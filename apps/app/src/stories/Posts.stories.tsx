@@ -1105,11 +1105,11 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-text')).toHaveTextContent('document text');
+    expect(canvas.getByTestId('media-text').textContent).toBe('document text');
     expect(
       canvas.queryByText('이미지가 있는 문서는 안전한 Plain Text로 표시합니다.'),
     ).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-only')).not.toHaveTextContent(/\S/);
+    expect(canvas.getByTestId('media-only').textContent).toBe('');
     const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
     expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(

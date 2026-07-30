@@ -54,12 +54,14 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
   return match(node)
     .with({ type: 'doc' }, (document) => (
       <Text {...replayBlockProps} key={key} style={context.bodyStyle}>
-        {document.content.map((child, index) => (
-          <Fragment key={`${key}.${index}`}>
-            {index > 0 ? '\n\n' : null}
-            {renderNode(child, `${key}.${index}`, context)}
-          </Fragment>
-        ))}
+        {document.content
+          .filter((child) => child.type === 'paragraph')
+          .map((child, index) => (
+            <Fragment key={`${key}.${index}`}>
+              {index > 0 ? '\n\n' : null}
+              {renderNode(child, `${key}.${index}`, context)}
+            </Fragment>
+          ))}
       </Text>
     ))
     .with({ type: 'paragraph' }, (paragraph) => (
