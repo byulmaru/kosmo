@@ -18,7 +18,9 @@ export const Policy: Story = {
     await expect(canvas.getByText('시행일: 2026년 7월 29일')).toBeVisible();
     await expect(canvas.getByText('9. 자동 수집 정보와 행태정보')).toBeVisible();
     await expect(canvas.getByText(/Session replay: 세션의 10%/)).toBeVisible();
-    await expect(canvas.getByText(/모든 input·textarea 값과 게시글 본문은 마스킹/)).toBeVisible();
+    await expect(
+      canvas.getByText(/모든 input·textarea 값은 마스킹하고 게시글 본문 영역은 기록에서 제외/),
+    ).toBeVisible();
     await expect(canvas.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute(
       'href',
       '/',

@@ -5,7 +5,7 @@ import type { AnalyticsSessionBridge as AnalyticsSessionBridgeType } from './Ana
 const calls: string[] = [];
 const session = {
   accountId: null as string | null,
-  status: 'guest' as 'guest' | 'valid',
+  status: 'guest' as 'error' | 'guest' | 'valid',
 };
 let loginStarted = false;
 
@@ -81,6 +81,18 @@ describe('AnalyticsSessionBridge', () => {
 
     session.accountId = null;
     session.status = 'guest';
+    AnalyticsSessionBridge();
+
+    assert.deepEqual(calls, ['identify:account-id', 'clear']);
+  });
+
+  it('valid session이 error로 바뀌면 이전 identity를 지운다', () => {
+    session.accountId = 'account-id';
+    session.status = 'valid';
+    AnalyticsSessionBridge();
+
+    session.accountId = null;
+    session.status = 'error';
     AnalyticsSessionBridge();
 
     assert.deepEqual(calls, ['identify:account-id', 'clear']);

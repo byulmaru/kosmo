@@ -5,13 +5,33 @@ import {
   makeRedirectUri,
   ResponseType,
 } from 'expo-auth-session';
+import { markWebLoginStarted } from '@/analytics/client';
 import { getNativeSessionConfiguration } from './nativeConfig';
+import type { GestureResponderEvent } from 'react-native';
 
 export type NativeOidcSessionExchangeInput = {
   code: string;
   codeVerifier: string;
   redirectUri: string;
 };
+
+export function startWebLoginFromPress(event: GestureResponderEvent): void {
+  const pointer = event.nativeEvent as unknown as MouseEvent;
+
+  markWebLoginStarted();
+  if (
+    (typeof pointer.button === 'number' && pointer.button !== 0) ||
+    pointer.altKey ||
+    pointer.ctrlKey ||
+    pointer.metaKey ||
+    pointer.shiftKey
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  window.location.assign('/login');
+}
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {
   const { clientId, issuer } = getNativeSessionConfiguration();

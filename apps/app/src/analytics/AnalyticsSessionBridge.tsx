@@ -11,12 +11,8 @@ export function AnalyticsSessionBridge(): null {
   const { accountId, status } = useSession();
 
   useEffect(() => {
-    if (status === 'guest') {
-      clearAnalytics();
-      return;
-    }
-
     if (status !== 'valid' || !accountId) {
+      clearAnalytics();
       return;
     }
 

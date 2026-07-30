@@ -19,7 +19,12 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
   return (
     <GraphQLErrorBoundary onRetry={retry}>
       <SessionFailOpenBoundary
-        fallback={<SessionErrorProvider>{children}</SessionErrorProvider>}
+        fallback={
+          <SessionErrorProvider>
+            <AnalyticsSessionBridge />
+            {children}
+          </SessionErrorProvider>
+        }
         resetKey={revision}
       >
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>

@@ -10,8 +10,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
-import { markWebLoginStarted } from '@/analytics/client';
-import { startNativeAuthorization } from '@/auth/login';
+import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -110,7 +109,7 @@ export default function IndexScreen() {
           <View style={styles.action}>
             {Platform.OS === 'web' ? (
               <Link asChild href={'/login' as Href}>
-                <Button onPress={markWebLoginStarted} style={styles.startButton}>
+                <Button onPress={startWebLoginFromPress} style={styles.startButton}>
                   시작하기
                 </Button>
               </Link>

@@ -3,7 +3,7 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
@@ -14,6 +14,8 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { PreloadedQuery } from 'react-relay';
+import type { GraphQLResponse } from 'relay-runtime';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
@@ -62,19 +64,88 @@ function PeopleResults({ handle }: { handle: string }) {
       onRetry={() => setFetchKey((key) => key + 1)}
       title="검색 결과를 불러오지 못했어요"
     >
-      <PeopleResultsContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
+      <PeopleResultsContent
+        key={`${revision}:${fetchKey}`}
+        fetchKey={`${revision}:${fetchKey}`}
+        handle={handle}
+      />
     </RouteBoundary>
   );
 }
 
 function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
-  const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
-    SearchPeopleQuery,
-    { query: handle.replace(/^@/, '') },
-    { fetchKey, fetchPolicy: 'network-only' },
-  );
+  const [queryReference, loadQuery] =
+    useQueryLoader<SearchPeopleByHandlePageQuery>(SearchPeopleQuery);
+
+  useEffect(() => {
+    loadQuery(
+      { query: handle.replace(/^@/, '') },
+      { fetchPolicy: 'store-and-network', networkCacheConfig: { metadata: { fetchKey } } },
+    );
+  }, [fetchKey, handle, loadQuery]);
+
+  if (!queryReference) {
+    return <StateView loading title="검색 결과를 불러오는 중입니다." />;
+  }
+
+  return <LoadedPeopleResults handle={handle} queryReference={queryReference} />;
+}
+
+function LoadedPeopleResults({
+  handle,
+  queryReference,
+}: {
+  handle: string;
+  queryReference: PreloadedQuery<SearchPeopleByHandlePageQuery>;
+}) {
+  const data = usePreloadedQuery<SearchPeopleByHandlePageQuery>(SearchPeopleQuery, queryReference);
+
+  useEffect(() => {
+    let hasResults: boolean | null = null;
+    let failed = false;
+    const subscription = queryReference.source?.subscribe({
+      complete: () => {
+        if (!failed && hasResults !== null) {
+          trackAnalytics('search_results_loaded', {
+            has_results: hasResults,
+            tab: 'people',
+          });
+        }
+      },
+      error: () => {
+        failed = true;
+      },
+      next: (response) => {
+        if ('errors' in response && response.errors?.length) {
+          failed = true;
+          return;
+        }
+
+        const edges = searchResultEdges(response);
+        if (edges) {
+          hasResults = edges.length > 0;
+        }
+      },
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [queryReference]);
 
   return <SearchPeopleResults handle={handle} query={data} />;
+}
+
+function searchResultEdges(response: GraphQLResponse): readonly unknown[] | null {
+  if (!('data' in response)) {
+    return null;
+  }
+
+  const data = response.data as
+    | { searchProfiles?: { edges?: readonly unknown[] | null } | null }
+    | null
+    | undefined;
+  return data?.searchProfiles?.edges ?? null;
 }
 
 function SearchPeopleResults({
@@ -90,20 +161,7 @@ function SearchPeopleResults({
     SearchPeopleResults_query$key
   >(SearchPeopleResultsFragment, query);
   const [loadError, setLoadError] = useState(false);
-  const trackedFirstPage = useRef(false);
   const edges = pagination.data.searchProfiles.edges;
-
-  useEffect(() => {
-    if (trackedFirstPage.current) {
-      return;
-    }
-
-    trackedFirstPage.current = true;
-    trackAnalytics('search_results_loaded', {
-      has_results: edges.length > 0,
-      tab: 'people',
-    });
-  }, [edges.length]);
 
   if (!edges.length) {
     return (

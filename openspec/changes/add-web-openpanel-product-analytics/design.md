@@ -58,7 +58,7 @@ SDK는 `trackScreenViews`, `trackOutgoingLinks`, `trackAttributes`를 활성화�
 ## Risks / Trade-offs
 
 - [자동 화면 추적 URL에 검색 query가 포함됨] → 개인정보 처리방침에 이를 명시하고 명시적 검색 이벤트에는 query를 포함하지 않는다.
-- [표시명·handle 등 Post 밖 텍스트가 replay에 보일 수 있음] → 승인된 범위를 고지하고 입력값과 Post Content에는 강한 마스킹을 적용한다.
+- [표시명·handle 등 Post 밖 텍스트가 replay에 보일 수 있음] → 승인된 범위를 고지하고 입력값은 마스킹하며 Post Content subtree는 수집에서 제외한다.
 - [Client ID가 공개 Web bundle에 포함됨] → 비밀로 취급하지 않고 OpenPanel project 설정과 ingress에서 허용 origin을 제한한다.
 - [수동 Account 삭제가 느리거나 실수 위험이 있음] → 대상 확인, dry-run, 승인, 삭제, 잔존 검증 순서를 runbook으로 고정하고 자동화는 후속 이슈로 분리한다.
 - [분석 차단기나 endpoint 장애로 데이터가 누락될 수 있음] → 분석은 best-effort로 취급하고 제품 흐름의 가용성을 우선한다.

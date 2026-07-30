@@ -17,7 +17,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 - 자동 수집: screen view의 전체 URL·query·title·referrer, 외부 링크 URL·표시 텍스트, `data-track` attribute event
 - identity: 로그인 전 anonymous device/session, 로그인 후 opaque Account ID. 이름·이메일·handle trait는 보내지 않는다.
 - 명시적 event: `login_succeeded`, `profile_created`, `profile_selected`, `post_created`, `follow_succeeded`, `search_submitted`, `search_results_loaded`, `search_result_selected`
-- replay: 10% sample, `maskAllInputs: true`, 모든 canonical Post Content root에 `[data-openpanel-replay-mask]`
+- replay: 10% sample, `maskAllInputs: true`, 모든 canonical Post Content root의 `[data-openpanel-replay-block]` 하위 DOM 제외
 - 보유: 일반 event는 분석 목적 달성, project 삭제, Account 삭제 또는 이용자 요청 중 먼저 도달한 때까지다. Replay chunk는 OpenPanel ClickHouse TTL에 따라 30일 뒤 삭제된다.
 
 ## 배포 후 acceptance
@@ -30,7 +30,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 4. 로그인해 같은 browser session이 opaque Account ID로 identify되고 `login_succeeded`가 한 번만 기록되는지 확인한다.
 5. Profile 생성·선택, Post 작성, Follow를 각각 성공시켜 대응 event와 허용된 enum/ID 속성만 확인한다. 실패 요청에는 성공 event가 없어야 한다.
 6. 검색 직접 입력, 최근 검색, tab 변경, People 첫 결과와 결과 선택을 확인한다. 명시적 event property에 검색 원문과 대상 Profile ID가 없어야 한다.
-7. replay 표본 session에서 input·textarea 값과 게시글 본문이 별표로 가려지고 표시명·handle과 화면 동작은 보이는지 확인한다.
+7. replay 표본 session에서 input·textarea 값은 마스킹되고 게시글 본문 subtree는 제외되며, 표시명·handle과 화면 동작은 보이는지 확인한다.
 8. OpenPanel endpoint를 browser에서 차단한 상태로 로그인·navigation·mutation·검색이 동일하게 완료되는지 확인한다.
 9. 로그아웃 후 새 event가 이전 Account ID가 아닌 anonymous identity로 기록되는지 확인한다.
 10. `/privacy`가 비로그인으로 열리고 landing과 로그인 후 menu에서 연결되는지 확인한다.
