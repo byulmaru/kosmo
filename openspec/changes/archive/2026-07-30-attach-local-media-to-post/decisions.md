@@ -119,6 +119,25 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
 - Confirmation / Follow-up: 통합 테스트에서 Followers Post도 권한을 통과한 projection에 저장된 공개 URL을
   사용하고 projection 중 추가 storage network read가 없는지 확인한다.
 
+### Media Storage Service 완료 응답을 공개 표현의 최종 권위로 사용한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Product Contract
+- Authority / Provenance: `docs/domain/objects/media.md`,
+  `docs/domain/decisions/0013-media-storage-service-boundary.md`, PROD-461, PROD-559, PROD-581
+- Status: Active
+- Context / Problem: Kosmo가 저장 서비스의 Media Type을 다시 MIME parser·allowlist·byte 검사로 검증하면 이미지
+  검증·변환과 표현 형식 결정 책임이 두 서비스에 중복되고 새 저장 형식을 Kosmo가 별도로 승인해야 한다.
+- Decision Outcome: Media Storage Service의 완료 응답은 URL과 Media Type 의미의 최종 권위다. Kosmo는 DB에
+  저장하기 위한 필드 존재와 transport type만 확인하고 Media Type 문법·지원 여부·byte 일치성을 재검증하거나
+  정규화하지 않는다. 계약된 응답의 non-empty Media Type 문자열은 그대로 저장하고 read projection에 사용한다.
+- Alternatives Considered: Kosmo에서도 MIME parser 또는 image allowlist를 적용하면 defense in depth를 얻지만
+  저장 서비스가 소유한 검증과 표현 결정에 두 번째 정책을 만들고 두 서비스의 지원 형식이 어긋날 수 있다.
+- Consequences: 잘못된 Media Type이나 byte 불일치를 방지할 책임은 Media Storage Service에 집중된다. Kosmo가
+  알지 못하거나 MIME 문법으로 해석할 수 없는 문자열도 서비스가 반환하면 Ready Media에 저장·투영한다.
+- Confirmation / Follow-up: 결합 통합 테스트에서 PNG byte에 대해 저장 서비스가 반환한 non-MIME Media Type을
+  Ready Media와 ActivityPub Image까지 그대로 보존하는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

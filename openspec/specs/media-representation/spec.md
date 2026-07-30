@@ -12,13 +12,20 @@ Local Media 업로드 완료 시 확정된 공개 표현을 저장해 read proje
 
 #### Scenario: Uploading Media 완료
 
-- **WHEN** Upload Account가 Uploading Local Media의 완료를 요청하고 저장 서비스가 유효한 공개 URL과 media type을 반환한다
+- **WHEN** Upload Account가 Uploading Local Media의 완료를 요청하고 저장 서비스가 계약된 공개 URL과 non-empty Media Type을 반환한다
 - **THEN** 같은 Media에 URL, Media Type, Ready At과 Ready state를 함께 저장한다
-- **AND** storage reference 형식, object key, URL 또는 media type을 Kosmo가 추론하지 않는다
+- **AND** storage reference 형식, object key, URL 또는 Media Type을 Kosmo가 추론하지 않는다
+- **AND** Media Type의 MIME 문법·지원 여부나 URL byte와의 일치를 Kosmo가 재검증·정규화하지 않고 반환 문자열을 그대로 저장한다
+
+#### Scenario: 저장 서비스가 확정한 알 수 없는 Media Type
+
+- **WHEN** 저장 서비스가 계약된 응답에서 Kosmo가 알지 못하거나 MIME 문법으로 해석할 수 없는 non-empty Media Type을 반환한다
+- **THEN** 시스템은 저장 서비스 결과를 신뢰해 그 문자열과 URL을 저장하고 Media를 Ready로 전환한다
+- **AND** 이후 read projection은 저장된 Media Type을 그대로 사용한다
 
 #### Scenario: 완료 확인 실패
 
-- **WHEN** 저장 서비스가 미완료·오류·timeout 또는 잘못된 representation 응답을 반환한다
+- **WHEN** 저장 서비스가 미완료·오류·timeout이거나 필수 필드의 존재·transport type을 충족하지 못한 응답을 반환한다
 - **THEN** Media는 Uploading state와 빈 URL·Media Type을 유지한다
 
 ### Requirement: Stored Media representation read boundary

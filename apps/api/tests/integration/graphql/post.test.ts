@@ -442,7 +442,7 @@ describe('Post Reply GraphQL 경계', () => {
         }
         if (url === representationUrl && init?.method === undefined) {
           assert.deepEqual(uploaded, onePixelPng);
-          return Response.json({ mediaType: 'image/webp', url: publicMediaUrl });
+          return Response.json({ mediaType: 'storage-defined-format', url: publicMediaUrl });
         }
         throw new Error(`Unexpected Media Storage request: ${init?.method ?? 'GET'} ${url}`);
       },
@@ -522,7 +522,7 @@ describe('Post Reply GraphQL 경계', () => {
     }
     assert.equal(attachments.length, 1);
     assert.equal(attachments[0]?.url?.href, publicMediaUrl);
-    assert.equal(attachments[0]?.mediaType, 'image/webp');
+    assert.equal(attachments[0]?.mediaType, 'storage-defined-format');
     assert.equal(attachments[0]?.name?.toString(), '통합 검증 이미지');
   });
 

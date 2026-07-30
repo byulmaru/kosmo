@@ -100,7 +100,7 @@ Local Media 업로드 완료 시 Media Storage Service가 확정한 공개 URL�
 - 완료 재호출과 동시 호출이 idempotent한지 확인한다.
 
 - [x] 3.1 URL·Media Type nullable column과 additive migration을 추가한다.
-- [x] 3.2 업로드 완료 결과 검증과 Ready 전환·metadata 원자 저장 및 idempotency를 구현한다.
+- [x] 3.2 업로드 완료 응답의 필수 field shape를 확인하고 저장 서비스가 확정한 URL·Media Type을 재검증·정규화하지 않은 채 Ready 전환·metadata 원자 저장 및 idempotency를 구현한다.
 - [x] 3.3 관련 core/API check와 strict OpenSpec 검증을 통과시킨다.
 
 ## 4. PROD-559 최초 Local Note Media 표현
