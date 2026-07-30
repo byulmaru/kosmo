@@ -30,6 +30,8 @@ before(async () => {
     .href;
   const safeAreaMock = new URL('../../../.storybook/mocks/safe-area-context.tsx', import.meta.url)
     .href;
+  const staticAssetMock = new URL('../../../.storybook/mocks/static-asset.ts', import.meta.url)
+    .href;
   const svgWeb = pathToFileURL(require.resolve('react-native-svg/lib/module/elements.web.js')).href;
   const hooks = registerHooks({
     resolve(specifier, context, nextResolve) {
@@ -44,6 +46,9 @@ before(async () => {
       }
       if (specifier === 'react-native-svg') {
         return nextResolve(svgWeb, context);
+      }
+      if (specifier.endsWith('.png')) {
+        return nextResolve(staticAssetMock, context);
       }
       return nextResolve(specifier, context);
     },

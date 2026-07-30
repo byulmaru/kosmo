@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
+import { BrandLogo } from '@/components/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -92,10 +93,7 @@ export default function IndexScreen() {
   return (
     <ScrollView contentContainerStyle={[styles.root, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <View style={[styles.logo, { backgroundColor: theme.primary }]}>
-          <Text style={styles.logoText}>K</Text>
-        </View>
-        <Text style={[styles.brand, { color: theme.text }]}>KOSMO</Text>
+        <BrandLogo variant="full" width={136} />
       </View>
       <View style={[styles.hero, { paddingHorizontal: width >= 1024 ? 128 : 48 }]}>
         <View style={styles.heroContent}>
@@ -149,15 +147,6 @@ const styles = StyleSheet.create({
     height: 84,
     paddingHorizontal: 48,
   },
-  logo: {
-    alignItems: 'center',
-    borderRadius: radii.md,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  logoText: { color: '#111111', fontFamily: 'SUIT', fontWeight: '800', ...typography.md },
-  brand: { fontFamily: 'SUIT', fontWeight: '800', ...typography.md },
   hero: {
     flex: 1,
     justifyContent: 'center',

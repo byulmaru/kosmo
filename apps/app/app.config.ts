@@ -24,21 +24,28 @@ const config: ExpoConfig = {
   scheme: 'kosmo',
   orientation: 'default',
   userInterfaceStyle: 'light',
+  icon: './assets/brand/app-icon-ios-light.png',
   ios: {
     appleTeamId: process.env.APPLE_DEVELOPER_TEAM_ID,
     buildNumber: iosBuildNumber,
     bundleIdentifier: 'moe.kos',
+    icon: './assets/brand/app-icon-ios-light.png',
     supportsTablet: true,
     infoPlist: {
       LSApplicationCategoryType: 'public.app-category.social-networking',
     },
   },
   android: {
+    adaptiveIcon: {
+      backgroundColor: '#FEFEFE',
+      foregroundImage: './assets/brand/app-icon-android-foreground.png',
+    },
     package: 'moe.kos',
     versionCode: 1,
     predictiveBackGestureEnabled: true,
   },
   web: {
+    favicon: './assets/brand/app-icon-ios-light.png',
     output: 'single',
   },
   plugins: ['expo-router', 'expo-secure-store'],
