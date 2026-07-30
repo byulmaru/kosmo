@@ -66,11 +66,11 @@ preview·상태·재시도·제거·Alt Text와 Sensitive Media를 관리해 새
 - body-only/media-only, Alt Text/Sensitive Media, upload/submit disabled와 성공·실패 상태 보존·초기화를 확인한다.
 - Storybook 상태, Web keyboard/a11y, Native-safe type/build와 Relay compile을 확인한다.
 
-- [ ] 2.1 Expo SDK 호환 이미지 picker dependency와 platform 설정을 `pnpm` CLI로 추가한다.
-- [ ] 2.2 갤러리 선택과 item별 direct upload·Ready 완료·재시도·제거 상태를 구현한다.
-- [ ] 2.3 Composer에 preview, 상태, 제거, Alt Text와 Sensitive Media control을 접근 가능한 공용 UI로 구현한다.
-- [ ] 2.4 ordered Ready Media item을 `createPost`에 연결하고 submit gating·성공 초기화·오류 보존을 구현한다.
-- [ ] 2.5 component/Relay/Storybook 상태와 접근성 회귀 검증을 추가하고 app check를 통과시킨다.
+- [x] 2.1 Expo SDK 호환 이미지 picker dependency와 platform 설정을 `pnpm` CLI로 추가한다.
+- [x] 2.2 갤러리 선택과 item별 direct upload·Ready 완료·재시도·제거 상태를 구현한다.
+- [x] 2.3 Composer에 preview, 상태, 제거, Alt Text와 Sensitive Media control을 접근 가능한 공용 UI로 구현한다.
+- [x] 2.4 ordered Ready Media item을 `createPost`에 연결하고 submit gating·성공 초기화·오류 보존을 구현한다.
+- [x] 2.5 component/Relay/Storybook 상태와 접근성 회귀 검증을 추가하고 app check를 통과시킨다.
 
 ## 3. PROD-559 최초 Local Note Media 표현
 
