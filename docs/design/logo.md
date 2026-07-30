@@ -23,8 +23,6 @@
 - 브라우저 favicon은 K+별 전용 마크를 사용한다.
 - iOS, Apple touch icon과 일반 PWA icon은 `#FEFEFE` 배경의 라이트 앱 아이콘을 사용한다.
 - Android adaptive icon과 maskable PWA icon은 투명 foreground와 `#FEFEFE` 배경을 조합한다.
-- 기본 공유 이미지는 `1200×630` `#FEFEFE` 배경에 풀 로고만 중앙 배치한다. `og:url`,
-  `og:image`, `twitter:image`의 절대 URL은 Web BFF가 배포별 `PUBLIC_ORIGIN`을 기준으로
-  SPA shell 응답에 주입한다.
+- 기본 공유 이미지는 `1200×630` `#FEFEFE` 배경에 풀 로고만 중앙 배치한다.
 
 컬러 변수와 코드 컬러 토큰의 재정비는 별도 작업이다. 이 문서는 로고 자산의 현재 색을 기존 `primary` 토큰에 재매핑하는 근거가 아니다.

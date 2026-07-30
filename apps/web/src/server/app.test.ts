@@ -437,46 +437,6 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
-  test('injects the configured public origin into SPA social metadata', async () => {
-    const shell = [
-      '<html><head>',
-      '<meta property="og:url" content="__KOSMO_PUBLIC_ORIGIN__/" />',
-      '<meta property="og:image" content="__KOSMO_PUBLIC_ORIGIN__/og-default.png" />',
-      '<meta name="twitter:image" content="__KOSMO_PUBLIC_ORIGIN__/og-default.png" />',
-      '</head><body>expo app</body></html>',
-    ].join('');
-    const shellPath = join(staticRoot, 'index.html');
-    const compressedShellPath = `${shellPath}.gz`;
-
-    await writeFile(shellPath, shell);
-    await writeFile(compressedShellPath, gzipSync(shell));
-    vi.stubEnv('PUBLIC_ORIGIN', 'https://dev.kos.moe');
-
-    try {
-      const response = await app.request('https://dev.kos.moe/', {
-        headers: { 'accept-encoding': 'gzip' },
-      });
-      const headResponse = await app.request('https://dev.kos.moe/', {
-        headers: { 'accept-encoding': 'gzip' },
-        method: 'HEAD',
-      });
-      const body = await response.text();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-encoding')).toBeNull();
-      expect(response.headers.get('content-length')).toBeNull();
-      expect(body).toContain('content="https://dev.kos.moe/"');
-      expect(body.match(/content="https:\/\/dev\.kos\.moe\/og-default\.png"/g)).toHaveLength(2);
-      expect(body).not.toContain('__KOSMO_PUBLIC_ORIGIN__');
-      expect(headResponse.status).toBe(200);
-      expect(headResponse.headers.get('content-encoding')).toBeNull();
-      expect(headResponse.headers.get('content-length')).toBeNull();
-    } finally {
-      await writeFile(shellPath, '<html>expo app</html>');
-      await rm(compressedShellPath, { force: true });
-    }
-  });
-
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },
