@@ -2,7 +2,7 @@ import { usePathname } from 'expo-router';
 import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
@@ -882,6 +882,10 @@ function PostDeletionListEdgeSafety() {
 
 type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
 
+type ProductionBookmarkRequest =
+  | Readonly<{ action: 'create'; postId: string }>
+  | Readonly<{ action: 'delete'; bookmarkId: string }>;
+
 function withReactionViewerState(storyPost: StoryPost): StoryPost & {
   viewerReactions: [];
 } {
@@ -1017,6 +1021,259 @@ function ProductionReactionMutationSurfaces() {
         />
       </View>
     </Catalog>
+  );
+}
+
+type ProductionBookmarkMutationMode = 'success' | 'pending' | 'create-failure' | 'delete-failure';
+
+function ProductionBookmarkMutationStory({
+  initiallyBookmarked = false,
+  mode = 'success',
+}: {
+  initiallyBookmarked?: boolean;
+  mode?: ProductionBookmarkMutationMode;
+}) {
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(() => {
+    let activeBookmarkId: string | null = initiallyBookmarked ? `bookmark-${shortPost.id}` : null;
+    let createAttempts = 0;
+    let deleteAttempts = 0;
+    const posts = storyPosts.map(withReactionViewerState).map((candidate) =>
+      candidate.id === shortPost.id
+        ? {
+            ...candidate,
+            viewerBookmark: activeBookmarkId
+              ? { __typename: 'Bookmark' as const, id: activeBookmarkId }
+              : null,
+          }
+        : candidate,
+    );
+    const bookmarkHomeTimeline = {
+      ...homeTimeline,
+      edges: homeTimeline.edges.map((edge) => ({
+        ...edge,
+        node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+      })),
+    };
+    const bookmarkContentPostsProfile = {
+      ...contentPostsProfile,
+      posts: {
+        ...contentPostsProfile.posts,
+        edges: contentPostsProfile.posts.edges.map((edge) => ({
+          ...edge,
+          node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+        })),
+      },
+    };
+
+    return new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.name === 'SessionProviderQuery') {
+          return Promise.resolve({
+            data: {
+              currentSession: {
+                __typename: 'Session',
+                id: 'session-production-bookmark',
+                selectedProfile: {
+                  __typename: 'Profile',
+                  id: 'profile-production-bookmark',
+                },
+              },
+              me: {
+                __typename: 'Account',
+                id: 'account-production-bookmark',
+                name: 'Bookmark Story',
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostsStoriesQuery') {
+          return Promise.resolve({
+            data: {
+              alternateComposerProfile,
+              composerProfile,
+              contentPostsProfile: bookmarkContentPostsProfile,
+              emptyPostsProfile,
+              homeTimeline: bookmarkHomeTimeline,
+              nodes: posts,
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+          const input = variables.input as { postId: string };
+          setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+          createAttempts += 1;
+          if (mode === 'pending') {
+            return new Promise<GraphQLResponse>(() => undefined);
+          }
+          if (mode === 'create-failure' && createAttempts === 1) {
+            return Promise.reject(new Error('bookmark create failed'));
+          }
+          activeBookmarkId = `bookmark-${input.postId}`;
+          return Promise.resolve({
+            data: {
+              createBookmark: {
+                bookmark: {
+                  __typename: 'Bookmark',
+                  id: activeBookmarkId,
+                  post: {
+                    __typename: 'Post',
+                    id: input.postId,
+                    viewerBookmark: { __typename: 'Bookmark', id: activeBookmarkId },
+                  },
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionDeleteBookmarkMutation') {
+          const input = variables.input as { id: string };
+          setRequests((current) => [...current, { action: 'delete', bookmarkId: input.id }]);
+          deleteAttempts += 1;
+          if (mode === 'delete-failure' && deleteAttempts === 1) {
+            return Promise.reject(new Error('bookmark delete failed'));
+          }
+          activeBookmarkId = null;
+          return Promise.resolve({
+            data: {
+              deleteBookmark: {
+                bookmarkId: input.id,
+                post: {
+                  __typename: 'Post',
+                  id: shortPost.id,
+                  viewerBookmark: null,
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        return Promise.resolve({ data: {} } as GraphQLResponse);
+      }),
+      store: new Store(new RecordSource()),
+    });
+  }, [initiallyBookmarked, mode]);
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Bookmark fixture를 불러오는 중입니다.</Text>}>
+        <SessionProvider>
+          <ProductionBookmarkMutationContents />
+        </SessionProvider>
+      </Suspense>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ProductionBookmarkMutationContents() {
+  const data = usePostsStoryData();
+
+  return (
+    <PostLayout
+      post={requireFragment(
+        requirePostById(data.posts, shortPost.id).layout,
+        'production Bookmark detail',
+      )}
+    />
+  );
+}
+
+function ProductionBookmarkEnvironmentReplacementStory() {
+  const staleFailure = useRef<((error: Error) => void) | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: `session-production-bookmark-${revision}`,
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: `profile-production-bookmark-${revision}`,
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-bookmark',
+                  name: 'Bookmark Environment Story',
+                },
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                alternateComposerProfile,
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+            const input = variables.input as { postId: string };
+            setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+            if (revision === 0) {
+              return Observable.create((sink) => {
+                staleFailure.current = (error) => sink.error(error);
+              });
+            }
+            const bookmarkId = `bookmark-${input.postId}-replacement`;
+            return Promise.resolve({
+              data: {
+                createBookmark: {
+                  bookmark: {
+                    __typename: 'Bookmark',
+                    id: bookmarkId,
+                    post: {
+                      __typename: 'Post',
+                      id: input.postId,
+                      viewerBookmark: { __typename: 'Bookmark', id: bookmarkId },
+                    },
+                  },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [revision],
+  );
+
+  return (
+    <View>
+      <RelayEnvironmentProvider environment={environment}>
+        <Suspense fallback={<Text>Bookmark Environment fixture를 불러오는 중입니다.</Text>}>
+          <SessionProvider>
+            <ProductionBookmarkMutationContents />
+          </SessionProvider>
+        </Suspense>
+      </RelayEnvironmentProvider>
+      <Pressable
+        accessibilityLabel="두 번째 Profile Store로 전환"
+        accessibilityRole="button"
+        onPress={() => setRevision(1)}
+      >
+        <Text>두 번째 Profile Store로 전환</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="이전 Store 요청 실패"
+        accessibilityRole="button"
+        onPress={() => staleFailure.current?.(new Error('stale bookmark failure'))}
+      >
+        <Text>이전 Store 요청 실패</Text>
+      </Pressable>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </View>
   );
 }
 
@@ -2020,6 +2277,156 @@ export const ProductionReactionMutationTargets: Story = {
     ]);
   },
   render: () => <ProductionReactionMutationTargetsStory />,
+};
+
+export const ProductionBookmarkMutation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 취소' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([
+        { action: 'create', postId: shortPost.id },
+        { action: 'delete', bookmarkId: `bookmark-${shortPost.id}` },
+      ]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+  },
+  render: () => <ProductionBookmarkMutationStory />,
+};
+
+export const ProductionBookmarkPendingGuard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    expect(bookmark).toBeDisabled();
+    bookmark.click();
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="pending" />,
+};
+
+export const ProductionBookmarkCreateFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(bookmark).toBeEnabled();
+    expect(bookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="create-failure" />,
+};
+
+export const ProductionBookmarkDeleteFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmarkId = `bookmark-${shortPost.id}`;
+    const cancel = await canvas.findByRole('button', { name: '북마크 취소' });
+
+    await userEvent.click(cancel);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(cancel).toBeEnabled();
+    expect(cancel).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(cancel);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'delete', bookmarkId },
+      { action: 'delete', bookmarkId },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-failure" />,
+};
+
+export const ProductionBookmarkEnvironmentReplacement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 Profile Store로 전환' }));
+    const replacementBookmark = await canvas.findByRole('button', { name: '북마크' });
+    await waitFor(() => expect(replacementBookmark).toBeEnabled());
+    await userEvent.click(canvas.getByRole('button', { name: '이전 Store 요청 실패' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.')).toBeNull();
+    expect(replacementBookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(replacementBookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkEnvironmentReplacementStory />,
 };
 
 export const ProductionRepostFailureToast: Story = {

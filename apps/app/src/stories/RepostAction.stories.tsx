@@ -199,6 +199,7 @@ const unselectedSource = {
   __typename: 'Post',
   id: sourcePostId,
   repostCount: 3,
+  viewerBookmark: null,
   viewerRepost: null,
   viewerReactions: [],
 };

@@ -89,6 +89,7 @@ const unselectedSource = {
     edges: [],
     pageInfo: { endCursor: null, hasNextPage: false },
   },
+  viewerBookmark: null,
   viewerRepost: null,
   viewerReactions: [],
 };

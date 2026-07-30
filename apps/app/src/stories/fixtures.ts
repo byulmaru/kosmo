@@ -99,6 +99,7 @@ export type StoryPost = {
   replyParent: StoryPostReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
+  viewerBookmark: { __typename: 'Bookmark'; id: string } | null;
   viewerRepost: StoryPostReference | null;
   visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 };
@@ -151,6 +152,7 @@ export function post({
     replyParent,
     repostSource,
     state: 'ACTIVE',
+    viewerBookmark: null,
     viewerRepost,
     visibility,
   };

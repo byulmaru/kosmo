@@ -10,6 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostReactionController } from './PostReactionController';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
@@ -82,6 +83,7 @@ export function PostLayout({
   post: PostLayout_post$key;
 }) {
   const theme = useTheme();
+  const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
@@ -141,6 +143,7 @@ export function PostLayout({
           </Text>
           <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
           <PostActionBar
+            onBookmarkError={onBookmarkError}
             onDeleted={onDeleted}
             onRepostError={onRepostError}
             post={actionBarPost}

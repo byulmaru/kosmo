@@ -10,6 +10,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostReactionController } from './PostReactionController';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
@@ -100,6 +101,7 @@ export function PostListItem({
   showDivider?: boolean;
 }) {
   const theme = useTheme();
+  const onBookmarkError = useBookmarkFailureToast();
   const onRepostError = useRepostFailureToast();
   const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
@@ -147,6 +149,7 @@ export function PostListItem({
       <>
         <View role="article" style={cardStyle}>
           <PostListRow
+            onBookmarkError={onBookmarkError}
             onDeleted={onDeleted}
             onRepostError={onRepostError}
             post={post}
@@ -190,6 +193,7 @@ export function PostListItem({
             </View>
           </View>
           <PostListRow
+            onBookmarkError={onBookmarkError}
             onDeleted={onDeleted}
             onRepostError={onRepostError}
             post={source}
@@ -256,6 +260,7 @@ export function PostListItem({
           <PostReactionActions
             actionBar={post.actionBar!}
             controllerPost={post.reactionController!}
+            onBookmarkError={onBookmarkError}
             onDeleted={onDeleted}
             onRepostError={onRepostError}
             quote
@@ -269,11 +274,13 @@ export function PostListItem({
 }
 
 function PostListRow({
+  onBookmarkError,
   onDeleted,
   onRepostError,
   post: postKey,
   reply,
 }: {
+  onBookmarkError: NonNullable<PostActionBarProps['onBookmarkError']>;
   onDeleted: () => void;
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   post: PostListRow_post$key;
@@ -330,6 +337,7 @@ function PostListRow({
         <PostReactionActions
           actionBar={post.actionBar!}
           controllerPost={post.reactionController!}
+          onBookmarkError={onBookmarkError}
           onDeleted={onDeleted}
           onRepostError={onRepostError}
           reply={reply}
@@ -342,6 +350,7 @@ function PostListRow({
 function PostReactionActions({
   actionBar,
   controllerPost,
+  onBookmarkError,
   onDeleted,
   onRepostError,
   quote = false,
@@ -349,6 +358,7 @@ function PostReactionActions({
 }: {
   actionBar: PostActionBar_post$key;
   controllerPost: PostReactionController_post$key;
+  onBookmarkError: NonNullable<PostActionBarProps['onBookmarkError']>;
   onDeleted?: () => void;
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   quote?: boolean;
@@ -364,6 +374,7 @@ function PostReactionActions({
       />
       <View style={styles.actionBarSlot}>
         <PostActionBar
+          onBookmarkError={onBookmarkError}
           onDeleted={onDeleted}
           onRepostError={onRepostError}
           post={actionBar}
