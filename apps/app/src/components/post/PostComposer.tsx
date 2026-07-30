@@ -21,11 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import {
-  postComposerMediaLimit,
-  takeComposerMediaSelection,
-  uploadComposerMedia,
-} from './postComposerMedia';
+import { postComposerMediaLimit, uploadComposerMedia } from './postComposerMedia';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
@@ -238,27 +234,18 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     }
     setError(null);
 
-    if (Platform.OS !== 'web') {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        setError('사진을 선택하려면 사진 접근 권한을 허용해주세요.');
-        return;
-      }
-    }
-
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
         mediaTypes: ['images'],
         orderedSelection: true,
-        quality: 1,
         selectionLimit: remainingSlots,
       });
       if (result.canceled) {
         return;
       }
 
-      const selected = takeComposerMediaSelection(media.length, result.assets).map((asset) => ({
+      const selected = result.assets.slice(0, remainingSlots).map((asset) => ({
         altText: '',
         asset,
         key: `composer-media-${++nextMediaKey.current}`,

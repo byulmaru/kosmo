@@ -1,12 +1,5 @@
 export const postComposerMediaLimit = 4;
 
-export function takeComposerMediaSelection<T>(
-  existingCount: number,
-  assets: readonly T[],
-): readonly T[] {
-  return assets.slice(0, Math.max(0, postComposerMediaLimit - existingCount));
-}
-
 export async function uploadComposerMedia({
   complete,
   isActive,

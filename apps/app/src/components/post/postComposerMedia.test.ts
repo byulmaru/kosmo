@@ -1,18 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  postComposerMediaLimit,
-  takeComposerMediaSelection,
-  uploadComposerMedia,
-} from './postComposerMedia';
-
-test('takes only the remaining media slots while preserving picker order', () => {
-  assert.deepEqual(takeComposerMediaSelection(2, ['third', 'fourth', 'fifth']), [
-    'third',
-    'fourth',
-  ]);
-  assert.deepEqual(takeComposerMediaSelection(postComposerMediaLimit, ['ignored']), []);
-});
+import { uploadComposerMedia } from './postComposerMedia';
 
 test('issues, uploads, and completes a fresh media in order', async () => {
   const calls: string[] = [];
