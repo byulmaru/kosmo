@@ -11,10 +11,10 @@
 - Authority / Provenance: 사용자 결정, PROD-563
 - Status: Active
 - Context / Problem: SemVer와 GitHub Release 규칙이 tag push 자체보다 별도의 release lifecycle을 만들었다.
-- Decision Outcome: 이름 형식과 관계없이 모든 Git tag push가 production image를 build한다. Tag ref는 audit 식별자이며 container identity는 build digest다.
+- Decision Outcome: 이름 형식과 관계없이 모든 Git tag push가 production image를 build한다. Tag ref는 workflow audit 식별자이며 container tag로 발행하지 않는다. Container identity는 build digest다.
 - Alternatives Considered: SemVer-only tag와 prefix-based tag는 현재 요구되지 않는 naming policy를 추가하므로 제외했다.
 - Consequences: 임의 tag 문자열을 Kubernetes label로 사용할 수 없으므로 manifest version에는 commit short SHA를 사용한다.
-- Confirmation / Follow-up: Workflow tag glob과 ref validation에 이름 제한이 없고 branch build에는 production deploy가 없는지 확인한다.
+- Confirmation / Follow-up: Workflow tag glob에 이름 제한이 없고 branch build에는 production deploy가 없으며 Docker metadata에 일반 tag ref가 없는지 확인한다. 일반 tag ref metadata를 발행하던 초기 구현은 PR #431에서 교정했다.
 
 ### Build digest를 같은 workflow의 승인 job에 직접 전달한다
 
@@ -106,6 +106,7 @@
 
 ## Superseded Decisions
 
+- Docker metadata에 Git tag 이름의 일반 tag ref를 발행한다. Git tag는 workflow audit에만 사용하고 container metadata에는 SHA와 보존용 `stable`만 사용한다.
 - Immutable GitHub Release tag와 asset을 production selector로 사용한다.
 - Release 해석과 별도 production deploy workflow를 사용한다.
 - API·Web preview를 함께 대기해 직접 promotion하고 ReplicaSet을 자동 복구한다.

@@ -16,10 +16,10 @@
 
 **Verification**
 
-- 임의 tag trigger, branch 제외, build digest output과 tag metadata를 정적으로 검증한다.
+- 임의 tag trigger, branch 제외, build digest output, 일반 Git tag container metadata 부재와 workflow audit ref를 정적으로 검증한다.
 
 - [x] 1.1 Docker Build의 tag trigger와 ref validation에서 SemVer 제한을 제거한다.
-- [x] 1.2 Tag image metadata를 일반 tag ref로 만들고 build digest output을 보존한다.
+- [x] 1.2 Git tag 이름을 container metadata로 발행하지 않고 SHA metadata와 build digest output을 보존한다. 초기 일반 tag ref 구현은 PR #431에서 교정했다.
 - [x] 1.3 `stable`을 ECR lifecycle 보존 표식으로 유지하되 deploy identity에는 사용하지 않는다.
 
 ## 2. PROD-563 Production approval and sync

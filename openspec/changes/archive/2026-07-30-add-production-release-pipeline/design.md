@@ -34,9 +34,9 @@ PROD-563은 tag build에서 production sync까지의 release 경계만 소유한
 
 ### Recommended Approach
 
-Docker Build의 tag trigger를 모든 tag에 적용하고 별도 SemVer validation을 제거한다. Docker metadata에는 tag ref, SHA tag와 ECR 보존용 `stable` tag를 남기되 production container identity는 build output의 `sha256:` digest다. `stable`은 배포 입력으로 읽지 않는다.
+Docker Build의 tag trigger를 모든 tag에 적용하고 별도 SemVer validation을 제거한다. Docker metadata에는 SHA tag와 ECR 보존용 `stable` tag만 남기고 Git tag 이름은 workflow audit ref로만 사용하며 container metadata로 발행하지 않는다. Production container identity는 build output의 `sha256:` digest고 `stable`은 배포 입력으로 읽지 않는다. 일반 tag ref metadata를 발행하던 초기 구현은 PR #431에서 dev용 `main` image tag 충돌 가능성 때문에 교정됐다.
 
-같은 workflow에 `deploy_production` job을 두고 tag ref에서만 실행한다. 이 job은 `docker_build` 성공 뒤 GitHub `prod` Environment 승인을 기다린다. 승인 뒤 Argo CD token을 얻고 `version`, `imageDigest`, `migration.enabled=true`를 `kosmo-prod`에 설정한다. `version`은 Kubernetes label에 안전한 commit short SHA를 사용하고 원래 tag 이름은 GitHub run의 ref에 남긴다.
+같은 workflow에 `deploy_production` job을 두고 tag ref에서만 실행한다. 이 job은 `docker_build` 성공 뒤 GitHub `prod` Environment 승인을 기다린다. 승인 뒤 Argo CD token을 얻고 `version`, `imageDigest`, `workloads.enabled=true`, `migration.enabled=true`를 `kosmo-prod`에 설정한다. `version`은 Kubernetes label에 안전한 commit short SHA를 사용하고 원래 tag 이름은 GitHub run의 ref에 남긴다.
 
 `prod` Environment는 별도 ref policy 없이 사용자 승인을 담당한다. 배포 대상을 tag로 제한하는 권위는 workflow의 tag trigger와 deploy job 조건 하나다.
 
@@ -64,7 +64,7 @@ GitHub Release publish/resolve job과 script, 별도 deploy workflow는 삭제�
 
 ## Migration Plan
 
-1. Tag trigger와 build metadata에서 SemVer 제한을 제거한다.
+1. Tag trigger에서 SemVer 제한을 제거하고 Git tag 이름은 container metadata가 아닌 workflow audit ref로만 유지한다.
 2. 기존 production deploy 단계를 Docker Build workflow의 tag-only 승인 job으로 옮긴다.
 3. GitHub Release publish/resolve job·script와 별도 deploy workflow를 삭제한다.
 4. Workflow, Helm render와 OpenSpec strict validation을 통과시킨다.
