@@ -544,6 +544,21 @@ test('exposes Profile tags as Hashtag nodes', () => {
   assert.equal(String(profile.getFields().tags.type), '[Hashtag!]!');
 });
 
+test('exposes related Profiles from a Hashtag with forward-only pagination', () => {
+  const hashtag = schema.getType('Hashtag');
+
+  assert.ok(isObjectType(hashtag));
+  const field = hashtag.getFields().relatedProfiles;
+
+  assert.equal(String(field.type), 'ProfileConnection!');
+  assert.deepEqual(
+    field.args.map(({ name }) => name),
+    ['after', 'first'],
+  );
+  assert.equal(field.args.find(({ name }) => name === 'after')?.type.toString(), 'String');
+  assert.equal(field.args.find(({ name }) => name === 'first')?.type.toString(), 'Int');
+});
+
 test('rejects a non-Notification global ID for Notification Read', async () => {
   const result = await graphql({
     schema,

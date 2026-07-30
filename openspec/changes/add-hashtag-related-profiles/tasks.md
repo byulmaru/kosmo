@@ -38,9 +38,9 @@
 - 관련 TypeScript·GraphQL·OpenSpec artifact Prettier와 ESLint, `git diff --check`
 - `openspec validate add-hashtag-related-profiles --strict`
 
-- [ ] 1.1 승인된 Hashtag object field와 Account login 선행 경계를 추가하고 forward connection argument와 기존 Profile connection identity를 공개 schema에 맞춘다.
-- [ ] 1.2 exact Hashtag 관계, Active·Normal Local visibility, `Profile.id ASC` cursor와 기본·최대 20개 상한을 candidate query와 page limit에 함께 적용한다.
-- [ ] 1.3 runtime GraphQL schema와 committed schema를 동기화하고 Hashtag 이름 input·신규 결과 type·기존 검색 shape 변경이 없음을 확인한다.
-- [ ] 1.4 인증 실패·selected Profile 없는 성공·exact/empty relation·visibility·Local/Remote·filter-before-limit 경계를 API integration test로 검증한다.
-- [ ] 1.5 default/max 20, multi-page cursor 중복·누락 방지, relation row 순서 비의존과 기존 `searchProfiles`·공개 lookup 회귀를 검증한다.
-- [ ] 1.6 관련 API typecheck·unit·integration·schema·lint와 strict OpenSpec validation을 완료하고 PROD-528 구현 handoff에 실제 결과와 남은 위험을 기록한다.
+- [x] 1.1 승인된 Hashtag object field와 Account login 선행 경계를 추가하고 forward connection argument와 기존 Profile connection identity를 공개 schema에 맞춘다.
+- [x] 1.2 exact Hashtag 관계, Active·Normal Local visibility, `Profile.id ASC` cursor와 기본·최대 20개 상한을 candidate query와 page limit에 함께 적용한다.
+- [x] 1.3 runtime GraphQL schema와 committed schema를 동기화하고 Hashtag 이름 input·신규 결과 type·기존 검색 shape 변경이 없음을 확인한다.
+- [x] 1.4 인증 실패·selected Profile 없는 성공·exact/empty relation·visibility·Local/Remote·filter-before-limit 경계를 API integration test로 검증한다.
+- [x] 1.5 default/max 20, multi-page cursor 중복·누락 방지, relation row 순서 비의존과 기존 `searchProfiles`·공개 lookup 회귀를 검증한다.
+- [x] 1.6 관련 API typecheck·unit·integration·schema·lint와 strict OpenSpec validation을 완료하고 PROD-528 구현 handoff에 실제 결과와 남은 위험을 기록한다.

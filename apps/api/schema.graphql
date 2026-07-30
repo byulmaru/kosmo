@@ -169,6 +169,7 @@ type FollowProfilePayload {
 type Hashtag implements Node {
   id: ID!
   name: String!
+  relatedProfiles(after: String, first: Int): ProfileConnection!
 }
 
 enum InstanceKind {
