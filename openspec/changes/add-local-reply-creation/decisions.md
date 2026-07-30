@@ -47,10 +47,22 @@
 - Authority / Provenance: 사용자 결정(2026-07-31), `docs/design/reply-composer.md`, `docs/design/accessibility.md`, `PROD-425`
 - Status: Active
 - Context / Problem: Web Reply editor에는 Composer 외곽 border, focus 시 primary로 바뀌는 둥근 editor surface border와 브라우저 기본 TextArea 사각 outline이 함께 표시되어 입력 영역이 상자 안의 상자처럼 답답해 보인다.
-- Decision Outcome: `PostComposer`의 Web TextArea에서는 브라우저 기본 사각 outline만 제거하고, 기존 둥근 editor surface의 primary focus border를 유일한 시각적 focus indicator로 유지한다. 오류 상태에서는 같은 경계를 danger border로 표시한다. 공용 `TextArea`, Native 입력 스타일과 Composer·modal 외곽 semantic border는 변경하지 않는다.
+- Decision Outcome: `PostComposer`의 Web Reply TextArea에서는 브라우저 기본 사각 outline만 제거하고, semantic `focus` token을 적용한 둥근 editor surface border를 유일한 시각적 focus indicator로 유지한다. focus border는 인접 editor background와 3:1 이상의 대비를 유지한다. 오류 상태에서는 같은 경계를 danger border로 표시한다. 일반 Composer의 browser outline, 공용 `TextArea`, Native 입력 스타일과 Composer·modal 외곽 semantic border는 변경하지 않는다.
 - Alternatives Considered: focus 강조를 모두 제거하면 keyboard focus 식별성이 약해진다. Composer나 modal 전체 외곽 border를 focus indicator로 바꾸면 실제 입력보다 넓은 Parent·footer 영역까지 강조한다. 외곽 semantic border를 제거하면 card·modal·inline surface 경계 계약이 흐려진다.
-- Consequences: Web Reply 입력은 사각 browser outline 없이 둥근 focus 경계 하나만 표시해 시각 밀도가 낮아지며, 실제 textbox focus·label·focus trap·복원과 error semantics는 유지된다.
-- Confirmation / Follow-up: focused Storybook interaction에서 editor가 실제 focus를 받고 TextArea computed `outlineStyle`이 `none`인지 확인한다. Web runtime에서는 둥근 editor surface focus border와 danger error border가 유지되고 공용 TextArea 및 Native가 변하지 않았는지 별도로 구분해 보고한다.
+- Consequences: Web Reply 입력은 사각 browser outline 없이 대비가 검증된 둥근 focus 경계 하나만 표시해 시각 밀도가 낮아지며, 실제 textbox focus·label·focus trap·복원과 error semantics는 유지된다. light `focus`는 `#9a7800`, dark `focus`는 `#fce79a`로 현재 editor background와 각각 약 4.15:1, 15.32:1 대비를 갖는다.
+- Confirmation / Follow-up: focused Storybook interaction에서 editor가 실제 focus를 받고 TextArea computed `outlineStyle`이 `none`이며 실제 wrapper border/background 대비가 3:1 이상인지 확인한다. Web runtime에서는 둥근 editor surface focus border와 danger error border가 유지되고 일반 Composer, 공용 TextArea 및 Native가 변하지 않았는지 별도로 구분해 보고한다.
+
+### Composer 문맥 전환은 stateful 구현을 동기적으로 교체한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정(2026-07-31), `docs/design/reply-composer.md`, `PROD-425`
+- Status: Active
+- Context / Problem: Profile·Parent·Relay Environment identity를 render에서 감지하고 passive effect로 draft를 초기화하면 새 문맥의 첫 commit이 새 Profile/Environment와 이전 본문·오류·pending을 잠시 조합할 수 있다. Environment replacement query가 상위에서 suspend하면 이전 Composer tree가 mounted 상태로 유지되어 이전 mutation completion이 surface close·toast·success callback을 실행할 수 있고, child만 key로 교체하면 surface의 dirty/pending state도 첫 commit까지 남는다.
+- Decision Outcome: Relay actor 전환 event는 새 environment state를 적용하기 전에 shared Environment generation ref를 갱신하고, `RelayEnvironmentBoundary`가 suspend 가능한 route/query보다 위에서 이 identity를 제공한다. public `PostComposer`는 Profile ID·Parent ID별 local generation과 Environment generation을 함께 사용해 기존 stateful Composer 구현을 key로 재마운트하고, mutation callback은 mounted/local/surface/Environment generation이 모두 현재일 때만 상태와 성공 callback을 갱신한다. `ReplyComposerSurface`는 suspend하지 않는 outer boundary에서 Parent·Profile fragment record identity를 읽고 stateful contents 전체를 generation key로 교체해 composer body와 surface dirty/pending/confirm state를 함께 초기화한다.
+- Alternatives Considered: passive effect를 layout effect로 바꾸는 방식은 render/commit된 stale state 자체를 제거하지 않는다. 각 route caller에서 Composer key를 조립하면 Profile·Environment 문맥 책임이 분산되고 누락될 수 있다. Environment 변경을 suspending descendant의 render에서만 감지하면 이전 mutation과 replacement query의 race를 막지 못한다. draft state에 identity를 중복 저장해 모든 setter를 guard하는 방식은 기존 Composer 상태 계약을 크게 재작성한다.
+- Consequences: Profile·Parent·Relay Environment가 바뀐 첫 실제 Composer/surface commit은 초기 body·Visibility·error·pending·close 상태로 시작한다. replacement query가 suspend하는 동안 보존된 이전 UI는 이전 mutation completion을 받아도 close·toast·success callback을 실행하지 않는다. 기존 본문·media·Visibility·mutation UI는 stateful inner 구현에 유지된다.
+- Confirmation / Follow-up: Storybook Profiler 기반 interaction에서 Profile+Parent 전환 뒤 첫 Composer body가 빈 문자열인지 검증한다. Relay Environment interaction은 replacement query를 이전 mutation보다 오래 suspend하고도 이전 success callback·surface close가 없으며, 새 surface 첫 commit의 body가 비어 있고 close가 enabled인지 확인한다. key 생성 unit test는 Profile과 Parent identity를 각각 구분한다.
 
 ### 상세 Reply 성공은 현재 route만 targeted refetch한다
 

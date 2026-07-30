@@ -403,7 +403,7 @@ Expected: caller의 행별 Reply config와 `PostListItemReplyController`가 사�
 **Interfaces:**
 
 - Consumes: Task 1·2의 구현과 자동화 결과.
-- Produces: PROD-425 task 2.2 완료 증거. OpenSpec 전체 archive 결정은 PROD-432 및 남은 slice 소유자에게 유지한다.
+- Produces: PROD-425 task 2.2 완료 증거. OpenSpec 전체 integration 검증과 archive 결정은 PROD-423에 유지한다.
 
 - [x] **Step 1: 구조 잔여물을 정적으로 검색한다**
 
@@ -526,6 +526,9 @@ Expected: required checks PASS. 실패하면 로그를 조사해 승인 범위 �
 
 - Modify: `apps/app/src/stories/Posts.stories.tsx`
 - Modify: `apps/app/src/components/post/PostComposer.tsx`
+- Modify: `apps/app/src/components/post/ReplyComposerSurface.tsx`
+- Modify: `apps/app/src/relay/RelayActorProvider.tsx`
+- Create: `apps/app/src/relay/RelayEnvironmentBoundary.tsx`
 - Modify: `docs/design/reply-composer.md`
 - Modify: `openspec/changes/add-local-reply-creation/decisions.md`
 - Modify: `openspec/changes/add-local-reply-creation/implementation-plan.md`
@@ -634,4 +637,81 @@ Expected: PR #413의 기존 modal·inline 동작과 OpenSpec 16/21 `in-progress`
 - row별 Provider, 전역 modal store, navigation state로 active Parent 관리.
 - 새로운 guest 로그인 동작, toast duration/target 변경, Native 출시 판단.
 - Relay connection updater, 새 Reply edge 합성, schema·mutation·Notification 변경.
-- OpenSpec archive와 PROD-432가 소유한 최종 Action Bar 통합 완료 처리.
+- OpenSpec archive와 PROD-423이 소유한 전체 integration 검증·archive 완료 처리.
+
+---
+
+### Task 6: Composer 문맥 격리와 Web focus 대비를 보강한다
+
+**Files:**
+
+- Modify: `apps/app/src/stories/Posts.stories.tsx`
+- Modify: `apps/app/src/components/post/PostComposer.tsx`
+- Modify: `apps/app/src/theme/tokens.ts`
+- Modify: `docs/design/colors.md`
+- Modify: `docs/design/reply-composer.md`
+- Modify: `openspec/changes/add-local-reply-creation/decisions.md`
+- Modify: `openspec/changes/add-local-reply-creation/implementation-plan.md`
+
+**Interfaces:**
+
+- Consumes: 기존 Profile/Parent context key, 현재 Relay Environment, mutation unmount guard와 Web Reply editor wrapper border.
+- Produces: Profile·Parent·Relay Environment가 바뀐 첫 commit부터 새 Composer 초깃값만 표시하는 state boundary와 light/dark에서 3:1 이상 대비를 갖는 단일 둥근 focus border.
+- Preserves: 기존 `PostComposer` 본문·Visibility·media·mutation 계약, 일반 Composer browser outline, Reply modal·inline geometry, error danger border와 Native 동작.
+
+- [x] **Step 1: 새 문맥 첫 commit과 focus border 대비를 검출하는 실패 Storybook assertion을 작성한다**
+
+Profile·Parent 전환 story는 React commit 시점의 Reply body를 기록한다. Relay Environment story는 이전 mutation보다 replacement query를 오래 suspend한 상태에서 이전 success callback·surface close가 발생하지 않고, 새 surface 첫 commit의 body와 close pending 상태가 초기값인지 검증한다. 상세 inline story는 실제 focused editor wrapper border와 background의 contrast ratio가 3:1 이상인지 검증한다.
+
+- [x] **Step 2: 현재 passive reset과 primary border 때문에 assertion이 실패하는지 확인한다**
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app exec vitest run --project=storybook \
+  src/stories/Posts.stories.tsx \
+  -t "Composer Reply (Context|Environment) Isolation|Reply Detail Inline Integration"
+```
+
+Expected: 전환 직후 첫 commit에 이전 body가 노출되거나 light focus border contrast가 3:1 미만이라 FAIL한다.
+
+- [x] **Step 3: 기존 Composer 상태부를 문맥별 keyed boundary로 격리한다**
+
+`PostComposer`의 기존 editor/mutation 구현은 유지하고, Profile ID·Parent ID·Relay Environment identity가 바뀌면 stateful inner Composer를 새 key로 재마운트한다. Relay actor 전환 event가 suspend 가능한 query보다 먼저 shared Environment generation을 갱신하고, `ReplyComposerSurface`도 fragment record identity별 stateful contents를 key로 교체한다. passive effect에서 뒤늦게 draft를 지우는 경로는 제거하고 mounted/local/surface/Environment generation guard로 이전 mutation callback을 무시한다.
+
+- [x] **Step 4: Web Reply의 단일 둥근 focus border에 semantic focus token을 적용한다**
+
+light/dark 양쪽에 `focus` token을 추가하고 focused `editorSurface`에만 사용한다. Web Reply textarea의 browser outline 제거, error의 `danger` 우선순위, 일반 Composer와 Native 범위는 유지한다. `colors.md`, Reply canonical과 decision record에 token 목적과 3:1 대비 기준을 동기화한다.
+
+- [x] **Step 5: archive 소유권을 PROD-423으로 정정하고 전체 검증을 실행한다**
+
+구현 계획의 PROD-432 archive 표기를 proposal/tasks와 같은 PROD-423으로 정정하되 OpenSpec 4.1–4.5는 완료 처리하지 않는다.
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app test
+pnpm exec openspec validate add-local-reply-creation --strict
+pnpm exec prettier --check \
+  apps/app/src/components/post/PostComposer.tsx \
+  apps/app/src/components/post/ReplyComposerSurface.tsx \
+  apps/app/src/relay/RelayActorProvider.tsx \
+  apps/app/src/relay/RelayEnvironmentBoundary.tsx \
+  apps/app/src/stories/Posts.stories.tsx \
+  apps/app/src/theme/tokens.ts \
+  docs/design/colors.md \
+  docs/design/reply-composer.md \
+  openspec/changes/add-local-reply-creation/decisions.md \
+  openspec/changes/add-local-reply-creation/implementation-plan.md
+git diff --check
+```
+
+- [ ] **Step 6: 독립 리뷰, checkpoint commit·push와 hosted CI를 확인한다**
+
+독립 reviewer가 첫 commit state 격리, 늦은 mutation 차단, focus/error contrast, 일반 Composer·Native 비회귀와 OpenSpec ownership 정합성을 확인한 뒤 경로 지정으로 stage·commit·push한다. hosted CI가 remote HEAD에서 통과한 뒤 서로 다른 세 관점으로 다시 리뷰한다. finding이 없을 때만 unresolved outdated thread에 남길 한국어 설명과 `@robin-maki` 재리뷰 요청 초안을 사용자에게 보여주며, 승인 전 GitHub write는 하지 않는다.
+
+## Task 6 Explicit Exclusions
+
+- Native snackbar target·duration과 Native 출시 판단.
+- Reply mutation/cache/Notification, modal·inline layout 또는 coordinator ownership 변경.
+- OpenSpec 4.1–4.5 완료 처리와 archive 실행.

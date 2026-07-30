@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Suspense, useMemo, useRef, useState } from 'react';
+import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
@@ -19,7 +19,9 @@ import { PostSourcePresentationView } from '@/components/post/PostSourcePresenta
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionProvider } from '@/session/SessionProvider';
+import { colors } from '@/theme/tokens';
 import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
@@ -34,6 +36,33 @@ import type { PostSourcePresentationData } from '@/components/post/PostSourcePre
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
+
+function getColorContrastRatio(foreground: string, background: string) {
+  const relativeLuminance = (color: string) => {
+    const hex = /^#([\da-f]{6})$/i.exec(color)?.[1];
+    const channels = hex
+      ? [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16))
+      : color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number);
+    if (!channels || channels.length !== 3) {
+      throw new Error(`RGB color를 해석할 수 없습니다: ${color}`);
+    }
+    const [red, green, blue] = channels.map((channel) => {
+      const normalized = channel! / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
 
 const shortPost = {
   ...post({
@@ -494,6 +523,7 @@ const storyPosts = [
   mediaOnlyPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
+const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
   [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
@@ -521,6 +551,14 @@ const PostsStoriesQuery = graphql`
       }
     }
     composerProfile: node(id: "profile-composer") {
+      __typename
+      ... on Profile {
+        id
+        ...PostComposer_profile @alias(as: "composer")
+        ...ReplyComposerSurface_profile @alias(as: "replySurface")
+      }
+    }
+    alternateComposerProfile: node(id: "profile-composer-alternate") {
       __typename
       ... on Profile {
         id
@@ -580,6 +618,7 @@ function usePostsStoryData() {
     return node;
   });
   if (
+    data.alternateComposerProfile?.__typename !== 'Profile' ||
     data.composerProfile?.__typename !== 'Profile' ||
     data.contentPostsProfile?.__typename !== 'Profile' ||
     data.emptyPostsProfile?.__typename !== 'Profile' ||
@@ -589,6 +628,10 @@ function usePostsStoryData() {
   }
 
   return {
+    alternateComposerProfile: requireFragment(
+      data.alternateComposerProfile.composer,
+      'alternate composer profile',
+    ),
     composerProfile: requireFragment(data.composerProfile.composer, 'composer profile'),
     replyComposerProfile: requireFragment(
       data.composerProfile.replySurface,
@@ -827,6 +870,7 @@ function ProductionReactionMutationTargetsStory() {
         if (request.name === 'PostsStoriesQuery') {
           return Promise.resolve({
             data: {
+              alternateComposerProfile,
               composerProfile,
               contentPostsProfile,
               emptyPostsProfile,
@@ -1090,6 +1134,7 @@ function ReplyComposerContractStory() {
           if (request.name === 'PostsStoriesQuery') {
             return Promise.resolve({
               data: {
+                alternateComposerProfile,
                 composerProfile,
                 contentPostsProfile,
                 emptyPostsProfile,
@@ -1149,7 +1194,11 @@ function ReplyComposerContractContents({
 
 function ReplyComposerContextIsolationStory() {
   const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [firstCommittedBody, setFirstCommittedBody] = useState<string | null>(null);
+  const [alternateProfile, setAlternateProfile] = useState(false);
   const [parentId, setParentId] = useState('post-parent-a');
+  const composerRoot = useRef<View>(null);
+  const captureNextCommit = useRef(false);
   const environment = useMemo(
     () =>
       new Environment({
@@ -1157,6 +1206,7 @@ function ReplyComposerContextIsolationStory() {
           if (request.name === 'PostsStoriesQuery') {
             return {
               data: {
+                alternateComposerProfile,
                 composerProfile,
                 contentPostsProfile,
                 emptyPostsProfile,
@@ -1182,48 +1232,84 @@ function ReplyComposerContextIsolationStory() {
 
   return (
     <RelayEnvironmentProvider environment={environment}>
-      <Suspense fallback={<Text>Reply Composer context fixture를 불러오는 중입니다.</Text>}>
-        <ReplyComposerContextIsolationContents
-          onPostCreated={(createdPost) =>
-            setCreatedPostIds((current) => [...current, createdPost.id])
-          }
-          parentId={parentId}
-        />
-      </Suspense>
+      <View ref={composerRoot}>
+        <Profiler
+          id="reply-context-composer"
+          onRender={() => {
+            if (!captureNextCommit.current) {
+              return;
+            }
+            const root = composerRoot.current as unknown as HTMLElement | null;
+            const body = root?.querySelector<HTMLTextAreaElement>('[aria-label="답글 본문"]');
+            if (!body) {
+              return;
+            }
+            captureNextCommit.current = false;
+            setFirstCommittedBody(body.value);
+          }}
+        >
+          <Suspense fallback={<Text>Reply Composer context fixture를 불러오는 중입니다.</Text>}>
+            <ReplyComposerContextIsolationContents
+              alternateProfile={alternateProfile}
+              onPostCreated={(createdPost) =>
+                setCreatedPostIds((current) => [...current, createdPost.id])
+              }
+              parentId={parentId}
+            />
+          </Suspense>
+        </Profiler>
+      </View>
       <Pressable
         accessibilityLabel="다른 Parent로 전환"
         accessibilityRole="button"
-        onPress={() => setParentId('post-parent-b')}
+        onPress={() => {
+          captureNextCommit.current = true;
+          setAlternateProfile(true);
+          setParentId('post-parent-b');
+        }}
       >
         <Text>다른 Parent로 전환</Text>
       </Pressable>
+      <Text testID="reply-context-first-committed-body">{JSON.stringify(firstCommittedBody)}</Text>
       <Text testID="reply-context-created-log">{JSON.stringify(createdPostIds)}</Text>
     </RelayEnvironmentProvider>
   );
 }
 
 function ReplyComposerContextIsolationContents({
+  alternateProfile,
   onPostCreated,
   parentId,
 }: {
+  alternateProfile: boolean;
   onPostCreated: (post: Readonly<{ id: string }>) => void;
   parentId: string;
 }) {
+  const data = usePostsStoryData();
+
   return (
     <PostComposer
       onPostCreated={onPostCreated}
-      profile={usePostsStoryData().composerProfile}
+      profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
       replyParentId={parentId}
     />
   );
 }
 
-function createReplyComposerEnvironment(mutationDelay: number) {
+function createReplyComposerEnvironment({
+  mutationDelay,
+  queryDelay = 0,
+}: {
+  mutationDelay: number;
+  queryDelay?: number;
+}) {
   return new Environment({
     network: Network.create(async (request: RequestParameters) => {
       if (request.name === 'PostsStoriesQuery') {
+        await new Promise((resolve) => setTimeout(resolve, queryDelay));
         return {
           data: {
+            alternateComposerProfile,
             composerProfile,
             contentPostsProfile,
             emptyPostsProfile,
@@ -1248,26 +1334,87 @@ function createReplyComposerEnvironment(mutationDelay: number) {
 
 function ReplyComposerEnvironmentIsolationStory() {
   const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
-  const [environment, setEnvironment] = useState(() => createReplyComposerEnvironment(200));
+  const [closeRequests, setCloseRequests] = useState(0);
+  const [environment, setEnvironment] = useState(() =>
+    createReplyComposerEnvironment({ mutationDelay: 200 }),
+  );
+  const [firstCommittedState, setFirstCommittedState] = useState<{
+    body: string;
+    closeDisabled: boolean;
+  } | null>(null);
+  const captureNextCommit = useRef(false);
+  const environmentGenerationRef = useRef(0);
 
   return (
-    <RelayEnvironmentProvider environment={environment}>
-      <Suspense fallback={<Text>새 Reply Composer 문맥을 불러오는 중입니다.</Text>}>
-        <ReplyComposerContractContents
-          onPostCreated={(createdPost) =>
-            setCreatedPostIds((current) => [...current, createdPost.id])
-          }
-        />
-      </Suspense>
+    <RelayEnvironmentBoundary environment={environment} generationRef={environmentGenerationRef}>
+      <View>
+        <Suspense fallback={<Text>새 Reply Composer 문맥을 불러오는 중입니다.</Text>}>
+          <ReplyComposerEnvironmentIsolationContents
+            onSurfaceRender={() => {
+              if (!captureNextCommit.current) {
+                return;
+              }
+              const body = document.querySelector<HTMLTextAreaElement>('[aria-label="답글 본문"]');
+              const close = document.querySelector<HTMLButtonElement>('[aria-label="닫기"]');
+              if (!body || !close) {
+                return;
+              }
+              captureNextCommit.current = false;
+              setFirstCommittedState({ body: body.value, closeDisabled: close.disabled });
+            }}
+            onPostCreated={(createdPost) =>
+              setCreatedPostIds((current) => [...current, createdPost.id])
+            }
+            onRequestClose={() => setCloseRequests((current) => current + 1)}
+          />
+        </Suspense>
+      </View>
       <Pressable
         accessibilityLabel="Relay Environment 교체"
         accessibilityRole="button"
-        onPress={() => setEnvironment(createReplyComposerEnvironment(0))}
+        onPress={() => {
+          captureNextCommit.current = true;
+          environmentGenerationRef.current += 1;
+          setEnvironment(createReplyComposerEnvironment({ mutationDelay: 0, queryDelay: 400 }));
+        }}
       >
         <Text>Relay Environment 교체</Text>
       </Pressable>
+      <Text testID="reply-environment-first-committed-state">
+        {JSON.stringify(firstCommittedState)}
+      </Text>
+      <Text testID="reply-environment-close-log">{closeRequests}</Text>
       <Text testID="reply-environment-created-log">{JSON.stringify(createdPostIds)}</Text>
-    </RelayEnvironmentProvider>
+    </RelayEnvironmentBoundary>
+  );
+}
+
+function ReplyComposerEnvironmentIsolationContents({
+  onPostCreated,
+  onRequestClose,
+  onSurfaceRender,
+}: {
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  onRequestClose: () => void;
+  onSurfaceRender: () => void;
+}) {
+  const data = usePostsStoryData();
+  const parent = requireFragment(
+    requirePostById(data.posts, shortPost.id).replySurface,
+    'Environment Reply Composer Parent',
+  );
+
+  return (
+    <Profiler id="reply-environment-surface" onRender={onSurfaceRender}>
+      <ReplyComposerSurface
+        onPostCreated={onPostCreated}
+        onRequestClose={onRequestClose}
+        open
+        owner="list"
+        parent={parent}
+        profile={data.replyComposerProfile}
+      />
+    </Profiler>
   );
 }
 
@@ -1419,6 +1566,7 @@ const meta = {
   parameters: {
     relay: {
       data: {
+        alternateComposerProfile,
         composerProfile,
         contentPostsProfile,
         emptyPostsProfile,
@@ -1797,6 +1945,7 @@ export const ProductionRepostFailureToast: Story = {
   parameters: {
     relay: {
       data: {
+        alternateComposerProfile,
         composerProfile,
         contentPostsProfile,
         emptyPostsProfile,
@@ -3273,11 +3422,15 @@ export const ComposerReplyContextIsolation: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
     await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
 
-    await waitFor(() => expect(body).toHaveValue(''));
-    await userEvent.type(body, '새 Parent의 답글');
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
+    );
+    const currentBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(currentBody).toHaveValue('');
+    await userEvent.type(currentBody, '새 Parent의 답글');
     expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
     await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(body).toHaveValue('새 Parent의 답글');
+    expect(currentBody).toHaveValue('새 Parent의 답글');
     expect(canvas.getByTestId('reply-context-created-log')).toHaveTextContent('[]');
   },
   render: () => <ReplyComposerContextIsolationStory />,
@@ -3286,16 +3439,23 @@ export const ComposerReplyContextIsolation: Story = {
 export const ComposerReplyEnvironmentIsolation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const oldBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    const oldBody = await screen.findByRole('textbox', { name: '답글 본문' });
 
     await userEvent.type(oldBody, '이전 Environment의 늦은 답글');
-    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(screen.getByRole('button', { name: '답글 게시' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
 
-    const currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
-    await waitFor(() => expect(currentBody).toHaveValue(''));
-    await userEvent.type(currentBody, '새 Environment의 답글');
     await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+    expect(canvas.getByTestId('reply-environment-close-log')).toHaveTextContent('0');
+    const currentBody = await screen.findByRole('textbox', { name: '답글 본문' });
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-environment-first-committed-state')).toHaveTextContent(
+        JSON.stringify({ body: '', closeDisabled: false }),
+      ),
+    );
+    expect(currentBody).toHaveValue('');
+    await userEvent.type(currentBody, '새 Environment의 답글');
     expect(currentBody).toHaveValue('새 Environment의 답글');
     expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
   },
@@ -3475,6 +3635,15 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(body).toBeVisible();
     await waitFor(() => expect(body).toHaveFocus());
     expect(getComputedStyle(body).outlineStyle).toBe('none');
+    const editorSurface = body.parentElement?.parentElement;
+    expect(editorSurface).not.toBeNull();
+    const editorStyle = getComputedStyle(editorSurface!);
+    expect(
+      getColorContrastRatio(editorStyle.borderColor, editorStyle.backgroundColor),
+    ).toBeGreaterThanOrEqual(3);
+    expect(getColorContrastRatio(colors.dark.focus, colors.dark.background)).toBeGreaterThanOrEqual(
+      3,
+    );
     expect(replyButton).toHaveAttribute('aria-expanded', 'true');
     expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
 

@@ -19,6 +19,13 @@ Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 �
 - toast foreground는 현재 theme `background`를 사용해 accent와 반전 대비를 만들며, 다른 조합이 필요해지기
   전에는 별도의 짝 토큰을 선제 정의하지 않는다.
 
+## Focus
+
+- `focus`는 브라우저 기본 focus indicator를 컴포넌트 경계로 대체해야 하는 제한된 Web surface에 사용한다.
+- focus 경계와 인접 배경은 상태 식별에 필요한 3:1 이상의 대비를 유지한다. 현재 light `focus`는 `#9a7800`,
+  dark `focus`는 `#fce79a`에 매핑하며 각각 Reply editor background와 약 4.15:1, 15.32:1 대비를 갖는다.
+- 기본 browser outline을 유지하는 control이나 Native focus style을 `focus` token으로 일괄 덮어쓰지 않는다.
+
 ## Divider
 
 - `divider`는 서로 이어지는 콘텐츠 행을 나누는 저강도 1px 구분선에 사용한다.

@@ -5,14 +5,15 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from 'react';
 import { Platform } from 'react-native';
-import { RelayEnvironmentProvider } from 'react-relay';
 import { deleteSessionToken, readSessionToken, writeSessionToken } from '@/auth/tokenStorage';
 import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
 import { createRelayEnvironment } from './environment';
+import { RelayEnvironmentBoundary } from './RelayEnvironmentBoundary';
 import type { PropsWithChildren } from 'react';
 import type { Environment } from 'relay-runtime';
 
@@ -37,6 +38,7 @@ export function RelayActorProvider({
     Platform.OS === 'web' ? null : undefined,
   );
   const [actor, dispatchActor] = useReducer(reduceActorState, initialActorState);
+  const environmentGenerationRef = useRef(0);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -48,21 +50,25 @@ export function RelayActorProvider({
 
   const setNativeSession = useCallback(async (token: string) => {
     await writeSessionToken(token);
+    environmentGenerationRef.current += 1;
     setNativeToken(token);
     dispatchActor({ type: 'retry' });
   }, []);
 
   const clearNativeSession = useCallback(async () => {
     await deleteSessionToken();
+    environmentGenerationRef.current += 1;
     setNativeToken(null);
     dispatchActor({ type: 'profile-selected', profileId: null });
   }, []);
 
   const resetActor = useCallback((profileId?: string | null) => {
+    environmentGenerationRef.current += 1;
     dispatchActor({ type: 'profile-selected', profileId });
   }, []);
 
   const retry = useCallback(() => {
+    environmentGenerationRef.current += 1;
     dispatchActor({ type: 'retry' });
   }, []);
 
@@ -89,7 +95,9 @@ export function RelayActorProvider({
 
   return (
     <RelayActorContext.Provider value={value}>
-      <RelayEnvironmentProvider environment={environment}>{children}</RelayEnvironmentProvider>
+      <RelayEnvironmentBoundary environment={environment} generationRef={environmentGenerationRef}>
+        {children}
+      </RelayEnvironmentBoundary>
     </RelayActorContext.Provider>
   );
 }

@@ -10,6 +10,7 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/TextField';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import {
@@ -23,7 +24,10 @@ import {
 } from './postComposerState';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
-import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
+import type {
+  PostComposer_profile$data,
+  PostComposer_profile$key,
+} from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 
@@ -78,6 +82,7 @@ const CreatePostMutation = graphql`
 
 type PostComposerProps = {
   beforeEditor?: ReactNode;
+  contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
   focusOnMount?: boolean;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
@@ -88,19 +93,57 @@ type PostComposerProps = {
   surface?: boolean;
 };
 
-export function PostComposer({
+export function PostComposer({ profile: profileKey, replyParentId, ...props }: PostComposerProps) {
+  const environment = useRelayEnvironment();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
+  const environmentRef = useRef(environment);
+  const contextGenerationRef = useRef(0);
+  if (!environmentGenerationRef && environmentRef.current !== environment) {
+    environmentRef.current = environment;
+    contextGenerationRef.current += 1;
+  }
+
+  const profile = useFragment(PostComposerFragment, profileKey);
+  const contextKey = createPostComposerContextKey(profile.id, replyParentId);
+  const contextKeyRef = useRef(contextKey);
+  if (contextKeyRef.current !== contextKey) {
+    contextKeyRef.current = contextKey;
+    contextGenerationRef.current += 1;
+  }
+
+  return (
+    <PostComposerContents
+      {...props}
+      contextGenerationRef={contextGenerationRef}
+      environmentGenerationRef={environmentGenerationRef}
+      key={`${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
+      profile={profile}
+      replyParentId={replyParentId}
+    />
+  );
+}
+
+type PostComposerContentsProps = Omit<PostComposerProps, 'profile'> & {
+  contextGenerationRef: RefObject<number>;
+  environmentGenerationRef: RefObject<number> | null;
+  profile: PostComposer_profile$data;
+};
+
+function PostComposerContents({
   beforeEditor,
+  contextGuard,
+  contextGenerationRef,
   editorRef,
+  environmentGenerationRef,
   focusOnMount = false,
   onPostCreated,
   onStateChange,
-  profile: profileKey,
+  profile,
   replyParentId,
   scrollable = false,
   surface = false,
-}: PostComposerProps) {
+}: PostComposerContentsProps) {
   const theme = useTheme();
-  const profile = useFragment(PostComposerFragment, profileKey);
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
   const visibilityControl = useRef<View>(null);
@@ -115,19 +158,10 @@ export function PostComposer({
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const environment = useRelayEnvironment();
   const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const replyMode = Boolean(replyParentId);
   const contextKey = createPostComposerContextKey(profile.id, replyParentId);
-  const contextKeyRef = useRef(contextKey);
-  const environmentRef = useRef(environment);
-  const contextGenerationRef = useRef(0);
   const mountedRef = useRef(true);
-  if (contextKeyRef.current !== contextKey || environmentRef.current !== environment) {
-    contextKeyRef.current = contextKey;
-    environmentRef.current = environment;
-    contextGenerationRef.current += 1;
-  }
   const availableVisibilityOptions = visibilityOptions.filter((option) =>
     isPostComposerVisibilityAllowed(option.value, replyParentId),
   );
@@ -156,6 +190,8 @@ export function PostComposer({
     setVisibilityOpen(false);
     setSubmitting(true);
     const submissionGeneration = contextGenerationRef.current;
+    const submissionEnvironmentGeneration = environmentGenerationRef?.current;
+    const submissionGuardGeneration = contextGuard?.current;
     const submittedCallback = onPostCreated;
     const submissionReplyMode = replyMode;
     commit({
@@ -166,7 +202,12 @@ export function PostComposer({
         },
       },
       onCompleted: (response, errors) => {
-        if (!mountedRef.current || contextGenerationRef.current !== submissionGeneration) {
+        if (
+          !mountedRef.current ||
+          contextGenerationRef.current !== submissionGeneration ||
+          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
+          contextGuard?.current !== submissionGuardGeneration
+        ) {
           return;
         }
         setSubmitting(false);
@@ -197,7 +238,12 @@ export function PostComposer({
         submittedCallback?.(createdPost);
       },
       onError: (cause) => {
-        if (!mountedRef.current || contextGenerationRef.current !== submissionGeneration) {
+        if (
+          !mountedRef.current ||
+          contextGenerationRef.current !== submissionGeneration ||
+          environmentGenerationRef?.current !== submissionEnvironmentGeneration ||
+          contextGuard?.current !== submissionGuardGeneration
+        ) {
           return;
         }
         setSubmitting(false);
@@ -210,21 +256,9 @@ export function PostComposer({
   };
 
   useEffect(() => {
-    setBody('');
-    setEditorFocused(false);
-    setError(null);
-    setMedia(emptyPostComposerMediaValue);
-    setMediaGeneration((generation) => generation + 1);
-    setSubmitting(false);
-    setVisibility(PostVisibility.UNLISTED);
-    setVisibilityOpen(false);
-  }, [contextKey, environment]);
-
-  useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      contextGenerationRef.current += 1;
     };
   }, []);
 
@@ -432,7 +466,13 @@ export function PostComposer({
           styles.editorSurface,
           {
             backgroundColor: theme.background,
-            borderColor: error ? theme.danger : editorFocused ? theme.primary : theme.border,
+            borderColor: error
+              ? theme.danger
+              : editorFocused
+                ? Platform.OS === 'web' && replyMode
+                  ? theme.focus
+                  : theme.primary
+                : theme.border,
           },
         ]}
       >

@@ -58,8 +58,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ### editor와 고정 footer
 
 - 중앙 editor는 기존 Composer의 작성 Profile, TextArea와 error 표현을 사용한다. Web TextArea의 브라우저
-  기본 사각 outline은 중복 표시하지 않고, 둥근 editor surface border 하나를 focus indicator로 사용한다.
-  오류 상태에서는 같은 경계를 semantic danger border로 바꾼다. placeholder는 `답글을 입력하세요…`다.
+  기본 사각 outline은 중복 표시하지 않고, semantic `focus` token을 적용한 둥근 editor surface border 하나를
+  focus indicator로 사용한다. 이 focus 경계는 인접 editor background와 3:1 이상의 대비를 유지한다. 오류
+  상태에서는 같은 경계를 semantic danger border로 바꾼다. placeholder는 `답글을 입력하세요…`다.
 - 제목·control label·button에는 공용 UI typography를, Parent·입력 본문에는 공용 body typography를 사용한다.
   modal 전용 raw font size나 font family를 만들지 않는다.
 - footer 좌측에는 Visibility control을 둔다.
@@ -87,6 +88,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, pending 상태에서는
   현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 modal, direct Parent 맥락, 본문과 Visibility를 유지한다.
+- selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
+  Visibility, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 mutation completion은 새 문맥의 상태나
+  성공 callback을 변경하지 않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
@@ -128,7 +132,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
 - pristine/dirty/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
-  없음, selected Profile 격리를 확인한다.
+  없음, selected Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 completion 격리를 확인한다.
 - Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의
   targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,

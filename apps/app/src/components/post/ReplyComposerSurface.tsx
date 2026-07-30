@@ -12,12 +12,14 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { graphql, useFragment } from 'react-relay';
+import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
+import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, shadow, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
@@ -26,7 +28,7 @@ import { PostSourcePreview } from './PostSourcePresentationView';
 import { PostThreadConnector } from './PostThreadConnector';
 import { getReplySurfacePresentation } from './replySurface';
 import type { Href } from 'expo-router';
-import type { RefObject } from 'react';
+import type { ForwardedRef, RefObject } from 'react';
 import type { TextInput, View as NativeView } from 'react-native';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
@@ -69,6 +71,9 @@ const ReplyComposerSurfaceProfileFragment = graphql`
   }
 `;
 
+const ReplyComposerSurfaceParentFragmentNode = getFragment(ReplyComposerSurfaceParentFragment);
+const ReplyComposerSurfaceProfileFragmentNode = getFragment(ReplyComposerSurfaceProfileFragment);
+
 type ReplyComposerSurfaceProps = {
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onRequestClose: () => void;
@@ -88,18 +93,57 @@ const initialComposerState: PostComposerState = { dirty: false, submitting: fals
 export const ReplyComposerSurface = forwardRef<
   ReplyComposerSurfaceHandle,
   ReplyComposerSurfaceProps
->(function ReplyComposerSurface(
-  {
-    onPostCreated,
-    onRequestClose,
-    open,
-    owner,
-    parent: parentKey,
-    profile: profileKey,
-    triggerRef,
-  },
-  ref,
-) {
+>(function ReplyComposerSurface(props, ref) {
+  const environment = useRelayEnvironment();
+  const environmentGenerationRef = useRelayEnvironmentGeneration();
+  const environmentRef = useRef(environment);
+  const identityRef = useRef(
+    `${String(getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent))}:${String(
+      getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile),
+    )}:${props.open ? 'open' : 'closed'}`,
+  );
+  const contextGuard = useRef(0);
+  const identity = `${String(
+    getDataIDsFromFragment(ReplyComposerSurfaceParentFragmentNode, props.parent),
+  )}:${String(getDataIDsFromFragment(ReplyComposerSurfaceProfileFragmentNode, props.profile))}:${
+    props.open ? 'open' : 'closed'
+  }`;
+
+  if (!environmentGenerationRef && environmentRef.current !== environment) {
+    environmentRef.current = environment;
+    contextGuard.current += 1;
+  }
+  if (identityRef.current !== identity) {
+    identityRef.current = identity;
+    contextGuard.current += 1;
+  }
+
+  return (
+    <ReplyComposerSurfaceContents
+      {...props}
+      contextGuard={contextGuard}
+      key={`${contextGuard.current}:${environmentGenerationRef?.current ?? 0}`}
+      surfaceRef={ref}
+    />
+  );
+});
+
+type ReplyComposerSurfaceContentsProps = ReplyComposerSurfaceProps & {
+  contextGuard: RefObject<number>;
+  surfaceRef: ForwardedRef<ReplyComposerSurfaceHandle>;
+};
+
+function ReplyComposerSurfaceContents({
+  contextGuard,
+  onPostCreated,
+  onRequestClose,
+  open,
+  owner,
+  parent: parentKey,
+  profile: profileKey,
+  surfaceRef,
+  triggerRef,
+}: ReplyComposerSurfaceContentsProps) {
   const theme = useTheme();
   const router = useRouter();
   const { showToast } = useToast();
@@ -151,7 +195,7 @@ export const ReplyComposerSurface = forwardRef<
   );
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
-  useImperativeHandle(ref, () => ({ requestClose }), [requestClose]);
+  useImperativeHandle(surfaceRef, () => ({ requestClose }), [requestClose]);
 
   const continueEditing = useCallback(() => {
     closeAfterDiscardRef.current = undefined;
@@ -304,6 +348,7 @@ export const ReplyComposerSurface = forwardRef<
           style={discardConfirmOpen ? styles.mainBlocked : null}
         >
           <PostComposer
+            contextGuard={contextGuard}
             editorRef={editorRef}
             focusOnMount
             onPostCreated={handlePostCreated}
@@ -428,6 +473,7 @@ export const ReplyComposerSurface = forwardRef<
                       </View>
                     </View>
                   }
+                  contextGuard={contextGuard}
                   editorRef={editorRef}
                   focusOnMount
                   onPostCreated={handlePostCreated}
@@ -445,7 +491,7 @@ export const ReplyComposerSurface = forwardRef<
       </Pressable>
     </Modal>
   );
-});
+}
 
 const styles = StyleSheet.create({
   backdrop: {
