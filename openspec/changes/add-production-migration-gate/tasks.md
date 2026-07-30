@@ -21,11 +21,11 @@ Production migration Job이 별도 database credential과 API/Web과 같은 immu
 **Verification**
 
 - Helm dev/prod render에서 별도 migration Secret, 동일 digest와 dev 회귀를 검증한다.
-- Invalid digest와 missing migration Secret이 render 단계에서 실패하는지 검증한다.
+- Invalid digest가 render 단계에서 실패하고 migration Job이 고정된 Secret의 `username/password`만 참조하는지 검증한다.
 - Production migration Job의 유일한 command가 `migrate`이고 gate/restore concern이 없는지 검증한다.
 - OpenSpec strict validation과 repository format/lint를 통과한다.
 
-- [x] 1.1 Production migration Job이 별도 migration Secret/database identity만 사용하고 runtime credential로 fallback하지 않게 한다.
+- [x] 1.1 Production migration Job이 고정된 database target과 별도 migration Secret의 `username/password`만 사용하고 runtime credential로 fallback하지 않게 한다.
 - [x] 1.2 Migration Job, API와 Web이 동일한 immutable image digest를 렌더하게 한다.
 - [x] 1.3 Migration Job을 기존 `migrate` command만 실행하는 단순 실행기로 유지하고 phase/schema-authority/restore 분기를 제거한다.
 - [x] 1.4 Credential, lock, SQL과 timeout 실패 뒤 workload 차단·같은 release 재시도·forward recovery 경계를 운영 문서에 기록한다.

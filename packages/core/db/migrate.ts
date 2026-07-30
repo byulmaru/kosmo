@@ -15,17 +15,25 @@ export async function runDatabaseMigrations({
   migrationsFolder?: string;
 } = {}): Promise<void> {
   if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required to run database migrations.');
+    const requiredEnvironment = ['PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD'];
+    const missingEnvironment = requiredEnvironment.filter((name) => !process.env[name]);
+
+    if (missingEnvironment.length > 0) {
+      throw new Error(
+        `DATABASE_URL or PostgreSQL environment is required to run database migrations; missing ${missingEnvironment.join(', ')}.`,
+      );
+    }
   }
 
-  const client = postgres(databaseUrl, {
+  const clientOptions = {
     max: 1,
     connection: {
       idle_in_transaction_session_timeout: 30 * 1000,
       lock_timeout: 10 * 1000,
       statement_timeout: 10 * 60 * 1000,
     },
-  });
+  };
+  const client = databaseUrl ? postgres(databaseUrl, clientOptions) : postgres(clientOptions);
   let lockAcquired = false;
 
   try {

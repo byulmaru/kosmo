@@ -5,7 +5,7 @@
 Production migration은 API/Web과 같은 immutable release image를 사용하지만 database 권한은 분리한다.
 
 - PROD-562는 production migration 전용 database identity와 Kubernetes Secret을 준비한다.
-- PROD-564의 Helm Job은 그 Secret의 `url` key만 `DATABASE_URL`로 읽고 기존 `migrate` command를 실행한다.
+- PROD-564의 Helm Job은 그 Secret의 `username`과 `password`만 읽고 기존 `migrate` command를 실행한다.
 - API/Web의 runtime Secret을 migration에 복제하거나 migration 장애 시 fallback으로 사용하지 않는다.
 - PROD-563은 정식 SemVer release의 migration/API/Web 전체를 production 배포로 한 번 승인하고, migration Job 성공 뒤에만 API/Web을 활성화한다.
 - PROD-565는 실제 첫 production release와 public smoke를 검증한다.
@@ -19,10 +19,10 @@ Production migration Job은 다음 값만 사용한다.
 - `env=prod`
 - `imageDigest=sha256:<64 lowercase hex>`
 - `migration.enabled=true`
-- `migration.secretName=<migration Secret>`
-- `migration.secretKey=url` — 다른 key를 사용할 때만 override
 
-Job, API와 Web은 모두 `image@sha256:...` 형태의 같은 image reference를 렌더한다. Production에서 mutable tag나 유효하지 않은 digest를 사용하면 Helm render가 실패한다. Migration Secret이 없으면 Kubernetes가 container를 시작할 수 없고 runtime credential로 재시도하지 않는다.
+Job, API와 Web은 모두 `image@sha256:...` 형태의 같은 image reference를 렌더한다. Production migration에서 mutable tag나 유효하지 않은 digest를 사용하면 Helm render가 실패한다.
+
+Migration 대상은 Helm release의 PostgreSQL read-write Service, `5432` port와 `kosmo` database로 고정한다. Job은 `<release>-postgres-migration` Secret의 `username`과 `password`만 읽으며 database URL, host, database 또는 Secret 이름/key를 release 입력으로 받지 않는다. Secret이 없거나 key가 누락되면 Kubernetes가 container를 시작할 수 없고 runtime credential로 재시도하지 않는다.
 
 Migration Job은 다음 command만 실행한다.
 

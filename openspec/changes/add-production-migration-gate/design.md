@@ -26,13 +26,14 @@ PROD-564는 production migration의 공통 실행 경계만 만든다. PROD-269�
 
 1. Production에서 migration이 명시적으로 enabled일 때만 기존 Helm Job을 렌더한다.
 2. Production render는 `imageDigest=sha256:...`를 요구하고 API/Web과 같은 `image@digest` helper를 사용한다.
-3. Job은 migration 전용 Secret의 database URL만 읽고 `migrate`를 실행한다.
+3. Job은 migration 전용 Secret의 `username`과 `password`만 읽는다. Host, port와 database는 현재 Helm release의 production PostgreSQL로 고정하고 `migrate`를 실행한다.
 4. Credential, advisory lock, SQL 또는 timeout 실패는 Job failure로 반환한다. PROD-563은 이 Job 성공 뒤에만 workload 활성화를 진행한다.
 5. 실제 destructive migration은 별도 이슈와 release에서 repository migration policy에 따른 구체 evidence gate를 구현한다.
 
 ### Known Traps
 
 - Migration 장애를 runtime credential 재사용으로 우회하지 않는다.
+- Database URL, host, database 또는 Secret 이름/key를 release 입력으로 열지 않는다.
 - Mutable tag, SemVer tag 또는 Git SHA tag를 immutable digest와 동일하게 취급하지 않는다.
 - Phase, schema authority, restore command와 generic evidence JSON을 Helm migration Job에 추가하지 않는다.
 - Generic gate가 모든 destructive migration의 안전 조건을 대신한다고 가정하지 않는다.

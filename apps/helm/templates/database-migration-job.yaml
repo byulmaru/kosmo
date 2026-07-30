@@ -4,8 +4,6 @@
 {{- if not (regexMatch "^sha256:[0-9a-f]{64}$" (default "" .Values.imageDigest)) -}}
 {{- fail "production migration requires imageDigest=sha256:<64 lowercase hex>" -}}
 {{- end -}}
-{{- $_ := required "production migration requires migration.secretName" .Values.migration.secretName -}}
-{{- $_ := required "production migration requires migration.secretKey" .Values.migration.secretKey -}}
 {{- end -}}
 {{- if or $isDev $isProductionMigration }}
 apiVersion: batch/v1
@@ -49,11 +47,22 @@ spec:
             - migrate
           env:
             {{- if $isProductionMigration }}
-            - name: DATABASE_URL
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGDATABASE
+              value: "kosmo"
+            - name: PGUSER
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.migration.secretName | quote }}
-                  key: {{ .Values.migration.secretKey | quote }}
+                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+                  key: password
             {{- else }}
             - name: DATABASE_PASSWORD
               valueFrom:

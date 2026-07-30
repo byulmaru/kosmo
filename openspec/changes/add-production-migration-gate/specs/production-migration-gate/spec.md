@@ -8,7 +8,14 @@
 
 - **WHEN** production migration Job이 시작된다
 - **THEN** Job은 production migration 전용 Secret과 database identity로 연결한다
+- **AND** 접속 대상은 현재 Helm release의 PostgreSQL read-write Service와 `kosmo` database로 고정된다
 - **AND** API와 Web workload는 같은 credential을 mount하거나 참조하지 않는다
+
+#### Scenario: Migration 대상 입력 금지
+
+- **WHEN** production migration Job manifest가 렌더된다
+- **THEN** database URL, host, database와 migration Secret 이름/key를 release 입력으로 받지 않는다
+- **AND** migration Secret에서는 `username`과 `password`만 읽는다
 
 #### Scenario: Migration credential 준비 실패
 
@@ -32,7 +39,7 @@
 
 ### Requirement: 단순한 migration 실행기
 
-**Authority / Provenance:** `PROD-564`, `memory/database-migrations.md`. Production migration Job은 release image의 기존 Drizzle `migrate` command만 실행해야 한다(MUST). Generic phase selector, schema authority input, restore-point command 또는 backup/compatibility collector를 포함해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-564`, `memory/database-migrations.md`. Production migration Job은 release image의 기존 Drizzle `migrate` command만 실행해야 한다(MUST). Generic phase selector, schema authority input, database target input, restore-point command 또는 backup/compatibility collector를 포함해서는 안 된다(MUST NOT).
 
 #### Scenario: Production migration 실행
 

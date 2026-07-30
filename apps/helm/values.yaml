@@ -4,5 +4,3 @@ imageDigest:
 version: main
 migration:
   enabled: false
-  secretName:
-  secretKey: url
