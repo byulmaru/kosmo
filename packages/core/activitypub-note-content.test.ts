@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { projectRemoteNoteContent } from './activitypub-note-content';
+import {
+  projectRemoteActivityPubHtmlToPlainText,
+  projectRemoteNoteContent,
+} from './activitypub-note-content';
 
 describe('projectRemoteNoteContent', () => {
   it('projects plain text into the canonical document and preserves internal newlines', () => {
@@ -179,5 +182,32 @@ describe('projectRemoteNoteContent', () => {
     });
 
     assert.deepEqual(formatted, compact);
+  });
+});
+
+describe('projectRemoteActivityPubHtmlToPlainText', () => {
+  it('projects visible HTML semantics while removing non-visible and unsafe content', () => {
+    assert.equal(
+      projectRemoteActivityPubHtmlToPlainText(
+        '<p>Hello &amp; <a href="https://example.com">world</a><br>again</p>' +
+          '<p>Second</p><img src="https://example.com/image.png" alt="hidden">' +
+          '<script>alert(1)</script><style>body{display:none}</style><template>secret</template>',
+      ),
+      'Hello & world\nagain\n\nSecond',
+    );
+  });
+
+  it('keeps visible text from malformed and unknown markup', () => {
+    assert.equal(
+      projectRemoteActivityPubHtmlToPlainText('<unknown>Hello <strong>world</strong>'),
+      'Hello world',
+    );
+  });
+
+  it('normalizes an empty projection to an empty string for nullable callers', () => {
+    assert.equal(
+      projectRemoteActivityPubHtmlToPlainText('<script>hidden</script><style>hidden</style>'),
+      '',
+    );
   });
 });

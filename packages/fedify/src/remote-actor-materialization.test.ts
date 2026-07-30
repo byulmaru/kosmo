@@ -386,6 +386,63 @@ describe('remote actor materialization', () => {
     assert.equal(profile.bio, 'Remote bio');
   });
 
+  test('projects a string HTML actor summary into a plain-text bio', async () => {
+    const actor = createActor({
+      summary:
+        '<p>Hello <a href="https://remote.example">world</a></p>' +
+        '<script>hidden</script><style>hidden</style>',
+    });
+    const { context } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.bio, 'Hello world');
+  });
+
+  test('projects a language-tagged HTML actor summary through the same boundary', async () => {
+    const actor = createActor({
+      summary: new LanguageString('<p>Hello &amp; <strong>world</strong></p>', 'en'),
+    });
+    const { context } = createLookupContext(async () => actor);
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.bio, 'Hello & world');
+  });
+
+  test('validates the projected bio length after markup projection', async () => {
+    const visibleText = 'a'.repeat(500);
+    const { context } = createLookupContext(async () =>
+      createActor({ summary: `<p><strong>${visibleText}</strong></p>` }),
+    );
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.bio, visibleText);
+  });
+
+  test('stores null when the actor summary has no visible text', async () => {
+    const { context } = createLookupContext(async () =>
+      createActor({ summary: '<script>hidden</script><style>hidden</style>' }),
+    );
+
+    const profile = await materializeRemoteProfileActor({
+      context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.bio, null);
+  });
+
   test('falls back to the handle when the actor name is unsupported', async () => {
     const { context } = createLookupContext(async () => createActor({ name: 'x'.repeat(1_000) }));
 
@@ -462,7 +519,11 @@ describe('remote actor materialization', () => {
     const nextPublished = Temporal.Instant.from('2024-01-02T03:04:05Z');
     const stored = await createStoredRemoteActor({ createdAt: originalCreatedAt });
     const { context } = createLookupContext(async () =>
-      createActor({ name: 'Refreshed Alice', published: nextPublished }),
+      createActor({
+        name: 'Refreshed Alice',
+        published: nextPublished,
+        summary: '<p>Refreshed <a href="https://remote.example">Alice</a></p>',
+      }),
     );
 
     const refreshed = await materializeRemoteProfileActor({
@@ -473,6 +534,8 @@ describe('remote actor materialization', () => {
 
     assert.equal(refreshed.id, stored.profile.id);
     assert.equal(refreshed.displayName, 'Refreshed Alice');
+    assert.equal(refreshed.bio, 'Refreshed Alice');
+    assert.equal(refreshed.state, ProfileState.ACTIVE);
     assert.equal(refreshed.createdAt.toString(), nextPublished.toString());
 
     const withoutPublished = createActor({ name: 'No Published', published: null });

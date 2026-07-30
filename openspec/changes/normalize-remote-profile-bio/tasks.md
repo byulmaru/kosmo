@@ -24,7 +24,7 @@
 - string summary, language-tagged summary, refresh, projection 후 500자 검증, Local Profile/outbound 회귀를 관련 테스트로 검증한다.
 - 기존 remote Note projection, Local Profile update, local actor outbound, GraphQL `Profile.bio`와 관련 workspace check에 회귀가 없는지 확인한다.
 
-- [ ] 1.1 기존 ActivityPub HTML canonicalization 의미를 공유하는 평문 projection 경계를 마련하고 entity·구조·비표시·malformed HTML 회귀 fixture를 통과시킨다.
-- [ ] 1.2 remote actor의 string/language-tagged `summary`를 projection한 뒤 bio schema를 적용해 최초 materialization과 refresh 저장 경계를 정렬한다.
-- [ ] 1.3 projection 후 500자, 빈 projection `null`, refresh lifecycle/suspension 보존과 Local Profile/outbound 비변경을 관련 테스트로 증명한다.
-- [ ] 1.4 관련 core/fedify/GraphQL 검증, lint·format check와 `openspec validate normalize-remote-profile-bio --strict`를 통과시키고 spec handoff를 기록한다.
+- [x] 1.1 기존 ActivityPub HTML canonicalization 의미를 공유하는 평문 projection 경계를 마련하고 entity·구조·비표시·malformed HTML 회귀 fixture를 통과시킨다.
+- [x] 1.2 remote actor의 string/language-tagged `summary`를 projection한 뒤 bio schema를 적용해 최초 materialization과 refresh 저장 경계를 정렬한다.
+- [x] 1.3 projection 후 500자, 빈 projection `null`, refresh lifecycle/suspension 보존과 Local Profile/outbound 비변경을 관련 테스트로 증명한다.
+- [x] 1.4 관련 core/fedify/GraphQL 검증, lint·format check와 `openspec validate normalize-remote-profile-bio --strict`를 통과시키고 spec handoff를 기록한다.
