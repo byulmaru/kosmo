@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change attach-local-media-to-post. Update Purpose after archive.
+유니버설 Post Composer에서 최대 4개 이미지를 선택·업로드하고 preview, Alt Text와 Sensitive Media 상태를 관리해 `createPost`에 제출하는 사용자 흐름을 정의한다.
 
 ## Requirements
 

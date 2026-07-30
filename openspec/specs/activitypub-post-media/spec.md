@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change attach-local-media-to-post. Update Purpose after archive.
+새 Local Post의 PostContent Media node를 안전한 HTML과 순서 있는 ActivityPub Image attachment로 투영하고 Sensitive Media 의미를 보존한다.
 
 ## Requirements
 

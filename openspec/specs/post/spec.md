@@ -185,6 +185,7 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 
 - **WHEN** 로그인한 클라이언트가 active profile이 선택된 상태에서 유효한 `bodyText`, `visibility`, 최대 4개의 선택적 `{ mediaId, altText }` item과 `sensitiveMedia`로 `createPost`를 호출한다
 - **THEN** 시스템은 현재 active profile이 작성한 `ACTIVE` Post와 첫 PostContent를 생성한다
+- **AND** Post의 공개 범위는 입력받은 `visibility` 값이다
 - **AND** `post.current_content_id`는 생성된 PostContent를 참조한다
 - **AND** Media item은 입력 순서의 V1 Media node가 되고 Sensitive Media는 document root attr가 된다
 - **AND** mutation은 `CreatePostPayload.post`로 생성된 Post를 반환한다
@@ -201,6 +202,7 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 - **WHEN** 시스템이 Plain Text와 Media item으로 PostContent를 저장한다
 - **THEN** 시스템은 bodyText를 공통 V1 Plain Text 변환 경계에 전달한다
 - **AND** trim과 line-ending normalization 뒤 paragraph content 다음에 입력 순서의 Media block node를 추가한다
+- **AND** summary는 `null`이다
 - **AND** persistence document의 Media node는 검증된 Media DB identity와 revision별 nullable Alt Text를 저장한다
 - **AND** Plain Text, HTML, Media ID 배열, Alt Text나 Sensitive Media를 두 번째 canonical 값으로 저장하지 않는다
 
