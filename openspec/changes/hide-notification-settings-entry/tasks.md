@@ -97,8 +97,16 @@ full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `�
 - Expo Web export와 BFF를 포함한 `auth-routes.e2e.ts`가 24/24 통과했으며 source route와 generated route에서 `/menu` 등록이 없음을 확인했다.
 - Android·iOS native runtime과 VoiceOver·TalkBack은 미실행했다. Web 관찰 및 자동화 결과와 구분한다.
 
+**최신 PR #390 재스택·자동화 실행 기록 (2026-07-30)**
+
+- Parent PR #390의 최신 head `cbd4b5ba` 위로 네 child commit만 재스택했고, 이전 parent `4524bb41` 기준 `git range-diff`에서 네 commit 모두 동일함(`=`)을 확인했다.
+- `CI=true pnpm --filter @kosmo/app test`: Relay compile·TypeScript, unit 59/59, Storybook build와 Storybook 175/175 통과.
+- 격리 DB와 Expo Web export·API·OIDC·BFF를 포함한 `auth-routes.e2e.ts`: 24/24 통과.
+- 변경 파일 ESLint·Prettier, scoped strict와 전체 OpenSpec strict 51/51, `git diff --check`를 통과했다.
+- `origin/PROD-487...HEAD` scope diff에 API·DB·dependency·migration·`.superpowers`·`docs/superpowers` 변경이 없음을 확인했다.
+
 - [x] 2.1 기존 Shell Storybook과 Web auth route 검증을 새 비노출·route 제거 계약에 맞춰 먼저 변경하고 최소 실패 증거를 확인한다.
 - [x] 2.2 `SidebarNavigation`의 두 준비되지 않은 item, profile `/menu` sentinel과 사용하지 않는 icon import를 제거하고 generic `/menu` route를 삭제한다.
 - [x] 2.3 focused 자동화와 full·compact·mobile Web viewport에서 유지 대상, 접근성, route 등록과 responsive 동작을 확인하고 Android·iOS 미실행 검증을 구분한다.
-- [ ] 2.4 관련 자동화, formatting, scoped/all strict validation, scope diff와 PR #390 기준 stack diff 검사를 통과한다.
+- [x] 2.4 관련 자동화, formatting, scoped/all strict validation, scope diff와 PR #390 기준 stack diff 검사를 통과한다.
 - [ ] 2.5 parent `add-web-feedback-slack-delivery` archive와 canonical requirement를 재확인하고 PROD-219의 stale `/menu` smoke ownership을 기록한 뒤 child change를 archive해 archive 후 strict validation을 통과한다.
