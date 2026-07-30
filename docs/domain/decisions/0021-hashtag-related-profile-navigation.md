@@ -33,8 +33,8 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 - 기존 사람 검색의 handle 입력·결과·pagination과 `searchProfiles` 동작은 변경하지 않는다. 검색창에서 Hashtag
   또는 Hashtag Name 결과를 반환하는 기능은 별도 계약으로 보류하며 이 ADR의 범위가 아니다.
 - Profile 목록 후보는 TagChip이 전달한 Hashtag identity와 정확히 관계되고, 공개 Profile 조회 조건을 통과한
-  Active·Normal Local Profile로 한정한다. Hashtag 자체·Hashtag Name 목록·Remote Profile·원격 조회·refresh·새
-  materialization은 반환하거나 수행하지 않는다.
+  Active·Normal Profile로 한정한다. Hashtag 자체·Hashtag Name 목록은 반환하지 않으며, 원격 조회·refresh·새
+  materialization은 수행하지 않는다.
 - 탐색 요청은 인증된 Account만 허용한다. 인증되지 않은 요청은 Profile 후보를 조회하기 전에 기존 로그인 정책에
   따라 처리한다.
 - 결과는 Profile 목록으로 반환하며 Profile마다 한 번만 나타난다. 관련도·알파벳순 정렬을 도입하지 않고, 안정적인
@@ -49,7 +49,7 @@ TagChip은 정확한 Hashtag identity에서 관련 Profile 목록을 여는 탐�
 
 정확한 Hashtag를 이미 보여 준 TagChip에서 시작하면 TagChip에서 선택된 Hashtag와 관계된 Profile만 탐색할 수
 있고, 기존 사람 검색 입력과 모드를 섞지 않는다. Hashtag identity 정확 일치와 공개 Profile 조건을 함께 적용하면
-비공개·정지·삭제 Profile이나 Remote Profile이 태그 관계만으로 노출되지 않는다.
+비공개·정지·삭제 Profile이 태그 관계만으로 노출되지 않는다.
 
 무순서·무상한 관계를 그대로 두고 결과에만 안정적인 immutable cursor와 페이지 상한을 적용하면 저장 표현에
 의존하지 않으면서 요청 비용을 예측할 수 있다. API와 navigation의 구체 이름은 후속 구현 이슈가 정하므로 이

@@ -19,8 +19,8 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 
 - 인증된 Account 요청만 허용한다. 인증되지 않은 요청은 Profile 후보를 조회하기 전에 기존 로그인 정책에 따라
   처리한다.
-- 결과는 Hashtag와 Profile Tag 관계가 있고 공개 Profile 조회 조건을 통과한 Active·Normal Local Profile이다.
-  Remote Profile과 원격 조회·refresh·materialization은 포함하지 않는다.
+- 결과는 Hashtag와 Profile Tag 관계가 있고 공개 Profile 조회 조건을 통과한 Active·Normal Profile이다.
+  원격 조회·refresh·materialization은 포함하지 않는다.
 - Profile은 결과에 한 번만 나타나며, 관련도나 알파벳순을 표시하지 않는다. 목록은 안정적인 immutable Profile
   cursor를 사용하고 한 페이지는 최대 20개다.
 - Profile Tag 관계는 무순서·무상한이므로 관계의 표현 방식이나 개수 제한을 결과 계약으로 사용하지 않는다.
@@ -38,4 +38,4 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 - 사람 검색창의 `#` 모드 판정, 임의 Hashtag 입력 정규화·자동완성, Hashtag/Hashtag Name 검색
 - canonical URL, 구체 route path, GraphQL field명과 API 입력 타입
 - Profile 검색의 부분 일치, 추천, trend, 관련도 랭킹
-- Profile Tag 관계의 순서·개수 상한, Remote Profile Tag와 ActivityPub 표현
+- Profile Tag 관계의 순서·개수 상한, Remote Profile Tag 수집·동기화와 ActivityPub 표현
