@@ -15,8 +15,8 @@
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/profile.md`
-- Linear Contract: PROD-560
+- Canonical Domain Policy: `docs/domain/objects/profile.md`의 공개 가능한 저장 count
+- Linear Wire Contract: PROD-560의 ActivityPub collection 표현
 - Linear Implementations: PROD-560
 
 ## Capabilities

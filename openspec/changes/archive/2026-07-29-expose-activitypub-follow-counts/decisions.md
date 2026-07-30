@@ -1,7 +1,8 @@
 ## Context
 
-PROD-560과 `docs/domain/objects/profile.md`가 승인한 count-only ActivityPub social graph 공개 범위를 Local actor
-discovery 계약과 현재 Fedify 경계에 적용한다.
+`docs/domain/objects/profile.md`가 정의한 공개 가능한 저장 count 정책과 PROD-560이 정의한 ActivityPub wire 표현을
+Local actor discovery 계약과 현재 Fedify 경계에 적용한다. collection URI와 직렬화 형식은 downstream OpenSpec이
+소유하며 canonical 도메인 문서로 승격하지 않는다.
 
 ## Decision Records
 
