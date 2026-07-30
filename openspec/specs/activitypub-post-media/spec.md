@@ -20,14 +20,14 @@ TBD - created by archiving change attach-local-media-to-post. Update Purpose aft
 #### Scenario: ActivityPub Image 표현
 
 - **WHEN** Ready Local Media node를 attachment Image로 투영한다
-- **THEN** Image URL은 Media Storage Service의 공개 immutable WebP 원본을 가리킨다
-- **AND** Image media type은 `image/webp`다
+- **THEN** Image URL과 media type은 Ready Local Media에 저장된 URL과 Media Type을 사용한다
+- **AND** 권한 판정이나 projection 중 Media Storage Service를 호출하지 않는다
 - **AND** nullable Alt Text가 있으면 Image의 사람이 읽을 수 있는 이름으로 제공한다
 - **AND** 내부 Media DB UUID, GraphQL global ID, storage reference와 upload URL을 ActivityPub 속성으로 노출하지 않는다
 
 #### Scenario: 필요한 Media를 제공할 수 없는 Post
 
-- **WHEN** 현재 PostContent가 참조하는 Media가 없거나 Ready가 아니거나 접근 가능한 공개 원본 URL을 안전하게 만들 수 없다
+- **WHEN** 현재 PostContent가 참조하는 Media가 없거나 Ready가 아니거나 저장된 URL·Media Type이 없다
 - **THEN** 시스템은 불완전한 Note나 일부 attachment를 제공하지 않는다
 - **AND** unavailable Local Post와 같은 미제공 결과로 수렴한다
 
