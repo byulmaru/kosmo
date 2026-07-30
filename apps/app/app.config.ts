@@ -41,7 +41,18 @@ const config: ExpoConfig = {
   web: {
     output: 'single',
   },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: [
+    'expo-router',
+    'expo-secure-store',
+    [
+      'expo-image-picker',
+      {
+        cameraPermission: false,
+        microphonePermission: false,
+        photosPermission: '게시물에 추가할 이미지를 선택하려면 사진 접근 권한이 필요합니다.',
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
   },
