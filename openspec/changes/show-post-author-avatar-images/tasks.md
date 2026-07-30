@@ -23,8 +23,8 @@
 - Relay compiler와 TypeScript가 일반 Post, Repost direct Source, Quote 직접 작성자·direct Source, 상세 fragment의 avatar shape를 검증한다.
 - 기존 Storybook surface에서 작성자별 이미지 URL과 null fallback, 크기·이동·접근성 계약을 확인한다.
 
-- [ ] 1.1 게시글 leaf fragment가 각 표시 작성자의 `avatar { id url }`을 조회하고 목록·상세·Source presentation에 독립적으로 공급하게 한다.
-- [ ] 1.2 실제 이미지와 이니셜 fallback 모두 기존 Avatar 크기·Profile 이동·접근성 이름·layout을 유지하게 한다.
+- [x] 1.1 게시글 leaf fragment가 각 표시 작성자의 `avatar { id url }`을 조회하고 목록·상세·Source presentation에 독립적으로 공급하게 한다.
+- [x] 1.2 실제 이미지와 이니셜 fallback 모두 기존 Avatar 크기·Profile 이동·접근성 이름·layout을 유지하게 한다.
 
 ## 2. PROD-588 최소 자동화 검증
 
@@ -49,8 +49,8 @@
 - `pnpm --filter @kosmo/app test:storybook`
 - `pnpm --filter @kosmo/app build-storybook`
 
-- [ ] 2.1 기존 production fragment fixture에 서로 구분되는 Ready avatar URL과 null avatar 상태를 추가하고 변경 동작의 최소 assertion을 작성한다.
-- [ ] 2.2 Relay, app check, Storybook test와 static build를 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
+- [x] 2.1 기존 production fragment fixture에 서로 구분되는 Ready avatar URL과 null avatar 상태를 추가하고 변경 동작의 최소 assertion을 작성한다.
+- [x] 2.2 Relay, app check, Storybook test와 static build를 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
 
 ## 3. PROD-588 통합 검증과 OpenSpec 완료
 

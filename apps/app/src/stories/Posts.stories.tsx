@@ -171,13 +171,17 @@ const mediaOnlyPost = post({
   bodyText: '',
   id: 'media-only',
 });
+const sourceAuthorAvatarUrl = 'https://images.example.test/source-avatar.png';
+const repostAuthorAvatarUrl = 'https://images.example.test/repost-avatar.png';
 const sourceAuthor = profile({
+  avatar: { id: 'media-source-avatar', url: sourceAuthorAvatarUrl },
   displayName: '아주 긴 Source 작성자 표시 이름',
   handle: 'source@remote.example',
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
 });
 const repostAuthor = profile({
+  avatar: { id: 'media-repost-avatar', url: repostAuthorAvatarUrl },
   displayName: '재게시한 코스모 사용자',
   handle: 'reposter',
   id: 'profile-repost-author',
@@ -2008,6 +2012,7 @@ export const PureRepost: Story = {
     expect(article.querySelector('[data-testid="post-source-presentation"]')).toBeNull();
     expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
     expect(getComputedStyle(article).borderBottomWidth).toBe('1px');
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(sourceAvatar.getBoundingClientRect().width).toBe(48);
     expect(sourceAvatar.getBoundingClientRect().height).toBe(48);
     expect(article.querySelector('a a')).toBeNull();
@@ -2076,11 +2081,17 @@ export const Quote: Story = {
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
     expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
       formatTimelineTimestamp(quotePost.createdAt),
     );
     const preview = canvas.getByTestId('source-post-preview');
+    const sourceAvatar = within(preview).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
     expect(canvas.getAllByRole('link')).toHaveLength(4);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
@@ -2103,6 +2114,24 @@ export const Quote: Story = {
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-quote" />,
+};
+
+export const QuoteListItemAvatars: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(canvas.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    expect(outerAvatar.getBoundingClientRect().width).toBe(48);
+    expect(outerAvatar.getBoundingClientRect().height).toBe(48);
+    expect(sourceAvatar.getBoundingClientRect().width).toBe(40);
+    expect(sourceAvatar.getBoundingClientRect().height).toBe(40);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" />,
 };
 
 export const QuoteOfQuote: Story = {
@@ -2160,7 +2189,10 @@ export const OrdinaryPost: Story = {
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
     const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
+    const avatar = within(standardRow).getByLabelText('코스모 작가 프로필 이미지');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(avatar.querySelector('img')).not.toBeInTheDocument();
+    expect(avatar).toHaveTextContent('코');
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
@@ -2569,9 +2601,15 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
+    const outerAvatar = currentQuote.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(currentQuote.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
 
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(0);
     expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(
       currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
     ).not.toBeInTheDocument();

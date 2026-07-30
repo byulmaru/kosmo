@@ -28,6 +28,10 @@ const PostLayoutFragment = graphql`
       bodyText
     }
     profile {
+      avatar {
+        id
+        url
+      }
       id
       handle
       relativeHandle
@@ -48,6 +52,10 @@ const PostLayoutFragment = graphql`
         document
       }
       profile {
+        avatar {
+          id
+          url
+        }
         displayName
         handle
         relativeHandle
@@ -90,6 +98,7 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
           displayName: source.profile.displayName,
           handle: source.profile.handle,
           relativeHandle: source.profile.relativeHandle,
+          avatar: source.profile.avatar,
         },
       }
     : null;
@@ -106,7 +115,11 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
           style={styles.avatar}
           tabIndex={-1}
         >
-          <Avatar label={post.profile.displayName || post.profile.handle} size={40} />
+          <Avatar
+            imageUri={post.profile.avatar?.url}
+            label={post.profile.displayName || post.profile.handle}
+            size={40}
+          />
         </Pressable>
       </Link>
       <View style={styles.content}>
