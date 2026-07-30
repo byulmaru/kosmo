@@ -74,7 +74,7 @@ jobs:
   deploy_production:
     name: Approve and Deploy Production
     needs: verify_release
-    runs-on: [self-hosted, macOS]
+    runs-on: self-hosted
     environment: production
     permissions:
       contents: read
