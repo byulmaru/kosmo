@@ -97,7 +97,7 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
   제공하고 HTML `<img>`를 중복하지 않는다. read projection은 Media Storage Service를 호출하지 않는다.
 - Alternatives Considered: projection마다 provider API를 호출하면 요청 증폭·timeout·장애 전파가 생긴다. Kosmo가
   URL을 직접 조립하면 provider 규칙에 결합된다. Media node를 `toDOM` `<img>`로 만들면 attachment와 중복된다.
-- Consequences: Ready 전환과 기존 row backfill이 표현 metadata의 완전성을 책임진다. federation에서는 내부 삽입
+- Consequences: Ready 전환이 표현 metadata의 완전성을 책임진다. federation에서는 내부 삽입
   위치가 attachment 순서로 축약된다. Post 수정과 `Update(Note)`는 독립 Backlog다.
 - Confirmation / Follow-up: 역참조와 최초 Create(Note)의 exact content/attachment/sensitive를 검증한다.
 

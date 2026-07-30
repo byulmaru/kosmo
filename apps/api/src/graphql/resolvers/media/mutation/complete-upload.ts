@@ -1,7 +1,7 @@
 import { db, first, firstOrThrowWith, Media } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { getMediaStorageRepresentation } from '@/media-storage';
 import { MediaObject } from '../ref';
@@ -30,7 +30,7 @@ builder.mutationField('completeMediaUpload', (t) =>
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Media not found')));
 
-      if (media.state === MediaState.READY && media.originalUrl && media.originalMediaType) {
+      if (media.state === MediaState.READY) {
         return { media };
       }
 
@@ -44,22 +44,15 @@ builder.mutationField('completeMediaUpload', (t) =>
         .set({
           originalMediaType: representation.mediaType,
           originalUrl: representation.url,
-          ...(media.state === MediaState.UPLOADING
-            ? { readyAt: Temporal.Now.instant(), state: MediaState.READY }
-            : {}),
+          readyAt: Temporal.Now.instant(),
+          state: MediaState.READY,
         })
         .where(
           and(
             eq(Media.id, media.id),
             eq(Media.accountId, ctx.session.accountId),
             eq(Media.source, MediaSource.LOCAL),
-            or(
-              eq(Media.state, MediaState.UPLOADING),
-              and(
-                eq(Media.state, MediaState.READY),
-                or(isNull(Media.originalUrl), isNull(Media.originalMediaType)),
-              ),
-            ),
+            eq(Media.state, MediaState.UPLOADING),
           ),
         )
         .returning()

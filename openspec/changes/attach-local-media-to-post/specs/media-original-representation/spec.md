@@ -15,12 +15,6 @@
 - **WHEN** 저장 서비스가 미완료·오류·timeout 또는 잘못된 representation 응답을 반환한다
 - **THEN** Media는 Uploading state와 빈 Original metadata를 유지한다
 
-#### Scenario: 기존 Ready Media backfill
-
-- **WHEN** Original URL 또는 MIME이 없는 기존 Ready Local Media를 backfill한다
-- **THEN** 저장 서비스의 현재 representation을 idempotent하게 저장한다
-- **AND** 성공·실패·남은 누락 수를 확인할 수 있다
-
 ### Requirement: Stored Media representation read boundary
 
 **Authority / Provenance:** `docs/domain/objects/media.md`, PROD-559, PROD-570, PROD-581. 시스템은 Post, GraphQL과 ActivityPub read projection에서 저장된 Original URL과 MIME을 사용해야 한다(MUST).

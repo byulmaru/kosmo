@@ -2,7 +2,6 @@
   "name": "@kosmo/api",
   "type": "module",
   "scripts": {
-    "db:backfill-media-representations": "tsx scripts/backfill-media-representations.ts",
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
     "lint:schema": "NODE_ENV=production node --import tsx scripts/check-schema.ts",

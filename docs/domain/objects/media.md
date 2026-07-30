@@ -38,8 +38,8 @@ Remote Media는 등록 시 Ready다.
 
 Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 결과와 연결하는 persistence 정보다. 저장
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
-Original URL과 Original MIME column은 additive rollout과 기존 Ready row backfill 동안 nullable이며, backfill이
-끝난 정상 상태에서는 Ready Local Media가 두 값을 모두 가져야 한다.
+Original URL과 Original MIME column은 Uploading Local Media에는 아직 값이 없으며, Ready 전환 시 두 값을 함께
+기록한다.
 
 ## 관계
 

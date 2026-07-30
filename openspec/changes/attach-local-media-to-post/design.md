@@ -59,7 +59,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - 각 item은 `issueMediaUploadUrl` → local byte PUT → `completeMediaUpload` 순서로 즉시 처리한다. 재시도는 새
   Uploading Media부터 시작하고 제거된 local key의 늦은 결과를 무시한다.
 - `completeMediaUpload`은 인증된 representation 조회가 반환한 Original URL과 MIME을 Ready At·Ready state와
-  함께 저장한다. 기존 Ready Local Media의 누락 값은 idempotent backfill로 채운다.
+  함께 저장한다.
 - Composer는 local URI preview, 상태, 재시도·제거, Alt Text와 Sensitive Media를 공용 React Native primitive와
   canonical platform target으로 제공한다. 선택 Media가 없으면 Sensitive Media를 false로 되돌린다.
 - Local Note projection은 current PostContent의 Media DB IDs를 함께 읽는다. Media node를 제거한 body만 기존
@@ -102,7 +102,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 ## Migration Plan
 
 1. PROD-554에서 V1 schema, core와 GraphQL input/output을 배포한다. JSONB table/column migration은 없다.
-2. PROD-581에서 nullable Original URL·MIME column, 완료 write와 기존 Ready backfill을 배포한다.
+2. PROD-581에서 nullable Original URL·MIME column과 완료 write를 배포한다.
 3. PROD-559에서 저장된 표현을 쓰는 Local Note attachment와 sensitive projection을 배포한다. Media 없는 Note는 그대로 유지한다.
 4. PROD-553에서 picker dependency와 Composer upload UI를 배포한다.
 5. PROD-461에서 direct upload → Ready → Post 작성 → GraphQL document → Local Note를 통합 검증한다.
