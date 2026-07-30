@@ -38,17 +38,17 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 
 ## 속성
 
-| 속성             | 타입/nullability   | 검증 정책                                                          | 존재 조건       | 조회 조건              | 조회 권한 |
-| ---------------- | ------------------ | ------------------------------------------------------------------ | --------------- | ---------------------- | --------- |
-| handle           | 문자열, 필수       | Local은 3-30자 영문/숫자/밑줄, Remote는 원격 원본 값을 보존한다    | 항상            | Profile 조회 정책 통과 | 없음      |
-| 표시 handle      | 문자열, 필수       | 같은 Host 안에서 유일하다                                          | 항상            | Profile 조회 정책 통과 | 없음      |
-| qualified handle | 문자열, 필수       | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다 | 항상            | Profile 조회 정책 통과 | 없음      |
-| 표시 이름        | 문자열, 필수       | 1-40자                                                             | 항상            | Profile 조회 정책 통과 | 없음      |
-| bio              | 문자열, nullable   | 500자 이하                                                         | 항상            | Profile 조회 정책 통과 | 없음      |
-| 팔로워 수        | 0 이상 정수, 필수  | 저장된 best-effort Follow Relationship 수다                        | 항상            | Profile 조회 정책 통과 | 없음      |
-| 팔로잉 수        | 0 이상 정수, 필수  | 저장된 best-effort Follow Relationship 수다                        | 항상            | Profile 조회 정책 통과 | 없음      |
-| Remote URL       | URL, 필수          | 원격 원본 Profile URL                                              | Origin이 Remote | Profile 조회 정책 통과 | 없음      |
-| Profile Link     | URL 목록, nullable | 각 항목은 유효한 URL이다                                           | Origin이 Local  | Profile 조회 정책 통과 | 없음      |
+| 속성             | 타입/nullability                  | 검증 정책                                                                                               | 존재 조건       | 조회 조건              | 조회 권한 |
+| ---------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------- | ---------------------- | --------- |
+| handle           | 문자열, 필수                      | Local은 3-30자 영문/숫자/밑줄, Remote는 원격 원본 값을 보존한다                                         | 항상            | Profile 조회 정책 통과 | 없음      |
+| 표시 handle      | 문자열, 필수                      | 같은 Host 안에서 유일하다                                                                               | 항상            | Profile 조회 정책 통과 | 없음      |
+| qualified handle | 문자열, 필수                      | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다                                      | 항상            | Profile 조회 정책 통과 | 없음      |
+| 표시 이름        | 문자열, 필수                      | 1-40자                                                                                                  | 항상            | Profile 조회 정책 통과 | 없음      |
+| bio              | 표시 가능한 평문 문자열, nullable | 앞뒤 공백 제거 후 500자 이하. Remote 원본 markup은 비표시 내용을 제외하고 의미 있는 평문으로 정규화한다 | 항상            | Profile 조회 정책 통과 | 없음      |
+| 팔로워 수        | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                             | 항상            | Profile 조회 정책 통과 | 없음      |
+| 팔로잉 수        | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                             | 항상            | Profile 조회 정책 통과 | 없음      |
+| Remote URL       | URL, 필수                         | 원격 원본 Profile URL                                                                                   | Origin이 Remote | Profile 조회 정책 통과 | 없음      |
+| Profile Link     | URL 목록, nullable                | 각 항목은 유효한 URL이다                                                                                | Origin이 Local  | Profile 조회 정책 통과 | 없음      |
 
 ## 관계
 
