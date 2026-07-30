@@ -166,6 +166,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          case "$(uname -s)" in
+            Darwin) argocd_os=darwin ;;
+            Linux) argocd_os=linux ;;
+            *)
+              echo "::error::Unsupported runner OS: $(uname -s)"
+              exit 1
+              ;;
+          esac
+
           case "$(uname -m)" in
             x86_64) argocd_arch=amd64 ;;
             aarch64 | arm64) argocd_arch=arm64 ;;
@@ -175,7 +184,7 @@ jobs:
               ;;
           esac
 
-          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-darwin-${argocd_arch}"
+          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-${argocd_os}-${argocd_arch}"
           chmod 555 "${RUNNER_TEMP}/argocd"
           echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
 
