@@ -77,38 +77,6 @@ const PostComposerFragment = graphql`
   }
 `;
 
-const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
-    createPost(input: $input) {
-      post {
-        id
-      }
-    }
-  }
-`;
-
-const IssueMediaUploadUrlMutation = graphql`
-  mutation PostComposerIssueMediaUploadUrlMutation {
-    issueMediaUploadUrl {
-      media {
-        id
-      }
-      uploadUrl
-    }
-  }
-`;
-
-const CompleteMediaUploadMutation = graphql`
-  mutation PostComposerCompleteMediaUploadMutation($input: CompleteMediaUploadInput!) {
-    completeMediaUpload(input: $input) {
-      media {
-        id
-        state
-      }
-    }
-  }
-`;
-
 export function PostComposer({ profile: profileKey }: { profile: PostComposer_profile$key }) {
   const theme = useTheme();
   const profile = useFragment(PostComposerFragment, profileKey);
@@ -127,13 +95,35 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const removedMediaKeys = useRef(new Set<string>());
   const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
-  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
-  const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(
-    IssueMediaUploadUrlMutation,
-  );
-  const [commitCompleteMediaUpload] = useMutation<PostComposerCompleteMediaUploadMutation>(
-    CompleteMediaUploadMutation,
-  );
+  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(graphql`
+    mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+      createPost(input: $input) {
+        post {
+          id
+        }
+      }
+    }
+  `);
+  const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
+    mutation PostComposerIssueMediaUploadUrlMutation {
+      issueMediaUploadUrl {
+        media {
+          id
+        }
+        uploadUrl
+      }
+    }
+  `);
+  const [commitCompleteMediaUpload] = useMutation<PostComposerCompleteMediaUploadMutation>(graphql`
+    mutation PostComposerCompleteMediaUploadMutation($input: CompleteMediaUploadInput!) {
+      completeMediaUpload(input: $input) {
+        media {
+          id
+          state
+        }
+      }
+    }
+  `);
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
   const hasPendingMedia = media.some((item) => item.state !== 'ready');
@@ -150,39 +140,6 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
-  const issueMediaUploadUrl = () =>
-    new Promise<{ mediaId: string; uploadUrl: string }>((resolve, reject) => {
-      commitIssueMediaUploadUrl({
-        variables: {},
-        onCompleted: (response, errors) => {
-          if (errors?.length) {
-            reject(new Error('이미지 업로드를 시작하지 못했습니다.'));
-            return;
-          }
-          resolve({
-            mediaId: response.issueMediaUploadUrl.media.id,
-            uploadUrl: response.issueMediaUploadUrl.uploadUrl,
-          });
-        },
-        onError: reject,
-      });
-    });
-
-  const completeMediaUpload = (mediaId: string) =>
-    new Promise<void>((resolve, reject) => {
-      commitCompleteMediaUpload({
-        variables: { input: { id: mediaId } },
-        onCompleted: (response, errors) => {
-          if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-            reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-            return;
-          }
-          resolve();
-        },
-        onError: reject,
-      });
-    });
-
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
     setMedia((items) =>
       items.map((item) => (item.key === key ? { ...item, state: 'uploading' } : item)),
@@ -190,9 +147,38 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
 
     try {
       const mediaId = await uploadComposerMedia({
-        complete: completeMediaUpload,
+        complete: (mediaId) =>
+          new Promise<void>((resolve, reject) => {
+            commitCompleteMediaUpload({
+              variables: { input: { id: mediaId } },
+              onCompleted: (response, errors) => {
+                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
+                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
+                  return;
+                }
+                resolve();
+              },
+              onError: reject,
+            });
+          }),
         isActive: () => !removedMediaKeys.current.has(key),
-        issue: issueMediaUploadUrl,
+        issue: () =>
+          new Promise((resolve, reject) => {
+            commitIssueMediaUploadUrl({
+              variables: {},
+              onCompleted: (response, errors) => {
+                if (errors?.length) {
+                  reject(new Error('이미지 업로드를 시작하지 못했습니다.'));
+                  return;
+                }
+                resolve({
+                  mediaId: response.issueMediaUploadUrl.media.id,
+                  uploadUrl: response.issueMediaUploadUrl.uploadUrl,
+                });
+              },
+              onError: reject,
+            });
+          }),
         put: async (uploadUrl) => {
           const body = asset.file ?? (await (await fetch(asset.uri)).blob());
           const uploaded = await fetch(uploadUrl, {
