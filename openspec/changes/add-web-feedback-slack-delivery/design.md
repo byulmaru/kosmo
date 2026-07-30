@@ -68,7 +68,6 @@
 - [Slack outage가 feedback 전달을 중단함] → success로 가장하지 않고 safe localized failure와 explicit retry를 제공한다.
 - [User content가 Slack mention/link rendering 또는 민감정보 확산을 일으킴] → plain-text blocks, unfurl 비활성화, 2,000자 제한과 최소 field payload를 사용한다.
 - [Webhook secret 누락 또는 잘못된 URL이 production에서만 드러남] → Secret 참조는 optional로 두어 API 전체 기동은 유지하고, feedback mutation의 fail-closed validation, adapter test와 배포 전 Vault 확인, 실제 production smoke로 검출한다.
-- [로컬 optional Vault 경로의 권한·TLS·연결 오류를 Secret 미존재로 오인함] → Vault CLI의 실제 Secret 미존재 진단만 빈 overlay로 허용하고 다른 원격 오류는 stderr와 함께 실패시킨다.
 
 ## Migration Plan
 

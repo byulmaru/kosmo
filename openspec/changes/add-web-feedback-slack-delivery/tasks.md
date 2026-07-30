@@ -124,4 +124,3 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
 - [x] 4.2 API-only Vault secret을 optional runtime 설정으로 주입하고 production smoke 절차를 민감값 없이 문서화하며 client export의 secret 비노출을 검증한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
 - [x] 4.4 `PROD-487` 검증 증거를 정리하고 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.
-- [ ] 4.5 로컬 API 개발 process가 optional API 전용 Vault path를 병합하고 Web·Expo process에는 feedback secret을 주입하지 않도록 실행 경계를 연결한다. (코드 연결 완료, Vault key를 공용 local path에서 API 전용 path로 이동하는 운영 작업 대기)

@@ -7,7 +7,6 @@
 - `pnpm --recursive --parallel --if-present <script>`는 루트 패키지의 `<script>`를 재귀 실행하지 않고, workspace 패키지들의 해당 script를 실행한다.
 - 루트 `dev` 스크립트가 `node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev`처럼 workspace script 실행을 감싸는 구조여도, 이것만으로 루트 `dev`가 자기 자신을 무한 재귀 호출한다고 판단하면 안 된다.
 - `scripts/vault-run.mjs`는 Vault CLI의 현재 인증 상태를 사용해 기본 `secret/kubernetes/kosmo/local` 값을 env로 주입하고, 토큰 조회가 실패하면 `vault login -method=oidc`를 실행한다. 다른 path가 필요하면 wrapper CLI 옵션 `--env <name>` 또는 `--secret-path <path>`를 `-- <command>` 앞에 둔다.
-- `--optional-secret-path <path>`는 primary path 위에 package 전용 값을 덧씌우며 Vault CLI가 단일 `No value found at ...` 진단으로 실제 Secret 미존재를 반환할 때만 빈 overlay로 취급한다. 같은 exit code를 쓰는 permission, TLS, API와 연결 오류는 stderr와 함께 실패시킨다. API `dev`는 공용 local path와 optional `secret/kubernetes/kosmo/local/api`를 함께 읽어 API-only secret을 Web·Expo process와 분리한다.
 - 관련 리뷰를 작성하거나 수정할 때는 실제 재현 로그 없이 재귀 실행을 단정하지 않는다.
 - 루트 script 래퍼 구조를 바꾸는 경우, 이 메모의 전제가 여전히 맞는지 확인하고 변경 사항을 업데이트한다.
 

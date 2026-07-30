@@ -3,9 +3,9 @@
 PROD-487의 Web 피드백은 API 서버가 Slack Incoming Webhook으로 전달한다. Web 번들,
 Relay 요청, 브라우저 쿠키, API 로그에는 Webhook URL을 포함하지 않는다.
 
-## Secret 위치
+## 배포 Secret 위치
 
-각 환경의 API 전용 Vault KV 경로에 다음 키를 저장한다.
+배포 환경의 API 전용 Vault KV 경로에 다음 키를 저장한다.
 
 ```text
 secret/kubernetes/kosmo/<env>/api
@@ -19,11 +19,10 @@ SLACK_FEEDBACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL이 없거나 형식이
 잘못되면 API는 피드백을 Slack으로 보내지 않고 안전한 오류만 반환한다.
 
-로컬 `pnpm dev`의 API process는 공용 `secret/kubernetes/kosmo/local` 위에
-`secret/kubernetes/kosmo/local/api`를 선택적으로 병합한다. API 전용 경로가 아직 없으면 다른 API
-기능은 계속 기동하고 feedback mutation만 fail closed로 실패한다. 이 overlay는 API process 안에서만
-읽으므로 Web·Expo 개발 process에는 webhook 값이 주입되지 않는다. API 전용 경로의 permission, TLS,
-Vault API 또는 연결 오류는 Secret 미존재로 숨기지 않고 API 개발 process 시작을 실패시킨다.
+로컬 `pnpm dev`는 루트 `scripts/vault-run.mjs`가 공용
+`secret/kubernetes/kosmo/local` 값을 한 번 읽어 workspace process에 전달한다. API `dev` script는
+별도 Vault 경로를 다시 읽거나 overlay하지 않는다. Web·Expo process에도 전달되는 공용 경로에는 webhook을
+추가하지 않으며, 로컬 설정이 없으면 feedback mutation만 fail closed로 실패한다.
 
 ## 배포 전 확인
 

@@ -24,11 +24,6 @@ const config = run(
         description: message`Full Vault KV path. Overrides --env.`,
       }),
     ),
-    optionalSecretPath: optional(
-      option('--optional-secret-path', string({ metavar: 'PATH' }), {
-        description: message`Optional Vault KV path merged over the primary path.`,
-      }),
-    ),
     command: multiple(
       argument(string({ metavar: 'COMMAND' }), {
         description: message`Command to run with Vault values in the environment.`,
@@ -42,7 +37,6 @@ const config = run(
 );
 const command = config.command;
 const secretPath = config.secretPath ?? `secret/kubernetes/kosmo/${config.env}`;
-const missingSecretPattern = /^No value found at \S+$/u;
 
 if (command.length === 0) {
   console.error('Usage: vault-run [--env <name>] [--secret-path <path>] -- <command> [args...]');
@@ -71,36 +65,26 @@ if (tokenLookup.status !== 0) {
   }
 }
 
-const readSecret = (path, optionalPath = false) => {
-  const vault = spawnSync('vault', ['kv', 'get', '-format=json', path], {
-    encoding: 'utf8',
-  });
+const vault = spawnSync('vault', ['kv', 'get', '-format=json', secretPath], {
+  encoding: 'utf8',
+});
 
-  if (vault.error) {
-    console.error(`Failed to run vault: ${vault.error.message}`);
-    process.exit(1);
-  }
+if (vault.error) {
+  console.error(`Failed to run vault: ${vault.error.message}`);
+  process.exit(1);
+}
 
-  if (vault.status !== 0) {
-    if (optionalPath && vault.status === 2 && missingSecretPattern.test(vault.stderr.trim())) {
-      return {};
-    }
+if (vault.status !== 0) {
+  process.stderr.write(vault.stderr);
+  process.exit(vault.status ?? 1);
+}
 
-    process.stderr.write(vault.stderr);
-    process.exit(vault.status ?? 1);
-  }
-
-  const payload = JSON.parse(vault.stdout);
-  const vaultData = payload.data ?? {};
-  return typeof vaultData.data === 'object' && vaultData.data !== null && 'metadata' in vaultData
+const payload = JSON.parse(vault.stdout);
+const vaultData = payload.data ?? {};
+const data =
+  typeof vaultData.data === 'object' && vaultData.data !== null && 'metadata' in vaultData
     ? vaultData.data
     : vaultData;
-};
-
-const data = {
-  ...readSecret(secretPath),
-  ...(config.optionalSecretPath ? readSecret(config.optionalSecretPath, true) : {}),
-};
 const env = { ...process.env };
 
 for (const [key, value] of Object.entries(data)) {
