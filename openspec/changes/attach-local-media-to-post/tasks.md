@@ -131,7 +131,7 @@ Create delivery에서 동일하게 제공된다.
 **Verification**
 
 - paragraph/link와 Media 혼합 document의 safe HTML과 attachment 순서를 확인한다.
-- public WebP URL, media type, nullable Alt Text와 sensitive true/false를 확인한다.
+- 저장된 공개 URL·Media Type, nullable Alt Text와 sensitive true/false를 확인한다.
 - missing/non-Ready/누락·잘못된 저장 표현의 미제공 결과와 내부 identity 비노출을 확인한다.
 - Media 없는 Local Note와 최초 Create delivery가 회귀하지 않는지 확인한다.
 
