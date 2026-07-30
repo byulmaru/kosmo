@@ -51,9 +51,11 @@
 
 #### Scenario: Deferred Note properties
 
-- **WHEN** Local Post가 Media, Mention, custom emoji 또는 Quote Source 관계를 가진다
+- **WHEN** Local Post가 Mention, custom emoji 또는 Quote Source 관계를 가진다
 - **THEN** 시스템은 이번 Local Note 표현에 해당 속성이나 Quote 전용 federation 속성을 추가하지 않는다
 - **AND** 지원되는 core Note identity, content, summary와 audience는 계속 제공한다
+
+Media attachment와 sensitive 표현은 후속 ADR 0022와 `attach-local-media-to-post` change가 확장한다.
 
 ### Requirement: Local Note audience and dereference authorization
 

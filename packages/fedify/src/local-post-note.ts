@@ -1,11 +1,12 @@
 import '@kosmo/core/polyfill';
 
-import { Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Image, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
   first,
   Instances,
+  Media,
   PostContents,
   Posts,
   ProfileFollows,
@@ -14,6 +15,8 @@ import {
 import {
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileState,
@@ -21,7 +24,7 @@ import {
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
@@ -34,8 +37,10 @@ type LocalPostNote = {
   readonly contentDocument: PostContentDocumentV1;
   readonly createdAt: Temporal.Instant;
   readonly id: string;
+  readonly mediaAttachments: readonly Image[];
   readonly replyParentId: string | null;
   readonly summary: string | null;
+  readonly sensitiveMedia: boolean;
   readonly visibility: (typeof PostVisibility)[keyof typeof PostVisibility];
 };
 
@@ -45,10 +50,7 @@ type LocalPostNoteProjection = LocalPostNote & {
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
 
-const loadLocalPostNote = async (
-  context: LocalPostNoteContext,
-  postId: string,
-): Promise<LocalPostNote | null> => {
+const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -77,19 +79,99 @@ const loadLocalPostNote = async (
     .limit(1)
     .then(first);
 
-  return row && row.instanceCanonicalOrigin && row.post.visibility !== PostVisibility.DIRECT
-    ? {
-        authorHandle: row.profile.handle,
-        authorProfileId: row.profile.id,
-        canonicalOrigin: row.instanceCanonicalOrigin,
-        contentDocument: row.contentDocument,
-        createdAt: row.post.createdAt,
-        id: row.post.id,
-        replyParentId: row.post.replyParentId,
-        summary: row.contentDocument.summary,
-        visibility: row.post.visibility,
-      }
-    : null;
+  if (!row?.instanceCanonicalOrigin || row.post.visibility === PostVisibility.DIRECT) {
+    return null;
+  }
+
+  return { ...row, instanceCanonicalOrigin: row.instanceCanonicalOrigin };
+};
+
+const loadLocalPostNote = async (
+  context: LocalPostNoteContext,
+  postId: string,
+): Promise<LocalPostNote | null> => {
+  const row = await loadLocalPostNoteRow(context, postId);
+  if (!row) {
+    return null;
+  }
+
+  const mediaNodes = row.contentDocument.body.content.filter((node) => node.type === 'media');
+  const mediaAttachments = await projectLocalMediaAttachments(mediaNodes);
+  if (!mediaAttachments) {
+    return null;
+  }
+
+  return {
+    authorHandle: row.profile.handle,
+    authorProfileId: row.profile.id,
+    canonicalOrigin: row.instanceCanonicalOrigin,
+    contentDocument: row.contentDocument,
+    createdAt: row.post.createdAt,
+    id: row.post.id,
+    mediaAttachments,
+    replyParentId: row.post.replyParentId,
+    sensitiveMedia: row.contentDocument.body.attrs?.sensitiveMedia ?? false,
+    summary: row.contentDocument.summary,
+    visibility: row.post.visibility,
+  };
+};
+
+const projectLocalMediaAttachments = async (
+  mediaNodes: readonly Extract<
+    PostContentDocumentV1['body']['content'][number],
+    { type: 'media' }
+  >[],
+): Promise<readonly Image[] | null> => {
+  if (mediaNodes.length === 0) {
+    return [];
+  }
+  const mediaIds = mediaNodes.map((node) => node.attrs.mediaId);
+  if (new Set(mediaIds).size !== mediaIds.length) {
+    return null;
+  }
+  const rows = await db
+    .select({
+      id: Media.id,
+      mediaType: Media.mediaType,
+      url: Media.url,
+    })
+    .from(Media)
+    .where(
+      and(
+        inArray(Media.id, mediaIds),
+        eq(Media.source, MediaSource.LOCAL),
+        eq(Media.state, MediaState.READY),
+      ),
+    );
+  if (rows.length !== mediaIds.length) {
+    return null;
+  }
+
+  const mediaById = new Map(rows.map((media) => [media.id, media]));
+  const attachments: Image[] = [];
+  for (const node of mediaNodes) {
+    const media = mediaById.get(node.attrs.mediaId);
+    if (!media?.url || !media.mediaType) {
+      return null;
+    }
+    let url: URL;
+    try {
+      url = new URL(media.url);
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+    attachments.push(
+      new Image({
+        mediaType: media.mediaType,
+        ...(node.attrs.altText !== null ? { name: node.attrs.altText } : {}),
+        url,
+      }),
+    );
+  }
+  return attachments;
 };
 
 const getFollowersUri = (context: LocalPostNoteContext, profileId: string): URL => {
@@ -120,11 +202,11 @@ export const authorizeLocalPostNote = async (
   context: RequestContext<void>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const note = await loadLocalPostNote(context, id);
-  if (!note) {
+  const row = await loadLocalPostNoteRow(context, id);
+  if (!row) {
     return false;
   }
-  if (note.visibility !== PostVisibility.FOLLOWERS) {
+  if (row.post.visibility !== PostVisibility.FOLLOWERS) {
     return true;
   }
 
@@ -134,8 +216,8 @@ export const authorizeLocalPostNote = async (
   }
 
   return (
-    signedActor.id.href === context.getActorUri(note.authorProfileId).href ||
-    (await isEstablishedFollower(signedActor.id, note.authorProfileId))
+    signedActor.id.href === context.getActorUri(row.profile.id).href ||
+    (await isEstablishedFollower(signedActor.id, row.profile.id))
   );
 };
 
@@ -170,6 +252,7 @@ export const projectLocalPostNote = async (
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
 
   const object = new Note({
+    attachments: [...note.mediaAttachments],
     attribution: authorUri,
     ...(cc ? { cc } : {}),
     content: postContentDocumentToHtml(note.contentDocument),
@@ -178,6 +261,7 @@ export const projectLocalPostNote = async (
     published: note.createdAt,
     ...(replyTarget ? { replyTarget } : {}),
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
+    sensitive: note.sensitiveMedia,
     to,
     url: new URL(
       `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,

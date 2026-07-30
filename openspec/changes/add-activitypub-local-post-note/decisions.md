@@ -75,8 +75,9 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
   Public/followers, Unlisted는 followers/Public, Followers Only는 followers만 audience로 사용하고 Mentioned
   Profiles는 제공하지 않는다.
 - Alternatives Considered: PROD-494에서 V1 node/mark 재정의, canonical JSON 직접 문자열화, 모든 visibility를
-  anonymous로 반환, 현재 범위에 Media/Mention/Quote 속성 포함. 기존 content 계약을 중복하거나 권한·범위를
-  위반하므로 사용하지 않는다.
+  anonymous로 반환, 당시 범위에 Media/Mention/Quote 속성 포함. 기존 content 계약을 중복하거나 권한·범위를
+  위반하므로 사용하지 않았다. Media는 후속 ADR 0022와 `attach-local-media-to-post` change가 독립 계약으로
+  확장하며 Mention/Quote는 계속 이 change 범위 밖이다.
 - Consequences: PROD-494는 ActivityPub HTML export 연결만 소유한다. PostContent schema 확장은 해당 canonical
   capability가 먼저 결정하고 Note export는 새 schema 의미를 참조해 후속 정렬한다.
 - Confirmation / Follow-up: node별 HTML, escaping, Content Warning과 visibility별 exact audience test로 확인한다.
