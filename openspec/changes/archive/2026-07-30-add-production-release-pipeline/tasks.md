@@ -1,4 +1,4 @@
-## 1. PROD-563 Immutable release identity
+## 1. PROD-563 Tag build identity
 
 **Authority / Provenance**
 
@@ -6,26 +6,23 @@
 
 **Deliverable**
 
-정식 SemVer image build의 digest가 immutable GitHub Release asset으로 고정되고, 운영자가 선택한 Release tag에서 검증된 identity가 production migration, API와 Web에 동일하게 전달된다.
+모든 Git tag가 이름 제한 없이 production image를 build하고 그 run의 digest를 확정한다.
 
 **Guardrails**
 
-- 배포 과정에서 release artifact를 다시 build하지 않는다.
-- Mutable `stable`, SemVer 또는 `main` tag만 production container identity로 사용하지 않는다.
-- Raw Git tag, draft/mutable GitHub Release와 attestation이 검증되지 않은 Release asset을 production selector로 사용하지 않는다.
-- dev의 기존 mutable `main` render와 배포 동작은 유지한다.
+- Branch build는 production deploy를 시작하지 않는다.
+- Tag 문자열을 Kubernetes label이나 container identity로 직접 사용하지 않는다.
+- GitHub Release, asset 또는 mutable registry tag를 중간 identity source로 추가하지 않는다.
 
 **Verification**
 
-- Immutable releases 설정, 성공 build 뒤 draft asset 첨부·발행 순서, immutable Release/asset 검증 실패와 동일 tag 재선택을 검증한다.
-- Helm dev/prod render에서 migration, API와 Web의 image reference와 release metadata를 비교한다.
+- 임의 tag trigger, branch 제외, build digest output과 tag metadata를 정적으로 검증한다.
 
-- [x] 1.1 Immutable releases 설정과 성공한 SemVer image build의 digest asset을 포함한 immutable GitHub Release 발행 경계를 구현한다.
-- [x] 1.2 Immutable Release tag 하나에서 Release와 asset attestation을 검증해 full digest image reference를 확정하는 입력 경계를 구현한다.
-- [x] 1.3 Migration, API와 Web이 같은 production digest를 사용하면서 dev tag render를 보존하도록 manifest 경계를 구현한다.
-- [x] 1.4 Immutable Release 발행·검증 실패와 dev/prod image render 회귀 검증을 추가한다.
+- [x] 1.1 Docker Build의 tag trigger와 ref validation에서 SemVer 제한을 제거한다.
+- [x] 1.2 Tag image metadata를 일반 tag ref로 만들고 build digest output을 보존한다.
+- [x] 1.3 `stable`을 ECR lifecycle 보존 표식으로 유지하되 deploy identity에는 사용하지 않는다.
 
-## 2. PROD-563 Production approval and activation pipeline
+## 2. PROD-563 Production approval and sync
 
 **Authority / Provenance**
 
@@ -33,32 +30,26 @@
 
 **Deliverable**
 
-명시적으로 승인된 production 실행만 같은 release migration과 API·Web workload를 Argo CD 기본 sync 경로로 배포한다.
+Tag build가 만든 digest를 같은 workflow의 production 승인 job이 PreSync migration과 API·Web에 배포한다.
 
 **Guardrails**
 
-- 승인 전에는 production 자격 증명을 취득하거나 Argo CD 상태를 변경하지 않는다.
-- Migration 성공 전 새 API·Web workload를 활성화하지 않는다.
-- PreSync migration이 성공한 뒤에만 API·Web workload 적용을 진행한다.
-- Pipeline이 두 Rollout의 preview를 교차 대기·직접 승격하거나 ReplicaSet을 찾아 자동 복구하지 않는다.
-- 선택한 release의 migration과 API·Web 전체를 한 번 승인하며 contract 전용 Environment·수동 approval input·중복 승인을 추가하지 않는다.
-- PROD-562 runtime resource와 PROD-564 migration credential·Job render를 이 task에서 구현하지 않는다.
-- 운영자에게 migration context·phase·schema authority·credential을 입력받거나 Helm Job에 command·phase·schema authority를 설정하지 않는다.
-- Generic gate JSON validator, target LSN/archive collector와 compatibility/rollback-window metadata를 추가하지 않는다.
+- `prod` Environment 승인 전 Argo CD credential을 얻거나 상태를 변경하지 않는다.
+- Migration, API와 Web은 같은 build digest를 사용한다.
+- Pipeline은 Rollout preview·promotion·ReplicaSet recovery를 직접 조정하지 않는다.
+- PROD-562 runtime과 PROD-564 migration credential·Job command를 구현하지 않는다.
 
 **Verification**
 
-- GitHub Environment reviewer·main ref·admin bypass 설정과 approval-before-OIDC 순서를 확인한다.
-- 같은 digest의 PreSync migration Job render, Argo CD sync 실패와 controller 기본 activation 설정을 검증한다.
-- Production 배포 concurrency가 직렬화되고 진행 중 실행을 취소하지 않는지 확인한다.
-- Workflow에 `production` Environment 승인만 하나 있고 contract 전용 approval 경로가 없는지 확인한다.
+- Tag-only deploy 조건, build dependency, Environment, OIDC와 Argo CD sync 순서를 확인한다.
+- 동일 digest render, PreSync Job 하나와 controller 기본 activation을 확인한다.
 
-- [x] 2.1 Production Environment 승인·ref·bypass 정책을 재현 가능하게 구성하고 설정 read-back 검증을 추가한다.
-- [x] 2.2 승인 뒤 검증된 identity를 `kosmo-prod` release parameter에 설정하고, 제거된 command·phase·schema-authority interface나 수동 context 없이 Argo CD sync를 실행한다.
-- [x] 2.3 Production Rollout을 controller 기본 activation으로 되돌리고 custom preview 대기·promotion·ReplicaSet recovery orchestration을 제거한다.
-- [x] 2.4 승인·migration·sync 성공/실패, controller 기본 activation과 production 직렬화를 최소한의 자동 검증으로 확인한다.
+- [x] 2.1 Production deploy를 Docker Build workflow의 tag-only `prod` Environment job으로 이동한다.
+- [x] 2.2 Build digest를 Helm parameter로 전달하고 동일-image PreSync manifest 확인 뒤 Argo CD sync를 실행한다.
+- [x] 2.3 Production Rollout controller 기본 activation과 custom recovery 부재를 검증한다.
+- [x] 2.4 `prod` Environment의 main-only policy를 제거하고 tag-only 조건은 workflow 한 곳에 둔다.
 
-## 3. PROD-563 Rerun, application rollback and audit
+## 3. PROD-563 Obsolete release path removal and verification
 
 **Authority / Provenance**
 
@@ -66,20 +57,19 @@
 
 **Deliverable**
 
-같은 release를 동일 identity로 재실행하고 이전 정상 application release를 같은 승인 pipeline으로 재선택하며 각 결과를 감사할 수 있다.
+GitHub Release와 별도 deploy lifecycle을 제거하고 tag workflow 하나만 남긴다.
 
 **Guardrails**
 
-- Rollback은 이전 정상 immutable GitHub Release tag의 명시적 재선택이며 DB rollback이나 destructive migration을 실행하지 않는다.
-- 실제 첫 production release, public-origin smoke와 운영 통합 검증은 PROD-565에 남긴다.
-- Secret, token, kubeconfig와 database credential을 repository, artifact 또는 workflow summary에 남기지 않는다.
+- 별도 publish, resolve 또는 rollback command를 만들지 않는다.
+- 이전 application 재배포는 호환되는 이전 commit에 새 tag를 붙이는 같은 경로를 사용한다.
+- DB rollback, actual production run과 public smoke는 포함하지 않는다.
 
 **Verification**
 
-- 동일 immutable Release tag 재실행과 이전 Release tag rollback에서 build가 발생하지 않고 두 active workload identity가 일치하는지 검증한다.
-- 성공·Release 검증 실패·sync 실패·rollback 기록에 요청자, 승인, Release tag, 해석한 digest와 결과가 남는지 확인한다.
-- Workflow/manifest 정적 검사, repository format 검사와 OpenSpec strict validation을 통과시킨다.
+- Release API·script·workflow 참조가 남지 않았는지 확인한다.
+- Workflow actionlint, Helm render, format과 OpenSpec strict validation을 통과시킨다.
 
-- [x] 3.1 같은 immutable Release tag 재실행과 승인된 이전 정상 Release tag의 application rollback을 같은 pipeline으로 제공한다.
-- [x] 3.2 GitHub와 Argo CD 배포 기록에 요청·승인·release identity·결과를 연결하고 민감 정보 비노출을 검증한다.
-- [x] 3.3 관련 workflow·manifest 성공/실패 검증, format 검사와 strict OpenSpec validation을 통과시킨다.
+- [x] 3.1 `publish_release`, GitHub Release publish/resolve script와 별도 production deploy workflow를 제거한다.
+- [x] 3.2 삭제한 release script 전용 test 대신 workflow·Helm·GitHub bootstrap을 각 표준 validator와 정적 검증으로 확인한다.
+- [x] 3.3 관련 검증을 통과시키고 main spec을 동기화해 change를 archive한다.

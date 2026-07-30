@@ -1,4 +1,4 @@
-# Operational tags are intentionally mutable; release version tags remain immutable.
+# Operational tags are intentionally mutable; Git tag names remain immutable.
 resource "aws_ecr_repository" "kosmo" { # nosemgrep: terraform.aws.security.aws-ecr-mutable-image-tags.aws-ecr-mutable-image-tags
   name                 = "kosmo"
   image_tag_mutability = "IMMUTABLE_WITH_EXCLUSION"

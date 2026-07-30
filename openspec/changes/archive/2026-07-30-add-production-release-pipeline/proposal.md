@@ -1,16 +1,16 @@
 ## Why
 
-정식 SemVer tag는 production 설정을 포함한 image를 발행하지만, 운영자가 그 artifact의 immutable identity를 승인해 migration과 API·Web에 일관되게 전달하고 실패 시 이전 release를 재선택하는 production 배포 계약은 없다. Mutable tag나 dev의 자동 restart를 production에 재사용하지 않고, 승인·실패 차단·재실행·application rollback을 하나의 재현 가능한 pipeline으로 제공해야 한다.
+Production build와 배포가 GitHub Release 발행, 별도 deploy workflow와 tag 형식 검증으로 나뉘어 실제 필요한 경로보다 복잡하다. Git tag가 가리키는 commit을 build한 workflow가 그 결과 digest를 production 승인 뒤 그대로 migration과 API·Web에 전달하면 별도 release 객체나 selector 없이 같은 identity를 보장할 수 있다.
 
 ## What Changes
 
-- 정식 SemVer image build가 성공하면 digest reference를 GitHub Release asset으로 고정하고, immutable하게 발행된 SemVer GitHub Release tag를 하나의 production release selector로 검증·선택한다.
-- GitHub `production` environment의 명시적 승인과 production 전용 권한 경계를 통과한 실행만 `kosmo-prod` 배포를 변경할 수 있게 한다.
-- 선택한 release의 migration과 API·Web 전체를 이 production 승인 한 번으로 승인하며 contract migration 전용 Environment나 중복 승인을 만들지 않는다.
-- migration Job과 API·Web Rollout에 같은 digest-pinned image를 전달하고, Argo CD PreSync migration 성공 뒤에는 Argo CD와 Rollout controller의 기본 sync·activation 동작을 사용한다.
-- 같은 immutable GitHub Release tag를 다시 선택하면 고정된 같은 digest로 release를 재실행하고, 이전 정상 Release tag를 같은 pipeline에 입력해 application rollback을 수행한다.
-- workflow 입력·승인·선택한 identity·결과를 GitHub Actions와 Argo CD 기록에서 감사할 수 있게 하고, migration 또는 sync 실패를 기록하되 pipeline 내부에서 ReplicaSet을 직접 복구하지 않는다.
-- PROD-562의 production Application/runtime resource, PROD-564의 migration Job identity·credential·실행 계약, 개별 schema migration의 destructive safety 검증, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
+- 모든 Git tag push에서 production image를 build한다. SemVer 또는 다른 tag 이름 규칙을 두지 않는다.
+- Tag build job이 만든 digest를 같은 workflow의 production 승인 job으로 직접 전달한다.
+- Production 승인 뒤 같은 digest를 migration Job, API와 Web Rollout에 설정하고 Argo CD sync를 실행한다.
+- PreSync migration 성공 뒤에는 Argo CD와 Rollout controller의 기본 activation을 사용한다.
+- GitHub Release, Release asset·attestation, `publish_release`, 별도 deploy workflow와 publish/resolve script를 제거한다.
+- 실패 시 pipeline이 ReplicaSet을 복구하지 않는다. 호환되는 이전 commit에 새 tag를 붙이면 같은 build·승인·배포 경로를 다시 실행한다.
+- PROD-562 runtime, PROD-564 migration Job credential·실행 계약, 개별 destructive migration safety와 PROD-565 실제 첫 production 배포는 변경하지 않는다.
 
 ## Authority / Provenance
 
@@ -23,7 +23,7 @@
 
 ### New Capabilities
 
-- `production-release`: 정식 SemVer artifact의 immutable identity 선택, production 승인, migration 선행 배포, controller 기본 activation, 재실행과 application rollback 계약
+- `production-release`: Git tag build digest의 production 승인, migration 선행 sync, controller 기본 activation과 동일 경로 재배포 계약
 
 ### Modified Capabilities
 
@@ -31,8 +31,7 @@
 
 ## Impact
 
-- GitHub immutable releases 설정, Docker build의 immutable Release 발행과 production deployment workflow
-- GitHub `production` Environment 설정과 Argo CD 배포 권한
-- Helm image reference, production Rollout activation 설정과 manifest render 검증
-- `kosmo-prod` Application이 제공하는 release parameter seam과 PROD-564가 구성한 Argo CD PreSync migration Job을 소비한다.
-- production resource 생성, migration policy/credential, DB rollback, public-origin smoke와 실제 첫 release 실행에는 영향이 없다.
+- Docker build workflow의 tag trigger와 production approval job
+- Helm digest image reference와 production Rollout activation
+- 기존 GitHub Release publish/resolve 및 별도 production deploy workflow 제거
+- `kosmo-prod` Application의 release parameter seam과 PROD-564 PreSync migration Job 소비

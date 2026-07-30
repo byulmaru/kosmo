@@ -7,7 +7,7 @@ Production migration은 API/Web과 같은 immutable release image를 사용하�
 - PROD-562는 production migration 전용 database identity와 Kubernetes Secret을 준비한다.
 - PROD-564의 Helm Job은 그 Secret의 `username`과 `password`만 읽고 기존 `migrate` command를 실행한다.
 - API/Web의 runtime Secret을 migration에 복제하거나 migration 장애 시 fallback으로 사용하지 않는다.
-- PROD-563은 정식 SemVer release의 migration/API/Web 전체를 production 배포로 한 번 승인하고, migration Job 성공 뒤에만 API/Web을 활성화한다.
+- PROD-563은 모든 Git tag build의 migration/API/Web 전체를 production 배포로 한 번 승인하고, 같은 build digest의 migration Job 성공 뒤에만 API/Web을 활성화한다.
 - PROD-565는 실제 첫 production release와 public smoke를 검증한다.
 
 Migration database identity에는 schema migration에 필요한 권한만 부여한다. API/Web database identity에는 DDL 권한을 부여하지 않는다.
@@ -34,8 +34,8 @@ Phase, schema authority, restore point, target LSN, workload compatibility 또�
 
 ## Release 실행 순서
 
-1. PROD-563 workflow에서 정식 SemVer tag가 가리키는 immutable image digest를 선택한다.
-2. Production Environment에서 해당 release의 migration/API/Web 배포를 한 번 승인한다.
+1. Git tag push가 production image를 build하고 digest를 확정한다.
+2. 같은 workflow의 `prod` Environment에서 해당 build의 migration/API/Web 배포를 한 번 승인한다.
 3. 같은 digest와 migration Secret으로 migration Job을 실행하고 완료를 기다린다.
 4. Job이 성공한 경우에만 같은 digest의 API/Web workload를 활성화한다.
 5. Job이 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다.
@@ -59,9 +59,9 @@ Contract SQL은 transition image에 미리 포함하지 않는다. 각 단계는
 ## 실패와 복구
 
 - Credential 또는 Secret 실패: SQL을 실행하지 않는다. Runtime credential로 우회하지 않는다.
-- Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 같은 immutable release로 재시도한다.
+- Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 새 tag build와 같은 승인 경로로 재시도한다.
 - SQL 또는 timeout 실패: API/Web 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
-- 부분 적용: 자동 down migration이나 database rollback을 실행하지 않는다. 같은 release 재시도 또는 새 forward migration을 사용한다.
+- 부분 적용: 자동 down migration이나 database rollback을 실행하지 않는다. 새 tag build를 통한 재시도 또는 새 forward migration을 사용한다.
 - Destructive migration의 restore 판단: 해당 schema migration runbook과 [Production PostgreSQL backup과 복구](./postgres-backup.md)를 따른다.
 
 완료 여부와 Drizzle migration count/hash 같은 비민감 식별 정보만 감사 기록에 남긴다. Credential, connection string과 database row 값은 출력하지 않는다.
