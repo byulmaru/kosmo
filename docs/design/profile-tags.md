@@ -9,7 +9,8 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - 기존 Profile 편집 화면에 bio와 함께 이해할 수 있는 `프로필 태그` 섹션을 둔다.
 - 저장된 태그는 TagChip으로 표시한다. 사용자는 태그를 추가하거나 기존 TagChip을 제거할 수 있다.
-- reorder UI를 제공하지 않으며 입력 또는 서버 응답의 안정적인 순서가 유지된다고 가정하지 않는다.
+- Profile Tag 관계·API·공개 노출은 순서를 보장하지 않고 reorder UI를 제공하지 않으며, 입력 또는 서버 응답의
+  안정적인 순서가 유지된다고 가정하지 않는다.
 - 입력은 선택적인 앞 `#`를 허용하지만 chip과 공개 화면에는 Hashtag가 보존한 Display Hashtag Name 앞에
   `#`를 한 번만 표시한다. canonical lowercase 이름은 identity·중복 판정에만 사용한다.
 - 빈 값, [Hashtag Name 규칙](../domain/objects/hashtag.md)에 맞지 않는 문자, 정규화 결과의 Unicode code point
@@ -31,9 +32,10 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
   공유한다.
-- 제거 action은 compact `32×32` 시각 크기와 실제 입력 target을 분리한다. Web target은 최소 32×32 CSS px,
-  iOS hit region은 `44×44 pt`, Android touch target은 `48×48 dp`로 제공하고 동작을 설명하는
-  accessibility label/state를 유지한다.
+- 제거 action은 시각 크기 `32×32`를 유지하고 실제 입력 target은 Web `32×32 CSS px`, iOS `44×44 pt`,
+  Android `48×48 dp`로 제공한다. 공용 component는 시각 geometry와 platform별 입력 target을 분리한다.
+- text action은 최소 높이 `36`의 compact rhythm을 사용한다.
+- 제거 같은 편집 action은 동작과 대상 Tag를 설명하는 accessibility label/state를 제공한다.
 - 색만으로 validation, 선택, disabled 상태를 구분하지 않는다.
 - 별도 breakpoint나 Profile Tag 전용 foundation token은 추가하지 않는다. 기존 spacing, color, typography,
   radius와 공용 breakpoint를 사용한다.
@@ -44,3 +46,12 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 - 자동완성, 추천, trend와 관련도 표시
 - Remote Profile Tag 편집·표시와 ActivityPub 표현
 - Hashtag Post List 또는 검색 결과 화면 변경
+
+## 전달 경계
+
+- `PROD-491`은 Profile 편집 presentation 안의 controlled Profile Tag editor, 로컬 추가·제거,
+  client validation과 Storybook 상태를 제공한다.
+- `PROD-527`은 위 editor를 다시 만들지 않고 Profile Tag mutation·server validation·Relay 상태에 연결하며 공개
+  Profile 표시를 제공한다.
+- `PROD-526`은 저장·정규화·권한·GraphQL 기반을 제공하고 `PROD-522`는 세 결과의 통합 검증과 OpenSpec
+  archive를 소유한다.

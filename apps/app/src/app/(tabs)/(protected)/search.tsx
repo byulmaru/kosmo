@@ -3,7 +3,8 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { graphql, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
+import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,8 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { PreloadedQuery } from 'react-relay';
+import type { GraphQLResponse } from 'relay-runtime';
 import type { SearchPeopleByHandlePageQuery } from './__generated__/SearchPeopleByHandlePageQuery.graphql';
 import type { SearchPeopleResults_query$key } from './__generated__/SearchPeopleResults_query.graphql';
 import type { SearchPeopleResultsNextPageQuery } from './__generated__/SearchPeopleResultsNextPageQuery.graphql';
@@ -61,19 +64,88 @@ function PeopleResults({ handle }: { handle: string }) {
       onRetry={() => setFetchKey((key) => key + 1)}
       title="검색 결과를 불러오지 못했어요"
     >
-      <PeopleResultsContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
+      <PeopleResultsContent
+        key={`${revision}:${fetchKey}`}
+        fetchKey={`${revision}:${fetchKey}`}
+        handle={handle}
+      />
     </RouteBoundary>
   );
 }
 
 function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
-  const data = useLazyLoadQuery<SearchPeopleByHandlePageQuery>(
-    SearchPeopleQuery,
-    { query: handle.replace(/^@/, '') },
-    { fetchKey, fetchPolicy: 'store-and-network' },
-  );
+  const [queryReference, loadQuery] =
+    useQueryLoader<SearchPeopleByHandlePageQuery>(SearchPeopleQuery);
+
+  useEffect(() => {
+    loadQuery(
+      { query: handle.replace(/^@/, '') },
+      { fetchPolicy: 'store-and-network', networkCacheConfig: { metadata: { fetchKey } } },
+    );
+  }, [fetchKey, handle, loadQuery]);
+
+  if (!queryReference) {
+    return <StateView loading title="검색 결과를 불러오는 중입니다." />;
+  }
+
+  return <LoadedPeopleResults handle={handle} queryReference={queryReference} />;
+}
+
+function LoadedPeopleResults({
+  handle,
+  queryReference,
+}: {
+  handle: string;
+  queryReference: PreloadedQuery<SearchPeopleByHandlePageQuery>;
+}) {
+  const data = usePreloadedQuery<SearchPeopleByHandlePageQuery>(SearchPeopleQuery, queryReference);
+
+  useEffect(() => {
+    let hasResults: boolean | null = null;
+    let failed = false;
+    const subscription = queryReference.source?.subscribe({
+      complete: () => {
+        if (!failed && hasResults !== null) {
+          trackAnalytics('search_results_loaded', {
+            has_results: hasResults,
+            tab: 'people',
+          });
+        }
+      },
+      error: () => {
+        failed = true;
+      },
+      next: (response) => {
+        if ('errors' in response && response.errors?.length) {
+          failed = true;
+          return;
+        }
+
+        const edges = searchResultEdges(response);
+        if (edges) {
+          hasResults = edges.length > 0;
+        }
+      },
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [queryReference]);
 
   return <SearchPeopleResults handle={handle} query={data} />;
+}
+
+function searchResultEdges(response: GraphQLResponse): readonly unknown[] | null {
+  if (!('data' in response)) {
+    return null;
+  }
+
+  const data = response.data as
+    | { searchProfiles?: { edges?: readonly unknown[] | null } | null }
+    | null
+    | undefined;
+  return data?.searchProfiles?.edges ?? null;
 }
 
 function SearchPeopleResults({
@@ -106,13 +178,20 @@ function SearchPeopleResults({
     }
 
     setLoadError(false);
-    pagination.loadNext(20, { onComplete: (error) => setLoadError(Boolean(error)) });
+    pagination.loadNext(20, {
+      onComplete: (error) => setLoadError(Boolean(error)),
+    });
   };
 
   return (
     <View>
       {edges.map(({ cursor, node }) => (
-        <ProfileListItem key={cursor} linked profile={node} />
+        <ProfileListItem
+          key={cursor}
+          linked
+          onPress={() => trackAnalytics('search_result_selected', { tab: 'people' })}
+          profile={node}
+        />
       ))}
       {pagination.hasNext || loadError ? (
         <View style={styles.pagination}>
@@ -215,10 +294,15 @@ export default function SearchScreen() {
     }, 0);
   };
 
-  const navigate = (nextQuery: string, tab: SearchTab = activeTab) => {
+  const navigate = (
+    nextQuery: string,
+    tab: SearchTab = activeTab,
+    source: 'keyboard' | 'tab' = 'keyboard',
+  ) => {
     const normalized = nextQuery.trim();
     if (normalized) {
       remember(normalized);
+      trackAnalytics('search_submitted', { source, tab });
     }
     setFocused(false);
     router.push(searchHref(normalized, tab));
@@ -299,6 +383,7 @@ export default function SearchScreen() {
                       onPress={() => {
                         setFocused(false);
                         remember(term);
+                        trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });
                       }}
                       onPressIn={keepSearchFocused}
                       style={styles.recentTerm}
@@ -347,7 +432,11 @@ export default function SearchScreen() {
                 accessibilityRole="tab"
                 accessibilityState={{ selected: activeTab === tab.value }}
                 key={tab.value}
-                onPress={() => navigate(query, tab.value)}
+                onPress={() => {
+                  if (tab.value !== activeTab) {
+                    navigate(query, tab.value, 'tab');
+                  }
+                }}
                 style={styles.tab}
               >
                 <Text

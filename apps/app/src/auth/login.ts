@@ -5,8 +5,6 @@ import {
   makeRedirectUri,
   ResponseType,
 } from 'expo-auth-session';
-import { Platform } from 'react-native';
-import { getWebOrigin } from '@/relay/network';
 import { getNativeSessionConfiguration } from './nativeConfig';
 import type { GestureResponderEvent } from 'react-native';
 
@@ -16,16 +14,9 @@ export type NativeOidcSessionExchangeInput = {
   redirectUri: string;
 };
 
-export function startWebLogin(): void {
-  if (Platform.OS !== 'web') {
-    throw new Error('Browser login is only available on web.');
-  }
-
-  window.location.assign(`${getWebOrigin()}/login`);
-}
-
 export function startWebLoginFromPress(event: GestureResponderEvent): void {
   const pointer = event.nativeEvent as unknown as MouseEvent;
+
   if (
     (typeof pointer.button === 'number' && pointer.button !== 0) ||
     pointer.altKey ||
@@ -37,7 +28,7 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
   }
 
   event.preventDefault();
-  startWebLogin();
+  window.location.assign('/login');
 }
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {

@@ -4,11 +4,14 @@ import './preview.css';
 import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { sb } from 'storybook/test';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
 import { RelayStoryProvider } from './mocks/react-relay';
 import type { Preview } from '@storybook/react-vite';
+
+sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 
 const preview: Preview = {
   decorators: [
@@ -96,6 +99,21 @@ const preview: Preview = {
           name: 'KOSMO picker wide',
           styles: { height: '900px', width: '600px' },
           type: 'tablet',
+        },
+        kosmoProfileCompact: {
+          name: 'KOSMO Profile compact',
+          styles: { height: '768px', width: '1024px' },
+          type: 'tablet',
+        },
+        kosmoProfileFull: {
+          name: 'KOSMO Profile full',
+          styles: { height: '900px', width: '1440px' },
+          type: 'desktop',
+        },
+        kosmoProfileIntermediate: {
+          name: 'KOSMO Profile intermediate',
+          styles: { height: '800px', width: '480px' },
+          type: 'mobile',
         },
       },
     },

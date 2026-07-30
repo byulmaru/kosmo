@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { trackAnalytics } from '@/analytics/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -209,8 +210,10 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           return;
         }
 
+        const selectedProfileId = response.selectProfile.session.selectedProfile?.id ?? id;
+        trackAnalytics('profile_selected', { selected_profile_id: selectedProfileId });
         setOpen(false);
-        resetActor(response.selectProfile.session.selectedProfile?.id ?? id);
+        resetActor(selectedProfileId);
       },
       onError: (cause) =>
         setOperationError(operationVersion, cause.message || '프로필을 전환하지 못했습니다.'),
@@ -241,6 +244,9 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           return;
         }
 
+        trackAnalytics('profile_created', {
+          selected_profile_id: active?.id ?? null,
+        });
         setHandle('');
         setCreating(false);
         selectProfile(response.createProfile.profile.id, operationVersion);

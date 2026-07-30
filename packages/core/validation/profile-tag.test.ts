@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { profileTagsInputSchema, profileTagsSchema } from './profile-tag';
+import {
+  profileTagDuplicateParityCases,
+  profileTagInvalidParityCases,
+  profileTagNormalizationParityCases,
+} from './profile-tag-parity-fixture';
+
+test('Profile Tags schema matches the shared normalization parity fixture', () => {
+  for (const { displayName, input, normalized } of profileTagNormalizationParityCases) {
+    assert.deepEqual(profileTagsSchema.parse([input]), [{ displayName, name: normalized }]);
+  }
+});
 
 test('Profile Tags schema returns the normalized service representation', () => {
   assert.deepEqual(profileTagsSchema.parse(['  #Ｆｏｏ  ', '𝔘𝔫𝔦𝔠𝔬𝔡𝔢', '한글']), [
@@ -25,6 +36,9 @@ test('Profile Tags schema preserves validation and duplicate error contracts', (
   ]);
 
   assert.equal(profileTagsSchema.safeParse(['𐐀'.repeat(21)]).success, false);
+  for (const { input } of profileTagInvalidParityCases) {
+    assert.equal(profileTagsSchema.safeParse([input]).success, false);
+  }
 
   const duplicate = profileTagsSchema.safeParse(['#Foo', ' foo ']);
   assert.equal(duplicate.success, false);
@@ -35,6 +49,9 @@ test('Profile Tags schema preserves validation and duplicate error contracts', (
       path: [1],
     },
   ]);
+  for (const { existing, input } of profileTagDuplicateParityCases) {
+    assert.equal(profileTagsSchema.safeParse([existing, input]).success, false);
+  }
 });
 
 test('Profile Tags schema allows arbitrary counts', () => {

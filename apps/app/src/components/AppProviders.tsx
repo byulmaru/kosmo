@@ -1,4 +1,6 @@
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
+import { initializeAnalytics } from '@/analytics/client';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import {
   SessionErrorProvider,
@@ -17,11 +19,19 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
   return (
     <GraphQLErrorBoundary onRetry={retry}>
       <SessionFailOpenBoundary
-        fallback={<SessionErrorProvider>{children}</SessionErrorProvider>}
+        fallback={
+          <SessionErrorProvider>
+            <AnalyticsSessionBridge />
+            {children}
+          </SessionErrorProvider>
+        }
         resetKey={revision}
       >
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider>
+            <AnalyticsSessionBridge />
+            {children}
+          </SessionProvider>
         </Suspense>
       </SessionFailOpenBoundary>
     </GraphQLErrorBoundary>
@@ -29,6 +39,10 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
 }
 
 export function AppProviders({ children }: PropsWithChildren) {
+  useEffect(() => {
+    initializeAnalytics();
+  }, []);
+
   return (
     <ThemeProvider>
       <ToastProvider>

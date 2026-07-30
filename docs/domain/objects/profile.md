@@ -80,6 +80,11 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
+표시 이름의 1-40자 정책은 Local Profile 편집에서 새로 입력하거나 기존 값을 변경할 때 적용한다. 이미 40자를
+초과한 legacy Local 표시 이름은 원문을 변경하지 않고 다른 Profile 속성만 편집하는 동안 존속할 수 있다. 표시
+이름 원문을 한 글자라도 변경하면 legacy 예외를 적용하지 않고 1-40자 정책을 다시 적용한다. Remote Profile
+등록·갱신은 이 Local 편집 제한의 대상이 아니다.
+
 Profile Tag는 Profile이 [Hashtag](./hashtag.md)를 참조하는 구조화 관계다. bio에서 파생하지 않으며 관계는
 순서를 가지지 않는다. 제품상 Profile Tag 개수 상한은 두지 않는다. Profile 편집 입력은 각 이름을
 [Hashtag](./hashtag.md)의 canonical Hashtag identity로 먼저 해석·생성한 뒤, 동일 Hashtag identity를 둘 이상

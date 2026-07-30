@@ -11,6 +11,7 @@ import type { ProfileListItem_profile$key } from './__generated__/ProfileListIte
 
 type ProfileListItemProps = {
   linked?: boolean;
+  onPress?: () => void;
   profile: ProfileListItem_profile$key;
   style?: StyleProp<ViewStyle>;
 };
@@ -25,7 +26,7 @@ const profileListItemFragment = graphql`
   }
 `;
 
-export function ProfileListItem({ linked = false, profile, style }: ProfileListItemProps) {
+export function ProfileListItem({ linked = false, onPress, profile, style }: ProfileListItemProps) {
   const theme = useTheme();
   const data = useFragment(profileListItemFragment, profile);
   const profileHref = `/${data.relativeHandle}` as Href;
@@ -52,7 +53,7 @@ export function ProfileListItem({ linked = false, profile, style }: ProfileListI
     <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }, style]}>
       {linked ? (
         <Link asChild href={profileHref}>
-          <Pressable accessibilityRole="link" style={styles.profile}>
+          <Pressable accessibilityRole="link" onPress={onPress} style={styles.profile}>
             {content}
           </Pressable>
         </Link>

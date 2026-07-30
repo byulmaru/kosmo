@@ -20,6 +20,7 @@
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
     "./validation/post-policy": "./validation/post-policy.ts",
+    "./validation/profile-tag-parity-fixture": "./validation/profile-tag-parity-fixture.ts",
     "./validation/profile": "./validation/profile.ts"
   },
   "dependencies": {

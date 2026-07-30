@@ -8,6 +8,7 @@ import type { PropsWithChildren, ReactNode } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
 type SessionValue = {
+  accountId: string | null;
   accountName: string | null;
   selectedProfileId: string | null;
   sessionId: string | null;
@@ -15,6 +16,7 @@ type SessionValue = {
 };
 
 const SessionContext = createContext<SessionValue>({
+  accountId: null,
   accountName: null,
   selectedProfileId: null,
   sessionId: null,
@@ -54,6 +56,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
   return (
     <SessionContext.Provider
       value={{
+        accountId: data.me?.id ?? null,
         accountName: data.me?.name ?? null,
         selectedProfileId: data.currentSession?.selectedProfile?.id ?? null,
         sessionId,
@@ -72,7 +75,13 @@ export function useSession(): SessionValue {
 export function SessionErrorProvider({ children }: PropsWithChildren) {
   return (
     <SessionContext.Provider
-      value={{ accountName: null, selectedProfileId: null, sessionId: null, status: 'error' }}
+      value={{
+        accountId: null,
+        accountName: null,
+        selectedProfileId: null,
+        sessionId: null,
+        status: 'error',
+      }}
     >
       {children}
     </SessionContext.Provider>
