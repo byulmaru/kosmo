@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -21,7 +21,13 @@ const queryHistory: Array<{
 }> = [];
 const pending = new Promise<never>(() => undefined);
 
-let params: { profileHandle?: string | string[] } = {};
+type RouteParams = { profileHandle?: string | string[] };
+
+const LocalParamsContext = createContext<RouteParams>({});
+
+let globalParams: RouteParams = {};
+let layoutLocalParams: RouteParams = {};
+let screenLocalParams: RouteParams = {};
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
 
@@ -31,9 +37,16 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
-  Slot: () => (SlotContent ? createElement(SlotContent) : null),
-  useGlobalSearchParams: () => params,
-  useLocalSearchParams: () => params,
+  Slot: () =>
+    SlotContent
+      ? createElement(
+          LocalParamsContext.Provider,
+          { value: screenLocalParams },
+          createElement(SlotContent),
+        )
+      : null,
+  useGlobalSearchParams: () => globalParams,
+  useLocalSearchParams: () => useContext(LocalParamsContext),
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
@@ -126,19 +139,37 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  params = {};
+  globalParams = {};
+  layoutLocalParams = {};
+  screenLocalParams = {};
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
 });
 
 async function renderRoute(profileHandle: string) {
-  params = { profileHandle };
+  globalParams = { profileHandle };
+  screenLocalParams = { profileHandle };
+  if (!renderer) {
+    layoutLocalParams = { profileHandle };
+  }
   await act(async () => {
     if (renderer) {
-      renderer.update(createElement(ProfileLayout));
+      renderer.update(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      );
     } else {
-      renderer = create(createElement(ProfileLayout));
+      renderer = create(
+        createElement(
+          LocalParamsContext.Provider,
+          { value: layoutLocalParams },
+          createElement(ProfileLayout),
+        ),
+      );
     }
   });
   assert.ok(renderer);
