@@ -28,11 +28,15 @@
 - When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
 - Do not archive an OpenSpec change merely because an individual pull request in a split or stacked implementation is complete or merged.
 - Archive an OpenSpec change only after the proposal's entire declared scope and all tasks across every implementation slice are complete, required validation passes, and delta specs are synchronized as appropriate.
+- Assign integration verification and archive ownership explicitly from the remaining work and completion evidence; do not infer either responsibility from parent/child issue status or PR order alone.
 
 ## OpenSpec Workflow
 
 - Before planning or updating an OpenSpec change, read `memory/issue-openspec-workflow.md` and
-  follow the Issue -> OpenSpec -> Implementation order.
+  follow the Issue -> OpenSpec -> Implementation order when an OpenSpec is needed. Do not require
+  an OpenSpec for every issue.
+- Treat Linear issue and OpenSpec change ownership as many-to-many. Split or share changes by
+  behavioral contract and lifecycle, not mechanically by issue hierarchy or PR count.
 - Define the Linear issue scope and dependency structure before creating the OpenSpec change. If
   the spec reveals an independently deliverable scope, update or split the Linear issues first.
 - When creating or updating OpenSpec specs before implementation, explain the resulting spec to the user in Korean.
