@@ -68,7 +68,8 @@ const keyKinds = Object.values(ActivityPubActorKeyKind);
 
 const profileIdSchema = z.uuid().refine((value) => value === value.toLowerCase());
 
-const isCanonicalUuid = (value: string): boolean => profileIdSchema.safeParse(value).success;
+export const isCanonicalLocalProfileId = (value: string): boolean =>
+  profileIdSchema.safeParse(value).success;
 
 type GenerateCryptoKeyPairAlgorithm = 'RSASSA-PKCS1-v1_5' | 'Ed25519';
 
@@ -146,7 +147,7 @@ export const ensureLocalProfileActor = async ({
   store,
 }: EnsureLocalProfileActorOptions): Promise<LocalProfileActorResult | null> => {
   // Route identifiers are public path input; reject non-canonical UUIDs before they reach uuid columns.
-  if (!isCanonicalUuid(profileId)) {
+  if (!isCanonicalLocalProfileId(profileId)) {
     return null;
   }
 
