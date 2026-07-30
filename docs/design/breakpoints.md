@@ -33,17 +33,16 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 - compact drawer는 본문보다 위에 표시하지만 backdrop과 focus trap을 사용하지 않는다. 아바타 재클릭,
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
 - `< compact` mobile Web drawer에서는 프로필 이름과 chevron을 하나의 trigger로 유지한다. 닫힌 상태는 아래
-  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠만 trigger 상자 안에서 아래로 `6px`
-  광학 보정한다. trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS에는 이 보정을
-  적용하지 않는다.
+  방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠를 trigger 상자의 수직 중심에 둔다.
+  trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS의 기존 정렬도 변경하지 않는다.
 - `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger
   바로 아래에 anchored absolute overlay로 표시한다. 닫힌 260px 프로필 요약 영역은 유지하며, picker는 trigger
   아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
   바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger 재실행, 바깥 클릭, `Escape`, 프로필
   선택 성공으로 닫는다.
-  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시한다. 이름·chevron 콘텐츠만 trigger 상자 안에서
-  아래로 `6px` 광학 보정하되 trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며, chevron 자체는
-  별도 focus target이 아니다.
+  닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시한다. 이름·chevron 콘텐츠는 trigger 상자의
+  수직 중심에 두되 trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며, chevron 자체는 별도
+  focus target이 아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
   목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
@@ -58,7 +57,7 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   trigger 재실행, full·compact 바깥 pointer close 또는 `Escape`처럼 사용자가 명시적으로 닫으면 `open=false`,
   `creating=false`, 빈 handle과 오류 없음으로 초기화한다. 바깥 pointer close는 이벤트 기본 동작을 막지 않아
   pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer의
-  chevron·광학 보정 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
+  chevron 표시 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
 
 ## 알림 Unread badge
 

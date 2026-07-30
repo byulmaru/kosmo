@@ -121,6 +121,15 @@ full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `�
 - 변경 파일 ESLint·Prettier, scoped strict와 전체 OpenSpec strict 51/51, `git diff --check`를 통과했다.
 - `origin/PROD-487...HEAD` scope diff에 API·DB·dependency·migration·`.superpowers`·`docs/superpowers` 변경이 없음을 확인했다.
 
+**Parent PR #390 merge 이후 재스택·자동화 실행 기록 (2026-07-30)**
+
+- PR #390 merge 후 기존 parent boundary `cbd4b5ba` 위의 child commit 6개만 최신 `origin/main` `217dfafa` 위로 재스택했다. 이전·이후 `git range-diff`에서 6개 commit이 모두 동일함(`=`)을 확인했고, PR diff는 PROD-541 소유 16개 파일로 정리됐다.
+- 사용자 결정에 따라 full Web sidebar와 mobile Web drawer의 ProfileSwitcher nickname·chevron을 trigger 수직 중심에 두도록 `docs/design/breakpoints.md`의 기존 6px 광학 보정 계약을 갱신했다.
+- active change archive 전에 canonical spec을 일부만 선반영하지 않도록 notification 계약은 delta spec에 유지하고 `openspec/specs/notification/spec.md`는 현재 canonical 상태로 복원했다.
+- `CI=true pnpm --filter @kosmo/app test`: Relay compile·TypeScript, unit 59/59, Storybook static build와 Storybook 175/175 통과.
+- scoped strict와 전체 OpenSpec strict 52/52, `git diff --check`를 통과했다.
+- Android·iOS native runtime과 VoiceOver·TalkBack은 미실행했다. Web Storybook 관찰 및 자동화 결과와 구분한다.
+
 - [x] 2.1 기존 Shell Storybook과 Web auth route 검증을 새 비노출·route 제거 계약에 맞춰 먼저 변경하고 최소 실패 증거를 확인한다.
 - [x] 2.2 `SidebarNavigation`의 두 준비되지 않은 item, profile `/menu` sentinel과 사용하지 않는 icon import를 제거하고 generic `/menu` route를 삭제한다.
 - [x] 2.3 focused 자동화와 full·compact·mobile Web viewport에서 유지 대상, 접근성, route 등록과 responsive 동작을 확인하고 Android·iOS 미실행 검증을 구분한다.
