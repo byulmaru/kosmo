@@ -2,9 +2,10 @@
 
 ## 확정 자산
 
-- 풀 로고 라이트: 투명한 `1720×1050` 캔버스를 유지한다.
+- 풀 로고 라이트: 의도한 비율의 투명한 `1665×1050` 캔버스를 유지한다.
 - 브랜드 마크 라이트: 투명 배경의 단독 마크다.
-- 앱 아이콘 라이트: `1024×1024`, 배경은 `#FEFEFE`다. iOS와 일반 Web 아이콘에 사용한다.
+- 앱 아이콘 라이트: `1024×1024`, 배경은 `#FEFEFE`다. iOS와 Apple touch icon, 일반 PWA icon에 사용한다.
+- 브라우저 favicon: 투명 브랜드 마크를 작은 캔버스에 맞춰 사용한다. `16–32px`에서도 식별되도록 앱 아이콘보다 여백을 줄인다.
 - Android foreground: `1024×1024` 투명 PNG다. Figma에서 확정한 optical offset을 그대로 유지하고 `#FEFEFE` adaptive-icon background와 조합한다.
 - 다크 앱 아이콘과 Android monochrome/themed icon은 소비처와 시안이 확정되지 않아 사용하지 않는다.
 
@@ -19,7 +20,8 @@
 
 - 앱 내 로딩 화면은 투명 브랜드 마크를 사용한다.
 - 로그인 화면 헤더는 풀 로고를 사용한다.
-- iOS, favicon, Apple touch icon과 일반 PWA icon은 라이트 앱 아이콘을 사용한다.
+- 브라우저 favicon은 투명 브랜드 마크를 사용한다.
+- iOS, Apple touch icon과 일반 PWA icon은 `#FEFEFE` 배경의 라이트 앱 아이콘을 사용한다.
 - Android adaptive icon과 maskable PWA icon은 투명 foreground와 `#FEFEFE` 배경을 조합한다.
 - 기본 공유 이미지는 `1200×630` `#FEFEFE` 배경에 풀 로고만 중앙 배치한다.
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { inflateSync } from 'node:zlib';
 
 const brandDirectory = new URL('../../assets/brand/', import.meta.url);
 const publicDirectory = new URL('../../public/', import.meta.url);
@@ -21,14 +22,82 @@ async function readPngDimensions(file: URL) {
   };
 }
 
+async function readPngRgba(file: URL) {
+  const contents = await readRequiredFile(file);
+  assert.deepEqual(contents.subarray(0, 8), pngSignature, `${file.pathname} must be a PNG`);
+
+  let width = 0;
+  let height = 0;
+  let offset = 8;
+  const imageData: Buffer[] = [];
+
+  while (offset < contents.length) {
+    const length = contents.readUInt32BE(offset);
+    const type = contents.toString('ascii', offset + 4, offset + 8);
+    const data = contents.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0);
+      height = data.readUInt32BE(4);
+      assert.equal(data[8], 8, `${file.pathname} must use 8-bit channels`);
+      assert.equal(data[9], 6, `${file.pathname} must use RGBA color`);
+    } else if (type === 'IDAT') {
+      imageData.push(data);
+    }
+    offset += length + 12;
+  }
+
+  assert.ok(width > 0 && height > 0 && imageData.length > 0, `${file.pathname} must be complete`);
+  const encoded = inflateSync(Buffer.concat(imageData));
+  const stride = width * 4;
+  const rgba = Buffer.alloc(stride * height);
+  let encodedOffset = 0;
+
+  const paeth = (left: number, above: number, upperLeft: number) => {
+    const prediction = left + above - upperLeft;
+    const leftDistance = Math.abs(prediction - left);
+    const aboveDistance = Math.abs(prediction - above);
+    const upperLeftDistance = Math.abs(prediction - upperLeft);
+    if (leftDistance <= aboveDistance && leftDistance <= upperLeftDistance) {
+      return left;
+    }
+    return aboveDistance <= upperLeftDistance ? above : upperLeft;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = encoded[encodedOffset];
+    encodedOffset += 1;
+    const rowOffset = y * stride;
+    for (let x = 0; x < stride; x += 1) {
+      const value = encoded[encodedOffset];
+      encodedOffset += 1;
+      const left = x >= 4 ? rgba[rowOffset + x - 4] : 0;
+      const above = y > 0 ? rgba[rowOffset + x - stride] : 0;
+      const upperLeft = x >= 4 && y > 0 ? rgba[rowOffset + x - stride - 4] : 0;
+      const predictor =
+        filter === 0
+          ? 0
+          : filter === 1
+            ? left
+            : filter === 2
+              ? above
+              : filter === 3
+                ? Math.floor((left + above) / 2)
+                : paeth(left, above, upperLeft);
+      rgba[rowOffset + x] = (value + predictor) & 0xff;
+    }
+  }
+
+  return { height, rgba, width };
+}
+
 test('native and reusable brand assets keep their approved source dimensions', async () => {
   const fullLogoSvg = (
     await readRequiredFile(new URL('brand-logo-full-light.svg', brandDirectory))
   ).toString('utf8');
-  assert.match(fullLogoSvg, /^<svg width="1720" height="1050" viewBox="[^"]*1720 1050"/);
+  assert.match(fullLogoSvg, /^<svg width="1665" height="1050" viewBox="[^"]*1665 1050"/);
   assert.deepEqual(await readPngDimensions(new URL('brand-logo-full-light.png', brandDirectory)), {
     height: 1050,
-    width: 1720,
+    width: 1665,
   });
   assert.deepEqual(await readPngDimensions(new URL('brand-mark-light.png', brandDirectory)), {
     height: 1024,
@@ -42,6 +111,30 @@ test('native and reusable brand assets keep their approved source dimensions', a
     await readPngDimensions(new URL('app-icon-android-foreground.png', brandDirectory)),
     { height: 1024, width: 1024 },
   );
+});
+
+test('browser favicon keeps transparency and fills the small canvas', async () => {
+  const { height, rgba, width } = await readPngRgba(new URL('favicon-32x32.png', publicDirectory));
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (rgba[(y * width + x) * 4 + 3] <= 8) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  assert.ok(rgba.some((value, index) => index % 4 === 3 && value === 0));
+  assert.ok(maxX - minX + 1 >= 29, 'favicon mark must fill at least 29px horizontally');
+  assert.ok(maxY - minY + 1 >= 26, 'favicon mark must fill at least 26px vertically');
 });
 
 test('browser, PWA, and share assets expose the expected delivery sizes', async () => {

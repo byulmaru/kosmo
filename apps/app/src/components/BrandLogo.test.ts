@@ -51,12 +51,12 @@ test('mark variant renders the approved mark as a square accessible image', asyn
   assert.deepEqual((image.props.style as Array<unknown>)[0], { height: 56, width: 56 });
 });
 
-test('full variant preserves the approved 1720 by 1050 artboard ratio', async () => {
-  const image = await renderLogo({ variant: 'full', width: 172 });
+test('full variant preserves the approved 1665 by 1050 artboard ratio', async () => {
+  const image = await renderLogo({ variant: 'full', width: 166.5 });
 
   assert.match(String((image.props.source as { uri?: string }).uri), /brand-logo-full-light\.png$/);
   assert.deepEqual((image.props.style as Array<unknown>)[0], {
-    aspectRatio: 1720 / 1050,
-    width: 172,
+    aspectRatio: 1665 / 1050,
+    width: 166.5,
   });
 });

@@ -45,7 +45,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: true,
   },
   web: {
-    favicon: './assets/brand/app-icon-ios-light.png',
+    favicon: './assets/brand/brand-mark-light.png',
     output: 'single',
   },
   plugins: ['expo-router', 'expo-secure-store'],
