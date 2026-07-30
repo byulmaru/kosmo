@@ -6,6 +6,14 @@
 제공한다. 화면의 presentation과 실제 권한·조회·저장 연결을 분리해, API가 연결되기 전 UI가 저장 가능한 것처럼
 보이거나 권한 없는 사용자가 직접 URL로 편집 화면에 접근하지 않게 한다.
 
+## 출시와 검증 범위
+
+- 현재 출시와 수동 runtime QA 범위는 Web이다.
+- 공용 React Native 구현과 자동화 검증은 Web·Android·iOS가 같은 정보 구조와 저장 계약을 유지하도록 계속
+  적용한다.
+- iOS·Android 실제 기기 QA는 현재 Profile edit 출시 완료 조건에서 제외하고 Native 출시 gate에서 별도로
+  수행한다. Web runtime 검증이나 공용 코드 자동화 결과를 Native runtime 완료 증거로 사용하지 않는다.
+
 ## 정보 구조와 필드
 
 화면은 다음 순서로 구성한다.

@@ -324,6 +324,27 @@
 - Confirmation / Follow-up: Storybook에서 Web `32×32 CSS px` target을 검증하고 iOS `44×44 pt`, Android
   `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 route 통합 단계에서 수행한다.
 
+### 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-edit.md`, `docs/design/accessibility.md`, `PROD-490`, `PROD-492`,
+  2026-07-31 사용자 확인
+- Status: Active
+- Context / Problem: 공용 React Native Profile edit 구현은 Web·Android·iOS를 지원하지만 현재 출시 대상은
+  Web이다. iOS·Android 실제 기기 QA를 현재 PR 완료 조건으로 유지하면 출시 범위와 검증 gate가 어긋난다.
+- Decision Outcome: 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다. iOS·Android 실제 기기 QA는
+  PROD-491·492와 PROD-490 통합 완료 조건에서 제외하고 Native 출시 gate에서 별도로 수행한다. 공용 React Native
+  구현과 자동화 검증은 유지하되 Web 검증을 Native runtime 완료 증거로 사용하지 않는다.
+- Alternatives Considered: iOS·Android 실제 기기 QA를 현재 완료 조건으로 유지하는 방식은 출시 대상이 아닌
+  플랫폼 때문에 Web PR readiness를 지연하므로 제외했다. Native 검증을 완료한 것으로 간주하는 방식도 실제
+  runtime 증거가 없어 제외했다.
+- Consequences: PROD-492는 필수 자동화와 Web runtime 증거로 PR readiness를 판단할 수 있다. Native 출시 전에는
+  safe area, Android hardware back, touch target, VoiceOver·TalkBack과 플랫폼별 picker/upload 동작을 별도 gate에서
+  검증해야 한다.
+- Confirmation / Follow-up: PROD-492 PR에 Web 수동 검증과 iOS·Android 미실행·명시적 제외를 함께 기록하고,
+  Native 출시 작업에서 실제 기기 QA를 다시 연다.
+
 ## Remaining Decisions
 
 - 없음.
