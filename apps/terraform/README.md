@@ -13,7 +13,7 @@
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
 - ECR의 `main`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
-- Argo CD `kosmo` ApplicationSet과 여기서 생성하는 `kosmo-dev` Application의 선언
+- Argo CD `kosmo` ApplicationSet이 생성하는 `kosmo-dev` Application과 별도 `kosmo-prod` Application의 선언
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 
