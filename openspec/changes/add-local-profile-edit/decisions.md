@@ -128,7 +128,7 @@
   포함한 고정 `48px`은 기기별 inset을 침범하므로 제외했다.
 - Consequences: Web과 Native의 header content rhythm은 같고, safe-area padding은 외부 shell이 별도로 소유한다.
 - Confirmation / Follow-up: Storybook에서 content row와 뒤로가기 target이 `48px`인지 검증하고 Native 실제 safe-area
-  배치는 PROD-492 route 통합에서 확인한다.
+  배치는 현재 이슈·PR 완료 조건에서 제외한 뒤 Native 출시 gate에서 확인한다.
 
 ### 40 code point를 초과한 legacy 표시 이름은 변경하지 않은 경우에만 통과시킨다
 
@@ -322,7 +322,8 @@
 - Consequences: 공용 component에서 compact visual과 platform별 실제 입력 target을 분리하고 제거 action의
   접근성 label/state를 유지한다.
 - Confirmation / Follow-up: Storybook에서 Web `32×32 CSS px` target을 검증하고 iOS `44×44 pt`, Android
-  `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 route 통합 단계에서 수행한다.
+  `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 현재 이슈·PR 완료 조건에서 제외한 뒤 Native 출시
+  gate에서 수행한다.
 
 ### 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다
 

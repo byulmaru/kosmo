@@ -14,7 +14,8 @@
 
 route·GraphQL 없이 displayName, bio, `followPolicy` enum draft와 한 줄 `팔로우 요청 자동 승인` Switch,
 avatar/header controlled state와 Profile Tag 로컬 편집을 표현하는 React Native 공용 Profile edit component와 현재
-Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제 기기 검증은 PROD-492 전달 시 수행한다.
+Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 자동화 검증은 PROD-492 공용 구현에 포함하되 실제 기기
+검증은 Native 출시 gate에서 수행한다.
 
 **Guardrails**
 
@@ -56,8 +57,8 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 실제
 - Web 390·1024·1440 wrapping, 상단 navigation header·뒤로가기 action의 `48px` geometry와 Profile Tag 제거
   action의 `32×32 CSS px` target을 확인한다.
 - displayName 40자 경계, 40자 초과 legacy 초기값 그대로+다른 field 변경, 40자 초과 초기값 변경 거부를 확인한다.
-- Native 실제 기기의 safe area·layout과 Profile Tag 제거 action의 iOS `44×44 pt`, Android `48×48 dp`
-  target은 PROD-492 전달 시 확인한다.
+- Native safe area·layout과 Profile Tag 제거 action의 iOS `44×44 pt`, Android `48×48 dp` mapping은 공용 구현과
+  자동화로 유지한다. 실제 기기 검증은 현재 이슈·PR 완료 조건에서 제외하고 Native 출시 gate에서 수행한다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 
