@@ -170,10 +170,10 @@ describe('Local Media upload GraphQL 경계', () => {
       const uploadBody = await upload.text();
       assert.equal(upload.status, 201, uploadBody);
       assert.equal(upload.headers.get('access-control-allow-origin'), browserUploadOrigin);
-      const storedOriginal = JSON.parse(uploadBody) as { id: string; url: string };
-      const original = await fetch(storedOriginal.url, { method: 'HEAD' });
-      assert.equal(original.status, 200);
-      assert.equal(original.headers.get('content-type'), 'image/webp');
+      const storedRepresentation = JSON.parse(uploadBody) as { id: string; url: string };
+      const representation = await fetch(storedRepresentation.url, { method: 'HEAD' });
+      assert.equal(representation.status, 200);
+      assert.equal(representation.headers.get('content-type'), 'image/webp');
 
       const completed = await requestCompleteMediaUpload(
         issued.data!.issueMediaUploadUrl.media.id,
@@ -186,6 +186,9 @@ describe('Local Media upload GraphQL 경계', () => {
       );
       assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
       assert.ok(completed.data?.completeMediaUpload.media.readyAt);
+      const stored = await db.select().from(Media).then(firstOrThrow);
+      assert.equal(stored.url, storedRepresentation.url);
+      assert.equal(stored.mediaType, 'image/webp');
     },
   );
 
@@ -300,11 +303,11 @@ describe('Local Media upload GraphQL 경계', () => {
           String(input),
           'https://media.example/v1/uploads/opaque%2Freference%3Fprovider-owned',
         );
-        assert.equal(init?.method, 'HEAD');
+        assert.equal(init?.method, undefined);
         assert.deepEqual(init?.headers, { Authorization: 'Bearer secret' });
         assert.equal(init?.body, undefined);
         assert.ok(init?.signal instanceof AbortSignal);
-        return new Response(null, { status: 204 });
+        return representationResponse();
       },
     );
 
@@ -320,6 +323,8 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(completed.accountId, auth.account.id);
     assert.equal(completed.profileId, auth.profile.id);
     assert.equal(completed.storageReference, stored.storageReference);
+    assert.equal(completed.url, 'https://media.example/media.webp');
+    assert.equal(completed.mediaType, 'image/webp');
     assert.equal(completed.uploadExpiresAt.toString(), uploadExpiresAt);
     assert.equal(completed.state, MediaState.READY);
     assert.ok(completed.readyAt);
@@ -329,7 +334,7 @@ describe('Local Media upload GraphQL 경계', () => {
     let fetchCalls = 0;
     t.mock.method(globalThis, 'fetch', async () => {
       fetchCalls += 1;
-      return new Response(null, { status: 204 });
+      return representationResponse();
     });
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
@@ -351,6 +356,7 @@ describe('Local Media upload GraphQL 경계', () => {
     const attempts: Array<() => Promise<Response>> = [
       async () => new Response(null, { status: 404 }),
       async () => new Response(null, { status: 503 }),
+      async () => Response.json({ mediaType: 'image/webp', url: 'not-a-url' }),
       async () => {
         throw new Error('network failure');
       },
@@ -366,6 +372,8 @@ describe('Local Media upload GraphQL 경계', () => {
       const unchanged = await db.select().from(Media).then(firstOrThrow);
       assert.equal(unchanged.state, MediaState.UPLOADING);
       assert.equal(unchanged.readyAt, null);
+      assert.equal(unchanged.url, null);
+      assert.equal(unchanged.mediaType, null);
     }
   });
 
@@ -373,7 +381,7 @@ describe('Local Media upload GraphQL 경계', () => {
     let fetchCalls = 0;
     t.mock.method(globalThis, 'fetch', async () => {
       fetchCalls += 1;
-      return new Response(null, { status: 204 });
+      return representationResponse();
     });
     const auth = await createAuthenticatedSession();
 
@@ -395,7 +403,7 @@ describe('Local Media upload GraphQL 경계', () => {
     let fetchCalls = 0;
     t.mock.method(globalThis, 'fetch', async () => {
       fetchCalls += 1;
-      return new Response(null, { status: 204 });
+      return representationResponse();
     });
     const auth = await createAuthenticatedSession();
     const media = await createUploadingMedia(auth.account.id, auth.profile.id);
@@ -418,7 +426,7 @@ describe('Local Media upload GraphQL 경계', () => {
         bothChecksStarted.resolve();
       }
       await bothChecksStarted.promise;
-      return new Response(null, { status: 204 });
+      return representationResponse();
     });
     const auth = await createAuthenticatedSession();
     const media = await createUploadingMedia(auth.account.id, auth.profile.id);
@@ -439,7 +447,7 @@ describe('Local Media upload GraphQL 경계', () => {
   });
 
   test('Ready persistence 실패는 부분 state 전이를 남기지 않는다', async (t) => {
-    t.mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }));
+    t.mock.method(globalThis, 'fetch', async () => representationResponse());
     const auth = await createAuthenticatedSession();
     const media = await createUploadingMedia(auth.account.id, auth.profile.id);
     await pg.unsafe(`
@@ -466,6 +474,8 @@ describe('Local Media upload GraphQL 경계', () => {
     const unchanged = await db.select().from(Media).then(firstOrThrow);
     assert.equal(unchanged.state, MediaState.UPLOADING);
     assert.equal(unchanged.readyAt, null);
+    assert.equal(unchanged.url, null);
+    assert.equal(unchanged.mediaType, null);
   });
 });
 
@@ -561,6 +571,9 @@ const uploadResponse = (
     { expiresAt: uploadExpiresAt, id, providerMetadata: { version: 1 }, uploadUrl },
     { status: 201 },
   );
+
+const representationResponse = () =>
+  Response.json({ mediaType: 'image/webp', url: 'https://media.example/media.webp' });
 
 const assertStoredMedia = (
   media: typeof Media.$inferSelect | undefined,
