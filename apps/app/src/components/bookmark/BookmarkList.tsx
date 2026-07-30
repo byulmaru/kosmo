@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostListItem } from '@/components/post/PostListItem';
 import { Button } from '@/components/ui/Button';
@@ -6,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
+import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
 
 export type BookmarkListEntry = { id: string; post: PostListItem_post$key };
 
@@ -18,6 +20,7 @@ export type BookmarkListProps = {
   onLoadMore?: () => void;
   onRetry?: () => void;
   profileRequired?: boolean;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 };
 
 export function BookmarkList({
@@ -29,9 +32,17 @@ export function BookmarkList({
   onLoadMore,
   onRetry,
   profileRequired = false,
+  replyProfile,
 }: BookmarkListProps): React.JSX.Element {
+  const [activeReplyPostId, setActiveReplyPostId] = useState<string | null>(null);
   const hasData = items.length > 0;
   let content: ReactNode;
+
+  useEffect(() => {
+    if (!replyProfile) {
+      setActiveReplyPostId(null);
+    }
+  }, [replyProfile]);
 
   if (profileRequired) {
     content = (
@@ -62,7 +73,22 @@ export function BookmarkList({
     content = (
       <>
         {items.map((item) => (
-          <PostListItem key={item.id} post={item.post} />
+          <PostListItem
+            key={item.id}
+            post={item.post}
+            reply={
+              replyProfile
+                ? {
+                    expanded: activeReplyPostId === item.id,
+                    onPress: () =>
+                      setActiveReplyPostId((current) => (current === item.id ? null : item.id)),
+                    onRequestClose: () => setActiveReplyPostId(null),
+                    owner: 'list',
+                    profile: replyProfile,
+                  }
+                : undefined
+            }
+          />
         ))}
         {error ? (
           <BookmarkListState

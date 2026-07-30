@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
@@ -7,6 +8,7 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostListItem } from './PostListItem';
 import type { PostList_homeTimeline$key } from './__generated__/PostList_homeTimeline.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
+import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 
 const PostListProfileFragment = graphql`
   fragment PostList_profile on Profile {
@@ -41,6 +43,7 @@ type Props = {
   loading?: boolean;
   onRetry?: () => void;
   profile?: PostList_profile$key | null;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 };
 
 export function PostList({
@@ -49,11 +52,19 @@ export function PostList({
   loading = false,
   onRetry,
   profile: profileKey,
+  replyProfile,
 }: Props) {
+  const [activeReplyPostId, setActiveReplyPostId] = useState<string | null>(null);
   const profile = useFragment(PostListProfileFragment, profileKey ?? null);
   const timeline = useFragment(PostListHomeTimelineFragment, timelineKey ?? null);
   const edges = timeline?.edges ?? profile?.posts.edges ?? [];
   const hasData = Boolean(timeline || profile);
+
+  useEffect(() => {
+    if (!replyProfile) {
+      setActiveReplyPostId(null);
+    }
+  }, [replyProfile]);
 
   if (loading && !hasData) {
     return <PostListSkeleton />;
@@ -82,7 +93,24 @@ export function PostList({
   return (
     <View style={styles.root}>
       {edges.map((edge) => (
-        <PostListItem key={edge.cursor} post={edge.node} />
+        <PostListItem
+          key={edge.cursor}
+          post={edge.node}
+          reply={
+            replyProfile
+              ? {
+                  expanded: activeReplyPostId === edge.node.id,
+                  onPress: () =>
+                    setActiveReplyPostId((current) =>
+                      current === edge.node.id ? null : edge.node.id,
+                    ),
+                  onRequestClose: () => setActiveReplyPostId(null),
+                  owner: 'list',
+                  profile: replyProfile,
+                }
+              : undefined
+          }
+        />
       ))}
     </View>
   );

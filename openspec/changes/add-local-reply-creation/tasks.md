@@ -64,10 +64,10 @@
 - 성공 payload 뒤 현재 detail route만 targeted refetch되어 thread에 반영되고 다른 actor Store나 관련 없는 목록을 변경하지 않으며 refetch 실패는 기존 detail retry 경계를 유지함을 검증한다.
 
 - [x] 2.1 PROD-422의 Reply 조상·하위 API와 Post 상세 thread 계약이 merge되었고 이 change와 ownership 중복이 없음을 확인한다.
-- [ ] 2.2 display Post와 Action Bar target을 분리한 actual 목록·상세 surface에서 contentful Parent의 Reply action을 기존 composer와 controlled `expanded`에 연결하고, contentless Repost에서는 Source target을 유지하면서 Reply 진입을 차단한다.
-- [ ] 2.3 기존 composer가 `replyParentId`를 포함해 Reply를 제출하고 DIRECT를 제외하며 selected Profile·Relay Environment·Parent별 입력·pending·error와 늦은 completion·callback을 격리하게 확장한다.
-- [ ] 2.4 direct Parent preview와 기존 composer를 조립해 Web 목록 modal·좁은 Web/Native 전체 화면·상세 thread 행별 inline surface, pristine/dirty/pending/실패/성공 lifecycle과 focus·scroll 계약을 구현한다.
-- [ ] 2.5 성공한 `Post` payload 뒤 현재 detail route만 targeted refetch하고 실패 시 입력·Parent 또는 기존 thread·retry 경계를 유지하며, surface·route·상태 격리·일반 Post 회귀 검증과 Relay compiler/check를 통과시킨다.
+- [x] 2.2 display Post와 Action Bar target을 분리한 actual 목록·상세 surface에서 contentful Parent의 Reply action을 기존 composer와 controlled `expanded`에 연결하고, contentless Repost에서는 Source target을 유지하면서 Reply 진입을 차단한다.
+- [x] 2.3 기존 composer가 `replyParentId`를 포함해 Reply를 제출하고 DIRECT를 제외하며 selected Profile·Relay Environment·Parent별 입력·pending·error와 늦은 completion·callback을 격리하게 확장한다.
+- [x] 2.4 direct Parent preview와 기존 composer를 조립해 Web 목록 modal·좁은 Web/Native 전체 화면·상세 thread 행별 inline surface, pristine/dirty/pending·실패·성공 lifecycle과 focus·scroll 계약을 구현한다.
+- [x] 2.5 성공한 `Post` payload 뒤 현재 detail route만 targeted refetch하고 실패 시 입력·Parent 또는 기존 thread·retry 경계를 유지하며, surface·route·상태 격리·일반 Post 회귀 검증과 Relay compiler/check를 통과시킨다.
 
 ## 3. PROD-426 Reply Notification/inbox 통합
 

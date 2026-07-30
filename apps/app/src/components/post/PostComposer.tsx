@@ -3,7 +3,7 @@ import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -21,6 +21,7 @@ import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
 } from './PostComposerMediaControls';
+import type { ReactNode } from 'react';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
@@ -76,15 +77,25 @@ const CreatePostMutation = graphql`
 `;
 
 type PostComposerProps = {
+  beforeEditor?: ReactNode;
+  focusOnMount?: boolean;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
+  onStateChange?: (state: PostComposerState) => void;
   profile: PostComposer_profile$key;
   replyParentId?: string;
+  scrollable?: boolean;
+  surface?: boolean;
 };
 
 export function PostComposer({
+  beforeEditor,
+  focusOnMount = false,
   onPostCreated,
+  onStateChange,
   profile: profileKey,
   replyParentId,
+  scrollable = false,
+  surface = false,
 }: PostComposerProps) {
   const theme = useTheme();
   const profile = useFragment(PostComposerFragment, profileKey);
@@ -115,6 +126,10 @@ export function PostComposer({
   );
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
+  const dirty =
+    body !== '' ||
+    visibility !== PostVisibility.UNLISTED ||
+    (!replyMode && (media.items.length > 0 || media.hasPendingMedia || media.sensitiveMedia));
   const disabled =
     submitting ||
     (bodyText.length === 0 && (replyMode || media.items.length === 0)) ||
@@ -130,6 +145,7 @@ export function PostComposer({
       return;
     }
     setError(null);
+    setVisibilityOpen(false);
     setSubmitting(true);
     const submissionGeneration = contextGenerationRef.current;
     const submittedCallback = onPostCreated;
@@ -138,9 +154,7 @@ export function PostComposer({
       variables: {
         input: {
           ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
-          ...(!replyMode
-            ? { media: media.items, sensitiveMedia: media.sensitiveMedia }
-            : {}),
+          ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
         },
       },
       onCompleted: (response, errors) => {
@@ -203,6 +217,18 @@ export function PostComposer({
       contextGenerationRef.current += 1;
     };
   }, []);
+
+  useEffect(() => {
+    onStateChange?.({ dirty, submitting });
+  }, [dirty, onStateChange, submitting]);
+
+  useEffect(() => {
+    if (!focusOnMount) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => editor.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [contextKey, focusOnMount]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -284,6 +310,7 @@ export function PostComposer({
             aria-checked={selected}
             accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
             accessibilityState={Platform.OS === 'web' ? undefined : { checked: selected }}
+            disabled={submitting}
             key={option.value}
             onPress={() => {
               setVisibility(option.value);
@@ -329,6 +356,8 @@ export function PostComposer({
         aria-expanded={visibilityOpen}
         aria-haspopup="menu"
         accessibilityRole="button"
+        accessibilityState={{ disabled: submitting }}
+        disabled={submitting}
         onPress={() => setVisibilityOpen(!visibilityOpen)}
         style={({ pressed }) => [
           styles.visibilityTrigger,
@@ -353,10 +382,7 @@ export function PostComposer({
     <View style={styles.submit}>
       <Text
         accessibilityLiveRegion="polite"
-        style={[
-          styles.remaining,
-          { color: remaining < 0 ? theme.danger : theme.textSecondary },
-        ]}
+        style={[styles.remaining, { color: remaining < 0 ? theme.danger : theme.textSecondary }]}
       >
         {remaining.toLocaleString('ko-KR')}
       </Text>
@@ -366,15 +392,9 @@ export function PostComposer({
     </View>
   );
 
-  return (
-    <View
-      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
-      style={[
-        styles.root,
-        replyMode ? styles.replyRoot : null,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
+  const editorContent = (
+    <>
+      {beforeEditor}
       <View style={styles.author}>
         <Avatar label={profile.displayName} size={40} />
         <ProfileNameBlock profile={profile} />
@@ -406,12 +426,7 @@ export function PostComposer({
             {error}
           </Text>
         ) : null}
-        {replyMode ? (
-          <View style={styles.footer}>
-            {visibilitySelector}
-            {submitActions}
-          </View>
-        ) : (
+        {replyMode ? null : (
           <PostComposerMediaControls
             actions={submitActions}
             disabled={submitting}
@@ -420,7 +435,42 @@ export function PostComposer({
           />
         )}
       </View>
+    </>
+  );
 
+  return (
+    <View
+      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
+      style={[
+        surface ? styles.surfaceRoot : styles.root,
+        !surface && replyMode ? styles.replyRoot : null,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
+    >
+      {scrollable ? (
+        <ScrollView
+          contentContainerStyle={styles.surfaceEditor}
+          keyboardShouldPersistTaps="handled"
+          style={styles.editorScroll}
+          testID="reply-composer-scroll"
+        >
+          {editorContent}
+        </ScrollView>
+      ) : (
+        editorContent
+      )}
+      {replyMode ? (
+        <View
+          style={[
+            styles.footer,
+            surface ? styles.surfaceFooter : null,
+            surface ? { borderColor: theme.border } : null,
+          ]}
+        >
+          {visibilitySelector}
+          {submitActions}
+        </View>
+      ) : null}
       {Platform.OS !== 'web' ? (
         <Modal
           accessibilityLabel={replyMode ? '답글 공개 범위' : '공개 범위'}
@@ -447,6 +497,9 @@ export function PostComposer({
 const styles = StyleSheet.create({
   root: { gap: spacing.lg, padding: spacing.lg },
   replyRoot: { borderRadius: radii.md, borderWidth: 1 },
+  surfaceRoot: { flex: 1, minHeight: 0 },
+  editorScroll: { flex: 1, minHeight: 0 },
+  surfaceEditor: { flexGrow: 1, gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   editorSurface: {
     borderRadius: radii.md,
@@ -467,6 +520,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     justifyContent: 'space-between',
+  },
+  surfaceFooter: {
+    borderTopWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   visibilityControl: { position: 'relative' },
   visibilityTrigger: {

@@ -13,6 +13,13 @@ import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
   query PostDetailQuery($postId: ID!) {
+    currentSession {
+      id
+      selectedProfile {
+        id
+        ...ReplyComposerSurface_profile
+      }
+    }
     node(id: $postId) {
       __typename
       ... on Post {
@@ -70,8 +77,10 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         fetchKey={`${revision}:${fetchKey}`}
+        onReplyCreated={() => setFetchKey((key) => key + 1)}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
+        threadIdentity={`${revision}:${postId}`}
       />
     </RouteBoundary>
   );
@@ -98,12 +107,16 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   fetchKey,
+  onReplyCreated,
   postId,
   routeRelativeHandle,
+  threadIdentity,
 }: {
   fetchKey: string;
+  onReplyCreated: () => void;
   postId: string;
   routeRelativeHandle: string;
+  threadIdentity: string;
 }) {
   const router = useRouter();
   const data = useLazyLoadQuery<PostDetailQuery>(
@@ -144,7 +157,13 @@ function PostDetailContent({
       />
     </PostDetailFrame>
   ) : (
-    <PostDetailThread header={<PostDetailHeader />} identity={fetchKey} post={post.thread} />
+    <PostDetailThread
+      header={<PostDetailHeader />}
+      identity={threadIdentity}
+      onReplyCreated={onReplyCreated}
+      post={post.thread}
+      replyProfile={data.currentSession?.selectedProfile ?? null}
+    />
   );
 }
 

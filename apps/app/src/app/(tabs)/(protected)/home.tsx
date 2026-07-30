@@ -18,6 +18,7 @@ const HomeQuery = graphql`
       id
       selectedProfile {
         id
+        ...ReplyComposerSurface_profile
       }
     }
     me {
@@ -88,7 +89,7 @@ function HomeContent({ fetchKey }: { fetchKey: string }) {
           홈
         </Text>
       </View>
-      <PostList homeTimeline={data.homeTimeline} />
+      <PostList homeTimeline={data.homeTimeline} replyProfile={selectedProfile} />
     </ScrollView>
   );
 }

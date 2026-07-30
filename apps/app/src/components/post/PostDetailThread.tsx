@@ -18,6 +18,8 @@ import type { PostDetailThread_post$key } from './__generated__/PostDetailThread
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
+import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
+import type { PostComposerCreatedPost } from './PostComposer';
 import type { PostThreadScrollMetrics } from './postThreadPagination';
 
 const PostDetailThreadFragment = graphql`
@@ -91,26 +93,43 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 export function PostDetailThread({
   header,
   identity,
+  onReplyCreated,
   post: postKey,
+  replyProfile,
 }: {
   header: ReactNode;
   identity: string;
+  onReplyCreated?: (post: PostComposerCreatedPost) => void;
   post: PostDetailThread_post$key;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
-  return <PostDetailThreadContent header={header} key={identity} post={postKey} />;
+  return (
+    <PostDetailThreadContent
+      header={header}
+      key={identity}
+      onReplyCreated={onReplyCreated}
+      post={postKey}
+      replyProfile={replyProfile}
+    />
+  );
 }
 
 function PostDetailThreadContent({
   header,
+  onReplyCreated,
   post: postKey,
+  replyProfile,
 }: {
   header: ReactNode;
+  onReplyCreated?: (post: PostComposerCreatedPost) => void;
   post: PostDetailThread_post$key;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
     PostDetailThreadNextPageQuery,
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
+  const [activeReplyPostId, setActiveReplyPostId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [nativePageRevision, setNativePageRevision] = useState(0);
   const handledNativePageRevisionRef = useRef(0);
@@ -228,13 +247,30 @@ function PostDetailThreadContent({
         current={current}
         descendants={descendants}
         renderPost={({ item, role }) => {
+          const reply = replyProfile
+            ? {
+                expanded: activeReplyPostId === item.post.id,
+                onPostCreated: onReplyCreated,
+                onPress: () =>
+                  setActiveReplyPostId((current) =>
+                    current === item.post.id ? null : item.post.id,
+                  ),
+                onRequestClose: () => setActiveReplyPostId(null),
+                owner: 'detail' as const,
+                profile: replyProfile,
+              }
+            : undefined;
           return (
             <View>
               {role === 'current' ? (
-                <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
+                <PostLayout
+                  post={requireThreadFragment(item.post.detail, 'current detail')}
+                  reply={reply}
+                />
               ) : (
                 <PostListItem
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}
+                  reply={reply}
                 />
               )}
             </View>

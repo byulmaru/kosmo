@@ -9,6 +9,7 @@ const bookmarkConnectionFragment = graphql`
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
   @refetchable(queryName: "BookmarkConnectionListNextPageQuery") {
     id
+    ...ReplyComposerSurface_profile
     bookmarks(first: $count, after: $cursor) @connection(key: "BookmarkConnectionList_bookmarks") {
       edges {
         node {
@@ -64,6 +65,7 @@ export function BookmarkConnectionList({ profile }: BookmarkConnectionListProps)
       items={items}
       onLoadMore={loadMore}
       onRetry={loadMore}
+      replyProfile={pagination.data}
     />
   );
 }
