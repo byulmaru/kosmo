@@ -2,7 +2,7 @@
 
 `Docker Build`는 branch와 정식 `[0-9]+.[0-9]+.[0-9]+` tag에서 하나의 API·Web runtime image를 GHCR/ECR에 발행하고 build digest artifact를 남긴다. 그러나 현재 배포 자동화는 mutable `main` image를 사용하는 dev Application을 sync/restart할 뿐이며, Helm은 repository와 tag를 결합해 migration/API/Web image를 렌더하고 두 Rollout을 자동 승격한다.
 
-PROD-563은 release identity, production 승인, migration 선행 차단, API·Web activation, 재실행과 application rollback만 소유한다. `kosmo-prod` Application과 runtime resource는 PROD-562, migration credential·단계·contract gate는 PROD-564, 실제 첫 release·public smoke·운영 통합 검증은 PROD-565가 각각 소유한다.
+PROD-563은 release identity, production 승인, migration 선행 차단, API·Web activation, 재실행과 application rollback만 소유한다. `kosmo-prod` Application과 runtime resource는 PROD-562, migration Job identity·credential·실행 계약은 PROD-564, 실제 첫 release·public smoke·운영 통합 검증은 PROD-565가 각각 소유한다.
 
 ## Goals / Non-Goals
 
@@ -17,7 +17,7 @@ PROD-563은 release identity, production 승인, migration 선행 차단, API·W
 **Non-Goals:**
 
 - `kosmo-prod` Application, namespace, domain, PostgreSQL, secret 또는 다른 runtime resource 생성
-- migration phase/credential, backup/restore, rollback window와 destructive contract safety gate 구현
+- migration credential, 특정 schema migration, backup/restore, workload compatibility와 destructive rollback-window 검증
 - DB rollback 또는 특정 schema migration 실행
 - 실제 production 배포, public-origin smoke, Sentry 연결과 첫 release 운영 runbook 검증
 
@@ -43,9 +43,7 @@ Helm에는 dev의 repository/tag 렌더를 유지하면서 production에서 full
 
 Argo CD sync는 PROD-564의 PreSync migration Job 성공을 먼저 요구한다. General release workflow는 migration context JSON, phase, schema authority 또는 database Secret을 입력받지 않고, PROD-564가 Application과 Job에 구성한 credential을 그대로 사용한다. Pipeline은 release tag, digest와 migration 활성화만 release parameter seam에 설정하고 rendered PreSync Job·API·Web가 같은 digest인지 확인한다. Migration Job의 command는 Helm이 `migrate`로 고정하며 pipeline은 command·phase·schema authority·restore point parameter를 설정하지 않는다. Production Rollout은 자동 승격하지 않고 preview를 만든다. Pipeline은 변경 전 두 Rollout의 stable ReplicaSet image가 같은 digest인지 읽어 복구 identity로 기록하고, sync 뒤 Application parameter와 desired manifest identity를 다시 검증한다. API와 Web preview가 모두 준비됐을 때만 둘을 승격하고 active image identity를 다시 확인한다. Parameter read-back, PreSync Job, preview 또는 승격 실패 시 기록한 직전 active digest로 두 workload를 복구하고 실패 결과를 남긴다.
 
-PROD-564 gate는 contract context의 `recoveryTarget(capturedAt, targetLsn, targetWal, archiveEvidence)`를 검증하지만 현재 repository에는 이를 production live state에서 생성하는 승인된 caller interface가 없다. Migration image의 별도 `recovery-target` command로 primary LSN과 exact-WAL archive를 관찰하는 방안은 검토 중일 뿐 확정되지 않았다. 또한 phase, schema authority, compatible image와 rollback window의 release-static source도 upstream에 정의되지 않았다. General release workflow는 이 공백을 운영자 JSON input이나 임의 callback으로 메우지 않고 해당 upstream 계약이 승인될 때까지 automatic gate 연결을 보류한다.
-
-승인된 PROD-564 gate interface가 마련되면 gate 성공 뒤 Argo CD PreSync migration Job을 실행한다. Contract phase도 선택한 image의 migration/API/Web 전체에 적용된 동일한 `production` Environment 승인 안에서 처리하며, contract 전용 Environment, reusable approval workflow, 수동 migration input이나 approval hash를 추가하지 않는다. General release pipeline은 `argocd app sync`의 성공을 해당 digest의 PreSync Job 성공 신호로 사용하고, sync가 실패하면 preview 승격을 시작하지 않는다. 이 pipeline은 gate의 phase·recovery·compatibility 정책이나 PROD-546 archive 검증을 다시 구현하지 않는다. 실패 복구는 DB migration을 다시 실행하지 않도록 API·Web Rollout만 selective sync한다.
+PROD-564의 공통 callable interface는 동일 digest와 migration 전용 `DATABASE_URL`을 사용하는 Argo CD PreSync Job 하나이며 command는 `migrate`로 고정된다. General release pipeline은 `argocd app sync`의 성공을 해당 digest의 migration 성공 신호로 사용하고, sync가 실패하면 preview 승격을 시작하지 않는다. Generic phase·schema authority·compatible image·rollback window metadata, gate JSON validator와 target LSN/archive collector는 공통 pipeline 계약에 포함하지 않는다. 실제 destructive migration의 backup/restore, 구버전 workload compatibility와 rollback window는 해당 schema migration 이슈·PR·release가 구체적으로 소유한다. 실패 복구는 DB migration을 다시 실행하지 않도록 API·Web Rollout만 selective sync한다.
 
 Rollback은 별도 DB 조작이 아니라 이전 정상 immutable Release tag를 같은 workflow에 다시 입력하는 application deployment다. Pipeline은 해당 Release의 검증된 asset에서 이전 digest를 다시 해석한다. GitHub run/deployment record와 Argo CD operation/history에 요청자, 승인, Release tag, 해석한 identity, 이전 identity와 결과를 남기고 job summary에도 사람이 확인할 값을 출력한다.
 
@@ -64,13 +62,13 @@ Rollback은 별도 DB 조작이 아니라 이전 정상 immutable Release tag를
 - GitHub environment 이름만 workflow에 적고 required reviewer·branch policy·admin bypass를 구성하지 않으면 승인 gate가 강제되지 않는다.
 - Migration success를 Job 이름이나 과거 run으로 추정하면 다른 digest의 성공을 현재 release에 재사용할 수 있다.
 - Argo CD sync 성공만으로 두 Rollout의 active image 일치를 증명할 수 없다.
-- Application rollback에 DB rollback 또는 PROD-564의 contract 판단을 섞으면 이 change의 소유 범위를 넘는다.
+- Application rollback에 DB rollback 또는 특정 schema migration의 destructive safety 판단을 섞으면 이 change의 소유 범위를 넘는다.
 
 ## Risks / Trade-offs
 
 - [API와 Web 승격은 하나의 원자적 Kubernetes transaction이 아님] → 둘의 preview 준비를 먼저 확인하고 승격 실패 시 직전 active identity로 두 workload를 즉시 복구한 뒤 최종 identity 일치를 검증한다.
 - [ApplicationSet reconciliation이 pipeline parameter를 되돌릴 수 있음] → PROD-562가 제공하는 release seam과 ignore/persistence 경계를 manifest test에서 확인하고, 보존되지 않으면 live 배포를 시작하지 않는다.
-- [이전 application이 현재 schema와 호환되지 않을 수 있음] → pipeline은 자동으로 임의 구버전을 선택하지 않고 운영자가 PROD-564의 호환성 판단을 거친 이전 정상 identity를 명시적으로 승인한다.
+- [이전 application이 현재 schema와 호환되지 않을 수 있음] → pipeline은 자동으로 임의 구버전을 선택하지 않고 운영자가 해당 schema migration release가 정한 호환성 범위 안의 이전 정상 identity를 명시적으로 승인한다.
 - [Environment 설정은 repository 밖 GitHub 상태임] → idempotent repository 관리 script와 API read-back 검증으로 reviewer, branch policy와 bypass 설정을 확인한다.
 - [Immutable releases 설정은 future Release에만 적용되고 image digest 자체가 registry에서 삭제될 수 있음] → 설정 활성화를 첫 정식 Release의 선행 조건으로 검증하고, 배포 전에 asset이 가리키는 digest를 registry에서 pull할 수 있는지 확인하되 다른 digest로 대체하지 않는다.
 
@@ -85,5 +83,4 @@ Rollback은 별도 DB 조작이 아니라 이전 정상 immutable Release tag를
 
 ## Open Questions
 
-- Contract context의 phase, schema authority, compatible images와 rollback window를 어떤 승인된 release-static source에서 읽는가?
-- Production caller가 primary target LSN과 PROD-546 exact-WAL archive evidence를 어떤 command·권한·output interface로 얻는가?
+- 없음.

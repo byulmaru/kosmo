@@ -41,23 +41,21 @@
 - Migration 성공 전 새 API·Web workload를 활성화하지 않는다.
 - API와 Web preview가 모두 준비되기 전 어느 것도 production traffic에 승격하지 않는다.
 - 선택한 release의 migration과 API·Web 전체를 한 번 승인하며 contract 전용 Environment·수동 approval input·중복 승인을 추가하지 않는다.
-- PROD-562 runtime resource와 PROD-564 migration 단계·credential·contract gate를 이 task에서 구현하지 않는다.
+- PROD-562 runtime resource와 PROD-564 migration credential·Job render를 이 task에서 구현하지 않는다.
 - 운영자에게 migration context·phase·schema authority·credential을 입력받거나 Helm Job에 command·phase·schema authority를 설정하지 않는다.
-- Named restore point와 restore-point 전용 command·Job을 추가하지 않고 contract recovery target은 LSN으로 표현한다.
+- Generic gate JSON validator, target LSN/archive collector와 compatibility/rollback-window metadata를 추가하지 않는다.
 
 **Verification**
 
 - GitHub Environment reviewer·main ref·admin bypass 설정과 approval-before-OIDC 순서를 확인한다.
-- 승인된 context producer가 마련되면 contract target LSN과 exact-WAL archive evidence 불일치 및 gate 실패를 검증한다.
 - 같은 digest의 PreSync migration Job render, Argo CD sync 실패, API/Web preview 개별 실패, 정상 준비, 승격 실패와 active identity mismatch를 검증한다.
 - Production 배포 concurrency가 직렬화되고 진행 중 실행을 취소하지 않는지 확인한다.
 - Workflow에 `production` Environment 승인만 하나 있고 contract 전용 approval 경로가 없는지 확인한다.
 
 - [x] 2.1 Production Environment 승인·ref·bypass 정책을 재현 가능하게 구성하고 설정 read-back 검증을 추가한다.
-- [x] 2.2 승인 뒤 검증된 identity로 `kosmo-prod`를 sync하고, removed command·phase·schema-authority interface나 수동 context 없이 같은-digest PreSync Job 성공을 기다리는 pipeline을 구현한다.
+- [x] 2.2 승인 뒤 검증된 identity로 `kosmo-prod`를 sync하고, 제거된 command·phase·schema-authority interface나 수동 context 없이 같은-digest PreSync Job 성공을 기다리는 pipeline을 구현한다.
 - [x] 2.3 API와 Web preview를 함께 검증한 뒤 승격하고 실패 시 이전 active identity를 유지·복구하는 경로를 구현한다.
 - [x] 2.4 승인·migration·preview·promotion 성공 및 실패 경로와 production 직렬화를 자동 검증한다.
-- [ ] 2.5 Upstream에서 승인된 release-static metadata와 target LSN/exact-WAL archive evidence producer를 사용해 PROD-564 automatic gate를 PreSync migration 앞에 연결한다. (`Contract context producer와 release metadata source는 upstream 결정이 필요하다` decision이 Blocked인 동안 구현하지 않는다.)
 
 ## 3. PROD-563 Rerun, application rollback and audit
 
