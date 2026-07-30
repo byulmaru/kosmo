@@ -14,7 +14,6 @@ spec:
     blueGreen:
       activeService: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
       previewService: {{ printf "%s-web-preview" .Release.Name | trunc 63 | trimSuffix "-" }}
-      autoPromotionEnabled: {{ ne .Values.env "prod" }}
       previewReplicaCount: 1
   selector:
     matchLabels:

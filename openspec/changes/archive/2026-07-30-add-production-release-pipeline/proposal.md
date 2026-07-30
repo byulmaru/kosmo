@@ -7,9 +7,9 @@
 - 정식 SemVer image build가 성공하면 digest reference를 GitHub Release asset으로 고정하고, immutable하게 발행된 SemVer GitHub Release tag를 하나의 production release selector로 검증·선택한다.
 - GitHub `production` environment의 명시적 승인과 production 전용 권한 경계를 통과한 실행만 `kosmo-prod` 배포를 변경할 수 있게 한다.
 - 선택한 release의 migration과 API·Web 전체를 이 production 승인 한 번으로 승인하며 contract migration 전용 Environment나 중복 승인을 만들지 않는다.
-- migration Job과 API·Web Rollout에 같은 digest-pinned image를 전달하고, migration 성공과 두 preview workload의 준비가 확인되기 전에는 새 release를 활성화하지 않는다.
+- migration Job과 API·Web Rollout에 같은 digest-pinned image를 전달하고, Argo CD PreSync migration 성공 뒤에는 Argo CD와 Rollout controller의 기본 sync·activation 동작을 사용한다.
 - 같은 immutable GitHub Release tag를 다시 선택하면 고정된 같은 digest로 release를 재실행하고, 이전 정상 Release tag를 같은 pipeline에 입력해 application rollback을 수행한다.
-- workflow 입력·승인·선택한 identity·결과를 GitHub Actions와 Argo CD 기록에서 감사할 수 있게 하고, manifest·workflow·실패 경로 검증을 추가한다.
+- workflow 입력·승인·선택한 identity·결과를 GitHub Actions와 Argo CD 기록에서 감사할 수 있게 하고, migration 또는 sync 실패를 기록하되 pipeline 내부에서 ReplicaSet을 직접 복구하지 않는다.
 - PROD-562의 production Application/runtime resource, PROD-564의 migration Job identity·credential·실행 계약, 개별 schema migration의 destructive safety 검증, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
 
 ## Authority / Provenance
@@ -23,7 +23,7 @@
 
 ### New Capabilities
 
-- `production-release`: 정식 SemVer artifact의 immutable identity 선택, production 승인, migration 선행 배포, API·Web 동시 활성화 차단, 재실행과 application rollback 계약
+- `production-release`: 정식 SemVer artifact의 immutable identity 선택, production 승인, migration 선행 배포, controller 기본 activation, 재실행과 application rollback 계약
 
 ### Modified Capabilities
 
@@ -33,6 +33,6 @@
 
 - GitHub immutable releases 설정, Docker build의 immutable Release 발행과 production deployment workflow
 - GitHub `production` Environment 설정과 Argo CD 배포 권한
-- Helm image reference, production Rollout 승격 설정과 manifest render 검증
+- Helm image reference, production Rollout activation 설정과 manifest render 검증
 - `kosmo-prod` Application이 제공하는 release parameter seam과 PROD-564가 구성한 Argo CD PreSync migration Job을 소비한다.
 - production resource 생성, migration policy/credential, DB rollback, public-origin smoke와 실제 첫 release 실행에는 영향이 없다.

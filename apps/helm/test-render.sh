@@ -30,18 +30,13 @@ if [[ "$(grep -Fc 'image: "ghcr.io/byulmaru/kosmo:main"' "${render_dir}/dev.yaml
   exit 1
 fi
 
-if [[ "$(grep -Fc 'autoPromotionEnabled: true' "${render_dir}/dev.yaml")" -ne 2 ]]; then
-  echo "dev API and Web rollouts must keep automatic promotion" >&2
-  exit 1
-fi
-
 if [[ "$(grep -Fc "image: \"${release_image}\"" "${render_dir}/prod.yaml")" -ne 2 ]]; then
   echo "prod API and Web must use the selected digest image" >&2
   exit 1
 fi
 
-if [[ "$(grep -Fc 'autoPromotionEnabled: false' "${render_dir}/prod.yaml")" -ne 2 ]]; then
-  echo "prod API and Web rollouts must wait for coordinated promotion" >&2
+if grep -Fq 'autoPromotionEnabled:' "${render_dir}/dev.yaml" || grep -Fq 'autoPromotionEnabled:' "${render_dir}/prod.yaml"; then
+  echo "API and Web rollouts must use the controller's default activation" >&2
   exit 1
 fi
 

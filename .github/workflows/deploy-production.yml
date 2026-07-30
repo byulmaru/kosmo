@@ -66,9 +66,7 @@ jobs:
             echo "- Approval gate: not entered"
             echo "- Release tag: ${RELEASE_TAG}"
             echo "- Image identity: ${IMAGE_REF:-unresolved}"
-            echo "- Previous identity: not read before production approval"
             echo "- Result: ${VERIFICATION_RESULT}"
-            echo "- Recovery: not required"
           } >> "${GITHUB_STEP_SUMMARY}"
 
   deploy_production:
@@ -144,27 +142,51 @@ jobs:
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
-          PRODUCTION_AUDIT_FILE: ${{ runner.temp }}/production-audit.md
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
-        run: scripts/deploy-production-release.sh "${RELEASE_TAG}" "${IMAGE_REF}"
+        run: |
+          set -euo pipefail
+
+          digest="${IMAGE_REF#*@}"
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
+            -p "version=${RELEASE_TAG}" \
+            -p "imageDigest=${digest}" \
+            -p "migration.enabled=true" \
+            --validate
+
+          manifests="${RUNNER_TEMP}/kosmo-prod.yaml"
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app manifests kosmo-prod --source git > "${manifests}"
+
+          kosmo_images="$(
+            sed -En "s/^[[:space:]]*-?[[:space:]]*image:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "${manifests}" \
+              | grep -E '^ghcr\.io/byulmaru/kosmo(@|:)' \
+              || true
+          )"
+          expected_images="$(grep -Fxc "${IMAGE_REF}" <<<"${kosmo_images}" || true)"
+          kosmo_image_count="$(grep -c . <<<"${kosmo_images}" || true)"
+          presync_jobs="$(grep -Ec "argocd\.argoproj\.io/hook: ['\"]?PreSync" "${manifests}" || true)"
+          if [[ "${expected_images}" -ne 3 || "${kosmo_image_count}" -ne 3 || "${presync_jobs}" -ne 1 ]]; then
+            echo "::error::Production migration, API, and Web must use ${IMAGE_REF} with one PreSync migration job."
+            exit 1
+          fi
+
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod --timeout 600
 
       - name: Record production release audit
         if: always()
+        env:
+          IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RESULT: ${{ job.status }}
         shell: bash
         run: |
-          if [[ -f "${PRODUCTION_AUDIT_FILE}" ]]; then
-            cat "${PRODUCTION_AUDIT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
-          else
-            {
-              echo "### Production release ${RELEASE_TAG}"
-              echo
-              echo "- Requester: ${GITHUB_ACTOR}"
-              echo "- Approval gate: production environment"
-              echo "- Release tag: ${RELEASE_TAG}"
-              echo "- Result: failed before deployment state was read"
-            } >> "${GITHUB_STEP_SUMMARY}"
-          fi
-        env:
-          PRODUCTION_AUDIT_FILE: ${{ runner.temp }}/production-audit.md
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          {
+            echo "### Production release ${RELEASE_TAG}"
+            echo
+            echo "- Requester: ${GITHUB_ACTOR}"
+            echo "- Approval gate: production environment"
+            echo "- Release tag: ${RELEASE_TAG}"
+            echo "- Image identity: ${IMAGE_REF}"
+            echo "- Result: ${RESULT}"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
+          } >> "${GITHUB_STEP_SUMMARY}"

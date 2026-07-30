@@ -57,12 +57,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: PROD-563
-- Status: Active
+- Status: Superseded
 - Context / Problem: 현재 dev의 자동 승격을 production에 사용하면 migration 또는 다른 workload의 preview 상태를 확인하기 전에 API나 Web 하나가 active가 될 수 있다.
 - Decision Outcome: Production에서는 같은-digest Argo CD PreSync migration Job을 실행한다. General release workflow는 migration context·phase·schema authority·credential을 입력받거나 generic gate를 호출하지 않고 `argocd app sync` 성공을 Job 성공 신호로 사용한다. Sync 성공 뒤 API와 Web preview를 만들고, 둘이 모두 준비된 다음 pipeline이 두 Rollout을 승격한다. PreSync Job이나 preview가 실패하면 승격하지 않고, 승격 또는 active identity 확인 실패 시 직전 active identity로 둘을 복구한다.
 - Alternatives Considered: 두 Rollout의 독립 자동 승격은 cross-workload gate를 제공하지 않는다. Migration 뒤 API와 Web을 순차 완전 배포하는 방식은 중간에 서로 다른 release가 active가 되는 시간을 정상 경로로 만들므로 선택하지 않는다.
 - Consequences: Pipeline은 Argo CD sync와 두 Rollout의 preview/active 상태를 관찰하고 promotion/abort 권한을 가져야 한다. Migration credential과 Job render는 PROD-564와 production Application에 남는다. Kubernetes 차원에서 완전한 원자 승격은 아니므로 실패 복구와 최종 identity 검증이 필요하다.
 - Confirmation / Follow-up: workflow에 수동 migration context가 없는지, rendered PreSync Job의 digest, sync 실패, 각 preview 실패, 정상 동시 준비, promotion 실패와 최종 identity mismatch 경로를 자동 검증한다.
+
+### PreSync 성공 뒤 controller 기본 activation을 사용한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, PROD-563
+- Status: Active
+- Context / Problem: API와 Web을 원자적으로 함께 승격하고 pipeline 내부에서 ReplicaSet을 복구하려 하면서 배포 script와 모의 test가 실제 필요한 release 계약보다 훨씬 복잡해졌다.
+- Decision Outcome: Production workflow는 승인된 immutable Release의 tag와 digest를 Application parameter에 설정하고 `argocd app sync`를 실행한다. 같은 digest의 PreSync migration이 성공하면 Argo CD가 API·Web Rollout을 적용하고 각 Rollout controller의 기본 activation 동작을 사용한다. Pipeline은 cross-Rollout preview 대기·직접 promotion·stable ReplicaSet 탐색·자동 application recovery를 수행하지 않는다. Sync 또는 Rollout 실패는 실패로 기록하고, application rollback은 운영자가 현재 DB와 호환되는 이전 immutable Release tag를 같은 workflow로 다시 승인한다.
+- Alternatives Considered: API·Web preview를 모두 대기한 뒤 수동 동시 승격하고 실패 시 selective sync로 복구하는 방식은 원자성을 완전히 보장하지 못하면서 pipeline에 Kubernetes controller orchestration을 중복 구현한다. 별도 rollback 함수도 정상 release 경로와 다른 권한·검증 경계를 만들기 때문에 선택하지 않는다.
+- Consequences: API와 Web activation은 Kubernetes 차원의 원자적 transaction이 아니다. 대신 배포 경로는 release identity 검증, 한 번의 production 승인, 동일 digest, PreSync migration barrier, controller 기본 상태 관리로 단순해진다. 실패 복구에는 이전 Release를 재선택하는 별도 승인 실행이 필요하다.
+- Confirmation / Follow-up: Workflow가 release parameter 설정과 Argo CD sync만 조정하는지, production Rollout이 기본 activation을 사용하는지, custom preview/promotion/ReplicaSet recovery 코드가 제거됐는지 검증한다.
 
 ### Contract context producer와 release metadata source는 upstream 결정이 필요하다
 
@@ -119,7 +131,7 @@
 - Authority / Provenance: PROD-563
 - Status: Active
 - Context / Problem: 재실행과 rollback의 요청·승인·identity·결과를 추적해야 하지만 별도 release database는 현재 범위를 확장한다.
-- Decision Outcome: GitHub workflow/deployment record와 job summary에 요청자, 승인 environment, immutable Release tag, asset에서 해석한 digest, 직전 identity와 결과를 남기고 Argo CD operation/history의 실제 적용 결과와 연결한다.
+- Decision Outcome: GitHub workflow/deployment record와 job summary에 요청자, 승인 environment, immutable Release tag, asset에서 해석한 digest와 결과를 남기고 Argo CD operation/history의 실제 적용 결과와 연결한다.
 - Alternatives Considered: 별도 database나 release service는 새로운 runtime과 lifecycle을 만들며, workflow log만 남기는 방식은 요약된 identity와 최종 결과 확인이 어려워 선택하지 않는다.
 - Consequences: Audit 조회는 GitHub와 Argo CD 보존 정책에 의존한다. 장기 규제 보존 요구가 생기면 별도 계약으로 export/storage를 추가해야 한다.
 - Confirmation / Follow-up: 성공·검증 실패·rollback fixture에서 job summary와 deployment/operation metadata에 필수 필드가 남는지 확인한다.
@@ -133,3 +145,4 @@
 - `SemVer tag와 digest를 함께 검증해 full image reference를 확정한다`: 사용자가 immutable GitHub Release tag 하나를 selector로 사용하기로 결정해 `Immutable GitHub Release tag에서 attested image identity를 해석한다`로 대체했다.
 - `Application rollback은 이전 tag와 digest를 같은 pipeline에 재입력한다`: 같은 사용자 결정에 따라 이전 immutable Release tag만 재입력하고 검증된 asset에서 digest를 해석하는 방식으로 대체했다.
 - `Contract context producer와 release metadata source는 upstream 결정이 필요하다`: generic gate와 collector를 공통 pipeline 계약에서 제거한 사용자 최종 결정으로 대체했다.
+- `두 Rollout은 migration과 preview 검증 뒤 수동 승격한다`: 사용자가 custom cross-Rollout coordination과 pipeline 내부 자동 recovery를 제거하고 PreSync 뒤 controller 기본 activation을 사용하기로 결정해 `PreSync 성공 뒤 controller 기본 activation을 사용한다`로 대체했다.

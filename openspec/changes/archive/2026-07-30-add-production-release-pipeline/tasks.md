@@ -33,13 +33,14 @@
 
 **Deliverable**
 
-명시적으로 승인된 production 실행만 같은 release migration과 API·Web preview를 검증하고 두 workload를 활성화한다.
+명시적으로 승인된 production 실행만 같은 release migration과 API·Web workload를 Argo CD 기본 sync 경로로 배포한다.
 
 **Guardrails**
 
 - 승인 전에는 production 자격 증명을 취득하거나 Argo CD 상태를 변경하지 않는다.
 - Migration 성공 전 새 API·Web workload를 활성화하지 않는다.
-- API와 Web preview가 모두 준비되기 전 어느 것도 production traffic에 승격하지 않는다.
+- PreSync migration이 성공한 뒤에만 API·Web workload 적용을 진행한다.
+- Pipeline이 두 Rollout의 preview를 교차 대기·직접 승격하거나 ReplicaSet을 찾아 자동 복구하지 않는다.
 - 선택한 release의 migration과 API·Web 전체를 한 번 승인하며 contract 전용 Environment·수동 approval input·중복 승인을 추가하지 않는다.
 - PROD-562 runtime resource와 PROD-564 migration credential·Job render를 이 task에서 구현하지 않는다.
 - 운영자에게 migration context·phase·schema authority·credential을 입력받거나 Helm Job에 command·phase·schema authority를 설정하지 않는다.
@@ -48,14 +49,14 @@
 **Verification**
 
 - GitHub Environment reviewer·main ref·admin bypass 설정과 approval-before-OIDC 순서를 확인한다.
-- 같은 digest의 PreSync migration Job render, Argo CD sync 실패, API/Web preview 개별 실패, 정상 준비, 승격 실패와 active identity mismatch를 검증한다.
+- 같은 digest의 PreSync migration Job render, Argo CD sync 실패와 controller 기본 activation 설정을 검증한다.
 - Production 배포 concurrency가 직렬화되고 진행 중 실행을 취소하지 않는지 확인한다.
 - Workflow에 `production` Environment 승인만 하나 있고 contract 전용 approval 경로가 없는지 확인한다.
 
 - [x] 2.1 Production Environment 승인·ref·bypass 정책을 재현 가능하게 구성하고 설정 read-back 검증을 추가한다.
-- [x] 2.2 승인 뒤 검증된 identity로 `kosmo-prod`를 sync하고, 제거된 command·phase·schema-authority interface나 수동 context 없이 같은-digest PreSync Job 성공을 기다리는 pipeline을 구현한다.
-- [x] 2.3 API와 Web preview를 함께 검증한 뒤 승격하고 실패 시 이전 active identity를 유지·복구하는 경로를 구현한다.
-- [x] 2.4 승인·migration·preview·promotion 성공 및 실패 경로와 production 직렬화를 자동 검증한다.
+- [x] 2.2 승인 뒤 검증된 identity를 `kosmo-prod` release parameter에 설정하고, 제거된 command·phase·schema-authority interface나 수동 context 없이 Argo CD sync를 실행한다.
+- [x] 2.3 Production Rollout을 controller 기본 activation으로 되돌리고 custom preview 대기·promotion·ReplicaSet recovery orchestration을 제거한다.
+- [x] 2.4 승인·migration·sync 성공/실패, controller 기본 activation과 production 직렬화를 최소한의 자동 검증으로 확인한다.
 
 ## 3. PROD-563 Rerun, application rollback and audit
 
@@ -76,9 +77,9 @@
 **Verification**
 
 - 동일 immutable Release tag 재실행과 이전 Release tag rollback에서 build가 발생하지 않고 두 active workload identity가 일치하는지 검증한다.
-- 성공·Release 검증 실패·activation 실패·rollback 기록에 요청자, 승인, Release tag, 해석한 digest, 이전 identity와 결과가 남는지 확인한다.
+- 성공·Release 검증 실패·sync 실패·rollback 기록에 요청자, 승인, Release tag, 해석한 digest와 결과가 남는지 확인한다.
 - Workflow/manifest 정적 검사, repository format 검사와 OpenSpec strict validation을 통과시킨다.
 
 - [x] 3.1 같은 immutable Release tag 재실행과 승인된 이전 정상 Release tag의 application rollback을 같은 pipeline으로 제공한다.
-- [x] 3.2 GitHub와 Argo CD 배포 기록에 요청·승인·release identity·이전 identity·결과를 연결하고 민감 정보 비노출을 검증한다.
+- [x] 3.2 GitHub와 Argo CD 배포 기록에 요청·승인·release identity·결과를 연결하고 민감 정보 비노출을 검증한다.
 - [x] 3.3 관련 workflow·manifest 성공/실패 검증, format 검사와 strict OpenSpec validation을 통과시킨다.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-정식 SemVer artifact의 immutable image identity를 production 승인 경계 안에서 migration과 API·Web workload에 일관되게 적용하고, 두 workload의 활성화·재실행·application rollback을 감사 가능하게 제어하는 배포 계약을 정의한다.
+TBD - created by archiving change add-production-release-pipeline. Update Purpose after archive.
 
 ## Requirements
 
@@ -52,35 +52,35 @@
 #### Scenario: Migration 성공
 
 - **WHEN** 선택한 digest를 사용하는 production migration이 성공한다
-- **THEN** Argo CD sync는 PreSync hook 완료 뒤 같은 digest를 사용하는 API·Web preview workload의 준비 검증으로 진행한다
+- **THEN** Argo CD sync는 PreSync hook 완료 뒤 같은 digest를 사용하는 API·Web workload 적용으로 진행한다
 
 #### Scenario: Migration 실패 또는 성공 신호 부재
 
 - **WHEN** 선택한 release의 migration이 실패하거나 성공으로 확인되지 않는다
 - **THEN** Argo CD sync는 실패하고 시스템은 새 API·Web release를 활성화하지 않은 채 배포를 실패로 기록한다
 
-### Requirement: API와 Web은 활성화 전에 함께 검증된다
+### Requirement: API와 Web은 controller 기본 activation을 사용한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 새 release의 API와 Web preview workload가 모두 준비된 뒤에만 production traffic 승격을 시작해야 한다(MUST). 어느 Rollout이라도 준비 또는 승격에 실패하면 새 release를 정상 release로 기록해서는 안 되며(MUST NOT), 이전 active release를 유지하거나 복구해야 한다(MUST).
+**Authority / Provenance:** PROD-563 — 시스템은 같은 digest의 PreSync migration이 성공한 뒤 Argo CD가 API와 Web Rollout을 적용하고 각 Rollout controller의 기본 activation 동작으로 진행하게 해야 한다(MUST). Release pipeline은 두 Rollout의 preview를 교차 대기하거나 직접 승격해서는 안 되며(MUST NOT), 이전 stable ReplicaSet을 탐색해 자동 application recovery를 수행해서도 안 된다(MUST NOT).
 
-#### Scenario: 두 preview가 모두 준비됨
+#### Scenario: Migration 뒤 workload 적용
 
-- **WHEN** migration 성공 뒤 같은 digest의 API와 Web preview가 모두 준비된다
-- **THEN** 시스템은 두 Rollout을 새 release로 승격하고 둘의 active identity가 일치하는지 확인한다
+- **WHEN** 같은 digest의 PreSync migration이 성공한다
+- **THEN** Argo CD는 같은 desired digest의 API와 Web Rollout을 적용하고 각 controller는 기본 activation 동작으로 release를 진행한다
 
-#### Scenario: 한 preview가 실패함
+#### Scenario: Sync 또는 Rollout 실패
 
-- **WHEN** API 또는 Web preview 중 하나라도 준비되지 않거나 실패한다
-- **THEN** 시스템은 어느 새 preview도 production traffic에 활성화하지 않고 이전 active release를 유지한다
+- **WHEN** Argo CD sync 또는 API·Web Rollout 진행이 실패한다
+- **THEN** 시스템은 실행을 실패로 기록하고 pipeline은 ReplicaSet을 직접 선택해 자동 복구하지 않는다
 
-#### Scenario: 승격 중 실패함
+#### Scenario: Application rollback 필요
 
-- **WHEN** 두 preview 검증 뒤 Rollout 승격 또는 active identity 확인이 실패한다
-- **THEN** 시스템은 실행을 실패로 기록하고 두 workload를 이전 release identity로 복구한다
+- **WHEN** 실패 뒤 application을 이전 release로 되돌려야 한다
+- **THEN** 운영자는 현재 DB와 호환되는 이전 immutable Release tag를 같은 승인 pipeline으로 다시 선택한다
 
 ### Requirement: Release 재실행과 application rollback은 감사 가능하다
 
-**Authority / Provenance:** PROD-563 — 시스템은 같은 immutable SemVer GitHub Release tag를 다시 선택할 때 그 Release asset이 고정한 동일 identity로 배포를 재실행해야 하며(MUST), 이전 정상 immutable Release tag를 같은 승인 pipeline으로 재선택해 application rollback할 수 있어야 한다(MUST). 각 실행은 요청자, 승인, Release tag, 해석한 digest, 이전 identity와 최종 결과를 감사 가능한 배포 기록에 남겨야 한다(MUST). 이 rollback은 DB rollback이나 destructive migration 실행을 포함해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 같은 immutable SemVer GitHub Release tag를 다시 선택할 때 그 Release asset이 고정한 동일 identity로 배포를 재실행해야 하며(MUST), 이전 정상 immutable Release tag를 같은 승인 pipeline으로 재선택해 application rollback할 수 있어야 한다(MUST). 각 실행은 요청자, 승인, Release tag, 해석한 digest와 최종 결과를 감사 가능한 배포 기록에 남겨야 한다(MUST). 이 rollback은 DB rollback이나 destructive migration 실행을 포함해서는 안 된다(MUST NOT).
 
 #### Scenario: 같은 release 재실행
 
