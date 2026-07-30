@@ -1188,7 +1188,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "original_media_type",
+      "name": "media_type",
       "entityType": "columns",
       "schema": "public",
       "table": "media"
@@ -1201,7 +1201,7 @@
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "original_url",
+      "name": "url",
       "entityType": "columns",
       "schema": "public",
       "table": "media"

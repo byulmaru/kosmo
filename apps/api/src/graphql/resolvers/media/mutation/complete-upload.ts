@@ -76,8 +76,8 @@ builder.mutationField('completeMediaUpload', (t) =>
       const completed = await db
         .update(Media)
         .set({
-          originalMediaType: representation.data.mediaType,
-          originalUrl: representation.data.url,
+          mediaType: representation.data.mediaType,
+          url: representation.data.url,
           readyAt: Temporal.Now.instant(),
           state: MediaState.READY,
         })

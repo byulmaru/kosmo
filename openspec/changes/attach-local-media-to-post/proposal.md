@@ -14,7 +14,7 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
   body-only, media-only와 body+media 작성을 지원한다.
 - Post Composer가 Web/iOS/Android 갤러리 이미지를 선택 즉시 직접 업로드하고 미리보기·진행·실패·재시도·제거,
   Alt Text와 Sensitive Media를 관리한다.
-- Local Media 완료 시 저장 서비스가 확정한 Original URL과 MIME을 Ready state와 함께 저장한다.
+- Local Media 완료 시 저장 서비스가 확정한 공개 URL과 media type을 Ready state와 함께 저장한다.
 - 새 Local Post의 text/rich node는 ActivityPub `Note.content` HTML로, Media node는 순서 있는
   `Note.attachment` Image로, Sensitive Media는 지원하는 sensitive 속성으로 투영한다.
 - 기존 Post 수정, 새 revision 교체와 `Update(Note)` delivery는 독립 Backlog로 제외한다.
@@ -34,7 +34,7 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
 
 ### New Capabilities
 
-- `media-original-representation`: Local Media 완료 시 원본 공개 URL과 MIME을 Ready state와 함께 저장하는 계약
+- `media-representation`: Local Media 완료 시 공개 URL과 media type을 Ready state와 함께 저장하는 계약
 - `post-composer-media-upload`: 유니버설 Composer의 이미지 선택, 직접 업로드, 항목별 상태와 작성 연결
 - `activitypub-post-media`: 새 Local Note의 Media attachment, Alt Text와 sensitive 표현
 
@@ -52,4 +52,4 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
 - App: `expo-image-picker`, 항목별 direct upload state, preview·Alt Text·Sensitive Media UI와 Relay mutation
 - Fedify: Local Note HTML/attachment/sensitive projection과 Media Storage public original URL
 - Storage: 기존 `media.document` JSONB를 additive하게 사용하고 `media` table에 Uploading state를 지원하는
-  nullable Original URL·MIME column을 추가한다.
+  nullable URL·Media Type column을 추가한다.

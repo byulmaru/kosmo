@@ -34,7 +34,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - `postContentDocumentToText`와 HTML serializer는 Media 없는 body만 처리한다. HTML serializer는 동기
   DOMSerializer라 Media Storage URL을 직접 조회할 수 없다.
 - DB `media.storageReference`는 persistence-only opaque 값이고 GraphQL consumer에게 노출하거나 Kosmo에서 URL과
-  MIME을 추론할 수 없다. 업로드 완료 시 Media Storage Service가 반환한 Original URL과 MIME을 Media에 저장해야
+  media type을 추론할 수 없다. 업로드 완료 시 Media Storage Service가 반환한 공개 URL과 media type을 Media에 저장해야
   read path가 외부 서비스에 의존하지 않는다.
 - `createPost` core input은 Account identity를 받지 않지만 Local Media 사용 권한은 요청 Account와 Upload Account
   일치를 요구한다.
@@ -58,12 +58,12 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
   item별 local key, URI, `uploading | ready | failed`, Media global ID와 Alt Text를 유지한다.
 - 각 item은 `issueMediaUploadUrl` → local byte PUT → `completeMediaUpload` 순서로 즉시 처리한다. 재시도는 새
   Uploading Media부터 시작하고 제거된 local key의 늦은 결과를 무시한다.
-- `completeMediaUpload`은 인증된 representation 조회가 반환한 Original URL과 MIME을 Ready At·Ready state와
+- `completeMediaUpload`은 인증된 representation 조회가 반환한 URL과 media type을 Ready At·Ready state와
   함께 저장한다.
 - Composer는 local URI preview, 상태, 재시도·제거, Alt Text와 Sensitive Media를 공용 React Native primitive와
   canonical platform target으로 제공한다. 선택 Media가 없으면 Sensitive Media를 false로 되돌린다.
 - Local Note projection은 current PostContent의 Media DB IDs를 함께 읽는다. Media node를 제거한 body만 기존
-  DOMSerializer에 전달하고 Media에 저장된 Original URL·MIME과 document Alt Text를 Media node 순서대로
+  DOMSerializer에 전달하고 Media에 저장된 URL·media type과 document Alt Text를 Media node 순서대로
   ActivityPub Image로 만든다. projection과 authorization은 Media Storage Service를 호출하지 않으며 sensitive는
   Fedify가 지원하는 확장 표현 경계에서 추가한다.
 
@@ -102,7 +102,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 ## Migration Plan
 
 1. PROD-554에서 V1 schema, core와 GraphQL input/output을 배포한다. JSONB table/column migration은 없다.
-2. PROD-581에서 nullable Original URL·MIME column과 완료 write를 배포한다.
+2. PROD-581에서 nullable URL·Media Type column과 완료 write를 배포한다.
 3. PROD-559에서 저장된 표현을 쓰는 Local Note attachment와 sensitive projection을 배포한다. Media 없는 Note는 그대로 유지한다.
 4. PROD-553에서 picker dependency와 Composer upload UI를 배포한다.
 5. PROD-461에서 direct upload → Ready → Post 작성 → GraphQL document → Local Note를 통합 검증한다.
