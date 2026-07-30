@@ -21,7 +21,7 @@
 
 ### Requirement: Production 배포는 명시적 승인을 요구한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 production environment의 명시적 승인과 production 전용 권한 경계를 통과한 실행만 배포 상태를 변경하도록 해야 한다(MUST). 승인되지 않은 실행은 Argo CD production 자격 증명을 얻거나 `kosmo-prod` Application을 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 production environment의 명시적 승인과 production 전용 권한 경계를 통과한 실행만 배포 상태를 변경하도록 해야 한다(MUST). 한 번의 승인은 선택한 immutable release image에 포함된 migration과 API·Web workload 전체에 적용되어야 하며(MUST), contract migration만을 위한 별도 Environment·수동 입력·중복 승인을 요구해서는 안 된다(MUST NOT). 승인되지 않은 실행은 Argo CD production 자격 증명을 얻거나 `kosmo-prod` Application을 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 승인 전 실행
 
@@ -33,9 +33,14 @@
 - **WHEN** 허용된 ref의 실행이 production environment 승인을 받는다
 - **THEN** 시스템은 해당 실행에 한정된 권한으로 검증된 release 배포를 계속한다
 
+#### Scenario: Contract migration이 포함된 release
+
+- **WHEN** 승인된 immutable production release에 contract migration이 포함된다
+- **THEN** 시스템은 같은 production 승인 안에서 PROD-564의 자동 safety gate를 호출하고 contract 전용 추가 승인을 요구하지 않는다
+
 ### Requirement: Migration과 workload는 같은 release identity를 사용한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564가 제공하는 해당 release migration 성공이 확인되기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564가 제공하는 자동 safety gate와 해당 release migration 성공이 확인되기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 

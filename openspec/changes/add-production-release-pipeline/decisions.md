@@ -47,10 +47,10 @@
 - Authority / Provenance: PROD-563
 - Status: Active
 - Context / Problem: Workflow 내부 확인 input이나 수동 dispatch 권한만으로는 실행과 production 배포 승인을 분리하거나 자격 증명 접근을 gate하지 못한다.
-- Decision Outcome: `production` GitHub Environment는 `robin-maki`를 required reviewer로 두고 main branch deployment만 허용하며 admin bypass를 끈다. 현재 단일 운영자 workflow가 교착되지 않도록 self-review는 허용한다. 승인된 job만 OIDC로 Argo CD token을 얻는다.
-- Alternatives Considered: 확인 문자열 input은 독립적인 GitHub approval 기록과 secret/OIDC gate가 없고, environment reviewer 없이 branch policy만 두는 방식은 명시적 production 승인을 강제하지 못해 선택하지 않는다.
+- Decision Outcome: `production` GitHub Environment는 `robin-maki`를 required reviewer로 두고 main branch deployment만 허용하며 admin bypass를 끈다. 현재 단일 운영자 workflow가 교착되지 않도록 self-review는 허용한다. 이 승인 한 번이 선택한 image의 migration과 API·Web 전체에 적용되고, 승인된 job만 OIDC로 Argo CD token을 얻는다. Contract migration도 PROD-564 자동 safety gate만 추가로 통과하며 contract 전용 Environment, 수동 approval input이나 approval hash를 요구하지 않는다.
+- Alternatives Considered: 확인 문자열 input은 독립적인 GitHub approval 기록과 secret/OIDC gate가 없고, environment reviewer 없이 branch policy만 두는 방식은 명시적 production 승인을 강제하지 못해 선택하지 않는다. Contract migration 전용 두 번째 Environment는 하나의 release를 중복 승인하게 하고 사용자가 확정한 승인 단위를 깨므로 선택하지 않는다.
 - Consequences: 같은 운영자가 dispatch와 승인을 수행할 수 있지만 GitHub에 별도의 명시적 승인 행위와 시각이 남는다. 더 강한 separation of duties가 필요해지면 reviewer team과 self-review 정책을 별도 상위 결정으로 바꿔야 한다.
-- Confirmation / Follow-up: Environment API read-back과 workflow 구조 검증에서 reviewer, main policy, bypass와 approval-before-OIDC 순서를 확인한다.
+- Confirmation / Follow-up: Environment API read-back과 workflow 구조 검증에서 reviewer, main policy, bypass, approval-before-OIDC 순서와 contract 전용 approval 경로 부재를 확인한다.
 
 ### 두 Rollout은 migration과 preview 검증 뒤 수동 승격한다
 

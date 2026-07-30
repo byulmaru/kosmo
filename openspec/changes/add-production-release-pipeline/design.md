@@ -17,7 +17,7 @@ PROD-563은 release identity, production 승인, migration 선행 차단, API·W
 **Non-Goals:**
 
 - `kosmo-prod` Application, namespace, domain, PostgreSQL, secret 또는 다른 runtime resource 생성
-- migration phase/credential, backup/restore, rollback window와 destructive contract gate 구현
+- migration phase/credential, backup/restore, rollback window와 destructive contract safety gate 구현
 - DB rollback 또는 특정 schema migration 실행
 - 실제 production 배포, public-origin smoke, Sentry 연결과 첫 release 운영 runbook 검증
 
@@ -43,7 +43,7 @@ Helm에는 dev의 repository/tag 렌더를 유지하면서 production에서 full
 
 Argo CD sync는 PROD-564의 PreSync migration 성공을 먼저 요구한다. Production Rollout은 자동 승격하지 않고 preview를 만든다. Pipeline은 변경 전 두 Rollout의 stable ReplicaSet image가 같은 digest인지 읽어 복구 identity로 기록하고, sync 뒤 Application parameter와 desired manifest identity를 다시 검증한다. API와 Web preview가 모두 준비됐을 때만 둘을 승격하고 active image identity를 다시 확인한다. Parameter read-back, preview 또는 승격 실패 시 기록한 직전 active digest로 두 workload를 복구하고 실패 결과를 남긴다.
 
-Migration 실행 전에는 PROD-564의 `production-migration-gate.mjs preflight`를 같은 release identity context로 통과한다. Contract phase는 PROD-564가 별도로 준비한 restore-point/evidence context를 `production-contract-approval.yml` reusable workflow에 전달하고, 그 workflow가 반환한 정확한 context SHA-256을 completion에 사용한다. General release pipeline의 PreSync command는 실제 schema 적용을 위한 `migrate`로 고정하며, full Argo CD sync 성공 뒤 `complete`가 activation을 허용해야만 preview 승격으로 진행한다. 이 pipeline은 restore point 생성이나 gate의 phase·recovery·compatibility 정책을 다시 구현하지 않고 해당 interface의 결과만 소비한다. 실패 복구는 DB migration을 다시 실행하지 않도록 API·Web Rollout만 selective sync한다.
+Migration 실행 전에는 PROD-564의 `production-migration-gate.mjs preflight`를 같은 release identity context로 호출해 자동 safety gate를 통과한다. Contract phase도 선택한 image의 migration/API/Web 전체에 적용된 동일한 `production` Environment 승인 안에서 처리하며, contract 전용 Environment, reusable approval workflow, 수동 승인 input이나 approval hash를 추가하지 않는다. General release pipeline의 PreSync command는 실제 schema 적용을 위한 `migrate`로 고정하며, full Argo CD sync 성공 뒤 PROD-564의 `complete`가 activation을 허용해야만 preview 승격으로 진행한다. 이 pipeline은 restore point 생성이나 gate의 phase·recovery·compatibility 정책을 다시 구현하지 않고 자동 gate 결과만 소비한다. 실패 복구는 DB migration을 다시 실행하지 않도록 API·Web Rollout만 selective sync한다.
 
 Rollback은 별도 DB 조작이 아니라 이전 정상 immutable Release tag를 같은 workflow에 다시 입력하는 application deployment다. Pipeline은 해당 Release의 검증된 asset에서 이전 digest를 다시 해석한다. GitHub run/deployment record와 Argo CD operation/history에 요청자, 승인, Release tag, 해석한 identity, 이전 identity와 결과를 남기고 job summary에도 사람이 확인할 값을 출력한다.
 

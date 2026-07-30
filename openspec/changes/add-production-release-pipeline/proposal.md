@@ -6,10 +6,11 @@
 
 - 정식 SemVer image build가 성공하면 digest reference를 GitHub Release asset으로 고정하고, immutable하게 발행된 SemVer GitHub Release tag를 하나의 production release selector로 검증·선택한다.
 - GitHub `production` environment의 명시적 승인과 production 전용 권한 경계를 통과한 실행만 `kosmo-prod` 배포를 변경할 수 있게 한다.
+- 선택한 release의 migration과 API·Web 전체를 이 production 승인 한 번으로 승인하며 contract migration 전용 Environment나 중복 승인을 만들지 않는다.
 - migration Job과 API·Web Rollout에 같은 digest-pinned image를 전달하고, migration 성공과 두 preview workload의 준비가 확인되기 전에는 새 release를 활성화하지 않는다.
 - 같은 immutable GitHub Release tag를 다시 선택하면 고정된 같은 digest로 release를 재실행하고, 이전 정상 Release tag를 같은 pipeline에 입력해 application rollback을 수행한다.
 - workflow 입력·승인·선택한 identity·결과를 GitHub Actions와 Argo CD 기록에서 감사할 수 있게 하고, manifest·workflow·실패 경로 검증을 추가한다.
-- PROD-562의 production Application/runtime resource, PROD-564의 migration 단계·contract gate, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
+- PROD-562의 production Application/runtime resource, PROD-564의 migration 단계·자동 safety gate, PROD-565의 실제 첫 release와 public smoke는 변경하지 않는다.
 
 ## Authority / Provenance
 

@@ -33,7 +33,11 @@ scenario="${GH_SCENARIO:-immutable}"
 
 if [[ "$1" == "api" ]]; then
   [[ "${scenario}" != "setting-disabled" ]]
-  echo true
+  if [[ "$2" == repos/*/commits/* ]]; then
+    echo "${GH_TAG_COMMIT:-${GITHUB_SHA:-}}"
+  else
+    echo true
+  fi
   exit 0
 fi
 
@@ -58,7 +62,7 @@ case "$1" in
     printf '%s\n' "${GH_ASSET_CONTENT}" >"${destination}/docker-image-ref.txt"
     ;;
   view)
-    if [[ "${scenario}" == "fresh" && ! -f "${FAKE_STATE}/draft" ]]; then
+    if [[ "${scenario}" == fresh* && ! -f "${FAKE_STATE}/draft" ]]; then
       exit 1
     fi
     if [[ "$*" == *"--json isDraft"* ]]; then
@@ -260,6 +264,7 @@ chmod +x "${fake_bin}/migration-gate"
 export PATH="${fake_bin}:${PATH}"
 export GITHUB_REPOSITORY=byulmaru/kosmo
 export ARGOCD_SERVER=argocd.example.test
+unset GITHUB_SHA
 valid_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 previous_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 valid_image="ghcr.io/byulmaru/kosmo@${valid_digest}"
@@ -290,6 +295,14 @@ command_order="$(sed -E 's/ --repo.*//' "${FAKE_LOG}" | rg 'release (create|uplo
 
 run_release_test setting-disabled
 expect_failure "${repo_root}/scripts/publish-production-release.sh" 1.0.0 "${valid_image}"
+
+run_release_test fresh-tag-match
+GITHUB_SHA=build-commit GH_TAG_COMMIT=build-commit \
+  "${repo_root}/scripts/publish-production-release.sh" 1.0.0 "${valid_image}" >/dev/null
+
+run_release_test fresh-tag-mismatch
+GITHUB_SHA=build-commit GH_TAG_COMMIT=moved-tag \
+  expect_failure "${repo_root}/scripts/publish-production-release.sh" 1.0.0 "${valid_image}"
 
 run_deploy_test() {
   local scenario="$1"
@@ -368,14 +381,17 @@ assert_contains "${build_workflow}" 'scripts/publish-production-release.sh'
 assert_contains "${deploy_workflow}" 'group: production-release'
 assert_contains "${deploy_workflow}" 'cancel-in-progress: false'
 assert_contains "${deploy_workflow}" 'needs: verify_release'
-assert_contains "${deploy_workflow}" 'environment: production'
 assert_contains "${deploy_workflow}" 'scripts/resolve-production-release.sh'
 assert_contains "${deploy_workflow}" 'scripts/deploy-production-release.sh'
 assert_contains "${deploy_workflow}" 'Record release verification audit'
-assert_contains "${deploy_workflow}" 'uses: ./.github/workflows/production-contract-approval.yml'
-assert_contains "${deploy_workflow}" "APPROVED_CONTRACT_CONTEXT_SHA256: \${{ needs.contract_approval.outputs['approved-context-sha256'] }}"
 assert_contains "${github_setup}" "ensure_environment \"\${production_environment}\" \"\${production_reviewer}\""
 assert_contains "${github_setup}" 'ensure_immutable_releases'
+
+environment_count="$(grep -Ec '^[[:space:]]+environment:' "${deploy_workflow}")"
+production_environment_count="$(grep -Ec '^[[:space:]]+environment: production$' "${deploy_workflow}")"
+if [[ "${environment_count}" -ne 1 || "${production_environment_count}" -ne 1 ]]; then
+  fail "the whole production release must use exactly one production Environment approval"
+fi
 
 verify_job="$(sed -n '/^  verify_release:/,/^  deploy_production:/p' "${deploy_workflow}")"
 if grep -Fq 'id-token: write' <<<"${verify_job}"; then
@@ -386,6 +402,9 @@ if grep -Fq 'docker/build-push-action' "${deploy_workflow}"; then
 fi
 if grep -Fq 'contract-restore-point' "${deploy_workflow}"; then
   fail "the general release workflow must not replace migration with contract evidence preparation"
+fi
+if grep -Eq 'production-contract|contract_approval|APPROVED_CONTRACT_CONTEXT_SHA256|PRODUCTION_CONTRACT_PREFLIGHT' "${deploy_workflow}"; then
+  fail "the production release workflow must not add a contract-only approval path"
 fi
 
 echo "Production release publish, verification, rerun, failure recovery, and audit checks passed."

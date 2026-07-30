@@ -30,7 +30,6 @@ jobs:
       packages: read
     outputs:
       image_ref: ${{ steps.release.outputs.image_ref }}
-      migration_phase: ${{ steps.migration.outputs.phase }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -61,11 +60,9 @@ jobs:
         run: docker buildx imagetools inspect "${IMAGE_REF}" >/dev/null
 
       - name: Validate migration gate context
-        id: migration
         env:
           IMAGE_REF: ${{ steps.release.outputs.image_ref }}
           MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
-          PRODUCTION_CONTRACT_PREFLIGHT: 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -79,7 +76,6 @@ jobs:
             and .apiImage == $image
             and .webImage == $image
           ' "${context_file}" >/dev/null
-          echo "phase=$(jq -r '.phase' "${context_file}")" >> "${GITHUB_OUTPUT}"
 
       - name: Record release verification audit
         if: always()
@@ -101,24 +97,9 @@ jobs:
             echo "- Recovery: not required"
           } >> "${GITHUB_STEP_SUMMARY}"
 
-  contract_approval:
-    name: Approve Contract Migration
-    if: needs.verify_release.outputs.migration_phase == 'contract'
-    needs: verify_release
-    uses: ./.github/workflows/production-contract-approval.yml
-    permissions:
-      contents: read
-      deployments: write
-    with:
-      gate-context-json: ${{ inputs.migration_context_json }}
-
   deploy_production:
     name: Approve and Deploy Production
-    if: >-
-      always()
-      && needs.verify_release.result == 'success'
-      && (needs.contract_approval.result == 'success' || needs.contract_approval.result == 'skipped')
-    needs: [verify_release, contract_approval]
+    needs: verify_release
     runs-on: [self-hosted, macOS]
     environment: production
     permissions:
@@ -188,7 +169,6 @@ jobs:
       - name: Deploy verified release
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          APPROVED_CONTRACT_CONTEXT_SHA256: ${{ needs.contract_approval.outputs['approved-context-sha256'] }}
           IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
           MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
           MIGRATION_SECRET_NAME: ${{ inputs.migration_secret_name }}
