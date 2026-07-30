@@ -158,7 +158,7 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 
 ### Requirement: viewer와 무관한 Reaction Type count
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 count 내림차순으로 제공해야 하며(MUST), 동률 순서는 보장하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type%EC%9D%84-%EC%B5%9C%EC%B4%88-reaction-%EC%83%9D%EC%84%B1-%EC%8B%9C%EA%B0%81-%EC%88%9C%EC%9C%BC%EB%A1%9C-%EC%95%88%EC%A0%95%EC%A0%81%EC%9C%BC%EB%A1%9C-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각 오름차순으로 제공해야 하며(MUST), 같은 최초 생성 시각에는 결정적 최종 순서를 적용해야 한다(MUST).
 
 #### Scenario: viewer 간 같은 count
 
@@ -171,11 +171,17 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 - **WHEN** 현재 Reaction이 삭제된다
 - **THEN** 다음 Type별 count는 삭제된 Reaction을 포함하지 않는다
 
-#### Scenario: count 정렬
+#### Scenario: 현재 최초 Reaction 생성 시각 정렬
 
-- **WHEN** 둘 이상의 Reaction Type count가 다르다
-- **THEN** 시스템은 count가 큰 Type부터 반환한다
-- **AND** count가 같은 Type 사이의 순서는 별도로 보장하지 않는다
+- **WHEN** 둘 이상의 Reaction Type이 현재 존재한다
+- **THEN** 시스템은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각이 이른 Type부터 반환한다
+- **AND** 같은 최초 생성 시각에는 제품상 Type 우선순위가 아닌 결정적 최종 순서를 적용한다
+- **AND** count 증감만으로 기존 Type의 최초 생성 시각이 바뀌지 않으면 순서를 바꾸지 않는다
+
+#### Scenario: Type 제거와 재등장
+
+- **WHEN** 한 Type의 현재 Reaction이 모두 제거됐다가 나중에 다시 생성된다
+- **THEN** 시스템은 새로 존재하는 Reaction의 최초 생성 시각으로 해당 Type의 순서를 정한다
 
 ### Requirement: viewer별 Reaction Profile 목록
 

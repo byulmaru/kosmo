@@ -28,7 +28,7 @@ Kosmo는 Profile이 Post에 여러 종류의 Reaction을 남기고, 이를 일�
 
 ## Impact
 
-- Linear: PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419와 부모 PROD-390
+- Linear: PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419, PROD-576과 부모 PROD-390
 - Core/DB: Reaction schema, migration, 무결성·index 검증
 - GraphQL/Core service: 생성·Post/Type 삭제 mutation, selected Profile의 Reaction 목록, count와 Profile connection, Reaction Notification concrete type와 loader
 - Universal client: fixture-first Reaction Quick Picker·summary presentation, 기존 Post Action Bar의 Reaction popover, 목록·상세 summary toggle과 More/Profile tab, Relay mutation/cache·targeted count refetch·pagination 통합과 component/integration 검증

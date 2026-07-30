@@ -125,13 +125,14 @@
 
 ### Requirement: Reaction 요약 component
 
-클라이언트는 목록과 상세 Post에 viewer-independent Type별 count를 내림차순으로 표시하고, 기존 token으로 같은 Type의 Reaction을 toggle하며, Reaction 전용 More 버튼에서 viewer가 조회할 수 있는 Profile 목록을 Type별 page 단위로 탐색할 수 있어야 한다(MUST).
+클라이언트는 목록과 상세 Post에 viewer-independent Type별 count를 현재 최초 Reaction 생성 시각 순으로 표시하고, 기존 token으로 같은 Type의 Reaction을 toggle하며, Reaction 전용 More 버튼에서 viewer가 조회할 수 있는 Profile 목록을 Type별 page 단위로 탐색할 수 있어야 한다(MUST).
 
 #### Scenario: Type별 count 표시
 
 - **WHEN** Post에 현재 Reaction이 존재한다
-- **THEN** component는 Type과 count를 count 내림차순으로 표시한다
-- **AND** count 동률 Type의 순서에 의존하지 않는다
+- **THEN** component는 server가 제공한 현재 최초 Reaction 생성 시각 순서로 Type과 count를 표시한다
+- **AND** count 증감만으로 기존 Type 순서를 재정렬하지 않는다
+- **AND** 새로 나타난 Type은 현재 server 순서의 뒤에 추가하고 targeted refetch로 최종 순서를 맞춘다
 - **AND** standalone `반응` 제목을 표시하지 않는다
 - **AND** Web token은 높이 32px, radius 12px, emoji 20px, count 14px, 내부 gap 4px, 좌우 padding 8px와 token gap 4px을 사용한다
 - **AND** selected token은 emoji·count와 분리한 `primary`/`primaryHover` 배경 layer만 70% opacity로 표시하고 emoji·count는 100% opacity를 유지한다

@@ -166,7 +166,7 @@ function commitDelete(
 }
 
 describe('PostReactionController count contract', () => {
-  it('sorts updated counts stably and removes zero-count Types', () => {
+  it('preserves server order across count changes and removes zero-count Types', () => {
     assert.deepEqual(
       applyReactionCountDeltas(
         [
@@ -174,13 +174,13 @@ describe('PostReactionController count contract', () => {
           { count: 1, type: '🎉' },
         ],
         new Map([
-          ['❤️', -1],
+          ['🎉', 3],
           ['👀', 1],
         ]),
       ),
       [
-        { count: 1, type: '❤️' },
-        { count: 1, type: '🎉' },
+        { count: 2, type: '❤️' },
+        { count: 4, type: '🎉' },
         { count: 1, type: '👀' },
       ],
     );

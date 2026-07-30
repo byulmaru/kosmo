@@ -27,10 +27,12 @@ Accepted
 - 같은 Profile/Post/Reaction Type 조합에는 Reaction이 하나만 존재하며 다른 Reaction Type은 함께 존재할 수
   있다.
 - 초기 Reaction Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀`
-  (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 허용한다. 이 나열 순서는 개수가 같은
-  Reaction Type의 표시 순서를 정의하지 않으며 동률 표시에는 별도 순서 규칙을 두지 않는다.
+  (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 허용한다. 이 나열 순서는 Reaction Type의
+  표시 순서를 정의하지 않는다.
 - Reaction 조회 결과는 Reaction Type별 개수와 Reaction을 남긴 Profile 목록을 제공한다. Reaction Type은
-  개수 내림차순으로 표시한다.
+  각 Type에 현재 존재하는 Reaction 중 가장 이른 생성 시각 오름차순으로 표시한다. 같은 가장 이른 생성
+  시각에는 제품상 Type 우선순위를 뜻하지 않는 결정적 최종 순서를 적용한다. 한 Type의 현재 Reaction이 모두
+  제거됐다가 다시 생성되면 새 현재 최초 생성 시각으로 순서를 정한다.
 - Bookmark 목록은 UUIDv7 ID 내림차순으로 표시하고 ID만 cursor로 사용한다. 같은 millisecond 안에서는 실제 생성
   순서와 UUID 순서가 다를 수 있다. 대상 Post를 조회할 수 없는 동안에는 목록에서 숨기되 Bookmark 관계는 유지하고,
   대상 Post가 물리적으로 삭제되면 연결된 Bookmark도 함께 삭제한다.

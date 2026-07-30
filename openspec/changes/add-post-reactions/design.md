@@ -20,7 +20,7 @@
 - ActivityPub federation과 remote delivery
 - 범용 Notification framework, retry/outbox/queue/cron/backfill/bulk cleanup
 - Reply composer·Post Action Bar의 일반 More action을 포함해 여러 Post action 전체를 조립하는 PROD-432 범위. 기존 Action Bar의 Reaction action과 실제 Post surface 연결 및 Reaction 전용 More는 PROD-417에 포함한다.
-- Reaction event history와 count 동률 표시 순서
+- 삭제된 Reaction history와 역사상 최초 Type 등장 시각의 영구 보존
 
 ## Implementation Guidance
 
@@ -36,6 +36,7 @@
 - Notification Node/list/count/read query와 client item은 kind별 visible projection으로 Follow와 Reaction source를 함께 처리한다. Reaction 제거 뒤 Notification 정리와 stale source 숨김 lifecycle은 PROD-419에 남아 있다.
 - selected Profile이 바뀌면 앱의 Relay Environment가 교체된다. Reaction pending/error/cache 상태를 actor 사이에 공유하면 안 된다.
 - `Post.viewerReactions: [Reaction!]!`는 현재 selected Profile과 Post 사이의 Reaction 관계를 batch 조회한다. guest 또는 selected Profile 부재에는 빈 목록을 반환하고 다른 selected Profile의 결과를 공유하지 않는다.
+- `Post.reactionCounts`는 각 Type에 현재 존재하는 Reaction의 `MIN(createdAt) ASC`를 주 정렬로 사용하고 같은 최초 생성 시각에는 Type 문자열의 결정적 최종 순서를 사용한다. 이 최종 순서는 제품상 Type 우선순위를 뜻하지 않는다. count 변화만으로 Type을 재정렬하지 않으며 Type이 0개가 됐다가 재등장하면 새 현재 최초 생성 시각으로 배치한다.
 - `deleteReaction(input: { postId, type })`은 현재 selected Profile의 조합만 삭제한다. 첫 삭제는 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환하고, missing·반복·동시 loser는 `reactionId: null`인 성공으로 정규화한다.
 - `SelectMenu`와 `ActionMenu`는 단일 item 선택과 platform별 drawer/menu 동작을 소유하므로 복수 Reaction toggle을 유지하는 anchored popover에 그대로 사용할 수 없다. 이번 slice에서 범용 overlay로 일반화하지 않는다.
 - PROD-450이 전달한 props-only `ReactionSelector` seam은 부모가 공급한 ordered option과 controlled selected/pending/error 상태만 표시한다. PROD-417은 최신 canonical 디자인에 맞춰 Web option을 32×32 CSS px, emoji 20px, spinner 16×16px·2px stroke, gap/panel padding 4px로 조정한다. iOS·Android target과 spinner geometry는 이번 Web 우선 변경에서 축소하지 않는다. selected 배경 layer의 70% opacity, border 없는 12px radius option, 전체 disabled 미렌더링과 supplied opaque identity 계약은 유지한다.
@@ -54,7 +55,7 @@
 1. PROD-395는 `reaction` 관계 테이블을 additive migration으로 추가하고 Type을 non-null text로 저장한다. built-in 여섯 Type은 database에 seed하거나 `CHECK`로 고정하지 않으며 기존 행은 backfill하거나 재작성하지 않는다.
 2. PROD-404의 GraphQL `usingProfile` entry point는 Account/session membership과 selected Profile/Instance 상태를 검증하고 resolver는 Post visibility를 검증한다. core service는 검증된 actor Profile identity를 받아 짧은 transaction에서 Post·Type을 검증한 뒤 `(post, type, profile)` insert를 conflict-safe하게 수행한다. core `addReaction`은 `{ created, reaction }`을 반환하고, GraphQL resolver는 이를 `Reaction` Node만 포함하는 공개 payload로 변환한다. PROD-404는 Notification side effect와 신규 source 구분을 미리 구현하지 않으며, 실제 caller가 생기는 PROD-413이 `created` 결과를 사용해 신규 source에만 Best Effort Notification을 연결한다. 명시적 pessimistic lock은 사용하지 않는다.
 3. PROD-405는 concrete Reaction global ID를 입력으로 받고, GraphQL `usingProfile` entry point가 Account, membership과 Profile/Instance 상태를 검증한 actor Profile identity를 core service에 전달한다. core는 actor 상태를 다시 조회하지 않고 현재 Reaction Owner인지 확인한다. 현재 타인 소유 행은 거부한다. 현재 Owner 행은 ID와 actor를 조건으로 transaction에서 삭제하며, 이미 없는 ID는 입력 ID를 유지한 성공 no-op으로 처리한다. core는 입력받은 database Reaction ID를 결과로 반환하고, GraphQL `deleteReaction(id: ID!)` payload는 이를 concrete Reaction global ID인 `reactionId: ID!`로 encode한다. Post의 현재 visibility는 조회하거나 삭제 권한으로 사용하지 않으며, Notification cleanup 연결과 필요한 service 결과 확장은 PROD-419가 소유한다.
-4. PROD-406 count query는 `Post.reactionCounts: [ReactionCount!]!`로 현재 Reaction이 존재하는 Type의 `type: String!`과 `count: Int!`만 제공한다. Post visibility를 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 Post와 Type으로 batch group/count하고 count 내림차순으로 반환한다. Reaction이 없으면 빈 목록을 반환한다. PROD-407 Profile connection은 기존 Profile node만 반환하고, Type을 격리하며 기존 Profile visibility를 SQL page limit 전에 적용한 뒤 `Reaction.createdAt DESC, Reaction.id DESC` keyset으로 최신 Reaction부터 반환한다. Reaction metadata는 공개 row field로 노출하지 않는다.
+4. PROD-406 count query는 `Post.reactionCounts: [ReactionCount!]!`로 현재 Reaction이 존재하는 Type의 `type: String!`과 `count: Int!`만 제공한다. PROD-576은 Post visibility를 통과한 뒤 viewer Profile filtering 없이 현재 Reaction을 Post와 Type으로 batch group/count하고 `MIN(Reaction.createdAt) ASC, Reaction.type ASC`로 반환한다. `type` tie-break는 제품 우선순위가 아니라 Relay가 같은 Post의 ID 없는 항목을 위치 기반으로 정규화할 때 안정적인 순서를 보장한다. Reaction이 없으면 빈 목록을 반환한다. PROD-407 Profile connection은 기존 Profile node만 반환하고, Type을 격리하며 기존 Profile visibility를 SQL page limit 전에 적용한 뒤 `Reaction.createdAt DESC, Reaction.id DESC` keyset으로 최신 Reaction부터 반환한다. Reaction metadata는 공개 row field로 노출하지 않는다.
 5. PROD-413은 Reaction source에서 Recipient, Related Profile, Target Post와 Type을 파생하고 자기 Post·Remote Recipient를 no-op 처리한다. multi-kind Notification 목록은 승인된 구현 선택에 따라 kind별 visible projection을 `UNION ALL`한 뒤 공통 `id DESC` pagination/count를 적용한다. item 활성화는 Target Post 이동을 즉시 시작하고 Read는 응답을 기다리지 않는 Best Effort 동기화로 유지한다.
 6. PROD-449는 먼저 props-only `ReactionSummary`와 `ReactionProfileList`의 fixture 상태 catalog를 전달한다. supplied count entry는 order·zero-count를 바꾸지 않고 렌더하며, Profile row는 기존 `ProfileListItem` Relay fragment ref를 재사용하고 Storybook은 Relay mock fragment ref로 상태를 구성한다. 이 구현 단계는 최종 `post-reaction-ui` spec을 변경하지 않는다.
 7. PROD-450은 부모가 공급한 option 순서를 그대로 사용하는 props-only `ReactionSelector` Quick Picker panel을 먼저 제공했다. PROD-417은 supplied identity·selected layer·controlled state seam을 유지하면서 Web만 32×32 option, 20px emoji, 16×16px·2px spinner와 4px gap/padding으로 조정한다. 현재 Native 44 logical unit option과 spinner geometry는 이번 slice에서 변경하지 않으며 Android 48×48dp target과 Native runtime 검증은 출시 전 gate로 유지한다.
@@ -86,6 +87,7 @@
 - 삭제 mutation에서 Reaction Node loader를 호출해 Post visibility를 삭제 권한으로 만들지 않는다.
 - Post/Type 삭제는 오래 지연된 요청이 같은 조합으로 다시 생성된 현재 Reaction을 제거할 수 있음을 숨기지 않는다. 별도 Reaction ID 조회·보존이나 ABA ledger를 추가하지 않는다.
 - viewer가 볼 수 없는 Profile의 Reaction을 count에서 제외하지 않는다.
+- `reactionCounts`를 count로 재정렬하거나 동일 최초 생성 시각의 최종 순서를 비결정적으로 두지 않는다.
 - `reactionCounts`에 zero-count Type을 합성하거나 Profile connection 길이로 count를 다시 계산하지 않는다.
 - Reaction이 없는 Post에 빈 summary를 렌더링하거나 Profile 목록을 별도 route·URL로 확장하지 않는다.
 - Profile 조회 오류를 snackbar·toast로만 알리거나 추가 page 실패 때 기존 edge를 제거하지 않는다.

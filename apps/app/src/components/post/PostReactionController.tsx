@@ -99,10 +99,7 @@ export function applyReactionCountDeltas(
     }
   }
 
-  return ordered
-    .filter(({ count }) => count > 0)
-    .sort((left, right) => right.count - left.count || left.index - right.index)
-    .map(({ count, type }) => ({ count, type }));
+  return ordered.filter(({ count }) => count > 0).map(({ count, type }) => ({ count, type }));
 }
 
 export function usePostReactionController(

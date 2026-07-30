@@ -56,6 +56,8 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - Post에 하나 이상의 Reaction이 있을 때만 요약 row를 표시한다. Reaction이 없으면 별도 빈 영역이나 zero-count Type을 표시하지 않는다.
 - standalone `반응` 제목은 표시하지 않는다.
 - server가 제공한 양수 count Type과 순서를 그대로 사용하며, 조회된 Profile 수로 count를 다시 계산하지 않는다.
+  server 순서는 각 Type에 현재 존재하는 최초 Reaction 생성 시각 오름차순이고, count 증감만으로 기존 Type을
+  재정렬하지 않는다. Type이 0개가 됐다가 다시 생기면 새 Type처럼 현재 순서의 뒤에 추가한다.
 - Web token은 높이 32px, radius 12px의 둥근 사각형이다. emoji는 20px, count는 14px, 내부 gap은 4px, 좌우 padding은 8px, token 사이 gap은 4px이다.
 - 요약 row의 token은 Profile 목록을 여는 control이 아니라 해당 Type의 Reaction을 추가·삭제하는 toggle이다. 선택 상태, pending, error와 disabled 상태는 Quick Picker와 동일한 controller에서 공급한다.
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.

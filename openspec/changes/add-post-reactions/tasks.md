@@ -91,20 +91,20 @@ Reaction Owner가 대상 Post의 현재 조회 가능성과 무관하게 자신�
 
 **Deliverable**
 
-Post를 조회할 수 있는 viewer가 `Post.reactionCounts`에서 현재 Reaction 전체의 Type별 count를 viewer와 무관하게 count 내림차순으로 조회한다.
+Post를 조회할 수 있는 viewer가 `Post.reactionCounts`에서 현재 Reaction 전체의 Type별 count를 viewer와 무관하게 조회한다. 최종 표시 순서는 PROD-576이 소유한다.
 
 **Guardrails**
 
 - GraphQL은 `Post.reactionCounts: [ReactionCount!]!`와 `ReactionCount.type: String!`, `ReactionCount.count: Int!` 계약을 유지한다.
 - 현재 Reaction이 있는 Type만 포함하고 Reaction이 없으면 빈 목록을 반환한다.
 - unavailable Profile의 현재 Reaction도 count에 포함한다.
-- count 동률 Type 사이의 순서를 보장하지 않는다.
+- 정렬 계약은 PROD-576의 현재 최초 Reaction 생성 시각 순서를 따른다.
 - 대상 Post의 기존 조회 정책을 우회하지 않는다.
 
 **Verification**
 
 - schema test에서 non-null list와 항목 shape를 검증한다.
-- 서로 다른 viewer의 동일 count, 빈 목록, unavailable Profile 포함, 삭제 반영, Type 격리, 내림차순과 Post 권한을 integration test로 검증한다.
+- 서로 다른 viewer의 동일 count, 빈 목록, unavailable Profile 포함, 삭제 반영, Type 격리와 Post 권한을 integration test로 검증한다. 정렬 회귀는 PROD-576에서 검증한다.
 
 - [x] 4.1 PROD-406이 소유한 `reactionCounts` 공개 shape를 specs·decisions·design·tasks에 동기화하고 strict validation을 통과시킨다.
 - [x] 4.2 Post가 Type별 Reaction count를 제공하는 query-layer DB 집계와 GraphQL field를 구현한다.
@@ -316,7 +316,40 @@ Reaction selector가 selected Profile이 Post에 남긴 현재 Reaction 관계�
 - [x] 10.3 core와 GraphQL `deleteReaction`을 Post/Type 입력, nullable 삭제 결과와 post-commit cleanup 계약으로 전환한다.
 - [x] 10.4 core·schema·API integration 검증과 typecheck·format check를 통과시킨다.
 
-## 11. PROD-390 Reaction 통합 검증·정합성 확인·archive
+## 11. PROD-576 Reaction Type 최초 생성 시각 순서
+
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [Reaction UI 디자인](../../../docs/design/reactions.md)
+- [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type을-최초-reaction-생성-시각-순으로-안정적으로-표시한다)
+
+**Deliverable**
+
+Reaction summary와 Profile modal의 Type이 각 Type에 현재 존재하는 최초 Reaction 생성 시각 순으로 안정적으로 표시되고, count 변화와 targeted refetch에서 순서를 유지하며 Relay 위치 기반 record가 충돌하지 않는다.
+
+**Guardrails**
+
+- 주 정렬은 각 Post·Type에 현재 존재하는 Reaction의 `MIN(createdAt) ASC`다.
+- 같은 최초 생성 시각에는 제품상 Type 우선순위를 뜻하지 않는 결정적 최종 tie-break를 적용한다.
+- count 증감만으로 기존 Type을 재정렬하지 않는다.
+- Type이 0개가 됐다가 재등장하면 새 현재 최초 생성 시각으로 배치한다.
+- `ReactionCount` 공개 shape에 ID나 생성 시각을 추가하지 않고 삭제된 Reaction history를 저장하지 않는다.
+- 클라이언트 local delta는 server 순서를 보존하고 새 Type만 뒤에 추가한 뒤 targeted refetch로 최종 server 순서를 맞춘다.
+
+**Verification**
+
+- API integration에서 viewer-independent count, 현재 최초 생성 시각 순서, count 증감, 최초 Reaction 삭제, 0→1 재등장, 동일 생성 시각과 동일 Post 복수 응답 경로를 검증한다.
+- client unit test에서 기존 순서 보존, zero-count 제거, 새 Type 뒤 추가와 refetch 전 순서를 검증한다.
+- canonical·OpenSpec strict validation, API/app typecheck·test와 format/diff check를 통과시킨다.
+
+- [x] 11.1 PROD-576의 현재 최초 Reaction 생성 시각 순서와 Relay 안정성 계약을 canonical·specs·design·decisions·tasks에 동기화하고 strict validation을 통과시킨다.
+- [x] 11.2 API Type별 집계를 현재 최초 생성 시각 오름차순과 결정적 최종 tie-break로 변경하고 회귀 검증을 추가한다.
+- [x] 11.3 클라이언트 local count delta가 server 순서를 유지하고 새 Type만 뒤에 추가하도록 변경하고 unit test를 추가한다.
+- [x] 11.4 API·client·format·OpenSpec 검증을 통과시키고 PROD-576 구현 증거를 정리한다.
+
+## 12. PROD-390 Reaction 통합 검증·정합성 확인·archive
 
 **Deliverable**
 
@@ -333,7 +366,7 @@ Reaction selector가 selected Profile이 Post에 남긴 현재 Reaction 관계�
 - 허용 Type add/delete, viewer-independent count, viewer-filtered Profile 목록, selector/summary, 자기 알림 억제, inbox/read/이동과 삭제 cleanup을 연결한 통합 흐름을 검증한다.
 - canonical 문서·OpenSpec delta·구현 정합성, archive diff와 archive 후 strict validation을 확인한다.
 
-- [ ] 10.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
-- [ ] 10.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
-- [ ] 10.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
-- [ ] 10.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [ ] 12.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
+- [ ] 12.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
+- [ ] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
+- [ ] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
