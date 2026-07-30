@@ -602,7 +602,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  visibilityControl: { position: 'relative' },
+  visibilityControl: {
+    alignSelf: 'flex-start',
+    paddingVertical: Platform.select({ android: 4, ios: 2, default: 0 }),
+    position: 'relative',
+  },
   visibilityTrigger: {
     alignItems: 'center',
     borderRadius: radii.sm,
