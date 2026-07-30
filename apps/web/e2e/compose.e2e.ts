@@ -34,8 +34,17 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await input.fill(editorBody);
   const visibilityTrigger = composer.getByRole('button', { name: '조용한 공개' });
+  const editorBeforeOpen = await input.boundingBox();
+  expect(editorBeforeOpen).not.toBeNull();
+
   await visibilityTrigger.click();
   const visibilityMenu = page.getByRole('menu', { name: '게시글 공개 설정' });
+  await expect(visibilityMenu).toBeVisible();
+
+  const editorAfterOpen = await input.boundingBox();
+  expect(editorAfterOpen).not.toBeNull();
+  expect(editorAfterOpen?.y).toBe(editorBeforeOpen?.y);
+
   await expect(visibilityMenu.getByRole('menuitemradio', { name: /^조용한 공개/ })).toHaveAttribute(
     'aria-checked',
     'true',
