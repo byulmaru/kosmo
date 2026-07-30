@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { formatPostActionCount } from './postActionCount';
 import type { ComponentType, Ref } from 'react';
 import type { AccessibilityState } from 'react-native';
@@ -50,6 +51,7 @@ export function PostActionControl({
   testID,
 }: Props) {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
@@ -79,12 +81,15 @@ export function PostActionControl({
       accessibilityRole="button"
       accessibilityState={stateful ? accessibilityState : undefined}
       disabled={blocked}
+      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
       onPress={onPress}
       ref={controlRef}
       testID={`post-action-${testID}`}
       style={({ pressed }) => [
         styles.action,
         alignToEnd ? styles.alignToEnd : undefined,
+        hovered && !blocked ? [styles.hovered, { backgroundColor: theme.surface }] : undefined,
         blocked ? styles.blocked : pressed ? styles.pressed : undefined,
       ]}
     >
@@ -141,6 +146,7 @@ const styles = StyleSheet.create({
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
   },
+  hovered: { borderRadius: radii.full },
   icon: { alignItems: 'center', height: 16, justifyContent: 'center', width: 16 },
   pressed: { opacity: 0.72 },
 });

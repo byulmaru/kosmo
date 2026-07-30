@@ -32,9 +32,21 @@ Web의 비터치 pointer가 Post Action control에 hover하면 기존 target 전
 - light Web runtime에서 pointer hover와 인접 target 비중첩을 관찰한다. dark·Web touch·Native runtime은
   미실행으로 보고한다.
 
-- [ ] 1.1 공통 Post Action control에 승인된 Web 비터치 hover target 표현을 구현한다.
-- [ ] 1.2 가장 가까운 기존 Storybook interaction에 hover와 핵심 상태·geometry 회귀 검증을 추가한다.
-- [ ] 1.3 App check, targeted Storybook interaction, static Storybook build와 light Web 수동 관찰을 수행하고
+**Verification Record (2026-07-31)**
+
+- `@kosmo/app check`는 Watchman의 FSEvents 시작 실패를 피하도록 Watchman을 PATH에서 제외한 동일 script로
+  실행해 Relay compiler(87 reader, 53 normalization, 94 operation text)와 TypeScript를 통과했다.
+- `PostActionBar.stories.tsx` targeted Storybook interaction 14/14와 static Storybook build, OpenSpec strict
+  validation을 통과했다.
+- light Web Storybook에서 Reply의 `surface` hover가 50×28 pill로 표시되고 More 28×28, active Bookmark
+  50×28, blocked control 미표시와 모든 toolbar의 target 비중첩을 관찰했다.
+- dark runtime, Web touch, Android와 iOS runtime은 실행하지 않았다. 이 gap 때문에 change를 active로 유지한다.
+- 구현과 검증은 canonical design, 이 change의 spec·decision, 작업 시작 시 확인한 live PROD-595 범위와
+  일치한다. Linear connector가 검증 중 unavailable 상태가 되어 status·본문 writeback은 완료하지 못했다.
+
+- [x] 1.1 공통 Post Action control에 승인된 Web 비터치 hover target 표현을 구현한다.
+- [x] 1.2 가장 가까운 기존 Storybook interaction에 hover와 핵심 상태·geometry 회귀 검증을 추가한다.
+- [x] 1.3 App check, targeted Storybook interaction, static Storybook build와 light Web 수동 관찰을 수행하고
       미실행 platform 검증을 구분해 기록한다.
-- [ ] 1.4 구현과 검증 결과를 canonical 문서·Linear·OpenSpec에 대조하고 dark runtime 미검증 때문에 change를
+- [x] 1.4 구현과 검증 결과를 canonical 문서·Linear·OpenSpec에 대조하고 dark runtime 미검증 때문에 change를
       active로 유지한다.

@@ -11,14 +11,14 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -647,6 +647,48 @@ export const ActionBarCatalog: Story = {
     expect(bookmarkButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
     expect(reactionButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
+
+    const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
+    const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
+    const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
+    const defaultReplyBounds = defaultReply.getBoundingClientRect();
+    const defaultMoreBounds = defaultMore.getBoundingClientRect();
+
+    await userEvent.hover(defaultReply);
+    expect(defaultReply).toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(getComputedStyle(defaultReply).borderRadius).toBe('999px');
+    expect(defaultReply.getBoundingClientRect().width).toBe(defaultReplyBounds.width);
+    expect(defaultReply.getBoundingClientRect().height).toBe(defaultReplyBounds.height);
+
+    const pointerUser = userEvent.setup();
+    await pointerUser.pointer({ target: defaultReply, keys: '[MouseLeft>]' });
+    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    expect(defaultReply).toHaveStyle({ backgroundColor: colors.light.surface });
+    await pointerUser.pointer({ target: defaultReply, keys: '[/MouseLeft]' });
+    await userEvent.unhover(defaultReply);
+    expect(getComputedStyle(defaultReply).opacity).toBe('1');
+
+    await userEvent.hover(defaultMore);
+    expect(defaultMore).toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(getComputedStyle(defaultMore).borderRadius).toBe('999px');
+    expect(defaultMore.getBoundingClientRect().width).toBe(defaultMoreBounds.width);
+    expect(defaultMore.getBoundingClientRect().height).toBe(defaultMoreBounds.height);
+    await userEvent.unhover(defaultMore);
+    expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.surface });
+
+    const activeBookmark = within(toolbars[2]!).getByRole('button', { name: /북마크/ });
+    expect(activeBookmark).toHaveAttribute('aria-pressed', 'true');
+    const activeBookmarkIcon = activeBookmark.querySelector('svg');
+    expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
+    await userEvent.hover(activeBookmark);
+    expect(activeBookmark).toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
+    await userEvent.unhover(activeBookmark);
+    expect(activeBookmark).not.toHaveStyle({ backgroundColor: colors.light.surface });
+
+    const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
+    fireEvent.pointerEnter(blockedReply);
+    expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.surface });
   },
 };
 
