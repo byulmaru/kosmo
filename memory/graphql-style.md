@@ -202,6 +202,12 @@ GraphQL enum은 `apps/api/src/graphql/enums.ts`에서 전역 등록한다.
 - Pothos resolver/object/input/payload 변경으로 런타임 GraphQL schema가 바뀌면 같은 변경에서
   `apps/api/schema.graphql`도 갱신한다. `apps/app/relay.config.json`은 이 파일을 Relay schema source로
   사용하므로 런타임 등록만으로 client contract가 동기화됐다고 보지 않는다.
+- 공개 schema shape는 `apps/api/schema.graphql`과 `apps/api`의 `lint:schema`가 하나의 계약으로 검증한다.
+  기능별 unit test에서 `schema.getType()`, `getFields()`, `String(field.type)` 등으로 resolver 선언을 다시
+  옮겨 적지 않는다. 이러한 검사는 resolver 동작을 증명하지 않고 SDL 동기화 검사와 중복된다.
+- GraphQL 요청을 실행하는 인증, 입력 검증, ID routing 같은 행동 테스트는 `schema.test.ts` 같은 전역
+  수집 파일에 모으지 않고 해당 query, mutation 또는 field 구현 옆에 둔다. 전체 schema 조립만의 별도
+  불변식이 생기면 기능 계약과 구분되는 최소 검증으로 한정한다.
 - GraphQL operation은 실제 사용하는 React Native `.tsx` 파일에 Relay `graphql` tag로 colocate한다. 프론트 fragment, connection, actor environment 세부 규칙은 `memory/frontend-react-native.md`를 따른다.
 - GraphQL mutation error UI 분기가 여러 컴포넌트에서 반복되면 공통 helper나 error handling boundary로 모을 후보로 본다.
 - API 구현과 OpenSpec은 root field, object field, payload, error type, connection 단위가 서로 맞아야 한다.
