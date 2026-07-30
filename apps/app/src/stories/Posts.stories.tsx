@@ -1084,7 +1084,10 @@ function ThreadCatalog() {
                 </View>
               ) : (
                 <View testID={`post-thread-renderer-list-${item.id}`}>
-                  <PostListItem post={requireFragment(item.post.listItem, 'thread list item')} />
+                  <PostListItem
+                    post={requireFragment(item.post.listItem, 'thread list item')}
+                    showDivider={false}
+                  />
                 </View>
               )}
               {item.post.repostSource ? (
@@ -1844,8 +1847,9 @@ export const ReplyThreadPresentation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = canvas.getByTestId('post-thread');
+    const rows = Array.from(thread.children) as HTMLElement[];
 
-    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-thread-root',
       'post-thread-item-thread-parent',
       'post-thread-current-thread-current',
@@ -1853,6 +1857,37 @@ export const ReplyThreadPresentation: Story = {
       'post-thread-item-thread-sibling',
       'post-thread-item-thread-reply-quote',
     ]);
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
+    rows.forEach((row, index) => {
+      const dividers = within(row).queryAllByTestId(/^post-thread-divider-/);
+
+      if (index === rows.length - 1) {
+        expect(dividers).toHaveLength(0);
+        return;
+      }
+
+      expect(dividers).toHaveLength(1);
+      const divider = dividers[0]!;
+      const dividerBounds = divider.getBoundingClientRect();
+      const rowBounds = row.getBoundingClientRect();
+      expect(dividerBounds.height).toBeCloseTo(1, 0);
+      expect(dividerBounds.left - rowBounds.left).toBeCloseTo(8, 0);
+      expect(rowBounds.right - dividerBounds.right).toBeCloseTo(8, 0);
+      expect(window.getComputedStyle(divider).backgroundColor).toBe('rgb(242, 242, 242)');
+    });
+    const currentRow = canvas.getByTestId('post-thread-current-thread-current');
+    expect(window.getComputedStyle(currentRow).borderTopWidth).toBe('0px');
+    expect(window.getComputedStyle(currentRow).borderBottomWidth).toBe('0px');
+    for (const rowId of [
+      'post-thread-item-thread-root',
+      'post-thread-item-thread-child',
+      'post-thread-item-thread-sibling',
+    ]) {
+      expect(
+        window.getComputedStyle(within(canvas.getByTestId(rowId)).getByRole('article'))
+          .borderBottomWidth,
+      ).toBe('0px');
+    }
     expect(thread.textContent).toContain('대화의 시작입니다.');
     expect(thread.textContent).toContain('지금 보고 있는 Reply입니다.');
     expect(thread.textContent).toContain('현재 Reply에 이어진 답글입니다.');
@@ -1971,7 +2006,8 @@ export const PostDetailThreadRoute: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    expect(Array.from(thread.children).map((row) => row.getAttribute('data-testid'))).toEqual([
+    const rows = Array.from(thread.children) as HTMLElement[];
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
       'post-thread-item-route-parent',
       'post-thread-current-route-current',
@@ -1980,6 +2016,12 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-reply-quote',
       'post-thread-item-route-source-null',
     ]);
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
+    expect(
+      window.getComputedStyle(
+        within(canvas.getByTestId('post-thread-item-route-root')).getByRole('article'),
+      ).borderBottomWidth,
+    ).toBe('0px');
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
     const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
@@ -2094,6 +2136,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
     const canvas = within(canvasElement);
     const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
 
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(0);
     expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(
       currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
