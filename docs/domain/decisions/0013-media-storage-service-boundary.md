@@ -12,7 +12,8 @@ Accepted
 
 File 표현, Local Media 생성 시점과 업로드 중 상태에 관한 결정은
 [ADR 0018](./0018-media-upload-lifecycle-without-file.md)가 대체한다. Media Storage Service와 Kosmo의 소유권·저장
-책임 분리는 계속 적용된다.
+책임 분리는 계속 적용된다. Post Content revision의 Media 참조와 Alt Text 소유권은
+[ADR 0022](./0022-post-content-revision-media-nodes.md)가 대체한다.
 
 ## 결정
 

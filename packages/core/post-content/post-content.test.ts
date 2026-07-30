@@ -5,6 +5,7 @@ import {
   arePostContentRevisionsEqual,
   canonicalizePostContentDocument,
   postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
   postContentDocumentToText,
   validateLocalPostContentDocument,
 } from './server';
@@ -43,6 +44,113 @@ test('keeps one empty paragraph for an empty document', () => {
     type: 'doc',
     content: [{ type: 'paragraph' }],
   });
+});
+
+test('preserves ordered Media nodes and omits the default Sensitive Media attr', () => {
+  const document = postContentDocumentFromTextAndMedia('body', [
+    { altText: 'first image', mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+    { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
+  ]);
+
+  assert.deepEqual(document.body, {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'body' }] },
+      {
+        type: 'media',
+        attrs: {
+          altText: 'first image',
+          mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+        },
+      },
+      {
+        type: 'media',
+        attrs: { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
+      },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), 'body');
+  assert.equal(isPostContentDocumentV1(document), true);
+});
+
+test('canonicalizes media-only content with one empty paragraph and Sensitive Media', () => {
+  const document = postContentDocumentFromTextAndMedia(
+    '',
+    [{ altText: '', mediaId: '019f6678-86fa-709b-984e-1520766b8447' }],
+    true,
+  );
+
+  assert.deepEqual(document.body, {
+    type: 'doc',
+    attrs: { sensitiveMedia: true },
+    content: [
+      { type: 'paragraph' },
+      {
+        type: 'media',
+        attrs: { altText: '', mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+      },
+    ],
+  });
+  assert.equal(postContentDocumentToText(document), '');
+});
+
+test('rejects more than four Media nodes and unknown Media or document attrs', () => {
+  assert.throws(
+    () =>
+      postContentDocumentFromTextAndMedia(
+        'body',
+        Array.from({ length: 5 }, (_, index) => ({
+          altText: null,
+          mediaId: `019f6678-86fa-709b-984e-1520766b844${index}`,
+        })),
+      ),
+    /more than 4 Media nodes/,
+  );
+  assert.throws(() =>
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        attrs: { sensitiveMedia: true, unknown: true },
+        content: [{ type: 'paragraph' }],
+      },
+    }),
+  );
+  assert.throws(() =>
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [{ type: 'media', attrs: { mediaId: 'media', altText: null, unknown: true } }],
+      },
+    }),
+  );
+});
+
+test('rejects invalid Sensitive Media and Media attr scalar types', () => {
+  for (const body of [
+    {
+      type: 'doc',
+      attrs: { sensitiveMedia: 'yes' },
+      content: [{ type: 'paragraph' }],
+    },
+    {
+      type: 'doc',
+      content: [{ type: 'media', attrs: { mediaId: 123, altText: null } }],
+    },
+    {
+      type: 'doc',
+      content: [{ type: 'media', attrs: { mediaId: '', altText: null } }],
+    },
+    {
+      type: 'doc',
+      content: [{ type: 'media', attrs: { mediaId: 'media', altText: 123 } }],
+    },
+  ]) {
+    assert.throws(() => canonicalizePostContentDocument({ version: 1, summary: null, body }));
+  }
 });
 
 test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', () => {
@@ -268,5 +376,20 @@ test('validates the combined local summary and body length', () => {
   assert.throws(
     () => validateLocalPostContentDocument(postContentDocumentFromText('가'.repeat(500), '나')),
     /exceeds 500 characters/,
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(postContentDocumentFromText('')),
+    /body text or Media/,
+  );
+  assert.throws(
+    () => validateLocalPostContentDocument(postContentDocumentFromText('', 'warning')),
+    /body text or Media/,
+  );
+  assert.doesNotThrow(() =>
+    validateLocalPostContentDocument(
+      postContentDocumentFromTextAndMedia('', [
+        { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+      ]),
+    ),
   );
 });

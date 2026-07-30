@@ -1,5 +1,6 @@
 import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -46,7 +47,26 @@ export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
 
 PostContent.implement({
   fields: (t) => ({
-    document: t.expose('document', { type: 'PostContentDocument' }),
+    document: t.field({
+      type: 'PostContentDocument',
+      resolve: (content) => ({
+        ...content.document,
+        body: {
+          ...content.document.body,
+          content: content.document.body.content.map((block) =>
+            block.type === 'media'
+              ? {
+                  ...block,
+                  attrs: {
+                    ...block.attrs,
+                    mediaId: encodeGlobalId('Media', block.attrs.mediaId),
+                  },
+                }
+              : block,
+          ),
+        },
+      }),
+    }),
     bodyText: t.string({
       resolve: (content) => postContentDocumentToText(content.document),
     }),

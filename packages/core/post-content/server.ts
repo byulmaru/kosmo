@@ -9,8 +9,14 @@ import type { Mark, Node as ProseMirrorNode } from 'prosemirror-model';
 import type {
   PostContentBodyDocumentV1,
   PostContentDocumentV1,
+  PostContentMediaNode,
   PostContentSchemaVersion,
 } from './index';
+
+export interface PostContentMediaInput {
+  readonly altText: string | null;
+  readonly mediaId: string;
+}
 
 export function canonicalizePostContentDocument(document: unknown): PostContentDocumentV1 {
   if (!isRecordWithExactKeys(document, ['version', 'summary', 'body'])) {
@@ -45,11 +51,24 @@ function canonicalizePostContentBody(
   const parsed = postContentSchema.nodeFromJSON(canonicalizeDuplicateLinkMarks(body));
   parsed.check();
 
-  const paragraphs: ProseMirrorNode[] = [];
-  parsed.forEach((paragraph) => {
+  const blocks: ProseMirrorNode[] = [];
+  let paragraphCount = 0;
+  let mediaCount = 0;
+  parsed.forEach((block) => {
+    if (block.type === postContentSchema.nodes.media) {
+      mediaCount += 1;
+      blocks.push(
+        postContentSchema.nodes.media.create({
+          altText: block.attrs.altText,
+          mediaId: block.attrs.mediaId,
+        }),
+      );
+      return;
+    }
+
     const inline: ProseMirrorNode[] = [];
 
-    paragraph.forEach((node) => {
+    block.forEach((node) => {
       if (node.isText) {
         appendNormalizedText(inline, node.text!, node.marks);
       } else {
@@ -59,21 +78,38 @@ function canonicalizePostContentBody(
 
     const canonicalParagraph = postContentSchema.nodes.paragraph.create(null, inline);
     if (canonicalParagraph.childCount > 0) {
-      paragraphs.push(canonicalParagraph);
+      paragraphCount += 1;
+      blocks.push(canonicalParagraph);
     }
   });
 
-  if (paragraphs.length === 0) {
-    paragraphs.push(postContentSchema.nodes.paragraph.create());
+  if (mediaCount > 4) {
+    throw new RangeError('PostContent cannot contain more than 4 Media nodes');
+  }
+  if (paragraphCount === 0) {
+    blocks.unshift(postContentSchema.nodes.paragraph.create());
   }
 
-  const canonical = postContentSchema.nodes.doc.create(null, paragraphs);
+  const canonical = postContentSchema.nodes.doc.create(
+    { sensitiveMedia: parsed.attrs.sensitiveMedia },
+    blocks,
+  );
   canonical.check();
-  return canonical.toJSON() as PostContentBodyDocumentV1;
+  const json = JSON.parse(JSON.stringify(canonical.toJSON())) as PostContentBodyDocumentV1;
+  return json.attrs?.sensitiveMedia ? json : { type: json.type, content: json.content };
 }
 
 export function postContentDocumentFromText(
   bodyText: string,
+  summary: string | null = null,
+): PostContentDocumentV1 {
+  return postContentDocumentFromTextAndMedia(bodyText, [], false, summary);
+}
+
+export function postContentDocumentFromTextAndMedia(
+  bodyText: string,
+  media: readonly PostContentMediaInput[],
+  sensitiveMedia = false,
   summary: string | null = null,
 ): PostContentDocumentV1 {
   const normalized = normalizePostContentPlainText(bodyText);
@@ -83,11 +119,18 @@ export function postContentDocumentFromText(
     summary,
     body: {
       type: 'doc',
+      ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
       content: [
         {
           type: 'paragraph',
           ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
         },
+        ...media.map(
+          ({ altText, mediaId }): PostContentMediaNode => ({
+            type: 'media',
+            attrs: { altText, mediaId },
+          }),
+        ),
       ],
     },
   });
@@ -99,7 +142,10 @@ export function postContentDocumentToText(value: unknown): string {
 
 export function postContentDocumentToHtml(document: PostContentDocumentV1): string {
   const { body } = canonicalizePostContentDocument(document);
-  const node = postContentSchema.nodeFromJSON(body);
+  const node = postContentSchema.nodeFromJSON({
+    type: 'doc',
+    content: body.content.filter((block) => block.type === 'paragraph'),
+  });
 
   const domDocument = new JSDOM().window.document;
   const container = domDocument.createElement('div');
@@ -113,9 +159,13 @@ export function postContentDocumentToHtml(document: PostContentDocumentV1): stri
 
 export function validateLocalPostContentDocument(value: unknown): PostContentDocumentV1 {
   const document = canonicalizePostContentDocument(value);
-  const authoredTextLength =
-    (document.summary?.length ?? 0) + postContentBodyToText(document.body).length;
+  const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
+  const bodyTextLength = postContentBodyToText(document.body).length;
+  const authoredTextLength = (document.summary?.length ?? 0) + bodyTextLength;
 
+  if (bodyTextLength === 0 && mediaCount === 0) {
+    throw new RangeError('PostContent must contain body text or Media');
+  }
   if (authoredTextLength > postBodyMaxLength) {
     throw new RangeError(`PostContent authored text exceeds ${postBodyMaxLength} characters`);
   }
@@ -125,6 +175,7 @@ export function validateLocalPostContentDocument(value: unknown): PostContentDoc
 
 function postContentBodyToText(document: PostContentBodyDocumentV1): string {
   return document.content
+    .filter((block) => block.type === 'paragraph')
     .map((paragraph) =>
       (paragraph.content ?? []).map((node) => (node.type === 'text' ? node.text : '\n')).join(''),
     )
@@ -170,13 +221,46 @@ function assertPostContentJsonKeys(value: unknown): void {
     return;
   }
 
-  if (value.type === 'doc' || value.type === 'paragraph') {
+  if (value.type === 'doc') {
+    assertOnlyKeys(value, ['type', 'attrs', 'content']);
+    if (value.attrs !== undefined) {
+      if (!isRecord(value.attrs)) {
+        throw new TypeError('Node attrs must be an object');
+      }
+      assertOnlyKeys(value.attrs, ['sensitiveMedia']);
+      if (typeof value.attrs.sensitiveMedia !== 'boolean') {
+        throw new TypeError('Sensitive Media must be a boolean');
+      }
+    }
+    if (value.content !== undefined && !Array.isArray(value.content)) {
+      throw new TypeError('Node content must be an array');
+    }
+    if (Array.isArray(value.content)) {
+      value.content.forEach(assertPostContentJsonKeys);
+    }
+    return;
+  }
+  if (value.type === 'paragraph') {
     assertOnlyKeys(value, ['type', 'content']);
     if (value.content !== undefined && !Array.isArray(value.content)) {
       throw new TypeError('Node content must be an array');
     }
     if (Array.isArray(value.content)) {
       value.content.forEach(assertPostContentJsonKeys);
+    }
+    return;
+  }
+  if (value.type === 'media') {
+    assertOnlyKeys(value, ['type', 'attrs']);
+    if (!isRecord(value.attrs)) {
+      throw new TypeError('Media attrs must be an object');
+    }
+    assertOnlyKeys(value.attrs, ['mediaId', 'altText']);
+    if (typeof value.attrs.mediaId !== 'string' || value.attrs.mediaId.length === 0) {
+      throw new TypeError('Media ID must be a non-empty string');
+    }
+    if (value.attrs.altText !== null && typeof value.attrs.altText !== 'string') {
+      throw new TypeError('Media Alt Text must be a string or null');
     }
     return;
   }

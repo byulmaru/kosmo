@@ -84,8 +84,15 @@ type CreateBookmarkPayload {
 
 input CreatePostInput {
   bodyText: String!
+  media: [CreatePostMediaInput!]
   replyParentId: ID
+  sensitiveMedia: Boolean
   visibility: PostVisibility!
+}
+
+input CreatePostMediaInput {
+  altText: String
+  mediaId: ID!
 }
 
 type CreatePostPayload {

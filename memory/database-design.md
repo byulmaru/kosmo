@@ -90,7 +90,9 @@ Queries to check:
 
 - Use explicit join tables when an N:N relationship has role, state, order, timestamp, or permissions.
 - Put relationship-context values on the join table.
-- For example, post-specific `alt_text`, `position`, `sensitivity`, thumbnail `focus_x`, and `focus_y` belong on `post_media`.
+- For ordinary N:N relationships, post-specific context belongs on the relationship. Post Content Media is an explicit
+  exception defined by canonical ADR 0022: revision-specific Media references, order, alt text and sensitivity live in
+  the versioned `post_content.document` Media nodes without a duplicate join table.
 - Avoid polymorphic foreign keys in the initial schema. Prefer explicit relationship tables.
 - Add ActivityPub actor details, inbox/outbox queues, and AT Protocol record/cache tables after the implementation path is concrete.
 
@@ -149,7 +151,7 @@ Drizzle query policy:
 - `profile`: social identity that writes posts, follows, and federates.
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
-- `post_content`: authored-content revision, storing one canonical versioned `{ version, summary, body }` JSON document and eventually `(post_id, revision_number)` uniqueness when revisioning lands. V1 `summary` is nullable Plain Text Content Warning and `body` is the canonical ProseMirror document; GraphQL may keep `contentWarning` and `bodyText` as compatibility projections. Plain Text and executable HTML are never second canonical stored bodies. ActivityPub adapters map Note `summary` to document `summary`.
+- `post_content`: immutable authored-content revision, storing one canonical versioned `{ version, summary, body }` JSON document and eventually `(post_id, revision_number)` uniqueness when revision numbering lands. V1 `summary` is nullable Plain Text Content Warning and `body` is the canonical ProseMirror document. V1 Media block nodes own revision-specific `mediaId`, nullable `altText` and order, while the document root owns `sensitiveMedia`; these JSON references are the intentional ADR 0022 exception to the normal FK-backed relationship rule. GraphQL may keep `contentWarning` and `bodyText` as compatibility projections. Plain Text and executable HTML are never second canonical stored bodies. ActivityPub adapters map Note `summary` to document `summary`.
 - `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
 - `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 
@@ -170,7 +172,9 @@ Current media direction:
 - Remote Media remains a canonical product concept, but its Media Storage Service projection and persistence shape are
   deferred until a real Remote Media implementation requires them. Do not add future File or remote-storage columns to
   the Local upload slice.
-- `post_media`: usage context for a post, with `position`, `alt_text`, `sensitivity`, `focus_x`, and `focus_y`.
+- Do not add `post_media` or `post_content_media` as a duplicate source for Post Content Media. Validate referenced
+  Media existence, Ready state and Account authorization when creating each revision, and do not physically delete
+  referenced Media until a separate lifecycle contract preserves historical revisions.
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
 Do not expose an original URL just because a stored representation exists. Timelines can use thumbnail/compressed
@@ -194,7 +198,8 @@ Thumbnail policy:
 - Start with center crop.
 - Consider `focus_x` and `focus_y` over time for creator images.
 - Manual focus may be safer than automatic saliency because creator intent can differ from detected image center.
-- If focus differs by post context, store it on `post_media`.
+- If focus editing is introduced for Post Content, define it as an additive Media node attr unless image-byte editing
+  or another independently owned relationship requires a new canonical boundary.
 
 ## Soft Deletes And Cleanup
 
@@ -202,7 +207,8 @@ Thumbnail policy:
 - For `post`, consider `state` and `deleted_at` if federation tombstones, moderation, or user restore policy matter.
 - Mark `media` with `deleted_at` once deletion policy is introduced, then request external object deletion after a grace period.
 - Manage `session` and `application_secret` with revoke/expire timestamps.
-- `post_media` can cascade if audit/restore is not required, but review that with post/media deletion policy.
+- Post Content Media references have no join row to cascade. Review Media physical deletion against current and
+  historical revision references before introducing it.
 - Treat `ON DELETE CASCADE` as policy, not convenience. Check whether rows are needed for audit, moderation, federation, or cost accounting.
 
 ## Review Checklist

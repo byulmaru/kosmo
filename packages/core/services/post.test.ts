@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq } from 'drizzle-orm';
 import {
+  Accounts,
   ActivityPubPosts,
   db,
   firstOrThrow,
   Instances,
+  Media,
   Notifications,
   pg,
   PostContents,
@@ -13,8 +15,11 @@ import {
   Profiles,
 } from '../db';
 import {
+  AccountState,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   NotificationKind,
   PostState,
   PostVisibility,
@@ -22,7 +27,10 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
-import { postContentDocumentFromText } from '../post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '../post-content/server';
 import { createPost } from './post';
 
 after(async () => pg.end());
@@ -53,6 +61,42 @@ const createProfile = async () => {
     .then(firstOrThrow);
 };
 
+const createAccount = () =>
+  db
+    .insert(Accounts)
+    .values({
+      displayName: crypto.randomUUID(),
+      oidcSubject: crypto.randomUUID(),
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const createMedia = async ({
+  accountId,
+  profileId,
+  source = MediaSource.LOCAL,
+  state = MediaState.READY,
+}: {
+  accountId: string;
+  profileId: string;
+  source?: MediaSource;
+  state?: MediaState;
+}) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      profileId,
+      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      source,
+      state,
+      storageReference: `u_${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
+    .returning()
+    .then(firstOrThrow);
+
 test('createPost는 local Post와 최초 content 연결을 하나의 transaction으로 생성한다', async () => {
   const profile = await createProfile();
   const result = await createPost({
@@ -74,6 +118,116 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .then((rows) => rows.length),
     0,
   );
+});
+
+test('createPost는 같은 Upload Account의 Ready Local Media를 document 순서대로 저장한다', async () => {
+  const account = await createAccount();
+  const author = await createProfile();
+  const uploadProfile = await createProfile();
+  const firstMedia = await createMedia({
+    accountId: account.id,
+    profileId: uploadProfile.id,
+  });
+  const secondMedia = await createMedia({ accountId: account.id, profileId: author.id });
+
+  const result = await createPost({
+    accountId: account.id,
+    document: postContentDocumentFromTextAndMedia(
+      '',
+      [
+        { altText: 'first', mediaId: firstMedia.id },
+        { altText: null, mediaId: secondMedia.id },
+      ],
+      true,
+    ),
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.deepEqual(
+    result.content.document.body.content.flatMap((block) =>
+      block.type === 'media' ? [block.attrs] : [],
+    ),
+    [
+      { altText: 'first', mediaId: firstMedia.id },
+      { altText: null, mediaId: secondMedia.id },
+    ],
+  );
+  assert.deepEqual(result.content.document.body.attrs, { sensitiveMedia: true });
+});
+
+test('createPost는 사용할 수 없는 Media를 같은 오류로 거부하고 Post를 남기지 않는다', async () => {
+  const account = await createAccount();
+  const otherAccount = await createAccount();
+  const profile = await createProfile();
+  const uploading = await createMedia({
+    accountId: account.id,
+    profileId: profile.id,
+    state: MediaState.UPLOADING,
+  });
+  const remote = await createMedia({
+    accountId: account.id,
+    profileId: profile.id,
+    source: MediaSource.REMOTE,
+  });
+  const otherAccountMedia = await createMedia({
+    accountId: otherAccount.id,
+    profileId: profile.id,
+  });
+  const initialPostCount = await db.$count(Posts);
+  const initialContentCount = await db.$count(PostContents);
+
+  for (const mediaId of [uploading.id, remote.id, otherAccountMedia.id, crypto.randomUUID()]) {
+    await assert.rejects(
+      createPost({
+        accountId: account.id,
+        document: postContentDocumentFromTextAndMedia('body', [{ altText: null, mediaId }]),
+        origin: 'LOCAL',
+        profileId: profile.id,
+        visibility: PostVisibility.PUBLIC,
+      }),
+      (error: unknown) =>
+        error instanceof ValidationError &&
+        error.field === 'media' &&
+        error.message === 'Media cannot be attached',
+    );
+  }
+
+  assert.equal(await db.$count(Posts), initialPostCount);
+  assert.equal(await db.$count(PostContents), initialContentCount);
+});
+
+test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으로 거부한다', async () => {
+  const account = await createAccount();
+  const profile = await createProfile();
+  const media = await createMedia({ accountId: account.id, profileId: profile.id });
+  const initialPostCount = await db.$count(Posts);
+
+  await assert.rejects(
+    createPost({
+      accountId: account.id,
+      document: postContentDocumentFromTextAndMedia('body', [
+        { altText: null, mediaId: media.id },
+        { altText: 'duplicate', mediaId: media.id },
+      ]),
+      origin: 'LOCAL',
+      profileId: profile.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error: unknown) => error instanceof ValidationError && error.field === 'media',
+  );
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromTextAndMedia('body', [{ altText: null, mediaId: media.id }]),
+      origin: 'LOCAL',
+      profileId: profile.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error: unknown) => error instanceof ValidationError && error.field === 'media',
+  );
+
+  assert.equal(await db.$count(Posts), initialPostCount);
 });
 
 test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존한다', async () => {

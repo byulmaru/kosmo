@@ -11,6 +11,8 @@ Accepted
 ## 후속 결정
 
 File 표현과 Media 생성 시점에 관한 결정은 [ADR 0018](./0018-media-upload-lifecycle-without-file.md)가 대체한다.
+Post Content revision의 Media 소유권과 게시 후 편집에 관한 결정은
+[ADR 0022](./0022-post-content-revision-media-nodes.md)가 대체한다.
 
 ## 결정
 

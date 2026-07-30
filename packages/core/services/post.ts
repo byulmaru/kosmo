@@ -7,13 +7,23 @@ import {
   getDatabaseConnection,
   Instances,
   isUniqueViolation,
+  Media,
   PostContents,
   Posts,
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceState, NotificationKind, PostState, PostVisibility, ProfileState } from '../enums';
+import {
+  InstanceState,
+  MediaSource,
+  MediaState,
+  NotificationKind,
+  PostState,
+  PostVisibility,
+  ProfileState,
+} from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { validateLocalPostContentDocument } from '../post-content/server';
 import {
   createReplyNotification,
   createRepostNotification,
@@ -24,6 +34,7 @@ import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type LocalPostInput = {
+  accountId?: string;
   document: PostContentDocumentV1;
   origin: 'LOCAL';
   profileId: string;
@@ -300,6 +311,39 @@ export async function createPost(
   let result: CreatedPost;
   try {
     result = await getDatabaseConnection(tx).transaction(async (tx) => {
+      const document =
+        input.origin === 'LOCAL'
+          ? validateLocalPostContentDocument(input.document)
+          : input.document;
+
+      if (input.origin === 'LOCAL') {
+        const mediaIds = document.body.content.flatMap((block) =>
+          block.type === 'media' ? [block.attrs.mediaId] : [],
+        );
+        if (new Set(mediaIds).size !== mediaIds.length) {
+          throw new ValidationError('Media cannot be attached', { field: 'media' });
+        }
+        if (mediaIds.length > 0) {
+          if (!input.accountId) {
+            throw new ValidationError('Media cannot be attached', { field: 'media' });
+          }
+          const attachableMedia = await tx
+            .select({ id: Media.id })
+            .from(Media)
+            .where(
+              and(
+                inArray(Media.id, mediaIds),
+                eq(Media.accountId, input.accountId),
+                eq(Media.source, MediaSource.LOCAL),
+                eq(Media.state, MediaState.READY),
+              ),
+            );
+          if (attachableMedia.length !== mediaIds.length) {
+            throw new ValidationError('Media cannot be attached', { field: 'media' });
+          }
+        }
+      }
+
       if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
         const parent = await findVisiblePost(tx, {
           actorProfileId: input.profileId,
@@ -347,7 +391,7 @@ export async function createPost(
         .insert(PostContents)
         .values({
           createdAt: input.origin === 'ACTIVITYPUB' ? input.receivedAt : undefined,
-          document: input.document,
+          document,
           postId: post.id,
         })
         .returning()

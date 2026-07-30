@@ -5,15 +5,14 @@ import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
 import { typography } from '@/theme/tokens';
 import type {
+  PostContentBlockNode,
   PostContentBodyDocumentV1,
   PostContentInlineNode,
-  PostContentParagraphNode,
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextProps, TextStyle } from 'react-native';
 
-type PostContentNode = PostContentBodyDocumentV1 | PostContentParagraphNode | PostContentInlineNode;
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
 interface RenderContext {
@@ -46,20 +45,23 @@ export function PostContentRenderer({
       </Text>
     ) : null;
   }
-
   return renderNode(document, 'body', { bodyStyle });
 }
+
+type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostContentInlineNode;
 
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
       <Text {...replayBlockProps} key={key} style={context.bodyStyle}>
-        {document.content.map((child, index) => (
-          <Fragment key={`${key}.${index}`}>
-            {index > 0 ? '\n\n' : null}
-            {renderNode(child, `${key}.${index}`, context)}
-          </Fragment>
-        ))}
+        {document.content
+          .filter((child) => child.type === 'paragraph')
+          .map((child, index) => (
+            <Fragment key={`${key}.${index}`}>
+              {index > 0 ? '\n\n' : null}
+              {renderNode(child, `${key}.${index}`, context)}
+            </Fragment>
+          ))}
       </Text>
     ))
     .with({ type: 'paragraph' }, (paragraph) => (
@@ -71,7 +73,7 @@ function renderNode(node: PostContentNode, key: Key, context: RenderContext): Re
     ))
     .with({ type: 'text' }, (text) => renderMarks(text, key))
     .with({ type: 'hard_break' }, () => '\n')
-    .exhaustive();
+    .otherwise(() => null);
 }
 
 function renderMarks(node: PostContentTextNode, key: Key): ReactNode {
@@ -103,7 +105,7 @@ function renderMark(
         {content}
       </Text>
     ))
-    .exhaustive();
+    .otherwise(() => content);
 }
 
 const styles = StyleSheet.create({

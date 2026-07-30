@@ -26,9 +26,22 @@ export interface PostContentParagraphNode {
   readonly content?: readonly PostContentInlineNode[];
 }
 
+export interface PostContentMediaNode {
+  readonly type: 'media';
+  readonly attrs: {
+    readonly mediaId: string;
+    readonly altText: string | null;
+  };
+}
+
+export type PostContentBlockNode = PostContentParagraphNode | PostContentMediaNode;
+
 export interface PostContentBodyDocumentV1 {
   readonly type: 'doc';
-  readonly content: readonly PostContentParagraphNode[];
+  readonly attrs?: {
+    readonly sensitiveMedia: boolean;
+  };
+  readonly content: readonly PostContentBlockNode[];
 }
 
 export interface PostContentDocumentV1 {
@@ -54,14 +67,29 @@ export function isPostContentDocumentV1(value: unknown): value is PostContentDoc
 }
 
 export function isPostContentBodyDocumentV1(value: unknown): value is PostContentBodyDocumentV1 {
-  if (!isRecordWithKeys(value, ['type', 'content']) || value.type !== 'doc') {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ['type', 'attrs', 'content']) ||
+    value.type !== 'doc' ||
+    !('content' in value)
+  ) {
+    return false;
+  }
+  if (
+    value.attrs !== undefined &&
+    (!isRecordWithKeys(value.attrs, ['sensitiveMedia']) ||
+      typeof value.attrs.sensitiveMedia !== 'boolean')
+  ) {
     return false;
   }
   if (!Array.isArray(value.content) || value.content.length === 0) {
     return false;
   }
 
-  return value.content.every(isParagraph);
+  return (
+    value.content.every((node) => isParagraph(node) || isMedia(node)) &&
+    value.content.filter((node) => isRecord(node) && node.type === 'media').length <= 4
+  );
 }
 
 function isParagraph(value: unknown): value is PostContentParagraphNode {
@@ -76,6 +104,17 @@ function isParagraph(value: unknown): value is PostContentParagraphNode {
   }
 
   return Array.isArray(value.content) && value.content.every(isInlineNode);
+}
+
+function isMedia(value: unknown): value is PostContentMediaNode {
+  return (
+    isRecordWithKeys(value, ['type', 'attrs']) &&
+    value.type === 'media' &&
+    isRecordWithKeys(value.attrs, ['mediaId', 'altText']) &&
+    typeof value.attrs.mediaId === 'string' &&
+    value.attrs.mediaId.length > 0 &&
+    (value.attrs.altText === null || typeof value.attrs.altText === 'string')
+  );
 }
 
 function isInlineNode(value: unknown): value is PostContentInlineNode {

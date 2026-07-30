@@ -2,8 +2,9 @@
 
 ## 정의
 
-Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 게시 Content, Post Visibility, Reply Parent와 Repost
-Source 관계, Content Warning, Sensitive Media, Tombstone, Post Eligibility 정책을 소유한다.
+Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 현재 Post Content, Post Visibility, Reply Parent와
+Repost Source 관계, Tombstone, Post Eligibility 정책을 소유한다. 작성 내용의 revision과 그 안의 Content
+Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 소유한다.
 
 ## 상태
 
@@ -25,25 +26,23 @@ Source 관계, Content Warning, Sensitive Media, Tombstone, Post Eligibility 정
 
 ## 속성
 
-| 속성             | 타입/nullability         | 검증 정책                                                                                                                                                                  | 존재 조건             | 조회 조건           | 조회 권한 |
-| ---------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------- | --------- |
-| Content Document | Versioned JSON, nullable | `{ version, summary, body }`; V1 summary는 nullable Plain Text Content Warning이고 summary와 body Plain Text 합계가 500자 이하이며 Media가 없으면 body가 비어 있을 수 없다 | Repost가 아닐 때      | Post 조회 정책 통과 | 없음      |
-| Sensitive Media  | boolean, 필수            | Post에 연결된 모든 Media 표시에 함께 적용한다                                                                                                                              | Content가 있을 때     | Post 조회 정책 통과 | 없음      |
-| 생성 시각        | 시각, 필수               | 생성 결과로 기록하며 변경 불가                                                                                                                                             | 항상                  | Post 조회 정책 통과 | 없음      |
-| 삭제 시각        | 시각, nullable           | Tombstone 전이 결과로 기록하며 변경 불가                                                                                                                                   | Lifecycle이 Tombstone | Tombstone 조회 정책 | 없음      |
+| 속성      | 타입/nullability | 검증 정책                                | 존재 조건             | 조회 조건           | 조회 권한 |
+| --------- | ---------------- | ---------------------------------------- | --------------------- | ------------------- | --------- |
+| 생성 시각 | 시각, 필수       | 생성 결과로 기록하며 변경 불가           | 항상                  | Post 조회 정책 통과 | 없음      |
+| 삭제 시각 | 시각, nullable   | Tombstone 전이 결과로 기록하며 변경 불가 | Lifecycle이 Tombstone | Tombstone 조회 정책 | 없음      |
 
 ## 관계
 
-| 관계              | 대상                      | 방향             | cardinality | 존재 조건                                             | 조회 조건                                             | 조회 권한        |
-| ----------------- | ------------------------- | ---------------- | ----------- | ----------------------------------------------------- | ----------------------------------------------------- | ---------------- |
-| Author Profile    | [Profile](./profile.md)   | Post -> Profile  | 1 -> 1      | 항상                                                  | Post 조회 정책 통과                                   | 없음             |
-| Reply Parent      | [Post](./post.md)         | Post -> Post     | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                     | Post와 Parent가 각각 조회 정책을 통과할 때 표시       | 없음             |
-| Repost Source     | [Post](./post.md)         | Post -> Post     | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때 | Post와 Source를 독립 판정해 조회 가능한 Source만 표시 | 없음             |
-| Mentioned Profile | [Profile](./profile.md)   | Post -> Profile  | 1 -> 0..N   | Post에 Content가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
-| Attached Media    | [Media](./media.md)       | Post -> Media    | 1 -> 0..4   | Post에 Content가 있을 때                              | Post와 Media 조회 정책 통과                           | 없음             |
-| Hashtag           | [Hashtag](./hashtag.md)   | Post -> Hashtag  | 1 -> 0..N   | 본문에 Hashtag가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
-| Reaction          | [Reaction](./reaction.md) | Post <- Reaction | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                   | 없음             |
-| Bookmark          | [Bookmark](./bookmark.md) | Post <- Bookmark | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
+| 관계              | 대상                              | 방향                 | cardinality | 존재 조건                                             | 조회 조건                                             | 조회 권한        |
+| ----------------- | --------------------------------- | -------------------- | ----------- | ----------------------------------------------------- | ----------------------------------------------------- | ---------------- |
+| Author Profile    | [Profile](./profile.md)           | Post -> Profile      | 1 -> 1      | 항상                                                  | Post 조회 정책 통과                                   | 없음             |
+| Current Content   | [Post Content](./post-content.md) | Post -> Post Content | 1 -> 0..1   | Repost가 아닐 때                                      | Post 조회 정책 통과                                   | 없음             |
+| Reply Parent      | [Post](./post.md)                 | Post -> Post         | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                     | Post와 Parent가 각각 조회 정책을 통과할 때 표시       | 없음             |
+| Repost Source     | [Post](./post.md)                 | Post -> Post         | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때 | Post와 Source를 독립 판정해 조회 가능한 Source만 표시 | 없음             |
+| Mentioned Profile | [Profile](./profile.md)           | Post -> Profile      | 1 -> 0..N   | Post에 Content가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
+| Hashtag           | [Hashtag](./hashtag.md)           | Post -> Hashtag      | 1 -> 0..N   | 본문에 Hashtag가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
+| Reaction          | [Reaction](./reaction.md)         | Post <- Reaction     | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                   | 없음             |
+| Bookmark          | [Bookmark](./bookmark.md)         | Post <- Bookmark     | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
 
 Reply Parent가 Tombstone으로 전이되어도 저장된 직접 관계를 유지한다. 현재 Parent Post row를 물리적으로
 제거하는 행동은 제공하지 않지만, Reply Parent FK는 향후 실제 row 제거 시 Reply Post를 cascade 삭제하지 않고
@@ -65,17 +64,18 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 
 ## 행동
 
-| 행동        | 행동 주체 Profile | 대상 객체 | 입력값                                                                                               | 권한                               | 조건                                                                                                                                                                                                                                                                    | 결과                                                                                                                                                                                                                 |
-| ----------- | ----------------- | --------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post 작성   | Profile           | Post      | 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록                                  | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이다. 본문과 Media가 모두 비어 있지 않으며 Media는 최대 4개다                                                                                                                                                                   | Lifecycle=Active이고 Content가 있으며 Reply Parent와 Repost Source가 없는 Post와 Author/Media/Hashtag 관계가 원자적으로 생성된다                                                                                     |
-| Reply 작성  | Profile           | Post      | Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록                     | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Parent를 볼 수 있다. Post Visibility는 Parent와 독립적으로 행동 주체가 선택하며 본문/Media 조건은 Post 작성과 같다                                                                                          | Lifecycle=Active이고 Content와 입력 Reply Parent가 있으며 Repost Source가 없는 Post와 Author/Media/Hashtag 관계가 원자적으로 생성된다                                                                                |
-| Quote 작성  | Profile           | Post      | Source Post, 선택적 Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Source와 선택한 Parent를 볼 수 있다. Post Visibility는 Source/Parent와 독립적으로 선택하며 본문/Media 조건은 Post 작성과 같다                                                                               | Lifecycle=Active이고 Content와 Repost Source가 있으며 선택에 따라 Reply Parent도 가진 Post와 Author/Media/Hashtag 관계가 원자적으로 생성된다                                                                         |
-| Repost 작성 | Profile           | Post      | Source Post                                                                                          | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다 | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다 |
-| Post 삭제   | Author Profile    | Post      | 없음                                                                                                 | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                              | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                              |
+| 행동              | 행동 주체 Profile | 대상 객체 | 입력값                                                                                               | 권한                               | 조건                                                                                                                                                                                                                                                                    | 결과                                                                                                                                                                                                                 |
+| ----------------- | ----------------- | --------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post 작성         | Profile           | Post      | 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록                                  | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이다. 본문과 Media가 모두 비어 있을 수 없으며 Media는 최대 4개다                                                                                                                                                                | Lifecycle=Active이고 Current Content가 있으며 Reply Parent와 Repost Source가 없는 Post, 첫 Post Content, Author/Hashtag 관계가 원자적으로 생성된다                                                                   |
+| Reply 작성        | Profile           | Post      | Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록                     | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Parent를 볼 수 있다. Post Visibility는 Parent와 독립적으로 행동 주체가 선택하며 본문/Media 조건은 Post 작성과 같다                                                                                          | Lifecycle=Active이고 Current Content와 입력 Reply Parent가 있으며 Repost Source가 없는 Post, 첫 Post Content, Author/Hashtag 관계가 원자적으로 생성된다                                                              |
+| Quote 작성        | Profile           | Post      | Source Post, 선택적 Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Source와 선택한 Parent를 볼 수 있다. Post Visibility는 Source/Parent와 독립적으로 선택하며 본문/Media 조건은 Post 작성과 같다                                                                               | Lifecycle=Active이고 Current Content와 Repost Source가 있으며 선택에 따라 Reply Parent도 가진 Post, 첫 Post Content, Author/Hashtag 관계가 원자적으로 생성된다                                                       |
+| Post Content 수정 | Author Profile    | Post      | 본문, Content Warning, Sensitive Media, Media 목록                                                   | `Account.Active`, `Post.Author`    | Lifecycle State가 Active이고 Content가 있다. 새 document와 참조 Media가 [Post Content](./post-content.md)의 검증을 통과한다                                                                                                                                             | 새 immutable Post Content revision이 생성되고 Current Content가 같은 transaction에서 새 revision을 가리킨다. Post Visibility와 구조 관계는 바뀌지 않는다                                                             |
+| Repost 작성       | Profile           | Post      | Source Post                                                                                          | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다 | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다 |
+| Post 삭제         | Author Profile    | Post      | 없음                                                                                                 | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                              | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                              |
 
-Post/Reply/Quote 작성에서 Attached Media는 입력 순서를 유지한다. 모든 Attached Media는 Source=Local,
-State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은 Author
-Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. State=Uploading인 Media는 Attached Media로
+Post/Reply/Quote 작성과 Post Content 수정에서 Media node는 입력 순서를 유지한다. 모든 참조 Media는
+Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의
+Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
 사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
 
 ## 권한
@@ -100,7 +100,7 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
 
 - Lifecycle State가 Active여야 한다.
 - Author Profile의 Lifecycle State가 Active이고 Suspension State가 Normal이어야 한다.
-- 필요한 Attached Media가 Media 조회 정책을 통과해야 한다.
+- 현재 Post Content가 참조하는 Media가 Media 조회 정책을 통과해야 한다.
 - viewer가 Author Profile을 차단했거나 Author Profile의 Instance를 Profile Domain Block한 경우 없는 것처럼
   취급한다.
 - Author Profile의 Instance Safety State가 Domain Block이면 없는 것처럼 취급한다.
@@ -150,10 +150,12 @@ Profile과 달라도 같은 Upload Account를 가지면 연결할 수 있다. St
   가진다. Local Post를 위해 remote ActivityPub Post mapping을 만들지 않는다.
 - ActivityPub `Note`는 위 URI를 `id`, Author Profile의 canonical ActivityPub URI를 `attributedTo`, Post
   생성 시각을 `published`, Post 공유 참조를 `url`로 제공한다.
-- canonical PostContent 계약이 정의한 document 의미와 안전한 link 제약을 ActivityPub HTML `content`에
-  투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. 이 Local Note 계약은 PostContent node,
-  mark, canonicalization 또는 validation을 다시 정의하지 않는다. Media, Mention, custom emoji와 Quote 전용
-  federation 속성은 이 표현에 포함하지 않는다.
+- canonical PostContent 계약이 정의한 paragraph, text, hard break와 안전한 link 의미를 ActivityPub HTML
+  `content`에 투영한다. Content Warning은 있으면 안전한 `summary`로 투영한다. Media node는 HTML에 `<img>`로
+  중복하지 않고 document 순서대로 `attachment` Image에 투영하며 Alt Text와 조회 시점의 접근 가능한 URL·MIME
+  type을 제공한다. document root의 Sensitive Media는 지원하는 ActivityPub sensitive 속성으로 투영한다. 이
+  Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Mention,
+  custom emoji와 Quote 전용 federation 속성은 이 표현에 포함하지 않는다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
   requester별 Parent 조회 가능성에 따라 달라지지 않으며, Parent의 실제 표현은 Parent 자체의 역참조 권한으로
@@ -216,7 +218,11 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
 - Repost 취소는 별도 행동이 아니라 Content와 Reply Parent 없이 Repost Source를 가진 Post에 대한 Post 삭제다.
 - Mentioned Profiles Post는 Repost할 수 없다.
-- 게시 후 Media 연결/해제와 Post Visibility 변경은 지원하지 않는다.
+- 새 Post Content revision으로 본문, Content Warning, Sensitive Media와 Media 구성·순서·Alt Text·참조를
+  바꾸는 도메인 방향은 정의되어 있지만 현재 사용자용 Post 수정 기능은 제공하지 않는다. 이 기능은 이미지가
+  있는 새 Post 작성과 독립된 후속 계약이다. Post Visibility 변경도 현재 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
-- 현재 document V1은 paragraph, text, hard break와 안전한 HTTP(S) link만 지원한다. `pre`와 rich-text editor는 지원하지 않는다.
-- Mentioned Profiles audience, ActivityPub Media·Mention·custom emoji·Quote 전용 속성은 후속 계약에서 정의한다.
+- 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원한다. `pre`와
+  일반 rich-text editor는 지원하지 않는다.
+- Mentioned Profiles audience와 ActivityPub Mention·custom emoji·Quote 전용 속성은 후속 계약에서 정의한다.
+- Post Content 수정 후 원격 수신자에게 `Update(Note)`를 전달하는 lifecycle은 후속 계약에서 정의한다.
