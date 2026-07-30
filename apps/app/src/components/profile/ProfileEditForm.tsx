@@ -93,7 +93,7 @@ export function ProfileEditForm({
             value={value.bio}
           />
           <Text style={[styles.counter, { color: theme.textSecondary }]}>
-            {value.bio.length}/500
+            {value.bio.trim().length}/500
           </Text>
         </View>
 
