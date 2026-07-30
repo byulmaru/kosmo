@@ -514,6 +514,7 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
             accessibilityRole="button"
             accessibilityState={{ disabled: submitting || media.length >= postComposerMediaLimit }}
             disabled={submitting || media.length >= postComposerMediaLimit}
+            hitSlop={4}
             onPress={() => void selectMedia()}
             style={({ pressed }) => [
               styles.addMedia,
@@ -718,9 +719,9 @@ const styles = StyleSheet.create({
   addMedia: {
     alignItems: 'center',
     borderRadius: radii.sm,
-    height: 48,
+    height: 40,
     justifyContent: 'center',
-    width: 48,
+    width: 40,
   },
   mediaItem: {
     borderRadius: radii.md,
