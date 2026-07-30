@@ -21,7 +21,7 @@ Argo CD가 dev와 격리된 `kosmo-prod` Application을 pinned image version으�
 
 **Verification**
 
-- Dev/prod Helm lint와 render assertion으로 environment, hostname, pinned image version, runtime/migration Vault path와 Secret type, `DatabaseRole`, prod 3 instances, backup 연결, API/Web credential 격리와 migration Job/read-routing 비렌더를 검증한다.
+- Dev/prod Helm lint/render와 admission dry-run으로 environment, hostname, 명시적인 image version, runtime/migration Vault path와 Secret type, `DatabaseRole`, prod 3 instances, backup 연결, API/Web credential 격리와 migration Job/read-routing 비렌더를 검증한다.
 - Production manifest의 server-side admission dry-run과 Terraform saved plan을 검토한다.
 - 필수 add-on, public Gateway/TLS, production runtime/migration Vault path와 Pod Identity 준비 상태를 확인한 뒤 Application automated sync 상태를 확인한다.
 - CloudNativePG 3 Pods/PVC, 두 VSO projection, migration basic-auth Secret과 `DatabaseRole`, API/Web Rollout·Service와 HTTPRoute Accepted/ResolvedRefs/readiness를 확인하고 API/Web database endpoint/credential이 `-rw`/`-app` 경계에 유지됨을 기록한다. Secret value는 읽거나 기록하지 않는다.
@@ -30,7 +30,7 @@ Argo CD가 dev와 격리된 `kosmo-prod` Application을 pinned image version으�
 - [x] 1.2 Migration DB username/password만 투영하는 production basic-auth Secret과 별도 `kosmo_migration` `DatabaseRole`을 선언하고 API/Web runtime credential과 격리한다.
 - [x] 1.3 `kosmo-prod` Application과 namespace를 선언형으로 추가하고 automated sync, prune와 self-heal을 유지하면서 mutable image tag 추적을 차단한다.
 - [x] 1.4 Production CloudNativePG를 총 3 instances로 구성하고 기존 storage/backup 선언에 연결하되 API/Web read-write endpoint를 유지한다.
-- [x] 1.5 Dev/prod Helm 검증을 확장해 production runtime 요구사항과 명시적 제외 범위의 회귀를 검사한다.
+- [x] 1.5 Dev/prod Helm lint/render와 admission dry-run으로 production runtime 요구사항 및 명시적 제외 범위를 확인한다.
 - [x] 1.6 OpenSpec strict validation, Helm lint/render와 repository 정적 검증을 통과시킨다.
 - [x] 1.7 Cluster-wide add-on, public Gateway/TLS, production runtime/migration Vault path와 Pod Identity의 live 선행 조건을 확인하고 production manifest의 server-side admission dry-run을 통과시킨다.
 - [ ] 1.8 Terraform saved plan을 검토·적용하고 ApplicationSet이 명시적인 non-`main` version으로 `kosmo-prod`를 자동 동기화하는지 확인한다.

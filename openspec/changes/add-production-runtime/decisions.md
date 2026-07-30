@@ -74,7 +74,7 @@
 - Decision Outcome: `kosmo-prod`는 automated sync, prune와 self-heal을 항상 사용한다. Workload image version은 Application 선언에 명시된 non-`main` immutable version으로 고정하고 version 변경은 Git의 명시적인 선언 변경으로만 수행한다. 이 change는 version 선택·승인·rollback workflow를 만들지 않는다.
 - Alternatives Considered: Manual sync는 항상 자동이어야 한다는 production 운영 계약과 맞지 않아 제외했다. `main` 또는 `stable` 자동 추적은 image identity가 선언 밖에서 이동하므로 제외했다.
 - Consequences: Git의 production manifest 변경은 Argo CD가 자동 반영한다. 정식 version을 어떤 절차로 선택·승인·되돌릴지는 별도 release pipeline 계약이 계속 소유한다.
-- Confirmation / Follow-up: Application에 automated/prune/self-heal이 있고 prod render에 `main`/`stable`이 없으며 명시적인 version이 workload image에 사용되는지 확인한다.
+- Confirmation / Follow-up: Application에 automated/prune/self-heal이 있고 선언에 명시된 version이 workload image에 사용되는지 확인한다. Version 형식과 release 선택 정책은 PROD-563이 소유한다.
 
 ### 첫 release 전 bootstrap image version
 
@@ -86,7 +86,7 @@
 - Decision Outcome: `kosmo-prod` Application에는 의도적으로 존재하지 않는 `0.0.0` bootstrap version을 명시한다. Application은 automated sync를 유지하지만 이 version을 workload readiness 증거로 사용하지 않는다. PROD-563이 첫 production-built immutable release version을 선택해 명시적으로 교체한다.
 - Alternatives Considered: `main`, `stable` 또는 현재 dev용 `sha-*` image를 사용하는 방식은 production build 경계와 mutable-tag 금지를 위반해 제외했다. PROD-562가 one-off production image를 만드는 방식은 PROD-563 ownership을 침범해 제외했다.
 - Consequences: 선언과 admission 검증은 production image 없이 완료할 수 있지만 실제 API/Web readiness는 첫 production image와 runtime key가 준비될 때까지 완료되지 않는다. 개별 PR readiness와 OpenSpec 전체 runtime readiness는 별도로 판정한다.
-- Confirmation / Follow-up: Terraform plan에서 `version: '0.0.0'`을 확인하고 Helm이 mutable operational tag를 거부하는지 검증한다. PROD-563은 이 값을 production image version으로 교체한다.
+- Confirmation / Follow-up: Terraform declaration과 plan에서 `version: '0.0.0'`이 명시되어 있는지 확인한다. PROD-563은 이 값을 production image version으로 교체한다.
 
 ### Production Application lifecycle 분리
 
@@ -98,7 +98,7 @@
 - Decision Outcome: 기존 dev ApplicationSet은 변경하지 않고 production을 별도 Terraform `argocd_application` resource로 선언한다. Production Application은 `cascade=false`를 사용하며 Cluster, ObjectStore, migration DatabaseRole과 migration VaultStaticSecret의 prune에는 명시적 확인을 요구한다.
 - Alternatives Considered: Shared ApplicationSet에 `preserveResourcesOnDeletion`을 설정하는 방식은 dev scope를 불필요하게 변경해 제외했다. 데이터 resource에 아무 보호도 두지 않는 방식은 자동 prune과 실수 삭제 위험 때문에 제외했다.
 - Consequences: Production Application lifecycle과 dev lifecycle이 분리되고 Application 제거만으로 production resource가 연쇄 삭제되지 않는다. 실제 데이터 resource 제거에는 별도의 명시적 확인 및 운영 절차가 필요하다.
-- Confirmation / Follow-up: Terraform schema/plan에서 `cascade=false`를 확인하고 prod render에서 보호 대상 resource의 `Prune=confirm` annotation을 검사한다.
+- Confirmation / Follow-up: Terraform schema/plan에서 `cascade=false`를 확인하고 production manifest 검토에서 보호 대상 resource의 `Prune=confirm` annotation을 확인한다.
 
 ### Primary 1개와 standby replica 2개
 

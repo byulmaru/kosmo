@@ -34,7 +34,7 @@ PROD-562는 작은 독립 계약으로 `production-runtime` capability, 구현, 
 ### Current Constraints
 
 - ApplicationSet의 단일 template은 dev의 automated sync, prune와 self-heal을 모든 element에 동일하게 적용한다. Production도 이 동작을 유지하되 `main` 같은 mutable operational tag가 아니라 명시적으로 고정된 image version을 받아야 한다.
-- 현재 Docker workflow는 branch와 `main` build에 `EXPO_PUBLIC_ENVIRONMENT=dev`와 dev Vault의 browser Sentry DSN을 bake하고, production build는 정식 SemVer Git tag에서만 만든다. 첫 release 전에는 production-built image가 없는 것이 의도된 상태이므로 Application은 `0.0.0` bootstrap version을 명시하고, PROD-563이 정식 image digest를 제공하기 전까지 workload readiness를 완료로 기록하지 않는다.
+- 현재 Docker workflow는 branch와 `main` build에 `EXPO_PUBLIC_ENVIRONMENT=dev`와 dev Vault의 browser Sentry DSN을 bake하고, production build는 정식 SemVer Git tag에서만 만든다. 첫 release 전에는 production-built image가 없는 것이 의도된 상태이므로 Application은 `0.0.0` bootstrap version을 명시하고, PROD-563이 정식 image version을 제공하기 전까지 workload readiness를 완료로 기록하지 않는다.
 - `apps/helm/values.yaml`은 `env`, `image`, `version`만 제공한다. Production의 public hostname과 고정 image version을 명시적으로 검토할 환경별 값 경계가 없다.
 - 기존 Vault manifest는 `kubernetes/kosmo/<env>` 하나를 `env` Secret으로 투영하고 API/Web 모두에 주입한다. Production runtime은 이 구조를 `kubernetes/kosmo/prod`에 그대로 사용해야 하며 `/prod/runtime`으로 옮기지 않는다.
 - 2026-07-30 live key-only 확인에서 `kubernetes/kosmo/prod`에는 Sentry와 Slack key만 존재하고 API에 필요한 public origin, OIDC와 media runtime key가 없었다. 이 change는 해당 path를 소비하는 선언을 구현하되 값을 복제하거나 임의 생성하지 않으며, 필수 key가 준비되기 전까지 workload readiness를 완료로 기록하지 않는다.
@@ -46,13 +46,13 @@ PROD-562는 작은 독립 계약으로 `production-runtime` capability, 구현, 
 
 ### Recommended Approach
 
-1. Review 가능한 production values에 `env=prod`, Web/API hostname과 명시적인 non-`main` image version을 둔다. 첫 release 전에는 의도적으로 존재하지 않는 `0.0.0` bootstrap version을 사용하고 mutable `main`/`stable` 같은 operational tag를 거부하는 render assertion을 추가한다.
+1. Review 가능한 production values에 `env=prod`, Web/API hostname과 명시적인 image version을 둔다. 첫 release 전에는 의도적으로 존재하지 않는 `0.0.0` bootstrap version을 사용한다. Version 형식과 release 선택 정책은 PROD-563에 남긴다.
 2. `apps/terraform/argocd.tf`가 별도 `kosmo-prod` Application과 `kosmo-prod` destination namespace를 선언하게 한다. 기존 dev ApplicationSet lifecycle은 바꾸지 않고 production Application은 `cascade=false`로 제거 시 resource를 보존한다. Automated sync, prune와 self-heal을 유지하고 image version 변경은 Git의 명시적인 Application 선언 변경으로만 일어나게 한다.
 3. Web은 `kos.moe`, API는 `api.kos.moe`를 사용하고 기존 HTTPRoute가 `gateway/public`을 참조하게 한다. Certificate, ClusterIssuer, Cloudflare credential과 public Gateway는 Kubernetes platform 소유로 유지한다.
 4. 기존 CloudNativePG Cluster template에서 dev는 1 instance, prod는 3 instances를 렌더한다. 기존 10Gi per-instance storage와 prod backup 조건을 재사용하고 API/Web `DATABASE_URL`은 `-rw` Service에 유지한다.
 5. 기존 환경별 Vault projection 구조를 재사용해 production runtime 환경값은 `kubernetes/kosmo/prod`에서 `env` Secret으로 동기화한다. 별도 migration VaultStaticSecret은 `kubernetes/kosmo/prod/migration`에서 database username/password만 `kubernetes.io/basic-auth` Secret으로 투영한다.
 6. CloudNativePG `DatabaseRole`로 별도 `kosmo_migration` login identity를 관리하고 migration basic-auth Secret을 `passwordSecret`으로 참조한다. 기존 `kosmo` database owner role membership을 상속해 현재 migration 권한을 유지하되, API/Web은 기존 `-app` runtime DB Secret을 계속 사용한다. Role reclaim은 `retain`으로 두고 DatabaseRole과 migration VaultStaticSecret의 prune에는 명시적 확인을 요구한다. 이 change는 credential/identity만 분리하며 runtime role의 privilege를 축소하지 않는다.
-7. `test-render.sh`를 production runtime 경계까지 확장해 hostname, pinned version, prod 3 instances, runtime path, migration basic-auth/DatabaseRole, API/Web credential 격리, prod backup 연결과 production migration Job/read-routing 비소유를 검사한다. Helm lint/render 다음 실제 cluster의 server-side dry-run으로 CRD/admission 호환성을 확인한다.
+7. 기존 Helm lint/render를 통과시키고 production render를 검토한 다음 실제 cluster의 server-side dry-run으로 CRD/schema/admission 호환성을 확인한다. YAML 텍스트 marker 검사는 추가하지 않는다.
 8. 구현 PR에서는 정적 검증과 Terraform plan까지 완료한다. 실제 적용은 필수 add-on, public Gateway/TLS, 두 production Vault path 및 production-built image가 준비된 시점에 수행하고, Application automated sync로 `kosmo-prod`를 조정한 뒤 CNPG/DatabaseRole/VSO/Rollout/Service/HTTPRoute readiness까지만 증거로 남긴다.
 
 ### Allowed Alternatives
@@ -86,7 +86,7 @@ PROD-562는 작은 독립 계약으로 `production-runtime` capability, 구현, 
 
 ## Migration Plan
 
-1. Helm dev/prod lint와 render assertion을 통과시켜 기존 dev 동작과 backup 계약이 보존됨을 확인한다.
+1. Helm dev/prod lint와 render를 통과시키고 기존 dev 동작과 backup 계약이 보존됨을 확인한다.
 2. Platform의 Argo Rollouts, Gateway/TLS, CNPG/Barman, VSO와 Pod Identity 준비 상태 및 runtime/migration production Vault path 존재를 확인한다.
 3. Production manifest를 API server에 server-side dry-run해 CRD, schema와 admission을 검증한다.
 4. `apps/terraform` plan에서 `kosmo-prod` Application 추가 외의 의도하지 않은 변경이 없는지 검토한다. Production-built image와 필수 runtime key가 준비되기 전에는 적용 및 workload readiness를 완료로 기록하지 않는다.

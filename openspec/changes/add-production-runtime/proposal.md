@@ -34,6 +34,6 @@ Kosmo의 ApplicationSet은 dev 환경만 선언하고 있어 API, Web, PostgreSQ
 
 - `apps/terraform/argocd.tf`: dev ApplicationSet과 lifecycle을 분리한 `kosmo-prod` Application 및 production Helm input.
 - `apps/helm`: prod values, 환경별 render 경계, production runtime 환경값 projection, migration DB identity/credential, route와 workload/database 구성.
-- `apps/helm/test-render.sh`: dev/prod 격리와 production runtime manifest assertions.
+- Helm render/admission 검증: dev/prod 격리와 production runtime manifest 확인.
 - EKS add-on 경계: Argo CD/Rollouts, Gateway API와 `gateway/public`, cert-manager TLS, CloudNativePG/Barman plugin, Vault Secrets Operator, EKS Pod Identity.
 - 후속 관계: production Cluster가 준비되면 `PROD-546`의 live backup/restore 검증이 진행될 수 있다. `PROD-563`, `PROD-564`, `PROD-565`의 계약이나 구현은 변경하지 않는다.
