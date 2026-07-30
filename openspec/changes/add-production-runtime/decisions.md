@@ -1,6 +1,6 @@
 ## Context
 
-이 결정 기록은 2026-07-30에 정정된 Linear `PROD-562`의 독립 `production-runtime` 계약, 현재 Kosmo ApplicationSet/Helm/Vault/CNPG 구성, Kubernetes platform의 public Gateway/TLS 및 add-on 경계와 `PROD-546`의 기존 production backup 계약을 반영한다.
+이 결정 기록은 2026-07-30에 작성된 Linear `PROD-562`의 `production-runtime` 계약과 이후 PROD-545로 통합 완료 책임을 옮긴 정정, 현재 Kosmo ApplicationSet/Helm/Vault/CNPG 구성, Kubernetes platform의 public Gateway/TLS 및 add-on 경계와 `PROD-546`의 기존 production backup 계약을 반영한다.
 
 ## Decision Records
 
@@ -9,12 +9,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-562`
-- Status: Active
+- Status: Superseded by `PROD-545 통합 완료 책임과 runtime bootstrap 경계`
 - Context / Problem: Production runtime 기반과 release·migration·첫 출시 통합 계약의 OpenSpec ownership을 명확히 해야 한다.
 - Decision Outcome: `PROD-562`가 `production-runtime` capability의 OpenSpec, 구현, 검증과 archive를 자체 소유한다. 이 change는 `kosmo-prod` Application/namespace, automated sync와 pinned image version, route/TLS 연결, 총 3 instances의 PostgreSQL/storage/backup 연결, production runtime 환경값 projection, 분리된 migration DB identity/credential 기반과 readiness만 포함한다.
 - Alternatives Considered: `PROD-545` 전체를 하나의 공유 change로 묶는 방식은 최신 Linear ownership과 맞지 않아 제외했다. PROD-563/564/565 계약을 이 change에 포함하는 방식도 독립 delivery와 검증 경계를 침범해 제외했다.
 - Consequences: PROD-562는 runtime readiness가 증명되면 독립 archive할 수 있다. Release pipeline, production migration gate와 첫 release 통합 검증은 이 change가 완료되어도 별도로 남는다.
 - Confirmation / Follow-up: Diff와 tasks에 PROD-563/564/565 소유 resource나 검증이 없는지 확인한다.
+
+### PROD-545 통합 완료 책임과 runtime bootstrap 경계
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: 사용자 정정, Linear `PROD-545`, `PROD-562`
+- Status: Active
+- Context / Problem: PROD-562/563/564를 서로 독립적인 최종 결과로 완료하면 runtime 적용, restore rehearsal과 첫 release의 통합 완료 책임이 분산된다.
+- Decision Outcome: PROD-562는 이 OpenSpec과 runtime bootstrap 구현 이력을 보존한다. Terraform 적용, database·backup·Secret readiness, PROD-546 restore rehearsal 연계, workload/migration 활성화, public smoke와 첫 release 최종 완료 판단은 PROD-545가 소유한다. PROD-563/564의 완료된 구현 이력은 다시 열거나 삭제하지 않는다.
+- Alternatives Considered: 구현이 시작된 세 change를 뒤늦게 공통 OpenSpec 하나로 재작성하는 방식은 감사 이력을 훼손하므로 제외했다. PROD-565를 별도 최종 통합 owner로 유지하는 방식은 PROD-545와 책임이 중복되어 제외했다.
+- Consequences: 이 change는 workload가 비활성화된 runtime 기반까지만 merge할 수 있다. Live 적용 이후 검증 증거는 PROD-545에 모이며, restore rehearsal이 성공한 뒤에만 첫 release로 진행한다.
+- Confirmation / Follow-up: Terraform plan/apply에서 public workload가 생성되지 않는지 확인하고, readiness와 후속 실행 결과를 PROD-545에 기록한다.
 
 ### Production public hostname
 
@@ -69,7 +81,7 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-562`
-- Status: Active
+- Status: Superseded by `Terraform bootstrap values와 release parameter의 소유권 분리`
 - Context / Problem: Production은 GitOps 자동 수렴을 유지해야 하지만 workload image가 mutable tag를 자동 추적해서는 안 된다.
 - Decision Outcome: `kosmo-prod`는 automated sync, prune와 self-heal을 항상 사용한다. Workload image version은 Application 선언에 명시된 non-`main` immutable version으로 고정하고 version 변경은 Git의 명시적인 선언 변경으로만 수행한다. 이 change는 version 선택·승인·rollback workflow를 만들지 않는다.
 - Alternatives Considered: Manual sync는 항상 자동이어야 한다는 production 운영 계약과 맞지 않아 제외했다. `main` 또는 `stable` 자동 추적은 image identity가 선언 밖에서 이동하므로 제외했다.
@@ -81,12 +93,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: 사용자 정정, Linear `PROD-562`와 `PROD-563` ownership 경계
-- Status: Active
+- Status: Superseded by `Terraform bootstrap values와 release parameter의 소유권 분리`
 - Context / Problem: PROD-562의 선언형 runtime 구현 시점에는 production-built image가 아직 없으며, 이를 이유로 PROD-562가 one-off image build나 PROD-563 release workflow를 소유해서는 안 된다.
 - Decision Outcome: `kosmo-prod` Application에는 의도적으로 존재하지 않는 `0.0.0` bootstrap version을 명시한다. Application은 automated sync를 유지하지만 이 version을 workload readiness 증거로 사용하지 않는다. PROD-563이 첫 production-built immutable release version을 선택해 명시적으로 교체한다.
 - Alternatives Considered: `main`, `stable` 또는 현재 dev용 `sha-*` image를 사용하는 방식은 production build 경계와 mutable-tag 금지를 위반해 제외했다. PROD-562가 one-off production image를 만드는 방식은 PROD-563 ownership을 침범해 제외했다.
 - Consequences: 선언과 admission 검증은 production image 없이 완료할 수 있지만 실제 API/Web readiness는 첫 production image와 runtime key가 준비될 때까지 완료되지 않는다. 개별 PR readiness와 OpenSpec 전체 runtime readiness는 별도로 판정한다.
 - Confirmation / Follow-up: Terraform declaration과 plan에서 `version: '0.0.0'`이 명시되어 있는지 확인한다. PROD-563은 이 값을 production image version으로 교체한다.
+
+### Terraform bootstrap values와 release parameter의 소유권 분리
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: Linear `PROD-545`, `PROD-562`; PR review
+- Status: Active
+- Context / Problem: Terraform이 선언한 bootstrap Helm values와 PROD-545 release workflow가 설정하는 digest, workload, migration Helm parameter를 함께 관리하면 이후 Terraform reconciliation이 release parameter를 제거해 배포된 workload를 prune할 수 있다.
+- Decision Outcome: Terraform은 Application 구조와 `workloads.enabled=false`, `version=0.0.0` bootstrap values를 소유한다. PROD-545 release workflow는 Argo CD Helm parameter overlay를 소유한다. Terraform은 `spec.source.helm.parameter` 변경만 무시하고 values와 나머지 Application 구조는 계속 조정한다.
+- Alternatives Considered: Release마다 Terraform 선언을 커밋하는 방식은 승인된 tag deployment를 불필요하게 Git 선언 변경과 결합해 제외했다. Application 전체 변경을 무시하는 방식은 실제 infrastructure drift까지 숨기므로 제외했다.
+- Consequences: 첫 Terraform 적용은 workload 없이 database, backup과 Secret 기반만 준비한다. 이후 release workflow가 설정한 immutable digest와 workload/migration 활성화는 다음 Terraform 적용에도 유지된다.
+- Confirmation / Follow-up: Provider schema와 Terraform plan에서 정확히 Helm `parameter` block만 lifecycle ignore 대상인지 확인하고, release parameter가 values나 다른 Application 구조의 drift를 숨기지 않는지 검토한다.
 
 ### Production Application lifecycle 분리
 

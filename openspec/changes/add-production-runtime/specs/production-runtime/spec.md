@@ -2,22 +2,22 @@
 
 ### Requirement: Dev와 격리된 production Application
 
-**Authority / Provenance:** Linear `PROD-562`. 시스템은 Argo CD가 `kosmo-prod` Application을 `kosmo-prod` namespace에 선언형으로 생성하고 항상 automated sync하게 해야 한다(MUST). Production Helm 입력은 dev와 다른 environment, namespace, public hostname, runtime secret path와 database 경계를 사용해야 하며(MUST), workload image는 mutable tag를 자동 추적하지 않는 명시적인 non-`main` version으로 고정해야 한다(MUST). Dev 전용 resource나 `main` image version을 포함해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-562`, 통합 완료 책임 `PROD-545`. 시스템은 Argo CD가 `kosmo-prod` Application을 `kosmo-prod` namespace에 선언형으로 생성하고 항상 automated sync하게 해야 한다(MUST). Production Helm 입력은 dev와 다른 environment, namespace, public hostname, runtime secret path와 database 경계를 사용해야 한다(MUST). Bootstrap은 workload를 비활성화해야 하며(MUST), 이후 PROD-545가 설정한 immutable digest와 workload/migration Helm parameter를 Terraform이 제거해서는 안 된다(MUST NOT).
 
 #### Scenario: Production Application 선언
 
 - **WHEN** Terraform의 production Application을 계획하거나 렌더한다
 - **THEN** `kosmo-prod` Application의 destination은 `kosmo-prod` namespace이고 automated sync와 production 전용 Helm 입력을 사용한다
 
-#### Scenario: Production image version 고정
+#### Scenario: Release parameter 소유권 보존
 
-- **WHEN** production Application이 자동 동기화된다
-- **THEN** workload image는 Application 선언에 명시된 non-`main` version을 사용하고 registry의 mutable operational tag를 자동 추적하지 않는다
+- **WHEN** PROD-545 release workflow가 production Application에 digest와 workload/migration Helm parameter를 설정한 뒤 Terraform을 다시 적용한다
+- **THEN** Terraform은 해당 parameter overlay를 보존하면서 bootstrap values와 나머지 Application 구조의 drift는 계속 조정한다
 
 #### Scenario: 첫 release 전 bootstrap version
 
-- **WHEN** PROD-563이 production-built image digest를 아직 제공하지 않았다
-- **THEN** Application은 자동 추적 tag 대신 명시적인 `0.0.0` bootstrap version을 유지하고 workload readiness는 완료로 기록하지 않는다
+- **WHEN** PROD-545가 production release를 아직 배포하지 않았다
+- **THEN** Application은 `0.0.0` bootstrap sentinel과 `workloads.enabled=false`를 유지하고 API/Web Service, Rollout과 HTTPRoute를 생성하지 않는다
 
 #### Scenario: Dev 정책 격리
 
@@ -117,7 +117,7 @@
 
 ### Requirement: Production runtime dependency와 readiness 검증
 
-**Authority / Provenance:** Linear `PROD-562`. 시스템은 production runtime을 동기화하기 전에 Argo CD, Argo Rollouts, Gateway API의 public Gateway와 TLS, CloudNativePG, Barman Cloud plugin, Vault Secrets Operator 및 필요한 production ServiceAccount가 준비되었음을 확인할 수 있어야 한다(MUST). 선언은 Helm lint/render와 Kubernetes admission dry-run을 통과해야 하며(MUST), 동기화 뒤 PostgreSQL, secret projection, API와 Web workload 및 route 상태를 확인할 수 있어야 한다(MUST).
+**Authority / Provenance:** Linear `PROD-562`, 통합 완료 책임 `PROD-545`. 시스템은 production runtime bootstrap을 동기화하기 전에 Argo CD, CloudNativePG, Barman Cloud plugin, Vault Secrets Operator 및 필요한 production ServiceAccount가 준비되었음을 확인할 수 있어야 한다(MUST). 선언은 Helm lint/render와 Kubernetes admission dry-run을 통과해야 하며(MUST), 동기화 뒤 PostgreSQL과 secret projection 상태를 확인할 수 있어야 한다(MUST).
 
 #### Scenario: 선언형 사전 검증
 
@@ -129,14 +129,14 @@
 - **WHEN** 필수 CRD, controller, public Gateway, TLS certificate, Barman plugin 또는 Vault 인증 경계가 준비되지 않았다
 - **THEN** 운영자는 Application sync 전에 실패한 dependency를 식별하고 production workload readiness를 완료로 기록하지 않는다
 
-#### Scenario: Runtime readiness
+#### Scenario: Bootstrap readiness
 
 - **WHEN** `kosmo-prod` Application sync가 완료된다
-- **THEN** CloudNativePG Cluster, Vault secret projection, API와 Web Rollout, Service와 HTTPRoute의 상태가 Ready 또는 정상 조정 상태임을 확인한다
+- **THEN** CloudNativePG Cluster와 Vault secret projection의 상태가 Ready 또는 정상 조정 상태임을 확인하고 API/Web workload와 public route는 존재하지 않는다
 
 ### Requirement: 후속 release와 migration 계약의 비소유
 
-**Authority / Provenance:** Linear `PROD-562`. 이 capability는 production runtime resource와 migration DB identity/credential 기반만 제공해야 한다(MUST). 시스템은 PROD-563의 정식 release version 선택·승인·배포·rollback workflow, PROD-564의 migration Secret consumer·production migration 순서·실행·contract gate, PROD-565의 public 사용자 경로 smoke·첫 release 통합 검증이나 application read-routing을 이 변경으로 구현해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-562`, 통합 완료 책임 `PROD-545`. 이 capability는 production runtime bootstrap resource와 migration DB identity/credential 기반만 제공해야 한다(MUST). 시스템은 PROD-545의 release 선택·승인, workload/migration 활성화, restore rehearsal 연계, public 사용자 경로 smoke와 첫 release 완료 판단이나 application read-routing을 이 변경으로 구현해서는 안 된다(MUST NOT). 완료된 PROD-563/564 구현 이력은 보존해야 한다(MUST).
 
 #### Scenario: Production runtime 변경 범위 검토
 

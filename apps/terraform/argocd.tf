@@ -72,6 +72,12 @@ resource "argocd_application" "kosmo_prod" {
   cascade = false
   wait    = false
 
+  lifecycle {
+    # PROD-545 owns release-time digest, workload, and migration parameters.
+    # Terraform continues to own the bootstrap values and Application structure.
+    ignore_changes = [spec[0].source[0].helm[0].parameter]
+  }
+
   metadata {
     name      = "kosmo-prod"
     namespace = "argocd"
