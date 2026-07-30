@@ -3,7 +3,7 @@ import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
@@ -171,7 +171,7 @@ export function SidebarNavigation({
               <View key={item.label}>{control}</View>
             );
           })}
-          {compact || surface === 'drawer' ? (
+          {compact ? (
             <Link asChild href="/compose">
               <Pressable
                 accessibilityLabel="글쓰기"
@@ -191,11 +191,6 @@ export function SidebarNavigation({
                       strokeWidth={2}
                       style={pressed && styles.pressedContent}
                     />
-                    {!compact ? (
-                      <Text style={[styles.composeLabel, pressed && styles.pressedContent]}>
-                        글쓰기
-                      </Text>
-                    ) : null}
                   </>
                 )}
               </Pressable>
@@ -316,7 +311,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  composeLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   footer: { borderTopWidth: 1, marginTop: 'auto', paddingTop: spacing.xs, width: '100%' },
   compactFooter: { borderTopWidth: 0 },
   footerItem: {

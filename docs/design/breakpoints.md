@@ -19,9 +19,23 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 ## 글쓰기 진입
 
-- `< compact`: 하단 탭 바의 글쓰기.
+- `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼.
-- `≥ full`: 우측 레일 컴포저가 담당하며, 사이드바 글쓰기 버튼은 표시하지 않는다(드로어 surface에서만 유지).
+- `≥ full`: 우측 레일 컴포저가 담당하며, 사이드바 글쓰기 버튼은 표시하지 않는다. mobile drawer에도 중복 글쓰기 버튼을 표시하지 않는다.
+
+## 개인정보 처리방침 진입
+
+공개 `/privacy` route와 비로그인 landing의 링크는 유지한다. 인증 후 셸에서는 generic `/menu`를 법적 고지의
+영구 위치로 사용하지 않고 full Web 우측 레일에만 보조 진입점을 둔다.
+
+- `≥ full`: 우측 레일 최하단에 `textSecondary` 색의 `개인정보 처리방침` 텍스트 링크를 둔다. 선택한 Profile이
+  없어 컴포저가 표시되지 않아도 링크는 유지하며, 기존 위치보다 viewport 하단에 가깝게 배치한다.
+- `compact`~`full`: 좁은 아이콘 레일의 공간과 navigation 위계를 보존하기 위해 개인정보 처리방침 진입점을
+  표시하지 않는다.
+- `< compact` mobile Web과 Android/iOS: mobile drawer에 개인정보 처리방침 진입점을 표시하지 않는다.
+- 가입·로그인 온보딩 안의 추가 개인정보 처리방침 진입점은 후속 범위에서 결정한다. 현재 범위에서는 공개
+  route와 landing 링크, full Web 보조 진입점만 유지하며 준비되지 않은 설정, 팔로워 요청 또는 generic menu
+  navigation을 다시 만들지 않는다.
 
 ## 프로필 피커
 

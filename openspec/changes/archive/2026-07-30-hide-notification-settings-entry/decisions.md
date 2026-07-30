@@ -81,12 +81,72 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-487`, `PROD-541`, PR #390, PR #412
-- Status: Active
+- Status: Superseded
 - Context / Problem: Parent `add-web-feedback-slack-delivery`는 parent head의 기존 `/menu` 소비자를 보호하기 위해 `Universal shell feedback navigation` requirement에서 `/menu` 보존을 요구한다. Child PROD-541은 그 소비자를 제거한 뒤 같은 requirement의 최종 내용을 바꾼다. Active change 간 의미적 적용 순서는 strict validation만으로 보장되지 않는다.
 - Decision Outcome: Parent #390과 `add-web-feedback-slack-delivery`는 parent slice의 `/menu` 보존 계약을 유지한다. Parent change를 먼저 archive해 requirement를 canonical에 반영하고, child archive 직전에 canonical requirement 전체를 다시 복사·대조한 뒤 `/menu` 보존 scenario만 제거한 MODIFIED requirement를 적용한다. Child는 parent active artifact를 직접 수정하지 않는다.
 - Alternatives Considered: Parent에서 보존 계약을 먼저 철회, child에서 parent active 파일 직접 수정, child 문구로만 supersede하고 archive 순서를 확인하지 않음.
 - Consequences: 각 stack 단계의 코드와 계약이 일치하고 issue ownership이 섞이지 않는다. Parent archive 전에는 child archive가 blocked되며, child delta는 feedback navigation의 나머지 scenario를 빠뜨리지 않도록 requirement 전체를 포함해야 한다.
 - Confirmation / Follow-up: Parent archive 여부와 canonical requirement 내용을 child archive stop gate에서 재확인하고 archive 후 strict validation을 수행한다.
+
+### Child sidebar 계약과 parent feedback 계약의 lifecycle을 분리한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-487`, `PROD-541`, PR #390, PR #412 human review
+- Status: Active
+- Context / Problem: child가 parent-owned `Universal shell feedback navigation` requirement를 MODIFIED하고 parent production smoke를 archive stop gate로 두면, child 고유의 `Mail` glyph와 `/menu` 제거가 parent lifecycle에 불필요하게 결합된다.
+- Decision Outcome: child delta에서 parent feedback requirement 전체를 제거한다. `Mail` glyph는 child-owned `준비되지 않은 sidebar 진입점 비노출` requirement에 기록한다. child archive는 PROD-541 구현·검증만으로 판단하며 PROD-487 production smoke·archive를 기다리지 않는다.
+- Alternatives Considered: 기존 parent-first archive 유지, parent active artifact 수정, child에서 parent requirement 일부를 계속 MODIFIED.
+- Consequences: feedback navigation의 label·destination·전달 계약은 parent가 계속 소유하고, child는 sidebar 비노출·glyph·route 정리만 소유한다. 서로의 production acceptance와 archive 책임이 분리된다.
+- Confirmation / Follow-up: PR #412 human review를 반영해 child delta와 task 2.8을 정리하고 scoped/all strict validation으로 확인한다.
+
+### 개인정보 처리방침 링크를 responsive shell 보조 위치로 옮긴다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-469`, `PROD-541`; 사용자 승인 및 관련 변경 허가 확인
+- Status: Superseded
+- Context / Problem: PR #404가 개인정보 처리방침의 인증 후 진입점을 generic `/menu`에 추가했지만, PROD-541은 준비되지 않은 menu placeholder 자체를 삭제한다. 법적 고지 링크까지 함께 제거하면 인증 후 사용자의 접근성이 후퇴한다.
+- Decision Outcome: 공개 `/privacy` route와 landing link는 유지한다. full Web은 우측 레일 좌하단 muted text, compact Web은 아이콘 레일 하단 Lucide `FileText` accessible link, mobile Web·Android/iOS는 drawer 하단 muted text link로 옮긴다. generic `/menu`, 설정 또는 팔로워 요청 진입점은 복원하지 않는다.
+- Alternatives Considered: `/menu` 유지, full Web에만 링크, 모든 breakpoint에서 sidebar text row 사용, 개인정보 처리방침 진입점 자체 제거.
+- Consequences: 법적 고지는 각 responsive shell에서 계속 접근 가능하고 `/menu` route는 완전히 제거된다. compact icon-only link와 drawer text link는 platform 최소 target 및 accessible name을 제공해야 한다.
+- Confirmation / Follow-up: 사용자가 responsive 배치를 승인했고 관련 변경 허가도 확인했다. OpenPanel 개인정보 처리방침 requirement를 함께 정렬하고 Storybook full·compact·mobile 및 인증 Web E2E로 검증한다.
+
+### 개인정보 처리방침 진입점을 full Web으로 한정하고 compact·mobile에서 숨긴다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-541`, `PROD-575`; 사용자 승인
+- Status: Active
+- Context / Problem: compact icon rail의 `FileText` link와 mobile drawer의 텍스트 link가 좁은 navigation 공간에서 법적 고지 진입점을 주요 navigation과 같은 크기로 강조한다. 공개 `/privacy`와 landing link가 이미 있고 인증 후 full Web에도 보조 진입점이 있으므로 모든 shell surface에 상시 노출할 필요는 없다.
+- Decision Outcome: 공개 `/privacy` route와 landing link를 유지한다. 인증 후에는 full Web 우측 레일 최하단에만 muted text link를 표시하고 bottom margin을 `spacing.lg`에서 `spacing.sm`으로 줄여 기존보다 viewport 하단에 가깝게 둔다. compact Web icon rail과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 시각·접근성 트리에 노출하지 않는다. 가입·로그인 온보딩 안의 추가 진입점은 후속 범위로 둔다.
+- Alternatives Considered: full·compact·mobile responsive shell 전체 노출 유지, generic `더보기` disclosure menu에 통합, 개인정보 처리방침 진입점 전체 제거.
+- Consequences: compact와 mobile navigation의 공간·위계가 단순해지고 full Web과 공개 landing에서는 처리방침 접근이 유지된다. Native 인증 후 drawer에는 별도 링크가 없으며, 후속 온보딩 범위를 현재 구현이나 task로 선반영하지 않는다.
+- Confirmation / Follow-up: 사용자가 compact·mobile 비노출과 full Web 하단 배치를 선택했다. PROD-541·PROD-575 본문과 active OpenPanel requirement를 정렬하고 Storybook·Web E2E로 검증한다.
+
+### mobile drawer의 중복 글쓰기를 제거하고 로그아웃 glyph weight를 맞춘다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-541`; 사용자 승인 및 관련 팀원 허가 확인
+- Status: Active
+- Context / Problem: mobile drawer와 하단 5탭이 모두 `/compose` 글쓰기를 제공해 같은 shell에서 진입점이 중복된다. 공용 `LogoutControl`의 1.5px `LogOut` glyph는 2px 주변 navigation glyph보다 얇게 보인다.
+- Decision Outcome: mobile Web·Android/iOS drawer의 글쓰기 control만 제거하고 하단 5탭과 compact Web rail의 글쓰기는 유지한다. 공용 `LogOut` glyph stroke를 2px로 올리되 label, accessible name, target geometry와 logout 동작은 유지한다.
+- Alternatives Considered: 중복 글쓰기 유지, 하단 탭 글쓰기 제거, compact rail 글쓰기까지 제거, logout icon size 또는 container 확대.
+- Consequences: mobile drawer가 간결해지고 로그아웃 icon의 시각적 weight가 주변 navigation과 일치한다. route, mutation과 responsive breakpoint 구조는 바뀌지 않는다.
+- Confirmation / Follow-up: 사용자가 같은 PR에 포함하도록 승인했고 관련 팀원 허가를 확인했다. Storybook에서 drawer 글쓰기 부재, 하단 탭·compact compose 유지와 세 surface의 2px logout stroke를 검증한다.
+
+### compact 로그아웃을 다른 footer control과 같은 중심선에 맞춘다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-541`; 사용자 승인
+- Status: Active
+- Context / Problem: compact `LogoutControl`은 full-width wrapper 안에서 44px target을 가운데 정렬하지만, 같은 footer의 feedback target은 44px direct child로 배치되어 로그아웃만 오른쪽으로 10px 밀린다.
+- Decision Outcome: compact mode의 outer wrapper 폭만 inner target과 같은 44px로 제한한다. 로그아웃 target·glyph를 feedback을 포함한 다른 compact footer target과 같은 수평 중심선에 두고 icon size·stroke, target geometry, feedback geometry와 동작은 유지한다.
+- Alternatives Considered: compact footer 전체를 가운데 정렬해 feedback까지 이동, 로그아웃 target의 padding 또는 icon 위치 보정, 현재 정렬 유지.
+- Consequences: compact 로그아웃만 기존 10px offset을 해소하며 full sidebar와 mobile drawer, feedback 위치, accessible name과 logout 동작은 바뀌지 않는다.
+- Confirmation / Follow-up: 사용자가 해당 정렬 수정을 승인했다. 기존 Compact Sidebar Storybook에서 두 target의 실제 bounding rect 중심을 비교하고 1024px viewport를 관찰한다.
 
 ## Remaining Decisions
 
@@ -98,3 +158,5 @@
 - 위 `사이드바 전체를 설정 비노출 범위에서 제외한다` Derived Contract는 `프로필 설정`과 feedback footer를 같은 표면으로 잘못 묶어 2026-07-30의 새 Derived Contract로 대체됐다.
 - 위 `사이드바의 프로필 설정은 숨기고 피드백 진입점은 유지한다` Derived Contract는 받은 요청 UI가 없는 `팔로워 요청`과 generic `/menu`를 유지해 최신 PROD-541 범위와 어긋나므로, 같은 날의 `준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다` Derived Contract로 대체됐다.
 - 위 `준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다` Derived Contract는 비노출·route 제거 결과를 유지하되 최신 PROD-541의 ProfileSwitcher 중심 정렬과 feedback `Mail` glyph를 포함하는 Derived Contract로 대체됐다.
+- 위 `Parent feedback change를 먼저 archive한 뒤 child에서 menu 보존 scenario를 제거한다` Implementation Choice는 PR #412 human review에 따라 parent requirement와 archive lifecycle을 분리하는 Active Implementation Choice로 대체됐다.
+- 위 `개인정보 처리방침 링크를 responsive shell 보조 위치로 옮긴다` Derived Contract는 full·compact·mobile 상시 노출이 좁은 navigation 위계를 과도하게 차지한다는 사용자 결정에 따라 full Web-only 진입과 compact·mobile 비노출 Derived Contract로 대체됐다.
