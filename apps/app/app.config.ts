@@ -45,7 +45,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: true,
   },
   web: {
-    favicon: './assets/brand/brand-mark-light.png',
+    favicon: './public/favicon-32x32.png',
     output: 'single',
   },
   plugins: ['expo-router', 'expo-secure-store'],

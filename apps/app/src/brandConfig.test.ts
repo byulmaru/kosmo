@@ -10,5 +10,5 @@ test('Expo resolves the approved platform-specific icons', () => {
     './assets/brand/app-icon-android-foreground.png',
   );
   assert.equal(config.android?.adaptiveIcon?.backgroundColor, '#FEFEFE');
-  assert.equal(config.web?.favicon, './assets/brand/brand-mark-light.png');
+  assert.equal(config.web?.favicon, './public/favicon-32x32.png');
 });

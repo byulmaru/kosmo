@@ -113,7 +113,7 @@ test('native and reusable brand assets keep their approved source dimensions', a
   );
 });
 
-test('browser favicon keeps transparency and fills the small canvas', async () => {
+test('browser favicon uses the browser-only K and star composition', async () => {
   const { height, rgba, width } = await readPngRgba(new URL('favicon-32x32.png', publicDirectory));
   let minX = width;
   let minY = height;
@@ -133,8 +133,17 @@ test('browser favicon keeps transparency and fills the small canvas', async () =
   }
 
   assert.ok(rgba.some((value, index) => index % 4 === 3 && value === 0));
-  assert.ok(maxX - minX + 1 >= 29, 'favicon mark must fill at least 29px horizontally');
-  assert.ok(maxY - minY + 1 >= 26, 'favicon mark must fill at least 26px vertically');
+  assert.equal(maxX - minX + 1, 29, 'browser favicon must keep its compact K silhouette');
+  assert.equal(maxY - minY + 1, 32, 'favicon mark must reach both vertical edges');
+
+  const starPixel = (24 * width + 5) * 4;
+  assert.ok(
+    rgba[starPixel] >= 130 &&
+      rgba[starPixel + 1] >= 110 &&
+      rgba[starPixel + 2] >= 220 &&
+      rgba[starPixel + 3] === 255,
+    'browser favicon must keep the purple star visible at 32px',
+  );
 });
 
 test('browser, PWA, and share assets expose the expected delivery sizes', async () => {
