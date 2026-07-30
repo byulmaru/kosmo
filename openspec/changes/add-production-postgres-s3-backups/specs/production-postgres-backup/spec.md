@@ -18,6 +18,8 @@
 
 **Authority / Provenance:** `PROD-546`. 시스템은 production backup과 별도 restore workload가 EKS Pod Identity로 같은 최소 권한 IAM role의 단기 자격 증명을 받게 해야 한다(MUST). 시스템은 AWS access key, secret key 또는 session token을 repository, Kubernetes Secret이나 workflow 입력으로 저장해서는 안 된다.
 
+Production backup ServiceAccount는 같은 namespace의 `kosmo-postgres-backup` ObjectStore 하나를 읽을 수 있어야 하며(MUST), 다른 ObjectStore나 write verb 권한을 받아서는 안 된다(MUST NOT).
+
 #### Scenario: Production backup Pod의 S3 접근
 
 - **WHEN** `kosmo-prod`의 PostgreSQL Pod가 Barman Cloud sidecar에서 기본 AWS credential chain으로 S3에 접근한다
@@ -27,6 +29,11 @@
 
 - **WHEN** `kosmo-prod-restore`의 복구 Pod가 source backup을 읽는다
 - **THEN** 같은 이름의 restore ServiceAccount에 연결된 Pod Identity role로 source prefix를 읽고 static credential을 사용하지 않는다
+
+#### Scenario: Production plugin의 ObjectStore 조회
+
+- **WHEN** production PostgreSQL Pod의 Barman plugin이 backup 설정을 해석한다
+- **THEN** `kosmo-postgres-backup` ServiceAccount는 같은 namespace의 동명 ObjectStore에 대한 `get`만 허용받고 WAL archive와 base backup을 시작할 수 있다
 
 ### Requirement: 연속 WAL archive와 매일 base backup
 
