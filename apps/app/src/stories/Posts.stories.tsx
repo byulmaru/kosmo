@@ -3505,7 +3505,9 @@ export const ComposerErrorInteraction: Story = {
       '오류 상태를 확인합니다.',
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('게시글 작성 실패');
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다.',
+    );
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveAttribute(
       'aria-invalid',
       'true',

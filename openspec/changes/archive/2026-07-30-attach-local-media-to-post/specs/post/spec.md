@@ -23,6 +23,7 @@
 
 - **WHEN** 로그인한 클라이언트가 active profile이 선택된 상태에서 유효한 `bodyText`, `visibility`, 최대 4개의 선택적 `{ mediaId, altText }` item과 `sensitiveMedia`로 `createPost`를 호출한다
 - **THEN** 시스템은 현재 active profile이 작성한 `ACTIVE` Post와 첫 PostContent를 생성한다
+- **AND** Post와 첫 PostContent는 같은 transaction에서 생성되며 하나라도 실패하면 함께 rollback한다
 - **AND** Post의 공개 범위는 입력받은 `visibility` 값이다
 - **AND** `post.current_content_id`는 생성된 PostContent를 참조한다
 - **AND** Media item은 입력 순서의 V1 Media node가 되고 Sensitive Media는 document root attr가 된다

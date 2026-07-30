@@ -243,7 +243,7 @@ function PostComposerContents({
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
-      onError: (cause) => {
+      onError: () => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -254,8 +254,7 @@ function PostComposerContents({
         }
         setSubmitting(false);
         setError(
-          cause.message ||
-            (submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.'),
+          submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
         );
       },
     });
