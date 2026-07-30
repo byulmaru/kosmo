@@ -2,6 +2,7 @@ import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { usePostActionAuthentication } from './PostActionAuthentication';
+import { isRepostTargetEligible } from './postActionAvailability';
 import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
@@ -22,7 +23,9 @@ type Props = Readonly<{
 const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
+    visibility
     profile {
+      id
       relativeHandle
     }
     ...PostActionBar_post @alias(as: "actionBar")
@@ -39,6 +42,13 @@ export function PostActionSurface({
 }: Props) {
   const target = useFragment(postActionSurfaceFragment, socialActionTarget);
   const authentication = usePostActionAuthentication(true);
+  const repostAuthentication = usePostActionAuthentication(
+    isRepostTargetEligible({
+      authorProfileId: target.profile.id,
+      selectedProfileId: authentication.selectedProfileId,
+      visibility: target.visibility,
+    }),
+  );
   const reactionController = usePostReactionController(
     target.reactionController!,
     authentication.execution.kind === 'enabled',
@@ -64,6 +74,7 @@ export function PostActionSurface({
           post={target.actionBar}
           reactionController={reactionController}
           reply={reply}
+          repostExecution={repostAuthentication.execution}
         />
       </View>
     </>

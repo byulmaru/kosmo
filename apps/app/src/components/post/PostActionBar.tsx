@@ -45,6 +45,7 @@ export type PostActionBarProps = {
   post?: PostActionBar_post$key | null;
   reactionController?: PostReactionController;
   reply?: ReplyActionConfig;
+  repostExecution?: PostActionExecution;
 };
 
 const postActionBarPostFragment = graphql`
@@ -67,6 +68,7 @@ export function PostActionBar({
   post,
   reactionController,
   reply,
+  repostExecution = execution,
 }: PostActionBarProps) {
   const data = useFragment(postActionBarPostFragment, post ?? null);
   const bookmarkAction = usePostBookmarkAction(
@@ -93,7 +95,7 @@ export function PostActionBar({
       ) : null}
       {data?.repost ? (
         <RepostAction
-          execution={execution}
+          execution={repostExecution}
           onError={onRepostError}
           onResolutionRequired={onResolutionRequired}
           post={data.repost}

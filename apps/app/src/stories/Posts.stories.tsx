@@ -788,10 +788,14 @@ function PostCatalog(_args: PostsStoryArgs) {
 
       <Section title="Detail layout · visibility and long author">
         {visibilityPosts.map((visibilityPost, index) => (
-          <PostLayout
+          <View
             key={visibilityPost.id}
-            post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
-          />
+            testID={`detail-${visibilityPost.visibility.toLowerCase()}`}
+          >
+            <PostLayout
+              post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
+            />
+          </View>
         ))}
         <PostLayout
           post={requireFragment(requirePost(posts, 13).layout, 'remote author post layout')}
@@ -1987,6 +1991,18 @@ export const BodyTimeAndLayoutStates: Story = {
       { name: '액션 바' },
     );
     expect(within(defaultActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('0');
+    for (const visibility of ['public', 'unlisted'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    }
+    for (const visibility of ['followers', 'direct'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    }
 
     const pureRepostActionBar = within(
       canvas.getByTestId('detail-pure-repost-action-layout'),

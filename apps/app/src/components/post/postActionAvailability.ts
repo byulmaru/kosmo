@@ -14,6 +14,26 @@ type PostActionAvailabilityInput = Readonly<{
   targetEligible: boolean;
 }>;
 
+type RepostTargetEligibilityInput = Readonly<{
+  authorProfileId: string;
+  selectedProfileId: string | null;
+  visibility: string;
+}>;
+
+export function isRepostTargetEligible({
+  authorProfileId,
+  selectedProfileId,
+  visibility,
+}: RepostTargetEligibilityInput): boolean {
+  if (visibility === 'PUBLIC' || visibility === 'UNLISTED') {
+    return true;
+  }
+  if (visibility === 'FOLLOWERS') {
+    return selectedProfileId === authorProfileId;
+  }
+  return false;
+}
+
 export function resolvePostActionExecution({
   selectedProfileId,
   status,

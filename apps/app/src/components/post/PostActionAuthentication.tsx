@@ -99,6 +99,7 @@ export function PostActionAuthenticationProvider({
 export function usePostActionAuthentication(targetEligible: boolean): Readonly<{
   execution: PostActionExecution;
   resolve: (reason: PostActionResolutionReason) => void;
+  selectedProfileId: string | null;
 }> {
   const authentication = useContext(PostActionAuthenticationContext);
   if (!authentication) {
@@ -112,5 +113,6 @@ export function usePostActionAuthentication(targetEligible: boolean): Readonly<{
       targetEligible,
     }),
     resolve: authentication.resolve,
+    selectedProfileId: authentication.selectedProfileId,
   };
 }

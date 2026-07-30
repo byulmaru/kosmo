@@ -47,4 +47,50 @@ describe('Post action 실행 가능성', () => {
       { kind: 'disabled', reason: 'session-error' },
     );
   });
+
+  it('Repost visibility와 selected Profile author 조건을 분리한다', async () => {
+    const policy = await import('./postActionAvailability').catch(() => null);
+
+    assert.ok(policy);
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
+        selectedProfileId: 'viewer-id',
+        visibility: 'PUBLIC',
+      }),
+      true,
+    );
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
+        selectedProfileId: null,
+        visibility: 'UNLISTED',
+      }),
+      true,
+    );
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
+        selectedProfileId: 'viewer-id',
+        visibility: 'FOLLOWERS',
+      }),
+      false,
+    );
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
+        selectedProfileId: 'author-id',
+        visibility: 'FOLLOWERS',
+      }),
+      true,
+    );
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
+        selectedProfileId: 'author-id',
+        visibility: 'DIRECT',
+      }),
+      false,
+    );
+  });
 });
