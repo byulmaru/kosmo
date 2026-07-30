@@ -214,23 +214,13 @@ type ReactionRequestSummary = Readonly<{
   type: string;
 }>;
 
-type CountRefetchRequestSummary = Readonly<{
-  disposed: boolean;
-  failed: boolean;
-  id: number;
-}>;
-
-function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRefetch?: boolean }) {
+function ReactionContractHarness() {
   const requestsRef = useRef<CapturedReactionRequest[]>([]);
   const selectedTypesByActor = useRef(new Map<number, Set<string>>());
   const nextActorId = useRef(0);
   const nextRequestId = useRef(0);
-  const nextCountRefetchRequestId = useRef(0);
   const [mounted, setMounted] = useState(true);
   const [requests, setRequests] = useState<ReactionRequestSummary[]>([]);
-  const [countRefetchRequests, setCountRefetchRequests] = useState<CountRefetchRequestSummary[]>(
-    [],
-  );
 
   const createEnvironment = useCallback(() => {
     const actorId = ++nextActorId.current;
@@ -243,37 +233,6 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
             ...entry,
             count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
           }));
-          if (request.name === 'PostReactionControllerRefetchQuery' && manualCountRefetch) {
-            return Observable.create<GraphQLResponse>((sink) => {
-              const id = ++nextCountRefetchRequestId.current;
-              let settled = false;
-              setCountRefetchRequests((current) => [
-                ...current,
-                { disposed: false, failed: false, id },
-              ]);
-              if (id > 1) {
-                Promise.resolve().then(() => {
-                  settled = true;
-                  setCountRefetchRequests((current) =>
-                    current.map((candidate) =>
-                      candidate.id === id ? { ...candidate, failed: true } : candidate,
-                    ),
-                  );
-                  sink.error(new Error(`count refetch ${id} failed`));
-                });
-              }
-              return () => {
-                if (settled) {
-                  return;
-                }
-                setCountRefetchRequests((current) =>
-                  current.map((candidate) =>
-                    candidate.id === id ? { ...candidate, disposed: true } : candidate,
-                  ),
-                );
-              };
-            });
-          }
           return Promise.resolve({
             data:
               request.name === 'SessionProviderQuery'
@@ -325,7 +284,7 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
       { node: unselectedSource },
     );
     return environment;
-  }, [manualCountRefetch]);
+  }, []);
 
   const settleRequest = useCallback((id: number, outcome: ReactionRequestOutcome) => {
     const request = requestsRef.current.find((candidate) => candidate.id === id);
@@ -362,9 +321,23 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
     } else {
       selectedTypes.delete(request.type);
     }
+    const post = {
+      __typename: 'Post',
+      id: sourcePostId,
+      reactionCounts: unselectedSource.reactionCounts.map((entry) => ({
+        ...entry,
+        count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+      })),
+      viewerReactions: [...selectedTypes].map((type, index) => ({
+        __typename: 'Reaction',
+        id: `reaction-${request.actorId}-${index}-${type}`,
+        type,
+      })),
+    };
     const data = add
       ? {
           addReaction: {
+            post,
             reaction: {
               __typename: 'Reaction',
               id: `reaction-${request.actorId}-${request.id}`,
@@ -374,15 +347,7 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
         }
       : {
           deleteReaction: {
-            post: {
-              __typename: 'Post',
-              id: sourcePostId,
-              viewerReactions: [...selectedTypes].map((type, index) => ({
-                __typename: 'Reaction',
-                id: `reaction-${request.actorId}-${index}-${type}`,
-                type,
-              })),
-            },
+            post,
             reactionId: null,
           },
         };
@@ -398,7 +363,6 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
       <ReactionContractControls
-        countRefetchRequests={countRefetchRequests}
         mounted={mounted}
         onMountedChange={setMounted}
         onSettleRequest={settleRequest}
@@ -409,13 +373,11 @@ function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRe
 }
 
 function ReactionContractControls({
-  countRefetchRequests,
   mounted,
   onMountedChange,
   onSettleRequest,
   requests,
 }: {
-  countRefetchRequests: ReadonlyArray<CountRefetchRequestSummary>;
   mounted: boolean;
   onMountedChange: (mounted: boolean) => void;
   onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
@@ -441,7 +403,6 @@ function ReactionContractControls({
       </Text>
       <Text testID="reaction-actor-revision">{revision}</Text>
       <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
-      <Text testID="reaction-count-refetch-log">{JSON.stringify(countRefetchRequests)}</Text>
       {requests.map((request) => (
         <View key={request.id}>
           {(['success', 'payload-error', 'data-errors-success', 'network-error'] as const).map(
@@ -473,12 +434,6 @@ function readReactionRequests(canvas: ReturnType<typeof within>): ReactionReques
   return JSON.parse(
     canvas.getByTestId('reaction-request-log').textContent ?? '[]',
   ) as ReactionRequestSummary[];
-}
-
-function readCountRefetchRequests(canvas: ReturnType<typeof within>): CountRefetchRequestSummary[] {
-  return JSON.parse(
-    canvas.getByTestId('reaction-count-refetch-log').textContent ?? '[]',
-  ) as CountRefetchRequestSummary[];
 }
 
 type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
@@ -841,49 +796,6 @@ export const ReactionConcurrentMutationContract: Story = {
     expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
   },
   render: () => <ReactionContractHarness />,
-};
-
-export const ReactionCountRefetchRaceContract: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    unstable_batchedUpdates(() => {
-      canvas.getByRole('button', { name: '❤️ 반응 12개' }).click();
-      canvas.getByRole('button', { name: '🎉 반응 7개' }).click();
-    });
-    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
-    const requests = readReactionRequests(canvas);
-    const heartRequest = requests.find((request) => request.type === '❤️')!;
-    const partyRequest = requests.find((request) => request.type === '🎉')!;
-
-    canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
-    await waitFor(() =>
-      expect(
-        readReactionRequests(canvas).find((request) => request.id === heartRequest.id),
-      ).toMatchObject({ settled: true }),
-    );
-    expect(readCountRefetchRequests(canvas)).toHaveLength(0);
-
-    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
-    await waitFor(() => expect(readCountRefetchRequests(canvas)).toHaveLength(1));
-    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '🎉 반응 8개' })).toBeVisible();
-
-    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
-    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
-    await waitFor(() =>
-      expect(readCountRefetchRequests(canvas)[0]).toMatchObject({ disposed: true }),
-    );
-
-    const deleteHeartRequest = readReactionRequests(canvas)[2]!;
-    canvas.getByRole('button', { name: `요청 ${deleteHeartRequest.id} success` }).click();
-    await waitFor(() =>
-      expect(readCountRefetchRequests(canvas)[1]).toMatchObject({ failed: true }),
-    );
-    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '🎉 반응 8개' })).toBeVisible();
-    expect(canvas.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
-  },
-  render: () => <ReactionContractHarness manualCountRefetch />,
 };
 
 export const ReactionFailureRetryActorSwitchAndUnmount: Story = {

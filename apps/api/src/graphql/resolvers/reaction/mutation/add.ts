@@ -12,6 +12,7 @@ builder.mutationField('addReaction', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('AddReactionPayload', {
       fields: (field) => ({
+        post: field.field({ type: Post }),
         reaction: field.field({ type: Reaction }),
       }),
     }),
@@ -40,7 +41,7 @@ builder.mutationField('addReaction', (t) =>
       });
       await result.postCommit();
 
-      return { reaction: result.reaction };
+      return { post: post.id, reaction: result.reaction };
     },
   }),
 );

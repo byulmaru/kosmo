@@ -122,6 +122,12 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(first);
     assertNoGraphQLErrors(second);
     assert.deepEqual(second.data?.addReaction.reaction, first.data?.addReaction.reaction);
+    assert.deepEqual(first.data?.addReaction.post, {
+      id: globalId('Post', post.id),
+      reactionCounts: [{ count: 1, type: '❤️' }],
+      viewerReactions: [{ id: first.data?.addReaction.reaction.id, type: '❤️' }],
+    });
+    assert.deepEqual(second.data?.addReaction.post, first.data?.addReaction.post);
     const stored = await db
       .select()
       .from(Reactions)
@@ -603,6 +609,7 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.deleteReaction.reactionId, null);
     assert.deepEqual(result.data?.deleteReaction.post?.viewerReactions, []);
+    assert.deepEqual(result.data?.deleteReaction.post?.reactionCounts, [{ count: 1, type: '🎉' }]);
     assert.equal(
       await db
         .select()
@@ -668,6 +675,7 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(missing);
     assert.equal(missing.data?.deleteReaction.reactionId, null);
     assert.deepEqual(missing.data?.deleteReaction.post?.viewerReactions, []);
+    assert.deepEqual(missing.data?.deleteReaction.post?.reactionCounts, []);
 
     const first = await requestAddReaction(post.id, '👀', auth.token);
     const firstId = first.data?.addReaction.reaction.id;
@@ -1021,6 +1029,7 @@ describe('GraphQL Reaction', () => {
       instanceId: suspendedInstance.id,
     });
     const otherProfile = await createProfile('other-count-profile');
+    const lateHeartProfile = await createProfile('late-heart-count-profile');
 
     await Promise.all([
       insertReaction({
@@ -1034,7 +1043,7 @@ describe('GraphQL Reaction', () => {
         id: '00000000-0000-8000-8000-000000000032',
         postId: post.id,
         profileId: unavailableProfile.id,
-        type: '❤️',
+        type: '🎉',
         createdAt: '2026-07-21T00:00:02Z',
       }),
       insertReaction({
@@ -1051,18 +1060,50 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(authenticated);
     assertNoGraphQLErrors(anonymous);
     assert.deepEqual(authenticated.data?.node?.reactionCounts, [
-      { type: '❤️', count: 2 },
-      { type: '🎉', count: 1 },
+      { type: '❤️', count: 1 },
+      { type: '🎉', count: 2 },
     ]);
     assert.deepEqual(
       anonymous.data?.node?.reactionCounts,
       authenticated.data?.node?.reactionCounts,
     );
 
-    await db.delete(Reactions).where(eq(Reactions.id, '00000000-0000-8000-8000-000000000033'));
-    const afterDelete = await requestReactionCounts(post.id, viewer.token);
-    assertNoGraphQLErrors(afterDelete);
-    assert.deepEqual(afterDelete.data?.node?.reactionCounts, [{ type: '❤️', count: 2 }]);
+    await insertReaction({
+      id: '00000000-0000-8000-8000-000000000034',
+      postId: post.id,
+      profileId: lateHeartProfile.id,
+      type: '❤️',
+      createdAt: '2026-07-21T00:00:04Z',
+    });
+    const afterCountIncrease = await requestReactionCounts(post.id, viewer.token);
+    assertNoGraphQLErrors(afterCountIncrease);
+    assert.deepEqual(afterCountIncrease.data?.node?.reactionCounts, [
+      { type: '❤️', count: 2 },
+      { type: '🎉', count: 2 },
+    ]);
+
+    await db.delete(Reactions).where(eq(Reactions.id, '00000000-0000-8000-8000-000000000031'));
+    const afterFirstReactionDelete = await requestReactionCounts(post.id, viewer.token);
+    assertNoGraphQLErrors(afterFirstReactionDelete);
+    assert.deepEqual(afterFirstReactionDelete.data?.node?.reactionCounts, [
+      { type: '🎉', count: 2 },
+      { type: '❤️', count: 1 },
+    ]);
+
+    await db.delete(Reactions).where(eq(Reactions.id, '00000000-0000-8000-8000-000000000034'));
+    await insertReaction({
+      id: '00000000-0000-8000-8000-000000000035',
+      postId: post.id,
+      profileId: viewer.profile.id,
+      type: '❤️',
+      createdAt: '2026-07-21T00:00:05Z',
+    });
+    const afterReappearance = await requestReactionCounts(post.id, viewer.token);
+    assertNoGraphQLErrors(afterReappearance);
+    assert.deepEqual(afterReappearance.data?.node?.reactionCounts, [
+      { type: '🎉', count: 2 },
+      { type: '❤️', count: 1 },
+    ]);
 
     const emptyPost = await createPost(viewer.profile.id);
     const empty = await requestReactionCounts(emptyPost.id, viewer.token);
@@ -1074,6 +1115,39 @@ describe('GraphQL Reaction', () => {
     const hiddenPost = await requestReactionCounts(privatePost.id, viewer.token);
     assertNoGraphQLErrors(hiddenPost);
     assert.equal(hiddenPost.data?.node, null);
+  });
+
+  test('Reaction count는 동일 최초 시각을 Type으로 결정하고 동일 Post 복수 경로에서 일치한다', async () => {
+    const author = await createProfile('tie-count-author');
+    const heartProfile = await createProfile('tie-count-heart');
+    const partyProfile = await createProfile('tie-count-party');
+    const post = await createPost(author.id);
+
+    await Promise.all([
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000036',
+        postId: post.id,
+        profileId: heartProfile.id,
+        type: '❤️',
+        createdAt: '2026-07-21T00:00:06Z',
+      }),
+      insertReaction({
+        id: '00000000-0000-8000-8000-000000000037',
+        postId: post.id,
+        profileId: partyProfile.id,
+        type: '🎉',
+        createdAt: '2026-07-21T00:00:06Z',
+      }),
+    ]);
+
+    const result = await requestRepeatedReactionCounts(post.id);
+    assertNoGraphQLErrors(result);
+    const expected = [
+      { type: '❤️', count: 1 },
+      { type: '🎉', count: 1 },
+    ];
+    assert.deepEqual(result.data?.first?.reactionCounts, expected);
+    assert.deepEqual(result.data?.second?.reactionCounts, expected);
   });
 
   test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
@@ -1171,10 +1245,24 @@ type GraphQLResult<TData> = {
 };
 
 const requestAddReaction = (postId: string, type: string, token?: string) =>
-  requestGraphQL<{ addReaction: { reaction: ReactionNode } }>(
+  requestGraphQL<{
+    addReaction: {
+      post: {
+        id: string;
+        reactionCounts: Array<{ count: number; type: string }>;
+        viewerReactions: Array<{ id: string; type: string }>;
+      };
+      reaction: ReactionNode;
+    };
+  }>(
     `mutation AddReaction($input: AddReactionInput!) {
       addReaction(input: $input) {
         reaction { __typename id type createdAt }
+        post {
+          id
+          viewerReactions { id type }
+          reactionCounts { type count }
+        }
       }
     }`,
     { input: { postId: globalId('Post', postId), type } },
@@ -1187,7 +1275,11 @@ const requestDeleteReaction = (postId: string, type: string, token?: string) =>
 const requestDeleteReactionWithInput = (input: { postId: string; type: string }, token?: string) =>
   requestGraphQL<{
     deleteReaction: {
-      post: { id: string; viewerReactions: Array<{ id: string; type: string }> } | null;
+      post: {
+        id: string;
+        reactionCounts: Array<{ count: number; type: string }>;
+        viewerReactions: Array<{ id: string; type: string }>;
+      } | null;
       reactionId: string | null;
     };
   }>(
@@ -1197,6 +1289,7 @@ const requestDeleteReactionWithInput = (input: { postId: string; type: string },
         post {
           id
           viewerReactions { id type }
+          reactionCounts { type count }
         }
       }
     }`,
@@ -1300,6 +1393,22 @@ const requestReactionCounts = (postId: string, token?: string) =>
     }`,
     { postId: globalId('Post', postId) },
     token,
+  );
+
+const requestRepeatedReactionCounts = (postId: string) =>
+  requestGraphQL<{
+    first: ReactionCountsNode | null;
+    second: ReactionCountsNode | null;
+  }>(
+    `query RepeatedReactionCounts($postId: ID!) {
+      first: node(id: $postId) {
+        ... on Post { reactionCounts { type count } }
+      }
+      second: node(id: $postId) {
+        ... on Post { reactionCounts { type count } }
+      }
+    }`,
+    { postId: globalId('Post', postId) },
   );
 
 const requestGraphQL = async <TData>(
