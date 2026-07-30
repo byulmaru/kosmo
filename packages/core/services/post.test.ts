@@ -332,7 +332,7 @@ test('createPost는 caller transaction rollback에 Post와 Content를 남기지 
   assert.equal(await db.$count(PostContents), contentCount);
 });
 
-test('caller transaction의 Reply Notification은 savepoint 뒤에 생성하지 않는다', async () => {
+test('caller transaction의 Reply Notification은 outer commit 전에 생성하지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -341,8 +341,9 @@ test('caller transaction의 Reply Notification은 savepoint 뒤에 생성하지 
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const reply = await db.transaction((tx) =>
-    createPost(
+  let replyId: string | undefined;
+  await db.transaction(async (tx) => {
+    const reply = await createPost(
       {
         document: postContentDocumentFromText('reply'),
         origin: 'LOCAL',
@@ -351,10 +352,15 @@ test('caller transaction의 Reply Notification은 savepoint 뒤에 생성하지 
         visibility: PostVisibility.PUBLIC,
       },
       tx,
-    ),
-  );
+    );
+    replyId = reply.post.id;
 
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
+    assert.equal(await tx.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 1);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
+  });
+
+  assert.ok(replyId);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 1);
 });
 
 test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 duplicate로 backfill하지 않는다', async () => {

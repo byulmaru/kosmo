@@ -2,7 +2,7 @@
 
 ### Requirement: Reply Notification source correlation
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `PROD-426`, `PROD-507` 시스템은 origin과 application entrypoint에 관계없이 다른 Profile의 Post에 새 Reply가 실제 생성되면 결과 Reply를 source로 하는 Profile-scoped Reply Notification을 post-commit Best Effort로 생성해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `PROD-426`, `PROD-507` 시스템은 origin과 application entrypoint에 관계없이 다른 Profile의 Post에 새 Reply가 실제 생성되면 결과 Reply를 source로 하는 Profile-scoped Reply Notification을 공통 생성 lifecycle의 격리된 Best Effort savepoint에서 생성해야 한다(MUST).
 
 #### Scenario: 다른 Profile의 Post에 Reply
 
@@ -45,16 +45,16 @@
 
 #### Scenario: Notification 저장 실패
 
-- **WHEN** Reply commit 뒤 같은 request에서 await한 Notification 저장이 실패한다
+- **WHEN** Reply 생성 lifecycle에서 별도 savepoint로 await한 Notification 저장이 실패한다
 - **THEN** 시스템은 Reply와 Reply 생성 성공 결과를 유지한다
 - **AND** 누락 item을 retry, outbox, queue 또는 backfill로 자동 복구하지 않는다
 
 #### Scenario: caller-owned outer transaction
 
 - **WHEN** 공통 Post 생성 action이 caller-owned transaction에 참여해 새 Reply를 만든다
-- **THEN** 시스템은 outer transaction이 실제 commit되기 전에 Reply Notification을 만들지 않는다
-- **AND** 현재 Best Effort 경계는 callback이나 별도 coordination 계약을 추가하지 않고 이 경로에서 Notification 생성을 생략한다
-- **AND** 누락 item을 retry하거나 backfill하지 않는다
+- **THEN** Reply Notification은 outer transaction이 실제 commit되기 전에 다른 transaction에 보이지 않는다
+- **AND** 같은 Best Effort savepoint를 사용해 transaction 인자의 존재 여부로 Notification lifecycle을 분기하지 않는다
+- **AND** outer transaction이 rollback되면 Reply와 Notification을 모두 남기지 않는다
 
 ### Requirement: Reply Notification GraphQL과 inbox 통합
 

@@ -424,6 +424,15 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
+      if (input.replyParentId !== undefined) {
+        await createReplyNotification(linkedPost.id, tx).catch((error) => {
+          console.error('Reply notification creation failed', {
+            error,
+            postId: linkedPost.id,
+          });
+        });
+      }
+
       return { content, created: true, post: linkedPost };
     });
   } catch (error) {
@@ -432,15 +441,6 @@ export async function createPost(
     }
 
     return { created: false };
-  }
-
-  if (!tx && input.replyParentId !== undefined) {
-    await createReplyNotification(result.post.id).catch((error) => {
-      console.error('Post-commit Reply notification creation failed', {
-        error,
-        postId: result.post.id,
-      });
-    });
   }
 
   if (input.origin === 'LOCAL') {

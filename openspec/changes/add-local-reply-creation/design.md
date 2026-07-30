@@ -35,7 +35,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 
 1. PROD-424에서 `CreatePostInput`에 nullable `replyParentId: ID`를 추가하고 concrete `Post` global ID를 decode한다. 요청 Profile 기준 Parent visibility/eligibility·Content를 검증한 같은 transaction 내에서 기존 core Reply 저장 경계를 호출하고 기존 `CreatePostPayload.post`를 반환한다.
 2. PROD-425에서 선행 thread API/UI가 merge된 뒤 route가 thread query와 mutation connection context를 소유하게 한다. `PostComposer`에 optional Parent context를 주입하고, 성공 payload를 현재 descendant connection에 정규화·반영하되 전역 Post 목록 membership을 추측하지 않는다.
-3. PROD-426에서 Reply source에서 Recipient·Related Post·Related Profile을 파생하는 멱등 Notification 저장 경계를 추가한다. Reply commit 후 같은 request에서 이 경계를 await/catch하여 source transaction과 격리한다.
+3. PROD-426에서 Reply source에서 Recipient·Related Post·Related Profile을 파생하는 멱등 Notification 저장 경계를 추가한다. 같은 Reply 생성 transaction의 별도 savepoint에서 이 경계를 await/catch하여 Notification 실패만 rollback한다.
 4. Notification visibility predicate를 kind별 source relation에 따라 SQL에서 구성하고 page limit 전에 적용한다. Reply branch는 source PK에서 시작하는 nested `EXISTS`로 Parent Author/Recipient mapping과 Reply Author visibility를 확인하며 Parent lifecycle predicate는 두지 않는다. concrete `ReplyNotification` Node의 `post`/`profile` source hydration은 request-scoped `ctx.loader`로 batch하고, mixed connection/count/Read가 동일 predicate를 사용하게 한 뒤 client의 discriminated item branch를 결과 Reply 이동과 기존 Best Effort Read/cache 경계에 연결한다.
 5. PROD-423에서 Post 상세 Reply 작성 → thread 반영 → Parent Author inbox/count → item 읽음/결과 Reply 이동을 통합 검증한다. 세 자식 계약과 선행 change의 task·delta spec이 모두 맞을 때만 archive한다.
 
@@ -50,7 +50,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 - Parent visibility를 검증하지 않거나 요청 Account/selected Profile을 viewer로 삼지 않고, 행동 주체 Profile을 viewer로 사용한다.
 - Reply에 Parent Visibility를 강제하지 않고, `repostSourceId`를 작성 입력에 추가하지 않는다.
 - Content 없는 Repost의 disabled action에 callback을 남겨 composer 진입이 가능하게 만들지 않는다.
-- Notification을 Reply transaction/savepoint에 넣거나 fire-and-forget으로 호출하지 않는다.
+- Notification을 Reply write와 같은 savepoint에 넣거나 fire-and-forget으로 호출하지 않는다. 별도 savepoint로 실패를 격리하고 transaction 인자의 존재 여부로 lifecycle을 분기하지 않는다.
 - client에서 hidden Notification을 사후 filtering해 서버 connection·count·Node·Read의 불일치를 감추지 않는다.
 
 ## Risks / Trade-offs
