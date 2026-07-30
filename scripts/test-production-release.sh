@@ -290,7 +290,7 @@ expect_failure "${repo_root}/scripts/resolve-production-release.sh" 1.0.0
 
 run_release_test fresh
 "${repo_root}/scripts/publish-production-release.sh" 1.0.0 "${valid_image}" >/dev/null
-command_order="$(sed -E 's/ --repo.*//' "${FAKE_LOG}" | rg 'release (create|upload|edit|verify)' | sed -E 's/.*release ([^ ]+).*/\1/' | tr '\n' ' ')"
+command_order="$(sed -E 's/ --repo.*//' "${FAKE_LOG}" | grep -E 'release (create|upload|edit|verify)' | sed -E 's/.*release ([^ ]+).*/\1/' | tr '\n' ' ')"
 [[ "${command_order}" == "create upload edit verify verify-asset " ]] || fail "release was not drafted, populated, published, and verified in order: ${command_order}"
 
 run_release_test setting-disabled
@@ -360,7 +360,7 @@ run_deploy_test() {
 
 run_deploy_test success success
 run_deploy_test rerun success
-if rg -q 'actions run' "${FAKE_LOG}"; then
+if grep -q 'actions run' "${FAKE_LOG}"; then
   fail "same-identity rerun unexpectedly promoted an already active rollout"
 fi
 run_deploy_test migration-failure failure
