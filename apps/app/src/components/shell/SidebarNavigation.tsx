@@ -196,15 +196,11 @@ export function SidebarNavigation({
               </Pressable>
             </Link>
           ) : null}
-          {!compact ? <LogoutControl /> : null}
         </View>
 
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          {compact ? (
-            <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
-          ) : null}
           <Link asChild href="/feedback">
             <Pressable
               aria-current={feedbackActive ? 'page' : undefined}
@@ -240,6 +236,11 @@ export function SidebarNavigation({
               ) : null}
             </Pressable>
           </Link>
+          {compact ? (
+            <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
+          ) : (
+            <LogoutControl />
+          )}
         </View>
       </ScrollView>
     </View>

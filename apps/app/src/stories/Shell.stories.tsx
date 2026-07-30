@@ -269,9 +269,12 @@ export const FeedbackNavigationCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(link.querySelector('path')).toHaveAttribute(
       'd',
       'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',
@@ -285,9 +288,12 @@ export const FeedbackNavigationCompactCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
   },
   render: () => <CompactSidebarStory />,
 };
@@ -297,15 +303,15 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
-    expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
-      'stroke-width',
-      '2',
-    );
+    expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
   },
   render: () => <FeedbackNavigationDrawerStory />,
 };
@@ -969,7 +975,7 @@ export const UniversalMobile: Story = {
     expect(page.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute('href', '/feedback');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
-    const logout = within(drawer).getByRole('button', { name: '로그아웃' });
+    const logout = page.getByRole('button', { name: '로그아웃' });
     expect(logout).toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(within(drawer).queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
