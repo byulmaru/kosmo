@@ -43,18 +43,18 @@
 - **THEN** 시스템은 Account 로그인 경계를 통과시킨다
 - **AND** 공개 조회 가능한 관련 Profile connection을 정상적으로 반환한다
 
-### Requirement: Exact relation and public Local Profile visibility
+### Requirement: Exact relation and public Profile visibility
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-523`, `PROD-524`, `PROD-525`, `PROD-528` — 시스템은 parent Hashtag identity와 정확한 Profile Tag 관계가 있고 공개 조회 조건을 통과한 Active·Normal Local Profile만 `relatedProfiles` 후보로 사용해야 한다(MUST). Profile visibility와 Local 조건은 page limit 전에 SQL 후보에 적용해야 하며(MUST), 같은 Profile을 한 page 또는 여러 page에 중복 반환해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `PROD-523`, `PROD-524`, `PROD-525`, `PROD-528` — 시스템은 parent Hashtag identity와 정확한 Profile Tag 관계가 있고 공개 조회 조건을 통과한 Active·Normal Profile을 `relatedProfiles` 후보로 사용해야 한다(MUST). Profile visibility는 page limit 전에 SQL 후보에 적용해야 하며(MUST), 저장된 Profile Origin을 별도로 제한하거나 원격 Profile을 새로 조회해서는 안 되며(MUST NOT), 같은 Profile을 한 page 또는 여러 page에 중복 반환해서는 안 된다(MUST NOT).
 
-#### Scenario: Include an exact related public Local Profile
+#### Scenario: Include an exact related public Profile
 
-- **WHEN** Active·Normal Local Profile이 parent Hashtag identity를 Profile Tag로 참조한다
+- **WHEN** Active·Normal Profile이 parent Hashtag identity를 Profile Tag로 참조한다
 - **THEN** 시스템은 그 Profile을 `relatedProfiles` 후보에 포함한다
 
 #### Scenario: Exclude a Profile related to another Hashtag
 
-- **WHEN** 공개 Local Profile이 요청한 Hashtag가 아닌 다른 Hashtag identity만 Profile Tag로 참조한다
+- **WHEN** 공개 Profile이 요청한 Hashtag가 아닌 다른 Hashtag identity만 Profile Tag로 참조한다
 - **THEN** 시스템은 그 Profile을 결과에 포함하지 않는다
 
 #### Scenario: Exclude Profiles that are not publicly visible
@@ -62,15 +62,15 @@
 - **WHEN** parent Hashtag와 관계된 Profile의 lifecycle이 Active가 아니거나 suspension 상태가 Normal이 아니다
 - **THEN** 시스템은 그 Profile을 page limit 계산 전에 후보에서 제외한다
 
-#### Scenario: Exclude Remote Profiles without materialization
+#### Scenario: Do not materialize Remote Profiles
 
-- **WHEN** 저장된 Remote Profile이 parent Hashtag와 관계되어 있거나 원격에서 같은 Hashtag 이름을 사용할 수 있다
-- **THEN** 시스템은 Remote Profile을 결과에 포함하지 않는다
+- **WHEN** parent Hashtag와 저장된 관계가 없지만 원격에서 같은 Hashtag 이름을 사용하는 Profile을 조회할 수 있다
+- **THEN** 시스템은 새로 materialize한 Remote Profile을 결과에 포함하지 않는다
 - **AND** 원격 lookup, refresh 또는 새 Profile materialization을 수행하지 않는다
 
 #### Scenario: Fill a page after applying visibility
 
-- **WHEN** cursor 다음의 관계 row 중 일부 Profile이 공개 조회 조건을 통과하지 않고 이후에 공개 Local Profile 후보가 더 존재한다
+- **WHEN** cursor 다음의 관계 row 중 일부 Profile이 공개 조회 조건을 통과하지 않고 이후에 공개 Profile 후보가 더 존재한다
 - **THEN** 시스템은 숨겨진 Profile을 application 단계에서 제거해 짧은 page를 만들지 않는다
 - **AND** visibility를 통과한 후보를 기준으로 요청한 page 크기까지 반환한다
 

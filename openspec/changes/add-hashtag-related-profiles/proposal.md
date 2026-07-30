@@ -5,9 +5,9 @@
 ## What Changes
 
 - 기존 `Hashtag` Node에 로그인한 Account만 사용할 수 있는 `relatedProfiles(first:, after:): ProfileConnection!` 관계 목록을 추가한다.
-- 결과를 정확한 Hashtag identity와 관계된 Active·Normal Local Profile로 제한하고, visibility를 페이지 상한 전에 적용한다.
+- 결과를 정확한 Hashtag identity와 관계된 공개 Active·Normal Profile로 제한하고, visibility를 페이지 상한 전에 적용한다.
 - 결과를 immutable `Profile.id ASC` cursor로 정렬하고 한 요청의 기본·최대 크기를 20개로 제한한다.
-- 인증 실패, 존재하지만 관계가 없는 Hashtag, visibility, Local/Remote 경계, cursor 페이지의 중복·누락과 기존 `searchProfiles` 회귀를 API 통합 테스트로 검증한다.
+- 인증 실패, 존재하지만 관계가 없는 Hashtag, visibility, 저장된 관계와 원격 조회 경계, cursor 페이지의 중복·누락과 기존 `searchProfiles` 회귀를 API 통합 테스트로 검증한다.
 - 이번 PROD-528 slice에서는 client route, TagChip navigation, Relay 목록 상태와 UI를 구현하지 않는다. 해당 범위는 같은 change를 이어받는 PROD-529가 소유한다.
 
 ## Authority / Provenance
@@ -20,7 +20,7 @@
 
 ### New Capabilities
 
-- `hashtag-related-profile-api`: 정확한 Hashtag identity에서 공개 Local Profile 관계를 인증·visibility·비용 제한 cursor 계약으로 조회하는 GraphQL API
+- `hashtag-related-profile-api`: 정확한 Hashtag identity에서 공개 Profile 관계를 인증·visibility·비용 제한 cursor 계약으로 조회하는 GraphQL API
 
 ### Modified Capabilities
 

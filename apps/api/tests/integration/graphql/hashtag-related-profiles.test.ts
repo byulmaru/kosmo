@@ -142,7 +142,7 @@ describe('GraphQL Hashtag related Profiles', () => {
     );
   });
 
-  test('uses exact relation and fills the page after applying public Local visibility', async () => {
+  test('uses exact relation and fills the page after applying public visibility', async () => {
     const hashtag = await createHashtag('exact');
     const otherHashtag = await createHashtag('other');
     const visibleProfiles = await Promise.all(
@@ -169,12 +169,6 @@ describe('GraphQL Hashtag related Profiles', () => {
       id: profileId(24),
       instanceId: suspendedInstance.id,
     });
-    const remoteInstance = await createRemoteInstance();
-    const remote = await createProfile({
-      handle: 'remote',
-      id: profileId(25),
-      instanceId: remoteInstance.id,
-    });
     const other = await createProfile({ handle: 'other-only', id: profileId(26) });
 
     await db
@@ -184,7 +178,6 @@ describe('GraphQL Hashtag related Profiles', () => {
         { hashtagId: hashtag.id, profileId: disabled.id },
         { hashtagId: hashtag.id, profileId: suspended.id },
         { hashtagId: hashtag.id, profileId: suspendedInstanceProfile.id },
-        { hashtagId: hashtag.id, profileId: remote.id },
         { hashtagId: otherHashtag.id, profileId: other.id },
       ]);
 
@@ -289,7 +282,7 @@ describe('GraphQL Hashtag related Profiles', () => {
     const hashtag = await createHashtag('cursor-validation');
     const auth = await createAuthenticatedSession();
 
-    for (const after of ['not-a-cursor', 'MA==']) {
+    for (const after of ['', 'not-a-cursor', 'MA==']) {
       const result = await requestGraphQL<RelatedProfilesData>(
         relatedProfilesQuery,
         { after, id: globalId('Hashtag', hashtag.id) },
@@ -332,18 +325,6 @@ const addTag = (profileId: string, hashtagId: string) =>
 
 const profileId = (value: number) =>
   `00000000-0000-8006-8000-${value.toString(16).padStart(12, '0')}`;
-
-const createRemoteInstance = async () =>
-  db
-    .insert(Instances)
-    .values({
-      canonicalOrigin: 'https://remote.example',
-      domain: 'remote.example',
-      kind: InstanceKind.ACTIVITYPUB,
-      state: InstanceState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
 
 const createLocalInstance = async ({
   domain,
@@ -427,7 +408,6 @@ const resetFixtures = async () => {
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);
-  await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
   await db
     .delete(Instances)
     .where(and(eq(Instances.kind, InstanceKind.LOCAL), ne(Instances.id, localInstanceId)));

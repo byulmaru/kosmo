@@ -1,5 +1,4 @@
 import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, eq, getColumns, gt } from 'drizzle-orm';
@@ -53,9 +52,10 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
             .where(
               and(
                 eq(ProfileHashtags.hashtagId, hashtag.id),
-                eq(Instances.kind, InstanceKind.LOCAL),
                 visibleProfileWhere({ profile: Profiles, instance: Instances }),
-                after ? gt(Profiles.id, decodeRelatedProfileCursor(after)) : undefined,
+                after !== null && after !== undefined
+                  ? gt(Profiles.id, decodeRelatedProfileCursor(after))
+                  : undefined,
               ),
             )
             .orderBy(asc(Profiles.id))

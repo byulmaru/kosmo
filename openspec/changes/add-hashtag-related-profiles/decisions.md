@@ -16,17 +16,17 @@
 - Consequences: API와 client는 Hashtag global identity를 전달해야 하며, 검색창 Hashtag 검색이 필요하면 별도 Domain/Issue/OpenSpec 계약을 거쳐야 한다.
 - Confirmation / Follow-up: schema와 integration test에서 `searchProfiles` shape·동작이 유지되고 새 field가 parent Hashtag identity만 사용하는지 확인한다.
 
-### 관련 Profile 후보는 로그인 뒤 Local visibility로 제한한다
+### 관련 Profile 후보는 로그인 뒤 공용 visibility로 제한한다
 
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/design/hashtag-related-profiles.md`, `PROD-523`, `PROD-524`, `PROD-525`, `PROD-528`
 - Status: Active
-- Context / Problem: Profile Tag 관계만 확인하거나 page limit 뒤 visibility를 적용하면 비공개·정지·Remote Profile이 노출되거나 page가 짧아질 수 있다. `usingProfile` 인증은 selected Profile 없는 로그인 Account를 불필요하게 거부한다.
-- Decision Outcome: GraphQL field가 Account `login`을 resolver와 Profile 후보 query 전에 평가한다. 후보 SQL은 exact Hashtag 관계, Active·Normal Profile visibility와 Local Instance 조건을 page limit 전에 함께 적용하고, Remote lookup·refresh·materialization을 수행하지 않는다.
+- Context / Problem: Profile Tag 관계만 확인하거나 page limit 뒤 visibility를 적용하면 비공개·정지 Profile이 노출되거나 page가 짧아질 수 있다. `usingProfile` 인증은 selected Profile 없는 로그인 Account를 불필요하게 거부한다.
+- Decision Outcome: GraphQL field가 Account `login`을 resolver와 Profile 후보 query 전에 평가한다. 후보 SQL은 exact Hashtag 관계와 Active·Normal Profile visibility를 page limit 전에 함께 적용하고, 저장된 Profile Origin을 별도로 제한하지 않으며 Remote lookup·refresh·materialization을 수행하지 않는다.
 - Alternatives Considered: `usingProfile` scope는 canonical보다 강한 권한을 요구한다. resolver 내부 수동 인증은 field scope의 선행 실행과 기존 permission error 계약을 잃는다. application filtering은 짧은 page와 cursor 누락을 만들 수 있다.
-- Consequences: selected Profile이 없는 Active Account도 조회할 수 있고, 비인증 요청은 기존 `PERMISSION_DENIED` 표현을 사용한다. SQL predicate는 공용 visibility만 재사용하지 않고 Local 조건을 명시해야 한다.
-- Confirmation / Follow-up: 인증 실패에서 후보 SQL이 실행되지 않는지, selected Profile 없는 Session 성공, 비공개·suspended·Remote 제외와 filter-before-limit page fullness를 integration test로 확인한다.
+- Consequences: selected Profile이 없는 Active Account도 조회할 수 있고, 비인증 요청은 기존 `PERMISSION_DENIED` 표현을 사용한다. 이미 저장된 Local·Remote 관계는 공용 visibility를 통과할 때 같은 목록 계약으로 반환한다.
+- Confirmation / Follow-up: 인증 실패에서 후보 SQL이 실행되지 않는지, selected Profile 없는 Session 성공, 비공개·suspended 제외와 원격 lookup 미수행, filter-before-limit page fullness를 integration test로 확인한다.
 
 ### Hashtag Node에 ProfileConnection 관계 field를 둔다
 
