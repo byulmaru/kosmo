@@ -158,12 +158,14 @@
 
 ### Requirement: Feedback secret injection and production smoke
 
-**Authority / Provenance:** `PROD-479`, `PROD-487` — The deployment environment MUST inject `SLACK_FEEDBACK_WEBHOOK_URL` as a secret only into the API runtime and MUST NOT include it in the client bundle or Relay payload. The 2026-07-29 production verification MUST submit real Web feedback with an authenticated smoke account and confirm one successful Slack message, a safe payload, and the UI success state.
+**Authority / Provenance:** `PROD-479`, `PROD-487` — The deployment environment MUST provide `SLACK_FEEDBACK_WEBHOOK_URL` through the existing shared `env` Secret used by the API and Web Rollouts. The API delivery application MUST be the only application consumer, and the value MUST NOT be read into, inlined into, or otherwise exposed by the Web browser bundle or Relay payload. The 2026-07-29 production verification MUST submit real Web feedback with an authenticated smoke account and confirm one successful Slack message, a safe payload, and the UI success state.
 
 #### Scenario: Inject the webhook secret into the API
 
 - **WHEN** API가 production 배포 환경에서 시작한다
-- **THEN** `SLACK_FEEDBACK_WEBHOOK_URL`은 API process environment에서만 사용할 수 있다
+- **THEN** 기존 공용 `env` Secret을 통해 `SLACK_FEEDBACK_WEBHOOK_URL`이 API와 Web Rollout process environment에 전달된다
+- **AND** API delivery application만 해당 값을 읽어 Slack 전달에 사용한다
+- **AND** Web application은 해당 값을 읽거나 browser asset으로 inline하지 않는다
 - **AND** Expo public environment, generated GraphQL schema와 Web asset에 secret 값이 포함되지 않는다
 
 #### Scenario: Start the API without optional feedback configuration

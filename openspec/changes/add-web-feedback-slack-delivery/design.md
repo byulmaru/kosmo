@@ -2,7 +2,11 @@
 
 `PROD-487`은 부모 `PROD-479`의 Android/iOS/Web 공용 구현 slice다. 현재 `apps/app`의 full/compact sidebar와 mobile drawer는 같은 sidebar component를 공유하며 footer의 "피드백 보내기" control은 보호된 `/feedback` route로 이동한다. `/feedback`은 기존 `/menu` placeholder의 KOSMO eyebrow, 메뉴 제목·설명과 login test link를 렌더링하지 않지만, 기존 프로필 관련 진입점이 사용하는 `/menu` route와 그 UI는 독립적으로 보존한다. 각 클라이언트는 기존 GraphQL 인증 경계를 사용하고, API의 `login` scope는 선택 Profile 없이도 유효한 account session을 식별한다.
 
-현재 API runtime에는 Slack client나 feedback persistence가 없다. 배포 환경은 API process에 secret을 주입할 수 있지만 이 변경은 전용 Helm Secret 경로를 추가하지 않으며, feedback secret 누락이 API 전체 기동을 막아서도 안 된다. Slack Incoming Webhook은 성공 또는 오류 응답을 반환하지만 멱등 key를 제공하지 않으므로, 사용자가 선택한 계약에 따라 server 자동 retry를 금지하고 모호한 실패 후 명시적 재시도의 드문 중복을 허용한다.
+현재 API runtime에는 Slack client나 feedback persistence가 없다. 배포 환경은 기존 공용 `env` Secret을 API와
+Web Rollout에 전달하며 API delivery만 webhook 값을 소비한다. 이 변경은 전용 Helm Secret 경로를 추가하지
+않으며, feedback secret 누락이 API 전체 기동을 막아서도 안 된다. Slack Incoming Webhook은 성공 또는 오류
+응답을 반환하지만 멱등 key를 제공하지 않으므로, 사용자가 선택한 계약에 따라 server 자동 retry를 금지하고
+모호한 실패 후 명시적 재시도의 드문 중복을 허용한다.
 
 ## Goals / Non-Goals
 
@@ -43,7 +47,10 @@
 5. Webhook URL은 `SLACK_FEEDBACK_WEBHOOK_URL`에서만 읽고 HTTPS `hooks.slack.com` Incoming Webhook 형태인지 검증한다. Request에는 짧은 timeout을 적용하되 timeout, network error와 non-success response에서 다시 POST하지 않는다.
 6. Slack top-level fallback은 user content 없이 새 feedback과 category만 식별한다. Block Kit은 category, body, 제출 Account 내부 ID와 선택 Profile의 내부 ID·`displayName` 닉네임·`relativeHandle`을 plain-text로 표현하고 source field와 unfurl을 뺀다. 선택 Profile이 없으면 그 사실만 표시하며 Account `displayName`, 이메일, OIDC subject, session identity, request headers와 다른 Profile 정보는 포함하거나 기록하지 않는다.
 7. API test에서는 network를 호출하지 않고 fetch 경계를 stub해 auth, validation, payload, timeout, non-success와 concurrent flow를 검증한다. App story/test는 idle, invalid, pending, success, failure와 retry를 다루고 shared shell surface의 `/feedback` 이동과 Relay request state를 검증한다.
-8. 배포 전에 production API process에만 secret을 별도로 설정하고, 배포 후 전용 smoke account와 비민감 payload로 실제 Slack message 한 건과 UI 성공 상태를 확인한다. 절차와 확인 결과는 재현 가능한 운영 문서 또는 PR 검증 기록에 남긴다.
+8. 배포 전에 기존 공용 `env` Secret에 secret을 설정하고 API delivery가 이를 소비하는지 확인한다. 배포 후
+   전용 smoke account와 비민감 payload로 실제 Slack message 한 건과 UI 성공 상태를 확인하며, Web process와
+   browser asset에는 값이 노출되지 않는지 검증한다. 절차와 확인 결과는 재현 가능한 운영 문서 또는 PR 검증
+   기록에 남긴다.
 
 ### Allowed Alternatives
 
@@ -73,7 +80,8 @@
 
 1. API schema, validation, process-local guard와 Slack adapter를 test double로 검증한다.
 2. Android/iOS/Web `/feedback` form, shell navigation, Relay operation과 Storybook/E2E를 연결한다.
-3. 배포 차트 변경 없이 production API process에만 `SLACK_FEEDBACK_WEBHOOK_URL`을 별도로 설정하고 client/exported assets에 값이 없는지 확인한다.
+3. 배포 차트 변경 없이 기존 공용 `env` Secret에 `SLACK_FEEDBACK_WEBHOOK_URL`을 설정하고 API delivery가
+   이를 소비하는지 확인한다. Web process와 client/exported assets에는 값이 노출되지 않는지 검증한다.
 4. Web/API를 배포한 뒤 authenticated production smoke를 수행하고 지정 Slack channel의 single message와 safe payload를 확인한다.
 5. 회귀가 발생하면 feedback entry와 mutation을 이전 revision으로 rollback한다. DB migration이 없으므로 data rollback은 없으며, 필요하면 API runtime 환경 변수를 제거해 delivery를 fail closed 상태로 중지한다.
 

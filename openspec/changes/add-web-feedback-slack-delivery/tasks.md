@@ -38,7 +38,7 @@
 
 **Guardrails**
 
-- API runtime만 `SLACK_FEEDBACK_WEBHOOK_URL`을 소유하며 user body와 delivery metadata를 DB에 영속화하지 않는다.
+- API delivery 애플리케이션만 `SLACK_FEEDBACK_WEBHOOK_URL`을 소비하며 user body와 delivery metadata를 DB에 영속화하지 않는다.
 - Slack 성공 응답을 확인한 요청만 성공 처리하고 server는 자동 retry하지 않는다.
 - 같은 account의 concurrent delivery를 시작하지 않고, 완료 시 process-local in-flight 상태를 즉시 제거한다.
 - Account별 요청 횟수 제한과 rate history는 이번 범위에서 구현하거나 영속화하지 않는다.
@@ -108,7 +108,9 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
 **Guardrails**
 
 - `SLACK_FEEDBACK_WEBHOOK_URL` 실제 값은 repository, client bundle, Relay payload와 test fixture에 기록하지 않는다.
-- 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않으며, 운영 환경은 production smoke 전에 API process에만 webhook을 별도로 구성한다.
+- 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않는다. 운영 환경은 production smoke 전에 기존 공용
+  `env` Secret에 webhook을 구성하고, API delivery만 이를 소비하도록 유지한다. Web Rollout과 browser asset에는
+  값이 노출되지 않아야 한다.
 - 환경 변수 누락 시 API Pod 기동을 유지하고 feedback mutation만 fail closed로 실패한다.
 - Production smoke는 비민감하고 식별 가능한 test feedback을 사용하며 Web UI 성공과 Slack message 한 건을 함께 확인한다.
 - 부모 `PROD-479`의 final archive와 completion gate는 이번 task group에서 수행하지 않는다.
@@ -117,7 +119,8 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
 
 - `pnpm --filter @kosmo/api test`, `pnpm --filter @kosmo/app test`, 관련 API integration test와 `pnpm test:e2e`를 통과시킨다.
 - `pnpm lint:eslint`, `pnpm lint:prettier`와 `openspec validate add-web-feedback-slack-delivery --strict`를 통과시킨다.
-- Helm diff에 feedback 전용 Vault 경로나 Secret 주입이 추가되지 않았는지 확인한다.
+- Helm diff에 feedback 전용 Vault 경로나 Secret 주입이 추가되지 않았는지 확인하고, 기존 공용 `env` Secret이
+  API·Web Rollout에 전달되더라도 Web application과 browser asset이 webhook 값을 소비·노출하지 않는지 확인한다.
 - Web export와 repository search로 client artifact에 webhook secret 또는 hard-coded Slack URL이 없음을 확인한다.
 - Production smoke의 시간, environment, UI result와 Slack single-message/redaction result를 민감값 없이 기록한다.
 

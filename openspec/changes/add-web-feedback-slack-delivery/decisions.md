@@ -69,12 +69,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-487`, PR #390 review
-- Status: Active
+- Status: Superseded
 - Context / Problem: Feedback 구현이 Helm에 전용 Vault 경로와 `api-env` Secret을 추가했지만, 리뷰에서 이 기능 PR이 새 배포 Secret 리소스를 소유하지 않도록 범위를 정정했다. Web과 API가 함께 읽는 기존 공용 `env`에 webhook을 넣으면 client runtime까지 credential이 확산될 수 있다.
 - Decision Outcome: API는 process environment의 `SLACK_FEEDBACK_WEBHOOK_URL`을 fail-closed로 읽되, 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않는다. Production smoke 전에 배포 환경이 API process에만 webhook을 별도로 구성하며, 환경 변수 누락은 API 기동이 아니라 feedback mutation만 실패시킨다.
 - Alternatives Considered: 기존 `api-env` VaultStaticSecret 추가는 리뷰에서 제거하기로 했다. 공용 `env` Secret 재사용은 Web runtime에도 webhook을 전달하므로 제외했다.
 - Consequences: Repository chart만으로 production webhook 주입을 완료하지 않으며, 운영 환경 구성은 production smoke의 선행 조건이다. API·client 코드의 secret 경계와 missing configuration fail-closed 동작은 유지한다.
 - Confirmation / Follow-up: Helm diff에 feedback 전용 Secret 리소스가 없는지, missing/invalid config test와 client secret 비노출을 확인하고, 별도 운영 환경 구성을 포함한 production Slack smoke를 수행한다.
+
+### 기존 공용 `env` Secret을 사용하되 API delivery만 webhook을 소비한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-487`, PR #390 review
+- Status: Active
+- Context / Problem: 실제 Helm chart는 기존 Vault `env` Secret을 API와 Web Rollout에 `envFrom`으로 전달하고, 별도 `api-env` Secret을 사용하지 않는다. 이전 기록의 API 전용 별도 주입 가정은 현재 배포 계약과 운영 문서를 어긋나게 한다.
+- Decision Outcome: `SLACK_FEEDBACK_WEBHOOK_URL`은 기존 공용 `env` Secret에 구성한다. API delivery 애플리케이션만 이 값을 읽어 Slack 전달에 사용하며, Web process는 값을 application input이나 browser asset으로 읽거나 노출하지 않는다. 이 변경은 전용 Vault 경로나 Secret을 Helm에 추가하지 않고, 값이 없으면 feedback mutation만 fail closed로 실패시킨다.
+- Alternatives Considered: 별도 `api-env` VaultStaticSecret과 전용 Helm 주입은 이 PR의 배포 리소스 소유 범위를 넓히므로 제외했다. 공용 Secret을 사용하면서 Web bundle과 Relay에 값을 넣는 방식은 secret 경계를 깨므로 제외했다.
+- Consequences: 운영 환경은 기존 공용 `env` Secret에 webhook key를 구성해야 하며, Helm chart는 API·Web Rollout의 공용 `envFrom` 계약을 유지한다. Web runtime에 환경 변수가 전달될 수 있어도 Web application과 browser asset에는 credential이 노출되지 않는다.
+- Confirmation / Follow-up: API·Web Rollout의 `envFrom: env`와 Vault destination을 Helm render에서 확인하고, API delivery 소비 경로·Web bundle·Relay payload에 실제 secret 값이 노출되지 않는지 검증한다. Production Slack smoke에서 성공 메시지와 safe payload를 확인한다.
 
 ### Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다
 
@@ -156,7 +168,7 @@
 
 - 2026-07-28 `Account별 비영속 fixed-window와 in-flight guard를 사용한다`는 2026-07-29 `같은 account의 진행 중 delivery만 process-local로 차단한다`로 대체했다.
 - 2026-07-28 `Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다`는 2026-07-29 `Feedback 계약에서 Sentry event ID를 제외한다`로 대체했다.
-- 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. `api-env` 배포 결정은 2026-07-30 `Feedback webhook secret은 배포 환경에서 API process에 별도 구성한다`로 대체했으며, API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.
+- 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. `api-env` 배포 결정은 2026-07-30 `Feedback webhook secret은 배포 환경에서 API process에 별도 구성한다`로 대체되었고, 해당 별도 구성 결정은 다시 2026-07-30 `기존 공용 env Secret을 사용하되 API delivery만 webhook을 소비한다`로 대체했다. API secret 소비와 plain-text·unfurl 비활성화 결정은 유지한다.
 - 2026-07-29의 기존 `/menu` → `/feedback` redirect 결정은 `/feedback`을 canonical Web feedback route로 사용하면서 기존 `/menu`는 보존하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 메뉴 소개 UI를 제거한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 기존 /menu는 보존한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
