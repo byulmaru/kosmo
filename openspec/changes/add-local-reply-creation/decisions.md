@@ -40,6 +40,18 @@
 - Consequences: 목록·상세 route는 selected Profile fragment, surface mode와 성공 callback을 collection·thread coordinator 경계에 공급하고, actual Post row는 coordinator를 내부 소비해 Reply action과 surface를 조립한다. coordinator는 collection·detail identity와 selected Profile·Relay Environment를 분리하면서 하나의 active Parent를 유지하며, Reply shell은 Parent presentation과 open·close lifecycle만 소유하고 입력·mutation 상태는 기존 composer를 재사용한다. 이 ownership 이동은 modal·전체 화면·inline presentation, focus, 성공 feedback과 targeted refetch를 변경하지 않는다. 짧은 Web modal에도 720px frame이 유지되고 viewport가 작을 때만 `85dvh`로 축소된다. PROD-432는 guest 인증 위임과 전체 action 조합을 통합 검증한다.
 - Confirmation / Follow-up: PROD-425의 component·route 검증에서 일반 Post·Reply·Quote 진입, 순수 Repost disabled, 목록 modal·전체 화면, 상세 행별 inline, selected Profile 없음의 unchanged partial rollout과 controlled `expanded`를 확인한다. caller가 Reply UI config를 행별 prop으로 조립하지 않아도 contentful Post surface가 coordinator를 통해 action과 Composer를 내부 조립하고, coordinator 누락이 조용한 action 제거로 이어지지 않으며, 기존 단일 active Parent·dirty·pending·focus·callback 동작이 유지되는지 검증한다.
 
+### Web Reply editor는 하나의 둥근 focus indicator를 사용한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Visual Design Choice
+- Authority / Provenance: 사용자 결정(2026-07-31), `docs/design/reply-composer.md`, `docs/design/accessibility.md`, `PROD-425`
+- Status: Active
+- Context / Problem: Web Reply editor에는 Composer 외곽 border, focus 시 primary로 바뀌는 둥근 editor surface border와 브라우저 기본 TextArea 사각 outline이 함께 표시되어 입력 영역이 상자 안의 상자처럼 답답해 보인다.
+- Decision Outcome: `PostComposer`의 Web TextArea에서는 브라우저 기본 사각 outline만 제거하고, 기존 둥근 editor surface의 primary focus border를 유일한 시각적 focus indicator로 유지한다. 오류 상태에서는 같은 경계를 danger border로 표시한다. 공용 `TextArea`, Native 입력 스타일과 Composer·modal 외곽 semantic border는 변경하지 않는다.
+- Alternatives Considered: focus 강조를 모두 제거하면 keyboard focus 식별성이 약해진다. Composer나 modal 전체 외곽 border를 focus indicator로 바꾸면 실제 입력보다 넓은 Parent·footer 영역까지 강조한다. 외곽 semantic border를 제거하면 card·modal·inline surface 경계 계약이 흐려진다.
+- Consequences: Web Reply 입력은 사각 browser outline 없이 둥근 focus 경계 하나만 표시해 시각 밀도가 낮아지며, 실제 textbox focus·label·focus trap·복원과 error semantics는 유지된다.
+- Confirmation / Follow-up: focused Storybook interaction에서 editor가 실제 focus를 받고 TextArea computed `outlineStyle`이 `none`인지 확인한다. Web runtime에서는 둥근 editor surface focus border와 danger error border가 유지되고 공용 TextArea 및 Native가 변하지 않았는지 별도로 구분해 보고한다.
+
 ### 상세 Reply 성공은 현재 route만 targeted refetch한다
 
 - Decision Date: 2026-07-30

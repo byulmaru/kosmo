@@ -57,8 +57,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ### editor와 고정 footer
 
-- 중앙 editor는 기존 Composer의 작성 Profile, TextArea, focus/error 표현을 사용한다. placeholder는
-  `답글을 입력하세요…`다.
+- 중앙 editor는 기존 Composer의 작성 Profile, TextArea와 error 표현을 사용한다. Web TextArea의 브라우저
+  기본 사각 outline은 중복 표시하지 않고, 둥근 editor surface border 하나를 focus indicator로 사용한다.
+  오류 상태에서는 같은 경계를 semantic danger border로 바꾼다. placeholder는 `답글을 입력하세요…`다.
 - 제목·control label·button에는 공용 UI typography를, Parent·입력 본문에는 공용 body typography를 사용한다.
   modal 전용 raw font size나 font family를 만들지 않는다.
 - footer 좌측에는 Visibility control을 둔다.

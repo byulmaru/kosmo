@@ -448,7 +448,7 @@ export function PostComposer({
           onChangeText={setBody}
           onFocus={() => setEditorFocused(true)}
           placeholder={replyMode ? '답글을 입력하세요…' : '무슨 일이 일어나고 있나요?'}
-          style={styles.editor}
+          style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
           value={body}
         />
         {error ? (
@@ -545,6 +545,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
+  webEditor: { outlineStyle: 'none' as never },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',

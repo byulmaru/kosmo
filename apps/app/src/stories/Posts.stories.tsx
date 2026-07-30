@@ -2967,7 +2967,11 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
 export const ComposerDefault: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('textbox', { name: '게시글 본문' })).not.toHaveAttribute('maxlength');
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    expect(body).not.toHaveAttribute('maxlength');
+    await userEvent.click(body);
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(body).outlineStyle).not.toBe('none');
   },
   render: () => <ComposerStory />,
 };
@@ -3467,7 +3471,10 @@ export const ReplyDetailInlineIntegration: Story = {
 
     await userEvent.click(replyButton);
     expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
-    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(body).toBeVisible();
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(getComputedStyle(body).outlineStyle).toBe('none');
     expect(replyButton).toHaveAttribute('aria-expanded', 'true');
     expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
 

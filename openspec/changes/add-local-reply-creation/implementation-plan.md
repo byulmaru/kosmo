@@ -2,21 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 목록과 상세 caller가 행별 Reply controller를 조립하지 않아도 `PostListItem`과 `PostLayout`이 기존 Reply action과 Composer surface를 내부 조립하게 한다.
+**Goal:** 목록과 상세 caller가 행별 Reply controller를 조립하지 않아도 `PostListItem`과 `PostLayout`이 기존 Reply action과 Composer surface를 내부 조립하게 하고, Web Reply editor에는 하나의 둥근 focus indicator만 남긴다.
 
-**Architecture:** collection·thread 단위의 필수 `PostReplyCoordinatorProvider`가 selected Profile, surface owner, 단일 active Parent와 dirty·pending 전환 명령만 소유한다. 각 Post 표현부는 `usePostReplyBinding(post.id)`으로 coordinator를 소비하고, 기존 `ReplyComposerSurface`와 `PostActionBar` 계약을 그대로 조립한다. Provider 부재는 프로그래밍 오류로 드러내고, guest는 Provider 안의 `profile: null`로 명시한다.
+**Architecture:** collection·thread 단위의 필수 `PostReplyCoordinatorProvider`가 selected Profile, surface owner, 단일 active Parent와 dirty·pending 전환 명령만 소유한다. 각 Post 표현부는 `usePostReplyBinding(post.id)`으로 coordinator를 소비하고, 기존 `ReplyComposerSurface`와 `PostActionBar` 계약을 그대로 조립한다. Provider 부재는 프로그래밍 오류로 드러내고, guest는 Provider 안의 `profile: null`로 명시한다. Web `TextArea`의 브라우저 기본 outline은 `PostComposer` 안에서만 제거하고, `editorSurface`의 기존 둥근 focus/error border를 유일한 시각적 입력 상태 경계로 유지한다.
 
 **Tech Stack:** React 19, React Native/React Native Web, React Relay, TypeScript, Node test runner, React Test Renderer, Storybook/Vitest, OpenSpec
 
 ## Global Constraints
 
 - modal·fullscreen·inline geometry, Parent/Quote presentation, action 순서와 copy를 변경하지 않는다.
+- Web Reply editor는 브라우저 기본 사각 outline을 중복 표시하지 않고 기존 `editorSurface`의 둥근 primary focus border와 danger error border를 유지한다.
 - Content 없는 display Repost의 Reply action은 disabled이고 callback·Composer·mutation에 진입하지 않는다. Repost action의 direct Source target은 유지한다.
 - 한 collection 또는 thread에서 하나의 direct Parent만 active 상태가 될 수 있다.
 - dirty 확인, pending close/Parent 전환 차단, 실패 입력 유지, 성공 close·focus 복원, 약 3초 snackbar와 수동 `보기`를 유지한다.
 - 상세 성공 callback은 현재 detail query의 targeted refetch를 정확히 한 번 시작한다. 자동 이동, 목록 connection 합성, pagination membership 합성을 추가하지 않는다.
 - `PostComposer`가 소유하는 Profile·Relay Environment·Parent별 draft/pending/error와 늦은 callback 격리를 변경하지 않는다.
-- API, GraphQL schema, dependency, canonical `docs/design`, Notification 코드는 변경하지 않는다.
+- API, GraphQL schema, dependency, Notification 코드는 변경하지 않는다. canonical 문서는 승인된 focus 표현을 기록하는 `docs/design/reply-composer.md`만 변경한다.
 - generated Relay artifact는 생성될 수 있지만 stage·commit하지 않는다.
 - `.superpowers/**`와 `docs/superpowers/**`는 생성·stage·commit하지 않는다.
 - Web 자동화와 Storybook screenshot은 현재 PR의 증거로 남기되, Android·iOS runtime 검증을 수행했다고 주장하지 않는다.
@@ -31,8 +32,11 @@
 - Modify `apps/app/src/components/bookmark/BookmarkList.tsx`: 행별 controller 조립을 제거하고 bookmark collection Provider를 한 번 배치.
 - Modify `apps/app/src/components/post/PostDetailThread.tsx`: active Parent/ref 상태를 Provider로 옮기고 thread renderer는 Post 표현부만 선택.
 - Modify `apps/app/src/stories/Posts.stories.tsx`: standalone Post story의 explicit guest Provider와 production coordinator 기반 Reply stories/interaction assertions.
+- Modify `apps/app/src/components/post/PostComposer.tsx`: Web Reply editor의 브라우저 기본 outline만 제거하고 기존 wrapper focus/error border를 유지.
+- Modify `docs/design/reply-composer.md`: Web editor의 단일 focus indicator 계약 기록.
+- Modify `openspec/changes/add-local-reply-creation/decisions.md`: 사용자 승인 focus 표현과 대안·결과 기록.
 - Modify `openspec/changes/add-local-reply-creation/tasks.md`: 전체 검증 뒤 task 2.2 완료 표시.
-- Keep `apps/app/src/components/post/ReplyComposerSurface.tsx`, `PostComposer.tsx`, `replySurface.ts`, GraphQL documents, generated artifacts unchanged.
+- Keep `apps/app/src/components/post/ReplyComposerSurface.tsx`, `replySurface.ts`, GraphQL documents, generated artifacts unchanged.
 
 ---
 
@@ -514,11 +518,114 @@ Expected: required checks PASS. 실패하면 로그를 조사해 승인 범위 �
 
 초안에는 controller가 PROD-425에서 도입된 구조였고, 이번 변경이 composition ownership만 Post 표현부로 옮겼으며 관찰 가능한 동작과 테스트가 유지됐다는 내용을 포함한다. 사용자 승인 전에는 reviewer mention, PR comment, review reply, thread resolve나 PR 상태 변경을 실행하지 않는다.
 
+---
+
+### Task 5: Web Reply editor의 focus 경계를 하나로 정리한다
+
+**Files:**
+
+- Modify: `apps/app/src/stories/Posts.stories.tsx`
+- Modify: `apps/app/src/components/post/PostComposer.tsx`
+- Modify: `docs/design/reply-composer.md`
+- Modify: `openspec/changes/add-local-reply-creation/decisions.md`
+- Modify: `openspec/changes/add-local-reply-creation/implementation-plan.md`
+
+**Interfaces:**
+
+- Consumes: 기존 `PostComposer`의 `editorFocused` state와 `editorSurface` primary/danger border.
+- Produces: Web `<textarea>`의 computed `outlineStyle: none`; focus는 기존 둥근 `editorSurface` border로 계속 식별된다.
+- Preserves: Native 입력 스타일, 공용 `TextArea`, modal·inline geometry, focus 이동·복원, validation/error와 submit lifecycle.
+
+- [x] **Step 1: 중복 사각 outline을 검출하는 실패 Storybook assertion을 작성한다**
+
+`ReplyDetailInlineIntegration`에서 Reply editor가 열린 뒤 textbox focus와 computed outline을 검증하고,
+`ComposerDefault`에서는 일반 Post editor의 browser outline이 유지되는지 확인한다.
+
+```tsx
+const body = canvas.getByRole('textbox', { name: '답글 본문' });
+await waitFor(() => expect(body).toHaveFocus());
+expect(getComputedStyle(body).outlineStyle).toBe('none');
+```
+
+```tsx
+expect(getComputedStyle(body).outlineStyle).not.toBe('none');
+```
+
+두 assertion은 기존 story에 추가하며 새 fixture, helper, test ID를 만들지 않는다.
+
+- [x] **Step 2: 현재 브라우저 outline 때문에 테스트가 실패하는지 확인한다**
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app exec vitest run --project=storybook \
+  src/stories/Posts.stories.tsx -t "Reply Detail Inline Integration"
+```
+
+Expected: FAIL — focused `답글 본문`의 computed `outlineStyle`이 `auto`이고 기대값은 `none`이다.
+
+- [x] **Step 3: `PostComposer`의 Web editor에만 기본 outline 제거 스타일을 적용한다**
+
+`PostComposer.tsx`에서 공용 `TextArea`에 전달하는 기존 `styles.editor`는 유지하고 Web에서만 다음 style을 추가한다.
+
+```tsx
+style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
+```
+
+```tsx
+webEditor: { outlineStyle: 'none' as never },
+```
+
+`editorSurface`의 `error ? theme.danger : editorFocused ? theme.primary : theme.border` 분기와 `borderWidth: 1`은 변경하지 않는다. 일반 Post composer, 공용 `TextField.tsx`와 Native style은 수정하지 않는다.
+
+- [x] **Step 4: canonical·decision 문서를 승인된 시각 계약과 동기화한다**
+
+`docs/design/reply-composer.md`의 editor 계약에 Web TextArea 기본 outline을 중복 표시하지 않고 둥근 `editorSurface` border 하나로 focus를 표현하며 error에서는 danger border를 사용한다고 기록한다.
+
+`decisions.md`에는 2026-07-31 사용자 결정을 추가한다: 사각 browser outline만 제거하고 wrapper focus/error border를 유지한다. focus 표시 전체 제거와 Composer 외곽 border 이동은 각각 접근성 약화와 잘못된 범위 강조 때문에 선택하지 않았다.
+
+- [x] **Step 5: focused·전체 app·OpenSpec 검증을 통과시킨다**
+
+Run:
+
+```bash
+pnpm --filter @kosmo/app exec vitest run --project=storybook \
+  src/stories/Posts.stories.tsx -t "Reply Detail Inline Integration"
+pnpm --filter @kosmo/app test
+pnpm exec openspec validate add-local-reply-creation --strict
+pnpm exec prettier --check \
+  apps/app/src/components/post/PostComposer.tsx \
+  apps/app/src/stories/Posts.stories.tsx \
+  docs/design/reply-composer.md \
+  openspec/changes/add-local-reply-creation/decisions.md \
+  openspec/changes/add-local-reply-creation/implementation-plan.md
+git diff --check
+```
+
+Expected: focused Storybook, Relay/TypeScript, unit, Storybook build/interaction, OpenSpec strict validation, formatting과 whitespace 검사가 모두 PASS한다. Web runtime computed style에서 textarea outline은 `none`, editor wrapper focus border는 유지된다.
+
+- [x] **Step 6: 독립 리뷰 뒤 경로 지정 commit·push한다**
+
+Sol medium `implementation_reviewer`가 Web-only 범위, focus indicator 보존, error/Native/공용 TextArea 비변경과 문서·테스트 정합성을 확인한 뒤 아래 경로만 stage한다.
+
+```bash
+git add apps/app/src/components/post/PostComposer.tsx \
+  apps/app/src/stories/Posts.stories.tsx \
+  docs/design/reply-composer.md \
+  openspec/changes/add-local-reply-creation/decisions.md \
+  openspec/changes/add-local-reply-creation/implementation-plan.md
+git diff --cached --name-only -- .superpowers docs/superpowers
+git commit -m "PROD-425 Reply editor 포커스 경계를 정리한다"
+git push origin prod-425
+```
+
+Expected: PR #413의 기존 modal·inline 동작과 OpenSpec 16/21 `in-progress` 상태를 유지하면서 Web editor의 중복 outline만 제거된다.
+
 ## Test Scope
 
-- 테스트 코드 범위: `PostReplyCoordinator.test.ts`의 Provider/guest/single-active/close-gated transition과 기존 `Posts.stories.tsx` Reply interaction의 coordinator 소비 경로.
-- 테스트 필요성: optional caller prop 누락 재발, row별 state 분산, dirty/pending Parent 전환 손실, callback/refetch 중복을 직접 방지한다.
-- 테스트 제외 범위: `ReplyComposerSurface` geometry/lifecycle의 중복 unit test, 새로운 fixture/helper/harness, unrelated Post/Reaction/Repost coverage, API E2E, Android·iOS runtime 자동화.
+- 테스트 코드 범위: `PostReplyCoordinator.test.ts`의 Provider/guest/single-active/close-gated transition과 기존 `Posts.stories.tsx` Reply interaction의 coordinator 소비 경로, focused Web Reply textbox computed outline assertion 및 일반 Post composer의 outline 비회귀 assertion.
+- 테스트 필요성: optional caller prop 누락 재발, row별 state 분산, dirty/pending Parent 전환 손실, callback/refetch 중복, Reply browser outline 재도입과 일반 composer 범위 확장을 직접 방지한다.
+- 테스트 제외 범위: `ReplyComposerSurface` geometry/lifecycle의 중복 unit test, 새로운 fixture/helper/test ID/harness, 공용 `TextArea`·unrelated Post/Reaction/Repost coverage, API E2E, Android·iOS runtime 자동화.
 
 ## Explicit Exclusions
 
