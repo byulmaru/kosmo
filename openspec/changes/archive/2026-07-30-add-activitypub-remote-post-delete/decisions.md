@@ -47,13 +47,14 @@ mapping 위에서 동작하며 remote Update를 포함하지 않는다.
 - Context / Problem: object URI 또는 instance origin만 비교하면 같은 instance의 다른 actor나 잘못 연결된 mapping이
   타인의 Post를 변경할 수 있다.
 - Decision Outcome: ACTIVE stored ActivityPub Actor/Profile, ACTIVITYPUB ACTIVE/UNRESPONSIVE Instance, exact
-  mapping URI, Post Author Profile과 actor URI가 모두 일치해야 한다. Local Post는 어떤 fallback identity로도
-  선택하지 않는다.
+  mapping URI, Current Content가 있는 Note 구조, Post Author Profile과 actor URI가 모두 일치해야 한다. Local
+  Post는 어떤 fallback identity로도 선택하지 않는다.
 - Alternatives Considered: actor/object origin 비교, mapping URI 단독 조회, ActivityPubActor를 mapping에 중복 저장.
   전자는 ownership이 약하고 후자는 기존 normalized 관계를 중복한다.
-- Consequences: unknown/inactive/SUSPENDED actor, missing mapping, 다른 Author/object와 Local Post는 write 없이
-  종료한다.
-- Confirmation / Follow-up: cross-actor, cross-object, Local Post와 actor lifecycle matrix로 검증한다.
+- Consequences: unknown/inactive/SUSPENDED actor, missing mapping, 다른 Author/object, Content 없는 Repost의
+  Announce mapping과 Local Post는 write 없이 종료한다. Repost 취소는 기존 `Undo(Announce)` lifecycle에 남는다.
+- Confirmation / Follow-up: cross-actor, cross-object, Announce mapping, Local Post와 actor lifecycle matrix로
+  검증한다.
 
 ### Tombstone 뒤 mapping과 content history를 보존한다
 

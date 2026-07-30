@@ -9,8 +9,8 @@ slice로 남긴다.
 
 - personal/shared inbox에서 verified typed `Delete`를 수신하고 직접 object IRI와 동일 identity의 embedded
   Tombstone을 해석한다.
-- 저장된 eligible ActivityPub actor, object URI mapping과 remote Post Author ownership이 모두 일치할 때만
-  기존 canonical Post 삭제 행동으로 Active Post를 Tombstone으로 전환한다.
+- 저장된 eligible ActivityPub actor, content-bearing Note object URI mapping과 remote Post Author ownership이
+  모두 일치할 때만 기존 canonical Post 삭제 행동으로 Active Post를 Tombstone으로 전환한다.
 - PostContent, current Content pointer와 ActivityPub Post mapping을 보존해 terminal identity와 duplicate
   Create first-write-wins를 유지한다.
 - repeated, missing, out-of-order와 concurrent Delete의 no-op/전이 결과를 고정하고 미저장 object receipt,

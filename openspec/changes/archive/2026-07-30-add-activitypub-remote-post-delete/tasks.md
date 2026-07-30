@@ -24,7 +24,7 @@ personal/shared inbox의 verified typed Delete가 direct object IRI 또는 지�
 **Verification**
 
 - personal/shared, direct IRI, embedded Tombstone과 no-network 처리를 검증한다.
-- unknown/inactive/SUSPENDED/non-ActivityPub actor, ambiguous URI, cross-actor/object와 Local Post 거부를 검증한다.
+- unknown/inactive/SUSPENDED/non-ActivityPub actor, ambiguous URI, cross-actor/object, Announce mapping과 Local Post 거부를 검증한다.
 - Active→Tombstone, deletedAt, transaction rollback과 Local delivery 부재를 검증한다.
 - 기존 Local root/Reply Delete delivery와 repeated Local Delete를 회귀 검증한다.
 

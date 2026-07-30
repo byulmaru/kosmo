@@ -179,6 +179,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   필수 입력 검증이다.
 - 수신 `Delete(Note)`는 저장된 ActivityPub Post mapping의 정확한 object URI와 Author Profile에 연결된
   ActivityPub Actor URI가 모두 일치할 때만 기존 Post 삭제 행동으로 해당 remote Post를 Tombstone 전이한다.
+  mapping의 Post는 Current Content가 있는 Note 구조여야 하며, Content 없는 Repost의 Announce mapping은
+  `Delete(Note)` 대상이 아니다.
   object는 직접 IRI 또는 같은 `id`의 embedded `Tombstone`만 지원하며, 삭제 처리를 위해 원격 object를
   역참조하지 않는다. mapping이 없거나 actor·object·author가 일치하지 않으면 아무 상태도 만들거나 변경하지
   않는다.

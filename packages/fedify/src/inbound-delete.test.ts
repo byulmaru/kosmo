@@ -230,6 +230,56 @@ describe('inbound Delete dispatch', () => {
     );
   });
 
+  test('does not treat an Announce mapping as a Delete(Note) target', async () => {
+    const actorUri = new URL('https://remote.example/users/alice');
+    const sourceUri = new URL('https://remote.example/notes/source');
+    const announceUri = new URL('https://remote.example/activities/announce-1');
+    const profile = await createStoredRemoteActor(actorUri);
+    const source = await materializeRemotePost(profile.id, sourceUri);
+    const repost = await db
+      .insert(Posts)
+      .values({
+        profileId: profile.id,
+        repostSourceId: source.post.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.UNLISTED,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const mapping = await db
+      .insert(ActivityPubPosts)
+      .values({
+        postId: repost.id,
+        receivedAt,
+        uri: announceUri.href,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    await handleInboundDelete(
+      createContext(),
+      new Delete({ actor: actorUri, object: announceUri }),
+    );
+
+    assert.equal(
+      await db
+        .select({ state: Posts.state })
+        .from(Posts)
+        .where(eq(Posts.id, repost.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      PostState.ACTIVE,
+    );
+    assert.equal(
+      await db
+        .select({ id: ActivityPubPosts.id })
+        .from(ActivityPubPosts)
+        .where(eq(ActivityPubPosts.id, mapping.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
   test('keeps Delete-before-Create absent and keeps duplicate Create tombstoned', async () => {
     const actorUri = new URL('https://remote.example/users/alice');
     await createStoredRemoteActor(actorUri);

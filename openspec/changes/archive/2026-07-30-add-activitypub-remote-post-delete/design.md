@@ -56,8 +56,9 @@ activity receipt를 추가하지 않는다.
    HTTP(S) 형식을 검증한다.
 2. embedded object는 network를 항상 실패시키는 document loader와 suppressed error로만 확인한다. embedded
    object가 없으면 direct IRI로 처리하고, 있으면 동일 ID의 Tombstone만 허용한다.
-3. 하나의 DB transaction에서 object mapping, Post, Profile, Instance와 ActivityPubActor를 exact join한다.
-   eligible actor/author/origin/state가 아니면 write 없이 종료한다.
+3. 하나의 DB transaction에서 object mapping, Current Content가 있는 Note Post, Profile, Instance와
+   ActivityPubActor를 exact join한다. Content 없는 Repost의 Announce mapping은 선택하지 않고 기존
+   `Undo(Announce)` lifecycle에 남긴다. eligible actor/author/origin/state가 아니면 write 없이 종료한다.
 4. 같은 transaction을 전달해 canonical `deletePost`를 호출한다. handler lookup과 core author 재검증 중 하나가
    실패하거나 대상이 바뀌면 전체 transition을 적용하지 않는다.
 5. core delete action의 Local outbound 후보는 caller transaction이 아니라 remote ActivityPub Post mapping

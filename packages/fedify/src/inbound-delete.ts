@@ -12,7 +12,7 @@ import {
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
@@ -61,7 +61,7 @@ export const handleInboundDelete = async (
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-      .where(eq(ActivityPubPosts.uri, objectUri.href))
+      .where(and(eq(ActivityPubPosts.uri, objectUri.href), isNotNull(Posts.currentContentId)))
       .limit(1)
       .then(first);
 

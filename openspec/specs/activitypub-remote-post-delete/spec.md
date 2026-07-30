@@ -38,6 +38,7 @@ TBD - created by archiving change add-activitypub-remote-post-delete. Update Pur
 - **AND** Actor의 Profile은 ACTIVE이고 Instance는 ACTIVITYPUB이면서 ACTIVE 또는 UNRESPONSIVE다
 - **AND** object URI가 기존 ActivityPub Post mapping URI와 정확히 일치한다
 - **AND** mapping의 Post Author Profile이 해당 Actor의 Profile과 같다
+- **AND** mapping의 Post는 Current Content가 있는 Note 구조다
 - **THEN** 시스템은 그 Post만 canonical 삭제 대상으로 선택한다
 - **AND** actor lookup, object fetch, Profile materialization과 refresh를 수행하지 않는다
 
@@ -52,6 +53,12 @@ TBD - created by archiving change add-activitypub-remote-post-delete. Update Pur
 - **WHEN** object mapping이 없거나 대상 Post Author의 Instance가 ACTIVITYPUB이 아니다
 - **THEN** 시스템은 Local Post를 포함한 어떤 Post도 변경하지 않는다
 - **AND** Local Post의 파생 Note URI나 DB UUID를 remote mapping 대신 추측하지 않는다
+
+#### Scenario: Announce mapping 변경 거부
+
+- **WHEN** object URI가 Content 없는 Repost의 ActivityPub Announce mapping과 일치한다
+- **THEN** 시스템은 그 Repost와 Announce mapping을 변경하지 않는다
+- **AND** Repost 취소는 기존 `Undo(Announce)` lifecycle에 남긴다
 
 #### Scenario: unavailable actor 거부
 
