@@ -57,17 +57,18 @@
 #### Scenario: 유효한 recovery chain과 restore evidence
 
 - **WHEN** recovery window 안의 성공한 base backup과 그 이후의 연속 WAL archive가 존재하고 월간 restore rehearsal이 성공 상태이며 overdue가 아니다
-- **THEN** contract gate는 migration 직전 복구 지점 생성을 진행할 수 있다
+- **THEN** contract gate는 migration 직전 target LSN capture를 진행할 수 있다
 
 #### Scenario: Migration 직전 복구 지점 보존
 
 - **WHEN** contract의 다른 자동 조건이 충족돼 migration 실행을 준비한다
-- **THEN** gate는 production database에 고유한 named restore point를 생성한다
-- **AND** 해당 restore point를 포함하는 target WAL이 backup 저장소에 archive됐음을 확인한 뒤에만 migration을 실행한다
+- **THEN** system은 production primary의 현재 WAL LSN과 해당 WAL identity를 migration 직전에 캡처한다
+- **AND** PROD-546 backup 경계가 해당 target WAL의 archive를 검증한 evidence를 gate에 제공한 뒤에만 migration을 실행한다
+- **AND** named restore point 전용 command 또는 별도 restore-point Job을 실행하지 않는다
 
 #### Scenario: Recovery chain이 유효하지 않음
 
-- **WHEN** 복구를 시작할 base backup이 recovery window 안에 없거나 WAL chain이 끊겼거나 restore point의 target WAL archive를 확인할 수 없다
+- **WHEN** 복구를 시작할 base backup이 recovery window 안에 없거나 WAL chain이 끊겼거나 target LSN에 대응하는 WAL archive evidence를 확인할 수 없다
 - **THEN** gate는 contract migration을 차단한다
 
 #### Scenario: Restore rehearsal이 overdue임
@@ -77,7 +78,7 @@
 
 #### Scenario: 일일 base backup 지연만 발생함
 
-- **WHEN** 가장 최근 예정된 일일 base backup이 지연됐지만 기존 base backup과 연속 WAL로 migration 직전 restore point까지 복구할 수 있고 restore rehearsal도 overdue가 아니다
+- **WHEN** 가장 최근 예정된 일일 base backup이 지연됐지만 기존 base backup과 연속 WAL로 migration 직전 target LSN까지 복구할 수 있고 restore rehearsal도 overdue가 아니다
 - **THEN** gate는 base backup의 경과 시간만을 이유로 contract migration을 차단하지 않는다
 - **AND** 일일 backup 지연은 PROD-546의 별도 운영 이상으로 유지한다
 

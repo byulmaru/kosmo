@@ -11,7 +11,7 @@ Production migration은 API/Web과 같은 immutable image digest를 사용하지
 - Contract migration만을 위한 별도 Environment나 추가 승인은 사용하지 않으며 migration 성공 전에는 API/Web을 활성화하지 않는다.
 - PROD-565는 실제 첫 production release와 public smoke를 검증한다.
 
-Migration database identity에는 schema migration에 필요한 권한과 contract restore point 생성을 위한 `pg_checkpoint` role만 부여한다. API/Web database identity에는 DDL 또는 `pg_checkpoint` 권한을 부여하지 않는다.
+Migration database identity에는 schema migration에 필요한 권한만 부여한다. API/Web database identity에는 DDL 권한을 부여하지 않는다. Migration Job은 restore point 생성이나 backup 관리를 수행하지 않는다.
 
 ## Gate 입력
 
@@ -40,7 +40,8 @@ Contract context는 일반 필드 외에 다음 비민감 evidence를 포함한�
 
 - Recovery window 안의 completed base backup과 이후 WAL chain의 연속성
 - 성공했고 월간 주기가 overdue가 아닌 PROD-546 restore rehearsal reference
-- migration 직전에 생성한 named restore point와 target/archived-through WAL
+- migration 직전에 캡처한 primary target LSN과 대응 WAL identity
+- PROD-546 backup 경계가 그 정확한 WAL의 archive를 검증한 시각과 evidence reference
 - Kubernetes에서 실행 직전에 조회한 active, preview, rollback workload 이름·역할·digest
 - Schema authority가 승인한 compatible image allowlist와 rollback window 종료 시각
 
@@ -49,23 +50,26 @@ Production pipeline은 운영자가 작성한 workload 목록을 그대로 신�
 순서는 다음과 같다.
 
 1. Live workload와 PROD-546 evidence로 자동 preflight context를 만든다.
-2. Migration image에서 `contract-restore-point`를 migration Secret으로 실행한다.
-3. Command가 `targetWal`과 같거나 이후인 `archivedThroughWal`을 반환할 때까지 기다린다.
-4. 결과를 contract context에 넣고 live workload를 다시 조회한 뒤 자동 gate를 실행한다. Workload observation이 restore point보다 오래되면 gate가 거부한다.
+2. PROD-563 pipeline은 production primary의 현재 WAL LSN, 대응 WAL identity와 UTC 시각을 migration 직전에 캡처한다.
+3. PROD-546 backup interface에서 해당 target WAL의 정확한 archive evidence를 얻는다. `last_archived_wal`의 대소 비교만으로 archive를 추정하지 않는다.
+4. Target LSN과 archive evidence를 contract context에 넣고 live workload를 다시 조회한 뒤 자동 gate를 실행한다. Workload observation이 target LSN capture보다 오래되면 gate가 거부한다.
 5. 자동 gate가 성공하면 PROD-563 pipeline이 이미 승인된 같은 digest의 migration Job을 실행하고 성공을 기다린다.
 6. 성공 결과에 대해서만 `complete`를 실행하고 `workloadActivationAllowed: true`를 후속 활성화 조건으로 사용한다.
 
-Restore point command는 WAL 전환을 강제하지 않는다. 실제 workload 또는 `archive_timeout`으로 target segment가 archive될 때까지 기본 10분 동안 기다린다.
+Target LSN capture의 비민감 결과는 다음 형태다. 이 query의 orchestration과 cluster 접근은 PROD-563이 소유하며 migration Job의 command를 바꾸지 않는다.
 
-```sh
-RESTORE_POINT_NAME="contract-PROD-700-20260730T000000Z" \
-  docker run --rm \
-  --env-file /run/secrets/migration-database \
-  "ghcr.io/byulmaru/kosmo@sha256:..." \
-  contract-restore-point
+```sql
+WITH recovery_target AS (
+  SELECT pg_current_wal_flush_lsn() AS target_lsn
+)
+SELECT
+  clock_timestamp() AS captured_at,
+  target_lsn::text AS target_lsn,
+  pg_walfile_name(target_lsn) AS target_wal
+FROM recovery_target;
 ```
 
-실제 Kubernetes Job에서는 `--env-file`을 쓰지 않고 Helm의 migration Secret `secretKeyRef`를 사용한다. 위 예시는 command interface 설명용이며 credential 값을 shell history에 직접 쓰면 안 된다.
+Contract context의 `recoveryTarget`은 `capturedAt`, `targetLsn`, `targetWal`과 `archiveEvidence`를 포함한다. `archiveEvidence`는 `status: "verified"`, 정확히 같은 `wal`, `verifiedAt`과 비민감 `evidenceRef`를 제공한다. 실제 복구에서는 CloudNativePG `recoveryTarget.targetLSN`에 이 LSN을 사용한다.
 
 Migration 완료 후 pipeline은 다음 형태의 비민감 결과를 기록한다.
 
@@ -91,6 +95,7 @@ Production 승인 자체는 PROD-563 workflow의 배포 경계에서 수행한�
 
 - Credential 또는 Secret 실패: SQL을 실행하지 않는다. Runtime credential로 우회하지 않는다.
 - Preflight 실패: migration Job을 시작하지 않는다. Live evidence를 새로 조회한 뒤 같은 digest로 재시도한다.
+- Target LSN archive 확인 실패: migration Job을 시작하지 않는다. PROD-546 backup 상태를 확인하고 새 target LSN과 live evidence를 캡처해 다시 gate를 실행한다.
 - Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 같은 digest로 재시도한다.
 - SQL 또는 timeout 실패: API/Web 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
 - Production release 승인 없음: PROD-563 pipeline이 migration을 포함한 배포 전체를 시작하지 않는다. PROD-564는 별도 contract approval로 이를 우회하거나 중복하지 않는다.

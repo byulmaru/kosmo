@@ -9,7 +9,8 @@ Linear [PROD-564](https://linear.app/byulmaru/issue/PROD-564/프로덕션-migrat
 - Production migration Job이 runtime workload와 분리된 migration credential만 사용하고 runtime credential로 fallback하지 않게 한다.
 - Migration Job, API와 Web workload가 하나의 immutable image digest를 사용한다는 gate를 제공한다.
 - Release가 `expand`, `transition`, `contract` phase와 해당 schema-change authority를 명시하게 하고, phase별 조건을 검증한다.
-- Contract phase에서는 유효한 base backup과 연속 WAL recovery chain, overdue가 아닌 restore rehearsal, migration 직전 restore point의 WAL archive, rollback window 종료와 active/preview/rollback workload compatibility를 모두 확인한다.
+- Contract phase에서는 유효한 base backup과 연속 WAL recovery chain, overdue가 아닌 restore rehearsal, migration 직전 target LSN의 WAL archive evidence, rollback window 종료와 active/preview/rollback workload compatibility를 모두 확인한다.
+- Migration Job은 `migrate`, 동일 immutable digest와 별도 database credential만 책임지며 phase, schema authority 또는 restore-point command를 Helm interface로 받지 않는다.
 - PROD-563의 production release 승인 하나가 해당 image의 migration과 API/Web 배포를 함께 승인하며 contract 전용 추가 승인을 요구하지 않는다.
 - Migration 실패 시 새 workload 활성화를 중단하고, 같은 release identity로 재시도하거나 운영자가 복구 판단을 내릴 수 있는 runbook을 제공한다.
 - 특정 schema migration, backup/PITR 구현, 일반 production release 승인 UI와 실제 첫 release 검증은 추가하지 않는다.

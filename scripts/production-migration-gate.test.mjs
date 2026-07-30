@@ -45,11 +45,16 @@ function contractContext() {
           overdue: false,
           evidenceRef: 'PROD-546#restore-2026-07',
         },
-        restorePoint: {
-          name: 'prod-564-20260730',
-          createdAt: '2026-07-29T23:58:00.000Z',
+        recoveryTarget: {
+          capturedAt: '2026-07-29T23:58:00.000Z',
+          targetLsn: '0/A0000000',
           targetWal: '00000001000000000000000A',
-          archivedThroughWal: '00000001000000000000000A',
+          archiveEvidence: {
+            status: 'verified',
+            wal: '00000001000000000000000A',
+            verifiedAt: '2026-07-29T23:58:30.000Z',
+            evidenceRef: 'PROD-546#wal-00000001000000000000000A',
+          },
         },
       },
     },
@@ -109,10 +114,21 @@ test('contract rejects broken recovery and overdue rehearsal without a backup ag
   );
 });
 
-test('contract rejects a restore point whose target WAL is not archived', () => {
+test('contract rejects invalid target LSN and mismatched WAL archive evidence', () => {
   const context = contractContext();
-  context.contract.recovery.restorePoint.archivedThroughWal = '000000010000000000000009';
-  assert.throws(() => validateMigrationGate(context, { now }), /target WAL has not been archived/);
+  context.contract.recovery.recoveryTarget.targetLsn = 'not-an-lsn';
+  assert.throws(
+    () => validateMigrationGate(context, { now }),
+    /must be an uppercase PostgreSQL LSN/,
+  );
+
+  const mismatch = contractContext();
+  mismatch.contract.recovery.recoveryTarget.archiveEvidence.wal = '000000010000000000000009';
+  assert.throws(() => validateMigrationGate(mismatch, { now }), /does not match archive evidence/);
+
+  const unverified = contractContext();
+  unverified.contract.recovery.recoveryTarget.archiveEvidence.status = 'pending';
+  assert.throws(() => validateMigrationGate(unverified, { now }), /status must be verified/);
 });
 
 test('contract rejects stale compatibility decisions against live workloads', () => {
@@ -129,12 +145,12 @@ test('contract rejects stale compatibility decisions against live workloads', ()
   openWindow.contract.rollbackWindowEndsAt = '2026-07-31T00:00:00.000Z';
   assert.throws(() => validateMigrationGate(openWindow, { now }), /rollback window has not ended/);
 
-  const observationBeforeRestorePoint = contractContext();
-  observationBeforeRestorePoint.contract.workloadObservation.observedAt =
+  const observationBeforeRecoveryTarget = contractContext();
+  observationBeforeRecoveryTarget.contract.workloadObservation.observedAt =
     '2026-07-29T23:57:59.000Z';
   assert.throws(
-    () => validateMigrationGate(observationBeforeRestorePoint, { now }),
-    /workload observation predates the restore point/,
+    () => validateMigrationGate(observationBeforeRecoveryTarget, { now }),
+    /workload observation predates the recovery target/,
   );
 });
 

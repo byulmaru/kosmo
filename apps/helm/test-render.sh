@@ -17,8 +17,6 @@ helm template kosmo . \
   --set env=prod \
   --set imageDigest="${image_digest}" \
   --set migration.enabled=true \
-  --set migration.phase=contract \
-  --set migration.schemaAuthority=PROD-700 \
   --set migration.secretName=kosmo-postgres-migration \
   >"${render_dir}/prod-migration.yaml"
 helm template kosmo . \
@@ -27,30 +25,14 @@ helm template kosmo . \
   --set env=prod \
   --set imageDigest="${image_digest}" \
   --set migration.enabled=true \
-  --set migration.phase=contract \
-  --set migration.schemaAuthority=PROD-700 \
   --set migration.secretName=kosmo-postgres-migration \
   >"${render_dir}/prod-migration-job.yaml"
-helm template kosmo . \
-  --namespace kosmo-prod \
-  --show-only templates/database-migration-job.yaml \
-  --set env=prod \
-  --set imageDigest="${image_digest}" \
-  --set migration.enabled=true \
-  --set migration.command=contract-restore-point \
-  --set migration.phase=contract \
-  --set migration.restorePointName=contract-PROD-700 \
-  --set migration.schemaAuthority=PROD-700 \
-  --set migration.secretName=kosmo-postgres-migration \
-  >"${render_dir}/prod-restore-point-job.yaml"
 
 helm template kosmo . \
   --namespace kosmo-prod \
   --set env=prod \
   --set imageDigest="${image_digest}" \
   --set migration.enabled=true \
-  --set migration.phase=contract \
-  --set migration.schemaAuthority=PROD-700 \
   >"${render_dir}/invalid-prod-migration.yaml" 2>/dev/null && {
   echo "prod migration unexpectedly rendered without migration.secretName" >&2
   exit 1
@@ -99,14 +81,13 @@ done
 
 required_migration_markers=(
   "ghcr.io/byulmaru/kosmo@${image_digest}"
-  "kosmo.dev/migration-phase: \"contract\""
-  "kosmo.dev/schema-authority: \"PROD-700\""
   "name: \"kosmo-postgres-migration\""
   'key: "url"'
+  '- migrate'
 )
 
 for marker in "${required_migration_markers[@]}"; do
-  if ! grep -Fq "${marker}" "${render_dir}/prod-migration.yaml"; then
+  if ! grep -Fq -- "${marker}" "${render_dir}/prod-migration.yaml"; then
     echo "prod migration manifest is missing marker: ${marker}" >&2
     exit 1
   fi
@@ -129,16 +110,9 @@ if grep -Fq "kosmo-postgres-app" "${render_dir}/prod-migration-job.yaml"; then
   exit 1
 fi
 
-required_restore_point_markers=(
-  "name: kosmo-db-restore-point"
-  '- "contract-restore-point"'
-  "name: RESTORE_POINT_NAME"
-  'value: "contract-PROD-700"'
-)
-
-for marker in "${required_restore_point_markers[@]}"; do
-  if ! grep -Fq -- "${marker}" "${render_dir}/prod-restore-point-job.yaml"; then
-    echo "prod restore point manifest is missing marker: ${marker}" >&2
+for forbidden_marker in contract-restore-point RESTORE_POINT_NAME kosmo.dev/migration-phase kosmo.dev/schema-authority; do
+  if grep -Fq -- "${forbidden_marker}" "${render_dir}/prod-migration-job.yaml"; then
+    echo "prod migration Job unexpectedly contains gate concern: ${forbidden_marker}" >&2
     exit 1
   fi
 done

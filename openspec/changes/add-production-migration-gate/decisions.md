@@ -45,12 +45,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-564`, `PROD-546`; repository operations `docs/operations/postgres-backup.md`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 일일 base backup의 경과 시간은 recovery chain의 시작점과 RTO에는 영향을 줄 수 있지만, 연속 WAL이 존재하면 그 자체가 migration 직전 복구 가능성을 결정하지 않는다. 반대로 최근 base backup만 있어도 WAL chain이 끊겼다면 contract 직전으로 복구할 수 없다.
 - Decision Outcome: Contract gate는 recovery window 안의 성공한 base backup, 그 이후의 연속 WAL archive와 overdue가 아닌 월간 restore rehearsal evidence를 확인한다. Contract 실행 직전에는 고유한 named restore point를 만들고 해당 target WAL이 backup 저장소에 archive된 뒤에만 migration을 실행한다. 일일 base backup 지연은 이 recovery chain이 유효한 한 migration 차단 조건으로 중복하지 않는다.
 - Alternatives Considered: 24시간에 고정 유예를 더한 backup age 기준은 backup 운영 이상과 migration 복구 가능성을 과도하게 결합해 제외했다. 매 contract마다 새 base backup 또는 restore rehearsal을 실행하는 방식은 연속 WAL과 월간 rehearsal을 중복하고 release latency를 크게 늘려 제외했다. Evidence 문자열 존재만 확인하는 방식은 실제 recovery chain을 증명하지 못해 제외했다.
 - Consequences: Gate는 backup 생성이나 restore rehearsal을 직접 실행하지 않지만, restore point 생성과 target WAL archive 확인이 끝날 때까지 contract를 기다린다. 일일 backup 누락은 PROD-546 운영 이상으로 별도 처리하며 recovery window, WAL 연속성 또는 RTO evidence를 깨뜨리면 결과적으로 contract도 차단된다.
-- Confirmation / Follow-up: Base backup age만 지난 유효 chain은 통과하고, missing base, 끊긴 WAL, overdue rehearsal과 restore point target WAL 미archive는 실패하는 fixture를 검증한다.
+- Confirmation / Follow-up: 2026-07-30 사용자 결정과 갱신된 Linear `PROD-564`에 따라 아래 target LSN evidence 결정으로 대체됐다.
+
+### Contract는 target LSN과 정확한 WAL archive evidence를 사용한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: Linear `PROD-564`, `PROD-546`; repository operations `docs/operations/postgres-backup.md`
+- Status: Active
+- Context / Problem: CloudNativePG는 PostgreSQL이 미리 생성한 named restore point를 PITR target으로 소비할 수 있지만 restore point 생성 자체를 제공하지 않는다. 전용 command를 migration image와 Helm Job에 추가하면 migration 실행, recovery evidence 수집과 release gate 책임이 결합된다. 또한 `pg_stat_archiver.last_archived_wal`의 순서 비교는 promotion이나 crash recovery에서 정확한 target WAL의 archive를 증명하지 못한다.
+- Decision Outcome: Contract 실행 직전에 production primary의 현재 WAL LSN과 대응 WAL identity를 캡처하고, PROD-546 backup 경계가 그 정확한 WAL의 archive를 검증한 evidence를 gate가 소비한다. 복구 시 CloudNativePG의 `recoveryTarget.targetLSN`을 사용한다. Named restore point command와 별도 restore-point Job은 만들지 않는다.
+- Alternatives Considered: `pg_create_restore_point()`는 사람이 읽기 쉬운 이름을 제공하지만 별도 함수 권한과 image command를 요구해 제외했다. `last_archived_wal >= targetWal` 비교는 archive 순서를 가정하므로 제외했다. Migration 직전 새 base backup은 연속 WAL recovery chain을 중복하고 release latency를 늘려 제외했다.
+- Consequences: Migration Job은 `migrate`, 동일 digest와 전용 DB Secret만 책임진다. Target LSN capture와 정확한 archive evidence 수집 연결은 PROD-563 pipeline 및 PROD-546 backup interface 경계에서 수행하며, PROD-564 gate는 비민감 evidence의 일치와 freshness를 검증한다.
+- Confirmation / Follow-up: Base backup age만 지난 유효 chain은 통과하고, missing base, 끊긴 WAL, overdue rehearsal, 잘못된 LSN 형식과 target/archive WAL 불일치는 실패하는 fixture를 검증한다. Helm render에 restore-point command, phase 또는 schema-authority 분기가 없는지 검증한다.
 
 ### Contract compatibility는 live workload와 승인된 digest allowlist를 대조한다
 
@@ -85,7 +97,7 @@
 - Context / Problem: 정식 SemVer release image에는 실행할 migration과 API/Web code가 함께 들어 있으며 production 배포 승인은 이 release 전체를 선택하는 행위다. Contract migration만 다시 승인하면 같은 release에 중복 승인 경계가 생기고 실제 migration 실행과 승인 workflow가 분리된다.
 - Decision Outcome: PROD-563의 production release 승인은 선택한 immutable image의 migration과 API/Web workload를 한 번에 승인한다. PROD-564는 그 승인 뒤 phase, recovery evidence, compatibility와 rollback window를 자동 검증하며 contract 전용 Environment, approval workflow 또는 boolean approval input을 추가하지 않는다.
 - Alternatives Considered: Contract 전용 protected Environment는 destructive 의도를 별도로 드러내지만 동일 release를 두 번 승인하고 migration 실행 job과 결합하기 어렵기 때문에 제외했다. 승인 없는 자동 production 배포도 제외하며 production release 자체의 Environment 경계는 PROD-563에 유지한다.
-- Consequences: Contract의 강화된 안전성은 별도 사람 승인 횟수가 아니라 schema authority, restore point WAL archive, live workload allowlist와 rollback window의 fail-closed 자동 검사로 제공한다.
+- Consequences: Contract의 강화된 안전성은 별도 사람 승인 횟수가 아니라 schema authority, target LSN WAL archive evidence, live workload allowlist와 rollback window의 fail-closed 자동 검사로 제공한다.
 - Confirmation / Follow-up: Gate fixture에서 approval input 없이 contract 자동 조건만 검증하고, PROD-563 pipeline이 production approval 전에는 migration을 실행하지 않는지 해당 이슈에서 검증한다.
 
 ### 실패 후 database rollback을 자동 실행하지 않는다
@@ -107,3 +119,4 @@
 ## Superseded Decisions
 
 - `Contract는 별도 protected approval 경계를 사용한다` — 2026-07-30 사용자 결정과 Linear `PROD-563`, `PROD-564` 정정으로 superseded.
+- `Contract는 migration 직전 복구 가능성을 증명한다`의 named restore point 방식 — 2026-07-30 사용자 결정과 Linear `PROD-564` 정정으로 target LSN evidence 방식에 의해 superseded.

@@ -5,6 +5,7 @@ const PHASES = new Set(['expand', 'transition', 'contract']);
 const CONTRACT_ROLES = new Set(['active', 'preview', 'rollback']);
 const IMAGE_PATTERN = /^[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$/;
 const WAL_PATTERN = /^[0-9A-F]{24}$/;
+const LSN_PATTERN = /^[0-9A-F]+\/[0-9A-F]{8}$/;
 const RECOVERY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 export class MigrationGateError extends Error {}
@@ -95,35 +96,62 @@ function assertRecoveryEvidence(contract, now) {
     throw new MigrationGateError('contract.recovery.restoreRehearsal is overdue');
   }
 
-  const restorePoint = recovery.restorePoint;
-  requireString(restorePoint?.name, 'contract.recovery.restorePoint.name');
-  const restorePointCreatedAt = requireTimestamp(
-    restorePoint?.createdAt,
-    'contract.recovery.restorePoint.createdAt',
+  const recoveryTarget = recovery.recoveryTarget;
+  const capturedAt = requireTimestamp(
+    recoveryTarget?.capturedAt,
+    'contract.recovery.recoveryTarget.capturedAt',
   );
-  if (restorePointCreatedAt > now) {
-    throw new MigrationGateError('contract.recovery.restorePoint.createdAt is in the future');
+  if (capturedAt > now) {
+    throw new MigrationGateError('contract.recovery.recoveryTarget.capturedAt is in the future');
   }
-  const targetWal = requireString(
-    restorePoint?.targetWal,
-    'contract.recovery.restorePoint.targetWal',
+  const targetLsn = requireString(
+    recoveryTarget?.targetLsn,
+    'contract.recovery.recoveryTarget.targetLsn',
   );
-  const archivedThroughWal = requireString(
-    restorePoint?.archivedThroughWal,
-    'contract.recovery.restorePoint.archivedThroughWal',
-  );
-  if (!WAL_PATTERN.test(targetWal) || !WAL_PATTERN.test(archivedThroughWal)) {
+  if (!LSN_PATTERN.test(targetLsn)) {
     throw new MigrationGateError(
-      'restore point WAL names must be 24 uppercase hexadecimal characters',
+      'contract.recovery.recoveryTarget.targetLsn must be an uppercase PostgreSQL LSN',
     );
   }
-  if (archivedThroughWal < targetWal) {
-    throw new MigrationGateError('restore point target WAL has not been archived');
+  const targetWal = requireString(
+    recoveryTarget?.targetWal,
+    'contract.recovery.recoveryTarget.targetWal',
+  );
+  const archiveEvidence = recoveryTarget?.archiveEvidence;
+  const archivedWal = requireString(
+    archiveEvidence?.wal,
+    'contract.recovery.recoveryTarget.archiveEvidence.wal',
+  );
+  if (!WAL_PATTERN.test(targetWal) || !WAL_PATTERN.test(archivedWal)) {
+    throw new MigrationGateError(
+      'recovery target WAL names must be 24 uppercase hexadecimal characters',
+    );
   }
-  return restorePointCreatedAt;
+  if (archiveEvidence?.status !== 'verified') {
+    throw new MigrationGateError(
+      'contract.recovery.recoveryTarget.archiveEvidence.status must be verified',
+    );
+  }
+  requireString(
+    archiveEvidence.evidenceRef,
+    'contract.recovery.recoveryTarget.archiveEvidence.evidenceRef',
+  );
+  const archiveVerifiedAt = requireTimestamp(
+    archiveEvidence.verifiedAt,
+    'contract.recovery.recoveryTarget.archiveEvidence.verifiedAt',
+  );
+  if (archiveVerifiedAt < capturedAt || archiveVerifiedAt > now) {
+    throw new MigrationGateError(
+      'contract.recovery.recoveryTarget.archiveEvidence.verifiedAt is outside the valid window',
+    );
+  }
+  if (archivedWal !== targetWal) {
+    throw new MigrationGateError('recovery target WAL does not match archive evidence');
+  }
+  return capturedAt;
 }
 
-function assertWorkloadCompatibility(contract, now, restorePointCreatedAt) {
+function assertWorkloadCompatibility(contract, now, recoveryTargetCapturedAt) {
   if (contract.workloadObservation?.source !== 'kubernetes-live') {
     throw new MigrationGateError('contract.workloadObservation.source must be kubernetes-live');
   }
@@ -134,8 +162,8 @@ function assertWorkloadCompatibility(contract, now, restorePointCreatedAt) {
   if (observedAt > now) {
     throw new MigrationGateError('contract.workloadObservation.observedAt is in the future');
   }
-  if (observedAt < restorePointCreatedAt) {
-    throw new MigrationGateError('contract workload observation predates the restore point');
+  if (observedAt < recoveryTargetCapturedAt) {
+    throw new MigrationGateError('contract workload observation predates the recovery target');
   }
 
   if (!Array.isArray(contract.compatibleImages) || contract.compatibleImages.length === 0) {
@@ -199,8 +227,8 @@ export function validateMigrationGate(context, options = {}) {
       throw new MigrationGateError('contract evidence is required for contract phase');
     }
     const now = options.now instanceof Date ? options.now.getTime() : Date.now();
-    const restorePointCreatedAt = assertRecoveryEvidence(context.contract, now);
-    assertWorkloadCompatibility(context.contract, now, restorePointCreatedAt);
+    const recoveryTargetCapturedAt = assertRecoveryEvidence(context.contract, now);
+    assertWorkloadCompatibility(context.contract, now, recoveryTargetCapturedAt);
   }
 
   return {

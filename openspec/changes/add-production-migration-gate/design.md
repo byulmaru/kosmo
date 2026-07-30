@@ -34,9 +34,9 @@ Production backup은 CNPG Barman Cloud plugin, 매일 base backup과 연속 WAL 
 ### Recommended Approach
 
 1. PROD-563의 일반 release workflow가 직접 호출할 수 있는 독립 gate command를 둔다. 이 command는 immutable image digest, migration phase, schema-change authority, rollback window 종료 시각, compatibility allowlist와 restore rehearsal evidence reference를 입력으로 받는다.
-2. Production Helm render에서 migration Job과 API/Web image가 같은 digest인지 정적으로 검사하고 migration Job은 별도 Secret reference만 사용하게 한다.
+2. Production Helm render에서 migration Job과 API/Web image가 같은 digest인지 정적으로 검사하고 migration Job은 별도 Secret reference와 `migrate` command만 사용하게 한다. Phase와 schema authority는 release gate metadata이며 Helm Job input이나 annotation으로 복제하지 않는다.
 3. `expand`/`transition`은 필수 identity·credential·phase 검사를 통과하면 기존 Drizzle runner를 실행한다. Phase별 SQL 선택은 하지 않고 release/image 분리로 안전한 migration 집합을 보장한다.
-4. `contract`는 recovery window 안의 base backup과 연속 WAL chain, 월간 restore rehearsal의 overdue 여부, live active/preview/rollback workload digest와 rollback window를 검사한다. 이후 고유한 named restore point를 만들고 해당 target WAL의 archive 성공을 확인한다. 이 자동 조건이 모두 충족되면 이미 승인된 production release의 migration을 실행한다.
+4. `contract`는 recovery window 안의 base backup과 연속 WAL chain, 월간 restore rehearsal의 overdue 여부, live active/preview/rollback workload digest와 rollback window를 검사한다. 이후 production primary의 현재 target LSN과 WAL identity를 캡처하고 PROD-546 backup 경계가 같은 WAL의 archive를 검증한 evidence를 소비한다. 이 자동 조건이 모두 충족되면 이미 승인된 production release의 migration을 실행한다.
 5. Gate와 migration 결과를 호출자에게 명시적 success/failure로 반환한다. PROD-563은 success일 때만 workload 활성화를 이어가며, 이 change는 일반 release orchestration 자체를 만들지 않는다.
 6. 운영 문서는 evidence 수집, 실패 원인 분류, 같은 digest 재시도, forward recovery와 restore 판단 시점을 설명한다.
 
@@ -52,7 +52,8 @@ Production backup은 CNPG Barman Cloud plugin, 매일 base backup과 연속 WAL 
 - Contract SQL을 transition image에 미리 포함하고 runner가 건너뛸 것으로 기대하지 않는다.
 - `PostSync` 성공이나 non-current ReplicaSet의 scale 0만으로 rollback window 종료를 증명하지 않는다.
 - SemVer/stable/SHA tag를 immutable digest와 동일하게 취급하지 않는다.
-- Evidence input의 non-empty 여부만 검사하고 recovery chain, rehearsal overdue 상태와 restore point WAL archive 확인을 생략하지 않는다.
+- Evidence input의 non-empty 여부만 검사하고 recovery chain, rehearsal overdue 상태와 target LSN에 대응하는 정확한 WAL archive 확인을 생략하지 않는다.
+- Named restore point 생성, restore-point 전용 image command와 migration Job의 command/phase/schema-authority 분기를 추가하지 않는다.
 - Production release가 승인된 뒤 contract migration만 다시 승인하게 하는 별도 Environment나 workflow를 추가하지 않는다.
 - Migration credential 장애를 runtime credential 재사용으로 우회하지 않는다.
 - Secret, connection string, backup object key, row 값 또는 raw Kubernetes Secret을 workflow log에 출력하지 않는다.
@@ -60,8 +61,8 @@ Production backup은 CNPG Barman Cloud plugin, 매일 base backup과 연속 WAL 
 
 ## Risks / Trade-offs
 
-- 일일 base backup 지연은 PROD-546의 운영 이상이지만, 기존 base backup과 연속 WAL이 migration 직전 restore point까지 유효하면 그 경과 시간만으로 contract를 차단하지 않는다. 반대로 recovery chain이나 월간 rehearsal readiness가 깨졌다면 contract release도 보류된다.
-- Named restore point의 target WAL archive를 기다리므로 contract 시작이 WAL 전환·업로드 시간만큼 지연될 수 있다. 이 지연은 destructive migration 직전 복구 지점을 확보하는 비용이다.
+- 일일 base backup 지연은 PROD-546의 운영 이상이지만, 기존 base backup과 연속 WAL이 migration 직전 target LSN까지 유효하면 그 경과 시간만으로 contract를 차단하지 않는다. 반대로 recovery chain이나 월간 rehearsal readiness가 깨졌다면 contract release도 보류된다.
+- Target LSN에 대응하는 WAL archive evidence를 기다리므로 contract 시작이 WAL 전환·업로드 시간만큼 지연될 수 있다. 이 지연은 destructive migration 직전 복구 지점을 확보하는 비용이다.
 - Compatibility allowlist는 특정 schema-change authority가 정확한 release identity를 기록해야 한다. Gate는 live workload와 allowlist 일치 여부를 검증하지만 특정 migration의 compatibility 자체를 대신 판단하지 않는다.
 - Production release 승인은 image 안의 migration까지 포함하므로 contract 의도를 별도 승인 행위로 중복 기록하지 않는다. 대신 phase, schema authority, recovery와 compatibility evidence가 release 기록에 남아야 한다.
 - 자동 database rollback을 제공하지 않으므로 실패 후 forward fix 또는 restore 판단이 운영자에게 남는다. 임의 down migration보다 데이터 안전성이 높다.
