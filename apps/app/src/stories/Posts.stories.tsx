@@ -1871,8 +1871,11 @@ export const ReplyThreadPresentation: Story = {
       const dividerBounds = divider.getBoundingClientRect();
       const rowBounds = row.getBoundingClientRect();
       expect(dividerBounds.height).toBeCloseTo(1, 0);
-      expect(dividerBounds.left - rowBounds.left).toBeCloseTo(8, 0);
+      expect(dividerBounds.left - rowBounds.left).toBeCloseTo(64, 0);
       expect(rowBounds.right - dividerBounds.right).toBeCloseTo(8, 0);
+      for (const connector of within(row).queryAllByTestId(/^post-thread-connector-/)) {
+        expect(connector.getBoundingClientRect().right).toBeLessThan(dividerBounds.left);
+      }
       expect(window.getComputedStyle(divider).backgroundColor).toBe('rgb(242, 242, 242)');
     });
     const currentRow = canvas.getByTestId('post-thread-current-thread-current');

@@ -99,7 +99,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.lg,
   },
-  divider: { height: 1, marginHorizontal: spacing.sm },
+  divider: {
+    height: 1,
+    marginLeft: spacing.xxl * 2,
+    marginRight: spacing.sm,
+  },
   connector: {
     borderRadius: radii.full,
     left: spacing.xxl,
