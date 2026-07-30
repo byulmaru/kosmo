@@ -1292,7 +1292,13 @@ function ProductionBookmarkEnvironmentReplacementStory() {
 
 type PostActionSessionState = 'error' | 'guest' | 'profile';
 
-function ProductionPostActionSessionBoundaryStory({ state }: { state: PostActionSessionState }) {
+function ProductionPostActionSessionBoundaryStory({
+  postId = shortPost.id,
+  state,
+}: {
+  postId?: string;
+  state: PostActionSessionState;
+}) {
   const data = usePostsStoryData();
   const [guestResolutionCount, setGuestResolutionCount] = useState(0);
   const [profileResolutionCount, setProfileResolutionCount] = useState(0);
@@ -1315,7 +1321,7 @@ function ProductionPostActionSessionBoundaryStory({ state }: { state: PostAction
           <View testID="production-session-action-post">
             <PostListItem
               post={requireFragment(
-                requirePostById(data.posts, shortPost.id).listItem,
+                requirePostById(data.posts, postId).listItem,
                 'session action boundary Post',
               )}
             />
@@ -2574,6 +2580,25 @@ export const ProductionProfileActionResolution: Story = {
     expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
   },
   render: () => <ProductionPostActionSessionBoundaryStory state="profile" />,
+};
+
+export const ProductionFollowersRepostProfileResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+    const repost = surface.getByRole('button', { name: /^재게시/ });
+
+    expect(repost).toBeEnabled();
+    await userEvent.click(repost);
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('1'),
+    );
+    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+  },
+  render: () => (
+    <ProductionPostActionSessionBoundaryStory postId="detail-followers" state="profile" />
+  ),
 };
 
 export const ProductionSessionErrorDisablesActions: Story = {

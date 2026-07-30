@@ -29,7 +29,7 @@ export function isRepostTargetEligible({
     return true;
   }
   if (visibility === 'FOLLOWERS') {
-    return selectedProfileId === authorProfileId;
+    return selectedProfileId === null || selectedProfileId === authorProfileId;
   }
   return false;
 }

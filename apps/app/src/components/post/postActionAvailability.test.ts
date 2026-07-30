@@ -71,6 +71,26 @@ describe('Post action 실행 가능성', () => {
     assert.equal(
       policy.isRepostTargetEligible({
         authorProfileId: 'author-id',
+        selectedProfileId: null,
+        visibility: 'FOLLOWERS',
+      }),
+      true,
+    );
+    assert.deepEqual(
+      policy.resolvePostActionExecution({
+        selectedProfileId: null,
+        status: 'valid',
+        targetEligible: policy.isRepostTargetEligible({
+          authorProfileId: 'author-id',
+          selectedProfileId: null,
+          visibility: 'FOLLOWERS',
+        }),
+      }),
+      { kind: 'resolution-required', reason: 'profile' },
+    );
+    assert.equal(
+      policy.isRepostTargetEligible({
+        authorProfileId: 'author-id',
         selectedProfileId: 'viewer-id',
         visibility: 'FOLLOWERS',
       }),
