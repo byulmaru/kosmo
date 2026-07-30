@@ -55,6 +55,10 @@ export function useLocalSearchParams<T extends Record<string, string | undefined
   return useContext(RouterContext).params as T;
 }
 
+export function useGlobalSearchParams<T extends Record<string, string | undefined>>() {
+  return useContext(RouterContext).params as T;
+}
+
 export function useRouter() {
   const { setPathname } = useContext(RouterContext);
   return useMemo(

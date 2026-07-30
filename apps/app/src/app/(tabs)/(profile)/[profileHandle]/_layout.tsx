@@ -4,7 +4,7 @@ import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
-import { useProfileHandle } from '@/components/profile/route';
+import { useProfileLayoutHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -22,7 +22,7 @@ const ProfileLayoutQuery = graphql`
 `;
 
 export default function ProfileLayout() {
-  const handle = useProfileHandle();
+  const handle = useProfileLayoutHandle();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
 
