@@ -150,6 +150,16 @@ test('로그인 후 menu에서도 개인정보 처리방침으로 이동한다',
   await expect(page).toHaveURL(/\/privacy$/);
 });
 
+test('로그인 후 menu 재인증도 BFF 문서 탐색으로 시작한다', async ({ context, page }) => {
+  const session = await createE2ESession();
+  await setE2ESessionCookie(context, session.token);
+  await page.goto('/menu');
+
+  await page.getByRole('link', { name: '로그인 테스트' }).click();
+
+  await expect(page).toHaveURL(/\/home$/);
+});
+
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
   await page.route('**/graphql', async (route) => {
     if (isGraphQLOperation(route.request().postData(), 'SessionProviderQuery')) {

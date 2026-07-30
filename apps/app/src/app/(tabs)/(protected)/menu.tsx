@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { Platform, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
-import { markWebLoginStarted } from '@/analytics/client';
+import { startWebLoginFromPress } from '@/auth/login';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -23,7 +23,7 @@ export default function MenuScreen() {
       </Link>
       {Platform.OS === 'web' ? (
         <Link asChild href={'/login' as Href}>
-          <Pressable accessibilityRole="link" onPress={markWebLoginStarted}>
+          <Pressable accessibilityRole="link" onPress={startWebLoginFromPress}>
             <Text style={[styles.login, { color: theme.primary }]}>로그인 테스트</Text>
           </Pressable>
         </Link>
