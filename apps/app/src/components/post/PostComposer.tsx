@@ -9,10 +9,20 @@ import {
   LockIcon,
   MoonIcon,
   RefreshCwIcon,
-  Trash2Icon,
+  XIcon,
 } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Modal, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -20,7 +30,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { colors, radii, spacing, typography } from '@/theme/tokens';
 import {
   postComposerMediaLimit,
   releaseComposerMediaPreview,
@@ -596,30 +606,56 @@ export function PostComposerMediaControls({
                 ? '업로드 완료'
                 : '업로드 실패'
           }`}
+          accessibilityLiveRegion="polite"
           key={item.key}
-          style={[styles.mediaItem, { borderColor: theme.border }]}
+          style={styles.mediaItem}
         >
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
-            source={{ uri: item.asset.uri }}
-            style={styles.mediaPreview}
-          />
-          <View style={styles.mediaItemBody}>
-            <Text
-              accessibilityLiveRegion="polite"
-              style={[
-                styles.mediaStatus,
-                { color: item.state === 'failed' ? theme.danger : theme.textSecondary },
+          <View style={styles.mediaPreviewContainer}>
+            <Image
+              accessibilityIgnoresInvertColors
+              accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
+              source={{ uri: item.asset.uri }}
+              style={styles.mediaPreview}
+            />
+            {item.state !== 'ready' ? (
+              <>
+                <View style={styles.mediaOverlayBackdrop} />
+                {item.state === 'uploading' ? (
+                  <View style={styles.mediaOverlay}>
+                    <ActivityIndicator
+                      accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
+                      color={colors.light.background}
+                    />
+                  </View>
+                ) : (
+                  <Pressable
+                    accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 재시도`}
+                    accessibilityRole="button"
+                    onPress={() => onRetry(item)}
+                    style={styles.mediaOverlay}
+                  >
+                    <RefreshCwIcon color={colors.light.background} size={24} />
+                  </Pressable>
+                )}
+              </>
+            ) : null}
+            <Pressable
+              accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: submitting }}
+              disabled={submitting}
+              hitSlop={8}
+              onPress={() => onRemove(item.key)}
+              style={({ pressed }) => [
+                styles.mediaRemove,
+                { opacity: submitting ? 0.45 : pressed ? 0.75 : 1 },
               ]}
             >
-              {item.state === 'uploading'
-                ? '업로드 중…'
-                : item.state === 'ready'
-                  ? '업로드 완료'
-                  : '업로드 실패'}
-            </Text>
-            {item.state === 'ready' ? (
+              <XIcon color={colors.light.background} size={18} />
+            </Pressable>
+          </View>
+          {item.state === 'ready' ? (
+            <View style={styles.mediaItemBody}>
               <TextField
                 accessibilityLabel={`첨부 이미지 ${index + 1} 대체 텍스트`}
                 editable={!submitting}
@@ -627,31 +663,8 @@ export function PostComposerMediaControls({
                 onChangeText={(altText) => onAltTextChange(item.key, altText)}
                 value={item.altText}
               />
-            ) : null}
-            <View style={styles.mediaActions}>
-              {item.state === 'failed' ? (
-                <Pressable
-                  accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 재시도`}
-                  accessibilityRole="button"
-                  onPress={() => onRetry(item)}
-                  style={styles.mediaAction}
-                >
-                  <RefreshCwIcon color={theme.text} size={18} />
-                  <Text style={[styles.mediaActionLabel, { color: theme.text }]}>재시도</Text>
-                </Pressable>
-              ) : null}
-              <Pressable
-                accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
-                accessibilityRole="button"
-                disabled={submitting}
-                onPress={() => onRemove(item.key)}
-                style={styles.mediaAction}
-              >
-                <Trash2Icon color={theme.danger} size={18} />
-                <Text style={[styles.mediaActionLabel, { color: theme.danger }]}>제거</Text>
-              </Pressable>
             </View>
-          </View>
+          ) : null}
         </View>
       ))}
       {media.length > 0 ? (
@@ -724,24 +737,41 @@ const styles = StyleSheet.create({
     width: 40,
   },
   mediaItem: {
-    borderRadius: radii.md,
-    borderWidth: 1,
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.md,
   },
-  mediaPreview: { borderRadius: radii.sm, height: 96, width: 96 },
-  mediaItemBody: { flex: 1, gap: spacing.sm },
-  mediaStatus: { fontFamily: 'SUIT', ...typography.sm },
-  mediaActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  mediaAction: {
+  mediaPreviewContainer: {
+    borderRadius: radii.sm,
+    height: 96,
+    overflow: 'hidden',
+    position: 'relative',
+    width: 96,
+  },
+  mediaPreview: { height: 96, width: 96 },
+  mediaOverlayBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.light.text,
+    opacity: 0.58,
+  },
+  mediaOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-    minHeight: 48,
-    paddingHorizontal: spacing.sm,
+    justifyContent: 'center',
   },
-  mediaActionLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  mediaRemove: {
+    alignItems: 'center',
+    backgroundColor: colors.light.text,
+    borderRadius: radii.full,
+    height: 32,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: spacing.xs,
+    top: spacing.xs,
+    width: 32,
+    zIndex: 1,
+  },
+  mediaItemBody: { flex: 1 },
   sensitiveMedia: {
     alignItems: 'center',
     flexDirection: 'row',

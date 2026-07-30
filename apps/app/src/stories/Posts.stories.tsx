@@ -2505,9 +2505,14 @@ export const ComposerDefault: Story = {
 export const ComposerMediaStates: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+    expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toHaveStyle({
+      borderWidth: '0px',
+    });
+    expect(canvas.getByRole('progressbar', { name: '첨부 이미지 1 업로드 중' })).toBeVisible();
+    expect(canvas.queryByText('업로드 중…')).not.toBeInTheDocument();
     expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '첨부 이미지 1 제거' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '첨부 이미지 2 대체 텍스트' })).toHaveValue(
       '회색 이미지의 대체 텍스트',
     );
@@ -2575,7 +2580,7 @@ export const ComposerMediaUploadInteraction: Story = {
       });
 
       await waitFor(() => {
-        expect(canvas.getAllByText('업로드 완료')).toHaveLength(4);
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
       });
       expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
       expect(upload).toHaveBeenCalledTimes(4);
