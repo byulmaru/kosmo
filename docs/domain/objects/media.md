@@ -31,11 +31,15 @@ Remote Media는 등록 시 Ready다.
 | ----------------- | ---------------- | ------------------------------ | --------------------- | -------------------- | --------------------- |
 | Upload Expires At | 시각, 필수       | 제한된 업로드 권한의 만료 시각 | Source가 Local        | Upload Account 조회  | `Media.UploadAccount` |
 | Ready At          | 시각, 필수       | 저장 성공을 확인한 시각        | State가 Ready인 Local | Media 조회 정책 통과 | 없음                  |
+| Original URL      | URL, 필수        | 저장 서비스가 확정한 공개 원본 | State가 Ready인 Local | Media 조회 정책 통과 | 없음                  |
+| Original MIME     | 문자열, 필수     | 저장 서비스가 확정한 원본 형식 | State가 Ready인 Local | Media 조회 정책 통과 | 없음                  |
 | Remote URL        | URL, 필수        | 원격 Media 원본 위치           | Source가 Remote       | Media 조회 정책 통과 | 없음                  |
 | Remote Fetched At | 시각, nullable   | 마지막 성공 fetch 결과로 갱신  | Source가 Remote       | 운영 조회            | `Account.Operator`    |
 
 Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 결과와 연결하는 persistence 정보다. 저장
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
+Original URL과 Original MIME column은 additive rollout과 기존 Ready row backfill 동안 nullable이며, backfill이
+끝난 정상 상태에서는 Ready Local Media가 두 값을 모두 가져야 한다.
 
 ## 관계
 
@@ -55,12 +59,12 @@ Profile이 달라도 참조할 수 있다.
 
 ## 행동
 
-| 행동              | 행동 주체 | 대상 객체 | 입력값                     | 권한                                    | 조건                                                                                               | 결과                                                                                                     |
-| ----------------- | --------- | --------- | -------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Local 업로드 시작 | Profile   | Media     | 없음                       | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다 | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다                   |
-| Local 업로드 완료 | Profile   | Media     | Local Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고, State가 Uploading이면 Media Storage Service에서 이미지 저장 성공이 확인된다    | Uploading이면 같은 Media의 State가 Ready가 되고 Ready At이 기록되며, Ready이면 기존 완료 결과를 반환한다 |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다              | Source=Remote, State=Ready인 Media와 Remote Profile 관계가 생성된다                                      |
-| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                 | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                  | 원격 속성과 Remote Fetched At이 갱신된다                                                                 |
+| 행동              | 행동 주체 | 대상 객체 | 입력값                     | 권한                                    | 조건                                                                                                       | 결과                                                                                     |
+| ----------------- | --------- | --------- | -------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Local 업로드 시작 | Profile   | Media     | 없음                       | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다         | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다   |
+| Local 업로드 완료 | Profile   | Media     | Uploading Media            | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공과 원본 표현이 확인된다 | 같은 Media의 State가 Ready가 되고 Ready At, Original URL과 Original MIME이 함께 기록된다 |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다                      | Source=Remote, State=Ready인 Media와 Remote Profile 관계가 생성된다                      |
+| Remote Media 갱신 | 시스템    | Media     | Fetch 결과                 | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                          | 원격 속성과 Remote Fetched At이 갱신된다                                                 |
 
 Local 업로드 완료는 Media identity, Profile과 Upload Account를 바꾸지 않는다. 저장 참조를 알고 있다는 사실만으로
 Media 완료, 조회 또는 Post 연결 권한을 부여하지 않는다.
@@ -89,7 +93,8 @@ identity와 최초 Ready At을 반환한다.
   재검증을 보내지 않지만 기존에 허용된 표현의 공개 범위를 자동으로 바꾸지 않는다.
 - 현재 Post Content의 Sensitive Media가 true면 그 revision이 참조하는 모든 Media 표시를 가린다.
 - avatar 표현은 400x400 crop, header 표현은 1500x500 crop을 기준으로 한다.
-- 접근 가능한 URL은 위 정책을 통과한 조회 결과이며 Media의 영구 속성이 아니다.
+- Original URL은 Ready 전환 때 저장한 persistence metadata다. 이를 API나 protocol에 노출하는 것은 위 조회 정책을
+  통과한 projection의 책임이며 URL 자체를 권한 증명으로 사용하지 않는다.
 
 ## 확정 용어
 
@@ -104,8 +109,8 @@ identity와 최초 Ready At을 반환한다.
 
 - 업로드 만료 뒤 상태 전이, 완료 전 업로드 취소, 삭제와 orphan Media 정리는 현재 행동에서 제외한다.
 - Media Proxy 조회는 Mutation이 아니므로 행동에서 제외한다.
-- Media Storage Service의 endpoint, 저장 참조 형식, 접근 URL, 구체 이미지 형식과 제한, 저장 위치와 cache
-  정책은 도메인 계약으로 고정하지 않는다.
+- Media Storage Service의 endpoint, 저장 참조 형식, URL 조립 규칙, 구체 이미지 형식과 제한, 저장 위치와 cache
+  정책은 도메인 계약으로 고정하지 않는다. Kosmo는 완료 응답의 Original URL과 MIME을 그대로 저장한다.
 - 구체 MIME type 목록, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책, 바이러스 스캔과 성인물 탐지는
   구현/OpenSpec에서 다룬다.
 - Remote Media의 Media Storage Service 저장 projection은 실제 Remote Media 저장 구현에서 정밀화한다.

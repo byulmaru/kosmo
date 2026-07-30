@@ -90,14 +90,15 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
   `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-436, PROD-461, PROD-559
 - Status: Active
 - Context / Problem: ProseMirror document에는 Media 위치가 있지만 ActivityPub은 HTML content와 attachment
-  Image를 별도 표현하며 Media URL은 조회 시점에 해석해야 한다.
+  Image를 별도 표현한다. 공개 표현을 조회할 때마다 저장 서비스에서 해석하면 read latency와 가용성이 외부
+  I/O에 결합된다.
 - Decision Outcome: Media를 제거한 body만 기존 DOMSerializer로 HTML화하고 Media node는 document 순서의
-  `attachment` Image로 만든다. public immutable WebP URL, `image/webp`, Alt Text와 sensitive를 제공하고 HTML
-  `<img>`를 중복하지 않는다.
-- Alternatives Considered: Media node를 `toDOM` `<img>`로 만들면 async URL 해석이 불가능하고 attachment와
-  중복될 수 있다. document attrs Media array는 rich placement를 잃는다.
-- Consequences: federation에서는 내부 삽입 위치가 attachment 순서로 축약된다. Post 수정과 `Update(Note)`는
-  독립 Backlog다.
+  `attachment` Image로 만든다. 업로드 완료 시 저장한 Original URL·MIME, document Alt Text와 sensitive를
+  제공하고 HTML `<img>`를 중복하지 않는다. read projection은 Media Storage Service를 호출하지 않는다.
+- Alternatives Considered: projection마다 provider API를 호출하면 요청 증폭·timeout·장애 전파가 생긴다. Kosmo가
+  URL을 직접 조립하면 provider 규칙에 결합된다. Media node를 `toDOM` `<img>`로 만들면 attachment와 중복된다.
+- Consequences: Ready 전환과 기존 row backfill이 표현 metadata의 완전성을 책임진다. federation에서는 내부 삽입
+  위치가 attachment 순서로 축약된다. Post 수정과 `Update(Note)`는 독립 Backlog다.
 - Confirmation / Follow-up: 역참조와 최초 Create(Note)의 exact content/attachment/sensitive를 검증한다.
 
 ## Remaining Decisions

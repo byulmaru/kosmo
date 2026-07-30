@@ -27,13 +27,15 @@ File 표현, Local Media 생성 시점과 업로드 중 상태에 관한 결정�
 - 저장 참조를 알고 있다는 사실은 Local Media의 identity, 소유권, 조회 권한 또는 Post 연결 권한을 증명하지
   않는다. Post에 연결할 수 있는 Account 경계는 [ADR 0010](./0010-post-interaction-contracts.md)의 Upload
   Account 계약을 그대로 따른다.
-- Media Storage Service의 endpoint, 저장 참조 형식, 접근 URL, 구체 이미지 형식과 제한, 저장 위치와 cache
-  정책은 도메인 속성이 아니다.
+- Kosmo는 업로드 완료 확인 응답의 공개 Original URL과 MIME type을 Media의 persistence metadata로 저장한 뒤
+  Ready로 전환한다. 이후 read projection은 이 저장 결과를 사용하고 Media Storage Service를 다시 호출하지 않는다.
+- Media Storage Service의 endpoint, 저장 참조 형식, URL 조립 규칙, 구체 이미지 형식과 제한, 저장 위치와 cache
+  정책은 Kosmo가 추론하거나 도메인 상수로 고정하지 않는다.
 
 ## 결과
 
 - Local Media는 인증된 Account/Profile의 업로드 요청에서 Uploading으로 성립하고 확인된 저장 결과가 있어야
-  Ready가 된다.
+  Original URL·MIME과 함께 Ready가 된다.
 - Kosmo는 Post와 Profile의 조회 정책을 통과한 Media 접근 결과만 제공한다.
 - 구현 이슈와 OpenSpec은 저장 서비스 구현과 Kosmo 통합을 독립적인 전달 단위로 나눌 수 있으며, Kosmo 통합
   검증에서 두 단위의 계약을 함께 확인한다.

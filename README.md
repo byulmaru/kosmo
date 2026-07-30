@@ -21,9 +21,19 @@ or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <com
 to point at another path.
 
 The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
-to issue browser upload URLs from Media Storage Service. These are server-only
-values loaded through the same Vault environment and must not be exposed to the
-browser bundle.
+to issue browser upload URLs and persist the completed original representation
+reported by Media Storage Service. These are server-only values loaded through
+the same Vault environment and must not be exposed to the browser bundle.
+
+After deploying the additive Media representation columns, backfill existing
+Ready Local Media with the same environment and database configuration:
+
+```sh
+pnpm --filter @kosmo/api db:backfill-media-representations
+```
+
+The command is idempotent, prints `found`, `updated`, and `failed` counts as JSON,
+and exits unsuccessfully when any row could not be refreshed.
 
 Run `pnpm dev`, then open `http://localhost:5173`. Local development uses Expo/Metro
 on public port `5173`, the Hono web BFF on internal port `5174`, and the API on
