@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ValidationError } from '@kosmo/core/error';
+import { encodeGlobalId } from '@kosmo/core/global-id';
 import { graphql, isInputObjectType, isObjectType } from 'graphql';
 import { schema } from '@/graphql/schema';
 
@@ -30,10 +32,24 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
 });
 
-test('rejects contentless and over-500-character Plain Text before creating a post', async () => {
-  for (const [bodyText, message] of [
-    [' \n ', '본문 또는 이미지를 추가해주세요.'],
-    ['가'.repeat(501), '본문은 500자까지 작성할 수 있어요.'],
+test('validates createPost input before running the resolver', async () => {
+  const mediaId = encodeGlobalId('Media', '00000000-0000-8000-8000-000000000001');
+  for (const [input, message, field] of [
+    [{ bodyText: ' \n ', visibility: 'UNLISTED' }, '본문 또는 이미지를 추가해주세요.', 'bodyText'],
+    [
+      { bodyText: '가'.repeat(501), visibility: 'UNLISTED' },
+      '본문은 500자까지 작성할 수 있어요.',
+      'bodyText',
+    ],
+    [
+      {
+        bodyText: '',
+        media: Array.from({ length: 5 }, () => ({ mediaId })),
+        visibility: 'UNLISTED',
+      },
+      '이미지는 4개까지 첨부할 수 있어요.',
+      'media',
+    ],
   ] as const) {
     const result = await graphql({
       schema,
@@ -44,11 +60,14 @@ test('rejects contentless and over-500-character Plain Text before creating a po
           }
         }
       `,
-      variableValues: { input: { bodyText, visibility: 'UNLISTED' } },
+      variableValues: { input },
       contextValue: { session: { profileId: '00000000-0000-8000-8000-000000000001' } },
     });
 
     assert.equal(result.data == null, true);
     assert.equal(result.errors?.[0]?.message, message);
+    const error = result.errors?.[0]?.originalError;
+    assert.ok(error instanceof ValidationError);
+    assert.equal(error.field, field);
   }
 });
