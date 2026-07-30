@@ -961,7 +961,6 @@ function ComposerMediaStatesStory() {
     <Catalog>
       <PostComposerMediaControls
         media={media}
-        onAdd={() => undefined}
         onAltTextChange={(key, altText) =>
           setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)))
         }
@@ -2559,6 +2558,7 @@ export const ComposerMediaUploadInteraction: Story = {
 
     try {
       const add = canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' });
+      expect(canvas.queryByText('이미지 추가')).not.toBeInTheDocument();
       await userEvent.click(add);
       await userEvent.click(add);
       expect(getImagePickerLaunchCount()).toBe(1);

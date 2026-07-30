@@ -436,45 +436,21 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   return (
     <View
       accessibilityLabel="새 게시글 작성"
-      style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[styles.root, { backgroundColor: theme.card }]}
     >
       <View style={styles.author}>
         <Avatar label={profile.displayName} size={40} />
         <ProfileNameBlock profile={profile} />
       </View>
-      <TextArea
-        ref={editor}
-        aria-invalid={Boolean(error)}
-        accessibilityLabel="게시글 본문"
-        editable={!submitting}
-        onBlur={() => setEditorFocused(false)}
-        onChangeText={setBody}
-        onFocus={() => setEditorFocused(true)}
-        placeholder="무슨 일이 일어나고 있나요?"
-        style={{
-          backgroundColor: theme.background,
-          borderColor: error ? theme.danger : editorFocused ? theme.primary : theme.border,
-        }}
-        value={body}
-      />
-      <PostComposerMediaControls
-        media={media}
-        onAdd={() => void selectMedia()}
-        onAltTextChange={(key, altText) =>
-          setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)))
-        }
-        onRemove={removeMedia}
-        onRetry={(item) => void uploadMedia(item.key, item.asset)}
-        onSensitiveMediaChange={setSensitiveMedia}
-        sensitiveMedia={sensitiveMedia}
-        submitting={submitting}
-      />
-      {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          {error}
-        </Text>
-      ) : null}
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.editorSurface,
+          {
+            backgroundColor: theme.background,
+            borderColor: error ? theme.danger : editorFocused ? theme.primary : theme.border,
+          },
+        ]}
+      >
         <View
           ref={visibilityControl}
           style={[styles.visibilityControl, { zIndex: visibilityOpen ? 50 : 0 }]}
@@ -502,19 +478,67 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
             <View style={styles.webVisibilityMenu}>{visibilityMenu}</View>
           ) : null}
         </View>
-        <View style={styles.submit}>
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[
-              styles.remaining,
-              { color: remaining < 0 ? theme.danger : theme.textSecondary },
+        <TextArea
+          ref={editor}
+          aria-invalid={Boolean(error)}
+          accessibilityLabel="게시글 본문"
+          editable={!submitting}
+          onBlur={() => setEditorFocused(false)}
+          onChangeText={setBody}
+          onFocus={() => setEditorFocused(true)}
+          placeholder="무슨 일이 일어나고 있나요?"
+          style={styles.editor}
+          value={body}
+        />
+        <PostComposerMediaControls
+          media={media}
+          onAltTextChange={(key, altText) =>
+            setMedia((items) =>
+              items.map((item) => (item.key === key ? { ...item, altText } : item)),
+            )
+          }
+          onRemove={removeMedia}
+          onRetry={(item) => void uploadMedia(item.key, item.asset)}
+          onSensitiveMediaChange={setSensitiveMedia}
+          sensitiveMedia={sensitiveMedia}
+          submitting={submitting}
+        />
+        {error ? (
+          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+            {error}
+          </Text>
+        ) : null}
+        <View style={styles.footer}>
+          <Pressable
+            accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting || media.length >= postComposerMediaLimit }}
+            disabled={submitting || media.length >= postComposerMediaLimit}
+            onPress={() => void selectMedia()}
+            style={({ pressed }) => [
+              styles.addMedia,
+              {
+                backgroundColor: pressed ? theme.surface : 'transparent',
+                opacity: submitting || media.length >= postComposerMediaLimit ? 0.45 : 1,
+              },
             ]}
           >
-            {remaining.toLocaleString('ko-KR')}
-          </Text>
-          <Button disabled={disabled} loading={submitting} onPress={submit}>
-            게시
-          </Button>
+            <ImagePlusIcon color={theme.primary} size={24} />
+          </Pressable>
+          <View style={styles.submit}>
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[
+                styles.remaining,
+                { color: remaining < 0 ? theme.danger : theme.textSecondary },
+              ]}
+            >
+              {remaining.toLocaleString('ko-KR')}
+            </Text>
+            <Button disabled={disabled} loading={submitting} onPress={submit}>
+              게시
+            </Button>
+          </View>
         </View>
       </View>
 
@@ -543,7 +567,6 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
 
 export function PostComposerMediaControls({
   media,
-  onAdd,
   onAltTextChange,
   onRemove,
   onRetry,
@@ -552,7 +575,6 @@ export function PostComposerMediaControls({
   submitting,
 }: {
   readonly media: readonly ComposerMediaItem[];
-  readonly onAdd: () => void;
   readonly onAltTextChange: (key: string, altText: string) => void;
   readonly onRemove: (key: string) => void;
   readonly onRetry: (item: ComposerMediaItem) => void;
@@ -564,24 +586,6 @@ export function PostComposerMediaControls({
 
   return (
     <View style={styles.mediaSection}>
-      <Pressable
-        accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: submitting || media.length >= postComposerMediaLimit }}
-        disabled={submitting || media.length >= postComposerMediaLimit}
-        onPress={onAdd}
-        style={({ pressed }) => [
-          styles.addMedia,
-          {
-            backgroundColor: pressed ? theme.surface : theme.card,
-            borderColor: theme.border,
-            opacity: submitting || media.length >= postComposerMediaLimit ? 0.45 : 1,
-          },
-        ]}
-      >
-        <ImagePlusIcon color={theme.text} size={20} />
-        <Text style={[styles.addMediaLabel, { color: theme.text }]}>이미지 추가</Text>
-      </Pressable>
       {media.map((item, index) => (
         <View
           accessibilityLabel={`첨부 이미지 ${index + 1}, ${
@@ -671,8 +675,22 @@ export function PostComposerMediaControls({
 }
 
 const styles = StyleSheet.create({
-  root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.lg, padding: spacing.lg },
+  root: { gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
+  editorSurface: {
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  editor: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    minHeight: 128,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -699,15 +717,11 @@ const styles = StyleSheet.create({
   mediaSection: { gap: spacing.md },
   addMedia: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     borderRadius: radii.sm,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
   },
-  addMediaLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   mediaItem: {
     borderRadius: radii.md,
     borderWidth: 1,
