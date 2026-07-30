@@ -10,7 +10,8 @@
 **Deliverable**
 
 personal/shared inbox의 verified typed Delete가 direct object IRI 또는 지원하는 embedded Tombstone을 no-network로
-해석하고, exact eligible remote actor/mapping/Author chain이 일치하는 Post만 canonical Tombstone으로 전환한다.
+해석하고, 저장 remote actor/mapping/Author의 exact identity chain이 일치하는 Post만 canonical Tombstone으로
+전환한다.
 
 **Guardrails**
 

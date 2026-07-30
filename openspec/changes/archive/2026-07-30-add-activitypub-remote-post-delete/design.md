@@ -58,7 +58,8 @@ activity receipt를 추가하지 않는다.
    object가 없으면 direct IRI로 처리하고, 있으면 동일 ID의 Tombstone만 허용한다.
 3. 하나의 DB transaction에서 object mapping, Current Content가 있는 Note Post, Profile, Instance와
    ActivityPubActor를 exact join한다. Content 없는 Repost의 Announce mapping은 선택하지 않고 기존
-   `Undo(Announce)` lifecycle에 남긴다. eligible actor/author/origin/state가 아니면 write 없이 종료한다.
+   `Undo(Announce)` lifecycle에 남긴다. 저장 actor, exact author와 ActivityPub origin identity chain이 아니면
+   write 없이 종료하고, Profile/Instance의 현재 가용 상태는 이 terminal transition을 막지 않는다.
 4. 같은 transaction을 전달해 canonical `deletePost`를 호출한다. handler lookup과 core author 재검증 중 하나가
    실패하거나 대상이 바뀌면 전체 transition을 적용하지 않는다.
 5. core delete action의 Local outbound 후보는 caller transaction이 아니라 remote ActivityPub Post mapping
@@ -98,8 +99,9 @@ activity receipt를 추가하지 않는다.
 - [Risk] Delete가 최초 Create commit 전 mapping을 보지 못하면 no-op 후 Post가 Active로 materialize될 수 있다.
   → 미저장 object memory가 없다는 명시적 계약으로 제한하고 이후 delivery 또는 운영 동기화는 별도 capability가
   소유한다.
-- [Risk] ACTIVE/UNRESPONSIVE actor만 허용하면 SUSPENDED/disabled remote author의 cleanup Delete를 적용하지 않는다.
-  → 현재 known-actor eligibility와 GraphQL hidden 상태를 유지하고 actor lifecycle cleanup은 별도 계약으로 둔다.
+- [Trade-off] Profile 또는 Instance가 unavailable이어도 exact ownership을 통과한 Delete를 terminal state에
+  반영한다. → 저장 actor/object/Author identity와 ACTIVITYPUB origin을 계속 요구하고 network lookup 없이
+  처리해, 일시적으로 숨겨진 Post가 상태 복구 뒤 다시 노출되는 것을 막는다.
 - [Risk] content history와 mapping을 보존하면 삭제 데이터가 물리적으로 남는다. → canonical Tombstone과 remote
   identity 보존을 우선하며 retention/physical cleanup은 별도 lifecycle로 결정한다.
 - [Risk] core Local outbound 후보 판정 변경이 기존 Local Post Delete delivery를 회귀시킬 수 있다. → Local root,
