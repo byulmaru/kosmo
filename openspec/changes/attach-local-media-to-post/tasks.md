@@ -135,9 +135,9 @@ Create delivery에서 동일하게 제공된다.
 - missing/non-Ready/unsafe reference의 미제공 결과와 내부 identity 비노출을 확인한다.
 - Media 없는 Local Note와 최초 Create delivery가 회귀하지 않는지 확인한다.
 
-- [ ] 4.1 current PostContent Media를 검증해 ActivityPub Image에 필요한 저장된 공개 표현으로 projection한다.
-- [ ] 4.2 Media node를 제외한 HTML과 ordered attachment/sensitive를 Local Note 역참조 및 최초 delivery에 연결한다.
-- [ ] 4.3 federation projection·권한·회귀 검증과 관련 Fedify check를 통과시킨다.
+- [x] 4.1 current PostContent Media를 검증해 ActivityPub Image에 필요한 저장된 공개 표현으로 projection한다.
+- [x] 4.2 Media node를 제외한 HTML과 ordered attachment/sensitive를 Local Note 역참조 및 최초 delivery에 연결한다.
+- [x] 4.3 federation projection·권한·회귀 검증과 관련 Fedify check를 통과시킨다.
 
 ## 5. PROD-461 통합 검증과 archive
 
