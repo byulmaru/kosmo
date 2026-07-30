@@ -1,19 +1,37 @@
-import { useState } from 'react';
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { unstable_batchedUpdates } from 'react-dom';
 import { Text, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { graphql, useLazyLoadQuery } from 'react-relay';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import { expect, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
+import { usePostReactionController } from '@/components/post/PostReactionController';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
+import { SessionProvider } from '@/session/SessionProvider';
 import { spacing, typography } from '@/theme/tokens';
+import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
+import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
 const reply = fn();
-const repost = fn();
-const reaction = fn();
 const bookmark = fn();
 const more = fn();
+const reactionMutationRequest = fn();
+const reactionLifecycleConsoleErrors: unknown[][] = [];
 
 const actionBarProps = {
   bookmark: {
@@ -23,12 +41,6 @@ const actionBarProps = {
     processing: 'default' as const,
   },
   more: { accessibilityLabel: '더보기', onPress: more },
-  reaction: {
-    accessibilityLabel: '반응',
-    hasReacted: false,
-    onPress: reaction,
-    processing: 'default' as const,
-  },
   reply: {
     accessibilityLabel: '답글',
     count: 12_345,
@@ -36,14 +48,438 @@ const actionBarProps = {
     onPress: reply,
     processing: 'default' as const,
   },
-  repost: {
-    accessibilityLabel: '재게시',
-    count: 12_345,
-    hasReposted: false,
-    onPress: repost,
-    processing: 'default' as const,
-  },
 };
+
+const sourcePostId = 'post-source';
+const activeRepostId = 'post-repost-active';
+type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending';
+type FixtureProps = Omit<PostActionBarProps, 'post'> & {
+  onMutationRequest?: (requestName: string) => void;
+  repostState?: RepostFixtureState;
+  selectedProfileId?: string | null;
+  showReactionSummary?: boolean;
+};
+
+const postActionBarStoryQuery = graphql`
+  query PostActionBarStoryQuery($id: ID!) {
+    node(id: $id) {
+      ... on Post {
+        ...PostActionBar_post @alias(as: "actionBar")
+        ...PostReactionController_post @alias(as: "reactionController")
+      }
+    }
+  }
+`;
+
+const unselectedSource = {
+  __typename: 'Post',
+  id: sourcePostId,
+  repostCount: 12_345,
+  reactionCounts: [
+    { count: 12, type: '❤️' },
+    { count: 7, type: '🎉' },
+  ],
+  reactionProfiles: {
+    edges: [],
+    pageInfo: { endCursor: null, hasNextPage: false },
+  },
+  viewerRepost: null,
+  viewerReactions: [],
+};
+const selectedSource = {
+  ...unselectedSource,
+  repostCount: 12_346,
+  viewerRepost: { __typename: 'Post', id: activeRepostId },
+  viewerReactions: [{ __typename: 'Reaction', id: 'reaction-story', type: '🥹' }],
+};
+
+function PostActionBarFixture({
+  onMutationRequest,
+  repostState = 'unselected',
+  selectedProfileId = 'profile-story',
+  showReactionSummary = false,
+  ...props
+}: FixtureProps) {
+  const environment = useMemo(() => {
+    const source =
+      repostState === 'selected' || repostState === 'pending' ? selectedSource : unselectedSource;
+    const result = new Environment({
+      network: Network.create((request) => {
+        if (request.operationKind === 'mutation') {
+          onMutationRequest?.(request.name);
+        }
+        return request.operationKind !== 'mutation'
+          ? Promise.resolve({
+              data:
+                request.name === 'SessionProviderQuery'
+                  ? {
+                      currentSession: {
+                        __typename: 'Session',
+                        id: 'session-story',
+                        selectedProfile:
+                          selectedProfileId === null
+                            ? null
+                            : {
+                                __typename: 'Profile',
+                                id: selectedProfileId,
+                              },
+                      },
+                      me: { __typename: 'Account', id: 'account-story', name: 'Story' },
+                    }
+                  : { node: source },
+            } as GraphQLResponse)
+          : repostState === 'pending'
+            ? Observable.create(() => undefined)
+            : Promise.resolve({
+                data:
+                  request.name === 'RepostActionDeletePostMutation'
+                    ? { deletePost: { postId: activeRepostId } }
+                    : {
+                        repostPost: {
+                          repost: {
+                            __typename: 'Post',
+                            id: activeRepostId,
+                            repostSource: selectedSource,
+                          },
+                        },
+                      },
+              });
+      }),
+      store: new Store(new RecordSource()),
+    });
+    result.commitPayload(
+      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+      { node: source },
+    );
+    return result;
+  }, [onMutationRequest, repostState, selectedProfileId]);
+  const createEnvironment = useCallback(() => environment, [environment]);
+
+  if (repostState === 'hidden') {
+    return <PostActionBar {...props} />;
+  }
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <Suspense fallback={<View />}>
+        <SessionProvider>
+          <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
+        </SessionProvider>
+      </Suspense>
+    </RelayActorProvider>
+  );
+}
+
+function PostActionBarFixtureContents({
+  showReactionSummary = false,
+  ...props
+}: Omit<PostActionBarProps, 'post' | 'reactionController'> & { showReactionSummary?: boolean }) {
+  const data = useLazyLoadQuery<PostActionBarStoryQuery>(
+    postActionBarStoryQuery,
+    { id: sourcePostId },
+    { fetchPolicy: 'store-only' },
+  );
+  const controller = usePostReactionController(data.node!.reactionController!);
+
+  return (
+    <>
+      {showReactionSummary ? <PostReactionSummary controller={controller} /> : null}
+      <PostActionBar {...props} post={data.node!.actionBar!} reactionController={controller} />
+    </>
+  );
+}
+
+type ReactionRequestOutcome = 'data-errors-success' | 'network-error' | 'payload-error' | 'success';
+
+type ReactionMutationSink = Readonly<{
+  complete: () => void;
+  error: (error: Error) => void;
+  next: (response: GraphQLResponse) => void;
+}>;
+
+type CapturedReactionRequest = {
+  actorId: number;
+  id: number;
+  name: string;
+  settled: boolean;
+  sink: ReactionMutationSink;
+  type: string;
+};
+
+type ReactionRequestSummary = Readonly<{
+  actorId: number;
+  id: number;
+  name: string;
+  settled: boolean;
+  type: string;
+}>;
+
+type CountRefetchRequestSummary = Readonly<{
+  disposed: boolean;
+  failed: boolean;
+  id: number;
+}>;
+
+function ReactionContractHarness({ manualCountRefetch = false }: { manualCountRefetch?: boolean }) {
+  const requestsRef = useRef<CapturedReactionRequest[]>([]);
+  const selectedTypesByActor = useRef(new Map<number, Set<string>>());
+  const nextActorId = useRef(0);
+  const nextRequestId = useRef(0);
+  const nextCountRefetchRequestId = useRef(0);
+  const [mounted, setMounted] = useState(true);
+  const [requests, setRequests] = useState<ReactionRequestSummary[]>([]);
+  const [countRefetchRequests, setCountRefetchRequests] = useState<CountRefetchRequestSummary[]>(
+    [],
+  );
+
+  const createEnvironment = useCallback(() => {
+    const actorId = ++nextActorId.current;
+    selectedTypesByActor.current.set(actorId, new Set());
+    const environment = new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.operationKind !== 'mutation') {
+          const selectedTypes = selectedTypesByActor.current.get(actorId)!;
+          const reactionCounts = unselectedSource.reactionCounts.map((entry) => ({
+            ...entry,
+            count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+          }));
+          if (request.name === 'PostReactionControllerRefetchQuery' && manualCountRefetch) {
+            return Observable.create<GraphQLResponse>((sink) => {
+              const id = ++nextCountRefetchRequestId.current;
+              let settled = false;
+              setCountRefetchRequests((current) => [
+                ...current,
+                { disposed: false, failed: false, id },
+              ]);
+              if (id > 1) {
+                Promise.resolve().then(() => {
+                  settled = true;
+                  setCountRefetchRequests((current) =>
+                    current.map((candidate) =>
+                      candidate.id === id ? { ...candidate, failed: true } : candidate,
+                    ),
+                  );
+                  sink.error(new Error(`count refetch ${id} failed`));
+                });
+              }
+              return () => {
+                if (settled) {
+                  return;
+                }
+                setCountRefetchRequests((current) =>
+                  current.map((candidate) =>
+                    candidate.id === id ? { ...candidate, disposed: true } : candidate,
+                  ),
+                );
+              };
+            });
+          }
+          return Promise.resolve({
+            data:
+              request.name === 'SessionProviderQuery'
+                ? {
+                    currentSession: {
+                      __typename: 'Session',
+                      id: `session-${actorId}`,
+                      selectedProfile: {
+                        __typename: 'Profile',
+                        id: `profile-${actorId}`,
+                      },
+                    },
+                    me: {
+                      __typename: 'Account',
+                      id: `account-${actorId}`,
+                      name: `Actor ${actorId}`,
+                    },
+                  }
+                : { node: { ...unselectedSource, reactionCounts } },
+          } as GraphQLResponse);
+        }
+
+        return Observable.create<GraphQLResponse>((sink) => {
+          const captured: CapturedReactionRequest = {
+            actorId,
+            id: ++nextRequestId.current,
+            name: request.name,
+            settled: false,
+            sink,
+            type: String(variables.type),
+          };
+          requestsRef.current.push(captured);
+          setRequests((current) => [
+            ...current,
+            {
+              actorId: captured.actorId,
+              id: captured.id,
+              name: captured.name,
+              settled: false,
+              type: captured.type,
+            },
+          ]);
+        });
+      }),
+      store: new Store(new RecordSource()),
+    });
+    environment.commitPayload(
+      createOperationDescriptor(getRequest(PostActionBarStoryQueryNode), { id: sourcePostId }),
+      { node: unselectedSource },
+    );
+    return environment;
+  }, [manualCountRefetch]);
+
+  const settleRequest = useCallback((id: number, outcome: ReactionRequestOutcome) => {
+    const request = requestsRef.current.find((candidate) => candidate.id === id);
+    if (!request || request.settled) {
+      return;
+    }
+    request.settled = true;
+    setRequests((current) =>
+      current.map((candidate) =>
+        candidate.id === id ? { ...candidate, settled: true } : candidate,
+      ),
+    );
+
+    if (outcome === 'network-error') {
+      request.sink.error(new Error(`request ${id} failed`));
+      return;
+    }
+    if (outcome === 'payload-error') {
+      request.sink.next({
+        data:
+          request.name === 'PostReactionControllerAddReactionMutation'
+            ? { addReaction: null }
+            : { deleteReaction: null },
+        errors: [{ message: `request ${id} payload missing` }],
+      });
+      request.sink.complete();
+      return;
+    }
+
+    const selectedTypes = selectedTypesByActor.current.get(request.actorId)!;
+    const add = request.name === 'PostReactionControllerAddReactionMutation';
+    if (add) {
+      selectedTypes.add(request.type);
+    } else {
+      selectedTypes.delete(request.type);
+    }
+    const data = add
+      ? {
+          addReaction: {
+            reaction: {
+              __typename: 'Reaction',
+              id: `reaction-${request.actorId}-${request.id}`,
+              type: request.type,
+            },
+          },
+        }
+      : {
+          deleteReaction: {
+            post: {
+              __typename: 'Post',
+              id: sourcePostId,
+              viewerReactions: [...selectedTypes].map((type, index) => ({
+                __typename: 'Reaction',
+                id: `reaction-${request.actorId}-${index}-${type}`,
+                type,
+              })),
+            },
+            reactionId: null,
+          },
+        };
+    request.sink.next({
+      data,
+      ...(outcome === 'data-errors-success'
+        ? { errors: [{ message: `request ${id} partial error` }] }
+        : {}),
+    });
+    request.sink.complete();
+  }, []);
+
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <ReactionContractControls
+        countRefetchRequests={countRefetchRequests}
+        mounted={mounted}
+        onMountedChange={setMounted}
+        onSettleRequest={settleRequest}
+        requests={requests}
+      />
+    </RelayActorProvider>
+  );
+}
+
+function ReactionContractControls({
+  countRefetchRequests,
+  mounted,
+  onMountedChange,
+  onSettleRequest,
+  requests,
+}: {
+  countRefetchRequests: ReadonlyArray<CountRefetchRequestSummary>;
+  mounted: boolean;
+  onMountedChange: (mounted: boolean) => void;
+  onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
+  requests: ReadonlyArray<ReactionRequestSummary>;
+}) {
+  const { resetActor, revision } = useRelayActor();
+
+  return (
+    <View>
+      <Text
+        accessibilityLabel="Reaction actor 전환"
+        accessibilityRole="button"
+        onPress={() => resetActor(`profile-${revision + 2}`)}
+      >
+        Reaction actor 전환
+      </Text>
+      <Text
+        accessibilityLabel={mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
+        accessibilityRole="button"
+        onPress={() => onMountedChange(!mounted)}
+      >
+        {mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
+      </Text>
+      <Text testID="reaction-actor-revision">{revision}</Text>
+      <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
+      <Text testID="reaction-count-refetch-log">{JSON.stringify(countRefetchRequests)}</Text>
+      {requests.map((request) => (
+        <View key={request.id}>
+          {(['success', 'payload-error', 'data-errors-success', 'network-error'] as const).map(
+            (outcome) => (
+              <Text
+                accessibilityLabel={`요청 ${request.id} ${outcome}`}
+                accessibilityRole="button"
+                key={outcome}
+                onPress={() => onSettleRequest(request.id, outcome)}
+              >
+                요청 {request.id} {outcome}
+              </Text>
+            ),
+          )}
+        </View>
+      ))}
+      {mounted ? (
+        <Suspense fallback={<View />}>
+          <SessionProvider>
+            <PostActionBarFixtureContents showReactionSummary />
+          </SessionProvider>
+        </Suspense>
+      ) : null}
+    </View>
+  );
+}
+
+function readReactionRequests(canvas: ReturnType<typeof within>): ReactionRequestSummary[] {
+  return JSON.parse(
+    canvas.getByTestId('reaction-request-log').textContent ?? '[]',
+  ) as ReactionRequestSummary[];
+}
+
+function readCountRefetchRequests(canvas: ReturnType<typeof within>): CountRefetchRequestSummary[] {
+  return JSON.parse(
+    canvas.getByTestId('reaction-count-refetch-log').textContent ?? '[]',
+  ) as CountRefetchRequestSummary[];
+}
 
 type BookmarkProcessingState = NonNullable<PostActionBarProps['bookmark']>['processing'];
 
@@ -55,39 +491,36 @@ function CatalogStory() {
   return (
     <Catalog>
       <Section title="Default · Reply/Repost count / no count / Reaction/Bookmark count omitted">
-        <PostActionBar {...actionBarProps} />
-        <PostActionBar
+        <PostActionBarFixture {...actionBarProps} />
+        <PostActionBarFixture
           bookmark={actionBarProps.bookmark}
-          reaction={actionBarProps.reaction}
           reply={{ ...actionBarProps.reply, count: undefined }}
-          repost={{ ...actionBarProps.repost, count: undefined }}
+          repostState="unselected"
         />
       </Section>
       <Section title="Domain active · Reply / Repost / Reaction / Bookmark">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
-          reaction={{ ...actionBarProps.reaction, hasReacted: true }}
           reply={{ ...actionBarProps.reply, expanded: true }}
-          repost={{ ...actionBarProps.repost, hasReposted: true }}
+          repostState="selected"
         />
       </Section>
       <Section title="Processing · pending / disabled">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true, processing: 'disabled' }}
-          reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
           reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-          repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
+          repostState="pending"
         />
       </Section>
       <Section title="Optional actions · More callback only">
-        <PostActionBar more={actionBarProps.more} reaction={actionBarProps.reaction} />
+        <PostActionBarFixture more={actionBarProps.more} repostState="hidden" />
       </Section>
       <Section title="Standard compact formatting · runtime component / locale seam">
         <Text style={styles.localeCopy}>
           ko-KR: {formatPostActionCount(12_345, 'ko-KR')} · en-US:{' '}
           {formatPostActionCount(12_345, 'en-US')}
         </Text>
-        <PostActionBar {...actionBarProps} />
+        <PostActionBarFixture {...actionBarProps} />
       </Section>
     </Catalog>
   );
@@ -98,7 +531,7 @@ function ControlledReplyStory() {
 
   return (
     <View style={styles.controlled}>
-      <PostActionBar
+      <PostActionBarFixture
         reply={{
           ...actionBarProps.reply,
           expanded,
@@ -114,19 +547,14 @@ function InteractionStory() {
   return (
     <Catalog>
       <Section title="Default invokes callbacks">
-        <PostActionBar
+        <PostActionBarFixture
           bookmark={actionBarProps.bookmark}
           more={actionBarProps.more}
-          reaction={actionBarProps.reaction}
           reply={actionBarProps.reply}
-          repost={actionBarProps.repost}
         />
       </Section>
       <Section title="Pending and disabled block callbacks">
-        <PostActionBar
-          bookmark={{ ...actionBarProps.bookmark, processing: 'disabled' }}
-          reaction={{ ...actionBarProps.reaction, processing: 'pending' }}
-        />
+        <PostActionBarFixture bookmark={{ ...actionBarProps.bookmark, processing: 'disabled' }} />
       </Section>
     </Catalog>
   );
@@ -136,12 +564,12 @@ function ActionBarFixtures() {
   return (
     <View style={styles.fixture}>
       <View style={styles.detailSurface}>
-        <PostActionBar {...actionBarProps} />
+        <PostActionBarFixture {...actionBarProps} />
       </View>
       <View style={styles.listCard}>
         <View style={styles.avatarFixture} />
         <View style={styles.listContent}>
-          <PostActionBar {...actionBarProps} />
+          <PostActionBarFixture {...actionBarProps} />
         </View>
       </View>
     </View>
@@ -170,8 +598,8 @@ export const ActionBarCatalog: Story = {
     const defaultToolbarCanvas = within(defaultToolbar);
     const iconMetrics = [
       ['답글', 16, 16, '3.5'],
-      ['재게시', 18, 24, '2.7'],
-      ['반응', 18, 18, '3.5'],
+      ['재게시', 16, 16, '2.7'],
+      ['반응', 16, 16, '3.5'],
       ['북마크', 16, 16, '3.5'],
       ['더보기', 16, 16, '3.5'],
     ] as const;
@@ -183,23 +611,20 @@ export const ActionBarCatalog: Story = {
       expect(icon).toHaveAttribute('stroke-width', strokeWidth);
     }
     expect(
-      defaultToolbarCanvas.getByRole('button', { name: '답글' }).querySelector('svg'),
-    ).toHaveAttribute('preserveAspectRatio', 'none');
-    expect(
-      defaultToolbarCanvas.getByRole('button', { name: '재게시' }).querySelector('svg'),
-    ).toHaveAttribute('preserveAspectRatio', 'none');
-    expect(
       defaultToolbarCanvas.getByTestId('post-action-repost-icon').getBoundingClientRect().width,
-    ).toBe(18);
+    ).toBe(16);
 
     for (const label of ['답글', '재게시'] as const) {
       const button = defaultToolbarCanvas.getByRole('button', { name: label });
       const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
-      const countBounds = button.querySelector('[dir="auto"]')!.getBoundingClientRect();
+      const count = button.querySelector('[dir="auto"]') as HTMLElement;
+      const countBounds = count.getBoundingClientRect();
+      expect(count.scrollWidth).toBeLessThanOrEqual(count.clientWidth);
       expect(countBounds.top + countBounds.height / 2).toBeCloseTo(
-        iconBounds.top + iconBounds.height / 2 + 2,
+        iconBounds.top + iconBounds.height / 2,
         0,
       );
+      expect(countBounds.left - iconBounds.right).toBeCloseTo(spacing.xs, 0);
     }
 
     for (const button of bookmarkButtons) {
@@ -226,44 +651,376 @@ export const ControlledReply: Story = {
   render: () => <ControlledReplyStory />,
 };
 
+export const ReactionPopoverDismissFocusAndPlacement: Story = {
+  globals: { viewport: { isRotated: false, value: 'reactionNarrow' } },
+  parameters: {
+    layout: 'fullscreen',
+    viewport: {
+      options: {
+        reactionNarrow: {
+          name: 'Reaction narrow',
+          styles: { height: '640px', width: '320px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const [topLeftTrigger, bottomRightTrigger] = canvas.getAllByRole('button', { name: '반응' });
+
+    expect(topLeftTrigger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(topLeftTrigger).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(topLeftTrigger!);
+    const dialog = await screen.findByRole('dialog', { name: '반응 선택' });
+    let position = screen.getByTestId('reaction-popover-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'bottom'));
+    expect(canvasElement.ownerDocument.activeElement).toHaveAttribute('aria-label', '🥹 반응');
+    expect(position.getBoundingClientRect().left).toBeGreaterThanOrEqual(0);
+
+    const shell = screen.getByTestId('reaction-popover-scroll');
+    expect(shell.getBoundingClientRect().left).toBeGreaterThanOrEqual(spacing.sm);
+    expect(shell.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
+    );
+    expect(getComputedStyle(shell).overflowX).toBe('auto');
+    for (const option of within(dialog).getAllByRole('button', { name: /반응/ })) {
+      const bounds = option.getBoundingClientRect();
+      expect(bounds.width).toBe(32);
+      expect(bounds.height).toBe(32);
+    }
+
+    await userEvent.click(screen.getByTestId('reaction-popover-trigger-dismiss'));
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+    await userEvent.click(topLeftTrigger!);
+    await userEvent.click(screen.getByTestId('reaction-popover-backdrop'));
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+
+    await userEvent.click(topLeftTrigger!);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(canvasElement.ownerDocument.activeElement).toBe(topLeftTrigger);
+
+    await userEvent.click(bottomRightTrigger!);
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    position = screen.getByTestId('reaction-popover-position');
+    await waitFor(() => expect(position).toHaveAttribute('data-placement', 'top'));
+    expect(position.getBoundingClientRect().right).toBeLessThanOrEqual(
+      canvasElement.ownerDocument.documentElement.clientWidth - spacing.sm,
+    );
+  },
+  render: () => (
+    <View style={styles.placementFixture}>
+      <View style={styles.topLeftAction}>
+        <PostActionBarFixture />
+      </View>
+      <View style={styles.bottomRightAction}>
+        <PostActionBarFixture />
+      </View>
+    </View>
+  ),
+};
+
+export const NoSelectedProfileDisablesReaction: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    reactionMutationRequest.mockClear();
+    const trigger = canvas.getByRole('button', { name: '반응' });
+    const heartSummary = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+    const moreProfiles = canvas.getByRole('button', { name: '반응한 프로필 보기' });
+
+    expect(trigger).toBeDisabled();
+    expect(heartSummary).toBeDisabled();
+    expect(moreProfiles).toBeEnabled();
+    trigger.click();
+    heartSummary.click();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(reactionMutationRequest).not.toHaveBeenCalled();
+
+    await userEvent.click(moreProfiles);
+    await expect(
+      screen.findByRole('dialog', { name: '반응한 프로필' }),
+    ).resolves.toBeInTheDocument();
+    await expect(screen.findByText('아직 이 반응을 남긴 프로필이 없어요')).resolves.toBeVisible();
+  },
+  render: () => (
+    <PostActionBarFixture
+      onMutationRequest={reactionMutationRequest}
+      selectedProfileId={null}
+      showReactionSummary
+    />
+  ),
+};
+
+export const ReactionSummaryToggleContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heart = canvas.getByRole('button', { name: '❤️ 반응 12개' });
+
+    await userEvent.click(heart);
+    expect(screen.queryByRole('dialog', { name: '반응한 프로필' })).toBeNull();
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 1 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개, 처리 중' })).toBeDisabled();
+    canvas.getByRole('button', { name: '요청 2 success' }).click();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionConcurrentMutationContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    const heart = await screen.findByRole('button', { name: '❤️ 반응' });
+    const party = screen.getByRole('button', { name: '🎉 반응' });
+
+    unstable_batchedUpdates(() => {
+      heart.click();
+      heart.click();
+      party.click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    let requests = readReactionRequests(canvas);
+    expect(requests.filter((request) => request.type === '❤️')).toHaveLength(1);
+    expect(requests.filter((request) => request.type === '🎉')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '🎉 반응, 처리 중' })).toBeDisabled();
+
+    const partyRequest = requests.find((request) => request.type === '🎉')!;
+    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled();
+
+    const heartRequest = requests.find((request) => request.type === '❤️')!;
+    canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+
+    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    requests = readReactionRequests(canvas);
+    const deleteHeart = requests.find(
+      (request) => request.name === 'PostReactionControllerDeleteReactionMutation',
+    )!;
+    canvas.getByRole('button', { name: `요청 ${deleteHeart.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      ),
+    );
+    expect(screen.getByRole('button', { name: '🎉 반응' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('dialog', { name: '반응 선택' })).toBeVisible();
+  },
+  render: () => <ReactionContractHarness />,
+};
+
+export const ReactionCountRefetchRaceContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    unstable_batchedUpdates(() => {
+      canvas.getByRole('button', { name: '❤️ 반응 12개' }).click();
+      canvas.getByRole('button', { name: '🎉 반응 7개' }).click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    const requests = readReactionRequests(canvas);
+    const heartRequest = requests.find((request) => request.type === '❤️')!;
+    const partyRequest = requests.find((request) => request.type === '🎉')!;
+
+    canvas.getByRole('button', { name: `요청 ${heartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(
+        readReactionRequests(canvas).find((request) => request.id === heartRequest.id),
+      ).toMatchObject({ settled: true }),
+    );
+    expect(readCountRefetchRequests(canvas)).toHaveLength(0);
+
+    canvas.getByRole('button', { name: `요청 ${partyRequest.id} success` }).click();
+    await waitFor(() => expect(readCountRefetchRequests(canvas)).toHaveLength(1));
+    expect(canvas.getByRole('button', { name: '❤️ 반응 13개' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '🎉 반응 8개' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '❤️ 반응 13개' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(3));
+    await waitFor(() =>
+      expect(readCountRefetchRequests(canvas)[0]).toMatchObject({ disposed: true }),
+    );
+
+    const deleteHeartRequest = readReactionRequests(canvas)[2]!;
+    canvas.getByRole('button', { name: `요청 ${deleteHeartRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(readCountRefetchRequests(canvas)[1]).toMatchObject({ failed: true }),
+    );
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '🎉 반응 8개' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
+  },
+  render: () => <ReactionContractHarness manualCountRefetch />,
+};
+
+export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
+  beforeEach: () => {
+    reactionLifecycleConsoleErrors.length = 0;
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      reactionLifecycleConsoleErrors.push(args);
+      const expectedGraphQLError = args.some(
+        (argument) =>
+          typeof argument === 'string' &&
+          (argument.includes('payload missing') || argument.includes('partial error')),
+      );
+      if (!expectedGraphQLError) {
+        originalError(...args);
+      }
+    });
+    return () => errorSpy.mockRestore();
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '❤️ 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(1));
+    canvas.getByRole('button', { name: '요청 1 payload-error' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' })).toBeVisible(),
+    );
+    expect(canvas.getByRole('button', { name: '❤️ 반응 12개, 오류, 다시 시도' })).toBeVisible();
+    expect(screen.getByRole('button', { name: '🎉 반응' })).not.toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: '❤️ 반응, 오류, 다시 시도' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응, 처리 중' })).toBeDisabled(),
+    );
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(2));
+    canvas.getByRole('button', { name: '요청 2 data-errors-success' }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '❤️ 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
+
+    unstable_batchedUpdates(() => {
+      screen.getByRole('button', { name: '🎉 반응' }).click();
+      screen.getByRole('button', { name: '☘️ 반응' }).click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(4));
+    const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
+    canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
+    await waitFor(() =>
+      expect(canvas.getByTestId('reaction-actor-revision')).toHaveTextContent('1'),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await userEvent.click(await screen.findByRole('button', { name: '👀 반응' }));
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(5));
+    const currentActorRequest = readReactionRequests(canvas)[4]!;
+    canvas.getByRole('button', { name: `요청 ${oldActorRequests[0]!.id} success` }).click();
+    canvas.getByRole('button', { name: `요청 ${oldActorRequests[1]!.id} network-error` }).click();
+    expect(screen.getByRole('button', { name: '👀 반응, 처리 중' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /오류, 다시 시도/ })).toBeNull();
+
+    canvas.getByRole('button', { name: `요청 ${currentActorRequest.id} success` }).click();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '👀 반응' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      ),
+    );
+    unstable_batchedUpdates(() => {
+      screen.getByRole('button', { name: '🌈 반응' }).click();
+      screen.getByRole('button', { name: '🥹 반응' }).click();
+    });
+    await waitFor(() => expect(readReactionRequests(canvas)).toHaveLength(7));
+    const unmountedRequests = readReactionRequests(canvas).slice(5, 7);
+    canvas.getByRole('button', { name: 'Reaction surface unmount' }).click();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
+    canvas.getByRole('button', { name: `요청 ${unmountedRequests[0]!.id} success` }).click();
+    canvas.getByRole('button', { name: `요청 ${unmountedRequests[1]!.id} network-error` }).click();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+
+    canvas.getByRole('button', { name: 'Reaction surface remount' }).click();
+    await userEvent.click(await canvas.findByRole('button', { name: '반응' }));
+    await screen.findByRole('dialog', { name: '반응 선택' });
+    expect(screen.queryByRole('button', { name: /처리 중|오류, 다시 시도/ })).toBeNull();
+    expect(
+      reactionLifecycleConsoleErrors
+        .flat()
+        .map((value) => String(value))
+        .join(' '),
+    ).not.toMatch(/state update|unmount/i);
+  },
+  render: () => <ReactionContractHarness />,
+};
+
 export const InteractionContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     reply.mockClear();
-    repost.mockClear();
-    reaction.mockClear();
     bookmark.mockClear();
     more.mockClear();
 
     const labels = canvas.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
-    expect(labels).toEqual(['답글', '재게시', '반응', '북마크', '더보기', '반응', '북마크']);
+    expect(labels).toEqual([
+      '답글',
+      '재게시',
+      '반응',
+      '북마크',
+      '더보기',
+      '재게시',
+      '반응',
+      '북마크',
+    ]);
 
     const replyButton = canvas.getByRole('button', { name: '답글' });
     replyButton.focus();
     await userEvent.keyboard('{Enter}');
     await userEvent.keyboard(' ');
-    await userEvent.click(canvas.getByRole('button', { name: '재게시' }));
+    await userEvent.click(canvas.getAllByRole('button', { name: '재게시' })[0]!);
     await userEvent.click(canvas.getAllByRole('button', { name: '반응' })[0]!);
+    await userEvent.keyboard('{Escape}');
     await userEvent.click(canvas.getAllByRole('button', { name: '북마크' })[0]!);
     await userEvent.click(canvas.getByRole('button', { name: '더보기' }));
-    const pendingReaction = canvas.getAllByRole('button', { name: '반응' })[1]!;
     const disabledBookmark = canvas.getAllByRole('button', { name: '북마크' })[1]!;
-    expect(pendingReaction).toBeDisabled();
     expect(disabledBookmark).toBeDisabled();
-    expect(pendingReaction).toHaveAttribute('tabindex', '-1');
     expect(disabledBookmark).toHaveAttribute('tabindex', '-1');
-    pendingReaction.focus();
-    expect(canvasElement.ownerDocument.activeElement).not.toBe(pendingReaction);
     disabledBookmark.focus();
     expect(canvasElement.ownerDocument.activeElement).not.toBe(disabledBookmark);
-    pendingReaction.click();
     disabledBookmark.click();
 
     expect(reply).toHaveBeenCalledTimes(2);
-    expect(repost).toHaveBeenCalledTimes(1);
     expect(bookmark).toHaveBeenCalledTimes(1);
     expect(more).toHaveBeenCalledTimes(1);
-    expect(reaction).toHaveBeenCalledTimes(1);
   },
   render: () => <InteractionStory />,
 };
@@ -272,7 +1029,17 @@ export const ProcessingAccessibility: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
-    const repostButton = canvas.getByRole('button', { name: '재게시' });
+    const repostButton = canvas.getByRole('button', { name: '재게시 취소' });
+    await userEvent.click(repostButton);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '재게시 메뉴' })).getByRole('menuitem', {
+        name: '재게시 취소',
+      }),
+    );
+    await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
     const reactionButton = canvas.getByRole('button', { name: '반응' });
     const bookmarkButton = canvas.getByRole('button', { name: '북마크' });
     const moreButton = canvas.getByRole('button', { name: '더보기' });
@@ -284,7 +1051,7 @@ export const ProcessingAccessibility: Story = {
     expect(repostButton).toHaveAttribute('aria-busy', 'true');
     expect(repostButton).toHaveAttribute('aria-disabled', 'true');
     expect(reactionButton).toHaveAttribute('aria-pressed', 'true');
-    expect(reactionButton).toHaveAttribute('aria-disabled', 'true');
+    expect(reactionButton).not.toHaveAttribute('aria-disabled');
     expect(bookmarkButton).toHaveAttribute('aria-pressed', 'true');
     expect(bookmarkButton).not.toHaveAttribute('aria-busy');
     expect(bookmarkButton).not.toHaveAttribute('aria-disabled');
@@ -307,11 +1074,11 @@ export const ProcessingAccessibility: Story = {
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
-      replyCountBounds.top + replyCountBounds.height / 2 - 1,
+      replyCountBounds.top + replyCountBounds.height / 2,
       0,
     );
     expect(repostSpinnerBounds.top + repostSpinnerBounds.height / 2).toBeCloseTo(
-      repostCountBounds.top + repostCountBounds.height / 2 - 1,
+      repostCountBounds.top + repostCountBounds.height / 2,
       0,
     );
     expect(
@@ -319,17 +1086,16 @@ export const ProcessingAccessibility: Story = {
     ).not.toHaveAttribute('fill', 'none');
   },
   render: () => (
-    <PostActionBar
+    <PostActionBarFixture
       bookmark={{ ...actionBarProps.bookmark, hasBookmarked: true }}
       more={actionBarProps.more}
-      reaction={{ ...actionBarProps.reaction, hasReacted: true, processing: 'disabled' }}
       reply={{ ...actionBarProps.reply, expanded: true, processing: 'pending' }}
-      repost={{ ...actionBarProps.repost, hasReposted: true, processing: 'pending' }}
+      repostState="pending"
     />
   ),
 };
 
-export const AccessibilityAndMinimumTarget: Story = {
+export const AccessibilityAndCompactGeometry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -345,21 +1111,26 @@ export const AccessibilityAndMinimumTarget: Story = {
     ]);
     expect(buttons[0]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
+    expect(buttons[1]).toHaveAttribute('aria-haspopup', 'menu');
+    expect(buttons[1]).toHaveAttribute('aria-expanded', 'false');
     expect(buttons[2]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[3]).toHaveAttribute('aria-pressed', 'false');
     expect(buttons[4]).not.toHaveAttribute('aria-pressed');
-    for (const button of buttons) {
+    expect(actionBar.getBoundingClientRect().height).toBe(28);
+    for (const [index, button] of buttons.entries()) {
       const bounds = button.getBoundingClientRect();
-      expect(bounds.width).toBeGreaterThanOrEqual(44);
-      expect(bounds.height).toBeGreaterThanOrEqual(44);
+      expect(bounds.width).toBe(index === 4 ? 28 : 50);
+      expect(bounds.height).toBe(28);
+      expect(bounds.width).toBeGreaterThanOrEqual(24);
+      expect(bounds.height).toBeGreaterThanOrEqual(24);
     }
     const actionBarBounds = actionBar.getBoundingClientRect();
+    const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
-    expect(moreIconBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left + spacing.sm, 0);
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
   },
-  render: () => <PostActionBar {...actionBarProps} />,
+  render: () => <PostActionBarFixture {...actionBarProps} />,
 };
 
 export const Compact390: Story = {
@@ -384,6 +1155,12 @@ export const Full1400: Story = {
 };
 
 const styles = {
+  bottomRightAction: {
+    bottom: 0,
+    position: 'absolute',
+    right: 0,
+    width: 88,
+  } satisfies ViewStyle,
   controlled: { gap: spacing.sm },
   avatarFixture: { height: 48, width: 48 },
   detailSurface: { paddingHorizontal: spacing.lg },
@@ -401,6 +1178,17 @@ const styles = {
   } satisfies ViewStyle,
   listContent: { flex: 1, minWidth: 0 } satisfies ViewStyle,
   localeCopy: { fontFamily: 'SUIT', ...typography.sm },
+  placementFixture: {
+    height: 640,
+    position: 'relative',
+    width: '100%',
+  } satisfies ViewStyle,
+  topLeftAction: {
+    left: -44,
+    position: 'absolute',
+    top: 0,
+    width: 88,
+  } satisfies ViewStyle,
 };
 
 function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) {
@@ -421,10 +1209,13 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   let previousRight = toolbarBounds.left;
 
   expect(toolbarBounds.width).toBeCloseTo(expectedContentWidth, 0);
-  for (const button of buttons) {
+  expect(toolbarBounds.height).toBe(28);
+  for (const [index, button] of buttons.entries()) {
     const bounds = button.getBoundingClientRect();
-    expect(bounds.width).toBeGreaterThanOrEqual(44);
-    expect(bounds.height).toBeGreaterThanOrEqual(44);
+    expect(bounds.width).toBe(index === 4 ? 28 : 50);
+    expect(bounds.height).toBe(28);
+    expect(bounds.width).toBeGreaterThanOrEqual(24);
+    expect(bounds.height).toBeGreaterThanOrEqual(24);
     expect(bounds.top).toBe(firstBounds.top);
     expect(bounds.bottom).toBe(firstBounds.bottom);
     expect(bounds.top).toBeGreaterThanOrEqual(toolbarBounds.top);
@@ -433,4 +1224,9 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;
   }
+  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left + spacing.sm, 0);
+  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(
+    toolbarBounds.right - spacing.sm,
+    0,
+  );
 }

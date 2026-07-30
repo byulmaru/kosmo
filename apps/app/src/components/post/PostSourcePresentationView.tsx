@@ -48,9 +48,11 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 export function PostSourcePresentationView({
   post,
   showPostAvatar = true,
+  sourcePreviewStyle,
 }: {
   post: PostSourcePresentationData;
   showPostAvatar?: boolean;
+  sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
   const kind = presentationKind(post);
@@ -104,7 +106,7 @@ export function PostSourcePresentationView({
     <View role="article" style={styles.root} testID="post-source-presentation">
       {postHeader}
       <PostBodyPressTarget content={post.content} href={postDetailHref} testID="post-body" />
-      <PostSourcePreview source={source} />
+      <PostSourcePreview source={source} style={sourcePreviewStyle} />
     </View>
   );
 }

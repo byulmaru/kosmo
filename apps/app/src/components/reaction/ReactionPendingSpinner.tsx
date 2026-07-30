@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
 import { useTheme } from '@/theme/ThemeProvider';
 import type React from 'react';
 
-const SIZE = 24;
-const STROKE_WIDTH = 3;
+const SIZE = Platform.OS === 'web' ? 16 : 24;
+const STROKE_WIDTH = Platform.OS === 'web' ? 2 : 3;
 const CENTER = SIZE / 2;
 const RADIUS = (SIZE - STROKE_WIDTH) / 2;
 const ARC_DEGREES = 180;

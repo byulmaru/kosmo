@@ -20,6 +20,14 @@ Android·iOS 같은 Native App에는 WCAG를 Web과 같은 방식으로 직접 �
 
 CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표가 A·AA라는 이유로 Web과 Native App의 target 숫자를 하나로 통일하지 않는다. React Native Web으로 렌더되는 surface는 Web 기준을 적용하고 실제 Android·iOS binary는 각 Native 기준을 적용한다.
 
+### Post Action Bar의 출시 전 임시 예외
+
+Post Action Bar는 현재 Web 우선 출시 범위의 Figma geometry를 먼저 맞추기 위해 모든 플랫폼 구현에서 control 높이와 실제 interactive target 높이를 28 logical unit(CSS px·pt·dp)로 통일한다. 이 예외는 [post-action-bar.md](./post-action-bar.md)가 소유하며 다른 toolbar나 icon button의 선례로 일반화하지 않는다.
+
+- Web의 28px target은 24×24 CSS px 자체를 포함하고 인접 action과 겹치지 않아야 한다.
+- iOS·Android의 28pt·28dp target은 위 표의 Native baseline을 충족하지 않는다. Native binary가 아직 출시 범위가 아니기 때문에 구현 일관성을 위한 임시 값으로만 허용하며, Native 접근성 준수나 runtime 검증 완료 증거로 사용하지 않는다.
+- iOS 출시 전에는 실제 hit target을 최소 44×44pt, Android 출시 전에는 최소 48×48dp로 복구하고, 28px visual geometry를 유지할지 포함해 각 플랫폼 assistive technology와 touch runtime에서 다시 검증한다.
+
 ## Web target과 밀도
 
 [WCAG 2.2 SC 2.5.8 Target Size (Minimum)](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)은 Level AA에서 pointer target이 최소 24×24 CSS px이거나 공식 예외를 만족하도록 요구한다. 공식 예외는 spacing, equivalent control, inline target, user-agent control, essential presentation이다.
@@ -66,19 +74,24 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 
 PR과 이슈에는 실행한 자동화, 실제 관찰한 platform·viewport·입력 방식, 실행하지 못한 검증을 나눠 적는다. 특정 surface만 확인했다면 제품 또는 저장소 전체가 AA를 만족한다고 일반화하지 않는다.
 
-## 기존 44×44 계약의 우선순위
+## 컴포넌트별 계약의 우선순위
 
-이 문서는 전역의 무조건적인 44×44 규칙을 제거하지만, 이미 승인된 더 강한 컴포넌트 계약을 자동으로 낮추지 않는다.
+이 문서는 전역의 무조건적인 44×44 규칙을 제거하지만, 컴포넌트의 플랫폼별 exact contract를 임의로 바꾸지 않는다.
 
-- Reaction Quick Picker는 [reactions.md](./reactions.md)의 44×44 option과 pending overlay를 유지한다. `apps/app/src/stories/Reactions.stories.tsx`의 exact 44×44 assertion도 그대로 유지한다.
-- Post Action Bar는 현재 `openspec/changes/add-post-action-bar`와 `apps/app/src/stories/PostActionBar.stories.tsx`에서 최소 44×44와 single-row geometry를 요구한다. 이 PR에서는 변경하지 않는다.
-- Post Action Bar의 현재 44×44 interactive target 계약은 PROD-433이 소유한다. 이 PR은 더 작은 exact Web target이나 그 변경의 구현 이슈를 확정하지 않는다. 후속 변경은 해당 Linear 이슈의 범위와 canonical 디자인 결정을 exact target·간격으로 먼저 정렬하고, 그 결정에 맞춰 OpenSpec과 Storybook assertion을 수정한 뒤 구현한다. 전역 Web AA 최소값만으로 기존 component-specific 44×44 계약을 우회하지 않는다.
+- Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.
+- 이번 Web 우선 Reaction 변경은 Native interaction geometry를 수정하지 않는다. 현재 selector·summary의 44 logical unit과 Profile tab의 32 minimum은 iOS Profile tab 44×44pt 및 Android 48×48dp baseline을 모두 충족하는 구현이 아니다. Native 출시 전 iOS target을 최소 44×44pt, Android target을 최소 48×48dp로 복구하고 assistive technology·touch runtime에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
+- Post Action Bar는 `post-action-bar.md`의 component-specific 28px geometry를 사용한다. 기존 PROD-433의 최소 44×44 assertion은 이 결정에 맞춰 PROD-414에서 교체하되, 이 변경을 전역 Web 또는 Native target 완화로 해석하지 않는다.
+- Post Action Bar의 Native 28pt·28dp 값은 출시 전 임시 예외다. iOS 44×44pt와 Android 48×48dp 복구 및 runtime 관찰은 Native 출시 gate이며 현재 Web 우선 slice의 완료 증거와 분리한다.
+- 순수 Repost의 `{displayName}님이 재게시함` Profile link는 독립 icon button이 아니라 attribution 문장 전체에
+  적용된 text link다. Web에서는 SC 2.5.8의 inline target 예외를 사용해 14/20 line box를 유지하며 role,
+  accessible name, keyboard focus와 navigation을 보존한다. Native 출시 전에는 이 링크의 44pt·48dp target,
+  focus boundary와 바로 아래 Source Author link 비중첩을 runtime에서 다시 검증한다.
 - 새 컴포넌트는 이 문서의 플랫폼 baseline을 사용한다. 더 큰 target이나 엄격한 검증이 필요하면 컴포넌트 디자인 문서·Linear·OpenSpec에 이유와 exact contract를 기록한다.
 
 ## 이 문서가 변경하지 않는 것
 
 - 기존 UI의 접근성 결함을 일괄 수정하지 않는다.
-- 기존 44×44 컴포넌트와 테스트를 일괄 축소하지 않는다.
+- Post Action Bar 외의 기존 44×44 컴포넌트와 테스트를 일괄 축소하지 않는다.
 - Storybook의 `color-contrast` 제외를 해소하지 않는다.
 - 접근성 인증이나 법적 준수를 선언하지 않는다.
 

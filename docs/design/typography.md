@@ -31,4 +31,6 @@
   - UI, 버튼, 내비게이션, 라벨, heading: `fontFamily: 'SUIT'`
   - 포스트 본문, 긴 글 입력: `fontFamily: 'Pretendard'`
 - font size/line height는 `apps/app/src/theme/tokens.ts`의 `typography` token을 사용한다. 화면에서 같은 Foundation 값을 raw number로 반복하지 않는다.
-- React Native Web Storybook은 app과 같은 font loader/decorator를 사용해 production family name과 asset을 그대로 검증한다.
+- React Native Web Storybook은 전용 `@font-face` 설정으로 같은 npm package의 Variable WOFF2 asset을
+  `SUIT`와 `Pretendard` family로 등록한다. Expo runtime의 `useFonts` loader는 사용하지 않지만,
+  component의 production family name과 asset은 동일하게 유지한다.

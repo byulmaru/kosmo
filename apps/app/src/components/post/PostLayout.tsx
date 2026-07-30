@@ -7,8 +7,11 @@ import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { usePostReactionController } from './PostReactionController';
 import { PostSourcePreview } from './PostSourcePresentationView';
+import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
@@ -17,6 +20,9 @@ const PostLayoutFragment = graphql`
     id
     createdAt
     visibility
+    content {
+      bodyText
+    }
     profile {
       id
       handle
@@ -24,6 +30,11 @@ const PostLayoutFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    replyParent {
+      id
+    }
+    ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
       id
       createdAt
@@ -36,9 +47,10 @@ const PostLayoutFragment = graphql`
         handle
         relativeHandle
       }
+      ...PostActionBar_post @alias(as: "actionBar")
+      ...PostReactionController_post @alias(as: "reactionController")
     }
     ...PostBody_post
-    ...PostReactionSummary_post
   }
 `;
 
@@ -51,9 +63,15 @@ const visibilityLabels: Record<string, string> = {
 
 export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
+  const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
+  const pureRepost = !post.content && !post.replyParent && post.repostSource;
+  const actionBarPost = pureRepost ? post.repostSource?.actionBar : post.actionBar;
+  const reactionController = usePostReactionController(
+    (pureRepost ? post.repostSource?.reactionController : post.reactionController)!,
+  );
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -95,7 +113,12 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          <PostReactionSummary post={post} style={styles.reactionSummary} />
+          <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
+          <PostActionBar
+            onRepostError={onRepostError}
+            post={actionBarPost}
+            reactionController={reactionController}
+          />
         </View>
       </View>
     </View>

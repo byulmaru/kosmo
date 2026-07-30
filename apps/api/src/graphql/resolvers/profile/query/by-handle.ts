@@ -64,7 +64,7 @@ builder.queryField('profileByHandle', (t) =>
 );
 
 builder.queryField('searchProfiles', (t) =>
-  t.connection(
+  t.withAuth({ login: true }).connection(
     {
       type: Profile,
       args: {
@@ -131,6 +131,6 @@ builder.queryField('searchProfiles', (t) =>
         );
       },
     },
-    ProfileConnection,
+    ProfileConnection as never,
   ),
 );

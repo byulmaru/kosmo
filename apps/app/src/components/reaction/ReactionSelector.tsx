@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
@@ -119,10 +119,12 @@ const styles = StyleSheet.create({
   option: {
     alignItems: 'center',
     borderRadius: radii.md,
-    height: 44,
     justifyContent: 'center',
     position: 'relative',
-    width: 44,
+    ...Platform.select({
+      default: { height: 44, width: 44 },
+      web: { height: 32, width: 32 },
+    }),
   },
   optionBackground: {
     borderRadius: radii.md,
@@ -133,7 +135,10 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
   },
-  emoji: { fontSize: 24, lineHeight: 32 },
+  emoji: Platform.select({
+    default: { fontSize: 24, lineHeight: 32 },
+    web: { fontSize: 20, lineHeight: 24 },
+  }),
   pendingOverlay: {
     alignItems: 'center',
     bottom: 0,

@@ -2,14 +2,21 @@ import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
+import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
+import { usePostReactionController } from './PostReactionController';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { useRepostFailureToast } from './useRepostFailureToast';
+import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
+import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
+import type { PostActionBarProps } from './PostActionBar';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
@@ -25,6 +32,8 @@ const PostListRowFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
+    ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     ...PostBody_post
   }
 `;
@@ -46,6 +55,8 @@ const PostListItemFragment = graphql`
     replyParent {
       id
     }
+    ...PostActionBar_post @alias(as: "actionBar")
+    ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
       id
       createdAt
@@ -66,13 +77,14 @@ const PostListItemFragment = graphql`
 
 export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
   const theme = useTheme();
+  const onRepostError = useRepostFailureToast();
   const post = useFragment(PostListItemFragment, postKey);
   const profileHref = `/${post.profile.relativeHandle}` as const;
 
   if (!post.repostSource) {
     return (
-      <View role="article" style={[styles.card, { borderColor: theme.border }]}>
-        <PostListRow post={post} />
+      <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
+        <PostListRow onRepostError={onRepostError} post={post} />
       </View>
     );
   }
@@ -85,7 +97,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 
   if (!post.content) {
     return (
-      <View role="article" style={[styles.card, { borderColor: theme.border }]}>
+      <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
         <View style={styles.repostAttribution}>
           <View style={styles.repostIconColumn}>
             <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
@@ -107,7 +119,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
             </Link>
           </View>
         </View>
-        <PostListRow post={source} />
+        <PostListRow onRepostError={onRepostError} post={source} />
       </View>
     );
   }
@@ -137,7 +149,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
   };
 
   return (
-    <View style={[styles.card, styles.quoteRow, { borderColor: theme.border }]}>
+    <View style={[styles.card, styles.quoteRow, { borderColor: theme.divider }]}>
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -152,13 +164,29 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
         </Pressable>
       </Link>
       <View style={styles.sourcePresentation}>
-        <PostSourcePresentationView post={presentationPost} showPostAvatar={false} />
+        <PostSourcePresentationView
+          post={presentationPost}
+          showPostAvatar={false}
+          sourcePreviewStyle={styles.quoteSourcePreview}
+        />
+        <PostReactionActions
+          actionBar={post.actionBar!}
+          controllerPost={post.reactionController!}
+          onRepostError={onRepostError}
+          quote
+        />
       </View>
     </View>
   );
 }
 
-function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
+function PostListRow({
+  onRepostError,
+  post: postKey,
+}: {
+  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
+  post: PostListRow_post$key;
+}) {
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
@@ -203,15 +231,49 @@ function PostListRow({ post: postKey }: { post: PostListRow_post$key }) {
             <PostBody post={post} />
           </Pressable>
         ) : null}
+        <PostReactionActions
+          actionBar={post.actionBar!}
+          controllerPost={post.reactionController!}
+          onRepostError={onRepostError}
+        />
       </View>
     </View>
+  );
+}
+
+function PostReactionActions({
+  actionBar,
+  controllerPost,
+  onRepostError,
+  quote = false,
+}: {
+  actionBar: PostActionBar_post$key;
+  controllerPost: PostReactionController_post$key;
+  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
+  quote?: boolean;
+}) {
+  const controller = usePostReactionController(controllerPost);
+
+  return (
+    <>
+      <PostReactionSummary
+        controller={controller}
+        style={quote ? styles.quoteReactionSummary : styles.reactionSummary}
+      />
+      <View style={styles.actionBarSlot}>
+        <PostActionBar
+          onRepostError={onRepostError}
+          post={actionBar}
+          reactionController={controller}
+        />
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     borderBottomWidth: 1,
-    paddingBottom: spacing.lg,
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
@@ -227,6 +289,10 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   avatar: { borderRadius: radii.full },
+  actionBarSlot: { paddingBottom: spacing.xs },
+  reactionSummary: { marginTop: spacing.xs },
+  quoteReactionSummary: { marginTop: spacing.sm },
+  quoteSourcePreview: { paddingBottom: spacing.xs },
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   header: {
     alignItems: 'flex-start',
@@ -248,12 +314,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
-    marginBottom: spacing.xs,
     minWidth: 0,
   },
   repostIconColumn: { alignItems: 'flex-end', width: 48 },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
   repostAuthorSlot: { flex: 1, minWidth: 0 },
-  repostLabelTarget: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
+  repostLabelTarget: { minWidth: 0 },
   repostLabel: { fontFamily: 'SUIT', ...typography.sm },
 });
