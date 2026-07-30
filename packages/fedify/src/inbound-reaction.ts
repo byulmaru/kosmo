@@ -32,11 +32,12 @@ export const handleInboundReaction = async (
     ...activity.ccIds,
     ...activity.bccIds,
   ].map((uri) => uri.href);
-  if (
-    context.recipient !== null &&
-    !recipientUris.includes(context.getActorUri(context.recipient).href)
-  ) {
-    return;
+  if (context.recipient !== null) {
+    const inboxRecipientUri = context.getActorUri(context.recipient).href;
+    if (recipientUris.length > 0 && !recipientUris.includes(inboxRecipientUri)) {
+      return;
+    }
+    recipientUris.push(inboxRecipientUri);
   }
 
   await materializeInboundReaction({

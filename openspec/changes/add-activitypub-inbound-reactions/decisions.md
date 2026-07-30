@@ -28,7 +28,7 @@ outbound, collection과 신규 remote ingestion은 포함하지 않는다.
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-498
-- Status: Active
+- Status: Superseded by `Target Post Author actor를 activity 또는 personal inbox recipient로 검증한다`
 - Context / Problem: shared inbox는 route-level recipient가 `null`일 수 있고 Remote Post Author는 Kosmo local actor가
   아니므로 local inbox identifier만으로 target recipient를 검증할 수 없다.
 - Decision Outcome: activity의 recipient URI 집합에 대상 Post Author의 ActivityPub actor URI가 포함되어야 한다.
@@ -38,6 +38,27 @@ outbound, collection과 신규 remote ingestion은 포함하지 않는다.
 - Consequences: target lookup은 Post Author의 canonical actor URI도 반환해야 한다.
 - Confirmation / Follow-up: local·remote Author recipient 성공, missing/mismatched recipient와 personal route mismatch를
   검증한다.
+
+### Target Post Author actor를 activity 또는 personal inbox recipient로 검증한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, PROD-498, PROD-567
+- Status: Active
+- Context / Problem: 호환 구현체는 Local Post의 personal inbox로 직접 전달하면서 activity audience를 생략할 수
+  있다. shared inbox는 route-level recipient가 `null`이고 Remote Post Author는 Kosmo local actor가 아니므로 같은
+  예외를 적용할 수 없다.
+- Decision Outcome: audience가 없는 personal inbox activity는 Fedify route가 식별한 canonical Local actor URI를
+  recipient 집합에 보충한다. audience가 있으면 route recipient가 그 audience에 포함되는 기존 일관성 검사를
+  유지한다. shared inbox는 recipient를 보충하지 않으며 대상 Post Author actor가 최종 recipient 증거에 포함돼야
+  한다.
+- Alternatives Considered: shared inbox recipient 검증을 생략하면 target Author와 무관한 activity를 materialize할
+  수 있다. 모든 personal delivery에서 route recipient를 audience에 합치면 명시된 audience와 route가 불일치하는
+  activity를 허용한다.
+- Consequences: handler는 audience 유무와 personal/shared route를 구분하고, core target lookup은 최종 recipient
+  집합을 Post Author의 canonical actor URI와 비교해야 한다.
+- Confirmation / Follow-up: audience 없는 personal success, 같은 shared delivery 거부, missing/mismatched recipient와
+  audience가 있는 personal route mismatch를 검증한다.
 
 ### Unsupported content는 heart Reaction으로 투영한다
 

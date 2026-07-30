@@ -113,3 +113,32 @@ PROD-498의 inbound Reaction 계약과 기존 actor, Follow, Create(Note), Local
 - [x] 4.1 관련 package TypeScript와 focused test를 통과시킨다.
 - [x] 4.2 core/Fedify 회귀와 migration 검증을 실행한다.
 - [x] 4.3 formatting, strict OpenSpec validation과 diff integrity를 확인한다.
+
+## 5. PROD-567 Audience 없는 personal inbox Reaction 호환성
+
+**Authority / Provenance**
+
+- `docs/domain/objects/reaction.md`
+- `docs/domain/objects/post.md`
+- PROD-567
+
+**Deliverable**
+
+Local Post Author의 personal inbox로 직접 전달된 `Like`·`EmojiReact`는 activity audience가 생략되어도 route가
+식별한 Local actor를 recipient 증거로 사용하고, 같은 shared inbox delivery는 기존처럼 거부한다.
+
+**Guardrails**
+
+- audience가 있는 personal activity의 route-audience 일관성 검사를 유지한다.
+- shared inbox와 Remote Post 대상 activity의 audience 요구사항을 완화하지 않는다.
+- 새 OpenSpec change나 remote fetch/materialization 범위를 추가하지 않는다.
+
+**Verification**
+
+- audience 없는 personal success, 같은 shared delivery 거부와 personal target mismatch를 DB-backed Fedify test로
+  확인한다.
+- 관련 Fedify/core 회귀, TypeScript, formatting, strict OpenSpec과 diff integrity를 확인한다.
+
+- [x] 5.1 canonical Reaction 계약과 기존 OpenSpec requirement·design·decision을 PROD-567에 맞게 정렬한다.
+- [x] 5.2 personal inbox route recipient 보충과 personal/shared/mismatch 회귀 테스트를 구현한다.
+- [x] 5.3 관련 회귀, TypeScript, formatting, strict OpenSpec과 diff integrity를 검증한다.

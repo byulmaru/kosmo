@@ -2,13 +2,19 @@
 
 ### Requirement: Typed inbound Reaction activity validation
 
-**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, 저장된 active Remote Profile actor, 고유한 HTTP(S) object URI와 대상 Post Author recipient를 가진 `Like`와 `EmojiReact`만 처리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498, PROD-567. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, 저장된 active Remote Profile actor, 고유한 HTTP(S) object URI와 대상 Post Author recipient 증거를 가진 `Like`와 `EmojiReact`만 처리해야 한다(MUST). Local Post Author의 personal inbox recipient는 activity audience가 생략됐을 때 대상 Post Author recipient 증거로 사용할 수 있지만(MAY), shared inbox와 Remote Post 대상 activity는 activity audience에 대상 Post Author actor URI를 포함해야 한다(MUST).
 
 #### Scenario: Local Post 대상 activity
 
 - **WHEN** 저장된 active Remote Profile이 파생 Local Note URI를 object로 하고 대상 Local Post Author actor를 수신자에 포함한 `Like` 또는 `EmojiReact`를 전달한다
 - **THEN** 시스템은 local Post identity를 기존 Post로 해석한다
 - **AND** 행동 주체가 Post 조회 정책을 통과하면 Reaction materialization을 계속한다
+
+#### Scenario: Audience가 생략된 personal inbox activity
+
+- **WHEN** 저장된 active Remote Profile이 Local Post Author의 personal inbox로 `Like` 또는 `EmojiReact`를 직접 전달하고 activity audience를 생략한다
+- **THEN** 시스템은 personal inbox가 식별한 canonical Local actor URI를 대상 Post Author recipient 증거로 사용한다
+- **AND** shared inbox로 같은 activity를 전달하면 side effect 없이 거부한다
 
 #### Scenario: Stored Remote Post 대상 activity
 
@@ -24,7 +30,7 @@
 
 #### Scenario: Recipient mismatch or unavailable target
 
-- **WHEN** activity 수신자에 대상 Post Author actor URI가 없거나 행동 주체가 대상 Post를 조회할 수 없다
+- **WHEN** activity audience와 허용된 personal inbox recipient 증거에 대상 Post Author actor URI가 없거나 행동 주체가 대상 Post를 조회할 수 없다
 - **THEN** 시스템은 side effect 없이 activity를 거부한다
 - **AND** Local·Remote 여부나 거부 원인을 federation 응답으로 구분해 노출하지 않는다
 

@@ -87,9 +87,12 @@ const createLocalTarget = async () => {
   };
 };
 
-const createContext = (recipient: string | null): InboxContext<void> =>
+const createContext = (
+  recipient: string | null,
+  canonicalOrigin = 'https://kos.moe',
+): InboxContext<void> =>
   ({
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, 'https://kos.moe'),
+    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, canonicalOrigin),
     recipient,
   }) as unknown as InboxContext<void>;
 
@@ -138,11 +141,7 @@ test('personal inbox recipient mismatch는 거부하고 일치 recipient와 shar
   await handleInboundReaction(createContext(crypto.randomUUID()), activity);
   assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
 
-  const personalContext = {
-    getActorUri: (identifier: string) =>
-      new URL(`/ap/actor/${identifier}`, target.author.canonicalOrigin!),
-    recipient: target.author.profile.id,
-  } as unknown as InboxContext<void>;
+  const personalContext = createContext(target.author.profile.id, target.author.canonicalOrigin!);
   await handleInboundReaction(personalContext, activity);
   assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, '🌈');
 
@@ -158,6 +157,32 @@ test('personal inbox recipient mismatch는 거부하고 일치 recipient와 shar
     }),
   );
   assert.equal((await readReaction(actor.profile.id, sharedTarget.post.id))?.type, '🎉');
+});
+
+test('audience 없는 activity는 대상 personal inbox에서만 처리한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const target = await createLocalTarget();
+  const otherTarget = await createLocalTarget();
+  const activity = new Like({
+    actor: new URL(actor.actorUri),
+    id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+    object: target.objectUri,
+  });
+
+  await handleInboundReaction(createContext(null), activity);
+  assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
+
+  await handleInboundReaction(
+    createContext(otherTarget.author.profile.id, otherTarget.author.canonicalOrigin!),
+    activity,
+  );
+  assert.equal(await readReaction(actor.profile.id, target.post.id), undefined);
+
+  await handleInboundReaction(
+    createContext(target.author.profile.id, target.author.canonicalOrigin!),
+    activity,
+  );
+  assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, '❤️');
 });
 
 test('malformed identity와 복수 actor/object activity는 side effect 없이 거부한다', async () => {
