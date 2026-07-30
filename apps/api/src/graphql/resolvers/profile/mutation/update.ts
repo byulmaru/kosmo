@@ -1,11 +1,8 @@
 import { ProfileFollowPolicy } from '@kosmo/core/enums';
 import { updateProfile } from '@kosmo/core/services';
-import {
-  profileBioSchema,
-  profileDisplayNameSchema,
-  profileTagsInputSchema,
-} from '@kosmo/core/validation';
+import { profileBioSchema, profileTagsInputSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
+import { Media } from '../../media/ref';
 import { Profile } from '../ref';
 
 builder.mutationField('updateProfile', (t) =>
@@ -16,13 +13,12 @@ builder.mutationField('updateProfile', (t) =>
       }),
     }),
     input: {
-      displayName: t.input.string({
-        required: false,
-        validate: profileDisplayNameSchema.optional(),
-      }),
+      displayName: t.input.string({ required: false }),
       bio: t.input.string({ required: false, validate: profileBioSchema.optional() }),
       followPolicy: t.input.field({ type: ProfileFollowPolicy, required: false }),
       tags: t.input.stringList({ required: false, validate: profileTagsInputSchema }),
+      avatarId: t.input.globalID({ for: Media, required: false }),
+      headerId: t.input.globalID({ for: Media, required: false }),
     },
     resolve: async (_, { input }, ctx) => {
       const updatedProfile = await updateProfile({
@@ -32,6 +28,8 @@ builder.mutationField('updateProfile', (t) =>
         bio: input.bio,
         followPolicy: input.followPolicy ?? undefined,
         tags: input.tags,
+        avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
+        headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
       });
 
       return { profile: updatedProfile };
