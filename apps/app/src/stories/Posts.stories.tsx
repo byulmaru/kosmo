@@ -14,6 +14,7 @@ import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
@@ -1058,7 +1059,6 @@ function ReplyListSurfaceStory() {
 }
 
 function ReplyDetailInlineStory() {
-  const [expanded, setExpanded] = useState(false);
   const data = usePostsStoryData();
   const post = requireFragment(
     requirePostById(data.posts, shortPost.id).layout,
@@ -1066,18 +1066,11 @@ function ReplyDetailInlineStory() {
   );
 
   return (
-    <Catalog>
-      <PostLayout
-        post={post}
-        reply={{
-          expanded,
-          onPress: () => setExpanded((current) => !current),
-          onRequestClose: () => setExpanded(false),
-          owner: 'detail',
-          profile: data.replyComposerProfile,
-        }}
-      />
-    </Catalog>
+    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+      <Catalog>
+        <PostLayout post={post} />
+      </Catalog>
+    </PostReplyCoordinatorProvider>
   );
 }
 
@@ -1416,6 +1409,13 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
+  decorators: [
+    (Story) => (
+      <PostReplyCoordinatorProvider owner="list" profile={null}>
+        <Story />
+      </PostReplyCoordinatorProvider>
+    ),
+  ],
   parameters: {
     relay: {
       data: {

@@ -11,20 +11,17 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { usePostReactionController } from './PostReactionController';
+import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import { useRepostFailureToast } from './useRepostFailureToast';
-import type { RefObject } from 'react';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
-import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostActionBarProps } from './PostActionBar';
-import type { PostComposerCreatedPost } from './PostComposer';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
-import type { ReplyComposerSurfaceHandle } from './ReplyComposerSurface';
 
 const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
@@ -83,47 +80,32 @@ const PostListItemFragment = graphql`
   }
 `;
 
-export type PostListItemReplyController = {
-  expanded: boolean;
-  onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onPress: () => void;
-  onRequestClose: () => void;
-  owner: 'detail' | 'list';
-  profile: ReplyComposerSurface_profile$key;
-  surfaceRef?: RefObject<ReplyComposerSurfaceHandle | null>;
-};
-
-export function PostListItem({
-  post: postKey,
-  reply: replyController,
-}: {
-  post: PostListItem_post$key;
-  reply?: PostListItemReplyController;
-}) {
+export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostListItemFragment, postKey);
+  const replyBinding = usePostReplyBinding(post.id);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
-  const reply = replyController
+  const reply = replyBinding
     ? {
         accessibilityLabel: '답글',
         controlRef: replyTriggerRef,
-        expanded: replyController.expanded,
-        onPress: replyController.onPress,
+        expanded: replyBinding.expanded,
+        onPress: replyBinding.onPress,
         processing: getReplyProcessingState(true, Boolean(post.content)),
       }
     : undefined;
   const replySurface =
-    replyController && post.content && post.replySurface ? (
+    replyBinding && post.content && post.replySurface ? (
       <ReplyComposerSurface
-        ref={replyController.surfaceRef}
-        onPostCreated={replyController.onPostCreated}
-        onRequestClose={replyController.onRequestClose}
-        open={replyController.expanded}
-        owner={replyController.owner}
+        ref={replyBinding.surfaceRef}
+        onPostCreated={replyBinding.onPostCreated}
+        onRequestClose={replyBinding.onRequestClose}
+        open={replyBinding.expanded}
+        owner={replyBinding.owner}
         parent={post.replySurface}
-        profile={replyController.profile}
+        profile={replyBinding.profile}
         triggerRef={replyTriggerRef}
       />
     ) : null;

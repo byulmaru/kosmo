@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -34,15 +34,8 @@ export function BookmarkList({
   profileRequired = false,
   replyProfile,
 }: BookmarkListProps): React.JSX.Element {
-  const [activeReplyPostId, setActiveReplyPostId] = useState<string | null>(null);
   const hasData = items.length > 0;
   let content: ReactNode;
-
-  useEffect(() => {
-    if (!replyProfile) {
-      setActiveReplyPostId(null);
-    }
-  }, [replyProfile]);
 
   if (profileRequired) {
     content = (
@@ -73,22 +66,7 @@ export function BookmarkList({
     content = (
       <>
         {items.map((item) => (
-          <PostListItem
-            key={item.id}
-            post={item.post}
-            reply={
-              replyProfile
-                ? {
-                    expanded: activeReplyPostId === item.id,
-                    onPress: () =>
-                      setActiveReplyPostId((current) => (current === item.id ? null : item.id)),
-                    onRequestClose: () => setActiveReplyPostId(null),
-                    owner: 'list',
-                    profile: replyProfile,
-                  }
-                : undefined
-            }
-          />
+          <PostListItem key={item.id} post={item.post} />
         ))}
         {error ? (
           <BookmarkListState
@@ -120,10 +98,12 @@ export function BookmarkList({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
-      <BookmarkListTitle />
-      {content}
-    </ScrollView>
+    <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
+      <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
+        <BookmarkListTitle />
+        {content}
+      </ScrollView>
+    </PostReplyCoordinatorProvider>
   );
 }
 

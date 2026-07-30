@@ -11,12 +11,12 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { usePostReactionController } from './PostReactionController';
+import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
-import type { PostListItemReplyController } from './PostListItem';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
@@ -66,16 +66,11 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({
-  post: postKey,
-  reply: replyController,
-}: {
-  post: PostLayout_post$key;
-  reply?: PostListItemReplyController;
-}) {
+export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
+  const replyBinding = usePostReplyBinding(post.id);
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
@@ -131,27 +126,27 @@ export function PostLayout({
             post={actionBarPost}
             reactionController={reactionController}
             reply={
-              replyController
+              replyBinding
                 ? {
                     accessibilityLabel: '답글',
                     controlRef: replyTriggerRef,
-                    expanded: replyController.expanded,
-                    onPress: replyController.onPress,
+                    expanded: replyBinding.expanded,
+                    onPress: replyBinding.onPress,
                     processing: getReplyProcessingState(true, Boolean(post.content)),
                   }
                 : undefined
             }
           />
-          {replyController && post.content && post.replySurface ? (
+          {replyBinding && post.content && post.replySurface ? (
             <View style={styles.replySurface}>
               <ReplyComposerSurface
-                ref={replyController.surfaceRef}
-                onPostCreated={replyController.onPostCreated}
-                onRequestClose={replyController.onRequestClose}
-                open={replyController.expanded}
-                owner={replyController.owner}
+                ref={replyBinding.surfaceRef}
+                onPostCreated={replyBinding.onPostCreated}
+                onRequestClose={replyBinding.onRequestClose}
+                open={replyBinding.expanded}
+                owner={replyBinding.owner}
                 parent={post.replySurface}
-                profile={replyController.profile}
+                profile={replyBinding.profile}
                 triggerRef={replyTriggerRef}
               />
             </View>
