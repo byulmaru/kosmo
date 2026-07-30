@@ -87,8 +87,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 modal, direct Parent 맥락, 본문과 Visibility를 유지한다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
-  `보기` action을 표시한다. 사용자가 `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를
-  바꾸지 않는다.
+  `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
+  `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
 - 성공 payload 반영은 modal이 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
   제공한 현재 actor의 connection/callback 경계만 사용한다. 상세 surface는 현재 detail query만 targeted
   refetch하며, 새 Reply가 현재 query 범위에 포함될 때만 기존 thread 정렬에 따라 자연스럽게 표시한다.
@@ -121,12 +121,15 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 검증 기준
 
-- Web 목록 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을 열고, 작은
-  viewport에서는 높이가 `85dvh`로 제한되는지 확인한다.
+- Web 목록 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을 여는지 자동화로
+  확인한다. 작은 viewport에서 높이가 `85dvh`로 제한되는 실제 layout은 Web runtime 후속 검증으로 남긴다.
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
 - pristine/dirty/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
   없음, selected Profile 격리를 확인한다.
-- Web `< compact`와 Native 전체 화면, 상세 inline surface가 같은 Parent·Composer 계약을 공유하면서 각 shell의
-  scroll, keyboard와 accessibility 지침을 따르는지 별도로 확인한다.
+- Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의
+  targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
+- Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,
+  platform back과 접근성 runtime은 이번 Web 우선 PR의 Ready 근거로 사용하지 않고 Native 출시 gate에서 별도로
+  확인한다.

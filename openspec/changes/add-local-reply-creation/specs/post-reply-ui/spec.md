@@ -37,7 +37,7 @@
 - **WHEN** 현재 Post 상세에서 Reply mutation이 성공한다
 - **THEN** 클라이언트는 surface를 닫고 현재 detail query만 targeted refetch한다
 - **AND** 성공 payload의 Post가 현재 query 범위에 포함되면 기존 thread 정렬에 따라 표시한다
-- **AND** `답글을 게시했어요` snackbar와 결과 Reply로 이동하는 `보기` action을 제공한다
+- **AND** 약 3초 뒤 자동으로 사라지는 `답글을 게시했어요` snackbar와 표시 중 결과 Reply로 이동하는 `보기` action을 제공한다
 - **AND** 자동으로 결과 Reply로 이동하거나 현재 thread의 Parent·조상·하위 Reply 관계와 pagination membership을 합성·평탄화하지 않는다
 
 #### Scenario: validation 또는 network 실패
@@ -104,6 +104,6 @@
 - **WHEN** validation 또는 network 오류가 발생한다
 - **THEN** 클라이언트는 direct Parent, 본문과 Visibility를 유지하고 editor와 footer 사이에 accessible inline alert를 표시한다
 - **WHEN** mutation이 성공한다
-- **THEN** 클라이언트는 surface를 닫고 원래 Reply action으로 focus를 복원하며 `답글을 게시했어요` snackbar와 결과 Reply `보기` action을 표시한다
+- **THEN** 클라이언트는 surface를 닫고 원래 Reply action으로 focus를 복원하며 약 3초 뒤 자동으로 사라지는 `답글을 게시했어요` snackbar와 표시 중 결과 Reply `보기` action을 표시한다
 - **AND** 사용자가 `보기`를 활성화할 때만 결과 Reply 상세로 이동한다
 - **AND** 상세 route는 현재 query만 targeted refetch하고 목록 membership이나 다른 actor Store를 합성하지 않는다
