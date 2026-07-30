@@ -22,6 +22,12 @@
 - **THEN** PROD-487과 PR #390의 `피드백 보내기` link와 `/feedback` destination을 유지한다
 - **AND** 기존 `프로필`·`북마크` link, 로그아웃 control과 responsive navigation 동작을 유지한다
 
+#### Scenario: ProfileSwitcher nickname 중심 정렬
+
+- **WHEN** full Web sidebar 또는 mobile drawer가 ProfileSwitcher trigger를 렌더링한다
+- **THEN** nickname은 별도 하향 transform 없이 trigger의 수직 중심에 정렬된다
+- **AND** nickname·chevron은 trigger의 같은 중심선을 유지하며 compact rail profile button geometry를 변경하지 않는다
+
 #### Scenario: generic menu placeholder 제거
 
 - **WHEN** PROD-541의 유니버설 route 구성이 등록된다
@@ -64,6 +70,12 @@
 - **WHEN** Android, iOS 또는 Web 앱이 shell navigation을 렌더링한다
 - **THEN** 시스템은 공통 "피드백 보내기" link를 `/feedback` route에 노출한다
 - **AND** 각 플랫폼의 기존 drawer close와 navigation semantics를 유지한다
+
+#### Scenario: Distinguish feedback from unavailable settings
+
+- **WHEN** full sidebar, compact icon rail 또는 mobile drawer가 "피드백 보내기" link를 렌더링한다
+- **THEN** 시스템은 Lucide `Mail` glyph를 사용한다
+- **AND** label, accessible name, `/feedback` destination, active 상태와 drawer close 동작은 유지한다
 
 ### Requirement: Protected app routes require a valid session
 

@@ -42,7 +42,7 @@
 - [x] 1.4 관련 자동화, formatting, scoped/all strict validation과 scope diff 검사를 통과한다.
 - [x] 1.5 당시 최신 canonical·Linear와 notification-only 구현 정합성을 재확인하고 archive 후 strict validation을 통과했다.
 
-## 2. PROD-541 준비되지 않은 사이드바 진입점과 generic menu route 비노출
+## 2. PROD-541 준비되지 않은 사이드바 진입점 비노출과 shell 정렬
 
 **Authority / Provenance**
 
@@ -54,14 +54,15 @@
 
 **Deliverable**
 
-full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `팔로워 요청` link가 시각·접근성 트리로 노출되지 않고 generic `/menu` placeholder route가 등록되지 않는다. `피드백 보내기`, 실제 Profile route, `북마크`, 로그아웃과 기존 responsive navigation 동작은 유지된다.
+full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `팔로워 요청` link가 시각·접근성 트리로 노출되지 않고 generic `/menu` placeholder route가 등록되지 않는다. full/mobile ProfileSwitcher nickname은 별도 하향 보정 없이 중심에 정렬되고 `피드백 보내기`는 Lucide `Mail` glyph를 사용한다. 실제 Profile route, `북마크`, feedback label·link·동작, 로그아웃과 기존 responsive navigation 동작은 유지된다.
 
 **Guardrails**
 
 - `SidebarNavigation`에서 `프로필 설정`과 `팔로워 요청` item을 제거하고 literal source comment나 dead code로 남기지 않는다.
 - `프로필` item은 선택한 Profile의 canonical route 또는 기존 no-profile button 동작만 사용하며 `/menu` sentinel을 남기지 않는다.
 - 사용하지 않는 `UserRoundPlus` import는 제거하되 복원 icon 이름은 PROD-566에 보존한다.
-- `/feedback`, feedback footer와 PROD-487·PR #390의 변경을 수정하지 않는다.
+- feedback footer는 `Settings` glyph만 `Mail`로 교체하며 label, `/feedback` destination, active·drawer close·접근성 semantics와 전달 동작을 수정하지 않는다.
+- ProfileSwitcher의 nickname 하향 보정만 제거하고 avatar·chevron·trigger height와 compact rail geometry를 수정하지 않는다.
 - `프로필`, `북마크`, 로그아웃과 drawer close·active semantics를 유지한다.
 - 팔로우 요청의 pending 저장 모델, GraphQL connection·mutation, 보낸 요청의 `요청됨`·취소 동작을 변경하지 않는다.
 - `/menu` 직접 접근을 위한 새 redirect나 전용 404 화면을 추가하지 않는다.
@@ -69,8 +70,8 @@ full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `�
 
 **Verification**
 
-- 테스트 코드 범위: 기존 Shell Storybook의 full sidebar, compact rail과 mobile drawer interaction에서 `프로필 설정`·`팔로워 요청` 부재와 유지 대상 진입점을 검증하고, `apps/web/e2e/auth-routes.e2e.ts`의 positive `/menu` smoke를 제거한다.
-- 테스트 필요성: 공용 navigation 변경이 세 responsive surface에서 두 준비되지 않은 link를 제거하고 실제 동작하는 profile·bookmark·feedback·logout을 보존하며, 삭제된 route를 성공 화면으로 검증하지 않음을 직접 증명한다.
+- 테스트 코드 범위: 기존 Shell Storybook의 full sidebar, compact rail과 mobile drawer interaction에서 `프로필 설정`·`팔로워 요청` 부재와 유지 대상 진입점, full/mobile nickname 중심 정렬을 검증하고, `apps/web/e2e/auth-routes.e2e.ts`의 positive `/menu` smoke를 제거한다.
+- 테스트 필요성: 공용 navigation 변경이 세 responsive surface에서 두 준비되지 않은 link를 제거하고 실제 동작하는 profile·bookmark·feedback·logout을 보존하며, full/mobile nickname의 별도 하향 offset을 방지하고 삭제된 route를 성공 화면으로 검증하지 않음을 직접 증명한다.
 - 테스트 제외 범위: 새 Story, fixture, helper, harness, snapshot, 특정 framework 404·redirect expectation, feedback E2E 변경과 관련 없는 shell interaction 확대.
 - `feedback.e2e.ts`의 `/feedback` 화면에서 legacy menu 소개 문구 부재 assertion은 route 삭제 후에도 유효하므로 유지한다.
 - Web Storybook full 1280×900, compact 1024×900, mobile drawer 390×844에서 navigation geometry, overflow, link semantics와 drawer close를 관찰한다.
@@ -89,6 +90,21 @@ full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `�
 - Shell Storybook의 full sidebar, compact rail과 mobile drawer assertion을 `팔로워 요청` 비노출 계약으로 먼저 변경하고 Web auth route positive smoke에서 `/menu`를 제거했다.
 - production 변경 전 `CI=true pnpm --filter @kosmo/app exec vitest run --project=storybook src/stories/Shell.stories.tsx`: 31개 중 28개 통과, 세 surface의 실제 `팔로워 요청 → /menu` link만 원인으로 3개 실패해 새 검증이 기존 동작을 포착함을 확인했다.
 - production 최소 변경 후 같은 focused suite가 31/31 통과했고 App Relay compile·TypeScript check와 Web TypeScript check가 통과했다.
+
+**정렬·glyph TDD RED 실행 기록 (2026-07-30)**
+
+- 기존 Shell Storybook의 feedback current-state에 Lucide `Mail` path assertion을 추가하고 full/mobile ProfileSwitcher의 nickname·chevron 중심 차이 기대값을 6px에서 0px로 먼저 변경했다.
+- production 변경 전 같은 focused suite는 31개 중 28개 통과했고, 실제 `Settings` path 1건과 full/mobile의 실제 6px offset 2건만 원인으로 실패해 새 검증이 기존 동작을 정확히 포착함을 확인했다.
+
+**정렬·glyph 최종 실행 기록 (2026-07-30)**
+
+- production 최소 변경 후 focused Shell Storybook은 31/31 통과했다. 기존 ProfileSwitcher interaction의 React `act(...)`·Suspense 경고는 남았지만 실패는 없었다.
+- `CI=true pnpm --filter @kosmo/app test`: Relay compile·TypeScript, unit 59/59, Storybook static build와 Storybook 175/175 통과.
+- Web Storybook full 1280×900과 mobile drawer 390×844에서 nickname·chevron의 trigger 중심 정렬과 `Mail` glyph를 확인했고, compact 1024×900에서도 `Mail` glyph와 기존 rail geometry가 유지됨을 확인했다.
+- 변경 파일 ESLint·Prettier, scoped strict와 전체 OpenSpec strict 51/51, `git diff --check`를 통과했다.
+- 최신 parent PR #390 head `e9c9f0b9`와 child merge-base `cbd4b5ba` 사이의 parent-only 변경은 parent OpenSpec·운영 문서에 한정됐다. merge-base 기준 child scope diff에 API·DB·dependency·migration·`.superpowers`·`docs/superpowers` 변경이 없음을 확인했다.
+- Sol medium 독립 리뷰에서 full/mobile에 존재하지 않는 avatar까지 중심 정렬 대상으로 기록한 P2 문서 불일치를 발견해 Linear·OpenSpec을 실제 구조에 맞게 정정했다. 후속 재리뷰는 finding 없이 승인 가능 판정을 반환했다.
+- Android·iOS native runtime과 VoiceOver·TalkBack은 미실행했다. Web Storybook 관찰 및 자동화 결과와 구분한다.
 
 **최종 viewport·route 실행 기록 (2026-07-30)**
 
@@ -109,4 +125,7 @@ full Web sidebar, compact Web rail과 mobile drawer에 `프로필 설정`과 `�
 - [x] 2.2 `SidebarNavigation`의 두 준비되지 않은 item, profile `/menu` sentinel과 사용하지 않는 icon import를 제거하고 generic `/menu` route를 삭제한다.
 - [x] 2.3 focused 자동화와 full·compact·mobile Web viewport에서 유지 대상, 접근성, route 등록과 responsive 동작을 확인하고 Android·iOS 미실행 검증을 구분한다.
 - [x] 2.4 관련 자동화, formatting, scoped/all strict validation, scope diff와 PR #390 기준 stack diff 검사를 통과한다.
-- [ ] 2.5 parent `add-web-feedback-slack-delivery` archive와 canonical requirement를 재확인하고 PROD-219의 stale `/menu` smoke ownership을 기록한 뒤 child change를 archive해 archive 후 strict validation을 통과한다.
+- [x] 2.5 기존 Shell Storybook의 full/mobile nickname geometry assertion을 중심 기준으로 먼저 변경하고 production 변경 전 최소 실패 증거를 확인한다.
+- [x] 2.6 ProfileSwitcher nickname의 하향 보정을 제거하고 feedback footer의 `Settings` glyph만 `Mail`로 교체한다.
+- [x] 2.7 focused 자동화와 full·compact·mobile Web viewport에서 정렬·glyph·유지 동작을 확인하고 formatting, scoped/all strict validation, scope diff와 PR #390 기준 stack diff를 통과한다.
+- [ ] 2.8 parent `add-web-feedback-slack-delivery` archive와 canonical requirement를 재확인하고 PROD-219의 stale `/menu` smoke ownership을 기록한 뒤 child change를 archive해 archive 후 strict validation을 통과한다.

@@ -1,5 +1,5 @@
 import { Link, usePathname } from 'expo-router';
-import { Bell, Bookmark, House, PenLine, Search, Settings, UserRound } from 'lucide-react-native';
+import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -226,7 +226,7 @@ export function SidebarNavigation({
                 },
               ])}
             >
-              <Settings
+              <Mail
                 color={feedbackActive ? theme.text : theme.textSecondary}
                 size={20}
                 strokeWidth={1.5}

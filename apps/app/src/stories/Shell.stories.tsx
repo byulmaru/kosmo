@@ -230,6 +230,10 @@ export const FeedbackNavigationCurrentState: Story = {
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.querySelector('path')).toHaveAttribute(
+      'd',
+      'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',
+    );
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -276,10 +280,10 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const pickerRegion = await canvas.findByLabelText('프로필 전환');
@@ -930,10 +934,10 @@ export const UniversalMobile: Story = {
     expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
 
     await userEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');

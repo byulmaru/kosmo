@@ -57,12 +57,24 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-566`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: `SidebarNavigation`의 `프로필 설정`은 실제 설정 화면이 없고, `팔로워 요청`은 pending domain/API가 존재하지만 받은 요청 관리 UI 대신 generic `/menu` 소개 화면으로 이동한다. 준비되지 않은 두 진입점을 유지하면 사용자가 실행 가능한 기능으로 오인한다. 반면 feedback, 실제 Profile navigation, Bookmark와 logout은 현재 동작한다.
 - Decision Outcome: full Web sidebar, compact Web rail과 mobile drawer에서 `프로필 설정`과 `팔로워 요청` row를 시각·접근성 트리에서 제거하고, 남은 user-facing 소비자가 없는 generic `/menu` placeholder route와 positive route smoke를 제거한다. `프로필`은 선택한 Profile의 canonical route만 사용한다. PROD-487과 PR #390의 `피드백 보내기`와 `/feedback`, `프로필`, `북마크`, 로그아웃은 유지한다. 팔로우 요청의 pending 모델/API와 보낸 요청의 `요청됨`·취소는 변경하지 않는다.
 - Alternatives Considered: 두 row와 `/menu` 유지, 받은 요청 UI를 PROD-541에서 즉시 구현, 승인제 팔로우를 제품에서 제거, navigation item을 literal source comment로 남김.
 - Consequences: 현재 App에서 잘못된 진입점은 사라지지만 받은 요청을 App에서 확인·처리하는 UI는 계속 없다. 해당 UI와 진입점 복원은 PROD-566이 별도로 소유하며 기존 Lucide `UserRoundPlus` 아이콘 이름을 보존한다. `/menu` 직접 접근에 새 redirect나 전용 404 화면을 추가하지 않는다.
-- Confirmation / Follow-up: Shell Storybook의 full·compact·mobile drawer에서 두 진입점 부재와 유지 대상을 검증하고, Web auth route의 positive `/menu` smoke를 제거한다. Android·iOS runtime 미실행 여부를 별도로 기록한다.
+- Confirmation / Follow-up: Shell Storybook의 full·compact·mobile drawer에서 두 진입점 부재와 유지 대상을 검증하고, Web auth route의 positive `/menu` smoke를 제거한다. 2026-07-30 PROD-541에 ProfileSwitcher 중심 정렬과 feedback `Mail` glyph가 추가되어 아래 Derived Contract로 대체됐다.
+
+### 준비되지 않은 진입점을 제거하고 ProfileSwitcher 정렬과 feedback glyph를 명확화한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-566`, `PROD-487`
+- Status: Active
+- Context / Problem: 준비되지 않은 `프로필 설정`·`팔로워 요청`과 `/menu`를 제거한 뒤에도 full/mobile ProfileSwitcher nickname은 trigger 중심보다 6px 아래로 보정돼 있다. 실제 feedback footer는 유지되지만 `Settings` glyph가 노출돼 준비되지 않은 설정 기능으로 오인될 수 있다.
+- Decision Outcome: 기존 비노출·route 제거 계약을 유지하면서 full Web sidebar와 mobile drawer의 nickname 하향 보정을 제거해 nickname·chevron을 trigger 수직 중심에 놓고 compact avatar geometry는 유지한다. `피드백 보내기`는 Lucide `Mail` glyph를 사용하되 label, `/feedback` destination, active·drawer close·접근성 semantics와 전달 동작은 유지한다.
+- Alternatives Considered: nickname의 6px 보정 유지, feedback `Settings` 유지, 댓글에서 이미 사용하는 `MessageCircle`, 텍스트 피드백을 강조하는 `MessageSquareText`.
+- Consequences: profile trigger의 수직 정렬이 중앙으로 복원되고 feedback이 설정이나 댓글이 아닌 별도 전달 action으로 구분된다. feedback route/API, compact rail geometry와 navigation semantics는 바뀌지 않는다.
+- Confirmation / Follow-up: 사용자가 `Mail` 선택과 중심 정렬 복원을 승인했다. 기존 Shell Storybook의 full/mobile geometry assertion을 중심 기준으로 먼저 변경해 RED를 확인하고, 세 responsive surface에서 feedback link 의미와 glyph를 시각 검증한다.
 
 ### Parent feedback change를 먼저 archive한 뒤 child에서 menu 보존 scenario를 제거한다
 
@@ -85,3 +97,4 @@
 - 위 `44px disabled 알림 설정 placeholder를 표시한다` Implementation Choice는 PROD-541의 Active Derived Contract로 대체됐다. archived `2026-07-27-add-in-app-notifications`의 같은 기록에 포함된 단일 목록, Follow item 표현, 탭·section heading 부재와 나머지 결과는 유지한다.
 - 위 `사이드바 전체를 설정 비노출 범위에서 제외한다` Derived Contract는 `프로필 설정`과 feedback footer를 같은 표면으로 잘못 묶어 2026-07-30의 새 Derived Contract로 대체됐다.
 - 위 `사이드바의 프로필 설정은 숨기고 피드백 진입점은 유지한다` Derived Contract는 받은 요청 UI가 없는 `팔로워 요청`과 generic `/menu`를 유지해 최신 PROD-541 범위와 어긋나므로, 같은 날의 `준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다` Derived Contract로 대체됐다.
+- 위 `준비되지 않은 설정·팔로워 요청 진입점과 generic menu placeholder를 제거한다` Derived Contract는 비노출·route 제거 결과를 유지하되 최신 PROD-541의 ProfileSwitcher 중심 정렬과 feedback `Mail` glyph를 포함하는 Derived Contract로 대체됐다.
