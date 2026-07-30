@@ -107,11 +107,7 @@ describe('ProfileHero media presentation', () => {
   });
 
   it('URL이 없으면 Image를 렌더하지 않는다', async () => {
-    await renderProfile({
-      ...baseProfile,
-      avatar: { id: 'media-avatar', url: null },
-      header: { id: 'media-header', url: null },
-    });
+    await renderProfile(baseProfile);
 
     assert.deepEqual(
       renderer!.root.findAll((node) => (node.type as unknown) === 'Image'),

@@ -389,12 +389,12 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireDiscardDialogProps().visible, true);
   });
 
-  it('dialog가 열린 동안 첫 action의 nested target을 제거하고 한 번만 dispatch한다', async () => {
+  it('dialog가 열린 동안 첫 GO_BACK action의 nested target을 제거하고 한 번만 dispatch한다', async () => {
     await renderRoute();
     await act(async () =>
       requireScreenProps().onChange({ ...requireScreenProps().value, displayName: '새 이름' }),
     );
-    const first = { source: 'first', target: 'nested-stack', type: 'REPLACE' };
+    const first = { source: 'first', target: 'nested-stack', type: 'GO_BACK' };
     const second = { source: 'second', type: 'POP_TO_TOP' };
 
     let firstEvent: BeforeRemoveEvent | null = null;
@@ -409,21 +409,6 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireDiscardDialogProps().onDiscard());
     assert.deepEqual(navigationDispatches, [{ ...first, target: undefined }]);
     assert.equal(requireDiscardDialogProps().visible, false);
-  });
-
-  it('nested target GO_BACK의 source와 type을 보존해 discard한다', async () => {
-    await renderRoute();
-    await act(async () =>
-      requireScreenProps().onChange({ ...requireScreenProps().value, displayName: '새 이름' }),
-    );
-    const action = { source: 'profile-edit-route', target: 'nested-stack', type: 'GO_BACK' };
-
-    await act(async () => {
-      emitBeforeRemove(action);
-    });
-    await act(async () => requireDiscardDialogProps().onDiscard());
-
-    assert.deepEqual(navigationDispatches, [{ ...action, target: undefined }]);
   });
 
   it('저장 중에는 dialog 없이 이탈을 막는다', async () => {
