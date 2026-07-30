@@ -103,21 +103,7 @@ export function postContentDocumentFromText(
   bodyText: string,
   summary: string | null = null,
 ): PostContentDocumentV1 {
-  const normalized = normalizePostContentPlainText(bodyText);
-
-  return canonicalizePostContentDocument({
-    version: postContentSchemaVersion,
-    summary,
-    body: {
-      type: 'doc',
-      content: [
-        {
-          type: 'paragraph',
-          ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
-        },
-      ],
-    },
-  });
+  return postContentDocumentFromTextAndMedia(bodyText, [], false, summary);
 }
 
 export function postContentDocumentFromTextAndMedia(
@@ -126,15 +112,19 @@ export function postContentDocumentFromTextAndMedia(
   sensitiveMedia = false,
   summary: string | null = null,
 ): PostContentDocumentV1 {
-  const textDocument = postContentDocumentFromText(bodyText, summary);
+  const normalized = normalizePostContentPlainText(bodyText);
 
   return canonicalizePostContentDocument({
-    ...textDocument,
+    version: postContentSchemaVersion,
+    summary,
     body: {
       type: 'doc',
       ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
       content: [
-        ...textDocument.body.content,
+        {
+          type: 'paragraph',
+          ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
+        },
         ...media.map(
           ({ altText, mediaId }): PostContentMediaNode => ({
             type: 'media',
