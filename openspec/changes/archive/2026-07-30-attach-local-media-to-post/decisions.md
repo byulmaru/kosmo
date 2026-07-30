@@ -104,7 +104,7 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
 ### 공개 Media URL은 Note projection 뒤 재인가하지 않는다
 
 - Decision Date: 2026-07-30
-- Decision Class: Product Contract
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/media.md`,
   `docs/domain/decisions/0013-media-storage-service-boundary.md`, PROD-461, PROD-559
 - Status: Active
@@ -122,7 +122,7 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
 ### Media Storage Service 완료 응답을 공개 표현의 최종 권위로 사용한다
 
 - Decision Date: 2026-07-30
-- Decision Class: Product Contract
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/media.md`,
   `docs/domain/decisions/0013-media-storage-service-boundary.md`, PROD-461, PROD-559, PROD-581
 - Status: Active
