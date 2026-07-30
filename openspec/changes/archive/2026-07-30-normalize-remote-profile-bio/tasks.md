@@ -19,7 +19,7 @@
 
 **Verification**
 
-- pure projection test로 HTML entity, 링크 표시 텍스트, 문단/hard break, malformed/unknown markup, image·unsafe URL·속성, script/style/template 제거와 빈 결과 `null`을 검증한다.
+- pure projection test로 HTML entity, 링크 표시 텍스트, 문단/hard break, malformed/unknown markup, image·unsafe URL·속성, `hidden` 요소와 script/style/template 제거 및 빈 결과 `null`을 검증한다.
 - remote actor DB test로 string/language-tagged 최초 저장, refresh, projection 후 500자 검증과 lifecycle/suspension 보존을 검증한다.
 - string summary, language-tagged summary, refresh, projection 후 500자 검증, Local Profile/outbound 회귀를 관련 테스트로 검증한다.
 - 기존 remote Note projection, Local Profile update, local actor outbound, GraphQL `Profile.bio`와 관련 workspace check에 회귀가 없는지 확인한다.

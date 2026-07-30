@@ -23,7 +23,13 @@ const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
 ]);
 
 function htmlToBodyDocument(html: string): PostContentBodyDocumentV1 {
-  return remoteNoteDOMParser.parse(JSDOM.fragment(html)).toJSON() as PostContentBodyDocumentV1;
+  const fragment = JSDOM.fragment(html);
+
+  for (const element of fragment.querySelectorAll('[hidden]')) {
+    element.remove();
+  }
+
+  return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
 }
 
 function mediaTypeEssence(mediaType: string | null): string {

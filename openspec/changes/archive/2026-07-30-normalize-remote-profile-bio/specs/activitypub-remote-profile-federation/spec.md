@@ -16,7 +16,7 @@
 
 #### Scenario: Project HTML string summary to plain-text bio
 
-- **WHEN** remote actor의 string `summary`가 문단, 줄바꿈, 링크, HTML entity와 script/style/template 같은 비표시 markup을 포함한다
+- **WHEN** remote actor의 string `summary`가 문단, 줄바꿈, 링크, HTML entity와 `hidden` 요소 또는 script/style/template 같은 비표시 markup을 포함한다
 - **THEN** 시스템은 문단과 줄바꿈을 결정적으로 평문화하고 entity와 링크의 표시 텍스트를 보존한 bio를 만든다
 - **AND** 시스템은 markup 문자, 실행 가능한 속성, 이미지와 비표시 내용을 bio에 포함하지 않는다
 - **AND** 시스템은 평문 projection을 trim한 뒤 `Profile.bio`의 500자 제한을 검증한다

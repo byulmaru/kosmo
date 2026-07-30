@@ -103,6 +103,7 @@ describe('projectRemoteNoteContent', () => {
       content:
         '<p onclick="steal()">safe <a href="javascript:steal()">link</a>' +
         '<img src="javascript:steal()" alt="secret"></p>' +
+        '<span hidden>not visible</span>' +
         '<script>alert(1)</script><style>body{display:none}</style><template>hidden</template>',
       summary: null,
       mediaType: 'text/html',
@@ -191,6 +192,7 @@ describe('projectRemoteActivityPubHtmlToPlainText', () => {
       projectRemoteActivityPubHtmlToPlainText(
         '<p>Hello &amp; <a href="https://example.com">world</a><br>again</p>' +
           '<p>Second</p><img src="https://example.com/image.png" alt="hidden">' +
+          '<span hidden>not visible</span>' +
           '<script>alert(1)</script><style>body{display:none}</style><template>secret</template>',
       ),
       'Hello & world\nagain\n\nSecond',

@@ -26,7 +26,7 @@
 - Decision Outcome: remote Note 수신에서 검증된 JSDOM→ProseMirror→Plain Text 의미를 remote Profile bio projection과 공유한다. helper 추출 여부와 내부 이름은 고정하지 않지만 두 진입점은 같은 parser 규칙과 회귀 fixture를 사용한다.
 - Alternatives Considered: regex tag 제거, 신규 sanitizer dependency, frontend DOM/HTML renderer. 각각 malformed HTML·비표시 내용 처리, dependency/정책 중복 또는 저장 경계 미해결 문제가 있다.
 - Consequences: 새 dependency 없이 기존 보안 fixture를 재사용하지만 PostContent parser 의미 변경은 Profile bio에도 영향을 줄 수 있으므로 공통 회귀 검증이 필요하다.
-- Confirmation / Follow-up: entity, 링크 표시 텍스트, paragraph/hard break, malformed markup, unsafe URL, image와 script/style/template fixture를 pure projection test에서 고정한다.
+- Confirmation / Follow-up: entity, 링크 표시 텍스트, paragraph/hard break, malformed markup, unsafe URL, image, `hidden` 요소와 script/style/template fixture를 pure projection test에서 고정한다.
 
 ## Remaining Decisions
 
