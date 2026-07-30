@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createContext, createElement, useContext } from 'react';
 import { act, create } from 'react-test-renderer';
+import { StructuredClientError } from '../../observability/client-error';
 import type { ComponentType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -36,6 +37,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule(new URL('../UnexpectedErrorScreen.tsx', import.meta.url), {
+  UnexpectedErrorScreen: () => null,
+});
 mockModule('expo-router', {
   Slot: () =>
     SlotContent
@@ -71,7 +75,12 @@ mockModule('react-relay', {
       throw pending;
     }
     if (mode === 'error') {
-      throw new Error(`${query}:${variables.handle}`);
+      throw new StructuredClientError({
+        code: 'NETWORK_REQUEST_FAILED',
+        message: `${query}:${variables.handle}`,
+        origin: 'transport',
+        type: 'network',
+      });
     }
 
     return {
@@ -118,6 +127,7 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
+  useSafeErrorNavigation: () => undefined,
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {

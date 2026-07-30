@@ -26,23 +26,42 @@ export function ClientErrorBoundary({
 }: ClientErrorBoundaryProps) {
   const inheritedReporter = useUnexpectedErrorReporter();
   const reporter = onError ?? inheritedReporter;
-  const reportedErrorRef = useRef<unknown>(null);
+  const reportedErrorRef = useRef<unknown>(unreportedError);
   const occurrenceCounterRef = useRef(0);
+  const [boundaryKey, setBoundaryKey] = useState(0);
   const [reported, setReported] = useState<{
     error: unknown;
     eventId?: string;
     occurrenceKey: number;
   } | null>(null);
+  const clearReportedError = () => {
+    reportedErrorRef.current = unreportedError;
+    setReported(null);
+  };
+  const resetBoundary = (props: FallbackProps, ...args: unknown[]) => {
+    if (props.error === null || props.error === undefined) {
+      clearReportedError();
+      setBoundaryKey((key) => key + 1);
+      if (args[0] !== safeNavigationReset) {
+        onReset();
+      }
+      return;
+    }
+
+    props.resetErrorBoundary(...args);
+  };
 
   return (
     <ErrorBoundary
+      key={boundaryKey}
       fallbackRender={(props) =>
         renderFallback({
           ...props,
+          resetErrorBoundary: (...args) => resetBoundary(props, ...args),
           eventId: reported && reported.error === props.error ? reported.eventId : undefined,
           occurrenceKey:
             reported && reported.error === props.error ? reported.occurrenceKey : undefined,
-          resetForSafeNavigation: () => props.resetErrorBoundary(safeNavigationReset),
+          resetForSafeNavigation: () => resetBoundary(props, safeNavigationReset),
         })
       }
       onError={(error, info) => {
@@ -61,8 +80,7 @@ export function ClientErrorBoundary({
         logBoundaryError(error, info);
       }}
       onReset={(details) => {
-        reportedErrorRef.current = null;
-        setReported(null);
+        clearReportedError();
         if (details.reason !== 'imperative-api' || details.args[0] !== safeNavigationReset) {
           onReset();
         }
@@ -73,6 +91,7 @@ export function ClientErrorBoundary({
   );
 }
 
+const unreportedError = Symbol('unreported-client-error');
 const safeNavigationReset = Symbol('safe-navigation-reset');
 
 function logBoundaryError(error: unknown, info: ErrorInfo): void {

@@ -7,6 +7,7 @@ import { GraphQLErrorBoundary } from '@/components/GraphQLErrorBoundary';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { UnexpectedErrorScreen } from '@/components/UnexpectedErrorScreen';
 import { StructuredClientError } from '@/observability/client-error';
+import { UnexpectedErrorContext } from '@/observability/UnexpectedErrorContext';
 import { SessionFailOpenBoundary } from '@/session/SessionProvider';
 import { RouterMockProvider } from '../../.storybook/mocks/expo-router';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -31,7 +32,7 @@ function ThrowOnRender({
   error = unexpectedRenderError,
 }: {
   active: boolean;
-  error?: Error;
+  error?: unknown;
 }) {
   if (active) {
     throw error;
@@ -117,6 +118,28 @@ function ReporterFallbackHarness({
   );
 }
 
+function NullThrownValueHarness({
+  onReport,
+  onRetry,
+}: {
+  onReport: (error: unknown, info: ErrorInfo) => string | undefined;
+  onRetry: () => void;
+}) {
+  const [failed, setFailed] = useState(true);
+
+  return (
+    <GraphQLErrorBoundary
+      onError={onReport}
+      onRetry={() => {
+        setFailed(false);
+        onRetry();
+      }}
+    >
+      <ThrowOnRender active={failed} error={null} />
+    </GraphQLErrorBoundary>
+  );
+}
+
 function RetryReFailureHarness({ onReport }: { onReport: (eventId: string) => void }) {
   const [attempt, setAttempt] = useState(0);
 
@@ -152,7 +175,7 @@ function SessionBoundaryHarness() {
           <Text>세션 갱신</Text>
         </Pressable>
         <SessionFailOpenBoundary fallback={<Text>세션 오류 상태</Text>} resetKey={resetKey}>
-          <ThrowOnRender active={failed} />
+          <ThrowOnRender active={failed} error={expectedNetworkError} />
         </SessionFailOpenBoundary>
       </View>
     </GraphQLErrorBoundary>
@@ -172,14 +195,18 @@ function ProductionRouteFailure() {
 
 function ProductionAppProvidersHarness({
   onNavigate,
+  onReport,
 }: {
   onNavigate: (action: 'push' | 'replace', href: Href) => void;
+  onReport: (error: unknown, info: ErrorInfo) => string | undefined;
 }) {
   return (
     <RouterMockProvider onNavigate={onNavigate} pathname="/settings">
-      <AppProviders>
-        <ProductionRouteFailure />
-      </AppProviders>
+      <UnexpectedErrorContext.Provider value={onReport}>
+        <AppProviders>
+          <ProductionRouteFailure />
+        </AppProviders>
+      </UnexpectedErrorContext.Provider>
     </RouterMockProvider>
   );
 }
@@ -309,6 +336,23 @@ export const ReporterWithoutEventIdFallsBackSafely: Story = {
   },
 };
 
+const nullThrownValueReporter = fn(() => 'null-event');
+const nullThrownValueRetry = fn();
+
+export const NullThrownValueReportsWithEventId: Story = {
+  render: () => (
+    <NullThrownValueHarness onReport={nullThrownValueReporter} onRetry={nullThrownValueRetry} />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText('null-event')).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findByText('콘텐츠가 복구됐습니다.')).resolves.toBeVisible();
+    expect(nullThrownValueReporter).toHaveBeenCalledTimes(1);
+    expect(nullThrownValueRetry).toHaveBeenCalledTimes(1);
+  },
+};
+
 const retryReFailureReports = fn();
 
 export const RetryReFailureUsesNewIdAndClearsOldToast: Story = {
@@ -341,17 +385,26 @@ export const SessionFailOpenAndResetKey: Story = {
 };
 
 const productionNavigation = fn();
+const productionReporter = fn(() => 'production-event');
 
 export const ProductionAppProvidersSafeNavigation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  render: () => <ProductionAppProvidersHarness onNavigate={productionNavigation} />,
+  render: () => (
+    <ProductionAppProvidersHarness
+      onNavigate={productionNavigation}
+      onReport={productionReporter}
+    />
+  ),
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.findByText('문제가 발생했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('production-event')).resolves.toBeVisible();
+    expect(productionReporter).toHaveBeenCalledTimes(1);
     await userEvent.click(canvas.getByRole('button', { name: '안전한 화면으로 이동' }));
 
     await expect(canvas.findByText('/')).resolves.toBeVisible();
     expect(canvas.queryByText('문제가 발생했어요')).not.toBeInTheDocument();
+    expect(productionReporter).toHaveBeenCalledTimes(1);
     expect(productionNavigation).toHaveBeenCalledTimes(1);
     expect(productionNavigation).toHaveBeenCalledWith('replace', '/');
   },
