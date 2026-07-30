@@ -12,7 +12,6 @@ digest="${image_ref#*@}"
 previous_tag=""
 previous_digest=""
 previous_migration_enabled=""
-previous_migration_command=""
 previous_image="none"
 deployment_changed=false
 deployment_succeeded=false
@@ -45,13 +44,11 @@ set_release_parameters() {
   local tag="$1"
   local release_digest="$2"
   local enabled="$3"
-  local command="$4"
 
   argocd_prod app set "${application}" \
     -p "version=${tag}" \
     -p "imageDigest=${release_digest}" \
     -p "migration.enabled=${enabled}" \
-    -p "migration.command=${command}" \
     --validate >/dev/null
 
   verify_release_parameters "$@"
@@ -61,14 +58,12 @@ verify_release_parameters() {
   local tag="$1"
   local release_digest="$2"
   local enabled="$3"
-  local command="$4"
 
   local app_json
   app_json="$(argocd_prod app get "${application}" --refresh -o json)"
   if [[ "$(parameter_value "${app_json}" version)" != "${tag}" \
     || "$(parameter_value "${app_json}" imageDigest)" != "${release_digest}" \
-    || "$(parameter_value "${app_json}" migration.enabled)" != "${enabled}" \
-    || "$(parameter_value "${app_json}" migration.command)" != "${command}" ]]; then
+    || "$(parameter_value "${app_json}" migration.enabled)" != "${enabled}" ]]; then
     echo "Argo CD did not preserve the requested production release parameters" >&2
     return 1
   fi
@@ -218,15 +213,13 @@ deploy_release() {
   set_release_parameters \
     "${release_tag}" \
     "${digest}" \
-    true \
-    migrate
+    true
   validate_desired_images "${image_ref}"
   argocd_prod app sync "${application}" --timeout "${wait_timeout}"
   verify_release_parameters \
     "${release_tag}" \
     "${digest}" \
-    true \
-    migrate
+    true
   validate_desired_images "${image_ref}"
   activate_rollouts "${image_ref}"
 }
@@ -236,8 +229,7 @@ restore_previous_identity() {
     set_release_parameters \
       "${previous_tag}" \
       "${previous_digest}" \
-      "${previous_migration_enabled}" \
-      "${previous_migration_command}"
+      "${previous_migration_enabled}"
     argocd_prod app sync "${application}" \
       --resource argoproj.io:Rollout:kosmo-api \
       --resource argoproj.io:Rollout:kosmo-web \
@@ -248,8 +240,7 @@ restore_previous_identity() {
     argocd_prod app unset "${application}" \
       -p version \
       -p imageDigest \
-      -p migration.enabled \
-      -p migration.command >/dev/null || true
+      -p migration.enabled >/dev/null || true
     recovery_result="no-previous-release"
   fi
 }
@@ -295,7 +286,6 @@ trap on_exit EXIT
 
 current_app="$(argocd_prod app get "${application}" --refresh -o json)"
 previous_migration_enabled="$(parameter_value "${current_app}" migration.enabled)"
-previous_migration_command="$(parameter_value "${current_app}" migration.command)"
 api_active_identity="$(active_rollout_identity kosmo-api)"
 web_active_identity="$(active_rollout_identity kosmo-web)"
 if [[ "${api_active_identity}" != "${web_active_identity}" ]]; then

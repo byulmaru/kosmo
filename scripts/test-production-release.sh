@@ -109,9 +109,8 @@ case "${command}" in
     tag="$(state_value tag)"
     digest="$(state_value digest)"
     migration_enabled="$(state_value migration-enabled)"
-    migration_command="$(state_value migration-command)"
     cat <<JSON
-{"spec":{"source":{"helm":{"parameters":[{"name":"version","value":"${tag}"},{"name":"imageDigest","value":"${digest}"},{"name":"migration.enabled","value":"${migration_enabled}"},{"name":"migration.command","value":"${migration_command}"}]}}}}
+{"spec":{"source":{"helm":{"parameters":[{"name":"version","value":"${tag}"},{"name":"imageDigest","value":"${digest}"},{"name":"migration.enabled","value":"${migration_enabled}"}]}}}}
 JSON
     ;;
   set)
@@ -120,7 +119,6 @@ JSON
         version=*) printf '%s' "${argument#version=}" >"${FAKE_STATE}/tag" ;;
         imageDigest=*) printf '%s' "${argument#imageDigest=}" >"${FAKE_STATE}/digest" ;;
         migration.enabled=*) printf '%s' "${argument#migration.enabled=}" >"${FAKE_STATE}/migration-enabled" ;;
-        migration.command=*) printf '%s' "${argument#migration.command=}" >"${FAKE_STATE}/migration-command" ;;
       esac
     done
     ;;
@@ -128,7 +126,6 @@ JSON
     : >"${FAKE_STATE}/tag"
     : >"${FAKE_STATE}/digest"
     : >"${FAKE_STATE}/migration-enabled"
-    : >"${FAKE_STATE}/migration-command"
     ;;
   manifests)
     digest="$(state_value digest)"
@@ -307,7 +304,6 @@ run_deploy_test() {
     printf '%s' 0.9.0 >"${FAKE_STATE}/active-tag"
   fi
   printf '%s' true >"${FAKE_STATE}/migration-enabled"
-  printf '%s' migrate >"${FAKE_STATE}/migration-command"
 
   if [[ "${expected_result}" == "success" ]]; then
     "${repo_root}/scripts/deploy-production-release.sh" 1.0.0 "${valid_image}" >/dev/null
@@ -318,7 +314,7 @@ run_deploy_test() {
     grep -Fq -- '- Recovery: restored-0.9.0' "${PRODUCTION_AUDIT_FILE}" || fail "${scenario} did not restore the previous release"
     [[ "$(cat "${FAKE_STATE}/digest")" == "${previous_digest}" ]] || fail "${scenario} restored desired state instead of the previous active identity"
   fi
-  if grep -Eq 'migration\.(phase|schemaAuthority|secretName|restorePointName)=' "${FAKE_LOG}"; then
+  if grep -Eq 'migration\.(command|phase|schemaAuthority|secretName|restorePointName)=' "${FAKE_LOG}"; then
     fail "${scenario} changed PROD-564-owned migration policy or credential parameters"
   fi
 }
@@ -376,6 +372,9 @@ if grep -Eq 'migration_context_json|MIGRATION_CONTEXT_JSON|migration_secret_name
 fi
 if grep -Eq 'PRODUCTION_MIGRATION_CONTEXT_FILE|PRODUCTION_MIGRATION_GATE_COMMAND|PRODUCTION_MIGRATION_SECRET_NAME|production-migration-gate' "${repo_root}/scripts/deploy-production-release.sh"; then
   fail "the production deploy script must use the Argo CD PreSync Job as its migration barrier"
+fi
+if grep -Eq 'migration\.(command|phase|schemaAuthority|restorePointName)' "${repo_root}/scripts/deploy-production-release.sh"; then
+  fail "the production deploy script must not configure removed migration Job interfaces"
 fi
 
 echo "Production release publish, verification, rerun, failure recovery, and audit checks passed."

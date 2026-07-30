@@ -64,6 +64,18 @@
 - Consequences: Pipeline은 Argo CD sync와 두 Rollout의 preview/active 상태를 관찰하고 promotion/abort 권한을 가져야 한다. Migration 정책 입력은 PROD-564와 production Application에 남는다. Kubernetes 차원에서 완전한 원자 승격은 아니므로 실패 복구와 최종 identity 검증이 필요하다.
 - Confirmation / Follow-up: workflow에 수동 migration context가 없는지, rendered PreSync Job의 digest, sync 실패, 각 preview 실패, 정상 동시 준비, promotion 실패와 최종 identity mismatch 경로를 자동 검증한다.
 
+### Contract context producer와 release metadata source는 upstream 결정이 필요하다
+
+- Decision Date: 2026-07-30
+- Decision Class: Upstream Change Required
+- Authority / Provenance: 사용자 정정, Linear `PROD-563`, `PROD-564`; context producer와 release-static metadata source authority 없음
+- Status: Blocked
+- Context / Problem: PROD-564 gate는 target LSN과 exact-WAL archive evidence, phase, schema authority, compatible images와 rollback window를 요구하지만 이를 production live state와 승인된 release metadata에서 만드는 caller interface는 정의되지 않았다. 운영자 작성 JSON이나 test-only callback을 추가하면 자동 gate와 evidence 신뢰 경계를 깨뜨린다.
+- Decision Outcome: 현재 구현에서는 migration image·Helm Job의 command/phase/schema-authority interface를 제거하고 동일 digest의 Argo CD PreSync Job 성공 barrier까지만 적용한다. Contract context producer나 metadata source는 추측해 구현하지 않으며 upstream 계약 승인 뒤 별도 task로 연결한다.
+- Alternatives Considered: Migration image의 `recovery-target` command는 가능한 방향이지만 command 권한·archive 관측·JSON output이 아직 승인되지 않아 선택하지 않았다. Workflow JSON input과 임의 injected command는 운영자 self-assertion 또는 production caller 부재를 만들므로 제외했다.
+- Consequences: Expand/transition/contract 자동 gate를 실제 production pipeline에서 호출하는 task는 blocked 상태다. PR은 migration Job interface 회귀를 제거할 수 있지만 전체 OpenSpec implementation은 이 결정이 Active 대안으로 대체될 때까지 완료할 수 없다.
+- Confirmation / Follow-up: Upstream은 release-static metadata source와 target LSN/archive evidence collector의 command, 권한, freshness와 output 계약을 확정해야 한다.
+
 ### Application rollback은 이전 tag와 digest를 같은 pipeline에 재입력한다
 
 - Decision Date: 2026-07-30
@@ -102,7 +114,7 @@
 
 ## Remaining Decisions
 
-- 없음.
+- Contract context producer와 release-static metadata source. 위 `Upstream Change Required` decision이 `Blocked` 상태다.
 
 ## Superseded Decisions
 

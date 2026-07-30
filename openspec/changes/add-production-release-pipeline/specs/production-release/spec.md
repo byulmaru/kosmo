@@ -36,11 +36,12 @@
 #### Scenario: Contract migration이 포함된 release
 
 - **WHEN** 승인된 immutable production release에 contract migration이 포함된다
-- **THEN** 시스템은 같은 production 승인 안에서 PROD-564의 자동 safety gate를 호출하고 contract 전용 추가 승인을 요구하지 않는다
+- **THEN** 시스템은 같은 production 승인 안에서 PROD-564의 자동 safety gate를 호출하고 gate 성공 뒤 Argo CD PreSync migration Job을 실행한다
+- **AND** contract 전용 추가 승인이나 운영자 작성 context를 요구하지 않는다
 
 ### Requirement: Migration과 workload는 같은 release identity를 사용한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564의 자동 safety gate가 적용된 Argo CD PreSync migration Job이 해당 release에 대해 성공하기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT). General release workflow가 운영자에게 migration context, phase, schema authority 또는 credential을 별도 입력받아 PROD-564의 계약을 복제해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 production migration Job, API Rollout과 Web Rollout에 하나의 동일한 digest-pinned image identity를 전달해야 한다(MUST). PROD-564의 자동 safety gate와 Argo CD PreSync migration Job이 해당 release에 대해 성공하기 전에는 새 API·Web workload를 활성화해서는 안 된다(MUST NOT). General release workflow가 운영자에게 migration context, phase, schema authority 또는 credential을 별도 입력받거나 Helm Job에 command·phase·schema authority를 설정해 PROD-564의 계약을 복제해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 
