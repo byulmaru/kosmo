@@ -34,7 +34,7 @@ export function LogoutControl({
         {pending ? (
           <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={theme.textSecondary} />
         ) : (
-          <LogOut color={theme.textSecondary} size={20} strokeWidth={2} />
+          <LogOut color={theme.textSecondary} size={20} strokeWidth={1.5} />
         )}
         {!compact ? <Text style={[styles.label, { color: theme.text }]}>로그아웃</Text> : null}
       </Pressable>

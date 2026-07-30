@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   body: { flexGrow: 1 },
-  timeline: { paddingHorizontal: spacing.xl, paddingVertical: spacing.xxl },
+  timeline: { paddingHorizontal: spacing.xl },
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,

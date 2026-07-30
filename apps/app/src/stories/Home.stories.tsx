@@ -36,7 +36,12 @@ export const EmptyTimelineFull: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.findByText('아직 게시글이 없어요')).resolves.toBeVisible();
+    const emptyTitle = await canvas.findByText('아직 게시글이 없어요');
+    const timeline = emptyTitle.parentElement?.parentElement;
+
+    expect(emptyTitle).toBeVisible();
+    expect(timeline).not.toBeNull();
+    expect(timeline).toHaveStyle({ paddingBottom: '0px', paddingTop: '0px' });
     expectHomeBrandHeader(canvasElement);
   },
 };

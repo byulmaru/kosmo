@@ -458,6 +458,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       style={({ pressed }) => [
         styles.trigger,
         compact ? styles.compactTrigger : styles.fullTrigger,
+        (fullWeb || mobileWebDrawer) && styles.webProfileTrigger,
         { opacity: pressed ? 0.65 : 1 },
       ]}
     >
@@ -599,6 +600,7 @@ const styles = StyleSheet.create({
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
   fullTrigger: { alignSelf: 'flex-start', gap: spacing.sm, height: 42, maxWidth: '100%' },
+  webProfileTrigger: { marginBottom: -spacing.sm },
   webTriggerContent: {
     alignItems: 'center',
     flexDirection: 'row',

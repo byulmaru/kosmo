@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -146,13 +145,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
       accessibilityRole="button"
       accessibilityState={{ expanded: drawerOpen }}
       onPress={() => setDrawerOpen(true)}
-      style={({ pressed }) => [
-        styles.menuButton,
-        { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
-      ]}
+      style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
     >
-      <Menu color={theme.text} size={20} strokeWidth={2} />
-      <Text style={[styles.menuLabel, { color: theme.text }]}>메뉴</Text>
+      <Menu color={theme.text} size={24} strokeWidth={2} />
     </Pressable>
   );
 
@@ -302,14 +297,11 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     alignItems: 'center',
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 40,
-    paddingHorizontal: spacing.lg,
+    height: 44,
+    justifyContent: 'center',
+    minHeight: 44,
+    width: 44,
   },
-  menuLabel: { fontFamily: 'SUIT', fontWeight: '700' },
   drawerBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, flexDirection: 'row' },
   drawer: {
     borderBottomRightRadius: 16,
