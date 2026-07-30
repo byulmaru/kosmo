@@ -214,6 +214,7 @@ jobs:
           argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
             -p "version=${version}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
+            -p "workloads.enabled=true" \
             -p "migration.enabled=true" \
             --validate
 

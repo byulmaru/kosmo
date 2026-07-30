@@ -25,6 +25,24 @@ if helm template kosmo . --namespace kosmo-prod --set env=prod --set-string imag
   exit 1
 fi
 
+helm template kosmo . \
+  --namespace kosmo-prod \
+  --set env=prod \
+  --set workloads.enabled=false \
+  >"${render_dir}/prod-runtime.yaml"
+
+if grep -Eq '^kind: (Rollout|Service|HTTPRoute)$' "${render_dir}/prod-runtime.yaml"; then
+  echo "prod runtime bootstrap unexpectedly rendered application workloads" >&2
+  exit 1
+fi
+
+for runtime_kind in Cluster ObjectStore ScheduledBackup VaultStaticSecret; do
+  if ! grep -Fq "kind: ${runtime_kind}" "${render_dir}/prod-runtime.yaml"; then
+    echo "prod runtime bootstrap is missing ${runtime_kind}" >&2
+    exit 1
+  fi
+done
+
 if [[ "$(grep -Fc 'image: "ghcr.io/byulmaru/kosmo:main"' "${render_dir}/dev.yaml")" -ne 3 ]]; then
   echo "dev migration, API, and Web must keep the mutable main image" >&2
   exit 1
