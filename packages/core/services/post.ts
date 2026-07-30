@@ -61,11 +61,6 @@ type CreatedPost = {
 
 type DuplicatePost = { created: false };
 
-type CreatePostOptions = {
-  afterCommit?: (effect: () => Promise<void>) => void;
-  tx?: Transaction;
-};
-
 const isActivityPubPostUriConflict = (error: unknown): boolean => {
   if (!isUniqueViolation(error) || !error || typeof error !== 'object' || !('cause' in error)) {
     return false;
@@ -304,22 +299,15 @@ export const repostPost = async (
 
   return result;
 };
-export function createPost(
-  input: LocalPostInput,
-  options?: CreatePostOptions,
-): Promise<CreatedPost>;
+export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
 export function createPost(
   input: ActivityPubPostInput,
-  options?: CreatePostOptions,
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
-  { afterCommit, tx }: CreatePostOptions = {},
+  tx?: Transaction,
 ): Promise<CreatedPost | DuplicatePost> {
-  if (tx && input.replyParentId !== undefined && !afterCommit) {
-    throw new Error('createPost requires afterCommit for a Reply in a caller transaction');
-  }
-
   let result: CreatedPost;
   try {
     result = await getDatabaseConnection(tx).transaction(async (tx) => {
@@ -446,20 +434,13 @@ export async function createPost(
     return { created: false };
   }
 
-  if (input.replyParentId !== undefined) {
-    const createNotification = () =>
-      createReplyNotification(result.post.id).catch((error) => {
-        console.error('Post-commit Reply notification creation failed', {
-          error,
-          postId: result.post.id,
-        });
+  if (!tx && input.replyParentId !== undefined) {
+    await createReplyNotification(result.post.id).catch((error) => {
+      console.error('Post-commit Reply notification creation failed', {
+        error,
+        postId: result.post.id,
       });
-
-    if (tx) {
-      afterCommit!(createNotification);
-    } else {
-      await createNotification();
-    }
+    });
   }
 
   if (input.origin === 'LOCAL') {

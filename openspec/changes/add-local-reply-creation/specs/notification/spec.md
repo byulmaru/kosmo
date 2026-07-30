@@ -53,7 +53,8 @@
 
 - **WHEN** 공통 Post 생성 action이 caller-owned transaction에 참여해 새 Reply를 만든다
 - **THEN** 시스템은 outer transaction이 실제 commit되기 전에 Reply Notification을 만들지 않는다
-- **AND** transaction owner는 commit 뒤 등록된 Best Effort lifecycle을 실행하고 rollback 뒤에는 실행하지 않는다
+- **AND** 현재 Best Effort 경계는 callback이나 별도 coordination 계약을 추가하지 않고 이 경로에서 Notification 생성을 생략한다
+- **AND** 누락 item을 retry하거나 backfill하지 않는다
 
 ### Requirement: Reply Notification GraphQL과 inbox 통합
 
