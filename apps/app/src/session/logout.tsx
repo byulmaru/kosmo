@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
+import { clearAnalytics } from '@/analytics/client';
 import { LOGOUT_FAILURE_MESSAGE, requestWebLogout } from '@/auth/logout';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { LogoutRevokeCurrentSessionMutation as LogoutRevokeCurrentSessionMutationType } from './__generated__/LogoutRevokeCurrentSessionMutation.graphql';
@@ -63,6 +64,7 @@ export function useLogout(): LogoutState {
         if (Platform.OS === 'web') {
           await requestWebLogout();
           resetActor(null);
+          clearAnalytics();
         } else {
           await revokeNativeSession();
           await clearNativeSession();

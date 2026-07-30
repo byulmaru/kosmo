@@ -1,8 +1,16 @@
 import { Link, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, useMutation } from 'react-relay';
-import { startNativeAuthorization, startWebLogin, startWebLoginFromPress } from '@/auth/login';
+import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -38,11 +46,6 @@ export default function IndexScreen() {
   }, [router, status]);
 
   const login = async () => {
-    if (Platform.OS === 'web') {
-      startWebLogin();
-      return;
-    }
-
     setLoggingIn(true);
     setError(null);
     try {
@@ -124,6 +127,13 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
+          <Link asChild href={'/privacy' as Href}>
+            <Pressable accessibilityRole="link">
+              <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
+                개인정보 처리방침
+              </Text>
+            </Pressable>
+          </Link>
         </View>
       </View>
     </ScrollView>
@@ -165,4 +175,5 @@ const styles = StyleSheet.create({
   startButton: { borderRadius: radii.sm, height: 48, width: 200 },
   hint: { fontFamily: 'SUIT', ...typography.xsm },
   error: { fontFamily: 'SUIT', ...typography.sm },
+  privacyLink: { fontFamily: 'SUIT', marginTop: spacing.lg, ...typography.sm },
 });

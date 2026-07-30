@@ -74,6 +74,9 @@ mockModule(new URL('../auth/logout.ts', import.meta.url), {
   LOGOUT_FAILURE_MESSAGE: '로그아웃하지 못했습니다. 다시 시도해주세요.',
   requestWebLogout: () => state.requestWebLogout(),
 });
+mockModule(new URL('../analytics/client.ts', import.meta.url), {
+  clearAnalytics: () => state.events.push('clear-analytics'),
+});
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   useRelayActor: () => ({
     clearNativeSession: () => state.clearNativeSession(),
@@ -103,7 +106,12 @@ describe('useLogout production composition', () => {
     useLogout().logout();
     await flushLogout();
 
-    assert.deepEqual(state.events, ['request-web-logout', 'reset-actor', 'replace-root']);
+    assert.deepEqual(state.events, [
+      'request-web-logout',
+      'reset-actor',
+      'clear-analytics',
+      'replace-root',
+    ]);
   });
 
   it('Native는 실제 Relay mutation 성공 뒤 SecureStore와 actor를 정리하고 root로 replace한다', async () => {
