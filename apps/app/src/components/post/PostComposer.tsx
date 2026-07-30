@@ -1,46 +1,25 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import * as ImagePicker from 'expo-image-picker';
-import {
-  AtSignIcon,
-  GlobeIcon,
-  ImagePlusIcon,
-  LockIcon,
-  MoonIcon,
-  RefreshCwIcon,
-  XIcon,
-} from 'lucide-react-native';
+import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { TextArea, TextField } from '@/components/ui/TextField';
+import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import {
-  postComposerMediaLimit,
-  releaseComposerMediaPreview,
-  uploadComposerMedia,
-} from './postComposerMedia';
+  emptyPostComposerMediaValue,
+  PostComposerMediaControls,
+} from './PostComposerMediaControls';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
-import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
-import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/PostComposerIssueMediaUploadUrlMutation.graphql';
+import type { PostComposerMediaValue } from './PostComposerMediaControls';
 
 const visibilityOptions = [
   {
@@ -70,14 +49,6 @@ const visibilityOptions = [
 ] as const;
 type Visibility = (typeof visibilityOptions)[number]['value'];
 
-export type ComposerMediaItem = {
-  readonly asset: ImagePicker.ImagePickerAsset;
-  readonly key: string;
-  readonly mediaId?: string;
-  readonly state: 'uploading' | 'ready' | 'failed';
-  readonly altText: string;
-};
-
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
@@ -99,12 +70,8 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [media, setMedia] = useState<ComposerMediaItem[]>([]);
-  const mediaRef = useRef<readonly ComposerMediaItem[]>(media);
-  const [sensitiveMedia, setSensitiveMedia] = useState(false);
-  const removedMediaKeys = useRef(new Set<string>());
-  const selectingMedia = useRef(false);
-  const nextMediaKey = useRef(0);
+  const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
+  const [mediaGeneration, setMediaGeneration] = useState(0);
   const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(graphql`
     mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
       createPost(input: $input) {
@@ -114,162 +81,16 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
       }
     }
   `);
-  const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(graphql`
-    mutation PostComposerIssueMediaUploadUrlMutation {
-      issueMediaUploadUrl {
-        media {
-          id
-        }
-        uploadUrl
-      }
-    }
-  `);
-  const [commitCompleteMediaUpload] = useMutation<PostComposerCompleteMediaUploadMutation>(graphql`
-    mutation PostComposerCompleteMediaUploadMutation($input: CompleteMediaUploadInput!) {
-      completeMediaUpload(input: $input) {
-        media {
-          id
-          state
-        }
-      }
-    }
-  `);
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
-  const hasPendingMedia = media.some((item) => item.state !== 'ready');
-  const readyMedia = media.filter(
-    (item): item is ComposerMediaItem & { readonly mediaId: string; readonly state: 'ready' } =>
-      item.state === 'ready' && typeof item.mediaId === 'string',
-  );
   const disabled =
     submitting ||
-    (bodyText.length === 0 && readyMedia.length === 0) ||
-    hasPendingMedia ||
+    (bodyText.length === 0 && media.items.length === 0) ||
+    media.hasPendingMedia ||
     remaining < 0;
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
-
-  const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
-    setMedia((items) =>
-      items.map((item) => (item.key === key ? { ...item, state: 'uploading' } : item)),
-    );
-
-    try {
-      const mediaId = await uploadComposerMedia({
-        complete: (mediaId) =>
-          new Promise<void>((resolve, reject) => {
-            commitCompleteMediaUpload({
-              variables: { input: { id: mediaId } },
-              onCompleted: (response, errors) => {
-                if (errors?.length || response.completeMediaUpload.media.state !== 'READY') {
-                  reject(new Error('이미지 업로드를 완료하지 못했습니다.'));
-                  return;
-                }
-                resolve();
-              },
-              onError: reject,
-            });
-          }),
-        isActive: () => !removedMediaKeys.current.has(key),
-        issue: () =>
-          new Promise((resolve, reject) => {
-            commitIssueMediaUploadUrl({
-              variables: {},
-              onCompleted: (response, errors) => {
-                if (errors?.length) {
-                  reject(new Error('이미지 업로드를 시작하지 못했습니다.'));
-                  return;
-                }
-                resolve({
-                  mediaId: response.issueMediaUploadUrl.media.id,
-                  uploadUrl: response.issueMediaUploadUrl.uploadUrl,
-                });
-              },
-              onError: reject,
-            });
-          }),
-        put: async (uploadUrl) => {
-          const body = asset.file ?? (await (await fetch(asset.uri)).blob());
-          const uploaded = await fetch(uploadUrl, {
-            body,
-            headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
-            method: 'PUT',
-          });
-          if (!uploaded.ok) {
-            throw new Error('이미지 전송에 실패했습니다.');
-          }
-        },
-      });
-      if (mediaId === null) {
-        return;
-      }
-      setMedia((items) =>
-        items.map((item) => (item.key === key ? { ...item, mediaId, state: 'ready' } : item)),
-      );
-    } catch {
-      if (removedMediaKeys.current.has(key)) {
-        return;
-      }
-      setMedia((items) =>
-        items.map((item) => (item.key === key ? { ...item, state: 'failed' } : item)),
-      );
-    }
-  };
-
-  const selectMedia = async () => {
-    const availableAtOpen = postComposerMediaLimit - mediaRef.current.length;
-    if (availableAtOpen <= 0 || submitting || selectingMedia.current) {
-      return;
-    }
-    selectingMedia.current = true;
-    setError(null);
-
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsMultipleSelection: true,
-        mediaTypes: ['images'],
-        orderedSelection: true,
-        selectionLimit: availableAtOpen,
-      });
-      if (result.canceled) {
-        return;
-      }
-
-      const availableNow = postComposerMediaLimit - mediaRef.current.length;
-      const selected = result.assets.slice(0, availableNow).map((asset) => ({
-        altText: '',
-        asset,
-        key: `composer-media-${++nextMediaKey.current}`,
-        state: 'uploading' as const,
-      }));
-      const nextMedia = [...mediaRef.current, ...selected];
-      mediaRef.current = nextMedia;
-      setMedia(nextMedia);
-      for (const item of selected) {
-        void uploadMedia(item.key, item.asset);
-      }
-    } catch {
-      setError('이미지를 선택하지 못했습니다.');
-    } finally {
-      selectingMedia.current = false;
-    }
-  };
-
-  const removeMedia = (key: string) => {
-    removedMediaKeys.current.add(key);
-    const removed = media.find((item) => item.key === key);
-    if (Platform.OS === 'web' && removed) {
-      releaseComposerMediaPreview(removed.asset.uri);
-    }
-    setMedia((items) => {
-      const next = items.filter((item) => item.key !== key);
-      if (next.length === 0) {
-        setSensitiveMedia(false);
-      }
-      return next;
-    });
-  };
 
   const submit = () => {
     if (disabled) {
@@ -280,11 +101,8 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
       variables: {
         input: {
           bodyText,
-          media: readyMedia.map((item) => ({
-            altText: item.altText.trim() || null,
-            mediaId: item.mediaId,
-          })),
-          sensitiveMedia: media.length > 0 ? sensitiveMedia : false,
+          media: media.items,
+          sensitiveMedia: media.sensitiveMedia,
           visibility,
         },
       },
@@ -299,34 +117,14 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
           visibility,
         });
         setBody('');
-        for (const item of media) {
-          if (Platform.OS === 'web') {
-            releaseComposerMediaPreview(item.asset.uri);
-          }
-        }
-        setMedia([]);
-        setSensitiveMedia(false);
+        setMedia(emptyPostComposerMediaValue);
+        setMediaGeneration((generation) => generation + 1);
         setVisibility(PostVisibility.UNLISTED);
         editor.current?.focus();
       },
       onError: (cause) => setError(cause.message || '게시글을 작성하지 못했습니다.'),
     });
   };
-
-  useEffect(() => {
-    mediaRef.current = media;
-  }, [media]);
-
-  useEffect(
-    () => () => {
-      if (Platform.OS === 'web') {
-        for (const item of mediaRef.current) {
-          releaseComposerMediaPreview(item.asset.uri);
-        }
-      }
-    },
-    [],
-  );
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -500,57 +298,32 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
           style={styles.editor}
           value={body}
         />
-        <PostComposerMediaControls
-          media={media}
-          onAltTextChange={(key, altText) =>
-            setMedia((items) =>
-              items.map((item) => (item.key === key ? { ...item, altText } : item)),
-            )
-          }
-          onRemove={removeMedia}
-          onRetry={(item) => void uploadMedia(item.key, item.asset)}
-          onSensitiveMediaChange={setSensitiveMedia}
-          sensitiveMedia={sensitiveMedia}
-          submitting={submitting}
-        />
         {error ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
             {error}
           </Text>
         ) : null}
-        <View style={styles.footer}>
-          <Pressable
-            accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: submitting || media.length >= postComposerMediaLimit }}
-            disabled={submitting || media.length >= postComposerMediaLimit}
-            hitSlop={4}
-            onPress={() => void selectMedia()}
-            style={({ pressed }) => [
-              styles.addMedia,
-              {
-                backgroundColor: pressed ? theme.surface : 'transparent',
-                opacity: submitting || media.length >= postComposerMediaLimit ? 0.45 : 1,
-              },
-            ]}
-          >
-            <ImagePlusIcon color={theme.primary} size={24} />
-          </Pressable>
-          <View style={styles.submit}>
-            <Text
-              accessibilityLiveRegion="polite"
-              style={[
-                styles.remaining,
-                { color: remaining < 0 ? theme.danger : theme.textSecondary },
-              ]}
-            >
-              {remaining.toLocaleString('ko-KR')}
-            </Text>
-            <Button disabled={disabled} loading={submitting} onPress={submit}>
-              게시
-            </Button>
-          </View>
-        </View>
+        <PostComposerMediaControls
+          actions={
+            <View style={styles.submit}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[
+                  styles.remaining,
+                  { color: remaining < 0 ? theme.danger : theme.textSecondary },
+                ]}
+              >
+                {remaining.toLocaleString('ko-KR')}
+              </Text>
+              <Button disabled={disabled} loading={submitting} onPress={submit}>
+                게시
+              </Button>
+            </View>
+          }
+          disabled={submitting}
+          key={mediaGeneration}
+          onValueChange={setMedia}
+        />
       </View>
 
       {Platform.OS !== 'web' ? (
@@ -576,118 +349,6 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   );
 }
 
-export function PostComposerMediaControls({
-  media,
-  onAltTextChange,
-  onRemove,
-  onRetry,
-  onSensitiveMediaChange,
-  sensitiveMedia,
-  submitting,
-}: {
-  readonly media: readonly ComposerMediaItem[];
-  readonly onAltTextChange: (key: string, altText: string) => void;
-  readonly onRemove: (key: string) => void;
-  readonly onRetry: (item: ComposerMediaItem) => void;
-  readonly onSensitiveMediaChange: (value: boolean) => void;
-  readonly sensitiveMedia: boolean;
-  readonly submitting: boolean;
-}) {
-  const theme = useTheme();
-
-  return (
-    <View style={styles.mediaSection}>
-      {media.map((item, index) => (
-        <View
-          accessibilityLabel={`첨부 이미지 ${index + 1}, ${
-            item.state === 'uploading'
-              ? '업로드 중'
-              : item.state === 'ready'
-                ? '업로드 완료'
-                : '업로드 실패'
-          }`}
-          accessibilityLiveRegion="polite"
-          key={item.key}
-          style={styles.mediaItem}
-        >
-          <View style={styles.mediaPreviewContainer}>
-            <Image
-              accessibilityIgnoresInvertColors
-              accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
-              source={{ uri: item.asset.uri }}
-              style={styles.mediaPreview}
-            />
-            {item.state !== 'ready' ? (
-              <>
-                <View style={styles.mediaOverlayBackdrop} />
-                {item.state === 'uploading' ? (
-                  <View style={styles.mediaOverlay}>
-                    <ActivityIndicator
-                      accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 중`}
-                      color={colors.light.background}
-                    />
-                  </View>
-                ) : (
-                  <Pressable
-                    accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 재시도`}
-                    accessibilityRole="button"
-                    onPress={() => onRetry(item)}
-                    style={styles.mediaOverlay}
-                  >
-                    <RefreshCwIcon color={colors.light.background} size={24} />
-                  </Pressable>
-                )}
-              </>
-            ) : null}
-            <Pressable
-              accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: submitting }}
-              disabled={submitting}
-              hitSlop={8}
-              onPress={() => onRemove(item.key)}
-              style={({ pressed }) => [
-                styles.mediaRemove,
-                { opacity: submitting ? 0.45 : pressed ? 0.75 : 1 },
-              ]}
-            >
-              <XIcon color={colors.light.background} size={18} />
-            </Pressable>
-          </View>
-          {item.state === 'ready' ? (
-            <View style={styles.mediaItemBody}>
-              <TextField
-                accessibilityLabel={`첨부 이미지 ${index + 1} 대체 텍스트`}
-                editable={!submitting}
-                label="대체 텍스트 (선택)"
-                onChangeText={(altText) => onAltTextChange(item.key, altText)}
-                value={item.altText}
-              />
-            </View>
-          ) : null}
-        </View>
-      ))}
-      {media.length > 0 ? (
-        <View style={styles.sensitiveMedia}>
-          <View style={styles.sensitiveMediaCopy}>
-            <Text style={[styles.sensitiveMediaLabel, { color: theme.text }]}>민감한 이미지</Text>
-            <Text style={[styles.sensitiveMediaDescription, { color: theme.textSecondary }]}>
-              이미지를 기본적으로 가려서 표시합니다.
-            </Text>
-          </View>
-          <Switch
-            accessibilityLabel="민감한 이미지로 표시"
-            accessibilityState={{ checked: sensitiveMedia, disabled: submitting }}
-            disabled={submitting}
-            onValueChange={onSensitiveMediaChange}
-            value={sensitiveMedia}
-          />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
@@ -704,12 +365,6 @@ const styles = StyleSheet.create({
     minHeight: 128,
     paddingHorizontal: 0,
     paddingVertical: 0,
-  },
-  footer: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between',
   },
   visibilityControl: { position: 'relative' },
   visibilityTrigger: {
@@ -728,59 +383,6 @@ const styles = StyleSheet.create({
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   remaining: { fontFamily: 'SUIT', ...typography.xsm },
   error: { fontFamily: 'SUIT', ...typography.sm },
-  mediaSection: { gap: spacing.md },
-  addMedia: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  mediaItem: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  mediaPreviewContainer: {
-    borderRadius: radii.sm,
-    height: 96,
-    overflow: 'hidden',
-    position: 'relative',
-    width: 96,
-  },
-  mediaPreview: { height: 96, width: 96 },
-  mediaOverlayBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.light.text,
-    opacity: 0.58,
-  },
-  mediaOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mediaRemove: {
-    alignItems: 'center',
-    backgroundColor: colors.light.text,
-    borderRadius: radii.full,
-    height: 32,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: spacing.xs,
-    top: spacing.xs,
-    width: 32,
-    zIndex: 1,
-  },
-  mediaItemBody: { flex: 1 },
-  sensitiveMedia: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between',
-  },
-  sensitiveMediaCopy: { flex: 1, gap: spacing.xs },
-  sensitiveMediaLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  sensitiveMediaDescription: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.4)',

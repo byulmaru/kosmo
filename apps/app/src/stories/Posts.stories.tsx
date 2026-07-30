@@ -8,7 +8,8 @@ import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { PostBody } from '@/components/post/PostBody';
-import { PostComposer, PostComposerMediaControls } from '@/components/post/PostComposer';
+import { PostComposer } from '@/components/post/PostComposer';
+import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
@@ -26,7 +27,7 @@ import { longBody, post, profile, profileWithPosts, timeline } from './fixtures'
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
-import type { ComposerMediaItem } from '@/components/post/PostComposer';
+import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
@@ -959,7 +960,8 @@ function ComposerMediaStatesStory() {
 
   return (
     <Catalog>
-      <PostComposerMediaControls
+      <PostComposerMediaItems
+        disabled={false}
         media={media}
         onAltTextChange={(key, altText) =>
           setMedia((items) => items.map((item) => (item.key === key ? { ...item, altText } : item)))
@@ -974,7 +976,6 @@ function ComposerMediaStatesStory() {
         }
         onSensitiveMediaChange={setSensitiveMedia}
         sensitiveMedia={sensitiveMedia}
-        submitting={false}
       />
     </Catalog>
   );
