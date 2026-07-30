@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  webVisibilityMenu: { left: 0, position: 'absolute', top: 44, width: 256, zIndex: 50 },
+  webVisibilityMenu: { marginTop: spacing.xs, width: 256, zIndex: 50 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   remaining: { fontFamily: 'SUIT', ...typography.xsm },
   error: { fontFamily: 'SUIT', ...typography.sm },

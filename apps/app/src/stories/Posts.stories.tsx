@@ -2693,8 +2693,15 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
 
-    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
     expect(menu).toBeVisible();
+    await userEvent.click(body);
+    await waitFor(() => {
+      expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
+    menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => {
       expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
