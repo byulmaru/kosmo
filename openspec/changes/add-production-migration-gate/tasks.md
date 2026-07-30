@@ -36,4 +36,4 @@ Production release가 별도 migration credential과 workload와 같은 immutabl
 - [x] 1.6 Contract 자동 gate 뒤 별도 protected approval을 요구하고 migration 성공만 호출자에게 workload activation 허용 결과로 반환한다.
 - [x] 1.7 Credential/preflight/SQL/lock/timeout 실패, 같은 digest 재시도, forward recovery와 restore 판단 경계를 운영 runbook에 기록한다.
 - [x] 1.8 Dev/prod render와 모든 gate failure fixture를 추가하고 관련 test, lint, format과 OpenSpec strict validation을 통과한다.
-- [ ] 1.9 최신 Linear와 repository policy를 다시 대조해 PROD-562/563/565 범위가 포함되지 않았는지 확인한 뒤 PROD-564 구현 PR을 Ready로 준비한다.
+- [x] 1.9 최신 Linear와 repository policy를 다시 대조해 PROD-562/563/565 범위가 포함되지 않았는지 확인한 뒤 PROD-564 구현 PR을 Ready로 준비한다.
