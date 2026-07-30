@@ -26,6 +26,7 @@ const protectedHeadingRoutes = [
   { heading: '글쓰기', path: '/compose' },
   { heading: '알림', path: '/notifications' },
   { heading: '메뉴', path: '/menu' },
+  { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
 
 type NativeSessionGraphQLResponse = {

@@ -10,7 +10,10 @@ import {
   Reject,
   Undo,
 } from '@fedify/vocab';
+import { db, first, Profiles } from '@kosmo/core/db';
+import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
@@ -19,9 +22,10 @@ import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
+import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
-import type { Federation } from '@fedify/fedify';
+import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
@@ -72,6 +76,58 @@ federation
 
     return result ? [...result.keyPairs] : [];
   });
+
+const findActiveLocalProfile = async (
+  context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
+  profileId: string,
+) => {
+  // Multiple Local Instances are valid domain state. This runtime currently serves only its
+  // configured origin; request-origin instance resolution is tracked by PROD-376.
+  if (
+    context.host !== new URL(context.canonicalOrigin).host ||
+    !isCanonicalLocalProfileId(profileId)
+  ) {
+    return undefined;
+  }
+
+  const localInstance = await resolveConfiguredLocalInstance();
+
+  return db
+    .select({
+      followersCount: Profiles.followersCount,
+      followingCount: Profiles.followingCount,
+    })
+    .from(Profiles)
+    .where(
+      and(
+        eq(Profiles.id, profileId),
+        eq(Profiles.instanceId, localInstance.id),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+};
+
+federation
+  .setFollowersDispatcher(
+    '/ap/actor/{identifier}/followers',
+    async (context, identifier, cursor) =>
+      cursor == null && (await findActiveLocalProfile(context, identifier)) ? { items: [] } : null,
+  )
+  .setCounter(async (context, identifier) =>
+    findActiveLocalProfile(context, identifier).then((profile) => profile?.followersCount ?? null),
+  );
+
+federation
+  .setFollowingDispatcher(
+    '/ap/actor/{identifier}/following',
+    async (context, identifier, cursor) =>
+      cursor == null && (await findActiveLocalProfile(context, identifier)) ? { items: [] } : null,
+  )
+  .setCounter(async (context, identifier) =>
+    findActiveLocalProfile(context, identifier).then((profile) => profile?.followingCount ?? null),
+  );
 
 federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)

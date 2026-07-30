@@ -124,7 +124,6 @@ test('Local Note URI를 새 core Reaction과 mapping으로 원자적으로 mater
     activityUri,
     actorUri: actor.actorUri,
     objectUri,
-    recipientUris: [author.actorUri],
     type: '🎉',
   });
 
@@ -151,7 +150,6 @@ test('저장된 Remote Post URI와 서로 다른 Type을 같은 actor에 materia
         activityUri: `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`,
         actorUri: actor.actorUri,
         objectUri,
-        recipientUris: [author.actorUri],
         type,
       }),
     ),
@@ -174,7 +172,7 @@ test('저장된 Remote Post URI와 서로 다른 Type을 같은 actor에 materia
   );
 });
 
-test('recipient, object와 Followers Post 접근을 side effect 없이 검증한다', async () => {
+test('object와 Followers Post 접근을 side effect 없이 검증한다', async () => {
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
   const author = await createProfile(InstanceKind.LOCAL);
   const post = await createLocalPost(author.profile.id, PostVisibility.FOLLOWERS);
@@ -182,17 +180,15 @@ test('recipient, object와 Followers Post 접근을 side effect 없이 검증한
 
   const rejected = await Promise.all([
     materializeInboundReaction({
-      activityUri: `https://${actor.instance.domain}/activities/no-recipient`,
-      actorUri: actor.actorUri,
-      objectUri,
-      recipientUris: [],
-      type: '❤️',
-    }),
-    materializeInboundReaction({
       activityUri: `https://${actor.instance.domain}/activities/unknown-object`,
       actorUri: actor.actorUri,
       objectUri: `https://${author.instance.domain}/ap/note/${crypto.randomUUID()}`,
-      recipientUris: [author.actorUri],
+      type: '❤️',
+    }),
+    materializeInboundReaction({
+      activityUri: `https://${actor.instance.domain}/activities/inaccessible`,
+      actorUri: actor.actorUri,
+      objectUri,
       type: '❤️',
     }),
   ]);
@@ -209,7 +205,6 @@ test('recipient, object와 Followers Post 접근을 side effect 없이 검증한
     activityUri: `https://${actor.instance.domain}/activities/follower`,
     actorUri: actor.actorUri,
     objectUri,
-    recipientUris: [author.actorUri],
     type: '❤️',
   });
   assert.equal(accepted.kind, 'CREATED');
@@ -225,7 +220,6 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
     activityUri,
     actorUri: actor.actorUri,
     objectUri,
-    recipientUris: [author.actorUri],
     type: '👀',
   } as const;
 
@@ -261,7 +255,6 @@ test('exact duplicate와 기존 core Reaction mapping은 멱등이고 URI confli
     activityUri: `https://${secondActor.instance.domain}/activities/existing`,
     actorUri: secondActor.actorUri,
     objectUri,
-    recipientUris: [author.actorUri],
     type: '☘️',
   });
   assert.equal(mapped.kind, 'MAPPED');
@@ -284,7 +277,6 @@ test('같은 activity URI의 동시 conflict는 한 identity만 보존하고 los
         activityUri,
         actorUri: actor.actorUri,
         objectUri,
-        recipientUris: [author.actorUri],
         type,
       }),
     ),
@@ -321,7 +313,6 @@ test('Notification 생성 실패에도 새 Reaction과 mapping을 유지한다',
       activityUri,
       actorUri: actor.actorUri,
       objectUri: new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href,
-      recipientUris: [author.actorUri],
       type: '🌈',
     });
     assert.equal(result.kind, 'CREATED');
@@ -348,7 +339,6 @@ test('mapping owner의 Undo만 exact Reaction과 Notification을 제거하고 �
     activityUri,
     actorUri: actor.actorUri,
     objectUri: new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href,
-    recipientUris: [author.actorUri],
     type: '🥹',
   });
   if (created.kind !== 'CREATED') {
@@ -383,7 +373,6 @@ test('Undo Notification cleanup 실패에도 source 삭제와 mapping cascade를
     activityUri,
     actorUri: actor.actorUri,
     objectUri: new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href,
-    recipientUris: [author.actorUri],
     type: '❤️',
   });
   if (created.kind !== 'CREATED') {

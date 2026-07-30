@@ -124,6 +124,22 @@ function CompactSidebarStory() {
   );
 }
 
+function FeedbackNavigationFullStory() {
+  return (
+    <View style={{ height: 560, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} />
+    </View>
+  );
+}
+
+function FeedbackNavigationDrawerStory() {
+  return (
+    <View style={{ height: 560, width: 320 }}>
+      <SidebarNavigation query={useShellStoryData().query} surface="drawer" />
+    </View>
+  );
+}
+
 function ProfileSwitcherStory() {
   return (
     <View style={{ maxWidth: 360 }}>
@@ -184,6 +200,42 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
   },
   render: () => <CompactSidebarStory />,
+};
+
+export const FeedbackNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/feedback' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const FeedbackNavigationCompactCurrentState: Story = {
+  parameters: { router: { pathname: '/feedback' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <CompactSidebarStory />,
+};
+
+export const FeedbackNavigationDrawerCurrentState: Story = {
+  parameters: { router: { pathname: '/feedback' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    expect(link).toHaveAttribute('href', '/feedback');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+  },
+  render: () => <FeedbackNavigationDrawerStory />,
 };
 
 export const ResponsiveProfilePickerFull: Story = {
@@ -257,10 +309,11 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.type(handle, 'outside_reset');
     expect(handle).toHaveValue('outside_reset');
 
-    const support = canvas.getByRole('button', { name: '설정 & 지원' });
-    await userEvent.click(support);
+    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
+    feedbackLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    await userEvent.click(feedbackLink);
     await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
-    expect(support).toHaveFocus();
+    expect(feedbackLink).toHaveFocus();
 
     await userEvent.click(trigger);
     await waitFor(() => {

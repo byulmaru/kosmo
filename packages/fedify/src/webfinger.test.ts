@@ -224,6 +224,8 @@ describe('WebFinger local profile handle mapping', () => {
     assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
     assert.equal(actor.endpoints?.sharedInbox, `${publicOrigin}/inbox`);
     assert.equal(actor.outbox, `${publicOrigin}/ap/actor/${profile.id}/outbox`);
+    assert.equal(actor.followers, `${publicOrigin}/ap/actor/${profile.id}/followers`);
+    assert.equal(actor.following, `${publicOrigin}/ap/actor/${profile.id}/following`);
     const actorUri = `${publicOrigin}/ap/actor/${profile.id}`;
     assert.equal(typeof actor.publicKey?.id, 'string');
     assert.equal(actor.publicKey?.owner, actorUri);
@@ -232,9 +234,6 @@ describe('WebFinger local profile handle mapping', () => {
         (method) => typeof method.id === 'string' && method.controller === actorUri,
       ),
     );
-    assert.equal(actor.followers, undefined);
-    assert.equal(actor.following, undefined);
-
     const actorsAfterFirstRequest = await db.select().from(ActivityPubActors);
     const keysAfterFirstRequest = await db.select().from(ActivityPubActorKeys);
     assert.equal(actorsAfterFirstRequest.length, 1);
@@ -246,6 +245,98 @@ describe('WebFinger local profile handle mapping', () => {
     const keysAfterSecondRequest = await db.select().from(ActivityPubActorKeys);
     assert.deepEqual(actorsAfterSecondRequest, actorsAfterFirstRequest);
     assert.deepEqual(keysAfterSecondRequest, keysAfterFirstRequest);
+  });
+
+  test('serves count-only followers and following collections without creating actor keys', async () => {
+    const profile = await createProfile({
+      followersCount: 41,
+      followingCount: 43,
+      handle: 'alice',
+      instanceId: localInstanceId,
+    });
+
+    for (const [collection, totalItems] of [
+      ['followers', 41],
+      ['following', 43],
+    ] as const) {
+      const collectionUri = `${publicOrigin}/ap/actor/${profile.id}/${collection}`;
+      const response = await federation.fetch(
+        new Request(collectionUri, { headers: { accept: 'application/activity+json' } }),
+        { contextData: undefined },
+      );
+      const json = (await response.json()) as {
+        first?: string;
+        id?: string;
+        last?: string;
+        orderedItems?: unknown[];
+        totalItems?: number;
+        type?: string;
+      };
+
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /application\/activity\+json/);
+      assert.equal(json.id, collectionUri);
+      assert.equal(json.type, 'OrderedCollection');
+      assert.equal(json.totalItems, totalItems);
+      assert.deepEqual(json.orderedItems ?? [], []);
+      assert.equal(json.first, undefined);
+      assert.equal(json.last, undefined);
+
+      const pageResponse = await federation.fetch(
+        new Request(`${collectionUri}?cursor=arbitrary`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+      assert.equal(pageResponse.status, 404);
+
+      const alternateHostResponse = await federation.fetch(
+        new Request(collectionUri.replace(publicOrigin, 'https://alternate.example'), {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+      assert.equal(alternateHostResponse.status, 404);
+    }
+
+    assert.deepEqual(await db.select().from(ActivityPubActors), []);
+    assert.deepEqual(await db.select().from(ActivityPubActorKeys), []);
+  });
+
+  test('does not serve follow count collections for unavailable profiles', async () => {
+    const remote = await createProfile({ handle: 'remote', instanceId: remoteInstanceId });
+    const disabled = await createProfile({
+      handle: 'disabled',
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspended = await createProfile({
+      handle: 'suspended',
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+
+    for (const profileId of [
+      '019f6f67-1111-7777-8888-123456789abc',
+      remote.id,
+      disabled.id,
+      suspended.id,
+      'not-a-profile-id',
+    ]) {
+      for (const collection of ['followers', 'following']) {
+        const response = await federation.fetch(
+          new Request(`${publicOrigin}/ap/actor/${profileId}/${collection}`, {
+            headers: { accept: 'application/activity+json' },
+          }),
+          { contextData: undefined },
+        );
+
+        assert.equal(response.status, 404);
+      }
+    }
+
+    assert.deepEqual(await db.select().from(ActivityPubActors), []);
+    assert.deepEqual(await db.select().from(ActivityPubActorKeys), []);
   });
 
   test('returns 404 for a missing local actor document', async () => {
@@ -319,11 +410,15 @@ const createRemoteInstance = async () =>
     .then((instance) => instance.id);
 
 const createProfile = async ({
+  followersCount,
+  followingCount,
   handle,
   id,
   instanceId,
   state = ProfileState.ACTIVE,
 }: {
+  followersCount?: number;
+  followingCount?: number;
   handle: string;
   id?: string;
   instanceId: string;
@@ -334,6 +429,8 @@ const createProfile = async ({
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
+      ...(followersCount == null ? {} : { followersCount }),
+      ...(followingCount == null ? {} : { followingCount }),
       handle,
       ...(id ? { id } : {}),
       instanceId,

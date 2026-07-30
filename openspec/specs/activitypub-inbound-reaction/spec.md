@@ -1,18 +1,30 @@
-## ADDED Requirements
+# activitypub-inbound-reaction Specification
+
+## Purpose
+
+Remote `Like`·`EmojiReact`와 대응 `Undo`를 기존 Reaction lifecycle에 안전하고 멱등하게 투영하는 수신 계약을 정의한다.
+
+## Requirements
 
 ### Requirement: Typed inbound Reaction activity validation
 
-**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, 저장된 active Remote Profile actor, 고유한 HTTP(S) object URI와 대상 Post Author recipient를 가진 `Like`와 `EmojiReact`만 처리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/reaction.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-498, PROD-567. 시스템은 중앙 Fedify inbox에서 고유한 HTTP(S) activity URI, 저장된 active Remote Profile actor와 고유한 HTTP(S) object URI를 가진 `Like`와 `EmojiReact`만 처리해야 한다(MUST). Activity의 `to`·`cc` 등 audience 존재 여부, 대상 Post Author 포함 여부와 personal/shared inbox route를 수신 Reaction의 유효성 또는 권한 증거로 사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Local Post 대상 activity
 
-- **WHEN** 저장된 active Remote Profile이 파생 Local Note URI를 object로 하고 대상 Local Post Author actor를 수신자에 포함한 `Like` 또는 `EmojiReact`를 전달한다
+- **WHEN** 저장된 active Remote Profile이 파생 Local Note URI를 object로 한 `Like` 또는 `EmojiReact`를 전달한다
 - **THEN** 시스템은 local Post identity를 기존 Post로 해석한다
 - **AND** 행동 주체가 Post 조회 정책을 통과하면 Reaction materialization을 계속한다
 
+#### Scenario: Audience와 inbox route에 독립적인 activity
+
+- **WHEN** 유효한 `Like` 또는 `EmojiReact`가 audience를 생략하거나 대상 Post Author를 포함하지 않은 audience를 가진 채 personal inbox 또는 shared inbox로 전달된다
+- **THEN** 시스템은 audience와 route만을 이유로 activity를 거부하지 않는다
+- **AND** 저장된 actor, 정확한 object identity와 Post 조회 정책을 동일하게 검증한다
+
 #### Scenario: Stored Remote Post 대상 activity
 
-- **WHEN** 저장된 active Remote Profile이 기존 `ActivityPubPosts.uri`를 object로 하고 대상 Remote Post Author actor를 수신자에 포함한 `Like` 또는 `EmojiReact`를 전달한다
+- **WHEN** 저장된 active Remote Profile이 기존 `ActivityPubPosts.uri`를 object로 한 `Like` 또는 `EmojiReact`를 전달한다
 - **THEN** 시스템은 mapping의 기존 Remote Post를 대상으로 Reaction materialization을 계속한다
 - **AND** Remote Post나 Profile을 새로 fetch, backfill 또는 materialize하지 않는다
 
@@ -22,9 +34,9 @@
 - **THEN** 시스템은 Reaction과 ActivityPub mapping을 만들지 않는다
 - **AND** actor 또는 object를 네트워크에서 새로 materialize하지 않는다
 
-#### Scenario: Recipient mismatch or unavailable target
+#### Scenario: Unavailable target
 
-- **WHEN** activity 수신자에 대상 Post Author actor URI가 없거나 행동 주체가 대상 Post를 조회할 수 없다
+- **WHEN** 행동 주체가 대상 Post를 조회할 수 없다
 - **THEN** 시스템은 side effect 없이 activity를 거부한다
 - **AND** Local·Remote 여부나 거부 원인을 federation 응답으로 구분해 노출하지 않는다
 
@@ -151,3 +163,4 @@ Reaction actor와 일치하는 저장된 active Remote Profile만 이를 제거�
 - **WHEN** inbound `Like`, `EmojiReact`와 `Undo` handler가 제공된다
 - **THEN** 시스템은 local Reaction outbound delivery와 `emojiReactions` collection을 이 변경에서 추가하지 않는다
 - **AND** Remote Post fetch·backfill, custom emoji 저장과 legacy `EmojiReaction` vocabulary를 추가하지 않는다
+- **AND** `Create(Note)`의 audience 기반 Public·Unlisted Visibility projection과 unsupported addressing 거부를 변경하지 않는다

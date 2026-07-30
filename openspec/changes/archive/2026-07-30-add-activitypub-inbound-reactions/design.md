@@ -7,15 +7,16 @@ Notification 생성·정리를 이미 제공한다. Fedify inbox는 typed handle
 
 Inbound Reaction은 protocol identity를 core Reaction identity와 혼동하지 않아야 한다. 한 remote activity URI는
 정확한 Reaction 하나를 가리키지만 core에는 같은 actor·Post·Type 관계가 이미 존재할 수 있고, 서로 다른 activity
-URI가 같은 core 관계를 주장할 수도 있다. 또한 local·remote Post URI를 모두 역방향으로 해석하고 Post Author
-actor와 viewer 접근을 한 transaction 안에서 확인해야 한다.
+URI가 같은 core 관계를 주장할 수도 있다. 또한 local·remote Post URI를 모두 역방향으로 해석하고 actor의
+viewer 접근을 한 transaction 안에서 확인해야 한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - `Like`와 `EmojiReact`를 공통 검증·Type 투영·materialization 경계로 처리한다.
-- local·stored remote Post identity와 Author recipient를 검증한다.
+- local·stored remote Post identity와 actor의 Post 접근을 검증한다. Reaction activity audience와 personal/shared
+  inbox route는 Post Visibility나 수신 권한을 정의하지 않으므로 검증 입력에서 제외한다.
 - core Reaction과 activity mapping의 원자성, duplicate/conflict first-write 보존과 정확한 Undo를 보장한다.
 - 새 source에만 기존 Best Effort Notification을 연결한다.
 
@@ -48,14 +49,15 @@ actor와 viewer 접근을 한 transaction 안에서 확인해야 한다.
 1. additive 1:1 extension table에 unique activity URI를 두고, `reaction_id`를 primary key이자
    `reaction(id) ON DELETE CASCADE` foreign key로 선언한다. 별도 surrogate identity와 중복 unique index는 만들지
    않고 migration catalog test로 물리 shape를 검증한다.
-2. core에 inbound 전용 transaction service를 두어 저장된 remote actor, local·remote object URI, Post Author actor,
-   Post visibility와 mapping을 함께 조회한다. Type은 기존 canonical validator를 사용한다.
+2. core에 inbound 전용 transaction service를 두어 저장된 remote actor, local·remote object URI, Post visibility와
+   mapping을 함께 조회한다. Type은 기존 canonical validator를 사용한다.
 3. mapping이 없으면 기존 `addReaction(..., tx)`로 core 관계를 얻고 mapping insert를 시도한다. unique race에서는
    저장된 mapping과 actor·Post·Type을 다시 비교해 exact duplicate만 성공시키고 conflict는 rollback/no-op한다.
 4. Undo는 activity URI로 mapping, Reaction과 actor를 join하고 actor가 일치할 때 exact Reaction ID와 mapping을 같은
    transaction에서 제거한다. 실제 source ID가 제거된 경우에만 transaction 밖에서 Notification cleanup을 호출한다.
-5. Fedify handler는 URI shape, recipient set과 embedded activity identity를 protocol 경계에서 정규화하고 core
-   service에는 문자열 identity와 투영 Type만 전달한다. `Like`와 `EmojiReact` listener는 같은 handler를 호출한다.
+5. Fedify handler는 URI shape와 embedded activity identity를 protocol 경계에서 정규화하고 core service에는
+   문자열 activity·actor·object identity와 투영 Type만 전달한다. audience와 personal/shared inbox route는
+   materialization 입력으로 전달하지 않는다. `Like`와 `EmojiReact` listener는 같은 handler를 호출한다.
 6. core transaction 결과의 `created`/`removedReactionId`로 Notification 생성·정리를 한 번만 Best Effort 실행한다.
 
 ### Allowed Alternatives
@@ -70,8 +72,9 @@ actor와 viewer 접근을 한 transaction 안에서 확인해야 한다.
 - `addReaction` 성공만 확인하고 mapping을 별도 transaction에 저장하면 Undo identity와 crash recovery가 깨진다.
 - Undo에서 기존 Post/Type delete를 호출하면 mapping 이후 재생성된 Reaction을 잘못 지울 수 있다.
 - unsupported content를 validator에 직접 넘기면 계약의 `❤️` fallback 대신 activity가 거부된다.
-- shared inbox의 `context.recipient === null`을 곧 recipient 검증 생략으로 해석하면 target Author와 무관한 activity를
-  저장할 수 있다. activity recipient set에서 Post Author actor를 독립 확인해야 한다.
+- activity audience의 Post Author 포함 여부를 권한 증거로 사용하면 audience를 생략하는 Mastodon 호환
+  `Like`·`EmojiReact`를 거부하고 송신자가 선언한 routing 정보를 보안 경계로 오해한다. 반대로 `Create(Note)`는
+  Note audience에서 Public·Unlisted Visibility를 결정하므로 missing·unsupported addressing 거부를 유지해야 한다.
 - object나 Undo activity를 네트워크에서 hydrate하면 unknown resource fetch와 replay 경계가 넓어진다.
 
 ## Risks / Trade-offs

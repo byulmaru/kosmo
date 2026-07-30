@@ -11,6 +11,31 @@ helm lint . --set env=prod
 helm template kosmo . --namespace kosmo-dev --set env=dev >"${render_dir}/dev.yaml"
 helm template kosmo . --namespace kosmo-prod --set env=prod >"${render_dir}/prod.yaml"
 
+image_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+helm template kosmo . \
+  --namespace kosmo-prod \
+  --set env=prod \
+  --set imageDigest="${image_digest}" \
+  --set migration.enabled=true \
+  >"${render_dir}/prod-migration.yaml"
+helm template kosmo . \
+  --namespace kosmo-prod \
+  --show-only templates/database-migration-job.yaml \
+  --set env=prod \
+  --set imageDigest="${image_digest}" \
+  --set migration.enabled=true \
+  >"${render_dir}/prod-migration-job.yaml"
+
+if helm template kosmo . \
+  --namespace kosmo-prod \
+  --set env=prod \
+  --set imageDigest=sha256:invalid \
+  --set migration.enabled=true \
+  >"${render_dir}/invalid-prod-migration.yaml" 2>/dev/null; then
+  echo "prod migration unexpectedly rendered with an invalid image digest" >&2
+  exit 1
+fi
+
 backup_markers=(
   "apiVersion: barmancloud.cnpg.io/v1"
   "kind: ScheduledBackup"
@@ -52,4 +77,42 @@ for marker in "${required_prod_markers[@]}"; do
   fi
 done
 
-echo "Helm dev/prod backup render checks passed."
+required_migration_markers=(
+  "ghcr.io/byulmaru/kosmo@${image_digest}"
+  "name: \"kosmo-postgres-migration\""
+  "name: PGHOST"
+  'value: "kosmo-postgres-rw"'
+  "name: PGDATABASE"
+  'value: "kosmo"'
+  "name: PGUSER"
+  "key: username"
+  "name: PGPASSWORD"
+  "key: password"
+  '- migrate'
+)
+
+for marker in "${required_migration_markers[@]}"; do
+  if ! grep -Fq -- "${marker}" "${render_dir}/prod-migration.yaml"; then
+    echo "prod migration manifest is missing marker: ${marker}" >&2
+    exit 1
+  fi
+done
+
+rendered_digest_count="$(grep -Fc "image: \"ghcr.io/byulmaru/kosmo@${image_digest}\"" "${render_dir}/prod-migration.yaml")"
+if [[ "${rendered_digest_count}" -ne 3 ]]; then
+  echo "expected migration, API, and Web to render the same digest; found ${rendered_digest_count}" >&2
+  exit 1
+fi
+
+migration_secret_count="$(grep -Fc 'name: "kosmo-postgres-migration"' "${render_dir}/prod-migration-job.yaml")"
+if [[ "${migration_secret_count}" -ne 2 ]]; then
+  echo "expected the migration Job to read only username and password from its Secret; found ${migration_secret_count} references" >&2
+  exit 1
+fi
+
+if grep -Fq "kosmo-postgres-app" "${render_dir}/prod-migration-job.yaml"; then
+  echo "prod migration unexpectedly references the runtime database Secret" >&2
+  exit 1
+fi
+
+echo "Helm dev/prod backup and migration render checks passed."

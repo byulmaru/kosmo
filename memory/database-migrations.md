@@ -59,7 +59,7 @@ OpenSpec change를 공유할 수 있지만, 각 PR의 merge와 배포 gate는 �
 - data backfill은 재실행 가능하고 중단 후 이어갈 수 있어야 한다. 큰 backfill은 단일 DDL transaction에
   숨기지 않고 batch, progress와 실패 관측 경계를 둔다.
 - API/web active와 preview를 포함한 모든 workload가 전환됐는지 image identity와 runtime 상태로 확인한다.
-- production에서는 migration Job과 workload가 같은 immutable release를 사용해야 한다. 이 장치는 PROD-288이
+- production에서는 migration Job과 workload가 같은 immutable release를 사용해야 한다. 이 장치는 PROD-564가
   소유한다.
 
 ### 3. Contract gate
