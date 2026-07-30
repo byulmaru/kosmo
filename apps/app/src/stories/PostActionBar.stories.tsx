@@ -1272,8 +1272,8 @@ export const AccessibilityAndCompactGeometry: Story = {
     const actionBarBounds = actionBar.getBoundingClientRect();
     const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left + spacing.sm, 0);
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left, 0);
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
   },
   render: () => <PostActionBarFixture {...actionBarProps} />,
 };
@@ -1369,9 +1369,6 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;
   }
-  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left + spacing.sm, 0);
-  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(
-    toolbarBounds.right - spacing.sm,
-    0,
-  );
+  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left, 0);
+  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(toolbarBounds.right, 0);
 }

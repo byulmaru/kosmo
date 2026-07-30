@@ -1,7 +1,6 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import { PostDeletionAction } from './PostDeletionAction';
 import { usePostBookmarkAction } from './PostBookmarkAction';
@@ -159,7 +158,6 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
     height: 28,
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.sm,
     width: '100%',
   } satisfies StyleProp<ViewStyle>,
 });

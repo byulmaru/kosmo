@@ -153,7 +153,7 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: 기존 44px control과 action별 16~24px glyph 보정은 Figma의 약 27px row보다 지나치게 높고 아이콘 비율도 제각각이라 production Post에서 시각 밀도가 무너진다. Web이 현재 출시 범위이고 Native binary는 아직 출시 범위가 아니므로 먼저 공유 구현을 Figma geometry에 맞출 필요가 있다.
 - Decision Outcome: Figma의 약 27px 측정값을 production 정수값 28px로 정규화한다. Bar와 모든 control은 Android·iOS·Web에서 높이 28을 사용하고 Bar는 좌우 8 padding 안에서 action을 `space-between`으로 분배한다. Reply·Repost·Reaction·Bookmark target은 각각 너비 50, More target은 최소 너비 28이며 모든 glyph visual box는 16×16, icon-count 간격은 4, count line box는 16이다. pending spinner, selected·pressed·disabled 표현도 같은 28px slot을 유지한다. Web target은 24×24 CSS px 사각형을 포함하고 인접 target과 겹치지 않는다.
 - Alternatives Considered: 기존 44px control 유지는 Figma와 production 밀도 차이를 남겨 채택하지 않았다. Web만 28px로 바꾸고 Native를 즉시 44pt·48dp로 분기하면 아직 출시하지 않는 platform에서 공유 구현 drift가 생겨 채택하지 않았다. visual row만 28px로 줄이고 겹치는 hit slop으로 Native target을 확장하면 인접 action target과 focus boundary가 겹칠 수 있어 채택하지 않았다.
@@ -315,6 +315,18 @@
 - Consequences: 한 화면의 여러 Post Action Bar가 같은 이름을 사용하지만 모두 toolbar로 식별되며, 각 액션은 기존 label을 가진 button으로 계속 탐색된다. 공개 `PostActionBarProps`는 바뀌지 않는다.
 - Confirmation / Follow-up: Storybook에서 반복 렌더된 toolbar를 `액션 바` 이름으로 찾고 각 toolbar 내부 action button이 계속 노출되는지 검증한다.
 
+### Action Bar endpoint를 PostBody content column 양끝에 정렬한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: Action Bar와 PostBody는 같은 content column을 사용하지만 Bar의 별도 좌우 8px inset 때문에 Reply와 More control slot이 본문 양끝보다 안쪽에 놓이고, 중간 action도 더 좁은 내부 폭에서 분배된다.
+- Decision Outcome: Bar와 모든 control의 높이 28, Reply·Repost·Reaction·Bookmark target 너비 50, More target 최소 너비 28, glyph 16×16, icon-count 간격 4와 고정 순서를 유지한다. Bar에는 별도 좌우 inset을 두지 않고 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. Repost·Reaction·Bookmark는 두 endpoint 사이를 `space-between`으로 균등 분배한다.
+- Alternatives Considered: 기존 8px inset을 유지하면 PostBody와 Action Bar가 같은 content column을 사용하면서도 endpoint가 어긋나는 현재 회귀가 남아 채택하지 않았다. 각 production surface에서 음수 margin이나 별도 width를 적용하는 방식은 공용 Bar와 list/detail/Quote/순수 Repost 사이의 geometry drift를 만들므로 채택하지 않았다.
+- Consequences: 공용 `PostActionBar` root의 좌우 inset만 제거되며 list/detail/Quote/순수 Repost에 같은 endpoint 정렬이 적용된다. 목록 slot 하단 4px, Quote Source preview border 밖 8px 간격, Repost menu item 좌우 8px padding과 기존 target 크기·접근성 계약은 유지한다.
+- Confirmation / Follow-up: focused Storybook에서 compact geometry와 390px·900px·1400px 목록·상세 fixture의 Reply left edge, More right edge, 중간 action non-overlap을 검증하고 Home runtime에서 PostBody content column과의 정렬을 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -330,5 +342,6 @@
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
 - 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.
+- 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`는 2026-07-31 `Action Bar endpoint를 PostBody content column 양끝에 정렬한다`로 endpoint inset이 대체됐다. 높이·target 너비·glyph·gap·Native 출시 gate 결과는 유지한다.
 - 2026-07-29 `목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다`는 같은 날 `Quote preview 내부·외부 spacing을 분리한다`로 Quote spacing이 대체됐다. Action Bar 하단 4px, 1px semantic divider와 순수 Repost spacing 결과는 유지한다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.
