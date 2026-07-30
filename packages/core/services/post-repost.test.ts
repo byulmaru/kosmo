@@ -503,6 +503,46 @@ test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하�
   assert.equal(repeatedDeletedAt?.toString(), firstDeletedAt.toString());
 });
 
+test('deletePost는 ActivityPub mapping을 remote provenance로 사용해 local cleanup을 만들지 않는다', async () => {
+  const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const recipient = await createProfile();
+  const created = await createPost({
+    document: postContentDocumentFromText('remote post'),
+    objectUri: `https://${author.instance.domain}/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: author.profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Now.instant(),
+    visibility: PostVisibility.PUBLIC,
+  });
+  assert.equal(created.created, true);
+  await db.insert(Notifications).values({
+    kind: NotificationKind.REPOST,
+    recipientProfileId: recipient.profile.id,
+    sourceId: created.post.id,
+  });
+
+  await deletePost({ actorProfileId: author.profile.id, postId: created.post.id });
+
+  assert.equal(
+    await db
+      .select()
+      .from(Notifications)
+      .where(eq(Notifications.sourceId, created.post.id))
+      .then((rows) => rows.length),
+    1,
+  );
+  assert.equal(
+    await db
+      .select({ state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, created.post.id))
+      .then(firstOrThrow)
+      .then(({ state }) => state),
+    PostState.DELETED,
+  );
+});
+
 test('deletePost는 다른 Author의 Post를 거부하고 누락 Post를 숨긴다', async () => {
   const author = await createProfile();
   const other = await createProfile();
