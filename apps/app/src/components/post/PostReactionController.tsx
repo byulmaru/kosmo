@@ -81,25 +81,20 @@ export function applyReactionCountDeltas(
   entries: ReadonlyArray<ReactionCount>,
   deltas: ReadonlyMap<string, number>,
 ): ReadonlyArray<ReactionCount> {
-  const ordered = entries.map((entry, index) => ({ ...entry, index }));
-  const indexByType = new Map(ordered.map((entry) => [entry.type, entry.index]));
+  const ordered = entries.map((entry) => ({ ...entry }));
 
   for (const [type, delta] of deltas) {
-    const index = indexByType.get(type);
-    if (index === undefined) {
+    const entry = ordered.find((entry) => entry.type === type);
+    if (!entry) {
       if (delta > 0) {
-        indexByType.set(type, ordered.length);
-        ordered.push({ count: delta, index: ordered.length, type });
+        ordered.push({ count: delta, type });
       }
       continue;
     }
-    const entry = ordered[index];
-    if (entry) {
-      ordered[index] = { ...entry, count: entry.count + delta };
-    }
+    entry.count += delta;
   }
 
-  return ordered.filter(({ count }) => count > 0).map(({ count, type }) => ({ count, type }));
+  return ordered.filter(({ count }) => count > 0);
 }
 
 export function usePostReactionController(

@@ -15,7 +15,6 @@ export const reactionCountLoader = (ctx: UserContext) =>
     many: true,
     load: async (postIds) => {
       const reactionCount = count();
-      const firstReactionAt = min(Reactions.createdAt);
 
       return db
         .select({
@@ -29,7 +28,7 @@ export const reactionCountLoader = (ctx: UserContext) =>
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .where(and(inArray(Reactions.postId, postIds), postAccessWhere({ ctx })))
         .groupBy(Reactions.postId, Reactions.type)
-        .orderBy(asc(firstReactionAt), asc(Reactions.type));
+        .orderBy(asc(min(Reactions.createdAt)), asc(Reactions.type));
     },
     key: (row) => row.postId,
   });
