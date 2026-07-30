@@ -52,12 +52,13 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 Account, membership, Profile/Instance 상태와 Instance Type을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Post, Type과 멱등 저장만 검증해야 한다(MUST).
 
-GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`을 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
+GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`과 현재 조회 가능한 `post: Post!`를 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: GraphQL Reaction 추가 계약
 
 - **WHEN** 권한 있는 Profile이 `addReaction`에 Post global ID와 허용 Type 문자열을 전달한다
 - **THEN** API는 `AddReactionPayload.reaction`으로 현재 Reaction Node를 반환한다
+- **AND** payload의 `post`에서 갱신된 `viewerReactions`와 `reactionCounts`를 조회할 수 있다
 - **AND** `postId`는 concrete `Post` global ID만 허용한다
 - **AND** payload는 `created` 또는 동등한 신규 생성 여부를 노출하지 않는다
 
@@ -130,12 +131,13 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 - **WHEN** selected Profile이 자신의 현재 Reaction과 같은 Post와 Type을 전달한다
 - **THEN** 시스템은 해당 Reaction만 제거한다
 - **AND** payload의 `reactionId`는 삭제된 Reaction global ID이다
-- **AND** Target Post가 현재 조회 가능하면 payload의 `post`에서 갱신된 `viewerReactions`를 조회할 수 있다
+- **AND** Target Post가 현재 조회 가능하면 payload의 `post`에서 갱신된 `viewerReactions`와 `reactionCounts`를 조회할 수 있다
 
 #### Scenario: 관계가 없는 반복 삭제
 
 - **WHEN** selected Profile이 현재 관계가 없는 Post와 Type의 삭제를 요청한다
 - **THEN** mutation은 `reactionId: null`인 성공을 반환한다
+- **AND** Target Post가 현재 조회 가능하면 payload의 `post`는 현재 `viewerReactions`와 `reactionCounts`를 제공한다
 - **AND** 다른 Profile과 다른 Type의 Reaction을 변경하지 않는다
 
 #### Scenario: Post가 더 이상 조회되지 않는 삭제

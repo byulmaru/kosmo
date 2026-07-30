@@ -122,6 +122,12 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(first);
     assertNoGraphQLErrors(second);
     assert.deepEqual(second.data?.addReaction.reaction, first.data?.addReaction.reaction);
+    assert.deepEqual(first.data?.addReaction.post, {
+      id: globalId('Post', post.id),
+      reactionCounts: [{ count: 1, type: '❤️' }],
+      viewerReactions: [{ id: first.data?.addReaction.reaction.id, type: '❤️' }],
+    });
+    assert.deepEqual(second.data?.addReaction.post, first.data?.addReaction.post);
     const stored = await db
       .select()
       .from(Reactions)
@@ -603,6 +609,7 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.deleteReaction.reactionId, null);
     assert.deepEqual(result.data?.deleteReaction.post?.viewerReactions, []);
+    assert.deepEqual(result.data?.deleteReaction.post?.reactionCounts, [{ count: 1, type: '🎉' }]);
     assert.equal(
       await db
         .select()
@@ -668,6 +675,7 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(missing);
     assert.equal(missing.data?.deleteReaction.reactionId, null);
     assert.deepEqual(missing.data?.deleteReaction.post?.viewerReactions, []);
+    assert.deepEqual(missing.data?.deleteReaction.post?.reactionCounts, []);
 
     const first = await requestAddReaction(post.id, '👀', auth.token);
     const firstId = first.data?.addReaction.reaction.id;
@@ -1237,10 +1245,24 @@ type GraphQLResult<TData> = {
 };
 
 const requestAddReaction = (postId: string, type: string, token?: string) =>
-  requestGraphQL<{ addReaction: { reaction: ReactionNode } }>(
+  requestGraphQL<{
+    addReaction: {
+      post: {
+        id: string;
+        reactionCounts: Array<{ count: number; type: string }>;
+        viewerReactions: Array<{ id: string; type: string }>;
+      };
+      reaction: ReactionNode;
+    };
+  }>(
     `mutation AddReaction($input: AddReactionInput!) {
       addReaction(input: $input) {
         reaction { __typename id type createdAt }
+        post {
+          id
+          viewerReactions { id type }
+          reactionCounts { type count }
+        }
       }
     }`,
     { input: { postId: globalId('Post', postId), type } },
@@ -1253,7 +1275,11 @@ const requestDeleteReaction = (postId: string, type: string, token?: string) =>
 const requestDeleteReactionWithInput = (input: { postId: string; type: string }, token?: string) =>
   requestGraphQL<{
     deleteReaction: {
-      post: { id: string; viewerReactions: Array<{ id: string; type: string }> } | null;
+      post: {
+        id: string;
+        reactionCounts: Array<{ count: number; type: string }>;
+        viewerReactions: Array<{ id: string; type: string }>;
+      } | null;
       reactionId: string | null;
     };
   }>(
@@ -1263,6 +1289,7 @@ const requestDeleteReactionWithInput = (input: { postId: string; type: string },
         post {
           id
           viewerReactions { id type }
+          reactionCounts { type count }
         }
       }
     }`,
