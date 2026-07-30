@@ -109,6 +109,19 @@ jobs:
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
 
+      - name: Save Docker image reference for Trivy
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: echo "ghcr.io/${GITHUB_REPOSITORY}@${{ steps.build.outputs.digest }}" > docker-image-ref.txt
+
+      - name: Upload Docker image reference for Trivy
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-image-ref
+          path: docker-image-ref.txt
+          retention-days: 7
+
   deploy_production:
     name: Approve and Deploy Production
     if: startsWith(github.ref, 'refs/tags/')
