@@ -23,7 +23,13 @@ const remoteNoteDOMParser = new ProseMirrorDOMParser(postContentSchema, [
 ]);
 
 function htmlToBodyDocument(html: string): PostContentBodyDocumentV1 {
-  return remoteNoteDOMParser.parse(JSDOM.fragment(html)).toJSON() as PostContentBodyDocumentV1;
+  const fragment = JSDOM.fragment(html);
+
+  for (const element of fragment.querySelectorAll('[hidden]')) {
+    element.remove();
+  }
+
+  return remoteNoteDOMParser.parse(fragment).toJSON() as PostContentBodyDocumentV1;
 }
 
 function mediaTypeEssence(mediaType: string | null): string {
@@ -49,18 +55,22 @@ function projectBody(value: string | null, mediaType: string | null): PostConten
   throw new TypeError(`Unsupported remote Note media type: ${essence}`);
 }
 
+export function projectRemoteActivityPubHtmlToPlainText(html: string): string {
+  const plainText = postContentDocumentToText({
+    version: postContentSchemaVersion,
+    summary: null,
+    body: htmlToBodyDocument(html),
+  });
+
+  return normalizePostContentPlainText(plainText);
+}
+
 function projectSummary(value: string | null): string | null {
   if (value === null) {
     return null;
   }
 
-  const summary = postContentDocumentToText({
-    version: postContentSchemaVersion,
-    summary: null,
-    body: htmlToBodyDocument(value),
-  });
-
-  return normalizePostContentPlainText(summary) || null;
+  return projectRemoteActivityPubHtmlToPlainText(value) || null;
 }
 
 export function projectRemoteNoteContent({

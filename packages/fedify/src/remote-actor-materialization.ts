@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import { getActorHandle, getActorTypeName, isActor } from '@fedify/vocab';
+import { projectRemoteActivityPubHtmlToPlainText } from '@kosmo/core/activitypub-note-content/server';
 import {
   ActivityPubActors,
   db,
@@ -107,6 +108,14 @@ const getActorEndpoints = (actor: ActorWithKosmoFields): ActorEndpoints => ({
   sharedInboxUri: actor.endpoints?.sharedInbox?.href ?? null,
 });
 
+const projectActorBio = (summary: string | LanguageString | null | undefined): string | null => {
+  const value = summary?.toString();
+  const plainText = value === undefined ? null : projectRemoteActivityPubHtmlToPlainText(value);
+  const bio = profileBioSchema.safeParse(plainText || null);
+
+  return bio.success ? bio.data : null;
+};
+
 const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
   const preferredUsername = actor.preferredUsername?.toString();
 
@@ -127,10 +136,9 @@ const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: st
   }
 
   const displayName = profileDisplayNameSchema.safeParse(actor.name?.toString());
-  const bio = profileBioSchema.safeParse(actor.summary?.toString() ?? null);
 
   return {
-    bio: bio.success ? bio.data : null,
+    bio: projectActorBio(actor.summary),
     displayName: displayName.success ? displayName.data : handle.data,
     followPolicy: actor.manuallyApprovesFollowers
       ? ProfileFollowPolicy.APPROVAL_REQUIRED
