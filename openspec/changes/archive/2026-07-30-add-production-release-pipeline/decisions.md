@@ -25,7 +25,7 @@
 - Context / Problem: GitHub Release 발행과 별도 deploy workflow는 이미 build job이 알고 있는 digest를 다시 저장하고 해석했다.
 - Decision Outcome: Tag build output digest를 같은 workflow의 `prod` Environment job으로 직접 전달한다. GitHub Release, asset attestation, publish/resolve job·script와 별도 deploy workflow를 사용하지 않는다.
 - Alternatives Considered: GitHub Release asset은 장기 selector를 제공하지만 추가 lifecycle과 scripts가 필요하다. Registry tag 재해석은 mutable identity가 될 수 있어 제외했다.
-- Consequences: 각 tag workflow run은 자신이 build한 digest만 배포한다. 이전 application은 이전 commit에 새 tag를 붙여 새 build로 배포한다.
+- Consequences: 각 tag workflow run은 자신이 build한 digest만 배포한다. 이전 application은 지원 대상인 이전 production release commit에 새 tag를 붙여 새 build로 배포한다.
 - Confirmation / Follow-up: Deploy job이 build job output만 사용하며 Release API나 registry tag lookup이 없는지 검증한다.
 
 ### `stable`은 ECR lifecycle 보존 표식으로만 사용한다
@@ -64,6 +64,18 @@
 - Consequences: 현재 `prod` Environment caller의 tag-only 조건과 사용자 승인 두 단계가 배포를 제한한다.
 - Confirmation / Follow-up: Branch build에는 deploy job이 없고 `prod` Environment reviewer가 유지되는지 검증한다.
 
+### 최신 pending tag가 이전 pending tag를 대체한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: 사용자 결정, PROD-563
+- Status: Active
+- Context / Problem: 모든 tag build를 FIFO로 배포할 필요는 없지만 실행 중인 production 변경을 새 tag가 중단해서도 안 된다.
+- Decision Outcome: 고정 concurrency group에서 실행 중 배포는 보존하고 pending job은 최신 tag build 하나만 유지한다. 새 pending job이 도달하면 이전 pending job은 취소된다.
+- Alternatives Considered: 모든 pending tag를 FIFO로 보존하는 `queue: max`는 배포할 이유가 없는 중간 버전까지 순서대로 실행하므로 제외했다.
+- Consequences: 대체된 pending tag는 production 배포를 시작하지 않으며 별도 deploy step summary 대신 GitHub Actions 취소 기록만 남는다.
+- Confirmation / Follow-up: `cancel-in-progress: false`와 기본 single pending concurrency가 유지되는지 확인한다.
+
 ### PreSync 성공 뒤 controller 기본 activation을 사용한다
 
 - Decision Date: 2026-07-30
@@ -76,16 +88,16 @@
 - Consequences: API와 Web activation은 원자적이지 않으며 실패 복구는 새 tag를 통한 동일 경로 재배포다.
 - Confirmation / Follow-up: Manifest가 기본 activation을 사용하고 workflow에 Rollout action·ReplicaSet 조회가 없는지 확인한다.
 
-### Application rollback은 이전 commit에 새 tag를 붙이는 재배포다
+### Application rollback은 지원 대상인 이전 production release에 새 tag를 붙이는 재배포다
 
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: 사용자 결정, PROD-563
 - Status: Active
-- Context / Problem: 별도 rollback 함수나 immutable Release selector는 정상 배포와 다른 경로를 만든다.
-- Decision Outcome: 현재 DB와 호환되는 이전 commit에 새 tag를 붙여 같은 build·approval·PreSync·sync 경로를 실행한다. DB는 되돌리지 않는다.
+- Context / Problem: 별도 rollback 함수나 immutable Release selector는 정상 배포와 다른 경로를 만든다. 반면 pipeline 도입 전 commit에는 현재 승인·배포 workflow가 존재하지 않는다.
+- Decision Outcome: Pipeline 도입 이후 실제 production에 배포됐고 현재 DB와 호환되는 이전 release commit에 새 tag를 붙여 같은 build·approval·PreSync·sync 경로를 실행한다. Pipeline 도입 전 임의 commit은 지원하지 않고 DB는 되돌리지 않는다.
 - Alternatives Considered: Argo CD history rollback과 이전 Release selector는 각각 승인 경로를 우회하거나 제거된 Release lifecycle을 되살린다.
-- Consequences: 이전 image digest를 그대로 재사용하지 않고 이전 source commit을 다시 build한다.
+- Consequences: 이전 image digest를 그대로 재사용하지 않고 지원 대상인 이전 production release source commit을 다시 build한다. 첫 production release 전에는 rollback 대상 release가 없다.
 - Confirmation / Follow-up: 별도 rollback command가 없고 tag workflow가 commit·digest·결과를 기록하는지 확인한다.
 
 ## Remaining Decisions

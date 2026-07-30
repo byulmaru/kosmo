@@ -37,6 +37,7 @@ Tag build가 만든 digest를 같은 workflow의 production 승인 job이 PreSyn
 - `prod` Environment 승인 전 Argo CD credential을 얻거나 상태를 변경하지 않는다.
 - Migration, API와 Web은 같은 build digest를 사용한다.
 - Pipeline은 Rollout preview·promotion·ReplicaSet recovery를 직접 조정하지 않는다.
+- 실행 중 배포는 취소하지 않고 최신 pending tag가 이전 pending tag를 대체한다.
 - PROD-562 runtime과 PROD-564 migration credential·Job command를 구현하지 않는다.
 
 **Verification**
@@ -48,6 +49,7 @@ Tag build가 만든 digest를 같은 workflow의 production 승인 job이 PreSyn
 - [x] 2.2 Build digest를 Helm parameter로 전달하고 동일-image PreSync manifest 확인 뒤 Argo CD sync를 실행한다.
 - [x] 2.3 Production Rollout controller 기본 activation과 custom recovery 부재를 검증한다.
 - [x] 2.4 `prod` Environment의 main-only policy를 제거하고 tag-only 조건은 workflow 한 곳에 둔다.
+- [x] 2.5 고정 concurrency group이 실행 중 배포와 최신 pending tag만 유지하는 계약을 검증한다.
 
 ## 3. PROD-563 Obsolete release path removal and verification
 
@@ -62,7 +64,7 @@ GitHub Release와 별도 deploy lifecycle을 제거하고 tag workflow 하나만
 **Guardrails**
 
 - 별도 publish, resolve 또는 rollback command를 만들지 않는다.
-- 이전 application 재배포는 호환되는 이전 commit에 새 tag를 붙이는 같은 경로를 사용한다.
+- 이전 application 재배포는 pipeline 도입 이후 실제 production에 배포된 호환 가능한 이전 release commit에 새 tag를 붙이는 같은 경로를 사용한다.
 - DB rollback, actual production run과 public smoke는 포함하지 않는다.
 
 **Verification**

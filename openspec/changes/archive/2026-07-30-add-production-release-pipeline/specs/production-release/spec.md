@@ -32,6 +32,8 @@
 
 **Authority / Provenance:** PROD-563 — 시스템은 GitHub `prod` Environment 승인을 받은 tag build만 Argo CD production credential을 얻고 배포 상태를 변경하게 해야 한다(MUST). 같은 승인은 migration과 API·Web 전체에 적용되어야 하며(MUST), 별도 verification·migration approval job을 추가해서는 안 된다(MUST NOT).
 
+시스템은 실행 중인 production 배포를 새 tag 때문에 취소해서는 안 된다(MUST NOT). 새 tag build가 같은 배포 대기열에 도달하면 아직 실행되지 않은 이전 pending tag build를 최신 pending tag build로 대체할 수 있다(MAY).
+
 #### Scenario: 승인 전
 
 - **WHEN** tag build는 성공했지만 `prod` Environment 승인이 완료되지 않았다
@@ -42,9 +44,14 @@
 - **WHEN** tag build가 `prod` Environment 승인을 받는다
 - **THEN** 시스템은 해당 build digest로 production sync를 진행한다
 
+#### Scenario: 최신 pending tag가 이전 pending tag를 대체
+
+- **WHEN** production 배포 하나가 실행 중이고 이전 tag build가 pending인 상태에서 더 최신 tag build가 같은 대기열에 도달한다
+- **THEN** 실행 중인 배포는 계속되고 이전 pending tag build는 취소되며 최신 tag build가 다음 pending 배포가 된다
+
 ### Requirement: Production 배포 결과를 감사할 수 있다
 
-**Authority / Provenance:** PROD-563 — 시스템은 각 production 배포 실행의 요청자, Git tag, commit, build digest와 최종 결과를 감사 가능한 기록에 남겨야 한다(MUST). Credential이나 database 내용은 기록해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 실제 실행을 시작한 각 production 배포의 요청자, Git tag, commit, build digest와 최종 결과를 감사 가능한 기록에 남겨야 한다(MUST). 최신 pending tag에 대체되어 실행을 시작하지 않은 run은 production 배포 실행으로 보지 않으며 GitHub Actions의 취소 기록으로 식별한다. Credential이나 database 내용은 기록해서는 안 된다(MUST NOT).
 
 #### Scenario: Production 배포 종료
 
@@ -65,13 +72,13 @@
 - **WHEN** PreSync migration이나 Argo CD sync가 실패한다
 - **THEN** 실행은 실패로 기록되고 pipeline은 Rollout·ReplicaSet을 직접 복구하지 않는다
 
-### Requirement: 이전 application은 같은 tag 경로로 다시 배포한다
+### Requirement: 이전 production release는 같은 tag 경로로 다시 배포한다
 
-**Authority / Provenance:** PROD-563 — 운영자는 현재 DB와 호환되는 이전 commit에 새 Git tag를 붙여 같은 build·production 승인·PreSync·sync 경로로 application을 다시 배포할 수 있어야 한다(MUST). Pipeline은 DB rollback이나 destructive migration을 자동 실행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 운영자는 이 pipeline 도입 이후 실제 production에 배포됐고 현재 DB와 호환되는 이전 release commit에 새 Git tag를 붙여 같은 build·production 승인·PreSync·sync 경로로 application을 다시 배포할 수 있어야 한다(MUST). Pipeline 도입 전의 임의 commit을 현재 workflow로 배포할 것을 보장하지 않으며, DB rollback이나 destructive migration을 자동 실행해서는 안 된다(MUST NOT).
 
-#### Scenario: 이전 commit 재배포
+#### Scenario: 이전 production release commit 재배포
 
-- **WHEN** 운영자가 호환되는 이전 commit에 새 tag를 push한다
+- **WHEN** 운영자가 pipeline 도입 이후 production에 배포된 호환 가능한 이전 release commit에 새 tag를 push한다
 - **THEN** 시스템은 그 commit을 새로 build하고 같은 production 승인·배포 경로를 실행한다
 
 #### Scenario: DB rollback 아님
