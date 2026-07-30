@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, mock, test } from 'node:test';
-import { Create, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Create, Delete, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -26,6 +26,7 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
 import type { handleInboundCreate as HandleInboundCreate } from '../../../../../packages/fedify/src/inbound-create';
+import type { handleInboundDelete as HandleInboundDelete } from '../../../../../packages/fedify/src/inbound-delete';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
@@ -55,6 +56,7 @@ let createPost: typeof CoreServices.createPost;
 let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let handleInboundCreate: typeof HandleInboundCreate;
+let handleInboundDelete: typeof HandleInboundDelete;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -85,6 +87,7 @@ describe('GraphQL remote profile boundary', () => {
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({ createPost } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
+    ({ handleInboundDelete } = await import('../../../../../packages/fedify/src/inbound-delete'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -2122,6 +2125,86 @@ describe('GraphQL remote profile boundary', () => {
     } finally {
       fetchMock.mock.restore();
     }
+  });
+
+  test('hides an inbound-deleted remote Post and its content through DB-only GraphQL reads', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createStoredActivityPubAuthor({
+      domain: 'deleted.example',
+      handle: 'deleted-author',
+    });
+    const objectUri = 'https://deleted.example/notes/1';
+    const materialized = await materializeRemotePost({
+      actorUri: author.actorUri,
+      content: '<p>Delete me</p>',
+      objectUri,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const historical = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('Historical deleted content'),
+        postId: materialized.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileFollows).values({
+      followerProfileId: auth.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+
+    const fetchMock = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Inbound Delete and GraphQL reads must not use the network');
+    });
+    try {
+      await handleInboundDelete(
+        { documentLoader: fetchMock } as unknown as Parameters<typeof handleInboundDelete>[0],
+        new Delete({ actor: new URL(author.actorUri), object: new URL(objectUri) }),
+      );
+
+      const result = await requestRemotePostRead({
+        first: 10,
+        nodeIds: [
+          globalId('Post', materialized.post.id),
+          globalId('PostContent', materialized.content.id),
+          globalId('PostContent', historical.id),
+        ],
+        profileId: globalId('Profile', author.profile.id),
+        token: auth.token,
+      });
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.nodes, [null, null, null]);
+      assert.deepEqual(connectionIds(result.data?.profile?.posts), []);
+      assert.deepEqual(connectionIds(result.data?.homeTimeline), []);
+      assert.equal(fetchMock.mock.calls.length, 0);
+    } finally {
+      fetchMock.mock.restore();
+    }
+
+    const storedPost = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, materialized.post.id))
+      .then(firstOrThrow);
+    assert.equal(storedPost.state, PostState.DELETED);
+    assert.equal(storedPost.currentContentId, materialized.content.id);
+    assert.equal(
+      await db
+        .select()
+        .from(ActivityPubPosts)
+        .where(eq(ActivityPubPosts.id, materialized.mapping.id))
+        .then((rows) => rows.length),
+      1,
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(PostContents)
+        .where(eq(PostContents.postId, materialized.post.id))
+        .then((rows) => rows.length),
+      2,
+    );
   });
 
   test('reads an inbound materialized remote Reply through the existing Post relation', async () => {

@@ -177,6 +177,15 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   지원되는 공개 audience가 없거나 addressing이 모호하면 Post Visibility를 정확히 결정할 수 없으므로 Note를
   materialize하지 않는다. 이는 송신 actor의 권한을 증명하기 위한 검사가 아니라 저장할 Post Visibility를 결정하는
   필수 입력 검증이다.
+- 수신 `Delete(Note)`는 저장된 ActivityPub Post mapping의 정확한 object URI와 Author Profile에 연결된
+  ActivityPub Actor URI가 모두 일치할 때만 기존 Post 삭제 행동으로 해당 remote Post를 Tombstone 전이한다.
+  object는 직접 IRI 또는 같은 `id`의 embedded `Tombstone`만 지원하며, 삭제 처리를 위해 원격 object를
+  역참조하지 않는다. mapping이 없거나 actor·object·author가 일치하지 않으면 아무 상태도 만들거나 변경하지
+  않는다.
+- remote Post의 Tombstone 전이는 Post, Current Content, 모든 Post Content revision과 ActivityPub Post
+  mapping을 보존한다. 반복·동시 Delete는 최초 삭제 시각을 보존하고, 이후 같은 object의 중복 `Create(Note)`는
+  Tombstone을 다시 Active로 만들지 않는다. 수신 remote Delete는 Local `Delete` delivery, Repost `Undo` 또는
+  local notification cleanup의 원인이 아니다.
 
 - Followers Only signed fetch는 서명으로 검증된 요청 Profile이 Author이거나 저장된 established Follow 관계의
   Follower일 때만 허용한다. 인증되지 않았거나 식별되지 않은 요청 주체와 Follower가 아닌 Profile에게는 Post가
