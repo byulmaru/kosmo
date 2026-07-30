@@ -52,13 +52,7 @@ Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822
 
 `ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
 
-그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Merge queue에서는 최신 `main`과 PR을 합친 commit으로 plan을 다시 만들며, 그 commit이 `main`에 병합되면 같은 commit과 repository tree에서 만든 merge queue plan artifact만 찾아 그대로 apply한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
-
-Merge queue plan은 OIDC trust를 먼저 배포한 뒤 활성화한다. GCP WIF condition 변경을 기존 PR plan 경로로 apply하고, 관리자 AWS credential로 `./scripts/ensure-ci-aws-role.sh`를 다시 실행한 뒤 repository variable을 설정한다. 활성화 전 main apply는 기존 PR plan을 사용하되 동일한 repository tree인지 계속 검증한다.
-
-```sh
-gh variable set TERRAFORM_MERGE_GROUP_PLAN_ENABLED --repo byulmaru/kosmo --body true
-```
+그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. PR이 `main`에 병합되면 현재 main에서 plan을 새로 만들고, 생성 시각과 이전 state snapshot을 제외한 Terraform JSON 표현이 reviewed plan과 같은지 확인한다. Configuration, variables, planned values, drift와 resource/output changes, checks가 모두 같을 때만 reviewed saved plan을 그대로 apply한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, reviewed saved plan을 실제로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. 이 정책은 GitHub Actions의 `all_external_contributors` 설정으로 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
