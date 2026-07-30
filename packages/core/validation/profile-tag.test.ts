@@ -1,40 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  normalizeProfileTagDisplayName,
-  normalizeProfileTagName,
-  profileTagNameSchema,
-  profileTagsInputSchema,
-  profileTagsSchema,
-} from './profile-tag';
+import { profileTagsInputSchema, profileTagsSchema } from './profile-tag';
 import {
   profileTagDuplicateParityCases,
   profileTagInvalidParityCases,
   profileTagNormalizationParityCases,
 } from './profile-tag-parity-fixture';
 
-test('Profile Tag normalizer separates NFKC display name from lowercase canonical name', () => {
+test('Profile Tags schema matches the shared normalization parity fixture', () => {
   for (const { displayName, input, normalized } of profileTagNormalizationParityCases) {
-    assert.equal(normalizeProfileTagDisplayName(input), displayName);
-    assert.equal(normalizeProfileTagName(input), normalized);
-    assert.equal(profileTagNameSchema.parse(input), normalized);
-  }
-  assert.equal(normalizeProfileTagName('ı'), 'ı');
-});
-
-test('Profile Tag name schema accepts valid normalized names', () => {
-  assert.equal(profileTagNameSchema.parse('  #Kosmo_1  '), 'kosmo_1');
-  assert.equal(profileTagNameSchema.parse('𝔘𝔫𝔦𝔠𝔬𝔡𝔢'), 'unicode');
-  assert.equal(profileTagNameSchema.parse('한글'), '한글');
-  assert.equal(profileTagNameSchema.parse('𐐀'.repeat(20)), '𐐨'.repeat(20));
-});
-
-test('Profile Tag name schema rejects invalid normalized names', () => {
-  for (const value of ['', '   ', '#', 'hello-world', 'hello!', 'İ', 'a'.repeat(21)]) {
-    assert.throws(() => profileTagNameSchema.parse(value));
-  }
-  for (const { input } of profileTagInvalidParityCases) {
-    assert.throws(() => profileTagNameSchema.parse(input));
+    assert.deepEqual(profileTagsSchema.parse([input]), [{ displayName, name: normalized }]);
   }
 });
 

@@ -1,9 +1,4 @@
-import {
-  normalizeProfileTagDisplayName,
-  normalizeProfileTagName,
-  profileBioSchema,
-  profileTagNameSchema,
-} from '@kosmo/core/validation';
+import { profileBioSchema, profileTagsSchema } from '@kosmo/core/validation';
 
 export type ProfileEditImageDraft =
   | { kind: 'current'; previewUri: string | null }
@@ -141,7 +136,7 @@ export function validateProfileTagDraftInput(
   input: string,
   tags: ReadonlyArray<string>,
 ): ProfileTagValidationResult {
-  const result = profileTagNameSchema.safeParse(input);
+  const result = profileTagsSchema.safeParse([input]);
 
   if (!result.success) {
     return {
@@ -150,9 +145,19 @@ export function validateProfileTagDraftInput(
     };
   }
 
-  if (tags.some((tag) => normalizeProfileTagName(tag) === result.data)) {
+  const normalizedTag = result.data[0];
+  if (!normalizedTag) {
+    return { ok: false, error: 'Profile Tag를 확인해 주세요.' };
+  }
+
+  const isDuplicate = tags.some((tag) => {
+    const existing = profileTagsSchema.safeParse([tag]);
+    return existing.success && existing.data[0]?.name === normalizedTag.name;
+  });
+
+  if (isDuplicate) {
     return { ok: false, error: '이미 추가한 태그예요.' };
   }
 
-  return { ok: true, value: normalizeProfileTagDisplayName(input) };
+  return { ok: true, value: normalizedTag.displayName };
 }
