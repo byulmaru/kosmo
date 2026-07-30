@@ -103,7 +103,7 @@ function renderMark(
         {content}
       </Text>
     ))
-    .exhaustive();
+    .otherwise(() => content);
 }
 
 const styles = StyleSheet.create({
