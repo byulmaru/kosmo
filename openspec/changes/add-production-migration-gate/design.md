@@ -33,7 +33,7 @@ Production backup은 CNPG Barman Cloud plugin, 매일 base backup과 연속 WAL 
 
 ### Recommended Approach
 
-1. PROD-563의 일반 release workflow가 직접 호출할 수 있는 독립 gate command를 둔다. 이 command는 immutable image digest, migration phase, schema-change authority, rollback window 종료 시각, compatibility allowlist와 restore rehearsal evidence reference를 입력으로 받는다.
+1. PROD-563의 일반 release workflow가 직접 호출할 수 있는 metadata/evidence collector와 gate command를 둔다. Gate context는 tagged release의 static metadata와 live production evidence에서 자동 조립하며 운영자 JSON input을 받지 않는다.
 2. Production Helm render에서 migration Job과 API/Web image가 같은 digest인지 정적으로 검사하고 migration Job은 별도 Secret reference와 `migrate` command만 사용하게 한다. Phase와 schema authority는 release gate metadata이며 Helm Job input이나 annotation으로 복제하지 않는다.
 3. `expand`/`transition`은 필수 identity·credential·phase 검사를 통과하면 기존 Drizzle runner를 실행한다. Phase별 SQL 선택은 하지 않고 release/image 분리로 안전한 migration 집합을 보장한다.
 4. `contract`는 recovery window 안의 base backup과 연속 WAL chain, 월간 restore rehearsal의 overdue 여부, live active/preview/rollback workload digest와 rollback window를 검사한다. 이후 production primary의 현재 target LSN과 WAL identity를 캡처하고 PROD-546 backup 경계가 같은 WAL의 archive를 검증한 evidence를 소비한다. 이 자동 조건이 모두 충족되면 이미 승인된 production release의 migration을 실행한다.
@@ -58,6 +58,7 @@ Production backup은 CNPG Barman Cloud plugin, 매일 base backup과 연속 WAL 
 - Migration credential 장애를 runtime credential 재사용으로 우회하지 않는다.
 - Secret, connection string, backup object key, row 값 또는 raw Kubernetes Secret을 workflow log에 출력하지 않는다.
 - PROD-562/563/565의 리소스·workflow·실배포 책임을 이 change의 완료 task로 가져오지 않는다.
+- Validator만 제공하고 PROD-563이 release metadata나 live evidence 수집 interface를 임의로 만들게 하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -79,4 +80,5 @@ Rollback은 gate와 production migration Job 활성화를 이전 revision으로 
 
 ## Open Questions
 
-없음.
+- Tagged release가 소유할 static migration metadata의 canonical file path와 schema를 정해야 한다. 최소 `phase`, `schemaAuthority` 및 contract일 때 compatibility/rollback metadata를 제공해야 하며 build 뒤 결정되는 release digest와 결합돼야 한다.
+- Target LSN capture와 정확한 target WAL archive evidence를 반환할 callable command의 실행 위치와 credential 경계를 정해야 한다. 운영자 JSON input과 `postgres` superuser 사용은 허용하지 않는다.

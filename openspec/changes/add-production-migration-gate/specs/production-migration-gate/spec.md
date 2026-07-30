@@ -50,6 +50,22 @@
 - **WHEN** production release가 phase 또는 schema-change authority를 제공하지 않는다
 - **THEN** gate는 migration을 실행하지 않고 실패한다
 
+### Requirement: 자동으로 조립되는 gate context
+
+**Authority / Provenance:** `PROD-564`. Production release pipeline은 tagged release가 소유한 static migration metadata와 현재 production의 recovery/workload evidence를 callable interface로 자동 조립해야 한다(MUST). 운영자가 workflow input으로 gate context JSON을 직접 작성하게 해서는 안 된다(MUST NOT).
+
+#### Scenario: Tagged release metadata 로드
+
+- **WHEN** PROD-563 pipeline이 승인된 immutable release를 배포한다
+- **THEN** phase, schema-change authority, compatibility와 rollback metadata를 해당 tagged release의 검토 가능한 source에서 로드한다
+- **AND** 누락되거나 release identity와 결합되지 않은 metadata를 거부한다
+
+#### Scenario: Live evidence 수집
+
+- **WHEN** contract preflight를 실행한다
+- **THEN** target LSN/archive evidence와 active, preview, rollback workload identity를 callable collector에서 가져온다
+- **AND** 운영자가 JSON 값을 직접 입력해 live 조회를 대체할 수 없다
+
 ### Requirement: Contract backup과 restore evidence gate
 
 **Authority / Provenance:** `PROD-564`, `PROD-546`, `docs/operations/postgres-backup.md`. Contract migration은 유효한 base backup부터 migration 직전 복구 지점까지 이어지는 WAL recovery chain과 overdue가 아닌 성공한 격리 restore rehearsal 증거를 확인해야 한다(MUST). Gate는 backup/restore를 직접 구현하지 않으며 PROD-546이 생성한 비민감 증거를 소비해야 한다(MUST).

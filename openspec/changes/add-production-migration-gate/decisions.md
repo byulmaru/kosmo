@@ -114,7 +114,17 @@
 
 ## Remaining Decisions
 
-- 없음.
+### Tagged release metadata와 live evidence collector interface
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: Linear `PROD-564`
+- Status: Blocked
+- Context / Problem: 현재 구현은 validator만 제공하므로 PROD-563이 phase, schema authority, compatibility, rollback window와 recovery/workload evidence를 자동 생성할 callable source가 없다. 운영자 workflow JSON input은 금지돼 있다.
+- Decision Outcome: 미결정. Tagged commit의 checked-in manifest, build가 생성하는 release artifact 또는 다른 immutable source 중 하나를 선택하고 target LSN/archive 및 workload collector의 command/output interface를 함께 고정해야 한다.
+- Alternatives Considered: 운영자 JSON input은 승인된 계약에 어긋나 제외한다. Linear를 배포 시 runtime configuration source로 사용하는 방식은 issue 편집과 release identity가 결합되지 않아 권장하지 않는다. `kubectl cnpg psql`의 `postgres` superuser 사용은 production 최소 권한 경계를 넓혀 제외한다.
+- Consequences: 이 interface가 승인되기 전에는 PROD-564 구현과 PR을 완료로 취급할 수 없고 PROD-563은 임의 collector를 만들면 안 된다.
+- Confirmation / Follow-up: 사용자 결정 뒤 Linear, OpenSpec, callable command fixture와 PROD-563 consumer contract를 함께 갱신한다.
 
 ## Superseded Decisions
 

@@ -9,6 +9,7 @@ Linear [PROD-564](https://linear.app/byulmaru/issue/PROD-564/프로덕션-migrat
 - Production migration Job이 runtime workload와 분리된 migration credential만 사용하고 runtime credential로 fallback하지 않게 한다.
 - Migration Job, API와 Web workload가 하나의 immutable image digest를 사용한다는 gate를 제공한다.
 - Release가 `expand`, `transition`, `contract` phase와 해당 schema-change authority를 명시하게 하고, phase별 조건을 검증한다.
+- Tagged release의 static migration metadata와 live recovery/workload evidence를 callable interface로 자동 조립하며 운영자가 gate context JSON을 직접 작성하지 않게 한다.
 - Contract phase에서는 유효한 base backup과 연속 WAL recovery chain, overdue가 아닌 restore rehearsal, migration 직전 target LSN의 WAL archive evidence, rollback window 종료와 active/preview/rollback workload compatibility를 모두 확인한다.
 - Migration Job은 `migrate`, 동일 immutable digest와 별도 database credential만 책임지며 phase, schema authority 또는 restore-point command를 Helm interface로 받지 않는다.
 - PROD-563의 production release 승인 하나가 해당 image의 migration과 API/Web 배포를 함께 승인하며 contract 전용 추가 승인을 요구하지 않는다.
@@ -35,7 +36,7 @@ Linear [PROD-564](https://linear.app/byulmaru/issue/PROD-564/프로덕션-migrat
 
 ## Impact
 
-- Deployment: production migration Job의 값·credential·immutable image 경계와 PROD-563 release pipeline이 호출할 수 있는 gate interface.
+- Deployment: production migration Job의 값·credential·immutable image 경계와 PROD-563 release pipeline이 호출할 수 있는 metadata/evidence collector 및 gate interface.
 - Operations: production release 승인 뒤 backup/restore evidence reference, rollback window와 workload compatibility를 자동 확인하는 절차.
 - Database: 기존 Drizzle history와 advisory lock을 재사용하며 migration SQL이나 phase별 migration directory를 새로 만들지 않는다.
 - Verification: phase별 gate fixture, Helm dev/prod render, credential·digest 불일치, stale evidence, 구버전 workload와 migration failure 회귀 검증.
