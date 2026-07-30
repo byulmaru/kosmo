@@ -13,7 +13,8 @@ SLACK_FEEDBACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않는다. 실제 운영 주입은 production smoke 전에
-기존 공용 `env` Secret에 구성하며, Web process나 브라우저 bundle은 이 값을 읽거나 노출하지 않는다.
+기존 공용 `env` Secret에 구성한다. 공용 Secret 값은 Web process까지 전달되지만, Web 애플리케이션이나
+브라우저 bundle은 이 값을 읽거나 노출하지 않는다.
 
 Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL이 없거나 형식이
 잘못되면 API는 피드백을 Slack으로 보내지 않고 안전한 오류만 반환한다.
@@ -21,8 +22,8 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
 로컬 `pnpm dev`는 루트 `scripts/vault-run.mjs`가 공용
 `secret/kubernetes/kosmo/local` 값을 한 번 읽어 workspace process에 전달한다. API `dev` script는
 별도 Vault 경로를 다시 읽거나 overlay하지 않는다. 공용 경로의 webhook 값은 API delivery만 소비하며,
-Web·Expo process나 browser asset으로 전달·노출되지 않는다. 로컬 설정이 없으면 feedback mutation만
-fail closed로 실패한다.
+Web·Expo process까지 전달되지만 Web·Expo 애플리케이션이나 browser asset은 이 값을 읽거나 inline하지 않는다.
+로컬 설정이 없으면 feedback mutation만 fail closed로 실패한다.
 
 ## 배포 전 확인
 
