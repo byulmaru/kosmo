@@ -17,6 +17,11 @@ import { PostSourcePresentationView } from '@/components/post/PostSourcePresenta
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { SessionProvider } from '@/session/SessionProvider';
+import {
+  getImagePickerLaunchCount,
+  resetImagePickerMock,
+  setNextImagePickerResult,
+} from '../../.storybook/mocks/expo-image-picker';
 import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -948,7 +953,6 @@ function ComposerMediaStatesStory() {
       asset: composerMediaAsset,
       key: 'failed',
       state: 'failed',
-      uploadError: '업로드 실패',
     },
   ]);
   const [sensitiveMedia, setSensitiveMedia] = useState(true);
@@ -1112,6 +1116,7 @@ function ThreadNavigationCatalog() {
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    resetImagePickerMock();
   },
   component: PostCatalog,
   parameters: {
@@ -2512,6 +2517,86 @@ export const ComposerMediaStates: Story = {
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 중')).toBeVisible();
   },
   render: () => <ComposerMediaStatesStory />,
+};
+
+export const ComposerMediaUploadInteraction: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: { completeMediaUpload: { media: { id: `media-${index}`, state: 'READY' } } },
+          })),
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-${index}` },
+                uploadUrl: `https://upload.example/${index}`,
+              },
+            },
+          })),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+
+    let finishSelection!: (result: {
+      assets: (typeof composerMediaAsset)[];
+      canceled: false;
+    }) => void;
+    setNextImagePickerResult(
+      new Promise((resolve) => {
+        finishSelection = resolve;
+      }),
+    );
+
+    try {
+      const add = canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' });
+      await userEvent.click(add);
+      await userEvent.click(add);
+      expect(getImagePickerLaunchCount()).toBe(1);
+
+      finishSelection({
+        assets: [1, 2, 3, 4, 5].map((index) => ({
+          ...composerMediaAsset,
+          file: new File([`image-${index}`], `image-${index}.png`, { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: `blob:https://kosmo.example/${index}`,
+        })),
+        canceled: false,
+      });
+
+      await waitFor(() => {
+        expect(canvas.getAllByText('업로드 완료')).toHaveLength(4);
+      });
+      expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
+      expect(upload).toHaveBeenCalledTimes(4);
+
+      await userEvent.type(
+        canvas.getByRole('textbox', { name: '첨부 이미지 1 대체 텍스트' }),
+        '첫 번째 이미지',
+      );
+      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지로 표시' }));
+      await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+
+      await waitFor(() => {
+        expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 완료')).not.toBeInTheDocument();
+      });
+      expect(
+        canvas.queryByRole('switch', { name: '민감한 이미지로 표시' }),
+      ).not.toBeInTheDocument();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerStory />,
 };
 
 export const ComposerSubmitting: Story = {

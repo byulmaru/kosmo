@@ -21,7 +21,11 @@ import { Button } from '@/components/ui/Button';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { postComposerMediaLimit, uploadComposerMedia } from './postComposerMedia';
+import {
+  postComposerMediaLimit,
+  releaseComposerMediaPreview,
+  uploadComposerMedia,
+} from './postComposerMedia';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
@@ -61,7 +65,6 @@ export type ComposerMediaItem = {
   readonly key: string;
   readonly mediaId?: string;
   readonly state: 'uploading' | 'ready' | 'failed';
-  readonly uploadError?: string;
   readonly altText: string;
 };
 
@@ -119,8 +122,10 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<ComposerMediaItem[]>([]);
+  const mediaRef = useRef<readonly ComposerMediaItem[]>(media);
   const [sensitiveMedia, setSensitiveMedia] = useState(false);
   const removedMediaKeys = useRef(new Set<string>());
+  const selectingMedia = useRef(false);
   const nextMediaKey = useRef(0);
   const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
   const [commitIssueMediaUploadUrl] = useMutation<PostComposerIssueMediaUploadUrlMutation>(
@@ -179,13 +184,8 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     });
 
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
-    removedMediaKeys.current.delete(key);
     setMedia((items) =>
-      items.map((item) =>
-        item.key === key
-          ? { ...item, mediaId: undefined, state: 'uploading', uploadError: undefined }
-          : item,
-      ),
+      items.map((item) => (item.key === key ? { ...item, state: 'uploading' } : item)),
     );
 
     try {
@@ -209,29 +209,24 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         return;
       }
       setMedia((items) =>
-        items.map((item) =>
-          item.key === key ? { ...item, mediaId, state: 'ready', uploadError: undefined } : item,
-        ),
+        items.map((item) => (item.key === key ? { ...item, mediaId, state: 'ready' } : item)),
       );
     } catch {
       if (removedMediaKeys.current.has(key)) {
         return;
       }
       setMedia((items) =>
-        items.map((item) =>
-          item.key === key
-            ? { ...item, mediaId: undefined, state: 'failed', uploadError: '업로드 실패' }
-            : item,
-        ),
+        items.map((item) => (item.key === key ? { ...item, state: 'failed' } : item)),
       );
     }
   };
 
   const selectMedia = async () => {
-    const remainingSlots = postComposerMediaLimit - media.length;
-    if (remainingSlots <= 0 || submitting) {
+    const availableAtOpen = postComposerMediaLimit - mediaRef.current.length;
+    if (availableAtOpen <= 0 || submitting || selectingMedia.current) {
       return;
     }
+    selectingMedia.current = true;
     setError(null);
 
     try {
@@ -239,29 +234,38 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         allowsMultipleSelection: true,
         mediaTypes: ['images'],
         orderedSelection: true,
-        selectionLimit: remainingSlots,
+        selectionLimit: availableAtOpen,
       });
       if (result.canceled) {
         return;
       }
 
-      const selected = result.assets.slice(0, remainingSlots).map((asset) => ({
+      const availableNow = postComposerMediaLimit - mediaRef.current.length;
+      const selected = result.assets.slice(0, availableNow).map((asset) => ({
         altText: '',
         asset,
         key: `composer-media-${++nextMediaKey.current}`,
         state: 'uploading' as const,
       }));
-      setMedia((items) => [...items, ...selected]);
+      const nextMedia = [...mediaRef.current, ...selected];
+      mediaRef.current = nextMedia;
+      setMedia(nextMedia);
       for (const item of selected) {
         void uploadMedia(item.key, item.asset);
       }
     } catch {
       setError('이미지를 선택하지 못했습니다.');
+    } finally {
+      selectingMedia.current = false;
     }
   };
 
   const removeMedia = (key: string) => {
     removedMediaKeys.current.add(key);
+    const removed = media.find((item) => item.key === key);
+    if (Platform.OS === 'web' && removed) {
+      releaseComposerMediaPreview(removed.asset.uri);
+    }
     setMedia((items) => {
       const next = items.filter((item) => item.key !== key);
       if (next.length === 0) {
@@ -300,7 +304,9 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         });
         setBody('');
         for (const item of media) {
-          removedMediaKeys.current.add(item.key);
+          if (Platform.OS === 'web') {
+            releaseComposerMediaPreview(item.asset.uri);
+          }
         }
         setMedia([]);
         setSensitiveMedia(false);
@@ -310,6 +316,21 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
       onError: (cause) => setError(cause.message || '게시글을 작성하지 못했습니다.'),
     });
   };
+
+  useEffect(() => {
+    mediaRef.current = media;
+  }, [media]);
+
+  useEffect(
+    () => () => {
+      if (Platform.OS === 'web') {
+        for (const item of mediaRef.current) {
+          releaseComposerMediaPreview(item.asset.uri);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -605,7 +626,7 @@ export function PostComposerMediaControls({
                 ? '업로드 중…'
                 : item.state === 'ready'
                   ? '업로드 완료'
-                  : item.uploadError}
+                  : '업로드 실패'}
             </Text>
             {item.state === 'ready' ? (
               <TextField

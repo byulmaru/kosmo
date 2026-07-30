@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { uploadComposerMedia } from './postComposerMedia';
+import { releaseComposerMediaPreview, uploadComposerMedia } from './postComposerMedia';
+
+test('releases only Web object URL previews', () => {
+  const released: string[] = [];
+  const release = (url: string) => released.push(url);
+
+  releaseComposerMediaPreview('blob:https://kosmo.example/preview', release);
+  releaseComposerMediaPreview('file:///local/image.jpg', release);
+  releaseComposerMediaPreview('data:image/png;base64,preview', release);
+
+  assert.deepEqual(released, ['blob:https://kosmo.example/preview']);
+});
 
 test('issues, uploads, and completes a fresh media in order', async () => {
   const calls: string[] = [];

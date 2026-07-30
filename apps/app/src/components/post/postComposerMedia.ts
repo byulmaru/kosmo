@@ -1,5 +1,14 @@
 export const postComposerMediaLimit = 4;
 
+export function releaseComposerMediaPreview(
+  uri: string,
+  revokeObjectUrl: (url: string) => void = URL.revokeObjectURL,
+) {
+  if (uri.startsWith('blob:')) {
+    revokeObjectUrl(uri);
+  }
+}
+
 export async function uploadComposerMedia({
   complete,
   isActive,
