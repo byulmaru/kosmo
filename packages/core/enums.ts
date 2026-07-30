@@ -38,6 +38,14 @@ export const ApplicationType = {
 } as const;
 export type ApplicationType = keyof typeof ApplicationType;
 
+export const FeedbackKind = {
+  BUG_REPORT: 'BUG_REPORT',
+  FEATURE_REQUEST: 'FEATURE_REQUEST',
+  NEGATIVE: 'NEGATIVE',
+  POSITIVE: 'POSITIVE',
+} as const;
+export type FeedbackKind = keyof typeof FeedbackKind;
+
 export const InstanceKind = {
   LOCAL: 'LOCAL',
   ACTIVITYPUB: 'ACTIVITYPUB',

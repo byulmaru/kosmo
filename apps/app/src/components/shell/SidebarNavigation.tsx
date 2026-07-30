@@ -2,7 +2,6 @@ import { Link, usePathname } from 'expo-router';
 import {
   Bell,
   Bookmark,
-  ChevronDown,
   House,
   PenLine,
   Search,
@@ -74,6 +73,7 @@ export function SidebarNavigation({
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
+  const feedbackActive = pathname === '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
     if (!item.profile) {
@@ -213,21 +213,41 @@ export function SidebarNavigation({
           {compact ? (
             <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : null}
-          <Pressable
-            accessibilityLabel="설정 & 지원"
-            accessibilityRole="button"
-            style={[styles.footerItem, compact && styles.compactItem]}
-          >
-            <Settings color={theme.textSecondary} size={20} strokeWidth={1.5} />
-            {!compact ? (
-              <>
-                <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
-                  설정 &amp; 지원
+          <Link asChild href="/feedback">
+            <Pressable
+              aria-current={feedbackActive ? 'page' : undefined}
+              accessibilityLabel="피드백 보내기"
+              accessibilityRole="link"
+              accessibilityState={{ selected: feedbackActive }}
+              onPress={onNavigate}
+              style={StyleSheet.flatten([
+                styles.footerItem,
+                compact && styles.compactItem,
+                styles.feedbackFooterItem,
+                {
+                  backgroundColor: feedbackActive ? theme.surface : 'transparent',
+                },
+              ])}
+            >
+              <Settings
+                color={feedbackActive ? theme.text : theme.textSecondary}
+                size={20}
+                strokeWidth={1.5}
+              />
+              {!compact ? (
+                <Text
+                  style={[
+                    styles.footerLabel,
+                    styles.footerLabelGrow,
+                    feedbackActive && styles.activeItemLabel,
+                    { color: theme.text },
+                  ]}
+                >
+                  피드백 보내기
                 </Text>
-                <ChevronDown color={theme.textSecondary} size={20} />
-              </>
-            ) : null}
-          </Pressable>
+              ) : null}
+            </Pressable>
+          </Link>
         </View>
       </ScrollView>
     </View>
@@ -312,6 +332,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  feedbackFooterItem: { height: 48, minHeight: 48 },
   footerLabel: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
   footerLabelGrow: { flex: 1 },
 });

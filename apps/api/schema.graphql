@@ -149,6 +149,13 @@ type ExchangeNativeOidcSessionPayload {
   token: String!
 }
 
+enum FeedbackKind {
+  BUG_REPORT
+  FEATURE_REQUEST
+  NEGATIVE
+  POSITIVE
+}
+
 type FollowNotification implements Node & Notification {
   createdAt: DateTime!
   id: ID!
@@ -222,6 +229,7 @@ type Mutation {
   repostPost(input: RepostPostInput!): RepostPostPayload!
   revokeCurrentSession: RevokeCurrentSessionPayload!
   selectProfile(input: SelectProfileInput!): SelectProfilePayload!
+  submitFeedback(input: SubmitFeedbackInput!): SubmitFeedbackPayload!
   unfollowProfile(input: UnfollowProfileInput!): UnfollowProfilePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
 }
@@ -495,6 +503,15 @@ type Session implements Node {
   account: Account!
   id: ID!
   selectedProfile: Profile
+}
+
+input SubmitFeedbackInput {
+  body: String!
+  kind: FeedbackKind!
+}
+
+type SubmitFeedbackPayload {
+  completed: Boolean!
 }
 
 input UnfollowProfileInput {

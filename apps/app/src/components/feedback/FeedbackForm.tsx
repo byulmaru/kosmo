@@ -1,0 +1,247 @@
+import { feedbackBodySchema } from '@kosmo/core/validation';
+import { useRef, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { graphql, useMutation } from 'react-relay';
+import { Button } from '@/components/ui/Button';
+import { TextArea } from '@/components/ui/TextField';
+import { useTheme } from '@/theme/ThemeProvider';
+import { radii, spacing, typography } from '@/theme/tokens';
+import type { FeedbackKind } from '@kosmo/core/enums';
+import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
+
+const feedbackOptions = [
+  { label: '좋아요', value: 'POSITIVE' },
+  { label: '아쉬워요', value: 'NEGATIVE' },
+  { label: '이 기능이 필요해요', value: 'FEATURE_REQUEST' },
+  { label: '버그를 발견했어요', value: 'BUG_REPORT' },
+] as const;
+
+type FeedbackStatus = 'idle' | 'success' | 'error';
+
+const SubmitFeedbackMutation = graphql`
+  mutation FeedbackFormSubmitFeedbackMutation($input: SubmitFeedbackInput!) {
+    submitFeedback(input: $input) {
+      completed
+    }
+  }
+`;
+
+export function FeedbackForm() {
+  const theme = useTheme();
+  const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
+  const [body, setBody] = useState('');
+  const [bodyTouched, setBodyTouched] = useState(false);
+  const [status, setStatus] = useState<FeedbackStatus>('idle');
+  const [focusedKind, setFocusedKind] = useState<FeedbackKind | null>(null);
+  const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
+  const [commit, submitting] =
+    useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
+  const parsedBody = feedbackBodySchema.safeParse(body);
+  const bodyError = parsedBody.success ? null : parsedBody.error.issues[0]?.message;
+  const showBodyError = bodyTouched || status === 'error';
+  const canSubmit = !submitting && !bodyError;
+  const actionLabel = status === 'error' ? '다시 시도' : '보내기';
+  const selectKind = (value: FeedbackKind) => {
+    setKind(value);
+    setStatus('idle');
+  };
+
+  const submit = () => {
+    if (!canSubmit || !parsedBody.success) {
+      return;
+    }
+
+    setStatus('idle');
+    commit({
+      variables: {
+        input: {
+          body: parsedBody.data,
+          kind,
+        },
+      },
+      onCompleted: (response, errors) => {
+        if (errors?.length || !response.submitFeedback?.completed) {
+          setStatus('error');
+          return;
+        }
+
+        setKind('POSITIVE');
+        setBody('');
+        setBodyTouched(false);
+        setStatus('success');
+      },
+      onError: () => {
+        setStatus('error');
+      },
+    });
+  };
+
+  return (
+    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      <View style={styles.header}>
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          피드백 보내기
+        </Text>
+        <Text style={[styles.description, { color: theme.textSecondary }]}>
+          KOSMO를 더 좋게 만들 수 있도록 의견을 들려주세요.
+        </Text>
+      </View>
+
+      <View accessibilityLabel="피드백 종류" role="radiogroup" style={styles.options}>
+        {feedbackOptions.map((option, index) => {
+          const selected = option.value === kind;
+          const focused = option.value === focusedKind;
+          const webKeyboardProps =
+            Platform.OS === 'web'
+              ? {
+                  onKeyDown: (event: KeyboardEvent) => {
+                    if (!['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp'].includes(event.key)) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    const direction =
+                      event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+                    const nextIndex =
+                      (index + direction + feedbackOptions.length) % feedbackOptions.length;
+                    const nextOption = feedbackOptions[nextIndex];
+                    selectKind(nextOption.value);
+                    radioRefs.current[nextIndex]?.focus?.();
+                  },
+                }
+              : {};
+          return (
+            <Pressable
+              {...webKeyboardProps}
+              accessibilityLabel={option.label}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected, disabled: submitting }}
+              aria-checked={selected}
+              aria-disabled={submitting}
+              disabled={submitting}
+              key={option.value}
+              onBlur={() =>
+                setFocusedKind((current) => (current === option.value ? null : current))
+              }
+              onFocus={() => setFocusedKind(option.value)}
+              onPress={() => selectKind(option.value)}
+              ref={(ref) => {
+                radioRefs.current[index] = ref as unknown as {
+                  focus?: () => void;
+                };
+              }}
+              role="radio"
+              style={({ pressed }) => [
+                styles.option,
+                {
+                  backgroundColor: selected
+                    ? theme.surface
+                    : pressed
+                      ? theme.surface
+                      : 'transparent',
+                  borderColor: focused ? theme.text : selected ? theme.primary : theme.border,
+                },
+              ]}
+              tabIndex={Platform.OS === 'web' ? (selected ? 0 : -1) : undefined}
+            >
+              <View
+                style={[
+                  styles.radio,
+                  { borderColor: selected ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                {selected ? (
+                  <View style={[styles.radioDot, { backgroundColor: theme.primary }]} />
+                ) : null}
+              </View>
+              <Text style={[styles.optionLabel, { color: theme.text }]}>{option.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <TextArea
+        accessibilityLabel="피드백 내용"
+        aria-invalid={Boolean(bodyError && showBodyError)}
+        editable={!submitting}
+        error={showBodyError ? (bodyError ?? undefined) : undefined}
+        label="피드백 내용"
+        onChangeText={(value) => {
+          setBody(value);
+          setBodyTouched(true);
+          setStatus('idle');
+        }}
+        placeholder="어떤 점이 좋았거나 불편했는지 알려주세요."
+        value={body}
+      />
+
+      {status === 'success' ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.success, { color: theme.text }]}>
+          피드백을 전달했습니다. 감사합니다!
+        </Text>
+      ) : null}
+      {status === 'error' ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+          style={[styles.error, { color: theme.danger }]}
+        >
+          피드백을 전달하지 못했습니다. 입력 내용을 확인한 뒤 다시 시도해주세요.
+        </Text>
+      ) : null}
+
+      <View style={styles.actions}>
+        <Button
+          accessibilityLabel={status === 'error' ? '피드백 다시 시도' : '피드백 보내기'}
+          accessibilityState={{ busy: submitting, disabled: !canSubmit }}
+          aria-busy={submitting}
+          disabled={!canSubmit}
+          loading={submitting}
+          onPress={submit}
+          style={styles.submitButton}
+        >
+          {actionLabel}
+        </Button>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.lg,
+    maxWidth: 680,
+    padding: spacing.xl,
+    width: '100%',
+  },
+  header: { gap: spacing.xs },
+  title: { fontFamily: 'SUIT', fontSize: 24, fontWeight: '700', lineHeight: 32 },
+  description: { fontFamily: 'SUIT', ...typography.md },
+  options: { gap: spacing.sm },
+  option: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  radio: {
+    alignItems: 'center',
+    borderRadius: radii.full,
+    borderWidth: 2,
+    height: 20,
+    justifyContent: 'center',
+    width: 20,
+  },
+  radioDot: { borderRadius: radii.full, height: 10, width: 10 },
+  optionLabel: { fontFamily: 'SUIT', ...typography.md },
+  success: { fontFamily: 'SUIT', ...typography.sm },
+  error: { fontFamily: 'SUIT', ...typography.sm },
+  submitButton: { minHeight: 48 },
+  actions: { alignItems: 'flex-start' },
+});
