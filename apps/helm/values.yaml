@@ -1,3 +1,24 @@
 env:
 image: ghcr.io/byulmaru/kosmo
 version: main
+postgresTls:
+  enabled: false
+  clientAuthEnabled: false
+  mount: pki
+  ttl: 24h
+  expiryOffset: 1h
+  server:
+    vaultRole:
+    commonName:
+    altNames: []
+  runtime:
+    vaultRole:
+    database: kosmo
+    role:
+  migration:
+    vaultRole:
+    database: kosmo
+    role:
+  replication:
+    vaultRole:
+    role: streaming_replica

@@ -1,0 +1,23 @@
+env: dev
+postgresTls:
+  enabled: true
+  clientAuthEnabled: true
+  mount: pki
+  ttl: 24h
+  expiryOffset: 1h
+  server:
+    vaultRole: postgres-server
+    commonName: kosmo-dev-postgres
+    altNames:
+      - postgres.dev.example.test
+  runtime:
+    vaultRole: postgres-runtime
+    database: kosmo
+    role: kosmo_runtime
+  migration:
+    vaultRole: postgres-migration
+    database: kosmo
+    role: kosmo_migration
+  replication:
+    vaultRole: postgres-replication
+    role: streaming_replica

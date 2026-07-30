@@ -3,6 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import { getPostgresSsl } from './ssl';
 
 // ASCII: "KOSM", "MIGR"
 export const migrationLock = [0x4b4f534d, 0x4d494752] as const;
@@ -19,6 +20,7 @@ export async function runDatabaseMigrations({
   }
 
   const client = postgres(databaseUrl, {
+    ssl: getPostgresSsl(),
     max: 1,
     connection: {
       idle_in_transaction_session_timeout: 30 * 1000,
