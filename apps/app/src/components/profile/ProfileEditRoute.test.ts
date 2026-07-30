@@ -17,6 +17,7 @@ type MutationConfig = {
 type ScreenProps = Record<string, unknown> & {
   onAvatarEdit: () => Promise<void>;
   onAvatarRetry: () => void;
+  onBack: () => void;
   onChange: (value: Record<string, unknown>) => void;
   onHeaderEdit: () => Promise<void>;
   onSubmit: (value: Record<string, unknown>) => void;
@@ -28,10 +29,28 @@ type ScreenProps = Record<string, unknown> & {
   };
 };
 
+type NavigationAction = { readonly source: string; readonly type: string };
+type BeforeRemoveEvent = {
+  readonly data: { readonly action: NavigationAction };
+  readonly preventDefault: ReturnType<typeof mock.fn>;
+};
+type DiscardDialogProps = {
+  onContinue: () => void;
+  onDiscard: () => void;
+  visible: boolean;
+};
+
 const mutationCalls = new Map<string, MutationConfig[]>();
 const mutationHandlers = new Map<string, (config: MutationConfig) => void>();
+const navigationDispatches: NavigationAction[] = [];
 const routerReplacements: string[] = [];
+let beforeRemoveListener: ((event: BeforeRemoveEvent) => void) | null = null;
+let discardDialogProps: DiscardDialogProps | null = null;
+let lastBackEvent: BeforeRemoveEvent | null = null;
+let lastReplaceEvent: BeforeRemoveEvent | null = null;
 let pickerResult: ImagePickerResult = { canceled: true, assets: null };
+let routerBackCalls = 0;
+let triggerBeforeRemoveOnReplace = false;
 let queryData: {
   currentSession: { selectedProfile: { relativeHandle: string } | null } | null;
   selectedProfileForEdit: {
@@ -56,7 +75,30 @@ mockModule('expo-image-picker', {
   launchImageLibraryAsync: async () => pickerResult,
 });
 mockModule('expo-router', {
-  useRouter: () => ({ replace: (href: string) => routerReplacements.push(href) }),
+  useNavigation: () => ({
+    addListener: (event: string, listener: (event: BeforeRemoveEvent) => void) => {
+      assert.equal(event, 'beforeRemove');
+      beforeRemoveListener = listener;
+      return () => {
+        if (beforeRemoveListener === listener) {
+          beforeRemoveListener = null;
+        }
+      };
+    },
+    dispatch: (action: NavigationAction) => navigationDispatches.push(action),
+  }),
+  useRouter: () => ({
+    back: () => {
+      routerBackCalls += 1;
+      lastBackEvent = emitBeforeRemove({ source: 'route-action', type: 'GO_BACK' });
+    },
+    replace: (href: string) => {
+      if (triggerBeforeRemoveOnReplace) {
+        lastReplaceEvent = emitBeforeRemove({ source: 'save-success', type: 'REPLACE' });
+      }
+      routerReplacements.push(href);
+    },
+  }),
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
@@ -84,6 +126,12 @@ mockModule(new URL('./ProfileEditScreen.tsx', import.meta.url), {
     return createElement('ProfileEditScreen');
   },
 });
+mockModule(new URL('./ProfileEditDiscardDialog.tsx', import.meta.url), {
+  ProfileEditDiscardDialog: (props: DiscardDialogProps) => {
+    discardDialogProps = props;
+    return createElement('ProfileEditDiscardDialog');
+  },
+});
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
@@ -101,10 +149,17 @@ afterEach(async () => {
   }
   mutationCalls.clear();
   mutationHandlers.clear();
+  navigationDispatches.length = 0;
   pickerResult = { canceled: true, assets: null };
   queryData = editableQueryData();
+  beforeRemoveListener = null;
+  discardDialogProps = null;
+  lastBackEvent = null;
+  lastReplaceEvent = null;
   routerReplacements.length = 0;
+  routerBackCalls = 0;
   screenProps = null;
+  triggerBeforeRemoveOnReplace = false;
   mock.restoreAll();
 });
 
@@ -132,6 +187,26 @@ const requireScreenProps = () => {
   assert.ok(screenProps);
   return screenProps;
 };
+
+const requireDiscardDialogProps = () => {
+  assert.ok(discardDialogProps);
+  return discardDialogProps;
+};
+
+function emitBeforeRemove(action: NavigationAction): BeforeRemoveEvent {
+  assert.ok(beforeRemoveListener);
+  const event: BeforeRemoveEvent = {
+    data: { action },
+    preventDefault: mock.fn(),
+  };
+  beforeRemoveListener(event);
+  return event;
+}
+
+function requireBeforeRemoveEvent(event: BeforeRemoveEvent | null): BeforeRemoveEvent {
+  assert.ok(event);
+  return event;
+}
 
 const asset = (uri: string): ImagePickerAsset => ({
   file: new File(['profile'], 'profile.webp', { type: 'image/webp' }),
@@ -261,5 +336,86 @@ describe('ProfileEditRoute', () => {
     assert.equal(issued, 3);
     assert.equal(fetchMock.mock.callCount(), 3);
     assert.deepEqual(routerReplacements, ['/@updated']);
+  });
+
+  it('변경된 draft의 route, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '변경된 소개' }),
+    );
+
+    await act(async () => {
+      requireScreenProps().onBack();
+    });
+    assert.equal(routerBackCalls, 1);
+    assert.equal(requireBeforeRemoveEvent(lastBackEvent).preventDefault.mock.callCount(), 1);
+    assert.equal(requireDiscardDialogProps().visible, true);
+    await act(async () => requireDiscardDialogProps().onContinue());
+
+    for (const source of ['web-browser', 'android-hardware']) {
+      let event: BeforeRemoveEvent | null = null;
+      await act(async () => {
+        event = emitBeforeRemove({ source, type: 'GO_BACK' });
+      });
+      assert.equal(requireBeforeRemoveEvent(event).preventDefault.mock.callCount(), 1);
+      assert.equal(requireDiscardDialogProps().visible, true);
+      await act(async () => requireDiscardDialogProps().onContinue());
+    }
+  });
+
+  it('dialog가 열린 동안 두 번째 action으로 교체하지 않고 첫 action만 한 번 dispatch한다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, displayName: '새 이름' }),
+    );
+    const first = { source: 'first', type: 'GO_BACK' };
+    const second = { source: 'second', type: 'POP_TO_TOP' };
+
+    let firstEvent: BeforeRemoveEvent | null = null;
+    let secondEvent: BeforeRemoveEvent | null = null;
+    await act(async () => {
+      firstEvent = emitBeforeRemove(first);
+      secondEvent = emitBeforeRemove(second);
+    });
+    assert.equal(requireBeforeRemoveEvent(firstEvent).preventDefault.mock.callCount(), 1);
+    assert.equal(requireBeforeRemoveEvent(secondEvent).preventDefault.mock.callCount(), 1);
+
+    await act(async () => requireDiscardDialogProps().onDiscard());
+    assert.deepEqual(navigationDispatches, [first]);
+    assert.equal(requireDiscardDialogProps().visible, false);
+  });
+
+  it('저장 중에는 dialog 없이 이탈을 막는다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장 중인 소개' }),
+    );
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    assert.equal(requireScreenProps().submitState.kind, 'saving');
+
+    let event: BeforeRemoveEvent | null = null;
+    await act(async () => {
+      event = emitBeforeRemove({ source: 'saving', type: 'GO_BACK' });
+    });
+    assert.equal(requireBeforeRemoveEvent(event).preventDefault.mock.callCount(), 1);
+    assert.equal(requireDiscardDialogProps().visible, false);
+    assert.deepEqual(navigationDispatches, []);
+  });
+
+  it('저장 성공 navigation은 guard를 먼저 해제하고 replace한다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장할 소개' }),
+    );
+    triggerBeforeRemoveOnReplace = true;
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+    );
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+
+    assert.deepEqual(routerReplacements, ['/@updated']);
+    assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 0);
+    assert.equal(requireDiscardDialogProps().visible, false);
   });
 });

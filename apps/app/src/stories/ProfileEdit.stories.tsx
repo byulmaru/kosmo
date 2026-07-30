@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Text } from 'react-native';
-import { expect, within } from 'storybook/test';
+import { expect, waitFor, within } from 'storybook/test';
+import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
@@ -317,6 +318,20 @@ export const ProductionTagsHidden: Story = {
     expect(
       within(canvasElement).queryByRole('textbox', { name: '프로필 태그' }),
     ).not.toBeInTheDocument();
+  },
+};
+
+export const DiscardConfirmation: Story = {
+  render: () => (
+    <ProfileEditDiscardDialog onContinue={() => undefined} onDiscard={() => undefined} visible />
+  ),
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body);
+    await waitFor(() =>
+      expect(page.getByRole('dialog', { name: '변경사항을 버릴까요?' })).toBeVisible(),
+    );
+    expect(page.getByRole('button', { name: '계속 편집' })).toBeVisible();
+    expect(page.getByRole('button', { name: '버리기' })).toBeVisible();
   },
 };
 

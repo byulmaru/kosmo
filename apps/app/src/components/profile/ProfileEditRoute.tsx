@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
+import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
 import {
   completeProfileEditImageUpload,
   createProfileEditRouteImage,
@@ -16,6 +17,8 @@ import {
   retryProfileEditImageUpload,
 } from './profileEditMedia';
 import { ProfileEditScreen } from './ProfileEditScreen';
+import { isProfileEditDraftDirty } from './profileEditState';
+import { useProfileEditNavigationGuard } from './useProfileEditNavigationGuard';
 import type { Href } from 'expo-router';
 import type { ProfileEditRouteCompleteMediaUploadMutation } from './__generated__/ProfileEditRouteCompleteMediaUploadMutation.graphql';
 import type { ProfileEditRouteIssueMediaUploadUrlMutation } from './__generated__/ProfileEditRouteIssueMediaUploadUrlMutation.graphql';
@@ -157,6 +160,10 @@ function EditableProfileRoute({
   );
   const [commitUpdateProfile] =
     useMutation<ProfileEditRouteUpdateProfileMutation>(updateProfileMutation);
+  const { allowNextNavigation, dialogProps } = useProfileEditNavigationGuard({
+    dirty: isProfileEditDraftDirty(initialValue, value),
+    saving: submitState.kind === 'saving',
+  });
 
   const updateImage = useCallback(
     (field: ImageField, update: (current: ProfileEditRouteImage) => ProfileEditRouteImage) => {
@@ -315,12 +322,13 @@ function EditableProfileRoute({
             setSubmitState({ kind: 'error', message: '프로필을 저장하지 못했어요.' });
             return;
           }
+          allowNextNavigation();
           router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
         },
         onError: () => setSubmitState({ kind: 'error', message: '프로필을 저장하지 못했어요.' }),
       });
     },
-    [commitUpdateProfile, router],
+    [allowNextNavigation, commitUpdateProfile, router],
   );
 
   useEffect(() => {
@@ -335,20 +343,23 @@ function EditableProfileRoute({
   }, []);
 
   return (
-    <ProfileEditScreen
-      initialValue={initialValue}
-      onAvatarEdit={() => selectImage('avatar')}
-      onAvatarRemove={() => removeImage('avatar')}
-      onAvatarRetry={() => retryImage('avatar')}
-      onBack={() => router.back()}
-      onChange={setValue}
-      onHeaderEdit={() => selectImage('header')}
-      onHeaderRemove={() => removeImage('header')}
-      onHeaderRetry={() => retryImage('header')}
-      onSubmit={submit}
-      showTags={false}
-      submitState={submitState}
-      value={{ ...value, avatar: avatar.presentation, header: header.presentation, tags: [] }}
-    />
+    <>
+      <ProfileEditScreen
+        initialValue={initialValue}
+        onAvatarEdit={() => selectImage('avatar')}
+        onAvatarRemove={() => removeImage('avatar')}
+        onAvatarRetry={() => retryImage('avatar')}
+        onBack={() => router.back()}
+        onChange={setValue}
+        onHeaderEdit={() => selectImage('header')}
+        onHeaderRemove={() => removeImage('header')}
+        onHeaderRetry={() => retryImage('header')}
+        onSubmit={submit}
+        showTags={false}
+        submitState={submitState}
+        value={{ ...value, avatar: avatar.presentation, header: header.presentation, tags: [] }}
+      />
+      <ProfileEditDiscardDialog {...dialogProps} />
+    </>
   );
 }
