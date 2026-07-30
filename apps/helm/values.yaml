@@ -1,6 +1,6 @@
 env:
 image: ghcr.io/byulmaru/kosmo
-imageDigest:
+imageDigest: ''
 version: main
 migration:
   enabled: false

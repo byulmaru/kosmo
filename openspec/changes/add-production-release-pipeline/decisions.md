@@ -1,0 +1,110 @@
+## Context
+
+이 결정 기록은 PROD-563의 `production-release` 계약과 현재 Docker Build, Helm, Argo CD 경계를 구체화한다. PROD-562·564·565의 소유 범위를 현재 요구사항의 근거로 확장하지 않고, PROD-563이 승인한 release identity·승인·activation·rollback 동작 안에서만 구현 수단을 선택한다.
+
+## Decision Records
+
+### SemVer tag와 digest를 함께 검증해 full image reference를 확정한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-563
+- Status: Superseded
+- Context / Problem: SemVer tag만 다시 해석하면 registry tag 이동이나 잘못된 입력으로 최초 승인과 다른 image가 배포될 수 있고, 짧게 보존되는 workflow artifact만으로 장기 재실행을 보장할 수 없다.
+- Decision Outcome: Production workflow는 정상 SemVer tag와 `sha256:` digest를 함께 선택하고 registry에서 둘의 현재 대응을 검증한 뒤 `repository@digest`를 release identity로 확정한다. 같은 tag의 재실행에서도 입력 digest가 달라지면 실패한다.
+- Alternatives Considered: tag만 사용하면 mutable identity가 되고, workflow artifact run ID만 사용하면 artifact retention 뒤 재실행할 수 없다. 배포 시 rebuild는 정식 artifact 재사용 계약을 깨므로 선택하지 않는다.
+- Consequences: 운영자는 tag와 digest를 함께 제공해야 하고 pipeline은 registry metadata read 권한이 필요하다. Audit record에는 사람이 읽는 SemVer와 실제 실행 identity인 digest가 모두 남는다.
+- Confirmation / Follow-up: 정상 tag/digest, 형식 오류, mapping 불일치와 같은 identity 재실행을 workflow test에서 검증한다.
+
+### Immutable GitHub Release tag에서 attested image identity를 해석한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, PROD-563
+- Status: Active
+- Context / Problem: 운영자가 tag와 digest를 함께 복사하면 입력 오류가 생기고, Git tag immutability만으로는 별도 GHCR container tag가 같은 digest에 고정됐다고 보장할 수 없다. 현재 7일 workflow artifact도 장기 재실행 identity로 충분하지 않다.
+- Decision Outcome: Repository immutable releases를 활성화한다. 정식 SemVer image build가 성공하면 full GHCR digest reference 하나를 `docker-image-ref.txt`로 만들어 draft Release에 첨부한 뒤 Release를 발행한다. Production workflow는 immutable Release tag 하나만 받고 Release와 asset attestation을 검증해 `repository@digest`를 해석한다. Raw Git tag, draft/mutable Release와 GHCR tag는 deployment identity source로 사용하지 않는다.
+- Alternatives Considered: Tag와 digest 수동 입력은 안전하지만 운영자 UX와 검증 입력이 중복된다. Immutable Git tag만 믿고 GHCR tag를 직접 배포하는 방식은 서로 다른 객체의 immutability를 혼동한다. Container artifact attestation만 사용하는 방식도 가능하지만 Release와 image identity를 연결하는 추가 predicate 검증이 필요해 현재 경로보다 복잡하다.
+- Consequences: 정식 release는 image build, digest asset 첨부와 immutable GitHub Release 발행이 모두 성공해야 완성된다. 운영자는 tag 하나만 제공하고 workload는 여전히 digest로 실행된다. Immutable releases 활성화 이전 tag와 Release asset이 없거나 검증되지 않는 tag는 배포할 수 없다.
+- Confirmation / Follow-up: Immutable releases 설정 read-back, draft/발행 순서, `gh release verify`, `gh release verify-asset`, asset 형식, digest 존재와 같은 tag 재실행을 검증한다.
+
+### Migration, API와 Web은 하나의 공통 digest reference를 사용한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-563
+- Status: Active
+- Context / Problem: 세 manifest가 repository/tag 문자열을 따로 조합하면 일부 workload만 다른 release를 사용하는 drift가 생길 수 있다.
+- Decision Outcome: 선택한 하나의 full digest image reference를 production migration Job, API Rollout과 Web Rollout에 동일하게 렌더한다. SemVer는 label과 audit metadata이며 container pull identity로 사용하지 않는다.
+- Alternatives Considered: workload별 digest 입력은 같은 release 불변식을 약화하고, SemVer 또는 `stable` tag는 immutable하지 않아 선택하지 않는다.
+- Consequences: Helm image rendering 변경은 dev의 기존 repository/tag 동작을 보존하면서 production digest를 표현해야 한다.
+- Confirmation / Follow-up: dev/prod render test에서 dev는 기존 tag를 유지하고 production 세 container image는 byte-for-byte 같은 digest reference인지 확인한다.
+
+### Production 승인은 GitHub Environment가 강제한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-563
+- Status: Active
+- Context / Problem: Workflow 내부 확인 input이나 수동 dispatch 권한만으로는 실행과 production 배포 승인을 분리하거나 자격 증명 접근을 gate하지 못한다.
+- Decision Outcome: `production` GitHub Environment는 `robin-maki`를 required reviewer로 두고 main branch deployment만 허용하며 admin bypass를 끈다. 현재 단일 운영자 workflow가 교착되지 않도록 self-review는 허용한다. 승인된 job만 OIDC로 Argo CD token을 얻는다.
+- Alternatives Considered: 확인 문자열 input은 독립적인 GitHub approval 기록과 secret/OIDC gate가 없고, environment reviewer 없이 branch policy만 두는 방식은 명시적 production 승인을 강제하지 못해 선택하지 않는다.
+- Consequences: 같은 운영자가 dispatch와 승인을 수행할 수 있지만 GitHub에 별도의 명시적 승인 행위와 시각이 남는다. 더 강한 separation of duties가 필요해지면 reviewer team과 self-review 정책을 별도 상위 결정으로 바꿔야 한다.
+- Confirmation / Follow-up: Environment API read-back과 workflow 구조 검증에서 reviewer, main policy, bypass와 approval-before-OIDC 순서를 확인한다.
+
+### 두 Rollout은 migration과 preview 검증 뒤 수동 승격한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-563
+- Status: Active
+- Context / Problem: 현재 dev의 자동 승격을 production에 사용하면 migration 또는 다른 workload의 preview 상태를 확인하기 전에 API나 Web 하나가 active가 될 수 있다.
+- Decision Outcome: Production에서는 PROD-564의 같은-digest migration 성공 뒤 API와 Web preview를 만들고, 둘이 모두 준비된 다음 pipeline이 두 Rollout을 승격한다. Preview 실패 시 승격하지 않고, 승격 또는 active identity 확인 실패 시 직전 active identity로 둘을 복구한다.
+- Alternatives Considered: 두 Rollout의 독립 자동 승격은 cross-workload gate를 제공하지 않는다. Migration 뒤 API와 Web을 순차 완전 배포하는 방식은 중간에 서로 다른 release가 active가 되는 시간을 정상 경로로 만들므로 선택하지 않는다.
+- Consequences: Pipeline은 두 Rollout의 preview/active 상태를 관찰하고 promotion/abort 권한을 가져야 한다. Kubernetes 차원에서 완전한 원자 승격은 아니므로 실패 복구와 최종 identity 검증이 필요하다.
+- Confirmation / Follow-up: migration 실패, 각 preview 실패, 정상 동시 준비, promotion 실패와 최종 identity mismatch 경로를 자동 검증한다.
+
+### Application rollback은 이전 tag와 digest를 같은 pipeline에 재입력한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-563
+- Status: Superseded
+- Context / Problem: 별도 rollback 구현은 승인·identity 검증·감사 경계를 우회할 수 있고 DB rollback과 혼동될 수 있다.
+- Decision Outcome: 운영자가 현재 DB와 호환된다고 판단한 이전 정상 SemVer tag와 digest를 동일 production workflow에 입력하고 다시 승인해 application rollback한다. Pipeline은 DB 상태나 migration history를 되돌리지 않는다.
+- Alternatives Considered: Argo CD history의 임의 revision rollback은 SemVer/digest 검증과 현재 workflow approval을 우회할 수 있다. 자동 DB rollback은 명시적 제외 범위여서 선택하지 않는다.
+- Consequences: Rollback도 정상 배포와 같은 승인 시간이 필요하고 운영자는 호환 가능한 이전 identity를 알아야 한다. Schema 호환성과 destructive migration 판단은 PROD-564에 남는다.
+- Confirmation / Follow-up: 이전 identity 재선택, 승인, 두 workload 복구와 DB 비변경을 workflow/manifest 검증으로 확인한다.
+
+### Application rollback은 이전 immutable Release tag를 같은 pipeline에 재입력한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, PROD-563
+- Status: Active
+- Context / Problem: Application rollback도 수동 digest 복사 없이 정상 배포와 같은 immutable identity source, 승인과 감사 경계를 사용해야 한다.
+- Decision Outcome: 운영자가 현재 DB와 호환된다고 판단한 이전 정상 immutable GitHub Release tag를 동일 production workflow에 입력하고 다시 승인한다. Pipeline은 해당 Release와 `docker-image-ref.txt` attestation을 검증해 이전 digest를 해석하며 DB 상태나 migration history를 되돌리지 않는다.
+- Alternatives Considered: 이전 tag와 digest를 함께 입력하는 방식은 안전하지만 새 release 선택과 다른 UX를 유지한다. Argo CD history의 임의 revision rollback은 immutable Release 검증과 현재 workflow approval을 우회할 수 있어 선택하지 않는다.
+- Consequences: Rollback도 검증 가능한 immutable GitHub Release가 있어야 하고 정상 배포와 같은 승인 시간이 필요하다. Schema 호환성과 destructive migration 판단은 PROD-564에 남는다.
+- Confirmation / Follow-up: 이전 Release tag 재선택, Release/asset 검증, 승인, 두 workload 복구와 DB 비변경을 workflow/manifest 검증으로 확인한다.
+
+### GitHub와 Argo CD의 기존 실행 기록을 release audit log로 사용한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-563
+- Status: Active
+- Context / Problem: 재실행과 rollback의 요청·승인·identity·결과를 추적해야 하지만 별도 release database는 현재 범위를 확장한다.
+- Decision Outcome: GitHub workflow/deployment record와 job summary에 요청자, 승인 environment, immutable Release tag, asset에서 해석한 digest, 직전 identity와 결과를 남기고 Argo CD operation/history의 실제 적용 결과와 연결한다.
+- Alternatives Considered: 별도 database나 release service는 새로운 runtime과 lifecycle을 만들며, workflow log만 남기는 방식은 요약된 identity와 최종 결과 확인이 어려워 선택하지 않는다.
+- Consequences: Audit 조회는 GitHub와 Argo CD 보존 정책에 의존한다. 장기 규제 보존 요구가 생기면 별도 계약으로 export/storage를 추가해야 한다.
+- Confirmation / Follow-up: 성공·검증 실패·rollback fixture에서 job summary와 deployment/operation metadata에 필수 필드가 남는지 확인한다.
+
+## Remaining Decisions
+
+- 없음.
+
+## Superseded Decisions
+
+- `SemVer tag와 digest를 함께 검증해 full image reference를 확정한다`: 사용자가 immutable GitHub Release tag 하나를 selector로 사용하기로 결정해 `Immutable GitHub Release tag에서 attested image identity를 해석한다`로 대체했다.
+- `Application rollback은 이전 tag와 digest를 같은 pipeline에 재입력한다`: 같은 사용자 결정에 따라 이전 immutable Release tag만 재입력하고 검증된 asset에서 digest를 해석하는 방식으로 대체했다.

@@ -6,10 +6,49 @@ render_dir="$(mktemp -d)"
 trap 'rm -rf "${render_dir}"' EXIT
 cd "${chart_dir}"
 
+release_tag="1.2.3"
+release_digest="sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+release_image="ghcr.io/byulmaru/kosmo@${release_digest}"
+
 helm lint . --set env=dev
-helm lint . --set env=prod
+helm lint . --set env=prod --set-string version="${release_tag}" --set-string imageDigest="${release_digest}"
 helm template kosmo . --namespace kosmo-dev --set env=dev >"${render_dir}/dev.yaml"
-helm template kosmo . --namespace kosmo-prod --set env=prod >"${render_dir}/prod.yaml"
+helm template kosmo . --namespace kosmo-prod --set env=prod --set-string version="${release_tag}" --set-string imageDigest="${release_digest}" >"${render_dir}/prod.yaml"
+
+if helm template kosmo . --namespace kosmo-prod --set env=prod >"${render_dir}/invalid-prod.yaml" 2>/dev/null; then
+  echo "prod manifest rendered without an image digest" >&2
+  exit 1
+fi
+
+if helm template kosmo . --namespace kosmo-prod --set env=prod --set-string imageDigest=sha256:invalid >"${render_dir}/invalid-prod.yaml" 2>/dev/null; then
+  echo "prod manifest rendered with a malformed image digest" >&2
+  exit 1
+fi
+
+if [[ "$(grep -Fc 'image: "ghcr.io/byulmaru/kosmo:main"' "${render_dir}/dev.yaml")" -ne 3 ]]; then
+  echo "dev migration, API, and Web must keep the mutable main image" >&2
+  exit 1
+fi
+
+if [[ "$(grep -Fc 'autoPromotionEnabled: true' "${render_dir}/dev.yaml")" -ne 2 ]]; then
+  echo "dev API and Web rollouts must keep automatic promotion" >&2
+  exit 1
+fi
+
+if [[ "$(grep -Fc "image: \"${release_image}\"" "${render_dir}/prod.yaml")" -ne 2 ]]; then
+  echo "prod API and Web must use the selected digest image" >&2
+  exit 1
+fi
+
+if [[ "$(grep -Fc 'autoPromotionEnabled: false' "${render_dir}/prod.yaml")" -ne 2 ]]; then
+  echo "prod API and Web rollouts must wait for coordinated promotion" >&2
+  exit 1
+fi
+
+if grep -Fq "image: \"ghcr.io/byulmaru/kosmo:${release_tag}\"" "${render_dir}/prod.yaml"; then
+  echo "prod workload identity must not use the mutable SemVer container tag" >&2
+  exit 1
+fi
 
 image_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 helm template kosmo . \

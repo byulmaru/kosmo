@@ -1,0 +1,225 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Immutable SemVer GitHub Release tag to deploy or roll back to
+        required: true
+        type: string
+      migration_context_json:
+        description: Non-secret PROD-564 migration gate context JSON for this release
+        required: true
+        type: string
+      migration_secret_name:
+        description: Production database credential Secret name
+        required: true
+        type: string
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  verify_release:
+    name: Verify Immutable Release
+    runs-on: [self-hosted, ARM64]
+    permissions:
+      attestations: read
+      contents: read
+      packages: read
+    outputs:
+      image_ref: ${{ steps.release.outputs.image_ref }}
+      migration_phase: ${{ steps.migration.outputs.phase }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Resolve immutable release identity
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image_ref="$(scripts/resolve-production-release.sh "${RELEASE_TAG}")"
+          echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify image digest is available
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+        shell: bash
+        run: docker buildx imagetools inspect "${IMAGE_REF}" >/dev/null
+
+      - name: Validate migration gate context
+        id: migration
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
+          PRODUCTION_CONTRACT_PREFLIGHT: 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          context_file="${RUNNER_TEMP}/production-migration-gate.json"
+          printf '%s' "${MIGRATION_CONTEXT_JSON}" > "${context_file}"
+          node scripts/production-migration-gate.mjs preflight "${context_file}"
+          jq -e --arg image "${IMAGE_REF}" '
+            .releaseImage == $image
+            and .migrationImage == $image
+            and .apiImage == $image
+            and .webImage == $image
+          ' "${context_file}" >/dev/null
+          echo "phase=$(jq -r '.phase' "${context_file}")" >> "${GITHUB_OUTPUT}"
+
+      - name: Record release verification audit
+        if: always()
+        env:
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          VERIFICATION_RESULT: ${{ job.status }}
+        shell: bash
+        run: |
+          {
+            echo "### Production release verification ${RELEASE_TAG}"
+            echo
+            echo "- Requester: ${GITHUB_ACTOR}"
+            echo "- Approval gate: not entered"
+            echo "- Release tag: ${RELEASE_TAG}"
+            echo "- Image identity: ${IMAGE_REF:-unresolved}"
+            echo "- Previous identity: not read before production approval"
+            echo "- Result: ${VERIFICATION_RESULT}"
+            echo "- Recovery: not required"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  contract_approval:
+    name: Approve Contract Migration
+    if: needs.verify_release.outputs.migration_phase == 'contract'
+    needs: verify_release
+    uses: ./.github/workflows/production-contract-approval.yml
+    permissions:
+      contents: read
+      deployments: write
+    with:
+      gate-context-json: ${{ inputs.migration_context_json }}
+
+  deploy_production:
+    name: Approve and Deploy Production
+    if: >-
+      always()
+      && needs.verify_release.result == 'success'
+      && (needs.contract_approval.result == 'success' || needs.contract_approval.result == 'skipped')
+    needs: [verify_release, contract_approval]
+    runs-on: [self-hosted, macOS]
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
+    steps:
+      - name: Get Argo CD token
+        id: argocd-token
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const githubToken = await core.getIDToken();
+            core.setSecret(githubToken);
+
+            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
+              method: "POST",
+              headers: {
+                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
+              },
+              body: new URLSearchParams({
+                connector_id: "github-actions",
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                scope: "openid email profile federated:id",
+                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                subject_token: githubToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
+            }
+
+            const { access_token: dexToken } = await response.json();
+            if (!dexToken) {
+              throw new Error("Dex token response did not include an access token.");
+            }
+
+            core.setSecret(dexToken);
+            core.setOutput("token", dexToken);
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Argo CD CLI
+        env:
+          ARGOCD_CLI_VERSION: v3.4.2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$(uname -m)" in
+            x86_64) argocd_arch=amd64 ;;
+            aarch64 | arm64) argocd_arch=arm64 ;;
+            *)
+              echo "::error::Unsupported runner architecture: $(uname -m)"
+              exit 1
+              ;;
+          esac
+
+          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-darwin-${argocd_arch}"
+          chmod 555 "${RUNNER_TEMP}/argocd"
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Deploy verified release
+        env:
+          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
+          APPROVED_CONTRACT_CONTEXT_SHA256: ${{ needs.contract_approval.outputs['approved-context-sha256'] }}
+          IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
+          MIGRATION_CONTEXT_JSON: ${{ inputs.migration_context_json }}
+          MIGRATION_SECRET_NAME: ${{ inputs.migration_secret_name }}
+          PRODUCTION_AUDIT_FILE: ${{ runner.temp }}/production-audit.md
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          context_file="${RUNNER_TEMP}/production-migration-gate.json"
+          printf '%s' "${MIGRATION_CONTEXT_JSON}" > "${context_file}"
+          PRODUCTION_MIGRATION_CONTEXT_FILE="${context_file}" \
+          PRODUCTION_MIGRATION_SECRET_NAME="${MIGRATION_SECRET_NAME}" \
+            scripts/deploy-production-release.sh "${RELEASE_TAG}" "${IMAGE_REF}"
+
+      - name: Record production release audit
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f "${PRODUCTION_AUDIT_FILE}" ]]; then
+            cat "${PRODUCTION_AUDIT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            {
+              echo "### Production release ${RELEASE_TAG}"
+              echo
+              echo "- Requester: ${GITHUB_ACTOR}"
+              echo "- Approval gate: production environment"
+              echo "- Release tag: ${RELEASE_TAG}"
+              echo "- Result: failed before deployment state was read"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
+        env:
+          PRODUCTION_AUDIT_FILE: ${{ runner.temp }}/production-audit.md
+          RELEASE_TAG: ${{ inputs.release_tag }}
