@@ -267,6 +267,10 @@ describe('inbound Create dispatch', () => {
         id: remoteObjectUri,
         to: new URL('https://remote.example/users/bob'),
       }),
+      new Note({
+        attribution: remoteActorUri,
+        id: remoteObjectUri,
+      }),
     ];
 
     for (const note of notes) {

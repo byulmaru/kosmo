@@ -49,10 +49,10 @@ activity URI를 가리키는 소유 actor의 Undo만 정확한 source를 제거�
 
 **Verification**
 
-- local·remote target, actor/recipient/object/access 거부, core Reaction 선존재, exact duplicate, concurrent conflict,
+- local·remote target, actor/object/access 거부, core Reaction 선존재, exact duplicate, concurrent conflict,
   URI·embedded Undo, actor mismatch와 Notification 실패 격리를 core DB-backed test로 확인한다.
 
-- [x] 2.1 local·remote object URI, Post Author recipient와 actor Post 접근을 검증하는 저장 lookup을 제공한다.
+- [x] 2.1 local·remote object URI와 actor Post 접근을 검증하는 저장 lookup을 제공한다.
 - [x] 2.2 core Reaction 추가와 activity mapping을 하나의 transaction에서 materialize한다.
 - [x] 2.3 activity URI mapping 기반 exact Undo와 반복·다른 actor no-op을 구현한다.
 - [x] 2.4 실제 생성·제거 결과에 기존 Reaction Notification 생성·정리를 연결한다.
@@ -79,7 +79,7 @@ activity URI를 가리키는 소유 actor의 Undo만 정확한 source를 제거�
 
 **Verification**
 
-- typed listener routing, Like·EmojiReact content fixtures, personal/shared recipient, local·remote object, malformed URI,
+- typed listener routing, Like·EmojiReact content fixtures, audience와 personal/shared route 독립성, local·remote object, malformed URI,
   legacy exclusion과 URI·embedded Undo를 Fedify unit/inbox integration test로 확인한다.
 
 - [x] 3.1 `Like`와 `EmojiReact`를 공통 검증·Type 투영·core materialization 경계에 연결한다.
@@ -113,3 +113,34 @@ PROD-498의 inbound Reaction 계약과 기존 actor, Follow, Create(Note), Local
 - [x] 4.1 관련 package TypeScript와 focused test를 통과시킨다.
 - [x] 4.2 core/Fedify 회귀와 migration 검증을 실행한다.
 - [x] 4.3 formatting, strict OpenSpec validation과 diff integrity를 확인한다.
+
+## 5. PROD-567 Inbound Reaction audience 독립성
+
+**Authority / Provenance**
+
+- `docs/domain/objects/reaction.md`
+- `docs/domain/objects/post.md`
+- PROD-567
+
+**Deliverable**
+
+저장된 active Remote Profile의 `Like`·`EmojiReact`는 activity audience의 존재, Post Author 포함 여부와
+personal/shared inbox route에 의존하지 않고 정확한 object와 Post 조회 정책으로 검증한다.
+
+**Guardrails**
+
+- actor·object identity, local·stored remote Post와 Post 조회 정책 검증을 유지한다.
+- `Create(Note)`의 audience 기반 Public·Unlisted Visibility projection과 unsupported addressing 거부를 변경하지
+  않는다.
+- 새 OpenSpec change나 remote fetch/materialization 범위를 추가하지 않는다.
+
+**Verification**
+
+- audience 없는 personal/shared success와 Post Author가 없는 명시 audience success를 DB-backed Fedify test로
+  확인한다.
+- 기존 `Create(Note)` missing/unsupported audience 거부를 회귀 검증한다.
+- 관련 Fedify/core 회귀, TypeScript, formatting, strict OpenSpec과 diff integrity를 확인한다.
+
+- [x] 5.1 canonical Reaction·Post 계약, Linear와 기존 OpenSpec requirement·design·decision을 PROD-567에 맞게 정렬한다.
+- [x] 5.2 inbound Reaction recipient 입력·검증을 제거하고 audience·personal/shared route 독립성 회귀 테스트를 구현한다.
+- [x] 5.3 Create(Note) addressing을 포함한 관련 회귀, TypeScript, formatting, strict OpenSpec과 diff integrity를 검증한다.

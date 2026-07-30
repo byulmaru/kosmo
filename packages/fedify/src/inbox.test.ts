@@ -51,9 +51,19 @@ describe('Fedify inbox routes', () => {
   });
 
   test('signed Like and EmojiReact reach typed handlers through personal and shared inboxes', async () => {
-    const calls: Array<{ id: string | undefined; recipient: string | null; type: string }> = [];
+    const calls: Array<{
+      audienceSize: number;
+      id: string | undefined;
+      recipient: string | null;
+      type: string;
+    }> = [];
     const fixture = await createReactionInboxFixture((context, activity) => {
       calls.push({
+        audienceSize:
+          activity.toIds.length +
+          activity.btoIds.length +
+          activity.ccIds.length +
+          activity.bccIds.length,
         id: activity.id?.href,
         recipient: context.recipient,
         type: activity instanceof Like ? 'Like' : 'EmojiReact',
@@ -65,6 +75,7 @@ describe('Fedify inbox routes', () => {
         `/ap/actor/${localProfileId}/inbox`,
         'personal-like',
         'Like',
+        false,
       ),
       { contextData: undefined },
     );
@@ -77,11 +88,13 @@ describe('Fedify inbox routes', () => {
     assert.equal(sharedResponse.status, 202, await sharedResponse.text());
     assert.deepEqual(calls, [
       {
+        audienceSize: 0,
         id: 'https://remote.example/activities/personal-like',
         recipient: localProfileId,
         type: 'Like',
       },
       {
+        audienceSize: 1,
         id: 'https://remote.example/activities/shared-emoji',
         recipient: null,
         type: 'EmojiReact',
@@ -215,6 +228,7 @@ const createReactionInboxFixture = async (onReaction: ReactionHandler) => {
     path: string,
     id: string,
     type: 'EmojiReact' | 'Like',
+    includeAudience = true,
   ): Promise<Request> => {
     const Activity = type === 'Like' ? Like : EmojiReact;
     const localActorUri = new URL(`/ap/actor/${localProfileId}`, 'https://kos.moe');
@@ -223,7 +237,7 @@ const createReactionInboxFixture = async (onReaction: ReactionHandler) => {
       content: type === 'Like' ? '❤️' : '🎉',
       id: new URL(`/activities/${id}`, remoteActorUri),
       object: new URL('/ap/note/019f6f67-2222-7777-8888-123456789abc', 'https://kos.moe'),
-      to: localActorUri,
+      ...(includeAudience ? { to: localActorUri } : {}),
     });
     const request = new Request(new URL(path, 'https://kos.moe'), {
       body: JSON.stringify(await activity.toJsonLd({ contextLoader })),
