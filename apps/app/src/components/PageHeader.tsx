@@ -13,6 +13,7 @@ type PageHeaderProps =
   | {
       accessibilityLabel: string;
       leading?: ReactNode;
+      trailing?: ReactNode;
       variant: 'brand';
     };
 
@@ -21,25 +22,33 @@ export function PageHeader(props: PageHeaderProps) {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.background, borderColor: theme.border }]}>
-      {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
       {props.variant === 'brand' ? (
-        <View style={styles.brand}>
-          <View
-            accessibilityElementsHidden
-            accessible={false}
-            aria-hidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <BrandLogo variant="mark" width={38} />
+        <>
+          <View style={styles.brandActionSlot}>{props.leading}</View>
+          <View style={styles.brand}>
+            <View
+              accessibilityElementsHidden
+              accessible={false}
+              aria-hidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <BrandLogo variant="mark" width={38} />
+            </View>
+            <Text accessibilityRole="header" style={styles.srOnly}>
+              {props.accessibilityLabel}
+            </Text>
           </View>
-          <Text accessibilityRole="header" style={styles.srOnly}>
-            {props.accessibilityLabel}
-          </Text>
-        </View>
+          <View style={styles.brandActionSlot} testID="page-header-trailing-slot">
+            {props.trailing}
+          </View>
+        </>
       ) : (
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-          {props.title}
-        </Text>
+        <>
+          {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+            {props.title}
+          </Text>
+        </>
       )}
     </View>
   );
@@ -56,15 +65,19 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   leading: { alignItems: 'center', flexDirection: 'row', zIndex: 1 },
+  brandActionSlot: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+    zIndex: 1,
+  },
   brand: {
     alignItems: 'center',
-    bottom: 0,
+    flex: 1,
     justifyContent: 'center',
-    left: 0,
-    position: 'absolute',
+    minWidth: 0,
     pointerEvents: 'none',
-    right: 0,
-    top: 0,
   },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xl },
   srOnly: { height: 1, overflow: 'hidden', position: 'absolute', width: 1 },

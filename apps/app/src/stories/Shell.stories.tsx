@@ -1037,9 +1037,23 @@ export const UniversalMobile: Story = {
     const homeHeading = canvas.getByRole('heading', { name: '홈' });
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
     const homeHeader = homeHeading.parentElement?.parentElement;
+    const brandMark = homeHeader?.querySelector<HTMLImageElement>('img');
+    const trailingSlot = homeHeader?.querySelector<HTMLElement>(
+      '[data-testid="page-header-trailing-slot"]',
+    );
 
     expect(homeHeader).not.toBeNull();
     expect(homeHeader).toContainElement(menuButton);
+    expect(brandMark).not.toBeNull();
+    expect(trailingSlot).not.toBeNull();
+    expect(trailingSlot?.getBoundingClientRect().height).toBe(44);
+    expect(trailingSlot?.getBoundingClientRect().width).toBe(44);
+    expect(
+      brandMark!.getBoundingClientRect().left + brandMark!.getBoundingClientRect().width / 2,
+    ).toBeCloseTo(
+      homeHeader!.getBoundingClientRect().left + homeHeader!.getBoundingClientRect().width / 2,
+      0,
+    );
     expect(within(menuButton).queryByText('메뉴')).toBeNull();
     expect(getComputedStyle(menuButton).borderTopWidth).toBe('0px');
     expect(menuButton.getBoundingClientRect().height).toBe(44);
