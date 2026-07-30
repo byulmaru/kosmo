@@ -56,6 +56,8 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - Post에 하나 이상의 Reaction이 있을 때만 요약 row를 표시한다. Reaction이 없으면 별도 빈 영역이나 zero-count Type을 표시하지 않는다.
 - standalone `반응` 제목은 표시하지 않는다.
 - server가 제공한 양수 count Type과 순서를 그대로 사용하며, 조회된 Profile 수로 count를 다시 계산하지 않는다.
+  server 순서는 각 Type에 현재 존재하는 최초 Reaction 생성 시각 오름차순이고, count 증감만으로 기존 Type을
+  재정렬하지 않는다. Type이 0개가 됐다가 다시 생기면 새 Type처럼 현재 순서의 뒤에 추가한다.
 - Web token은 높이 32px, radius 12px의 둥근 사각형이다. emoji는 20px, count는 14px, 내부 gap은 4px, 좌우 padding은 8px, token 사이 gap은 4px이다.
 - 요약 row의 token은 Profile 목록을 여는 control이 아니라 해당 Type의 Reaction을 추가·삭제하는 toggle이다. 선택 상태, pending, error와 disabled 상태는 Quick Picker와 동일한 controller에서 공급한다.
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
@@ -82,11 +84,11 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - private `PostReactionController`가 한 `reactionTarget`의 `viewerReactions`, Type별 pending·error, mutation과 Relay cache 갱신을 소유한다. generic context나 공용 mock infrastructure로 일반화하지 않는다.
 - Quick Picker option과 요약 token은 같은 controller 상태와 toggle 동작을 사용한다. 한쪽에서 성공한 변경은 같은 surface의 다른쪽에 즉시 같은 server-confirmed 상태로 보인다.
 - 선택 상태와 count는 optimistic하게 바꾸지 않는다. mutation payload가 성공을 확인한 뒤에만 해당 Type의 상태를 반영한다.
-- 성공 payload를 받은 뒤에는 그 결과로 확인할 수 있는 선택 상태와 count delta를 반영하고, 대상 Post의 `reactionCounts`만 좁게 다시 조회해 최종 server 상태로 맞춘다. API나 DB payload를 확장하지 않는다.
+- add/delete mutation payload는 대상 Post의 현재 `viewerReactions`와 `reactionCounts`를 함께 반환한다. Relay가 이 Post를 정규화한 결과를 선택 상태와 count의 authoritative 상태로 사용하며, client에서 count delta를 계산하거나 별도 refetch로 보정하지 않는다.
 - 요청한 Type만 pending으로 막고 다른 Type은 계속 조작할 수 있다. 같은 Type의 연속 입력은 하나의 operation만 만들지만 서로 다른 Type은 동시에 진행할 수 있다.
 - mutation 실패는 해당 Type에 기존 inline `오류, 다시 시도` 상태를 표시하며 전역 toast를 추가하지 않는다. 실패 전 선택 상태와 count를 유지하고 재시도는 해당 Type의 오류만 지운다.
 - 필요한 mutation payload가 있으면 GraphQL `errors`가 함께 있어도 해당 Reaction 결과는 성공으로 처리한다. payload가 없거나 network가 실패하면 기존 선택 상태와 count를 유지한다.
-- mutation, targeted refetch와 Relay cache 갱신은 요청을 시작한 selected Profile의 Relay Environment 안에서 끝낸다. 이전 actor의 늦은 성공·실패·refetch callback은 새 actor의 popover, pending, error, 선택 또는 count UI를 변경하지 않는다.
+- mutation과 Relay cache 갱신은 요청을 시작한 selected Profile의 Relay Environment 안에서 끝낸다. 이전 actor의 늦은 성공·실패 callback은 새 actor의 popover, pending, error, 선택 또는 count UI를 변경하지 않는다.
 - 같은 actor의 여러 화면에서 동시에 보낸 요청을 client 전역에서 직렬화하지 않는다. 서로 다른 Type의 응답 순서는 보존되지만 같은 Type의 cross-surface 응답 순서는 server 결과에 따른다.
 
 ## 컴포넌트 경계
@@ -104,7 +106,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 
 - Storybook interaction에서 Web option의 exact 32×32px, 20px emoji, 16×16px spinner와 2px stroke, 70% selected 배경, 오류 재시도와 disabled 시 미렌더링을 검증한다.
 - Reaction 요약은 exact 32px token·More geometry, standalone 제목 제거, Quick Picker와 공유하는 selected·pending·error 상태를 검증한다.
-- mutation 성공 전 상태 불변, 성공 후 count delta와 targeted refetch, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
+- mutation 성공 전 상태 불변, 성공 payload Post의 authoritative 선택·count·순서 정규화, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
 - selected Profile이 없을 때 Action Bar trigger와 token toggle은 disabled이고 popover·mutation이 없지만 More와 Profile 목록 조회는 가능한지 검증한다.
 - modal의 양수 count emoji tab 순서, 기본 선택, tab별 목록, item emoji, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다. 320px에서 여섯 Type tab이 horizontal scroll로 접근 가능한지도 검증한다.

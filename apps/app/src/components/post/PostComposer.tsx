@@ -12,9 +12,14 @@ import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import {
+  emptyPostComposerMediaValue,
+  PostComposerMediaControls,
+} from './PostComposerMediaControls';
 import type { TextInput } from 'react-native';
 import type { PostComposer_profile$key } from './__generated__/PostComposer_profile.graphql';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
+import type { PostComposerMediaValue } from './PostComposerMediaControls';
 
 const visibilityOptions = [
   {
@@ -53,16 +58,6 @@ const PostComposerFragment = graphql`
   }
 `;
 
-const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
-    createPost(input: $input) {
-      post {
-        id
-      }
-    }
-  }
-`;
-
 export function PostComposer({ profile: profileKey }: { profile: PostComposer_profile$key }) {
   const theme = useTheme();
   const profile = useFragment(PostComposerFragment, profileKey);
@@ -75,10 +70,24 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
+  const [mediaGeneration, setMediaGeneration] = useState(0);
+  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(graphql`
+    mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+      createPost(input: $input) {
+        post {
+          id
+        }
+      }
+    }
+  `);
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
-  const disabled = submitting || bodyText.length === 0 || remaining < 0;
+  const disabled =
+    submitting ||
+    (bodyText.length === 0 && media.items.length === 0) ||
+    media.hasPendingMedia ||
+    remaining < 0;
   const selectedVisibility =
     visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
@@ -89,7 +98,14 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     }
     setError(null);
     commit({
-      variables: { input: { bodyText, visibility } },
+      variables: {
+        input: {
+          bodyText,
+          media: media.items,
+          sensitiveMedia: media.sensitiveMedia,
+          visibility,
+        },
+      },
       onCompleted: (_response, errors) => {
         if (errors?.length) {
           setError('게시글을 작성하지 못했습니다.');
@@ -101,6 +117,8 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
           visibility,
         });
         setBody('');
+        setMedia(emptyPostComposerMediaValue);
+        setMediaGeneration((generation) => generation + 1);
         setVisibility(PostVisibility.UNLISTED);
         editor.current?.focus();
       },
@@ -226,33 +244,21 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   return (
     <View
       accessibilityLabel="새 게시글 작성"
-      style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[styles.root, { backgroundColor: theme.card }]}
     >
       <View style={styles.author}>
         <Avatar label={profile.displayName} size={40} />
         <ProfileNameBlock profile={profile} />
       </View>
-      <TextArea
-        ref={editor}
-        aria-invalid={Boolean(error)}
-        accessibilityLabel="게시글 본문"
-        editable={!submitting}
-        onBlur={() => setEditorFocused(false)}
-        onChangeText={setBody}
-        onFocus={() => setEditorFocused(true)}
-        placeholder="무슨 일이 일어나고 있나요?"
-        style={{
-          backgroundColor: theme.background,
-          borderColor: error ? theme.danger : editorFocused ? theme.primary : theme.border,
-        }}
-        value={body}
-      />
-      {error ? (
-        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          {error}
-        </Text>
-      ) : null}
-      <View style={styles.footer}>
+      <View
+        style={[
+          styles.editorSurface,
+          {
+            backgroundColor: theme.background,
+            borderColor: error ? theme.danger : editorFocused ? theme.primary : theme.border,
+          },
+        ]}
+      >
         <View
           ref={visibilityControl}
           style={[styles.visibilityControl, { zIndex: visibilityOpen ? 50 : 0 }]}
@@ -280,20 +286,44 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
             <View style={styles.webVisibilityMenu}>{visibilityMenu}</View>
           ) : null}
         </View>
-        <View style={styles.submit}>
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[
-              styles.remaining,
-              { color: remaining < 0 ? theme.danger : theme.textSecondary },
-            ]}
-          >
-            {remaining.toLocaleString('ko-KR')}
+        <TextArea
+          ref={editor}
+          aria-invalid={Boolean(error)}
+          accessibilityLabel="게시글 본문"
+          editable={!submitting}
+          onBlur={() => setEditorFocused(false)}
+          onChangeText={setBody}
+          onFocus={() => setEditorFocused(true)}
+          placeholder="무슨 일이 일어나고 있나요?"
+          style={styles.editor}
+          value={body}
+        />
+        {error ? (
+          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+            {error}
           </Text>
-          <Button disabled={disabled} loading={submitting} onPress={submit}>
-            게시
-          </Button>
-        </View>
+        ) : null}
+        <PostComposerMediaControls
+          actions={
+            <View style={styles.submit}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[
+                  styles.remaining,
+                  { color: remaining < 0 ? theme.danger : theme.textSecondary },
+                ]}
+              >
+                {remaining.toLocaleString('ko-KR')}
+              </Text>
+              <Button disabled={disabled} loading={submitting} onPress={submit}>
+                게시
+              </Button>
+            </View>
+          }
+          disabled={submitting}
+          key={mediaGeneration}
+          onValueChange={setMedia}
+        />
       </View>
 
       {Platform.OS !== 'web' ? (
@@ -320,13 +350,21 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
 }
 
 const styles = StyleSheet.create({
-  root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.lg, padding: spacing.lg },
+  root: { gap: spacing.lg, padding: spacing.lg },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
-  footer: {
-    alignItems: 'center',
-    flexDirection: 'row',
+  editorSurface: {
+    borderRadius: radii.md,
+    borderWidth: 1,
     gap: spacing.md,
-    justifyContent: 'space-between',
+    padding: spacing.md,
+  },
+  editor: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    minHeight: 128,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   visibilityControl: { position: 'relative' },
   visibilityTrigger: {
@@ -341,7 +379,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  webVisibilityMenu: { left: 0, position: 'absolute', top: 44, width: 256, zIndex: 50 },
+  webVisibilityMenu: { marginTop: spacing.xs, width: 256, zIndex: 50 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   remaining: { fontFamily: 'SUIT', ...typography.xsm },
   error: { fontFamily: 'SUIT', ...typography.sm },
