@@ -13,73 +13,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify_release:
-    name: Verify Immutable Release
-    runs-on: [self-hosted, ARM64]
+  deploy_production:
+    name: Approve and Deploy Production
+    runs-on: self-hosted
+    environment: production
     permissions:
       attestations: read
       contents: read
-      packages: read
-    outputs:
-      image_ref: ${{ steps.release.outputs.image_ref }}
+      id-token: write
+    env:
+      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Resolve immutable release identity
+      - name: Resolve release
         id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
         run: |
-          set -euo pipefail
-
           image_ref="$(scripts/resolve-production-release.sh "${RELEASE_TAG}")"
           echo "image_ref=${image_ref}" >> "${GITHUB_OUTPUT}"
 
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify image digest is available
-        env:
-          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
-        shell: bash
-        run: docker buildx imagetools inspect "${IMAGE_REF}" >/dev/null
-
-      - name: Record release verification audit
-        if: always()
-        env:
-          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          VERIFICATION_RESULT: ${{ job.status }}
-        shell: bash
-        run: |
-          {
-            echo "### Production release verification ${RELEASE_TAG}"
-            echo
-            echo "- Requester: ${GITHUB_ACTOR}"
-            echo "- Approval gate: not entered"
-            echo "- Release tag: ${RELEASE_TAG}"
-            echo "- Image identity: ${IMAGE_REF:-unresolved}"
-            echo "- Result: ${VERIFICATION_RESULT}"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-  deploy_production:
-    name: Approve and Deploy Production
-    needs: verify_release
-    runs-on: self-hosted
-    environment: production
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-    steps:
       - name: Get Argo CD token
         id: argocd-token
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -115,9 +72,6 @@ jobs:
             core.setSecret(dexToken);
             core.setOutput("token", dexToken);
 
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
       - name: Install Argo CD CLI
         env:
           ARGOCD_CLI_VERSION: v3.4.2
@@ -141,7 +95,7 @@ jobs:
       - name: Deploy verified release
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         shell: bash
         run: |
@@ -175,7 +129,7 @@ jobs:
       - name: Record production release audit
         if: always()
         env:
-          IMAGE_REF: ${{ needs.verify_release.outputs.image_ref }}
+          IMAGE_REF: ${{ steps.release.outputs.image_ref }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           RESULT: ${{ job.status }}
         shell: bash
@@ -186,7 +140,7 @@ jobs:
             echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Approval gate: production environment"
             echo "- Release tag: ${RELEASE_TAG}"
-            echo "- Image identity: ${IMAGE_REF}"
+            echo "- Image identity: ${IMAGE_REF:-unresolved}"
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"

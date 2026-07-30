@@ -52,6 +52,18 @@
 - Consequences: 같은 운영자가 dispatch와 승인을 수행할 수 있지만 GitHub에 별도의 명시적 승인 행위와 시각이 남는다. 더 강한 separation of duties가 필요해지면 reviewer team과 self-review 정책을 별도 상위 결정으로 바꿔야 한다.
 - Confirmation / Follow-up: Environment API read-back과 workflow 구조 검증에서 reviewer, main policy, bypass, approval-before-OIDC 순서와 contract 전용 approval 경로 부재를 확인한다.
 
+### Release 해석과 배포는 하나의 승인 job에서 수행한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, PROD-563
+- Status: Active
+- Context / Problem: 잘못된 Release tag를 production 승인 전에 거절하기 위한 별도 verification job이 output 전달, job dependency, GHCR login·availability 검사와 중복 audit을 만들었다.
+- Decision Outcome: Production workflow는 `production` Environment가 적용된 job 하나만 사용한다. 승인 뒤 immutable Release asset을 검증해 digest를 해석하고, 그 다음 Argo CD OIDC token을 받아 같은 job에서 sync한다. 별도 verification job과 GHCR availability preflight는 두지 않는다.
+- Alternatives Considered: 승인 전 별도 job에서 Release와 registry availability를 검사하면 잘못된 tag의 승인 요청을 줄일 수 있지만, production 상태 안전성에 필수인 경계는 아니며 workflow topology와 audit을 늘린다.
+- Consequences: 잘못된 tag도 production 승인 뒤 Release 해석 단계에서 실패한다. 하지만 Argo CD token 취득과 production 상태 변경 전이므로 승인 없는 배포와 잘못된 identity 적용은 여전히 발생하지 않는다.
+- Confirmation / Follow-up: Workflow에 `production` Environment job이 하나만 있고 Release 해석이 token 취득과 Argo CD 변경보다 앞서며 별도 verification job·registry preflight가 없는지 검증한다.
+
 ### 두 Rollout은 migration과 preview 검증 뒤 수동 승격한다
 
 - Decision Date: 2026-07-30

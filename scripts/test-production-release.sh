@@ -134,15 +134,15 @@ assert_contains "${build_workflow}" 'needs: docker_build'
 assert_contains "${build_workflow}" 'scripts/publish-production-release.sh'
 assert_contains "${deploy_workflow}" 'group: production-release'
 assert_contains "${deploy_workflow}" 'cancel-in-progress: false'
-assert_contains "${deploy_workflow}" 'needs: verify_release'
 assert_contains "${deploy_workflow}" 'runs-on: self-hosted'
 assert_contains "${deploy_workflow}" 'environment: production'
 assert_contains "${deploy_workflow}" 'scripts/resolve-production-release.sh'
+assert_contains "${deploy_workflow}" 'attestations: read'
 assert_contains "${deploy_workflow}" 'app set kosmo-prod'
 assert_contains "${deploy_workflow}" 'app manifests kosmo-prod --source git'
 assert_contains "${deploy_workflow}" 'app sync kosmo-prod --timeout 600'
 assert_contains "${deploy_workflow}" 'if: always()'
-assert_contains "${deploy_workflow}" 'Image identity: ${IMAGE_REF}'
+assert_contains "${deploy_workflow}" 'Image identity: ${IMAGE_REF:-unresolved}'
 assert_contains "${github_setup}" "ensure_environment \"\${production_environment}\" \"\${production_reviewer}\""
 assert_contains "${github_setup}" 'ensure_immutable_releases'
 
@@ -152,9 +152,18 @@ if [[ "${environment_count}" -ne 1 || "${production_environment_count}" -ne 1 ]]
   fail "the production release must use exactly one production Environment approval"
 fi
 
-verify_job="$(sed -n '/^  verify_release:/,/^  deploy_production:/p' "${deploy_workflow}")"
-if grep -Fq 'id-token: write' <<<"${verify_job}"; then
-  fail "release verification job must not receive production OIDC permission"
+if [[ "$(grep -Ec '^[[:space:]]+runs-on:' "${deploy_workflow}")" -ne 1 ]]; then
+  fail "production release must use one approved job"
+fi
+
+resolve_line="$(grep -n 'name: Resolve release' "${deploy_workflow}" | cut -d: -f1)"
+token_line="$(grep -n 'name: Get Argo CD token' "${deploy_workflow}" | cut -d: -f1)"
+if [[ "${resolve_line}" -ge "${token_line}" ]]; then
+  fail "release identity must resolve before production credentials are requested"
+fi
+
+if grep -Eq 'verify_release:|needs: verify_release|docker/login-action|imagetools inspect' "${deploy_workflow}"; then
+  fail "production release must not use a separate verification job or registry preflight"
 fi
 
 if grep -Eq 'docker/build-push-action|deploy-production-release|app (get-resource|actions|unset)|--resource argoproj.io:Rollout' "${deploy_workflow}"; then

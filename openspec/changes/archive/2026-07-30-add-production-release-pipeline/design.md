@@ -35,7 +35,7 @@ PROD-563은 release identity, production 승인, migration 선행 차단, API·W
 
 기본 경로는 repository immutable releases를 활성화하고 정식 SemVer image build가 성공한 뒤 draft GitHub Release에 `docker-image-ref.txt`를 첨부해 발행하는 방식이다. Asset에는 `ghcr.io/byulmaru/kosmo@sha256:...` full reference 하나만 기록한다. Release 발행 뒤 Git tag와 asset은 immutable해지고 Release attestation으로 검증할 수 있다. Build나 asset 준비가 실패하면 Release를 발행하지 않는다.
 
-`main`의 수동 production workflow는 운영자에게 SemVer Release tag 하나만 받는다. `gh release verify`로 발행된 immutable Release인지 확인하고, `docker-image-ref.txt`를 내려받아 `gh release verify-asset`으로 attestation과 내용을 검증한 뒤 strict full digest reference를 해석한다. GHCR의 같은 SemVer container tag가 나중에 움직여도 deployment는 이를 조회하지 않고 immutable Release asset이 고정한 digest를 사용한다.
+`main`의 수동 production workflow는 운영자에게 SemVer Release tag 하나만 받는다. 하나의 `production` Environment job이 승인된 뒤 `gh release verify`로 발행된 immutable Release인지 확인하고, `docker-image-ref.txt`를 내려받아 `gh release verify-asset`으로 attestation과 내용을 검증한 뒤 strict full digest reference를 해석한다. 별도 verification job이나 GHCR availability preflight는 두지 않는다. GHCR의 같은 SemVer container tag가 나중에 움직여도 deployment는 이를 조회하지 않고 immutable Release asset이 고정한 digest를 사용한다.
 
 승인 job은 GitHub `production` Environment 뒤에 두고, 승인된 뒤에만 GitHub OIDC로 Argo CD token을 얻는다. Production Environment는 main ref만 허용하고 admin bypass를 막으며 required reviewer를 둔다. Workflow concurrency는 production 배포를 직렬화하고 진행 중인 배포를 취소하지 않는다.
 
@@ -69,7 +69,7 @@ Rollback은 별도 DB 조작이 아니라 이전 정상 immutable Release tag를
 - [ApplicationSet reconciliation이 pipeline parameter를 되돌릴 수 있음] → PROD-562가 제공하는 release seam과 ignore/persistence 경계를 manifest test에서 확인하고, 보존되지 않으면 live 배포를 시작하지 않는다.
 - [이전 application이 현재 schema와 호환되지 않을 수 있음] → pipeline은 자동으로 임의 구버전을 선택하지 않고 운영자가 해당 schema migration release가 정한 호환성 범위 안의 이전 정상 identity를 명시적으로 승인한다.
 - [Environment 설정은 repository 밖 GitHub 상태임] → idempotent repository 관리 script와 API read-back 검증으로 reviewer, branch policy와 bypass 설정을 확인한다.
-- [Immutable releases 설정은 future Release에만 적용되고 image digest 자체가 registry에서 삭제될 수 있음] → 설정 활성화를 첫 정식 Release의 선행 조건으로 검증하고, 배포 전에 asset이 가리키는 digest를 registry에서 pull할 수 있는지 확인하되 다른 digest로 대체하지 않는다.
+- [Immutable releases 설정은 future Release에만 적용되고 image digest 자체가 registry에서 삭제될 수 있음] → 설정 활성화를 첫 정식 Release의 선행 조건으로 검증한다. Registry에서 digest가 사라진 경우 별도 preflight 대신 실제 Rollout 실패로 드러나며 다른 digest로 대체하지 않는다.
 
 ## Migration Plan
 
