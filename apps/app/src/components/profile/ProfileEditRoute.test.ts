@@ -48,6 +48,7 @@ const mutationCalls = new Map<string, MutationConfig[]>();
 const mutationHandlers = new Map<string, (config: MutationConfig) => void>();
 const navigationDispatches: NavigationAction[] = [];
 const routerReplacements: string[] = [];
+const toastMessages: string[] = [];
 let beforeRemoveListener: ((event: BeforeRemoveEvent) => void) | null = null;
 let discardDialogProps: DiscardDialogProps | null = null;
 let lastBackEvent: BeforeRemoveEvent | null = null;
@@ -144,6 +145,9 @@ mockModule(new URL('./ProfileEditDiscardDialog.tsx', import.meta.url), {
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
+mockModule(new URL('../ui/ToastProvider.tsx', import.meta.url), {
+  useToast: () => ({ showToast: (message: string) => toastMessages.push(message) }),
+});
 
 let ProfileEditRoute: typeof ProfileEditRouteExport;
 
@@ -169,6 +173,7 @@ afterEach(async () => {
   routerBackCalls = 0;
   routerCanGoBack = true;
   screenProps = null;
+  toastMessages.length = 0;
   triggerBeforeRemoveOnReplace = false;
   mock.restoreAll();
 });
@@ -324,11 +329,16 @@ describe('ProfileEditRoute', () => {
         config.onError(new Error('save failed'));
         return;
       }
+      if (updateAttempts === 2) {
+        config.onCompleted({} as never, [new Error('save failed')]);
+        return;
+      }
       config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never);
     });
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
-    assert.equal(requireScreenProps().submitState.kind, 'error');
+    assert.equal(requireScreenProps().submitState.kind, 'idle');
+    assert.deepEqual(toastMessages, ['프로필을 저장하지 못했어요.']);
     assert.equal(issued, 3);
     const firstUpdate = mutationCalls.get('ProfileEditRouteUpdateProfileMutation')?.[0];
     assert.deepEqual(firstUpdate?.variables, {
@@ -341,6 +351,12 @@ describe('ProfileEditRoute', () => {
       },
     });
     assert.equal('tags' in ((firstUpdate?.variables.input as object | undefined) ?? {}), false);
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    assert.equal(requireScreenProps().submitState.kind, 'idle');
+    assert.deepEqual(toastMessages, ['프로필을 저장하지 못했어요.', '프로필을 저장하지 못했어요.']);
+    assert.equal(issued, 3);
+    assert.equal(fetchMock.mock.callCount(), 3);
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
     assert.equal(issued, 3);

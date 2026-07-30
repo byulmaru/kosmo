@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
+import { useToast } from '@/components/ui/ToastProvider';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
 import {
   completeProfileEditImageUpload,
@@ -134,6 +135,7 @@ function EditableProfileRoute({
   profile: NonNullable<ProfileEditRouteQuery['response']['selectedProfileForEdit']>;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const initialAvatar = createProfileEditRouteImage(profile.avatar);
   const initialHeader = createProfileEditRouteImage(profile.header);
   const initialValue: ProfileEditDraft = {
@@ -302,6 +304,11 @@ function EditableProfileRoute({
     [updateImage, uploadImage],
   );
 
+  const handleSaveFailure = useCallback(() => {
+    setSubmitState({ kind: 'idle' });
+    showToast('프로필을 저장하지 못했어요.');
+  }, [showToast]);
+
   const submit = useCallback(
     (draft: ProfileEditDraft) => {
       const avatarId = profileEditImageInput(avatarRef.current);
@@ -319,16 +326,16 @@ function EditableProfileRoute({
         },
         onCompleted: (response, errors) => {
           if (errors?.length) {
-            setSubmitState({ kind: 'error', message: '프로필을 저장하지 못했어요.' });
+            handleSaveFailure();
             return;
           }
           allowNextNavigation();
           router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
         },
-        onError: () => setSubmitState({ kind: 'error', message: '프로필을 저장하지 못했어요.' }),
+        onError: handleSaveFailure,
       });
     },
-    [allowNextNavigation, commitUpdateProfile, router],
+    [allowNextNavigation, commitUpdateProfile, handleSaveFailure, router],
   );
 
   useEffect(() => {
