@@ -5,13 +5,13 @@ Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사�
 ## What Changes
 
 - 기존 `createPost` 입력에 nullable `replyParentId`를 추가하고, 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 본문·Visibility를 가진 일반 Reply를 생성한다.
-- Post 상세의 Reply action에서 기존 composer를 열고, 성공한 Reply를 현재 thread Relay cache에 반영한다. Content 없는 Repost의 action은 표시하되 진입을 차단한다.
+- 목록의 Reply action은 화면 폭과 platform에 맞는 modal 또는 전체 화면 surface에서, Post 상세의 Reply action은 현재 thread 안의 inline surface에서 기존 composer를 Parent 맥락으로 연다. 성공한 상세 Reply는 현재 thread에 반영하고, Content 없는 Repost의 action은 표시하되 진입을 차단한다.
 - 다른 Profile의 Post에 Local Reply가 생성되면 Parent Author에게 Reply Notification을 Best Effort로 생성하고, 기존 connection·Unread count·Read·badge/cache·inbox 흐름에 연결한다.
 - Content Warning, Media/Sensitive Media, Mentioned Profile recipient·Mentioned Profiles 작성/조회, Reply+Quote 작성, ActivityPub Reply, Action Bar 전체 rollout, retry/outbox와 동기 cleanup은 제외한다.
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/README.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`
+- Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/README.md`, `docs/design/reply-composer.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`
 - Linear Contract: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426)
 - Linear Implementations: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426)
 
@@ -31,6 +31,6 @@ Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사�
 
 - Linear: 구현 계약 PROD-424·425·426과 후행 통합·archive 이슈 PROD-423
 - Core/API: 기존 Reply Parent 저장 경계, Post visibility predicate, `CreatePostInput`, Reply Notification source·concrete Node·visible predicate
-- Universal client: Post 상세 action, 기존 composer mutation, thread Relay cache, Notification inbox item·Read·badge cache
+- Universal client: 목록 modal·전체 화면 Reply surface, 상세 inline Reply surface, 기존 composer mutation, thread Relay cache, Notification inbox item·Read·badge cache
 - Verification: backend service/schema/resolver, client component/route/cache, Notification connection·count·Read·Node와 통합 flow
 - Dependencies: `add-post-replies`의 Reply Parent·thread 기반과 `add-in-app-notifications`의 공통 Notification 기반을 재사용한다. `add-post-reposts`의 merged Repost Notification loader·bounded source visibility 구조와 같은 request-scoped loader contract를 공유한다.

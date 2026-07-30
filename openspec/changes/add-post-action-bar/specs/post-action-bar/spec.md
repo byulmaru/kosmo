@@ -241,7 +241,7 @@
 
 ### Requirement: 실제 액션 상태 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual action target Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), Reply에는 외부 Composer의 controlled `expanded`, Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 target fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), PROD-414 surface는 target fragment ref와 action별 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 한다(MUST NOT). Reaction과 Bookmark count는 공급하지 않아야 하며(MUST NOT), Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 target child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 상태를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual action target Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), PROD-425는 actual 목록·상세 surface에서 Reply에 외부 Composer의 controlled `expanded`를 공급하고 PROD-432는 이를 재구현하지 않고 전체 조합에서 유지해야 한다(MUST). Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 target fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), PROD-414 surface는 target fragment ref와 action별 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 하며(MUST NOT), Reaction과 Bookmark count는 공급하지 않아야 한다(MUST NOT). Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 target child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 상태를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
 
 Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-418의 공개 계약을 그대로 소비해야 하며(MUST) 이 Action Bar 계약에서 별도 집계 방식이나 Reaction count를 정의하지 않아야 한다(MUST). `hasReacted`는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 나타내야 한다(MUST).
 
@@ -253,7 +253,8 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 #### Scenario: Reply Composer 연결
 
 - **WHEN** 사용자가 Reply를 활성화한다
-- **THEN** surface는 상위 Composer를 열거나 focus하고 Composer가 소유한 `expanded`를 Action Bar에 다시 공급한다
+- **THEN** PROD-425 surface는 목록의 modal·전체 화면 또는 상세의 행별 inline Composer를 열거나 focus하고 Composer가 소유한 `expanded`를 Action Bar에 다시 공급한다
+- **AND** PROD-432는 이 연결을 재구현하지 않고 guest 인증 위임과 전체 action 조합에서 유지한다
 
 #### Scenario: 액션별 pending 경계
 

@@ -28,6 +28,30 @@
 - Consequences: PROD-425 구현은 PROD-422의 thread API/UI가 제공하는 public connection shape을 선행 조건으로 삼고, generated Relay artifact를 commit하지 않는다.
 - Confirmation / Follow-up: PROD-425 component·route/cache 테스트에서 contentful Parent 진입, disabled Repost, pending/error, selected Profile 격리와 성공 thread 반영을 검증한다.
 
+### Reply surface는 목록 overlay와 상세 inline을 분리한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/reply-composer.md`, `PROD-425`
+- Status: Active
+- Context / Problem: 같은 `PostListItem`이 목록과 상세 thread에서 재사용되므로 화면 폭만으로 Reply surface를 고르면 상세의 행별 inline 계약이 목록 modal·전체 화면 계약으로 바뀐다. 순수 Repost는 direct Source를 Action Bar target으로 사용하므로 바깥 display Post identity를 잃으면 Reply eligibility도 잘못 활성화된다.
+- Decision Outcome: 목록은 Web `>= compact`에서 600px modal, Web `< compact`와 Native에서 전체 화면 Reply surface를 사용한다. 상세 thread owner는 current·ancestor·descendant의 Reply action에 inline surface mode와 하나의 active direct Parent를 공급한다. display Post와 Action Bar target을 분리해 Repost action의 Source target은 유지하되 바깥 display Post가 contentless Repost이면 Reply config를 disabled로 제공하고 callback·composer·mutation 진입을 차단한다. selected Profile이 없는 guest에는 PROD-425의 Reply config를 새로 노출하지 않고 guest 인증 위임과 최종 action 조합은 PROD-432가 소유한다.
+- Alternatives Considered: 하나의 전역 modal은 상세 inline 계약을 위반한다. `PostListItem`이 폭만으로 shell을 고르면 상세 thread 맥락을 알 수 없다. Source Content에서 Reply eligibility를 다시 계산하면 contentless Repost 차단 계약을 잃는다. PROD-425에서 새 guest 로그인 목적지를 만들면 PROD-432의 인증 위임 범위를 선점한다.
+- Consequences: 목록·상세 route는 selected Profile fragment와 surface mode를 actual Post row까지 전달하고, Reply shell은 Parent presentation과 open·close lifecycle만 소유하며 입력·mutation 상태는 기존 composer를 재사용한다. PROD-432는 guest 인증 위임과 전체 action 조합을 통합 검증한다.
+- Confirmation / Follow-up: PROD-425의 component·route 검증에서 일반 Post·Reply·Quote 진입, 순수 Repost disabled, 목록 modal·전체 화면, 상세 행별 inline, selected Profile 없음의 unchanged partial rollout과 controlled `expanded`를 확인한다.
+
+### 상세 Reply 성공은 현재 route만 targeted refetch한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/reply-composer.md`, `PROD-425`
+- Status: Active
+- Context / Problem: `CreatePostPayload.post`에는 existing descendant connection edge나 cursor가 없으므로 client가 edge·정렬을 합성하면 thread 관계와 pagination 계약을 추측하게 된다.
+- Decision Outcome: 상세 route는 제출 시점 callback의 성공 payload를 받은 뒤 현재 detail query의 fetch key를 갱신해 제한된 targeted refetch를 시작하고 Composer를 닫아 원래 Reply action으로 focus를 복원한다. 목록 Reply 성공은 전역 Home·Profile·Bookmark membership을 합성하지 않는다. refetch 실패는 기존 detail query error·retry 경계를 사용하며 mutation 성공을 실패로 바꾸거나 별도 success toast를 추가하지 않는다.
+- Alternatives Considered: Relay connection edge 합성은 edge type·cursor·정렬과 flattened descendant membership을 추측한다. 전역 목록 refetch는 현재 Parent thread 밖의 membership을 넓게 변경한다. refetch 완료까지 성공 close를 막으면 mutation 성공 lifecycle과 focus 복원이 network latency에 결합된다.
+- Consequences: 성공한 Reply의 상세 표시에는 추가 network request가 필요하지만 현재 actor의 detail query 밖을 변경하지 않는다. route integration 검증은 fetch key 변경, refetch 성공 반영, 기존 error·retry 경계와 close/focus 순서를 확인해야 한다.
+- Confirmation / Follow-up: PROD-425 route test와 Web runtime에서 mutation 성공 직후 close·focus 복원, targeted refetch 요청과 결과 thread 표시를 검증하고 refetch 실패 시 기존 thread와 retry가 유지되는지 확인한다.
+
 ### Reply Notification은 source commit 후 기존 projection에 Best Effort로 추가한다
 
 - Decision Date: 2026-07-23
