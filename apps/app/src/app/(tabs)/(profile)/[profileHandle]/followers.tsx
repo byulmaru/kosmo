@@ -1,10 +1,11 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   ProfileConnectionList,
   ProfileConnectionListState,
 } from '@/components/profile/ProfileConnectionList';
-import { useProfileHandle } from '@/components/profile/route';
+import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { ProfileFollowersPageQuery as ProfileFollowersPageQueryType } from './__generated__/ProfileFollowersPageQuery.graphql';
@@ -19,7 +20,10 @@ const ProfileFollowersPageQuery = graphql`
 `;
 
 export default function ProfileFollowersPage() {
-  const handle = useProfileHandle();
+  const { profileHandle } = useLocalSearchParams<{
+    profileHandle?: string | string[];
+  }>();
+  const handle = normalizeProfileHandle(profileHandle);
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
 

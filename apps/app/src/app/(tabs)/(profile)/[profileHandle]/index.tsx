@@ -1,7 +1,8 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PostList } from '@/components/post/PostList';
-import { useProfileHandle } from '@/components/profile/route';
+import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from './__generated__/ProfilePostListPageQuery.graphql';
@@ -16,7 +17,10 @@ const ProfilePostListPageQuery = graphql`
 `;
 
 export default function ProfilePostListPage() {
-  const handle = useProfileHandle();
+  const { profileHandle } = useLocalSearchParams<{
+    profileHandle?: string | string[];
+  }>();
+  const handle = normalizeProfileHandle(profileHandle);
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
 
