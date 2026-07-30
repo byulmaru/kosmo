@@ -14,7 +14,7 @@
 
 - Canonical: `docs/domain/objects/post.md` (Post Visibility와 Post 작성 입력·조회 계약)
 - Linear Contract: [PROD-580](https://linear.app/byulmaru/issue/PROD-580/direct-%EA%B5%AC%ED%98%84-%EC%A0%84-composer%EC%9D%98-%EC%96%B8%EA%B8%89%ED%95%9C-%EA%B3%84%EC%A0%95%EB%A7%8C-%EC%98%B5%EC%85%98%EC%9D%84-%EC%9E%84%EC%8B%9C%EB%A1%9C-%EC%88%A8%EA%B8%B4%EB%8B%A4) (2026-07-30 최신 계약; 복원 기준으로 PROD-462를 명시)
-- Linear Implementations: `PROD-580` 구현 snapshot `4fe6578d707cffff05f3fc7175304b4c96b1002a` 및 연결 PR #429
+- Linear Implementations: `PROD-580` 구현 snapshot `bb3bc7e1f893891505559f7fb1ea119bec21a974` 및 연결 PR #429
 
 ## Capabilities
 

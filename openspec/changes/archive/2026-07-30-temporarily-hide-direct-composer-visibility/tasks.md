@@ -18,8 +18,8 @@ Web·Native Post Composer에서 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 선택·제
 
 **Verification**
 
-- 구현 snapshot `4fe6578d707cffff05f3fc7175304b4c96b1002a`에서 shared Composer option의 DIRECT 주석/TODO와 enum·server 미변경을 확인한다.
-- Posts Storybook interaction 34/34 통과로 DIRECT 미노출 및 기존 공개 범위 선택을 확인한다.
+- 구현 snapshot `bb3bc7e1f893891505559f7fb1ea119bec21a974`에서 shared Composer option의 DIRECT 주석/TODO와 enum·server 미변경을 확인한다.
+- Posts Storybook interaction 37/37 통과로 DIRECT 미노출 및 기존 공개 범위 선택을 확인한다.
 - Storybook build 통과로 Composer presentation artifact를 확인한다.
 - Composer Web E2E 1/1 통과로 키보드 끝 이동이 `FOLLOWERS`에 도달하고 공개 게시 payload가 유지됨을 확인한다.
 - Web check, ESLint, Prettier 통과를 확인한다.
@@ -28,4 +28,4 @@ Web·Native Post Composer에서 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 선택·제
 - [x] 1.1 Composer의 Web·Native 공개 범위 surface에서 DIRECT option을 주석 처리하고 PROD-462 복원 TODO를 남긴다.
 - [x] 1.2 Composer Storybook interaction에서 `언급한 계정만` 메뉴 항목이 없고 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 선택·기본값 동작이 유지되는지 검증한다.
 - [x] 1.3 Composer Web E2E에서 공개 범위 메뉴 keyboard 경계가 마지막 `FOLLOWERS` option을 가리키고 DIRECT visibility를 새로 제출하지 않는지 검증한다.
-- [x] 1.4 Posts Storybook 34/34, Storybook build, Composer E2E 1/1, Web check·ESLint·Prettier를 통과시키고 변경 외 aggregate failure를 알려진 제한으로 분리 기록한다.
+- [x] 1.4 Posts Storybook 37/37, Storybook build, Composer E2E 1/1, Web check·ESLint·Prettier를 통과시키고 변경 외 aggregate failure를 알려진 제한으로 분리 기록한다.

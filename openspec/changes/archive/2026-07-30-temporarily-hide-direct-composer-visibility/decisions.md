@@ -14,7 +14,7 @@
 - Decision Outcome: PROD-462가 해당 recipient·권한 계약을 완료하기 전까지 Web·Native Composer는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 표시하고 새 `DIRECT` 선택·제출을 허용하지 않는다. `UNLISTED` 기본값과 세 옵션의 기존 동작은 유지한다.
 - Alternatives Considered: recipient 계약이 없는 상태에서 DIRECT를 계속 노출하는 방식은 사용자가 보장되지 않는 조회 범위를 기대하게 하므로 선택하지 않는다. 도메인의 Post Visibility enum/기존 data를 제거하는 방식은 PROD-580 제외 범위를 침범하므로 선택하지 않는다.
 - Consequences: Composer의 선택 surface와 client 선택 union은 임시로 세 값에 한정된다. 기존 서버 enum, 저장된 DIRECT Post와 후속 recipient 구현의 호환성은 유지된다.
-- Confirmation / Follow-up: Posts Storybook 34/34, Storybook build, Composer E2E 1/1과 targeted Web checks가 이 계약을 확인한다. PROD-462 완료·검증 승인 뒤 별도 복원 변경을 만든다.
+- Confirmation / Follow-up: Posts Storybook 37/37, Storybook build, Composer E2E 1/1과 targeted Web checks가 이 계약을 확인한다. PROD-462 완료·검증 승인 뒤 별도 복원 변경을 만든다.
 
 ### DIRECT client option은 주석 처리하고 복원 TODO를 남긴다
 
@@ -26,7 +26,7 @@
 - Decision Outcome: Composer option 목록의 DIRECT 객체와 전용 icon import는 삭제하지 않고 주석 처리하며, 주석에 `TODO(PROD-462)`와 recipient 입력·저장·DIRECT 조회 권한 완료 시 복원 기준을 기록한다.
 - Alternatives Considered: enum/server까지 삭제하는 방식은 기존 데이터와 후속 구현을 깨뜨린다. 별도 feature flag를 추가하는 방식은 이 단일 임시 표면 제한에 불필요한 상태·배포 경계를 늘린다.
 - Consequences: 현재 client 메뉴에는 DIRECT가 없지만 복원 시 원래 label·description·icon 정의를 재사용할 수 있다. 주석은 장기 보류가 되지 않도록 후속 issue를 가리킨다.
-- Confirmation / Follow-up: snapshot `4fe6578d707cffff05f3fc7175304b4c96b1002a`에서 주석과 TODO를 확인한다. PROD-462의 완료 증거가 생기면 별도 변경에서 option·recipient 제출 경계를 재검토한다.
+- Confirmation / Follow-up: snapshot `bb3bc7e1f893891505559f7fb1ea119bec21a974`에서 주석과 TODO를 확인한다. PROD-462의 완료 증거가 생기면 별도 변경에서 option·recipient 제출 경계를 재검토한다.
 
 ### 사람 승인된 최소 OpenSpec으로 active post capability를 delta 동기화한다
 

@@ -1,6 +1,6 @@
 ## Context
 
-현재 Universal Post Composer는 Web과 Native가 공유하는 공개 범위 option 목록에서 `DIRECT`를 선택해 `createPost`에 전달할 수 있다. 그러나 Mentioned Profile recipient 입력·저장과 recipient 기반 조회 권한은 아직 제공되지 않으며, PROD-580은 PROD-462 완료 전까지 이 선택 표면을 임시로 제한하도록 승인했다. 구현 snapshot `4fe6578d707cffff05f3fc7175304b4c96b1002a`는 이 제한과 Storybook·E2E 회귀 검증을 이미 반영한다.
+현재 Universal Post Composer는 Web과 Native가 공유하는 공개 범위 option 목록에서 `DIRECT`를 선택해 `createPost`에 전달할 수 있다. 그러나 Mentioned Profile recipient 입력·저장과 recipient 기반 조회 권한은 아직 제공되지 않으며, PROD-580은 PROD-462 완료 전까지 이 선택 표면을 임시로 제한하도록 승인했다. 구현 snapshot `bb3bc7e1f893891505559f7fb1ea119bec21a974`는 이 제한과 Storybook·E2E 회귀 검증을 이미 반영한다.
 
 ## Goals / Non-Goals
 
