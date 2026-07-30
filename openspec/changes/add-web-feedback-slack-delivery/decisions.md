@@ -64,6 +64,18 @@
 - Consequences: Channel은 Slack app의 Incoming Webhook 설정이 소유한다. Missing/invalid secret은 mutation만 fail closed로 실패하고, feedback content와 credential은 DB나 exported asset에 남지 않는다.
 - Confirmation / Follow-up: Helm render, missing/invalid config test, stubbed fetch payload snapshot, secret-redaction search와 production Slack smoke로 확인한다.
 
+### Feedback webhook secret은 배포 환경에서 API process에 별도 구성한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-487`, PR #390 review
+- Status: Active
+- Context / Problem: Feedback 구현이 Helm에 전용 Vault 경로와 `api-env` Secret을 추가했지만, 리뷰에서 이 기능 PR이 새 배포 Secret 리소스를 소유하지 않도록 범위를 정정했다. Web과 API가 함께 읽는 기존 공용 `env`에 webhook을 넣으면 client runtime까지 credential이 확산될 수 있다.
+- Decision Outcome: API는 process environment의 `SLACK_FEEDBACK_WEBHOOK_URL`을 fail-closed로 읽되, 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않는다. Production smoke 전에 배포 환경이 API process에만 webhook을 별도로 구성하며, 환경 변수 누락은 API 기동이 아니라 feedback mutation만 실패시킨다.
+- Alternatives Considered: 기존 `api-env` VaultStaticSecret 추가는 리뷰에서 제거하기로 했다. 공용 `env` Secret 재사용은 Web runtime에도 webhook을 전달하므로 제외했다.
+- Consequences: Repository chart만으로 production webhook 주입을 완료하지 않으며, 운영 환경 구성은 production smoke의 선행 조건이다. API·client 코드의 secret 경계와 missing configuration fail-closed 동작은 유지한다.
+- Confirmation / Follow-up: Helm diff에 feedback 전용 Secret 리소스가 없는지, missing/invalid config test와 client secret 비노출을 확인하고, 별도 운영 환경 구성을 포함한 production Slack smoke를 수행한다.
+
 ### Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다
 
 - Decision Date: 2026-07-29
@@ -144,7 +156,7 @@
 
 - 2026-07-28 `Account별 비영속 fixed-window와 in-flight guard를 사용한다`는 2026-07-29 `같은 account의 진행 중 delivery만 process-local로 차단한다`로 대체했다.
 - 2026-07-28 `Feedback input과 Sentry event ID를 좁은 공개 계약으로 제한한다`는 2026-07-29 `Feedback 계약에서 Sentry event ID를 제외한다`로 대체했다.
-- 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.
+- 2026-07-28 `Incoming Webhook secret과 plain-text Slack payload를 API가 소유한다`의 identity 비노출 payload 결정은 2026-07-29 `Slack payload에서 제출 Account와 선택 Profile을 제한적으로 식별한다`로 대체했다. `api-env` 배포 결정은 2026-07-30 `Feedback webhook secret은 배포 환경에서 API process에 별도 구성한다`로 대체했으며, API secret 소유와 plain-text·unfurl 비활성화 결정은 유지한다.
 - 2026-07-29의 기존 `/menu` → `/feedback` redirect 결정은 `/feedback`을 canonical Web feedback route로 사용하면서 기존 `/menu`는 보존하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 메뉴 소개 UI를 제거한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 기존 /menu는 보존한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.

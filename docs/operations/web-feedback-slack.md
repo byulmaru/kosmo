@@ -3,18 +3,16 @@
 PROD-487의 Web 피드백은 API 서버가 Slack Incoming Webhook으로 전달한다. Web 번들,
 Relay 요청, 브라우저 쿠키, API 로그에는 Webhook URL을 포함하지 않는다.
 
-## 배포 Secret 위치
+## 배포 Secret 구성
 
-배포 환경의 API 전용 Vault KV 경로에 다음 키를 저장한다.
+배포 환경은 API process에만 다음 환경 변수를 secret으로 주입해야 한다.
 
 ```text
-secret/kubernetes/kosmo/<env>/api
 SLACK_FEEDBACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
-`<env>`는 Helm의 `.Values.env`와 동일한 환경명이다. 공용 경로
-`secret/kubernetes/kosmo/<env>`에 이 키를 추가하지 않는다. 공용 `env` Secret은 Web과 API
-양쪽에 주입되고, API 전용 경로는 `api-env` Secret으로 변환되어 API Rollout에만 주입된다.
+이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않는다. 실제 운영 주입은 production smoke 전에
+배포 환경에서 별도로 구성하며, Web과 API가 함께 읽는 공용 `env` Secret에는 webhook을 추가하지 않는다.
 
 Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL이 없거나 형식이
 잘못되면 API는 피드백을 Slack으로 보내지 않고 안전한 오류만 반환한다.
@@ -26,8 +24,8 @@ Webhook 값은 HTTPS `hooks.slack.com/services/...` 형식이어야 한다. URL�
 
 ## 배포 전 확인
 
-- `api-env` VaultStaticSecret이 API Rollout만 재시작하도록 렌더링되는지 확인한다.
-- `web` Rollout에 `api-env` 또는 `SLACK_FEEDBACK_WEBHOOK_URL`이 주입되지 않는지 확인한다.
+- API process에만 `SLACK_FEEDBACK_WEBHOOK_URL`이 주입되는지 확인한다.
+- `web` Rollout에 `SLACK_FEEDBACK_WEBHOOK_URL`이 주입되지 않는지 확인한다.
 - Web bundle에서 `SLACK_FEEDBACK_WEBHOOK_URL`, `hooks.slack.com/services` 문자열이 검색되지
   않는지 확인한다. API source/image에는 runtime 환경 키와 Slack hostname이 정상적으로
   존재할 수 있으므로 이 문자열의 부재를 검사하지 않는다.

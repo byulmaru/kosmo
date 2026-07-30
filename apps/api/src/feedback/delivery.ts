@@ -1,8 +1,7 @@
 import { ConflictError, ValidationError } from '@kosmo/core/error';
+import type { FeedbackKind } from '@kosmo/core/enums';
 
 export const FEEDBACK_DELIVERY_TIMEOUT_MS = 5_000;
-
-export type FeedbackKind = 'POSITIVE' | 'NEGATIVE' | 'FEATURE_REQUEST' | 'BUG_REPORT';
 
 export type FeedbackInput = {
   body: string;
@@ -26,31 +25,6 @@ const kindLabels: Record<FeedbackKind, string> = {
   FEATURE_REQUEST: '필요한 점',
   NEGATIVE: '나빴던 점',
   POSITIVE: '좋았던 점',
-};
-
-const getWebhookUrl = (value: string | undefined) => {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const url = new URL(value);
-    if (
-      url.protocol !== 'https:' ||
-      url.origin !== 'https://hooks.slack.com' ||
-      url.username ||
-      url.password ||
-      !slackWebhookPath.test(url.pathname) ||
-      url.search ||
-      url.hash
-    ) {
-      return null;
-    }
-
-    return url;
-  } catch {
-    return null;
-  }
 };
 
 const createPayload = (
@@ -95,8 +69,22 @@ const claimDelivery = (accountId: string) => {
 };
 
 export const deliverFeedback = async (identity: FeedbackIdentity, input: FeedbackInput) => {
-  const webhookUrl = getWebhookUrl(process.env.SLACK_FEEDBACK_WEBHOOK_URL);
-  if (!webhookUrl) {
+  let webhookUrl: URL;
+  try {
+    webhookUrl = new URL(process.env.SLACK_FEEDBACK_WEBHOOK_URL ?? '');
+  } catch {
+    throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
+  }
+
+  if (
+    webhookUrl.protocol !== 'https:' ||
+    webhookUrl.origin !== 'https://hooks.slack.com' ||
+    webhookUrl.username ||
+    webhookUrl.password ||
+    !slackWebhookPath.test(webhookUrl.pathname) ||
+    webhookUrl.search ||
+    webhookUrl.hash
+  ) {
     throw new ValidationError('피드백을 전달할 수 없어요. 잠시 후 다시 시도해주세요.');
   }
 

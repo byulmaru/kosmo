@@ -1,3 +1,4 @@
+import { feedbackBodySchema } from '@kosmo/core/validation';
 import { useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import type { FeedbackKind } from '@kosmo/core/enums';
 import type { FeedbackFormSubmitFeedbackMutation } from './__generated__/FeedbackFormSubmitFeedbackMutation.graphql';
 
 const feedbackOptions = [
@@ -14,7 +16,6 @@ const feedbackOptions = [
   { label: '버그를 발견했어요', value: 'BUG_REPORT' },
 ] as const;
 
-type FeedbackKind = (typeof feedbackOptions)[number]['value'];
 type FeedbackStatus = 'idle' | 'success' | 'error';
 
 const SubmitFeedbackMutation = graphql`
@@ -35,13 +36,8 @@ export function FeedbackForm() {
   const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
-  const trimmedBody = body.trim();
-  const bodyError =
-    trimmedBody.length === 0
-      ? '피드백 내용을 입력해주세요.'
-      : trimmedBody.length > 2000
-        ? '피드백은 2,000자 이내로 입력해주세요.'
-        : null;
+  const parsedBody = feedbackBodySchema.safeParse(body);
+  const bodyError = parsedBody.success ? null : parsedBody.error.issues[0]?.message;
   const showBodyError = bodyTouched || status === 'error';
   const canSubmit = !submitting && !bodyError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
@@ -51,7 +47,7 @@ export function FeedbackForm() {
   };
 
   const submit = () => {
-    if (!canSubmit) {
+    if (!canSubmit || !parsedBody.success) {
       return;
     }
 
@@ -59,7 +55,7 @@ export function FeedbackForm() {
     commit({
       variables: {
         input: {
-          body: trimmedBody,
+          body: parsedBody.data,
           kind,
         },
       },

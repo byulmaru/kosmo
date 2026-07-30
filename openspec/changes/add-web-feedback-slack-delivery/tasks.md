@@ -103,12 +103,13 @@
 
 **Deliverable**
 
-API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하고, production Vault 설정과 Web 인증 smoke로 실제 Slack 한 건 전달을 확인할 수 있다.
+API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하고, production API runtime 설정과 Web 인증 smoke로 실제 Slack 한 건 전달을 확인할 수 있다.
 
 **Guardrails**
 
 - `SLACK_FEEDBACK_WEBHOOK_URL` 실제 값은 repository, client bundle, Relay payload와 test fixture에 기록하지 않는다.
-- `api-env` Secret 참조는 optional이며, 누락 시 API Pod 기동을 유지하고 feedback mutation만 fail closed로 실패한다.
+- 이 변경은 Helm에 전용 Vault 경로나 Secret을 추가하지 않으며, 운영 환경은 production smoke 전에 API process에만 webhook을 별도로 구성한다.
+- 환경 변수 누락 시 API Pod 기동을 유지하고 feedback mutation만 fail closed로 실패한다.
 - Production smoke는 비민감하고 식별 가능한 test feedback을 사용하며 Web UI 성공과 Slack message 한 건을 함께 확인한다.
 - 부모 `PROD-479`의 final archive와 completion gate는 이번 task group에서 수행하지 않는다.
 
@@ -116,11 +117,11 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
 
 - `pnpm --filter @kosmo/api test`, `pnpm --filter @kosmo/app test`, 관련 API integration test와 `pnpm test:e2e`를 통과시킨다.
 - `pnpm lint:eslint`, `pnpm lint:prettier`와 `openspec validate add-web-feedback-slack-delivery --strict`를 통과시킨다.
-- Helm render에서 API `api-env` 참조가 optional인지 확인한다.
+- Helm diff에 feedback 전용 Vault 경로나 Secret 주입이 추가되지 않았는지 확인한다.
 - Web export와 repository search로 client artifact에 webhook secret 또는 hard-coded Slack URL이 없음을 확인한다.
 - Production smoke의 시간, environment, UI result와 Slack single-message/redaction result를 민감값 없이 기록한다.
 
 - [x] 4.1 Relay/schema generation, API·app·Web E2E와 workspace lint/format 검증을 실행하고 실패를 수정한다.
-- [x] 4.2 API-only Vault secret을 optional runtime 설정으로 주입하고 production smoke 절차를 민감값 없이 문서화하며 client export의 secret 비노출을 검증한다.
+- [x] 4.2 API가 optional process environment만 읽도록 유지하고, Helm에 전용 Secret 경로를 추가하지 않은 상태에서 production smoke 절차와 client export의 secret 비노출을 문서화한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
 - [x] 4.4 `PROD-487` 검증 증거를 정리하고 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.

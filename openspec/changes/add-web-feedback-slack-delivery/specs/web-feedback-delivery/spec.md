@@ -162,13 +162,13 @@
 
 #### Scenario: Inject the webhook secret into the API
 
-- **WHEN** API가 Vault-managed 배포 환경에서 시작한다
+- **WHEN** API가 production 배포 환경에서 시작한다
 - **THEN** `SLACK_FEEDBACK_WEBHOOK_URL`은 API process environment에서만 사용할 수 있다
 - **AND** Expo public environment, generated GraphQL schema와 Web asset에 secret 값이 포함되지 않는다
 
 #### Scenario: Start the API without optional feedback configuration
 
-- **WHEN** Vault synchronization 전이거나 실패해 `api-env` Secret이 존재하지 않는다
+- **WHEN** API process에 `SLACK_FEEDBACK_WEBHOOK_URL`이 설정되지 않았다
 - **THEN** API Pod는 다른 API 기능을 제공할 수 있도록 시작한다
 - **AND** feedback mutation만 안전한 delivery unavailable 오류를 반환한다
 
