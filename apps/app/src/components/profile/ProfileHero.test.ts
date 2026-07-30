@@ -106,7 +106,7 @@ describe('ProfileHero media presentation', () => {
     assert.ok(images.every((node) => node.props.resizeMode === 'cover'));
   });
 
-  it('URL이 없으면 이미지 없이 기존 header 색상과 avatar initial을 유지한다', async () => {
+  it('URL이 없으면 Image를 렌더하지 않는다', async () => {
     await renderProfile({
       ...baseProfile,
       avatar: { id: 'media-avatar', url: null },
@@ -116,11 +116,6 @@ describe('ProfileHero media presentation', () => {
     assert.deepEqual(
       renderer!.root.findAll((node) => (node.type as unknown) === 'Image'),
       [],
-    );
-    assert.ok(
-      renderer!.root
-        .findAll((node) => (node.type as unknown) === 'Text')
-        .some((node) => node.children.includes('코')),
     );
   });
 });

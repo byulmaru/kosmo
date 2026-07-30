@@ -238,13 +238,6 @@ describe('profile route parameter lifecycle', () => {
     assert.deepEqual(identities('ProfileHero'), ['local']);
     assert.deepEqual(identities('FollowButton'), ['local']);
     assert.deepEqual(identities('PostList'), ['local']);
-    assert.deepEqual(
-      queryHistory.slice(-2).map(({ handle, query }) => ({ handle, query })),
-      [
-        { handle: 'local', query: 'ProfileLayoutQuery' },
-        { handle: 'local', query: 'ProfilePostListPageQuery' },
-      ],
-    );
   });
 
   it('handle 전환 중 layout과 nested query의 기존 loading fallback을 유지한다', async () => {

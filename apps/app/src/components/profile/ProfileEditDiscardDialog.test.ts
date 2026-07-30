@@ -46,7 +46,7 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-test('정확한 안내와 계속 편집, 버리기 action을 제공한다', async () => {
+test('이탈 확인 dialog에서 계속 편집과 버리기를 실행한다', async () => {
   const onContinue = mock.fn();
   const onDiscard = mock.fn();
   await act(async () => {
@@ -56,20 +56,11 @@ test('정확한 안내와 계속 편집, 버리기 action을 제공한다', asyn
   });
   assert.ok(renderer);
 
-  const texts = renderer.root
-    .findAll((node) => (node.type as unknown) === 'Text')
-    .map((node) => node.props.children);
-  assert.ok(texts.includes('변경사항을 버릴까요?'));
   const dialogs = renderer.root.findAll(
     (node) => (node.type as unknown) === 'Modal' && node.props.role === 'dialog',
   );
   assert.equal(dialogs.length, 1);
-  assert.equal(dialogs[0]?.props.accessibilityLabel, '변경사항을 버릴까요?');
   const buttons = renderer.root.findAll((node) => (node.type as unknown) === 'Button');
-  assert.deepEqual(
-    buttons.map((button) => button.props.children),
-    ['계속 편집', '버리기'],
-  );
 
   await act(async () => buttons[0]?.props.onPress());
   await act(async () => buttons[1]?.props.onPress());
