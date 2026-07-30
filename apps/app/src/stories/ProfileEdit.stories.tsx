@@ -51,9 +51,13 @@ function ProfileEditScreenHarness({
       disabled={disabled}
       initialValue={initialValue}
       onAvatarEdit={withImageActions ? () => undefined : undefined}
+      onAvatarRemove={withImageActions ? () => undefined : undefined}
+      onAvatarRetry={withImageActions ? () => undefined : undefined}
       onBack={() => undefined}
       onChange={setValue}
       onHeaderEdit={withImageActions ? () => undefined : undefined}
+      onHeaderRemove={withImageActions ? () => undefined : undefined}
+      onHeaderRetry={withImageActions ? () => undefined : undefined}
       onSubmit={connected ? () => undefined : undefined}
       value={value}
     />
@@ -177,7 +181,11 @@ const meta = {
     avatar: currentAvatar,
     header: currentHeader,
     onAvatarEdit: () => undefined,
+    onAvatarRemove: () => undefined,
+    onAvatarRetry: () => undefined,
     onHeaderEdit: () => undefined,
+    onHeaderRemove: () => undefined,
+    onHeaderRetry: () => undefined,
   },
   component: ProfileEditImageFields,
   parameters: {
@@ -214,13 +222,33 @@ export const ImageFields: Story = {
 export const ImageFieldsWithoutCallbacks: Story = {
   args: {
     onAvatarEdit: undefined,
+    onAvatarRemove: undefined,
+    onAvatarRetry: undefined,
     onHeaderEdit: undefined,
+    onHeaderRemove: undefined,
+    onHeaderRetry: undefined,
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     expect(canvas.getByRole('button', { name: '헤더 이미지 변경' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeDisabled();
+  },
+};
+
+export const CurrentImageMenu: Story = {
+  args: {
+    avatar: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+  },
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+
+    await userEvent.click(canvas.getByRole('button', { name: '아바타 이미지 편집' }));
+    expect(page.getByRole('menuitem', { name: '이미지 변경' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: '이미지 삭제' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: '취소' })).toBeVisible();
+    await userEvent.click(page.getByRole('menuitem', { name: '취소' }));
   },
 };
 
@@ -252,6 +280,7 @@ export const HeaderErrorKeepsCurrentAvatar: Story = {
     expect(canvas.getByRole('alert')).toHaveTextContent(
       '헤더 이미지 업로드에 실패했어요. 다시 시도해 주세요.',
     );
+    expect(canvas.getByRole('button', { name: '헤더 이미지 업로드 다시 시도' })).toBeVisible();
     expect(canvas.queryByText('업로드 서버 내부 detail')).not.toBeInTheDocument();
     expect(canvas.getByTestId('profile-edit-avatar-preview')).toBeVisible();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeEnabled();
@@ -271,6 +300,23 @@ export const TextFieldsAndSubmitGate: Story = {
     expect(canvas.getByText('표시 이름을 입력해 주세요.')).toBeVisible();
     await userEvent.type(displayName, '새 이름');
     expect(save).toBeEnabled();
+  },
+};
+
+export const ProductionTagsHidden: Story = {
+  render: () => (
+    <ProfileEditScreen
+      initialValue={initialDraft}
+      onChange={() => undefined}
+      onSubmit={() => undefined}
+      showTags={false}
+      value={{ ...initialDraft, bio: 'production draft' }}
+    />
+  ),
+  play: ({ canvasElement }) => {
+    expect(
+      within(canvasElement).queryByRole('textbox', { name: '프로필 태그' }),
+    ).not.toBeInTheDocument();
   },
 };
 

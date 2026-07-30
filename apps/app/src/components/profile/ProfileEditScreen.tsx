@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react-native';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
@@ -57,12 +57,17 @@ export function ProfileEditScreen({
   disabled = false,
   initialValue,
   onAvatarEdit,
+  onAvatarRemove,
+  onAvatarRetry,
   onBack,
   onChange,
   onHeaderEdit,
+  onHeaderRemove,
+  onHeaderRetry,
   onSubmit,
   serverErrors,
   submitState = { kind: 'idle' },
+  showTags = true,
   value,
 }: ProfileEditScreenProps) {
   const theme = useTheme();
@@ -77,6 +82,26 @@ export function ProfileEditScreen({
       submitState,
       value,
     });
+  const content = (
+    <>
+      <ProfileEditForm
+        disabled={disabled || saving}
+        initialValue={initialValue}
+        onAvatarEdit={onAvatarEdit}
+        onAvatarRemove={onAvatarRemove}
+        onAvatarRetry={onAvatarRetry}
+        onChange={onChange}
+        onHeaderEdit={onHeaderEdit}
+        onHeaderRemove={onHeaderRemove}
+        onHeaderRetry={onHeaderRetry}
+        serverErrors={serverErrors}
+        showTags={showTags}
+        value={value}
+      />
+
+      <SubmitStatus state={submitState} />
+    </>
+  );
 
   return (
     <View
@@ -130,17 +155,17 @@ export function ProfileEditScreen({
         </Button>
       </View>
 
-      <ProfileEditForm
-        disabled={disabled || saving}
-        initialValue={initialValue}
-        onAvatarEdit={onAvatarEdit}
-        onChange={onChange}
-        onHeaderEdit={onHeaderEdit}
-        serverErrors={serverErrors}
-        value={value}
-      />
-
-      <SubmitStatus state={submitState} />
+      {Platform.OS === 'web' ? (
+        <View style={styles.content}>{content}</View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.nativeContent}
+          keyboardShouldPersistTaps="handled"
+          style={styles.nativeScroll}
+        >
+          {content}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -176,6 +201,9 @@ const styles = StyleSheet.create({
     minHeight: 36,
     minWidth: 64,
   },
+  content: { width: '100%' },
+  nativeContent: { flexGrow: 1 },
+  nativeScroll: { flex: 1 },
   submitStatus: {
     fontFamily: 'SUIT',
     marginBottom: spacing.xl,

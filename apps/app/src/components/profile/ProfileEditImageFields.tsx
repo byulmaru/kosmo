@@ -1,7 +1,10 @@
 import { Camera } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
+import type { Ref } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 import type { ProfileEditImageDraft } from './profileEditState';
 
 type ProfileEditImageFieldsProps = {
@@ -9,7 +12,11 @@ type ProfileEditImageFieldsProps = {
   disabled?: boolean;
   header: ProfileEditImageDraft;
   onAvatarEdit?: () => void;
+  onAvatarRemove?: () => void;
+  onAvatarRetry?: () => void;
   onHeaderEdit?: () => void;
+  onHeaderRemove?: () => void;
+  onHeaderRetry?: () => void;
 };
 
 type ImageFieldStatus = {
@@ -43,7 +50,15 @@ function getImageFieldStatus(
   return { kind: 'info', message: `새 ${label} 이미지가 선택됐어요.` };
 }
 
-function ImageStatus({ status }: { status: ImageFieldStatus | null }) {
+function ImageStatus({
+  label,
+  onRetry,
+  status,
+}: {
+  label: '아바타' | '헤더';
+  onRetry?: () => void;
+  status: ImageFieldStatus | null;
+}) {
   const theme = useTheme();
 
   if (!status) {
@@ -51,16 +66,28 @@ function ImageStatus({ status }: { status: ImageFieldStatus | null }) {
   }
 
   return (
-    <Text
-      accessibilityLiveRegion={status.kind === 'error' ? undefined : 'polite'}
-      accessibilityRole={status.kind === 'error' ? 'alert' : undefined}
-      style={[
-        styles.status,
-        { color: status.kind === 'error' ? theme.danger : theme.textSecondary },
-      ]}
-    >
-      {status.message}
-    </Text>
+    <View style={styles.statusRow}>
+      <Text
+        accessibilityLiveRegion={status.kind === 'error' ? undefined : 'polite'}
+        accessibilityRole={status.kind === 'error' ? 'alert' : undefined}
+        style={[
+          styles.status,
+          { color: status.kind === 'error' ? theme.danger : theme.textSecondary },
+        ]}
+      >
+        {status.message}
+      </Text>
+      {status.kind === 'error' && onRetry ? (
+        <Pressable
+          accessibilityLabel={`${label} 이미지 업로드 다시 시도`}
+          accessibilityRole="button"
+          onPress={onRetry}
+          style={({ pressed }) => [styles.retry, { opacity: pressed ? 0.7 : 1 }]}
+        >
+          <Text style={[styles.retryLabel, { color: theme.text }]}>다시 시도</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -77,12 +104,90 @@ function CameraAffordance({ disabled }: { disabled: boolean }) {
   );
 }
 
+function ImageEditControl({
+  accessibilityLabel,
+  disabled,
+  draft,
+  onEdit,
+  onRemove,
+  style,
+  testID,
+}: {
+  accessibilityLabel: string;
+  disabled: boolean;
+  draft: ProfileEditImageDraft;
+  onEdit?: () => void;
+  onRemove?: () => void;
+  style: StyleProp<ViewStyle>;
+  testID: string;
+}) {
+  const theme = useTheme();
+  const renderTrigger = ({
+    expanded,
+    onPress,
+    ref,
+  }: {
+    expanded: boolean;
+    onPress: () => void;
+    ref: Ref<View>;
+  }) => (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled, expanded }}
+      disabled={disabled}
+      onPress={onPress}
+      ref={ref}
+      style={style}
+      testID={testID}
+    >
+      {({ pressed }) => (
+        <>
+          {draft.previewUri ? (
+            <Image
+              accessibilityIgnoresInvertColors
+              resizeMode="cover"
+              source={{ uri: draft.previewUri }}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : (
+            <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
+          )}
+          {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
+          <CameraAffordance disabled={disabled} />
+        </>
+      )}
+    </Pressable>
+  );
+
+  if (!draft.previewUri || !onRemove) {
+    return renderTrigger({ expanded: false, onPress: onEdit ?? (() => undefined), ref: null });
+  }
+
+  return (
+    <ActionMenu
+      accessibilityLabel={`${accessibilityLabel} 메뉴`}
+      disabled={disabled}
+      items={[
+        { key: 'change', label: '이미지 변경', onSelect: onEdit ?? (() => undefined) },
+        { key: 'remove', label: '이미지 삭제', onSelect: onRemove },
+        { key: 'cancel', label: '취소', onSelect: () => undefined },
+      ]}
+      renderTrigger={renderTrigger}
+    />
+  );
+}
+
 export function ProfileEditImageFields({
   avatar,
   disabled = false,
   header,
   onAvatarEdit,
+  onAvatarRemove,
+  onAvatarRetry,
   onHeaderEdit,
+  onHeaderRemove,
+  onHeaderRetry,
 }: ProfileEditImageFieldsProps) {
   const theme = useTheme();
   const headerActionDisabled = disabled || !onHeaderEdit;
@@ -90,68 +195,42 @@ export function ProfileEditImageFields({
 
   return (
     <View style={styles.root}>
-      <Pressable
+      <ImageEditControl
         accessibilityLabel="헤더 이미지 변경"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: headerActionDisabled }}
         disabled={headerActionDisabled}
-        onPress={onHeaderEdit}
+        draft={header}
+        onEdit={onHeaderEdit}
+        onRemove={onHeaderRemove}
         style={[styles.headerPreview, { backgroundColor: theme.surface }]}
         testID="profile-edit-header-preview"
-      >
-        {({ pressed }) => (
-          <>
-            {header.previewUri ? (
-              <Image
-                accessibilityIgnoresInvertColors
-                resizeMode="cover"
-                source={{ uri: header.previewUri }}
-                style={StyleSheet.absoluteFill}
-              />
-            ) : (
-              <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
-            )}
-            {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
-            <CameraAffordance disabled={headerActionDisabled} />
-          </>
-        )}
-      </Pressable>
+      />
 
       <View style={styles.avatarRow}>
-        <Pressable
+        <ImageEditControl
           accessibilityLabel="아바타 이미지 편집"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: avatarActionDisabled }}
           disabled={avatarActionDisabled}
-          onPress={onAvatarEdit}
+          draft={avatar}
+          onEdit={onAvatarEdit}
+          onRemove={onAvatarRemove}
           style={[
             styles.avatarPreview,
             { backgroundColor: theme.surface, borderColor: theme.background },
           ]}
           testID="profile-edit-avatar-preview"
-        >
-          {({ pressed }) => (
-            <>
-              {avatar.previewUri ? (
-                <Image
-                  accessibilityIgnoresInvertColors
-                  resizeMode="cover"
-                  source={{ uri: avatar.previewUri }}
-                  style={StyleSheet.absoluteFill}
-                />
-              ) : (
-                <View style={[styles.imagePlaceholder, { backgroundColor: theme.primary }]} />
-              )}
-              {pressed ? <View style={[StyleSheet.absoluteFill, styles.pressedVeil]} /> : null}
-              <CameraAffordance disabled={avatarActionDisabled} />
-            </>
-          )}
-        </Pressable>
+        />
       </View>
 
       <View style={styles.statuses}>
-        <ImageStatus status={getImageFieldStatus('헤더', header)} />
-        <ImageStatus status={getImageFieldStatus('아바타', avatar)} />
+        <ImageStatus
+          label="헤더"
+          onRetry={onHeaderRetry}
+          status={getImageFieldStatus('헤더', header)}
+        />
+        <ImageStatus
+          label="아바타"
+          onRetry={onAvatarRetry}
+          status={getImageFieldStatus('아바타', avatar)}
+        />
       </View>
     </View>
   );
@@ -213,7 +292,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   status: {
+    flex: 1,
     fontFamily: 'SUIT',
     ...typography.xsm,
   },
+  statusRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  retry: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.sm },
+  retryLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
 });

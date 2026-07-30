@@ -58,11 +58,11 @@ const remoteApprovalRequired = profile({
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
 const noViewer = profile({ id: 'profile-no-viewer', viewerState: null });
-const withImages = {
-  ...profile({ id: 'profile-with-images' }),
+const withImages = profile({
   avatar: { id: 'media-profile-avatar', url: '/apple-touch-icon.png' },
   header: { id: 'media-profile-header', url: '/og-default.png' },
-};
+  id: 'profile-with-images',
+});
 const followersEmpty = { ...followersProfile([]), id: 'profile-followers-empty' };
 const followersContent = {
   ...followersProfile([followable, followed], { hasNext: true }),

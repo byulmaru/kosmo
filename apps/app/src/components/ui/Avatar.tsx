@@ -17,6 +17,7 @@ export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps
   return (
     <View
       accessibilityLabel={`${label} 프로필 이미지`}
+      accessibilityRole="image"
       style={[
         styles.root,
         { backgroundColor: theme.surface, borderColor: theme.border, height: size, width: size },
