@@ -202,7 +202,7 @@ resource "google_iam_workload_identity_pool_provider" "terraform" {
     "assertion.repository_id == '${local.github_repository_id}'",
     "assertion.repository_owner_id == '${local.github_owner_id}'",
     "assertion.workflow_ref.startsWith('${local.github_owner}/${local.github_repository}/.github/workflows/terraform.yml@')",
-    "((assertion.event_name == 'pull_request' && assertion.base_ref == 'main') || (assertion.event_name == 'push' && assertion.ref == 'refs/heads/main' && assertion.environment == '${local.terraform_apply_environment}'))",
+    "((assertion.event_name == 'pull_request' && assertion.base_ref == 'main') || (assertion.event_name == 'merge_group' && assertion.ref.startsWith('refs/heads/gh-readonly-queue/main/')) || (assertion.event_name == 'push' && assertion.ref == 'refs/heads/main' && assertion.environment == '${local.terraform_apply_environment}'))",
   ])
 
   oidc {

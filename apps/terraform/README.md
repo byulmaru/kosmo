@@ -54,6 +54,12 @@ Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Merge queue에서는 최신 `main`과 PR을 합친 commit으로 plan을 다시 만들며, 그 commit이 `main`에 병합되면 같은 commit과 repository tree에서 만든 merge queue plan artifact만 찾아 그대로 apply한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
+Merge queue plan은 OIDC trust를 먼저 배포한 뒤 활성화한다. GCP WIF condition 변경을 기존 PR plan 경로로 apply하고, 관리자 AWS credential로 `./scripts/ensure-ci-aws-role.sh`를 다시 실행한 뒤 repository variable을 설정한다. 활성화 전 main apply는 기존 PR plan을 사용하되 동일한 repository tree인지 계속 검증한다.
+
+```sh
+gh variable set TERRAFORM_MERGE_GROUP_PLAN_ENABLED --repo byulmaru/kosmo --body true
+```
+
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. 이 정책은 GitHub Actions의 `all_external_contributors` 설정으로 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
 로컬 bootstrap 또는 복구가 필요할 때는 아래 순서로 실행한다.
