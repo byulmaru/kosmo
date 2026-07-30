@@ -39,7 +39,7 @@
 
 #### Scenario: Apply the same projection on refresh
 
-- **WHEN** raw HTML bio가 저장된 기존 remote actor를 새 HTML `summary`로 refresh한다
+- **WHEN** 저장된 remote actor를 새 HTML `summary`로 refresh한다
 - **THEN** 시스템은 최초 materialization과 같은 평문 projection 및 길이 검증으로 기존 `Profile.bio`를 갱신한다
 - **AND** refresh는 `Profile`의 lifecycle과 suspension state를 변경하지 않는다
 
@@ -81,27 +81,3 @@
 
 - **WHEN** remote actor가 성공적으로 materialize된다
 - **THEN** 시스템은 actor metadata에 `lastFetchedAt`을 현재 시각으로 저장한다
-
-## ADDED Requirements
-
-### Requirement: Existing remote profile bio cleanup
-
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`, `PROD-536` 시스템은 raw HTML bio가 이미 저장된 ActivityPub Remote Profile을 화면 조회나 7일 refresh TTL에 의존하지 않고 현재 remote summary 평문 계약으로 정리할 수 있는 명시적 데이터 정리 경로를 제공해야 한다(MUST).
-
-#### Scenario: Normalize a stored raw HTML remote bio
-
-- **WHEN** 데이터 정리 경로가 raw HTML bio를 가진 ActivityPub Remote Profile을 처리한다
-- **THEN** 시스템은 materialization과 같은 평문 projection 및 `Profile.bio` 검증 결과로 저장값을 갱신한다
-- **AND** GraphQL `Profile.bio`, `ProfileHero`와 `ProfileListItem`은 별도 HTML renderer 없이 갱신된 평문을 표시한다
-
-#### Scenario: Keep local profiles outside cleanup scope
-
-- **WHEN** 데이터 정리 경로가 대상 Profile을 선택한다
-- **THEN** 시스템은 ActivityPub Remote Profile만 처리한다
-- **AND** Local Profile bio와 local actor outbound 표현을 변경하지 않는다
-
-#### Scenario: Complete cleanup independently of profile reads and refresh TTL
-
-- **WHEN** 저장된 remote Profile이 최근 refresh됐거나 사용자가 해당 Profile 화면을 조회하지 않는다
-- **THEN** 명시적 데이터 정리 경로는 eligible raw HTML bio를 계속 식별하고 정규화할 수 있다
-- **AND** 완료 여부를 UI 조회 또는 향후 비동기 refresh 발생 여부로 대신하지 않는다
