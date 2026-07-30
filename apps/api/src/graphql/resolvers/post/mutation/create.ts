@@ -51,12 +51,15 @@ builder.mutationField('createPost', (t) =>
         accountId: ctx.session.accountId,
         document: postContentDocumentFromTextAndMedia(
           input.bodyText,
-          media.map(({ altText, mediaId }) => ({
-            altText: altText ?? null,
+          media.map(({ mediaId }) => ({
             mediaId: mediaId.id,
           })),
           input.sensitiveMedia ?? false,
         ),
+        media: media.map(({ altText, mediaId }) => ({
+          altText: altText ?? null,
+          mediaId: mediaId.id,
+        })),
         origin: 'LOCAL',
         profileId: ctx.session.profileId,
         replyParentId: input.replyParentId?.id,

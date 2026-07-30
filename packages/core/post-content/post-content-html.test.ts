@@ -54,7 +54,6 @@ test('omits Media nodes from HTML projection', () => {
           {
             type: 'media',
             attrs: {
-              altText: 'image',
               mediaId: '019f6678-86fa-709b-984e-1520766b8447',
             },
           },

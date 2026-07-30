@@ -48,8 +48,8 @@ test('keeps one empty paragraph for an empty document', () => {
 
 test('preserves ordered Media nodes and omits the default Sensitive Media attr', () => {
   const document = postContentDocumentFromTextAndMedia('body', [
-    { altText: 'first image', mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
-    { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
+    { mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+    { mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
   ]);
 
   assert.deepEqual(document.body, {
@@ -59,13 +59,12 @@ test('preserves ordered Media nodes and omits the default Sensitive Media attr',
       {
         type: 'media',
         attrs: {
-          altText: 'first image',
           mediaId: '019f6678-86fa-709b-984e-1520766b8447',
         },
       },
       {
         type: 'media',
-        attrs: { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
+        attrs: { mediaId: '019f6678-86fa-709b-984e-1520766b8448' },
       },
     ],
   });
@@ -76,7 +75,7 @@ test('preserves ordered Media nodes and omits the default Sensitive Media attr',
 test('canonicalizes media-only content with one empty paragraph and Sensitive Media', () => {
   const document = postContentDocumentFromTextAndMedia(
     '',
-    [{ altText: '', mediaId: '019f6678-86fa-709b-984e-1520766b8447' }],
+    [{ mediaId: '019f6678-86fa-709b-984e-1520766b8447' }],
     true,
   );
 
@@ -87,7 +86,7 @@ test('canonicalizes media-only content with one empty paragraph and Sensitive Me
       { type: 'paragraph' },
       {
         type: 'media',
-        attrs: { altText: '', mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+        attrs: { mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
       },
     ],
   });
@@ -100,7 +99,6 @@ test('rejects more than four Media nodes and unknown Media or document attrs', (
       postContentDocumentFromTextAndMedia(
         'body',
         Array.from({ length: 5 }, (_, index) => ({
-          altText: null,
           mediaId: `019f6678-86fa-709b-984e-1520766b844${index}`,
         })),
       ),
@@ -123,7 +121,7 @@ test('rejects more than four Media nodes and unknown Media or document attrs', (
       summary: null,
       body: {
         type: 'doc',
-        content: [{ type: 'media', attrs: { mediaId: 'media', altText: null, unknown: true } }],
+        content: [{ type: 'media', attrs: { mediaId: 'media', unknown: true } }],
       },
     }),
   );
@@ -138,15 +136,11 @@ test('rejects invalid Sensitive Media and Media attr scalar types', () => {
     },
     {
       type: 'doc',
-      content: [{ type: 'media', attrs: { mediaId: 123, altText: null } }],
+      content: [{ type: 'media', attrs: { mediaId: 123 } }],
     },
     {
       type: 'doc',
-      content: [{ type: 'media', attrs: { mediaId: '', altText: null } }],
-    },
-    {
-      type: 'doc',
-      content: [{ type: 'media', attrs: { mediaId: 'media', altText: 123 } }],
+      content: [{ type: 'media', attrs: { mediaId: '' } }],
     },
   ]) {
     assert.throws(() => canonicalizePostContentDocument({ version: 1, summary: null, body }));
@@ -388,7 +382,7 @@ test('validates the combined local summary and body length', () => {
   assert.doesNotThrow(() =>
     validateLocalPostContentDocument(
       postContentDocumentFromTextAndMedia('', [
-        { altText: null, mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
+        { mediaId: '019f6678-86fa-709b-984e-1520766b8447' },
       ]),
     ),
   );
