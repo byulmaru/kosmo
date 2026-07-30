@@ -61,7 +61,7 @@ PROD-424 backend, PROD-425 UI/thread, PROD-426 Notification/inbox는 하나의 L
 - [선행 thread/Notification change가 merge되기 전에 UI 또는 inbox slice를 구현하면 중복 ownership과 재작업이 생김] → PROD-425는 PROD-422, PROD-426은 기존 Notification 기반을 dependency gate로 유지하고 merge된 public contract에 맞춰 구현한다.
 - [Notification이 Best Effort이므로 저장 실패 시 일부 Reply 알림이 누락될 수 있음] → Reply 성공을 우선하고 retry/outbox는 제외하되 실패 격리를 검증한다.
 - [mixed Notification kind의 SQL predicate가 복잡해짐] → kind별 source 정합성을 공통 visible contract에서 조합하고 connection·count·Node·Read 통합 테스트로 드리프트를 막는다.
-- [mutation 성공 후 targeted refetch를 사용하면 추가 network request가 생김] → 선행 connection의 정렬·cursor 계약을 안전하게 갱신할 updater가 있으면 우선하고, 없을 때만 현재 상세에 제한한다.
+- [mutation 성공 후 targeted refetch를 사용하면 추가 network request가 생김] → 현재 상세 query의 fetch key만 갱신하고, connection edge·cursor 또는 전역 목록 membership을 합성하지 않는다.
 
 ## Migration Plan
 

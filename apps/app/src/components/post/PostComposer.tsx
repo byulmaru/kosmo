@@ -13,6 +13,11 @@ import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import {
+  createPostComposerContextKey,
+  createPostComposerMutationInput,
+  isPostComposerVisibilityAllowed,
+} from './postComposerState';
+import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
 } from './PostComposerMediaControls';
@@ -48,6 +53,8 @@ const visibilityOptions = [
   },
 ] as const;
 type Visibility = (typeof visibilityOptions)[number]['value'];
+export type PostComposerCreatedPost = Readonly<{ id: string }>;
+export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -58,7 +65,27 @@ const PostComposerFragment = graphql`
   }
 `;
 
-export function PostComposer({ profile: profileKey }: { profile: PostComposer_profile$key }) {
+const CreatePostMutation = graphql`
+  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+    createPost(input: $input) {
+      post {
+        id
+      }
+    }
+  }
+`;
+
+type PostComposerProps = {
+  onPostCreated?: (post: PostComposerCreatedPost) => void;
+  profile: PostComposer_profile$key;
+  replyParentId?: string;
+};
+
+export function PostComposer({
+  onPostCreated,
+  profile: profileKey,
+  replyParentId,
+}: PostComposerProps) {
   const theme = useTheme();
   const profile = useFragment(PostComposerFragment, profileKey);
   const editor = useRef<TextInput>(null);
@@ -72,24 +99,30 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaGeneration, setMediaGeneration] = useState(0);
-  const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(graphql`
-    mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
-      createPost(input: $input) {
-        post {
-          id
-        }
-      }
-    }
-  `);
+  const [submitting, setSubmitting] = useState(false);
+  const [commit] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const replyMode = Boolean(replyParentId);
+  const contextKey = createPostComposerContextKey(profile.id, replyParentId);
+  const contextKeyRef = useRef(contextKey);
+  const contextGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+  if (contextKeyRef.current !== contextKey) {
+    contextKeyRef.current = contextKey;
+    contextGenerationRef.current += 1;
+  }
+  const availableVisibilityOptions = visibilityOptions.filter((option) =>
+    isPostComposerVisibilityAllowed(option.value, replyParentId),
+  );
   const bodyText = normalizePostContentPlainText(body);
   const remaining = postBodyMaxLength - bodyText.length;
   const disabled =
     submitting ||
-    (bodyText.length === 0 && media.items.length === 0) ||
-    media.hasPendingMedia ||
+    (bodyText.length === 0 && (replyMode || media.items.length === 0)) ||
+    (!replyMode && media.hasPendingMedia) ||
     remaining < 0;
   const selectedVisibility =
-    visibilityOptions.find((option) => option.value === visibility) ?? visibilityOptions[1];
+    availableVisibilityOptions.find((option) => option.value === visibility) ??
+    visibilityOptions[1];
   const SelectedVisibilityIcon = selectedVisibility.icon;
 
   const submit = () => {
@@ -97,18 +130,34 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
       return;
     }
     setError(null);
+    setSubmitting(true);
+    const submissionGeneration = contextGenerationRef.current;
+    const submittedCallback = onPostCreated;
+    const submissionReplyMode = replyMode;
     commit({
       variables: {
         input: {
-          bodyText,
-          media: media.items,
-          sensitiveMedia: media.sensitiveMedia,
-          visibility,
+          ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
+          ...(!replyMode
+            ? { media: media.items, sensitiveMedia: media.sensitiveMedia }
+            : {}),
         },
       },
-      onCompleted: (_response, errors) => {
+      onCompleted: (response, errors) => {
+        if (!mountedRef.current || contextGenerationRef.current !== submissionGeneration) {
+          return;
+        }
+        setSubmitting(false);
         if (errors?.length) {
           setError('게시글을 작성하지 못했습니다.');
+          return;
+        }
+
+        const createdPost = response.createPost.post;
+        if (!createdPost) {
+          setError(
+            submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
+          );
           return;
         }
 
@@ -121,10 +170,39 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
         setMediaGeneration((generation) => generation + 1);
         setVisibility(PostVisibility.UNLISTED);
         editor.current?.focus();
+        submittedCallback?.(createdPost);
       },
-      onError: (cause) => setError(cause.message || '게시글을 작성하지 못했습니다.'),
+      onError: (cause) => {
+        if (!mountedRef.current || contextGenerationRef.current !== submissionGeneration) {
+          return;
+        }
+        setSubmitting(false);
+        setError(
+          cause.message ||
+            (submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.'),
+        );
+      },
     });
   };
+
+  useEffect(() => {
+    setBody('');
+    setEditorFocused(false);
+    setError(null);
+    setMedia(emptyPostComposerMediaValue);
+    setMediaGeneration((generation) => generation + 1);
+    setSubmitting(false);
+    setVisibility(PostVisibility.UNLISTED);
+    setVisibilityOpen(false);
+  }, [contextKey]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      contextGenerationRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -193,12 +271,12 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
   const visibilityMenu = (
     <View
       ref={visibilityMenuRef}
-      accessibilityLabel="게시글 공개 설정"
+      accessibilityLabel={replyMode ? '답글 공개 설정' : '게시글 공개 설정'}
       accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
       role={Platform.OS === 'web' ? 'menu' : undefined}
       style={[styles.visibilityMenu, { backgroundColor: theme.card, borderColor: theme.border }]}
     >
-      {visibilityOptions.map((option) => {
+      {availableVisibilityOptions.map((option) => {
         const selected = option.value === visibility;
         const VisibilityIcon = option.icon;
         return (
@@ -241,10 +319,61 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
     </View>
   );
 
+  const visibilitySelector = (
+    <View
+      ref={visibilityControl}
+      style={[styles.visibilityControl, { zIndex: visibilityOpen ? 50 : 0 }]}
+    >
+      <Pressable
+        ref={visibilityTrigger}
+        aria-expanded={visibilityOpen}
+        aria-haspopup="menu"
+        accessibilityRole="button"
+        onPress={() => setVisibilityOpen(!visibilityOpen)}
+        style={({ pressed }) => [
+          styles.visibilityTrigger,
+          {
+            backgroundColor: pressed ? theme.surface : theme.card,
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        <SelectedVisibilityIcon color={theme.text} size={16} />
+        <Text numberOfLines={1} style={[styles.visibilityTriggerLabel, { color: theme.text }]}>
+          {selectedVisibility.label}
+        </Text>
+      </Pressable>
+      {Platform.OS === 'web' && visibilityOpen ? (
+        <View style={styles.webVisibilityMenu}>{visibilityMenu}</View>
+      ) : null}
+    </View>
+  );
+
+  const submitActions = (
+    <View style={styles.submit}>
+      <Text
+        accessibilityLiveRegion="polite"
+        style={[
+          styles.remaining,
+          { color: remaining < 0 ? theme.danger : theme.textSecondary },
+        ]}
+      >
+        {remaining.toLocaleString('ko-KR')}
+      </Text>
+      <Button disabled={disabled} loading={submitting} onPress={submit}>
+        {replyMode ? '답글 게시' : '게시'}
+      </Button>
+    </View>
+  );
+
   return (
     <View
-      accessibilityLabel="새 게시글 작성"
-      style={[styles.root, { backgroundColor: theme.card }]}
+      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
+      style={[
+        styles.root,
+        replyMode ? styles.replyRoot : null,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
     >
       <View style={styles.author}>
         <Avatar label={profile.displayName} size={40} />
@@ -259,42 +388,16 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
           },
         ]}
       >
-        <View
-          ref={visibilityControl}
-          style={[styles.visibilityControl, { zIndex: visibilityOpen ? 50 : 0 }]}
-        >
-          <Pressable
-            ref={visibilityTrigger}
-            aria-expanded={visibilityOpen}
-            aria-haspopup="menu"
-            accessibilityRole="button"
-            onPress={() => setVisibilityOpen(!visibilityOpen)}
-            style={({ pressed }) => [
-              styles.visibilityTrigger,
-              {
-                backgroundColor: pressed ? theme.surface : theme.card,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            <SelectedVisibilityIcon color={theme.text} size={16} />
-            <Text numberOfLines={1} style={[styles.visibilityTriggerLabel, { color: theme.text }]}>
-              {selectedVisibility.label}
-            </Text>
-          </Pressable>
-          {Platform.OS === 'web' && visibilityOpen ? (
-            <View style={styles.webVisibilityMenu}>{visibilityMenu}</View>
-          ) : null}
-        </View>
+        {replyMode ? null : visibilitySelector}
         <TextArea
           ref={editor}
           aria-invalid={Boolean(error)}
-          accessibilityLabel="게시글 본문"
+          accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
           editable={!submitting}
           onBlur={() => setEditorFocused(false)}
           onChangeText={setBody}
           onFocus={() => setEditorFocused(true)}
-          placeholder="무슨 일이 일어나고 있나요?"
+          placeholder={replyMode ? '답글을 입력하세요…' : '무슨 일이 일어나고 있나요?'}
           style={styles.editor}
           value={body}
         />
@@ -303,32 +406,24 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
             {error}
           </Text>
         ) : null}
-        <PostComposerMediaControls
-          actions={
-            <View style={styles.submit}>
-              <Text
-                accessibilityLiveRegion="polite"
-                style={[
-                  styles.remaining,
-                  { color: remaining < 0 ? theme.danger : theme.textSecondary },
-                ]}
-              >
-                {remaining.toLocaleString('ko-KR')}
-              </Text>
-              <Button disabled={disabled} loading={submitting} onPress={submit}>
-                게시
-              </Button>
-            </View>
-          }
-          disabled={submitting}
-          key={mediaGeneration}
-          onValueChange={setMedia}
-        />
+        {replyMode ? (
+          <View style={styles.footer}>
+            {visibilitySelector}
+            {submitActions}
+          </View>
+        ) : (
+          <PostComposerMediaControls
+            actions={submitActions}
+            disabled={submitting}
+            key={mediaGeneration}
+            onValueChange={setMedia}
+          />
+        )}
       </View>
 
       {Platform.OS !== 'web' ? (
         <Modal
-          accessibilityLabel="공개 범위"
+          accessibilityLabel={replyMode ? '답글 공개 범위' : '공개 범위'}
           animationType="fade"
           onRequestClose={() => setVisibilityOpen(false)}
           role="dialog"
@@ -351,6 +446,7 @@ export function PostComposer({ profile: profileKey }: { profile: PostComposer_pr
 
 const styles = StyleSheet.create({
   root: { gap: spacing.lg, padding: spacing.lg },
+  replyRoot: { borderRadius: radii.md, borderWidth: 1 },
   author: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   editorSurface: {
     borderRadius: radii.md,
@@ -365,6 +461,12 @@ const styles = StyleSheet.create({
     minHeight: 128,
     paddingHorizontal: 0,
     paddingVertical: 0,
+  },
+  footer: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
   },
   visibilityControl: { position: 'relative' },
   visibilityTrigger: {

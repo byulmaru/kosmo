@@ -999,6 +999,150 @@ function ComposerMediaStatesStory() {
   );
 }
 
+type ReplyComposerRequest = Readonly<{
+  bodyText: string;
+  replyParentId?: string;
+  visibility: string;
+}>;
+
+function ReplyComposerContractStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostComposerCreatePostMutation') {
+            const input = variables.input as ReplyComposerRequest;
+            setRequests((current) => [...current, input]);
+            return Promise.resolve({
+              data: {
+                createPost: {
+                  post: { __typename: 'Post', id: 'reply-created-in-story' },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [],
+  );
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Reply Composer fixture를 불러오는 중입니다.</Text>}>
+        <ReplyComposerContractContents
+          onPostCreated={(createdPost) =>
+            setCreatedPostIds((current) => [...current, createdPost.id])
+          }
+        />
+      </Suspense>
+      <Text testID="reply-composer-request-log">{JSON.stringify(requests)}</Text>
+      <Text testID="reply-composer-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ReplyComposerContractContents({
+  onPostCreated,
+}: {
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+}) {
+  const { composerProfile } = usePostsStoryData();
+
+  return (
+    <PostComposer
+      onPostCreated={onPostCreated}
+      profile={composerProfile}
+      replyParentId="post-parent"
+    />
+  );
+}
+
+function ReplyComposerContextIsolationStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [parentId, setParentId] = useState('post-parent-a');
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create(async (request: RequestParameters) => {
+          if (request.name === 'PostsStoriesQuery') {
+            return {
+              data: {
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse;
+          }
+          if (request.name === 'PostComposerCreatePostMutation') {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            return {
+              data: {
+                createPost: { post: { __typename: 'Post', id: 'late-reply-created-in-story' } },
+              },
+            } as GraphQLResponse;
+          }
+          return { data: {} } as GraphQLResponse;
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [],
+  );
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Reply Composer context fixture를 불러오는 중입니다.</Text>}>
+        <ReplyComposerContextIsolationContents
+          onPostCreated={(createdPost) =>
+            setCreatedPostIds((current) => [...current, createdPost.id])
+          }
+          parentId={parentId}
+        />
+      </Suspense>
+      <Pressable
+        accessibilityLabel="다른 Parent로 전환"
+        accessibilityRole="button"
+        onPress={() => setParentId('post-parent-b')}
+      >
+        <Text>다른 Parent로 전환</Text>
+      </Pressable>
+      <Text testID="reply-context-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ReplyComposerContextIsolationContents({
+  onPostCreated,
+  parentId,
+}: {
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  parentId: string;
+}) {
+  return (
+    <PostComposer
+      onPostCreated={onPostCreated}
+      profile={usePostsStoryData().composerProfile}
+      replyParentId={parentId}
+    />
+  );
+}
+
 function LinkedPostListItemStory() {
   const { posts } = usePostsStoryData();
 
@@ -2755,4 +2899,54 @@ export const ComposerGraphQLErrorPreservesInput: Story = {
     expect(body).toHaveValue('오류가 나도 보존할 본문입니다.');
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerReplyMutationContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
+    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    expect(within(menu).queryByRole('menuitemradio', { name: /언급한 계정만/ })).toBeNull();
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^팔로워만/ }));
+    await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+
+    await waitFor(() => {
+      expect(canvas.getByTestId('reply-composer-request-log')).toHaveTextContent(
+        JSON.stringify([
+          {
+            bodyText: '부모 게시물에 작성한 답글입니다.',
+            replyParentId: 'post-parent',
+            visibility: 'FOLLOWERS',
+          },
+        ]),
+      );
+      expect(canvas.getByTestId('reply-composer-created-log')).toHaveTextContent(
+        JSON.stringify(['reply-created-in-story']),
+      );
+    });
+    expect(body).toHaveValue('');
+  },
+  render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyContextIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.type(body, '이전 Parent의 늦은 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
+
+    await waitFor(() => expect(body).toHaveValue(''));
+    await userEvent.type(body, '새 Parent의 답글');
+    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(body).toHaveValue('새 Parent의 답글');
+    expect(canvas.getByTestId('reply-context-created-log')).toHaveTextContent('[]');
+  },
+  render: () => <ReplyComposerContextIsolationStory />,
 };
