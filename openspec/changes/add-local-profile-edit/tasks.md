@@ -211,7 +211,7 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
       Profile edit navigation lifecycle만 수정한다. draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다.
 - [x] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, GraphQL/transport 실패를
       자동화하고 dirty discard guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
-- [ ] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
+- [x] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
       PROD-490 통합 검증 담당자에게 evidence를 전달한다.
 
 ## 4. PROD-490 통합 검증과 OpenSpec archive

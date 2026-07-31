@@ -16,7 +16,6 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
   context,
   page,
 }) => {
-  test.fail(true, 'PROD-613: router.replace가 반환된 직후 navigation guard가 다시 활성화된다.');
   const timeline: Array<{ correlationId: string; stage: string; timestamp: number }> = [];
   const session = await createE2ESession({ handle: 'prod613-text' });
   expect(session.profile).not.toBeNull();
@@ -93,7 +92,6 @@ test('Ready avatar/header ID 저장도 response parse 뒤 같은 navigation 경�
   context,
   page,
 }) => {
-  test.fail(true, 'PROD-613: Ready Media 저장도 router.replace 이후 guard 경합으로 멈춘다.');
   const session = await createE2ESession({ handle: 'prod613-ready-media' });
   expect(session.profile).not.toBeNull();
   const media = await createE2EReadyProfileMedia(session.profile!.id, session.account.id);
