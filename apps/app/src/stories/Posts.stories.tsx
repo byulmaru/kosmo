@@ -3502,10 +3502,8 @@ export const ComposerVisibilityFocusLifecycle: Story = {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const trigger = canvas.getByRole('button', { name: '조용한 공개' });
-    const editorSurface = body.parentElement?.parentElement;
-    if (!editorSurface) {
-      throw new Error('Post composer editor surface is missing.');
-    }
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
 
     const pressTouch = async (target: Element) => {
       const rect = target.getBoundingClientRect();
@@ -3515,30 +3513,78 @@ export const ComposerVisibilityFocusLifecycle: Story = {
         target,
       });
     };
+    const cancelTouch = async (target: Element) => {
+      const rect = target.getBoundingClientRect();
+      await userEvent.pointer({
+        coords: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        keys: '[TouchA>]',
+        target,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await userEvent.pointer({
+        coords: { x: rect.left - 32, y: rect.top - 32 },
+        target: canvasElement,
+      });
+      await userEvent.pointer({
+        coords: { x: rect.left - 32, y: rect.top - 32 },
+        keys: '[/TouchA]',
+        target: canvasElement,
+      });
+    };
 
     await userEvent.type(body, '터치 경로에서 포커스 상태를 확인합니다.');
     expect(body).toHaveFocus();
+    const focusedBorderColor = getComputedStyle(editorSurface).borderColor;
+    expect(focusedBorderColor).not.toBe(baselineBorderColor);
+
+    await cancelTouch(trigger);
+    expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).toBe(focusedBorderColor);
+
     await pressTouch(trigger);
 
     const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(body).not.toHaveFocus();
+    await waitFor(() =>
+      expect(within(menu).getByRole('menuitemradio', { name: /^조용한 공개/ })).toHaveFocus(),
+    );
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
     await pressTouch(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
     expect(trigger).toHaveFocus();
-    expect(getComputedStyle(editorSurface).borderColor).not.toBe('rgb(252, 231, 154)');
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
+  },
+  render: () => <ComposerStory />,
+};
 
+export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
+
+    await userEvent.type(body, '키보드 경로에서 포커스 상태를 확인합니다.');
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).not.toBe(baselineBorderColor);
+
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(trigger).toHaveFocus();
     await userEvent.keyboard('{Enter}');
     const keyboardMenu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
     const keyboardOption = within(keyboardMenu).getByRole('menuitemradio', {
       name: /^조용한 공개/,
     });
-    await userEvent.keyboard('{ArrowDown}');
     expect(keyboardOption).toHaveFocus();
-    await userEvent.click(keyboardOption);
+    await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
     expect(body).not.toHaveFocus();
     expect(trigger).toHaveFocus();
-    expect(getComputedStyle(editorSurface).borderColor).not.toBe('rgb(252, 231, 154)');
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
   },
   render: () => <ComposerStory />,
 };
@@ -3856,8 +3902,7 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(body).toBeVisible();
     await waitFor(() => expect(body).toHaveFocus());
     expect(getComputedStyle(body).outlineStyle).toBe('none');
-    const editorSurface = body.parentElement?.parentElement;
-    expect(editorSurface).not.toBeNull();
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
     const editorStyle = getComputedStyle(editorSurface!);
     expect(
       getColorContrastRatio(editorStyle.borderColor, editorStyle.backgroundColor),
