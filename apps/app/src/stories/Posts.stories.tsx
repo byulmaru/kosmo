@@ -2697,6 +2697,9 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
     menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(
+      within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ }),
+    ).not.toBeInTheDocument();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => {
       expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
