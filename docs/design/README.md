@@ -9,6 +9,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [colors.md](./colors.md) — 컬러 토큰 정책
 - [logo.md](./logo.md) — 확정 로고 자산, clear space와 플랫폼별 소비처
 - [page-header.md](./page-header.md) — 주요 화면 공용 헤더의 variant, 높이와 소유권
+- [feedback.md](./feedback.md) — Web 피드백 page의 정보 위계와 후속 popup 재사용 경계
 - [typography.md](./typography.md) — 폰트 사용 규칙
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
 - [post-action-bar.md](./post-action-bar.md) — Post Action Bar의 28px geometry, 배치, Repost 메뉴와 오류 toast 계약
