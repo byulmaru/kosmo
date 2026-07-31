@@ -38,7 +38,7 @@ export type PostContentBlockNode = PostContentParagraphNode | PostContentMediaNo
 export interface PostContentBodyDocumentV1 {
   readonly type: 'doc';
   readonly attrs?: {
-    readonly sensitiveMedia: boolean;
+    readonly sensitiveMedia?: boolean;
   };
   readonly content: readonly PostContentBlockNode[];
 }
@@ -69,12 +69,13 @@ export function isPostContentBodyDocumentV1(value: unknown): value is PostConten
   if (!isRecord(value) || value.type !== 'doc' || !('content' in value)) {
     return false;
   }
-  if (
-    value.attrs !== undefined &&
-    (!isRecordWithKeys(value.attrs, ['sensitiveMedia']) ||
-      typeof value.attrs.sensitiveMedia !== 'boolean')
-  ) {
-    return false;
+  if (value.attrs !== undefined) {
+    if (!isRecord(value.attrs)) {
+      return false;
+    }
+    if ('sensitiveMedia' in value.attrs && typeof value.attrs.sensitiveMedia !== 'boolean') {
+      return false;
+    }
   }
   if (!Array.isArray(value.content) || value.content.length === 0) {
     return false;

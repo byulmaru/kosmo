@@ -370,6 +370,18 @@ test('native-safe guard accepts additive V1 properties while validating consumed
     isPostContentDocumentV1({
       version: 1,
       summary: null,
+      body: {
+        type: 'doc',
+        attrs: { futureFlag: true },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
       ignoredDocumentProperty: true,
       body: {
         type: 'doc',
