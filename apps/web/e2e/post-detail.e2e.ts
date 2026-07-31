@@ -22,6 +22,7 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   context,
   page,
 }) => {
+  await page.setViewportSize({ height: 844, width: 390 });
   const body = 'E2E post detail body';
   const viewer = await createE2ESession({
     displayName: 'E2E Detail Viewer',
@@ -49,6 +50,7 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   const heading = page.getByRole('heading', { name: '게시글' });
   await expect(heading).toBeVisible();
   await expect.poll(async () => (await heading.locator('..').boundingBox())?.height).toBe(64);
+  await expect(page.getByRole('button', { name: '메뉴 열기' })).toHaveCount(0);
   await expect(page.getByText(body)).toBeVisible();
   await expect(page.getByText(/전체 공개$/)).toBeVisible();
 
@@ -56,7 +58,7 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect(page).toHaveURL(/\/home$/);
   await expect(page.getByText(body)).toBeVisible();
 
-  await page.goto(`/@wrong-handle/${postId}`);
+  await page.goto(`/wrong-handle/${postId}`);
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
     .toBe(`/@${viewer.profile!.handle}/${postId}`);
@@ -105,7 +107,7 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 
-  await page.goto(`/@wrong-handle/${postId}`);
+  await page.goto(`/wrong-handle/${postId}`);
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 });

@@ -2622,6 +2622,18 @@ export const PostDetailThreadRoute: Story = {
   ),
 };
 
+export const MobilePostDetailThreadRoute: Story = {
+  ...PostDetailThreadRoute,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await canvas.findByTestId('post-thread');
+    expect(canvas.queryByRole('heading', { name: '게시글' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+  },
+};
+
 export const PostDetailCurrentQuoteSourceNavigation: Story = {
   parameters: {
     relay: {

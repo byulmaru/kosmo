@@ -1,5 +1,5 @@
-import { Slot, usePathname } from 'expo-router';
-import { Menu } from 'lucide-react-native';
+import { Slot, usePathname, useRouter } from 'expo-router';
+import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
   Modal,
@@ -22,7 +22,7 @@ import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import { getShellLayout, webMobileShellHeaderHeight } from './shellLayout';
+import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { ViewStyle } from 'react-native';
@@ -94,6 +94,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -109,6 +110,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
+  const mobileShellHeader = getWebMobileShellHeader(web, width, pathname);
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -148,6 +150,16 @@ function UniversalShellContent({ revision }: { revision: number }) {
       style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
     >
       <Menu color={theme.text} size={24} strokeWidth={2} />
+    </Pressable>
+  );
+  const backButton = (
+    <Pressable
+      accessibilityLabel="뒤로 가기"
+      accessibilityRole="button"
+      onPress={() => router.back()}
+      style={styles.menuButton}
+    >
+      <ChevronLeftIcon color={theme.text} size={20} />
     </Pressable>
   );
 
@@ -200,6 +212,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
             >
               {home ? (
                 <PageHeader accessibilityLabel="홈" leading={menuButton} variant="brand" />
+              ) : mobileShellHeader ? (
+                <PageHeader
+                  leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
+                  title={mobileShellHeader.title}
+                />
               ) : (
                 <View style={[styles.mobileHeader, { borderColor: theme.border }]}>
                   {menuButton}

@@ -1,16 +1,18 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { ReactNode } from 'react';
 import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
@@ -51,15 +53,20 @@ const PostQuery = graphql`
 
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
+  const pathname = usePathname();
+  const { width } = useWindowDimensions();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
+  const header = getWebMobileShellHeader(Platform.OS === 'web', width, pathname) ? null : (
+    <PostDetailHeader />
+  );
 
   return (
     <RouteBoundary
       error={(retry) => (
-        <PostDetailFrame header={<PostDetailHeader />}>
+        <PostDetailFrame header={header}>
           <StateView
             actionLabel="다시 시도"
             alert
@@ -70,7 +77,7 @@ export default function PostDetailScreen() {
       )}
       key={`${routeRelativeHandle}:${postId}`}
       loading={
-        <PostDetailFrame header={<PostDetailHeader />}>
+        <PostDetailFrame header={header}>
           <StateView loading title="게시글을 불러오는 중입니다." />
         </PostDetailFrame>
       }
@@ -79,6 +86,7 @@ export default function PostDetailScreen() {
     >
       <PostDetailContent
         fetchKey={`${revision}:${fetchKey}`}
+        header={header}
         onReplyCreated={() => setFetchKey((key) => key + 1)}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
@@ -111,12 +119,14 @@ function PostDetailHeader() {
 
 function PostDetailContent({
   fetchKey,
+  header,
   onReplyCreated,
   postId,
   routeRelativeHandle,
   threadIdentity,
 }: {
   fetchKey: string;
+  header: ReactNode;
   onReplyCreated: () => void;
   postId: string;
   routeRelativeHandle: string;
@@ -148,22 +158,22 @@ function PostDetailContent({
   }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
 
   return pureRepostSourceHref ? null : locallyDeleted ? (
-    <PostDetailFrame header={<PostDetailHeader />}>
+    <PostDetailFrame header={header}>
       <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
     </PostDetailFrame>
   ) : !post ? (
-    <PostDetailFrame header={<PostDetailHeader />}>
+    <PostDetailFrame header={header}>
       <StateView
         description="이미 삭제되었거나 존재하지 않는 게시글이에요."
         title="게시글을 찾을 수 없어요"
       />
     </PostDetailFrame>
   ) : post.state === 'DELETED' ? (
-    <PostDetailFrame header={<PostDetailHeader />}>
+    <PostDetailFrame header={header}>
       <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
     </PostDetailFrame>
   ) : !post.thread ? (
-    <PostDetailFrame header={<PostDetailHeader />}>
+    <PostDetailFrame header={header}>
       <StateView
         description="게시글 데이터를 다시 불러와 주세요."
         title="게시글을 표시할 수 없어요"
@@ -171,7 +181,7 @@ function PostDetailContent({
     </PostDetailFrame>
   ) : (
     <PostDetailThread
-      header={<PostDetailHeader />}
+      header={header}
       identity={threadIdentity}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={onReplyCreated}

@@ -303,6 +303,14 @@ export const HeaderAndWebRefreshPolicy: Story = {
   render: () => <RefreshList />,
 };
 
+export const MobileHeaderOwnedByShell: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
+  },
+  render: () => <RefreshList />,
+};
+
 export const KeyboardFocusableProfileLink: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -545,6 +553,18 @@ export const NoSelectedProfileScreen: Story = {
 
     expect(heading).toBeVisible();
     expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
+  },
+  render: () => <NotificationsScreen />,
+};
+
+export const MobileNoSelectedProfileScreen: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: NoSelectedProfileScreen.parameters,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    expect(canvas.queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
     expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
   },
   render: () => <NotificationsScreen />,

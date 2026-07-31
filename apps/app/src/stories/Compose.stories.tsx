@@ -1,4 +1,4 @@
-import { expect, spyOn, within } from 'storybook/test';
+import { expect, spyOn, waitFor, within } from 'storybook/test';
 import ComposeScreen from '@/app/(tabs)/(protected)/compose';
 import { profile } from './fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -97,5 +97,37 @@ export const ErrorFull: Story = {
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).findByRole('alert')).resolves.toBeVisible();
     expectComposeHeader(canvasElement);
+  },
+};
+
+export const SelectedProfileMobileWeb: Story = {
+  beforeEach: () => {
+    const visualViewport = window.visualViewport;
+
+    if (!visualViewport) {
+      throw new Error('Compose mobile story requires visualViewport.');
+    }
+
+    const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
+    Object.defineProperty(visualViewport, 'width', { configurable: true, value: 390 });
+    visualViewport.dispatchEvent(new Event('resize'));
+
+    return () => {
+      if (originalWidthDescriptor) {
+        Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'width');
+      }
+      visualViewport.dispatchEvent(new Event('resize'));
+    };
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: SelectedProfileFull.parameters,
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      expect(
+        within(canvasElement).queryByRole('heading', { name: '글쓰기' }),
+      ).not.toBeInTheDocument();
+    });
   },
 };

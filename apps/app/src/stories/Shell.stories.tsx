@@ -1184,15 +1184,58 @@ export const UniversalMobileNonHomeHeader: Story = {
     router: { pathname: '/notifications', slotLabel: '알림 화면' },
   },
   play: ({ canvasElement }) => {
-    const menuButton = within(canvasElement).getByRole('button', { name: '메뉴 열기' });
-    const header = menuButton.parentElement;
+    const canvas = within(canvasElement);
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const heading = canvas.getByRole('heading', { name: '알림' });
+    const header = heading.parentElement;
     const buttonRect = menuButton.getBoundingClientRect();
     const headerRect = header?.getBoundingClientRect();
 
+    expect(header).toContainElement(menuButton);
     expect(headerRect?.height).toBe(64);
     expect(
       Math.abs(buttonRect.y + buttonRect.height / 2 - (headerRect!.y + headerRect!.height / 2)),
     ).toBeLessThanOrEqual(1);
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileComposeHeader: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: { pathname: '/compose', slotLabel: '글쓰기 화면' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const heading = canvas.getByRole('heading', { name: '글쓰기' });
+
+    expect(heading.parentElement).toContainElement(menuButton);
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobilePostDetailHeader: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: {
+      params: { postId: 'post-id', profileHandle: '@writer' },
+      pathname: '/@writer/post-id',
+      slotLabel: '게시글 상세',
+    },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const backButton = canvas.getByRole('button', { name: '뒤로 가기' });
+    const heading = canvas.getByRole('heading', { name: '게시글' });
+
+    expect(heading.parentElement).toContainElement(backButton);
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(backButton.getBoundingClientRect().height).toBe(44);
+    expect(canvas.queryByRole('button', { name: '메뉴 열기' })).not.toBeInTheDocument();
   },
   render: () => <UniversalShellStory />,
 };

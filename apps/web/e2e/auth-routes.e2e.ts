@@ -508,26 +508,35 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });
 
-  test('mobile non-home shell은 메뉴 버튼을 64px header 중앙에 둔다', async ({ page }) => {
+  test('mobile 주요 route는 메뉴와 제목을 하나의 64px header에 둔다', async ({ page }) => {
     await page.setViewportSize({ height: 667, width: 390 });
-    await page.goto('/notifications');
 
-    const menuButton = page.getByRole('button', { name: '메뉴 열기' });
-    const header = menuButton.locator('..');
+    for (const route of [
+      { heading: '글쓰기', path: '/compose' },
+      { heading: '알림', path: '/notifications' },
+    ]) {
+      await page.goto(route.path);
 
-    await expect.poll(async () => (await header.boundingBox())?.height).toBe(64);
-    await expect
-      .poll(async () => {
-        const [buttonBox, headerBox] = await Promise.all([
-          menuButton.boundingBox(),
-          header.boundingBox(),
-        ]);
+      const heading = page.getByRole('heading', { name: route.heading });
+      const header = heading.locator('..');
+      const menuButton = header.getByRole('button', { name: '메뉴 열기' });
 
-        return buttonBox && headerBox
-          ? Math.abs(buttonBox.y + buttonBox.height / 2 - (headerBox.y + headerBox.height / 2))
-          : Number.POSITIVE_INFINITY;
-      })
-      .toBeLessThanOrEqual(1);
+      await expect(heading).toHaveCount(1);
+      await expect(menuButton).toBeVisible();
+      await expect.poll(async () => (await header.boundingBox())?.height).toBe(64);
+      await expect
+        .poll(async () => {
+          const [buttonBox, headerBox] = await Promise.all([
+            menuButton.boundingBox(),
+            header.boundingBox(),
+          ]);
+
+          return buttonBox && headerBox
+            ? Math.abs(buttonBox.y + buttonBox.height / 2 - (headerBox.y + headerBox.height / 2))
+            : Number.POSITIVE_INFINITY;
+        })
+        .toBeLessThanOrEqual(1);
+    }
   });
 
   test('mobile drawer는 왼쪽에 열리고 Lucide 메뉴 규격을 유지한다', async ({ page }) => {

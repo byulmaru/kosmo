@@ -1,7 +1,17 @@
+import { usePathname } from 'expo-router';
 import { useState, useTransition } from 'react';
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -108,7 +118,7 @@ export function NotificationList({ profile }: NotificationListProps) {
         )
       }
     >
-      <PageHeader title="알림" />
+      <NotificationPageHeader />
       {notifications.length ? (
         notifications
       ) : (
@@ -154,7 +164,7 @@ export function NotificationListState({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <PageHeader title="알림" />
+      <NotificationPageHeader />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -199,6 +209,15 @@ export function NotificationListState({
       )}
     </ScrollView>
   );
+}
+
+function NotificationPageHeader() {
+  const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const shellOwnsHeader =
+    getWebMobileShellHeader(Platform.OS === 'web', width, pathname)?.title === '알림';
+
+  return shellOwnsHeader ? null : <PageHeader title="알림" />;
 }
 
 const styles = StyleSheet.create({
