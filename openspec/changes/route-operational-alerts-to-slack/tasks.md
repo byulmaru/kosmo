@@ -26,10 +26,10 @@
 - monitoring 전달 경로, node 또는 workload, storage 범주의 대표 firing·resolved 메시지와 allowlist 밖·비허용 namespace 미전달을 검증한다.
 - 모든 v0 alert의 owner·runbook과 전달 실패·잘못된 설정·silence·escalation 절차가 운영 문서에 있는지 확인한다.
 
-- [ ] 1.1 구현 직전 Linear PROD-530과 `byulmaru/kubernetes`의 live rule·route·Secret reference를 다시 조회해 authority snapshot을 남긴다.
-- [ ] 1.2 `byulmaru/kubernetes`에서 정확한 alert name allowlist와 workload namespace 범위를 운영 Slack routing에 반영하고 기존 Karpenter route의 중복을 제거한다.
-- [ ] 1.3 grouping interval, firing·resolved와 계약 필드만 출력하는 안전한 Slack 메시지를 적용하고 기존 inhibition·silence·Secret reference를 보존한다.
-- [ ] 1.4 v0 alert의 owner·runbook을 보완하고 allowlist 변경, 전달 실패, 설정 오류, silence, escalation과 rollback 절차를 platform 운영 문서에 기록한다.
+- [x] 1.1 구현 직전 Linear PROD-530과 `byulmaru/kubernetes`의 live rule·route·Secret reference를 다시 조회해 authority snapshot을 남긴다.
+- [x] 1.2 `byulmaru/kubernetes`에서 정확한 alert name allowlist와 workload namespace 범위를 운영 Slack routing에 반영하고 기존 Karpenter route의 중복을 제거한다.
+- [x] 1.3 grouping interval, firing·resolved와 계약 필드만 출력하는 안전한 Slack 메시지를 적용하고 기존 inhibition·silence·Secret reference를 보존한다.
+- [x] 1.4 v0 alert의 owner·runbook을 보완하고 allowlist 변경, 전달 실패, 설정 오류, silence, escalation과 rollback 절차를 platform 운영 문서에 기록한다.
 - [ ] 1.5 Terraform formatting·validation과 실제 plan을 실행해 의도한 범위와 secret 비노출을 확인한다.
 - [ ] 1.6 대표 alert의 firing·resolved 수신과 allowlist 밖·비허용 namespace alert의 미전달을 안전한 방식으로 검증하고 증거를 PROD-530에 남긴다.
 - [ ] 1.7 Kosmo와 Kubernetes 저장소의 변경·검증 증거를 대조하고 PROD-530 전체 범위가 끝난 뒤에만 OpenSpec change를 archive한다.
