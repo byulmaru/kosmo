@@ -25,7 +25,6 @@ type QueryNavigation = {
 
 type PendingIntent = {
   targetPathname: string;
-  token: number;
 };
 
 const PrimaryNavigationScrollContext = createContext<PrimaryNavigationScrollContextValue>({
@@ -39,7 +38,7 @@ const PrimaryNavigationScrollContext = createContext<PrimaryNavigationScrollCont
 export function PrimaryNavigationScrollProvider({ children }: { children: ReactNode }) {
   const pendingIntentRef = useRef<PendingIntent | null>(null);
   const queryNavigationRef = useRef<QueryNavigation | null>(null);
-  const tokenRef = useRef(0);
+  const cancelHistoryRestoreRef = useRef<(() => void) | null>(null);
 
   // Keep browser scroll restoration enabled; replay the entry offset if Expo Router writes top after popstate.
   useEffect(() => {
@@ -53,57 +52,113 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
     }
 
     const scrollPositions = new Map<string, number>();
+    const maxLayoutAttempts = 60;
+    const stableFrameCount = 2;
     let frame = 0;
-    let pendingHistoryKey: string | null = null;
+    let pendingHistoryEntry: { href: string; key: string } | null = null;
     let attempts = 0;
     let settledFrames = 0;
+    let lastScrollHeight: number | null = null;
     const getHistoryKey = () => {
       const state = window.history.state as { id?: unknown } | null;
       return typeof state?.id === 'string' ? state.id : window.location.href;
     };
+    const getHistoryEntry = () => ({ href: window.location.href, key: getHistoryKey() });
+    const cancelHistoryRestore = () => {
+      pendingHistoryEntry = null;
+      attempts = 0;
+      settledFrames = 0;
+      lastScrollHeight = null;
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+    };
+    cancelHistoryRestoreRef.current = cancelHistoryRestore;
     const saveScrollPosition = () => {
-      if (!pendingHistoryKey) {
+      if (!pendingHistoryEntry) {
         scrollPositions.set(getHistoryKey(), window.scrollY);
       }
     };
     const restoreHistoryScroll = () => {
-      if (!pendingHistoryKey) {
+      const pendingEntry = pendingHistoryEntry;
+      if (!pendingEntry) {
         return;
       }
 
-      const targetScrollY = scrollPositions.get(pendingHistoryKey) ?? 0;
+      const currentEntry = getHistoryEntry();
+      if (currentEntry.key !== pendingEntry.key || currentEntry.href !== pendingEntry.href) {
+        cancelHistoryRestore();
+        return;
+      }
+
+      const targetScrollY = scrollPositions.get(pendingEntry.key);
+      if (targetScrollY === undefined) {
+        cancelHistoryRestore();
+        return;
+      }
+
       const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-      if (targetScrollY > maxScrollY && attempts < 60) {
+      if (targetScrollY > maxScrollY && attempts < maxLayoutAttempts) {
         attempts += 1;
         frame = window.requestAnimationFrame(restoreHistoryScroll);
         return;
       }
 
-      window.scrollTo({ behavior: 'auto', left: 0, top: Math.min(targetScrollY, maxScrollY) });
-      settledFrames += 1;
-      if (settledFrames < 60) {
-        frame = window.requestAnimationFrame(restoreHistoryScroll);
+      const nextScrollY = Math.min(targetScrollY, maxScrollY);
+      window.scrollTo({ behavior: 'auto', left: 0, top: nextScrollY });
+
+      const entryAfterScroll = getHistoryEntry();
+      if (
+        entryAfterScroll.key !== pendingEntry.key ||
+        entryAfterScroll.href !== pendingEntry.href
+      ) {
+        cancelHistoryRestore();
         return;
       }
 
-      pendingHistoryKey = null;
+      const scrollHeight = document.documentElement.scrollHeight;
+      if (window.scrollY === nextScrollY && scrollHeight === lastScrollHeight) {
+        settledFrames += 1;
+      } else {
+        settledFrames = 0;
+      }
+      lastScrollHeight = scrollHeight;
+      if (settledFrames >= stableFrameCount) {
+        cancelHistoryRestore();
+        return;
+      }
+
+      if (pendingHistoryEntry) {
+        frame = window.requestAnimationFrame(restoreHistoryScroll);
+      }
     };
     const handlePopState = () => {
-      pendingHistoryKey = getHistoryKey();
+      cancelHistoryRestore();
+      const pendingEntry = getHistoryEntry();
+      if (!scrollPositions.has(pendingEntry.key)) {
+        return;
+      }
+
+      pendingHistoryEntry = pendingEntry;
       attempts = 0;
       settledFrames = 0;
-      window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(restoreHistoryScroll);
     };
 
     saveScrollPosition();
     window.addEventListener('scroll', saveScrollPosition, { passive: true });
     window.addEventListener('popstate', handlePopState);
+    for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
+      window.addEventListener(eventName, cancelHistoryRestore, { capture: true, passive: true });
+    }
 
     return () => {
-      window.cancelAnimationFrame(frame);
+      cancelHistoryRestore();
+      cancelHistoryRestoreRef.current = null;
       window.removeEventListener('scroll', saveScrollPosition);
       window.removeEventListener('popstate', handlePopState);
+      for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
+        window.removeEventListener(eventName, cancelHistoryRestore, true);
+      }
     };
   }, []);
 
@@ -112,10 +167,8 @@ export function PrimaryNavigationScrollProvider({ children }: { children: ReactN
       return;
     }
 
-    pendingIntentRef.current = {
-      targetPathname,
-      token: ++tokenRef.current,
-    };
+    cancelHistoryRestoreRef.current?.();
+    pendingIntentRef.current = { targetPathname };
   }, []);
   const consume = useCallback((pathname: string) => {
     const pendingIntent = pendingIntentRef.current;

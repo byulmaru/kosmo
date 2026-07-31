@@ -227,6 +227,31 @@ function searchHref(query: string, tab: SearchTab): Href {
   return `/search?${params.toString()}` as Href;
 }
 
+function isPrimarySearchLinkActivation(event: unknown) {
+  if (Platform.OS !== 'web') {
+    return true;
+  }
+
+  const webEvent = event as {
+    altKey?: boolean;
+    button?: number;
+    currentTarget?: { target?: string | null };
+    ctrlKey?: boolean;
+    defaultPrevented?: boolean;
+    metaKey?: boolean;
+    shiftKey?: boolean;
+  };
+  return (
+    !webEvent.defaultPrevented &&
+    !webEvent.metaKey &&
+    !webEvent.altKey &&
+    !webEvent.ctrlKey &&
+    !webEvent.shiftKey &&
+    (webEvent.button == null || webEvent.button === 0) &&
+    [undefined, null, '', 'self'].includes(webEvent.currentTarget?.target)
+  );
+}
+
 export default function SearchScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -250,6 +275,17 @@ export default function SearchScreen() {
     let frame = 0;
     let attempts = 0;
     let settledFrames = 0;
+    let lastScrollHeight: number | null = null;
+    const maxLayoutAttempts = 60;
+    const stableFrameCount = 2;
+    const cancelRestore = () => {
+      clearQueryNavigation(navigation);
+      window.cancelAnimationFrame(frame);
+      frame = 0;
+    };
+    const handleUserInput = () => {
+      cancelRestore();
+    };
     let restoredFocus = false;
     const restore = () => {
       if (getQueryNavigation() !== navigation) {
@@ -257,14 +293,14 @@ export default function SearchScreen() {
       }
 
       const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-      if (navigation.scrollY > maxScrollY && attempts < 60) {
+      if (navigation.scrollY > maxScrollY && attempts < maxLayoutAttempts) {
         attempts += 1;
         frame = window.requestAnimationFrame(restore);
         return;
       }
 
-      window.scrollTo({ behavior: 'auto', left: 0, top: Math.min(navigation.scrollY, maxScrollY) });
-      settledFrames += 1;
+      const nextScrollY = Math.min(navigation.scrollY, maxScrollY);
+      window.scrollTo({ behavior: 'auto', left: 0, top: nextScrollY });
       if (navigation.restoreFocus && !restoredFocus) {
         inputRef.current?.focus();
         restoredFocus = true;
@@ -272,7 +308,15 @@ export default function SearchScreen() {
           setFocused(false);
         }
       }
-      if (settledFrames < 60) {
+
+      const scrollHeight = document.documentElement.scrollHeight;
+      if (window.scrollY === nextScrollY && scrollHeight === lastScrollHeight) {
+        settledFrames += 1;
+      } else {
+        settledFrames = 0;
+      }
+      lastScrollHeight = scrollHeight;
+      if (settledFrames < stableFrameCount) {
         frame = window.requestAnimationFrame(restore);
         return;
       }
@@ -280,8 +324,17 @@ export default function SearchScreen() {
       clearQueryNavigation(navigation);
     };
 
+    for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
+      window.addEventListener(eventName, handleUserInput, { capture: true, passive: true });
+    }
     frame = window.requestAnimationFrame(restore);
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      clearQueryNavigation(navigation);
+      window.cancelAnimationFrame(frame);
+      for (const eventName of ['keydown', 'pointerdown', 'touchstart', 'wheel']) {
+        window.removeEventListener(eventName, handleUserInput, true);
+      }
+    };
   }, [activeTab, clearQueryNavigation, getQueryNavigation, query]);
 
   useEffect(() => {
@@ -350,6 +403,8 @@ export default function SearchScreen() {
       scrollY: window.scrollY,
     });
   };
+  const isCurrentSearchTarget = (nextQuery: string, nextTab: SearchTab) =>
+    nextQuery.trim() === query && nextTab === activeTab;
 
   const navigate = (
     nextQuery: string,
@@ -360,6 +415,10 @@ export default function SearchScreen() {
     if (normalized) {
       remember(normalized);
       trackAnalytics('search_submitted', { source, tab });
+    }
+    if (isCurrentSearchTarget(normalized, tab)) {
+      setFocused(false);
+      return;
     }
     preserveQueryNavigationPosition();
     setFocused(false);
@@ -440,8 +499,14 @@ export default function SearchScreen() {
                   <Link asChild href={searchHref(term, activeTab)}>
                     <Pressable
                       accessibilityRole="link"
-                      onPress={() => {
-                        preserveQueryNavigationPosition();
+                      onPress={(event) => {
+                        const currentTarget = isCurrentSearchTarget(term, activeTab);
+                        const primaryActivation = isPrimarySearchLinkActivation(event);
+                        if (currentTarget && primaryActivation) {
+                          event.preventDefault();
+                        } else if (primaryActivation) {
+                          preserveQueryNavigationPosition();
+                        }
                         setFocused(false);
                         remember(term);
                         trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });

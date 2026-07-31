@@ -38,6 +38,23 @@ async function scrollDocument(page: Page) {
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 }
 
+async function waitAnimationFrames(page: Page, count = 4) {
+  await page.evaluate((frameCount) => {
+    return new Promise<void>((resolve) => {
+      let completed = 0;
+      const tick = () => {
+        completed += 1;
+        if (completed >= frameCount) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }, count);
+}
+
 test('주요 Web navigation은 mobile bottom tab, drawer, compact rail과 full sidebar에서 document top으로 이동한다', async ({
   page,
 }) => {
@@ -175,7 +192,19 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
 
   await expect(page).toHaveURL(/q=e2e-query-second/);
   await expect(page.getByRole('link', { name: /e2e-query-second-0/ })).toBeVisible();
+  const offsetBeforeWheel = await page.evaluate(() => {
+    const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    window.scrollTo(0, Math.min(320, maxScrollY));
+    return window.scrollY;
+  });
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await page.mouse.wheel(0, -120);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(offsetBeforeWheel);
+  const offsetAfterWheel = await page.evaluate(() => window.scrollY);
+  await waitAnimationFrames(page);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(offsetAfterWheel);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(offsetBeforeWheel);
+  expect(offsetAfterWheel).toBeLessThan(offsetBeforeWheel);
   await expect(input).toBeFocused();
 
   await page.goto('/home');
@@ -191,4 +220,25 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
   await page.goBack();
   await expect(page).toHaveURL(/\/home$/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThanOrEqual(homeScroll);
+
+  await page.goto('/search?q=e2e-query-first&tab=people');
+  const repeatedQueryInput = page.getByRole('textbox', { name: '검색어' });
+  await expect(repeatedQueryInput).toBeVisible();
+  await expect(page.getByRole('link', { name: /e2e-query-first-0/ })).toBeVisible();
+  await repeatedQueryInput.focus();
+  const historyLengthBeforeSameQuery = await page.evaluate(() => window.history.length);
+  await repeatedQueryInput.press('Enter');
+  await expect
+    .poll(() => page.evaluate(() => window.history.length))
+    .toBe(historyLengthBeforeSameQuery);
+
+  await repeatedQueryInput.fill('e2e-query-second');
+  await repeatedQueryInput.press('Enter');
+  await expect(page).toHaveURL(/q=e2e-query-second/);
+  await expect(page.getByRole('link', { name: /e2e-query-second-0/ })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/q=e2e-query-first/);
+  await expect(page.getByRole('link', { name: /e2e-query-first-0/ })).toBeVisible();
+  await waitAnimationFrames(page);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
