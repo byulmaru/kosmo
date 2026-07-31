@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactNode } from 'react';
+import type { LinkProps } from 'expo-router';
+import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GuardedLink as GuardedLinkExport } from './GuardedLink';
 import type {
@@ -21,12 +22,16 @@ type LinkPressEvent = {
   preventDefault: ReturnType<typeof mock.fn>;
 };
 
+type LinkPress = NonNullable<LinkProps['onPress']>;
+
 type RenderedLinkProps = {
-  onPress: (event: LinkPressEvent) => void;
+  children: ReactElement<{ onPress?: LinkPress }>;
+  onPress?: LinkPress;
 };
 
 const navigations: string[] = [];
-let linkProps: RenderedLinkProps | null = null;
+let linkPress: LinkPress | undefined;
+let rootLinkPress: LinkPress | undefined;
 let renderer: ReactTestRenderer | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -36,7 +41,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('expo-router', {
   Link: (props: RenderedLinkProps & { children: ReactNode }) => {
-    linkProps = props;
+    linkPress = props.children.props.onPress;
+    rootLinkPress = props.onPress;
     return createElement('Link', props, props.children);
   },
   useRouter: () => ({
@@ -61,7 +67,8 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  linkProps = null;
+  linkPress = undefined;
+  rootLinkPress = undefined;
   navigations.length = 0;
   mock.restoreAll();
 });
@@ -72,6 +79,10 @@ function GuardRegistrar({ handler }: { handler: NavigationRequestHandler }) {
   return null;
 }
 
+function TestPressable(props: { onPress?: LinkPress }) {
+  return createElement('Pressable', props);
+}
+
 const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => void) => {
   await act(async () => {
     renderer = create(
@@ -79,11 +90,16 @@ const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => 
         NavigationGuardProvider,
         null,
         createElement(GuardRegistrar, { handler }),
-        createElement(GuardedLink, { href: '/timeline', onNavigate }, createElement('Pressable')),
+        createElement(GuardedLink, {
+          children: createElement(TestPressable),
+          href: '/timeline',
+          onNavigate,
+        }),
       ),
     );
   });
-  assert.ok(linkProps);
+  assert.equal(rootLinkPress, undefined);
+  assert.ok(linkPress);
 };
 
 describe('GuardedLink', () => {
@@ -95,7 +111,7 @@ describe('GuardedLink', () => {
     });
     const event: LinkPressEvent = { preventDefault: mock.fn() };
 
-    await act(async () => linkProps?.onPress(event));
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(event.preventDefault.mock.callCount(), 1);
     assert.deepEqual(navigations, []);
@@ -110,7 +126,7 @@ describe('GuardedLink', () => {
     await renderLink(() => false, onNavigate);
     const event: LinkPressEvent = { preventDefault: mock.fn() };
 
-    await act(async () => linkProps?.onPress(event));
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(event.preventDefault.mock.callCount(), 0);
     assert.equal(onNavigate.mock.callCount(), 1);
@@ -123,7 +139,7 @@ describe('GuardedLink', () => {
     await renderLink(handler, onNavigate);
     const event: LinkPressEvent = { metaKey: true, preventDefault: mock.fn() };
 
-    await act(async () => linkProps?.onPress(event));
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(handler.mock.callCount(), 0);
     assert.equal(onNavigate.mock.callCount(), 0);

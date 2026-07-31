@@ -58,8 +58,9 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
   공개 표시에 그대로 재사용할 수 없다. Profile 조회 정책을 통과한 관계 resolver가 별도 read authority를 가져야 한다.
 - client가 unchanged displayName을 생략하는 것만으로는 legacy 40자 초과 값을 서버에서 안전하게 허용할 수 없다.
   Local edit service가 저장 원문과 입력 원문을 비교해야 하며 Remote materialization의 공용 validation을 좁히면 안 된다.
-- 일반 transaction SELECT 뒤 Profile id만 update하면 Membership·Account·Profile eligibility가 commit 전에 바뀌는
-  경쟁을 막지 못한다. 권한 관련 row를 잠그거나 동등한 atomic guard가 필요하다.
+- 일반 transaction SELECT 뒤 eligibility가 바뀔 수 있지만, action 시작 시 승인된 실행 중 요청을 commit 전에
+  취소하는 것은 이 change의 계약이 아니다. 공유 Instance·Account까지 잠그지 않고 이후 요청부터 현재 상태로
+  거부한다.
 - Web 기본 confirm은 승인된 action label을 제어할 수 없으므로 Web·Native 공통 confirmation presentation이
   필요하다. 성공 replace 전에 dirty guard를 해제하지 않으면 정상 navigation도 막힐 수 있다.
 
@@ -84,8 +85,9 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    unique(Profile, kind)를 가진다. Profile 삭제는 관계만 cascade하고 Media는 보존한다. Media 조회 index를 두고
    기존 Profile backfill은 하지 않는다.
 6. update input의 avatar/header는 omitted=유지, concrete Media global ID=교체, `null`=관계 제거로 해석한다.
-   service는 selected Profile, Owner Membership과 Account eligibility를 일관된 lock 순서 또는 동등한 atomic
-   guard로 재확인하고, 요청된 두 Media가 모두 같은 selected Profile의 Local Ready인지 먼저 검증한다. 그 뒤
+   service는 action 시작 시 selected Profile, Owner Membership과 Account eligibility를 일반 SELECT로
+   server-authoritative하게 재확인하되 명시적인 lock이나 atomic guard는 사용하지 않는다. 요청된 두 Media가
+   모두 같은 selected Profile의 Local Ready인지 먼저 검증한 뒤
    displayName·bio·`followPolicy`와 kind별 relation upsert/delete를 하나의 transaction에서 반영한다. Local edit의
    displayName은 저장 원문과 정확히 같으면 legacy 값을 허용하고 바뀐 값만 Unicode code point 기준 1~40으로
    검증한다. bio는 앞뒤 공백을 제거한 뒤 500자 이하인지 검증한다.
@@ -106,8 +108,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 
 ### Allowed Alternatives
 
-- commit 시 권한 경쟁 방지는 Profile·Membership·Account의 일관된 row lock 또는 동일한 불변식을 보장하는
-  conditional write로 구현할 수 있다. 단순 선조회 뒤 Profile id만 update하는 방식은 허용하지 않는다.
+- action 시작 시의 eligibility 조회는 동등한 server-authoritative join으로 구성할 수 있다. 이미 승인된 실행 중
+  요청을 취소하기 위한 `FOR UPDATE`, shared lock이나 conditional write는 이 change에 추가하지 않는다.
 - Profile 관계 resolver는 기존 Media object identity를 반환하거나 같은 Relay identity를 유지하는 좁은 projection을
   사용할 수 있다. 어느 방식이든 일반 Media Node의 owner-only 조회 권한을 공개로 넓히지 않는다.
 - desktop sticky action은 shell document scroll을 유지하는 한 route header 또는 중앙 surface 내부 bar로 구현할 수
@@ -148,8 +150,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
   boundary에 포함하고, 정책 변경이 기존 Pending Follow Request를 바꾸지 않는지 통합 검증한다.
 - [Media upload 성공 뒤 Profile 저장 실패로 orphan Media가 남음] → upload와 relation을 구분하고 draft·재시도를
   보존하며 이번 범위에서는 orphan cleanup을 하지 않는다.
-- [권한 확인과 write 사이에 eligibility가 바뀜] → transaction 안의 lock/atomic guard와 동시 변경 통합 test로
-  Profile·Membership·Account 조건을 commit 시점까지 보존한다.
+- [권한 확인과 write 사이에 eligibility가 바뀜] → 이미 승인된 실행 중 요청은 완료될 수 있음을 허용하고, 이후
+  요청이 action 시작 시 현재 Profile·Membership·Account·Instance 상태로 거부되는지 검증한다.
 - [Profile 이미지 저장은 성공하지만 공개 화면에서 보이지 않음] → Profile visibility 기반 relation resolver,
   mutation/query의 동일 Media identity와 ProfileHero 렌더링을 한 전달 단위로 검증한다.
 - [한 field upload 실패가 다른 Ready field를 재업로드함] → field별 upload generation과 Ready ID를 route draft가

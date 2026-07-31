@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { setTimeout as delay } from 'node:timers/promises';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -124,26 +123,6 @@ const readProfileMedia = (profileId: string) =>
     .from(ProfileMedia)
     .where(eq(ProfileMedia.profileId, profileId))
     .then((rows) => rows.toSorted((a, b) => a.kind.localeCompare(b.kind)));
-
-const waitUntilBlockedBy = async (blockingPid: number) => {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
-    const [activity] = await db.execute<{ blocked: boolean }>(sql`
-      SELECT EXISTS (
-        SELECT 1
-        FROM pg_stat_activity
-        WHERE ${blockingPid} = ANY(pg_blocking_pids(pid))
-      ) AS blocked
-    `);
-
-    if (activity?.blocked) {
-      return;
-    }
-
-    await delay(20);
-  }
-
-  assert.fail('Profile eligibility change did not wait for updateProfile');
-};
 
 test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 Media를 보존한다', async () => {
   const { account, profile } = await createProfileFixture();
@@ -398,100 +377,6 @@ test('bio는 trim 후 JavaScript UTF-16 길이 500자를 적용한다', async ()
       .then(({ bio }) => bio),
     valid,
   );
-});
-
-test('updateProfile이 보유한 eligibility lock은 Owner downgrade보다 먼저 commit된다', async () => {
-  const { account, profile } = await createProfileFixture();
-  const updateLocked = Promise.withResolvers<number>();
-  const allowUpdateCommit = Promise.withResolvers<void>();
-  const updateTransaction = db.transaction(async (tx) => {
-    const [connection] = await tx.execute<{ pid: number }>(
-      sql`SELECT pg_backend_pid()::int AS pid`,
-    );
-    assert.ok(connection);
-    const updated = await updateProfile(
-      { accountId: account.id, displayName: 'Committed first', profileId: profile.id },
-      tx,
-    );
-    updateLocked.resolve(connection.pid);
-    await allowUpdateCommit.promise;
-    return updated;
-  });
-  let ownerDowngrade: Promise<unknown> | undefined;
-
-  try {
-    const blockingPid = await updateLocked.promise;
-    ownerDowngrade = db
-      .update(AccountProfiles)
-      .set({ role: AccountProfileRole.MEMBER })
-      .where(
-        and(eq(AccountProfiles.accountId, account.id), eq(AccountProfiles.profileId, profile.id)),
-      )
-      .then((rows) => rows);
-    await waitUntilBlockedBy(blockingPid);
-    allowUpdateCommit.resolve();
-
-    const [updated] = await Promise.all([updateTransaction, ownerDowngrade]);
-    assert.equal(updated.displayName, 'Committed first');
-    assert.equal(
-      await db
-        .select({ role: AccountProfiles.role })
-        .from(AccountProfiles)
-        .where(
-          and(eq(AccountProfiles.accountId, account.id), eq(AccountProfiles.profileId, profile.id)),
-        )
-        .then(firstOrThrow)
-        .then(({ role }) => role),
-      AccountProfileRole.MEMBER,
-    );
-  } finally {
-    allowUpdateCommit.resolve();
-    await Promise.allSettled([updateTransaction, ...(ownerDowngrade ? [ownerDowngrade] : [])]);
-  }
-});
-
-test('Account가 먼저 비활성화되면 updateProfile은 draft 전체를 거부한다', async () => {
-  const { account, profile } = await createProfileFixture();
-  const eligibilityLocked = Promise.withResolvers<number>();
-  const allowEligibilityCommit = Promise.withResolvers<void>();
-  const eligibilityTransaction = db.transaction(async (tx) => {
-    const [connection] = await tx.execute<{ pid: number }>(
-      sql`SELECT pg_backend_pid()::int AS pid`,
-    );
-    assert.ok(connection);
-    await tx
-      .update(Accounts)
-      .set({ state: AccountState.DISABLED })
-      .where(eq(Accounts.id, account.id));
-    eligibilityLocked.resolve(connection.pid);
-    await allowEligibilityCommit.promise;
-  });
-  let update: ReturnType<typeof updateProfile> | undefined;
-
-  try {
-    const blockingPid = await eligibilityLocked.promise;
-    update = updateProfile({
-      accountId: account.id,
-      bio: 'Should not commit',
-      displayName: 'Should not commit',
-      profileId: profile.id,
-    });
-    await waitUntilBlockedBy(blockingPid);
-    allowEligibilityCommit.resolve();
-    await eligibilityTransaction;
-    await assert.rejects(update, NotFoundError);
-
-    const persisted = await db
-      .select()
-      .from(Profiles)
-      .where(eq(Profiles.id, profile.id))
-      .then(firstOrThrow);
-    assert.equal(persisted.displayName, profile.displayName);
-    assert.equal(persisted.bio, profile.bio);
-  } finally {
-    allowEligibilityCommit.resolve();
-    await Promise.allSettled([eligibilityTransaction, ...(update ? [update] : [])]);
-  }
 });
 
 test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {

@@ -104,7 +104,6 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         ),
       )
       .limit(1)
-      .for('update', { of: [Profiles, Instances, AccountProfiles, Accounts] })
       .then(first);
 
     if (!profile) {

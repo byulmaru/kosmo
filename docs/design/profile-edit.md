@@ -84,9 +84,10 @@
   link로 진입했지만 편집할 수 없으면 form 대신 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을
   가진 StateView를 표시한다.
 - selected Profile id나 `Profile.instance.kind`만으로 Owner 또는 편집 권한을 추측하지 않는다.
-- mutation은 route query 결과를 권한 증거로 재사용하지 않는다. 저장 transaction 안에서 selected Profile,
-  Owner Membership과 Account의 현재 eligibility를 일관된 순서의 row lock 또는 동등한 atomic guard로 다시
-  확인하고, 하나라도 달라지면 text·policy·avatar/header 관계를 모두 그대로 둔다.
+- mutation은 route query 결과를 권한 증거로 재사용하지 않는다. action 시작 시 selected Profile, Owner
+  Membership과 Account의 현재 eligibility를 server-authoritative하게 다시 확인하되 명시적인 `FOR UPDATE`,
+  shared lock 또는 atomic guard로 해당 상태를 commit까지 고정하지 않는다. 확인 뒤 동시에 eligibility가
+  바뀌더라도 이미 승인된 실행 중 요청은 완료될 수 있고, 이후 요청부터 거부한다.
 - route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile avatar/header 표시, 성공
   navigation과 production 진입점을 연결한다.
 - route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로

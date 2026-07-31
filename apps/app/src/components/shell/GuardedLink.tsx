@@ -1,9 +1,16 @@
 import { Link, useRouter } from 'expo-router';
+import { cloneElement } from 'react';
 import { Platform } from 'react-native';
 import { useNavigationGuard } from './NavigationGuardContext';
 import type { Href, LinkProps } from 'expo-router';
+import type { ReactElement } from 'react';
 
-type Props = Omit<LinkProps, 'asChild' | 'href' | 'onPress'> & {
+type ChildProps = {
+  onPress?: NonNullable<LinkProps['onPress']>;
+};
+
+type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
+  children: ReactElement<ChildProps>;
   href: Href;
   onNavigate?: () => void;
 };
@@ -12,6 +19,7 @@ export function GuardedLink({ children, href, onNavigate, ...props }: Props) {
   const router = useRouter();
   const { request } = useNavigationGuard();
   const handlePress: NonNullable<LinkProps['onPress']> = (event) => {
+    children.props.onPress?.(event);
     if (!shouldHandleNavigation(event)) {
       return;
     }
@@ -22,8 +30,8 @@ export function GuardedLink({ children, href, onNavigate, ...props }: Props) {
   };
 
   return (
-    <Link {...props} asChild href={href} onPress={handlePress}>
-      {children}
+    <Link {...props} asChild href={href}>
+      {cloneElement(children, { onPress: handlePress })}
     </Link>
   );
 }

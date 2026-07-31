@@ -102,8 +102,8 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 - `profile_media`는 additive 관계 table로 두고 기존 Profile을 backfill하지 않는다. Profile 삭제는 관계만
   cascade하고 Media는 보존하며 `media_id` 전체 unique를 두지 않는다.
 - update input은 avatar/header omitted=유지, concrete Media global ID=교체, `null`=관계 제거로 해석한다.
-- commit 시 selected Profile·Owner Membership·Account eligibility를 lock 또는 동등 atomic guard로 재검증하고,
-  요청된 모든 Media를 먼저 검증한 뒤 전체 draft를 반영한다.
+- action 시작 시 selected Profile·Owner Membership·Account eligibility를 server-authoritative하게 재검증하되
+  명시적인 lock이나 atomic guard는 사용하지 않고, 요청된 모든 Media를 먼저 검증한 뒤 전체 draft를 반영한다.
 - 같은 selected Profile의 Ready Local Media만 avatar/header로 연결하고 관계 제거 때 Media를 삭제하지 않는다.
   Storage byte·MIME은 다시 검증하지 않고 `PROD-581` metadata를 소비한다.
 - `followPolicy`는 displayName·bio·Media 관계와 같은 draft/save 경계에서 저장하고, 별도 즉시 저장이나 별도
@@ -138,15 +138,15 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
   조건에서 명시적으로 제외하고 Native 출시 gate로 이관하며, 실행하지 않은 플랫폼을 통과로 적지 않는다.
 - 테스트 코드 범위: `profile_media` DB/core service, Profile GraphQL query/mutation integration, Profile route와
   upload/navigation/Relay를 직접 검증하는 기존 API/app test surface.
-- 테스트 필요성: 권한 경쟁, tri-state 관계 원자성, 공개 Profile read, 부분 upload 실패와 navigation race가
+- 테스트 필요성: 초기 부적격 권한 거부, tri-state 관계 원자성, 공개 Profile read, 부분 upload 실패와 navigation race가
   부분 저장·정보 비공개 회귀·중복 upload를 만들지 않음을 관찰 가능한 결과로 증명한다.
 - 테스트 제외 범위: Media upload 인프라 자체, orphan cleanup, Profile Tag·Settings, crop·thumbnail·variant·Remote
   Media·Fedify, 관련 없는 coverage·snapshot·새 범용 test harness 확대.
 
 - [x] 2.1 `profile_media` enum/table, FK·unique·index와 relation을 additive migration으로 추가하고 DB 제약·cascade·
       Media 보존을 검증한다.
-- [x] 2.2 guest-safe nullable `selectedProfileForEdit`, Profile/Membership/Account commit-time authorization과 거부
-      경계를 구현하고 권한·동시 변경 integration test를 추가한다.
+- [x] 2.2 guest-safe nullable `selectedProfileForEdit`, action 시작 시 Profile/Membership/Account authorization과
+      거부 경계를 구현하고 초기 부적격 상태 integration test를 추가한다.
 - [x] 2.3 update input/service를 selected Profile 기준 text·`followPolicy`·avatar/header omitted/ID/null로 정렬하고
       legacy displayName, Media 선검증·원자 rollback integration test를 추가한다.
 - [x] 2.4 Profile avatar/header viewer-authorized resolver와 mutation/query payload identity를 연결하고 공개 조회,

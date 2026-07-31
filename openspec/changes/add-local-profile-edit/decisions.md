@@ -196,7 +196,8 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/media.md`,
   `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/design/profile-edit.md`, `PROD-492`,
   2026-07-30 사용자 확인과 독립 구현 리뷰
-- Status: Active
+- Status: Superseded
+- Superseded By: `Profile update는 eligibility 행을 잠그지 않고 draft만 원자적으로 반영한다`
 - Context / Problem: transaction 안의 일반 SELECT 뒤 Profile id만 update하면 Profile·Membership·Account eligibility가
   commit 전에 바뀌거나 avatar/header 중 한쪽 validation 실패 전에 다른 field가 반영될 수 있다.
 - Decision Outcome: service는 selected Profile, Owner Membership과 Account eligibility를 일관된 row lock 순서 또는
@@ -209,6 +210,30 @@
 - Consequences: 권한 경쟁과 혼합 media input 실패에도 displayName·bio·policy·두 관계가 한 결과를 가진다.
 - Confirmation / Follow-up: 권한 동시 변경, 한쪽 invalid Media, omitted/ID/null 혼합과 rollback을 integration test로
   검증한다.
+
+### Profile update는 eligibility 행을 잠그지 않고 draft만 원자적으로 반영한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`,
+  `docs/design/profile-edit.md`, `PROD-492`, 2026-07-31 사용자 정정
+- Status: Active
+- Context / Problem: 이전 결정은 action 시작 시의 server-authoritative authorization을 commit 시점까지 보존해야
+  한다고 확대 해석해 Profile뿐 아니라 공유 Instance·Account까지 직렬화했다. PROD-492 계약에는 이미 승인된 실행 중
+  요청을 role·account·instance 상태 변경으로 취소해야 한다는 요구가 없다.
+- Decision Outcome: `usingProfile`이 caller의 selected Profile 경계를 검증하고 service는 action 시작 시 target
+  Profile, Owner Membership, Account와 Local Profile eligibility를 일반 SELECT로 다시 확인한다. 명시적인
+  `FOR UPDATE`, shared lock 또는 atomic guard는 사용하지 않는다. transaction은 요청된 avatar/header Media를
+  모두 먼저 검증하고 text·policy·relation draft를 원자적으로 반영하는 데만 사용한다.
+- Alternatives Considered: Profile·Membership·Account·Instance의 exclusive/shared lock과 conditional atomic
+  guard는 이미 승인된 요청을 취소하지 않아도 되는 benign race를 막기 위해 공유 상태를 과도하게 직렬화하므로
+  제외했다.
+- Consequences: 확인 직후 eligibility가 바뀌면 실행 중 update가 완료될 수 있으며 이후 요청부터 거부된다. 서로
+  다른 Profile update가 공유 Instance·Account 때문에 직렬화되지 않고, Media validation 실패 시 draft 전체
+  rollback은 그대로 유지된다.
+- Confirmation / Follow-up: 처음부터 부적격인 Profile·Membership·Account·Instance의 거부, 한쪽 invalid Media,
+  omitted/ID/null 혼합과 rollback을 integration test로 검증한다. lock 순서나 commit-time authorization 경쟁
+  test는 두지 않는다.
 
 ### 공개 avatar와 header는 Profile 관계 조회가 소유한다
 
