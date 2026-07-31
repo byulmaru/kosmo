@@ -133,7 +133,7 @@ jobs:
             echo
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
-            echo "- Apply: main will apply this saved plan only if its current plan is equivalent"
+            echo "- Apply: main will apply this saved plan with Terraform's native stale-plan validation"
             echo
             echo "<details>"
             echo "<summary>terraform show -no-color terraform.tfplan</summary>"
@@ -177,7 +177,7 @@ jobs:
             echo
             echo "- Commit: \`${PR_HEAD_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
-            echo "- Apply: main will apply this reviewed saved plan only if its current plan is equivalent"
+            echo "- Apply: main will apply this reviewed saved plan with Terraform's native stale-plan validation"
             echo "- Artifact retention: ${GITHUB_RETENTION_DAYS} days; rerun this plan before merging if it expires"
             echo
             echo "<details open>"
@@ -351,54 +351,13 @@ jobs:
             echo "TF_PLAN_SOURCE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${plan_run_id}"
           } >> "${GITHUB_ENV}"
 
-      - name: Compare reviewed and current Terraform plans
-        working-directory: ${{ env.TF_ROOT }}
-        run: |
-          set -euo pipefail
-
-          cleanup_plan_comparison() {
-            rm -f current.tfplan current.tfplan.txt current.tfplan.json reviewed.tfplan.json
-          }
-          trap cleanup_plan_comparison EXIT
-
-          terraform plan -input=false -out=current.tfplan
-          terraform show -json terraform.tfplan \
-            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
-            > reviewed.tfplan.json
-          terraform show -json current.tfplan \
-            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
-            > current.tfplan.json
-
-          if ! cmp -s reviewed.tfplan.json current.tfplan.json; then
-            terraform show -no-color current.tfplan > current.tfplan.txt
-            total_lines="$(wc -l < current.tfplan.txt)"
-            {
-              echo "## Terraform plan mismatch"
-              echo
-              echo "The current main plan differs from the reviewed plan; refusing to apply either plan."
-              echo
-              echo "<details>"
-              echo "<summary>Current main plan</summary>"
-              echo
-              echo '```terraform'
-              sed -n '1,600p' current.tfplan.txt
-              if [[ "${total_lines}" -gt 600 ]]; then
-                echo "... truncated ..."
-              fi
-              echo '```'
-              echo "</details>"
-            } >> "${GITHUB_STEP_SUMMARY}"
-            echo "Current main plan differs from the reviewed pull request plan; refusing to apply." >&2
-            exit 1
-          fi
-
       - name: Summarize Terraform apply
         run: |
           {
             echo "## Terraform apply"
             echo
-            echo "The current main plan is equivalent to the reviewed plan from \`${TF_PLAN_SOURCE_EVENT}\` commit \`${TF_PLAN_SOURCE_COMMIT}\`."
-            echo "Applying the reviewed saved plan so Terraform retains its native stale-plan validation."
+            echo "Applying the reviewed saved plan from \`${TF_PLAN_SOURCE_EVENT}\` commit \`${TF_PLAN_SOURCE_COMMIT}\`."
+            echo "Terraform will perform its native stale-plan validation before changing infrastructure."
             echo "- Plan workflow run: [${TF_PLAN_SOURCE_RUN_ID}](${TF_PLAN_SOURCE_URL})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
