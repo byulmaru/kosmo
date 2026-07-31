@@ -20,7 +20,8 @@ concurrency:
 jobs:
   nuclei:
     name: Nuclei scan
-    runs-on: [self-hosted]
+    # runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     env:
       DEFAULT_TARGETS: |
         https://kos.moe
