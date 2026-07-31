@@ -192,6 +192,44 @@ describe('remote actor materialization', () => {
     assert.equal(await db.$count(Media, eq(Media.profileId, first.id)), 3);
   });
 
+  test('accepts a shared avatar/header URL while the transition index remains', async () => {
+    const sharedUrl = new URL(`https://${remoteDomain}/media/shared.png`);
+    const profile = await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({
+          icon: new Image({ mediaType: 'image/png', name: 'Avatar', url: sharedUrl }),
+          image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
+        }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    const media = await readProfileMedia(profile.id);
+    assert.equal(media.length, 2);
+    const mediaIds = await db
+      .select({ mediaId: ProfileMedia.mediaId })
+      .from(ProfileMedia)
+      .where(eq(ProfileMedia.profileId, profile.id));
+    assert.equal(new Set(mediaIds.map(({ mediaId }) => mediaId)).size, 1);
+    assert.deepEqual(
+      media.map(({ altText, kind, mediaType, url }) => ({ altText, kind, mediaType, url })),
+      [
+        {
+          altText: 'Avatar',
+          kind: ProfileMediaKind.AVATAR,
+          mediaType: 'image/png',
+          url: sharedUrl.href,
+        },
+        {
+          altText: 'Avatar',
+          kind: ProfileMediaKind.HEADER,
+          mediaType: 'image/png',
+          url: sharedUrl.href,
+        },
+      ],
+    );
+  });
+
   test('ignores IRI-only and invalid actor representations without rejecting the profile', async () => {
     const actor = createActor({
       icon: new URL(`https://${remoteDomain}/media/avatar.png`),

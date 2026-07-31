@@ -32,7 +32,7 @@ import {
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
@@ -572,6 +572,23 @@ export const materializeRemoteProfileActor = async ({
           [ProfileMediaKind.AVATAR, projection.avatar],
           [ProfileMediaKind.HEADER, projection.header],
         ] as const) {
+          const current = await tx
+            .select({ media: Media })
+            .from(ProfileMedia)
+            .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
+            .where(and(eq(ProfileMedia.profileId, profileId), eq(ProfileMedia.kind, kind)))
+            .limit(1)
+            .then(first);
+          const currentIsShared = current
+            ? await tx
+                .select({ mediaId: ProfileMedia.mediaId })
+                .from(ProfileMedia)
+                .where(and(eq(ProfileMedia.mediaId, current.media.id), ne(ProfileMedia.kind, kind)))
+                .limit(1)
+                .then(first)
+                .then(Boolean)
+            : false;
+
           if (!candidate) {
             await tx
               .delete(ProfileMedia)
@@ -579,21 +596,45 @@ export const materializeRemoteProfileActor = async ({
             continue;
           }
 
-          const media = await tx
-            .insert(Media)
-            .values({
-              ...candidate,
-              profileId,
-              source: MediaSource.REMOTE,
-              state: MediaState.READY,
-            })
-            .onConflictDoUpdate({
-              target: [Media.profileId, Media.url],
-              targetWhere: sql`${Media.source} = 'REMOTE'`,
-              set: { altText: candidate.altText, mediaType: candidate.mediaType },
-            })
-            .returning({ id: Media.id })
-            .then(firstOrThrow);
+          const media =
+            current?.media.source === MediaSource.REMOTE &&
+            current.media.profileId === profileId &&
+            current.media.url === candidate.url &&
+            !currentIsShared
+              ? await tx
+                  .update(Media)
+                  .set({ altText: candidate.altText, mediaType: candidate.mediaType })
+                  .where(eq(Media.id, current.media.id))
+                  .returning({ id: Media.id })
+                  .then(firstOrThrow)
+              : await tx
+                  .insert(Media)
+                  .values({
+                    ...candidate,
+                    profileId,
+                    source: MediaSource.REMOTE,
+                    state: MediaState.READY,
+                  })
+                  .onConflictDoNothing()
+                  .returning({ id: Media.id })
+                  .then(first)
+                  .then(async (inserted) => {
+                    if (inserted) {
+                      return inserted;
+                    }
+                    return tx
+                      .select({ id: Media.id })
+                      .from(Media)
+                      .where(
+                        and(
+                          eq(Media.source, MediaSource.REMOTE),
+                          eq(Media.profileId, profileId),
+                          eq(Media.url, candidate.url),
+                        ),
+                      )
+                      .limit(1)
+                      .then(firstOrThrow);
+                  });
 
           await tx
             .insert(ProfileMedia)

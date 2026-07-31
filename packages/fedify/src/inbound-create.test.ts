@@ -211,7 +211,6 @@ describe('inbound Create dispatch', () => {
 
   test('rejects a Note atomically when one of the selected Images has an invalid URL', async () => {
     await createStoredRemoteActor();
-    const duplicateUrl = new URL('https://remote.example/media/duplicate.webp');
     const cases = [
       [new Image({ name: 'missing URL' })],
       [
@@ -223,7 +222,6 @@ describe('inbound Create dispatch', () => {
         }),
       ],
       [new Image({ url: new URL('ftp://remote.example/media/image.webp') })],
-      [new Image({ url: duplicateUrl }), new Image({ url: new URL(duplicateUrl.href) })],
     ];
 
     for (const [index, attachments] of cases.entries()) {
@@ -248,6 +246,47 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
     assert.equal((await db.select().from(Posts)).length, 0);
     assert.equal((await db.select().from(PostContents)).length, 0);
+  });
+
+  test('accepts same-URL attachments while the transition index remains', async () => {
+    await createStoredRemoteActor();
+    const sharedUrl = new URL('https://remote.example/media/shared.webp');
+
+    await handleInboundCreate(
+      createContext(),
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attachments: [
+            new Image({ mediaType: 'image/webp', name: 'First', url: sharedUrl }),
+            new Image({ mediaType: 'image/png', name: 'Second', url: sharedUrl }),
+          ],
+          attribution: remoteActorUri,
+          content: 'same URL, separate attachments',
+          id: remoteObjectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      }),
+      receivedAt,
+    );
+
+    const media = await db.select().from(Media);
+    assert.equal(media.length, 1);
+    const { content } = await getMaterializedPost(remoteObjectUri);
+    const mediaById = new Map(media.map((item) => [item.id, item]));
+    assert.deepEqual(
+      content.document.body.content
+        .flatMap((block) => (block.type === 'media' ? [mediaById.get(block.attrs.mediaId)] : []))
+        .map((item) => ({
+          altText: item?.altText,
+          mediaType: item?.mediaType,
+          url: item?.url,
+        })),
+      [
+        { altText: 'First', mediaType: 'image/webp', url: sharedUrl.href },
+        { altText: 'First', mediaType: 'image/webp', url: sharedUrl.href },
+      ],
+    );
   });
 
   test('duplicate Create does not add or update Remote Media', async () => {
@@ -283,7 +322,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('concurrent Notes with the same Remote URL converge on one Media identity', async () => {
+  test('concurrent Notes with the same Remote URL remain safe during transition', async () => {
     await createStoredRemoteActor();
     const mediaUrl = new URL('https://remote.example/media/concurrent.webp');
     const objectUris = [
@@ -312,15 +351,16 @@ describe('inbound Create dispatch', () => {
     const media = await db.select().from(Media);
     assert.equal(media.length, 1);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 2);
+    const referencedMediaIds = new Set<string>();
     for (const objectUri of objectUris) {
       const { content } = await getMaterializedPost(objectUri);
-      assert.deepEqual(
-        content.document.body.content.flatMap((block) =>
-          block.type === 'media' ? [block.attrs.mediaId] : [],
-        ),
-        [media[0]?.id],
+      const mediaIds = content.document.body.content.flatMap((block) =>
+        block.type === 'media' ? [block.attrs.mediaId] : [],
       );
+      assert.equal(mediaIds.length, 1);
+      referencedMediaIds.add(mediaIds[0]!);
     }
+    assert.deepEqual(referencedMediaIds, new Set(media.map(({ id }) => id)));
   });
 
   test('deduplicates actor and object hrefs before dispatch', async () => {

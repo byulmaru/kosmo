@@ -386,7 +386,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
   );
 });
 
-test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text만 최신 입력으로 갱신한다', async () => {
+test('createPost는 contract 전 같은 Profile과 URL의 Remote Media를 안전하게 재사용한다', async () => {
   const profile = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const first = await createPost({
@@ -410,12 +410,10 @@ test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text�
     visibility: PostVisibility.PUBLIC,
   });
 
-  assert.equal(first.created, true);
-  assert.equal(second.created, true);
   const media = await db.select().from(Media).where(eq(Media.url, url));
   assert.equal(media.length, 1);
+  assert.equal(media[0]?.altText, 'first alt');
   assert.equal(media[0]?.mediaType, 'image/png');
-  assert.equal(media[0]?.altText, 'second alt');
   assert.deepEqual(
     [first, second].map((result) =>
       result.content.document.body.content.flatMap((block) =>

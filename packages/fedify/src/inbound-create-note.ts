@@ -36,7 +36,6 @@ export const projectRemoteNoteMedia = async (note: Note) => {
     mediaType: string | null;
     url: string;
   }[] = [];
-  const urls = new Set<string>();
 
   for await (const attachment of note.getAttachments({
     contextLoader: noNetworkDocumentLoader,
@@ -61,10 +60,6 @@ export const projectRemoteNoteMedia = async (note: Note) => {
     }
 
     const canonicalUrl = new URL(url.href).href;
-    if (urls.has(canonicalUrl)) {
-      throw new TypeError('Remote image attachment representation URL must be unique');
-    }
-    urls.add(canonicalUrl);
     candidates.push({
       altText: attachment.name?.toString() ?? null,
       mediaType: attachment.mediaType,

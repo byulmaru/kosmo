@@ -29,11 +29,17 @@
 - **AND** avatar Media를 `AVATAR`, header Media를 `HEADER` ProfileMedia 관계로 연결한다
 - **AND** 기존 GraphQL `Profile.avatar`와 `Profile.header`에서 각 Media를 조회할 수 있다
 
-#### Scenario: 같은 표현 재사용
+#### Scenario: 같은 URL의 avatar와 header 분리
 
-- **WHEN** 같은 Remote Profile과 canonical URL의 Ready Remote Media가 이미 있다
-- **THEN** 시스템은 새 Media를 만들지 않고 기존 Media identity를 재사용한다
-- **AND** 최신 nullable Media Type과 Alt Text를 반영한다
+- **WHEN** 같은 Remote Profile의 avatar와 header가 같은 canonical URL을 사용한다
+- **THEN** 시스템은 kind별로 별도 Media identity와 ProfileMedia 관계를 저장한다
+- **AND** avatar와 header의 nullable Media Type과 Alt Text를 서로 덮어쓰지 않고 보존한다
+
+#### Scenario: 같은 kind의 동일 표현 refresh
+
+- **WHEN** 같은 kind의 현재 ProfileMedia 관계가 refresh에서도 같은 canonical URL을 가리킨다
+- **THEN** 시스템은 현재 관계가 가리키는 Media identity를 유지하고 최신 nullable Media Type과 Alt Text를 반영한다
+- **AND** URL이 같은 다른 Media를 검색하거나 재사용하지 않는다
 
 #### Scenario: refresh 표현 교체와 제거
 

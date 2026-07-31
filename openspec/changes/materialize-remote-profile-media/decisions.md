@@ -22,22 +22,24 @@ Remote Media와 actor refresh 경계에 적용하기 위한 durable 선택을 �
 - Consequences: embedded 표현을 보내는 서버와는 상호운용하지만 IRI-only avatar/header는 표시되지 않는다.
 - Confirmation / Follow-up: no-network loader와 invalid/IRI-only 회귀 테스트로 검증한다.
 
-### Remote Media identity를 원본 Profile과 URL 조합으로 둔다
+### Remote URL을 Media identity로 사용하지 않는다
 
 - Decision Date: 2026-07-31
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/media.md`, `PROD-625`
 - Status: Active
-- Context / Problem: Media는 원본 Remote Profile을 필수로 소유하지만 여러 actor가 같은 공용/default 이미지
-  URL을 사용할 수 있다. 기존 URL-only uniqueness는 두 번째 Profile 표현을 저장하지 못한다.
-- Decision Outcome: Remote Media uniqueness와 재사용 기준을 `(profileId, canonical URL)`로 둔다. 같은
-  Profile+URL은 재사용하고 다른 Profile의 같은 URL은 별도 Media identity를 가진다.
-- Alternatives Considered: 최초 Media owner를 공유하거나 변경하면 Media.Profile 관계를 위반한다. 공용 URL
-  actor를 계속 제외하면 요청한 Profile 표현 materialization 결과를 보장하지 못한다.
-- Consequences: 동일 URL Media row가 Profile별로 존재할 수 있고 기존 원격 Note URL 충돌 거부 동작도
-  Profile 범위 재사용으로 바뀐다.
-- Confirmation / Follow-up: migration catalog, 같은 Profile 재사용과 서로 다른 Profile 공용 URL 동시 저장을
-  검증한다.
+- Context / Problem: 기존 구현은 Remote URL을 Media identity로 사용해 서로 다른 Note attachment나 Profile
+  표현이 같은 URL을 쓰면 하나의 Media로 합치고 Media Type/Alt Text를 덮어쓸 수 있다.
+- Decision Outcome: Remote URL은 원본 위치 속성으로만 저장하고 uniqueness나 재사용 기준으로 사용하지 않는다.
+  서로 다른 Post attachment는 Profile과 URL이 같아도 별도 Media를 만든다. avatar/header는 URL이 같아도 kind별
+  별도 Media를 가진다. 같은 kind refresh는 URL 검색이 아니라 현재 ProfileMedia 관계가 가리키는 Media만 동일
+  URL일 때 유지·갱신한다.
+- Alternatives Considered: URL-only 또는 Profile+URL uniqueness는 서로 다른 표현을 합치므로 제외한다. refresh
+  때마다 무조건 새 Media를 만들면 변하지 않은 같은 kind 표현에도 orphan이 누적되어 현재 관계 문맥의 갱신을
+  선택했다.
+- Consequences: 동일 URL Media row가 여러 개 존재할 수 있고 각 표현의 metadata가 독립적으로 보존된다.
+- Confirmation / Follow-up: URL index 부재, 같은 URL의 Post attachment 및 avatar/header 분리와 같은 kind refresh
+  identity 유지를 검증한다.
 
 ### actor scalar와 Profile 표현을 한 transaction에서 동기화한다
 
@@ -56,21 +58,24 @@ Remote Media와 actor refresh 경계에 적용하기 위한 durable 선택을 �
   남는다.
 - Confirmation / Follow-up: 최초 생성, refresh 교체·제거와 강제 저장 실패 rollback 테스트로 검증한다.
 
-### unique index만 교체하고 데이터 backfill은 하지 않는다
+### Remote URL unique index는 무중단 두 release로 제거한다
 
 - Decision Date: 2026-07-31
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/media.md`, `PROD-625`
 - Status: Active
-- Context / Problem: 기존 데이터는 URL 전역 unique를 만족하며 새 Profile 범위 identity는 더 완화된
-  uniqueness다.
-- Decision Outcome: 기존 Remote URL partial unique index를 제거하고 `(profile_id, url)` partial unique
-  index를 생성하며 row backfill이나 rewrite는 하지 않는다.
-- Alternatives Considered: Media row 복제나 owner 재배정은 기존 데이터에 필요 없고 참조 identity를 불필요하게
-  바꾼다.
-- Consequences: migration은 짧은 index DDL만 수행한다. 새 중복 URL row가 생긴 뒤 이전 schema로 즉시 rollback할
-  수는 없다.
-- Confirmation / Follow-up: migration SQL, catalog assertion과 기존 row 보존을 검증한다.
+- Context / Problem: 기존 URL partial unique index가 URL 기반 identity와 conflict reuse를 database contract로
+  강제한다.
+- Decision Outcome: 첫 release는 전역 index를 `(profile_id, url)` compatibility index로 바꾸고 index 유무에
+  모두 호환되는 application을 배포한다. 구버전 active/preview와 rollback 대상을 배수한 뒤 별도 contract
+  release에서 compatibility index를 제거한다. row backfill이나 rewrite는 하지 않는다.
+- Alternatives Considered: `(profile_id, url)` 또는 `(profile_id, kind, url)` index도 URL을 identity 일부로
+  만들며 관계 문맥을 Media table에 중복하므로 제외한다.
+- Consequences: transition 기간에는 동일 Profile+URL 표현이 일시적으로 기존 Media에 수렴할 수 있지만 서비스
+  중단과 구버전 query 실패는 없다. contract 뒤 첫 refresh부터 공유 avatar/header도 분리된다. contract 뒤에는
+  이전 URL identity schema로 즉시 rollback할 수 없다.
+- Confirmation / Follow-up: PROD-625 배포·배수 증거 뒤 PROD-627에서 index 부재, 기존 row 보존과 같은 URL의
+  독립 저장을 검증한다.
 
 ## Remaining Decisions
 
@@ -78,7 +83,6 @@ Remote Media와 actor refresh 경계에 적용하기 위한 durable 선택을 �
 
 ## Superseded Decisions
 
-- archived `project-activitypub-remote-media`의 “Remote URL identity는 owner를 바꾸지 않는다” 중 URL-only
-  partial uniqueness와 다른 Profile URL 충돌 시 Note 전체 거부 선택은 현재
-  `docs/domain/objects/media.md`와 `PROD-625`가 정한 Profile 범위 identity로 대체됐다. 최초 owner를
-  변경하지 않는 제약은 유지한다.
+- archived `project-activitypub-remote-media`의 URL-only partial uniqueness, 같은 URL 재사용과 다른 Profile URL
+  충돌 거부 선택은 `docs/domain/objects/media.md`, PROD-625와 2026-07-31 사용자 결정에 따라 폐기한다. 기존
+  Media의 owner를 변경하지 않는 제약은 유지한다.

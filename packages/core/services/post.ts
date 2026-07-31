@@ -136,52 +136,41 @@ const materializeRemoteMedia = async (
     profileId: string;
   },
 ) => {
-  const urls = candidates.map(({ url }) => url);
-  if (candidates.length > 4 || new Set(urls).size !== urls.length) {
+  if (candidates.length > 4) {
     throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
   }
-  if (candidates.length === 0) {
-    return [];
-  }
 
-  await tx
-    .insert(Media)
-    .values(
-      candidates.map(({ altText, mediaType, url }) => ({
-        altText,
-        mediaType,
+  const materialized: { mediaId: string }[] = [];
+  for (const candidate of candidates) {
+    const inserted = await tx
+      .insert(Media)
+      .values({
+        ...candidate,
         profileId,
         source: MediaSource.REMOTE,
         state: MediaState.READY,
-        url,
-      })),
-    )
-    .onConflictDoNothing();
-
-  const mediaByUrl = new Map(
-    (
-      await tx
-        .select({ id: Media.id, profileId: Media.profileId, url: Media.url })
+      })
+      .onConflictDoNothing()
+      .returning({ id: Media.id })
+      .then(first);
+    const media =
+      inserted ??
+      (await tx
+        .select({ id: Media.id })
         .from(Media)
         .where(
           and(
             eq(Media.source, MediaSource.REMOTE),
             eq(Media.profileId, profileId),
-            inArray(Media.url, urls),
+            eq(Media.url, candidate.url),
           ),
         )
-    ).map((media) => [media.url, media]),
-  );
-
-  const materialized = candidates.map(({ altText, url }) => {
-    const media = mediaByUrl.get(url);
+        .limit(1)
+        .then(first));
     if (!media) {
       throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
     }
-    return { altText, mediaId: media.id };
-  });
-  for (const { altText, mediaId } of materialized) {
-    await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+    materialized.push({ mediaId: media.id });
   }
   return materialized;
 };
