@@ -368,15 +368,20 @@ jobs:
           set -euo pipefail
 
           cleanup_plan_comparison() {
-            rm -f current.tfplan current.tfplan.txt reviewed.tfplan.txt
+            rm -f current.tfplan current.tfplan.txt current.tfplan.json reviewed.tfplan.json
           }
           trap cleanup_plan_comparison EXIT
 
           terraform plan -input=false -out=current.tfplan
-          terraform show -no-color terraform.tfplan > reviewed.tfplan.txt
-          terraform show -no-color current.tfplan > current.tfplan.txt
+          terraform show -json terraform.tfplan \
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
+            > reviewed.tfplan.json
+          terraform show -json current.tfplan \
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
+            > current.tfplan.json
 
-          if ! cmp -s reviewed.tfplan.txt current.tfplan.txt; then
+          if ! cmp -s reviewed.tfplan.json current.tfplan.json; then
+            terraform show -no-color current.tfplan > current.tfplan.txt
             total_lines="$(wc -l < current.tfplan.txt)"
             {
               echo "## Terraform plan mismatch"
