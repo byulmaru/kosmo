@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -97,6 +97,9 @@ function PostMediaImage({ index, item }: { readonly index: number; readonly item
   const [generation, setGeneration] = useState(0);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
+  const handleError = useCallback(() => setStatus('error'), []);
+  const handleLoad = useCallback(() => setStatus('ready'), []);
+  const handleLoadStart = useCallback(() => setStatus('loading'), []);
 
   if (!item.url || status === 'error') {
     return (
@@ -137,9 +140,9 @@ function PostMediaImage({ index, item }: { readonly index: number; readonly item
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ busy: status === 'loading' }}
         key={`${item.id}:${generation}`}
-        onError={() => setStatus('error')}
-        onLoad={() => setStatus('ready')}
-        onLoadStart={() => setStatus('loading')}
+        onError={handleError}
+        onLoad={handleLoad}
+        onLoadStart={handleLoadStart}
         resizeMode="cover"
         source={{ uri: item.url }}
         style={styles.image}

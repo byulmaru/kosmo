@@ -65,8 +65,7 @@ function getColorContrastRatio(foreground: string, background: string) {
   );
 }
 
-const postMediaImageUri =
-  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="360"%3E%3Crect width="640" height="360" fill="%236b7280"/%3E%3C/svg%3E';
+const postMediaImageUri = '/og-default.png';
 
 const shortPost = {
   ...post({
@@ -1792,7 +1791,14 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
     const mediaText = within(canvas.getByTestId('media-text'));
     expect(mediaText.getByText('document text')).toBeVisible();
-    expect(mediaText.getByTestId('post-media-image-media-story')).toBeVisible();
+    const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');
+    expect(renderedMediaImage).toBeVisible();
+    await waitFor(() => {
+      expect(renderedMediaImage.firstElementChild).not.toBeNull();
+      expect(getComputedStyle(renderedMediaImage.firstElementChild!).backgroundImage).not.toBe(
+        'none',
+      );
+    });
     expect(
       mediaText.getByRole('img', { name: '회색 배경의 첫 번째 첨부 이미지' }),
     ).toBeInTheDocument();

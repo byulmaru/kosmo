@@ -48,6 +48,10 @@ describe('PostMediaGallery', () => {
       rendered('Image').map((image) => image.props.accessibilityLabel),
       ['설명 1', '2번째 첨부 이미지', '설명 3', '설명 4'],
     );
+
+    const firstOnLoad = image('media-1').props.onLoad;
+    await act(async () => firstOnLoad());
+    assert.equal(image('media-1').props.onLoad, firstOnLoad);
   });
 
   it('Sensitive Media를 image mount 없이 시작하고 전체 표시와 다시 가리기를 제공한다', async () => {
