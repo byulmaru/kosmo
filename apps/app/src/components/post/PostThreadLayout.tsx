@@ -43,17 +43,14 @@ export function PostThreadLayout<TPost>({
         const next = rows[index + 1];
         const connectsFromPrevious = item.connectedToPrevious && previous !== undefined;
         const connectsToNext = next?.item.connectedToPrevious === true;
+        const renderedPost = renderPost({ item, role });
 
         return (
           <View
             key={item.id}
             aria-current={role === 'current' ? true : undefined}
             role={role === 'current' ? 'article' : undefined}
-            style={[
-              styles.row,
-              role === 'current' && styles.current,
-              role === 'current' && { backgroundColor: theme.card, borderColor: theme.border },
-            ]}
+            style={[styles.row, role === 'current' && { backgroundColor: theme.card }]}
             testID={
               role === 'current' ? `post-thread-current-${item.id}` : `post-thread-item-${item.id}`
             }
@@ -78,7 +75,17 @@ export function PostThreadLayout<TPost>({
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
-            {renderPost({ item, role })}
+            {role === 'current' ? (
+              <View style={styles.currentContent}>{renderedPost}</View>
+            ) : (
+              renderedPost
+            )}
+            {index < rows.length - 1 ? (
+              <View
+                style={[styles.divider, { backgroundColor: theme.divider }]}
+                testID={`post-thread-divider-${item.id}`}
+              />
+            ) : null}
           </View>
         );
       })}
@@ -88,17 +95,21 @@ export function PostThreadLayout<TPost>({
 
 const styles = StyleSheet.create({
   row: { position: 'relative' },
-  current: {
-    borderBottomWidth: 1,
-    borderTopWidth: 1,
+  currentContent: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.lg,
+  },
+  divider: {
+    height: 1,
+    marginLeft: spacing.xxl * 2,
+    marginRight: spacing.sm,
   },
   connector: {
     borderRadius: radii.full,
     left: spacing.xxl,
     position: 'absolute',
     width: 2,
+    zIndex: 1,
   },
   listConnectorBefore: { height: spacing.sm - spacing.xs, top: 0 },
   listConnectorAfter: {

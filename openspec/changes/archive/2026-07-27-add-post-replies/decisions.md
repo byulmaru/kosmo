@@ -132,7 +132,7 @@
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-451`, `PROD-422`, `memory/frontend-react-native.md`
-- Status: Active
+- Status: Superseded by `docs/design/post-thread.md` (2026-07-31)
 - Context / Problem: 조상·현재·하위 Reply를 구분하면서도 기존 Post rendering을 유지하고, API가 제공하지 않은 관계나 visibility 경계를 client가 추론하지 않는 presentation 경계가 필요하다.
 - Decision Outcome: 조상과 하위 Reply는 기존 목록 Post와 같은 정보 밀도로 표시하고 현재 Post만 기존 상세 rendering을 사용해 앵커로 강조한다. `PostThreadLayout`은 item, role, supplied 순서와 direct connector metadata만 소유하며, 관계가 확인된 구간에만 connector를 그리고 supplied 경계에서 자연스럽게 종료한다. fixture caller는 `renderPost` 안에서 local state를 close over하여 mock 선택 action을 붙일 수 있고 기존 Link를 감싸거나 대체하지 않는다. PROD-422는 실제 Reply fragment·visibility 결과에서 relation metadata를 만들고 기존 route-aware Post renderer를 같은 layout에 공급한다. Reply+Quote는 바깥 Post를 role에 맞는 기존 renderer로 표시하고, 반환된 `repostSource`를 기존 `PostListItem`으로 바깥 renderer 아래의 테두리 있는 sibling에 표시한다. Source가 `null`이면 preview만 생략하며 별도 Source preview abstraction이나 전체 `PostSourcePresentationView` 중첩을 추가하지 않는다.
 - Alternatives Considered: 조상을 축소·희미하게 만드는 compact chain, 모든 Post를 같은 강조도로 잇는 linear feed, 모든 descendant를 depth tree나 하나의 연속선으로 추론하는 layout. compact chain은 일반 Post 밀도를 잃고, 동일 강조는 현재 상세 Post의 앵커를 약화하며, tree·연속선은 API가 공급하지 않은 직접 관계를 암시할 수 있어 사용하지 않는다.
