@@ -3238,6 +3238,11 @@ export const PostDetailThreadRoute: Story = {
     const currentRow = canvas.getByTestId('post-thread-current-route-current');
     const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
     const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
+    expect(currentAvatar).not.toBeNull();
+    expect(
+      currentAvatar!.getBoundingClientRect().top - currentRow.getBoundingClientRect().top,
+    ).toBeCloseTo(16, 0);
     expect(
       currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
     ).toBeCloseTo(4, 0);
@@ -3898,6 +3903,13 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     const canvas = within(canvasElement);
     const replyButtons = canvas.getAllByRole('button', { name: '답글' });
     expect(replyButtons).toHaveLength(3);
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
 
     await userEvent.click(replyButtons[0]!);
     expect(canvas.getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);

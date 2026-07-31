@@ -358,10 +358,10 @@
 - Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
 - Status: Active
 - Context / Problem: 상세 thread의 current row wrapper가 상하 `spacing.lg` 16px을 함께 적용해 28px Action Bar 아래부터 다음 divider까지 불필요하게 큰 공간이 생겼고, Reaction Summary와 Action Bar 사이에는 명시적 간격이 없었다.
-- Decision Outcome: `PostLayout`은 Reaction Summary가 있을 때 그 아래에 `spacing.xs` 4px을 제공하고, `PostThreadLayout`의 current row wrapper는 상단 16px을 유지하되 하단 padding만 `spacing.xs` 4px로 줄인다. 따라서 Reaction Summary와 Action Bar 사이, Action Bar와 다음 1px thread divider 사이가 각각 4px이 되며 Action Bar 자체 28px geometry는 유지된다.
+- Decision Outcome: `PostLayout`은 Reaction Summary가 있을 때 그 아래에 `spacing.xs` 4px을 제공한다. inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않는다. `PostThreadLayout`의 current row wrapper는 상단 16px을 유지하되 하단 padding만 `spacing.xs` 4px로 줄인다. 따라서 Reaction Summary와 Action Bar 사이, 닫힌 Composer 상태의 Action Bar와 다음 1px thread divider 사이가 각각 4px이 되며 Action Bar 자체 28px geometry는 유지된다.
 - Alternatives Considered: 공용 `PostActionBar`에 margin을 넣으면 목록·Quote·Repost까지 영향을 주므로 채택하지 않았다. thread row 전체 padding을 4px로 줄이면 현재 Post 상단 avatar·connector clearance와 헤더 밀도가 함께 바뀌므로 채택하지 않았다.
 - Consequences: 상세 thread의 current Post 높이만 아래쪽에서 12px 줄어들고 목록 surface와 다른 thread row, Action Bar component API·geometry는 바뀌지 않는다.
-- Confirmation / Follow-up: `PostDetailThreadRoute` Storybook에서 Reaction Summary bottom→Action Bar top과 Action Bar bottom→다음 divider top을 각각 exact 4px로 검증한다.
+- Confirmation / Follow-up: `PostDetailThreadRoute` Storybook에서 current row 상단 16px, Reaction Summary bottom→Action Bar top과 Action Bar bottom→다음 divider top을 검증한다. selected Profile을 공급하는 Reply owner fixture에서도 Composer가 닫힌 기본 상태의 Action Bar bottom→divider top을 exact 4px로 검증한다.
 
 ## Remaining Decisions
 

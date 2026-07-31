@@ -27,9 +27,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - `PostLayout`은 `PostActionBar`를 Post content grid 안의 마지막 자식으로 렌더링한다. `PostListItem`은
   상단 0·하단 4px을 제공하는 목록 전용 slot을 마지막 자식으로 두고 그 안에 `PostActionBar`를 렌더링한다.
-- 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 두고,
-  Action Bar 아래부터 다음 thread divider까지도 4px을 둔다. 이 간격은 thread current row wrapper와
-  `PostLayout`이 소유하며 Action Bar의 28px geometry는 바꾸지 않는다.
+- 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
+  inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않고 Action Bar 아래부터 다음
+  thread divider까지 4px을 둔다. current row 상단의 16px은 유지한다. 이 간격은 thread current row
+  wrapper와 `PostLayout`이 소유하며 Action Bar의 28px geometry는 바꾸지 않는다.
 - Action Bar는 `PostBody` 또는 Source presentation과 같은 content-level sibling이며 본문, 작성자, 생성 시각,
   Source preview의 `Link`나 `Pressable` 안에 중첩하지 않는다.
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
@@ -143,8 +144,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 목록의 일반 Post·순수 Repost·Quote에서 Action Bar slot의 상단 padding이 0, 하단 padding이 4이고 1px 구분선이 semantic
   `divider` color를 사용하는지 검증한다. 순수 Repost는 attribution line box가 20이고 Source 표준행과의
   추가 gap이 0인지, Quote는 Source preview 내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
-- 상세 thread의 현재 Post에서 Reaction Summary 아래부터 Action Bar까지 4px, Action Bar 아래부터 1px
-  thread divider까지 4px인지 exact geometry로 검증한다.
+- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, Reaction Summary 아래부터 Action Bar까지
+  4px인지 검증한다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper가 남지 않으며
+  Action Bar 아래부터 1px thread divider까지 4px인지 exact geometry로 검증한다.
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, Reply·More target의 content column 양끝 정렬, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.

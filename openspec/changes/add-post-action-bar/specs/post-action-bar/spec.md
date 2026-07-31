@@ -224,8 +224,10 @@
 
 #### Scenario: 상세 thread 현재 Post의 compact spacing
 
-- **WHEN** Post 상세 thread의 현재 Post에 Reaction Summary와 다음 thread row가 함께 렌더된다
-- **THEN** Reaction Summary와 Action Bar 사이에는 4px 간격이 있다
+- **WHEN** Post 상세 thread의 현재 Post에 Reaction Summary와 다음 thread row가 함께 렌더되고 inline Reply Composer가 닫혀 있다
+- **THEN** current row 상단부터 Post content까지 기존 16px 간격을 유지한다
+- **AND** Reaction Summary와 Action Bar 사이에는 4px 간격이 있다
+- **AND** selected Profile이 있어도 닫힌 Composer의 빈 wrapper와 margin을 렌더링하지 않는다
 - **AND** Action Bar 아래와 다음 1px thread divider 사이에는 4px 간격이 있다
 - **AND** Action Bar 자체의 28px geometry는 유지된다
 

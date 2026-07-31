@@ -158,7 +158,8 @@ export function PostLayout({
             }
             socialActionTarget={socialActionTarget!}
           />
-          {replyAuthentication.execution.kind === 'enabled' &&
+          {replyBinding?.expanded &&
+          replyAuthentication.execution.kind === 'enabled' &&
           replyBinding?.profile &&
           post.content &&
           post.replySurface ? (
