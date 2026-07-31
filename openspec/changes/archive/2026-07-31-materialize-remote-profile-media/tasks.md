@@ -85,4 +85,4 @@ materialize된 원격 avatar/header가 기존 GraphQL Profile Media 계약에서
 
 - [x] 3.1 기존 GraphQL Profile avatar/header 조회에서 원격 Ready Media가 노출되는 통합 검증을 추가한다.
 - [x] 3.2 관련 test/typecheck/format과 strict OpenSpec validation을 통과시킨다.
-- [ ] 3.3 구현 결과와 검증 증거를 Linear 및 Ready PR에 연결하고 change 완료 상태를 확인한다.
+- [x] 3.3 구현 결과와 검증 증거를 Linear 및 PR #481에 연결하고 change 완료 상태를 확인한다.
