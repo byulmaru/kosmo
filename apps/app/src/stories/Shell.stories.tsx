@@ -1182,9 +1182,6 @@ export const UniversalMobile: Story = {
     expect(profileSummary).toBeInTheDocument();
     expect(followingCountLink).toHaveAttribute('href', '/@selected/following');
     expect(followersCountLink).toHaveAttribute('href', '/@selected/followers');
-    ownerDocument.defaultView?.addEventListener('click', (event) => event.preventDefault(), {
-      once: true,
-    });
     fireEvent.click(followingCountLink, { metaKey: true });
     expect(ownerDocument.getElementById('mobile-sidebar')).not.toBeNull();
     expect(canvas.getByRole('heading', { name: '홈' })).toBeInTheDocument();

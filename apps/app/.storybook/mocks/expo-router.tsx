@@ -102,8 +102,9 @@ export function Link({
     href: typeof href === 'string' ? href : href.pathname,
     onPress: (event: LinkPressEvent) => {
       children.props.onPress?.(event);
-      if (shouldHandleNavigation(event)) {
-        event.preventDefault?.();
+      const shouldNavigate = shouldHandleNavigation(event);
+      event.preventDefault?.();
+      if (shouldNavigate) {
         setPathname(href);
       }
     },
