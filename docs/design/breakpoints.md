@@ -76,12 +76,6 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   pointer 대상의 브라우저 기본 focus를 따른다. `Escape`는 trigger focus를 복원한다. mobile Web drawer의
   chevron 표시 외 close transition과 Android/iOS의 기존 상태 동작은 이 계약으로 바꾸지 않는다.
 
-## 사이드바 보조 액션
-
-full·compact Web 사이드바와 mobile drawer의 하단 보조 액션은 `피드백 보내기` 다음에 `로그아웃` 순서로 둔다.
-두 액션은 같은 행 높이와 아이콘 크기·선 굵기를 사용한다. 라벨이 있는 surface에서는 같은 폰트 크기를 쓰고,
-비활성 아이콘은 모두 `textSecondary` 색을 사용한다.
-
 ## 알림 Unread badge
 
 모든 셸 단계는 selected Profile의 Unread 상태를 기존 알림 아이콘 우상단 badge로 표시한다. badge는 아이콘 wrapper 안에서 overlay되어 row, touch target과 label layout을 밀지 않는다.

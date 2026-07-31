@@ -246,7 +246,7 @@ export const SharedNavigation: Story = {
     expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
       'stroke-width',
-      '1.5',
+      '2',
     );
     expect(canvas.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
       'href',
