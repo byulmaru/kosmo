@@ -125,13 +125,20 @@ const avatarShadow = {
 } as ViewStyle;
 
 type Props = {
+  onNavigate?: () => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   query: ProfileSwitcher_query$key;
   surface: ProfileSwitcherSurface;
 };
 
-export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, surface }: Props) {
+export function ProfileSwitcher({
+  onNavigate,
+  onOpenChange,
+  open: controlledOpen,
+  query,
+  surface,
+}: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -489,6 +496,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       )}
     </Pressable>
   );
+  const profileSummaryOnNavigate = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
   const profileDetails = active ? (
     <>
       <Text
@@ -501,7 +509,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       <View style={styles.counts}>
         <GuardedLink
           href={`/${active.relativeHandle}/following`}
-          onNavigate={fullWeb && open ? dismissPicker : undefined}
+          onNavigate={profileSummaryOnNavigate}
         >
           <Pressable
             accessibilityRole="link"
@@ -516,7 +524,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         </GuardedLink>
         <GuardedLink
           href={`/${active.relativeHandle}/followers`}
-          onNavigate={fullWeb && open ? dismissPicker : undefined}
+          onNavigate={profileSummaryOnNavigate}
         >
           <Pressable
             accessibilityRole="link"

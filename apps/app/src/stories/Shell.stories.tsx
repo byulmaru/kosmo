@@ -1208,6 +1208,18 @@ export const UniversalMobile: Story = {
     expect(openNavigationRect).toEqual(navigationRect);
     expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
     expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+
+    await userEvent.click(profileTrigger);
+    expect(profileTrigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(within(profileSummary).getByRole('link', { name: /팔로잉/ }));
+    await waitFor(() => expect(page.queryByRole('button', { name: '사이드바 닫기' })).toBeNull());
+
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await page.findByRole('navigation', { name: '주요 메뉴' });
+    const reopenedProfileSummary = page.getByLabelText('활성 프로필');
+    await userEvent.click(within(reopenedProfileSummary).getByRole('link', { name: /팔로워/ }));
+    await waitFor(() => expect(page.queryByRole('button', { name: '사이드바 닫기' })).toBeNull());
   },
   render: () => (
     <View style={{ height: 844 }}>

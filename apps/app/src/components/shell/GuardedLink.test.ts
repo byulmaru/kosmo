@@ -16,21 +16,27 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type LinkPressEvent = {
+  altKey?: boolean;
   button?: number;
+  ctrlKey?: boolean;
+  currentTarget?: { target?: string | null };
   defaultPrevented?: boolean;
   metaKey?: boolean;
   preventDefault: ReturnType<typeof mock.fn>;
+  shiftKey?: boolean;
 };
 
 type LinkPress = NonNullable<LinkProps['onPress']>;
 
 type RenderedLinkProps = {
   children: ReactElement<{ onPress?: LinkPress }>;
+  href: string;
   onPress?: LinkPress;
 };
 
 const navigations: string[] = [];
 let linkPress: LinkPress | undefined;
+let composedLinkPress: LinkPress | undefined;
 let rootLinkPress: LinkPress | undefined;
 let renderer: ReactTestRenderer | null = null;
 
@@ -41,7 +47,15 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('expo-router', {
   Link: (props: RenderedLinkProps & { children: ReactNode }) => {
-    linkPress = props.children.props.onPress;
+    const childPress = props.children.props.onPress;
+    linkPress = childPress;
+    composedLinkPress = (event) => {
+      childPress?.(event as unknown as Parameters<LinkPress>[0]);
+      if (shouldHandleNavigation(event as unknown as LinkPressEvent)) {
+        event.preventDefault();
+        navigations.push(props.href);
+      }
+    };
     rootLinkPress = props.onPress;
     return createElement('Link', props, props.children);
   },
@@ -68,6 +82,7 @@ afterEach(async () => {
     renderer = null;
   }
   linkPress = undefined;
+  composedLinkPress = undefined;
   rootLinkPress = undefined;
   navigations.length = 0;
   mock.restoreAll();
@@ -81,6 +96,28 @@ function GuardRegistrar({ handler }: { handler: NavigationRequestHandler }) {
 
 function TestPressable(props: { onPress?: LinkPress }) {
   return createElement('Pressable', props);
+}
+
+function createPressEvent(overrides: Omit<LinkPressEvent, 'preventDefault'> = {}) {
+  const event = {
+    ...overrides,
+    preventDefault: mock.fn(() => {
+      event.defaultPrevented = true;
+    }),
+  } as LinkPressEvent;
+  return event;
+}
+
+function shouldHandleNavigation(event: LinkPressEvent) {
+  return (
+    !event.defaultPrevented &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    (event.button == null || event.button === 0) &&
+    [undefined, null, '', 'self'].includes(event.currentTarget?.target)
+  );
 }
 
 const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => void) => {
@@ -100,49 +137,71 @@ const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => 
   });
   assert.equal(rootLinkPress, undefined);
   assert.ok(linkPress);
+  assert.ok(composedLinkPress);
 };
 
 describe('GuardedLink', () => {
   it('guard가 이탈을 보류하면 기본 Link를 막고 승인된 action만 실행한다', async () => {
     let pendingAction: GuardedNavigationAction | null = null;
+    const onNavigate = mock.fn();
     await renderLink((action) => {
       pendingAction = action;
       return true;
-    });
-    const event: LinkPressEvent = { preventDefault: mock.fn() };
+    }, onNavigate);
+    const event = createPressEvent();
 
-    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(event.preventDefault.mock.callCount(), 1);
+    assert.equal(onNavigate.mock.callCount(), 0);
     assert.deepEqual(navigations, []);
     const approvedAction = pendingAction as GuardedNavigationAction | null;
     assert.ok(approvedAction);
-    approvedAction();
+    await act(async () => approvedAction());
+    assert.equal(onNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, ['/timeline']);
   });
 
   it('guard가 없으면 Link 기본 navigation과 surface 닫기를 유지한다', async () => {
     const onNavigate = mock.fn();
     await renderLink(() => false, onNavigate);
-    const event: LinkPressEvent = { preventDefault: mock.fn() };
+    const event = createPressEvent();
 
-    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
-    assert.equal(event.preventDefault.mock.callCount(), 0);
+    assert.equal(event.preventDefault.mock.callCount(), 1);
     assert.equal(onNavigate.mock.callCount(), 1);
-    assert.deepEqual(navigations, []);
+    assert.deepEqual(navigations, ['/timeline']);
   });
 
   it('Web modifier click은 현재 편집 route를 떠나지 않으므로 guard가 가로채지 않는다', async () => {
     const handler = mock.fn(() => true);
     const onNavigate = mock.fn();
     await renderLink(handler, onNavigate);
-    const event: LinkPressEvent = { metaKey: true, preventDefault: mock.fn() };
+    const event = createPressEvent({ metaKey: true });
 
-    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(handler.mock.callCount(), 0);
     assert.equal(onNavigate.mock.callCount(), 0);
     assert.equal(event.preventDefault.mock.callCount(), 0);
+  });
+
+  it('defaultPrevented와 middle click은 surface를 닫거나 guard를 실행하지 않는다', async () => {
+    const handler = mock.fn(() => true);
+    const onNavigate = mock.fn();
+    await renderLink(handler, onNavigate);
+
+    await act(async () =>
+      composedLinkPress?.(
+        createPressEvent({ defaultPrevented: true }) as unknown as Parameters<LinkPress>[0],
+      ),
+    );
+    await act(async () =>
+      composedLinkPress?.(createPressEvent({ button: 1 }) as unknown as Parameters<LinkPress>[0]),
+    );
+
+    assert.equal(handler.mock.callCount(), 0);
+    assert.equal(onNavigate.mock.callCount(), 0);
   });
 });

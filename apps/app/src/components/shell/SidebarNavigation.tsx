@@ -93,6 +93,7 @@ export function SidebarNavigation({
       ]}
     >
       <ProfileSwitcher
+        onNavigate={onNavigate}
         onOpenChange={onSwitcherOpenChange}
         open={switcherOpen}
         query={data}
