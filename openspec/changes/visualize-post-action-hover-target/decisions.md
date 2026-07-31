@@ -15,14 +15,15 @@ PROD-595와 `docs/design/post-action-bar.md`가 확정한 Web hover target 표�
   넓게 보였다. 시각 검토에서 Twitter-inspired action bar처럼 icon 중심 반응과 더 가벼운 selected Reaction
   색이 필요하다고 결정했다.
 - Decision Outcome: 모든 hover visual은 16×16 glyph 중심의 28×28 원형을 사용한다. Reply, Repost,
-  Bookmark와 More는 `surface`, Reaction은 `like`를 사용한다. selected Reaction heart의 stroke와 fill도
-  hover 여부와 관계없이 `like`를 사용한다. click target geometry는 유지한다.
+  Bookmark와 More는 `surface`를 사용한다. Reaction은 30% opacity의 `like` background 위에 불투명 `like`
+  heart foreground를 사용하고, selected Reaction heart의 stroke와 fill도 hover 여부와 관계없이 불투명
+  `like`를 사용한다. click target geometry는 유지한다.
 - Alternatives Considered: 모든 action별 tint는 장기 방향이지만 이 PR에서는 semantic token과 action mapping
   범위가 커져 제외했다. Reaction의 기존 `primary` 노랑 유지안은 heart 의미가 덜 분명해 선택하지 않았다.
-- Consequences: 공통 control에는 icon visual layer와 optional color override만 추가하고 action 기능이나 layout은
-  바꾸지 않는다.
-- Confirmation / Follow-up: light Web Storybook에서 원형 geometry, Reaction `like`, pressed·blocked와 click
-  target 불변을 검증한다. 다른 action tint는 후속 계약으로 다룬다.
+- Consequences: 공통 control에는 icon visual layer와 optional background color·opacity 및 foreground color
+  override만 추가하고 action 기능이나 layout은 바꾸지 않는다.
+- Confirmation / Follow-up: light Web Storybook에서 원형 geometry, Reaction 30% `like` background와 불투명
+  foreground, pressed·blocked와 click target 불변을 검증한다. 다른 action tint는 후속 계약으로 다룬다.
 
 ### Hover는 중립 surface와 기존 전체 target geometry를 사용한다 (Superseded)
 

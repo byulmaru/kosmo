@@ -117,6 +117,8 @@ export function PostActionBar({
               fillActive
               hoverColor={theme.like}
               hoverDisabled={execution.kind === 'resolution-required'}
+              hoverForegroundColor={theme.like}
+              hoverOpacity={0.3}
               icon={Heart}
               menuExpanded={expanded}
               onPress={onPress}

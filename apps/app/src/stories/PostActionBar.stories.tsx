@@ -724,14 +724,22 @@ export const ActionBarCatalog: Story = {
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
 
     const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });
+    const defaultReactionIcon = defaultReaction.querySelector('svg');
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.hover(defaultReaction);
     expect(defaultReaction).not.toHaveStyle({ backgroundColor: colors.light.like });
     const reactionHover = within(defaultReaction).getByTestId('post-action-reaction-hover');
     expect(reactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(getComputedStyle(reactionHover).opacity).toBe('0.3');
     expect(getComputedStyle(reactionHover).borderRadius).toBe('999px');
     expect(getComputedStyle(reactionHover).height).toBe('28px');
     expect(getComputedStyle(reactionHover).width).toBe('28px');
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     await userEvent.unhover(defaultReaction);
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
     expect(within(defaultReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
 
     const activeBookmark = within(toolbars[2]!).getByRole('button', { name: /북마크/ });
@@ -754,9 +762,9 @@ export const ActionBarCatalog: Story = {
     await userEvent.hover(activeReaction);
     expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
     expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
-    expect(within(activeReaction).getByTestId('post-action-reaction-hover')).toHaveStyle({
-      backgroundColor: colors.light.like,
-    });
+    const activeReactionHover = within(activeReaction).getByTestId('post-action-reaction-hover');
+    expect(activeReactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(getComputedStyle(activeReactionHover).opacity).toBe('0.3');
     await userEvent.unhover(activeReaction);
     expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
     expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);

@@ -15,7 +15,8 @@ light Web 동작을 검증한다. dark runtime 관찰은 미검증으로 남긴�
 
 - 공통 Post Action control의 glyph 중심에 28×28 Web 비터치 hover background를 표시한다.
 - 기존 active·pressed·blocked 상태와 28px geometry를 보존한다.
-- 일반 action은 `surface`, Reaction hover와 selected heart는 기존 `like` token을 사용한다.
+- 일반 action은 `surface`를 사용한다. Reaction hover는 30% `like` background와 불투명 `like` heart
+  foreground를 함께 사용하고 selected heart는 기존 불투명 `like`를 유지한다.
 - 가장 가까운 Storybook interaction에서 hover와 핵심 회귀 위험을 직접 검증한다.
 
 **Non-Goals:**
@@ -30,7 +31,7 @@ light Web 동작을 검증한다. dark runtime 관찰은 미검증으로 남긴�
 ### Current Constraints
 
 - hover 상태와 28×28 visual layer는 공통 `PostActionControl` 경계에서 처리하되 Reaction만 기존 `like`
-  color를 주입한다.
+  background color·opacity와 hover foreground color를 주입한다.
 - `Pressable` style callback의 React Native TypeScript 계약은 `pressed`만 제공하므로 React Native Web의
   추가 `hovered` field에 의존하면 공통 type을 우회하게 된다.
 - raw pointer enter는 touch pointer도 포함할 수 있다. React Native Web의 hover abstraction을 사용해 touch
@@ -42,11 +43,13 @@ light Web 동작을 검증한다. dark runtime 관찰은 미검증으로 남긴�
 
 공통 control에서 Web일 때만 `onHoverIn`·`onHoverOut`으로 local hover state를 갱신한다. `hovered &&
 !blocked`일 때 16×16 icon layout box 뒤에 absolute 28×28 원형 visual layer를 렌더링한다. 일반 action은
-기본 `surface`를 사용하고 Reaction은 `like`를 전달한다. active color도 기본 `primary`를 유지하되 Reaction만
-`like`를 전달한다. 기존 `blocked > pressed` opacity 우선순위와 Pressable width·height·spacing은 유지한다.
+기본 `surface`를 사용하고 Reaction은 30% opacity의 `like` background와 불투명 `like` hover foreground를
+전달한다. active color도 기본 `primary`를 유지하되 Reaction만 불투명 `like`를 전달한다. 기존
+`blocked > pressed` opacity 우선순위와 Pressable width·height·spacing은 유지한다.
 
 기존 Post Action Bar Storybook의 Web hover interaction을 수정해 50×28 click target 안의 28×28 icon circle,
-28×28 More, Reaction `like` hover·selected 표현, pressed 보존, blocked 미표시와 geometry 불변을 검증한다.
+28×28 More, Reaction 30% `like` background·불투명 `like` foreground·selected 표현, pressed 보존, blocked
+미표시와 geometry 불변을 검증한다.
 Theme provider는 변경하지 않고 light Web에서만 실행한다.
 
 ### Allowed Alternatives

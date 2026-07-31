@@ -32,6 +32,8 @@ type Props = {
   processing?: PostActionProcessingState;
   hoverColor?: string;
   hoverDisabled?: boolean;
+  hoverForegroundColor?: string;
+  hoverOpacity?: number;
   stateful?: boolean;
   testID: string;
 };
@@ -53,6 +55,8 @@ export function PostActionControl({
   processing = 'default',
   hoverColor,
   hoverDisabled = false,
+  hoverForegroundColor,
+  hoverOpacity = 1,
   stateful = true,
   testID,
 }: Props) {
@@ -65,9 +69,11 @@ export function PostActionControl({
     ? theme.textSecondary
     : active
       ? (activeColor ?? theme.primary)
-      : expanded
-        ? theme.primary
-        : theme.textSecondary;
+      : hovered && !hoverDisabled && hoverForegroundColor
+        ? hoverForegroundColor
+        : expanded
+          ? theme.primary
+          : theme.textSecondary;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -119,7 +125,10 @@ export function PostActionControl({
           {hovered && !blocked && !hoverDisabled ? (
             <View
               aria-hidden
-              style={[styles.hover, { backgroundColor: hoverColor ?? theme.surface }]}
+              style={[
+                styles.hover,
+                { backgroundColor: hoverColor ?? theme.surface, opacity: hoverOpacity },
+              ]}
               testID={`post-action-${testID}-hover`}
             />
           ) : null}
