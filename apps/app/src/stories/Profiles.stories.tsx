@@ -15,9 +15,13 @@ import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from './__generated__/ProfilesStoriesQuery.graphql';
 
-const followable = profile({ id: 'profile-followable' });
+const followable = profile({
+  avatar: { id: 'media-profile-followable-avatar', url: '/profile-followable-avatar.png' },
+  id: 'profile-followable',
+});
 const followingOwnerId = 'profile-following-content';
 const followed = profile({
+  avatar: { id: 'media-profile-followed-avatar', url: '/profile-followed-avatar.png' },
   id: 'profile-followed',
   viewerState: {
     follow: {
@@ -57,7 +61,13 @@ const remoteApprovalRequired = profile({
   relativeHandle: '@approval-required@remote.example',
 });
 const noBio = profile({ bio: null, id: 'profile-no-bio' });
-const noViewer = profile({ id: 'profile-no-viewer', viewerState: null });
+const noViewer = profile({
+  displayName: '이니셜 폴백 프로필',
+  handle: 'initial-fallback',
+  id: 'profile-no-viewer',
+  relativeHandle: '@initial-fallback',
+  viewerState: null,
+});
 const withImages = profile({
   avatar: { id: 'media-profile-avatar', url: '/apple-touch-icon.png' },
   header: { id: 'media-profile-header', url: '/og-default.png' },
@@ -344,10 +354,26 @@ export const HeroNameAndLoadingStates: Story = {
 
 export const ListAndFollowStates: Story = {
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const followableSection = within(canvas.getByText('Followable').parentElement!);
+    const followingSection = within(canvas.getByText('Following').parentElement!);
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example"]'),
     ).toBeInTheDocument();
-    expect(within(canvasElement).getAllByRole('button', { name: '팔로우' })).toHaveLength(2);
+    expect(canvas.getAllByRole('button', { name: '팔로우' })).toHaveLength(2);
+    const followableAvatar = followableSection.getByLabelText('코스모 작가 프로필 이미지');
+    const followingAvatar = followingSection.getByLabelText('코스모 작가 프로필 이미지');
+    expect(followableAvatar.querySelector('img')).toHaveAttribute(
+      'src',
+      '/profile-followable-avatar.png',
+    );
+    expect(followingAvatar.querySelector('img')).toHaveAttribute(
+      'src',
+      '/profile-followed-avatar.png',
+    );
+    const fallbackAvatar = canvas.getByLabelText('이니셜 폴백 프로필 프로필 이미지');
+    expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
+    expect(fallbackAvatar).toHaveTextContent('이');
   },
   render: () => <ProfileListCatalog />,
 };

@@ -45,6 +45,10 @@ const ReplyComposerSurfaceParentFragment = graphql`
     profile {
       displayName
       handle
+      avatar {
+        id
+        url
+      }
       ...ProfileNameBlock_profile
     }
     repostSource {
@@ -58,6 +62,10 @@ const ReplyComposerSurfaceParentFragment = graphql`
         displayName
         handle
         relativeHandle
+        avatar {
+          id
+          url
+        }
       }
     }
     ...PostBody_post
@@ -447,6 +455,7 @@ function ReplyComposerSurfaceContents({
                     <View style={styles.parent} testID="reply-parent">
                       <View style={styles.parentAvatarColumn}>
                         <Avatar
+                          imageUri={parent.profile.avatar?.url}
                           label={parent.profile.displayName || parent.profile.handle}
                           size={40}
                         />

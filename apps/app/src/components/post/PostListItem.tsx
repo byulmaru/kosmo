@@ -31,6 +31,10 @@ const PostListRowFragment = graphql`
       bodyText
     }
     profile {
+      avatar {
+        id
+        url
+      }
       handle
       relativeHandle
       displayName
@@ -51,6 +55,10 @@ const PostListItemFragment = graphql`
       document
     }
     profile {
+      avatar {
+        id
+        url
+      }
       id
       handle
       relativeHandle
@@ -70,6 +78,10 @@ const PostListItemFragment = graphql`
         document
       }
       profile {
+        avatar {
+          id
+          url
+        }
         displayName
         handle
         relativeHandle
@@ -197,6 +209,7 @@ export function PostListItem({
       displayName: post.profile.displayName,
       handle: post.profile.handle,
       relativeHandle: post.profile.relativeHandle,
+      avatar: post.profile.avatar,
     },
     replyParent: post.replyParent ? { id: post.replyParent.id } : null,
     repostSource: {
@@ -209,6 +222,7 @@ export function PostListItem({
         displayName: source.profile.displayName,
         handle: source.profile.handle,
         relativeHandle: source.profile.relativeHandle,
+        avatar: source.profile.avatar,
       },
     },
   };
@@ -226,7 +240,11 @@ export function PostListItem({
             style={styles.avatar}
             tabIndex={-1}
           >
-            <Avatar label={post.profile.displayName || post.profile.handle} size={48} />
+            <Avatar
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.handle}
+              size={48}
+            />
           </Pressable>
         </Link>
         <View style={styles.sourcePresentation}>
@@ -279,7 +297,11 @@ function PostListRow({
           style={styles.avatar}
           tabIndex={-1}
         >
-          <Avatar label={post.profile.displayName || post.profile.handle} size={48} />
+          <Avatar
+            imageUri={post.profile.avatar?.url}
+            label={post.profile.displayName || post.profile.handle}
+            size={48}
+          />
         </Pressable>
       </Link>
       <View style={styles.content}>

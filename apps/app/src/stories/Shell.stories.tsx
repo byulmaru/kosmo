@@ -24,7 +24,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
+const selectedAvatarUrl = '/apple-touch-icon.png';
+const selectedHeaderUrl = '/og-default.png';
+const secondAvatarUrl = '/icon-192.png';
 const secondProfile = profile({
+  avatar: { id: 'media-shell-second-avatar', url: secondAvatarUrl },
   displayName: '먼 우주의 사용자',
   handle: 'remote',
   id: 'profile-remote',
@@ -32,6 +36,8 @@ const secondProfile = profile({
   viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const selectedProfile = profile({
+  avatar: { id: 'media-shell-selected-avatar', url: selectedAvatarUrl },
+  header: { id: 'media-shell-selected-header', url: selectedHeaderUrl },
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
@@ -68,6 +74,31 @@ const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
 const longProfileQuery = {
   ...query,
   ...shellQuery({ profiles: [selectedProfile, ...additionalProfiles], selectedProfile }),
+};
+const imagePresentationQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [
+      selectedProfile,
+      secondProfile,
+      profile({
+        displayName: '이미지 없는 프로필',
+        handle: 'fallback',
+        id: 'profile-fallback',
+        relativeHandle: '@fallback',
+        viewerState: { follow: null, followRequest: null, isSelf: true },
+      }),
+    ],
+    selectedProfile,
+  }),
+};
+const selectedProfileWithoutHeader = { ...selectedProfile, header: null };
+const headerFallbackQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithoutHeader, secondProfile],
+    selectedProfile: selectedProfileWithoutHeader,
+  }),
 };
 
 const ShellStoriesQuery = graphql`
@@ -258,10 +289,10 @@ export const SharedNavigation: Story = {
 
 export const BottomNavigation: Story = {
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('link', { name: '글쓰기' })).toHaveAttribute(
-      'href',
-      '/compose',
-    );
+    const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
+    expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
   },
   render: () => <BottomNavigationStory />,
 };
@@ -768,6 +799,59 @@ export const ProfileSwitcherInteraction: Story = {
     const reopenedPicker = await canvas.findByLabelText('프로필 전환');
     expect(within(reopenedPicker).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
     expect(canvas.getByRole('button', { name: '새 프로필 추가' })).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherImagePresentation: Story = {
+  parameters: { relay: { data: imagePresentationQuery } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeAvatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    await waitFor(() =>
+      expect(activeAvatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl),
+    );
+    const headerImage = await waitFor(() => {
+      const image = canvasElement.querySelector<HTMLImageElement>(
+        `img[src="${selectedHeaderUrl}"]`,
+      );
+      expect(image).toBeInTheDocument();
+      return image!;
+    });
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+    expect(cover.contains(headerImage)).toBe(true);
+    expect(getComputedStyle(cover).filter).toBe('none');
+
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    const options = within(list).getAllByRole('button');
+    expect(options).toHaveLength(3);
+
+    const secondAvatar = within(options[1]!).getByLabelText(
+      `${secondProfile.displayName} 프로필 이미지`,
+    );
+    await waitFor(() =>
+      expect(secondAvatar.querySelector('img')).toHaveAttribute('src', secondAvatarUrl),
+    );
+
+    const fallbackAvatar = within(options[2]!).getByLabelText('이미지 없는 프로필 프로필 이미지');
+    expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
+    expect(fallbackAvatar).toHaveTextContent('이');
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherHeaderFallbackPresentation: Story = {
+  parameters: { relay: { data: headerFallbackQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+
+    expect(canvasElement.querySelector(`img[src="${selectedHeaderUrl}"]`)).not.toBeInTheDocument();
+    expect(getComputedStyle(cover).backgroundImage).toContain('linear-gradient');
+    expect(getComputedStyle(cover).filter).toBe('blur(1px)');
   },
   render: () => <ProfileSwitcherStory />,
 };

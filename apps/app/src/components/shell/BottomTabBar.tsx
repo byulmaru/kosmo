@@ -18,6 +18,10 @@ const BottomTabBarFragment = graphql`
   fragment BottomTabBar_profile on Profile {
     relativeHandle
     displayName
+    avatar {
+      id
+      url
+    }
   }
 `;
 
@@ -86,6 +90,7 @@ export function BottomTabBar({
               <>
                 {tab.label === '프로필' ? (
                   <Avatar
+                    imageUri={profile?.avatar?.url}
                     label={profile?.displayName ?? '프로필'}
                     size={24}
                     style={pressed && styles.pressedContent}

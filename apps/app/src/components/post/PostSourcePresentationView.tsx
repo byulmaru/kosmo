@@ -10,6 +10,13 @@ import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 export type PresentationProfile = {
+  readonly avatar:
+    | {
+        readonly id: string;
+        readonly url: string | null | undefined;
+      }
+    | null
+    | undefined;
   readonly displayName: string;
   readonly handle: string;
   readonly relativeHandle: string;
@@ -234,7 +241,13 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
 
   return (
     <View style={styles.author}>
-      {showAvatar ? <Avatar label={profile.displayName || profile.handle} size={40} /> : null}
+      {showAvatar ? (
+        <Avatar
+          imageUri={profile.avatar?.url}
+          label={profile.displayName || profile.handle}
+          size={40}
+        />
+      ) : null}
       <View style={styles.authorText}>
         <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
           {profile.displayName}
