@@ -32,3 +32,32 @@
 
 - **WHEN** 원격 Note 본문은 없지만 하나 이상의 유효한 이미지 후보가 있다
 - **THEN** 시스템은 canonical empty paragraph와 순서 있는 Media node를 가진 PostContent를 저장한다
+- **AND** 해당 Note를 contentless Note로 거부하지 않는다
+
+#### Scenario: Media Type이 없는 Image 조회
+
+- **WHEN** Media Type을 생략한 원격 Image에서 생성된 Ready Remote Media를 현재 PostContent가 참조한다
+- **THEN** GraphQL `PostContent.media`는 해당 Media를 nullable Media Type과 함께 반환한다
+- **AND** Media Type이 없다는 이유로 Media 목록 전체를 unavailable로 만들지 않는다
+
+### Requirement: 최초 원격 Media materialization 원자성
+
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-256, PROD-625. 시스템은 Remote Media projection을 기존 원격 Post 최초 materialization의 PostgreSQL transaction과 first-write-wins 경계에 포함해야 한다(MUST).
+
+#### Scenario: Media와 Post를 함께 commit
+
+- **WHEN** Media가 있는 유효한 원격 Note object URI가 최초로 materialize된다
+- **THEN** 시스템은 필요한 Remote Media, ActivityPub Post mapping, Post, first PostContent와 currentContent를 같은 transaction에서 commit한다
+- **AND** 하나의 write라도 실패하면 이 delivery가 새로 만든 모든 row를 rollback한다
+
+#### Scenario: duplicate Create first-write-wins
+
+- **WHEN** 이미 materialize된 object URI의 Create가 다시 전달된다
+- **THEN** 시스템은 기존 Post와 PostContent를 변경하지 않는다
+- **AND** duplicate delivery 때문에 Media를 추가하거나 갱신하지 않는다
+
+#### Scenario: concurrent URL과 object 충돌
+
+- **WHEN** 같은 object URI 또는 같은 Remote Profile과 Remote Media URL을 포함한 최초 delivery가 동시에 실행된다
+- **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나, Remote Profile과 canonical URL 조합당 Media 하나로 수렴한다
+- **AND** conflict loser는 orphan Post, PostContent 또는 Media를 남기지 않는다
