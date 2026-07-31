@@ -100,7 +100,7 @@ Local Media 업로드 완료 시 Media Storage Service가 확정한 공개 URL�
 - 완료 재호출과 동시 호출이 idempotent한지 확인한다.
 
 - [x] 3.1 URL·Media Type nullable column과 additive migration을 추가한다.
-- [x] 3.2 업로드 완료 결과 검증과 Ready 전환·metadata 원자 저장 및 idempotency를 구현한다.
+- [x] 3.2 업로드 완료 응답의 필수 field shape를 확인하고 저장 서비스가 확정한 URL·Media Type을 재검증·정규화하지 않은 채 Ready 전환·metadata 원자 저장 및 idempotency를 구현한다.
 - [x] 3.3 관련 core/API check와 strict OpenSpec 검증을 통과시킨다.
 
 ## 4. PROD-559 최초 Local Note Media 표현
@@ -168,10 +168,10 @@ canonical·Linear·OpenSpec이 일치한다.
 
 **Verification**
 
-- 실제 browser 방식의 발급 → PUT → 완료 → Post 작성 → document 조회 → Local Note projection을 확인한다.
+- 격리 DB와 stateful Media Storage fake를 사용하는 통합 테스트에서 GraphQL 발급 → client-equivalent direct PUT → 완료 → Post 작성 → document 조회 → Local Note projection을 한 흐름으로 확인한다.
 - Web/iOS/Android의 최대 4개·상태·접근성 결과와 실행하지 못한 runtime 검증을 구분해 기록한다.
 - core/API/app/Fedify tests, schema/Relay, TypeScript, ESLint, Prettier, syncpack, strict OpenSpec과 diff check를 통과시킨다.
 
-- [ ] 5.1 네 구현 자식 결과를 실제 direct upload, 새 Post 작성과 Local Note 흐름으로 통합 검증한다.
-- [ ] 5.2 canonical·Linear·OpenSpec과 GraphQL/Relay schema를 재대조하고 전체 정적·테스트 검증을 통과시킨다.
-- [ ] 5.3 네 구현 자식과 부모 완료 조건을 확인하고 delta spec을 동기화한 뒤 change를 archive한다.
+- [x] 5.1 네 구현 자식 결과를 실제 direct upload, 새 Post 작성과 Local Note 흐름으로 통합 검증한다.
+- [x] 5.2 canonical·Linear·OpenSpec과 GraphQL/Relay schema를 재대조하고 전체 정적·테스트 검증을 통과시킨다.
+- [x] 5.3 네 구현 자식과 부모 완료 조건을 확인하고 delta spec을 동기화한 뒤 change를 archive한다.

@@ -8,14 +8,14 @@
 
 **Deliverable**
 
-기존 `createPost` GraphQL 계약으로 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 본문·Visibility를 가진 Local Reply를 생성하고 기존 `Post` payload를 받는다.
+기존 `createPost` GraphQL 계약으로 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 PostContent·Visibility를 가진 Local Reply를 생성하고 기존 `Post` payload를 받는다.
 
 **Guardrails**
 
 - `replyParentId`는 nullable concrete `Post` global ID이며 Parent는 행동 주체 Profile 기준 Visibility·Eligibility와 Content 검증을 통과해야 한다.
 - Reply Visibility는 Parent와 독립적이고 `repostSourceId`는 작성 입력에 추가하지 않는다.
 - Parent 검증과 Post·Content·Reply Parent 저장은 원자적이어야 하며 실패 시 부분 데이터를 남기지 않는다.
-- Content Warning, Media/Sensitive Media, Mentioned Profiles/DIRECT와 Reply+Quote 작성은 포함하지 않는다.
+- Content Warning, Media/Sensitive Media capability의 변경, Mentioned Profiles/DIRECT와 Reply+Quote 작성은 포함하지 않는다. 기존 `createPost`의 Media/Sensitive Media 입력 계약은 보존한다.
 
 **Verification**
 

@@ -19,7 +19,8 @@
 - **AND** document는 nullable일 수 없고 V1은 exact `{ version: 1, summary: string | null, body: ProseMirrorDoc }` shape다
 - **AND** V1 summary는 nullable Plain Text Content Warning이고 body와 같은 revision의 authored content다
 - **AND** 시스템은 summary, 파생 Plain Text나 실행 가능한 HTML 본문을 별도 canonical 값으로 저장하지 않는다
-- **AND** JSON 안의 entity reference는 DB foreign key를 대체하지 않으며 필요한 relation projection은 같은 transaction에서 저장되고 canonical document로부터 재구축 가능해야 한다
+- **AND** JSON 안의 entity reference는 DB foreign key를 대체하지 않으며 owning canonical contract가 별도 relation projection을 요구할 때 그 projection은 같은 transaction에서 저장되고 canonical document로부터 재구축 가능해야 한다
+- **AND** PostContent Media node는 canonical document가 소유하는 예외이므로 별도 relation projection을 중복 저장하지 않는다
 
 #### Scenario: Repost와 Quote의 공용 Source 저장
 

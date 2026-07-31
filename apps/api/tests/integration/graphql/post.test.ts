@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { Create, Delete } from '@fedify/vocab';
+import { Create, Delete, Image } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -28,11 +28,19 @@ import type { Activity, Recipient } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
 import type { localOutboundFederation as LocalOutboundFederation } from '../../../../../packages/fedify/src/local-outbound-federation';
+import type { projectLocalPostNote as ProjectLocalPostNote } from '../../../../../packages/fedify/src/local-post-note';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
 import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.MEDIA_STORAGE_SERVICE_API_KEY = 'secret';
+process.env.MEDIA_STORAGE_SERVICE_ORIGIN = 'https://media.example';
+
+const onePixelPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 
 let db: typeof CoreDb.db;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
@@ -51,6 +59,7 @@ let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
 let localOutboundFederation: typeof LocalOutboundFederation;
+let projectLocalPostNote: typeof ProjectLocalPostNote;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -87,6 +96,7 @@ describe('Post Reply GraphQL 경계', () => {
     ({ encodeGlobalId } = await import('@kosmo/core/global-id'));
     ({ localOutboundFederation } =
       await import('../../../../../packages/fedify/src/local-outbound-federation'));
+    ({ projectLocalPostNote } = await import('../../../../../packages/fedify/src/local-post-note'));
 
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
@@ -401,6 +411,119 @@ describe('Post Reply GraphQL 경계', () => {
       assertNoGraphQLErrors(result);
       assert.equal(result.data?.node?.content.media, null);
     }
+  });
+
+  test('업로드 발급부터 PostContent와 Local Note Media projection까지 하나의 흐름으로 연결한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const storageReference = `u_${crypto.randomUUID()}`;
+    const uploadUrl = 'https://media.example/v1/uploads/integration-signed-url';
+    const publicMediaUrl = 'https://media.example/media/integration.webp';
+    const representationUrl = `https://media.example/v1/uploads/${storageReference}`;
+    let uploaded: Buffer | null = null;
+
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (url === 'https://media.example/v1/uploads' && init?.method === 'POST') {
+          return Response.json(
+            {
+              expiresAt: Temporal.Now.instant().add({ minutes: 5 }).toString(),
+              id: storageReference,
+              uploadUrl,
+            },
+            { status: 201 },
+          );
+        }
+        if (url === uploadUrl && init?.method === 'PUT') {
+          uploaded = Buffer.from(await new Response(init.body).arrayBuffer());
+          return new Response(null, { status: 201 });
+        }
+        if (url === representationUrl && init?.method === undefined) {
+          assert.deepEqual(uploaded, onePixelPng);
+          return Response.json({ mediaType: 'storage-defined-format', url: publicMediaUrl });
+        }
+        throw new Error(`Unexpected Media Storage request: ${init?.method ?? 'GET'} ${url}`);
+      },
+    );
+
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const mediaId = issued.data?.issueMediaUploadUrl.media.id;
+    assert.ok(mediaId);
+    assert.equal(issued.data?.issueMediaUploadUrl.media.state, MediaState.UPLOADING);
+
+    const uploadedResponse = await fetch(issued.data!.issueMediaUploadUrl.uploadUrl, {
+      body: onePixelPng,
+      headers: { 'Content-Type': 'image/png' },
+      method: 'PUT',
+    });
+    assert.equal(uploadedResponse.status, 201);
+
+    const completed = await requestCompleteMediaUpload(mediaId, auth.token);
+    assertNoGraphQLErrors(completed);
+    assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
+
+    const created = await requestCreatePost(
+      {
+        bodyText: '통합 검증 본문',
+        media: [{ altText: '통합 검증 이미지', mediaId }],
+        sensitiveMedia: true,
+        visibility: PostVisibility.FOLLOWERS,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(created);
+    const postId = created.data?.createPost.post.id;
+    assert.ok(postId);
+
+    const content = await requestPostContent(postId, auth.token);
+    assertNoGraphQLErrors(content);
+    assert.deepEqual(content.data?.node?.content.document, {
+      body: {
+        attrs: { sensitiveMedia: true },
+        content: [
+          { content: [{ text: '통합 검증 본문', type: 'text' }], type: 'paragraph' },
+          {
+            attrs: { mediaId },
+            type: 'media',
+          },
+        ],
+        type: 'doc',
+      },
+      summary: null,
+      version: 1,
+    });
+    assert.deepEqual(content.data?.node?.content.media, [
+      {
+        altText: '통합 검증 이미지',
+        id: mediaId,
+        mediaType: 'storage-defined-format',
+        url: publicMediaUrl,
+      },
+    ]);
+
+    const storedPost = await db.select().from(Posts).then(firstOrThrow);
+    const projection = await projectLocalPostNote(
+      {
+        canonicalOrigin: publicOrigin,
+        getActorUri: (identifier) => new URL(`/ap/actor/${identifier}`, publicOrigin),
+      },
+      storedPost.id,
+    );
+    assert.ok(projection);
+    assert.equal(projection.object.content?.toString(), '<p>통합 검증 본문</p>');
+    assert.equal(projection.object.sensitive, true);
+    const attachments: Image[] = [];
+    for await (const attachment of projection.object.getAttachments()) {
+      assert.ok(attachment instanceof Image);
+      attachments.push(attachment);
+    }
+    assert.equal(attachments.length, 1);
+    assert.equal(attachments[0]?.url?.href, publicMediaUrl);
+    assert.equal(attachments[0]?.mediaType, 'storage-defined-format');
+    assert.equal(attachments[0]?.name?.toString(), '통합 검증 이미지');
   });
 
   test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
@@ -1099,6 +1222,19 @@ type PostContentNode = {
   };
 };
 
+type IssueMediaUploadUrlData = {
+  issueMediaUploadUrl: {
+    media: { id: string; state: string };
+    uploadUrl: string;
+  };
+};
+
+type CompleteMediaUploadData = {
+  completeMediaUpload: {
+    media: { id: string; state: string };
+  };
+};
+
 type DeletePostNode = {
   postId: string;
 };
@@ -1185,6 +1321,24 @@ const requestMediaNode = (mediaId: string, token?: string) =>
       }
     }`,
     { mediaId: encodeGlobalId('Media', mediaId) },
+    token,
+  );
+
+const requestIssueMediaUploadUrl = (token?: string) =>
+  requestGraphQL<IssueMediaUploadUrlData>(
+    `mutation PostIntegrationIssueMediaUploadUrl {
+      issueMediaUploadUrl { media { id state } uploadUrl }
+    }`,
+    {},
+    token,
+  );
+
+const requestCompleteMediaUpload = (id: string, token?: string) =>
+  requestGraphQL<CompleteMediaUploadData>(
+    `mutation PostIntegrationCompleteMediaUpload($input: CompleteMediaUploadInput!) {
+      completeMediaUpload(input: $input) { media { id state } }
+    }`,
+    { input: { id } },
     token,
   );
 

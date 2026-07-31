@@ -1,4 +1,10 @@
-## ADDED Requirements
+# activitypub-post-media Specification
+
+## Purpose
+
+새 Local Post의 PostContent Media node를 안전한 HTML과 순서 있는 ActivityPub Image attachment로 투영하고 Sensitive Media 의미를 보존한다.
+
+## Requirements
 
 ### Requirement: Local Note Media attachment projection
 
@@ -18,6 +24,13 @@
 - **AND** 권한 판정이나 projection 중 Media Storage Service를 호출하지 않는다
 - **AND** nullable Alt Text가 있으면 Image의 사람이 읽을 수 있는 이름으로 제공한다
 - **AND** 내부 Media DB UUID, GraphQL global ID, storage reference와 upload URL을 ActivityPub 속성으로 노출하지 않는다
+
+#### Scenario: Followers Note의 공개 Media URL 전달
+
+- **WHEN** 권한을 통과한 `FOLLOWERS` Note를 delivery하거나 signed fetch로 제공한다
+- **THEN** attachment는 Ready Local Media에 저장된 공개 URL을 다른 Visibility와 동일하게 사용한다
+- **AND** Note의 delivery·역참조 권한은 URL 획득 전 projection을 제한하지만 URL을 획득한 주체의 이후 byte 조회나 재전달을 막지 않는다
+- **AND** 이 capability는 Media proxy, audience별 signed URL 또는 byte 요청의 Kosmo viewer 재인가를 추가하지 않는다
 
 #### Scenario: 필요한 Media를 제공할 수 없는 Post
 

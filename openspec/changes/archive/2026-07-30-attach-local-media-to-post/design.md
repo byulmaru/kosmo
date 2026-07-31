@@ -61,7 +61,8 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - 각 item은 `issueMediaUploadUrl` → local byte PUT → `completeMediaUpload` 순서로 즉시 처리한다. 재시도는 새
   Uploading Media부터 시작하고 제거된 local key의 늦은 결과를 무시한다.
 - `completeMediaUpload`은 인증된 representation 조회가 반환한 URL과 media type을 Ready At·Ready state와
-  함께 저장한다.
+  함께 저장한다. 필드 존재와 transport type만 확인하고 Media Type의 MIME 문법·지원 여부·byte 일치성은
+  Media Storage Service를 최종 권위로 신뢰해 재검증·정규화하지 않는다.
 - Composer는 local URI preview, 상태, 재시도·제거, Alt Text와 Sensitive Media를 공용 React Native primitive와
   canonical platform target으로 제공한다. 선택 Media가 없으면 Sensitive Media를 false로 되돌린다.
 - Local Note projection은 current PostContent의 Media DB IDs를 함께 읽는다. Media node를 제거한 body만 기존
@@ -100,6 +101,12 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - [앱과 backend의 순차 rollout] → backend schema/core/API를 먼저 배포하고 구버전 앱의 omitted input을 유지한다.
 - [저장된 공개 URL 정책 변화] → Kosmo는 provider URL을 조립하지 않고 완료 응답을 저장한다. URL
   교체 lifecycle은 별도 계약으로 다루며 raw storage reference는 protocol output에 노출하지 않는다.
+- [저장 서비스가 잘못된 표현을 확정함] → 이미지 검증·변환과 Media Type 결정은 Media Storage Service의 단일
+  책임으로 둔다. Kosmo의 중복 MIME parser·allowlist·byte 검사는 추가하지 않으며 서비스가 반환한 값을 그대로
+  저장·투영한다.
+- [Followers Media URL 재공유] → Note delivery·역참조에서 recipient 권한을 확인한 뒤 저장된 공개 URL을
+  전달한다. URL 획득 뒤 byte 조회·재전달은 제한하지 않으며 Media proxy·audience별 signed URL은 별도
+  capability로 둔다.
 
 ## Migration Plan
 
@@ -107,7 +114,8 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 2. PROD-581에서 nullable URL·Media Type column과 완료 write를 배포한다.
 3. PROD-559에서 저장된 표현을 쓰는 Local Note attachment와 sensitive projection을 배포한다. Media 없는 Note는 그대로 유지한다.
 4. PROD-553에서 picker dependency와 Composer upload UI를 배포한다.
-5. PROD-461에서 direct upload → Ready → Post 작성 → GraphQL document → Local Note를 통합 검증한다.
+5. PROD-461에서 격리 DB와 stateful Media Storage fake를 사용하는 통합 테스트로 발급 → client-equivalent direct
+   PUT → Ready → Post 작성 → GraphQL document → Local Note를 한 흐름에서 검증한다.
 6. rollback은 app/Fedify/API code를 이전 버전으로 되돌린다. 새 V1 document가 이미 저장됐다면 구버전
    canonicalizer가 Media node를 거부하므로 backend rollback 전에 해당 document 존재 여부와 호환 처리를 확인한다.
 

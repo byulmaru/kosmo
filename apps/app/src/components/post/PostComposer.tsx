@@ -243,7 +243,7 @@ function PostComposerContents({
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
-      onError: (cause) => {
+      onError: () => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -254,8 +254,7 @@ function PostComposerContents({
         }
         setSubmitting(false);
         setError(
-          cause.message ||
-            (submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.'),
+          submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
         );
       },
     });
@@ -603,15 +602,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  visibilityControl: { position: 'relative' },
+  visibilityControl: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+  },
   visibilityTrigger: {
     alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.xs,
-    height: 40,
+    height: Platform.select({ web: 40 }),
     justifyContent: 'center',
+    minHeight: Platform.select({ android: 48, ios: 44, default: 40 }),
     minWidth: 120,
     paddingHorizontal: spacing.lg,
   },
