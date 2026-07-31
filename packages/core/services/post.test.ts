@@ -386,7 +386,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
   );
 });
 
-test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text만 최신 입력으로 갱신한다', async () => {
+test('createPost는 contract 전 같은 Profile과 URL의 Remote Media를 안전하게 재사용한다', async () => {
   const profile = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const first = await createPost({
@@ -410,12 +410,10 @@ test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text�
     visibility: PostVisibility.PUBLIC,
   });
 
-  assert.equal(first.created, true);
-  assert.equal(second.created, true);
   const media = await db.select().from(Media).where(eq(Media.url, url));
   assert.equal(media.length, 1);
+  assert.equal(media[0]?.altText, 'first alt');
   assert.equal(media[0]?.mediaType, 'image/png');
-  assert.equal(media[0]?.altText, 'second alt');
   assert.deepEqual(
     [first, second].map((result) =>
       result.content.document.body.content.flatMap((block) =>
@@ -426,11 +424,11 @@ test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text�
   );
 });
 
-test('createPost는 다른 Profile의 Remote URL 충돌을 모든 Post row와 함께 rollback한다', async () => {
+test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Media로 저장한다', async () => {
   const owner = await createProfile();
   const other = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
-  await createPost({
+  const ownerPost = await createPost({
     document: postContentDocumentFromText('owner'),
     media: [{ altText: null, mediaType: 'image/png', url }],
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
@@ -440,28 +438,28 @@ test('createPost는 다른 Profile의 Remote URL 충돌을 모든 Post row와 �
     receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
     visibility: PostVisibility.PUBLIC,
   });
-  const postCount = await db.$count(Posts);
-  const contentCount = await db.$count(PostContents);
-  const mappingCount = await db.$count(ActivityPubPosts);
+  const otherPost = await createPost({
+    document: postContentDocumentFromText('other'),
+    media: [{ altText: null, mediaType: 'image/webp', url }],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: other.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-31T00:01:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
 
-  await assert.rejects(
-    createPost({
-      document: postContentDocumentFromText('other'),
-      media: [{ altText: null, mediaType: 'image/webp', url }],
-      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
-      origin: 'ACTIVITYPUB',
-      profileId: other.id,
-      publishedAt: null,
-      receivedAt: Temporal.Instant.from('2026-07-31T00:01:00Z'),
-      visibility: PostVisibility.PUBLIC,
-    }),
-    (error) => error instanceof ValidationError && error.field === 'media',
+  const media = await db.select().from(Media).where(eq(Media.url, url));
+  assert.equal(media.length, 2);
+  assert.deepEqual(new Set(media.map(({ profileId }) => profileId)), new Set([owner.id, other.id]));
+  assert.notDeepEqual(
+    ownerPost.content.document.body.content.flatMap((block) =>
+      block.type === 'media' ? [block.attrs.mediaId] : [],
+    ),
+    otherPost.content.document.body.content.flatMap((block) =>
+      block.type === 'media' ? [block.attrs.mediaId] : [],
+    ),
   );
-
-  assert.equal(await db.$count(Media, eq(Media.url, url)), 1);
-  assert.equal(await db.$count(Posts), postCount);
-  assert.equal(await db.$count(PostContents), contentCount);
-  assert.equal(await db.$count(ActivityPubPosts), mappingCount);
 });
 
 test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', async () => {

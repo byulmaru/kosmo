@@ -1271,6 +1271,76 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('exposes materialized remote Profile avatar and header through the existing fields', async () => {
+    const instance = await createRemoteInstance({ domain: 'profile-media.remote.example' });
+    const profile = await createProfile({
+      handle: 'alice',
+      instanceId: instance.id,
+    });
+    const [avatar, header] = await db
+      .insert(Media)
+      .values([
+        {
+          mediaType: 'image/png',
+          profileId: profile.id,
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: 'https://profile-media.remote.example/alice/avatar.png',
+        },
+        {
+          mediaType: 'image/jpeg',
+          profileId: profile.id,
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: 'https://profile-media.remote.example/alice/header.jpg',
+        },
+      ])
+      .returning();
+    assert.ok(avatar);
+    assert.ok(header);
+    await db.insert(ProfileMedia).values([
+      {
+        kind: ProfileMediaKind.AVATAR,
+        mediaId: avatar.id,
+        profileId: profile.id,
+      },
+      {
+        kind: ProfileMediaKind.HEADER,
+        mediaId: header.id,
+        profileId: profile.id,
+      },
+    ]);
+
+    const result = await requestGraphQL<{
+      profileByHandle: {
+        avatar: { id: string; mediaType: string | null; url: string | null } | null;
+        header: { id: string; mediaType: string | null; url: string | null } | null;
+      } | null;
+    }>(
+      `query RemoteProfileMedia($handle: String!) {
+        profileByHandle(handle: $handle) {
+          avatar { id mediaType url }
+          header { id mediaType url }
+        }
+      }`,
+      { handle: `${profile.handle}@${instance.domain}` },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle, {
+      avatar: {
+        id: globalId('Media', avatar.id),
+        mediaType: avatar.mediaType,
+        url: avatar.url,
+      },
+      header: {
+        id: globalId('Media', header.id),
+        mediaType: header.mediaType,
+        url: header.url,
+      },
+    });
+  });
+
   test('updates Profile tags without ordering guarantees and preserves omitted/null semantics', async () => {
     const auth = await createAuthenticatedSession();
     type Tag = { id: string; name: string };
