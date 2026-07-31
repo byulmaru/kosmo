@@ -2,8 +2,8 @@ import { Bookmark, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-nat
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostActionControl } from './PostActionControl';
-import { PostDeletionAction } from './PostDeletionAction';
 import { usePostBookmarkAction } from './PostBookmarkAction';
+import { PostDeletionAction } from './PostDeletionAction';
 import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
 import type { Ref } from 'react';

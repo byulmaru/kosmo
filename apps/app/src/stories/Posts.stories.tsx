@@ -2124,7 +2124,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       const cardBounds = card.getBoundingClientRect();
       const actionBarBounds = actionBar.getBoundingClientRect();
       const borderBottomWidth = Number.parseFloat(getComputedStyle(card).borderBottomWidth);
-      const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!.parentElement!);
+      const actionBarSlotStyle = getComputedStyle(actionBar.parentElement!);
       expect(actionBarSlotStyle.paddingTop).toBe('0px');
       expect(actionBarSlotStyle.paddingBottom).toBe('4px');
       expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
@@ -2136,11 +2136,9 @@ export const ProductionRepostQuoteListIntegration: Story = {
           .getAllByRole('button')
           .map((button) => button.getAttribute('aria-label')),
       ).toEqual(['답글', expect.stringMatching(/^재게시/), '반응', '북마크', '더 보기']);
-      const actionBarOwner = actionBar.parentElement!;
-      const actionBarSlot = actionBarOwner.parentElement!;
+      const actionBarSlot = actionBar.parentElement!;
       expect(actionBarSlot.closest('a, [role="link"], [role="button"]')).toBeNull();
-      expect(actionBarOwner.lastElementChild).toBe(actionBar);
-      expect(actionBarSlot.lastElementChild).toBe(actionBarOwner);
+      expect(actionBarSlot.lastElementChild).toBe(actionBar);
       expect(actionBarSlot.parentElement?.lastElementChild).toBe(actionBarSlot);
     }
     expect(
@@ -2259,8 +2257,14 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
     const profile = within(canvas.getByTestId('post-deletion-profile-list'));
 
     await userEvent.click(home.getByRole('button', { name: '더 보기' }));
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('aria-label')),
+    ).toEqual(['링크 복사', '게시글 삭제']);
     await userEvent.click(
-      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+      within(menu).getByRole('menuitem', {
         name: '게시글 삭제',
       }),
     );
