@@ -1,5 +1,11 @@
 ## 1. PROD-395 Reaction 저장 계약
 
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-395](https://linear.app/byulmaru/issue/PROD-395/reaction%EC%9D%84-%EC%A0%80%EC%9E%A5%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하고 같은 Profile/Post/Type 조합에 하나만 존재하며 다른 Type은 공존한다.
@@ -111,6 +117,12 @@ Post를 조회할 수 있는 viewer가 `Post.reactionCounts`에서 현재 Reacti
 - [x] 4.3 viewer-independent 집계·정렬·삭제 반영·Post 권한 검증을 추가하고 query/API check를 통과시킨다.
 
 ## 5. PROD-407 Reaction Type별 Profile 조회
+
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
 
@@ -354,6 +366,14 @@ Reaction summary와 Profile modal의 Type이 각 Type에 현재 존재하는 최
 - [x] 11.8 API·client·format·OpenSpec 검증을 통과시키고 갱신된 PROD-576 구현 증거를 정리한다.
 
 ## 12. PROD-390 Reaction 통합 검증·정합성 확인·archive
+
+**Authority / Provenance**
+
+- [Issue/OpenSpec workflow](../../../../memory/issue-openspec-workflow.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [Notification canonical 객체](../../../../docs/domain/objects/notification.md)
+- [Reaction UI 디자인](../../../../docs/design/reactions.md)
+- [PROD-390](https://linear.app/byulmaru/issue/PROD-390/reaction-%EA%B3%84%EC%95%BD%EC%9D%84-%ED%86%B5%ED%95%A9-%EA%B2%80%EC%A6%9D%ED%95%98%EA%B3%A0-openspec%EC%9D%84-archive%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
 

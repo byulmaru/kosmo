@@ -21,7 +21,7 @@
 - Decision Date: 2026-07-20
 - Decision Class: Derived Contract
 - Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-386](https://linear.app/byulmaru/issue/PROD-386/reaction-%EC%B4%88%EA%B8%B0-%ED%97%88%EC%9A%A9-%EC%9D%B4%EB%AA%A8%EC%A7%80-%EB%AA%A9%EB%A1%9D%EC%9D%84-%ED%99%95%EC%A0%95%ED%95%9C%EB%8B%A4)
-- Status: Active for allowed Types; display-order portion superseded by the 2026-07-30 PROD-576 decision
+- Status: Active
 - Context / Problem: 최초 구현이 허용할 Type과 정확한 Unicode 표현, count 동률 순서를 고정해야 한다.
 - Decision Outcome: 현재 허용 Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀` (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 사용한다. 목록 나열은 표시 순서를 정의하지 않는다.
 - Alternatives Considered: 임의 Unicode와 variation selector 정규화는 canonical Domain Gate에서 제외했다. 표시 순서는 2026-07-30 PROD-576 결정이 별도로 소유한다.
@@ -69,7 +69,7 @@
 - Decision Date: 2026-07-20
 - Decision Class: Derived Contract
 - Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
-- Status: Active for visibility; ordering portion superseded by the 2026-07-30 PROD-576 decision
+- Status: Active
 - Context / Problem: viewer에 따라 count가 달라지면 Post 단위 cache가 불안정해지지만 unavailable Profile은 목록에 노출할 수 없다.
 - Decision Outcome: Post 조회 권한을 통과한 모든 viewer에게 현재 Reaction 전체의 Type별 count를 동일하게 제공한다. Type별 Profile connection에만 viewer의 기존 Profile visibility를 SQL page limit 전에 적용한다. Type 표시 순서는 2026-07-30 PROD-576 결정이 소유한다.
 - Alternatives Considered: count에도 viewer Profile visibility를 적용하는 방식은 viewer마다 count가 달라지고 canonical 계약과 충돌한다. client filtering은 pagination을 깨뜨린다.
@@ -127,12 +127,27 @@
   - `docs/domain/objects/reaction.md`
   - `docs/design/reactions.md`
   - `PROD-418`의 2026-07-25 설계 결정 댓글
-- Status: Active for data·pagination·error behavior; entry interaction superseded by the 2026-07-29 PROD-417 decision
+- Status: Active
 - Context / Problem: PROD-418은 이미 제공된 viewer-independent Type별 count와 viewer-filtered Profile connection을 현재 Post 맥락에서 연결해야 한다. Reaction이 없는 Post의 빈 요약, 별도 route, 조회 오류용 전역 알림과 매번 빈 loading부터 시작하는 modal은 이 결과에 불필요한 UI·cache 계약을 추가한다.
-- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. PROD-418 전달 당시에는 Type token이 현재 Post 위 modal을 열었지만, 2026-07-29 PROD-417 계약부터 token은 same-Type Reaction toggle을 실행하고 Profile 목록은 Reaction 전용 More 버튼에서 연다. modal의 별도 route/URL 없음, 외부 영역·Android back dismiss, 별도 닫기 버튼 없음, 최초·추가 page inline retry, 기존 edge 보존, cache 우선 background 갱신과 selected Profile별 Relay Environment 격리는 유지한다.
+- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. Profile 목록 modal은 별도 route/URL 없이 현재 Post 위에서 열리고, 외부 영역·Android back으로 dismiss하며 별도 닫기 버튼을 두지 않는다. 최초·추가 page 오류에는 inline retry를 제공하고 기존 edge를 보존하며, cache 우선 background 갱신과 selected Profile별 Relay Environment 격리를 유지한다. 현재 modal 진입점은 2026-07-29 PROD-417 결정이 소유한다.
 - Alternatives Considered: Reaction이 없는 Post에 빈 요약을 표시하는 방식은 요약 진입점 없이 중복 empty UI를 남긴다. Profile 목록을 별도 route로 여는 방식은 현재 Post 맥락과 불필요한 URL 계약을 추가한다. 조회 오류를 snackbar로만 알리는 방식은 지속적인 복구 동작을 화면 밖의 일시적 알림에 의존하게 한다. 매번 network-only loading부터 시작하는 방식은 이미 조회한 목록을 불필요하게 숨긴다.
 - Consequences: PROD-418의 기존 backend API, Relay connection, modal·cache 구현은 재사용한다. PROD-417은 같은 seam의 token interaction, Reaction 전용 More·emoji tab, 목록 surface와 mutation 상태 연결을 소유하며 API·DB를 확장하지 않는다.
 - Confirmation / Follow-up: 기존 PROD-418 검증은 zero-count, server 순서, modal dismiss, 조회 오류·edge·cache 격리를 계속 보장한다. PROD-417은 새 token toggle·More/tab/list surface를 별도로 검증한다.
+
+### PROD-418은 Reaction Type token으로 Profile modal을 연다
+
+- Decision Date: 2026-07-25
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `docs/design/reactions.md`
+  - `PROD-418`의 2026-07-25 설계 결정 댓글
+- Status: Superseded
+- Context / Problem: PROD-418 전달 당시에는 Reaction Type별 Profile 목록으로 진입할 독립 affordance가 필요했다.
+- Decision Outcome: 양수 count의 Type token을 누르면 해당 Type을 선택한 상태로 현재 Post 위 Profile modal을 연다.
+- Alternatives Considered: 별도 route는 현재 Post 맥락과 불필요한 URL 계약을 추가하고, 독립 More affordance는 당시 token toggle 계약이 없어서 채택하지 않았다.
+- Consequences: Type token은 Profile 탐색 진입점이므로 Reaction 추가·삭제를 직접 수행하지 않는다.
+- Confirmation / Follow-up: 2026-07-29 PROD-417의 “목록·상세 Reaction token toggle과 More 기반 Profile 탐색을 연결한다” 결정이 token을 same-Type toggle로, Reaction 전용 More를 Profile modal 진입점으로 대체했다.
 
 ### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
 
@@ -188,7 +203,7 @@
 ### PROD-417은 목록·상세 Reaction token toggle과 More 기반 Profile 탐색을 연결한다
 
 - Decision Date: 2026-07-29
-- Decision Class: Product and Implementation Choice
+- Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/design/reactions.md`
   - `docs/design/accessibility.md`
