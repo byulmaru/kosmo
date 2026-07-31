@@ -79,12 +79,43 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 실패 시 pending만 종료하고 이전 서버 확정 selected 상태, `repostCount`와 Relay cache를 유지한다. 사용자는
   메뉴를 다시 열고 같은 action을 선택해 재시도한다. 성공 toast는 표시하지 않는다.
 
+## Post 삭제 More menu
+
+- Action Bar의 16px `MoreHorizontal` 케밥 icon은 삭제를 즉시 실행하는 button이 아니라 기존 `ActionMenu`를
+  여는 More trigger다. trigger의 접근성 이름은 `더 보기`이고 menu open 상태를 노출한다.
+- `삭제` 항목은 현재 selected Profile과 Action Bar target Post의 Author Profile이 같고, target이 Content를
+  가진 Active Post일 때만 표시한다. 일반 Post, Reply, Quote와 Reply이면서 Quote를 포함하며 guest, 다른
+  Profile, Tombstone과 Content 없는 Repost에는 표시하지 않는다.
+- 순수 Repost surface의 Action Bar target은 기존 배치 계약대로 direct Repost Source다. 따라서 More의 삭제
+  eligibility와 mutation ID도 Source를 기준으로 하며, 바깥 Repost의 취소는 Repost action menu가 계속
+  소유한다.
+- `링크 복사`와 `삭제`가 함께 제공되면 일반 action인 `링크 복사`를 먼저, destructive action인 `삭제`를
+  마지막에 둔다. `삭제` item은 `Trash2` icon, theme `danger` 색과 접근성 이름 `게시글 삭제`로 파괴적 결과를
+  label과 색상 모두로 구분한다.
+- `삭제` item을 선택하면 More menu를 닫고 확인 dialog를 연다. 이 선택만으로 mutation이나 cache 변경을
+  시작하지 않는다. dialog title은 `게시글을 삭제할까요?`, 설명은 `삭제한 게시글은 복구할 수 없습니다.`,
+  action은 `취소`와 `삭제`를 사용한다.
+- 확인 dialog는 Web에서 `alertdialog`, Android·iOS에서 modal 접근성 의미를 제공한다. 처음 열릴 때 안전한
+  `취소`에 focus를 두고 pending 전에는 Escape, platform back과 backdrop으로 취소할 수 있으며 닫은 뒤 More
+  trigger로 focus를 돌려보낸다.
+- 사용자가 dialog의 `삭제`를 확인한 경우에만 target Post ID로 기존 GraphQL `deletePost` mutation을 한 번
+  실행한다. pending 중에는 두 action과 dismiss 입력을 막고 destructive action에 busy 상태를 노출한다.
+- 서버 성공 payload의 `postId`를 확인한 뒤에만 현재 Relay actor Store에서 해당 Post를 Active content로
+  제거한다. Home·Profile 목록은 삭제된 Post edge를 표시하지 않고 상세는 기존 삭제됨·접근 불가 상태로
+  전환하며, 다른 selected Profile의 actor Store는 변경하지 않는다. 성공하면 dialog를 닫고 성공 toast는
+  표시하지 않는다.
+- 실패에는 optimistic 삭제를 적용하지 않고 서버 확정 Post와 cache를 유지한다. dialog는 열린 상태에서 다시
+  입력할 수 있게 복구하고 공용 toast host에 `게시글을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.`를
+  alert semantics로 표시한다.
+
 ## 소유권과 후속 범위
 
 - `PROD-414`는 실제 Action Bar surface 배치, Repost menu, 생성·취소 action과 실패 toast를 소유한다.
 - `PROD-415`는 목록의 Source 이동과 순수 Repost ID 직접 접근의 Source detail redirect를 소유한다.
 - `PROD-431`은 `인용하기` 메뉴 항목과 Quote 작성 흐름을 소유한다.
 - `PROD-471`은 Repost 취소 뒤 서버 확정 Source 상태를 같은 actor Store에 정규화하는 cache 갱신을 소유한다.
+- `PROD-598`은 기존 Post 삭제 domain과 GraphQL resolver를 재사용해 More의 작성자 삭제 항목, 확인 dialog,
+  Relay cache 동기화와 실패 복구를 소유한다.
 - Reaction, Reply, Bookmark, More의 실제 연결과 여러 action의 최종 통합 범위는 각 구현 이슈와 `PROD-432`에
   남긴다.
 
@@ -109,3 +140,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
   alert semantics, light `#262626` accent와 message 2px optical shift, 실패 뒤 상태 유지·다음 입력 재시도를
   검증한다.
+- 작성자·selected Profile 일치, Active contentful target과 guest·다른 Profile·Tombstone·Content 없는 Repost의
+  `삭제` 노출 여부, Source를 target으로 하는 순수 Repost surface, 링크 복사와 destructive item 순서를
+  검증한다.
+- 삭제 확인 전 취소와 dismiss, dialog의 title·설명·안전한 초기 focus·modal/alertdialog 의미, 정확한 Post ID의
+  단일 mutation, pending 중 중복·dismiss 차단과 busy 상태를 검증한다.
+- 성공 뒤 Home·Profile 목록 제거와 상세의 삭제됨·접근 불가 상태, selected Profile별 actor Store 격리, 실패
+  뒤 cache 유지·dialog 재시도와 접근 가능한 한국어 toast를 검증한다.

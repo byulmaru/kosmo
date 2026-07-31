@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -89,8 +89,10 @@ export function PostListItem({
 }) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
+  const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
+  const onDeleted = useCallback(() => setDeleted(true), []);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
   const reply = replyBinding
@@ -121,11 +123,23 @@ export function PostListItem({
     showDivider && { borderColor: theme.divider },
   ];
 
+  if (deleted) {
+    return null;
+  }
+
   if (!post.repostSource) {
+    if (!post.content) {
+      return null;
+    }
     return (
       <>
         <View role="article" style={cardStyle}>
-          <PostListRow onRepostError={onRepostError} post={post} reply={reply} />
+          <PostListRow
+            onDeleted={onDeleted}
+            onRepostError={onRepostError}
+            post={post}
+            reply={reply}
+          />
         </View>
         {replySurface}
       </>
@@ -163,7 +177,12 @@ export function PostListItem({
               </Link>
             </View>
           </View>
-          <PostListRow onRepostError={onRepostError} post={source} reply={reply} />
+          <PostListRow
+            onDeleted={onDeleted}
+            onRepostError={onRepostError}
+            post={source}
+            reply={reply}
+          />
         </View>
         {replySurface}
       </>
@@ -219,6 +238,7 @@ export function PostListItem({
           <PostReactionActions
             actionBar={post.actionBar!}
             controllerPost={post.reactionController!}
+            onDeleted={onDeleted}
             onRepostError={onRepostError}
             quote
             reply={reply}
@@ -231,10 +251,12 @@ export function PostListItem({
 }
 
 function PostListRow({
+  onDeleted,
   onRepostError,
   post: postKey,
   reply,
 }: {
+  onDeleted: () => void;
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
@@ -286,6 +308,7 @@ function PostListRow({
         <PostReactionActions
           actionBar={post.actionBar!}
           controllerPost={post.reactionController!}
+          onDeleted={onDeleted}
           onRepostError={onRepostError}
           reply={reply}
         />
@@ -297,12 +320,14 @@ function PostListRow({
 function PostReactionActions({
   actionBar,
   controllerPost,
+  onDeleted,
   onRepostError,
   quote = false,
   reply,
 }: {
   actionBar: PostActionBar_post$key;
   controllerPost: PostReactionController_post$key;
+  onDeleted?: () => void;
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   quote?: boolean;
   reply?: PostActionBarProps['reply'];
@@ -317,6 +342,7 @@ function PostReactionActions({
       />
       <View style={styles.actionBarSlot}>
         <PostActionBar
+          onDeleted={onDeleted}
           onRepostError={onRepostError}
           post={actionBar}
           reactionController={controller}

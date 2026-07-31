@@ -95,12 +95,14 @@ export function PostDetailThread({
   header,
   identity,
   onReplyCreated,
+  onPostDeleted,
   post: postKey,
   replyProfile,
 }: {
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
+  onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
@@ -109,6 +111,7 @@ export function PostDetailThread({
       header={header}
       key={identity}
       onReplyCreated={onReplyCreated}
+      onPostDeleted={onPostDeleted}
       post={postKey}
       replyProfile={replyProfile}
     />
@@ -118,11 +121,13 @@ export function PostDetailThread({
 function PostDetailThreadContent({
   header,
   onReplyCreated,
+  onPostDeleted,
   post: postKey,
   replyProfile,
 }: {
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
+  onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
@@ -210,16 +215,19 @@ function PostDetailThreadContent({
       window.removeEventListener('resize', check);
     };
   }, [data.replyDescendants.edges.length, maybeLoadNextPage]);
-  const ancestors = [...data.replyAncestors].reverse().map((post, index) => ({
-    connectedToPrevious: index > 0,
-    id: post.id,
-    post: {
-      detail: null,
+  const ancestors = data.replyAncestors
+    .filter((post) => post != null)
+    .reverse()
+    .map((post, index) => ({
+      connectedToPrevious: index > 0,
       id: post.id,
-      listItem: post.listItem,
-    } satisfies ThreadRenderablePost,
-  }));
-  const descendantEdges = data.replyDescendants.edges;
+      post: {
+        detail: null,
+        id: post.id,
+        listItem: post.listItem,
+      } satisfies ThreadRenderablePost,
+    }));
+  const descendantEdges = data.replyDescendants.edges.filter(({ node }) => node != null);
   const descendants = descendantEdges.map(({ node }, index) => ({
     connectedToPrevious:
       node.replyParent?.id === (index === 0 ? data.id : descendantEdges[index - 1]?.node.id),
@@ -254,7 +262,10 @@ function PostDetailThreadContent({
           renderPost={({ item, role }) => (
             <View>
               {role === 'current' ? (
-                <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
+                <PostLayout
+                  onDeleted={onPostDeleted}
+                  post={requireThreadFragment(item.post.detail, 'current detail')}
+                />
               ) : (
                 <PostListItem
                   post={requireThreadFragment(item.post.listItem, `${role} list item`)}

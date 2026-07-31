@@ -66,7 +66,13 @@ const visibilityLabels: Record<string, string> = {
   DIRECT: '다이렉트',
 };
 
-export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
+export function PostLayout({
+  onDeleted,
+  post: postKey,
+}: {
+  onDeleted?: () => void;
+  post: PostLayout_post$key;
+}) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
@@ -122,6 +128,7 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
           </Text>
           <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
           <PostActionBar
+            onDeleted={onDeleted}
             onRepostError={onRepostError}
             post={actionBarPost}
             reactionController={reactionController}

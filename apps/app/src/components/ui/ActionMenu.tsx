@@ -13,14 +13,17 @@ type ActionMenuIcon = ComponentType<{
 }>;
 
 export type ActionMenuItem = Readonly<{
+  accessibilityLabel?: string;
   icon?: ActionMenuIcon;
   key: string;
   label: string;
   onSelect: () => void;
+  tone?: 'default' | 'danger';
 }>;
 
 export type ActionMenuTriggerRenderProps = Readonly<{
   expanded: boolean;
+  focusTrigger: () => void;
   onPress: () => void;
   ref: Ref<View>;
 }>;
@@ -244,7 +247,12 @@ export function ActionMenu({
   if (web) {
     return (
       <View ref={controlRef} style={[styles.control, { zIndex: open ? 50 : 0 }]}>
-        {renderTrigger({ expanded: open, onPress: toggle, ref: triggerRef })}
+        {renderTrigger({
+          expanded: open,
+          focusTrigger,
+          onPress: toggle,
+          ref: triggerRef,
+        })}
         {open ? (
           <ActionMenuPortal>
             <View style={[styles.webPosition, webPosition]}>
@@ -256,8 +264,10 @@ export function ActionMenu({
               >
                 {items.map((item, index) => {
                   const Icon = item.icon;
+                  const itemColor = item.tone === 'danger' ? theme.danger : theme.text;
                   return (
                     <Pressable
+                      accessibilityLabel={item.accessibilityLabel ?? item.label}
                       key={item.key}
                       onPress={() => select(item)}
                       role="menuitem"
@@ -272,10 +282,10 @@ export function ActionMenu({
                       ) : null}
                       {Icon ? (
                         <View accessible={false} aria-hidden style={styles.webIcon}>
-                          <Icon color={theme.text} size={18} strokeWidth={2.4} />
+                          <Icon color={itemColor} size={18} strokeWidth={2.4} />
                         </View>
                       ) : null}
-                      <Text style={[styles.label, styles.webLabel, { color: theme.text }]}>
+                      <Text style={[styles.label, styles.webLabel, { color: itemColor }]}>
                         {item.label}
                       </Text>
                     </Pressable>
@@ -291,7 +301,12 @@ export function ActionMenu({
 
   return (
     <>
-      {renderTrigger({ expanded: open, onPress: toggle, ref: triggerRef })}
+      {renderTrigger({
+        expanded: open,
+        focusTrigger,
+        onPress: toggle,
+        ref: triggerRef,
+      })}
       <Modal
         accessibilityLabel={accessibilityLabel}
         animationType="fade"
@@ -325,17 +340,34 @@ export function ActionMenu({
             <View {...sheetDismissResponder.panHandlers} style={styles.dragHandleTarget}>
               <View style={[styles.dragHandle, { backgroundColor: theme.border }]} />
             </View>
-            {items.map((item) => (
-              <Pressable
-                accessibilityLabel={item.label}
-                accessibilityRole="button"
-                key={item.key}
-                onPress={() => select(item)}
-                style={styles.item}
-              >
-                <Text style={[styles.label, { color: theme.text }]}>{item.label}</Text>
-              </Pressable>
-            ))}
+            {items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Pressable
+                  accessibilityLabel={item.accessibilityLabel ?? item.label}
+                  accessibilityRole="menuitem"
+                  key={item.key}
+                  onPress={() => select(item)}
+                  style={[styles.item, styles.nativeItem]}
+                >
+                  {Icon ? (
+                    <Icon
+                      color={item.tone === 'danger' ? theme.danger : theme.text}
+                      size={20}
+                      strokeWidth={2.4}
+                    />
+                  ) : null}
+                  <Text
+                    style={[
+                      styles.label,
+                      { color: item.tone === 'danger' ? theme.danger : theme.text },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       </Modal>
@@ -354,6 +386,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
+  nativeItem: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   sheet: {
     borderTopLeftRadius: radii.lg,

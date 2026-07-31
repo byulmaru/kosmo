@@ -27,12 +27,13 @@ import {
   resetImagePickerMock,
   setNextImagePickerResult,
 } from '../../.storybook/mocks/expo-image-picker';
-import { longBody, post, profile, profileWithPosts, timeline } from './fixtures';
+import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
+import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
@@ -526,11 +527,15 @@ const contentPostsProfile = profileWithPosts(
   [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
   { id: 'profile-posts-content' },
 );
+const deletionProfile = profileWithPosts([withReactionViewerState(shortPost)], {
+  id: 'profile-posts-deletion',
+});
 const homeTimeline = timeline(
   ...[shortPost, pureRepost, quotePost, replyQuotePost, quoteOfQuotePost, linkedSourceQuote].map(
     withReactionViewerState,
   ),
 );
+const deletionHomeTimeline = timeline(withReactionViewerState(shortPost));
 
 const PostsStoriesQuery = graphql`
   query PostsStoriesQuery($ids: [ID!]!) {
@@ -578,6 +583,21 @@ const PostsStoriesQuery = graphql`
       }
     }
     homeTimeline(first: 20) {
+      ...PostList_homeTimeline
+    }
+  }
+`;
+
+const PostDeletionListEdgeSafetyQuery = graphql`
+  query PostDeletionListEdgeSafetyQuery {
+    deletionProfile: node(id: "profile-posts-deletion") {
+      __typename
+      ... on Profile {
+        id
+        ...PostList_profile @alias(as: "postList")
+      }
+    }
+    deletionHomeTimeline: homeTimeline(first: 1) {
       ...PostList_homeTimeline
     }
   }
@@ -823,6 +843,31 @@ function ProductionRepostQuoteLists() {
         <PostList profile={data.contentPostsProfile} />
       </View>
     </Catalog>
+  );
+}
+
+function PostDeletionListEdgeSafety() {
+  const data = useLazyLoadQuery<PostDeletionListEdgeSafetyQueryType>(
+    PostDeletionListEdgeSafetyQuery,
+    {},
+  );
+  if (data.deletionProfile?.__typename !== 'Profile' || !data.deletionHomeTimeline) {
+    throw new Error('PostDeletionListEdgeSafetyQuery must return both list fixtures.');
+  }
+
+  return (
+    <SessionProvider>
+      <Catalog>
+        <View testID="post-deletion-home-list">
+          <PostList homeTimeline={data.deletionHomeTimeline} />
+        </View>
+        <View testID="post-deletion-profile-list">
+          <PostList
+            profile={requireFragment(data.deletionProfile.postList, 'deletion profile list')}
+          />
+        </View>
+      </Catalog>
+    </SessionProvider>
   );
 }
 
@@ -1564,8 +1609,12 @@ const meta = {
         alternateComposerProfile,
         composerProfile,
         contentPostsProfile,
+        currentSession: shellQuery().currentSession,
+        deletionHomeTimeline,
+        deletionProfile,
         emptyPostsProfile,
         homeTimeline,
+        me: shellQuery().me,
         nodes: storyPosts.map(withReactionViewerState),
       },
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
@@ -1847,6 +1896,34 @@ export const ProductionRepostQuoteListIntegration: Story = {
     }
   },
   render: () => <ProductionRepostQuoteLists />,
+};
+
+export const ProductionPostDeletionListEdgeSafety: Story = {
+  parameters: {
+    relay: { mutationResponse: { deletePost: { postId: shortPost.id } } },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(canvas.getByTestId('post-deletion-home-list'));
+    const profile = within(canvas.getByTestId('post-deletion-profile-list'));
+
+    await userEvent.click(home.getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '게시글 삭제',
+      }),
+    );
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
+
+    await waitFor(() => {
+      expect(home.getByText('아직 게시글이 없어요')).toBeVisible();
+      expect(profile.getByText('아직 게시글이 없어요')).toBeVisible();
+    });
+    expect(home.queryByRole('article')).toBeNull();
+    expect(profile.queryByRole('article')).toBeNull();
+  },
+  render: () => <PostDeletionListEdgeSafety />,
 };
 
 export const ProductionReactionMutationTargets: Story = {

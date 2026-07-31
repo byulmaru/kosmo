@@ -1,11 +1,12 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, Ref } from 'react';
 import type { PressableProps } from 'react-native';
 
 type ButtonProps = PropsWithChildren<
   PressableProps & {
+    controlRef?: Ref<View>;
     loading?: boolean;
     loadingText?: string;
     tone?: 'primary' | 'secondary' | 'danger';
@@ -15,6 +16,7 @@ type ButtonProps = PropsWithChildren<
 export function Button({
   accessibilityLabel,
   children,
+  controlRef,
   disabled,
   loading = false,
   loadingText,
@@ -35,6 +37,7 @@ export function Button({
       accessibilityLabel={label}
       accessibilityRole="button"
       disabled={disabled || loading}
+      ref={controlRef}
       style={(state) => [
         styles.root,
         {
