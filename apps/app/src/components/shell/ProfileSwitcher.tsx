@@ -1,5 +1,4 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
-import { Link } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -19,6 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { GuardedLink } from './GuardedLink';
+import { useNavigationGuard } from './NavigationGuardContext';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -121,6 +122,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const { request: requestNavigation } = useNavigationGuard();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
@@ -201,6 +203,15 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   }, [open, surface]);
 
   const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
+    if (
+      requestNavigation(() => {
+        selectProfile(id, operationVersion);
+      })
+    ) {
+      dismissPicker();
+      return;
+    }
+
     setError(null);
     commitSelect({
       variables: { id },
@@ -221,6 +232,11 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   };
 
   const createProfile = () => {
+    if (requestNavigation(createProfile)) {
+      dismissPicker();
+      return;
+    }
+
     const operationVersion = dismissalVersionRef.current;
     const normalized = handle.trim();
     if (!normalized) {
@@ -457,11 +473,13 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         {active.relativeHandle}
       </Text>
       <View style={styles.counts}>
-        <Link asChild href={`/${active.relativeHandle}/following`}>
+        <GuardedLink
+          href={`/${active.relativeHandle}/following`}
+          onNavigate={fullWeb && open ? dismissPicker : undefined}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -469,12 +487,14 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
           </Pressable>
-        </Link>
-        <Link asChild href={`/${active.relativeHandle}/followers`}>
+        </GuardedLink>
+        <GuardedLink
+          href={`/${active.relativeHandle}/followers`}
+          onNavigate={fullWeb && open ? dismissPicker : undefined}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -482,7 +502,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
           </Pressable>
-        </Link>
+        </GuardedLink>
       </View>
     </>
   ) : (

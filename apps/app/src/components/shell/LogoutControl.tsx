@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { useNavigationGuard } from './NavigationGuardContext';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 export function LogoutControl({
@@ -14,6 +15,7 @@ export function LogoutControl({
 }) {
   const theme = useTheme();
   const { error, logout, pending } = useLogout();
+  const { request: requestNavigation } = useNavigationGuard();
 
   return (
     <View style={[styles.root, compact && styles.compactRoot]}>
@@ -22,7 +24,11 @@ export function LogoutControl({
         accessibilityRole="button"
         accessibilityState={{ busy: pending, disabled: pending }}
         disabled={pending}
-        onPress={logout}
+        onPress={() => {
+          if (!requestNavigation(logout)) {
+            logout();
+          }
+        }}
         style={[styles.control, compact && styles.compactControl, style]}
       >
         {pending ? (

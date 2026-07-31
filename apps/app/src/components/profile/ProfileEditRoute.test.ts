@@ -49,7 +49,9 @@ const mutationHandlers = new Map<string, (config: MutationConfig) => void>();
 const navigationDispatches: NavigationAction[] = [];
 const routerReplacements: string[] = [];
 const toastMessages: string[] = [];
-let beforeRemoveListener: ((event: BeforeRemoveEvent) => void) | null = null;
+let preventRemoveCallback: ((options: { data: { action: NavigationAction } }) => void) | null =
+  null;
+let preventRemoveEnabled = false;
 let discardDialogProps: DiscardDialogProps | null = null;
 let lastBackEvent: BeforeRemoveEvent | null = null;
 let lastReplaceEvent: BeforeRemoveEvent | null = null;
@@ -82,15 +84,6 @@ mockModule('expo-image-picker', {
 });
 mockModule('expo-router', {
   useNavigation: () => ({
-    addListener: (event: string, listener: (event: BeforeRemoveEvent) => void) => {
-      assert.equal(event, 'beforeRemove');
-      beforeRemoveListener = listener;
-      return () => {
-        if (beforeRemoveListener === listener) {
-          beforeRemoveListener = null;
-        }
-      };
-    },
     dispatch: (action: NavigationAction) => navigationDispatches.push(action),
   }),
   useRouter: () => ({
@@ -109,6 +102,15 @@ mockModule('expo-router', {
       routerReplacements.push(href);
     },
   }),
+});
+mockModule('expo-router/react-navigation', {
+  usePreventRemove: (
+    enabled: boolean,
+    callback: (options: { data: { action: NavigationAction } }) => void,
+  ) => {
+    preventRemoveEnabled = enabled;
+    preventRemoveCallback = callback;
+  },
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
@@ -165,7 +167,8 @@ afterEach(async () => {
   navigationDispatches.length = 0;
   pickerResult = { canceled: true, assets: null };
   queryData = editableQueryData();
-  beforeRemoveListener = null;
+  preventRemoveCallback = null;
+  preventRemoveEnabled = false;
   discardDialogProps = null;
   lastBackEvent = null;
   lastReplaceEvent = null;
@@ -209,12 +212,15 @@ const requireDiscardDialogProps = () => {
 };
 
 function emitBeforeRemove(action: NavigationAction): BeforeRemoveEvent {
-  assert.ok(beforeRemoveListener);
   const event: BeforeRemoveEvent = {
     data: { action },
     preventDefault: mock.fn(),
   };
-  beforeRemoveListener(event);
+  if (preventRemoveEnabled) {
+    assert.ok(preventRemoveCallback);
+    event.preventDefault();
+    preventRemoveCallback({ data: { action } });
+  }
   return event;
 }
 
@@ -425,6 +431,13 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireDiscardDialogProps().onDiscard());
     assert.deepEqual(navigationDispatches, [{ ...first, target: undefined }]);
     assert.equal(requireDiscardDialogProps().visible, false);
+
+    let nextEvent: BeforeRemoveEvent | null = null;
+    await act(async () => {
+      nextEvent = emitBeforeRemove({ source: 'next', type: 'GO_BACK' });
+    });
+    assert.equal(requireBeforeRemoveEvent(nextEvent).preventDefault.mock.callCount(), 1);
+    assert.equal(requireDiscardDialogProps().visible, true);
   });
 
   it('저장 중에는 dialog 없이 이탈을 막는다', async () => {

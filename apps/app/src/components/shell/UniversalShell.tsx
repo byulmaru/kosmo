@@ -19,6 +19,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
+import { NavigationGuardProvider } from './NavigationGuardContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, webMobileShellHeaderHeight } from './shellLayout';
@@ -76,13 +77,15 @@ export function UniversalShell() {
 
   return (
     <UnreadNotificationBadgeController>
-      <RouteBoundary
-        loading={<Splash label="앱을 불러오는 중입니다." />}
-        onRetry={retry}
-        title="앱을 불러오지 못했어요"
-      >
-        <UniversalShellContent revision={revision} />
-      </RouteBoundary>
+      <NavigationGuardProvider>
+        <RouteBoundary
+          loading={<Splash label="앱을 불러오는 중입니다." />}
+          onRetry={retry}
+          title="앱을 불러오지 못했어요"
+        >
+          <UniversalShellContent revision={revision} />
+        </RouteBoundary>
+      </NavigationGuardProvider>
     </UnreadNotificationBadgeController>
   );
 }

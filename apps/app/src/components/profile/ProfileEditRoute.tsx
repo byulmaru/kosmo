@@ -329,8 +329,9 @@ function EditableProfileRoute({
             handleSaveFailure();
             return;
           }
-          allowNextNavigation();
-          router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
+          allowNextNavigation(() =>
+            router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href),
+          );
         },
         onError: handleSaveFailure,
       });
