@@ -1792,12 +1792,19 @@ export const BodyTimeAndLayoutStates: Story = {
     const mediaText = within(canvas.getByTestId('media-text'));
     expect(mediaText.getByText('document text')).toBeVisible();
     const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');
+    const renderedMediaFrame = mediaText.getByTestId('post-media-frame-media-story');
     expect(renderedMediaImage).toBeVisible();
     await waitFor(() => {
-      expect(renderedMediaImage.firstElementChild).not.toBeNull();
+      const sourceImage = renderedMediaImage.querySelector('img');
+      expect(sourceImage?.naturalWidth).toBeGreaterThan(0);
+      expect(sourceImage?.naturalHeight).toBeGreaterThan(0);
       expect(getComputedStyle(renderedMediaImage.firstElementChild!).backgroundImage).not.toBe(
         'none',
       );
+      expect(
+        renderedMediaFrame.getBoundingClientRect().width /
+          renderedMediaFrame.getBoundingClientRect().height,
+      ).toBeCloseTo(sourceImage!.naturalWidth / sourceImage!.naturalHeight, 2);
     });
     expect(
       mediaText.getByRole('img', { name: '회색 배경의 첫 번째 첨부 이미지' }),

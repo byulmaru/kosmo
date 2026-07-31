@@ -8,9 +8,15 @@ import type { PostMediaItem } from './PostMediaGallery';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const ImageMock = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
+  getSize: (uri: string, success: (width: number, height: number) => void) => {
+    success(uri.endsWith('/2.webp') ? 900 : 1600, uri.endsWith('/2.webp') ? 1600 : 900);
+  },
+});
+
 mock.module('react-native', {
   exports: {
-    Image: 'Image',
+    Image: ImageMock,
     Pressable: 'Pressable',
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
@@ -52,6 +58,8 @@ describe('PostMediaGallery', () => {
     const firstOnLoad = image('media-1').props.onLoad;
     await act(async () => firstOnLoad());
     assert.equal(image('media-1').props.onLoad, firstOnLoad);
+    assert.equal(frameAspectRatio('media-1'), 1600 / 900);
+    assert.equal(frameAspectRatio('media-2'), 1);
   });
 
   it('Sensitive Media를 image mount 없이 시작하고 전체 표시와 다시 가리기를 제공한다', async () => {
@@ -129,6 +137,13 @@ function pressable(accessibilityLabel: string): ReactTestInstance {
 
 function image(id: string): ReactTestInstance {
   return byTestId(`post-media-image-${id}`);
+}
+
+function frameAspectRatio(id: string): number | undefined {
+  const style = byTestId(`post-media-frame-${id}`).props.style as ReadonlyArray<{
+    aspectRatio?: number;
+  }>;
+  return style.find(({ aspectRatio }) => aspectRatio !== undefined)?.aspectRatio;
 }
 
 function byTestId(testID: string): ReactTestInstance {

@@ -37,6 +37,7 @@ Alt Text, Sensitive Media와 이미지 오류·재시도를 접근 가능한 공
 - [x] 1.2 Alt Text fallback, Sensitive Media 공개 control과 Media unavailable·load failure·retry 동작을 구현한다.
 - [x] 1.3 목록·상세 Storybook 상태와 공용 component interaction·accessibility·navigation 회귀 검증을 추가한다.
 - [x] 1.4 Relay·static check·관련 test·Storybook build·format 검증을 실행하고 플랫폼별 증거와 미검증 범위를 기록한다.
+- [x] 1.5 Media가 surface 폭을 채우면서 가로 원본 비율을 유지하고 세로 높이를 1:1로 제한하도록 조정한다.
 
 ## Verification Evidence
 
@@ -49,6 +50,11 @@ Alt Text, Sensitive Media와 이미지 오류·재시도를 접근 가능한 공
 - 2026-07-30 `pnpm --filter @kosmo/app build-storybook`: static build 통과. Storybook a11y는 저장소
   설정상 color contrast를 제외하므로 전체 WCAG 적합성 증거가 아니다.
 - 2026-07-30 관련 ESLint, Prettier check와 `openspec validate display-post-media --strict` 통과.
+- 2026-07-31 `pnpm --filter @kosmo/app test:unit`: 96개 통과. 가로 원본 비율과 세로 1:1 clamp를 포함한다.
+- 2026-07-31 `pnpm --filter @kosmo/app test:storybook`: Chromium에서 전체 17 files, 210 tests 통과.
+  실제 원본과 Media frame의 비율 일치를 포함한다.
+- 2026-07-31 Chrome `localhost:5173/home`: 475px surface에서 가로 원본은 1.085·1.779·1.333 비율을
+  유지하고 세로 원본은 1:1로 제한되며, reload 이후 runtime exception이 없음을 확인했다.
 - iOS VoiceOver·Android TalkBack, 각 플랫폼 touch target과 실제 binary runtime은 현재 환경에서 실행하지
   않았다. 공용 React Native props와 48 logical-unit target을 구현했지만 Native runtime 검증 완료로
   간주하지 않는다.

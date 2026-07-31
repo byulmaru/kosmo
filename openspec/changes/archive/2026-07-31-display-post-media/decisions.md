@@ -57,10 +57,27 @@ canonical Post Content·Media 모델과 공용 앱 접근성·Relay 제약을 �
   필요해지면 backend 계약과 별도 이슈가 선행되어야 한다.
 - Confirmation / Follow-up: 개별 실패, 다른 Media 유지, retry remount와 반복 실패를 component test로 검증한다.
 
+### 원본 비율을 따르되 세로 Media 높이는 surface 폭으로 제한한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-571
+- Status: Active
+- Context / Problem: 모든 Media를 16:9로 고정하면 가로 이미지도 불필요하게 crop되고, 원본 비율을 제한 없이
+  적용하면 긴 세로 이미지 하나가 목록과 상세의 과도한 높이를 차지한다.
+- Decision Outcome: `Image.getSize()`의 원본 `width / height`를 사용한다. surface는 가로 폭을 모두 채우고,
+  가로·정사각형 이미지는 원본 비율을 유지하며 세로 이미지는 최대 1:1 frame에서 `cover` crop한다.
+- Alternatives Considered: 16:9 고정 frame은 가로 원본의 구도를 잃고, 세로 원본 높이를 그대로 표시하는
+  방식은 피드 밀도를 예측하기 어려워 선택하지 않는다.
+- Consequences: 원본 크기를 알기 전에는 1:1 frame을 사용하며 가로 이미지 load 뒤 높이가 줄어들 수 있다.
+  별도 thumbnail 생성이나 Media metadata GraphQL 확장은 필요하지 않다.
+- Confirmation / Follow-up: component test에서 가로 원본 비율과 세로 1:1 clamp를 검증하고 실제 Web 화면에서
+  frame 크기를 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-30의 16:9 고정 image box 구현 선택은 원본 비율 기반·세로 1:1 제한으로 대체한다.

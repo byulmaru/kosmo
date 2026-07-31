@@ -20,6 +20,21 @@
 - **WHEN** 현재 Post Content document가 Media node를 가지지 않는다
 - **THEN** 기존 본문·안전한 링크 renderer와 목록·상세 navigation 동작을 그대로 유지한다
 
+### Requirement: Media surface 비율
+
+**Authority / Provenance:** PROD-571 — 공용 Post Media UI는 각 이미지를 Post body surface 폭으로 MUST 표시하고, 가로·정사각형 원본은 원본 종횡비를 MUST 유지하며, 세로 원본의 표시 높이는 surface 폭을 MUST 초과하지 않는다.
+
+#### Scenario: 가로 또는 정사각형 이미지
+
+- **WHEN** 원본 이미지의 `width / height`가 1 이상이다
+- **THEN** Media frame은 surface 폭을 채우고 원본 종횡비를 유지한다
+
+#### Scenario: 세로 이미지
+
+- **WHEN** 원본 이미지의 `width / height`가 1보다 작다
+- **THEN** Media frame은 surface 폭과 같은 높이의 1:1 경계를 사용한다
+- **AND** 이미지는 해당 경계를 채우도록 중앙 기준으로 crop된다
+
 ### Requirement: Media 접근성 설명
 
 **Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/accessibility.md`, PROD-571 — 공용 Post Media UI는 Media의 nullable Alt Text를 이미지의 접근 가능한 설명으로 MUST 제공한다. Alt Text가 없을 때도 의미 있는 Post 첨부 이미지가 보조 기술에서 장식 이미지로 숨겨지지 않도록 안전한 기본 이름을 MUST 제공한다.

@@ -23,7 +23,7 @@ native-safe JSON으로 판별하며 ProseMirror runtime을 bundle에 포함하�
 
 - Composer 업로드·작성, backend URL 발급·권한과 Media Storage Service를 변경하지 않는다.
 - Quote/Reply 전용 preview layout, fullscreen viewer, swipe, zoom, 다운로드를 추가하지 않는다.
-- thumbnail, crop, 파생 이미지와 Remote Media fetch/proxy를 추가하지 않는다.
+- 파생 thumbnail, fullscreen viewer와 Remote Media fetch/proxy를 추가하지 않는다.
 
 ## Implementation Guidance
 
@@ -64,6 +64,8 @@ native-safe JSON으로 판별하며 ProseMirror runtime을 bundle에 포함하�
   GraphQL global ID다.
 - `PostContent.media === null`을 빈 목록으로 취급하지 않는다. 빈 목록은 media-less이고 null은 필요한 표시
   정보 unavailable이다.
+- 각 Image는 `Image.getSize()`의 원본 크기로 frame 비율을 계산한다. surface 폭은 모두 채우고 가로·정사각형은
+  원본 종횡비를 유지하며, 세로는 높이가 surface 폭을 넘지 않도록 1:1 frame에서 `cover` crop한다.
 - Alt Text null을 `accessible={false}`로 바꿔 Post의 의미 있는 첨부 이미지를 보조 기술에서 숨기지 않는다.
 - blur overlay 아래 Image를 미리 mount하면 기본 가림 상태에서도 image byte와 시각 정보가 노출될 수 있으므로
   Sensitive Media 공개 전에는 Image를 mount하지 않는다.
@@ -75,8 +77,10 @@ native-safe JSON으로 판별하며 ProseMirror runtime을 bundle에 포함하�
   Relay refetch는 backend 계약이 생기기 전까지 추가하지 않는다.
 - [목록의 기존 전체 body Pressable 안에 Media control을 넣으면 interaction이 중첩된다] → Post navigation과
   Media action의 Pressable 경계를 분리하고 기존 시간 링크·상세 route를 유지한다.
-- [고정된 image box는 원본 종횡비를 보존하지 못한다] → `resizeMode="cover"`로 layout stability를 우선하고
-  crop/thumbnail/fullscreen 정책은 제외 범위로 남긴다.
+- [원본 크기를 알기 전과 조회 뒤 frame 높이가 달라질 수 있다] → 초기 frame은 최대 높이인 1:1로 두고,
+  `Image.getSize()`의 원본 비율이 1보다 크면 해당 비율로 줄여 가로 이미지의 전체 구도를 보존한다.
+- [세로 이미지의 전체 높이를 표시하면 긴 Post가 피드를 과도하게 점유한다] → frame 높이를 surface 폭으로
+  제한하고 `resizeMode="cover"`로 중앙 crop한다. 파생 thumbnail과 fullscreen 정책은 제외 범위로 남긴다.
 
 ## Migration Plan
 
