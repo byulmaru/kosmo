@@ -7,9 +7,11 @@
 ### Reaction 계약은 PROD-390의 하나의 공유 OpenSpec으로 관리한다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Derived Contract
+- Authority / Provenance: [Issue/OpenSpec workflow](../../../../memory/issue-openspec-workflow.md), [PROD-390](https://linear.app/byulmaru/issue/PROD-390/reaction-%EA%B3%84%EC%95%BD%EC%9D%84-%ED%86%B5%ED%95%A9-%EA%B2%80%EC%A6%9D%ED%95%98%EA%B3%A0-openspec%EC%9D%84-archive%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: 저장, mutation, 조회, UI와 Notification이 같은 유일성·권한·멱등 lifecycle을 공유하지만 구현은 여러 PR로 나뉜다.
-- Decision Outcome: PROD-390이 `add-post-reactions` change, 최종 통합 검증과 archive를 소유한다. PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419는 하나씩 구현·테스트 slice를 소유한다.
+- Decision Outcome: PROD-390이 `add-post-reactions` change, 최종 통합 검증과 archive를 소유한다. PROD-395, PROD-404, PROD-405, PROD-406, PROD-407, PROD-413, PROD-450, PROD-472, PROD-417, PROD-418, PROD-419, PROD-576은 하나씩 구현·테스트 slice를 소유한다.
 - Alternatives Considered: DB/API/UI/Notification별 별도 OpenSpec은 같은 행동 계약을 복제하고 부분 archive 위험을 만들므로 채택하지 않았다.
 - Consequences: 각 PR 완료와 전체 change 완료를 구분한다. PROD-432의 공통 Action Bar rollout은 별도 계약으로 유지한다.
 - Confirmation / Follow-up: tasks heading과 dependency가 Linear 이슈 구조와 일치하는지 strict validation 및 부모 통합 단계에서 확인한다.
@@ -17,7 +19,9 @@
 ### 초기 built-in Reaction Type을 제한한다
 
 - Decision Date: 2026-07-20
-- Status: Active for allowed Types; display-order portion superseded by the 2026-07-30 PROD-576 decision
+- Decision Class: Derived Contract
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-386](https://linear.app/byulmaru/issue/PROD-386/reaction-%EC%B4%88%EA%B8%B0-%ED%97%88%EC%9A%A9-%EC%9D%B4%EB%AA%A8%EC%A7%80-%EB%AA%A9%EB%A1%9D%EC%9D%84-%ED%99%95%EC%A0%95%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: 최초 구현이 허용할 Type과 정확한 Unicode 표현, count 동률 순서를 고정해야 한다.
 - Decision Outcome: 현재 허용 Type은 `🥹` (`U+1F979`), `❤️` (`U+2764 U+FE0F`), `🎉` (`U+1F389`), `👀` (`U+1F440`), `☘️` (`U+2618 U+FE0F`), `🌈` (`U+1F308`)만 사용한다. 목록 나열은 표시 순서를 정의하지 않는다.
 - Alternatives Considered: 임의 Unicode와 variation selector 정규화는 canonical Domain Gate에서 제외했다. 표시 순서는 2026-07-30 PROD-576 결정이 별도로 소유한다.
@@ -27,7 +31,9 @@
 ### Reaction Type은 현재 canonical 문자열로 저장한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395/reaction%EC%9D%84-%EC%A0%80%EC%9E%A5%ED%95%9C%EB%8B%A4), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: Canonical Reaction은 Type을 문자열로 정의하고 PROD-386·390은 정확한 여섯 Unicode만 현재 범위에 포함한다. 별도 Type identity와 사용자 정의 Reaction 확장은 상위 계약에서 승인되지 않았다.
 - Decision Outcome: `reaction.type`은 non-null text로 exact Unicode를 저장한다. 현재 허용 목록은 PROD-404 application service가 검증하며 database enum, seed registry 또는 `CHECK` constraint로 고정하지 않는다.
 - Alternatives Considered: PostgreSQL enum과 `CHECK`는 허용 목록 변경을 schema migration에 결합한다. 별도 `reaction_type` registry는 미래 사용자 정의 Reaction을 전제로 identity와 lifecycle 방향을 현재 범위에서 선결정한다.
@@ -37,7 +43,9 @@
 ### Reaction foreign key lifecycle과 index를 존재 기반 관계에 맞춘다
 
 - Decision Date: 2026-07-20
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395/reaction%EC%9D%84-%EC%A0%80%EC%9E%A5%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: Profile/Post 물리 삭제와 후속 count·Profile 조회를 지원하는 최소 제약·index를 정해야 한다.
 - Decision Outcome: Profile/Post 삭제는 Reaction을 cascade한다. unique index는 `(post_id, type, profile_id)` 순서로 count·Type별 Profile lookup과 멱등 conflict target을 함께 지원하며, Profile cascade/cleanup을 위해 `(profile_id)` index를 추가한다. Profile connection ordering index는 PROD-407까지 유예한다.
 - Alternatives Considered: 모든 foreign key `NO ACTION`은 orphan 방지 삭제 순서를 caller에게 분산한다. `(profile_id, post_id, type)` unique와 별도 post/type index는 같은 세 값을 중복 저장한다. 미래 cursor index 선제 추가는 미확정 정렬을 고정한다.
@@ -48,7 +56,7 @@
 
 - Decision Date: 2026-07-20
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0012](../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [ADR 0016](../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-추가한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: 반복·동시 요청이 중복 Reaction이나 불필요한 실패를 만들 수 있다.
 - Decision Outcome: add는 unique conflict를 원자적으로 처리하고 기존 Reaction을 성공 결과로 반환한다. delete는 selected Profile의 현재 Post/Type 관계를 원자적으로 제거하며 관계가 없으면 성공 no-op으로 처리한다. 명시적 pessimistic lock을 사용하지 않는다.
@@ -60,8 +68,8 @@
 
 - Decision Date: 2026-07-20
 - Decision Class: Derived Contract
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
-- Status: Active for visibility; ordering portion superseded by the 2026-07-30 PROD-576 decision
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: viewer에 따라 count가 달라지면 Post 단위 cache가 불안정해지지만 unavailable Profile은 목록에 노출할 수 없다.
 - Decision Outcome: Post 조회 권한을 통과한 모든 viewer에게 현재 Reaction 전체의 Type별 count를 동일하게 제공한다. Type별 Profile connection에만 viewer의 기존 Profile visibility를 SQL page limit 전에 적용한다. Type 표시 순서는 2026-07-30 PROD-576 결정이 소유한다.
 - Alternatives Considered: count에도 viewer Profile visibility를 적용하는 방식은 viewer마다 count가 달라지고 canonical 계약과 충돌한다. client filtering은 pagination을 깨뜨린다.
@@ -119,12 +127,27 @@
   - `docs/domain/objects/reaction.md`
   - `docs/design/reactions.md`
   - `PROD-418`의 2026-07-25 설계 결정 댓글
-- Status: Active for data·pagination·error behavior; entry interaction superseded by the 2026-07-29 PROD-417 decision
+- Status: Active
 - Context / Problem: PROD-418은 이미 제공된 viewer-independent Type별 count와 viewer-filtered Profile connection을 현재 Post 맥락에서 연결해야 한다. Reaction이 없는 Post의 빈 요약, 별도 route, 조회 오류용 전역 알림과 매번 빈 loading부터 시작하는 modal은 이 결과에 불필요한 UI·cache 계약을 추가한다.
-- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. PROD-418 전달 당시에는 Type token이 현재 Post 위 modal을 열었지만, 2026-07-29 PROD-417 계약부터 token은 same-Type Reaction toggle을 실행하고 Profile 목록은 Reaction 전용 More 버튼에서 연다. modal의 별도 route/URL 없음, 외부 영역·Android back dismiss, 별도 닫기 버튼 없음, 최초·추가 page inline retry, 기존 edge 보존, cache 우선 background 갱신과 selected Profile별 Relay Environment 격리는 유지한다.
+- Decision Outcome: `reactionCounts`가 비어 있으면 `ReactionSummary`를 렌더링하지 않고, 양수 count가 있으면 server 순서를 그대로 표시한다. Profile 목록 modal은 별도 route/URL 없이 현재 Post 위에서 열리고, 외부 영역·Android back으로 dismiss하며 별도 닫기 버튼을 두지 않는다. 최초·추가 page 오류에는 inline retry를 제공하고 기존 edge를 보존하며, cache 우선 background 갱신과 selected Profile별 Relay Environment 격리를 유지한다. 현재 modal 진입점은 2026-07-29 PROD-417 결정이 소유한다.
 - Alternatives Considered: Reaction이 없는 Post에 빈 요약을 표시하는 방식은 요약 진입점 없이 중복 empty UI를 남긴다. Profile 목록을 별도 route로 여는 방식은 현재 Post 맥락과 불필요한 URL 계약을 추가한다. 조회 오류를 snackbar로만 알리는 방식은 지속적인 복구 동작을 화면 밖의 일시적 알림에 의존하게 한다. 매번 network-only loading부터 시작하는 방식은 이미 조회한 목록을 불필요하게 숨긴다.
 - Consequences: PROD-418의 기존 backend API, Relay connection, modal·cache 구현은 재사용한다. PROD-417은 같은 seam의 token interaction, Reaction 전용 More·emoji tab, 목록 surface와 mutation 상태 연결을 소유하며 API·DB를 확장하지 않는다.
 - Confirmation / Follow-up: 기존 PROD-418 검증은 zero-count, server 순서, modal dismiss, 조회 오류·edge·cache 격리를 계속 보장한다. PROD-417은 새 token toggle·More/tab/list surface를 별도로 검증한다.
+
+### PROD-418은 Reaction Type token으로 Profile modal을 연다
+
+- Decision Date: 2026-07-25
+- Decision Class: Implementation Choice
+- Authority / Provenance:
+  - `docs/domain/objects/reaction.md`
+  - `docs/design/reactions.md`
+  - `PROD-418`의 2026-07-25 설계 결정 댓글
+- Status: Superseded
+- Context / Problem: PROD-418 전달 당시에는 Reaction Type별 Profile 목록으로 진입할 독립 affordance가 필요했다.
+- Decision Outcome: 양수 count의 Type token을 누르면 해당 Type을 선택한 상태로 현재 Post 위 Profile modal을 연다.
+- Alternatives Considered: 별도 route는 현재 Post 맥락과 불필요한 URL 계약을 추가하고, 독립 More affordance는 당시 token toggle 계약이 없어서 채택하지 않았다.
+- Consequences: Type token은 Profile 탐색 진입점이므로 Reaction 추가·삭제를 직접 수행하지 않는다.
+- Confirmation / Follow-up: 2026-07-29 PROD-417의 “목록·상세 Reaction token toggle과 More 기반 Profile 탐색을 연결한다” 결정이 token을 same-Type toggle로, Reaction 전용 More를 Profile modal 진입점으로 대체했다.
 
 ### PROD-450은 supplied option 기반 Quick Picker 프레젠테이션을 먼저 전달한다
 
@@ -180,7 +203,7 @@
 ### PROD-417은 목록·상세 Reaction token toggle과 More 기반 Profile 탐색을 연결한다
 
 - Decision Date: 2026-07-29
-- Decision Class: Product and Implementation Choice
+- Decision Class: Implementation Choice
 - Authority / Provenance:
   - `docs/design/reactions.md`
   - `docs/design/accessibility.md`
@@ -198,7 +221,7 @@
 
 - Decision Date: 2026-07-20
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Notification canonical 객체](../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Notification canonical 객체](../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: Notification 실패가 Reaction 결과를 깨뜨리지 않으면서 source·Recipient·Related Profile·Post·Type 상관관계를 유지해야 한다.
 - Decision Outcome: Reaction commit 뒤 새 source에 대해서만 같은 request에서 Notification create를 await/catch한다. 자기 Post와 Remote Recipient는 생성하지 않는다. Reaction delete commit 뒤 cleanup을 await/catch하며 실패해도 source 결과를 유지하고 source Reaction을 식별할 수 있게 오류를 기록한다. stale row는 source/visibility predicate로 모든 API surface에서 숨긴다.
@@ -234,7 +257,7 @@
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Notification canonical 객체](../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Notification canonical 객체](../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: Follow와 Reaction은 서로 다른 source 관계와 visibility predicate를 가지지만 Node·list·count·Read는 같은 visible Notification 집합을 사용해야 한다.
 - Decision Outcome: 각 kind가 source correlation과 visibility를 검증한 동일 shape의 projection을 만들고 이를 `UNION ALL`로 합친 뒤 공통 ID cursor pagination, unread count와 Read 대상을 결정한다.
@@ -257,7 +280,9 @@
 ### Reaction Type과 add mutation은 canonical 문자열 계약을 그대로 노출한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%9C%EB%8B%A4), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type%EC%9D%84-%EC%B5%9C%EC%B4%88-reaction-%EC%83%9D%EC%84%B1-%EC%8B%9C%EA%B0%81-%EC%88%9C%EC%9C%BC%EB%A1%9C-%EC%95%88%EC%A0%95%EC%A0%81%EC%9C%BC%EB%A1%9C-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: PROD-404는 exact Unicode Type을 GraphQL에서 표현하고 Post와 현재 Type을 식별하는 add input 및 멱등 payload를 확정해야 한다.
 - Decision Outcome: GraphQL은 `addReaction(input: { postId: ID!, type: String! })`을 제공한다. `postId`는 concrete `Post` global ID만 허용하고 `type`은 canonical Unicode 문자열을 그대로 받는다. 성공 payload는 `AddReactionPayload.reaction: Reaction!`과 현재 `post: Post!`를 반환하며 신규 생성 여부는 공개하지 않는다.
 - Alternatives Considered: GraphQL enum은 canonical Unicode와 별도 symbolic mapping을 만들고 허용 목록 변경을 schema 변경에 결합한다. 별도 Reaction Type object나 opaque Type ID는 승인되지 않은 registry identity를 선결정한다. payload의 `created` boolean은 Notification 내부 분기를 공개 API에 누출한다.
@@ -267,7 +292,9 @@
 ### Reaction은 최소 필드의 Relay Node로 노출한다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%9C%EB%8B%A4), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: 멱등 add 결과와 후속 selector·delete cache가 동일한 durable Reaction 관계를 안정적으로 식별해야 하지만 아직 관계 navigation field의 구체 사용 사례는 확정되지 않았다.
 - Decision Outcome: `Reaction`은 Relay Node이며 현재 `id`, `type`, `createdAt`을 노출한다. Node loader는 대상 Post의 기존 조회 정책을 적용한다. Profile·Post 관계 field는 구체 client query가 소유하는 후속 slice 전까지 공개하지 않는다.
 - Alternatives Considered: non-Node payload는 같은 관계의 반복 결과와 후속 cache 제거 대상을 안정적으로 식별하지 못한다. Profile·Post field를 지금 모두 노출하는 방식은 현재 사용 사례와 별도 visibility 계약 없이 API 표면을 넓힌다.
@@ -277,7 +304,9 @@
 ### 조회할 수 없는 Post의 add는 존재를 숨긴다
 
 - Decision Date: 2026-07-21
-- Status: Accepted
+- Decision Class: Implementation Choice
+- Authority / Provenance: [Post canonical 객체](../../../../docs/domain/objects/post.md), [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%9C%EB%8B%A4)
+- Status: Active
 - Context / Problem: add mutation이 존재하지 않는 Post와 존재하지만 viewer가 조회할 수 없는 Post를 다른 오류로 구분하면 Post 존재를 추가로 노출한다.
 - Decision Outcome: `addReaction`은 대상 Post가 없거나 기존 Post 조회 정책을 통과하지 못하면 모두 `NOT_FOUND`를 반환한다. 로그인 또는 selected Profile scope 자체가 없으면 기존 scope auth의 `PERMISSION_DENIED`를 유지한다.
 - Alternatives Considered: unreadable Post에 `PERMISSION_DENIED`를 반환하면 원인은 명확하지만 global Node 조회의 숨김 계약과 달리 Post 존재를 확인시킨다.
@@ -288,7 +317,7 @@
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [Core 서비스 경계](../../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다)
 - Status: Superseded
 - Context / Problem: GraphQL context는 Active Account, selected Profile membership과 Profile visibility를 검증하지만 core `addReaction`이 `accountId`를 받아 같은 membership을 다시 조회해 transport session 정책에 결합하고 있었다.
 - Decision Outcome: GraphQL `usingProfile` entry point가 Active Account와 Account–Profile membership을 검증하고, core service에는 검증된 actor Profile identity만 전달한다. core는 actor가 Active/Normal Local Profile인지와 Post, Type, 멱등 저장을 계속 검증한다.
@@ -300,7 +329,7 @@
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0019](../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [Core 서비스 경계](../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0019](../../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [Core 서비스 경계](../../../../docs/architecture/core-services.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다)
 - Status: Active
 - Context / Problem: 이전 결정은 Local GraphQL caller의 Account·membership·selected Profile 조건과 여러 진입점이 공유할 수 있는 Reaction core actor 조건을 섞어 core에서 Local Instance와 Reachable 상태를 강제했다.
 - Decision Outcome: GraphQL `usingProfile` entry point는 Active Account와 Account–Profile membership, selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 한 번 검증하며 Instance Type을 제한하지 않는다. resolver와 core add/delete는 같은 Account·membership·Profile/Instance 상태를 다시 검증하지 않는다. core add/delete는 검증된 actor identity를 받아 Post, Type, 소유 관계와 persistence만 검증한다.
@@ -312,7 +341,7 @@
 
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0012](../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md), [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
 - Status: Superseded
 - Context / Problem: PROD-405는 현재 Reaction Owner를 검증하면서 이미 제거한 관계의 반복·동시 삭제를 성공시켜야 한다. Profile/Post/Type 조합을 input으로 사용하면 오래된 삭제 재시도가 같은 조합으로 다시 생성된 새 Reaction까지 제거하는 ABA 문제가 생긴다.
 - Decision Outcome: GraphQL은 `deleteReaction(input: { id: ID! })`을 제공하고 concrete `Reaction` global ID만 허용한다. 성공 payload는 입력과 같은 `DeleteReactionPayload.reactionId: ID!`를 반환하며 실제 삭제 여부를 공개하지 않는다. service는 유효한 actor를 먼저 검증하고, 현재 행이 타인 소유면 `PERMISSION_DENIED`로 거부하며, Owner 행은 ID와 actor를 조건으로 삭제한다. 이미 없는 ID는 같은 ID를 반환하는 성공 no-op이다. Post visibility는 조회하지 않는다.
@@ -324,7 +353,7 @@
 
 - Decision Date: 2026-07-25
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0016](../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: `Post.reactionProfiles(type:)`는 Profile만 반환하고 ID 기반 `deleteReaction`은 selector가 이전 session·화면에서 생성된 관계를 복원하거나 해제할 수 없게 한다. selector의 의도는 과거 Reaction 객체를 보존하는 것이 아니라 selected Profile의 현재 Type 선택을 관리하는 것이다.
 - Decision Outcome: GraphQL은 `Post.viewerReactions: [Reaction!]!`로 현재 selected Profile이 Post에 남긴 Reaction 관계를 제공한다. guest와 selected Profile 부재에는 빈 목록을 반환한다. `deleteReaction(input: { postId: ID!, type: String! })`은 현재 selected Profile의 조합만 원자적으로 삭제한다. payload는 실제 삭제된 관계의 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환한다. missing·반복·동시 loser는 `reactionId: null`인 성공이며 다른 Profile과 다른 Type을 변경하지 않는다. 삭제된 ID가 있을 때만 post-commit Notification cleanup을 시도한다.
@@ -336,7 +365,7 @@
 
 - Decision Date: 2026-07-24
 - Decision Class: Implementation Choice
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
 - Status: Active
 - Context / Problem: canonical과 PROD-406은 viewer-independent Type별 count와 정렬을 고정하지만 GraphQL field와 항목 shape는 구현 전 공개 계약으로 확정되지 않았다.
 - Decision Outcome: GraphQL은 `Post.reactionCounts: [ReactionCount!]!`를 제공하고 `ReactionCount`는 `type: String!`과 `count: Int!`만 제공한다. 목록은 현재 Reaction이 하나 이상 존재하는 Type만 포함하며 Reaction이 없으면 빈 목록이다. Type별 Profile connection은 기존 `Post.reactionProfiles`로 분리한다.
@@ -348,7 +377,7 @@
 
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
-- Authority / Provenance: [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [Reaction UI 디자인](../../../docs/design/reactions.md), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type을-최초-reaction-생성-시각-순으로-안정적으로-표시한다)
+- Authority / Provenance: [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [Reaction UI 디자인](../../../../docs/design/reactions.md), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type을-최초-reaction-생성-시각-순으로-안정적으로-표시한다)
 - Status: Active
 - Context / Problem: count 내림차순은 count 변화마다 summary token과 Profile tab을 재정렬하고, 동률 무보장은 같은 Post가 한 GraphQL operation의 여러 경로에서 반환될 때 Relay의 위치 기반 `ReactionCount` record ID가 서로 다른 Type을 가리키게 할 수 있다.
 - Decision Outcome: `Post.reactionCounts`는 각 Type에 현재 존재하는 Reaction의 `MIN(createdAt) ASC`를 주 정렬로 사용하고, 같은 최초 생성 시각에는 Type 문자열 오름차순을 결정적 최종 tie-break로 적용한다. Type 문자열 tie-break는 제품상 Type 우선순위를 뜻하지 않는다. count 증감만으로 기존 Type 순서를 바꾸지 않고, Type이 0개가 됐다가 재등장하면 새 현재 최초 생성 시각으로 배치한다. add/delete mutation payload도 이 authoritative Post 요약을 반환한다.

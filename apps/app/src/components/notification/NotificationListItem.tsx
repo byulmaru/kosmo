@@ -20,6 +20,7 @@ type NotificationListItemProps = {
 
 type NotificationRowProps = {
   action: string;
+  avatarUrl: string | null | undefined;
   destination: string;
   href: Href;
   id: string;
@@ -38,6 +39,10 @@ const notificationFragment = graphql`
       displayName
       handle
       relativeHandle
+      avatar {
+        id
+        url
+      }
     }
   }
 `;
@@ -64,6 +69,7 @@ export function NotificationListItem({ notification }: NotificationListItemProps
   return (
     <NotificationRow
       action="팔로우했습니다"
+      avatarUrl={data.profile.avatar?.url}
       destination="프로필"
       href={`/${data.profile.relativeHandle}` as Href}
       id={data.id}
@@ -84,6 +90,10 @@ const reactionNotificationFragment = graphql`
     profile {
       displayName
       handle
+      avatar {
+        id
+        url
+      }
     }
     post {
       id
@@ -105,6 +115,7 @@ export function ReactionNotificationListItem({
   return (
     <NotificationRow
       action={`${data.type} 반응을 남겼습니다`}
+      avatarUrl={data.profile.avatar?.url}
       destination="게시글"
       href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
       id={data.id}
@@ -124,6 +135,10 @@ const replyNotificationFragment = graphql`
     profile {
       displayName
       handle
+      avatar {
+        id
+        url
+      }
     }
     post {
       id
@@ -144,6 +159,7 @@ export function ReplyNotificationListItem({
   return (
     <NotificationRow
       action="답글을 남겼습니다"
+      avatarUrl={data.profile.avatar?.url}
       destination="게시글"
       href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
       id={data.id}
@@ -163,6 +179,10 @@ const repostNotificationFragment = graphql`
     profile {
       displayName
       handle
+      avatar {
+        id
+        url
+      }
     }
     post {
       id
@@ -184,6 +204,7 @@ export function RepostNotificationListItem({
   return (
     <NotificationRow
       action="게시물을 재게시했습니다"
+      avatarUrl={data.profile.avatar?.url}
       destination="게시글"
       href={`/${data.post.profile.relativeHandle}/${data.post.id}` as Href}
       id={data.id}
@@ -197,6 +218,7 @@ export function RepostNotificationListItem({
 
 function NotificationRow({
   action,
+  avatarUrl,
   destination,
   href,
   id,
@@ -255,7 +277,7 @@ function NotificationRow({
               onPress={markRead}
               style={styles.avatarLink}
             >
-              <Avatar label={name} size={28} />
+              <Avatar imageUri={avatarUrl} label={name} size={28} />
             </Pressable>
           </Link>
           <Text style={[styles.time, { color: theme.textSecondary }]}>{timestamp}</Text>

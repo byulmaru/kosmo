@@ -240,6 +240,7 @@ required_migration_markers=(
   'value: "kosmo-postgres-rw"'
   "name: PGDATABASE"
   'value: "kosmo"'
+  "name: DATABASE_MIGRATION_ROLE"
   "name: PGUSER"
   "key: username"
   "name: PGPASSWORD"

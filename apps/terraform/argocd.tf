@@ -112,11 +112,6 @@ resource "argocd_application" "kosmo_prod" {
     }
 
     sync_policy {
-      automated {
-        prune     = true
-        self_heal = true
-      }
-
       sync_options = ["CreateNamespace=true"]
     }
   }

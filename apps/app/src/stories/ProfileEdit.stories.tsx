@@ -253,6 +253,39 @@ export const CurrentImageMenu: Story = {
   },
 };
 
+export const HeaderMenuKeepsAvatarOverlap: Story = {
+  args: {
+    avatar: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+    header: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+  },
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const headerButton = canvas.getByRole('button', { name: '헤더 이미지 변경' });
+    const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
+
+    await userEvent.click(headerButton);
+
+    expect(page.getByRole('menuitem', { name: '이미지 변경' })).toBeVisible();
+    const avatarRect = avatarButton.getBoundingClientRect();
+    const overlapElements = canvasElement.ownerDocument.elementsFromPoint(
+      avatarRect.left + avatarRect.width / 2,
+      avatarRect.top + 24,
+    );
+    const avatarStackIndex = overlapElements.findIndex(
+      (element) => element === avatarButton || avatarButton.contains(element),
+    );
+    const headerStackIndex = overlapElements.findIndex(
+      (element) => element === headerButton || headerButton.contains(element),
+    );
+    expect(avatarStackIndex).toBeGreaterThanOrEqual(0);
+    expect(headerStackIndex).toBeGreaterThanOrEqual(0);
+    expect(avatarStackIndex).toBeLessThan(headerStackIndex);
+
+    await userEvent.click(page.getByRole('menuitem', { name: '취소' }));
+  },
+};
+
 export const ImageFieldsWide: Story = {
   parameters: {
     viewport: { defaultViewport: 'kosmoPickerWide' },

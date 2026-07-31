@@ -2,7 +2,7 @@
 
 ### Requirement: Reaction Type 문자열 저장
 
-시스템은 Reaction Type을 PostgreSQL enum이나 별도 registry identity가 아니라 `reaction.type`의 non-null Unicode 문자열로 저장해야 한다(MUST). Database는 현재 허용 목록을 `CHECK` constraint로 고정해서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395), [PROD-404](https://linear.app/byulmaru/issue/PROD-404) 시스템은 Reaction Type을 PostgreSQL enum이나 별도 registry identity가 아니라 `reaction.type`의 non-null Unicode 문자열로 저장해야 한다(MUST). Database는 현재 허용 목록을 `CHECK` constraint로 고정해서는 안 된다(MUST NOT).
 
 #### Scenario: Reaction Type 저장
 
@@ -18,7 +18,7 @@
 
 ### Requirement: Reaction 관계와 무결성 저장
 
-시스템은 Reaction을 UUIDv7 identity, Author Profile, Target Post, Reaction Type 문자열과 생성 시각을 가진 독립 행으로 저장해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395) 시스템은 Reaction을 UUIDv7 identity, Author Profile, Target Post, Reaction Type 문자열과 생성 시각을 가진 독립 행으로 저장해야 한다(MUST).
 
 #### Scenario: Reaction 행 저장
 
@@ -40,7 +40,7 @@
 
 ### Requirement: Reaction 유일성과 조회 index
 
-database는 `(post_id, type, profile_id)` 조합의 Reaction을 하나로 제한해야 하며(MUST), Post별 Type count·Type별 Profile 목록과 Profile cleanup 경로에 필요한 index를 제공해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395), [PROD-407](https://linear.app/byulmaru/issue/PROD-407) database는 `(post_id, type, profile_id)` 조합의 Reaction을 하나로 제한해야 하며(MUST), Post별 Type count·Type별 Profile 목록과 Profile cleanup 경로에 필요한 index를 제공해야 한다(MUST).
 
 #### Scenario: 중복 조합 거부
 
@@ -57,11 +57,11 @@ database는 `(post_id, type, profile_id)` 조합의 Reaction을 하나로 제한
 - **WHEN** migration이 Reaction schema를 생성한다
 - **THEN** unique index는 `post_id`, `type`, `profile_id` 순서로 생성된다
 - **AND** Profile 물리 삭제와 Profile 기준 cleanup을 위해 `profile_id` index를 생성한다
-- **AND** 아직 확정되지 않은 Reaction Profile 표시 순서를 위한 별도 ordering index를 선제 추가하지 않는다
+- **AND** Type별 Profile 목록의 `created_at DESC`, `id DESC` 정렬을 위해 `post_id`, `type`, `created_at DESC`, `id DESC` 순서의 index를 생성한다
 
 ### Requirement: additive Reaction migration
 
-Reaction 저장 schema는 기존 도메인 행을 재작성하지 않는 additive migration으로 전달되어야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395) Reaction 저장 schema는 기존 도메인 행을 재작성하지 않는 additive migration으로 전달되어야 한다(MUST).
 
 #### Scenario: 기존 database에 migration 적용
 

@@ -246,7 +246,7 @@ export function ActionMenu({
 
   if (web) {
     return (
-      <View ref={controlRef} style={[styles.control, { zIndex: open ? 50 : 0 }]}>
+      <View ref={controlRef} style={styles.control}>
         {renderTrigger({
           expanded: open,
           focusTrigger,

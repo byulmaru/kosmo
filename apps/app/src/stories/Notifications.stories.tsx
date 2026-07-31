@@ -23,7 +23,10 @@ import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NotificationsStoriesQuery as NotificationsStoriesQueryType } from './__generated__/NotificationsStoriesQuery.graphql';
 
+const unreadFollowerAvatarUrl =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="56" height="56"%3E%3Crect width="56" height="56" fill="%237c3aed"/%3E%3C/svg%3E';
 const unreadFollower = profile({
+  avatar: { id: 'media-notification-follower-avatar', url: unreadFollowerAvatarUrl },
   displayName: '별빛 여행자',
   handle: 'starlight',
   id: 'notification-follower-unread',
@@ -245,6 +248,14 @@ type Story = StoryObj<typeof meta>;
 export const StatesAndFollowItems: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    for (const avatar of canvas.getAllByLabelText('별빛 여행자 프로필 이미지')) {
+      expect(avatar.querySelector('img')).toHaveAttribute('src', unreadFollowerAvatarUrl);
+    }
+    for (const avatar of canvas.getAllByLabelText('은하 기록자 프로필 이미지')) {
+      expect(avatar.querySelector('img')?.getAttribute('src')).toMatch(
+        /\/assets\/avatar\/default-avatar\.png$/,
+      );
+    }
     expect(canvas.getByText('아직 알림이 없어요')).toBeVisible();
     expect(
       canvas.getByRole('link', {

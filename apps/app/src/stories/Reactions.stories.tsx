@@ -55,6 +55,10 @@ const quickReactionOptions = [
 
 const storyProfiles = [
   profile({
+    avatar: {
+      id: 'reaction-profile-starlight-avatar',
+      url: '/reaction-profile-starlight-avatar.png',
+    },
     displayName: '별빛 반응 프로필',
     id: 'reaction-profile-starlight',
     relativeHandle: '@starlight',
@@ -554,6 +558,15 @@ export const ProfileListStates: Story = {
     expect(canvas.getAllByText(profileCopy.emptyTitle)).toHaveLength(2);
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(canvasElement.querySelector('a[href="/@milky-way"]')).toBeInTheDocument();
+    const imageAvatar = populatedSection.getByLabelText('별빛 반응 프로필 프로필 이미지');
+    const fallbackAvatar = populatedSection.getByLabelText('은하수 반응 프로필 프로필 이미지');
+    expect(imageAvatar.querySelector('img')).toHaveAttribute(
+      'src',
+      '/reaction-profile-starlight-avatar.png',
+    );
+    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
     expect(canvas.getAllByText('❤️')).toHaveLength(9);
     const populatedRows = populatedSection
       .getAllByLabelText('❤️ 반응')

@@ -172,13 +172,17 @@ const mediaOnlyPost = post({
   bodyText: '',
   id: 'media-only',
 });
+const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
+const repostAuthorAvatarUrl = '/icon-192.png';
 const sourceAuthor = profile({
+  avatar: { id: 'media-source-avatar', url: sourceAuthorAvatarUrl },
   displayName: '아주 긴 Source 작성자 표시 이름',
   handle: 'source@remote.example',
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
 });
 const repostAuthor = profile({
+  avatar: { id: 'media-repost-avatar', url: repostAuthorAvatarUrl },
   displayName: '재게시한 코스모 사용자',
   handle: 'reposter',
   id: 'profile-repost-author',
@@ -295,7 +299,7 @@ const linkedSourceQuote = {
   ...linkedPost,
   id: 'post-quote-linked-source',
   profile: repostAuthor,
-  repostSource: linkedPost,
+  repostSource: { ...linkedPost, id: 'post-linked-source', profile: sourceAuthor },
 };
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
 const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
@@ -520,7 +524,12 @@ const storyPosts = [
   mediaTextPost,
   mediaOnlyPost,
 ];
-const composerProfile = profile({ id: 'profile-composer' });
+const composerAvatarUrl =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
+const composerProfile = profile({
+  avatar: { id: 'media-composer-avatar', url: composerAvatarUrl },
+  id: 'profile-composer',
+});
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
@@ -2085,6 +2094,7 @@ export const PureRepost: Story = {
     expect(article.querySelector('[data-testid="post-source-presentation"]')).toBeNull();
     expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
     expect(getComputedStyle(article).borderBottomWidth).toBe('1px');
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(sourceAvatar.getBoundingClientRect().width).toBe(48);
     expect(sourceAvatar.getBoundingClientRect().height).toBe(48);
     expect(article.querySelector('a a')).toBeNull();
@@ -2153,11 +2163,17 @@ export const Quote: Story = {
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
     expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
       formatTimelineTimestamp(quotePost.createdAt),
     );
     const preview = canvas.getByTestId('source-post-preview');
+    const sourceAvatar = within(preview).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
     expect(canvas.getAllByRole('link')).toHaveLength(4);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
@@ -2180,6 +2196,24 @@ export const Quote: Story = {
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-quote" />,
+};
+
+export const QuoteListItemAvatars: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(canvas.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    expect(outerAvatar.getBoundingClientRect().width).toBe(48);
+    expect(outerAvatar.getBoundingClientRect().height).toBe(48);
+    expect(sourceAvatar.getBoundingClientRect().width).toBe(40);
+    expect(sourceAvatar.getBoundingClientRect().height).toBe(40);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" />,
 };
 
 export const QuoteOfQuote: Story = {
@@ -2237,7 +2271,11 @@ export const OrdinaryPost: Story = {
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
     const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
+    const avatar = within(standardRow).getByLabelText('코스모 작가 프로필 이미지');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(avatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
@@ -2653,9 +2691,15 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
+    const outerAvatar = currentQuote.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(currentQuote.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
 
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(0);
     expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(
       currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
     ).not.toBeInTheDocument();
@@ -3218,7 +3262,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('첫 Parent draft');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(replyButtons[1]!);
     await userEvent.click(
@@ -3242,7 +3286,9 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
 export const ComposerDefault: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    expect(avatar.querySelector('img')).toHaveAttribute('src', composerAvatarUrl);
     expect(body).not.toHaveAttribute('maxlength');
     await userEvent.click(body);
     expect(body).toHaveFocus();
@@ -3681,7 +3727,7 @@ export const ReplyModalPresentation: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('작성 중인 답글');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
     await userEvent.click(
@@ -3920,6 +3966,12 @@ export const ReplyQuoteParentPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parentAvatar = within(dialog).getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(dialog).getByLabelText(`${sourceAuthor.displayName} 프로필 이미지`);
+    await waitFor(() => {
+      expect(parentAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+      expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    });
     expect(within(dialog).getByTestId('reply-parent')).toHaveTextContent('안전한 외부 링크');
     expect(within(dialog).queryByRole('link')).toBeNull();
     const source = within(dialog).getByTestId('source-post-preview');
