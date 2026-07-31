@@ -179,9 +179,11 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
 **Guardrails**
 
 - API/BFF/Relay response는 확인된 정상 경계다. timeout·buffering 변경으로 client navigation race를 우회하지 않는다.
-- 정상 성공은 Relay normalization으로 저장 draft를 clean baseline에 맞추고 `saving`을 끝낸 뒤 실제
-  `relativeHandle` Profile route commit까지 guard permission을 유지한다.
-- callback return을 navigation 완료로 간주하지 않으며, 기존 discard confirmation의 one-shot 보호를 약화하지 않는다.
+- 정상 성공은 Relay normalization으로 저장 draft를 clean baseline에 맞추고 `saving`을 끝낸 render에서
+  `relativeHandle` Profile route REPLACE를 one-shot으로 실행한다. clean baseline이 유지되는 동안에는 늦은
+  `beforeRemove`를 다시 막지 않는다.
+- callback return을 navigation 완료로 간주하지 않는다. 실제 commit 전 새 draft가 생기면 그 입력 보호가
+  성공 REPLACE보다 우선하며 기존 discard confirmation의 one-shot 보호를 다시 활성화한다.
 - 저장 복구는 Ready Media ID를 재사용하며 자동 mutation 재전송이나 이미지 재업로드를 실행하지 않는다.
 - 범용 GraphQL tracing·timeout·streaming 변경, Media Storage Service 성능·이미지 압축/resize, Profile Tag와
   Native 실제 기기 QA로 범위를 넓히지 않는다. 확인된 원인이 별도 행동 계약이나 공통 인프라 변경을 요구하면
@@ -196,7 +198,8 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
   guard effect와 `router.replace` return 이후 실제 route commit만 실패하는 correlation을 기록했다. 최종 회귀
   검증은 production 계측 없이 mutation 응답과 최종 URL·route 결과를 assertion한다.
 - 즉시 permission 회수를 제거한 fault injection에서 동일 E2E가 통과한 증거를 유지하고, 구현 후에는 실제
-  Chromium의 비동기 `beforeRemove` ordering으로 성공을 검증한다.
+  Chromium의 비동기 `beforeRemove` ordering으로 성공을 검증한다. route test는 clean baseline에서 늦은
+  `beforeRemove`가 통과하는 순서와 commit 전 새 draft가 생겨 pending REPLACE를 다시 가로채는 순서를 구분한다.
 - 저장 결과가 불확실하거나 실패해도 현재 text·policy·Ready Media ID가 유지되고 save retry에서
   issue→PUT→complete를 다시 실행하지 않는지 확인한다.
 - 기존 dirty navigation guard, Relay normalized Profile 갱신, avatar/header omitted/ID/null과 validation이
@@ -208,10 +211,12 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
       경계가 `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록하고 계측 코드를 제거한다.
 - [x] 3.2 실제 Chromium E2E에서 수정 전 영구 `saving`을 재현하고, guard의 즉시 permission 회수 한 줄만 제거한
       fault injection으로 동일 시나리오가 통과함을 입증한다. 실험 코드는 원상복구한다.
-- [x] 3.3 성공 저장을 clean terminal state로 수렴시키고 실제 navigation commit/unmount까지 permission을 유지하도록
-      Profile edit navigation lifecycle만 수정한다. draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다.
-- [x] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, GraphQL/transport 실패를
-      자동화하고 dirty discard guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
+- [x] 3.3 성공 저장을 clean terminal state로 수렴시키고 clean baseline에서 one-shot REPLACE를 실행하며, commit 전
+      새 draft가 생기면 그 입력 보호를 우선하도록 Profile edit navigation lifecycle만 수정한다. draft·Ready Media
+      ID 보존과 자동 재전송·재업로드 금지를 유지한다.
+- [x] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, commit 전 새 draft, navigation no-op/실패,
+      GraphQL/transport 실패를 자동화하고 dirty discard guard·Relay normalization·Ready ID 무재업로드 회귀를 함께
+      검증한다.
 - [x] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
       PROD-490 통합 검증 담당자에게 evidence를 전달한다.
 

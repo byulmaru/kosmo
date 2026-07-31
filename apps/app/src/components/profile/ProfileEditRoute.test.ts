@@ -15,6 +15,9 @@ type MutationConfig = {
 };
 
 type ScreenProps = Record<string, unknown> & {
+  initialValue: Record<string, unknown> & {
+    followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
+  };
   onAvatarEdit: () => Promise<void>;
   onAvatarRetry: () => void;
   onBack: () => void;
@@ -60,6 +63,7 @@ let routerBackCalls = 0;
 let routerCanGoBack = true;
 let triggerBeforeRemoveOnReplace = false;
 let deferBeforeRemoveOnReplace = false;
+let pendingReplaceCompletion: (() => void) | null = null;
 let noOpReplace = false;
 let throwOnReplace = false;
 let queryData: {
@@ -110,7 +114,8 @@ mockModule('expo-router', {
           }
         };
         if (deferBeforeRemoveOnReplace) {
-          setTimeout(completeReplace, 0);
+          assert.equal(pendingReplaceCompletion, null);
+          pendingReplaceCompletion = completeReplace;
           return;
         }
         completeReplace();
@@ -198,6 +203,7 @@ afterEach(async () => {
   toastMessages.length = 0;
   triggerBeforeRemoveOnReplace = false;
   deferBeforeRemoveOnReplace = false;
+  pendingReplaceCompletion = null;
   noOpReplace = false;
   throwOnReplace = false;
   mock.restoreAll();
@@ -263,6 +269,13 @@ const flush = async () => {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+};
+
+const completeDeferredReplace = async () => {
+  const completeReplace = pendingReplaceCompletion;
+  assert.ok(completeReplace);
+  pendingReplaceCompletion = null;
+  await act(async () => completeReplace());
 };
 
 describe('ProfileEditRoute', () => {
@@ -496,7 +509,7 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireDiscardDialogProps().visible, false);
   });
 
-  it('비동기 Web navigation commit까지 성공 permission을 유지하고 저장을 clean 상태로 끝낸다', async () => {
+  it('비동기 Web navigation에서 clean baseline이 늦은 beforeRemove를 허용한다', async () => {
     await renderRoute();
     await act(async () =>
       requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장할 소개' }),
@@ -511,7 +524,7 @@ describe('ProfileEditRoute', () => {
 
     assert.equal(requireScreenProps().submitState.kind, 'idle');
     assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
-    await flush();
+    await completeDeferredReplace();
     assert.deepEqual(routerReplacements, ['/@updated']);
     assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 0);
 
@@ -526,29 +539,102 @@ describe('ProfileEditRoute', () => {
     assert.equal(requireDiscardDialogProps().visible, true);
   });
 
-  it('navigation no-op과 실패에서도 saving을 끝내고 mutation 재전송을 하지 않는다', async () => {
-    for (const mode of ['no-op', 'failure'] as const) {
-      await renderRoute();
-      await act(async () =>
-        requireScreenProps().onChange({ ...requireScreenProps().value, bio: `저장 ${mode}` }),
-      );
-      noOpReplace = mode === 'no-op';
-      throwOnReplace = mode === 'failure';
-      mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
-        config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
-      );
+  it('비동기 성공 REPLACE 전에 생긴 새 draft를 discard guard로 보호한다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장할 소개' }),
+    );
+    triggerBeforeRemoveOnReplace = true;
+    deferBeforeRemoveOnReplace = true;
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+    );
 
-      await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: 'commit 전 새 소개' }),
+    );
+    await completeDeferredReplace();
 
-      assert.equal(requireScreenProps().submitState.kind, 'idle');
-      assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
-      assert.equal(mutationCalls.get('ProfileEditRouteUpdateProfileMutation')?.length, 1);
-      await act(async () => renderer?.unmount());
-      renderer = null;
-      mutationCalls.clear();
-      mutationHandlers.clear();
-      noOpReplace = false;
-      throwOnReplace = false;
-    }
+    assert.deepEqual(routerReplacements, []);
+    assert.equal(requireScreenProps().value.bio, 'commit 전 새 소개');
+    assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 1);
+    assert.equal(requireDiscardDialogProps().visible, true);
+  });
+
+  it('navigation no-op과 실패에서도 Ready Media ID를 재사용하고 재업로드하지 않는다', async () => {
+    let issued = 0;
+    mutationHandlers.set('ProfileEditRouteIssueMediaUploadUrlMutation', (config) => {
+      issued += 1;
+      config.onCompleted({
+        issueMediaUploadUrl: {
+          media: { id: `media-issued-${issued}` },
+          uploadUrl: `https://upload.example/${issued}`,
+        },
+      } as never);
+    });
+    mutationHandlers.set('ProfileEditRouteCompleteMediaUploadMutation', (config) =>
+      config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never),
+    );
+    const fetchMock = mock.method(
+      globalThis,
+      'fetch',
+      async () => new Response(null, { status: 204 }),
+    );
+    await renderRoute();
+
+    pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/header')] };
+    await act(async () => requireScreenProps().onHeaderEdit());
+    await flush();
+    pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/avatar')] };
+    await act(async () => requireScreenProps().onAvatarEdit());
+    await flush();
+    await act(async () =>
+      requireScreenProps().onChange({
+        ...requireScreenProps().value,
+        bio: '저장 no-op',
+        followPolicy: 'APPROVAL_REQUIRED',
+      }),
+    );
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+    );
+
+    noOpReplace = true;
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장 failure' }),
+    );
+    noOpReplace = false;
+    throwOnReplace = true;
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+
+    const updateCalls = mutationCalls.get('ProfileEditRouteUpdateProfileMutation');
+    assert.equal(requireScreenProps().submitState.kind, 'idle');
+    assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
+    assert.equal(requireScreenProps().value.followPolicy, 'APPROVAL_REQUIRED');
+    assert.equal(requireScreenProps().initialValue.followPolicy, 'APPROVAL_REQUIRED');
+    assert.equal(updateCalls?.length, 2);
+    assert.deepEqual(
+      updateCalls?.map((call) => call.variables.input),
+      [
+        {
+          avatarId: 'media-issued-2',
+          bio: '저장 no-op',
+          displayName: '기존 이름',
+          followPolicy: 'APPROVAL_REQUIRED',
+          headerId: 'media-issued-1',
+        },
+        {
+          avatarId: 'media-issued-2',
+          bio: '저장 failure',
+          displayName: '기존 이름',
+          followPolicy: 'APPROVAL_REQUIRED',
+          headerId: 'media-issued-1',
+        },
+      ],
+    );
+    assert.equal(issued, 2);
+    assert.equal(fetchMock.mock.callCount(), 2);
   });
 });

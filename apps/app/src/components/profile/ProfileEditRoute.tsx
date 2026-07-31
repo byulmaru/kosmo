@@ -332,16 +332,13 @@ function EditableProfileRoute({
           }
           setCleanValue(draft);
           setSubmitState({ kind: 'idle' });
-          allowNextNavigation(
-            () => {
-              try {
-                router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
-              } catch {
-                // Keep the saved draft recoverable when navigation cannot start.
-              }
-            },
-            { keepAllowedUntilUnmount: true },
-          );
+          allowNextNavigation(() => {
+            try {
+              router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
+            } catch {
+              // Keep the saved draft recoverable when navigation cannot start.
+            }
+          });
         },
         onError: handleSaveFailure,
       });

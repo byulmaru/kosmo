@@ -28,9 +28,11 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
 - route는 Media picker/upload 결과, field별 재시도, Ready ID 보존, Relay 정규화, dirty navigation 확인과 성공
   navigation을 연결한다. 저장 중에는 navigation을 차단한다.
 - `PROD-613`은 Relay 성공 callback과 GraphQL body parse까지 끝난 뒤에도 Web `router.replace`가 실제로
-  commit되기 전에 navigation guard permission을 회수해 REPLACE를 막는 race를 수정한다. 성공 저장은 실제
-  navigation commit 또는 복구 가능한 terminal UI로 끝나며, 현재 draft와 Ready Media ID를 보존하고 mutation
-  자동 재전송이나 이미지 자동 재업로드를 실행하지 않는다.
+  commit되기 전에 dirty·saving navigation guard가 REPLACE를 다시 막는 race를 수정한다. 성공 저장은 제출
+  draft를 clean baseline으로 확정하고 terminal UI에서 one-shot REPLACE를 실행한다. clean baseline이 유지되면
+  늦은 `beforeRemove`를 허용하고, commit 전 새 draft가 생기면 그 입력을 discard confirmation으로 보호한다.
+  navigation no-op·실패에서도 Ready Media ID를 보존하고 mutation 자동 재전송이나 이미지 자동 재업로드를
+  실행하지 않는다.
 - Web은 기존 shell의 최대 600px 중앙 route를 사용하고 1440/1024 단계와 mobile/native 정보 구조를 공유한다.
 - header 이미지 변경 영역은 avatar·편집 action을 담는 hero wrapper와 분리하고 모든 지원 폭에서 가로:세로
   `3:1`을 유지한다. 원본 비율이 다르면 해당 preview 안에서 cover crop한다.
@@ -71,7 +73,8 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   Media 자체를 보존하고 공개 ProfileHero에 viewer-authorized avatar/header를 표시
 - Profile Tag: `PROD-491` presentation을 `PROD-527`이 재사용하며 이 change는 저장·공개 표시를 완료로 간주하지 않음
 - Verification: DB 제약·초기 부적격 권한 거부·guest/public read, API/Core text·Media 원자성, Relay·부분 upload 재시도,
-  Web의 비동기 `beforeRemove`·navigation commit과 terminal state, Web/native dirty route와 부모 종단 간 검증
+  Web의 비동기 `beforeRemove`·clean baseline·commit 전 새 draft 보호와 terminal state, Web/native dirty route와
+  부모 종단 간 검증
 - Excluded systems: Settings 전체 정보 구조와 `PROD-531`의 Follow Approval Policy 이전, Profile Tag
   storage/public display, Profile Link·handle, Media upload 인프라, crop editor, Admin role 제거, orphan Media cleanup,
   thumbnail·variant·Remote Media와 Fedify/ActivityPub

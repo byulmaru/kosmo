@@ -32,8 +32,9 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - desktop shell 중앙 600px route와 mobile/native 정보 구조, 접근성을 일관되게 유지한다.
 - header 이미지 변경 영역을 hero wrapper와 분리하고 모든 지원 폭에서 `3:1`로 유지한다.
 - Profile Tag editor UI를 한 번 만들고 Tag 연결 change가 재사용할 seam을 제공한다.
-- 저장 성공 permission을 callback return 시점이 아니라 실제 navigation commit/unmount까지 유지하고, 성공
-  navigation이 완료되지 않아도 편집 화면을 영구 `saving`이 아닌 복구 가능한 terminal 상태로 수렴시킨다.
+- 저장 성공 시 제출 draft를 clean baseline으로 확정하고 terminal 상태에서 one-shot REPLACE를 실행한다. clean
+  baseline이 유지되는 동안에는 늦은 `beforeRemove`를 허용하되, commit 전 새 draft가 생기면 그 입력 보호를
+  우선한다.
 - 현재 draft와 Ready avatar/header Media ID를 보존하고 mutation 자동 재전송·이미지 자동 재업로드 없이
   안전하게 확인·수동 재시도하게 한다.
 
@@ -133,9 +134,11 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
     production 계측 코드는 제거했다.
 12. 실제 Chromium E2E에서 비동기 navigation ordering을 재현하고, guard의 즉시 permission 회수만 제거한 fault
     injection으로 같은 시나리오가 통과하는지 검증한다. 동기 `beforeRemove` mock만으로 성공 계약을 증명하지 않는다.
-13. 성공 저장은 Relay normalization으로 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 뒤,
-    실제 navigation commit/unmount 전까지 성공 REPLACE가 guard에 막히지 않게 한다. navigation no-op/실패에도
-    draft와 Ready Media ID를 유지하며 mutation 자동 재전송·이미지 자동 재업로드를 실행하지 않는다.
+13. 성공 저장은 Relay normalization으로 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸
+    render에서 성공 REPLACE를 one-shot으로 실행한다. clean baseline이 유지되는 동안에는 늦은
+    `beforeRemove`를 허용하고, 실제 commit 전 새 draft가 생기면 dirty guard와 discard confirmation으로 그 입력을
+    보호한다. navigation no-op/실패에도 draft와 Ready Media ID를 유지하며 mutation 자동 재전송·이미지 자동
+    재업로드를 실행하지 않는다.
 14. text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, 기존 discard와 transport 실패를
     자동화하고 실제 Web dev에서 재검증한다. API/BFF timeout·buffering은 변경하지 않으며 Native 실제 기기 QA
     미실행과 PROD-490 통합 검증 handoff를 기록한다.
@@ -151,9 +154,9 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - form은 future modal wrapper에서도 재사용할 수 있지만 현재 production entry는 dedicated route여야 한다.
 - 조사 단계의 계측은 기존 Sentry/logging surface의 좁은 timing field나 test-only seam을 사용할 수 있다.
   최종 production에는 correlation logging, 새 tracing dependency나 범용 middleware를 보존하지 않는다.
-- 성공 permission은 저장 결과가 clean baseline으로 확정된 동안 guard 자체를 비활성화하거나, 실제 navigation
-  commit/unmount까지 유지되는 one-shot lifecycle로 구현할 수 있다. 어느 방식이든 callback return 직후 permission을
-  회수하거나 discard guard를 영구 비활성화하면 안 된다.
+- 성공 navigation은 저장 결과가 clean baseline으로 확정된 render에서 guard 자체를 비활성화하거나 one-shot
+  permission으로 실행할 수 있다. 어느 방식이든 clean baseline이 유지되는 동안 늦은 `beforeRemove`를 막거나,
+  새 draft가 생겼는데 discard guard를 비활성 상태로 유지하면 안 된다.
 
 ### Known Traps
 
@@ -177,7 +180,9 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - web 중앙 column을 internal scroller로 바꿔 기존 document scroll 계약을 깨지 않는다.
 - presentation에 저장 성공 문구를 남겨 route가 갱신된 Profile로 복귀하는 production 동작과 경쟁시키지 않는다.
 - 확인된 navigation race를 API/BFF timeout이나 response buffering으로 우회하지 않는다.
-- `router.replace`의 동기 return을 navigation 완료로 취급해 성공 permission을 같은 effect에서 즉시 회수하지 않는다.
+- `router.replace`의 동기 return을 navigation 완료로 취급해 dirty·saving 상태인 guard를 다시 활성화하지 않는다.
+  clean baseline과 terminal `saving` 전이를 먼저 확정한 one-shot navigation은 callback return 뒤 permission을
+  회수해도 늦은 `beforeRemove`를 막지 않아야 한다.
 - 기존 동기 navigation mock의 통과만으로 Web 비동기 `beforeRemove` ordering을 검증했다고 간주하지 않는다.
 - 결과가 불확실한데 draft를 초기화하거나 같은 Media를 다시 upload하지 않는다. 반대로 단순히 `saving`만
   해제하고 중복 submit을 자동 실행 가능하게 두지 않는다.
@@ -203,7 +208,8 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - [한 field upload 실패가 다른 Ready field를 재업로드함] → field별 upload generation과 Ready ID를 route draft가
   분리해 소유하고 실패 field만 다시 시도한다.
 - [성공 callback return을 navigation 완료로 오인해 guard가 REPLACE를 다시 차단함] → 실제 Chromium scheduling과
-  비동기 `beforeRemove`를 회귀 test로 고정하고 permission을 commit/unmount까지 유지한다.
+  비동기 `beforeRemove`를 회귀 test로 고정하고 clean baseline·terminal `saving` 상태에서 one-shot REPLACE를
+  실행한다. commit 전 새 draft가 생기면 별도 회귀 test로 그 입력 보호를 확인한다.
 - [응답 결과가 불확실한 상태에서 중복 저장 또는 이미지 재업로드가 발생함] → 자동 재전송을 금지하고 현재
   draft와 Ready Media ID를 보존한 terminal 복구를 검증한다.
 - [확인된 client race를 범용 GraphQL timeout·streaming 변경으로 확대함] → 조사에서 확인한 API/BFF/Relay

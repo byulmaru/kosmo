@@ -191,3 +191,11 @@
 - **THEN** back과 다른 route navigation을 차단하고 discard confirmation을 열지 않는다
 - **AND** 저장 성공 시 guard를 먼저 해제하고 payload를 Relay에 정규화한 뒤 갱신된 `relativeHandle` Profile로 replace한다
 - **AND** 성공 toast나 presentation 성공 문구를 표시하지 않는다
+
+#### Scenario: Protect a new draft created before the successful replace commits
+
+- **WHEN** 저장 성공 뒤 제출 draft가 clean baseline이 되어 one-shot Profile REPLACE가 시작됐지만 실제 route
+  commit 전에 사용자가 새 draft를 만든다
+- **THEN** route는 새 draft를 dirty 상태로 취급해 대기 중인 REPLACE를 discard confirmation으로 가로챈다
+- **AND** 새 입력을 버리고 강제로 Profile route로 이동하지 않는다
+- **AND** 사용자가 새 draft를 만들지 않으면 늦게 도착한 `beforeRemove`가 성공 REPLACE를 다시 차단하지 않는다

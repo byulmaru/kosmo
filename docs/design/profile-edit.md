@@ -127,9 +127,12 @@
 - 저장 성공 시 dirty guard를 먼저 해제하고 mutation payload를 Relay에 정규화한 뒤, 갱신된
   `Profile.relativeHandle` route로 `router.replace`한다. 별도 성공 toast나 presentation 성공 문구는 표시하지 않는다.
 - Web `router.replace`의 동기 return은 실제 route state commit이 아니다. 성공 저장은 Relay normalization으로
-  제출 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 뒤, 실제 navigation commit 또는 route
-  unmount까지 성공 permission을 유지한다. callback return 직후 guard를 다시 활성화해 비동기 `beforeRemove`를
-  막지 않는다.
+  제출 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 render에서 성공 REPLACE를 one-shot으로
+  실행한다. clean baseline이 유지되는 동안에는 permission callback이 return한 뒤에도 dirty·saving guard가
+  비활성 상태이므로 비동기 `beforeRemove`가 성공 REPLACE를 다시 막지 않는다.
+- 실제 route commit 전에 사용자가 새 draft를 만들면 그 입력의 보호가 성공 REPLACE보다 우선한다. route는
+  dirty guard를 다시 활성화해 대기 중인 REPLACE를 공통 discard confirmation으로 가로채며, 새 입력을 버리고
+  강제로 이동하지 않는다.
 - 성공 REPLACE가 no-op이거나 완료되지 않아도 편집 화면은 잠금 상태에 남지 않으며 현재 text·policy와 Ready
   avatar/header Media ID를 보존한다. mutation 자동 재전송이나 이미지 자동 재업로드는 실행하지 않는다.
 - 표시 이름은 client omission에 의존하지 않는다. 서버는 기존 저장 원문과 정확히 같은 40 code point 초과
