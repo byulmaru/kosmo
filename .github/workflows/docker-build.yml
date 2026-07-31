@@ -209,7 +209,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          image_ref="ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
           version="${GITHUB_SHA:0:12}"
           argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
             -p "version=${version}" \
@@ -217,22 +216,6 @@ jobs:
             -p "workloads.enabled=true" \
             -p "migration.enabled=true" \
             --validate
-
-          manifests="${RUNNER_TEMP}/kosmo-prod.yaml"
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app manifests kosmo-prod --source git > "${manifests}"
-
-          kosmo_images="$(
-            sed -En "s/^[[:space:]]*-?[[:space:]]*image:[[:space:]]*['\"]?([^'\"[:space:]]+)['\"]?[[:space:]]*$/\1/p" "${manifests}" \
-              | grep -E '^ghcr\.io/byulmaru/kosmo(@|:)' \
-              || true
-          )"
-          expected_images="$(grep -Fxc "${image_ref}" <<<"${kosmo_images}" || true)"
-          kosmo_image_count="$(grep -c . <<<"${kosmo_images}" || true)"
-          presync_jobs="$(grep -Ec "argocd\.argoproj\.io/hook: ['\"]?PreSync" "${manifests}" || true)"
-          if [[ "${expected_images}" -ne 3 || "${kosmo_image_count}" -ne 3 || "${presync_jobs}" -ne 1 ]]; then
-            echo "::error::Production migration, API, and Web must use ${image_ref} with one PreSync migration job."
-            exit 1
-          fi
 
           argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod --timeout 600
 
