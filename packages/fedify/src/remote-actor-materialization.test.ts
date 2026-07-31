@@ -2,12 +2,15 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Endpoints, LanguageString, Note, Person } from '@fedify/vocab';
+import { Endpoints, Image, LanguageString, Note, Person } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
 import { count, eq, ne } from 'drizzle-orm';
@@ -27,7 +30,9 @@ let db: typeof CoreDb.db;
 let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let findOrMaterializeRemoteProfileActor: typeof Materialization.findOrMaterializeRemoteProfileActor;
@@ -42,7 +47,7 @@ describe('remote actor materialization', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ ActivityPubActors, db, first, firstOrThrow, Instances, pg, Profiles } =
+    ({ ActivityPubActors, db, first, firstOrThrow, Instances, Media, pg, ProfileMedia, Profiles } =
       await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({
@@ -58,6 +63,8 @@ describe('remote actor materialization', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(ProfileMedia);
+    await db.delete(Media);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -109,6 +116,269 @@ describe('remote actor materialization', () => {
     assert.equal(stored.actor.followingUri, `https://${remoteDomain}/users/alice/following`);
     assert.equal(stored.actor.sharedInboxUri, `https://${remoteDomain}/inbox`);
     assert.equal(stored.actor.lastFetchedAt?.toString(), now.toString());
+  });
+
+  test('materializes, replaces, and removes embedded actor avatar and header Media', async () => {
+    const avatarUrl = new URL(`https://${remoteDomain}/media/avatar.png`);
+    const headerUrl = new URL(`https://${remoteDomain}/media/header.png`);
+    const firstNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const firstActor = createActor({
+      icon: new Image({ mediaType: 'image/png', name: 'Avatar', url: avatarUrl }),
+      image: new Image({ mediaType: 'image/webp', name: 'Header', url: headerUrl }),
+    });
+    const first = await materializeRemoteProfileActor({
+      context: createLookupContext(async () => firstActor).context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow,
+    });
+
+    const firstMedia = await readProfileMedia(first.id);
+    assert.deepEqual(
+      firstMedia.map(({ altText, kind, mediaType, source, state, url }) => ({
+        altText,
+        kind,
+        mediaType,
+        source,
+        state,
+        url,
+      })),
+      [
+        {
+          altText: 'Avatar',
+          kind: ProfileMediaKind.AVATAR,
+          mediaType: 'image/png',
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: avatarUrl.href,
+        },
+        {
+          altText: 'Header',
+          kind: ProfileMediaKind.HEADER,
+          mediaType: 'image/webp',
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: headerUrl.href,
+        },
+      ],
+    );
+
+    const nextAvatarUrl = new URL(`https://${remoteDomain}/media/avatar-next.png`);
+    const nextActor = createActor({
+      icon: new Image({ mediaType: null, name: 'Next Avatar', url: nextAvatarUrl }),
+    });
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () => nextActor).context,
+      handle: `alice@${remoteDomain}`,
+      now: firstNow.add({ seconds: 1 }),
+    });
+
+    const refreshedMedia = await readProfileMedia(first.id);
+    assert.deepEqual(
+      refreshedMedia.map(({ altText, kind, mediaType, url }) => ({
+        altText,
+        kind,
+        mediaType,
+        url,
+      })),
+      [
+        {
+          altText: 'Next Avatar',
+          kind: ProfileMediaKind.AVATAR,
+          mediaType: null,
+          url: nextAvatarUrl.href,
+        },
+      ],
+    );
+    assert.equal(await db.$count(Media, eq(Media.profileId, first.id)), 3);
+  });
+
+  test('stores a shared avatar/header URL as separate Media identities', async () => {
+    const sharedUrl = new URL(`https://${remoteDomain}/media/shared.png`);
+    const profile = await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({
+          icon: new Image({ mediaType: 'image/png', name: 'Avatar', url: sharedUrl }),
+          image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
+        }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    const media = await readProfileMedia(profile.id);
+    assert.equal(media.length, 2);
+    const mediaIds = await db
+      .select({ mediaId: ProfileMedia.mediaId })
+      .from(ProfileMedia)
+      .where(eq(ProfileMedia.profileId, profile.id));
+    assert.equal(new Set(mediaIds.map(({ mediaId }) => mediaId)).size, 2);
+    assert.deepEqual(
+      media.map(({ altText, kind, mediaType, url }) => ({ altText, kind, mediaType, url })),
+      [
+        {
+          altText: 'Avatar',
+          kind: ProfileMediaKind.AVATAR,
+          mediaType: 'image/png',
+          url: sharedUrl.href,
+        },
+        {
+          altText: 'Header',
+          kind: ProfileMediaKind.HEADER,
+          mediaType: 'image/webp',
+          url: sharedUrl.href,
+        },
+      ],
+    );
+  });
+
+  test('splits a transition-era shared avatar/header Media on the first refresh', async () => {
+    const sharedUrl = new URL(`https://${remoteDomain}/media/shared-transition.png`);
+    const { profile } = await createStoredRemoteActor();
+    const sharedMedia = await db
+      .insert(Media)
+      .values({
+        altText: 'Transition',
+        mediaType: 'image/png',
+        profileId: profile.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileMedia).values([
+      { kind: ProfileMediaKind.AVATAR, mediaId: sharedMedia.id, profileId: profile.id },
+      { kind: ProfileMediaKind.HEADER, mediaId: sharedMedia.id, profileId: profile.id },
+    ]);
+
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({
+          icon: new Image({ mediaType: 'image/png', name: 'Avatar', url: sharedUrl }),
+          image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
+        }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+      now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
+    });
+
+    const relations = await db
+      .select({ kind: ProfileMedia.kind, mediaId: ProfileMedia.mediaId })
+      .from(ProfileMedia)
+      .where(eq(ProfileMedia.profileId, profile.id))
+      .orderBy(ProfileMedia.kind);
+    assert.equal(new Set(relations.map(({ mediaId }) => mediaId)).size, 2);
+    assert.deepEqual(await readProfileMedia(profile.id), [
+      {
+        altText: 'Avatar',
+        kind: ProfileMediaKind.AVATAR,
+        mediaType: 'image/png',
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      },
+      {
+        altText: 'Header',
+        kind: ProfileMediaKind.HEADER,
+        mediaType: 'image/webp',
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      },
+    ]);
+  });
+
+  test('ignores IRI-only and invalid actor representations without rejecting the profile', async () => {
+    const actor = createActor({
+      icon: new URL(`https://${remoteDomain}/media/avatar.png`),
+      image: new Image({ url: new URL('data:image/png;base64,AA==') }),
+    });
+
+    const profile = await materializeRemoteProfileActor({
+      context: createLookupContext(async () => actor).context,
+      handle: `alice@${remoteDomain}`,
+    });
+
+    assert.equal(profile.displayName, 'Alice Remote');
+    assert.deepEqual(await readProfileMedia(profile.id), []);
+  });
+
+  test('preserves the previous actor projection when Profile media refresh fails', async () => {
+    const originalAvatarUrl = new URL(`https://${remoteDomain}/media/avatar.png`);
+    const originalNow = Temporal.Instant.from('2026-07-10T00:00:00Z');
+    const original = await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({
+          icon: new Image({
+            mediaType: 'image/png',
+            url: originalAvatarUrl,
+          }),
+        }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+      now: originalNow,
+    });
+    const refreshedActor = createActor({
+      icon: new Image({
+        mediaType: 'image/webp',
+        url: new URL(`https://${remoteDomain}/media/avatar-next.webp`),
+      }),
+      name: 'Refreshed Alice',
+    });
+    await pg`
+      CREATE FUNCTION fail_remote_profile_media_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        RAISE EXCEPTION 'intentional remote profile media failure';
+      END
+      $function$
+    `;
+    await pg`
+      CREATE TRIGGER fail_remote_profile_media_insert
+      BEFORE INSERT ON profile_media
+      FOR EACH ROW EXECUTE FUNCTION fail_remote_profile_media_insert()
+    `;
+
+    try {
+      await assert.rejects(
+        materializeRemoteProfileActor({
+          context: createLookupContext(async () => refreshedActor).context,
+          handle: `alice@${remoteDomain}`,
+          now: originalNow.add({ seconds: 1 }),
+        }),
+      );
+      const persistedProfile = await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, original.id))
+        .limit(1)
+        .then(firstOrThrow);
+      const persistedActor = await db
+        .select()
+        .from(ActivityPubActors)
+        .where(eq(ActivityPubActors.profileId, original.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(persistedProfile.displayName, 'Alice Remote');
+      assert.equal(persistedActor.lastFetchedAt?.toString(), originalNow.toString());
+      assert.deepEqual(
+        (await readProfileMedia(original.id)).map(({ kind, mediaType, url }) => ({
+          kind,
+          mediaType,
+          url,
+        })),
+        [
+          {
+            kind: ProfileMediaKind.AVATAR,
+            mediaType: 'image/png',
+            url: originalAvatarUrl.href,
+          },
+        ],
+      );
+      assert.equal(await db.$count(Media), 1);
+    } finally {
+      await pg`DROP TRIGGER fail_remote_profile_media_insert ON profile_media`;
+      await pg`DROP FUNCTION fail_remote_profile_media_insert()`;
+    }
   });
 
   test('materializes an inbound actor URI through Fedify actor handle discovery', async () => {
@@ -565,10 +835,16 @@ describe('remote actor materialization', () => {
     const { context: olderContext } = createLookupContext(async () => {
       markOlderLookupStarted();
       await olderLookupReleased;
-      return createActor({ name: 'Older Alice' });
+      return createActor({
+        icon: new Image({ url: new URL(`https://${remoteDomain}/media/avatar-older.png`) }),
+        name: 'Older Alice',
+      });
     });
     const { context: newerContext } = createLookupContext(async () =>
-      createActor({ name: 'Newer Alice' }),
+      createActor({
+        icon: new Image({ url: new URL(`https://${remoteDomain}/media/avatar-newer.png`) }),
+        name: 'Newer Alice',
+      }),
     );
 
     const olderRefresh = materializeRemoteProfileActor({
@@ -594,6 +870,15 @@ describe('remote actor materialization', () => {
       .then(firstOrThrow);
     assert.equal(persisted.profile.displayName, 'Newer Alice');
     assert.equal(persisted.actor.lastFetchedAt?.toString(), newerNow.toString());
+    assert.deepEqual(
+      (await readProfileMedia(stored.profile.id)).map(({ kind, url }) => ({ kind, url })),
+      [
+        {
+          kind: ProfileMediaKind.AVATAR,
+          url: `https://${remoteDomain}/media/avatar-newer.png`,
+        },
+      ],
+    );
   });
 
   test('rejects handle collisions when refreshing an existing actor URI', async () => {
@@ -854,7 +1139,12 @@ describe('remote actor materialization', () => {
   });
 
   test('recovers concurrent first materialization as one remote identity', async () => {
-    const actor = createActor();
+    const actor = createActor({
+      icon: new Image({
+        mediaType: 'image/png',
+        url: new URL(`https://${remoteDomain}/alice/avatar.png`),
+      }),
+    });
     let lookupCount = 0;
     let releaseLookups!: () => void;
     const bothLookupsStarted = new Promise<void>((resolve) => {
@@ -877,6 +1167,17 @@ describe('remote actor materialization', () => {
     assert.equal(firstProfile.id, secondProfile.id);
     assert.equal(await countRows(Profiles), 1);
     assert.equal(await countRows(ActivityPubActors), 1);
+    const profileMedia = await readProfileMedia(firstProfile.id);
+    assert.deepEqual(profileMedia, [
+      {
+        altText: null,
+        kind: ProfileMediaKind.AVATAR,
+        mediaType: 'image/png',
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: `https://${remoteDomain}/alice/avatar.png`,
+      },
+    ]);
   });
 
   test('matches the remote actor Drizzle schema in PostgreSQL', async () => {
@@ -920,6 +1221,17 @@ describe('remote actor materialization', () => {
       enumValues.map((row) => row.enumlabel),
       Object.values(ActivityPubActorType),
     );
+
+    const mediaIndexes = await pg<Array<{ indexdef: string; indexname: string }>>`
+      SELECT indexname, indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND tablename = 'media'
+        AND indexname IN ('media_remote_profile_url_unique', 'media_remote_url_unique')
+      ORDER BY indexname
+    `;
+
+    assert.deepEqual([...mediaIndexes], []);
   });
 });
 
@@ -940,6 +1252,21 @@ const createActor = (overrides: Partial<PersonOptions> = {}) =>
     summary: 'Remote bio',
     ...overrides,
   });
+
+const readProfileMedia = (profileId: string) =>
+  db
+    .select({
+      altText: Media.altText,
+      kind: ProfileMedia.kind,
+      mediaType: Media.mediaType,
+      source: Media.source,
+      state: Media.state,
+      url: Media.url,
+    })
+    .from(ProfileMedia)
+    .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
+    .where(eq(ProfileMedia.profileId, profileId))
+    .orderBy(ProfileMedia.kind);
 
 const mockWebFinger = (descriptor: { subject: string }) =>
   mock.method(globalThis, 'fetch', async (input: string | URL | Request) => {

@@ -1,9 +1,10 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
-import { Linking, StyleSheet, Text } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
-import { typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
+import { PostMediaGallery } from './PostMediaGallery';
 import type {
   PostContentBlockNode,
   PostContentBodyDocumentV1,
@@ -12,6 +13,7 @@ import type {
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextProps, TextStyle } from 'react-native';
+import type { PostMediaItem } from './PostMediaGallery';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
@@ -26,11 +28,15 @@ export function PostContentRenderer({
   bodyText,
   document: value,
   interactive = true,
+  media,
+  onBodyPress,
   size = 'md',
 }: {
   bodyText: string;
   document: unknown;
   interactive?: boolean;
+  media: ReadonlyArray<PostMediaItem> | null;
+  onBodyPress?: () => void;
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
@@ -41,14 +47,41 @@ export function PostContentRenderer({
     { color: theme.text },
   ];
 
-  if (!document) {
-    return bodyText ? (
-      <Text {...replayBlockProps} style={bodyStyle}>
-        {bodyText}
-      </Text>
-    ) : null;
+  const body = !bodyText ? null : !document ? (
+    <Text {...replayBlockProps} style={bodyStyle}>
+      {bodyText}
+    </Text>
+  ) : (
+    renderNode(document, 'body', { bodyStyle, interactive })
+  );
+  const bodyContent =
+    body && onBodyPress ? (
+      <Pressable
+        accessible={false}
+        focusable={false}
+        onPress={onBodyPress}
+        tabIndex={-1}
+        testID="post-list-row-body"
+      >
+        {body}
+      </Pressable>
+    ) : (
+      body
+    );
+
+  if (!bodyContent && media !== null && media.length === 0) {
+    return null;
   }
-  return renderNode(document, 'body', { bodyStyle, interactive });
+  return (
+    <View style={styles.root} testID="post-content-renderer">
+      {bodyContent}
+      <PostMediaGallery
+        interactive={interactive}
+        media={media}
+        sensitive={document?.attrs?.sensitiveMedia ?? false}
+      />
+    </View>
+  );
 }
 
 type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostContentInlineNode;
@@ -117,6 +150,7 @@ function renderMark(
 }
 
 const styles = StyleSheet.create({
+  root: { gap: spacing.sm, minWidth: 0 },
   body: { fontFamily: 'Pretendard' },
   link: { textDecorationLine: 'underline' },
 });

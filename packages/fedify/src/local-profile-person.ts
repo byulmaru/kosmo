@@ -1,6 +1,8 @@
-import { Endpoints, Person } from '@fedify/vocab';
+import { Endpoints, Image, Person } from '@fedify/vocab';
+import { ProfileFollowPolicy } from '@kosmo/core/enums';
+import { isHttpUri } from './activitypub-uri';
 import type { ActorKeyPair, Context } from '@fedify/fedify';
-import type { LocalProfileActorProfile } from './local-profile-actor';
+import type { LocalProfileActorMedia, LocalProfileActorProfile } from './local-profile-actor';
 
 export interface CreateLocalProfilePersonOptions {
   readonly context: Context<void>;
@@ -10,6 +12,19 @@ export interface CreateLocalProfilePersonOptions {
 
 const getPublicKeyAlgorithmName = (keyPair: ActorKeyPair): string =>
   keyPair.publicKey.algorithm.name;
+
+const createProfileImage = (media: LocalProfileActorMedia | null): Image | null => {
+  if (!media) {
+    return null;
+  }
+
+  try {
+    const url = new URL(media.url);
+    return isHttpUri(url) ? new Image({ mediaType: media.mediaType, url }) : null;
+  } catch {
+    return null;
+  }
+};
 
 export const createLocalProfilePerson = ({
   context,
@@ -36,6 +51,8 @@ export const createLocalProfilePerson = ({
 
   return new Person({
     id: actorUri,
+    icon: createProfileImage(profile.avatar),
+    image: createProfileImage(profile.header),
     preferredUsername: profile.handle,
     name: profile.name,
     summary: profile.bio,
@@ -47,6 +64,7 @@ export const createLocalProfilePerson = ({
     following: context.getFollowingUri(profile.id),
     publicKey: rsaKeyPair.cryptographicKey,
     assertionMethods: ed25519KeyPairs.map((keyPair) => keyPair.multikey),
+    manuallyApprovesFollowers: profile.followPolicy === ProfileFollowPolicy.APPROVAL_REQUIRED,
     endpoints: new Endpoints({ sharedInbox: sharedInboxUri }),
   });
 };

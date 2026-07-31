@@ -93,6 +93,7 @@ export function SidebarNavigation({
       ]}
     >
       <ProfileSwitcher
+        onNavigate={onNavigate}
         onOpenChange={onSwitcherOpenChange}
         open={switcherOpen}
         query={data}
@@ -109,6 +110,7 @@ export function SidebarNavigation({
           compact && styles.compactNavigationArea,
           { borderColor: theme.border },
         ]}
+        testID={surface === 'drawer' ? 'mobile-sidebar-scroll' : undefined}
       >
         <View accessibilityLabel="주요 메뉴" role="navigation" style={styles.navigation}>
           {navigation.map((item) => {
@@ -246,7 +248,7 @@ export function SidebarNavigation({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, minHeight: 0 },
   iconWithBadge: { position: 'relative' },
   compactRoot: {
     alignItems: 'center',

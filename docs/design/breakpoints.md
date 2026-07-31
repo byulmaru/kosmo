@@ -90,6 +90,7 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
 
 - `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
+- `< compact`에서 mobile drawer가 열리면 drawer 안의 navigation content가 세로 internal scroll owner가 된다. drawer 안에서 profile picker를 연 경우에는 프로필 목록만 그 picker 안에서 다시 스크롤하며, drawer 바깥의 document/body scroll은 잠근다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.

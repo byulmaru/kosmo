@@ -93,8 +93,9 @@ export function PostThreadLayout<TPost>({
 const styles = StyleSheet.create({
   row: { position: 'relative' },
   currentContent: {
+    paddingBottom: spacing.xs,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.lg,
   },
   divider: {
     height: 1,

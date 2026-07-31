@@ -120,14 +120,81 @@ test.beforeEach(async () => {
 test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 본다', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS' }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('KOSMO는 현재 오픈 베타로 운영 중이에요.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText('이용 중 오류가 발생하거나 기능과 화면이 변경될 수 있어요.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('별마루 계정으로 가입/로그인해요.', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('가입할 때는 이메일만 수집하고, 이메일 인증으로 로그인해요.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');
   await expect(page.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
     'href',
     '/privacy',
   );
   await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toHaveCount(0);
 });
+
+for (const viewport of [
+  { centered: false, height: 812, padding: 24, width: 375 },
+  { centered: true, height: 900, padding: 128, width: 1024 },
+  { centered: true, height: 900, padding: 256, width: 1440 },
+]) {
+  test(`Welcome logo와 Hero가 ${viewport.width}px viewport에서 정렬된다`, async ({ page }) => {
+    await page.setViewportSize({ height: viewport.height, width: viewport.width });
+    await page.goto('/');
+
+    const logo = page.getByLabel('KOSMO 로고', { exact: true });
+    const heading = page.getByRole('heading', {
+      name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS',
+    });
+
+    await expect(logo).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await logo.boundingBox();
+        return box
+          ? {
+              height: Math.round(box.height),
+              width: Math.round(box.width),
+              x: Math.round(box.x),
+            }
+          : null;
+      })
+      .toEqual({ height: 101, width: 160, x: viewport.padding });
+    await expect(heading).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await heading.boundingBox();
+        return box ? Math.round(box.x) : null;
+      })
+      .toBe(viewport.padding);
+
+    const [logoBox, headingBox] = await Promise.all([logo.boundingBox(), heading.boundingBox()]);
+    expect(logoBox).not.toBeNull();
+    expect(headingBox).not.toBeNull();
+    expect(headingBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height);
+
+    if (viewport.centered) {
+      const privacyBox = await page.getByRole('link', { name: '개인정보 처리방침' }).boundingBox();
+      expect(privacyBox).not.toBeNull();
+
+      const contentCenter = (logoBox!.y + privacyBox!.y + privacyBox!.height) / 2;
+      expect(Math.abs(contentCenter - viewport.height / 2)).toBeLessThanOrEqual(2);
+    } else {
+      expect(Math.round(logoBox!.y)).toBe(44);
+      await expect
+        .poll(() => heading.evaluate((element) => getComputedStyle(element).wordBreak))
+        .toBe('keep-all');
+    }
+  });
+}
 
 test('개인정보 처리방침은 로그인 없이 공개되고 landing으로 돌아갈 수 있다', async ({ page }) => {
   await page.goto('/privacy');
@@ -167,7 +234,9 @@ test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 �
 
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: /나만의 타임라인/ })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '동인 창작 문화 향유자를 위한 차세대 연합우주 SNS' }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: '시작하기' })).toHaveAttribute('href', '/login');
 });
 

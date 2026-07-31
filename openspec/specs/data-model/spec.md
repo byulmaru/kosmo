@@ -274,7 +274,7 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: 게시물과 콘텐츠 저장
 
-시스템은 게시물 메타데이터와 게시물 콘텐츠 revision을 분리하여 저장하고, version, nullable Plain Text summary와 canonical ProseMirror body를 포함한 PostContent document JSON을 revision의 canonical 표현으로 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-461, PROD-554. 시스템은 게시물 메타데이터와 게시물 콘텐츠 revision을 분리하여 저장하고, version, nullable Plain Text summary와 canonical ProseMirror body를 포함한 PostContent document JSON을 revision의 canonical 표현으로 사용해야 한다(MUST).
 
 #### Scenario: 게시물 저장
 
@@ -287,10 +287,34 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **WHEN** 게시물 본문이 저장된다
 - **THEN** 시스템은 게시물, canonical versioned PostContent document JSON과 생성 시각을 저장한다
 - **AND** 게시물 콘텐츠는 `post.id`를 참조해야 한다
-- **AND** document는 nullable일 수 없고 V1은 exact `{ version: 1, summary: string | null, body: ProseMirrorDoc }` shape다
+- **AND** document는 nullable일 수 없고 V1 envelope는 exact `{ version: 1, summary: string | null, body: ProseMirrorDoc }` shape다
 - **AND** V1 summary는 nullable Plain Text Content Warning이고 body와 같은 revision의 authored content다
 - **AND** 시스템은 summary, 파생 Plain Text나 실행 가능한 HTML 본문을 별도 canonical 값으로 저장하지 않는다
-- **AND** JSON 안의 entity reference는 DB foreign key를 대체하지 않으며 필요한 relation projection은 같은 transaction에서 저장되고 canonical document로부터 재구축 가능해야 한다
+
+#### Scenario: V1 Media node 저장
+
+- **WHEN** 새 PostContent가 하나 이상의 Media와 함께 생성된다
+- **THEN** V1 body는 최대 4개의 block Media node를 포함할 수 있다
+- **AND** 각 Media node attrs는 Media identity만 가진다
+- **AND** body 안의 Media node 위치가 표시 순서를 결정한다
+- **AND** document root의 optional Sensitive Media attr는 모든 Media node에 적용되며 생략하면 `false`다
+- **AND** Media identity와 순서는 PostContent document에, nullable Alt Text는 Media column에, Sensitive Media는 document root에 각각 한 번만 저장한다
+- **AND** 별도 Post-Media relation, Media ID 배열 또는 Post Sensitive Media column을 만들지 않는다
+
+#### Scenario: 기존 V1 document 호환
+
+- **WHEN** Media node와 Sensitive Media attr가 없는 기존 V1 document를 읽거나 canonicalize한다
+- **THEN** document는 계속 유효하다
+- **AND** Sensitive Media는 `false`로 해석한다
+- **AND** 기존 paragraph, text, hard break와 link 의미를 바꾸지 않는다
+- **AND** Media node 추가만으로 document schema version을 올리지 않는다
+
+#### Scenario: Media 참조 검증 경계
+
+- **WHEN** PostContent를 생성할 때 body가 Media identity를 참조한다
+- **THEN** application은 저장 전에 참조 Media의 존재와 현재 작성 권한을 검증한다
+- **AND** PostContent Media 참조를 위한 별도 database foreign key projection을 만들지 않는다
+- **AND** 과거 revision 참조를 깨뜨리는 Media 물리 삭제는 별도 lifecycle 계약 없이 제공하지 않는다
 
 #### Scenario: 비프로덕션 기존 게시물 migration
 
@@ -636,18 +660,71 @@ source Reaction 없이 존재할 수 없어야 한다(MUST NOT).
 - **AND** 확인할 수 없는 값을 synthetic metadata로 만들거나 기존 Media row를 삭제하면 안 된다
 - **AND** 백필 뒤 모든 Ready Local Media가 URL, media type과 ready 시각을 가진 상태에서 constraint를 적용해야 한다
 
-### Requirement: Remote Media URL identity
+### Requirement: Reaction Type 문자열 저장
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, PROD-585. 시스템은 canonical 원격 URL을 Remote Media의 재사용 identity로 사용하고 database에서 중복을 방지해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395), [PROD-404](https://linear.app/byulmaru/issue/PROD-404) 시스템은 Reaction Type을 PostgreSQL enum이나 별도 registry identity가 아니라 `reaction.type`의 non-null Unicode 문자열로 저장해야 한다(MUST). Database는 현재 허용 목록을 `CHECK` constraint로 고정해서는 안 된다(MUST NOT).
 
-#### Scenario: Remote URL 중복 방지
+#### Scenario: Reaction Type 저장
 
-- **WHEN** `source=REMOTE`인 둘 이상의 Media가 같은 canonical `media.url`을 저장하려 한다
-- **THEN** PostgreSQL unique constraint가 하나의 Remote Media만 허용한다
-- **AND** Local Media URL의 identity 또는 uniqueness 계약을 변경하지 않는다
+- **WHEN** Reaction을 저장한다
+- **THEN** `reaction.type`은 입력의 정확한 Unicode 문자열을 저장한다
+- **AND** database column은 non-null text를 사용한다
 
-#### Scenario: Local upload schema 호환
+#### Scenario: 허용 목록을 database schema에 고정하지 않음
 
-- **WHEN** 기존 Local Media upload 시작과 완료가 실행된다
-- **THEN** Local upload 전용 identity인 storage reference와 Upload Account 계약은 유지된다
-- **AND** Remote URL uniqueness 때문에 서로 다른 Local Media의 URL 저장이 거부되지 않는다
+- **WHEN** Reaction schema migration을 적용한다
+- **THEN** database는 여섯 built-in Type을 enum, seed table 또는 `CHECK` constraint로 정의하지 않는다
+- **AND** 허용 Type 검증은 Reaction 생성 application service가 소유한다
+
+### Requirement: Reaction 관계와 무결성 저장
+
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395) 시스템은 Reaction을 UUIDv7 identity, Author Profile, Target Post, Reaction Type 문자열과 생성 시각을 가진 독립 행으로 저장해야 한다(MUST).
+
+#### Scenario: Reaction 행 저장
+
+- **WHEN** 새 Reaction을 저장한다
+- **THEN** `reaction.id`는 PostgreSQL `uuid`와 `uuidv7()` default를 사용한다
+- **AND** `profile_id`와 `post_id`는 각각 기존 `profile`과 `post` 행을 참조하는 non-null foreign key다
+- **AND** `type`은 non-null text다
+- **AND** `created_at`은 non-null 생성 시각으로 기록된다
+
+#### Scenario: 존재하지 않는 관계 거부
+
+- **WHEN** 존재하지 않는 Profile 또는 Post identity로 Reaction을 직접 저장하려 한다
+- **THEN** database foreign key는 insert를 거부한다
+
+#### Scenario: Profile 또는 Post 물리 삭제
+
+- **WHEN** Reaction이 참조하는 Profile 또는 Post 행이 물리적으로 삭제된다
+- **THEN** 대응하는 Reaction 행도 cascade로 삭제되어 orphan이 남지 않는다
+
+### Requirement: Reaction 유일성과 조회 index
+
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395), [PROD-407](https://linear.app/byulmaru/issue/PROD-407) database는 `(post_id, type, profile_id)` 조합의 Reaction을 하나로 제한해야 하며(MUST), Post별 Type count·Type별 Profile 목록과 Profile cleanup 경로에 필요한 index를 제공해야 한다(MUST).
+
+#### Scenario: 중복 조합 거부
+
+- **WHEN** 같은 `post_id`, `type`, `profile_id` 조합을 두 번 insert한다
+- **THEN** database unique constraint는 두 번째 insert를 거부한다
+
+#### Scenario: 다른 Type 공존
+
+- **WHEN** 같은 `post_id`와 `profile_id`에 서로 다른 `type` 문자열을 insert한다
+- **THEN** database는 각 Reaction 행을 허용한다
+
+#### Scenario: 조회와 cleanup index
+
+- **WHEN** migration이 Reaction schema를 생성한다
+- **THEN** unique index는 `post_id`, `type`, `profile_id` 순서로 생성된다
+- **AND** Profile 물리 삭제와 Profile 기준 cleanup을 위해 `profile_id` index를 생성한다
+- **AND** Type별 Profile 목록의 `created_at DESC`, `id DESC` 정렬을 위해 `post_id`, `type`, `created_at DESC`, `id DESC` 순서의 index를 생성한다
+
+### Requirement: additive Reaction migration
+
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395) Reaction 저장 schema는 기존 도메인 행을 재작성하지 않는 additive migration으로 전달되어야 한다(MUST).
+
+#### Scenario: 기존 database에 migration 적용
+
+- **WHEN** 기존 Profile과 Post가 있는 database에 Reaction migration을 적용한다
+- **THEN** 시스템은 새 Reaction schema만 추가한다
+- **AND** 기존 Profile, Post 또는 다른 도메인 행을 backfill·삭제·재작성하지 않는다

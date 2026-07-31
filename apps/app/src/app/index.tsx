@@ -18,7 +18,12 @@ import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { TextStyle } from 'react-native';
 import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
+
+type WebTextStyle = TextStyle & { wordBreak?: 'keep-all' };
+
+const mobileWebTitleStyle: WebTextStyle = { wordBreak: 'keep-all' };
 
 const ExchangeNativeOidcSessionMutation = graphql`
   mutation IndexScreenExchangeNativeOidcSessionMutation($input: ExchangeNativeOidcSessionInput!) {
@@ -85,25 +90,42 @@ export default function IndexScreen() {
     return null;
   }
 
-  const heroDescription =
-    width < breakpoints.compact
-      ? '흩어진 타임라인을 한곳에서.\n별마루 계정으로 바로 로그인하세요.'
-      : '흩어진 타임라인을 한곳에서. 별마루 계정으로 바로 로그인하세요.';
+  const isDesktopWeb = Platform.OS === 'web' && width >= breakpoints.compact;
+  const isMobileWeb = Platform.OS === 'web' && !isDesktopWeb;
+  const horizontalPadding =
+    Platform.OS !== 'web'
+      ? spacing.xl
+      : width >= breakpoints.full
+        ? 256
+        : width >= breakpoints.compact
+          ? 128
+          : spacing.xl;
 
   return (
-    <ScrollView contentContainerStyle={[styles.root, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
-        <BrandLogo variant="full" width={136} />
-      </View>
-      <View style={[styles.hero, { paddingHorizontal: width >= 1024 ? 128 : 48 }]}>
+    <ScrollView
+      contentContainerStyle={[
+        styles.root,
+        isDesktopWeb ? styles.desktopRoot : styles.mobileRoot,
+        { backgroundColor: theme.background, paddingHorizontal: horizontalPadding },
+      ]}
+    >
+      <View style={[styles.hero, isDesktopWeb ? styles.desktopHero : null]}>
+        <BrandLogo variant="full" width={160} />
         <View style={styles.heroContent}>
-          <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-            나만의 타임라인,{`\n`}여기서 시작하세요
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.text }, isMobileWeb ? mobileWebTitleStyle : null]}
+          >
+            동인 창작 문화 향유자를 위한 차세대 연합우주 SNS
           </Text>
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
-            {heroDescription}
-          </Text>
+          <View style={styles.betaNotice}>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              KOSMO는 현재 오픈 베타로 운영 중이에요.
+            </Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              이용 중 오류가 발생하거나 기능과 화면이 변경될 수 있어요.
+            </Text>
+          </View>
           <View style={styles.action}>
             {Platform.OS === 'web' ? (
               <Link asChild href={'/login' as Href}>
@@ -116,9 +138,14 @@ export default function IndexScreen() {
                 시작하기
               </Button>
             )}
-            <Text style={[styles.hint, { color: theme.textSecondary }]}>
-              별마루 계정으로 가입/로그인해요.
-            </Text>
+            <View style={styles.accountNotice}>
+              <Text style={[styles.hint, { color: theme.textSecondary }]}>
+                별마루 계정으로 가입/로그인해요.
+              </Text>
+              <Text style={[styles.hint, { color: theme.textSecondary }]}>
+                가입할 때는 이메일만 수집하고, 이메일 인증으로 로그인해요.
+              </Text>
+            </View>
           </View>
           {error ? (
             <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
@@ -140,24 +167,21 @@ export default function IndexScreen() {
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1 },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    height: 84,
-    paddingHorizontal: 48,
-  },
+  mobileRoot: { paddingBottom: spacing.xxl, paddingTop: 44 },
+  desktopRoot: { paddingVertical: spacing.xxxl },
   hero: {
+    alignItems: 'flex-start',
     flex: 1,
-    justifyContent: 'center',
-    paddingVertical: spacing.xxl,
+    gap: spacing.xxl,
   },
+  desktopHero: { justifyContent: 'center' },
   heroContent: {
     alignItems: 'flex-start',
     gap: 20,
     maxWidth: 620,
   },
-  eyebrow: { fontFamily: 'SUIT', fontWeight: '500', ...typography.sm },
+  betaNotice: { gap: spacing.xs },
+  accountNotice: { gap: spacing.xs },
   title: { fontFamily: 'SUIT', fontSize: 30, fontWeight: '700', lineHeight: 36 },
   description: { fontFamily: 'SUIT', ...typography.md },
   action: { alignItems: 'flex-start', gap: spacing.sm },

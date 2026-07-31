@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -24,7 +24,11 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
+const selectedAvatarUrl = '/apple-touch-icon.png';
+const selectedHeaderUrl = '/og-default.png';
+const secondAvatarUrl = '/icon-192.png';
 const secondProfile = profile({
+  avatar: { id: 'media-shell-second-avatar', url: secondAvatarUrl },
   displayName: '먼 우주의 사용자',
   handle: 'remote',
   id: 'profile-remote',
@@ -32,6 +36,8 @@ const secondProfile = profile({
   viewerState: { follow: null, followRequest: null, isSelf: true },
 });
 const selectedProfile = profile({
+  avatar: { id: 'media-shell-selected-avatar', url: selectedAvatarUrl },
+  header: { id: 'media-shell-selected-header', url: selectedHeaderUrl },
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
@@ -68,6 +74,31 @@ const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
 const longProfileQuery = {
   ...query,
   ...shellQuery({ profiles: [selectedProfile, ...additionalProfiles], selectedProfile }),
+};
+const imagePresentationQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [
+      selectedProfile,
+      secondProfile,
+      profile({
+        displayName: '이미지 없는 프로필',
+        handle: 'fallback',
+        id: 'profile-fallback',
+        relativeHandle: '@fallback',
+        viewerState: { follow: null, followRequest: null, isSelf: true },
+      }),
+    ],
+    selectedProfile,
+  }),
+};
+const selectedProfileWithoutHeader = { ...selectedProfile, header: null };
+const headerFallbackQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithoutHeader, secondProfile],
+    selectedProfile: selectedProfileWithoutHeader,
+  }),
 };
 
 const ShellStoriesQuery = graphql`
@@ -258,10 +289,10 @@ export const SharedNavigation: Story = {
 
 export const BottomNavigation: Story = {
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('link', { name: '글쓰기' })).toHaveAttribute(
-      'href',
-      '/compose',
-    );
+    const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
+    expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
   },
   render: () => <BottomNavigationStory />,
 };
@@ -772,6 +803,60 @@ export const ProfileSwitcherInteraction: Story = {
   render: () => <ProfileSwitcherStory />,
 };
 
+export const ProfileSwitcherImagePresentation: Story = {
+  parameters: { relay: { data: imagePresentationQuery } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeAvatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    await waitFor(() =>
+      expect(activeAvatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl),
+    );
+    const headerImage = await waitFor(() => {
+      const image = canvasElement.querySelector<HTMLImageElement>(
+        `img[src="${selectedHeaderUrl}"]`,
+      );
+      expect(image).toBeInTheDocument();
+      return image!;
+    });
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+    expect(cover.contains(headerImage)).toBe(true);
+    expect(getComputedStyle(cover).filter).toBe('none');
+
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    const options = within(list).getAllByRole('button');
+    expect(options).toHaveLength(3);
+
+    const secondAvatar = within(options[1]!).getByLabelText(
+      `${secondProfile.displayName} 프로필 이미지`,
+    );
+    await waitFor(() =>
+      expect(secondAvatar.querySelector('img')).toHaveAttribute('src', secondAvatarUrl),
+    );
+
+    const fallbackAvatar = within(options[2]!).getByLabelText('이미지 없는 프로필 프로필 이미지');
+    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherHeaderFallbackPresentation: Story = {
+  parameters: { relay: { data: headerFallbackQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+
+    expect(canvasElement.querySelector(`img[src="${selectedHeaderUrl}"]`)).not.toBeInTheDocument();
+    expect(getComputedStyle(cover).backgroundImage).toContain('linear-gradient');
+    expect(getComputedStyle(cover).filter).toBe('blur(1px)');
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
 export const ProfileSwitcherSelectTracksAnalytics: Story = {
   parameters: {
     relay: {
@@ -1060,8 +1145,9 @@ export const UniversalMobile: Story = {
     expect(menuButton.getBoundingClientRect().width).toBe(44);
     expect(canvas.getAllByRole('heading', { name: '홈' })).toHaveLength(1);
     expect(canvas.queryByRole('link', { name: '북마크' })).not.toBeInTheDocument();
-    await userEvent.click(menuButton);
-    const page = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const ownerDocument = canvasElement.ownerDocument;
+    const page = within(ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
@@ -1091,15 +1177,14 @@ export const UniversalMobile: Story = {
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(within(drawer).queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
     const profileSummary = page.getByLabelText('활성 프로필');
+    const followingCountLink = within(profileSummary).getByRole('link', { name: /팔로잉/ });
+    const followersCountLink = within(profileSummary).getByRole('link', { name: /팔로워/ });
     expect(profileSummary).toBeInTheDocument();
-    expect(within(profileSummary).getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
-      'href',
-      '/@selected/following',
-    );
-    expect(within(profileSummary).getByRole('link', { name: /팔로워/ })).toHaveAttribute(
-      'href',
-      '/@selected/followers',
-    );
+    expect(followingCountLink).toHaveAttribute('href', '/@selected/following');
+    expect(followersCountLink).toHaveAttribute('href', '/@selected/followers');
+    fireEvent.click(followingCountLink, { metaKey: true });
+    expect(ownerDocument.getElementById('mobile-sidebar')).not.toBeNull();
+    expect(canvas.getByRole('heading', { name: '홈' })).toBeInTheDocument();
     expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
@@ -1113,7 +1198,7 @@ export const UniversalMobile: Story = {
     await userEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
     expect(profileTrigger.querySelector('path')).toHaveAttribute('d', 'm18 15-6-6-6 6');
-    const menu = await page.findByRole('menu', { name: '프로필 전환' });
+    const menu = await page.findByLabelText('프로필 전환');
     const picker = menu.parentElement;
     const openTriggerRect = profileTrigger.getBoundingClientRect();
     const openNavigationRect = drawer.getBoundingClientRect();
@@ -1124,11 +1209,142 @@ export const UniversalMobile: Story = {
     expect(openNavigationRect).toEqual(navigationRect);
     expect(pickerRect.top).toBeGreaterThanOrEqual(triggerRect.bottom);
     expect(pickerRect.top - triggerRect.bottom).toBeLessThanOrEqual(12);
+
+    await userEvent.click(followingCountLink);
+    await waitFor(() => {
+      expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
+    });
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await waitFor(() => {
+      expect(ownerDocument.getElementById('mobile-sidebar')).not.toBeNull();
+    });
+    expect(page.getByRole('button', { name: '프로필 목록' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await userEvent.click(
+      within(page.getByLabelText('활성 프로필')).getByRole('link', {
+        name: /팔로워/,
+      }),
+    );
+    await waitFor(() => {
+      expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
+    });
   },
   render: () => (
     <View style={{ height: 844 }}>
       <UniversalShellStory />
     </View>
+  ),
+};
+
+export const UniversalMobileLongProfilePickerScroll: Story = {
+  globals: { viewport: { isRotated: false, value: 'shellMobileShort' } },
+  parameters: {
+    ...universalParameters,
+    relay: { data: longProfileQuery },
+    viewport: {
+      options: {
+        shellMobileShort: {
+          name: 'Shell mobile short',
+          styles: { height: '480px', width: '390px' },
+          type: 'mobile',
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const storyWindow = ownerDocument.defaultView;
+    const page = within(ownerDocument.body);
+    const previousScrollPosition = {
+      x: storyWindow?.scrollX ?? 0,
+      y: storyWindow?.scrollY ?? 0,
+    };
+    const previousBodyStyle = {
+      left: ownerDocument.body.style.left,
+      overflow: ownerDocument.body.style.overflow,
+      position: ownerDocument.body.style.position,
+      right: ownerDocument.body.style.right,
+      top: ownerDocument.body.style.top,
+      width: ownerDocument.body.style.width,
+    };
+    expect(storyWindow).not.toBeNull();
+    storyWindow!.scrollTo(8, 120);
+    await waitFor(() => {
+      expect(storyWindow!.scrollX).toBe(8);
+      expect(storyWindow!.scrollY).toBe(120);
+    });
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+
+    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const drawerScroll = page.getByTestId('mobile-sidebar-scroll');
+    const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
+
+    expect(drawer).toBeVisible();
+    expect(getComputedStyle(drawerScroll).overflowY).toBe('auto');
+    expect(drawerScroll.scrollHeight).toBeGreaterThan(drawerScroll.clientHeight);
+    expect(ownerDocument.body.style.overflow).toBe('hidden');
+    expect(ownerDocument.body.style.position).toBe('fixed');
+    expect(ownerDocument.body.style.top).toBe('-120px');
+    expect(ownerDocument.body.style.left).toBe('-8px');
+    expect(ownerDocument.body.style.right).toBe('0px');
+    expect(ownerDocument.body.style.width).toBe('100%');
+    drawerScroll.scrollTop = drawerScroll.scrollHeight;
+    expect(drawerScroll.scrollTop).toBeGreaterThan(0);
+    drawerScroll.scrollTop = 0;
+
+    await userEvent.click(profileTrigger);
+    const list = await page.findByLabelText('전환할 프로필 목록');
+    const picker = await page.findByRole('menu', { name: '프로필 전환' });
+    const options = within(list).getAllByRole('menuitemradio');
+    const addProfile = within(picker).getByRole('menuitem', { name: '새 프로필 추가' });
+
+    expect(picker).toBeVisible();
+    expect(options).toHaveLength(12);
+    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(getComputedStyle(list).overflowY).toBe('auto');
+    expect(addProfile).toBeVisible();
+    list.scrollTop = list.scrollHeight;
+    expect(list.scrollTop).toBeGreaterThan(0);
+
+    await userEvent.click(addProfile);
+    const handle = page.getByRole('textbox', { name: '프로필 핸들' });
+    const createButton = page.getByRole('button', { name: '만들기' });
+    const pickerViewport = picker.parentElement;
+    expect(pickerViewport).not.toBeNull();
+    const pickerBounds = pickerViewport!.getBoundingClientRect();
+    const drawerBounds = drawer.getBoundingClientRect();
+    const createButtonBounds = createButton.getBoundingClientRect();
+    expect(createButtonBounds.top).toBeGreaterThanOrEqual(pickerBounds.top);
+    expect(createButtonBounds.bottom).toBeLessThanOrEqual(pickerBounds.bottom);
+    expect(createButtonBounds.top).toBeGreaterThanOrEqual(drawerBounds.top);
+    expect(createButtonBounds.bottom).toBeLessThanOrEqual(drawerBounds.bottom);
+
+    await userEvent.type(handle, 'drawer_draft');
+    await userEvent.click(profileTrigger);
+    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await userEvent.click(profileTrigger);
+    const reopenedPicker = await page.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(reopenedPicker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    expect(page.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('drawer_draft');
+
+    await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
+    await waitFor(() => {
+      expect(ownerDocument.body.style).toMatchObject(previousBodyStyle);
+      expect(storyWindow!.scrollX).toBe(8);
+      expect(storyWindow!.scrollY).toBe(120);
+    });
+    storyWindow!.scrollTo(previousScrollPosition.x, previousScrollPosition.y);
+  },
+  render: () => (
+    <>
+      <View style={{ height: 480 }}>
+        <UniversalShellStory />
+      </View>
+      <View aria-hidden style={{ height: 480, width: 800 }} />
+    </>
   ),
 };
 

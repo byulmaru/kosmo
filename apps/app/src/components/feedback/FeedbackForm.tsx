@@ -28,6 +28,7 @@ const SubmitFeedbackMutation = graphql`
 
 export function FeedbackForm() {
   const theme = useTheme();
+  const web = Platform.OS === 'web';
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
   const [body, setBody] = useState('');
   const [bodyTouched, setBodyTouched] = useState(false);
@@ -77,17 +78,29 @@ export function FeedbackForm() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
+    <View
+      style={[
+        styles.root,
+        web ? null : styles.nativeRoot,
+        web ? null : { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
+    >
       <View style={styles.header}>
-        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-          피드백 보내기
-        </Text>
+        {web ? null : (
+          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+            피드백 보내기
+          </Text>
+        )}
         <Text style={[styles.description, { color: theme.textSecondary }]}>
           KOSMO를 더 좋게 만들 수 있도록 의견을 들려주세요.
         </Text>
       </View>
 
-      <View accessibilityLabel="피드백 종류" role="radiogroup" style={styles.options}>
+      <View
+        accessibilityLabel="피드백 종류"
+        role="radiogroup"
+        style={web ? styles.webOptions : styles.nativeOptions}
+      >
         {feedbackOptions.map((option, index) => {
           const selected = option.value === kind;
           const focused = option.value === focusedKind;
@@ -133,13 +146,20 @@ export function FeedbackForm() {
               role="radio"
               style={({ pressed }) => [
                 styles.option,
+                web ? styles.webOption : styles.nativeOption,
+                web && index === feedbackOptions.length - 1 ? styles.webOptionLast : null,
+                web && focused ? styles.webOptionFocused : null,
                 {
-                  backgroundColor: selected
-                    ? theme.surface
-                    : pressed
-                      ? theme.surface
-                      : 'transparent',
-                  borderColor: focused ? theme.text : selected ? theme.primary : theme.border,
+                  backgroundColor: selected || pressed ? theme.surface : 'transparent',
+                  borderBottomColor: web ? theme.divider : undefined,
+                  borderColor: web
+                    ? undefined
+                    : focused
+                      ? theme.text
+                      : selected
+                        ? theme.primary
+                        : theme.border,
+                  outlineColor: web && focused ? theme.focus : undefined,
                 },
               ]}
               tabIndex={Platform.OS === 'web' ? (selected ? 0 : -1) : undefined}
@@ -190,7 +210,7 @@ export function FeedbackForm() {
         </Text>
       ) : null}
 
-      <View style={styles.actions}>
+      <View style={web ? styles.webActions : styles.nativeActions}>
         <Button
           accessibilityLabel={status === 'error' ? '피드백 다시 시도' : '피드백 보내기'}
           accessibilityState={{ busy: submitting, disabled: !canSubmit }}
@@ -198,7 +218,7 @@ export function FeedbackForm() {
           disabled={!canSubmit}
           loading={submitting}
           onPress={submit}
-          style={styles.submitButton}
+          style={[styles.submitButton, web ? styles.webSubmitButton : null]}
         >
           {actionLabel}
         </Button>
@@ -209,26 +229,41 @@ export function FeedbackForm() {
 
 const styles = StyleSheet.create({
   root: {
+    gap: spacing.lg,
+    width: '100%',
+  },
+  nativeRoot: {
     borderRadius: radii.md,
     borderWidth: 1,
-    gap: spacing.lg,
     maxWidth: 680,
     padding: spacing.xl,
-    width: '100%',
   },
   header: { gap: spacing.xs },
   title: { fontFamily: 'SUIT', fontSize: 24, fontWeight: '700', lineHeight: 32 },
   description: { fontFamily: 'SUIT', ...typography.md },
-  options: { gap: spacing.sm },
+  webOptions: { gap: 0 },
+  nativeOptions: { gap: spacing.sm },
   option: {
     alignItems: 'center',
-    borderRadius: radii.sm,
-    borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
     minHeight: 48,
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  webOption: {
+    borderRadius: radii.sm,
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing.sm,
+  },
+  webOptionLast: { borderBottomWidth: 0 },
+  webOptionFocused: {
+    outlineStyle: 'solid' as never,
+    outlineWidth: 2,
+  },
+  nativeOption: {
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
   },
   radio: {
     alignItems: 'center',
@@ -243,5 +278,7 @@ const styles = StyleSheet.create({
   success: { fontFamily: 'SUIT', ...typography.sm },
   error: { fontFamily: 'SUIT', ...typography.sm },
   submitButton: { minHeight: 48 },
-  actions: { alignItems: 'flex-start' },
+  webSubmitButton: { width: '100%' },
+  webActions: { width: '100%' },
+  nativeActions: { alignItems: 'flex-start' },
 });

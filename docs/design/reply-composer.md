@@ -54,6 +54,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   대화 관계를 표현한다.
 - Parent 영역은 작성 맥락 확인을 위한 비대화형 presentation이다. 작성자·Source·본문을 활성화해 modal 작성
   상태를 잃는 route 이동을 만들지 않는다.
+- 일반 첨부 이미지는 Parent 맥락에 표시하되, Sensitive Media는 가림 placeholder만 유지한다. Sensitive 공개와
+  이미지 오류 재시도처럼 상태를 바꾸는 Media control은 Parent 영역에 노출하지 않는다.
 
 ### editor와 고정 footer
 

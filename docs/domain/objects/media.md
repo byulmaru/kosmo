@@ -68,7 +68,7 @@ Profile이 달라도 참조할 수 있다.
 | ----------------- | --------- | --------- | ------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | Local 업로드 시작 | Profile   | Media     | 없음                           | `Account.Active`, `Profile.Member`      | 행동 주체는 선택된 Active/Normal Profile이고 Media Storage Service가 제한된 업로드 권한을 발급한다         | Source=Local, State=Uploading인 Media와 행동 주체 Profile/요청 Account 관계가 생성된다           |
 | Local 업로드 완료 | Profile   | Media     | Uploading Media                | `Account.Active`, `Media.UploadAccount` | Source가 Local이고 State가 Uploading이며 Media Storage Service에서 이미지 저장 성공과 공개 표현이 확인된다 | 같은 Media의 State가 Ready가 되고 Ready At, URL과 Media Type이 함께 기록된다                     |
-| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태이고 같은 Remote URL의 Media가 없다                      | Source=Remote, State=Ready인 Media와 Remote Profile 관계가 생성된다                              |
+| Remote Media 등록 | 시스템    | Media     | Remote Profile, Remote URL     | `System.RemoteMediaSource`              | Remote Profile의 Instance가 새 원격 요청 허용 상태다                                                       | Source=Remote, State=Ready인 새 Media와 Remote Profile 관계가 생성된다                           |
 | Remote Media 갱신 | 시스템    | Media     | Fetch 결과                     | `System.RemoteMediaSource`              | Source가 Remote이고 Profile의 Instance가 새 원격 요청 허용 상태다                                          | 원격 속성과 Remote Fetched At이 갱신된다                                                         |
 | Post 첨부         | Profile   | Media     | Ready Media, nullable Alt Text | `Account.Active`, `Media.UploadAccount` | 새 Post Content가 같은 Media를 참조하며 Media가 첨부 가능하다                                              | Post Content에는 Media ID만 저장되고 같은 transaction에서 Media의 Alt Text가 입력값으로 갱신된다 |
 
@@ -85,9 +85,21 @@ identity와 최초 Ready At을 반환한다.
 Media 등록 대상으로 사용하고 초과분은 무시한다. `Image`는 Media Type을 생략할 수 있으며, `Document`는 Media
 Type의 MIME essence가 `image/*`일 때만 이미지로 분류한다. 선택한 attachment의 canonical HTTP(S) URL은 Remote
 URL로 저장하고 원본 nullable Media Type 문자열은 정규화하지 않고 보존한다. 선택한 attachment 중 URL이 없거나
-여러 개, HTTP(S)가 아니거나 서로 중복이면 일부만 등록하지 않고 해당 Note의 Media/Post materialization 전체를
+여러 개 또는 HTTP(S)가 아니면 일부만 등록하지 않고 해당 Note의 Media/Post materialization 전체를
 남기지 않는다. nullable name은 Media의 Alt Text로 보존한다. attachment metadata와 이미지 byte를 위한 추가
 원격 fetch는 수행하지 않는다.
+
+Remote URL은 원본 위치일 뿐 Media identity나 재사용 key가 아니다. 서로 다른 Note attachment는 같은 작성자와
+URL을 사용해도 각각 새 Media를 만들며, 한 Note 안에서 URL이 반복되어도 별도 Media와 PostContent Media node로
+보존한다. URL index나 URL 검색으로 Media를 합치지 않는다.
+
+원격 ActivityPub actor의 embedded `icon`은 Profile avatar로, embedded `image`는 Profile header로 투영한다.
+각 표현은 정확히 하나의 canonical HTTP(S) URL을 가진 경우 원본 Remote Profile 소유의 Ready Remote Media로
+등록하고 nullable Media Type과 사람이 읽을 수 있는 이름을 보존한다. IRI-only 표현이나 부적합한 embedded
+표현을 위해 추가 원격 fetch를 수행하지 않으며, 해당 표현만 없는 것으로 처리해 기본 Remote Profile
+materialization을 막지 않는다. avatar와 header는 URL이 같아도 kind별 별도 Media와 metadata를 가진다. 같은
+kind의 refresh에서 URL이 그대로면 현재 관계의 Media를 갱신할 수 있지만 URL로 다른 Media를 검색하거나 합치지
+않는다. URL이 바뀌면 새 Media를 만들고 현재 관계를 교체한다.
 
 ## 권한
 

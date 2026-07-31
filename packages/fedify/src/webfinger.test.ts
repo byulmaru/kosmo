@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
+import {
+  AccountState,
+  InstanceKind,
+  InstanceState,
+  MediaSource,
+  MediaState,
+  ProfileFollowPolicy,
+  ProfileMediaKind,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
+import { and, eq } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -12,10 +22,13 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Accounts: typeof CoreDb.Accounts;
 let ActivityPubActorKeys: typeof CoreDb.ActivityPubActorKeys;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let federation: typeof FederationModule.federation;
@@ -29,8 +42,18 @@ describe('WebFinger local profile handle mapping', () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
-    ({ ActivityPubActorKeys, ActivityPubActors, db, firstOrThrow, Instances, pg, Profiles } =
-      await import('@kosmo/core/db'));
+    ({
+      Accounts,
+      ActivityPubActorKeys,
+      ActivityPubActors,
+      db,
+      firstOrThrow,
+      Instances,
+      Media,
+      pg,
+      ProfileMedia,
+      Profiles,
+    } = await import('@kosmo/core/db'));
     ({ federation } = await import('./federation'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
     ({ resolveLocalActorIdentifierByHandle } = await import('./webfinger'));
@@ -43,6 +66,7 @@ describe('WebFinger local profile handle mapping', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(Media);
     await db.delete(Profiles);
   });
 
@@ -190,7 +214,25 @@ describe('WebFinger local profile handle mapping', () => {
   });
 
   test('serves the canonical actor document and reuses its stored key pairs', async () => {
-    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const profile = await createProfile({
+      bio: 'Local profile bio',
+      displayName: 'Alice Profile',
+      followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+      handle: 'alice',
+      instanceId: localInstanceId,
+    });
+    const avatar = await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      mediaType: 'image/webp',
+      profileId: profile.id,
+      url: 'https://media.example/alice-avatar.webp',
+    });
+    const header = await createLocalMedia({
+      kind: ProfileMediaKind.HEADER,
+      mediaType: 'image/png',
+      profileId: profile.id,
+      url: 'https://media.example/alice-header.png',
+    });
     const requestActor = () =>
       federation.fetch(
         new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
@@ -205,12 +247,16 @@ describe('WebFinger local profile handle mapping', () => {
       followers?: string;
       following?: string;
       id?: string;
+      icon?: { mediaType?: string; type?: string; url?: string };
+      image?: { mediaType?: string; type?: string; url?: string };
       inbox?: string;
+      manuallyApprovesFollowers?: boolean;
       name?: string;
       outbox?: string;
       preferredUsername?: string;
       publicKey?: { id?: string; owner?: string };
       published?: string;
+      summary?: string;
       url?: string;
     };
 
@@ -218,7 +264,19 @@ describe('WebFinger local profile handle mapping', () => {
     assert.match(response.headers.get('content-type') ?? '', /application\/activity\+json/);
     assert.equal(actor.id, `${publicOrigin}/ap/actor/${profile.id}`);
     assert.equal(actor.preferredUsername, 'alice');
-    assert.equal(actor.name, 'alice');
+    assert.equal(actor.name, 'Alice Profile');
+    assert.equal(actor.summary, 'Local profile bio');
+    assert.deepEqual(actor.icon, {
+      mediaType: avatar.mediaType,
+      type: 'Image',
+      url: avatar.url,
+    });
+    assert.deepEqual(actor.image, {
+      mediaType: header.mediaType,
+      type: 'Image',
+      url: header.url,
+    });
+    assert.equal(actor.manuallyApprovesFollowers, true);
     assert.equal(actor.url, `${publicOrigin}/@alice`);
     assert.equal(actor.published, profile.createdAt.toString());
     assert.equal(actor.inbox, `${publicOrigin}/ap/actor/${profile.id}/inbox`);
@@ -245,6 +303,81 @@ describe('WebFinger local profile handle mapping', () => {
     const keysAfterSecondRequest = await db.select().from(ActivityPubActorKeys);
     assert.deepEqual(actorsAfterSecondRequest, actorsAfterFirstRequest);
     assert.deepEqual(keysAfterSecondRequest, keysAfterFirstRequest);
+  });
+
+  test('reflects optional media replacement and removal while omitting ineligible media', async () => {
+    const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const requestActor = async () => {
+      const response = await federation.fetch(
+        new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 200);
+      return (await response.json()) as {
+        icon?: { mediaType?: string; type?: string; url?: string };
+        image?: { mediaType?: string; type?: string; url?: string };
+        manuallyApprovesFollowers?: boolean;
+        summary?: string;
+      };
+    };
+
+    const initial = await requestActor();
+    assert.equal(initial.icon, undefined);
+    assert.equal(initial.image, undefined);
+    assert.equal(initial.summary, undefined);
+    assert.equal(initial.manuallyApprovesFollowers, false);
+
+    await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      profileId: profile.id,
+      state: MediaState.UPLOADING,
+    });
+    assert.equal((await requestActor()).icon, undefined);
+    await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, profile.id));
+
+    const otherProfile = await createProfile({ handle: 'other', instanceId: localInstanceId });
+    const otherAvatar = await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      profileId: otherProfile.id,
+      url: 'https://media.example/other-avatar.png',
+    });
+    await db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: otherAvatar.id,
+      profileId: profile.id,
+    });
+    assert.equal((await requestActor()).icon, undefined);
+    await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, profile.id));
+
+    const firstAvatar = await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      profileId: profile.id,
+      url: 'https://media.example/avatar-first.png',
+    });
+    assert.equal((await requestActor()).icon?.url, firstAvatar.url);
+
+    const replacementAvatar = await createLocalMedia({
+      link: false,
+      profileId: profile.id,
+      url: 'https://media.example/avatar-replacement.png',
+    });
+    await db
+      .update(ProfileMedia)
+      .set({ mediaId: replacementAvatar.id })
+      .where(
+        and(eq(ProfileMedia.profileId, profile.id), eq(ProfileMedia.kind, ProfileMediaKind.AVATAR)),
+      );
+    assert.equal((await requestActor()).icon?.url, replacementAvatar.url);
+
+    await db.delete(ProfileMedia).where(eq(ProfileMedia.profileId, profile.id));
+    const removed = await requestActor();
+    assert.equal(removed.icon, undefined);
+    assert.equal(removed.image, undefined);
+    assert.equal(removed.summary, undefined);
+    assert.equal(removed.manuallyApprovesFollowers, false);
   });
 
   test('serves count-only followers and following collections without creating actor keys', async () => {
@@ -410,6 +543,9 @@ const createRemoteInstance = async () =>
     .then((instance) => instance.id);
 
 const createProfile = async ({
+  bio,
+  displayName,
+  followPolicy = ProfileFollowPolicy.OPEN,
   followersCount,
   followingCount,
   handle,
@@ -417,6 +553,9 @@ const createProfile = async ({
   instanceId,
   state = ProfileState.ACTIVE,
 }: {
+  bio?: string | null;
+  displayName?: string;
+  followPolicy?: ProfileFollowPolicy;
   followersCount?: number;
   followingCount?: number;
   handle: string;
@@ -427,8 +566,9 @@ const createProfile = async ({
   db
     .insert(Profiles)
     .values({
-      displayName: handle,
-      followPolicy: ProfileFollowPolicy.OPEN,
+      bio,
+      displayName: displayName ?? handle,
+      followPolicy,
       ...(followersCount == null ? {} : { followersCount }),
       ...(followingCount == null ? {} : { followingCount }),
       handle,
@@ -439,3 +579,54 @@ const createProfile = async ({
     })
     .returning()
     .then(firstOrThrow);
+
+const createLocalMedia = async ({
+  kind,
+  link = true,
+  mediaType = 'image/png',
+  profileId,
+  state = MediaState.READY,
+  url = 'https://media.example/profile.png',
+}: {
+  kind?: ProfileMediaKind;
+  link?: boolean;
+  mediaType?: string;
+  profileId: string;
+  state?: MediaState;
+  url?: string;
+}) => {
+  const now = Temporal.Instant.from('2026-07-31T00:00:00Z');
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: 'Media owner',
+      oidcSubject: `actor-media-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const media = await db
+    .insert(Media)
+    .values({
+      accountId: account.id,
+      mediaType: state === MediaState.READY ? mediaType : null,
+      profileId,
+      readyAt: state === MediaState.READY ? now : null,
+      source: MediaSource.LOCAL,
+      state,
+      storageReference: `actor-media-${crypto.randomUUID()}`,
+      uploadExpiresAt: now.add({ hours: 1 }),
+      url: state === MediaState.READY ? url : null,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  if (link) {
+    if (!kind) {
+      throw new Error('Profile media kind is required when linking media');
+    }
+    await db.insert(ProfileMedia).values({ kind, mediaId: media.id, profileId });
+  }
+
+  return media;
+};

@@ -80,6 +80,12 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 Profile Origin은 연결된 Instance Type과 같아야 한다. Follow Approval Policy 변경은 이미 존재하는 Pending Follow
 Request의 상태나 존재를 바꾸지 않는다.
 
+ActivityPub Remote Profile 등록·갱신에서 actor의 embedded `icon`은 avatar Media, embedded `image`는 header
+Media 관계로 투영한다. 최초 actor lookup, stale refresh와 검증된 inbound `Update(Actor)`는 같은 표현 동기화
+경계를 사용한다. 원격 표현 URL이 바뀌면 해당 관계를 교체하고 표현이 사라지면 관계를 제거하되, 더 이상 참조하지
+않는 Remote Media의 물리 삭제는 이 행동에 포함하지 않는다. IRI-only 또는 부적합한 표현은 Profile scalar와
+actor endpoint materialization을 막지 않고 해당 avatar/header가 없는 것으로 처리한다.
+
 표시 이름의 1-40자 정책은 Local Profile 편집에서 새로 입력하거나 기존 값을 변경할 때 적용한다. 이미 40자를
 초과한 legacy Local 표시 이름은 원문을 변경하지 않고 다른 Profile 속성만 편집하는 동안 존속할 수 있다. 표시
 이름 원문을 한 글자라도 변경하면 legacy 예외를 적용하지 않고 1-40자 정책을 다시 적용한다. Remote Profile

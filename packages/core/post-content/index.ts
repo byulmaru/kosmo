@@ -38,7 +38,7 @@ export type PostContentBlockNode = PostContentParagraphNode | PostContentMediaNo
 export interface PostContentBodyDocumentV1 {
   readonly type: 'doc';
   readonly attrs?: {
-    readonly sensitiveMedia: boolean;
+    readonly sensitiveMedia?: boolean;
   };
   readonly content: readonly PostContentBlockNode[];
 }
@@ -66,20 +66,16 @@ export function isPostContentDocumentV1(value: unknown): value is PostContentDoc
 }
 
 export function isPostContentBodyDocumentV1(value: unknown): value is PostContentBodyDocumentV1 {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, ['type', 'attrs', 'content']) ||
-    value.type !== 'doc' ||
-    !('content' in value)
-  ) {
+  if (!isRecord(value) || value.type !== 'doc' || !('content' in value)) {
     return false;
   }
-  if (
-    value.attrs !== undefined &&
-    (!isRecordWithKeys(value.attrs, ['sensitiveMedia']) ||
-      typeof value.attrs.sensitiveMedia !== 'boolean')
-  ) {
-    return false;
+  if (value.attrs !== undefined) {
+    if (!isRecord(value.attrs)) {
+      return false;
+    }
+    if ('sensitiveMedia' in value.attrs && typeof value.attrs.sensitiveMedia !== 'boolean') {
+      return false;
+    }
   }
   if (!Array.isArray(value.content) || value.content.length === 0) {
     return false;
@@ -93,9 +89,6 @@ export function isPostContentBodyDocumentV1(value: unknown): value is PostConten
 
 function isParagraph(value: unknown): value is PostContentParagraphNode {
   if (!isRecord(value) || value.type !== 'paragraph') {
-    return false;
-  }
-  if (!hasOnlyKeys(value, ['type', 'content'])) {
     return false;
   }
   if (value.content === undefined) {
@@ -121,9 +114,9 @@ function isInlineNode(value: unknown): value is PostContentInlineNode {
   }
 
   if (value.type === 'hard_break') {
-    return hasOnlyKeys(value, ['type']);
+    return true;
   }
-  if (value.type !== 'text' || !hasOnlyKeys(value, ['type', 'text', 'marks'])) {
+  if (value.type !== 'text') {
     return false;
   }
   if (typeof value.text !== 'string' || value.text.length === 0) {
@@ -164,10 +157,5 @@ function isRecordWithKeys<const Key extends string>(
   value: unknown,
   keys: readonly Key[],
 ): value is Record<Key, unknown> {
-  return isRecord(value) && hasOnlyKeys(value, keys) && keys.every((key) => key in value);
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
-  const allowed = new Set(keys);
-  return Object.keys(value).every((key) => allowed.has(key));
+  return isRecord(value) && keys.every((key) => key in value);
 }

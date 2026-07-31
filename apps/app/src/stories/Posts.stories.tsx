@@ -2,11 +2,13 @@ import { usePathname } from 'expo-router';
 import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
+import { startWebLogin } from '@/auth/webLogin';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
@@ -18,10 +20,16 @@ import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordin
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
+import {
+  getCopiedStrings,
+  resetClipboardMock,
+  setNextClipboardFailure,
+} from '../../.storybook/mocks/expo-clipboard';
 import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
@@ -64,6 +72,8 @@ function getColorContrastRatio(foreground: string, background: string) {
     (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
   );
 }
+
+const postMediaImageUri = '/og-default.png';
 
 const shortPost = {
   ...post({
@@ -162,6 +172,14 @@ const mediaTextPost = post({
   },
   bodyText: '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
   id: 'media-text',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '회색 배경의 첫 번째 첨부 이미지',
+      id: 'media-story',
+      url: postMediaImageUri,
+    },
+  ],
 });
 const mediaOnlyPost = post({
   bodyDocument: {
@@ -171,14 +189,84 @@ const mediaOnlyPost = post({
   },
   bodyText: '',
   id: 'media-only',
+  media: [
+    {
+      __typename: 'Media',
+      altText: null,
+      id: 'media-only-story',
+      url: postMediaImageUri,
+    },
+  ],
 });
+const fourMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '네 장의 이미지입니다.' }] },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-four-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '네 장의 이미지입니다.',
+  id: 'media-four',
+  media: Array.from({ length: 4 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: index === 1 ? null : `${index + 1}번째 순서 이미지`,
+    id: `media-four-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
+const unavailableMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '표시 정보가 없는 이미지입니다.' }] },
+      { type: 'media', attrs: { mediaId: 'media-unavailable-story' } },
+    ],
+  },
+  bodyText: '표시 정보가 없는 이미지입니다.',
+  id: 'media-unavailable',
+  media: null,
+});
+const loadErrorMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '일부 이미지 로딩 실패입니다.' }] },
+      { type: 'media', attrs: { mediaId: 'media-error-story' } },
+      { type: 'media', attrs: { mediaId: 'media-error-safe-story' } },
+    ],
+  },
+  bodyText: '일부 이미지 로딩 실패입니다.',
+  id: 'media-load-error',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '실패 이미지',
+      id: 'media-error-story',
+      url: 'data:image/png;base64,not-valid',
+    },
+    {
+      __typename: 'Media',
+      altText: '정상 이미지',
+      id: 'media-error-safe-story',
+      url: postMediaImageUri,
+    },
+  ],
+});
+const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
+const repostAuthorAvatarUrl = '/icon-192.png';
 const sourceAuthor = profile({
+  avatar: { id: 'media-source-avatar', url: sourceAuthorAvatarUrl },
   displayName: '아주 긴 Source 작성자 표시 이름',
   handle: 'source@remote.example',
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
 });
 const repostAuthor = profile({
+  avatar: { id: 'media-repost-avatar', url: repostAuthorAvatarUrl },
   displayName: '재게시한 코스모 사용자',
   handle: 'reposter',
   id: 'profile-repost-author',
@@ -295,7 +383,7 @@ const linkedSourceQuote = {
   ...linkedPost,
   id: 'post-quote-linked-source',
   profile: repostAuthor,
-  repostSource: linkedPost,
+  repostSource: { ...linkedPost, id: 'post-linked-source', profile: sourceAuthor },
 };
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
 const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
@@ -519,8 +607,16 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  fourMediaPost,
+  unavailableMediaPost,
+  loadErrorMediaPost,
 ];
-const composerProfile = profile({ id: 'profile-composer' });
+const composerAvatarUrl =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
+const composerProfile = profile({
+  avatar: { id: 'media-composer-avatar', url: composerAvatarUrl },
+  id: 'profile-composer',
+});
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
@@ -745,6 +841,57 @@ function PostCatalog(_args: PostsStoryArgs) {
             )}
           />
         </View>
+        <View testID="media-four">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, fourMediaPost.id).body,
+              'four-media post body',
+            )}
+          />
+        </View>
+        <View testID="media-unavailable">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, unavailableMediaPost.id).body,
+              'unavailable-media post body',
+            )}
+          />
+        </View>
+        <View testID="media-load-error">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, loadErrorMediaPost.id).body,
+              'load-error media post body',
+            )}
+          />
+        </View>
+      </Section>
+
+      <Section title="Post Media · list and detail">
+        <View testID="media-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, mediaTextPost.id).listItem,
+              'media post list item',
+            )}
+          />
+        </View>
+        <View testID="media-only-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, mediaOnlyPost.id).listItem,
+              'media-only post list item',
+            )}
+          />
+        </View>
+        <View testID="media-detail">
+          <PostLayout
+            post={requireFragment(
+              requirePostById(posts, mediaTextPost.id).layout,
+              'media post detail layout',
+            )}
+          />
+        </View>
       </Section>
 
       <Section title="List items · body states">
@@ -772,10 +919,14 @@ function PostCatalog(_args: PostsStoryArgs) {
 
       <Section title="Detail layout · visibility and long author">
         {visibilityPosts.map((visibilityPost, index) => (
-          <PostLayout
+          <View
             key={visibilityPost.id}
-            post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
-          />
+            testID={`detail-${visibilityPost.visibility.toLowerCase()}`}
+          >
+            <PostLayout
+              post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
+            />
+          </View>
         ))}
         <PostLayout
           post={requireFragment(requirePost(posts, 13).layout, 'remote author post layout')}
@@ -872,6 +1023,10 @@ function PostDeletionListEdgeSafety() {
 }
 
 type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
+
+type ProductionBookmarkRequest =
+  | Readonly<{ action: 'create'; postId: string }>
+  | Readonly<{ action: 'delete'; bookmarkId: string }>;
 
 function withReactionViewerState(storyPost: StoryPost): StoryPost & {
   viewerReactions: [];
@@ -1008,6 +1163,297 @@ function ProductionReactionMutationSurfaces() {
         />
       </View>
     </Catalog>
+  );
+}
+
+type ProductionBookmarkMutationMode = 'success' | 'pending' | 'create-failure' | 'delete-failure';
+
+function ProductionBookmarkMutationStory({
+  initiallyBookmarked = false,
+  mode = 'success',
+}: {
+  initiallyBookmarked?: boolean;
+  mode?: ProductionBookmarkMutationMode;
+}) {
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(() => {
+    let activeBookmarkId: string | null = initiallyBookmarked ? `bookmark-${shortPost.id}` : null;
+    let createAttempts = 0;
+    let deleteAttempts = 0;
+    const posts = storyPosts.map(withReactionViewerState).map((candidate) =>
+      candidate.id === shortPost.id
+        ? {
+            ...candidate,
+            viewerBookmark: activeBookmarkId
+              ? { __typename: 'Bookmark' as const, id: activeBookmarkId }
+              : null,
+          }
+        : candidate,
+    );
+    const bookmarkHomeTimeline = {
+      ...homeTimeline,
+      edges: homeTimeline.edges.map((edge) => ({
+        ...edge,
+        node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+      })),
+    };
+    const bookmarkContentPostsProfile = {
+      ...contentPostsProfile,
+      posts: {
+        ...contentPostsProfile.posts,
+        edges: contentPostsProfile.posts.edges.map((edge) => ({
+          ...edge,
+          node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+        })),
+      },
+    };
+
+    return new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.name === 'SessionProviderQuery') {
+          return Promise.resolve({
+            data: {
+              currentSession: {
+                __typename: 'Session',
+                id: 'session-production-bookmark',
+                selectedProfile: {
+                  __typename: 'Profile',
+                  id: 'profile-production-bookmark',
+                },
+              },
+              me: {
+                __typename: 'Account',
+                id: 'account-production-bookmark',
+                name: 'Bookmark Story',
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostsStoriesQuery') {
+          return Promise.resolve({
+            data: {
+              alternateComposerProfile,
+              composerProfile,
+              contentPostsProfile: bookmarkContentPostsProfile,
+              emptyPostsProfile,
+              homeTimeline: bookmarkHomeTimeline,
+              nodes: posts,
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+          const input = variables.input as { postId: string };
+          setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+          createAttempts += 1;
+          if (mode === 'pending') {
+            return new Promise<GraphQLResponse>(() => undefined);
+          }
+          if (mode === 'create-failure' && createAttempts === 1) {
+            return Promise.reject(new Error('bookmark create failed'));
+          }
+          activeBookmarkId = `bookmark-${input.postId}`;
+          return Promise.resolve({
+            data: {
+              createBookmark: {
+                bookmark: {
+                  __typename: 'Bookmark',
+                  id: activeBookmarkId,
+                  post: {
+                    __typename: 'Post',
+                    id: input.postId,
+                    viewerBookmark: { __typename: 'Bookmark', id: activeBookmarkId },
+                  },
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionDeleteBookmarkMutation') {
+          const input = variables.input as { id: string };
+          setRequests((current) => [...current, { action: 'delete', bookmarkId: input.id }]);
+          deleteAttempts += 1;
+          if (mode === 'delete-failure' && deleteAttempts === 1) {
+            return Promise.reject(new Error('bookmark delete failed'));
+          }
+          activeBookmarkId = null;
+          return Promise.resolve({
+            data: {
+              deleteBookmark: {
+                bookmarkId: input.id,
+                post: {
+                  __typename: 'Post',
+                  id: shortPost.id,
+                  viewerBookmark: null,
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        return Promise.resolve({ data: {} } as GraphQLResponse);
+      }),
+      store: new Store(new RecordSource()),
+    });
+  }, [initiallyBookmarked, mode]);
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Bookmark fixture를 불러오는 중입니다.</Text>}>
+        <SessionProvider>
+          <ProductionBookmarkMutationContents />
+        </SessionProvider>
+      </Suspense>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ProductionBookmarkMutationContents() {
+  const data = usePostsStoryData();
+
+  return (
+    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+      <PostLayout
+        post={requireFragment(
+          requirePostById(data.posts, shortPost.id).layout,
+          'production Bookmark detail',
+        )}
+      />
+    </PostReplyCoordinatorProvider>
+  );
+}
+
+function ProductionBookmarkEnvironmentReplacementStory() {
+  const staleFailure = useRef<((error: Error) => void) | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: `session-production-bookmark-${revision}`,
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: `profile-production-bookmark-${revision}`,
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-bookmark',
+                  name: 'Bookmark Environment Story',
+                },
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                alternateComposerProfile,
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+            const input = variables.input as { postId: string };
+            setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+            if (revision === 0) {
+              return Observable.create((sink) => {
+                staleFailure.current = (error) => sink.error(error);
+              });
+            }
+            const bookmarkId = `bookmark-${input.postId}-replacement`;
+            return Promise.resolve({
+              data: {
+                createBookmark: {
+                  bookmark: {
+                    __typename: 'Bookmark',
+                    id: bookmarkId,
+                    post: {
+                      __typename: 'Post',
+                      id: input.postId,
+                      viewerBookmark: { __typename: 'Bookmark', id: bookmarkId },
+                    },
+                  },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [revision],
+  );
+
+  return (
+    <View>
+      <RelayEnvironmentProvider environment={environment}>
+        <Suspense fallback={<Text>Bookmark Environment fixture를 불러오는 중입니다.</Text>}>
+          <SessionProvider>
+            <ProductionBookmarkMutationContents />
+          </SessionProvider>
+        </Suspense>
+      </RelayEnvironmentProvider>
+      <Pressable
+        accessibilityLabel="두 번째 Profile Store로 전환"
+        accessibilityRole="button"
+        onPress={() => setRevision(1)}
+      >
+        <Text>두 번째 Profile Store로 전환</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="이전 Store 요청 실패"
+        accessibilityRole="button"
+        onPress={() => staleFailure.current?.(new Error('stale bookmark failure'))}
+      >
+        <Text>이전 Store 요청 실패</Text>
+      </Pressable>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </View>
+  );
+}
+
+type PostActionSessionState = 'error' | 'guest' | 'profile';
+
+function ProductionPostActionSessionBoundaryStory({
+  postId = shortPost.id,
+  state,
+}: {
+  postId?: string;
+  state: PostActionSessionState;
+}) {
+  const data = usePostsStoryData();
+  const [profileResolutionCount, setProfileResolutionCount] = useState(0);
+  const contents = (
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider owner="list" profile={null}>
+        <View testID="production-session-action-post">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(data.posts, postId).listItem,
+              'session action boundary Post',
+            )}
+          />
+        </View>
+      </PostReplyCoordinatorProvider>
+      <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
+    </PostActionAuthenticationProvider>
+  );
+
+  return (
+    <ShellChromeProvider
+      openProfileSwitcher={() => setProfileResolutionCount((count) => count + 1)}
+    >
+      {state === 'error' ? <SessionErrorProvider>{contents}</SessionErrorProvider> : contents}
+    </ShellChromeProvider>
   );
 }
 
@@ -1590,33 +2036,64 @@ function ThreadNavigationCatalog() {
   );
 }
 
+const defaultStoryProfile = profile({ id: 'profile-story' });
+const defaultSession = shellQuery({
+  profiles: [defaultStoryProfile],
+  selectedProfile: defaultStoryProfile,
+});
+const postsStoryRelayData = {
+  alternateComposerProfile,
+  composerProfile,
+  contentPostsProfile,
+  currentSession: defaultSession.currentSession,
+  deletionHomeTimeline,
+  deletionProfile,
+  emptyPostsProfile,
+  homeTimeline,
+  me: defaultSession.me,
+  nodes: storyPosts.map(withReactionViewerState),
+};
+const guestPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: null,
+  me: null,
+};
+const profileResolutionSession = shellQuery({ selectedProfile: null });
+const profileResolutionPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: profileResolutionSession.currentSession,
+  me: profileResolutionSession.me,
+};
+const deletionOwnerSession = shellQuery();
+const deletionOwnerRelayData = {
+  ...postsStoryRelayData,
+  currentSession: deletionOwnerSession.currentSession,
+  me: deletionOwnerSession.me,
+};
+
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    mocked(startWebLogin).mockReset();
+    mocked(startWebLogin).mockImplementation(() => undefined);
+    resetClipboardMock();
     resetImagePickerMock();
   },
   component: PostCatalog,
   decorators: [
     (Story) => (
-      <PostReplyCoordinatorProvider owner="list" profile={null}>
-        <Story />
-      </PostReplyCoordinatorProvider>
+      <SessionProvider>
+        <PostActionAuthenticationProvider>
+          <PostReplyCoordinatorProvider owner="list" profile={null}>
+            <Story />
+          </PostReplyCoordinatorProvider>
+        </PostActionAuthenticationProvider>
+      </SessionProvider>
     ),
   ],
   parameters: {
     relay: {
-      data: {
-        alternateComposerProfile,
-        composerProfile,
-        contentPostsProfile,
-        currentSession: shellQuery().currentSession,
-        deletionHomeTimeline,
-        deletionProfile,
-        emptyPostsProfile,
-        homeTimeline,
-        me: shellQuery().me,
-        nodes: storyPosts.map(withReactionViewerState),
-      },
+      data: postsStoryRelayData,
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
     router: { pathname: '/@kosmo/post-1' },
@@ -1650,11 +2127,74 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-text').textContent).toBe('document text');
+    const mediaText = within(canvas.getByTestId('media-text'));
+    expect(mediaText.getByText('document text')).toBeVisible();
+    const renderedMediaImage = mediaText.getByTestId('post-media-image-media-story');
+    const renderedMediaFrame = mediaText.getByTestId('post-media-frame-media-story');
+    expect(renderedMediaImage).toBeVisible();
+    await waitFor(() => {
+      const sourceImage = renderedMediaImage.querySelector('img');
+      expect(sourceImage?.naturalWidth).toBeGreaterThan(0);
+      expect(sourceImage?.naturalHeight).toBeGreaterThan(0);
+      expect(getComputedStyle(renderedMediaImage.firstElementChild!).backgroundImage).not.toBe(
+        'none',
+      );
+      expect(
+        renderedMediaFrame.getBoundingClientRect().width /
+          renderedMediaFrame.getBoundingClientRect().height,
+      ).toBeCloseTo(sourceImage!.naturalWidth / sourceImage!.naturalHeight, 2);
+    });
+    expect(
+      mediaText.getByRole('img', { name: '회색 배경의 첫 번째 첨부 이미지' }),
+    ).toBeInTheDocument();
     expect(
       canvas.queryByText('이미지가 있는 문서는 안전한 Plain Text로 표시합니다.'),
     ).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-only').textContent).toBe('');
+    const mediaOnly = within(canvas.getByTestId('media-only'));
+    expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
+    const revealSensitiveMedia = mediaOnly.getByRole('button', { name: '민감한 이미지 표시' });
+    expect(revealSensitiveMedia).toHaveAttribute('aria-expanded', 'false');
+    revealSensitiveMedia.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(mediaOnly.getByRole('img', { name: '1번째 첨부 이미지' })).toBeInTheDocument();
+    const hideSensitiveMedia = mediaOnly.getByRole('button', {
+      name: '민감한 이미지 다시 가리기',
+    });
+    expect(hideSensitiveMedia).toHaveAttribute('aria-expanded', 'true');
+    expect(hideSensitiveMedia).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
+    expect(mediaOnly.getByRole('button', { name: '민감한 이미지 표시' })).toHaveFocus();
+
+    const fourMedia = within(canvas.getByTestId('media-four'));
+    expect(fourMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
+      '1번째 순서 이미지',
+      '2번째 첨부 이미지',
+      '3번째 순서 이미지',
+      '4번째 순서 이미지',
+    ]);
+    expect(within(canvas.getByTestId('media-unavailable')).getByRole('alert')).toHaveTextContent(
+      '이미지를 불러올 수 없습니다.',
+    );
+    const loadErrorMedia = within(canvas.getByTestId('media-load-error'));
+    expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    const retryFailedMedia = await loadErrorMedia.findByRole('button', {
+      name: '실패 이미지 다시 시도',
+    });
+    await userEvent.click(retryFailedMedia);
+    await expect(
+      loadErrorMedia.findByRole('button', { name: '실패 이미지 다시 시도' }),
+    ).resolves.toBeVisible();
+    expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    expect(
+      within(canvas.getByTestId('media-list')).getByTestId('post-media-image-media-story'),
+    ).toBeVisible();
+    expect(
+      within(canvas.getByTestId('media-detail')).getByTestId('post-media-image-media-story'),
+    ).toBeVisible();
+    expect(
+      within(canvas.getByTestId('media-only-list')).queryByTestId('post-list-row-body'),
+    ).not.toBeInTheDocument();
     const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
     expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(
@@ -1669,6 +2209,18 @@ export const BodyTimeAndLayoutStates: Story = {
       { name: '액션 바' },
     );
     expect(within(defaultActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('0');
+    for (const visibility of ['public', 'unlisted'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    }
+    for (const visibility of ['followers', 'direct'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    }
 
     const pureRepostActionBar = within(
       canvas.getByTestId('detail-pure-repost-action-layout'),
@@ -1676,6 +2228,10 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(
       within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
     ).toHaveTextContent('7');
+    expect(within(pureRepostActionBar).getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '반응' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '북마크' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '더 보기' })).toBeEnabled();
     await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
     expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
     expect(
@@ -1787,6 +2343,11 @@ export const ProductionRepostQuoteListIntegration: Story = {
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
+      expect(
+        within(actionBar)
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['답글', expect.stringMatching(/^재게시/), '반응', '북마크', '더 보기']);
       const actionBarSlot = actionBar.parentElement!;
       expect(actionBarSlot.closest('a, [role="link"], [role="button"]')).toBeNull();
       expect(actionBarSlot.lastElementChild).toBe(actionBar);
@@ -1900,7 +2461,10 @@ export const ProductionRepostQuoteListIntegration: Story = {
 
 export const ProductionPostDeletionListEdgeSafety: Story = {
   parameters: {
-    relay: { mutationResponse: { deletePost: { postId: shortPost.id } } },
+    relay: {
+      data: deletionOwnerRelayData,
+      mutationResponse: { deletePost: { postId: shortPost.id } },
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -1908,8 +2472,14 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
     const profile = within(canvas.getByTestId('post-deletion-profile-list'));
 
     await userEvent.click(home.getByRole('button', { name: '더 보기' }));
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('aria-label')),
+    ).toEqual(['링크 복사', '게시글 삭제']);
     await userEvent.click(
-      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+      within(menu).getByRole('menuitem', {
         name: '게시글 삭제',
       }),
     );
@@ -2013,6 +2583,317 @@ export const ProductionReactionMutationTargets: Story = {
   render: () => <ProductionReactionMutationTargetsStory />,
 };
 
+export const ProductionBookmarkMutation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 취소' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([
+        { action: 'create', postId: shortPost.id },
+        { action: 'delete', bookmarkId: `bookmark-${shortPost.id}` },
+      ]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+  },
+  render: () => <ProductionBookmarkMutationStory />,
+};
+
+export const ProductionBookmarkPendingGuard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    expect(bookmark).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '답글' })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: '반응' })).toBeEnabled();
+    const more = canvas.getByRole('button', { name: '더 보기' });
+    expect(more).toBeEnabled();
+    await userEvent.click(more);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
+    );
+    expect(bookmark).toHaveAttribute('aria-busy', 'true');
+    bookmark.click();
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="pending" />,
+};
+
+export const ProductionBookmarkCreateFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(bookmark).toBeEnabled();
+    expect(bookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="create-failure" />,
+};
+
+export const ProductionBookmarkDeleteFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmarkId = `bookmark-${shortPost.id}`;
+    const cancel = await canvas.findByRole('button', { name: '북마크 취소' });
+
+    await userEvent.click(cancel);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(cancel).toBeEnabled();
+    expect(cancel).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(cancel);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'delete', bookmarkId },
+      { action: 'delete', bookmarkId },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-failure" />,
+};
+
+export const ProductionBookmarkEnvironmentReplacement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 Profile Store로 전환' }));
+    const replacementBookmark = await canvas.findByRole('button', { name: '북마크' });
+    await waitFor(() => expect(replacementBookmark).toBeEnabled());
+    await userEvent.click(canvas.getByRole('button', { name: '이전 Store 요청 실패' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.')).toBeNull();
+    expect(replacementBookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(replacementBookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkEnvironmentReplacementStory />,
+};
+
+export const ProductionGuestActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+    await userEvent.click(surface.getByRole('button', { name: '더 보기' }));
+    const moreMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(within(moreMenu).getAllByRole('menuitem')).toHaveLength(1);
+    await userEvent.click(within(moreMenu).getByRole('menuitem', { name: '링크 복사' }));
+
+    await waitFor(() => expect(mocked(startWebLogin)).toHaveBeenCalledTimes(4));
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
+    );
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  parameters: { relay: { data: guestPostActionRelayData } },
+  render: () => <ProductionPostActionSessionBoundaryStory state="guest" />,
+};
+
+export const ProductionProfileActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('4'),
+    );
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
+  render: () => <ProductionPostActionSessionBoundaryStory state="profile" />,
+};
+
+export const ProductionFollowersRepostProfileResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+    const repost = surface.getByRole('button', { name: /^재게시/ });
+
+    expect(repost).toBeEnabled();
+    await userEvent.click(repost);
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('1'),
+    );
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+  },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
+  render: () => (
+    <ProductionPostActionSessionBoundaryStory postId="detail-followers" state="profile" />
+  ),
+};
+
+export const ProductionSessionErrorDisablesActions: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    expect(surface.getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '반응' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '북마크' })).toBeDisabled();
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+  },
+  render: () => <ProductionPostActionSessionBoundaryStory state="error" />,
+};
+
+export const ProductionMoreShareReferences: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(canvas.getByTestId('production-home-reposts'));
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const targets = [
+      {
+        actionBar: ordinaryActionBar,
+        reference: `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      },
+      {
+        actionBar: quoteActionBar,
+        reference: `https://canonical.story.kosmo.test/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+      },
+      {
+        actionBar: pureRepostActionBar,
+        reference: `https://canonical.story.kosmo.test/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
+      },
+    ];
+
+    for (const [index, { actionBar, reference }] of targets.entries()) {
+      const more = within(actionBar).getByRole('button', { name: '더 보기' });
+      await userEvent.click(more);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
+      await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
+      await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
+    }
+
+    setNextClipboardFailure(new Error('clipboard unavailable'));
+    await userEvent.click(within(ordinaryActionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(getCopiedStrings()).toHaveLength(3);
+  },
+  render: () => <ProductionRepostQuoteLists />,
+};
+
 export const ProductionRepostFailureToast: Story = {
   parameters: {
     relay: {
@@ -2085,6 +2966,7 @@ export const PureRepost: Story = {
     expect(article.querySelector('[data-testid="post-source-presentation"]')).toBeNull();
     expect(article.querySelector('[data-testid="source-post-preview"]')).toBeNull();
     expect(getComputedStyle(article).borderBottomWidth).toBe('1px');
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(sourceAvatar.getBoundingClientRect().width).toBe(48);
     expect(sourceAvatar.getBoundingClientRect().height).toBe(48);
     expect(article.querySelector('a a')).toBeNull();
@@ -2153,11 +3035,17 @@ export const Quote: Story = {
   play: async ({ canvasElement }) => {
     const root = within(canvasElement).getByTestId('post-source-presentation');
     const canvas = within(root);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
     expect(canvas.getByText('이 원문에 덧붙이는 인용자의 본문입니다.')).toBeVisible();
     expect(canvas.getByTestId('post-timestamp')).toHaveTextContent(
       formatTimelineTimestamp(quotePost.createdAt),
     );
     const preview = canvas.getByTestId('source-post-preview');
+    const sourceAvatar = within(preview).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(preview.textContent).toContain('원문 작성자의 긴 본문과 줄바꿈을 표시합니다.');
     expect(canvas.getAllByRole('link')).toHaveLength(4);
     expect(within(preview).getAllByRole('link')).toHaveLength(2);
@@ -2180,6 +3068,24 @@ export const Quote: Story = {
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-quote" />,
+};
+
+export const QuoteListItemAvatars: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const outerAvatar = canvas.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(canvas.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
+
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    expect(outerAvatar.getBoundingClientRect().width).toBe(48);
+    expect(outerAvatar.getBoundingClientRect().height).toBe(48);
+    expect(sourceAvatar.getBoundingClientRect().width).toBe(40);
+    expect(sourceAvatar.getBoundingClientRect().height).toBe(40);
+  },
+  render: () => <ProductionPostListItemStory postId="post-quote" />,
 };
 
 export const QuoteOfQuote: Story = {
@@ -2237,7 +3143,11 @@ export const OrdinaryPost: Story = {
     const article = canvas.getByRole('article');
     const standardRow = within(article).getByTestId('post-list-standard-row');
     const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
+    const avatar = within(standardRow).getByLabelText('코스모 작가 프로필 이미지');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(avatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
@@ -2542,6 +3452,20 @@ export const PostDetailThreadRoute: Story = {
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
     const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
+    expect(currentAvatar).not.toBeNull();
+    expect(
+      currentAvatar!.getBoundingClientRect().top - currentRow.getBoundingClientRect().top,
+    ).toBeCloseTo(16, 0);
+    expect(
+      currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
@@ -2665,9 +3589,15 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const currentQuote = within(await canvas.findByTestId('post-thread-current-post-quote'));
+    const outerAvatar = currentQuote.getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(currentQuote.getByTestId('source-post-preview')).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
 
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(0);
     expect(currentQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
+    expect(outerAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+    expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
     expect(
       currentQuote.queryByRole('link', { name: `${repostAuthor.displayName}의 게시글 보기` }),
     ).not.toBeInTheDocument();
@@ -3202,6 +4132,13 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     const canvas = within(canvasElement);
     const replyButtons = canvas.getAllByRole('button', { name: '답글' });
     expect(replyButtons).toHaveLength(3);
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
 
     await userEvent.click(replyButtons[0]!);
     expect(canvas.getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);
@@ -3230,7 +4167,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('첫 Parent draft');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(replyButtons[1]!);
     await userEvent.click(
@@ -3254,7 +4191,9 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
 export const ComposerDefault: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    expect(avatar.querySelector('img')).toHaveAttribute('src', composerAvatarUrl);
     expect(body).not.toHaveAttribute('maxlength');
     await userEvent.click(body);
     expect(body).toHaveFocus();
@@ -3432,8 +4371,10 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
-    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
+    await userEvent.click(visibilityButton);
 
     let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
     expect(menu).toBeVisible();
@@ -3463,6 +4404,100 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerVisibilityFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
+
+    const pressTouch = async (target: Element) => {
+      const rect = target.getBoundingClientRect();
+      await userEvent.pointer({
+        coords: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        keys: '[TouchA]',
+        target,
+      });
+    };
+    const cancelTouch = async (target: Element) => {
+      const rect = target.getBoundingClientRect();
+      await userEvent.pointer({
+        coords: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        keys: '[TouchA>]',
+        target,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      await userEvent.pointer({
+        coords: { x: rect.left - 32, y: rect.top - 32 },
+        target: canvasElement,
+      });
+      await userEvent.pointer({
+        coords: { x: rect.left - 32, y: rect.top - 32 },
+        keys: '[/TouchA]',
+        target: canvasElement,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    };
+
+    await userEvent.type(body, '터치 경로에서 포커스 상태를 확인합니다.');
+    expect(body).toHaveFocus();
+    const focusedBorderColor = getComputedStyle(editorSurface).borderColor;
+    expect(focusedBorderColor).not.toBe(baselineBorderColor);
+
+    await cancelTouch(trigger);
+    expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).toBe(focusedBorderColor);
+
+    await pressTouch(trigger);
+
+    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(body).not.toHaveFocus();
+    await waitFor(() =>
+      expect(within(menu).getByRole('menuitemradio', { name: /^조용한 공개/ })).toHaveFocus(),
+    );
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
+    await pressTouch(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
+    await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
+    expect(body).not.toHaveFocus();
+    expect(trigger).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
+    const baselineBorderColor = getComputedStyle(editorSurface).borderColor;
+
+    await userEvent.type(body, '키보드 경로에서 포커스 상태를 확인합니다.');
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).not.toBe(baselineBorderColor);
+
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(trigger).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    const keyboardMenu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const keyboardOption = within(keyboardMenu).getByRole('menuitemradio', {
+      name: /^조용한 공개/,
+    });
+    expect(keyboardOption).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
+    expect(body).not.toHaveFocus();
+    expect(trigger).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).toBe(baselineBorderColor);
+  },
+  render: () => <ComposerStory />,
+};
+
 export const ComposerErrorInteraction: Story = {
   parameters: { relay: { mutationError: '게시글 작성 실패' } },
   play: async ({ canvasElement }) => {
@@ -3472,7 +4507,9 @@ export const ComposerErrorInteraction: Story = {
       '오류 상태를 확인합니다.',
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('게시글 작성 실패');
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다.',
+    );
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveAttribute(
       'aria-invalid',
       'true',
@@ -3693,7 +4730,7 @@ export const ReplyModalPresentation: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('작성 중인 답글');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
     await userEvent.click(
@@ -3776,8 +4813,7 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(body).toBeVisible();
     await waitFor(() => expect(body).toHaveFocus());
     expect(getComputedStyle(body).outlineStyle).toBe('none');
-    const editorSurface = body.parentElement?.parentElement;
-    expect(editorSurface).not.toBeNull();
+    const editorSurface = canvas.getByTestId('post-composer-editor-surface');
     const editorStyle = getComputedStyle(editorSurface!);
     expect(
       getColorContrastRatio(editorStyle.borderColor, editorStyle.backgroundColor),
@@ -3869,7 +4905,9 @@ export const ReplyModalFailureLifecycle: Story = {
     await userEvent.type(body, '실패 뒤 유지할 답글');
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('답글 전송 네트워크 오류');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      '답글을 작성하지 못했습니다.',
+    );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(body).toHaveValue('실패 뒤 유지할 답글');
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeEnabled();
@@ -3932,6 +4970,12 @@ export const ReplyQuoteParentPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parentAvatar = within(dialog).getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(dialog).getByLabelText(`${sourceAuthor.displayName} 프로필 이미지`);
+    await waitFor(() => {
+      expect(parentAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+      expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    });
     expect(within(dialog).getByTestId('reply-parent')).toHaveTextContent('안전한 외부 링크');
     expect(within(dialog).queryByRole('link')).toBeNull();
     const source = within(dialog).getByTestId('source-post-preview');
@@ -3941,4 +4985,31 @@ export const ReplyQuoteParentPresentation: Story = {
     expect(getComputedStyle(source).borderStyle).toBe('solid');
   },
   render: () => <ReplyModalPresentationStory parentId={linkedSourceQuote.id} />,
+};
+
+export const ReplyMediaParentPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parentElement = within(dialog).getByTestId('reply-parent');
+    const parent = within(parentElement);
+    expect(parentElement).toHaveTextContent('document text');
+    expect(parent.getByTestId('post-media-gallery')).toBeVisible();
+    expect(parent.getByTestId('post-media-image-media-story')).toBeVisible();
+    expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
+    expect(parent.queryByRole('button', { name: /이미지 다시 시도/ })).toBeNull();
+  },
+  render: () => <ReplyModalPresentationStory parentId={mediaTextPost.id} />,
+};
+
+export const ReplySensitiveMediaParentPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parent = within(within(dialog).getByTestId('reply-parent'));
+    expect(parent.getByTestId('post-media-sensitive')).toBeVisible();
+    expect(parent.queryByTestId('post-media-gallery')).toBeNull();
+    expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
+  },
+  render: () => <ReplyModalPresentationStory parentId={mediaOnlyPost.id} />,
 };

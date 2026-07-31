@@ -79,6 +79,7 @@
 - **WHEN** Reply surface가 열린다
 - **THEN** 클라이언트는 direct Parent의 작성자·시각·전체 본문과 Quote이면 기존 Source preview를 비대화형으로 표시한다
 - **AND** Source preview는 일반 본문과 같은 background와 semantic border를 사용한다
+- **AND** 일반 첨부 이미지는 표시하되 Sensitive Media는 가림 상태를 유지하고 공개·이미지 오류 재시도 control을 노출하지 않는다
 - **AND** Parent Action Bar·Post menu와 전체 조상 thread를 중복 표시하지 않는다
 
 ### Requirement: Reply surface lifecycle

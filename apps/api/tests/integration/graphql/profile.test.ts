@@ -1020,7 +1020,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(remoteSelection.data?.selectedProfileForEdit, null);
   });
 
-  test('preserves, replaces, and removes Profile avatar and header through nullable Media IDs', async () => {
+  test('completes the Profile edit route payload for text-only and Ready media saves', async () => {
     const auth = await createAuthenticatedSession();
     const originalAvatar = await createReadyMedia(auth.account.id, auth.profile.id, 'avatar-old');
     const replacementAvatar = await createReadyMedia(
@@ -1035,25 +1035,86 @@ describe('GraphQL remote profile boundary', () => {
       profileId: auth.profile.id,
     });
 
-    const replaced = await requestGraphQL<{
+    const textOnly = await requestGraphQL<{
       updateProfile: {
         profile: {
           avatar: { id: string; url: string | null } | null;
+          bio: string | null;
+          displayName: string;
+          followPolicy: string;
           header: { id: string; url: string | null } | null;
+          id: string;
+          relativeHandle: string;
         };
       };
     }>(
-      `mutation ReplaceProfileMedia($avatarId: ID, $headerId: ID) {
-        updateProfile(input: { avatarId: $avatarId, headerId: $headerId }) {
+      `mutation ProfileEditTextOnly($input: UpdateProfileInput!) {
+        updateProfile(input: $input) {
           profile {
+            id
+            relativeHandle
+            displayName
+            bio
+            followPolicy
             avatar { id url }
             header { id url }
           }
         }
       }`,
       {
-        avatarId: globalId('Media', replacementAvatar.id),
-        headerId: globalId('Media', header.id),
+        input: {
+          bio: 'text-only boundary',
+          displayName: 'Text Boundary',
+          followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+        },
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(textOnly);
+    assert.deepEqual(textOnly.data?.updateProfile.profile, {
+      avatar: { id: globalId('Media', originalAvatar.id), url: originalAvatar.url },
+      bio: 'text-only boundary',
+      displayName: 'Text Boundary',
+      followPolicy: 'APPROVAL_REQUIRED',
+      header: null,
+      id: globalId('Profile', auth.profile.id),
+      relativeHandle: `@${auth.profile.handle}`,
+    });
+
+    const replaced = await requestGraphQL<{
+      updateProfile: {
+        profile: {
+          avatar: { id: string; url: string | null } | null;
+          bio: string | null;
+          displayName: string;
+          followPolicy: string;
+          header: { id: string; url: string | null } | null;
+          id: string;
+          relativeHandle: string;
+        };
+      };
+    }>(
+      `mutation ProfileEditReadyMedia($input: UpdateProfileInput!) {
+        updateProfile(input: $input) {
+          profile {
+            id
+            relativeHandle
+            displayName
+            bio
+            followPolicy
+            avatar { id url }
+            header { id url }
+          }
+        }
+      }`,
+      {
+        input: {
+          avatarId: globalId('Media', replacementAvatar.id),
+          bio: 'Ready media boundary',
+          displayName: 'Ready Media Boundary',
+          followPolicy: ProfileFollowPolicy.OPEN,
+          headerId: globalId('Media', header.id),
+        },
       },
       auth.token,
     );
@@ -1063,7 +1124,12 @@ describe('GraphQL remote profile boundary', () => {
         id: globalId('Media', replacementAvatar.id),
         url: replacementAvatar.url,
       },
+      bio: 'Ready media boundary',
+      displayName: 'Ready Media Boundary',
+      followPolicy: 'OPEN',
       header: { id: globalId('Media', header.id), url: header.url },
+      id: globalId('Profile', auth.profile.id),
+      relativeHandle: `@${auth.profile.handle}`,
     });
 
     const omitted = await requestGraphQL<{
@@ -1202,6 +1268,76 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(ownerNode.data?.node, {
       id: globalId('Media', avatar.id),
       url: avatar.url,
+    });
+  });
+
+  test('exposes materialized remote Profile avatar and header through the existing fields', async () => {
+    const instance = await createRemoteInstance({ domain: 'profile-media.remote.example' });
+    const profile = await createProfile({
+      handle: 'alice',
+      instanceId: instance.id,
+    });
+    const [avatar, header] = await db
+      .insert(Media)
+      .values([
+        {
+          mediaType: 'image/png',
+          profileId: profile.id,
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: 'https://profile-media.remote.example/alice/avatar.png',
+        },
+        {
+          mediaType: 'image/jpeg',
+          profileId: profile.id,
+          source: MediaSource.REMOTE,
+          state: MediaState.READY,
+          url: 'https://profile-media.remote.example/alice/header.jpg',
+        },
+      ])
+      .returning();
+    assert.ok(avatar);
+    assert.ok(header);
+    await db.insert(ProfileMedia).values([
+      {
+        kind: ProfileMediaKind.AVATAR,
+        mediaId: avatar.id,
+        profileId: profile.id,
+      },
+      {
+        kind: ProfileMediaKind.HEADER,
+        mediaId: header.id,
+        profileId: profile.id,
+      },
+    ]);
+
+    const result = await requestGraphQL<{
+      profileByHandle: {
+        avatar: { id: string; mediaType: string | null; url: string | null } | null;
+        header: { id: string; mediaType: string | null; url: string | null } | null;
+      } | null;
+    }>(
+      `query RemoteProfileMedia($handle: String!) {
+        profileByHandle(handle: $handle) {
+          avatar { id mediaType url }
+          header { id mediaType url }
+        }
+      }`,
+      { handle: `${profile.handle}@${instance.domain}` },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.profileByHandle, {
+      avatar: {
+        id: globalId('Media', avatar.id),
+        mediaType: avatar.mediaType,
+        url: avatar.url,
+      },
+      header: {
+        id: globalId('Media', header.id),
+        mediaType: header.mediaType,
+        url: header.url,
+      },
     });
   });
 

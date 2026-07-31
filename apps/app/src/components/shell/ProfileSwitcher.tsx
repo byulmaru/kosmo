@@ -2,6 +2,7 @@ import { profileHandleSchema } from '@kosmo/core/validation/profile';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -35,6 +36,14 @@ const ProfileSwitcherFragment = graphql`
         displayName
         followingCount
         followersCount
+        avatar {
+          id
+          url
+        }
+        header {
+          id
+          url
+        }
       }
     }
     me {
@@ -44,6 +53,10 @@ const ProfileSwitcherFragment = graphql`
         handle
         relativeHandle
         displayName
+        avatar {
+          id
+          url
+        }
       }
     }
   }
@@ -98,6 +111,9 @@ const webCompactPickerBounds = {
 const webFullPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 276px))',
 } as unknown as ViewStyle;
+const webDrawerPickerBounds = {
+  maxHeight: 'min(430px, calc(100vh - 206px))',
+} as unknown as ViewStyle;
 const countFormatter = new Intl.NumberFormat('en', {
   maximumFractionDigits: 1,
   notation: 'compact',
@@ -112,13 +128,20 @@ const avatarShadow = {
 } as ViewStyle;
 
 type Props = {
+  onNavigate?: () => void;
   onOpenChange?: (open: boolean) => void;
   open?: boolean;
   query: ProfileSwitcher_query$key;
   surface: ProfileSwitcherSurface;
 };
 
-export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, surface }: Props) {
+export function ProfileSwitcher({
+  onNavigate,
+  onOpenChange,
+  open: controlledOpen,
+  query,
+  surface,
+}: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -141,6 +164,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   const fullWeb = Platform.OS === 'web' && surface === 'full';
   const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
   const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
+  const scrollableWebPicker = Platform.OS === 'web';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
@@ -278,11 +302,13 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     action();
   };
 
-  const surfaceBounds = !redesignedWeb
+  const surfaceBounds = !scrollableWebPicker
     ? undefined
     : surface === 'compact'
       ? webCompactPickerBounds
-      : webFullPickerBounds;
+      : surface === 'drawer'
+        ? webDrawerPickerBounds
+        : webFullPickerBounds;
   const profileOptions = profiles.map((profile) => {
     const selected = active?.id === profile.id;
     return (
@@ -305,7 +331,11 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           },
         ]}
       >
-        <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+        <Avatar
+          imageUri={profile.avatar?.url}
+          label={profile.displayName}
+          size={selected ? 48 : 32}
+        />
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
             {profile.displayName}
@@ -323,7 +353,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       ref={pickerRef}
       style={[
         styles.menu,
-        redesignedWeb ? styles.redesignedMenu : undefined,
+        scrollableWebPicker ? styles.redesignedMenu : undefined,
         surfaceBounds,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
@@ -332,9 +362,9 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         accessibilityLabel="프로필 전환"
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
         role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
-        style={redesignedWeb ? styles.redesignedMenuRegion : styles.menuItems}
+        style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
       >
-        {redesignedWeb ? (
+        {scrollableWebPicker ? (
           <ScrollView
             accessibilityLabel="전환할 프로필 목록"
             contentContainerStyle={styles.profileListContent}
@@ -462,7 +492,9 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         { opacity: pressed ? 0.65 : 1 },
       ]}
     >
-      {compact ? <Avatar label={active?.displayName ?? '?'} size={40} /> : null}
+      {compact ? (
+        <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+      ) : null}
       {fullWeb || mobileWebDrawer ? (
         <View style={styles.webTriggerContent}>{triggerCopy}</View>
       ) : (
@@ -470,6 +502,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       )}
     </Pressable>
   );
+  const profileSummaryOnNavigate = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
   const profileDetails = active ? (
     <>
       <Text
@@ -482,7 +515,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
       <View style={styles.counts}>
         <GuardedLink
           href={`/${active.relativeHandle}/following`}
-          onNavigate={fullWeb && open ? dismissPicker : undefined}
+          onNavigate={profileSummaryOnNavigate}
         >
           <Pressable
             accessibilityRole="link"
@@ -497,7 +530,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         </GuardedLink>
         <GuardedLink
           href={`/${active.relativeHandle}/followers`}
-          onNavigate={fullWeb && open ? dismissPicker : undefined}
+          onNavigate={profileSummaryOnNavigate}
         >
           <Pressable
             accessibilityRole="link"
@@ -527,11 +560,21 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         style={[
           styles.cover,
           { backgroundColor: theme.surface },
-          Platform.OS === 'web' && webCover,
+          Platform.OS === 'web' && !active?.header?.url && webCover,
         ]}
-      />
+      >
+        {active?.header?.url ? (
+          <Image
+            accessible={false}
+            resizeMode="cover"
+            source={{ uri: active.header.url }}
+            style={styles.coverImage}
+          />
+        ) : null}
+      </View>
       <View style={styles.largeAvatar}>
         <Avatar
+          imageUri={active?.avatar?.url}
           label={active?.displayName || active?.handle || '?'}
           size={96}
           style={avatarShadow}
@@ -619,7 +662,8 @@ const styles = StyleSheet.create({
   drawerMenuPosition: { left: 0, top: 190 },
   fullOverlayPosition: { left: -10, top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
-  cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
+  cover: { height: 104, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
+  coverImage: { height: '100%', width: '100%' },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },
   profileCopy: {
     left: 10,

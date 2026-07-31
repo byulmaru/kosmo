@@ -19,6 +19,17 @@ type RouterContextValue = {
   slotLabel: string;
 };
 
+type LinkPressEvent = {
+  altKey?: boolean;
+  button?: number;
+  ctrlKey?: boolean;
+  currentTarget?: { target?: string | null };
+  defaultPrevented?: boolean;
+  metaKey?: boolean;
+  preventDefault?: () => void;
+  shiftKey?: boolean;
+};
+
 const RouterContext = createContext<RouterContextValue>({
   params: {},
   pathname: '/home',
@@ -81,7 +92,7 @@ export function Link({
     !asChild ||
     !isValidElement<{
       href?: string;
-      onPress?: (event: { preventDefault?: () => void }) => void;
+      onPress?: (event: LinkPressEvent) => void;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
@@ -89,12 +100,27 @@ export function Link({
 
   return cloneElement(children, {
     href: typeof href === 'string' ? href : href.pathname,
-    onPress: (event: { preventDefault?: () => void }) => {
-      event.preventDefault?.();
+    onPress: (event: LinkPressEvent) => {
       children.props.onPress?.(event);
-      setPathname(href);
+      const shouldNavigate = shouldHandleNavigation(event);
+      event.preventDefault?.();
+      if (shouldNavigate) {
+        setPathname(href);
+      }
     },
   });
+}
+
+function shouldHandleNavigation(event: LinkPressEvent) {
+  return (
+    !event.defaultPrevented &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    (event.button == null || event.button === 0) &&
+    [undefined, null, '', 'self'].includes(event.currentTarget?.target)
+  );
 }
 
 export function Slot() {

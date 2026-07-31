@@ -68,6 +68,10 @@ const PostComposerFragment = graphql`
     id
     displayName
     handle
+    avatar {
+      id
+      url
+    }
     ...ProfileNameBlock_profile
   }
 `;
@@ -239,7 +243,7 @@ function PostComposerContents({
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
-      onError: (cause) => {
+      onError: () => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -250,8 +254,7 @@ function PostComposerContents({
         }
         setSubmitting(false);
         setError(
-          cause.message ||
-            (submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.'),
+          submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
         );
       },
     });
@@ -359,6 +362,10 @@ function PostComposerContents({
             disabled={submitting}
             key={option.value}
             onPress={() => {
+              if (Platform.OS === 'web') {
+                editor.current?.blur();
+                setEditorFocused(false);
+              }
               setVisibility(option.value);
               setVisibilityOpen(false);
               if (Platform.OS === 'web') {
@@ -404,7 +411,13 @@ function PostComposerContents({
         accessibilityRole="button"
         accessibilityState={{ disabled: submitting }}
         disabled={submitting}
-        onPress={() => setVisibilityOpen(!visibilityOpen)}
+        onPress={() => {
+          if (Platform.OS === 'web') {
+            editor.current?.blur();
+            setEditorFocused(false);
+          }
+          setVisibilityOpen(!visibilityOpen);
+        }}
         style={({ pressed }) => [
           styles.visibilityTrigger,
           {
@@ -460,7 +473,7 @@ function PostComposerContents({
     <>
       {beforeEditor}
       <View style={styles.author}>
-        <Avatar label={profile.displayName} size={40} />
+        <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
         <ProfileNameBlock profile={profile} />
       </View>
       <View
@@ -477,6 +490,7 @@ function PostComposerContents({
                 : theme.border,
           },
         ]}
+        testID="post-composer-editor-surface"
       >
         {replyMode ? null : visibilitySelector}
         <TextArea
@@ -599,20 +613,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  visibilityControl: { position: 'relative' },
+  visibilityControl: {
+    alignSelf: 'flex-start',
+    position: 'relative',
+  },
   visibilityTrigger: {
     alignItems: 'center',
     borderRadius: radii.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.xs,
-    height: 40,
+    height: Platform.select({ web: 40 }),
     justifyContent: 'center',
+    minHeight: Platform.select({ android: 48, ios: 44, default: 40 }),
     minWidth: 120,
     paddingHorizontal: spacing.lg,
   },
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  webVisibilityMenu: { left: 0, position: 'absolute', width: 256, zIndex: 50 },
+  webVisibilityMenu: {
+    left: 0,
+    maxWidth: '100%',
+    position: 'absolute',
+    width: 256,
+    zIndex: 50,
+  },
   webVisibilityMenuAbove: { bottom: 44 },
   webVisibilityMenuBelow: { top: 44 },
   submit: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
@@ -638,6 +662,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
     gap: spacing.xs,
+    maxWidth: '100%',
     overflow: 'hidden',
     padding: spacing.xs,
     width: 256,

@@ -11,14 +11,14 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, spyOn, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { colors, spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -89,6 +89,7 @@ const unselectedSource = {
     edges: [],
     pageInfo: { endCursor: null, hasNextPage: false },
   },
+  viewerBookmark: null,
   viewerRepost: null,
   viewerReactions: [],
 };
@@ -523,6 +524,14 @@ function CatalogStory() {
           repostState="pending"
         />
       </Section>
+      <Section title="Resolution-required · hover blocked">
+        <PostActionBarFixture
+          bookmark={actionBarProps.bookmark}
+          execution={{ kind: 'resolution-required', reason: 'profile' }}
+          reply={actionBarProps.reply}
+          repostExecution={{ kind: 'resolution-required', reason: 'profile' }}
+        />
+      </Section>
       <Section title="Optional actions · More callback only">
         <PostActionBarFixture more={actionBarProps.more} repostState="hidden" />
       </Section>
@@ -646,6 +655,176 @@ export const ActionBarCatalog: Story = {
     expect(bookmarkButtons[0]?.querySelector('svg')).toHaveAttribute('fill', 'none');
     expect(reactionButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
+
+    const toolbars = canvas.getAllByRole('toolbar', { name: '액션 바' });
+    const defaultReply = defaultToolbarCanvas.getByRole('button', { name: '답글' });
+    const defaultMore = defaultToolbarCanvas.getByRole('button', { name: '더보기' });
+    const actionTargetSizes = [
+      ['답글', 50],
+      ['재게시', 50],
+      ['반응', 50],
+      ['북마크', 50],
+      ['더보기', 28],
+    ] as const;
+    for (const [label, width] of actionTargetSizes) {
+      const button = defaultToolbarCanvas.getByRole('button', { name: label });
+      const bounds = button.getBoundingClientRect();
+      expect(bounds.width).toBe(width);
+      expect(bounds.height).toBe(28);
+    }
+    expect(defaultToolbar.getBoundingClientRect().height).toBe(28);
+    expect(canvas.queryByTestId('post-action-reply-hover')).toBeNull();
+
+    await userEvent.hover(defaultReply);
+    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
+    const replyHover = within(defaultReply).getByTestId('post-action-reply-hover');
+    expect(replyHover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(getComputedStyle(replyHover).opacity).toBe('0.3');
+    expect(getComputedStyle(replyHover).borderRadius).toBe('999px');
+    expect(getComputedStyle(replyHover).height).toBe('28px');
+    expect(getComputedStyle(replyHover).width).toBe('28px');
+    expect(getComputedStyle(replyHover).pointerEvents).toBe('none');
+    expect(getComputedStyle(replyHover).zIndex).toBe('0');
+    const replyGlyph = within(defaultReply).getByTestId('post-action-reply-glyph');
+    expect(getComputedStyle(replyGlyph).zIndex).toBe('1');
+    const replyHoverBounds = replyHover.getBoundingClientRect();
+    const replyIconBounds = defaultReply.querySelector('svg')!.getBoundingClientRect();
+    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(replyHoverBounds.width).toBe(28);
+    expect(replyHoverBounds.height).toBe(28);
+    expect(replyHoverBounds.left + replyHoverBounds.width / 2).toBeCloseTo(
+      replyIconBounds.left + replyIconBounds.width / 2,
+      0,
+    );
+    expect(replyHoverBounds.top + replyHoverBounds.height / 2).toBeCloseTo(
+      replyIconBounds.top + replyIconBounds.height / 2,
+      0,
+    );
+    const replyCount = defaultReply.querySelector('[dir="auto"]') as HTMLElement;
+    expect(replyCount).toHaveStyle({ color: colors.light.textSecondary });
+    const replyCountBounds = replyCount.getBoundingClientRect();
+    expect(replyCountBounds.left - replyIconBounds.right).toBeCloseTo(spacing.xs, 0);
+    expect(defaultReply.getBoundingClientRect().width).toBe(50);
+    expect(defaultReply.getBoundingClientRect().height).toBe(28);
+
+    const pointerUser = userEvent.setup();
+    await pointerUser.pointer({ target: defaultReply, keys: '[MouseLeft>]' });
+    await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
+    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(within(defaultReply).getByTestId('post-action-reply-hover')).toBeVisible();
+    await pointerUser.pointer({ target: defaultReply, keys: '[/MouseLeft]' });
+    await userEvent.unhover(defaultReply);
+    expect(getComputedStyle(defaultReply).opacity).toBe('1');
+    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(within(defaultReply).queryByTestId('post-action-reply-hover')).toBeNull();
+
+    await userEvent.hover(defaultMore);
+    expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.primary });
+    const moreHover = within(defaultMore).getByTestId('post-action-more-hover');
+    expect(moreHover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(getComputedStyle(moreHover).opacity).toBe('0.3');
+    expect(getComputedStyle(moreHover).borderRadius).toBe('999px');
+    expect(getComputedStyle(moreHover).height).toBe('28px');
+    expect(getComputedStyle(moreHover).width).toBe('28px');
+    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
+    expect(defaultMore.getBoundingClientRect().width).toBe(28);
+    expect(defaultMore.getBoundingClientRect().height).toBe(28);
+    await userEvent.unhover(defaultMore);
+    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
+
+    for (const [label, testID] of [
+      ['재게시', 'repost'],
+      ['북마크', 'bookmark'],
+    ] as const) {
+      const button = defaultToolbarCanvas.getByRole('button', { name: label });
+      const icon = button.querySelector('svg');
+      await userEvent.hover(button);
+      const hover = within(button).getByTestId(`post-action-${testID}-hover`);
+      expect(hover).toHaveStyle({ backgroundColor: colors.light.primary });
+      expect(getComputedStyle(hover).opacity).toBe('0.3');
+      expect(getComputedStyle(hover).zIndex).toBe('0');
+      expect(icon).toHaveAttribute('stroke', colors.light.primary);
+      expect(
+        getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
+      ).toBe('1');
+      if (testID === 'repost') {
+        expect(button.querySelector('[dir="auto"]')).toHaveStyle({
+          color: colors.light.textSecondary,
+        });
+      }
+      await userEvent.unhover(button);
+      expect(icon).toHaveAttribute('stroke', colors.light.textSecondary);
+      expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
+    }
+
+    const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });
+    const defaultReactionIcon = defaultReaction.querySelector('svg');
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
+    await userEvent.hover(defaultReaction);
+    expect(defaultReaction).not.toHaveStyle({ backgroundColor: colors.light.like });
+    const reactionHover = within(defaultReaction).getByTestId('post-action-reaction-hover');
+    expect(reactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(getComputedStyle(reactionHover).opacity).toBe('0.3');
+    expect(getComputedStyle(reactionHover).borderRadius).toBe('999px');
+    expect(getComputedStyle(reactionHover).height).toBe('28px');
+    expect(getComputedStyle(reactionHover).width).toBe('28px');
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
+    await userEvent.unhover(defaultReaction);
+    expect(defaultReactionIcon).toHaveAttribute('stroke', colors.light.textSecondary);
+    expect(defaultReactionIcon).toHaveAttribute('fill', 'none');
+    expect(within(defaultReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
+
+    const activeBookmark = within(toolbars[2]!).getByRole('button', { name: /북마크/ });
+    expect(activeBookmark).toHaveAttribute('aria-pressed', 'true');
+    const activeBookmarkIcon = activeBookmark.querySelector('svg');
+    expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
+    await userEvent.hover(activeBookmark);
+    expect(activeBookmark).not.toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(within(activeBookmark).getByTestId('post-action-bookmark-hover')).toHaveStyle({
+      backgroundColor: colors.light.primary,
+    });
+    expect(
+      getComputedStyle(within(activeBookmark).getByTestId('post-action-bookmark-hover')).opacity,
+    ).toBe('0.3');
+    expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
+    await userEvent.unhover(activeBookmark);
+    expect(within(activeBookmark).queryByTestId('post-action-bookmark-hover')).toBeNull();
+
+    const activeReaction = within(toolbars[2]!).getByRole('button', { name: '반응' });
+    const activeReactionIcon = activeReaction.querySelector('svg');
+    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    await userEvent.hover(activeReaction);
+    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    const activeReactionHover = within(activeReaction).getByTestId('post-action-reaction-hover');
+    expect(activeReactionHover).toHaveStyle({ backgroundColor: colors.light.like });
+    expect(getComputedStyle(activeReactionHover).opacity).toBe('0.3');
+    await userEvent.unhover(activeReaction);
+    expect(activeReactionIcon).toHaveAttribute('stroke', colors.light.like);
+    expect(activeReactionIcon).toHaveAttribute('fill', colors.light.like);
+    expect(within(activeReaction).queryByTestId('post-action-reaction-hover')).toBeNull();
+
+    const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
+    fireEvent.pointerEnter(blockedReply);
+    expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(within(blockedReply).queryByTestId('post-action-reply-hover')).toBeNull();
+
+    const resolutionToolbar = within(toolbars[4]!);
+    for (const [label, testID] of [
+      ['답글', 'reply'],
+      ['재게시', 'repost'],
+      ['반응', 'reaction'],
+      ['북마크', 'bookmark'],
+    ] as const) {
+      const button = resolutionToolbar.getByRole('button', { name: label });
+      await userEvent.hover(button);
+      expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
+      await userEvent.unhover(button);
+    }
   },
 };
 
@@ -1217,6 +1396,14 @@ export const ProcessingAccessibility: Story = {
     const repostCountBounds = repostButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
+    expect(replySpinner.getBoundingClientRect().left).toBeCloseTo(
+      replyButton.getBoundingClientRect().left,
+      0,
+    );
+    expect(repostSpinner.getBoundingClientRect().left).toBeCloseTo(
+      repostButton.getBoundingClientRect().left,
+      0,
+    );
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
       replyCountBounds.top + replyCountBounds.height / 2,
       0,
@@ -1271,10 +1458,22 @@ export const AccessibilityAndCompactGeometry: Story = {
     const actionBarBounds = actionBar.getBoundingClientRect();
     const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left + spacing.sm, 0);
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left, 0);
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
+    for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
+      const buttonBounds = buttons[index]!.getBoundingClientRect();
+      const iconBounds = canvas.getByTestId(`post-action-${action}-icon`).getBoundingClientRect();
+      expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
+    }
+    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+    expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
+      moreButtonBounds.left + moreButtonBounds.width / 2,
+      0,
+    );
   },
-  render: () => <PostActionBarFixture {...actionBarProps} />,
+  render: () => (
+    <PostActionBarFixture {...actionBarProps} reply={{ ...actionBarProps.reply, count: 0 }} />
+  ),
 };
 
 export const Compact390: Story = {
@@ -1349,6 +1548,7 @@ function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) 
 function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   const toolbarBounds = toolbar.getBoundingClientRect();
   const buttons = within(toolbar).getAllByRole('button');
+  const toolbarCanvas = within(toolbar);
   const firstBounds = buttons[0]!.getBoundingClientRect();
   let previousRight = toolbarBounds.left;
 
@@ -1368,9 +1568,19 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;
   }
-  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left + spacing.sm, 0);
-  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(
-    toolbarBounds.right - spacing.sm,
+  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left, 0);
+  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(toolbarBounds.right, 0);
+  for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
+    const buttonBounds = buttons[index]!.getBoundingClientRect();
+    const iconBounds = toolbarCanvas
+      .getByTestId(`post-action-${action}-icon`)
+      .getBoundingClientRect();
+    expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
+  }
+  const moreBounds = buttons[4]!.getBoundingClientRect();
+  const moreIconBounds = toolbarCanvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+  expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
+    moreBounds.left + moreBounds.width / 2,
     0,
   );
 }

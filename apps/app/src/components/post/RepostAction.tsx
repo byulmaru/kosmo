@@ -6,6 +6,7 @@ import { PostActionControl } from './PostActionControl';
 import type { RepostAction_post$key } from './__generated__/RepostAction_post.graphql';
 import type { RepostActionDeletePostMutation } from './__generated__/RepostActionDeletePostMutation.graphql';
 import type { RepostActionRepostPostMutation } from './__generated__/RepostActionRepostPostMutation.graphql';
+import type { PostActionExecution, PostActionResolutionReason } from './postActionAvailability';
 
 export type RepostActionKind = 'create' | 'cancel';
 
@@ -15,7 +16,9 @@ export type RepostActionFailure = Readonly<{
 }>;
 
 type Props = {
+  execution?: PostActionExecution;
   onError?: (failure: RepostActionFailure) => void;
+  onResolutionRequired?: (reason: PostActionResolutionReason) => void;
   post: RepostAction_post$key;
 };
 
@@ -54,7 +57,12 @@ const deletePostMutation = graphql`
   }
 `;
 
-export function RepostAction({ onError, post }: Props) {
+export function RepostAction({
+  execution = { kind: 'enabled' },
+  onError,
+  onResolutionRequired,
+  post,
+}: Props) {
   const data = useFragment(repostActionPostFragment, post);
   const environment = useRelayEnvironment();
   const [commitRepost, isReposting] =
@@ -73,7 +81,7 @@ export function RepostAction({ onError, post }: Props) {
 
   const runMutation = useCallback(
     (action: RepostActionKind) => {
-      if (inFlight.current || processing) {
+      if (execution.kind !== 'enabled' || inFlight.current || processing) {
         return;
       }
 
@@ -120,7 +128,16 @@ export function RepostAction({ onError, post }: Props) {
 
       commitRepost({ ...callbacks, variables: { sourceId: data.id } });
     },
-    [commitDelete, commitRepost, data.id, data.viewerRepost?.id, environment, onError, processing],
+    [
+      commitDelete,
+      commitRepost,
+      data.id,
+      data.viewerRepost?.id,
+      environment,
+      execution.kind,
+      onError,
+      processing,
+    ],
   );
 
   const action: RepostActionKind = data.viewerRepost ? 'cancel' : 'create';
@@ -129,23 +146,32 @@ export function RepostAction({ onError, post }: Props) {
   return (
     <ActionMenu
       accessibilityLabel="재게시 메뉴"
-      disabled={processing}
+      disabled={processing || execution.kind !== 'enabled'}
       items={[{ icon: Repeat2, key: action, label, onSelect: () => runMutation(action) }]}
-      renderTrigger={({ expanded: menuExpanded, onPress, ref }) => (
-        <PostActionControl
-          accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
-          active={Boolean(data.viewerRepost)}
-          controlRef={ref}
-          count={data.repostCount}
-          icon={Repeat2}
-          iconStrokeWidth={2.7}
-          menuExpanded={menuExpanded}
-          onPress={onPress}
-          popupRole="menu"
-          processing={processing ? 'pending' : 'default'}
-          testID="repost"
-        />
-      )}
+      renderTrigger={({ expanded: menuExpanded, onPress, ref }) => {
+        const triggerPress =
+          execution.kind === 'resolution-required'
+            ? () => onResolutionRequired?.(execution.reason)
+            : onPress;
+        return (
+          <PostActionControl
+            accessibilityLabel={data.viewerRepost ? '재게시 취소' : '재게시'}
+            active={Boolean(data.viewerRepost)}
+            controlRef={ref}
+            count={data.repostCount}
+            hoverDisabled={execution.kind === 'resolution-required'}
+            icon={Repeat2}
+            iconStrokeWidth={2.7}
+            menuExpanded={execution.kind === 'enabled' ? menuExpanded : false}
+            onPress={triggerPress}
+            popupRole="menu"
+            processing={
+              processing ? 'pending' : execution.kind === 'disabled' ? 'disabled' : 'default'
+            }
+            testID="repost"
+          />
+        );
+      }}
     />
   );
 }

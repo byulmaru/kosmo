@@ -13,6 +13,11 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
     ...viteConfig,
+    define: {
+      ...viteConfig.define,
+      'process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN': JSON.stringify('0'),
+      'process.env.EXPO_PUBLIC_WEB_ORIGIN': JSON.stringify('https://canonical.story.kosmo.test'),
+    },
     plugins: [relayVitePlugin(), ...(viteConfig.plugins ?? [])],
     resolve: {
       ...viteConfig.resolve,
@@ -29,6 +34,10 @@ const config: StorybookConfig = {
         {
           find: /^expo-secure-store$/,
           replacement: fileURLToPath(new URL('./mocks/expo-secure-store.ts', import.meta.url)),
+        },
+        {
+          find: /^expo-clipboard$/,
+          replacement: fileURLToPath(new URL('./mocks/expo-clipboard.ts', import.meta.url)),
         },
         {
           find: /^expo-image-picker$/,

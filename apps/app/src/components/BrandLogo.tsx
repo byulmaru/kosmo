@@ -26,7 +26,7 @@ export function BrandLogo({
   width,
 }: BrandLogoProps) {
   const dimensions =
-    variant === 'full' ? { aspectRatio: 1665 / 1050, width } : { height: width, width };
+    variant === 'full' ? { height: (width * 1050) / 1665, width } : { height: width, width };
 
   return (
     <Image

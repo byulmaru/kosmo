@@ -30,6 +30,7 @@
     "@sun-typeface/suit": "^2.0.5",
     "expo": "~56.0.14",
     "expo-auth-session": "~56.0.15",
+    "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.20",
     "expo-crypto": "~56.0.4",
     "expo-font": "~56.0.7",

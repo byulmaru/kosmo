@@ -1,0 +1,1 @@
+DROP INDEX "media_remote_profile_url_unique";

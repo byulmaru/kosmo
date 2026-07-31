@@ -1,53 +1,53 @@
 import { expect, fireEvent, userEvent, within } from 'storybook/test';
-import { FeedbackForm } from '@/components/feedback/FeedbackForm';
-import { Catalog, Section } from './StoryFrame';
+import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  component: FeedbackForm,
+  component: FeedbackPage,
   parameters: {
+    layout: 'fullscreen',
     router: { pathname: '/feedback' },
   },
-  title: 'KOSMO/Feedback/Form',
-} satisfies Meta<typeof FeedbackForm>;
+  title: 'KOSMO/Feedback/Page',
+} satisfies Meta<typeof FeedbackPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Idle: Story = {
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 기본">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: () => <FeedbackPage />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getAllByRole('heading', { name: '피드백 보내기' })).toHaveLength(1);
+    expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeDisabled();
+  },
+};
+
+export const CompactIdle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  render: () => <FeedbackPage />,
+};
+
+export const FullIdle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  render: () => <FeedbackPage />,
 };
 
 export const BugReport: Story = {
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 버그 리포트">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
-    expect(canvas.getByRole('radio', { name: '버그를 발견했어요' })).toBeChecked();
+    const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
+    await userEvent.click(bugReport);
+    expect(bugReport).toBeChecked();
+    expect(bugReport).toHaveStyle({ borderRadius: '8px' });
     expect(canvas.getAllByRole('textbox')).toHaveLength(1);
   },
 };
 
 export const KeyboardNavigation: Story = {
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 키보드 라디오">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const radios = canvas.getAllByRole('radio');
@@ -76,13 +76,7 @@ export const TrimmedBodyBoundary: Story = {
   parameters: {
     relay: { mutationResponse: { submitFeedback: { completed: true } } },
   },
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · trim 경계">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
@@ -95,13 +89,7 @@ export const TrimmedBodyBoundary: Story = {
 };
 
 export const BodyTooLong: Story = {
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 본문 길이 검증">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
@@ -114,13 +102,7 @@ export const BodyTooLong: Story = {
 
 export const Pending: Story = {
   parameters: { relay: { mutationLoading: true } },
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 전달 중">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
@@ -143,13 +125,7 @@ export const Success: Story = {
   parameters: {
     relay: { mutationResponse: { submitFeedback: { completed: true } } },
   },
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 성공">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '피드백 내용' });
@@ -164,13 +140,7 @@ export const Success: Story = {
 
 export const DeliveryFailureKeepsInput: Story = {
   parameters: { relay: { mutationError: 'Slack delivery failed' } },
-  render: () => (
-    <Catalog width={760}>
-      <Section title="피드백 · 재시도">
-        <FeedbackForm />
-      </Section>
-    </Catalog>
-  ),
+  render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const message = '다시 시도할 수 있어야 해요.';

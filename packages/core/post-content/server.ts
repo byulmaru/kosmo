@@ -253,9 +253,16 @@ function assertPostContentJsonKeys(value: unknown): void {
     if (!isRecord(value.attrs)) {
       throw new TypeError('Media attrs must be an object');
     }
-    assertOnlyKeys(value.attrs, ['mediaId']);
+    assertOnlyKeys(value.attrs, ['mediaId', 'altText']);
     if (typeof value.attrs.mediaId !== 'string' || value.attrs.mediaId.length === 0) {
       throw new TypeError('Media ID must be a non-empty string');
+    }
+    if (
+      value.attrs.altText !== undefined &&
+      value.attrs.altText !== null &&
+      typeof value.attrs.altText !== 'string'
+    ) {
+      throw new TypeError('Legacy Media Alt Text must be a string or null');
     }
     return;
   }

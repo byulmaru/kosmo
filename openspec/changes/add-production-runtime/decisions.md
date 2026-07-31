@@ -64,6 +64,18 @@
 - Consequences: Runtime과 migration은 서로 다른 login과 credential을 갖지만 migration role은 기존 owner 권한을 상속하므로 권한 수준 자체를 축소하는 계약은 아니다. Application/manifest가 제거되어도 schema object를 소유할 수 있는 login은 자동 삭제되지 않으며, 제거 또는 rotation에는 명시적인 운영 확인이 필요하다. Migration Job이 이 identity를 소비하는 연결은 PROD-564까지 존재하지 않는다.
 - Confirmation / Follow-up: Render와 live 상태에서 `DatabaseRole`, basic-auth Secret 참조와 role membership을 확인하고 API/Web이 migration credential을 참조하지 않는지 검사한다.
 
+### Migration login membership은 owner role 전환과 함께 사용한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: Linear `PROD-562`, `PROD-564`, `PROD-616`; production incident evidence
+- Status: Active
+- Context / Problem: 첫 production migration에서 `kosmo_migration`은 `kosmo`의 member였지만 role을 전환하지 않은 채 schema 객체를 생성했다. PostgreSQL membership은 member가 owner의 기존 객체 권한을 상속하게 할 뿐 owner에게 member 소유 객체 권한을 역으로 부여하지 않아 API가 `permission denied for table instance`로 시작하지 못했다.
+- Decision Outcome: Production migration은 별도 `kosmo_migration` login/Secret으로 인증한 뒤 runner 내부에서 `SET ROLE kosmo`를 실행하고 Drizzle migration을 적용한다. API/Web credential 경계와 단일 `migrate` command는 유지한다.
+- Alternatives Considered: Runtime credential로 migration을 실행하는 방식은 credential 분리를 없애므로 제외했다. `kosmo_migration` 소유 객체에 table/sequence별 grant와 default privilege를 추가하는 방식은 현재 runtime이 bootstrap owner인 계약에 불필요한 두 번째 ownership 체계를 만들므로 제외했다.
+- Consequences: Session identity와 credential은 migration 전용으로 유지되지만 생성되는 schema 객체는 `kosmo`가 소유한다. Migration role membership 또는 owner role 이름이 어긋나면 Job은 SQL 적용 전에 실패한다.
+- Confirmation / Follow-up: 별도 login이 owner role로 전환해 Drizzle history와 새 table을 owner 소유로 만드는 integration test, production Helm render의 고정 role, live table ownership과 API readiness를 확인한다.
+
 ### 기존 platform add-on과 TLS의 소비
 
 - Decision Date: 2026-07-30

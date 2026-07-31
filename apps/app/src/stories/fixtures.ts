@@ -79,6 +79,13 @@ export type StoryPostReference = {
   id: string;
 };
 
+export type StoryMedia = {
+  __typename: 'Media';
+  altText: string | null;
+  id: string;
+  url: string | null;
+};
+
 export type StoryPost = {
   __typename: 'Post';
   content: {
@@ -90,6 +97,7 @@ export type StoryPost = {
       version: 1;
     };
     id: string;
+    media: StoryMedia[] | null;
   } | null;
   createdAt: string;
   id: string;
@@ -99,6 +107,7 @@ export type StoryPost = {
   replyParent: StoryPostReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
+  viewerBookmark: { __typename: 'Bookmark'; id: string } | null;
   viewerRepost: StoryPostReference | null;
   visibility: 'DIRECT' | 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 };
@@ -108,6 +117,7 @@ export function post({
   bodyText = '코스모에서 전하는 첫 번째 소식입니다.',
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   id = 'post-1',
+  media = [],
   profile: author = profile(),
   reactionCounts = [],
   repostCount = 0,
@@ -120,6 +130,7 @@ export function post({
   bodyText?: string | null;
   createdAt?: string;
   id?: string;
+  media?: StoryMedia[] | null;
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
@@ -142,6 +153,7 @@ export function post({
             },
             bodyText,
             id: `content-${id}`,
+            media,
           },
     createdAt,
     id,
@@ -151,6 +163,7 @@ export function post({
     replyParent,
     repostSource,
     state: 'ACTIVE',
+    viewerBookmark: null,
     viewerRepost,
     visibility,
   };

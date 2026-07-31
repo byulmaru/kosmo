@@ -150,6 +150,64 @@ test('PostgreSQL 환경 변수로 마이그레이션 database에 연결한다', 
   }
 });
 
+test('별도 로그인으로 연결해도 지정한 database owner role로 객체를 생성한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const ownerRole = `migration_owner_${process.pid}`;
+  const validMigrations = await migrationFolder(
+    '20260712000000_owner',
+    'CREATE TABLE migration_owner_probe (id integer PRIMARY KEY);',
+  );
+  const [{ currentUser }] = await control<
+    { currentUser: string }[]
+  >`SELECT current_user AS "currentUser"`;
+  const [{ databaseName }] = await control<
+    { databaseName: string }[]
+  >`SELECT current_database() AS "databaseName"`;
+  let roleCreated = false;
+
+  try {
+    await control`CREATE ROLE ${control(ownerRole)}`;
+    roleCreated = true;
+    await control`GRANT ${control(ownerRole)} TO ${control(currentUser)}`;
+    await control`GRANT CREATE ON DATABASE ${control(databaseName)} TO ${control(ownerRole)}`;
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await control`GRANT ALL ON SCHEMA public TO ${control(ownerRole)}`;
+
+    await runDatabaseMigrations({
+      databaseUrl,
+      migrationRole: ownerRole,
+      migrationsFolder: validMigrations,
+    });
+
+    const owners = await control<{ owner: string }[]>`
+      SELECT pg_get_userbyid(relowner) AS owner
+      FROM pg_class
+      WHERE oid IN (
+        'public.migration_owner_probe'::regclass,
+        'drizzle.__drizzle_migrations'::regclass
+      )
+      ORDER BY relname
+    `;
+    assert.deepEqual(
+      owners.map(({ owner }) => owner),
+      [ownerRole, ownerRole],
+    );
+  } finally {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+
+    if (roleCreated) {
+      await control`REVOKE CREATE ON DATABASE ${control(databaseName)} FROM ${control(ownerRole)}`;
+      await control`REVOKE ${control(ownerRole)} FROM ${control(currentUser)}`;
+      await control`DROP ROLE ${control(ownerRole)}`;
+    }
+
+    await control.end({ timeout: 5 });
+    await rm(validMigrations, { force: true, recursive: true });
+  }
+});
+
 test('현재 마이그레이션 이력을 빈 데이터베이스에 적용한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
 

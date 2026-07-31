@@ -18,6 +18,10 @@ type ProfileListItemProps = {
 
 const profileListItemFragment = graphql`
   fragment ProfileListItem_profile on Profile {
+    avatar {
+      id
+      url
+    }
     displayName
     handle
     relativeHandle
@@ -32,7 +36,7 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
   const profileHref = `/${data.relativeHandle}` as Href;
   const content = (
     <>
-      <Avatar label={data.displayName || data.handle} size={40} />
+      <Avatar imageUri={data.avatar?.url} label={data.displayName || data.handle} size={40} />
       <View style={styles.copy}>
         <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
           {data.displayName}

@@ -72,6 +72,29 @@ test('preserves ordered Media nodes and omits the default Sensitive Media attr',
   assert.equal(isPostContentDocumentV1(document), true);
 });
 
+test('canonicalizes legacy Media Alt Text attrs away', () => {
+  assert.deepEqual(
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph' },
+          {
+            type: 'media',
+            attrs: {
+              altText: '이전 문서의 대체 텍스트',
+              mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+            },
+          },
+        ],
+      },
+    }),
+    postContentDocumentFromTextAndMedia('', [{ mediaId: '019f6678-86fa-709b-984e-1520766b8447' }]),
+  );
+});
+
 test('canonicalizes media-only content with one empty paragraph and Sensitive Media', () => {
   const document = postContentDocumentFromTextAndMedia(
     '',
@@ -141,6 +164,10 @@ test('rejects invalid Sensitive Media and Media attr scalar types', () => {
     {
       type: 'doc',
       content: [{ type: 'media', attrs: { mediaId: '' } }],
+    },
+    {
+      type: 'doc',
+      content: [{ type: 'media', attrs: { altText: 123, mediaId: 'media' } }],
     },
   ]) {
     assert.throws(() => canonicalizePostContentDocument({ version: 1, summary: null, body }));
@@ -337,8 +364,65 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
-test('native-safe guard accepts only the V1 JSON contract', () => {
+test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
   assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
+  assert.equal(
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        attrs: { futureFlag: true },
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'body' }] }],
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
+      ignoredDocumentProperty: true,
+      body: {
+        type: 'doc',
+        ignoredBodyProperty: true,
+        attrs: { sensitiveMedia: true, ignoredBodyAttr: true },
+        content: [
+          {
+            type: 'paragraph',
+            ignoredParagraphProperty: true,
+            content: [
+              {
+                type: 'text',
+                text: '링크',
+                ignoredTextProperty: true,
+                marks: [
+                  {
+                    type: 'link',
+                    ignoredMarkProperty: true,
+                    attrs: {
+                      href: 'https://example.com/',
+                      ignoredLinkAttr: true,
+                    },
+                  },
+                ],
+              },
+              { type: 'hard_break', ignoredHardBreakProperty: true },
+            ],
+          },
+          {
+            type: 'media',
+            ignoredMediaProperty: true,
+            attrs: {
+              mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+              altText: '이전 초안 속성',
+            },
+          },
+        ],
+      },
+    }),
+    true,
+  );
   assert.equal(
     isPostContentDocumentV1({
       version: 1,
