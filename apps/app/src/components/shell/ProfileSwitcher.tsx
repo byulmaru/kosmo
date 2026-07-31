@@ -111,6 +111,13 @@ const webCompactPickerBounds = {
 const webFullPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 276px))',
 } as unknown as ViewStyle;
+const webDrawerPickerBounds = {
+  maxHeight: 'min(430px, calc(100vh - 206px))',
+} as unknown as ViewStyle;
+const webInternalScroll = {
+  overflowY: 'auto',
+  touchAction: 'pan-y',
+} as unknown as ViewStyle;
 const countFormatter = new Intl.NumberFormat('en', {
   maximumFractionDigits: 1,
   notation: 'compact',
@@ -160,7 +167,7 @@ export function ProfileSwitcher({
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
   const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
-  const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
+  const redesignedWeb = Platform.OS === 'web';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
@@ -302,7 +309,9 @@ export function ProfileSwitcher({
     ? undefined
     : surface === 'compact'
       ? webCompactPickerBounds
-      : webFullPickerBounds;
+      : surface === 'drawer'
+        ? webDrawerPickerBounds
+        : webFullPickerBounds;
   const profileOptions = profiles.map((profile) => {
     const selected = active?.id === profile.id;
     return (
@@ -363,7 +372,7 @@ export function ProfileSwitcher({
             accessibilityLabel="전환할 프로필 목록"
             contentContainerStyle={styles.profileListContent}
             role="group"
-            style={styles.profileList}
+            style={[styles.profileList, webInternalScroll]}
           >
             {profileOptions}
           </ScrollView>
