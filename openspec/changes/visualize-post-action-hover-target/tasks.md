@@ -98,9 +98,10 @@ Web의 비터치 pointer가 Post Action control에 hover하면 click target은 �
 
 **Verification Record (2026-07-31, X-style 보정)**
 
-- `@kosmo/app test`를 게시 직전 트리에서 실행해 Relay compiler와 TypeScript, unit 103/103, static Storybook
-  build, Storybook browser interaction 237/237를 통과했다. Expo dev server가 만든 ignored router type은
-  원본을 임시 경로에 보존한 채 clean check에서 제외하고 즉시 복원했다.
+- `@kosmo/app test`를 최신 부모 위 게시 직전 트리에서 실행해 Relay compiler(92 reader, 58 normalization,
+  99 operation text)와 TypeScript, unit 137/137, static Storybook build, Storybook browser interaction
+  256/256을 통과했다. Expo dev server가 만든 ignored router type은 원본을 임시 경로에 보존한 채 clean
+  check에서 제외하고 즉시 복원했다.
 - `ActionBarCatalog`는 미선택 Reaction hover에서 background `like` opacity `0.3`, heart의 불투명 `like`
   stroke와 hover 종료 뒤 default 색 복귀를 검증한다. selected Reaction은 hover 전·중·후 불투명 `like`
   stroke·fill을 유지하며, 원형 background만 hover 동안 opacity `0.3`으로 표시된다.
