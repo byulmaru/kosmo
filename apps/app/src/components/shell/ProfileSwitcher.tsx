@@ -114,10 +114,6 @@ const webFullPickerBounds = {
 const webDrawerPickerBounds = {
   maxHeight: 'min(430px, calc(100vh - 206px))',
 } as unknown as ViewStyle;
-const webInternalScroll = {
-  overflowY: 'auto',
-  touchAction: 'pan-y',
-} as unknown as ViewStyle;
 const countFormatter = new Intl.NumberFormat('en', {
   maximumFractionDigits: 1,
   notation: 'compact',
@@ -167,7 +163,8 @@ export function ProfileSwitcher({
   const compact = surface === 'compact';
   const fullWeb = Platform.OS === 'web' && surface === 'full';
   const mobileWebDrawer = Platform.OS === 'web' && surface === 'drawer';
-  const redesignedWeb = Platform.OS === 'web';
+  const redesignedWeb = Platform.OS === 'web' && surface !== 'drawer';
+  const scrollableWebPicker = Platform.OS === 'web';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
   const setOpen = (nextOpen: boolean) => {
@@ -305,7 +302,7 @@ export function ProfileSwitcher({
     action();
   };
 
-  const surfaceBounds = !redesignedWeb
+  const surfaceBounds = !scrollableWebPicker
     ? undefined
     : surface === 'compact'
       ? webCompactPickerBounds
@@ -356,7 +353,7 @@ export function ProfileSwitcher({
       ref={pickerRef}
       style={[
         styles.menu,
-        redesignedWeb ? styles.redesignedMenu : undefined,
+        scrollableWebPicker ? styles.redesignedMenu : undefined,
         surfaceBounds,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
@@ -365,14 +362,14 @@ export function ProfileSwitcher({
         accessibilityLabel="프로필 전환"
         accessibilityRole={Platform.OS === 'web' ? undefined : 'menu'}
         role={Platform.OS === 'web' && !redesignedWeb ? 'menu' : undefined}
-        style={redesignedWeb ? styles.redesignedMenuRegion : styles.menuItems}
+        style={scrollableWebPicker ? styles.redesignedMenuRegion : styles.menuItems}
       >
-        {redesignedWeb ? (
+        {scrollableWebPicker ? (
           <ScrollView
             accessibilityLabel="전환할 프로필 목록"
             contentContainerStyle={styles.profileListContent}
             role="group"
-            style={[styles.profileList, webInternalScroll]}
+            style={styles.profileList}
           >
             {profileOptions}
           </ScrollView>

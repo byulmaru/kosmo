@@ -1148,11 +1148,6 @@ export const UniversalMobile: Story = {
     await userEvent.click(menuButton);
     const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
-    expect(canvasElement.ownerDocument.body.style.overflow).toBe('hidden');
-    expect(page.getByTestId('mobile-sidebar-scroll')).toHaveStyle({
-      overflowY: 'auto',
-      touchAction: 'pan-y',
-    });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
     const profileHandle = page.getByLabelText('활성 프로필 핸들');
@@ -1234,42 +1229,85 @@ export const UniversalMobile: Story = {
 };
 
 export const UniversalMobileLongProfilePickerScroll: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  globals: { viewport: { isRotated: false, value: 'shellMobileShort' } },
   parameters: {
     ...universalParameters,
     relay: { data: longProfileQuery },
+    viewport: {
+      options: {
+        shellMobileShort: {
+          name: 'Shell mobile short',
+          styles: { height: '480px', width: '390px' },
+          type: 'mobile',
+        },
+      },
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const page = within(ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
 
-    const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerScroll = page.getByTestId('mobile-sidebar-scroll');
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
 
     expect(drawer).toBeVisible();
-    expect(drawerScroll).toHaveStyle({ overflowY: 'auto', touchAction: 'pan-y' });
-    expect(canvasElement.ownerDocument.body.style.overflow).toBe('hidden');
+    expect(getComputedStyle(drawerScroll).overflowY).toBe('auto');
+    expect(drawerScroll.scrollHeight).toBeGreaterThan(drawerScroll.clientHeight);
+    expect(ownerDocument.body.style.overflow).toBe('hidden');
+    const drawerScrollTop = drawerScroll.scrollTop;
+    drawerScroll.scrollTop = Math.max(1, drawerScroll.scrollHeight - drawerScroll.clientHeight);
+    await waitFor(() => expect(drawerScroll.scrollTop).toBeGreaterThan(drawerScrollTop));
+    drawerScroll.scrollTop = 0;
 
     await userEvent.click(profileTrigger);
     const list = await page.findByLabelText('전환할 프로필 목록');
-    const picker = page.getByLabelText('프로필 전환');
-    const options = within(list).getAllByRole('button');
-    const addProfile = page.getByRole('button', { name: '새 프로필 추가' });
+    const picker = await page.findByRole('menu', { name: '프로필 전환' });
+    const options = within(list).getAllByRole('menuitemradio');
+    const addProfile = within(picker).getByRole('menuitem', { name: '새 프로필 추가' });
 
     expect(picker).toBeVisible();
     expect(options).toHaveLength(12);
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    expect(getComputedStyle(list).overflowY).toBe('auto');
     expect(addProfile).toBeVisible();
-    list.scrollTop = list.scrollHeight;
-    expect(list.scrollTop).toBeGreaterThan(0);
+    const listScrollTop = list.scrollTop;
+    list.scrollTop = Math.max(1, list.scrollHeight - list.clientHeight);
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(listScrollTop));
+
+    drawerScroll.scrollTop = 0;
+    await userEvent.click(addProfile);
+    const handle = page.getByRole('textbox', { name: '프로필 핸들' });
+    const createButton = page.getByRole('button', { name: '만들기' });
+    const pickerViewport = picker.parentElement;
+    expect(pickerViewport).not.toBeNull();
+    const pickerBounds = pickerViewport!.getBoundingClientRect();
+    const drawerBounds = drawer.getBoundingClientRect();
+    for (const control of [handle, createButton]) {
+      const bounds = control.getBoundingClientRect();
+      expect(bounds.left).toBeGreaterThanOrEqual(pickerBounds.left);
+      expect(bounds.right).toBeLessThanOrEqual(pickerBounds.right);
+      expect(bounds.top).toBeGreaterThanOrEqual(pickerBounds.top);
+      expect(bounds.bottom).toBeLessThanOrEqual(pickerBounds.bottom);
+      expect(bounds.top).toBeGreaterThanOrEqual(drawerBounds.top);
+      expect(bounds.bottom).toBeLessThanOrEqual(drawerBounds.bottom);
+    }
+
+    await userEvent.type(handle, 'drawer_draft');
+    await userEvent.click(profileTrigger);
+    await waitFor(() => expect(page.queryByRole('menu', { name: '프로필 전환' })).toBeNull());
+    await userEvent.click(profileTrigger);
+    const reopenedPicker = await page.findByRole('menu', { name: '프로필 전환' });
+    await userEvent.click(within(reopenedPicker).getByRole('menuitem', { name: '새 프로필 추가' }));
+    expect(page.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('drawer_draft');
 
     await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
-    expect(canvasElement.ownerDocument.body.style.overflow).toBe('');
+    await waitFor(() => expect(ownerDocument.body.style.overflow).toBe(''));
   },
   render: () => (
-    <View style={{ height: 844 }}>
+    <View style={{ height: 480 }}>
       <UniversalShellStory />
     </View>
   ),

@@ -1,6 +1,6 @@
 import { usePathname } from 'expo-router';
 import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
@@ -12,7 +12,6 @@ import { useUnreadNotificationCount } from './UnreadNotificationBadgeController'
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
 import type { Href } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
-import type { ViewStyle } from 'react-native';
 import type { SidebarNavigation_query$key } from './__generated__/SidebarNavigation_query.graphql';
 
 const SidebarNavigationFragment = graphql`
@@ -49,11 +48,6 @@ const navigation: NavigationItem[] = [
   { Icon: UserRound, label: '프로필', profile: true },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
 ];
-
-const webDrawerScroll = {
-  overflowY: 'auto',
-  touchAction: 'pan-y',
-} as unknown as ViewStyle;
 
 type Props = {
   compact?: boolean;
@@ -114,7 +108,6 @@ export function SidebarNavigation({
         style={[
           styles.navigationArea,
           compact && styles.compactNavigationArea,
-          surface === 'drawer' && Platform.OS === 'web' && webDrawerScroll,
           { borderColor: theme.border },
         ]}
         testID={surface === 'drawer' ? 'mobile-sidebar-scroll' : undefined}
