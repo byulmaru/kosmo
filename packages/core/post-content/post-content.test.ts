@@ -72,6 +72,29 @@ test('preserves ordered Media nodes and omits the default Sensitive Media attr',
   assert.equal(isPostContentDocumentV1(document), true);
 });
 
+test('canonicalizes legacy Media Alt Text attrs away', () => {
+  assert.deepEqual(
+    canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph' },
+          {
+            type: 'media',
+            attrs: {
+              altText: '이전 문서의 대체 텍스트',
+              mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+            },
+          },
+        ],
+      },
+    }),
+    postContentDocumentFromTextAndMedia('', [{ mediaId: '019f6678-86fa-709b-984e-1520766b8447' }]),
+  );
+});
+
 test('canonicalizes media-only content with one empty paragraph and Sensitive Media', () => {
   const document = postContentDocumentFromTextAndMedia(
     '',
@@ -141,6 +164,10 @@ test('rejects invalid Sensitive Media and Media attr scalar types', () => {
     {
       type: 'doc',
       content: [{ type: 'media', attrs: { mediaId: '' } }],
+    },
+    {
+      type: 'doc',
+      content: [{ type: 'media', attrs: { altText: 123, mediaId: 'media' } }],
     },
   ]) {
     assert.throws(() => canonicalizePostContentDocument({ version: 1, summary: null, body }));
