@@ -217,7 +217,7 @@ jobs:
             -p "migration.enabled=true" \
             --validate
 
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod --timeout 600
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod --prune --timeout 600
 
       - name: Record production deployment
         if: always()
