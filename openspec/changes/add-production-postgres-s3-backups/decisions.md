@@ -59,10 +59,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: 아직 production Application이 없는 동안 선언을 먼저 병합하되 dev database에 backup 자원이나 AWS identity 의존성을 추가하면 안 된다.
-- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. PostgreSQL Pod의 plugin이 ObjectStore를 읽을 수 있도록 같은 ServiceAccount에 동명 ObjectStore 하나의 `get`만 허용하는 namespaced Role/RoleBinding을 함께 렌더한다. Dev manifest는 현재 상태를 유지한다.
+- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. PostgreSQL Pod의 plugin이 ObjectStore를 읽을 수 있도록 같은 ServiceAccount에 동명 ObjectStore 하나의 `get`만 허용하는 namespaced Role/RoleBinding을 함께 렌더한다. 임시 restore namespace의 runbook manifest도 restore ServiceAccount에 같은 범위의 Role/RoleBinding을 만든다. Dev manifest는 현재 상태를 유지한다.
 - Alternatives Considered: 모든 환경에 resource를 만들고 dev에서 비활성화하는 방식은 불필요한 CR과 identity 계약을 남겨 제외했다. 별도 chart는 공통 Cluster 선언이 중복되어 제외했다.
 - Consequences: dev/prod 양쪽의 render test가 필요하고 production 값이 활성화되기 전에는 live backup 검증이 불가능하다. ServiceAccount는 다른 ObjectStore나 write verb를 사용할 수 없다.
-- Confirmation / Follow-up: Role/RoleBinding은 API server dry-run을 통과해야 하고, 적용 후 exact ObjectStore `get`은 `kubectl auth can-i`로 검증한다. Backup과 WAL archive 성공을 실제 상태로 확인한다.
+- Confirmation / Follow-up: Role/RoleBinding은 API server dry-run과 live Role의 `resourceNames` 확인을 통과해야 하고, 적용 후 ServiceAccount의 ObjectStore `get`과 실제 backup/recovery 성공을 확인한다.
 
 ### 원본 쓰기 없는 격리 PITR rehearsal
 
@@ -71,10 +71,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: backup 성공만으로 복구 가능성을 증명할 수 없으며 rehearsal이 production 데이터나 backup chain을 오염시키면 안 된다.
-- Decision Outcome: application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 대상 WAL의 자연 archive 성공을 확인한 뒤 `kosmo-prod-restore` namespace의 새 Cluster를 해당 restore point로 복구한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
+- Decision Outcome: application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 대상 WAL의 자연 archive 성공을 확인한 뒤 `kosmo-prod-restore` namespace의 새 Cluster를 해당 restore point로 복구한다. Recovery target에는 restore point보다 앞서 완료된 base backup의 CNPG `backupID`와 target name을 함께 지정한다. Restore Cluster에는 source ObjectStore를 recovery source로만 연결하고 같은 destination의 WAL archiver 또는 ScheduledBackup을 구성하지 않는다. 출시 전 한 번과 이후 월 1회 RPO, RTO, schema, Drizzle migration history, 대표 row count와 최소 read를 검증한다.
 - Alternatives Considered: production Cluster in-place restore는 원본을 덮어쓸 위험이 있어 제외했다. Backup phase만 확인하는 방식은 실제 복구 경로를 검증하지 못해 제외했다.
 - Consequences: rehearsal용 namespace/PVC 비용과 월간 운영 작업이 발생한다. 민감 데이터가 아닌 시각·phase·측정값·검증 결과만 Linear에 기록해야 한다.
-- Confirmation / Follow-up: 최초 production 준비 후 RPO 5분/RTO 60분 목표를 측정하고 `PROD-546`에 증거를 남긴 뒤 restore namespace를 제거한다.
+- Confirmation / Follow-up: 2026-07-31 최초 live rehearsal에서 RPO 약 3분 25초, RTO 2분 6초를 확인하고 restore namespace를 제거했다. Bootstrap DB에는 아직 application table과 migration history가 없어 그 부재와 schema 동등성으로 기준을 검증했으며 첫 release 이후 월간 rehearsal에서는 실제 migration history와 대표 데이터를 검증한다.
 
 ### 자동 실패 알림의 후속 분리
 

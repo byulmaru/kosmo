@@ -31,8 +31,8 @@ kubectl get backup -n kosmo-prod --sort-by=.metadata.creationTimestamp
 ```sh
 kubectl describe objectstore kosmo-postgres-backup -n kosmo-prod
 kubectl get serviceaccount kosmo-postgres-backup -n kosmo-prod -o yaml
+kubectl get role kosmo-postgres-backup-objectstore-reader -n kosmo-prod -o yaml
 kubectl auth can-i get objectstores.barmancloud.cnpg.io \
-  --resource-name=kosmo-postgres-backup \
   --namespace=kosmo-prod \
   --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
 aws eks list-pod-identity-associations --cluster-name byulmaru --region ap-northeast-2
@@ -136,6 +136,35 @@ metadata:
   name: kosmo-postgres-backup
   namespace: kosmo-prod-restore
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kosmo-postgres-backup-objectstore-reader
+  namespace: kosmo-prod-restore
+rules:
+  - apiGroups:
+      - barmancloud.cnpg.io
+    resources:
+      - objectstores
+    resourceNames:
+      - kosmo-postgres-backup
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kosmo-postgres-backup-objectstore-reader
+  namespace: kosmo-prod-restore
+subjects:
+  - kind: ServiceAccount
+    name: kosmo-postgres-backup
+    namespace: kosmo-prod-restore
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kosmo-postgres-backup-objectstore-reader
+---
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
@@ -150,7 +179,15 @@ spec:
 
 ### 3. 새 Cluster를 named restore point로 복구
 
-`RESTORE_POINT_NAME`을 1단계에서 생성한 이름으로 바꿔 적용한다. `serverName`은 source Cluster 이름인 `kosmo-postgres`로 유지한다.
+restore point보다 먼저 완료된 base backup을 선택하고 CNPG가 기록한 ID를 확인한다.
+
+```sh
+kubectl get backup -n kosmo-prod --sort-by=.metadata.creationTimestamp
+kubectl get backup BACKUP_NAME -n kosmo-prod \
+  -o jsonpath='{.status.backupId}{"\n"}'
+```
+
+`BACKUP_ID`를 위 값으로, `RESTORE_POINT_NAME`을 1단계에서 생성한 이름으로 바꿔 적용한다. `serverName`은 source Cluster 이름인 `kosmo-postgres`로 유지한다. 현재 CNPG 1.30 CRD는 named recovery target에 source `backupID`를 함께 요구한다.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -167,6 +204,7 @@ spec:
       database: kosmo
       owner: kosmo
       recoveryTarget:
+        backupID: 'BACKUP_ID'
         targetName: 'RESTORE_POINT_NAME'
   externalClusters:
     - name: production
@@ -191,11 +229,11 @@ kubectl get cluster,pod -n kosmo-prod-restore
 
 CNPG가 생성한 `kosmo-postgres-restore-app` Secret을 `kosmo` owner와 `kosmo` database의 application credential로 사용해 읽기 전용 연결을 만든 뒤 다음을 비교한다. Secret 값은 terminal history, command output이나 Linear에 출력하지 않는다.
 
-- `pg_dump --schema-only` 결과의 구조적 차이
+- `pg_dump --schema-only` 결과의 구조적 차이. PostgreSQL 18이 실행마다 생성하는 `\restrict`/`\unrestrict` 토큰만 비교에서 제외한다.
 - restore point 직전 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash
 - restore point 직전 snapshot에 기록한 대표 테이블의 row count와 불변 식별자 존재 여부
 - 대표 GraphQL read query 또는 동일 query path의 최소 application read
-- Restore Cluster의 마지막 replay LSN이 기록한 `target_lsn`에 도달했는지 여부
+- Restore가 named target을 찾아 정상 종료되고 Ready가 되었으며 승격 후 current LSN이 기록한 `target_lsn` 이상인지 여부. 승격 뒤 `pg_last_wal_replay_lsn()`은 `NULL`일 수 있다.
 
 현재 production 상태가 아니라 1단계에서 restore point 직전에 고정한 기준과 Restore Cluster를 비교한다. Restore point LSN 도달은 선택한 복구 지점까지 데이터가 복원됐음을 증명한다. Target time부터 `target_wal` archive 성공을 처음 관측한 시각까지의 지연을 RPO 증거로, rehearsal 시작부터 Cluster Ready까지를 RTO로 기록한다. 목표는 각각 5분과 60분 이내다. Restore point 이름, timestamp, Backup phase, 측정값과 성공/실패만 `PROD-546`에 남긴다.
 

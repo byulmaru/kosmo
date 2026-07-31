@@ -27,7 +27,7 @@ Production PostgreSQL backup이 cluster와 독립된 서울 리전 S3 저장소�
 - [x] 1.4 bucket/role 식별자를 output과 운영자가 찾을 수 있는 repository 문서에 기록한다.
 - [x] 1.5 Terraform fmt/validate와 saved plan을 검토해 의도하지 않은 resource 변경이 없음을 확인한다.
 - [x] 1.6 승인된 saved plan을 적용하고 AWS live 설정과 output 증거를 `PROD-549`에 기록한다.
-- [ ] 1.7 Live Barman `HeadBucket` 403을 유발한 bucket-level list의 `s3:prefix` 조건을 제거하고 Terraform plan/apply와 실제 WAL archive로 보완을 검증한다.
+- [x] 1.7 Live Barman `HeadBucket` 403을 유발한 bucket-level list의 `s3:prefix` 조건을 제거하고 Terraform plan/apply와 실제 WAL archive로 보완을 검증한다.
 
 ## 2. PROD-550 Barman Cloud plugin과 PostgreSQL Pod Identity
 
@@ -90,7 +90,7 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - [x] 3.4 On-demand backup, 상태 확인과 S3/Pod Identity/plugin 장애 진단 절차를 운영 문서에 기록한다.
 - [x] 3.5 격리 PITR manifest 작성, named restore point와 WAL archive gate, 데이터 검증과 namespace 정리 절차를 운영 문서에 기록한다.
 - [x] 3.6 OpenSpec strict validation과 관련 Helm 검증을 통과시키고 결과를 `PROD-551`에 기록한다.
-- [ ] 3.7 Live activation에서 확인된 ObjectStore 조회 권한 누락을 namespaced 최소 Role/RoleBinding으로 보완하고 API server dry-run, `kubectl auth can-i`와 OpenSpec strict validation을 통과시킨다.
+- [x] 3.7 Live activation에서 확인된 ObjectStore 조회 권한 누락을 production과 restore namespace의 최소 Role/RoleBinding으로 보완하고 Role의 `resourceNames`, 실제 backup/recovery와 OpenSpec strict validation으로 검증한다.
 
 ## 4. PROD-546 운영 통합 검증과 archive gate
 
@@ -117,9 +117,9 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - Restore point 직전 snapshot과 schema, Drizzle migration history, 대표 row count와 최소 read를 비교하고 target LSN 도달을 확인한다.
 - Restore point 생성부터 대상 WAL archive 성공 관측까지와 rehearsal 시작부터 restore Ready까지를 측정해 `PROD-546`에 기록한다.
 
-- [ ] 4.1 `PROD-545`의 production Cluster 준비를 확인하고 production Application을 동기화한다.
-- [ ] 4.2 Immediate base backup, 연속 WAL archive와 S3 versioned object 성공 증거를 수집한다.
-- [ ] 4.3 Write pause 중 불변 snapshot과 named restore point를 만들고 강제 WAL 전환 없이 대상 WAL archive 성공 후 `kosmo-prod-restore`에서 해당 지점으로 격리 PITR rehearsal을 실행한다.
-- [ ] 4.4 WAL archive 지연, target LSN 도달, RTO와 schema, migration history, 대표 row count, 최소 read 검증 결과를 민감 데이터 없이 `PROD-546`에 기록한다.
-- [ ] 4.5 검증 후 restore namespace를 제거하고 source backup과 production resource가 유지되는지 확인한다.
+- [x] 4.1 `PROD-545`의 production Cluster 준비를 확인하고 production Application을 동기화한다.
+- [x] 4.2 Immediate base backup, 연속 WAL archive와 S3 versioned object 성공 증거를 수집한다.
+- [x] 4.3 Write pause 중 불변 snapshot과 named restore point를 만들고 강제 WAL 전환 없이 대상 WAL archive 성공 후 `kosmo-prod-restore`에서 해당 지점으로 격리 PITR rehearsal을 실행한다.
+- [x] 4.4 WAL archive 지연, target LSN 도달, RTO와 schema, migration history, 대표 row count, 최소 read 검증 결과를 민감 데이터 없이 `PROD-546`에 기록한다.
+- [x] 4.5 검증 후 restore namespace를 제거하고 source backup과 production resource가 유지되는지 확인한다.
 - [ ] 4.6 월 1회 rehearsal 책임을 운영 일정에 반영하고 모든 자식 완료 후 `PROD-546`과 OpenSpec archive gate를 닫는다.
