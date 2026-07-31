@@ -174,6 +174,7 @@ jobs:
             echo "- Commit: \`${PR_HEAD_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
             echo "- Apply: merge this PR to \`main\`"
+            echo "- Artifact retention: ${GITHUB_RETENTION_DAYS} days; rerun this plan before merging if it expires"
             echo
             echo "<details open>"
             echo "<summary>terraform show -no-color terraform.tfplan</summary>"
@@ -204,7 +205,7 @@ jobs:
             apps/terraform/terraform.tfplan.txt
             apps/terraform/plan.env
           if-no-files-found: error
-          retention-days: 3
+          retention-days: ${{ github.retention_days }}
 
   apply:
     name: Terraform Apply
@@ -299,11 +300,11 @@ jobs:
             exit 1
           fi
 
-          plan_run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/terraform.yml/runs?event=pull_request&status=success&per_page=100" \
-            --jq ".workflow_runs | sort_by(.run_started_at) | reverse | .[] | select(.head_sha == \"${pr_head_sha}\") | .id" \
-            | head -n 1)"
+          plan_run_id="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${TF_PLAN_ARTIFACT}&per_page=100" \
+            | jq -r "[.[].artifacts[] | select(.expired == false and .workflow_run.head_sha == \"${pr_head_sha}\")] | sort_by(.created_at) | last | .workflow_run.id // empty")"
           if [[ -z "${plan_run_id}" ]]; then
-            echo "No successful Terraform plan found for PR #${pr_number} at ${pr_head_sha}." >&2
+            echo "No unexpired Terraform plan artifact found for PR #${pr_number} at ${pr_head_sha}; rerun the PR plan before merging." >&2
             exit 1
           fi
 
