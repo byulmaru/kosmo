@@ -16,7 +16,7 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **WHEN** 검증된 원격 Note가 embedded Image 또는 Media Type이 `image/*`인 embedded Document attachment를 가진다
 - **THEN** 시스템은 Fedify vocabulary 객체를 사용해 attachment를 읽는다
 - **AND** Image는 Media Type이 없어도 후보이며 Document는 Media Type의 MIME essence가 `image/*`일 때만 후보이다
-- **AND** 각 후보는 서로 다른 canonical HTTP(S) 표현 URL을 정확히 하나 가져야 한다
+- **AND** 각 후보는 canonical HTTP(S) 표현 URL을 정확히 하나 가져야 한다
 - **AND** 시스템은 원본 nullable media type 문자열을 정규화하지 않고 그대로 보존한다
 - **AND** 시스템은 nullable name 문자열을 Remote Media의 Alt Text로 보존한다
 - **AND** attachment metadata나 byte를 위한 추가 원격 fetch를 수행하지 않는다
@@ -38,7 +38,6 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 - **WHEN** 이미지 후보의 표현 URL이 없거나 둘 이상이다
 - **OR** URL scheme이 HTTP(S)가 아니거나 canonicalize할 수 없다
-- **OR** 같은 canonical URL이 이미지 후보 안에 중복된다
 - **THEN** 시스템은 앞 4개 후보 안의 부적합 attachment를 부분 투영하지 않는다
 - **AND** 해당 Note의 ActivityPub Post mapping, Post, PostContent와 Media side effect를 모두 남기지 않는다
 
@@ -73,6 +72,13 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 - **WHEN** 원격 Note 본문은 없지만 하나 이상의 유효한 이미지 후보가 있다
 - **THEN** 시스템은 canonical empty paragraph와 순서 있는 Media node를 가진 PostContent를 저장한다
+- **AND** 해당 Note를 contentless Note로 거부하지 않는다
+
+#### Scenario: Media Type이 없는 Image 조회
+
+- **WHEN** Media Type을 생략한 원격 Image에서 생성된 Ready Remote Media를 현재 PostContent가 참조한다
+- **THEN** GraphQL `PostContent.media`는 해당 Media를 nullable Media Type과 함께 반환한다
+- **AND** Media Type이 없다는 이유로 Media 목록 전체를 unavailable로 만들지 않는다
 
 ### Requirement: 최초 원격 Media materialization 원자성
 
@@ -90,8 +96,9 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **THEN** 시스템은 기존 Post와 PostContent를 변경하지 않는다
 - **AND** duplicate delivery 때문에 Media를 추가하거나 갱신하지 않는다
 
-#### Scenario: concurrent URL과 object 충돌
+#### Scenario: concurrent object first-write-wins와 같은 URL의 독립 저장
 
-- **WHEN** 같은 object URI 또는 같은 Remote Media URL을 포함한 최초 delivery가 동시에 실행된다
-- **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나, canonical Remote URL당 Media 하나로 수렴한다
-- **AND** conflict loser는 orphan Post, PostContent 또는 Media를 남기지 않는다
+- **WHEN** 같은 object URI의 delivery 또는 같은 Remote Media URL을 가진 서로 다른 object URI의 delivery가 동시에 실행된다
+- **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나로 수렴한다
+- **AND** 서로 다른 object URI에서 commit된 attachment는 URL이 같아도 각각 별도 Media identity를 가진다
+- **AND** 같은 object URI의 conflict loser는 orphan Post, PostContent 또는 Media를 남기지 않는다
