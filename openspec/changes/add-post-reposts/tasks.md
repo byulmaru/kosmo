@@ -271,7 +271,6 @@ production fragment shape를 유지하는 fixture와 Storybook에서 Repost·Quo
 - `PROD-389`
 - `PROD-415`
 - `PROD-453`
-- `PROD-593`
 
 **Deliverable**
 
@@ -283,7 +282,7 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 - Bookmark도 Home/Profile과 같은 공용 Post list item fragment를 사용하고 별도 presentation scalar를 중복하지 않는다.
 - 현재 상세 Post는 `PostLayout`, 목록과 상세 thread의 조상·하위 Reply는 `PostListItem`이 자신의 direct Source를 소유하고 공용 preview leaf를 `PostBody` 아래 sibling으로 정확히 한 번 표시한다.
 - `PostDetailThread`는 Source를 별도 선택·운반·추가 렌더링하지 않는다.
-- thread connector segment는 목록형 48px avatar와 현재 상세 40px avatar의 위·아래에서 각각 4px 떨어지고 둥근 끝을 사용한다. row 경계는 `PostThreadLayout`이 N-1개의 1px `theme.divider` 구분선으로 소유하고 thread 내부 `PostListItem` border는 끈다. 구분선은 왼쪽 64px·오른쪽 8px inset을 사용해 connector와 교차하지 않으며 Home timeline과 token·1px 무게만 공유한다.
+- thread connector segment는 목록형 48px avatar와 현재 상세 40px avatar의 위·아래에서 각각 4px 떨어지고 둥근 끝을 사용한다. Thread row boundary presentation은 이 Repost renderer task에서 정의하거나 완료 처리하지 않고 canonical `docs/design/post-thread.md`를 따른다.
 - bordered Source preview는 시각적 그룹 경계로 유지하고 전체를 Source Post Link로 만들지 않는다.
 - Source가 API에서 제외된 불완전한 row를 client에서 합성하지 않는다.
 - Quote preview의 두 번째 Source ID·Content·Profile presentation field를 읽거나 presentation component를 재귀 호출하지 않는다.
@@ -300,7 +299,7 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 
 **Verification**
 
-- Home/Profile/Bookmark와 Post 상세 fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Pure Repost는 attribution이 한 번만 있고 Repost Author Profile과 Source Author/Profile·Post pathname이 구분되며, direct Source가 ordinary Post와 같은 48px avatar·Author·Content·spacing·navigation 표준 행을 사용하고 중첩 article·이중 border가 없어야 한다. ordinary와 pure Repost Source 표준 행은 최소 44px timestamp Link, pointer·touch body shortcut, 외부 Link 격리와 nested interactive 부재를 검증한다. current·ancestor·descendant Quote의 Source는 정확히 한 번만 표시되어야 한다. Quote-of-Quote는 direct Source 한 단계에서 preview가 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. 목록과 상세 thread 조상·하위 Reply의 `PostListItem`에서 Quote와 Reply+Quote의 자체 본문은 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않아야 하며, 현재 상세 `PostLayout`은 direct Source 이동만 제공해야 한다. Source/Quote 생성 시각의 실제 Link, pointer·touch body shortcut, 빈 border padding, Author Profile과 외부 body Link 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없어야 한다. Content 없는 Repost 상세 진입은 Source canonical URL로 replace되고 기존 thread 순서·pagination·오류 복구가 유지되어야 한다. production Storybook은 48px 목록형 avatar와 40px 현재 avatar 모두 connector 위·아래 간격이 4px이며 끝이 둥글고, thread divider가 N-1개·1px·왼쪽 64px·오른쪽 8px이며 현재 상세 본문 열과 정렬되고 connector·renderer 내부 border와 겹치지 않는지 검증한다.
+- Home/Profile/Bookmark와 Post 상세 fragment 연결, Repost/Quote Author 구분, Source·Profile navigation, 일반 Post 회귀와 Relay generated type을 app integration/E2E로 검증한다. Pure Repost는 attribution이 한 번만 있고 Repost Author Profile과 Source Author/Profile·Post pathname이 구분되며, direct Source가 ordinary Post와 같은 48px avatar·Author·Content·spacing·navigation 표준 행을 사용하고 중첩 article·이중 border가 없어야 한다. ordinary와 pure Repost Source 표준 행은 최소 44px timestamp Link, pointer·touch body shortcut, 외부 Link 격리와 nested interactive 부재를 검증한다. current·ancestor·descendant Quote의 Source는 정확히 한 번만 표시되어야 한다. Quote-of-Quote는 direct Source 한 단계에서 preview가 끝나고 direct Source 생성 시각·본문이 해당 Source의 canonical route로 이동하며 두 번째 Source Content와 CTA가 표시되지 않는지 확인한다. 목록과 상세 thread 조상·하위 Reply의 `PostListItem`에서 Quote와 Reply+Quote의 자체 본문은 바깥 Quote Post로 이동하고 Source Post로 잘못 이동하지 않아야 하며, 현재 상세 `PostLayout`은 direct Source 이동만 제공해야 한다. Source/Quote 생성 시각의 실제 Link, pointer·touch body shortcut, 빈 border padding, Author Profile과 외부 body Link 목적지를 각각 검증하고 `a a` 및 `[role="link"] [role="link"]`가 없어야 한다. Content 없는 Repost 상세 진입은 Source canonical URL로 replace되고 기존 thread 순서·pagination·오류 복구가 유지되어야 한다. production Storybook은 48px 목록형 avatar와 40px 현재 avatar 모두 connector 위·아래 간격이 4px이며 끝이 둥근지도 검증한다.
 
 - [x] 9.1 PROD-453 presentation fragment를 production Post list item과 실제 API shape에 연결한다.
 - [x] 9.2 Home/Profile/Bookmark 목록의 Source·Author navigation과 중첩 Link 회귀를 검증한다.
@@ -311,7 +310,6 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 - [x] 9.7 Source presentation과 표준 목록 행이 고정 canonical Link·body shortcut을 직접 소유하게 하고 caller-injected renderer·target·navigation callback API를 제거한다.
 - [x] 9.8 Content 없는 Repost가 Repost Author Profile Link attribution을 한 번 표시한 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행 leaf로 렌더링하게 하고 별도 Source renderer·중첩 article·이중 border를 제거한다.
 - [x] 9.9 production Storybook pathname·외부 Link 격리·표준 행 구조·Quote one-depth cutoff와 전체 app/OpenSpec 회귀 검증을 통과시킨다.
-- [x] 9.10 PROD-593에서 thread row 경계를 `PostThreadLayout`의 N-1 단일 divider로 통합하고 64px/8px inset·connector 비중첩·마지막/단일 행 예외·thread 밖 목록 divider 유지를 검증한다.
 
 ## 10. PROD-412 Repost Notification 생성과 inbox 표시
 
