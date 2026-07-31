@@ -126,6 +126,12 @@
   재실행한다. 저장 중에는 navigation을 차단하고 확인 UI를 열지 않는다.
 - 저장 성공 시 dirty guard를 먼저 해제하고 mutation payload를 Relay에 정규화한 뒤, 갱신된
   `Profile.relativeHandle` route로 `router.replace`한다. 별도 성공 toast나 presentation 성공 문구는 표시하지 않는다.
+- Web `router.replace`의 동기 return은 실제 route state commit이 아니다. 성공 저장은 Relay normalization으로
+  제출 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 뒤, 실제 navigation commit 또는 route
+  unmount까지 성공 permission을 유지한다. callback return 직후 guard를 다시 활성화해 비동기 `beforeRemove`를
+  막지 않는다.
+- 성공 REPLACE가 no-op이거나 완료되지 않아도 편집 화면은 잠금 상태에 남지 않으며 현재 text·policy와 Ready
+  avatar/header Media ID를 보존한다. mutation 자동 재전송이나 이미지 자동 재업로드는 실행하지 않는다.
 - 표시 이름은 client omission에 의존하지 않는다. 서버는 기존 저장 원문과 정확히 같은 40 code point 초과
   displayName을 허용하고, 원문과 달라진 값에만 Unicode code point 기준 1~40 규칙을 적용한다. Remote Profile
   materialization이 공유하는 validation 계약은 변경하지 않는다.

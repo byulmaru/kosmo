@@ -13,10 +13,12 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 만들며, `PROD-527`이 같은 component를 연결한다. Follow Approval Policy는 현재 Profile 편집의 controlled draft와
 같은 저장 경계에 포함하고, Settings 진입점이 제공되면 `PROD-531`이 제어를 이전한다.
 
-`PROD-613`에서 avatar/header 두 이미지를 포함한 저장이 DB에는 commit됐지만 기존 Web 탭은 영구 `saving`에
-남는 회귀가 관찰됐다. 새 탭에서는 변경된 Profile을 조회할 수 있어 현재 확인된 실패 경계는 transaction 이후
-GraphQL child field resolution·API response, BFF upstream/downstream body, browser body parse, Relay callback과
-navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계측으로 확정되지 않았다.
+`PROD-613`에서 text-only와 Ready avatar/header ID 저장 모두 DB commit, GraphQL child field resolution,
+BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영구 `saving`에 남는 회귀를 재현했다.
+같은 correlation에서 navigation guard effect와 `router.replace` callback도 return했지만 실제 Web REPLACE는
+발생하지 않았다. 원인은 guard effect가 Expo Router Web의 비동기 navigation commit을 기다리지 않고
+`navigationAllowed`를 즉시 `false`로 되돌려 실제 `beforeRemove` 시점에 성공 REPLACE를 다시 차단하는 race다.
+해당 한 줄을 제거한 fault injection에서 같은 E2E가 통과해 원인을 입증했다.
 
 ## Goals / Non-Goals
 
@@ -30,10 +32,10 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
 - desktop shell 중앙 600px route와 mobile/native 정보 구조, 접근성을 일관되게 유지한다.
 - header 이미지 변경 영역을 hero wrapper와 분리하고 모든 지원 폭에서 `3:1`로 유지한다.
 - Profile Tag editor UI를 한 번 만들고 Tag 연결 change가 재사용할 seam을 제공한다.
-- DB commit 이후 응답·Relay·navigation 이상을 재현 가능한 경계로 특정하고 기존 저장 성공·실패 복구 계약이
-  영구 `saving` 없이 끝나게 한다.
-- 저장 결과를 확인하지 못한 경우에도 현재 draft와 Ready avatar/header Media ID를 보존해 이미지 재업로드
-  없이 안전하게 복구·재시도하게 한다.
+- 저장 성공 permission을 callback return 시점이 아니라 실제 navigation commit/unmount까지 유지하고, 성공
+  navigation이 완료되지 않아도 편집 화면을 영구 `saving`이 아닌 복구 가능한 terminal 상태로 수렴시킨다.
+- 현재 draft와 Ready avatar/header Media ID를 보존하고 mutation 자동 재전송·이미지 자동 재업로드 없이
+  안전하게 확인·수동 재시도하게 한다.
 
 **Non-Goals:**
 
@@ -74,11 +76,13 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
   거부한다.
 - Web 기본 confirm은 승인된 action label을 제어할 수 없으므로 Web·Native 공통 confirmation presentation이
   필요하다. 성공 replace 전에 dirty guard를 해제하지 않으면 정상 navigation도 막힐 수 있다.
-- `updateProfile` transaction이 끝난 뒤에도 mutation payload의 `relativeHandle`, `avatar`, `header` child
-  resolver와 BFF response body streaming이 남아 있어 DB commit은 Relay `onCompleted` 도착을 보장하지 않는다.
-- Web BFF는 upstream response body를 그대로 전달하고 client Relay network는 fetch와 body parse에 명시적인
-  deadline을 두지 않는다. route는 submit 시작 시 `saving`으로 전환하고 실패 callback에서만 명시적으로
-  `idle`로 복구하므로 callback이나 성공 navigation이 끝나지 않으면 편집과 이탈이 함께 잠길 수 있다.
+- `PROD-613` 계측에서 `updateProfile` transaction, `relativeHandle`·`avatar`·`header` resolution, API/BFF body,
+  browser parse와 Relay `onCompleted`는 모두 종료됐다. API/BFF timeout은 확인된 원인이나 수정 seam이 아니다.
+- Web `router.replace`는 실제 route state 반영 전에 return한다. 성공 permission을 action callback return 직후
+  회수하면 이후 비동기 `beforeRemove`가 다시 활성화된 guard에 막힌다. 기존 unit mock은 `beforeRemove`를
+  `router.replace` 안에서 동기 실행해 이 scheduling 차이를 숨겼다.
+- 성공 path는 navigation이 완료될 것을 전제로 `saving`을 명시적으로 끝내지 않으므로 REPLACE가 막히면 편집과
+  이탈이 함께 영구 잠긴다.
 - post-commit 응답 결과가 불확실한 상태에서 자동으로 같은 mutation을 다시 보내거나 Ready Media ID를 버리면
   사용자가 이미 반영된 저장을 중복 실행하거나 이미 완료한 이미지를 재업로드할 수 있다.
 
@@ -123,20 +127,17 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
    Relay normalization, 갱신된 relativeHandle Profile로 `router.replace` 순서이며 toast를 표시하지 않는다.
 10. Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`,
     Android `48×48 dp`를 분리하고 text action은 최소 높이 `36`을 사용한다.
-11. `PROD-613`은 text-only 저장과 Ready avatar/header 두 장을 포함한 저장을 분리하고, 같은 correlation으로
-    browser 요청 시작·body parse, BFF upstream headers/body와 downstream body 종료, API transaction 완료와
-    Profile child field resolution, Relay `onCompleted`/`onError`, navigation guard effect와 실제 route
-    replacement 시점을 기록해 먼저 멈춘 경계를 특정한다.
-12. 확인된 경계를 지연·응답 유실·callback 미도착 또는 route replacement 실패로 재현하는 가장 좁은 fault
-    injection seam을 기존 API·BFF·app test surface에 둔다. 수정 전에는 영구 `saving`을 재현하고 수정 뒤에는
-    정상 성공이나 draft를 보존한 복구 가능 상태로 끝나는지 검증한다.
-13. 계측 결과에 맞는 가장 좁은 경계에서 복구한다. UI는 응답 결과가 불확실해도 영구 잠금에 남지 않고 기존
-    draft와 Ready Media ID를 유지해야 하며, 자동 재업로드나 자동 중복 mutation을 실행하지 않는다. 전체
-    GraphQL timeout·streaming 정책 변경은 실제 원인이 공통 경계로 확인되고 별도 영향 범위가 정리된 경우에만
-    선택한다.
-14. 정상 성공, GraphQL/transport 실패, post-commit 응답 이상과 navigation 실패를 자동화하고 실제 Web dev
-    환경에서 동일 correlation으로 저장을 확인한다. 원인과 적용 경계, 실행하지 않은 Native QA는 PROD-613
-    PR에 기록하고 통합 검증·archive 증거는 PROD-490에 넘긴다.
+11. `PROD-613`은 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 계측한다. 확인된 정상 경계는
+    API transaction·child field·response body, BFF body, browser parse, Relay `onCompleted`, guard effect와
+    `router.replace` callback return이며, 최초 실패는 그 뒤 실제 Web route commit이다.
+12. 실제 Chromium E2E에서 비동기 navigation ordering을 재현하고, guard의 즉시 permission 회수만 제거한 fault
+    injection으로 같은 시나리오가 통과하는지 검증한다. 동기 `beforeRemove` mock만으로 성공 계약을 증명하지 않는다.
+13. 성공 저장은 Relay normalization으로 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 뒤,
+    실제 navigation commit/unmount 전까지 성공 REPLACE가 guard에 막히지 않게 한다. navigation no-op/실패에도
+    draft와 Ready Media ID를 유지하며 mutation 자동 재전송·이미지 자동 재업로드를 실행하지 않는다.
+14. text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, 기존 discard와 transport 실패를
+    자동화하고 실제 Web dev에서 재검증한다. API/BFF timeout·buffering은 변경하지 않으며 Native 실제 기기 QA
+    미실행과 PROD-490 통합 검증 handoff를 기록한다.
 
 ### Allowed Alternatives
 
@@ -150,9 +151,9 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
 - 계측은 기존 Sentry/logging surface의 좁은 timing field나 test-only seam을 사용할 수 있다. 새 tracing
   dependency나 범용 middleware는 확인된 원인이 여러 GraphQL operation에 공통이라는 증거가 있을 때만
   허용한다.
-- terminal 복구는 확인된 멈춤 경계에 따라 client operation deadline, BFF upstream/body 종료 처리 또는
-  route navigation 복구로 둘 수 있다. 어느 대안도 자동 mutation 재전송·Media 재업로드를 만들거나 기존
-  Relay normalization·dirty guard 순서를 깨면 안 된다.
+- 성공 permission은 저장 결과가 clean baseline으로 확정된 동안 guard 자체를 비활성화하거나, 실제 navigation
+  commit/unmount까지 유지되는 one-shot lifecycle로 구현할 수 있다. 어느 방식이든 callback return 직후 permission을
+  회수하거나 discard guard를 영구 비활성화하면 안 된다.
 
 ### Known Traps
 
@@ -175,8 +176,9 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
   포함하지 않는다.
 - web 중앙 column을 internal scroller로 바꿔 기존 document scroll 계약을 깨지 않는다.
 - presentation에 저장 성공 문구를 남겨 route가 갱신된 Profile로 복귀하는 production 동작과 경쟁시키지 않는다.
-- 계측 전에 client timeout이나 navigation state 변경을 정답으로 고정해 실제 child resolver·BFF stream·Relay
-  경계를 가리지 않는다.
+- 확인된 navigation race를 API/BFF timeout이나 response buffering으로 우회하지 않는다.
+- `router.replace`의 동기 return을 navigation 완료로 취급해 성공 permission을 같은 effect에서 즉시 회수하지 않는다.
+- 기존 동기 navigation mock의 통과만으로 Web 비동기 `beforeRemove` ordering을 검증했다고 간주하지 않는다.
 - 결과가 불확실한데 draft를 초기화하거나 같은 Media를 다시 upload하지 않는다. 반대로 단순히 `saving`만
   해제하고 중복 submit을 자동 실행 가능하게 두지 않는다.
 - 전체 GraphQL proxy를 buffer하거나 공통 timeout을 추가하는 범위 확대를 PROD-613의 단일 mutation 관찰
@@ -200,12 +202,12 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
   mutation/query의 동일 Media identity와 ProfileHero 렌더링을 한 전달 단위로 검증한다.
 - [한 field upload 실패가 다른 Ready field를 재업로드함] → field별 upload generation과 Ready ID를 route draft가
   분리해 소유하고 실패 field만 다시 시도한다.
-- [관측 전에 timeout이나 navigation workaround를 추가해 실제 post-commit 병목을 숨김] → 단계별 correlation과
-  fault injection으로 최초 정지 경계를 기록한 뒤 가장 좁은 수정 범위를 선택한다.
+- [성공 callback return을 navigation 완료로 오인해 guard가 REPLACE를 다시 차단함] → 실제 Chromium scheduling과
+  비동기 `beforeRemove`를 회귀 test로 고정하고 permission을 commit/unmount까지 유지한다.
 - [응답 결과가 불확실한 상태에서 중복 저장 또는 이미지 재업로드가 발생함] → 자동 재전송을 금지하고 현재
   draft와 Ready Media ID를 보존한 terminal 복구를 검증한다.
-- [범용 GraphQL 계측·streaming 변경이 다른 operation에 회귀를 만듦] → PROD-613에서 확인된 단계만 계측하고
-  공통 경계 변경이 필요하면 영향 범위와 별도 authority를 먼저 정리한다.
+- [확인된 client race를 범용 GraphQL timeout·streaming 변경으로 확대함] → API/BFF/Relay 응답 완료 증거를
+  유지하고 수정 범위를 Profile edit navigation lifecycle에 한정한다.
 
 ## Migration Plan
 
@@ -225,5 +227,4 @@ navigation 완료 사이다. 어느 하위 경계가 원인인지는 아직 계�
 
 ## Open Questions
 
-- DB commit 이후 GraphQL child field, BFF response body, Relay callback과 navigation 중 실제로 처음 멈추는
-  경계는 무엇인가? PROD-613의 계측과 fault injection으로 구현 수단을 선택하기 전에 확정한다.
+없음. root cause와 사용자 관찰 가능한 수정 계약은 PROD-613에 확정됐다. 이 확정은 구현 승인과 별개다.

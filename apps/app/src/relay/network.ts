@@ -1,3 +1,4 @@
+import { getProfileEditCorrelationId, traceProfileEditDiagnostic } from './profileEditDiagnostics';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
 const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
@@ -80,12 +81,15 @@ export async function executeGraphQLRequest(
 
   const native = isNativeRuntime();
   const origin = native ? getApiOrigin() : getWebOrigin();
+  const correlationId = native ? null : getProfileEditCorrelationId(request.name);
+  traceProfileEditDiagnostic(correlationId, 'browser-request-start');
   const response = await fetchImplementation(`${origin}/graphql`, {
     method: 'POST',
     credentials: native ? 'omit' : 'include',
     headers: {
       accept: 'application/json',
       'content-type': 'application/json',
+      ...(correlationId ? { 'x-kosmo-correlation-id': correlationId } : {}),
       ...(native && token ? { authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({
@@ -94,7 +98,11 @@ export async function executeGraphQLRequest(
       variables,
     }),
   });
+  traceProfileEditDiagnostic(correlationId, 'browser-response-headers', {
+    status: response.status,
+  });
   const body = (await response.json().catch(() => null)) as GraphQLResponse | null;
+  traceProfileEditDiagnostic(correlationId, 'browser-response-body-parse');
 
   if (!response.ok) {
     const message =

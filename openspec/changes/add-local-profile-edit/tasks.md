@@ -171,30 +171,31 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 
 **Deliverable**
 
-DB commit 이후 GraphQL payload·BFF response·Relay callback·navigation 중 실제로 멈춘 경계를 관측 근거로
-특정하고, 정상 저장과 응답·navigation 이상이 모두 영구 `saving` 대신 성공 또는 복구 가능한 상태로 끝나게
-한다. 저장 결과를 확인하지 못한 경우에도 현재 draft와 Ready avatar/header Media ID를 보존해 이미지
-재업로드 없이 안전하게 확인·재시도할 수 있게 한다.
+Web `router.replace` callback return 직후 navigation permission을 회수해 실제 비동기 REPLACE를 다시 차단하는
+race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나고, navigation no-op/실패도 영구 `saving`
+대신 복구 가능한 terminal 상태로 수렴한다. 현재 draft와 Ready avatar/header Media ID를 보존하며 mutation
+자동 재전송이나 이미지 자동 재업로드를 실행하지 않는다.
 
 **Guardrails**
 
-- 단계별 timing과 correlation, fault injection으로 실제 경계를 확인하기 전에 timeout이나 navigation state
-  변경을 원인·해법으로 고정하지 않는다.
-- 정상 성공은 기존 guard 해제→Relay normalization→갱신된 `relativeHandle` Profile replace 계약을 유지하고,
-  실패·결과 불확실 상태는 text·policy·Ready image draft를 보존한다.
+- API/BFF/Relay response는 확인된 정상 경계다. timeout·buffering 변경으로 client navigation race를 우회하지 않는다.
+- 정상 성공은 Relay normalization으로 저장 draft를 clean baseline에 맞추고 `saving`을 끝낸 뒤 실제
+  `relativeHandle` Profile route commit까지 guard permission을 유지한다.
+- callback return을 navigation 완료로 간주하지 않으며, 기존 discard confirmation의 one-shot 보호를 약화하지 않는다.
 - 저장 복구는 Ready Media ID를 재사용하며 자동 mutation 재전송이나 이미지 재업로드를 실행하지 않는다.
 - 범용 GraphQL tracing·timeout·streaming 변경, Media Storage Service 성능·이미지 압축/resize, Profile Tag와
   Native 실제 기기 QA로 범위를 넓히지 않는다. 확인된 원인이 별도 행동 계약이나 공통 인프라 변경을 요구하면
   구현 전에 canonical 문서와 Linear 범위를 먼저 갱신한다.
 - PROD-613은 원인·수정·회귀 테스트와 Web runtime 증거만 소유한다. 전체 Profile edit 통합 검증과
   `add-local-profile-edit` archive는 PROD-490에 남긴다.
+- root cause와 수정 계약은 확정됐지만 이 task 문서 갱신은 구현 승인이 아니다.
 
 **Verification**
 
-- text-only 저장과 Ready avatar/header 두 장을 포함한 저장을 분리해 browser→BFF→API transaction→GraphQL
-  child field→response body→Relay callback→navigation timing을 같은 correlation으로 확인한다.
-- 확인된 post-commit 경계의 지연·응답 유실과 navigation 실패를 fault injection으로 재현하고, 정상 성공·
-  GraphQL/transport 실패와 함께 영구 `saving`이 남지 않는지 검증한다.
+- text-only와 Ready avatar/header ID 저장에서 API/BFF body·browser parse·Relay callback이 끝난 뒤 guard
+  effect와 `router.replace` return 이후 실제 route commit만 실패하는 correlation을 회귀 증거로 유지한다.
+- 즉시 permission 회수를 제거한 fault injection에서 동일 E2E가 통과한 증거를 유지하고, 구현 후에는 실제
+  Chromium의 비동기 `beforeRemove` ordering으로 성공을 검증한다.
 - 저장 결과가 불확실하거나 실패해도 현재 text·policy·Ready Media ID가 유지되고 save retry에서
   issue→PUT→complete를 다시 실행하지 않는지 확인한다.
 - 기존 dirty navigation guard, Relay normalized Profile 갱신, avatar/header omitted/ID/null과 validation이
@@ -202,15 +203,14 @@ DB commit 이후 GraphQL payload·BFF response·Relay callback·navigation 중 �
 - Web dev 환경에서 실제 저장을 재검증하고 원인, 수정 경계, 자동화 결과와 Native 실제 기기 QA 미실행을
   PROD-613 PR에 기록한다.
 
-- [ ] 3.1 text-only와 Ready avatar/header 두 장 저장을 단계별 correlation으로 재현해 최초 정지 경계와 정상
-      기준 시간을 PROD-613 또는 PR에 기록한다.
-- [ ] 3.2 확인된 post-commit 경계와 navigation 실패를 가장 좁은 기존 test surface에서 fault injection하고
-      수정 전 영구 `saving`을 재현하는 회귀 test를 추가한다.
-- [ ] 3.3 `design.md`의 계측 우선 guidance에 따라 확인된 경계만 수정해 저장 UI를 terminal 상태로 수렴시키고,
-      draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다. 새 사용자 행동이나 공통 인프라
-      계약이 필요하면 구현을 멈추고 canonical·Linear·OpenSpec을 먼저 정렬한다.
-- [ ] 3.4 정상 성공, GraphQL/transport 실패, post-commit 응답 이상, callback 미도착과 navigation 실패를 자동화하고
-      dirty guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
+- [x] 3.1 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 재현해 최초 정지 경계가
+      `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록한다.
+- [x] 3.2 실제 Chromium E2E에서 수정 전 영구 `saving`을 재현하고, guard의 즉시 permission 회수 한 줄만 제거한
+      fault injection으로 동일 시나리오가 통과함을 입증한다. 실험 코드는 원상복구한다.
+- [ ] 3.3 성공 저장을 clean terminal state로 수렴시키고 실제 navigation commit/unmount까지 permission을 유지하도록
+      Profile edit navigation lifecycle만 수정한다. draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다.
+- [ ] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, GraphQL/transport 실패를
+      자동화하고 dirty discard guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
 - [ ] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
       PROD-490 통합 검증 담당자에게 evidence를 전달한다.
 
