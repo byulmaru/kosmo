@@ -9,9 +9,11 @@ export const migrationLock = [0x4b4f534d, 0x4d494752] as const;
 
 export async function runDatabaseMigrations({
   databaseUrl = process.env.DATABASE_URL,
+  migrationRole = process.env.DATABASE_MIGRATION_ROLE,
   migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '../../../drizzle'),
 }: {
   databaseUrl?: string;
+  migrationRole?: string;
   migrationsFolder?: string;
 } = {}): Promise<void> {
   if (!databaseUrl) {
@@ -46,6 +48,11 @@ export async function runDatabaseMigrations({
     }
 
     lockAcquired = true;
+
+    if (migrationRole) {
+      await client`SET ROLE ${client(migrationRole)}`;
+    }
+
     await migrate(drizzle({ client }), { migrationsFolder });
   } finally {
     if (lockAcquired) {

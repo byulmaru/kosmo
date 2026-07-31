@@ -8,12 +8,13 @@ Production migration이 고정된 database 대상과 분리된 credential을 사
 
 ### Requirement: 분리된 production migration 권한
 
-**Authority / Provenance:** `PROD-564`, `memory/database-migrations.md`. Production migration Job은 schema migration에 필요한 별도 database identity와 credential을 사용해야 하며(MUST), API와 Web runtime credential을 사용하거나 migration credential이 없을 때 runtime credential로 fallback해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-564`, `PROD-616`, `memory/database-migrations.md`. Production migration Job은 schema migration에 필요한 별도 database identity와 credential을 사용해야 하며(MUST), API와 Web runtime credential을 사용하거나 migration credential이 없을 때 runtime credential로 fallback해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration credential로 실행
 
 - **WHEN** production migration Job이 시작된다
 - **THEN** Job은 production migration 전용 Secret과 database identity로 연결한다
+- **AND** 연결 후 명시적인 database owner role로 전환해 새 schema 객체가 runtime owner의 권한 경계에 남게 한다
 - **AND** 접속 대상은 현재 Helm release의 PostgreSQL read-write Service와 `kosmo` database로 고정된다
 - **AND** API와 Web workload는 같은 credential을 mount하거나 참조하지 않는다
 
