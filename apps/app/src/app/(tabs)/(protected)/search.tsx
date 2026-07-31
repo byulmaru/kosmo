@@ -2,7 +2,7 @@ import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
@@ -354,7 +354,11 @@ export default function SearchScreen() {
               placeholder="검색어를 입력하세요"
               placeholderTextColor={theme.textSecondary}
               returnKeyType="search"
-              style={[styles.input, { color: theme.text }]}
+              style={[
+                styles.input,
+                Platform.OS === 'web' ? styles.webInput : null,
+                { color: theme.text },
+              ]}
               value={input}
             />
             {input ? (
@@ -503,6 +507,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     ...typography.sm,
   },
+  webInput: { fontSize: 16 },
   clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
   sectionTitle: {
