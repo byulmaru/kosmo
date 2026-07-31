@@ -6,10 +6,6 @@ import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
-import {
-  beginProfileEditDiagnostic,
-  traceProfileEditDiagnostic,
-} from '@/relay/profileEditDiagnostics';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
 import {
   completeProfileEditImageUpload,
@@ -316,7 +312,6 @@ function EditableProfileRoute({
 
   const submit = useCallback(
     (draft: ProfileEditDraft) => {
-      const correlationId = beginProfileEditDiagnostic();
       const avatarId = profileEditImageInput(avatarRef.current);
       const headerId = profileEditImageInput(headerRef.current);
       setSubmitState({ kind: 'saving' });
@@ -331,35 +326,24 @@ function EditableProfileRoute({
           },
         },
         onCompleted: (response, errors) => {
-          traceProfileEditDiagnostic(correlationId, 'relay-onCompleted', {
-            errorCount: errors?.length ?? 0,
-          });
           if (errors?.length) {
             handleSaveFailure();
             return;
           }
           setCleanValue(draft);
           setSubmitState({ kind: 'idle' });
-          traceProfileEditDiagnostic(correlationId, 'allowNextNavigation-call');
           allowNextNavigation(
             () => {
-              traceProfileEditDiagnostic(correlationId, 'router-replace-start');
               try {
                 router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
               } catch {
-                traceProfileEditDiagnostic(correlationId, 'router-replace-error');
+                // Keep the saved draft recoverable when navigation cannot start.
               }
-              traceProfileEditDiagnostic(correlationId, 'router-replace-return');
             },
             { keepAllowedUntilUnmount: true },
           );
         },
-        onError: (error) => {
-          traceProfileEditDiagnostic(correlationId, 'relay-onError', {
-            message: error.message,
-          });
-          handleSaveFailure();
-        },
+        onError: handleSaveFailure,
       });
     },
     [allowNextNavigation, commitUpdateProfile, handleSaveFailure, router],

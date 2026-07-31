@@ -16,36 +16,10 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
   context,
   page,
 }) => {
-  const timeline: Array<{ correlationId: string; stage: string; timestamp: number }> = [];
   const session = await createE2ESession({ handle: 'prod613-text' });
   expect(session.profile).not.toBeNull();
   await createE2EReadyProfileMedia(session.profile!.id, session.account.id);
   await setE2ESessionCookie(context, session.token);
-
-  page.on('console', (message) => {
-    try {
-      const entry = JSON.parse(message.text()) as {
-        correlationId?: string;
-        scope?: string;
-        stage?: string;
-        timestamp?: number;
-      };
-      if (
-        entry.scope === 'profile-edit-save' &&
-        entry.correlationId &&
-        entry.stage &&
-        entry.timestamp
-      ) {
-        timeline.push({
-          correlationId: entry.correlationId,
-          stage: entry.stage,
-          timestamp: entry.timestamp,
-        });
-      }
-    } catch {
-      // Ignore normal browser console messages.
-    }
-  });
 
   await page.goto('/profile-edit');
   await page.getByRole('textbox', { name: '소개' }).fill('PROD-613 text-only boundary');
@@ -71,24 +45,18 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
     errors?: unknown[];
   };
 
-  expect(body.errors, JSON.stringify({ body, timeline }, null, 2)).toBeUndefined();
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
   expect(body.data?.updateProfile?.profile).toMatchObject({
     avatar: { id: expect.any(String) },
     bio: 'PROD-613 text-only boundary',
     header: { id: expect.any(String) },
     relativeHandle: '@prod613-text',
   });
-  await expect
-    .poll(() => timeline.map(({ stage }) => stage), {
-      message: JSON.stringify(timeline, null, 2),
-    })
-    .toContain('relay-onCompleted');
-  await page.waitForTimeout(250);
-  expect(page.url(), JSON.stringify(timeline, null, 2)).toMatch(/\/@prod613-text$/);
+  await expect(page).toHaveURL(/\/@prod613-text$/);
   await expect(page.getByRole('button', { name: '저장', exact: true })).toHaveCount(0);
 });
 
-test('Ready avatar/header ID 저장도 response parse 뒤 같은 navigation 경계에서 멈춘다', async ({
+test('Ready avatar/header ID 저장도 응답 결과와 최종 Profile route를 확인한다', async ({
   context,
   page,
 }) => {

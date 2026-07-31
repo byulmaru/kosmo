@@ -2,10 +2,6 @@ import { useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigationGuard } from '@/components/shell/NavigationGuardContext';
-import {
-  getProfileEditCorrelationId,
-  traceProfileEditDiagnostic,
-} from '@/relay/profileEditDiagnostics';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 
 type Options = {
@@ -62,15 +58,12 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
       return;
     }
 
-    const correlationId = getProfileEditCorrelationId();
-    traceProfileEditDiagnostic(correlationId, 'navigation-guard-effect-start');
     const action = allowedAction.current;
     allowedAction.current = null;
     if (!action) {
       return;
     }
     action();
-    traceProfileEditDiagnostic(correlationId, 'navigation-guard-effect-return');
     if (!keepAllowedUntilUnmount.current) {
       setNavigationAllowed(false);
     }
@@ -83,10 +76,6 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
 
   const allowNextNavigation = useCallback(
     (action: GuardedNavigationAction, options: AllowNextNavigationOptions = {}) => {
-      traceProfileEditDiagnostic(
-        getProfileEditCorrelationId(),
-        'navigation-guard-allowNextNavigation',
-      );
       keepAllowedUntilUnmount.current = options.keepAllowedUntilUnmount ?? false;
       allowedAction.current = action;
       pendingAction.current = null;

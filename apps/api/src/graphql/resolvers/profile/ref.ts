@@ -6,7 +6,6 @@ import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { profileEditCorrelationId, traceProfileEditBoundary } from '@/profile-edit-diagnostics';
 import { Media } from '../media/ref';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
@@ -31,25 +30,16 @@ Profile.implement({
     handle: t.exposeString('handle'),
     relativeHandle: t.string({
       resolve: async (profile, _, ctx) => {
-        const correlationId = profileEditCorrelationId(ctx);
-        traceProfileEditBoundary(correlationId, 'api-relativeHandle-resolution-start');
         const configuredLocalInstance = await resolveConfiguredLocalInstance();
         const profileInstanceId = profile.instanceId;
 
         if (profileInstanceId === configuredLocalInstance.id) {
-          const relativeHandle = formatRelativeHandle(profile, { configuredLocalInstance });
-          traceProfileEditBoundary(correlationId, 'api-relativeHandle-resolution-end');
-          return relativeHandle;
+          return formatRelativeHandle(profile, { configuredLocalInstance });
         }
 
         const profileInstance = await profileInstanceByIdLoader(ctx).load(profileInstanceId);
 
-        const relativeHandle = formatRelativeHandle(profile, {
-          configuredLocalInstance,
-          profileInstance,
-        });
-        traceProfileEditBoundary(correlationId, 'api-relativeHandle-resolution-end');
-        return relativeHandle;
+        return formatRelativeHandle(profile, { configuredLocalInstance, profileInstance });
       },
     }),
     displayName: t.exposeString('displayName'),
@@ -58,29 +48,19 @@ Profile.implement({
       type: Media,
       nullable: true,
       grantScopes: ['readMedia'],
-      resolve: async (profile, _, ctx) => {
-        const correlationId = profileEditCorrelationId(ctx);
-        traceProfileEditBoundary(correlationId, 'api-avatar-resolution-start');
-        const media = await profileMediaLoader(ctx)
+      resolve: (profile, _, ctx) =>
+        profileMediaLoader(ctx)
           .load(profile.id)
-          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.AVATAR) ?? null);
-        traceProfileEditBoundary(correlationId, 'api-avatar-resolution-end');
-        return media;
-      },
+          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.AVATAR) ?? null),
     }),
     header: t.field({
       type: Media,
       nullable: true,
       grantScopes: ['readMedia'],
-      resolve: async (profile, _, ctx) => {
-        const correlationId = profileEditCorrelationId(ctx);
-        traceProfileEditBoundary(correlationId, 'api-header-resolution-start');
-        const media = await profileMediaLoader(ctx)
+      resolve: (profile, _, ctx) =>
+        profileMediaLoader(ctx)
           .load(profile.id)
-          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.HEADER) ?? null);
-        traceProfileEditBoundary(correlationId, 'api-header-resolution-end');
-        return media;
-      },
+          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.HEADER) ?? null),
     }),
     followPolicy: t.expose('followPolicy', {
       type: ProfileFollowPolicy,

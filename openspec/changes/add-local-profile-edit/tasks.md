@@ -192,8 +192,9 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
 
 **Verification**
 
-- text-only와 Ready avatar/header ID 저장에서 API/BFF body·browser parse·Relay callback이 끝난 뒤 guard
-  effect와 `router.replace` return 이후 실제 route commit만 실패하는 correlation을 회귀 증거로 유지한다.
+- 조사 단계에서 text-only와 Ready avatar/header ID 저장의 API/BFF body·browser parse·Relay callback 종료 뒤
+  guard effect와 `router.replace` return 이후 실제 route commit만 실패하는 correlation을 기록했다. 최종 회귀
+  검증은 production 계측 없이 mutation 응답과 최종 URL·route 결과를 assertion한다.
 - 즉시 permission 회수를 제거한 fault injection에서 동일 E2E가 통과한 증거를 유지하고, 구현 후에는 실제
   Chromium의 비동기 `beforeRemove` ordering으로 성공을 검증한다.
 - 저장 결과가 불확실하거나 실패해도 현재 text·policy·Ready Media ID가 유지되고 save retry에서
@@ -203,8 +204,8 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
 - Web dev 환경에서 실제 저장을 재검증하고 원인, 수정 경계, 자동화 결과와 Native 실제 기기 QA 미실행을
   PROD-613 PR에 기록한다.
 
-- [x] 3.1 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 재현해 최초 정지 경계가
-      `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록한다.
+- [x] 3.1 조사 단계 임시 correlation 계측으로 text-only와 Ready avatar/header ID 저장을 재현해 최초 정지
+      경계가 `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록하고 계측 코드를 제거한다.
 - [x] 3.2 실제 Chromium E2E에서 수정 전 영구 `saving`을 재현하고, guard의 즉시 permission 회수 한 줄만 제거한
       fault injection으로 동일 시나리오가 통과함을 입증한다. 실험 코드는 원상복구한다.
 - [x] 3.3 성공 저장을 clean terminal state로 수렴시키고 실제 navigation commit/unmount까지 permission을 유지하도록

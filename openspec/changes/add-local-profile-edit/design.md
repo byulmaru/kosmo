@@ -127,9 +127,10 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
    Relay normalization, 갱신된 relativeHandle Profile로 `router.replace` 순서이며 toast를 표시하지 않는다.
 10. Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`,
     Android `48×48 dp`를 분리하고 text action은 최소 높이 `36`을 사용한다.
-11. `PROD-613`은 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 계측한다. 확인된 정상 경계는
+11. `PROD-613` 조사 단계에서만 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 임시 계측했다.
     API transaction·child field·response body, BFF body, browser parse, Relay `onCompleted`, guard effect와
-    `router.replace` callback return이며, 최초 실패는 그 뒤 실제 Web route commit이다.
+    `router.replace` callback return이 정상 경계이고 최초 실패는 그 뒤 실제 Web route commit임을 확인한 뒤,
+    production 계측 코드는 제거했다.
 12. 실제 Chromium E2E에서 비동기 navigation ordering을 재현하고, guard의 즉시 permission 회수만 제거한 fault
     injection으로 같은 시나리오가 통과하는지 검증한다. 동기 `beforeRemove` mock만으로 성공 계약을 증명하지 않는다.
 13. 성공 저장은 Relay normalization으로 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸 뒤,
@@ -148,9 +149,8 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - desktop sticky action은 shell document scroll을 유지하는 한 route header 또는 중앙 surface 내부 bar로 구현할 수
   있다.
 - form은 future modal wrapper에서도 재사용할 수 있지만 현재 production entry는 dedicated route여야 한다.
-- 계측은 기존 Sentry/logging surface의 좁은 timing field나 test-only seam을 사용할 수 있다. 새 tracing
-  dependency나 범용 middleware는 확인된 원인이 여러 GraphQL operation에 공통이라는 증거가 있을 때만
-  허용한다.
+- 조사 단계의 계측은 기존 Sentry/logging surface의 좁은 timing field나 test-only seam을 사용할 수 있다.
+  최종 production에는 correlation logging, 새 tracing dependency나 범용 middleware를 보존하지 않는다.
 - 성공 permission은 저장 결과가 clean baseline으로 확정된 동안 guard 자체를 비활성화하거나, 실제 navigation
   commit/unmount까지 유지되는 one-shot lifecycle로 구현할 수 있다. 어느 방식이든 callback return 직후 permission을
   회수하거나 discard guard를 영구 비활성화하면 안 된다.
@@ -206,8 +206,8 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
   비동기 `beforeRemove`를 회귀 test로 고정하고 permission을 commit/unmount까지 유지한다.
 - [응답 결과가 불확실한 상태에서 중복 저장 또는 이미지 재업로드가 발생함] → 자동 재전송을 금지하고 현재
   draft와 Ready Media ID를 보존한 terminal 복구를 검증한다.
-- [확인된 client race를 범용 GraphQL timeout·streaming 변경으로 확대함] → API/BFF/Relay 응답 완료 증거를
-  유지하고 수정 범위를 Profile edit navigation lifecycle에 한정한다.
+- [확인된 client race를 범용 GraphQL timeout·streaming 변경으로 확대함] → 조사에서 확인한 API/BFF/Relay
+  응답 완료 근거를 문서화한 상태로 유지하고 수정 범위를 Profile edit navigation lifecycle에 한정한다.
 
 ## Migration Plan
 
@@ -216,8 +216,8 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
    `followPolicy` 저장과 public read를 연결한다.
 3. PROD-492가 guest-safe entrypoint, protected route, picker/upload 재시도, Relay·ProfileHero와 navigation을
    연결한다.
-4. PROD-613이 post-commit 응답·Relay·navigation 경계를 계측하고 영구 `saving` 회귀를 수정해 자동화와 Web
-   runtime 증거를 남긴다.
+4. PROD-613이 post-commit 응답·Relay·navigation 경계를 조사 단계에서 임시 계측으로 확인한 뒤 계측 코드를
+   제거하고, 영구 `saving` 회귀 수정과 자동화·Web runtime 증거를 남긴다.
 5. PROD-490이 Owner route, text·Media save와 실패 복구를 통합 검증한다.
 6. Profile Tag는 PROD-526·527 완료 뒤 같은 editor를 연결하며 `add-profile-tags`가 별도로 archive한다.
 7. Settings 진입점이 제공되면 PROD-531이 Follow Approval Policy 제어를 이전하고 Profile 편집의 중복 저장
