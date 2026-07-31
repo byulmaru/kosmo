@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -248,12 +248,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433`
-- Status: Active
+- Status: Superseded
 - Context / Problem: More의 callback-only 컴포넌트 경계와 사용자가 복사할 URL의 제품 정책은 서로 다른 authority와 구현 소유자를 가진다.
 - Decision Outcome: `PostActionBar`는 optional More icon, callback과 접근성 label만 제공한다. PROD-432의 production surface 통합은 접근 가능한 최소 팝업과 `링크 복사` 한 항목을 제공하고 ADR 0015의 Post Share Reference를 복사한다. Content가 있는 Post는 그 Post의 공유 참조를 복사한다. Content와 Reply Parent 없이 Repost Source만 있는 Repost는 독립 상세 참조를 노출하지 않고 조회 가능한 직접 Repost Source의 공유 참조를 복사한다. Web·Android·iOS 모두 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 canonical Web origin으로 사용한다. `EXPO_PUBLIC_WEB_ORIGIN`은 이 값을 Expo client에 전달하는 projection이며 독립 authority가 아니다. Web의 현재 browser origin이 달라도 공유 참조에 사용하지 않는다. guest도 조회할 수 있는 Post의 공유 참조를 인증 없이 복사할 수 있지만 링크는 Post Visibility와 Post Eligibility를 우회하지 않는다.
 - Alternatives Considered: 공통 컴포넌트가 팝업과 clipboard를 소유하는 방식은 surface 통합 책임을 침범하므로 채택하지 않았다. 현재 화면 URL 전체, API origin과 native deep link는 ADR 0015의 대안 검토에 따라 채택하지 않았다.
 - Consequences: PROD-433은 More의 표시·접근성·callback만 검증하고 PROD-432가 팝업·clipboard·platform별 origin 연결과 guest 동작을 통합 검증한다. 링크 복사 외 메뉴 항목은 후속 제품 계약을 요구한다.
 - Confirmation / Follow-up: PROD-433 component test와 PROD-432 integration test의 검증 책임을 분리하고, PROD-432는 configured Local Instance의 `canonical_origin`을 기준으로 같은 canonical URL fixture를 platform별로 검증하며 Web의 current Host가 다른 경우와 Content 없는 Repost가 직접 Source의 공유 참조를 복사하는 경우도 확인한다.
+
+### More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, `PROD-598`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: PROD-432의 링크 복사 단일 항목 계약이 작성된 뒤 sibling PROD-598이 작성자 Post 삭제 action을 같은 More surface에 완료했다. 현재 production code와 canonical design은 이미 두 action을 조합하므로 링크 복사 하나만 허용하는 OpenSpec은 실제 제품과 충돌한다.
+- Decision Outcome: `PostActionBar`는 독립 UI를 위한 optional More icon·callback·접근성 label 경계와 production 합성을 위한 `moreItems`·`onDeleted` 입력을 함께 제공한다. production surface는 PROD-432의 `링크 복사` item을 항상 첫 항목으로 공급하고, composite Post fragment 아래 private `PostDeletionAction`이 selected Profile과 target Post에서 삭제 자격을 파생해 PROD-598의 destructive `삭제`를 마지막 항목으로 조합하며 menu·확인 dialog·delete mutation 상태를 소유한다. guest·다른 Profile·Tombstone·Content 없는 Repost target에는 `삭제`를 표시하지 않아 링크 복사만 남긴다. 순수 Repost surface의 More target은 direct Source이므로 삭제 자격과 mutation ID도 Source를 기준으로 한다. 삭제 확인 dialog·mutation·Relay cache 동기화·실패 복구는 PROD-598 소유 결과를 재사용하고, PROD-432는 링크 item 공급·항목 순서와 동일 menu에서의 통합 회귀만 소유한다.
+- Alternatives Considered: OpenSpec을 링크 복사 단일 항목으로 유지하면 canonical design·code·PR과 불일치하므로 채택하지 않았다. 삭제 계약 전체를 PROD-432로 흡수하면 완료된 PROD-598의 독립 소유권과 검증 책임이 중복되므로 채택하지 않았다. 삭제를 별도 More trigger로 분리하면 고정 Action Bar와 공용 menu 계약을 깨므로 채택하지 않았다.
+- Consequences: 이 shared change는 production More menu의 조합 결과를 규범화하지만 Post 삭제 domain·GraphQL·cache 계약을 새로 정의하지 않는다. 링크 복사의 guest·canonical origin·Visibility 계약과 첫 item overlap은 유지되고, 삭제 자격이 없는 사용자의 menu는 기존 단일 링크 복사 형태를 유지한다.
+- Confirmation / Follow-up: integration test에서 링크 복사 첫 번째·삭제 마지막 순서, 작성자·selected Profile·Active contentful 자격, guest·다른 Profile·Tombstone·Content 없는 Repost 미노출, direct Source target과 PROD-598 dialog·cache·실패 회귀를 검증한다.
 
 ### locale-aware 표준 compact number formatting을 사용
 
@@ -334,7 +346,7 @@
 - Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
 - Status: Active
 - Context / Problem: 공용 Web action menu의 기존 시작 정렬은 More trigger에서 menu를 오른쪽 rail 방향으로 펼쳐 중앙 Home timeline shell 위가 아니라 바깥쪽으로 돌출한다. 방향만 반전하면서도 menu를 연 pointer 위치와 첫 item의 겹침을 유지해야 같은 위치의 두 번째 활성화 계약이 깨지지 않는다.
-- Decision Outcome: 공용 ActionMenu는 Web에만 적용되는 선택적 끝 정렬을 제공하고 More 링크 복사 consumer만 이를 사용한다. 끝 정렬에서는 menu card 오른쪽 경계를 trigger 오른쪽보다 기존 5px inset만큼 바깥에 두고 첫 item의 시각 target 오른쪽 경계를 trigger 오른쪽과 맞춰 menu가 왼쪽으로 펼쳐지게 한다. 첫 item의 확장 hit area는 28px More trigger 전체를 계속 덮고 viewport 보정을 유지한다. Repost consumer는 기본 시작 정렬을 유지하며 Android·iOS bottom action sheet는 바꾸지 않는다.
+- Decision Outcome: 공용 ActionMenu는 Web에만 적용되는 선택적 끝 정렬을 제공하고 More consumer만 이를 사용한다. 끝 정렬에서는 menu card 오른쪽 경계를 trigger 오른쪽보다 기존 5px inset만큼 바깥에 두고 첫 `링크 복사` item의 시각 target 오른쪽 경계를 trigger 오른쪽과 맞춰 menu가 왼쪽으로 펼쳐지게 한다. 첫 item의 확장 hit area는 28px More trigger 전체를 계속 덮고 viewport 보정을 유지한다. Repost consumer는 기본 시작 정렬을 유지하며 Android·iOS bottom action sheet는 바꾸지 않는다.
 - Alternatives Considered: 모든 ActionMenu를 끝 정렬하면 Repost의 기존 배치까지 바뀌므로 채택하지 않았다. menu를 trigger 왼쪽에 완전히 분리하면 같은 pointer 위치의 두 번째 활성화가 item을 선택하지 못하므로 채택하지 않았다.
 - Consequences: ActionMenu 공개 입력에 좁은 Web 배치 선택지가 생기지만 production 사용은 More에만 한정된다. 중앙 timeline 끝의 More menu가 shell 안쪽으로 펼쳐지고 trigger와의 시각 겹침·입력 계약은 유지된다.
 - Confirmation / Follow-up: ActionMenu Storybook에서 끝 정렬 menu·첫 item의 오른쪽 경계, 왼쪽 확장, viewport clamp와 trigger 두 모서리의 첫 item 포함을 검증하고 Home runtime에서 실제 More menu 좌표를 확인한다.
@@ -351,6 +363,7 @@
 - 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`는 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`로 대체했다.
 - 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`는 2026-07-27 `Repost 실패 피드백은 PROD-414 surface에서 완성한다`로 Repost 소유 범위가 대체됐다. Repost 외 action의 원칙은 유지한다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
+- 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`의 링크 복사 단일 항목 결과는 2026-07-31 `More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다`로 대체했다. 독립 UI용 callback-only 경계와 Post Share Reference 계약은 유지한다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
 - 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.

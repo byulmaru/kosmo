@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useSession } from '@/session/SessionProvider';
+import { applyBookmarkDeleteResponse, getBookmarkConnectionId } from './PostBookmarkActionCache';
 import type { PostBookmarkAction_post$key } from './__generated__/PostBookmarkAction_post.graphql';
 import type { PostBookmarkActionCreateBookmarkMutation } from './__generated__/PostBookmarkActionCreateBookmarkMutation.graphql';
 import type { PostBookmarkActionDeleteBookmarkMutation } from './__generated__/PostBookmarkActionDeleteBookmarkMutation.graphql';
@@ -48,10 +50,6 @@ const deleteBookmarkMutation = graphql`
   mutation PostBookmarkActionDeleteBookmarkMutation($input: DeleteBookmarkInput!) {
     deleteBookmark(input: $input) {
       bookmarkId
-      post {
-        id
-        ...PostBookmarkAction_post
-      }
     }
   }
 `;
@@ -64,6 +62,7 @@ export function usePostBookmarkAction(
 ): BookmarkActionConfig | undefined {
   const data = useFragment(postBookmarkActionFragment, post);
   const environment = useRelayEnvironment();
+  const { selectedProfileId } = useSession();
   const [commitCreate, isCreating] =
     useMutation<PostBookmarkActionCreateBookmarkMutation>(createBookmarkMutation);
   const [commitDelete, isDeleting] =
@@ -121,7 +120,28 @@ export function usePostBookmarkAction(
     };
 
     if (activeBookmarkId) {
-      commitDelete({ ...callbacks, variables: { input: { id: activeBookmarkId } } });
+      const bookmarkConnectionId = selectedProfileId
+        ? getBookmarkConnectionId(selectedProfileId)
+        : null;
+      commitDelete({
+        onCompleted: (response, errors) => {
+          const error = applyBookmarkDeleteResponse(
+            requestEnvironment,
+            data.id,
+            activeBookmarkId,
+            bookmarkConnectionId,
+            response?.deleteBookmark?.bookmarkId,
+            errors,
+          );
+          if (error) {
+            finishWithError(error);
+            return;
+          }
+          finish();
+        },
+        onError: finishWithError,
+        variables: { input: { id: activeBookmarkId } },
+      });
       return;
     }
 
@@ -135,6 +155,7 @@ export function usePostBookmarkAction(
     onError,
     onResolutionRequired,
     processing,
+    selectedProfileId,
   ]);
 
   if (!data) {

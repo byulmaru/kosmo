@@ -14,14 +14,20 @@
 - **WHEN** production Post surface가 아닌 독립 컴포넌트 사용에서 일부 액션의 config 또는 child fragment가 제공되지 않는다
 - **THEN** Action Bar는 해당 액션을 숨기고 제공된 액션의 상대 순서를 유지한다
 
-#### Scenario: More 표시
+#### Scenario: 독립 컴포넌트의 More 표시
 
 - **WHEN** More 설정과 callback이 제공된다
 - **THEN** Action Bar는 접근 가능한 icon-only More 버튼을 표시하고 메뉴나 링크 복사 동작은 실행하지 않는다
 
+#### Scenario: Production More 표시
+
+- **WHEN** production Post fragment가 제공되고 독립 컴포넌트용 More callback은 제공되지 않는다
+- **THEN** Action Bar는 private `PostDeletionAction` child가 소유하는 접근 가능한 icon-only More 버튼을 표시한다
+- **AND** surface가 제공한 menu item과 child가 파생한 삭제 자격을 하나의 menu에 조합한다
+
 ### Requirement: 액션의 시각 상태
 
-**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). default 상태는 보조 텍스트 색상의 outline icon과 Reply 또는 Repost child가 제공한 선택적 count를 표시해야 하고(MUST), 활성인 도메인 상태는 primary 색상의 icon으로 표현해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Heart 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 하며(MUST), default 처리 상태에서는 primary 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). More는 callback과 accessibility label만 받아야 하며(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-433`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425`, `PROD-598` — Reply·Reaction·Bookmark는 default·pending·disabled 처리 상태와 각각 controlled `expanded`, `hasReacted`, `hasBookmarked`를 받아야 하며(MUST), private Repost child action은 `viewerRepost`와 mutation 진행 상태에서 `hasReposted` 및 default·pending을 함께 파생해야 한다(MUST). Repost의 최종 disabled 행동은 유지하되 concrete policy input 또는 fragment shape를 PROD-414가 선결해서는 안 되며(MUST NOT), actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 범용 `selected`를 공개 prop으로 제공하지 않아야 하며(MUST NOT), Reaction과 Bookmark는 count를 받지 않아야 한다(MUST NOT). default 상태는 보조 텍스트 색상의 outline icon과 Reply 또는 Repost child가 제공한 선택적 count를 표시해야 하고(MUST), 활성인 도메인 상태는 primary 색상의 icon으로 표현해야 한다(MUST). `hasReacted` 또는 `hasBookmarked`가 true이면 pending spinner를 표시하는 동안을 제외하고 Heart 또는 Bookmark icon 내부를 현재 처리 상태 색상으로 채워야 하며(MUST), default 처리 상태에서는 primary 색상으로 채워야 한다(MUST). 처리 상태의 시각 표현은 도메인 상태의 primary 표현보다 우선해야 한다(MUST). pending 상태는 icon 자리에 spinner를 표시하고(MUST), disabled 상태는 icon과 제공된 count를 비활성 표현으로 약화해야 한다(MUST). pending·disabled 중에도 `expanded`·`hasReposted`·`hasReacted`·`hasBookmarked`의 의미와 접근성 상태를 잃지 않아야 한다(MUST). 독립 UI용 More config는 callback과 accessibility label을 받아야 하고(MUST) count·도메인 상태·pending·disabled 입력을 받지 않아야 하며(MUST), production private `PostDeletionAction`은 자기 mutation pending과 menu expanded 상태를 내부에서 관리해야 한다(MUST).
 
 #### Scenario: 활성인 도메인 상태
 
@@ -50,7 +56,7 @@
 
 ### Requirement: 액션 입력 계약
 
-**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414` — Post Action Bar toolbar는 composite Post fragment와 고정 action 순서를 소유해야 하며(MUST), 구현된 private child action은 자신의 child fragment, mutation, pending과 파생 도메인 상태를 소유하고 공통 private control을 렌더할 수 있어야 한다(MUST). Reply·Reaction·Bookmark·More의 callback, controlled Composer, navigation과 More menu는 외부 surface가 소유해야 하며(MUST), PROD-414 surface는 Repost child에 actual target Post fragment ref와 action별 error callback을 제공해야 한다(MUST). Repost child는 자기 action menu의 open·dismiss·선택 결과를 조립할 수 있어야 하지만(MUST), toolbar container는 child mutation payload 또는 cache update 정책을 재구현하지 않아야 한다(MUST NOT). Repost trigger는 사용자 입력 시 mutation을 즉시 실행하지 않고(MUST NOT) action menu를 열어야 하며(MUST), menu 항목 선택 뒤 fragment 상태에서 파생한 mutation을 한 번 실행해야 한다(MUST). Reply·Reaction·Bookmark의 default 상태는 사용자 입력 시 해당 callback을 한 번 실행해야 하며(MUST), pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단해야 한다(MUST). 대상 적격성·현재 실행 주체 권한·guest 인증 위임에서 파생할 최종 disabled 행동은 actual production caller와 함께 PROD-432가 설계해야 한다(MUST). More는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 한다(MUST).
+**Authority / Provenance:** `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-414`, `PROD-598` — Post Action Bar toolbar는 composite Post fragment와 고정 action 순서를 소유해야 하며(MUST), 구현된 private child action은 자신의 child fragment, mutation, pending과 파생 도메인 상태를 소유하고 공통 private control을 렌더할 수 있어야 한다(MUST). Reply·Reaction·Bookmark callback, controlled Composer, navigation과 production 링크 item은 외부 surface가 소유해야 하며(MUST), PROD-414 surface는 Repost child에 actual target Post fragment ref와 action별 error callback을 제공해야 한다(MUST). Repost child는 자기 action menu의 open·dismiss·선택 결과를 조립할 수 있어야 하고(MUST), production `PostDeletionAction` child는 surface의 menu item과 자기 삭제 item을 조합해 More menu·확인 dialog·delete mutation 상태를 소유해야 한다(MUST). toolbar container는 child mutation payload 또는 cache update 정책을 재구현하지 않아야 한다(MUST NOT). Repost trigger는 사용자 입력 시 mutation을 즉시 실행하지 않고(MUST NOT) action menu를 열어야 하며(MUST), menu 항목 선택 뒤 fragment 상태에서 파생한 mutation을 한 번 실행해야 한다(MUST). Reply·Reaction·Bookmark의 default 상태는 사용자 입력 시 해당 callback을 한 번 실행해야 하며(MUST), pending·disabled 상태는 touch, pointer 및 keyboard 입력을 차단해야 한다(MUST). 대상 적격성·현재 실행 주체 권한·guest 인증 위임에서 파생할 최종 disabled 행동은 actual production caller와 함께 PROD-432가 설계해야 한다(MUST). 독립 UI용 More config는 사용자 입력 시 상태 전이 없이 callback을 한 번 호출해야 하며(MUST), production More는 private child menu를 열어야 한다(MUST).
 
 #### Scenario: 기본 액션 실행
 
@@ -68,10 +74,16 @@
 - **WHEN** 사용자가 disabled 상태의 액션을 활성화하려 한다
 - **THEN** Action Bar는 callback 또는 child mutation을 호출하지 않는다
 
-#### Scenario: More callback 실행
+#### Scenario: 독립 컴포넌트의 More callback 실행
 
 - **WHEN** 사용자가 More를 활성화한다
 - **THEN** Action Bar는 More callback을 한 번 호출하고 메뉴나 clipboard 동작을 자체 수행하지 않는다
+
+#### Scenario: Production More child 실행
+
+- **WHEN** 사용자가 production More를 활성화한다
+- **THEN** private `PostDeletionAction`은 surface가 공급한 item과 삭제 자격을 조합한 menu를 연다
+- **AND** toolbar container는 clipboard나 delete mutation을 직접 실행하지 않는다
 
 ### Requirement: Repost action menu
 
@@ -258,7 +270,7 @@
 
 ### Requirement: 실제 액션 상태 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual action target Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), PROD-425는 actual 목록·상세 surface에서 Reply에 외부 Composer의 controlled `expanded`를 공급하고 PROD-432는 이를 재구현하지 않고 전체 조합에서 유지해야 한다(MUST). Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 target fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), PROD-414 surface는 target fragment ref와 action별 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 하며(MUST NOT), Reaction과 Bookmark count는 공급하지 않아야 한다(MUST NOT). Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 target child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 상태를 재사용하지 않아야 한다(MUST). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/bookmark.md`, `docs/design/post-action-bar.md`, `docs/design/reply-composer.md`, `PROD-432`, `PROD-414`, `PROD-417`, `PROD-418`, `PROD-420`, `PROD-425` — Production surface는 actual action target Post fragment ref와 Reply·Reaction·Bookmark의 기존 구현 결과에서 callback과 처리 상태를 공급해야 하며(MUST), PROD-425는 actual 목록·상세 surface에서 Reply에 외부 Composer의 controlled `expanded`를 공급하고 PROD-432는 이를 재구현하지 않고 전체 조합에서 유지해야 한다(MUST). Reaction에는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지를 나타내는 `hasReacted`, Bookmark에는 현재 Profile의 `hasBookmarked`를 공급해야 한다(MUST). Repost child action은 target fragment의 `viewerRepost`에서 `hasReposted`, delete identity와 create/delete mutation 선택을 함께 파생해야 하고(MUST), PROD-414 surface는 target fragment ref와 action별 error callback을 공급해야 한다(MUST). Repost의 최종 disabled 행동을 연결할 concrete host input 또는 fragment shape는 actual production caller와 함께 PROD-432가 설계하고 통합 검증해야 한다(MUST). 범용 `selected`를 합성하거나 공개 입력으로 공급하지 않아야 하며(MUST NOT), Reaction과 Bookmark count는 공급하지 않아야 한다(MUST NOT). Reply count는 선행 action 계약이 제공하는 경우에만 optional로 공급하고 Repost count는 target child fragment에서 읽어야 하며(MUST), count 계약이 없는 액션에 `0`이나 새로운 집계 값을 합성하지 않아야 한다(MUST NOT). 제공된 count와 선택된 Profile에 상대적인 도메인 상태는 기존 cache 경계를 유지해야 하며(MUST), Profile 전환 시 이전 Profile의 상태를 재사용하지 않아야 한다(MUST). Bookmark 해제 성공은 현재 Relay actor Store에서 target Post의 `viewerBookmark`를 `null`로 정규화하고 해당 Bookmark record를 삭제하며(MUST), 로드된 `BookmarkConnectionList_bookmarks`에서 같은 Bookmark node의 edge를 제거해야 한다(MUST). 다른 actor Store의 Post·Bookmark·connection은 변경하지 않아야 한다(MUST NOT). 각 액션의 pending 상태는 해당 요청의 중복 입력만 차단해야 하며(MUST) 다른 액션을 불필요하게 차단하지 않아야 한다(MUST).
 
 Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-418의 공개 계약을 그대로 소비해야 하며(MUST) 이 Action Bar 계약에서 별도 집계 방식이나 Reaction count를 정의하지 않아야 한다(MUST). `hasReacted`는 현재 Profile이 하나 이상의 Reaction Type을 남겼는지만 나타내야 한다(MUST).
 
@@ -283,6 +295,13 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **WHEN** 연결된 action 요청이 성공한다
 - **THEN** Production surface는 기존 action 계약이 제공하는 Reply count와 `hasReacted`·`hasBookmarked`를 공급하고 Repost child는 fragment가 제공하는 Repost count와 `hasReposted`를 반영한다
 
+#### Scenario: Bookmark 해제 cache 동기화
+
+- **WHEN** 현재 selected Profile이 target Post의 활성 Bookmark를 해제하고 서버 요청이 성공한다
+- **THEN** 현재 Relay actor Store의 target Post는 `viewerBookmark: null`을 반영하고 해당 Bookmark record를 삭제한다
+- **AND** 같은 actor Store에 로드된 `BookmarkConnectionList_bookmarks`는 해당 Bookmark node의 edge를 제거해 북마크 목록에서 row가 즉시 사라진다
+- **AND** 다른 selected Profile의 actor Store는 변경하지 않는다
+
 #### Scenario: 실패한 요청 복구
 
 - **WHEN** 연결된 action 요청이 실패한다
@@ -293,16 +312,27 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **AND** light toast는 `#262626` accent 배경을 사용하고 message line box·padding을 유지한 채 glyph를 2px 아래로 이동한다
 - **AND** Action Bar에 지속 error 상태나 toast close·retry control을 공급하지 않고, 사용자가 Repost menu를 다시 열어 같은 항목을 선택하면 재시도할 수 있게 한다
 
-### Requirement: More 링크 복사 통합
+### Requirement: More menu 통합
 
-**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433` — Production surface는 More callback이 활성화되면 접근 가능한 팝업을 열고(MUST) 현재 범위에서는 `링크 복사` 항목 하나를 제공해야 한다(MUST). Content가 있는 Post의 링크 복사는 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`과 그 Post의 `/{relativeHandle}/{postId}` 경로를 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 한다(MUST). Content와 Reply Parent 없이 Repost Source만 있는 Repost의 링크 복사는 Repost 자신의 상세 참조를 노출하지 않고 조회 가능한 직접 Repost Source의 Post Share Reference를 복사해야 한다(MUST). Web·Android·iOS는 모두 같은 canonical Web origin과 Post Share Reference 선택 규칙을 사용해야 한다(MUST). 클라이언트 설정은 configured Local Instance의 `canonical_origin`을 전달하는 projection이어야 하며(MUST) 독립적인 공유 링크 authority가 되지 않아야 한다(MUST NOT). Web의 현재 browser origin이 canonical Web origin과 달라도 현재 browser origin을 공유 참조에 사용하지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). PostActionBar 컴포넌트는 팝업, clipboard 또는 메뉴 상태를 직접 소유하지 않아야 하며(MUST), 링크 복사 외의 More 항목은 이 change에 포함하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-598` — Production surface는 `링크 복사`를 첫 `moreItems` 항목으로 제공해야 하고(MUST), composite Post fragment 아래 private `PostDeletionAction`은 접근 가능한 More menu를 열어 이 항목을 항상 첫 항목으로 유지해야 한다(MUST). selected Profile이 target Post의 Author Profile과 같고 target이 Content를 가진 Active Post일 때만 private child가 완료된 PROD-598의 destructive `삭제`를 마지막 항목으로 추가해야 하며(MUST), guest·다른 Profile·Tombstone·Content 없는 Repost target에는 `삭제`를 표시하지 않아야 한다(MUST NOT). 삭제 확인 dialog·mutation·Relay cache 동기화·실패 복구는 PROD-598의 완료 계약을 재사용해야 하며(MUST), 이 change가 삭제 domain·GraphQL·cache 계약을 다시 정의하지 않아야 한다(MUST NOT). Content가 있는 Post의 링크 복사는 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`과 그 Post의 `/{relativeHandle}/{postId}` 경로를 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 한다(MUST). Content와 Reply Parent 없이 Repost Source만 있는 Repost의 More target은 direct Repost Source여야 하며(MUST), 링크 복사는 Repost 자신의 상세 참조를 노출하지 않고 조회 가능한 direct Source의 Post Share Reference를 복사하고 삭제 자격과 mutation ID도 Source를 기준으로 해야 한다(MUST). Web·Android·iOS는 모두 같은 canonical Web origin과 Post Share Reference 선택 규칙을 사용해야 한다(MUST). 클라이언트 설정은 configured Local Instance의 `canonical_origin`을 전달하는 projection이어야 하며(MUST) 독립적인 공유 링크 authority가 되지 않아야 한다(MUST NOT). Web의 현재 browser origin이 canonical Web origin과 달라도 현재 browser origin을 공유 참조에 사용하지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). Toolbar container는 clipboard나 삭제 mutation payload·cache 계약을 직접 소유하지 않아야 하고(MUST NOT), private `PostDeletionAction`은 menu·확인 dialog·delete mutation 상태를 소유해야 한다(MUST).
 
 #### Scenario: More 팝업 열기
 
 - **WHEN** production surface에서 사용자가 More를 활성화한다
-- **THEN** surface는 `링크 복사` 항목 하나를 가진 접근 가능한 팝업을 연다
+- **THEN** surface는 `링크 복사`를 첫 항목으로 가진 접근 가능한 팝업을 연다
 - **AND** Web에서는 menu card 오른쪽이 trigger 오른쪽보다 5px 바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 menu가 왼쪽으로 펼쳐진다
 - **AND** 첫 item의 확장 target은 trigger pointer 지점을 덮고 menu는 viewport 안으로 보정되며, Repost의 기존 시작 정렬과 Native bottom action sheet는 유지된다
+
+#### Scenario: 작성자의 삭제 action 조합
+
+- **WHEN** selected Profile이 Content를 가진 Active target Post의 Author Profile과 같다
+- **THEN** More menu는 첫 항목 `링크 복사` 뒤 마지막 항목에 destructive `삭제`를 표시한다
+- **AND** 삭제 선택 이후의 확인·mutation·cache·실패 동작은 PROD-598 계약을 사용한다
+
+#### Scenario: 삭제 자격이 없는 More menu
+
+- **WHEN** 사용자가 guest·다른 Profile이거나 target이 Tombstone 또는 Content 없는 Repost다
+- **THEN** More menu는 `삭제`를 표시하지 않고 `링크 복사`만 제공한다
 
 #### Scenario: guest 링크 복사
 
@@ -313,6 +343,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 - **WHEN** Content와 Reply Parent 없이 Repost Source만 있는 Repost에서 사용자가 `링크 복사`를 활성화한다
 - **THEN** surface는 Repost 자신의 상세 참조가 아니라 조회 가능한 직접 Repost Source의 Post Share Reference를 clipboard에 복사한다
+- **AND** 같은 More menu의 삭제 자격과 mutation ID도 direct Source를 기준으로 한다
 
 #### Scenario: Web과 Native의 동일한 공유 URL
 
