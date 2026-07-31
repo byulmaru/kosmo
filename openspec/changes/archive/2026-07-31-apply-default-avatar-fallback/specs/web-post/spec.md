@@ -1,10 +1,4 @@
-# web-post Specification
-
-## Purpose
-
-kosmo 웹 게시글 UI capability의 현재 계약을 문서화한다. 이 스펙은 게시글 목록과 게시글 상세 화면이 공유하는 작성자 프로필 표시 컴포넌트 계약을 다룬다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Post author profile display
 

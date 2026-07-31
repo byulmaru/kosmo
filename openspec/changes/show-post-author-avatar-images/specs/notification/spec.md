@@ -2,7 +2,7 @@
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `PROD-277`, `PROD-372`, `PROD-541`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST). 각 item의 Related Profile에 공개 Ready avatar URL이 있으면 28px 공용 Avatar로 실제 이미지를 표시하고 URL이 없으면 기존 이니셜 fallback을 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `PROD-277`, `PROD-372`, `PROD-541`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588), [PROD-596](https://linear.app/byulmaru/issue/PROD-596) — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST). 각 item의 Related Profile에 공개 Ready avatar URL이 있으면 28px 공용 Avatar로 실제 이미지를 표시하고 URL이 없으면 승인된 기본 아바타 fallback을 표시해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -16,10 +16,11 @@
 - **WHEN** Follow Notification의 Related Profile에 공개 URL을 가진 Ready avatar가 있다
 - **THEN** item의 28px 공용 Avatar는 해당 Profile의 실제 이미지를 표시한다
 
-#### Scenario: Related Profile avatar initial fallback
+#### Scenario: Related Profile default avatar fallback
 
 - **WHEN** Follow Notification의 Related Profile에 avatar 관계가 없거나 공개 avatar URL을 제공할 수 없다
-- **THEN** item의 28px 공용 Avatar는 같은 Profile의 표시 이름 또는 핸들 기반 기존 이니셜 fallback을 표시한다
+- **THEN** item의 28px 공용 Avatar는 승인된 기본 아바타 이미지를 표시한다
+- **AND** 아바타의 접근 가능한 이름은 기존 Related Profile 표시 이름을 유지한다
 
 #### Scenario: 알림 화면 header와 단일 목록
 
@@ -82,7 +83,7 @@
 
 ### Requirement: Reaction·Reply·Repost Notification Related Profile avatar presentation
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 클라이언트는 visible Reaction·Reply·Repost Notification item이 나타내는 Related Profile의 공개 Ready avatar URL이 있으면 기존 28px 공용 Avatar로 실제 이미지를 표시하고, URL이 없으면 같은 Profile의 기존 이니셜 fallback을 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/design/figma.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588), [PROD-596](https://linear.app/byulmaru/issue/PROD-596) — 클라이언트는 visible Reaction·Reply·Repost Notification item이 나타내는 Related Profile의 공개 Ready avatar URL이 있으면 기존 28px 공용 Avatar로 실제 이미지를 표시하고, URL이 없으면 승인된 기본 아바타 fallback을 표시해야 한다(MUST).
 
 #### Scenario: Related Profile avatar image by Notification subtype
 
@@ -93,9 +94,10 @@
 #### Scenario: Related Profile avatar fallback by Notification subtype
 
 - **WHEN** visible Reaction, Reply 또는 Repost Notification의 Related Profile에 avatar 관계가 없거나 공개 avatar URL을 제공할 수 없다
-- **THEN** 각 item의 28px 공용 Avatar는 같은 Profile의 표시 이름 또는 핸들 기반 기존 이니셜 fallback을 표시한다
+- **THEN** 각 item의 28px 공용 Avatar는 승인된 기본 아바타 이미지를 표시한다
+- **AND** 아바타의 접근 가능한 이름은 기존 Related Profile 표시 이름을 유지한다
 
 #### Scenario: Preserve Notification subtype presentation contracts
 
-- **WHEN** Reaction·Reply·Repost item이 실제 avatar 이미지 또는 이니셜 fallback을 표시한다
+- **WHEN** Reaction·Reply·Repost item이 실제 avatar 이미지 또는 승인된 기본 아바타 fallback을 표시한다
 - **THEN** 기존 28px 크기, kind icon, 문구, Related Post 이동, Read mutation과 actor별 Relay cache 격리 계약을 유지한다

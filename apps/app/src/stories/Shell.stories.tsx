@@ -836,8 +836,9 @@ export const ProfileSwitcherImagePresentation: Story = {
     );
 
     const fallbackAvatar = within(options[2]!).getByLabelText('이미지 없는 프로필 프로필 이미지');
-    expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
-    expect(fallbackAvatar).toHaveTextContent('이');
+    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
   },
   render: () => <ProfileSwitcherStory />,
 };

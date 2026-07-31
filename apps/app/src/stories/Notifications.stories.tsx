@@ -252,8 +252,9 @@ export const StatesAndFollowItems: Story = {
       expect(avatar.querySelector('img')).toHaveAttribute('src', unreadFollowerAvatarUrl);
     }
     for (const avatar of canvas.getAllByLabelText('은하 기록자 프로필 이미지')) {
-      expect(avatar.querySelector('img')).not.toBeInTheDocument();
-      expect(avatar).toHaveTextContent('은');
+      expect(avatar.querySelector('img')?.getAttribute('src')).toMatch(
+        /\/assets\/avatar\/default-avatar\.png$/,
+      );
     }
     expect(canvas.getByText('아직 알림이 없어요')).toBeVisible();
     expect(

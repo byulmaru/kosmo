@@ -2273,8 +2273,9 @@ export const OrdinaryPost: Story = {
     const bodyShortcut = within(standardRow).getByTestId('post-list-row-body');
     const avatar = within(standardRow).getByLabelText('코스모 작가 프로필 이미지');
     expect(canvas.getByText('짧은 본문 한 줄.')).toBeVisible();
-    expect(avatar.querySelector('img')).not.toBeInTheDocument();
-    expect(avatar).toHaveTextContent('코');
+    expect(avatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
     expect(canvas.queryByTestId('source-post-preview')).not.toBeInTheDocument();
     expect(article.querySelectorAll('[data-testid="post-list-standard-row"]')).toHaveLength(1);
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');

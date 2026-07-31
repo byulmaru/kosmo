@@ -28,10 +28,11 @@
 - **WHEN** 좁은 화면에서 긴 허용값 또는 임의 개수의 Profile Tag를 모두 표시한다
 - **THEN** chip 목록은 여러 줄로 감싸지고 Profile 본문을 가로로 넘치지 않는다
 
-#### Scenario: Avatar initial fallback
+#### Scenario: Default avatar fallback
 
-- **WHEN** 프로필에 아바타 이미지가 없다(스키마 미보유)
-- **THEN** 시스템은 표시 이름(없으면 핸들)의 첫 글자를 대문자로 한 이니셜 아바타를 표시한다
+- **WHEN** 프로필 이미지 URL이 없다
+- **THEN** 시스템은 승인된 기본 아바타 이미지를 표시한다
+- **AND** 아바타의 접근 가능한 이름은 기존 프로필 표시 이름을 유지한다
 
 #### Scenario: Compact follow counts
 

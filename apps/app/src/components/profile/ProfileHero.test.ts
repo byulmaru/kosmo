@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -58,6 +59,11 @@ mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   Skeleton: (props: object) => createElement('Skeleton', props),
 });
 
+const require = createRequire(import.meta.url);
+require.extensions['.png'] = (module, filename) => {
+  module.exports = filename;
+};
+
 let ProfileHero: typeof ProfileHeroExport;
 
 before(async () => {
@@ -106,12 +112,11 @@ describe('ProfileHero media presentation', () => {
     assert.ok(images.every((node) => node.props.resizeMode === 'cover'));
   });
 
-  it('URL이 없으면 Image를 렌더하지 않는다', async () => {
+  it('URL이 없으면 승인된 기본 아바타 asset을 렌더한다', async () => {
     await renderProfile(baseProfile);
 
-    assert.deepEqual(
-      renderer!.root.findAll((node) => (node.type as unknown) === 'Image'),
-      [],
-    );
+    const images = renderer!.root.findAll((node) => (node.type as unknown) === 'Image');
+    assert.equal(images.length, 1);
+    assert.match(String((images[0]!.props.source as { uri?: string }).uri), /default-avatar\.png$/);
   });
 });

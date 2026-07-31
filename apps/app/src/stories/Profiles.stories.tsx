@@ -372,8 +372,9 @@ export const ListAndFollowStates: Story = {
       '/profile-followed-avatar.png',
     );
     const fallbackAvatar = canvas.getByLabelText('이니셜 폴백 프로필 프로필 이미지');
-    expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
-    expect(fallbackAvatar).toHaveTextContent('이');
+    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
   },
   render: () => <ProfileListCatalog />,
 };

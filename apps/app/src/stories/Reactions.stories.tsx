@@ -564,8 +564,9 @@ export const ProfileListStates: Story = {
       'src',
       '/reaction-profile-starlight-avatar.png',
     );
-    expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
-    expect(fallbackAvatar).toHaveTextContent('은');
+    expect(fallbackAvatar.querySelector('img')?.getAttribute('src')).toMatch(
+      /\/assets\/avatar\/default-avatar\.png$/,
+    );
     expect(canvas.getAllByText('❤️')).toHaveLength(9);
     const populatedRows = populatedSection
       .getAllByLabelText('❤️ 반응')

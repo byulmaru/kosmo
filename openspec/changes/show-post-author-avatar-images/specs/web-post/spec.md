@@ -2,7 +2,7 @@
 
 ### Requirement: Post author profile display
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 웹 앱은 게시글 목록, 게시글 상세 페이지와 Reply Composer의 leaf GraphQL fragment가 소유하는 작성자 프로필 presentation을 제공하고, 작성자의 공개 Ready avatar URL이 있으면 공용 Avatar로 실제 이미지를 표시하며 URL이 없으면 이니셜 fallback을 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/design/figma.md`, PROD-97, [PROD-588](https://linear.app/byulmaru/issue/PROD-588), [PROD-596](https://linear.app/byulmaru/issue/PROD-596) — 웹 앱은 게시글 목록, 게시글 상세 페이지와 Reply Composer의 leaf GraphQL fragment가 소유하는 작성자 프로필 presentation을 제공하고, 작성자의 공개 Ready avatar URL이 있으면 공용 Avatar로 실제 이미지를 표시하며 URL이 없으면 승인된 기본 아바타 fallback을 표시해야 한다(MUST).
 
 #### Scenario: Render author identity
 
@@ -17,7 +17,8 @@
 #### Scenario: Render author fallback avatar
 
 - **WHEN** 게시글 작성자 Profile에 avatar 관계가 없거나 공개 avatar URL을 제공할 수 없다
-- **THEN** 시스템은 표시 이름 또는 핸들 기반 이니셜 fallback avatar를 렌더링한다
+- **THEN** 시스템은 승인된 기본 아바타 fallback을 렌더링한다
+- **AND** 아바타의 접근 가능한 이름은 기존 작성자 표시 이름을 유지한다
 
 #### Scenario: Keep displayed author avatars distinct
 
@@ -37,7 +38,7 @@
 
 #### Scenario: Preserve author avatar presentation contract
 
-- **WHEN** 시스템이 실제 avatar 이미지 또는 이니셜 fallback을 렌더링한다
+- **WHEN** 시스템이 실제 avatar 이미지 또는 승인된 기본 아바타 fallback을 렌더링한다
 - **THEN** 목록의 48px avatar와 상세·Reply Composer parent·Source preview의 40px avatar 크기를 유지한다
 - **AND** 기존 작성자 Profile 이동과 접근성 이름을 유지한다
 

@@ -4,12 +4,14 @@
 
 - `docs/domain/objects/profile.md`
 - `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`
+- `docs/design/figma.md`
 - [PROD-588](https://linear.app/byulmaru/issue/PROD-588)
 - Profile avatar/header 공개 표현 의존성 [PROD-492](https://linear.app/byulmaru/issue/PROD-492)
+- 기본 아바타 fallback 의존성 [PROD-596](https://linear.app/byulmaru/issue/PROD-596)
 
 **Deliverable**
 
-홈·프로필·북마크 목록과 게시글 상세에서 일반 Post, Repost, Quote의 각 표시 위치가 해당 작성자의 실제 Ready avatar 이미지를 표시하고, URL이 없으면 기존 이니셜 fallback을 표시한다.
+홈·프로필·북마크 목록과 게시글 상세에서 일반 Post, Repost, Quote의 각 표시 위치가 해당 작성자의 실제 Ready avatar 이미지를 표시하고, URL이 없으면 승인된 기본 아바타 fallback을 표시한다.
 
 **Guardrails**
 
@@ -23,7 +25,7 @@
 - 기존 Posts Storybook surface에서 목록·상세 작성자별 이미지 URL과 null fallback, 크기·이동·접근성 계약을 확인한다.
 
 - [x] 1.1 게시글 leaf fragment가 각 표시 작성자의 `avatar { id url }`을 조회하고 목록·상세·Source presentation에 독립적으로 공급하게 한다.
-- [x] 1.2 실제 이미지와 이니셜 fallback 모두 기존 Avatar 크기·Profile 이동·접근성 이름·layout을 유지하게 한다.
+- [x] 1.2 실제 이미지와 승인된 기본 아바타 fallback 모두 기존 Avatar 크기·Profile 이동·접근성 이름·layout을 유지하게 한다.
 
 ## 2. PROD-588 공용 Profile 이미지 소비자 연결
 
@@ -31,12 +33,14 @@
 
 - `docs/domain/objects/profile.md`
 - `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`
+- `docs/design/figma.md`
 - [PROD-588](https://linear.app/byulmaru/issue/PROD-588)
 - Profile avatar/header 공개 표현 의존성 [PROD-492](https://linear.app/byulmaru/issue/PROD-492)
+- 기본 아바타 fallback 의존성 [PROD-596](https://linear.app/byulmaru/issue/PROD-596)
 
 **Deliverable**
 
-현재 production의 나머지 Profile avatar 소비자, Reply Composer의 parent·direct Source와 ProfileSwitcher header가 각 Profile의 실제 Ready 이미지를 표시하고, URL이 없으면 기존 이니셜·gradient fallback을 유지한다.
+현재 production의 나머지 Profile avatar 소비자, Reply Composer의 parent·direct Source와 ProfileSwitcher header가 각 Profile의 실제 Ready 이미지를 표시하고, URL이 없으면 승인된 기본 아바타·기존 gradient fallback을 유지한다.
 
 **Guardrails**
 
@@ -52,7 +56,7 @@
 
 - [x] 2.1 `ProfileSwitcher`의 full·drawer·compact trigger와 전환 목록에 각 Profile avatar를 연결하고, 활성 Profile header 이미지·gradient fallback을 기존 전환 계약과 함께 유지한다.
 - [x] 2.2 공용 `ProfileListItem`, `BottomTabBar`, `PostComposer`와 `ReplyComposerSurface` parent·direct Source가 자신이 표시하는 Profile avatar를 기존 크기·이동·접근성 계약으로 사용하게 한다.
-- [x] 2.3 각 `NotificationListItem` subtype fragment가 Related Profile avatar를 조회해 28px 이미지 또는 기존 이니셜 fallback을 표시하게 한다.
+- [x] 2.3 각 `NotificationListItem` subtype fragment가 Related Profile avatar를 조회해 28px 이미지 또는 승인된 기본 아바타 fallback을 표시하게 한다.
 
 ## 3. PROD-588 최소 자동화 검증
 

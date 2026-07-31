@@ -1,23 +1,22 @@
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { TextArea, TextField } from '@/components/ui/TextField';
-import { spacing } from '@/theme/tokens';
+import { colors, radii, spacing } from '@/theme/tokens';
 import { Catalog, Row, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function PrimitivesCatalog() {
   return (
     <Catalog>
-      <Section title="Avatar sizes and edge cases">
-        <Row>
-          <Avatar label="코스모" size={24} />
-          <Avatar label="코스모" size={40} />
-          <Avatar label="코스모" size={72} />
-          <Avatar label="" size={48} />
-          <Avatar label="아주 긴 표시 이름" size={48} />
-        </Row>
+      <Section title="Avatar fallback across sizes and backgrounds">
+        <View style={[styles.avatarPreview, { backgroundColor: colors.light.background }]}>
+          <AvatarSizes />
+        </View>
+        <View style={[styles.avatarPreview, { backgroundColor: colors.dark.background }]}>
+          <AvatarSizes />
+        </View>
       </Section>
 
       <Section title="Button tones and states">
@@ -62,6 +61,23 @@ function PrimitivesCatalog() {
     </Catalog>
   );
 }
+
+function AvatarSizes() {
+  return (
+    <Row>
+      {[24, 32, 40, 48, 64].map((size) => (
+        <Avatar key={size} label="코스모" size={size} />
+      ))}
+    </Row>
+  );
+}
+
+const styles = StyleSheet.create({
+  avatarPreview: {
+    borderRadius: radii.md,
+    padding: spacing.lg,
+  },
+});
 
 const meta = {
   component: PrimitivesCatalog,
