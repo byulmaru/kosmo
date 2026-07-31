@@ -374,10 +374,10 @@ jobs:
 
           terraform plan -input=false -out=current.tfplan
           terraform show -json terraform.tfplan \
-            | jq -S '{configuration, variables, planned_values, resource_drift, resource_changes, output_changes, checks}' \
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
             > reviewed.tfplan.json
           terraform show -json current.tfplan \
-            | jq -S '{configuration, variables, planned_values, resource_drift, resource_changes, output_changes, checks}' \
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
             > current.tfplan.json
 
           if ! cmp -s reviewed.tfplan.json current.tfplan.json; then

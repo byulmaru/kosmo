@@ -54,7 +54,7 @@ Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Merge queue에서는 같은 배치에 포함된 PR 전체와 최신 `main`을 합친 commit으로 reviewed plan을 다시 만든다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 최종 main commit과 일치하는 미만료 merge queue artifact만 선택한다.
 
-PR 배치가 `main`에 병합되면 현재 main에서 plan을 새로 만들고, 생성 시각과 이전 state snapshot을 제외한 Terraform JSON 표현이 merge queue의 reviewed plan과 같은지 확인한다. Configuration, variables, planned values, drift와 resource/output changes, checks가 모두 같을 때만 reviewed saved plan을 그대로 apply한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, reviewed saved plan을 실제로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
+PR 배치가 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존하되 Argo CD Application의 resource version이나 reconcile 시각처럼 실행 사이에 바뀌는 no-op 관측 상태는 제외한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
 Merge queue plan은 OIDC trust를 먼저 배포한 뒤 활성화한다. 이 변경을 배포할 때는 repository variable을 설정하기 전에 PR plan으로 GCP WIF condition을 apply하고, 관리자 AWS credential로 `./scripts/ensure-ci-aws-role.sh`를 다시 실행한다. 활성화 전 main apply는 PR plan fallback을 사용한다.
 
