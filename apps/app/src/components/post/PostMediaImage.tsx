@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import type { ImageLoadEvent } from 'react-native';
 
 export type PostMediaItem = {
   readonly altText: string | null;
@@ -22,10 +23,40 @@ export function PostMediaImage({
   const [generation, setGeneration] = useState(0);
   const [aspectRatio, setAspectRatio] = useState(1);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const currentUrl = useRef(item.url);
+  const measuredUrl = useRef<string | null>(null);
+  currentUrl.current = item.url;
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
   const handleError = useCallback(() => setStatus('error'), []);
-  const handleLoad = useCallback(() => setStatus('ready'), []);
   const handleLoadStart = useCallback(() => setStatus('loading'), []);
+  const updateAspectRatio = useCallback((url: string, width: number, height: number) => {
+    if (currentUrl.current === url && height > 0 && width > 0) {
+      measuredUrl.current = url;
+      setAspectRatio(Math.max(width / height, 1));
+    }
+  }, []);
+  const handleLoad = useCallback(
+    (event?: ImageLoadEvent) => {
+      setStatus('ready');
+      if (!item.url || measuredUrl.current === item.url) {
+        return;
+      }
+
+      const source = event?.nativeEvent?.source;
+      if (source) {
+        updateAspectRatio(item.url, source.width, source.height);
+        return;
+      }
+
+      const url = item.url;
+      Image.getSize(
+        url,
+        (width, height) => updateAspectRatio(url, width, height),
+        () => undefined,
+      );
+    },
+    [item.url, updateAspectRatio],
+  );
 
   useEffect(() => {
     if (!item.url) {
@@ -36,8 +67,8 @@ export function PostMediaImage({
     Image.getSize(
       item.url,
       (width, height) => {
-        if (active && height > 0 && width > 0) {
-          setAspectRatio(Math.max(width / height, 1));
+        if (active) {
+          updateAspectRatio(item.url!, width, height);
         }
       },
       () => undefined,
@@ -46,7 +77,7 @@ export function PostMediaImage({
     return () => {
       active = false;
     };
-  }, [generation, item.url]);
+  }, [generation, item.url, updateAspectRatio]);
 
   if (!item.url || status === 'error') {
     return (

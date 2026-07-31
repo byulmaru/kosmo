@@ -9,13 +9,24 @@ import type { PostMediaItem } from './PostMediaImage';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ImageMock = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
-  getSize: (uri: string, success: (width: number, height: number) => void) => {
+  getSize: (
+    uri: string,
+    success: (width: number, height: number) => void,
+    failure?: () => void,
+  ) => {
+    const attempts = getSizeAttempts.get(uri) ?? 0;
+    getSizeAttempts.set(uri, attempts + 1);
+    if (uri.endsWith('/transient-size-error.webp') && attempts === 0) {
+      failure?.();
+      return;
+    }
     success(
       uri.endsWith('/portrait.webp') ? 900 : 1600,
       uri.endsWith('/portrait.webp') ? 1600 : 900,
     );
   },
 });
+const getSizeAttempts = new Map<string, number>();
 
 mock.module('react-native', {
   exports: {
@@ -35,6 +46,7 @@ before(async () => {
 });
 
 afterEach(async () => {
+  getSizeAttempts.clear();
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -59,6 +71,16 @@ describe('PostMediaImage', () => {
     await act(async () => firstOnLoad());
 
     assert.equal(image('landscape').props.onLoad, firstOnLoad);
+  });
+
+  it('초기 크기 조회가 실패해도 성공한 Image load 뒤 원본 비율을 다시 조회한다', async () => {
+    await render(0, media('transient-size-error', '가로 이미지'));
+    assert.equal(frameAspectRatio('transient-size-error'), 1);
+
+    await act(async () => image('transient-size-error').props.onLoad());
+
+    assert.equal(frameAspectRatio('transient-size-error'), 1600 / 900);
+    assert.equal(getSizeAttempts.get(media('transient-size-error', null).url!), 2);
   });
 
   it('오류 뒤 같은 URL로 Image를 다시 mount한다', async () => {
