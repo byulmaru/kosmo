@@ -8,7 +8,7 @@ import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
-import { RightRail } from '@/components/shell/RightRail';
+import { RightRail, RightRailPrivacyLink } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -105,8 +105,9 @@ function NavigationCatalog() {
         </View>
       </Section>
       <Section title="Right rail">
-        <View style={{ padding: spacing.lg, width: 320 }}>
+        <View style={{ height: 560, padding: spacing.lg, width: 320 }}>
           <RightRail profile={data.profile} />
+          <RightRailPrivacyLink />
         </View>
       </Section>
     </Catalog>
@@ -193,15 +194,72 @@ export const SharedNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
+      'href',
+      '/feedback',
+    );
+    expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
+      'stroke-width',
+      '2',
+    );
+    expect(canvas.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute(
+      'href',
+      '/privacy',
+    );
+    expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
 };
 
-export const BottomNavigation: Story = { render: () => <BottomNavigationStory /> };
+export const BottomNavigation: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).getByRole('link', { name: '글쓰기' })).toHaveAttribute(
+      'href',
+      '/compose',
+    );
+  },
+  render: () => <BottomNavigationStory />,
+};
 
 export const CompactSidebar: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
+      'href',
+      '/feedback',
+    );
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
+    const feedback = canvas.getByRole('link', { name: '피드백 보내기' });
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
+    const triggerRect = trigger.getBoundingClientRect();
+    const avatarRect = avatar.getBoundingClientRect();
+    const logoutRect = logout.getBoundingClientRect();
+    const feedbackRect = feedback.getBoundingClientRect();
+
+    expect(logout).toBeInTheDocument();
+    expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
+    expect(avatarRect.x + avatarRect.width / 2).toBeCloseTo(
+      feedbackRect.x + feedbackRect.width / 2,
+      0,
+    );
+    expect(triggerRect.x + triggerRect.width / 2).toBeCloseTo(
+      feedbackRect.x + feedbackRect.width / 2,
+      0,
+    );
+    expect(feedback.querySelector('svg')).toHaveAttribute('stroke-width', '2');
+    expect(logoutRect.x + logoutRect.width / 2).toBeCloseTo(
+      feedbackRect.x + feedbackRect.width / 2,
+      0,
+    );
+    expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
+    expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
   render: () => <CompactSidebarStory />,
 };
@@ -211,9 +269,24 @@ export const FeedbackNavigationCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
+    const feedbackLabel = within(link).getByText('피드백 보내기');
+    const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
+    expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
+    expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
+    expect(link.querySelector('svg')).toHaveAttribute('height', '20');
+    expect(link.querySelector('svg')).toHaveAttribute('width', '20');
+    expect(logout.querySelector('svg')).toHaveAttribute('height', '20');
+    expect(logout.querySelector('svg')).toHaveAttribute('width', '20');
+    expect(link.querySelector('path')).toHaveAttribute(
+      'd',
+      'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',
+    );
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -223,9 +296,12 @@ export const FeedbackNavigationCompactCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
   },
   render: () => <CompactSidebarStory />,
 };
@@ -235,9 +311,15 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
+    const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
     expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link.nextElementSibling).toContainElement(logout);
+    expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
+    expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
+    expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
   },
   render: () => <FeedbackNavigationDrawerStory />,
 };
@@ -260,10 +342,10 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const pickerRegion = await canvas.findByLabelText('프로필 전환');
@@ -893,6 +975,18 @@ export const UniversalMobile: Story = {
       'href',
       '/bookmarks',
     );
+    expect(within(drawer).getByRole('link', { name: '프로필' })).toHaveAttribute(
+      'href',
+      '/@selected',
+    );
+    expect(within(drawer).queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    expect(page.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute('href', '/feedback');
+    expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
+    expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
+    const logout = page.getByRole('button', { name: '로그아웃' });
+    expect(logout).toBeInTheDocument();
+    expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
+    expect(within(drawer).queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
     const profileSummary = page.getByLabelText('활성 프로필');
     expect(profileSummary).toBeInTheDocument();
     expect(within(profileSummary).getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
@@ -906,10 +1000,10 @@ export const UniversalMobile: Story = {
     expect(triggerIcon.querySelector('path')).toHaveAttribute('d', 'm6 9 6 6 6-6');
     expect(
       nameRect.top + nameRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
-    ).toBeCloseTo(6, 0);
+    ).toBeCloseTo(0, 0);
 
     await userEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
@@ -1273,6 +1367,9 @@ export const UniversalFull: Story = {
 
     const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
+    const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
+    const rightRailRect = rightRail?.getBoundingClientRect();
+    const privacyLinkRect = privacyLink.getBoundingClientRect();
 
     expect(leftRail).not.toBeNull();
     expect(leftRail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
@@ -1281,6 +1378,8 @@ export const UniversalFull: Story = {
     expect(rightRailStyle?.overflowX).toBe('hidden');
     expect(rightRailStyle?.overflowY).toBe('auto');
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
+    expect(privacyLink).toHaveAttribute('href', '/privacy');
+    expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
     <View style={{ height: 1800 }}>

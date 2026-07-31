@@ -83,12 +83,12 @@
 
 - Full/compact/drawer navigation, active semantics, drawer close와 Android/iOS/Web 공용 behavior를 component 또는 Storybook test로 검증한다. Native device harness가 없으면 해당 검증 공백을 기록한다.
 - Idle, validation, BUG_REPORT 선택, pending, success, failure와 retry state를 Storybook interaction과 unit test로 검증한다.
-- 인증된 클라이언트의 `/menu`·`/feedback` 독립 route와 Relay success/failure 흐름을 검증하고, production smoke는 Web에서 수행한다.
+- 인증된 클라이언트의 `/feedback` protected route와 Relay success/failure 흐름을 검증하고, production smoke는 Web에서 수행한다. generic `/menu` 제거의 구현·검증은 PROD-541이 소유한다.
 
 - [x] 3.1 공통 shell의 feedback navigation과 `/feedback` current-state behavior를 구현한다.
 - [x] 3.2 Android/iOS/Web feedback form을 기존 메뉴 소개 UI 없이 직접 렌더링하고, colocated Relay mutation과 validation·pending·success·failure·retry state를 구현한다.
 - [x] 3.3 Feedback form과 shell surface의 Storybook 상태·접근성·interaction test를 추가한다.
-- [x] 3.4 인증된 `/menu`·`/feedback` route 독립성과 제출 성공·실패 흐름의 E2E 증거를 추가한다.
+- [x] 3.4 인증된 `/feedback` protected route와 제출 성공·실패 흐름의 E2E 증거를 추가한다.
 
 ## 4. PROD-487 Integrated verification and production delivery
 
@@ -100,6 +100,7 @@
 - `memory/frontend-react-native.md`
 - `PROD-479`
 - `PROD-487`
+- `PROD-541`
 
 **Deliverable**
 
@@ -114,6 +115,7 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
 - 환경 변수 누락 시 API Pod 기동을 유지하고 feedback mutation만 fail closed로 실패한다.
 - Production smoke는 비민감하고 식별 가능한 test feedback을 사용하며 Web UI 성공과 Slack message 한 건을 함께 확인한다.
 - 부모 `PROD-479`의 final archive와 completion gate는 이번 task group에서 수행하지 않는다.
+- Parent feedback delta는 PROD-541이 제거·archive한 generic `/menu` route나 기존 메뉴 UI의 보존을 다시 요구하지 않는다.
 
 **Verification**
 
@@ -123,8 +125,10 @@ API·Android/iOS/Web contract와 secret 경계가 repository checks를 통과하
   API·Web Rollout에 전달되더라도 Web application과 browser asset이 webhook 값을 소비·노출하지 않는지 확인한다.
 - Web export와 repository search로 client artifact에 webhook secret 또는 hard-coded Slack URL이 없음을 확인한다.
 - Production smoke의 시간, environment, UI result와 Slack single-message/redaction result를 민감값 없이 기록한다.
+- Parent `web-app-shell` delta, Active decision과 task가 PROD-541의 canonical `/menu` 제거 계약을 되돌리지 않는지 확인한다.
 
 - [x] 4.1 Relay/schema generation, API·app·Web E2E와 workspace lint/format 검증을 실행하고 실패를 수정한다.
 - [x] 4.2 API가 optional process environment만 읽도록 유지하고, Helm에 전용 Secret 경로를 추가하지 않은 상태에서 production smoke 절차와 client export의 secret 비노출을 문서화한다.
 - [ ] 4.3 Production Web에서 인증 smoke를 실행해 Slack message 한 건, safe payload와 UI 성공 상태를 확인한다.
 - [x] 4.4 `PROD-487` 검증 증거를 정리하고 부모 `PROD-479`의 후속 integration/archive 책임을 handoff한다.
+- [x] 4.5 PROD-541의 `/menu` 제거 이후 parent `web-app-shell` delta에서 stale 보존 시나리오를 제거하고 Active decision·task를 현재 canonical에 맞춘다.

@@ -24,11 +24,11 @@ Android, iOS, Web에서 하나의 Expo Router·React Native route tree와 React 
 
 ### Requirement: Universal route parity
 
-유니버설 클라이언트는 기존 공개·보호 화면의 canonical URL을 Android, iOS, Web에서 동일하게 해석해야 한다(MUST).
+**Authority / Provenance:** archived `migrate-frontend-to-expo-relay`, PR #217, `PROD-541` — 유니버설 클라이언트는 기존 공개·보호 화면의 canonical URL을 Android, iOS, Web에서 동일하게 해석해야 한다(MUST).
 
 #### Scenario: Navigate core routes
 
-- **WHEN** 사용자가 `/`, `/home`, `/compose`, `/search`, `/notifications`, `/menu` 중 하나로 이동한다
+- **WHEN** 사용자가 `/`, `/home`, `/compose`, `/search`, `/notifications` 중 하나로 이동한다
 - **THEN** Expo Router는 해당 온보딩 또는 앱 화면을 표시한다
 
 #### Scenario: Navigate profile routes

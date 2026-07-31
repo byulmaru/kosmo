@@ -28,7 +28,7 @@ export function LogoutControl({
         {pending ? (
           <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={theme.textSecondary} />
         ) : (
-          <LogOut color={theme.textSecondary} size={20} strokeWidth={1.5} />
+          <LogOut color={theme.textSecondary} size={20} strokeWidth={2} />
         )}
         {!compact ? <Text style={[styles.label, { color: theme.text }]}>로그아웃</Text> : null}
       </Pressable>
@@ -47,7 +47,7 @@ export function LogoutControl({
 
 const styles = StyleSheet.create({
   root: { width: '100%' },
-  compactRoot: { alignItems: 'center' },
+  compactRoot: { alignItems: 'center', width: 44 },
   control: {
     alignItems: 'center',
     borderRadius: radii.sm,
@@ -67,6 +67,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  label: { fontFamily: 'SUIT', fontSize: 16, lineHeight: 21 },
+  label: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
   error: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
 });
