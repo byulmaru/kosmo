@@ -56,7 +56,7 @@ background로 드러나고, active·pressed·blocked 상태와 Action Bar geomet
 - [x] 1.4 구현과 검증 결과를 canonical 문서·Linear·OpenSpec에 대조한다. 이 초기 판단은 superseded됐으며
       제외된 runtime 검증은 현재 archive gate가 아니다.
 
-## 2. 시각 검토 보정 — glyph 중심 원형과 Reaction like tint
+## 2. 시각 검토 보정 — glyph 중심 원형과 Reaction like tint (Superseded)
 
 **Authority / Provenance**
 
@@ -122,3 +122,54 @@ Web의 비터치 pointer가 Post Action control에 hover하면 click target은 �
       가동을 검증하고 미실행 platform 검증을 구분해 기록한다.
 - [x] 2.5 구현과 검증 결과를 canonical·Linear·OpenSpec에 대조하고 미실행 runtime 범위와 archive 판단을
       분리해 기록한다.
+
+## 3. 최종 시각 검토 보정 — 일반 action primary tint와 foreground layer
+
+**Authority / Provenance**
+
+- `docs/design/colors.md`
+- `docs/design/post-action-bar.md`
+- PROD-595의 2026-07-31 최종 시각 검토
+
+**Deliverable**
+
+Web의 비터치 pointer가 Reply, Repost, Bookmark 또는 More에 hover하면 glyph 중심 28×28 원형은 30% opacity의
+semantic `primary` background로 표시되고 glyph는 불투명 `primary` foreground로 그 위에 표시된다. Reaction은
+같은 표현에 기존 `like`를 사용한다.
+
+**Guardrails**
+
+- Reply·Repost·Reaction·Bookmark의 기존 50×28 target과 More의 기존 28×28 target을 변경하지 않는다.
+- 28×28 background는 count와 glyph를 덮거나 pointer event를 받지 않으며 glyph는 명시적인 상위 layer에 둔다.
+- pending·disabled·resolution-required, Web touch와 Native의 기존 제외 경계를 유지한다.
+- action 기능·count·mutation·execution eligibility·Relay cache·ThemeProvider·dependency를 변경하지 않는다.
+- Reply·Repost·Bookmark·More를 서로 다른 tint로 분리하는 후속 범위는 포함하지 않는다.
+
+**Verification**
+
+- 기존 `ActionBarCatalog` interaction에서 Reply·Repost·Bookmark·More의 30% `primary` background와 불투명
+  `primary` foreground, glyph layer 순서와 hover 종료 시 default foreground 복귀를 검증한다.
+- Reaction의 30% `like` background·불투명 `like` foreground와 selected 표현을 그대로 검증한다.
+- App 전체 test, 변경 파일 lint·format, OpenSpec strict, light Web dev 시각 관찰을 수행한다.
+- dark·Web touch·Android·iOS runtime은 미실행으로 구분한다.
+
+- [x] 3.1 새 `primary` hover와 glyph foreground layer 계약을 Storybook에 추가하고 기존 `surface` 구현에서
+      RED를 확인한다.
+- [x] 3.2 공통 control의 기본 hover tint를 `primary` 30%로 바꾸고 glyph를 background 상위 layer에 두어
+      targeted Storybook interaction을 GREEN으로 만든다.
+- [x] 3.3 canonical과 OpenSpec proposal·design·decision·spec을 최종 시각 결정에 맞춘다.
+- [x] 3.4 App 전체 test, lint·format, OpenSpec strict와 light Web dev 검증을 완료한다.
+- [x] 3.5 Linear와 PR 본문을 최종 계약·검증 결과에 맞춰 동기화한다.
+
+**Verification Record (2026-07-31, primary tint 보정)**
+
+- `@kosmo/app test`에서 Relay compiler(92 reader, 58 normalization, 99 operation text), TypeScript, unit,
+  static Storybook build와 Storybook browser interaction 19 files·256/256을 통과했다. Storybook의 기존 Relay
+  fixture warning·error boundary log·React act warning은 남지만 실패는 없다.
+- 새 hover 계약을 먼저 실행해 기존 `surface` 구현에서 `primary` background 기대가 실패하는 RED를 확인했고,
+  기본 `primary` 30% background·불투명 foreground와 glyph `z-index: 1` 구현 뒤 GREEN을 확인했다.
+- 변경 TypeScript의 ESLint, 변경 전체의 Prettier, `git diff --check`와 OpenSpec strict validation을 통과했다.
+- API `3300`, Web BFF `5474`를 유지한 채 App `5473`을 현재 worktree 소스로 재기동했고, 사용자 브라우저의
+  `/home`에서 최신 glyph foreground layer가 로드됨을 확인했다.
+- dark runtime, Web touch, Android와 iOS runtime은 실행하지 않았다. 승인된 제외 범위이며 완료 증거로
+  주장하지 않는다.

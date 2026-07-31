@@ -676,15 +676,19 @@ export const ActionBarCatalog: Story = {
     expect(canvas.queryByTestId('post-action-reply-hover')).toBeNull();
 
     await userEvent.hover(defaultReply);
-    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     const replyHover = within(defaultReply).getByTestId('post-action-reply-hover');
-    expect(replyHover).toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(replyHover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(getComputedStyle(replyHover).opacity).toBe('0.3');
     expect(getComputedStyle(replyHover).borderRadius).toBe('999px');
     expect(getComputedStyle(replyHover).height).toBe('28px');
     expect(getComputedStyle(replyHover).width).toBe('28px');
     expect(getComputedStyle(replyHover).pointerEvents).toBe('none');
+    const replyGlyph = within(defaultReply).getByTestId('post-action-reply-glyph');
+    expect(getComputedStyle(replyGlyph).zIndex).toBe('1');
     const replyHoverBounds = replyHover.getBoundingClientRect();
     const replyIconBounds = defaultReply.querySelector('svg')!.getBoundingClientRect();
+    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
     expect(replyHoverBounds.width).toBe(28);
     expect(replyHoverBounds.height).toBe(28);
     expect(replyHoverBounds.left + replyHoverBounds.width / 2).toBeCloseTo(
@@ -704,24 +708,47 @@ export const ActionBarCatalog: Story = {
     const pointerUser = userEvent.setup();
     await pointerUser.pointer({ target: defaultReply, keys: '[MouseLeft>]' });
     await waitFor(() => expect(getComputedStyle(defaultReply).opacity).toBe('0.72'));
-    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(defaultReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(defaultReply).getByTestId('post-action-reply-hover')).toBeVisible();
     await pointerUser.pointer({ target: defaultReply, keys: '[/MouseLeft]' });
     await userEvent.unhover(defaultReply);
     expect(getComputedStyle(defaultReply).opacity).toBe('1');
+    expect(defaultReply.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
     await userEvent.hover(defaultMore);
-    expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(defaultMore).not.toHaveStyle({ backgroundColor: colors.light.primary });
     const moreHover = within(defaultMore).getByTestId('post-action-more-hover');
-    expect(moreHover).toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(moreHover).toHaveStyle({ backgroundColor: colors.light.primary });
+    expect(getComputedStyle(moreHover).opacity).toBe('0.3');
     expect(getComputedStyle(moreHover).borderRadius).toBe('999px');
     expect(getComputedStyle(moreHover).height).toBe('28px');
     expect(getComputedStyle(moreHover).width).toBe('28px');
+    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.primary);
     expect(defaultMore.getBoundingClientRect().width).toBe(28);
     expect(defaultMore.getBoundingClientRect().height).toBe(28);
     await userEvent.unhover(defaultMore);
+    expect(defaultMore.querySelector('svg')).toHaveAttribute('stroke', colors.light.textSecondary);
     expect(within(defaultMore).queryByTestId('post-action-more-hover')).toBeNull();
+
+    for (const [label, testID] of [
+      ['재게시', 'repost'],
+      ['북마크', 'bookmark'],
+    ] as const) {
+      const button = defaultToolbarCanvas.getByRole('button', { name: label });
+      const icon = button.querySelector('svg');
+      await userEvent.hover(button);
+      const hover = within(button).getByTestId(`post-action-${testID}-hover`);
+      expect(hover).toHaveStyle({ backgroundColor: colors.light.primary });
+      expect(getComputedStyle(hover).opacity).toBe('0.3');
+      expect(icon).toHaveAttribute('stroke', colors.light.primary);
+      expect(
+        getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
+      ).toBe('1');
+      await userEvent.unhover(button);
+      expect(icon).toHaveAttribute('stroke', colors.light.textSecondary);
+      expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();
+    }
 
     const defaultReaction = defaultToolbarCanvas.getByRole('button', { name: '반응' });
     const defaultReactionIcon = defaultReaction.querySelector('svg');
@@ -747,10 +774,13 @@ export const ActionBarCatalog: Story = {
     const activeBookmarkIcon = activeBookmark.querySelector('svg');
     expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
     await userEvent.hover(activeBookmark);
-    expect(activeBookmark).not.toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(activeBookmark).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(activeBookmark).getByTestId('post-action-bookmark-hover')).toHaveStyle({
-      backgroundColor: colors.light.surface,
+      backgroundColor: colors.light.primary,
     });
+    expect(
+      getComputedStyle(within(activeBookmark).getByTestId('post-action-bookmark-hover')).opacity,
+    ).toBe('0.3');
     expect(activeBookmarkIcon).not.toHaveAttribute('fill', 'none');
     await userEvent.unhover(activeBookmark);
     expect(within(activeBookmark).queryByTestId('post-action-bookmark-hover')).toBeNull();
@@ -772,7 +802,7 @@ export const ActionBarCatalog: Story = {
 
     const blockedReply = within(toolbars[3]!).getByRole('button', { name: '답글' });
     fireEvent.pointerEnter(blockedReply);
-    expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.surface });
+    expect(blockedReply).not.toHaveStyle({ backgroundColor: colors.light.primary });
     expect(within(blockedReply).queryByTestId('post-action-reply-hover')).toBeNull();
 
     const resolutionToolbar = within(toolbars[4]!);

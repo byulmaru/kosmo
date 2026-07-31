@@ -5,14 +5,15 @@
 **Authority / Provenance:** `docs/design/post-action-bar.md`, PROD-595. The Universal client MUST render the
 approved glyph-centered hover affordance. Universal client는 비터치 Web pointer가
 활성 Post Action control에 hover하는 동안 16×16 glyph를 중심으로 28×28 원형 background를 표시해야
-한다(MUST). Reply, Repost, Bookmark와 More는 현재 theme의 semantic `surface`를 사용하고 Reaction은
-semantic `like`를 30% opacity의 background로 사용해야 한다(MUST). Reaction의 heart foreground는
-hover 동안 불투명 semantic `like`를 사용해야 한다(MUST).
+한다(MUST). Reply, Repost, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity의
+background로 사용하고 hover foreground에는 불투명 `primary`를 사용해야 한다(MUST). Reaction은 semantic
+`like`를 30% opacity의 background로 사용하고 heart foreground에는 불투명 `like`를 사용해야 한다(MUST).
 
 #### Scenario: Social action target에 hover한다
 
 - **WHEN** 비터치 Web pointer가 활성 Reply, Repost 또는 Bookmark control에 hover하면
-- **THEN** 50×28 click target은 유지되고 glyph 중심의 28×28 `surface` 원형 background만 표시된다
+- **THEN** 50×28 click target은 유지되고 glyph 중심의 28×28 `primary` 원형 background가 30% opacity로
+  표시되며 glyph foreground는 불투명 `primary`로 표시된다
 
 #### Scenario: Reaction target에 hover한다
 
@@ -23,12 +24,14 @@ hover 동안 불투명 semantic `like`를 사용해야 한다(MUST).
 #### Scenario: More target에 hover한다
 
 - **WHEN** 비터치 Web pointer가 활성 More control에 hover하면
-- **THEN** 기존 28×28 target과 일치하는 glyph 중심의 `surface` 원형 background가 표시된다
+- **THEN** 기존 28×28 target과 일치하는 glyph 중심의 `primary` 원형 background가 30% opacity로 표시되며
+  glyph foreground는 불투명 `primary`로 표시된다
 
-#### Scenario: 현재 theme의 surface를 사용한다
+#### Scenario: 현재 theme의 semantic tint를 사용한다
 
 - **WHEN** light 또는 dark theme에서 활성 action에 hover하면
-- **THEN** hover background는 고정 색상 대신 해당 theme의 semantic `surface` 또는 `like` 값을 사용한다
+- **THEN** hover background와 foreground는 고정 색상 대신 해당 theme의 semantic `primary` 또는 `like` 값을
+  사용한다
 
 #### Scenario: 미선택 Reaction에서 pointer가 벗어난다
 

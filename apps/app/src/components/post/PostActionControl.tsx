@@ -56,7 +56,7 @@ export function PostActionControl({
   hoverColor,
   hoverDisabled = false,
   hoverForegroundColor,
-  hoverOpacity = 1,
+  hoverOpacity = 0.3,
   stateful = true,
   testID,
 }: Props) {
@@ -69,8 +69,8 @@ export function PostActionControl({
     ? theme.textSecondary
     : active
       ? (activeColor ?? theme.primary)
-      : hovered && !hoverDisabled && hoverForegroundColor
-        ? hoverForegroundColor
+      : hovered && !hoverDisabled
+        ? (hoverForegroundColor ?? theme.primary)
         : expanded
           ? theme.primary
           : theme.textSecondary;
@@ -127,17 +127,24 @@ export function PostActionControl({
               aria-hidden
               style={[
                 styles.hover,
-                { backgroundColor: hoverColor ?? theme.surface, opacity: hoverOpacity },
+                { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
               ]}
               testID={`post-action-${testID}-hover`}
             />
           ) : null}
-          <Icon
-            color={color}
-            fill={fillActive && active ? color : 'none'}
-            size={16}
-            strokeWidth={iconStrokeWidth}
-          />
+          <View
+            accessible={false}
+            aria-hidden
+            style={styles.glyph}
+            testID={`post-action-${testID}-glyph`}
+          >
+            <Icon
+              color={color}
+              fill={fillActive && active ? color : 'none'}
+              size={16}
+              strokeWidth={iconStrokeWidth}
+            />
+          </View>
         </View>
       )}
       {formattedCount ? (
@@ -177,6 +184,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -6,
     width: 28,
+    zIndex: 0,
+  },
+  glyph: {
+    alignItems: 'center',
+    height: 16,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 16,
+    zIndex: 1,
   },
   icon: {
     alignItems: 'center',
