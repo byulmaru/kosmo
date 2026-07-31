@@ -35,6 +35,17 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 
 - **재사용성보다 UX를 우선한다.** 과거에는 모바일/웹 화면에서 같은 컴포넌트를 재사용하는 것을 최우선으로 했지만, 메뉴 등 일부 컴포넌트를 양쪽에서 재사용하려다 디자인 문제가 발생해 방향을 바꿨다 (2026-06 결정). 재사용이 UX를 해치면 플랫폼 전용 컴포넌트(예: `💻 Web` 섹션)를 따로 만든다.
 
+## Default Avatar
+
+- 프로필 이미지 URL이 없는 사용자의 공용 fallback은 `01 Foundations`의
+  [`Default Avatar`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1552-667)
+  노드를 사용한다 (2026-07-31 결정).
+- 구현 에셋은 배경과 crop을 포함한 전체 노드를 1024×1024 PNG로 export한 단일 원본을 사용한다. 내부 SVG만
+  별도로 사용하거나 크기별 raster variant를 만들지 않는다.
+- 공용 Avatar primitive는 실제 프로필 이미지 URL을 우선하고, URL이 없을 때만 이 기본 이미지를 표시한다.
+  원형 clipping과 크기 조절은 primitive가 소유하며 접근 가능한 이름은 기존 프로필 이름을 유지한다.
+- 네트워크 이미지 로드 실패를 기본 이미지로 전환하는 정책은 이 결정에 포함하지 않는다.
+
 ## 작업 규칙
 
 - 새 화면/컴포넌트는 `02 Components`의 기존 컴포넌트와 Foundation 변수(디자인 토큰)를 사용해 만든다.
