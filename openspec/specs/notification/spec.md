@@ -432,7 +432,6 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** Reaction Target Post의 Author가 Remote Profile이다
 - **THEN** 시스템은 Local inbox Notification을 생성하지 않는다
-- **AND** ActivityPub delivery를 수행하지 않는다
 
 #### Scenario: 동일 Reaction source 재처리
 
