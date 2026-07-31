@@ -16,10 +16,14 @@ import type {
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type LinkPressEvent = {
+  altKey?: boolean;
   button?: number;
+  ctrlKey?: boolean;
+  currentTarget?: { target?: string | null };
   defaultPrevented?: boolean;
   metaKey?: boolean;
   preventDefault: ReturnType<typeof mock.fn>;
+  shiftKey?: boolean;
 };
 
 type LinkPress = NonNullable<LinkProps['onPress']>;
@@ -105,19 +109,22 @@ const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => 
 describe('GuardedLink', () => {
   it('guard가 이탈을 보류하면 기본 Link를 막고 승인된 action만 실행한다', async () => {
     let pendingAction: GuardedNavigationAction | null = null;
+    const onNavigate = mock.fn();
     await renderLink((action) => {
       pendingAction = action;
       return true;
-    });
+    }, onNavigate);
     const event: LinkPressEvent = { preventDefault: mock.fn() };
 
     await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
 
     assert.equal(event.preventDefault.mock.callCount(), 1);
+    assert.equal(onNavigate.mock.callCount(), 0);
     assert.deepEqual(navigations, []);
     const approvedAction = pendingAction as GuardedNavigationAction | null;
     assert.ok(approvedAction);
-    approvedAction();
+    await act(async () => approvedAction());
+    assert.equal(onNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, ['/timeline']);
   });
 
@@ -144,5 +151,24 @@ describe('GuardedLink', () => {
     assert.equal(handler.mock.callCount(), 0);
     assert.equal(onNavigate.mock.callCount(), 0);
     assert.equal(event.preventDefault.mock.callCount(), 0);
+  });
+
+  it('defaultPrevented와 middle click은 surface를 닫거나 guard를 실행하지 않는다', async () => {
+    const handler = mock.fn(() => true);
+    const onNavigate = mock.fn();
+    await renderLink(handler, onNavigate);
+
+    await act(async () =>
+      linkPress?.({
+        defaultPrevented: true,
+        preventDefault: mock.fn(),
+      } as unknown as Parameters<LinkPress>[0]),
+    );
+    await act(async () =>
+      linkPress?.({ button: 1, preventDefault: mock.fn() } as unknown as Parameters<LinkPress>[0]),
+    );
+
+    assert.equal(handler.mock.callCount(), 0);
+    assert.equal(onNavigate.mock.callCount(), 0);
   });
 });

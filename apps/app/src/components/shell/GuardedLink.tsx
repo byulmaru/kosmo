@@ -23,10 +23,15 @@ export function GuardedLink({ children, href, onNavigate, ...props }: Props) {
     if (!shouldHandleNavigation(event)) {
       return;
     }
-    onNavigate?.();
-    if (request(() => router.navigate(href))) {
+    const navigate = () => {
+      onNavigate?.();
+      router.navigate(href);
+    };
+    if (request(navigate)) {
       event.preventDefault();
+      return;
     }
+    onNavigate?.();
   };
 
   return (

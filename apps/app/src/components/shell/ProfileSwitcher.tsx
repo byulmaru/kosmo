@@ -496,7 +496,7 @@ export function ProfileSwitcher({
       )}
     </Pressable>
   );
-  const profileSummaryOnPress = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
+  const profileSummaryOnNavigate = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
   const profileDetails = active ? (
     <>
       <Text
@@ -507,11 +507,13 @@ export function ProfileSwitcher({
         {active.relativeHandle}
       </Text>
       <View style={styles.counts}>
-        <GuardedLink href={`/${active.relativeHandle}/following`}>
+        <GuardedLink
+          href={`/${active.relativeHandle}/following`}
+          onNavigate={profileSummaryOnNavigate}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={profileSummaryOnPress}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -520,11 +522,13 @@ export function ProfileSwitcher({
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
           </Pressable>
         </GuardedLink>
-        <GuardedLink href={`/${active.relativeHandle}/followers`}>
+        <GuardedLink
+          href={`/${active.relativeHandle}/followers`}
+          onNavigate={profileSummaryOnNavigate}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={profileSummaryOnPress}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
