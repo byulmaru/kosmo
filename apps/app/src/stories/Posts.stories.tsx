@@ -2517,6 +2517,13 @@ export const PostDetailThreadRoute: Story = {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
     const rows = Array.from(thread.children) as HTMLElement[];
+    const heading = canvas.getByRole('heading', { name: '게시글' });
+    const backButton = canvas.getByRole('button', { name: '뒤로 가기' });
+
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(backButton.getBoundingClientRect().height).toBe(44);
+    expect(heading.parentElement).toContainElement(backButton);
+    expect(heading.parentElement?.parentElement).toHaveStyle({ position: 'sticky', top: '0px' });
     expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
       'post-thread-item-route-root',
       'post-thread-item-route-parent',

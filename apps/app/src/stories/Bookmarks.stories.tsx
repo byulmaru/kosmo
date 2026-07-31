@@ -410,7 +410,11 @@ export const StatesAndCanonicalLinks: Story = {
     expect(canvas.getByText('북마크 목록을 불러오는 중입니다.')).toBeVisible();
     expect(canvas.getByText('아직 북마크가 없어요')).toBeVisible();
     expect(canvas.getByText('북마크 목록을 불러오지 못했어요')).toBeVisible();
-    expect(canvas.getAllByRole('heading', { name: '북마크' })).toHaveLength(4);
+    const headings = canvas.getAllByRole('heading', { name: '북마크' });
+    expect(headings).toHaveLength(4);
+    for (const heading of headings) {
+      expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    }
     expect(canvas.getAllByRole('article')).toHaveLength(targetPosts.length);
     expect(canvasElement.querySelector('a[href="/@space-writer"]')).toBeInTheDocument();
     expect(

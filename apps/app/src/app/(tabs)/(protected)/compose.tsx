@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PageHeader } from '@/components/PageHeader';
 import { PostComposer } from '@/components/post/PostComposer';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
@@ -24,35 +25,33 @@ const ComposeQuery = graphql`
 `;
 
 export default function ComposeScreen() {
-  const theme = useTheme();
   const router = useRouter();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
     <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
-      <Text style={[styles.eyebrow, { color: theme.textSecondary }]}>KOSMO</Text>
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        글쓰기
-      </Text>
-      <RouteBoundary
-        error={(retry) => (
-          <ComposeStateCard
-            alert
-            description="잠시 후 다시 시도해주세요."
-            onAction={retry}
-            title="글쓰기 정보를 불러오지 못했어요"
+      <PageHeader title="글쓰기" />
+      <View style={styles.content}>
+        <RouteBoundary
+          error={(retry) => (
+            <ComposeStateCard
+              alert
+              description="잠시 후 다시 시도해주세요."
+              onAction={retry}
+              title="글쓰기 정보를 불러오지 못했어요"
+            />
+          )}
+          loading={<ComposeLoading />}
+          onRetry={() => setFetchKey((key) => key + 1)}
+          title="글쓰기 정보를 불러오지 못했어요"
+        >
+          <ComposeContent
+            fetchKey={`${revision}:${fetchKey}`}
+            onGoHome={() => router.push('/home')}
           />
-        )}
-        loading={<ComposeLoading />}
-        onRetry={() => setFetchKey((key) => key + 1)}
-        title="글쓰기 정보를 불러오지 못했어요"
-      >
-        <ComposeContent
-          fetchKey={`${revision}:${fetchKey}`}
-          onGoHome={() => router.push('/home')}
-        />
-      </RouteBoundary>
+        </RouteBoundary>
+      </View>
     </ScrollView>
   );
 }
@@ -129,6 +128,10 @@ function ComposeStateCard({
 
 const styles = StyleSheet.create({
   root: {
+    flexGrow: 1,
+    width: '100%',
+  },
+  content: {
     alignSelf: 'center',
     flexGrow: 1,
     gap: 20,
@@ -137,8 +140,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
     width: '100%',
   },
-  eyebrow: { fontFamily: 'SUIT', fontWeight: '700', letterSpacing: 1.6, ...typography.xsm },
-  title: { fontFamily: 'SUIT', fontSize: 36, fontWeight: '700', lineHeight: 40 },
   loadingCard: {
     borderRadius: radii.sm,
     borderWidth: 1,

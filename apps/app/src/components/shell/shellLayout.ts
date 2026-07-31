@@ -1,6 +1,6 @@
 import { breakpoints } from '@/theme/tokens';
 
-export const webMobileShellHeaderHeight = 65;
+export const webMobileShellHeaderHeight = 64;
 
 export function getShellLayout(web: boolean, width: number) {
   if (!web || width < breakpoints.compact) {

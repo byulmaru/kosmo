@@ -1,6 +1,7 @@
 import { useState, useTransition } from 'react';
 import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
+import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -107,7 +108,7 @@ export function NotificationList({ profile }: NotificationListProps) {
         )
       }
     >
-      <NotificationHeader />
+      <PageHeader title="알림" />
       {notifications.length ? (
         notifications
       ) : (
@@ -153,7 +154,7 @@ export function NotificationListState({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <NotificationHeader />
+      <PageHeader title="알림" />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -200,30 +201,8 @@ export function NotificationListState({
   );
 }
 
-function NotificationHeader() {
-  const theme = useTheme();
-
-  return (
-    <View style={[styles.heading, { borderColor: theme.border }]}>
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        알림
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flexGrow: 1, paddingBottom: spacing.xxxl },
-  heading: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 64,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-  },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xl },
   state: {
     alignItems: 'center',
     gap: spacing.sm,

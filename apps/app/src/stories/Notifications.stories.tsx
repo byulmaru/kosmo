@@ -291,7 +291,10 @@ export const NextPageFailureAndRetry: Story = {
 export const HeaderAndWebRefreshPolicy: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
+    const heading = canvas.getByRole('heading', { name: '알림' });
+
+    expect(heading).toBeVisible();
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
     expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
     expect(canvas.queryByRole('heading', { name: '모두' })).not.toBeInTheDocument();
@@ -538,7 +541,10 @@ export const NoSelectedProfileScreen: Story = {
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
+    const heading = canvas.getByRole('heading', { name: '알림' });
+
+    expect(heading).toBeVisible();
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
     expect(canvas.getByText('프로필이 필요해요')).toBeVisible();
   },
   render: () => <NotificationsScreen />,

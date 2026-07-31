@@ -376,10 +376,12 @@ export const ResponsiveProfilePickerFull: Story = {
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const triggerName = within(trigger).getByText('코스모 작가');
+    const profileHandle = canvas.getByLabelText('활성 프로필 핸들');
     const triggerIcon = trigger.querySelector('svg')!;
     const triggerRect = trigger.getBoundingClientRect();
     const closedNavigationTop = navigation.getBoundingClientRect().top;
     const nameRect = triggerName.getBoundingClientRect();
+    const handleRect = profileHandle.getBoundingClientRect();
     const iconRect = triggerIcon.getBoundingClientRect();
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -389,6 +391,8 @@ export const ResponsiveProfilePickerFull: Story = {
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
     ).toBeCloseTo(0, 0);
+    expect(handleRect.top - nameRect.bottom).toBeGreaterThanOrEqual(-8);
+    expect(handleRect.top - nameRect.bottom).toBeLessThanOrEqual(2);
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
     const pickerRegion = await canvas.findByLabelText('프로필 전환');
@@ -1030,16 +1034,43 @@ export const UniversalMobile: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const homeHeading = canvas.getByRole('heading', { name: '홈' });
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const homeHeader = homeHeading.parentElement?.parentElement;
+    const brandMark = homeHeader?.querySelector<HTMLImageElement>('img');
+    const trailingSlot = homeHeader?.querySelector<HTMLElement>(
+      '[data-testid="page-header-trailing-slot"]',
+    );
+
+    expect(homeHeader).not.toBeNull();
+    expect(homeHeader).toContainElement(menuButton);
+    expect(brandMark).not.toBeNull();
+    expect(trailingSlot).not.toBeNull();
+    expect(trailingSlot?.getBoundingClientRect().height).toBe(44);
+    expect(trailingSlot?.getBoundingClientRect().width).toBe(44);
+    expect(
+      brandMark!.getBoundingClientRect().left + brandMark!.getBoundingClientRect().width / 2,
+    ).toBeCloseTo(
+      homeHeader!.getBoundingClientRect().left + homeHeader!.getBoundingClientRect().width / 2,
+      0,
+    );
+    expect(within(menuButton).queryByText('메뉴')).toBeNull();
+    expect(getComputedStyle(menuButton).borderTopWidth).toBe('0px');
+    expect(menuButton.getBoundingClientRect().height).toBe(44);
+    expect(menuButton.getBoundingClientRect().width).toBe(44);
+    expect(canvas.getAllByRole('heading', { name: '홈' })).toHaveLength(1);
     expect(canvas.queryByRole('link', { name: '북마크' })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await userEvent.click(menuButton);
     const page = within(canvasElement.ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
+    const profileHandle = page.getByLabelText('활성 프로필 핸들');
     const triggerIcon = profileTrigger.querySelector('svg')!;
     const triggerRect = profileTrigger.getBoundingClientRect();
     const navigationRect = drawer.getBoundingClientRect();
     const nameRect = triggerName.getBoundingClientRect();
+    const handleRect = profileHandle.getBoundingClientRect();
     const iconRect = triggerIcon.getBoundingClientRect();
 
     expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
@@ -1051,7 +1082,8 @@ export const UniversalMobile: Story = {
       '/@selected',
     );
     expect(within(drawer).queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
-    expect(page.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute('href', '/feedback');
+    const feedback = page.getByRole('link', { name: '피드백 보내기' });
+    expect(feedback).toHaveAttribute('href', '/feedback');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     const logout = page.getByRole('button', { name: '로그아웃' });
@@ -1075,6 +1107,8 @@ export const UniversalMobile: Story = {
     expect(
       iconRect.top + iconRect.height / 2 - (triggerRect.top + triggerRect.height / 2),
     ).toBeCloseTo(0, 0);
+    expect(handleRect.top - nameRect.bottom).toBeGreaterThanOrEqual(-8);
+    expect(handleRect.top - nameRect.bottom).toBeLessThanOrEqual(2);
 
     await userEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
@@ -1139,6 +1173,26 @@ export const UniversalMobileUnreadBadgeZero: Story = {
     const notification = await canvas.findByRole('link', { name: '알림' });
     expect(notification).toBeVisible();
     expect(canvas.queryByTestId('unread-notification-dot')).toBeNull();
+  },
+  render: () => <UniversalShellStory />,
+};
+
+export const UniversalMobileNonHomeHeader: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: { pathname: '/notifications', slotLabel: '알림 화면' },
+  },
+  play: ({ canvasElement }) => {
+    const menuButton = within(canvasElement).getByRole('button', { name: '메뉴 열기' });
+    const header = menuButton.parentElement;
+    const buttonRect = menuButton.getBoundingClientRect();
+    const headerRect = header?.getBoundingClientRect();
+
+    expect(headerRect?.height).toBe(64);
+    expect(
+      Math.abs(buttonRect.y + buttonRect.height / 2 - (headerRect!.y + headerRect!.height / 2)),
+    ).toBeLessThanOrEqual(1);
   },
   render: () => <UniversalShellStory />,
 };

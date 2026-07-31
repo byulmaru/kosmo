@@ -6,14 +6,16 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 ## 단계
 
-| 단계            | 폭 구간                       | 좌측        | 중앙         | 우측   | 모바일 셸            |
-| --------------- | ----------------------------- | ----------- | ------------ | ------ | -------------------- |
-| 1 모바일        | `< compact` (768px 미만)      | 드로어      | 피드(전체폭) | —      | ☰ 헤더 + 하단 탭 바 |
-| 2 아이콘 + 피드 | `compact`~`full` (768~1279px) | 아이콘 레일 | 피드         | —      | 없음                 |
-| 3 풀 3분할      | `≥ full` (1280px 이상)        | 풀 사이드바 | 피드         | 컴포저 | 없음                 |
+| 단계            | 폭 구간                       | 좌측        | 중앙         | 우측   | 모바일 셸              |
+| --------------- | ----------------------------- | ----------- | ------------ | ------ | ---------------------- |
+| 1 모바일        | `< compact` (768px 미만)      | 드로어      | 피드(전체폭) | —      | 64px 헤더 + 하단 탭 바 |
+| 2 아이콘 + 피드 | `compact`~`full` (768~1279px) | 아이콘 레일 | 피드         | —      | 없음                   |
+| 3 풀 3분할      | `≥ full` (1280px 이상)        | 풀 사이드바 | 피드         | 컴포저 | 없음                   |
 
 - **`compact`(768px, 기존 `md`)** = 모바일 ↔ 데스크톱 경계. 미만은 하단 탭 바 + 드로어 사이드바, 이상은 사이드바가 항상 보인다.
 - **`full`(1280px, 기존 `xl`)** = 좌측 풀 사이드바(프로필 헤더 + 라벨)와 우측 컴포저(우측 레일)가 함께 등장해 풀 3분할이 된다. `compact`~`full`는 좌측이 아이콘 전용 레일이고 우측 레일이 없다.
+
+모바일 셸의 화면 헤더 높이는 `64px`이며 Android/iOS safe-area inset은 이 높이 바깥에서 셸이 추가한다. `/home`에서는 셸이 메뉴 버튼과 중앙 브랜드 마크를 하나의 app bar로 렌더링하고 route는 헤더를 중복 렌더링하지 않는다. `compact`와 `full` Web에서는 모바일 셸 헤더가 없으므로 `/home` route가 중앙 브랜드 마크 헤더를 소유한다. 다른 주요 route의 텍스트 헤더와 게시글 상세의 뒤로가기 헤더는 route가 소유한다.
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
@@ -48,15 +50,16 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
   바깥 클릭, `Escape`, 프로필 선택 성공으로 닫힌다.
 - `< compact` mobile Web drawer에서는 프로필 이름과 chevron을 하나의 trigger로 유지한다. 닫힌 상태는 아래
   방향, 열린 상태는 위 방향 chevron으로 표시하고 이름·chevron 콘텐츠를 trigger 상자의 수직 중심에 둔다.
-  trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS의 기존 정렬도 변경하지 않는다.
+  프로필 이름 행 아래에는 Figma의 `-8px` 보정을 적용해 바로 다음 handle과의 불필요한 간격을 없앤다. trigger
+  hitbox, picker anchor와 navigation geometry는 바꾸지 않으며 Android/iOS의 기존 정렬도 변경하지 않는다.
 - `≥ full`에서는 프로필 이름과 chevron을 하나의 trigger로 사용하고, picker의 시각적 wrapper를 그 trigger
   바로 아래에 anchored absolute overlay로 표시한다. 닫힌 260px 프로필 요약 영역은 유지하며, picker는 trigger
   아래의 프로필 상세와 navigation 위에 표시하되 navigation의 layout 위치와 sidebar·중앙 피드의 실제 폭을
   바꾸지 않는다. backdrop과 focus trap을 사용하지 않으며, 같은 trigger 재실행, 바깥 클릭, `Escape`, 프로필
   선택 성공으로 닫는다.
   닫힌 상태는 아래 방향, 열린 상태는 위 방향 chevron으로 표시한다. 이름·chevron 콘텐츠는 trigger 상자의
-  수직 중심에 두되 trigger hitbox, picker anchor와 navigation geometry는 바꾸지 않으며, chevron 자체는 별도
-  focus target이 아니다.
+  수직 중심에 두고 이름 행 아래에는 같은 `-8px` 보정을 적용한다. trigger hitbox, picker anchor와 navigation
+  geometry는 바꾸지 않으며, chevron 자체는 별도 focus target이 아니다.
 - trigger는 열린 상태를 accessibility `expanded` 상태로 노출한다.
 - 프로필이 많을 때는 프로필 목록 영역만 제한된 높이 안에서 스크롤한다. 새 프로필 추가 액션과 생성 폼은
   목록 아래의 고정 영역에 두며, 생성 폼이 열리면 목록이 남은 높이에 맞게 줄어든다. full·compact Web picker의
@@ -86,7 +89,7 @@ Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사
 
 React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owner로 둔다. 중앙 피드만 별도 internal scroller가 되는 앱형 shell은 이 기준의 목표가 아니다. 사용자가 피드 바깥의 비스크롤 sidebar, 우측 rail, 빈 레이아웃 영역에서 wheel/trackpad를 사용해도 브라우저 기본 document scroll 흐름으로 페이지가 움직여야 한다. Android/iOS 화면은 platform의 `ScrollView`를 사용하되 이 web scroll 계약을 바꾸지 않는다.
 
-- `< compact`에서는 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
+- `< compact`에서는 64px 모바일 header가 document scroll 위의 sticky chrome으로 동작하고, 하단 탭 바는 safe-area를 포함한 fixed bottom chrome으로 유지된다. 콘텐츠는 하단 탭 높이와 safe-area를 고려한 bottom padding 또는 scroll padding으로 겹침을 피한다.
 - `compact`~`full`에서는 아이콘 레일이 layout flow 안에서 sticky viewport column으로 고정된다. 레일 자체가 스크롤 가능한 콘텐츠를 갖지 않는 한 wheel 입력은 document scroll로 이어진다.
 - `compact`~`full` profile picker가 열렸을 때는 overlay drawer 안의 프로필 목록만 internal scroll owner가 된다.
   drawer 밖의 wheel 입력은 기존 document scroll 흐름을 유지한다.

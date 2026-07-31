@@ -508,6 +508,28 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });
 
+  test('mobile non-home shell은 메뉴 버튼을 64px header 중앙에 둔다', async ({ page }) => {
+    await page.setViewportSize({ height: 667, width: 390 });
+    await page.goto('/notifications');
+
+    const menuButton = page.getByRole('button', { name: '메뉴 열기' });
+    const header = menuButton.locator('..');
+
+    await expect.poll(async () => (await header.boundingBox())?.height).toBe(64);
+    await expect
+      .poll(async () => {
+        const [buttonBox, headerBox] = await Promise.all([
+          menuButton.boundingBox(),
+          header.boundingBox(),
+        ]);
+
+        return buttonBox && headerBox
+          ? Math.abs(buttonBox.y + buttonBox.height / 2 - (headerBox.y + headerBox.height / 2))
+          : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(1);
+  });
+
   test('mobile drawer는 왼쪽에 열리고 Lucide 메뉴 규격을 유지한다', async ({ page }) => {
     let canonicalProfilePath = '';
 
@@ -553,7 +575,34 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.setViewportSize({ height: 667, width: 390 });
     await page.goto('/home');
-    await page.getByRole('button', { name: '메뉴 열기' }).click();
+    const homeHeading = page.getByRole('heading', { name: '홈' });
+    const menuButton = page.getByRole('button', { name: '메뉴 열기' });
+    const homeHeader = homeHeading.locator('..').locator('..');
+    const homeMark = homeHeader.locator('[aria-hidden="true"] img');
+
+    await expect(homeHeading).toHaveCount(1);
+    await expect(menuButton).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await menuButton.boundingBox();
+        return box ? { height: box.height, width: box.width } : null;
+      })
+      .toEqual({ height: 44, width: 44 });
+    await expect.poll(async () => (await homeHeader.boundingBox())?.height).toBe(64);
+    await expect.poll(async () => (await homeMark.boundingBox())?.width).toBe(38);
+    await expect
+      .poll(async () => {
+        const [headerBox, markBox] = await Promise.all([
+          homeHeader.boundingBox(),
+          homeMark.boundingBox(),
+        ]);
+
+        return headerBox && markBox
+          ? Math.abs(markBox.x + markBox.width / 2 - (headerBox.x + headerBox.width / 2))
+          : Number.POSITIVE_INFINITY;
+      })
+      .toBeLessThanOrEqual(1);
+    await menuButton.click();
 
     const drawer = page.locator('#mobile-sidebar');
     const navigation = drawer.getByRole('navigation', { name: '주요 메뉴' });

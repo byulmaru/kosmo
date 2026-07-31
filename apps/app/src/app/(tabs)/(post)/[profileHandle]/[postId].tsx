@@ -1,8 +1,9 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
@@ -92,17 +93,19 @@ function PostDetailHeader() {
   const router = useRouter();
 
   return (
-    <View style={[styles.header, { backgroundColor: theme.background, borderColor: theme.border }]}>
-      <Pressable
-        accessibilityLabel="뒤로 가기"
-        accessibilityRole="button"
-        onPress={() => router.back()}
-        style={styles.back}
-      >
-        <ChevronLeftIcon color={theme.text} size={20} />
-      </Pressable>
-      <Text style={[styles.heading, { color: theme.text }]}>게시글</Text>
-    </View>
+    <PageHeader
+      leading={
+        <Pressable
+          accessibilityLabel="뒤로 가기"
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={styles.back}
+        >
+          <ChevronLeftIcon color={theme.text} size={20} />
+        </Pressable>
+      }
+      title="게시글"
+    />
   );
 }
 
@@ -179,14 +182,6 @@ function PostDetailContent({
 }
 
 const styles = StyleSheet.create({
-  header: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-  },
   back: {
     alignItems: 'center',
     height: 44,
@@ -194,5 +189,4 @@ const styles = StyleSheet.create({
     marginLeft: -spacing.sm,
     width: 44,
   },
-  heading: { fontFamily: 'SUIT', fontSize: 18, fontWeight: '700', lineHeight: 28 },
 });
