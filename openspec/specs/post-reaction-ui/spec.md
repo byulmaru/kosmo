@@ -8,7 +8,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: Reaction 선택 component
 
-클라이언트는 현재 허용된 여섯 Reaction Type을 기존 Post Action Bar의 anchored popover에서 선택하고 selected Profile의 Reaction 추가·삭제 상태를 조작하는 재사용 component를 제공해야 한다(MUST).
+**Authority / Provenance:** [Reaction UI 디자인](../../../docs/design/reactions.md), [PROD-417](https://linear.app/byulmaru/issue/PROD-417), [PROD-450](https://linear.app/byulmaru/issue/PROD-450), [PROD-576](https://linear.app/byulmaru/issue/PROD-576) 클라이언트는 현재 허용된 여섯 Reaction Type을 기존 Post Action Bar의 anchored popover에서 선택하고 selected Profile의 Reaction 추가·삭제 상태를 조작하는 재사용 component를 제공해야 한다(MUST).
 
 #### Scenario: 초기 선택지 표시
 
@@ -106,7 +106,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: Post surface의 공유 Reaction controller
 
-클라이언트는 한 Post surface의 Quick Picker와 Reaction 요약 token이 동일하게 결정된 `reactionTarget`, selected 상태, Type별 pending·error와 server-confirmed mutation 결과를 공유하게 해야 한다(MUST). 이를 위한 controller는 Reaction feature 내부에 유지해야 하며(MUST), generic context나 공용 mock infrastructure로 일반화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Reaction UI 디자인](../../../docs/design/reactions.md), [PROD-417](https://linear.app/byulmaru/issue/PROD-417), [PROD-576](https://linear.app/byulmaru/issue/PROD-576) 클라이언트는 한 Post surface의 Quick Picker와 Reaction 요약 token이 동일하게 결정된 `reactionTarget`, selected 상태, Type별 pending·error와 server-confirmed mutation 결과를 공유하게 해야 한다(MUST). 이를 위한 controller는 Reaction feature 내부에 유지해야 하며(MUST), generic context나 공용 mock infrastructure로 일반화해서는 안 된다(MUST NOT).
 
 #### Scenario: Quick Picker와 요약 token의 공유 toggle
 
@@ -130,7 +130,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: Reaction 요약 component
 
-클라이언트는 목록과 상세 Post에 viewer-independent Type별 count를 현재 최초 Reaction 생성 시각 순으로 표시하고, 기존 token으로 같은 Type의 Reaction을 toggle하며, Reaction 전용 More 버튼에서 viewer가 조회할 수 있는 Profile 목록을 Type별 page 단위로 탐색할 수 있어야 한다(MUST).
+**Authority / Provenance:** [Reaction UI 디자인](../../../docs/design/reactions.md), [PROD-417](https://linear.app/byulmaru/issue/PROD-417), [PROD-418](https://linear.app/byulmaru/issue/PROD-418), [PROD-576](https://linear.app/byulmaru/issue/PROD-576) 클라이언트는 목록과 상세 Post에 viewer-independent Type별 count를 현재 최초 Reaction 생성 시각 순으로 표시하고, 기존 token으로 같은 Type의 Reaction을 toggle하며, Reaction 전용 More 버튼에서 viewer가 조회할 수 있는 Profile 목록을 Type별 page 단위로 탐색할 수 있어야 한다(MUST).
 
 #### Scenario: Type별 count 표시
 
@@ -215,7 +215,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: Reaction UI 검증 경계
 
-Reaction 선택과 요약 UI는 각 소유 범위의 component 및 integration 경계에서 검증되어야 한다(MUST).
+**Authority / Provenance:** [Reaction UI 디자인](../../../docs/design/reactions.md), [PROD-417](https://linear.app/byulmaru/issue/PROD-417), [PROD-418](https://linear.app/byulmaru/issue/PROD-418), [PROD-450](https://linear.app/byulmaru/issue/PROD-450) Reaction 선택과 요약 UI는 각 소유 범위의 component 및 integration 경계에서 검증되어야 한다(MUST).
 
 #### Scenario: component 상태 검증
 

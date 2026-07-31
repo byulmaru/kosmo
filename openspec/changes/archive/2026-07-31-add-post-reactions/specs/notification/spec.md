@@ -2,7 +2,7 @@
 
 ### Requirement: Reaction Notification source correlation
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 다른 Profile의 Local Post에 새 Reaction이 생성되면 Reaction을 source로 하는 Profile-scoped Notification을 Best Effort로 생성해야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 다른 Profile의 Local Post에 새 Reaction이 생성되면 Reaction을 source로 하는 Profile-scoped Notification을 Best Effort로 생성해야 한다(MUST).
 
 #### Scenario: 다른 Profile의 Post Reaction
 
@@ -31,7 +31,7 @@
 
 ### Requirement: Reaction Notification 실패 격리
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Reaction Notification 생성 실패는 Reaction 생성 transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../../docs/domain/objects/notification.md), [ADR 0010](../../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Reaction Notification 생성 실패는 Reaction 생성 transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
 
 #### Scenario: Notification 저장 실패
 
@@ -41,7 +41,7 @@
 
 ### Requirement: Reaction Notification GraphQL과 inbox 계약
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-372](https://linear.app/byulmaru/issue/PROD-372/%EC%95%8C%EB%A6%BC-%ED%95%AD%EB%AA%A9-%EC%9D%BD%EC%9D%8C-%EC%83%81%ED%83%9C%EB%A5%BC-best-effort%EB%A1%9C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%9C%EB%8B%A4) API와 클라이언트는 visible Reaction Notification을 기존 Notification interface·connection·Unread count·Read 계약에 통합해야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-372](https://linear.app/byulmaru/issue/PROD-372/%EC%95%8C%EB%A6%BC-%ED%95%AD%EB%AA%A9-%EC%9D%BD%EC%9D%8C-%EC%83%81%ED%83%9C%EB%A5%BC-best-effort%EB%A1%9C-%EB%8F%99%EA%B8%B0%ED%99%94%ED%95%9C%EB%8B%A4) API와 클라이언트는 visible Reaction Notification을 기존 Notification interface·connection·Unread count·Read 계약에 통합해야 한다(MUST).
 
 #### Scenario: Reaction Notification concrete object
 
@@ -65,7 +65,7 @@
 
 ### Requirement: unavailable Reaction Notification 숨김
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
 
 #### Scenario: source가 없는 item
 
@@ -81,7 +81,7 @@
 
 ### Requirement: Reaction 제거 뒤 Best Effort Notification 정리
 
-**Authority / Provenance:** [Notification canonical 객체](../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) 실제 Reaction 제거가 source transaction에서 commit되면 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST). 삭제 no-op은 cleanup을 시도해서는 안 되며(MUST NOT), 정리 시점과 성공은 Reaction 삭제 결과의 조건이어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Notification canonical 객체](../../../../../../docs/domain/objects/notification.md), [Reaction canonical 객체](../../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) 실제 Reaction 제거가 source transaction에서 commit되면 대응 Notification cleanup을 Best Effort로 시도해야 한다(MUST). 삭제 no-op은 cleanup을 시도해서는 안 되며(MUST NOT), 정리 시점과 성공은 Reaction 삭제 결과의 조건이어서는 안 된다(MUST NOT).
 
 #### Scenario: Reaction 삭제 cleanup
 

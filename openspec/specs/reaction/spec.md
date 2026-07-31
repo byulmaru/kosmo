@@ -8,7 +8,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: 초기 Reaction Type 계약
 
-시스템은 현재 Reaction Type으로 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`의 정확한 Unicode 표현만 허용해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-386](https://linear.app/byulmaru/issue/PROD-386) 시스템은 현재 Reaction Type으로 `🥹`, `❤️`, `🎉`, `👀`, `☘️`, `🌈`의 정확한 Unicode 표현만 허용해야 한다(MUST).
 
 #### Scenario: 허용된 built-in Type
 
@@ -23,7 +23,7 @@ TBD - created by archiving change add-post-reactions. Update Purpose after archi
 
 ### Requirement: Reaction GraphQL Node 계약
 
-API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 제공하는 Relay Node로 노출해야 한다(MUST). Reaction Node 조회는 대상 Post의 기존 조회 정책을 그대로 적용해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404), [PROD-472](https://linear.app/byulmaru/issue/PROD-472) API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 제공하는 Relay Node로 노출해야 한다(MUST). Reaction Node 조회는 대상 Post의 기존 조회 정책을 그대로 적용해야 한다(MUST).
 
 #### Scenario: Reaction Node 노출
 
@@ -40,7 +40,7 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 ### Requirement: Reaction 유일성과 공존
 
-시스템은 같은 Profile/Post/Reaction Type 조합에 Reaction을 하나만 유지해야 하며(MUST), 같은 Profile과 Post에 서로 다른 Reaction Type이 함께 존재하는 것을 허용해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395) 시스템은 같은 Profile/Post/Reaction Type 조합에 Reaction을 하나만 유지해야 하며(MUST), 같은 Profile과 Post에 서로 다른 Reaction Type이 함께 존재하는 것을 허용해야 한다(MUST).
 
 #### Scenario: 같은 Type 중복 저장
 
@@ -54,7 +54,7 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 ### Requirement: 멱등 Reaction 추가
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0019](../../../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다) — Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0019](../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md), [PROD-404](https://linear.app/byulmaru/issue/PROD-404/reaction을-생성한다), [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다) — Active Account의 Member인 Active/Normal Profile은 조회할 수 있는 Post에 허용 Reaction Type을 추가할 수 있어야 하며(MUST), 같은 조합의 반복·동시 추가는 기존 Reaction을 유지한 성공 결과여야 한다(MUST). 선택 Profile의 Instance Type은 Reaction 추가 권한 조건이어서는 안 된다(MUST NOT).
 
 GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 Account, membership, Profile/Instance 상태와 Instance Type을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Post, Type과 멱등 저장만 검증해야 한다(MUST).
 
@@ -103,7 +103,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 ### Requirement: selected Profile의 현재 Reaction 조회
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0016](../../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — Post를 조회하는 viewer는 현재 selected Profile이 남긴 Reaction 관계를 복원할 수 있어야 한다(MUST). GraphQL API는 `Post.viewerReactions: [Reaction!]!`를 제공해야 하며(MUST), guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — Post를 조회하는 viewer는 현재 selected Profile이 남긴 Reaction 관계를 복원할 수 있어야 한다(MUST). GraphQL API는 `Post.viewerReactions: [Reaction!]!`를 제공해야 하며(MUST), guest 또는 selected Profile이 없는 viewer에게 빈 목록을 반환해야 한다(MUST).
 
 #### Scenario: selected Profile의 현재 관계
 
@@ -126,7 +126,7 @@ GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: Str
 
 ### Requirement: Post와 Type 기준의 멱등 Reaction 삭제
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0016](../../../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — selected Profile은 대상 Post의 현재 조회 가능성과 무관하게 Post와 Reaction Type으로 자신의 현재 Reaction을 삭제할 수 있어야 하며(MUST), 관계가 없는 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md), [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4) — selected Profile은 대상 Post의 현재 조회 가능성과 무관하게 Post와 Reaction Type으로 자신의 현재 Reaction을 삭제할 수 있어야 하며(MUST), 관계가 없는 반복·동시 삭제는 상태를 바꾸지 않는 성공 결과여야 한다(MUST).
 
 GraphQL API는 `deleteReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 한다(MUST). 성공 payload는 실제 삭제된 concrete Reaction global ID인 nullable `reactionId`와 현재 조회 가능한 nullable `post`를 반환해야 한다(MUST). missing·반복·동시 loser는 `reactionId: null`인 성공이어야 하며(MUST), payload는 별도 `deleted` boolean을 노출해서는 안 된다(MUST NOT).
 
@@ -166,7 +166,7 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 
 ### Requirement: viewer와 무관한 Reaction Type count
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type%EC%9D%84-%EC%B5%9C%EC%B4%88-reaction-%EC%83%9D%EC%84%B1-%EC%8B%9C%EA%B0%81-%EC%88%9C%EC%9C%BC%EB%A1%9C-%EC%95%88%EC%A0%95%EC%A0%81%EC%9C%BC%EB%A1%9C-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각 오름차순으로 제공해야 하며(MUST), 같은 최초 생성 시각에는 결정적 최종 순서를 적용해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type%EC%9D%84-%EC%B5%9C%EC%B4%88-reaction-%EC%83%9D%EC%84%B1-%EC%8B%9C%EA%B0%81-%EC%88%9C%EC%9C%BC%EB%A1%9C-%EC%95%88%EC%A0%95%EC%A0%81%EC%9C%BC%EB%A1%9C-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각 오름차순으로 제공해야 하며(MUST), 같은 최초 생성 시각에는 결정적 최종 순서를 적용해야 한다(MUST).
 
 #### Scenario: viewer 간 같은 count
 
@@ -193,7 +193,7 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 
 ### Requirement: viewer별 Reaction Profile 목록
 
-시스템은 Post와 Reaction Type별로 Reaction을 남긴 Profile의 Relay connection을 제공해야 하며(MUST), 대상 Post와 Profile의 기존 조회 정책을 각각 적용해야 한다(MUST). GraphQL API는 `Post.reactionProfiles(type: String!): ProfileConnection!` field로 이 목록을 제공하고 canonical Reaction Type 문자열 검증을 적용해야 한다(MUST).
+**Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-407](https://linear.app/byulmaru/issue/PROD-407) 시스템은 Post와 Reaction Type별로 Reaction을 남긴 Profile의 Relay connection을 제공해야 하며(MUST), 대상 Post와 Profile의 기존 조회 정책을 각각 적용해야 한다(MUST). GraphQL API는 `Post.reactionProfiles(type: String!): ProfileConnection!` field로 이 목록을 제공하고 canonical Reaction Type 문자열 검증을 적용해야 한다(MUST).
 
 #### Scenario: 조회 가능한 Profile만 반환
 
