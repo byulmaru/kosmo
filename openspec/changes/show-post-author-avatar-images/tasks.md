@@ -81,7 +81,7 @@
 - [x] 3.1 Posts production fixture에 서로 구분되는 Ready avatar URL과 null 상태를 추가하고 게시글 변경 동작의 최소 assertion을 작성한다.
 - [x] 3.2 기존 게시글 범위의 Relay, app check, Storybook test와 static build를 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
 - [x] 3.3 Shell·Profiles·Reactions·Posts·Notifications의 확장 소비자 fixture와 최소 assertion을 추가한다.
-- [ ] 3.4 확장 구현 뒤 Relay, app check, unit, Storybook test와 static build를 다시 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
+- [x] 3.4 확장 구현 뒤 Relay, app check, unit, Storybook test와 static build를 다시 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
 
 ## 4. PROD-588 통합 검증과 OpenSpec 완료
 
@@ -109,5 +109,5 @@ PROD-588이 소유한 Web runtime과 공용 코드 경로 검증을 완료하고
 - PR ancestry, base, hosted CI와 미실행 runtime QA를 최종 보고에 구분한다.
 
 - [ ] 4.1 Web 공용 경로에서 각 이미지·fallback과 기존 이동·접근성·Profile 전환 동작을 수동 확인한다.
-- [ ] 4.2 app 전체 검증과 hosted CI를 통과시키고 Android·iOS 실제 기기 QA 미실행 여부를 기록한다.
+- [x] 4.2 app 전체 검증과 hosted CI를 통과시키고 Android·iOS 실제 기기 QA 미실행 여부를 기록한다.
 - [ ] 4.3 canonical·Linear·delta specs·구현과 다른 active change를 다시 대조한 뒤 PROD-588 소유로 change를 archive하고 archive 후 strict validation을 통과시킨다.
