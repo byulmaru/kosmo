@@ -253,6 +253,65 @@ export const CurrentImageMenu: Story = {
   },
 };
 
+export const HeaderMenuKeepsAvatarOverlap: Story = {
+  args: {
+    avatar: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+    header: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+  },
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const headerButton = canvas.getByRole('button', { name: '헤더 이미지 변경' });
+    const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
+    const headerRectBefore = headerButton.getBoundingClientRect();
+    const avatarRectBefore = avatarButton.getBoundingClientRect();
+
+    await userEvent.click(headerButton);
+
+    expect(page.getByRole('menuitem', { name: '이미지 변경' })).toBeVisible();
+    const headerRectAfter = headerButton.getBoundingClientRect();
+    const avatarRectAfter = avatarButton.getBoundingClientRect();
+    expect({
+      height: headerRectAfter.height,
+      left: headerRectAfter.left,
+      top: headerRectAfter.top,
+      width: headerRectAfter.width,
+    }).toEqual({
+      height: headerRectBefore.height,
+      left: headerRectBefore.left,
+      top: headerRectBefore.top,
+      width: headerRectBefore.width,
+    });
+    expect({
+      height: avatarRectAfter.height,
+      left: avatarRectAfter.left,
+      top: avatarRectAfter.top,
+      width: avatarRectAfter.width,
+    }).toEqual({
+      height: avatarRectBefore.height,
+      left: avatarRectBefore.left,
+      top: avatarRectBefore.top,
+      width: avatarRectBefore.width,
+    });
+
+    const overlapElements = canvasElement.ownerDocument.elementsFromPoint(
+      avatarRectAfter.left + avatarRectAfter.width / 2,
+      avatarRectAfter.top + 24,
+    );
+    const avatarStackIndex = overlapElements.findIndex(
+      (element) => element === avatarButton || avatarButton.contains(element),
+    );
+    const headerStackIndex = overlapElements.findIndex(
+      (element) => element === headerButton || headerButton.contains(element),
+    );
+    expect(avatarStackIndex).toBeGreaterThanOrEqual(0);
+    expect(headerStackIndex).toBeGreaterThanOrEqual(0);
+    expect(avatarStackIndex).toBeLessThan(headerStackIndex);
+
+    await userEvent.click(page.getByRole('menuitem', { name: '취소' }));
+  },
+};
+
 export const ImageFieldsWide: Story = {
   parameters: {
     viewport: { defaultViewport: 'kosmoPickerWide' },
