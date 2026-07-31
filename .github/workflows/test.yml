@@ -11,7 +11,9 @@ permissions:
 jobs:
   test:
     name: Test
-    runs-on: [self-hosted]
+    # runs-on: [self-hosted]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -19,17 +21,33 @@ jobs:
       - name: Set up mise
         uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
         with:
-          cache: false
+          cache: true
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @kosmo/app exec playwright install chromium
+        run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
 
-      - name: Install Helm
-        working-directory: apps/helm
-        run: mise install helm
+      - name: Set up Helm
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: true
+          install_args: helm
+          working_directory: apps/helm
 
       - name: Run module tests
         run: pnpm test
