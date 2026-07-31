@@ -7,10 +7,10 @@
 ### 원격 원본 URL을 기존 Media URL에 저장한다
 
 - Decision Date: 2026-07-30
-- Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/media.md`, PROD-585
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-585
 - Status: Active
-- Context / Problem: canonical 문서는 Remote URL을 요구하지만 현재 물리 schema에는 Local 공개 표현용 `url` column만 있고, 별도 `remote_url` 추가 여부를 정해야 한다.
+- Context / Problem: canonical 문서는 Remote URL 속성과 lifecycle을 요구하지만 물리 schema 표현은 정하지 않는다. PROD-585가 기존 `media.url` 재사용과 별도 `remote_url` 미추가를 구현 범위로 정했다.
 - Decision Outcome: Remote Image의 canonical HTTP(S) 원본 URL을 `media.url`에 저장하고 별도 `remote_url` column을 만들지 않는다.
 - Alternatives Considered: 새 `remote_url` column은 URL 역할을 source별로 중복하고 사용자가 정한 단일-column 방향과 다르므로 선택하지 않았다. `storageReference` 재사용은 Media Storage Service opaque identity와 원격 URL을 혼합하므로 선택하지 않았다.
 - Consequences: `url`의 의미는 source에 따라 Local 공개 표현 또는 Remote 원본 위치이며, 조회 projection은 Media source와 조회 정책을 함께 적용해야 한다.
@@ -19,10 +19,10 @@
 ### Media를 source별 nullable variant로 저장한다
 
 - Decision Date: 2026-07-30
-- Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/media.md`, PROD-585
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-585
 - Status: Active
-- Context / Problem: Remote Media에는 Account, storage reference와 upload expiry가 없지만 현재 column은 non-null이다.
+- Context / Problem: canonical 문서는 Local/Remote Media의 서로 다른 lifecycle과 속성 존재 조건을 요구하지만 nullable column과 CHECK의 물리 표현은 정하지 않는다. PROD-585 범위에 맞춰 현재 non-null Local upload field를 어떻게 정렬할지 결정해야 한다.
 - Decision Outcome: 세 physical column의 NOT NULL을 해제하되 source CHECK로 Local row에는 계속 요구하고, Remote row에는 `READY`, URL 존재와 Local upload field 부재를 요구한다. Remote media type은 nullable이고 ready 시각은 Local Ready 전용이므로 Remote에서 null이다.
 - Alternatives Considered: synthetic Account/storage reference/expiry는 존재하지 않는 Local upload lifecycle을 조작하므로 선택하지 않았다. 별도 Remote Media table은 canonical 단일 Media identity와 PostContent reference를 분리하므로 선택하지 않았다.
 - Consequences: Drizzle select type에서 세 field가 nullable이 되며 Local code는 source를 좁히거나 기존 application invariant를 명시적으로 유지해야 한다.

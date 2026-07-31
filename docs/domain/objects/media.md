@@ -40,8 +40,8 @@ Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 �
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
 URL과 Media Type column은 Uploading Local Media에는 아직 값이 없으며, Ready 전환 시 두 값을 함께
 기록한다.
-Local Media의 URL과 Remote Media의 Remote URL은 물리 `media.url` column을 공유하며 Media Source가 그 값의
-의미를 결정한다. Remote Media를 위해 별도 `remote_url` column을 만들지 않는다.
+Local Media의 URL은 저장 서비스가 확정한 공개 표현이고 Remote Media의 Remote URL은 원격 원본 위치다.
+Media Source가 각 URL 속성의 의미와 생명주기를 구분한다.
 Media Storage Service의 완료 응답은 공개 표현의 최종 권위다. Kosmo는 persistence에 필요한 필드의 존재와
 transport type만 확인하고, Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시
 검증하지 않는다. 저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
