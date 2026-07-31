@@ -3235,6 +3235,15 @@ export const PostDetailThreadRoute: Story = {
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
     const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    expect(
+      currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);

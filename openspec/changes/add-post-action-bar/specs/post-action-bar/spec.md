@@ -222,6 +222,13 @@
 - **AND** 순수 Repost attribution은 20px line box를 사용하고 아래 Source 표준행과의 추가 gap을 두지 않는다
 - **AND** Quote는 Source preview 내부 하단 padding을 4px로 줄이고, 공용 slot 상단 padding을 늘리지 않은 채 Source preview border 밖에서 Action Bar까지 8px 간격을 제공한다
 
+#### Scenario: 상세 thread 현재 Post의 compact spacing
+
+- **WHEN** Post 상세 thread의 현재 Post에 Reaction Summary와 다음 thread row가 함께 렌더된다
+- **THEN** Reaction Summary와 Action Bar 사이에는 4px 간격이 있다
+- **AND** Action Bar 아래와 다음 1px thread divider 사이에는 4px 간격이 있다
+- **AND** Action Bar 자체의 28px geometry는 유지된다
+
 #### Scenario: 순수 Repost의 Source action target
 
 - **WHEN** Post에 Content와 Reply Parent가 없고 Repost Source만 있다

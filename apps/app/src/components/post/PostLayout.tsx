@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
-  reactionSummary: { marginTop: spacing.lg },
+  reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
 });
