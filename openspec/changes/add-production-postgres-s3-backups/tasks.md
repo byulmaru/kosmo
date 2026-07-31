@@ -89,7 +89,7 @@ Production CNPG Cluster가 5분 WAL archive 목표와 매일 03:00 KST base back
 - [x] 3.4 On-demand backup, 상태 확인과 S3/Pod Identity/plugin 장애 진단 절차를 운영 문서에 기록한다.
 - [x] 3.5 격리 PITR manifest 작성, named restore point와 WAL archive gate, 데이터 검증과 namespace 정리 절차를 운영 문서에 기록한다.
 - [x] 3.6 OpenSpec strict validation과 관련 Helm 검증을 통과시키고 결과를 `PROD-551`에 기록한다.
-- [ ] 3.7 Live activation에서 확인된 ObjectStore 조회 권한 누락을 namespaced 최소 Role/RoleBinding으로 보완하고 dev/prod render, `kubectl auth can-i`와 OpenSpec strict validation을 통과시킨다.
+- [ ] 3.7 Live activation에서 확인된 ObjectStore 조회 권한 누락을 namespaced 최소 Role/RoleBinding으로 보완하고 API server dry-run, `kubectl auth can-i`와 OpenSpec strict validation을 통과시킨다.
 
 ## 4. PROD-546 운영 통합 검증과 archive gate
 

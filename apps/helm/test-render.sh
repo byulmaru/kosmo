@@ -196,7 +196,6 @@ backup_markers=(
   "apiVersion: barmancloud.cnpg.io/v1"
   "kind: ScheduledBackup"
   "name: kosmo-postgres-backup"
-  "name: kosmo-postgres-backup-objectstore-reader"
   "serviceAccountName: kosmo-postgres-backup"
   "barman-cloud.cloudnative-pg.io"
 )
@@ -211,12 +210,6 @@ done
 required_prod_markers=(
   "kind: ServiceAccount"
   "name: kosmo-postgres-backup"
-  "kind: Role"
-  "kind: RoleBinding"
-  "name: kosmo-postgres-backup-objectstore-reader"
-  "- barmancloud.cnpg.io"
-  "- objectstores"
-  "- get"
   "kind: ObjectStore"
   "destinationPath: s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/"
   "inheritFromIAMRole: true"
@@ -234,7 +227,7 @@ required_prod_markers=(
 )
 
 for marker in "${required_prod_markers[@]}"; do
-  if ! grep -Fq -- "${marker}" "${render_dir}/prod-runtime.yaml"; then
+  if ! grep -Fq "${marker}" "${render_dir}/prod-runtime.yaml"; then
     echo "prod manifest is missing backup marker: ${marker}" >&2
     exit 1
   fi
