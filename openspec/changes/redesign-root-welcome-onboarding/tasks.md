@@ -75,9 +75,9 @@
 - `pnpm --filter @kosmo/app check`
 - targeted ESLint와 Prettier
 
-- [ ] 3.1 guest/session E2E를 승인 카피로 갱신하고 375/1024/1440 logo·heading geometry test를 추가해 기존 구현에서 실패를 확인한다.
-- [ ] 3.2 root route에서 별도 header·eyebrow와 1024px 분기를 제거하고 통합 Hero, 승인 카피와 공용 breakpoint padding을 구현한다.
-- [ ] 3.3 focused E2E, app check, ESLint와 Prettier를 통과시킨다.
+- [x] 3.1 guest/session E2E를 승인 카피로 갱신하고 375/1024/1440 logo·heading geometry test를 추가해 기존 구현에서 실패를 확인한다.
+- [x] 3.2 root route에서 별도 header·eyebrow와 1024px 분기를 제거하고 통합 Hero, 승인 카피와 공용 breakpoint padding을 구현한다.
+- [x] 3.3 focused E2E, app check, ESLint와 Prettier를 통과시킨다.
 
 ## 4. DSN-26 Figma, 통합 검증과 OpenSpec 완료
 
