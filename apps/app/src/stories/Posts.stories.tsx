@@ -882,6 +882,7 @@ function ProductionReactionMutationTargetsStory() {
         if (request.name === 'PostReactionControllerAddReactionMutation') {
           const postId = String(variables.postId);
           const type = String(variables.type);
+          const target = requireStoryPostById(storyPosts, postId);
           const selectedTypes = selectedTypesByPost.get(postId) ?? new Set<string>();
           selectedTypes.add(type);
           selectedTypesByPost.set(postId, selectedTypes);
@@ -889,31 +890,25 @@ function ProductionReactionMutationTargetsStory() {
           return Promise.resolve({
             data: {
               addReaction: {
+                post: {
+                  __typename: 'Post',
+                  id: postId,
+                  reactionCounts: target.reactionCounts.map((entry) => ({
+                    ...entry,
+                    count: entry.count + (selectedTypes.has(entry.type) ? 1 : 0),
+                  })),
+                  viewerReactions: [...selectedTypes].map((selectedType) => ({
+                    __typename: 'Reaction',
+                    id: `reaction-${postId}-${selectedType}`,
+                    type: selectedType,
+                  })),
+                },
                 reaction: {
                   __typename: 'Reaction',
                   id: `reaction-${postId}-${type}`,
                   type,
                 },
               },
-            },
-          } as GraphQLResponse);
-        }
-        if (request.name === 'PostReactionControllerRefetchQuery') {
-          const postId = String(variables.id);
-          const target = storyPosts.find((candidate) => candidate.id === postId);
-          return Promise.resolve({
-            data: {
-              node: target
-                ? {
-                    __typename: 'Post',
-                    id: postId,
-                    reactionCounts: target.reactionCounts.map((entry) => ({
-                      ...entry,
-                      count:
-                        entry.count + (selectedTypesByPost.get(postId)?.has(entry.type) ? 1 : 0),
-                    })),
-                  }
-                : null,
             },
           } as GraphQLResponse);
         }
@@ -3306,6 +3301,9 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
     menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(
+      within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ }),
+    ).not.toBeInTheDocument();
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
     await waitFor(() => {
       expect(canvas.queryByRole('menu', { name: '게시글 공개 설정' })).not.toBeInTheDocument();

@@ -579,7 +579,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
 
 const styles = StyleSheet.create({
   root: { position: 'relative' },
-  compactRoot: { height: 44, width: 44 },
+  compactRoot: { height: 44, width: 64 },
   fullRoot: { alignSelf: 'stretch' },
   trigger: { alignItems: 'center', flexDirection: 'row' },
   compactTrigger: { height: 44, justifyContent: 'center', width: 44 },
@@ -590,7 +590,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     gap: spacing.sm,
     maxWidth: '100%',
-    transform: [{ translateY: 6 }],
   },
   triggerName: {
     flexShrink: 1,
@@ -599,7 +598,7 @@ const styles = StyleSheet.create({
     ...typography.xl,
   },
   webMenu: { position: 'absolute', width: 280, zIndex: 30 },
-  compactMenuPosition: { left: 62, top: 0 },
+  compactMenuPosition: { left: 72, top: 0 },
   drawerMenuPosition: { left: 0, top: 190 },
   fullOverlayPosition: { left: -10, top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },

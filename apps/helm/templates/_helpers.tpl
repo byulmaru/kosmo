@@ -19,6 +19,11 @@
 {{- end -}}
 
 {{- define "kosmo.imageRef" -}}
+{{- if eq .Values.env "prod" -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.imageDigest) -}}
+{{- fail "imageDigest must be a sha256 digest when env=prod" -}}
+{{- end -}}
+{{- end -}}
 {{- if .Values.imageDigest -}}
 {{- printf "%s@%s" .Values.image .Values.imageDigest -}}
 {{- else -}}

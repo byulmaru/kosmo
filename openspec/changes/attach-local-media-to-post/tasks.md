@@ -72,7 +72,38 @@ preview·상태·재시도·제거·Alt Text와 Sensitive Media를 관리해 새
 - [x] 2.4 ordered Ready Media item을 `createPost`에 연결하고 submit gating·성공 초기화·오류 보존을 구현한다.
 - [x] 2.5 component/Relay/Storybook 상태와 접근성 회귀 검증을 추가하고 app check를 통과시킨다.
 
-## 3. PROD-559 최초 Local Note Media 표현
+## 3. PROD-581 Local Media 공개 표현 저장
+
+**Authority / Provenance**
+
+- `docs/domain/objects/media.md`
+- `docs/domain/decisions/0013-media-storage-service-boundary.md`
+- PROD-461
+- PROD-581
+
+**Deliverable**
+
+Local Media 업로드 완료 시 Media Storage Service가 확정한 공개 URL과 media type을 Ready 전환과 함께 DB에
+저장한다.
+
+**Guardrails**
+
+- Kosmo가 storage reference에서 공개 URL이나 provider 경로 규칙을 추론하지 않는다.
+- 게시물 조회·권한 확인·ActivityPub projection 중 Media Storage Service를 호출하지 않는다.
+- Uploading 행에는 공개 표현 metadata가 아직 없을 수 있다.
+- thumbnail·변환본과 Remote Media 표현 관리는 추가하지 않는다.
+
+**Verification**
+
+- additive migration과 새 업로드 완료 시 URL·Media Type·Ready 상태의 원자 저장을 확인한다.
+- Media Storage Service의 미완료·오류·잘못된 응답에서 Ready 전환과 metadata 저장이 함께 거부되는지 확인한다.
+- 완료 재호출과 동시 호출이 idempotent한지 확인한다.
+
+- [x] 3.1 URL·Media Type nullable column과 additive migration을 추가한다.
+- [x] 3.2 업로드 완료 결과 검증과 Ready 전환·metadata 원자 저장 및 idempotency를 구현한다.
+- [x] 3.3 관련 core/API check와 strict OpenSpec 검증을 통과시킨다.
+
+## 4. PROD-559 최초 Local Note Media 표현
 
 **Authority / Provenance**
 
@@ -82,6 +113,7 @@ preview·상태·재시도·제거·Alt Text와 Sensitive Media를 관리해 새
 - `docs/domain/decisions/0017-activitypub-local-post-note.md`
 - `docs/domain/decisions/0022-post-content-revision-media-nodes.md`
 - PROD-461
+- PROD-581
 - PROD-559
 
 **Deliverable**
@@ -99,15 +131,15 @@ Create delivery에서 동일하게 제공된다.
 **Verification**
 
 - paragraph/link와 Media 혼합 document의 safe HTML과 attachment 순서를 확인한다.
-- public WebP URL, media type, nullable Alt Text와 sensitive true/false를 확인한다.
-- missing/non-Ready/unsafe reference의 미제공 결과와 내부 identity 비노출을 확인한다.
+- 저장된 공개 URL·Media Type, nullable Alt Text와 sensitive true/false를 확인한다.
+- missing/non-Ready/누락·잘못된 저장 표현의 미제공 결과와 내부 identity 비노출을 확인한다.
 - Media 없는 Local Note와 최초 Create delivery가 회귀하지 않는지 확인한다.
 
-- [ ] 3.1 current PostContent Media를 검증해 ActivityPub Image에 필요한 공개 표현으로 projection한다.
-- [ ] 3.2 Media node를 제외한 HTML과 ordered attachment/sensitive를 Local Note 역참조 및 최초 delivery에 연결한다.
-- [ ] 3.3 federation projection·권한·회귀 검증과 관련 Fedify check를 통과시킨다.
+- [x] 4.1 current PostContent Media를 검증해 ActivityPub Image에 필요한 저장된 공개 표현으로 projection한다.
+- [x] 4.2 Media node를 제외한 HTML과 ordered attachment/sensitive를 Local Note 역참조 및 최초 delivery에 연결한다.
+- [x] 4.3 federation projection·권한·회귀 검증과 관련 Fedify check를 통과시킨다.
 
-## 4. PROD-461 통합 검증과 archive
+## 5. PROD-461 통합 검증과 archive
 
 **Authority / Provenance**
 
@@ -119,6 +151,7 @@ Create delivery에서 동일하게 제공된다.
 - PROD-461
 - PROD-554
 - PROD-553
+- PROD-581
 - PROD-559
 
 **Deliverable**
@@ -139,6 +172,6 @@ canonical·Linear·OpenSpec이 일치한다.
 - Web/iOS/Android의 최대 4개·상태·접근성 결과와 실행하지 못한 runtime 검증을 구분해 기록한다.
 - core/API/app/Fedify tests, schema/Relay, TypeScript, ESLint, Prettier, syncpack, strict OpenSpec과 diff check를 통과시킨다.
 
-- [ ] 4.1 세 구현 자식 결과를 실제 direct upload, 새 Post 작성과 Local Note 흐름으로 통합 검증한다.
-- [ ] 4.2 canonical·Linear·OpenSpec과 GraphQL/Relay schema를 재대조하고 전체 정적·테스트 검증을 통과시킨다.
-- [ ] 4.3 세 구현 자식과 부모 완료 조건을 확인하고 delta spec을 동기화한 뒤 change를 archive한다.
+- [ ] 5.1 네 구현 자식 결과를 실제 direct upload, 새 Post 작성과 Local Note 흐름으로 통합 검증한다.
+- [ ] 5.2 canonical·Linear·OpenSpec과 GraphQL/Relay schema를 재대조하고 전체 정적·테스트 검증을 통과시킨다.
+- [ ] 5.3 네 구현 자식과 부모 완료 조건을 확인하고 delta spec을 동기화한 뒤 change를 archive한다.

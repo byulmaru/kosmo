@@ -3,6 +3,7 @@ import {
   Accept,
   Announce,
   Create,
+  Delete,
   EmojiReact,
   Follow,
   Like,
@@ -17,6 +18,7 @@ import { and, eq } from 'drizzle-orm';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
+import { handleInboundDelete } from './inbound-delete';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
@@ -138,6 +140,7 @@ federation
   .on(Accept, handleInboundAccept)
   .on(Announce, handleInboundAnnounce)
   .on(Create, handleInboundCreate)
+  .on(Delete, handleInboundDelete)
   .on(EmojiReact, handleInboundReaction)
   .on(Follow, handleInboundFollow)
   .on(Like, handleInboundReaction)

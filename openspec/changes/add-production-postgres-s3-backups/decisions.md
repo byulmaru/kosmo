@@ -59,10 +59,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: 아직 production Application이 없는 동안 선언을 먼저 병합하되 dev database에 backup 자원이나 AWS identity 의존성을 추가하면 안 된다.
-- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. Dev manifest는 현재 상태를 유지한다.
+- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. PostgreSQL Pod의 plugin이 ObjectStore를 읽을 수 있도록 같은 ServiceAccount에 동명 ObjectStore 하나의 `get`만 허용하는 namespaced Role/RoleBinding을 함께 렌더한다. Dev manifest는 현재 상태를 유지한다.
 - Alternatives Considered: 모든 환경에 resource를 만들고 dev에서 비활성화하는 방식은 불필요한 CR과 identity 계약을 남겨 제외했다. 별도 chart는 공통 Cluster 선언이 중복되어 제외했다.
-- Consequences: dev/prod 양쪽의 render test가 필요하고 production 값이 활성화되기 전에는 live backup 검증이 불가능하다.
-- Confirmation / Follow-up: dev에는 관련 resource/field가 없고 prod에는 정확한 ServiceAccount, ObjectStore, plugin과 ScheduledBackup이 있는지 snapshot 또는 manifest assertion으로 검증한다.
+- Consequences: dev/prod 양쪽의 render test가 필요하고 production 값이 활성화되기 전에는 live backup 검증이 불가능하다. ServiceAccount는 다른 ObjectStore나 write verb를 사용할 수 없다.
+- Confirmation / Follow-up: Role/RoleBinding은 API server dry-run을 통과해야 하고, 적용 후 exact ObjectStore `get`은 `kubectl auth can-i`로 검증한다. Backup과 WAL archive 성공을 실제 상태로 확인한다.
 
 ### 원본 쓰기 없는 격리 PITR rehearsal
 

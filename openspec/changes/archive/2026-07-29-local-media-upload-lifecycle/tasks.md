@@ -206,4 +206,4 @@ PROD-441 구현이 canonical·Linear·OpenSpec 계약을 만족하고 부모 PRO
 - [x] 7.1 Vault dev secret에 Media Storage Service API key와 production origin을 저장하고 기존 Vault Secrets Operator 및 `envFrom` 경로로 주입한다.
 - [x] 7.2 실제 Media Storage Service를 사용하는 선택적 cross-service API integration test를 추가하고 통과시킨다.
 - [x] 7.3 Vault 설정을 dev에 배포하고 Rollout 상태, runtime 환경변수와 실제 업로드 lifecycle을 확인한다.
-- [ ] 7.4 delta spec을 동기화하고 canonical·Linear·OpenSpec 정합성 및 strict validation을 확인한 뒤 change를 archive한다.
+- [x] 7.4 delta spec을 동기화하고 canonical·Linear·OpenSpec 정합성 및 strict validation을 확인한 뒤 change를 archive한다.

@@ -5,6 +5,8 @@ repository="byulmaru/kosmo"
 native_environment="native-test-distribution"
 onboarding_environment="ios-device-onboarding"
 onboarding_reviewer="robin-maki"
+production_environment="prod"
+production_reviewer="robin-maki"
 terraform_environment="terraform-apply"
 terraform_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -15,6 +17,7 @@ terraform_output() {
 ensure_environment() {
   local environment="$1"
   local reviewer="${2:-}"
+  local restrict_to_main="${3:-true}"
 
   if [[ -n "${reviewer}" ]]; then
     local reviewer_id
@@ -24,7 +27,7 @@ ensure_environment() {
       -F can_admins_bypass=false \
       -F prevent_self_review=false \
       -F 'deployment_branch_policy[protected_branches]=false' \
-      -F 'deployment_branch_policy[custom_branch_policies]=true' \
+      -F "deployment_branch_policy[custom_branch_policies]=${restrict_to_main}" \
       -F 'reviewers[][type]=User' \
       -F "reviewers[][id]=${reviewer_id}" \
       >/dev/null
@@ -32,11 +35,12 @@ ensure_environment() {
     gh api --method PUT "repos/${repository}/environments/${environment}" \
       -F can_admins_bypass=false \
       -F 'deployment_branch_policy[protected_branches]=false' \
-      -F 'deployment_branch_policy[custom_branch_policies]=true' \
+      -F "deployment_branch_policy[custom_branch_policies]=${restrict_to_main}" \
       >/dev/null
   fi
 
-  if ! gh api "repos/${repository}/environments/${environment}/deployment-branch-policies" \
+  if [[ "${restrict_to_main}" == "true" ]] \
+    && ! gh api "repos/${repository}/environments/${environment}/deployment-branch-policies" \
     --paginate \
     --jq '.branch_policies[] | select(.name == "main") | .id' \
     | grep -q .; then
@@ -47,8 +51,28 @@ ensure_environment() {
   fi
 }
 
+verify_production_environment() {
+  local reviewer_id
+  reviewer_id="$(gh api "users/${production_reviewer}" --jq '.id')"
+
+  gh api "repos/${repository}/environments/${production_environment}" \
+    | jq -e --argjson reviewer_id "${reviewer_id}" '
+        .can_admins_bypass == false
+        and .deployment_branch_policy == null
+        and any(
+          .protection_rules[];
+          .type == "required_reviewers"
+          and .prevent_self_review == false
+          and any(.reviewers[]; .type == "User" and .reviewer.id == $reviewer_id)
+        )
+      ' >/dev/null
+
+}
+
 ensure_environment "${native_environment}"
 ensure_environment "${onboarding_environment}" "${onboarding_reviewer}"
+ensure_environment "${production_environment}" "${production_reviewer}" false
+verify_production_environment
 ensure_environment "${terraform_environment}"
 
 gh variable set FIREBASE_ANDROID_APP_ID --repo "${repository}" --env "${native_environment}" --body "$(terraform_output firebase_android_app_id)"

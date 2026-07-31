@@ -50,7 +50,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
 
   await visibilityTrigger.click();
   await page.keyboard.press('End');
-  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeFocused();
+  await expect(visibilityMenu.getByRole('menuitemradio', { name: /^팔로워만/ })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(visibilityMenu).toHaveCount(0);
 

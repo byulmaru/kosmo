@@ -76,6 +76,8 @@ Local/Remote Post가 `packages/fedify`의 하나의 안정적인 ActivityPub ide
 **Guardrails**
 
 - URI resolver, Post load, authorization과 FK 작업은 PROD-502 완료 전에도 독립적으로 진행할 수 있다.
+- 이 section의 완료 상태는 PROD-494의 원래 core Note 범위만 나타낸다. 후속 Media attachment·sensitive 확장은
+  ADR 0022와 `attach-local-media-to-post` change가 소유하며 이 task를 다시 열거나 해당 change 완료를 대신하지 않는다.
 - Local Post URI origin은 Author Profile이 속한 `Instances.canonicalOrigin`에서 읽고 resolver caller가 origin이나
   Local Instance ID를 다시 전달하지 않는다.
 - Note `content` 연결과 PROD-494 최종 완료만 PROD-502 serializer 결과에 의존한다.

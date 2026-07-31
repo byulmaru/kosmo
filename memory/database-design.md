@@ -159,12 +159,14 @@ Drizzle query policy:
 
 Current media direction:
 
-- `media` is the only Kosmo persistence for a logical image. Kosmo does not mirror Media Storage Service originals,
-  derived representations, storage keys, MIME metadata or dimensions in a separate `file` table.
+- `media` is the only Kosmo persistence for a logical image. Kosmo stores the Media Storage Service completion result's
+  public URL and media type on the Local Media row, but does not mirror bytes, storage keys, derived
+  representations or dimensions in a separate `file` table.
 - A Local Media row is created when an authenticated Account/Profile starts an upload. It keeps its Kosmo identity,
   upload Account, actor Profile, `UPLOADING` state, opaque external storage reference and upload expiry.
-- After Kosmo confirms storage through Media Storage Service, the same row transitions atomically to `READY`; only
-  `READY` Media can be attached to a Post or used as a Profile representation.
+- After Kosmo confirms storage through Media Storage Service, the same row stores its URL and media type and transitions
+  atomically to `READY`; later read projections use these columns without calling the storage service. Only `READY`
+  Media can be attached to a Post or used as a Profile representation.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
 - The unused legacy `/upload` route, direct R2 configuration and `file` persistence are removed rather than supported as
@@ -177,7 +179,7 @@ Current media direction:
   referenced Media until a separate lifecycle contract preserves historical revisions.
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
-Do not expose an original URL just because a stored representation exists. Timelines can use thumbnail/compressed
+Do not expose a stored original URL without the owning Post/Profile viewer policy. Timelines can use thumbnail/compressed
 variants, detail views can use high-resolution variants, and original access remains a product/cost policy decision.
 
 Deduplication questions:

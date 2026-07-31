@@ -122,58 +122,64 @@ export const deletePost = async (
   },
   tx?: Transaction,
 ): Promise<{ readonly postId: string }> => {
-  const { localPostId, repostId, result } = await getDatabaseConnection(tx).transaction(
-    async (tx) => {
-      const post = await tx
-        .select({
-          profileId: Posts.profileId,
-        })
-        .from(Posts)
-        .where(eq(Posts.id, postId))
-        .limit(1)
-        .then(first);
-      if (!post) {
-        throw new NotFoundError('Post not found');
-      }
-      if (post.profileId !== actorProfileId) {
-        throw new PermissionDeniedError('Post author permission is required');
-      }
+  const { isActivityPubPost, localPostId, repostId, result } = await getDatabaseConnection(
+    tx,
+  ).transaction(async (tx) => {
+    const post = await tx
+      .select({
+        activityPubPostId: ActivityPubPosts.id,
+        profileId: Posts.profileId,
+      })
+      .from(Posts)
+      .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
+      .where(eq(Posts.id, postId))
+      .limit(1)
+      .then(first);
+    if (!post) {
+      throw new NotFoundError('Post not found');
+    }
 
-      const deleted = await tx
-        .update(Posts)
-        .set({ deletedAt: sql`now()`, state: PostState.DELETED })
-        .where(
-          and(
-            eq(Posts.id, postId),
-            eq(Posts.profileId, actorProfileId),
-            eq(Posts.state, PostState.ACTIVE),
-          ),
-        )
-        .returning({
-          currentContentId: Posts.currentContentId,
-          id: Posts.id,
-          replyParentId: Posts.replyParentId,
-          repostSourceId: Posts.repostSourceId,
-        })
-        .then(first);
+    const isActivityPubPost = post.activityPubPostId !== null;
+    if (post.profileId !== actorProfileId) {
+      throw new PermissionDeniedError('Post author permission is required');
+    }
 
-      return {
-        localPostId: deleted?.currentContentId ? deleted.id : undefined,
-        repostId:
-          deleted &&
-          deleted.currentContentId === null &&
-          deleted.replyParentId === null &&
-          deleted.repostSourceId !== null
-            ? deleted.id
-            : undefined,
-        result: { postId },
-      };
-    },
-  );
+    const deleted = await tx
+      .update(Posts)
+      .set({ deletedAt: sql`now()`, state: PostState.DELETED })
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Posts.profileId, actorProfileId),
+          eq(Posts.state, PostState.ACTIVE),
+        ),
+      )
+      .returning({
+        currentContentId: Posts.currentContentId,
+        id: Posts.id,
+        replyParentId: Posts.replyParentId,
+        repostSourceId: Posts.repostSourceId,
+      })
+      .then(first);
+
+    return {
+      isActivityPubPost,
+      localPostId: !isActivityPubPost && deleted?.currentContentId ? deleted.id : undefined,
+      repostId:
+        !isActivityPubPost &&
+        deleted &&
+        deleted.currentContentId === null &&
+        deleted.replyParentId === null &&
+        deleted.repostSourceId !== null
+          ? deleted.id
+          : undefined,
+      result: { postId },
+    };
+  });
 
   // A caller-owned transaction has no after-commit hook. Its caller owns any
   // post-commit side effect so delivery cannot run before the outer commit.
-  if (!tx) {
+  if (!tx && !isActivityPubPost) {
     await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch((error) => {
       console.error('Post-commit Repost notification cleanup failed', {
         error,

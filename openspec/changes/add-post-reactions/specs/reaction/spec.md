@@ -52,12 +52,13 @@ API는 Reaction을 opaque global ID, 현재 Type 문자열과 생성 시각을 �
 
 GraphQL `usingProfile` entry point는 Active Account, Account–Profile membership과 selected Profile의 Active/Normal 및 non-Suspended Instance 조회 가능 상태를 검증해야 하며(MUST), resolver와 core service는 Account, membership, Profile/Instance 상태와 Instance Type을 중복 조회·검증해서는 안 된다(MUST NOT). core service는 검증된 actor Profile identity를 받아 Post, Type과 멱등 저장만 검증해야 한다(MUST).
 
-GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`을 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
+GraphQL API는 `addReaction` mutation의 input으로 `postId: ID!`와 `type: String!`을 받아야 하며(MUST), 성공 payload는 `reaction: Reaction!`과 현재 조회 가능한 `post: Post!`를 반환해야 한다(MUST). 공개 payload는 신규 생성 여부를 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: GraphQL Reaction 추가 계약
 
 - **WHEN** 권한 있는 Profile이 `addReaction`에 Post global ID와 허용 Type 문자열을 전달한다
 - **THEN** API는 `AddReactionPayload.reaction`으로 현재 Reaction Node를 반환한다
+- **AND** payload의 `post`에서 갱신된 `viewerReactions`와 `reactionCounts`를 조회할 수 있다
 - **AND** `postId`는 concrete `Post` global ID만 허용한다
 - **AND** payload는 `created` 또는 동등한 신규 생성 여부를 노출하지 않는다
 
@@ -130,12 +131,13 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 - **WHEN** selected Profile이 자신의 현재 Reaction과 같은 Post와 Type을 전달한다
 - **THEN** 시스템은 해당 Reaction만 제거한다
 - **AND** payload의 `reactionId`는 삭제된 Reaction global ID이다
-- **AND** Target Post가 현재 조회 가능하면 payload의 `post`에서 갱신된 `viewerReactions`를 조회할 수 있다
+- **AND** Target Post가 현재 조회 가능하면 payload의 `post`에서 갱신된 `viewerReactions`와 `reactionCounts`를 조회할 수 있다
 
 #### Scenario: 관계가 없는 반복 삭제
 
 - **WHEN** selected Profile이 현재 관계가 없는 Post와 Type의 삭제를 요청한다
 - **THEN** mutation은 `reactionId: null`인 성공을 반환한다
+- **AND** Target Post가 현재 조회 가능하면 payload의 `post`는 현재 `viewerReactions`와 `reactionCounts`를 제공한다
 - **AND** 다른 Profile과 다른 Type의 Reaction을 변경하지 않는다
 
 #### Scenario: Post가 더 이상 조회되지 않는 삭제
@@ -158,7 +160,7 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 
 ### Requirement: viewer와 무관한 Reaction Type count
 
-**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 count 내림차순으로 제공해야 하며(MUST), 동률 순서는 보장하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** [Reaction canonical 객체](../../../../../docs/domain/objects/reaction.md), [ADR 0010](../../../../../docs/domain/decisions/0010-post-interaction-contracts.md), [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4), [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type%EC%9D%84-%EC%B5%9C%EC%B4%88-reaction-%EC%83%9D%EC%84%B1-%EC%8B%9C%EA%B0%81-%EC%88%9C%EC%9C%BC%EB%A1%9C-%EC%95%88%EC%A0%95%EC%A0%81%EC%9C%BC%EB%A1%9C-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) Post의 Reaction Type별 count는 대상 Post에 현재 존재하는 모든 Reaction을 포함해야 하며(MUST), Post를 조회할 수 있는 viewer 사이에서 같아야 한다(MUST). Type은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각 오름차순으로 제공해야 하며(MUST), 같은 최초 생성 시각에는 결정적 최종 순서를 적용해야 한다(MUST).
 
 #### Scenario: viewer 간 같은 count
 
@@ -171,11 +173,17 @@ GraphQL `usingProfile` entry point는 actor의 Active/Normal Profile과 non-Susp
 - **WHEN** 현재 Reaction이 삭제된다
 - **THEN** 다음 Type별 count는 삭제된 Reaction을 포함하지 않는다
 
-#### Scenario: count 정렬
+#### Scenario: 현재 최초 Reaction 생성 시각 정렬
 
-- **WHEN** 둘 이상의 Reaction Type count가 다르다
-- **THEN** 시스템은 count가 큰 Type부터 반환한다
-- **AND** count가 같은 Type 사이의 순서는 별도로 보장하지 않는다
+- **WHEN** 둘 이상의 Reaction Type이 현재 존재한다
+- **THEN** 시스템은 각 Type에 현재 존재하는 Reaction의 최초 생성 시각이 이른 Type부터 반환한다
+- **AND** 같은 최초 생성 시각에는 제품상 Type 우선순위가 아닌 결정적 최종 순서를 적용한다
+- **AND** count 증감만으로 기존 Type의 최초 생성 시각이 바뀌지 않으면 순서를 바꾸지 않는다
+
+#### Scenario: Type 제거와 재등장
+
+- **WHEN** 한 Type의 현재 Reaction이 모두 제거됐다가 나중에 다시 생성된다
+- **THEN** 시스템은 새로 존재하는 Reaction의 최초 생성 시각으로 해당 Type의 순서를 정한다
 
 ### Requirement: viewer별 Reaction Profile 목록
 

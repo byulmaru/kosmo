@@ -31,6 +31,10 @@ kubectl get backup -n kosmo-prod --sort-by=.metadata.creationTimestamp
 ```sh
 kubectl describe objectstore kosmo-postgres-backup -n kosmo-prod
 kubectl get serviceaccount kosmo-postgres-backup -n kosmo-prod -o yaml
+kubectl auth can-i get objectstores.barmancloud.cnpg.io \
+  --resource-name=kosmo-postgres-backup \
+  --namespace=kosmo-prod \
+  --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
 aws eks list-pod-identity-associations --cluster-name byulmaru --region ap-northeast-2
 kubectl logs deployment/barman-cloud-plugin-barman-cloud -n cnpg-system --since=30m
 kubectl get pod -n kosmo-prod -l cnpg.io/cluster=kosmo-postgres \

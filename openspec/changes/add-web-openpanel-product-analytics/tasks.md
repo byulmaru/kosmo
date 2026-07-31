@@ -63,17 +63,19 @@ Web의 Profile 생성·선택, Post 생성, Follow와 검색 흐름이 실제 �
 **Guardrails**
 
 - 고지는 실제 자동 수집, identity, replay 설정과 보유·권리 행사 절차에 일치해야 한다.
-- landing과 인증 후 menu 모두에서 접근할 수 있어야 한다.
+- landing과 인증 후 full Web right rail 최하단에서 접근할 수 있어야 하며 compact Web·mobile drawer에는 진입점을 표시하지 않는다.
 - 삭제 절차는 대상 확인, dry-run, 승인, 삭제와 잔존 검증을 포함해야 한다.
 
 **Verification**
 
-- 공개 route 렌더링, 두 진입 링크와 필수 고지 항목을 test로 확인하고 runbook 절차를 검토한다.
+- 공개 route 렌더링, landing·full Web 진입 링크, compact·mobile 비노출과 필수 고지 항목을 test로 확인하고 runbook 절차를 검토한다.
 
-- [x] 3.1 공개 개인정보 처리방침 route와 landing·menu 진입 링크를 구현한다.
+- [x] 3.1 공개 개인정보 처리방침 route와 landing·menu 진입 링크를 구현한다. (초기 배치, responsive shell 이전으로 superseded)
 - [x] 3.2 OpenPanel production 설정·검증과 Account별 삭제 runbook을 작성한다.
 - [x] 3.3 production Web build의 Client ID 주입을 구성한다.
 - [x] 3.4 개인정보 처리방침 route와 진입 링크 test를 추가한다.
+- [x] 3.5 PROD-541에서 인증 후 menu link를 full Web right rail, compact Web icon rail과 mobile drawer로 옮기고 responsive 진입점 test를 통과한다. (초기 responsive 배치, full-only 정책으로 superseded)
+- [x] 3.6 PROD-541에서 full Web right rail link를 최하단에 더 가깝게 배치하고 compact Web·mobile drawer 진입점을 제거한 뒤 full 진입·compact/mobile 비노출 test를 통과한다.
 
 ## 4. PROD-469 통합 검증과 인계
 

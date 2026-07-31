@@ -35,8 +35,7 @@ Reaction은 Profile이 Post에 남기는 유니코드 이모지 반응이다.
 - `☘️` (`U+2618 U+FE0F`)
 - `🌈` (`U+1F308`)
 
-이 목록의 나열 순서는 Reaction Type 개수가 같을 때의 표시 순서를 정의하지 않는다. 동률 표시에는 별도
-순서 규칙을 두지 않는다.
+이 목록의 나열 순서는 Reaction Type 표시 순서를 정의하지 않는다.
 
 ## 행동
 
@@ -114,7 +113,10 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 - Reaction Type별 개수는 대상 Post에 현재 존재하는 모든 Reaction을 포함하며, Post를 조회할 수 있는
   viewer 사이에서 달라지지 않는다.
 - Profile 목록에는 viewer가 조회할 수 있는 Profile의 Reaction만 포함한다.
-- Reaction Type은 개수가 많은 순서로 표시한다.
+- Post의 Reaction Type 요약은 각 Type에 현재 존재하는 Reaction 중 가장 이른 생성 시각 오름차순으로
+  표시한다. 같은 가장 이른 생성 시각에는 제품상 Type 우선순위를 뜻하지 않는 결정적 최종 순서를 적용한다.
+  한 Type의 현재 Reaction이 모두 제거됐다가 다시 생성되면 새로 존재하는 Reaction의 가장 이른 생성
+  시각으로 순서를 정한다.
 - Profile Block 생성 결과로 제거되는 Reaction 범위는 [Profile Block](./profile-block.md)이 정의한다.
 
 ## 확정 용어

@@ -206,6 +206,8 @@ export const Media = pgTable(
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
+    mediaType: text('media_type'),
+    url: text('url'),
     storageReference: text('storage_reference').unique().notNull(),
     uploadExpiresAt: datetime('upload_expires_at').notNull(),
     readyAt: datetime('ready_at'),

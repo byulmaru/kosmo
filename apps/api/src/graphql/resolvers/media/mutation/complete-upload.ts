@@ -2,8 +2,14 @@ import { db, first, firstOrThrowWith, Media } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { MediaObject } from '../ref';
+
+const representationResponseSchema = z.object({
+  mediaType: z.string().min(1),
+  url: z.httpUrl(),
+});
 
 const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -41,14 +47,13 @@ builder.mutationField('completeMediaUpload', (t) =>
         throw new Error('Media Storage Service is not configured');
       }
 
-      const completionPath = `/v1/uploads/${encodeURIComponent(media.storageReference)}`;
-      const completionUrl = new URL(completionPath, mediaStorageOrigin);
-      if (completionUrl.pathname !== completionPath) {
+      const representationPath = `/v1/uploads/${encodeURIComponent(media.storageReference)}`;
+      const representationUrl = new URL(representationPath, mediaStorageOrigin);
+      if (representationUrl.pathname !== representationPath) {
         throw new Error('Media Storage Service returned an unsafe upload reference');
       }
 
-      const response = await globalThis.fetch(completionUrl, {
-        method: 'HEAD',
+      const response = await globalThis.fetch(representationUrl, {
         headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
         signal: AbortSignal.any([
           ctx.c.req.raw.signal,
@@ -58,13 +63,24 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (response.status === 404) {
         throw new Error('Media upload is not complete');
       }
-      if (response.status !== 204) {
-        throw new Error(`Media Storage Service rejected upload completion (${response.status})`);
+      if (response.status !== 200) {
+        throw new Error(
+          `Media Storage Service rejected representation lookup (${response.status})`,
+        );
+      }
+      const representation = representationResponseSchema.safeParse(await response.json());
+      if (!representation.success) {
+        throw new Error('Media Storage Service returned an invalid representation');
       }
 
       const completed = await db
         .update(Media)
-        .set({ readyAt: Temporal.Now.instant(), state: MediaState.READY })
+        .set({
+          mediaType: representation.data.mediaType,
+          url: representation.data.url,
+          readyAt: Temporal.Now.instant(),
+          state: MediaState.READY,
+        })
         .where(
           and(
             eq(Media.id, media.id),

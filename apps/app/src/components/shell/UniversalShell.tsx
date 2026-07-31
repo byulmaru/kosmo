@@ -19,7 +19,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
-import { RightRail } from './RightRail';
+import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
@@ -224,6 +224,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             ]}
           >
             {profile ? <RightRail profile={profile} /> : null}
+            <RightRailPrivacyLink />
           </View>
         ) : null}
 

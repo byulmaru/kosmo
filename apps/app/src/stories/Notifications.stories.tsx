@@ -292,7 +292,7 @@ export const HeaderAndWebRefreshPolicy: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('heading', { name: '알림' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '알림 설정 (준비 중)' })).toBeDisabled();
+    expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
     expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
     expect(canvas.queryByRole('heading', { name: '모두' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '새로고침' })).not.toBeInTheDocument();
