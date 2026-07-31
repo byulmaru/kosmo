@@ -170,6 +170,7 @@ export function PostSourcePreview({
             bodyText={source.content.bodyText}
             document={source.content.document}
             interactive={false}
+            media={[]}
             size="md"
           />
         </View>
