@@ -116,6 +116,13 @@ PostContent 본문의 versioned ProseMirror document schema, 서버 검증·cano
 - **AND** 앱이 사용하는 core subpath는 JSON 타입과 runtime-independent type guard만 제공한다
 - **AND** React Native/Web bundle은 `prosemirror-model`, ProseMirror editor/view, TipTap 또는 WebView editor runtime을 포함하지 않는다
 
+#### Scenario: 앱 표시용 V1 guard의 additive 속성 호환
+
+- **WHEN** version `1` document가 필수 구조·타입과 안전한 absolute HTTP(S) link를 만족하면서 앱이 소비하지 않는 추가 object 속성을 포함한다
+- **THEN** runtime-independent type guard는 추가 속성을 무시하고 document를 유효한 V1 표시 입력으로 판정한다
+- **AND** 알 수 없는 node·mark, 누락되거나 잘못된 필수 값, 지원하지 않는 version과 안전하지 않은 link는 계속 거부한다
+- **AND** 서버의 canonical write validation과 저장 표현 정규화 경계는 완화하지 않는다
+
 ### Requirement: limited native and web renderer
 
 유니버설 앱은 V1 JSON의 paragraph, text, hard break와 link만 React Native primitive로 렌더링해야 한다(MUST).
@@ -130,6 +137,6 @@ PostContent 본문의 versioned ProseMirror document schema, 서버 검증·cano
 
 #### Scenario: 미지원 document 방어
 
-- **WHEN** 앱이 알 수 없는 document version, node, mark, attr 또는 안전하지 않은 link를 받는다
+- **WHEN** 앱이 알 수 없는 document version·node·mark, 잘못된 필수 attr 또는 안전하지 않은 link를 받는다
 - **THEN** 앱은 해당 값을 실행 가능한 UI로 렌더링하지 않는다
 - **AND** GraphQL이 제공한 파생 `bodyText`를 안전한 fallback으로 표시한다

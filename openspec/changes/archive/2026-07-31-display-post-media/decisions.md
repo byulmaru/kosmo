@@ -37,9 +37,28 @@ canonical Post Content·Media 모델과 공용 앱 접근성·Relay 제약을 �
 - Alternatives Considered: blur overlay와 image preload는 기본 비공개 의미를 약화시키므로 선택하지 않는다.
   Media마다 별도 공개 state를 두는 방식은 document root의 전체 Media 가림 계약과 맞지 않는다.
 - Consequences: 사용자가 표시하기 전에는 네트워크 이미지 요청도 시작하지 않는다. 목록과 상세에 같은 Post가
-  각각 mount되면 reveal state는 공유하지 않는다.
+  각각 mount되면 reveal state는 공유하지 않는다. Web에서는 공개·가리기 전환에도 같은 control을 mount
+  상태로 유지해 keyboard focus를 보존한다.
 - Confirmation / Follow-up: Storybook interaction과 component test에서 초기 미요청, 표시, 다시 가리기와
-  accessible state를 확인한다.
+  accessible state를 확인하고 Web keyboard focus가 같은 control에 남는지 검증한다.
+
+### 앱 표시용 V1 guard는 소비하지 않는 추가 속성을 무시한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post-content.md`, ADR-0022, PROD-571
+- Status: Active
+- Context / Problem: V1 안에서 허용되는 additive 속성이나 이전 초안의 `media.attrs.altText`처럼 앱이 소비하지
+  않는 속성 때문에 exact-shape guard가 전체 document 표시를 fallback으로 전환했다.
+- Decision Outcome: 유니버설 앱의 runtime-independent guard는 필수 V1 구조·타입, 지원 node·mark와 안전한
+  URL을 검증하되 소비하지 않는 추가 object 속성은 무시한다. 서버 canonical write validation은 계속 strict
+  schema를 적용하고 저장 전에 불필요한 속성을 제거한다.
+- Alternatives Considered: 알려진 legacy 속성을 하나씩 허용 목록에 추가하면 다음 additive 확장마다 같은
+  표시 장애가 반복되고, 서버 validator까지 완화하면 canonical 저장 계약을 약화하므로 선택하지 않는다.
+- Consequences: additive 속성이 있는 유효한 V1은 표시되지만 알 수 없는 node·mark, 잘못된 필수 값, 위험한
+  URL과 지원하지 않는 version은 계속 안전한 fallback으로 처리된다.
+- Confirmation / Follow-up: core unit test에서 여러 계층의 추가 속성과 legacy `altText`를 포함한 V1 수용,
+  미지원 node 거부를 함께 검증한다.
 
 ### Retry는 현재 표시 URL의 Image load만 다시 시작한다
 

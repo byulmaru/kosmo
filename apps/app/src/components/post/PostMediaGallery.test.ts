@@ -65,10 +65,12 @@ describe('PostMediaGallery', () => {
     await act(async () => reveal.props.onPress());
     assert.equal(rendered('PostMediaImage').length, 2);
     const hide = pressable('민감한 이미지 다시 가리기');
+    assert.equal(hide, reveal);
     assert.deepEqual(hide.props.accessibilityState, { expanded: true });
 
     await act(async () => hide.props.onPress());
     assert.equal(rendered('PostMediaImage').length, 0);
+    assert.equal(pressable('민감한 이미지 표시'), reveal);
   });
 
   it('표시 정보 unavailable을 Post 전체 오류 없이 표시한다', async () => {

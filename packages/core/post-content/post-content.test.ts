@@ -364,8 +364,53 @@ test('compares canonical body and summary meaning', () => {
   assert.equal(arePostContentRevisionsEqual(first, { ...second, summary: 'warning' }), false);
 });
 
-test('native-safe guard accepts only the V1 JSON contract', () => {
+test('native-safe guard accepts additive V1 properties while validating consumed values', () => {
   assert.equal(isPostContentDocumentV1(postContentDocumentFromText('body')), true);
+  assert.equal(
+    isPostContentDocumentV1({
+      version: 1,
+      summary: null,
+      ignoredDocumentProperty: true,
+      body: {
+        type: 'doc',
+        ignoredBodyProperty: true,
+        attrs: { sensitiveMedia: true, ignoredBodyAttr: true },
+        content: [
+          {
+            type: 'paragraph',
+            ignoredParagraphProperty: true,
+            content: [
+              {
+                type: 'text',
+                text: '링크',
+                ignoredTextProperty: true,
+                marks: [
+                  {
+                    type: 'link',
+                    ignoredMarkProperty: true,
+                    attrs: {
+                      href: 'https://example.com/',
+                      ignoredLinkAttr: true,
+                    },
+                  },
+                ],
+              },
+              { type: 'hard_break', ignoredHardBreakProperty: true },
+            ],
+          },
+          {
+            type: 'media',
+            ignoredMediaProperty: true,
+            attrs: {
+              mediaId: '019f6678-86fa-709b-984e-1520766b8447',
+              altText: '이전 초안 속성',
+            },
+          },
+        ],
+      },
+    }),
+    true,
+  );
   assert.equal(
     isPostContentDocumentV1({
       version: 1,

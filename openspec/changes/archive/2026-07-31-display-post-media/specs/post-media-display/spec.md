@@ -64,6 +64,7 @@
 - **WHEN** 사용자가 민감한 이미지 표시 action을 실행한다
 - **THEN** 같은 Post의 Media가 표시되고 control은 expanded 상태와 다시 가리기 action을 전달한다
 - **AND** 다시 가리기 action을 실행하면 같은 Post의 모든 Media가 가려진 기본 상태로 돌아간다
+- **AND** Web keyboard focus는 두 상태 전환 뒤에도 같은 visibility control에 유지된다
 
 #### Scenario: 일반 Media
 

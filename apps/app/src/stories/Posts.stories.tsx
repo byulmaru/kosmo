@@ -1816,14 +1816,17 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
     const revealSensitiveMedia = mediaOnly.getByRole('button', { name: '민감한 이미지 표시' });
     expect(revealSensitiveMedia).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(revealSensitiveMedia);
+    revealSensitiveMedia.focus();
+    await userEvent.keyboard('{Enter}');
     expect(mediaOnly.getByRole('img', { name: '1번째 첨부 이미지' })).toBeInTheDocument();
     const hideSensitiveMedia = mediaOnly.getByRole('button', {
       name: '민감한 이미지 다시 가리기',
     });
     expect(hideSensitiveMedia).toHaveAttribute('aria-expanded', 'true');
-    await userEvent.click(hideSensitiveMedia);
+    expect(hideSensitiveMedia).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
+    expect(mediaOnly.getByRole('button', { name: '민감한 이미지 표시' })).toHaveFocus();
 
     const fourMedia = within(canvas.getByTestId('media-four'));
     expect(fourMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([

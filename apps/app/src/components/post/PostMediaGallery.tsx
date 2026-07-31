@@ -37,24 +37,38 @@ export function PostMediaGallery({
     return null;
   }
 
-  if (sensitive && !revealed) {
+  if (sensitive) {
     return (
       <View
-        style={[styles.sensitive, { backgroundColor: theme.surface, borderColor: theme.border }]}
-        testID="post-media-sensitive"
+        style={
+          revealed
+            ? styles.root
+            : [styles.sensitive, { backgroundColor: theme.surface, borderColor: theme.border }]
+        }
+        testID={revealed ? 'post-media-gallery' : 'post-media-sensitive'}
       >
-        <Text style={[styles.sensitiveTitle, { color: theme.text }]}>민감한 이미지</Text>
-        <Text style={[styles.sensitiveDescription, { color: theme.textSecondary }]}>
-          작성자가 민감한 내용으로 표시했습니다.
-        </Text>
-        <MediaVisibilityButton expanded={false} onPress={() => setRevealed(true)} />
+        {revealed ? null : (
+          <Text style={[styles.sensitiveTitle, { color: theme.text }]}>민감한 이미지</Text>
+        )}
+        {revealed ? null : (
+          <Text style={[styles.sensitiveDescription, { color: theme.textSecondary }]}>
+            작성자가 민감한 내용으로 표시했습니다.
+          </Text>
+        )}
+        <MediaVisibilityButton
+          expanded={revealed}
+          key="media-visibility"
+          onPress={() => setRevealed((current) => !current)}
+        />
+        {revealed
+          ? items.map((item, index) => <PostMediaImage index={index} item={item} key={item.id} />)
+          : null}
       </View>
     );
   }
 
   return (
     <View style={styles.root} testID="post-media-gallery">
-      {sensitive ? <MediaVisibilityButton expanded onPress={() => setRevealed(false)} /> : null}
       {items.map((item, index) => (
         <PostMediaImage index={index} item={item} key={item.id} />
       ))}
