@@ -1,8 +1,22 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
-import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
-import { and, eq } from 'drizzle-orm';
+import {
+  ActivityPubActorKeys,
+  ActivityPubActors,
+  db,
+  first,
+  Media,
+  ProfileMedia,
+  Profiles,
+} from '@kosmo/core/db';
+import {
+  ActivityPubActorType,
+  MediaSource,
+  MediaState,
+  ProfileMediaKind,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { ensureLocalProfileActor } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
@@ -10,6 +24,7 @@ import type {
   CreateLocalActorRowInput,
   EnsureLocalProfileActorOptions,
   LocalActorStore,
+  LocalProfileActorMedia,
   LocalProfileActorProfile,
   LocalProfileActorResult,
   StoredLocalActorKey,
@@ -20,12 +35,16 @@ type LocalActorDbClient = Pick<Database, 'insert' | 'select'>;
 
 const toLocalProfileActorProfile = (
   profile: typeof Profiles.$inferSelect,
+  mediaByKind: ReadonlyMap<string, LocalProfileActorMedia>,
 ): LocalProfileActorProfile => ({
+  avatar: mediaByKind.get(ProfileMediaKind.AVATAR) ?? null,
   id: profile.id,
   handle: profile.handle,
   name: profile.displayName,
   bio: profile.bio,
   createdAt: profile.createdAt,
+  followPolicy: profile.followPolicy,
+  header: mediaByKind.get(ProfileMediaKind.HEADER) ?? null,
 });
 
 const findActorByProfileId = async (
@@ -98,7 +117,38 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
       .limit(1)
       .then(first);
 
-    return profile ? toLocalProfileActorProfile(profile) : undefined;
+    if (!profile) {
+      return undefined;
+    }
+
+    const media = await client
+      .select({
+        kind: ProfileMedia.kind,
+        mediaType: Media.mediaType,
+        url: Media.url,
+      })
+      .from(ProfileMedia)
+      .innerJoin(
+        Media,
+        and(eq(Media.id, ProfileMedia.mediaId), eq(Media.profileId, ProfileMedia.profileId)),
+      )
+      .where(
+        and(
+          eq(ProfileMedia.profileId, profile.id),
+          eq(Media.source, MediaSource.LOCAL),
+          eq(Media.state, MediaState.READY),
+          isNotNull(Media.url),
+          isNotNull(Media.mediaType),
+        ),
+      );
+    const mediaByKind = new Map<string, LocalProfileActorMedia>();
+    for (const item of media) {
+      if (item.url && item.mediaType) {
+        mediaByKind.set(item.kind, { mediaType: item.mediaType, url: item.url });
+      }
+    }
+
+    return toLocalProfileActorProfile(profile, mediaByKind);
   },
 
   findActorByProfileId(profileId) {
