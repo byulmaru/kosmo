@@ -159,6 +159,44 @@ test('handle 제출은 operationName을 포함한 Relay request와 사람 결과
   expect(operationName).toBe('SearchPeopleByHandlePageQuery');
 });
 
+test('명시적 원격 handle은 선행 @를 GraphQL 변수에 유지하고 빈 결과 상태를 보여준다', async ({
+  context,
+  page,
+}) => {
+  const remoteHandle = '@alice@remote.example';
+  let queryVariable: unknown;
+  await signInSearchUser(context);
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'SearchPeopleByHandlePageQuery') {
+      await route.continue();
+      return;
+    }
+
+    queryVariable = operation.variables?.query;
+    await route.fulfill({
+      body: JSON.stringify({
+        data: {
+          searchProfiles: {
+            edges: [],
+            pageInfo: { endCursor: null, hasNextPage: false },
+          },
+        },
+      }),
+      contentType: 'application/json',
+      status: 200,
+    });
+  });
+
+  await page.goto(`/search?q=${encodeURIComponent(remoteHandle)}&tab=people`);
+
+  await expect(page.getByText('검색 결과가 없어요')).toBeVisible();
+  await expect(
+    page.getByText(`'${remoteHandle}'에 해당하는 프로필을 찾지 못했어요.`),
+  ).toBeVisible();
+  expect(queryVariable).toBe(remoteHandle);
+});
+
 test('부분 handle 검색은 저장된 일치 Profile을 목록으로 표시한다', async ({ context, page }) => {
   const firstHandle = 'e2e-partial-alpha';
   const secondHandle = 'e2e-partial-beta';

@@ -331,6 +331,7 @@ describe('remote actor materialization', () => {
         expected,
       );
       assert.equal(await countRows(Profiles), 0);
+      assert.equal(await countRows(Instances), 1);
     }
   });
 
@@ -664,6 +665,30 @@ describe('remote actor materialization', () => {
         .then(firstOrThrow);
       assert.equal(profile.state, state);
       assert.equal(profile.displayName, 'alice');
+    });
+  }
+
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    test(`returns NotFound for a stored ${state} profile without a remote lookup`, async () => {
+      const stored = await createStoredRemoteActor({ profileState: state });
+      const { context, lookupObject } = createLookupContext(async () => createActor());
+
+      await assert.rejects(
+        findOrMaterializeRemoteProfileActor({
+          context,
+          handle: `alice@${remoteDomain}`,
+        }),
+        /Profile not found/,
+      );
+
+      assert.equal(lookupObject.mock.calls.length, 0);
+      const profile = await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(profile.state, state);
     });
   }
 
@@ -1018,7 +1043,7 @@ const createStoredRemoteActor = async ({
   return { actor, instance, profile };
 };
 
-const countRows = async (table: typeof Profiles | typeof ActivityPubActors) =>
+const countRows = async (table: typeof Profiles | typeof ActivityPubActors | typeof Instances) =>
   db
     .select({ value: count() })
     .from(table)

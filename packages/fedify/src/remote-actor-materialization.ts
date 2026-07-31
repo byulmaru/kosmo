@@ -167,7 +167,7 @@ const requireAvailableRemoteInstance = (
   return instance;
 };
 
-const ensureRemoteInstance = async (
+const findAvailableRemoteInstance = async (
   domain: string,
   { allowUnresponsive = false }: { allowUnresponsive?: boolean } = {},
 ) => {
@@ -180,6 +180,19 @@ const ensureRemoteInstance = async (
 
   if (existing) {
     return requireAvailableRemoteInstance(existing, { allowUnresponsive });
+  }
+
+  return undefined;
+};
+
+const ensureRemoteInstance = async (
+  domain: string,
+  { allowUnresponsive = false }: { allowUnresponsive?: boolean } = {},
+) => {
+  const existing = await findAvailableRemoteInstance(domain, { allowUnresponsive });
+
+  if (existing) {
+    return existing;
   }
 
   return db
@@ -243,7 +256,6 @@ const findStoredRemoteProfile = async (domain: string, normalizedHandle: string)
         eq(Instances.domain, domain),
         eq(Instances.kind, InstanceKind.ACTIVITYPUB),
         eq(Profiles.normalizedHandle, normalizedHandle),
-        eq(Profiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
@@ -369,6 +381,10 @@ export const findOrMaterializeRemoteProfileActor = async ({
   const stored = await findStoredRemoteProfile(parsed.domain, parsed.normalizedHandle);
 
   if (stored) {
+    if (stored.profile.state !== ProfileState.ACTIVE) {
+      throw new NotFoundError('Profile not found');
+    }
+
     if (stored.instance.state === InstanceState.SUSPENDED) {
       throw new NotFoundError('Profile not found');
     }
@@ -405,7 +421,7 @@ export const materializeRemoteProfileActor = async ({
     throw new RemoteActorMaterializationError('Remote materialization requires a remote handle.');
   }
 
-  const requestedRemoteInstance = await ensureRemoteInstance(parsed.domain, {
+  const existingRequestedRemoteInstance = await findAvailableRemoteInstance(parsed.domain, {
     allowUnresponsive: reactivateUnresponsive,
   });
   const actor = await lookupRemoteActor(context, `${parsed.handle}@${parsed.domain}`);
@@ -428,6 +444,11 @@ export const materializeRemoteProfileActor = async ({
     actorId.port ? `${canonicalActorHostname}:${actorId.port}` : canonicalActorHostname,
     { allowUnresponsive: reactivateUnresponsive },
   );
+  const requestedRemoteInstance =
+    existingRequestedRemoteInstance ??
+    (await ensureRemoteInstance(parsed.domain, {
+      allowUnresponsive: reactivateUnresponsive,
+    }));
 
   const persistActor = () =>
     db.transaction(async (tx) => {
