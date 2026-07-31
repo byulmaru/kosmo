@@ -27,6 +27,10 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   이미지에 연결한다. 일반 Media Node의 owner-only 정책은 넓히지 않는다.
 - route는 Media picker/upload 결과, field별 재시도, Ready ID 보존, Relay 정규화, dirty navigation 확인과 성공
   navigation을 연결한다. 저장 중에는 navigation을 차단한다.
+- `PROD-613`은 DB commit 이후 GraphQL payload·BFF response·Relay callback·navigation 중 멈춘 경계를
+  계측하고 재현한 뒤, 기존 저장 성공·실패 복구 계약이 영구 `saving` 없이 끝나도록 회귀를 수정한다. 저장
+  결과를 확인하지 못한 경우에도 현재 draft와 Ready Media ID를 보존해 이미지 재업로드 없이 복구·재시도할
+  수 있게 한다.
 - Web은 기존 shell의 최대 600px 중앙 route를 사용하고 1440/1024 단계와 mobile/native 정보 구조를 공유한다.
 - header 이미지 변경 영역은 avatar·편집 action을 담는 hero wrapper와 분리하고 모든 지원 폭에서 가로:세로
   `3:1`을 유지한다. 원본 비율이 다르면 해당 preview 안에서 cover crop한다.
@@ -42,7 +46,8 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`,
   `docs/design/profile-tags.md`
 - Linear Contract: `PROD-490`
-- Linear Implementations: `PROD-491` (presentation), `PROD-492` (route·API·Media 연결)
+- Linear Implementations: `PROD-491` (presentation), `PROD-492` (route·API·Media 연결), `PROD-613`
+  (post-commit 응답·Relay·navigation 회귀 조사와 수정)
 - Blocking implementation: `PROD-581` (Local Media 완료 시 공개 URL·media type metadata 저장)
 - Related contracts: `PROD-522`·`PROD-526`·`PROD-527` (Profile Tag), `PROD-531` (향후 Follow Approval Policy 이전)
 
@@ -66,7 +71,7 @@ Local Profile의 displayName, bio와 avatar/header를 수정할 production 화�
   Media 자체를 보존하고 공개 ProfileHero에 viewer-authorized avatar/header를 표시
 - Profile Tag: `PROD-491` presentation을 `PROD-527`이 재사용하며 이 change는 저장·공개 표시를 완료로 간주하지 않음
 - Verification: DB 제약·초기 부적격 권한 거부·guest/public read, API/Core text·Media 원자성, Relay·부분 upload 재시도,
-  Web/native dirty route와 부모 종단 간 검증
+  post-commit 응답 이상·Relay callback·navigation terminal state, Web/native dirty route와 부모 종단 간 검증
 - Excluded systems: Settings 전체 정보 구조와 `PROD-531`의 Follow Approval Policy 이전, Profile Tag
   storage/public display, Profile Link·handle, Media upload 인프라, crop editor, Admin role 제거, orphan Media cleanup,
   thumbnail·variant·Remote Media와 Fedify/ActivityPub

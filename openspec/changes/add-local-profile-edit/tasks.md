@@ -161,7 +161,60 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 - [x] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 명시적 제외를
       구분해 PROD-492 PR에 권한·Media·Relay·navigation 증거와 Native 출시 gate를 기록한다.
 
-## 3. PROD-490 통합 검증과 OpenSpec archive
+## 3. PROD-613 post-commit 응답·Relay·navigation 회귀 수정
+
+**Authority / Provenance**
+
+- `docs/design/profile-edit.md`
+- `PROD-490`
+- `PROD-613`
+
+**Deliverable**
+
+DB commit 이후 GraphQL payload·BFF response·Relay callback·navigation 중 실제로 멈춘 경계를 관측 근거로
+특정하고, 정상 저장과 응답·navigation 이상이 모두 영구 `saving` 대신 성공 또는 복구 가능한 상태로 끝나게
+한다. 저장 결과를 확인하지 못한 경우에도 현재 draft와 Ready avatar/header Media ID를 보존해 이미지
+재업로드 없이 안전하게 확인·재시도할 수 있게 한다.
+
+**Guardrails**
+
+- 단계별 timing과 correlation, fault injection으로 실제 경계를 확인하기 전에 timeout이나 navigation state
+  변경을 원인·해법으로 고정하지 않는다.
+- 정상 성공은 기존 guard 해제→Relay normalization→갱신된 `relativeHandle` Profile replace 계약을 유지하고,
+  실패·결과 불확실 상태는 text·policy·Ready image draft를 보존한다.
+- 저장 복구는 Ready Media ID를 재사용하며 자동 mutation 재전송이나 이미지 재업로드를 실행하지 않는다.
+- 범용 GraphQL tracing·timeout·streaming 변경, Media Storage Service 성능·이미지 압축/resize, Profile Tag와
+  Native 실제 기기 QA로 범위를 넓히지 않는다. 확인된 원인이 별도 행동 계약이나 공통 인프라 변경을 요구하면
+  구현 전에 canonical 문서와 Linear 범위를 먼저 갱신한다.
+- PROD-613은 원인·수정·회귀 테스트와 Web runtime 증거만 소유한다. 전체 Profile edit 통합 검증과
+  `add-local-profile-edit` archive는 PROD-490에 남긴다.
+
+**Verification**
+
+- text-only 저장과 Ready avatar/header 두 장을 포함한 저장을 분리해 browser→BFF→API transaction→GraphQL
+  child field→response body→Relay callback→navigation timing을 같은 correlation으로 확인한다.
+- 확인된 post-commit 경계의 지연·응답 유실과 navigation 실패를 fault injection으로 재현하고, 정상 성공·
+  GraphQL/transport 실패와 함께 영구 `saving`이 남지 않는지 검증한다.
+- 저장 결과가 불확실하거나 실패해도 현재 text·policy·Ready Media ID가 유지되고 save retry에서
+  issue→PUT→complete를 다시 실행하지 않는지 확인한다.
+- 기존 dirty navigation guard, Relay normalized Profile 갱신, avatar/header omitted/ID/null과 validation이
+  회귀하지 않는지 관련 app·API·BFF·core test로 확인한다.
+- Web dev 환경에서 실제 저장을 재검증하고 원인, 수정 경계, 자동화 결과와 Native 실제 기기 QA 미실행을
+  PROD-613 PR에 기록한다.
+
+- [ ] 3.1 text-only와 Ready avatar/header 두 장 저장을 단계별 correlation으로 재현해 최초 정지 경계와 정상
+      기준 시간을 PROD-613 또는 PR에 기록한다.
+- [ ] 3.2 확인된 post-commit 경계와 navigation 실패를 가장 좁은 기존 test surface에서 fault injection하고
+      수정 전 영구 `saving`을 재현하는 회귀 test를 추가한다.
+- [ ] 3.3 `design.md`의 계측 우선 guidance에 따라 확인된 경계만 수정해 저장 UI를 terminal 상태로 수렴시키고,
+      draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다. 새 사용자 행동이나 공통 인프라
+      계약이 필요하면 구현을 멈추고 canonical·Linear·OpenSpec을 먼저 정렬한다.
+- [ ] 3.4 정상 성공, GraphQL/transport 실패, post-commit 응답 이상, callback 미도착과 navigation 실패를 자동화하고
+      dirty guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
+- [ ] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
+      PROD-490 통합 검증 담당자에게 evidence를 전달한다.
+
+## 4. PROD-490 통합 검증과 OpenSpec archive
 
 **Authority / Provenance**
 
@@ -193,10 +246,11 @@ canonical·Linear·구현·OpenSpec이 일치할 때 `add-local-profile-edit`을
   followPolicy Switch가 enum과 동일 저장 경계로 제공되는지 확인한다.
 - archive 전후 strict validation과 delta spec 동기화를 확인한다.
 
-- [ ] 3.1 PROD-491·492 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
-- [ ] 3.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·dirty navigation 복구를
+- [ ] 4.1 PROD-491·492·613 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
+- [ ] 4.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·post-commit 응답 이상·
+      dirty navigation 복구를
       종단 간 검증한다.
-- [ ] 3.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
+- [ ] 4.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
       Pending Follow Request 불변과 Profile Link 제외 범위·기존 Profile 조회 회귀를 확인한다.
-- [ ] 3.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
-- [ ] 3.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
+- [ ] 4.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
+- [ ] 4.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
