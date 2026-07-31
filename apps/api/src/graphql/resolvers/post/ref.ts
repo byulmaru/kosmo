@@ -1,10 +1,11 @@
-import { db, Instances, Media, PostContents, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
+import { mediaByIdLoader } from '../media/loader/by-id';
 import { MediaObject } from '../media/ref';
 import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
@@ -79,26 +80,18 @@ PostContent.implement({
       type: [MediaObject],
       nullable: true,
       grantScopes: ['readMedia'],
-      resolve: async (content) => {
+      resolve: async (content, _, ctx) => {
         const mediaNodes = content.document.body.content.filter((block) => block.type === 'media');
         if (mediaNodes.length === 0) {
           return [];
         }
 
-        const mediaRows = await db
-          .select(getColumns(Media))
-          .from(Media)
-          .where(
-            inArray(
-              Media.id,
-              mediaNodes.map((node) => node.attrs.mediaId),
-            ),
-          );
-        const mediaById = new Map(mediaRows.map((media) => [media.id, media]));
-        const result: (typeof Media.$inferSelect)[] = [];
+        const mediaRows = await Promise.all(
+          mediaNodes.map((node) => mediaByIdLoader(ctx).load(node.attrs.mediaId)),
+        );
+        const result: NonNullable<(typeof mediaRows)[number]>[] = [];
 
-        for (const node of mediaNodes) {
-          const media = mediaById.get(node.attrs.mediaId);
+        for (const media of mediaRows) {
           if (!media || media.state !== MediaState.READY || !media.url || !media.mediaType) {
             return null;
           }

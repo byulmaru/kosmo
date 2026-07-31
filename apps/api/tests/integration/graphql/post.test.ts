@@ -191,6 +191,43 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('여러 PostContent의 Media를 요청당 한 번에 batch 조회한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const firstMedia = await createReadyMedia(auth.account.id, auth.profile.id);
+    const secondMedia = await createReadyMedia(auth.account.id, auth.profile.id);
+    const firstPost = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '첫 번째', mediaId: encodeGlobalId('Media', firstMedia.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    const secondPost = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '두 번째', mediaId: encodeGlobalId('Media', secondMedia.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(firstPost);
+    assertNoGraphQLErrors(secondPost);
+    const selectMock = t.mock.method(db, 'select');
+
+    const result = await requestPostContents([
+      firstPost.data!.createPost.post.id,
+      secondPost.data!.createPost.post.id,
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(selectMock.mock.callCount(), 4);
+    assert.deepEqual(
+      result.data?.nodes.map((node) => node?.content.media?.[0]?.altText),
+      ['첫 번째', '두 번째'],
+    );
+  });
+
   test('Media 재사용 시 최신 Alt Text가 모든 참조에서 보인다', async () => {
     const auth = await createAuthenticatedSession();
     const bodyOnly = await requestCreatePost(
@@ -1079,6 +1116,20 @@ const requestPostContent = (postId: string, token?: string) =>
     }`,
     { postId },
     token,
+  );
+
+const requestPostContents = (postIds: string[]) =>
+  requestGraphQL<{ nodes: Array<PostContentNode | null> }>(
+    `query PostMediaContents($postIds: [ID!]!) {
+      nodes(ids: $postIds) {
+        ... on Post {
+          content {
+            media { altText id mediaType url }
+          }
+        }
+      }
+    }`,
+    { postIds },
   );
 
 const requestMediaNode = (mediaId: string, token?: string) =>

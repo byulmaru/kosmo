@@ -1,17 +1,17 @@
-import { db, Media } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
-import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
+import { mediaByIdLoader } from './loader/by-id';
 
-export const MediaObject = createObjectRef('Media', (ids, ctx) => {
+export const MediaObject = createObjectRef('Media', async (ids, ctx) => {
   if (!ctx.session) {
-    return Promise.resolve([]);
+    return [];
   }
 
-  return db
-    .select(getColumns(Media))
-    .from(Media)
-    .where(and(inArray(Media.id, ids), eq(Media.accountId, ctx.session.accountId)));
+  const media = await mediaByIdLoader(ctx).loadMany(ids);
+
+  return media.map((item) =>
+    item instanceof Error || item?.accountId !== ctx.session?.accountId ? null : item,
+  );
 });
 
 MediaObject.implement({
