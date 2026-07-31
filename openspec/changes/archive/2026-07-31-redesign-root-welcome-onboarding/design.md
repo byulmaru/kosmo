@@ -9,10 +9,10 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 **Goals:**
 
 - 확정된 제품 소개, 오픈 베타, 별마루 계정·이메일 인증 카피를 표시한다.
-- full logo와 Hero를 같은 column으로 구성하고 160×101px logo를 유지한다. 모바일은 44px 상단 여백,
+- full logo와 Hero를 같은 column으로 구성하고 160×101px logo를 유지한다. 모바일 Web은 44px 상단 여백,
   compact/full Web은 viewport 수직 중앙 정렬을 사용한다.
 - 768/1280 공용 breakpoint로 24/128/256px Web 가로 여백을 적용한다.
-- 모바일 Web·Android·iOS heading은 단어 단위 줄바꿈을 우선한다.
+- 모바일 Web heading은 단어 단위 줄바꿈을 우선한다.
 - 기존 auth/session/navigation와 개인정보 처리방침 진입을 보존한다.
 - 최소 unit, Web E2E, 3 viewport smoke와 Figma 1440/1024 frame으로 검증한다.
 
@@ -35,11 +35,10 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 ### Recommended Approach
 
 - `BrandLogo` full variant의 style을 `{ height: (width * 1050) / 1665, width }`로 만들고 기존 unit test를 이 geometry로 갱신한다.
-- root에서 platform과 공용 breakpoint에 따라 horizontal padding을 계산한다. Web은 24/128/256px, native는 24px이다.
-- 모바일 `ScrollView` content에는 top 44px과 bottom semantic spacing을 준다. compact/full Web은 대칭 vertical
+- root에서 platform과 공용 breakpoint에 따라 horizontal padding을 계산한다. Web은 24/128/256px을 사용하며 공유 native route의 기존 AuthSession 동작은 보존한다.
+- 모바일 Web `ScrollView` content에는 top 44px과 bottom semantic spacing을 준다. compact/full Web은 대칭 vertical
   padding 안에서 단일 `hero` column을 flex 수직 중앙에 둔다.
-- 모바일 Web title은 `word-break: keep-all`, iOS는 `hangul-word`, Android는 high-quality line breaking과
-  hyphenation 비활성화를 사용한다.
+- 모바일 Web title은 `word-break: keep-all`을 사용한다. Android/iOS 전용 presentation geometry와 줄바꿈은 이 change의 완료 계약으로 추가하지 않는다.
 - eyebrow와 width별 copy 분기를 제거하고 제목·두 줄 beta notice·CTA·두 줄 account notice를 승인 문구 그대로 표시한다.
 - 기존 error alert, privacy link, Web/native login branch와 session effect를 그대로 둔다.
 - Web E2E는 정확한 카피와 375/1024/1440 bounding box를 같은 기존 auth route suite에서 검증한다.

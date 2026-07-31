@@ -114,10 +114,7 @@ export default function IndexScreen() {
         <View style={styles.heroContent}>
           <Text
             accessibilityRole="header"
-            android_hyphenationFrequency="none"
-            lineBreakStrategyIOS="hangul-word"
             style={[styles.title, { color: theme.text }, isMobileWeb ? mobileWebTitleStyle : null]}
-            textBreakStrategy="highQuality"
           >
             동인 창작 문화 향유자를 위한 차세대 연합우주 SNS
           </Text>

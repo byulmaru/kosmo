@@ -64,7 +64,7 @@
 **Guardrails**
 
 - `/home` 온보딩, auth/OIDC/session 내부, 새 route·asset, privacy 내용과 다른 route copy를 바꾸지 않는다.
-- Android/iOS는 24px 가로 여백을 사용하고 native AuthSession을 유지한다.
+- 공유 root route의 기존 native AuthSession은 유지하되 Android/iOS 전용 presentation geometry와 줄바꿈은 완료 계약에 추가하지 않는다.
 - 테스트 코드 범위: 기존 `auth-routes.e2e.ts`의 guest/session/OIDC와 375/1024/1440 geometry.
 - 테스트 필요성: 승인 카피, x/y/size, CTA destination과 auth regression을 관찰 가능한 결과로 검증한다.
 - 테스트 제외 범위: 새 fixture/helper/harness, screenshot golden, Storybook interaction, 전체 navigation suite와 Android/iOS 자동화.
@@ -94,7 +94,7 @@ production 구현을 375/1024/1440 Web에서 검증하고 Figma 1440/1024 Onboar
 
 - Figma file `Erj975S6vVP8PlHQius801`, `05 Screens - Web → 🔑 Onboarding`의 기존 1440/1024 frame만 수정한다.
 - 375 Figma frame, unrelated component/screen과 외부 library token을 추가하지 않는다.
-- 자동화, local browser, Figma, 배포 Web와 Android/iOS 실제 기기 QA를 서로 다른 검증 증거로 보고한다.
+- 자동화, local browser, Figma와 배포 Web smoke를 서로 다른 검증 증거로 보고한다. Android/iOS 실제 기기 presentation QA는 이 change의 완료 조건이 아니다.
 - 모든 requirement와 task가 완료되기 전에는 change를 archive하지 않는다.
 
 **Verification**
@@ -107,16 +107,15 @@ production 구현을 375/1024/1440 Web에서 검증하고 Figma 1440/1024 Onboar
 
 - [x] 4.1 local Web 세 viewport에서 logo x/y/size, heading alignment, copy·CTA·privacy, overflow를 확인한다.
 - [x] 4.2 Figma Onboarding 1440/1024 frame을 production 구현과 동기화하고 node read-back·screenshot을 확인한다.
-- [x] 4.3 전체 자동화와 독립 implementation review를 통과시키고 local/Figma/deployed/native 검증 경계를 기록한다.
+- [x] 4.3 전체 자동화와 독립 implementation review를 통과시키고 local/Figma/deployed Web 검증 경계와 native presentation 제외 범위를 기록한다.
 - [x] 4.4 canonical·Linear·delta spec·구현과 다른 active `web-app-shell` change를 재대조한 뒤 전체 scope가 complete일 때 archive하고 post-archive strict validation을 통과시킨다.
 
-## 5. DSN-26 owner 시각 승인 후 responsive Hero 조정
+## 5. DSN-26 최종 계약 정정 후 responsive Hero 조정
 
 **Authority / Provenance**
 
 - [DSN-26](https://linear.app/byulmaru/issue/DSN-26/)의 Web viewport 수직 배치 범위
-- 2026-07-31 구현 thread에서 compact 128px, full 256px, desktop 수직 중앙과 모바일 단어 단위 줄바꿈을
-  확정하고 API 없는 local preview를 owner가 시각 승인함
+- [DSN-26](https://linear.app/byulmaru/issue/DSN-26/)의 `PR #477 리뷰 반영 — 최종 Welcome 배치 계약 정정` 댓글
 
 **Verification**
 
@@ -126,6 +125,6 @@ production 구현을 375/1024/1440 Web에서 검증하고 Figma 1440/1024 Onboar
 - archive 전후 strict OpenSpec validation
 
 - [x] 5.1 기존 구현에서 375 heading `word-break: normal`, 1024 x=48, 1440 x=128로 focused E2E RED를 확인한다.
-- [x] 5.2 모바일 24/44와 단어 단위 heading 줄바꿈, compact 128px, full 256px, desktop Hero 수직 중앙을 구현하고 focused E2E 3/3·정적 검증을 통과시킨다.
+- [x] 5.2 모바일 Web 24/44와 단어 단위 heading 줄바꿈, compact 128px, full 256px, desktop Hero 수직 중앙을 구현하고 focused E2E 3/3·정적 검증을 통과시킨다.
 - [x] 5.3 Figma Onboarding 1440/1024 frame을 최종 production 배치와 동기화하고 node read-back·screenshot을 확인한다.
 - [x] 5.4 canonical·delta spec·구현을 재대조하고 change를 다시 archive한 뒤 post-archive strict validation을 통과시킨다.
