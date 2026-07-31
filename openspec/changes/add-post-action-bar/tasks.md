@@ -154,6 +154,6 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - [ ] 4.2 목록·상세에서 Reaction·Bookmark의 callback과 default·pending·disabled 처리 상태를 PROD-414가 배치한 공통 Action Bar에 연결하고 각각 `hasReacted`·`hasBookmarked`를 공급한다. Reply는 PROD-425의 상위 Composer `expanded`와 optional count 경계를 유지한다.
 - [ ] 4.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고 관계 조합, Post Visibility·권한별 disabled, target이 적격한 guest의 인증 위임, target이 부적격한 guest의 disabled 유지와 action별 pending·실패 복구를 적용한다. display Post와 action target을 구분하고 순수 Repost는 Source target을 유지한다.
 - [ ] 4.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 연결하고 Web·Android·iOS의 canonical origin 계약을 검증한다.
-- [ ] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, PROD-414 Repost menu·toast 회귀, 대상 정책·guest 위임과 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되는 geometry도 검증한다.
+- [ ] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, PROD-414 Repost menu·toast 회귀, 대상 정책·guest 위임과 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 target 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry도 검증한다.
 - [ ] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 - [ ] 4.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.

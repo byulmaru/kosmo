@@ -10,7 +10,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - Bar와 각 interactive control의 높이는 Web·Android·iOS 모두 28px·28dp·28pt다. Native 값은 출시 전 임시 예외이며 아래 release gate를 통과하기 전에는 Native 접근성 완료를 주장하지 않는다.
 - Bar는 가용 너비를 채우고 Reply control slot의 왼쪽 경계와 More control slot의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. 나머지 action은 그 사이를 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
-- Reply, Repost, Reaction, Bookmark의 action slot 너비는 각각 50px다. More는 16px glyph를 사용하되 실제 interactive target 너비를 최소 28px로 확보하고 target 오른쪽 경계를 content column 오른쪽 끝에 맞춘다.
+- Reply, Repost, Reaction, Bookmark의 action slot 너비는 각각 50px이며 icon-count visual group을 slot 왼쪽에 맞춘다. 따라서 각 glyph의 왼쪽 경계는 자기 slot의 왼쪽 경계와 일치한다. More는 이 왼쪽 정렬에서 제외해 16px glyph를 최소 28px interactive target 가운데에 두고 target 오른쪽 경계를 content column 오른쪽 끝에 맞춘다.
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.

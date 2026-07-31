@@ -322,10 +322,10 @@
 - Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
 - Status: Active
 - Context / Problem: Action Bar와 PostBody는 같은 content column을 사용하지만 Bar의 별도 좌우 8px inset 때문에 Reply와 More control slot이 본문 양끝보다 안쪽에 놓이고, 중간 action도 더 좁은 내부 폭에서 분배된다.
-- Decision Outcome: Bar와 모든 control의 높이 28, Reply·Repost·Reaction·Bookmark target 너비 50, More target 최소 너비 28, glyph 16×16, icon-count 간격 4와 고정 순서를 유지한다. Bar에는 별도 좌우 inset을 두지 않고 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. Repost·Reaction·Bookmark는 두 endpoint 사이를 `space-between`으로 균등 분배한다.
+- Decision Outcome: Bar와 모든 control의 높이 28, Reply·Repost·Reaction·Bookmark target 너비 50, More target 최소 너비 28, glyph 16×16, icon-count 간격 4와 고정 순서를 유지한다. Bar에는 별도 좌우 inset을 두지 않고 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. Repost·Reaction·Bookmark는 두 endpoint 사이를 `space-between`으로 균등 분배한다. Reply·Repost·Reaction·Bookmark의 icon-count visual group은 각 50px target 왼쪽에 맞춰 glyph 왼쪽 경계가 target 왼쪽 경계와 일치하게 하고, More glyph는 28px target 가운데 정렬을 유지한다.
 - Alternatives Considered: 기존 8px inset을 유지하면 PostBody와 Action Bar가 같은 content column을 사용하면서도 endpoint가 어긋나는 현재 회귀가 남아 채택하지 않았다. 각 production surface에서 음수 margin이나 별도 width를 적용하는 방식은 공용 Bar와 list/detail/Quote/순수 Repost 사이의 geometry drift를 만들므로 채택하지 않았다.
-- Consequences: 공용 `PostActionBar` root의 좌우 inset만 제거되며 list/detail/Quote/순수 Repost에 같은 endpoint 정렬이 적용된다. 목록 slot 하단 4px, Quote Source preview border 밖 8px 간격, Repost menu item 좌우 8px padding과 기존 target 크기·접근성 계약은 유지한다.
-- Confirmation / Follow-up: focused Storybook에서 compact geometry와 390px·900px·1400px 목록·상세 fixture의 Reply left edge, More right edge, 중간 action non-overlap을 검증하고 Home runtime에서 PostBody content column과의 정렬을 확인한다.
+- Consequences: 공용 `PostActionBar` root의 좌우 inset을 제거하고 non-More control의 icon-count visual group을 각 50px target 왼쪽에 맞춘다. More는 28px target 중앙 정렬을 유지하며 list/detail/Quote/순수 Repost에 같은 endpoint·glyph 정렬이 적용된다. 목록 slot 하단 4px, Quote Source preview border 밖 8px 간격, Repost menu item 좌우 8px padding과 기존 target 크기·접근성 계약은 유지한다.
+- Confirmation / Follow-up: focused Storybook에서 compact geometry와 390px·900px·1400px 목록·상세 fixture의 Reply target left edge, More target right edge, non-More glyph left edge, More glyph center, 중간 action non-overlap을 검증하고 Home runtime에서 Reaction Summary pill 시작선과 Reply glyph 시작선의 정렬을 확인한다.
 
 ## Remaining Decisions
 
