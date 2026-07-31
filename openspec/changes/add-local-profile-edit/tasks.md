@@ -122,7 +122,8 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 
 - Owner·Member·무관 Account·guest, Local/Remote·inactive/suspended Profile, selected mismatch와 direct route
   StateView를 API·route test로 검증한다.
-- Profile/Membership/Account 동시 권한 변경이 전체 update를 rollback하는지 확인한다.
+- Profile/Membership/Account가 처음부터 부적격이면 전체 update를 거부하고, action 시작 뒤 eligibility 변경은
+  실행 중 요청을 취소하지 않으며 이후 요청부터 거부하는지 확인한다.
 - 새로 입력·변경한 displayName Unicode code point 1~40과 astral 문자 경계, 40 code point 초과 legacy 초기값
   그대로+다른 field 변경, legacy 초기값 변경 거부, 앞뒤 공백 제거 후 bio 500 경계, omitted/ID/null,
   Ready/Uploading·다른 Profile Media와 교체·제거·한쪽 invalid rollback을 통합 test로 확인한다. upload 실패는

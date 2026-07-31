@@ -1,9 +1,9 @@
-import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
+import { GuardedLink } from './GuardedLink';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 const RightRailFragment = graphql`
@@ -21,7 +21,7 @@ export function RightRailPrivacyLink() {
   const theme = useTheme();
 
   return (
-    <Link asChild href="/privacy">
+    <GuardedLink href="/privacy">
       <Pressable
         accessibilityLabel="개인정보 처리방침"
         accessibilityRole="link"
@@ -29,7 +29,7 @@ export function RightRailPrivacyLink() {
       >
         <Text style={[styles.privacyLabel, { color: theme.textSecondary }]}>개인정보 처리방침</Text>
       </Pressable>
-    </Link>
+    </GuardedLink>
   );
 }
 

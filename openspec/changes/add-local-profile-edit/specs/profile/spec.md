@@ -11,11 +11,19 @@
 - **THEN** 시스템은 selected Profile의 표현 값, `followPolicy`와 avatar/header 관계를 원자적으로 변경한다
 - **AND** payload는 갱신된 Profile을 반환해 Relay normalized record를 동기화할 수 있게 한다
 
-#### Scenario: Revalidate authorization at commit
+#### Scenario: Validate authorization when the update starts
 
-- **WHEN** route 조회 뒤 저장 commit 전에 Profile lifecycle/suspension, Owner Membership 또는 Account active 상태가 바뀐다
-- **THEN** 시스템은 transaction 안에서 현재 selected Profile·Owner Membership·Account eligibility를 다시 확인해 수정을 거부한다
+- **WHEN** 저장 action을 시작할 때 selected Profile·Owner Membership·Account·Local Profile eligibility 중 하나가
+  유효하지 않다
+- **THEN** 시스템은 현재 상태를 server-authoritative하게 확인해 수정을 거부한다
 - **AND** displayName, bio, `followPolicy`와 avatar/header 관계를 모두 저장 전 상태로 유지한다
+
+#### Scenario: Apply a later eligibility change to subsequent updates
+
+- **WHEN** 저장 action이 eligibility 확인을 통과한 뒤 commit 전에 Profile lifecycle/suspension, Owner Membership
+  또는 Account active 상태가 바뀐다
+- **THEN** 이미 승인된 실행 중 요청은 별도 lock 없이 완료될 수 있다
+- **AND** 상태 변경 뒤 시작한 요청은 현재 eligibility로 거부한다
 
 ### Requirement: Guest-safe selected Profile edit capability
 
