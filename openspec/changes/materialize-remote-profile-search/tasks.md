@@ -34,10 +34,10 @@ actor materialization 뒤 canonical Profile을 기존 `searchProfiles` connectio
 - Fedify 관련 test로 기존 lookup·SSRF·Instance 상태·identity·transaction 계약이 유지되는지 확인한다.
 - schema diff와 migration이 없고 public package dependency만 사용했는지 확인한다.
 
-- [ ] 1.1 인증된 명시적 원격 qualified handle만 actor 준비 단계를 실행하고 성공한 canonical Profile을 기존 DB connection 결과로 반환하도록 구현한다.
-- [ ] 1.2 저장 actor의 stale refresh를 억제하고 local·일반·불완전 remote·비인증 검색과 exact Profile 조회의 zero-network 경계를 유지한다.
-- [ ] 1.3 expected materialization 실패를 빈 connection으로 격리하고 unexpected 오류를 관측하되 기존 DB 검색 오류 semantics는 유지한다.
-- [ ] 1.4 auth, trigger, 저장/미저장, alias, 실패·관측, visibility, cursor, 동시성 matrix를 API/Fedify/PostgreSQL 테스트로 추가하고 통과시킨다.
+- [x] 1.1 인증된 명시적 원격 qualified handle만 actor 준비 단계를 실행하고 성공한 canonical Profile을 기존 DB connection 결과로 반환하도록 구현한다.
+- [x] 1.2 저장 actor의 stale refresh를 억제하고 local·일반·불완전 remote·비인증 검색과 exact Profile 조회의 zero-network 경계를 유지한다.
+- [x] 1.3 expected materialization 실패를 빈 connection으로 격리하고 unexpected 오류를 관측하되 기존 DB 검색 오류 semantics는 유지한다.
+- [x] 1.4 auth, trigger, 저장/미저장, alias, 실패·관측, visibility, cursor, 동시성 matrix를 API/Fedify/PostgreSQL 테스트로 추가하고 통과시킨다.
 
 ## 2. PROD-573 검색·route 회귀와 change 완료
 
