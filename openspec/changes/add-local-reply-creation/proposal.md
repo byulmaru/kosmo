@@ -6,14 +6,14 @@ Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사�
 
 - 기존 `createPost` 입력에 nullable `replyParentId`를 추가하고, 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 본문·Visibility를 가진 일반 Reply를 생성한다.
 - 목록의 Reply action은 화면 폭과 platform에 맞는 modal 또는 전체 화면 surface에서, Post 상세의 Reply action은 현재 thread 안의 inline surface에서 기존 composer를 Parent 맥락으로 연다. 성공하면 현재 화면과 focus를 유지하면서 결과 Reply로 이동할 수 있는 `보기` action을 제공하고 현재 detail query만 갱신하며, Content 없는 Repost의 action은 표시하되 진입을 차단한다.
-- 다른 Profile의 Post에 Local Reply가 생성되면 Parent Author에게 Reply Notification을 Best Effort로 생성하고, 기존 connection·Unread count·Read·badge/cache·inbox 흐름에 연결한다.
-- Content Warning, Media/Sensitive Media, Mentioned Profile recipient·Mentioned Profiles 작성/조회, Reply+Quote 작성, ActivityPub Reply, Action Bar 전체 rollout, retry/outbox와 동기 cleanup은 제외한다.
+- 다른 Profile의 Post에 새 Reply가 생성되면 origin과 무관하게 Parent Author에게 Reply Notification을 같은 생성 lifecycle의 격리된 Best Effort savepoint로 생성하고, 기존 connection·Unread count·Read·badge/cache·inbox 흐름에 연결한다.
+- Content Warning, Media/Sensitive Media, Mentioned Profile recipient·Mentioned Profiles 작성/조회, Reply+Quote 작성, ActivityPub Reply materialization·delivery, Action Bar 전체 rollout, retry/outbox와 동기 cleanup은 제외한다. 이미 materialize된 새 ActivityPub Reply의 기존 Notification integration은 포함한다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/README.md`, `docs/design/reply-composer.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`
-- Linear Contract: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426)
-- Linear Implementations: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426)
+- Linear Contract: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507)
+- Linear Implementations: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507)
 
 ## Capabilities
 

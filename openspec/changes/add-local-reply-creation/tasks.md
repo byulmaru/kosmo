@@ -87,7 +87,7 @@
 
 - source와 Related Post는 결과 Reply, Related Profile은 Reply Author, Recipient는 Parent Author에서 파생하고 self-reply와 Recipient에게 보이지 않는 결과는 생성을 억제한다.
 - 아직 구현되지 않은 Profile Mute·Profile Block·Profile Domain Block·Domain Block Instance, Notification scope Word·Hashtag Mute와 Root Post thread Notification Mute capability 및 Reply source 연동은 제외하고, capability가 제공되기 전에는 PROD-273의 기본 allow 계약을 따른다.
-- Notification은 Reply commit 후 Best Effort로 생성하며 저장 실패가 Reply를 rollback하거나 mutation 성공을 실패로 바꾸지 않는다.
+- Notification은 Reply 생성 transaction의 격리된 Best Effort savepoint로 생성하며 저장 실패가 Reply를 rollback하거나 mutation 성공을 실패로 바꾸지 않는다.
 - 기존 Notification projection·interface·connection·count·Read·badge/cache를 확장하고 별도 inbox를 만들지 않는다.
 - duplicate/concurrent source에서 uniqueness를 유지하고 visible filtering을 page limit 전에 적용한다.
 - ActivityPub delivery, retry/outbox/backfill과 Tombstone 후 동기 cleanup은 포함하지 않는다.
@@ -100,11 +100,12 @@
 
 - [x] 3.1 기존 Notification 기반의 projection·API·client contract가 merge되었고 Reply kind 확장이 공통 계약을 재사용할 수 있음을 확인한다.
 - [x] 3.2 Reply source에서 Recipient·Related Post·Related Profile을 파생하는 멱등 Notification 저장·visibility 계약을 추가한다.
-- [x] 3.3 Reply commit 후 Notification 생성을 Best Effort로 연결하고 self-reply·invisible 결과를 억제한다.
+- [x] 3.3 Reply 생성 lifecycle에서 Notification 생성을 격리된 Best Effort savepoint로 연결하고 self-reply·invisible 결과를 억제한다.
 - [x] 3.4 concrete `ReplyNotification` Node와 mixed visible connection·Unread count·Read 계약을 기존 Notification API에 통합한다.
 - [x] 3.5 기존 inbox item에 Reply Author 표시, 결과 Reply 이동, Best Effort Read와 selected Profile badge/cache 동기화를 연결한다.
 - [x] 3.6 source mapping·self-reply·visibility·uniqueness·실패 격리 서비스 검증과 API Node·connection·count·Read integration 테스트를 통과시킨다.
 - [x] 3.7 inbox 표시·이동·Read·cache·Profile 전환 client 검증과 Relay compiler/check를 통과시킨다.
+- [x] 3.8 PROD-507에서 Local·ActivityPub Reply가 transaction 인자와 무관한 공통 Best Effort Notification lifecycle을 사용하도록 정렬하고, duplicate no-op·outer transaction 회귀를 검증한다.
 
 ## 4. PROD-423 통합 검증·OpenSpec 완료
 

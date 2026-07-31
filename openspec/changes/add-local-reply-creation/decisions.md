@@ -76,16 +76,16 @@
 - Consequences: 성공한 Reply의 상세 표시에는 추가 network request가 필요하지만 현재 actor의 detail query 밖을 변경하지 않는다. 현재 query에 나타나지 않는 결과는 snackbar가 표시되는 동안 `보기`로 접근할 수 있으며, 사용자가 선택할 때만 새 Reply 상세로 이동한다. snackbar가 자동으로 사라진 뒤에는 이 transient action을 유지하지 않는다.
 - Confirmation / Follow-up: PROD-425 자동화는 mutation 성공 직후 close·focus 복원, 성공 snackbar와 `보기`, 자동 이동 없음, targeted refetch 요청과 현재 query에 포함되는 결과의 thread 표시를 검증한다. 실제 API의 refetch 실패·retry, Web 짧은-height layout과 Android·iOS runtime은 실행하지 않았으며 각각 통합 runtime·Native 출시 gate의 별도 증거로 남긴다.
 
-### Reply Notification은 source commit 후 기존 projection에 Best Effort로 추가한다
+### Reply Notification은 origin과 무관하게 공통 source lifecycle의 격리된 savepoint에서 생성한다
 
 - Decision Date: 2026-07-23
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `PROD-426`
+- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-426`, `PROD-507`
 - Status: Active
-- Context / Problem: Reply Notification을 Reply transaction 내에 포함하거나 별도 inbox/storage로 만들면 source 성공 격리 또는 기존 Notification 계약이 깨진다.
-- Decision Outcome: Reply commit 후 같은 request에서 source-only 멱등 Notification 저장 경계를 await/catch한다. Reply kind는 기존 Notification projection·interface·connection·count·Read·badge/cache에 additive로 통합하고, source Reply에서 Parent Author Recipient, Reply Related Post, Reply Author Related Profile을 파생한다.
-- Alternatives Considered: source transaction 내 저장은 Notification 실패가 Reply를 rollback한다. fire-and-forget은 process 종료와 오류 관찰 경계가 불명하다. 별도 Reply inbox/table은 기존 Notification API와 client를 중복한다.
-- Consequences: Notification 저장 실패 시 item이 누락될 수 있지만 Reply는 유지된다. mixed kind visible predicate는 connection limit 전 SQL에서 적용하고 connection·count·Node·Read가 동일한 source 정합성을 사용해야 한다. Reply source hydration은 request-scoped `ctx.loader`를 사용하며, source PK에서 시작한 nested `EXISTS`는 Parent Author/Recipient mapping을 검증하되 Parent Tombstone을 Reply eligibility에서 제외한다.
+- Context / Problem: Reply Notification을 Reply write와 같은 savepoint에 포함하거나 별도 inbox/storage로 만들면 source 성공 격리 또는 기존 Notification 계약이 깨진다.
+- Decision Outcome: 공통 `createPost` action은 origin, adapter와 transaction 인자 유무에 관계없이 실제 새 Reply 생성 결과에서 source-only 멱등 Notification 저장 경계를 같은 transaction의 격리된 savepoint로 await/catch한다. duplicate/no-op만 effect를 실행하지 않는다. Reply kind는 기존 Notification projection·interface·connection·count·Read·badge/cache에 additive로 통합하고, source Reply에서 Parent Author Recipient, Reply Related Post, Reply Author Related Profile을 파생한다.
+- Alternatives Considered: Reply write와 같은 savepoint에 직접 저장하면 Notification 실패가 Reply를 rollback한다. transaction 밖 callback이나 lifecycle 결과는 Best Effort DB projection에 불필요한 공개 coordination 계약을 추가한다. fire-and-forget은 process 종료와 오류 관찰 경계가 불명하며, 별도 Reply inbox/table은 기존 Notification API와 client를 중복한다.
+- Consequences: Notification savepoint 실패 시 item이 누락될 수 있지만 Reply transaction은 유지되며 retry·backfill하지 않는다. caller-owned transaction에서는 Reply와 성공한 Notification이 outer commit 뒤 함께 보이고 rollback 뒤에는 모두 사라진다. transaction 인자는 lifecycle을 선택하는 신호로 사용하지 않는다. mixed kind visible predicate는 connection limit 전 SQL에서 적용하고 connection·count·Node·Read가 동일한 source 정합성을 사용해야 한다. Reply source hydration은 request-scoped `ctx.loader`를 사용하며, source PK에서 시작한 nested `EXISTS`는 Parent Author/Recipient mapping을 검증하되 Parent Tombstone을 Reply eligibility에서 제외한다.
 - Confirmation / Follow-up: PROD-426에서 self-reply, invisible result, duplicate/concurrent source, 저장 실패 격리와 mixed inbox/count/Read/Node/client 이동을 검증한다. interface-only Notification list가 Reply source loader를 호출하지 않고 여러 concrete Reply source field가 요청당 한 batch로 mapping되는 회귀를 검증한다.
 
 ## Remaining Decisions
