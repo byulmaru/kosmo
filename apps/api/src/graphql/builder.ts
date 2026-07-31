@@ -18,7 +18,6 @@ export const builder = new SchemaBuilder<{
   };
   AuthScopes: {
     login: boolean;
-    readMedia: boolean;
     usingProfile: boolean;
   };
   Context: UserContext;
@@ -64,7 +63,6 @@ export const builder = new SchemaBuilder<{
   scopeAuth: {
     authScopes: async (ctx) => ({
       login: !!ctx.session,
-      readMedia: false,
       usingProfile: !!ctx.session?.profileId,
     }),
     defaultStrategy: 'all',
