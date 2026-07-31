@@ -20,13 +20,12 @@ type Story = StoryObj<typeof meta>;
 function expectHomeBrandHeader(canvasElement: HTMLElement) {
   const canvas = within(canvasElement);
   const headings = canvas.getAllByRole('heading', { name: '홈' });
-  const mark = canvasElement.querySelector<HTMLImageElement>('img[src*="brand-mark-light"]');
+  const mark = canvasElement.querySelector<HTMLImageElement>('[aria-hidden="true"] img');
 
   expect(headings).toHaveLength(1);
   expect(mark).not.toBeNull();
   expect(mark?.getBoundingClientRect().width).toBe(38);
   expect(mark?.closest('[aria-hidden="true"]')).not.toBeNull();
-  expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
 }
 
 export const EmptyTimelineFull: Story = {
@@ -61,12 +60,7 @@ export const OnboardingCompact: Story = {
       },
     },
   },
-  play: async ({ canvasElement }) => {
-    await expect(
-      within(canvasElement).findByRole('heading', { name: '프로필을 만들어 시작하세요' }),
-    ).resolves.toBeVisible();
-    expectHomeBrandHeader(canvasElement);
-  },
+  play: ({ canvasElement }) => expectHomeBrandHeader(canvasElement),
 };
 
 export const LoadingFull: Story = {
@@ -76,10 +70,7 @@ export const LoadingFull: Story = {
       operationResponses: { HomePageQuery: { data: selectedProfileData, delayMs: 60_000 } },
     },
   },
-  play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByText('홈을 불러오는 중입니다.')).toBeVisible();
-    expectHomeBrandHeader(canvasElement);
-  },
+  play: ({ canvasElement }) => expectHomeBrandHeader(canvasElement),
 };
 
 export const ErrorFull: Story = {

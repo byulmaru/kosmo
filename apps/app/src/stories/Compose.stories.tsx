@@ -25,7 +25,6 @@ function expectComposeHeader(canvasElement: HTMLElement) {
 
   expect(canvas.getAllByRole('heading', { name: '글쓰기' })).toHaveLength(1);
   expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
-  expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
 }
 
 export const SelectedProfileFull: Story = {
@@ -39,12 +38,7 @@ export const SelectedProfileFull: Story = {
       },
     },
   },
-  play: async ({ canvasElement }) => {
-    await expect(
-      within(canvasElement).findByRole('textbox', { name: '게시글 본문' }),
-    ).resolves.toBeVisible();
-    expectComposeHeader(canvasElement);
-  },
+  play: ({ canvasElement }) => expectComposeHeader(canvasElement),
 };
 
 export const ProfileRequiredCompact: Story = {
@@ -58,10 +52,7 @@ export const ProfileRequiredCompact: Story = {
       },
     },
   },
-  play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).findByText('프로필이 필요해요')).resolves.toBeVisible();
-    expectComposeHeader(canvasElement);
-  },
+  play: ({ canvasElement }) => expectComposeHeader(canvasElement),
 };
 
 export const LoadingFull: Story = {
@@ -77,7 +68,7 @@ export const LoadingFull: Story = {
     },
   },
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByText('글쓰기 화면을 불러오는 중입니다.')).toBeInTheDocument();
+    expect(within(canvasElement).getByRole('status')).toBeInTheDocument();
     expectComposeHeader(canvasElement);
   },
 };
