@@ -49,6 +49,7 @@
 - Content 없는 Repost의 Reply action은 disabled이며 callback·composer·mutation 진입을 차단한다.
 - 순수 Repost의 Repost action target은 direct Source를 유지하지만 Reply eligibility는 바깥 display Post identity에서 계산한다. 목록·thread coordinator는 selected Profile, surface mode, 하나의 active Parent와 dirty·pending 전환만 공급하고, `PostListItem`/`PostLayout`이 Reply action과 Composer surface를 내부 조립한다.
 - 목록은 Web `>= compact`에서 600px modal, Web `< compact`와 Native에서 전체 화면 composer를 사용하고, 상세는 행별 inline composer를 사용한다. Parent preview는 비대화형이며 Action Bar·menu를 중복 표시하지 않는다.
+- Parent의 일반 첨부 이미지는 표시하되 Sensitive Media 공개와 이미지 오류 재시도 control은 노출하지 않는다.
 - pristine close, dirty 취소 확인, pending close 차단, 실패 상태 유지, 성공 close·focus 복원과 Web modal focus trap·배경 scroll lock을 surface lifecycle로 제공한다.
 - selected Profile이 없는 guest에는 Reply config를 새로 노출하지 않고 guest 인증 위임과 Reply 외 전체 action 조합은 PROD-432에 남긴다.
 - Visibility는 Parent와 독립적이며 validation·pending·실패·성공 상태와 Relay cache는 selected Profile별로 격리한다.
@@ -60,6 +61,7 @@
 - contentful 일반 Post·Reply·Quote의 목록 modal·전체 화면 및 상세 행별 inline composer 진입, display Post/action target 분리와 contentless Repost disabled 호출 차단을 검증한다.
 - Home·Profile·Bookmark·상세 query가 selected Profile fragment와 성공 callback을 필수 coordinator 경계에 전달하고, 각 `PostListItem`/`PostLayout`이 행별 Reply config prop 없이 coordinator를 소비해 action과 Composer를 내부 조립하며, coordinator 누락은 조용한 Reply 제거가 아니라 프로그래밍 오류이고 guest/null Profile 경계에서는 Reply config를 새로 노출하지 않음을 검증한다.
 - Parent와 다른 Visibility, validation·pending·성공·실패 상태와 selected Profile 전환 격리를 검증한다.
+- 일반·Sensitive Media Parent에서 이미지 표시·가림은 유지하면서 Media 상태 변경 control이 제외되는지 검증한다.
 - pristine·dirty·pending·실패·성공 close, focus trap·복원·배경 scroll lock, single central scroll과 selected Profile 없는 surface의 unchanged partial rollout을 검증한다.
 - 상세 current·ancestor·descendant에서 active Parent를 전환할 때 dirty 확인·pending 차단을 거치고, 정확한 한 행만 `expanded` 상태를 받으며 close·성공 뒤 해당 Reply action으로 focus가 복원되는지 검증한다.
 - 성공 payload 뒤 현재 detail route만 targeted refetch되고 현재 query 범위의 결과만 thread에 반영되며, transient 성공 snackbar가 표시되는 동안 `보기`로 결과 Reply를 열 수 있고 자동 이동·다른 actor Store·관련 없는 목록 변경이 없음을 자동화로 검증한다.
@@ -70,6 +72,7 @@
 - [x] 2.3 기존 composer가 `replyParentId`를 포함해 Reply를 제출하고 DIRECT를 제외하며 selected Profile·Relay Environment·Parent별 입력·pending·error와 늦은 completion·callback을 격리하게 확장한다.
 - [x] 2.4 direct Parent preview와 기존 composer를 조립해 Web 목록 modal·좁은 Web/Native 전체 화면·상세 thread 행별 inline surface, pristine/dirty/pending·실패·성공 lifecycle과 focus·scroll 계약을 구현한다.
 - [x] 2.5 성공한 `Post` payload 뒤 현재 detail route만 targeted refetch하고 transient 결과 Reply `보기`를 제공하며 mutation 실패 시 입력·Parent를 유지하고, surface·route·상태 격리·일반 Post 회귀 검증과 Relay compiler/check를 통과시킨다.
+- [x] 2.6 비대화형 Parent가 일반 이미지는 표시하면서 Sensitive 공개·이미지 오류 재시도 control을 제외하도록 Media interaction을 정렬한다.
 
 ## 3. PROD-426 Reply Notification/inbox 통합
 

@@ -9,6 +9,11 @@ const PostBodyFragment = graphql`
       id
       document
       bodyText
+      media {
+        id
+        altText
+        url
+      }
     }
   }
 `;
@@ -16,10 +21,12 @@ const PostBodyFragment = graphql`
 export function PostBody({
   interactive = true,
   post: postKey,
+  onBodyPress,
   size = 'md',
 }: {
   interactive?: boolean;
   post: PostBody_post$key;
+  onBodyPress?: () => void;
   size?: 'md' | 'lg';
 }) {
   const post = useFragment(PostBodyFragment, postKey);
@@ -34,6 +41,14 @@ export function PostBody({
       bodyText={content.bodyText}
       document={content.document}
       interactive={interactive}
+      media={
+        content.media?.map(({ altText, id, url }) => ({
+          altText: altText ?? null,
+          id,
+          url: url ?? null,
+        })) ?? null
+      }
+      onBodyPress={onBodyPress}
       size={size}
     />
   );

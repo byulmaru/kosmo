@@ -170,6 +170,7 @@ export function PostSourcePreview({
             bodyText={source.content.bodyText}
             document={source.content.document}
             interactive={false}
+            media={[]}
             size="md"
           />
         </View>
@@ -231,7 +232,12 @@ function PostBodyPressTarget({
       tabIndex={-1}
       testID={testID}
     >
-      <PostContentRenderer bodyText={content.bodyText} document={content.document} size="md" />
+      <PostContentRenderer
+        bodyText={content.bodyText}
+        document={content.document}
+        media={[]}
+        size="md"
+      />
     </Pressable>
   );
 }
