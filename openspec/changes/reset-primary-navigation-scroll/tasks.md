@@ -103,7 +103,7 @@ archive된 뒤 PROD-617 담당자가 mobile Web 통합 검증에 사용할 수 �
 - Archive 전 모든 task, required validation, linked PR 상태와 delta spec 정합성을 확인하고 archive 후 strict
   validation을 다시 실행한다.
 
-- [ ] 3.1 구현·검증 diff와 branch/HEAD/commit/push 결과, 남은 위험과 실행하지 못한 검증을 handoff에 기록한다.
+- [x] 3.1 구현·검증 diff와 branch/HEAD/commit/push 결과, 남은 위험과 실행하지 못한 검증을 handoff에 기록한다.
 - [x] 3.2 Canonical·Linear·OpenSpec과 실제 구현의 forward/history/query/reselection/Native 경계를 대조하고 strict
       validation을 통과시킨다.
 - [ ] 3.3 PROD-619 전체 task와 linked PR 완료 evidence가 충족되면 change를 archive하고, mobile Web 통합 검증용
