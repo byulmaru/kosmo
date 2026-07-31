@@ -315,17 +315,10 @@ function PostListRow({
             </Pressable>
           </Link>
         </View>
-        {post.content?.bodyText ? (
-          <Pressable
-            accessible={false}
-            focusable={false}
-            onPress={() => router.push(detailHref)}
-            style={styles.bodyLink}
-            tabIndex={-1}
-            testID="post-list-row-body"
-          >
-            <PostBody post={post} />
-          </Pressable>
+        {post.content ? (
+          <View style={styles.bodyLink}>
+            <PostBody onBodyPress={() => router.push(detailHref)} post={post} />
+          </View>
         ) : null}
         <PostReactionActions
           actionBar={post.actionBar!}

@@ -65,6 +65,9 @@ function getColorContrastRatio(foreground: string, background: string) {
   );
 }
 
+const postMediaImageUri =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="640" height="360"%3E%3Crect width="640" height="360" fill="%236b7280"/%3E%3C/svg%3E';
+
 const shortPost = {
   ...post({
     bodyText: '짧은 본문 한 줄.',
@@ -162,6 +165,14 @@ const mediaTextPost = post({
   },
   bodyText: '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
   id: 'media-text',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '회색 배경의 첫 번째 첨부 이미지',
+      id: 'media-story',
+      url: postMediaImageUri,
+    },
+  ],
 });
 const mediaOnlyPost = post({
   bodyDocument: {
@@ -171,6 +182,72 @@ const mediaOnlyPost = post({
   },
   bodyText: '',
   id: 'media-only',
+  media: [
+    {
+      __typename: 'Media',
+      altText: null,
+      id: 'media-only-story',
+      url: postMediaImageUri,
+    },
+  ],
+});
+const fourMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '네 장의 이미지입니다.' }] },
+      ...Array.from({ length: 4 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-four-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '네 장의 이미지입니다.',
+  id: 'media-four',
+  media: Array.from({ length: 4 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: index === 1 ? null : `${index + 1}번째 순서 이미지`,
+    id: `media-four-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
+const unavailableMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '표시 정보가 없는 이미지입니다.' }] },
+      { type: 'media', attrs: { mediaId: 'media-unavailable-story' } },
+    ],
+  },
+  bodyText: '표시 정보가 없는 이미지입니다.',
+  id: 'media-unavailable',
+  media: null,
+});
+const loadErrorMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '일부 이미지 로딩 실패입니다.' }] },
+      { type: 'media', attrs: { mediaId: 'media-error-story' } },
+      { type: 'media', attrs: { mediaId: 'media-error-safe-story' } },
+    ],
+  },
+  bodyText: '일부 이미지 로딩 실패입니다.',
+  id: 'media-load-error',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '실패 이미지',
+      id: 'media-error-story',
+      url: 'data:image/png;base64,not-valid',
+    },
+    {
+      __typename: 'Media',
+      altText: '정상 이미지',
+      id: 'media-error-safe-story',
+      url: postMediaImageUri,
+    },
+  ],
 });
 const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
 const repostAuthorAvatarUrl = '/icon-192.png';
@@ -523,6 +600,9 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  fourMediaPost,
+  unavailableMediaPost,
+  loadErrorMediaPost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -751,6 +831,57 @@ function PostCatalog(_args: PostsStoryArgs) {
             post={requireFragment(
               requirePostById(posts, mediaOnlyPost.id).body,
               'media-only post body',
+            )}
+          />
+        </View>
+        <View testID="media-four">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, fourMediaPost.id).body,
+              'four-media post body',
+            )}
+          />
+        </View>
+        <View testID="media-unavailable">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, unavailableMediaPost.id).body,
+              'unavailable-media post body',
+            )}
+          />
+        </View>
+        <View testID="media-load-error">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, loadErrorMediaPost.id).body,
+              'load-error media post body',
+            )}
+          />
+        </View>
+      </Section>
+
+      <Section title="Post Media · list and detail">
+        <View testID="media-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, mediaTextPost.id).listItem,
+              'media post list item',
+            )}
+          />
+        </View>
+        <View testID="media-only-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, mediaOnlyPost.id).listItem,
+              'media-only post list item',
+            )}
+          />
+        </View>
+        <View testID="media-detail">
+          <PostLayout
+            post={requireFragment(
+              requirePostById(posts, mediaTextPost.id).layout,
+              'media post detail layout',
             )}
           />
         </View>
@@ -1659,11 +1790,57 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toBeVisible();
     expect(canvas.queryByText('실행하면 안 되는 구조')).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-text').textContent).toBe('document text');
+    const mediaText = within(canvas.getByTestId('media-text'));
+    expect(mediaText.getByText('document text')).toBeVisible();
+    expect(mediaText.getByTestId('post-media-image-media-story')).toBeVisible();
+    expect(
+      mediaText.getByRole('img', { name: '회색 배경의 첫 번째 첨부 이미지' }),
+    ).toBeInTheDocument();
     expect(
       canvas.queryByText('이미지가 있는 문서는 안전한 Plain Text로 표시합니다.'),
     ).not.toBeInTheDocument();
-    expect(canvas.getByTestId('media-only').textContent).toBe('');
+    const mediaOnly = within(canvas.getByTestId('media-only'));
+    expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
+    const revealSensitiveMedia = mediaOnly.getByRole('button', { name: '민감한 이미지 표시' });
+    expect(revealSensitiveMedia).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(revealSensitiveMedia);
+    expect(mediaOnly.getByRole('img', { name: '1번째 첨부 이미지' })).toBeInTheDocument();
+    const hideSensitiveMedia = mediaOnly.getByRole('button', {
+      name: '민감한 이미지 다시 가리기',
+    });
+    expect(hideSensitiveMedia).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(hideSensitiveMedia);
+    expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
+
+    const fourMedia = within(canvas.getByTestId('media-four'));
+    expect(fourMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
+      '1번째 순서 이미지',
+      '2번째 첨부 이미지',
+      '3번째 순서 이미지',
+      '4번째 순서 이미지',
+    ]);
+    expect(within(canvas.getByTestId('media-unavailable')).getByRole('alert')).toHaveTextContent(
+      '이미지를 불러올 수 없습니다.',
+    );
+    const loadErrorMedia = within(canvas.getByTestId('media-load-error'));
+    expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    const retryFailedMedia = await loadErrorMedia.findByRole('button', {
+      name: '실패 이미지 다시 시도',
+    });
+    await userEvent.click(retryFailedMedia);
+    await expect(
+      loadErrorMedia.findByRole('button', { name: '실패 이미지 다시 시도' }),
+    ).resolves.toBeVisible();
+    expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    expect(
+      within(canvas.getByTestId('media-list')).getByTestId('post-media-image-media-story'),
+    ).toBeVisible();
+    expect(
+      within(canvas.getByTestId('media-detail')).getByTestId('post-media-image-media-story'),
+    ).toBeVisible();
+    expect(
+      within(canvas.getByTestId('media-only-list')).queryByTestId('post-list-row-body'),
+    ).not.toBeInTheDocument();
     const quoteLayout = within(canvas.getByTestId('detail-quote-layout'));
     expect(quoteLayout.getAllByTestId('source-post-preview')).toHaveLength(1);
     expect(quoteLayout.getByTestId('source-post-body')).toHaveTextContent(
