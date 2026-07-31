@@ -171,8 +171,8 @@ const mediaOnlyPost = post({
   bodyText: '',
   id: 'media-only',
 });
-const sourceAuthorAvatarUrl = 'https://images.example.test/source-avatar.png';
-const repostAuthorAvatarUrl = 'https://images.example.test/repost-avatar.png';
+const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
+const repostAuthorAvatarUrl = '/icon-192.png';
 const sourceAuthor = profile({
   avatar: { id: 'media-source-avatar', url: sourceAuthorAvatarUrl },
   displayName: '아주 긴 Source 작성자 표시 이름',
@@ -298,7 +298,7 @@ const linkedSourceQuote = {
   ...linkedPost,
   id: 'post-quote-linked-source',
   profile: repostAuthor,
-  repostSource: linkedPost,
+  repostSource: { ...linkedPost, id: 'post-linked-source', profile: sourceAuthor },
 };
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
 const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
@@ -3881,6 +3881,12 @@ export const ReplyQuoteParentPresentation: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parentAvatar = within(dialog).getByLabelText(`${repostAuthor.displayName} 프로필 이미지`);
+    const sourceAvatar = within(dialog).getByLabelText(`${sourceAuthor.displayName} 프로필 이미지`);
+    await waitFor(() => {
+      expect(parentAvatar.querySelector('img')).toHaveAttribute('src', repostAuthorAvatarUrl);
+      expect(sourceAvatar.querySelector('img')).toHaveAttribute('src', sourceAuthorAvatarUrl);
+    });
     expect(within(dialog).getByTestId('reply-parent')).toHaveTextContent('안전한 외부 링크');
     expect(within(dialog).queryByRole('link')).toBeNull();
     const source = within(dialog).getByTestId('source-post-preview');

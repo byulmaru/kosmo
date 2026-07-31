@@ -4,7 +4,7 @@ PROD-492가 Profile의 Ready avatar/header 공개 URL과 이미지 표시가 가
 
 ## What Changes
 
-- 홈·프로필·북마크 목록과 게시글 상세에서 일반 Post, Repost, Quote와 direct Source 작성자의 실제 Ready avatar 이미지를 표시한다.
+- 홈·프로필·북마크 목록, 게시글 상세와 Reply Composer에서 일반 Post, Repost, Quote와 direct Source 작성자의 실제 Ready avatar 이미지를 표시한다.
 - `ProfileSwitcher`의 full·drawer·compact trigger와 프로필 전환 목록에 각 Profile의 실제 avatar를 표시하고, 활성 Profile의 Ready header URL이 있으면 기존 cover 영역에 실제 이미지를 표시한다.
 - 팔로워·팔로잉·Reaction 목록이 공유하는 `ProfileListItem`, `BottomTabBar`, `PostComposer`, `NotificationListItem`에 해당 Profile의 실제 avatar를 표시한다.
 - 각 leaf Relay fragment가 자신이 표시하는 Profile의 `avatar { id url }`을 조회하고 기존 `Avatar.imageUri`에 전달하며, 활성 Profile header를 표시하는 fragment만 `header { id url }`을 조회한다.
@@ -32,7 +32,7 @@ PROD-492가 Profile의 Ready avatar/header 공개 URL과 이미지 표시가 가
 
 ## Impact
 
-- `apps/app`의 게시글 presentation, `ProfileSwitcher`, `ProfileListItem`, `BottomTabBar`, `PostComposer`, `NotificationListItem` Relay fragment와 기존 Posts·Shell·Profiles·Reactions·Notifications Storybook 검증이 영향을 받는다.
+- `apps/app`의 게시글 presentation과 `ReplyComposerSurface`, `ProfileSwitcher`, `ProfileListItem`, `BottomTabBar`, `PostComposer`, `NotificationListItem` Relay fragment와 기존 Posts·Shell·Profiles·Reactions·Notifications Storybook 검증이 영향을 받는다.
 - PROD-492가 제공하는 `Profile.avatar { id url }`, `Profile.header { id url }`와 `Avatar.imageUri`를 선행 입력으로 사용한다.
 - PROD-588 자체에서 GraphQL schema, API resolver, DB migration, Media 공개 정책, 새 dependency는 변경하지 않는다.
 - 공용 Avatar primitive 재설계, 업로드·저장·crop·thumbnail, Post 첨부 이미지, PROD-596의 기본 avatar asset, 네트워크 이미지 로드 실패 fallback과 iOS·Android 실제 기기 QA는 제외한다.

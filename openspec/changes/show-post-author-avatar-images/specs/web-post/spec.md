@@ -2,7 +2,7 @@
 
 ### Requirement: Post author profile display
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 웹 앱은 게시글 목록과 게시글 상세 페이지의 leaf GraphQL fragment가 소유하는 작성자 프로필 presentation을 제공하고, 작성자의 공개 Ready avatar URL이 있으면 공용 Avatar로 실제 이미지를 표시하며 URL이 없으면 이니셜 fallback을 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 웹 앱은 게시글 목록, 게시글 상세 페이지와 Reply Composer의 leaf GraphQL fragment가 소유하는 작성자 프로필 presentation을 제공하고, 작성자의 공개 Ready avatar URL이 있으면 공용 Avatar로 실제 이미지를 표시하며 URL이 없으면 이니셜 fallback을 표시해야 한다(MUST).
 
 #### Scenario: Render author identity
 
@@ -21,7 +21,7 @@
 
 #### Scenario: Keep displayed author avatars distinct
 
-- **WHEN** Repost 또는 Quote presentation이 직접 작성자와 direct Source 작성자를 함께 또는 교대로 표시한다
+- **WHEN** Repost, Quote 또는 Reply Composer presentation이 직접 또는 parent 작성자와 direct Source 작성자를 함께 또는 교대로 표시한다
 - **THEN** 시스템은 표시되는 각 위치에서 그 위치가 나타내는 Profile의 avatar 이미지 또는 fallback을 사용한다
 - **AND** 한 작성자의 avatar URL을 다른 작성자에게 재사용하지 않는다
 
@@ -38,7 +38,7 @@
 #### Scenario: Preserve author avatar presentation contract
 
 - **WHEN** 시스템이 실제 avatar 이미지 또는 이니셜 fallback을 렌더링한다
-- **THEN** 목록의 48px avatar와 상세·Source preview의 40px avatar 크기를 유지한다
+- **THEN** 목록의 48px avatar와 상세·Reply Composer parent·Source preview의 40px avatar 크기를 유지한다
 - **AND** 기존 작성자 Profile 이동과 접근성 이름을 유지한다
 
 #### Scenario: Link to author profile when available

@@ -20,7 +20,7 @@
 **Verification**
 
 - Relay compiler와 TypeScript가 일반 Post, Repost direct Source, Quote 직접 작성자·direct Source, 상세 fragment의 avatar shape를 검증한다.
-- 기존 Posts Storybook surface에서 작성자별 이미지 URL과 null fallback, 크기·이동·접근성 계약을 확인한다.
+- 기존 Posts Storybook surface에서 목록·상세 작성자별 이미지 URL과 null fallback, 크기·이동·접근성 계약을 확인한다.
 
 - [x] 1.1 게시글 leaf fragment가 각 표시 작성자의 `avatar { id url }`을 조회하고 목록·상세·Source presentation에 독립적으로 공급하게 한다.
 - [x] 1.2 실제 이미지와 이니셜 fallback 모두 기존 Avatar 크기·Profile 이동·접근성 이름·layout을 유지하게 한다.
@@ -36,7 +36,7 @@
 
 **Deliverable**
 
-현재 production의 나머지 Profile avatar 소비자와 ProfileSwitcher header가 각 Profile의 실제 Ready 이미지를 표시하고, URL이 없으면 기존 이니셜·gradient fallback을 유지한다.
+현재 production의 나머지 Profile avatar 소비자, Reply Composer의 parent·direct Source와 ProfileSwitcher header가 각 Profile의 실제 Ready 이미지를 표시하고, URL이 없으면 기존 이니셜·gradient fallback을 유지한다.
 
 **Guardrails**
 
@@ -47,11 +47,11 @@
 
 **Verification**
 
-- Relay compiler와 TypeScript가 각 production consumer의 avatar/header fragment shape를 검증한다.
+- Relay compiler와 TypeScript가 각 production consumer와 Reply Composer parent·direct Source의 avatar/header fragment shape를 검증한다.
 - 기존 Shell·Profiles·Reactions·Posts·Notifications Storybook surface에서 서로 다른 이미지와 null fallback을 확인한다.
 
 - [x] 2.1 `ProfileSwitcher`의 full·drawer·compact trigger와 전환 목록에 각 Profile avatar를 연결하고, 활성 Profile header 이미지·gradient fallback을 기존 전환 계약과 함께 유지한다.
-- [x] 2.2 공용 `ProfileListItem`, `BottomTabBar`, `PostComposer`가 자신이 표시하는 Profile avatar를 기존 크기·이동·접근성 계약으로 사용하게 한다.
+- [x] 2.2 공용 `ProfileListItem`, `BottomTabBar`, `PostComposer`와 `ReplyComposerSurface` parent·direct Source가 자신이 표시하는 Profile avatar를 기존 크기·이동·접근성 계약으로 사용하게 한다.
 - [x] 2.3 각 `NotificationListItem` subtype fragment가 Related Profile avatar를 조회해 28px 이미지 또는 기존 이니셜 fallback을 표시하게 한다.
 
 ## 3. PROD-588 최소 자동화 검증
@@ -81,7 +81,7 @@
 - [x] 3.1 Posts production fixture에 서로 구분되는 Ready avatar URL과 null 상태를 추가하고 게시글 변경 동작의 최소 assertion을 작성한다.
 - [x] 3.2 기존 게시글 범위의 Relay, app check, Storybook test와 static build를 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
 - [x] 3.3 Shell·Profiles·Reactions·Posts·Notifications의 확장 소비자 fixture와 최소 assertion을 추가한다.
-- [x] 3.4 확장 구현 뒤 Relay, app check, unit, Storybook test와 static build를 다시 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
+- [ ] 3.4 확장 구현 뒤 Relay, app check, unit, Storybook test와 static build를 다시 통과시키고 생성 artifact가 commit 대상이 아닌지 확인한다.
 
 ## 4. PROD-588 통합 검증과 OpenSpec 완료
 
@@ -95,7 +95,7 @@ PROD-588이 소유한 Web runtime과 공용 코드 경로 검증을 완료하고
 
 **Guardrails**
 
-- PROD-492가 먼저 포함되는 stacked ancestry와 PR base를 유지한다.
+- PROD-492가 통합된 최신 `main`을 PR base로 유지하고 PROD-588 고유 commit만 포함한다.
 - Web runtime 관찰을 Android·iOS 실제 기기 QA 완료 증거로 사용하지 않는다.
 - Android·iOS 공용 React Native 코드와 자동화 결과는 확인하되 실제 기기 QA는 이번 이슈에서 미실행으로 보고한다.
 - 모든 requirement와 task가 완료되기 전에는 change를 archive하지 않는다.
@@ -109,5 +109,5 @@ PROD-588이 소유한 Web runtime과 공용 코드 경로 검증을 완료하고
 - PR ancestry, base, hosted CI와 미실행 runtime QA를 최종 보고에 구분한다.
 
 - [ ] 4.1 Web 공용 경로에서 각 이미지·fallback과 기존 이동·접근성·Profile 전환 동작을 수동 확인한다.
-- [x] 4.2 app 전체 검증과 hosted CI를 통과시키고 Android·iOS 실제 기기 QA 미실행 여부를 기록한다.
+- [ ] 4.2 app 전체 검증과 hosted CI를 통과시키고 Android·iOS 실제 기기 QA 미실행 여부를 기록한다.
 - [ ] 4.3 canonical·Linear·delta specs·구현과 다른 active change를 다시 대조한 뒤 PROD-588 소유로 change를 archive하고 archive 후 strict validation을 통과시킨다.

@@ -92,6 +92,14 @@ const imagePresentationQuery = {
     selectedProfile,
   }),
 };
+const selectedProfileWithoutHeader = { ...selectedProfile, header: null };
+const headerFallbackQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithoutHeader, secondProfile],
+    selectedProfile: selectedProfileWithoutHeader,
+  }),
+};
 
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
@@ -799,9 +807,17 @@ export const ProfileSwitcherImagePresentation: Story = {
     await waitFor(() =>
       expect(activeAvatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl),
     );
-    await waitFor(() =>
-      expect(canvasElement.querySelector(`img[src="${selectedHeaderUrl}"]`)).toBeInTheDocument(),
-    );
+    const headerImage = await waitFor(() => {
+      const image = canvasElement.querySelector<HTMLImageElement>(
+        `img[src="${selectedHeaderUrl}"]`,
+      );
+      expect(image).toBeInTheDocument();
+      return image!;
+    });
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+    expect(cover.contains(headerImage)).toBe(true);
+    expect(getComputedStyle(cover).filter).toBe('none');
 
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     const list = await canvas.findByLabelText('전환할 프로필 목록');
@@ -818,6 +834,20 @@ export const ProfileSwitcherImagePresentation: Story = {
     const fallbackAvatar = within(options[2]!).getByLabelText('이미지 없는 프로필 프로필 이미지');
     expect(fallbackAvatar.querySelector('img')).not.toBeInTheDocument();
     expect(fallbackAvatar).toHaveTextContent('이');
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherHeaderFallbackPresentation: Story = {
+  parameters: { relay: { data: headerFallbackQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeSurface = canvas.getByLabelText('활성 프로필');
+    const cover = activeSurface.firstElementChild as HTMLElement;
+
+    expect(canvasElement.querySelector(`img[src="${selectedHeaderUrl}"]`)).not.toBeInTheDocument();
+    expect(getComputedStyle(cover).backgroundImage).toContain('linear-gradient');
+    expect(getComputedStyle(cover).filter).toBe('blur(1px)');
   },
   render: () => <ProfileSwitcherStory />,
 };

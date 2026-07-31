@@ -545,7 +545,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         style={[
           styles.cover,
           { backgroundColor: theme.surface },
-          Platform.OS === 'web' && webCover,
+          Platform.OS === 'web' && !active?.header?.url && webCover,
         ]}
       >
         {active?.header?.url ? (

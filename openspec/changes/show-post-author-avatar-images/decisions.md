@@ -37,8 +37,8 @@
 - Context / Problem: PROD-588이 필요한 Profile avatar/header URL과 image-capable Avatar는 PROD-492가 제공하며 현재 production consumer fragment만 이 필드를 완전히 소비하지 않는다.
 - Decision Outcome: PROD-492 결과를 선행 입력으로 사용하고 실제 Profile 이미지를 렌더링하는 leaf Relay fragment가 `avatar { id url }`과 필요한 경우에만 `header { id url }`을 조회한다. PROD-588에서 같은 API·schema·Media projection을 복제하지 않는다.
 - Alternatives Considered: 상위 route query가 image scalar를 따로 조립하는 방식, PROD-588이 API·Avatar 구현을 복제하는 방식. 각각 fragment colocation을 약화하거나 ownership 중복과 stack 충돌을 만든다.
-- Consequences: Relay compiler 산출물은 생성해 검증하되 commit하지 않고, PROD-588 PR은 PROD-492 결과가 포함되는 stack 순서를 유지한다.
-- Confirmation / Follow-up: parent ancestry와 PR base를 확인하고 Relay compile·typecheck에서 leaf fragment와 schema 정합성을 검증한다.
+- Consequences: Relay compiler 산출물은 생성해 검증하되 commit하지 않는다. PROD-492가 `main`에 통합된 뒤 PROD-588 PR은 최신 `main`을 base로 이 change의 고유 commit만 유지한다.
+- Confirmation / Follow-up: PR base와 unique commit 범위를 확인하고 Relay compile·typecheck에서 leaf fragment와 schema 정합성을 검증한다.
 
 ### 공용 Avatar는 재사용하고 header는 기존 cover에서 직접 표시한다
 

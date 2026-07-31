@@ -2,7 +2,7 @@
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST). 각 item의 Related Profile에 공개 Ready avatar URL이 있으면 28px 공용 Avatar로 실제 이미지를 표시하고 URL이 없으면 기존 이니셜 fallback을 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `PROD-277`, `PROD-372`, `PROD-541`, [PROD-588](https://linear.app/byulmaru/issue/PROD-588) — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST). 각 item의 Related Profile에 공개 Ready avatar URL이 있으면 28px 공용 Avatar로 실제 이미지를 표시하고 URL이 없으면 기존 이니셜 fallback을 표시해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -24,8 +24,9 @@
 #### Scenario: 알림 화면 header와 단일 목록
 
 - **WHEN** 사용자가 `/notifications` 화면을 연다
-- **THEN** 화면은 `알림` 제목과 최소 44px의 `알림 설정 (준비 중)` disabled control을 표시한다
-- **AND** 설정 route가 추가되기 전에는 control이 navigation이나 임시 안내 action을 실행하지 않는다
+- **THEN** 화면은 `알림` 제목을 표시하고 설정 진입 control을 시각적으로 표시하지 않는다
+- **AND** `알림 설정 (준비 중)` 또는 같은 의미의 설정 진입 control을 접근성 트리에 button이나 다른 interactive element로 노출하지 않는다
+- **AND** 설정 control 없이도 mobile과 Web에서 제목의 정렬과 header 간격을 유지한다
 - **AND** `모두`·`멘션` 탭, 단독 `모두` section heading과 날짜별 heading을 표시하지 않는다
 
 #### Scenario: Read와 Unread 표시

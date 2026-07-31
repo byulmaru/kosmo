@@ -8,7 +8,7 @@ PROD-492는 `Profile.avatar { id url }`, `Profile.header { id url }` 공개 proj
 
 **Goals:**
 
-- 게시글의 직접 작성자와 direct Source, Profile 전환 표면, 공용 Profile 목록 행, 하단 탭, 작성기와 알림 행이 각자 나타내는 Profile의 Ready avatar 이미지를 표시하게 한다.
+- 게시글의 직접 작성자와 direct Source, Reply Composer의 parent·direct Source, Profile 전환 표면, 공용 Profile 목록 행, 하단 탭, 작성기와 알림 행이 각자 나타내는 Profile의 Ready avatar 이미지를 표시하게 한다.
 - `ProfileSwitcher`의 활성 Profile cover가 Ready header 이미지를 표시하고 URL이 없으면 기존 gradient를 유지하게 한다.
 - URL이 없을 때 현재 이니셜 fallback을 유지하고 기존 크기·레이아웃·이동·접근성 계약을 보존한다.
 - Profile 전환 후 actor별 Relay Environment와 Store 재생성 계약을 바꾸지 않는다.
@@ -38,7 +38,7 @@ PROD-492는 `Profile.avatar { id url }`, `Profile.header { id url }` 공개 proj
 
 - 각 production leaf fragment의 표시 Profile selection에 `avatar { id url }`을 추가하고 기존 Avatar 호출에 nullable URL을 `imageUri`로 전달한다.
 - 활성 Profile cover를 소유하는 `ProfileSwitcher` fragment에만 `header { id url }`을 추가하고, URL이 있으면 cover 안에 이미지를 채우며 없으면 기존 gradient를 렌더링한다.
-- `PostListItem`, `PostLayout`, `PostSourcePresentationView`는 outer 작성자와 direct Source의 avatar를 독립적으로 mapping한다.
+- `PostListItem`, `PostLayout`, `PostSourcePresentationView`, `ReplyComposerSurface`는 outer 또는 parent 작성자와 direct Source의 avatar를 독립적으로 mapping한다.
 - `ProfileListItem` 한 곳에 avatar 연결을 추가해 검색·팔로워·팔로잉·Reaction 목록이 동일한 계약을 재사용하게 한다.
 - `BottomTabBar`, `PostComposer`, 각 `NotificationListItem` subtype fragment는 자신이 직접 표시하는 Profile의 avatar만 조회한다.
 - label, size, wrapper의 Profile 이동·접근성 속성, ProfileSwitcher mutation과 actor environment 재생성은 그대로 유지한다.
@@ -68,7 +68,7 @@ PROD-492는 `Profile.avatar { id url }`, `Profile.header { id url }` 공개 proj
 
 ## Migration Plan
 
-DB 또는 데이터 migration은 없다. PROD-492가 먼저 포함되는 stacked PR base를 유지한다. 배포는 앱 fragment와 presentation 변경만 포함하며 문제가 생기면 PROD-588 commit을 되돌려 기존 이니셜·gradient 표시로 복구할 수 있다. archive는 이 change의 전체 소비자 구현·검증이 끝난 뒤 최신 active capability 계약과 동기화해 수행한다.
+DB 또는 데이터 migration은 없다. PROD-492는 `main`에 통합됐고 PROD-588 PR #438은 최신 `main`을 base로 이 change의 고유 commit만 유지한다. 배포는 앱 fragment와 presentation 변경만 포함하며 문제가 생기면 PROD-588 commit을 되돌려 기존 이니셜·gradient 표시로 복구할 수 있다. archive는 이 change의 전체 소비자 구현·검증이 끝난 뒤 최신 active capability 계약과 동기화해 수행한다.
 
 ## Open Questions
 
