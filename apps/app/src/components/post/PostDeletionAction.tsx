@@ -56,6 +56,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
   const currentEnvironment = useRef(environment);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
+  const dialogRef = useRef<View>(null);
   const restoreFocusRef = useRef<() => void>(() => undefined);
 
   currentEnvironment.current = environment;
@@ -100,6 +101,22 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        const dialog = dialogRef.current as unknown as HTMLElement | null;
+        const focusable = Array.from(
+          dialog?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+        return;
+      }
       if (event.key !== 'Escape' || requesting || isDeleting) {
         return;
       }
@@ -187,6 +204,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
         accessibilityLabel="게시글 삭제 확인"
         accessibilityViewIsModal
         onAccessibilityEscape={closeConfirmation}
+        ref={dialogRef}
         role="alertdialog"
         style={styles.dialogShell}
       >
