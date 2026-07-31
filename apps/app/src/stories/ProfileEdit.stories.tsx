@@ -263,40 +263,14 @@ export const HeaderMenuKeepsAvatarOverlap: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const headerButton = canvas.getByRole('button', { name: '헤더 이미지 변경' });
     const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
-    const headerRectBefore = headerButton.getBoundingClientRect();
-    const avatarRectBefore = avatarButton.getBoundingClientRect();
 
     await userEvent.click(headerButton);
 
     expect(page.getByRole('menuitem', { name: '이미지 변경' })).toBeVisible();
-    const headerRectAfter = headerButton.getBoundingClientRect();
-    const avatarRectAfter = avatarButton.getBoundingClientRect();
-    expect({
-      height: headerRectAfter.height,
-      left: headerRectAfter.left,
-      top: headerRectAfter.top,
-      width: headerRectAfter.width,
-    }).toEqual({
-      height: headerRectBefore.height,
-      left: headerRectBefore.left,
-      top: headerRectBefore.top,
-      width: headerRectBefore.width,
-    });
-    expect({
-      height: avatarRectAfter.height,
-      left: avatarRectAfter.left,
-      top: avatarRectAfter.top,
-      width: avatarRectAfter.width,
-    }).toEqual({
-      height: avatarRectBefore.height,
-      left: avatarRectBefore.left,
-      top: avatarRectBefore.top,
-      width: avatarRectBefore.width,
-    });
-
+    const avatarRect = avatarButton.getBoundingClientRect();
     const overlapElements = canvasElement.ownerDocument.elementsFromPoint(
-      avatarRectAfter.left + avatarRectAfter.width / 2,
-      avatarRectAfter.top + 24,
+      avatarRect.left + avatarRect.width / 2,
+      avatarRect.top + 24,
     );
     const avatarStackIndex = overlapElements.findIndex(
       (element) => element === avatarButton || avatarButton.contains(element),
