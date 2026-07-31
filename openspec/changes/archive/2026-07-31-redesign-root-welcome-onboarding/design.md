@@ -9,8 +9,10 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 **Goals:**
 
 - 확정된 제품 소개, 오픈 베타, 별마루 계정·이메일 인증 카피를 표시한다.
-- full logo와 Hero를 같은 column으로 구성하고 160×101px logo와 44px 상단 여백을 유지한다.
-- 768/1280 공용 breakpoint로 24/48/128px Web 가로 여백을 적용한다.
+- full logo와 Hero를 같은 column으로 구성하고 160×101px logo를 유지한다. 모바일은 44px 상단 여백,
+  compact/full Web은 viewport 수직 중앙 정렬을 사용한다.
+- 768/1280 공용 breakpoint로 24/128/256px Web 가로 여백을 적용한다.
+- 모바일 Web·Android·iOS heading은 단어 단위 줄바꿈을 우선한다.
 - 기존 auth/session/navigation와 개인정보 처리방침 진입을 보존한다.
 - 최소 unit, Web E2E, 3 viewport smoke와 Figma 1440/1024 frame으로 검증한다.
 
@@ -18,7 +20,7 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 
 - auth/OIDC/session 내부, `/home` 온보딩, 다른 route copy와 개인정보 처리방침 내용 변경
 - 새 logo asset, dependency, GraphQL/API/DB/schema/migration
-- 새 375 Figma frame, Android/iOS 실제 기기 QA와 배포 Web smoke 완료 주장
+- 새 375 Figma frame과 배포 Web smoke 완료 주장
 
 ## Implementation Guidance
 
@@ -33,8 +35,11 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 ### Recommended Approach
 
 - `BrandLogo` full variant의 style을 `{ height: (width * 1050) / 1665, width }`로 만들고 기존 unit test를 이 geometry로 갱신한다.
-- root에서 platform과 공용 breakpoint에 따라 horizontal padding을 계산한다. Web은 24/48/128px, native는 24px이다.
-- `ScrollView` content에 top 44px과 bottom semantic spacing을 주고, full logo와 `heroContent`를 gap 32px인 단일 `hero` column에 둔다.
+- root에서 platform과 공용 breakpoint에 따라 horizontal padding을 계산한다. Web은 24/128/256px, native는 24px이다.
+- 모바일 `ScrollView` content에는 top 44px과 bottom semantic spacing을 준다. compact/full Web은 대칭 vertical
+  padding 안에서 단일 `hero` column을 flex 수직 중앙에 둔다.
+- 모바일 Web title은 `word-break: keep-all`, iOS는 `hangul-word`, Android는 high-quality line breaking과
+  hyphenation 비활성화를 사용한다.
 - eyebrow와 width별 copy 분기를 제거하고 제목·두 줄 beta notice·CTA·두 줄 account notice를 승인 문구 그대로 표시한다.
 - 기존 error alert, privacy link, Web/native login branch와 session effect를 그대로 둔다.
 - Web E2E는 정확한 카피와 375/1024/1440 bounding box를 같은 기존 auth route suite에서 검증한다.
@@ -49,13 +54,14 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 - `aspectRatio`만 다시 사용하거나 root-only height override로 공용 full logo Web 회귀를 남기지 않는다.
 - 제목에 viewport별 하드코딩 copy를 만들거나 1024px local breakpoint를 유지하지 않는다.
 - presentation 변경을 이유로 session effect, Web `Link`, native AuthSession, error alert와 privacy navigation을 리팩터링하지 않는다.
-- logo와 title 사이를 별도 header, flex center 또는 큰 최소 높이로 다시 분리하지 않는다.
+- logo와 title 사이를 별도 header로 다시 분리하거나 Hero 내부 순서를 바꾸지 않는다. 수직 중앙 정렬은
+  compact/full Web의 Hero 전체에만 적용한다.
 - 새 fixture, screenshot golden, Storybook interaction 또는 전체 navigation suite로 테스트 범위를 넓히지 않는다.
 
 ## Risks / Trade-offs
 
 - [160×101px 계산 결과의 subpixel height] → component는 정확한 비율을 사용하고 Web E2E는 rendered bounding box를 반올림해 101px로 검증한다.
-- [긴 제목과 안내가 small Web에서 접힘] → text는 자연스럽게 wrap하고 375px에서 overlap·horizontal overflow·privacy 접근을 smoke한다.
+- [긴 제목과 안내가 small Web에서 접힘] → heading은 단어 단위로 wrap하고 375px에서 overlap·horizontal overflow·privacy 접근을 smoke한다.
 - [heading locator 변경으로 auth 회귀가 가려짐] → guest, session 503와 mock OIDC 테스트를 모두 새 exact heading으로 갱신하고 기존 destination assertion을 유지한다.
 - [Figma가 code와 다시 어긋남] → production 구현과 3 viewport smoke 뒤 기존 Onboarding 1440/1024 frame만 동기화하고 node read-back과 screenshot을 남긴다.
 
@@ -65,4 +71,4 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 
 ## Open Questions
 
-없음. 배포된 `dev.kos.moe` smoke와 Android/iOS 실제 기기 QA는 구현 선택이 아니라 자동화·local·Figma 증거와 구분해 최종 보고할 미실행 검증이다.
+없음. 배포된 `dev.kos.moe` smoke는 구현 선택이 아니라 자동화·local·Figma 증거와 구분한다.

@@ -11,9 +11,9 @@
 - Authority / Provenance: [DSN-26](https://linear.app/byulmaru/issue/DSN-26/) 본문과 2026-07-31 확정 댓글
 - Status: Active
 - Context / Problem: 별도 84px header의 logo는 제품 카피와 분리되어 있고, 화면 상단의 큰 빈 영역 때문에 첫 정보 위계가 깨진다.
-- Decision Outcome: full logo를 제목과 같은 왼쪽 정렬 Hero column에 포함하고 중복 `KOSMO` eyebrow와 별도 84px header를 제거한다. 화면 상단에서 logo box까지 44px 여백을 둔다.
+- Decision Outcome: full logo를 제목과 같은 왼쪽 정렬 Hero column에 포함하고 중복 `KOSMO` eyebrow와 별도 84px header를 제거한다. 모바일은 화면 상단에서 logo box까지 44px 여백을 두고 compact/full Web은 Hero 전체를 viewport 수직 중앙에 둔다.
 - Alternatives Considered: 44px 상단 여백을 가진 별도 site header 유지, 작은 brand mark를 Hero 위에 배치. 전자는 logo와 메시지 분리를 남기고 후자는 로그인 화면이 full logo를 사용한다는 기존 logo 소비처 계약을 약화한다.
-- Consequences: root layout은 상단 정렬 content flow를 사용하며 전체 화면을 채우기 위한 빈 header나 임의 최소 높이를 추가하지 않는다.
+- Consequences: 모바일 root는 상단 정렬 content flow를 사용한다. compact/full Web은 대칭 vertical padding과 flex 정렬로 Hero를 중앙에 두며 빈 header나 absolute position을 추가하지 않는다.
 - Confirmation / Follow-up: 375/1024/1440 Web viewport와 Figma 1440/1024 frame에서 logo와 heading의 왼쪽 정렬과 수직 순서를 확인한다.
 
 ### full logo의 layout box를 160×101px로 명시한다
@@ -28,17 +28,17 @@
 - Consequences: full variant의 명시적 height 계산을 unit test로 고정하고 mark variant의 square geometry는 유지한다.
 - Confirmation / Follow-up: `BrandLogo.test.ts`와 Web bounding box E2E에서 width 160px, rounded height 101px를 확인한다.
 
-### 공용 breakpoint로 24/48/128px Web 여백을 적용한다
+### 공용 breakpoint로 24/128/256px Web 여백을 적용한다
 
 - Decision Date: 2026-07-31
 - Decision Class: Derived Contract
-- Authority / Provenance: [DSN-26](https://linear.app/byulmaru/issue/DSN-26/) 본문과 2026-07-31 확정 댓글, `docs/design/breakpoints.md`
+- Authority / Provenance: [DSN-26](https://linear.app/byulmaru/issue/DSN-26/) 본문·2026-07-31 확정 댓글·같은 날 구현 thread의 owner 시각 승인, `docs/design/breakpoints.md`
 - Status: Active
 - Context / Problem: root Welcome은 component-local 1024px 분기를 사용해 canonical 768/1280 단계와 어긋나며 small/medium/large Web 완료 조건을 직접 표현하지 못한다.
-- Decision Outcome: `<768px`은 24px, `768~1279px`은 48px, `>=1280px`은 128px 가로 여백을 사용한다. Android/iOS는 화면 폭과 관계없이 24px을 사용한다.
+- Decision Outcome: `<768px`은 24px, `768~1279px`은 128px, `>=1280px`은 256px 가로 여백을 사용한다. Android/iOS는 화면 폭과 관계없이 24px을 사용한다. 모바일 heading은 Web `keep-all`, iOS `hangul-word`, Android high-quality line breaking과 hyphenation 비활성화를 사용한다.
 - Alternatives Considered: 현재 48/128px과 1024px cutoff 유지, 새 Welcome 전용 breakpoint 추가. 둘 다 공용 3단계 계약과 소비자 일관성을 약화한다.
 - Consequences: component-local 1024 숫자를 제거하고 `breakpoints.compact`, `breakpoints.full`만 분기에 사용한다.
-- Confirmation / Follow-up: 375/1024/1440 Web bounding box에서 x=24/48/128을 검증한다.
+- Confirmation / Follow-up: 375/1024/1440 Web bounding box에서 x=24/128/256, compact/full content center와 375 heading `keep-all`을 검증한다.
 
 ### 카피와 presentation만 바꾸고 기존 인증 분기를 보존한다
 

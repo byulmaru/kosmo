@@ -18,7 +18,12 @@ import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { TextStyle } from 'react-native';
 import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
+
+type WebTextStyle = TextStyle & { wordBreak?: 'keep-all' };
+
+const mobileWebTitleStyle: WebTextStyle = { wordBreak: 'keep-all' };
 
 const ExchangeNativeOidcSessionMutation = graphql`
   mutation IndexScreenExchangeNativeOidcSessionMutation($input: ExchangeNativeOidcSessionInput!) {
@@ -85,26 +90,35 @@ export default function IndexScreen() {
     return null;
   }
 
+  const isDesktopWeb = Platform.OS === 'web' && width >= breakpoints.compact;
+  const isMobileWeb = Platform.OS === 'web' && !isDesktopWeb;
   const horizontalPadding =
     Platform.OS !== 'web'
       ? spacing.xl
       : width >= breakpoints.full
-        ? 128
+        ? 256
         : width >= breakpoints.compact
-          ? spacing.xxxl
+          ? 128
           : spacing.xl;
 
   return (
     <ScrollView
       contentContainerStyle={[
         styles.root,
+        isDesktopWeb ? styles.desktopRoot : styles.mobileRoot,
         { backgroundColor: theme.background, paddingHorizontal: horizontalPadding },
       ]}
     >
-      <View style={styles.hero}>
+      <View style={[styles.hero, isDesktopWeb ? styles.desktopHero : null]}>
         <BrandLogo variant="full" width={160} />
         <View style={styles.heroContent}>
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          <Text
+            accessibilityRole="header"
+            android_hyphenationFrequency="none"
+            lineBreakStrategyIOS="hangul-word"
+            style={[styles.title, { color: theme.text }, isMobileWeb ? mobileWebTitleStyle : null]}
+            textBreakStrategy="highQuality"
+          >
             동인 창작 문화 향유자를 위한 차세대 연합우주 SNS
           </Text>
           <View style={styles.betaNotice}>
@@ -155,12 +169,15 @@ export default function IndexScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flexGrow: 1, paddingBottom: spacing.xxl, paddingTop: 44 },
+  root: { flexGrow: 1 },
+  mobileRoot: { paddingBottom: spacing.xxl, paddingTop: 44 },
+  desktopRoot: { paddingVertical: spacing.xxxl },
   hero: {
     alignItems: 'flex-start',
     flex: 1,
     gap: spacing.xxl,
   },
+  desktopHero: { justifyContent: 'center' },
   heroContent: {
     alignItems: 'flex-start',
     gap: 20,

@@ -109,3 +109,23 @@ production 구현을 375/1024/1440 Web에서 검증하고 Figma 1440/1024 Onboar
 - [x] 4.2 Figma Onboarding 1440/1024 frame을 production 구현과 동기화하고 node read-back·screenshot을 확인한다.
 - [x] 4.3 전체 자동화와 독립 implementation review를 통과시키고 local/Figma/deployed/native 검증 경계를 기록한다.
 - [x] 4.4 canonical·Linear·delta spec·구현과 다른 active `web-app-shell` change를 재대조한 뒤 전체 scope가 complete일 때 archive하고 post-archive strict validation을 통과시킨다.
+
+## 5. DSN-26 owner 시각 승인 후 responsive Hero 조정
+
+**Authority / Provenance**
+
+- [DSN-26](https://linear.app/byulmaru/issue/DSN-26/)의 Web viewport 수직 배치 범위
+- 2026-07-31 구현 thread에서 compact 128px, full 256px, desktop 수직 중앙과 모바일 단어 단위 줄바꿈을
+  확정하고 API 없는 local preview를 owner가 시각 승인함
+
+**Verification**
+
+- 375/1024/1440 focused Web E2E
+- targeted TypeScript, ESLint, Prettier와 `git diff --check`
+- Figma 1440/1024 node read-back과 screenshot
+- archive 전후 strict OpenSpec validation
+
+- [x] 5.1 기존 구현에서 375 heading `word-break: normal`, 1024 x=48, 1440 x=128로 focused E2E RED를 확인한다.
+- [x] 5.2 모바일 24/44와 단어 단위 heading 줄바꿈, compact 128px, full 256px, desktop Hero 수직 중앙을 구현하고 focused E2E 3/3·정적 검증을 통과시킨다.
+- [x] 5.3 Figma Onboarding 1440/1024 frame을 최종 production 배치와 동기화하고 node read-back·screenshot을 확인한다.
+- [x] 5.4 canonical·delta spec·구현을 재대조하고 change를 다시 archive한 뒤 post-archive strict validation을 통과시킨다.

@@ -142,9 +142,9 @@ test('비로그인 사용자는 루트 온보딩에서 로그인 진입점을 �
 });
 
 for (const viewport of [
-  { height: 812, padding: 24, width: 375 },
-  { height: 900, padding: 48, width: 1024 },
-  { height: 900, padding: 128, width: 1440 },
+  { centered: false, height: 812, padding: 24, width: 375 },
+  { centered: true, height: 900, padding: 128, width: 1024 },
+  { centered: true, height: 900, padding: 256, width: 1440 },
 ]) {
   test(`Welcome logo와 Hero가 ${viewport.width}px viewport에서 정렬된다`, async ({ page }) => {
     await page.setViewportSize({ height: viewport.height, width: viewport.width });
@@ -164,11 +164,10 @@ for (const viewport of [
               height: Math.round(box.height),
               width: Math.round(box.width),
               x: Math.round(box.x),
-              y: Math.round(box.y),
             }
           : null;
       })
-      .toEqual({ height: 101, width: 160, x: viewport.padding, y: 44 });
+      .toEqual({ height: 101, width: 160, x: viewport.padding });
     await expect(heading).toBeVisible();
     await expect
       .poll(async () => {
@@ -181,6 +180,19 @@ for (const viewport of [
     expect(logoBox).not.toBeNull();
     expect(headingBox).not.toBeNull();
     expect(headingBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height);
+
+    if (viewport.centered) {
+      const privacyBox = await page.getByRole('link', { name: '개인정보 처리방침' }).boundingBox();
+      expect(privacyBox).not.toBeNull();
+
+      const contentCenter = (logoBox!.y + privacyBox!.y + privacyBox!.height) / 2;
+      expect(Math.abs(contentCenter - viewport.height / 2)).toBeLessThanOrEqual(2);
+    } else {
+      expect(Math.round(logoBox!.y)).toBe(44);
+      await expect
+        .poll(() => heading.evaluate((element) => getComputedStyle(element).wordBreak))
+        .toBe('keep-all');
+    }
   });
 }
 
