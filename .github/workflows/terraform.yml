@@ -302,7 +302,7 @@ jobs:
 
           pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
           merged_prs="$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" "${pr_api}?per_page=100" \
-            | jq -r '[.[][] | select(.merged_at != null)] | sort_by(.number)[] | [.number, .head.sha] | @tsv')"
+            --jq '[.[][] | select(.merged_at != null)] | sort_by(.number)[] | [.number, .head.sha] | @tsv')"
           if [[ -z "${merged_prs}" ]]; then
             echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
             exit 1
