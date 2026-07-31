@@ -3465,8 +3465,10 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
-    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
+    await userEvent.click(visibilityButton);
 
     let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
     expect(menu).toBeVisible();

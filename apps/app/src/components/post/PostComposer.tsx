@@ -604,7 +604,6 @@ const styles = StyleSheet.create({
   },
   visibilityControl: {
     alignSelf: 'flex-start',
-    paddingVertical: Platform.select({ android: 4, ios: 2, default: 0 }),
     position: 'relative',
   },
   visibilityTrigger: {
@@ -613,8 +612,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.xs,
-    height: 40,
+    height: Platform.select({ web: 40 }),
     justifyContent: 'center',
+    minHeight: Platform.select({ android: 48, ios: 44, default: 40 }),
     minWidth: 120,
     paddingHorizontal: spacing.lg,
   },

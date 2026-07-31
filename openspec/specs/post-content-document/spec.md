@@ -28,7 +28,7 @@ PostContent 본문의 versioned ProseMirror document schema, 서버 검증·cano
 - **AND** `paragraph` content expression은 `inline*`이다
 - **AND** inline node는 non-empty `text`와 mark를 가질 수 없는 `hard_break`만 허용한다
 - **AND** mark는 `link`만 허용하고 attr는 `href` 하나만 허용한다
-- **AND** block `media` node는 non-empty string `mediaId`와 nullable string `altText` attr만 허용한다
+- **AND** block `media` node는 non-empty string `mediaId` attr 하나만 허용한다
 - **AND** 하나의 document는 Media node를 최대 4개까지 포함할 수 있다
 - **AND** node와 mark에 열거되지 않은 attr, node 또는 mark가 있으면 검증을 거부한다
 - **AND** `pre` node를 지원하지 않는다
