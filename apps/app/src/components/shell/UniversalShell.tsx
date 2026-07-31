@@ -1,6 +1,6 @@
 import { Slot, usePathname } from 'expo-router';
 import { Menu } from 'lucide-react-native';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Modal,
   PanResponder,
@@ -109,6 +109,36 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !drawerOpen) {
+      return;
+    }
+
+    const bodyStyle = document.body.style;
+    const previousBodyStyle = {
+      left: bodyStyle.left,
+      overflow: bodyStyle.overflow,
+      position: bodyStyle.position,
+      right: bodyStyle.right,
+      top: bodyStyle.top,
+      width: bodyStyle.width,
+    };
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    Object.assign(bodyStyle, {
+      left: `-${scrollX}px`,
+      overflow: 'hidden',
+      position: 'fixed',
+      right: '0px',
+      top: `-${scrollY}px`,
+      width: '100%',
+    });
+    return () => {
+      Object.assign(bodyStyle, previousBodyStyle);
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [drawerOpen]);
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -302,12 +332,19 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
-  drawerBackdrop: { backgroundColor: 'rgba(0,0,0,0.35)', flex: 1, flexDirection: 'row' },
+  drawerBackdrop: {
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    flex: 1,
+    flexDirection: 'row',
+    minHeight: 0,
+  },
   drawer: {
     borderBottomRightRadius: 16,
     borderTopRightRadius: 16,
     boxShadow: '4px 0 4px rgba(0, 0, 0, 0.4)',
+    height: '100%',
     maxWidth: '85%',
+    minHeight: 0,
     overflow: 'hidden',
     width: 320,
   },

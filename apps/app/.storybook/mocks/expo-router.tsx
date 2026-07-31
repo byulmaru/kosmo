@@ -92,7 +92,7 @@ export function Link({
     !asChild ||
     !isValidElement<{
       href?: string;
-      onPress?: (event: { preventDefault?: () => void }) => void;
+      onPress?: (event: LinkPressEvent) => void;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
@@ -102,8 +102,9 @@ export function Link({
     href: typeof href === 'string' ? href : href.pathname,
     onPress: (event: LinkPressEvent) => {
       children.props.onPress?.(event);
-      if (shouldHandleNavigation(event)) {
-        event.preventDefault?.();
+      const shouldNavigate = shouldHandleNavigation(event);
+      event.preventDefault?.();
+      if (shouldNavigate) {
         setPathname(href);
       }
     },
