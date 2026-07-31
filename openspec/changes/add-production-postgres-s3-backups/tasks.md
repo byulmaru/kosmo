@@ -13,7 +13,7 @@ Production PostgreSQL backup이 cluster와 독립된 서울 리전 S3 저장소�
 
 - Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access block, TLS-only, versioning, current 10일/non-current 30일/incomplete multipart 1일 lifecycle과 Terraform 삭제 보호를 사용한다.
 - KMS, Object Lock, cross-region/account replication과 영구 access key는 추가하지 않는다.
-- IAM role 이름은 `byulmaru-kosmo-prod-postgres-backup`이며 권한은 대상 bucket의 `kosmo-prod/` prefix와 필요한 backup/restore object 동작으로 제한한다.
+- IAM role 이름은 `byulmaru-kosmo-prod-postgres-backup`이며 bucket-level list는 Barman 확인을 위해 대상 전용 bucket 하나에만 허용하고 object 동작은 `kosmo-prod/` prefix로 제한한다.
 - 이 Terraform state는 bucket과 role을 소유하며 Kubernetes resource를 소유하지 않는다.
 
 **Verification**
@@ -27,6 +27,7 @@ Production PostgreSQL backup이 cluster와 독립된 서울 리전 S3 저장소�
 - [x] 1.4 bucket/role 식별자를 output과 운영자가 찾을 수 있는 repository 문서에 기록한다.
 - [x] 1.5 Terraform fmt/validate와 saved plan을 검토해 의도하지 않은 resource 변경이 없음을 확인한다.
 - [x] 1.6 승인된 saved plan을 적용하고 AWS live 설정과 output 증거를 `PROD-549`에 기록한다.
+- [ ] 1.7 Live Barman `HeadBucket` 403을 유발한 bucket-level list의 `s3:prefix` 조건을 제거하고 Terraform plan/apply와 실제 WAL archive로 보완을 검증한다.
 
 ## 2. PROD-550 Barman Cloud plugin과 PostgreSQL Pod Identity
 
