@@ -20,7 +20,8 @@ concurrency:
 jobs:
   nuclei:
     name: Nuclei scan
-    runs-on: [self-hosted]
+    # runs-on: [self-hosted]
+    runs-on: ubuntu-latest
     env:
       DEFAULT_TARGETS: |
         https://kos.moe
@@ -65,6 +66,7 @@ jobs:
         continue-on-error: true
         uses: projectdiscovery/nuclei-action@cc153d0541e1adf8a42bbe31c0a4fb2376147538 # v3.1.1
         with:
+          cache: true
           # Cloudflare controls the default targets' edge cipher suites on the current plan.
           args: >-
             ${{ env.NUCLEI_ARGS }}
