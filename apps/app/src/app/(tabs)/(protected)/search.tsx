@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 0,
     ...typography.sm,
-    fontSize: 16,
+    fontSize: typography.md.fontSize,
   },
   clearButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   recent: { width: '100%' },
