@@ -364,23 +364,20 @@ jobs:
           normalize_plan() {
             terraform show -json "$1" \
               | jq -S '
-                  def changed_values($before; $after):
-                    if $before == $after then
-                      []
-                    elif ($before | type) == "object" and ($after | type) == "object" then
-                      [
-                        ((($before | keys_unsorted) + ($after | keys_unsorted)) | unique[]) as $key
-                        | changed_values($before[$key]; $after[$key])[]
-                        | .path = [$key] + .path
-                      ]
-                    elif ($before | type) == "array" and ($after | type) == "array" then
-                      [
-                        range(0; ([($before | length), ($after | length)] | max)) as $index
-                        | changed_values($before[$index]; $after[$index])[]
-                        | .path = [$index] + .path
-                      ]
+                  def normalize_argocd_application:
+                    if .type == "argocd_application" then
+                      del(
+                        .change.before.status,
+                        .change.after.status,
+                        .change.before.metadata[]?.generation,
+                        .change.after.metadata[]?.generation,
+                        .change.before.metadata[]?.resource_version,
+                        .change.after.metadata[]?.resource_version,
+                        .change.before.metadata[]?.uid,
+                        .change.after.metadata[]?.uid
+                      )
                     else
-                      [{ path: [], before: $before, after: $after }]
+                      .
                     end;
 
                   {
@@ -389,16 +386,9 @@ jobs:
                     resource_changes: [
                       (.resource_changes // [])[]
                       | select(.change.actions != ["no-op"])
-                      | .change.changed_values = changed_values(.change.before; .change.after)
-                      | del(.change.before, .change.after)
+                      | normalize_argocd_application
                     ],
-                    output_changes: (
-                      (.output_changes // {})
-                      | with_entries(
-                          .value.changed_values = changed_values(.value.before; .value.after)
-                          | del(.value.before, .value.after)
-                        )
-                    ),
+                    output_changes,
                     checks
                   }
                 ' > "$2"
