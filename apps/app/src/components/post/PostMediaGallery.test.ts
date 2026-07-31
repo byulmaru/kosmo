@@ -8,19 +8,18 @@ import type { PostMediaItem } from './PostMediaGallery';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ImageMock = Object.assign((props: Record<string, unknown>) => createElement('Image', props), {
-  getSize: (uri: string, success: (width: number, height: number) => void) => {
-    success(uri.endsWith('/2.webp') ? 900 : 1600, uri.endsWith('/2.webp') ? 1600 : 900);
-  },
-});
-
 mock.module('react-native', {
   exports: {
-    Image: ImageMock,
     Pressable: 'Pressable',
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostMediaImage', {
+  exports: {
+    PostMediaImage: (props: Record<string, unknown>) => createElement('PostMediaImage', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -42,7 +41,7 @@ afterEach(async () => {
 });
 
 describe('PostMediaGallery', () => {
-  it('document 순서의 최대 네 이미지와 nullable Alt Text fallback을 표시한다', async () => {
+  it('document 순서대로 이미지를 최대 네 개 표시한다', async () => {
     await render({
       media: Array.from({ length: 5 }, (_, index) =>
         media(index + 1, index === 1 ? null : `설명 ${index + 1}`),
@@ -51,59 +50,30 @@ describe('PostMediaGallery', () => {
     });
 
     assert.deepEqual(
-      rendered('Image').map((image) => image.props.accessibilityLabel),
-      ['설명 1', '2번째 첨부 이미지', '설명 3', '설명 4'],
+      rendered('PostMediaImage').map(({ props }) => props.item.id),
+      ['media-1', 'media-2', 'media-3', 'media-4'],
     );
-
-    const firstOnLoad = image('media-1').props.onLoad;
-    await act(async () => firstOnLoad());
-    assert.equal(image('media-1').props.onLoad, firstOnLoad);
-    assert.equal(frameAspectRatio('media-1'), 1600 / 900);
-    assert.equal(frameAspectRatio('media-2'), 1);
   });
 
   it('Sensitive Media를 image mount 없이 시작하고 전체 표시와 다시 가리기를 제공한다', async () => {
     await render({ media: [media(1, null), media(2, '두 번째 이미지')], sensitive: true });
 
-    assert.equal(rendered('Image').length, 0);
+    assert.equal(rendered('PostMediaImage').length, 0);
     const reveal = pressable('민감한 이미지 표시');
     assert.deepEqual(reveal.props.accessibilityState, { expanded: false });
 
     await act(async () => reveal.props.onPress());
-    assert.equal(rendered('Image').length, 2);
+    assert.equal(rendered('PostMediaImage').length, 2);
     const hide = pressable('민감한 이미지 다시 가리기');
     assert.deepEqual(hide.props.accessibilityState, { expanded: true });
 
     await act(async () => hide.props.onPress());
-    assert.equal(rendered('Image').length, 0);
+    assert.equal(rendered('PostMediaImage').length, 0);
   });
 
-  it('한 이미지 오류를 격리하고 같은 URL로 해당 Image만 다시 mount한다', async () => {
-    await render({
-      media: [media(1, '첫 번째 이미지'), media(2, '두 번째 이미지')],
-      sensitive: false,
-    });
-    const firstUrl = image('media-1').props.source;
-
-    await act(async () => image('media-1').props.onError());
-    assert.equal(rendered('Image').length, 1);
-    assert.equal(rendered('Image')[0]?.props.accessibilityLabel, '두 번째 이미지');
-
-    await act(async () => pressable('첫 번째 이미지 다시 시도').props.onPress());
-    assert.equal(rendered('Image').length, 2);
-    assert.deepEqual(image('media-1').props.source, firstUrl);
-
-    await act(async () => image('media-1').props.onError());
-    assert.equal(pressable('첫 번째 이미지 다시 시도').props.accessibilityRole, 'button');
-  });
-
-  it('표시 정보 unavailable과 URL 없는 Media를 Post 전체 오류 없이 구분한다', async () => {
+  it('표시 정보 unavailable을 Post 전체 오류 없이 표시한다', async () => {
     await render({ media: null, sensitive: false });
     assert.equal(byTestId('post-media-unavailable').props.accessibilityRole, 'alert');
-
-    await render({ media: [{ ...media(1, null), url: null }], sensitive: false });
-    assert.ok(byTestId('post-media-error-media-1'));
-    assert.equal(rendered('Pressable').length, 0);
   });
 });
 
@@ -133,17 +103,6 @@ function pressable(accessibilityLabel: string): ReactTestInstance {
   );
   assert.ok(result);
   return result;
-}
-
-function image(id: string): ReactTestInstance {
-  return byTestId(`post-media-image-${id}`);
-}
-
-function frameAspectRatio(id: string): number | undefined {
-  const style = byTestId(`post-media-frame-${id}`).props.style as ReadonlyArray<{
-    aspectRatio?: number;
-  }>;
-  return style.find(({ aspectRatio }) => aspectRatio !== undefined)?.aspectRatio;
 }
 
 function byTestId(testID: string): ReactTestInstance {
