@@ -11,7 +11,9 @@
 - 폼은 제목을 다시 표시하지 않고 `KOSMO를 더 좋게 만들 수 있도록 의견을 들려주세요.` 설명으로 시작한다.
 - 설명 다음에는 피드백 종류, 피드백 내용, 제출 상태, primary action 순으로 배치한다.
 - 피드백 종류는 outer card나 항목별 bordered card를 사용하지 않는 평면 목록이다. 항목 사이의 낮은 강도
-  구분선과 선택된 행의 theme surface, radio indicator를 함께 사용해 선택 상태를 나타낸다.
+  구분선과 선택된 행의 theme surface, radio indicator를 함께 사용해 선택 상태를 나타낸다. Web의 선택·누름
+  surface는 공용 `radii.sm=8px` 반경을 사용하되 행 사이 간격이나 border를 추가하지 않아 카드 목록처럼
+  분리하지 않는다.
 - 피드백 내용은 공용 `TextField`의 multiline 입력을 사용하고, 입력 경계가 필요한 surface이므로 `border`
   token을 유지한다.
 - `피드백 보내기` primary action은 폼의 전체 너비를 사용한다. 작은 독립 버튼이나 별도 action card로
@@ -56,6 +58,8 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - delivery failure와 GraphQL failure는 기존 오류 문구와 재시도 action을 표시하고 종류와 본문을 유지한다.
 - `submitFeedback` mutation, Slack payload, route와 인증 경계, 기존 radio·status·busy semantics는 변경하지
   않는다.
+- 재현 환경은 별도 필드로 수집하지 않는다. 사용자는 필요한 기기·플랫폼 정보를 피드백 본문에 함께 적을 수
+  있으며, 자동 감지 metadata나 환경 선택값을 제출 계약에 추가하지 않는다.
 
 ## 검증
 
@@ -63,6 +67,8 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - 각 상태의 page surface를 `390px` mobile, `900px` compact, `1400px` full Web viewport에서 확인한다.
 - 실제 Web `/feedback`에서 `< compact`와 desktop viewport의 `PageHeader`, 평면 목록, multiline 입력과 full-width
   primary action을 확인한다.
+- 첫 번째·중간·마지막 종류를 각각 선택해 8px 선택 surface, 구분선 연속성, 누름·keyboard focus 표시가 평면
+  목록 위계를 유지하는지 확인한다.
 - 기존 Web E2E로 인증된 진입, 제출 payload, 성공 초기화, 실패 후 입력 유지가 바뀌지 않았음을 검증한다.
 - 자동화와 Storybook 결과는 실제 Web reflow, focus indicator, contrast와 keyboard/document scroll 관찰을
   대신하지 않는다.
@@ -70,6 +76,7 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 ## 제외 범위
 
 - `submitFeedback` mutation과 Slack delivery payload 변경
+- 기기·플랫폼 자동 감지 metadata와 재현 환경 선택 필드
 - `/feedback` route 및 인증 경계 변경
 - PROD-594가 소유하는 popup 진입, shell navigation과 dialog/sheet lifecycle
 - Android/iOS 피드백 화면 변경
