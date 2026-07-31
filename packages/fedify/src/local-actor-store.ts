@@ -1,8 +1,23 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubActorKeys, ActivityPubActors, db, first, Profiles } from '@kosmo/core/db';
-import { ActivityPubActorType, ProfileState } from '@kosmo/core/enums';
-import { and, eq } from 'drizzle-orm';
+import {
+  ActivityPubActorKeys,
+  ActivityPubActors,
+  db,
+  first,
+  Media,
+  ProfileMedia,
+  Profiles,
+} from '@kosmo/core/db';
+import {
+  ActivityPubActorType,
+  MediaSource,
+  MediaState,
+  ProfileMediaKind,
+  ProfileState,
+} from '@kosmo/core/enums';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { ensureLocalProfileActor } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
@@ -10,6 +25,7 @@ import type {
   CreateLocalActorRowInput,
   EnsureLocalProfileActorOptions,
   LocalActorStore,
+  LocalProfileActorMedia,
   LocalProfileActorProfile,
   LocalProfileActorResult,
   StoredLocalActorKey,
@@ -18,14 +34,29 @@ import type {
 
 type LocalActorDbClient = Pick<Database, 'insert' | 'select'>;
 
+const AvatarProfileMedia = alias(ProfileMedia, 'avatar_profile_media');
+const AvatarMedia = alias(Media, 'avatar_media');
+const HeaderProfileMedia = alias(ProfileMedia, 'header_profile_media');
+const HeaderMedia = alias(Media, 'header_media');
+
+const toLocalProfileActorMedia = (
+  media: { mediaType: string | null; url: string | null } | null,
+): LocalProfileActorMedia | null =>
+  media?.mediaType && media.url ? { mediaType: media.mediaType, url: media.url } : null;
+
 const toLocalProfileActorProfile = (
   profile: typeof Profiles.$inferSelect,
+  avatar: LocalProfileActorMedia | null,
+  header: LocalProfileActorMedia | null,
 ): LocalProfileActorProfile => ({
+  avatar,
   id: profile.id,
   handle: profile.handle,
   name: profile.displayName,
   bio: profile.bio,
   createdAt: profile.createdAt,
+  followPolicy: profile.followPolicy,
+  header,
 });
 
 const findActorByProfileId = async (
@@ -85,9 +116,55 @@ const requireExistingActorKey = async (
 
 export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): LocalActorStore => ({
   async findActiveLocalProfile({ localInstanceId, profileId }) {
-    const profile = await client
-      .select()
+    const row = await client
+      .select({
+        avatar: {
+          mediaType: AvatarMedia.mediaType,
+          url: AvatarMedia.url,
+        },
+        header: {
+          mediaType: HeaderMedia.mediaType,
+          url: HeaderMedia.url,
+        },
+        profile: Profiles,
+      })
       .from(Profiles)
+      .leftJoin(
+        AvatarProfileMedia,
+        and(
+          eq(AvatarProfileMedia.profileId, Profiles.id),
+          eq(AvatarProfileMedia.kind, ProfileMediaKind.AVATAR),
+        ),
+      )
+      .leftJoin(
+        AvatarMedia,
+        and(
+          eq(AvatarMedia.id, AvatarProfileMedia.mediaId),
+          eq(AvatarMedia.profileId, Profiles.id),
+          eq(AvatarMedia.source, MediaSource.LOCAL),
+          eq(AvatarMedia.state, MediaState.READY),
+          isNotNull(AvatarMedia.url),
+          isNotNull(AvatarMedia.mediaType),
+        ),
+      )
+      .leftJoin(
+        HeaderProfileMedia,
+        and(
+          eq(HeaderProfileMedia.profileId, Profiles.id),
+          eq(HeaderProfileMedia.kind, ProfileMediaKind.HEADER),
+        ),
+      )
+      .leftJoin(
+        HeaderMedia,
+        and(
+          eq(HeaderMedia.id, HeaderProfileMedia.mediaId),
+          eq(HeaderMedia.profileId, Profiles.id),
+          eq(HeaderMedia.source, MediaSource.LOCAL),
+          eq(HeaderMedia.state, MediaState.READY),
+          isNotNull(HeaderMedia.url),
+          isNotNull(HeaderMedia.mediaType),
+        ),
+      )
       .where(
         and(
           eq(Profiles.id, profileId),
@@ -98,7 +175,15 @@ export const createDrizzleLocalActorStore = (client: LocalActorDbClient = db): L
       .limit(1)
       .then(first);
 
-    return profile ? toLocalProfileActorProfile(profile) : undefined;
+    if (!row) {
+      return undefined;
+    }
+
+    return toLocalProfileActorProfile(
+      row.profile,
+      toLocalProfileActorMedia(row.avatar),
+      toLocalProfileActorMedia(row.header),
+    );
   },
 
   findActorByProfileId(profileId) {

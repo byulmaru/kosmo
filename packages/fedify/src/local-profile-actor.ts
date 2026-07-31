@@ -1,16 +1,27 @@
 import { exportJwk, generateCryptoKeyPair, importJwk } from '@fedify/fedify';
 import { ActivityPubActorKeyKind } from '@kosmo/core/enums';
 import { z } from 'zod';
-import type { ActivityPubActorKeyKind as ActivityPubActorKeyKindValue } from '@kosmo/core/enums';
+import type {
+  ActivityPubActorKeyKind as ActivityPubActorKeyKindValue,
+  ProfileFollowPolicy,
+} from '@kosmo/core/enums';
 
 export type JsonWebKeyRecord = Record<string, unknown>;
 
+export interface LocalProfileActorMedia {
+  readonly mediaType: string;
+  readonly url: string;
+}
+
 export interface LocalProfileActorProfile {
+  readonly avatar: LocalProfileActorMedia | null;
   readonly id: string;
   readonly handle: string;
   readonly name: string;
   readonly bio: string | null;
   readonly createdAt: Temporal.Instant;
+  readonly followPolicy: ProfileFollowPolicy;
+  readonly header: LocalProfileActorMedia | null;
 }
 
 export interface StoredLocalActorRow {
