@@ -322,7 +322,7 @@ jobs:
               pr_head_sha="${candidate_head_sha}"
               plan_run_id="${candidate_plan_run_id}"
             fi
-          done < <(sort -n -u <<< "${merged_prs}")
+          done < <(awk '!seen[$0]++' <<< "${merged_prs}")
 
           if [[ -z "${plan_run_id}" ]]; then
             echo "No associated merged pull request has an unexpired Terraform plan artifact; rerun the Terraform PR plan before merging." >&2
