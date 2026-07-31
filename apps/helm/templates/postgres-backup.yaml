@@ -9,6 +9,43 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kosmo-postgres-backup-objectstore-reader
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+rules:
+  - apiGroups:
+      - barmancloud.cnpg.io
+    resources:
+      - objectstores
+    resourceNames:
+      - kosmo-postgres-backup
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kosmo-postgres-backup-objectstore-reader
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+subjects:
+  - kind: ServiceAccount
+    name: kosmo-postgres-backup
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kosmo-postgres-backup-objectstore-reader
+---
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
 metadata:
