@@ -3496,6 +3496,53 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerVisibilityFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const trigger = canvas.getByRole('button', { name: '조용한 공개' });
+    const editorSurface = body.parentElement?.parentElement;
+    if (!editorSurface) {
+      throw new Error('Post composer editor surface is missing.');
+    }
+
+    const pressTouch = async (target: Element) => {
+      const rect = target.getBoundingClientRect();
+      await userEvent.pointer({
+        coords: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+        keys: '[TouchA]',
+        target,
+      });
+    };
+
+    await userEvent.type(body, '터치 경로에서 포커스 상태를 확인합니다.');
+    expect(body).toHaveFocus();
+    await pressTouch(trigger);
+
+    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    await pressTouch(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
+    await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
+    expect(body).not.toHaveFocus();
+    expect(trigger).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).not.toBe('rgb(252, 231, 154)');
+
+    await userEvent.keyboard('{Enter}');
+    const keyboardMenu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const keyboardOption = within(keyboardMenu).getByRole('menuitemradio', {
+      name: /^조용한 공개/,
+    });
+    await userEvent.keyboard('{ArrowDown}');
+    expect(keyboardOption).toHaveFocus();
+    await userEvent.click(keyboardOption);
+    await waitFor(() => expect(canvas.queryByRole('menu')).not.toBeInTheDocument());
+    expect(body).not.toHaveFocus();
+    expect(trigger).toHaveFocus();
+    expect(getComputedStyle(editorSurface).borderColor).not.toBe('rgb(252, 231, 154)');
+  },
+  render: () => <ComposerStory />,
+};
+
 export const ComposerErrorInteraction: Story = {
   parameters: { relay: { mutationError: '게시글 작성 실패' } },
   play: async ({ canvasElement }) => {

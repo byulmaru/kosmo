@@ -363,6 +363,7 @@ function PostComposerContents({
             disabled={submitting}
             key={option.value}
             onPress={() => {
+              setEditorFocused(false);
               setVisibility(option.value);
               setVisibilityOpen(false);
               if (Platform.OS === 'web') {
@@ -408,6 +409,7 @@ function PostComposerContents({
         accessibilityRole="button"
         accessibilityState={{ disabled: submitting }}
         disabled={submitting}
+        onPressIn={() => setEditorFocused(false)}
         onPress={() => setVisibilityOpen(!visibilityOpen)}
         style={({ pressed }) => [
           styles.visibilityTrigger,
