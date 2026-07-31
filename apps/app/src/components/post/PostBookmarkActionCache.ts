@@ -33,7 +33,7 @@ export function applyBookmarkDeleteResponse(
   if (responseError) {
     return new Error(responseError.message);
   }
-  if (responseBookmarkId !== expectedBookmarkId) {
+  if (responseBookmarkId !== null && responseBookmarkId !== expectedBookmarkId) {
     return new Error('Bookmark delete response did not confirm the requested Bookmark.');
   }
 

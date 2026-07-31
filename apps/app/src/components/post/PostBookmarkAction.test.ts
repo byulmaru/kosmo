@@ -173,6 +173,26 @@ describe('PostBookmarkAction Relay cache contract', () => {
     });
   });
 
+  it('treats an error-free null delete response as idempotent success and clears the actor cache', () => {
+    const environment = createEnvironment(true);
+
+    const error = applyBookmarkDeleteResponse(
+      environment,
+      postId,
+      bookmarkId,
+      bookmarkConnectionId,
+      null,
+      null,
+    );
+
+    assert.equal(error, null);
+    assert.equal(postRecord(environment).viewerBookmark, null);
+    assert.equal(environment.getStore().getSource().get(bookmarkId), null);
+    assert.deepEqual(environment.getStore().getSource().get(bookmarkConnectionId)?.edges, {
+      __refs: [],
+    });
+  });
+
   it('keeps Bookmark state isolated per Relay actor Store', () => {
     const actorA = createEnvironment();
     const actorB = createEnvironment();
