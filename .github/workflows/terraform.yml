@@ -7,9 +7,6 @@ on:
     paths:
       - .github/workflows/terraform.yml
       - apps/terraform/**
-  merge_group:
-    types:
-      - checks_requested
   push:
     branches:
       - main
@@ -32,7 +29,6 @@ env:
   ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net:443
   AWS_REGION: ap-northeast-2
   TF_IN_AUTOMATION: 'true'
-  TF_MERGE_GROUP_PLAN_ENABLED: ${{ vars.TERRAFORM_MERGE_GROUP_PLAN_ENABLED }}
   TF_PLAN_ARTIFACT: terraform-plan
   TF_ROOT: apps/terraform
   TF_STATE_BUCKET: byulmaru-terraform-state
@@ -41,7 +37,7 @@ env:
 jobs:
   plan:
     name: Terraform Plan
-    if: ${{ github.event_name == 'pull_request' || (github.event_name == 'merge_group' && vars.TERRAFORM_MERGE_GROUP_PLAN_ENABLED == 'true') }}
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: self-hosted
 
     steps:
@@ -135,14 +131,9 @@ jobs:
           {
             echo "## Terraform plan"
             echo
-            echo "- Event: \`${GITHUB_EVENT_NAME}\`"
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
-            if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-              echo "- Apply: the merge queue will create the batch plan used on \`main\`"
-            else
-              echo "- Apply: main will apply this batch plan only if its current plan is equivalent"
-            fi
+            echo "- Apply: main will apply this saved plan only if its current plan is equivalent"
             echo
             echo "<details>"
             echo "<summary>terraform show -no-color terraform.tfplan</summary>"
@@ -186,7 +177,7 @@ jobs:
             echo
             echo "- Commit: \`${PR_HEAD_SHA}\`"
             echo "- Workflow run: [${GITHUB_RUN_ID}](${plan_url})"
-            echo "- Apply: the merge queue will create the reviewed batch plan used on \`main\`"
+            echo "- Apply: main will apply this reviewed saved plan only if its current plan is equivalent"
             echo "- Artifact retention: ${GITHUB_RETENTION_DAYS} days; rerun this plan before merging if it expires"
             echo
             echo "<details open>"
@@ -309,28 +300,20 @@ jobs:
               | jq -r "[.[].artifacts[] | select(.expired == false and .workflow_run.head_sha == \"${commit_sha}\")] | sort_by(.created_at) | last | .workflow_run.id // empty"
           }
 
-          if [[ "${TF_MERGE_GROUP_PLAN_ENABLED}" == "true" ]]; then
-            plan_run_id="$(find_plan_run "${GITHUB_SHA}")"
-            if [[ -z "${plan_run_id}" ]]; then
-              echo "No unexpired merge queue Terraform plan artifact found for ${GITHUB_SHA}." >&2
-              exit 1
-            fi
-          else
-            pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
-            pr_jq='(map(select(.merged_at != null)) | sort_by(.number) | last // empty)'
-            pr_number="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .number // empty")"
-            pr_head_sha="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .head.sha // empty")"
+          pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
+          pr_jq='(map(select(.merged_at != null)) | sort_by(.number) | last // empty)'
+          pr_number="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .number // empty")"
+          pr_head_sha="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .head.sha // empty")"
 
-            if [[ -z "${pr_number}" || -z "${pr_head_sha}" ]]; then
-              echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
-              exit 1
-            fi
+          if [[ -z "${pr_number}" || -z "${pr_head_sha}" ]]; then
+            echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
+            exit 1
+          fi
 
-            plan_run_id="$(find_plan_run "${pr_head_sha}")"
-            if [[ -z "${plan_run_id}" ]]; then
-              echo "No unexpired Terraform plan artifact found for PR #${pr_number} at ${pr_head_sha}; rerun the PR plan before merging." >&2
-              exit 1
-            fi
+          plan_run_id="$(find_plan_run "${pr_head_sha}")"
+          if [[ -z "${plan_run_id}" ]]; then
+            echo "No unexpired Terraform plan artifact found for PR #${pr_number} at ${pr_head_sha}; rerun the PR plan before merging." >&2
+            exit 1
           fi
 
           gh run download "${plan_run_id}" --name "${TF_PLAN_ARTIFACT}" --dir "${TF_ROOT}"
@@ -341,18 +324,11 @@ jobs:
 
           planned_event_name="$(plan_env TF_PLAN_EVENT_NAME)"
           planned_commit_sha="$(plan_env TF_PLAN_COMMIT_SHA)"
-          if [[ "${TF_MERGE_GROUP_PLAN_ENABLED}" == "true" ]]; then
-            if [[ "${planned_event_name}" != "merge_group" || "${planned_commit_sha}" != "${GITHUB_SHA}" ]]; then
-              echo "Downloaded plan metadata does not match merge queue commit ${GITHUB_SHA}." >&2
-              exit 1
-            fi
-          else
-            planned_pr_number="$(plan_env TF_PLAN_PR_NUMBER)"
-            planned_head_sha="$(plan_env TF_PLAN_HEAD_SHA)"
-            if [[ "${planned_event_name}" != "pull_request" || "${planned_pr_number}" != "${pr_number}" || "${planned_head_sha}" != "${pr_head_sha}" ]]; then
-              echo "Downloaded plan metadata does not match PR #${pr_number} at ${pr_head_sha}." >&2
-              exit 1
-            fi
+          planned_pr_number="$(plan_env TF_PLAN_PR_NUMBER)"
+          planned_head_sha="$(plan_env TF_PLAN_HEAD_SHA)"
+          if [[ "${planned_event_name}" != "pull_request" || "${planned_pr_number}" != "${pr_number}" || "${planned_head_sha}" != "${pr_head_sha}" ]]; then
+            echo "Downloaded plan metadata does not match PR #${pr_number} at ${pr_head_sha}." >&2
+            exit 1
           fi
 
           {
