@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -153,7 +153,7 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/accessibility.md`, `docs/design/post-action-bar.md`, `PROD-414`, 2026-07-29 KST 사용자 결정
-- Status: Active
+- Status: Superseded
 - Context / Problem: 기존 44px control과 action별 16~24px glyph 보정은 Figma의 약 27px row보다 지나치게 높고 아이콘 비율도 제각각이라 production Post에서 시각 밀도가 무너진다. Web이 현재 출시 범위이고 Native binary는 아직 출시 범위가 아니므로 먼저 공유 구현을 Figma geometry에 맞출 필요가 있다.
 - Decision Outcome: Figma의 약 27px 측정값을 production 정수값 28px로 정규화한다. Bar와 모든 control은 Android·iOS·Web에서 높이 28을 사용하고 Bar는 좌우 8 padding 안에서 action을 `space-between`으로 분배한다. Reply·Repost·Reaction·Bookmark target은 각각 너비 50, More target은 최소 너비 28이며 모든 glyph visual box는 16×16, icon-count 간격은 4, count line box는 16이다. pending spinner, selected·pressed·disabled 표현도 같은 28px slot을 유지한다. Web target은 24×24 CSS px 사각형을 포함하고 인접 target과 겹치지 않는다.
 - Alternatives Considered: 기존 44px control 유지는 Figma와 production 밀도 차이를 남겨 채택하지 않았다. Web만 28px로 바꾸고 Native를 즉시 44pt·48dp로 분기하면 아직 출시하지 않는 platform에서 공유 구현 drift가 생겨 채택하지 않았다. visual row만 28px로 줄이고 겹치는 hit slop으로 Native target을 확장하면 인접 action target과 focus boundary가 겹칠 수 있어 채택하지 않았다.
@@ -248,12 +248,24 @@
 - Decision Date: 2026-07-23
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-432`, `PROD-433`
-- Status: Active
+- Status: Superseded
 - Context / Problem: More의 callback-only 컴포넌트 경계와 사용자가 복사할 URL의 제품 정책은 서로 다른 authority와 구현 소유자를 가진다.
 - Decision Outcome: `PostActionBar`는 optional More icon, callback과 접근성 label만 제공한다. PROD-432의 production surface 통합은 접근 가능한 최소 팝업과 `링크 복사` 한 항목을 제공하고 ADR 0015의 Post Share Reference를 복사한다. Content가 있는 Post는 그 Post의 공유 참조를 복사한다. Content와 Reply Parent 없이 Repost Source만 있는 Repost는 독립 상세 참조를 노출하지 않고 조회 가능한 직접 Repost Source의 공유 참조를 복사한다. Web·Android·iOS 모두 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 canonical Web origin으로 사용한다. `EXPO_PUBLIC_WEB_ORIGIN`은 이 값을 Expo client에 전달하는 projection이며 독립 authority가 아니다. Web의 현재 browser origin이 달라도 공유 참조에 사용하지 않는다. guest도 조회할 수 있는 Post의 공유 참조를 인증 없이 복사할 수 있지만 링크는 Post Visibility와 Post Eligibility를 우회하지 않는다.
 - Alternatives Considered: 공통 컴포넌트가 팝업과 clipboard를 소유하는 방식은 surface 통합 책임을 침범하므로 채택하지 않았다. 현재 화면 URL 전체, API origin과 native deep link는 ADR 0015의 대안 검토에 따라 채택하지 않았다.
 - Consequences: PROD-433은 More의 표시·접근성·callback만 검증하고 PROD-432가 팝업·clipboard·platform별 origin 연결과 guest 동작을 통합 검증한다. 링크 복사 외 메뉴 항목은 후속 제품 계약을 요구한다.
 - Confirmation / Follow-up: PROD-433 component test와 PROD-432 integration test의 검증 책임을 분리하고, PROD-432는 configured Local Instance의 `canonical_origin`을 기준으로 같은 canonical URL fixture를 platform별로 검증하며 Web의 current Host가 다른 경우와 Content 없는 Repost가 직접 Source의 공유 참조를 복사하는 경우도 확인한다.
+
+### More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, `PROD-598`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: PROD-432의 링크 복사 단일 항목 계약이 작성된 뒤 sibling PROD-598이 작성자 Post 삭제 action을 같은 More surface에 완료했다. 현재 production code와 canonical design은 이미 두 action을 조합하므로 링크 복사 하나만 허용하는 OpenSpec은 실제 제품과 충돌한다.
+- Decision Outcome: `PostActionBar`는 독립 UI를 위한 optional More icon·callback·접근성 label 경계와 production 합성을 위한 `moreItems`·`onDeleted` 입력을 함께 제공한다. production surface는 PROD-432의 `링크 복사` item을 항상 첫 항목으로 공급하고, composite Post fragment 아래 private `PostDeletionAction`이 selected Profile과 target Post에서 삭제 자격을 파생해 PROD-598의 destructive `삭제`를 마지막 항목으로 조합하며 menu·확인 dialog·delete mutation 상태를 소유한다. guest·다른 Profile·Tombstone·Content 없는 Repost target에는 `삭제`를 표시하지 않아 링크 복사만 남긴다. 순수 Repost surface의 More target은 direct Source이므로 삭제 자격과 mutation ID도 Source를 기준으로 한다. 삭제 확인 dialog·mutation·Relay cache 동기화·실패 복구는 PROD-598 소유 결과를 재사용하고, PROD-432는 링크 item 공급·항목 순서와 동일 menu에서의 통합 회귀만 소유한다.
+- Alternatives Considered: OpenSpec을 링크 복사 단일 항목으로 유지하면 canonical design·code·PR과 불일치하므로 채택하지 않았다. 삭제 계약 전체를 PROD-432로 흡수하면 완료된 PROD-598의 독립 소유권과 검증 책임이 중복되므로 채택하지 않았다. 삭제를 별도 More trigger로 분리하면 고정 Action Bar와 공용 menu 계약을 깨므로 채택하지 않았다.
+- Consequences: 이 shared change는 production More menu의 조합 결과를 규범화하지만 Post 삭제 domain·GraphQL·cache 계약을 새로 정의하지 않는다. 링크 복사의 guest·canonical origin·Visibility 계약과 첫 item overlap은 유지되고, 삭제 자격이 없는 사용자의 menu는 기존 단일 링크 복사 형태를 유지한다.
+- Confirmation / Follow-up: integration test에서 링크 복사 첫 번째·삭제 마지막 순서, 작성자·selected Profile·Active contentful 자격, guest·다른 Profile·Tombstone·Content 없는 Repost 미노출, direct Source target과 PROD-598 dialog·cache·실패 회귀를 검증한다.
 
 ### locale-aware 표준 compact number formatting을 사용
 
@@ -279,17 +291,29 @@
 - Consequences: 실제 대상 적격성과 실행 권한은 canonical 문서와 선행 action 계약이 소유하고 Action Bar는 adapter가 전달한 disabled 상태만 표현한다. guest 인증 목적지·화면 전환·임시 화면은 이 change에서 구현하지 않는다.
 - Confirmation / Follow-up: PROD-432 통합 검증에서 Content 없는 Repost와 Visibility 등 대상 자체 제한, 인증된 실행 주체의 권한 제한, 대상이 적격한 guest의 인증 위임과 대상이 부적격한 guest의 disabled 유지를 각각 확인한다.
 
-### production surface는 표시 Post와 action target을 구분한다
+### production surface는 표시 Post와 action별 target을 구분한다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-432`
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-414`, `PROD-425`, `PROD-432`, 2026-07-31 KST 사용자 결정
 - Status: Active
-- Context / Problem: 순수 Repost는 바깥 Repost Post를 표시 단위로 사용하지만 본문과 action의 실제 대상은 direct Source다. 이를 구분하지 않고 관계 조합만으로 바깥 Repost의 Repost action을 disabled 처리하면 사용자가 화면에 보이는 Source를 action할 수 없다.
-- Decision Outcome: production surface는 다섯 액션의 고정 위치를 유지하되 display Post와 각 action target을 구분한다. 일반 Post와 Quote의 Action Bar는 바깥 Post를 target으로 사용하고, 순수 Repost 아래 Action Bar는 direct Source를 target으로 사용한다. target 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 숨기지 않고 disabled로 제공한다. guest에게 현재 세션 전제가 없다는 이유만으로 target 자체가 적격한 소셜 action을 disabled로 만들지 않고 상위 인증 진입에 위임한다.
-- Alternatives Considered: 순수 Repost의 Repost action을 항상 disabled, 바깥 Repost identity target, 순수 Repost에서 Action Bar 숨김. 모두 display한 Source에 대한 일관된 action 진입점을 잃거나 잘못된 target을 사용하므로 채택하지 않았다.
-- Consequences: surface adapter와 fragment는 display Post와 target Post를 구분해 전달해야 하지만 toolbar 공개 API나 고정 순서는 바뀌지 않는다. 최종 eligibility·권한 seam은 PROD-432가 실제 caller와 통합 검증한다.
-- Confirmation / Follow-up: 일반·Quote self target, 순수 Repost Source target, disabled·guest 인증 위임과 Action Bar 고정 배치를 각각 검증한다.
+- Context / Problem: 순수 Repost는 바깥 Repost Post를 표시 단위로 사용하지만 본문과 대부분 action의 실제 대상은 direct Source다. 그러나 PROD-425는 Reply를 바깥 contentless Repost identity에 결합하고 disabled로 확정했다. 모든 액션을 하나의 target으로 축약하면 Source action 또는 Reply 계약 중 하나를 깨뜨린다.
+- Decision Outcome: production surface는 다섯 액션의 고정 위치를 유지하되 display Post와 action별 target을 구분한다. 일반 Post와 Quote의 Action Bar는 바깥 Post를 target으로 사용한다. 순수 Repost의 Reply는 바깥 contentless Repost binding과 disabled 상태를 유지하고 Repost·Reaction·Bookmark·More는 direct Source를 target으로 사용한다. target 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못한 액션은 숨기지 않고 disabled로 제공한다. guest에게 현재 세션 전제가 없다는 이유만으로 target 자체가 적격한 소셜 action을 disabled로 만들지 않고 상위 인증 진입에 위임한다.
+- Alternatives Considered: 순수 Repost Reply까지 direct Source에 연결하는 방식은 PROD-425 계약과 `add-local-reply-creation` 소유 범위를 침범하므로 채택하지 않았다. Repost·Reaction·Bookmark·More까지 바깥 Repost identity를 target으로 쓰거나 Action Bar를 숨기는 방식도 화면에 표시한 Source의 action 진입점을 잃으므로 채택하지 않았다.
+- Consequences: surface adapter와 fragment는 display Post, Reply binding과 나머지 action target을 구분해 전달해야 하지만 toolbar 공개 API나 고정 순서는 바뀌지 않는다. 최종 eligibility·권한 seam은 PROD-432가 실제 caller와 통합 검증한다.
+- Confirmation / Follow-up: 일반·Quote self target, 순수 Repost의 바깥 contentless Reply disabled와 나머지 direct Source target, Action Bar 고정 배치를 각각 검증한다.
+
+### 세션 상태와 선택 Profile 부재를 별도 resolution으로 처리한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `docs/design/reactions.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: `selectedProfile == null`은 인증하지 않은 guest뿐 아니라 Account 세션은 유효하지만 아직 Profile을 선택하지 않은 상태에도 발생한다. 두 상태를 합치면 valid 세션을 로그인으로 보내거나, 반대로 guest에게 Profile 선택기를 여는 잘못된 진입이 생긴다. session 복원 오류에서도 navigation이나 mutation을 시작해서는 안 된다.
+- Decision Outcome: surface는 target 적격성을 먼저 판정하고, 적격한 액션만 `SessionProvider.status`와 selected Profile로 resolution한다. `guest`는 기존 플랫폼 인증 진입(Web `/login`, Native `/`)으로 위임하고 child UI나 mutation을 시작하지 않는다. `valid`이며 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`로 기존 Profile 선택기를 열고 로그인, child UI와 mutation을 시작하지 않는다. `valid`이며 selected Profile이 있으면 액션을 실행한다. `error`에서는 액션을 disabled로 유지하고 navigation이나 mutation을 시작하지 않는다. Profile 선택 성공 뒤 원래 액션을 자동 재실행하지 않으며 사용자가 다시 활성화한다.
+- Alternatives Considered: selected Profile 부재를 모두 guest로 처리하는 방식은 valid 세션 onboarding을 깨뜨려 채택하지 않았다. selected Profile 부재를 단순 disabled로 두는 방식은 기존 Profile 선택 진입점을 잃어 채택하지 않았다. Profile 선택 뒤 원래 action 자동 재실행은 선택 흐름과 mutation intent 사이에 숨은 side effect를 만들어 채택하지 않았다.
+- Consequences: surface adapter는 session status와 selected Profile을 별도 입력으로 사용하고, action child는 인증·Profile 선택 정책을 소유하지 않는다. 새 route나 선택 화면은 추가하지 않는다. 사용자는 인증 또는 Profile 선택을 마친 뒤 원래 액션을 한 번 더 활성화해야 한다.
+- Confirmation / Follow-up: target 부적격 우선 차단, guest의 플랫폼별 기존 인증 진입, valid/no-profile의 기존 ProfileSwitcher 진입, valid/profile의 action 실행, session error의 disabled, resolution 전 child UI·mutation 부재와 Profile 선택 후 자동 재실행 부재를 검증한다.
 
 ### Action Bar 컨테이너는 고정된 한국어 접근성 이름을 사용
 
@@ -303,6 +327,42 @@
 - Consequences: 한 화면의 여러 Post Action Bar가 같은 이름을 사용하지만 모두 toolbar로 식별되며, 각 액션은 기존 label을 가진 button으로 계속 탐색된다. 공개 `PostActionBarProps`는 바뀌지 않는다.
 - Confirmation / Follow-up: Storybook에서 반복 렌더된 toolbar를 `액션 바` 이름으로 찾고 각 toolbar 내부 action button이 계속 노출되는지 검증한다.
 
+### Action Bar endpoint를 PostBody content column 양끝에 정렬한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: Action Bar와 PostBody는 같은 content column을 사용하지만 Bar의 별도 좌우 8px inset 때문에 Reply와 More control slot이 본문 양끝보다 안쪽에 놓이고, 중간 action도 더 좁은 내부 폭에서 분배된다.
+- Decision Outcome: Bar와 모든 control의 높이 28, Reply·Repost·Reaction·Bookmark target 너비 50, More target 최소 너비 28, glyph 16×16, icon-count 간격 4와 고정 순서를 유지한다. Bar에는 별도 좌우 inset을 두지 않고 Reply target의 왼쪽 경계와 More target의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. Repost·Reaction·Bookmark는 두 endpoint 사이를 `space-between`으로 균등 분배한다. Reply·Repost·Reaction·Bookmark의 icon-count visual group은 각 50px target 왼쪽에 맞춰 glyph 왼쪽 경계가 target 왼쪽 경계와 일치하게 하고, More glyph는 28px target 가운데 정렬을 유지한다.
+- Alternatives Considered: 기존 8px inset을 유지하면 PostBody와 Action Bar가 같은 content column을 사용하면서도 endpoint가 어긋나는 현재 회귀가 남아 채택하지 않았다. 각 production surface에서 음수 margin이나 별도 width를 적용하는 방식은 공용 Bar와 list/detail/Quote/순수 Repost 사이의 geometry drift를 만들므로 채택하지 않았다.
+- Consequences: 공용 `PostActionBar` root의 좌우 inset을 제거하고 non-More control의 icon-count visual group을 각 50px target 왼쪽에 맞춘다. More는 28px target 중앙 정렬을 유지하며 list/detail/Quote/순수 Repost에 같은 endpoint·glyph 정렬이 적용된다. 목록 slot 하단 4px, Quote Source preview border 밖 8px 간격, Repost menu item 좌우 8px padding과 기존 target 크기·접근성 계약은 유지한다.
+- Confirmation / Follow-up: focused Storybook에서 compact geometry와 390px·900px·1400px 목록·상세 fixture의 Reply target left edge, More target right edge, non-More glyph left edge, More glyph center, 중간 action non-overlap을 검증하고 Home runtime에서 Reaction Summary pill 시작선과 Reply glyph 시작선의 정렬을 확인한다.
+
+### Web More menu는 trigger 오른쪽을 기준으로 왼쪽으로 펼친다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: 공용 Web action menu의 기존 시작 정렬은 More trigger에서 menu를 오른쪽 rail 방향으로 펼쳐 중앙 Home timeline shell 위가 아니라 바깥쪽으로 돌출한다. 방향만 반전하면서도 menu를 연 pointer 위치와 첫 item의 겹침을 유지해야 같은 위치의 두 번째 활성화 계약이 깨지지 않는다.
+- Decision Outcome: 공용 ActionMenu는 Web에만 적용되는 선택적 끝 정렬을 제공하고 More consumer만 이를 사용한다. 끝 정렬에서는 menu card 오른쪽 경계를 trigger 오른쪽보다 기존 5px inset만큼 바깥에 두고 첫 `링크 복사` item의 시각 target 오른쪽 경계를 trigger 오른쪽과 맞춰 menu가 왼쪽으로 펼쳐지게 한다. 첫 item의 확장 hit area는 28px More trigger 전체를 계속 덮고 viewport 보정을 유지한다. Repost consumer는 기본 시작 정렬을 유지하며 Android·iOS bottom action sheet는 바꾸지 않는다.
+- Alternatives Considered: 모든 ActionMenu를 끝 정렬하면 Repost의 기존 배치까지 바뀌므로 채택하지 않았다. menu를 trigger 왼쪽에 완전히 분리하면 같은 pointer 위치의 두 번째 활성화가 item을 선택하지 못하므로 채택하지 않았다.
+- Consequences: ActionMenu 공개 입력에 좁은 Web 배치 선택지가 생기지만 production 사용은 More에만 한정된다. 중앙 timeline 끝의 More menu가 shell 안쪽으로 펼쳐지고 trigger와의 시각 겹침·입력 계약은 유지된다.
+- Confirmation / Follow-up: ActionMenu Storybook에서 끝 정렬 menu·첫 item의 오른쪽 경계, 왼쪽 확장, viewport clamp와 trigger 두 모서리의 첫 item 포함을 검증하고 Home runtime에서 실제 More menu 좌표를 확인한다.
+
+### 상세 thread 현재 Post의 Action Bar 주변 간격을 4px로 맞춘다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: 상세 thread의 current row wrapper가 상하 `spacing.lg` 16px을 함께 적용해 28px Action Bar 아래부터 다음 divider까지 불필요하게 큰 공간이 생겼고, Reaction Summary와 Action Bar 사이에는 명시적 간격이 없었다.
+- Decision Outcome: `PostLayout`은 Reaction Summary가 있을 때 그 아래에 `spacing.xs` 4px을 제공한다. inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않는다. `PostThreadLayout`의 current row wrapper는 상단 16px을 유지하되 하단 padding만 `spacing.xs` 4px로 줄인다. 따라서 Reaction Summary와 Action Bar 사이, 닫힌 Composer 상태의 Action Bar와 다음 1px thread divider 사이가 각각 4px이 되며 Action Bar 자체 28px geometry는 유지된다.
+- Alternatives Considered: 공용 `PostActionBar`에 margin을 넣으면 목록·Quote·Repost까지 영향을 주므로 채택하지 않았다. thread row 전체 padding을 4px로 줄이면 현재 Post 상단 avatar·connector clearance와 헤더 밀도가 함께 바뀌므로 채택하지 않았다.
+- Consequences: 상세 thread의 current Post 높이만 아래쪽에서 12px 줄어들고 목록 surface와 다른 thread row, Action Bar component API·geometry는 바뀌지 않는다.
+- Confirmation / Follow-up: `PostDetailThreadRoute` Storybook에서 current row 상단 16px, Reaction Summary bottom→Action Bar top과 Action Bar bottom→다음 divider top을 검증한다. selected Profile을 공급하는 Reply owner fixture에서도 Composer가 닫힌 기본 상태의 Action Bar bottom→divider top을 exact 4px로 검증한다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -315,8 +375,10 @@
 - 2026-07-23 `공개 도메인 상태와 처리 상태를 분리`는 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`로 대체했다.
 - 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`는 2026-07-27 `Repost 실패 피드백은 PROD-414 surface에서 완성한다`로 Repost 소유 범위가 대체됐다. Repost 외 action의 원칙은 유지한다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
+- 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`의 링크 복사 단일 항목 결과는 2026-07-31 `More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다`로 대체했다. 독립 UI용 callback-only 경계와 Post Share Reference 계약은 유지한다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
 - 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.
+- 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`는 2026-07-31 `Action Bar endpoint를 PostBody content column 양끝에 정렬한다`로 endpoint inset이 대체됐다. 높이·target 너비·glyph·gap·Native 출시 gate 결과는 유지한다.
 - 2026-07-29 `목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다`는 같은 날 `Quote preview 내부·외부 spacing을 분리한다`로 Quote spacing이 대체됐다. Action Bar 하단 4px, 1px semantic divider와 순수 Repost spacing 결과는 유지한다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.

@@ -16,6 +16,16 @@ export function getWebOrigin(): string {
   throw new Error('EXPO_PUBLIC_WEB_ORIGIN is required outside the browser.');
 }
 
+export function getConfiguredWebOrigin(): string {
+  const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN;
+
+  if (!configured) {
+    throw new Error('EXPO_PUBLIC_WEB_ORIGIN is required for Post share references.');
+  }
+
+  return normalizeWebOrigin(configured, process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN === '1');
+}
+
 export function normalizeWebOrigin(value: string, allowInsecure: boolean): string {
   return normalizeOrigin(value, allowInsecure, 'EXPO_PUBLIC_WEB_ORIGIN');
 }

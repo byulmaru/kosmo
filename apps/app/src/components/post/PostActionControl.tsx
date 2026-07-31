@@ -127,10 +127,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     height: 28,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     width: 50,
   },
   alignToEnd: {
+    justifyContent: 'center',
     width: 28,
   },
   blocked: { opacity: 0.45 },

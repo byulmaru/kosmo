@@ -33,6 +33,7 @@ type Props = {
   disabled?: boolean;
   items: readonly ActionMenuItem[];
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
+  webHorizontalPlacement?: 'start' | 'end';
 };
 
 const webMenuInset = spacing.xs + 1;
@@ -44,12 +45,14 @@ export function ActionMenu({
   disabled = false,
   items,
   renderTrigger,
+  webHorizontalPlacement = 'start',
 }: Props): ReactNode {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
+  const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const web = Platform.OS === 'web';
@@ -72,10 +75,11 @@ export function ActionMenu({
     const menuHeight = menuRect?.height ?? items.length * webMenuItemHeight + webMenuInset * 2;
     const viewportWidth = trigger.ownerDocument.documentElement.clientWidth;
     const viewportHeight = trigger.ownerDocument.documentElement.clientHeight;
-    const viewportLeft = Math.max(
-      0,
-      Math.min(triggerRect.left - webMenuInset, viewportWidth - menuWidth),
-    );
+    const anchoredLeft =
+      webHorizontalPlacement === 'end'
+        ? triggerRect.right + webMenuInset - menuWidth
+        : triggerRect.left - webMenuInset;
+    const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
     const viewportTop = Math.max(
       0,
       Math.min(triggerRect.top - webMenuInset, viewportHeight - menuHeight),
@@ -90,13 +94,14 @@ export function ActionMenu({
         ? current
         : nextPosition,
     );
-  }, [items.length, web]);
+  }, [items.length, web, webHorizontalPlacement]);
 
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();
   }, []);
   const dismiss = useCallback(
     (restoreFocus = true) => {
+      setHoveredWebItemKey(null);
       setOpen(false);
       if (restoreFocus) {
         focusTrigger();
@@ -106,6 +111,7 @@ export function ActionMenu({
   );
   const toggle = useCallback(() => {
     if (!disabled) {
+      setHoveredWebItemKey(null);
       setOpen((value) => {
         if (!value) {
           positionWebMenu();
@@ -269,12 +275,21 @@ export function ActionMenu({
                     <Pressable
                       accessibilityLabel={item.accessibilityLabel ?? item.label}
                       key={item.key}
+                      onHoverIn={() => setHoveredWebItemKey(item.key)}
+                      onHoverOut={() =>
+                        setHoveredWebItemKey((current) => (current === item.key ? null : current))
+                      }
                       onPress={() => select(item)}
                       role="menuitem"
                       style={({ pressed }) => [
                         styles.item,
                         styles.webItem,
-                        pressed ? { backgroundColor: theme.surface } : undefined,
+                        index > 0
+                          ? { borderTopColor: theme.divider, borderTopWidth: 1 }
+                          : undefined,
+                        pressed || hoveredWebItemKey === item.key
+                          ? { backgroundColor: theme.surface }
+                          : undefined,
                       ]}
                     >
                       {index === 0 ? (
@@ -407,11 +422,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     height: webMenuItemHeight,
+    justifyContent: 'flex-start',
     minHeight: webMenuItemHeight,
     paddingHorizontal: spacing.sm,
     position: 'relative',
   },
-  webLabel: { fontWeight: '500', ...typography.sm },
+  webLabel: { flex: 1, fontWeight: '500', textAlign: 'left', ...typography.sm },
   webMenu: {
     borderRadius: radii.md,
     borderWidth: 1,

@@ -6,7 +6,10 @@ import {
   ResponseType,
 } from 'expo-auth-session';
 import { getNativeSessionConfiguration } from './nativeConfig';
+import { startWebLogin } from './webLogin';
 import type { GestureResponderEvent } from 'react-native';
+
+export { startWebLogin } from './webLogin';
 
 export type NativeOidcSessionExchangeInput = {
   code: string;
@@ -28,7 +31,7 @@ export function startWebLoginFromPress(event: GestureResponderEvent): void {
   }
 
   event.preventDefault();
-  window.location.assign('/login');
+  startWebLogin();
 }
 
 export async function startNativeAuthorization(): Promise<NativeOidcSessionExchangeInput | null> {

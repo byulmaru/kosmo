@@ -3,19 +3,17 @@ import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { PostActionBar } from './PostActionBar';
+import { usePostActionAuthentication } from './PostActionAuthentication';
+import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { usePostReactionController } from './PostReactionController';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
-import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
@@ -42,8 +40,7 @@ const PostLayoutFragment = graphql`
       id
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
-    ...PostActionBar_post @alias(as: "actionBar")
-    ...PostReactionController_post @alias(as: "reactionController")
+    ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
       id
       createdAt
@@ -60,8 +57,7 @@ const PostLayoutFragment = graphql`
         handle
         relativeHandle
       }
-      ...PostActionBar_post @alias(as: "actionBar")
-      ...PostReactionController_post @alias(as: "reactionController")
+      ...PostActionSurface_post @alias(as: "actionSurface")
     }
     ...PostBody_post
   }
@@ -82,17 +78,14 @@ export function PostLayout({
   post: PostLayout_post$key;
 }) {
   const theme = useTheme();
-  const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
+  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
-  const actionBarPost = pureRepost ? post.repostSource?.actionBar : post.actionBar;
-  const reactionController = usePostReactionController(
-    (pureRepost ? post.repostSource?.reactionController : post.reactionController)!,
-  );
+  const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -139,25 +132,37 @@ export function PostLayout({
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
-          <PostReactionSummary controller={reactionController} style={styles.reactionSummary} />
-          <PostActionBar
+          <PostActionSurface
             onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            post={actionBarPost}
-            reactionController={reactionController}
+            reactionSummaryStyle={styles.reactionSummary}
             reply={
               replyBinding
                 ? {
                     accessibilityLabel: '답글',
                     controlRef: replyTriggerRef,
-                    expanded: replyBinding.expanded,
-                    onPress: replyBinding.onPress,
-                    processing: getReplyProcessingState(true, Boolean(post.content)),
+                    expanded:
+                      replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+                    onPress: () => {
+                      if (replyAuthentication.execution.kind === 'resolution-required') {
+                        replyAuthentication.resolve(replyAuthentication.execution.reason);
+                      } else if (replyAuthentication.execution.kind === 'enabled') {
+                        replyBinding.onPress();
+                      }
+                    },
+                    processing: getReplyProcessingState(
+                      replyAuthentication.execution,
+                      Boolean(replyBinding.profile),
+                    ),
                   }
                 : undefined
             }
+            socialActionTarget={socialActionTarget!}
           />
-          {replyBinding && post.content && post.replySurface ? (
+          {replyBinding?.expanded &&
+          replyAuthentication.execution.kind === 'enabled' &&
+          replyBinding?.profile &&
+          post.content &&
+          post.replySurface ? (
             <View style={styles.replySurface}>
               <ReplyComposerSurface
                 ref={replyBinding.surfaceRef}
@@ -183,7 +188,7 @@ const styles = StyleSheet.create({
   content: { flex: 1, gap: spacing.xs, minWidth: 0 },
   body: { minWidth: 0 },
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
-  reactionSummary: { marginTop: spacing.lg },
+  reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
 });

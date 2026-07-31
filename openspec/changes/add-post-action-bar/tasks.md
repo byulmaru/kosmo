@@ -127,33 +127,36 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - `PROD-418`
 - `PROD-420`
 - `PROD-425`
+- `PROD-598`
 
 **Deliverable**
 
-PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 연결한 Reply Composer 위에 Reaction·Bookmark 구현 결과를 연결하고, 선택 Profile에 상대적인 도메인 상태, 최종 대상 적격성·현재 세션 실행 권한 정책, More 링크 복사와 전체 실패 복구를 통합 검증한 뒤 공유 OpenSpec을 archive한다.
+PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 연결한 Reply Composer 위에 Reaction·Bookmark 구현 결과를 연결하고, 선택 Profile에 상대적인 도메인 상태, 최종 대상 적격성·현재 세션 실행 권한 정책, PROD-432 링크 복사와 완료된 PROD-598 삭제 action의 More menu 조합 및 전체 실패 복구를 통합 검증한 뒤 공유 OpenSpec을 archive한다.
 
 **Guardrails**
 
 - 각 action의 schema, 저장, mutation, count 집계, 도메인 상태 의미, 권한과 개별 UI 계약을 재구현하지 않고 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료 결과를 소비한다. Repost child는 PROD-414의 fragment·mutation·pending을, Reply surface와 controlled `expanded`는 PROD-425의 Composer 연결을 유지하고 toolbar container는 payload/cache 정책을 재구현하지 않는다.
 - 선행 action 계약이 제공하는 viewer-independent Reply·Repost count와 선택 Profile별 `hasReposted`·`hasReacted`·`hasBookmarked`의 기존 Relay cache 경계를 유지한다. Repost의 count와 `hasReposted`는 child fragment에서 파생하고, Reaction·Bookmark count를 연결하지 않으며 count 계약이 없는 액션에 `0`이나 새 집계를 합성하지 않는다. Reply `expanded`는 상위 Composer가 소유한다.
 - pending은 액션별로 격리하고, 한 액션 요청이 다른 액션을 불필요하게 차단하지 않는다. 요청 실패는 Action Bar의 지속 처리 상태로 만들지 않고 요청 직전의 확정 상태를 유지한다. PROD-414의 Repost menu·toast를 재구현하지 않고 전체 조합에서 회귀만 확인한다.
+- Bookmark 해제 성공은 현재 Relay actor Store의 `Post.viewerBookmark`, Bookmark record와 mutation 응답 처리 시점에 로드된 `BookmarkConnectionList_bookmarks` edge를 함께 정규화하고 다른 actor Store를 변경하지 않는다.
 - 목록과 상세는 다섯 액션을 같은 위치에 유지하고, 대상 자체가 부적격하거나 인증된 실행 주체가 실행 권한을 갖지 못한 액션을 disabled로 제공한다.
 - guest에게 `Account.Active`·`Profile.Member`·선택 Profile이 없다는 이유만으로 대상 자체가 적격한 소셜 액션을 disabled로 만들지 않고 상위 인증 진입 계약으로 위임한다. 대상 자체 제한은 guest에게도 disabled로 유지하고 임시 인증 화면은 추가하지 않는다. More 링크 복사는 guest에게도 허용한다.
+- More menu는 PROD-432의 `링크 복사`를 항상 첫 항목으로 유지하고 PROD-598 자격을 충족하는 작성자에게만 `삭제`를 마지막 항목으로 조합한다. 삭제 확인·mutation·cache·실패 계약은 PROD-598 결과를 재사용하고 이 change에서 다시 소유하지 않는다.
 - 구현 자식 하나의 완료만으로 공유 change를 부분 archive하지 않는다.
 
 **Verification**
 
 - 선택 Profile 전환 시 제공된 Reply count와 child fragment의 Repost count 공유, `hasReposted`·`hasReacted`·`hasBookmarked` 격리, 상위 Composer가 제어하는 Reply `expanded`를 검증한다.
-- Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 시 이전 확정 상태 유지와 각 action 계약의 접근 가능한 안내·다음 입력 재시도를 검증한다. Repost는 PROD-414의 menu·exact toast 결과를 재사용한다.
+- Reply·Repost·Reaction·Bookmark 각각의 성공, action별 pending 중복 차단, 실패 시 이전 확정 상태 유지와 각 action 계약의 접근 가능한 안내·다음 입력 재시도를 검증한다. Bookmark 해제는 현재 actor의 `viewerBookmark`·Bookmark record·로드된 connection edge 제거와 다른 actor 격리를 함께 검증하고, Repost는 PROD-414의 menu·exact toast 결과를 재사용한다.
 - Content·Reply Parent·Repost Source 관계 조합, Post Visibility 등 대상 자체가 부적격한 액션과 인증된 실행 주체의 권한이 부족한 액션의 disabled 표시, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 Home·Profile 목록·상세의 동일 계약을 검증한다.
-- More 팝업의 단일 `링크 복사` 항목, Web·Android·iOS가 configured Local Instance의 `canonical_origin`을 공통 기준으로 사용하는 ADR 0015 Post Share Reference의 clipboard 복사, Content 없는 Repost에서 직접 Source 공유 참조 선택, Web current Host 불일치, guest 사용과 Visibility 우회 방지를 검증한다.
+- More 팝업에서 `링크 복사`가 항상 첫 항목이고 PROD-598 작성자 삭제 자격을 충족할 때만 `삭제`가 마지막 항목인지 검증한다. Web·Android·iOS가 configured Local Instance의 `canonical_origin`을 공통 기준으로 사용하는 ADR 0015 Post Share Reference의 clipboard 복사, Content 없는 Repost에서 direct Source 공유 참조·삭제 자격 선택, Web current Host 불일치, guest 사용과 Visibility 우회 방지를 함께 검증한다.
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.
-- archive 전후 strict validation을 통과시킨다.
+- 4.6에서 archive 전 strict validation을 통과시키고, 4.7 승인 뒤 archive와 archive 후 strict validation을 수행한다.
 
-- [ ] 4.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, PROD-425가 연결한 Reply callback·surface·controlled `expanded`를 재구현하지 않으면서 아직 config 기반인 action 상태를 연결할 경계를 정리한다. Reaction은 하나 이상의 Reaction Type 존재를 `hasReacted`로 연결하되 count는 연결하지 않는다.
-- [ ] 4.2 목록·상세에서 Reaction·Bookmark의 callback과 default·pending·disabled 처리 상태를 PROD-414가 배치한 공통 Action Bar에 연결하고 각각 `hasReacted`·`hasBookmarked`를 공급한다. Reply는 PROD-425의 상위 Composer `expanded`와 optional count 경계를 유지한다.
-- [ ] 4.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고 관계 조합, Post Visibility·권한별 disabled, target이 적격한 guest의 인증 위임, target이 부적격한 guest의 disabled 유지와 action별 pending·실패 복구를 적용한다. display Post와 action target을 구분하고 순수 Repost는 Source target을 유지한다.
-- [ ] 4.4 More callback에 접근 가능한 최소 팝업과 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 연결하고 Web·Android·iOS의 canonical origin 계약을 검증한다.
-- [ ] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, PROD-414 Repost menu·toast 회귀, 대상 정책·guest 위임과 More 링크 복사 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다.
-- [ ] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
+- [x] 4.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, PROD-425가 연결한 Reply callback·surface·controlled `expanded`를 재구현하지 않으면서 아직 config 기반인 action 상태를 연결할 경계를 정리한다. Reaction은 하나 이상의 Reaction Type 존재를 `hasReacted`로 연결하되 count는 연결하지 않는다.
+- [x] 4.2 목록·상세에서 Reaction·Bookmark의 callback과 default·pending·disabled 처리 상태를 PROD-414가 배치한 공통 Action Bar에 연결하고 각각 `hasReacted`·`hasBookmarked`를 공급한다. Reply는 PROD-425의 상위 Composer `expanded`와 optional count 경계를 유지한다.
+- [x] 4.3 선택 Profile cache 경계를 유지하면서 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리하고 관계 조합, Post Visibility·권한별 disabled, target이 적격한 guest의 인증 위임, target이 부적격한 guest의 disabled 유지와 action별 pending·실패 복구를 적용한다. display Post와 action target을 구분하고 순수 Repost는 Source target을 유지한다.
+- [x] 4.4 Surface가 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 `moreItems` 첫 항목으로 공급하고, private `PostDeletionAction`이 접근 가능한 팝업에서 완료된 PROD-598의 작성자 `삭제`를 자격 충족 시 마지막 항목으로 조합한다. 삭제 확인·mutation·cache·실패 계약은 재구현하지 않는다. Web menu는 trigger 오른쪽을 기준으로 왼쪽으로 펼치되 첫 item overlap·viewport 보정을 유지하고, Repost 시작 정렬과 Native bottom action sheet는 유지한다. Web·Android·iOS의 canonical origin 계약을 검증한다.
+- [x] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, Bookmark 해제의 응답 처리 시점 loaded connection row 제거·GraphQL 오류 보존·actor 격리, PROD-414 Repost menu·toast 및 PROD-598 삭제 회귀, 대상 정책·guest 위임과 More 항목 순서 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 target 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry를 검증한다. 상세 thread current Post는 상단 16px을 보존하고 Reaction Summary와 Action Bar 사이를 4px로 둔다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper 없이 Action Bar와 다음 divider 사이가 4px인지 검증한다. Web More menu의 끝 정렬, 첫 `링크 복사` item overlap과 viewport clamp도 실제 Home 및 Storybook에서 확인한다.
+- [x] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 - [ ] 4.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.

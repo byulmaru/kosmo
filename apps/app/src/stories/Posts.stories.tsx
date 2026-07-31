@@ -2,11 +2,13 @@ import { usePathname } from 'expo-router';
 import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
+import { startWebLogin } from '@/auth/webLogin';
+import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
@@ -18,10 +20,16 @@ import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordin
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
+import {
+  getCopiedStrings,
+  resetClipboardMock,
+  setNextClipboardFailure,
+} from '../../.storybook/mocks/expo-clipboard';
 import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
@@ -911,10 +919,14 @@ function PostCatalog(_args: PostsStoryArgs) {
 
       <Section title="Detail layout · visibility and long author">
         {visibilityPosts.map((visibilityPost, index) => (
-          <PostLayout
+          <View
             key={visibilityPost.id}
-            post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
-          />
+            testID={`detail-${visibilityPost.visibility.toLowerCase()}`}
+          >
+            <PostLayout
+              post={requireFragment(requirePost(posts, index + 9).layout, 'visibility post layout')}
+            />
+          </View>
         ))}
         <PostLayout
           post={requireFragment(requirePost(posts, 13).layout, 'remote author post layout')}
@@ -1011,6 +1023,10 @@ function PostDeletionListEdgeSafety() {
 }
 
 type ProductionReactionRequest = Readonly<{ postId: string; type: string }>;
+
+type ProductionBookmarkRequest =
+  | Readonly<{ action: 'create'; postId: string }>
+  | Readonly<{ action: 'delete'; bookmarkId: string }>;
 
 function withReactionViewerState(storyPost: StoryPost): StoryPost & {
   viewerReactions: [];
@@ -1147,6 +1163,297 @@ function ProductionReactionMutationSurfaces() {
         />
       </View>
     </Catalog>
+  );
+}
+
+type ProductionBookmarkMutationMode = 'success' | 'pending' | 'create-failure' | 'delete-failure';
+
+function ProductionBookmarkMutationStory({
+  initiallyBookmarked = false,
+  mode = 'success',
+}: {
+  initiallyBookmarked?: boolean;
+  mode?: ProductionBookmarkMutationMode;
+}) {
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(() => {
+    let activeBookmarkId: string | null = initiallyBookmarked ? `bookmark-${shortPost.id}` : null;
+    let createAttempts = 0;
+    let deleteAttempts = 0;
+    const posts = storyPosts.map(withReactionViewerState).map((candidate) =>
+      candidate.id === shortPost.id
+        ? {
+            ...candidate,
+            viewerBookmark: activeBookmarkId
+              ? { __typename: 'Bookmark' as const, id: activeBookmarkId }
+              : null,
+          }
+        : candidate,
+    );
+    const bookmarkHomeTimeline = {
+      ...homeTimeline,
+      edges: homeTimeline.edges.map((edge) => ({
+        ...edge,
+        node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+      })),
+    };
+    const bookmarkContentPostsProfile = {
+      ...contentPostsProfile,
+      posts: {
+        ...contentPostsProfile.posts,
+        edges: contentPostsProfile.posts.edges.map((edge) => ({
+          ...edge,
+          node: posts.find((candidate) => candidate.id === edge.node.id) ?? edge.node,
+        })),
+      },
+    };
+
+    return new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.name === 'SessionProviderQuery') {
+          return Promise.resolve({
+            data: {
+              currentSession: {
+                __typename: 'Session',
+                id: 'session-production-bookmark',
+                selectedProfile: {
+                  __typename: 'Profile',
+                  id: 'profile-production-bookmark',
+                },
+              },
+              me: {
+                __typename: 'Account',
+                id: 'account-production-bookmark',
+                name: 'Bookmark Story',
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostsStoriesQuery') {
+          return Promise.resolve({
+            data: {
+              alternateComposerProfile,
+              composerProfile,
+              contentPostsProfile: bookmarkContentPostsProfile,
+              emptyPostsProfile,
+              homeTimeline: bookmarkHomeTimeline,
+              nodes: posts,
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+          const input = variables.input as { postId: string };
+          setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+          createAttempts += 1;
+          if (mode === 'pending') {
+            return new Promise<GraphQLResponse>(() => undefined);
+          }
+          if (mode === 'create-failure' && createAttempts === 1) {
+            return Promise.reject(new Error('bookmark create failed'));
+          }
+          activeBookmarkId = `bookmark-${input.postId}`;
+          return Promise.resolve({
+            data: {
+              createBookmark: {
+                bookmark: {
+                  __typename: 'Bookmark',
+                  id: activeBookmarkId,
+                  post: {
+                    __typename: 'Post',
+                    id: input.postId,
+                    viewerBookmark: { __typename: 'Bookmark', id: activeBookmarkId },
+                  },
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostBookmarkActionDeleteBookmarkMutation') {
+          const input = variables.input as { id: string };
+          setRequests((current) => [...current, { action: 'delete', bookmarkId: input.id }]);
+          deleteAttempts += 1;
+          if (mode === 'delete-failure' && deleteAttempts === 1) {
+            return Promise.reject(new Error('bookmark delete failed'));
+          }
+          activeBookmarkId = null;
+          return Promise.resolve({
+            data: {
+              deleteBookmark: {
+                bookmarkId: input.id,
+                post: {
+                  __typename: 'Post',
+                  id: shortPost.id,
+                  viewerBookmark: null,
+                },
+              },
+            },
+          } as GraphQLResponse);
+        }
+        return Promise.resolve({ data: {} } as GraphQLResponse);
+      }),
+      store: new Store(new RecordSource()),
+    });
+  }, [initiallyBookmarked, mode]);
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Bookmark fixture를 불러오는 중입니다.</Text>}>
+        <SessionProvider>
+          <ProductionBookmarkMutationContents />
+        </SessionProvider>
+      </Suspense>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ProductionBookmarkMutationContents() {
+  const data = usePostsStoryData();
+
+  return (
+    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+      <PostLayout
+        post={requireFragment(
+          requirePostById(data.posts, shortPost.id).layout,
+          'production Bookmark detail',
+        )}
+      />
+    </PostReplyCoordinatorProvider>
+  );
+}
+
+function ProductionBookmarkEnvironmentReplacementStory() {
+  const staleFailure = useRef<((error: Error) => void) | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [requests, setRequests] = useState<ProductionBookmarkRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'SessionProviderQuery') {
+            return Promise.resolve({
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: `session-production-bookmark-${revision}`,
+                  selectedProfile: {
+                    __typename: 'Profile',
+                    id: `profile-production-bookmark-${revision}`,
+                  },
+                },
+                me: {
+                  __typename: 'Account',
+                  id: 'account-production-bookmark',
+                  name: 'Bookmark Environment Story',
+                },
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                alternateComposerProfile,
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostBookmarkActionCreateBookmarkMutation') {
+            const input = variables.input as { postId: string };
+            setRequests((current) => [...current, { action: 'create', postId: input.postId }]);
+            if (revision === 0) {
+              return Observable.create((sink) => {
+                staleFailure.current = (error) => sink.error(error);
+              });
+            }
+            const bookmarkId = `bookmark-${input.postId}-replacement`;
+            return Promise.resolve({
+              data: {
+                createBookmark: {
+                  bookmark: {
+                    __typename: 'Bookmark',
+                    id: bookmarkId,
+                    post: {
+                      __typename: 'Post',
+                      id: input.postId,
+                      viewerBookmark: { __typename: 'Bookmark', id: bookmarkId },
+                    },
+                  },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [revision],
+  );
+
+  return (
+    <View>
+      <RelayEnvironmentProvider environment={environment}>
+        <Suspense fallback={<Text>Bookmark Environment fixture를 불러오는 중입니다.</Text>}>
+          <SessionProvider>
+            <ProductionBookmarkMutationContents />
+          </SessionProvider>
+        </Suspense>
+      </RelayEnvironmentProvider>
+      <Pressable
+        accessibilityLabel="두 번째 Profile Store로 전환"
+        accessibilityRole="button"
+        onPress={() => setRevision(1)}
+      >
+        <Text>두 번째 Profile Store로 전환</Text>
+      </Pressable>
+      <Pressable
+        accessibilityLabel="이전 Store 요청 실패"
+        accessibilityRole="button"
+        onPress={() => staleFailure.current?.(new Error('stale bookmark failure'))}
+      >
+        <Text>이전 Store 요청 실패</Text>
+      </Pressable>
+      <Text testID="production-bookmark-request-log">{JSON.stringify(requests)}</Text>
+    </View>
+  );
+}
+
+type PostActionSessionState = 'error' | 'guest' | 'profile';
+
+function ProductionPostActionSessionBoundaryStory({
+  postId = shortPost.id,
+  state,
+}: {
+  postId?: string;
+  state: PostActionSessionState;
+}) {
+  const data = usePostsStoryData();
+  const [profileResolutionCount, setProfileResolutionCount] = useState(0);
+  const contents = (
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider owner="list" profile={null}>
+        <View testID="production-session-action-post">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(data.posts, postId).listItem,
+              'session action boundary Post',
+            )}
+          />
+        </View>
+      </PostReplyCoordinatorProvider>
+      <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
+    </PostActionAuthenticationProvider>
+  );
+
+  return (
+    <ShellChromeProvider
+      openProfileSwitcher={() => setProfileResolutionCount((count) => count + 1)}
+    >
+      {state === 'error' ? <SessionErrorProvider>{contents}</SessionErrorProvider> : contents}
+    </ShellChromeProvider>
   );
 }
 
@@ -1729,33 +2036,64 @@ function ThreadNavigationCatalog() {
   );
 }
 
+const defaultStoryProfile = profile({ id: 'profile-story' });
+const defaultSession = shellQuery({
+  profiles: [defaultStoryProfile],
+  selectedProfile: defaultStoryProfile,
+});
+const postsStoryRelayData = {
+  alternateComposerProfile,
+  composerProfile,
+  contentPostsProfile,
+  currentSession: defaultSession.currentSession,
+  deletionHomeTimeline,
+  deletionProfile,
+  emptyPostsProfile,
+  homeTimeline,
+  me: defaultSession.me,
+  nodes: storyPosts.map(withReactionViewerState),
+};
+const guestPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: null,
+  me: null,
+};
+const profileResolutionSession = shellQuery({ selectedProfile: null });
+const profileResolutionPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: profileResolutionSession.currentSession,
+  me: profileResolutionSession.me,
+};
+const deletionOwnerSession = shellQuery();
+const deletionOwnerRelayData = {
+  ...postsStoryRelayData,
+  currentSession: deletionOwnerSession.currentSession,
+  me: deletionOwnerSession.me,
+};
+
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    mocked(startWebLogin).mockReset();
+    mocked(startWebLogin).mockImplementation(() => undefined);
+    resetClipboardMock();
     resetImagePickerMock();
   },
   component: PostCatalog,
   decorators: [
     (Story) => (
-      <PostReplyCoordinatorProvider owner="list" profile={null}>
-        <Story />
-      </PostReplyCoordinatorProvider>
+      <SessionProvider>
+        <PostActionAuthenticationProvider>
+          <PostReplyCoordinatorProvider owner="list" profile={null}>
+            <Story />
+          </PostReplyCoordinatorProvider>
+        </PostActionAuthenticationProvider>
+      </SessionProvider>
     ),
   ],
   parameters: {
     relay: {
-      data: {
-        alternateComposerProfile,
-        composerProfile,
-        contentPostsProfile,
-        currentSession: shellQuery().currentSession,
-        deletionHomeTimeline,
-        deletionProfile,
-        emptyPostsProfile,
-        homeTimeline,
-        me: shellQuery().me,
-        nodes: storyPosts.map(withReactionViewerState),
-      },
+      data: postsStoryRelayData,
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
     router: { pathname: '/@kosmo/post-1' },
@@ -1871,6 +2209,18 @@ export const BodyTimeAndLayoutStates: Story = {
       { name: '액션 바' },
     );
     expect(within(defaultActionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('0');
+    for (const visibility of ['public', 'unlisted'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    }
+    for (const visibility of ['followers', 'direct'] as const) {
+      const actionBar = within(canvas.getByTestId(`detail-${visibility}`)).getByRole('toolbar', {
+        name: '액션 바',
+      });
+      expect(within(actionBar).getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    }
 
     const pureRepostActionBar = within(
       canvas.getByTestId('detail-pure-repost-action-layout'),
@@ -1878,6 +2228,10 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(
       within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }),
     ).toHaveTextContent('7');
+    expect(within(pureRepostActionBar).getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '반응' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '북마크' })).toBeEnabled();
+    expect(within(pureRepostActionBar).getByRole('button', { name: '더 보기' })).toBeEnabled();
     await userEvent.click(within(pureRepostActionBar).getByRole('button', { name: '재게시 취소' }));
     expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
     expect(
@@ -1989,6 +2343,11 @@ export const ProductionRepostQuoteListIntegration: Story = {
       expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
+      expect(
+        within(actionBar)
+          .getAllByRole('button')
+          .map((button) => button.getAttribute('aria-label')),
+      ).toEqual(['답글', expect.stringMatching(/^재게시/), '반응', '북마크', '더 보기']);
       const actionBarSlot = actionBar.parentElement!;
       expect(actionBarSlot.closest('a, [role="link"], [role="button"]')).toBeNull();
       expect(actionBarSlot.lastElementChild).toBe(actionBar);
@@ -2102,7 +2461,10 @@ export const ProductionRepostQuoteListIntegration: Story = {
 
 export const ProductionPostDeletionListEdgeSafety: Story = {
   parameters: {
-    relay: { mutationResponse: { deletePost: { postId: shortPost.id } } },
+    relay: {
+      data: deletionOwnerRelayData,
+      mutationResponse: { deletePost: { postId: shortPost.id } },
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -2110,8 +2472,14 @@ export const ProductionPostDeletionListEdgeSafety: Story = {
     const profile = within(canvas.getByTestId('post-deletion-profile-list'));
 
     await userEvent.click(home.getByRole('button', { name: '더 보기' }));
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.getAttribute('aria-label')),
+    ).toEqual(['링크 복사', '게시글 삭제']);
     await userEvent.click(
-      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+      within(menu).getByRole('menuitem', {
         name: '게시글 삭제',
       }),
     );
@@ -2213,6 +2581,317 @@ export const ProductionReactionMutationTargets: Story = {
     ]);
   },
   render: () => <ProductionReactionMutationTargetsStory />,
+};
+
+export const ProductionBookmarkMutation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '북마크 취소' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+      ) as ProductionBookmarkRequest[];
+      expect(requests).toEqual([
+        { action: 'create', postId: shortPost.id },
+        { action: 'delete', bookmarkId: `bookmark-${shortPost.id}` },
+      ]);
+    });
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+  },
+  render: () => <ProductionBookmarkMutationStory />,
+};
+
+export const ProductionBookmarkPendingGuard: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    expect(bookmark).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '답글' })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: /^재게시/ })).toBeEnabled();
+    expect(canvas.getByRole('button', { name: '반응' })).toBeEnabled();
+    const more = canvas.getByRole('button', { name: '더 보기' });
+    expect(more).toBeEnabled();
+    await userEvent.click(more);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
+    );
+    expect(bookmark).toHaveAttribute('aria-busy', 'true');
+    bookmark.click();
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([{ action: 'create', postId: shortPost.id }]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="pending" />,
+};
+
+export const ProductionBookmarkCreateFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(bookmark).toBeEnabled();
+    expect(bookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(bookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory mode="create-failure" />,
+};
+
+export const ProductionBookmarkDeleteFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmarkId = `bookmark-${shortPost.id}`;
+    const cancel = await canvas.findByRole('button', { name: '북마크 취소' });
+
+    await userEvent.click(cancel);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      '북마크를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(cancel).toBeEnabled();
+    expect(cancel).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(cancel);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'delete', bookmarkId },
+      { action: 'delete', bookmarkId },
+    ]);
+  },
+  render: () => <ProductionBookmarkMutationStory initiallyBookmarked mode="delete-failure" />,
+};
+
+export const ProductionBookmarkEnvironmentReplacement: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bookmark = await canvas.findByRole('button', { name: '북마크' });
+
+    await userEvent.click(bookmark);
+    await waitFor(() => expect(bookmark).toHaveAttribute('aria-busy', 'true'));
+    await userEvent.click(canvas.getByRole('button', { name: '두 번째 Profile Store로 전환' }));
+    const replacementBookmark = await canvas.findByRole('button', { name: '북마크' });
+    await waitFor(() => expect(replacementBookmark).toBeEnabled());
+    await userEvent.click(canvas.getByRole('button', { name: '이전 Store 요청 실패' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('북마크하지 못했습니다. 잠시 후 다시 시도해 주세요.')).toBeNull();
+    expect(replacementBookmark).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(replacementBookmark);
+    await waitFor(() => {
+      expect(canvas.getByRole('button', { name: '북마크 취소' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    const requests = JSON.parse(
+      canvas.getByTestId('production-bookmark-request-log').textContent ?? '[]',
+    ) as ProductionBookmarkRequest[];
+    expect(requests).toEqual([
+      { action: 'create', postId: shortPost.id },
+      { action: 'create', postId: shortPost.id },
+    ]);
+  },
+  render: () => <ProductionBookmarkEnvironmentReplacementStory />,
+};
+
+export const ProductionGuestActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+    await userEvent.click(surface.getByRole('button', { name: '더 보기' }));
+    const moreMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(within(moreMenu).getAllByRole('menuitem')).toHaveLength(1);
+    await userEvent.click(within(moreMenu).getByRole('menuitem', { name: '링크 복사' }));
+
+    await waitFor(() => expect(mocked(startWebLogin)).toHaveBeenCalledTimes(4));
+    await waitFor(() =>
+      expect(getCopiedStrings()).toEqual([
+        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      ]),
+    );
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  parameters: { relay: { data: guestPostActionRelayData } },
+  render: () => <ProductionPostActionSessionBoundaryStory state="guest" />,
+};
+
+export const ProductionProfileActionResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    await userEvent.click(surface.getByRole('button', { name: '답글' }));
+    await userEvent.click(surface.getByRole('button', { name: /^재게시/ }));
+    await userEvent.click(surface.getByRole('button', { name: '반응' }));
+    await userEvent.click(surface.getByRole('button', { name: '북마크' }));
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('4'),
+    );
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+  },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
+  render: () => <ProductionPostActionSessionBoundaryStory state="profile" />,
+};
+
+export const ProductionFollowersRepostProfileResolution: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+    const repost = surface.getByRole('button', { name: /^재게시/ });
+
+    expect(repost).toBeEnabled();
+    await userEvent.click(repost);
+    await waitFor(() =>
+      expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('1'),
+    );
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
+  },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
+  render: () => (
+    <ProductionPostActionSessionBoundaryStory postId="detail-followers" state="profile" />
+  ),
+};
+
+export const ProductionSessionErrorDisablesActions: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = within(canvas.getByTestId('production-session-action-post'));
+
+    expect(surface.getByRole('button', { name: '답글' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: /^재게시/ })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '반응' })).toBeDisabled();
+    expect(surface.getByRole('button', { name: '북마크' })).toBeDisabled();
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
+    expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
+  },
+  render: () => <ProductionPostActionSessionBoundaryStory state="error" />,
+};
+
+export const ProductionMoreShareReferences: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const home = within(canvas.getByTestId('production-home-reposts'));
+    const ordinaryActionBar = within(home.getAllByRole('article')[0]!).getByRole('toolbar', {
+      name: '액션 바',
+    });
+    const quoteActionBar = within(
+      home
+        .getByText('이 원문에 덧붙이는 인용자의 본문입니다.')
+        .closest<HTMLElement>('[role="article"]')!.parentElement!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const pureRepostActionBar = within(
+      home
+        .getByText('재게시한 코스모 사용자님이 재게시함')
+        .closest<HTMLElement>('[role="article"]')!,
+    ).getByRole('toolbar', { name: '액션 바' });
+    const targets = [
+      {
+        actionBar: ordinaryActionBar,
+        reference: `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      },
+      {
+        actionBar: quoteActionBar,
+        reference: `https://canonical.story.kosmo.test/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+      },
+      {
+        actionBar: pureRepostActionBar,
+        reference: `https://canonical.story.kosmo.test/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
+      },
+    ];
+
+    for (const [index, { actionBar, reference }] of targets.entries()) {
+      const more = within(actionBar).getByRole('button', { name: '더 보기' });
+      await userEvent.click(more);
+      expect(more).toHaveAttribute('aria-expanded', 'true');
+      const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      expect(within(menu).getAllByRole('menuitem')).toHaveLength(1);
+      await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
+      await waitFor(() => expect(more).toHaveAttribute('aria-expanded', 'false'));
+      await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
+    }
+
+    setNextClipboardFailure(new Error('clipboard unavailable'));
+    await userEvent.click(within(ordinaryActionBar).getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+    expect(getCopiedStrings()).toHaveLength(3);
+  },
+  render: () => <ProductionRepostQuoteLists />,
 };
 
 export const ProductionRepostFailureToast: Story = {
@@ -2773,6 +3452,20 @@ export const PostDetailThreadRoute: Story = {
     expect(canvas.getByText('Reply+Quote 자체 Content')).toBeVisible();
     const reactionButton = canvas.getByRole('button', { name: '❤️ 반응 2개' });
     expect(reactionButton).toBeVisible();
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
+    expect(currentAvatar).not.toBeNull();
+    expect(
+      currentAvatar!.getBoundingClientRect().top - currentRow.getBoundingClientRect().top,
+    ).toBeCloseTo(16, 0);
+    expect(
+      currentActionBar.getBoundingClientRect().top - reactionButton.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
     const ancestorQuote = within(canvas.getByTestId('post-thread-item-route-parent'));
     expect(ancestorQuote.getAllByText('Source 본문')).toHaveLength(1);
     expect(ancestorQuote.getAllByTestId('source-post-preview')).toHaveLength(1);
@@ -3427,6 +4120,13 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     const canvas = within(canvasElement);
     const replyButtons = canvas.getAllByRole('button', { name: '답글' });
     expect(replyButtons).toHaveLength(3);
+    const currentRow = canvas.getByTestId('post-thread-current-route-current');
+    const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(
+      currentDivider.getBoundingClientRect().top - currentActionBar.getBoundingClientRect().bottom,
+    ).toBeCloseTo(4, 0);
 
     await userEvent.click(replyButtons[0]!);
     expect(canvas.getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);

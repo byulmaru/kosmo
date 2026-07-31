@@ -9,8 +9,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 기준 source는 Figma `KOSMO` 파일의 [`Action` node 88:1005](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)다. source metadata에서 27px로 측정되는 한 줄 높이는 구현과 검증에서 exact 28px 정수 계약으로 정규화한다.
 
 - Bar와 각 interactive control의 높이는 Web·Android·iOS 모두 28px·28dp·28pt다. Native 값은 출시 전 임시 예외이며 아래 release gate를 통과하기 전에는 Native 접근성 완료를 주장하지 않는다.
-- Bar는 가용 너비를 채우고 좌우 8px padding 안에서 action을 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
-- Reply, Repost, Reaction, Bookmark의 action slot 너비는 각각 50px다. More는 16px glyph를 사용하되 실제 interactive target 너비를 최소 28px로 확보하고 오른쪽 8px inset에 맞춘다.
+- Bar는 가용 너비를 채우고 Reply control slot의 왼쪽 경계와 More control slot의 오른쪽 경계를 PostBody가 사용하는 content column의 양끝에 맞춘다. 나머지 action은 그 사이를 `space-between`으로 분배한다. Figma의 302px frame은 기준 viewport의 측정값이며 production 고정 너비가 아니다.
+- Reply, Repost, Reaction, Bookmark의 action slot 너비는 각각 50px이며 icon-count visual group을 slot 왼쪽에 맞춘다. 따라서 각 glyph의 왼쪽 경계는 자기 slot의 왼쪽 경계와 일치한다. More는 이 왼쪽 정렬에서 제외해 16px glyph를 최소 28px interactive target 가운데에 두고 target 오른쪽 경계를 content column 오른쪽 끝에 맞춘다.
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.
@@ -27,6 +27,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - `PostLayout`은 `PostActionBar`를 Post content grid 안의 마지막 자식으로 렌더링한다. `PostListItem`은
   상단 0·하단 4px을 제공하는 목록 전용 slot을 마지막 자식으로 두고 그 안에 `PostActionBar`를 렌더링한다.
+- 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
+  inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않고 Action Bar 아래부터 다음
+  thread divider까지 4px을 둔다. current row 상단의 16px은 유지한다. 이 간격은 thread current row
+  wrapper와 `PostLayout`이 소유하며 Action Bar의 28px geometry는 바꾸지 않는다.
 - Action Bar는 `PostBody` 또는 Source presentation과 같은 content-level sibling이며 본문, 작성자, 생성 시각,
   Source preview의 `Link`나 `Pressable` 안에 중첩하지 않는다.
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
@@ -36,8 +40,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   간격은 늘리지 않는다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
-- 순수 Repost 아래의 Action Bar는 바깥 Repost Post가 아니라 화면에 표시한 direct Source Post를 대상으로
-  동작한다. 따라서 Repost menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
+- 순수 Repost 아래 Action Bar의 Reply는 바깥 contentless Repost의 Reply 계약을 유지해 disabled로 표시한다.
+  Repost·Reaction·Bookmark·More는 화면에 표시한 direct Source Post를 대상으로 동작한다. 따라서 Repost
+  menu의 선택 상태, count와 생성·취소 identity도 Source fragment에서 파생한다.
 - Quote의 자체 본문 affordance는 Quote detail로 이동하고 Source preview만 Source detail로 이동한다.
 - 순수 Repost의 `{displayName}님이 재게시함` attribution은 `typography.sm`의 14/20 line box에 맞추고 바로
   아래 Source 표준행과의 추가 간격을 두지 않는다. Web의 Profile text link는 inline target 예외를 사용하며,
@@ -58,11 +63,23 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   방향키, Home과 End로 item focus를 이동한다.
 - Web item은 theme card surface(light theme에서는 흰색), 4px card padding, 36px 높이와 128px 최소폭,
   8px 좌우 padding, 18px Repost icon, 14px·500 label, 1px menu border와 `0 2px 4px`
-  shadow를 사용해 Action Bar 위에 떠 있는 compact control로 구분한다.
+  shadow를 사용해 Action Bar 위에 떠 있는 compact control로 구분한다. 모든 Web `ActionMenu` item은
+  icon과 label을 같은 왼쪽 시작선에 고정하고 label을 왼쪽 정렬한다. 첫 item을 제외한 각 item 위에는
+  theme divider 1px를 두며 hover와 pressed 상태는 theme surface 배경으로 표시한다.
 - Android와 iOS는 safe area를 고려한 bottom action sheet를 사용한다. backdrop, platform back action과
   dismiss gesture로 닫을 수 있고 modal·menu 의미를 제공한다. sheet 내부 menu item의 target은 Action Bar의
   28px trigger geometry와 별도이며 최소 44×44를 유지한다.
 - mutation pending 중에는 trigger와 menu action의 반복 입력을 막고 기존 selected·count 표현을 유지한다.
+
+## More 링크 복사 menu
+
+- Web의 More menu는 Repost와 같은 외부 overlay·viewport 보정·dismiss·keyboard 계약을 재사용하되 More
+  trigger의 오른쪽을 기준으로 왼쪽을 향해 펼친다. menu card의 오른쪽 경계는 trigger 오른쪽보다 5px
+  바깥에 두고 첫 item의 시각 target 오른쪽 경계는 trigger 오른쪽과 맞춘다. 따라서 28px More trigger는
+  첫 item의 확장 hit area 안에 남아, menu를 연 위치에서 포인터를 움직이지 않은 두 번째 활성화가
+  `링크 복사`를 선택한다.
+- 왼쪽 viewport 가장자리와 충돌하면 menu를 화면 안으로 보정한다. 이 방향 선택은 More에만 적용하며
+  Repost menu의 기존 시작 정렬과 Native bottom action sheet는 바꾸지 않는다.
 
 ## Repost 실패 toast
 
@@ -116,8 +133,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-471`은 Repost 취소 뒤 서버 확정 Source 상태를 같은 actor Store에 정규화하는 cache 갱신을 소유한다.
 - `PROD-598`은 기존 Post 삭제 domain과 GraphQL resolver를 재사용해 More의 작성자 삭제 항목, 확인 dialog,
   Relay cache 동기화와 실패 복구를 소유한다.
-- Reaction, Reply, Bookmark, More의 실제 연결과 여러 action의 최종 통합 범위는 각 구현 이슈와 `PROD-432`에
-  남긴다.
+- `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
+- Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
+  선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
 ## 검증
 
@@ -126,16 +144,26 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 목록의 일반 Post·순수 Repost·Quote에서 Action Bar slot의 상단 padding이 0, 하단 padding이 4이고 1px 구분선이 semantic
   `divider` color를 사용하는지 검증한다. 순수 Repost는 attribution line box가 20이고 Source 표준행과의
   추가 gap이 0인지, Quote는 Source preview 내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
-- 모든 플랫폼 구현에서 Bar와 control 높이 28, 좌우 padding 8, social action 너비 50, More target 너비 최소
+- 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, Reaction Summary 아래부터 Action Bar까지
+  4px인지 검증한다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper가 남지 않으며
+  Action Bar 아래부터 1px thread divider까지 4px인지 exact geometry로 검증한다.
+- 모든 플랫폼 구현에서 Bar와 control 높이 28, Reply·More target의 content column 양끝 정렬, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
-  두 번째 pointer 활성화로 item이 선택되는지, card surface·36px 높이·128px 최소폭·18px icon·14px·500
+  두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px
+  바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 왼쪽으로 펼쳐지는지, Repost menu는 기존 시작
+  정렬을 유지하는지 함께 검증한다. card surface·36px 높이·128px 최소폭·18px icon·14px·500
   label·8px 좌우 padding·border·`0 2px 4px` shadow를 제공하는지 검증한다. open/close, focus 복귀와
   키보드 이동도 함께 검증한다.
 - Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
 - Native 44pt·48dp Action Bar target과 VoiceOver·TalkBack runtime은 출시 전 후속 gate로 남기고, 현재 28px
   공통 구현의 완료 증거로 보고하지 않는다.
+- 순수 Repost에서 Reply는 바깥 contentless Repost identity를 유지해 disabled이고,
+  Repost·Reaction·Bookmark·More만 direct Source Post를 대상으로 사용하는지 검증한다.
+- target 자체가 적격할 때 guest는 기존 인증 진입으로, valid 세션에서 selected Profile이 없으면 기존 Profile
+  선택기로 위임하고 session error에서는 액션을 비활성화하는지 검증한다. Profile 선택 뒤 원래 액션을 자동으로
+  재실행하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
 - 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
   alert semantics, light `#262626` accent와 message 2px optical shift, 실패 뒤 상태 유지·다음 입력 재시도를

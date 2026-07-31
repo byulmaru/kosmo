@@ -89,6 +89,7 @@ const unselectedSource = {
     edges: [],
     pageInfo: { endCursor: null, hasNextPage: false },
   },
+  viewerBookmark: null,
   viewerRepost: null,
   viewerReactions: [],
 };
@@ -1217,6 +1218,14 @@ export const ProcessingAccessibility: Story = {
     const repostCountBounds = repostButton.querySelector('[dir="auto"]')!.getBoundingClientRect();
     expect(replySpinnerVisual.clientWidth).toBe(14);
     expect(replySpinnerVisual.clientHeight).toBe(14);
+    expect(replySpinner.getBoundingClientRect().left).toBeCloseTo(
+      replyButton.getBoundingClientRect().left,
+      0,
+    );
+    expect(repostSpinner.getBoundingClientRect().left).toBeCloseTo(
+      repostButton.getBoundingClientRect().left,
+      0,
+    );
     expect(replySpinnerBounds.top + replySpinnerBounds.height / 2).toBeCloseTo(
       replyCountBounds.top + replyCountBounds.height / 2,
       0,
@@ -1271,10 +1280,22 @@ export const AccessibilityAndCompactGeometry: Story = {
     const actionBarBounds = actionBar.getBoundingClientRect();
     const firstButtonBounds = buttons[0]!.getBoundingClientRect();
     const moreButtonBounds = buttons[4]!.getBoundingClientRect();
-    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left + spacing.sm, 0);
-    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right - spacing.sm, 0);
+    expect(firstButtonBounds.left).toBeCloseTo(actionBarBounds.left, 0);
+    expect(moreButtonBounds.right).toBeCloseTo(actionBarBounds.right, 0);
+    for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
+      const buttonBounds = buttons[index]!.getBoundingClientRect();
+      const iconBounds = canvas.getByTestId(`post-action-${action}-icon`).getBoundingClientRect();
+      expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
+    }
+    const moreIconBounds = canvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+    expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
+      moreButtonBounds.left + moreButtonBounds.width / 2,
+      0,
+    );
   },
-  render: () => <PostActionBarFixture {...actionBarProps} />,
+  render: () => (
+    <PostActionBarFixture {...actionBarProps} reply={{ ...actionBarProps.reply, count: 0 }} />
+  ),
 };
 
 export const Compact390: Story = {
@@ -1349,6 +1370,7 @@ function verifyFixtures(expectedDetailWidth: number, expectedListWidth: number) 
 function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
   const toolbarBounds = toolbar.getBoundingClientRect();
   const buttons = within(toolbar).getAllByRole('button');
+  const toolbarCanvas = within(toolbar);
   const firstBounds = buttons[0]!.getBoundingClientRect();
   let previousRight = toolbarBounds.left;
 
@@ -1368,9 +1390,19 @@ function verifySingleRow(toolbar: HTMLElement, expectedContentWidth: number) {
     expect(bounds.right).toBeLessThanOrEqual(toolbarBounds.right);
     previousRight = bounds.right;
   }
-  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left + spacing.sm, 0);
-  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(
-    toolbarBounds.right - spacing.sm,
+  expect(buttons[0]!.getBoundingClientRect().left).toBeCloseTo(toolbarBounds.left, 0);
+  expect(buttons[4]!.getBoundingClientRect().right).toBeCloseTo(toolbarBounds.right, 0);
+  for (const [index, action] of ['reply', 'repost', 'reaction', 'bookmark'].entries()) {
+    const buttonBounds = buttons[index]!.getBoundingClientRect();
+    const iconBounds = toolbarCanvas
+      .getByTestId(`post-action-${action}-icon`)
+      .getBoundingClientRect();
+    expect(iconBounds.left).toBeCloseTo(buttonBounds.left, 0);
+  }
+  const moreBounds = buttons[4]!.getBoundingClientRect();
+  const moreIconBounds = toolbarCanvas.getByTestId('post-action-more-icon').getBoundingClientRect();
+  expect(moreIconBounds.left + moreIconBounds.width / 2).toBeCloseTo(
+    moreBounds.left + moreBounds.width / 2,
     0,
   );
 }

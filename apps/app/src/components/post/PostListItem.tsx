@@ -3,23 +3,19 @@ import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
-import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { PostActionBar } from './PostActionBar';
+import { usePostActionAuthentication } from './PostActionAuthentication';
+import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { usePostReactionController } from './PostReactionController';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
-import { useRepostFailureToast } from './useRepostFailureToast';
-import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
-import type { PostReactionController_post$key } from './__generated__/PostReactionController_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
@@ -40,8 +36,7 @@ const PostListRowFragment = graphql`
       displayName
       ...ProfileNameBlock_profile
     }
-    ...PostActionBar_post @alias(as: "actionBar")
-    ...PostReactionController_post @alias(as: "reactionController")
+    ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
   }
 `;
@@ -68,8 +63,7 @@ const PostListItemFragment = graphql`
       id
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
-    ...PostActionBar_post @alias(as: "actionBar")
-    ...PostReactionController_post @alias(as: "reactionController")
+    ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
       id
       createdAt
@@ -100,24 +94,36 @@ export function PostListItem({
   showDivider?: boolean;
 }) {
   const theme = useTheme();
-  const onRepostError = useRepostFailureToast();
   const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
   const onDeleted = useCallback(() => setDeleted(true), []);
+  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
   const reply = replyBinding
     ? {
         accessibilityLabel: '답글',
         controlRef: replyTriggerRef,
-        expanded: replyBinding.expanded,
-        onPress: replyBinding.onPress,
-        processing: getReplyProcessingState(true, Boolean(post.content)),
+        expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+        onPress: () => {
+          if (replyAuthentication.execution.kind === 'resolution-required') {
+            replyAuthentication.resolve(replyAuthentication.execution.reason);
+          } else if (replyAuthentication.execution.kind === 'enabled') {
+            replyBinding.onPress();
+          }
+        },
+        processing: getReplyProcessingState(
+          replyAuthentication.execution,
+          Boolean(replyBinding.profile),
+        ),
       }
     : undefined;
   const replySurface =
-    replyBinding && post.content && post.replySurface ? (
+    replyAuthentication.execution.kind === 'enabled' &&
+    replyBinding?.profile &&
+    post.content &&
+    post.replySurface ? (
       <ReplyComposerSurface
         ref={replyBinding.surfaceRef}
         onPostCreated={replyBinding.onPostCreated}
@@ -146,12 +152,7 @@ export function PostListItem({
     return (
       <>
         <View role="article" style={cardStyle}>
-          <PostListRow
-            onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            post={post}
-            reply={reply}
-          />
+          <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
         </View>
         {replySurface}
       </>
@@ -189,12 +190,7 @@ export function PostListItem({
               </Link>
             </View>
           </View>
-          <PostListRow
-            onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            post={source}
-            reply={reply}
-          />
+          <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
         </View>
         {replySurface}
       </>
@@ -253,13 +249,12 @@ export function PostListItem({
             showPostAvatar={false}
             sourcePreviewStyle={styles.quoteSourcePreview}
           />
-          <PostReactionActions
-            actionBar={post.actionBar!}
-            controllerPost={post.reactionController!}
+          <PostActionSurface
+            actionBarStyle={styles.actionBarSlot}
             onDeleted={onDeleted}
-            onRepostError={onRepostError}
-            quote
+            reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
+            socialActionTarget={post.actionSurface!}
           />
         </View>
       </View>
@@ -270,12 +265,10 @@ export function PostListItem({
 
 function PostListRow({
   onDeleted,
-  onRepostError,
   post: postKey,
   reply,
 }: {
   onDeleted: () => void;
-  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
 }) {
@@ -320,51 +313,15 @@ function PostListRow({
             <PostBody onBodyPress={() => router.push(detailHref)} post={post} />
           </View>
         ) : null}
-        <PostReactionActions
-          actionBar={post.actionBar!}
-          controllerPost={post.reactionController!}
+        <PostActionSurface
+          actionBarStyle={styles.actionBarSlot}
           onDeleted={onDeleted}
-          onRepostError={onRepostError}
+          reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
+          socialActionTarget={post.actionSurface!}
         />
       </View>
     </View>
-  );
-}
-
-function PostReactionActions({
-  actionBar,
-  controllerPost,
-  onDeleted,
-  onRepostError,
-  quote = false,
-  reply,
-}: {
-  actionBar: PostActionBar_post$key;
-  controllerPost: PostReactionController_post$key;
-  onDeleted?: () => void;
-  onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
-  quote?: boolean;
-  reply?: PostActionBarProps['reply'];
-}) {
-  const controller = usePostReactionController(controllerPost);
-
-  return (
-    <>
-      <PostReactionSummary
-        controller={controller}
-        style={quote ? styles.quoteReactionSummary : styles.reactionSummary}
-      />
-      <View style={styles.actionBarSlot}>
-        <PostActionBar
-          onDeleted={onDeleted}
-          onRepostError={onRepostError}
-          post={actionBar}
-          reactionController={controller}
-          reply={reply}
-        />
-      </View>
-    </>
   );
 }
 

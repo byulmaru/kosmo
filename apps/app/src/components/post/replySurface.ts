@@ -1,4 +1,5 @@
 import { breakpoints } from '@/theme/tokens';
+import type { PostActionExecution } from './postActionAvailability';
 import type { PostActionProcessingState } from './PostActionControl';
 
 type ReplySurfaceOwner = 'detail' | 'list';
@@ -17,8 +18,11 @@ export function getReplySurfacePresentation(
 }
 
 export function getReplyProcessingState(
-  hasSelectedProfile: boolean,
-  displayPostHasContent: boolean,
+  execution: PostActionExecution,
+  hasComposerProfile: boolean,
 ): PostActionProcessingState {
-  return hasSelectedProfile && displayPostHasContent ? 'default' : 'disabled';
+  if (execution.kind === 'resolution-required') {
+    return 'default';
+  }
+  return execution.kind === 'enabled' && hasComposerProfile ? 'default' : 'disabled';
 }

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it, mock } from 'node:test';
-import type { startWebLoginFromPress as StartWebLoginFromPress } from './login';
+import type {
+  startWebLogin as StartWebLogin,
+  startWebLoginFromPress as StartWebLoginFromPress,
+} from './login';
 
 const calls: string[] = [];
 
@@ -29,10 +32,11 @@ Object.defineProperty(globalThis, 'window', {
   },
 });
 
+let startWebLogin: typeof StartWebLogin;
 let startWebLoginFromPress: typeof StartWebLoginFromPress;
 
 before(async () => {
-  ({ startWebLoginFromPress } = await import('./login'));
+  ({ startWebLogin, startWebLoginFromPress } = await import('./login'));
 });
 
 beforeEach(() => {
@@ -46,6 +50,12 @@ const pressEvent = (nativeEvent: Partial<MouseEvent> = {}) =>
   }) as never;
 
 describe('Web 로그인 진입', () => {
+  it('event가 없는 action callback도 BFF endpoint로 문서 탐색한다', () => {
+    startWebLogin();
+
+    assert.deepEqual(calls, ['assign:/login']);
+  });
+
   it('일반 클릭은 BFF endpoint로 문서 탐색한다', () => {
     startWebLoginFromPress(pressEvent());
 

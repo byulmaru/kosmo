@@ -21,12 +21,23 @@ describe('Reply surface selection', () => {
 });
 
 describe('Reply display Post eligibility', () => {
-  it('does not inherit Reply eligibility from a contentful Repost Source', async () => {
+  it('target/session disabled와 resolution-only 실행을 구분한다', async () => {
     const { getReplyProcessingState } = await import('./replySurface');
 
-    assert.equal(getReplyProcessingState(true, false), 'disabled');
-    assert.equal(getReplyProcessingState(false, false), 'disabled');
-    assert.equal(getReplyProcessingState(false, true), 'disabled');
-    assert.equal(getReplyProcessingState(true, true), 'default');
+    assert.equal(getReplyProcessingState({ kind: 'disabled', reason: 'target' }, true), 'disabled');
+    assert.equal(
+      getReplyProcessingState({ kind: 'disabled', reason: 'session-error' }, true),
+      'disabled',
+    );
+    assert.equal(
+      getReplyProcessingState({ kind: 'resolution-required', reason: 'guest' }, false),
+      'default',
+    );
+    assert.equal(
+      getReplyProcessingState({ kind: 'resolution-required', reason: 'profile' }, false),
+      'default',
+    );
+    assert.equal(getReplyProcessingState({ kind: 'enabled' }, false), 'disabled');
+    assert.equal(getReplyProcessingState({ kind: 'enabled' }, true), 'default');
   });
 });
