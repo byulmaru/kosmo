@@ -1,6 +1,7 @@
+import { Link2, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -80,6 +81,41 @@ function ActionMenuInteractionFixtures() {
       </View>
       <View accessibilityLabel="end-aligned menu fixture">
         <ActionMenuFixture compactTrigger singleItem webHorizontalPlacement="end" />
+      </View>
+      <View accessibilityLabel="공용 메뉴 스타일 fixture">
+        <ActionMenu
+          accessibilityLabel="더 보기 메뉴"
+          items={[
+            {
+              icon: Link2,
+              key: 'copy-link',
+              label: '링크 복사',
+              onSelect: () => undefined,
+            },
+            {
+              accessibilityLabel: '게시글 삭제',
+              icon: Trash2,
+              key: 'delete-post',
+              label: '삭제',
+              onSelect: () => undefined,
+              tone: 'danger',
+            },
+          ]}
+          renderTrigger={({ expanded, onPress, ref }) => (
+            <Pressable
+              accessibilityLabel="더 보기"
+              accessibilityRole="button"
+              aria-expanded={expanded}
+              aria-haspopup="menu"
+              onPress={onPress}
+              ref={ref}
+              style={styles.compactTrigger}
+            >
+              <MoreHorizontal size={16} />
+            </Pressable>
+          )}
+          webHorizontalPlacement="end"
+        />
       </View>
     </View>
   );
@@ -227,6 +263,43 @@ export const InteractionContract: Story = {
     Object.assign(endAlignedTrigger.style, { left: '8px', right: 'auto' });
     ownerDocument.dispatchEvent(new Event('scroll'));
     await waitFor(() => expectEndAlignedGeometry(0));
+    await userEvent.keyboard('{Escape}');
+
+    const styleFixture = within(canvas.getByLabelText('공용 메뉴 스타일 fixture'));
+    await userEvent.click(styleFixture.getByRole('button', { name: '더 보기' }));
+    const styleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    const copyItem = within(styleMenu).getByRole('menuitem', { name: '링크 복사' });
+    const deleteItem = within(styleMenu).getByRole('menuitem', { name: '게시글 삭제' });
+    const copyIcon = copyItem.querySelector('svg')!;
+    const deleteIcon = deleteItem.querySelector('svg')!;
+    const copyLabel = within(copyItem).getByText('링크 복사');
+    const deleteLabel = within(deleteItem).getByText('삭제');
+
+    expect(copyIcon.getBoundingClientRect().left).toBeCloseTo(
+      deleteIcon.getBoundingClientRect().left,
+      0,
+    );
+    expect(copyLabel.getBoundingClientRect().left).toBeCloseTo(
+      deleteLabel.getBoundingClientRect().left,
+      0,
+    );
+    expect(getComputedStyle(copyLabel).textAlign).toBe('left');
+    expect(getComputedStyle(copyItem).borderTopWidth).toBe('0px');
+    expect(getComputedStyle(deleteItem).borderTopWidth).toBe('1px');
+    expect(getComputedStyle(deleteItem).borderTopColor).toBe('rgb(242, 242, 242)');
+    fireEvent.keyDown(copyItem, { key: 'Enter' });
+    expect(getComputedStyle(copyItem).backgroundColor).toBe('rgb(246, 246, 246)');
+    fireEvent.keyUp(copyItem, { key: 'Enter' });
+    await userEvent.keyboard('{Enter}');
+    const hoveredStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    const hoveredCopyItem = within(hoveredStyleMenu).getByRole('menuitem', { name: '링크 복사' });
+    await userEvent.hover(hoveredCopyItem);
+    expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe('rgb(246, 246, 246)');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.keyboard('{Enter}');
+    const reopenedStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    const reopenedCopyItem = within(reopenedStyleMenu).getByRole('menuitem', { name: '링크 복사' });
+    expect(getComputedStyle(reopenedCopyItem).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     await userEvent.keyboard('{Escape}');
 
     const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));

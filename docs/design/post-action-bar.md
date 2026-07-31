@@ -59,7 +59,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   방향키, Home과 End로 item focus를 이동한다.
 - Web item은 theme card surface(light theme에서는 흰색), 4px card padding, 36px 높이와 128px 최소폭,
   8px 좌우 padding, 18px Repost icon, 14px·500 label, 1px menu border와 `0 2px 4px`
-  shadow를 사용해 Action Bar 위에 떠 있는 compact control로 구분한다.
+  shadow를 사용해 Action Bar 위에 떠 있는 compact control로 구분한다. 모든 Web `ActionMenu` item은
+  icon과 label을 같은 왼쪽 시작선에 고정하고 label을 왼쪽 정렬한다. 첫 item을 제외한 각 item 위에는
+  theme divider 1px를 두며 hover와 pressed 상태는 theme surface 배경으로 표시한다.
 - Android와 iOS는 safe area를 고려한 bottom action sheet를 사용한다. backdrop, platform back action과
   dismiss gesture로 닫을 수 있고 modal·menu 의미를 제공한다. sheet 내부 menu item의 target은 Action Bar의
   28px trigger geometry와 별도이며 최소 44×44를 유지한다.
