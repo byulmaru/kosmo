@@ -7,6 +7,8 @@ import {
 } from './shellLayout';
 
 describe('getShellLayout', () => {
+  const postDetailSegments = ['(tabs)', '(post)', '[profileHandle]', '[postId]'] as const;
+
   it('keeps native tablets on the mobile shell', () => {
     assert.equal(getShellLayout(false, 1_024), 'mobile');
   });
@@ -24,29 +26,38 @@ describe('getShellLayout', () => {
   });
 
   it('assigns only the approved Web mobile routes to the shell header', () => {
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/compose'), {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/compose', []), {
       leading: 'menu',
       title: '글쓰기',
     });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/notifications'), {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/notifications', []), {
       leading: 'menu',
       title: '알림',
     });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/@writer/post-id'), {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/@writer/post-id', postDetailSegments), {
       leading: 'back',
       title: '게시글',
     });
-    assert.deepEqual(getWebMobileShellHeader(true, 390, '/writer/post-id'), {
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/writer/post-id', postDetailSegments), {
       leading: 'back',
       title: '게시글',
     });
-    assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks'), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/search'), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers'), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/following'), null);
-    assert.equal(getWebMobileShellHeader(true, 390, '/login/callback'), null);
-    assert.equal(getWebMobileShellHeader(true, 768, '/notifications'), null);
-    assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications'), null);
-    assert.equal(getWebMobileShellHeader(false, 390, '/notifications'), null);
+    assert.equal(
+      getWebMobileShellHeader(true, 390, '/settings/account', [
+        '(tabs)',
+        '(protected)',
+        'settings',
+        'account',
+      ]),
+      null,
+    );
+    assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
+    assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
+    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);
+    assert.equal(getWebMobileShellHeader(true, 390, '/@writer/following', []), null);
+    assert.equal(getWebMobileShellHeader(true, 390, '/login/callback', []), null);
+    assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
+    assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
+    assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
   });
 });

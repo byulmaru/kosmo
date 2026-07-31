@@ -2096,7 +2096,10 @@ const meta = {
       data: postsStoryRelayData,
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
-    router: { pathname: '/@kosmo/post-1' },
+    router: {
+      pathname: '/@kosmo/post-1',
+      segments: ['(tabs)', '(post)', '[profileHandle]', '[postId]'],
+    },
   },
   title: 'KOSMO/Content/Posts',
 } satisfies Meta<typeof PostCatalog>;

@@ -1,4 +1,4 @@
-import { usePathname, useRouter } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -27,12 +27,14 @@ const ComposeQuery = graphql`
 
 export default function ComposeScreen() {
   const pathname = usePathname();
+  const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
   const shellOwnsHeader =
-    getWebMobileShellHeader(Platform.OS === 'web', width, pathname)?.title === '글쓰기';
+    getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
+    '글쓰기';
 
   return (
     <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">

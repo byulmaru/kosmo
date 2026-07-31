@@ -1,4 +1,4 @@
-import { Slot, usePathname, useRouter } from 'expo-router';
+import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -94,6 +94,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -110,7 +111,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
-  const mobileShellHeader = getWebMobileShellHeader(web, width, pathname);
+  const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {

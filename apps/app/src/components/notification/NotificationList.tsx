@@ -1,4 +1,4 @@
-import { usePathname } from 'expo-router';
+import { usePathname, useSegments } from 'expo-router';
 import { useState, useTransition } from 'react';
 import {
   Platform,
@@ -213,9 +213,11 @@ export function NotificationListState({
 
 function NotificationPageHeader() {
   const pathname = usePathname();
+  const routeSegments = useSegments();
   const { width } = useWindowDimensions();
   const shellOwnsHeader =
-    getWebMobileShellHeader(Platform.OS === 'web', width, pathname)?.title === '알림';
+    getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
+    '알림';
 
   return shellOwnsHeader ? null : <PageHeader title="알림" />;
 }

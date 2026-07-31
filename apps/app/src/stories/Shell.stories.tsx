@@ -1448,6 +1448,7 @@ export const UniversalMobilePostDetailHeader: Story = {
     router: {
       params: { postId: 'post-id', profileHandle: '@writer' },
       pathname: '/@writer/post-id',
+      segments: ['(tabs)', '(post)', '[profileHandle]', '[postId]'],
       slotLabel: '게시글 상세',
     },
   },

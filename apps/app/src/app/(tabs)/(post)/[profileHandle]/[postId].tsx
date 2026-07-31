@@ -1,4 +1,4 @@
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
@@ -54,12 +54,18 @@ const PostQuery = graphql`
 export default function PostDetailScreen() {
   const params = useLocalSearchParams<{ postId: string; profileHandle: string }>();
   const pathname = usePathname();
+  const routeSegments = useSegments();
   const { width } = useWindowDimensions();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
-  const header = getWebMobileShellHeader(Platform.OS === 'web', width, pathname) ? null : (
+  const header = getWebMobileShellHeader(
+    Platform.OS === 'web',
+    width,
+    pathname,
+    routeSegments,
+  ) ? null : (
     <PostDetailHeader />
   );
 

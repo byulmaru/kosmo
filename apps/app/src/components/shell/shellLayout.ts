@@ -19,6 +19,7 @@ export function getWebMobileShellHeader(
   web: boolean,
   width: number,
   pathname: string,
+  routeSegments: readonly string[],
 ): WebMobileShellHeader | null {
   if (!web || getShellLayout(web, width) !== 'mobile') {
     return null;
@@ -31,13 +32,7 @@ export function getWebMobileShellHeader(
     return { leading: 'menu', title: '알림' };
   }
 
-  const segments = pathname.split('/').filter(Boolean);
-  if (
-    segments.length === 2 &&
-    pathname !== '/login/callback' &&
-    segments[1] !== 'followers' &&
-    segments[1] !== 'following'
-  ) {
+  if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
     return { leading: 'back', title: '게시글' };
   }
 
