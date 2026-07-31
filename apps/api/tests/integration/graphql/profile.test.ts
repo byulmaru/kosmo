@@ -955,6 +955,62 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
+  test('Profile Update delivery 실패 뒤에도 committed GraphQL payload를 반환한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({ domain: 'profile-update.remote.example' });
+    const remote = await createProfile({
+      handle: 'profile-update-follower',
+      instanceId: remoteInstance.id,
+    });
+    await createRemoteActor(remote.id, remoteInstance.domain);
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: auth.profile.id,
+      followerProfileId: remote.id,
+    });
+    const delivery = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('delivery failed');
+    });
+    const errorLog = mock.method(console, 'error', () => undefined);
+
+    try {
+      const result = await requestGraphQL<{
+        updateProfile: { profile: { bio: string | null; id: string } };
+      }>(
+        `mutation UpdateProfileAfterDeliveryFailure {
+          updateProfile(input: { bio: "Committed bio" }) {
+            profile { bio id }
+          }
+        }`,
+        {},
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.updateProfile.profile, {
+        bio: 'Committed bio',
+        id: globalId('Profile', auth.profile.id),
+      });
+      assert.ok(delivery.mock.callCount() > 0);
+      assert.equal(errorLog.mock.callCount(), 1);
+      assert.equal(
+        errorLog.mock.calls[0]?.arguments[0],
+        'Post-commit ActivityPub Local Profile Update delivery failed',
+      );
+      assert.equal(
+        await db
+          .select({ bio: Profiles.bio })
+          .from(Profiles)
+          .where(eq(Profiles.id, auth.profile.id))
+          .then(firstOrThrow)
+          .then(({ bio }) => bio),
+        'Committed bio',
+      );
+    } finally {
+      delivery.mock.restore();
+      errorLog.mock.restore();
+    }
+  });
+
   test('returns only the selected editable local Owner Profile without exposing auth errors', async () => {
     const guest = await requestGraphQL<{
       selectedProfileForEdit: { id: string } | null;

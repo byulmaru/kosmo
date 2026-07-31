@@ -23,17 +23,20 @@ builder.mutationField('updateProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       try {
+        const result = await updateProfile({
+          accountId: ctx.session.accountId,
+          profileId: ctx.session.profileId,
+          displayName: input.displayName ?? undefined,
+          bio: input.bio,
+          followPolicy: input.followPolicy ?? undefined,
+          tags: input.tags,
+          avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
+          headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
+        });
+        await result.postCommit();
+
         return {
-          profile: await updateProfile({
-            accountId: ctx.session.accountId,
-            profileId: ctx.session.profileId,
-            displayName: input.displayName ?? undefined,
-            bio: input.bio,
-            followPolicy: input.followPolicy ?? undefined,
-            tags: input.tags,
-            avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
-            headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
-          }),
+          profile: result.profile,
         };
       } catch (error) {
         if (
