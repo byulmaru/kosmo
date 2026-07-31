@@ -78,7 +78,7 @@ Android, iOS, Web에서 공유하는 kosmo 앱 shell과 canonical route 계약�
 
 ### Requirement: Post basic information display
 
-게시글 디테일 페이지는 게시글의 기본 정보를 표시해야 한다(MUST). 표시 항목은 Plain Text 본문, 작성자(표시 이름·핸들), 작성 시각, 공개 범위이며, 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
+**Authority / Provenance:** `docs/design/figma.md`, `docs/design/post-thread.md`, PROD-89, PROD-596 — 게시글 디테일 페이지는 게시글의 기본 정보를 표시해야 한다(MUST). 표시 항목은 Plain Text 본문, 작성자(표시 이름·핸들), 작성 시각, 공개 범위이며, 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
 
 #### Scenario: Display post body and author
 
@@ -86,10 +86,11 @@ Android, iOS, Web에서 공유하는 kosmo 앱 shell과 canonical route 계약�
 - **THEN** 시스템은 Plain Text 본문을 줄바꿈을 보존해 표시하고, 작성자 표시 이름과 `relativeHandle`, 작성 시각, 공개 범위를 표시한다
 - **AND** 작성자 영역은 작성자의 `/${relativeHandle}` 프로필 페이지로 이동할 수 있다
 
-#### Scenario: Author avatar initial fallback
+#### Scenario: Author default avatar fallback
 
-- **WHEN** 작성자에게 아바타 이미지가 없다(스키마 미보유)
-- **THEN** 시스템은 표시 이름(없으면 핸들)의 첫 글자를 대문자로 한 이니셜 아바타를 표시한다
+- **WHEN** 작성자의 프로필 이미지 URL이 없다
+- **THEN** 시스템은 승인된 기본 아바타 이미지를 표시한다
+- **AND** 아바타의 접근 가능한 이름은 기존 작성자 표시 이름을 유지한다
 
 #### Scenario: Missing post content
 
@@ -625,7 +626,7 @@ Domain Limit·viewer Profile Domain Block의 미래 공통-predicate rollout은 
 
 ### Requirement: Profile basic information display
 
-프로필 페이지는 조회된 프로필의 기본 정보를 표시해야 한다(MUST). 표시 항목은 커버 영역, 아바타, 표시 이름, 핸들, bio, 팔로잉/팔로워 수이며, 팔로우 수는 `팔로잉 → 팔로워` 순서로 표시해야 한다(MUST). 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
+**Authority / Provenance:** `docs/design/figma.md`, PROD-91, PROD-596 — 프로필 페이지는 조회된 프로필의 기본 정보를 표시해야 한다(MUST). 표시 항목은 커버 영역, 아바타, 표시 이름, 핸들, bio, 팔로잉/팔로워 수이며, 팔로우 수는 `팔로잉 → 팔로워` 순서로 표시해야 한다(MUST). 색·반경은 시맨틱 디자인 토큰을 사용해 라이트/다크에 대응해야 한다(MUST).
 
 #### Scenario: Display loaded profile
 
@@ -633,10 +634,11 @@ Domain Limit·viewer Profile Domain Block의 미래 공통-predicate rollout은 
 - **THEN** 시스템은 커버 밴드, 아바타, 표시 이름, `relativeHandle`, bio(있을 때), 팔로잉/팔로워 수를 표시한다
 - **AND** 팔로우 수는 팔로잉을 먼저, 팔로워를 나중에 표시한다
 
-#### Scenario: Avatar initial fallback
+#### Scenario: Default avatar fallback
 
-- **WHEN** 프로필에 아바타 이미지가 없다(스키마 미보유)
-- **THEN** 시스템은 표시 이름(없으면 핸들)의 첫 글자를 대문자로 한 이니셜 아바타를 표시한다
+- **WHEN** 프로필 이미지 URL이 없다
+- **THEN** 시스템은 승인된 기본 아바타 이미지를 표시한다
+- **AND** 아바타의 접근 가능한 이름은 기존 프로필 표시 이름을 유지한다
 
 #### Scenario: Compact follow counts
 

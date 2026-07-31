@@ -2,7 +2,7 @@
 
 ### Requirement: Post author profile display
 
-**Authority / Provenance:** `docs/design/figma.md`, PROD-97, PROD-596 웹 앱은 게시글 목록과 게시글 상세 페이지에서 재사용 가능한 GraphQL `Profile` fragment 기반 작성자 프로필 표시 컴포넌트를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/figma.md`, PROD-97, PROD-596 — 웹 앱은 게시글 목록과 게시글 상세 페이지에서 재사용 가능한 GraphQL `Profile` fragment 기반 작성자 프로필 표시 컴포넌트를 제공해야 한다(MUST).
 
 #### Scenario: Render author identity
 
@@ -22,7 +22,7 @@
 
 #### Scenario: Keep layout with long author text
 
-- **WHEN** 게시글 작성자 표시 이름 또는 핸들이 긴 값이다
+- **WHEN** 작성자 표시 이름 또는 핸들이 긴 값이다
 - **THEN** 시스템은 게시글 목록 또는 상세 레이아웃을 깨지 않고 텍스트를 줄임 처리한다
 
 #### Scenario: Link to author profile when available
@@ -34,11 +34,3 @@
 
 - **WHEN** 작성자 프로필 링크가 제공되지 않는다
 - **THEN** 시스템은 특정 라우트 구현에 의존하지 않고 작성자 정보를 non-interactive 요소로 렌더링한다
-- **WHEN** 현재 세션에 선택된 프로필이 있고 사용자가 모바일 하단 탭 바의 "프로필" 항목을 활성화한다
-- **THEN** 시스템은 선택된 프로필의 `/${relativeHandle}` 페이지로 이동한다
-- **AND** 사용자가 자신의 프로필 페이지를 보고 있을 때만 하단 탭의 "프로필" 항목을 active로 표시한다
-
-#### Scenario: Disable bottom profile tab when no selected profile
-
-- **WHEN** 현재 세션에 선택된 프로필이 없다
-- **THEN** 시스템은 모바일 하단 탭 바의 "프로필" 항목을 비활성화하여 이동하지 않는다

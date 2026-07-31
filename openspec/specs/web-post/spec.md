@@ -8,7 +8,7 @@ kosmo 웹 게시글 UI capability의 현재 계약을 문서화한다. 이 스�
 
 ### Requirement: Post author profile display
 
-웹 앱은 게시글 목록과 게시글 상세 페이지에서 재사용 가능한 GraphQL `Profile` fragment 기반 작성자 프로필 표시 컴포넌트를 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/figma.md`, PROD-97, PROD-596 — 웹 앱은 게시글 목록과 게시글 상세 페이지에서 재사용 가능한 GraphQL `Profile` fragment 기반 작성자 프로필 표시 컴포넌트를 제공해야 한다(MUST).
 
 #### Scenario: Render author identity
 
@@ -17,8 +17,9 @@ kosmo 웹 게시글 UI capability의 현재 계약을 문서화한다. 이 스�
 
 #### Scenario: Render author fallback avatar
 
-- **WHEN** 게시글 작성자 `Profile` fragment가 제공된다
-- **THEN** 시스템은 표시 이름 또는 핸들 기반 fallback avatar를 렌더링한다
+- **WHEN** 게시글 작성자의 프로필 이미지 URL이 없다
+- **THEN** 시스템은 승인된 기본 아바타 이미지를 렌더링한다
+- **AND** 아바타의 접근 가능한 이름은 기존 작성자 표시 이름을 유지한다
 
 #### Scenario: Declare author profile fields as fragment
 
