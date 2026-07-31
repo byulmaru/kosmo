@@ -4,13 +4,13 @@ import { createPost } from '@kosmo/core/services';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { MediaObject } from '../../media/ref';
+import { Media } from '../../media/ref';
 import { Post } from '../ref';
 
 const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
-    mediaId: t.globalID({ for: MediaObject }),
+    mediaId: t.globalID({ for: Media }),
   }),
 });
 

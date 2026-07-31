@@ -2,7 +2,7 @@ import { MediaState } from '@kosmo/core/enums';
 import { createObjectRef } from '@/graphql/utils';
 import { mediaByIdLoader } from './loader/by-id';
 
-export const MediaObject = createObjectRef('Media', async (ids, ctx) => {
+export const Media = createObjectRef('Media', async (ids, ctx) => {
   if (!ctx.session) {
     return [];
   }
@@ -14,7 +14,7 @@ export const MediaObject = createObjectRef('Media', async (ids, ctx) => {
   );
 });
 
-MediaObject.implement({
+Media.implement({
   grantScopes: (media, ctx) => (media.accountId === ctx.session?.accountId ? ['readMedia'] : []),
   fields: (t) => ({
     altText: t.exposeString('altText', {

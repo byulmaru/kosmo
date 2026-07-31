@@ -6,7 +6,7 @@ import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { mediaByIdLoader } from '../media/loader/by-id';
-import { MediaObject } from '../media/ref';
+import { Media } from '../media/ref';
 import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
 
@@ -77,7 +77,7 @@ PostContent.implement({
       resolve: (content) => content.document.summary,
     }),
     media: t.field({
-      type: [MediaObject],
+      type: [Media],
       nullable: true,
       grantScopes: ['readMedia'],
       resolve: async (content, _, ctx) => {

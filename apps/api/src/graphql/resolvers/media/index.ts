@@ -1,3 +1,3 @@
 import './mutation';
 
-export { MediaObject } from './ref';
+export { Media } from './ref';

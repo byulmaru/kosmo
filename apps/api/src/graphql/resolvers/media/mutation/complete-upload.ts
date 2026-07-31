@@ -1,10 +1,10 @@
-import { db, first, firstOrThrowWith, Media } from '@kosmo/core/db';
+import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { MediaObject } from '../ref';
+import { Media } from '../ref';
 
 const representationResponseSchema = z.object({
   mediaType: z.string().min(1),
@@ -17,21 +17,21 @@ builder.mutationField('completeMediaUpload', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('CompleteMediaUploadPayload', {
       fields: (field) => ({
-        media: field.field({ type: MediaObject }),
+        media: field.field({ type: Media }),
       }),
     }),
     input: {
-      id: t.input.globalID({ for: MediaObject }),
+      id: t.input.globalID({ for: Media }),
     },
     resolve: async (_, { input }, ctx) => {
       const media = await db
         .select()
-        .from(Media)
+        .from(MediaTable)
         .where(
           and(
-            eq(Media.id, input.id.id),
-            eq(Media.accountId, ctx.session.accountId),
-            eq(Media.source, MediaSource.LOCAL),
+            eq(MediaTable.id, input.id.id),
+            eq(MediaTable.accountId, ctx.session.accountId),
+            eq(MediaTable.source, MediaSource.LOCAL),
           ),
         )
         .limit(1)
@@ -74,7 +74,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       }
 
       const completed = await db
-        .update(Media)
+        .update(MediaTable)
         .set({
           mediaType: representation.data.mediaType,
           url: representation.data.url,
@@ -83,10 +83,10 @@ builder.mutationField('completeMediaUpload', (t) =>
         })
         .where(
           and(
-            eq(Media.id, media.id),
-            eq(Media.accountId, ctx.session.accountId),
-            eq(Media.source, MediaSource.LOCAL),
-            eq(Media.state, MediaState.UPLOADING),
+            eq(MediaTable.id, media.id),
+            eq(MediaTable.accountId, ctx.session.accountId),
+            eq(MediaTable.source, MediaSource.LOCAL),
+            eq(MediaTable.state, MediaState.UPLOADING),
           ),
         )
         .returning()
@@ -98,13 +98,13 @@ builder.mutationField('completeMediaUpload', (t) =>
       return {
         media: await db
           .select()
-          .from(Media)
+          .from(MediaTable)
           .where(
             and(
-              eq(Media.id, media.id),
-              eq(Media.accountId, ctx.session.accountId),
-              eq(Media.source, MediaSource.LOCAL),
-              eq(Media.state, MediaState.READY),
+              eq(MediaTable.id, media.id),
+              eq(MediaTable.accountId, ctx.session.accountId),
+              eq(MediaTable.source, MediaSource.LOCAL),
+              eq(MediaTable.state, MediaState.READY),
             ),
           )
           .limit(1)
