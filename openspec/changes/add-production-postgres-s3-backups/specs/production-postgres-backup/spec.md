@@ -16,7 +16,7 @@
 
 ### Requirement: 장기 credential 없는 workload identity
 
-**Authority / Provenance:** `PROD-546`. 시스템은 production backup과 별도 restore workload가 EKS Pod Identity로 같은 최소 권한 IAM role의 단기 자격 증명을 받게 해야 한다(MUST). 시스템은 AWS access key, secret key 또는 session token을 repository, Kubernetes Secret이나 workflow 입력으로 저장해서는 안 된다.
+**Authority / Provenance:** `PROD-546`. 시스템은 production backup과 별도 restore workload가 EKS Pod Identity로 같은 최소 권한 IAM role의 단기 자격 증명을 받게 해야 한다(MUST). 시스템은 AWS access key, secret key 또는 session token을 repository, Kubernetes Secret이나 workflow 입력으로 저장해서는 안 된다. 이 role은 Barman의 `HeadBucket` 확인에 필요한 bucket-level list 권한을 전용 backup bucket 하나에만 가져야 하며(MUST), 객체 읽기·쓰기·삭제와 multipart 권한은 prod prefix로 제한해야 한다(MUST).
 
 Production backup ServiceAccount는 같은 namespace의 `kosmo-postgres-backup` ObjectStore 하나를 읽을 수 있어야 하며(MUST), 다른 ObjectStore나 write verb 권한을 받아서는 안 된다(MUST NOT).
 

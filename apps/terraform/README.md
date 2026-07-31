@@ -48,13 +48,13 @@ main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신�
 
 ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
 
-Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 `kosmo-prod/` prefix의 backup/WAL 객체만 관리한다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
+Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 Barman의 bucket 확인을 위한 bucket-level list 권한과 `kosmo-prod/` prefix의 backup/WAL 객체 관리 권한만 가진다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 
 `ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Merge queue에서는 같은 배치에 포함된 PR 전체와 최신 `main`을 합친 commit으로 reviewed plan을 다시 만든다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 최종 main commit과 일치하는 미만료 merge queue artifact만 선택한다.
 
-PR 배치가 `main`에 병합되면 현재 main에서 plan을 새로 만들고, 생성 시각과 이전 state snapshot을 제외한 Terraform JSON 표현이 merge queue의 reviewed plan과 같은지 확인한다. Configuration, variables, planned values, drift와 resource/output changes, checks가 모두 같을 때만 reviewed saved plan을 그대로 apply한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, reviewed saved plan을 실제로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
+PR 배치가 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존하되 Argo CD Application의 resource version이나 reconcile 시각처럼 실행 사이에 바뀌는 no-op 관측 상태는 제외한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
 Merge queue plan은 OIDC trust를 먼저 배포한 뒤 활성화한다. 이 변경을 배포할 때는 repository variable을 설정하기 전에 PR plan으로 GCP WIF condition을 apply하고, 관리자 AWS credential로 `./scripts/ensure-ci-aws-role.sh`를 다시 실행한다. 활성화 전 main apply는 PR plan fallback을 사용한다.
 

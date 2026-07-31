@@ -80,7 +80,13 @@ const PostListItemFragment = graphql`
   }
 `;
 
-export function PostListItem({ post: postKey }: { post: PostListItem_post$key }) {
+export function PostListItem({
+  post: postKey,
+  showDivider = true,
+}: {
+  post: PostListItem_post$key;
+  showDivider?: boolean;
+}) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostListItemFragment, postKey);
@@ -109,11 +115,16 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
         triggerRef={replyTriggerRef}
       />
     ) : null;
+  const cardStyle = [
+    styles.card,
+    showDivider && styles.cardDivider,
+    showDivider && { borderColor: theme.divider },
+  ];
 
   if (!post.repostSource) {
     return (
       <>
-        <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
+        <View role="article" style={cardStyle}>
           <PostListRow onRepostError={onRepostError} post={post} reply={reply} />
         </View>
         {replySurface}
@@ -130,7 +141,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
   if (!post.content) {
     return (
       <>
-        <View role="article" style={[styles.card, { borderColor: theme.divider }]}>
+        <View role="article" style={cardStyle}>
           <View style={styles.repostAttribution}>
             <View style={styles.repostIconColumn}>
               <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
@@ -185,7 +196,7 @@ export function PostListItem({ post: postKey }: { post: PostListItem_post$key })
 
   return (
     <>
-      <View style={[styles.card, styles.quoteRow, { borderColor: theme.divider }]}>
+      <View style={[...cardStyle, styles.quoteRow]}>
         <Link asChild href={profileHref}>
           <Pressable
             aria-hidden
@@ -318,10 +329,10 @@ function PostReactionActions({
 
 const styles = StyleSheet.create({
   card: {
-    borderBottomWidth: 1,
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
+  cardDivider: { borderBottomWidth: 1 },
   quoteRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',

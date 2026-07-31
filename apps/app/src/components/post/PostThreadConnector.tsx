@@ -28,5 +28,6 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
     position: 'absolute',
     width: 2,
+    zIndex: 1,
   },
 });

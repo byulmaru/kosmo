@@ -374,9 +374,11 @@ jobs:
 
           terraform plan -input=false -out=current.tfplan
           terraform show -json terraform.tfplan \
-            | jq -S 'del(.timestamp, .prior_state)' > reviewed.tfplan.json
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
+            > reviewed.tfplan.json
           terraform show -json current.tfplan \
-            | jq -S 'del(.timestamp, .prior_state)' > current.tfplan.json
+            | jq -S '{configuration, variables, resource_changes: [.resource_changes[] | select(.change.actions != ["no-op"])], output_changes, checks}' \
+            > current.tfplan.json
 
           if ! cmp -s reviewed.tfplan.json current.tfplan.json; then
             terraform show -no-color current.tfplan > current.tfplan.txt

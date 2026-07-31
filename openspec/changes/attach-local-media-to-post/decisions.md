@@ -29,10 +29,10 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
 - Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`,
   `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-461, PROD-554
 - Status: Active
-- Context / Problem: Media identity, 순서, Alt Text와 Sensitive Media를 revision과 함께 바꾸면서 두 source of
-  truth를 만들지 않아야 한다.
-- Decision Outcome: Media node가 Media identity와 nullable Alt Text를, node 위치가 순서를, document root가
-  Sensitive Media를 소유한다. 별도 relation table, ID array, Post/Media 표시 column을 만들지 않는다.
+- Context / Problem: Media identity와 순서, Sensitive Media를 revision에 두되 Media-owned Alt Text와 중복
+  source of truth를 만들지 않아야 한다.
+- Decision Outcome: Media node가 Media identity를, node 위치가 순서를, document root가 Sensitive Media를,
+  Media row가 nullable Alt Text를 소유한다. 별도 relation table이나 ID array를 만들지 않는다.
 - Alternatives Considered: `post_media` 또는 derived projection은 FK를 제공하지만 현재 write/read source를
   중복한다. Post attrs의 Media array는 rich placement를 잃는다.
 - Consequences: write-time Media 검증과 Media 물리 삭제 금지가 JSON reference 안전성을 책임진다.
@@ -93,7 +93,7 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
   Image를 별도 표현한다. 공개 표현을 조회할 때마다 저장 서비스에서 해석하면 read latency와 가용성이 외부
   I/O에 결합된다.
 - Decision Outcome: Media를 제거한 body만 기존 DOMSerializer로 HTML화하고 Media node는 document 순서의
-  `attachment` Image로 만든다. 업로드 완료 시 저장한 URL·media type, document Alt Text와 sensitive를
+  `attachment` Image로 만든다. 업로드 완료 시 저장한 URL·media type, Media Alt Text와 document sensitive를
   제공하고 HTML `<img>`를 중복하지 않는다. read projection은 Media Storage Service를 호출하지 않는다.
 - Alternatives Considered: projection마다 provider API를 호출하면 요청 증폭·timeout·장애 전파가 생긴다. Kosmo가
   URL을 직접 조립하면 provider 규칙에 결합된다. Media node를 `toDOM` `<img>`로 만들면 attachment와 중복된다.
@@ -105,11 +105,18 @@ PROD-554·553·559 구현 경계를 기존 attachment-table 초안 대신 구현
 
 - 없음.
 
+## Current Corrections
+
+- 2026-07-30: 아래 Superseded Decisions의 revision-owned Alt Text 결정을 다시 대체한다. Media node는
+  `mediaId`와 순서만 소유하고 nullable Alt Text는 Media가 소유한다. createPost는 Alt Text를 Media에 같은
+  transaction으로 갱신한다. 같은 Media를 다른 Alt Text로 재사용하는 비정상 사례는 금지하지 않으며 최신 값이
+  모든 참조에 보인다. Sensitive Media는 계속 PostContent document root가 소유한다.
+
 ## Superseded Decisions
 
 - 기존 “Post Media와 표시 속성은 소유 객체에 additive 저장한다” 초안은 Media node가 revision 관계·Alt Text·순서와
   Sensitive Media를 소유하고 별도 table/column을 만들지 않는 결정으로 대체한다.
-- 기존 `mediaIds`, `Post.media`, `Post.sensitiveMedia`, `Media.altText`와 `updateMediaAltText` 초안은 ordered
-  `{ mediaId, altText }` create input과 PostContent document output으로 대체한다.
-- 기존 Composer 결정 중 Alt Text를 별도 mutation으로 먼저 저장하는 부분은 create input의 revision-owned Alt
-  Text로 대체한다. 선택 즉시 upload와 item별 상태 결정은 유지한다.
+- 기존 `mediaIds`, `Post.media`, `Post.sensitiveMedia`와 `updateMediaAltText` 초안은 ordered
+  `{ mediaId, altText }` create input, Media-owned Alt Text와 PostContent document output으로 대체한다.
+- 기존 Composer 결정 중 Alt Text를 별도 mutation으로 먼저 저장하는 부분은 createPost transaction의
+  Media-owned Alt Text 갱신으로 대체한다. 선택 즉시 upload와 item별 상태 결정은 유지한다.

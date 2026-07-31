@@ -127,7 +127,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.repostSourceId, null);
   });
 
-  test('Ready Media와 Alt Text를 첫 PostContent에 저장하고 조회 ID를 global ID로 투영한다', async () => {
+  test('Ready Media 참조와 Media-owned Alt Text를 저장하고 조회 ID를 global ID로 투영한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const uploadProfile = await createProfile('media-upload-profile');
     const first = await createReadyMedia(auth.account.id, uploadProfile.id);
@@ -149,9 +149,25 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(result);
     const postId = result.data?.createPost.post.id;
     assert.ok(postId);
-    const contentResult = await requestPostContent(postId, auth.token);
+    const fetchMock = t.mock.method(globalThis, 'fetch');
+    const contentResult = await requestPostContent(postId);
     assertNoGraphQLErrors(contentResult);
+    assert.equal(fetchMock.mock.callCount(), 0);
     assert.equal(contentResult.data?.node?.content.bodyText, '');
+    assert.deepEqual(contentResult.data?.node?.content.media, [
+      {
+        altText: '첫 번째 이미지',
+        id: encodeGlobalId('Media', first.id),
+        mediaType: first.mediaType,
+        url: first.url,
+      },
+      {
+        altText: null,
+        id: encodeGlobalId('Media', second.id),
+        mediaType: second.mediaType,
+        url: second.url,
+      },
+    ]);
     assert.deepEqual(contentResult.data?.node?.content.document, {
       version: 1,
       summary: null,
@@ -163,17 +179,190 @@ describe('Post Reply GraphQL 경계', () => {
           {
             type: 'media',
             attrs: {
-              altText: '첫 번째 이미지',
               mediaId: encodeGlobalId('Media', first.id),
             },
           },
           {
             type: 'media',
-            attrs: { altText: null, mediaId: encodeGlobalId('Media', second.id) },
+            attrs: { mediaId: encodeGlobalId('Media', second.id) },
           },
         ],
       },
     });
+  });
+
+  test('여러 PostContent의 Media를 요청당 한 번에 batch 조회한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const firstMedia = await createReadyMedia(auth.account.id, auth.profile.id);
+    const secondMedia = await createReadyMedia(auth.account.id, auth.profile.id);
+    const firstPost = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '첫 번째', mediaId: encodeGlobalId('Media', firstMedia.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    const secondPost = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '두 번째', mediaId: encodeGlobalId('Media', secondMedia.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(firstPost);
+    assertNoGraphQLErrors(secondPost);
+    const selectMock = t.mock.method(db, 'select');
+
+    const result = await requestPostContents([
+      firstPost.data!.createPost.post.id,
+      secondPost.data!.createPost.post.id,
+    ]);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(selectMock.mock.callCount(), 4);
+    assert.deepEqual(
+      result.data?.nodes.map((node) => node?.content.media?.[0]?.altText),
+      ['첫 번째', '두 번째'],
+    );
+  });
+
+  test('Media 재사용 시 최신 Alt Text가 모든 참조에서 보인다', async () => {
+    const auth = await createAuthenticatedSession();
+    const bodyOnly = await requestCreatePost(
+      { bodyText: '본문만', visibility: PostVisibility.PUBLIC },
+      auth.token,
+    );
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const textAndMedia = await requestCreatePost(
+      {
+        bodyText: '본문과 이미지',
+        media: [{ altText: '설명', mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    const sameMediaOtherRevision = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '다른 revision 설명', mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(bodyOnly);
+    assertNoGraphQLErrors(textAndMedia);
+    assertNoGraphQLErrors(sameMediaOtherRevision);
+
+    const bodyOnlyResult = await requestPostContent(bodyOnly.data!.createPost.post.id);
+    const textAndMediaResult = await requestPostContent(textAndMedia.data!.createPost.post.id);
+    const sameMediaOtherRevisionResult = await requestPostContent(
+      sameMediaOtherRevision.data!.createPost.post.id,
+    );
+
+    assertNoGraphQLErrors(bodyOnlyResult);
+    assertNoGraphQLErrors(textAndMediaResult);
+    assertNoGraphQLErrors(sameMediaOtherRevisionResult);
+    assert.deepEqual(bodyOnlyResult.data?.node?.content.media, []);
+    assert.deepEqual(textAndMediaResult.data?.node?.content.media, [
+      {
+        altText: '다른 revision 설명',
+        id: encodeGlobalId('Media', media.id),
+        mediaType: media.mediaType,
+        url: media.url,
+      },
+    ]);
+    assert.deepEqual(sameMediaOtherRevisionResult.data?.node?.content.media, [
+      {
+        altText: '다른 revision 설명',
+        id: encodeGlobalId('Media', media.id),
+        mediaType: media.mediaType,
+        url: media.url,
+      },
+    ]);
+  });
+
+  test('PostContent 경로의 grant 없이 anonymous standalone Media Node를 조회할 수 없다', async () => {
+    const auth = await createAuthenticatedSession();
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const post = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '설명', mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(post);
+
+    const anonymous = await requestMediaNode(media.id);
+    assertNoGraphQLErrors(anonymous);
+    assert.equal(anonymous.data?.node, null);
+
+    const owner = await requestMediaNode(media.id, auth.token);
+    assertNoGraphQLErrors(owner);
+    assert.deepEqual(owner.data?.node, {
+      altText: '설명',
+      id: encodeGlobalId('Media', media.id),
+      mediaType: media.mediaType,
+      url: media.url,
+    });
+  });
+
+  test('Post를 조회할 수 없는 viewer에게 Media 표시 정보를 노출하지 않는다', async () => {
+    const auth = await createAuthenticatedSession();
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const result = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: '비공개 설명', mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.DIRECT,
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(result);
+
+    const hidden = await requestPostContent(result.data!.createPost.post.id);
+
+    assertNoGraphQLErrors(hidden);
+    assert.equal(hidden.data?.node, null);
+    assert.equal(JSON.stringify(hidden).includes(media.url!), false);
+    assert.equal(JSON.stringify(hidden).includes(media.storageReference), false);
+  });
+
+  test('불완전한 Media representation은 partial list 대신 media field 전체를 unavailable로 만든다', async () => {
+    const auth = await createAuthenticatedSession();
+    const cases = [
+      (mediaId: string) => db.delete(Media).where(eq(Media.id, mediaId)),
+      (mediaId: string) =>
+        db.update(Media).set({ state: MediaState.UPLOADING }).where(eq(Media.id, mediaId)),
+      (mediaId: string) => db.update(Media).set({ url: null }).where(eq(Media.id, mediaId)),
+      (mediaId: string) => db.update(Media).set({ mediaType: null }).where(eq(Media.id, mediaId)),
+    ];
+
+    for (const invalidate of cases) {
+      const first = await createReadyMedia(auth.account.id, auth.profile.id);
+      const second = await createReadyMedia(auth.account.id, auth.profile.id);
+      const post = await requestCreatePost(
+        {
+          bodyText: '',
+          media: [
+            { altText: '첫 번째', mediaId: encodeGlobalId('Media', first.id) },
+            { altText: '두 번째', mediaId: encodeGlobalId('Media', second.id) },
+          ],
+          visibility: PostVisibility.PUBLIC,
+        },
+        auth.token,
+      );
+      assertNoGraphQLErrors(post);
+      await invalidate(second.id);
+
+      const result = await requestPostContent(post.data!.createPost.post.id);
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.node?.content.media, null);
+    }
   });
 
   test('잘못된 Media typename과 사용할 수 없는 Media를 validation 경계에서 거부한다', async () => {
@@ -860,7 +1049,16 @@ type CreatePostNode = {
 };
 
 type PostContentNode = {
-  content: { bodyText: string; document: unknown };
+  content: {
+    bodyText: string;
+    document: unknown;
+    media: Array<{
+      altText: string | null;
+      id: string;
+      mediaType: string;
+      url: string;
+    }> | null;
+  };
 };
 
 type DeletePostNode = {
@@ -907,10 +1105,48 @@ const requestPostContent = (postId: string, token?: string) =>
   requestGraphQL<{ node: PostContentNode | null }>(
     `query PostMediaContent($postId: ID!) {
       node(id: $postId) {
-        ... on Post { content { bodyText document } }
+        ... on Post {
+          content {
+            bodyText
+            document
+            media { altText id mediaType url }
+          }
+        }
       }
     }`,
     { postId },
+    token,
+  );
+
+const requestPostContents = (postIds: string[]) =>
+  requestGraphQL<{ nodes: Array<PostContentNode | null> }>(
+    `query PostMediaContents($postIds: [ID!]!) {
+      nodes(ids: $postIds) {
+        ... on Post {
+          content {
+            media { altText id mediaType url }
+          }
+        }
+      }
+    }`,
+    { postIds },
+  );
+
+const requestMediaNode = (mediaId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      altText: string | null;
+      id: string;
+      mediaType: string | null;
+      url: string | null;
+    } | null;
+  }>(
+    `query MediaNode($mediaId: ID!) {
+      node(id: $mediaId) {
+        ... on Media { altText id mediaType url }
+      }
+    }`,
+    { mediaId: encodeGlobalId('Media', mediaId) },
     token,
   );
 
@@ -1101,20 +1337,25 @@ const createProfile = (
     .then(firstOrThrow);
 };
 
-const createReadyMedia = (accountId: string, profileId: string) =>
-  db
+const createReadyMedia = (accountId: string, profileId: string) => {
+  const id = crypto.randomUUID();
+
+  return db
     .insert(Media)
     .values({
       accountId,
+      mediaType: 'image/webp',
       profileId,
       readyAt: Temporal.Now.instant(),
       source: MediaSource.LOCAL,
       state: MediaState.READY,
-      storageReference: `u_${crypto.randomUUID()}`,
+      storageReference: `u_${id}`,
       uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+      url: `https://media.example/${id}.webp`,
     })
     .returning()
     .then(firstOrThrow);
+};
 
 const createUploadingMedia = (accountId: string, profileId: string) =>
   db

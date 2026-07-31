@@ -11,12 +11,12 @@
 
 **Deliverable**
 
-GraphQL Post 작성자가 소유한 Ready Local Media를 최대 4개까지 순서와 revision별 Alt Text로 첫 PostContent V1
-document에 저장하고 Sensitive Media를 같은 revision에서 조회할 수 있다.
+GraphQL Post 작성자가 소유한 Ready Local Media를 최대 4개까지 첫 PostContent V1 document에 ID와 순서로
+저장하고 Media에 Alt Text, document에 Sensitive Media를 저장할 수 있다.
 
 **Guardrails**
 
-- 별도 Post-Media table, Media ID array, Post Sensitive Media column 또는 Media Alt Text column을 만들지 않는다.
+- 별도 Post-Media table, Media ID array 또는 Post Sensitive Media column을 만들지 않는다.
 - Media Profile과 Author Profile 일치나 InstanceKind.LOCAL을 요구하지 않고 Upload Account만 비교한다.
 - GraphQL global ID를 DB document에 저장하거나 DB UUID를 GraphQL document에 노출하지 않는다.
 - Post와 첫 PostContent는 하나의 transaction에서 성공하거나 함께 rollback한다.

@@ -134,12 +134,13 @@ test('createPost는 같은 Upload Account의 Ready Local Media를 document 순�
     accountId: account.id,
     document: postContentDocumentFromTextAndMedia(
       '',
-      [
-        { altText: 'first', mediaId: firstMedia.id },
-        { altText: null, mediaId: secondMedia.id },
-      ],
+      [{ mediaId: firstMedia.id }, { mediaId: secondMedia.id }],
       true,
     ),
+    media: [
+      { altText: 'first', mediaId: firstMedia.id },
+      { altText: null, mediaId: secondMedia.id },
+    ],
     origin: 'LOCAL',
     profileId: author.id,
     visibility: PostVisibility.PUBLIC,
@@ -149,10 +150,25 @@ test('createPost는 같은 Upload Account의 Ready Local Media를 document 순�
     result.content.document.body.content.flatMap((block) =>
       block.type === 'media' ? [block.attrs] : [],
     ),
-    [
-      { altText: 'first', mediaId: firstMedia.id },
-      { altText: null, mediaId: secondMedia.id },
-    ],
+    [{ mediaId: firstMedia.id }, { mediaId: secondMedia.id }],
+  );
+  assert.equal(
+    await db
+      .select({ altText: Media.altText })
+      .from(Media)
+      .where(eq(Media.id, firstMedia.id))
+      .then(firstOrThrow)
+      .then(({ altText }) => altText),
+    'first',
+  );
+  assert.equal(
+    await db
+      .select({ altText: Media.altText })
+      .from(Media)
+      .where(eq(Media.id, secondMedia.id))
+      .then(firstOrThrow)
+      .then(({ altText }) => altText),
+    null,
   );
   assert.deepEqual(result.content.document.body.attrs, { sensitiveMedia: true });
 });
@@ -182,7 +198,8 @@ test('createPost는 사용할 수 없는 Media를 같은 오류로 거부하고 
     await assert.rejects(
       createPost({
         accountId: account.id,
-        document: postContentDocumentFromTextAndMedia('body', [{ altText: null, mediaId }]),
+        document: postContentDocumentFromTextAndMedia('body', [{ mediaId }]),
+        media: [{ altText: null, mediaId }],
         origin: 'LOCAL',
         profileId: profile.id,
         visibility: PostVisibility.PUBLIC,
@@ -208,9 +225,13 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
     createPost({
       accountId: account.id,
       document: postContentDocumentFromTextAndMedia('body', [
+        { mediaId: media.id },
+        { mediaId: media.id },
+      ]),
+      media: [
         { altText: null, mediaId: media.id },
         { altText: 'duplicate', mediaId: media.id },
-      ]),
+      ],
       origin: 'LOCAL',
       profileId: profile.id,
       visibility: PostVisibility.PUBLIC,
@@ -219,7 +240,8 @@ test('createPost는 중복 Media와 Media Account 증거 누락을 원자적으�
   );
   await assert.rejects(
     createPost({
-      document: postContentDocumentFromTextAndMedia('body', [{ altText: null, mediaId: media.id }]),
+      document: postContentDocumentFromTextAndMedia('body', [{ mediaId: media.id }]),
+      media: [{ altText: null, mediaId: media.id }],
       origin: 'LOCAL',
       profileId: profile.id,
       visibility: PostVisibility.PUBLIC,

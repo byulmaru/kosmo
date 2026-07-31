@@ -116,15 +116,6 @@ data "aws_iam_policy_document" "postgres_backup" {
       "s3:ListBucketMultipartUploads",
     ]
     resources = [aws_s3_bucket.postgres_backup.arn]
-
-    condition {
-      test     = "StringLike"
-      variable = "s3:prefix"
-      values = [
-        local.postgres_backup_prefix,
-        "${local.postgres_backup_prefix}/*",
-      ]
-    }
   }
 
   statement {

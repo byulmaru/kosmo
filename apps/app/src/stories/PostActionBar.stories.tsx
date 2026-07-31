@@ -695,9 +695,8 @@ export const NoSelectedProfileDisablesReaction: Story = {
     expect(reactionMutationRequest).not.toHaveBeenCalled();
 
     await userEvent.click(moreProfiles);
-    await expect(
-      screen.findByRole('dialog', { name: '반응한 프로필' }),
-    ).resolves.toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: '반응한 프로필' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
     await expect(screen.findByText('아직 이 반응을 남긴 프로필이 없어요')).resolves.toBeVisible();
   },
   render: () => (

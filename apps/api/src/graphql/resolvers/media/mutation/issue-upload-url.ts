@@ -1,8 +1,8 @@
-import { db, firstOrThrowWith, Media } from '@kosmo/core/db';
+import { db, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { MediaObject } from '../ref';
+import { Media } from '../ref';
 
 const uploadResponseSchema = z.object({
   id: z.string().min(1),
@@ -16,7 +16,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
   t.withAuth({ usingProfile: true }).field({
     type: builder.simpleObject('IssueMediaUploadUrlPayload', {
       fields: (field) => ({
-        media: field.field({ type: MediaObject }),
+        media: field.field({ type: Media }),
         uploadUrl: field.string(),
         expiresAt: field.field({ type: 'DateTime' }),
       }),
@@ -51,7 +51,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
       const expiresAt = Temporal.Instant.from(upload.data.expiresAt);
 
       const media = await db
-        .insert(Media)
+        .insert(MediaTable)
         .values({
           source: MediaSource.LOCAL,
           state: MediaState.UPLOADING,
