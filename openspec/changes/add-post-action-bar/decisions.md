@@ -327,6 +327,18 @@
 - Consequences: 공용 `PostActionBar` root의 좌우 inset을 제거하고 non-More control의 icon-count visual group을 각 50px target 왼쪽에 맞춘다. More는 28px target 중앙 정렬을 유지하며 list/detail/Quote/순수 Repost에 같은 endpoint·glyph 정렬이 적용된다. 목록 slot 하단 4px, Quote Source preview border 밖 8px 간격, Repost menu item 좌우 8px padding과 기존 target 크기·접근성 계약은 유지한다.
 - Confirmation / Follow-up: focused Storybook에서 compact geometry와 390px·900px·1400px 목록·상세 fixture의 Reply target left edge, More target right edge, non-More glyph left edge, More glyph center, 중간 action non-overlap을 검증하고 Home runtime에서 Reaction Summary pill 시작선과 Reply glyph 시작선의 정렬을 확인한다.
 
+### Web More menu는 trigger 오른쪽을 기준으로 왼쪽으로 펼친다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-action-bar.md`, `PROD-432`, 2026-07-31 KST 사용자 결정
+- Status: Active
+- Context / Problem: 공용 Web action menu의 기존 시작 정렬은 More trigger에서 menu를 오른쪽 rail 방향으로 펼쳐 중앙 Home timeline shell 위가 아니라 바깥쪽으로 돌출한다. 방향만 반전하면서도 menu를 연 pointer 위치와 첫 item의 겹침을 유지해야 같은 위치의 두 번째 활성화 계약이 깨지지 않는다.
+- Decision Outcome: 공용 ActionMenu는 Web에만 적용되는 선택적 끝 정렬을 제공하고 More 링크 복사 consumer만 이를 사용한다. 끝 정렬에서는 menu card 오른쪽 경계를 trigger 오른쪽보다 기존 5px inset만큼 바깥에 두고 첫 item의 시각 target 오른쪽 경계를 trigger 오른쪽과 맞춰 menu가 왼쪽으로 펼쳐지게 한다. 첫 item의 확장 hit area는 28px More trigger 전체를 계속 덮고 viewport 보정을 유지한다. Repost consumer는 기본 시작 정렬을 유지하며 Android·iOS bottom action sheet는 바꾸지 않는다.
+- Alternatives Considered: 모든 ActionMenu를 끝 정렬하면 Repost의 기존 배치까지 바뀌므로 채택하지 않았다. menu를 trigger 왼쪽에 완전히 분리하면 같은 pointer 위치의 두 번째 활성화가 item을 선택하지 못하므로 채택하지 않았다.
+- Consequences: ActionMenu 공개 입력에 좁은 Web 배치 선택지가 생기지만 production 사용은 More에만 한정된다. 중앙 timeline 끝의 More menu가 shell 안쪽으로 펼쳐지고 trigger와의 시각 겹침·입력 계약은 유지된다.
+- Confirmation / Follow-up: ActionMenu Storybook에서 끝 정렬 menu·첫 item의 오른쪽 경계, 왼쪽 확장, viewport clamp와 trigger 두 모서리의 첫 item 포함을 검증하고 Home runtime에서 실제 More menu 좌표를 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

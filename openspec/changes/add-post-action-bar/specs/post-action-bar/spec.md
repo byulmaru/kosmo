@@ -301,6 +301,8 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 - **WHEN** production surface에서 사용자가 More를 활성화한다
 - **THEN** surface는 `링크 복사` 항목 하나를 가진 접근 가능한 팝업을 연다
+- **AND** Web에서는 menu card 오른쪽이 trigger 오른쪽보다 5px 바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 menu가 왼쪽으로 펼쳐진다
+- **AND** 첫 item의 확장 target은 trigger pointer 지점을 덮고 menu는 viewport 안으로 보정되며, Repost의 기존 시작 정렬과 Native bottom action sheet는 유지된다
 
 #### Scenario: guest 링크 복사
 

@@ -33,6 +33,7 @@ type Props = {
   disabled?: boolean;
   items: readonly ActionMenuItem[];
   renderTrigger: (props: ActionMenuTriggerRenderProps) => ReactNode;
+  webHorizontalPlacement?: 'start' | 'end';
 };
 
 const webMenuInset = spacing.xs + 1;
@@ -44,6 +45,7 @@ export function ActionMenu({
   disabled = false,
   items,
   renderTrigger,
+  webHorizontalPlacement = 'start',
 }: Props): ReactNode {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -72,10 +74,11 @@ export function ActionMenu({
     const menuHeight = menuRect?.height ?? items.length * webMenuItemHeight + webMenuInset * 2;
     const viewportWidth = trigger.ownerDocument.documentElement.clientWidth;
     const viewportHeight = trigger.ownerDocument.documentElement.clientHeight;
-    const viewportLeft = Math.max(
-      0,
-      Math.min(triggerRect.left - webMenuInset, viewportWidth - menuWidth),
-    );
+    const anchoredLeft =
+      webHorizontalPlacement === 'end'
+        ? triggerRect.right + webMenuInset - menuWidth
+        : triggerRect.left - webMenuInset;
+    const viewportLeft = Math.max(0, Math.min(anchoredLeft, viewportWidth - menuWidth));
     const viewportTop = Math.max(
       0,
       Math.min(triggerRect.top - webMenuInset, viewportHeight - menuHeight),
@@ -90,7 +93,7 @@ export function ActionMenu({
         ? current
         : nextPosition,
     );
-  }, [items.length, web]);
+  }, [items.length, web, webHorizontalPlacement]);
 
   const focusTrigger = useCallback(() => {
     triggerRef.current?.focus();

@@ -65,6 +65,16 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   28px trigger geometry와 별도이며 최소 44×44를 유지한다.
 - mutation pending 중에는 trigger와 menu action의 반복 입력을 막고 기존 selected·count 표현을 유지한다.
 
+## More 링크 복사 menu
+
+- Web의 More menu는 Repost와 같은 외부 overlay·viewport 보정·dismiss·keyboard 계약을 재사용하되 More
+  trigger의 오른쪽을 기준으로 왼쪽을 향해 펼친다. menu card의 오른쪽 경계는 trigger 오른쪽보다 5px
+  바깥에 두고 첫 item의 시각 target 오른쪽 경계는 trigger 오른쪽과 맞춘다. 따라서 28px More trigger는
+  첫 item의 확장 hit area 안에 남아, menu를 연 위치에서 포인터를 움직이지 않은 두 번째 활성화가
+  `링크 복사`를 선택한다.
+- 왼쪽 viewport 가장자리와 충돌하면 menu를 화면 안으로 보정한다. 이 방향 선택은 More에만 적용하며
+  Repost menu의 기존 시작 정렬과 Native bottom action sheet는 바꾸지 않는다.
+
 ## Repost 실패 toast
 
 - 앱은 하나의 공용 transient toast host를 provider에서 제공하고 실제 `PostListItem`·`PostLayout` surface가
@@ -132,7 +142,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
-  두 번째 pointer 활성화로 item이 선택되는지, card surface·36px 높이·128px 최소폭·18px icon·14px·500
+  두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px
+  바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 왼쪽으로 펼쳐지는지, Repost menu는 기존 시작
+  정렬을 유지하는지 함께 검증한다. card surface·36px 높이·128px 최소폭·18px icon·14px·500
   label·8px 좌우 padding·border·`0 2px 4px` shadow를 제공하는지 검증한다. open/close, focus 복귀와
   키보드 이동도 함께 검증한다.
 - Native bottom action sheet의 backdrop·back dismiss, safe area, modal 접근성과 menu item target을 검증한다.
