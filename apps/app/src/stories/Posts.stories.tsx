@@ -125,7 +125,7 @@ const mediaTextPost = post({
     type: 'doc',
     content: [
       { type: 'paragraph', content: [{ type: 'text', text: 'document text' }] },
-      { type: 'media', attrs: { altText: '표시하지 않는 이미지', mediaId: 'media-story' } },
+      { type: 'media', attrs: { mediaId: 'media-story' } },
     ],
   },
   bodyText: '이미지가 있는 문서는 안전한 Plain Text로 표시합니다.',
@@ -135,10 +135,7 @@ const mediaOnlyPost = post({
   bodyDocument: {
     type: 'doc',
     attrs: { sensitiveMedia: true },
-    content: [
-      { type: 'paragraph' },
-      { type: 'media', attrs: { altText: '표시하지 않는 이미지', mediaId: 'media-only-story' } },
-    ],
+    content: [{ type: 'paragraph' }, { type: 'media', attrs: { mediaId: 'media-only-story' } }],
   },
   bodyText: '',
   id: 'media-only',

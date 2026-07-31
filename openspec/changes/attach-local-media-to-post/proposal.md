@@ -8,8 +8,8 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
 
 - PostContent V1 ProseMirror body에 순서 있는 Media block node를 추가하고 document root에 Sensitive Media
   attr를 추가한다.
-- Media node가 Media identity와 revision별 nullable Alt Text를 소유하며 별도 Post-Media 관계 테이블이나
-  Media ID 배열은 저장하지 않는다.
+- Media node가 Media identity와 순서를 소유하고 Media가 nullable Alt Text를 소유하며 별도 Post-Media 관계
+  테이블이나 Media ID 배열은 저장하지 않는다.
 - `createPost`가 최대 4개의 Ready Local Media를 검증해 첫 PostContent document에 원자적으로 저장하고
   body-only, media-only와 body+media 작성을 지원한다.
 - Post Composer가 Web/iOS/Android 갤러리 이미지를 선택 즉시 직접 업로드하고 미리보기·진행·실패·재시도·제거,
@@ -40,7 +40,8 @@ Local Media 업로드 시작·완료로 Ready Media를 만들 수 있지만 새 
 
 ### Modified Capabilities
 
-- `data-model`: PostContent V1 document가 revision-owned Media node와 Sensitive Media를 저장하도록 변경한다.
+- `data-model`: PostContent V1 document가 Media ID·순서와 Sensitive Media를 저장하고 Media가 Alt Text를
+  저장하도록 변경한다.
 - `post-content-document`: V1 ProseMirror schema와 canonicalization이 ordered Media node와 document-wide Sensitive Media를 지원하도록 확장한다.
 - `post`: PostContent GraphQL document, 새 Post 작성 API와 Plain Text Composer가 Media 입력을 지원하도록
   변경한다.

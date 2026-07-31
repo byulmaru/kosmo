@@ -30,7 +30,6 @@ export interface PostContentMediaNode {
   readonly type: 'media';
   readonly attrs: {
     readonly mediaId: string;
-    readonly altText: string | null;
   };
 }
 
@@ -110,10 +109,9 @@ function isMedia(value: unknown): value is PostContentMediaNode {
   return (
     isRecordWithKeys(value, ['type', 'attrs']) &&
     value.type === 'media' &&
-    isRecordWithKeys(value.attrs, ['mediaId', 'altText']) &&
+    isRecordWithKeys(value.attrs, ['mediaId']) &&
     typeof value.attrs.mediaId === 'string' &&
-    value.attrs.mediaId.length > 0 &&
-    (value.attrs.altText === null || typeof value.attrs.altText === 'string')
+    value.attrs.mediaId.length > 0
   );
 }
 

@@ -208,9 +208,12 @@ type MarkNotificationReadPayload {
 }
 
 type Media implements Node {
+  altText: String
   id: ID!
+  mediaType: String
   readyAt: DateTime
   state: MediaState!
+  url: String
 }
 
 enum MediaState {
@@ -305,6 +308,7 @@ type PostContent implements Node {
   createdAt: DateTime!
   document: PostContentDocument!
   id: ID!
+  media: [Media!]
 }
 
 """Kosmo versioned PostContent document JSON"""

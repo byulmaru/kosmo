@@ -13,7 +13,8 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 
 **Goals:**
 
-- PostContent V1에 revision-owned Media node와 Sensitive Media를 additive하게 추가한다.
+- PostContent V1에 Media ID·순서를 소유하는 Media node와 Sensitive Media를 additive하게 추가하고 Media에
+  nullable Alt Text를 둔다.
 - Ready Local Media 검증과 첫 PostContent 생성을 하나의 Post 작성 transaction으로 처리한다.
 - Web/iOS/Android Composer에서 갤러리 선택부터 direct upload, Ready 완료와 게시까지 제공한다.
 - 새 Local Note의 HTML, attachment와 sensitive 표현을 같은 current PostContent에서 만든다.
@@ -48,10 +49,11 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 
 - V1 ProseMirror schema에 block Media node와 default false인 doc Sensitive Media attr를 추가한다. canonicalizer는
   paragraph와 Media를 각각 보존하고, Plain Text projection은 Media를 무시하며 최소 빈 paragraph를 유지한다.
-- persistence Media node에는 검증한 Media DB UUID와 nullable Alt Text를 저장한다. GraphQL create input은 Media
+- persistence Media node에는 검증한 Media DB UUID만 저장한다. GraphQL create input은 Media
   global ID를 decode하고, `PostContent.document` output은 node의 DB UUID를 global ID로 encode한다.
 - Local `createPost`는 검증된 Account ID, ordered Media item과 Sensitive Media를 받아 transaction 안에서 Media를
-  한 번 조회하고 exact count, distinct, Local/Ready/Account 조건을 확인한 뒤 Post와 첫 PostContent를 저장한다.
+  한 번 조회하고 exact count, distinct, Local/Ready/Account 조건을 확인한 뒤 Media Alt Text와 Post의 첫
+  PostContent를 같은 transaction에 저장한다.
 - GraphQL create input은 optional ordered Media item list와 optional Sensitive Media를 사용한다. omitted는 빈
   list와 false다. 별도 Media Alt Text mutation이나 Post Media field를 만들지 않는다.
 - 앱은 SDK 호환 `expo-image-picker`를 `pnpm` CLI로 추가하고 library-only selection을 남은 슬롯으로 제한한다.
@@ -63,7 +65,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 - Composer는 local URI preview, 상태, 재시도·제거, Alt Text와 Sensitive Media를 공용 React Native primitive와
   canonical platform target으로 제공한다. 선택 Media가 없으면 Sensitive Media를 false로 되돌린다.
 - Local Note projection은 current PostContent의 Media DB IDs를 함께 읽는다. Media node를 제거한 body만 기존
-  DOMSerializer에 전달하고 Media에 저장된 URL·media type과 document Alt Text를 Media node 순서대로
+  DOMSerializer에 전달하고 Media에 저장된 URL·media type·Alt Text를 Media node 순서대로
   ActivityPub Image로 만든다. projection과 authorization은 Media Storage Service를 호출하지 않으며 sensitive는
   Fedify가 지원하는 확장 표현 경계에서 추가한다.
 
@@ -78,7 +80,7 @@ PROD-461은 PROD-554, PROD-553, PROD-559와 PROD-581을 하나의 “이미지�
 
 ### Known Traps
 
-- `post_media`, `post_content_media`, Media ID array, `Post.sensitiveMedia` 또는 `Media.altText`를 추가하지 않는다.
+- `post_media`, `post_content_media`, Media ID array 또는 `Post.sensitiveMedia`를 추가하지 않는다.
 - GraphQL global ID를 DB document에 저장하거나 DB UUID를 GraphQL document에 그대로 노출하지 않는다.
 - Media node의 `toDOM`을 public `<img>`로 만들어 HTML과 attachment에 중복 출력하지 않는다.
 - raw storage reference, upload URL 또는 local preview URI를 Post/Media 공개 identity나 ActivityPub 속성으로
