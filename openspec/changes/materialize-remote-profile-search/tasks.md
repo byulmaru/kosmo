@@ -68,6 +68,6 @@ actor materialization 뒤 canonical Profile을 기존 `searchProfiles` connectio
   test를 실행한다.
 - `openspec validate materialize-remote-profile-search --strict`와 archive 후 전체 OpenSpec validation을 통과시킨다.
 
-- [ ] 2.1 기존 people 검색 UI가 새 canonical Remote Profile edge와 빈 fallback을 표시하고 프로필·nested route가 DB-only로 유지되는지 필요한 회귀 검증을 추가한다.
-- [ ] 2.2 formatting, GraphQL schema, API/Fedify/Web typecheck와 관련 unit·PostgreSQL integration·E2E 검증을 통과시키고 실행 결과를 handoff와 PR에 기록한다.
+- [x] 2.1 기존 people 검색 UI가 새 canonical Remote Profile edge와 빈 fallback을 표시하고 프로필·nested route가 DB-only로 유지되는지 필요한 회귀 검증을 추가한다.
+- [x] 2.2 formatting, GraphQL schema, API/Fedify/Web typecheck와 관련 unit·PostgreSQL integration·E2E 검증을 통과시키고 실행 결과를 handoff와 PR에 기록한다.
 - [ ] 2.3 최신 canonical·Linear와 구현·delta spec을 독립 대조하고 모든 task·scenario가 완료되면 active spec 동기화, archive와 archive 후 strict validation을 수행한다.
