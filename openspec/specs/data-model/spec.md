@@ -709,7 +709,7 @@ source Reaction 없이 존재할 수 없어야 한다(MUST NOT).
 - **WHEN** migration이 Reaction schema를 생성한다
 - **THEN** unique index는 `post_id`, `type`, `profile_id` 순서로 생성된다
 - **AND** Profile 물리 삭제와 Profile 기준 cleanup을 위해 `profile_id` index를 생성한다
-- **AND** 아직 확정되지 않은 Reaction Profile 표시 순서를 위한 별도 ordering index를 선제 추가하지 않는다
+- **AND** Type별 Profile 목록의 `created_at DESC`, `id DESC` 정렬을 위해 `post_id`, `type`, `created_at DESC`, `id DESC` 순서의 index를 생성한다
 
 ### Requirement: additive Reaction migration
 
