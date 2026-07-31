@@ -22,7 +22,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const remoteDomain = 'remote.example';
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -42,7 +42,6 @@ let localInstanceId: string;
 
 describe('GraphQL profile follow graph', () => {
   before(async () => {
-    process.env.DATABASE_URL = databaseUrl;
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
@@ -851,7 +850,9 @@ const resetFixtures = async () => {
 };
 
 const truncateDatabase = async () => {
-  assert.equal(new URL(process.env.DATABASE_URL ?? '').pathname, '/kosmo_test');
+  const databaseUrl = new URL(process.env.DATABASE_URL ?? '');
+  assert.ok(['127.0.0.1', '[::1]', 'localhost'].includes(databaseUrl.hostname));
+  assert.match(decodeURIComponent(databaseUrl.pathname.slice(1)), /^kosmo_test(?:_[a-z0-9_]+)?$/);
   await pg.unsafe(`
     DO $$
     DECLARE
