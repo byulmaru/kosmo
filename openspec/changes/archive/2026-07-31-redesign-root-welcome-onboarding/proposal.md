@@ -8,7 +8,7 @@
 - 오픈 베타 중 오류나 기능·화면 변경 가능성을 `~요` 어미로 안내한다.
 - 별마루 계정 가입·로그인과 가입 시 이메일만 수집하고 이메일 인증으로 로그인한다는 안내를 CTA 아래에 표시한다.
 - 별도 84px logo header와 중복 `KOSMO` eyebrow를 제거하고 full logo를 Hero column에 포함한다.
-- full logo를 `160×101px` box로 표시한다. 모바일 Web은 화면 상단에서 44px 여백을 두고 compact/full Web은 Hero
+- Web full logo를 `160×101px` box로 표시한다. 모바일 Web은 화면 상단에서 44px 여백을 두고 compact/full Web은 Hero
   전체를 viewport 수직 중앙에 둔다.
 - 공용 `compact=768`, `full=1280` breakpoint를 사용해 Web 가로 여백을 24/128/256px로 전환한다.
 - 모바일 Web heading은 한글 음절 중간이 아니라 단어 단위 줄바꿈을 우선한다.

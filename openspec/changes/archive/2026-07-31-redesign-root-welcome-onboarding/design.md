@@ -9,7 +9,7 @@ Welcome presentation은 full `BrandLogo`를 별도 84px header에 width 136으�
 **Goals:**
 
 - 확정된 제품 소개, 오픈 베타, 별마루 계정·이메일 인증 카피를 표시한다.
-- full logo와 Hero를 같은 column으로 구성하고 160×101px logo를 유지한다. 모바일 Web은 44px 상단 여백,
+- full logo와 Hero를 같은 column으로 구성하고 Web에서 160×101px logo를 유지한다. 모바일 Web은 44px 상단 여백,
   compact/full Web은 viewport 수직 중앙 정렬을 사용한다.
 - 768/1280 공용 breakpoint로 24/128/256px Web 가로 여백을 적용한다.
 - 모바일 Web heading은 단어 단위 줄바꿈을 우선한다.

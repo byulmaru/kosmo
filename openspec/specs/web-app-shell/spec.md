@@ -550,9 +550,9 @@ Domain Limit·viewer Profile Domain Block의 미래 공통-predicate rollout은 
 - **THEN** 시스템은 full logo, `동인 창작 문화 향유자를 위한 차세대 연합우주 SNS` heading, 오픈 베타 안내, `시작하기` CTA, 별마루 계정·이메일 인증 안내와 개인정보 처리방침 link를 표시한다
 - **AND** `(tabs)` 앱 셸과 중복 `KOSMO` eyebrow를 표시하지 않는다
 
-#### Scenario: Keep the Welcome logo in the Hero hierarchy
+#### Scenario: Keep the Web Welcome logo in the Hero hierarchy
 
-- **WHEN** Welcome을 렌더링한다
+- **WHEN** Web에서 Welcome을 렌더링한다
 - **THEN** 시스템은 full logo를 `160×101px` box로 표시한다
 - **AND** 모바일 Web은 화면 상단에서 44px 여백을 둔다
 - **AND** compact/full Web은 logo부터 개인정보 처리방침까지의 Hero 묶음을 viewport 수직 중앙에 둔다

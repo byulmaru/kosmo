@@ -20,10 +20,10 @@
 
 - Decision Date: 2026-07-31
 - Decision Class: Derived Contract
-- Authority / Provenance: [DSN-26](https://linear.app/byulmaru/issue/DSN-26/) 본문과 2026-07-31 확정 댓글, `docs/design/logo.md`
+- Authority / Provenance: [DSN-26](https://linear.app/byulmaru/issue/DSN-26/) 본문, 2026-07-31 `확정된 Welcome 카피·배치 계약` 댓글과 이를 대체하는 `PR #477 리뷰 반영 — 최종 Welcome 배치 계약 정정` 댓글, `docs/design/logo.md`
 - Status: Active
 - Context / Problem: full logo asset은 `1665×1050` artboard이며 현재 Web 증거에서 width 136px에 원본 height 1050px가 layout box로 사용됐다.
-- Decision Outcome: Welcome full logo는 1665:1050 비율의 `160×101px` box를 사용한다. `BrandLogo` full variant는 입력 width에서 계산한 height를 style에 명시한다.
+- Decision Outcome: Web Welcome full logo는 1665:1050 비율의 `160×101px` box를 사용한다. `BrandLogo` full variant는 입력 width에서 계산한 height를 style에 명시한다.
 - Alternatives Considered: `aspectRatio`와 width만 유지, root route에서만 height override. 전자는 현재 Web 회귀를 막지 못했고 후자는 공용 component가 잘못된 box를 다시 만들 수 있다.
 - Consequences: full variant의 명시적 height 계산을 unit test로 고정하고 mark variant의 square geometry는 유지한다.
 - Confirmation / Follow-up: `BrandLogo.test.ts`와 Web bounding box E2E에서 width 160px, rounded height 101px를 확인한다.
