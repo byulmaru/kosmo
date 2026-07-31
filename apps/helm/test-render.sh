@@ -135,6 +135,32 @@ for marker in "${dev_forbidden_markers[@]}"; do
   fi
 done
 
+if ! awk '
+  $0 == "kind: Cluster" { in_cluster = 1 }
+  in_cluster && $0 == "  resources:" { resources = 1 }
+  resources && $0 == "    limits:" { limits = 1; requests = 0; seen_limits = 1 }
+  resources && $0 == "    requests:" { requests = 1; limits = 0; seen_requests = 1 }
+  limits && $0 == "      cpu: 250m" { limit_cpu = 1 }
+  limits && $0 == "      memory: 1Gi" { limit_memory = 1 }
+  requests && $0 == "      cpu: 250m" { request_cpu = 1 }
+  requests && $0 == "      memory: 1Gi" { request_memory = 1 }
+  in_cluster && /^---$/ { exit }
+  END { exit !(resources && seen_limits && seen_requests && limit_cpu && limit_memory && request_cpu && request_memory) }
+' "${render_dir}/dev.yaml"; then
+  echo "dev PostgreSQL must render the expected resource requests and limits" >&2
+  exit 1
+fi
+
+if ! awk '
+  $0 == "kind: Cluster" { in_cluster = 1 }
+  in_cluster && $0 == "  resources:" { found = 1 }
+  in_cluster && /^---$/ { exit }
+  END { exit found }
+' "${render_dir}/prod.yaml"; then
+  echo "prod PostgreSQL unexpectedly inherited dev resource settings" >&2
+  exit 1
+fi
+
 if [[ "$(grep -Fc 'image: "ghcr.io/byulmaru/kosmo:main"' "${render_dir}/dev.yaml")" -ne 3 ]]; then
   echo "dev migration, API, and Web must keep the mutable main image" >&2
   exit 1
