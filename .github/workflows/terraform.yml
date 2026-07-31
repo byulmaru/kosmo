@@ -301,18 +301,27 @@ jobs:
           }
 
           pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
-          pr_jq='(map(select(.merged_at != null)) | sort_by(.number) | last // empty)'
-          pr_number="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .number // empty")"
-          pr_head_sha="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" --jq "${pr_jq} | .head.sha // empty")"
-
-          if [[ -z "${pr_number}" || -z "${pr_head_sha}" ]]; then
+          merged_prs="$(gh api -H "Accept: application/vnd.github+json" "${pr_api}" \
+            --jq 'map(select(.merged_at != null)) | sort_by(.number)[] | [.number, .head.sha] | @tsv')"
+          if [[ -z "${merged_prs}" ]]; then
             echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
             exit 1
           fi
 
-          plan_run_id="$(find_plan_run "${pr_head_sha}")"
+          pr_number=""
+          pr_head_sha=""
+          plan_run_id=""
+          while IFS=$'\t' read -r candidate_pr_number candidate_head_sha; do
+            candidate_plan_run_id="$(find_plan_run "${candidate_head_sha}")"
+            if [[ -n "${candidate_plan_run_id}" ]]; then
+              pr_number="${candidate_pr_number}"
+              pr_head_sha="${candidate_head_sha}"
+              plan_run_id="${candidate_plan_run_id}"
+            fi
+          done <<< "${merged_prs}"
+
           if [[ -z "${plan_run_id}" ]]; then
-            echo "No unexpired Terraform plan artifact found for PR #${pr_number} at ${pr_head_sha}; rerun the PR plan before merging." >&2
+            echo "No associated merged pull request has an unexpired Terraform plan artifact; rerun the Terraform PR plan before merging." >&2
             exit 1
           fi
 
