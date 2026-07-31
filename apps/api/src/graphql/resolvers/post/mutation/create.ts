@@ -4,13 +4,13 @@ import { createPost } from '@kosmo/core/services';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
-import { MediaObject } from '../../media/ref';
+import { Media } from '../../media/ref';
 import { Post } from '../ref';
 
 const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
-    mediaId: t.globalID({ for: MediaObject }),
+    mediaId: t.globalID({ for: Media }),
   }),
 });
 
@@ -51,12 +51,15 @@ builder.mutationField('createPost', (t) =>
         accountId: ctx.session.accountId,
         document: postContentDocumentFromTextAndMedia(
           input.bodyText,
-          media.map(({ altText, mediaId }) => ({
-            altText: altText ?? null,
+          media.map(({ mediaId }) => ({
             mediaId: mediaId.id,
           })),
           input.sensitiveMedia ?? false,
         ),
+        media: media.map(({ altText, mediaId }) => ({
+          altText: altText ?? null,
+          mediaId: mediaId.id,
+        })),
         origin: 'LOCAL',
         profileId: ctx.session.profileId,
         replyParentId: input.replyParentId?.id,

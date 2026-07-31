@@ -230,7 +230,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
 - Repost 취소는 별도 행동이 아니라 Content와 Reply Parent 없이 Repost Source를 가진 Post에 대한 Post 삭제다.
 - Mentioned Profiles Post는 Repost할 수 없다.
-- 새 Post Content revision으로 본문, Content Warning, Sensitive Media와 Media 구성·순서·Alt Text·참조를
+- 새 Post Content revision으로 본문, Content Warning, Sensitive Media와 Media 구성·순서·참조를
   바꾸는 도메인 방향은 정의되어 있지만 현재 사용자용 Post 수정 기능은 제공하지 않는다. 이 기능은 이미지가
   있는 새 Post 작성과 독립된 후속 계약이다. Post Visibility 변경도 현재 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.

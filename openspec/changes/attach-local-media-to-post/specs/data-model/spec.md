@@ -23,10 +23,11 @@
 
 - **WHEN** 새 PostContent가 하나 이상의 Media와 함께 생성된다
 - **THEN** V1 body는 최대 4개의 block Media node를 포함할 수 있다
-- **AND** 각 Media node attrs는 Media identity와 nullable Alt Text만 가진다
+- **AND** 각 Media node attrs는 Media identity만 가진다
 - **AND** body 안의 Media node 위치가 표시 순서를 결정한다
 - **AND** document root의 optional Sensitive Media attr는 모든 Media node에 적용되며 생략하면 `false`다
-- **AND** Media identity, Alt Text, 순서와 Sensitive Media를 별도 Post-Media relation, Media ID 배열, Post column 또는 Media column에 중복 저장하지 않는다
+- **AND** Media identity와 순서는 PostContent document에, nullable Alt Text는 Media column에, Sensitive Media는 document root에 각각 한 번만 저장한다
+- **AND** 별도 Post-Media relation, Media ID 배열 또는 Post Sensitive Media column을 만들지 않는다
 
 #### Scenario: 기존 V1 document 호환
 

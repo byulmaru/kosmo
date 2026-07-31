@@ -153,12 +153,24 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/colors.md`, `docs/design/typography.md`, `memory/frontend-react-native.md`, `PROD-479`, `PROD-487`
-- Status: Active
+- Status: Superseded
 - Context / Problem: `PROD-487`의 확정 범위가 제한된 플랫폼 구현에서 인증된 Android/iOS/Web 공용 피드백으로 확대되었고 별도 플랫폼 slice가 취소되어 추가 분할이 필요하지 않다. `/feedback`은 보호된 canonical route로, `/menu`는 기존 소비자를 위해 독립 route로 유지해야 한다.
 - Decision Outcome: Android/iOS/Web의 공용 `(tabs)/(protected)/feedback` route는 동일한 피드백 form과 GraphQL 제출 계약을 렌더링한다. 모든 플랫폼의 full/compact sidebar와 mobile drawer footer는 "피드백 보내기" Link를 `/feedback`으로 제공하고 현재 위치를 active/page-current로 노출한다. `/menu`는 redirect하지 않고 기존 화면과 UI를 보존한다.
 - Alternatives Considered: 플랫폼별 route·form을 분리하면 인증·검증·상태 계약이 중복되어 제외했다. 일부 플랫폼만 entry를 제공하고 native 후속 구현을 두는 방식은 최신 `PROD-487` 범위와 맞지 않아 제외했다.
 - Consequences: Android/iOS/Web이 동일한 route, form과 shell semantics를 공유하며 별도 native 구현 slice가 없다. 각 플랫폼의 기존 authenticated transport와 drawer close 동작은 유지한다.
 - Confirmation / Follow-up: Full/compact/drawer navigation, active semantics, drawer close, `/menu`·`/feedback` 독립성 및 각 플랫폼의 form state를 component/Storybook/E2E로 검증한다. Native device harness가 없으면 해당 검증 공백을 결과에 기록한다.
+
+### PROD-541 이후 Android/iOS/Web에서 `/feedback` navigation만 독립적으로 유지한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-487`, `PROD-541`
+- Status: Active
+- Context / Problem: PROD-487 구현 뒤 PROD-541이 남은 소비자가 없는 generic `/menu` placeholder와 준비되지 않은 sidebar 진입점을 제거했다. Parent feedback change가 과거 `/menu` 보존 시나리오를 유지하면 이후 archive 시 canonical의 route 제거 계약과 다시 충돌한다.
+- Decision Outcome: Android/iOS/Web의 공용 `(tabs)/(protected)/feedback` route, 동일한 feedback form과 GraphQL 제출 계약, full/compact/mobile shell의 "피드백 보내기" link와 active·drawer-close semantics를 유지한다. Parent feedback change는 `/menu` route나 기존 메뉴 UI의 보존을 요구하지 않는다.
+- Alternatives Considered: stale `/menu` 시나리오를 parent archive 직전까지 유지하고 별도 task로만 추적하는 방식은 이미 확정된 canonical과 active delta의 의미 충돌을 계속 남겨 제외했다. PROD-541 child가 parent requirement 전체를 수정하는 방식은 두 change의 production acceptance와 archive 책임을 다시 결합하므로 제외했다.
+- Consequences: PROD-487의 feedback navigation·form·delivery 계약과 production smoke는 그대로 유지하면서, parent archive가 PROD-541의 `/menu` 제거를 되돌리지 않는다. `/menu` 제거 자체의 구현·검증·archive 증거는 PROD-541이 계속 소유한다.
+- Confirmation / Follow-up: Parent delta의 `/menu` 보존 시나리오와 stale task 문구를 제거하고, scoped·전체 strict validation으로 canonical과의 정합성을 확인한다. Native device harness 공백과 production smoke task 4.3은 기존 PROD-487 범위에 남긴다.
 
 ## Remaining Decisions
 
@@ -172,3 +184,4 @@
 - 2026-07-29의 기존 `/menu` → `/feedback` redirect 결정은 `/feedback`을 canonical Web feedback route로 사용하면서 기존 `/menu`는 보존하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 메뉴 소개 UI를 제거한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
 - 2026-07-29 `/feedback을 canonical Web feedback route로 사용하고 기존 /menu는 보존한다`는 Android/iOS/Web에서 동일한 `/feedback` route와 shell navigation을 사용하는 결정으로 대체했다.
+- 2026-07-29 `Android/iOS/Web에서 동일한 /feedback route와 shell navigation을 사용한다`의 `/menu` 보존 부분은 PROD-541의 canonical route 제거에 따라 2026-07-30 `PROD-541 이후 Android/iOS/Web에서 /feedback navigation만 독립적으로 유지한다`로 대체했다.

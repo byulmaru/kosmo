@@ -2,7 +2,7 @@
 
 ### Requirement: 공개 Kosmo 개인정보 처리방침
 
-Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제공하고 landing과 인증 후 menu에서 연결해야 한다. 처리방침은 실제 처리 목적·항목·법적 근거·보유와 파기·제공과 위탁·국외 이전·권리 행사·행태정보·안전조치·책임자·구제·변경 이력을 구체적으로 밝혀야 한다.
+Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제공하고 landing과 인증 후 full Web shell에서 연결해야 한다. compact Web과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 표시해서는 안 된다(MUST NOT). 처리방침은 실제 처리 목적·항목·법적 근거·보유와 파기·제공과 위탁·국외 이전·권리 행사·행태정보·안전조치·책임자·구제·변경 이력을 구체적으로 밝혀야 한다.
 
 **Authority / Provenance:** `PROD-469`, 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
 
@@ -10,6 +10,18 @@ Kosmo MUST 인증 없이 접근할 수 있는 개인정보 처리방침을 제�
 
 - **WHEN** 방문자가 `/privacy`에 접근한다
 - **THEN** 로그인 없이 현재 시행일과 모든 필수 처리 항목을 읽을 수 있다
+
+#### Scenario: 인증 사용자가 full Web shell에서 처리방침을 연다
+
+- **WHEN** 인증된 사용자가 full Web right rail 최하단의 `개인정보 처리방침` link를 활성화한다
+- **THEN** 시스템은 공개 `/privacy` route로 이동한다
+- **AND** link는 accessible name과 Web 최소 target 크기를 제공한다
+
+#### Scenario: compact와 mobile shell에서 처리방침 진입점을 숨긴다
+
+- **WHEN** 인증된 사용자가 compact Web icon rail 또는 mobile Web·Android/iOS drawer를 연다
+- **THEN** 시스템은 개인정보 처리방침 link나 같은 의미의 진입 control을 시각·접근성 트리에 노출하지 않는다
+- **AND** 공개 `/privacy` route와 landing link는 유지한다
 
 ### Requirement: OpenPanel 자동 수집과 replay 고지
 

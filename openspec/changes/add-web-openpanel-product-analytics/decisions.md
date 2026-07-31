@@ -69,12 +69,36 @@
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-469`, `PROD-538`, `PROD-540`; 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
-- Status: Active
+- Status: Superseded
 - Context / Problem: 실제 자동 수집과 replay를 투명하게 고지하고 정보주체의 열람·삭제·처리정지 요청을 수행할 절차가 필요하다.
 - Decision Outcome: 인증 없는 `/privacy`에 실제 분석 처리 항목과 권리 행사 방법을 공개한다. v1 Account별 삭제는 대상 확인과 사후 검증을 포함한 관리자 runbook으로 수행한다.
 - Alternatives Considered: 외부 사이트에만 고지하는 방법은 Kosmo 사용자 접근성이 낮고, 즉시 자동 삭제 API를 만드는 방법은 PROD-469 범위를 확장해 제외했다.
 - Consequences: opt-out UI와 자동 삭제는 각각 PROD-540, PROD-538에서 구현한다. 그 전까지 권리 요청은 고지된 연락처로 접수한다.
 - Confirmation / Follow-up: 비로그인 route, landing/menu link, 처리방침 내용과 runbook을 검증한다.
+
+### 공개 처리방침을 landing과 responsive shell에서 연결한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: Linear `PROD-469`, `PROD-541`, `PROD-575`; `docs/design/breakpoints.md`; 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
+- Status: Superseded
+- Context / Problem: PR #404의 인증 후 처리방침 link는 generic `/menu` placeholder에 배치됐지만 PROD-541이 해당 route를 제거한다. 공개 고지와 인증 후 접근성은 유지해야 한다.
+- Decision Outcome: 인증 없는 `/privacy`와 landing link를 유지하고, 인증 후 link는 full Web right rail 좌하단 muted text, compact Web icon rail 하단 accessible `FileText`, mobile Web·Android·iOS drawer 하단 muted text로 옮긴다. v1 Account별 삭제 runbook과 처리방침 본문은 변경하지 않는다.
+- Alternatives Considered: generic `/menu` 유지, 인증 후 link 제거, full Web에만 link 제공.
+- Consequences: 모든 shell 단계에서 공개 처리방침에 접근할 수 있고 generic menu 의존성이 사라진다. production acceptance와 이 OpenSpec archive는 PROD-575가 계속 소유한다.
+- Confirmation / Follow-up: PROD-541의 Storybook/E2E로 responsive 진입점을 검증하고 PROD-575가 production 수집 검증 후 전체 change를 archive한다.
+
+### 공개 처리방침을 landing과 full Web shell에서 연결한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: Linear `PROD-469`, `PROD-541`, `PROD-575`; `docs/design/breakpoints.md`; 개인정보보호위원회 「개인정보 처리방침 작성지침」 2026.4 개정
+- Status: Active
+- Context / Problem: compact icon rail과 mobile drawer의 개인정보 처리방침 진입점이 좁은 navigation 공간에서 주요 기능과 같은 크기로 표시된다. 공개 `/privacy`와 landing link가 이미 있고 인증 후 full Web에도 안정적인 보조 위치가 있으므로 모든 shell surface에서 상시 노출할 필요는 없다.
+- Decision Outcome: 인증 없는 `/privacy`와 landing link를 유지하고, 인증 후 link는 full Web right rail 최하단의 muted text로만 제공한다. compact Web icon rail과 mobile Web·Android/iOS drawer에는 개인정보 처리방침 진입점을 표시하지 않는다. 가입·로그인 온보딩 안의 추가 진입점은 후속 범위로 두며 v1 Account별 삭제 runbook과 처리방침 본문은 변경하지 않는다.
+- Alternatives Considered: full·compact·mobile responsive shell 전체 노출 유지, generic `더보기` disclosure menu에 통합, 인증 후 link 전체 제거.
+- Consequences: 공개 landing과 full Web에서 접근성을 유지하면서 compact·mobile navigation 위계를 단순화한다. production acceptance와 이 OpenSpec archive는 PROD-575가 계속 소유한다.
+- Confirmation / Follow-up: PROD-541의 Storybook/E2E로 full 진입과 compact·mobile 비노출을 검증하고 PROD-575가 production 수집 검증 후 전체 change를 archive한다.
 
 ## Remaining Decisions
 
@@ -82,4 +106,5 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 위 `공개 처리방침과 수동 삭제 절차` Derived Contract는 공개 route·수동 삭제 결과를 유지하되 인증 후 진입 위치를 responsive shell로 옮기는 Active Derived Contract로 대체됐다.
+- 위 `공개 처리방침을 landing과 responsive shell에서 연결한다` Derived Contract는 compact·mobile 상시 노출을 제거하고 full Web과 공개 landing만 유지하는 Active Derived Contract로 대체됐다.

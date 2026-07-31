@@ -1,18 +1,9 @@
 import { Link, usePathname } from 'expo-router';
-import {
-  Bell,
-  Bookmark,
-  House,
-  PenLine,
-  Search,
-  Settings,
-  UserRound,
-  UserRoundPlus,
-} from 'lucide-react-native';
+import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
@@ -34,21 +25,27 @@ const SidebarNavigationFragment = graphql`
   }
 `;
 
-type NavigationItem = {
+type RouteNavigationItem = {
   href: Href;
   Icon: LucideIcon;
   label: string;
-  profile?: boolean;
+  profile?: false;
 };
+
+type ProfileNavigationItem = {
+  Icon: LucideIcon;
+  label: string;
+  profile: true;
+};
+
+type NavigationItem = ProfileNavigationItem | RouteNavigationItem;
 
 const navigation: NavigationItem[] = [
   { href: '/home', Icon: House, label: '홈' },
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
-  { href: '/menu', Icon: UserRound, label: '프로필', profile: true },
+  { Icon: UserRound, label: '프로필', profile: true },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
-  { href: '/menu', Icon: UserRoundPlus, label: '팔로워 요청' },
-  { href: '/menu', Icon: Settings, label: '프로필 설정' },
 ];
 
 type Props = {
@@ -76,12 +73,12 @@ export function SidebarNavigation({
   const feedbackActive = pathname === '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
-    if (!item.profile) {
-      return { active: pathname === item.href && item.href !== '/menu', href: item.href };
+    if (item.profile) {
+      const href = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
+      return { active: Boolean(href && pathname === href), href };
     }
 
-    const href = profile ? (`/${profile.relativeHandle}` as Href) : undefined;
-    return { active: Boolean(href && pathname === href), href };
+    return { active: pathname === item.href, href: item.href };
   };
 
   const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';
@@ -174,7 +171,7 @@ export function SidebarNavigation({
               <View key={item.label}>{control}</View>
             );
           })}
-          {compact || surface === 'drawer' ? (
+          {compact ? (
             <Link asChild href="/compose">
               <Pressable
                 accessibilityLabel="글쓰기"
@@ -194,25 +191,16 @@ export function SidebarNavigation({
                       strokeWidth={2}
                       style={pressed && styles.pressedContent}
                     />
-                    {!compact ? (
-                      <Text style={[styles.composeLabel, pressed && styles.pressedContent]}>
-                        글쓰기
-                      </Text>
-                    ) : null}
                   </>
                 )}
               </Pressable>
             </Link>
           ) : null}
-          {!compact ? <LogoutControl /> : null}
         </View>
 
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          {compact ? (
-            <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
-          ) : null}
           <Link asChild href="/feedback">
             <Pressable
               aria-current={feedbackActive ? 'page' : undefined}
@@ -229,10 +217,10 @@ export function SidebarNavigation({
                 },
               ])}
             >
-              <Settings
+              <Mail
                 color={feedbackActive ? theme.text : theme.textSecondary}
                 size={20}
-                strokeWidth={1.5}
+                strokeWidth={2}
               />
               {!compact ? (
                 <Text
@@ -248,6 +236,11 @@ export function SidebarNavigation({
               ) : null}
             </Pressable>
           </Link>
+          {compact ? (
+            <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
+          ) : (
+            <LogoutControl />
+          )}
         </View>
       </ScrollView>
     </View>
@@ -319,7 +312,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  composeLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   footer: { borderTopWidth: 1, marginTop: 'auto', paddingTop: spacing.xs, width: '100%' },
   compactFooter: { borderTopWidth: 0 },
   footerItem: {

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, colors, radii, spacing, typography } from '@/theme/tokens';
 import { Catalog, Row, Section } from './StoryFrame';
@@ -9,6 +10,13 @@ function FoundationsCatalog() {
 
   return (
     <Catalog width={880}>
+      <Section title="Brand logo">
+        <Row>
+          <BrandLogo width={96} />
+          <BrandLogo variant="full" width={220} />
+        </Row>
+      </Section>
+
       <Section title="Color tokens">
         <Row>
           {Object.entries(colors.light).map(([name, value]) => (

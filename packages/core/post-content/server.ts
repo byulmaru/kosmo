@@ -13,8 +13,7 @@ import type {
   PostContentSchemaVersion,
 } from './index';
 
-export interface PostContentMediaInput {
-  readonly altText: string | null;
+export interface PostContentMediaReference {
   readonly mediaId: string;
 }
 
@@ -59,7 +58,6 @@ function canonicalizePostContentBody(
       mediaCount += 1;
       blocks.push(
         postContentSchema.nodes.media.create({
-          altText: block.attrs.altText,
           mediaId: block.attrs.mediaId,
         }),
       );
@@ -108,7 +106,7 @@ export function postContentDocumentFromText(
 
 export function postContentDocumentFromTextAndMedia(
   bodyText: string,
-  media: readonly PostContentMediaInput[],
+  media: readonly PostContentMediaReference[],
   sensitiveMedia = false,
   summary: string | null = null,
 ): PostContentDocumentV1 {
@@ -126,9 +124,9 @@ export function postContentDocumentFromTextAndMedia(
           ...(normalized.length > 0 ? { content: [{ type: 'text', text: normalized }] } : {}),
         },
         ...media.map(
-          ({ altText, mediaId }): PostContentMediaNode => ({
+          ({ mediaId }): PostContentMediaNode => ({
             type: 'media',
-            attrs: { altText, mediaId },
+            attrs: { mediaId },
           }),
         ),
       ],
@@ -255,12 +253,9 @@ function assertPostContentJsonKeys(value: unknown): void {
     if (!isRecord(value.attrs)) {
       throw new TypeError('Media attrs must be an object');
     }
-    assertOnlyKeys(value.attrs, ['mediaId', 'altText']);
+    assertOnlyKeys(value.attrs, ['mediaId']);
     if (typeof value.attrs.mediaId !== 'string' || value.attrs.mediaId.length === 0) {
       throw new TypeError('Media ID must be a non-empty string');
-    }
-    if (value.attrs.altText !== null && typeof value.attrs.altText !== 'string') {
-      throw new TypeError('Media Alt Text must be a string or null');
     }
     return;
   }

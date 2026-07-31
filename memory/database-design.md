@@ -151,7 +151,7 @@ Drizzle query policy:
 - `profile`: social identity that writes posts, follows, and federates.
 - `account_profile`: account-profile N:N relationship and role.
 - `post`: post metadata, visibility, state, and current content pointer.
-- `post_content`: immutable authored-content revision, storing one canonical versioned `{ version, summary, body }` JSON document and eventually `(post_id, revision_number)` uniqueness when revision numbering lands. V1 `summary` is nullable Plain Text Content Warning and `body` is the canonical ProseMirror document. V1 Media block nodes own revision-specific `mediaId`, nullable `altText` and order, while the document root owns `sensitiveMedia`; these JSON references are the intentional ADR 0022 exception to the normal FK-backed relationship rule. GraphQL may keep `contentWarning` and `bodyText` as compatibility projections. Plain Text and executable HTML are never second canonical stored bodies. ActivityPub adapters map Note `summary` to document `summary`.
+- `post_content`: immutable authored-content revision, storing one canonical versioned `{ version, summary, body }` JSON document and eventually `(post_id, revision_number)` uniqueness when revision numbering lands. V1 `summary` is nullable Plain Text Content Warning and `body` is the canonical ProseMirror document. V1 Media block nodes own `mediaId` and order, the document root owns `sensitiveMedia`, and the referenced `media` row owns nullable `alt_text`; these JSON references are the intentional ADR 0022 exception to the normal FK-backed relationship rule. GraphQL may keep `contentWarning` and `bodyText` as compatibility projections. Plain Text and executable HTML are never second canonical stored bodies. ActivityPub adapters map Note `summary` to document `summary`.
 - `profile_follow`: established follower/followee direction only; row existence means the follow relationship is active.
 - `profile_follow_request`: pending follower/followee request direction before a follow relationship is established. The row itself means the request is pending; accepted or rejected requests are removed instead of stored with a state.
 
@@ -159,12 +159,14 @@ Drizzle query policy:
 
 Current media direction:
 
-- `media` is the only Kosmo persistence for a logical image. Kosmo does not mirror Media Storage Service originals,
-  derived representations, storage keys, MIME metadata or dimensions in a separate `file` table.
+- `media` is the only Kosmo persistence for a logical image. Kosmo stores the Media Storage Service completion result's
+  public URL and media type on the Local Media row, but does not mirror bytes, storage keys, derived
+  representations or dimensions in a separate `file` table.
 - A Local Media row is created when an authenticated Account/Profile starts an upload. It keeps its Kosmo identity,
   upload Account, actor Profile, `UPLOADING` state, opaque external storage reference and upload expiry.
-- After Kosmo confirms storage through Media Storage Service, the same row transitions atomically to `READY`; only
-  `READY` Media can be attached to a Post or used as a Profile representation.
+- After Kosmo confirms storage through Media Storage Service, the same row stores its URL and media type and transitions
+  atomically to `READY`; later read projections use these columns without calling the storage service. Only `READY`
+  Media can be attached to a Post or used as a Profile representation.
 - The external storage reference is unique persistence data but is never the GraphQL/Media identity and is not exposed
   to clients. API consumers use the Media global ID.
 - The unused legacy `/upload` route, direct R2 configuration and `file` persistence are removed rather than supported as
@@ -177,7 +179,7 @@ Current media direction:
   referenced Media until a separate lifecycle contract preserves historical revisions.
 - `profile_media`: add later when avatar/banner usage needs its own context.
 
-Do not expose an original URL just because a stored representation exists. Timelines can use thumbnail/compressed
+Do not expose a stored original URL without the owning Post/Profile viewer policy. Timelines can use thumbnail/compressed
 variants, detail views can use high-resolution variants, and original access remains a product/cost policy decision.
 
 Deduplication questions:

@@ -22,7 +22,7 @@
 - **AND** `paragraph` content expression은 `inline*`이다
 - **AND** inline node는 non-empty `text`와 mark를 가질 수 없는 `hard_break`만 허용한다
 - **AND** mark는 `link`만 허용하고 attr는 `href` 하나만 허용한다
-- **AND** block `media` node는 non-empty string `mediaId`와 nullable string `altText` attr만 허용한다
+- **AND** block `media` node는 non-empty string `mediaId` attr만 허용한다
 - **AND** 하나의 document는 Media node를 최대 4개까지 포함할 수 있다
 - **AND** node와 mark에 열거되지 않은 attr, node 또는 mark가 있으면 검증을 거부한다
 - **AND** `pre` node를 지원하지 않는다
@@ -46,12 +46,12 @@
 
 ### Requirement: V1 Media canonicalization과 Plain Text 경계
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-461, PROD-554. 시스템은 Media identity, revision별 Alt Text, 표시 순서와 Sensitive Media를 같은 canonical PostContent V1 revision에서 보존하고 Plain Text와 HTML projection에는 Media를 중복 표현하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-461, PROD-554. 시스템은 Media identity, 표시 순서와 Sensitive Media를 canonical PostContent V1 revision에서 보존하고 Plain Text와 HTML projection에는 Media를 중복 표현하지 않아야 한다(MUST).
 
 #### Scenario: Media 순서와 revision equality
 
 - **WHEN** V1 document가 paragraph와 Media node를 함께 포함한다
-- **THEN** canonicalization은 Media node의 상대 순서, `mediaId`, nullable `altText`와 root `sensitiveMedia`를 보존한다
+- **THEN** canonicalization은 Media node의 상대 순서, `mediaId`와 root `sensitiveMedia`를 보존한다
 - **AND** revision equality는 이 값 중 하나라도 다르면 서로 다른 revision 의미로 판정한다
 
 #### Scenario: Media-only canonical document

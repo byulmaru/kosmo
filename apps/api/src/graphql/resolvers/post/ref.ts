@@ -1,10 +1,12 @@
 import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
-import { PostState, PostVisibility } from '@kosmo/core/enums';
+import { MediaState, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
+import { mediaByIdLoader } from '../media/loader/by-id';
+import { Media } from '../media/ref';
 import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
 
@@ -73,6 +75,32 @@ PostContent.implement({
     contentWarning: t.string({
       nullable: true,
       resolve: (content) => content.document.summary,
+    }),
+    media: t.field({
+      type: [Media],
+      nullable: true,
+      grantScopes: ['readMedia'],
+      resolve: async (content, _, ctx) => {
+        const mediaNodes = content.document.body.content.filter((block) => block.type === 'media');
+        if (mediaNodes.length === 0) {
+          return [];
+        }
+
+        const mediaRows = await Promise.all(
+          mediaNodes.map((node) => mediaByIdLoader(ctx).load(node.attrs.mediaId)),
+        );
+        const result: NonNullable<(typeof mediaRows)[number]>[] = [];
+
+        for (const media of mediaRows) {
+          if (!media || media.state !== MediaState.READY || !media.url || !media.mediaType) {
+            return null;
+          }
+
+          result.push(media);
+        }
+
+        return result;
+      },
     }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
   }),

@@ -1,19 +1,22 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
 import {
   createFederation,
   generateCryptoKeyPair,
   MemoryKvStore,
   signRequest,
 } from '@fedify/fedify';
-import { CryptographicKey, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { CryptographicKey, Image, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
+  AccountState,
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -32,6 +35,7 @@ const remoteActorUri = new URL('https://prod-494.remote.example/users/follower')
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let Accounts: typeof CoreDb.Accounts;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
 let db: typeof CoreDb.db;
@@ -40,6 +44,7 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
 let Instances: typeof CoreDb.Instances;
 let localInstanceId: string;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -48,6 +53,7 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let resolveActivityPubPostUri: typeof PostUriModule.resolveActivityPubPostUri;
 let testInstanceIds: string[] = [];
+let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
 
 describe('ActivityPub Local Post Note', () => {
@@ -56,10 +62,12 @@ describe('ActivityPub Local Post Note', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
+      Accounts,
       ActivityPubPosts,
       db,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       PostContents,
       Posts,
@@ -76,6 +84,10 @@ describe('ActivityPub Local Post Note', () => {
 
   beforeEach(async () => {
     await cleanTestRows();
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
   });
 
   after(async () => {
@@ -189,6 +201,83 @@ describe('ActivityPub Local Post Note', () => {
       tombstoneParentNote?.replyTargetId?.href,
       `${publicOrigin}/ap/note/${localParent.id}`,
     );
+  });
+
+  test('projects stored ordered Ready Local Media as Image attachments without HTML duplication or network reads', async () => {
+    const author = await createProfile({ handle: 'media-author', kind: InstanceKind.LOCAL });
+    const firstMedia = await createMedia(author.id, {
+      mediaType: 'image/avif',
+      url: 'https://cdn.example/media/first',
+      storageReference: 'provider-opaque-reference-1',
+    });
+    const secondMedia = await createMedia(author.id, {
+      url: 'https://cdn.example/media/second',
+      storageReference: 'provider/opaque?reference=2',
+    });
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Media projection must use stored representation metadata');
+    });
+    const post = await createPost(author.id, {
+      media: [
+        { altText: '', mediaId: secondMedia.id },
+        { altText: '첫 번째 설명', mediaId: firstMedia.id },
+      ],
+      sensitiveMedia: true,
+    });
+
+    const note = await dispatchLocalPostNote(createContext(), { id: post.id });
+    assert.ok(note);
+    assert.equal(note.content?.toString(), '<p>body</p>');
+    assert.equal(note.content?.toString().includes('<img'), false);
+    assert.equal(note.sensitive, true);
+
+    const attachments: Image[] = [];
+    for await (const attachment of note.getAttachments()) {
+      assert.ok(attachment instanceof Image);
+      attachments.push(attachment);
+    }
+    assert.equal(attachments.length, 2);
+    assert.equal(attachments[0]?.url?.toString(), 'https://cdn.example/media/second');
+    assert.equal(attachments[0]?.mediaType, 'image/webp');
+    assert.equal(attachments[0]?.name?.toString(), '');
+    assert.equal(attachments[1]?.url?.toString(), 'https://cdn.example/media/first');
+    assert.equal(attachments[1]?.mediaType, 'image/avif');
+    assert.equal(attachments[1]?.name?.toString(), '첫 번째 설명');
+    assert.equal(networkRead.mock.callCount(), 0);
+
+    const json = JSON.stringify(await note.toJsonLd());
+    assert.equal(json.includes(firstMedia.id), false);
+    assert.equal(json.includes(secondMedia.id), false);
+  });
+
+  test('does not project a partial Note when required Media is unavailable', async () => {
+    const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
+    const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
+    const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
+    const unavailable = await createMedia(author.id, {
+      mediaType: null,
+      url: null,
+      storageReference: 'provider-opaque-reference',
+    });
+    const malformed = await createMedia(author.id, { url: 'not-a-url' });
+    const nonHttp = await createMedia(author.id, { url: 'data:image/png;base64,AA==' });
+    const missingId = crypto.randomUUID();
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Unavailable stored metadata must not trigger a network read');
+    });
+
+    for (const mediaId of [
+      uploading.id,
+      remote.id,
+      unavailable.id,
+      malformed.id,
+      nonHttp.id,
+      missingId,
+    ]) {
+      const post = await createPost(author.id, { media: [{ altText: null, mediaId }] });
+      assert.equal(await dispatchLocalPostNote(createContext(), { id: post.id }), null);
+    }
+    assert.equal(networkRead.mock.callCount(), 0);
   });
 
   test('returns the same unavailable boundary for unsupported or ineligible Posts', async () => {
@@ -317,6 +406,21 @@ describe('ActivityPub Local Post Note', () => {
 
     assert.equal(await authorizeLocalPostNote(context, { id: followersPost.id }), true);
   });
+
+  test('authorizes Followers Only access before resolving Media representations', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const media = await createMedia(author.id, { storageReference: 'opaque-media' });
+    const followersPost = await createPost(author.id, {
+      media: [{ altText: null, mediaId: media.id }],
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const mediaLookup = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Media representation must not be resolved during authorization');
+    });
+
+    assert.equal(await authorizeLocalPostNote(createContext(), { id: followersPost.id }), false);
+    assert.equal(mediaLookup.mock.callCount(), 0);
+  });
 });
 
 const createContext = (): RequestContext<void> => {
@@ -429,11 +533,15 @@ const createPost = async (
   profileId: string,
   {
     replyParentId = null,
+    media = [],
+    sensitiveMedia = false,
     state = PostState.ACTIVE,
     summary = null,
     visibility = PostVisibility.PUBLIC,
   }: {
     replyParentId?: string | null;
+    media?: readonly { readonly altText: string | null; readonly mediaId: string }[];
+    sensitiveMedia?: boolean;
     state?: (typeof PostState)[keyof typeof PostState];
     summary?: string | null;
     visibility?: (typeof PostVisibility)[keyof typeof PostVisibility];
@@ -444,12 +552,22 @@ const createPost = async (
     .values({ profileId, replyParentId, state, visibility })
     .returning()
     .then(firstOrThrow);
+  for (const { altText, mediaId } of media) {
+    await db.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+  }
   const content = await db
     .insert(PostContents)
     .values({
       document: {
         body: {
-          content: [{ content: [{ text: 'body', type: 'text' }], type: 'paragraph' }],
+          ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
+          content: [
+            { content: [{ text: 'body', type: 'text' }], type: 'paragraph' },
+            ...media.map(({ mediaId }) => ({
+              attrs: { mediaId },
+              type: 'media' as const,
+            })),
+          ],
           type: 'doc',
         },
         summary,
@@ -463,6 +581,51 @@ const createPost = async (
     .update(Posts)
     .set({ currentContentId: content.id })
     .where(eq(Posts.id, post.id))
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createMedia = async (
+  profileId: string,
+  {
+    source = MediaSource.LOCAL,
+    state = MediaState.READY,
+    storageReference = `u_${crypto.randomUUID()}`,
+    mediaType = source === MediaSource.LOCAL && state === MediaState.READY ? 'image/webp' : null,
+    url = source === MediaSource.LOCAL && state === MediaState.READY
+      ? `https://cdn.example/media/${encodeURIComponent(storageReference)}`
+      : null,
+  }: {
+    mediaType?: string | null;
+    url?: string | null;
+    source?: (typeof MediaSource)[keyof typeof MediaSource];
+    state?: (typeof MediaState)[keyof typeof MediaState];
+    storageReference?: string;
+  } = {},
+) => {
+  const account = await db
+    .insert(Accounts)
+    .values({
+      displayName: `media-${crypto.randomUUID()}`,
+      oidcSubject: `media-${crypto.randomUUID()}`,
+      state: AccountState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  testAccountIds.push(account.id);
+  return db
+    .insert(Media)
+    .values({
+      accountId: account.id,
+      mediaType,
+      url,
+      profileId,
+      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      source,
+      state,
+      storageReference,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+    })
     .returning()
     .then(firstOrThrow);
 };
@@ -482,10 +645,15 @@ const cleanTestRows = async () => {
     await db.delete(PostContents).where(inArray(PostContents.postId, postIds));
     await db.delete(Posts).where(inArray(Posts.id, postIds));
   }
+  await db.delete(Media).where(inArray(Media.profileId, testProfileIds));
   await db.delete(Profiles).where(inArray(Profiles.id, testProfileIds));
+  if (testAccountIds.length > 0) {
+    await db.delete(Accounts).where(inArray(Accounts.id, testAccountIds));
+  }
   if (testInstanceIds.length > 0) {
     await db.delete(Instances).where(inArray(Instances.id, testInstanceIds));
   }
   testInstanceIds = [];
+  testAccountIds = [];
   testProfileIds = [];
 };

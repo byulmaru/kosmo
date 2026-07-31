@@ -130,18 +130,41 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 
 ### Requirement: PostContent GraphQL object
 
-API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하고 versioned canonical PostContent document와 파생 호환 필드를 제공해야 한다(MUST).
+API는 현재 PostContent를 versioned document와 파생 호환 필드로 노출하고, 조회 가능한 PostContent에서 실제 Media Node 목록을 제공해야 한다(MUST).
 
-#### Scenario: 게시글 콘텐츠 조회
+#### Scenario: PostContent Media Node 조회
 
-- **WHEN** 클라이언트가 게시글의 현재 콘텐츠를 조회한다
-- **THEN** 시스템은 `PostContent` object를 반환한다
-- **AND** `PostContent`는 `id`, `document`, `bodyText`, `contentWarning`, `createdAt` 필드를 포함한다
-- **AND** `document`는 서버가 검증하고 canonicalize한 `{ version, summary, body }` JSON이다
-- **AND** `bodyText`는 저장값이 아니라 `document.body`에서 결정적으로 파생된 호환 필드다
-- **AND** `bodyText`는 text, hard break와 paragraph 경계를 보존한다
-- **AND** `contentWarning`은 저장값이 아니라 `document.summary`를 노출하는 nullable 호환 필드다
-- **AND** `PostContent`는 HTML 본문 필드를 노출하지 않는다
+- **WHEN** 조회 가능한 PostContent document가 하나 이상의 Media node를 참조한다
+- **THEN** `PostContent.media`는 document 순서대로 실제 `Media` Node를 반환한다
+- **AND** 각 Media는 global `id`, 저장된 `url`, `mediaType`, nullable `altText`를 제공한다
+- **AND** Sensitive Media는 Media에 복제하지 않고 `PostContent.document` root에 유지한다
+
+#### Scenario: Post 권한 scope grant
+
+- **WHEN** viewer가 Post 조회 정책을 통과해 `PostContent.media`를 조회한다
+- **THEN** field는 반환한 Media subtree에 Media 표시 조회 scope를 grant한다
+- **AND** Media의 URL, media type, Alt Text는 이 grant를 요구한다
+- **AND** standalone Media Node가 참조 Post를 역추적해 권한을 얻는 동작은 제공하지 않는다
+
+#### Scenario: Media-owned Alt Text 갱신
+
+- **WHEN** createPost가 `{mediaId, altText}` 첨부 입력을 받아 유효한 Media를 참조한다
+- **THEN** PostContent document에는 Media ID와 순서만 저장한다
+- **AND** 같은 transaction에서 Media의 nullable Alt Text를 입력값으로 갱신한다
+- **AND** 같은 Media가 다른 값으로 다시 갱신되면 모든 참조 Post가 최신 값을 조회한다
+
+#### Scenario: Media가 없거나 표시할 수 없는 경우
+
+- **WHEN** document에 Media node가 없다
+- **THEN** `PostContent.media`는 빈 목록을 반환한다
+- **WHEN** 참조 Media row, Ready 상태, URL 또는 media type이 불완전하다
+- **THEN** partial list 대신 `PostContent.media` 전체를 unavailable로 반환한다
+
+#### Scenario: 저장된 representation만 사용하는 조회
+
+- **WHEN** 시스템이 `PostContent.media`를 해석한다
+- **THEN** Media row에 저장된 값만 사용하고 외부 storage service를 호출하지 않는다
+- **AND** storage reference를 공개하지 않는다
 
 ### Requirement: Plain Text post creation
 
@@ -257,20 +280,21 @@ API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하�
 
 ### Requirement: Post visibility dropdown selection
 
-유니버설 앱은 새 글 작성 컴포넌트에서 게시글 공개 범위를 platform에 맞는 menu 또는 modal control로 선택할 수 있게 해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md` (Post Visibility와 Post 작성 입력 계약), [PROD-580](https://linear.app/byulmaru/issue/PROD-580/direct-%EA%B5%AC%ED%98%84-%EC%A0%84-composer%EC%9D%98-%EC%96%B8%EA%B8%89%ED%95%9C-%EA%B3%84%EC%A0%95%EB%A7%8C-%EC%98%B5%EC%85%98%EC%9D%84-%EC%9E%84%EC%8B%9C%EB%A1%9C-%EC%88%A8%EA%B8%B4%EB%8B%A4) (PROD-462 완료 전 Composer 임시 계약; 이 authority에 따라 이 requirement는 MUST로 적용한다.)
+
+유니버설 앱은 새 글 작성 컴포넌트에서 게시글 공개 범위를 platform에 맞는 menu 또는 modal control로 선택할 수 있게 해야 한다(MUST). PROD-462가 Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한을 완료하기 전까지 새 글 작성 컴포넌트는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 선택·제출할 수 있게 해야 하며(MUST), `DIRECT`는 기존 enum과 서버 계약을 유지한 채 Composer 표면에서 숨겨야 한다(MUST).
 
 #### Scenario: 공개 범위 옵션 표시
 
-- **WHEN** 사용자가 작성 컴포넌트의 공개 설정 control을 연다
-- **THEN** 시스템은 `PUBLIC`, `UNLISTED`, `FOLLOWERS`, `DIRECT` 공개 범위 옵션을 표시한다
+- **WHEN** PROD-462가 완료되기 전에 사용자가 작성 컴포넌트의 공개 설정 control을 연다
+- **THEN** 시스템은 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 공개 범위 옵션만 표시한다
+- **AND** 시스템은 `DIRECT` 공개 범위 옵션, “언급한 계정만” 라벨, 설명 또는 아이콘을 표시하지 않는다
 - **AND** `PUBLIC` 옵션은 “공개”와 “모두가 볼 수 있어요.” 설명을 표시한다
 - **AND** `UNLISTED` 옵션은 “조용한 공개”와 “모두가 볼 수 있지만 검색되지 않아요.” 설명을 표시한다
 - **AND** `FOLLOWERS` 옵션은 “팔로워만”과 “팔로워만 볼 수 있어요.” 설명을 표시한다
-- **AND** `DIRECT` 옵션은 “언급한 계정만”과 “이 글에서 언급한 계정만 볼 수 있어요.” 설명을 표시한다
 - **AND** `PUBLIC` 옵션은 Lucide `GlobeIcon` 아이콘을 표시한다
 - **AND** `UNLISTED` 옵션은 Lucide `MoonIcon` 아이콘을 표시한다
 - **AND** `FOLLOWERS` 옵션은 Lucide `LockIcon` 아이콘을 표시한다
-- **AND** `DIRECT` 옵션은 Lucide `AtSignIcon` 아이콘을 표시한다
 
 #### Scenario: 기본 공개 범위
 
@@ -287,6 +311,19 @@ API는 게시글의 현재 콘텐츠를 GraphQL `PostContent` Node로 노출하�
 - **THEN** 시스템은 작성 컴포넌트의 선택 공개 범위를 사용자가 선택한 값으로 갱신한다
 - **AND** 시스템은 현재 선택된 공개 범위를 제출 전 컴포넌트에서 확인할 수 있게 표시한다
 - **AND** 시스템은 공개 설정 surface를 닫는다
+
+#### Scenario: DIRECT 신규 선택·제출 불가
+
+- **WHEN** 사용자가 Composer의 공개 설정 surface 또는 키보드 탐색을 통해 새 공개 범위로 `DIRECT`를 선택하거나 제출하려 한다
+- **THEN** 시스템은 `DIRECT` 선택지를 노출하지 않는다
+- **AND** 시스템은 새 `createPost` mutation에 `visibility: DIRECT`를 전달하지 않는다
+- **AND** 사용자는 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나를 선택해 기존 게시 동작을 계속 사용할 수 있다
+
+#### Scenario: PROD-462 복원 기준
+
+- **WHEN** PROD-462가 Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한을 완료하고 그 계약의 검증 증거가 승인된다
+- **THEN** Composer의 DIRECT 옵션 복원은 해당 완료를 근거로 한 별도 변경에서만 수행한다
+- **AND** 그 완료 전에는 이 임시 세 옵션 계약을 유지한다
 
 ### Requirement: Character count indicator
 

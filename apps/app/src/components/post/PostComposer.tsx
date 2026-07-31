@@ -1,7 +1,7 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { AtSignIcon, GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
+import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -40,12 +40,14 @@ const visibilityOptions = [
     label: '팔로워만',
     value: PostVisibility.FOLLOWERS,
   },
-  {
-    description: '이 글에서 언급한 계정만 볼 수 있어요.',
-    icon: AtSignIcon,
-    label: '언급한 계정만',
-    value: PostVisibility.DIRECT,
-  },
+  // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면 복원한다.
+  // Local Post는 현재 이 공개 범위를 선택해도 해당 계약을 보장할 수 없어 임시로 숨긴다.
+  // {
+  //   description: '이 글에서 언급한 계정만 볼 수 있어요.',
+  //   icon: AtSignIcon,
+  //   label: '언급한 계정만',
+  //   value: PostVisibility.DIRECT,
+  // },
 ] as const;
 type Visibility = (typeof visibilityOptions)[number]['value'];
 

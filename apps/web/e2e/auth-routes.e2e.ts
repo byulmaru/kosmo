@@ -25,7 +25,6 @@ const protectedHeadingRoutes = [
   { heading: '홈', path: '/home' },
   { heading: '글쓰기', path: '/compose' },
   { heading: '알림', path: '/notifications' },
-  { heading: '메뉴', path: '/menu' },
   { heading: '피드백 보내기', path: '/feedback' },
 ] as const;
 
@@ -140,25 +139,16 @@ test('개인정보 처리방침은 로그인 없이 공개되고 landing으로 �
   await expect(page.getByRole('link', { name: 'KOSMO로 돌아가기' })).toHaveAttribute('href', '/');
 });
 
-test('로그인 후 menu에서도 개인정보 처리방침으로 이동한다', async ({ context, page }) => {
+test('로그인 후 full shell에서도 개인정보 처리방침으로 이동한다', async ({ context, page }) => {
   const session = await createE2ESession();
   await setE2ESessionCookie(context, session.token);
-  await page.goto('/menu');
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto('/home');
 
   const privacyLink = page.getByRole('link', { name: '개인정보 처리방침' });
   await expect(privacyLink).toHaveAttribute('href', '/privacy');
   await privacyLink.click();
   await expect(page).toHaveURL(/\/privacy$/);
-});
-
-test('로그인 후 menu 재인증도 BFF 문서 탐색으로 시작한다', async ({ context, page }) => {
-  const session = await createE2ESession();
-  await setE2ESessionCookie(context, session.token);
-  await page.goto('/menu');
-
-  await page.getByRole('link', { name: '로그인 테스트' }).click();
-
-  await expect(page).toHaveURL(/\/home$/);
 });
 
 test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 유지한다', async ({ page }) => {
@@ -573,6 +563,12 @@ test.describe('로그인 사용자 보호 라우트', () => {
       'href',
       canonicalProfilePath,
     );
+    await expect(drawer.getByRole('link', { name: '글쓰기' })).toHaveCount(0);
+    await expect(drawer.getByRole('link', { name: '개인정보 처리방침' })).toHaveCount(0);
+    await expect(drawer.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
+      'href',
+      '/feedback',
+    );
     await expect(drawer.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
       'href',
       `${canonicalProfilePath}/following`,
@@ -595,6 +591,8 @@ test.describe('로그인 사용자 보호 라우트', () => {
     expect(
       Math.abs(labelBox!.y + labelBox!.height / 2 - (iconBox!.y + iconBox!.height / 2)),
     ).toBeLessThanOrEqual(1);
+
+    await page.setViewportSize({ height: 480, width: 390 });
 
     const drawerState = await drawer.evaluate((element) => {
       let fixedAncestor: HTMLElement | null = element as HTMLElement;

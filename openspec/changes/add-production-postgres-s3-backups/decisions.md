@@ -23,10 +23,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-549`, `PROD-550`
 - Status: Active
 - Context / Problem: production과 restore Pod가 S3에 접근해야 하지만 장기 access key를 배포하면 안 된다.
-- Decision Outcome: `byulmaru-kosmo-prod-postgres-backup` IAM role을 EKS Pod Identity로 `kosmo-prod/kosmo-postgres-backup`과 `kosmo-prod-restore/kosmo-postgres-backup`에 연결한다. Policy는 대상 bucket의 `kosmo-prod/` prefix에서 backup/restore에 필요한 List/Get/Put/Delete/multipart 동작만 허용한다.
-- Alternatives Considered: static access key Secret은 장기 credential을 만들므로 제외했다. IRSA는 기존 platform의 Pod Identity agent를 재사용하지 못하고 별도 OIDC trust/annotation을 요구해 제외했다. production과 restore 별도 role은 현재 동일 source 접근 계약에서 이점보다 관리 비용이 커 제외했다.
-- Consequences: Kosmo Terraform의 role 적용이 Kubernetes association보다 먼저여야 한다. Restore Pod도 기술적으로 write 권한을 받으므로 restore manifest에서 WAL archiver와 ScheduledBackup을 구성하지 않는 방어가 필요하다.
-- Confirmation / Follow-up: 두 association의 live 상태와 Pod 내부 기본 AWS credential chain 접근을 확인하고 repository/Secret에 access key가 없는지 검사한다.
+- Decision Outcome: `byulmaru-kosmo-prod-postgres-backup` IAM role을 EKS Pod Identity로 `kosmo-prod/kosmo-postgres-backup`과 `kosmo-prod-restore/kosmo-postgres-backup`에 연결한다. Policy는 Barman의 `HeadBucket` 확인에 필요한 bucket-level `ListBucket`과 `ListBucketMultipartUploads`를 전용 backup bucket 하나에 허용하고 Get/Put/Delete와 multipart 객체 동작은 `kosmo-prod/` prefix로 제한한다.
+- Alternatives Considered: static access key Secret은 장기 credential을 만들므로 제외했다. IRSA는 기존 platform의 Pod Identity agent를 재사용하지 못하고 별도 OIDC trust/annotation을 요구해 제외했다. production과 restore 별도 role은 현재 동일 source 접근 계약에서 이점보다 관리 비용이 커 제외했다. Bucket-level list에 `s3:prefix` 조건을 유지하는 방식은 prefix context가 없는 Barman의 필수 `HeadBucket` 요청을 거부하므로 제외했다.
+- Consequences: Kosmo Terraform의 role 적용이 Kubernetes association보다 먼저여야 한다. Bucket key metadata는 전용 backup bucket 범위에서 조회할 수 있지만 객체 내용과 변경 권한은 계속 `kosmo-prod/`에 제한된다. Restore Pod도 기술적으로 write 권한을 받으므로 restore manifest에서 WAL archiver와 ScheduledBackup을 구성하지 않는 방어가 필요하다.
+- Confirmation / Follow-up: 두 association의 live 상태와 Pod 내부 기본 AWS credential chain 접근을 확인하고 repository/Secret에 access key가 없는지 검사한다. IAM simulator와 실제 Barman WAL archive로 prefix 없는 bucket 확인과 prefix 제한 객체 작업을 검증한다.
 
 ### 공식 Barman Cloud CNPG-I plugin 사용
 
@@ -59,10 +59,10 @@
 - Authority / Provenance: Linear `PROD-546`, `PROD-551`
 - Status: Active
 - Context / Problem: 아직 production Application이 없는 동안 선언을 먼저 병합하되 dev database에 backup 자원이나 AWS identity 의존성을 추가하면 안 된다.
-- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. Dev manifest는 현재 상태를 유지한다.
+- Decision Outcome: `kosmo-postgres-backup` ServiceAccount, ObjectStore, Cluster plugin/WAL 설정과 ScheduledBackup은 prod values에서만 렌더한다. PostgreSQL Pod의 plugin이 ObjectStore를 읽을 수 있도록 같은 ServiceAccount에 동명 ObjectStore 하나의 `get`만 허용하는 namespaced Role/RoleBinding을 함께 렌더한다. Dev manifest는 현재 상태를 유지한다.
 - Alternatives Considered: 모든 환경에 resource를 만들고 dev에서 비활성화하는 방식은 불필요한 CR과 identity 계약을 남겨 제외했다. 별도 chart는 공통 Cluster 선언이 중복되어 제외했다.
-- Consequences: dev/prod 양쪽의 render test가 필요하고 production 값이 활성화되기 전에는 live backup 검증이 불가능하다.
-- Confirmation / Follow-up: dev에는 관련 resource/field가 없고 prod에는 정확한 ServiceAccount, ObjectStore, plugin과 ScheduledBackup이 있는지 snapshot 또는 manifest assertion으로 검증한다.
+- Consequences: dev/prod 양쪽의 render test가 필요하고 production 값이 활성화되기 전에는 live backup 검증이 불가능하다. ServiceAccount는 다른 ObjectStore나 write verb를 사용할 수 없다.
+- Confirmation / Follow-up: Role/RoleBinding은 API server dry-run을 통과해야 하고, 적용 후 exact ObjectStore `get`은 `kubectl auth can-i`로 검증한다. Backup과 WAL archive 성공을 실제 상태로 확인한다.
 
 ### 원본 쓰기 없는 격리 PITR rehearsal
 

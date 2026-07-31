@@ -36,6 +36,10 @@ import type { PostContentDocumentV1 } from '../post-content';
 type LocalPostInput = {
   accountId?: string;
   document: PostContentDocumentV1;
+  media?: readonly {
+    altText: string | null;
+    mediaId: string;
+  }[];
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
@@ -326,6 +330,13 @@ export async function createPost(
         const mediaIds = document.body.content.flatMap((block) =>
           block.type === 'media' ? [block.attrs.mediaId] : [],
         );
+        const media = input.media ?? [];
+        if (
+          media.length !== mediaIds.length ||
+          media.some(({ mediaId }, index) => mediaId !== mediaIds[index])
+        ) {
+          throw new ValidationError('Media cannot be attached', { field: 'media' });
+        }
         if (new Set(mediaIds).size !== mediaIds.length) {
           throw new ValidationError('Media cannot be attached', { field: 'media' });
         }
@@ -346,6 +357,9 @@ export async function createPost(
             );
           if (attachableMedia.length !== mediaIds.length) {
             throw new ValidationError('Media cannot be attached', { field: 'media' });
+          }
+          for (const { altText, mediaId } of media) {
+            await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
           }
         }
       }
@@ -430,8 +444,13 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch(() => undefined);
+      if (input.replyParentId !== undefined) {
+        await createReplyNotification(linkedPost.id, tx).catch((error) => {
+          console.error('Reply notification creation failed', {
+            error,
+            postId: linkedPost.id,
+          });
+        });
       }
 
       return { content, created: true, post: linkedPost };

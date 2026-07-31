@@ -2,13 +2,17 @@ apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
   name: {{ include "kosmo.postgresName" . }}
+{{- if eq .Values.env "prod" }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+{{- end }}
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: postgres
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  instances: 1
+  instances: {{ ternary 3 1 (eq .Values.env "prod") }}
 {{- if eq .Values.env "dev" }}
   enablePDB: false
 {{- end }}
