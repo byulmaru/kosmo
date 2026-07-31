@@ -362,6 +362,10 @@ function PostComposerContents({
             disabled={submitting}
             key={option.value}
             onPress={() => {
+              if (Platform.OS === 'web') {
+                editor.current?.blur();
+                setEditorFocused(false);
+              }
               setVisibility(option.value);
               setVisibilityOpen(false);
               if (Platform.OS === 'web') {
@@ -407,7 +411,13 @@ function PostComposerContents({
         accessibilityRole="button"
         accessibilityState={{ disabled: submitting }}
         disabled={submitting}
-        onPress={() => setVisibilityOpen(!visibilityOpen)}
+        onPress={() => {
+          if (Platform.OS === 'web') {
+            editor.current?.blur();
+            setEditorFocused(false);
+          }
+          setVisibilityOpen(!visibilityOpen);
+        }}
         style={({ pressed }) => [
           styles.visibilityTrigger,
           {
@@ -480,6 +490,7 @@ function PostComposerContents({
                 : theme.border,
           },
         ]}
+        testID="post-composer-editor-surface"
       >
         {replyMode ? null : visibilitySelector}
         <TextArea
