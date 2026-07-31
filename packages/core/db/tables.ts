@@ -200,21 +200,59 @@ export const Media = pgTable(
     id: id(),
     source: Enum.mediaSource('source').notNull(),
     state: Enum.mediaState('state').notNull(),
-    accountId: uuid('account_id')
-      .notNull()
-      .references(() => Accounts.id),
+    accountId: uuid('account_id').references(() => Accounts.id),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id),
     mediaType: text('media_type'),
     url: text('url'),
     altText: text('alt_text'),
-    storageReference: text('storage_reference').unique().notNull(),
-    uploadExpiresAt: datetime('upload_expires_at').notNull(),
+    storageReference: text('storage_reference').unique(),
+    uploadExpiresAt: datetime('upload_expires_at'),
     readyAt: datetime('ready_at'),
     createdAt: createdAt(),
   },
-  (table) => [index().on(table.accountId), index().on(table.profileId)],
+  (table) => [
+    check(
+      'media_source_state_fields_check',
+      sql`
+        (
+          ${table.source} = 'LOCAL'
+          AND ${table.accountId} IS NOT NULL
+          AND ${table.storageReference} IS NOT NULL
+          AND ${table.uploadExpiresAt} IS NOT NULL
+          AND (
+            (
+              ${table.state} = 'UPLOADING'
+              AND ${table.mediaType} IS NULL
+              AND ${table.url} IS NULL
+              AND ${table.readyAt} IS NULL
+            )
+            OR (
+              ${table.state} = 'READY'
+              AND ${table.mediaType} IS NOT NULL
+              AND ${table.url} IS NOT NULL
+              AND ${table.readyAt} IS NOT NULL
+            )
+          )
+        )
+        OR (
+          ${table.source} = 'REMOTE'
+          AND ${table.state} = 'READY'
+          AND ${table.accountId} IS NULL
+          AND ${table.storageReference} IS NULL
+          AND ${table.uploadExpiresAt} IS NULL
+          AND ${table.url} IS NOT NULL
+          AND ${table.readyAt} IS NULL
+        )
+      `,
+    ),
+    index().on(table.accountId),
+    index().on(table.profileId),
+    uniqueIndex('media_remote_url_unique')
+      .on(table.url)
+      .where(sql`${table.source} = 'REMOTE'`),
+  ],
 );
 
 export const Notifications = pgTable(

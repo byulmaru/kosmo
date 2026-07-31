@@ -17,7 +17,10 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentFromTextAndMedia,
+} from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -191,6 +194,35 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('mediaType이 없는 Ready Remote Media도 PostContent에서 조회한다', async () => {
+    const profile = await createRemoteActorProfile('nullable-media-type');
+    const media = await db
+      .insert(Media)
+      .values({
+        altText: '원격 이미지',
+        mediaType: null,
+        profileId: profile.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/media/without-type',
+      })
+      .returning()
+      .then(firstOrThrow);
+    const post = await createContentfulPost(profile.id, { mediaIds: [media.id] });
+
+    const result = await requestPostContent(encodeGlobalId('Post', post.id));
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.content.media, [
+      {
+        altText: '원격 이미지',
+        id: encodeGlobalId('Media', media.id),
+        mediaType: null,
+        url: media.url,
+      },
+    ]);
+  });
+
   test('여러 PostContent의 Media를 요청당 한 번에 batch 조회한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const firstMedia = await createReadyMedia(auth.account.id, auth.profile.id);
@@ -328,7 +360,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(hidden);
     assert.equal(hidden.data?.node, null);
     assert.equal(JSON.stringify(hidden).includes(media.url!), false);
-    assert.equal(JSON.stringify(hidden).includes(media.storageReference), false);
+    assert.equal(JSON.stringify(hidden).includes(media.storageReference!), false);
   });
 
   test('불완전한 Media representation은 partial list 대신 media field 전체를 unavailable로 만든다', async () => {
@@ -336,9 +368,15 @@ describe('Post Reply GraphQL 경계', () => {
     const cases = [
       (mediaId: string) => db.delete(Media).where(eq(Media.id, mediaId)),
       (mediaId: string) =>
-        db.update(Media).set({ state: MediaState.UPLOADING }).where(eq(Media.id, mediaId)),
-      (mediaId: string) => db.update(Media).set({ url: null }).where(eq(Media.id, mediaId)),
-      (mediaId: string) => db.update(Media).set({ mediaType: null }).where(eq(Media.id, mediaId)),
+        db
+          .update(Media)
+          .set({
+            mediaType: null,
+            readyAt: null,
+            state: MediaState.UPLOADING,
+            url: null,
+          })
+          .where(eq(Media.id, mediaId)),
     ];
 
     for (const invalidate of cases) {
@@ -1055,7 +1093,7 @@ type PostContentNode = {
     media: Array<{
       altText: string | null;
       id: string;
-      mediaType: string;
+      mediaType: string | null;
       url: string;
     }> | null;
   };
@@ -1377,6 +1415,7 @@ const createContentfulPost = async (
     bodyText,
     createdAt,
     id,
+    mediaIds,
     replyParentId,
     repostSourceId,
     state = PostState.ACTIVE,
@@ -1385,6 +1424,7 @@ const createContentfulPost = async (
     bodyText?: string;
     createdAt?: Temporal.Instant;
     id?: string;
+    mediaIds?: string[];
     replyParentId?: string;
     repostSourceId?: string;
     state?: PostState;
@@ -1399,7 +1439,12 @@ const createContentfulPost = async (
   const content = await db
     .insert(PostContents)
     .values({
-      document: postContentDocumentFromText(bodyText ?? post.id),
+      document: mediaIds
+        ? postContentDocumentFromTextAndMedia(
+            bodyText ?? '',
+            mediaIds.map((mediaId) => ({ mediaId })),
+          )
+        : postContentDocumentFromText(bodyText ?? post.id),
       postId: post.id,
     })
     .returning()

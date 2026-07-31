@@ -40,6 +40,9 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (media.state === MediaState.READY) {
         return { media };
       }
+      if (media.storageReference === null) {
+        throw new Error('Uploading Local Media is missing its storage reference');
+      }
 
       const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
       const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;

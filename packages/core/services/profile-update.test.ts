@@ -93,26 +93,26 @@ const createMedia = ({
   profileId,
   source = MediaSource.LOCAL,
   state = MediaState.READY,
-  url = state === MediaState.READY ? `https://media.example/${crypto.randomUUID()}.webp` : null,
 }: {
   accountId: string;
   profileId: string;
   source?: MediaSource;
   state?: MediaState;
-  url?: string | null;
 }) =>
   db
     .insert(Media)
     .values({
-      accountId,
+      accountId: source === MediaSource.LOCAL ? accountId : null,
       mediaType: state === MediaState.READY ? 'image/webp' : null,
       profileId,
-      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      readyAt:
+        source === MediaSource.LOCAL && state === MediaState.READY ? Temporal.Now.instant() : null,
       source,
       state,
-      storageReference: `u_${crypto.randomUUID()}`,
-      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
-      url,
+      storageReference: source === MediaSource.LOCAL ? `u_${crypto.randomUUID()}` : null,
+      uploadExpiresAt:
+        source === MediaSource.LOCAL ? Temporal.Now.instant().add({ minutes: 5 }) : null,
+      url: state === MediaState.READY ? `https://media.example/${crypto.randomUUID()}.webp` : null,
     })
     .returning()
     .then(firstOrThrow);
@@ -225,24 +225,13 @@ test('사용할 수 없는 avatar/header Media 하나는 scalar·policy·관계�
     profileId: target.profile.id,
     state: MediaState.UPLOADING,
   });
-  const missingUrl = await createMedia({
-    accountId: target.account.id,
-    profileId: target.profile.id,
-    url: null,
-  });
   await db.insert(ProfileMedia).values({
     kind: ProfileMediaKind.AVATAR,
     mediaId: currentAvatar.id,
     profileId: target.profile.id,
   });
 
-  for (const invalidHeaderId of [
-    wrongProfile.id,
-    remote.id,
-    uploading.id,
-    missingUrl.id,
-    crypto.randomUUID(),
-  ]) {
+  for (const invalidHeaderId of [wrongProfile.id, remote.id, uploading.id, crypto.randomUUID()]) {
     await assert.rejects(
       updateProfile({
         accountId: target.account.id,

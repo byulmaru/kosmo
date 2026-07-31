@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
-import { PUBLIC_COLLECTION } from '@fedify/vocab';
+import { MIMEType } from 'node:util';
+import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -9,6 +10,70 @@ import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+
+const noNetworkDocumentLoader = async (): Promise<never> => {
+  throw new TypeError('Remote attachment lookup is disabled');
+};
+
+const isImageAttachment = (attachment: Document): boolean => {
+  if (attachment instanceof Image) {
+    return true;
+  }
+  if (!attachment.mediaType) {
+    return false;
+  }
+
+  try {
+    return new MIMEType(attachment.mediaType).type === 'image';
+  } catch {
+    return false;
+  }
+};
+
+export const projectRemoteNoteMedia = async (note: Note) => {
+  const candidates: {
+    altText: string | null;
+    mediaType: string | null;
+    url: string;
+  }[] = [];
+  const urls = new Set<string>();
+
+  for await (const attachment of note.getAttachments({
+    contextLoader: noNetworkDocumentLoader,
+    crossOrigin: 'trust',
+    documentLoader: noNetworkDocumentLoader,
+    suppressError: true,
+  })) {
+    if (!(attachment instanceof Document) || !isImageAttachment(attachment)) {
+      continue;
+    }
+    if (candidates.length === 4) {
+      break;
+    }
+    if (attachment.urls.length !== 1) {
+      throw new TypeError('Remote image attachment must have exactly one representation URL');
+    }
+
+    const representation = attachment.urls[0];
+    const url = representation instanceof Link ? representation.href : representation;
+    if (!url || !isHttpUri(url)) {
+      throw new TypeError('Remote image attachment representation URL must use HTTP(S)');
+    }
+
+    const canonicalUrl = new URL(url.href).href;
+    if (urls.has(canonicalUrl)) {
+      throw new TypeError('Remote image attachment representation URL must be unique');
+    }
+    urls.add(canonicalUrl);
+    candidates.push({
+      altText: attachment.name?.toString() ?? null,
+      mediaType: attachment.mediaType,
+      url: canonicalUrl,
+    });
+  }
+
+  return candidates;
+};
 
 const resolveReplyParentId = async (
   context: InboxContext<void>,
@@ -63,12 +128,14 @@ export const handleInboundCreateNote = async ({
   }
 
   let document;
+  let media;
   try {
     document = projectRemoteNoteContent({
       content: note.content?.toString() ?? null,
       mediaType: note.mediaType,
       summary: note.summary?.toString() ?? null,
     });
+    media = await projectRemoteNoteMedia(note);
   } catch (error) {
     if (error instanceof TypeError) {
       return;
@@ -78,6 +145,7 @@ export const handleInboundCreateNote = async ({
 
   const input = {
     document,
+    media,
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId,
@@ -89,6 +157,9 @@ export const handleInboundCreateNote = async ({
   try {
     await createPost(replyParentId ? { ...input, replyParentId } : input);
   } catch (error) {
+    if (error instanceof ValidationError && error.field === 'media') {
+      return;
+    }
     if (
       !replyParentId ||
       !(
