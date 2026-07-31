@@ -17,7 +17,7 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **THEN** 시스템은 Fedify vocabulary 객체를 사용해 Image를 읽는다
 - **AND** 각 Image는 서로 다른 canonical HTTP(S) 표현 URL을 정확히 하나 가져야 한다
 - **AND** 시스템은 Image의 nullable media type을 해석하거나 정규화하지 않고 그대로 보존한다
-- **AND** 시스템은 Image의 nullable name 문자열을 PostContent Media node의 Alt Text로 보존한다
+- **AND** 시스템은 Image의 nullable name 문자열을 Remote Media의 Alt Text로 보존한다
 - **AND** Image attachment metadata나 byte를 위한 추가 원격 fetch를 수행하지 않는다
 
 #### Scenario: Image attachment가 4개를 초과함
@@ -51,14 +51,17 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **THEN** 시스템은 Note 작성자 Remote Profile을 소유자로 하는 `REMOTE + READY` Media를 생성한다
 - **AND** canonical Image URL을 `media.url`에 저장한다
 - **AND** nullable media type을 `media.mediaType`에 저장한다
-- **AND** 생성된 Media ID와 Image name Alt Text를 attachment 순서대로 PostContent Media node에 기록한다
+- **AND** nullable Image name을 `media.altText`에 저장한다
+- **AND** 생성된 Media ID를 attachment 순서대로 PostContent Media node에 기록한다
 - **AND** 별도 `remote_url` column이나 Post-Media 관계 테이블을 만들지 않는다
 
 #### Scenario: 같은 작성자의 기존 Remote Media 재사용
 
 - **WHEN** 같은 canonical URL과 같은 Remote Profile의 Remote Media가 이미 있다
 - **THEN** 시스템은 새 Media를 만들지 않고 기존 Media identity를 PostContent Media node에서 재사용한다
-- **AND** 기존 Media의 URL, media type과 Profile을 duplicate Create로 갱신하지 않는다
+- **AND** 새 object의 Image name은 기존 Media의 Alt Text를 갱신한다
+- **AND** 기존 Media의 URL, media type과 Profile은 갱신하지 않는다
+- **AND** duplicate Create는 Alt Text를 포함한 기존 Media metadata를 갱신하지 않는다
 
 #### Scenario: 다른 작성자가 소유한 URL 충돌
 

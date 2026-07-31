@@ -382,10 +382,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
     result.content.document.body.content.flatMap((block) =>
       block.type === 'media' ? [block.attrs] : [],
     ),
-    [
-      { mediaId: mediaIdByUrl.get(firstUrl) },
-      { mediaId: mediaIdByUrl.get(secondUrl) },
-    ],
+    [{ mediaId: mediaIdByUrl.get(firstUrl) }, { mediaId: mediaIdByUrl.get(secondUrl) }],
   );
 });
 

@@ -328,7 +328,7 @@ describe('Post Reply GraphQL 경계', () => {
     assertNoGraphQLErrors(hidden);
     assert.equal(hidden.data?.node, null);
     assert.equal(JSON.stringify(hidden).includes(media.url!), false);
-    assert.equal(JSON.stringify(hidden).includes(media.storageReference), false);
+    assert.equal(JSON.stringify(hidden).includes(media.storageReference!), false);
   });
 
   test('불완전한 Media representation은 partial list 대신 media field 전체를 unavailable로 만든다', async () => {
@@ -336,9 +336,15 @@ describe('Post Reply GraphQL 경계', () => {
     const cases = [
       (mediaId: string) => db.delete(Media).where(eq(Media.id, mediaId)),
       (mediaId: string) =>
-        db.update(Media).set({ state: MediaState.UPLOADING }).where(eq(Media.id, mediaId)),
-      (mediaId: string) => db.update(Media).set({ url: null }).where(eq(Media.id, mediaId)),
-      (mediaId: string) => db.update(Media).set({ mediaType: null }).where(eq(Media.id, mediaId)),
+        db
+          .update(Media)
+          .set({
+            mediaType: null,
+            readyAt: null,
+            state: MediaState.UPLOADING,
+            url: null,
+          })
+          .where(eq(Media.id, mediaId)),
     ];
 
     for (const invalidate of cases) {
