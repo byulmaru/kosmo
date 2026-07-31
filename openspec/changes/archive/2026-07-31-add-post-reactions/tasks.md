@@ -1,5 +1,11 @@
 ## 1. PROD-395 Reaction 저장 계약
 
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-395](https://linear.app/byulmaru/issue/PROD-395/reaction%EC%9D%84-%EC%A0%80%EC%9E%A5%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하고 같은 Profile/Post/Type 조합에 하나만 존재하며 다른 Type은 공존한다.
@@ -54,9 +60,9 @@ Reaction이 Unicode 문자열 Type, Author Profile과 Target Post를 보존하�
 
 **Authority / Provenance**
 
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0012](../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md)
-- [ADR 0019](../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0012](../../../../docs/domain/decisions/0012-post-interaction-followup-clarifications.md)
+- [ADR 0019](../../../../docs/domain/decisions/0019-selected-profile-authorization-boundary.md)
 - [PROD-405](https://linear.app/byulmaru/issue/PROD-405/reaction을-삭제한다)
 - [PROD-439](https://linear.app/byulmaru/issue/PROD-439/kosmo에서-uploading-local-media를-생성한다)
 
@@ -85,8 +91,8 @@ Reaction Owner가 대상 Post의 현재 조회 가능성과 무관하게 자신�
 
 **Authority / Provenance**
 
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
 - [PROD-406](https://linear.app/byulmaru/issue/PROD-406/reaction-type%EB%B3%84-%EA%B0%9C%EC%88%98%EB%A5%BC-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
@@ -112,6 +118,12 @@ Post를 조회할 수 있는 viewer가 `Post.reactionCounts`에서 현재 Reacti
 
 ## 5. PROD-407 Reaction Type별 Profile 조회
 
+**Authority / Provenance**
+
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [PROD-407](https://linear.app/byulmaru/issue/PROD-407/reaction%EC%9D%84-%EB%82%A8%EA%B8%B4-profile%EC%9D%84-%EC%A1%B0%ED%9A%8C%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가능한 Profile을 중복 없는 Relay connection으로 탐색한다.
@@ -134,9 +146,9 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 **Authority / Provenance**
 
-- [Notification canonical 객체](../../../docs/domain/objects/notification.md)
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [Notification canonical 객체](../../../../docs/domain/objects/notification.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
 - [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
@@ -227,8 +239,8 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 **Authority / Provenance**
 
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [Reaction UI 디자인](../../../docs/design/reactions.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [Reaction UI 디자인](../../../../docs/design/reactions.md)
 - `PROD-449`
 - `PROD-418`의 2026-07-25 설계 결정 댓글
 
@@ -262,9 +274,9 @@ Post를 조회할 수 있는 viewer가 한 Reaction Type에 반응한 조회 가
 
 **Authority / Provenance**
 
-- [Notification canonical 객체](../../../docs/domain/objects/notification.md)
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [Notification canonical 객체](../../../../docs/domain/objects/notification.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
 - [PROD-419](https://linear.app/byulmaru/issue/PROD-419/reaction-notification%EC%9D%84-%EC%A0%95%EB%A6%AC%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
@@ -289,8 +301,8 @@ Reaction 삭제 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 
 
 **Authority / Provenance**
 
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0016](../../../docs/domain/decisions/0016-reaction-selector-current-state.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0016](../../../../docs/domain/decisions/0016-reaction-selector-current-state.md)
 - [PROD-472](https://linear.app/byulmaru/issue/PROD-472/reaction-selector%EC%9A%A9-%ED%98%84%EC%9E%AC-%EC%83%81%ED%83%9C-%EC%A1%B0%ED%9A%8C%EC%99%80-type-%EC%82%AD%EC%A0%9C-%EA%B3%84%EC%95%BD%EC%9D%84-%EB%B3%B4%EC%99%84%ED%95%9C%EB%8B%A4)
 
 **Deliverable**
@@ -320,9 +332,9 @@ Reaction selector가 selected Profile이 Post에 남긴 현재 Reaction 관계�
 
 **Authority / Provenance**
 
-- [Reaction canonical 객체](../../../docs/domain/objects/reaction.md)
-- [ADR 0010](../../../docs/domain/decisions/0010-post-interaction-contracts.md)
-- [Reaction UI 디자인](../../../docs/design/reactions.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [ADR 0010](../../../../docs/domain/decisions/0010-post-interaction-contracts.md)
+- [Reaction UI 디자인](../../../../docs/design/reactions.md)
 - [PROD-576](https://linear.app/byulmaru/issue/PROD-576/reaction-type을-최초-reaction-생성-시각-순으로-안정적으로-표시한다)
 
 **Deliverable**
@@ -355,6 +367,14 @@ Reaction summary와 Profile modal의 Type이 각 Type에 현재 존재하는 최
 
 ## 12. PROD-390 Reaction 통합 검증·정합성 확인·archive
 
+**Authority / Provenance**
+
+- [Issue/OpenSpec workflow](../../../../memory/issue-openspec-workflow.md)
+- [Reaction canonical 객체](../../../../docs/domain/objects/reaction.md)
+- [Notification canonical 객체](../../../../docs/domain/objects/notification.md)
+- [Reaction UI 디자인](../../../../docs/design/reactions.md)
+- [PROD-390](https://linear.app/byulmaru/issue/PROD-390/reaction-%EA%B3%84%EC%95%BD%EC%9D%84-%ED%86%B5%ED%95%A9-%EA%B2%80%EC%A6%9D%ED%95%98%EA%B3%A0-openspec%EC%9D%84-archive%ED%95%9C%EB%8B%A4)
+
 **Deliverable**
 
 저장, mutation, 조회, 독립 UI와 Notification lifecycle이 하나의 Reaction 사용자 흐름으로 동작하고 canonical 문서와 active specs에 동기화된다.
@@ -370,7 +390,7 @@ Reaction summary와 Profile modal의 Type이 각 Type에 현재 존재하는 최
 - 허용 Type add/delete, viewer-independent count, viewer-filtered Profile 목록, selector/summary, 자기 알림 억제, inbox/read/이동과 삭제 cleanup을 연결한 통합 흐름을 검증한다.
 - canonical 문서·OpenSpec delta·구현 정합성, archive diff와 archive 후 strict validation을 확인한다.
 
-- [ ] 12.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
-- [ ] 12.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
-- [ ] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
-- [ ] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [x] 12.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
+- [x] 12.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
+- [x] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
+- [x] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
