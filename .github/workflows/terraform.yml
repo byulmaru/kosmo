@@ -351,12 +351,44 @@ jobs:
             echo "TF_PLAN_SOURCE_URL=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${plan_run_id}"
           } >> "${GITHUB_ENV}"
 
+      - name: Compare reviewed and current Terraform plans
+        working-directory: ${{ env.TF_ROOT }}
+        run: |
+          set -euo pipefail
+
+          cleanup_plan_comparison() {
+            rm -f current.tfplan current.tfplan.txt
+          }
+          trap cleanup_plan_comparison EXIT
+
+          terraform plan -input=false -out=current.tfplan
+          terraform show -no-color current.tfplan > current.tfplan.txt
+
+          if ! cmp -s terraform.tfplan.txt current.tfplan.txt; then
+            {
+              echo "## Terraform plan mismatch"
+              echo
+              echo "The current main plan differs from the reviewed plan; refusing to apply either plan."
+              echo
+              echo "<details>"
+              echo "<summary>Current main plan</summary>"
+              echo
+              echo '```terraform'
+              sed -n '1,600p' current.tfplan.txt
+              echo '```'
+              echo "</details>"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "Current main plan differs from the reviewed pull request plan; refusing to apply." >&2
+            exit 1
+          fi
+
       - name: Summarize Terraform apply
         run: |
           {
             echo "## Terraform apply"
             echo
-            echo "Applying the reviewed saved plan from \`${TF_PLAN_SOURCE_EVENT}\` commit \`${TF_PLAN_SOURCE_COMMIT}\`."
+            echo "The current main plan matches the reviewed plan from \`${TF_PLAN_SOURCE_EVENT}\` commit \`${TF_PLAN_SOURCE_COMMIT}\`."
+            echo "Applying that reviewed saved plan."
             echo "Terraform will perform its native stale-plan validation before changing infrastructure."
             echo "- Plan workflow run: [${TF_PLAN_SOURCE_RUN_ID}](${TF_PLAN_SOURCE_URL})"
           } >> "${GITHUB_STEP_SUMMARY}"
