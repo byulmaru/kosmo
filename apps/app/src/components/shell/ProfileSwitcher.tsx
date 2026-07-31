@@ -202,16 +202,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     };
   }, [open, surface]);
 
-  const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
-    if (
-      requestNavigation(() => {
-        selectProfile(id, operationVersion);
-      })
-    ) {
-      dismissPicker();
-      return;
-    }
-
+  const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
     setError(null);
     commitSelect({
       variables: { id },
@@ -231,26 +222,17 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     });
   };
 
-  const createProfile = () => {
-    if (requestNavigation(createProfile)) {
+  const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
+    const action = () => commitProfileSelection(id, operationVersion);
+    if (requestNavigation(action)) {
       dismissPicker();
       return;
     }
 
-    const operationVersion = dismissalVersionRef.current;
-    const normalized = handle.trim();
-    if (!normalized) {
-      setError('프로필 핸들을 입력해주세요.');
-      return;
-    }
+    action();
+  };
 
-    const result = profileHandleSchema.safeParse(normalized);
-
-    if (!result.success) {
-      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
-      return;
-    }
-
+  const commitProfileCreation = (normalized: string, operationVersion: number) => {
     setError(null);
     commitCreate({
       variables: { handle: normalized },
@@ -265,11 +247,35 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         });
         setHandle('');
         setCreating(false);
-        selectProfile(response.createProfile.profile.id, operationVersion);
+        commitProfileSelection(response.createProfile.profile.id, operationVersion);
       },
       onError: (cause) =>
         setOperationError(operationVersion, cause.message || '프로필을 생성하지 못했습니다.'),
     });
+  };
+
+  const createProfile = () => {
+    const normalized = handle.trim();
+    if (!normalized) {
+      setError('프로필 핸들을 입력해주세요.');
+      return;
+    }
+
+    const result = profileHandleSchema.safeParse(normalized);
+
+    if (!result.success) {
+      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
+      return;
+    }
+
+    const operationVersion = dismissalVersionRef.current;
+    const action = () => commitProfileCreation(normalized, operationVersion);
+    if (requestNavigation(action)) {
+      dismissPicker();
+      return;
+    }
+
+    action();
   };
 
   const surfaceBounds = !redesignedWeb

@@ -894,6 +894,23 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(await db.select().from(ProfileMedia), []);
   });
 
+  test('maps invalid Profile media errors to the public GraphQL input field', async () => {
+    const auth = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const otherHeader = await createReadyMedia(other.account.id, other.profile.id, 'other-header');
+
+    const result = await requestGraphQL(
+      `mutation RejectOtherProfileMedia($headerId: ID) {
+        updateProfile(input: { headerId: $headerId }) { profile { id } }
+      }`,
+      { headerId: globalId('Media', otherHeader.id) },
+      auth.token,
+    );
+
+    assert.equal(result.data, null);
+    assert.equal(result.errors?.[0]?.extensions?.field, 'headerId');
+  });
+
   test('exposes linked Profile media publicly while keeping standalone Media Nodes owner-only', async () => {
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
