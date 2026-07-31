@@ -3177,7 +3177,7 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('첫 Parent draft');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(replyButtons[1]!);
     await userEvent.click(
@@ -3642,7 +3642,7 @@ export const ReplyModalPresentation: Story = {
     await userEvent.click(continueButton);
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(body).toHaveValue('작성 중인 답글');
-    expect(body).toHaveFocus();
+    await waitFor(() => expect(body).toHaveFocus());
 
     await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
     await userEvent.click(
