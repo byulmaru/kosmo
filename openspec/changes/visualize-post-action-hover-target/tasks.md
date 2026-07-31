@@ -58,6 +58,9 @@ background로 드러나고, active·pressed·blocked 상태와 Action Bar geomet
 
 ## 2. 시각 검토 보정 — glyph 중심 원형과 Reaction like tint (Superseded)
 
+이 section은 2026-07-31 중간 시각 결정을 완료했던 역사 기록이다. 아래 `surface` deliverable과 verification은
+section 3의 최종 `primary` 또는 `like` tint 계약으로 대체됐으며 현재 deliverable로 해석하지 않는다.
+
 **Authority / Provenance**
 
 - `docs/design/colors.md`
@@ -135,12 +138,13 @@ Web의 비터치 pointer가 Post Action control에 hover하면 click target은 �
 
 Web의 비터치 pointer가 Reply, Repost, Bookmark 또는 More에 hover하면 glyph 중심 28×28 원형은 30% opacity의
 semantic `primary` background로 표시되고 glyph는 불투명 `primary` foreground로 그 위에 표시된다. Reaction은
-같은 표현에 기존 `like`를 사용한다.
+같은 표현에 기존 `like`를 사용한다. Reply와 Repost의 count는 hover tint에 포함하지 않고 기존 색을 유지한다.
 
 **Guardrails**
 
 - Reply·Repost·Reaction·Bookmark의 기존 50×28 target과 More의 기존 28×28 target을 변경하지 않는다.
 - 28×28 background는 count와 glyph를 덮거나 pointer event를 받지 않으며 glyph는 명시적인 상위 layer에 둔다.
+  Reply·Repost count 색은 hover 전후에 바뀌지 않는다.
 - pending·disabled·resolution-required, Web touch와 Native의 기존 제외 경계를 유지한다.
 - action 기능·count·mutation·execution eligibility·Relay cache·ThemeProvider·dependency를 변경하지 않는다.
 - Reply·Repost·Bookmark·More를 서로 다른 tint로 분리하는 후속 범위는 포함하지 않는다.
@@ -148,7 +152,8 @@ semantic `primary` background로 표시되고 glyph는 불투명 `primary` foreg
 **Verification**
 
 - 기존 `ActionBarCatalog` interaction에서 Reply·Repost·Bookmark·More의 30% `primary` background와 불투명
-  `primary` foreground, glyph layer 순서와 hover 종료 시 default foreground 복귀를 검증한다.
+  `primary` foreground, background `z-index: 0`과 glyph `z-index: 1`, Reply·Repost count 색 유지 및 hover 종료
+  시 default foreground 복귀를 검증한다.
 - Reaction의 30% `like` background·불투명 `like` foreground와 selected 표현을 그대로 검증한다.
 - App 전체 test, 변경 파일 lint·format, OpenSpec strict, light Web dev 시각 관찰을 수행한다.
 - dark·Web touch·Android·iOS runtime은 미실행으로 구분한다.
@@ -160,6 +165,8 @@ semantic `primary` background로 표시되고 glyph는 불투명 `primary` foreg
 - [x] 3.3 canonical과 OpenSpec proposal·design·decision·spec을 최종 시각 결정에 맞춘다.
 - [x] 3.4 App 전체 test, lint·format, OpenSpec strict와 light Web dev 검증을 완료한다.
 - [x] 3.5 Linear와 PR 본문을 최종 계약·검증 결과에 맞춰 동기화한다.
+- [x] 3.6 리뷰에서 확인한 count hover tint 회귀를 Storybook RED로 재현하고 glyph와 count 색을 분리하며
+      background·glyph layer 순서 assertion을 보강한다.
 
 **Verification Record (2026-07-31, primary tint 보정)**
 
@@ -168,6 +175,8 @@ semantic `primary` background로 표시되고 glyph는 불투명 `primary` foreg
   fixture warning·error boundary log·React act warning은 남지만 실패는 없다.
 - 새 hover 계약을 먼저 실행해 기존 `surface` 구현에서 `primary` background 기대가 실패하는 RED를 확인했고,
   기본 `primary` 30% background·불투명 foreground와 glyph `z-index: 1` 구현 뒤 GREEN을 확인했다.
+- 리뷰에서 발견한 Reply·Repost count hover tint 회귀를 Storybook RED로 재현하고 glyph와 count 색을 분리한 뒤
+  256/256 GREEN을 확인했다. background `z-index: 0`과 glyph `z-index: 1`도 함께 고정했다.
 - 변경 TypeScript의 ESLint, 변경 전체의 Prettier, `git diff --check`와 OpenSpec strict validation을 통과했다.
 - API `3300`, Web BFF `5474`를 유지한 채 App `5473`을 현재 worktree 소스로 재기동했고, 사용자 브라우저의
   `/home`에서 최신 glyph foreground layer가 로드됨을 확인했다.

@@ -16,12 +16,12 @@ PROD-595와 `docs/design/post-action-bar.md`가 확정한 Web hover target 표�
   `like` tint와 같은 색 foreground를 사용해 선명하게 보였다.
 - Decision Outcome: 모든 hover visual은 16×16 glyph 중심의 28×28 원형과 30% semantic tint background,
   불투명 foreground를 사용한다. Reply, Repost, Bookmark와 More는 `primary`, Reaction은 `like`를 사용한다.
-  glyph를 background보다 명시적인 상위 layer에 두고 click target geometry를 유지한다.
+  glyph를 background보다 명시적인 상위 layer에 두고 Reply·Repost count 색과 click target geometry를 유지한다.
 - Alternatives Considered: 일반 action을 계속 불투명 `surface`로 두는 안은 icon을 덮는 실제 시각 결과 때문에
   제외했다. 액션마다 서로 다른 tint를 배정하는 안은 후속 방향으로 남기고 현재는 KOSMO 공통 `primary`로
   통일했다.
-- Consequences: 공통 control의 기본 hover background·foreground가 `primary`로 바뀌고 Reaction만 `like`
-  override를 유지한다. action 기능이나 layout은 바뀌지 않는다.
+- Consequences: 공통 control의 기본 hover background·glyph foreground가 `primary`로 바뀌고 Reaction만
+  `like` override를 유지한다. count 색, action 기능과 layout은 바뀌지 않는다.
 - Confirmation / Follow-up: light Web Storybook과 dev에서 일반 action의 30% `primary` background·불투명
   foreground, Reaction의 기존 `like` 표현, layer 순서와 click target 불변을 검증한다.
 

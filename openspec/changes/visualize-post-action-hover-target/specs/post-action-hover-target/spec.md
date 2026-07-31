@@ -8,12 +8,13 @@ approved glyph-centered hover affordance. Universal client는 비터치 Web poin
 한다(MUST). Reply, Repost, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity의
 background로 사용하고 hover foreground에는 불투명 `primary`를 사용해야 한다(MUST). Reaction은 semantic
 `like`를 30% opacity의 background로 사용하고 heart foreground에는 불투명 `like`를 사용해야 한다(MUST).
+Reply와 Repost의 count는 hover tint에 포함하지 않고 기존 색을 유지해야 한다(MUST).
 
 #### Scenario: Social action target에 hover한다
 
 - **WHEN** 비터치 Web pointer가 활성 Reply, Repost 또는 Bookmark control에 hover하면
 - **THEN** 50×28 click target은 유지되고 glyph 중심의 28×28 `primary` 원형 background가 30% opacity로
-  표시되며 glyph foreground는 불투명 `primary`로 표시된다
+  표시되며 glyph foreground는 불투명 `primary`로 표시되고 count는 기존 색을 유지한다
 
 #### Scenario: Reaction target에 hover한다
 

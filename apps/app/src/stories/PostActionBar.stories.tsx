@@ -684,6 +684,7 @@ export const ActionBarCatalog: Story = {
     expect(getComputedStyle(replyHover).height).toBe('28px');
     expect(getComputedStyle(replyHover).width).toBe('28px');
     expect(getComputedStyle(replyHover).pointerEvents).toBe('none');
+    expect(getComputedStyle(replyHover).zIndex).toBe('0');
     const replyGlyph = within(defaultReply).getByTestId('post-action-reply-glyph');
     expect(getComputedStyle(replyGlyph).zIndex).toBe('1');
     const replyHoverBounds = replyHover.getBoundingClientRect();
@@ -700,6 +701,7 @@ export const ActionBarCatalog: Story = {
       0,
     );
     const replyCount = defaultReply.querySelector('[dir="auto"]') as HTMLElement;
+    expect(replyCount).toHaveStyle({ color: colors.light.textSecondary });
     const replyCountBounds = replyCount.getBoundingClientRect();
     expect(replyCountBounds.left - replyIconBounds.right).toBeCloseTo(spacing.xs, 0);
     expect(defaultReply.getBoundingClientRect().width).toBe(50);
@@ -741,10 +743,16 @@ export const ActionBarCatalog: Story = {
       const hover = within(button).getByTestId(`post-action-${testID}-hover`);
       expect(hover).toHaveStyle({ backgroundColor: colors.light.primary });
       expect(getComputedStyle(hover).opacity).toBe('0.3');
+      expect(getComputedStyle(hover).zIndex).toBe('0');
       expect(icon).toHaveAttribute('stroke', colors.light.primary);
       expect(
         getComputedStyle(within(button).getByTestId(`post-action-${testID}-glyph`)).zIndex,
       ).toBe('1');
+      if (testID === 'repost') {
+        expect(button.querySelector('[dir="auto"]')).toHaveStyle({
+          color: colors.light.textSecondary,
+        });
+      }
       await userEvent.unhover(button);
       expect(icon).toHaveAttribute('stroke', colors.light.textSecondary);
       expect(within(button).queryByTestId(`post-action-${testID}-hover`)).toBeNull();

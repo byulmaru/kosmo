@@ -23,6 +23,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   표시한다. Reply, Repost, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity로 사용하고
   hover foreground에는 불투명 `primary`를 사용한다. Reaction은 기존 semantic `like`를 30% opacity로
   사용하고 heart foreground에는 불투명 `like`를 사용해 옅은 원형 위에서도 glyph가 선명하게 보이게 한다.
+  Reply와 Repost의 count 색은 hover tint에 포함하지 않고 기존 default 또는 active 색을 유지한다.
 - 원형 hover background는 실제 interactive target의 크기·padding·간격을 바꾸지 않는다. Reply, Repost,
   Reaction과 Bookmark의 target은 계속 50×28px이고 More는 28×28px이며, background는 count를 감싸거나
   인접 action target과 겹치지 않는다.
@@ -169,8 +170,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   포함하고 서로 겹치지 않는지도 확인한다.
 - Web pointer hover에서는 glyph 중심 28×28 원형 background, social action의 50×28 click target과 More의
   28×28 click target 보존, 일반 action의 30% `primary` background·불투명 `primary` foreground,
-  Reaction의 30% `like` background·불투명 `like` foreground·selected 표현과 기존 pressed 상태 보존을
-  검증한다.
+  Reply·Repost count 색 유지, Reaction의 30% `like` background·불투명 `like` foreground·selected 표현과
+  기존 pressed 상태 보존을 검증한다.
   blocked action, Web touch 입력과 Native에는 hover background가 나타나지 않는지 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
   두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px

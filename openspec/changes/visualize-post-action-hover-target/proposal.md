@@ -8,6 +8,7 @@ Web 게시글 Action Bar는 아이콘만 보여 포인터 사용자가 상호작
 - Web의 비터치 pointer hover 시 각 Post Action control의 16×16 glyph 중심에 28×28 원형 background를 표시한다.
 - Reply·Repost·Bookmark·More는 semantic `primary`를 30% opacity의 background로 사용하고 hover
   foreground에는 불투명 `primary`를 사용한다. Reaction은 같은 표현에 semantic `like`를 사용한다.
+- Reply와 Repost의 count는 hover tint에 포함하지 않고 기존 색을 유지한다.
 - selected Reaction heart의 stroke와 fill은 hover 여부와 관계없이 `like`를 사용한다.
 - active·pressed 표현을 유지하고 pending·disabled·resolution-required에는 hover background를 표시하지 않는다.
 - Web touch와 Native에는 hover 전용 background를 노출하지 않는다.

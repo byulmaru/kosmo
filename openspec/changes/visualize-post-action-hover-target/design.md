@@ -20,6 +20,7 @@ light Web 동작을 검증한다. dark runtime 관찰은 미검증으로 남긴�
 - 일반 action은 30% `primary` background와 불투명 `primary` foreground를 사용한다. Reaction hover는
   30% `like` background와 불투명 `like` heart foreground를 함께 사용하고 selected heart는 기존 불투명
   `like`를 유지한다.
+- Reply와 Repost의 count는 hover foreground tint와 분리해 기존 default 또는 active 색을 유지한다.
 - 가장 가까운 Storybook interaction에서 hover와 핵심 회귀 위험을 직접 검증한다.
 
 **Non-Goals:**
@@ -48,12 +49,14 @@ light Web 동작을 검증한다. dark runtime 관찰은 미검증으로 남긴�
 !blocked`일 때 16×16 icon layout box 뒤에 absolute 28×28 원형 visual layer를 렌더링한다. 일반 action은
 30% opacity의 `primary` background와 불투명 `primary` hover foreground를 기본으로 사용하고 Reaction은
 같은 표현에 `like`를 전달한다. foreground glyph는 명시적인 상위 layer에 두어 불투명 background가 icon을
-덮지 않게 한다. active color도 기본 `primary`를 유지하되 Reaction만 불투명 `like`를 전달한다. 기존
+덮지 않게 한다. count 색은 hover foreground와 분리한다. active color도 기본 `primary`를 유지하되 Reaction만
+불투명 `like`를 전달한다. 기존
 `blocked > pressed` opacity 우선순위와 Pressable width·height·spacing은 유지한다.
 
 기존 Post Action Bar Storybook의 Web hover interaction을 수정해 50×28 click target 안의 28×28 icon circle,
 28×28 More, 일반 action의 30% `primary` background·불투명 `primary` foreground, Reaction의 30% `like`
-background·불투명 `like` foreground·selected 표현, pressed 보존, blocked 미표시와 geometry 불변을 검증한다.
+background·불투명 `like` foreground·selected 표현, Reply·Repost count 색 유지, pressed 보존, blocked
+미표시와 geometry 불변을 검증한다.
 Theme provider는 변경하지 않고 light Web에서만 실행한다.
 
 ### Allowed Alternatives

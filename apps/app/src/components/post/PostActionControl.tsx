@@ -65,15 +65,17 @@ export function PostActionControl({
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
-  const color = blocked
+  const countColor = blocked
     ? theme.textSecondary
     : active
       ? (activeColor ?? theme.primary)
-      : hovered && !hoverDisabled
-        ? (hoverForegroundColor ?? theme.primary)
-        : expanded
-          ? theme.primary
-          : theme.textSecondary;
+      : expanded
+        ? theme.primary
+        : theme.textSecondary;
+  const iconColor =
+    hovered && !blocked && !active && !hoverDisabled
+      ? (hoverForegroundColor ?? theme.primary)
+      : countColor;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -110,7 +112,7 @@ export function PostActionControl({
         <ActivityIndicator
           accessible={false}
           aria-hidden
-          color={color}
+          color={iconColor}
           size={14}
           style={styles.icon}
           testID={`post-action-${testID}-spinner`}
@@ -139,8 +141,8 @@ export function PostActionControl({
             testID={`post-action-${testID}-glyph`}
           >
             <Icon
-              color={color}
-              fill={fillActive && active ? color : 'none'}
+              color={iconColor}
+              fill={fillActive && active ? iconColor : 'none'}
               size={16}
               strokeWidth={iconStrokeWidth}
             />
@@ -148,7 +150,7 @@ export function PostActionControl({
         </View>
       )}
       {formattedCount ? (
-        <Text numberOfLines={1} style={[styles.count, { color }]}>
+        <Text numberOfLines={1} style={[styles.count, { color: countColor }]}>
           {formattedCount}
         </Text>
       ) : null}
