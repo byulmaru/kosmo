@@ -298,6 +298,13 @@ const styles = StyleSheet.create({
     width: '100%',
     ...shadow,
   } satisfies ViewStyle,
-  webModal: { bottom: 0, left: 0, position: 'fixed', right: 0, top: 0, zIndex: 100 },
+  webModal: {
+    bottom: 0,
+    left: 0,
+    position: 'fixed',
+    right: 0,
+    top: 0,
+    zIndex: 100,
+  } as unknown as ViewStyle,
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
 });
