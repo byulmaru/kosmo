@@ -331,6 +331,7 @@ describe('remote actor materialization', () => {
         expected,
       );
       assert.equal(await countRows(Profiles), 0);
+      assert.equal(await countRows(Instances), 1);
     }
   });
 
@@ -1042,7 +1043,7 @@ const createStoredRemoteActor = async ({
   return { actor, instance, profile };
 };
 
-const countRows = async (table: typeof Profiles | typeof ActivityPubActors) =>
+const countRows = async (table: typeof Profiles | typeof ActivityPubActors | typeof Instances) =>
   db
     .select({ value: count() })
     .from(table)

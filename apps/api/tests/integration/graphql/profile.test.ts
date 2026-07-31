@@ -380,6 +380,7 @@ describe('GraphQL remote profile boundary', () => {
     const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const lookupObject = mock.fn(async () => null);
     t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+    const instanceCountBefore = await db.$count(Instances);
 
     const result = await requestGraphQL<{
       searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
@@ -398,6 +399,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.searchProfiles, { edges: [], pageInfo: { hasNextPage: false } });
     assert.equal(lookupObject.mock.calls.length, 1);
     assert.equal(captureUnexpectedError.mock.calls.length, 0);
+    assert.equal(await db.$count(Instances), instanceCountBefore);
   });
 
   test('falls back to an empty connection for unexpected remote materialization failures', async (t) => {
