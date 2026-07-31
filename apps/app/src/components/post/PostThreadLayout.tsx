@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { PostThreadConnector } from './PostThreadConnector';
 import type React from 'react';
 
 export type PostThreadRole = 'ancestor' | 'current' | 'descendant';
@@ -56,22 +57,18 @@ export function PostThreadLayout<TPost>({
             }
           >
             {connectsFromPrevious ? (
-              <View
-                style={[
-                  styles.connector,
-                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore,
-                  { backgroundColor: theme.border, pointerEvents: 'none' },
-                ]}
+              <PostThreadConnector
+                style={
+                  role === 'current' ? styles.currentConnectorBefore : styles.listConnectorBefore
+                }
                 testID={`post-thread-connector-${previous.item.id}-${item.id}-before`}
               />
             ) : null}
             {connectsToNext ? (
-              <View
-                style={[
-                  styles.connector,
-                  role === 'current' ? styles.currentConnectorAfter : styles.listConnectorAfter,
-                  { backgroundColor: theme.border, pointerEvents: 'none' },
-                ]}
+              <PostThreadConnector
+                style={
+                  role === 'current' ? styles.currentConnectorAfter : styles.listConnectorAfter
+                }
                 testID={`post-thread-connector-${item.id}-${next.item.id}-after`}
               />
             ) : null}
@@ -104,21 +101,20 @@ const styles = StyleSheet.create({
     marginLeft: spacing.xxl * 2,
     marginRight: spacing.sm,
   },
-  connector: {
-    borderRadius: radii.full,
-    left: spacing.xxl,
-    position: 'absolute',
-    width: 2,
-    zIndex: 1,
-  },
-  listConnectorBefore: { height: spacing.sm - spacing.xs, top: 0 },
+  listConnectorBefore: { height: spacing.sm - spacing.xs, left: spacing.xxl, top: 0 },
   listConnectorAfter: {
     bottom: 0,
+    left: spacing.xxl,
     top: spacing.sm + spacing.xxxl + spacing.xs,
   },
-  currentConnectorBefore: { height: spacing.lg - spacing.xs, top: 0 },
+  currentConnectorBefore: {
+    height: spacing.lg - spacing.xs,
+    left: spacing.xxl,
+    top: 0,
+  },
   currentConnectorAfter: {
     bottom: 0,
+    left: spacing.xxl,
     top: spacing.lg + spacing.xxl + spacing.sm + spacing.xs,
   },
 });

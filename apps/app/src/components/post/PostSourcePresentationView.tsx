@@ -112,9 +112,11 @@ export function PostSourcePresentationView({
 }
 
 export function PostSourcePreview({
+  interactive = true,
   source,
   style,
 }: {
+  interactive?: boolean;
   source: SourcePostPresentationData;
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
@@ -125,26 +127,45 @@ export function PostSourcePreview({
     <>
       <View style={styles.authorHeader}>
         <View style={styles.authorSlot}>
-          <PresentationLink
-            accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
-            href={sourceProfileHref}
-          >
+          {interactive ? (
+            <PresentationLink
+              accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
+              href={sourceProfileHref}
+            >
+              <Author profile={source.profile} showAvatar />
+            </PresentationLink>
+          ) : (
             <Author profile={source.profile} showAvatar />
-          </PresentationLink>
+          )}
         </View>
-        <PresentationLink accessibilityLabel="원문 게시글 보기" href={sourcePostHref}>
+        {interactive ? (
+          <PresentationLink accessibilityLabel="원문 게시글 보기" href={sourcePostHref}>
+            <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+              {formatTimelineTimestamp(source.createdAt)}
+            </Text>
+          </PresentationLink>
+        ) : (
           <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
             {formatTimelineTimestamp(source.createdAt)}
           </Text>
-        </PresentationLink>
+        )}
       </View>
-      {source.content ? (
+      {source.content && interactive ? (
         <PostBodyPressTarget
           content={source.content}
           href={sourcePostHref}
           style={styles.sourceBody}
           testID="source-post-body"
         />
+      ) : source.content ? (
+        <View style={styles.sourceBody} testID="source-post-body">
+          <PostContentRenderer
+            bodyText={source.content.bodyText}
+            document={source.content.document}
+            interactive={false}
+            size="md"
+          />
+        </View>
       ) : null}
     </>
   );

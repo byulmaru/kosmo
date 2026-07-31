@@ -40,7 +40,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
     'aria-checked',
     'true',
   );
-  await input.click();
+  await composer.getByText('@e2e-composer').click();
   await expect(visibilityMenu).toHaveCount(0);
 
   await visibilityTrigger.click();

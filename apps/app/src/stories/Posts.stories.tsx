@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { Suspense, useMemo, useState } from 'react';
+import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
@@ -14,10 +14,14 @@ import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
+import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { formatTimelineTimestamp } from '@/lib/date';
+import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionProvider } from '@/session/SessionProvider';
+import { colors } from '@/theme/tokens';
 import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
@@ -32,6 +36,33 @@ import type { PostSourcePresentationData } from '@/components/post/PostSourcePre
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from './fixtures';
+
+function getColorContrastRatio(foreground: string, background: string) {
+  const relativeLuminance = (color: string) => {
+    const hex = /^#([\da-f]{6})$/i.exec(color)?.[1];
+    const channels = hex
+      ? [0, 2, 4].map((index) => Number.parseInt(hex.slice(index, index + 2), 16))
+      : color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number);
+    if (!channels || channels.length !== 3) {
+      throw new Error(`RGB color를 해석할 수 없습니다: ${color}`);
+    }
+    const [red, green, blue] = channels.map((channel) => {
+      const normalized = channel! / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  return (
+    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+  );
+}
 
 const shortPost = {
   ...post({
@@ -323,6 +354,14 @@ const routeChildPost = {
   }),
   viewerReactions: [],
 };
+const routeCreatedReply = {
+  ...post({
+    bodyText: 'targeted refetch로 반영된 새 Reply',
+    id: 'route-created-reply',
+    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
 const routeSiblingPost = {
   ...post({
     bodyText: 'Sibling 본문',
@@ -481,6 +520,7 @@ const storyPosts = [
   mediaOnlyPost,
 ];
 const composerProfile = profile({ id: 'profile-composer' });
+const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
   [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
@@ -504,6 +544,7 @@ const PostsStoriesQuery = graphql`
         ...PostBody_post @alias(as: "body")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
+        ...ReplyComposerSurface_parent @alias(as: "replySurface")
       }
     }
     composerProfile: node(id: "profile-composer") {
@@ -511,6 +552,15 @@ const PostsStoriesQuery = graphql`
       ... on Profile {
         id
         ...PostComposer_profile @alias(as: "composer")
+        ...ReplyComposerSurface_profile @alias(as: "replySurface")
+      }
+    }
+    alternateComposerProfile: node(id: "profile-composer-alternate") {
+      __typename
+      ... on Profile {
+        id
+        ...PostComposer_profile @alias(as: "composer")
+        ...ReplyComposerSurface_profile @alias(as: "replySurface")
       }
     }
     emptyPostsProfile: node(id: "profile-posts-empty") {
@@ -565,6 +615,7 @@ function usePostsStoryData() {
     return node;
   });
   if (
+    data.alternateComposerProfile?.__typename !== 'Profile' ||
     data.composerProfile?.__typename !== 'Profile' ||
     data.contentPostsProfile?.__typename !== 'Profile' ||
     data.emptyPostsProfile?.__typename !== 'Profile' ||
@@ -574,7 +625,15 @@ function usePostsStoryData() {
   }
 
   return {
+    alternateComposerProfile: requireFragment(
+      data.alternateComposerProfile.composer,
+      'alternate composer profile',
+    ),
     composerProfile: requireFragment(data.composerProfile.composer, 'composer profile'),
+    replyComposerProfile: requireFragment(
+      data.composerProfile.replySurface,
+      'Reply Composer profile',
+    ),
     contentPostsProfile: requireFragment(data.contentPostsProfile.postList, 'content post list'),
     emptyPostsProfile: requireFragment(data.emptyPostsProfile.postList, 'empty post list'),
     homeTimeline: data.homeTimeline,
@@ -808,6 +867,7 @@ function ProductionReactionMutationTargetsStory() {
         if (request.name === 'PostsStoriesQuery') {
           return Promise.resolve({
             data: {
+              alternateComposerProfile,
               composerProfile,
               contentPostsProfile,
               emptyPostsProfile,
@@ -943,6 +1003,38 @@ function ComposerPickerUnmountStory() {
   );
 }
 
+function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: string }) {
+  const [open, setOpen] = useState(true);
+  const triggerRef = useRef<View>(null);
+  const data = usePostsStoryData();
+  const parent = requireFragment(
+    requirePostById(data.posts, parentId).replySurface,
+    'Reply Composer Parent',
+  );
+
+  return (
+    <Catalog>
+      <Pressable
+        accessibilityLabel="Reply modal 다시 열기"
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        ref={triggerRef}
+      >
+        <Text>Reply modal 다시 열기</Text>
+      </Pressable>
+      <ReplyComposerSurface
+        onRequestClose={() => setOpen(false)}
+        open={open}
+        owner="list"
+        parent={parent}
+        profile={data.replyComposerProfile}
+        triggerRef={triggerRef}
+      />
+      <Text testID="reply-modal-open-state">{open ? 'open' : 'closed'}</Text>
+    </Catalog>
+  );
+}
+
 const composerMediaAsset = {
   height: 96,
   uri: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%236b7280"/%3E%3C/svg%3E',
@@ -988,6 +1080,333 @@ function ComposerMediaStatesStory() {
         sensitiveMedia={sensitiveMedia}
       />
     </Catalog>
+  );
+}
+
+function ReplyListSurfaceStory() {
+  const data = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <StoryPathname testID="reply-success-pathname" />
+      <PostList homeTimeline={data.homeTimeline} replyProfile={data.replyComposerProfile} />
+    </Catalog>
+  );
+}
+
+function ReplyDetailInlineStory() {
+  const data = usePostsStoryData();
+  const post = requireFragment(
+    requirePostById(data.posts, shortPost.id).layout,
+    'Reply detail inline Post',
+  );
+
+  return (
+    <PostReplyCoordinatorProvider owner="detail" profile={data.replyComposerProfile}>
+      <Catalog>
+        <PostLayout post={post} />
+      </Catalog>
+    </PostReplyCoordinatorProvider>
+  );
+}
+
+type ReplyComposerRequest = Readonly<{
+  bodyText: string;
+  replyParentId?: string;
+  visibility: string;
+}>;
+
+function ReplyComposerContractStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create((request: RequestParameters, variables: Variables) => {
+          if (request.name === 'PostsStoriesQuery') {
+            return Promise.resolve({
+              data: {
+                alternateComposerProfile,
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse);
+          }
+          if (request.name === 'PostComposerCreatePostMutation') {
+            const input = variables.input as ReplyComposerRequest;
+            setRequests((current) => [...current, input]);
+            return Promise.resolve({
+              data: {
+                createPost: {
+                  post: { __typename: 'Post', id: 'reply-created-in-story' },
+                },
+              },
+            } as GraphQLResponse);
+          }
+          return Promise.resolve({ data: {} } as GraphQLResponse);
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [],
+  );
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <Suspense fallback={<Text>Reply Composer fixture를 불러오는 중입니다.</Text>}>
+        <ReplyComposerContractContents
+          onPostCreated={(createdPost) =>
+            setCreatedPostIds((current) => [...current, createdPost.id])
+          }
+        />
+      </Suspense>
+      <Text testID="reply-composer-request-log">{JSON.stringify(requests)}</Text>
+      <Text testID="reply-composer-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ReplyComposerContractContents({
+  onPostCreated,
+}: {
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+}) {
+  const { composerProfile } = usePostsStoryData();
+
+  return (
+    <PostComposer
+      onPostCreated={onPostCreated}
+      profile={composerProfile}
+      replyParentId="post-parent"
+    />
+  );
+}
+
+function ReplyComposerContextIsolationStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [firstCommittedBody, setFirstCommittedBody] = useState<string | null>(null);
+  const [alternateProfile, setAlternateProfile] = useState(false);
+  const [parentId, setParentId] = useState('post-parent-a');
+  const composerRoot = useRef<View>(null);
+  const captureNextCommit = useRef(false);
+  const environment = useMemo(
+    () =>
+      new Environment({
+        network: Network.create(async (request: RequestParameters) => {
+          if (request.name === 'PostsStoriesQuery') {
+            return {
+              data: {
+                alternateComposerProfile,
+                composerProfile,
+                contentPostsProfile,
+                emptyPostsProfile,
+                homeTimeline,
+                nodes: storyPosts.map(withReactionViewerState),
+              },
+            } as GraphQLResponse;
+          }
+          if (request.name === 'PostComposerCreatePostMutation') {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            return {
+              data: {
+                createPost: { post: { __typename: 'Post', id: 'late-reply-created-in-story' } },
+              },
+            } as GraphQLResponse;
+          }
+          return { data: {} } as GraphQLResponse;
+        }),
+        store: new Store(new RecordSource()),
+      }),
+    [],
+  );
+
+  return (
+    <RelayEnvironmentProvider environment={environment}>
+      <View ref={composerRoot}>
+        <Profiler
+          id="reply-context-composer"
+          onRender={() => {
+            if (!captureNextCommit.current) {
+              return;
+            }
+            const root = composerRoot.current as unknown as HTMLElement | null;
+            const body = root?.querySelector<HTMLTextAreaElement>('[aria-label="답글 본문"]');
+            if (!body) {
+              return;
+            }
+            captureNextCommit.current = false;
+            setFirstCommittedBody(body.value);
+          }}
+        >
+          <Suspense fallback={<Text>Reply Composer context fixture를 불러오는 중입니다.</Text>}>
+            <ReplyComposerContextIsolationContents
+              alternateProfile={alternateProfile}
+              onPostCreated={(createdPost) =>
+                setCreatedPostIds((current) => [...current, createdPost.id])
+              }
+              parentId={parentId}
+            />
+          </Suspense>
+        </Profiler>
+      </View>
+      <Pressable
+        accessibilityLabel="다른 Parent로 전환"
+        accessibilityRole="button"
+        onPress={() => {
+          captureNextCommit.current = true;
+          setAlternateProfile(true);
+          setParentId('post-parent-b');
+        }}
+      >
+        <Text>다른 Parent로 전환</Text>
+      </Pressable>
+      <Text testID="reply-context-first-committed-body">{JSON.stringify(firstCommittedBody)}</Text>
+      <Text testID="reply-context-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentProvider>
+  );
+}
+
+function ReplyComposerContextIsolationContents({
+  alternateProfile,
+  onPostCreated,
+  parentId,
+}: {
+  alternateProfile: boolean;
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  parentId: string;
+}) {
+  const data = usePostsStoryData();
+
+  return (
+    <PostComposer
+      onPostCreated={onPostCreated}
+      profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
+      replyParentId={parentId}
+    />
+  );
+}
+
+function createReplyComposerEnvironment({
+  mutationDelay,
+  queryDelay = 0,
+}: {
+  mutationDelay: number;
+  queryDelay?: number;
+}) {
+  return new Environment({
+    network: Network.create(async (request: RequestParameters) => {
+      if (request.name === 'PostsStoriesQuery') {
+        await new Promise((resolve) => setTimeout(resolve, queryDelay));
+        return {
+          data: {
+            alternateComposerProfile,
+            composerProfile,
+            contentPostsProfile,
+            emptyPostsProfile,
+            homeTimeline,
+            nodes: storyPosts.map(withReactionViewerState),
+          },
+        } as GraphQLResponse;
+      }
+      if (request.name === 'PostComposerCreatePostMutation') {
+        await new Promise((resolve) => setTimeout(resolve, mutationDelay));
+        return {
+          data: {
+            createPost: { post: { __typename: 'Post', id: 'old-environment-reply' } },
+          },
+        } as GraphQLResponse;
+      }
+      return { data: {} } as GraphQLResponse;
+    }),
+    store: new Store(new RecordSource()),
+  });
+}
+
+function ReplyComposerEnvironmentIsolationStory() {
+  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [closeRequests, setCloseRequests] = useState(0);
+  const [environment, setEnvironment] = useState(() =>
+    createReplyComposerEnvironment({ mutationDelay: 200 }),
+  );
+  const [firstCommittedState, setFirstCommittedState] = useState<{
+    body: string;
+    closeDisabled: boolean;
+  } | null>(null);
+  const captureNextCommit = useRef(false);
+  const environmentGenerationRef = useRef(0);
+
+  return (
+    <RelayEnvironmentBoundary environment={environment} generationRef={environmentGenerationRef}>
+      <View>
+        <Suspense fallback={<Text>새 Reply Composer 문맥을 불러오는 중입니다.</Text>}>
+          <ReplyComposerEnvironmentIsolationContents
+            onSurfaceRender={() => {
+              if (!captureNextCommit.current) {
+                return;
+              }
+              const body = document.querySelector<HTMLTextAreaElement>('[aria-label="답글 본문"]');
+              const close = document.querySelector<HTMLButtonElement>('[aria-label="닫기"]');
+              if (!body || !close) {
+                return;
+              }
+              captureNextCommit.current = false;
+              setFirstCommittedState({ body: body.value, closeDisabled: close.disabled });
+            }}
+            onPostCreated={(createdPost) =>
+              setCreatedPostIds((current) => [...current, createdPost.id])
+            }
+            onRequestClose={() => setCloseRequests((current) => current + 1)}
+          />
+        </Suspense>
+      </View>
+      <Pressable
+        accessibilityLabel="Relay Environment 교체"
+        accessibilityRole="button"
+        onPress={() => {
+          captureNextCommit.current = true;
+          environmentGenerationRef.current += 1;
+          setEnvironment(createReplyComposerEnvironment({ mutationDelay: 0, queryDelay: 400 }));
+        }}
+      >
+        <Text>Relay Environment 교체</Text>
+      </Pressable>
+      <Text testID="reply-environment-first-committed-state">
+        {JSON.stringify(firstCommittedState)}
+      </Text>
+      <Text testID="reply-environment-close-log">{closeRequests}</Text>
+      <Text testID="reply-environment-created-log">{JSON.stringify(createdPostIds)}</Text>
+    </RelayEnvironmentBoundary>
+  );
+}
+
+function ReplyComposerEnvironmentIsolationContents({
+  onPostCreated,
+  onRequestClose,
+  onSurfaceRender,
+}: {
+  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  onRequestClose: () => void;
+  onSurfaceRender: () => void;
+}) {
+  const data = usePostsStoryData();
+  const parent = requireFragment(
+    requirePostById(data.posts, shortPost.id).replySurface,
+    'Environment Reply Composer Parent',
+  );
+
+  return (
+    <Profiler id="reply-environment-surface" onRender={onSurfaceRender}>
+      <ReplyComposerSurface
+        onPostCreated={onPostCreated}
+        onRequestClose={onRequestClose}
+        open
+        owner="list"
+        parent={parent}
+        profile={data.replyComposerProfile}
+      />
+    </Profiler>
   );
 }
 
@@ -1132,9 +1551,17 @@ const meta = {
     resetImagePickerMock();
   },
   component: PostCatalog,
+  decorators: [
+    (Story) => (
+      <PostReplyCoordinatorProvider owner="list" profile={null}>
+        <Story />
+      </PostReplyCoordinatorProvider>
+    ),
+  ],
   parameters: {
     relay: {
       data: {
+        alternateComposerProfile,
         composerProfile,
         contentPostsProfile,
         emptyPostsProfile,
@@ -1513,6 +1940,7 @@ export const ProductionRepostFailureToast: Story = {
   parameters: {
     relay: {
       data: {
+        alternateComposerProfile,
         composerProfile,
         contentPostsProfile,
         emptyPostsProfile,
@@ -1978,6 +2406,7 @@ export const PostDetailThreadRoute: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
@@ -2115,6 +2544,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...withReactionViewerState(quotePost),
               reactionCounts: [],
@@ -2183,6 +2613,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...withReactionViewerState(pureRepost),
               reactionCounts: [],
@@ -2228,6 +2659,7 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
@@ -2263,12 +2695,83 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
   render: () => <PostDetailScreen />,
 };
 
+export const PostDetailReplyTargetedRefetch: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        createPost: { post: { __typename: 'Post', id: routeCreatedReply.id } },
+      },
+      operationResponses: {
+        PostDetailQuery: {
+          sequence: [
+            {
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: 'session',
+                  selectedProfile: composerProfile,
+                },
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+            {
+              data: {
+                currentSession: {
+                  __typename: 'Session',
+                  id: 'session',
+                  selectedProfile: composerProfile,
+                },
+                node: {
+                  ...routeCurrentPostWithoutReactions,
+                  replyAncestors: [],
+                  replyDescendants: {
+                    edges: [{ cursor: routeCreatedReply.id, node: routeCreatedReply }],
+                    pageInfo: { endCursor: null, hasNextPage: false },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+    router: {
+      params: {
+        postId: routeCurrentPost.id,
+        profileHandle: routeCurrentPost.profile.relativeHandle,
+      },
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole('button', { name: '답글' });
+    await userEvent.click(trigger);
+    const body = await canvas.findByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '현재 상세에 반영할 Reply');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+
+    await expect(canvas.findByText('targeted refetch로 반영된 새 Reply')).resolves.toBeVisible();
+    expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
+  },
+  render: () => <PostDetailScreen />,
+};
+
 export const PostDetailThreadShortContentAutoFills: Story = {
   parameters: {
     relay: {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -2316,6 +2819,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -2390,6 +2894,7 @@ export const PostDetailThreadPageLoading: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -2432,6 +2937,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
       operationResponses: {
         PostDetailQuery: {
           data: {
+            currentSession: null,
             node: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
@@ -2516,6 +3022,28 @@ function PostDetailThreadIdentityFailureStory() {
   );
 }
 
+function PostDetailThreadReplyOwnerStory() {
+  const data = useLazyLoadQuery<PostDetailThreadIdentityStoryQuery>(
+    PostDetailThreadIdentityStoryQuery,
+    { postId: routeCurrentPost.id },
+  );
+  const replyProfile = usePostsStoryData().replyComposerProfile;
+  const post = data.node?.__typename === 'Post' ? data.node.thread : null;
+
+  if (!post) {
+    throw new Error('Missing Post detail thread Reply owner story fixture.');
+  }
+
+  return (
+    <PostDetailThread
+      header={<Text>게시글</Text>}
+      identity="reply-owner:0"
+      post={post}
+      replyProfile={replyProfile}
+    />
+  );
+}
+
 export const PostDetailThreadPageFailureIdentityReset: Story = {
   parameters: {
     relay: {
@@ -2555,10 +3083,86 @@ export const PostDetailThreadPageFailureIdentityReset: Story = {
   render: () => <PostDetailThreadIdentityFailureStory />,
 };
 
+export const PostDetailThreadReplyOwnerIntegration: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostDetailThreadIdentityStoryQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: {
+                edges: [{ cursor: routeChildPost.id, node: routeChildPost }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButtons = canvas.getAllByRole('button', { name: '답글' });
+    expect(replyButtons).toHaveLength(3);
+
+    await userEvent.click(replyButtons[0]!);
+    expect(canvas.getAllByRole('textbox', { name: '답글 본문' })).toHaveLength(1);
+    expect(
+      replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
+    ).toEqual([replyButtons[0]]);
+
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '첫 Parent draft');
+    await userEvent.click(replyButtons[1]!);
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(body).toHaveValue('첫 Parent draft');
+    expect(
+      replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
+    ).toEqual([replyButtons[0]]);
+
+    const continueButton = within(confirm).getByRole('button', { name: '계속 작성' });
+    const discardButton = within(confirm).getByRole('button', { name: '작성 취소' });
+    await waitFor(() => expect(continueButton).toHaveFocus());
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(discardButton).toHaveFocus();
+    await userEvent.keyboard('{Tab}');
+    expect(continueButton).toHaveFocus();
+    await userEvent.click(continueButton);
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+    expect(body).toHaveValue('첫 Parent draft');
+    expect(body).toHaveFocus();
+
+    await userEvent.click(replyButtons[1]!);
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveValue(''));
+    expect(
+      replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
+    ).toEqual([replyButtons[1]]);
+
+    await userEvent.click(replyButtons[1]!);
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    expect(replyButtons[1]).toHaveFocus();
+  },
+  render: () => <PostDetailThreadReplyOwnerStory />,
+};
+
 export const ComposerDefault: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('textbox', { name: '게시글 본문' })).not.toHaveAttribute('maxlength');
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    expect(body).not.toHaveAttribute('maxlength');
+    await userEvent.click(body);
+    expect(body).toHaveFocus();
+    expect(getComputedStyle(body).outlineStyle).not.toBe('none');
   },
   render: () => <ComposerStory />,
 };
@@ -2800,4 +3404,445 @@ export const ComposerGraphQLErrorPreservesInput: Story = {
     expect(body).toHaveValue('오류가 나도 보존할 본문입니다.');
   },
   render: () => <ComposerStory />,
+};
+
+export const ComposerReplyGraphQLErrorPreservesInput: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: { post: { id: 'reply-rejected-in-story' } } },
+    },
+  },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '오류가 나도 보존할 답글입니다.');
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
+    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
+      '답글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('오류가 나도 보존할 답글입니다.');
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ComposerReplyMutationContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.click(canvas.getByRole('button', { name: '조용한 공개' }));
+    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    expect(within(menu).queryByRole('menuitemradio', { name: /언급한 계정만/ })).toBeNull();
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^팔로워만/ }));
+    await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+
+    await waitFor(() => {
+      expect(canvas.getByTestId('reply-composer-request-log')).toHaveTextContent(
+        JSON.stringify([
+          {
+            bodyText: '부모 게시물에 작성한 답글입니다.',
+            replyParentId: 'post-parent',
+            visibility: 'FOLLOWERS',
+          },
+        ]),
+      );
+      expect(canvas.getByTestId('reply-composer-created-log')).toHaveTextContent(
+        JSON.stringify(['reply-created-in-story']),
+      );
+    });
+    expect(body).toHaveValue('');
+  },
+  render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyContextIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.type(body, '이전 Parent의 늦은 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
+    );
+    const currentBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(currentBody).toHaveValue('');
+    await userEvent.type(currentBody, '새 Parent의 답글');
+    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(currentBody).toHaveValue('새 Parent의 답글');
+    expect(canvas.getByTestId('reply-context-created-log')).toHaveTextContent('[]');
+  },
+  render: () => <ReplyComposerContextIsolationStory />,
+};
+
+export const ComposerReplyEnvironmentIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const oldBody = await screen.findByRole('textbox', { name: '답글 본문' });
+
+    await userEvent.type(oldBody, '이전 Environment의 늦은 답글');
+    await userEvent.click(screen.getByRole('button', { name: '답글 게시' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+    expect(canvas.getByTestId('reply-environment-close-log')).toHaveTextContent('0');
+    const currentBody = await screen.findByRole('textbox', { name: '답글 본문' });
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-environment-first-committed-state')).toHaveTextContent(
+        JSON.stringify({ body: '', closeDisabled: false }),
+      ),
+    );
+    expect(currentBody).toHaveValue('');
+    await userEvent.type(currentBody, '새 Environment의 답글');
+    expect(currentBody).toHaveValue('새 Environment의 답글');
+    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+  },
+  render: () => <ReplyComposerEnvironmentIsolationStory />,
+};
+
+export const ReplyModalPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+
+    expect(within(dialog).getByRole('heading', { name: '답글 쓰기' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '닫기' })).toBeVisible();
+    expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
+    const initialBody = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    expect(initialBody).toBeVisible();
+    expect(initialBody).toHaveAccessibleDescription('남은 글자 수 500자');
+    expect(within(dialog).getByRole('button', { name: '조용한 공개' })).toBeVisible();
+    expect(within(dialog).getByText('500')).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
+    expect(within(dialog).queryByRole('toolbar', { name: '액션 바' })).toBeNull();
+    expect(within(dialog).getAllByTestId('reply-composer-scroll')).toHaveLength(1);
+    expect(getComputedStyle(within(dialog).getByTestId('reply-parent')).borderBottomWidth).toBe(
+      '0px',
+    );
+    const connector = within(dialog).getByTestId('reply-parent-thread-connector');
+    const [parentAvatar, composerAvatar] = within(dialog).getAllByLabelText(/프로필 이미지$/);
+    const connectorBounds = connector.getBoundingClientRect();
+    const parentAvatarBounds = parentAvatar!.getBoundingClientRect();
+    const composerAvatarBounds = composerAvatar!.getBoundingClientRect();
+    expect(getComputedStyle(connector).width).toBe('2px');
+    expect(
+      Math.abs(
+        connectorBounds.left +
+          connectorBounds.width / 2 -
+          (parentAvatarBounds.left + parentAvatarBounds.width / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        connectorBounds.left +
+          connectorBounds.width / 2 -
+          (composerAvatarBounds.left + composerAvatarBounds.width / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(connectorBounds.top).toBeGreaterThanOrEqual(parentAvatarBounds.bottom);
+    expect(connectorBounds.bottom).toBeLessThanOrEqual(composerAvatarBounds.top);
+    expect(connectorBounds.height).toBeGreaterThan(0);
+    const modalSurface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    expect(modalSurface.getBoundingClientRect().width).toBe(600);
+    expect(modalSurface.getBoundingClientRect().height).toBe(720);
+
+    const visibilityButton = within(dialog).getByRole('button', { name: '조용한 공개' });
+    await userEvent.click(visibilityButton);
+    const visibilityMenu = await within(dialog).findByRole('menu', { name: '답글 공개 설정' });
+    expect(visibilityMenu).toBeVisible();
+    const visibilityButtonBounds = visibilityButton.getBoundingClientRect();
+    const visibilityMenuBounds = visibilityMenu.getBoundingClientRect();
+    expect(visibilityMenuBounds.bottom).toBeLessThanOrEqual(visibilityButtonBounds.top);
+    expect(visibilityMenuBounds.top).toBeGreaterThanOrEqual(
+      modalSurface.getBoundingClientRect().top,
+    );
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(within(dialog).queryByRole('menu', { name: '답글 공개 설정' })).toBeNull();
+    });
+    expect(dialog).toBeVisible();
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+    expect(visibilityButton).toHaveFocus();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
+
+    const reopen = canvas.getByRole('button', { name: 'Reply modal 다시 열기' });
+    await userEvent.click(reopen);
+    const reopenedDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(reopenedDialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '작성 중인 답글');
+    await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
+
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(body).toHaveValue('작성 중인 답글');
+    const continueButton = within(confirm).getByRole('button', { name: '계속 작성' });
+    const discardButton = within(confirm).getByRole('button', { name: '작성 취소' });
+    await waitFor(() => expect(continueButton).toHaveFocus());
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(discardButton).toHaveFocus();
+    await userEvent.keyboard('{Tab}');
+    expect(continueButton).toHaveFocus();
+    await userEvent.click(continueButton);
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+    expect(body).toHaveValue('작성 중인 답글');
+    expect(body).toHaveFocus();
+
+    await userEvent.click(within(reopenedDialog).getByRole('button', { name: '닫기' }));
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(reopen).toHaveFocus();
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyModalResponsiveFocusLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    if (!storyWindow) {
+      throw new Error('Reply modal responsive story requires a browser window.');
+    }
+
+    const visualViewport = storyWindow.visualViewport;
+    if (!visualViewport) {
+      throw new Error('Reply modal responsive story requires visualViewport.');
+    }
+    const originalWidthDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'width');
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    await waitFor(() => expect(body).toHaveFocus());
+
+    try {
+      Object.defineProperty(visualViewport, 'width', { configurable: true, value: 767 });
+      visualViewport.dispatchEvent(new Event('resize'));
+      await waitFor(() => expect(getComputedStyle(surface).borderRadius).toBe('0px'));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(body).toHaveFocus();
+    } finally {
+      if (originalWidthDescriptor) {
+        Object.defineProperty(visualViewport, 'width', originalWidthDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'width');
+      }
+      visualViewport.dispatchEvent(new Event('resize'));
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyListSurfaceIntegration: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButtons = canvas.getAllByRole('button', { name: '답글' });
+
+    expect(replyButtons[0]).toBeEnabled();
+    expect(replyButtons.some((button) => button.hasAttribute('disabled'))).toBe(true);
+    await userEvent.click(replyButtons[0]!);
+
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(replyButtons[0]).toHaveFocus();
+    expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'false');
+  },
+  render: () => <ReplyListSurfaceStory />,
+};
+
+export const ReplyDetailInlineIntegration: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButton = canvas.getByRole('button', { name: '답글' });
+
+    await userEvent.click(replyButton);
+    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    expect(body).toBeVisible();
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(getComputedStyle(body).outlineStyle).toBe('none');
+    const editorSurface = body.parentElement?.parentElement;
+    expect(editorSurface).not.toBeNull();
+    const editorStyle = getComputedStyle(editorSurface!);
+    expect(
+      getColorContrastRatio(editorStyle.borderColor, editorStyle.backgroundColor),
+    ).toBeGreaterThanOrEqual(3);
+    expect(getColorContrastRatio(colors.dark.focus, colors.dark.background)).toBeGreaterThanOrEqual(
+      3,
+    );
+    expect(replyButton).toHaveAttribute('aria-expanded', 'true');
+    expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
+
+    await userEvent.click(replyButton);
+    await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
+    expect(replyButton).toHaveAttribute('aria-expanded', 'false');
+  },
+  render: () => <ReplyDetailInlineStory />,
+};
+
+export const ReplyModalPendingLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '제출 중인 답글');
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
+
+    expect(within(dialog).getByRole('button', { name: '게시 중' })).toBeDisabled();
+    expect(within(dialog).getByLabelText('게시 중 처리 중')).toBeVisible();
+    expect(body).toHaveAttribute('readonly');
+    expect(within(dialog).getByRole('button', { name: '조용한 공개' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '닫기' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: '답글 쓰기' })).toBeVisible();
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+    expect(canvasElement.ownerDocument.body.style.overflow).toBe('hidden');
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyDetailInlinePendingLifecycle: Story = {
+  parameters: {
+    relay: {
+      mutationLoading: true,
+      operationResponses: {
+        PostDetailThreadIdentityStoryQuery: {
+          data: {
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [routeVisibleParentPost],
+              replyDescendants: {
+                edges: [{ cursor: routeChildPost.id, node: routeChildPost }],
+                pageInfo: { endCursor: null, hasNextPage: false },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const replyButtons = canvas.getAllByRole('button', { name: '답글' });
+    await userEvent.click(replyButtons[0]!);
+    const body = canvas.getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '제출 중인 인라인 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+
+    expect(canvas.getByRole('button', { name: '게시 중' })).toBeDisabled();
+    expect(canvas.getByLabelText('게시 중 처리 중')).toBeVisible();
+    await userEvent.click(replyButtons[1]!);
+    expect(body).toHaveValue('제출 중인 인라인 답글');
+    expect(
+      replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
+    ).toEqual([replyButtons[0]]);
+
+    await userEvent.click(replyButtons[0]!);
+    expect(canvas.getByRole('textbox', { name: '답글 본문' })).toBe(body);
+    expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
+  },
+  render: () => <PostDetailThreadReplyOwnerStory />,
+};
+
+export const ReplyModalFailureLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: { relay: { mutationError: '답글 전송 네트워크 오류' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await userEvent.type(body, '실패 뒤 유지할 답글');
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('답글 전송 네트워크 오류');
+    expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
+    expect(body).toHaveValue('실패 뒤 유지할 답글');
+    expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeEnabled();
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyListSurfaceSuccessLifecycle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      mutationResponse: {
+        createPost: { post: { __typename: 'Post', id: 'reply-created-from-list' } },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = canvas.getAllByRole('button', { name: '답글' })[0]!;
+    await userEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    await userEvent.type(
+      within(dialog).getByRole('textbox', { name: '답글 본문' }),
+      '목록에서 작성한 답글',
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    const success = await screen.findByRole('alert');
+    expect(success).toHaveTextContent('답글을 게시했어요');
+    expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent('/@kosmo/post-1');
+    await userEvent.click(within(success).getByRole('button', { name: '보기' }));
+    await waitFor(() => {
+      expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent(
+        '/@kosmo/reply-created-from-list',
+      );
+    });
+  },
+  render: () => <ReplyListSurfaceStory />,
+};
+
+export const ReplyFullscreenPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const bounds = surface.getBoundingClientRect();
+    const documentElement = canvasElement.ownerDocument.documentElement;
+
+    expect(bounds.width).toBe(documentElement.clientWidth);
+    expect(bounds.height).toBe(documentElement.clientHeight);
+    expect(getComputedStyle(surface).borderRadius).toBe('0px');
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyQuoteParentPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(within(dialog).getByTestId('reply-parent')).toHaveTextContent('안전한 외부 링크');
+    expect(within(dialog).queryByRole('link')).toBeNull();
+    const source = within(dialog).getByTestId('source-post-preview');
+    expect(source).toBeVisible();
+    expect(within(source).getByTestId('source-post-body')).toHaveTextContent('안전한 외부 링크');
+    expect(within(source).queryByRole('link')).toBeNull();
+    expect(getComputedStyle(source).borderStyle).toBe('solid');
+  },
+  render: () => <ReplyModalPresentationStory parentId={linkedSourceQuote.id} />,
 };

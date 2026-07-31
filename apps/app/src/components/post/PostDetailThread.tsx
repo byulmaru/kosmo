@@ -3,6 +3,7 @@ import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } fro
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
@@ -18,6 +19,8 @@ import type { PostDetailThread_post$key } from './__generated__/PostDetailThread
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
+import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
+import type { PostComposerCreatedPost } from './PostComposer';
 import type { PostThreadScrollMetrics } from './postThreadPagination';
 
 const PostDetailThreadFragment = graphql`
@@ -91,21 +94,37 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 export function PostDetailThread({
   header,
   identity,
+  onReplyCreated,
   post: postKey,
+  replyProfile,
 }: {
   header: ReactNode;
   identity: string;
+  onReplyCreated?: (post: PostComposerCreatedPost) => void;
   post: PostDetailThread_post$key;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
-  return <PostDetailThreadContent header={header} key={identity} post={postKey} />;
+  return (
+    <PostDetailThreadContent
+      header={header}
+      key={identity}
+      onReplyCreated={onReplyCreated}
+      post={postKey}
+      replyProfile={replyProfile}
+    />
+  );
 }
 
 function PostDetailThreadContent({
   header,
+  onReplyCreated,
   post: postKey,
+  replyProfile,
 }: {
   header: ReactNode;
+  onReplyCreated?: (post: PostComposerCreatedPost) => void;
   post: PostDetailThread_post$key;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
     PostDetailThreadNextPageQuery,
@@ -222,13 +241,17 @@ function PostDetailThreadContent({
   };
 
   return (
-    <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
-      <PostThreadLayout<ThreadRenderablePost>
-        ancestors={ancestors}
-        current={current}
-        descendants={descendants}
-        renderPost={({ item, role }) => {
-          return (
+    <PostReplyCoordinatorProvider
+      onPostCreated={onReplyCreated}
+      owner="detail"
+      profile={replyProfile ?? null}
+    >
+      <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+        <PostThreadLayout<ThreadRenderablePost>
+          ancestors={ancestors}
+          current={current}
+          descendants={descendants}
+          renderPost={({ item, role }) => (
             <View>
               {role === 'current' ? (
                 <PostLayout post={requireThreadFragment(item.post.detail, 'current detail')} />
@@ -239,21 +262,21 @@ function PostDetailThreadContent({
                 />
               )}
             </View>
-          );
-        }}
-      />
-      {isLoadingNext ? (
-        <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
-      ) : loadError ? (
-        <View accessibilityRole="alert">
-          <Text>답글을 더 불러오지 못했어요</Text>
-          <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
-          <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
-            답글 다시 불러오기
-          </Button>
-        </View>
-      ) : null}
-    </PostDetailFrame>
+          )}
+        />
+        {isLoadingNext ? (
+          <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
+        ) : loadError ? (
+          <View accessibilityRole="alert">
+            <Text>답글을 더 불러오지 못했어요</Text>
+            <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
+            <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
+              답글 다시 불러오기
+            </Button>
+          </View>
+        ) : null}
+      </PostDetailFrame>
+    </PostReplyCoordinatorProvider>
   );
 }
 

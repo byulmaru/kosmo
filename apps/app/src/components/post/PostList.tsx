@@ -5,8 +5,10 @@ import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostListItem } from './PostListItem';
+import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { PostList_homeTimeline$key } from './__generated__/PostList_homeTimeline.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
+import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 
 const PostListProfileFragment = graphql`
   fragment PostList_profile on Profile {
@@ -41,6 +43,7 @@ type Props = {
   loading?: boolean;
   onRetry?: () => void;
   profile?: PostList_profile$key | null;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 };
 
 export function PostList({
@@ -49,6 +52,7 @@ export function PostList({
   loading = false,
   onRetry,
   profile: profileKey,
+  replyProfile,
 }: Props) {
   const profile = useFragment(PostListProfileFragment, profileKey ?? null);
   const timeline = useFragment(PostListHomeTimelineFragment, timelineKey ?? null);
@@ -80,11 +84,13 @@ export function PostList({
   }
 
   return (
-    <View style={styles.root}>
-      {edges.map((edge) => (
-        <PostListItem key={edge.cursor} post={edge.node} />
-      ))}
-    </View>
+    <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
+      <View style={styles.root}>
+        {edges.map((edge) => (
+          <PostListItem key={edge.cursor} post={edge.node} />
+        ))}
+      </View>
+    </PostReplyCoordinatorProvider>
   );
 }
 

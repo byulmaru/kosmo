@@ -512,7 +512,11 @@ test.describe('로그인 사용자 보호 라우트', () => {
     let canonicalProfilePath = '';
 
     await page.route('**/graphql', async (route) => {
-      if (!isGraphQLOperation(route.request().postData(), 'UniversalShellQuery')) {
+      const requestBody = route.request().postData();
+      if (
+        !isGraphQLOperation(requestBody, 'UniversalShellQuery') &&
+        !isGraphQLOperation(requestBody, 'HomePageQuery')
+      ) {
         await route.continue();
         return;
       }

@@ -14,9 +14,11 @@ const PostBodyFragment = graphql`
 `;
 
 export function PostBody({
+  interactive = true,
   post: postKey,
   size = 'md',
 }: {
+  interactive?: boolean;
   post: PostBody_post$key;
   size?: 'md' | 'lg';
 }) {
@@ -28,6 +30,11 @@ export function PostBody({
   }
 
   return (
-    <PostContentRenderer bodyText={content.bodyText} document={content.document} size={size} />
+    <PostContentRenderer
+      bodyText={content.bodyText}
+      document={content.document}
+      interactive={interactive}
+      size={size}
+    />
   );
 }

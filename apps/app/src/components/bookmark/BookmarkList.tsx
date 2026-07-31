@@ -1,11 +1,13 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
+import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
 
 export type BookmarkListEntry = { id: string; post: PostListItem_post$key };
 
@@ -18,6 +20,7 @@ export type BookmarkListProps = {
   onLoadMore?: () => void;
   onRetry?: () => void;
   profileRequired?: boolean;
+  replyProfile?: ReplyComposerSurface_profile$key | null;
 };
 
 export function BookmarkList({
@@ -29,6 +32,7 @@ export function BookmarkList({
   onLoadMore,
   onRetry,
   profileRequired = false,
+  replyProfile,
 }: BookmarkListProps): React.JSX.Element {
   const hasData = items.length > 0;
   let content: ReactNode;
@@ -94,10 +98,12 @@ export function BookmarkList({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
-      <BookmarkListTitle />
-      {content}
-    </ScrollView>
+    <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
+      <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
+        <BookmarkListTitle />
+        {content}
+      </ScrollView>
+    </PostReplyCoordinatorProvider>
   );
 }
 

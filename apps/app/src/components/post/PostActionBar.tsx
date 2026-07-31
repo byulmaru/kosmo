@@ -5,6 +5,7 @@ import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
+import type { Ref } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostActionProcessingState } from './PostActionControl';
@@ -18,7 +19,7 @@ type SocialActionConfig = {
   processing: PostActionProcessingState;
 };
 
-type ReplyActionConfig = SocialActionConfig & { expanded: boolean };
+type ReplyActionConfig = SocialActionConfig & { controlRef?: Ref<View>; expanded: boolean };
 type BookmarkActionConfig = Omit<SocialActionConfig, 'count'> & { hasBookmarked: boolean };
 type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 
@@ -53,6 +54,7 @@ export function PostActionBar({
         <PostActionControl
           accessibilityLabel={reply.accessibilityLabel}
           count={reply.count}
+          controlRef={reply.controlRef}
           expanded={reply.expanded}
           icon={MessageCircle}
           onPress={reply.onPress}

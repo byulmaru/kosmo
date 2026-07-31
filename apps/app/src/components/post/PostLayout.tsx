@@ -1,4 +1,5 @@
 import { Link } from 'expo-router';
+import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,7 +11,10 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { usePostReactionController } from './PostReactionController';
+import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
+import { ReplyComposerSurface } from './ReplyComposerSurface';
+import { getReplyProcessingState } from './replySurface';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
@@ -33,6 +37,7 @@ const PostLayoutFragment = graphql`
     replyParent {
       id
     }
+    ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
@@ -65,6 +70,8 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostLayoutFragment, postKey);
+  const replyBinding = usePostReplyBinding(post.id);
+  const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
@@ -118,7 +125,32 @@ export function PostLayout({ post: postKey }: { post: PostLayout_post$key }) {
             onRepostError={onRepostError}
             post={actionBarPost}
             reactionController={reactionController}
+            reply={
+              replyBinding
+                ? {
+                    accessibilityLabel: '답글',
+                    controlRef: replyTriggerRef,
+                    expanded: replyBinding.expanded,
+                    onPress: replyBinding.onPress,
+                    processing: getReplyProcessingState(true, Boolean(post.content)),
+                  }
+                : undefined
+            }
           />
+          {replyBinding && post.content && post.replySurface ? (
+            <View style={styles.replySurface}>
+              <ReplyComposerSurface
+                ref={replyBinding.surfaceRef}
+                onPostCreated={replyBinding.onPostCreated}
+                onRequestClose={replyBinding.onRequestClose}
+                open={replyBinding.expanded}
+                owner={replyBinding.owner}
+                parent={post.replySurface}
+                profile={replyBinding.profile}
+                triggerRef={replyTriggerRef}
+              />
+            </View>
+          ) : null}
         </View>
       </View>
     </View>
@@ -133,4 +165,5 @@ const styles = StyleSheet.create({
   meta: { fontFamily: 'SUIT', marginTop: 6, textAlign: 'right', ...typography.xsm },
   reactionSummary: { marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
+  replySurface: { marginTop: spacing.lg },
 });

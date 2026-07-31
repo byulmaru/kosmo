@@ -88,6 +88,18 @@
 - Consequences: 상위 계층은 selected를 지원하는 액션의 선택 여부와 모든 액션의 요청 처리 상태를 별도로 공급한다. Reply config에는 selected가 없고, component test와 통합 테스트는 selected 지원 액션의 selected+pending·selected+disabled·selected+error 조합을 검증한다.
 - Confirmation / Follow-up: Storybook과 component test에서 세 조합의 시각 우선순위, callback 허용 여부 및 접근성 selected와 처리 상태를 함께 검증한다.
 
+### Reply Composer actual surface 연결은 PROD-425가 소유한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/reply-composer.md`, `PROD-425`, `PROD-432`
+- Status: Active
+- Context / Problem: 기존 기록은 PROD-432가 Reply를 포함한 나머지 config action을 actual surface에 연결한다고 넓게 표현했지만, 최신 PROD-425는 actual 목록·상세의 Reply callback, controlled `expanded`, selected Profile fragment와 connection 반영을 자기 완료 조건으로 명시한다.
+- Decision Outcome: PROD-425는 PROD-414 surface의 Reply config를 기존 Composer와 연결하고 목록 modal·전체 화면, 상세 행별 inline surface와 controlled `expanded`를 제공한다. display Post와 Action Bar target을 분리해 순수 Repost의 Repost Source target을 유지하면서 Reply는 바깥 contentless Repost identity에서 disabled로 차단한다. selected Profile이 없는 guest에는 PROD-425에서 Reply config를 새로 노출하지 않는다. PROD-432는 Reply 연결을 재구현하지 않고 guest 인증 위임, 최종 eligibility·권한과 전체 action 조합에서 회귀 검증한다.
+- Alternatives Considered: Reply actual surface를 PROD-432까지 미루면 PROD-425의 최신 완료 조건과 목록·상세 디자인 계약을 충족하지 못한다. PROD-425가 guest 인증 위임까지 구현하면 PROD-432의 최종 surface 정책을 선점한다.
+- Consequences: `PostListItem`, `PostLayout`, `PostDetailThread`와 route의 Reply surface 변경은 PROD-425 PR에 포함된다. PROD-432 task는 완료된 Reply 결과를 소비하는 문장으로 유지한다.
+- Confirmation / Follow-up: PROD-425에서 actual surface와 Composer callback을 검증하고, PROD-432에서 guest와 다른 action을 포함한 최종 조합을 검증한다.
+
 ### More 컴포넌트 경계와 링크 복사 통합을 분리
 
 - Decision Date: 2026-07-21

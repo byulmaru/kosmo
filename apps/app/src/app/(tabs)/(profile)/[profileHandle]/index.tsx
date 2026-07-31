@@ -9,6 +9,13 @@ import type { ProfilePostListPageQuery as ProfilePostListPageQueryType } from '.
 
 const ProfilePostListPageQuery = graphql`
   query ProfilePostListPageQuery($handle: String!) {
+    currentSession {
+      id
+      selectedProfile {
+        id
+        ...ReplyComposerSurface_profile
+      }
+    }
     profileByHandle(handle: $handle) {
       id
       ...PostList_profile
@@ -44,5 +51,10 @@ function ProfilePostListPageContent({ fetchKey, handle }: { fetchKey: string; ha
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
 
-  return <PostList profile={data.profileByHandle} />;
+  return (
+    <PostList
+      profile={data.profileByHandle}
+      replyProfile={data.currentSession?.selectedProfile ?? null}
+    />
+  );
 }

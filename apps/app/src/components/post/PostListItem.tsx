@@ -1,4 +1,5 @@
 import { Link, useRouter } from 'expo-router';
+import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,7 +11,10 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionBar } from './PostActionBar';
 import { PostBody } from './PostBody';
 import { usePostReactionController } from './PostReactionController';
+import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
+import { ReplyComposerSurface } from './ReplyComposerSurface';
+import { getReplyProcessingState } from './replySurface';
 import { useRepostFailureToast } from './useRepostFailureToast';
 import type { PostActionBar_post$key } from './__generated__/PostActionBar_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -55,6 +59,7 @@ const PostListItemFragment = graphql`
     replyParent {
       id
     }
+    ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionBar_post @alias(as: "actionBar")
     ...PostReactionController_post @alias(as: "reactionController")
     repostSource {
@@ -85,7 +90,31 @@ export function PostListItem({
   const theme = useTheme();
   const onRepostError = useRepostFailureToast();
   const post = useFragment(PostListItemFragment, postKey);
+  const replyBinding = usePostReplyBinding(post.id);
   const profileHref = `/${post.profile.relativeHandle}` as const;
+  const replyTriggerRef = useRef<View>(null);
+  const reply = replyBinding
+    ? {
+        accessibilityLabel: '답글',
+        controlRef: replyTriggerRef,
+        expanded: replyBinding.expanded,
+        onPress: replyBinding.onPress,
+        processing: getReplyProcessingState(true, Boolean(post.content)),
+      }
+    : undefined;
+  const replySurface =
+    replyBinding && post.content && post.replySurface ? (
+      <ReplyComposerSurface
+        ref={replyBinding.surfaceRef}
+        onPostCreated={replyBinding.onPostCreated}
+        onRequestClose={replyBinding.onRequestClose}
+        open={replyBinding.expanded}
+        owner={replyBinding.owner}
+        parent={post.replySurface}
+        profile={replyBinding.profile}
+        triggerRef={replyTriggerRef}
+      />
+    ) : null;
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
@@ -94,9 +123,12 @@ export function PostListItem({
 
   if (!post.repostSource) {
     return (
-      <View role="article" style={cardStyle}>
-        <PostListRow onRepostError={onRepostError} post={post} />
-      </View>
+      <>
+        <View role="article" style={cardStyle}>
+          <PostListRow onRepostError={onRepostError} post={post} reply={reply} />
+        </View>
+        {replySurface}
+      </>
     );
   }
 
@@ -108,30 +140,33 @@ export function PostListItem({
 
   if (!post.content) {
     return (
-      <View role="article" style={cardStyle}>
-        <View style={styles.repostAttribution}>
-          <View style={styles.repostIconColumn}>
-            <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
-          </View>
-          <View style={styles.repostAuthorSlot}>
-            <Link asChild href={profileHref}>
-              <Pressable
-                accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
-                accessibilityRole="link"
-                style={styles.repostLabelTarget}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[styles.repostLabel, { color: theme.textSecondary }]}
+      <>
+        <View role="article" style={cardStyle}>
+          <View style={styles.repostAttribution}>
+            <View style={styles.repostIconColumn}>
+              <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
+            </View>
+            <View style={styles.repostAuthorSlot}>
+              <Link asChild href={profileHref}>
+                <Pressable
+                  accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+                  accessibilityRole="link"
+                  style={styles.repostLabelTarget}
                 >
-                  {post.profile.displayName}님이 재게시함
-                </Text>
-              </Pressable>
-            </Link>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.repostLabel, { color: theme.textSecondary }]}
+                  >
+                    {post.profile.displayName}님이 재게시함
+                  </Text>
+                </Pressable>
+              </Link>
+            </View>
           </View>
+          <PostListRow onRepostError={onRepostError} post={source} reply={reply} />
         </View>
-        <PostListRow onRepostError={onRepostError} post={source} />
-      </View>
+        {replySurface}
+      </>
     );
   }
 
@@ -160,43 +195,49 @@ export function PostListItem({
   };
 
   return (
-    <View style={[...cardStyle, styles.quoteRow]}>
-      <Link asChild href={profileHref}>
-        <Pressable
-          aria-hidden
-          accessibilityElementsHidden
-          accessible={false}
-          focusable={false}
-          importantForAccessibility="no-hide-descendants"
-          style={styles.avatar}
-          tabIndex={-1}
-        >
-          <Avatar label={post.profile.displayName || post.profile.handle} size={48} />
-        </Pressable>
-      </Link>
-      <View style={styles.sourcePresentation}>
-        <PostSourcePresentationView
-          post={presentationPost}
-          showPostAvatar={false}
-          sourcePreviewStyle={styles.quoteSourcePreview}
-        />
-        <PostReactionActions
-          actionBar={post.actionBar!}
-          controllerPost={post.reactionController!}
-          onRepostError={onRepostError}
-          quote
-        />
+    <>
+      <View style={[...cardStyle, styles.quoteRow]}>
+        <Link asChild href={profileHref}>
+          <Pressable
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no-hide-descendants"
+            style={styles.avatar}
+            tabIndex={-1}
+          >
+            <Avatar label={post.profile.displayName || post.profile.handle} size={48} />
+          </Pressable>
+        </Link>
+        <View style={styles.sourcePresentation}>
+          <PostSourcePresentationView
+            post={presentationPost}
+            showPostAvatar={false}
+            sourcePreviewStyle={styles.quoteSourcePreview}
+          />
+          <PostReactionActions
+            actionBar={post.actionBar!}
+            controllerPost={post.reactionController!}
+            onRepostError={onRepostError}
+            quote
+            reply={reply}
+          />
+        </View>
       </View>
-    </View>
+      {replySurface}
+    </>
   );
 }
 
 function PostListRow({
   onRepostError,
   post: postKey,
+  reply,
 }: {
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   post: PostListRow_post$key;
+  reply?: PostActionBarProps['reply'];
 }) {
   const router = useRouter();
   const theme = useTheme();
@@ -246,6 +287,7 @@ function PostListRow({
           actionBar={post.actionBar!}
           controllerPost={post.reactionController!}
           onRepostError={onRepostError}
+          reply={reply}
         />
       </View>
     </View>
@@ -257,11 +299,13 @@ function PostReactionActions({
   controllerPost,
   onRepostError,
   quote = false,
+  reply,
 }: {
   actionBar: PostActionBar_post$key;
   controllerPost: PostReactionController_post$key;
   onRepostError: NonNullable<PostActionBarProps['onRepostError']>;
   quote?: boolean;
+  reply?: PostActionBarProps['reply'];
 }) {
   const controller = usePostReactionController(controllerPost);
 
@@ -276,6 +320,7 @@ function PostReactionActions({
           onRepostError={onRepostError}
           post={actionBar}
           reactionController={controller}
+          reply={reply}
         />
       </View>
     </>
