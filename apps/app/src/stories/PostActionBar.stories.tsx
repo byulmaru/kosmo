@@ -30,6 +30,7 @@ import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStory
 const reply = fn();
 const bookmark = fn();
 const more = fn();
+const deletionMutationRequest = fn();
 const reactionMutationRequest = fn();
 const reactionLifecycleConsoleErrors: unknown[][] = [];
 
@@ -53,7 +54,9 @@ const actionBarProps = {
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'hidden' | 'unselected' | 'selected' | 'pending';
+type DeleteOutcome = 'graphql-error' | 'network-error' | 'success';
 type FixtureProps = Omit<PostActionBarProps, 'post'> & {
+  deleteOutcome?: DeleteOutcome;
   onMutationRequest?: (requestName: string) => void;
   repostState?: RepostFixtureState;
   selectedProfileId?: string | null;
@@ -73,7 +76,9 @@ const postActionBarStoryQuery = graphql`
 
 const unselectedSource = {
   __typename: 'Post',
+  content: { __typename: 'PostContent', id: 'content-source' },
   id: sourcePostId,
+  profile: { __typename: 'Profile', id: 'profile-author' },
   repostCount: 12_345,
   reactionCounts: [
     { count: 12, type: '❤️' },
@@ -94,6 +99,7 @@ const selectedSource = {
 };
 
 function PostActionBarFixture({
+  deleteOutcome = 'success',
   onMutationRequest,
   repostState = 'unselected',
   selectedProfileId = 'profile-story',
@@ -107,6 +113,17 @@ function PostActionBarFixture({
       network: Network.create((request) => {
         if (request.operationKind === 'mutation') {
           onMutationRequest?.(request.name);
+          if (request.name === 'PostDeletionActionDeletePostMutation') {
+            if (deleteOutcome === 'network-error') {
+              return Promise.reject(new Error('delete failed'));
+            }
+            if (deleteOutcome === 'graphql-error') {
+              return Promise.resolve({
+                data: { deletePost: null },
+                errors: [{ message: 'delete failed' }],
+              } as GraphQLResponse);
+            }
+          }
         }
         return request.operationKind !== 'mutation'
           ? Promise.resolve({
@@ -132,17 +149,19 @@ function PostActionBarFixture({
             ? Observable.create(() => undefined)
             : Promise.resolve({
                 data:
-                  request.name === 'RepostActionDeletePostMutation'
-                    ? { deletePost: { postId: activeRepostId } }
-                    : {
-                        repostPost: {
-                          repost: {
-                            __typename: 'Post',
-                            id: activeRepostId,
-                            repostSource: selectedSource,
+                  request.name === 'PostDeletionActionDeletePostMutation'
+                    ? { deletePost: { postId: sourcePostId } }
+                    : request.name === 'RepostActionDeletePostMutation'
+                      ? { deletePost: { postId: activeRepostId } }
+                      : {
+                          repostPost: {
+                            repost: {
+                              __typename: 'Post',
+                              id: activeRepostId,
+                              repostSource: selectedSource,
+                            },
                           },
                         },
-                      },
               });
       }),
       store: new Store(new RecordSource()),
@@ -152,7 +171,7 @@ function PostActionBarFixture({
       { node: source },
     );
     return result;
-  }, [onMutationRequest, repostState, selectedProfileId]);
+  }, [deleteOutcome, onMutationRequest, repostState, selectedProfileId]);
   const createEnvironment = useCallback(() => environment, [environment]);
 
   if (repostState === 'hidden') {
@@ -174,17 +193,50 @@ function PostActionBarFixtureContents({
   showReactionSummary = false,
   ...props
 }: Omit<PostActionBarProps, 'post' | 'reactionController'> & { showReactionSummary?: boolean }) {
+  const [deleted, setDeleted] = useState(false);
   const data = useLazyLoadQuery<PostActionBarStoryQuery>(
     postActionBarStoryQuery,
     { id: sourcePostId },
     { fetchPolicy: 'store-only' },
   );
-  const controller = usePostReactionController(data.node!.reactionController!);
+  if (deleted || !data.node) {
+    return <Text>삭제된 게시글</Text>;
+  }
 
+  return (
+    <PostActionBarFixtureLoaded
+      data={data.node}
+      onDeleted={(postId) => {
+        setDeleted(true);
+        props.onDeleted?.(postId);
+      }}
+      props={props}
+      showReactionSummary={showReactionSummary}
+    />
+  );
+}
+
+function PostActionBarFixtureLoaded({
+  data,
+  onDeleted,
+  props,
+  showReactionSummary,
+}: {
+  data: NonNullable<PostActionBarStoryQuery['response']['node']>;
+  onDeleted: (postId: string) => void;
+  props: Omit<PostActionBarProps, 'post' | 'reactionController'>;
+  showReactionSummary: boolean;
+}) {
+  const controller = usePostReactionController(data.reactionController!);
   return (
     <>
       {showReactionSummary ? <PostReactionSummary controller={controller} /> : null}
-      <PostActionBar {...props} post={data.node!.actionBar!} reactionController={controller} />
+      <PostActionBar
+        {...props}
+        onDeleted={onDeleted}
+        post={data.actionBar!}
+        reactionController={controller}
+      />
     </>
   );
 }
@@ -591,6 +643,97 @@ export const ActionBarCatalog: Story = {
     expect(reactionButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
     expect(bookmarkButtons[2]?.querySelector('svg')).not.toHaveAttribute('fill', 'none');
   },
+};
+
+export const AuthorPostDeletion: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    deletionMutationRequest.mockClear();
+
+    const trigger = canvas.getByRole('button', { name: '더 보기' });
+    await userEvent.click(trigger);
+    const menu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+    expect(within(menu).getByRole('menuitem', { name: '게시글 삭제' })).toBeVisible();
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '게시글 삭제' }));
+
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    expect(dialog).toHaveTextContent('게시글을 삭제할까요?');
+    expect(dialog).toHaveTextContent('삭제한 게시글은 복구할 수 없습니다.');
+    expect(deletionMutationRequest).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '취소' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeNull(),
+    );
+    expect(deletionMutationRequest).not.toHaveBeenCalled();
+
+    await userEvent.click(trigger);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '게시글 삭제',
+      }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' })).getByRole(
+        'button',
+        { name: '삭제' },
+      ),
+    );
+    await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(1));
+  },
+  render: () => (
+    <PostActionBarFixture
+      onMutationRequest={deletionMutationRequest}
+      selectedProfileId="profile-author"
+    />
+  ),
+};
+
+export const NonAuthorPostDeletionHidden: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('button', { name: '더 보기' })).toBeNull();
+  },
+  render: () => <PostActionBarFixture selectedProfileId="profile-other" />,
+};
+
+export const GuestPostDeletionHidden: Story = {
+  play: ({ canvasElement }) => {
+    expect(within(canvasElement).queryByRole('button', { name: '더 보기' })).toBeNull();
+  },
+  render: () => <PostActionBarFixture selectedProfileId={null} />,
+};
+
+export const AuthorPostDeletionFailureRetry: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    deletionMutationRequest.mockClear();
+    await userEvent.click(canvas.getByRole('button', { name: '더 보기' }));
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '게시글 삭제',
+      }),
+    );
+    const dialog = await screen.findByRole('alertdialog', { name: '게시글 삭제 확인' });
+    await userEvent.click(within(dialog).getByRole('button', { name: '삭제' }));
+    await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(1));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('게시글을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    expect(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).toBeVisible();
+
+    await userEvent.click(
+      within(screen.getByRole('alertdialog', { name: '게시글 삭제 확인' })).getByRole('button', {
+        name: '삭제',
+      }),
+    );
+    await waitFor(() => expect(deletionMutationRequest).toHaveBeenCalledTimes(2));
+  },
+  render: () => (
+    <PostActionBarFixture
+      deleteOutcome="network-error"
+      onMutationRequest={deletionMutationRequest}
+      selectedProfileId="profile-author"
+    />
+  ),
 };
 
 export const ControlledReply: Story = {

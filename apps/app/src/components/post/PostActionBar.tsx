@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { spacing } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
+import { PostDeletionAction } from './PostDeletionAction';
 import { ReactionAction } from './ReactionAction';
 import { RepostAction } from './RepostAction';
 import type { Ref } from 'react';
@@ -26,6 +27,7 @@ type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
   more?: MoreActionConfig;
+  onDeleted?: (postId: string) => void;
   onRepostError?: (failure: RepostActionFailure) => void;
   post?: PostActionBar_post$key | null;
   reactionController?: PostReactionController;
@@ -35,12 +37,14 @@ export type PostActionBarProps = {
 const postActionBarPostFragment = graphql`
   fragment PostActionBar_post on Post {
     ...RepostAction_post @alias(as: "repost")
+    ...PostDeletionAction_post @alias(as: "deletion")
   }
 `;
 
 export function PostActionBar({
   bookmark,
   more,
+  onDeleted,
   onRepostError,
   post,
   reactionController,
@@ -102,6 +106,8 @@ export function PostActionBar({
           stateful={false}
           testID="more"
         />
+      ) : data?.deletion ? (
+        <PostDeletionAction onDeleted={onDeleted} post={data.deletion} />
       ) : null}
     </View>
   );

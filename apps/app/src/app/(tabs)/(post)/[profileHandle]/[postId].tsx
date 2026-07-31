@@ -9,6 +9,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import type { Href } from 'expo-router';
 import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
@@ -119,6 +120,7 @@ function PostDetailContent({
   threadIdentity: string;
 }) {
   const router = useRouter();
+  const [locallyDeleted, setLocallyDeleted] = useState(false);
   const data = useLazyLoadQuery<PostDetailQuery>(
     PostQuery,
     { postId },
@@ -126,9 +128,13 @@ function PostDetailContent({
   );
   const post = data.node?.__typename === 'Post' ? data.node : null;
   const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
-  const pureRepostSourceHref = pureRepostSource
+  const pureRepostSourceHref: Href | null = pureRepostSource
     ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
     : null;
+
+  useEffect(() => {
+    setLocallyDeleted(false);
+  }, [fetchKey]);
 
   useEffect(() => {
     if (pureRepostSourceHref) {
@@ -138,7 +144,11 @@ function PostDetailContent({
     }
   }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
 
-  return pureRepostSourceHref ? null : !post ? (
+  return pureRepostSourceHref ? null : locallyDeleted ? (
+    <PostDetailFrame header={<PostDetailHeader />}>
+      <StateView description="작성자가 이 게시글을 삭제했어요." title="삭제된 게시글이에요" />
+    </PostDetailFrame>
+  ) : !post ? (
     <PostDetailFrame header={<PostDetailHeader />}>
       <StateView
         description="이미 삭제되었거나 존재하지 않는 게시글이에요."
@@ -160,6 +170,7 @@ function PostDetailContent({
     <PostDetailThread
       header={<PostDetailHeader />}
       identity={threadIdentity}
+      onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={onReplyCreated}
       post={post.thread}
       replyProfile={data.currentSession?.selectedProfile ?? null}

@@ -19,8 +19,8 @@ GraphQL `deletePost`가 검증된 selected Profile과 concrete Post ID를 기존
 - Author 성공, 비Author·guest 거부, Post가 아닌 global ID 거부, target global `postId` payload와 대상 Post 상태를 API integration에서 확인한다.
 - 기존 resolver가 현재 Core service를 한 번 호출하는 경계와 관련 type/schema check를 확인한다.
 
-- [ ] 1.1 현재 GraphQL resolver와 API integration coverage를 계약에 대조하고 누락된 resolver behavior만 최소 구현한다.
-- [ ] 1.2 Author·비Author·guest·잘못된 concrete ID와 global `postId` 결과를 검증하고 backend 경계 증거를 기록한다.
+- [x] 1.1 현재 GraphQL resolver와 API integration coverage를 계약에 대조하고 누락된 resolver behavior만 최소 구현한다.
+- [x] 1.2 Author·비Author·guest·잘못된 concrete ID와 global `postId` 결과를 검증하고 backend 경계 증거를 기록한다.
 
 ## 2. PROD-598 작성자 More menu와 삭제 확인
 
@@ -48,8 +48,8 @@ GraphQL `deletePost`가 검증된 selected Profile과 concrete Post ID를 기존
 - 일반 Post·Reply·Quote·Reply이면서 Quote, guest·다른 Profile, pure Repost Source와 링크 복사 item 순서를 component/Storybook fixture로 확인한다.
 - menu open·dismiss·focus return, 확인 copy·cancel·confirm, Web keyboard/Escape, Native back/backdrop와 pending busy·disabled 상태를 검증한다.
 
-- [ ] 2.1 작성자 eligibility와 direct Source target을 파생하는 private More action을 기존 ActionMenu와 Action Bar에 연결한다.
-- [ ] 2.2 기존 item과 호환되는 destructive menu 표현과 승인된 copy·focus·dismiss·pending semantics의 삭제 확인 UI를 구현한다.
+- [x] 2.1 작성자 eligibility와 direct Source target을 파생하는 private More action을 기존 ActionMenu와 Action Bar에 연결한다.
+- [x] 2.2 기존 item과 호환되는 destructive menu 표현과 승인된 copy·focus·dismiss·pending semantics의 삭제 확인 UI를 구현한다.
 - [ ] 2.3 작성자별 노출, item 순서, 정확한 target ID, 취소·확인·중복 입력과 Web·Native 접근성 component/Storybook 검증을 추가한다.
 
 ## 3. PROD-598 서버 성공 기반 Relay 동기화와 실패 복구
@@ -79,8 +79,8 @@ GraphQL `deletePost`가 검증된 selected Profile과 concrete Post ID를 기존
 - server pending·GraphQL/network failure에는 cache 유지, dialog 복구, alert toast와 같은 ID 재시도를 검증한다.
 - mutation 중 selected Profile 전환 fixture에서 이전 callback이 새 actor Store나 UI state를 바꾸지 않는지 확인한다.
 
-- [ ] 3.1 확인 뒤 정확한 Post ID로 단일 mutation을 실행하고 actor 전환에 안전한 성공·실패 callback 경계를 구현한다.
-- [ ] 3.2 payload `postId` 기반으로 현재 actor Store의 목록·상세·pure Repost representation을 server 확정 상태에 맞추고 성공 UI를 종료한다.
+- [x] 3.1 확인 뒤 정확한 Post ID로 단일 mutation을 실행하고 actor 전환에 안전한 성공·실패 callback 경계를 구현한다.
+- [x] 3.2 payload `postId` 기반으로 현재 actor Store의 목록·상세·pure Repost representation을 server 확정 상태에 맞추고 성공 UI를 종료한다.
 - [ ] 3.3 실패 cache 유지·dialog 재시도·한국어 alert toast와 Home·Profile·상세·actor 격리 Relay test를 구현한다.
 
 ## 4. PROD-598 통합 검증과 완료 증거
