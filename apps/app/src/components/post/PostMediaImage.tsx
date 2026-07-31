@@ -11,9 +11,11 @@ export type PostMediaItem = {
 
 export function PostMediaImage({
   index,
+  interactive = true,
   item,
 }: {
   readonly index: number;
+  readonly interactive?: boolean;
   readonly item: PostMediaItem;
 }) {
   const theme = useTheme();
@@ -56,7 +58,7 @@ export function PostMediaImage({
         <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
           {accessibilityLabel}을 불러오지 못했습니다.
         </Text>
-        {item.url ? (
+        {item.url && interactive ? (
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"

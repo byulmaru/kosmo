@@ -27,7 +27,7 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let PostMediaImage: ComponentType<{ index: number; item: PostMediaItem }>;
+let PostMediaImage: ComponentType<{ index: number; interactive?: boolean; item: PostMediaItem }>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -81,18 +81,26 @@ describe('PostMediaImage', () => {
     assert.ok(byTestId('post-media-error-missing'));
     assert.equal(rendered('Pressable').length, 0);
   });
+
+  it('비대화형 이미지 오류에서는 재시도 control을 표시하지 않는다', async () => {
+    await render(0, media('landscape', '가로 이미지'), false);
+
+    await act(async () => image('landscape').props.onError());
+    assert.ok(byTestId('post-media-error-landscape'));
+    assert.equal(rendered('Pressable').length, 0);
+  });
 });
 
 function media(id: string, altText: string | null): PostMediaItem {
   return { altText, id, url: `https://media.example/${id}.webp` };
 }
 
-async function render(index: number, item: PostMediaItem) {
+async function render(index: number, item: PostMediaItem, interactive = true) {
   await act(async () => {
     if (renderer) {
-      renderer.update(createElement(PostMediaImage, { index, item }));
+      renderer.update(createElement(PostMediaImage, { index, interactive, item }));
     } else {
-      renderer = create(createElement(PostMediaImage, { index, item }));
+      renderer = create(createElement(PostMediaImage, { index, interactive, item }));
     }
   });
   assert.ok(renderer);

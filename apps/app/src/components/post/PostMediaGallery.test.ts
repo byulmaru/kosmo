@@ -24,6 +24,7 @@ mock.module('./PostMediaImage', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let PostMediaGallery: ComponentType<{
+  interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   sensitive: boolean;
 }>;
@@ -77,13 +78,24 @@ describe('PostMediaGallery', () => {
     await render({ media: null, sensitive: false });
     assert.equal(byTestId('post-media-unavailable').props.accessibilityRole, 'alert');
   });
+
+  it('비대화형 Sensitive Media에서는 image와 공개 control을 mount하지 않는다', async () => {
+    await render({ interactive: false, media: [media(1, null)], sensitive: true });
+
+    assert.equal(rendered('PostMediaImage').length, 0);
+    assert.equal(rendered('Pressable').length, 0);
+  });
 });
 
 function media(index: number, altText: string | null): PostMediaItem {
   return { altText, id: `media-${index}`, url: `https://media.example/${index}.webp` };
 }
 
-async function render(props: { media: ReadonlyArray<PostMediaItem> | null; sensitive: boolean }) {
+async function render(props: {
+  interactive?: boolean;
+  media: ReadonlyArray<PostMediaItem> | null;
+  sensitive: boolean;
+}) {
   await act(async () => {
     if (renderer) {
       renderer.update(createElement(PostMediaGallery, props));

@@ -8,9 +8,11 @@ import type { PostMediaItem } from './PostMediaImage';
 export type { PostMediaItem } from './PostMediaImage';
 
 export function PostMediaGallery({
+  interactive = true,
   media,
   sensitive,
 }: {
+  readonly interactive?: boolean;
   readonly media: ReadonlyArray<PostMediaItem> | null;
   readonly sensitive: boolean;
 }) {
@@ -55,13 +57,17 @@ export function PostMediaGallery({
             작성자가 민감한 내용으로 표시했습니다.
           </Text>
         )}
-        <MediaVisibilityButton
-          expanded={revealed}
-          key="media-visibility"
-          onPress={() => setRevealed((current) => !current)}
-        />
+        {interactive ? (
+          <MediaVisibilityButton
+            expanded={revealed}
+            key="media-visibility"
+            onPress={() => setRevealed((current) => !current)}
+          />
+        ) : null}
         {revealed
-          ? items.map((item, index) => <PostMediaImage index={index} item={item} key={item.id} />)
+          ? items.map((item, index) => (
+              <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
+            ))
           : null}
       </View>
     );
@@ -70,7 +76,7 @@ export function PostMediaGallery({
   return (
     <View style={styles.root} testID="post-media-gallery">
       {items.map((item, index) => (
-        <PostMediaImage index={index} item={item} key={item.id} />
+        <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
       ))}
     </View>
   );

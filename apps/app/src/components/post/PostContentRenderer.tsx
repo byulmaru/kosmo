@@ -75,7 +75,11 @@ export function PostContentRenderer({
   return (
     <View style={styles.root} testID="post-content-renderer">
       {bodyContent}
-      <PostMediaGallery media={media} sensitive={document?.attrs?.sensitiveMedia ?? false} />
+      <PostMediaGallery
+        interactive={interactive}
+        media={media}
+        sensitive={document?.attrs?.sensitiveMedia ?? false}
+      />
     </View>
   );
 }

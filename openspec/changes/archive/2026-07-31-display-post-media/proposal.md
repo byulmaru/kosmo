@@ -32,7 +32,8 @@ media-only와 text+media Post를 Web·iOS·Android에서 동일하고 접근 가
 
 ### Modified Capabilities
 
-없음.
+- `post-content-document`: 앱 표시용 V1 guard가 필수 구조·타입과 안전한 URL을 검증하면서 소비하지 않는
+  additive object 속성을 허용하고, 미지원 document fallback 경계를 해당 계약과 정렬한다.
 
 ## Impact
 

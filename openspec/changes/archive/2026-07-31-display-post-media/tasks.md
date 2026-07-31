@@ -40,6 +40,8 @@ Alt Text, Sensitive Media와 이미지 오류·재시도를 접근 가능한 공
 - [x] 1.5 Media가 surface 폭을 채우면서 가로 원본 비율을 유지하고 세로 높이를 1:1로 제한하도록 조정한다.
 - [x] 1.6 앱 표시용 V1 guard가 필수 계약은 검증하면서 소비하지 않는 additive 속성을 허용하도록 보완한다.
 - [x] 1.7 Sensitive Media 공개·가리기 전환에서 Web keyboard focus를 같은 control에 보존한다.
+- [x] 1.8 비대화형 Reply Composer Parent에서 일반 Media 표시는 유지하고 Media 상태 변경 control을 제외한다.
+- [x] 1.9 변경한 `post-content-document` 계약을 proposal과 archive delta에 동기화한다.
 
 ## Verification Evidence
 
@@ -65,6 +67,14 @@ Alt Text, Sensitive Media와 이미지 오류·재시도를 접근 가능한 공
   keyboard로 Sensitive Media를 공개하고 다시 가린 뒤 visibility control의 focus가 유지되는 검증을 포함한다.
 - 2026-07-31 `pnpm --filter @kosmo/app lint:tsc`, 관련 ESLint·Prettier와
   `openspec validate --all --strict`: 모두 통과.
+- 2026-07-31 `pnpm --filter @kosmo/app test:storybook`: Chromium에서 전체 17 files, 232 tests 통과.
+  비대화형 Reply Composer Parent가 일반 이미지는 표시하고 Sensitive Media는 가린 채 Media 상태 변경
+  control을 제외하는 검증을 포함한다.
+- 2026-07-31 `pnpm --filter @kosmo/app test:unit`: 131개 통과. 비대화형 Sensitive Media가 image·공개
+  control을 mount하지 않고 비대화형 이미지 오류가 재시도 control을 제공하지 않는 검증을 포함한다.
+- 2026-07-31 `post-content-document`의 MODIFIED requirement 두 개를 archive delta에 추가하고 proposal의
+  Modified Capabilities와 동기화했다. archive를 임시 active change로 복원한 strict validation과
+  `openspec validate --all --strict` 60개가 모두 통과했다.
 - iOS VoiceOver·Android TalkBack, 각 플랫폼 touch target과 실제 binary runtime은 현재 환경에서 실행하지
   않았다. 공용 React Native props와 48 logical-unit target을 구현했지만 Native runtime 검증 완료로
   간주하지 않는다.

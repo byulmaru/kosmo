@@ -4174,3 +4174,30 @@ export const ReplyQuoteParentPresentation: Story = {
   },
   render: () => <ReplyModalPresentationStory parentId={linkedSourceQuote.id} />,
 };
+
+export const ReplyMediaParentPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parentElement = within(dialog).getByTestId('reply-parent');
+    const parent = within(parentElement);
+    expect(parentElement).toHaveTextContent('document text');
+    expect(parent.getByTestId('post-media-gallery')).toBeVisible();
+    expect(parent.getByTestId('post-media-image-media-story')).toBeVisible();
+    expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
+    expect(parent.queryByRole('button', { name: /이미지 다시 시도/ })).toBeNull();
+  },
+  render: () => <ReplyModalPresentationStory parentId={mediaTextPost.id} />,
+};
+
+export const ReplySensitiveMediaParentPresentation: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const parent = within(within(dialog).getByTestId('reply-parent'));
+    expect(parent.getByTestId('post-media-sensitive')).toBeVisible();
+    expect(parent.queryByTestId('post-media-gallery')).toBeNull();
+    expect(parent.queryByRole('button', { name: '민감한 이미지 표시' })).toBeNull();
+  },
+  render: () => <ReplyModalPresentationStory parentId={mediaOnlyPost.id} />,
+};
