@@ -248,7 +248,7 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(PostContents)).length, 0);
   });
 
-  test('accepts same-URL attachments while the transition index remains', async () => {
+  test('stores same-URL attachments as separate Remote Media', async () => {
     await createStoredRemoteActor();
     const sharedUrl = new URL('https://remote.example/media/shared.webp');
 
@@ -271,7 +271,7 @@ describe('inbound Create dispatch', () => {
     );
 
     const media = await db.select().from(Media);
-    assert.equal(media.length, 1);
+    assert.equal(media.length, 2);
     const { content } = await getMaterializedPost(remoteObjectUri);
     const mediaById = new Map(media.map((item) => [item.id, item]));
     assert.deepEqual(
@@ -284,7 +284,7 @@ describe('inbound Create dispatch', () => {
         })),
       [
         { altText: 'First', mediaType: 'image/webp', url: sharedUrl.href },
-        { altText: 'First', mediaType: 'image/webp', url: sharedUrl.href },
+        { altText: 'Second', mediaType: 'image/png', url: sharedUrl.href },
       ],
     );
   });
@@ -322,7 +322,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('concurrent Notes with the same Remote URL remain safe during transition', async () => {
+  test('concurrent Notes with the same Remote URL keep separate Media identities', async () => {
     await createStoredRemoteActor();
     const mediaUrl = new URL('https://remote.example/media/concurrent.webp');
     const objectUris = [
@@ -349,7 +349,7 @@ describe('inbound Create dispatch', () => {
     );
 
     const media = await db.select().from(Media);
-    assert.equal(media.length, 1);
+    assert.equal(media.length, 2);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 2);
     const referencedMediaIds = new Set<string>();
     for (const objectUri of objectUris) {
@@ -361,6 +361,7 @@ describe('inbound Create dispatch', () => {
       referencedMediaIds.add(mediaIds[0]!);
     }
     assert.deepEqual(referencedMediaIds, new Set(media.map(({ id }) => id)));
+    assert.equal(referencedMediaIds.size, 2);
   });
 
   test('deduplicates actor and object hrefs before dispatch', async () => {

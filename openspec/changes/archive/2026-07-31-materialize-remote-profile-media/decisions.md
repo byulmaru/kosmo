@@ -58,7 +58,7 @@ Remote Media와 actor refresh 경계에 적용하기 위한 durable 선택을 �
   남는다.
 - Confirmation / Follow-up: 최초 생성, refresh 교체·제거와 강제 저장 실패 rollback 테스트로 검증한다.
 
-### Remote URL unique index는 무중단 두 release로 제거한다
+### Remote URL unique index는 transition과 contract 두 단계로 제거한다
 
 - Decision Date: 2026-07-31
 - Decision Class: Implementation Choice
@@ -66,16 +66,17 @@ Remote Media와 actor refresh 경계에 적용하기 위한 durable 선택을 �
 - Status: Active
 - Context / Problem: 기존 URL partial unique index가 URL 기반 identity와 conflict reuse를 database contract로
   강제한다.
-- Decision Outcome: 첫 release는 전역 index를 `(profile_id, url)` compatibility index로 바꾸고 index 유무에
-  모두 호환되는 application을 배포한다. 구버전 active/preview와 rollback 대상을 배수한 뒤 별도 contract
-  release에서 compatibility index를 제거한다. row backfill이나 rewrite는 하지 않는다.
+- Decision Outcome: 첫 PR은 전역 index를 `(profile_id, url)` compatibility index로 바꾸고 index 유무에 모두
+  호환되는 application을 만든다. 별도 contract PR에서 compatibility index를 제거한다. 프로덕션은 아직
+  실서비스 전이므로 active/preview workload 배수나 rollback window 대기는 적용하지 않으며 row backfill이나
+  rewrite도 하지 않는다.
 - Alternatives Considered: `(profile_id, url)` 또는 `(profile_id, kind, url)` index도 URL을 identity 일부로
   만들며 관계 문맥을 Media table에 중복하므로 제외한다.
-- Consequences: transition 기간에는 동일 Profile+URL 표현이 일시적으로 기존 Media에 수렴할 수 있지만 서비스
-  중단과 구버전 query 실패는 없다. contract 뒤 첫 refresh부터 공유 avatar/header도 분리된다. contract 뒤에는
-  이전 URL identity schema로 즉시 rollback할 수 없다.
-- Confirmation / Follow-up: PROD-625 배포·배수 증거 뒤 PROD-627에서 index 부재, 기존 row 보존과 같은 URL의
-  독립 저장을 검증한다.
+- Consequences: transition schema에서 만든 공유 avatar/header는 contract 뒤 첫 refresh부터 분리된다. 기존
+  Media row와 참조는 migration에서 보존한다. 실서비스 데이터와 트래픽이 없으므로 이전 URL identity schema로의
+  운영 rollback 호환성은 gate가 아니다.
+- Confirmation / Follow-up: PR #479 merge와 실서비스 전 운영 조건을 PROD-627에 기록하고 index 부재, 기존 row
+  보존과 같은 URL의 독립 저장을 검증한다.
 
 ## Remaining Decisions
 

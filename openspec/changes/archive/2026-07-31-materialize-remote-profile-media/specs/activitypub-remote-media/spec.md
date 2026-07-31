@@ -1,15 +1,8 @@
-# activitypub-remote-media Specification
-
-## Purpose
-
-원격 ActivityPub Note의 embedded 이미지 attachment를 검증하고, Remote Media와 순서 있는 PostContent Media
-node로 원자적으로 투영하는 수신 계약을 정의한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: 원격 이미지 attachment 검증
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585. 시스템은 원격 Note에 embedded Image 또는 Media Type이 `image/*`인 embedded Document로 제공된 attachment만 Remote Media projection 후보로 사용하고, 후보 전체를 Post materialization 전에 검증해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-625. 시스템은 원격 Note에 embedded Image 또는 Media Type이 `image/*`인 embedded Document로 제공된 attachment만 Remote Media projection 후보로 사용하고, 후보 전체를 Post materialization 전에 검증해야 한다(MUST).
 
 #### Scenario: 지원되는 이미지 attachment 수집
 
@@ -82,7 +75,7 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 ### Requirement: 최초 원격 Media materialization 원자성
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-256. 시스템은 Remote Media projection을 기존 원격 Post 최초 materialization의 PostgreSQL transaction과 first-write-wins 경계에 포함해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, PROD-585, PROD-256, PROD-625. 시스템은 Remote Media projection을 기존 원격 Post 최초 materialization의 PostgreSQL transaction과 first-write-wins 경계에 포함해야 한다(MUST).
 
 #### Scenario: Media와 Post를 함께 commit
 

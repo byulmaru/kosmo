@@ -142,7 +142,7 @@ const materializeRemoteMedia = async (
 
   const materialized: { mediaId: string }[] = [];
   for (const candidate of candidates) {
-    const inserted = await tx
+    const media = await tx
       .insert(Media)
       .values({
         ...candidate,
@@ -150,26 +150,8 @@ const materializeRemoteMedia = async (
         source: MediaSource.REMOTE,
         state: MediaState.READY,
       })
-      .onConflictDoNothing()
       .returning({ id: Media.id })
-      .then(first);
-    const media =
-      inserted ??
-      (await tx
-        .select({ id: Media.id })
-        .from(Media)
-        .where(
-          and(
-            eq(Media.source, MediaSource.REMOTE),
-            eq(Media.profileId, profileId),
-            eq(Media.url, candidate.url),
-          ),
-        )
-        .limit(1)
-        .then(first));
-    if (!media) {
-      throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
-    }
+      .then(firstOrThrow);
     materialized.push({ mediaId: media.id });
   }
   return materialized;

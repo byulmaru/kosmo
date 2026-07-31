@@ -660,22 +660,6 @@ source Reaction 없이 존재할 수 없어야 한다(MUST NOT).
 - **AND** 확인할 수 없는 값을 synthetic metadata로 만들거나 기존 Media row를 삭제하면 안 된다
 - **AND** 백필 뒤 모든 Ready Local Media가 URL, media type과 ready 시각을 가진 상태에서 constraint를 적용해야 한다
 
-### Requirement: Remote Media URL identity
-
-**Authority / Provenance:** `docs/domain/objects/media.md`, PROD-585. 시스템은 canonical 원격 URL을 Remote Media의 재사용 identity로 사용하고 database에서 중복을 방지해야 한다(MUST).
-
-#### Scenario: Remote URL 중복 방지
-
-- **WHEN** `source=REMOTE`인 둘 이상의 Media가 같은 canonical `media.url`을 저장하려 한다
-- **THEN** PostgreSQL unique constraint가 하나의 Remote Media만 허용한다
-- **AND** Local Media URL의 identity 또는 uniqueness 계약을 변경하지 않는다
-
-#### Scenario: Local upload schema 호환
-
-- **WHEN** 기존 Local Media upload 시작과 완료가 실행된다
-- **THEN** Local upload 전용 identity인 storage reference와 Upload Account 계약은 유지된다
-- **AND** Remote URL uniqueness 때문에 서로 다른 Local Media의 URL 저장이 거부되지 않는다
-
 ### Requirement: Reaction Type 문자열 저장
 
 **Authority / Provenance:** [Reaction canonical 객체](../../../docs/domain/objects/reaction.md), [PROD-395](https://linear.app/byulmaru/issue/PROD-395), [PROD-404](https://linear.app/byulmaru/issue/PROD-404) 시스템은 Reaction Type을 PostgreSQL enum이나 별도 registry identity가 아니라 `reaction.type`의 non-null Unicode 문자열로 저장해야 한다(MUST). Database는 현재 허용 목록을 `CHECK` constraint로 고정해서는 안 된다(MUST NOT).

@@ -192,7 +192,7 @@ describe('remote actor materialization', () => {
     assert.equal(await db.$count(Media, eq(Media.profileId, first.id)), 3);
   });
 
-  test('accepts a shared avatar/header URL while the transition index remains', async () => {
+  test('stores a shared avatar/header URL as separate Media identities', async () => {
     const sharedUrl = new URL(`https://${remoteDomain}/media/shared.png`);
     const profile = await materializeRemoteProfileActor({
       context: createLookupContext(async () =>
@@ -210,7 +210,7 @@ describe('remote actor materialization', () => {
       .select({ mediaId: ProfileMedia.mediaId })
       .from(ProfileMedia)
       .where(eq(ProfileMedia.profileId, profile.id));
-    assert.equal(new Set(mediaIds.map(({ mediaId }) => mediaId)).size, 1);
+    assert.equal(new Set(mediaIds.map(({ mediaId }) => mediaId)).size, 2);
     assert.deepEqual(
       media.map(({ altText, kind, mediaType, url }) => ({ altText, kind, mediaType, url })),
       [
@@ -221,13 +221,70 @@ describe('remote actor materialization', () => {
           url: sharedUrl.href,
         },
         {
-          altText: 'Avatar',
+          altText: 'Header',
           kind: ProfileMediaKind.HEADER,
-          mediaType: 'image/png',
+          mediaType: 'image/webp',
           url: sharedUrl.href,
         },
       ],
     );
+  });
+
+  test('splits a transition-era shared avatar/header Media on the first refresh', async () => {
+    const sharedUrl = new URL(`https://${remoteDomain}/media/shared-transition.png`);
+    const { profile } = await createStoredRemoteActor();
+    const sharedMedia = await db
+      .insert(Media)
+      .values({
+        altText: 'Transition',
+        mediaType: 'image/png',
+        profileId: profile.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.insert(ProfileMedia).values([
+      { kind: ProfileMediaKind.AVATAR, mediaId: sharedMedia.id, profileId: profile.id },
+      { kind: ProfileMediaKind.HEADER, mediaId: sharedMedia.id, profileId: profile.id },
+    ]);
+
+    await materializeRemoteProfileActor({
+      context: createLookupContext(async () =>
+        createActor({
+          icon: new Image({ mediaType: 'image/png', name: 'Avatar', url: sharedUrl }),
+          image: new Image({ mediaType: 'image/webp', name: 'Header', url: sharedUrl }),
+        }),
+      ).context,
+      handle: `alice@${remoteDomain}`,
+      now: Temporal.Instant.from('2026-07-10T00:00:00Z'),
+    });
+
+    const relations = await db
+      .select({ kind: ProfileMedia.kind, mediaId: ProfileMedia.mediaId })
+      .from(ProfileMedia)
+      .where(eq(ProfileMedia.profileId, profile.id))
+      .orderBy(ProfileMedia.kind);
+    assert.equal(new Set(relations.map(({ mediaId }) => mediaId)).size, 2);
+    assert.deepEqual(await readProfileMedia(profile.id), [
+      {
+        altText: 'Avatar',
+        kind: ProfileMediaKind.AVATAR,
+        mediaType: 'image/png',
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      },
+      {
+        altText: 'Header',
+        kind: ProfileMediaKind.HEADER,
+        mediaType: 'image/webp',
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: sharedUrl.href,
+      },
+    ]);
   });
 
   test('ignores IRI-only and invalid actor representations without rejecting the profile', async () => {
@@ -1174,10 +1231,7 @@ describe('remote actor materialization', () => {
       ORDER BY indexname
     `;
 
-    assert.equal(mediaIndexes.length, 1);
-    assert.equal(mediaIndexes[0]?.indexname, 'media_remote_profile_url_unique');
-    assert.match(mediaIndexes[0]?.indexdef ?? '', /\(profile_id, url\)/);
-    assert.match(mediaIndexes[0]?.indexdef ?? '', /WHERE \(source = 'REMOTE'/);
+    assert.deepEqual([...mediaIndexes], []);
   });
 });
 
