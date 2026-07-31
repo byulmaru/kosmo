@@ -10,7 +10,9 @@ metadata:
     app.kubernetes.io/version: {{ .Values.version | quote }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
+  {{- if ne .Values.env "prod" }}
   replicas: 1
+  {{- end }}
   strategy:
     blueGreen:
       activeService: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}

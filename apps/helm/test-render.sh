@@ -150,6 +150,16 @@ if [[ "$(grep -Fc 'kind: HorizontalPodAutoscaler' "${render_dir}/prod.yaml")" -n
   exit 1
 fi
 
+if grep -Fq '  replicas:' "${render_dir}/prod.yaml"; then
+  echo "prod Rollouts must leave replicas under HPA ownership" >&2
+  exit 1
+fi
+
+if [[ "$(grep -Fc '  replicas: 1' "${render_dir}/dev.yaml")" -ne 2 ]]; then
+  echo "dev API and Web Rollouts must each keep one fixed replica" >&2
+  exit 1
+fi
+
 for workload in api web; do
   if ! awk -v name="kosmo-${workload}" '
     $0 == "kind: HorizontalPodAutoscaler" { in_resource = 1 }
