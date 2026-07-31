@@ -17,6 +17,24 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - Figma Action은 내부 상하 padding 4px을 포함한다. 목록 surface는 28px Action Bar 자체 geometry를 바꾸지
   않고 전용 slot의 상단 padding은 0, 하단 padding은 4px로 두어 아래 카드 구분선과 4px 간격을 만든다.
 
+## Web hover target
+
+- Web의 비터치 pointer가 action 위에 머무르면 16×16px glyph를 중심으로 한 28×28px 원형 background를
+  표시한다. Reply, Repost, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity로 사용하고
+  hover foreground에는 불투명 `primary`를 사용한다. Reaction은 기존 semantic `like`를 30% opacity로
+  사용하고 heart foreground에는 불투명 `like`를 사용해 옅은 원형 위에서도 glyph가 선명하게 보이게 한다.
+  Reply와 Repost의 count 색은 hover tint에 포함하지 않고 기존 default 또는 active 색을 유지한다.
+- 원형 hover background는 실제 interactive target의 크기·padding·간격을 바꾸지 않는다. Reply, Repost,
+  Reaction과 Bookmark의 target은 계속 50×28px이고 More는 28×28px이며, background는 count를 감싸거나
+  인접 action target과 겹치지 않는다.
+- Reaction이 selected 상태이면 hover 여부와 관계없이 heart의 stroke와 fill에 `like`를 사용한다. 다른
+  action의 default·active 색, selected fill과 모든 action의 pressed opacity는 기존 상태 표현을 유지한다.
+  hover가 끝나면 원형 background는 사라지고 미선택 Reaction의 foreground는 기존 default 색으로 돌아간다.
+- pending·disabled·resolution-required처럼 입력이 차단된 action은 hover background를 표시하지 않는다.
+  Native와 Web touch 입력에는 hover 전용 background를 표시하지 않는다.
+- light·dark theme 모두 고정 색상 대신 semantic `primary`와 `like` token을 사용한다. Reply, Repost,
+  Bookmark와 More를 서로 다른 tint로 분리하는 확장은 후속 범위이며 이 변경에서는 공통 `primary`를 사용한다.
+
 ## 플랫폼 rollout과 release gate
 
 - 현재 출시 범위는 Web이며, 구현 drift를 막기 위해 Native platform file도 우선 같은 28px geometry를 사용한다.
@@ -150,6 +168,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, Reply·More target의 content column 양끝 정렬, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
   포함하고 서로 겹치지 않는지도 확인한다.
+- Web pointer hover에서는 glyph 중심 28×28 원형 background, social action의 50×28 click target과 More의
+  28×28 click target 보존, 일반 action의 30% `primary` background·불투명 `primary` foreground,
+  Reply·Repost count 색 유지, Reaction의 30% `like` background·불투명 `like` foreground·selected 표현과
+  기존 pressed 상태 보존을 검증한다.
+  blocked action, Web touch 입력과 Native에는 hover background가 나타나지 않는지 확인한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
   두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px
   바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 왼쪽으로 펼쳐지는지, Repost menu는 기존 시작

@@ -159,6 +159,7 @@ export function RepostAction({
             active={Boolean(data.viewerRepost)}
             controlRef={ref}
             count={data.repostCount}
+            hoverDisabled={execution.kind === 'resolution-required'}
             icon={Repeat2}
             iconStrokeWidth={2.7}
             menuExpanded={execution.kind === 'enabled' ? menuExpanded : false}

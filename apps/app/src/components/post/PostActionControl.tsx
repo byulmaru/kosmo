@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { formatPostActionCount } from './postActionCount';
 import type { ComponentType, Ref } from 'react';
 import type { AccessibilityState } from 'react-native';
@@ -16,6 +17,7 @@ type Icon = ComponentType<{
 
 type Props = {
   accessibilityLabel: string;
+  activeColor?: string;
   active?: boolean;
   alignToEnd?: boolean;
   count?: number;
@@ -28,12 +30,17 @@ type Props = {
   onPress: () => void;
   popupRole?: 'dialog' | 'menu';
   processing?: PostActionProcessingState;
+  hoverColor?: string;
+  hoverDisabled?: boolean;
+  hoverForegroundColor?: string;
+  hoverOpacity?: number;
   stateful?: boolean;
   testID: string;
 };
 
 export function PostActionControl({
   accessibilityLabel,
+  activeColor,
   active = false,
   alignToEnd = false,
   count,
@@ -46,18 +53,29 @@ export function PostActionControl({
   onPress,
   popupRole,
   processing = 'default',
+  hoverColor,
+  hoverDisabled = false,
+  hoverForegroundColor,
+  hoverOpacity = 0.3,
   stateful = true,
   testID,
 }: Props) {
   const theme = useTheme();
+  const [hovered, setHovered] = useState(false);
   const isPending = processing === 'pending';
   const isDisabled = processing === 'disabled';
   const blocked = isPending || isDisabled;
-  const color = blocked
+  const countColor = blocked
     ? theme.textSecondary
-    : active || expanded
-      ? theme.primary
-      : theme.textSecondary;
+    : active
+      ? (activeColor ?? theme.primary)
+      : expanded
+        ? theme.primary
+        : theme.textSecondary;
+  const iconColor =
+    hovered && !blocked && !active && !hoverDisabled
+      ? (hoverForegroundColor ?? theme.primary)
+      : countColor;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -79,6 +97,8 @@ export function PostActionControl({
       accessibilityRole="button"
       accessibilityState={stateful ? accessibilityState : undefined}
       disabled={blocked}
+      onHoverIn={Platform.OS === 'web' ? () => setHovered(true) : undefined}
+      onHoverOut={Platform.OS === 'web' ? () => setHovered(false) : undefined}
       onPress={onPress}
       ref={controlRef}
       testID={`post-action-${testID}`}
@@ -92,7 +112,7 @@ export function PostActionControl({
         <ActivityIndicator
           accessible={false}
           aria-hidden
-          color={color}
+          color={iconColor}
           size={14}
           style={styles.icon}
           testID={`post-action-${testID}-spinner`}
@@ -104,16 +124,33 @@ export function PostActionControl({
           style={styles.icon}
           testID={`post-action-${testID}-icon`}
         >
-          <Icon
-            color={color}
-            fill={fillActive && active ? color : 'none'}
-            size={16}
-            strokeWidth={iconStrokeWidth}
-          />
+          {hovered && !blocked && !hoverDisabled ? (
+            <View
+              aria-hidden
+              style={[
+                styles.hover,
+                { backgroundColor: hoverColor ?? theme.primary, opacity: hoverOpacity },
+              ]}
+              testID={`post-action-${testID}-hover`}
+            />
+          ) : null}
+          <View
+            accessible={false}
+            aria-hidden
+            style={styles.glyph}
+            testID={`post-action-${testID}-glyph`}
+          >
+            <Icon
+              color={iconColor}
+              fill={fillActive && active ? iconColor : 'none'}
+              size={16}
+              strokeWidth={iconStrokeWidth}
+            />
+          </View>
         </View>
       )}
       {formattedCount ? (
-        <Text numberOfLines={1} style={[styles.count, { color }]}>
+        <Text numberOfLines={1} style={[styles.count, { color: countColor }]}>
           {formattedCount}
         </Text>
       ) : null}
@@ -141,6 +178,30 @@ const styles = StyleSheet.create({
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
   },
-  icon: { alignItems: 'center', height: 16, justifyContent: 'center', width: 16 },
+  hover: {
+    borderRadius: radii.full,
+    height: 28,
+    left: -6,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: -6,
+    width: 28,
+    zIndex: 0,
+  },
+  glyph: {
+    alignItems: 'center',
+    height: 16,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 16,
+    zIndex: 1,
+  },
+  icon: {
+    alignItems: 'center',
+    height: 16,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 16,
+  },
   pressed: { opacity: 0.72 },
 });
