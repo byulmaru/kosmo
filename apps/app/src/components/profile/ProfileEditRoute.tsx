@@ -156,6 +156,7 @@ function EditableProfileRoute({
   const headerRef = useRef(header);
   const mounted = useRef(true);
   const selecting = useRef(false);
+  const [cleanValue, setCleanValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
   const [submitState, setSubmitState] = useState<ProfileEditSubmitState>({ kind: 'idle' });
   const [commitIssueMediaUploadUrl] = useMutation<ProfileEditRouteIssueMediaUploadUrlMutation>(
@@ -167,7 +168,7 @@ function EditableProfileRoute({
   const [commitUpdateProfile] =
     useMutation<ProfileEditRouteUpdateProfileMutation>(updateProfileMutation);
   const { allowNextNavigation, dialogProps } = useProfileEditNavigationGuard({
-    dirty: isProfileEditDraftDirty(initialValue, value),
+    dirty: isProfileEditDraftDirty(cleanValue, value),
     saving: submitState.kind === 'saving',
   });
 
@@ -337,12 +338,21 @@ function EditableProfileRoute({
             handleSaveFailure();
             return;
           }
+          setCleanValue(draft);
+          setSubmitState({ kind: 'idle' });
           traceProfileEditDiagnostic(correlationId, 'allowNextNavigation-call');
-          allowNextNavigation(() => {
-            traceProfileEditDiagnostic(correlationId, 'router-replace-start');
-            router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
-            traceProfileEditDiagnostic(correlationId, 'router-replace-return');
-          });
+          allowNextNavigation(
+            () => {
+              traceProfileEditDiagnostic(correlationId, 'router-replace-start');
+              try {
+                router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
+              } catch {
+                traceProfileEditDiagnostic(correlationId, 'router-replace-error');
+              }
+              traceProfileEditDiagnostic(correlationId, 'router-replace-return');
+            },
+            { keepAllowedUntilUnmount: true },
+          );
         },
         onError: (error) => {
           traceProfileEditDiagnostic(correlationId, 'relay-onError', {
@@ -369,7 +379,7 @@ function EditableProfileRoute({
   return (
     <>
       <ProfileEditScreen
-        initialValue={initialValue}
+        initialValue={cleanValue}
         onAvatarEdit={() => selectImage('avatar')}
         onAvatarRemove={() => removeImage('avatar')}
         onAvatarRetry={() => retryImage('avatar')}

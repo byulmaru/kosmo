@@ -207,9 +207,9 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
       `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록한다.
 - [x] 3.2 실제 Chromium E2E에서 수정 전 영구 `saving`을 재현하고, guard의 즉시 permission 회수 한 줄만 제거한
       fault injection으로 동일 시나리오가 통과함을 입증한다. 실험 코드는 원상복구한다.
-- [ ] 3.3 성공 저장을 clean terminal state로 수렴시키고 실제 navigation commit/unmount까지 permission을 유지하도록
+- [x] 3.3 성공 저장을 clean terminal state로 수렴시키고 실제 navigation commit/unmount까지 permission을 유지하도록
       Profile edit navigation lifecycle만 수정한다. draft·Ready Media ID 보존과 자동 재전송·재업로드 금지를 유지한다.
-- [ ] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, GraphQL/transport 실패를
+- [x] 3.4 text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, GraphQL/transport 실패를
       자동화하고 dirty discard guard·Relay normalization·Ready ID 무재업로드 회귀를 함께 검증한다.
 - [ ] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
       PROD-490 통합 검증 담당자에게 evidence를 전달한다.

@@ -59,6 +59,9 @@ let pickerResult: ImagePickerResult = { canceled: true, assets: null };
 let routerBackCalls = 0;
 let routerCanGoBack = true;
 let triggerBeforeRemoveOnReplace = false;
+let deferBeforeRemoveOnReplace = false;
+let noOpReplace = false;
+let throwOnReplace = false;
 let queryData: {
   currentSession: { selectedProfile: { relativeHandle: string } | null } | null;
   selectedProfileForEdit: {
@@ -93,13 +96,29 @@ mockModule('expo-router', {
     },
     canGoBack: () => routerCanGoBack,
     replace: (href: string) => {
+      if (throwOnReplace) {
+        throw new Error('replace failed');
+      }
       if (triggerBeforeRemoveOnReplace) {
-        lastReplaceEvent = emitBeforeRemove({ source: 'save-success', type: 'REPLACE' });
-        if (lastReplaceEvent.preventDefault.mock.callCount() > 0) {
+        const completeReplace = () => {
+          lastReplaceEvent = emitBeforeRemove({ source: 'save-success', type: 'REPLACE' });
+          if (lastReplaceEvent.preventDefault.mock.callCount() > 0) {
+            return;
+          }
+          if (!noOpReplace) {
+            routerReplacements.push(href);
+          }
+        };
+        if (deferBeforeRemoveOnReplace) {
+          setTimeout(completeReplace, 0);
           return;
         }
+        completeReplace();
+        return;
       }
-      routerReplacements.push(href);
+      if (!noOpReplace) {
+        routerReplacements.push(href);
+      }
     },
   }),
 });
@@ -178,6 +197,9 @@ afterEach(async () => {
   screenProps = null;
   toastMessages.length = 0;
   triggerBeforeRemoveOnReplace = false;
+  deferBeforeRemoveOnReplace = false;
+  noOpReplace = false;
+  throwOnReplace = false;
   mock.restoreAll();
 });
 
@@ -472,5 +494,61 @@ describe('ProfileEditRoute', () => {
     assert.deepEqual(routerReplacements, ['/@updated']);
     assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 0);
     assert.equal(requireDiscardDialogProps().visible, false);
+  });
+
+  it('비동기 Web navigation commit까지 성공 permission을 유지하고 저장을 clean 상태로 끝낸다', async () => {
+    await renderRoute();
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '저장할 소개' }),
+    );
+    triggerBeforeRemoveOnReplace = true;
+    deferBeforeRemoveOnReplace = true;
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+    );
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+
+    assert.equal(requireScreenProps().submitState.kind, 'idle');
+    assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
+    await flush();
+    assert.deepEqual(routerReplacements, ['/@updated']);
+    assert.equal(requireBeforeRemoveEvent(lastReplaceEvent).preventDefault.mock.callCount(), 0);
+
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, bio: '다시 변경한 소개' }),
+    );
+    let event: BeforeRemoveEvent | null = null;
+    await act(async () => {
+      event = emitBeforeRemove({ source: 'after-success-edit', type: 'GO_BACK' });
+    });
+    assert.equal(requireBeforeRemoveEvent(event).preventDefault.mock.callCount(), 1);
+    assert.equal(requireDiscardDialogProps().visible, true);
+  });
+
+  it('navigation no-op과 실패에서도 saving을 끝내고 mutation 재전송을 하지 않는다', async () => {
+    for (const mode of ['no-op', 'failure'] as const) {
+      await renderRoute();
+      await act(async () =>
+        requireScreenProps().onChange({ ...requireScreenProps().value, bio: `저장 ${mode}` }),
+      );
+      noOpReplace = mode === 'no-op';
+      throwOnReplace = mode === 'failure';
+      mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
+        config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+      );
+
+      await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+
+      assert.equal(requireScreenProps().submitState.kind, 'idle');
+      assert.deepEqual(requireScreenProps().initialValue, requireScreenProps().value);
+      assert.equal(mutationCalls.get('ProfileEditRouteUpdateProfileMutation')?.length, 1);
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      mutationCalls.clear();
+      mutationHandlers.clear();
+      noOpReplace = false;
+      throwOnReplace = false;
+    }
   });
 });

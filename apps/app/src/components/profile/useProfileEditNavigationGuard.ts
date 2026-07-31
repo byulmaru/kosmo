@@ -13,11 +13,17 @@ type Options = {
   saving: boolean;
 };
 
+type AllowNextNavigationOptions = {
+  keepAllowedUntilUnmount?: boolean;
+};
+
 export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
   const navigation = useNavigation();
   const { register } = useNavigationGuard();
   const pendingAction = useRef<GuardedNavigationAction | null>(null);
   const allowedAction = useRef<GuardedNavigationAction | null>(null);
+  const keepAllowedUntilUnmount = useRef(false);
+  const previousDirty = useRef(dirty);
   const [navigationAllowed, setNavigationAllowed] = useState(false);
   const [dialogVisible, setDialogVisible] = useState(false);
 
@@ -44,6 +50,14 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
   });
 
   useEffect(() => {
+    if (dirty && !previousDirty.current && keepAllowedUntilUnmount.current) {
+      keepAllowedUntilUnmount.current = false;
+      setNavigationAllowed(false);
+    }
+    previousDirty.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
     if (!navigationAllowed) {
       return;
     }
@@ -52,9 +66,14 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
     traceProfileEditDiagnostic(correlationId, 'navigation-guard-effect-start');
     const action = allowedAction.current;
     allowedAction.current = null;
-    action?.();
+    if (!action) {
+      return;
+    }
+    action();
     traceProfileEditDiagnostic(correlationId, 'navigation-guard-effect-return');
-    setNavigationAllowed(false);
+    if (!keepAllowedUntilUnmount.current) {
+      setNavigationAllowed(false);
+    }
   }, [navigationAllowed]);
 
   const continueEditing = useCallback(() => {
@@ -62,16 +81,20 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
     setDialogVisible(false);
   }, []);
 
-  const allowNextNavigation = useCallback((action: GuardedNavigationAction) => {
-    traceProfileEditDiagnostic(
-      getProfileEditCorrelationId(),
-      'navigation-guard-allowNextNavigation',
-    );
-    allowedAction.current = action;
-    pendingAction.current = null;
-    setDialogVisible(false);
-    setNavigationAllowed(true);
-  }, []);
+  const allowNextNavigation = useCallback(
+    (action: GuardedNavigationAction, options: AllowNextNavigationOptions = {}) => {
+      traceProfileEditDiagnostic(
+        getProfileEditCorrelationId(),
+        'navigation-guard-allowNextNavigation',
+      );
+      keepAllowedUntilUnmount.current = options.keepAllowedUntilUnmount ?? false;
+      allowedAction.current = action;
+      pendingAction.current = null;
+      setDialogVisible(false);
+      setNavigationAllowed(true);
+    },
+    [],
+  );
 
   const discard = useCallback(() => {
     const action = pendingAction.current;
