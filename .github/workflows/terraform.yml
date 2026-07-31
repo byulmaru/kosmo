@@ -300,11 +300,15 @@ jobs:
               | jq -r "[.[].artifacts[] | select(.expired == false and .workflow_run.head_sha == \"${commit_sha}\")] | sort_by(.created_at) | last | .workflow_run.id // empty"
           }
 
-          pr_api="repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls"
-          merged_prs="$(gh api --paginate --slurp -H "Accept: application/vnd.github+json" "${pr_api}?per_page=100" \
-            | jq -r '[.[][] | select(.merged_at != null)] | sort_by(.number)[] | [.number, .head.sha] | @tsv')"
+          merged_prs="$(
+            while read -r commit_sha; do
+              gh api --paginate --slurp -H "Accept: application/vnd.github+json" \
+                "repos/${GITHUB_REPOSITORY}/commits/${commit_sha}/pulls?per_page=100" \
+                | jq -r '.[][] | select(.merged_at != null) | [.number, .head.sha] | @tsv'
+            done < <(jq -r '.commits[].id' "${GITHUB_EVENT_PATH}")
+          )"
           if [[ -z "${merged_prs}" ]]; then
-            echo "No merged pull request is associated with ${GITHUB_SHA}; refusing to apply an unreviewed plan." >&2
+            echo "No merged pull request is associated with this main push; refusing to apply an unreviewed plan." >&2
             exit 1
           fi
 
@@ -318,7 +322,7 @@ jobs:
               pr_head_sha="${candidate_head_sha}"
               plan_run_id="${candidate_plan_run_id}"
             fi
-          done <<< "${merged_prs}"
+          done < <(awk '!seen[$0]++' <<< "${merged_prs}")
 
           if [[ -z "${plan_run_id}" ]]; then
             echo "No associated merged pull request has an unexpired Terraform plan artifact; rerun the Terraform PR plan before merging." >&2
