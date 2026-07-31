@@ -1,6 +1,7 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { useTheme } from '@/theme/ThemeProvider';
 import { PostActionControl } from './PostActionControl';
 import { usePostBookmarkAction } from './PostBookmarkAction';
 import { PostDeletionAction } from './PostDeletionAction';
@@ -69,6 +70,7 @@ export function PostActionBar({
   reply,
   repostExecution = execution,
 }: PostActionBarProps) {
+  const theme = useTheme();
   const data = useFragment(postActionBarPostFragment, post ?? null);
   const bookmarkAction = usePostBookmarkAction(
     data?.bookmark ?? null,
@@ -86,6 +88,7 @@ export function PostActionBar({
           count={reply.count}
           controlRef={reply.controlRef}
           expanded={reply.expanded}
+          hoverDisabled={execution.kind === 'resolution-required'}
           icon={MessageCircle}
           onPress={reply.onPress}
           processing={reply.processing}
@@ -109,8 +112,11 @@ export function PostActionBar({
             <PostActionControl
               accessibilityLabel="반응"
               active={hasReacted}
+              activeColor={theme.like}
               controlRef={ref}
               fillActive
+              hoverColor={theme.like}
+              hoverDisabled={execution.kind === 'resolution-required'}
               icon={Heart}
               menuExpanded={expanded}
               onPress={onPress}
@@ -126,6 +132,7 @@ export function PostActionBar({
           accessibilityLabel={resolvedBookmark.accessibilityLabel}
           active={resolvedBookmark.hasBookmarked}
           fillActive
+          hoverDisabled={execution.kind === 'resolution-required'}
           icon={Bookmark}
           onPress={resolvedBookmark.onPress}
           processing={resolvedBookmark.processing}

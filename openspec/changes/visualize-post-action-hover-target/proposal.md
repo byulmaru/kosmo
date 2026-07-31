@@ -1,16 +1,17 @@
 ## Why
 
-Web 게시글 Action Bar는 아이콘만 보여 포인터 사용자가 실제 클릭 가능한 target 범위를 파악하기 어렵다.
-PROD-595는 기존 action 기능과 28px geometry를 유지하면서 hover 시 전체 target을 은은하게 드러내는 공통
-시각 affordance를 추가한다.
+Web 게시글 Action Bar는 아이콘만 보여 포인터 사용자가 상호작용 가능 여부를 파악하기 어렵다. PROD-595는
+기존 action 기능과 click target geometry를 유지하면서 hover 시 glyph 중심의 원형 affordance를 추가한다.
 
 ## What Changes
 
-- Web의 비터치 pointer hover 시 각 Post Action control 전체 target에 semantic `surface` background를 표시한다.
-- Reply·Repost·Reaction·Bookmark의 50×28 target은 pill, More의 28×28 target은 원형으로 표시한다.
+- Web의 비터치 pointer hover 시 각 Post Action control의 16×16 glyph 중심에 28×28 원형 background를 표시한다.
+- Reply·Repost·Bookmark·More는 semantic `surface`, Reaction은 semantic `like`를 사용한다.
+- selected Reaction heart의 stroke와 fill은 hover 여부와 관계없이 `like`를 사용한다.
 - active·pressed 표현을 유지하고 pending·disabled·resolution-required에는 hover background를 표시하지 않는다.
 - Web touch와 Native에는 hover 전용 background를 노출하지 않는다.
 - action 기능·count·mutation·target 크기와 Action Bar 배치는 변경하지 않는다.
+- 다른 action의 semantic tint 확장은 후속 범위로 남긴다.
 
 ## Authority / Provenance
 
@@ -30,7 +31,7 @@ PROD-595는 기존 action 기능과 28px geometry를 유지하면서 hover 시 �
 
 ## Impact
 
-- Universal client: 공통 `PostActionControl`의 Web pointer 상태와 theme style
+- Universal client: 공통 `PostActionControl`의 Web pointer 상태, icon visual layer와 Reaction theme style
 - State catalog: Post Action Bar Storybook의 hover·blocked·geometry 검증
 - Canonical design: `docs/design/post-action-bar.md`의 Web hover target 규칙
 - Dependency: PROD-595는 최신 공통 Action Bar 통합을 소유한 PROD-432 위에 stack하며 PROD-432 merge 뒤 전달한다.

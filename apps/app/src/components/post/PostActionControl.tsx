@@ -17,6 +17,7 @@ type Icon = ComponentType<{
 
 type Props = {
   accessibilityLabel: string;
+  activeColor?: string;
   active?: boolean;
   alignToEnd?: boolean;
   count?: number;
@@ -29,12 +30,15 @@ type Props = {
   onPress: () => void;
   popupRole?: 'dialog' | 'menu';
   processing?: PostActionProcessingState;
+  hoverColor?: string;
+  hoverDisabled?: boolean;
   stateful?: boolean;
   testID: string;
 };
 
 export function PostActionControl({
   accessibilityLabel,
+  activeColor,
   active = false,
   alignToEnd = false,
   count,
@@ -47,6 +51,8 @@ export function PostActionControl({
   onPress,
   popupRole,
   processing = 'default',
+  hoverColor,
+  hoverDisabled = false,
   stateful = true,
   testID,
 }: Props) {
@@ -57,9 +63,11 @@ export function PostActionControl({
   const blocked = isPending || isDisabled;
   const color = blocked
     ? theme.textSecondary
-    : active || expanded
-      ? theme.primary
-      : theme.textSecondary;
+    : active
+      ? (activeColor ?? theme.primary)
+      : expanded
+        ? theme.primary
+        : theme.textSecondary;
   const accessibilityState: AccessibilityState = {
     busy: isPending,
     disabled: blocked,
@@ -89,7 +97,6 @@ export function PostActionControl({
       style={({ pressed }) => [
         styles.action,
         alignToEnd ? styles.alignToEnd : undefined,
-        hovered && !blocked ? [styles.hovered, { backgroundColor: theme.surface }] : undefined,
         blocked ? styles.blocked : pressed ? styles.pressed : undefined,
       ]}
     >
@@ -109,6 +116,13 @@ export function PostActionControl({
           style={styles.icon}
           testID={`post-action-${testID}-icon`}
         >
+          {hovered && !blocked && !hoverDisabled ? (
+            <View
+              aria-hidden
+              style={[styles.hover, { backgroundColor: hoverColor ?? theme.surface }]}
+              testID={`post-action-${testID}-hover`}
+            />
+          ) : null}
           <Icon
             color={color}
             fill={fillActive && active ? color : 'none'}
@@ -146,7 +160,21 @@ const styles = StyleSheet.create({
     fontSize: typography.md.fontSize,
     lineHeight: typography.md.fontSize,
   },
-  hovered: { borderRadius: radii.full },
-  icon: { alignItems: 'center', height: 16, justifyContent: 'center', width: 16 },
+  hover: {
+    borderRadius: radii.full,
+    height: 28,
+    left: -6,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: -6,
+    width: 28,
+  },
+  icon: {
+    alignItems: 'center',
+    height: 16,
+    justifyContent: 'center',
+    position: 'relative',
+    width: 16,
+  },
   pressed: { opacity: 0.72 },
 });
