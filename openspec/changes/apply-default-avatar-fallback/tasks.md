@@ -29,8 +29,19 @@ URL이 있는 사용자는 기존 이미지를 계속 본다.
 - `@kosmo/app` unit test, Storybook test/build와 check를 통과시킨다. iOS·Android runtime QA를 실행하지 못하면
   자동화 결과와 구분해 남긴다.
 
-- [ ] 1.1 승인된 기본 아바타 PNG를 앱 정적 asset으로 추가한다.
-- [ ] 1.2 공용 Avatar의 URL 부재 fallback을 기본 이미지로 교체하고 Guardrails를 유지한다.
-- [ ] 1.3 근접 단위 테스트와 Storybook 상태를 새 fallback 계약에 맞춘다.
-- [ ] 1.4 관련 자동화와 크기·배경별 시각 검증을 수행하고 실행하지 못한 runtime QA를 기록한다.
-- [ ] 1.5 최신 canonical specs와 관련 active delta를 대조한 뒤 전체 change의 완료·archive 조건을 확인한다.
+- [x] 1.1 승인된 기본 아바타 PNG를 앱 정적 asset으로 추가한다.
+- [x] 1.2 공용 Avatar의 URL 부재 fallback을 기본 이미지로 교체하고 Guardrails를 유지한다.
+- [x] 1.3 근접 단위 테스트와 Storybook 상태를 새 fallback 계약에 맞춘다.
+- [x] 1.4 관련 자동화와 크기·배경별 시각 검증을 수행하고 실행하지 못한 runtime QA를 기록한다.
+- [x] 1.5 최신 canonical specs와 관련 active delta를 대조한 뒤 전체 change의 완료·archive 조건을 확인한다.
+
+**Execution Record (2026-07-31)**
+
+- Watchman의 로컬 FSEvents watcher 실패를 피해 공식 `relay-compiler --noWatchman`으로 88 reader, 56
+  normalization, 95 operation text artifact를 생성한 뒤 TypeScript check와 unit test 127개를 통과했다.
+- Storybook build와 browser test 246개를 통과했다. 실제 Web story에서 1024×1024 원본이 24/32/40/48/64px
+  두 세트에 로드되고 `border-radius: 999px`, `overflow: hidden`으로 밝은·어두운 주변 배경에서 원형 clipping이
+  유지됨을 확인했다.
+- iOS·Android 실제 runtime QA는 실행하지 않았다.
+- 최신 base spec과 `add-profile-tags`, `fix-profile-follow-count-order` active delta를 대조하고 두 delta의 복제된
+  fallback scenario를 승인된 기본 이미지 계약으로 동기화했다.

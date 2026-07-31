@@ -1,7 +1,8 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii } from '@/theme/tokens';
-import type { StyleProp, ViewStyle } from 'react-native';
+import defaultAvatar from '../../../assets/avatar/default-avatar.png';
+import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
 
 type AvatarProps = {
   imageUri?: string | null;
@@ -12,7 +13,6 @@ type AvatarProps = {
 
 export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps) {
   const theme = useTheme();
-  const initial = label.trim().slice(0, 1).toUpperCase() || '?';
 
   return (
     <View
@@ -24,27 +24,21 @@ export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps
         style,
       ]}
     >
-      {imageUri ? (
-        <Image
-          accessible={false}
-          resizeMode="cover"
-          source={{ uri: imageUri }}
-          style={styles.image}
-        />
-      ) : (
-        <Text
-          style={{
-            color: theme.textSecondary,
-            fontFamily: 'SUIT',
-            fontSize: size * 0.36,
-            fontWeight: '700',
-          }}
-        >
-          {initial}
-        </Text>
-      )}
+      <Image
+        accessible={false}
+        resizeMode="cover"
+        source={resolveAvatarSource(imageUri)}
+        style={styles.image}
+      />
     </View>
   );
+}
+
+function resolveAvatarSource(imageUri: string | null): ImageSourcePropType {
+  if (imageUri) {
+    return { uri: imageUri };
+  }
+  return typeof defaultAvatar === 'string' ? { uri: defaultAvatar } : defaultAvatar;
 }
 
 const styles = StyleSheet.create({
