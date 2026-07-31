@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
@@ -8,8 +8,11 @@ import {
   firstOrThrow,
   Hashtags,
   Instances,
+  Media,
   pg,
+  ProfileFollowRequests,
   ProfileHashtags,
+  ProfileMedia,
   Profiles,
 } from '../db';
 import {
@@ -17,7 +20,10 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
@@ -81,6 +87,297 @@ const readTags = async (profileId: string) =>
 
 const readHashtag = async (name: string) =>
   db.select().from(Hashtags).where(eq(Hashtags.name, name)).then(firstOrThrow);
+
+const createMedia = ({
+  accountId,
+  profileId,
+  source = MediaSource.LOCAL,
+  state = MediaState.READY,
+  url = state === MediaState.READY ? `https://media.example/${crypto.randomUUID()}.webp` : null,
+}: {
+  accountId: string;
+  profileId: string;
+  source?: MediaSource;
+  state?: MediaState;
+  url?: string | null;
+}) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      mediaType: state === MediaState.READY ? 'image/webp' : null,
+      profileId,
+      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      source,
+      state,
+      storageReference: `u_${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+      url,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+const readProfileMedia = (profileId: string) =>
+  db
+    .select({ kind: ProfileMedia.kind, mediaId: ProfileMedia.mediaId })
+    .from(ProfileMedia)
+    .where(eq(ProfileMedia.profileId, profileId))
+    .then((rows) => rows.toSorted((a, b) => a.kind.localeCompare(b.kind)));
+
+test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 Media를 보존한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const media = await createMedia({ accountId: account.id, profileId: profile.id });
+  const otherMedia = await createMedia({ accountId: account.id, profileId: profile.id });
+
+  await db.insert(ProfileMedia).values([
+    { kind: ProfileMediaKind.AVATAR, mediaId: media.id, profileId: profile.id },
+    { kind: ProfileMediaKind.HEADER, mediaId: media.id, profileId: profile.id },
+  ]);
+
+  await assert.rejects(
+    db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: otherMedia.id,
+      profileId: profile.id,
+    }),
+  );
+
+  await db
+    .delete(ProfileMedia)
+    .where(
+      and(eq(ProfileMedia.profileId, profile.id), eq(ProfileMedia.kind, ProfileMediaKind.AVATAR)),
+    );
+
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(inArray(Media.id, [media.id, otherMedia.id]))
+      .then((rows) => rows.length),
+    2,
+  );
+});
+
+test('avatar/header 입력은 교체·제거·생략을 kind별로 적용하고 Media를 보존한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const originalAvatar = await createMedia({ accountId: account.id, profileId: profile.id });
+  const originalHeader = await createMedia({ accountId: account.id, profileId: profile.id });
+  const replacementAvatar = await createMedia({ accountId: account.id, profileId: profile.id });
+  await db.insert(ProfileMedia).values([
+    {
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: originalAvatar.id,
+      profileId: profile.id,
+    },
+    {
+      kind: ProfileMediaKind.HEADER,
+      mediaId: originalHeader.id,
+      profileId: profile.id,
+    },
+  ]);
+
+  await updateProfile({
+    accountId: account.id,
+    avatarMediaId: replacementAvatar.id,
+    headerMediaId: null,
+    profileId: profile.id,
+  });
+  assert.deepEqual(await readProfileMedia(profile.id), [
+    { kind: ProfileMediaKind.AVATAR, mediaId: replacementAvatar.id },
+  ]);
+
+  await updateProfile({ accountId: account.id, bio: 'omitted media', profileId: profile.id });
+  assert.deepEqual(await readProfileMedia(profile.id), [
+    { kind: ProfileMediaKind.AVATAR, mediaId: replacementAvatar.id },
+  ]);
+  assert.equal(
+    await db
+      .select()
+      .from(Media)
+      .where(inArray(Media.id, [originalAvatar.id, originalHeader.id, replacementAvatar.id]))
+      .then((rows) => rows.length),
+    3,
+  );
+});
+
+test('사용할 수 없는 avatar/header Media 하나는 scalar·policy·관계를 모두 보존한다', async () => {
+  const target = await createProfileFixture();
+  const other = await createProfileFixture();
+  const currentAvatar = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+  });
+  const validAvatar = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+  });
+  const wrongProfile = await createMedia({
+    accountId: other.account.id,
+    profileId: other.profile.id,
+  });
+  const remote = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    source: MediaSource.REMOTE,
+  });
+  const uploading = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    state: MediaState.UPLOADING,
+  });
+  const missingUrl = await createMedia({
+    accountId: target.account.id,
+    profileId: target.profile.id,
+    url: null,
+  });
+  await db.insert(ProfileMedia).values({
+    kind: ProfileMediaKind.AVATAR,
+    mediaId: currentAvatar.id,
+    profileId: target.profile.id,
+  });
+
+  for (const invalidHeaderId of [
+    wrongProfile.id,
+    remote.id,
+    uploading.id,
+    missingUrl.id,
+    crypto.randomUUID(),
+  ]) {
+    await assert.rejects(
+      updateProfile({
+        accountId: target.account.id,
+        avatarMediaId: validAvatar.id,
+        displayName: 'Should not commit',
+        followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+        headerMediaId: invalidHeaderId,
+        profileId: target.profile.id,
+      }),
+      (error) => error instanceof ValidationError && error.field === 'headerMediaId',
+    );
+
+    const persisted = await db
+      .select()
+      .from(Profiles)
+      .where(eq(Profiles.id, target.profile.id))
+      .then(firstOrThrow);
+    assert.equal(persisted.displayName, target.profile.displayName);
+    assert.equal(persisted.followPolicy, ProfileFollowPolicy.OPEN);
+    assert.deepEqual(await readProfileMedia(target.profile.id), [
+      { kind: ProfileMediaKind.AVATAR, mediaId: currentAvatar.id },
+    ]);
+  }
+});
+
+test('followPolicy만 변경해도 기존 Pending Follow Request를 유지한다', async () => {
+  const target = await createProfileFixture();
+  const follower = await createProfileFixture();
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({
+      followeeProfileId: target.profile.id,
+      followerProfileId: follower.profile.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  await updateProfile({
+    accountId: target.account.id,
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    profileId: target.profile.id,
+  });
+
+  assert.deepEqual(
+    await db.select().from(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, request.id)),
+    [request],
+  );
+});
+
+test('변경한 displayName은 Unicode code point 40자를 허용하고 41자를 거부한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const valid = '😀'.repeat(40);
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    displayName: `  ${valid}  `,
+    profileId: profile.id,
+  });
+  assert.equal(updated.displayName, valid);
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      displayName: '😀'.repeat(41),
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'displayName',
+  );
+  assert.equal(
+    await db
+      .select({ displayName: Profiles.displayName })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ displayName }) => displayName),
+    valid,
+  );
+});
+
+test('40 code point 초과 legacy displayName은 저장 원문과 같을 때만 허용한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const legacyDisplayName = '😀'.repeat(41);
+  await db
+    .update(Profiles)
+    .set({ displayName: legacyDisplayName })
+    .where(eq(Profiles.id, profile.id));
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    bio: 'legacy preserved',
+    displayName: legacyDisplayName,
+    profileId: profile.id,
+  });
+  assert.equal(updated.displayName, legacyDisplayName);
+  assert.equal(updated.bio, 'legacy preserved');
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      displayName: `${legacyDisplayName.slice(0, -2)}a`,
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'displayName',
+  );
+});
+
+test('bio는 trim 후 JavaScript UTF-16 길이 500자를 적용한다', async () => {
+  const { account, profile } = await createProfileFixture();
+  const valid = '😀'.repeat(250);
+
+  const updated = await updateProfile({
+    accountId: account.id,
+    bio: `  ${valid}  `,
+    profileId: profile.id,
+  });
+  assert.equal(updated.bio, valid);
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      bio: ` ${'😀'.repeat(251)} `,
+      profileId: profile.id,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'bio',
+  );
+  assert.equal(
+    await db
+      .select({ bio: Profiles.bio })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ bio }) => bio),
+    valid,
+  );
+});
 
 test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다', async () => {
   const { account, profile } = await createProfileFixture();

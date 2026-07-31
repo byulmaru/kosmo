@@ -3,6 +3,7 @@ import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
   __typename: 'Profile';
+  avatar: { id: string; url: string | null } | null;
   bio: string | null;
   displayName: string;
   followers: {
@@ -23,6 +24,7 @@ export type StoryProfile = {
   };
   followingCount: number;
   handle: string;
+  header: { id: string; url: string | null } | null;
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
   relativeHandle: string;
@@ -53,6 +55,7 @@ function pageInfo(hasNextPage = false, endCursor: string | null = null): StoryPa
 export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
   return {
     __typename: 'Profile',
+    avatar: null,
     bio: '우주와 사람을 잇는 코스모 프로필입니다.',
     displayName: '코스모 작가',
     followers: { edges: [], pageInfo: pageInfo() },
@@ -61,6 +64,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     following: { edges: [], pageInfo: pageInfo() },
     followingCount: 42,
     handle: 'kosmo',
+    header: null,
     id: 'profile-kosmo',
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',

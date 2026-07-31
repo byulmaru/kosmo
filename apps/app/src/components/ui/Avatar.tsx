@@ -1,37 +1,48 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii } from '@/theme/tokens';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 type AvatarProps = {
+  imageUri?: string | null;
   label: string;
   size?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function Avatar({ label, size = 40, style }: AvatarProps) {
+export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps) {
   const theme = useTheme();
   const initial = label.trim().slice(0, 1).toUpperCase() || '?';
 
   return (
     <View
       accessibilityLabel={`${label} 프로필 이미지`}
+      accessibilityRole="image"
       style={[
         styles.root,
         { backgroundColor: theme.surface, borderColor: theme.border, height: size, width: size },
         style,
       ]}
     >
-      <Text
-        style={{
-          color: theme.textSecondary,
-          fontFamily: 'SUIT',
-          fontSize: size * 0.36,
-          fontWeight: '700',
-        }}
-      >
-        {initial}
-      </Text>
+      {imageUri ? (
+        <Image
+          accessible={false}
+          resizeMode="cover"
+          source={{ uri: imageUri }}
+          style={styles.image}
+        />
+      ) : (
+        <Text
+          style={{
+            color: theme.textSecondary,
+            fontFamily: 'SUIT',
+            fontSize: size * 0.36,
+            fontWeight: '700',
+          }}
+        >
+          {initial}
+        </Text>
+      )}
     </View>
   );
 }
@@ -42,5 +53,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     borderWidth: 1,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
+  image: { height: '100%', width: '100%' },
 });

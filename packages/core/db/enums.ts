@@ -25,5 +25,6 @@ export const oauthTokenState = createPgEnum('oauth_token_state', Enum.OAuthToken
 export const postState = createPgEnum('post_state', Enum.PostState);
 export const postVisibility = createPgEnum('post_visibility', Enum.PostVisibility);
 export const profileFollowPolicy = createPgEnum('profile_follow_policy', Enum.ProfileFollowPolicy);
+export const profileMediaKind = createPgEnum('profile_media_kind', Enum.ProfileMediaKind);
 export const profileState = createPgEnum('profile_state', Enum.ProfileState);
 export const sessionState = createPgEnum('session_state', Enum.SessionState);

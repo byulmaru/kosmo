@@ -26,6 +26,12 @@
 - **AND** 건드리지 않은 이미지 field는 현재 값을 draft로 유지한다
 - **AND** 별도의 `유지` action이나 두 이미지의 공통 `유지`·`교체`·`제거` action row를 표시하지 않는다
 
+#### Scenario: Open the image action appropriate to the current draft
+
+- **WHEN** 사용자가 현재 이미지가 있는 avatar/header preview를 누른다
+- **THEN** `이미지 변경`, `이미지 삭제`, `취소` action을 표시한다
+- **AND** 사용자가 현재 이미지가 없는 preview를 누르면 action menu 없이 system picker를 연다
+
 #### Scenario: Use each image preview as the only edit button
 
 - **WHEN** header 또는 avatar 편집 callback이 제공되고 form이 편집 가능한 상태다
@@ -54,7 +60,7 @@
 
 ### Requirement: Profile edit fields and Profile Tag interaction
 
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `PROD-491`, `PROD-522`, `PROD-526` — Profile edit presentation은 새로 입력하거나 변경한 값에 1~40자 displayName, 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 40자를 초과한 legacy displayName은 초기 원문과 정확히 같은 경우에만 허용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `docs/domain/objects/hashtag.md`, `PROD-491`, `PROD-522`, `PROD-526` — Profile edit presentation은 새로 입력하거나 변경한 값에 Unicode code point 기준 1~40 displayName, 앞뒤 공백을 제거한 뒤 500자 이하 bio와 avatar/header별 controlled 편집 control을 제공해야 하며(MUST), 40 code point를 초과한 legacy displayName은 초기 원문과 정확히 같은 경우에만 허용해야 한다(MUST). 개수 상한 없이 Profile Tag를 inline chip으로 추가·제거할 수 있어야 하고(MUST), 순서·재정렬 control을 제공해서는 안 되며(MUST NOT), 승인되지 않은 field를 표시해서는 안 된다(MUST NOT). Profile Tag의 canonical identity는 Hashtag의 NFKC·locale 비종속 `toLowerCase()` 규칙을 사용하되 chip은 최초 입력의 NFKC 표기를 유지해야 한다(MUST).
 
 #### Scenario: Edit approved text and image fields
 
@@ -65,9 +71,9 @@
 
 #### Scenario: Preserve an unchanged legacy display name
 
-- **WHEN** 초기 displayName이 40자를 초과하고 사용자가 그 원문을 정확히 유지한 채 다른 field만 편집한다
+- **WHEN** 초기 displayName이 40 code point를 초과하고 사용자가 그 원문을 정확히 유지한 채 다른 field만 편집한다
 - **THEN** form은 legacy displayName만을 이유로 저장을 막지 않는다
-- **AND** displayName이 원문에서 한 글자라도 달라지면 새 값에 1~40자 validation을 적용한다
+- **AND** displayName이 원문에서 한 글자라도 달라지면 새 값에 Unicode code point 기준 1~40 validation을 적용한다
 - **AND** 사용자가 값을 변경했다가 원문과 정확히 같게 되돌리면 unchanged legacy 값으로 취급한다
 
 #### Scenario: Add and remove Profile Tags locally
@@ -125,9 +131,63 @@
 - **WHEN** usingProfile 경계의 selected Profile이 Active/Normal Local이고 현재 Account Membership이 Owner다
 - **THEN** route는 서버가 반환한 초기값과 submit callback을 가진 Profile edit form을 제공한다
 - **AND** 저장 성공 뒤 갱신된 Profile로 복귀한다
+- **AND** Profile route는 `selectedProfileForEdit.id`가 표시 중인 Profile `id`와 같을 때만 편집 button을 표시한다
 
 #### Scenario: Reject non-owner or ineligible route access
 
 - **WHEN** selected Profile이 Remote·inactive·suspended이거나 현재 Account가 Owner가 아닌 상태로 직접 URL에 접근한다
-- **THEN** client는 Profile edit content와 enabled 저장 action을 제공하지 않는다
+- **THEN** client는 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을 가진 StateView를 제공한다
+- **AND** Profile edit content와 enabled 저장 action을 제공하지 않는다
 - **AND** selectedProfileId 또는 Local origin만으로 접근을 허용하지 않는다
+- **AND** 공개 Profile 화면에 disabled placeholder를 포함한 편집 button을 렌더하지 않는다
+
+### Requirement: Production route excludes Profile Tag persistence until its owning change
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-492`, `PROD-527` — PROD-492 production route는 Profile Tag section을 렌더링하거나 update input에 Tag 값을 포함해서는 안 된다(MUST NOT). PROD-491 presentation과 Storybook의 Tag state는 PROD-527 재사용을 위해 유지해야 한다(MUST).
+
+#### Scenario: Submit a production Profile draft without Tags
+
+- **WHEN** PROD-492 route에서 사용자가 text, policy 또는 image draft를 저장한다
+- **THEN** production form은 Profile Tag section을 표시하지 않는다
+- **AND** GraphQL update variables에 Tag field나 presentation Tag draft를 포함하지 않는다
+
+### Requirement: Field-scoped Media upload and retry
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-492`, `PROD-581` — production route는 avatar/header별 local asset, preview, upload generation과 Ready Media ID를 독립적으로 보존해야 한다(MUST). 선택 즉시 preview를 표시하고 issue-upload URL, byte PUT, complete 순서로 Ready Media를 확보해야 하며(MUST), stale completion이나 실패한 field 때문에 다른 Ready field를 다시 업로드해서는 안 된다(MUST NOT).
+
+#### Scenario: Upload selected image and ignore a stale completion
+
+- **WHEN** 사용자가 이미지를 선택한 뒤 같은 field를 교체하거나 route를 떠나기 전에 이전 upload가 늦게 완료된다
+- **THEN** route는 최신 local preview와 upload generation만 draft에 반영한다
+- **AND** stale completion을 현재 Ready Media ID로 사용하지 않는다
+
+#### Scenario: Retry only the failed image field
+
+- **WHEN** 한 image field는 Ready이고 다른 field의 upload가 실패한다
+- **THEN** form은 실패 field에 canonical 오류와 `다시 시도` action을 표시하고 저장을 disabled로 둔다
+- **AND** retry는 실패 field의 issue→PUT→complete만 다시 실행한다
+- **AND** Ready field와 text·policy draft를 유지한다
+
+#### Scenario: Retry Profile save without reuploading Ready Media
+
+- **WHEN** 모든 image upload가 Ready인 뒤 updateProfile 저장이 실패한다
+- **THEN** route는 전체 draft와 Ready Media ID를 유지한다
+- **AND** 저장 재시도는 같은 Ready ID를 사용하고 upload sequence를 다시 실행하지 않는다
+
+### Requirement: Dirty Profile edit navigation guard
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-492` — dirty Profile edit route는 route navigation, Web browser back과 Android hardware back을 공통 confirmation으로 한 번만 가로채야 한다(MUST). confirmation은 `변경사항을 버릴까요?`, `계속 편집`, `버리기`를 제공해야 하며(MUST), saving 중에는 navigation을 차단해야 한다(MUST).
+
+#### Scenario: Confirm discarding a dirty draft
+
+- **WHEN** dirty route에서 route action, Web browser back 또는 Android hardware back을 시도한다
+- **THEN** 동일한 discard confirmation을 한 번 표시한다
+- **AND** `계속 편집`은 현재 draft와 route를 유지한다
+- **AND** `버리기`는 guard를 재진입하지 않고 원래 navigation action을 한 번 실행한다
+
+#### Scenario: Block navigation while saving and bypass the guard after success
+
+- **WHEN** updateProfile이 진행 중이다
+- **THEN** back과 다른 route navigation을 차단하고 discard confirmation을 열지 않는다
+- **AND** 저장 성공 시 guard를 먼저 해제하고 payload를 Relay에 정규화한 뒤 갱신된 `relativeHandle` Profile로 replace한다
+- **AND** 성공 toast나 presentation 성공 문구를 표시하지 않는다

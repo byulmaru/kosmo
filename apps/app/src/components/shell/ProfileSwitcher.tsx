@@ -1,5 +1,4 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
-import { Link } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -19,6 +18,8 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { GuardedLink } from './GuardedLink';
+import { useNavigationGuard } from './NavigationGuardContext';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -121,6 +122,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
+  const { request: requestNavigation } = useNavigationGuard();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [handle, setHandle] = useState('');
@@ -200,7 +202,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     };
   }, [open, surface]);
 
-  const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
+  const commitProfileSelection = (id: string, operationVersion = dismissalVersionRef.current) => {
     setError(null);
     commitSelect({
       variables: { id },
@@ -220,21 +222,17 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
     });
   };
 
-  const createProfile = () => {
-    const operationVersion = dismissalVersionRef.current;
-    const normalized = handle.trim();
-    if (!normalized) {
-      setError('프로필 핸들을 입력해주세요.');
+  const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
+    const action = () => commitProfileSelection(id, operationVersion);
+    if (requestNavigation(action)) {
+      dismissPicker();
       return;
     }
 
-    const result = profileHandleSchema.safeParse(normalized);
+    action();
+  };
 
-    if (!result.success) {
-      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
-      return;
-    }
-
+  const commitProfileCreation = (normalized: string, operationVersion: number) => {
     setError(null);
     commitCreate({
       variables: { handle: normalized },
@@ -249,11 +247,35 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         });
         setHandle('');
         setCreating(false);
-        selectProfile(response.createProfile.profile.id, operationVersion);
+        commitProfileSelection(response.createProfile.profile.id, operationVersion);
       },
       onError: (cause) =>
         setOperationError(operationVersion, cause.message || '프로필을 생성하지 못했습니다.'),
     });
+  };
+
+  const createProfile = () => {
+    const normalized = handle.trim();
+    if (!normalized) {
+      setError('프로필 핸들을 입력해주세요.');
+      return;
+    }
+
+    const result = profileHandleSchema.safeParse(normalized);
+
+    if (!result.success) {
+      setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
+      return;
+    }
+
+    const operationVersion = dismissalVersionRef.current;
+    const action = () => commitProfileCreation(normalized, operationVersion);
+    if (requestNavigation(action)) {
+      dismissPicker();
+      return;
+    }
+
+    action();
   };
 
   const surfaceBounds = !redesignedWeb
@@ -457,11 +479,13 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         {active.relativeHandle}
       </Text>
       <View style={styles.counts}>
-        <Link asChild href={`/${active.relativeHandle}/following`}>
+        <GuardedLink
+          href={`/${active.relativeHandle}/following`}
+          onNavigate={fullWeb && open ? dismissPicker : undefined}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -469,12 +493,14 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
           </Pressable>
-        </Link>
-        <Link asChild href={`/${active.relativeHandle}/followers`}>
+        </GuardedLink>
+        <GuardedLink
+          href={`/${active.relativeHandle}/followers`}
+          onNavigate={fullWeb && open ? dismissPicker : undefined}
+        >
           <Pressable
             accessibilityRole="link"
             onFocus={fullWeb && open ? dismissPicker : undefined}
-            onPress={fullWeb && open ? dismissPicker : undefined}
             style={styles.countLink}
           >
             <Text style={[styles.count, { color: theme.text }]}>
@@ -482,7 +508,7 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
           </Pressable>
-        </Link>
+        </GuardedLink>
       </View>
     </>
   ) : (
@@ -510,17 +536,6 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           style={avatarShadow}
         />
       </View>
-      {active ? (
-        <Pressable
-          accessibilityLabel="프로필 편집"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          disabled
-          style={[styles.editButton, { backgroundColor: theme.primary }]}
-        >
-          <Text style={styles.editLabel}>편집</Text>
-        </Pressable>
-      ) : null}
       <View style={styles.profileCopy}>
         {trigger}
         {fullWebPicker}
@@ -604,18 +619,6 @@ const styles = StyleSheet.create({
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
   cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },
-  editButton: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    height: 32,
-    justifyContent: 'center',
-    opacity: 0.6,
-    paddingHorizontal: spacing.md,
-    position: 'absolute',
-    right: 20,
-    top: 134,
-  },
-  editLabel: { color: '#111111', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   profileCopy: {
     left: 10,
     paddingHorizontal: spacing.sm,

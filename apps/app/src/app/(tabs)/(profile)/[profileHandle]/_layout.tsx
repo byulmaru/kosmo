@@ -1,4 +1,4 @@
-import { Slot, useGlobalSearchParams } from 'expo-router';
+import { Link, Slot, useGlobalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -6,8 +6,10 @@ import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
 
@@ -17,6 +19,9 @@ const ProfileLayoutQuery = graphql`
       id
       ...ProfileHero_profile
       ...FollowButton_profile
+    }
+    selectedProfileForEdit {
+      id
     }
   }
 `;
@@ -62,9 +67,20 @@ function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: 
     );
   }
 
+  const action =
+    data.selectedProfileForEdit?.id === profile.id ? (
+      <Link asChild href={'/profile-edit' as Href}>
+        <Button accessibilityLabel="프로필 편집" tone="secondary">
+          편집
+        </Button>
+      </Link>
+    ) : (
+      <FollowButton profile={profile} />
+    );
+
   return (
     <ProfileRouteContainer>
-      <ProfileHero action={<FollowButton profile={profile} />} profile={profile} />
+      <ProfileHero action={action} profile={profile} />
       <Slot />
     </ProfileRouteContainer>
   );

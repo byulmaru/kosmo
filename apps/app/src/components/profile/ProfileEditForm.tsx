@@ -11,9 +11,14 @@ export type ProfileEditFormProps = {
   disabled?: boolean;
   initialValue: ProfileEditDraft;
   onAvatarEdit?: () => void;
+  onAvatarRemove?: () => void;
+  onAvatarRetry?: () => void;
   onChange: (next: ProfileEditDraft) => void;
   onHeaderEdit?: () => void;
+  onHeaderRemove?: () => void;
+  onHeaderRetry?: () => void;
   serverErrors?: ProfileEditFieldErrors;
+  showTags?: boolean;
   value: ProfileEditDraft;
 };
 
@@ -43,9 +48,14 @@ export function ProfileEditForm({
   disabled = false,
   initialValue,
   onAvatarEdit,
+  onAvatarRemove,
+  onAvatarRetry,
   onChange,
   onHeaderEdit,
+  onHeaderRemove,
+  onHeaderRetry,
   serverErrors,
+  showTags = true,
   value,
 }: ProfileEditFormProps) {
   const theme = useTheme();
@@ -60,7 +70,11 @@ export function ProfileEditForm({
         disabled={disabled}
         header={value.header}
         onAvatarEdit={onAvatarEdit}
+        onAvatarRemove={onAvatarRemove}
+        onAvatarRetry={onAvatarRetry}
         onHeaderEdit={onHeaderEdit}
+        onHeaderRemove={onHeaderRemove}
+        onHeaderRetry={onHeaderRetry}
       />
 
       <View style={styles.imageErrors}>
@@ -114,14 +128,16 @@ export function ProfileEditForm({
           />
         </View>
 
-        <View style={styles.field}>
-          <ProfileTagEditor
-            disabled={disabled}
-            onChange={(tags) => onChange({ ...value, tags })}
-            tags={value.tags}
-          />
-          <FieldError message={serverErrors?.tags} />
-        </View>
+        {showTags ? (
+          <View style={styles.field}>
+            <ProfileTagEditor
+              disabled={disabled}
+              onChange={(tags) => onChange({ ...value, tags })}
+              tags={value.tags}
+            />
+            <FieldError message={serverErrors?.tags} />
+          </View>
+        ) : null}
       </View>
     </View>
   );

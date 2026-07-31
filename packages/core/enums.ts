@@ -106,6 +106,12 @@ export const ProfileFollowPolicy = {
 } as const;
 export type ProfileFollowPolicy = keyof typeof ProfileFollowPolicy;
 
+export const ProfileMediaKind = {
+  AVATAR: 'AVATAR',
+  HEADER: 'HEADER',
+} as const;
+export type ProfileMediaKind = keyof typeof ProfileMediaKind;
+
 export const ProfileState = {
   ACTIVE: 'ACTIVE',
   DISABLED: 'DISABLED',

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
@@ -7,6 +7,10 @@ import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
+import {
+  NavigationGuardProvider,
+  useNavigationGuard,
+} from '@/components/shell/NavigationGuardContext';
 import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail, RightRailPrivacyLink } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
@@ -17,6 +21,7 @@ import { spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
 const secondProfile = profile({
@@ -147,6 +152,44 @@ function ProfileSwitcherStory() {
     <View style={{ maxWidth: 360 }}>
       <ProfileSwitcher query={useShellStoryData().query} surface="full" />
     </View>
+  );
+}
+
+function NavigationGuardRegistrar({
+  onPending,
+}: {
+  onPending: (action: GuardedNavigationAction) => void;
+}) {
+  const { register } = useNavigationGuard();
+  useEffect(
+    () =>
+      register((action) => {
+        onPending(action);
+        return true;
+      }),
+    [onPending, register],
+  );
+  return null;
+}
+
+function GuardedProfileSwitcherStory() {
+  const [pending, setPending] = useState<GuardedNavigationAction | null>(null);
+  return (
+    <NavigationGuardProvider>
+      <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+      <ProfileSwitcherStory />
+      <Pressable
+        accessibilityRole="button"
+        disabled={!pending}
+        onPress={() => {
+          const action = pending;
+          setPending(null);
+          action?.();
+        }}
+      >
+        <Text>버리기</Text>
+      </Pressable>
+    </NavigationGuardProvider>
   );
 }
 
@@ -747,6 +790,34 @@ export const ProfileSwitcherSelectTracksAnalytics: Story = {
     });
   },
   render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
+  parameters: {
+    relay: {
+      mutationResponse: {
+        selectProfile: {
+          profile: secondProfile,
+          session: { id: 'session-story', selectedProfile: { id: secondProfile.id } },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
+    expect(trackAnalytics).not.toHaveBeenCalled();
+
+    await userEvent.click(canvas.getByRole('button', { name: '버리기' }));
+    await waitFor(() =>
+      expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
+        selected_profile_id: secondProfile.id,
+      }),
+    );
+  },
+  render: () => <GuardedProfileSwitcherStory />,
 };
 
 export const ProfileSwitcherCreateTracksAnalytics: Story = {

@@ -1,9 +1,10 @@
-import { Link, usePathname } from 'expo-router';
+import { usePathname } from 'expo-router';
 import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
+import { GuardedLink } from './GuardedLink';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
@@ -123,7 +124,6 @@ export function SidebarNavigation({
                 accessibilityRole={href ? 'link' : 'button'}
                 accessibilityState={{ disabled: !href }}
                 disabled={!href}
-                onPress={onNavigate}
                 style={StyleSheet.flatten([
                   styles.item,
                   compact && styles.compactItem,
@@ -164,19 +164,18 @@ export function SidebarNavigation({
             );
 
             return href ? (
-              <Link asChild href={href} key={item.label}>
+              <GuardedLink href={href} key={item.label} onNavigate={onNavigate}>
                 {control}
-              </Link>
+              </GuardedLink>
             ) : (
               <View key={item.label}>{control}</View>
             );
           })}
           {compact ? (
-            <Link asChild href="/compose">
+            <GuardedLink href="/compose" onNavigate={onNavigate}>
               <Pressable
                 accessibilityLabel="글쓰기"
                 accessibilityRole="link"
-                onPress={onNavigate}
                 style={StyleSheet.flatten([
                   styles.compose,
                   compact && styles.compactCompose,
@@ -194,20 +193,19 @@ export function SidebarNavigation({
                   </>
                 )}
               </Pressable>
-            </Link>
+            </GuardedLink>
           ) : null}
         </View>
 
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          <Link asChild href="/feedback">
+          <GuardedLink href="/feedback" onNavigate={onNavigate}>
             <Pressable
               aria-current={feedbackActive ? 'page' : undefined}
               accessibilityLabel="피드백 보내기"
               accessibilityRole="link"
               accessibilityState={{ selected: feedbackActive }}
-              onPress={onNavigate}
               style={StyleSheet.flatten([
                 styles.footerItem,
                 compact && styles.compactItem,
@@ -235,7 +233,7 @@ export function SidebarNavigation({
                 </Text>
               ) : null}
             </Pressable>
-          </Link>
+          </GuardedLink>
           {compact ? (
             <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : (

@@ -9,9 +9,12 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
@@ -43,10 +46,12 @@ let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileHashtags: typeof CoreDb.ProfileHashtags;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -75,10 +80,12 @@ describe('GraphQL remote profile boundary', () => {
       firstOrThrow,
       Hashtags,
       Instances,
+      Media,
       pg,
       ProfileFollows,
       ProfileFollowRequests,
       ProfileHashtags,
+      ProfileMedia,
       Profiles,
       PostContents,
       Posts,
@@ -715,6 +722,256 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.updateProfile.profile, {
       displayName: 'Updated Owner',
       id: globalId('Profile', auth.profile.id),
+    });
+  });
+
+  test('returns only the selected editable local Owner Profile without exposing auth errors', async () => {
+    const guest = await requestGraphQL<{
+      selectedProfileForEdit: { id: string } | null;
+    }>(`query SelectedProfileForEdit { selectedProfileForEdit { id } }`, {});
+    assertNoGraphQLErrors(guest);
+    assert.equal(guest.data?.selectedProfileForEdit, null);
+
+    const withoutSelection = await createAuthenticatedSession({ selectedProfile: false });
+    const noSelection = await requestGraphQL<{
+      selectedProfileForEdit: { id: string } | null;
+    }>(
+      `query SelectedProfileForEditWithoutSelection { selectedProfileForEdit { id } }`,
+      {},
+      withoutSelection.token,
+    );
+    assertNoGraphQLErrors(noSelection);
+    assert.equal(noSelection.data?.selectedProfileForEdit, null);
+
+    const owner = await createAuthenticatedSession();
+    const editable = await requestGraphQL<{
+      selectedProfileForEdit: { id: string } | null;
+    }>(`query EditableSelectedProfile { selectedProfileForEdit { id } }`, {}, owner.token);
+    assertNoGraphQLErrors(editable);
+    assert.deepEqual(editable.data?.selectedProfileForEdit, {
+      id: globalId('Profile', owner.profile.id),
+    });
+
+    await db
+      .update(AccountProfiles)
+      .set({ role: AccountProfileRole.MEMBER })
+      .where(
+        and(
+          eq(AccountProfiles.accountId, owner.account.id),
+          eq(AccountProfiles.profileId, owner.profile.id),
+        ),
+      );
+    const member = await requestGraphQL<{
+      selectedProfileForEdit: { id: string } | null;
+    }>(`query MemberSelectedProfileForEdit { selectedProfileForEdit { id } }`, {}, owner.token);
+    assertNoGraphQLErrors(member);
+    assert.equal(member.data?.selectedProfileForEdit, null);
+
+    const remoteInstance = await createRemoteInstance({
+      domain: 'selected-profile-for-edit.remote.example',
+    });
+    const remote = await createProfile({
+      handle: 'selected-profile-for-edit-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: remote.id })
+      .where(eq(Sessions.id, owner.session.id));
+    const remoteSelection = await requestGraphQL<{
+      selectedProfileForEdit: { id: string } | null;
+    }>(`query RemoteSelectedProfileForEdit { selectedProfileForEdit { id } }`, {}, owner.token);
+    assertNoGraphQLErrors(remoteSelection);
+    assert.equal(remoteSelection.data?.selectedProfileForEdit, null);
+  });
+
+  test('preserves, replaces, and removes Profile avatar and header through nullable Media IDs', async () => {
+    const auth = await createAuthenticatedSession();
+    const originalAvatar = await createReadyMedia(auth.account.id, auth.profile.id, 'avatar-old');
+    const replacementAvatar = await createReadyMedia(
+      auth.account.id,
+      auth.profile.id,
+      'avatar-new',
+    );
+    const header = await createReadyMedia(auth.account.id, auth.profile.id, 'header');
+    await db.insert(ProfileMedia).values({
+      kind: ProfileMediaKind.AVATAR,
+      mediaId: originalAvatar.id,
+      profileId: auth.profile.id,
+    });
+
+    const replaced = await requestGraphQL<{
+      updateProfile: {
+        profile: {
+          avatar: { id: string; url: string | null } | null;
+          header: { id: string; url: string | null } | null;
+        };
+      };
+    }>(
+      `mutation ReplaceProfileMedia($avatarId: ID, $headerId: ID) {
+        updateProfile(input: { avatarId: $avatarId, headerId: $headerId }) {
+          profile {
+            avatar { id url }
+            header { id url }
+          }
+        }
+      }`,
+      {
+        avatarId: globalId('Media', replacementAvatar.id),
+        headerId: globalId('Media', header.id),
+      },
+      auth.token,
+    );
+    assertNoGraphQLErrors(replaced);
+    assert.deepEqual(replaced.data?.updateProfile.profile, {
+      avatar: {
+        id: globalId('Media', replacementAvatar.id),
+        url: replacementAvatar.url,
+      },
+      header: { id: globalId('Media', header.id), url: header.url },
+    });
+
+    const omitted = await requestGraphQL<{
+      updateProfile: {
+        profile: { avatar: { id: string } | null; header: { id: string } | null };
+      };
+    }>(
+      `mutation PreserveProfileMedia {
+        updateProfile(input: { bio: "media preserved" }) {
+          profile { avatar { id } header { id } }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(omitted);
+    assert.deepEqual(omitted.data?.updateProfile.profile, {
+      avatar: { id: globalId('Media', replacementAvatar.id) },
+      header: { id: globalId('Media', header.id) },
+    });
+
+    const removed = await requestGraphQL<{
+      updateProfile: { profile: { avatar: null; header: null } };
+    }>(
+      `mutation RemoveProfileMedia {
+        updateProfile(input: { avatarId: null, headerId: null }) {
+          profile { avatar { id } header { id } }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(removed);
+    assert.deepEqual(removed.data?.updateProfile.profile, { avatar: null, header: null });
+
+    assert.equal(
+      await db
+        .select()
+        .from(Media)
+        .then((rows) => rows.length),
+      3,
+    );
+  });
+
+  test('rejects a non-Media global ID before updating Profile media', async () => {
+    const auth = await createAuthenticatedSession();
+
+    const result = await requestGraphQL(
+      `mutation RejectNonMediaId($avatarId: ID) {
+        updateProfile(input: { avatarId: $avatarId }) { profile { id } }
+      }`,
+      { avatarId: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+
+    assert.equal(result.data, null);
+    assert.ok(result.errors?.[0]);
+    assert.deepEqual(await db.select().from(ProfileMedia), []);
+  });
+
+  test('maps invalid Profile media errors to the public GraphQL input field', async () => {
+    const auth = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const otherHeader = await createReadyMedia(other.account.id, other.profile.id, 'other-header');
+
+    const result = await requestGraphQL(
+      `mutation RejectOtherProfileMedia($headerId: ID) {
+        updateProfile(input: { headerId: $headerId }) { profile { id } }
+      }`,
+      { headerId: globalId('Media', otherHeader.id) },
+      auth.token,
+    );
+
+    assert.equal(result.data, null);
+    assert.equal(result.errors?.[0]?.extensions?.field, 'headerId');
+  });
+
+  test('exposes linked Profile media publicly while keeping standalone Media Nodes owner-only', async () => {
+    const owner = await createAuthenticatedSession();
+    const other = await createAuthenticatedSession();
+    const avatar = await createReadyMedia(owner.account.id, owner.profile.id, 'public-avatar');
+    const header = await createReadyMedia(owner.account.id, owner.profile.id, 'public-header');
+    await db.insert(ProfileMedia).values([
+      {
+        kind: ProfileMediaKind.AVATAR,
+        mediaId: avatar.id,
+        profileId: owner.profile.id,
+      },
+      {
+        kind: ProfileMediaKind.HEADER,
+        mediaId: header.id,
+        profileId: owner.profile.id,
+      },
+    ]);
+
+    const publicProfile = await requestGraphQL<{
+      profileByHandle: {
+        avatar: { id: string; url: string | null } | null;
+        header: { id: string; url: string | null } | null;
+      } | null;
+    }>(
+      `query PublicProfileMedia($handle: String!) {
+        profileByHandle(handle: $handle) {
+          avatar { id url }
+          header { id url }
+        }
+      }`,
+      { handle: owner.profile.handle },
+    );
+    assertNoGraphQLErrors(publicProfile);
+    assert.deepEqual(publicProfile.data?.profileByHandle, {
+      avatar: { id: globalId('Media', avatar.id), url: avatar.url },
+      header: { id: globalId('Media', header.id), url: header.url },
+    });
+
+    const mediaNodeQuery = `query StandaloneMediaNode($id: ID!) {
+      node(id: $id) { ... on Media { id url } }
+    }`;
+    const guestNode = await requestGraphQL<{ node: { id: string } | null }>(mediaNodeQuery, {
+      id: globalId('Media', avatar.id),
+    });
+    const otherNode = await requestGraphQL<{ node: { id: string } | null }>(
+      mediaNodeQuery,
+      { id: globalId('Media', avatar.id) },
+      other.token,
+    );
+    const ownerNode = await requestGraphQL<{
+      node: { id: string; url: string | null } | null;
+    }>(mediaNodeQuery, { id: globalId('Media', avatar.id) }, owner.token);
+
+    assertNoGraphQLErrors(guestNode);
+    assertNoGraphQLErrors(otherNode);
+    assertNoGraphQLErrors(ownerNode);
+    assert.equal(guestNode.data?.node, null);
+    assert.equal(otherNode.data?.node, null);
+    assert.deepEqual(ownerNode.data?.node, {
+      id: globalId('Media', avatar.id),
+      url: avatar.url,
     });
   });
 
@@ -3219,6 +3476,23 @@ const createAuthenticatedSession = async ({
   return { account, profile, session, token };
 };
 
+const createReadyMedia = async (accountId: string, profileId: string, label: string) =>
+  db
+    .insert(Media)
+    .values({
+      accountId,
+      mediaType: 'image/webp',
+      profileId,
+      readyAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
+      source: MediaSource.LOCAL,
+      state: MediaState.READY,
+      storageReference: `${label}-${crypto.randomUUID()}`,
+      uploadExpiresAt: Temporal.Instant.from('2026-07-30T00:05:00Z'),
+      url: `https://media.example/${label}.webp`,
+    })
+    .returning()
+    .then(firstOrThrow);
+
 const countRows = async (
   table: typeof Instances | typeof Profiles | typeof ProfileFollows | typeof ProfileFollowRequests,
 ): Promise<number> =>
@@ -3243,6 +3517,7 @@ const resetFixtures = async () => {
   await db.delete(Posts);
   await db.delete(ProfileFollowRequests);
   await db.delete(ProfileFollows);
+  await db.delete(Media);
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);

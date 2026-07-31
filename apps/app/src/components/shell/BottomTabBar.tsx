@@ -1,4 +1,4 @@
-import { Link, usePathname } from 'expo-router';
+import { usePathname } from 'expo-router';
 import { Bell, House, PenLine, Search } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
+import { GuardedLink } from './GuardedLink';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -117,9 +118,9 @@ export function BottomTabBar({
         );
 
         return tab.href ? (
-          <Link asChild href={tab.href} key={tab.label}>
+          <GuardedLink href={tab.href} key={tab.label}>
             {content}
-          </Link>
+          </GuardedLink>
         ) : (
           <View key={tab.label} style={styles.disabledItem}>
             {content}

@@ -327,6 +327,7 @@ enum PostVisibility {
 }
 
 type Profile implements Node {
+  avatar: Media
   bio: String
   bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
@@ -337,6 +338,7 @@ type Profile implements Node {
   following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection!
   followingCount: Int!
   handle: String!
+  header: Media
   id: ID!
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
   instance: ProfileInstance!
@@ -444,6 +446,7 @@ type Query {
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
+  selectedProfileForEdit: Profile
 }
 
 type Reaction implements Node {
@@ -538,9 +541,11 @@ type UnfollowProfilePayload {
 }
 
 input UpdateProfileInput {
+  avatarId: ID
   bio: String
   displayName: String
   followPolicy: ProfileFollowPolicy
+  headerId: ID
   tags: [String!]
 }
 

@@ -1,14 +1,16 @@
 import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
+import { AccountProfileRole, ProfileFollowPolicy, ProfileMediaKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
+import { Media } from '../media/ref';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
+import { profileMediaLoader } from './loader/media';
 
 export const Profile = createObjectRef('Profile', (ids) =>
   db
@@ -42,6 +44,24 @@ Profile.implement({
     }),
     displayName: t.exposeString('displayName'),
     bio: t.exposeString('bio', { nullable: true }),
+    avatar: t.field({
+      type: Media,
+      nullable: true,
+      grantScopes: ['readMedia'],
+      resolve: (profile, _, ctx) =>
+        profileMediaLoader(ctx)
+          .load(profile.id)
+          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.AVATAR) ?? null),
+    }),
+    header: t.field({
+      type: Media,
+      nullable: true,
+      grantScopes: ['readMedia'],
+      resolve: (profile, _, ctx) =>
+        profileMediaLoader(ctx)
+          .load(profile.id)
+          .then((media) => media.find(({ kind }) => kind === ProfileMediaKind.HEADER) ?? null),
+    }),
     followPolicy: t.expose('followPolicy', {
       type: ProfileFollowPolicy,
     }),
