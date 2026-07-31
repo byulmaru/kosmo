@@ -79,6 +79,10 @@ Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 
 - 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
   뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
   경계에서 격리하고 commit된 상태를 유지한다.
+- source와 함께 commit되어야 하는 Best Effort DB projection은 같은 transaction의 격리된 savepoint에서
+  실행할 수 있다. projection 실패는 savepoint에서 rollback하고 source transaction은 유지하며, caller
+  transaction의 commit 전에는 외부에 보이지 않고 outer rollback 뒤에는 함께 사라진다. transaction 인자의
+  존재 여부로 projection lifecycle을 선택하거나 생략하지 않는다.
 - rollback되어 존재하지 않는 domain transition의 Activity를 외부에 전달해서는 안 된다. 반대로 commit된
   transition의 post-commit Activity delivery 실패나 현재 direct-delivery 경계에서의 전달 누락을 수용하는지는
   각 capability가 명시적으로 결정할 수 있다.

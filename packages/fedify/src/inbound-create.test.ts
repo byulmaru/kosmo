@@ -22,6 +22,7 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -31,7 +32,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
-import { eq, ne } from 'drizzle-orm';
+import { eq, ne, sql } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -55,6 +56,7 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -74,6 +76,7 @@ describe('inbound Create dispatch', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       PostContents,
       Posts,
@@ -88,6 +91,7 @@ describe('inbound Create dispatch', () => {
   });
 
   beforeEach(async () => {
+    await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
@@ -96,6 +100,7 @@ describe('inbound Create dispatch', () => {
   });
 
   after(async () => {
+    await db.delete(Notifications);
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
@@ -357,6 +362,23 @@ describe('inbound Create dispatch', () => {
       localParent.post.id,
     );
     assert.equal((await getMaterializedPost(remoteReplyUri)).post.profileId, remoteProfile.id);
+    const localParentReply = await getMaterializedPost(localReplyUri);
+    assert.deepEqual(
+      await db
+        .select({
+          kind: Notifications.kind,
+          recipientProfileId: Notifications.recipientProfileId,
+          sourceId: Notifications.sourceId,
+        })
+        .from(Notifications),
+      [
+        {
+          kind: NotificationKind.REPLY,
+          recipientProfileId: localProfile.id,
+          sourceId: localParentReply.post.id,
+        },
+      ],
+    );
   });
 
   test('does not resolve a current canonical URI to a Post from a previous Local Instance', async () => {
@@ -409,6 +431,50 @@ describe('inbound Create dispatch', () => {
       ),
       previousPost.post.id,
     );
+  });
+
+  test('keeps an inbound Reply committed when Notification creation fails', async () => {
+    await createStoredRemoteActor();
+    const localProfile = await db
+      .insert(Profiles)
+      .values({
+        displayName: 'notification failure recipient',
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: 'notification_failure_recipient',
+        instanceId: localInstanceId,
+        normalizedHandle: 'notification_failure_recipient',
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const parent = await createPost({
+      document: postContentDocumentFromText('Local parent'),
+      origin: 'LOCAL',
+      profileId: localProfile.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_reply_create_failure CHECK (false) NOT VALID`,
+    );
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        createRemoteCreate({
+          objectUri: replyUri,
+          replyTarget: new URL(`/ap/note/${parent.post.id}`, publicOrigin),
+        }),
+        receivedAt,
+      );
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_reply_create_failure`,
+      );
+    }
+
+    assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
+    assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {

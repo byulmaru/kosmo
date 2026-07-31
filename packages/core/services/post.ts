@@ -430,8 +430,13 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.origin === 'LOCAL' && input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch(() => undefined);
+      if (input.replyParentId !== undefined) {
+        await createReplyNotification(linkedPost.id, tx).catch((error) => {
+          console.error('Reply notification creation failed', {
+            error,
+            postId: linkedPost.id,
+          });
+        });
       }
 
       return { content, created: true, post: linkedPost };
