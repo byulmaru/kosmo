@@ -44,11 +44,11 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 ### Requirement: Remote Media와 PostContent projection
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-585, PROD-625. 시스템은 검증된 원격 이미지 후보를 원본 Remote Profile 소유의 Ready Remote Media로 등록하고 같은 순서의 PostContent V1 Media node로 투영해야 한다(MUST). Remote Media identity는 원본 Remote Profile과 canonical URL의 조합이어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, PROD-585. 시스템은 검증된 원격 이미지 후보를 원본 Remote Profile 소유의 Ready Remote Media로 등록하고 같은 순서의 PostContent V1 Media node로 투영해야 한다(MUST).
 
 #### Scenario: 최초 원격 이미지 투영
 
-- **WHEN** 유효한 원격 Note의 이미지 attachment URL에 대응하는 같은 작성자 소유 Remote Media가 없다
+- **WHEN** 유효한 원격 Note의 이미지 attachment URL에 대응하는 Remote Media가 없다
 - **THEN** 시스템은 Note 작성자 Remote Profile을 소유자로 하는 `REMOTE + READY` Media를 생성한다
 - **AND** canonical 이미지 URL을 `media.url`에 저장한다
 - **AND** nullable media type을 `media.mediaType`에 저장한다
@@ -64,11 +64,11 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 - **AND** 기존 Media의 URL, media type과 Profile은 갱신하지 않는다
 - **AND** duplicate Create는 Alt Text를 포함한 기존 Media metadata를 갱신하지 않는다
 
-#### Scenario: 다른 작성자의 공용 URL
+#### Scenario: 다른 작성자가 소유한 URL 충돌
 
-- **WHEN** canonical URL이 같은 Remote Media가 다른 Remote Profile에 이미 존재한다
-- **THEN** 시스템은 현재 Note 작성자 소유의 별도 Remote Media를 생성하거나 재사용한다
-- **AND** 기존 Media의 Profile과 참조를 변경하지 않는다
+- **WHEN** canonical URL이 같은 Remote Media가 이미 있지만 그 Media의 Profile이 현재 Note 작성자와 다르다
+- **THEN** 시스템은 기존 Media의 Profile을 바꾸거나 새 중복 Media를 만들지 않는다
+- **AND** 해당 Note를 partial row 없이 거부한다
 
 #### Scenario: attachment-only Note 투영
 
@@ -100,6 +100,6 @@ node로 원자적으로 투영하는 수신 계약을 정의한다.
 
 #### Scenario: concurrent URL과 object 충돌
 
-- **WHEN** 같은 object URI 또는 같은 Remote Profile과 Remote Media URL을 포함한 최초 delivery가 동시에 실행된다
-- **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나, Remote Profile과 canonical URL 조합당 Media 하나로 수렴한다
+- **WHEN** 같은 object URI 또는 같은 Remote Media URL을 포함한 최초 delivery가 동시에 실행된다
+- **THEN** database uniqueness와 transaction 결과가 object URI당 Post 하나, canonical Remote URL당 Media 하나로 수렴한다
 - **AND** conflict loser는 orphan Post, PostContent 또는 Media를 남기지 않는다
