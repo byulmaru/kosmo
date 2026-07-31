@@ -105,7 +105,7 @@ production 구현을 375/1024/1440 Web에서 검증하고 Figma 1440/1024 Onboar
 - archive 전 `pnpm exec openspec validate redesign-root-welcome-onboarding --strict`
 - archive 후 `pnpm exec openspec validate --all --strict`
 
-- [ ] 4.1 local Web 세 viewport에서 logo x/y/size, heading alignment, copy·CTA·privacy, overflow를 확인한다.
-- [ ] 4.2 Figma Onboarding 1440/1024 frame을 production 구현과 동기화하고 node read-back·screenshot을 확인한다.
+- [x] 4.1 local Web 세 viewport에서 logo x/y/size, heading alignment, copy·CTA·privacy, overflow를 확인한다.
+- [x] 4.2 Figma Onboarding 1440/1024 frame을 production 구현과 동기화하고 node read-back·screenshot을 확인한다.
 - [ ] 4.3 전체 자동화와 독립 implementation review를 통과시키고 local/Figma/deployed/native 검증 경계를 기록한다.
 - [ ] 4.4 canonical·Linear·delta spec·구현과 다른 active `web-app-shell` change를 재대조한 뒤 전체 scope가 complete일 때 archive하고 post-archive strict validation을 통과시킨다.
