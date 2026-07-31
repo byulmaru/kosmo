@@ -13,8 +13,8 @@ ProfileMedia 조회 계약을 재사용해 최초 lookup과 refresh 모두에서
 - IRI-only 또는 부적합한 표현은 추가 fetch 없이 제외하고 기본 Profile materialization은 유지한다.
 - Remote URL을 Media identity로 사용하던 기존 unique index와 재사용을 제거한다. 서로 다른 Post attachment와
   avatar/header 표현은 URL이 같아도 별도 Media identity와 metadata를 유지한다.
-- 무중단 전환을 위해 애플리케이션을 먼저 URL index 유무에 모두 호환되게 배포하고, 구버전 배수와 rollback
-  window 종료를 확인한 별도 contract release에서 마지막 URL unique index를 제거한다.
+- transition PR에서 애플리케이션을 URL index 유무에 모두 호환되게 만든 뒤 별도 contract PR에서 마지막 URL
+  unique index를 제거한다. 프로덕션은 아직 실서비스 전이므로 workload 배수나 rollback window 대기는 하지 않는다.
 - 기존 GraphQL schema와 앱 image/fallback 계약은 변경하지 않는다.
 
 ## Authority / Provenance

@@ -386,7 +386,7 @@ test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원
   );
 });
 
-test('createPost는 contract 전 같은 Profile과 URL의 Remote Media를 안전하게 재사용한다', async () => {
+test('createPost는 같은 Profile과 URL의 Remote Media도 attachment별로 저장한다', async () => {
   const profile = await createProfile();
   const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
   const first = await createPost({
@@ -411,17 +411,21 @@ test('createPost는 contract 전 같은 Profile과 URL의 Remote Media를 안전
   });
 
   const media = await db.select().from(Media).where(eq(Media.url, url));
-  assert.equal(media.length, 1);
-  assert.equal(media[0]?.altText, 'first alt');
-  assert.equal(media[0]?.mediaType, 'image/png');
+  assert.equal(media.length, 2);
   assert.deepEqual(
-    [first, second].map((result) =>
-      result.content.document.body.content.flatMap((block) =>
-        block.type === 'media' ? [block.attrs.mediaId] : [],
-      ),
-    ),
-    [[media[0]?.id], [media[0]?.id]],
+    media.map(({ altText, mediaType }) => ({ altText, mediaType })),
+    [
+      { altText: 'first alt', mediaType: 'image/png' },
+      { altText: 'second alt', mediaType: 'image/webp' },
+    ],
   );
+  const referencedMediaIds = [first, second].map((result) =>
+    result.content.document.body.content.flatMap((block) =>
+      block.type === 'media' ? [block.attrs.mediaId] : [],
+    ),
+  );
+  assert.equal(new Set(referencedMediaIds.flat()).size, 2);
+  assert.deepEqual(new Set(referencedMediaIds.flat()), new Set(media.map(({ id }) => id)));
 });
 
 test('createPost는 다른 Profile의 같은 Remote URL을 각 Profile 소유 Media로 저장한다', async () => {

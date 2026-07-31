@@ -615,26 +615,8 @@ export const materializeRemoteProfileActor = async ({
                     source: MediaSource.REMOTE,
                     state: MediaState.READY,
                   })
-                  .onConflictDoNothing()
                   .returning({ id: Media.id })
-                  .then(first)
-                  .then(async (inserted) => {
-                    if (inserted) {
-                      return inserted;
-                    }
-                    return tx
-                      .select({ id: Media.id })
-                      .from(Media)
-                      .where(
-                        and(
-                          eq(Media.source, MediaSource.REMOTE),
-                          eq(Media.profileId, profileId),
-                          eq(Media.url, candidate.url),
-                        ),
-                      )
-                      .limit(1)
-                      .then(firstOrThrow);
-                  });
+                  .then(firstOrThrow);
 
           await tx
             .insert(ProfileMedia)

@@ -249,9 +249,6 @@ export const Media = pgTable(
     ),
     index().on(table.accountId),
     index().on(table.profileId),
-    uniqueIndex('media_remote_profile_url_unique')
-      .on(table.profileId, table.url)
-      .where(sql`${table.source} = 'REMOTE'`),
   ],
 );
 

@@ -75,16 +75,17 @@ kind별 관계를 delete 후 insert하거나 conflict update로 교체할 수 �
 
 ## Migration Plan
 
-무중단 전환은 두 release로 나눈다.
+전환은 두 PR로 나눈다.
 
 1. PROD-625 transition release에서 기존 전역 URL unique index를 구버전과 신버전이 모두 사용할 수 있는
    `(profile_id, url)` compatibility index로 바꾸고, 신버전을 index 유무에 모두 호환되게 배포한다. 이 단계에는
    contract SQL을 포함하지 않는다.
-2. production active/preview와 rollback 대상 구버전이 모두 배수되고 rollback window 종료 및 contract 승인을
-   확인한 뒤 PROD-627의 별도 release에서 compatibility index만 제거한다. 기존 row와 참조는 rewrite하지 않는다.
+2. PR #479 merge 뒤 PROD-627의 별도 contract PR에서 compatibility index만 제거한다. 프로덕션은 아직 실서비스
+   전이므로 active/preview workload 배수나 rollback window 대기는 적용하지 않는다. 기존 row와 참조는
+   rewrite하지 않는다.
 
 contract 이후에는 같은 URL의 독립 Media가 생성될 수 있으므로 URL identity 동작으로의 애플리케이션 rollback은
-지원하지 않는다. 실패 시 자동 down migration 대신 forward migration 또는 승인된 restore 절차를 사용한다.
+지원하지 않는다.
 
 ## Open Questions
 
