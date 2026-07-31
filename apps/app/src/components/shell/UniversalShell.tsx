@@ -115,10 +115,28 @@ function UniversalShellContent({ revision }: { revision: number }) {
       return;
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const bodyStyle = document.body.style;
+    const previousBodyStyle = {
+      left: bodyStyle.left,
+      overflow: bodyStyle.overflow,
+      position: bodyStyle.position,
+      right: bodyStyle.right,
+      top: bodyStyle.top,
+      width: bodyStyle.width,
+    };
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    Object.assign(bodyStyle, {
+      left: `-${scrollX}px`,
+      overflow: 'hidden',
+      position: 'fixed',
+      right: '0px',
+      top: `-${scrollY}px`,
+      width: '100%',
+    });
     return () => {
-      document.body.style.overflow = previousOverflow;
+      Object.assign(bodyStyle, previousBodyStyle);
+      window.scrollTo(scrollX, scrollY);
     };
   }, [drawerOpen]);
 

@@ -92,7 +92,7 @@ export function Link({
     !asChild ||
     !isValidElement<{
       href?: string;
-      onPress?: (event: { preventDefault?: () => void }) => void;
+      onPress?: (event: LinkPressEvent) => void;
     }>(children)
   ) {
     return <Fragment>{children}</Fragment>;
