@@ -22,7 +22,7 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const remoteDomain = 'remote.example';
-const databaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
