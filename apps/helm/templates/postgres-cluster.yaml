@@ -15,9 +15,9 @@ spec:
   instances: {{ ternary 3 1 (eq .Values.env "prod") }}
 {{- if eq .Values.env "dev" }}
   enablePDB: false
-  resources:
-{{ toYaml .Values.postgres.devResources | indent 4 }}
 {{- end }}
+  resources:
+{{ toYaml .Values.postgres.resources | indent 4 }}
 {{- if eq .Values.env "prod" }}
   serviceAccountName: kosmo-postgres-backup
   postgresql:

@@ -11,7 +11,7 @@ autoscaling:
 migration:
   enabled: false
 postgres:
-  devResources:
+  resources:
     requests:
       cpu: 250m
       memory: 1Gi
