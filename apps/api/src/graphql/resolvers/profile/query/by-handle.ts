@@ -18,6 +18,12 @@ import { Profile, ProfileConnection } from '../ref';
 
 type ProfileRow = typeof Profiles.$inferSelect;
 
+// Resolver-local seam keeps error reporting replaceable in focused tests without widening
+// the Fedify or application-wide error-reporting API.
+export const remoteProfileSearchErrorReporter = {
+  capture: captureUnexpectedError,
+};
+
 const escapeLikePattern = (value: string) =>
   value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 
@@ -119,7 +125,7 @@ builder.queryField('searchProfiles', (t) =>
             materializedProfileId = profile.id;
           } catch (error) {
             if (!isExpectedRemoteMaterializationError(error)) {
-              captureUnexpectedError(error);
+              remoteProfileSearchErrorReporter.capture(error);
             }
 
             return resolveCursorConnection<Promise<ProfileRow[]>>(

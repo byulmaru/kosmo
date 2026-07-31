@@ -243,7 +243,6 @@ const findStoredRemoteProfile = async (domain: string, normalizedHandle: string)
         eq(Instances.domain, domain),
         eq(Instances.kind, InstanceKind.ACTIVITYPUB),
         eq(Profiles.normalizedHandle, normalizedHandle),
-        eq(Profiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
@@ -369,6 +368,10 @@ export const findOrMaterializeRemoteProfileActor = async ({
   const stored = await findStoredRemoteProfile(parsed.domain, parsed.normalizedHandle);
 
   if (stored) {
+    if (stored.profile.state !== ProfileState.ACTIVE) {
+      throw new NotFoundError('Profile not found');
+    }
+
     if (stored.instance.state === InstanceState.SUSPENDED) {
       throw new NotFoundError('Profile not found');
     }

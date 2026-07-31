@@ -667,6 +667,30 @@ describe('remote actor materialization', () => {
     });
   }
 
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    test(`returns NotFound for a stored ${state} profile without a remote lookup`, async () => {
+      const stored = await createStoredRemoteActor({ profileState: state });
+      const { context, lookupObject } = createLookupContext(async () => createActor());
+
+      await assert.rejects(
+        findOrMaterializeRemoteProfileActor({
+          context,
+          handle: `alice@${remoteDomain}`,
+        }),
+        /Profile not found/,
+      );
+
+      assert.equal(lookupObject.mock.calls.length, 0);
+      const profile = await db
+        .select()
+        .from(Profiles)
+        .where(eq(Profiles.id, stored.profile.id))
+        .limit(1)
+        .then(firstOrThrow);
+      assert.equal(profile.state, state);
+    });
+  }
+
   for (const state of [InstanceState.SUSPENDED, InstanceState.UNRESPONSIVE]) {
     test(`does not refresh an existing actor from a ${state} instance through an alias`, async () => {
       const stored = await createStoredRemoteActor({ instanceState: state });

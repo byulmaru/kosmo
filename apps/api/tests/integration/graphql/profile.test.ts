@@ -202,6 +202,22 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('does not create a federation context for unauthenticated explicit remote search', async (t) => {
+    const createContext = t.mock.method(remoteFederation, 'createContext');
+    const query = `query SearchRemoteProfile($query: String!) {
+      searchProfiles(query: $query, first: 20) {
+        edges { node { relativeHandle } }
+      }
+    }`;
+
+    for (const token of [undefined, 'invalid-token']) {
+      const result = await requestGraphQL(query, { query: `@alice@${remoteDomain}` }, token);
+      assertGraphQLErrorCode(result, 'PERMISSION_DENIED');
+    }
+
+    assert.equal(createContext.mock.calls.length, 0);
+  });
+
   test('materializes a missing explicit remote profile into the existing connection', async (t) => {
     const auth = await createAuthenticatedSession();
     const actor = createLookupActor();
@@ -266,6 +282,37 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(lookupObject.mock.calls.length, 0);
   });
 
+  for (const state of [ProfileState.DISABLED, ProfileState.SUSPENDED]) {
+    test(`returns an empty connection for a stored ${state} remote profile without lookup`, async (t) => {
+      const auth = await createAuthenticatedSession();
+      const domain = `${state.toLowerCase()}.remote.example`;
+      const stored = await createStoredActivityPubAuthor({ domain, handle: 'alice' });
+      await db.update(Profiles).set({ state }).where(eq(Profiles.id, stored.profile.id));
+      const lookupObject = mock.fn(async () => createLookupActor());
+      t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
+
+      const result = await requestGraphQL<{
+        searchProfiles: { edges: unknown[]; pageInfo: { hasNextPage: boolean } };
+      }>(
+        `query SearchRemoteProfile($query: String!) {
+          searchProfiles(query: $query, first: 20) {
+            edges { node { id } }
+            pageInfo { hasNextPage }
+          }
+        }`,
+        { query: `@alice@${domain}` },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.searchProfiles, {
+        edges: [],
+        pageInfo: { hasNextPage: false },
+      });
+      assert.equal(lookupObject.mock.calls.length, 0);
+    });
+  }
+
   test('uses the canonical profile when an explicit remote search resolves an alias domain', async (t) => {
     const auth = await createAuthenticatedSession();
     const actor = createLookupActor();
@@ -328,6 +375,9 @@ describe('GraphQL remote profile boundary', () => {
 
   test('falls back to an empty connection for expected remote materialization failures', async (t) => {
     const auth = await createAuthenticatedSession();
+    const { remoteProfileSearchErrorReporter } =
+      await import('../../../src/graphql/resolvers/profile/query/by-handle');
+    const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const lookupObject = mock.fn(async () => null);
     t.mock.method(remoteFederation, 'createContext', () => ({ lookupObject }) as never);
 
@@ -347,10 +397,14 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.searchProfiles, { edges: [], pageInfo: { hasNextPage: false } });
     assert.equal(lookupObject.mock.calls.length, 1);
+    assert.equal(captureUnexpectedError.mock.calls.length, 0);
   });
 
   test('falls back to an empty connection for unexpected remote materialization failures', async (t) => {
     const auth = await createAuthenticatedSession();
+    const { remoteProfileSearchErrorReporter } =
+      await import('../../../src/graphql/resolvers/profile/query/by-handle');
+    const captureUnexpectedError = t.mock.method(remoteProfileSearchErrorReporter, 'capture');
     const lookupError = new Error('remote lookup unavailable');
     const lookupObject = mock.fn(async () => {
       throw lookupError;
@@ -369,6 +423,8 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.searchProfiles.edges, []);
+    assert.equal(captureUnexpectedError.mock.calls.length, 1);
+    assert.strictEqual(captureUnexpectedError.mock.calls[0]?.arguments[0], lookupError);
   });
 
   test('searches stored profiles by partial handle with literal LIKE metacharacters', async () => {

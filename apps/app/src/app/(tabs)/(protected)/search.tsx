@@ -79,7 +79,7 @@ function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: 
 
   useEffect(() => {
     loadQuery(
-      { query: handle.replace(/^@/, '') },
+      { query: handle },
       { fetchPolicy: 'store-and-network', networkCacheConfig: { metadata: { fetchKey } } },
     );
   }, [fetchKey, handle, loadQuery]);
