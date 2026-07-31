@@ -56,7 +56,7 @@ test('full variant preserves the approved 1665 by 1050 artboard ratio', async ()
 
   assert.match(String((image.props.source as { uri?: string }).uri), /brand-logo-full-light\.png$/);
   assert.deepEqual((image.props.style as Array<unknown>)[0], {
-    aspectRatio: 1665 / 1050,
+    height: 105,
     width: 166.5,
   });
 });

@@ -46,8 +46,8 @@
 - `pnpm --filter @kosmo/app exec node --experimental-test-module-mocks --import tsx --test src/components/BrandLogo.test.ts`
 - `pnpm --filter @kosmo/app check`
 
-- [ ] 2.1 full variant test를 명시적 calculated height expectation으로 바꾸고 기존 구현에서 실패를 확인한다.
-- [ ] 2.2 full variant style에 calculated height를 구현하고 focused test와 app check를 통과시킨다.
+- [x] 2.1 full variant test를 명시적 calculated height expectation으로 바꾸고 기존 구현에서 실패를 확인한다.
+- [x] 2.2 full variant style에 calculated height를 구현하고 focused test와 app check를 통과시킨다.
 
 ## 3. DSN-26 Welcome production UI와 Web E2E
 
