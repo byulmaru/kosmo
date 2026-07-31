@@ -8,7 +8,7 @@
 
 **Goals:**
 
-- embedded typed Image attachment를 추가 fetch 없이 검증한다.
+- embedded Image와 Media Type이 `image/*`인 embedded Document attachment를 추가 fetch 없이 검증한다.
 - Remote Media를 재사용하거나 생성한 뒤 Media node가 포함된 document를 기존 원격 Post transaction에서 저장한다.
 - Local과 Remote Media field 조합, Remote URL uniqueness와 duplicate/concurrent first-write-wins를 database에서 지지한다.
 - 기존 text-only/HTML remote Note와 Local upload 동작을 유지한다.
@@ -16,7 +16,7 @@
 **Non-Goals:**
 
 - attachment IRI hydration, 이미지 byte fetch, proxy/cache 또는 Media Storage Service 복제
-- Update(Note), Profile avatar/header, client image renderer와 GraphQL Media 표시 정보
+- Update(Note), Profile avatar/header, client image renderer와 새로운 GraphQL Media field
 - Local Note outbound attachment task 또는 active `attach-local-media-to-post` change의 archive
 
 ## Implementation Guidance
@@ -31,9 +31,9 @@
 
 ### Recommended Approach
 
-Fedify adapter는 network를 수행하지 않는 loader 경계로 embedded attachment만 순회하고 typed Image 후보를 primitive `{ url, mediaType, altText }` 목록으로 만든다. non-Image/IRI-only attachment는 제외하고 원래 순서의 앞 네 Image만 후보로 유지한다. URL은 WHATWG URL로 HTTP(S)와 canonical serialization을 검증하며, 유지한 후보 하나라도 부적합하거나 canonical URL이 중복되면 materialization을 시작하지 않는다. 다섯 번째 이후 Image는 상세 projection과 persistence 없이 무시한다.
+Fedify adapter는 network를 수행하지 않는 loader 경계로 embedded attachment만 순회하고 Image 또는 Media Type의 MIME essence가 `image/*`인 Document를 primitive `{ url, mediaType, altText }` 후보로 만든다. 다른 타입과 IRI-only attachment는 제외하고 원래 순서의 앞 네 이미지 attachment만 후보로 유지한다. Image는 Media Type이 없어도 후보로 수용하고, Document의 malformed/non-image Media Type은 지원하지 않는 attachment로 제외한다. URL은 WHATWG URL로 HTTP(S)와 canonical serialization을 검증하며, 유지한 후보 하나라도 부적합하거나 canonical URL이 중복되면 materialization을 시작하지 않는다. 다섯 번째 이후 이미지 attachment는 상세 projection과 persistence 없이 무시한다.
 
-core의 ActivityPub `createPost` 입력에 protocol-neutral한 remote media 후보를 추가한다. 기존 transaction에서 Post와 ActivityPub mapping을 먼저 insert해 duplicate object를 조기에 판정한 뒤, 후보 URL의 Remote Media를 conflict-safe insert/reuse하고 owner Profile이 같은지 확인한다. Image name은 생성 또는 재사용한 Media의 nullable Alt Text로 저장하고, 얻은 Media ID만 이미 projection된 canonical document 끝의 Media node로 결합해 canonicalize한 뒤 PostContent를 저장한다. transaction 자체는 지금처럼 object URI conflict만 duplicate no-op으로 정규화하고, URL ownership conflict나 다른 오류는 전체 rollback한다.
+core의 ActivityPub `createPost` 입력에 protocol-neutral한 remote media 후보를 추가한다. 기존 transaction에서 Post와 ActivityPub mapping을 먼저 insert해 duplicate object를 조기에 판정한 뒤, 후보 URL의 Remote Media를 conflict-safe insert/reuse하고 owner Profile이 같은지 확인한다. attachment name은 생성 또는 재사용한 Media의 nullable Alt Text로 저장하고, 얻은 Media ID만 이미 projection된 canonical document 끝의 Media node로 결합해 canonicalize한 뒤 PostContent를 저장한다. transaction 자체는 지금처럼 object URI conflict만 duplicate no-op으로 정규화하고, URL ownership conflict나 다른 오류는 전체 rollback한다.
 
 schema migration은 `account_id`, `storage_reference`, `upload_expires_at`의 physical NOT NULL을 해제하고, source/state별 CHECK로 Local Uploading/Ready와 Remote Ready 조합을 강제한다. `source=REMOTE`에만 적용되는 URL partial unique index를 추가한다. PR #428 이전 dev의 Ready Local row는 Media Storage Service의 실제 representation metadata로 사전 백필해 CHECK 적용 전 누락을 0개로 만든다.
 

@@ -12,6 +12,7 @@ import {
   Article,
   Create,
   CryptographicKey,
+  Document,
   Image,
   LanguageString,
   Note,
@@ -139,7 +140,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(postContentDocumentToText(content.document), 'Hello');
   });
 
-  test('projects the first four embedded Images without fetching IRI-only attachments', async () => {
+  test('projects the first four embedded image attachments without fetching IRI-only attachments', async () => {
     const profile = await createStoredRemoteActor();
     const documentLoader = mock.fn<DocumentLoader>(async (url) => {
       throw new Error(`Attachment network lookup must not run: ${url}`);
@@ -151,15 +152,23 @@ describe('inbound Create dispatch', () => {
     const note = new Note({
       attachments: [
         new Article({ url: new URL('https://remote.example/article') }),
+        new Document({
+          mediaType: 'audio/ogg',
+          url: new URL('https://remote.example/media/audio.ogg'),
+        }),
+        new Document({
+          mediaType: 'not a media type',
+          url: new URL('https://remote.example/media/malformed'),
+        }),
         new URL('https://remote.example/media/iri-only'),
-        ...urls.map(
-          (url, index) =>
-            new Image({
-              mediaType: index === 3 ? null : 'image/webp',
-              name: index === 0 ? 'first image' : null,
-              url,
-            }),
-        ),
+        new Document({
+          mediaType: 'image/webp',
+          name: 'first image',
+          url: urls[0],
+        }),
+        new Image({ mediaType: 'image/webp', url: urls[1] }),
+        new Document({ mediaType: 'IMAGE/PNG; profile=remote', url: urls[2] }),
+        new Image({ mediaType: null, url: urls[3] }),
         new Image({ name: 'ignored invalid fifth image' }),
       ],
       attribution: remoteActorUri,
@@ -186,7 +195,7 @@ describe('inbound Create dispatch', () => {
       canonicalUrls
         .map((url, index) => ({
           altText: index === 0 ? 'first image' : null,
-          mediaType: index === 3 ? null : 'image/webp',
+          mediaType: index === 2 ? 'IMAGE/PNG; profile=remote' : index === 3 ? null : 'image/webp',
           url,
         }))
         .sort((left, right) => left.url.localeCompare(right.url)),

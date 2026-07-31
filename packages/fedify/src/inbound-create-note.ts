@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
-import { Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { MIMEType } from 'node:util';
+import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { NotFoundError, ValidationError } from '@kosmo/core/error';
@@ -12,6 +13,21 @@ import type { Note } from '@fedify/vocab';
 
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote attachment lookup is disabled');
+};
+
+const isImageAttachment = (attachment: Document): boolean => {
+  if (attachment instanceof Image) {
+    return true;
+  }
+  if (!attachment.mediaType) {
+    return false;
+  }
+
+  try {
+    return new MIMEType(attachment.mediaType).type === 'image';
+  } catch {
+    return false;
+  }
 };
 
 export const projectRemoteNoteMedia = async (note: Note) => {
@@ -28,25 +44,25 @@ export const projectRemoteNoteMedia = async (note: Note) => {
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   })) {
-    if (!(attachment instanceof Image)) {
+    if (!(attachment instanceof Document) || !isImageAttachment(attachment)) {
       continue;
     }
     if (candidates.length === 4) {
       break;
     }
     if (attachment.urls.length !== 1) {
-      throw new TypeError('Remote Image must have exactly one representation URL');
+      throw new TypeError('Remote image attachment must have exactly one representation URL');
     }
 
     const representation = attachment.urls[0];
     const url = representation instanceof Link ? representation.href : representation;
     if (!url || !isHttpUri(url)) {
-      throw new TypeError('Remote Image representation URL must use HTTP(S)');
+      throw new TypeError('Remote image attachment representation URL must use HTTP(S)');
     }
 
     const canonicalUrl = new URL(url.href).href;
     if (urls.has(canonicalUrl)) {
-      throw new TypeError('Remote Image representation URL must be unique');
+      throw new TypeError('Remote image attachment representation URL must be unique');
     }
     urls.add(canonicalUrl);
     candidates.push({

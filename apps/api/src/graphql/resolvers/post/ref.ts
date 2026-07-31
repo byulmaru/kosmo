@@ -92,7 +92,7 @@ PostContent.implement({
         const result: NonNullable<(typeof mediaRows)[number]>[] = [];
 
         for (const media of mediaRows) {
-          if (!media || media.state !== MediaState.READY || !media.url || !media.mediaType) {
+          if (!media || media.state !== MediaState.READY || !media.url) {
             return null;
           }
 

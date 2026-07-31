@@ -80,12 +80,14 @@ identity와 최초 Ready At을 반환한다.
 같은 Media를 다시 첨부하면서 다른 Alt Text를 입력하는 것은 정상적인 작성 흐름은 아니지만 별도 귀속이나 재사용
 제약으로 금지하지 않는다. 이 경우 Media의 최신 Alt Text가 모든 참조 Post에 보인다.
 
-원격 Note의 embedded typed Image attachment를 Post Content로 투영할 때는 non-Image와 IRI-only attachment를
-제외한 원래 순서의 앞 4개 Image만 Remote Media 등록 대상으로 사용하고 초과분은 무시한다. 선택한 Image의
-canonical HTTP(S) URL은 Remote URL로 저장하며 nullable Media Type은 해석하거나 정규화하지 않고 보존한다.
-선택한 Image 중 URL이 없거나 여러 개, HTTP(S)가 아니거나 서로 중복이면 일부만 등록하지 않고 해당 Note의
-Media/Post materialization 전체를 남기지 않는다. Image의 nullable name은 Media의 Alt Text로 보존한다.
-attachment metadata와 이미지 byte를 위한 추가 원격 fetch는 수행하지 않는다.
+원격 Note의 embedded `Image`와 Media Type이 `image/*`인 embedded `Document` attachment를 Post Content로
+투영한다. 다른 attachment type과 IRI-only attachment를 제외한 원래 순서의 앞 4개 이미지 attachment만 Remote
+Media 등록 대상으로 사용하고 초과분은 무시한다. `Image`는 Media Type을 생략할 수 있으며, `Document`는 Media
+Type의 MIME essence가 `image/*`일 때만 이미지로 분류한다. 선택한 attachment의 canonical HTTP(S) URL은 Remote
+URL로 저장하고 원본 nullable Media Type 문자열은 정규화하지 않고 보존한다. 선택한 attachment 중 URL이 없거나
+여러 개, HTTP(S)가 아니거나 서로 중복이면 일부만 등록하지 않고 해당 Note의 Media/Post materialization 전체를
+남기지 않는다. nullable name은 Media의 Alt Text로 보존한다. attachment metadata와 이미지 byte를 위한 추가
+원격 fetch는 수행하지 않는다.
 
 ## 권한
 

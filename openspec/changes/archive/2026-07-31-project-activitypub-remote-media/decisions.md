@@ -136,6 +136,18 @@
 - Consequences: 비일반적인 역순 다중 URL 동시 재사용에서는 한 delivery가 PostgreSQL deadlock 오류로 실패할 가능성을 수용한다.
 - Confirmation / Follow-up: 기존 단일 URL duplicate/concurrent 테스트를 유지하며 실제 제품 사용에서 다중 URL 재사용이 관찰되면 별도 이슈에서 lock ordering을 재평가한다.
 
+### embedded Image와 image Document를 함께 지원한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-585 사용자 결정, ActivityStreams Image/Document vocabulary, Mastodon·Hackers’ Pub 실제 outbound 표현
+- Status: Active
+- Context / Problem: 초기 구현은 embedded `Image`만 후보로 선택했지만, Mastodon과 Hackers’ Pub은 Note 이미지 attachment를 `Document`와 `mediaType=image/*`로 전송한다. 이 구현은 표준 `Image`는 수용하면서 실제 상호운용 대상의 이미지를 모두 누락했다.
+- Decision Outcome: embedded `Image`는 nullable Media Type과 관계없이 이미지 후보로 수용하고, embedded `Document`는 Media Type의 MIME essence가 `image/*`일 때만 후보로 수용한다. 원본 nullable Media Type 문자열은 저장 시 정규화하지 않는다. 다른 Document, malformed/non-image Media Type과 IRI-only attachment는 무시한다.
+- Alternatives Considered: Image-only는 실제 대상 서버와 상호운용되지 않아 폐기했다. Document-only는 유효한 표준 Image 표현을 불필요하게 거부하므로 선택하지 않았다. URL 확장자로 종류를 추론하면 원격 표현 계약에 없는 휴리스틱이 생기므로 선택하지 않았다.
+- Consequences: Mastodon·Hackers’ Pub의 일반적인 이미지 attachment와 표준 Image를 모두 처리한다. Media Type이 없는 Image는 `media.mediaType=NULL`로 저장되므로 GraphQL `PostContent.media`도 URL이 있는 Ready Remote Media를 nullable Media Type과 함께 노출한다.
+- Confirmation / Follow-up: Image의 nullable Media Type, image/non-image Document, MIME 대소문자·parameter 보존과 GraphQL nullable Media Type 회귀를 검증한다.
+
 ## Remaining Decisions
 
 - 없음.

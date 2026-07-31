@@ -4,11 +4,11 @@
 
 ## What Changes
 
-- 원격 Image attachment의 HTTP(S) URL을 별도 remote URL column 없이 `media.url`에 저장하는 `REMOTE + READY` Media projection을 추가한다.
+- 원격 embedded `Image`와 `mediaType=image/*`인 embedded `Document` attachment의 HTTP(S) URL을 별도 remote URL column 없이 `media.url`에 저장하는 `REMOTE + READY` Media projection을 추가한다.
 - Local upload 전용 Media field와 Remote Media field의 존재 조건을 PostgreSQL/Drizzle schema에 반영한다.
-- 지원되는 원격 Image attachment의 순서는 PostContent V1 Media node로, Alt Text는 해당 Remote Media로 보존한다.
+- 지원되는 원격 이미지 attachment의 순서는 PostContent V1 Media node로, Alt Text는 해당 Remote Media로 보존한다.
 - Remote Media와 기존 ActivityPub Post mapping, Post, PostContent, currentContent를 최초 materialization의 같은 transaction과 first-write-wins 경계에서 생성한다.
-- 원격 Image URL 중복과 concurrent delivery가 중복 Media 또는 orphan row를 만들지 않도록 한다.
+- 원격 이미지 URL 중복과 concurrent delivery가 중복 Media 또는 orphan row를 만들지 않도록 한다.
 - 원격 byte fetch, Media Storage Service 복제/proxy, Update(Note), Profile representation과 client rendering은 추가하지 않는다.
 
 ## Authority / Provenance
@@ -21,7 +21,7 @@
 
 ### New Capabilities
 
-- `activitypub-remote-media`: 원격 Note Image attachment를 Remote Media와 PostContent Media node로 원자적으로 투영하는 계약
+- `activitypub-remote-media`: 원격 Note 이미지 attachment를 Remote Media와 PostContent Media node로 원자적으로 투영하는 계약
 
 ### Modified Capabilities
 
@@ -31,6 +31,6 @@
 
 - `packages/core/db`: Media column nullability, source/state invariant, 원격 URL uniqueness와 migration 검증
 - `packages/core`: 원격 Media persistence와 PostContent Media document 조합을 포함하는 transaction 경계
-- `packages/fedify`: typed Image attachment 검증과 원격 Note materialization 입력
+- `packages/fedify`: embedded Image와 `image/*` Document attachment 검증 및 원격 Note materialization 입력
 - `packages/fedify` 및 `packages/core` 테스트: attachment-only, 중복, concurrent, rollback과 기존 text-only 회귀 검증
 - 선행 계약: active `attach-local-media-to-post` change의 PostContent V1 Media node schema를 재사용하며 Local Note attachment projection task는 변경하지 않음
