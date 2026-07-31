@@ -2,12 +2,13 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, mock, test } from 'node:test';
-import { Accept, Endpoints, Follow, Note, Person, Update } from '@fedify/vocab';
+import { Accept, Endpoints, Follow, Image, Note, Person, Update } from '@fedify/vocab';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
+  ProfileMediaKind,
 } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -28,9 +29,11 @@ let db: typeof CoreDb.db;
 let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
+let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let followProfile: typeof CoreServices.followProfile;
 let handleInboundAccept: typeof HandleInboundAccept;
@@ -47,9 +50,11 @@ describe('inbound actor Update', () => {
       first,
       firstOrThrow,
       Instances,
+      Media,
       pg,
       ProfileFollowRequests,
       ProfileFollows,
+      ProfileMedia,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -78,6 +83,16 @@ describe('inbound actor Update', () => {
     const firstReceivedAt = Temporal.Instant.from('2026-07-31T05:00:00Z');
     const context = createContext();
     const approvalRequired = createActor({
+      icon: new Image({
+        mediaType: 'image/png',
+        name: 'Updated avatar',
+        url: new URL('https://remote.example/media/avatar.png'),
+      }),
+      image: new Image({
+        mediaType: 'image/webp',
+        name: 'Updated header',
+        url: new URL('https://remote.example/media/header.webp'),
+      }),
       manuallyApprovesFollowers: true,
       name: 'Alice Updated',
       summary: '<p>Updated <strong>bio</strong></p>',
@@ -96,6 +111,18 @@ describe('inbound actor Update', () => {
     assert.equal(stored.actor.inboxUri, 'https://remote.example/users/alice/inbox-updated');
     assert.equal(stored.actor.sharedInboxUri, 'https://remote.example/inbox-updated');
     assert.equal(stored.actor.lastFetchedAt?.toString(), firstReceivedAt.toString());
+    assert.deepEqual(await readProfileMedia(fixture.profile.id), [
+      {
+        altText: 'Updated avatar',
+        kind: ProfileMediaKind.AVATAR,
+        url: 'https://remote.example/media/avatar.png',
+      },
+      {
+        altText: 'Updated header',
+        kind: ProfileMediaKind.HEADER,
+        url: 'https://remote.example/media/header.webp',
+      },
+    ]);
 
     const secondReceivedAt = firstReceivedAt.add({ seconds: 1 });
     await handleInboundUpdate(
@@ -110,6 +137,8 @@ describe('inbound actor Update', () => {
     stored = await readRemoteActor(fixture.profile.id);
     assert.equal(stored.profile.followPolicy, ProfileFollowPolicy.OPEN);
     assert.equal(stored.actor.lastFetchedAt?.toString(), secondReceivedAt.toString());
+    assert.deepEqual(await readProfileMedia(fixture.profile.id), []);
+    assert.equal(await db.$count(Media, eq(Media.profileId, fixture.profile.id)), 2);
   });
 
   test('ignores mismatched, unsupported, unknown, and local actor updates without document loading', async () => {
@@ -375,6 +404,18 @@ const readRemoteActor = (profileId: string) =>
     .limit(1)
     .then(firstOrThrow);
 
+const readProfileMedia = (profileId: string) =>
+  db
+    .select({
+      altText: Media.altText,
+      kind: ProfileMedia.kind,
+      url: Media.url,
+    })
+    .from(ProfileMedia)
+    .innerJoin(Media, eq(Media.id, ProfileMedia.mediaId))
+    .where(eq(ProfileMedia.profileId, profileId))
+    .orderBy(ProfileMedia.kind);
+
 const readCounts = async (followerProfileId: string, followeeProfileId: string) => {
   const follower = await db
     .select({ count: Profiles.followingCount })
@@ -409,6 +450,8 @@ const countPair = (
     .then((rows) => rows.length);
 
 const cleanFixtures = async () => {
+  await db.delete(ProfileMedia);
+  await db.delete(Media);
   const remoteInstances = await db
     .select({ id: Instances.id })
     .from(Instances)

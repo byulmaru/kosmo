@@ -163,13 +163,19 @@ const materializeRemoteMedia = async (
       await tx
         .select({ id: Media.id, profileId: Media.profileId, url: Media.url })
         .from(Media)
-        .where(and(eq(Media.source, MediaSource.REMOTE), inArray(Media.url, urls)))
+        .where(
+          and(
+            eq(Media.source, MediaSource.REMOTE),
+            eq(Media.profileId, profileId),
+            inArray(Media.url, urls),
+          ),
+        )
     ).map((media) => [media.url, media]),
   );
 
   const materialized = candidates.map(({ altText, url }) => {
     const media = mediaByUrl.get(url);
-    if (!media || media.profileId !== profileId) {
+    if (!media) {
       throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
     }
     return { altText, mediaId: media.id };

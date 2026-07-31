@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { getActorHandle, getActorTypeName, isActor } from '@fedify/vocab';
+import { getActorHandle, getActorTypeName, isActor, Link } from '@fedify/vocab';
 import { projectRemoteActivityPubHtmlToPlainText } from '@kosmo/core/activitypub-note-content/server';
 import {
   ActivityPubActors,
@@ -9,13 +9,18 @@ import {
   firstOrThrow,
   Instances,
   isUniqueViolation,
+  Media,
+  ProfileMedia,
   Profiles,
 } from '@kosmo/core/db';
 import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
@@ -27,9 +32,9 @@ import {
   profileDisplayNameSchema,
   profileHandleSchema,
 } from '@kosmo/core/validation';
-import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
+import { and, eq, getColumns, inArray, ne, sql } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
-import type { Actor, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
+import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
@@ -54,12 +59,20 @@ type FindOrMaterializeRemoteActorOptions = RemoteActorMaterializationOptions & {
 };
 
 type ActorProjection = {
+  avatar: RemoteProfileMediaCandidate | null;
   bio: string | null;
   displayName: string;
   followPolicy: ProfileFollowPolicy;
   handle: string;
+  header: RemoteProfileMediaCandidate | null;
   normalizedHandle: string;
   published: Temporal.Instant | null;
+};
+
+type RemoteProfileMediaCandidate = {
+  altText: string | null;
+  mediaType: string | null;
+  url: string;
 };
 
 type ActorEndpoints = {
@@ -84,6 +97,10 @@ type ActorWithKosmoFields = Actor & {
 };
 
 const getNow = () => Temporal.Now.instant();
+
+const noNetworkDocumentLoader = async (): Promise<never> => {
+  throw new TypeError('Remote actor representation lookup is disabled');
+};
 
 const toActorType = (actor: Actor): ActivityPubActorType => {
   switch (getActorTypeName(actor)) {
@@ -116,7 +133,37 @@ const projectActorBio = (summary: string | LanguageString | null | undefined): s
   return bio.success ? bio.data : null;
 };
 
-const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
+const projectActorImage = async (
+  images: AsyncIterable<Image>,
+): Promise<RemoteProfileMediaCandidate | null> => {
+  const projected: Image[] = [];
+
+  for await (const image of images) {
+    projected.push(image);
+    if (projected.length > 1) {
+      return null;
+    }
+  }
+
+  const image = projected[0];
+  if (!image || image.urls.length !== 1) {
+    return null;
+  }
+
+  const representation = image.urls[0];
+  const url = representation instanceof Link ? representation.href : representation;
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) {
+    return null;
+  }
+
+  return {
+    altText: image.name?.toString() ?? null,
+    mediaType: image.mediaType,
+    url: new URL(url.href).href,
+  };
+};
+
+const projectActor = async (actor: ActorWithKosmoFields, requestedNormalizedHandle: string) => {
   const preferredUsername = actor.preferredUsername?.toString();
 
   if (!preferredUsername) {
@@ -136,14 +183,26 @@ const projectActor = (actor: ActorWithKosmoFields, requestedNormalizedHandle: st
   }
 
   const displayName = profileDisplayNameSchema.safeParse(actor.name?.toString());
+  const representationOptions = {
+    contextLoader: noNetworkDocumentLoader,
+    crossOrigin: 'trust' as const,
+    documentLoader: noNetworkDocumentLoader,
+    suppressError: true,
+  };
+  const [avatar, header] = await Promise.all([
+    projectActorImage(actor.getIcons(representationOptions)),
+    projectActorImage(actor.getImages(representationOptions)),
+  ]);
 
   return {
+    avatar,
     bio: projectActorBio(actor.summary),
     displayName: displayName.success ? displayName.data : handle.data,
     followPolicy: actor.manuallyApprovesFollowers
       ? ProfileFollowPolicy.APPROVAL_REQUIRED
       : ProfileFollowPolicy.OPEN,
     handle: handle.data,
+    header,
     normalizedHandle,
     published: actor.published ?? null,
   } satisfies ActorProjection;
@@ -435,7 +494,7 @@ export const materializeRemoteProfileActor = async ({
     throw new ConflictError({ message: 'Remote actor URI uses the local origin' });
   }
 
-  const projection = projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
+  const projection = await projectActor(actor as ActorWithKosmoFields, parsed.normalizedHandle);
   const endpoints = getActorEndpoints(actor as ActorWithKosmoFields);
   const actorUri = actorId.href;
   const actorType = toActorType(actor);
@@ -506,6 +565,44 @@ export const materializeRemoteProfileActor = async ({
               eq(Instances.state, InstanceState.UNRESPONSIVE),
             ),
           );
+      };
+
+      const syncProfileMedia = async (profileId: string) => {
+        for (const [kind, candidate] of [
+          [ProfileMediaKind.AVATAR, projection.avatar],
+          [ProfileMediaKind.HEADER, projection.header],
+        ] as const) {
+          if (!candidate) {
+            await tx
+              .delete(ProfileMedia)
+              .where(and(eq(ProfileMedia.profileId, profileId), eq(ProfileMedia.kind, kind)));
+            continue;
+          }
+
+          const media = await tx
+            .insert(Media)
+            .values({
+              ...candidate,
+              profileId,
+              source: MediaSource.REMOTE,
+              state: MediaState.READY,
+            })
+            .onConflictDoUpdate({
+              target: [Media.profileId, Media.url],
+              targetWhere: sql`${Media.source} = 'REMOTE'`,
+              set: { altText: candidate.altText, mediaType: candidate.mediaType },
+            })
+            .returning({ id: Media.id })
+            .then(firstOrThrow);
+
+          await tx
+            .insert(ProfileMedia)
+            .values({ kind, mediaId: media.id, profileId })
+            .onConflictDoUpdate({
+              target: [ProfileMedia.profileId, ProfileMedia.kind],
+              set: { mediaId: media.id },
+            });
+        }
       };
 
       let existingActor = await findExistingActor();
@@ -605,6 +702,8 @@ export const materializeRemoteProfileActor = async ({
           })
           .where(eq(ActivityPubActors.uri, actorUri));
 
+        await syncProfileMedia(profile.id);
+
         return profile;
       }
 
@@ -651,6 +750,8 @@ export const materializeRemoteProfileActor = async ({
         })
         .returning()
         .then(firstOrThrow);
+
+      await syncProfileMedia(profile.id);
 
       return profile;
     });
