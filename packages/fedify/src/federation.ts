@@ -10,6 +10,7 @@ import {
   Note,
   Reject,
   Undo,
+  Update,
 } from '@fedify/vocab';
 import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
@@ -22,6 +23,7 @@ import { handleInboundDelete } from './inbound-delete';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
+import { handleInboundUpdate } from './inbound-update';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
@@ -145,4 +147,5 @@ federation
   .on(Follow, handleInboundFollow)
   .on(Like, handleInboundReaction)
   .on(Reject, handleInboundReject)
-  .on(Undo, handleInboundUndo);
+  .on(Undo, handleInboundUndo)
+  .on(Update, handleInboundUpdate);
