@@ -207,6 +207,12 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
   expect(offsetAfterWheel).toBeLessThan(offsetBeforeWheel);
   await expect(input).toBeFocused();
 
+  await page.getByRole('link', { name: '뒤로', exact: true }).click();
+  await expect(page).toHaveURL(/\/search\?tab=people$/);
+  await expect(page.getByText('프로필을 검색해보세요')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'e2e-query-second', exact: true })).not.toBeVisible();
+  await expect(input).not.toBeFocused();
+
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
   await scrollDocument(page);

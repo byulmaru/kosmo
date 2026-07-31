@@ -393,13 +393,13 @@ export default function SearchScreen() {
     }, 0);
   };
 
-  const preserveQueryNavigationPosition = () => {
+  const preserveQueryNavigationPosition = (restoreFocus = focused) => {
     if (Platform.OS !== 'web') {
       return;
     }
 
     recordQueryNavigation({
-      restoreFocus: focused,
+      restoreFocus,
       scrollY: window.scrollY,
     });
   };
@@ -450,7 +450,7 @@ export default function SearchScreen() {
                 accessibilityLabel="뒤로"
                 accessibilityRole="link"
                 onPress={() => {
-                  preserveQueryNavigationPosition();
+                  preserveQueryNavigationPosition(false);
                   setInput('');
                   setFocused(false);
                 }}
