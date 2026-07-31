@@ -29,11 +29,11 @@ scroll offset이 남지 않는다.
   생성·소비·취소를 자동화한다.
 - 각 breakpoint의 shell surface가 같은 route-scroll 정책을 사용하고 Native에서는 no-op임을 검증한다.
 
-- [ ] 1.1 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar의 실제 navigation action이 current와 다른
+- [x] 1.1 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar의 실제 navigation action이 current와 다른
       target pathname intent를 동일한 경계로 전달하게 한다.
-- [ ] 1.2 target pathname이 commit된 뒤 Web document를 최상단으로 초기화하고, 새 navigation이 이전의 지연
+- [x] 1.2 target pathname이 commit된 뒤 Web document를 최상단으로 초기화하고, 새 navigation이 이전의 지연
       처리를 무효화해 마지막 target에 수렴하게 한다.
-- [ ] 1.3 Guard 승인 전·취소, current route 재선택, search query-only와 Native 경로가 reset/refetch를 실행하지
+- [x] 1.3 Guard 승인 전·취소, current route 재선택, search query-only와 Native 경로가 reset/refetch를 실행하지
       않으며 browser history restoration을 건드리지 않는지 implementation diff로 확인한다.
 
 ## 2. PROD-619 targeted Web 회귀 검증
@@ -65,13 +65,13 @@ Web touch 관찰로 재현 가능하게 증명된다.
 - 관련 `pnpm --filter @kosmo/web test:e2e -- <PROD-619 E2E file>`
 - iPhone급 mobile Web viewport에서 touch로 profile/home 및 다른 bottom-tab route 전환을 수동 관찰한다.
 
-- [ ] 2.1 Shell navigation의 무guard·guard 승인/취소, current/different pathname, 연속 target 교체와 Native no-op을
+- [x] 2.1 Shell navigation의 무guard·guard 승인/취소, current/different pathname, 연속 target 교체와 Native no-op을
       가장 가까운 component test로 검증한다.
-- [ ] 2.2 Mobile bottom tab/drawer와 compact/full sidebar에서 스크롤된 source → 다른 target의 pathname 반영,
+- [x] 2.2 Mobile bottom tab/drawer와 compact/full sidebar에서 스크롤된 source → 다른 target의 pathname 반영,
       `window.scrollY` top, loading·empty target과 연속 route 전환을 targeted Web E2E로 검증한다.
-- [ ] 2.3 Browser back/forward의 restored position, search query-only의 scroll·focus 보존, current route 재선택의
+- [x] 2.3 Browser back/forward의 restored position, search query-only의 scroll·focus 보존, current route 재선택의
       reset/refetch 비실행을 Web E2E로 검증한다.
-- [ ] 2.4 관련 app check/unit/Storybook와 Web E2E를 통과시키고 iPhone급 mobile Web touch 관찰의 viewport·입력·
+- [x] 2.4 관련 app check/unit/Storybook와 Web E2E를 통과시키고 iPhone급 mobile Web touch 관찰의 viewport·입력·
       결과와 실행하지 못한 검증을 기록한다.
 
 ## 3. PROD-619 완료·handoff·archive
@@ -104,7 +104,7 @@ archive된 뒤 PROD-617 담당자가 mobile Web 통합 검증에 사용할 수 �
   validation을 다시 실행한다.
 
 - [ ] 3.1 구현·검증 diff와 branch/HEAD/commit/push 결과, 남은 위험과 실행하지 못한 검증을 handoff에 기록한다.
-- [ ] 3.2 Canonical·Linear·OpenSpec과 실제 구현의 forward/history/query/reselection/Native 경계를 대조하고 strict
+- [x] 3.2 Canonical·Linear·OpenSpec과 실제 구현의 forward/history/query/reselection/Native 경계를 대조하고 strict
       validation을 통과시킨다.
 - [ ] 3.3 PROD-619 전체 task와 linked PR 완료 evidence가 충족되면 change를 archive하고, mobile Web 통합 검증용
       결과를 PROD-617 담당자에게 전달한다.

@@ -1,12 +1,13 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
@@ -237,6 +238,51 @@ export default function SearchScreen() {
   const [recent, setRecent] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { clearQueryNavigation, getQueryNavigation, recordQueryNavigation } =
+    usePrimaryNavigationScroll();
+
+  useLayoutEffect(() => {
+    const navigation = getQueryNavigation();
+    if (Platform.OS !== 'web' || !navigation) {
+      return;
+    }
+
+    let frame = 0;
+    let attempts = 0;
+    let settledFrames = 0;
+    let restoredFocus = false;
+    const restore = () => {
+      if (getQueryNavigation() !== navigation) {
+        return;
+      }
+
+      const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      if (navigation.scrollY > maxScrollY && attempts < 60) {
+        attempts += 1;
+        frame = window.requestAnimationFrame(restore);
+        return;
+      }
+
+      window.scrollTo({ behavior: 'auto', left: 0, top: Math.min(navigation.scrollY, maxScrollY) });
+      settledFrames += 1;
+      if (navigation.restoreFocus && !restoredFocus) {
+        inputRef.current?.focus();
+        restoredFocus = true;
+        if (query) {
+          setFocused(false);
+        }
+      }
+      if (settledFrames < 60) {
+        frame = window.requestAnimationFrame(restore);
+        return;
+      }
+
+      clearQueryNavigation(navigation);
+    };
+
+    frame = window.requestAnimationFrame(restore);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, clearQueryNavigation, getQueryNavigation, query]);
 
   useEffect(() => {
     let current = true;
@@ -294,6 +340,17 @@ export default function SearchScreen() {
     }, 0);
   };
 
+  const preserveQueryNavigationPosition = () => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    recordQueryNavigation({
+      restoreFocus: focused,
+      scrollY: window.scrollY,
+    });
+  };
+
   const navigate = (
     nextQuery: string,
     tab: SearchTab = activeTab,
@@ -304,6 +361,7 @@ export default function SearchScreen() {
       remember(normalized);
       trackAnalytics('search_submitted', { source, tab });
     }
+    preserveQueryNavigationPosition();
     setFocused(false);
     router.push(searchHref(normalized, tab));
   };
@@ -312,6 +370,7 @@ export default function SearchScreen() {
     setInput('');
     keepSearchFocused();
     if (query) {
+      preserveQueryNavigationPosition();
       router.setParams({ q: undefined });
     }
     inputRef.current?.focus();
@@ -332,6 +391,7 @@ export default function SearchScreen() {
                 accessibilityLabel="뒤로"
                 accessibilityRole="link"
                 onPress={() => {
+                  preserveQueryNavigationPosition();
                   setInput('');
                   setFocused(false);
                 }}
@@ -381,6 +441,7 @@ export default function SearchScreen() {
                     <Pressable
                       accessibilityRole="link"
                       onPress={() => {
+                        preserveQueryNavigationPosition();
                         setFocused(false);
                         remember(term);
                         trackAnalytics('search_submitted', { source: 'recent', tab: activeTab });

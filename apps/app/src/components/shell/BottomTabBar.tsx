@@ -123,7 +123,7 @@ export function BottomTabBar({
         );
 
         return tab.href ? (
-          <GuardedLink href={tab.href} key={tab.label}>
+          <GuardedLink href={tab.href} key={tab.label} primary>
             {content}
           </GuardedLink>
         ) : (

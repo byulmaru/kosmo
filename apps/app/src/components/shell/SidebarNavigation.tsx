@@ -165,7 +165,7 @@ export function SidebarNavigation({
             );
 
             return href ? (
-              <GuardedLink href={href} key={item.label} onNavigate={onNavigate}>
+              <GuardedLink href={href} key={item.label} onNavigate={onNavigate} primary>
                 {control}
               </GuardedLink>
             ) : (
@@ -173,7 +173,7 @@ export function SidebarNavigation({
             );
           })}
           {compact ? (
-            <GuardedLink href="/compose" onNavigate={onNavigate}>
+            <GuardedLink href="/compose" onNavigate={onNavigate} primary>
               <Pressable
                 accessibilityLabel="글쓰기"
                 accessibilityRole="link"
