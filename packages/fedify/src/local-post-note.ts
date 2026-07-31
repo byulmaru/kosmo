@@ -131,6 +131,7 @@ const projectLocalMediaAttachments = async (
   }
   const rows = await db
     .select({
+      altText: Media.altText,
       id: Media.id,
       mediaType: Media.mediaType,
       url: Media.url,
@@ -166,7 +167,7 @@ const projectLocalMediaAttachments = async (
     attachments.push(
       new Image({
         mediaType: media.mediaType,
-        ...(node.attrs.altText !== null ? { name: node.attrs.altText } : {}),
+        ...(media.altText !== null ? { name: media.altText } : {}),
         url,
       }),
     );

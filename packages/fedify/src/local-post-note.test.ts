@@ -552,6 +552,9 @@ const createPost = async (
     .values({ profileId, replyParentId, state, visibility })
     .returning()
     .then(firstOrThrow);
+  for (const { altText, mediaId } of media) {
+    await db.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+  }
   const content = await db
     .insert(PostContents)
     .values({
@@ -560,8 +563,8 @@ const createPost = async (
           ...(sensitiveMedia ? { attrs: { sensitiveMedia: true } } : {}),
           content: [
             { content: [{ text: 'body', type: 'text' }], type: 'paragraph' },
-            ...media.map(({ altText, mediaId }) => ({
-              attrs: { altText, mediaId },
+            ...media.map(({ mediaId }) => ({
+              attrs: { mediaId },
               type: 'media' as const,
             })),
           ],
