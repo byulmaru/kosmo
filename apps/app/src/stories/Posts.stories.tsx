@@ -3530,6 +3530,7 @@ export const ComposerVisibilityFocusLifecycle: Story = {
         keys: '[/TouchA]',
         target: canvasElement,
       });
+      await new Promise((resolve) => setTimeout(resolve, 100));
     };
 
     await userEvent.type(body, '터치 경로에서 포커스 상태를 확인합니다.');
