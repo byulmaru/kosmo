@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren, Ref } from 'react';
-import type { PressableProps, View } from 'react-native';
+import type { PressableProps } from 'react-native';
 
 type ButtonProps = PropsWithChildren<
   PressableProps & {

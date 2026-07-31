@@ -57,6 +57,10 @@ export function PostList({
   const profile = useFragment(PostListProfileFragment, profileKey ?? null);
   const timeline = useFragment(PostListHomeTimelineFragment, timelineKey ?? null);
   const edges = timeline?.edges ?? profile?.posts.edges ?? [];
+  // A successful delete can remove the node record before Relay prunes an
+  // unhandled connection edge. Treat that stale edge as empty until the next
+  // server payload instead of passing a missing fragment ref to PostListItem.
+  const visibleEdges = edges.filter((edge) => edge.node != null);
   const hasData = Boolean(timeline || profile);
 
   if (loading && !hasData) {
@@ -74,7 +78,7 @@ export function PostList({
     );
   }
 
-  if (edges.length === 0) {
+  if (visibleEdges.length === 0) {
     return (
       <PostListState
         description="첫 게시글이 올라오면 여기에 표시돼요."
@@ -86,7 +90,7 @@ export function PostList({
   return (
     <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
       <View style={styles.root}>
-        {edges.map((edge) => (
+        {visibleEdges.map((edge) => (
           <PostListItem key={edge.cursor} post={edge.node} />
         ))}
       </View>

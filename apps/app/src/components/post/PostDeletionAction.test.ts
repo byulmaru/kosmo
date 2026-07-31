@@ -31,6 +31,12 @@ function createEnvironment() {
     __typename: 'Profile',
     id: 'profile:author',
   });
+  source.set('home-edge', {
+    __id: 'home-edge',
+    __typename: 'PostConnectionEdge',
+    cursor: 'home-edge-cursor',
+    node: { __ref: postId },
+  });
 
   return new Environment({
     network: Network.create(() => Promise.reject(new Error('network is not used'))),
@@ -49,5 +55,16 @@ describe('PostDeletionAction Relay cache contract', () => {
     assert.equal(actorA.getStore().getSource().get(postId), null);
     assert.ok(actorA.getStore().getSource().get('content:post-author-owned'));
     assert.ok(actorB.getStore().getSource().get(postId));
+  });
+
+  it('captures the stale connection edge that PostList must guard after record deletion', () => {
+    const actor = createEnvironment();
+    const operation = createOperationDescriptor(getRequest(deletePostMutation), { id: postId });
+
+    actor.commitPayload(operation, { deletePost: { postId } });
+
+    const staleEdge = actor.getStore().getSource().get('home-edge');
+    assert.deepEqual(staleEdge?.node, { __ref: postId });
+    assert.equal(actor.getStore().getSource().get(postId), null);
   });
 });

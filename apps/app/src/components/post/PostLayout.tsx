@@ -70,7 +70,7 @@ export function PostLayout({
   onDeleted,
   post: postKey,
 }: {
-  onDeleted?: (postId: string) => void;
+  onDeleted?: () => void;
   post: PostLayout_post$key;
 }) {
   const theme = useTheme();

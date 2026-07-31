@@ -23,6 +23,7 @@ export type ActionMenuItem = Readonly<{
 
 export type ActionMenuTriggerRenderProps = Readonly<{
   expanded: boolean;
+  focusTrigger: () => void;
   onPress: () => void;
   ref: Ref<View>;
 }>;
@@ -246,7 +247,12 @@ export function ActionMenu({
   if (web) {
     return (
       <View ref={controlRef} style={[styles.control, { zIndex: open ? 50 : 0 }]}>
-        {renderTrigger({ expanded: open, onPress: toggle, ref: triggerRef })}
+        {renderTrigger({
+          expanded: open,
+          focusTrigger,
+          onPress: toggle,
+          ref: triggerRef,
+        })}
         {open ? (
           <ActionMenuPortal>
             <View style={[styles.webPosition, webPosition]}>
@@ -295,7 +301,12 @@ export function ActionMenu({
 
   return (
     <>
-      {renderTrigger({ expanded: open, onPress: toggle, ref: triggerRef })}
+      {renderTrigger({
+        expanded: open,
+        focusTrigger,
+        onPress: toggle,
+        ref: triggerRef,
+      })}
       <Modal
         accessibilityLabel={accessibilityLabel}
         animationType="fade"

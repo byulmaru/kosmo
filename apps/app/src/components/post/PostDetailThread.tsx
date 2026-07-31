@@ -215,7 +215,8 @@ function PostDetailThreadContent({
       window.removeEventListener('resize', check);
     };
   }, [data.replyDescendants.edges.length, maybeLoadNextPage]);
-  const ancestors = [...data.replyAncestors.filter((post) => post != null)]
+  const ancestors = data.replyAncestors
+    .filter((post) => post != null)
     .reverse()
     .map((post, index) => ({
       connectedToPrevious: index > 0,

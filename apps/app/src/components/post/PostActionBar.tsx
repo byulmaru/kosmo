@@ -27,7 +27,7 @@ type MoreActionConfig = { accessibilityLabel: string; onPress: () => void };
 export type PostActionBarProps = {
   bookmark?: BookmarkActionConfig;
   more?: MoreActionConfig;
-  onDeleted?: (postId: string) => void;
+  onDeleted?: () => void;
   onRepostError?: (failure: RepostActionFailure) => void;
   post?: PostActionBar_post$key | null;
   reactionController?: PostReactionController;

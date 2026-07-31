@@ -25,6 +25,7 @@ const deletePostMutation = graphql`
 const postDeletionActionFragment = graphql`
   fragment PostDeletionAction_post on Post {
     id
+    state
     content {
       id
     }
@@ -35,7 +36,7 @@ const postDeletionActionFragment = graphql`
 `;
 
 type Props = {
-  onDeleted?: (postId: string) => void;
+  onDeleted?: () => void;
   post: PostDeletionAction_post$key;
 };
 
@@ -55,6 +56,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
   const currentEnvironment = useRef(environment);
   const mounted = useRef(false);
   const cancelRef = useRef<View>(null);
+  const restoreFocusRef = useRef<() => void>(() => undefined);
 
   currentEnvironment.current = environment;
 
@@ -84,15 +86,37 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
     return () => clearTimeout(timer);
   }, [confirmationOpen]);
 
-  const eligible = Boolean(
-    selectedProfileId && data.content && data.profile.id === selectedProfileId,
-  );
-
   const closeConfirmation = useCallback(() => {
-    if (!requesting && !isDeleting) {
-      setConfirmationOpen(false);
+    if (requesting || isDeleting) {
+      return;
     }
+    setConfirmationOpen(false);
+    setTimeout(() => restoreFocusRef.current(), 0);
   }, [isDeleting, requesting]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !confirmationOpen) {
+      return;
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || requesting || isDeleting) {
+        return;
+      }
+      event.preventDefault();
+      closeConfirmation();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [closeConfirmation, confirmationOpen, isDeleting, requesting]);
+
+  const eligible = Boolean(
+    selectedProfileId &&
+    data.state === 'ACTIVE' &&
+    data.content &&
+    data.profile.id === selectedProfileId,
+  );
 
   const fail = useCallback(
     (error: Error) => {
@@ -141,7 +165,7 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
         inFlight.current = false;
         setRequesting(false);
         setConfirmationOpen(false);
-        onDeleted?.(postId);
+        onDeleted?.();
       },
       onError: fail,
       variables: { id: data.id },
@@ -153,10 +177,16 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
   }
 
   const confirmation = (
-    <Pressable accessible={false} onPress={closeConfirmation} style={styles.backdrop}>
+    <Pressable
+      accessible={false}
+      onPress={closeConfirmation}
+      style={styles.backdrop}
+      testID="post-deletion-backdrop"
+    >
       <View
         accessibilityLabel="게시글 삭제 확인"
         accessibilityViewIsModal
+        onAccessibilityEscape={closeConfirmation}
         role="alertdialog"
         style={styles.dialogShell}
       >
@@ -207,19 +237,22 @@ export function PostDeletionAction({ onDeleted, post: postKey }: Props) {
             tone: 'danger',
           },
         ]}
-        renderTrigger={({ expanded, onPress, ref }) => (
-          <PostActionControl
-            accessibilityLabel="더 보기"
-            alignToEnd
-            controlRef={ref}
-            icon={MoreHorizontal}
-            menuExpanded={expanded}
-            onPress={onPress}
-            popupRole="menu"
-            processing={requesting || isDeleting ? 'pending' : 'default'}
-            testID="more"
-          />
-        )}
+        renderTrigger={({ expanded, focusTrigger, onPress, ref }) => {
+          restoreFocusRef.current = focusTrigger;
+          return (
+            <PostActionControl
+              accessibilityLabel="더 보기"
+              alignToEnd
+              controlRef={ref}
+              icon={MoreHorizontal}
+              menuExpanded={expanded}
+              onPress={onPress}
+              popupRole="menu"
+              processing={requesting || isDeleting ? 'pending' : 'default'}
+              testID="more"
+            />
+          );
+        }}
       />
       {Platform.OS === 'web' ? (
         confirmationOpen ? (
