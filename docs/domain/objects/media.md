@@ -40,6 +40,8 @@ Media Storage Service의 opaque 저장 참조는 Local Media를 외부 저장 �
 참조 형식은 Media 속성이나 공개 identity가 아니며 Kosmo API consumer에게 노출하지 않는다.
 URL과 Media Type column은 Uploading Local Media에는 아직 값이 없으며, Ready 전환 시 두 값을 함께
 기록한다.
+Local Media의 URL과 Remote Media의 Remote URL은 물리 `media.url` column을 공유하며 Media Source가 그 값의
+의미를 결정한다. Remote Media를 위해 별도 `remote_url` column을 만들지 않는다.
 Media Storage Service의 완료 응답은 공개 표현의 최종 권위다. Kosmo는 persistence에 필요한 필드의 존재와
 transport type만 확인하고, Media Type의 MIME 문법·지원 목록이나 URL이 가리키는 byte와의 일치 여부를 다시
 검증하지 않는다. 저장 서비스가 반환한 Media Type 문자열은 의미를 해석하거나 정규화하지 않고 저장한다.
@@ -77,6 +79,13 @@ identity와 최초 Ready At을 반환한다.
 
 같은 Media를 다시 첨부하면서 다른 Alt Text를 입력하는 것은 정상적인 작성 흐름은 아니지만 별도 귀속이나 재사용
 제약으로 금지하지 않는다. 이 경우 Media의 최신 Alt Text가 모든 참조 Post에 보인다.
+
+원격 Note의 embedded typed Image attachment를 Post Content로 투영할 때는 non-Image와 IRI-only attachment를
+제외한 원래 순서의 앞 4개 Image만 Remote Media 등록 대상으로 사용하고 초과분은 무시한다. 선택한 Image의
+canonical HTTP(S) URL은 Remote URL로 저장하며 nullable Media Type은 해석하거나 정규화하지 않고 보존한다.
+선택한 Image 중 URL이 없거나 여러 개, HTTP(S)가 아니거나 서로 중복이면 일부만 등록하지 않고 해당 Note의
+Media/Post materialization 전체를 남기지 않는다. Image의 nullable name은 Media의 Alt Text로 보존한다.
+attachment metadata와 이미지 byte를 위한 추가 원격 fetch는 수행하지 않는다.
 
 ## 권한
 
@@ -124,5 +133,5 @@ identity와 최초 Ready At을 반환한다.
   정책은 도메인 계약으로 고정하지 않는다. Kosmo는 완료 응답의 URL과 media type을 그대로 저장한다.
 - 구체 MIME type 목록과 문법, byte와 Media Type의 일치, Hash, EXIF, dedupe, 이미지 변환 실패 삭제 정책,
   바이러스 스캔과 성인물 탐지는 Media Storage Service가 소유하며 Kosmo에서 중복 검증하지 않는다.
-- Remote Media의 Media Storage Service 저장 projection은 실제 Remote Media 저장 구현에서 정밀화한다.
-- Remote 원본의 Alt Text 수집·보존과 Post Content로의 투영은 Remote Media 구현에서 정밀화한다.
+- Remote Media의 Media Storage Service 복제, proxy/cache와 파생 표현은 별도 구현에서 정밀화한다.
+- IRI-only attachment hydration과 추가 원격 metadata fetch는 별도 resource budget·retry 계약에서 정밀화한다.

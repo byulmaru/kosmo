@@ -23,7 +23,10 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
-import { validateLocalPostContentDocument } from '../post-content/server';
+import {
+  canonicalizePostContentDocument,
+  validateLocalPostContentDocument,
+} from '../post-content/server';
 import {
   createReplyNotification,
   createRepostNotification,
@@ -48,6 +51,7 @@ type LocalPostInput = {
 
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
+  media?: readonly RemoteMediaCandidate[];
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -55,6 +59,12 @@ type ActivityPubPostInput = {
   receivedAt: Temporal.Instant;
   replyParentId?: string;
   visibility: PostVisibility;
+};
+
+type RemoteMediaCandidate = {
+  altText: string | null;
+  mediaType: string | null;
+  url: string;
 };
 
 type CreatedPost = {
@@ -115,6 +125,60 @@ const findVisiblePost = async (
     )
     .limit(1)
     .then(first);
+
+const materializeRemoteMedia = async (
+  tx: Transaction,
+  {
+    candidates,
+    profileId,
+  }: {
+    candidates: readonly RemoteMediaCandidate[];
+    profileId: string;
+  },
+) => {
+  const urls = candidates.map(({ url }) => url);
+  if (candidates.length > 4 || new Set(urls).size !== urls.length) {
+    throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
+  }
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  await tx
+    .insert(Media)
+    .values(
+      candidates.map(({ altText, mediaType, url }) => ({
+        altText,
+        mediaType,
+        profileId,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const mediaByUrl = new Map(
+    (
+      await tx
+        .select({ id: Media.id, profileId: Media.profileId, url: Media.url })
+        .from(Media)
+        .where(and(eq(Media.source, MediaSource.REMOTE), inArray(Media.url, urls)))
+    ).map((media) => [media.url, media]),
+  );
+
+  const materialized = candidates.map(({ altText, url }) => {
+    const media = mediaByUrl.get(url);
+    if (!media || media.profileId !== profileId) {
+      throw new ValidationError('Remote Media cannot be attached', { field: 'media' });
+    }
+    return { altText, mediaId: media.id };
+  });
+  for (const { altText, mediaId } of materialized) {
+    await tx.update(Media).set({ altText }).where(eq(Media.id, mediaId));
+  }
+  return materialized;
+};
 
 export const deletePost = async (
   {
@@ -321,7 +385,7 @@ export async function createPost(
   let result: CreatedPost;
   try {
     result = await getDatabaseConnection(tx).transaction(async (tx) => {
-      const document =
+      let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
           : input.document;
@@ -405,6 +469,26 @@ export async function createPost(
           receivedAt: input.receivedAt,
           uri: input.objectUri,
         });
+
+        const media = await materializeRemoteMedia(tx, {
+          candidates: input.media ?? [],
+          profileId: input.profileId,
+        });
+        if (media.length > 0) {
+          document = canonicalizePostContentDocument({
+            ...document,
+            body: {
+              ...document.body,
+              content: [
+                ...document.body.content,
+                ...media.map(({ mediaId }) => ({
+                  attrs: { mediaId },
+                  type: 'media' as const,
+                })),
+              ],
+            },
+          });
+        }
       }
 
       const content = await tx

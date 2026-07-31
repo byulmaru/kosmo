@@ -325,6 +325,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(completed.storageReference, stored.storageReference);
     assert.equal(completed.url, 'https://media.example/media.webp');
     assert.equal(completed.mediaType, 'image/webp');
+    assert.ok(completed.uploadExpiresAt);
     assert.equal(completed.uploadExpiresAt.toString(), uploadExpiresAt);
     assert.equal(completed.state, MediaState.READY);
     assert.ok(completed.readyAt);
@@ -585,6 +586,7 @@ const assertStoredMedia = (
   assert.equal(media.profileId, profileId);
   assert.equal(media.source, MediaSource.LOCAL);
   assert.equal(media.state, MediaState.UPLOADING);
+  assert.ok(media.uploadExpiresAt);
   assert.equal(media.uploadExpiresAt.toString(), uploadExpiresAt);
 };
 

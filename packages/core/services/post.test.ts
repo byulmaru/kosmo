@@ -86,13 +86,18 @@ const createMedia = async ({
   db
     .insert(Media)
     .values({
-      accountId,
+      accountId: source === MediaSource.LOCAL ? accountId : null,
+      mediaType:
+        source === MediaSource.LOCAL && state === MediaState.UPLOADING ? null : 'image/webp',
       profileId,
-      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      readyAt:
+        source === MediaSource.LOCAL && state === MediaState.READY ? Temporal.Now.instant() : null,
       source,
       state,
-      storageReference: `u_${crypto.randomUUID()}`,
-      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+      storageReference: source === MediaSource.LOCAL ? `u_${crypto.randomUUID()}` : null,
+      uploadExpiresAt:
+        source === MediaSource.LOCAL ? Temporal.Now.instant().add({ minutes: 5 }) : null,
+      url: state === MediaState.READY ? `https://media.example/${crypto.randomUUID()}.webp` : null,
     })
     .returning()
     .then(firstOrThrow);
@@ -297,6 +302,169 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
       .then((rows) => rows.length),
     1,
   );
+});
+
+test('createPost는 ActivityPub Remote Media를 생성하고 document 끝에 원래 순서로 연결한다', async () => {
+  const profile = await createProfile();
+  const firstUrl = `https://remote.example/media/${crypto.randomUUID()}.png`;
+  const secondUrl = `https://remote.example/media/${crypto.randomUUID()}.webp`;
+  const result = await createPost({
+    document: postContentDocumentFromText('remote images'),
+    media: [
+      { altText: 'first', mediaType: 'image/png', url: firstUrl },
+      { altText: null, mediaType: null, url: secondUrl },
+    ],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.equal(result.created, true);
+  const media = await db
+    .select()
+    .from(Media)
+    .where(eq(Media.profileId, profile.id))
+    .then((rows) => rows.sort((left, right) => left.url!.localeCompare(right.url!)));
+  const mediaIdByUrl = new Map(media.map((item) => [item.url, item.id]));
+  assert.deepEqual(
+    media.map(
+      ({
+        accountId,
+        altText,
+        mediaType,
+        readyAt,
+        source,
+        state,
+        storageReference,
+        uploadExpiresAt,
+        url,
+      }) => ({
+        accountId,
+        altText,
+        mediaType,
+        readyAt,
+        source,
+        state,
+        storageReference,
+        uploadExpiresAt,
+        url,
+      }),
+    ),
+    [
+      {
+        accountId: null,
+        altText: 'first',
+        mediaType: 'image/png',
+        readyAt: null,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        storageReference: null,
+        uploadExpiresAt: null,
+        url: firstUrl,
+      },
+      {
+        accountId: null,
+        altText: null,
+        mediaType: null,
+        readyAt: null,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        storageReference: null,
+        uploadExpiresAt: null,
+        url: secondUrl,
+      },
+    ].sort((left, right) => left.url.localeCompare(right.url)),
+  );
+  assert.deepEqual(
+    result.content.document.body.content.flatMap((block) =>
+      block.type === 'media' ? [block.attrs] : [],
+    ),
+    [
+      { mediaId: mediaIdByUrl.get(firstUrl) },
+      { mediaId: mediaIdByUrl.get(secondUrl) },
+    ],
+  );
+});
+
+test('createPost는 같은 Profile의 Remote Media를 재사용하고 Alt Text만 최신 입력으로 갱신한다', async () => {
+  const profile = await createProfile();
+  const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
+  const first = await createPost({
+    document: postContentDocumentFromText('first'),
+    media: [{ altText: 'first alt', mediaType: 'image/png', url }],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
+  const second = await createPost({
+    document: postContentDocumentFromText('second'),
+    media: [{ altText: 'second alt', mediaType: 'image/webp', url }],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: profile.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-31T00:01:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
+
+  assert.equal(first.created, true);
+  assert.equal(second.created, true);
+  const media = await db.select().from(Media).where(eq(Media.url, url));
+  assert.equal(media.length, 1);
+  assert.equal(media[0]?.mediaType, 'image/png');
+  assert.equal(media[0]?.altText, 'second alt');
+  assert.deepEqual(
+    [first, second].map((result) =>
+      result.content.document.body.content.flatMap((block) =>
+        block.type === 'media' ? [block.attrs.mediaId] : [],
+      ),
+    ),
+    [[media[0]?.id], [media[0]?.id]],
+  );
+});
+
+test('createPost는 다른 Profile의 Remote URL 충돌을 모든 Post row와 함께 rollback한다', async () => {
+  const owner = await createProfile();
+  const other = await createProfile();
+  const url = `https://remote.example/media/${crypto.randomUUID()}.png`;
+  await createPost({
+    document: postContentDocumentFromText('owner'),
+    media: [{ altText: null, mediaType: 'image/png', url }],
+    objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+    origin: 'ACTIVITYPUB',
+    profileId: owner.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
+    visibility: PostVisibility.PUBLIC,
+  });
+  const postCount = await db.$count(Posts);
+  const contentCount = await db.$count(PostContents);
+  const mappingCount = await db.$count(ActivityPubPosts);
+
+  await assert.rejects(
+    createPost({
+      document: postContentDocumentFromText('other'),
+      media: [{ altText: null, mediaType: 'image/webp', url }],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: other.id,
+      publishedAt: null,
+      receivedAt: Temporal.Instant.from('2026-07-31T00:01:00Z'),
+      visibility: PostVisibility.PUBLIC,
+    }),
+    (error) => error instanceof ValidationError && error.field === 'media',
+  );
+
+  assert.equal(await db.$count(Media, eq(Media.url, url)), 1);
+  assert.equal(await db.$count(Posts), postCount);
+  assert.equal(await db.$count(PostContents), contentCount);
+  assert.equal(await db.$count(ActivityPubPosts), mappingCount);
 });
 
 test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', async () => {

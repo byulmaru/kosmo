@@ -254,11 +254,6 @@ describe('ActivityPub Local Post Note', () => {
     const author = await createProfile({ handle: 'unavailable-media', kind: InstanceKind.LOCAL });
     const uploading = await createMedia(author.id, { state: MediaState.UPLOADING });
     const remote = await createMedia(author.id, { source: MediaSource.REMOTE });
-    const unavailable = await createMedia(author.id, {
-      mediaType: null,
-      url: null,
-      storageReference: 'provider-opaque-reference',
-    });
     const malformed = await createMedia(author.id, { url: 'not-a-url' });
     const nonHttp = await createMedia(author.id, { url: 'data:image/png;base64,AA==' });
     const missingId = crypto.randomUUID();
@@ -266,14 +261,7 @@ describe('ActivityPub Local Post Note', () => {
       throw new Error('Unavailable stored metadata must not trigger a network read');
     });
 
-    for (const mediaId of [
-      uploading.id,
-      remote.id,
-      unavailable.id,
-      malformed.id,
-      nonHttp.id,
-      missingId,
-    ]) {
+    for (const mediaId of [uploading.id, remote.id, malformed.id, nonHttp.id, missingId]) {
       const post = await createPost(author.id, { media: [{ altText: null, mediaId }] });
       assert.equal(await dispatchLocalPostNote(createContext(), { id: post.id }), null);
     }
@@ -592,8 +580,10 @@ const createMedia = async (
     state = MediaState.READY,
     storageReference = `u_${crypto.randomUUID()}`,
     mediaType = source === MediaSource.LOCAL && state === MediaState.READY ? 'image/webp' : null,
-    url = source === MediaSource.LOCAL && state === MediaState.READY
-      ? `https://cdn.example/media/${encodeURIComponent(storageReference)}`
+    url = state === MediaState.READY
+      ? source === MediaSource.LOCAL
+        ? `https://cdn.example/media/${encodeURIComponent(storageReference)}`
+        : `https://remote.example/media/${crypto.randomUUID()}`
       : null,
   }: {
     mediaType?: string | null;
@@ -616,15 +606,17 @@ const createMedia = async (
   return db
     .insert(Media)
     .values({
-      accountId: account.id,
+      accountId: source === MediaSource.LOCAL ? account.id : null,
       mediaType,
       url,
       profileId,
-      readyAt: state === MediaState.READY ? Temporal.Now.instant() : null,
+      readyAt:
+        source === MediaSource.LOCAL && state === MediaState.READY ? Temporal.Now.instant() : null,
       source,
       state,
-      storageReference,
-      uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
+      storageReference: source === MediaSource.LOCAL ? storageReference : null,
+      uploadExpiresAt:
+        source === MediaSource.LOCAL ? Temporal.Now.instant().add({ minutes: 5 }) : null,
     })
     .returning()
     .then(firstOrThrow);

@@ -30,6 +30,12 @@ MIME type으로 바꾸며 Media의 nullable Alt Text는 Image의 사람이 읽�
 `sensitiveMedia`는 지원하는 ActivityPub sensitive 속성으로 투영한다. 내부 document의 정확한 Media 삽입
 위치는 attachment-only ActivityPub 수신자에게 보존되지 않는다.
 
+ActivityPub 원격 Note 수신은 지원 가능한 embedded typed Image attachment 중 원래 순서의 앞 4개를 Remote
+Media와 같은 순서의 Media node로 투영하고 초과분은 무시한다. Image name은 해당 Media의 nullable Alt Text로
+보존한다.
+본문이 없어도 하나 이상의 유효한 Image가 있으면 빈 paragraph와 Media node를 가진 contentful revision으로
+저장할 수 있다.
+
 ## 관계
 
 | 관계             | 대상                | 방향                  | cardinality | 존재 조건                       | 조회 조건           | 조회 권한 |

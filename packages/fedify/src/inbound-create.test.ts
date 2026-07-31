@@ -12,6 +12,7 @@ import {
   Article,
   Create,
   CryptographicKey,
+  Image,
   LanguageString,
   Note,
   Person,
@@ -56,6 +57,7 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Media: typeof CoreDb.Media;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
@@ -76,6 +78,7 @@ describe('inbound Create dispatch', () => {
       db,
       firstOrThrow,
       Instances,
+      Media,
       Notifications,
       pg,
       PostContents,
@@ -95,6 +98,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(Media);
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -104,6 +108,7 @@ describe('inbound Create dispatch', () => {
     await db.update(Posts).set({ currentContentId: null });
     await db.delete(PostContents);
     await db.delete(Posts);
+    await db.delete(Media);
     await pg.end();
   });
 
@@ -132,6 +137,181 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.visibility, 'UNLISTED');
     assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
+  });
+
+  test('projects the first four embedded Images without fetching IRI-only attachments', async () => {
+    const profile = await createStoredRemoteActor();
+    const documentLoader = mock.fn<DocumentLoader>(async (url) => {
+      throw new Error(`Attachment network lookup must not run: ${url}`);
+    });
+    const urls = Array.from(
+      { length: 4 },
+      (_, index) => new URL(`HTTPS://REMOTE.EXAMPLE:443/media/${index}/../${index}.webp`),
+    );
+    const note = new Note({
+      attachments: [
+        new Article({ url: new URL('https://remote.example/article') }),
+        new URL('https://remote.example/media/iri-only'),
+        ...urls.map(
+          (url, index) =>
+            new Image({
+              mediaType: index === 3 ? null : 'image/webp',
+              name: index === 0 ? 'first image' : null,
+              url,
+            }),
+        ),
+        new Image({ name: 'ignored invalid fifth image' }),
+      ],
+      attribution: remoteActorUri,
+      content: null,
+      id: remoteObjectUri,
+      to: PUBLIC_COLLECTION,
+    });
+
+    await handleInboundCreate(
+      createContext(documentLoader),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+
+    const { content, post } = await getMaterializedPost(remoteObjectUri);
+    const media = await db.select().from(Media).where(eq(Media.profileId, profile.id));
+    const mediaByUrl = new Map(media.map((item) => [item.url, item]));
+    const canonicalUrls = urls.map((url) => new URL(url.href).href);
+    assert.equal(documentLoader.mock.calls.length, 0);
+    assert.deepEqual(
+      media
+        .map(({ altText, mediaType, url }) => ({ altText, mediaType, url }))
+        .sort((left, right) => left.url!.localeCompare(right.url!)),
+      canonicalUrls
+        .map((url, index) => ({
+          altText: index === 0 ? 'first image' : null,
+          mediaType: index === 3 ? null : 'image/webp',
+          url,
+        }))
+        .sort((left, right) => left.url.localeCompare(right.url)),
+    );
+    assert.deepEqual(
+      content.document.body.content.flatMap((block) =>
+        block.type === 'media' ? [block.attrs] : [],
+      ),
+      canonicalUrls.map((url) => ({ mediaId: mediaByUrl.get(url)?.id })),
+    );
+    assert.equal(post.currentContentId, content.id);
+  });
+
+  test('rejects a Note atomically when one of the selected Images has an invalid URL', async () => {
+    await createStoredRemoteActor();
+    const duplicateUrl = new URL('https://remote.example/media/duplicate.webp');
+    const cases = [
+      [new Image({ name: 'missing URL' })],
+      [
+        new Image({
+          urls: [
+            new URL('https://remote.example/media/one.webp'),
+            new URL('https://remote.example/media/two.webp'),
+          ],
+        }),
+      ],
+      [new Image({ url: new URL('ftp://remote.example/media/image.webp') })],
+      [new Image({ url: duplicateUrl }), new Image({ url: new URL(duplicateUrl.href) })],
+    ];
+
+    for (const [index, attachments] of cases.entries()) {
+      const objectUri = new URL(`https://remote.example/notes/invalid-image-${index}`);
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attachments,
+            attribution: remoteActorUri,
+            content: 'must not persist',
+            id: objectUri,
+            to: PUBLIC_COLLECTION,
+          }),
+        }),
+        receivedAt,
+      );
+    }
+
+    assert.equal((await db.select().from(Media)).length, 0);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.equal((await db.select().from(Posts)).length, 0);
+    assert.equal((await db.select().from(PostContents)).length, 0);
+  });
+
+  test('duplicate Create does not add or update Remote Media', async () => {
+    await createStoredRemoteActor();
+    const firstUrl = new URL('https://remote.example/media/first.webp');
+    const duplicateUrl = new URL('https://remote.example/media/duplicate-delivery.webp');
+    const create = (image: Image) =>
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attachments: [image],
+          attribution: remoteActorUri,
+          content: 'first write wins',
+          id: remoteObjectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      });
+
+    await handleInboundCreate(
+      createContext(),
+      create(new Image({ mediaType: 'image/webp', url: firstUrl })),
+      receivedAt,
+    );
+    await handleInboundCreate(
+      createContext(),
+      create(new Image({ mediaType: 'image/png', url: duplicateUrl })),
+      receivedAt.add({ minutes: 1 }),
+    );
+
+    assert.deepEqual(
+      (await db.select().from(Media)).map(({ mediaType, url }) => ({ mediaType, url })),
+      [{ mediaType: 'image/webp', url: firstUrl.href }],
+    );
+  });
+
+  test('concurrent Notes with the same Remote URL converge on one Media identity', async () => {
+    await createStoredRemoteActor();
+    const mediaUrl = new URL('https://remote.example/media/concurrent.webp');
+    const objectUris = [
+      new URL('https://remote.example/notes/concurrent-media-1'),
+      new URL('https://remote.example/notes/concurrent-media-2'),
+    ];
+
+    await Promise.all(
+      objectUris.map((objectUri) =>
+        handleInboundCreate(
+          createContext(),
+          new Create({
+            actor: remoteActorUri,
+            object: new Note({
+              attachments: [new Image({ mediaType: 'image/webp', url: mediaUrl })],
+              attribution: remoteActorUri,
+              id: objectUri,
+              to: PUBLIC_COLLECTION,
+            }),
+          }),
+          receivedAt,
+        ),
+      ),
+    );
+
+    const media = await db.select().from(Media);
+    assert.equal(media.length, 1);
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 2);
+    for (const objectUri of objectUris) {
+      const { content } = await getMaterializedPost(objectUri);
+      assert.deepEqual(
+        content.document.body.content.flatMap((block) =>
+          block.type === 'media' ? [block.attrs.mediaId] : [],
+        ),
+        [media[0]?.id],
+      );
+    }
   });
 
   test('deduplicates actor and object hrefs before dispatch', async () => {
@@ -902,6 +1082,12 @@ describe('inbound Create dispatch', () => {
       new Create({
         actor: remoteActorUri,
         object: new Note({
+          attachments: [
+            new Image({
+              mediaType: 'image/webp',
+              url: new URL('https://remote.example/media/retryable.webp'),
+            }),
+          ],
           attribution: remoteActorUri,
           content: 'Retryable',
           id: remoteObjectUri,
@@ -927,6 +1113,7 @@ describe('inbound Create dispatch', () => {
       assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
       assert.equal((await db.select().from(Posts)).length, 0);
       assert.equal((await db.select().from(PostContents)).length, 0);
+      assert.equal((await db.select().from(Media)).length, 0);
     } finally {
       await pg`drop trigger fail_inbound_post_content on post_content`;
       await pg`drop function fail_inbound_post_content()`;
@@ -934,6 +1121,7 @@ describe('inbound Create dispatch', () => {
 
     await handleInboundCreate(createContext(), create(), receivedAt);
     assert.equal((await getMaterializedPost(remoteObjectUri)).mapping.uri, remoteObjectUri.href);
+    assert.equal((await db.select().from(Media)).length, 1);
   });
 });
 
