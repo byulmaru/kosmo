@@ -152,6 +152,7 @@ function EditableProfileRoute({
   const headerRef = useRef(header);
   const mounted = useRef(true);
   const selecting = useRef(false);
+  const [cleanValue, setCleanValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
   const [submitState, setSubmitState] = useState<ProfileEditSubmitState>({ kind: 'idle' });
   const [commitIssueMediaUploadUrl] = useMutation<ProfileEditRouteIssueMediaUploadUrlMutation>(
@@ -163,7 +164,7 @@ function EditableProfileRoute({
   const [commitUpdateProfile] =
     useMutation<ProfileEditRouteUpdateProfileMutation>(updateProfileMutation);
   const { allowNextNavigation, dialogProps } = useProfileEditNavigationGuard({
-    dirty: isProfileEditDraftDirty(initialValue, value),
+    dirty: isProfileEditDraftDirty(cleanValue, value),
     saving: submitState.kind === 'saving',
   });
 
@@ -329,9 +330,15 @@ function EditableProfileRoute({
             handleSaveFailure();
             return;
           }
-          allowNextNavigation(() =>
-            router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href),
-          );
+          setCleanValue(draft);
+          setSubmitState({ kind: 'idle' });
+          allowNextNavigation(() => {
+            try {
+              router.replace(`/${response.updateProfile.profile.relativeHandle}` as Href);
+            } catch {
+              // Keep the saved draft recoverable when navigation cannot start.
+            }
+          });
         },
         onError: handleSaveFailure,
       });
@@ -353,7 +360,7 @@ function EditableProfileRoute({
   return (
     <>
       <ProfileEditScreen
-        initialValue={initialValue}
+        initialValue={cleanValue}
         onAvatarEdit={() => selectImage('avatar')}
         onAvatarRemove={() => removeImage('avatar')}
         onAvatarRetry={() => retryImage('avatar')}

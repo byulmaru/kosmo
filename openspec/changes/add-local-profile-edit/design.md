@@ -13,6 +13,13 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 만들며, `PROD-527`이 같은 component를 연결한다. Follow Approval Policy는 현재 Profile 편집의 controlled draft와
 같은 저장 경계에 포함하고, Settings 진입점이 제공되면 `PROD-531`이 제어를 이전한다.
 
+`PROD-613`에서 text-only와 Ready avatar/header ID 저장 모두 DB commit, GraphQL child field resolution,
+BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영구 `saving`에 남는 회귀를 재현했다.
+같은 correlation에서 navigation guard effect와 `router.replace` callback도 return했지만 실제 Web REPLACE는
+발생하지 않았다. 원인은 guard effect가 Expo Router Web의 비동기 navigation commit을 기다리지 않고
+`navigationAllowed`를 즉시 `false`로 되돌려 실제 `beforeRemove` 시점에 성공 REPLACE를 다시 차단하는 race다.
+해당 한 줄을 제거한 fault injection에서 같은 E2E가 통과해 원인을 입증했다.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -25,6 +32,11 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 - desktop shell 중앙 600px route와 mobile/native 정보 구조, 접근성을 일관되게 유지한다.
 - header 이미지 변경 영역을 hero wrapper와 분리하고 모든 지원 폭에서 `3:1`로 유지한다.
 - Profile Tag editor UI를 한 번 만들고 Tag 연결 change가 재사용할 seam을 제공한다.
+- 저장 성공 시 제출 draft를 clean baseline으로 확정하고 terminal 상태에서 one-shot REPLACE를 실행한다. clean
+  baseline이 유지되는 동안에는 늦은 `beforeRemove`를 허용하되, commit 전 새 draft가 생기면 그 입력 보호를
+  우선한다.
+- 현재 draft와 Ready avatar/header Media ID를 보존하고 mutation 자동 재전송·이미지 자동 재업로드 없이
+  안전하게 확인·수동 재시도하게 한다.
 
 **Non-Goals:**
 
@@ -33,6 +45,8 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 - Media upload 인프라, 다른 Profile Media 재사용, crop editor
 - orphan Media cleanup, thumbnail·variant, Remote Profile Media, Fedify/ActivityPub projection
 - Admin role 제거, client-side Owner 추측과 API 미연결 local persistence
+- 근거 없는 이미지 압축·resize, Media Storage Service 성능 개선, 전체 GraphQL 요청에 대한 범용 tracing·
+  timeout 정책, Native 실제 기기 QA
 
 ## Implementation Guidance
 
@@ -63,6 +77,15 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
   거부한다.
 - Web 기본 confirm은 승인된 action label을 제어할 수 없으므로 Web·Native 공통 confirmation presentation이
   필요하다. 성공 replace 전에 dirty guard를 해제하지 않으면 정상 navigation도 막힐 수 있다.
+- `PROD-613` 계측에서 `updateProfile` transaction, `relativeHandle`·`avatar`·`header` resolution, API/BFF body,
+  browser parse와 Relay `onCompleted`는 모두 종료됐다. API/BFF timeout은 확인된 원인이나 수정 seam이 아니다.
+- Web `router.replace`는 실제 route state 반영 전에 return한다. 성공 permission을 action callback return 직후
+  회수하면 이후 비동기 `beforeRemove`가 다시 활성화된 guard에 막힌다. 기존 unit mock은 `beforeRemove`를
+  `router.replace` 안에서 동기 실행해 이 scheduling 차이를 숨겼다.
+- 성공 path는 navigation이 완료될 것을 전제로 `saving`을 명시적으로 끝내지 않으므로 REPLACE가 막히면 편집과
+  이탈이 함께 영구 잠긴다.
+- post-commit 응답 결과가 불확실한 상태에서 자동으로 같은 mutation을 다시 보내거나 Ready Media ID를 버리면
+  사용자가 이미 반영된 저장을 중복 실행하거나 이미 완료한 이미지를 재업로드할 수 있다.
 
 ### Recommended Approach
 
@@ -105,6 +128,20 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    Relay normalization, 갱신된 relativeHandle Profile로 `router.replace` 순서이며 toast를 표시하지 않는다.
 10. Profile Tag 제거 action은 시각 크기 `32×32`와 실제 입력 target Web `32×32 CSS px`, iOS `44×44 pt`,
     Android `48×48 dp`를 분리하고 text action은 최소 높이 `36`을 사용한다.
+11. `PROD-613` 조사 단계에서만 text-only와 Ready avatar/header ID 저장을 같은 correlation으로 임시 계측했다.
+    API transaction·child field·response body, BFF body, browser parse, Relay `onCompleted`, guard effect와
+    `router.replace` callback return이 정상 경계이고 최초 실패는 그 뒤 실제 Web route commit임을 확인한 뒤,
+    production 계측 코드는 제거했다.
+12. 실제 Chromium E2E에서 비동기 navigation ordering을 재현하고, guard의 즉시 permission 회수만 제거한 fault
+    injection으로 같은 시나리오가 통과하는지 검증한다. 동기 `beforeRemove` mock만으로 성공 계약을 증명하지 않는다.
+13. 성공 저장은 Relay normalization으로 draft를 clean baseline에 맞추고 `saving`을 terminal 상태로 끝낸
+    render에서 성공 REPLACE를 one-shot으로 실행한다. clean baseline이 유지되는 동안에는 늦은
+    `beforeRemove`를 허용하고, 실제 commit 전 새 draft가 생기면 dirty guard와 discard confirmation으로 그 입력을
+    보호한다. navigation no-op/실패에도 draft와 Ready Media ID를 유지하며 mutation 자동 재전송·이미지 자동
+    재업로드를 실행하지 않는다.
+14. text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, 기존 discard와 transport 실패를
+    자동화하고 실제 Web dev에서 재검증한다. API/BFF timeout·buffering은 변경하지 않으며 Native 실제 기기 QA
+    미실행과 PROD-490 통합 검증 handoff를 기록한다.
 
 ### Allowed Alternatives
 
@@ -115,6 +152,11 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
 - desktop sticky action은 shell document scroll을 유지하는 한 route header 또는 중앙 surface 내부 bar로 구현할 수
   있다.
 - form은 future modal wrapper에서도 재사용할 수 있지만 현재 production entry는 dedicated route여야 한다.
+- 조사 단계의 계측은 기존 Sentry/logging surface의 좁은 timing field나 test-only seam을 사용할 수 있다.
+  최종 production에는 correlation logging, 새 tracing dependency나 범용 middleware를 보존하지 않는다.
+- 성공 navigation은 저장 결과가 clean baseline으로 확정된 render에서 guard 자체를 비활성화하거나 one-shot
+  permission으로 실행할 수 있다. 어느 방식이든 clean baseline이 유지되는 동안 늦은 `beforeRemove`를 막거나,
+  새 draft가 생겼는데 discard guard를 비활성 상태로 유지하면 안 된다.
 
 ### Known Traps
 
@@ -137,6 +179,15 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
   포함하지 않는다.
 - web 중앙 column을 internal scroller로 바꿔 기존 document scroll 계약을 깨지 않는다.
 - presentation에 저장 성공 문구를 남겨 route가 갱신된 Profile로 복귀하는 production 동작과 경쟁시키지 않는다.
+- 확인된 navigation race를 API/BFF timeout이나 response buffering으로 우회하지 않는다.
+- `router.replace`의 동기 return을 navigation 완료로 취급해 dirty·saving 상태인 guard를 다시 활성화하지 않는다.
+  clean baseline과 terminal `saving` 전이를 먼저 확정한 one-shot navigation은 callback return 뒤 permission을
+  회수해도 늦은 `beforeRemove`를 막지 않아야 한다.
+- 기존 동기 navigation mock의 통과만으로 Web 비동기 `beforeRemove` ordering을 검증했다고 간주하지 않는다.
+- 결과가 불확실한데 draft를 초기화하거나 같은 Media를 다시 upload하지 않는다. 반대로 단순히 `saving`만
+  해제하고 중복 submit을 자동 실행 가능하게 두지 않는다.
+- 전체 GraphQL proxy를 buffer하거나 공통 timeout을 추가하는 범위 확대를 PROD-613의 단일 mutation 관찰
+  근거 없이 수행하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -156,6 +207,13 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
   mutation/query의 동일 Media identity와 ProfileHero 렌더링을 한 전달 단위로 검증한다.
 - [한 field upload 실패가 다른 Ready field를 재업로드함] → field별 upload generation과 Ready ID를 route draft가
   분리해 소유하고 실패 field만 다시 시도한다.
+- [성공 callback return을 navigation 완료로 오인해 guard가 REPLACE를 다시 차단함] → 실제 Chromium scheduling과
+  비동기 `beforeRemove`를 회귀 test로 고정하고 clean baseline·terminal `saving` 상태에서 one-shot REPLACE를
+  실행한다. commit 전 새 draft가 생기면 별도 회귀 test로 그 입력 보호를 확인한다.
+- [응답 결과가 불확실한 상태에서 중복 저장 또는 이미지 재업로드가 발생함] → 자동 재전송을 금지하고 현재
+  draft와 Ready Media ID를 보존한 terminal 복구를 검증한다.
+- [확인된 client race를 범용 GraphQL timeout·streaming 변경으로 확대함] → 조사에서 확인한 API/BFF/Relay
+  응답 완료 근거를 문서화한 상태로 유지하고 수정 범위를 Profile edit navigation lifecycle에 한정한다.
 
 ## Migration Plan
 
@@ -164,13 +222,15 @@ Profile Tag는 `add-profile-tags`가 별도 저장·공개 계약을 소유한�
    `followPolicy` 저장과 public read를 연결한다.
 3. PROD-492가 guest-safe entrypoint, protected route, picker/upload 재시도, Relay·ProfileHero와 navigation을
    연결한다.
-4. PROD-490이 Owner route, text·Media save와 실패 복구를 통합 검증한다.
-5. Profile Tag는 PROD-526·527 완료 뒤 같은 editor를 연결하며 `add-profile-tags`가 별도로 archive한다.
-6. Settings 진입점이 제공되면 PROD-531이 Follow Approval Policy 제어를 이전하고 Profile 편집의 중복 저장
+4. PROD-613이 post-commit 응답·Relay·navigation 경계를 조사 단계에서 임시 계측으로 확인한 뒤 계측 코드를
+   제거하고, 영구 `saving` 회귀 수정과 자동화·Web runtime 증거를 남긴다.
+5. PROD-490이 Owner route, text·Media save와 실패 복구를 통합 검증한다.
+6. Profile Tag는 PROD-526·527 완료 뒤 같은 editor를 연결하며 `add-profile-tags`가 별도로 archive한다.
+7. Settings 진입점이 제공되면 PROD-531이 Follow Approval Policy 제어를 이전하고 Profile 편집의 중복 저장
    경계를 제거한다.
-7. rollback 시 production entrypoint를 먼저 비활성화하고 additive API/Media 관계 변경은 해당 migration 정책에
+8. rollback 시 production entrypoint를 먼저 비활성화하고 additive API/Media 관계 변경은 해당 migration 정책에
    따라 보존한다.
 
 ## Open Questions
 
-없음.
+없음. root cause와 사용자 관찰 가능한 수정 계약은 PROD-613에 확정됐다. 이 확정은 구현 승인과 별개다.

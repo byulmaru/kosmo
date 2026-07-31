@@ -7,9 +7,11 @@ import {
   db,
   firstOrThrow,
   Instances,
+  Media,
   pg,
   PostContents,
   Posts,
+  ProfileMedia,
   Profiles,
   Sessions,
 } from '@kosmo/core/db';
@@ -20,9 +22,12 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  MediaSource,
+  MediaState,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
+  ProfileMediaKind,
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
@@ -207,6 +212,35 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     })
     .returning()
     .then(firstOrThrow);
+}
+
+export async function createE2EReadyProfileMedia(profileId: string, accountId: string) {
+  const rows = await db
+    .insert(Media)
+    .values(
+      [ProfileMediaKind.AVATAR, ProfileMediaKind.HEADER].map((kind) => ({
+        accountId,
+        mediaType: 'image/webp',
+        profileId,
+        readyAt: Temporal.Instant.from('2026-07-31T00:00:00Z'),
+        source: MediaSource.LOCAL,
+        state: MediaState.READY,
+        storageReference: `e2e-profile-${kind.toLowerCase()}-${randomUUID()}`,
+        uploadExpiresAt: Temporal.Instant.from('2026-07-31T00:05:00Z'),
+        url: `https://media.example/e2e-profile-${kind.toLowerCase()}.webp`,
+      })),
+    )
+    .returning();
+
+  await db.insert(ProfileMedia).values(
+    rows.map((media, index) => ({
+      kind: index === 0 ? ProfileMediaKind.AVATAR : ProfileMediaKind.HEADER,
+      mediaId: media.id,
+      profileId,
+    })),
+  );
+
+  return { avatar: rows[0]!, header: rows[1]! };
 }
 
 export async function createE2EAccountProfile(options: CreateE2EAccountProfileOptions) {

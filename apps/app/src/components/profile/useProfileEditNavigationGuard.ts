@@ -46,7 +46,10 @@ export function useProfileEditNavigationGuard({ dirty, saving }: Options) {
 
     const action = allowedAction.current;
     allowedAction.current = null;
-    action?.();
+    if (!action) {
+      return;
+    }
+    action();
     setNavigationAllowed(false);
   }, [navigationAllowed]);
 

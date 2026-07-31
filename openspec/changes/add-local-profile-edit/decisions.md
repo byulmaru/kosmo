@@ -290,6 +290,29 @@
 - Confirmation / Follow-up: route/Web back/Android hardware back, saving 차단과 성공 replace를 automated test와
   실제 플랫폼 QA로 구분해 확인한다.
 
+### 저장 성공 REPLACE는 clean baseline에서 one-shot으로 실행하고 새 draft 보호를 우선한다
+
+- Decision Date: 2026-07-31
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/profile-edit.md`, `PROD-613`, 2026-07-31 PR #468 리뷰 사용자 승인과
+  Linear 댓글 `bd2f3227-c0bd-4376-8c1f-89607191d033`
+- Status: Active
+- Context / Problem: Web `router.replace`는 실제 route commit 전에 return한다. 기존 구현은 제출 draft가 여전히
+  dirty이고 `saving`인 상태에서 permission을 회수해 늦은 `beforeRemove`가 성공 REPLACE를 다시 막았다. 반대로
+  commit 전 사용자가 새 draft를 만든 경우까지 성공 permission을 강제로 유지하면 새 입력을 확인 없이 버린다.
+- Decision Outcome: 저장 성공은 Relay normalization으로 제출 draft를 clean baseline으로 확정하고 `saving`을
+  terminal 상태로 끝낸 render에서 one-shot REPLACE를 실행한다. clean baseline이 유지되는 동안에는 늦은
+  `beforeRemove`를 허용한다. 실제 route commit 전에 사용자가 새 draft를 만들면 그 입력 보호가 우선하며 dirty
+  guard가 대기 중인 REPLACE를 discard confirmation으로 가로챈다.
+- Alternatives Considered: commit/unmount까지 모든 입력에 대해 permission을 유지하는 방식은 commit 전 새 draft를
+  버릴 수 있어 제외했다. navigation completion observer와 timeout을 새로 도입하는 방식은 현재 clean baseline과
+  guard 상태만으로 계약을 충족할 수 있어 제외했다.
+- Consequences: 성공 permission은 별도 장기 ref나 option 없이 one-shot으로 유지할 수 있다. navigation no-op이나
+  동기 실패 뒤에도 clean draft와 Ready Media ID가 남고, 새 입력부터 다시 dirty confirmation의 보호를 받는다.
+- Confirmation / Follow-up: 비동기 `beforeRemove`가 clean baseline에서는 통과하고, commit 전 새 draft가 생기면
+  같은 pending REPLACE가 confirmation으로 차단되는 두 순서를 route test로 고정한다. Ready Media ID를 가진
+  no-op·실패 경로에서 upload·mutation 자동 재실행이 없는지도 확인한다.
+
 ### PROD-492 production route는 Profile Tag를 렌더링하거나 제출하지 않는다
 
 - Decision Date: 2026-07-30
