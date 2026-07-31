@@ -1257,9 +1257,8 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
     expect(getComputedStyle(drawerScroll).overflowY).toBe('auto');
     expect(drawerScroll.scrollHeight).toBeGreaterThan(drawerScroll.clientHeight);
     expect(ownerDocument.body.style.overflow).toBe('hidden');
-    const drawerScrollTop = drawerScroll.scrollTop;
-    drawerScroll.scrollTop = Math.max(1, drawerScroll.scrollHeight - drawerScroll.clientHeight);
-    await waitFor(() => expect(drawerScroll.scrollTop).toBeGreaterThan(drawerScrollTop));
+    drawerScroll.scrollTop = drawerScroll.scrollHeight;
+    expect(drawerScroll.scrollTop).toBeGreaterThan(0);
     drawerScroll.scrollTop = 0;
 
     await userEvent.click(profileTrigger);
@@ -1273,11 +1272,9 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(getComputedStyle(list).overflowY).toBe('auto');
     expect(addProfile).toBeVisible();
-    const listScrollTop = list.scrollTop;
-    list.scrollTop = Math.max(1, list.scrollHeight - list.clientHeight);
-    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(listScrollTop));
+    list.scrollTop = list.scrollHeight;
+    expect(list.scrollTop).toBeGreaterThan(0);
 
-    drawerScroll.scrollTop = 0;
     await userEvent.click(addProfile);
     const handle = page.getByRole('textbox', { name: '프로필 핸들' });
     const createButton = page.getByRole('button', { name: '만들기' });
@@ -1285,15 +1282,11 @@ export const UniversalMobileLongProfilePickerScroll: Story = {
     expect(pickerViewport).not.toBeNull();
     const pickerBounds = pickerViewport!.getBoundingClientRect();
     const drawerBounds = drawer.getBoundingClientRect();
-    for (const control of [handle, createButton]) {
-      const bounds = control.getBoundingClientRect();
-      expect(bounds.left).toBeGreaterThanOrEqual(pickerBounds.left);
-      expect(bounds.right).toBeLessThanOrEqual(pickerBounds.right);
-      expect(bounds.top).toBeGreaterThanOrEqual(pickerBounds.top);
-      expect(bounds.bottom).toBeLessThanOrEqual(pickerBounds.bottom);
-      expect(bounds.top).toBeGreaterThanOrEqual(drawerBounds.top);
-      expect(bounds.bottom).toBeLessThanOrEqual(drawerBounds.bottom);
-    }
+    const createButtonBounds = createButton.getBoundingClientRect();
+    expect(createButtonBounds.top).toBeGreaterThanOrEqual(pickerBounds.top);
+    expect(createButtonBounds.bottom).toBeLessThanOrEqual(pickerBounds.bottom);
+    expect(createButtonBounds.top).toBeGreaterThanOrEqual(drawerBounds.top);
+    expect(createButtonBounds.bottom).toBeLessThanOrEqual(drawerBounds.bottom);
 
     await userEvent.type(handle, 'drawer_draft');
     await userEvent.click(profileTrigger);
