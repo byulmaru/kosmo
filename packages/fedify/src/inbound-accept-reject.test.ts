@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { Accept, Follow, Note, Reject } from '@fedify/vocab';
 import {
@@ -13,12 +14,14 @@ import { eq, ne } from 'drizzle-orm';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundReject from './inbound-reject';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const localProfileId = '019f73b1-1111-7777-8888-123456789abc';
+const mastodonFixtureProjectionId = '019f73b1-2222-7777-8888-123456789abc';
 const localActorUri = new URL(`/ap/actor/${localProfileId}`, publicOrigin);
 const remoteActorUri = new URL('https://remote.example/users/alice');
 
@@ -33,6 +36,7 @@ let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
 let localInstanceId: string;
+let federation: typeof productionFederation;
 
 describe('inbound Accept and Reject', () => {
   before(async () => {
@@ -51,6 +55,7 @@ describe('inbound Accept and Reject', () => {
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAccept } = await import('./inbound-accept'));
     ({ handleInboundReject } = await import('./inbound-reject'));
+    ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -62,6 +67,129 @@ describe('inbound Accept and Reject', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('routes a Mastodon 4.1.18 Accept through the production Follow document boundary', async () => {
+    const fixture = await createFixture({
+      projection: 'PENDING',
+      projectionId: mastodonFixtureProjectionId,
+    });
+    const acceptJson = JSON.parse(
+      await readFile(
+        new URL('./fixtures/mastodon-4.1.18-accept-follow.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const accept = await Accept.fromJsonLd(acceptJson);
+    const loadedUrls: string[] = [];
+    const documentLoader: DocumentLoader = async (url) => {
+      loadedUrls.push(url);
+      const response = await federation.fetch(
+        new Request(url, { headers: { Accept: 'application/activity+json' } }),
+        { contextData: undefined },
+      );
+      if (!response.ok) {
+        throw new Error(`Follow document returned ${response.status}: ${url}`);
+      }
+
+      return {
+        contextUrl: null,
+        document: await response.json(),
+        documentUrl: url,
+      };
+    };
+
+    const followResponse = await federation.fetch(
+      new Request(`${publicOrigin}/ap/follow/${fixture.projection.id}`, {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(followResponse.status, 200, await followResponse.text());
+
+    await handleInboundAccept(createContext(localProfileId, documentLoader), accept);
+    await handleInboundAccept(createContext(localProfileId, documentLoader), accept);
+
+    assert.deepEqual(loadedUrls, [`${publicOrigin}/ap/follow/${fixture.projection.id}`]);
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+
+    const established = await db.select().from(ProfileFollows).then(firstOrThrow);
+    const establishedFollowResponse = await federation.fetch(
+      new Request(`${publicOrigin}/ap/follow/${established.id}`, {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(establishedFollowResponse.status, 200);
+    const consumedRequestResponse = await federation.fetch(
+      new Request(`${publicOrigin}/ap/follow/${fixture.projection.id}`, {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(consumedRequestResponse.status, 404);
+    const unknownResponse = await federation.fetch(
+      new Request(`${publicOrigin}/ap/follow/${crypto.randomUUID()}`, {
+        headers: { Accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(unknownResponse.status, 404);
+  });
+
+  test('serves only the current available local-to-remote Follow projection', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const fetchFollow = (id: string) =>
+      federation.fetch(
+        new Request(`${publicOrigin}/ap/follow/${id}`, {
+          headers: { Accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+
+    assert.equal((await fetchFollow(fixture.projection.id.toUpperCase())).status, 404);
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.UNRESPONSIVE })
+      .where(eq(Instances.id, fixture.remoteInstance.id));
+    assert.equal((await fetchFollow(fixture.projection.id)).status, 404);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, fixture.remoteInstance.id));
+    assert.equal((await fetchFollow(fixture.projection.id)).status, 404);
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.ACTIVE })
+      .where(eq(Instances.id, fixture.remoteInstance.id));
+    await db
+      .delete(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, fixture.projection.id));
+    const replacement = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        followeeProfileId: fixture.remoteProfile.id,
+        followerProfileId: fixture.localProfile.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    assert.equal((await fetchFollow(fixture.projection.id)).status, 404);
+    assert.equal((await fetchFollow(replacement.id)).status, 200);
+
+    await db.delete(ProfileFollowRequests);
+    const reversed = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        followeeProfileId: fixture.localProfile.id,
+        followerProfileId: fixture.remoteProfile.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    assert.equal((await fetchFollow(reversed.id)).status, 404);
   });
 
   test('promotes an exact pending request once from embedded Accept', async () => {
@@ -235,13 +363,26 @@ describe('inbound Accept and Reject', () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
     const context = createContext(localProfileId);
-
-    await handleInboundAccept(context, new Accept({ actor: remoteActorUri, object }));
-    await handleInboundReject(context, new Reject({ actor: remoteActorUri, object }));
+    const errors: unknown[][] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args) => errors.push(args);
+    try {
+      await handleInboundAccept(context, new Accept({ actor: remoteActorUri, object }));
+      await handleInboundReject(context, new Reject({ actor: remoteActorUri, object }));
+    } finally {
+      console.error = originalConsoleError;
+    }
 
     assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.deepEqual(
+      errors.map(([message]) => message),
+      [
+        'Inbound ActivityPub Accept object could not be resolved as Follow',
+        'Inbound ActivityPub Reject object could not be resolved as Follow',
+      ],
+    );
   });
 
   test('keeps an exact established relation idempotently on Accept', async () => {
@@ -422,9 +563,11 @@ describe('inbound Accept and Reject', () => {
 
 const createFixture = async ({
   projection,
+  projectionId,
   remoteInstanceState = InstanceState.ACTIVE,
 }: {
   projection: 'ESTABLISHED' | 'PENDING';
+  projectionId?: string;
   remoteInstanceState?: InstanceState;
 }) => {
   const remoteInstance = await db
@@ -480,6 +623,7 @@ const createFixture = async ({
           .values({
             followeeProfileId: remoteProfile.id,
             followerProfileId: localProfile.id,
+            ...(projectionId ? { id: projectionId } : {}),
           })
           .returning()
           .then(firstOrThrow)
@@ -488,6 +632,7 @@ const createFixture = async ({
           .values({
             followeeProfileId: remoteProfile.id,
             followerProfileId: localProfile.id,
+            ...(projectionId ? { id: projectionId } : {}),
           })
           .returning()
           .then(firstOrThrow);

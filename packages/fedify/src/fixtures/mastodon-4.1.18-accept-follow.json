@@ -1,0 +1,12 @@
+{
+  "@context": "https://www.w3.org/ns/activitystreams",
+  "id": "https://remote.example/activities/accept-mastodon-4.1.18",
+  "type": "Accept",
+  "actor": "https://remote.example/users/alice",
+  "object": {
+    "id": "http://127.0.0.1:4173/ap/follow/019f73b1-2222-7777-8888-123456789abc",
+    "type": "Follow",
+    "actor": "http://127.0.0.1:4173/ap/actor/019f73b1-1111-7777-8888-123456789abc",
+    "object": "https://remote.example/users/alice"
+  }
+}

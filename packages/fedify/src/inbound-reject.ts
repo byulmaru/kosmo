@@ -41,5 +41,11 @@ export const handleInboundReject = async (
       followeeActorUri: actorUri,
       followeeProfileId: remoteActor.profile.id,
     });
+  } else {
+    console.error('Inbound ActivityPub Reject object could not be resolved as Follow', {
+      actorUri: actorUri.href,
+      objectUri: reject.objectId?.href,
+      rejectId: reject.id?.href,
+    });
   }
 };
