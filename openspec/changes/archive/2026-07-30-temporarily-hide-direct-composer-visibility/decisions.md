@@ -16,17 +16,17 @@
 - Consequences: Composer의 선택 surface와 client 선택 union은 임시로 세 값에 한정된다. 기존 서버 enum, 저장된 DIRECT Post와 후속 recipient 구현의 호환성은 유지된다.
 - Confirmation / Follow-up: Posts Storybook 37/37, Storybook build, Composer E2E 1/1과 targeted Web checks가 이 계약을 확인한다. PROD-462 완료·검증 승인 뒤 별도 복원 변경을 만든다.
 
-### DIRECT client option은 주석 처리하고 복원 TODO를 남긴다
+### DIRECT client option은 주석으로 보존하고 unused icon import는 제거한다
 
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, [PROD-580](https://linear.app/byulmaru/issue/PROD-580/direct-%EA%B5%AC%ED%98%84-%EC%A0%84-composer%EC%9D%98-%EC%96%B8%EA%B8%89%ED%95%9C-%EA%B3%84%EC%A0%95%EB%A7%8C-%EC%98%B5%EC%85%98%EC%9D%84-%EC%9E%84%EC%8B%9C%EB%A1%9C-%EC%88%A8%EA%B8%B4%EB%8B%A4)
 - Status: Active
 - Context / Problem: 임시 UI 제한 뒤에도 enum·서버·기존 DIRECT 데이터와 후속 복원 경계를 보존해야 한다.
-- Decision Outcome: Composer option 목록의 DIRECT 객체와 전용 icon import는 삭제하지 않고 주석 처리하며, 주석에 `TODO(PROD-462)`와 recipient 입력·저장·DIRECT 조회 권한 완료 시 복원 기준을 기록한다.
+- Decision Outcome: Composer option 목록의 DIRECT 객체만 주석으로 보존하고 사용하지 않는 `AtSignIcon` import는 제거하며, 주석에 `TODO(PROD-462)`와 recipient 입력·저장·DIRECT 조회 권한 완료 시 복원 기준을 기록한다.
 - Alternatives Considered: enum/server까지 삭제하는 방식은 기존 데이터와 후속 구현을 깨뜨린다. 별도 feature flag를 추가하는 방식은 이 단일 임시 표면 제한에 불필요한 상태·배포 경계를 늘린다.
-- Consequences: 현재 client 메뉴에는 DIRECT가 없지만 복원 시 원래 label·description·icon 정의를 재사용할 수 있다. 주석은 장기 보류가 되지 않도록 후속 issue를 가리킨다.
-- Confirmation / Follow-up: snapshot `bb3bc7e1f893891505559f7fb1ea119bec21a974`에서 주석과 TODO를 확인한다. PROD-462의 완료 증거가 생기면 별도 변경에서 option·recipient 제출 경계를 재검토한다.
+- Consequences: 현재 client 메뉴에는 DIRECT가 없지만 복원 시 주석에 남은 원래 label·description·icon 식별자를 재사용하고 `AtSignIcon` import를 함께 복원할 수 있다. 주석은 장기 보류가 되지 않도록 후속 issue를 가리킨다.
+- Confirmation / Follow-up: archived 최종 상태에서 DIRECT 객체 주석과 TODO, `AtSignIcon` import 제거를 확인한다. PROD-462의 완료 증거가 생기면 별도 변경에서 option·import·recipient 제출 경계를 함께 재검토한다.
 
 ### 사람 승인된 최소 OpenSpec으로 active post capability를 delta 동기화한다
 
@@ -34,11 +34,11 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, [PROD-580](https://linear.app/byulmaru/issue/PROD-580/direct-%EA%B5%AC%ED%98%84-%EC%A0%84-composer%EC%9D%98-%EC%96%B8%EA%B8%89%ED%95%9C-%EA%B3%84%EC%A0%95%EB%A7%8C-%EC%98%B5%EC%85%98%EC%9D%84-%EC%9E%84%EC%8B%9C%EB%A1%9C-%EC%88%A8%EA%B8%B4%EB%8B%A4), 2026-07-30 사용자 승인(최소 OpenSpec 생성 및 active `post` sync)
 - Status: Active
-- Context / Problem: 현재 active `post` spec은 네 옵션을 MUST로 적고 있어 구현된 임시 세 옵션 Composer와 충돌하지만, 이 slice는 기존 active spec 파일이나 도메인 문서를 직접 수정할 권한이 없다.
-- Decision Outcome: 새 change 디렉터리 안에 `post` capability의 MODIFIED delta를 만들고, 기존 requirement 전체를 보존하면서 PROD-462 완료 전 세 옵션·신규 DIRECT 제출 불가·복원 기준을 검증 가능하게 기록한다. 기존 active spec과 canonical 문서는 이 slice에서 수정하지 않는다.
-- Alternatives Considered: active spec 또는 canonical 문서를 직접 편집하는 방식은 승인된 파일 범위를 벗어난다. implementation snapshot만 남기고 명세를 동기화하지 않는 방식은 현재 active contract와 구현의 drift를 남긴다.
-- Consequences: apply/archive 시 delta가 active `post` requirement와 병합될 수 있으며, 이 change는 Composer visibility 외 도메인 enum·server·Mention 계약을 소유하지 않는다.
-- Confirmation / Follow-up: strict OpenSpec validation과 status가 delta·decision·tasks를 apply-ready로 확인한다. archive 전에는 PROD-580의 구현·검증 책임자와 active spec 동기화 및 전체 change 완료 여부를 재확인한다.
+- Context / Problem: 기존 active `post` spec은 네 옵션을 MUST로 적고 있어 구현된 임시 세 옵션 Composer와 충돌했으므로, 승인된 delta를 active spec에 반영해 런타임과 규범 문서를 동기화해야 했다.
+- Decision Outcome: `post` capability의 MODIFIED delta에 기존 requirement 전체를 보존하면서 PROD-462 완료 전 세 옵션·신규 DIRECT 제출 불가·복원 기준을 기록했다. 구현과 검증 완료 뒤 delta를 `openspec/specs/post/spec.md`에 반영하고 change를 archive했다. canonical 도메인 문서는 변경하지 않았다.
+- Alternatives Considered: active spec을 OpenSpec lifecycle 밖에서 직접 편집하는 방식은 delta와 완료 근거를 남기지 않으므로 선택하지 않았다. implementation snapshot만 남기고 명세를 동기화하지 않는 방식도 active contract와 구현의 drift를 남기므로 선택하지 않았다.
+- Consequences: active `post` requirement와 Composer의 임시 세 옵션 계약이 일치하며, archived change가 적용한 delta·결정·완료 증거를 보존한다. 이 change는 Composer visibility 외 도메인 enum·server·Mention 계약을 소유하지 않는다.
+- Confirmation / Follow-up: strict OpenSpec validation 통과와 `openspec/specs/post/spec.md`의 세 옵션 계약 반영을 확인한 뒤 change archive를 완료했다. PROD-462 완료 전까지 active spec과 Composer에서 이 임시 계약을 유지한다.
 
 ## Remaining Decisions
 

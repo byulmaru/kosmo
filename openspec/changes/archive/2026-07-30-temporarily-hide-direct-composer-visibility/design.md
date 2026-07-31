@@ -28,7 +28,7 @@
 
 ### Recommended Approach
 
-`DIRECT` option 객체와 전용 icon import를 삭제하지 않고 주석 처리하고, 주석에 PROD-462의 recipient 입력·저장·조회 권한 완료 시 복원한다는 이유를 명시한다. Composer Storybook에는 메뉴에 `언급한 계정만`이 없음을 추가하고, Web E2E는 키보드 끝 이동과 공개 제출 payload가 세 옵션 계약과 함께 유지되는지 확인한다. 세 옵션의 labels, descriptions, icons, default와 submit reset은 기존 동작을 그대로 둔다.
+`DIRECT` option 객체만 주석으로 보존하고 사용하지 않는 `AtSignIcon` import는 제거하며, 주석에 PROD-462의 recipient 입력·저장·조회 권한 완료 시 option과 import를 함께 복원한다는 이유를 명시한다. Composer Storybook에는 메뉴에 `언급한 계정만`이 없음을 추가하고, Web E2E는 키보드 끝 이동과 공개 제출 payload가 세 옵션 계약과 함께 유지되는지 확인한다. 세 옵션의 labels, descriptions, icons, default와 submit reset은 기존 동작을 그대로 둔다.
 
 ### Allowed Alternatives
 
