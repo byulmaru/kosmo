@@ -53,6 +53,8 @@ spec:
               value: "5432"
             - name: PGDATABASE
               value: "kosmo"
+            - name: DATABASE_MIGRATION_ROLE
+              value: "kosmo"
             - name: PGUSER
               valueFrom:
                 secretKeyRef:
