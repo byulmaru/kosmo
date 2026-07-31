@@ -68,6 +68,10 @@ const PostComposerFragment = graphql`
     id
     displayName
     handle
+    avatar {
+      id
+      url
+    }
     ...ProfileNameBlock_profile
   }
 `;
@@ -460,7 +464,7 @@ function PostComposerContents({
     <>
       {beforeEditor}
       <View style={styles.author}>
-        <Avatar label={profile.displayName} size={40} />
+        <Avatar imageUri={profile.avatar?.url} label={profile.displayName} size={40} />
         <ProfileNameBlock profile={profile} />
       </View>
       <View

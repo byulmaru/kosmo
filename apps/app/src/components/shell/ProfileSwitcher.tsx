@@ -2,6 +2,7 @@ import { profileHandleSchema } from '@kosmo/core/validation/profile';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -35,6 +36,14 @@ const ProfileSwitcherFragment = graphql`
         displayName
         followingCount
         followersCount
+        avatar {
+          id
+          url
+        }
+        header {
+          id
+          url
+        }
       }
     }
     me {
@@ -44,6 +53,10 @@ const ProfileSwitcherFragment = graphql`
         handle
         relativeHandle
         displayName
+        avatar {
+          id
+          url
+        }
       }
     }
   }
@@ -305,7 +318,11 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           },
         ]}
       >
-        <Avatar label={profile.displayName} size={selected ? 48 : 32} />
+        <Avatar
+          imageUri={profile.avatar?.url}
+          label={profile.displayName}
+          size={selected ? 48 : 32}
+        />
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
             {profile.displayName}
@@ -461,7 +478,9 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
         { opacity: pressed ? 0.65 : 1 },
       ]}
     >
-      {compact ? <Avatar label={active?.displayName ?? '?'} size={40} /> : null}
+      {compact ? (
+        <Avatar imageUri={active?.avatar?.url} label={active?.displayName ?? '?'} size={40} />
+      ) : null}
       {fullWeb || mobileWebDrawer ? (
         <View style={styles.webTriggerContent}>{triggerCopy}</View>
       ) : (
@@ -528,9 +547,19 @@ export function ProfileSwitcher({ onOpenChange, open: controlledOpen, query, sur
           { backgroundColor: theme.surface },
           Platform.OS === 'web' && webCover,
         ]}
-      />
+      >
+        {active?.header?.url ? (
+          <Image
+            accessible={false}
+            resizeMode="cover"
+            source={{ uri: active.header.url }}
+            style={styles.coverImage}
+          />
+        ) : null}
+      </View>
       <View style={styles.largeAvatar}>
         <Avatar
+          imageUri={active?.avatar?.url}
           label={active?.displayName || active?.handle || '?'}
           size={96}
           style={avatarShadow}
@@ -617,7 +646,8 @@ const styles = StyleSheet.create({
   drawerMenuPosition: { left: 0, top: 190 },
   fullOverlayPosition: { left: -10, top: 50 },
   profileHeader: { height: 260, position: 'relative', width: 320, zIndex: 20 },
-  cover: { height: 104, left: 0, position: 'absolute', right: 0, top: 0 },
+  cover: { height: 104, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
+  coverImage: { height: '100%', width: '100%' },
   largeAvatar: { left: 20, position: 'absolute', top: 54 },
   profileCopy: {
     left: 10,

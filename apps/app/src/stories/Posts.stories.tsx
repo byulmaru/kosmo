@@ -523,7 +523,12 @@ const storyPosts = [
   mediaTextPost,
   mediaOnlyPost,
 ];
-const composerProfile = profile({ id: 'profile-composer' });
+const composerAvatarUrl =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
+const composerProfile = profile({
+  avatar: { id: 'media-composer-avatar', url: composerAvatarUrl },
+  id: 'profile-composer',
+});
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
@@ -3196,7 +3201,9 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
 export const ComposerDefault: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    expect(avatar.querySelector('img')).toHaveAttribute('src', composerAvatarUrl);
     expect(body).not.toHaveAttribute('maxlength');
     await userEvent.click(body);
     expect(body).toHaveFocus();
