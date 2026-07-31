@@ -39,5 +39,11 @@ export const handleInboundAccept = async (
       followeeActorUri: actorUri,
       followeeProfileId: remoteActor.profile.id,
     });
+  } else {
+    console.error('Inbound ActivityPub Accept object could not be resolved as Follow', {
+      acceptId: accept.id?.href,
+      actorUri: actorUri.href,
+      objectUri: accept.objectId?.href,
+    });
   }
 };

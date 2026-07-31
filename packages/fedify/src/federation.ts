@@ -25,6 +25,7 @@ import { handleInboundReject } from './inbound-reject';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
+import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
@@ -134,6 +135,8 @@ federation
 federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
   .authorize(authorizeLocalPostNote);
+
+federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFollow);
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
