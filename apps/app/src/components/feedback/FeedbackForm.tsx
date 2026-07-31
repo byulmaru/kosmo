@@ -251,6 +251,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   webOption: {
+    borderRadius: radii.sm,
     borderBottomWidth: 1,
     paddingHorizontal: spacing.sm,
   },

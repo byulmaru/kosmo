@@ -38,8 +38,10 @@ export const BugReport: Story = {
   render: () => <FeedbackPage />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('radio', { name: '버그를 발견했어요' }));
-    expect(canvas.getByRole('radio', { name: '버그를 발견했어요' })).toBeChecked();
+    const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
+    await userEvent.click(bugReport);
+    expect(bugReport).toBeChecked();
+    expect(bugReport).toHaveStyle({ borderRadius: '8px' });
     expect(canvas.getAllByRole('textbox')).toHaveLength(1);
   },
 };
