@@ -10,6 +10,7 @@
 ## Action slot
 
 - `leading` prop은 모바일 홈의 메뉴 버튼과 게시글 상세의 뒤로가기처럼 제목 왼쪽의 화면별 action을 받는다. touch target은 각 action이 소유한다. 모바일 홈 메뉴는 테두리나 텍스트 라벨 없이 햄버거 아이콘만 표시하되 `44×44px` touch target과 접근 가능한 이름을 유지하고, 게시글 상세 뒤로가기도 `44×44px`를 유지한다.
+- `text` variant에서 leading action과 제목 사이에는 `spacing.lg`(`16px`)를 두어 `24px` 아이콘과 제목의 시각 간격을 약 `26px`로 유지한다. `brand` variant의 대칭 action slot에는 이 간격을 적용하지 않는다.
 
 ## 소유권
 

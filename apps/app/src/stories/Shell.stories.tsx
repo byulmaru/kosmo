@@ -1210,9 +1210,17 @@ export const UniversalMobileComposeHeader: Story = {
     const canvas = within(canvasElement);
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
     const heading = canvas.getByRole('heading', { name: '글쓰기' });
+    const menuIcon = menuButton.querySelector('svg');
 
     expect(heading.parentElement).toContainElement(menuButton);
     expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(menuIcon).not.toBeNull();
+    expect(
+      heading.getBoundingClientRect().left - menuIcon!.getBoundingClientRect().right,
+    ).toBeGreaterThanOrEqual(24);
+    expect(
+      heading.getBoundingClientRect().left - menuIcon!.getBoundingClientRect().right,
+    ).toBeLessThanOrEqual(28);
   },
   render: () => <UniversalShellStory />,
 };
