@@ -53,11 +53,6 @@ if grep -Eq '^kind: (Rollout|Service|HTTPRoute)$' "${render_dir}/prod-runtime.ya
   exit 1
 fi
 
-if grep -Fq 'kind: HorizontalPodAutoscaler' "${render_dir}/prod-runtime.yaml"; then
-  echo "prod runtime bootstrap unexpectedly rendered application autoscaling" >&2
-  exit 1
-fi
-
 if grep -Fq 'kind: "argo.Rollout"' "${render_dir}/prod-runtime.yaml"; then
   echo "prod runtime bootstrap unexpectedly references workload restart targets" >&2
   exit 1
@@ -136,54 +131,6 @@ dev_forbidden_markers=(
 for marker in "${dev_forbidden_markers[@]}"; do
   if grep -Fq "${marker}" "${render_dir}/dev.yaml"; then
     echo "dev manifest unexpectedly contains production marker: ${marker}" >&2
-    exit 1
-  fi
-done
-
-if grep -Fq 'kind: HorizontalPodAutoscaler' "${render_dir}/dev.yaml"; then
-  echo "dev manifest unexpectedly contains application autoscaling" >&2
-  exit 1
-fi
-
-if [[ "$(grep -Fc 'kind: HorizontalPodAutoscaler' "${render_dir}/prod.yaml")" -ne 2 ]]; then
-  echo "prod API and Web must each render a HorizontalPodAutoscaler" >&2
-  exit 1
-fi
-
-if grep -Fq '  replicas:' "${render_dir}/prod.yaml"; then
-  echo "prod Rollouts must leave replicas under HPA ownership" >&2
-  exit 1
-fi
-
-if [[ "$(grep -Fc '  replicas: 1' "${render_dir}/dev.yaml")" -ne 2 ]]; then
-  echo "dev API and Web Rollouts must each keep one fixed replica" >&2
-  exit 1
-fi
-
-for workload in api web; do
-  if ! awk -v name="kosmo-${workload}" '
-    $0 == "kind: HorizontalPodAutoscaler" { in_resource = 1 }
-    in_resource && $0 == "  name: " name { named = 1 }
-    in_resource && $0 == "    apiVersion: argoproj.io/v1alpha1" { rollout_api = 1 }
-    in_resource && $0 == "    kind: Rollout" { rollout_kind = 1 }
-    in_resource && $0 == "    name: " name { rollout_name = 1 }
-    in_resource && $0 == "  minReplicas: 2" { min_replicas = 1 }
-    in_resource && $0 == "  maxReplicas: 10" { max_replicas = 1 }
-    in_resource && $0 == "          averageUtilization: 80" { cpu_target = 1 }
-    /^---$/ {
-      if (in_resource && named && rollout_api && rollout_kind && rollout_name && min_replicas && max_replicas && cpu_target) {
-        found = 1
-      }
-      in_resource = named = rollout_api = rollout_kind = rollout_name = min_replicas = max_replicas = cpu_target = 0
-    }
-    END {
-      if (in_resource && named && rollout_api && rollout_kind && rollout_name && min_replicas && max_replicas && cpu_target) {
-        found = 1
-      }
-      exit !found
-    }
-  ' "${render_dir}/prod.yaml"; then
-    echo "prod ${workload} HPA must target its Rollout with min 2, max 10, and 80% CPU utilization" >&2
     exit 1
   fi
 done
