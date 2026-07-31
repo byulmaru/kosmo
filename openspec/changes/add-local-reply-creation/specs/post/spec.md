@@ -31,8 +31,9 @@
 - **THEN** 시스템은 입력 문자열을 공통 V1 Plain Text 변환 경계에 전달한다
 - **AND** trim과 line-ending normalization 뒤 paragraph content 다음에 입력 순서의 Media block node를 추가하고 summary `null`인 V1 canonical PostContent document를 저장한다
 - **AND** trim된 Plain Text가 canonical document에서 다시 동일하게 projection된다
-- **AND** persistence document의 Media node는 검증된 Media DB identity와 revision별 nullable Alt Text를 저장한다
-- **AND** 시스템은 Plain Text, HTML, Media ID 배열, Alt Text나 Sensitive Media를 별도 canonical 값으로 저장하지 않는다
+- **AND** persistence document의 Media node는 검증된 Media DB identity만 저장한다
+- **AND** 같은 transaction에서 Media가 nullable Alt Text를 저장하고 document root가 Sensitive Media를 저장한다
+- **AND** 시스템은 Plain Text, HTML 또는 Media ID 배열을 별도 canonical 값으로 저장하지 않는다
 
 #### Scenario: Media-only Post 또는 Reply
 

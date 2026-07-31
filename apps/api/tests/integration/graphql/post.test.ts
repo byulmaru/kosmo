@@ -499,7 +499,7 @@ describe('Post Reply GraphQL 경계', () => {
       {
         altText: '통합 검증 이미지',
         id: mediaId,
-        mediaType: 'image/webp',
+        mediaType: 'storage-defined-format',
         url: publicMediaUrl,
       },
     ]);

@@ -3904,7 +3904,9 @@ export const ReplyModalFailureLifecycle: Story = {
     await userEvent.type(body, '실패 뒤 유지할 답글');
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('답글 전송 네트워크 오류');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      '답글을 작성하지 못했습니다.',
+    );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(body).toHaveValue('실패 뒤 유지할 답글');
     expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeEnabled();

@@ -204,8 +204,9 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 - **THEN** 시스템은 bodyText를 공통 V1 Plain Text 변환 경계에 전달한다
 - **AND** trim과 line-ending normalization 뒤 paragraph content 다음에 입력 순서의 Media block node를 추가한다
 - **AND** summary는 `null`이다
-- **AND** persistence document의 Media node는 검증된 Media DB identity와 revision별 nullable Alt Text를 저장한다
-- **AND** Plain Text, HTML, Media ID 배열, Alt Text나 Sensitive Media를 두 번째 canonical 값으로 저장하지 않는다
+- **AND** persistence document의 Media node는 검증된 Media DB identity만 저장한다
+- **AND** 같은 transaction에서 Media가 nullable Alt Text를 저장하고 document root가 Sensitive Media를 저장한다
+- **AND** Plain Text, HTML 또는 Media ID 배열을 두 번째 canonical 값으로 저장하지 않는다
 
 #### Scenario: Media-only Post
 
@@ -319,8 +320,8 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 - **THEN** 시스템은 `UNLISTED`를 기본 공개 범위로 선택한다
 - **AND** 공개 설정 control은 현재 선택된 `UNLISTED` 라벨을 표시한다
 - **AND** 공개 설정 control은 현재 선택된 `UNLISTED`의 Lucide `MoonIcon` 아이콘을 표시한다
-- **AND** 공개 설정 control은 작성자 프로필 헤더가 아니라 본문 입력 영역 아래에 표시된다
-- **AND** 공개 설정 control은 제출 버튼과 같은 줄에 표시된다
+- **AND** 공개 설정 control과 외곽선 없는 본문 입력은 하나의 외곽선 editor surface 안에 표시된다
+- **AND** 공개 설정 control은 본문 입력 영역 앞에 표시된다
 
 #### Scenario: 공개 범위 변경
 
