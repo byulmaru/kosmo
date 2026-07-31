@@ -72,17 +72,16 @@ export function ReactionProfilesModal({
   return (
     <Modal
       accessibilityLabel={title}
+      accessibilityViewIsModal
       animationType="fade"
       onRequestClose={onClose}
+      role="dialog"
       transparent
       visible
     >
       <Pressable accessibilityLabel={`${title} 닫기`} onPress={onClose} style={styles.backdrop}>
         <Pressable
-          accessibilityLabel={title}
-          accessibilityViewIsModal
           onPress={(event) => event.stopPropagation()}
-          role="dialog"
           style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}
         >
           <ScrollView
