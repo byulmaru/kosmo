@@ -370,7 +370,7 @@ Reaction summary와 Profile modal의 Type이 각 Type에 현재 존재하는 최
 - 허용 Type add/delete, viewer-independent count, viewer-filtered Profile 목록, selector/summary, 자기 알림 억제, inbox/read/이동과 삭제 cleanup을 연결한 통합 흐름을 검증한다.
 - canonical 문서·OpenSpec delta·구현 정합성, archive diff와 archive 후 strict validation을 확인한다.
 
-- [ ] 12.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
-- [ ] 12.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
-- [ ] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
-- [ ] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+- [x] 12.1 모든 자식 이슈·PR·검증 완료와 Remaining Decisions 정리를 확인한다.
+- [x] 12.2 전체 Reaction 사용자·Notification lifecycle 통합 검증을 실행한다.
+- [x] 12.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
+- [x] 12.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
