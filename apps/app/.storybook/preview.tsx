@@ -12,6 +12,7 @@ import { RelayStoryProvider } from './mocks/react-relay';
 import type { Preview } from '@storybook/react-vite';
 
 sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
+sb.mock(import('../src/auth/webLogin.ts'), { spy: true });
 
 const preview: Preview = {
   decorators: [

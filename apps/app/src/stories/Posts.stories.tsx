@@ -7,6 +7,7 @@ import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storyboo
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
+import { startWebLogin } from '@/auth/webLogin';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
@@ -22,7 +23,7 @@ import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
 import {
   getCopiedStrings,
@@ -1300,36 +1301,28 @@ function ProductionPostActionSessionBoundaryStory({
   state: PostActionSessionState;
 }) {
   const data = usePostsStoryData();
-  const [guestResolutionCount, setGuestResolutionCount] = useState(0);
   const [profileResolutionCount, setProfileResolutionCount] = useState(0);
-  const sessionOverride =
-    state === 'guest'
-      ? ({ selectedProfileId: null, status: 'guest' } as const)
-      : state === 'profile'
-        ? ({ selectedProfileId: null, status: 'valid' } as const)
-        : ({ selectedProfileId: null, status: 'error' } as const);
+  const contents = (
+    <PostActionAuthenticationProvider>
+      <PostReplyCoordinatorProvider owner="list" profile={null}>
+        <View testID="production-session-action-post">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(data.posts, postId).listItem,
+              'session action boundary Post',
+            )}
+          />
+        </View>
+      </PostReplyCoordinatorProvider>
+      <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
+    </PostActionAuthenticationProvider>
+  );
 
   return (
     <ShellChromeProvider
       openProfileSwitcher={() => setProfileResolutionCount((count) => count + 1)}
     >
-      <PostActionAuthenticationProvider
-        onGuestResolution={() => setGuestResolutionCount((count) => count + 1)}
-        sessionOverride={sessionOverride}
-      >
-        <PostReplyCoordinatorProvider owner="list" profile={null}>
-          <View testID="production-session-action-post">
-            <PostListItem
-              post={requireFragment(
-                requirePostById(data.posts, postId).listItem,
-                'session action boundary Post',
-              )}
-            />
-          </View>
-        </PostReplyCoordinatorProvider>
-        <Text testID="guest-resolution-count">{guestResolutionCount}</Text>
-        <Text testID="profile-resolution-count">{profileResolutionCount}</Text>
-      </PostActionAuthenticationProvider>
+      {state === 'error' ? <SessionErrorProvider>{contents}</SessionErrorProvider> : contents}
     </ShellChromeProvider>
   );
 }
@@ -1913,38 +1906,64 @@ function ThreadNavigationCatalog() {
   );
 }
 
+const defaultStoryProfile = profile({ id: 'profile-story' });
+const defaultSession = shellQuery({
+  profiles: [defaultStoryProfile],
+  selectedProfile: defaultStoryProfile,
+});
+const postsStoryRelayData = {
+  alternateComposerProfile,
+  composerProfile,
+  contentPostsProfile,
+  currentSession: defaultSession.currentSession,
+  deletionHomeTimeline,
+  deletionProfile,
+  emptyPostsProfile,
+  homeTimeline,
+  me: defaultSession.me,
+  nodes: storyPosts.map(withReactionViewerState),
+};
+const guestPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: null,
+  me: null,
+};
+const profileResolutionSession = shellQuery({ selectedProfile: null });
+const profileResolutionPostActionRelayData = {
+  ...postsStoryRelayData,
+  currentSession: profileResolutionSession.currentSession,
+  me: profileResolutionSession.me,
+};
+const deletionOwnerSession = shellQuery();
+const deletionOwnerRelayData = {
+  ...postsStoryRelayData,
+  currentSession: deletionOwnerSession.currentSession,
+  me: deletionOwnerSession.me,
+};
+
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    mocked(startWebLogin).mockReset();
+    mocked(startWebLogin).mockImplementation(() => undefined);
     resetClipboardMock();
     resetImagePickerMock();
   },
   component: PostCatalog,
   decorators: [
     (Story) => (
-      <PostActionAuthenticationProvider
-        sessionOverride={{ selectedProfileId: 'profile-story', status: 'valid' }}
-      >
-        <PostReplyCoordinatorProvider owner="list" profile={null}>
-          <Story />
-        </PostReplyCoordinatorProvider>
-      </PostActionAuthenticationProvider>
+      <SessionProvider>
+        <PostActionAuthenticationProvider>
+          <PostReplyCoordinatorProvider owner="list" profile={null}>
+            <Story />
+          </PostReplyCoordinatorProvider>
+        </PostActionAuthenticationProvider>
+      </SessionProvider>
     ),
   ],
   parameters: {
     relay: {
-      data: {
-        alternateComposerProfile,
-        composerProfile,
-        contentPostsProfile,
-        currentSession: shellQuery().currentSession,
-        deletionHomeTimeline,
-        deletionProfile,
-        emptyPostsProfile,
-        homeTimeline,
-        me: shellQuery().me,
-        nodes: storyPosts.map(withReactionViewerState),
-      },
+      data: postsStoryRelayData,
       mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
     },
     router: { pathname: '/@kosmo/post-1' },
@@ -2249,7 +2268,10 @@ export const ProductionRepostQuoteListIntegration: Story = {
 
 export const ProductionPostDeletionListEdgeSafety: Story = {
   parameters: {
-    relay: { mutationResponse: { deletePost: { postId: shortPost.id } } },
+    relay: {
+      data: deletionOwnerRelayData,
+      mutationResponse: { deletePost: { postId: shortPost.id } },
+    },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -2549,9 +2571,7 @@ export const ProductionGuestActionResolution: Story = {
     expect(within(moreMenu).getAllByRole('menuitem')).toHaveLength(1);
     await userEvent.click(within(moreMenu).getByRole('menuitem', { name: '링크 복사' }));
 
-    await waitFor(() =>
-      expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('4'),
-    );
+    await waitFor(() => expect(mocked(startWebLogin)).toHaveBeenCalledTimes(4));
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
         `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
@@ -2562,6 +2582,7 @@ export const ProductionGuestActionResolution: Story = {
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
   },
+  parameters: { relay: { data: guestPostActionRelayData } },
   render: () => <ProductionPostActionSessionBoundaryStory state="guest" />,
 };
 
@@ -2578,11 +2599,12 @@ export const ProductionProfileActionResolution: Story = {
     await waitFor(() =>
       expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('4'),
     );
-    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
     expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
   },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
   render: () => <ProductionPostActionSessionBoundaryStory state="profile" />,
 };
 
@@ -2597,9 +2619,10 @@ export const ProductionFollowersRepostProfileResolution: Story = {
     await waitFor(() =>
       expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('1'),
     );
-    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
     expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull();
   },
+  parameters: { relay: { data: profileResolutionPostActionRelayData } },
   render: () => (
     <ProductionPostActionSessionBoundaryStory postId="detail-followers" state="profile" />
   ),
@@ -2614,7 +2637,7 @@ export const ProductionSessionErrorDisablesActions: Story = {
     expect(surface.getByRole('button', { name: /^재게시/ })).toBeDisabled();
     expect(surface.getByRole('button', { name: '반응' })).toBeDisabled();
     expect(surface.getByRole('button', { name: '북마크' })).toBeDisabled();
-    expect(canvas.getByTestId('guest-resolution-count')).toHaveTextContent('0');
+    expect(mocked(startWebLogin)).not.toHaveBeenCalled();
     expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
   },
   render: () => <ProductionPostActionSessionBoundaryStory state="error" />,
