@@ -87,6 +87,7 @@ export const KeyboardSubmissionTracksAnalytics: Story = {
   parameters: { router: { params: {}, pathname: '/search' } },
   play: async ({ canvasElement }) => {
     const input = within(canvasElement).getByRole('textbox', { name: '검색어' });
+    expect(getComputedStyle(input).fontSize).toBe('16px');
     await userEvent.type(input, '검색 원문{enter}');
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('search_submitted', {
