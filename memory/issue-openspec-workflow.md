@@ -342,13 +342,14 @@ OpenSpec만을 만들기 위한 Linear 이슈는 두지 않는다. 여러 PR이 
 검토·merge가 필요하더라도 별도 spec-only 이슈를 만들지 않고 실제 구현·검증 결과를 소유한 이슈들에 책임을
 배정한다. 특정 부모가 존재한다는 이유만으로 change 전체를 그 부모의 소유로 간주하지 않는다.
 
-OpenSpec Gate artifacts가 준비된 뒤 승인 요청을 작성하기 전에 primary agent는 반드시 Luna Max subagent를
-사용해 `proposal.md`, `specs/**/spec.md`의 requirements·scenarios, `design.md`, `decisions.md`,
+OpenSpec Gate artifacts가 준비된 뒤 승인 요청을 작성하기 전에 primary agent는 가능하면 경량 모델의 subagent를 활용해
+`proposal.md`, `specs/**/spec.md`의 requirements·scenarios, `design.md`, `decisions.md`,
 `tasks.md`, 포함·제외 범위, 각 항목의 authority/provenance, 각 decision의 `Active | Blocked | Superseded` 상태,
 이슈별 구현·검증·archive 책임, 이전 gate 승인과 달라진 점과 승인 후 다음 단계를 사용자가 검토할 수 있는
-한국어 설명으로 합성한다. primary agent는 Luna 설명을 증거로 검토·정정하고 누락·불일치·미결정을 해결하거나
-명시한 후에만 최종 승인을 요청한다. Luna 결과는 승인 자체를 대체하지 않는다. Luna Max를 사용할 수 없거나
-설명이 완료되지 않으면 이 필수 절차를 생략한 채 승인 요청을 제시하지 않고 blocker를 보고한다. 이 절차는
+한국어 설명으로 합성한다. subagent를 사용할 수 없으면 primary agent가 같은 범위를 직접 합성·검토한다. primary agent는
+설명을 증거로 검토·정정하고 누락·불일치·미결정을 해결하거나 명시한 후에만 최종 승인을 요청한다. subagent 결과는
+승인 자체를 대체하지 않으며, subagent의 가용성 자체는 blocker가 아니다. 설명이 불완전하고 primary agent가 보완하지
+못하면 필수 절차를 완료하지 못한 blocker와 미결정을 보고한다. 이 절차는
 기존 OpenSpec Gate의 source-of-truth, authority와 approval semantics를 변경하지 않는다.
 
 OpenSpec Gate 승인 요청은 requirement와 scenario, Active/Blocked/Superseded decision, 구현 이슈별 task
