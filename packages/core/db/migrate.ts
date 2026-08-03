@@ -1,11 +1,227 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
+import type { MigrationMeta } from 'drizzle-orm/migrator';
 
 // ASCII: "KOSM", "MIGR"
 export const migrationLock = [0x4b4f534d, 0x4d494752] as const;
+
+const migrationsSchema = 'drizzle';
+const migrationsTable = '__drizzle_migrations';
+
+type MigrationHistoryRow = {
+  id: number;
+  hash: string;
+  createdAt: unknown;
+  name: string | null;
+};
+
+type LegacyMigrationHistoryRow = Omit<MigrationHistoryRow, 'name'>;
+
+type MigrationClient = ReturnType<typeof postgres>;
+
+function migrationTableReference(sql: MigrationClient) {
+  return sql`${sql(migrationsSchema)}.${sql(migrationsTable)}`;
+}
+
+function asMigrationMillis(value: unknown): number | undefined {
+  let numberValue: number;
+
+  if (typeof value === 'number') {
+    numberValue = value;
+  } else if (typeof value === 'bigint') {
+    numberValue = Number(value);
+  } else {
+    if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+      return undefined;
+    }
+
+    numberValue = Number(value);
+  }
+
+  return Number.isSafeInteger(numberValue) ? Math.trunc(numberValue / 1000) * 1000 : undefined;
+}
+
+function matchLegacyHistory(
+  rows: LegacyMigrationHistoryRow[],
+  migrations: MigrationMeta[],
+): Map<number, MigrationMeta> {
+  const byMillis = new Map<number, MigrationMeta[]>();
+  const byHash = new Map<string, MigrationMeta>();
+
+  for (const migration of migrations) {
+    const candidates = byMillis.get(migration.folderMillis) ?? [];
+    candidates.push(migration);
+    byMillis.set(migration.folderMillis, candidates);
+    byHash.set(migration.hash, migration);
+  }
+
+  const matched = new Map<number, MigrationMeta>();
+
+  for (const row of rows) {
+    const createdAt = asMigrationMillis(row.createdAt);
+    const candidates = createdAt === undefined ? undefined : byMillis.get(createdAt);
+    const migration =
+      candidates?.length === 1
+        ? candidates[0]
+        : (candidates?.find((candidate) => candidate.hash === row.hash) ?? byHash.get(row.hash));
+
+    if (!migration) {
+      throw new Error(
+        `Database migration history row ${row.id} does not match a local migration by timestamp or hash.`,
+      );
+    }
+
+    matched.set(row.id, migration);
+  }
+
+  return matched;
+}
+
+async function ensureMigrationHistory(
+  sql: MigrationClient,
+  migrations: MigrationMeta[],
+): Promise<void> {
+  const table = migrationTableReference(sql);
+  const tableRows = await sql<{ exists: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = ${migrationsSchema}
+        AND table_name = ${migrationsTable}
+    ) AS exists
+  `;
+
+  if (!tableRows[0]?.exists) {
+    await sql`CREATE SCHEMA IF NOT EXISTS ${sql(migrationsSchema)}`;
+    await sql`
+      CREATE TABLE IF NOT EXISTS ${table} (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint,
+        name text,
+        applied_at timestamp with time zone DEFAULT now()
+      )
+    `;
+    return;
+  }
+
+  const columns = await sql<{ columnName: string }[]>`
+    SELECT column_name AS "columnName"
+    FROM information_schema.columns
+    WHERE table_schema = ${migrationsSchema}
+      AND table_name = ${migrationsTable}
+    ORDER BY ordinal_position
+  `;
+  const columnNames = new Set(columns.map(({ columnName }) => columnName));
+  const requiredColumns = ['id', 'hash', 'created_at'];
+  const missingColumns = requiredColumns.filter((column) => !columnNames.has(column));
+
+  if (missingColumns.length > 0) {
+    throw new Error(
+      `Unsupported ${migrationsSchema}.${migrationsTable} history shape; missing ${missingColumns.join(', ')}.`,
+    );
+  }
+
+  if (columnNames.has('name') && columnNames.has('applied_at')) {
+    return;
+  }
+
+  const legacyRows = await sql<LegacyMigrationHistoryRow[]>`
+    SELECT id, hash, created_at AS "createdAt"
+    FROM ${table}
+    ORDER BY id ASC
+  `;
+  const matched = matchLegacyHistory(legacyRows, migrations);
+
+  await sql.begin(async (transaction) => {
+    if (!columnNames.has('name')) {
+      await transaction`
+        ALTER TABLE ${table}
+        ADD COLUMN name text
+      `;
+    }
+
+    if (!columnNames.has('applied_at')) {
+      await transaction`
+        ALTER TABLE ${table}
+        ADD COLUMN applied_at timestamp with time zone DEFAULT now()
+      `;
+    }
+
+    for (const row of legacyRows) {
+      const migration = matched.get(row.id);
+      if (!migration) {
+        throw new Error(`Unable to backfill migration history row ${row.id}.`);
+      }
+
+      await transaction`
+        UPDATE ${table}
+        SET name = ${migration.name}, applied_at = NULL
+        WHERE id = ${row.id}
+      `;
+    }
+  });
+}
+
+async function readMigrationHistory(sql: MigrationClient): Promise<MigrationHistoryRow[]> {
+  const table = migrationTableReference(sql);
+
+  return sql<MigrationHistoryRow[]>`
+    SELECT id, hash, created_at AS "createdAt", name
+    FROM ${table}
+    ORDER BY id ASC
+  `;
+}
+
+function validateMigrationHistory(
+  history: MigrationHistoryRow[],
+  migrations: MigrationMeta[],
+): void {
+  if (history.length > migrations.length) {
+    throw new Error(
+      `Database migration history has ${history.length} rows, but only ${migrations.length} local migrations exist.`,
+    );
+  }
+
+  for (const [index, row] of history.entries()) {
+    const migration = migrations[index];
+
+    if (!migration) {
+      throw new Error(
+        `Database migration history row ${row.id} has no local migration at position ${index + 1}.`,
+      );
+    }
+
+    if (row.name !== migration.name) {
+      throw new Error(
+        `Database migration history order mismatch at row ${row.id}; expected ${migration.name}, found ${row.name ?? 'NULL'}.`,
+      );
+    }
+
+    if (row.hash !== migration.hash) {
+      throw new Error(
+        `Database migration history hash mismatch for ${migration.name}; refusing to execute new SQL.`,
+      );
+    }
+  }
+}
+
+async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta): Promise<void> {
+  const table = migrationTableReference(sql);
+
+  await sql.begin(async (transaction) => {
+    for (const statement of migration.sql) {
+      await transaction.unsafe(statement);
+    }
+
+    await transaction`
+      INSERT INTO ${table} (hash, created_at, name)
+      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})
+    `;
+  });
+}
 
 export async function runDatabaseMigrations({
   databaseUrl = process.env.DATABASE_URL,
@@ -53,7 +269,14 @@ export async function runDatabaseMigrations({
       await client`SET ROLE ${client(migrationRole)}`;
     }
 
-    await migrate(drizzle({ client }), { migrationsFolder });
+    const migrations = readMigrationFiles({ migrationsFolder });
+    await ensureMigrationHistory(client, migrations);
+    const history = await readMigrationHistory(client);
+    validateMigrationHistory(history, migrations);
+
+    for (const migration of migrations.slice(history.length)) {
+      await applyMigrationFile(client, migration);
+    }
   } finally {
     if (lockAcquired) {
       await client`

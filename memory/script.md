@@ -57,7 +57,7 @@
 ## Dev database migrations
 
 - dev 배포는 `Deploy Dev`가 `kosmo-dev` 애플리케이션을 full sync하고, dev 전용 Argo CD `PreSync` Job이 같은 `main` 런타임 이미지의 `migrate` entrypoint를 실행한 뒤 기존 API/web Rollout을 restart한다. sync나 migration이 실패하면 restart하지 않는다.
-- migration runner는 Drizzle history와 PostgreSQL advisory lock을 사용한다. `Deploy Dev` 실행도 취소하지 않고 직렬화하므로 동일 DB에 migration을 동시에 적용하지 않는다.
+- migration runner는 Drizzle history와 PostgreSQL advisory lock을 사용한다. local history prefix/name/hash를 먼저 검증하고 각 migration 파일의 SQL과 history insert를 독립 transaction으로 commit한다. 한 파일 실패 시 해당 파일은 rollback되고 앞서 성공한 파일은 유지되며, 재실행은 실패한 파일부터 이어간다. `Deploy Dev` 실행도 취소하지 않고 직렬화하므로 동일 DB에 migration을 동시에 적용하지 않는다.
 - dev migration은 기존 dev DB와 credential을 그대로 사용하고 데이터를 reset하지 않는다. dev downtime은 허용한다.
 - 로컬에서는 `pnpm --filter @kosmo/core db:migrate`로 같은 runner를 실행한다. 런타임 이미지에는 `drizzle/` migration 파일이 포함된다.
 - production의 immutable image, expand/contract, backup/rollback/approval gate와 배포 smoke는 PROD-269 후속 범위이며 dev 계약을 그대로 production에 적용하지 않는다.

@@ -86,8 +86,11 @@ Argo CD `PostSync` 성공만으로 이 gate를 대체하지 않는다. `PostSync
 
 ## Current Drizzle Runner Boundary
 
-현재 `migrate` command는 runtime image의 `drizzle/` 아래에서 Drizzle history에 없는 migration을 모두 읽어 한
-번에 적용한다. PostgreSQL advisory lock은 동시 runner를 막지만 migration phase를 선택하지 않는다.
+현재 `migrate` command는 runtime image의 `drizzle/` 아래에서 공개 Drizzle migration reader로 파일을
+version-control 순서대로 읽는다. `drizzle.__drizzle_migrations` history가 local migration의 유효한 prefix인지
+name·hash로 검증한 뒤, history에 없는 pending suffix를 파일마다 독립 transaction으로 적용한다.
+각 파일의 모든 statement와 history insert가 같은 transaction에 있으므로 파일 성공은 함께 commit되고 파일
+실패는 함께 rollback된다. PostgreSQL advisory lock은 동시 runner를 막지만 migration phase를 선택하지 않는다.
 Production은 별도 `kosmo_migration` login/credential로 연결한 뒤 `DATABASE_MIGRATION_ROLE=kosmo`에 따라
 database owner role로 전환해 migration을 실행한다. PostgreSQL role membership은 member가 owner의 기존
 객체를 변경할 수 있게 할 뿐 owner에게 member가 새로 만든 객체 권한을 역으로 주지 않으므로, 이 role 전환을
@@ -97,6 +100,8 @@ database owner role로 전환해 migration을 실행한다. PostgreSQL role memb
 
 - Drizzle history에 기록된 migration의 directory name이나 SQL을 수정, 이동 또는 재생성하지 않는다. 이미 적용된
   migration의 오류는 새 forward migration으로 수정한다.
+- 중간 파일이 실패해도 앞서 성공한 파일과 history는 유지한다. 실패한 파일 뒤의 파일은 실행하지 않으며, 원인을
+  수정한 새 release는 history의 다음 파일(실패한 파일)부터 재시도한다.
 - expand와 contract migration을 같은 transition image에 포함하지 않는다.
 - 아직 실행하면 안 되는 contract SQL을 미리 commit한 뒤 현재 runner가 알아서 건너뛸 것이라고 기대하지 않는다.
 - 단순한 breaking change는 phase-aware custom runner보다 PR/release 분리를 우선한다.
