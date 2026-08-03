@@ -133,4 +133,4 @@ PROD-594의 구현·문서·검증 결과가 하나의 리뷰 가능한 Web-only
 - 독립 구현 리뷰에서 승인 범위, 회귀 위험과 검증 공백을 확인한다.
 
 - [x] 5.1 OpenSpec strict validation과 관련 자동화·정적 검사를 통과시키고 실행하지 못한 runtime/platform 검증을 분리해 기록한다.
-- [ ] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.
+- [x] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.
