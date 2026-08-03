@@ -29,10 +29,10 @@
 - Account section에 Kosmo Account 데이터 loading·empty·save UI나 내부 Account route가 없는지 검증한다.
 - Relay actor/Profile 전환 뒤 이전 identity와 control data가 새 대상 아래에 표시되지 않는지 검증한다.
 
-- [ ] 1.1 단일 `설정` heading 아래 Byulmaru ID Account 외부 진입점/Kosmo Profile 내부 설정 section, 소유권 설명과 현재 Profile identity를 제공하는 공통 page shell을 구현한다.
-- [ ] 1.2 selected Profile이 없을 때 Account 외부 진입점을 유지하고 기존 Profile 선택·생성 flow로 연결하는 Profile empty state를 구현한다.
+- [x] 1.1 단일 `설정` heading 아래 Byulmaru ID Account 외부 진입점/Kosmo Profile 내부 설정 section, 소유권 설명과 현재 Profile identity를 제공하는 공통 page shell을 구현한다.
+- [x] 1.2 selected Profile이 없을 때 Account 외부 진입점을 유지하고 기존 Profile 선택·생성 flow로 연결하는 Profile empty state를 구현한다.
 - [ ] 1.3 route·Profile loading/error와 Account external navigation error slot이 소유 경계를 유지하고 독립적으로 재시도 가능한 상태를 구현한다.
-- [ ] 1.4 selected/no-profile, loading·error, 긴 Profile identity와 작은 화면 상태의 component test·Storybook catalog를 추가한다.
+- [x] 1.4 selected/no-profile, loading·error, 긴 Profile identity와 작은 화면 상태의 component test·Storybook catalog를 추가한다.
 
 ## 2. PROD-653 Account 외부 진입점과 Profile 내부 기능 통합
 
@@ -64,7 +64,7 @@ settings page의 올바른 section에 함께 배치되고 각 자식 결과의 �
 - Account external navigation error 또는 Profile loading/error/retry가 다른 정상 section과 page heading을
   숨기지 않는지 검증한다.
 
-- [ ] 2.1 PROD-645와 PROD-648의 최신 통합 surface, 완료 상태와 변경 댓글을 다시 확인하고 current branch의 통합 경계를 정렬한다.
+- [x] 2.1 PROD-645와 PROD-648의 최신 통합 surface, 완료 상태와 변경 댓글을 다시 확인하고 current branch의 통합 경계를 정렬한다.
 - [ ] 2.2 PROD-645의 Byulmaru ID Account 외부 진입점을 `계정 설정` section에 연결하고 Web HTTPS·Android/iOS 승인 external link flow와 이동 오류 경계를 보존한다.
 - [ ] 2.3 PROD-648 Profile 설정 결과를 현재 대상이 명시된 `프로필 설정` section에 연결하고 actor/Profile 데이터 격리를 보존한다.
 - [ ] 2.4 Account external navigation error/retry와 Profile loading·error·retry·성공 content가 같은 page에서 독립적으로 동작하는 통합 검증을 추가한다.
