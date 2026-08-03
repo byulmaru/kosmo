@@ -39,6 +39,7 @@ const preview: Preview = {
                 <RouterMockProvider
                   params={router.params}
                   pathname={router.pathname}
+                  segments={router.segments}
                   slotLabel={router.slotLabel}
                 >
                   <Suspense

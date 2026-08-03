@@ -1,10 +1,11 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter, useSegments } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostComposer } from '@/components/post/PostComposer';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -25,13 +26,19 @@ const ComposeQuery = graphql`
 `;
 
 export default function ComposeScreen() {
+  const pathname = usePathname();
+  const routeSegments = useSegments();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
+  const shellOwnsHeader =
+    getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
+    '글쓰기';
 
   return (
     <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
-      <PageHeader title="글쓰기" />
+      {shellOwnsHeader ? null : <PageHeader title="글쓰기" />}
       <View style={styles.content}>
         <RouteBoundary
           error={(retry) => (

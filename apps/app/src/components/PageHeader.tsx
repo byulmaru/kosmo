@@ -64,7 +64,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
   },
-  leading: { alignItems: 'center', flexDirection: 'row', zIndex: 1 },
+  leading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    marginRight: spacing.lg,
+    zIndex: 1,
+  },
   brandActionSlot: {
     alignItems: 'center',
     height: 44,
