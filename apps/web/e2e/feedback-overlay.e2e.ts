@@ -43,6 +43,27 @@ test('query overlay의 clean open, back, forward, fresh-load close와 direct fal
   await expect(page.getByRole('heading', { name: '피드백 보내기' })).toBeVisible();
 });
 
+test('동적 route parameter를 feedback query로 복제하지 않는다', async ({ context, page }) => {
+  const viewer = await createE2ESession({ handle: 'e2e-feedback-route' });
+  await setE2ESessionCookie(context, viewer.token);
+
+  const originalUrl = '/@e2e-feedback-route/followers?context=thread';
+  await page.goto(originalUrl);
+  const feedbackLink = page.getByRole('link', { name: '피드백 보내기' });
+  await expect(feedbackLink).toHaveAttribute(
+    'href',
+    '/@e2e-feedback-route/followers?context=thread&feedback=open',
+  );
+
+  await feedbackLink.click();
+  await expect(page).toHaveURL(/\/@e2e-feedback-route\/followers\?context=thread&feedback=open$/u);
+  await page.reload();
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: '피드백 닫기' }).click();
+  await expect(page).toHaveURL(/\/@e2e-feedback-route\/followers\?context=thread$/u);
+});
+
 test('dirty browser back은 query와 draft를 유지하고 폐기 확인 뒤에만 이동한다', async ({
   context,
   page,
@@ -73,6 +94,66 @@ test('dirty browser back은 query와 draft를 유지하고 폐기 확인 뒤에�
   await reopenedConfirm.getByRole('button', { name: '피드백 버리기' }).click();
   await expect(page).toHaveURL(/\/home$/u);
   await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
+});
+
+test('history index가 없어도 다단계 back을 복원하고 확인 뒤 같은 목적지로 이동한다', async ({
+  context,
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'navigation', { configurable: true, value: undefined });
+  });
+  const viewer = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, viewer.token);
+
+  await page.goto('/search');
+  await page.getByRole('link', { name: '홈' }).click();
+  await expect(page).toHaveURL(/\/home$/u);
+  await page.getByRole('link', { name: '피드백 보내기' }).click();
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
+  await body.fill('다단계 back에서도 남아야 하는 피드백');
+
+  await page.evaluate(() => history.go(-2));
+  const confirm = page.getByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' });
+  await expect(confirm).toBeVisible();
+  await expect(page).toHaveURL(/\/home\?feedback=open$/u);
+  await confirm.getByRole('button', { name: '계속 작성' }).click();
+  await expect(body).toHaveValue('다단계 back에서도 남아야 하는 피드백');
+
+  await page.evaluate(() => history.go(-2));
+  const reopenedConfirm = page.getByRole('alertdialog', {
+    name: '작성 중인 피드백을 버릴까요?',
+  });
+  await expect(reopenedConfirm).toBeVisible();
+  await reopenedConfirm.getByRole('button', { name: '피드백 버리기' }).click();
+  await expect(page).toHaveURL(/\/search$/u);
+  await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
+});
+
+test('폐기 직후 history forward로 다시 열어도 버린 draft를 복원하지 않는다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, viewer.token);
+
+  await page.goto('/home');
+  await page.getByRole('link', { name: '피드백 보내기' }).click();
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
+  await body.fill('폐기한 뒤 다시 보이면 안 되는 피드백');
+  await dialog.getByRole('button', { name: '피드백 닫기' }).click();
+  const confirm = page.getByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' });
+  await expect(confirm).toBeVisible();
+  await page.evaluate(() => {
+    window.addEventListener('popstate', () => history.forward(), { once: true });
+  });
+  await confirm.getByRole('button', { name: '피드백 버리기' }).click();
+
+  await expect(page).toHaveURL(/\/home\?feedback=open$/u);
+  await expect(dialog).toBeVisible();
+  await expect(body).toHaveValue('');
 });
 
 test('submitting browser back을 차단하고 성공 후 같은 overlay에서 연속 입력한다', async ({

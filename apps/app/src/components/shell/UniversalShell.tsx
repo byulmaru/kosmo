@@ -26,6 +26,7 @@ import {
   PrimaryNavigationScrollReset,
 } from './PrimaryNavigationScrollContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
+import { withoutDynamicRouteParams } from './routeSearchParams';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
@@ -141,10 +142,10 @@ function UniversalShellContent({ revision }: { revision: number }) {
       return;
     }
 
-    const remainingParams = { ...searchParams };
+    const remainingParams = withoutDynamicRouteParams(searchParams, routeSegments);
     delete remainingParams.feedback;
     router.replace({ pathname, params: remainingParams });
-  }, [feedbackOpenedFromFreshLoad, pathname, router, searchParams]);
+  }, [feedbackOpenedFromFreshLoad, pathname, routeSegments, router, searchParams]);
 
   const recordFeedbackHistoryOrigin = useCallback(() => {
     if (Platform.OS !== 'web') {

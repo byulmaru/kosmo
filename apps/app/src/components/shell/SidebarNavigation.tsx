@@ -1,4 +1,4 @@
-import { useGlobalSearchParams, usePathname } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useSegments } from 'expo-router';
 import {
   Bell,
   Bookmark,
@@ -16,6 +16,7 @@ import { radii, spacing } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { withoutDynamicRouteParams } from './routeSearchParams';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -81,13 +82,15 @@ export function SidebarNavigation({
   const theme = useTheme();
   const pathname = usePathname();
   const searchParams = useGlobalSearchParams();
+  const routeSegments = useSegments();
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const feedbackActive = pathname === '/feedback';
+  const queryParams = withoutDynamicRouteParams(searchParams, routeSegments);
   const feedbackHref: Href =
     Platform.OS === 'web' && !feedbackActive
-      ? { pathname, params: { ...searchParams, feedback: 'open' } }
+      ? { pathname, params: { ...queryParams, feedback: 'open' } }
       : '/feedback';
 
   const resolveItem = (item: NavigationItem) => {

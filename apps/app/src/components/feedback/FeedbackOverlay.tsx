@@ -38,6 +38,11 @@ type BrowserHistoryEntry = {
   index: number | null;
 };
 
+type FallbackHistoryRestore = {
+  overlayId: string;
+  steps: number;
+};
+
 export function FeedbackOverlay({
   closeUsesHistoryTraversal = false,
   fallbackFocusRef,
@@ -50,6 +55,7 @@ export function FeedbackOverlay({
   const { width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [formRevision, setFormRevision] = useState(0);
   const [historyRestorePending, setHistoryRestorePending] = useState(false);
   const [navigationAllowed, setNavigationAllowed] = useState(false);
   const allowedActionRef = useRef<CloseAction | null>(null);
@@ -57,6 +63,7 @@ export function FeedbackOverlay({
   const confirmRef = useRef<NativeView>(null);
   const bypassHistoryGuardRef = useRef(false);
   const bypassHistoryGuardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallbackHistoryRestoreRef = useRef<FallbackHistoryRestore | null>(null);
   const formStateRef = useRef(formState);
   const historyRestoringRef = useRef(false);
   const mainRef = useRef<NativeView>(null);
@@ -156,7 +163,10 @@ export function FeedbackOverlay({
       return;
     }
 
-    overlayHistoryEntryRef.current = getBrowserHistoryEntry();
+    const frame = requestAnimationFrame(() => {
+      overlayHistoryEntryRef.current = getBrowserHistoryEntry();
+    });
+    return () => cancelAnimationFrame(frame);
   }, [visible]);
 
   useEffect(() => {
@@ -171,6 +181,24 @@ export function FeedbackOverlay({
           clearTimeout(bypassHistoryGuardTimeoutRef.current);
           bypassHistoryGuardTimeoutRef.current = null;
         }
+        return;
+      }
+      const fallbackRestore = fallbackHistoryRestoreRef.current;
+      if (fallbackRestore) {
+        event.stopImmediatePropagation();
+        fallbackRestore.steps += 1;
+        if (getBrowserHistoryEntry().id !== fallbackRestore.overlayId) {
+          window.history.forward();
+          return;
+        }
+
+        fallbackHistoryRestoreRef.current = null;
+        historyRestoringRef.current = false;
+        setHistoryRestorePending(false);
+        requestCloseRef.current(() => {
+          armHistoryGuardBypass();
+          window.history.go(-fallbackRestore.steps);
+        });
         return;
       }
       if (historyRestoringRef.current) {
@@ -192,11 +220,17 @@ export function FeedbackOverlay({
       });
       historyRestoringRef.current = true;
       setHistoryRestorePending(true);
+      if (attemptedDelta === null && overlayEntry?.id) {
+        fallbackHistoryRestoreRef.current = { overlayId: overlayEntry.id, steps: 0 };
+        window.history.forward();
+        return;
+      }
+      const resolvedDelta = attemptedDelta ?? -1;
       requestCloseRef.current(() => {
         armHistoryGuardBypass();
-        window.history.go(attemptedDelta);
+        window.history.go(resolvedDelta);
       });
-      window.history.go(-attemptedDelta);
+      window.history.go(-resolvedDelta);
     };
 
     return registerFeedbackHistoryGuard(handlePopState);
@@ -223,6 +257,9 @@ export function FeedbackOverlay({
   const discardAndClose = useCallback(() => {
     const action = pendingCloseActionRef.current;
     if (action) {
+      formStateRef.current = initialFormState;
+      setFormState(initialFormState);
+      setFormRevision((current) => current + 1);
       allowClose(action);
     }
   }, [allowClose]);
@@ -358,7 +395,7 @@ export function FeedbackOverlay({
               style={[styles.scroll, mobile ? styles.mobileScroll : null]}
               testID="feedback-overlay-body"
             >
-              <FeedbackForm onStateChange={handleFormStateChange} />
+              <FeedbackForm key={formRevision} onStateChange={handleFormStateChange} />
             </ScrollView>
           </View>
           {discardConfirmOpen ? (
@@ -433,7 +470,7 @@ function getAttemptedHistoryDelta({
   }
 
   if (originHistoryId && destination.id !== originHistoryId) {
-    return 1;
+    return null;
   }
   return -1;
 }
