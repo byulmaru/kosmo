@@ -37,6 +37,7 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
+  onPostCommitError?: (error: unknown) => void | Promise<void>;
 };
 
 const loadProfileFollowParticipants = async (
@@ -89,6 +90,7 @@ const loadProfileFollowParticipants = async (
 export const followProfile = async ({
   followerProfileId,
   followeeProfileId,
+  onPostCommitError,
 }: ProfileFollowInput): Promise<{
   created: boolean;
   followeeProfile: ProfileRow;
@@ -177,7 +179,9 @@ export const followProfile = async ({
 
   if (result.created && result.result.kind === 'ESTABLISHED') {
     // Notification delivery is best-effort and must not change the committed Follow result.
-    await createFollowNotification(result.result.profileFollow.id).catch(() => undefined);
+    await createFollowNotification(result.result.profileFollow.id).catch(async (error) => {
+      await onPostCommitError?.(error);
+    });
   }
 
   if (result.created && result.result.kind === 'PENDING') {
@@ -206,6 +210,7 @@ export const followProfile = async ({
 export const unfollowProfile = async ({
   followerProfileId,
   followeeProfileId,
+  onPostCommitError,
 }: ProfileFollowInput): Promise<{
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
@@ -268,7 +273,9 @@ export const unfollowProfile = async ({
   if (result.profileFollowId) {
     // Notification cleanup is best-effort and must not change the committed Unfollow result.
     await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId).catch(
-      () => undefined,
+      async (error) => {
+        await onPostCommitError?.(error);
+      },
     );
   }
 

@@ -10,6 +10,11 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import {
+  observeInbound,
+  observeInboundNoop,
+  observeInboundRejected,
+} from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
@@ -139,11 +144,27 @@ export const handleInboundCreateNote = async ({
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
   if (note.id?.href !== objectUri) {
+    observeInboundRejected({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'validation',
+      reasonCode: 'note_identity_mismatch',
+    });
     return;
   }
 
   const attributionUri = uniqueHref(note.attributionIds);
   if (attributionUri !== actorUri) {
+    observeInboundRejected({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'validation',
+      reasonCode: 'note_attribution_mismatch',
+    });
     return;
   }
 
@@ -156,6 +177,14 @@ export const handleInboundCreateNote = async ({
         ? PostVisibility.FOLLOWERS
         : undefined;
   if (!visibility) {
+    observeInboundRejected({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'validation',
+      reasonCode: 'unsupported_note_visibility',
+    });
     return;
   }
 
@@ -166,6 +195,14 @@ export const handleInboundCreateNote = async ({
       followeeProfileId: storedActor.profile.id,
     }))
   ) {
+    observeInboundRejected({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'validation',
+      reasonCode: 'followers_visibility_without_follow',
+    });
     return;
   }
 
@@ -182,6 +219,14 @@ export const handleInboundCreateNote = async ({
     media = await projectRemoteNoteMedia(note);
   } catch (error) {
     if (error instanceof TypeError) {
+      observeInboundRejected({
+        activityType: 'Create',
+        actorOrigin: actorUri,
+        handler: 'create',
+        objectOrigin: objectUri,
+        phase: 'projection',
+        reasonCode: 'note_media_projection_rejected',
+      });
       return;
     }
     throw error;
@@ -190,6 +235,17 @@ export const handleInboundCreateNote = async ({
   const input = {
     document,
     media,
+    onPostCommitError: (error: unknown) =>
+      observeInbound({
+        activityType: 'Create',
+        actorOrigin: actorUri,
+        error,
+        handler: 'create',
+        objectOrigin: objectUri,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'reply_notification_effect_failed',
+      }),
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: storedActor.profile.id,
@@ -202,6 +258,14 @@ export const handleInboundCreateNote = async ({
     await createPost(replyParentId ? { ...input, replyParentId } : input);
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
+      observeInboundRejected({
+        activityType: 'Create',
+        actorOrigin: actorUri,
+        handler: 'create',
+        objectOrigin: objectUri,
+        phase: 'projection',
+        reasonCode: 'note_media_validation_rejected',
+      });
       return;
     }
     if (
@@ -214,6 +278,14 @@ export const handleInboundCreateNote = async ({
       throw error;
     }
 
+    observeInboundNoop({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'projection',
+      reasonCode: 'reply_parent_missing_fallback',
+    });
     await createPost(input);
   }
 };

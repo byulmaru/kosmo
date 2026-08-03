@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
+import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -27,11 +28,27 @@ export const handleInboundRejectFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
+    observeInboundRejected({
+      activityType: 'Reject',
+      actorOrigin: followerActorUri?.origin,
+      handler: 'reject',
+      objectOrigin: objectUri?.origin,
+      phase: 'protocol',
+      reasonCode: 'reject_follow_identity_mismatch',
+    });
     return;
   }
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
+    observeInboundNoop({
+      activityType: 'Reject',
+      actorOrigin: followerActorUri.origin,
+      handler: 'reject',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'reject_follower_profile_missing',
+    });
     return;
   }
 
@@ -69,6 +86,14 @@ export const handleInboundRejectFollow = async ({
       projection,
     )
   ) {
+    observeInboundNoop({
+      activityType: 'Reject',
+      actorOrigin: followerActorUri.origin,
+      handler: 'reject',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'reject_follow_projection_missing_or_mismatched',
+    });
     return;
   }
 

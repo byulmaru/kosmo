@@ -35,6 +35,7 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { eq, ne, sql } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -924,6 +925,11 @@ describe('inbound Create dispatch', () => {
     await db.execute(
       sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_reply_create_failure CHECK (false) NOT VALID`,
     );
+    const captures: { context: { tags: Record<string, string> }; error: unknown }[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: () => undefined,
+    });
 
     try {
       await handleInboundCreate(
@@ -935,6 +941,7 @@ describe('inbound Create dispatch', () => {
         receivedAt,
       );
     } finally {
+      restoreReporter();
       await db.execute(
         sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_reply_create_failure`,
       );
@@ -942,6 +949,9 @@ describe('inbound Create dispatch', () => {
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
     assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal(captures.length, 1);
+    assert.equal(captures[0]?.context.tags.reason_code, 'reply_notification_effect_failed');
+    assert.ok(captures[0]?.error instanceof Error);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {

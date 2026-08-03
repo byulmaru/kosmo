@@ -33,6 +33,25 @@ Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지
 
 - console, network, navigation과 UI breadcrumb
 
+### ActivityPub inbound 처리 실패
+
+Production Web BFF의 Fedify inbox listener가 처리한 inbound ActivityPub 실패는 전역 HTTP 오류 경계와
+별도의 공통 관측 경계를 따른다. `packages/fedify/src/inbound-accept.ts`, `inbound-announce.ts`,
+`inbound-create.ts`/`inbound-create-note.ts`, `inbound-delete.ts`, `inbound-follow.ts`,
+`inbound-reaction.ts`, `inbound-reject.ts`와 `inbound-update.ts`의 `suppressError`, 예상 오류 catch,
+projection 및 post-commit delivery 경계를 inventory로 유지한다. Listener 등록은
+`packages/fedify/src/federation.ts`에서 같은 경계를 통과한다.
+
+- malformed/foreign/mismatched activity의 보안·정책 거절과 멱등 no-op은 `activity_type`, `handler`,
+  `phase`, `outcome`, bounded `reason_code`를 가진 구조화 로그만 남긴다.
+- 원격 5xx, timeout, DNS/connection, 외부 document/actor lookup, protocol 비호환·해석 실패와 외부
+  delivery 실패는 구조화 로그만 남기며 Sentry event를 만들지 않는다.
+- Kosmo 내부 unexpected 오류와 내부 projection/post-commit/effect 실패는 기존 runtime reporter를 통해
+  Sentry로 한 번 capture한다. `activity_type`, `handler`, `phase`, `reason_code`만 tag/fingerprint로
+  사용하고 반복량 제어는 SDK/ingest quota에 맡긴다.
+- raw Activity JSON, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
+  URI는 필요한 경우 origin 수준 context로만 남기며 tag/fingerprint에는 넣지 않는다.
+
 Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 
 ## Build와 source map

@@ -11,6 +11,7 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -363,25 +364,23 @@ describe('inbound Accept and Reject', () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
     const context = createContext(localProfileId);
-    const errors: unknown[][] = [];
-    const originalConsoleError = console.error;
-    console.error = (...args) => errors.push(args);
+    const observations: { reasonCode: string }[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
     try {
       await handleInboundAccept(context, new Accept({ actor: remoteActorUri, object }));
       await handleInboundReject(context, new Reject({ actor: remoteActorUri, object }));
     } finally {
-      console.error = originalConsoleError;
+      restoreReporter();
     }
 
     assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
     assert.deepEqual(
-      errors.map(([message]) => message),
-      [
-        'Inbound ActivityPub Accept object could not be resolved as Follow',
-        'Inbound ActivityPub Reject object could not be resolved as Follow',
-      ],
+      observations.map(({ reasonCode }) => reasonCode),
+      ['accept_object_lookup_failed', 'reject_object_lookup_failed'],
     );
   });
 
