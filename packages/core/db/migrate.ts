@@ -1,14 +1,13 @@
-import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
+import drizzleConfig from '../drizzle.config';
 import type { MigrationMeta } from 'drizzle-orm/migrator';
 
 // ASCII: "KOSM", "MIGR"
 export const migrationLock = [0x4b4f534d, 0x4d494752] as const;
 
-const migrationsSchema = 'drizzle';
-const migrationsTable = '__drizzle_migrations';
+const { schema: migrationsSchema, table: migrationsTable } = drizzleConfig.migrations;
 
 type MigrationHistoryRow = {
   id: number;
@@ -231,8 +230,8 @@ async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta
     }
 
     await transaction`
-      INSERT INTO ${table} (hash, created_at, name)
-      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})
+      INSERT INTO ${table} (hash, created_at, name, applied_at)
+      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name}, now())
     `;
   });
 }
@@ -240,7 +239,7 @@ async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta
 export async function runDatabaseMigrations({
   databaseUrl = process.env.DATABASE_URL,
   migrationRole = process.env.DATABASE_MIGRATION_ROLE,
-  migrationsFolder = join(dirname(fileURLToPath(import.meta.url)), '../../../drizzle'),
+  migrationsFolder = drizzleConfig.out,
 }: {
   databaseUrl?: string;
   migrationRole?: string;

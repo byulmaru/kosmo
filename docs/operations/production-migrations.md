@@ -35,11 +35,15 @@ migrate
 
 Phase, schema authority, restore point, target LSN, workload compatibility 또는 rollback window는 이 Job의 value, annotation이나 command mode가 아니다.
 
-`migrate`는 release image의 Drizzle migration directory를 version-control 순서로 읽고,
-`drizzle.__drizzle_migrations`의 기존 history가 local migration의 유효한 prefix인지 name·hash로
+`migrate`는 release image의 `packages/core/drizzle.config.ts`가 지정한 Drizzle migration directory를
+version-control 순서로 읽고, config의 `migrations.schema`·`migrations.table`이 지정한 history(현재
+`drizzle.__drizzle_migrations`)가 local migration의 유효한 prefix인지 name·hash로
 검증한 뒤 pending suffix만 실행한다. 각 migration 파일의 statement와 해당 history insert는 같은 독립
 transaction에 넣는다. 따라서 파일 하나가 성공하면 schema와 history가 함께 commit되고, 실패하면 그 파일의
 변경만 함께 rollback된다. 앞에서 성공한 파일은 뒤 파일 실패로 되돌리지 않는다.
+
+`drizzle.config.ts`의 `dbCredentials`는 Drizzle Kit CLI 설정이다. Runtime `migrate`는 이를 connection source로
+사용하지 않고, injectable `DATABASE_URL` 또는 PostgreSQL environment와 `DATABASE_MIGRATION_ROLE`을 사용한다.
 
 ## Release 실행 순서
 

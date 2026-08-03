@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
+import drizzleConfig from '../drizzle.config';
 import { migrationLock, runDatabaseMigrations } from './migrate';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -545,6 +546,9 @@ test('name이 없는 partial history는 기존 applied_at을 보존하며 승격
       VALUES (${firstMigration.hash}, ${firstMigration.folderMillis + 123}, '2026-08-03T12:34:56Z')
     `;
 
+    const [{ startedAt }] = await control<{ startedAt: Date }[]>`
+      SELECT clock_timestamp() AS "startedAt"
+    `;
     await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
 
     const history = await control<{ name: string | null; appliedAt: Date | null; count: number }[]>`
@@ -557,6 +561,8 @@ test('name이 없는 partial history는 기존 applied_at을 보존하며 승격
       ['20260712000000_partial_applied_at_first', '20260712000001_partial_applied_at_second'],
     );
     assert.deepEqual(history[0]?.appliedAt, new Date('2026-08-03T12:34:56Z'));
+    assert.ok(history[1]?.appliedAt);
+    assert.ok(history[1].appliedAt.getTime() >= startedAt.getTime());
     assert.equal(history[0]?.count, 2);
     assert.equal(
       (
@@ -852,16 +858,18 @@ test('별도 로그인으로 연결해도 지정한 database owner role로 객�
 
 test('현재 마이그레이션 이력을 빈 데이터베이스에 적용한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
+  const configuredMigrations = readMigrationFiles({ migrationsFolder: drizzleConfig.out });
 
   try {
     await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
     await control.unsafe('CREATE SCHEMA public;');
 
+    assert.ok(configuredMigrations.length > 0);
     await runDatabaseMigrations({ databaseUrl });
     const [{ count: appliedCount }] = await control<
       { count: number }[]
     >`SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`;
-    assert.ok(appliedCount > 0);
+    assert.equal(appliedCount, configuredMigrations.length);
 
     await runDatabaseMigrations({ databaseUrl });
     const [{ count: reappliedCount }] = await control<

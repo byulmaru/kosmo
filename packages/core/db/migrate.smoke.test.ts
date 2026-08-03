@@ -5,6 +5,7 @@ import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
+import drizzleConfig from '../drizzle.config';
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -14,7 +15,7 @@ if (!databaseUrl) {
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = join(packageRoot, '../..');
-const migrationsRoot = join(repositoryRoot, 'drizzle');
+const migrationsRoot = drizzleConfig.out;
 const migrationCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
 const migrationNames = (await readdir(migrationsRoot, { withFileTypes: true }))
@@ -44,11 +45,12 @@ assert.equal(
 );
 
 const sql = postgres(databaseUrl, { max: 1 });
+const { schema: migrationsSchema, table: migrationsTable } = drizzleConfig.migrations;
 
 try {
   const history = await sql<{ name: string | null }[]>`
     SELECT name
-    FROM drizzle.__drizzle_migrations
+    FROM ${sql(migrationsSchema)}.${sql(migrationsTable)}
     ORDER BY id ASC
   `;
 
