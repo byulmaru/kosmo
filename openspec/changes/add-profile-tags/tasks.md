@@ -74,10 +74,10 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 - 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
-- [ ] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
+- [x] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
 - [ ] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 연결 뒤 Web `32×32 CSS px`·iOS `44×44 pt`·Android `48×48 dp` runtime 상태를 보강한다. Web 제거 action의 Tab focus·focus-visible 유지와 Enter/Space의 pointer·touch 결과 parity, iOS·Android 확장 target의 인접한 다른 TagChip 제거 action 비중첩 및 여러 줄 wrapping을 검증하는 최소 adjacent/wrapping fixture(인접한 두 TagChip과 wrapping으로 서로 다른 줄에 배치된 TagChip)를 보조로 포함한다. 실제 iOS·Android 기기 또는 시뮬레이터에서 같은 경계의 hit/touch target 비중첩을 관찰하고 플랫폼·viewport·입력 방식·결과 증거를 `PROD-527` PR에 기록한다. max count·순서 변경 control은 추가하지 않는다.
-- [ ] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
-- [ ] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
+- [x] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
+- [x] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
 - [ ] 2.5 Web·Android·iOS 공용 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거를 기록한다.
 
 ## 3. PROD-522 통합 검증과 OpenSpec archive
