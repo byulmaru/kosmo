@@ -11,11 +11,11 @@
 - 현재 Profile edit 제품 출시와 일반 수동 runtime QA 범위는 Web이다.
 - 공용 React Native 구현과 자동화 검증은 Web·Android·iOS가 같은 정보 구조와 저장 계약을 유지하도록 계속
   적용한다.
-- iOS·Android 실제 기기 QA는 원칙적으로 현재 Profile edit 제품 출시 완료 조건에서 제외하고 Native 출시
-  gate에서 별도로 수행한다. 단, 컴포넌트별 exact target 계약이 별도 이슈의 PR readiness 조건으로 승인된 경우에는
-  그 범위를 먼저 검증한다. `PROD-527`의 Profile Tag 제거 target은 iOS·Android simulator 또는 기기에서 인접·wrapping
-  비중첩을 관찰하기 전까지 해당 PR을 Ready로 전환하지 않는다. Web runtime 검증이나 공용 코드 자동화 결과를
-  Native runtime 완료 증거로 사용하지 않는다.
+- iOS·Android 실제 기기·simulator runtime QA는 현재 Profile edit 제품 출시 완료 조건과 `PROD-527` PR
+  readiness에서 제외하고 Native 출시 gate에서 별도로 수행한다. 공용 코드와 자동화가 플랫폼별 target 계약을
+  유지하더라도 이를 Native runtime 완료 증거로 사용하지 않는다.
+- Native 출시 전에는 iOS·Android 실제 환경에서 플랫폼별 target, 인접 action 비중첩, 여러 줄 wrapping과 접근성
+  동작을 다시 검증한다.
 
 ## 정보 구조와 필드
 

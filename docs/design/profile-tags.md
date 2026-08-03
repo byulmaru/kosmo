@@ -34,6 +34,12 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
   공유한다.
 - 제거 action은 시각 크기 `32×32`를 유지하고 실제 입력 target은 Web `32×32 CSS px`, iOS `44×44 pt`,
   Android `48×48 dp`로 제공한다. 공용 component는 시각 geometry와 platform별 입력 target을 분리한다.
+- 현재 Profile Tag 제품 출시와 runtime 검증 범위는 Web이다. iOS·Android 실제 기기·simulator QA는
+  `PROD-527` PR readiness와 구현 완료 조건에서 제외하고 Native 출시 gate로 미루되, 공용 구현의 플랫폼별
+  target mapping은 유지한다. 현재 자동화는 React Native Web의 Web target과 layout만 실행하므로 이를
+  iOS·Android target 또는 Native runtime 완료 증거로 사용하지 않는다.
+- Native 출시 전에는 iOS·Android 실제 환경에서 플랫폼별 target, 인접 action 비중첩, 여러 줄 wrapping과 접근성
+  동작을 다시 검증한다.
 - text action은 최소 높이 `36`의 compact rhythm을 사용한다.
 - 제거 같은 편집 action은 동작과 대상 Tag를 설명하는 accessibility label/state를 제공한다.
 - 색만으로 validation, 선택, disabled 상태를 구분하지 않는다.
