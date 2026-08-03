@@ -35,10 +35,10 @@ Post 목록과 상세가 같은 공용 renderer를 사용해 한 장의 기존 �
 
 - 새 screenshot harness, 광범위 snapshot, route별 중복 fixture, viewer·Composer·API·DB 테스트와 테스트 인프라 변경.
 
-- [ ] 1.1 개수별 gallery layout·crop·접근성 결정을 적용되는 `docs/design` canonical 문서에 기록한다.
-- [ ] 1.2 한 장의 기존 비율, 두 장의 token 공간을 제외한 정사각 tile geometry와 3·4장 구조·순서·surface 비율을 직접 검증하는 최소 회귀 테스트와 3장 Storybook 사례를 추가하고 기존 구현에서 실패함을 확인한다.
-- [ ] 1.3 승인된 개수별 surface와 tile 배치를 공용 Post Media presentation에 구현하되 한 장의 측정 비율 경로와 목록·상세 소비자 계약을 유지한다.
-- [ ] 1.4 targeted Post Media unit test와 Storybook 검증을 통과시키고 1·2·3·4장 visual geometry를 확인한다.
+- [x] 1.1 개수별 gallery layout·crop·접근성 결정을 적용되는 `docs/design` canonical 문서에 기록한다.
+- [x] 1.2 한 장의 기존 비율, 두 장의 token 공간을 제외한 정사각 tile geometry와 3·4장 구조·순서·surface 비율을 직접 검증하는 최소 회귀 테스트와 3장 Storybook 사례를 추가하고 기존 구현에서 실패함을 확인한다.
+- [x] 1.3 승인된 개수별 surface와 tile 배치를 공용 Post Media presentation에 구현하되 한 장의 측정 비율 경로와 목록·상세 소비자 계약을 유지한다.
+- [x] 1.4 targeted Post Media unit test와 Storybook 검증을 통과시키고 1·2·3·4장 visual geometry를 확인한다.
 
 ## 2. PROD-626 Sensitive·오류·상호작용 안정성
 
@@ -78,9 +78,9 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 
 - screen reader 자동화 harness, color-contrast debt 해소, 새 navigation mock, PROD-650 viewer interaction과 관련 없는 접근성 coverage 확대.
 
-- [ ] 2.1 Sensitive 공개 전후와 단일 tile loading·error·retry가 개수별 surface를 유지하고 정상 tile이 비상호작용이며 Reply Composer 부모 preview가 내부 control을 표시하지 않음을 검증하는 최소 회귀 테스트를 추가해 기존 구현에서 실패함을 확인한다.
-- [ ] 2.2 이미지·loading·error 표현이 다중 tile 경계를 채우고 Sensitive placeholder·gallery·visibility control이 승인된 높이와 기존 접근성 의미를 유지하도록 구현한다.
-- [ ] 2.3 targeted Post Media unit test와 Storybook a11y에서 상태 격리·control semantics·document 순서를 확인한다.
+- [x] 2.1 Sensitive 공개 전후와 단일 tile loading·error·retry가 개수별 surface를 유지하고 정상 tile이 비상호작용이며 Reply Composer 부모 preview가 내부 control을 표시하지 않음을 검증하는 최소 회귀 테스트를 추가해 기존 구현에서 실패함을 확인한다.
+- [x] 2.2 이미지·loading·error 표현이 다중 tile 경계를 채우고 Sensitive placeholder·gallery·visibility control이 승인된 높이와 기존 접근성 의미를 유지하도록 구현한다.
+- [x] 2.3 targeted Post Media unit test와 Storybook a11y에서 상태 격리·control semantics·document 순서를 확인한다.
 
 ## 3. PROD-626 통합 검증과 OpenSpec 완료
 
@@ -119,7 +119,14 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 
 - 저장소 전체 coverage 확대, e2e 인프라 추가, unrelated fixture·snapshot·interaction test.
 
-- [ ] 3.1 App type/Relay check, 관련 unit test, Storybook build/test, ESLint·Prettier와 strict OpenSpec validation을 통과시킨다.
-- [ ] 3.2 Web의 작은 viewport와 일반 Post 폭에서 목록·상세 layout, keyboard·pointer, Sensitive·retry와 중첩 navigation 부재를 관찰해 기록한다.
+- [x] 3.1 App type/Relay check, 관련 unit test, Storybook build/test, ESLint·Prettier와 strict OpenSpec validation을 통과시킨다.
+- [x] 3.2 Web의 작은 viewport와 일반 Post 폭에서 목록·상세 layout, keyboard·pointer, Sensitive·retry와 중첩 navigation 부재를 관찰해 기록한다.
 - [ ] 3.3 iOS·Android binary에서 개수별 layout, 화면 폭, touch·VoiceOver·TalkBack, Sensitive·retry를 관찰해 기록한다.
 - [ ] 3.4 모든 task와 필수 runtime 증거가 완료되면 delta spec과 canonical design 정합성을 확인하고 이 change를 archive한다. 미실행 platform이 있으면 해당 task와 archive를 완료 처리하지 않는다.
+
+### 2026-08-03 Web runtime 증거
+
+- Storybook `BodyTimeAndLayoutStates`를 390×844 Web viewport에서 관찰했다. 목록의 2장 tile은 각각 136×136, gallery는 282×138이었고 재시도 control은 실패 tile bounds 안에 남았다. 3장 gallery는 358×268.5, 4장 gallery는 358×358이었다.
+- 900×900 Web viewport의 일반 600px Post 폭에서 3장은 600×450, 4장은 600×600을 유지했고 정상 tile에 button·link가 추가되지 않았다.
+- Sensitive 공개·다시 가리기를 pointer로 실행했을 때 같은 control이 focus와 `expanded`를 유지했고 가림 상태에서 image가 없었다. Storybook play test의 keyboard `Enter` 경로도 같은 focus 보존을 통과했다.
+- 목록의 실패 tile 재시도 후 Storybook route가 바뀌지 않았고 재시도 control과 인접 정상 이미지가 유지되었다.

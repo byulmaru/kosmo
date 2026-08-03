@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostMediaImage } from './PostMediaImage';
+import type { ReactNode } from 'react';
 import type { PostMediaItem } from './PostMediaImage';
 
 export type { PostMediaItem } from './PostMediaImage';
@@ -39,47 +40,126 @@ export function PostMediaGallery({
     return null;
   }
 
-  if (sensitive) {
+  const multi = items.length > 1;
+  const isRevealed = interactive && revealed;
+  const gallery = (
+    <View
+      style={
+        multi
+          ? [styles.surface, surfaceGeometry(items.length), { borderColor: theme.border }]
+          : styles.root
+      }
+      testID="post-media-gallery"
+    >
+      {renderMediaSurface(items, (item, index) =>
+        multi ? (
+          <View
+            key={item.id}
+            style={tileStyle(items.length)}
+            testID={`post-media-tile-${items.length}-${index}`}
+          >
+            <PostMediaImage fill index={index} interactive={interactive} item={item} />
+          </View>
+        ) : (
+          <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
+        ),
+      )}
+    </View>
+  );
+
+  if (!sensitive) {
+    return gallery;
+  }
+
+  return (
+    <View style={styles.root}>
+      {interactive ? (
+        <MediaVisibilityButton
+          expanded={isRevealed}
+          key="media-visibility"
+          onPress={() => setRevealed((current) => !current)}
+        />
+      ) : null}
+      {isRevealed ? (
+        gallery
+      ) : (
+        <View
+          style={[
+            multi ? styles.surface : styles.sensitive,
+            multi ? surfaceGeometry(items.length) : styles.singleSensitive,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+          testID="post-media-sensitive"
+        >
+          {multi
+            ? renderMediaSurface(items, (item) => (
+                <View
+                  key={item.id}
+                  style={[tileStyle(items.length), { backgroundColor: theme.background }]}
+                  testID={`post-media-sensitive-tile-${item.id}`}
+                />
+              ))
+            : null}
+          <View style={styles.sensitiveContent}>
+            <Text style={[styles.sensitiveTitle, { color: theme.text }]}>민감한 이미지</Text>
+            <Text style={[styles.sensitiveDescription, { color: theme.textSecondary }]}>
+              작성자가 민감한 내용으로 표시했습니다.
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function renderMediaSurface(
+  items: ReadonlyArray<PostMediaItem>,
+  renderTile: (item: PostMediaItem, index: number) => ReactNode,
+): ReactNode {
+  if (items.length === 1) {
+    return renderTile(items[0]!, 0);
+  }
+
+  if (items.length === 2) {
     return (
-      <View
-        style={
-          revealed
-            ? styles.root
-            : [styles.sensitive, { backgroundColor: theme.surface, borderColor: theme.border }]
-        }
-        testID={revealed ? 'post-media-gallery' : 'post-media-sensitive'}
-      >
-        {revealed ? null : (
-          <Text style={[styles.sensitiveTitle, { color: theme.text }]}>민감한 이미지</Text>
-        )}
-        {revealed ? null : (
-          <Text style={[styles.sensitiveDescription, { color: theme.textSecondary }]}>
-            작성자가 민감한 내용으로 표시했습니다.
-          </Text>
-        )}
-        {interactive ? (
-          <MediaVisibilityButton
-            expanded={revealed}
-            key="media-visibility"
-            onPress={() => setRevealed((current) => !current)}
-          />
-        ) : null}
-        {revealed
-          ? items.map((item, index) => (
-              <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
-            ))
-          : null}
+      <View style={styles.twoTileRow} testID="post-media-row-2-0">
+        {items.map((item, index) => renderTile(item, index))}
+      </View>
+    );
+  }
+
+  if (items.length === 3) {
+    return (
+      <View style={styles.surfaceRow} testID="post-media-row-3-0">
+        {renderTile(items[0]!, 0)}
+        <View style={styles.surfaceColumn} testID="post-media-row-3-1">
+          {renderTile(items[1]!, 1)}
+          {renderTile(items[2]!, 2)}
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.root} testID="post-media-gallery">
-      {items.map((item, index) => (
-        <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
-      ))}
-    </View>
+    <>
+      <View style={styles.surfaceRow} testID="post-media-row-4-0">
+        {renderTile(items[0]!, 0)}
+        {renderTile(items[1]!, 1)}
+      </View>
+      <View style={styles.surfaceRow} testID="post-media-row-4-1">
+        {renderTile(items[2]!, 2)}
+        {renderTile(items[3]!, 3)}
+      </View>
+    </>
   );
+}
+
+function surfaceGeometry(count: number) {
+  return count === 2 ? null : { aspectRatio: count === 3 ? 4 / 3 : 1 };
+}
+
+function tileStyle(count: number) {
+  return count === 2 ? styles.squareTile : styles.tile;
 }
 
 function MediaVisibilityButton({
@@ -119,18 +199,32 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: spacing.lg,
   },
-  sensitiveTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  sensitiveDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
-  visibilityButton: {
+  sensitiveContent: {
     alignItems: 'center',
-    borderRadius: radii.full,
+    bottom: 0,
+    gap: spacing.xs,
     justifyContent: 'center',
-    marginTop: spacing.xs,
-    minHeight: 48,
-    minWidth: 120,
-    paddingHorizontal: spacing.lg,
+    left: 0,
+    padding: spacing.lg,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
-  visibilityButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  sensitiveDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  sensitiveTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
+  singleSensitive: { aspectRatio: 1, width: '100%' },
+  surface: {
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  surfaceColumn: { flex: 1, gap: spacing.sm, minHeight: 0 },
+  surfaceRow: { flex: 1, flexDirection: 'row', gap: spacing.sm, minHeight: 0 },
+  squareTile: { aspectRatio: 1, flex: 1, minWidth: 0, overflow: 'hidden' },
+  tile: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' },
+  twoTileRow: { flexDirection: 'row', gap: spacing.sm, width: '100%' },
   unavailable: {
     alignItems: 'center',
     borderRadius: radii.md,
@@ -141,4 +235,14 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   unavailableText: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  visibilityButton: {
+    alignItems: 'center',
+    borderRadius: radii.full,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    minHeight: 48,
+    minWidth: 120,
+    paddingHorizontal: spacing.lg,
+  },
+  visibilityButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
 });

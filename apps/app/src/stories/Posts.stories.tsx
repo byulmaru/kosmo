@@ -198,6 +198,26 @@ const mediaOnlyPost = post({
     },
   ],
 });
+const threeMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '세 장의 이미지입니다.' }] },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-three-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '세 장의 이미지입니다.',
+  id: 'media-three',
+  media: Array.from({ length: 3 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: `${index + 1}번째 3장 gallery 이미지`,
+    id: `media-three-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
 const fourMediaPost = post({
   bodyDocument: {
     type: 'doc',
@@ -607,6 +627,7 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  threeMediaPost,
   fourMediaPost,
   unavailableMediaPost,
   loadErrorMediaPost,
@@ -841,6 +862,14 @@ function PostCatalog(_args: PostsStoryArgs) {
             )}
           />
         </View>
+        <View testID="media-three">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, threeMediaPost.id).body,
+              'three-media post body',
+            )}
+          />
+        </View>
         <View testID="media-four">
           <PostBody
             post={requireFragment(
@@ -881,6 +910,14 @@ function PostCatalog(_args: PostsStoryArgs) {
             post={requireFragment(
               requirePostById(posts, mediaOnlyPost.id).listItem,
               'media-only post list item',
+            )}
+          />
+        </View>
+        <View testID="media-load-error-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, loadErrorMediaPost.id).listItem,
+              'load-error media post list item',
             )}
           />
         </View>
@@ -2105,6 +2142,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const BodyTimeAndLayoutStates: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-block', '');
@@ -2166,6 +2204,24 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
     expect(mediaOnly.getByRole('button', { name: '민감한 이미지 표시' })).toHaveFocus();
 
+    const threeMedia = within(canvas.getByTestId('media-three'));
+    expect(threeMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
+      '1번째 3장 gallery 이미지',
+      '2번째 3장 gallery 이미지',
+      '3번째 3장 gallery 이미지',
+    ]);
+    const threeGallery = threeMedia.getByTestId('post-media-gallery');
+    const [firstThreeTile, secondThreeTile, thirdThreeTile] = [0, 1, 2].map((index) =>
+      threeMedia.getByTestId(`post-media-tile-3-${index}`).getBoundingClientRect(),
+    );
+    expect(
+      threeGallery.getBoundingClientRect().width / threeGallery.getBoundingClientRect().height,
+    ).toBeCloseTo(4 / 3, 1);
+    expect(firstThreeTile!.height).toBeGreaterThan(secondThreeTile!.height);
+    expect(firstThreeTile!.left).toBeLessThan(secondThreeTile!.left);
+    expect(secondThreeTile!.left).toBeCloseTo(thirdThreeTile!.left, 0);
+    expect(secondThreeTile!.top).toBeLessThan(thirdThreeTile!.top);
+
     const fourMedia = within(canvas.getByTestId('media-four'));
     expect(fourMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
       '1번째 순서 이미지',
@@ -2173,6 +2229,21 @@ export const BodyTimeAndLayoutStates: Story = {
       '3번째 순서 이미지',
       '4번째 순서 이미지',
     ]);
+    const fourGallery = fourMedia.getByTestId('post-media-gallery');
+    const fourTiles = [0, 1, 2, 3].map((index) =>
+      fourMedia.getByTestId(`post-media-tile-4-${index}`).getBoundingClientRect(),
+    );
+    expect(
+      fourGallery.getBoundingClientRect().width / fourGallery.getBoundingClientRect().height,
+    ).toBeCloseTo(1, 1);
+    for (const tile of fourTiles.slice(1)) {
+      expect(tile.width).toBeCloseTo(fourTiles[0]!.width, 0);
+      expect(tile.height).toBeCloseTo(fourTiles[0]!.height, 0);
+    }
+    expect(fourTiles[0]!.top).toBeCloseTo(fourTiles[1]!.top, 0);
+    expect(fourTiles[0]!.left).toBeCloseTo(fourTiles[2]!.left, 0);
+    expect(fourTiles[0]!.left).toBeLessThan(fourTiles[1]!.left);
+    expect(fourTiles[0]!.top).toBeLessThan(fourTiles[2]!.top);
     expect(within(canvas.getByTestId('media-unavailable')).getByRole('alert')).toHaveTextContent(
       '이미지를 불러올 수 없습니다.',
     );
@@ -2186,6 +2257,28 @@ export const BodyTimeAndLayoutStates: Story = {
       loadErrorMedia.findByRole('button', { name: '실패 이미지 다시 시도' }),
     ).resolves.toBeVisible();
     expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    const loadErrorMediaList = within(canvas.getByTestId('media-load-error-list'));
+    const twoGalleryBounds = loadErrorMediaList
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    const twoTileBounds = [0, 1].map((index) =>
+      loadErrorMediaList.getByTestId(`post-media-tile-2-${index}`).getBoundingClientRect(),
+    );
+    for (const tile of twoTileBounds) {
+      expect(tile.width / tile.height).toBeCloseTo(1, 1);
+    }
+    expect(twoTileBounds[0]!.width).toBeCloseTo(twoTileBounds[1]!.width, 0);
+    expect(twoGalleryBounds.height).toBeCloseTo(twoTileBounds[0]!.height + 2, 0);
+    expect(twoGalleryBounds.width).toBeCloseTo(
+      twoTileBounds[0]!.width + twoTileBounds[1]!.width + 8 + 2,
+      0,
+    );
+    const compactRetryBounds = (
+      await loadErrorMediaList.findByRole('button', { name: '실패 이미지 다시 시도' })
+    ).getBoundingClientRect();
+    expect(compactRetryBounds.left).toBeGreaterThanOrEqual(twoTileBounds[0]!.left);
+    expect(compactRetryBounds.right).toBeLessThanOrEqual(twoTileBounds[0]!.right);
+    expect(compactRetryBounds.width).toBeLessThanOrEqual(twoTileBounds[0]!.width);
     expect(
       within(canvas.getByTestId('media-list')).getByTestId('post-media-image-media-story'),
     ).toBeVisible();

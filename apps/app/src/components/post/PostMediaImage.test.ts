@@ -38,7 +38,12 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let PostMediaImage: ComponentType<{ index: number; interactive?: boolean; item: PostMediaItem }>;
+let PostMediaImage: ComponentType<{
+  fill?: boolean;
+  index: number;
+  interactive?: boolean;
+  item: PostMediaItem;
+}>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
@@ -111,18 +116,36 @@ describe('PostMediaImage', () => {
     assert.ok(byTestId('post-media-error-landscape'));
     assert.equal(rendered('Pressable').length, 0);
   });
+
+  it('tile 경계에서는 measured aspect ratio 대신 frame을 채우고 fallback도 같은 경계를 채운다', async () => {
+    await render(0, media('landscape', '가로 이미지'), true, true);
+
+    const frameStyle = flattenStyle(byTestId('post-media-frame-landscape').props.style);
+    assert.equal(frameStyle.height, '100%');
+    assert.equal(frameStyle.aspectRatio, undefined);
+    assert.equal(flattenStyle(image('landscape').props.style).height, '100%');
+
+    await act(async () => image('landscape').props.onError());
+    const fallbackStyle = flattenStyle(byTestId('post-media-error-landscape').props.style);
+    assert.equal(fallbackStyle.height, '100%');
+    assert.equal(fallbackStyle.minHeight, 0);
+    const retryStyle = flattenPressableStyle(pressable('가로 이미지 다시 시도').props.style);
+    assert.equal(retryStyle.minHeight, 48);
+    assert.equal(retryStyle.minWidth, 0);
+    assert.equal(retryStyle.width, '100%');
+  });
 });
 
 function media(id: string, altText: string | null): PostMediaItem {
   return { altText, id, url: `https://media.example/${id}.webp` };
 }
 
-async function render(index: number, item: PostMediaItem, interactive = true) {
+async function render(index: number, item: PostMediaItem, interactive = true, fill = false) {
   await act(async () => {
     if (renderer) {
-      renderer.update(createElement(PostMediaImage, { index, interactive, item }));
+      renderer.update(createElement(PostMediaImage, { fill, index, interactive, item }));
     } else {
-      renderer = create(createElement(PostMediaImage, { index, interactive, item }));
+      renderer = create(createElement(PostMediaImage, { fill, index, interactive, item }));
     }
   });
   assert.ok(renderer);
@@ -155,4 +178,18 @@ function frameAspectRatio(id: string): number | undefined {
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.findByProps({ testID });
+}
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) {
+    return style.reduce<Record<string, unknown>>(
+      (result, value) => ({ ...result, ...flattenStyle(value) }),
+      {},
+    );
+  }
+  return (style ?? {}) as Record<string, unknown>;
+}
+
+function flattenPressableStyle(style: unknown): Record<string, unknown> {
+  return flattenStyle(typeof style === 'function' ? style({ pressed: false }) : style);
 }
