@@ -81,12 +81,14 @@ function createEnvironment({
     });
   }
 
+  const environmentRef: { current?: Environment } = {};
   const environment = new Environment({
     network: Network.create(() =>
-      Promise.resolve({ data: { createPost: pendingPayloads.get(environment) } }),
+      Promise.resolve({ data: { createPost: pendingPayloads.get(environmentRef.current!) } }),
     ),
     store: new Store(source),
   });
+  environmentRef.current = environment;
   return environment;
 }
 
