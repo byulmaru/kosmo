@@ -374,6 +374,7 @@
 - Alternatives Considered: PROD-432를 다시 활성화하는 방식은 구현자가 다른 완료 이력을 변경하므로 사용자 결정에 따라 채택하지 않았다. 별도 bugfix OpenSpec은 같은 행동 계약과 archive 생명주기를 중복하므로 채택하지 않았다. mock 검증만으로 issue를 닫는 방식은 실제 런타임 실패를 설명하지 못하므로 채택하지 않았다.
 - Consequences: proposal·design·tasks는 PROD-632의 후속 복구와 archive ownership만 추가한다. PROD-432의 완료된 구현 task와 PR 이력은 수정하지 않고, 기존 4.7 archive task를 PROD-632 task group으로 옮긴다.
 - Confirmation / Follow-up: PROD-632에서 실제 Clipboard adapter 실패를 재현하고 목록·상세, guest, canonical origin·direct Source, 성공·실패·menu dismiss·재시도를 Web과 지원 Native 플랫폼에서 검증한다. archive 전후 strict validation을 통과시킨다.
+- Implementation Evidence (2026-08-03): 현재 `expo-clipboard@56.0.4` Web adapter의 `setStringAsync`는 `navigator.clipboard.writeText` 실패 뒤 legacy `document.execCommand('copy')` 결과인 `false`를 반환할 수 있다. 기존 `PostMoreMenu`는 이 반환값을 무시해 실제 clipboard 실패를 성공처럼 처리했으므로, `false`를 한국어 실패 안내 경로로 전환하고 다음 More 선택으로 재시도할 수 있게 보강했다. Storybook mock은 이 Web adapter 결과를 재현한다. 실제 Expo Web 앱은 로컬 GraphQL backend `502`로 Post surface 진입이 막혔고, 현재 환경에는 Android device와 booted iOS simulator가 없어 지원 Native runtime 증거는 아직 없다.
 
 ## Remaining Decisions
 

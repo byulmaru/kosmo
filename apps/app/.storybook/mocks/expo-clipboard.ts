@@ -1,5 +1,5 @@
 const copiedStrings: string[] = [];
-let nextFailure: Error | null = null;
+let nextResult: boolean | null = null;
 
 export function getCopiedStrings(): readonly string[] {
   return copiedStrings;
@@ -7,18 +7,21 @@ export function getCopiedStrings(): readonly string[] {
 
 export function resetClipboardMock(): void {
   copiedStrings.length = 0;
-  nextFailure = null;
+  nextResult = null;
 }
 
-export function setNextClipboardFailure(error: Error): void {
-  nextFailure = error;
+export function setNextClipboardResult(result: boolean): void {
+  nextResult = result;
 }
 
-export async function setStringAsync(value: string): Promise<void> {
-  if (nextFailure) {
-    const error = nextFailure;
-    nextFailure = null;
-    throw error;
+export async function setStringAsync(value: string): Promise<boolean> {
+  if (nextResult !== null) {
+    const result = nextResult;
+    nextResult = null;
+    if (!result) {
+      return false;
+    }
   }
   copiedStrings.push(value);
+  return true;
 }

@@ -18,7 +18,10 @@ export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMe
   const copyReference = useCallback(async () => {
     try {
       const reference = createPostShareReference(getConfiguredWebOrigin(), relativeHandle, postId);
-      await Clipboard.setStringAsync(reference);
+      const copied = await Clipboard.setStringAsync(reference);
+      if (!copied) {
+        throw new Error('Clipboard did not confirm the copy.');
+      }
     } catch {
       showToast(copyFailureMessage);
     }
