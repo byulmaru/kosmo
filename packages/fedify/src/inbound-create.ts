@@ -42,8 +42,7 @@ export const handleInboundCreate = async (
       context,
       note: object,
       objectUri,
-      profileId: storedActor.profile.id,
-      canonicalFollowersUri: storedActor.actor.followersUri,
+      storedActor,
       receivedAt,
     });
   }

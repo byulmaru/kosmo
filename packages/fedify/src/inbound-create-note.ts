@@ -12,6 +12,11 @@ import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
+
+type StoredRemoteProfileActor = NonNullable<
+  Awaited<ReturnType<typeof findStoredRemoteProfileActorByUri>>
+>;
 
 const noNetworkDocumentLoader = async (): Promise<never> => {
   throw new TypeError('Remote attachment lookup is disabled');
@@ -123,16 +128,14 @@ export const handleInboundCreateNote = async ({
   context,
   note,
   objectUri,
-  profileId,
-  canonicalFollowersUri,
+  storedActor,
   receivedAt,
 }: {
   actorUri: string;
   context: InboxContext<void>;
   note: Note;
   objectUri: string;
-  profileId: string;
-  canonicalFollowersUri: string | null;
+  storedActor: StoredRemoteProfileActor;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
   if (note.id?.href !== objectUri) {
@@ -148,8 +151,8 @@ export const handleInboundCreateNote = async ({
     ? PostVisibility.PUBLIC
     : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
       ? PostVisibility.UNLISTED
-      : canonicalFollowersUri &&
-          [...note.toIds, ...note.ccIds].some((uri) => uri.href === canonicalFollowersUri)
+      : storedActor.actor.followersUri &&
+          [...note.toIds, ...note.ccIds].some((uri) => uri.href === storedActor.actor.followersUri)
         ? PostVisibility.FOLLOWERS
         : undefined;
   if (!visibility) {
@@ -160,7 +163,7 @@ export const handleInboundCreateNote = async ({
     visibility === PostVisibility.FOLLOWERS &&
     !(await hasEstablishedFollower({
       followerProfileId: context.recipient,
-      followeeProfileId: profileId,
+      followeeProfileId: storedActor.profile.id,
     }))
   ) {
     return;
@@ -189,7 +192,7 @@ export const handleInboundCreateNote = async ({
     media,
     objectUri,
     origin: 'ACTIVITYPUB',
-    profileId,
+    profileId: storedActor.profile.id,
     publishedAt: note.published,
     receivedAt,
     visibility,
