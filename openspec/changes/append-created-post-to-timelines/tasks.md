@@ -12,24 +12,26 @@
 
 **Deliverable**
 
-`createPost` 성공 payload가 생성 Post와 함께 현재 selected Profile 관점에서 서버가 Home·작성자 Profile Post List 후보로 판정한 surface의 canonical connection edge를 제공한다.
+`createPost` 성공 payload가 같은 transaction에서 반환한 validated committed Post에서 Home·작성자 Profile canonical connection edge를 투영한다. Home edge는 항상 존재하고 Profile edge는 Reply Parent가 없을 때만 존재한다.
 
 **Guardrails**
 
 - 기존 `CreatePostPayload.post`, Post 작성 transaction, 인증·membership·Media 검증과 공개 범위를 유지한다.
-- Home·Profile edge는 기존 Post List 후보·Visibility·Eligibility·Control Decision과 Post ID cursor를 재사용한다.
-- surface가 후보가 아니거나 Control Decision이 `Exclude`이면 해당 nullable edge를 반환하지 않는다.
+- Home edge는 action이 반환한 Original·Quote·Reply·Reply+Quote를 포함한 모든 성공 결과에 반환한다.
+- Profile edge는 committed `post.replyParentId == null`일 때만 반환하고, Reply에는 `null`을 반환한다.
+- edge projection은 post-commit Post List 후보·Visibility·Eligibility·Control Decision DB read를 수행하지 않는다.
+- 서버 authority와 기존 Post 작성 transaction·검증 결과를 유지하며, Reply Parent가 있는 Post는 Quote 여부와 관계없이 Profile edge를 반환하지 않는다.
 - DB schema/migration과 Post List 정렬 정책을 변경하지 않는다.
 
 **Verification**
 
 - GraphQL schema가 기존 `post`와 additive nullable Home·Profile Post edge를 노출하는지 검증한다.
-- Original, Reply, server-excluded surface, Remote selected Profile에서 edge nullability·Post Node identity·cursor가 Home/Profile query 정책과 일치하는지 resolver 테스트로 검증한다.
+- 현재 resolver 테스트는 Original, Reply, Remote selected Profile에서 edge nullability·Post Node identity·cursor와 committed invariant projection을 검증한다. Quote·Reply+Quote에는 같은 `replyParentId` invariant가 조건부로 적용되며 해당 runtime fixture가 있다고 주장하지 않는다. post-commit DB read failure surface는 추가하지 않는다.
 - 기존 본문·Media·인증·transaction createPost 테스트가 통과하는지 확인한다.
 
-- [x] 1.1 createPost 성공 결과가 현재 selected Profile 기준 Home·Profile Post List Policy를 재사용해 surface별 nullable edge를 제공하게 한다.
+- [x] 1.1 createPost 성공 결과가 validated committed Post에서 Home edge를 항상, `replyParentId == null`일 때 Profile edge를 투영하게 한다.
 - [x] 1.2 기존 Post payload와 동일 Node identity·server cursor를 가진 additive edge GraphQL 계약을 노출하고 schema snapshot을 동기화한다.
-- [x] 1.3 성공·nullable surface·Reply·Remote selected Profile·오류 경계의 API schema/resolver 회귀 테스트를 추가해 통과시킨다.
+- [x] 1.3 성공·Original·Reply·Remote selected Profile·오류 경계의 API schema/resolver 회귀 테스트를 추가해 통과시키고, post-commit 정책 DB read가 없음을 구현 diff로 확인한다. Quote·Reply+Quote는 동일 `replyParentId` invariant의 조건부 mapping으로만 확인한다.
 
 ## 2. PROD-641 Current actor Relay connection synchronization
 

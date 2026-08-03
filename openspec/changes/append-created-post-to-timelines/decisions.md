@@ -1,20 +1,20 @@
 ## Context
 
-이 기록은 PROD-641의 createPost 호출자 로컬 즉시 반영 범위, canonical Post 구조와 Post List Policy, selected Profile actor Store 경계, 그리고 현재 API·Relay 제약을 반영한다. 구현 전에는 아래 Authority / Provenance를 OpenSpec과 독립적으로 다시 확인한다.
+이 기록은 PROD-641의 createPost 호출자 로컬 즉시 반영 범위, createPost가 도달 가능한 Post 구조와 selected Profile actor Store 경계, 그리고 현재 API·Relay 제약을 반영한다. 구현 전에는 아래 Authority / Provenance를 OpenSpec과 독립적으로 다시 확인한다.
 
 ## Decision Records
 
-### 서버가 Home·Profile surface membership을 판정한다
+### createPost는 검증된 committed Post에서 Home·Profile edge를 투영한다
 
 - Decision Date: 2026-08-03
-- Decision Class: Derived Contract
+- Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, PROD-641
 - Status: Active
-- Context / Problem: Home은 viewer가 작성한 Reply를 포함하지만 Profile은 Reply Parent가 있는 Post를 제외하고, Visibility·Eligibility·Control Decision도 surface membership에 영향을 준다. 클라이언트가 관계 shape 일부만 보고 membership을 합성하면 server query와 불일치할 수 있다.
-- Decision Outcome: createPost 성공 결과의 Home·작성자 Profile edge 존재 여부는 현재 selected Profile을 viewer로 사용한 기존 Post List 후보·제어 정책에서 서버가 판정한다. 클라이언트는 nullable edge의 존재만 소비하고 정책을 재계산하지 않는다.
-- Alternatives Considered: 클라이언트가 Original·Reply·Quote·Visibility·mute/block을 모두 판정하는 방식은 canonical 정책을 복제한다. 모든 생성 Post를 두 목록에 넣는 방식은 Profile Reply 제외와 Control Decision을 위반한다.
-- Consequences: mutation payload projection과 Home/Profile query가 같은 policy predicate에 수렴해야 한다. payload edge가 `null`이면 클라이언트는 해당 surface를 변경하지 않는다.
-- Confirmation / Follow-up: 동일 fixture로 Home/Profile query membership과 createPost payload edge nullability를 함께 검증한다.
+- Context / Problem: 현재 GraphQL `createPost` input이 도달시키는 Post 형태는 Original·Reply다. PROD-641의 조건부 surface rule은 committed Post의 relation shape를 기준으로 하므로, 이 action이 Quote 또는 Reply+Quote shape를 반환하는 경우에도 Home은 Home 후보 Reply를 포함하고 Profile은 Reply Parent가 있는 모든 Post를 제외한다. mutation 뒤 다시 Post List 정책을 DB 조회하면 이미 검증한 결과를 재평가하고 성공 경로에 불필요한 읽기 실패 표면을 만든다.
+- Decision Outcome: `createPost` 성공 payload는 transaction이 반환한 canonical Post에서 Home edge를 항상 `{ cursor: post.id, node: post }`로 투영한다. Profile edge는 committed `post.replyParentId == null`일 때만 같은 shape로 투영하고, 그 밖에는 nullable `null`을 반환한다. 이 투영은 post-commit 정책 DB read를 수행하지 않는다. 서버는 committed Post invariant와 payload shape의 authority를 보유하며 클라이언트는 nullable edge의 존재만 소비하고 정책을 재계산하지 않는다.
+- Alternatives Considered: mutation 뒤 Home/Profile 후보·Visibility·Control predicate를 다시 조회하는 방식은 createPost의 검증된 committed 결과를 재평가하고 읽기 실패를 성공 후 오류로 바꾼다. 클라이언트가 Original·Quote·Reply·Reply+Quote의 관계를 판정하거나 cursor를 합성하는 방식은 서버 authority와 canonical identity를 복제한다.
+- Consequences: Home/Profile query는 조회 시점의 Post List Policy를 계속 적용하지만 mutation payload는 별도 policy projection 없이 committed invariant를 반환한다. payload edge가 `null`이면 클라이언트는 해당 surface를 변경하지 않는다. Reply Parent가 있는 Post는 Quote 여부와 관계없이 Profile edge가 `null`이다.
+- Confirmation / Follow-up: 현재 API resolver/schema와 integration fixture에서 Original·Reply·Remote selected Profile의 Post/cursor identity, Reply Parent가 있는 Post의 Profile `null`, post-commit DB read 부재를 검증한다. Quote·Reply+Quote는 같은 `replyParentId` invariant에 따른 조건부 mapping으로 확인하며 해당 fixture가 있다고 주장하지 않는다.
 
 ### CreatePostPayload에 surface별 nullable Post edge를 추가한다
 
@@ -22,10 +22,10 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, PROD-641
 - Status: Active
-- Context / Problem: 기존 `CreatePostPayload.post`만으로는 connection cursor와 server-derived surface membership을 표현할 수 없다. client-only edge를 만들면 pagination cursor와 정책을 추측하게 된다.
+- Context / Problem: 기존 `CreatePostPayload.post`만으로는 connection cursor와 서버가 결정한 surface 결과를 표현할 수 없다. client-only edge를 만들면 pagination cursor와 membership을 추측하게 된다.
 - Decision Outcome: 기존 `post` field를 유지하면서 additive nullable `homeTimelineEdge`와 `profilePostsEdge`를 같은 `PostConnection` edge type으로 제공한다. 각 edge는 생성 Post의 canonical Node identity와 해당 server connection의 Post ID cursor를 재사용한다.
 - Alternatives Considered: 하나의 edge와 membership enum/list는 Relay operation에서 surface별 edge를 독립 선택·정규화하기 어렵다. boolean eligibility와 client-created edge는 cursor를 클라이언트에 맡긴다. mutation 성공 후 Home/Profile refetch는 제외 범위인 광범위한 재조회와 latency를 추가한다.
-- Consequences: API schema snapshot과 Relay source operation이 additive하게 바뀐다. 구버전 client는 새 field를 선택하지 않아 계속 동작한다.
+- Consequences: API schema snapshot과 Relay source operation이 additive하게 바뀐다. 구버전 client는 새 field를 선택하지 않아 계속 동작한다. 두 field는 nullable이므로 Reply의 Profile 부재를 명시할 수 있다.
 - Confirmation / Follow-up: schema test에서 field type/nullability를, resolver test에서 node/cursor identity와 surface 판정을 검증한다.
 
 ### 요청 actor의 managed connection에 ordered deduplicating updater를 사용한다

@@ -1,5 +1,5 @@
 import { ConnectionHandler } from 'relay-runtime';
-import type { RecordProxy, RecordSourceProxy, RecordSourceSelectorProxy } from 'relay-runtime';
+import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
 
 export const homeTimelineConnectionKey = 'PostList_homeTimeline';
 export const profilePostsConnectionKey = 'PostList_profile_posts';
@@ -37,22 +37,8 @@ function prependEdgeIfMissing(
 export function updateCreatedPostConnections(
   store: RecordSourceSelectorProxy,
   profileId: string,
-): void;
-export function updateCreatedPostConnections(
-  store: RecordSourceProxy,
-  profileId: string,
-  mutationPayload: RecordProxy | null,
-): void;
-export function updateCreatedPostConnections(
-  store: RecordSourceProxy,
-  profileId: string,
-  mutationPayload?: RecordProxy | null,
-) {
-  const payload =
-    mutationPayload ??
-    ('getRootField' in store
-      ? (store as RecordSourceSelectorProxy).getRootField('createPost')
-      : null);
+): void {
+  const payload = store.getRootField('createPost');
   if (!payload) {
     return;
   }

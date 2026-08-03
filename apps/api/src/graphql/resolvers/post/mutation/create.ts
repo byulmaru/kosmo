@@ -1,14 +1,10 @@
-import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
-import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Media } from '../../media/ref';
-import { postAccessWhere } from '../access';
-import { homePostListCandidateWhere, profilePostListCandidateWhere } from '../list-policy';
 import { Post, PostConnectionEdge } from '../ref';
 
 const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
@@ -17,27 +13,6 @@ const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
     mediaId: t.globalID({ for: Media }),
   }),
 });
-
-const postListEdge = async ({
-  candidateWhere,
-  ctx,
-  post,
-}: {
-  candidateWhere: ReturnType<typeof and>;
-  ctx: Parameters<typeof postAccessWhere>[0]['ctx'];
-  post: typeof Posts.$inferSelect;
-}) => {
-  const candidate = await db
-    .select({ id: Posts.id })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(eq(Posts.id, post.id), candidateWhere, postAccessWhere({ ctx })))
-    .limit(1)
-    .then(first);
-
-  return candidate ? { cursor: candidate.id, node: post } : null;
-};
 
 builder.mutationField('createPost', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
@@ -93,20 +68,11 @@ builder.mutationField('createPost', (t) =>
         visibility: input.visibility,
       });
 
-      const [homeTimelineEdge, profilePostsEdge] = await Promise.all([
-        postListEdge({
-          candidateWhere: homePostListCandidateWhere(ctx.session.profileId),
-          ctx,
-          post,
-        }),
-        postListEdge({
-          candidateWhere: profilePostListCandidateWhere(ctx.session.profileId),
-          ctx,
-          post,
-        }),
-      ]);
-
-      return { homeTimelineEdge, post, profilePostsEdge };
+      return {
+        homeTimelineEdge: { cursor: post.id, node: post },
+        post,
+        profilePostsEdge: post.replyParentId == null ? { cursor: post.id, node: post } : null,
+      };
     },
   }),
 );
