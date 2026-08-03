@@ -174,10 +174,29 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 | Followers Only     | Author followers collection | 없음                        | Author 또는 established Follower의 signed fetch만 허용 |
 | Mentioned Profiles | 지원하지 않음               | 지원하지 않음               | 제공하지 않음                                          |
 
-- 수신 `Create(Note)`는 Note의 `to`·`cc`에 있는 Public marker 위치로 Public과 Unlisted Visibility를 구분한다.
-  지원되는 공개 audience가 없거나 addressing이 모호하면 Post Visibility를 정확히 결정할 수 없으므로 Note를
-  materialize하지 않는다. 이는 송신 actor의 권한을 증명하기 위한 검사가 아니라 저장할 Post Visibility를 결정하는
-  필수 입력 검증이다.
+- 수신 `Create(Note)`는 Note의 `to`·`cc`에서 인식 가능한 audience marker를 다음 우선순위로 분류한다. `to`에
+  ActivityStreams Public이 있으면 Public, `to`에는 없고 `cc`에 Public이 있으면 Unlisted, 둘 다 없고 검증된
+  remote author의 canonical followers URI가 `to` 또는 `cc`에 있으면 Followers Only다. Public/Unlisted는
+  canonical followers URI의 존재를 요구하지 않으며, 이 분류는 Note가 personal/shared inbox로 전달된 경로와
+  독립적이다.
+- 인식된 marker가 있으면 그 밖의 구문상 유효하게 파싱된 actor/collection URI(공식 ActivityPub/Mastodon
+  addressing으로 추가된 Mention addressee 포함), URI의 순서·중복과 foreign/unknown/spoofed-looking followers URI는
+  audience를 바꾸거나 Note 전체를 무효화하지 않는다. author canonical followers URI가 있는 경우 foreign
+  collection을 분류하려고 network dereference하거나 `/followers` 경로 휴리스틱을 사용하지 않고 추가 addressee로
+  무시한다. raw malformed audience syntax는 기존 ActivityPub vocabulary hydration과 top-level Note 기본 검증에서
+  처리하며, 이 무시 규칙은 구문상 유효하게 파싱된 extra IRI에만 적용한다.
+- Public marker와 author canonical followers marker가 모두 없으면 actor-only DIRECT/limited audience와 foreign
+  followers-looking URI만 있는 audience는 지원하지 않으며 Post side effect 없이 건너뛴다. 이런 추가 actor URI와
+  spoofed-looking URI 자체로 Mentioned Profile 관계, Notification, DIRECT/limited recipient authorization 또는
+  viewer access를 만들지 않는다. body/tag Mention 보존과 파싱은 이 수신 계약에 포함하지 않는다.
+- actor·object·attribution과 top-level Note의 기본 검증은 여전히 materialization 전에 통과해야 한다. 이 검증은
+  audience marker가 인식된 Note의 추가 actor URI를 근거 없이 거부하기 위한 검사가 아니라 저장할 Post Visibility와
+  local 수신 관련성을 결정하기 위한 경계다.
+- Followers Only Note의 inbound local 수신 대상은 Active local Profile·Active local Instance에 연결된 follower와
+  remote followee 사이의 현재 established Follow Relationship으로 확인한다. pending·rejected Follow Request,
+  unfollow로 removed된 관계 또는 follower Profile/Instance가 inbound eligibility를 통과하지 못하면 수신 대상이
+  아니다. GraphQL 조회는 기존 viewer→author established 관계와 Post/Author Profile·Instance eligibility 정책을
+  사용하며, 이 inbound local 조건을 일반 viewer locality 조건으로 확장하지 않는다.
 - 수신 `Delete(Note)`는 저장된 ActivityPub Post mapping의 정확한 object URI와 Author Profile에 연결된
   ActivityPub Actor URI가 모두 일치할 때만 기존 Post 삭제 행동으로 해당 remote Post를 Tombstone 전이한다.
   mapping의 Post는 Current Content가 있는 Note 구조여야 하며, Content 없는 Repost의 Announce mapping은

@@ -3030,6 +3030,121 @@ describe('GraphQL remote profile boundary', () => {
     assertRemotePostReadDenied(await read(), nodeIds.length, true);
   });
 
+  test('enforces Followers Only access for Node, Profile posts, and Home timeline', async () => {
+    const author = await createAuthenticatedSession();
+    const acceptedViewer = await createAuthenticatedSession();
+    const nonFollower = await createAuthenticatedSession();
+    const pendingViewer = await createAuthenticatedSession();
+    const rejectedViewer = await createAuthenticatedSession();
+    const reverseViewer = await createAuthenticatedSession();
+    const post = await createContentfulPost({
+      profileId: author.profile.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const postId = globalId('Post', post.id);
+    assert.ok(post.currentContentId);
+    const contentId = globalId('PostContent', post.currentContentId);
+    const profileId = globalId('Profile', author.profile.id);
+
+    await db.insert(ProfileFollows).values({
+      followerProfileId: acceptedViewer.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+    await db.insert(ProfileFollowRequests).values({
+      followerProfileId: pendingViewer.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+    const rejectedRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        followerProfileId: rejectedViewer.profile.id,
+        followeeProfileId: author.profile.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.delete(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, rejectedRequest.id));
+    await db.insert(ProfileFollows).values({
+      followerProfileId: author.profile.id,
+      followeeProfileId: reverseViewer.profile.id,
+    });
+
+    const read = (token: string) =>
+      requestRemotePostRead({
+        first: 10,
+        nodeIds: [postId, contentId],
+        profileId,
+        token,
+      });
+
+    const accepted = await read(acceptedViewer.token);
+    assertNoGraphQLErrors(accepted);
+    assert.deepEqual(
+      accepted.data?.nodes.map((node) => node?.id ?? null),
+      [postId, contentId],
+    );
+    assert.deepEqual(connectionIds(accepted.data?.profile?.posts), [postId]);
+    assert.deepEqual(connectionIds(accepted.data?.homeTimeline), [postId]);
+
+    const authorRead = await read(author.token);
+    assertNoGraphQLErrors(authorRead);
+    assert.deepEqual(
+      authorRead.data?.nodes.map((node) => node?.id ?? null),
+      [postId, contentId],
+    );
+    assert.deepEqual(connectionIds(authorRead.data?.profile?.posts), [postId]);
+    assert.deepEqual(connectionIds(authorRead.data?.homeTimeline), [postId]);
+
+    for (const token of [
+      nonFollower.token,
+      pendingViewer.token,
+      rejectedViewer.token,
+      reverseViewer.token,
+    ]) {
+      const denied = await read(token);
+      assertNoGraphQLErrors(denied);
+      assert.deepEqual(
+        denied.data?.nodes.map((node) => node?.id ?? null),
+        [null, null],
+      );
+      assert.deepEqual(connectionIds(denied.data?.profile?.posts), []);
+      assert.deepEqual(connectionIds(denied.data?.homeTimeline), []);
+    }
+
+    await db
+      .delete(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, acceptedViewer.profile.id),
+          eq(ProfileFollows.followeeProfileId, author.profile.id),
+        ),
+      );
+    const unfollowed = await read(acceptedViewer.token);
+    assertNoGraphQLErrors(unfollowed);
+    assert.deepEqual(
+      unfollowed.data?.nodes.map((node) => node?.id ?? null),
+      [null, null],
+    );
+    assert.deepEqual(connectionIds(unfollowed.data?.profile?.posts), []);
+    assert.deepEqual(connectionIds(unfollowed.data?.homeTimeline), []);
+
+    await db.insert(ProfileFollows).values({
+      followerProfileId: acceptedViewer.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, author.profile.id));
+    const suspended = await read(acceptedViewer.token);
+    assertNoGraphQLErrors(suspended);
+    assert.deepEqual(
+      suspended.data?.nodes.map((node) => node?.id ?? null),
+      [null, null],
+    );
+    assert.equal(suspended.data?.profile, null);
+    assert.deepEqual(connectionIds(suspended.data?.homeTimeline), []);
+  });
+
   test('orders and paginates materialized followee Posts while excluding a non-followee', async () => {
     const auth = await createAuthenticatedSession();
     const followee = await createStoredActivityPubAuthor({
@@ -3829,11 +3944,13 @@ const createContentfulPost = async ({
   profileId,
   replyParentId,
   repostSourceId,
+  visibility = PostVisibility.PUBLIC,
 }: {
   id?: string;
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  visibility?: PostVisibility;
 }) => {
   const post = await db
     .insert(Posts)
@@ -3841,7 +3958,7 @@ const createContentfulPost = async ({
       ...(id === undefined ? {} : { id }),
       profileId,
       state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
+      visibility,
     })
     .returning()
     .then(firstOrThrow);

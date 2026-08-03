@@ -3,9 +3,11 @@ import '@kosmo/core/polyfill';
 import { MIMEType } from 'node:util';
 import { Document, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import { projectRemoteNoteContent } from '@kosmo/core/activitypub-note-content/server';
-import { PostVisibility } from '@kosmo/core/enums';
+import { db, first, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { InstanceKind, InstanceState, PostVisibility, ProfileState } from '@kosmo/core/enums';
 import { NotFoundError, ValidationError } from '@kosmo/core/error';
 import { createPost } from '@kosmo/core/services';
+import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import type { InboxContext } from '@fedify/fedify';
@@ -87,12 +89,42 @@ const resolveReplyParentId = async (
   return findPostByActivityPubUri(context, replyTarget);
 };
 
+const hasEstablishedFollower = async ({
+  followerProfileId,
+  followeeProfileId,
+}: {
+  followerProfileId?: string | null;
+  followeeProfileId: string;
+}): Promise<boolean> => {
+  const row = await db
+    .select({ id: ProfileFollows.id })
+    .from(ProfileFollows)
+    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(ProfileFollows.followeeProfileId, followeeProfileId),
+        followerProfileId == null
+          ? undefined
+          : eq(ProfileFollows.followerProfileId, followerProfileId),
+        eq(Profiles.state, ProfileState.ACTIVE),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+  return row !== undefined;
+};
+
 export const handleInboundCreateNote = async ({
   actorUri,
   context,
   note,
   objectUri,
   profileId,
+  canonicalFollowersUri,
   receivedAt,
 }: {
   actorUri: string;
@@ -100,6 +132,7 @@ export const handleInboundCreateNote = async ({
   note: Note;
   objectUri: string;
   profileId: string;
+  canonicalFollowersUri: string | null;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
   if (note.id?.href !== objectUri) {
@@ -111,16 +144,29 @@ export const handleInboundCreateNote = async ({
     return;
   }
 
-  const replyParentId = await resolveReplyParentId(context, note);
-
   const visibility = note.toIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
     ? PostVisibility.PUBLIC
     : note.ccIds.some((uri) => uri.href === PUBLIC_COLLECTION.href)
       ? PostVisibility.UNLISTED
-      : undefined;
+      : canonicalFollowersUri &&
+          [...note.toIds, ...note.ccIds].some((uri) => uri.href === canonicalFollowersUri)
+        ? PostVisibility.FOLLOWERS
+        : undefined;
   if (!visibility) {
     return;
   }
+
+  if (
+    visibility === PostVisibility.FOLLOWERS &&
+    !(await hasEstablishedFollower({
+      followerProfileId: context.recipient,
+      followeeProfileId: profileId,
+    }))
+  ) {
+    return;
+  }
+
+  const replyParentId = await resolveReplyParentId(context, note);
 
   let document;
   let media;
