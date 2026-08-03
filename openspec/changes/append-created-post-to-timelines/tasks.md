@@ -117,6 +117,6 @@ PROD-641이 소유한 API·Relay·Home·Profile·Composer 결과를 하나의 �
 - 작성 성공 직후 target Home/Profile에 한 번만 표시되고 실패·actor 전환·unloaded surface에서 잘못된 membership이 없는 통합 evidence를 남긴다.
 - archive 뒤 active specs와 전체 OpenSpec strict validation이 통과하는지 확인한다.
 
-- [ ] 4.1 API schema/test, `pnpm --filter @kosmo/app relay`, app check·관련 테스트, `pnpm lint:eslint`, `pnpm lint:prettier`와 `openspec validate append-created-post-to-timelines --strict`를 통과시키고 결과를 기록한다.
+- [x] 4.1 API schema/test, `pnpm --filter @kosmo/app relay`, app check·관련 테스트, `pnpm lint:eslint`, `pnpm lint:prettier`와 `openspec validate append-created-post-to-timelines --strict`를 통과시키고 결과를 기록한다.
 - [ ] 4.2 Home·Profile·Composer를 연결한 PROD-641 통합 시나리오와 최신 canonical·Linear 정합성을 확인한다.
 - [ ] 4.3 모든 PROD-641 task와 required verification이 완료된 뒤 delta를 active `post` spec에 동기화하고 change를 archive한 다음 전체 OpenSpec strict validation을 통과시킨다.
