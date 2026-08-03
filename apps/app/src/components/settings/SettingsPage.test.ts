@@ -30,8 +30,10 @@ mockModule(new URL('../shell/ShellChromeContext.tsx', import.meta.url), {
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
+    background: '#ffffff',
     border: '#dddddd',
     card: '#ffffff',
+    divider: '#eeeeee',
     surface: '#eeeeee',
     text: '#111111',
     textSecondary: '#666666',
@@ -53,7 +55,7 @@ afterEach(async () => {
 });
 
 describe('SettingsPage', () => {
-  it('Byulmaru ID 외부 Account와 Kosmo 내부 Profile 소유 경계를 표시한다', async () => {
+  it('단일 heading과 행 접근성 이름으로 Account/Profile 소유 경계를 제공한다', async () => {
     await render({
       content: createElement('ProfileSettings'),
       displayName: '우주 기록자',
@@ -61,16 +63,18 @@ describe('SettingsPage', () => {
       status: 'selected',
     });
 
-    assert.deepEqual(headingTexts(), ['계정 설정', '프로필 설정']);
-    assert.deepEqual(headingLevels(), [2, 2]);
+    assert.deepEqual(headingTexts(), []);
+    assert.deepEqual(headingLevels(), []);
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
-    assert.ok(texts().includes('Byulmaru ID 외부 서비스'));
-    assert.ok(texts().includes('Kosmo 내부 기능'));
+    assert.equal(texts().includes('계정 설정'), false);
+    assert.equal(texts().includes('Byulmaru ID 외부 서비스'), false);
+    assert.equal(texts().includes('프로필 설정'), false);
+    assert.equal(texts().includes('Kosmo 내부 기능'), false);
     assert.equal(rendered('AccountEntry').length, 1);
     assert.equal(rendered('ProfileSettings').length, 1);
 
     const identity = renderer!.root.findByProps({
-      accessibilityLabel: '현재 프로필 설정 대상: 우주 기록자, @space-writer',
+      accessibilityLabel: 'Kosmo 내부 프로필 설정 대상: 우주 기록자, @space-writer',
     });
     assert.equal(identity.props.accessible, true);
   });

@@ -13,8 +13,10 @@
 
 **Guardrails**
 
-- `계정 설정`은 Byulmaru ID 외부 서비스 진입점, `프로필 설정`은 Kosmo 내부 기능으로 표시하고 하나의 저장
-  단위로 합치지 않는다.
+- Account 외부 진입점 다음에 Profile identity와 Profile content를 배치하고 하나의 저장 단위로 합치지 않는다.
+- 별도 `계정 설정`·`프로필 설정` heading, 소유자 label과 설명 block을 시각적으로 반복하지 않는다. Account
+  행 label·이동 동작·accessible name과 Profile control accessible name에서 각 소유 경계와 현재 대상을
+  전달한다.
 - Kosmo 내부 Account route·UI·데이터 query·input·save 상태를 만들지 않는다.
 - selected Profile이 없더라도 Account 외부 진입점을 유지하고 다른 Profile의 값을 fallback으로 표시하지 않는다.
 - 승인되지 않은 미래 설정 category를 disabled item이나 placeholder로 노출하지 않는다.
@@ -24,12 +26,12 @@
 **Verification**
 
 - selected Profile 있음·없음, Profile loading, route error, Account external-navigation-only error와
-  Profile-data-only error 상태에서 heading, ownership 설명, identity, 정상 section 유지와 재시도를 component
-  test와 Storybook 상태로 검증한다.
+  Profile-data-only error 상태에서 단일 page heading, 행 순서·accessible name, identity, 정상 소유 단위
+  유지와 재시도를 component test와 Storybook 상태로 검증한다.
 - Account section에 Kosmo Account 데이터 loading·empty·save UI나 내부 Account route가 없는지 검증한다.
 - Relay actor/Profile 전환 뒤 이전 identity와 control data가 새 대상 아래에 표시되지 않는지 검증한다.
 
-- [x] 1.1 단일 `설정` heading 아래 Byulmaru ID Account 외부 진입점/Kosmo Profile 내부 설정 section, 소유권 설명과 현재 Profile identity를 제공하는 공통 page shell을 구현한다.
+- [x] 1.1 단일 `설정` heading 아래 Byulmaru ID Account 외부 진입점과 현재 Profile identity/Kosmo Profile content를 평면 행으로 제공하고 각 행의 accessible name에서 소유권을 전달하는 공통 page shell을 구현한다.
 - [x] 1.2 selected Profile이 없을 때 Account 외부 진입점을 유지하고 기존 Profile 선택·생성 flow로 연결하는 Profile empty state를 구현한다.
 - [ ] 1.3 route·Profile loading/error와 Account external navigation error slot이 소유 경계를 유지하고 독립적으로 재시도 가능한 상태를 구현한다.
 - [x] 1.4 selected/no-profile, loading·error, 긴 Profile identity와 작은 화면 상태의 component test·Storybook catalog를 추가한다.

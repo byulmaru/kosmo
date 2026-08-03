@@ -10,8 +10,9 @@ Byulmaru ID Account Settings로 이동하는 외부 진입점(PROD-645)과 Kosmo
 - 인증된 universal client에 canonical `/settings` route와 공통 settings page shell을 추가한다.
 - full Web sidebar, compact Web icon rail, mobile Web·Android·iOS drawer에 `설정` 진입점과 page-current
   semantics를 제공하되 하단 탭 바와 우측 레일에는 중복하지 않는다.
-- 페이지에 단일 `설정` heading과 `계정 설정`, `프로필 설정` section을 두고 `계정 설정`은 Byulmaru ID 외부
-  서비스 진입점, `프로필 설정`은 Kosmo 내부 기능임을 label·설명·접근성 이름에서 구분한다.
+- 페이지에 단일 `설정` heading을 두고 Byulmaru ID Account 외부 진입점과 Kosmo Profile 내부 content를 평면
+  행 구조로 이 순서에 배치한다. 독립된 section heading·소유자 label·설명 block은 반복하지 않고 실제 행의
+  label·이동 동작·접근성 이름에서 소유 경계를 구분한다.
 - Kosmo 내부 Account 설정 route·UI·데이터 조회·입력·저장을 만들지 않는다. Account 진입점은 Byulmaru ID의
   canonical Account Settings 페이지로 이동하며 Web은 HTTPS external navigation, Android·iOS는 시스템
   브라우저 또는 승인된 external link flow를 사용한다.

@@ -1,9 +1,9 @@
 # 설정 페이지
 
 Kosmo의 인증된 설정 hub는 `/settings` 하나를 canonical route로 사용한다. 이 페이지는 Byulmaru ID가 소유한
-Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profile 설정을 같은 정보 구조에 배치하되, 두
-서비스와 소유 단위를 label, 설명, heading과 접근성 이름에서 명확히 구분한다. Kosmo 내부에서 제공하는 설정
-기능은 Profile 설정뿐이다.
+Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profile 설정을 같은 정보 구조에 배치하되, 실제
+설정 행의 label·이동 동작과 접근성 이름에서 두 서비스와 소유 단위를 명확히 구분한다. Kosmo 내부에서
+제공하는 설정 기능은 Profile 설정뿐이다.
 
 ## Route와 진입점
 
@@ -21,9 +21,16 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 ## Page shell과 정보 구조
 
 - 페이지의 단일 최상위 heading은 `설정`이다.
-- 본문은 `계정 설정`과 `프로필 설정` section을 이 순서로 제공한다. `계정 설정`은 **Byulmaru ID 외부
-  서비스**, `프로필 설정`은 **Kosmo 내부 기능**임을 인접 설명과 하위 control의 accessible name에도
-  드러내며, 시각적 구분에만 의존하지 않는다.
+- 본문은 기존 중앙 column을 채우는 평면 목록형 구조를 사용한다. section 전체를 둥근 테두리 카드로 감싸거나
+  소유 단위 사이에 큰 바깥 여백을 두지 않고, 실제 Account/Profile content를 같은 column에 정렬한 뒤 theme
+  구분선으로 경계를 표시한다.
+- chevron은 Byulmaru ID 외부 진입점처럼 실제로 다른 위치를 여는 행에만 표시한다. 현재 페이지 안에서 값을
+  조회·입력·저장하는 Profile control이나 비상호작용 Profile identity에는 이동을 암시하는 장식용 chevron을
+  붙이지 않는다.
+- 본문은 Byulmaru ID Account 외부 진입점과 현재 Local Profile의 Kosmo 설정 content를 이 순서로 제공한다.
+  `계정 설정`·`프로필 설정` heading, 소유자 label과 설명을 별도 시각 block으로 반복하지 않는다. Account
+  진입점은 행 label·이동 동작·accessible name에서 **Byulmaru ID 외부 서비스**임을 전달하고, Profile
+  control은 accessible name에서 **Kosmo 내부 기능**과 현재 대상을 전달한다.
 - `계정 설정` section은 Byulmaru ID가 소유하는 canonical Account Settings 페이지로 이동하는 진입점만
   제공한다. Kosmo는 이 section에 Account 데이터, 현재 값, 입력 form, 저장 action 또는 Account 관리 기능을
   구현하지 않는다.
@@ -36,8 +43,9 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 - Account가 접근할 수 있는 Local Profile이 없거나 selected Profile이 없으면 Byulmaru ID Account 설정 외부
   진입점은 계속 표시하고, `프로필 설정`에는 대상이 없음을 설명하는 empty state와 Profile 선택·생성 흐름으로
   이동할 수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
-- 공통 page shell은 두 section의 배치와 소유권 설명만 소유한다. PROD-645는 Account 외부 진입점과 이동을,
-  PROD-648은 Profile 입력·저장과 세부 상태를 소유한다.
+- 공통 page shell은 두 소유 단위의 순서·구분선과 현재 Profile identity 배치만 소유한다. PROD-645는 Account
+  외부 진입점 label·accessible name과 이동을, PROD-648은 Profile control accessible name, 입력·저장과 세부
+  상태를 소유한다.
 
 ## Header와 responsive layout
 
@@ -47,8 +55,8 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
   `PageHeader`를 렌더링한다. Native safe area는 mobile shell이 소유한다.
 - 페이지는 기존 중앙 column과 `compact=768`, `full=1280` breakpoint를 그대로 사용한다. settings 전용
   breakpoint나 별도 Web route tree를 만들지 않는다.
-- 작은 화면에서는 section을 한 column으로 유지하고, text scaling과 reflow에서도 section heading, 현재
-  Profile identity와 action이 잘리거나 가로 scroll에 의존하지 않게 한다.
+- 작은 화면에서는 content를 한 column으로 유지하고, text scaling과 reflow에서도 현재 Profile identity와
+  action이 잘리거나 가로 scroll에 의존하지 않게 한다.
 
 ## Loading, error와 empty state
 
@@ -67,9 +75,12 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 
 ## 접근성
 
-- `설정`, `계정 설정`, `프로필 설정`의 heading hierarchy를 programmatic하게 노출한다.
-- Account 진입점은 accessible name과 인접 설명에서 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달한다.
-  navigation과 page action은 실제 동작에 맞는 role, accessible name, current/disabled/busy 상태를 제공한다.
+- `설정`을 페이지의 단일 heading으로 programmatic하게 노출하고, Account 외부 진입점 다음에 현재 Profile
+  identity와 Profile control이 오는 문서 순서를 유지한다. 시각적으로 제거한 `계정 설정`·`프로필 설정`
+  heading을 screen reader 전용 중복 heading으로 다시 만들지 않는다.
+- Account 진입점은 행 label과 accessible name에서 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달한다.
+  Profile control의 accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다. navigation과 page action은
+  실제 동작에 맞는 role, accessible name, current/disabled/busy 상태를 제공한다.
 - Web keyboard focus 순서는 page heading, Account section, Profile 대상과 Profile section의 문서 순서를
   따른다. Account 외부 이동 오류 announcement는 PROD-645가, Profile 저장 결과 announcement는 PROD-648이
   중복 없이 소유한다.
@@ -82,8 +93,9 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 
 - PROD-653은 `/settings` route, 공통 page shell, shell navigation, Byulmaru ID Account 외부 진입점과 Kosmo
   Profile 설정의 정보 구조 및 페이지 수준 통합 검증만 소유한다.
-- PROD-645는 `계정 설정` section의 Byulmaru ID 소유권 설명과 외부 진입점, canonical Account Settings URL,
-  Web HTTPS external navigation, Android·iOS external link flow, 이동 오류 처리와 해당 기능 검증을 소유한다.
+- PROD-645는 Byulmaru ID 소유권을 드러내는 Account 외부 진입점 label·accessible name, canonical Account
+  Settings URL, Web HTTPS external navigation, Android·iOS external link flow, 이동 오류 처리와 해당 기능
+  검증을 소유한다.
 - PROD-648은 `프로필 설정` section의 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer
   연결 및 해당 기능 검증을 소유한다.
 - PROD-653의 통합 검증은 PROD-645의 외부 navigation 세부 테스트나 PROD-648의 Profile 기능 테스트를

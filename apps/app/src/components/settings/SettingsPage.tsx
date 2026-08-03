@@ -3,7 +3,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import type { ReactElement, ReactNode } from 'react';
 
 type SelectedProfileSettings = {
@@ -43,19 +43,9 @@ export function SettingsPage({ accountContent, profileState }: SettingsPageProps
     <ScrollView contentContainerStyle={styles.root}>
       <PageHeader title="설정" />
       <View style={styles.body}>
-        <SettingsSection
-          description="계정 보안과 인증 설정은 Byulmaru ID에서 관리합니다."
-          owner="Byulmaru ID 외부 서비스"
-          title="계정 설정"
-        >
-          {accountContent}
-        </SettingsSection>
+        <SettingsSection testID="settings-section-account">{accountContent}</SettingsSection>
 
-        <SettingsSection
-          description="선택한 Local Profile에 적용되는 Kosmo 설정입니다."
-          owner="Kosmo 내부 기능"
-          title="프로필 설정"
-        >
+        <SettingsSection testID="settings-section-profile">
           <ProfileSettingsContent state={profileState} />
         </SettingsSection>
       </View>
@@ -63,33 +53,15 @@ export function SettingsPage({ accountContent, profileState }: SettingsPageProps
   );
 }
 
-function SettingsSection({
-  children,
-  description,
-  owner,
-  title,
-}: {
-  children: ReactNode;
-  description: string;
-  owner: string;
-  title: string;
-}) {
+function SettingsSection({ children, testID }: { children: ReactNode; testID: string }) {
   const theme = useTheme();
 
   return (
-    <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      <View style={styles.sectionHeader}>
-        <Text
-          accessibilityRole="header"
-          aria-level={2}
-          style={[styles.sectionTitle, { color: theme.text }]}
-        >
-          {title}
-        </Text>
-        <Text style={[styles.owner, { color: theme.textSecondary }]}>{owner}</Text>
-        <Text style={[styles.description, { color: theme.textSecondary }]}>{description}</Text>
-      </View>
-      <View style={styles.sectionContent}>{children}</View>
+    <View
+      style={[styles.section, { backgroundColor: theme.background, borderColor: theme.border }]}
+      testID={testID}
+    >
+      {children}
     </View>
   );
 }
@@ -128,14 +100,17 @@ function ProfileSettingsContent({ state }: { state: SettingsProfileState }) {
   return (
     <View style={styles.profileContent}>
       <View
-        accessibilityLabel={`현재 프로필 설정 대상: ${state.displayName}, ${state.relativeHandle}`}
+        accessibilityLabel={`Kosmo 내부 프로필 설정 대상: ${state.displayName}, ${state.relativeHandle}`}
         accessible
-        style={[styles.profileIdentity, { backgroundColor: theme.surface }]}
+        style={[styles.profileIdentity, { borderColor: theme.divider }]}
       >
-        <Text style={[styles.profileName, { color: theme.text }]}>{state.displayName}</Text>
-        <Text style={[styles.profileHandle, { color: theme.textSecondary }]}>
-          {state.relativeHandle}
-        </Text>
+        <Text style={[styles.profileContext, { color: theme.textSecondary }]}>현재 프로필</Text>
+        <View style={styles.profileIdentityValue}>
+          <Text style={[styles.profileName, { color: theme.text }]}>{state.displayName}</Text>
+          <Text style={[styles.profileHandle, { color: theme.textSecondary }]}>
+            {state.relativeHandle}
+          </Text>
+        </View>
       </View>
       {state.content}
     </View>
@@ -144,24 +119,30 @@ function ProfileSettingsContent({ state }: { state: SettingsProfileState }) {
 
 const styles = StyleSheet.create({
   root: { flexGrow: 1 },
-  body: { gap: spacing.xl, padding: spacing.xl },
+  body: { width: '100%' },
   section: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    overflow: 'hidden',
+    borderBottomWidth: 1,
+    width: '100%',
   },
-  sectionHeader: { gap: spacing.xs, padding: spacing.lg },
-  sectionTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  owner: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  description: { fontFamily: 'SUIT', ...typography.sm },
-  sectionContent: { padding: spacing.lg, paddingTop: 0 },
-  profileContent: { gap: spacing.lg },
+  profileContent: { width: '100%' },
   profileIdentity: {
-    borderRadius: radii.sm,
+    borderBottomWidth: 1,
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  profileName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  profileHandle: { fontFamily: 'SUIT', ...typography.sm },
+  profileContext: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xsm },
+  profileIdentityValue: {
+    alignItems: 'baseline',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  profileName: {
+    flexShrink: 1,
+    fontFamily: 'SUIT',
+    fontWeight: '700',
+    ...typography.sm,
+  },
+  profileHandle: { flexShrink: 1, fontFamily: 'SUIT', ...typography.sm },
 });

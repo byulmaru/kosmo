@@ -16,7 +16,7 @@ PROD-653 완료와 change archive는 두 자식 결과가 통합 가능해진 �
 **Goals:**
 
 - Expo Router 보호 route에 `/settings` page shell을 추가하고 모든 승인된 shell surface에서 진입하게 한다.
-- Byulmaru ID Account 외부 진입점과 Kosmo Profile 내부 설정의 heading·설명·접근성 이름, 현재 Profile 대상과
+- Byulmaru ID Account 외부 진입점과 Kosmo Profile 내부 설정의 평면 행 순서·접근성 이름, 현재 Profile 대상과
   Profile empty/loading/error 상태를 공통 구조로 제공한다.
 - PROD-645의 외부 navigation과 PROD-648의 Profile 데이터·상태·오류 경계를 유지하면서 같은 page에 결합될
   수 있는 좁은 통합 경계를 둔다.
@@ -61,10 +61,10 @@ PROD-653 완료와 change archive는 두 자식 결과가 통합 가능해진 �
    공통 React Native page view에 필요한 fragment ref 또는 명시적 UI state를 전달한다. no-profile 상태는
    `ShellChromeContext`의 기존 Profile switcher action을 재사용한다. Account 진입점은 Account data fragment나
    mutation을 요구하지 않는다.
-2. page view는 `계정 설정`, `프로필 설정` section과 공통 spacing·heading·소유권 설명·Profile 상태 배치만
-   소유한다. `계정 설정`에는 PROD-645가 제공하는 Byulmaru ID 외부 진입점을 배치하고, `프로필 설정`에는
-   PROD-648의 Kosmo 내부 control을 배치한다. 공통 shell은 Account UI·데이터·저장 또는 Profile 저장 상태를
-   소유하지 않는다.
+2. page view는 Account 외부 진입점 다음에 Profile identity와 Profile content가 오는 평면 행 순서·구분선과
+   Profile 상태 배치만 소유한다. 별도 `계정 설정`·`프로필 설정` heading, 소유자 label과 설명 block을
+   반복하지 않는다. 실제 행의 label·이동 동작·accessible name이 외부 Account/내부 Profile 소유 경계를
+   전달하고, 공통 shell은 Account UI·데이터·저장 또는 Profile 저장 상태를 소유하지 않는다.
 3. mobile Web에서는 shell header 분류에 `/settings`를 추가하고 route header를 숨긴다. Native와
    compact/full Web에서는 route가 기존 `PageHeader` text variant를 첫 heading으로 렌더링한다. 플랫폼 분기는
    공용 breakpoint helper 또는 기존 shell context를 사용해 한 곳에서 계산한다.
@@ -98,6 +98,8 @@ PROD-653 완료와 change archive는 두 자식 결과가 통합 가능해진 �
 - mobile Web shell header와 route `PageHeader`를 동시에 렌더링해 heading과 sticky chrome을 중복하는 것
 - 이전 Relay environment 또는 local state의 Profile 설정값을 새 selected Profile의 loading fallback으로 쓰는 것
 - child section 오류 하나를 route-level boundary로 승격해 정상인 다른 소유 단위까지 숨기는 것
+- 실제 Account/Profile content 앞에 section heading·소유자 label·설명 block을 반복해 설정 행보다 설명이 더
+  두드러지게 만드는 것
 - Web Storybook a11y 통과를 Native screen reader·touch target 또는 전체 WCAG 적합성 증거로 일반화하는 것
 
 ## Risks / Trade-offs

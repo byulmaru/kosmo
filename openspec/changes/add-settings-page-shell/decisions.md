@@ -34,8 +34,9 @@ Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 �
 - Status: Active
 - Context / Problem: Account 설정을 Kosmo section의 내부 데이터·form·저장 기능으로 모델링하면 OIDC Provider인
   Byulmaru ID의 소유권을 침범하고 Profile 설정 구현과 혼동한다.
-- Decision Outcome: Account Settings의 소유자는 Byulmaru ID다. Kosmo는 `/settings`의 `계정 설정` section에
-  Byulmaru ID canonical Account Settings로 이동하는 외부 진입점과 소유권 설명만 제공한다. Web은 HTTPS
+- Decision Outcome: Account Settings의 소유자는 Byulmaru ID다. Kosmo는 `/settings`의 Account 소유 위치에
+  Byulmaru ID canonical Account Settings로 이동하는 외부 진입점만 제공하고 행 label·이동 동작·accessible
+  name에서 외부 소유권을 전달한다. Web은 HTTPS
   external navigation, Android·iOS는 시스템 브라우저 또는 승인된 external link flow를 사용한다. canonical
   URL·플랫폼 이동·실패 복구는 PROD-645가 소유하고, PROD-653은 해당 결과의 배치와 페이지 통합만 소유한다.
   Kosmo 내부 Account route·UI·데이터 query·input·save·관리 기능은 만들지 않는다.
@@ -47,7 +48,7 @@ Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 �
 - Confirmation / Follow-up: Account 진입점의 Byulmaru ID 외부 서비스 label·accessible name, Web HTTPS 이동,
   Android·iOS 승인 flow와 내부 Account route·query·save 부재를 확인한다.
 
-### Account 외부 진입점과 Profile 내부 설정을 순서가 있는 독립 section으로 유지한다
+### Account 외부 진입점과 Profile 내부 설정을 순서가 있는 독립 소유 단위로 유지한다
 
 - Decision Date: 2026-08-03
 - Decision Class: Derived Contract
@@ -55,17 +56,39 @@ Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 �
 - Status: Active
 - Context / Problem: Byulmaru ID가 소유한 Account 외부 진입점과 Kosmo selected Local Profile이 소유한 기본
   공개 범위를 같은 저장 단위나 모호한 category로 표현하면 서비스·대상·권한 경계가 섞인다.
-- Decision Outcome: 단일 `설정` heading 아래에 `계정 설정`, `프로필 설정` section을 이 순서로 둔다. Profile
-  section은 Kosmo 내부 기능과 현재 대상의 표시 이름·`relativeHandle`을 함께 표시한다. Account section은
-  Byulmaru ID 외부 서비스 진입점임을 표시한다. Profile 대상이 없으면 Account 외부 진입점을 유지한 채 기존
-  Profile 선택·생성 flow로 연결하는 empty state를 표시하며 다른 Profile의 값을 fallback으로 쓰지 않는다.
+- Decision Outcome: 단일 `설정` heading 아래에 Account 외부 진입점, 현재 Profile identity와 Profile content를
+  이 순서로 둔다. Account 행 label·이동 동작·accessible name은 Byulmaru ID 외부 서비스임을 전달하고,
+  Profile control accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다. Profile 대상이 없으면 Account
+  외부 진입점을 유지한 채 기존 Profile 선택·생성 flow로 연결하는 empty state를 표시하며 다른 Profile의 값을
+  fallback으로 쓰지 않는다.
 - Alternatives Considered: Account/Profile tab으로 페이지 전체를 전환하는 방식, 외부 entry와 내부 control을
   한 form으로 합치는 방식, selected Profile이 없을 때 page 전체를 숨기는 방식. 현재 소유 단위와 empty-state
   계약을 충족하지 않으므로 채택하지 않았다.
-- Consequences: 공통 shell은 section layout과 소유권 설명만 소유하고 Account 외부 이동과 Profile 저장 상태를
-  합치지 않는다. 현재 Profile identity와 control data가 같은 actor 결과인지 검증해야 한다.
-- Confirmation / Follow-up: selected Profile 유무, Profile 전환 loading과 외부 Account/내부 Profile
-  heading·설명·accessible name을 component와 runtime에서 확인한다.
+- Consequences: 공통 shell은 평면 행 순서·구분선과 Profile identity 배치만 소유하고 Account 외부 이동과
+  Profile 저장 상태를 합치지 않는다. 현재 Profile identity와 control data가 같은 actor 결과인지 검증해야 한다.
+- Confirmation / Follow-up: selected Profile 유무, Profile 전환 loading과 외부 Account/내부 Profile 행
+  순서·accessible name을 component와 runtime에서 확인한다.
+
+### 소유권은 별도 설명 block 대신 실제 설정 행에서 전달한다
+
+- Decision Date: 2026-08-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/settings.md`, `PROD-653`
+- Status: Active
+- Context / Problem: section heading, 소유자 label과 설명을 실제 Account/Profile content 앞에 반복하면 설정
+  화면의 정보 밀도가 낮아지고 사용자가 실행할 수 있는 행보다 설명 block이 더 두드러진다.
+- Decision Outcome: 화면에는 단일 `설정` heading과 실제 Account/Profile content만 표시한다. `계정 설정`·
+  `프로필 설정` heading, 소유자 label과 설명을 별도 시각 block 또는 screen reader 전용 heading으로 반복하지
+  않는다. Account 외부 진입점은 행 label·이동 동작·accessible name에서 Byulmaru ID 소유권을 전달하고,
+  Profile control은 accessible name에서 Kosmo 내부 기능과 현재 Local Profile 대상을 전달한다. chevron은 실제
+  외부 navigation 행에만 표시한다.
+- Alternatives Considered: 각 소유 단위를 둥근 card와 3줄 설명 header로 감싸는 방식, 시각 heading만 숨기고
+  같은 heading을 screen reader 전용으로 유지하는 방식. 전자는 사용자 결정의 평면 행 밀도와 어긋나고 후자는
+  동일한 중복 정보를 보조 기술에 남기므로 채택하지 않았다.
+- Consequences: Account/Profile child가 자기 행의 정확한 accessible name을 소유해야 한다. 공통 shell의
+  component test와 Storybook은 단일 page heading, 행 순서, 평면 구분선과 외부 행 chevron을 검증한다.
+- Confirmation / Follow-up: Web과 Native에서 screen reader가 Account 외부 소유권과 Profile 현재 대상을 행의
+  accessible name으로 구분하는지 확인한다.
 
 ### Mobile Web과 다른 플랫폼의 settings header 소유권을 분리한다
 
@@ -124,8 +147,8 @@ Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 �
   해석하지 않는다.
 - Alternatives Considered: 모든 loading/error를 page-wide fallback 하나로 처리하는 방식, 공통 shell이 child
   error type을 해석하는 방식. 전자는 독립 복구 계약을 잃고 후자는 child 소유권을 침범하므로 채택하지 않았다.
-- Consequences: section boundary가 heading hierarchy와 retry focus를 보존해야 하며 동일 오류를 route와 section이
-  중복 announcement하지 않게 해야 한다.
+- Consequences: section boundary가 문서 순서와 retry focus를 보존해야 하며 동일 오류를 route와 section이 중복
+  announcement하지 않게 해야 한다.
 - Confirmation / Follow-up: Account external-navigation-only와 Profile-data-only error story/test에서 정상
   section과 page heading 유지, 안전한 한국어 fallback과 재시도를 확인한다.
 
