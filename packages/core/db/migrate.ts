@@ -13,11 +13,10 @@ const migrationsTable = '__drizzle_migrations';
 type MigrationHistoryRow = {
   id: number;
   hash: string;
-  createdAt: unknown;
   name: string | null;
 };
 
-type LegacyMigrationHistoryRow = Omit<MigrationHistoryRow, 'name'>;
+type LegacyMigrationHistoryRow = Pick<MigrationHistoryRow, 'id' | 'hash'>;
 
 type MigrationClient = ReturnType<typeof postgres>;
 
@@ -25,58 +24,38 @@ function migrationTableReference(sql: MigrationClient) {
   return sql`${sql(migrationsSchema)}.${sql(migrationsTable)}`;
 }
 
-function asMigrationMillis(value: unknown): number | undefined {
-  let numberValue: number;
-
-  if (typeof value === 'number') {
-    numberValue = value;
-  } else if (typeof value === 'bigint') {
-    numberValue = Number(value);
-  } else {
-    if (typeof value !== 'string' || !/^\d+$/.test(value)) {
-      return undefined;
-    }
-
-    numberValue = Number(value);
-  }
-
-  return Number.isSafeInteger(numberValue) ? Math.trunc(numberValue / 1000) * 1000 : undefined;
-}
-
-function matchLegacyHistory(
+function validateLegacyMigrationHistory(
   rows: LegacyMigrationHistoryRow[],
   migrations: MigrationMeta[],
-): Map<number, MigrationMeta> {
-  const byMillis = new Map<number, MigrationMeta[]>();
-  const byHash = new Map<string, MigrationMeta>();
-
-  for (const migration of migrations) {
-    const candidates = byMillis.get(migration.folderMillis) ?? [];
-    candidates.push(migration);
-    byMillis.set(migration.folderMillis, candidates);
-    byHash.set(migration.hash, migration);
+): void {
+  if (rows.length > migrations.length) {
+    throw new Error(
+      `Database migration history has ${rows.length} rows, but only ${migrations.length} local migrations exist.`,
+    );
   }
 
-  const matched = new Map<number, MigrationMeta>();
-
-  for (const row of rows) {
-    const createdAt = asMigrationMillis(row.createdAt);
-    const candidates = createdAt === undefined ? undefined : byMillis.get(createdAt);
-    const migration =
-      candidates?.length === 1
-        ? candidates[0]
-        : (candidates?.find((candidate) => candidate.hash === row.hash) ?? byHash.get(row.hash));
+  for (const [index, row] of rows.entries()) {
+    const migration = migrations[index];
 
     if (!migration) {
       throw new Error(
-        `Database migration history row ${row.id} does not match a local migration by timestamp or hash.`,
+        `Database migration history row ${row.id} has no local migration at position ${index + 1}.`,
       );
     }
 
-    matched.set(row.id, migration);
-  }
+    if (row.hash !== migration.hash) {
+      const foundIndex = migrations.findIndex(({ hash }) => hash === row.hash);
+      if (foundIndex >= 0) {
+        throw new Error(
+          `Database migration history order mismatch at legacy row ${row.id}; expected ${migration.name}, found ${migrations[foundIndex]?.name ?? 'unknown'}.`,
+        );
+      }
 
-  return matched;
+      throw new Error(
+        `Database migration history hash mismatch for legacy row ${row.id}; expected ${migration.name}, refusing to execute new SQL.`,
+      );
+    }
+  }
 }
 
 async function ensureMigrationHistory(
@@ -129,11 +108,11 @@ async function ensureMigrationHistory(
   }
 
   const legacyRows = await sql<LegacyMigrationHistoryRow[]>`
-    SELECT id, hash, created_at AS "createdAt"
+    SELECT id, hash
     FROM ${table}
     ORDER BY id ASC
   `;
-  const matched = matchLegacyHistory(legacyRows, migrations);
+  validateLegacyMigrationHistory(legacyRows, migrations);
 
   await sql.begin(async (transaction) => {
     if (!columnNames.has('name')) {
@@ -150,12 +129,8 @@ async function ensureMigrationHistory(
       `;
     }
 
-    for (const row of legacyRows) {
-      const migration = matched.get(row.id);
-      if (!migration) {
-        throw new Error(`Unable to backfill migration history row ${row.id}.`);
-      }
-
+    for (const [index, row] of legacyRows.entries()) {
+      const migration = migrations[index];
       await transaction`
         UPDATE ${table}
         SET name = ${migration.name}, applied_at = NULL
@@ -169,7 +144,7 @@ async function readMigrationHistory(sql: MigrationClient): Promise<MigrationHist
   const table = migrationTableReference(sql);
 
   return sql<MigrationHistoryRow[]>`
-    SELECT id, hash, created_at AS "createdAt", name
+    SELECT id, hash, name
     FROM ${table}
     ORDER BY id ASC
   `;

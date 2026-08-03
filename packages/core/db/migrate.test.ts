@@ -289,6 +289,211 @@ test('기존 legacy Drizzle history를 확장해 pending suffix를 이어서 적
   }
 });
 
+test('legacy history hash 불일치는 승격 전에 history와 SQL을 변경하지 않는다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_legacy_hash_first',
+      sql: 'CREATE TABLE migration_legacy_hash_first (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_legacy_hash_second',
+      sql: 'CREATE TABLE migration_legacy_hash_second (id integer PRIMARY KEY);',
+    },
+  ]);
+  const [firstMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe(`
+      CREATE SCHEMA public;
+      CREATE SCHEMA drizzle;
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint
+      );
+    `);
+    await control`
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+      VALUES (${'legacy-hash'}, ${firstMigration.folderMillis + 123})
+    `;
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      /hash mismatch.*legacy row/,
+    );
+
+    const columns = await control<{ columnName: string }[]>`
+      SELECT column_name AS "columnName"
+      FROM information_schema.columns
+      WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations'
+      ORDER BY ordinal_position
+    `;
+    assert.deepEqual(
+      columns.map(({ columnName }) => columnName),
+      ['id', 'hash', 'created_at'],
+    );
+    assert.deepEqual(
+      Array.from(
+        await control<{ id: number; hash: string; createdAt: string }[]>`
+          SELECT id, hash, created_at AS "createdAt"
+          FROM drizzle.__drizzle_migrations
+          ORDER BY id
+        `,
+      ),
+      [{ id: 1, hash: 'legacy-hash', createdAt: String(firstMigration.folderMillis + 123) }],
+    );
+    assert.deepEqual(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY['public.migration_legacy_hash_first', 'public.migration_legacy_hash_second']) AS table_name
+        `
+      ).map(({ tableName }) => tableName),
+      [null, null],
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('legacy history가 중간 migration을 건너뛰면 승격 전에 history와 SQL을 변경하지 않는다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_legacy_gap_first',
+      sql: 'CREATE TABLE migration_legacy_gap_first (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_legacy_gap_second',
+      sql: 'CREATE TABLE migration_legacy_gap_second (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000002_legacy_gap_third',
+      sql: 'CREATE TABLE migration_legacy_gap_third (id integer PRIMARY KEY);',
+    },
+  ]);
+  const [firstMigration, , thirdMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe(`
+      CREATE SCHEMA public;
+      CREATE SCHEMA drizzle;
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint
+      );
+    `);
+    await control`
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+      VALUES
+        (${firstMigration.hash}, ${firstMigration.folderMillis + 123}),
+        (${thirdMigration.hash}, ${thirdMigration.folderMillis + 123})
+    `;
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      /order mismatch.*legacy row/,
+    );
+
+    const columns = await control<{ columnName: string }[]>`
+      SELECT column_name AS "columnName"
+      FROM information_schema.columns
+      WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations'
+      ORDER BY ordinal_position
+    `;
+    assert.deepEqual(
+      columns.map(({ columnName }) => columnName),
+      ['id', 'hash', 'created_at'],
+    );
+    assert.deepEqual(
+      Array.from(
+        await control<{ id: number; hash: string; createdAt: string }[]>`
+          SELECT id, hash, created_at AS "createdAt"
+          FROM drizzle.__drizzle_migrations
+          ORDER BY id
+        `,
+      ),
+      [
+        { id: 1, hash: firstMigration.hash, createdAt: String(firstMigration.folderMillis + 123) },
+        { id: 2, hash: thirdMigration.hash, createdAt: String(thirdMigration.folderMillis + 123) },
+      ],
+    );
+    assert.deepEqual(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY[
+            'public.migration_legacy_gap_first',
+            'public.migration_legacy_gap_second',
+            'public.migration_legacy_gap_third'
+          ]) AS table_name
+        `
+      ).map(({ tableName }) => tableName),
+      [null, null, null],
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('history insert 실패가 해당 파일의 schema를 rollback하고 앞 history를 보존한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder(
+    '20260712000000_history_insert_first',
+    'CREATE TABLE migration_history_insert_first (id integer PRIMARY KEY);',
+  );
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    await mkdir(join(migrations, '20260712000001_history_insert_second'));
+    await writeFile(
+      join(migrations, '20260712000001_history_insert_second', 'migration.sql'),
+      'CREATE TABLE migration_history_insert_second (id integer PRIMARY KEY);',
+    );
+    await control.unsafe(`
+      ALTER TABLE drizzle.__drizzle_migrations
+      ADD CONSTRAINT migration_history_insert_reject_second
+      CHECK (name <> '20260712000001_history_insert_second')
+    `);
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      /migration_history_insert_reject_second/,
+    );
+    assert.deepEqual(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY['public.migration_history_insert_first', 'public.migration_history_insert_second']) AS table_name
+        `
+      ).map(({ tableName }) => tableName),
+      ['migration_history_insert_first', null],
+    );
+    const history = await control<{ name: string | null; count: number }[]>`
+      SELECT name, count(*) OVER ()::int AS count
+      FROM drizzle.__drizzle_migrations
+      ORDER BY id
+    `;
+    assert.deepEqual(
+      history.map(({ name }) => name),
+      ['20260712000000_history_insert_first'],
+    );
+    assert.equal(history[0]?.count, 1);
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
 test('history hash가 달라지면 SQL 실행 전에 실패한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
   const migrations = await migrationFolder([
