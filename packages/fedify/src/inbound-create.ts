@@ -42,7 +42,7 @@ export const handleInboundCreate = async (
       context,
       note: object,
       objectUri,
-      profileId: storedActor.profile.id,
+      storedActor,
       receivedAt,
     });
   }

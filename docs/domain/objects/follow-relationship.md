@@ -51,6 +51,10 @@ Approval Policy 변경만으로 기존 Pending Follow Request를 승인하거나
   수를 보장하는 membership source of truth가 아니다.
 - Profile 비활성화 전이는 관계를 보존하면서 남은 Active 상대 Profile의 저장 count를 조정한다.
 - Profile Block과 Domain Block은 Follow Relationship보다 우선한다.
+- Follow Relationship은 Follower와 Followee Profile 사이의 현재 established 관계다. inbound Followers Only
+  수신 relevance는 이 관계와 함께 Follower가 Active local Profile·Active local Instance에 연결되어 있는지
+  확인한다. 조회 access는 기존 established 관계와 Profile/Instance eligibility 정책을 사용하며, pending·rejected·removed
+  Follow Request 또는 unfollow 뒤에는 현재 관계가 없다.
 - 팔로워/팔로잉 목록 공개 정책의 구체 값이 확정되기 전에는 관계 당사자 외 공개 범위를 확장하지 않는다.
 
 ## 확정 용어

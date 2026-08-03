@@ -63,6 +63,7 @@ let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
@@ -84,6 +85,7 @@ describe('inbound Create dispatch', () => {
       pg,
       PostContents,
       Posts,
+      ProfileFollows,
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
@@ -138,6 +140,241 @@ describe('inbound Create dispatch', () => {
     assert.equal(post.visibility, 'UNLISTED');
     assert.equal(content.document.summary, 'Content warning');
     assert.equal(postContentDocumentToText(content.document), 'Hello');
+  });
+
+  test('keeps recognized visibility markers with extra actor audience values', async () => {
+    const profile = await createStoredRemoteActor();
+    const follower = await createLocalFollowerProfile('marker-follower');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: follower.id,
+      followeeProfileId: profile.id,
+    });
+
+    const mentionActorUri = new URL('https://mention.example/users/bob');
+    const foreignFollowersUri = new URL('https://foreign.example/users/bob/followers');
+    const cases = [
+      {
+        objectUri: new URL('https://remote.example/notes/marker-public'),
+        expected: PostVisibility.PUBLIC,
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Public marker',
+          id: new URL('https://remote.example/notes/marker-public'),
+          tos: [PUBLIC_COLLECTION, mentionActorUri],
+        }),
+      },
+      {
+        objectUri: new URL('https://remote.example/notes/marker-unlisted'),
+        expected: PostVisibility.UNLISTED,
+        note: new Note({
+          attribution: remoteActorUri,
+          cc: PUBLIC_COLLECTION,
+          content: 'Unlisted marker',
+          id: new URL('https://remote.example/notes/marker-unlisted'),
+          to: mentionActorUri,
+        }),
+      },
+      {
+        objectUri: new URL('https://remote.example/notes/marker-followers'),
+        expected: PostVisibility.FOLLOWERS,
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Followers marker',
+          id: new URL('https://remote.example/notes/marker-followers'),
+          tos: [
+            new URL('https://remote.example/users/alice/followers'),
+            new URL('https://remote.example/users/alice/followers'),
+            mentionActorUri,
+            foreignFollowersUri,
+          ],
+        }),
+      },
+    ];
+
+    for (const { expected, note, objectUri } of cases) {
+      await handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: note }),
+        receivedAt,
+      );
+      assert.equal((await getMaterializedPost(objectUri)).post.visibility, expected);
+    }
+
+    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+  });
+
+  test('skips actor-only and foreign-followers-only audiences without side effects', async () => {
+    await createStoredRemoteActor();
+    const cases = [
+      {
+        id: new URL('https://remote.example/notes/actor-only'),
+        to: new URL('https://mention.example/users/bob'),
+      },
+      {
+        id: new URL('https://remote.example/notes/foreign-followers-only'),
+        to: new URL('https://foreign.example/users/bob/followers'),
+      },
+    ];
+
+    for (const { id, to } of cases) {
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: 'unsupported audience',
+            id,
+            to,
+          }),
+        }),
+        receivedAt,
+      );
+    }
+
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    assert.equal((await db.select().from(Posts)).length, 0);
+    assert.equal((await db.select().from(PostContents)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+  });
+
+  test('requires an established local follower for Followers Only personal and shared deliveries', async () => {
+    const profile = await createStoredRemoteActor();
+    const follower = await createLocalFollowerProfile('accepted-follower');
+    const objectUri = new URL('https://remote.example/notes/followers-relevance');
+    const note = new Note({
+      attribution: remoteActorUri,
+      content: 'Followers only',
+      id: objectUri,
+      to: new URL('https://remote.example/users/alice/followers'),
+    });
+
+    await handleInboundCreate(
+      createContext(undefined, follower.id),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+
+    await db.insert(ProfileFollows).values({
+      followerProfileId: follower.id,
+      followeeProfileId: profile.id,
+    });
+    await handleInboundCreate(
+      createContext(undefined, follower.id),
+      new Create({ actor: remoteActorUri, object: note }),
+      receivedAt,
+    );
+    assert.equal((await getMaterializedPost(objectUri)).post.visibility, PostVisibility.FOLLOWERS);
+
+    const sharedObjectUri = new URL('https://remote.example/notes/followers-shared-relevance');
+    await handleInboundCreate(
+      createContext(),
+      new Create({
+        actor: remoteActorUri,
+        object: new Note({
+          attribution: remoteActorUri,
+          content: 'Followers shared',
+          id: sharedObjectUri,
+          to: new URL('https://remote.example/users/alice/followers'),
+        }),
+      }),
+      receivedAt,
+    );
+    assert.equal(
+      (await getMaterializedPost(sharedObjectUri)).post.visibility,
+      PostVisibility.FOLLOWERS,
+    );
+  });
+
+  test('requires an active local follower on an active local instance for shared delivery', async () => {
+    const profile = await createStoredRemoteActor();
+    const remoteFollowerInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://remote-follower.example',
+        domain: 'remote-follower.example',
+        kind: InstanceKind.ACTIVITYPUB,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remoteFollower = await createLocalFollowerProfile('remote-follower', undefined, {
+      instanceId: remoteFollowerInstance.id,
+    });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: remoteFollower.id,
+      followeeProfileId: profile.id,
+    });
+
+    const deliver = async (objectUri: URL) =>
+      handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: 'Followers only',
+            id: objectUri,
+            to: new URL('https://remote.example/users/alice/followers'),
+          }),
+        }),
+        receivedAt,
+      );
+
+    await deliver(new URL('https://remote.example/notes/remote-follower-only'));
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+
+    for (const [index, state] of [ProfileState.SUSPENDED, ProfileState.DISABLED].entries()) {
+      const inactiveFollower = await createLocalFollowerProfile(
+        `inactive-follower-${index}`,
+        undefined,
+        {
+          state,
+        },
+      );
+      await db.insert(ProfileFollows).values({
+        followerProfileId: inactiveFollower.id,
+        followeeProfileId: profile.id,
+      });
+      await deliver(new URL(`https://remote.example/notes/inactive-follower-${index}`));
+      assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+    }
+
+    const suspendedInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://suspended-local.example',
+        domain: 'suspended-local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.SUSPENDED,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const suspendedInstanceFollower = await createLocalFollowerProfile(
+      'suspended-instance-follower',
+      undefined,
+      { instanceId: suspendedInstance.id },
+    );
+    await db.insert(ProfileFollows).values({
+      followerProfileId: suspendedInstanceFollower.id,
+      followeeProfileId: profile.id,
+    });
+    await deliver(new URL('https://remote.example/notes/suspended-instance-follower'));
+    assert.equal((await db.select().from(ActivityPubPosts)).length, 0);
+
+    const activeFollower = await createLocalFollowerProfile('active-follower');
+    await db.insert(ProfileFollows).values({
+      followerProfileId: activeFollower.id,
+      followeeProfileId: profile.id,
+    });
+    const activeObjectUri = new URL('https://remote.example/notes/active-follower');
+    await deliver(activeObjectUri);
+    assert.equal(
+      (await getMaterializedPost(activeObjectUri)).post.visibility,
+      PostVisibility.FOLLOWERS,
+    );
   });
 
   test('projects the first four embedded image attachments without fetching IRI-only attachments', async () => {
@@ -887,14 +1124,25 @@ describe('inbound Create dispatch', () => {
   });
 
   test('signed Create reaches the dispatcher through personal and shared inboxes', async () => {
-    await createStoredRemoteActor();
+    const remoteProfile = await createStoredRemoteActor();
+    await createLocalFollowerProfile('inbox-recipient', localProfileId);
+    await db.insert(ProfileFollows).values({
+      followerProfileId: localProfileId,
+      followeeProfileId: remoteProfile.id,
+    });
     const fixture = await createInboxFixture();
+    const audience = [
+      new URL('https://remote.example/users/alice/followers'),
+      new URL('https://mention.example/users/bob'),
+    ];
 
     const personalResponse = await fixture.federation.fetch(
       await fixture.createSignedCreateRequest(
         `/ap/actor/${localProfileId}/inbox`,
         new URL('https://remote.example/notes/personal'),
         new URL('https://remote.example/activities/create-personal'),
+        undefined,
+        audience,
       ),
       { contextData: undefined },
     );
@@ -903,6 +1151,8 @@ describe('inbound Create dispatch', () => {
         '/inbox',
         new URL('https://remote.example/notes/shared'),
         null,
+        undefined,
+        audience,
       ),
       { contextData: undefined },
     );
@@ -913,6 +1163,12 @@ describe('inbound Create dispatch', () => {
       'https://remote.example/notes/personal',
       'https://remote.example/notes/shared',
     ]);
+    assert.deepEqual(
+      (await db.select({ visibility: Posts.visibility }).from(Posts)).map(
+        ({ visibility }) => visibility,
+      ),
+      [PostVisibility.FOLLOWERS, PostVisibility.FOLLOWERS],
+    );
   });
 
   test('commits one Post for concurrent personal and shared deliveries of the same object', async () => {
@@ -1179,11 +1435,13 @@ const createContext = (
   documentLoader: DocumentLoader = async (url) => {
     throw new Error(`Unexpected document URL: ${url}`);
   },
+  recipient: string | null = null,
 ) =>
   ({
     canonicalOrigin: publicOrigin,
     documentLoader,
     parseUri: (uri: URL | null) => uriContext.parseUri(uri),
+    recipient,
   }) as unknown as InboxContext<void>;
 
 const createRemoteCreate = ({ objectUri, replyTarget }: { objectUri: URL; replyTarget?: URL }) =>
@@ -1234,10 +1492,33 @@ const createStoredRemoteActor = async ({
     profileId: profile.id,
     type: ActivityPubActorType.PERSON,
     uri: remoteActorUri.href,
+    followersUri: `${remoteActorUri.href}/followers`,
   });
 
   return profile;
 };
+
+const createLocalFollowerProfile = async (
+  handle: string,
+  id?: string,
+  {
+    instanceId = localInstanceId,
+    state = ProfileState.ACTIVE,
+  }: { instanceId?: string; state?: ProfileState } = {},
+) =>
+  db
+    .insert(Profiles)
+    .values({
+      displayName: handle,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle,
+      ...(id === undefined ? {} : { id }),
+      instanceId,
+      normalizedHandle: handle,
+      state,
+    })
+    .returning()
+    .then(firstOrThrow);
 
 const getMaterializedPost = async (objectUri: URL) => {
   const mapping = await db
@@ -1298,13 +1579,14 @@ const createInboxFixture = async () => {
     objectUri: URL,
     activityId: URL | null,
     replyTarget?: URL,
+    audience: URL | URL[] = PUBLIC_COLLECTION,
   ) => {
     const note = new Note({
       attribution: remoteActorUri,
       content: 'Hello',
       id: objectUri,
       ...(replyTarget ? { replyTarget } : {}),
-      to: PUBLIC_COLLECTION,
+      ...(Array.isArray(audience) ? { tos: audience } : { to: audience }),
     });
     documents.set(objectUri.href, await note.toJsonLd({ format: 'expand' }));
     const activity = new Create({ actor: remoteActorUri, id: activityId, object: note });
