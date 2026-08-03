@@ -24,6 +24,27 @@ function migrationTableReference(sql: MigrationClient) {
   return sql`${sql(migrationsSchema)}.${sql(migrationsTable)}`;
 }
 
+async function runMigrationTransaction(
+  sql: MigrationClient,
+  callback: (transaction: MigrationClient) => Promise<void>,
+): Promise<void> {
+  // postgres.js reserved clients expose query primitives but not `.begin` at runtime.
+  await sql`BEGIN`;
+
+  try {
+    await callback(sql);
+    await sql`COMMIT`;
+  } catch (error) {
+    try {
+      await sql`ROLLBACK`;
+    } catch {
+      // Preserve the migration error when the connection cannot roll back.
+    }
+
+    throw error;
+  }
+}
+
 function validateLegacyMigrationHistory(
   rows: LegacyMigrationHistoryRow[],
   migrations: MigrationMeta[],
@@ -114,7 +135,7 @@ async function ensureMigrationHistory(
   `;
   validateLegacyMigrationHistory(legacyRows, migrations);
 
-  await sql.begin(async (transaction) => {
+  await runMigrationTransaction(sql, async (transaction) => {
     if (!columnNames.has('name')) {
       await transaction`
         ALTER TABLE ${table}
@@ -186,7 +207,7 @@ function validateMigrationHistory(
 async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta): Promise<void> {
   const table = migrationTableReference(sql);
 
-  await sql.begin(async (transaction) => {
+  await runMigrationTransaction(sql, async (transaction) => {
     for (const statement of migration.sql) {
       await transaction.unsafe(statement);
     }
@@ -220,6 +241,7 @@ export async function runDatabaseMigrations({
 
   const clientOptions = {
     max: 1,
+    max_lifetime: null,
     connection: {
       idle_in_transaction_session_timeout: 30 * 1000,
       lock_timeout: 10 * 1000,
@@ -227,10 +249,14 @@ export async function runDatabaseMigrations({
     },
   };
   const client = databaseUrl ? postgres(databaseUrl, clientOptions) : postgres(clientOptions);
+  type ReservedMigrationClient = Awaited<ReturnType<MigrationClient['reserve']>>;
+  let session: ReservedMigrationClient | undefined;
   let lockAcquired = false;
 
   try {
-    const [lock] = await client<{ acquired: boolean }[]>`
+    session = await client.reserve();
+
+    const [lock] = await session<{ acquired: boolean }[]>`
       SELECT pg_try_advisory_lock(${migrationLock[0]}, ${migrationLock[1]}) AS acquired
     `;
 
@@ -241,25 +267,28 @@ export async function runDatabaseMigrations({
     lockAcquired = true;
 
     if (migrationRole) {
-      await client`SET ROLE ${client(migrationRole)}`;
+      await session`SET ROLE ${session(migrationRole)}`;
     }
 
     const migrations = readMigrationFiles({ migrationsFolder });
-    await ensureMigrationHistory(client, migrations);
-    const history = await readMigrationHistory(client);
+    await ensureMigrationHistory(session, migrations);
+    const history = await readMigrationHistory(session);
     validateMigrationHistory(history, migrations);
 
     for (const migration of migrations.slice(history.length)) {
-      await applyMigrationFile(client, migration);
+      await applyMigrationFile(session, migration);
     }
   } finally {
-    if (lockAcquired) {
-      await client`
-        SELECT pg_advisory_unlock(${migrationLock[0]}, ${migrationLock[1]})
-      `;
+    try {
+      if (session && lockAcquired) {
+        await session`
+          SELECT pg_advisory_unlock(${migrationLock[0]}, ${migrationLock[1]})
+        `;
+      }
+    } finally {
+      session?.release();
+      await client.end({ timeout: 5 });
     }
-
-    await client.end({ timeout: 5 });
   }
 }
 

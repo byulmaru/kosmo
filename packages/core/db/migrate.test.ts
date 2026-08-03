@@ -627,10 +627,28 @@ test('PostgreSQL 환경 변수로 마이그레이션 database에 연결한다', 
 test('별도 로그인으로 연결해도 지정한 database owner role로 객체를 생성한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
   const ownerRole = `migration_owner_${process.pid}`;
-  const validMigrations = await migrationFolder(
-    '20260712000000_owner',
-    'CREATE TABLE migration_owner_probe (id integer PRIMARY KEY);',
-  );
+  const validMigrations = await migrationFolder([
+    {
+      name: '20260712000000_owner_first',
+      sql: `
+        CREATE TABLE migration_owner_sessions (
+          migration_name text PRIMARY KEY,
+          backend_pid integer NOT NULL,
+          current_user_name name NOT NULL
+        );
+        INSERT INTO migration_owner_sessions (migration_name, backend_pid, current_user_name)
+        VALUES ('first', pg_backend_pid(), current_user);
+      `,
+    },
+    {
+      name: '20260712000001_owner_second',
+      sql: `
+        CREATE TABLE migration_owner_probe (id integer PRIMARY KEY);
+        INSERT INTO migration_owner_sessions (migration_name, backend_pid, current_user_name)
+        VALUES ('second', pg_backend_pid(), current_user);
+      `,
+    },
+  ]);
   const [{ currentUser }] = await control<
     { currentUser: string }[]
   >`SELECT current_user AS "currentUser"`;
@@ -654,18 +672,38 @@ test('별도 로그인으로 연결해도 지정한 database owner role로 객�
       migrationsFolder: validMigrations,
     });
 
+    const sessions = await control<
+      { migrationName: string; backendPid: number; currentUser: string }[]
+    >`
+      SELECT migration_name AS "migrationName",
+        backend_pid AS "backendPid",
+        current_user_name AS "currentUser"
+      FROM migration_owner_sessions
+      ORDER BY migration_name
+    `;
+    assert.deepEqual(
+      sessions.map(({ migrationName }) => migrationName),
+      ['first', 'second'],
+    );
+    assert.equal(new Set(sessions.map(({ backendPid }) => backendPid)).size, 1);
+    assert.deepEqual(
+      sessions.map(({ currentUser }) => currentUser),
+      [ownerRole, ownerRole],
+    );
+
     const owners = await control<{ owner: string }[]>`
       SELECT pg_get_userbyid(relowner) AS owner
       FROM pg_class
       WHERE oid IN (
         'public.migration_owner_probe'::regclass,
+        'public.migration_owner_sessions'::regclass,
         'drizzle.__drizzle_migrations'::regclass
       )
       ORDER BY relname
     `;
     assert.deepEqual(
       owners.map(({ owner }) => owner),
-      [ownerRole, ownerRole],
+      [ownerRole, ownerRole, ownerRole],
     );
   } finally {
     await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
