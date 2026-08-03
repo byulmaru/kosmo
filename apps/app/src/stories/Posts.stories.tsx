@@ -4935,7 +4935,15 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
   parameters: {
     relay: {
       mutationResponse: {
-        createPost: { post: { __typename: 'Post', id: 'reply-created-from-list' } },
+        createPost: {
+          post: withReactionViewerState(
+            post({
+              bodyText: '목록에서 작성한 답글',
+              id: 'reply-created-from-list',
+              replyParent: { __typename: 'Post', id: shortPost.id },
+            }),
+          ),
+        },
       },
     },
   },
@@ -4951,7 +4959,7 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
-    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     const success = await screen.findByRole('alert');
     expect(success).toHaveTextContent('답글을 게시했어요');
