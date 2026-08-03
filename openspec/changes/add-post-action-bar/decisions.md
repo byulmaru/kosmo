@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434·PROD-632와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31·2026-08-03 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -188,7 +188,7 @@
 - Decision Date: 2026-07-21
 - Decision Class: Derived Contract
 - Authority / Provenance: `memory/issue-openspec-workflow.md`, `PROD-432`, `PROD-433`, `PROD-434`
-- Status: Active
+- Status: Superseded
 - Context / Problem: UI 컴포넌트, surface 배치와 실제 action 연결은 별도 PR로 리뷰해야 하지만 하나의 최종 Post Action Bar 결과와 통합 검증을 공유한다.
 - Decision Outcome: `add-post-action-bar` 하나가 PROD-432 계약 전체를 소유한다. PROD-433과 PROD-434는 자기 구현과 테스트를 소유하고, PROD-432는 선행 action 연결, 전체 surface 통합 검증, task 정합성 확인과 최종 archive를 소유한다.
 - Alternatives Considered: 구현 자식마다 OpenSpec을 복제하면 같은 상태·접근성·배치 계약이 갈라지고 부분 완료를 전체 완료로 오인할 수 있어 채택하지 않았다. 부모를 추적 컨테이너로만 두는 방식은 최종 통합 검증과 archive 소유자가 사라져 채택하지 않았다.
@@ -363,6 +363,18 @@
 - Consequences: 상세 thread의 current Post 높이만 아래쪽에서 12px 줄어들고 목록 surface와 다른 thread row, Action Bar component API·geometry는 바뀌지 않는다.
 - Confirmation / Follow-up: `PostDetailThreadRoute` Storybook에서 current row 상단 16px, Reaction Summary bottom→Action Bar top과 Action Bar bottom→다음 divider top을 검증한다. selected Profile을 공급하는 Reply owner fixture에서도 Composer가 닫힌 기본 상태의 Action Bar bottom→divider top을 exact 4px로 검증한다.
 
+### PROD-632가 후속 링크 복사 복구와 change archive를 인계받는다
+
+- Decision Date: 2026-08-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-632`, 2026-08-03 KST 사용자 결정
+- Status: Active
+- Context / Problem: PROD-432와 PR #437이 완료된 뒤 실제 Clipboard 런타임에서 링크가 복사되지 않는 PROD-632가 발견됐다. 기존 `add-post-action-bar` change는 같은 링크 복사 requirement와 미완료 archive task를 이미 소유하므로 새 change를 만들면 동일 계약과 완료 생명주기가 중복된다.
+- Decision Outcome: PROD-432는 재활성화하지 않고 기존 구현 완료 이력으로 유지한다. PROD-632가 실제 Clipboard 실패 원인 조사, 게시글 목록·상세 링크 복사 복구, Web·지원 Native 플랫폼 회귀 검증, canonical 문서·Linear·OpenSpec·구현의 최종 정합성 확인과 `add-post-action-bar` archive를 인계받는다. 기존 `post-action-bar` requirement와 ADR 0015 Post Share Reference를 그대로 적용하며 새 capability나 spec delta를 만들지 않는다.
+- Alternatives Considered: PROD-432를 다시 활성화하는 방식은 구현자가 다른 완료 이력을 변경하므로 사용자 결정에 따라 채택하지 않았다. 별도 bugfix OpenSpec은 같은 행동 계약과 archive 생명주기를 중복하므로 채택하지 않았다. mock 검증만으로 issue를 닫는 방식은 실제 런타임 실패를 설명하지 못하므로 채택하지 않았다.
+- Consequences: proposal·design·tasks는 PROD-632의 후속 복구와 archive ownership만 추가한다. PROD-432의 완료된 구현 task와 PR 이력은 수정하지 않고, 기존 4.7 archive task를 PROD-632 task group으로 옮긴다.
+- Confirmation / Follow-up: PROD-632에서 실제 Clipboard adapter 실패를 재현하고 목록·상세, guest, canonical origin·direct Source, 성공·실패·menu dismiss·재시도를 Web과 지원 Native 플랫폼에서 검증한다. archive 전후 strict validation을 통과시킨다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -382,3 +394,4 @@
 - 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`는 2026-07-31 `Action Bar endpoint를 PostBody content column 양끝에 정렬한다`로 endpoint inset이 대체됐다. 높이·target 너비·glyph·gap·Native 출시 gate 결과는 유지한다.
 - 2026-07-29 `목록 Post 카드의 Action Bar 주변 spacing을 Figma에 맞춘다`는 같은 날 `Quote preview 내부·외부 spacing을 분리한다`로 Quote spacing이 대체됐다. Action Bar 하단 4px, 1px semantic divider와 순수 Repost spacing 결과는 유지한다.
 - 2026-07-21 `실행할 수 없는 액션은 숨기지 않고 disabled로 유지`는 2026-07-27 `production surface는 표시 Post와 action target을 구분한다`로 대체했다.
+- 2026-07-21 `공유 change와 부모 소유의 최종 archive`의 PROD-432 archive owner 결과는 2026-08-03 `PROD-632가 후속 링크 복사 복구와 change archive를 인계받는다`로 대체했다. 하나의 공유 change를 유지하고 부분 archive하지 않는 결과는 유지한다.

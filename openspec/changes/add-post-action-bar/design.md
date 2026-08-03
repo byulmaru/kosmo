@@ -4,7 +4,7 @@
 
 [KOSMO Action 컴포넌트](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=88-1005)는 Reply → Repost → Reaction → Bookmark → More 순서, 16px icon/count, 4px 내부 간격, 약 50px social action 영역과 측정 높이 약 27px을 보여 준다. `docs/design/post-action-bar.md`는 이를 production 정수값 28px로 정규화하고 Bar·control 높이 28, Reply·More control slot의 content column 양끝 정렬, social action 너비 50, More target 너비 최소 28을 canonical geometry로 확정한다. Figma에는 pending·disabled와 접근 가능한 실패 toast가 없으므로 상태·피드백 계약은 기존 구현을 유지한다. Figma는 이 change에서 수정하지 않으며 비규범적 시각 참고로만 사용한다. `docs/domain`·`docs/design`은 제품·디자인의 canonical source, Linear는 범위·소유권·의존성의 source, `post-action-bar` spec은 상태·입력·접근성·통합 동작의 규범 계약이다.
 
-공유 change의 계약 부모는 PROD-432다. PROD-433은 독립 UI와 상태 카탈로그를, PROD-414는 최초 production surface 배치와 Repost menu·toast를, PROD-432는 준비된 나머지 action 상태 연결·최종 정책·More 링크 복사·통합 검증·archive를 소유한다. 이후 완료된 sibling PROD-598은 More의 작성자 삭제 항목·확인 dialog·mutation·cache·실패 계약을 소유하며, PROD-432 production surface는 이 결과를 링크 복사와 조합하고 순서·자격·회귀만 통합 검증한다. PROD-434는 canceled ownership record로만 유지한다. Reply·Repost·Reaction·Bookmark 자체의 저장·GraphQL·count 집계·도메인 상태 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425와 canonical 문서의 계약을 재사용한다. Post Action Bar 배치·Repost menu·toast와 삭제 More menu는 `docs/design/post-action-bar.md`, Post Share Reference는 ADR 0015와 Post 객체 문서를 따른다.
+공유 change의 계약 부모는 PROD-432다. PROD-433은 독립 UI와 상태 카탈로그를, PROD-414는 최초 production surface 배치와 Repost menu·toast를, PROD-432는 준비된 나머지 action 상태 연결·최종 정책·More 링크 복사·통합 검증의 기존 완료 이력을 소유한다. 이후 완료된 sibling PROD-598은 More의 작성자 삭제 항목·확인 dialog·mutation·cache·실패 계약을 소유하며, PROD-432 production surface는 이 결과를 링크 복사와 조합하고 순서·자격·회귀만 통합 검증했다. PROD-432 완료 뒤 발견된 실제 Clipboard 런타임 회귀와 남은 archive는 PROD-632가 인계받는다. PROD-434는 canceled ownership record로만 유지한다. Reply·Repost·Reaction·Bookmark 자체의 저장·GraphQL·count 집계·도메인 상태 의미·권한·Content·Reply Parent·Repost Source 관계 조합 및 Post Visibility 정책은 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425와 canonical 문서의 계약을 재사용한다. Post Action Bar 배치·Repost menu·toast와 삭제 More menu는 `docs/design/post-action-bar.md`, Post Share Reference는 ADR 0015와 Post 객체 문서를 따른다.
 
 ## Goals / Non-Goals
 
@@ -15,6 +15,7 @@
 - Reaction·Bookmark count를 제외하고, 선행 계약이 제공한 Reply·Repost의 optional count는 실행 환경 locale의 표준 compact formatting으로 표시한다.
 - 같은 React Native 구현이 Android·iOS·Web에서 28 logical unit geometry와 접근성 metadata를 제공한다. Web은 24×24 CSS px 최소 target을 충족하고 Native target 복구는 출시 gate로 분리한다.
 - UI, surface 배치, 실제 데이터 연결을 각 구현 이슈가 독립적으로 리뷰·검증할 수 있게 하면서 하나의 공유 spec으로 최종 결과를 묶는다.
+- PROD-632가 mock 검증과 실제 Clipboard 런타임 사이의 차이를 확인해 링크 복사를 복구하고 최종 change 정합성·archive를 완료한다.
 
 **Non-Goals:**
 
@@ -33,6 +34,7 @@
 - React Native Web을 공유하므로 DOM element, CSS selector, Web 전용 event에 의존한 구현은 native 계약을 깨뜨린다.
 - Figma의 측정 높이 약 27px은 production 정수값 28px로 정규화한다. Web은 28×최소 28 target 안에 24×24 CSS px 사각형을 포함하며, Native의 28pt·28dp는 출시 전 임시 예외로만 사용한다.
 - 선행 action 계약이 제공하는 Reply count와 아직 config 기반인 도메인 상태의 cache 소유권은 상위 Relay/surface 계층에 있다. 구현된 Repost child는 composite parent fragment 아래 자기 fragment·mutation·pending과 viewer-relative 파생 상태를 colocate하되 toolbar container가 mutation payload나 cache update 정책을 재구현하지 않는다.
+- 현재 `PostMoreMenu`와 Storybook Clipboard mock은 canonical URL 생성, 성공·rejection과 menu dismiss를 검증하지만 실제 Web·Native Clipboard adapter의 secure context·permission·platform 동작을 증명하지 않는다. PROD-632는 실제 지원 런타임에서 실패를 먼저 재현하고 이 검증 공백을 닫아야 한다.
 
 ### Recommended Approach
 
@@ -51,6 +53,8 @@ PROD-414는 준비된 `PostActionBar`를 `PostLayout`의 content grid 마지막 
 PROD-425는 PROD-414가 배치한 actual Post Action Bar의 Reply config를 existing Composer와 연결한다. display Post와 Action Bar target을 분리해 순수 Repost의 Repost child는 direct Source target을 유지하면서 Reply eligibility는 바깥 contentless Repost에서 disabled로 전달한다. selected Profile이 있는 목록은 modal·전체 화면 Reply surface, 상세 thread는 행별 inline surface를 열고 Composer가 소유한 `expanded`를 Action Bar에 다시 공급한다. selected Profile이 없는 guest에는 이 child slice에서 Reply config를 새로 노출하지 않으며 인증 진입과 최종 guest 정책은 PROD-432가 소유한다.
 
 PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직 config 기반인 나머지 action 구현 결과를 surface 입력으로 변환한다. surface는 canonical 계약 전체를 하나의 boolean으로 재사용하지 않고, Content·Reply Parent·Repost Source 관계 조합, Post Visibility와 대상 관련 조건으로 결정되는 대상 적격성과 현재 실행 주체·세션의 실행 권한을 분리한다. 대상 자체가 부적격하거나 인증된 실행 주체가 권한을 갖지 못하면 disabled를 전달한다. 순수 Repost의 Reply는 PROD-425가 연결한 바깥 contentless Repost identity와 disabled 상태를 유지하고, Repost·Reaction·Bookmark·More만 direct Source target을 사용한다. target 자체가 적격하면 `SessionProvider.status`에 따라 `guest`는 기존 플랫폼 인증 진입(Web `/login`, Native `/`)으로 위임하고, `valid`인데 selected Profile이 없으면 `ShellChromeContext.openProfileSwitcher()`를 호출하며, `error`에서는 disabled로 유지한다. resolution 전에 child UI나 mutation을 시작하지 않고 Profile 선택 성공 뒤 원래 action을 자동 재실행하지 않는다. 이 change에서는 새 인증 목적지·임시 인증 화면·Profile 선택 화면을 만들지 않는다. surface는 PROD-425의 Reply callback·`expanded`를 재구현하지 않고 회귀 검증하며, Reaction에 하나 이상의 Reaction Type 존재를 나타내는 `hasReacted`, Bookmark에 `hasBookmarked`를 공급한다. Repost의 최종 disabled 행동을 child에 연결할 concrete host input 또는 fragment shape는 actual Home·Profile·상세 caller와 함께 이 단계에서 설계하고 통합 검증한다. Reaction과 Bookmark count는 연결하지 않고 Reply도 선행 계약이 제공하는 count만 optional로 연결하며 계약이 없는 `0`이나 새 집계를 합성하지 않는다. viewer-independent count와 선택 Profile별 도메인 상태의 기존 Relay cache 경계를 유지하고 action별 pending을 분리한다. Bookmark 해제 성공은 현재 Relay actor Store의 `Post.viewerBookmark`, Bookmark record와 응답 처리 시점에 로드된 `BookmarkConnectionList_bookmarks` edge를 함께 제거하되 다른 actor Store를 변경하지 않는다. Repost 외 action 요청이 실패하면 해당 action 계약에 맞는 접근 가능한 안내를 제공하되 PROD-414의 Repost toast를 재구현하지 않는다. Surface는 ADR 0015 Post Share Reference를 복사하는 `링크 복사` item을 `moreItems` 첫 항목으로 제공하고, private `PostDeletionAction`은 이 항목과 PROD-598의 작성자 `삭제`를 자격 충족 시 마지막 항목으로 조합해 menu·dialog·delete mutation을 소유한다. 삭제 확인·mutation·cache·실패는 PROD-598 결과를 재사용한다. Web More menu는 공용 overlay의 viewport 보정과 첫 item overlap을 유지하면서 trigger 오른쪽을 기준으로 왼쪽을 향해 펼친다. menu card 오른쪽은 trigger 오른쪽보다 5px 바깥에 두고 첫 item 오른쪽은 trigger 오른쪽과 맞춰, 같은 위치의 두 번째 활성화가 `링크 복사`를 선택하게 한다. Repost의 기존 시작 정렬과 Native bottom action sheet는 유지한다. Web·Android·iOS 모두 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 canonical Web origin으로 사용한다. 모든 자식과 선행 action이 준비된 뒤 목록·상세의 동일 계약, Profile 전환, 성공·실패 복귀, disabled 정책 및 More 조합을 통합 검증하고 공유 change를 archive한다.
+
+PROD-632는 실제 Web과 지원 Native 런타임에서 Clipboard 실패를 재현한 뒤 Storybook mock과 runtime adapter의 차이를 근거로 최소 수정 경계를 선택한다. 수정은 기존 `PostMoreMenu`·production surface 소유 경계 안에서 canonical Post Share Reference, guest 사용, 순수 Repost direct Source, More item 순서·dismiss와 한국어 실패 안내·다음 입력 재시도를 유지해야 한다. 실제 런타임 성공·실패와 가까운 자동 검증을 함께 통과시킨 뒤 canonical 문서·Linear·OpenSpec·구현을 다시 대조하고 이 change를 archive한다.
 
 ### Allowed Alternatives
 
@@ -74,6 +78,7 @@ PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직
 - `selectedProfile == null`만 보고 guest로 판단하면 valid 세션의 Profile 선택 onboarding을 건너뛰고 잘못된 로그인 경로로 이동한다. `SessionProvider.status`와 selected Profile을 별도로 해석해야 한다.
 - 순수 Repost 아래 다섯 액션 모두에 바깥 Repost fragment를 공급하면 Content 없는 Repost를 action target으로 사용한다. 반대로 다섯 액션 모두 direct Source를 사용하면 PROD-425의 Reply binding을 깨뜨린다. Reply는 바깥 contentless Repost의 disabled 상태를 유지하고 나머지 액션만 direct Source fragment를 사용해야 한다.
 - Repost trigger에서 즉시 mutation을 실행하거나 선택 상태에 따라 menu와 즉시 실행을 섞으면 미래 `인용하기` 진입점과 interaction 예측 가능성이 깨진다.
+- Storybook Clipboard mock 성공만으로 실제 browser secure context·permission이나 Native adapter 동작을 증명하면 PROD-632의 운영 회귀를 다시 놓친다.
 
 ## Risks / Trade-offs
 
@@ -88,13 +93,15 @@ PROD-432는 PROD-414 surface와 PROD-425가 연결한 Reply 결과 위에 아직
 - [공통 cross-platform toast 인프라가 현재 없음] → PROD-414가 새 dependency 없이 provider의 단일 최소 host를 만들고 정확한 Repost 문구·latest replace·자동 dismiss·alert semantics만 구현한다.
 - [Web anchored menu와 Native bottom sheet의 동작 차이] → 공용 항목 계약은 공유하되 platform file로 위치·dismiss·focus/back 처리를 분리하고 Web·Android·iOS runtime에서 각각 검증한다.
 - [Web overlay가 trigger와 분리되어 item pointer·focus를 바깥 입력으로 오인할 수 있음] → outside 판정은 trigger control과 portal menu를 모두 내부로 취급하고, 같은 위치 두 번째 pointer 입력·Escape focus 복귀·keyboard 이동을 회귀 검증한다.
+- [mock과 실제 Clipboard adapter의 실행 조건이 다를 수 있음] → 실제 Web·지원 Native 런타임에서 성공·실패를 재현하고 가까운 자동 검증과 함께 완료 증거로 남긴다.
 
 ## Migration Plan
 
 1. PROD-433에서 surface와 분리된 공통 컴포넌트, Storybook 및 component test를 추가한다.
 2. PROD-414에서 `PostActionBar` composite fragment와 private Repost child fragment·mutation·pending을 유지한 채 `PostListItem`·`PostLayout`의 final sibling에 처음 배치하고, 순수 Repost Source target, cross-platform Repost menu와 action별 transient toast를 연결한다. PROD-434의 canceled task는 실행하지 않는다.
 3. 선행 action 구현이 준비되면 PROD-432에서 아직 config 기반인 action 상태와 callback, 대상 적격성·현재 세션 실행 권한이 분리된 disabled 정책, 기존 guest 인증 진입, valid 세션의 기존 Profile 선택기 진입, session error 비활성화와 More 링크 복사를 연결한다. 완료된 sibling PROD-598의 작성자 삭제 action은 같은 More menu에 조합하되 소유 계약을 재정의하지 않고 PROD-414의 Repost toast를 포함한 전체 surface 결과를 통합 검증한다.
-4. 모든 task와 통합 검증이 완료된 뒤 PROD-432가 change를 archive하고 archive 후 strict validation을 수행한다.
+4. PROD-632에서 실제 Clipboard 런타임 실패를 재현하고 기존 canonical 공유 참조와 More surface 계약을 바꾸지 않는 최소 수정 및 Web·지원 Native 회귀 검증을 완료한다.
+5. PROD-632가 canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인한 뒤 change를 archive하고 archive 후 strict validation을 수행한다.
 
 롤백은 역순으로 production surface 연결을 제거한 뒤 공통 컴포넌트를 제거한다. 새 persistence나 schema migration이 없으므로 데이터 rollback은 필요 없다. 일부 구현 PR만 완료된 동안에는 change를 archive하지 않는다.
 
