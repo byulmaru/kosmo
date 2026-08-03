@@ -1603,46 +1603,64 @@ function ReplyDetailInlineStory() {
 
 type ReplyComposerRequest = Readonly<{
   bodyText: string;
+  media: readonly Readonly<{ altText: string | null; mediaId: string }>[];
   replyParentId?: string;
+  sensitiveMedia: boolean;
   visibility: string;
 }>;
 
 function ReplyComposerContractStory() {
   const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
   const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
-  const environment = useMemo(
-    () =>
-      new Environment({
-        network: Network.create((request: RequestParameters, variables: Variables) => {
-          if (request.name === 'PostsStoriesQuery') {
-            return Promise.resolve({
-              data: {
-                alternateComposerProfile,
-                composerProfile,
-                contentPostsProfile,
-                emptyPostsProfile,
-                homeTimeline,
-                nodes: storyPosts.map(withReactionViewerState),
+  const environment = useMemo(() => {
+    let nextMediaId = 0;
+    return new Environment({
+      network: Network.create((request: RequestParameters, variables: Variables) => {
+        if (request.name === 'PostsStoriesQuery') {
+          return Promise.resolve({
+            data: {
+              alternateComposerProfile,
+              composerProfile,
+              contentPostsProfile,
+              emptyPostsProfile,
+              homeTimeline,
+              nodes: storyPosts.map(withReactionViewerState),
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostComposerCreatePostMutation') {
+          const input = variables.input as ReplyComposerRequest;
+          setRequests((current) => [...current, input]);
+          return Promise.resolve({
+            data: {
+              createPost: {
+                post: { __typename: 'Post', id: 'reply-created-in-story' },
               },
-            } as GraphQLResponse);
-          }
-          if (request.name === 'PostComposerCreatePostMutation') {
-            const input = variables.input as ReplyComposerRequest;
-            setRequests((current) => [...current, input]);
-            return Promise.resolve({
-              data: {
-                createPost: {
-                  post: { __typename: 'Post', id: 'reply-created-in-story' },
-                },
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
+          nextMediaId += 1;
+          return Promise.resolve({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-reply-story-${nextMediaId}` },
+                uploadUrl: `https://upload.example/reply/${nextMediaId}`,
               },
-            } as GraphQLResponse);
-          }
-          return Promise.resolve({ data: {} } as GraphQLResponse);
-        }),
-        store: new Store(new RecordSource()),
+            },
+          } as GraphQLResponse);
+        }
+        if (request.name === 'PostComposerCompleteMediaUploadMutation') {
+          const input = variables.input as Readonly<{ id: string }>;
+          return Promise.resolve({
+            data: { completeMediaUpload: { media: { id: input.id, state: 'READY' } } },
+          } as GraphQLResponse);
+        }
+        return Promise.resolve({ data: {} } as GraphQLResponse);
       }),
-    [],
-  );
+      store: new Store(new RecordSource()),
+    });
+  }, []);
 
   return (
     <RelayEnvironmentProvider environment={environment}>
@@ -1703,6 +1721,25 @@ function ReplyComposerContextIsolationStory() {
             return {
               data: {
                 createPost: { post: { __typename: 'Post', id: 'late-reply-created-in-story' } },
+              },
+            } as GraphQLResponse;
+          }
+          if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
+            return {
+              data: {
+                issueMediaUploadUrl: {
+                  media: { id: 'media-reply-context' },
+                  uploadUrl: 'https://upload.example/reply-context',
+                },
+              },
+            } as GraphQLResponse;
+          }
+          if (request.name === 'PostComposerCompleteMediaUploadMutation') {
+            return {
+              data: {
+                completeMediaUpload: {
+                  media: { id: 'media-reply-context', state: 'READY' },
+                },
               },
             } as GraphQLResponse;
           }
@@ -4582,6 +4619,8 @@ export const ComposerReplyMutationContract: Story = {
             bodyText: '부모 게시물에 작성한 답글입니다.',
             replyParentId: 'post-parent',
             visibility: 'FOLLOWERS',
+            media: [],
+            sensitiveMedia: false,
           },
         ]),
       );
@@ -4592,6 +4631,159 @@ export const ComposerReplyMutationContract: Story = {
     expect(body).toHaveValue('');
   },
   render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyMediaMutationContract: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+    setNextImagePickerResult({
+      assets: [
+        {
+          ...composerMediaAsset,
+          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: 'blob:https://kosmo.example/reply',
+        },
+      ],
+      canceled: false,
+    });
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      await userEvent.type(
+        canvas.getByRole('textbox', { name: '첨부 이미지 1 대체 텍스트' }),
+        '답글 이미지',
+      );
+      await userEvent.click(canvas.getByRole('switch', { name: '민감한 이미지로 표시' }));
+      await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+
+      await waitFor(() => {
+        expect(canvas.getByTestId('reply-composer-request-log')).toHaveTextContent(
+          JSON.stringify([
+            {
+              bodyText: '',
+              replyParentId: 'post-parent',
+              visibility: 'UNLISTED',
+              media: [{ altText: '답글 이미지', mediaId: 'media-reply-story-1' }],
+              sensitiveMedia: true,
+            },
+          ]),
+        );
+      });
+      expect(upload).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyMediaFailureLifecycle: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    let finishFirstUpload!: (response: Response) => void;
+    let uploadCount = 0;
+    globalThis.fetch = fn(() => {
+      uploadCount += 1;
+      if (uploadCount === 1) {
+        return new Promise<Response>((resolve) => {
+          finishFirstUpload = resolve;
+        });
+      }
+      return Promise.resolve(new Response(null, { status: 200 }));
+    });
+    setNextImagePickerResult({
+      assets: [
+        {
+          ...composerMediaAsset,
+          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: 'blob:https://kosmo.example/reply-failure',
+        },
+      ],
+      canceled: false,
+    });
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+
+      finishFirstUpload(new Response(null, { status: 500 }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 실패')).toBeVisible();
+      });
+      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 업로드 재시도' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 제거' }));
+      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyMediaContextIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    let finishUpload!: (response: Response) => void;
+    const upload = fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishUpload = resolve;
+        }),
+    );
+    globalThis.fetch = upload;
+    setNextImagePickerResult({
+      assets: [
+        {
+          ...composerMediaAsset,
+          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: 'blob:https://kosmo.example/reply-context',
+        },
+      ],
+      canceled: false,
+    });
+
+    try {
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+
+      await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
+      expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 중')).toBeNull();
+      expect(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' })).toBeVisible();
+      expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+
+      finishUpload(new Response(null, { status: 200 }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(canvas.queryByLabelText('첨부 이미지 1, 업로드 완료')).toBeNull();
+      expect(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' })).toBeVisible();
+      expect(upload).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ReplyComposerContextIsolationStory />,
 };
 
 export const ComposerReplyContextIsolation: Story = {
@@ -4641,6 +4833,79 @@ export const ComposerReplyEnvironmentIsolation: Story = {
     expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
   },
   render: () => <ReplyComposerEnvironmentIsolationStory />,
+};
+
+export const ReplyModalMediaUploadDirtyClose: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-reply-dirty-close', state: 'READY' },
+            },
+          },
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-reply-dirty-close' },
+              uploadUrl: 'https://upload.example/reply-dirty-close',
+            },
+          },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    let finishUpload!: (response: Response) => void;
+    globalThis.fetch = fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishUpload = resolve;
+        }),
+    );
+    setNextImagePickerResult({
+      assets: [
+        {
+          ...composerMediaAsset,
+          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: 'blob:https://kosmo.example/reply-dirty-close',
+        },
+      ],
+      canceled: false,
+    });
+
+    try {
+      const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await waitFor(() => {
+        expect(within(dialog).getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+      expect(within(dialog).getByRole('button', { name: '답글 게시' })).toBeDisabled();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+      const confirm = await screen.findByRole('alertdialog', {
+        name: '답글 작성을 취소할까요?',
+      });
+      await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
+      expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
+
+      finishUpload(new Response(null, { status: 200 }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
+      expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
 };
 
 export const ReplyModalPresentation: Story = {

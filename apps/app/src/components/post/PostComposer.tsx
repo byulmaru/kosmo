@@ -177,11 +177,13 @@ function PostComposerContents({
   const dirty =
     body !== '' ||
     visibility !== PostVisibility.UNLISTED ||
-    (!replyMode && (media.items.length > 0 || media.hasPendingMedia || media.sensitiveMedia));
+    media.items.length > 0 ||
+    media.hasPendingMedia ||
+    media.sensitiveMedia;
   const disabled =
     submitting ||
-    (bodyText.length === 0 && (replyMode || media.items.length === 0)) ||
-    (!replyMode && media.hasPendingMedia) ||
+    (bodyText.length === 0 && media.items.length === 0) ||
+    media.hasPendingMedia ||
     remaining < 0;
   const selectedVisibility =
     availableVisibilityOptions.find((option) => option.value === visibility) ??
@@ -204,7 +206,8 @@ function PostComposerContents({
       variables: {
         input: {
           ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
-          ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
+          media: media.items,
+          sensitiveMedia: media.sensitiveMedia,
         },
       },
       onCompleted: (response, errors) => {
@@ -512,14 +515,12 @@ function PostComposerContents({
             {error}
           </Text>
         ) : null}
-        {replyMode ? null : (
-          <PostComposerMediaControls
-            actions={submitActions}
-            disabled={submitting}
-            key={mediaGeneration}
-            onValueChange={setMedia}
-          />
-        )}
+        <PostComposerMediaControls
+          actions={replyMode ? null : submitActions}
+          disabled={submitting}
+          key={mediaGeneration}
+          onValueChange={setMedia}
+        />
       </View>
     </>
   );
