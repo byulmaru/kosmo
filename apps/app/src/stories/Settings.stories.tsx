@@ -37,13 +37,13 @@ export const SelectedProfile: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getAllByRole('heading', { name: '설정' })).toHaveLength(1);
-    expect(canvas.getByRole('heading', { name: '계정 설정' })).toBeVisible();
+    expect(canvas.getByRole('heading', { level: 1, name: '설정' })).toBeVisible();
+    expect(canvas.getByRole('heading', { level: 2, name: '계정 설정' })).toBeVisible();
     expect(canvas.getByText('Byulmaru ID 외부 서비스')).toBeVisible();
     expect(
       canvas.getByRole('link', { name: 'Byulmaru ID 계정 설정 열기, 외부 서비스' }),
     ).toBeVisible();
-    expect(canvas.getByRole('heading', { name: '프로필 설정' })).toBeVisible();
+    expect(canvas.getByRole('heading', { level: 2, name: '프로필 설정' })).toBeVisible();
     expect(canvas.getByText('Kosmo 내부 기능')).toBeVisible();
     expect(
       canvas.getByLabelText('현재 프로필 설정 대상: 우주 기록자, @space-writer'),
@@ -92,22 +92,6 @@ export const ProfileError: Story = {
   args: {
     accountContent: <AccountEntryFixture />,
     profileState: { onRetry: fn(), status: 'error' },
-  },
-};
-
-export const RouteLoading: Story = {
-  args: {
-    accountContent: <AccountEntryFixture />,
-    profileState: { status: 'loading' },
-    routeState: { status: 'loading' },
-  },
-};
-
-export const RouteError: Story = {
-  args: {
-    accountContent: <AccountEntryFixture />,
-    profileState: { status: 'loading' },
-    routeState: { onRetry: fn(), status: 'error' },
   },
 };
 

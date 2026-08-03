@@ -3,11 +3,7 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import type {
-  SettingsPage as SettingsPageExport,
-  SettingsProfileState,
-  SettingsRouteState,
-} from './SettingsPage';
+import type { SettingsPage as SettingsPageExport, SettingsProfileState } from './SettingsPage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,6 +62,8 @@ describe('SettingsPage', () => {
     });
 
     assert.deepEqual(headingTexts(), ['계정 설정', '프로필 설정']);
+    assert.deepEqual(headingLevels(), [2, 2]);
+    assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.ok(texts().includes('Byulmaru ID 외부 서비스'));
     assert.ok(texts().includes('Kosmo 내부 기능'));
     assert.equal(rendered('AccountEntry').length, 1);
@@ -110,30 +108,6 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('route loading은 공통 heading 아래에서 Profile과 Account 상태를 확정하지 않는다', async () => {
-    await render({ status: 'loading' }, { status: 'loading' });
-
-    assert.equal(rendered('PageHeader')[0].props.title, '설정');
-    assert.equal(rendered('AccountEntry').length, 0);
-    assert.equal(rendered('ProfileSettings').length, 0);
-    assertStateView({ loading: true, title: '설정 페이지를 불러오는 중입니다.' });
-  });
-
-  it('route 오류는 page heading을 유지하고 같은 route를 재시도한다', async () => {
-    const onRetry = mock.fn();
-    await render({ status: 'loading' }, { status: 'error', onRetry });
-
-    assert.equal(rendered('PageHeader')[0].props.title, '설정');
-    const stateView = assertStateView({
-      actionLabel: '다시 시도',
-      alert: true,
-      onAction: onRetry,
-      title: '설정 페이지를 불러오지 못했어요',
-    });
-    stateView.props.onAction();
-    assert.equal(onRetry.mock.callCount(), 1);
-  });
-
   it('Account 외부 이동 오류 slot은 정상 Profile section과 독립적으로 유지된다', async () => {
     const onAccountRetry = mock.fn();
     await render({
@@ -151,21 +125,6 @@ describe('SettingsPage', () => {
     rendered('AccountNavigationError')[0].props.onRetry();
     assert.equal(onAccountRetry.mock.callCount(), 1);
   });
-
-  it('shell이 heading을 소유하면 route PageHeader를 렌더링하지 않는다', async () => {
-    await render(
-      {
-        content: createElement('ProfileSettings'),
-        displayName: '우주 기록자',
-        relativeHandle: '@space-writer',
-        status: 'selected',
-      },
-      false,
-    );
-
-    assert.equal(rendered('PageHeader').length, 0);
-    assert.deepEqual(headingTexts(), ['계정 설정', '프로필 설정']);
-  });
 });
 
 async function render(
@@ -175,7 +134,6 @@ async function render(
         accountContent: ReturnType<typeof createElement>;
         profileState: SettingsProfileState;
       },
-  routeOwnsHeaderOrState: boolean | SettingsRouteState = true,
 ) {
   const props =
     'profileState' in profileStateOrProps
@@ -188,9 +146,6 @@ async function render(
     renderer = create(
       createElement(SettingsPage, {
         ...props,
-        ...(typeof routeOwnsHeaderOrState === 'boolean'
-          ? { routeOwnsHeader: routeOwnsHeaderOrState }
-          : { routeState: routeOwnsHeaderOrState }),
       }),
     );
   });
@@ -214,6 +169,12 @@ function headingTexts(): string[] {
       ? [node.props.children]
       : [],
   );
+}
+
+function headingLevels(): number[] {
+  return rendered('Text')
+    .filter((node) => node.props.accessibilityRole === 'header')
+    .map((node) => node.props['aria-level']);
 }
 
 function assertStateView(expected: Record<string, unknown>) {

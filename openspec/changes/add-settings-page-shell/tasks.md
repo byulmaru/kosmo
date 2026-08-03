@@ -31,7 +31,7 @@
 
 - [x] 1.1 단일 `설정` heading 아래 Byulmaru ID Account 외부 진입점/Kosmo Profile 내부 설정 section, 소유권 설명과 현재 Profile identity를 제공하는 공통 page shell을 구현한다.
 - [x] 1.2 selected Profile이 없을 때 Account 외부 진입점을 유지하고 기존 Profile 선택·생성 flow로 연결하는 Profile empty state를 구현한다.
-- [x] 1.3 route·Profile loading/error와 Account external navigation error slot이 소유 경계를 유지하고 독립적으로 재시도 가능한 상태를 구현한다.
+- [ ] 1.3 route·Profile loading/error와 Account external navigation error slot이 소유 경계를 유지하고 독립적으로 재시도 가능한 상태를 구현한다.
 - [x] 1.4 selected/no-profile, loading·error, 긴 Profile identity와 작은 화면 상태의 component test·Storybook catalog를 추가한다.
 
 ## 2. PROD-653 Account 외부 진입점과 Profile 내부 기능 통합
