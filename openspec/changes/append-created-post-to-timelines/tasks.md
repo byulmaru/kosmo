@@ -20,10 +20,11 @@
 **Verification**
 
 - Relay compiler가 `post { id ...PostListItem_post }`와 Home/Profile connection handle을 통과하는지 확인한다.
-- Relay Store 테스트가 최신순, duplicate completion, Original/Profile과 Reply/Home-only, loaded/unloaded connection, normalized fragment와 actor Store isolation을 검증하는지 확인한다.
+- Relay compiler가 목록 fragment를 선택한 `@prependNode`와 client-only connection 변수를 처리하는지 확인한다.
+- Relay Store 테스트가 Home/Profile connection ID 선택, 최신순 prepend, duplicate completion, Reply/Home-only, loaded/unloaded connection과 부분 GraphQL 오류를 검증하는지 확인한다.
 - API schema/resolver 테스트는 `CreatePostPayload.post`만 유지하는지 확인한다.
 
-- [x] 1.1 Home/Profile managed connection identity를 유지하고 Composer updater를 normalized Post 기반으로 좁힌다.
+- [x] 1.1 Home/Profile managed connection identity를 유지하고 Composer mutation의 Relay `@prependNode` directive에 필요한 connection ID만 전달한다.
 - [x] 1.2 API edge field와 server projection/export 및 관련 선택·테스트를 제거한다.
-- [x] 1.3 OpenSpec과 frontend memory를 caller-local Store update 계약으로 정렬한다.
+- [x] 1.3 수동 updater를 제거하고 테스트·OpenSpec·frontend memory를 Relay 선언형 prepend 계약으로 정렬한다.
 - [x] 1.4 Relay compiler, app/API focused checks와 formatting/diff validation을 실행한다.

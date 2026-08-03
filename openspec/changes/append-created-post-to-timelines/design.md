@@ -1,15 +1,15 @@
 ## Context
 
-`PostComposer`는 `createPost` 응답의 `post`를 Relay normalized Store에 기록하지만, 이미 렌더링한 Home·Profile 목록 membership은 자동으로 바뀌지 않는다. Home Query root와 작성자 Profile Node는 서로 다른 Relay parent이므로 surface별 managed connection을 선언하고 mutation updater에서 각각 찾는다.
+`PostComposer`는 `createPost` 응답의 `post`를 Relay normalized Store에 기록하지만, 이미 렌더링한 Home·Profile 목록 membership은 자동으로 바뀌지 않는다. Home Query root와 작성자 Profile Node는 서로 다른 Relay parent이므로 surface별 managed connection ID를 mutation에 전달하고 `@prependNode`로 응답 Node를 반영한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - `CreatePostPayload.post`만 선택해 생성 Post의 목록 렌더 fragment와 관계 필드를 정규화한다.
-- 요청을 시작한 actor Environment에서 이미 로드된 Home connection에 생성 Post를 최신순으로 한 번 삽입한다.
-- normalized `replyParent`가 `null`인 Original/Quote는 작성자 Profile connection에도 삽입하고, Reply는 Home에만 삽입한다.
-- 같은 Node의 기존 edge를 유지해 duplicate completion을 deduplicate하고, unloaded connection은 변경하지 않는다.
+- 요청을 시작한 actor Environment에서 이미 로드된 Home connection에 생성 Post를 Relay `@prependNode`로 최신순으로 한 번 삽입한다.
+- Original/Quote는 Home과 작성자 Profile connection ID를 전달하고, Reply는 Home ID만 전달한다.
+- Relay 기본 handler가 같은 Node의 기존 edge를 유지해 duplicate completion을 deduplicate하고, unloaded connection은 변경하지 않도록 한다.
 
 **Non-Goals:**
 
@@ -21,9 +21,9 @@
 ## Implementation Guidance
 
 1. Home Query와 `PostList_profile` fragment에 surface별 안정적인 `@connection` handle을 유지한다.
-2. Composer mutation은 `post { id ...PostListItem_post }`를 선택한다. updater는 root `createPost.post` RecordProxy를 가져와 `ConnectionHandler.getConnection`이 반환하는 로드된 connection만 갱신한다.
-3. `ConnectionHandler.createEdge`로 normalized Post를 edge node로 연결하고 `insertEdgeBefore`로 최신순을 유지한다. 이 edge는 서버 cursor나 정책 필드를 합성하지 않는다.
-4. connection의 기존 edge node identity를 먼저 검사해 같은 Post를 중복 삽입하지 않는다. Profile은 `replyParent`가 명시적으로 `null`일 때만 갱신한다.
+2. Composer mutation은 `post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") { id ...PostListItem_post }`를 선택한다.
+3. commit 시 `ConnectionHandler.getConnectionID`로 Home과 작성자 Profile managed connection ID를 계산하되, Reply는 Home ID만 `$connections`에 전달한다. 이 client directive 변수는 서버 API input으로 전달되지 않는다.
+4. Relay 기본 prepend handler가 로드된 connection만 찾고 기존 node identity를 검사한 뒤 `PostConnectionEdge`를 생성하도록 한다. 수동 updater로 같은 Store 동작을 재구현하지 않는다.
 5. 기존 Composer lifecycle guard와 Environment isolation을 유지한다. generated Relay artifacts는 source GraphQL 변경 후 `pnpm --filter @kosmo/app relay`로만 재생성한다.
 
 ## Risks / Trade-offs

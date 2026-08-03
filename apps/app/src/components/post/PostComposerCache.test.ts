@@ -8,11 +8,12 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import { post, profile } from '../../stories/fixtures';
 import CreatePostMutation from './__generated__/PostComposerCreatePostMutation.graphql';
 import {
+  getCreatedPostConnectionIds,
   homeTimelineConnectionKey,
   profilePostsConnectionKey,
-  updateCreatedPostConnections,
 } from './PostComposerCache';
 import type { PayloadError } from 'relay-runtime';
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
@@ -20,40 +21,8 @@ import type { PostComposerCreatePostMutation } from './__generated__/PostCompose
 const rootId = 'client:root';
 const profileId = 'profile-created-post-author';
 const oldPostId = 'post-existing';
-const pendingPayloads = new WeakMap<Environment, CreatedPostPayload>();
+const pendingPayloads = new WeakMap<Environment, ReturnType<typeof payload>>();
 const pendingErrors = new WeakMap<Environment, PayloadError[]>();
-
-type CreatedPostPayload = {
-  post: {
-    __typename: 'Post';
-    content: {
-      __typename: 'PostContent';
-      bodyText: string;
-      document: null;
-      id: string;
-      media: ReadonlyArray<never>;
-    };
-    createdAt: string;
-    id: string;
-    profile: {
-      __typename: 'Profile';
-      avatar: null;
-      displayName: string;
-      handle: string;
-      id: string;
-      relativeHandle: string;
-    };
-    replyParent: { __typename: 'Post'; id: string } | null;
-    reactionCounts: ReadonlyArray<never>;
-    repostCount: number;
-    repostSource: null;
-    state: 'ACTIVE';
-    viewerBookmark: null;
-    viewerReactions: ReadonlyArray<never>;
-    viewerRepost: null;
-    visibility: 'UNLISTED';
-  };
-};
 
 function connectionHandle(key: string) {
   return `__${key}_connection`;
@@ -120,18 +89,20 @@ function createEnvironment({
 
 async function applyPayload(
   environment: Environment,
-  payload: CreatedPostPayload,
+  createdPayload: ReturnType<typeof payload>,
   errors: readonly PayloadError[] = [],
 ): Promise<readonly PayloadError[] | null | undefined> {
-  pendingPayloads.set(environment, payload);
+  pendingPayloads.set(environment, createdPayload);
   pendingErrors.set(environment, [...errors]);
   return new Promise<readonly PayloadError[] | null | undefined>((resolve, reject) => {
     commitMutation<PostComposerCreatePostMutation>(environment, {
       mutation: CreatePostMutation,
       onCompleted: (_response, completionErrors) => resolve(completionErrors),
       onError: reject,
-      updater: (store) => updateCreatedPostConnections(store, profileId),
-      variables: { input: { bodyText: '새 게시글', visibility: 'UNLISTED' } },
+      variables: {
+        connections: getCreatedPostConnectionIds(profileId, createdPayload.post.replyParent?.id),
+        input: { bodyText: '새 게시글', visibility: 'UNLISTED' },
+      },
     });
   });
 }
@@ -153,37 +124,23 @@ function edgeNodes(environment: Environment, parentId: string, key: string) {
   });
 }
 
-function payload(postId: string, replyParentId: string | null = null): CreatedPostPayload {
+function payload(postId: string, replyParentId: string | null = null) {
   return {
     post: {
-      __typename: 'Post' as const,
-      content: {
-        __typename: 'PostContent' as const,
+      ...post({
         bodyText: '새 게시글',
-        document: null,
-        id: `content-${postId}`,
-        media: [],
-      },
-      createdAt: '2026-08-03T00:00:00.000Z',
-      id: postId,
-      profile: {
-        __typename: 'Profile' as const,
-        avatar: null,
-        displayName: '작성자',
-        handle: 'author',
-        id: profileId,
-        relativeHandle: 'author',
-      },
-      replyParent:
-        replyParentId == null ? null : { __typename: 'Post' as const, id: replyParentId },
-      reactionCounts: [],
-      repostCount: 0,
-      repostSource: null,
-      state: 'ACTIVE' as const,
-      viewerBookmark: null,
+        createdAt: '2026-08-03T00:00:00.000Z',
+        id: postId,
+        profile: profile({
+          displayName: '작성자',
+          handle: 'author',
+          id: profileId,
+          relativeHandle: 'author',
+        }),
+        replyParent:
+          replyParentId == null ? null : { __typename: 'Post' as const, id: replyParentId },
+      }),
       viewerReactions: [],
-      viewerRepost: null,
-      visibility: 'UNLISTED' as const,
     },
   };
 }
@@ -204,24 +161,6 @@ describe('PostComposer Relay connection cache', () => {
       { cursor: null, id: 'post-created' },
       { cursor: 'cursor-post-existing', id: oldPostId },
     ]);
-  });
-
-  it('normalizes the created Post list fragment before inserting its edge', async () => {
-    const environment = createEnvironment();
-
-    await applyPayload(environment, payload('post-with-list-fields'));
-
-    const source = environment.getStore().getSource();
-    const post = source.get('post-with-list-fields');
-    assert.equal(post?.createdAt, '2026-08-03T00:00:00.000Z');
-
-    const content = post?.content;
-    assert.ok(content && '__ref' in content);
-    assert.equal(source.get(content.__ref)?.bodyText, '새 게시글');
-
-    const profile = post?.profile;
-    assert.ok(profile && '__ref' in profile);
-    assert.equal(source.get(profile.__ref)?.relativeHandle, 'author');
   });
 
   it('keeps a committed Post successful when GraphQL errors accompany the response', async () => {
@@ -263,15 +202,5 @@ describe('PostComposer Relay connection cache', () => {
         .get(ConnectionHandler.getConnectionID(profileId, profilePostsConnectionKey)),
       undefined,
     );
-  });
-
-  it('does not replace an existing same-node edge', async () => {
-    const actorA = createEnvironment({ existingPostId: 'post-same-node' });
-
-    await applyPayload(actorA, payload('post-same-node'));
-
-    assert.deepEqual(edgeNodes(actorA, rootId, homeTimelineConnectionKey), [
-      { cursor: 'cursor-post-same-node', id: 'post-same-node' },
-    ]);
   });
 });

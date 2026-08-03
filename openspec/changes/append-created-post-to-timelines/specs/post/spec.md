@@ -2,7 +2,7 @@
 
 ### Requirement: CreatePost caller-local connection synchronization
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, PROD-641. Universal client는 `createPost` 성공 응답의 normalized `post`를 요청 actor Environment의 이미 로드된 managed connection에만 반영해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, PROD-641. Universal client는 `createPost` 성공 응답의 normalized `post`를 Relay의 선언형 connection directive로 요청 actor Environment의 이미 로드된 managed connection에만 반영해야 한다(MUST).
 
 #### Scenario: Original 또는 Quote 작성 성공
 
@@ -24,14 +24,14 @@
 
 #### Scenario: Duplicate completion
 
-- **WHEN** 같은 canonical Post Node에 대한 updater가 같은 connection에 두 번 실행된다
+- **WHEN** 같은 canonical Post Node에 대한 prepend handler가 같은 connection에 두 번 실행된다
 - **THEN** 해당 Node를 참조하는 edge를 하나만 유지한다
 - **AND** 기존 edge의 상대 순서를 변경하지 않는다
 
 #### Scenario: Actor 전환 또는 Composer unmount
 
 - **WHEN** 작성 요청 뒤 actor Environment가 전환되거나 Composer가 unmount된다
-- **THEN** normalized payload와 updater는 요청을 시작한 Environment에만 적용된다
+- **THEN** normalized payload와 connection handler는 요청을 시작한 Environment에만 적용된다
 - **AND** 새 actor Store, unmounted state 또는 navigation을 늦게 변경하지 않는다
 
 #### Scenario: Committed Post와 GraphQL 오류

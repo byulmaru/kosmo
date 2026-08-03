@@ -13,7 +13,7 @@ import { TextArea } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { updateCreatedPostConnections } from './PostComposerCache';
+import { getCreatedPostConnectionIds } from './PostComposerCache';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -78,9 +78,9 @@ const PostComposerFragment = graphql`
 `;
 
 const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+  mutation PostComposerCreatePostMutation($input: CreatePostInput!, $connections: [ID!]!) {
     createPost(input: $input) {
-      post {
+      post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
         id
         ...PostListItem_post
       }
@@ -204,12 +204,12 @@ function PostComposerContents({
     const submissionReplyMode = replyMode;
     commit({
       variables: {
+        connections: getCreatedPostConnectionIds(profile.id, replyParentId),
         input: {
           ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
           ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
         },
       },
-      updater: (store) => updateCreatedPostConnections(store, profile.id),
       onCompleted: (response) => {
         if (
           !mountedRef.current ||
