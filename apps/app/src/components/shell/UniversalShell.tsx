@@ -1,4 +1,4 @@
-import { Slot, useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
+import { Slot, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -101,13 +101,14 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const searchParams = useLocalSearchParams<{ feedback?: string }>();
+  const searchParams = useGlobalSearchParams<{ feedback?: string }>();
   const feedback = searchParams.feedback;
   const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const feedbackHistoryOriginIdRef = useRef<string | null>(null);
   const menuButtonRef = useRef<NativeView>(null);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
@@ -123,18 +124,19 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const feedbackOverlayOpen = web && pathname !== '/feedback' && feedback === 'open';
-  const feedbackOpenedFromFreshLoadRef = useRef(feedbackOverlayOpen);
+  const [feedbackOpenedFromFreshLoad, setFeedbackOpenedFromFreshLoad] =
+    useState(feedbackOverlayOpen);
   const previousFeedbackOverlayOpenRef = useRef(feedbackOverlayOpen);
 
   useEffect(() => {
     if (feedbackOverlayOpen && !previousFeedbackOverlayOpenRef.current) {
-      feedbackOpenedFromFreshLoadRef.current = false;
+      setFeedbackOpenedFromFreshLoad(false);
     }
     previousFeedbackOverlayOpenRef.current = feedbackOverlayOpen;
   }, [feedbackOverlayOpen]);
 
   const closeFeedbackOverlay = useCallback(() => {
-    if (!feedbackOpenedFromFreshLoadRef.current) {
+    if (!feedbackOpenedFromFreshLoad) {
       router.back();
       return;
     }
@@ -142,7 +144,15 @@ function UniversalShellContent({ revision }: { revision: number }) {
     const remainingParams = { ...searchParams };
     delete remainingParams.feedback;
     router.replace({ pathname, params: remainingParams });
-  }, [pathname, router, searchParams]);
+  }, [feedbackOpenedFromFreshLoad, pathname, router, searchParams]);
+
+  const recordFeedbackHistoryOrigin = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    const state = window.history.state as { id?: unknown } | null;
+    feedbackHistoryOriginIdRef.current = typeof state?.id === 'string' ? state.id : null;
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {
@@ -253,6 +263,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           >
             <SidebarNavigation
               compact={compact}
+              onFeedbackNavigate={recordFeedbackHistoryOrigin}
               onSwitcherOpenChange={setSwitcherOpen}
               query={data}
               switcherOpen={switcherOpen}
@@ -337,6 +348,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
               style={[styles.drawer, { backgroundColor: theme.card }]}
             >
               <SidebarNavigation
+                onFeedbackNavigate={recordFeedbackHistoryOrigin}
                 onNavigate={closeDrawer}
                 onSwitcherOpenChange={setSwitcherOpen}
                 query={data}
@@ -354,7 +366,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
         </Modal>
       </View>
       <FeedbackOverlay
+        closeUsesHistoryTraversal={!feedbackOpenedFromFreshLoad}
         fallbackFocusRef={menuButtonRef}
+        originHistoryId={feedbackHistoryOriginIdRef.current}
         onRequestClose={closeFeedbackOverlay}
         visible={feedbackOverlayOpen}
       />

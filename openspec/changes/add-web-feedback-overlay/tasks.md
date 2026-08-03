@@ -79,7 +79,7 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - [x] 3.1 기존 Storybook Expo Router mock이 query push·replace·back/forward 결과를 표현하도록 최소 범위로 확장하고 shell history assertion을 먼저 추가한다.
 - [x] 3.2 Web shell 진입은 `feedback=open`을 사용하고 Android/iOS는 `/feedback` route를 유지하도록 responsive navigation을 연결한다.
 - [x] 3.3 `UniversalShellContent`의 shell root 다음에 단일 Web feedback overlay를 조립하고 `/feedback` direct route에서는 중복 렌더링하지 않는다.
-- [ ] 3.4 internal open, fresh-load restore, clean/dirty/submitting browser traversal과 close 후 route·scroll·focus 복원을 구현한다.
+- [x] 3.4 internal open, fresh-load restore, clean/dirty/submitting browser traversal과 close 후 route·scroll·focus 복원을 구현한다.
 
 ## 4. PROD-594 직접 동작 검증
 
@@ -104,9 +104,9 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - 전용 Web E2E에서 인증된 open, direct `/feedback`, fresh query, back/forward, dirty 취소·확인, submitting 차단과 success 연속 제출을 검증한다.
 - 실제 browser에서 390px·900px·1400px, keyboard, focus indicator, document scroll과 background pointer 차단을 관찰한다.
 
-- [ ] 4.1 전용 Web E2E에 query open·clean close/back/forward·fresh-load close와 direct `/feedback` fallback 시나리오를 추가하고 통과시킨다.
-- [ ] 4.2 전용 Web E2E에 dirty 취소·폐기, submitting close 차단, success 후 overlay 유지·연속 제출과 focus/scroll 복원 시나리오를 추가하고 통과시킨다.
-- [ ] 4.3 390px·900px·1400px 실제 Web runtime에서 responsive geometry, keyboard focus trap/restore, `Escape`, backdrop, background 차단과 document scroll을 수동 확인한다.
+- [x] 4.1 전용 Web E2E에 query open·clean close/back/forward·fresh-load close와 direct `/feedback` fallback 시나리오를 추가하고 통과시킨다.
+- [x] 4.2 전용 Web E2E에 dirty 취소·폐기, submitting close 차단, success 후 overlay 유지·연속 제출과 focus/scroll 복원 시나리오를 추가하고 통과시킨다.
+- [x] 4.3 390px·900px·1400px 실제 Web runtime에서 responsive geometry, keyboard focus trap/restore, `Escape`, backdrop, background 차단과 document scroll을 수동 확인한다.
 
 ## 5. PROD-594 통합과 전달
 
@@ -132,5 +132,5 @@ PROD-594의 구현·문서·검증 결과가 하나의 리뷰 가능한 Web-only
 - OpenSpec strict validation, 관련 Storybook tests, Web E2E, app typecheck/lint와 `git diff --check`를 실행한다.
 - 독립 구현 리뷰에서 승인 범위, 회귀 위험과 검증 공백을 확인한다.
 
-- [ ] 5.1 OpenSpec strict validation과 관련 자동화·정적 검사를 통과시키고 실행하지 못한 runtime/platform 검증을 분리해 기록한다.
+- [x] 5.1 OpenSpec strict validation과 관련 자동화·정적 검사를 통과시키고 실행하지 못한 runtime/platform 검증을 분리해 기록한다.
 - [ ] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.

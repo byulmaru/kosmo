@@ -28,6 +28,12 @@ const config: StorybookConfig = {
           replacement: require.resolve('react-native-svg/lib/module/elements.web.js'),
         },
         {
+          find: /^expo-router\/react-navigation$/,
+          replacement: fileURLToPath(
+            new URL('./mocks/expo-router-react-navigation.ts', import.meta.url),
+          ),
+        },
+        {
           find: /^expo-router$/,
           replacement: fileURLToPath(new URL('./mocks/expo-router.tsx', import.meta.url)),
         },

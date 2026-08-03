@@ -265,7 +265,16 @@ export const OverlayDirtyCloseGuard: Story = {
     });
     expect(body).toHaveValue('작성 중인 피드백');
     const continueButton = within(confirm).getByRole('button', { name: '계속 작성' });
+    const discardButton = within(confirm).getByRole('button', { name: '피드백 버리기' });
     await waitFor(() => expect(continueButton).toHaveFocus());
+    await userEvent.tab();
+    expect(discardButton).toHaveFocus();
+    await userEvent.tab();
+    expect(continueButton).toHaveFocus();
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(discardButton).toHaveFocus();
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    expect(continueButton).toHaveFocus();
     await userEvent.click(continueButton);
     expect(page.queryByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' })).toBeNull();
     expect(body).toHaveValue('작성 중인 피드백');

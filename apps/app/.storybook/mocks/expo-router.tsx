@@ -133,6 +133,10 @@ export function useRouter() {
   );
 }
 
+export function useNavigation() {
+  return useMemo(() => ({ dispatch: () => undefined }), []);
+}
+
 export function Link({
   asChild,
   children,

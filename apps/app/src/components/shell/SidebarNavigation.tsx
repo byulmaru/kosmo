@@ -1,4 +1,4 @@
-import { useLocalSearchParams, usePathname } from 'expo-router';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
 import {
   Bell,
   Bookmark,
@@ -61,6 +61,7 @@ const navigation: NavigationItem[] = [
 
 type Props = {
   compact?: boolean;
+  onFeedbackNavigate?: () => void;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -70,6 +71,7 @@ type Props = {
 
 export function SidebarNavigation({
   compact = false,
+  onFeedbackNavigate,
   onNavigate,
   onSwitcherOpenChange,
   query,
@@ -78,7 +80,7 @@ export function SidebarNavigation({
 }: Props) {
   const theme = useTheme();
   const pathname = usePathname();
-  const searchParams = useLocalSearchParams();
+  const searchParams = useGlobalSearchParams();
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
@@ -217,7 +219,14 @@ export function SidebarNavigation({
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          <GuardedLink href={feedbackHref} onNavigate={onNavigate}>
+          <GuardedLink
+            href={feedbackHref}
+            onNavigate={() => {
+              onFeedbackNavigate?.();
+              onNavigate?.();
+            }}
+            push={Platform.OS === 'web' && !feedbackActive}
+          >
             <Pressable
               aria-current={feedbackActive ? 'page' : undefined}
               accessibilityLabel="피드백 보내기"

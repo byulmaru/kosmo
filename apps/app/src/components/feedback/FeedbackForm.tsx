@@ -47,18 +47,25 @@ export function FeedbackForm({ onStateChange }: Props) {
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
   const dirty = kind !== 'POSITIVE' || body.length > 0;
+  const latestStateRef = useRef<FeedbackFormState>({ dirty, submitting });
+  latestStateRef.current = { dirty, submitting };
   const parsedBody = feedbackBodySchema.safeParse(body);
   const bodyError = parsedBody.success ? null : parsedBody.error.issues[0]?.message;
   const showBodyError = bodyTouched || status === 'error';
   const canSubmit = !submitting && !bodyError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
+  const reportState = (state: FeedbackFormState) => {
+    latestStateRef.current = state;
+    onStateChange?.(state);
+  };
   const selectKind = (value: FeedbackKind) => {
+    reportState({ dirty: value !== 'POSITIVE' || body.length > 0, submitting });
     setKind(value);
     setStatus('idle');
   };
 
   useEffect(() => {
-    onStateChange?.({ dirty, submitting });
+    onStateChange?.(latestStateRef.current);
   }, [dirty, onStateChange, submitting]);
 
   const submit = () => {
@@ -66,6 +73,7 @@ export function FeedbackForm({ onStateChange }: Props) {
       return;
     }
 
+    reportState({ dirty, submitting: true });
     setStatus('idle');
     commit({
       variables: {
@@ -76,16 +84,19 @@ export function FeedbackForm({ onStateChange }: Props) {
       },
       onCompleted: (response, errors) => {
         if (errors?.length || !response.submitFeedback?.completed) {
+          reportState({ dirty, submitting: false });
           setStatus('error');
           return;
         }
 
+        reportState({ dirty: false, submitting: false });
         setKind('POSITIVE');
         setBody('');
         setBodyTouched(false);
         setStatus('success');
       },
       onError: () => {
+        reportState({ dirty, submitting: false });
         setStatus('error');
       },
     });
@@ -201,6 +212,7 @@ export function FeedbackForm({ onStateChange }: Props) {
         error={showBodyError ? (bodyError ?? undefined) : undefined}
         label="피드백 내용"
         onChangeText={(value) => {
+          reportState({ dirty: kind !== 'POSITIVE' || value.length > 0, submitting });
           setBody(value);
           setBodyTouched(true);
           setStatus('idle');
