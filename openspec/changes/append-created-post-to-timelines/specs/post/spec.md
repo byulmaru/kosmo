@@ -144,6 +144,12 @@
 
 #### Scenario: 실패 결과에서 기존 목록 유지
 
-- **WHEN** `createPost`가 network, GraphQL 또는 validation 오류로 실패하거나 payload edge를 제공하지 않는다
+- **WHEN** `createPost`가 network 오류로 실패하거나 GraphQL·validation 오류로 committed `post`를 제공하지 않거나 payload edge를 제공하지 않는다
 - **THEN** 앱은 기존 Home·Profile connection edge 순서와 membership을 유지한다
 - **AND** 낙관적 또는 client-only edge를 남기지 않는다
+
+#### Scenario: committed Post가 있는 부분 GraphQL 오류
+
+- **WHEN** `createPost` 응답이 committed `post`와 canonical edge를 제공하지만 nullable loader-backed 필드 오류도 함께 반환한다
+- **THEN** 앱은 payload edge를 요청 actor Store의 로드된 Home·Profile connection에 반영한다
+- **AND** Composer는 작성을 성공으로 처리해 입력과 submitting 상태를 초기화하고 중복 재시도를 유도하지 않는다

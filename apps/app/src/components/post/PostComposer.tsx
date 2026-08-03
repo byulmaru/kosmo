@@ -222,7 +222,7 @@ function PostComposerContents({
         },
       },
       updater: (store) => updateCreatedPostConnections(store, profile.id),
-      onCompleted: (response, errors) => {
+      onCompleted: (response) => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -232,14 +232,7 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        if (errors?.length) {
-          setError(
-            submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
-          );
-          return;
-        }
-
-        const createdPost = response.createPost.post;
+        const createdPost = response.createPost?.post;
         if (!createdPost) {
           setError(
             submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',

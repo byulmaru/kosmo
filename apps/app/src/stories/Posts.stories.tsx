@@ -4514,32 +4514,52 @@ export const ComposerErrorInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
-export const ComposerGraphQLErrorPreservesInput: Story = {
+export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
   parameters: {
     relay: {
-      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
-      mutationResponse: { createPost: { post: { id: 'post-rejected-in-story' } } },
+      mutationGraphQLErrors: ['nullable loader 조회에 실패했습니다.'],
+      mutationResponse: { createPost: { post: { id: 'post-committed-in-story' } } },
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
-    await userEvent.type(body, '오류가 나도 보존할 본문입니다.');
+    await userEvent.type(body, '부분 오류에도 생성된 게시글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다.',
-    );
-    expect(body).toHaveValue('오류가 나도 보존할 본문입니다.');
+    await waitFor(() => expect(body).toHaveValue(''));
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    expect(trackAnalytics).toHaveBeenCalledOnce();
   },
   render: () => <ComposerStory />,
 };
 
-export const ComposerReplyGraphQLErrorPreservesInput: Story = {
+export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
+      mutationResponse: { createPost: null },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    await userEvent.type(body, '생성되지 않으면 보존할 본문입니다.');
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 작성하지 못했습니다.',
+    );
+    expect(body).toHaveValue('생성되지 않으면 보존할 본문입니다.');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
     relay: {
       mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
-      mutationResponse: { createPost: { post: { id: 'reply-rejected-in-story' } } },
+      mutationResponse: { createPost: null },
     },
   },
   play: async () => {
