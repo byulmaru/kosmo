@@ -342,7 +342,7 @@ OpenSpec만을 만들기 위한 Linear 이슈는 두지 않는다. 여러 PR이 
 검토·merge가 필요하더라도 별도 spec-only 이슈를 만들지 않고 실제 구현·검증 결과를 소유한 이슈들에 책임을
 배정한다. 특정 부모가 존재한다는 이유만으로 change 전체를 그 부모의 소유로 간주하지 않는다.
 
-OpenSpec Gate artifacts가 준비된 뒤 승인 요청을 작성하기 전에 primary agent는 가능하면 경량 모델의 subagent를 활용해
+OpenSpec Gate artifacts가 준비된 뒤 승인 요청을 작성하기 전에 primary agent는 가능하면 경량 모델의 subagent로 Luna Max를 활용해
 `proposal.md`, `specs/**/spec.md`의 requirements·scenarios, `design.md`, `decisions.md`,
 `tasks.md`, 포함·제외 범위, 각 항목의 authority/provenance, 각 decision의 `Active | Blocked | Superseded` 상태,
 이슈별 구현·검증·archive 책임, 이전 gate 승인과 달라진 점과 승인 후 다음 단계를 사용자가 검토할 수 있는
