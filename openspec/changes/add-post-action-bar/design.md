@@ -15,7 +15,7 @@
 - Reaction·Bookmark count를 제외하고, 선행 계약이 제공한 Reply·Repost의 optional count는 실행 환경 locale의 표준 compact formatting으로 표시한다.
 - 같은 React Native 구현이 Android·iOS·Web에서 28 logical unit geometry와 접근성 metadata를 제공한다. Web은 24×24 CSS px 최소 target을 충족하고 Native target 복구는 출시 gate로 분리한다.
 - UI, surface 배치, 실제 데이터 연결을 각 구현 이슈가 독립적으로 리뷰·검증할 수 있게 하면서 하나의 공유 spec으로 최종 결과를 묶는다.
-- PROD-632가 mock 검증과 실제 Clipboard 런타임 사이의 차이를 확인해 링크 복사를 복구하고 최종 change 정합성·archive를 완료한다.
+- PROD-632가 mock 검증과 실제 Clipboard 런타임 사이의 차이를 확인한다. 현재 구현 slice는 실제 복사 실패 감지와 복구 UX를 제공하며, 동일 환경의 변경 전 실패·변경 후 성공 근거를 확보한 뒤에만 링크 복사 자체의 복구 완료와 최종 change 정합성·archive를 판단한다.
 
 **Non-Goals:**
 
@@ -34,7 +34,7 @@
 - React Native Web을 공유하므로 DOM element, CSS selector, Web 전용 event에 의존한 구현은 native 계약을 깨뜨린다.
 - Figma의 측정 높이 약 27px은 production 정수값 28px로 정규화한다. Web은 28×최소 28 target 안에 24×24 CSS px 사각형을 포함하며, Native의 28pt·28dp는 출시 전 임시 예외로만 사용한다.
 - 선행 action 계약이 제공하는 Reply count와 아직 config 기반인 도메인 상태의 cache 소유권은 상위 Relay/surface 계층에 있다. 구현된 Repost child는 composite parent fragment 아래 자기 fragment·mutation·pending과 viewer-relative 파생 상태를 colocate하되 toolbar container가 mutation payload나 cache update 정책을 재구현하지 않는다.
-- 현재 `PostMoreMenu`와 Storybook Clipboard mock은 canonical URL 생성, 성공·rejection과 menu dismiss를 검증하지만 실제 Web·Native Clipboard adapter의 secure context·permission·platform 동작을 증명하지 않는다. PROD-632는 실제 지원 런타임에서 실패를 먼저 재현하고 이 검증 공백을 닫아야 한다.
+- 현재 `PostMoreMenu`와 Storybook Clipboard mock은 canonical URL 생성, 성공·rejection과 menu dismiss를 검증하지만 실제 Web·Native Clipboard adapter의 secure context·permission·platform 동작을 증명하지 않는다. `postClipboard` 경계는 false-positive를 제거해 실패 감지와 복구 UX를 보장할 뿐, 기존 실패 원인을 제거하거나 실패 환경의 복사 성공을 보장하지 않는다. PROD-632는 실제 지원 런타임에서 실패를 재현하고 동일 환경의 변경 전·후 결과를 비교해 이 검증 공백을 닫아야 한다.
 
 ### Recommended Approach
 

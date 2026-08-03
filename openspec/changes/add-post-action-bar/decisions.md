@@ -363,18 +363,18 @@
 - Consequences: 상세 thread의 current Post 높이만 아래쪽에서 12px 줄어들고 목록 surface와 다른 thread row, Action Bar component API·geometry는 바뀌지 않는다.
 - Confirmation / Follow-up: `PostDetailThreadRoute` Storybook에서 current row 상단 16px, Reaction Summary bottom→Action Bar top과 Action Bar bottom→다음 divider top을 검증한다. selected Profile을 공급하는 Reply owner fixture에서도 Composer가 닫힌 기본 상태의 Action Bar bottom→divider top을 exact 4px로 검증한다.
 
-### PROD-632가 후속 링크 복사 복구와 change archive를 인계받는다
+### PROD-632가 후속 링크 복사 조사·복구와 change archive를 인계받는다
 
 - Decision Date: 2026-08-03
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-632`, 2026-08-03 KST 사용자 결정
 - Status: Active
 - Context / Problem: PROD-432와 PR #437이 완료된 뒤 실제 Clipboard 런타임에서 링크가 복사되지 않는 PROD-632가 발견됐다. 기존 `add-post-action-bar` change는 같은 링크 복사 requirement와 미완료 archive task를 이미 소유하므로 새 change를 만들면 동일 계약과 완료 생명주기가 중복된다.
-- Decision Outcome: PROD-432는 재활성화하지 않고 기존 구현 완료 이력으로 유지한다. PROD-632가 실제 Clipboard 실패 원인 조사, 게시글 목록·상세 링크 복사 복구, Web·지원 Native 플랫폼 회귀 검증, canonical 문서·Linear·OpenSpec·구현의 최종 정합성 확인과 `add-post-action-bar` archive를 인계받는다. 기존 `post-action-bar` requirement와 ADR 0015 Post Share Reference를 그대로 적용하며 새 capability나 spec delta를 만들지 않는다.
+- Decision Outcome: PROD-432는 재활성화하지 않고 기존 구현 완료 이력으로 유지한다. PROD-632가 실제 Clipboard 실패 원인 조사, 게시글 목록·상세 링크 복사 복구, Web·지원 Native 플랫폼 회귀 검증, canonical 문서·Linear·OpenSpec·구현의 최종 정합성 확인과 `add-post-action-bar` archive를 인계받는다. 현재 구현 slice는 실제 복사 실패의 정확한 감지, 한국어 안내와 재시도를 보장하지만 기존 실패 원인 제거 또는 실패 환경의 복사 성공을 보장하지 않는다. 동일 환경에서 변경 전 실패와 변경 후 성공을 확인하기 전에는 PROD-632의 링크 복사 복구를 완료로 판단하지 않는다. 기존 `post-action-bar` requirement와 ADR 0015 Post Share Reference를 그대로 적용하며 새 capability나 spec delta를 만들지 않는다.
 - Alternatives Considered: PROD-432를 다시 활성화하는 방식은 구현자가 다른 완료 이력을 변경하므로 사용자 결정에 따라 채택하지 않았다. 별도 bugfix OpenSpec은 같은 행동 계약과 archive 생명주기를 중복하므로 채택하지 않았다. mock 검증만으로 issue를 닫는 방식은 실제 런타임 실패를 설명하지 못하므로 채택하지 않았다.
 - Consequences: proposal·design·tasks는 PROD-632의 후속 복구와 archive ownership만 추가한다. PROD-432의 완료된 구현 task와 PR 이력은 수정하지 않고, 기존 4.7 archive task를 PROD-632 task group으로 옮긴다.
-- Confirmation / Follow-up: PROD-632에서 실제 Clipboard adapter 실패를 재현하고 목록·상세, guest, canonical origin·direct Source, 성공·실패·menu dismiss·재시도를 Web과 지원 Native 플랫폼에서 검증한다. archive 전후 strict validation을 통과시킨다.
-- Implementation Evidence (2026-08-03): `expo-clipboard@56.0.4` Web adapter는 `navigator.clipboard.writeText` 실패 뒤 legacy `document.execCommand('copy')`를 호출하지만 그 boolean 결과를 확인하지 않고 `true`를 반환하므로, 실제 복사가 실패해도 성공으로 보고할 수 있다. 앱은 `postClipboard` platform boundary를 추가해 base/native에서만 `expo-clipboard.setStringAsync`를 위임하고, Web에서는 `navigator.clipboard.writeText`만 직접 호출해 API 부재 또는 rejection을 `false`로 반환한다. `PostMoreMenu`는 이 경계의 `false` 또는 throw를 기존 한국어 실패 안내와 다음 More 선택 재시도로 연결한다. Storybook은 Expo 모듈이 아니라 이 앱 경계를 alias하고 성공·실패 결과를 재현하며, `postClipboard.web.test.ts`가 성공·API 부재·rejection을 실제 Web boundary에서 검증한다. 실제 Expo Web 앱은 로컬 GraphQL backend `502`로 Post surface 진입이 막혔고, 현재 환경에는 Android device와 booted iOS simulator가 없어 지원 Native runtime 증거는 아직 없다.
+- Confirmation / Follow-up: PROD-632에서 실제 Clipboard adapter 실패를 재현하고 같은 환경의 변경 전 실패·변경 후 성공을 확인한다. 목록·상세, guest, canonical origin·direct Source, 성공·실패·menu dismiss·재시도를 Web과 지원 Native 플랫폼에서 검증한 뒤 archive 전후 strict validation을 통과시킨다.
+- Implementation Evidence (2026-08-03): `expo-clipboard@56.0.4` Web adapter는 `navigator.clipboard.writeText` 실패 뒤 legacy `document.execCommand('copy')`를 호출하지만 그 boolean 결과를 확인하지 않고 `true`를 반환하므로, 실제 복사가 실패해도 성공으로 보고할 수 있다. 앱은 `postClipboard` platform boundary를 추가해 base/native에서만 `expo-clipboard.setStringAsync`를 위임하고, Web에서는 `navigator.clipboard.writeText`만 직접 호출해 API 부재 또는 rejection을 `false`로 반환한다. `PostMoreMenu`는 이 경계의 `false` 또는 throw를 기존 한국어 실패 안내와 다음 More 선택 재시도로 연결한다. Storybook은 Expo 모듈이 아니라 이 앱 경계를 alias하고 성공·실패 결과를 재현하며, `postClipboard.web.test.ts`가 성공·API 부재·rejection을 실제 Web boundary에서 검증한다. 이는 실패 감지와 복구 UX의 근거이며, 기존 실패 원인 제거 또는 실패 환경의 복사 성공 근거는 아니다. 실제 Expo Web 앱은 로컬 GraphQL backend `502`로 Post surface 진입이 막혔고, 현재 환경에는 Android device와 booted iOS simulator가 없어 지원 Native runtime 증거는 아직 없다.
 
 ## Remaining Decisions
 

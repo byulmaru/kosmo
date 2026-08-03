@@ -160,7 +160,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - [x] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, Bookmark 해제의 응답 처리 시점 loaded connection row 제거·GraphQL 오류 보존·actor 격리, PROD-414 Repost menu·toast 및 PROD-598 삭제 회귀, 대상 정책·guest 위임과 More 항목 순서 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 target 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry를 검증한다. 상세 thread current Post는 상단 16px을 보존하고 Reaction Summary와 Action Bar 사이를 4px로 둔다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper 없이 Action Bar와 다음 divider 사이가 4px인지 검증한다. Web More menu의 끝 정렬, 첫 `링크 복사` item overlap과 viewport clamp도 실제 Home 및 Storybook에서 확인한다.
 - [x] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
 
-## 5. PROD-632 링크 복사 런타임 복구와 최종 archive
+## 5. PROD-632 링크 복사 런타임 조사·복구와 최종 archive
 
 **Authority / Provenance**
 
@@ -171,7 +171,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 
 **Deliverable**
 
-사용자가 게시글 목록·상세의 More 메뉴에서 조회 가능한 현재 Post의 canonical public Web URL을 실제 지원 런타임의 clipboard에 복사할 수 있고, 실패 시 한국어 안내 뒤 같은 action을 다시 선택해 재시도할 수 있다. 복구와 검증이 끝나면 PROD-632가 공유 change의 최종 정합성 확인과 archive를 완료한다.
+사용자가 게시글 목록·상세의 More 메뉴에서 조회 가능한 현재 Post의 canonical public Web URL을 실제 지원 런타임의 clipboard에 복사할 수 있고, 실패 시 한국어 안내 뒤 같은 action을 다시 선택해 재시도할 수 있다. 현재 구현 slice는 실제 복사 실패의 정확한 감지와 복구 UX까지만 완료한다. 동일 환경의 변경 전 실패·변경 후 성공 근거를 포함한 전체 복구 검증이 끝나면 PROD-632가 공유 change의 최종 정합성 확인과 archive를 완료한다.
 
 **Guardrails**
 
@@ -180,6 +180,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - `링크 복사`는 More menu의 첫 항목을 유지하고, PROD-598 삭제 자격을 충족할 때만 `삭제`를 마지막 항목으로 조합한다. 선택 뒤 menu dismiss와 한국어 실패 안내·다음 입력 재시도를 유지한다.
 - 새 공유 채널, 별도 native deep link, 서버 권한·schema·migration·ActivityPub 계약을 추가하지 않는다.
 - Storybook Clipboard mock 성공만 실제 Web·Native adapter의 완료 증거로 사용하지 않는다.
+- 실패 감지와 실패 원인 제거를 구분하고, 동일 환경의 변경 전 실패·변경 후 성공 근거 없이 링크 복사 복구를 완료 처리하지 않는다.
 
 **Verification**
 
@@ -188,8 +189,8 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - Clipboard 실패가 조용히 무시되지 않고 접근 가능한 한국어 안내를 표시하며 menu 재개방·동일 action 재선택으로 재시도되는지 검증한다.
 - 가까운 component 또는 E2E 회귀 검증, 관련 앱 check와 archive 전·후 strict validation을 통과시킨다.
 
-- [ ] 5.1 실제 Web과 지원 Native 런타임에서 Clipboard 실패를 재현하고 Storybook mock과 실제 adapter의 차이 및 원인을 검증 가능한 근거로 기록한다.
-- [x] 5.2 기존 production surface 소유 경계 안에서 `postClipboard` platform boundary를 통해 목록·상세 링크 복사를 복구하고 canonical origin·direct Source·guest·More item 순서·dismiss·실패 재시도 계약을 유지한다.
+- [ ] 5.1 실제 Web과 지원 Native 런타임에서 Clipboard 실패를 재현하고 Storybook mock과 실제 adapter의 차이 및 원인을 검증 가능한 근거로 기록한다. 동일 환경에서 변경 전 실패·변경 후 성공을 확인하기 전에는 링크 복사 복구를 완료로 판단하지 않는다.
+- [x] 5.2 기존 production surface 소유 경계 안에서 `postClipboard` platform boundary를 통해 실제 복사 실패를 정확히 감지하고 한국어 안내·다음 입력 재시도를 제공한다. canonical origin·direct Source·guest·More item 순서·dismiss 계약을 유지하며, 이 task 완료를 기존 실패 환경의 복사 성공 근거로 사용하지 않는다.
 - [x] 5.3 `postClipboard.web.test.ts`의 성공·API 부재·rejection 검증과 기존 Storybook `ProductionMoreShareReferences`·`PostDetailThreadRoute`의 성공·실패·menu dismiss·재시도 회귀로 일반 Post·Quote·순수 Repost·guest 경로를 가까운 경계에서 증명한다.
-- [ ] 5.4 실제 Web·지원 Native 런타임과 관련 앱 검증 및 archive 전 strict validation을 통과시키고 canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인한다.
+- [ ] 5.4 실제 Web·지원 Native 런타임에서 동일 환경의 변경 전 실패·변경 후 성공을 확인하고 관련 앱 검증 및 archive 전 strict validation을 통과시킨다. canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인한다.
 - [ ] 5.5 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
