@@ -286,8 +286,11 @@ export async function runDatabaseMigrations({
         `;
       }
     } finally {
-      session?.release();
-      await client.end({ timeout: 5 });
+      try {
+        session?.release();
+      } finally {
+        await client.end({ timeout: 5 });
+      }
     }
   }
 }
