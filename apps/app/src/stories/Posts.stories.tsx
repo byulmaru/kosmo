@@ -26,15 +26,15 @@ import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
 import {
-  getCopiedStrings,
-  resetClipboardMock,
-  setNextClipboardResult,
-} from '../../.storybook/mocks/expo-clipboard';
-import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
   setNextImagePickerResult,
 } from '../../.storybook/mocks/expo-image-picker';
+import {
+  getCopiedStrings,
+  resetClipboardMock,
+  setNextClipboardResult,
+} from '../../.storybook/mocks/postClipboard';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';

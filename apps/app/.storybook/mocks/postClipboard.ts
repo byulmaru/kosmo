@@ -15,13 +15,10 @@ export function setNextClipboardResult(result: boolean): void {
 }
 
 export async function setStringAsync(value: string): Promise<boolean> {
-  if (nextResult !== null) {
-    const result = nextResult;
-    nextResult = null;
-    if (!result) {
-      return false;
-    }
+  const result = nextResult ?? true;
+  nextResult = null;
+  if (result) {
+    copiedStrings.push(value);
   }
-  copiedStrings.push(value);
-  return true;
+  return result;
 }

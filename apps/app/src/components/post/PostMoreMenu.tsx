@@ -1,6 +1,6 @@
-import * as Clipboard from 'expo-clipboard';
 import { Link2 } from 'lucide-react-native';
 import { useCallback } from 'react';
+import { setStringAsync } from '@/components/post/postClipboard';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getConfiguredWebOrigin } from '@/relay/network';
 import { createPostShareReference } from './postShareReference';
@@ -18,7 +18,7 @@ export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMe
   const copyReference = useCallback(async () => {
     try {
       const reference = createPostShareReference(getConfiguredWebOrigin(), relativeHandle, postId);
-      const copied = await Clipboard.setStringAsync(reference);
+      const copied = await setStringAsync(reference);
       if (!copied) {
         throw new Error('Clipboard did not confirm the copy.');
       }

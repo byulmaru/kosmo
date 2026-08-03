@@ -189,7 +189,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - 가까운 component 또는 E2E 회귀 검증, 관련 앱 check와 archive 전·후 strict validation을 통과시킨다.
 
 - [ ] 5.1 실제 Web과 지원 Native 런타임에서 Clipboard 실패를 재현하고 Storybook mock과 실제 adapter의 차이 및 원인을 검증 가능한 근거로 기록한다.
-- [x] 5.2 기존 production surface 소유 경계 안에서 목록·상세 링크 복사를 복구하고 canonical origin·direct Source·guest·More item 순서·dismiss·실패 재시도 계약을 유지한다.
-- [x] 5.3 성공·실패·menu dismiss와 일반 Post·Quote·순수 Repost·guest 경로를 증명하는 가까운 component 또는 E2E 회귀 검증을 추가한다.
+- [x] 5.2 기존 production surface 소유 경계 안에서 `postClipboard` platform boundary를 통해 목록·상세 링크 복사를 복구하고 canonical origin·direct Source·guest·More item 순서·dismiss·실패 재시도 계약을 유지한다.
+- [x] 5.3 `postClipboard.web.test.ts`의 성공·API 부재·rejection 검증과 기존 Storybook `ProductionMoreShareReferences`·`PostDetailThreadRoute`의 성공·실패·menu dismiss·재시도 회귀로 일반 Post·Quote·순수 Repost·guest 경로를 가까운 경계에서 증명한다.
 - [ ] 5.4 실제 Web·지원 Native 런타임과 관련 앱 검증 및 archive 전 strict validation을 통과시키고 canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인한다.
 - [ ] 5.5 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
