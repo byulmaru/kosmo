@@ -108,7 +108,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.15 focused Storybook interaction에서 Quote preview 내부 4px·외부 8px geometry를 검증하고 390px Web runtime에서 시각 결과를 확인한다.
 - [x] 3.16 활성 toast와 동일한 실패 문구가 다시 발생해도 증가하는 identity의 새 alert instance로 교체하고 dismiss timer를 다시 시작하도록 하며, 단일 alert host·반복 알림·두 번째 호출 기준 자동 dismiss를 focused Storybook interaction으로 검증한다.
 
-## 4. PROD-432 실제 액션 연결·통합 검증·archive
+## 4. PROD-432 실제 액션 연결·통합 검증 완료 이력
 
 **Authority / Provenance**
 
@@ -131,7 +131,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 
 **Deliverable**
 
-PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 연결한 Reply Composer 위에 Reaction·Bookmark 구현 결과를 연결하고, 선택 Profile에 상대적인 도메인 상태, 최종 대상 적격성·현재 세션 실행 권한 정책, PROD-432 링크 복사와 완료된 PROD-598 삭제 action의 More menu 조합 및 전체 실패 복구를 통합 검증한 뒤 공유 OpenSpec을 archive한다.
+PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 연결한 Reply Composer 위에 Reaction·Bookmark 구현 결과를 연결하고, 선택 Profile에 상대적인 도메인 상태, 최종 대상 적격성·현재 세션 실행 권한 정책, PROD-432 링크 복사와 완료된 PROD-598 삭제 action의 More menu 조합 및 전체 실패 복구를 통합 검증한 기존 완료 이력을 유지한다.
 
 **Guardrails**
 
@@ -151,7 +151,7 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - Content·Reply Parent·Repost Source 관계 조합, Post Visibility 등 대상 자체가 부적격한 액션과 인증된 실행 주체의 권한이 부족한 액션의 disabled 표시, 대상이 적격한 guest의 인증 위임, 대상이 부적격한 guest의 disabled 유지와 Home·Profile 목록·상세의 동일 계약을 검증한다.
 - More 팝업에서 `링크 복사`가 항상 첫 항목이고 PROD-598 작성자 삭제 자격을 충족할 때만 `삭제`가 마지막 항목인지 검증한다. Web·Android·iOS가 configured Local Instance의 `canonical_origin`을 공통 기준으로 사용하는 ADR 0015 Post Share Reference의 clipboard 복사, Content 없는 Repost에서 direct Source 공유 참조·삭제 자격 선택, Web current Host 불일치, guest 사용과 Visibility 우회 방지를 함께 검증한다.
 - 모든 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425 완료, OpenSpec task 정합성과 canonical 문서·Linear·OpenSpec·코드 일치를 확인한다.
-- 4.6에서 archive 전 strict validation을 통과시키고, 4.7 승인 뒤 archive와 archive 후 strict validation을 수행한다.
+- 4.6에서 당시 archive 전 strict validation을 통과시킨 이력을 유지한다. 완료 뒤 발견된 실제 Clipboard 회귀 복구와 최종 archive는 PROD-632가 이어받는다.
 
 - [x] 4.1 구현 자식과 PROD-414·PROD-417·PROD-418·PROD-420·PROD-425의 완료·공개 계약을 확인하고, PROD-425가 연결한 Reply callback·surface·controlled `expanded`를 재구현하지 않으면서 아직 config 기반인 action 상태를 연결할 경계를 정리한다. Reaction은 하나 이상의 Reaction Type 존재를 `hasReacted`로 연결하되 count는 연결하지 않는다.
 - [x] 4.2 목록·상세에서 Reaction·Bookmark의 callback과 default·pending·disabled 처리 상태를 PROD-414가 배치한 공통 Action Bar에 연결하고 각각 `hasReacted`·`hasBookmarked`를 공급한다. Reply는 PROD-425의 상위 Composer `expanded`와 optional count 경계를 유지한다.
@@ -159,4 +159,38 @@ PROD-414가 배치한 actual Action Bar와 Repost menu·toast 및 PROD-425가 �
 - [x] 4.4 Surface가 guest도 사용할 수 있는 ADR 0015 Post Share Reference `링크 복사`를 `moreItems` 첫 항목으로 공급하고, private `PostDeletionAction`이 접근 가능한 팝업에서 완료된 PROD-598의 작성자 `삭제`를 자격 충족 시 마지막 항목으로 조합한다. 삭제 확인·mutation·cache·실패 계약은 재구현하지 않는다. Web menu는 trigger 오른쪽을 기준으로 왼쪽으로 펼치되 첫 item overlap·viewport 보정을 유지하고, Repost 시작 정렬과 Native bottom action sheet는 유지한다. Web·Android·iOS의 canonical origin 계약을 검증한다.
 - [x] 4.5 Home·Profile 목록·Post 상세의 실제 성공·중복 차단·실패 복구·controlled Reply Composer·Profile별 도메인 상태, Bookmark 해제의 응답 처리 시점 loaded connection row 제거·GraphQL 오류 보존·actor 격리, PROD-414 Repost menu·toast 및 PROD-598 삭제 회귀, 대상 정책·guest 위임과 More 항목 순서 통합 테스트를 추가하고 전체 관련 검증을 통과시킨다. 390·900·1400px에서 Reply·More target이 PostBody content column 양끝에 맞고 나머지 action이 그 사이에 균등 분배되며, non-More glyph는 각 target 왼쪽에 맞고 More glyph는 가운데를 유지하는 geometry를 검증한다. 상세 thread current Post는 상단 16px을 보존하고 Reaction Summary와 Action Bar 사이를 4px로 둔다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper 없이 Action Bar와 다음 divider 사이가 4px인지 검증한다. Web More menu의 끝 정렬, 첫 `링크 복사` item overlap과 viewport clamp도 실제 Home 및 Storybook에서 확인한다.
 - [x] 4.6 canonical 문서·Linear·OpenSpec·구현과 모든 task의 정합성을 확인하고 archive 전 strict validation을 통과시킨다.
-- [ ] 4.7 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.
+
+## 5. PROD-632 링크 복사 런타임 조사·복구와 최종 archive
+
+**Authority / Provenance**
+
+- `docs/domain/decisions/0015-post-share-reference.md`
+- `docs/domain/objects/post.md`
+- `docs/design/post-action-bar.md`
+- `PROD-632`
+
+**Deliverable**
+
+사용자가 게시글 목록·상세의 More 메뉴에서 조회 가능한 현재 Post의 canonical public Web URL을 실제 지원 런타임의 clipboard에 복사할 수 있고, 실패 시 한국어 안내 뒤 같은 action을 다시 선택해 재시도할 수 있다. 현재 구현 slice는 실제 복사 실패의 정확한 감지와 복구 UX까지만 완료한다. 동일 환경의 변경 전 실패·변경 후 성공 근거를 포함한 전체 복구 검증이 끝나면 PROD-632가 공유 change의 최종 정합성 확인과 archive를 완료한다.
+
+**Guardrails**
+
+- configured Local Instance의 canonical origin과 `/{relativeHandle}/{postId}`를 결합하고 query·hash, API origin과 native 전용 deep link를 사용하지 않는다. Content 없는 Repost는 조회 가능한 direct Source의 공유 참조를 사용한다.
+- guest도 조회 가능한 Post의 링크를 복사할 수 있게 유지하고 Post Visibility·Eligibility를 우회하지 않는다.
+- `링크 복사`는 More menu의 첫 항목을 유지하고, PROD-598 삭제 자격을 충족할 때만 `삭제`를 마지막 항목으로 조합한다. 선택 뒤 menu dismiss와 한국어 실패 안내·다음 입력 재시도를 유지한다.
+- 새 공유 채널, 별도 native deep link, 서버 권한·schema·migration·ActivityPub 계약을 추가하지 않는다.
+- Storybook Clipboard mock 성공만 실제 Web·Native adapter의 완료 증거로 사용하지 않는다.
+- 실패 감지와 실패 원인 제거를 구분하고, 동일 환경의 변경 전 실패·변경 후 성공 근거 없이 링크 복사 복구를 완료 처리하지 않는다.
+
+**Verification**
+
+- 실제 Web과 지원 Native 플랫폼에서 일반 Post·Quote·순수 Repost의 목록·상세 `링크 복사` 성공, canonical URL 붙여넣기와 menu dismiss를 확인한다.
+- guest 사용, Web current Host 불일치, query·hash 제외, 순수 Repost direct Source와 Post Visibility 유지 여부를 검증한다.
+- Clipboard 실패가 조용히 무시되지 않고 접근 가능한 한국어 안내를 표시하며 menu 재개방·동일 action 재선택으로 재시도되는지 검증한다.
+- 가까운 component 또는 E2E 회귀 검증, 관련 앱 check와 archive 전·후 strict validation을 통과시킨다.
+
+- [ ] 5.1 실제 Web과 지원 Native 런타임에서 Clipboard 실패를 재현하고 Storybook mock과 실제 adapter의 차이 및 원인을 검증 가능한 근거로 기록한다. 동일 환경에서 변경 전 실패·변경 후 성공을 확인하기 전에는 링크 복사 복구를 완료로 판단하지 않는다.
+- [x] 5.2 기존 production surface 소유 경계 안에서 `postClipboard` platform boundary를 통해 실제 복사 실패를 정확히 감지하고 한국어 안내·다음 입력 재시도를 제공한다. canonical origin·direct Source·guest·More item 순서·dismiss 계약을 유지하며, 이 task 완료를 기존 실패 환경의 복사 성공 근거로 사용하지 않는다.
+- [x] 5.3 `postClipboard.web.test.ts`의 성공·API 부재·rejection 검증과 기존 Storybook `ProductionMoreShareReferences`·`PostDetailThreadRoute`의 성공·실패·menu dismiss·재시도 회귀로 일반 Post·Quote·순수 Repost·guest 경로를 가까운 경계에서 증명한다.
+- [ ] 5.4 실제 Web·지원 Native 런타임에서 동일 환경의 변경 전 실패·변경 후 성공을 확인하고 관련 앱 검증 및 archive 전 strict validation을 통과시킨다. canonical 문서·Linear·OpenSpec·구현의 최종 정합성을 확인한다.
+- [ ] 5.5 전체 계약 완료 승인을 받은 뒤 공유 change를 archive하고 archive 후 strict validation을 통과시킨다.

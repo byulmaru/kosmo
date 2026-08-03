@@ -26,15 +26,15 @@ import { RelayEnvironmentBoundary } from '@/relay/RelayEnvironmentBoundary';
 import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider';
 import { colors } from '@/theme/tokens';
 import {
-  getCopiedStrings,
-  resetClipboardMock,
-  setNextClipboardFailure,
-} from '../../.storybook/mocks/expo-clipboard';
-import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
   setNextImagePickerResult,
 } from '../../.storybook/mocks/expo-image-picker';
+import {
+  getCopiedStrings,
+  resetClipboardMock,
+  setNextClipboardResult,
+} from '../../.storybook/mocks/postClipboard';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -2882,8 +2882,9 @@ export const ProductionMoreShareReferences: Story = {
       await waitFor(() => expect(getCopiedStrings()[index]).toBe(reference));
     }
 
-    setNextClipboardFailure(new Error('clipboard unavailable'));
-    await userEvent.click(within(ordinaryActionBar).getByRole('button', { name: '더 보기' }));
+    const ordinaryMore = within(ordinaryActionBar).getByRole('button', { name: '더 보기' });
+    setNextClipboardResult(false);
+    await userEvent.click(ordinaryMore);
     await userEvent.click(
       within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
         name: '링크 복사',
@@ -2893,6 +2894,18 @@ export const ProductionMoreShareReferences: Story = {
       '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.',
     );
     expect(getCopiedStrings()).toHaveLength(3);
+    expect(ordinaryMore).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(ordinaryMore);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() => expect(getCopiedStrings()).toHaveLength(4));
+    expect(getCopiedStrings()[3]).toBe(
+      `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+    );
   },
   render: () => <ProductionRepostQuoteLists />,
 };
@@ -3457,6 +3470,19 @@ export const PostDetailThreadRoute: Story = {
     expect(reactionButton).toBeVisible();
     const currentRow = canvas.getByTestId('post-thread-current-route-current');
     const currentActionBar = within(currentRow).getByRole('toolbar', { name: '액션 바' });
+    const currentMore = within(currentActionBar).getByRole('button', { name: '더 보기' });
+    await userEvent.click(currentMore);
+    await userEvent.click(
+      within(await screen.findByRole('menu', { name: '더 보기 메뉴' })).getByRole('menuitem', {
+        name: '링크 복사',
+      }),
+    );
+    await waitFor(() =>
+      expect(getCopiedStrings()).toContain(
+        `https://canonical.story.kosmo.test/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      ),
+    );
+    expect(currentMore).toHaveAttribute('aria-expanded', 'false');
     const currentDivider = canvas.getByTestId('post-thread-divider-route-current');
     const currentAvatar = currentRow.querySelector<HTMLElement>('[aria-label$="프로필 이미지"]');
     expect(currentAvatar).not.toBeNull();
