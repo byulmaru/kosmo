@@ -15,9 +15,10 @@
 ## 소유권
 
 - 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
-- `<768px` 모바일 Web `/compose`, `/notifications`: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
+- `<768px` 모바일 Web `/compose`, `/notifications`, `/settings`: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
 - Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
+- Android/iOS와 compact/full Web의 `/settings`: settings route가 `설정` text header를 scroll content의 첫 heading으로 소유한다. Native safe area는 모바일 셸이 바깥에서 소유한다.
 - 북마크 등 이 변경에 포함되지 않은 PageHeader 소비 화면은 기존 route 소유권을 유지한다.
 - compact/full Web `/home`: 모바일 셸 헤더가 없으므로 홈 route가 브랜드 헤더를 소유한다.
 
