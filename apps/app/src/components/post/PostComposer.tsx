@@ -82,6 +82,7 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       post {
         id
+        ...PostListItem_post
       }
       homeTimelineEdge {
         cursor

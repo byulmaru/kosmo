@@ -26,7 +26,35 @@ type CreatedPostPayload = {
     cursor: string;
     node: { __typename: 'Post'; id: string };
   } | null;
-  post: { __typename: 'Post'; id: string };
+  post: {
+    __typename: 'Post';
+    content: {
+      __typename: 'PostContent';
+      bodyText: string;
+      document: null;
+      id: string;
+      media: ReadonlyArray<never>;
+    };
+    createdAt: string;
+    id: string;
+    profile: {
+      __typename: 'Profile';
+      avatar: null;
+      displayName: string;
+      handle: string;
+      id: string;
+      relativeHandle: string;
+    };
+    replyParent: null;
+    reactionCounts: ReadonlyArray<never>;
+    repostCount: number;
+    repostSource: null;
+    state: 'ACTIVE';
+    viewerBookmark: null;
+    viewerReactions: ReadonlyArray<never>;
+    viewerRepost: null;
+    visibility: 'UNLISTED';
+  };
   profilePostsEdge: {
     __typename: 'PostConnectionEdge';
     cursor: string;
@@ -138,7 +166,35 @@ function payload(postId: string, profileEdge?: CreatedPostPayload['profilePostsE
       cursor: `cursor-${postId}`,
       node: { __typename: 'Post' as const, id: postId },
     },
-    post: { __typename: 'Post' as const, id: postId },
+    post: {
+      __typename: 'Post' as const,
+      content: {
+        __typename: 'PostContent' as const,
+        bodyText: '새 게시글',
+        document: null,
+        id: `content-${postId}`,
+        media: [],
+      },
+      createdAt: '2026-08-03T00:00:00.000Z',
+      id: postId,
+      profile: {
+        __typename: 'Profile' as const,
+        avatar: null,
+        displayName: '작성자',
+        handle: 'author',
+        id: profileId,
+        relativeHandle: 'author',
+      },
+      replyParent: null,
+      reactionCounts: [],
+      repostCount: 0,
+      repostSource: null,
+      state: 'ACTIVE' as const,
+      viewerBookmark: null,
+      viewerReactions: [],
+      viewerRepost: null,
+      visibility: 'UNLISTED' as const,
+    },
     profilePostsEdge: resolvedProfileEdge,
   };
 }
@@ -159,6 +215,24 @@ describe('PostComposer Relay connection cache', () => {
       { cursor: 'cursor-post-created', id: 'post-created' },
       { cursor: 'cursor-post-existing', id: oldPostId },
     ]);
+  });
+
+  it('normalizes the created Post list fragment before inserting its edge', async () => {
+    const environment = createEnvironment();
+
+    await applyPayload(environment, payload('post-with-list-fields'));
+
+    const source = environment.getStore().getSource();
+    const post = source.get('post-with-list-fields');
+    assert.equal(post?.createdAt, '2026-08-03T00:00:00.000Z');
+
+    const content = post?.content;
+    assert.ok(content && '__ref' in content);
+    assert.equal(source.get(content.__ref)?.bodyText, '새 게시글');
+
+    const profile = post?.profile;
+    assert.ok(profile && '__ref' in profile);
+    assert.equal(source.get(profile.__ref)?.relativeHandle, 'author');
   });
 
   it('keeps nullable and unloaded surfaces unchanged without synthesizing connections', async () => {
@@ -195,7 +269,7 @@ describe('PostComposer Relay connection cache', () => {
     await applyPayload(actorA, payload('post-same-node'));
     await applyPayload(actorB, {
       homeTimelineEdge: null,
-      post: { __typename: 'Post', id: 'post-no-edge' },
+      post: payload('post-no-edge').post,
       profilePostsEdge: null,
     });
 
