@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
+import {
+  createNativeScrollHandlers,
+  isScrollNearEnd,
+  resumeNativePagination,
+} from '@/components/pagination/nativeScrollPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
@@ -9,20 +14,15 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
-import {
-  createPostThreadNativeScrollHandlers,
-  isPostThreadNearEnd,
-  resumePostThreadNativePagination,
-} from './postThreadPagination';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
+import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposer';
-import type { PostThreadScrollMetrics } from './postThreadPagination';
 
 const PostDetailThreadFragment = graphql`
   fragment PostDetailThread_post on Post
@@ -167,20 +167,20 @@ function PostDetailThreadContent({
     });
   }, [hasNext, isLoadingNext, loadNext]);
   const maybeLoadNextPage = useCallback(
-    (metrics: PostThreadScrollMetrics) => {
-      if (!pageErrorRef.current && !loadError && isPostThreadNearEnd(metrics)) {
+    (metrics: ScrollMetrics) => {
+      if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
         loadNextPage();
       }
     },
     [loadError, loadNextPage],
   );
-  const nativeMetricsRef = useRef<PostThreadScrollMetrics>({
+  const nativeMetricsRef = useRef<ScrollMetrics>({
     contentLength: 0,
     offset: 0,
     viewportLength: 0,
   });
   const nativeScrollProps = useMemo(
-    () => createPostThreadNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
+    () => createNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
     [maybeLoadNextPage],
   );
 
@@ -194,7 +194,7 @@ function PostDetailThreadContent({
       return;
     }
     handledNativePageRevisionRef.current = nativePageRevision;
-    resumePostThreadNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
+    resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
   }, [isLoadingNext, maybeLoadNextPage, nativePageRevision]);
 
   useEffect(() => {

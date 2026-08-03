@@ -3,19 +3,19 @@ import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  createNativeScrollHandlers,
+  isScrollNearEnd,
+  resumeNativePagination,
+} from '@/components/pagination/nativeScrollPagination';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { FollowRequestListItem } from './FollowRequestListItem';
-import {
-  createFollowRequestNativeScrollHandlers,
-  isFollowRequestListNearEnd,
-  resumeFollowRequestNativePagination,
-} from './followRequestPagination';
+import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { FollowRequestList_profile$key } from './__generated__/FollowRequestList_profile.graphql';
 import type { FollowRequestListNextPageQuery } from './__generated__/FollowRequestListNextPageQuery.graphql';
-import type { FollowRequestScrollMetrics } from './followRequestPagination';
 
 type FollowRequestListProps = {
   profile: FollowRequestList_profile$key;
@@ -84,20 +84,20 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
     });
   }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
   const maybeLoadNextPage = useCallback(
-    (metrics: FollowRequestScrollMetrics) => {
-      if (!pageErrorRef.current && !loadError && isFollowRequestListNearEnd(metrics)) {
+    (metrics: ScrollMetrics) => {
+      if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
         loadNextPage();
       }
     },
     [loadError, loadNextPage],
   );
-  const nativeMetricsRef = useRef<FollowRequestScrollMetrics>({
+  const nativeMetricsRef = useRef<ScrollMetrics>({
     contentLength: 0,
     offset: 0,
     viewportLength: 0,
   });
   const nativeScrollProps = useMemo(
-    () => createFollowRequestNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
+    () => createNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
     [maybeLoadNextPage],
   );
 
@@ -112,7 +112,7 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
     }
 
     handledNativePageRevisionRef.current = nativePageRevision;
-    resumeFollowRequestNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
+    resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
   }, [maybeLoadNextPage, nativePageRevision, pagination.isLoadingNext]);
 
   useEffect(() => {
