@@ -36,6 +36,8 @@
 - **THEN** 시스템은 이미 history에 기록된 성공 파일을 다시 실행하지 않는다
 - **AND** 이전에 실패한 파일부터 version control 순서로 적용을 계속한다
 
+## ADDED Requirements
+
 ### Requirement: Drizzle migration history 호환성과 무결성
 
 **Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-269`, `PROD-656`. Runtime migration command는 version-controlled Drizzle migration directory의 파일 순서, statement breakpoint, name, timestamp와 hash 및 기존 `drizzle.__drizzle_migrations` history를 호환되게 사용해야 한다(MUST). 실행 전에 적용된 history가 로컬 migration 순서의 유효한 prefix이며 적용된 migration의 hash가 일치하는지 검증해야 하고(MUST), 적용된 migration의 누락, 순서 변경 또는 hash 변경을 발견하면 새 SQL을 실행해서는 안 된다(MUST NOT).
