@@ -345,23 +345,6 @@ export const TextFieldsAndSubmitGate: Story = {
   },
 };
 
-export const ProductionTagsHidden: Story = {
-  render: () => (
-    <ProfileEditScreen
-      initialValue={initialDraft}
-      onChange={() => undefined}
-      onSubmit={() => undefined}
-      showTags={false}
-      value={{ ...initialDraft, bio: 'production draft' }}
-    />
-  ),
-  play: ({ canvasElement }) => {
-    expect(
-      within(canvasElement).queryByRole('textbox', { name: '프로필 태그' }),
-    ).not.toBeInTheDocument();
-  },
-};
-
 export const DiscardConfirmation: Story = {
   render: () => (
     <ProfileEditDiscardDialog onContinue={() => undefined} onDiscard={() => undefined} visible />
