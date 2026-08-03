@@ -4,6 +4,18 @@
 
 ## Decision Records
 
+### Reply/thread scope exclusion preserves generic remote projection
+
+- Decision Date: 2026-08-03
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md#행동`, `docs/domain/objects/post.md#activitypub-local-note-표현`, `PROD-360`
+- Status: Active
+- Context / Problem: PROD-360은 Followers Only audience와 수신 relevance를 추가하지만 Reply/thread 별도 기능 확장을 소유하지 않는다. 이 scope exclusion을 reply Note rejection 또는 non-processing 규칙으로 해석하면 canonical Post가 정한 Reply Visibility의 Parent 독립성과 기존 generic remote reply projection을 깨뜨린다.
+- Decision Outcome: remote Note의 actor·object·attribution·audience와 local relevance validation은 선택적 `inReplyTo`/reply 관계의 존재 여부와 독립적으로 적용한다. reply target 자체는 Note를 drop하는 이유가 아니다. PROD-360의 reply/thread 별도 기능 확장 제외는 새 reply/thread 기능이나 별도 durable contract를 추가하지 않는다는 뜻이며, 기존 generic remote reply projection을 막는 규칙을 만들지 않는다. validation 뒤 Reply handling/projection 대상 여부와 결과, Parent 연결·top-level fallback은 별도 generic remote reply ingestion capability가 소유한다.
+- Alternatives Considered: reply/thread가 포함된 Note를 Followers Only capability에서 unsupported no-op으로 건너뛰는 방식은 canonical Post의 Reply visibility 독립성 및 PROD-360 scope를 넘어서는 drop rule을 만들어 선택하지 않는다.
+- Consequences: reply target 자체는 Followers Only audience·local relevance validation의 실패나 drop 사유가 아니며, validation 뒤 Note의 Reply handling/projection 대상 여부와 결과는 별도 capability가 결정한다. 이 change는 Mention·Notification·DIRECT/limited recipient model·historical backfill을 새로 만들지 않는다.
+- Confirmation / Follow-up: reply 관계가 있는 Note에서 audience·identity·local relevance 검증이 reply 여부와 독립적이고, 이 change가 별도 generic reply capability의 대상·결과를 재정의하지 않는지 관련 integration/spec 검증으로 확인한다.
+
 ### Audience priority and canonical followers identity
 
 - Decision Date: 2026-08-03

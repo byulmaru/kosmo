@@ -2,22 +2,22 @@
 
 ## Purpose
 
-공개 원격 ActivityPub `Create(Note)`의 `inReplyTo`를 저장된 Post identity와 기존 Reply Parent 관계로 materialize하고, 현재 연결할 수 없는 Parent는 향후 lifecycle을 열어 둔 채 top-level Post로 보존하기 위한 요구사항을 정의한다.
+원격 ActivityPub `Create(Note)`의 `inReplyTo`를 저장된 Post identity와 기존 Reply Parent 관계로 materialize하고, 현재 연결할 수 없는 Parent는 향후 lifecycle을 열어 둔 채 top-level Post로 보존하기 위한 요구사항을 정의한다.
 
 ## Requirements
 
 ### Requirement: 원격 Reply identity 검증
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-358. 시스템은 PUBLIC 또는 UNLISTED 원격 `Note`가 `inReplyTo`를 제공하면 정확히 하나로 해석되는 HTTP(S) URI를 Reply Parent identity로 사용해야 한다(MUST). Note의 object identity와 attribution은 기존 원격 Note ingestion 계약을 그대로 통과해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-358. 시스템은 원격 Note ingestion을 통과해 Reply projection 대상으로 전달된 `Note`가 `inReplyTo`를 제공하면 정확히 하나로 해석되는 HTTP(S) URI를 Reply Parent identity로 사용해야 한다(MUST). Note의 object identity와 attribution은 기존 원격 Note ingestion 계약을 그대로 통과해야 한다(MUST).
 
 #### Scenario: 유효한 원격 Reply identity
 
-- **WHEN** object identity와 attribution이 Create actor와 일치하는 공개 원격 Note가 단일 HTTP(S) `inReplyTo` URI를 제공한다
+- **WHEN** object identity와 attribution이 Create actor와 일치하고 원격 Note ingestion을 통과해 Reply projection 대상으로 전달된 Note가 단일 HTTP(S) `inReplyTo` URI를 제공한다
 - **THEN** 시스템은 그 URI를 저장된 Reply Parent 해석 입력으로 사용한다
 
 #### Scenario: 모호하거나 지원하지 않는 Parent identity
 
-- **WHEN** 공개 원격 Note의 `inReplyTo`가 없지 않으면서 여러 URI로 해석되거나 HTTP(S)가 아닌 URI다
+- **WHEN** 원격 Note ingestion을 통과해 Reply projection 대상으로 전달된 Note의 `inReplyTo`가 없지 않으면서 여러 URI로 해석되거나 HTTP(S)가 아닌 URI다
 - **THEN** 시스템은 그 Note를 Reply Parent 관계 없는 top-level Post로 materialize한다
 
 ### Requirement: 저장된 ActivityPub Post를 Reply Parent로 해석
@@ -63,7 +63,7 @@
 
 #### Scenario: 원격 Reply 저장 성공
 
-- **WHEN** 유효한 공개 원격 Reply의 Parent가 Content 있는 Post로 해석된다
+- **WHEN** 유효한 remote Reply의 Parent가 Content 있는 Post로 해석된다
 - **THEN** 시스템은 `currentContentId`와 `replyParentId`가 모두 있는 기존 단일 Post 구조를 원자적으로 저장한다
 - **AND** `repostSourceId`를 설정하지 않는다
 

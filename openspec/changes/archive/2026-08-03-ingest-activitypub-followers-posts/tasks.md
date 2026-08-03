@@ -105,7 +105,7 @@ GraphQL integration fixture에서 accepted follower와 Author Profile의 기존 
 
 Fedify/API integration 결과, existing public/unlisted regression, formatter와 `openspec validate ingest-activitypub-followers-posts --strict` 결과를 PROD-360 evidence에 연결한다.
 
-4.2 verification evidence (2026-08-03): the isolated Fedify suite passed all 190 tests, including existing Public/Unlisted inbound and delivery regressions, and the API GraphQL profile suite passed all 58 tests including existing Public/Unlisted authorization coverage. This change adds no PROD-634 logging or Sentry instrumentation; the upstream observability enum remains unconfirmed, so no compatibility assertion was invented.
+4.2 verification evidence (2026-08-03): the isolated Fedify suite passed all 193 tests, including existing Public/Unlisted inbound and delivery regressions, and the API GraphQL profile suite passed all 59 tests including existing Public/Unlisted authorization coverage. This change adds no PROD-634 logging or Sentry instrumentation; the upstream observability enum remains unconfirmed, so no compatibility assertion was invented.
 
 - [x] 4.1 대표 외부 서버의 personal/shared Followers Only 수신과 GraphQL surfaces를 end-to-end로 검증한다.
 - [x] 4.2 기존 public/unlisted inbound·Post authorization 회귀와 common observability boundary 호환성을 scope 중복 없이 확인한다.

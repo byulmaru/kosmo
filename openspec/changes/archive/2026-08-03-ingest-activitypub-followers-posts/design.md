@@ -7,14 +7,15 @@ PROD-360은 현재 `to`·`cc`의 Public audience만 분류하는 remote Note 수
 **Goals:**
 
 - `to` Public → PUBLIC, `cc` Public(그리고 to에는 없음) → UNLISTED, 그 밖의 verified author canonical followers URI → FOLLOWERS의 우선순위로 audience를 분류한다. 공식 ActivityPub/Mastodon addressing으로 추가된 구문상 유효하게 파싱된 actor/collection URI, 순서·중복과 foreign/unknown/spoofed-looking followers URI는 인식된 marker 뒤에서 무시한다. raw malformed audience syntax는 기존 vocabulary hydration/basic validation 경계에 남긴다.
-- personal/shared inbox에서 Active local Profile·Active local Instance에 연결된 follower와 remote followee의 established 관계가 있는 경우에만 Followers Only Note를 materialize한다.
+- personal/shared inbox에서 Active local Profile·Active local Instance에 연결된 follower와 remote followee의 established 관계를 확인하고, 이 capability의 Followers Only Post materialization 대상으로 판정된 Note만 materialize한다.
 - 기존 `createPost` transaction/idempotency와 GraphQL Post Visibility·Eligibility·pagination 정책을 그대로 연결한다.
 - accepted follower 접근, unfollow·suspension에 따른 read-time 변화, 인식된 marker가 없는 actor-only·foreign-followers-only audience의 no-side-effect 결과를 검증한다.
+- Note의 선택적 `inReplyTo`/reply 관계 자체는 actor·object·attribution·audience validation에서 Note를 drop하는 이유가 아니다. validation 뒤 reply handling/projection 대상 여부와 결과는 별도 `activitypub-remote-reply-ingestion` capability가 소유한다. PROD-360은 새 reply/thread 기능을 추가하지 않으며 기존 generic remote reply projection을 막는 규칙도 만들지 않는다.
 
 **Non-Goals:**
 
 - DB migration, followers membership mirror, 전체 과거 Note backfill, Local outbound Followers delivery.
-- DIRECT/limited recipient 모델, Mention 관계·notification·viewer authorization, body/tag Mention 보존·파싱, Reply/thread 또는 remote Media 확장.
+- DIRECT/limited recipient 모델, Mention 관계·notification·viewer authorization, body/tag Mention 보존·파싱, reply/thread 별도 기능 확장 또는 remote Media 확장. 이 scope exclusion은 기존 generic remote reply projection을 제한하거나 reply Note를 drop하는 규칙이 아니다. Reply handling/projection의 실제 대상과 결과는 별도 capability가 결정한다.
 - PROD-634가 소유하는 공통 logging/Sentry 계측의 신규 구현.
 
 ## Implementation Guidance
