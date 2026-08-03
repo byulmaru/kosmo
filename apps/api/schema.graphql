@@ -97,9 +97,7 @@ input CreatePostMediaInput {
 }
 
 type CreatePostPayload {
-  homeTimelineEdge: PostConnectionEdge
   post: Post!
-  profilePostsEdge: PostConnectionEdge
 }
 
 input CreateProfileInput {

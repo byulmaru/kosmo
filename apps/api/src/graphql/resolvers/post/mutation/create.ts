@@ -5,7 +5,7 @@ import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Media } from '../../media/ref';
-import { Post, PostConnectionEdge } from '../ref';
+import { Post } from '../ref';
 
 const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
@@ -19,8 +19,6 @@ builder.mutationField('createPost', (t) =>
     type: builder.simpleObject('CreatePostPayload', {
       fields: (field) => ({
         post: field.field({ type: Post }),
-        homeTimelineEdge: field.field({ type: PostConnectionEdge, nullable: true }),
-        profilePostsEdge: field.field({ type: PostConnectionEdge, nullable: true }),
       }),
     }),
     typeOptions: {
@@ -68,11 +66,7 @@ builder.mutationField('createPost', (t) =>
         visibility: input.visibility,
       });
 
-      return {
-        homeTimelineEdge: { cursor: post.id, node: post },
-        post,
-        profilePostsEdge: post.replyParentId == null ? { cursor: post.id, node: post } : null,
-      };
+      return { post };
     },
   }),
 );

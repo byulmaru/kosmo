@@ -84,18 +84,6 @@ const CreatePostMutation = graphql`
         id
         ...PostListItem_post
       }
-      homeTimelineEdge {
-        cursor
-        node {
-          id
-        }
-      }
-      profilePostsEdge {
-        cursor
-        node {
-          id
-        }
-      }
     }
   }
 `;

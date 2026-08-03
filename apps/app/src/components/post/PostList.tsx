@@ -93,7 +93,7 @@ export function PostList({
       <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
         <View style={styles.root}>
           {visibleEdges.map((edge) => (
-            <PostListItem key={edge.cursor} post={edge.node} />
+            <PostListItem key={edge.node.id} post={edge.node} />
           ))}
         </View>
       </PostReplyCoordinatorProvider>

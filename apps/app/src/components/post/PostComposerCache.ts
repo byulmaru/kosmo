@@ -7,14 +7,10 @@ export const profilePostsConnectionKey = 'PostList_profile_posts';
 function prependEdgeIfMissing(
   parent: RecordProxy | null | undefined,
   connectionKey: string,
-  edge: RecordProxy | null | undefined,
+  store: RecordSourceSelectorProxy,
+  post: RecordProxy,
 ) {
-  if (!parent || !edge) {
-    return;
-  }
-
-  const node = edge.getLinkedRecord('node');
-  if (!node) {
+  if (!parent) {
     return;
   }
 
@@ -23,7 +19,7 @@ function prependEdgeIfMissing(
     return;
   }
 
-  const nodeId = node.getDataID();
+  const nodeId = post.getDataID();
   const hasSameNode = connection
     .getLinkedRecords('edges')
     ?.some((existingEdge) => existingEdge?.getLinkedRecord('node')?.getDataID() === nodeId);
@@ -31,6 +27,7 @@ function prependEdgeIfMissing(
     return;
   }
 
+  const edge = ConnectionHandler.createEdge(store, connection, post, 'PostConnectionEdge');
   ConnectionHandler.insertEdgeBefore(connection, edge);
 }
 
@@ -39,18 +36,13 @@ export function updateCreatedPostConnections(
   profileId: string,
 ): void {
   const payload = store.getRootField('createPost');
-  if (!payload) {
+  const post = payload?.getLinkedRecord('post');
+  if (!post) {
     return;
   }
 
-  prependEdgeIfMissing(
-    store.getRoot(),
-    homeTimelineConnectionKey,
-    payload.getLinkedRecord('homeTimelineEdge'),
-  );
-  prependEdgeIfMissing(
-    store.get(profileId),
-    profilePostsConnectionKey,
-    payload.getLinkedRecord('profilePostsEdge'),
-  );
+  prependEdgeIfMissing(store.getRoot(), homeTimelineConnectionKey, store, post);
+  if (post.getLinkedRecord('replyParent') === null) {
+    prependEdgeIfMissing(store.get(profileId), profilePostsConnectionKey, store, post);
+  }
 }

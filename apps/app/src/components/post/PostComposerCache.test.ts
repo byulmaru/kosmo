@@ -14,18 +14,16 @@ import {
   profilePostsConnectionKey,
   updateCreatedPostConnections,
 } from './PostComposerCache';
+import type { PayloadError } from 'relay-runtime';
+import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 
 const rootId = 'client:root';
 const profileId = 'profile-created-post-author';
 const oldPostId = 'post-existing';
 const pendingPayloads = new WeakMap<Environment, CreatedPostPayload>();
+const pendingErrors = new WeakMap<Environment, PayloadError[]>();
 
 type CreatedPostPayload = {
-  homeTimelineEdge: {
-    __typename: 'PostConnectionEdge';
-    cursor: string;
-    node: { __typename: 'Post'; id: string };
-  } | null;
   post: {
     __typename: 'Post';
     content: {
@@ -45,7 +43,7 @@ type CreatedPostPayload = {
       id: string;
       relativeHandle: string;
     };
-    replyParent: null;
+    replyParent: { __typename: 'Post'; id: string } | null;
     reactionCounts: ReadonlyArray<never>;
     repostCount: number;
     repostSource: null;
@@ -55,11 +53,6 @@ type CreatedPostPayload = {
     viewerRepost: null;
     visibility: 'UNLISTED';
   };
-  profilePostsEdge: {
-    __typename: 'PostConnectionEdge';
-    cursor: string;
-    node: { __typename: 'Post'; id: string };
-  } | null;
 };
 
 function connectionHandle(key: string) {
@@ -111,21 +104,31 @@ function createEnvironment({
 
   const environmentRef: { current?: Environment } = {};
   const environment = new Environment({
-    network: Network.create(() =>
-      Promise.resolve({ data: { createPost: pendingPayloads.get(environmentRef.current!) } }),
-    ),
+    network: Network.create(() => {
+      const environment = environmentRef.current!;
+      const errors = pendingErrors.get(environment) ?? [];
+      return Promise.resolve({
+        data: { createPost: pendingPayloads.get(environment) },
+        ...(errors.length > 0 ? { errors } : {}),
+      });
+    }),
     store: new Store(source),
   });
   environmentRef.current = environment;
   return environment;
 }
 
-async function applyPayload(environment: Environment, payload: CreatedPostPayload) {
+async function applyPayload(
+  environment: Environment,
+  payload: CreatedPostPayload,
+  errors: readonly PayloadError[] = [],
+): Promise<readonly PayloadError[] | null | undefined> {
   pendingPayloads.set(environment, payload);
-  await new Promise<void>((resolve, reject) => {
-    commitMutation(environment, {
+  pendingErrors.set(environment, [...errors]);
+  return new Promise<readonly PayloadError[] | null | undefined>((resolve, reject) => {
+    commitMutation<PostComposerCreatePostMutation>(environment, {
       mutation: CreatePostMutation,
-      onCompleted: () => resolve(),
+      onCompleted: (_response, completionErrors) => resolve(completionErrors),
       onError: reject,
       updater: (store) => updateCreatedPostConnections(store, profileId),
       variables: { input: { bodyText: '새 게시글', visibility: 'UNLISTED' } },
@@ -150,22 +153,8 @@ function edgeNodes(environment: Environment, parentId: string, key: string) {
   });
 }
 
-function payload(postId: string, profileEdge?: CreatedPostPayload['profilePostsEdge']) {
-  const resolvedProfileEdge =
-    profileEdge === undefined
-      ? {
-          __typename: 'PostConnectionEdge' as const,
-          cursor: `cursor-${postId}`,
-          node: { __typename: 'Post' as const, id: postId },
-        }
-      : profileEdge;
-
+function payload(postId: string, replyParentId: string | null = null): CreatedPostPayload {
   return {
-    homeTimelineEdge: {
-      __typename: 'PostConnectionEdge' as const,
-      cursor: `cursor-${postId}`,
-      node: { __typename: 'Post' as const, id: postId },
-    },
     post: {
       __typename: 'Post' as const,
       content: {
@@ -185,7 +174,8 @@ function payload(postId: string, profileEdge?: CreatedPostPayload['profilePostsE
         id: profileId,
         relativeHandle: 'author',
       },
-      replyParent: null,
+      replyParent:
+        replyParentId == null ? null : { __typename: 'Post' as const, id: replyParentId },
       reactionCounts: [],
       repostCount: 0,
       repostSource: null,
@@ -195,12 +185,11 @@ function payload(postId: string, profileEdge?: CreatedPostPayload['profilePostsE
       viewerRepost: null,
       visibility: 'UNLISTED' as const,
     },
-    profilePostsEdge: resolvedProfileEdge,
   };
 }
 
 describe('PostComposer Relay connection cache', () => {
-  it('prepends server edges in both loaded connections and deduplicates completion', async () => {
+  it('prepends normalized posts in both loaded connections and deduplicates completion', async () => {
     const environment = createEnvironment();
     const created = payload('post-created');
 
@@ -208,11 +197,11 @@ describe('PostComposer Relay connection cache', () => {
     await applyPayload(environment, created);
 
     assert.deepEqual(edgeNodes(environment, rootId, homeTimelineConnectionKey), [
-      { cursor: 'cursor-post-created', id: 'post-created' },
+      { cursor: null, id: 'post-created' },
       { cursor: 'cursor-post-existing', id: oldPostId },
     ]);
     assert.deepEqual(edgeNodes(environment, profileId, profilePostsConnectionKey), [
-      { cursor: 'cursor-post-created', id: 'post-created' },
+      { cursor: null, id: 'post-created' },
       { cursor: 'cursor-post-existing', id: oldPostId },
     ]);
   });
@@ -235,22 +224,36 @@ describe('PostComposer Relay connection cache', () => {
     assert.equal(source.get(profile.__ref)?.relativeHandle, 'author');
   });
 
-  it('keeps nullable and unloaded surfaces unchanged without synthesizing connections', async () => {
+  it('keeps a committed Post successful when GraphQL errors accompany the response', async () => {
+    const environment = createEnvironment();
+
+    const completionErrors = await applyPayload(environment, payload('post-partial'), [
+      { message: 'nullable loader 조회에 실패했습니다.' },
+    ]);
+
+    assert.deepEqual(
+      completionErrors?.map(({ message }) => message),
+      ['nullable loader 조회에 실패했습니다.'],
+    );
+    assert.deepEqual(edgeNodes(environment, rootId, homeTimelineConnectionKey), [
+      { cursor: null, id: 'post-partial' },
+      { cursor: 'cursor-post-existing', id: oldPostId },
+    ]);
+    assert.deepEqual(edgeNodes(environment, profileId, profilePostsConnectionKey), [
+      { cursor: null, id: 'post-partial' },
+      { cursor: 'cursor-post-existing', id: oldPostId },
+    ]);
+  });
+
+  it('keeps replies out of Profile and does not synthesize unloaded connections', async () => {
     const environment = createEnvironment({ profileLoaded: false });
 
-    await applyPayload(environment, payload('post-home-only'));
-    await applyPayload(
-      environment,
-      payload('post-no-surfaces', {
-        __typename: 'PostConnectionEdge',
-        cursor: 'cursor-post-no-surfaces',
-        node: { __typename: 'Post', id: 'post-no-surfaces' },
-      }),
-    );
+    await applyPayload(environment, payload('post-reply', oldPostId));
+    await applyPayload(environment, payload('post-original'));
 
     assert.deepEqual(edgeNodes(environment, rootId, homeTimelineConnectionKey), [
-      { cursor: 'cursor-post-no-surfaces', id: 'post-no-surfaces' },
-      { cursor: 'cursor-post-home-only', id: 'post-home-only' },
+      { cursor: null, id: 'post-original' },
+      { cursor: null, id: 'post-reply' },
       { cursor: 'cursor-post-existing', id: oldPostId },
     ]);
     assert.equal(
@@ -262,21 +265,12 @@ describe('PostComposer Relay connection cache', () => {
     );
   });
 
-  it('does not replace an existing same-node edge or update another actor Store', async () => {
+  it('does not replace an existing same-node edge', async () => {
     const actorA = createEnvironment({ existingPostId: 'post-same-node' });
-    const actorB = createEnvironment({ existingPostId: 'post-same-node' });
 
     await applyPayload(actorA, payload('post-same-node'));
-    await applyPayload(actorB, {
-      homeTimelineEdge: null,
-      post: payload('post-no-edge').post,
-      profilePostsEdge: null,
-    });
 
     assert.deepEqual(edgeNodes(actorA, rootId, homeTimelineConnectionKey), [
-      { cursor: 'cursor-post-same-node', id: 'post-same-node' },
-    ]);
-    assert.deepEqual(edgeNodes(actorB, rootId, homeTimelineConnectionKey), [
       { cursor: 'cursor-post-same-node', id: 'post-same-node' },
     ]);
   });

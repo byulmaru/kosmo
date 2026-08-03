@@ -135,14 +135,6 @@ describe('Post Reply GraphQL 경계', () => {
       state: PostState.ACTIVE,
       visibility: PostVisibility.UNLISTED,
     });
-    assert.deepEqual(result.data?.createPost.homeTimelineEdge, {
-      cursor: stored.id,
-      node: { id: encodeGlobalId('Post', stored.id) },
-    });
-    assert.deepEqual(result.data?.createPost.profilePostsEdge, {
-      cursor: stored.id,
-      node: { id: encodeGlobalId('Post', stored.id) },
-    });
     assert.equal(stored.currentContentId, content.id);
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
@@ -603,11 +595,6 @@ describe('Post Reply GraphQL 경계', () => {
       assert.equal(stored.visibility, PostVisibility.FOLLOWERS);
       assert.ok(stored.currentContentId);
       assert.equal(stored.repostSourceId, null);
-      assert.deepEqual(result.data?.createPost.homeTimelineEdge, {
-        cursor: stored.id,
-        node: { id: encodeGlobalId('Post', stored.id) },
-      });
-      assert.equal(result.data?.createPost.profilePostsEdge, null);
     }
   });
 
@@ -1222,11 +1209,6 @@ type CreatePostNode = {
   visibility: PostVisibility;
 };
 
-type CreatePostEdge = {
-  cursor: string;
-  node: { id: string };
-} | null;
-
 type PostContentNode = {
   content: {
     bodyText: string;
@@ -1446,17 +1428,11 @@ const requestCreatePost = (
   token?: string,
 ) =>
   requestGraphQL<{
-    createPost: {
-      homeTimelineEdge: CreatePostEdge;
-      post: CreatePostNode;
-      profilePostsEdge: CreatePostEdge;
-    };
+    createPost: { post: CreatePostNode };
   }>(
     `mutation CreatePost($input: CreatePostInput!) {
       createPost(input: $input) {
         post { __typename id state visibility }
-        homeTimelineEdge { cursor node { id } }
-        profilePostsEdge { cursor node { id } }
       }
     }`,
     { input },

@@ -1,20 +1,19 @@
 ## Why
 
-Post 작성이 성공해도 이미 열어 본 Home·Profile Post List의 Relay connection에는 새 Post가 반영되지 않아, 사용자가 새로고침하거나 화면을 다시 열기 전까지 방금 작성한 결과를 확인하기 어렵다. 검증된 committed Post에서 서버가 canonical edge를 투영해 현재 selected Profile의 actor Store에 즉시 반영하고 작성 성공과 목록 표시를 일치시킨다.
+`createPost`가 성공해도 이미 열어 둔 Home·작성자 Profile Post List의 Relay connection에는 새 Post가 반영되지 않아 사용자가 새로고침 전까지 결과를 확인하기 어렵다. 호출자 Store에서 normalized Post를 즉시 반영해 작성 성공과 현재 목록을 일치시킨다.
 
 ## What Changes
 
-- `createPost` 성공 payload가 검증된 committed Post의 canonical identity와 Post ID cursor를 재사용하는 Home·Profile용 server-projected connection edge를 제공한다. Projection은 post-commit Post List Policy DB read를 수행하지 않는다.
-- Home과 Profile Post List를 안정적인 Relay managed connection으로 식별하고, 작성 요청을 시작한 actor Store의 이미 로드된 대상 connection에 새 edge를 최신순으로 한 번만 추가한다.
-- 현재 GraphQL input은 Original·Reply에 도달하지만, relation-shape mapping은 이 action이 반환하는 Quote·Reply+Quote에도 유효하다. Home에는 해당 action의 Original·Quote·Reply·Reply+Quote를, 작성자 Profile에는 Reply Parent가 없는 Post만 반영한다. 클라이언트는 후보·Control 정책이나 surface shape를 재계산하지 않는다.
-- 실패, 재시도, 중복 completion, route unmount와 selected Profile·Relay Environment 전환에서 새 actor UI나 비대상 connection을 변경하지 않는다.
-- Home·Profile 목록, Composer와 actor Store 격리 회귀 테스트를 추가하고, Subscription만이 새 Post membership을 소유한다고 기록한 frontend memory를 현재 Linear 경계에 맞춘다.
+- `createPost`의 기존 `CreatePostPayload.post` 선택을 유지하고 별도 edge 공개 계약은 추가하지 않는다.
+- Home과 Profile Post List를 surface별 안정적인 Relay managed connection으로 식별한다.
+- mutation updater가 normalized `post`를 요청 actor Environment의 이미 로드된 Home connection에 최신순으로 한 번 반영한다. Reply Parent가 없을 때만 작성자 Profile connection에도 반영한다.
+- updater는 connection을 합성하거나 Post List 정책·cursor를 재구현하지 않고, 같은 Post Node의 edge를 중복 삽입하지 않는다.
+- 기존 mounted/context/Environment 수명주기 보호를 유지해 늦은 결과가 새 actor Store나 unmounted UI를 변경하지 않게 한다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0014-post-structure-relations.md`
 - Linear Contract: [PROD-641](https://linear.app/byulmaru/issue/PROD-641)
-- Linear Implementations: [PROD-641](https://linear.app/byulmaru/issue/PROD-641) — 같은 작은 변경 이슈가 구현·회귀 테스트·통합 검증·archive를 함께 소유한다.
 
 ## Capabilities
 
@@ -24,12 +23,10 @@ Post 작성이 성공해도 이미 열어 본 Home·Profile Post List의 Relay c
 
 ### Modified Capabilities
 
-- `post`: `createPost`가 서버 판정 connection edge를 반환하고, 유니버설 클라이언트가 요청 actor의 Home·Profile managed connection에 정렬·중복·actor 격리를 보존하며 즉시 반영하도록 작성 성공 계약을 변경한다.
+- `post`: `createPost` 성공 후 호출자 Relay Store의 로컬 connection membership을 동기화한다.
 
 ## Impact
 
-- GraphQL: `CreatePostPayload`의 additive edge projection과 API schema/resolver 검증
-- Universal client: `PostComposer` mutation, Home/Profile `PostList` connection identity, actor Environment 경계와 관련 Relay 테스트
-- Contract: `openspec/specs/post/spec.md`의 생성 payload·목록·작성 성공 요구사항 delta
-- Project memory: `memory/frontend-react-native.md`의 createPost 로컬 즉시 반영과 Subscription 소유권 경계
-- 제외: DB schema/migration, 새 dependency, GraphQL Subscription·server push, 타임라인 후보·정렬 정책 변경, 광범위한 refetch
+- Universal client: `PostComposer` mutation, Home/Profile `@connection` identity, 좁은 Relay updater와 관련 테스트
+- OpenSpec delta: API schema 또는 server projection이 아닌 caller-local Store update만 기록
+- 제외: `CreatePostPayload` edge field, server-side edge projection, GraphQL Subscription/server push, 다른 actor Store 동기화, 광범위한 refetch, DB schema/migration

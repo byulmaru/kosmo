@@ -34,8 +34,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   const createPostPayload = schema.getType('CreatePostPayload');
   assert.ok(isObjectType(createPostPayload));
   assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
-  assert.equal(String(createPostPayload.getFields().homeTimelineEdge.type), 'PostConnectionEdge');
-  assert.equal(String(createPostPayload.getFields().profilePostsEdge.type), 'PostConnectionEdge');
+  assert.deepEqual(Object.keys(createPostPayload.getFields()), ['post']);
 });
 
 test('validates createPost input before running the resolver', async () => {
