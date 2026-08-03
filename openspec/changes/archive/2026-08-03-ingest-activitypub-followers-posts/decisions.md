@@ -81,17 +81,18 @@
 - Decision Date: 2026-08-03
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
-- Status: Blocked
-- Context / Problem: PROD-360은 outcome/phase/reason 호환성을 요구하지만 PROD-634의 구체 값과 공개 계약은 이 change의 authority로 제공되지 않았다.
-- Decision Outcome: exact field names, enum values와 retention/logging semantics를 현재 OpenSpec의 normative requirement나 task checkbox로 확정하지 않는다.
+- Status: Superseded
+- Superseded By: `Keep common observability ownership with PROD-634`
+- Context / Problem: PROD-360은 outcome/phase/reason 호환성을 요구했지만 PROD-634의 구체 값과 공개 계약은 이 change의 authority로 제공되지 않았다. 최신 소유 경계에서 common observability는 PROD-634가 담당하며 PROD-360의 blocker가 아니다.
+- Decision Outcome: 이 record는 PROD-360에서 abandoned/out-of-scope로 처리한다. exact field names, enum values와 retention/logging semantics는 현재 OpenSpec의 normative requirement나 task checkbox로 확정하지 않으며, 후속 PROD-634가 canonical contract로 소유한다.
 - Alternatives Considered: 임의의 reason catalog를 만들거나 기존 log 문자열을 계약으로 승격하는 방식은 upstream authority 없이 제품 행동을 추가하므로 선택하지 않는다.
-- Consequences: implementation은 공통 observability authority가 확인될 때까지 해당 값을 추론하지 않으며, 현재 change의 완료 검증은 안정적인 materialization/access 결과에 한정한다.
-- Confirmation / Follow-up: PROD-634 또는 PROD-360 owner가 canonical/Linear contract를 갱신하면 이 decision을 재분류하고 compatibility 검증을 추가한다.
+- Consequences: 이 change의 implementation과 완료 검증은 안정적인 materialization/access 결과에 한정한다. exact observability enum은 이 change가 발명·소유하지 않고 후속 PROD-634에서 정한다.
+- Confirmation / Follow-up: PROD-634가 common observability contract를 제공하면 해당 change에서 compatibility 검증을 추가한다.
 
 ## Remaining Decisions
 
-- PROD-634가 제공할 stable `outcome`·`phase`·`reason` 값과 공개 compatibility 범위. 위 Blocked decision의 upstream 갱신이 필요하다.
+- 없음.
 
 ## Superseded Decisions
 
-- 없음.
+- `Stable observability field values remain upstream-owned`는 PROD-360에서 abandoned/out-of-scope로 처리하고, `Keep common observability ownership with PROD-634` Active decision으로 대체했다. exact `outcome`·`phase`·`reason` enum과 공개 compatibility 범위는 후속 PROD-634의 소유이며 이 change의 archive blocker가 아니다.
