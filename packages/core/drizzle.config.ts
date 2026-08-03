@@ -1,7 +1,8 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'drizzle-kit';
+import type { Config } from 'drizzle-kit';
 
+// Keep this type-only: the runtime migration image does not install drizzle-kit.
 const configDir = dirname(fileURLToPath(import.meta.url));
 
 // drizzle-kit feeds each schema path straight into `glob`, which treats `\` as an
@@ -9,11 +10,17 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 // nothing ("No schema files found"). Normalize to forward slashes to keep matching.
 const schemaPath = (...segments: string[]) => join(configDir, ...segments).replaceAll('\\', '/');
 
-export default defineConfig({
+const config = {
   dialect: 'postgresql',
   schema: [schemaPath('db/tables.ts'), schemaPath('db/enums.ts')],
   out: join(configDir, '../../drizzle'),
+  migrations: {
+    schema: 'drizzle',
+    table: '__drizzle_migrations',
+  },
   dbCredentials: {
     url: process.env.DATABASE_URL!,
   },
-});
+} satisfies Config;
+
+export default config;

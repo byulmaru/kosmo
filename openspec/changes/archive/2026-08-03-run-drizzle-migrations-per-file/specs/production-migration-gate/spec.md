@@ -1,48 +1,4 @@
-# production-migration-gate Specification
-
-## Purpose
-
-Production migration이 고정된 database 대상과 분리된 credential을 사용하고 API/Web과 동일한 immutable release에서 실행되며, 성공하기 전에는 새 workload가 활성화되지 않도록 하는 실행 경계를 정의한다.
-
-## Requirements
-
-### Requirement: 분리된 production migration 권한
-
-**Authority / Provenance:** `PROD-564`, `PROD-616`, `memory/database-migrations.md`. Production migration Job은 schema migration에 필요한 별도 database identity와 credential을 사용해야 하며(MUST), API와 Web runtime credential을 사용하거나 migration credential이 없을 때 runtime credential로 fallback해서는 안 된다(MUST NOT).
-
-#### Scenario: Migration credential로 실행
-
-- **WHEN** production migration Job이 시작된다
-- **THEN** Job은 production migration 전용 Secret과 database identity로 연결한다
-- **AND** 연결 후 명시적인 database owner role로 전환해 새 schema 객체가 runtime owner의 권한 경계에 남게 한다
-- **AND** 접속 대상은 현재 Helm release의 PostgreSQL read-write Service와 `kosmo` database로 고정된다
-- **AND** API와 Web workload는 같은 credential을 mount하거나 참조하지 않는다
-
-#### Scenario: Migration 대상 입력 금지
-
-- **WHEN** production migration Job manifest가 렌더된다
-- **THEN** database URL, host, database와 migration Secret 이름/key를 release 입력으로 받지 않는다
-- **AND** migration Secret에서는 `username`과 `password`만 읽는다
-
-#### Scenario: Migration credential 준비 실패
-
-- **WHEN** migration 전용 Secret이 없거나 유효한 database 연결을 만들 수 없다
-- **THEN** migration Job은 SQL을 실행하지 않고 실패한다
-- **AND** runtime credential로 재시도하지 않는다
-
-### Requirement: 동일한 immutable release identity
-
-**Authority / Provenance:** `PROD-564`, `PROD-269`. Production migration Job, API와 Web workload는 승인된 release의 동일한 immutable image digest를 사용해야 한다(MUST). Mutable tag 또는 서로 다른 digest로 production migration을 실행해서는 안 된다(MUST NOT).
-
-#### Scenario: 동일 digest로 렌더
-
-- **WHEN** production release manifest가 렌더된다
-- **THEN** migration Job, API와 Web image reference는 같은 `repository@sha256:...` 값이다
-
-#### Scenario: Mutable production image 거부
-
-- **WHEN** production migration이 tag-only image 또는 유효하지 않은 digest로 구성된다
-- **THEN** manifest render는 migration Job을 생성하기 전에 실패한다
+## MODIFIED Requirements
 
 ### Requirement: 단순한 migration 실행기
 
