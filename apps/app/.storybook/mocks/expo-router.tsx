@@ -58,33 +58,45 @@ export function RouterMockProvider({
   segments?: readonly string[];
   slotLabel?: string;
 }>) {
-  const [history, setHistory] = useState(() => [
-    {
-      params,
-      pathname: initialPathname,
-    },
-  ]);
-  const [historyIndex, setHistoryIndex] = useState(0);
-  const location = history[historyIndex]!;
-  const setLocation = useCallback(
-    (href: Href) => {
-      setHistory((current) => [...current.slice(0, historyIndex + 1), resolveHref(href)]);
-      setHistoryIndex(historyIndex + 1);
-    },
-    [historyIndex],
+  const [history, setHistory] = useState(() => ({
+    entries: [
+      {
+        params,
+        pathname: initialPathname,
+      },
+    ],
+    index: 0,
+  }));
+  const location = history.entries[history.index]!;
+  const setLocation = useCallback((href: Href) => {
+    setHistory((current) => {
+      const currentLocation = current.entries[current.index]!;
+      const entries = [
+        ...current.entries.slice(0, current.index + 1),
+        resolveHref(href, currentLocation.params),
+      ];
+      return { entries, index: entries.length - 1 };
+    });
+  }, []);
+  const replaceLocation = useCallback((href: Href) => {
+    setHistory((current) => ({
+      ...current,
+      entries: current.entries.map((entry, index) =>
+        index === current.index ? resolveHref(href, entry.params) : entry,
+      ),
+    }));
+  }, []);
+  const back = useCallback(
+    () => setHistory((current) => ({ ...current, index: Math.max(0, current.index - 1) })),
+    [],
   );
-  const replaceLocation = useCallback(
-    (href: Href) => {
-      setHistory((current) =>
-        current.map((entry, index) => (index === historyIndex ? resolveHref(href) : entry)),
-      );
-    },
-    [historyIndex],
-  );
-  const back = useCallback(() => setHistoryIndex((current) => Math.max(0, current - 1)), []);
   const forward = useCallback(
-    () => setHistoryIndex((current) => Math.min(history.length - 1, current + 1)),
-    [history.length],
+    () =>
+      setHistory((current) => ({
+        ...current,
+        index: Math.min(current.entries.length - 1, current.index + 1),
+      })),
+    [],
   );
   const value = useMemo(
     () => ({
@@ -166,14 +178,14 @@ export function Link({
   });
 }
 
-function resolveHref(href: Href) {
+function resolveHref(href: Href, currentParams: Record<string, string | undefined>) {
   if (typeof href !== 'string') {
-    return { params: href.params ?? {}, pathname: href.pathname };
+    return { params: href.params ?? currentParams, pathname: href.pathname };
   }
 
   const [pathname, query = ''] = href.split('?', 2);
   return {
-    params: Object.fromEntries(new URLSearchParams(query)),
+    params: { ...currentParams, ...Object.fromEntries(new URLSearchParams(query)) },
     pathname: pathname || '/',
   };
 }
