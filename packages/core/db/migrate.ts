@@ -128,12 +128,21 @@ async function ensureMigrationHistory(
     return;
   }
 
-  const legacyRows = await sql<LegacyMigrationHistoryRow[]>`
-    SELECT id, hash
-    FROM ${table}
-    ORDER BY id ASC
-  `;
-  validateLegacyMigrationHistory(legacyRows, migrations);
+  let historyRows: LegacyMigrationHistoryRow[];
+
+  if (columnNames.has('name')) {
+    const partialRows = await readMigrationHistory(sql);
+    validateMigrationHistory(partialRows, migrations);
+    historyRows = partialRows;
+  } else {
+    const legacyRows = await sql<LegacyMigrationHistoryRow[]>`
+      SELECT id, hash
+      FROM ${table}
+      ORDER BY id ASC
+    `;
+    validateLegacyMigrationHistory(legacyRows, migrations);
+    historyRows = legacyRows;
+  }
 
   await runMigrationTransaction(sql, async (transaction) => {
     if (!columnNames.has('name')) {
@@ -150,13 +159,22 @@ async function ensureMigrationHistory(
       `;
     }
 
-    for (const [index, row] of legacyRows.entries()) {
+    for (const [index, row] of historyRows.entries()) {
       const migration = migrations[index];
-      await transaction`
-        UPDATE ${table}
-        SET name = ${migration.name}, applied_at = NULL
-        WHERE id = ${row.id}
-      `;
+
+      if (columnNames.has('applied_at')) {
+        await transaction`
+          UPDATE ${table}
+          SET name = ${migration.name}
+          WHERE id = ${row.id}
+        `;
+      } else {
+        await transaction`
+          UPDATE ${table}
+          SET name = ${migration.name}, applied_at = NULL
+          WHERE id = ${row.id}
+        `;
+      }
     }
   });
 }

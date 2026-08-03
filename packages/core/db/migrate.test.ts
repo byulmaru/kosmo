@@ -442,6 +442,136 @@ test('legacy history가 중간 migration을 건너뛰면 승격 전에 history�
   }
 });
 
+test('partial history의 기존 name 불일치는 승격 전에 history와 SQL을 변경하지 않는다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_partial_name_first',
+      sql: 'CREATE TABLE migration_partial_name_first (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_partial_name_second',
+      sql: 'CREATE TABLE migration_partial_name_second (id integer PRIMARY KEY);',
+    },
+  ]);
+  const [firstMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe(`
+      CREATE SCHEMA public;
+      CREATE SCHEMA drizzle;
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint,
+        name text
+      );
+    `);
+    await control`
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
+      VALUES (${firstMigration.hash}, ${firstMigration.folderMillis + 123}, 'tampered_name')
+    `;
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations }),
+      /history order mismatch/,
+    );
+
+    const columns = await control<{ columnName: string }[]>`
+      SELECT column_name AS "columnName"
+      FROM information_schema.columns
+      WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations'
+      ORDER BY ordinal_position
+    `;
+    assert.deepEqual(
+      columns.map(({ columnName }) => columnName),
+      ['id', 'hash', 'created_at', 'name'],
+    );
+    assert.deepEqual(
+      Array.from(
+        await control<{ id: number; hash: string; name: string }[]>`
+          SELECT id, hash, name
+          FROM drizzle.__drizzle_migrations
+          ORDER BY id
+        `,
+      ),
+      [{ id: 1, hash: firstMigration.hash, name: 'tampered_name' }],
+    );
+    assert.deepEqual(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass(table_name)::text AS "tableName"
+          FROM unnest(ARRAY['public.migration_partial_name_first', 'public.migration_partial_name_second']) AS table_name
+        `
+      ).map(({ tableName }) => tableName),
+      [null, null],
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
+test('name이 없는 partial history는 기존 applied_at을 보존하며 승격한다', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const migrations = await migrationFolder([
+    {
+      name: '20260712000000_partial_applied_at_first',
+      sql: 'CREATE TABLE migration_partial_applied_at_first (id integer PRIMARY KEY);',
+    },
+    {
+      name: '20260712000001_partial_applied_at_second',
+      sql: 'CREATE TABLE migration_partial_applied_at_second (id integer PRIMARY KEY);',
+    },
+  ]);
+  const [firstMigration] = readMigrationFiles({ migrationsFolder: migrations });
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe(`
+      CREATE SCHEMA public;
+      CREATE SCHEMA drizzle;
+      CREATE TABLE drizzle.__drizzle_migrations (
+        id SERIAL PRIMARY KEY,
+        hash text NOT NULL,
+        created_at bigint,
+        applied_at timestamp with time zone
+      );
+      CREATE TABLE migration_partial_applied_at_first (id integer PRIMARY KEY);
+    `);
+    await control`
+      INSERT INTO drizzle.__drizzle_migrations (hash, created_at, applied_at)
+      VALUES (${firstMigration.hash}, ${firstMigration.folderMillis + 123}, '2026-08-03T12:34:56Z')
+    `;
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: migrations });
+
+    const history = await control<{ name: string | null; appliedAt: Date | null; count: number }[]>`
+      SELECT name, applied_at AS "appliedAt", count(*) OVER ()::int AS count
+      FROM drizzle.__drizzle_migrations
+      ORDER BY id
+    `;
+    assert.deepEqual(
+      history.map(({ name }) => name),
+      ['20260712000000_partial_applied_at_first', '20260712000001_partial_applied_at_second'],
+    );
+    assert.deepEqual(history[0]?.appliedAt, new Date('2026-08-03T12:34:56Z'));
+    assert.equal(history[0]?.count, 2);
+    assert.equal(
+      (
+        await control<{ tableName: string | null }[]>`
+          SELECT to_regclass('public.migration_partial_applied_at_second')::text AS "tableName"
+        `
+      )[0]?.tableName,
+      'migration_partial_applied_at_second',
+    );
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(migrations, { force: true, recursive: true });
+  }
+});
+
 test('history insert 실패가 해당 파일의 schema를 rollback하고 앞 history를 보존한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
   const migrations = await migrationFolder(
