@@ -37,6 +37,19 @@ export type UpdateProfileInput = {
   readonly tags?: readonly string[] | null;
 };
 
+export type UpdateProfileResult = {
+  readonly postCommit: () => Promise<void>;
+  readonly profile: typeof Profiles.$inferSelect;
+};
+
+const noPostCommit = async (): Promise<void> => {};
+
+const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
+  let pending: Promise<void> | undefined;
+
+  return () => (pending ??= effect());
+};
+
 const normalizeDisplayName = (next: string | undefined, current: string) => {
   if (next === undefined) {
     return undefined;
@@ -85,8 +98,11 @@ const normalizeTags = (tags: UpdateProfileInput['tags']) => {
   return result.data;
 };
 
-export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction) =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+export const updateProfile = async (
+  input: UpdateProfileInput,
+  tx?: Transaction,
+): Promise<UpdateProfileResult> => {
+  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
     const profile = await tx
       .select({ profile: Profiles, actorRole: AccountProfiles.role })
       .from(Profiles)
@@ -149,20 +165,45 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
       }
     }
 
+    const currentMediaByKind = new Map(
+      (
+        await tx
+          .select({ kind: ProfileMedia.kind, mediaId: ProfileMedia.mediaId })
+          .from(ProfileMedia)
+          .where(
+            and(
+              eq(ProfileMedia.profileId, input.profileId),
+              inArray(ProfileMedia.kind, [ProfileMediaKind.AVATAR, ProfileMediaKind.HEADER]),
+            ),
+          )
+      ).map(({ kind, mediaId }) => [kind, mediaId]),
+    );
+
     const scalarChanges: {
       displayName?: string;
       bio?: string | null;
       followPolicy?: ProfileFollowPolicy;
     } = {};
-    if (displayName !== undefined) {
+    if (displayName !== undefined && displayName !== profile.profile.displayName) {
       scalarChanges.displayName = displayName;
     }
-    if (bio !== undefined) {
+    if (bio !== undefined && bio !== profile.profile.bio) {
       scalarChanges.bio = bio;
     }
-    if (input.followPolicy !== undefined) {
+    if (input.followPolicy !== undefined && input.followPolicy !== profile.profile.followPolicy) {
       scalarChanges.followPolicy = input.followPolicy;
     }
+
+    const mediaChanges: [ProfileMediaKind, string | null][] = [];
+    for (const [kind, mediaId] of [
+      [ProfileMediaKind.AVATAR, input.avatarMediaId],
+      [ProfileMediaKind.HEADER, input.headerMediaId],
+    ] as const) {
+      if (mediaId !== undefined && (currentMediaByKind.get(kind) ?? null) !== mediaId) {
+        mediaChanges.push([kind, mediaId]);
+      }
+    }
+    const actorProjectionChanged = Object.keys(scalarChanges).length > 0 || mediaChanges.length > 0;
 
     const updatedProfile =
       Object.keys(scalarChanges).length > 0
@@ -201,13 +242,7 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
       }
     }
 
-    for (const [kind, mediaId] of [
-      [ProfileMediaKind.AVATAR, input.avatarMediaId],
-      [ProfileMediaKind.HEADER, input.headerMediaId],
-    ] as const) {
-      if (mediaId === undefined) {
-        continue;
-      }
+    for (const [kind, mediaId] of mediaChanges) {
       if (mediaId === null) {
         await tx
           .delete(ProfileMedia)
@@ -224,5 +259,23 @@ export const updateProfile = async (input: UpdateProfileInput, tx?: Transaction)
         });
     }
 
-    return updatedProfile;
+    return { actorProjectionChanged, profile: updatedProfile };
   });
+
+  return {
+    profile: result.profile,
+    postCommit: result.actorProjectionChanged
+      ? oncePostCommit(async () => {
+          try {
+            const { sendLocalProfileUpdate } = await import('@kosmo/fedify');
+            await sendLocalProfileUpdate(result.profile.id);
+          } catch (error) {
+            console.error('Post-commit ActivityPub Local Profile Update delivery failed', {
+              error,
+              profileId: result.profile.id,
+            });
+          }
+        })
+      : noPostCommit,
+  };
+};

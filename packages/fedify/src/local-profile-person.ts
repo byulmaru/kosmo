@@ -4,8 +4,8 @@ import { isHttpUri } from './activitypub-uri';
 import type { ActorKeyPair, Context } from '@fedify/fedify';
 import type { LocalProfileActorMedia, LocalProfileActorProfile } from './local-profile-actor';
 
-export interface CreateLocalProfilePersonOptions {
-  readonly context: Context<void>;
+export interface CreateLocalProfilePersonOptions<TContextData> {
+  readonly context: Context<TContextData>;
   readonly profile: LocalProfileActorProfile;
   readonly keyPairs: readonly ActorKeyPair[];
 }
@@ -26,11 +26,11 @@ const createProfileImage = (media: LocalProfileActorMedia | null): Image | null 
   }
 };
 
-export const createLocalProfilePerson = ({
+export const createLocalProfilePerson = <TContextData>({
   context,
   keyPairs,
   profile,
-}: CreateLocalProfilePersonOptions): Person => {
+}: CreateLocalProfilePersonOptions<TContextData>): Person => {
   const rsaKeyPair = keyPairs.find(
     (keyPair) => getPublicKeyAlgorithmName(keyPair) === 'RSASSA-PKCS1-v1_5',
   );

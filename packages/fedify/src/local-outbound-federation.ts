@@ -21,3 +21,6 @@ localOutboundFederation
 
     return result ? [...result.keyPairs] : [];
   });
+
+localOutboundFederation.setFollowersDispatcher('/ap/actor/{identifier}/followers', () => null);
+localOutboundFederation.setFollowingDispatcher('/ap/actor/{identifier}/following', () => null);
