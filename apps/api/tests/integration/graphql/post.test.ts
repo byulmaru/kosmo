@@ -1427,7 +1427,9 @@ const requestCreatePost = (
   },
   token?: string,
 ) =>
-  requestGraphQL<{ createPost: { post: CreatePostNode } }>(
+  requestGraphQL<{
+    createPost: { post: CreatePostNode };
+  }>(
     `mutation CreatePost($input: CreatePostInput!) {
       createPost(input: $input) {
         post { __typename id state visibility }

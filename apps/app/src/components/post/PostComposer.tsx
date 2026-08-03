@@ -5,6 +5,7 @@ import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -77,10 +78,11 @@ const PostComposerFragment = graphql`
 `;
 
 const CreatePostMutation = graphql`
-  mutation PostComposerCreatePostMutation($input: CreatePostInput!) {
+  mutation PostComposerCreatePostMutation($input: CreatePostInput!, $connections: [ID!]!) {
     createPost(input: $input) {
-      post {
+      post @prependNode(connections: $connections, edgeTypeName: "PostConnectionEdge") {
         id
+        ...PostListItem_post
       }
     }
   }
@@ -202,12 +204,13 @@ function PostComposerContents({
     const submissionReplyMode = replyMode;
     commit({
       variables: {
+        connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
         input: {
           ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
           ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
         },
       },
-      onCompleted: (response, errors) => {
+      onCompleted: (response) => {
         if (
           !mountedRef.current ||
           contextGenerationRef.current !== submissionGeneration ||
@@ -217,14 +220,7 @@ function PostComposerContents({
           return;
         }
         setSubmitting(false);
-        if (errors?.length) {
-          setError(
-            submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
-          );
-          return;
-        }
-
-        const createdPost = response.createPost.post;
+        const createdPost = response.createPost?.post;
         if (!createdPost) {
           setError(
             submissionReplyMode ? '답글을 작성하지 못했습니다.' : '게시글을 작성하지 못했습니다.',
