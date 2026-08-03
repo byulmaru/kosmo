@@ -149,11 +149,11 @@
 **Verification Evidence (2026-08-03)**
 
 - `pnpm --filter @kosmo/app test:unit`: 166 passed
-- `pnpm --filter @kosmo/app test:storybook`: 277 passed; Reply Media 집중 계약 5개도 별도 통과
+- `pnpm --filter @kosmo/app test:storybook`: 278 passed; 새 Relay Environment Media 격리 Story는 focused run 1 passed
 - `pnpm --filter @kosmo/app check`: Relay compiler와 TypeScript 통과
 - 변경 TSX의 ESLint와 변경 파일의 Prettier check 통과
 - `pnpm --filter @kosmo/app build-storybook`과 `pnpm --filter @kosmo/app build` Web production export 통과
-- Web은 Chromium Storybook interaction과 production export까지만 검증했다. 실제 API/BFF 연동 Web runtime과 Android·iOS picker·keyboard·safe area·platform back·접근성 runtime은 실행하지 않았으며 Ready 전 별도 platform gate로 남긴다.
+- Web 자동화와 공용 코드는 현재 PR의 Ready 근거로 검증했다. 격리 API 3100·BFF 5184·App 5183 runtime에서는 인증 화면, picker와 upload URL 발급까지 확인했지만 Media Storage의 local CORS가 기본 `http://localhost:5173`만 허용해 5183 origin의 PUT은 환경 제한으로 완료하지 못했다. 기본 5173 origin의 실제 cross-service upload lifecycle은 통합 테스트로 통과했다. Android·iOS picker·keyboard·safe area·platform back·접근성 runtime은 이번 Web 우선 PR의 Ready 조건이 아니며 Native 출시 gate에서 별도로 확인한다.
 
 ## 5. PROD-423 통합 검증·OpenSpec 완료
 

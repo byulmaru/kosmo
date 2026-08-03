@@ -1846,6 +1846,25 @@ function createReplyComposerEnvironment({
           },
         } as GraphQLResponse;
       }
+      if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
+        return {
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: 'media-reply-environment' },
+              uploadUrl: 'https://upload.example/reply-environment',
+            },
+          },
+        } as GraphQLResponse;
+      }
+      if (request.name === 'PostComposerCompleteMediaUploadMutation') {
+        return {
+          data: {
+            completeMediaUpload: {
+              media: { id: 'media-reply-environment', state: 'READY' },
+            },
+          },
+        } as GraphQLResponse;
+      }
       return { data: {} } as GraphQLResponse;
     }),
     store: new Store(new RecordSource()),
@@ -4831,6 +4850,56 @@ export const ComposerReplyEnvironmentIsolation: Story = {
     await userEvent.type(currentBody, '새 Environment의 답글');
     expect(currentBody).toHaveValue('새 Environment의 답글');
     expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+  },
+  render: () => <ReplyComposerEnvironmentIsolationStory />,
+};
+
+export const ComposerReplyEnvironmentMediaIsolation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const originalFetch = globalThis.fetch;
+    let finishUpload!: (response: Response) => void;
+    const upload = fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishUpload = resolve;
+        }),
+    );
+    globalThis.fetch = upload;
+    setNextImagePickerResult({
+      assets: [
+        {
+          ...composerMediaAsset,
+          file: new File(['reply-image'], 'reply-image.png', { type: 'image/png' }),
+          mimeType: 'image/png',
+          uri: 'blob:https://kosmo.example/reply-environment',
+        },
+      ],
+      canceled: false,
+    });
+
+    try {
+      await userEvent.click(screen.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(screen.getByLabelText('첨부 이미지 1, 업로드 중')).toBeVisible();
+      });
+
+      await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
+      await waitFor(() =>
+        expect(canvas.getByTestId('reply-environment-first-committed-state')).toHaveTextContent(
+          JSON.stringify({ body: '', closeDisabled: false }),
+        ),
+      );
+      expect(screen.queryByLabelText('첨부 이미지 1, 업로드 중')).toBeNull();
+      expect(screen.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' })).toBeVisible();
+
+      finishUpload(new Response(null, { status: 200 }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(screen.queryByLabelText('첨부 이미지 1, 업로드 완료')).toBeNull();
+      expect(screen.getByRole('button', { name: '답글 게시' })).toBeDisabled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   },
   render: () => <ReplyComposerEnvironmentIsolationStory />,
 };
