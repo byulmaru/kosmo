@@ -698,7 +698,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(drawer.getByRole('link', { name: '개인정보 처리방침' })).toHaveCount(0);
     await expect(drawer.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
-      '/feedback',
+      '/home?feedback=open',
     );
     await expect(drawer.getByRole('link', { name: /팔로잉/ })).toHaveAttribute(
       'href',
