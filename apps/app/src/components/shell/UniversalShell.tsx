@@ -1,6 +1,6 @@
-import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
+import { Slot, useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   PanResponder,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
@@ -29,7 +30,7 @@ import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
-import type { ViewStyle } from 'react-native';
+import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
 
 const ShellQuery = graphql`
@@ -100,11 +101,14 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
+  const searchParams = useLocalSearchParams<{ feedback?: string }>();
+  const feedback = searchParams.feedback;
   const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const menuButtonRef = useRef<NativeView>(null);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
@@ -118,6 +122,27 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
+  const feedbackOverlayOpen = web && pathname !== '/feedback' && feedback === 'open';
+  const feedbackOpenedFromFreshLoadRef = useRef(feedbackOverlayOpen);
+  const previousFeedbackOverlayOpenRef = useRef(feedbackOverlayOpen);
+
+  useEffect(() => {
+    if (feedbackOverlayOpen && !previousFeedbackOverlayOpenRef.current) {
+      feedbackOpenedFromFreshLoadRef.current = false;
+    }
+    previousFeedbackOverlayOpenRef.current = feedbackOverlayOpen;
+  }, [feedbackOverlayOpen]);
+
+  const closeFeedbackOverlay = useCallback(() => {
+    if (!feedbackOpenedFromFreshLoadRef.current) {
+      router.back();
+      return;
+    }
+
+    const remainingParams = { ...searchParams };
+    delete remainingParams.feedback;
+    router.replace({ pathname, params: remainingParams });
+  }, [pathname, router, searchParams]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {
@@ -184,6 +209,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
       accessibilityRole="button"
       accessibilityState={{ expanded: drawerOpen }}
       onPress={() => setDrawerOpen(true)}
+      ref={menuButtonRef}
       style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
     >
       <Menu color={theme.text} size={24} strokeWidth={2} />
@@ -205,11 +231,16 @@ function UniversalShellContent({ revision }: { revision: number }) {
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
         {...swipeToOpenDrawer.panHandlers}
+        accessibilityElementsHidden={feedbackOverlayOpen}
+        aria-hidden={feedbackOverlayOpen || undefined}
+        importantForAccessibility={feedbackOverlayOpen ? 'no-hide-descendants' : 'auto'}
         style={[
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
+          feedbackOverlayOpen ? styles.backgroundBlocked : null,
           { backgroundColor: theme.background },
         ]}
+        testID="universal-shell-root"
       >
         {!mobile ? (
           <View
@@ -322,12 +353,18 @@ function UniversalShellContent({ revision }: { revision: number }) {
           </View>
         </Modal>
       </View>
+      <FeedbackOverlay
+        fallbackFocusRef={menuButtonRef}
+        onRequestClose={closeFeedbackOverlay}
+        visible={feedbackOverlayOpen}
+      />
     </ShellChromeProvider>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flexDirection: 'row', justifyContent: 'center', minHeight: '100%' },
+  backgroundBlocked: { pointerEvents: 'none' },
   nativeRoot: { flex: 1 },
   webRoot: { flexGrow: 1 },
   sidebar: { borderRightWidth: 1, minHeight: '100%' },

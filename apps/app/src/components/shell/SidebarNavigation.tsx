@@ -1,4 +1,4 @@
-import { usePathname } from 'expo-router';
+import { useLocalSearchParams, usePathname } from 'expo-router';
 import {
   Bell,
   Bookmark,
@@ -9,7 +9,7 @@ import {
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
@@ -78,10 +78,15 @@ export function SidebarNavigation({
 }: Props) {
   const theme = useTheme();
   const pathname = usePathname();
+  const searchParams = useLocalSearchParams();
   const data = useFragment(SidebarNavigationFragment, query);
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const feedbackActive = pathname === '/feedback';
+  const feedbackHref: Href =
+    Platform.OS === 'web' && !feedbackActive
+      ? { pathname, params: { ...searchParams, feedback: 'open' } }
+      : '/feedback';
 
   const resolveItem = (item: NavigationItem) => {
     if (item.profile) {
@@ -212,7 +217,7 @@ export function SidebarNavigation({
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          <GuardedLink href="/feedback" onNavigate={onNavigate}>
+          <GuardedLink href={feedbackHref} onNavigate={onNavigate}>
             <Pressable
               aria-current={feedbackActive ? 'page' : undefined}
               accessibilityLabel="피드백 보내기"

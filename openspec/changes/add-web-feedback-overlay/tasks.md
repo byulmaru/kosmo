@@ -48,10 +48,10 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - Feedback Storybook에서 390px sheet, 900px·1400px dialog와 가용 높이 body scroll을 확인한다.
 - close button name, dialog title, initial focus, Tab 순환, `Escape`, backdrop와 background 차단을 검사한다.
 
-- [ ] 2.1 Feedback Storybook에 mobile sheet와 desktop dialog의 observable geometry·semantics를 증명하는 최소 overlay stories/assertion을 추가한다.
-- [ ] 2.2 기존 breakpoint token을 사용해 Web 전용 sheet/dialog surface와 내부 form body scroll을 구현한다.
-- [ ] 2.3 overlay 제목·닫기 control, focus 진입·trap·restore, background inert/aria-hidden과 document scroll lock을 구현한다.
-- [ ] 2.4 clean·dirty·submitting close 정책과 success 유지·failure retry 흐름을 하나의 `requestClose` 경계에 연결한다.
+- [x] 2.1 Feedback Storybook에 mobile sheet와 desktop dialog의 observable geometry·semantics를 증명하는 최소 overlay stories/assertion을 추가한다.
+- [x] 2.2 기존 breakpoint token을 사용해 Web 전용 sheet/dialog surface와 내부 form body scroll을 구현한다.
+- [x] 2.3 overlay 제목·닫기 control, focus 진입·trap·restore, background inert/aria-hidden과 document scroll lock을 구현한다.
+- [x] 2.4 clean·dirty·submitting close 정책과 success 유지·failure retry 흐름을 하나의 `requestClose` 경계에 연결한다.
 
 ## 3. PROD-594 Shell query와 history lifecycle
 
@@ -76,9 +76,9 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - full sidebar, compact rail, mobile drawer가 동일한 overlay를 열고 mobile drawer가 먼저 닫히는지 확인한다.
 - internal push/back/forward, fresh-load query replace close, 기존 query 보존과 `/feedback` 중복 overlay 방지를 확인한다.
 
-- [ ] 3.1 기존 Storybook Expo Router mock이 query push·replace·back/forward 결과를 표현하도록 최소 범위로 확장하고 shell history assertion을 먼저 추가한다.
-- [ ] 3.2 Web shell 진입은 `feedback=open`을 사용하고 Android/iOS는 `/feedback` route를 유지하도록 responsive navigation을 연결한다.
-- [ ] 3.3 `UniversalShellContent`의 shell root 다음에 단일 Web feedback overlay를 조립하고 `/feedback` direct route에서는 중복 렌더링하지 않는다.
+- [x] 3.1 기존 Storybook Expo Router mock이 query push·replace·back/forward 결과를 표현하도록 최소 범위로 확장하고 shell history assertion을 먼저 추가한다.
+- [x] 3.2 Web shell 진입은 `feedback=open`을 사용하고 Android/iOS는 `/feedback` route를 유지하도록 responsive navigation을 연결한다.
+- [x] 3.3 `UniversalShellContent`의 shell root 다음에 단일 Web feedback overlay를 조립하고 `/feedback` direct route에서는 중복 렌더링하지 않는다.
 - [ ] 3.4 internal open, fresh-load restore, clean/dirty/submitting browser traversal과 close 후 route·scroll·focus 복원을 구현한다.
 
 ## 4. PROD-594 직접 동작 검증

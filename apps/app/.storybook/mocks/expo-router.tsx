@@ -3,6 +3,7 @@ import {
   createContext,
   Fragment,
   isValidElement,
+  useCallback,
   useContext,
   useMemo,
   useState,
@@ -13,10 +14,13 @@ import type { PropsWithChildren, ReactNode } from 'react';
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
 type RouterContextValue = {
+  back: () => void;
+  forward: () => void;
   params: Record<string, string | undefined>;
   pathname: string;
+  replaceLocation: (href: Href) => void;
   segments: readonly string[];
-  setPathname: (href: Href) => void;
+  setLocation: (href: Href) => void;
   slotLabel: string;
 };
 
@@ -32,10 +36,13 @@ type LinkPressEvent = {
 };
 
 const RouterContext = createContext<RouterContextValue>({
+  back: () => undefined,
+  forward: () => undefined,
   params: {},
   pathname: '/home',
+  replaceLocation: () => undefined,
   segments: [],
-  setPathname: () => undefined,
+  setLocation: () => undefined,
   slotLabel: '현재 라우트 콘텐츠',
 });
 
@@ -51,12 +58,46 @@ export function RouterMockProvider({
   segments?: readonly string[];
   slotLabel?: string;
 }>) {
-  const [pathname, setCurrentPathname] = useState(initialPathname);
-  const setPathname = (href: Href) =>
-    setCurrentPathname(typeof href === 'string' ? href : href.pathname);
+  const [history, setHistory] = useState(() => [
+    {
+      params,
+      pathname: initialPathname,
+    },
+  ]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const location = history[historyIndex]!;
+  const setLocation = useCallback(
+    (href: Href) => {
+      setHistory((current) => [...current.slice(0, historyIndex + 1), resolveHref(href)]);
+      setHistoryIndex(historyIndex + 1);
+    },
+    [historyIndex],
+  );
+  const replaceLocation = useCallback(
+    (href: Href) => {
+      setHistory((current) =>
+        current.map((entry, index) => (index === historyIndex ? resolveHref(href) : entry)),
+      );
+    },
+    [historyIndex],
+  );
+  const back = useCallback(() => setHistoryIndex((current) => Math.max(0, current - 1)), []);
+  const forward = useCallback(
+    () => setHistoryIndex((current) => Math.min(history.length - 1, current + 1)),
+    [history.length],
+  );
   const value = useMemo(
-    () => ({ params, pathname, segments, setPathname, slotLabel }),
-    [params, pathname, segments, slotLabel],
+    () => ({
+      back,
+      forward,
+      params: location.params,
+      pathname: location.pathname,
+      replaceLocation,
+      segments,
+      setLocation,
+      slotLabel,
+    }),
+    [back, forward, location, replaceLocation, segments, setLocation, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -79,14 +120,16 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
 }
 
 export function useRouter() {
-  const { setPathname } = useContext(RouterContext);
+  const { back, forward, replaceLocation, setLocation } = useContext(RouterContext);
   return useMemo(
     () => ({
-      back: () => undefined,
-      push: setPathname,
-      replace: setPathname,
+      back,
+      forward,
+      navigate: setLocation,
+      push: setLocation,
+      replace: replaceLocation,
     }),
-    [setPathname],
+    [back, forward, replaceLocation, setLocation],
   );
 }
 
@@ -95,7 +138,7 @@ export function Link({
   children,
   href,
 }: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
-  const { setPathname } = useContext(RouterContext);
+  const { setLocation } = useContext(RouterContext);
   if (
     !asChild ||
     !isValidElement<{
@@ -107,16 +150,41 @@ export function Link({
   }
 
   return cloneElement(children, {
-    href: typeof href === 'string' ? href : href.pathname,
+    href: serializeHref(href),
     onPress: (event: LinkPressEvent) => {
       children.props.onPress?.(event);
       const shouldNavigate = shouldHandleNavigation(event);
       event.preventDefault?.();
       if (shouldNavigate) {
-        setPathname(href);
+        setLocation(href);
       }
     },
   });
+}
+
+function resolveHref(href: Href) {
+  if (typeof href !== 'string') {
+    return { params: href.params ?? {}, pathname: href.pathname };
+  }
+
+  const [pathname, query = ''] = href.split('?', 2);
+  return {
+    params: Object.fromEntries(new URLSearchParams(query)),
+    pathname: pathname || '/',
+  };
+}
+
+function serializeHref(href: Href) {
+  if (typeof href === 'string') {
+    return href;
+  }
+
+  const query = new URLSearchParams(
+    Object.entries(href.params ?? {}).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  ).toString();
+  return query ? `${href.pathname}?${query}` : href.pathname;
 }
 
 function shouldHandleNavigation(event: LinkPressEvent) {

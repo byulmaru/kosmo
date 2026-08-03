@@ -277,7 +277,7 @@ export const SharedNavigation: Story = {
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
-      '/feedback',
+      '/search?feedback=open',
     );
     expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
@@ -312,7 +312,7 @@ export const CompactSidebar: Story = {
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
-      '/feedback',
+      '/search?feedback=open',
     );
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     const feedback = canvas.getByRole('link', { name: '피드백 보내기' });
@@ -1189,7 +1189,7 @@ export const UniversalMobile: Story = {
     const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
     const feedback = page.getByRole('link', { name: '피드백 보내기' });
-    expect(feedback).toHaveAttribute('href', '/feedback');
+    expect(feedback).toHaveAttribute('href', '/home?feedback=open');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     const logout = page.getByRole('button', { name: '로그아웃' });
@@ -1250,6 +1250,16 @@ export const UniversalMobile: Story = {
     await waitFor(() => {
       expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
     });
+
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const feedbackLink = page.getByRole('link', { name: '피드백 보내기' });
+    expect(feedbackLink).toHaveAttribute('href', '/@selected/followers?feedback=open');
+    await userEvent.click(feedbackLink);
+    await waitFor(() => expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull());
+    const feedbackDialog = await page.findByRole('dialog', { name: '피드백 보내기' });
+    await userEvent.click(within(feedbackDialog).getByRole('button', { name: '피드백 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
+    await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
   },
   render: () => (
     <View style={{ height: 844 }}>
@@ -1685,6 +1695,113 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
 export const UniversalCompact: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: universalParameters,
+  render: () => (
+    <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalCompactFeedbackOverlay: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    ...universalParameters,
+    router: {
+      params: { context: 'notifications' },
+      pathname: '/home',
+      slotLabel: '홈 타임라인',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const view = ownerDocument.defaultView;
+    const page = within(ownerDocument.body);
+    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
+
+    expect(feedbackLink).toHaveAttribute('href', '/home?context=notifications&feedback=open');
+    await userEvent.click(feedbackLink);
+    const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
+    const surface = page.getByTestId('feedback-overlay-surface');
+    const shellRoot = canvasElement.querySelector('[data-testid="universal-shell-root"]');
+    const bounds = surface.getBoundingClientRect();
+
+    if (!shellRoot) {
+      throw new Error('Universal shell root is required for overlay background assertions.');
+    }
+
+    expect(canvas.getByText('홈 타임라인')).toBeInTheDocument();
+    expect(dialog).toBeVisible();
+    expect(shellRoot).toHaveAttribute('aria-hidden', 'true');
+    expect(getComputedStyle(shellRoot).pointerEvents).toBe('none');
+    expect(bounds.width).toBeLessThanOrEqual(600);
+    expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
+    expect(bounds.left + bounds.width / 2).toBeCloseTo((view?.innerWidth ?? 0) / 2, 0);
+
+    await userEvent.click(within(dialog).getByRole('button', { name: '피드백 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
+    expect(canvas.getByText('홈 타임라인')).toBeInTheDocument();
+  },
+  render: () => (
+    <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalMobileFeedbackOverlay: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    ...universalParameters,
+    router: {
+      params: { feedback: 'open' },
+      pathname: '/home',
+      slotLabel: '홈 타임라인',
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const ownerDocument = canvasElement.ownerDocument;
+    const view = ownerDocument.defaultView;
+    const page = within(ownerDocument.body);
+    await page.findByRole('dialog', { name: '피드백 보내기' });
+    const surface = await page.findByTestId('feedback-overlay-surface');
+    const bounds = surface.getBoundingClientRect();
+
+    expect(bounds.width).toBeCloseTo(view?.innerWidth ?? 0, 0);
+    expect(bounds.bottom).toBeCloseTo(view?.innerHeight ?? 0, 0);
+    expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
+
+    await userEvent.click(page.getByRole('button', { name: '피드백 닫기' }));
+    await waitFor(() => expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull());
+    expect(within(canvasElement).getByText('홈 타임라인')).toBeInTheDocument();
+  },
+  render: () => (
+    <View style={{ height: 900 }}>
+      <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const UniversalDirectFeedbackPageDoesNotOpenOverlay: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    ...universalParameters,
+    router: {
+      params: { feedback: 'open' },
+      pathname: '/feedback',
+      slotLabel: '독립 피드백 페이지',
+    },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
+
+    expect(canvas.getByText('독립 피드백 페이지')).toBeInTheDocument();
+    expect(feedbackLink).toHaveAttribute('href', '/feedback');
+    expect(feedbackLink).toHaveAttribute('aria-current', 'page');
+    expect(page.queryByRole('dialog', { name: '피드백 보내기' })).toBeNull();
+  },
   render: () => (
     <View style={{ height: 900 }}>
       <UniversalShellStory />
