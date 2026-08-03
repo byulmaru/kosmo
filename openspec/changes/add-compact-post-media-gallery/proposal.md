@@ -5,9 +5,9 @@
 ## What Changes
 
 - Post 목록과 상세의 공용 Media renderer가 첨부 이미지 1~4장을 개수별 surface 비율과 분할 배치로 표시한다.
-- 1장은 기존 원본 비율 규칙을 유지하고, 2장은 token gap·외곽 border를 제외한 이미지 영역 2:1의 정사각 2열, 3장은 4:3의 첫 이미지+오른쪽 2분할, 4장은 1:1의 2×2 배치를 사용한다.
-- 다중 이미지 tile은 document 순서를 유지하고 공용 theme token의 간격·외곽선·radius 안에서 `cover`로 표시한다.
-- Sensitive Media 가림 상태는 1장은 1:1, 2장은 정사각 tile에서 계산한 높이, 3장은 4:3, 4장은 1:1 surface를 예약한다.
+- 1장은 기존 원본 비율 규칙을 유지하고, 2장은 token gap을 제외한 이미지 영역 2:1의 정사각 2열, 3장은 16:9의 첫 이미지+오른쪽 2분할, 4장은 1:1의 2×2 배치를 사용한다.
+- 다중 이미지 tile은 document 순서를 유지하고 공용 theme token의 간격·radius 안에서 외곽 border 없이 `cover`로 표시한다.
+- Sensitive Media 가림 상태는 1장은 1:1, 2장은 정사각 tile에서 계산한 높이, 3장은 16:9, 4장은 1:1 surface를 단일 placeholder로 예약하며 공개 뒤에만 분할 gallery를 표시한다.
 - 이미지 tile 자체는 이번 변경에서 새 navigation control이 되지 않는다. 일반 목록·상세에서는 기존 공개·다시 가리기와 오류 재시도 control을 유지하고, 비대화형 Reply Composer 부모 preview는 같은 gallery 배치를 사용하되 기존처럼 Sensitive 이미지를 가린 채 내부 control을 표시하지 않는다.
 - 개수별 배치와 접근성 결정을 `docs/design`에 기록하고 Web·Android·iOS 자동화와 runtime 증거를 구분한다.
 

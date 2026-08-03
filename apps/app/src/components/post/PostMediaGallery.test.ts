@@ -76,9 +76,9 @@ describe('PostMediaGallery', () => {
         assert.equal(tileRows.length, 0);
         assert.equal(tileWrappers.length, 0);
       } else {
-        assert.equal(galleryStyle.borderWidth, 1);
+        assert.equal(galleryStyle.borderWidth, undefined);
         assert.equal(galleryStyle.gap, 8);
-        assert.equal(galleryStyle.aspectRatio, count === 2 ? undefined : count === 3 ? 4 / 3 : 1);
+        assert.equal(galleryStyle.aspectRatio, count === 2 ? undefined : count === 3 ? 16 / 9 : 1);
         assert.equal(tileRows.length, count === 2 ? 1 : count === 3 ? 2 : 2);
         assert.equal(tileWrappers.length, count);
         assert.equal(
@@ -134,26 +134,36 @@ describe('PostMediaGallery', () => {
       }
       const mediaItems = Array.from({ length: count }, (_, index) => media(index + 1, null));
       await render({ media: mediaItems, sensitive: true });
-      const hiddenStyle = flattenStyle(byTestId('post-media-sensitive').props.style);
-      const hiddenGeometry = hiddenStyle.aspectRatio;
+      const hiddenSurface = byTestId('post-media-sensitive');
+      const hiddenStyle = flattenStyle(hiddenSurface.props.style);
       const hiddenTiles = rendered('View').filter((node) =>
         node.props.testID?.startsWith('post-media-sensitive-tile-'),
       );
+      const hiddenSizers = rendered('View').filter(
+        (node) => node.props.testID === 'post-media-sensitive-two-item-sizer',
+      );
 
       assert.equal(rendered('PostMediaImage').length, 0);
-      assert.equal(hiddenTiles.length, count);
-      assert.equal(
-        hiddenTiles.every(
-          (node) => flattenStyle(node.props.style).aspectRatio === (count === 2 ? 1 : undefined),
-        ),
-        true,
-      );
+      assert.equal(hiddenTiles.length, 0);
+      assert.equal(hiddenStyle.borderWidth, undefined);
+      assert.equal(hiddenStyle.gap, undefined);
+      assert.equal(hiddenStyle.height, undefined);
+      assert.equal(hiddenStyle.aspectRatio, count === 3 ? 16 / 9 : count === 4 ? 1 : undefined);
+      assert.equal(hiddenSizers.length, count === 2 ? 1 : 0);
+      if (count === 2) {
+        const sizerStyle = flattenStyle(hiddenSizers[0]!.props.style);
+        assert.equal(sizerStyle.aspectRatio, 1);
+        assert.equal(sizerStyle.marginBottom, -4);
+        assert.equal(sizerStyle.width, '50%');
+      }
       assert.ok(pressable('민감한 이미지 표시'));
       await act(async () => pressable('민감한 이미지 표시').props.onPress());
-      assert.equal(
-        flattenStyle(byTestId('post-media-gallery').props.style).aspectRatio,
-        hiddenGeometry,
-      );
+      if (count > 2) {
+        assert.equal(
+          flattenStyle(byTestId('post-media-gallery').props.style).aspectRatio,
+          hiddenStyle.aspectRatio,
+        );
+      }
 
       await render({ interactive: false, media: mediaItems, sensitive: true });
       assert.equal(rendered('Pressable').length, 0);

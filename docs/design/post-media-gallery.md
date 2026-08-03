@@ -4,20 +4,21 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 ## 이미지 개수별 geometry
 
-| 개수 | Gallery surface                                      | Tile 배치                                                                                                     |
-| ---- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 1장  | 가로·정사각 원본은 원본 비율, 세로 원본은 최대 1:1   | 한 장을 surface 전체에 표시하고 세로 이미지는 중앙 `cover` crop                                               |
-| 2장  | 외곽 border와 tile 사이 gap을 제외한 이미지 영역 2:1 | 같은 크기의 1:1 tile 두 개. 외곽 높이는 tile 한 변과 border에서 파생하므로 최종 외곽 비율은 2:1보다 조금 넓음 |
-| 3장  | 외곽 4:3                                             | 첫 이미지는 왼쪽 전체 높이, 두·세 번째는 같은 폭의 오른쪽 열 위·아래                                          |
-| 4장  | 외곽 1:1                                             | 같은 크기의 2×2 tile                                                                                          |
+| 개수 | Gallery surface                                    | Tile 배치                                                                                            |
+| ---- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1장  | 가로·정사각 원본은 원본 비율, 세로 원본은 최대 1:1 | 한 장을 surface 전체에 표시하고 세로 이미지는 중앙 `cover` crop                                      |
+| 2장  | tile 사이 gap을 제외한 이미지 영역 2:1             | 같은 크기의 1:1 tile 두 개. 외곽 높이는 tile 한 변에서 파생하므로 최종 외곽 비율은 2:1보다 조금 넓음 |
+| 3장  | 외곽 16:9                                          | 첫 이미지는 왼쪽 전체 높이, 두·세 번째는 같은 폭의 오른쪽 열 위·아래                                 |
+| 4장  | 외곽 1:1                                           | 같은 크기의 2×2 tile                                                                                 |
 
-다중 tile은 `spacing.sm` gap, `radii.md` radius, theme border를 사용한다. 이미지·loading·error fallback은 같은 tile 경계를 채우고 원본을 늘이거나 찌그러뜨리지 않은 채 `cover`로 crop한다. 한 tile의 상태가 바뀌어도 인접 tile의 순서와 gallery surface를 밀지 않는다.
+다중 tile은 `spacing.sm` gap과 `radii.md` gallery radius를 사용하되 gallery 외곽 border는 사용하지 않는다. 이미지·loading·error fallback은 같은 tile 경계를 채우고 원본을 늘이거나 찌그러뜨리지 않은 채 `cover`로 crop한다. 한 tile의 상태가 바뀌어도 인접 tile의 순서와 gallery surface를 밀지 않는다.
 
 ## Sensitive Media
 
 - 가림 상태에서는 이미지를 mount하거나 byte를 load하지 않는다.
 - 1장의 가림 surface는 1:1이고, 공개 뒤에는 위의 단일 이미지 비율을 사용한다.
-- 2장은 정사각 tile에서 계산한 높이, 3장은 4:3, 4장은 1:1 surface를 공개 전후에 같게 사용한다.
+- 2장은 정사각 tile에서 계산한 높이, 3장은 16:9, 4장은 1:1 surface를 공개 전후에 같게 사용한다.
+- 가림 상태는 실제 gallery tile이나 내부 gap을 렌더하지 않는 단일 placeholder로 같은 surface 높이만 예약하고, 공개 뒤에만 개수별 분할 gallery를 표시한다.
 - 일반 목록·상세에서는 공개·다시 가리기 control을 같은 위치의 안정된 형제로 유지해 Web focus와 `expanded` 상태를 보존한다.
 - `interactive=false`인 Reply Composer 부모 preview는 같은 gallery geometry를 사용하지만 Sensitive 이미지를 가린 채 공개 control을 표시하지 않는다.
 

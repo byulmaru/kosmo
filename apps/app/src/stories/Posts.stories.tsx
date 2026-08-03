@@ -198,6 +198,27 @@ const mediaOnlyPost = post({
     },
   ],
 });
+const sensitiveTwoMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    attrs: { sensitiveMedia: true },
+    content: [
+      { type: 'paragraph' },
+      ...Array.from({ length: 2 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-sensitive-two-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '',
+  id: 'media-sensitive-two',
+  media: Array.from({ length: 2 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: `${index + 1}번째 Sensitive 이미지`,
+    id: `media-sensitive-two-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
 const threeMediaPost = post({
   bodyDocument: {
     type: 'doc',
@@ -627,6 +648,7 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  sensitiveTwoMediaPost,
   threeMediaPost,
   fourMediaPost,
   unavailableMediaPost,
@@ -859,6 +881,14 @@ function PostCatalog(_args: PostsStoryArgs) {
             post={requireFragment(
               requirePostById(posts, mediaOnlyPost.id).body,
               'media-only post body',
+            )}
+          />
+        </View>
+        <View testID="media-sensitive-two">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, sensitiveTwoMediaPost.id).body,
+              'two-media sensitive post body',
             )}
           />
         </View>
@@ -2204,6 +2234,24 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
     expect(mediaOnly.getByRole('button', { name: '민감한 이미지 표시' })).toHaveFocus();
 
+    const sensitiveTwoMedia = within(canvas.getByTestId('media-sensitive-two'));
+    const hiddenSensitiveTwo = sensitiveTwoMedia.getByTestId('post-media-sensitive');
+    const hiddenSensitiveTwoBounds = hiddenSensitiveTwo.getBoundingClientRect();
+    expect(hiddenSensitiveTwoBounds.height).toBeCloseTo(
+      (hiddenSensitiveTwoBounds.width - 8) / 2,
+      0,
+    );
+    expect(getComputedStyle(hiddenSensitiveTwo).borderTopWidth).toBe('0px');
+    expect(
+      hiddenSensitiveTwo.querySelector('[data-testid^="post-media-sensitive-tile-"]'),
+    ).toBeNull();
+    await userEvent.click(sensitiveTwoMedia.getByRole('button', { name: '민감한 이미지 표시' }));
+    const revealedSensitiveTwoBounds = sensitiveTwoMedia
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    expect(revealedSensitiveTwoBounds.height).toBeCloseTo(hiddenSensitiveTwoBounds.height, 0);
+    expect(sensitiveTwoMedia.getAllByRole('img')).toHaveLength(2);
+
     const threeMedia = within(canvas.getByTestId('media-three'));
     expect(threeMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
       '1번째 3장 gallery 이미지',
@@ -2216,7 +2264,8 @@ export const BodyTimeAndLayoutStates: Story = {
     );
     expect(
       threeGallery.getBoundingClientRect().width / threeGallery.getBoundingClientRect().height,
-    ).toBeCloseTo(4 / 3, 1);
+    ).toBeCloseTo(16 / 9, 1);
+    expect(getComputedStyle(threeGallery).borderTopWidth).toBe('0px');
     expect(firstThreeTile!.height).toBeGreaterThan(secondThreeTile!.height);
     expect(firstThreeTile!.left).toBeLessThan(secondThreeTile!.left);
     expect(secondThreeTile!.left).toBeCloseTo(thirdThreeTile!.left, 0);
@@ -2236,6 +2285,7 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(
       fourGallery.getBoundingClientRect().width / fourGallery.getBoundingClientRect().height,
     ).toBeCloseTo(1, 1);
+    expect(getComputedStyle(fourGallery).borderTopWidth).toBe('0px');
     for (const tile of fourTiles.slice(1)) {
       expect(tile.width).toBeCloseTo(fourTiles[0]!.width, 0);
       expect(tile.height).toBeCloseTo(fourTiles[0]!.height, 0);
@@ -2268,11 +2318,14 @@ export const BodyTimeAndLayoutStates: Story = {
       expect(tile.width / tile.height).toBeCloseTo(1, 1);
     }
     expect(twoTileBounds[0]!.width).toBeCloseTo(twoTileBounds[1]!.width, 0);
-    expect(twoGalleryBounds.height).toBeCloseTo(twoTileBounds[0]!.height + 2, 0);
+    expect(twoGalleryBounds.height).toBeCloseTo(twoTileBounds[0]!.height, 0);
     expect(twoGalleryBounds.width).toBeCloseTo(
-      twoTileBounds[0]!.width + twoTileBounds[1]!.width + 8 + 2,
+      twoTileBounds[0]!.width + twoTileBounds[1]!.width + 8,
       0,
     );
+    expect(
+      getComputedStyle(loadErrorMediaList.getByTestId('post-media-gallery')).borderTopWidth,
+    ).toBe('0px');
     const compactRetryBounds = (
       await loadErrorMediaList.findByRole('button', { name: '실패 이미지 다시 시도' })
     ).getBoundingClientRect();

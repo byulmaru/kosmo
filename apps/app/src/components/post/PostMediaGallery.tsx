@@ -44,11 +44,7 @@ export function PostMediaGallery({
   const isRevealed = interactive && revealed;
   const gallery = (
     <View
-      style={
-        multi
-          ? [styles.surface, surfaceGeometry(items.length), { borderColor: theme.border }]
-          : styles.root
-      }
+      style={multi ? [styles.surface, surfaceGeometry(items.length)] : styles.root}
       testID="post-media-gallery"
     >
       {renderMediaSurface(items, (item, index) =>
@@ -85,21 +81,19 @@ export function PostMediaGallery({
       ) : (
         <View
           style={[
-            multi ? styles.surface : styles.sensitive,
+            multi ? styles.sensitiveSurface : styles.sensitive,
             multi ? surfaceGeometry(items.length) : styles.singleSensitive,
-            { backgroundColor: theme.surface, borderColor: theme.border },
+            { backgroundColor: theme.surface },
+            multi ? null : { borderColor: theme.border },
           ]}
           testID="post-media-sensitive"
         >
-          {multi
-            ? renderMediaSurface(items, (item) => (
-                <View
-                  key={item.id}
-                  style={[tileStyle(items.length), { backgroundColor: theme.background }]}
-                  testID={`post-media-sensitive-tile-${item.id}`}
-                />
-              ))
-            : null}
+          {items.length === 2 ? (
+            <View
+              style={styles.twoItemSensitiveSizer}
+              testID="post-media-sensitive-two-item-sizer"
+            />
+          ) : null}
           <View style={styles.sensitiveContent}>
             <Text style={[styles.sensitiveTitle, { color: theme.text }]}>민감한 이미지</Text>
             <Text style={[styles.sensitiveDescription, { color: theme.textSecondary }]}>
@@ -155,7 +149,7 @@ function renderMediaSurface(
 }
 
 function surfaceGeometry(count: number) {
-  return count === 2 ? null : { aspectRatio: count === 3 ? 4 / 3 : 1 };
+  return count === 2 ? null : { aspectRatio: count === 3 ? 16 / 9 : 1 };
 }
 
 function tileStyle(count: number) {
@@ -213,9 +207,13 @@ const styles = StyleSheet.create({
   sensitiveDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
   sensitiveTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   singleSensitive: { aspectRatio: 1, width: '100%' },
+  sensitiveSurface: {
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    width: '100%',
+  },
   surface: {
     borderRadius: radii.md,
-    borderWidth: 1,
     gap: spacing.sm,
     overflow: 'hidden',
     width: '100%',
@@ -224,6 +222,7 @@ const styles = StyleSheet.create({
   surfaceRow: { flex: 1, flexDirection: 'row', gap: spacing.sm, minHeight: 0 },
   squareTile: { aspectRatio: 1, flex: 1, minWidth: 0, overflow: 'hidden' },
   tile: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'hidden' },
+  twoItemSensitiveSizer: { aspectRatio: 1, marginBottom: -spacing.sm / 2, width: '50%' },
   twoTileRow: { flexDirection: 'row', gap: spacing.sm, width: '100%' },
   unavailable: {
     alignItems: 'center',

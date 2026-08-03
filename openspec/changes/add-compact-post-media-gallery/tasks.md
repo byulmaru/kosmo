@@ -9,11 +9,11 @@
 
 **Deliverable**
 
-Post 목록과 상세가 같은 공용 renderer를 사용해 한 장의 기존 비율을 보존하고, 두 장은 token gap·외곽 border를 제외한 이미지 영역 2:1의 정사각 2열, 세 장은 4:3의 왼쪽 첫 이미지+오른쪽 2분할, 네 장은 1:1의 2×2 gallery로 document 순서대로 표시한다.
+Post 목록과 상세가 같은 공용 renderer를 사용해 한 장의 기존 비율을 보존하고, 두 장은 token gap을 제외한 이미지 영역 2:1의 정사각 2열, 세 장은 16:9의 왼쪽 첫 이미지+오른쪽 2분할, 네 장은 1:1의 2×2 gallery로 document 순서대로 표시한다.
 
 **Guardrails**
 
-- 다중 tile은 공용 theme token의 간격·radius·border 안에서 `cover`로 표시하며 원본을 늘이거나 찌그러뜨리지 않는다.
+- 다중 tile은 공용 theme token의 간격·radius 안에서 외곽 border 없이 `cover`로 표시하며 원본을 늘이거나 찌그러뜨리지 않는다.
 - gallery는 Post body 폭과 작은 Web viewport·iOS·Android 화면을 초과하지 않는다.
 - Home·Profile·Post 상세별 별도 layout, 새 breakpoint, API·Relay·서버·DB 계약과 새 dependency를 추가하지 않는다.
 - 구현 출발점과 허용 대안은 `design.md`의 비규범적 guidance를 따를 수 있으나 공개 범용 abstraction을 만들지 않는다.
@@ -56,7 +56,7 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 **Guardrails**
 
 - Sensitive 가림 상태에서 이미지 byte를 미리 load하지 않는다.
-- 한 장 가림 surface는 1:1이고 공개 뒤 기존 단일 이미지 비율을 사용한다. 두 장은 정사각 tile에서 계산한 높이, 세 장은 4:3, 네 장은 1:1 surface를 공개 전후에 유지한다.
+- 한 장 가림 surface는 1:1이고 공개 뒤 기존 단일 이미지 비율을 사용한다. 두 장은 정사각 tile에서 계산한 높이, 세 장은 16:9, 네 장은 1:1 surface를 공개 전후에 유지한다. 다중 가림 상태는 실제 gallery tile·내부 gap을 렌더하지 않는 단일 placeholder를 사용한다.
 - 실패·loading 표현은 해당 tile만 대체하고 gallery surface·인접 tile·Post 본문·action·navigation을 밀거나 실패시키지 않는다.
 - 정상 tile에 button·link role이나 press action을 추가하지 않는다. 일반 목록·상세에서는 공개·다시 가리기와 재시도 control의 기존 role·name·state·focus·입력 동작을 유지한다. 비대화형 Reply Composer 부모 preview는 같은 gallery 배치와 fallback을 사용하되 Sensitive 공개·재시도 control을 표시하지 않는다.
 
@@ -126,7 +126,57 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 
 ### 2026-08-03 Web runtime 증거
 
+> 2026-08-04 geometry 결정으로 3장 4:3·다중 외곽 border 관련 관찰은 superseded되었다. 나머지 상호작용·접근성 관찰은 유지된다.
+
 - Storybook `BodyTimeAndLayoutStates`를 390×844 Web viewport에서 관찰했다. 목록의 2장 tile은 각각 136×136, gallery는 282×138이었고 재시도 control은 실패 tile bounds 안에 남았다. 3장 gallery는 358×268.5, 4장 gallery는 358×358이었다.
 - 900×900 Web viewport의 일반 600px Post 폭에서 3장은 600×450, 4장은 600×600을 유지했고 정상 tile에 button·link가 추가되지 않았다.
 - Sensitive 공개·다시 가리기를 pointer로 실행했을 때 같은 control이 focus와 `expanded`를 유지했고 가림 상태에서 image가 없었다. Storybook play test의 keyboard `Enter` 경로도 같은 focus 보존을 통과했다.
 - 목록의 실패 tile 재시도 후 Storybook route가 바뀌지 않았고 재시도 control과 인접 정상 이미지가 유지되었다.
+
+## 4. PROD-626 2026-08-04 gallery geometry 정정
+
+**Authority / Provenance**
+
+- `docs/design/post-media-gallery.md`
+- PROD-626
+
+**Deliverable**
+
+3장 gallery는 16:9 surface를 사용하고 모든 다중 gallery는 외곽 border 없이 내부 gap·radius를 유지한다. Sensitive 가림 상태는 같은 개수별 높이의 단일 placeholder를 사용하고 공개 뒤에만 실제 gallery tile을 표시한다.
+
+**Guardrails**
+
+- 1·2·4장 비율, document 순서, `cover` crop, 기존 공개·다시 가리기 control과 focus 의미를 변경하지 않는다.
+- Sensitive 가림 상태에서 image byte와 실제 gallery tile·내부 gap을 렌더하지 않는다.
+- PROD-650 viewer의 tile click·navigation을 선점하지 않는다.
+
+**Verification**
+
+- 3장 16:9, 다중 외곽 border 부재와 Sensitive tile 미렌더를 기존 component test에서 직접 검증한다.
+- targeted Post Media test, 변경 없는 Relay generation을 제외한 App TypeScript check, format·lint, strict OpenSpec validation과 Web runtime geometry를 확인한다.
+- 기존 iOS·Android runtime 미실행과 archive gate는 완료 처리하지 않는다.
+
+**테스트 코드 범위**
+
+- `apps/app/src/components/post/PostMediaGallery.test.ts`의 개수별 geometry와 Sensitive 가림 surface assertion.
+
+**테스트 필요성**
+
+- 이전 4:3·border·빈 tile 구현으로 돌아가는 회귀를 직접 차단한다.
+
+**테스트 제외 범위**
+
+- 새 screenshot harness, viewer interaction, 버튼 크기·배치, unrelated fixture·snapshot·테스트 인프라 변경.
+
+- [x] 4.1 Linear PROD-626, canonical design과 active OpenSpec의 16:9·borderless·단일 Sensitive placeholder 계약을 동기화한다.
+- [x] 4.2 변경 동작을 검증하는 기존 component test를 RED로 확인한 뒤 공용 gallery 구현을 최소 수정한다.
+- [x] 4.3 targeted 자동화·strict OpenSpec validation과 localhost:5173 Web runtime geometry를 확인하고 기존 native/archive 미완료 경계를 유지한다.
+
+### 2026-08-04 geometry 정정 검증 증거
+
+- component test를 먼저 수정해 기존 구현에서 다중 `borderWidth: 1`과 Sensitive 빈 tile 2개 렌더를 각각 실패로 확인했다. 단일 placeholder 구현 뒤 5173 runtime에서 2장 Sensitive 높이가 0인 회귀를 발견했고, 폭 320에서 token gap 8을 제외한 높이 156을 요구하는 두 번째 RED를 확인했다.
+- 초기 `onLayout` state 보완은 독립 리뷰에서 최초 0 높이와 공개 중 resize 뒤 stale 높이 위험이 확인됐다. 측정 state 대신 하나의 비시각적 sizing element가 `width: 50%`, `aspectRatio: 1`, `marginBottom: -spacing.sm / 2`로 첫 layout부터 정확한 높이를 만들도록 바꿨고, 해당 구조가 없는 구현에서 component test가 다시 실패함을 확인했다.
+- 최소 구현 뒤 App unit test 169개, Storybook test 267개, `tsc --noEmit`, 변경 파일 ESLint·Prettier check와 strict OpenSpec validation이 통과했다. 전체 App `check`의 선행 Relay compiler는 Watchman 상태 파일 접근에 실패했으며 이번 변경에는 GraphQL·Relay source 변경이 없어 정정 slice의 필수 gate에서 제외했다.
+- Storybook에 2장 Sensitive fixture를 추가해 최초 가림 높이 `(width - spacing.sm) / 2`, 공개 전후 동일 높이, tile 미렌더와 border 부재를 실제 browser layout에서 검증했다. Watchman 없이 Expo Web 정적 export도 다시 생성해 localhost:5173에서 Post 폭 475의 2장 일반 gallery와 2장 Sensitive 단일 placeholder가 모두 475×233.5이고 3장 gallery가 475×267.1875로 정확히 16:9임을 확인했다. 두 다중 surface의 computed border는 0px였고 가림 상태의 Sensitive tile test id는 0개였다.
+- 2장 Sensitive 공개 뒤 gallery도 475×233.5를 유지했고 공개·다시 가리기 후 같은 control에 Web focus가 남았다. 버튼 크기·배치와 PROD-650 viewer interaction은 변경하지 않았다.
+- 기존 iOS·Android binary runtime과 archive gate는 각각 3.3·3.4에서 계속 미완료로 유지한다.
