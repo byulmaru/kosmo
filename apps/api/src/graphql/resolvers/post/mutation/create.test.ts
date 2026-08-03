@@ -30,6 +30,12 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.equal(schema.getType('TipTapDocument'), undefined);
   assert.equal(schema.getType('PostContentBody'), undefined);
   assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
+
+  const createPostPayload = schema.getType('CreatePostPayload');
+  assert.ok(isObjectType(createPostPayload));
+  assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
+  assert.equal(String(createPostPayload.getFields().homeTimelineEdge.type), 'PostConnectionEdge');
+  assert.equal(String(createPostPayload.getFields().profilePostsEdge.type), 'PostConnectionEdge');
 });
 
 test('validates createPost input before running the resolver', async () => {

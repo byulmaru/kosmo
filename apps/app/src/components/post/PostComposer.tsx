@@ -13,6 +13,7 @@ import { TextArea } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { updateCreatedPostConnections } from './PostComposerCache';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -81,6 +82,18 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       post {
         id
+      }
+      homeTimelineEdge {
+        cursor
+        node {
+          id
+        }
+      }
+      profilePostsEdge {
+        cursor
+        node {
+          id
+        }
       }
     }
   }
@@ -207,6 +220,7 @@ function PostComposerContents({
           ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
         },
       },
+      updater: (store) => updateCreatedPostConnections(store, profile.id),
       onCompleted: (response, errors) => {
         if (
           !mountedRef.current ||

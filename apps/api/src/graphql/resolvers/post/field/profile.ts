@@ -1,9 +1,10 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { postAccessWhere } from '../access';
+import { profilePostListCandidateWhere } from '../list-policy';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -28,9 +29,8 @@ builder.objectFields(Profile, (t) => ({
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  eq(Posts.profileId, profile.id),
+                  profilePostListCandidateWhere(profile.id),
                   postAccessWhere({ ctx }),
-                  isNull(Posts.replyParentId),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

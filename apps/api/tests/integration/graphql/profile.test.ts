@@ -1779,6 +1779,38 @@ describe('GraphQL remote profile boundary', () => {
       id: globalId('Profile', remote.id),
       instance: { kind: 'ACTIVITYPUB' },
     });
+
+    const created = await requestGraphQL<{
+      createPost: {
+        homeTimelineEdge: { cursor: string; node: { id: string } } | null;
+        post: { id: string };
+        profilePostsEdge: { cursor: string; node: { id: string } } | null;
+      };
+    }>(
+      `mutation CreatePostWithRemoteSelectedProfile($bodyText: String!) {
+        createPost(input: { bodyText: $bodyText, visibility: UNLISTED }) {
+          post { id }
+          homeTimelineEdge { cursor node { id } }
+          profilePostsEdge { cursor node { id } }
+        }
+      }`,
+      { bodyText: 'remote selected profile post' },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(created);
+    assert.equal(
+      created.data?.createPost.homeTimelineEdge?.node.id,
+      created.data?.createPost.post.id,
+    );
+    assert.equal(
+      created.data?.createPost.profilePostsEdge?.node.id,
+      created.data?.createPost.post.id,
+    );
+    assert.equal(
+      created.data?.createPost.homeTimelineEdge?.cursor,
+      created.data?.createPost.profilePostsEdge?.cursor,
+    );
   });
 
   test('rejects remote profile selection without ownership by the session account', async () => {

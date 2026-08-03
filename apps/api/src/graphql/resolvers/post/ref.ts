@@ -27,14 +27,17 @@ Post.implement({
   }),
 });
 
+export const PostConnectionEdge = builder.edgeObject({
+  name: 'PostConnectionEdge',
+  type: Post,
+});
+
 export const PostConnection = builder.connectionObject(
   {
     type: Post,
     name: 'PostConnection',
   },
-  {
-    name: 'PostConnectionEdge',
-  },
+  PostConnectionEdge,
 );
 
 export const PostContent = createObjectRef('PostContent', (ids, ctx) =>

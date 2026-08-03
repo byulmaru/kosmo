@@ -678,7 +678,14 @@ const PostsStoriesQuery = graphql`
         ...PostList_profile @alias(as: "postList")
       }
     }
-    homeTimeline(first: 20) {
+    homeTimeline(first: 20) @connection(key: "PostList_homeTimeline") {
+      edges {
+        cursor
+        node {
+          id
+          ...PostListItem_post
+        }
+      }
       ...PostList_homeTimeline
     }
   }

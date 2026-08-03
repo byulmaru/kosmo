@@ -27,9 +27,9 @@
 - Original, Reply, server-excluded surface, Remote selected Profile에서 edge nullability·Post Node identity·cursor가 Home/Profile query 정책과 일치하는지 resolver 테스트로 검증한다.
 - 기존 본문·Media·인증·transaction createPost 테스트가 통과하는지 확인한다.
 
-- [ ] 1.1 createPost 성공 결과가 현재 selected Profile 기준 Home·Profile Post List Policy를 재사용해 surface별 nullable edge를 제공하게 한다.
-- [ ] 1.2 기존 Post payload와 동일 Node identity·server cursor를 가진 additive edge GraphQL 계약을 노출하고 schema snapshot을 동기화한다.
-- [ ] 1.3 성공·nullable surface·Reply·Remote selected Profile·오류 경계의 API schema/resolver 회귀 테스트를 추가해 통과시킨다.
+- [x] 1.1 createPost 성공 결과가 현재 selected Profile 기준 Home·Profile Post List Policy를 재사용해 surface별 nullable edge를 제공하게 한다.
+- [x] 1.2 기존 Post payload와 동일 Node identity·server cursor를 가진 additive edge GraphQL 계약을 노출하고 schema snapshot을 동기화한다.
+- [x] 1.3 성공·nullable surface·Reply·Remote selected Profile·오류 경계의 API schema/resolver 회귀 테스트를 추가해 통과시킨다.
 
 ## 2. PROD-641 Current actor Relay connection synchronization
 
@@ -59,9 +59,9 @@ Post 작성 성공 직후 server-derived edge가 요청 actor Store에 이미 �
 - 두 edge, Home-only Reply, nullable edge, loaded/unloaded connection, existing same-node edge와 duplicate completion을 Relay Store 테스트로 검증한다.
 - actor A 요청 뒤 actor B 전환과 route unmount에서 actor B Store·Composer·navigation이 바뀌지 않는지 검증한다.
 
-- [ ] 2.1 Home과 Profile Post List가 actor·surface별 안정적인 managed connection identity를 제공하게 한다.
-- [ ] 2.2 Composer mutation이 server-derived edge를 선택하고 요청 actor의 로드된 대상 connection에 최신순·중복 없이 반영하게 한다.
-- [ ] 2.3 실패·늦은 completion에서도 기존 Composer lifecycle guard와 actor Environment 격리를 유지하고 비대상 connection·새 route UI를 변경하지 않게 한다.
+- [x] 2.1 Home과 Profile Post List가 actor·surface별 안정적인 managed connection identity를 제공하게 한다.
+- [x] 2.2 Composer mutation이 server-derived edge를 선택하고 요청 actor의 로드된 대상 connection에 최신순·중복 없이 반영하게 한다.
+- [x] 2.3 실패·늦은 completion에서도 기존 Composer lifecycle guard와 actor Environment 격리를 유지하고 비대상 connection·새 route UI를 변경하지 않게 한다.
 
 ## 3. PROD-641 Regression coverage and project memory
 
@@ -86,8 +86,8 @@ Home·Profile·Composer 회귀 검증과 project memory가 createPost 호출자 
 - Home/Profile 목록 표시와 Composer 성공·실패·중복 제출·route lifecycle 회귀 테스트가 통과하는지 확인한다.
 - frontend memory가 PROD-641과 PROD-644의 소유권을 구분하고 기존 actor Store 원칙을 유지하는지 diff로 확인한다.
 
-- [ ] 3.1 Home·Profile 목록과 Composer의 성공·실패·duplicate·actor/route 전환 회귀 테스트를 완성한다.
-- [ ] 3.2 `memory/frontend-react-native.md`의 “Subscription만 membership을 소유” 전제를 createPost 호출자 로컬 반영과 다른 producer Subscription 경계로 갱신한다.
+- [x] 3.1 Home·Profile 목록과 Composer의 성공·실패·duplicate·actor/route 전환 회귀 테스트를 완성한다.
+- [x] 3.2 `memory/frontend-react-native.md`의 “Subscription만 membership을 소유” 전제를 createPost 호출자 로컬 반영과 다른 producer Subscription 경계로 갱신한다.
 
 ## 4. PROD-641 Integration verification and OpenSpec completion
 
