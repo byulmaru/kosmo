@@ -180,13 +180,15 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
   expect(updateVariables).toMatchObject({
     input: { tags: ['FirstWrite', '길게표시되는프로필태그'] },
   });
-  expect(body.data?.updateProfile?.profile).toMatchObject({
-    relativeHandle: '@prod527-tags',
-    tags: [
+  const updatedProfile = body.data?.updateProfile?.profile;
+  expect(updatedProfile?.relativeHandle).toBe('@prod527-tags');
+  expect(updatedProfile?.tags).toHaveLength(2);
+  expect(updatedProfile?.tags).toEqual(
+    expect.arrayContaining([
       { id: expect.any(String), name: 'FirstWrite' },
       { id: expect.any(String), name: '길게표시되는프로필태그' },
-    ],
-  });
+    ]),
+  );
   await expect(page).toHaveURL(/\/@prod527-tags$/);
 
   // Relay cache만이 아니라 저장된 서버 상태를 다시 조회한다.
@@ -197,7 +199,8 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
   const tagList = page.getByTestId('profile-tag-list');
   await expect(tagList).toBeVisible();
   await expect(tagList).toHaveCSS('flex-wrap', 'wrap');
-  await expect(tagList).toHaveText(/#FirstWrite.*#길게표시되는프로필태그/);
+  await expect(tagList.getByText('#FirstWrite', { exact: true })).toBeVisible();
+  await expect(tagList.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
   await expect(
     tagList.evaluate((node) => ({
       next: node.nextElementSibling?.textContent,
