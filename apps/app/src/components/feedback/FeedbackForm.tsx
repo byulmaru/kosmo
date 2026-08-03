@@ -1,5 +1,5 @@
 import { feedbackBodySchema } from '@kosmo/core/validation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,15 @@ const feedbackOptions = [
 
 type FeedbackStatus = 'idle' | 'success' | 'error';
 
+export type FeedbackFormState = {
+  dirty: boolean;
+  submitting: boolean;
+};
+
+type Props = {
+  onStateChange?: (state: FeedbackFormState) => void;
+};
+
 const SubmitFeedbackMutation = graphql`
   mutation FeedbackFormSubmitFeedbackMutation($input: SubmitFeedbackInput!) {
     submitFeedback(input: $input) {
@@ -26,7 +35,7 @@ const SubmitFeedbackMutation = graphql`
   }
 `;
 
-export function FeedbackForm() {
+export function FeedbackForm({ onStateChange }: Props) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
@@ -37,6 +46,7 @@ export function FeedbackForm() {
   const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
+  const dirty = kind !== 'POSITIVE' || body.length > 0;
   const parsedBody = feedbackBodySchema.safeParse(body);
   const bodyError = parsedBody.success ? null : parsedBody.error.issues[0]?.message;
   const showBodyError = bodyTouched || status === 'error';
@@ -46,6 +56,10 @@ export function FeedbackForm() {
     setKind(value);
     setStatus('idle');
   };
+
+  useEffect(() => {
+    onStateChange?.({ dirty, submitting });
+  }, [dirty, onStateChange, submitting]);
 
   const submit = () => {
     if (!canSubmit || !parsedBody.success) {

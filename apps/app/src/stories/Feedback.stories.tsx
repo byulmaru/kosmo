@@ -1,6 +1,23 @@
+import { useState } from 'react';
+import { Text, View } from 'react-native';
 import { expect, fireEvent, userEvent, within } from 'storybook/test';
+import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { FeedbackFormState } from '@/components/feedback/FeedbackForm';
+
+function FeedbackFormStateProbe() {
+  const [state, setState] = useState<FeedbackFormState>({ dirty: false, submitting: false });
+
+  return (
+    <View>
+      <FeedbackForm onStateChange={setState} />
+      <Text accessibilityLabel="피드백 폼 상태">
+        {state.dirty ? 'dirty' : 'clean'} {state.submitting ? 'submitting' : 'idle'}
+      </Text>
+    </View>
+  );
+}
 
 const meta = {
   component: FeedbackPage,
@@ -118,6 +135,25 @@ export const Pending: Story = {
     expect(bugReport).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(canvas.getByRole('radio', { name: '좋아요' }));
     expect(bugReport).toBeChecked();
+  },
+};
+
+export const StateSignal: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  render: () => <FeedbackFormStateProbe />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const state = canvas.getByLabelText('피드백 폼 상태');
+    expect(state).toHaveTextContent('clean idle');
+
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: '피드백 내용' }),
+      '상태를 외부에서 관찰합니다.',
+    );
+    await expect(state).toHaveTextContent('dirty idle');
+
+    await userEvent.click(canvas.getByRole('button', { name: '피드백 보내기' }));
+    await expect(state).toHaveTextContent('dirty submitting');
   },
 };
 

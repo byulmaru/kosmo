@@ -42,12 +42,36 @@
 - 후속 popup 소유: dialog/sheet 제목, 닫기 action, 크기와 위치, backdrop, navigation과 browser history,
   뒤로가기와 `Escape`, focus trap·복원, 배경 상호작용 차단
 
-[PROD-594](https://linear.app/byulmaru/issue/PROD-594)는 같은 form을 popup body에 조립한다. 현재 page 작업은
-아직 결정되지 않은 popup 전용 `variant`, 닫기 callback이나 성공 후 자동 닫기 정책을 form에 미리 추가하지
-않는다. popup 성공 후 유지·닫기 정책과 `/feedback` route의 fallback·deep-link 역할은 PROD-594에서 결정한다.
+[PROD-594](https://linear.app/byulmaru/issue/PROD-594)는 같은 form을 Web popup body에 조립한다. form은
+`{dirty, submitting}` 상태만 presentation에 알리고 popup 전용 variant, navigation, 닫기 callback이나 history를
+소유하지 않는다. popup의 모든 닫기 경로는 하나의 `requestClose` 경계를 사용한다.
 
 Android와 iOS 피드백 화면은 PROD-547 범위가 아니다. 공용 form의 상태·제출 로직은 공유할 수 있지만 이번 Web
 surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸지 않는다.
+
+## Web Overlay
+
+- Web의 full sidebar, compact icon rail과 mobile drawer에서 `피드백 보내기`를 실행하면 현재 pathname과 다른
+  query를 보존한 채 `feedback=open` history entry를 push하고 shell 전체 위에 하나의 피드백 overlay를 연다.
+- overlay는 `UniversalShell`의 sidebar, 중앙 route, right rail과 mobile chrome 전체를 덮되 기존 route tree와
+  document scroll을 배경에 유지한다. desktop과 mobile navigation 안에 별도 overlay 인스턴스를 만들지 않는다.
+- `/feedback` 직접 URL 접근과 새로고침은 기존 `PageHeader`와 page surface를 가진 보호 route fallback을
+  유지한다. `/feedback` 위에는 query overlay를 중복 표시하지 않는다.
+- `feedback=open` query가 있는 다른 shell route를 직접 열거나 새로고침하면 overlay를 복원한다. 이 fresh-load
+  overlay를 닫을 때는 다른 history page로 이동하지 않고 `feedback` query만 replace해 제거한다.
+- shell 진입으로 연 overlay의 clean close는 push 전 history entry로 돌아간다. browser forward로 query entry를
+  다시 방문하면 overlay를 다시 연다.
+- 종류나 본문이 초기값에서 바뀐 dirty 상태의 close는 draft 폐기 확인을 거친다. 취소하면 overlay, query와
+  draft를 유지하고, 확인하면 close source에 맞는 history 결과를 적용한다.
+- 제출 중에는 닫기 버튼, backdrop, `Escape`와 browser back을 포함한 모든 close를 차단하고 overlay, query와
+  form 상태를 유지한다.
+- 성공 후에는 기존 성공 문구와 초기화된 form을 overlay 안에 유지해 여러 피드백을 이어서 보낼 수 있게 한다.
+  실패 후에는 기존 오류·재시도와 draft를 유지한다.
+- `< compact` Web에서는 viewport 아래에 붙는 bottom sheet, `compact` 이상 Web에서는 최대 약 `600px` 너비와
+  `85dvh` 높이의 중앙 dialog로 표시한다. 두 surface 모두 form body만 가용 높이 안에서 내부 scroll한다.
+- overlay는 `피드백 보내기` 제목과 accessible name이 있는 닫기 control을 제공하고 focus를 내부로 이동시킨다.
+  열린 동안 focus를 가두고 배경 shell을 pointer, keyboard와 accessibility tree 상호작용에서 차단한다. 닫힌
+  뒤에는 열기 직전의 유효한 focus target과 document scroll 위치를 복원한다.
 
 ## 상태와 동작 불변조건
 
@@ -70,6 +94,11 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - 첫 번째·중간·마지막 종류를 각각 선택해 8px 선택 surface, 구분선 연속성, 누름·keyboard focus 표시가 평면
   목록 위계를 유지하는지 확인한다.
 - 기존 Web E2E로 인증된 진입, 제출 payload, 성공 초기화, 실패 후 입력 유지가 바뀌지 않았음을 검증한다.
+- Web shell에서 현재 route query를 보존한 open, clean close와 browser back/forward, fresh-load query close,
+  dirty 폐기 확인, submitting close 차단을 검증한다.
+- `390px`에서 bottom sheet, `900px`와 `1400px`에서 중앙 dialog geometry와 body 내부 scroll을 확인한다.
+- keyboard로 open, focus trap, `Escape`, 닫기 후 trigger focus·document scroll 복원과 배경 상호작용 차단을
+  실제 Web runtime에서 확인한다.
 - 자동화와 Storybook 결과는 실제 Web reflow, focus indicator, contrast와 keyboard/document scroll 관찰을
   대신하지 않는다.
 
@@ -78,10 +107,9 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - `submitFeedback` mutation과 Slack delivery payload 변경
 - 기기·플랫폼 자동 감지 metadata와 재현 환경 선택 필드
 - `/feedback` route 및 인증 경계 변경
-- PROD-594가 소유하는 popup 진입, shell navigation과 dialog/sheet lifecycle
 - Android/iOS 피드백 화면 변경
 - PROD-487이 소유한 접근성 semantics 재설계
 
-PROD-547은 새 사용자 행동이나 제출 계약을 추가하지 않고 기존 행동을 보존한 채 Web 시각 구조를 정리한다.
-따라서 별도 OpenSpec change를 만들지 않고, 기존 `web-app-shell`의 피드백 진입과 `/feedback` 보존 계약을
-유지한다. PROD-594가 popup의 navigation·lifecycle 행동을 확정할 때 필요한 OpenSpec 범위를 별도로 판단한다.
+PROD-547은 새 사용자 행동이나 제출 계약을 추가하지 않고 기존 행동을 보존한 채 Web 시각 구조를 정리했다.
+PROD-594는 그 form과 `/feedback` page를 유지하면서 Web shell의 query-backed overlay navigation과 lifecycle만
+추가한다.
