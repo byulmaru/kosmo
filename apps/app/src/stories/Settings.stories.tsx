@@ -95,6 +95,22 @@ export const ProfileError: Story = {
   },
 };
 
+export const RouteLoading: Story = {
+  args: {
+    accountContent: <AccountEntryFixture />,
+    profileState: { status: 'loading' },
+    routeState: { status: 'loading' },
+  },
+};
+
+export const RouteError: Story = {
+  args: {
+    accountContent: <AccountEntryFixture />,
+    profileState: { status: 'loading' },
+    routeState: { onRetry: fn(), status: 'error' },
+  },
+};
+
 export const AccountNavigationError: Story = {
   args: {
     accountContent: (

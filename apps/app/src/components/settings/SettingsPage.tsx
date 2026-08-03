@@ -33,37 +33,65 @@ export type SettingsProfileState =
   | LoadingProfileSettings
   | ErrorProfileSettings;
 
+export type SettingsRouteState =
+  | {
+      status: 'error';
+      onRetry: () => void;
+    }
+  | {
+      status: 'loading';
+    };
+
 type SettingsPageProps = {
   accountContent: ReactElement;
   profileState: SettingsProfileState;
   routeOwnsHeader?: boolean;
+  routeState?: SettingsRouteState;
 };
 
 export function SettingsPage({
   accountContent,
   profileState,
   routeOwnsHeader = true,
+  routeState,
 }: SettingsPageProps) {
   return (
     <ScrollView contentContainerStyle={styles.root}>
       {routeOwnsHeader ? <PageHeader title="설정" /> : null}
-      <View style={styles.body}>
-        <SettingsSection
-          description="계정 보안과 인증 설정은 Byulmaru ID에서 관리합니다."
-          owner="Byulmaru ID 외부 서비스"
-          title="계정 설정"
-        >
-          {accountContent}
-        </SettingsSection>
+      {routeState ? (
+        <View style={styles.routeState}>
+          <StateView
+            actionLabel={routeState.status === 'error' ? '다시 시도' : undefined}
+            alert={routeState.status === 'error'}
+            description={routeState.status === 'error' ? '잠시 후 다시 시도해주세요.' : undefined}
+            loading={routeState.status === 'loading'}
+            onAction={routeState.status === 'error' ? routeState.onRetry : undefined}
+            title={
+              routeState.status === 'error'
+                ? '설정 페이지를 불러오지 못했어요'
+                : '설정 페이지를 불러오는 중입니다.'
+            }
+          />
+        </View>
+      ) : (
+        <View style={styles.body}>
+          <SettingsSection
+            description="계정 보안과 인증 설정은 Byulmaru ID에서 관리합니다."
+            owner="Byulmaru ID 외부 서비스"
+            title="계정 설정"
+          >
+            {accountContent}
+          </SettingsSection>
 
-        <SettingsSection
-          description="선택한 Local Profile에 적용되는 Kosmo 설정입니다."
-          owner="Kosmo 내부 기능"
-          title="프로필 설정"
-        >
-          <ProfileSettingsContent state={profileState} />
-        </SettingsSection>
-      </View>
+          <SettingsSection
+            description="선택한 Local Profile에 적용되는 Kosmo 설정입니다."
+            owner="Kosmo 내부 기능"
+            title="프로필 설정"
+          >
+            <ProfileSettingsContent state={profileState} />
+          </SettingsSection>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -146,6 +174,7 @@ function ProfileSettingsContent({ state }: { state: SettingsProfileState }) {
 const styles = StyleSheet.create({
   root: { flexGrow: 1 },
   body: { gap: spacing.xl, padding: spacing.xl },
+  routeState: { padding: spacing.xl },
   section: {
     borderRadius: radii.md,
     borderWidth: 1,
