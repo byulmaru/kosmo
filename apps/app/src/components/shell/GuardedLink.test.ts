@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { LinkProps } from 'expo-router';
+import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GuardedLink as GuardedLinkExport } from './GuardedLink';
@@ -12,6 +12,10 @@ import type {
   NavigationRequestHandler,
   useNavigationGuard as useNavigationGuardExport,
 } from './NavigationGuardContext';
+import type {
+  PrimaryNavigationScrollProvider as PrimaryNavigationScrollProviderExport,
+  usePrimaryNavigationScroll as usePrimaryNavigationScrollExport,
+} from './PrimaryNavigationScrollContext';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,6 +39,8 @@ type RenderedLinkProps = {
 };
 
 const navigations: string[] = [];
+let currentPathname = '/home';
+let consumeIntent: ((pathname: string) => boolean) | undefined;
 let linkPress: LinkPress | undefined;
 let composedLinkPress: LinkPress | undefined;
 let rootLinkPress: LinkPress | undefined;
@@ -62,6 +68,7 @@ mockModule('expo-router', {
   useRouter: () => ({
     navigate: (href: string) => navigations.push(href),
   }),
+  usePathname: () => currentPathname,
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
@@ -70,10 +77,14 @@ mockModule('react-native', {
 let GuardedLink: typeof GuardedLinkExport;
 let NavigationGuardProvider: typeof NavigationGuardProviderExport;
 let useNavigationGuard: typeof useNavigationGuardExport;
+let PrimaryNavigationScrollProvider: typeof PrimaryNavigationScrollProviderExport;
+let usePrimaryNavigationScroll: typeof usePrimaryNavigationScrollExport;
 
 before(async () => {
   ({ GuardedLink } = await import('./GuardedLink'));
   ({ NavigationGuardProvider, useNavigationGuard } = await import('./NavigationGuardContext'));
+  ({ PrimaryNavigationScrollProvider, usePrimaryNavigationScroll } =
+    await import('./PrimaryNavigationScrollContext'));
 });
 
 afterEach(async () => {
@@ -84,6 +95,8 @@ afterEach(async () => {
   linkPress = undefined;
   composedLinkPress = undefined;
   rootLinkPress = undefined;
+  consumeIntent = undefined;
+  currentPathname = '/home';
   navigations.length = 0;
   mock.restoreAll();
 });
@@ -96,6 +109,11 @@ function GuardRegistrar({ handler }: { handler: NavigationRequestHandler }) {
 
 function TestPressable(props: { onPress?: LinkPress }) {
   return createElement('Pressable', props);
+}
+
+function PrimaryNavigationProbe() {
+  consumeIntent = usePrimaryNavigationScroll().consume;
+  return null;
 }
 
 function createPressEvent(overrides: Omit<LinkPressEvent, 'preventDefault'> = {}) {
@@ -120,18 +138,28 @@ function shouldHandleNavigation(event: LinkPressEvent) {
   );
 }
 
-const renderLink = async (handler: NavigationRequestHandler, onNavigate?: () => void) => {
+const renderLink = async (
+  handler: NavigationRequestHandler,
+  onNavigate?: () => void,
+  options: { href?: Href; primary?: boolean } = {},
+) => {
   await act(async () => {
     renderer = create(
       createElement(
-        NavigationGuardProvider,
+        PrimaryNavigationScrollProvider,
         null,
-        createElement(GuardRegistrar, { handler }),
-        createElement(GuardedLink, {
-          children: createElement(TestPressable),
-          href: '/timeline',
-          onNavigate,
-        }),
+        createElement(
+          NavigationGuardProvider,
+          null,
+          createElement(PrimaryNavigationProbe),
+          createElement(GuardRegistrar, { handler }),
+          createElement(GuardedLink, {
+            children: createElement(TestPressable),
+            href: options.href ?? '/timeline',
+            onNavigate,
+            primary: options.primary,
+          }),
+        ),
       ),
     );
   });
@@ -172,6 +200,54 @@ describe('GuardedLink', () => {
     assert.equal(event.preventDefault.mock.callCount(), 1);
     assert.equal(onNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, ['/timeline']);
+  });
+
+  it('실제 무guard primary navigation에서만 scroll intent를 기록한다', async () => {
+    currentPathname = '/home';
+    await renderLink(() => false, undefined, { href: '/search', primary: true });
+    const event: LinkPressEvent = { preventDefault: mock.fn() };
+
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+
+    assert.equal(consumeIntent?.('/search'), true);
+  });
+
+  it('guard 승인 action에서 scroll intent를 기록하고 취소 시에는 기록하지 않는다', async () => {
+    let pendingAction: GuardedNavigationAction | null = null;
+    await renderLink(
+      (action) => {
+        pendingAction = action;
+        return true;
+      },
+      undefined,
+      { href: '/timeline', primary: true },
+    );
+    const event: LinkPressEvent = { preventDefault: mock.fn() };
+
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    assert.equal(consumeIntent?.('/timeline'), false);
+
+    const approvedAction = pendingAction as GuardedNavigationAction | null;
+    assert.ok(approvedAction);
+    approvedAction();
+    assert.equal(consumeIntent?.('/timeline'), true);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    pendingAction = null;
+    await renderLink(() => true, undefined, { href: '/notifications', primary: true });
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+    assert.equal(consumeIntent?.('/notifications'), false);
+  });
+
+  it('현재 primary route 재선택은 scroll intent를 기록하지 않는다', async () => {
+    currentPathname = '/home';
+    await renderLink(() => false, undefined, { href: '/home', primary: true });
+    const event: LinkPressEvent = { preventDefault: mock.fn() };
+
+    await act(async () => linkPress?.(event as unknown as Parameters<LinkPress>[0]));
+
+    assert.equal(consumeIntent?.('/home'), false);
   });
 
   it('Web modifier click은 현재 편집 route를 떠나지 않으므로 guard가 가로채지 않는다', async () => {

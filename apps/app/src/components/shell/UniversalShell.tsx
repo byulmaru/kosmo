@@ -20,6 +20,10 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
+import {
+  PrimaryNavigationScrollProvider,
+  PrimaryNavigationScrollReset,
+} from './PrimaryNavigationScrollContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, webMobileShellHeaderHeight } from './shellLayout';
@@ -78,13 +82,15 @@ export function UniversalShell() {
   return (
     <UnreadNotificationBadgeController>
       <NavigationGuardProvider>
-        <RouteBoundary
-          loading={<Splash label="앱을 불러오는 중입니다." />}
-          onRetry={retry}
-          title="앱을 불러오지 못했어요"
-        >
-          <UniversalShellContent revision={revision} />
-        </RouteBoundary>
+        <PrimaryNavigationScrollProvider>
+          <RouteBoundary
+            loading={<Splash label="앱을 불러오는 중입니다." />}
+            onRetry={retry}
+            title="앱을 불러오지 못했어요"
+          >
+            <UniversalShellContent revision={revision} />
+          </RouteBoundary>
+        </PrimaryNavigationScrollProvider>
       </NavigationGuardProvider>
     </UnreadNotificationBadgeController>
   );
@@ -183,6 +189,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
 
   return (
     <ShellChromeProvider openProfileSwitcher={openProfileSwitcher}>
+      <PrimaryNavigationScrollReset pathname={pathname} />
       <View
         {...swipeToOpenDrawer.panHandlers}
         style={[

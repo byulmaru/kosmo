@@ -98,7 +98,13 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
 - `≥ full` profile picker가 열렸을 때는 overlay 안의 프로필 목록만 internal scroll owner가 된다. overlay 밖의
   wheel 입력은 기존 document scroll 흐름을 유지하고 navigation의 layout 위치는 닫힌 상태와 같게 유지한다.
 - 우측 레일 콘텐츠가 viewport보다 긴 경우 rail 내부 overflow를 허용할 수 있지만, 중앙 피드를 별도 internal scroller로 만들지는 않는다.
-- 일반 route 이동과 back/forward는 Expo Router와 browser history의 document scroll policy에 맞춘다. 검색 화면의 query-only `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존하도록 명시적으로 검증한다.
+- Web 하단 탭, mobile drawer, compact 아이콘 레일과 full sidebar에서 현재와 다른 shell-level 주요 route를
+  여는 forward navigation은 대상 route가 준비된 뒤 document 최상단에서 표시한다. 로딩·빈 상태에서도 이전
+  route의 document scroll offset을 대상 route에 노출하지 않는다.
+- 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
+  `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
+- 이미 선택된 홈을 다시 실행하는 최상단 이동과 새로고침은 `PROD-610`이 소유한다. 이 정책은 다른 현재
+  route 재선택에 최상단 이동이나 데이터 새로고침을 추가하지 않는다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
 ## 구현 위치
