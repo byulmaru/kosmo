@@ -5,6 +5,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { ProfileTagChip } from './ProfileTagChip';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileHero_profile$key } from './__generated__/ProfileHero_profile.graphql';
@@ -21,6 +22,10 @@ const profileHeroFragment = graphql`
     relativeHandle
     displayName
     bio
+    tags {
+      id
+      name
+    }
     avatar {
       id
       url
@@ -100,6 +105,13 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         </Text>
         <Text style={[styles.handle, { color: theme.textSecondary }]}>{data.relativeHandle}</Text>
         {data.bio ? <Text style={[styles.bio, { color: theme.text }]}>{data.bio}</Text> : null}
+        {data.tags.length ? (
+          <View style={styles.tags} testID="profile-tag-list">
+            {data.tags.map((tag) => (
+              <ProfileTagChip key={tag.id} name={tag.name} />
+            ))}
+          </View>
+        ) : null}
         <View style={styles.counts}>
           <Link asChild href={followingHref}>
             <Pressable accessibilityRole="link" style={styles.countLink}>
@@ -141,6 +153,7 @@ const styles = StyleSheet.create({
   displayName: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.xl },
   handle: { fontFamily: 'SUIT', ...typography.sm },
   bio: { fontFamily: 'SUIT', marginTop: spacing.md, ...typography.md },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
   counts: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
   countLink: { flexDirection: 'row', gap: spacing.xs },
   count: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },

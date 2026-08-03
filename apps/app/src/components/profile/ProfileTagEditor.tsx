@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 import { TextField } from '../ui/TextField';
 import { validateProfileTagDraftInput } from './profileEditState';
+import { PROFILE_TAG_CHIP_VISUAL_SIZE, ProfileTagChip } from './ProfileTagChip';
 
 export type ProfileTagEditorProps = {
   disabled?: boolean;
@@ -12,9 +13,8 @@ export type ProfileTagEditorProps = {
   tags: ReadonlyArray<string>;
 };
 
-const REMOVE_ACTION_VISUAL_SIZE = 32;
 const REMOVE_ACTION_TARGET_SIZE = Platform.select({ android: 48, ios: 44, web: 32, default: 48 });
-const REMOVE_ACTION_TARGET_INSET = (REMOVE_ACTION_TARGET_SIZE - REMOVE_ACTION_VISUAL_SIZE) / 2;
+const REMOVE_ACTION_TARGET_INSET = (REMOVE_ACTION_TARGET_SIZE - PROFILE_TAG_CHIP_VISUAL_SIZE) / 2;
 
 export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTagEditorProps) {
   const theme = useTheme();
@@ -41,13 +41,7 @@ export function ProfileTagEditor({ disabled = false, onChange, tags }: ProfileTa
       <View style={styles.chips}>
         {tags.map((tag, index) => (
           <View key={tag} style={styles.chipTarget}>
-            <View
-              style={[styles.chip, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            >
-              <Text style={[styles.tagText, { color: theme.text }]} testID="profile-tag-chip">
-                #{tag}
-              </Text>
-            </View>
+            <ProfileTagChip name={tag} style={styles.editableChip} />
             <Pressable
               accessibilityLabel={`#${tag} 제거`}
               accessibilityRole="button"
@@ -112,14 +106,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  chip: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    borderWidth: 1,
-    flexDirection: 'row',
-    height: REMOVE_ACTION_VISUAL_SIZE,
-    paddingLeft: spacing.md,
-    paddingRight: REMOVE_ACTION_VISUAL_SIZE,
+  editableChip: {
+    paddingRight: PROFILE_TAG_CHIP_VISUAL_SIZE,
     pointerEvents: 'none',
   },
   chipTarget: {
@@ -128,10 +116,6 @@ const styles = StyleSheet.create({
     minHeight: REMOVE_ACTION_TARGET_SIZE,
     paddingRight: REMOVE_ACTION_TARGET_INSET,
     position: 'relative',
-  },
-  tagText: {
-    fontFamily: 'SUIT',
-    ...typography.sm,
   },
   removeButton: {
     alignItems: 'center',

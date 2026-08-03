@@ -73,6 +73,23 @@ const withImages = profile({
   header: { id: 'media-profile-header', url: '/og-default.png' },
   id: 'profile-with-images',
 });
+const withTags = profile({
+  id: 'profile-with-tags',
+  tags: [
+    { id: 'hashtag-fediverse', name: 'Fediverse' },
+    { id: 'hashtag-development', name: '개발' },
+  ],
+});
+const withManyLongTags = profile({
+  id: 'profile-with-many-long-tags',
+  tags: [
+    { id: 'hashtag-craft', name: '공예' },
+    { id: 'hashtag-photography', name: '사진' },
+    { id: 'hashtag-reading', name: '독서' },
+    { id: 'hashtag-music', name: '음악' },
+    { id: 'hashtag-long', name: '아주긴프로필태그이름입니다' },
+  ],
+});
 const followersEmpty = { ...followersProfile([]), id: 'profile-followers-empty' };
 const followersContent = {
   ...followersProfile([followable, followed], { hasNext: true }),
@@ -98,6 +115,8 @@ const storyProfiles = [
   remoteApprovalRequired,
   pending,
   withImages,
+  withTags,
+  withManyLongTags,
 ];
 
 const ProfilesStoriesQuery = graphql`
@@ -156,6 +175,8 @@ function ProfileCatalog() {
   const remoteRef = requireProfile(profiles, 3);
   const noBioRef = requireProfile(profiles, 4);
   const withImagesRef = requireProfile(profiles, 12);
+  const withTagsRef = requireProfile(profiles, 13);
+  const withManyLongTagsRef = requireProfile(profiles, 14);
 
   return (
     <Catalog>
@@ -175,6 +196,15 @@ function ProfileCatalog() {
         <ProfileHero profile={requireFragment(noBioRef.hero, 'no-bio profile hero')} />
         <ProfileHero profile={requireFragment(remoteRef.hero, 'remote profile hero')} />
         <ProfileHero loading />
+      </Section>
+
+      <Section title="Hero · tags empty / long / many / remote empty">
+        <ProfileHero profile={requireFragment(followableRef.hero, 'empty tags profile hero')} />
+        <ProfileHero profile={requireFragment(withTagsRef.hero, 'profile hero with tags')} />
+        <ProfileHero
+          profile={requireFragment(withManyLongTagsRef.hero, 'profile hero with many long tags')}
+        />
+        <ProfileHero profile={requireFragment(remoteRef.hero, 'remote empty tags profile hero')} />
       </Section>
     </Catalog>
   );
@@ -349,6 +379,14 @@ export const HeroNameAndLoadingStates: Story = {
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/followers"]'),
     ).toBeInTheDocument();
+    const canvas = within(canvasElement);
+    const tagSection = within(
+      canvas.getByText('Hero · tags empty / long / many / remote empty').parentElement!,
+    );
+    expect(tagSection.getByText('#Fediverse')).toBeVisible();
+    expect(tagSection.getByText('#개발')).toBeVisible();
+    expect(tagSection.getByText('#아주긴프로필태그이름입니다')).toBeVisible();
+    expect(tagSection.getAllByTestId('profile-tag-list')).toHaveLength(2);
   },
 };
 

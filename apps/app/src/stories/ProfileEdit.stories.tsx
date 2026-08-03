@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { expect, waitFor, within } from 'storybook/test';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
@@ -152,6 +152,14 @@ function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyA
   const [tags, setTags] = useState(initialTags);
 
   return <ProfileTagEditor onChange={setTags} tags={tags} />;
+}
+
+function ProfileTagWrappingHarness() {
+  return (
+    <View style={{ width: 180 }} testID="profile-tag-layout-fixture">
+      <ProfileTagEditor onChange={() => undefined} tags={['가', '나', '아주긴태그이름']} />
+    </View>
+  );
 }
 
 function expectResponsiveSurface(
@@ -522,6 +530,50 @@ export const TagAddDuplicateAndRemove: Story = {
 
     await userEvent.click(remove);
     expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagRemovalKeyboardParity: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['Foo', 'Bar', 'Baz']} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const enterAction = canvas.getByRole('button', { name: '#Baz 제거' });
+    expect(enterAction).toHaveFocus();
+    expect(getComputedStyle(enterAction).outlineStyle).not.toBe('none');
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.queryByText('#Baz')).not.toBeInTheDocument();
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const spaceAction = canvas.getByRole('button', { name: '#Bar 제거' });
+    expect(spaceAction).toHaveFocus();
+    await userEvent.keyboard(' ');
+    expect(canvas.queryByText('#Bar')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '#Foo 제거' }));
+    expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagAdjacentAndWrappingTargetsDoNotOverlap: Story = {
+  render: () => <ProfileTagWrappingHarness />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const actions = canvas.getAllByRole('button', { name: /제거$/ });
+    const [first, second, wrapped] = actions.map((action) => action.getBoundingClientRect());
+
+    expect(actions).toHaveLength(3);
+    expect(Math.round(first!.top)).toBe(Math.round(second!.top));
+    expect(first!.right).toBeLessThanOrEqual(second!.left);
+    expect(wrapped!.top).toBeGreaterThanOrEqual(first!.bottom);
+    for (const target of [first!, second!, wrapped!]) {
+      expect(Math.round(target.width)).toBe(32);
+      expect(Math.round(target.height)).toBe(32);
+    }
   },
 };
 
