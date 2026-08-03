@@ -14,7 +14,7 @@ import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComp
 const PostListProfileFragment = graphql`
   fragment PostList_profile on Profile {
     id
-    posts(first: 20) @connection(key: "PostList_profile_posts") {
+    posts(first: 20) {
       edges {
         cursor
         node {

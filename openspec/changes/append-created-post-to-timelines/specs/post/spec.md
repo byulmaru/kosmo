@@ -4,17 +4,10 @@
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, PROD-641. Universal client는 `createPost` 성공 응답의 normalized `post`를 Relay의 선언형 connection directive로 요청 actor Environment의 이미 로드된 managed connection에만 반영해야 한다(MUST).
 
-#### Scenario: Original 또는 Quote 작성 성공
+#### Scenario: Post 작성 성공
 
-- **WHEN** `createPost`가 `replyParent`가 `null`인 Post를 반환한다
+- **WHEN** `createPost`가 Original, Quote 또는 Reply Post를 반환한다
 - **THEN** 앱은 로드된 Home connection의 첫 edge 앞에 canonical Post Node를 한 번 삽입한다
-- **AND** 로드된 작성자 Profile connection에도 같은 Node를 한 번 삽입한다
-
-#### Scenario: Reply 작성 성공
-
-- **WHEN** `createPost`가 `replyParent`가 있는 Post를 반환한다
-- **THEN** 앱은 로드된 Home connection에만 canonical Post Node를 첫 edge 앞에 삽입한다
-- **AND** 작성자 Profile connection을 변경하지 않는다
 
 #### Scenario: Connection이 로드되지 않음
 
@@ -43,5 +36,5 @@
 #### Scenario: Post가 없는 실패 결과
 
 - **WHEN** mutation이 network 오류로 실패하거나 `data.createPost.post`를 제공하지 않는다
-- **THEN** 기존 Home·Profile connection membership을 유지한다
+- **THEN** 기존 Home connection membership을 유지한다
 - **AND** 낙관적 또는 client-only Post/edge를 남기지 않는다

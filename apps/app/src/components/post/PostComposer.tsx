@@ -5,6 +5,7 @@ import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -13,7 +14,6 @@ import { TextArea } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { getCreatedPostConnectionIds } from './PostComposerCache';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -204,7 +204,7 @@ function PostComposerContents({
     const submissionReplyMode = replyMode;
     commit({
       variables: {
-        connections: getCreatedPostConnectionIds(profile.id, replyParentId),
+        connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
         input: {
           ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
           ...(!replyMode ? { media: media.items, sensitiveMedia: media.sensitiveMedia } : {}),
