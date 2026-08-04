@@ -34,11 +34,13 @@ type Mode = 'error-once' | 'pending' | 'success';
 function createEnvironment({
   defaultPostVisibility,
   mode,
+  onMutationAttempt,
   onPending,
   targetId,
 }: {
   defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
   mode: Mode;
+  onMutationAttempt: (attempt: number) => void;
   onPending: (complete: () => void) => void;
   targetId: string;
 }) {
@@ -47,6 +49,7 @@ function createEnvironment({
     network: Network.create((request: RequestParameters, variables: Variables) => {
       if (request.name === 'ProfileDefaultPostVisibilityControlMutation') {
         attempts += 1;
+        onMutationAttempt(attempts);
         if (mode === 'pending' && attempts === 1) {
           return Observable.create<GraphQLResponse>((sink) => {
             onPending(() => {
@@ -94,6 +97,7 @@ function createEnvironment({
         defaultPostVisibility,
         displayName: targetId.endsWith(':1') ? '두 번째 Profile' : '현재 Profile',
         id: targetId,
+        relativeHandle: targetId.endsWith(':1') ? '@second-profile' : '@current-profile',
       },
     },
   );
@@ -110,12 +114,14 @@ function ProfileDefaultPostVisibilityStory({
   mode?: Mode;
 }) {
   const [revision, setRevision] = useState(0);
+  const [mutationAttempts, setMutationAttempts] = useState(0);
   const pendingCompletionRef = useRef<(() => void) | null>(null);
   const environment = useMemo(
     () =>
       createEnvironment({
         defaultPostVisibility: revision === 0 ? initial : 'FOLLOWERS',
         mode,
+        onMutationAttempt: setMutationAttempts,
         onPending: (complete) => {
           pendingCompletionRef.current = complete;
         },
@@ -132,6 +138,7 @@ function ProfileDefaultPostVisibilityStory({
       {mode === 'pending' ? (
         <Pressable
           accessibilityLabel="Profile과 Environment 전환"
+          accessibilityRole="button"
           onPress={() => setRevision((value) => value + 1)}
         >
           <Text>Profile과 Environment 전환</Text>
@@ -140,11 +147,13 @@ function ProfileDefaultPostVisibilityStory({
       {mode === 'pending' ? (
         <Pressable
           accessibilityLabel="이전 저장 완료"
+          accessibilityRole="button"
           onPress={() => pendingCompletionRef.current?.()}
         >
           <Text>이전 저장 완료</Text>
         </Pressable>
       ) : null}
+      <Text testID="profile-default-post-visibility-mutation-attempts">{mutationAttempts}</Text>
     </View>
   );
 }
@@ -179,6 +188,10 @@ type Story = StoryObj<typeof meta>;
 export const OwnerOptionsAndSuccess: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    expect(canvas.getByText('현재 Profile')).toBeVisible();
+    expect(canvas.getByText('@current-profile')).toBeVisible();
+    expect(canvas.getAllByRole('radio')).toHaveLength(3);
+    expect(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' })).toBeDisabled();
     const option = canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' });
     await userEvent.click(option);
     expect(option).toHaveAttribute('aria-checked', 'true');
@@ -192,7 +205,10 @@ export const MemberReadOnly: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('Profile Member는 조회만 할 수 있어요.')).toBeTruthy();
-    expect(canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' })).toBeDisabled();
+    expect(canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   },
   render: () => <ProfileDefaultPostVisibilityStory editable={false} />,
 };
@@ -215,7 +231,12 @@ export const LateCompletionIgnoredAfterProfileEnvironmentTransition: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' }));
-    await userEvent.click(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' }));
+    const save = canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' });
+    await userEvent.click(save);
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      canvas.getByTestId('profile-default-post-visibility-mutation-attempts'),
+    ).toHaveTextContent('1');
     await userEvent.click(canvas.getByRole('button', { name: 'Profile과 Environment 전환' }));
     await userEvent.click(canvas.getByRole('button', { name: '이전 저장 완료' }));
     expect(canvas.queryByText('저장했어요.')).toBeNull();

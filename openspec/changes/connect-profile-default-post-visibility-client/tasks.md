@@ -27,7 +27,7 @@ Composer에서 소비하되 변경할 수 없는 Profile 설정 control을 제�
 - [x] 1.1 현재 Profile identity, 세 옵션과 접근성 이름을 가진 설정 control을 구현한다.
 - [x] 1.2 Owner 저장과 Member 비편집, dirty·pending·success·error·retry를 구현한다.
 - [x] 1.3 Relay normalized update와 Profile·Environment 전환의 늦은 completion 격리를 구현한다.
-- [ ] 1.4 Owner/Member와 설정 interaction·접근성 회귀 검증을 추가한다.
+- [x] 1.4 Owner/Member와 설정 interaction·접근성 회귀 검증을 추가한다.
 
 ## 2. PROD-667 일반 Post·Reply Composer 기본값
 
@@ -57,7 +57,7 @@ Profile의 값이나 열린 draft와 섞지 않는다.
 
 - [x] 2.1 공유 Composer Profile fragment와 initial/reset state가 Profile 기본값 또는 `UNLISTED` fallback을 사용하게 한다.
 - [x] 2.2 열린 draft 독립성, 개별 변경 비저장과 Profile·Parent·Environment 문맥 격리를 유지한다.
-- [ ] 2.3 일반 Post·Reply Composer의 seed·fallback·reset·전환 회귀 검증을 추가한다.
+- [x] 2.3 일반 Post·Reply Composer의 seed·fallback·reset·전환 회귀 검증을 추가한다.
 
 ## 3. PROD-667 canonical settings 연결
 

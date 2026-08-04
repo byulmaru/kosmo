@@ -42,6 +42,7 @@ const ProfileFragment = graphql`
   fragment ProfileDefaultPostVisibilityControl_profile on Profile {
     id
     displayName
+    relativeHandle
     defaultPostVisibility
   }
 `;
@@ -108,6 +109,8 @@ function ProfileDefaultPostVisibilityControlContents({
   const [commit] = useMutation<ProfileDefaultPostVisibilityControlMutation>(UpdateMutation);
   const dirty = isProfileDefaultVisibilityDirty(saved, selected);
   const mountedRef = useRef(true);
+  const saveRequestIdRef = useRef(0);
+  const saveInFlightRef = useRef<number | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -115,17 +118,28 @@ function ProfileDefaultPostVisibilityControlContents({
     };
   }, []);
   const save = useCallback(() => {
-    if (!editable || !dirty || saveState.kind === 'saving') {
+    if (!editable || !dirty || saveInFlightRef.current !== null) {
       return;
     }
     const environmentGeneration = environmentGenerationRef?.current;
+    const requestId = saveRequestIdRef.current + 1;
+    saveRequestIdRef.current = requestId;
+    saveInFlightRef.current = requestId;
     setSaveState({ kind: 'saving' });
     commit({
       variables: { input: { defaultPostVisibility: selected } },
       onCompleted: (response, errors) => {
-        if (!mountedRef.current || environmentGenerationRef?.current !== environmentGeneration) {
+        if (
+          !mountedRef.current ||
+          saveInFlightRef.current !== requestId ||
+          environmentGenerationRef?.current !== environmentGeneration
+        ) {
+          if (saveInFlightRef.current === requestId) {
+            saveInFlightRef.current = null;
+          }
           return;
         }
+        saveInFlightRef.current = null;
         if (errors?.length || !response.updateProfile.profile) {
           setSaveState({ kind: 'error', message: '기본 공개 범위를 저장하지 못했어요.' });
           return;
@@ -138,15 +152,23 @@ function ProfileDefaultPostVisibilityControlContents({
         setSaveState({ kind: 'success' });
       },
       onError: () => {
-        if (!mountedRef.current || environmentGenerationRef?.current !== environmentGeneration) {
+        if (
+          !mountedRef.current ||
+          saveInFlightRef.current !== requestId ||
+          environmentGenerationRef?.current !== environmentGeneration
+        ) {
+          if (saveInFlightRef.current === requestId) {
+            saveInFlightRef.current = null;
+          }
           return;
         }
+        saveInFlightRef.current = null;
         setSaveState({ kind: 'error', message: '기본 공개 범위를 저장하지 못했어요.' });
       },
     });
-  }, [commit, dirty, editable, environmentGenerationRef, saveState.kind, selected]);
+  }, [commit, dirty, editable, environmentGenerationRef, selected]);
 
-  const label = `Kosmo 내부 Profile ${profile.displayName} 기본 게시 공개 범위`;
+  const label = `Kosmo 내부 Profile ${profile.displayName} ${profile.relativeHandle} 기본 게시 공개 범위`;
   const saving = saveState.kind === 'saving';
 
   return (
@@ -158,13 +180,19 @@ function ProfileDefaultPostVisibilityControlContents({
       <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
         기본 게시 공개 범위
       </Text>
-      <Text style={[styles.target, { color: theme.textSecondary }]}>{profile.displayName}</Text>
+      <View accessibilityLabel={`현재 Profile ${profile.displayName} ${profile.relativeHandle}`}>
+        <Text style={[styles.target, { color: theme.text }]}>{profile.displayName}</Text>
+        <Text style={[styles.targetHandle, { color: theme.textSecondary }]}>
+          {profile.relativeHandle}
+        </Text>
+      </View>
       <View accessibilityRole="radiogroup" style={styles.options}>
         {options.map((option) => {
           const selectedOption = option.value === selected;
           const Icon = option.icon;
           return (
             <Pressable
+              aria-checked={selectedOption}
               accessibilityLabel={`${option.label}: ${option.description}`}
               accessibilityRole="radio"
               accessibilityState={{ checked: selectedOption, disabled: !editable || saving }}
@@ -241,6 +269,7 @@ const styles = StyleSheet.create({
   root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
   target: { ...typography.sm },
+  targetHandle: { ...typography.xsm },
   options: { gap: spacing.sm },
   option: {
     alignItems: 'center',

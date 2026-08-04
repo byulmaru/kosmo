@@ -697,6 +697,14 @@ const composerProfile = profile({
   avatar: { id: 'media-composer-avatar', url: composerAvatarUrl },
   id: 'profile-composer',
 });
+const composerPublicProfile = profile({
+  ...composerProfile,
+  defaultPostVisibility: 'PUBLIC',
+});
+const composerUnavailableProfile = {
+  ...composerProfile,
+  defaultPostVisibility: null,
+} as unknown as typeof composerProfile;
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
@@ -1729,9 +1737,15 @@ type ReplyComposerRequest = Readonly<{
   visibility: string;
 }>;
 
-function ReplyComposerContractStory() {
+function ReplyComposerContractStory({
+  defaultPostVisibility = 'UNLISTED',
+}: {
+  defaultPostVisibility?: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+} = {}) {
   const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
   const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
+  const fixtureProfile =
+    defaultPostVisibility === 'PUBLIC' ? composerPublicProfile : composerProfile;
   const environment = useMemo(() => {
     let nextMediaId = 0;
     return new Environment({
@@ -1740,7 +1754,7 @@ function ReplyComposerContractStory() {
           return Promise.resolve({
             data: {
               alternateComposerProfile,
-              composerProfile,
+              composerProfile: fixtureProfile,
               contentPostsProfile,
               emptyPostsProfile,
               homeTimeline,
@@ -1780,7 +1794,7 @@ function ReplyComposerContractStory() {
       }),
       store: new Store(new RecordSource()),
     });
-  }, []);
+  }, [fixtureProfile]);
 
   return (
     <RelayEnvironmentProvider environment={environment}>
@@ -4954,11 +4968,42 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     await expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
     await expect(body).toHaveValue('');
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
       selected_profile_id: composerProfile.id,
       visibility: 'PUBLIC',
     });
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerProfileDefaultVisibilitySeed: Story = {
+  parameters: {
+    relay: {
+      data: { ...postsStoryRelayData, composerProfile: composerPublicProfile },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
+    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerUnavailableProfileDefaultFallsBackToUnlisted: Story = {
+  parameters: {
+    relay: {
+      data: { ...postsStoryRelayData, composerProfile: composerUnavailableProfile },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
   },
   render: () => <ComposerStory />,
 };
@@ -5168,8 +5213,21 @@ export const ComposerReplyMutationContract: Story = {
       );
     });
     expect(body).toHaveValue('');
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
   },
   render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
+    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+  },
+  render: () => <ReplyComposerContractStory defaultPostVisibility="PUBLIC" />,
 };
 
 export const ComposerReplyMediaMutationContract: Story = {
