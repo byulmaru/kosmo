@@ -6,11 +6,13 @@ import {
   ActivityPubActors,
   db,
   firstOrThrow,
+  Hashtags,
   Instances,
   Media,
   pg,
   PostContents,
   Posts,
+  ProfileHashtags,
   ProfileMedia,
   Profiles,
   Sessions,
@@ -213,6 +215,27 @@ export async function createE2EProfile(options: CreateE2EProfileOptions = {}) {
     })
     .returning()
     .then(firstOrThrow);
+}
+
+export async function createE2EHashtagRelation({
+  displayName,
+  name,
+  profileIds,
+}: {
+  displayName: string;
+  name: string;
+  profileIds: readonly string[];
+}) {
+  const hashtag = await db
+    .insert(Hashtags)
+    .values({ displayName, name })
+    .returning()
+    .then(firstOrThrow);
+
+  await db
+    .insert(ProfileHashtags)
+    .values(profileIds.map((profileId) => ({ hashtagId: hashtag.id, profileId })));
+  return hashtag;
 }
 
 export async function createE2EReadyProfileMedia(profileId: string, accountId: string) {

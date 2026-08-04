@@ -147,7 +147,10 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
       <Pressable
         accessibilityLabel={`#${name} 관련 프로필 보기`}
         accessibilityRole="link"
-        style={[styles.tagTarget, { minHeight: targetSize, minWidth: targetSize }]}
+        style={StyleSheet.flatten([
+          styles.tagTarget,
+          { minHeight: targetSize, minWidth: targetSize },
+        ])}
       >
         <ProfileTagChip name={name} removable={false} />
       </Pressable>
@@ -174,7 +177,11 @@ const styles = StyleSheet.create({
   handle: { fontFamily: 'SUIT', ...typography.sm },
   bio: { fontFamily: 'SUIT', marginTop: spacing.md, ...typography.md },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  tagTarget: { alignItems: 'center', justifyContent: 'center', maxWidth: '100%' },
+  tagTarget: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
   counts: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
   countLink: { flexDirection: 'row', gap: spacing.xs },
   count: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },

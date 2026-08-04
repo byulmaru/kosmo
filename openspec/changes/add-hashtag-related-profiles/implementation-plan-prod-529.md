@@ -56,7 +56,7 @@
 - Produces: `HashtagRelatedProfileListState({ name?, onRetry?, state }: { name?: string; onRetry?: () => void; state: 'error' | 'loading' | 'notFound' })`.
 - Route query: `HashtagRelatedProfilesPageQuery($id: ID!)` selects `__typename`, Hashtag `id`, `name` and `...HashtagRelatedProfileList_hashtag`.
 
-- [ ] **Step 1: RED — route observable behavior test를 먼저 작성한다**
+- [x] **Step 1: RED — route observable behavior test를 먼저 작성한다**
 
   `react-relay`, `expo-router`, `useRelayActor`, `HashtagRelatedProfileList`와 state component를 module boundary에서 mock한다. 다음 계약을 각각 깨뜨리면 실패해야 한다.
 
@@ -77,7 +77,7 @@
 
   별도 cases로 첫 loading은 `state="loading"`과 generic title, query error 뒤 retry는 `fetchKey`를 `4:1`로 변경, `node: null`과 `__typename !== 'Hashtag'`는 `notFound`, missing/array param은 query 없이 `notFound`임을 확인한다. `revision` 또는 `hashtagId` 변경은 retry counter를 0으로 초기화하고 새 ID만 query한다.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run:
 
@@ -87,7 +87,7 @@
 
   Expected: FAIL because route와 list exports가 아직 없다.
 
-- [ ] **Step 3: GREEN — 최소 route/query/state 경계를 구현한다**
+- [x] **Step 3: GREEN — 최소 route/query/state 경계를 구현한다**
 
   route param normalizer는 해당 route 안의 private function으로 유지한다. 빈 문자열과 배열을 거부하고 name normalization이나 decoding을 추가하지 않는다.
 
@@ -128,11 +128,11 @@
 
   state component는 항상 `<PageHeader title={name ? `#${name} 관련 프로필` : '관련 프로필'} />`를 먼저 렌더한다. loading은 `StateView loading title="관련 프로필을 불러오는 중입니다."`, error는 alert와 `다시 시도`, not-found는 `해시태그를 찾을 수 없어요`와 존재하지 않거나 삭제됐다는 설명을 제공한다.
 
-- [ ] **Step 4: Verify GREEN and refactor**
+- [x] **Step 4: Verify GREEN and refactor**
 
   Run the same targeted test. Expected: PASS. query ownership과 param normalization을 route 밖의 generic helper로 추출하지 않는다.
 
-- [ ] **Step 5: Checkpoint preparation**
+- [x] **Step 5: Checkpoint preparation**
 
   OpenSpec artifacts, 이 계획, route/list state scaffold와 route test만 첫 checkpoint 후보로 유지한다. commit 단계에서는 `$kosmo-codex-workflows:commit-safely`를 사용하고 staged diff를 사용자에게 보여준다.
 
@@ -152,7 +152,7 @@
 - Row: each `edge.node` is passed to `<ProfileListItem linked profile={...} />`; edge cursor is the render key.
 - Pagination: `loadNext(20, { onComplete })`; `hasNext`, `isLoadingNext` and local `loadError` determine the affordance.
 
-- [ ] **Step 1: RED — actual Relay state catalog와 interactions를 작성한다**
+- [x] **Step 1: RED — actual Relay state catalog와 interactions를 작성한다**
 
   새 story file은 production component와 실제 fragment를 렌더한다. 최소 stories와 assertions는 다음과 같다.
   - `Loading`: generic `관련 프로필` header와 loading status.
@@ -177,7 +177,7 @@
   }
   ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run:
 
@@ -188,7 +188,7 @@
 
   Expected: Relay compiler 또는 story가 pagination fragment/list behavior 부재로 FAIL한다.
 
-- [ ] **Step 3: GREEN — 전용 fragment와 observable list states를 구현한다**
+- [x] **Step 3: GREEN — 전용 fragment와 observable list states를 구현한다**
 
   ```graphql
   fragment HashtagRelatedProfileList_hashtag on Hashtag
@@ -223,11 +223,11 @@
 
   `loadError`는 fragment data를 대체하지 않는다. pagination footer는 `pagination.hasNext || loadError`일 때만 보이고 오류 alert, `더 불러오기`/`불러오는 중`/`다시 시도`, live region을 제공한다. error retry도 같은 cursor에서 `loadNext(20)`만 다시 호출한다.
 
-- [ ] **Step 4: Verify GREEN and refactor**
+- [x] **Step 4: Verify GREEN and refactor**
 
   Run Relay compiler와 targeted Storybook test. Expected: PASS. followers/following component의 private types·copy를 export하거나 search connection을 공유하지 않는다.
 
-- [ ] **Step 5: Checkpoint commit and push**
+- [x] **Step 5: Checkpoint commit and push**
 
   Task 1–2 GREEN 뒤 `$kosmo-codex-workflows:commit-safely`로 승인된 파일만 stage하고 `PROD-529 관련 프로필 route와 목록 경계를 추가한다`로 commit한다. commit 성공 직후 현재 branch를 push한다. 첫 push 뒤 Draft PR의 정확한 제목·본문·target을 사용자에게 보여주고 별도 승인을 받은 뒤에만 생성한다.
 
@@ -248,7 +248,7 @@
 - Produces: Expo Router href `{ pathname: '/hashtags/[hashtagId]/profiles', params: { hashtagId: tag.id } }`.
 - Produces: one `Pressable` per public tag with role `link`, label `#${tag.name} 관련 프로필 보기`, and target size `Platform.select({ android: 48, ios: 44, web: 32, default: 48 })`.
 
-- [ ] **Step 1: RED — 기존 public tag unit/catalog 기대를 새 contract로 바꾼다**
+- [x] **Step 1: RED — 기존 public tag unit/catalog 기대를 새 contract로 바꾼다**
 
   `ProfileHero.test.ts`의 “비대화형 chip” assertion을 다음 observable contract로 교체한다. `expo-router` mock은 object href를 보존하고 `react-native` mock은 `Platform.select`을 Web 32로 반환한다.
 
@@ -275,7 +275,7 @@
 
   기존 bio→tags→counts 순서와 visual chip 높이 32는 유지한다. `Profiles.stories.tsx`도 actual Web DOM에서 exact link href, accessible name과 target bounds 32px를 확인하도록 갱신한다.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run:
 
@@ -286,7 +286,7 @@
 
   Expected: public TagChip이 아직 Link/Pressable을 렌더하지 않아 FAIL한다.
 
-- [ ] **Step 3: GREEN — ProfileHero 내부 navigation wrapper만 추가한다**
+- [x] **Step 3: GREEN — ProfileHero 내부 navigation wrapper만 추가한다**
 
   `ProfileHero.tsx` 안의 private `ProfileTagLink`가 target size와 href를 계산하고 표시 chip을 감싼다. 새 공용 component나 `ProfileTagChip` prop을 만들지 않는다.
 
@@ -303,7 +303,10 @@
         <Pressable
           accessibilityLabel={`#${name} 관련 프로필 보기`}
           accessibilityRole="link"
-          style={[styles.tagTarget, { minHeight: targetSize }]}
+          style={StyleSheet.flatten([
+            styles.tagTarget,
+            { minHeight: targetSize, minWidth: targetSize },
+          ])}
         >
           <ProfileTagChip name={name} removable={false} />
         </Pressable>
@@ -312,9 +315,9 @@
   }
   ```
 
-  `styles.tagTarget`은 visual chip을 중앙 정렬하고 `maxWidth: '100%'`만 소유한다. iOS/Android target의 추가 높이는 wrapper에만 생기고 chip visual은 32를 유지한다. 태그 map key는 계속 exact `tag.id`다.
+  `styles.tagTarget`은 visual chip을 중앙 정렬하고 `maxWidth: '100%'`만 소유한다. `StyleSheet.flatten`으로 Web `Link asChild`에 indexed style 배열이 전달되지 않게 하면서 iOS/Android target의 추가 높이와 너비는 wrapper에만 적용하고 chip visual은 32를 유지한다. 태그 map key는 계속 exact `tag.id`다.
 
-- [ ] **Step 4: Verify GREEN and regression boundary**
+- [x] **Step 4: Verify GREEN and regression boundary**
 
   Targeted unit/Storybook tests를 재실행한다. 기존 Profile edit story를 실행해 편집 제거 action, disabled state와 validation surface가 변하지 않았음을 확인한다.
 
@@ -323,7 +326,7 @@
   pnpm --filter @kosmo/app test:storybook -- src/stories/Profiles.stories.tsx src/stories/ProfileEdit.stories.tsx
   ```
 
-- [ ] **Step 5: Checkpoint commit and push**
+- [x] **Step 5: Checkpoint commit and push**
 
   승인된 ProfileHero tests/catalog/implementation만 stage하고 `PROD-529 프로필 태그 탐색을 연결한다`로 commit한 뒤 즉시 push한다. `ProfileTagChip.tsx`에 diff가 생기면 checkpoint를 멈추고 범위 이탈을 검토한다.
 
@@ -344,7 +347,7 @@
 - E2E begins at an authenticated public Profile route, activates `#<태그명> 관련 프로필 보기`, verifies related list, then follows an existing Profile link.
 - Search regression reuses the existing search E2E; no search fixture/helper or production code changes.
 
-- [ ] **Step 1: RED — 기존 공개 TagChip E2E 기대를 새 link contract로 갱신한다**
+- [x] **Step 1: RED — 기존 공개 TagChip E2E 기대를 새 link contract로 갱신한다**
 
   `profile-edit.e2e.ts`의 마지막 two assertions를 exact link role/name과 canonical href로 바꾼다. 편집 저장 payload·공개 재조회·wrap 순서 assertions는 유지한다.
 
@@ -379,7 +382,7 @@
 
   이후 두 related Profile 이름/links와 기존 follow action을 확인하고 한 Profile link를 클릭해 `/<relativeHandle>` route와 Profile heading을 확인한다. 목록에는 관계 없는 Profile이 없음을 함께 검증한다.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run:
 
@@ -389,7 +392,7 @@
 
   Expected: 기존 public chip에 link가 없고 새 route/list가 아직 완성되지 않은 시점에는 FAIL한다.
 
-- [ ] **Step 3: 최소 Hashtag relation fixture와 GREEN flow를 완성한다**
+- [x] **Step 3: 최소 Hashtag relation fixture와 GREEN flow를 완성한다**
 
   `db-fixtures.ts`의 기존 `@kosmo/core/db` import에 `Hashtags`, `ProfileHashtags`만 추가하고 다음 helper를 추가한다.
 
@@ -418,7 +421,7 @@
 
   helper는 API/schema를 우회해 production behavior를 fake하지 않고, 이미 PROD-528에서 검증한 저장 관계를 test DB에 준비하는 역할만 한다. global Hashtag ID는 공개 Profile query가 반환한 Link href에서 관찰하며 test가 server-side ID encoding을 복제하지 않는다.
 
-- [ ] **Step 4: Targeted Web GREEN과 검색 회귀를 확인한다**
+- [x] **Step 4: Targeted Web GREEN과 검색 회귀를 확인한다**
 
   Run:
 
@@ -428,7 +431,7 @@
 
   Expected: TagChip keyboard flow와 기존 사람 검색 input/result/pagination이 모두 PASS한다. Web target은 DOM bounds/keyboard로 검증하지만 Native runtime 완료로 기록하지 않는다.
 
-- [ ] **Step 5: App와 OpenSpec 전체 검증을 실행한다**
+- [x] **Step 5: App와 OpenSpec 전체 검증을 실행한다**
 
   Run:
 
@@ -445,11 +448,11 @@
 
   Expected: 모든 명령이 exit 0이다. Watchman이 Relay compiler를 막으면 `pnpm --filter @kosmo/app exec relay-compiler --noWatchman`과 `pnpm --filter @kosmo/app exec tsc --noEmit`을 분리 실행하고 환경 제한과 결과를 handoff에 정확히 기록한다.
 
-- [ ] **Step 6: OpenSpec evidence와 남은 gate를 기록한다**
+- [x] **Step 6: OpenSpec evidence와 남은 gate를 기록한다**
 
   실제 결과가 있을 때만 task 2.1–2.5를 `[x]`로 변경한다. 날짜가 있는 verification note에 명령별 결과, Web proof, React Native source mapping, 미수행 iOS·Android runtime QA를 분리한다. task 3.1–3.2는 PROD-525 소유로 `[ ]`를 유지하며 이 change를 archive하지 않는다.
 
-- [ ] **Step 7: 독립 review와 최종 checkpoint**
+- [x] **Step 7: 독립 review와 최종 checkpoint**
 
   PROD-529 diff만 implementation review에 제출해 scope, exact ID, Relay connection isolation, state preservation, accessibility target, test gap을 재검토한다. 발견 사항을 수정하고 관련 검증을 다시 실행한 뒤 `$kosmo-codex-workflows:commit-safely`로 `PROD-529 관련 프로필 탐색 흐름을 검증한다` commit을 만들고 즉시 push한다.
 

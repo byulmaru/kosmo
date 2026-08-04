@@ -46,6 +46,7 @@ mockModule('react-native', {
   StyleSheet: {
     absoluteFillObject: {},
     create: <T>(styles: T) => styles,
+    flatten: (styles: ReadonlyArray<Record<string, unknown>>) => Object.assign({}, ...styles),
   },
   Text: 'Text',
   View: 'View',
@@ -171,8 +172,8 @@ describe('ProfileHero Profile Tag presentation', () => {
         label: node.props.accessibilityLabel,
         role: node.props.accessibilityRole,
         target: {
-          height: node.props.style.at(-1).minHeight,
-          width: node.props.style.at(-1).minWidth,
+          height: node.props.style.minHeight,
+          width: node.props.style.minWidth,
         },
       })),
       [
