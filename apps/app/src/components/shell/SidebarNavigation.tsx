@@ -1,5 +1,14 @@
 import { usePathname } from 'expo-router';
-import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
+import {
+  Bell,
+  Bookmark,
+  House,
+  Mail,
+  PenLine,
+  Search,
+  UserRound,
+  UserRoundPlus,
+} from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -47,6 +56,7 @@ const navigation: NavigationItem[] = [
   { href: '/notifications', Icon: Bell, label: '알림' },
   { Icon: UserRound, label: '프로필', profile: true },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
+  { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
 ];
 
 type Props = {

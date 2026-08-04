@@ -269,7 +269,9 @@ export const SharedNavigation: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
-    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
       '/feedback',
@@ -293,6 +295,7 @@ export const BottomNavigation: Story = {
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
+    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
   },
   render: () => <BottomNavigationStory />,
 };
@@ -302,7 +305,9 @@ export const CompactSidebar: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
-    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
       '/feedback',
@@ -361,6 +366,18 @@ export const FeedbackNavigationCurrentState: Story = {
       'd',
       'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',
     );
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const FollowRequestsNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/follow-requests' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(link).toHaveAttribute('href', '/follow-requests');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -1167,7 +1184,9 @@ export const UniversalMobile: Story = {
       'href',
       '/@selected',
     );
-    expect(within(drawer).queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     const feedback = page.getByRole('link', { name: '피드백 보내기' });
     expect(feedback).toHaveAttribute('href', '/feedback');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();

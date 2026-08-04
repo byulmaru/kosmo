@@ -101,9 +101,20 @@
 - 테스트 제외 범위: PROD-566 목록·mutation 동작, notification activation, unrelated shell snapshot·fixture 확대.
 - Web breakpoint별 keyboard·screen-reader와 Android/iOS drawer touch target을 runtime에서 확인한다.
 
-- [ ] 3.1 full Web sidebar, compact Web rail과 mobile drawer의 shared navigation ownership에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 진입점을 복원한다.
-- [ ] 3.2 기존 navigation 동작을 유지하고 bottom tab·`/menu`가 추가되지 않음을 검증한다.
+- [x] 3.1 full Web sidebar, compact Web rail과 mobile drawer의 shared navigation ownership에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 진입점을 복원한다.
+- [x] 3.2 기존 navigation 동작을 유지하고 bottom tab·`/menu`가 추가되지 않음을 검증한다.
 - [ ] 3.3 최소 shell component/Storybook/Web E2E 검증과 platform runtime QA 결과를 기록한다.
+
+**2026-08-04 검증 기록**
+
+- passed — targeted `Shell.stories.tsx`: 전체 20 files / 289 interactions, including full·compact·mobile drawer의 `팔로워 요청` label·`UserRoundPlus`·`/follow-requests`, active state와 bottom tab 비노출
+- passed — `node scripts/test-db.mjs run -- pnpm test:e2e:database -- navigation-scroll.e2e.ts`: 4 tests, including full·compact·mobile drawer route 진입, drawer close와 bottom tab·`/menu` 비노출
+- passed — `pnpm --filter @kosmo/app check`: Relay 99 reader / 63 normalization / 107 operation text와 TypeScript 검사. 현재 worktree의 Watchman FSEvents 등록 실패는 비커밋 `relay-compiler --noWatchman` local workaround로 우회했다.
+- passed — `pnpm --filter @kosmo/app test:unit`: 175 tests
+- passed — 기존 local Storybook executable의 `build --disable-telemetry`: production bundle 생성
+- passed — `pnpm lint:eslint`, 기존 local executable의 Prettier 전체 check와 `openspec validate add-incoming-follow-request-management --strict`
+- passed — 승인 범위, shared ownership, 접근성 semantics와 테스트 증명력을 독립 구현 리뷰했으며 finding 없음
+- not run — 실제 Web keyboard·screen-reader와 Android/iOS drawer touch target runtime QA. 해당 증거가 없으므로 3.3은 완료 처리하지 않는다.
 
 ## 4. PROD-566 통합 검증과 OpenSpec 완료
 
