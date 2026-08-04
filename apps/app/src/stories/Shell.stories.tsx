@@ -63,6 +63,22 @@ const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
 };
+const selectedProfileWithUnread = { ...selectedProfile, unreadNotificationCount: 1 };
+const secondProfileWithLargeUnread = { ...secondProfile, unreadNotificationCount: 127 };
+const profileWithoutUnread = profile({
+  displayName: '알림 없는 프로필',
+  handle: 'no_unread',
+  id: 'profile-no-unread',
+  relativeHandle: '@no_unread',
+  viewerState: { follow: null, followRequest: null, isSelf: true },
+});
+const profileSwitcherUnreadQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithUnread, secondProfileWithLargeUnread, profileWithoutUnread],
+    selectedProfile: selectedProfileWithUnread,
+  }),
+};
 const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
   profile({
     displayName: `테스트 프로필 ${index + 1}`,
@@ -101,12 +117,6 @@ const headerFallbackQuery = {
     selectedProfile: selectedProfileWithoutHeader,
   }),
 };
-const profileSwitcherUnreadResponse = (
-  profiles: ReadonlyArray<{ id: string; unreadNotificationCount: number }>,
-) => ({
-  me: { id: query.me.id, profiles },
-});
-
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
     ...ProfileSwitcher_query
@@ -228,22 +238,6 @@ function GuardedProfileSwitcherStory() {
         visible={pending !== null}
       />
     </NavigationGuardProvider>
-  );
-}
-
-function ActorResetProfileSwitcherStory() {
-  const data = useShellStoryData();
-  const { resetActor } = useRelayActor();
-
-  return (
-    <SessionProvider>
-      <View style={{ maxWidth: 360 }}>
-        <ProfileSwitcher query={data.query} surface="full" />
-        <Pressable accessibilityRole="button" onPress={() => resetActor(secondProfile.id)}>
-          <Text>Relay actor 교체</Text>
-        </Pressable>
-      </View>
-    </SessionProvider>
   );
 }
 
@@ -847,16 +841,7 @@ export const ProfileSwitcherInteraction: Story = {
 
 export const ProfileSwitcherUnreadPresence: Story = {
   parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: {
-          data: profileSwitcherUnreadResponse([
-            { id: selectedProfile.id, unreadNotificationCount: 1 },
-            { id: secondProfile.id, unreadNotificationCount: 127 },
-          ]),
-        },
-      },
-    },
+    relay: { data: profileSwitcherUnreadQuery },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -868,11 +853,17 @@ export const ProfileSwitcherUnreadPresence: Story = {
     const unreadOption = await within(list).findByRole('button', {
       name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
     });
+    const noUnreadOption = within(list).getByRole('button', {
+      name: `${profileWithoutUnread.displayName}, ${profileWithoutUnread.relativeHandle}`,
+    });
     const selectedDot = within(selectedOption).getByTestId('profile-switcher-unread-dot');
     const unreadDot = within(unreadOption).getByTestId('profile-switcher-unread-dot');
 
     expect(selectedOption).toHaveAttribute('aria-pressed', 'true');
     expect(unreadOption).toHaveAttribute('aria-pressed', 'false');
+    expect(noUnreadOption).toHaveAttribute('aria-pressed', 'false');
+    expect(within(noUnreadOption).queryByTestId('profile-switcher-unread-dot')).toBeNull();
+    expect(noUnreadOption).not.toHaveAccessibleName(/읽지 않은 알림 있음/);
     expect(selectedDot).toHaveAttribute('aria-hidden', 'true');
     expect(unreadDot).toHaveAttribute('aria-hidden', 'true');
     expect(selectedDot).toHaveStyle({ height: '12px', width: '12px' });
@@ -883,262 +874,6 @@ export const ProfileSwitcherUnreadPresence: Story = {
     expect(unreadDot.getBoundingClientRect().right).toBeLessThanOrEqual(
       unreadOption.getBoundingClientRect().right,
     );
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadRefreshFailureKeepsLastSuccess: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: {
-          sequence: [
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 0 },
-                { id: secondProfile.id, unreadNotificationCount: 8 },
-              ]),
-            },
-            { error: 'Unread refresh failed' },
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 0 },
-                { id: secondProfile.id, unreadNotificationCount: 0 },
-              ]),
-            },
-          ],
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    const unreadName = `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`;
-
-    await userEvent.click(trigger);
-    await expect(canvas.findByRole('button', { name: unreadName })).resolves.toBeVisible();
-    expect(
-      within(
-        canvas.getByRole('button', {
-          name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}`,
-        }),
-      ).queryByTestId('profile-switcher-unread-dot'),
-    ).toBeNull();
-    const firstRefreshDeadline = Date.now() + 20;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(firstRefreshDeadline));
-
-    await userEvent.click(trigger);
-    await userEvent.click(trigger);
-    await expect(canvas.findByRole('button', { name: unreadName })).resolves.toBeVisible();
-    expect(canvas.queryByRole('alert')).toBeNull();
-    const failedRefreshDeadline = Date.now() + 20;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(failedRefreshDeadline));
-    expect(canvas.getByRole('button', { name: unreadName })).toBeVisible();
-
-    await userEvent.click(trigger);
-    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
-    await userEvent.click(trigger);
-    await waitFor(() =>
-      expect(
-        canvas.getByRole('button', {
-          name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}`,
-        }),
-      ).toBeVisible(),
-    );
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadSuccessfulRefreshRemovesOmittedProfile: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: {
-          sequence: [
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 0 },
-                { id: secondProfile.id, unreadNotificationCount: 8 },
-              ]),
-            },
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 0 },
-              ]),
-            },
-          ],
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    const unreadName = `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`;
-    const readName = `${secondProfile.displayName}, ${secondProfile.relativeHandle}`;
-
-    await userEvent.click(trigger);
-    await expect(canvas.findByRole('button', { name: unreadName })).resolves.toBeVisible();
-    const firstRefreshDeadline = Date.now() + 20;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(firstRefreshDeadline));
-    await userEvent.click(trigger);
-    await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
-    await userEvent.click(trigger);
-    await waitFor(() => {
-      const option = canvas.getByRole('button', { name: readName });
-      expect(within(option).queryByTestId('profile-switcher-unread-dot')).toBeNull();
-    });
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadStaleOpenResponseIgnored: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: {
-          sequence: [
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 9 },
-                { id: secondProfile.id, unreadNotificationCount: 0 },
-              ]),
-              delayMs: 100,
-            },
-            {
-              data: profileSwitcherUnreadResponse([
-                { id: selectedProfile.id, unreadNotificationCount: 0 },
-                { id: secondProfile.id, unreadNotificationCount: 1 },
-              ]),
-            },
-          ],
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-
-    await userEvent.click(trigger);
-    await canvas.findByLabelText('전환할 프로필 목록');
-    await userEvent.click(trigger);
-    await userEvent.click(trigger);
-    await expect(
-      canvas.findByRole('button', {
-        name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
-      }),
-    ).resolves.toBeVisible();
-
-    const responseDeadline = Date.now() + 120;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(responseDeadline));
-    expect(
-      canvas.getByRole('button', {
-        name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}`,
-      }),
-    ).toBeVisible();
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadStaleActorResponseIgnored: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: [
-          {
-            data: profileSwitcherUnreadResponse([
-              { id: selectedProfile.id, unreadNotificationCount: 9 },
-              { id: secondProfile.id, unreadNotificationCount: 0 },
-            ]),
-            delayMs: 100,
-          },
-          {
-            data: profileSwitcherUnreadResponse([
-              { id: selectedProfile.id, unreadNotificationCount: 0 },
-              { id: secondProfile.id, unreadNotificationCount: 1 },
-            ]),
-          },
-        ],
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    await canvas.findByLabelText('전환할 프로필 목록');
-    await userEvent.click(canvas.getByRole('button', { name: 'Relay actor 교체' }));
-
-    const currentTrigger = await canvas.findByRole('button', { name: '프로필 목록' });
-    if (!canvas.queryByLabelText('프로필 전환')) {
-      await userEvent.click(currentTrigger);
-    }
-    await expect(
-      canvas.findByRole('button', {
-        name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
-      }),
-    ).resolves.toBeVisible();
-
-    const oldActorResponseDeadline = Date.now() + 120;
-    await waitFor(() => expect(Date.now()).toBeGreaterThanOrEqual(oldActorResponseDeadline));
-    expect(
-      canvas.getByRole('button', {
-        name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}`,
-      }),
-    ).toBeVisible();
-  },
-  render: () => <ActorResetProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadUnavailableIsNonBlocking: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: { error: 'Unread is unavailable' },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const list = await canvas.findByLabelText('전환할 프로필 목록');
-    const options = within(list).getAllByRole('button');
-
-    expect(options).toHaveLength(2);
-    expect(options[0]).toBeEnabled();
-    expect(options[1]).toBeEnabled();
-    expect(within(list).queryByTestId('profile-switcher-unread-dot')).toBeNull();
-    expect(canvas.queryByRole('alert')).toBeNull();
-  },
-  render: () => <ProfileSwitcherStory />,
-};
-
-export const ProfileSwitcherUnreadLoadingIsNonBlocking: Story = {
-  parameters: {
-    relay: {
-      operationResponses: {
-        ProfileSwitcherUnreadQuery: {
-          data: profileSwitcherUnreadResponse([
-            { id: selectedProfile.id, unreadNotificationCount: 1 },
-            { id: secondProfile.id, unreadNotificationCount: 1 },
-          ]),
-          delayMs: 60_000,
-        },
-      },
-    },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
-    const list = await canvas.findByLabelText('전환할 프로필 목록');
-    const options = within(list).getAllByRole('button');
-
-    expect(options).toHaveLength(2);
-    expect(options[0]).toBeEnabled();
-    expect(options[1]).toBeEnabled();
-    expect(within(list).queryByTestId('profile-switcher-unread-dot')).toBeNull();
-    expect(canvas.queryByRole('alert')).toBeNull();
   },
   render: () => <ProfileSwitcherStory />,
 };

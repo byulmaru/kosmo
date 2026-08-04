@@ -99,16 +99,8 @@ check와 별개다.
 - dot 자체는 접근성 트리와 focus 순서에서 숨긴다. Profile option의 accessible name은 기존 표시 이름과
   handle을 유지하고 Unread가 있을 때만 `읽지 않은 알림 있음`을 덧붙인다. 정확한 count는 시각적 UI나
   accessible name에 포함하지 않는다.
-- picker를 열 때 각 Profile의 서버 제공 `unreadNotificationCount`를 갱신하고 양수인지 여부만 표시한다.
-  최초 loading·최초 오류와 unavailable Profile에는 dot을 표시하지 않는다. 같은 Profile의 마지막 성공값이
-  있으면 이후 갱신 실패 중에는 그 Profile ID에만 기존 존재 여부를 유지한다. 성공 응답에서 사라진 Profile은
-  unavailable로 보고 이전 값을 제거한다.
-- Profile별 상태는 기존 suspending shell·Profile picker fragment에 결합하지 않고, picker를 열 때 별도의
-  non-suspending Relay network operation으로 조회한다. 조회는 picker와 Profile 선택 동작을 막거나 전체 셸의
-  loading·error boundary로 전파하지 않는다.
-- 각 요청은 시작한 Account와 Relay actor environment generation에 귀속한다. picker를 닫거나 다시 열거나 actor
-  environment가 교체되면 이전 요청을 취소하고 request generation을 무효화하며, 취소 뒤 늦게 도착한 완료
-  결과는 현재 Profile별 상태에 적용하지 않는다.
+- 각 Profile option의 서버 제공 `unreadNotificationCount`가 양수일 때만 dot을 표시한다. count가 `0`이거나
+  Profile option을 표시할 수 없으면 잘못된 dot을 표시하지 않는다.
 - Profile 전환 성공 뒤 알림 목록과 셸 badge는 기존 actor 전환과 서버 재조회 계약에 따라 새 selected Profile
   상태로 수렴한다.
 - 다른 Profile의 알림 내용이나 정확한 count를 현재 화면에 노출하거나, Profile을 자동 전환하거나, 알림을

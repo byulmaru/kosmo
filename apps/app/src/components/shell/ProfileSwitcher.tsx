@@ -12,32 +12,19 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
-import { Environment, fetchQuery, RecordSource, Store } from 'relay-runtime';
+import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
-import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
-import {
-  createProfileSwitcherUnreadSnapshot,
-  getProfileSwitcherHasUnread,
-  isCurrentProfileSwitcherUnreadRequest,
-} from './profileSwitcherUnreadState';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
 import type { ProfileSwitcherSelectProfileMutation } from './__generated__/ProfileSwitcherSelectProfileMutation.graphql';
-import type { ProfileSwitcherUnreadQuery } from './__generated__/ProfileSwitcherUnreadQuery.graphql';
-import type {
-  ProfileSwitcherUnreadRequestIdentity,
-  ProfileSwitcherUnreadSnapshot,
-} from './profileSwitcherUnreadState';
 
 const ProfileSwitcherFragment = graphql`
   fragment ProfileSwitcher_query on Query {
@@ -66,6 +53,7 @@ const ProfileSwitcherFragment = graphql`
         handle
         relativeHandle
         displayName
+        unreadNotificationCount
         avatar {
           id
           url
@@ -116,18 +104,6 @@ const CreateProfileMutation = graphql`
   }
 `;
 
-const UnreadQuery = graphql`
-  query ProfileSwitcherUnreadQuery {
-    me {
-      id
-      profiles {
-        id
-        unreadNotificationCount
-      }
-    }
-  }
-`;
-
 export type ProfileSwitcherSurface = 'compact' | 'drawer' | 'full';
 
 const webCompactPickerBounds = {
@@ -169,10 +145,7 @@ export function ProfileSwitcher({
 }: Props) {
   const theme = useTheme();
   const data = useFragment(ProfileSwitcherFragment, query);
-  const environment = useRelayEnvironment();
-  const environmentGenerationRef = useRelayEnvironmentGeneration();
   const { resetActor } = useRelayActor();
-  const { accountId } = useSession();
   const { request: requestNavigation } = useNavigationGuard();
   const [internalOpen, setInternalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -181,10 +154,6 @@ export function ProfileSwitcher({
   const pickerRef = useRef<View>(null);
   const triggerRef = useRef<View>(null);
   const dismissalVersionRef = useRef(0);
-  const unreadRequestVersionRef = useRef(0);
-  const currentAccountIdRef = useRef(accountId);
-  const currentEnvironmentRef = useRef(environment);
-  const [unreadSnapshot, setUnreadSnapshot] = useState<ProfileSwitcherUnreadSnapshot | null>(null);
   const [commitSelect, selecting] =
     useMutation<ProfileSwitcherSelectProfileMutation>(SelectProfileMutation);
   const [commitCreate, creatingProfile] =
@@ -199,8 +168,6 @@ export function ProfileSwitcher({
   const scrollableWebPicker = Platform.OS === 'web';
   const open = controlledOpen ?? internalOpen;
   const webExpandedChevron = Platform.OS === 'web' && open;
-  currentAccountIdRef.current = accountId;
-  currentEnvironmentRef.current = environment;
   const setOpen = (nextOpen: boolean) => {
     if (controlledOpen === undefined) {
       setInternalOpen(nextOpen);
@@ -231,67 +198,6 @@ export function ProfileSwitcher({
       }
     }
   }, [open, redesignedWeb]);
-
-  useEffect(() => {
-    setUnreadSnapshot((current) => (current?.accountId === accountId ? current : null));
-  }, [accountId]);
-
-  useEffect(() => {
-    const requestVersion = unreadRequestVersionRef.current + 1;
-    unreadRequestVersionRef.current = requestVersion;
-
-    if (!open || !accountId) {
-      return;
-    }
-
-    const request: ProfileSwitcherUnreadRequestIdentity = {
-      accountId,
-      environment,
-      environmentGeneration: environmentGenerationRef?.current ?? 0,
-      requestVersion,
-    };
-    const unreadEnvironment = new Environment({
-      network: environment.getNetwork(),
-      store: new Store(new RecordSource()),
-    });
-    const subscription = fetchQuery<ProfileSwitcherUnreadQuery>(
-      unreadEnvironment,
-      UnreadQuery,
-      {},
-      { fetchPolicy: 'network-only' },
-    ).subscribe({
-      next: (response) => {
-        if (response.me?.id !== accountId) {
-          return;
-        }
-
-        const currentAccountId = currentAccountIdRef.current;
-        if (!currentAccountId) {
-          return;
-        }
-
-        const current: ProfileSwitcherUnreadRequestIdentity = {
-          accountId: currentAccountId,
-          environment: currentEnvironmentRef.current,
-          environmentGeneration: environmentGenerationRef?.current ?? 0,
-          requestVersion: unreadRequestVersionRef.current,
-        };
-        if (!isCurrentProfileSwitcherUnreadRequest(request, current)) {
-          return;
-        }
-
-        setUnreadSnapshot(createProfileSwitcherUnreadSnapshot(accountId, response.me.profiles));
-      },
-      error: () => undefined,
-    });
-
-    return () => {
-      if (unreadRequestVersionRef.current === requestVersion) {
-        unreadRequestVersionRef.current += 1;
-      }
-      subscription.unsubscribe();
-    };
-  }, [accountId, environment, environmentGenerationRef, open]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !open || surface === 'drawer') {
@@ -417,7 +323,7 @@ export function ProfileSwitcher({
         : webFullPickerBounds;
   const profileOptions = profiles.map((profile) => {
     const selected = active?.id === profile.id;
-    const hasUnread = getProfileSwitcherHasUnread(unreadSnapshot, accountId, profile.id);
+    const hasUnread = profile.unreadNotificationCount > 0;
     return (
       <Pressable
         aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}

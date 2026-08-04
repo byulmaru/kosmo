@@ -49,9 +49,9 @@ test('다른 Profile의 Unread dot에서 전환하면 기존 badge와 알림 목
     await followerPage.getByRole('button', { name: '팔로우' }).click();
     await followResponse;
 
-    const unreadResponse = waitForGraphQLOperation(page, 'ProfileSwitcherUnreadQuery');
+    await page.reload();
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
     await openProfileSwitcher(page);
-    await unreadResponse;
 
     const list = page.getByLabel('전환할 프로필 목록');
     const unreadOption = list.getByRole('button', {
