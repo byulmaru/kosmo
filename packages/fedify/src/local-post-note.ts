@@ -86,7 +86,7 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
   return { ...row, instanceCanonicalOrigin: row.instanceCanonicalOrigin };
 };
 
-const loadLocalPostNote = async (
+export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
 ): Promise<LocalPostNote | null> => {
@@ -259,6 +259,7 @@ export const projectLocalPostNote = async (
     content: postContentDocumentToHtml(note.contentDocument),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
     mediaType: 'text/html',
+    emojiReactions: new URL(`/ap/note/${note.id}/emoji-reactions`, note.canonicalOrigin),
     published: note.createdAt,
     ...(replyTarget ? { replyTarget } : {}),
     ...(note.summary ? { summary: escapeText(note.summary) } : {}),
