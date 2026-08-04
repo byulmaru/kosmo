@@ -305,17 +305,16 @@ export const HeaderErrorKeepsCurrentAvatar: Story = {
       kind: 'replacement',
       previewUri: null,
       uploadState: 'error',
-      error: '업로드 서버 내부 detail',
+      failure: { stage: 'transfer', reason: 'file-too-large' },
     },
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     expect(canvas.getByRole('alert')).toHaveTextContent(
-      '헤더 이미지 업로드에 실패했어요. 다시 시도해 주세요.',
+      '헤더 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
     );
     expect(canvas.getByRole('button', { name: '헤더 이미지 업로드 다시 시도' })).toBeVisible();
-    expect(canvas.queryByText('업로드 서버 내부 detail')).not.toBeInTheDocument();
     expect(canvas.getByTestId('profile-edit-avatar-preview')).toBeVisible();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeEnabled();
     expect(canvas.queryByText(/아바타 이미지 업로드에 실패/)).not.toBeInTheDocument();

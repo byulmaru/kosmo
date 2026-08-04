@@ -27,8 +27,8 @@ type ScreenProps = Record<string, unknown> & {
   showTags: boolean;
   submitState: { kind: string };
   value: Record<string, unknown> & {
-    avatar: { kind: string; uploadState?: string };
-    header: { kind: string; uploadState?: string };
+    avatar: { kind: string; failure?: unknown; uploadState?: string };
+    header: { kind: string; failure?: unknown; uploadState?: string };
   };
 };
 
@@ -346,6 +346,10 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onAvatarEdit());
     await flush();
     assert.equal(requireScreenProps().value.avatar.uploadState, 'error');
+    assert.deepEqual(requireScreenProps().value.avatar.failure, {
+      reason: 'transient',
+      stage: 'complete',
+    });
     assert.equal(issued, 2);
     assert.equal(fetchMock.mock.callCount(), 2);
 

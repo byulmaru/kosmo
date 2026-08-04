@@ -27,9 +27,9 @@
   `5xx`, issue/complete 실패의 stage/reason을 table-driven unit test로 검증한다.
 - 외부 message·URL·token fixture가 canonical 한국어 문구나 accessible name에 나타나지 않는지 검증한다.
 
-- [ ] 1.1 단계·원인 분류와 안전한 `{subject}` 기반 한국어 안내를 두 consumer가 공유할 수 있게 구현한다.
-- [ ] 1.2 전체 upload sequence가 issue/transfer/complete 실패를 구분하면서 기존 inactive·stale 결과 무시와 새 URL 재시도를 유지하게 연결한다.
-- [ ] 1.3 공통 분류·문구·sequence의 정상/오류/정보 비노출 테스트 matrix를 추가하고 통과시킨다.
+- [x] 1.1 단계·원인 분류와 안전한 `{subject}` 기반 한국어 안내를 두 consumer가 공유할 수 있게 구현한다.
+- [x] 1.2 전체 upload sequence가 issue/transfer/complete 실패를 구분하면서 기존 inactive·stale 결과 무시와 새 URL 재시도를 유지하게 연결한다.
+- [x] 1.3 공통 분류·문구·sequence의 정상/오류/정보 비노출 테스트 matrix를 추가하고 통과시킨다.
 
 ## 2. PROD-657 Post Composer 원인별 실패 안내
 
@@ -61,8 +61,8 @@ Post Composer가 실패한 각 이미지의 현재 순서와 원인에 맞는 �
 - 항목 제거 뒤 순서 변경, 실패 보존, 새 URL 재시도, 다른 Ready 항목 불변과 stale completion 무시를 회귀
   테스트로 검증한다.
 
-- [ ] 2.1 Post Composer 실패 state와 표시를 공통 stage/reason·한국어 안내·접근성 계약에 연결한다.
-- [ ] 2.2 원인별 표시, alert/name, 항목 보존·제거·새 URL 재시도와 순서 변경 회귀 테스트를 추가하고 통과시킨다.
+- [x] 2.1 Post Composer 실패 state와 표시를 공통 stage/reason·한국어 안내·접근성 계약에 연결한다.
+- [x] 2.2 원인별 표시, alert/name, 항목 보존·제거·새 URL 재시도와 순서 변경 회귀 테스트를 추가하고 통과시킨다.
 
 ## 3. PROD-657 Profile 편집 원인별 실패 안내
 
@@ -94,9 +94,9 @@ Profile 편집이 avatar/header 업로드 실패를 Post Composer와 같은 정�
 - 한 field Ready/다른 field 실패, generation 교체, 실패 후 retry, Profile 저장 실패 뒤 Ready ID 재사용과 draft
   보존을 회귀 테스트로 검증한다.
 
-- [ ] 3.1 Profile 편집의 field별 upload 실패 state와 표시를 공통 stage/reason·한국어 안내·접근성 계약에 연결한다.
-- [ ] 3.2 field draft·다른 Ready 결과·save 차단·stale guard·새 URL 재시도를 포함한 원인별 회귀 테스트를 추가하고 통과시킨다.
-- [ ] 3.3 Profile 편집의 active spec과 Storybook 오류 상태를 canonical 공통 오류 정책에 맞게 정렬한다.
+- [x] 3.1 Profile 편집의 field별 upload 실패 state와 표시를 공통 stage/reason·한국어 안내·접근성 계약에 연결한다.
+- [x] 3.2 field draft·다른 Ready 결과·save 차단·stale guard·새 URL 재시도를 포함한 원인별 회귀 테스트를 추가하고 통과시킨다.
+- [x] 3.3 Profile 편집의 active spec과 Storybook 오류 상태를 canonical 공통 오류 정책에 맞게 정렬한다.
 
 ## 4. PROD-657 통합 검증과 OpenSpec 완료 책임
 
