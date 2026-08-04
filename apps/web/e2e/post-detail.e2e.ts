@@ -111,3 +111,58 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 });
+
+test('Child Reply 상세에서 Parent inline Reply composer는 connector lane 밖에 표시된다', async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize({ height: 844, width: 390 });
+  const parentBody = 'E2E parent reply body';
+  const childBody = 'E2E child reply body';
+  const viewer = await createE2ESession({
+    displayName: 'E2E Reply Thread Viewer',
+    handle: 'e2e-reply-thread-viewer',
+  });
+  const parent = await createE2EPost({
+    body: parentBody,
+    profileId: viewer.profile!.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const child = await createE2EPost({
+    body: childBody,
+    profileId: viewer.profile!.id,
+    replyParentId: parent.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const parentId = toGlobalId('Post', parent.id);
+  const childId = toGlobalId('Post', child.id);
+
+  await setE2ESessionCookie(context, viewer.token);
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  await page.goto(`/@${viewer.profile!.handle}/${childId}`);
+  await detailResponse;
+  await expect(page.getByText(childBody)).toBeVisible();
+
+  const parentRow = page.getByTestId(`post-thread-item-${parentId}`);
+  await expect(parentRow).toBeVisible();
+  await parentRow.getByRole('button', { name: '답글' }).click();
+
+  const parentComposer = parentRow.getByLabel('답글 작성');
+  const parentConnector = page.getByTestId(`post-thread-connector-${parentId}-${childId}-after`);
+  await expect(parentComposer).toBeVisible();
+  await expect(parentConnector).toBeVisible();
+
+  const [parentRowBox, parentComposerBox, parentConnectorBox] = await Promise.all([
+    parentRow.boundingBox(),
+    parentComposer.boundingBox(),
+    parentConnector.boundingBox(),
+  ]);
+  expect(parentRowBox).not.toBeNull();
+  expect(parentComposerBox).not.toBeNull();
+  expect(parentConnectorBox).not.toBeNull();
+  expect(parentComposerBox!.x - parentRowBox!.x).toBe(64);
+  expect(
+    parentRowBox!.x + parentRowBox!.width - (parentComposerBox!.x + parentComposerBox!.width),
+  ).toBe(8);
+  expect(parentConnectorBox!.x + parentConnectorBox!.width).toBeLessThan(parentComposerBox!.x);
+});

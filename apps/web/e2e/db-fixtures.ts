@@ -75,6 +75,7 @@ type CreateE2EPostOptions = {
   body?: string;
   createdAt?: string;
   profileId: string;
+  replyParentId?: string;
   state?: PostState;
   visibility?: PostVisibility;
 };
@@ -314,6 +315,7 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       .insert(Posts)
       .values({
         profileId: options.profileId,
+        ...(options.replyParentId ? { replyParentId: options.replyParentId } : {}),
         state: options.state ?? PostState.ACTIVE,
         visibility: options.visibility ?? PostVisibility.PUBLIC,
         ...(createdAt ? { createdAt } : {}),

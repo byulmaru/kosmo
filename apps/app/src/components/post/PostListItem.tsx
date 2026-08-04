@@ -135,6 +135,12 @@ export function PostListItem({
         triggerRef={replyTriggerRef}
       />
     ) : null;
+  const presentedReplySurface =
+    replySurface && replyBinding?.owner === 'detail' ? (
+      <View style={styles.detailReplySurface}>{replySurface}</View>
+    ) : (
+      replySurface
+    );
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
@@ -154,7 +160,7 @@ export function PostListItem({
         <View role="article" style={cardStyle}>
           <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
         </View>
-        {replySurface}
+        {presentedReplySurface}
       </>
     );
   }
@@ -192,7 +198,7 @@ export function PostListItem({
           </View>
           <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
         </View>
-        {replySurface}
+        {presentedReplySurface}
       </>
     );
   }
@@ -258,7 +264,7 @@ export function PostListItem({
           />
         </View>
       </View>
-      {replySurface}
+      {presentedReplySurface}
     </>
   );
 }
@@ -344,6 +350,10 @@ const styles = StyleSheet.create({
   },
   avatar: { borderRadius: radii.full },
   actionBarSlot: { paddingBottom: spacing.xs },
+  detailReplySurface: {
+    marginLeft: spacing.xxl * 2,
+    marginRight: spacing.sm,
+  },
   reactionSummary: { marginTop: spacing.xs },
   quoteReactionSummary: { marginTop: spacing.sm },
   quoteSourcePreview: { paddingBottom: spacing.xs },
