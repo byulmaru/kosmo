@@ -79,9 +79,10 @@
 
 #### Scenario: delete 실패 격리
 
-- **WHEN** request deletion이 commit된 뒤 `FOLLOW_REQUEST` Notification delete가 실패하거나 process가 종료된다
+- **WHEN** request deletion이 commit된 뒤 `FOLLOW_REQUEST` Notification delete가 catch 가능한 오류로 실패한다
 - **THEN** request deletion, 승인 시 relation/count 결과와 handler 성공을 유지한다
 - **AND** Sentry에 `operation`(delete), `notificationKind = FOLLOW_REQUEST`, `sourceId = ProfileFollowRequest.id`를 전달한다
+- **AND** effect 완료 전에 process가 종료된 경우에는 Sentry 보고를 보장하지 않는다
 - **AND** retry, outbox, queue, reconciliation 또는 backfill command를 실행하지 않는다
 
 #### Scenario: 최소 context 유지
