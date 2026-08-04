@@ -28,7 +28,7 @@
 - Notification Web E2E에서 activation navigation, Read 수렴과 전역 인디케이터 제거 회귀를 확인한다.
 - Relay compiler, app TypeScript check와 strict OpenSpec validation을 통과시키고 Native style branch가 변경되지 않았음을 diff로 확인한다.
 
-- [ ] 1.1 컬러 정책 문서와 light/dark theme에 Web Unread 배경용 `primary` 30% alpha 의미를 동기화한다.
-- [ ] 1.2 모든 Notification kind의 Web 행이 Read·Unread·hover 상태를 공통 계약대로 표시하고 Native 동작은 유지하도록 구현한다.
-- [ ] 1.3 가장 가까운 Storybook interaction 검증에 상태선·배경·정렬·접근성·Read 성공과 실패 증거를 추가하고 기존 Relay unit 회귀를 확인한다.
-- [ ] 1.4 관련 Storybook, unit, Web E2E, Relay와 TypeScript 검증을 실행하고 strict OpenSpec validation과 최종 diff 범위 점검을 완료한다.
+- [x] 1.1 컬러 정책 문서와 light/dark theme에 Web Unread 배경용 `primary` 30% alpha 의미를 동기화한다.
+- [x] 1.2 모든 Notification kind의 Web 행이 Read·Unread·hover 상태를 공통 계약대로 표시하고 Native 동작은 유지하도록 구현한다.
+- [x] 1.3 가장 가까운 Storybook interaction 검증에 상태선·배경·정렬·접근성·Read 성공과 실패 증거를 추가하고 기존 Relay unit 회귀를 확인한다.
+- [x] 1.4 관련 Storybook, unit, Web E2E, Relay와 TypeScript 검증을 실행하고 strict OpenSpec validation과 최종 diff 범위 점검을 완료한다.

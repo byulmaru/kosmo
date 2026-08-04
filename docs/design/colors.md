@@ -19,6 +19,13 @@ Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 �
 - toast foreground는 현재 theme `background`를 사용해 accent와 반전 대비를 만들며, 다른 조합이 필요해지기
   전에는 별도의 짝 토큰을 선제 정의하지 않는다.
 
+## Primary 상태 배경
+
+- `primarySubtle`은 `primary`의 30% alpha 표현이며 light와 dark 양쪽 mode에서 함께 정의한다.
+- Web 알림 목록의 Unread 행은 불투명한 `primary` 좌측 상태선과 `primarySubtle` 배경을 하나의 결합 표현으로 사용해 `card`인 Read 행과 구분한다.
+- 좌측 상태선은 `primarySubtle`과 분리되는 고대비 edge가 아니다. Unread 상태는 기존 접근성명도 함께 제공하며 별도 고대비 경계를 추가하지 않는다.
+- 이 의미를 다른 selected·pressed·visibility 상태나 Native 알림 행으로 일반화하지 않는다.
+
 ## Focus
 
 - `focus`는 브라우저 기본 focus indicator를 컴포넌트 경계로 대체해야 하는 제한된 Web surface에 사용한다.
