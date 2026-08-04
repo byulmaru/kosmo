@@ -17,7 +17,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
     handle: 'e2e-composer',
   });
   await setE2ESessionCookie(context, viewer.token);
-  await page.setViewportSize({ width: 280, height: 720 });
+  await page.setViewportSize({ width: 320, height: 720 });
   await page.goto('/compose');
 
   const composer = page.getByLabel('새 게시글 작성').first();
@@ -44,6 +44,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   const visibilityMenuBox = await visibilityMenu.boundingBox();
   const viewport = page.viewportSize();
   expect(visibilityMenuBox).not.toBeNull();
+  expect(visibilityMenuBox?.width).toBe(256);
   expect(viewport).not.toBeNull();
   expect(visibilityMenuBox?.x).toBeGreaterThanOrEqual(0);
   expect(visibilityMenuBox!.x + visibilityMenuBox!.width).toBeLessThanOrEqual(viewport!.width);
