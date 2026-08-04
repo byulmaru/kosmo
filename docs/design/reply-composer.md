@@ -12,7 +12,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   상세 진입점은
   [`ReplyComposer` node 693:518](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=693-518)을 기준으로 한다.
 - 일반 Post Composer가 지원하는 Plain Text 본문, Visibility, 글자 수, Media 선택·업로드·미리보기·제거·재시도,
-  Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로 재사용한다.
+  Alt Text, Sensitive Media, `@` Profile 검색·선택, validation, pending과 오류 상태를 그대로 재사용한다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
 
@@ -68,6 +68,13 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 기존 Composer의 Media control은 editor 안에서 본문 아래에 둔다. 선택한 이미지의 미리보기, 업로드 상태,
   제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
   함께 스크롤하고 고정 footer를 밀어내지 않는다.
+- `@` 뒤의 현재 검색어가 있으면 기존 인증 `searchProfiles` 결과를 editor 문맥에 표시한다. 각 결과는 Avatar,
+  표시 이름과 `relativeHandle`을 함께 보여 local/remote와 같은 handle 후보를 구분하고, keyboard와 touch로
+  선택할 수 있어야 한다. 선택하면 `relativeHandle` Plain Text를 현재 cursor 위치에 삽입하고 해당 Profile
+  identity를 제출 상태에 연결한다.
+- 사용자가 삽입된 mention text를 제거하거나 바꿔 더 이상 선택 결과와 일치하지 않으면 연결된 Profile을 제출
+  상태에서 제거한다. 사용자가 검색·선택하지 않고 직접 입력한 같은 `@handle` 문자열은 Mentioned Profile
+  identity를 만들지 않는다. 검색 loading·empty·error는 현재 본문과 이미 선택한 mention 상태를 보존한다.
 - footer 좌측에는 Visibility control을 둔다.
 - footer 우측에는 남은 글자 수와 `답글 게시` primary button을 이 순서로 둔다.
 - 남은 글자 수는 `500`에서 시작해 항상 표시하며 초과 시 semantic danger 상태로 표시한다.
@@ -83,14 +90,15 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Reply Visibility는 Parent Visibility와 독립적이다.
 - 기본값은 일반 Composer와 같은 `UNLISTED`다.
 - 현재 Reply 작성 범위에서는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`를 제공한다.
-- `DIRECT`/지정 멤버만 공개는 노출하지 않는다. Mentioned Profile recipient 결정과 작성 계약은 이 범위에
-  포함하지 않는다.
+- `DIRECT`/지정 멤버만 공개는 노출하지 않는다. 본문에서 명시적으로 선택한 Mentioned Profile 관계는
+  저장하지만, 이를 `DIRECT` 최소 recipient 수와 조회 권한에 적용하는 계약은 이 범위에 포함하지 않는다.
 
 ## lifecycle
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - 빈 상태에서는 `X`, backdrop과 `Escape`로 즉시 닫는다.
-- 본문·Visibility가 초기값에서 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive Media 상태가 있으면 dirty로
+- 본문·Visibility가 초기값에서 바뀌었거나 Mentioned Profile 선택, Media 선택·업로드·Alt Text·Sensitive Media
+  상태가 있으면 dirty로
   취급한다. 이 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시하고 사용자가 `계속 작성` 또는
   `작성 취소`를 선택하게 한다. Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는
   닫힌 surface를 다시 열거나 상태를 변경하지 않는다.
@@ -99,8 +107,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   상태에서는 현재 작성과 active Parent를 유지한다.
 - 제출 실패 시 modal, direct Parent 맥락, 본문, Visibility와 Media 작성 상태를 유지한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
-  Visibility, Media, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 upload·mutation completion은 새
-  문맥의 상태나 성공 callback을 변경하지 않는다.
+  Visibility, Mentioned Profile 선택, Media, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 Profile
+  검색·upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
@@ -113,6 +121,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Web modal은 이름이 `답글 쓰기`인 modal dialog semantics와 focus trap을 제공한다.
 - `X`, backdrop, `Escape`, 취소 확인과 성공 close에서 focus 이동을 각각 검증한다.
 - 오류는 alert semantics, Visibility와 Reply action은 name/state, 남은 글자 수는 입력과 연관된 설명을 제공한다.
+- Profile 검색 결과 surface는 이름과 expanded/busy 상태, 결과의 option semantics와 현재 선택 상태를 제공하고,
+  Web에서는 Arrow key·Home·End·Enter·Escape와 focus 복원을 지원한다. Native는 keyboard·touch 선택과 platform
+  screen reader가 같은 Profile identity를 선택하도록 한다.
 - Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은
   accessible name·state·live feedback을 제공한다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
@@ -122,7 +133,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 제외 범위
 
-- Mentioned Profiles recipient와 `DIRECT` Reply
+- `DIRECT` Reply의 최소 recipient 수와 recipient 기반 조회 권한
 - Poll과 Content Warning을 포함한 Reply 작성
 - 새 Media 형식·제한, Reply 전용 Media 모델·storage·API·uploader 또는 일반 Composer Media UI 재설계
 - Reply+Quote 동시 작성
@@ -145,6 +156,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
+- `@` trigger, local/remote Profile 결과 구분, keyboard·touch 선택, `relativeHandle` 삽입과 선택 identity 제출,
+  mention text 삭제·수정 및 context 전환 시 stale identity 제거, 직접 입력 문자열의 관계 비생성을 확인한다.
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
   Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
   다시 계산해야 한다.
