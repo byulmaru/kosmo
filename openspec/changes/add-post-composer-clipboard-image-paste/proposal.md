@@ -15,7 +15,7 @@ Web Post Composer는 갤러리에서 고른 이미지를 기존 Media 업로드 
 
 - Canonical: `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, `docs/design/accessibility.md`
 - Linear Contract: [PROD-639](https://linear.app/byulmaru/issue/PROD-639/post-composer%EC%97%90%EC%84%9C-%ED%81%B4%EB%A6%BD%EB%B3%B4%EB%93%9C-%EC%9D%B4%EB%AF%B8%EC%A7%80-%EB%B6%99%EC%97%AC%EB%84%A3%EA%B8%B0%EB%A5%BC-%EC%A7%80%EC%9B%90%ED%95%9C%EB%8B%A4)
-- Linear Implementations: PROD-639가 계약·구현·Web 검증 책임을 함께 소유한다.
+- Linear Implementations: PROD-639가 계약·구현·Web 검증과 change 전체 정합성 확인·archive 책임을 함께 소유한다.
 - Existing Baseline: [PROD-553](https://linear.app/byulmaru/issue/PROD-553/post-composer%EC%97%90%EC%84%9C-%EC%9D%B4%EB%AF%B8%EC%A7%80%EB%A5%BC-%EC%84%A0%ED%83%9D%EC%97%85%EB%A1%9C%EB%93%9C%EC%B2%A8%EB%B6%80%ED%95%9C%EB%8B%A4), active `post-composer-media-upload` spec
 
 ## Capabilities
