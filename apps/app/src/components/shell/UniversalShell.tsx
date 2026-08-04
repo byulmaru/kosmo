@@ -1,6 +1,6 @@
-import { Slot, useGlobalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
+import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   PanResponder,
@@ -26,21 +26,12 @@ import {
   PrimaryNavigationScrollReset,
 } from './PrimaryNavigationScrollContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
-import { withoutDynamicRouteParams } from './routeSearchParams';
 import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
-import type { Href } from 'expo-router';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
-
-type FeedbackHistoryBarrierState =
-  | 'inactive'
-  | 'pending'
-  | 'creating-base'
-  | 'restoring-overlay'
-  | 'ready';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -110,16 +101,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const searchParams = useGlobalSearchParams<{ feedback?: string }>();
-  const feedback = searchParams.feedback;
   const routeSegments = useSegments();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const feedbackHistoryBarrierAttemptedRef = useRef(false);
-  const feedbackHistoryOriginIdRef = useRef<string | null>(null);
-  const feedbackOpenedInternallyRef = useRef(false);
   const menuButtonRef = useRef<NativeView>(null);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
@@ -134,83 +121,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
-  const feedbackOverlayOpen = web && pathname !== '/feedback' && feedback === 'open';
-  const [feedbackHistoryBarrierState, setFeedbackHistoryBarrierState] =
-    useState<FeedbackHistoryBarrierState>(() => (feedbackOverlayOpen ? 'pending' : 'inactive'));
-  const feedbackOverlayHrefRef = useRef<Href | null>(null);
-  const feedbackHistoryReady =
-    feedbackHistoryBarrierState === 'inactive' || feedbackHistoryBarrierState === 'ready';
-  const feedbackOverlayVisible = feedbackOverlayOpen || !feedbackHistoryReady;
-
-  useEffect(() => {
-    if (
-      feedbackHistoryBarrierState === 'inactive' &&
-      feedbackOverlayOpen &&
-      !feedbackOpenedInternallyRef.current &&
-      !feedbackHistoryBarrierAttemptedRef.current
-    ) {
-      feedbackHistoryBarrierAttemptedRef.current = true;
-      setFeedbackHistoryBarrierState('pending');
-      return;
-    }
-
-    if (feedbackHistoryBarrierState === 'pending') {
-      if (!feedbackOverlayOpen) {
-        setFeedbackHistoryBarrierState('inactive');
-        return;
-      }
-
-      const overlayParams = withoutDynamicRouteParams(searchParams, routeSegments);
-      const remainingParams = { ...overlayParams };
-      delete remainingParams.feedback;
-      feedbackOverlayHrefRef.current = { pathname, params: overlayParams };
-      setFeedbackHistoryBarrierState('creating-base');
-      router.replace({ pathname, params: remainingParams });
-      return;
-    }
-
-    if (feedbackHistoryBarrierState === 'creating-base' && !feedbackOverlayOpen) {
-      const overlayHref = feedbackOverlayHrefRef.current;
-      if (!overlayHref) {
-        setFeedbackHistoryBarrierState('inactive');
-        return;
-      }
-
-      const frame = requestAnimationFrame(() => {
-        setFeedbackHistoryBarrierState('restoring-overlay');
-        router.push(overlayHref);
-      });
-      return () => cancelAnimationFrame(frame);
-    }
-
-    if (feedbackHistoryBarrierState === 'restoring-overlay' && feedbackOverlayOpen) {
-      setFeedbackHistoryBarrierState('ready');
-    }
-  }, [
-    feedbackHistoryBarrierState,
-    feedbackOverlayOpen,
-    pathname,
-    routeSegments,
-    router,
-    searchParams,
-  ]);
-
-  const closeFeedbackOverlay = useCallback(() => {
-    if (!feedbackHistoryReady) {
-      return;
-    }
-
-    router.back();
-  }, [feedbackHistoryReady, router]);
-
-  const recordFeedbackHistoryOrigin = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      return;
-    }
-    feedbackOpenedInternallyRef.current = true;
-    const state = window.history.state as { id?: unknown } | null;
-    feedbackHistoryOriginIdRef.current = typeof state?.id === 'string' ? state.id : null;
-  }, []);
+  const feedbackOverlayVisible =
+    web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !drawerOpen) {
@@ -270,6 +182,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
     }
     setSwitcherOpen(true);
   };
+  const openFeedbackOverlay = () => {
+    setDrawerOpen(false);
+    setSwitcherOpen(false);
+    setFeedbackOpen(true);
+  };
   const menuButton = (
     <Pressable
       aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
@@ -321,7 +238,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           >
             <SidebarNavigation
               compact={compact}
-              onFeedbackNavigate={recordFeedbackHistoryOrigin}
+              onFeedbackOpen={openFeedbackOverlay}
               onSwitcherOpenChange={setSwitcherOpen}
               query={data}
               switcherOpen={switcherOpen}
@@ -406,7 +323,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
               style={[styles.drawer, { backgroundColor: theme.card }]}
             >
               <SidebarNavigation
-                onFeedbackNavigate={recordFeedbackHistoryOrigin}
+                onFeedbackOpen={openFeedbackOverlay}
                 onNavigate={closeDrawer}
                 onSwitcherOpenChange={setSwitcherOpen}
                 query={data}
@@ -424,10 +341,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
         </Modal>
       </View>
       <FeedbackOverlay
-        closeUsesHistoryTraversal={feedbackHistoryReady}
         fallbackFocusRef={menuButtonRef}
-        originHistoryId={feedbackHistoryOriginIdRef.current}
-        onRequestClose={closeFeedbackOverlay}
+        onRequestClose={() => setFeedbackOpen(false)}
         visible={feedbackOverlayVisible}
       />
     </ShellChromeProvider>

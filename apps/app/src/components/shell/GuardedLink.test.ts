@@ -39,7 +39,6 @@ type RenderedLinkProps = {
 };
 
 const navigations: string[] = [];
-const pushes: string[] = [];
 let currentPathname = '/home';
 let consumeIntent: ((pathname: string) => boolean) | undefined;
 let linkPress: LinkPress | undefined;
@@ -68,7 +67,6 @@ mockModule('expo-router', {
   },
   useRouter: () => ({
     navigate: (href: string) => navigations.push(href),
-    push: (href: string) => pushes.push(href),
   }),
   usePathname: () => currentPathname,
 });
@@ -100,7 +98,6 @@ afterEach(async () => {
   consumeIntent = undefined;
   currentPathname = '/home';
   navigations.length = 0;
-  pushes.length = 0;
   mock.restoreAll();
 });
 
@@ -144,7 +141,7 @@ function shouldHandleNavigation(event: LinkPressEvent) {
 const renderLink = async (
   handler: NavigationRequestHandler,
   onNavigate?: () => void,
-  options: { href?: Href; primary?: boolean; push?: boolean } = {},
+  options: { href?: Href; primary?: boolean } = {},
 ) => {
   await act(async () => {
     renderer = create(
@@ -161,7 +158,6 @@ const renderLink = async (
             href: options.href ?? '/timeline',
             onNavigate,
             primary: options.primary,
-            push: options.push,
           }),
         ),
       ),
@@ -192,27 +188,6 @@ describe('GuardedLink', () => {
     await act(async () => approvedAction());
     assert.equal(onNavigate.mock.callCount(), 1);
     assert.deepEqual(navigations, ['/timeline']);
-  });
-
-  it('push Link의 guard 승인 action도 새 history entry를 만든다', async () => {
-    let pendingAction: GuardedNavigationAction | null = null;
-    await renderLink(
-      (action) => {
-        pendingAction = action;
-        return true;
-      },
-      undefined,
-      { push: true },
-    );
-    const event = createPressEvent();
-
-    await act(async () => composedLinkPress?.(event as unknown as Parameters<LinkPress>[0]));
-    const approvedAction = pendingAction as GuardedNavigationAction | null;
-    assert.ok(approvedAction);
-    await act(async () => approvedAction());
-
-    assert.deepEqual(navigations, []);
-    assert.deepEqual(pushes, ['/timeline']);
   });
 
   it('guard가 없으면 Link 기본 navigation과 surface 닫기를 유지한다', async () => {

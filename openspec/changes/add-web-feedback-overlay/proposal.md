@@ -1,22 +1,24 @@
 ## Why
 
-현재 Web 셸의 `피드백 보내기` 진입은 `/feedback` 독립 화면으로 이동해 사용자가 보던 route, scroll, focus 맥락을 끊는다. 인증된 사용자가 현재 화면을 유지한 채 의견을 보내고 명시적으로 닫은 뒤 원래 작업을 이어갈 수 있도록 shell-level 피드백 오버레이가 필요하다.
+Web 셸의 `/feedback` route 이동은 사용자가 보던 화면 맥락을 교체한다. 인증된 사용자가 현재 route를 유지한
+채 의견을 보내고 명시적으로 닫은 뒤 작업을 이어갈 수 있도록 shell-level 피드백 overlay가 필요하다.
 
 ## What Changes
 
-- Web의 full sidebar, compact rail, mobile drawer에서 일반 피드백 진입을 현재 URL의 `feedback=open` query로 여는 단일 shell-level 오버레이로 변경한다.
-- 기존 `FeedbackForm`, `submitFeedback` mutation, 성공·실패·재시도 동작을 재사용하고 form은 `{ dirty, submitting }` 상태만 presentation에 보고한다.
-- Web `<768px`에서는 bottom sheet, `>=768px`에서는 최대 약 `600px` 너비와 `85dvh` 높이의 중앙 dialog를 제공한다.
-- browser back, `Escape`, backdrop, 닫기 버튼을 하나의 `requestClose` 경계로 통합하고 dirty 확인, submitting 차단, focus trap·복원, 배경 상호작용 차단과 scroll 복원을 제공한다.
-- fresh-load overlay는 단일 same-document barrier를 사용한다. 일반적인 단일 Back과 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 보호하되, Navigation API history index 제공 여부와 관계없이 barrier보다 여러 entry를 매우 빠르게 지나는 연속 Back은 이번 범위에서 보장하지 않는다.
-- `/feedback` 직접 접근과 새로고침은 기존 보호 route의 독립 페이지 fallback으로 유지한다.
-- Android/iOS 피드백 진입과 화면, GraphQL/API, Slack 전달 계약, 피드백 필드 정책은 변경하지 않는다.
+- Web full sidebar, compact rail, mobile drawer의 인증 사용자 피드백 진입을 `UniversalShell` 로컬 상태로 여는
+  단일 overlay 버튼으로 변경한다.
+- overlay open/close는 URL과 browser history를 변경하지 않으며 `feedback=open` 직접 query는 무시한다.
+- 기존 `FeedbackForm`, mutation, success/failure/retry를 재사용하고 form은 `{dirty, submitting}`만 보고한다.
+- `<768px` bottom sheet와 `>=768px` 최대 약 `600px`/`85dvh` 중앙 dialog를 제공한다.
+- 닫기 버튼, backdrop, `Escape`를 `requestClose`로 통합해 dirty 확인, submitting 차단, focus/scroll 복원과
+  배경 차단을 제공한다.
+- `/feedback` direct route와 Android/iOS route navigation은 유지하며 guest에는 Web 진입점과 form을 숨긴다.
+- browser navigation/reload에 대한 draft 보호와 URL 기반 overlay 복원은 범위에서 제외한다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/design/feedback.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`
 - Linear Contract: [PROD-594](https://linear.app/byulmaru/issue/PROD-594)
-- Linear Implementations: [PROD-594](https://linear.app/byulmaru/issue/PROD-594)
 
 ## Capabilities
 
@@ -26,12 +28,11 @@
 
 ### Modified Capabilities
 
-- `web-app-shell`: Web 피드백 진입을 현재 route 위 query-backed overlay로 변경하고, direct `/feedback` fallback과 Native 진입은 유지한다.
+- `web-app-shell`: 인증된 Web 사용자의 일반 피드백 진입을 현재 route 위 transient shell overlay로 제공한다.
 
 ## Impact
 
-- Web feedback presentation: `apps/app/src/components/feedback/FeedbackForm.tsx`, 새 Web overlay surface
-- Shell/navigation: `apps/app/src/components/shell/UniversalShell.tsx`, `SidebarNavigation.tsx`
-- Router test support and verification: Storybook Expo Router mock, Feedback/Shell stories, Web E2E
-- Canonical design: `docs/design/feedback.md`
-- API, GraphQL schema, database, Slack payload, dependencies, Android/iOS runtime에는 영향이 없다.
+- Web feedback presentation과 shell navigation
+- Feedback/Shell Storybook 및 Web E2E
+- canonical feedback design과 OpenSpec delta
+- API, GraphQL, database, Slack payload, dependencies와 Android/iOS runtime에는 영향이 없다.

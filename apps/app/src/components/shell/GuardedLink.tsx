@@ -40,11 +40,7 @@ export function GuardedLink({ children, href, onNavigate, primary = false, ...pr
     const navigate = () => {
       recordPrimaryNavigation();
       onNavigate?.();
-      if (props.push) {
-        router.push(href);
-      } else {
-        router.navigate(href);
-      }
+      router.navigate(href);
     };
     if (request(navigate)) {
       event.preventDefault();

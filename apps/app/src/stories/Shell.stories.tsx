@@ -275,10 +275,7 @@ export const SharedNavigation: Story = {
     expect(
       followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
-      'href',
-      '/search?feedback=open',
-    );
+    expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
       'stroke-width',
@@ -310,12 +307,8 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
-      'href',
-      '/search?feedback=open',
-    );
     const logout = canvas.getByRole('button', { name: '로그아웃' });
-    const feedback = canvas.getByRole('link', { name: '피드백 보내기' });
+    const feedback = canvas.getByRole('button', { name: '피드백 보내기' });
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
     const avatar = canvas.getByLabelText('코스모 작가 프로필 이미지');
     const triggerRect = trigger.getBoundingClientRect();
@@ -492,11 +485,10 @@ export const ResponsiveProfilePickerFull: Story = {
     await userEvent.type(handle, 'outside_reset');
     expect(handle).toHaveValue('outside_reset');
 
-    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
-    feedbackLink.addEventListener('click', (event) => event.preventDefault(), { once: true });
-    await userEvent.click(feedbackLink);
+    const feedbackButton = canvas.getByRole('button', { name: '피드백 보내기' });
+    await userEvent.click(feedbackButton);
     await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
-    expect(feedbackLink).toHaveFocus();
+    expect(feedbackButton).toHaveFocus();
 
     await userEvent.click(trigger);
     await waitFor(() => {
@@ -1188,8 +1180,7 @@ export const UniversalMobile: Story = {
     );
     const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    const feedback = page.getByRole('link', { name: '피드백 보내기' });
-    expect(feedback).toHaveAttribute('href', '/home?feedback=open');
+    expect(page.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     const logout = page.getByRole('button', { name: '로그아웃' });
@@ -1252,9 +1243,8 @@ export const UniversalMobile: Story = {
     });
 
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
-    const feedbackLink = page.getByRole('link', { name: '피드백 보내기' });
-    expect(feedbackLink).toHaveAttribute('href', '/@selected/followers?feedback=open');
-    await userEvent.click(feedbackLink);
+    const feedbackButton = page.getByRole('button', { name: '피드백 보내기' });
+    await userEvent.click(feedbackButton);
     await waitFor(() => expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull());
     const feedbackDialog = await page.findByRole('dialog', { name: '피드백 보내기' });
     await userEvent.click(within(feedbackDialog).getByRole('button', { name: '피드백 닫기' }));
@@ -1717,10 +1707,9 @@ export const UniversalCompactFeedbackOverlay: Story = {
     const ownerDocument = canvasElement.ownerDocument;
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
-    const feedbackLink = canvas.getByRole('link', { name: '피드백 보내기' });
+    const feedbackButton = canvas.getByRole('button', { name: '피드백 보내기' });
 
-    expect(feedbackLink).toHaveAttribute('href', '/home?context=notifications&feedback=open');
-    await userEvent.click(feedbackLink);
+    await userEvent.click(feedbackButton);
     const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
     const surface = page.getByTestId('feedback-overlay-surface');
     const shellRoot = canvasElement.querySelector('[data-testid="universal-shell-root"]');
@@ -1754,7 +1743,6 @@ export const UniversalMobileFeedbackOverlay: Story = {
   parameters: {
     ...universalParameters,
     router: {
-      params: { feedback: 'open' },
       pathname: '/home',
       slotLabel: '홈 타임라인',
     },
@@ -1763,6 +1751,9 @@ export const UniversalMobileFeedbackOverlay: Story = {
     const ownerDocument = canvasElement.ownerDocument;
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    await userEvent.click(page.getByRole('button', { name: '피드백 보내기' }));
     await page.findByRole('dialog', { name: '피드백 보내기' });
     const surface = await page.findByTestId('feedback-overlay-surface');
     const bounds = surface.getBoundingClientRect();

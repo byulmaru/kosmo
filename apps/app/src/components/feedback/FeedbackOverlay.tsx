@@ -1,5 +1,3 @@
-import { useNavigation } from 'expo-router';
-import { usePreventRemove } from 'expo-router/react-navigation';
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -16,66 +14,32 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, shadow, spacing, typography } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
-import { registerFeedbackHistoryGuard } from './feedbackHistoryGuard';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { FeedbackFormState } from './FeedbackForm';
 
 type Props = {
-  closeUsesHistoryTraversal?: boolean;
   fallbackFocusRef?: RefObject<NativeView | null>;
-  originHistoryId?: string | null;
   onRequestClose: () => void;
   visible: boolean;
 };
 
 const initialFormState: FeedbackFormState = { dirty: false, submitting: false };
 
-type CloseAction = () => void;
-
-type BrowserHistoryEntry = {
-  id: string | null;
-  index: number | null;
-};
-
-type FallbackHistoryRestore = {
-  delta: number;
-  direction: -1 | 1;
-  overlayId: string;
-  timeout: ReturnType<typeof setTimeout> | null;
-};
-
-export function FeedbackOverlay({
-  closeUsesHistoryTraversal = false,
-  fallbackFocusRef,
-  originHistoryId = null,
-  onRequestClose,
-  visible,
-}: Props) {
+export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: Props) {
   const theme = useTheme();
-  const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [formRevision, setFormRevision] = useState(0);
-  const [historyRestorePending, setHistoryRestorePending] = useState(false);
-  const [navigationAllowed, setNavigationAllowed] = useState(false);
-  const allowedActionRef = useRef<CloseAction | null>(null);
   const closeRef = useRef<NativeView>(null);
   const confirmRef = useRef<NativeView>(null);
-  const bypassHistoryGuardRef = useRef(false);
-  const bypassHistoryGuardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fallbackHistoryRestoreRef = useRef<FallbackHistoryRestore | null>(null);
   const formStateRef = useRef(formState);
-  const historyRestoringRef = useRef(false);
   const mainRef = useRef<NativeView>(null);
-  const overlayHistoryEntryRef = useRef<BrowserHistoryEntry | null>(null);
-  const pendingCloseActionRef = useRef<CloseAction | null>(null);
-  const requestCloseRef = useRef<(action?: CloseAction) => void>(() => undefined);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const surfaceRef = useRef<NativeView>(null);
+  const wasVisibleRef = useRef(visible);
   const mobile = width < breakpoints.compact;
-  const overlayVisible = visible || historyRestorePending;
   formStateRef.current = formState;
 
   const handleFormStateChange = useCallback((nextState: FeedbackFormState) => {
@@ -92,197 +56,19 @@ export function FeedbackOverlay({
     });
   }, [fallbackFocusRef]);
 
-  const allowClose = useCallback((action: CloseAction) => {
-    allowedActionRef.current = action;
-    pendingCloseActionRef.current = null;
-    setDiscardConfirmOpen(false);
-    setNavigationAllowed(true);
-  }, []);
-
-  const armHistoryGuardBypass = useCallback(() => {
-    bypassHistoryGuardRef.current = true;
-    if (bypassHistoryGuardTimeoutRef.current) {
-      clearTimeout(bypassHistoryGuardTimeoutRef.current);
+  const requestClose = useCallback(() => {
+    const currentFormState = formStateRef.current;
+    if (currentFormState.submitting || discardConfirmOpen) {
+      return;
     }
-    bypassHistoryGuardTimeoutRef.current = setTimeout(() => {
-      bypassHistoryGuardRef.current = false;
-      bypassHistoryGuardTimeoutRef.current = null;
-    }, 250);
-  }, []);
-
-  const shellCloseAction = useCallback(() => {
-    if (closeUsesHistoryTraversal) {
-      armHistoryGuardBypass();
+    if (currentFormState.dirty) {
+      setDiscardConfirmOpen(true);
+      return;
     }
     onRequestClose();
-  }, [armHistoryGuardBypass, closeUsesHistoryTraversal, onRequestClose]);
-
-  const requestClose = useCallback(
-    (action: CloseAction = shellCloseAction) => {
-      const currentFormState = formStateRef.current;
-      if (navigationAllowed) {
-        action();
-        return;
-      }
-      if (currentFormState.submitting || discardConfirmOpen || pendingCloseActionRef.current) {
-        return;
-      }
-      if (currentFormState.dirty) {
-        pendingCloseActionRef.current = action;
-        setDiscardConfirmOpen(true);
-        return;
-      }
-      action();
-    },
-    [discardConfirmOpen, navigationAllowed, shellCloseAction],
-  );
-  requestCloseRef.current = requestClose;
-
-  usePreventRemove(
-    overlayVisible && (formState.dirty || formState.submitting) && !navigationAllowed,
-    ({ data }) => {
-      requestClose(() => navigation.dispatch({ ...data.action, target: undefined }));
-    },
-  );
-
-  useEffect(() => {
-    if (!navigationAllowed) {
-      return;
-    }
-
-    const action = allowedActionRef.current;
-    allowedActionRef.current = null;
-    if (!action) {
-      setNavigationAllowed(false);
-      return;
-    }
-    action();
-    setNavigationAllowed(false);
-  }, [navigationAllowed]);
-
-  useEffect(() => {
-    if (!visible || Platform.OS !== 'web') {
-      return;
-    }
-
-    const frame = requestAnimationFrame(() => {
-      overlayHistoryEntryRef.current = getBrowserHistoryEntry();
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [closeUsesHistoryTraversal, visible]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !overlayVisible) {
-      return;
-    }
-
-    const moveFallbackHistory = (restore: FallbackHistoryRestore) => {
-      if (restore.timeout) {
-        clearTimeout(restore.timeout);
-      }
-      restore.timeout = setTimeout(() => {
-        if (fallbackHistoryRestoreRef.current !== restore) {
-          return;
-        }
-        if (restore.direction === 1) {
-          restore.direction = -1;
-          moveFallbackHistory(restore);
-          return;
-        }
-
-        fallbackHistoryRestoreRef.current = null;
-        historyRestoringRef.current = false;
-        setHistoryRestorePending(false);
-      }, 250);
-      window.history.go(restore.direction);
-    };
-
-    const handlePopState = (event: PopStateEvent) => {
-      if (bypassHistoryGuardRef.current) {
-        bypassHistoryGuardRef.current = false;
-        if (bypassHistoryGuardTimeoutRef.current) {
-          clearTimeout(bypassHistoryGuardTimeoutRef.current);
-          bypassHistoryGuardTimeoutRef.current = null;
-        }
-        return;
-      }
-      const fallbackRestore = fallbackHistoryRestoreRef.current;
-      if (fallbackRestore) {
-        event.stopImmediatePropagation();
-        if (fallbackRestore.timeout) {
-          clearTimeout(fallbackRestore.timeout);
-          fallbackRestore.timeout = null;
-        }
-        fallbackRestore.delta += fallbackRestore.direction;
-        if (getBrowserHistoryEntry().id !== fallbackRestore.overlayId) {
-          moveFallbackHistory(fallbackRestore);
-          return;
-        }
-
-        fallbackHistoryRestoreRef.current = null;
-        historyRestoringRef.current = false;
-        setHistoryRestorePending(false);
-        requestCloseRef.current(() => {
-          armHistoryGuardBypass();
-          window.history.go(-fallbackRestore.delta);
-        });
-        return;
-      }
-      if (historyRestoringRef.current) {
-        historyRestoringRef.current = false;
-        setHistoryRestorePending(false);
-        return;
-      }
-      if (!formStateRef.current.dirty && !formStateRef.current.submitting) {
-        return;
-      }
-
-      event.stopImmediatePropagation();
-      const overlayEntry = overlayHistoryEntryRef.current;
-      const destinationEntry = getBrowserHistoryEntry();
-      const attemptedDelta = getAttemptedHistoryDelta({
-        destination: destinationEntry,
-        originHistoryId,
-        overlay: overlayEntry,
-      });
-      historyRestoringRef.current = true;
-      setHistoryRestorePending(true);
-      if (attemptedDelta === null && overlayEntry?.id) {
-        const fallbackRestore: FallbackHistoryRestore = {
-          delta: 0,
-          direction: 1,
-          overlayId: overlayEntry.id,
-          timeout: null,
-        };
-        fallbackHistoryRestoreRef.current = fallbackRestore;
-        moveFallbackHistory(fallbackRestore);
-        return;
-      }
-      const resolvedDelta = attemptedDelta ?? -1;
-      requestCloseRef.current(() => {
-        armHistoryGuardBypass();
-        window.history.go(resolvedDelta);
-      });
-      window.history.go(-resolvedDelta);
-    };
-
-    return registerFeedbackHistoryGuard(handlePopState);
-  }, [armHistoryGuardBypass, originHistoryId, overlayVisible]);
-
-  useEffect(
-    () => () => {
-      if (bypassHistoryGuardTimeoutRef.current) {
-        clearTimeout(bypassHistoryGuardTimeoutRef.current);
-      }
-      if (fallbackHistoryRestoreRef.current?.timeout) {
-        clearTimeout(fallbackHistoryRestoreRef.current.timeout);
-      }
-    },
-    [],
-  );
+  }, [discardConfirmOpen, onRequestClose]);
 
   const continueEditing = useCallback(() => {
-    pendingCloseActionRef.current = null;
     setDiscardConfirmOpen(false);
     requestAnimationFrame(() => {
       const surface = surfaceRef.current as unknown as HTMLElement | null;
@@ -291,14 +77,12 @@ export function FeedbackOverlay({
   }, []);
 
   const discardAndClose = useCallback(() => {
-    const action = pendingCloseActionRef.current;
-    if (action) {
-      formStateRef.current = initialFormState;
-      setFormState(initialFormState);
-      setFormRevision((current) => current + 1);
-      allowClose(action);
-    }
-  }, [allowClose]);
+    formStateRef.current = initialFormState;
+    setFormState(initialFormState);
+    setFormRevision((current) => current + 1);
+    setDiscardConfirmOpen(false);
+    onRequestClose();
+  }, [onRequestClose]);
 
   const trapConfirmationFocus = useCallback((event: KeyboardEvent) => {
     if (event.key !== 'Tab') {
@@ -331,7 +115,17 @@ export function FeedbackOverlay({
   }, []);
 
   useEffect(() => {
-    if (!overlayVisible || Platform.OS !== 'web') {
+    if (wasVisibleRef.current && !visible) {
+      formStateRef.current = initialFormState;
+      setFormState(initialFormState);
+      setDiscardConfirmOpen(false);
+      setFormRevision((current) => current + 1);
+    }
+    wasVisibleRef.current = visible;
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible || Platform.OS !== 'web') {
       return;
     }
 
@@ -346,7 +140,7 @@ export function FeedbackOverlay({
       cancelAnimationFrame(frame);
       document.body.style.overflow = previousOverflow;
     };
-  }, [fallbackFocusRef, overlayVisible]);
+  }, [fallbackFocusRef, visible]);
 
   useEffect(() => {
     if (!discardConfirmOpen || Platform.OS !== 'web') {
@@ -378,7 +172,7 @@ export function FeedbackOverlay({
       onRequestClose={discardConfirmOpen ? continueEditing : () => requestClose()}
       role="dialog"
       transparent
-      visible={overlayVisible}
+      visible={visible}
     >
       <View
         onResponderRelease={() => requestClose()}
@@ -473,42 +267,6 @@ export function FeedbackOverlay({
       </View>
     </Modal>
   );
-}
-
-function getBrowserHistoryEntry(): BrowserHistoryEntry {
-  const state = window.history.state as { id?: unknown } | null;
-  const navigation = (
-    window as typeof window & {
-      navigation?: { currentEntry?: { index?: unknown } };
-    }
-  ).navigation;
-  const index = navigation?.currentEntry?.index;
-  return {
-    id: typeof state?.id === 'string' ? state.id : null,
-    index: typeof index === 'number' ? index : null,
-  };
-}
-
-function getAttemptedHistoryDelta({
-  destination,
-  originHistoryId,
-  overlay,
-}: {
-  destination: BrowserHistoryEntry;
-  originHistoryId: string | null;
-  overlay: BrowserHistoryEntry | null;
-}) {
-  if (destination.index !== null && overlay?.index != null) {
-    const delta = destination.index - overlay.index;
-    if (delta !== 0) {
-      return delta;
-    }
-  }
-
-  if (!originHistoryId || destination.id !== originHistoryId) {
-    return null;
-  }
-  return -1;
 }
 
 const styles = StyleSheet.create({

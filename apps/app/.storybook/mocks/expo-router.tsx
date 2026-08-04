@@ -3,7 +3,6 @@ import {
   createContext,
   Fragment,
   isValidElement,
-  useCallback,
   useContext,
   useMemo,
   useState,
@@ -14,13 +13,10 @@ import type { PropsWithChildren, ReactNode } from 'react';
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
 type RouterContextValue = {
-  back: () => void;
-  forward: () => void;
   params: Record<string, string | undefined>;
   pathname: string;
-  replaceLocation: (href: Href) => void;
   segments: readonly string[];
-  setLocation: (href: Href) => void;
+  setPathname: (href: Href) => void;
   slotLabel: string;
 };
 
@@ -36,13 +32,10 @@ type LinkPressEvent = {
 };
 
 const RouterContext = createContext<RouterContextValue>({
-  back: () => undefined,
-  forward: () => undefined,
   params: {},
   pathname: '/home',
-  replaceLocation: () => undefined,
   segments: [],
-  setLocation: () => undefined,
+  setPathname: () => undefined,
   slotLabel: '현재 라우트 콘텐츠',
 });
 
@@ -58,58 +51,12 @@ export function RouterMockProvider({
   segments?: readonly string[];
   slotLabel?: string;
 }>) {
-  const [history, setHistory] = useState(() => ({
-    entries: [
-      {
-        params,
-        pathname: initialPathname,
-      },
-    ],
-    index: 0,
-  }));
-  const location = history.entries[history.index]!;
-  const setLocation = useCallback((href: Href) => {
-    setHistory((current) => {
-      const currentLocation = current.entries[current.index]!;
-      const entries = [
-        ...current.entries.slice(0, current.index + 1),
-        resolveHref(href, currentLocation.params),
-      ];
-      return { entries, index: entries.length - 1 };
-    });
-  }, []);
-  const replaceLocation = useCallback((href: Href) => {
-    setHistory((current) => ({
-      ...current,
-      entries: current.entries.map((entry, index) =>
-        index === current.index ? resolveHref(href, entry.params) : entry,
-      ),
-    }));
-  }, []);
-  const back = useCallback(
-    () => setHistory((current) => ({ ...current, index: Math.max(0, current.index - 1) })),
-    [],
-  );
-  const forward = useCallback(
-    () =>
-      setHistory((current) => ({
-        ...current,
-        index: Math.min(current.entries.length - 1, current.index + 1),
-      })),
-    [],
-  );
+  const [pathname, setCurrentPathname] = useState(initialPathname);
+  const setPathname = (href: Href) =>
+    setCurrentPathname(typeof href === 'string' ? href : href.pathname);
   const value = useMemo(
-    () => ({
-      back,
-      forward,
-      params: location.params,
-      pathname: location.pathname,
-      replaceLocation,
-      segments,
-      setLocation,
-      slotLabel,
-    }),
-    [back, forward, location, replaceLocation, segments, setLocation, slotLabel],
+    () => ({ params, pathname, segments, setPathname, slotLabel }),
+    [params, pathname, segments, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -132,21 +79,15 @@ export function useGlobalSearchParams<T extends Record<string, string | undefine
 }
 
 export function useRouter() {
-  const { back, forward, replaceLocation, setLocation } = useContext(RouterContext);
+  const { setPathname } = useContext(RouterContext);
   return useMemo(
     () => ({
-      back,
-      forward,
-      navigate: setLocation,
-      push: setLocation,
-      replace: replaceLocation,
+      back: () => undefined,
+      push: setPathname,
+      replace: setPathname,
     }),
-    [back, forward, replaceLocation, setLocation],
+    [setPathname],
   );
-}
-
-export function useNavigation() {
-  return useMemo(() => ({ dispatch: () => undefined }), []);
 }
 
 export function Link({
@@ -154,7 +95,7 @@ export function Link({
   children,
   href,
 }: PropsWithChildren<{ asChild?: boolean; href: Href }>) {
-  const { setLocation } = useContext(RouterContext);
+  const { setPathname } = useContext(RouterContext);
   if (
     !asChild ||
     !isValidElement<{
@@ -166,41 +107,16 @@ export function Link({
   }
 
   return cloneElement(children, {
-    href: serializeHref(href),
+    href: typeof href === 'string' ? href : href.pathname,
     onPress: (event: LinkPressEvent) => {
       children.props.onPress?.(event);
       const shouldNavigate = shouldHandleNavigation(event);
       event.preventDefault?.();
       if (shouldNavigate) {
-        setLocation(href);
+        setPathname(href);
       }
     },
   });
-}
-
-function resolveHref(href: Href, currentParams: Record<string, string | undefined>) {
-  if (typeof href !== 'string') {
-    return { params: href.params ?? currentParams, pathname: href.pathname };
-  }
-
-  const [pathname, query = ''] = href.split('?', 2);
-  return {
-    params: { ...currentParams, ...Object.fromEntries(new URLSearchParams(query)) },
-    pathname: pathname || '/',
-  };
-}
-
-function serializeHref(href: Href) {
-  if (typeof href === 'string') {
-    return href;
-  }
-
-  const query = new URLSearchParams(
-    Object.entries(href.params ?? {}).filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
-    ),
-  ).toString();
-  return query ? `${href.pathname}?${query}` : href.pathname;
 }
 
 function shouldHandleNavigation(event: LinkPressEvent) {
