@@ -60,4 +60,4 @@ PROD-653이 임시 slot API 없이 `/settings` 첫 번째 Account 행에 직접 
 
 - [x] 2.1 Account 행의 정상·지원 불가·확인 실패·이동 실패·재시도 성공과 접근성 계약을 검증하는 component test를 추가한다.
 - [x] 2.2 기본 행과 실패·재시도 상태를 검토할 Storybook catalog와 interaction 검증을 추가한다.
-- [ ] 2.3 관련 자동 검증과 strict OpenSpec validation을 통과시키고 PROD-653 통합에 필요한 concrete child handoff를 기록한다.
+- [x] 2.3 관련 자동 검증과 strict OpenSpec validation을 통과시키고 PROD-653 통합에 필요한 concrete child handoff를 기록한다.
