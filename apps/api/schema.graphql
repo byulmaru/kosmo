@@ -339,6 +339,7 @@ type Profile implements Node {
   bio: String
   bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
   createdAt: DateTime!
+  defaultPostVisibility: PostVisibility
   displayName: String!
   followPolicy: ProfileFollowPolicy!
   followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection!
@@ -551,6 +552,7 @@ type UnfollowProfilePayload {
 input UpdateProfileInput {
   avatarId: ID
   bio: String
+  defaultPostVisibility: PostVisibility
   displayName: String
   followPolicy: ProfileFollowPolicy
   headerId: ID

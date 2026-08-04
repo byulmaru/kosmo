@@ -6,6 +6,7 @@ export type StoryProfile = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
   displayName: string;
+  defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
   followers: {
     edges: Array<{
       cursor: string;
@@ -58,6 +59,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     avatar: null,
     bio: '우주와 사람을 잇는 코스모 프로필입니다.',
     displayName: '코스모 작가',
+    defaultPostVisibility: 'UNLISTED',
     followers: { edges: [], pageInfo: pageInfo() },
     followersCount: 128,
     followPolicy: 'OPEN',

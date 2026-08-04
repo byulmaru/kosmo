@@ -23,9 +23,9 @@ Local Profile별 기본 Post Visibility를 durable하게 저장하고 기존·�
 - 기존/신규 Local Profile과 Remote Profile의 저장·fallback·지원하지 않는 값 거부를 core test로 검증한다.
 
 - [x] 1.1 Profile 기본 Post Visibility와 Reply Composer 초기값의 canonical 문서를 PROD-648 계약에 맞게 정렬한다.
-- [ ] 1.2 Local Profile 기본값을 저장할 additive schema와 migration을 구현한다.
-- [ ] 1.3 Profile 생성·조회·Owner update에서 Local fallback, 허용 값과 Remote 비저장 계약을 구현한다.
-- [ ] 1.4 기존/신규 Local Profile, Remote Profile, `DIRECT` 거부와 부분 update 원자성을 검증한다.
+- [x] 1.2 Local Profile 기본값을 저장할 additive schema와 migration을 구현한다.
+- [x] 1.3 Profile 생성·조회·Owner update에서 Local fallback, 허용 값과 Remote 비저장 계약을 구현한다.
+- [x] 1.4 기존/신규 Local Profile, Remote Profile, `DIRECT` 거부와 부분 update 원자성을 검증한다.
 
 ## 2. PROD-648 GraphQL·권한 계약
 
@@ -52,9 +52,9 @@ Profile Member는 Local Profile 기본값을 조회하고 Owner는 변경할 수
 - `DIRECT`와 명시적 `null` 거부, omitted input의 변경 없음, payload Profile 값을 검증한다.
 - GraphQL schema generation/check와 API typecheck를 통과한다.
 
-- [ ] 2.1 membership을 검증하는 nullable Profile 기본값 field와 optional Owner update input/payload 계약을 구현한다.
-- [ ] 2.2 Owner·Member·non-member·Remote와 허용/거부 값의 GraphQL integration test를 추가한다.
-- [ ] 2.3 schema 산출물과 generated Relay types를 갱신하고 API·client 계약 check를 통과시킨다.
+- [x] 2.1 membership을 검증하는 nullable Profile 기본값 field와 optional Owner update input/payload 계약을 구현한다.
+- [x] 2.2 Owner·Member·non-member·Remote와 허용/거부 값의 GraphQL integration test를 추가한다.
+- [x] 2.3 schema 산출물과 generated Relay types를 갱신하고 API·client 계약 check를 통과시킨다.
 
 ## 3. PROD-648 Composer 기본값·문맥 격리
 
@@ -82,7 +82,7 @@ Profile의 값과 섞지 않는다. 향후 Quote Composer도 같은 공용 Profi
 - 일반 Post·Reply의 개별 변경, 제출 성공 reset, Profile·Parent·Environment 전환과 늦은 completion을 unit 및
   Storybook interaction으로 검증한다.
 
-- [ ] 3.1 공용 Composer Profile fragment와 초기/reset state가 Profile 기본값 또는 `UNLISTED` fallback을 사용하게 한다.
+- [x] 3.1 공용 Composer Profile fragment와 초기/reset state가 Profile 기본값 또는 `UNLISTED` fallback을 사용하게 한다.
 - [ ] 3.2 열린 draft 독립성, 개별 변경 비저장과 기존 Profile·Parent·Environment 문맥 격리를 유지한다.
 - [ ] 3.3 일반 Post·Reply Composer의 seed·fallback·reset·전환 회귀 검증을 추가한다.
 
@@ -113,8 +113,8 @@ component를 제공한다.
   검증한다.
 - Web keyboard/screen reader semantics와 Native-compatible label/state를 확인한다.
 
-- [ ] 4.1 현재 Profile identity, 세 옵션과 접근성 이름을 가진 독립 설정 control을 구현한다.
-- [ ] 4.2 dirty·pending·success·error·retry와 Relay normalized update, 늦은 completion 격리를 구현한다.
+- [x] 4.1 현재 Profile identity, 세 옵션과 접근성 이름을 가진 독립 설정 control을 구현한다.
+- [x] 4.2 dirty·pending·success·error·retry와 Relay normalized update, 늦은 completion 격리를 구현한다.
 - [ ] 4.3 Owner/Member 상태와 설정 interaction·접근성 회귀 검증을 추가한다.
 
 ## 5. PROD-648 통합 검증·handoff
@@ -143,5 +143,5 @@ PROD-648이 소유한 DB·GraphQL·Relay·Composer·설정 component slice가 �
 - 미실행 Web·Android·iOS runtime, Quote surface와 PROD-653 integration을 handoff risk로 기록한다.
 
 - [ ] 5.1 OpenSpec strict validation과 영향 package의 required check를 실행하고 실패를 수정한다.
-- [ ] 5.2 실제 implementation diff와 task checkbox가 일치하는지 확인한다.
-- [ ] 5.3 PROD-653 통합 지점, 실행 결과, 남은 Quote·platform 검증 위험을 implementation handoff에 기록한다.
+- [x] 5.2 실제 implementation diff와 task checkbox가 일치하는지 확인한다.
+- [x] 5.3 PROD-653 통합 지점, 실행 결과, 남은 Quote·platform 검증 위험을 implementation handoff에 기록한다.

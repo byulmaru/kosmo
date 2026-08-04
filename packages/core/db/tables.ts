@@ -389,12 +389,22 @@ export const Profiles = pgTable(
     normalizedHandle: text('normalized_handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
+    defaultPostVisibility: Enum.postVisibility('default_post_visibility'),
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     followersCount: integer('followers_count').notNull().default(0),
     followingCount: integer('following_count').notNull().default(0),
     createdAt: createdAt(),
   },
-  (table) => [unique().on(table.instanceId, table.normalizedHandle)],
+  (table) => [
+    unique().on(table.instanceId, table.normalizedHandle),
+    check(
+      'profile_default_post_visibility_check',
+      sql`
+        ${table.defaultPostVisibility} IN ('PUBLIC', 'UNLISTED', 'FOLLOWERS')
+        OR ${table.defaultPostVisibility} IS NULL
+      `,
+    ),
+  ],
 );
 
 export const ProfileFollows = pgTable(

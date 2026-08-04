@@ -25,6 +25,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostVisibility,
   ProfileFollowPolicy,
   ProfileMediaKind,
   ProfileState,
@@ -410,6 +411,73 @@ test('Owner는 scalar와 정규화된 tags를 하나의 update로 저장한다',
   assert.deepEqual(await readTags(profile.id), ['foo', 'straße', 'ı'].sort());
   assert.equal((await readHashtag('foo')).displayName, 'Foo');
   assert.equal((await readHashtag('straße')).displayName, 'Straße');
+});
+
+test('Local Profile 기본 Post Visibility는 지원 값만 저장하고 omitted는 유지한다', async () => {
+  const { account, profile } = await createProfileFixture();
+
+  assert.equal(profile.defaultPostVisibility, null);
+  const first = await updateProfile({
+    accountId: account.id,
+    defaultPostVisibility: PostVisibility.PUBLIC,
+    profileId: profile.id,
+  });
+  assert.equal(first.profile.defaultPostVisibility, PostVisibility.PUBLIC);
+
+  const omitted = await updateProfile({ accountId: account.id, profileId: profile.id });
+  assert.equal(omitted.profile.defaultPostVisibility, PostVisibility.PUBLIC);
+
+  for (const visibility of [PostVisibility.DIRECT, null] as const) {
+    await assert.rejects(
+      updateProfile({
+        accountId: account.id,
+        defaultPostVisibility: visibility,
+        profileId: profile.id,
+      }),
+      (error) => error instanceof ValidationError && error.field === 'defaultPostVisibility',
+    );
+  }
+
+  assert.equal(
+    await db
+      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ defaultPostVisibility }) => defaultPostVisibility),
+    PostVisibility.PUBLIC,
+  );
+});
+
+test('Remote Profile은 기본 Post Visibility를 저장할 수 없다', async () => {
+  const { account, profile } = await createProfileFixture({
+    instanceKind: InstanceKind.ACTIVITYPUB,
+  });
+
+  await assert.rejects(
+    updateProfile({
+      accountId: account.id,
+      defaultPostVisibility: PostVisibility.PUBLIC,
+      profileId: profile.id,
+    }),
+    NotFoundError,
+  );
+  assert.equal(profile.defaultPostVisibility, null);
+});
+
+test('Profile 기본 Post Visibility DB 제약은 DIRECT를 거부한다', async () => {
+  const { profile } = await createProfileFixture();
+
+  await assert.rejects(
+    db
+      .update(Profiles)
+      .set({ defaultPostVisibility: PostVisibility.DIRECT })
+      .where(eq(Profiles.id, profile.id)),
+    (error) => {
+      const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : error;
+      return cause && typeof cause === 'object' && 'code' in cause && cause.code === '23514';
+    },
+  );
 });
 
 test('같은 canonical Hashtag의 최초 display name을 유지한다', async () => {

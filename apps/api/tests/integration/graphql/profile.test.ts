@@ -1230,6 +1230,120 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('Profile 기본 Post Visibility는 Member 조회·Owner 변경과 Local 경계를 지킨다', async () => {
+    const owner = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession();
+    const outsider = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({
+      domain: 'default-visibility.remote.example',
+    });
+    const remote = await createProfile({
+      handle: 'default-visibility-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: member.account.id,
+      profileId: owner.profile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: owner.profile.id })
+      .where(eq(Sessions.id, member.session.id));
+
+    const ownerRead = await requestGraphQL<{
+      node: { defaultPostVisibility: string | null } | null;
+    }>(
+      `query DefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { defaultPostVisibility } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      owner.token,
+    );
+    assertNoGraphQLErrors(ownerRead);
+    assert.deepEqual(ownerRead.data?.node, { defaultPostVisibility: 'UNLISTED' });
+
+    const memberRead = await requestGraphQL<{
+      node: { defaultPostVisibility: string | null } | null;
+    }>(
+      `query MemberDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { defaultPostVisibility } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      member.token,
+    );
+    assertNoGraphQLErrors(memberRead);
+    assert.deepEqual(memberRead.data?.node, { defaultPostVisibility: 'UNLISTED' });
+
+    const nonMemberRead = await requestGraphQL<{
+      node: { defaultPostVisibility: string | null } | null;
+    }>(
+      `query NonMemberDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { defaultPostVisibility } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      outsider.token,
+    );
+    assertNoGraphQLErrors(nonMemberRead);
+    assert.deepEqual(nonMemberRead.data?.node, { defaultPostVisibility: null });
+
+    const updated = await requestGraphQL<{
+      updateProfile: { profile: { defaultPostVisibility: string | null } };
+    }>(
+      `mutation SetDefaultVisibility($input: UpdateProfileInput!) {
+        updateProfile(input: $input) { profile { defaultPostVisibility } }
+      }`,
+      { input: { defaultPostVisibility: 'PUBLIC' } },
+      owner.token,
+    );
+    assertNoGraphQLErrors(updated);
+    assert.deepEqual(updated.data?.updateProfile.profile, { defaultPostVisibility: 'PUBLIC' });
+
+    const memberWrite = await requestGraphQL(
+      `mutation MemberSetDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: FOLLOWERS }) { profile { id } }
+      }`,
+      {},
+      member.token,
+    );
+    assertGraphQLErrorCode(memberWrite, 'PERMISSION_DENIED');
+
+    const direct = await requestGraphQL(
+      `mutation RejectDirectDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: DIRECT }) { profile { id } }
+      }`,
+      {},
+      owner.token,
+    );
+    assertGraphQLErrorCode(direct, 'VALIDATION');
+
+    const explicitNull = await requestGraphQL(
+      `mutation RejectNullDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: null }) { profile { id } }
+      }`,
+      {},
+      owner.token,
+    );
+    assertGraphQLErrorCode(explicitNull, 'VALIDATION');
+
+    const remoteRead = await requestGraphQL<{
+      node: { defaultPostVisibility: string | null } | null;
+    }>(
+      `query RemoteDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { defaultPostVisibility } }
+      }`,
+      { id: globalId('Profile', remote.id) },
+      owner.token,
+    );
+    assertNoGraphQLErrors(remoteRead);
+    assert.deepEqual(remoteRead.data?.node, { defaultPostVisibility: null });
+  });
+
   test('rejects a non-Media global ID before updating Profile media', async () => {
     const auth = await createAuthenticatedSession();
 
