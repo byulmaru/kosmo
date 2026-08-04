@@ -255,6 +255,17 @@ OpenSpec decision은 다음 세 종류로 구분한다.
 - `Upstream Change Required`: OpenSpec 작성 중 새 제품 행동이나 범위를 발견한 상태다. 현재 Authority는
   없으며 canonical·Linear가 갱신될 때까지 `Blocked`로 유지한다.
 
+### 플랫폼 지원 상태와 제품 계약을 분리한다
+
+Native 또는 다른 플랫폼이 현재 배포되지 않았거나 실행 가능한 QA 환경이 없다는 사실은 지원·검증 상태다.
+이를 `현재 Web 출시·검증 범위`, `Native runtime 증거 미실행`, `Native 출시 gate로 이관`처럼 시점과 증거
+범위로 기록하고, 공용 코드·route·API가 이미 존재하는 경우 해당 플랫폼에 행동이 영구히 적용되지 않는 제품
+계약으로 쓰지 않는다. `Native에는 적용하지 않는다`, `지원하지 않는다`와 같은 영구적 비적용은 canonical
+domain/design 또는 Linear authority가 제품 결정을 명시한 경우에만 normative requirement/decision으로 기록한다.
+검증하지 않은 플랫폼을 완료로 일반화하지 않되, 미래 지원을 막지 않는 후속 owner와 gate를 함께 적는다.
+Hover처럼 지원 상태와 무관한 실제 platform 입력 모델의 차이는 이 원칙의 대상이 아니며, 해당 행동 경계를
+정당화하는 근거를 함께 기록한다.
+
 단일 `Accepted` 상태는 사용하지 않는다. 각 decision은 날짜, Decision Class, 정확한 canonical·Linear
 Authority / Provenance와 `Active | Blocked | Superseded` 상태를 기록한다. `Blocked` decision은 spec
 requirement, task Guardrail 또는 checkbox의 구현 근거가 될 수 없다.

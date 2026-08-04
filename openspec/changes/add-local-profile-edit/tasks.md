@@ -136,7 +136,7 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
   재사용, stale completion과 preview cleanup을 확인한다.
 - route/Web back/Android hardware back discard, saving 차단, 성공 guard 해제→normalize→replace를 확인한다.
 - Web 실제 runtime QA는 자동화 통과와 별도 증거로 기록한다. iOS·Android 실제 기기 QA는 현재 Web 출시 완료
-  조건에서 명시적으로 제외하고 Native 출시 gate로 이관하며, 실행하지 않은 플랫폼을 통과로 적지 않는다.
+  증거에 포함하지 않고 Native 출시 gate로 이관하며, 실행하지 않은 플랫폼을 통과로 적지 않는다.
 - 테스트 코드 범위: `profile_media` DB/core service, Profile GraphQL query/mutation integration, Profile route와
   upload/navigation/Relay를 직접 검증하는 기존 API/app test surface.
 - 테스트 필요성: 초기 부적격 권한 거부, tri-state 관계 원자성, 공개 Profile read, 부분 upload 실패와 navigation race가
@@ -158,7 +158,7 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
       명시적 field retry와 save retry Ready ID 재사용을 검증한다.
 - [x] 2.7 dirty route/Web/Android back confirmation, saving navigation 차단과 성공 guard 해제→Relay normalize→
       relativeHandle Profile replace를 구현하고 route test를 추가한다.
-- [x] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 명시적 제외를
+- [x] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 미실행 상태를
       구분해 PROD-492 PR에 권한·Media·Relay·navigation 증거와 Native 출시 gate를 기록한다.
 
 ## 3. PROD-613 post-commit 응답·Relay·navigation 회귀 수정

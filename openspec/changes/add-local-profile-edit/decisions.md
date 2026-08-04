@@ -370,7 +370,7 @@
 - Consequences: 공용 component에서 compact visual과 platform별 실제 입력 target을 분리하고 제거 action의
   접근성 label/state를 유지한다.
 - Confirmation / Follow-up: Storybook에서 Web `32×32 CSS px` target을 검증하고 iOS `44×44 pt`, Android
-  `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 현재 이슈·PR 완료 조건에서 제외한 뒤 Native 출시
+  `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 현재 이슈·PR 완료 증거로 삼지 않고 Native 출시
   gate에서 수행한다.
 
 ### 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다
@@ -391,8 +391,8 @@
 - Consequences: PROD-492는 필수 자동화와 Web runtime 증거로 PR readiness를 판단할 수 있다. Native 출시 전에는
   safe area, Android hardware back, touch target, VoiceOver·TalkBack과 플랫폼별 picker/upload 동작을 별도 gate에서
   검증해야 한다.
-- Confirmation / Follow-up: PROD-492 PR에 Web 수동 검증과 iOS·Android 미실행·명시적 제외를 함께 기록하고,
-  Native 출시 작업에서 실제 기기 QA를 다시 연다.
+- Confirmation / Follow-up: PROD-492 PR에 Web 수동 검증과 iOS·Android 미실행 상태를 함께 기록하고, Native
+  출시 작업에서 실제 기기 QA를 다시 연다. 이 미실행 상태를 Native의 영구 비적용으로 해석하지 않는다.
 
 ## Remaining Decisions
 
