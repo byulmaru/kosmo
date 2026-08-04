@@ -14,8 +14,8 @@
 
 route·GraphQL 없이 displayName, bio, `followPolicy` enum draft와 한 줄 `팔로우 요청 자동 승인` Switch,
 avatar/header controlled state와 Profile Tag 로컬 편집을 표현하는 React Native 공용 Profile edit component와 현재
-Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 자동화 검증은 PROD-492 공용 구현에 포함하되 실제 기기
-검증은 Native 출시 gate에서 수행한다.
+Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 자동화 검증은 PROD-492 공용 구현에 포함한다. Native
+실제 기기 QA는 아직 실행하지 않았고 현재 Web 완료 증거에 포함하지 않는다.
 
 **Guardrails**
 
@@ -58,7 +58,7 @@ Web Storybook 상태 카탈로그를 전달한다. Native route 연결과 자동
   action의 `32×32 CSS px` target을 확인한다.
 - displayName 40자 경계, 40자 초과 legacy 초기값 그대로+다른 field 변경, 40자 초과 초기값 변경 거부를 확인한다.
 - Native safe area·layout과 Profile Tag 제거 action의 iOS `44×44 pt`, Android `48×48 dp` mapping은 공용 구현과
-  자동화로 유지한다. 실제 기기 검증은 현재 이슈·PR 완료 조건에서 제외하고 Native 출시 gate에서 수행한다.
+  자동화로 유지한다. Native 실제 기기 QA는 아직 실행하지 않았고 현재 Web 완료 증거에 포함하지 않는다.
 - 테스트 코드 범위는 Profile edit form/editor의 승인 동작을 직접 검증하는 최소 component test로 제한하고 중복
   snapshot·새 harness·관련 없는 fixture 확대는 제외한다.
 
@@ -135,8 +135,8 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 - Relay 동일 Media identity, ProfileHero 갱신, 한쪽 upload 실패/다른 쪽 Ready, field retry, save retry의 Ready ID
   재사용, stale completion과 preview cleanup을 확인한다.
 - route/Web back/Android hardware back discard, saving 차단, 성공 guard 해제→normalize→replace를 확인한다.
-- Web 실제 runtime QA는 자동화 통과와 별도 증거로 기록한다. iOS·Android 실제 기기 QA는 현재 Web 출시 완료
-  증거에 포함하지 않고 Native 출시 gate로 이관하며, 실행하지 않은 플랫폼을 통과로 적지 않는다.
+- Web 실제 runtime QA는 자동화 통과와 별도 증거로 기록한다. iOS·Android 실제 기기 QA는 아직 실행하지 않았고
+  현재 Web 완료 증거에 포함하지 않으며, 실행하지 않은 플랫폼을 통과로 적지 않는다.
 - 테스트 코드 범위: `profile_media` DB/core service, Profile GraphQL query/mutation integration, Profile route와
   upload/navigation/Relay를 직접 검증하는 기존 API/app test surface.
 - 테스트 필요성: 초기 부적격 권한 거부, tri-state 관계 원자성, 공개 Profile read, 부분 upload 실패와 navigation race가
@@ -159,7 +159,8 @@ avatar/header·`followPolicy` 저장, viewer-authorized Profile image read, Prof
 - [x] 2.7 dirty route/Web/Android back confirmation, saving navigation 차단과 성공 guard 해제→Relay normalize→
       relativeHandle Profile replace를 구현하고 route test를 추가한다.
 - [x] 2.8 core·API·app·Web 필수 검증을 통과하고 실제 Web QA 증거와 iOS·Android 실제 기기 QA의 미실행 상태를
-      구분해 PROD-492 PR에 권한·Media·Relay·navigation 증거와 Native 출시 gate를 기록한다.
+      구분해 PROD-492 PR에 권한·Media·Relay·navigation 증거와 현재 Web 완료에 포함하지 않는 Native QA 상태를
+      기록한다.
 
 ## 3. PROD-613 post-commit 응답·Relay·navigation 회귀 수정
 
@@ -205,7 +206,7 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
 - 기존 dirty navigation guard, Relay normalized Profile 갱신, avatar/header omitted/ID/null과 validation이
   회귀하지 않는지 관련 app·API·BFF·core test로 확인한다.
 - Web dev 환경에서 실제 저장을 재검증하고 원인, 수정 경계, 자동화 결과와 Native 실제 기기 QA 미실행을
-  PROD-613 PR에 기록한다.
+  현재 Web 완료 증거에 포함하지 않는 상태로 PROD-613 PR에 기록한다.
 
 - [x] 3.1 조사 단계 임시 correlation 계측으로 text-only와 Ready avatar/header ID 저장을 재현해 최초 정지
       경계가 `router.replace` callback return 뒤 실제 Web route commit임을 PROD-613에 기록하고 계측 코드를 제거한다.

@@ -127,8 +127,8 @@
 - Alternatives Considered: Web 기준의 더 작은 공통 높이는 Native 뒤로가기 target을 줄여 제외했다. safe-area까지
   포함한 고정 `48px`은 기기별 inset을 침범하므로 제외했다.
 - Consequences: Web과 Native의 header content rhythm은 같고, safe-area padding은 외부 shell이 별도로 소유한다.
-- Confirmation / Follow-up: Storybook에서 content row와 뒤로가기 target이 `48px`인지 검증하고 Native 실제 safe-area
-  배치는 현재 이슈·PR 완료 조건에서 제외한 뒤 Native 출시 gate에서 확인한다.
+- Confirmation / Follow-up: Storybook에서 content row와 뒤로가기 target이 `48px`인지 검증한다. Native 실제 safe-area
+  배치는 아직 실행하지 않았고 현재 Web 완료 증거에 포함하지 않는다.
 
 ### 40 code point를 초과한 legacy 표시 이름은 변경하지 않은 경우에만 통과시킨다
 
@@ -370,8 +370,8 @@
 - Consequences: 공용 component에서 compact visual과 platform별 실제 입력 target을 분리하고 제거 action의
   접근성 label/state를 유지한다.
 - Confirmation / Follow-up: Storybook에서 Web `32×32 CSS px` target을 검증하고 iOS `44×44 pt`, Android
-  `48×48 dp` mapping을 구현한다. Native 실제 기기 검증은 현재 이슈·PR 완료 증거로 삼지 않고 Native 출시
-  gate에서 수행한다.
+  `48×48 dp` mapping을 구현한다. Native 실제 기기 QA는 아직 실행하지 않았고 현재 Web 완료 증거에 포함하지
+  않는다.
 
 ### 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다
 
@@ -383,16 +383,16 @@
 - Context / Problem: 공용 React Native Profile edit 구현은 Web·Android·iOS를 지원하지만 현재 출시 대상은
   Web이다. iOS·Android 실제 기기 QA를 현재 PR 완료 조건으로 유지하면 출시 범위와 검증 gate가 어긋난다.
 - Decision Outcome: 현재 출시와 수동 runtime QA 범위는 Web으로 한정한다. iOS·Android 실제 기기 QA는
-  PROD-491·492와 PROD-490 통합 완료 조건에서 제외하고 Native 출시 gate에서 별도로 수행한다. 공용 React Native
-  구현과 자동화 검증은 유지하되 Web 검증을 Native runtime 완료 증거로 사용하지 않는다.
+  PROD-491·492와 PROD-490 통합 완료 조건에 포함하지 않으며 현재 Web 완료 증거로도 사용하지 않는다. 공용 React
+  Native 구현과 자동화 검증은 유지하되 Web 검증을 Native runtime 완료 증거로 사용하지 않는다.
 - Alternatives Considered: iOS·Android 실제 기기 QA를 현재 완료 조건으로 유지하는 방식은 출시 대상이 아닌
   플랫폼 때문에 Web PR readiness를 지연하므로 제외했다. Native 검증을 완료한 것으로 간주하는 방식도 실제
   runtime 증거가 없어 제외했다.
-- Consequences: PROD-492는 필수 자동화와 Web runtime 증거로 PR readiness를 판단할 수 있다. Native 출시 전에는
-  safe area, Android hardware back, touch target, VoiceOver·TalkBack과 플랫폼별 picker/upload 동작을 별도 gate에서
-  검증해야 한다.
-- Confirmation / Follow-up: PROD-492 PR에 Web 수동 검증과 iOS·Android 미실행 상태를 함께 기록하고, Native
-  출시 작업에서 실제 기기 QA를 다시 연다. 이 미실행 상태를 Native의 영구 비적용으로 해석하지 않는다.
+- Consequences: PROD-492는 필수 자동화와 Web runtime 증거로 PR readiness를 판단할 수 있다. Native 실제 기기 QA는
+  아직 실행하지 않았으며 현재 Web 완료 증거에 포함하지 않는다. Native 지원이 재개될 때 필요한 범위와 검증을
+  정하며, 현재 별도 Native owner나 gate를 배정하지 않는다.
+- Confirmation / Follow-up: PROD-492 PR에 Web 수동 검증과 iOS·Android 실제 기기 QA 미실행 상태를 함께 기록한다.
+  이 미실행 상태를 Native의 영구 비적용으로 해석하지 않는다.
 
 ## Remaining Decisions
 
