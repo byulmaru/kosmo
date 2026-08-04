@@ -55,8 +55,8 @@ const navigation: NavigationItem[] = [
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
   { Icon: UserRound, label: '프로필', profile: true },
-  { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
   { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
+  { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
 ];
 
 type Props = {

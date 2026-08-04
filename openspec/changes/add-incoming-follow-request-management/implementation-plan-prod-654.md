@@ -11,6 +11,7 @@
 ## Global Constraints
 
 - Canonical destination은 `/follow-requests`, label은 `팔로워 요청`, glyph는 Lucide `UserRoundPlus`다.
+- shared navigation에서 `팔로워 요청`은 `북마크` 바로 위에 표시한다.
 - full Web sidebar, compact Web rail과 mobile drawer는 동일한 shared navigation item을 사용한다.
 - mobile bottom tab과 generic `/menu`를 추가하거나 복원하지 않는다.
 - `UniversalShell`, `BottomTabBar`, Follow Request 화면·Relay·API·DB, notification/push/realtime은 수정하지 않는다.
@@ -134,7 +135,7 @@
 
 - [x] **Step 4: 최소 production 변경으로 GREEN을 만든다**
 
-  `SidebarNavigation.tsx`의 Lucide import에 `UserRoundPlus`를 추가하고 기존 복원 위치인 `북마크` 뒤에 item 하나만 추가한다.
+  `SidebarNavigation.tsx`의 Lucide import에 `UserRoundPlus`를 추가하고 `북마크` 바로 위에 item 하나만 추가한다.
 
   ```tsx
   import {
@@ -153,8 +154,8 @@
     { href: '/search', Icon: Search, label: '검색' },
     { href: '/notifications', Icon: Bell, label: '알림' },
     { Icon: UserRound, label: '프로필', profile: true },
-    { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
     { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
+    { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
   ];
   ```
 
