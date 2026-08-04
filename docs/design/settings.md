@@ -75,15 +75,15 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 
 ## 접근성
 
-- `설정`을 페이지의 단일 heading으로 programmatic하게 노출하고, Account 외부 진입점 다음에 현재 Profile
-  identity와 Profile control이 오는 문서 순서를 유지한다. 시각적으로 제거한 `계정 설정`·`프로필 설정`
-  heading을 screen reader 전용 중복 heading으로 다시 만들지 않는다.
+- `설정`을 페이지의 단일 heading으로 programmatic하게 노출하고, 문서·보조기술 읽기 순서는 `설정` page
+  heading → Account 외부 진입점 → 비상호작용 Profile identity → Profile control을 따른다. 시각적으로 제거한
+  `계정 설정`·`프로필 설정` heading을 screen reader 전용 중복 heading으로 다시 만들지 않는다.
 - Account 진입점은 행 label과 accessible name에서 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달한다.
   Profile control의 accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다. navigation과 page action은
   실제 동작에 맞는 role, accessible name, current/disabled/busy 상태를 제공한다.
-- Web keyboard focus 순서는 page heading, Account section, Profile 대상과 Profile section의 문서 순서를
-  따른다. Account 외부 이동 오류 announcement는 PROD-645가, Profile 저장 결과 announcement는 PROD-648이
-  중복 없이 소유한다.
+- Web keyboard Tab 순서는 Account 외부 진입점 → Profile 선택 control(있는 경우) → Profile control이다. page
+  heading과 비상호작용 Profile identity는 tab stop이 아니다. Account 외부 이동 오류 announcement는 PROD-645가,
+  Profile 저장 결과 announcement는 PROD-648이 중복 없이 소유한다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지

@@ -128,19 +128,20 @@
 
 ### Requirement: Settings 접근성 계약
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-653` — 설정 페이지는 `설정`을 단일 page heading으로 programmatic하게 노출해야 하며(MUST), 시각적으로 제거한 `계정 설정`·`프로필 설정` heading을 screen reader 전용 중복 heading으로 다시 만들어서는 안 된다(MUST NOT). Account 진입점의 행 label과 accessible name은 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달해야 하고(MUST), Profile control은 accessible name에서 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). navigation과 page action은 실제 동작에 맞는 role, accessible name과 current·disabled·busy 상태를 노출해야 한다(MUST). Web keyboard focus는 문서의 Account 다음 Profile 순서를 따라야 하고(MUST), text scaling과 reflow에서 현재 Profile identity와 action을 잃어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-653` — 설정 페이지는 `설정`을 단일 page heading으로 programmatic하게 노출해야 하며(MUST), 시각적으로 제거한 `계정 설정`·`프로필 설정` heading을 screen reader 전용 중복 heading으로 다시 만들어서는 안 된다(MUST NOT). 문서·보조기술 읽기 순서는 `설정` page heading → Account 외부 진입점 → 비상호작용 Profile identity → Profile control을 따라야 하고(MUST), Web keyboard Tab 순서는 Account 외부 진입점 → Profile 선택 control(있는 경우) → Profile control이어야 한다(MUST). page heading과 비상호작용 Profile identity는 tab stop이 아니어야 한다(MUST NOT). Account 진입점의 행 label과 accessible name은 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달해야 하고(MUST), Profile control은 accessible name에서 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). navigation과 page action은 실제 동작에 맞는 role, accessible name과 current·disabled·busy 상태를 노출해야 한다(MUST). text scaling과 reflow에서 현재 Profile identity와 action을 잃어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
 
 #### Scenario: screen reader가 설정 소유 단위를 구분한다
 
 - **WHEN** screen reader 사용자가 `/settings`를 heading과 control 단위로 탐색한다
-- **THEN** `설정` page heading 다음에 Account 외부 진입점과 Profile control이 문서 순서로 노출된다
+- **THEN** `설정` page heading 다음에 Account 외부 진입점, 비상호작용 Profile identity와 Profile control이 이 문서 순서로 노출된다
 - **AND** Account 진입점의 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 알 수 있다
 - **AND** Profile control의 accessible name에서 Kosmo 내부 기능과 현재 설정 대상을 알 수 있다
 
 #### Scenario: keyboard로 설정 페이지를 탐색한다
 
 - **WHEN** Web keyboard 사용자가 `/settings`의 interactive control을 순서대로 이동한다
-- **THEN** focus는 Account 외부 진입점 다음 Profile 대상과 Profile control의 문서 순서를 따른다
+- **THEN** Tab focus는 Account 외부 진입점 다음 Profile 선택 control(있는 경우)과 Profile control을 순서대로 지난다
+- **AND** page heading과 비상호작용 Profile identity는 tab stop이 아니다
 - **AND** focus-visible, disabled와 busy 상태를 색상만으로 전달하지 않는다
 
 #### Scenario: 작은 화면과 font scaling에서 정보를 유지한다

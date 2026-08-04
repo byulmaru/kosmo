@@ -60,7 +60,10 @@ Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 �
   이 순서로 둔다. Account 행 label·이동 동작·accessible name은 Byulmaru ID 외부 서비스임을 전달하고,
   Profile control accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다. Profile 대상이 없으면 Account
   외부 진입점을 유지한 채 기존 Profile 선택·생성 flow로 연결하는 empty state를 표시하며 다른 Profile의 값을
-  fallback으로 쓰지 않는다.
+  fallback으로 쓰지 않는다. 문서·보조기술 읽기 순서는 `설정` page heading → Account 외부 진입점 →
+  비상호작용 Profile identity → Profile content로 유지하고, Web keyboard Tab 순서는 Account 외부 진입점 →
+  Profile 선택 control(있는 경우) → Profile controls로 별도 정의한다. page heading과 비상호작용 Profile
+  identity는 tab stop이 아니다.
 - Alternatives Considered: Account/Profile tab으로 페이지 전체를 전환하는 방식, 외부 entry와 내부 control을
   한 form으로 합치는 방식, selected Profile이 없을 때 page 전체를 숨기는 방식. 현재 소유 단위와 empty-state
   계약을 충족하지 않으므로 채택하지 않았다.
