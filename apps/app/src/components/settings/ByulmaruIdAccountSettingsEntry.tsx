@@ -1,8 +1,10 @@
+import { Link } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
+import type { LinkProps } from 'expo-router';
 
 export const BYULMARU_ID_ACCOUNT_SETTINGS_URL = 'https://id.byulmaru.co';
 
@@ -12,20 +14,20 @@ const FAILURE_MESSAGE = 'Byulmaru ID 계정 설정을 열지 못했어요.';
 
 export function ByulmaruIdAccountSettingsEntry() {
   const theme = useTheme();
-  const [status, setStatus] = useState<'idle' | 'opening' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'opening' | 'error' | 'retrying'>('idle');
   const [focused, setFocused] = useState(false);
   const isOpeningRef = useRef(false);
   const web = Platform.OS === 'web';
-  const isOpening = status === 'opening';
-  const hasError = status === 'error';
+  const isOpening = status === 'opening' || status === 'retrying';
+  const hasError = status === 'error' || status === 'retrying';
 
-  const openAccountSettings = useCallback(async () => {
-    if (isOpening || isOpeningRef.current) {
+  const openAccountSettings = useCallback(async (retrying = false) => {
+    if (isOpeningRef.current) {
       return;
     }
 
     isOpeningRef.current = true;
-    setStatus('opening');
+    setStatus(retrying ? 'retrying' : 'opening');
     try {
       if (!(await Linking.canOpenURL(BYULMARU_ID_ACCOUNT_SETTINGS_URL))) {
         throw new Error('unsupported external URL');
@@ -38,38 +40,58 @@ export function ByulmaruIdAccountSettingsEntry() {
     } finally {
       isOpeningRef.current = false;
     }
-  }, [isOpening]);
+  }, []);
+
+  const handleWebPress: NonNullable<LinkProps['onPress']> = (event) => {
+    if (!shouldHandleWebNavigation(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    void openAccountSettings();
+  };
+
+  const entry = (
+    <Pressable
+      accessibilityLabel={ENTRY_ACCESSIBILITY_LABEL}
+      accessibilityRole="link"
+      accessibilityState={{ busy: isOpening, disabled: isOpening || hasError }}
+      aria-busy={web && isOpening ? true : undefined}
+      disabled={isOpening || hasError}
+      onPress={web ? handleWebPress : () => openAccountSettings()}
+      onBlur={() => setFocused(false)}
+      onFocus={() => setFocused(true)}
+      style={({ pressed }) => [
+        styles.entry,
+        web && focused ? styles.entryFocused : null,
+        {
+          borderColor: theme.divider,
+          outlineColor: web && focused ? theme.focus : undefined,
+          opacity: pressed || isOpening || hasError ? 0.6 : 1,
+        },
+      ]}
+      testID="byulmaru-id-account-settings-entry"
+    >
+      <Text style={[styles.label, { color: theme.text }]}>{ENTRY_LABEL}</Text>
+      <ChevronRightIcon
+        accessibilityElementsHidden
+        color={theme.textSecondary}
+        pointerEvents="none"
+        size={20}
+        strokeWidth={2}
+      />
+    </Pressable>
+  );
 
   return (
     <View style={styles.root} testID="byulmaru-id-account-settings-entry-container">
-      <Pressable
-        accessibilityLabel={ENTRY_ACCESSIBILITY_LABEL}
-        accessibilityRole="link"
-        accessibilityState={{ busy: isOpening, disabled: isOpening || hasError }}
-        disabled={isOpening || hasError}
-        onPress={openAccountSettings}
-        onBlur={() => setFocused(false)}
-        onFocus={() => setFocused(true)}
-        style={({ pressed }) => [
-          styles.entry,
-          web && focused ? styles.entryFocused : null,
-          {
-            borderColor: theme.divider,
-            outlineColor: web && focused ? theme.focus : undefined,
-            opacity: pressed || isOpening || hasError ? 0.6 : 1,
-          },
-        ]}
-        testID="byulmaru-id-account-settings-entry"
-      >
-        <Text style={[styles.label, { color: theme.text }]}>{ENTRY_LABEL}</Text>
-        <ChevronRightIcon
-          accessibilityElementsHidden
-          color={theme.textSecondary}
-          pointerEvents="none"
-          size={20}
-          strokeWidth={2}
-        />
-      </Pressable>
+      {web ? (
+        <Link asChild href={BYULMARU_ID_ACCOUNT_SETTINGS_URL}>
+          {entry}
+        </Link>
+      ) : (
+        entry
+      )}
 
       {hasError ? (
         <View
@@ -82,10 +104,19 @@ export function ByulmaruIdAccountSettingsEntry() {
           <Pressable
             accessibilityLabel="Byulmaru ID 계정 설정 다시 시도"
             accessibilityRole="button"
-            onPress={openAccountSettings}
+            accessibilityState={{
+              busy: status === 'retrying',
+              disabled: !web && status === 'retrying',
+            }}
+            aria-busy={web && status === 'retrying' ? true : undefined}
+            disabled={!web && status === 'retrying'}
+            onPress={() => openAccountSettings(true)}
             style={({ pressed }) => [
               styles.retry,
-              { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+              {
+                borderColor: theme.border,
+                opacity: pressed || status === 'retrying' ? 0.7 : 1,
+              },
             ]}
             testID="byulmaru-id-account-settings-retry"
           >
@@ -94,6 +125,26 @@ export function ByulmaruIdAccountSettingsEntry() {
         </View>
       ) : null}
     </View>
+  );
+}
+
+function shouldHandleWebNavigation(event: Parameters<NonNullable<LinkProps['onPress']>>[0]) {
+  const webEvent = event as typeof event & {
+    altKey?: boolean;
+    button?: number;
+    ctrlKey?: boolean;
+    currentTarget?: { target?: string | null };
+    metaKey?: boolean;
+    shiftKey?: boolean;
+  };
+  return (
+    !webEvent.defaultPrevented &&
+    !webEvent.metaKey &&
+    !webEvent.altKey &&
+    !webEvent.ctrlKey &&
+    !webEvent.shiftKey &&
+    (webEvent.button == null || webEvent.button === 0) &&
+    [undefined, null, '', 'self'].includes(webEvent.currentTarget?.target)
   );
 }
 

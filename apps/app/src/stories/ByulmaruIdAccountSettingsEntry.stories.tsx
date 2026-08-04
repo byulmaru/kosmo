@@ -1,5 +1,5 @@
 import { Linking, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import {
   BYULMARU_ID_ACCOUNT_SETTINGS_URL,
   ByulmaruIdAccountSettingsEntry,
@@ -36,7 +36,9 @@ export const Default: Story = {
         name: 'Byulmaru ID 계정 설정, 외부 서비스로 이동',
       });
       await expect(entry).toBeVisible();
-      await userEvent.click(entry);
+      await expect(entry).toHaveAttribute('href', BYULMARU_ID_ACCOUNT_SETTINGS_URL);
+      entry.focus();
+      await userEvent.keyboard('{Enter}');
       await expect(openURL).toHaveBeenCalledWith(BYULMARU_ID_ACCOUNT_SETTINGS_URL);
       await expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
     } finally {
@@ -79,12 +81,16 @@ export const NavigationFailureRetry: Story = {
     const originalCanOpenURL = Linking.canOpenURL;
     const originalOpenURL = Linking.openURL;
     let attempts = 0;
+    let resolveRetry: (() => void) | undefined;
     const canOpenURL = fn(async () => true);
-    const openURL = fn(async () => {
+    const openURL = fn(() => {
       attempts += 1;
       if (attempts === 1) {
-        throw new Error('story navigation failure');
+        return Promise.reject(new Error('story navigation failure'));
       }
+      return new Promise<void>((resolve) => {
+        resolveRetry = resolve;
+      });
     });
     Linking.canOpenURL = canOpenURL;
     Linking.openURL = openURL;
@@ -95,11 +101,19 @@ export const NavigationFailureRetry: Story = {
         canvas.getByRole('link', { name: 'Byulmaru ID 계정 설정, 외부 서비스로 이동' }),
       );
       await expect(canvas.getByRole('alert')).toBeVisible();
-      await userEvent.click(
-        canvas.getByRole('button', { name: 'Byulmaru ID 계정 설정 다시 시도' }),
-      );
+      const retry = canvas.getByRole('button', {
+        name: 'Byulmaru ID 계정 설정 다시 시도',
+      });
+      retry.focus();
+      const retryInteraction = userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(resolveRetry).toBeDefined());
+      await expect(canvas.getByRole('alert')).toBeVisible();
+      await expect(retry).toHaveAttribute('aria-busy', 'true');
+      await expect(retry).toHaveFocus();
       await expect(openURL).toHaveBeenCalledTimes(2);
-      await expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+      resolveRetry?.();
+      await retryInteraction;
+      await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument());
     } finally {
       Linking.canOpenURL = originalCanOpenURL;
       Linking.openURL = originalOpenURL;

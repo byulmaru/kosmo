@@ -39,16 +39,20 @@
 - `apps/app`의 settings component 영역에 stateful concrete Account entry component를 둔다. public prop은 parent
   layout이 필요한 범위로 제한하고 canonical URL이나 navigation callback을 caller가 주입하게 하지 않는다.
 - 시각 label은 `Byulmaru ID 계정 설정`, accessible name은 `Byulmaru ID 계정 설정, 외부 서비스로 이동`을
-  기본 copy로 사용한다. 전체 행을 `link` role의 `Pressable`로 만들고 우측에는 `ChevronRight`만 둔다.
-- 한 번의 action은 `Linking.canOpenURL('https://id.byulmaru.co')`를 확인한 뒤 true일 때만 같은 URL로
-  `Linking.openURL()`을 실행한다. 확인 또는 이동이 실패하면 platform 원문을 버리고 child 내부 error state로
-  전환한다.
+  기본 copy로 사용한다. 전체 행은 Web에서 canonical `href`를 가진 Expo Router 외부 `Link`와 `Pressable`을
+  결합하고 Native에서는 `link` role의 `Pressable`로 렌더링하며, 우측에는 `ChevronRight`만 둔다.
+- Web의 수정자·보조 버튼 동작은 실제 anchor의 browser 기본 동작에 맡긴다. 평범한 활성화와 Native action은
+  `Linking.canOpenURL('https://id.byulmaru.co')`를 확인한 뒤 true일 때만 같은 URL로 `Linking.openURL()`을
+  실행한다. 확인 또는 이동이 실패하면 platform 원문을 버리고 child 내부 error state로 전환한다.
 - 오류에는 `Byulmaru ID 계정 설정을 열지 못했어요.`와 별도 button role의 `다시 시도`를 제공한다. 재시도는
   동일한 확인→이동 순서를 다시 수행하고 성공하면 오류를 제거한다.
-- 이동 중에는 중복 실행을 막고 link의 busy/disabled 상태를 노출한다. 오류 container는 live region 또는
-  alert semantics로 한 번만 announce하고 Profile content를 가리지 않는다.
-- component unit test는 지원 가능·지원 불가·확인 rejection·open rejection·재시도 성공, exact URL과 semantics를
-  검증한다. Storybook은 기본 행과 실패→재시도 상태를 catalog하고 Web interaction/a11y를 확인한다.
+- 이동 중에는 중복 실행을 막고 link의 busy/disabled 상태를 노출한다. 재시도 중에는 오류 container와 같은
+  retry focus target을 mount 상태로 유지한다. Web retry는 busy 상태와 instance-local 잠금으로 focus를
+  유지하고 Native retry는 busy/disabled 상태를 노출한다. 오류 container는 live region 또는 alert
+  semantics로 한 번만 announce하고 Profile content를 가리지 않는다.
+- component unit test는 지원 가능·지원 불가·확인 rejection·open rejection·재시도 성공, exact URL과 Web
+  anchor·수정자 동작·재시도 pending semantics를 검증한다. Storybook은 keyboard 외부 이동과 실패→재시도
+  focus 유지 상태를 catalog하고 Web interaction/a11y를 확인한다.
 
 ### Allowed Alternatives
 
@@ -58,7 +62,8 @@
 
 ### Known Traps
 
-- Expo Router 내부 `href`로 canonical URL을 처리해 Kosmo route 또는 SPA fallback으로 보내지 않는다.
+- absolute canonical URL이 아닌 Expo Router 내부 `href`로 처리해 Kosmo route 또는 SPA fallback으로 보내지
+  않는다. Web의 실제 외부 anchor를 JS-only `Pressable`로 대체하지 않는다.
 - `void Linking.openURL(...)`처럼 Promise rejection을 버리거나 `canOpenURL=false`를 성공으로 처리하지 않는다.
 - Web에서 native 전용 browser API를 직접 import하거나 공용 component에서 `window`를 읽지 않는다.
 - chevron을 별도 focus target으로 만들거나 Profile control에 같은 이동 affordance를 복제하지 않는다.

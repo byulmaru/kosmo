@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { cloneElement, createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,6 +33,12 @@ const openURL = mock.fn(async (url: string) => {
 
 const require = createRequire(import.meta.url);
 
+mock.module('expo-router', {
+  exports: {
+    Link: ({ children, href }: { children: ReactElement<{ href?: string }>; href: string }) =>
+      createElement('Link', { href }, cloneElement(children, { href })),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module('react-native', {
   exports: {
     Linking: { canOpenURL, openURL },
@@ -86,6 +92,8 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     const entry = byTestId('byulmaru-id-account-settings-entry');
     assert.equal(entry.props.accessibilityLabel, 'Byulmaru ID 계정 설정, 외부 서비스로 이동');
     assert.equal(entry.props.accessibilityRole, 'link');
+    assert.equal(entry.props.href, 'https://id.byulmaru.co');
+    assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
 
     await act(async () => entry.props.onFocus());
@@ -96,8 +104,10 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     );
     await act(async () => entry.props.onBlur());
 
-    await act(async () => entry.props.onPress());
+    const event = createWebPressEvent();
+    await act(async () => entry.props.onPress(event));
 
+    assert.equal(event.preventDefault.mock.callCount(), 1);
     assert.equal(canOpenURL.mock.callCount(), 1);
     assert.equal(openURL.mock.callCount(), 1);
     assert.equal(openURL.mock.calls[0].arguments[0], 'https://id.byulmaru.co');
@@ -108,7 +118,7 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     canOpenResult = false;
     await render();
 
-    await act(async () => byTestId('byulmaru-id-account-settings-entry').props.onPress());
+    await pressEntry();
 
     assert.equal(openURL.mock.callCount(), 0);
     assert.equal(
@@ -122,7 +132,7 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     canOpenError = new Error('cannot inspect URL');
     await render();
 
-    await act(async () => byTestId('byulmaru-id-account-settings-entry').props.onPress());
+    await pressEntry();
     assert.equal(openURL.mock.callCount(), 0);
     assert.ok(texts().includes('Byulmaru ID 계정 설정을 열지 못했어요.'));
 
@@ -137,7 +147,7 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     openFailureCount = 1;
     await render();
 
-    await act(async () => byTestId('byulmaru-id-account-settings-entry').props.onPress());
+    await pressEntry();
     assert.ok(byTestId('byulmaru-id-account-settings-navigation-error'));
 
     await act(async () => byTestId('byulmaru-id-account-settings-retry').props.onPress());
@@ -145,6 +155,49 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(openURL.mock.callCount(), 2);
     assert.equal(queryByTestId('byulmaru-id-account-settings-navigation-error'), undefined);
     assert.equal(openURL.mock.calls[1].arguments[0], 'https://id.byulmaru.co');
+  });
+
+  it('Web modifier·보조 버튼은 실제 href의 browser 기본 동작에 맡긴다', async () => {
+    await render();
+    const entry = byTestId('byulmaru-id-account-settings-entry');
+
+    for (const overrides of [{ metaKey: true }, { ctrlKey: true }, { button: 1 }]) {
+      const event = createWebPressEvent(overrides);
+      await act(async () => entry.props.onPress(event));
+      assert.equal(event.preventDefault.mock.callCount(), 0);
+    }
+
+    assert.equal(canOpenURL.mock.callCount(), 0);
+    assert.equal(openURL.mock.callCount(), 0);
+  });
+
+  it('Web 재시도 중 오류와 같은 control·focus 가능한 busy 상태를 유지한다', async () => {
+    openFailureCount = 1;
+    await render();
+    await pressEntry();
+
+    let resolveRetry: (() => void) | undefined;
+    openImplementation = () =>
+      new Promise<void>((resolve) => {
+        resolveRetry = resolve;
+      });
+    const retry = byTestId('byulmaru-id-account-settings-retry');
+
+    await act(async () => {
+      void retry.props.onPress();
+      await Promise.resolve();
+    });
+
+    assert.equal(byTestId('byulmaru-id-account-settings-retry'), retry);
+    assert.ok(byTestId('byulmaru-id-account-settings-navigation-error'));
+    assert.equal(retry.props.disabled, false);
+    assert.deepEqual(retry.props.accessibilityState, { busy: true, disabled: false });
+
+    await act(async () => {
+      resolveRetry?.();
+      await Promise.resolve();
+    });
+    assert.equal(queryByTestId('byulmaru-id-account-settings-navigation-error'), undefined);
   });
 
   it('외부 이동 중 중복 실행을 막고 busy 상태를 노출한다', async () => {
@@ -158,8 +211,8 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     const entry = byTestId('byulmaru-id-account-settings-entry');
     const onPress = entry.props.onPress;
     await act(async () => {
-      void onPress();
-      void onPress();
+      void onPress(createWebPressEvent());
+      void onPress(createWebPressEvent());
       await Promise.resolve();
     });
     assert.equal(canOpenURL.mock.callCount(), 1);
@@ -172,7 +225,7 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     );
 
     await act(async () => {
-      void byTestId('byulmaru-id-account-settings-entry').props.onPress();
+      void byTestId('byulmaru-id-account-settings-entry').props.onPress(createWebPressEvent());
       await Promise.resolve();
     });
     assert.equal(openURL.mock.callCount(), 1);
@@ -190,6 +243,35 @@ async function render() {
     renderer = create(createElement(Entry));
   });
   assert.ok(renderer);
+}
+
+async function pressEntry() {
+  await act(async () =>
+    byTestId('byulmaru-id-account-settings-entry').props.onPress(createWebPressEvent()),
+  );
+}
+
+type WebPressEvent = {
+  altKey?: boolean;
+  button?: number;
+  ctrlKey?: boolean;
+  currentTarget: { target: string | null };
+  defaultPrevented?: boolean;
+  metaKey?: boolean;
+  preventDefault: ReturnType<typeof mock.fn>;
+  shiftKey?: boolean;
+};
+
+function createWebPressEvent(overrides: Partial<WebPressEvent> = {}): WebPressEvent {
+  const event = {
+    button: 0,
+    currentTarget: { target: null },
+    ...overrides,
+  } as WebPressEvent;
+  event.preventDefault = mock.fn(() => {
+    event.defaultPrevented = true;
+  });
+  return event;
 }
 
 function rendered(type: string): ReactTestInstance[] {
