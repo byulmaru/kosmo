@@ -13,7 +13,9 @@ export const handleInboundAcceptFollow = async ({
   follow,
   followeeActorUri,
   followeeProfileId,
+  acceptProfileFollowRequest: acceptFollowRequest = acceptProfileFollowRequest,
 }: {
+  readonly acceptProfileFollowRequest?: typeof acceptProfileFollowRequest;
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
@@ -95,9 +97,19 @@ export const handleInboundAcceptFollow = async ({
     return;
   }
 
-  await acceptProfileFollowRequest({
+  const result = await acceptFollowRequest({
     expectedRowId: projection.id,
     followeeProfileId,
     followerProfileId: followerProfile.id,
   });
+  if (result.kind === 'ALREADY_ESTABLISHED') {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'duplicate_accept_noop',
+    });
+  }
 };

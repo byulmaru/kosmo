@@ -355,7 +355,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       return;
     }
 
-    await unfollowProfile({
+    const result = await unfollowProfile({
       followeeProfileId: localRecipient.id,
       followerProfileId: remoteActor.profile.id,
       onPostCommitError: (error) =>
@@ -370,6 +370,16 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
           reasonCode: 'follow_undo_notification_effect_failed',
         }),
     });
+    if (!result.changed) {
+      observeInboundNoop({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'follow_undo_missing_or_repeated',
+      });
+    }
     return;
   }
 

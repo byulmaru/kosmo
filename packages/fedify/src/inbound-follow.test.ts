@@ -352,6 +352,37 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(Notifications)).length, 0);
   });
 
+  test('logs only a true-noop after an inbound pending Follow Undo was already consumed', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    const context = createContext({ recipient: null });
+    const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+    const undo = new Undo({ actor: remoteActorUri, object: follow });
+
+    try {
+      await handleInboundFollow(context, follow);
+      await handleInboundUndo(context, undo);
+      await handleInboundUndo(context, undo);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Undo',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'undo',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'follow_undo_missing_or_repeated',
+      },
+    ]);
+  });
+
   test('does not log a newly created pending Follow as a noop', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const logs: unknown[] = [];

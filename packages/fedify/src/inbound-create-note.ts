@@ -254,8 +254,21 @@ export const handleInboundCreateNote = async ({
     visibility,
   } satisfies Parameters<typeof createPost>[0];
 
+  const observeDuplicateCreate = () =>
+    observeInboundNoop({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'projection',
+      reasonCode: 'duplicate_create_noop',
+    });
+
   try {
-    await createPost(replyParentId ? { ...input, replyParentId } : input);
+    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
+    if (!result.created) {
+      observeDuplicateCreate();
+    }
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
       observeInboundRejected({
@@ -286,6 +299,9 @@ export const handleInboundCreateNote = async ({
       phase: 'projection',
       reasonCode: 'reply_parent_missing_fallback',
     });
-    await createPost(input);
+    const result = await createPost(input);
+    if (!result.created) {
+      observeDuplicateCreate();
+    }
   }
 };

@@ -113,9 +113,13 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
       .where(eq(ProfileFollows.followerProfileId, follower.id))
       .then(firstOrThrow);
     assert.equal((await readNotifications(relation.id)).length, 1);
-    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, relation.id);
+    const removed = await removeInboundFollowThroughLifecycle(input);
+    assert.equal(removed.profileFollowId, relation.id);
+    assert.equal(removed.changed, true);
     assert.deepEqual(await readNotifications(relation.id), []);
-    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, null);
+    const repeated = await removeInboundFollowThroughLifecycle(input);
+    assert.equal(repeated.profileFollowId, null);
+    assert.equal(repeated.changed, false);
     assert.deepEqual(await getProfiles(follower.id, followee.id), {
       followee,
       follower,
@@ -139,7 +143,9 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
         .then((rows) => rows.length),
       1,
     );
-    assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, null);
+    const removed = await removeInboundFollowThroughLifecycle(input);
+    assert.equal(removed.profileFollowId, null);
+    assert.equal(removed.changed, true);
     assert.equal(
       await db
         .select()

@@ -96,3 +96,5 @@ production personal/shared inbox listener가 대표 외부 실패를 로그 전�
       로그 의미를 회귀 테스트로 검증한다.
 - [x] 4.3 core post-commit observer의 동기 throw/비동기 reject가 커밋된 상태와 후속 delivery를
       중단하지 않는지 회귀 테스트로 검증한다.
+- [x] 4.4 duplicate Create, established Accept 재처리와 Follow Undo의 pending 삭제/true noop을
+      structured log로 구분하는 회귀 테스트를 추가한다.

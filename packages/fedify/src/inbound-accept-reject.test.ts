@@ -15,8 +15,10 @@ import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
+import type * as InboundAcceptFollow from './inbound-accept-follow';
 import type * as InboundReject from './inbound-reject';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -35,7 +37,9 @@ let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
+let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
+let acceptProfileFollowRequest: typeof CoreServices.acceptProfileFollowRequest;
 let localInstanceId: string;
 let federation: typeof productionFederation;
 
@@ -55,7 +59,9 @@ describe('inbound Accept and Reject', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAccept } = await import('./inbound-accept'));
+    ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
+    ({ acceptProfileFollowRequest } = await import('@kosmo/core/services'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -221,6 +227,64 @@ describe('inbound Accept and Reject', () => {
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+  });
+
+  test('logs a concurrent pending Accept loser as an established noop', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const follow = createOutboundFollow(fixture.projection);
+    let arrived = 0;
+    let release!: () => void;
+    const bothArrived = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const acceptWithBarrier: typeof acceptProfileFollowRequest = async (input) => {
+      arrived += 1;
+      if (arrived === 2) {
+        release();
+      }
+      await bothArrived;
+      return acceptProfileFollowRequest(input);
+    };
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await Promise.all([
+        handleInboundAcceptFollow({
+          acceptProfileFollowRequest: acceptWithBarrier,
+          context: createContext(localProfileId),
+          follow,
+          followeeActorUri: remoteActorUri,
+          followeeProfileId: fixture.remoteProfile.id,
+        }),
+        handleInboundAcceptFollow({
+          acceptProfileFollowRequest: acceptWithBarrier,
+          context: createContext(localProfileId),
+          follow,
+          followeeActorUri: remoteActorUri,
+          followeeProfileId: fixture.remoteProfile.id,
+        }),
+      ]);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+    ]);
   });
 
   test('uses verified actor pair fallback for same-origin non-kosmo embedded Follow', async () => {
@@ -394,11 +458,40 @@ describe('inbound Accept and Reject', () => {
       }).toJsonLd(),
     );
 
-    await handleInboundAccept(createContext(localProfileId), accept);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    try {
+      await handleInboundAccept(createContext(localProfileId), accept);
+      await handleInboundAccept(createContext(localProfileId), accept);
+    } finally {
+      restoreReporter();
+    }
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+    ]);
   });
 
   test('ignores embedded non-Follow responses with a canonical Follow-shaped id', async () => {

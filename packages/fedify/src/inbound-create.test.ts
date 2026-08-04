@@ -1284,26 +1284,46 @@ describe('inbound Create dispatch', () => {
       to: PUBLIC_COLLECTION,
     });
 
-    await handleInboundCreate(
-      createContext(),
-      new Create({ actor: remoteActorUri, object: first }),
-      receivedAt,
-    );
-    await handleInboundCreate(
-      createContext(),
-      new Create({
-        actor: remoteActorUri,
-        object: new Note({
-          attribution: remoteActorUri,
-          cc: PUBLIC_COLLECTION,
-          content: 'Changed',
-          id: remoteObjectUri,
-          mediaType: 'text/plain',
-          published: receivedAt.add({ hours: 1 }),
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({ actor: remoteActorUri, object: first }),
+        receivedAt,
+      );
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            cc: PUBLIC_COLLECTION,
+            content: 'Changed',
+            id: remoteObjectUri,
+            mediaType: 'text/plain',
+            published: receivedAt.add({ hours: 1 }),
+          }),
         }),
-      }),
-      receivedAt.add({ hours: 2 }),
-    );
+        receivedAt.add({ hours: 2 }),
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: remoteObjectUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_create_noop',
+      },
+    ]);
 
     const { content, mapping, post } = await getMaterializedPost(remoteObjectUri);
     assert.equal(post.visibility, 'PUBLIC');

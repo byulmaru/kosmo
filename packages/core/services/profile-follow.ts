@@ -225,6 +225,7 @@ export const unfollowProfile = async ({
   followeeProfileId,
   onPostCommitError,
 }: ProfileFollowInput): Promise<{
+  changed: boolean;
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   profileFollowId: string | null;
@@ -258,6 +259,7 @@ export const unfollowProfile = async ({
     }
 
     const result = {
+      changed: deleted.profileFollow !== undefined || deleted.profileFollowRequest !== undefined,
       followeeProfile,
       followerProfile,
       profileFollowId: deleted.profileFollow?.id ?? null,
