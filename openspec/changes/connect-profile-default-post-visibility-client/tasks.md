@@ -86,8 +86,8 @@ Account 외부 entry와 Profile 내부 설정의 소유 경계를 유지한다.
 - Account external navigation 오류가 Profile control을 숨기지 않고 Profile 오류가 정상 Account entry를 숨기지
   않는지 page-level test로 검증한다.
 
-- [x] 3.1 실제 settings host의 Profile child 경계에 현재 Profile identity와 설정 control을 연결한다.
-- [x] 3.2 selected/no-profile, loading·error와 Account/Profile 독립 상태의 page-level 회귀 검증을 추가한다.
+- [ ] 3.1 실제 settings host의 Profile child 경계에 현재 Profile identity와 설정 control을 연결한다.
+- [ ] 3.2 selected/no-profile, loading·error와 Account/Profile 독립 상태의 page-level 회귀 검증을 추가한다.
 
 ## 4. PROD-667 Frontend 검증·archive
 
@@ -118,6 +118,6 @@ change와 별개인 Frontend change lifecycle을 완료할 수 있다.
 - 실제 실행한 Web·Android·iOS 범위와 미실행 범위를 분리해 기록한다.
 
 - [x] 4.1 Relay compiler, app typecheck와 focused unit/component test를 통과시킨다.
-- [x] 4.2 Storybook interaction·static build·접근성과 지원 플랫폼 검증을 수행한다. 전체 interaction의 `Posts.stories.tsx > Body Time And Layout States`는 변경 전후 동일한 `naturalWidth=0` fixture 실패로 판정하고 비범위 회귀로 기록한다.
-- [x] 4.3 actual diff와 task checkbox, 최신 canonical·Linear·OpenSpec 정합성을 확인한다.
-- [x] 4.4 `openspec validate connect-profile-default-post-visibility-client --strict`를 통과시키고 archive handoff를 정리한다.
+- [ ] 4.2 Storybook interaction·static build·접근성과 지원 플랫폼 검증을 수행한다. 전체 interaction의 `Posts.stories.tsx > Body Time And Layout States`는 변경 전후 동일한 `naturalWidth=0` fixture 실패로 판정하고 비범위 회귀로 기록한다.
+- [ ] 4.3 actual diff와 task checkbox, 최신 canonical·Linear·OpenSpec 정합성을 확인한다.
+- [ ] 4.4 `openspec validate connect-profile-default-post-visibility-client --strict`를 통과시키고 archive handoff를 정리한다.

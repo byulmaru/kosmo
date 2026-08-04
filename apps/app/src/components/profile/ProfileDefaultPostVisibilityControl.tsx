@@ -1,16 +1,13 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import {
-  isProfileDefaultVisibilityDirty,
-  resolveProfileDefaultVisibility,
-} from './profileDefaultPostVisibilityState';
+import { resolveProfileDefaultVisibility } from './profileDefaultPostVisibilityState';
 import type {
   ProfileDefaultPostVisibilityControl_profile$data,
   ProfileDefaultPostVisibilityControl_profile$key,
@@ -58,19 +55,15 @@ const UpdateMutation = graphql`
   }
 `;
 
-type SaveState =
-  | { kind: 'idle' }
-  | { kind: 'saving' }
-  | { kind: 'success' }
-  | { kind: 'error'; message: string };
+type SaveState = 'idle' | 'saving' | 'success' | 'error';
 
 export type ProfileDefaultPostVisibilityControlProps = {
-  editable?: boolean;
+  editable: boolean;
   profile: ProfileDefaultPostVisibilityControl_profile$key;
 };
 
 export function ProfileDefaultPostVisibilityControl({
-  editable = true,
+  editable,
   profile: profileKey,
 }: ProfileDefaultPostVisibilityControlProps) {
   const profile = useFragment(ProfileFragment, profileKey);
@@ -105,18 +98,11 @@ function ProfileDefaultPostVisibilityControlContents({
   const savedFromRelay = resolveProfileDefaultVisibility(profile.defaultPostVisibility);
   const [saved, setSaved] = useState(savedFromRelay);
   const [selected, setSelected] = useState(savedFromRelay);
-  const [saveState, setSaveState] = useState<SaveState>({ kind: 'idle' });
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [commit] = useMutation<ProfileDefaultPostVisibilityControlMutation>(UpdateMutation);
-  const dirty = isProfileDefaultVisibilityDirty(saved, selected);
-  const mountedRef = useRef(true);
+  const dirty = saved !== selected;
   const saveRequestIdRef = useRef(0);
   const saveInFlightRef = useRef<number | null>(null);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
   const save = useCallback(() => {
     if (!editable || !dirty || saveInFlightRef.current !== null) {
       return;
@@ -125,12 +111,11 @@ function ProfileDefaultPostVisibilityControlContents({
     const requestId = saveRequestIdRef.current + 1;
     saveRequestIdRef.current = requestId;
     saveInFlightRef.current = requestId;
-    setSaveState({ kind: 'saving' });
+    setSaveState('saving');
     commit({
       variables: { input: { defaultPostVisibility: selected } },
       onCompleted: (response, errors) => {
         if (
-          !mountedRef.current ||
           saveInFlightRef.current !== requestId ||
           environmentGenerationRef?.current !== environmentGeneration
         ) {
@@ -141,7 +126,7 @@ function ProfileDefaultPostVisibilityControlContents({
         }
         saveInFlightRef.current = null;
         if (errors?.length || !response.updateProfile.profile) {
-          setSaveState({ kind: 'error', message: '기본 공개 범위를 저장하지 못했어요.' });
+          setSaveState('error');
           return;
         }
         const next = resolveProfileDefaultVisibility(
@@ -149,11 +134,10 @@ function ProfileDefaultPostVisibilityControlContents({
         );
         setSaved(next);
         setSelected(next);
-        setSaveState({ kind: 'success' });
+        setSaveState('success');
       },
       onError: () => {
         if (
-          !mountedRef.current ||
           saveInFlightRef.current !== requestId ||
           environmentGenerationRef?.current !== environmentGeneration
         ) {
@@ -163,13 +147,13 @@ function ProfileDefaultPostVisibilityControlContents({
           return;
         }
         saveInFlightRef.current = null;
-        setSaveState({ kind: 'error', message: '기본 공개 범위를 저장하지 못했어요.' });
+        setSaveState('error');
       },
     });
   }, [commit, dirty, editable, environmentGenerationRef, selected]);
 
   const label = `Kosmo 내부 Profile ${profile.displayName} ${profile.relativeHandle} 기본 게시 공개 범위`;
-  const saving = saveState.kind === 'saving';
+  const saving = saveState === 'saving';
 
   return (
     <View
@@ -200,7 +184,7 @@ function ProfileDefaultPostVisibilityControlContents({
               key={option.value}
               onPress={() => {
                 setSelected(option.value);
-                setSaveState({ kind: 'idle' });
+                setSaveState('idle');
               }}
               style={({ pressed }) => [
                 styles.option,
@@ -226,12 +210,12 @@ function ProfileDefaultPostVisibilityControlContents({
           );
         })}
       </View>
-      {saveState.kind === 'error' ? (
+      {saveState === 'error' ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-          {saveState.message}
+          기본 공개 범위를 저장하지 못했어요.
         </Text>
       ) : null}
-      {saveState.kind === 'success' ? (
+      {saveState === 'success' ? (
         <Text
           accessibilityLiveRegion="polite"
           style={[styles.success, { color: theme.textSecondary }]}
@@ -256,7 +240,7 @@ function ProfileDefaultPostVisibilityControlContents({
           Profile Member는 조회만 할 수 있어요.
         </Text>
       )}
-      {saveState.kind === 'error' ? (
+      {saveState === 'error' ? (
         <Button onPress={save} tone="secondary" disabled={saving || !dirty}>
           다시 시도
         </Button>

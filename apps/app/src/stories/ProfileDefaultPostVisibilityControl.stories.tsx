@@ -198,7 +198,7 @@ export const OwnerOptionsAndSuccess: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory initial="UNLISTED" />,
+  render: () => <ProfileDefaultPostVisibilityStory editable initial="UNLISTED" />,
 };
 
 export const MemberReadOnly: Story = {
@@ -224,7 +224,7 @@ export const FailureAndRetry: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory mode="error-once" />,
+  render: () => <ProfileDefaultPostVisibilityStory editable mode="error-once" />,
 };
 
 export const LateCompletionIgnoredAfterProfileEnvironmentTransition: Story = {
@@ -242,5 +242,5 @@ export const LateCompletionIgnoredAfterProfileEnvironmentTransition: Story = {
     expect(canvas.queryByText('저장했어요.')).toBeNull();
     expect(canvas.getByText('Profile과 Environment 전환')).toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory mode="pending" />,
+  render: () => <ProfileDefaultPostVisibilityStory editable mode="pending" />,
 };

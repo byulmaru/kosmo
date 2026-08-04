@@ -1,7 +1,5 @@
 import { PostVisibility } from '@kosmo/core/enums';
 
-export const profileDefaultVisibilityFallback = PostVisibility.UNLISTED;
-
 export const resolveProfileDefaultVisibility = (
   value: string | null | undefined,
 ): PostVisibility =>
@@ -9,9 +7,4 @@ export const resolveProfileDefaultVisibility = (
   value === PostVisibility.UNLISTED ||
   value === PostVisibility.FOLLOWERS
     ? value
-    : profileDefaultVisibilityFallback;
-
-export const isProfileDefaultVisibilityDirty = (
-  saved: PostVisibility,
-  selected: PostVisibility,
-): boolean => saved !== selected;
+    : PostVisibility.UNLISTED;
