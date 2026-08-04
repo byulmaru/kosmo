@@ -32,6 +32,7 @@ Canonical 도메인은 Follow Request를 객체 존재 자체가 Pending인 별�
 - `handleInboundFollow`, `handleInboundUndo`는 이미 공통 core follow lifecycle을 사용한다. Fedify handler에 pending Notification SQL을 추가하면 Local/remote 동작과 failure boundary가 갈라진다.
 - `notification.source_id`는 의도적인 loose reference다. API visibility/source loader는 `FOLLOW_REQUEST`일 때 실제 `profile_follow_request`와 Followee/Requester pair를 검증해야 하며, 요청 삭제 뒤 남은 row를 generic fallback으로 노출해서는 안 된다.
 - `FollowRequestNotification` concrete object는 requester `profile`과 함께 같은 source의 `followRequest: ProfileFollowRequest!`를 Recipient visibility 경계 안에서 반환해야 한다. 이 field는 기존 received-request transition action이나 별도 snapshot을 추가하지 않고, visible source row를 재사용한다.
+- connection·concrete Node·Read payload는 visibility statement 또는 parent payload에서 Follow Request source row를 함께 운반하고, `profile`·`followRequest` field는 그 snapshot을 재사용해야 한다. visibility 확인 뒤 source loader를 별도 실행해 서로 다른 DB snapshot을 만들지 않는다.
 - Sentry 초기화는 runtime 앱에 있고 `@kosmo/core`는 Sentry를 직접 초기화하지 않는다. 따라서 기존 앱·Fedify 실행 경계에서 사용할 수 있는 최소 reporter 또는 동등한 runtime adapter를 선택하되, effect 오류를 swallow하는 지점에서 context가 유실되지 않게 해야 한다.
 
 ### Recommended Approach
@@ -57,6 +58,7 @@ Canonical 도메인은 Follow Request를 객체 존재 자체가 Pending인 별�
 - duplicate request에서도 create effect를 호출하면 배포 전에 누락된 item을 우연히 backfill하는 결과가 된다.
 - approval/reject/cancel/inbound Undo에서 request가 실제 삭제됐는지 확인하지 않고 cleanup하면 새 request와 같은 source ID를 잘못 지울 수 있다.
 - `FOLLOW_REQUEST` source를 Follow source loader로 해석하거나 request 삭제 뒤 이름 snapshot을 반환하면 hidden row와 Profile 접근 정책을 우회한다.
+- visibility query가 source 존재만 확인하고 concrete field에서 source를 다시 읽으면 request deletion race가 non-null GraphQL 오류를 만든다. source projection을 같은 statement/parent row로 운반하고 fields에서 재사용한다.
 - create/delete effect 사이의 모든 interleaving을 lock으로 직렬화하려 하면 post-commit transaction ownership과 이번 change의 retry/queue 제외 범위를 깨뜨린다. overlap stale row는 API visibility가 숨기는 허용된 best-effort 결과다.
 - received-request connection 또는 승인·거절 mutation을 Notification item에 넣으면 `PROD-566` 소유권과 selected Profile UI 경계를 침범한다.
 - Unread count를 list length로 보정하거나 다른 Profile의 normalized record를 재사용하면 기존 badge isolation 계약이 깨진다.

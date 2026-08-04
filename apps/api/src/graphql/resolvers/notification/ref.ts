@@ -18,7 +18,15 @@ import {
 } from './access/visibility';
 import type { UserContext } from '@/context';
 
-export type NotificationRow = typeof Notifications.$inferSelect;
+export type NotificationRow = typeof Notifications.$inferSelect & {
+  /**
+   * Follow Request source captured by the same statement as the visible
+   * Notification row. It is present on connection/Node rows and lets fields
+   * resolve the source from a consistent snapshot instead of issuing a second
+   * query after visibility has been checked.
+   */
+  followRequestSource?: FollowRequestNotificationSourceRow | null;
+};
 export type FollowNotificationRow = NotificationRow;
 export type FollowRequestNotificationRow = NotificationRow;
 export type ReactionNotificationRow = NotificationRow;
@@ -41,6 +49,48 @@ type FollowRequestNotificationSourceRow = {
   followRequest: typeof ProfileFollowRequests.$inferSelect;
   id: string;
   profileId: string;
+};
+
+export const notificationRowSelection = {
+  ...getColumns(Notifications),
+  followRequestSourceId: ProfileFollowRequests.id,
+  followRequestSourceFollowerProfileId: ProfileFollowRequests.followerProfileId,
+  followRequestSourceFolloweeProfileId: ProfileFollowRequests.followeeProfileId,
+  followRequestSourceCreatedAt: ProfileFollowRequests.createdAt,
+};
+
+type NotificationRowSelection = typeof Notifications.$inferSelect & {
+  followRequestSourceId: string | null;
+  followRequestSourceFollowerProfileId: string | null;
+  followRequestSourceFolloweeProfileId: string | null;
+  followRequestSourceCreatedAt: Temporal.Instant | null;
+};
+
+export const notificationRowFromSelection = (row: NotificationRowSelection): NotificationRow => {
+  const {
+    followRequestSourceId,
+    followRequestSourceFollowerProfileId,
+    followRequestSourceFolloweeProfileId,
+    followRequestSourceCreatedAt,
+    ...notification
+  } = row;
+
+  return {
+    ...notification,
+    followRequestSource:
+      followRequestSourceId === null
+        ? null
+        : {
+            followRequest: {
+              id: followRequestSourceId,
+              followerProfileId: followRequestSourceFollowerProfileId!,
+              followeeProfileId: followRequestSourceFolloweeProfileId!,
+              createdAt: followRequestSourceCreatedAt!,
+            },
+            id: followRequestSourceId,
+            profileId: followRequestSourceFollowerProfileId!,
+          },
+  };
 };
 
 type ReactionNotificationSourceRow = {
@@ -73,22 +123,6 @@ const followNotificationSourceLoader = (ctx: UserContext) =>
         .select({ id: ProfileFollows.id, profileId: ProfileFollows.followerProfileId })
         .from(ProfileFollows)
         .where(inArray(ProfileFollows.id, ids)),
-    key: (source) => source?.id ?? null,
-  });
-
-const followRequestNotificationSourceLoader = (ctx: UserContext) =>
-  ctx.loader<string, FollowRequestNotificationSourceRow, string, true>({
-    name: 'notification.followRequestSource',
-    nullable: true,
-    load: (ids) =>
-      db
-        .select({
-          followRequest: getColumns(ProfileFollowRequests),
-          id: ProfileFollowRequests.id,
-          profileId: ProfileFollowRequests.followerProfileId,
-        })
-        .from(ProfileFollowRequests)
-        .where(inArray(ProfileFollowRequests.id, ids)),
     key: (source) => source?.id ?? null,
   });
 
@@ -163,7 +197,7 @@ export const getNotificationSource = async (
     notification.kind === NotificationKind.FOLLOW
       ? await followNotificationSourceLoader(ctx).load(notification.sourceId)
       : notification.kind === NotificationKind.FOLLOW_REQUEST
-        ? await followRequestNotificationSourceLoader(ctx).load(notification.sourceId)
+        ? notification.followRequestSource
         : notification.kind === NotificationKind.REACTION
           ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
           : notification.kind === NotificationKind.REPLY
@@ -252,15 +286,23 @@ export const FollowRequestNotification = createObjectRef<FollowRequestNotificati
   'FollowRequestNotification',
   (ids, ctx) =>
     db
-      .select(getColumns(Notifications))
+      .select(notificationRowSelection)
       .from(Notifications)
+      .leftJoin(
+        ProfileFollowRequests,
+        and(
+          eq(ProfileFollowRequests.id, Notifications.sourceId),
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+        ),
+      )
       .where(
         and(
           inArray(Notifications.id, ids),
           eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
           visibleNotificationWhere({ ctx }),
         ),
-      ),
+      )
+      .then((rows) => rows.map(notificationRowFromSelection)),
 );
 
 FollowRequestNotification.implement({

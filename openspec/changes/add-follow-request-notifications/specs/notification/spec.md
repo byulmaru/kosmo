@@ -118,6 +118,12 @@ API는 visible `FOLLOW_REQUEST` Notification을 기존 Profile-scoped Notificati
 - **THEN** API는 selected Profile과 무관하게 해당 Recipient의 visible Follow Request Notification을 반환한다
 - **AND** requester Profile이 Recipient Profile의 조회 정책을 통과하지 않으면 item을 숨기고 generic fallback을 반환하지 않는다
 
+#### Scenario: visibility와 source field의 일관된 snapshot
+
+- **WHEN** connection 또는 Node가 pending Follow Request source를 visible로 확인한 뒤 concrete field를 resolve하기 전에 같은 request가 삭제된다
+- **THEN** API는 visibility row와 함께 읽은 source snapshot을 사용해 non-null `profile`·`followRequest` field를 일관되게 resolve하거나 부모 Notification을 존재하지 않는 것으로 처리한다
+- **AND** source를 별도 조회해 `Notification source not found` GraphQL 오류를 발생시키지 않는다
+
 #### Scenario: unread와 read 반영
 
 - **WHEN** visible Follow Request Notification을 읽음 처리한다

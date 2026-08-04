@@ -54,6 +54,7 @@ visible `FOLLOW_REQUEST` item이 기존 Notification connection·Unread count·N
 
 - GraphQL schema/type/Node loader integration test로 concrete Follow Request Notification, requester field와 global ID routing을 검증한다.
 - connection, pagination, Unread count, idempotent Read에서 source 삭제·불일치·requester visibility·membership 오류를 검증한다.
+- visibility 확인과 concrete source field resolve 사이의 source 삭제를 DB-backed regression으로 재현해 Node·connection·Read가 non-null source 오류 없이 같은 snapshot을 사용하거나 item을 숨기는지 검증한다.
 
 - [x] 2.1 Follow Request Notification concrete GraphQL object와 source loader를 추가해 request의 Follower Profile과 Recipient-visible related Follow Request를 파생한다.
 - [x] 2.2 공통 visible predicate를 `FOLLOW_REQUEST` source existence·pair·requester visibility까지 확장하고 connection/count/Node/Read에 재사용한다.

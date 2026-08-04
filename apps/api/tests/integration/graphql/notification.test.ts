@@ -253,6 +253,186 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(marked.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
   });
 
+  test('uses the visible Follow Request source snapshot for Node and connection fields', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-snapshot-recipient');
+    const requester = await createProfile('follow-request-snapshot-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: requester.id })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: request.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('FollowRequestNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const requestId = encodeGlobalId('ProfileFollowRequest', request.id);
+    const requesterId = encodeGlobalId('Profile', requester.id);
+
+    try {
+      const result = await requestGraphQL<{
+        node: {
+          __typename: string;
+          profile: { id: string };
+          followRequest: { id: string };
+        } | null;
+        profile: {
+          notifications: {
+            edges: Array<{
+              node: {
+                __typename: string;
+                profile: { id: string };
+                followRequest: { id: string };
+              };
+            }>;
+          };
+        } | null;
+      }>(
+        `query FollowRequestSourceSnapshot($notificationId: ID!, $profileId: ID!) {
+          node(id: $notificationId) {
+            __typename
+            ... on FollowRequestNotification { profile { id } followRequest { id } }
+          }
+          profile: node(id: $profileId) {
+            ... on Profile {
+              notifications(first: 10) {
+                edges {
+                  node {
+                    __typename
+                    ... on FollowRequestNotification { profile { id } followRequest { id } }
+                  }
+                }
+              }
+            }
+          }
+        }`,
+        { notificationId, profileId: recipientId },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.node, {
+        __typename: 'FollowRequestNotification',
+        followRequest: { id: requestId },
+        profile: { id: requesterId },
+      });
+      assert.deepEqual(result.data?.profile?.notifications.edges[0]?.node, {
+        __typename: 'FollowRequestNotification',
+        followRequest: { id: requestId },
+        profile: { id: requesterId },
+      });
+    } finally {
+      await db.delete(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, request.id));
+    }
+  });
+
+  test('keeps the Follow Request Read payload source snapshot when source deletion overlaps update', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-read-snapshot-recipient');
+    const requester = await createProfile('follow-request-read-snapshot-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: requester.id })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: request.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('FollowRequestNotification', notification.id);
+    const requestId = encodeGlobalId('ProfileFollowRequest', request.id);
+    const requesterId = encodeGlobalId('Profile', requester.id);
+    let functionInstalled = false;
+    let triggerInstalled = false;
+    try {
+      await db.execute(
+        sql.raw(`
+        CREATE FUNCTION delete_follow_request_on_notification_read() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.kind = 'FOLLOW_REQUEST'::notification_kind
+             AND OLD.read_at IS NULL
+             AND NEW.read_at IS NOT NULL THEN
+            DELETE FROM "profile_follow_request" WHERE id = OLD.source_id;
+          END IF;
+          RETURN NEW;
+        END;
+        $$
+      `),
+      );
+      functionInstalled = true;
+      await db.execute(
+        sql.raw(`
+        CREATE TRIGGER delete_follow_request_on_notification_read
+        BEFORE UPDATE OF read_at ON "notification"
+        FOR EACH ROW
+        EXECUTE FUNCTION delete_follow_request_on_notification_read()
+      `),
+      );
+      triggerInstalled = true;
+
+      const result = await requestGraphQL<{
+        markNotificationRead: {
+          notification: {
+            id: string;
+            readAt: string | null;
+            profile: { id: string };
+            followRequest: { id: string };
+          };
+        };
+      }>(
+        `mutation MarkFollowRequestRead($id: ID!) {
+          markNotificationRead(input: { id: $id }) {
+            notification {
+              id
+              readAt
+              ... on FollowRequestNotification { profile { id } followRequest { id } }
+            }
+          }
+        }`,
+        { id: notificationId },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.markNotificationRead.notification.id, notificationId);
+      assert.equal(result.data?.markNotificationRead.notification.profile.id, requesterId);
+      assert.equal(result.data?.markNotificationRead.notification.followRequest.id, requestId);
+      assert.equal(
+        (
+          await db
+            .select({ id: ProfileFollowRequests.id })
+            .from(ProfileFollowRequests)
+            .where(eq(ProfileFollowRequests.id, request.id))
+        ).length,
+        0,
+      );
+    } finally {
+      if (triggerInstalled) {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS delete_follow_request_on_notification_read ON ${Notifications}`,
+        );
+      }
+      if (functionInstalled) {
+        await db.execute(sql`DROP FUNCTION IF EXISTS delete_follow_request_on_notification_read()`);
+      }
+    }
+  });
+
   test('hides a stale row when terminal request deletion overlaps post-commit creation', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('follow-request-race-recipient');

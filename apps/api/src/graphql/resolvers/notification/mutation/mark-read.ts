@@ -1,10 +1,16 @@
-import { db, firstOrThrowWith, Notifications } from '@kosmo/core/db';
+import { db, firstOrThrowWith, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
+import { NotificationKind } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import { visibleNotificationWhere } from '../access/visibility';
-import { Notification, notificationKindForNodeType } from '../ref';
+import {
+  Notification,
+  notificationKindForNodeType,
+  notificationRowFromSelection,
+  notificationRowSelection,
+} from '../ref';
 
 builder.mutationField('markNotificationRead', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
@@ -23,18 +29,56 @@ builder.mutationField('markNotificationRead', (t) =>
         throw new NotFoundError('Notification not found');
       }
 
-      const notification = await db
-        .update(Notifications)
-        .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
-        .where(
-          and(
-            eq(Notifications.id, input.id.id),
-            eq(Notifications.kind, kind),
-            visibleNotificationWhere({ ctx }),
-          ),
-        )
-        .returning(getColumns(Notifications))
-        .then(firstOrThrowWith(() => new NotFoundError('Notification not found')));
+      const notification =
+        kind === NotificationKind.FOLLOW_REQUEST
+          ? await (async () => {
+              const visible = await db
+                .select(notificationRowSelection)
+                .from(Notifications)
+                .leftJoin(
+                  ProfileFollowRequests,
+                  and(
+                    eq(ProfileFollowRequests.id, Notifications.sourceId),
+                    eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+                  ),
+                )
+                .where(
+                  and(
+                    eq(Notifications.id, input.id.id),
+                    eq(Notifications.kind, kind),
+                    visibleNotificationWhere({ ctx }),
+                  ),
+                )
+                .then(firstOrThrowWith(() => new NotFoundError('Notification not found')))
+                .then(notificationRowFromSelection);
+
+              const updated = await db
+                .update(Notifications)
+                .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
+                .where(
+                  and(
+                    eq(Notifications.id, input.id.id),
+                    eq(Notifications.kind, kind),
+                    visibleNotificationWhere({ ctx }),
+                  ),
+                )
+                .returning(getColumns(Notifications))
+                .then(firstOrThrowWith(() => new NotFoundError('Notification not found')));
+
+              return { ...updated, followRequestSource: visible.followRequestSource };
+            })()
+          : await db
+              .update(Notifications)
+              .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
+              .where(
+                and(
+                  eq(Notifications.id, input.id.id),
+                  eq(Notifications.kind, kind),
+                  visibleNotificationWhere({ ctx }),
+                ),
+              )
+              .returning(getColumns(Notifications))
+              .then(firstOrThrowWith(() => new NotFoundError('Notification not found')));
 
       return {
         notification,
