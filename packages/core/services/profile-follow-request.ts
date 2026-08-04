@@ -13,7 +13,10 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { NotFoundError, PermissionDeniedError } from '../error';
-import { createFollowNotification } from './notification';
+import {
+  createFollowNotification,
+  deleteFollowRequestNotificationPostCommit,
+} from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
 
@@ -93,8 +96,8 @@ export const acceptProfileFollowRequest = async ({
   expectedRowId,
   followeeProfileId,
   followerProfileId,
-}: ProfileFollowPair & { readonly expectedRowId: string }): Promise<boolean> =>
-  db.transaction(async (tx) => {
+}: ProfileFollowPair & { readonly expectedRowId: string }): Promise<boolean> => {
+  const accepted = await db.transaction(async (tx) => {
     const pair = { followeeProfileId, followerProfileId };
     const established = await tx
       .select({ id: ProfileFollows.id })
@@ -136,6 +139,13 @@ export const acceptProfileFollowRequest = async ({
     await ensureProfileFollow(pair, tx);
     return true;
   });
+
+  if (accepted) {
+    await deleteFollowRequestNotificationPostCommit(expectedRowId);
+  }
+
+  return accepted;
+};
 
 type ApproveProfileFollowRequestResult = {
   readonly followeeProfile: typeof Profiles.$inferSelect;
@@ -220,6 +230,8 @@ export const approveProfileFollowRequest = async ({
     approveProfileFollowRequestInTransaction({ actorProfileId, profileFollowRequestId }, tx),
   );
 
+  await deleteFollowRequestNotificationPostCommit(approved.profileFollowRequestId);
+
   if (created) {
     // Notification delivery is best-effort and must not change the committed approval result.
     await createFollowNotification(approved.profileFollow.id).catch(() => undefined);
@@ -276,14 +288,15 @@ const deleteProfileFollowRequestAsActor = async (
     return { actorProfile: actorProfile.profile, request };
   });
 
-export const rejectProfileFollowRequest = async (
-  input: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
-  tx?: Transaction,
-): Promise<{
+export const rejectProfileFollowRequest = async (input: {
+  readonly actorProfileId: string;
+  readonly profileFollowRequestId: string;
+}): Promise<{
   readonly followeeProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWEE' }, tx);
+  const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWEE' });
+  await deleteFollowRequestNotificationPostCommit(result.request.id);
   return {
     followeeProfile: result.actorProfile,
     profileFollowRequestId: result.request.id,
@@ -339,6 +352,8 @@ export const cancelProfileFollowRequest = async (input: {
       },
     };
   });
+
+  await deleteFollowRequestNotificationPostCommit(result.profileFollowRequestId);
 
   if (command) {
     try {

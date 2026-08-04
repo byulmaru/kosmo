@@ -303,7 +303,7 @@ describe('inbound Follow and Undo', () => {
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
-    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
     assert.equal(sendActivity.mock.calls.length, 0);
 
     await handleInboundUndo(
@@ -345,6 +345,39 @@ describe('inbound Follow and Undo', () => {
           .then(firstOrThrow)
       ).followersCount,
       1,
+    );
+  });
+
+  test('keeps approval-required inbound Follow successful when request Notification creation fails', async () => {
+    const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_pending_create_failure CHECK (false) NOT VALID`,
+    );
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: localProfileId }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_pending_create_failure`,
+      );
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.deepEqual(
+      await db
+        .select({
+          followersCount: Profiles.followersCount,
+          followingCount: Profiles.followingCount,
+        })
+        .from(Profiles)
+        .where(eq(Profiles.id, fixture.localProfile.id))
+        .then(firstOrThrow),
+      { followersCount: 0, followingCount: 0 },
     );
   });
 
@@ -391,6 +424,55 @@ describe('inbound Follow and Undo', () => {
         .select()
         .from(Notifications)
         .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
+  test('keeps approval-required inbound Undo successful when request Notification cleanup fails', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const context = createContext({ recipient: localProfileId });
+    await handleInboundFollow(
+      context,
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
+    );
+    const request = await db.select().from(ProfileFollowRequests).then(firstOrThrow);
+    await db.execute(sql`
+      CREATE FUNCTION fail_inbound_pending_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'pending notification delete failed';
+      END;
+      $$
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER notification_inbound_pending_delete_failure
+      BEFORE DELETE ON ${Notifications}
+      FOR EACH ROW EXECUTE FUNCTION fail_inbound_pending_notification_delete()
+    `);
+
+    try {
+      await handleInboundUndo(
+        context,
+        new Undo({
+          actor: remoteActorUri,
+          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+        }),
+      );
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER notification_inbound_pending_delete_failure ON ${Notifications}`,
+      );
+      await db.execute(sql`DROP FUNCTION fail_inbound_pending_notification_delete()`);
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, request.id))
         .then((rows) => rows.length),
       1,
     );

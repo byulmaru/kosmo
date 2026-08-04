@@ -1,4 +1,10 @@
 import './field';
 import './mutation';
 
-export { FollowNotification, Notification, ReactionNotification, RepostNotification } from './ref';
+export {
+  FollowNotification,
+  FollowRequestNotification,
+  Notification,
+  ReactionNotification,
+  RepostNotification,
+} from './ref';

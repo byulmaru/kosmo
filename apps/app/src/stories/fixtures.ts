@@ -264,6 +264,26 @@ export function followNotification({
   };
 }
 
+export function followRequestNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
+  id = 'notification-follow-request-1',
+  profile: relatedProfile = profile(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  profile?: StoryProfile;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'FollowRequestNotification' as const,
+    createdAt,
+    id,
+    profile: relatedProfile,
+    readAt,
+  };
+}
+
 export function reactionNotification({
   createdAt = Temporal.Now.instant().subtract({ minutes: 3 }).toString(),
   id = 'notification-reaction-1',
@@ -339,6 +359,7 @@ export function repostNotification({
 export function notificationsProfile(
   notifications: Array<
     | ReturnType<typeof followNotification>
+    | ReturnType<typeof followRequestNotification>
     | ReturnType<typeof reactionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>

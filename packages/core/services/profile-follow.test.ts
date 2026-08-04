@@ -189,8 +189,43 @@ test('follow action은 승인 필요 profile에 pending request를 만들고 cou
       .from(Notifications)
       .where(eq(Notifications.recipientProfileId, followee.id))
       .then((rows) => rows.length),
+    1,
+  );
+});
+
+test('OPEN 정책 전환으로 pending request를 relation으로 승격하면 request 알림도 정리한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const pending = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  assert.equal(pending.result.kind, 'PENDING');
+  if (pending.result.kind !== 'PENDING') {
+    assert.fail('Expected a pending profile follow request');
+  }
+
+  await db
+    .update(Profiles)
+    .set({ followPolicy: ProfileFollowPolicy.OPEN })
+    .where(eq(Profiles.id, followee.id));
+
+  const promoted = await followProfile({
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+  });
+  assert.equal(promoted.created, true);
+  assert.equal(promoted.result.kind, 'ESTABLISHED');
+  assert.equal(
+    await db
+      .select()
+      .from(ProfileFollowRequests)
+      .where(eq(ProfileFollowRequests.id, pending.result.profileFollowRequest.id))
+      .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(pending.result.profileFollowRequest.id), []);
+  assert.equal((await readNotifications(getEstablishedFollow(promoted).id)).length, 1);
 });
 
 test('follow action은 unavailable follower의 relation과 request 생성을 거부한다', async () => {

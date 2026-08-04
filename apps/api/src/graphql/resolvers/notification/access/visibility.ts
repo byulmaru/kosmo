@@ -4,6 +4,7 @@ import {
   Instances,
   Notifications,
   Posts,
+  ProfileFollowRequests,
   ProfileFollows,
   Profiles,
   Reactions,
@@ -24,6 +25,10 @@ import type { UserContext } from '@/context';
 export const NotificationRecipientProfiles = alias(Profiles, 'notification_recipient_profile');
 export const NotificationRelatedProfiles = alias(Profiles, 'notification_related_profile');
 export const NotificationRelatedInstances = alias(Instances, 'notification_related_instance');
+export const NotificationFollowRequestRecipientInstances = alias(
+  Instances,
+  'notification_follow_request_recipient_instance',
+);
 export const NotificationReactionRecipientInstances = alias(
   Instances,
   'notification_reaction_recipient_instance',
@@ -81,6 +86,42 @@ const visibleNotificationSourceWhere = () =>
             eq(ProfileFollows.id, Notifications.sourceId),
             eq(ProfileFollows.followeeProfileId, Notifications.recipientProfileId),
             eq(NotificationRecipientProfiles.state, ProfileState.ACTIVE),
+            visibleProfileWhere({
+              instance: NotificationRelatedInstances,
+              profile: NotificationRelatedProfiles,
+            }),
+          ),
+        ),
+      db
+        .select({ id: ProfileFollowRequests.id })
+        .from(ProfileFollowRequests)
+        .innerJoin(
+          NotificationRecipientProfiles,
+          eq(NotificationRecipientProfiles.id, ProfileFollowRequests.followeeProfileId),
+        )
+        .innerJoin(
+          NotificationFollowRequestRecipientInstances,
+          eq(
+            NotificationFollowRequestRecipientInstances.id,
+            NotificationRecipientProfiles.instanceId,
+          ),
+        )
+        .innerJoin(
+          NotificationRelatedProfiles,
+          eq(NotificationRelatedProfiles.id, ProfileFollowRequests.followerProfileId),
+        )
+        .innerJoin(
+          NotificationRelatedInstances,
+          eq(NotificationRelatedInstances.id, NotificationRelatedProfiles.instanceId),
+        )
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+            eq(ProfileFollowRequests.id, Notifications.sourceId),
+            eq(ProfileFollowRequests.followeeProfileId, Notifications.recipientProfileId),
+            eq(NotificationRecipientProfiles.state, ProfileState.ACTIVE),
+            eq(NotificationFollowRequestRecipientInstances.kind, InstanceKind.LOCAL),
+            eq(NotificationFollowRequestRecipientInstances.state, InstanceState.ACTIVE),
             visibleProfileWhere({
               instance: NotificationRelatedInstances,
               profile: NotificationRelatedProfiles,

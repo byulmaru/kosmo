@@ -181,6 +181,14 @@ type FollowProfilePayload {
   result: ProfileFollowResult!
 }
 
+type FollowRequestNotification implements Node & Notification {
+  createdAt: DateTime!
+  followRequest: ProfileFollowRequest!
+  id: ID!
+  profile: Profile!
+  readAt: DateTime
+}
+
 type Hashtag implements Node {
   id: ID!
   name: String!

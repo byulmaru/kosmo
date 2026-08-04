@@ -33,13 +33,10 @@ type ApproveProfileFollowRequest = (input: {
   profileFollowRequestId: string;
 }>;
 
-type RejectProfileFollowRequest = (
-  input: {
-    actorProfileId: string;
-    profileFollowRequestId: string;
-  },
-  tx?: Transaction,
-) => Promise<{
+type RejectProfileFollowRequest = (input: {
+  actorProfileId: string;
+  profileFollowRequestId: string;
+}) => Promise<{
   followeeProfile: typeof Profiles.$inferSelect;
   profileFollowRequestId: string;
 }>;
@@ -163,6 +160,7 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(found.id), []);
   assert.equal(
     await db
       .select()
@@ -203,6 +201,7 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(request.id), []);
   await assert.rejects(
     lifecycle.rejectProfileFollowRequest!({
       actorProfileId: followee.id,
@@ -237,6 +236,7 @@ test('follower는 request를 취소하고 actor Profile과 삭제 ID를 받는�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(request.id), []);
 });
 
 test('participant가 아닌 actor는 request transition을 실행할 수 없다', async () => {
