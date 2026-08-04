@@ -22,6 +22,7 @@ import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
   isPostComposerVisibilityAllowed,
+  resolvePostComposerVisibility,
 } from './postComposerState';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
@@ -67,6 +68,7 @@ export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
+    defaultPostVisibility
     displayName
     handle
     avatar {
@@ -158,9 +160,14 @@ function PostComposerContents({
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
   const remainingDescriptionId = useId();
+  const seededVisibilityRef = useRef<Visibility>(
+    resolvePostComposerVisibility(profile.defaultPostVisibility),
+  );
+  const latestVisibilityRef = useRef<Visibility>(seededVisibilityRef.current);
+  latestVisibilityRef.current = resolvePostComposerVisibility(profile.defaultPostVisibility);
   const [body, setBody] = useState('');
   const [editorFocused, setEditorFocused] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
+  const [visibility, setVisibility] = useState<Visibility>(seededVisibilityRef.current);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
@@ -178,7 +185,7 @@ function PostComposerContents({
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const dirty =
     body !== '' ||
-    visibility !== PostVisibility.UNLISTED ||
+    visibility !== seededVisibilityRef.current ||
     media.items.length > 0 ||
     media.hasPendingMedia ||
     media.sensitiveMedia;
@@ -238,7 +245,9 @@ function PostComposerContents({
         setBody('');
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
-        setVisibility(PostVisibility.UNLISTED);
+        const latestVisibility = latestVisibilityRef.current;
+        seededVisibilityRef.current = latestVisibility;
+        setVisibility(latestVisibility);
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
