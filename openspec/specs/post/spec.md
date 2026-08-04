@@ -434,7 +434,7 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 
 ### Requirement: Post identity 기반 Content Warning reveal 상태
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/design/reply-composer.md`, PROD-642. 유니버설 앱은 Content Warning이 있는 Post의 reveal 상태를 canonical `Post.id` 기준으로 관리하고 Home·Profile·Thread를 포함해 같은 Post가 표시되는 모든 surface에서 공유해야 한다(MUST). Reveal 상태를 PostContent document, 별도 서버 모델 또는 DB 컬럼에 저장하면 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/design/reply-composer.md`, PROD-642. 유니버설 앱은 Content Warning이 있는 Post의 reveal 상태를 하나의 selected Profile·session lifecycle 안에서 canonical `Post.id` 기준으로 관리하고 Home·Profile·Thread를 포함해 같은 Post가 표시되는 모든 surface에서 공유해야 한다(MUST). selected Profile 또는 session 전환 시 Provider는 새 reveal store를 생성해 이전 lifecycle의 모든 reveal 상태를 초기화해야 한다(MUST). Reveal 상태를 PostContent document, 별도 서버 모델 또는 DB 컬럼에 저장하면 안 된다(MUST NOT).
 
 #### Scenario: Content Warning이 있는 Post의 초기 표시
 
@@ -448,6 +448,14 @@ API는 활성 게시글을 GraphQL `Post` Node로 노출해야 하며 작성자 
 - **THEN** 현재 mounted되어 있거나 이후 표시되는 모든 surface의 같은 `Post.id`가 동일한 reveal 상태를 사용한다
 - **AND** component instance, route, surface, selected Profile 또는 PostContent revision별 별도 reveal state를 만들지 않는다
 - **AND** component unmount·remount나 surface 이동만으로 같은 Post의 상태를 초기화하지 않는다
+- **AND** 이 공유는 현재 selected Profile·session lifecycle 안에서만 적용하며, 그 lifecycle의 공용 key는 canonical `Post.id`다
+
+#### Scenario: selected Profile 또는 session 전환
+
+- **WHEN** selected Profile이 바뀌거나 session이 로그아웃·교체되어 새 lifecycle이 시작된다
+- **THEN** Provider는 새 reveal store를 생성하고 이전 lifecycle의 모든 Post reveal 상태를 초기화한다
+- **AND** 이전 lifecycle에서 reveal된 Post가 새 Profile·session의 같은 `Post.id`로 표시되어도 가림 상태로 시작한다
+- **AND** 이 reset은 같은 lifecycle 안의 surface 이동·component remount reset과 구분된다
 
 #### Scenario: 서로 다른 Post와 Sensitive Media의 독립 상태
 
