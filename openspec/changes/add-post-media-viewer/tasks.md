@@ -147,6 +147,6 @@ PROD-626 위의 Viewer 고유 diff가 자동화와 플랫폼별 runtime 증거�
 - Exact parent SHA, stack-only diff, CI와 미실행 runtime 항목을 PR에 분리해 기록한다.
 
 - [ ] 5.1 Focused test와 전체 App test, lint·Prettier, diff check와 `add-post-media-viewer` strict validation을 통과시킨다.
-- [ ] 5.2 PROD-626 exact parent SHA와 stack-only diff를 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
+- [x] 5.2 PROD-626 exact parent SHA와 stack-only diff를 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
 - [ ] 5.3 PROD-650 자체 구현과 필수 검증이 완료되면 PR readiness를 판단하되 OpenSpec을 조기 archive하지 않는다.
 - [ ] 5.4 PROD-626 archive 뒤 canonical `post-media-display`와 이 delta를 동기화하고 모든 PROD-650 task·runtime·CI가 완료된 경우 PROD-650 소유로 change를 archive한 뒤 strict validation을 통과시킨다.
