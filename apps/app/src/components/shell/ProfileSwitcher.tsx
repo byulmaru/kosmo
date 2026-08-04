@@ -205,13 +205,26 @@ export function ProfileSwitcher({
 
     const picker = pickerRef.current as unknown as HTMLElement | null;
     const trigger = triggerRef.current as unknown as HTMLElement | null;
+    const eventComesFromModal = (event: Event) =>
+      event
+        .composedPath()
+        .some(
+          (target) => target instanceof Element && target.getAttribute('aria-modal') === 'true',
+        );
+    const modalIsPresent = () => document.querySelector('[aria-modal="true"]') !== null;
     const onPointerDown = (event: PointerEvent) => {
+      if (eventComesFromModal(event)) {
+        return;
+      }
       if (!picker?.contains(event.target as Node) && !trigger?.contains(event.target as Node)) {
         dismissPicker();
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        if (modalIsPresent()) {
+          return;
+        }
         event.preventDefault();
         dismissPicker();
         trigger?.focus();
@@ -249,7 +262,6 @@ export function ProfileSwitcher({
   const selectProfile = (id: string, operationVersion = dismissalVersionRef.current) => {
     const action = () => commitProfileSelection(id, operationVersion);
     if (requestNavigation(action)) {
-      dismissPicker();
       return;
     }
 
@@ -295,7 +307,6 @@ export function ProfileSwitcher({
     const operationVersion = dismissalVersionRef.current;
     const action = () => commitProfileCreation(normalized, operationVersion);
     if (requestNavigation(action)) {
-      dismissPicker();
       return;
     }
 
