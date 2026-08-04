@@ -46,15 +46,16 @@
 
 #### Scenario: Protect supported fresh-load browser traversal
 
-- **WHEN** fresh-load overlay에서 사용자가 browser Back을 한 번 실행하거나, 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 실행하거나, Navigation API history index를 제공하는 환경에서 Back을 빠르게 연속 실행한다
-- **THEN** 시스템은 same-document barrier와 history target 복원을 통해 `requestClose` 정책을 적용한다
+- **WHEN** fresh-load overlay에서 사용자가 browser Back을 한 번 실행하거나 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 실행한다
+- **THEN** 시스템은 same-document barrier를 통해 `requestClose` 정책을 적용한다
 - **AND** dirty 취소 또는 submitting 차단이면 overlay, `feedback=open` query와 form 상태를 유지한다
 - **AND** dirty 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다
 
-#### Scenario: Allow no-index rapid multi-entry escape
+#### Scenario: Allow rapid multi-entry escape
 
-- **WHEN** Navigation API history index를 제공하지 않는 환경에서 사용자가 browser Back을 매우 빠르게 연속 실행해 단일 same-document barrier보다 여러 entry를 한 번에 지나간다
+- **WHEN** 사용자가 browser Back을 매우 빠르게 연속 실행해 단일 same-document barrier보다 여러 entry를 한 번에 지나간다
 - **THEN** 현재 document의 `popstate` guard가 dirty/submitting 정책을 적용하기 전에 이전 document로 이탈할 수 있다
+- **AND** 이 제한은 Navigation API history index 제공 여부와 관계없이 적용된다
 - **AND** 시스템은 이 제한을 없애기 위한 `beforeunload` native prompt, raw history marker·자동 압축 또는 복수 same-document barrier를 추가하지 않는다
 
 #### Scenario: Close a clean internally opened overlay

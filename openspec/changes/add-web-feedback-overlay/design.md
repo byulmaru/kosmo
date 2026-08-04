@@ -20,7 +20,7 @@
 - `FeedbackForm`의 시각 계층, 입력 schema, 성공·오류 문구 재설계
 - GraphQL/API, Slack payload, 인증 경계와 새 dependency 변경
 - 범용 modal primitive 또는 shell router architecture의 전면 재설계
-- Navigation API history index가 없는 환경의 빠른 다중 entry Back 이탈까지 막는 범용 history guard
+- 단일 barrier보다 여러 entry를 매우 빠르게 지나는 Back 이탈까지 막는 범용 history guard
 
 ## Implementation Guidance
 
@@ -42,7 +42,7 @@ overlay는 기존 `ModalSheet`를 확장하지 않는 전용 presentation으로 
 
 fresh-load query overlay는 현재 route의 query 없는 entry를 한 번 만든 뒤 overlay entry를 push하는 단일 same-document barrier를 사용한다. Expo Router의 replace/push 흐름으로 두 entry를 만들고 정규화 중에도 overlay를 유지해 route tree나 draft가 끊기지 않게 한다. 이후 browser back은 이전 document로 빠져나가기 전에 query 없는 현재 route에 도달하므로 기존 `requestClose`가 dirty 확인과 submitting 차단을 적용할 수 있다. 폐기를 확인하거나 clean close하면 그 query 없는 route에 남는다.
 
-Navigation API history index를 제공하는 환경에서는 복원 target의 ID/index와 현재 entry를 비교하고, 빠른 연속 Back으로 target을 지나친 경우 target까지 다시 이동해 `requestClose` 결과를 유지한다. index가 없는 환경의 일반적인 단일 Back은 same-document barrier로 처리하지만, 사용자가 barrier보다 여러 entry를 한 번에 지나가면 현재 document의 `popstate` guard가 이전 document 이탈을 가로채지 못할 수 있다. 이번 범위는 이 제한을 허용한다.
+일반적인 단일 Back과 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal은 same-document barrier에서 처리한다. 하지만 사용자가 Back을 매우 빠르게 연속 실행해 barrier보다 여러 entry를 한 번에 지나가면 Navigation API history index 제공 여부와 관계없이 현재 document의 `popstate` guard가 이전 document 이탈을 가로채지 못할 수 있다. 지나친 target을 사후 복원하려는 retry는 이전 document가 이미 활성화된 경우 실행할 수 없으므로 추가하지 않고 이번 범위는 이 제한을 허용한다.
 
 barrier entry를 브라우저 history에서 강제로 압축하거나 제거하지 않는다. 따라서 close 뒤 browser forward가 남은 `feedback=open` entry를 방문해 초기화된 overlay를 다시 열 수 있다. 이를 없애기 위한 raw `history.pushState`, marker, 자동 skip 로직은 Expo Router history와의 이중 상태 및 추가 회귀 위험에 비해 이 변경의 필요 범위를 넘으므로 추가하지 않는다.
 
@@ -50,7 +50,7 @@ barrier entry를 브라우저 history에서 강제로 압축하거나 제거하�
 
 - 전용 overlay가 spec의 responsive geometry와 lifecycle을 모두 소유한다면 내부에서 기존 `ModalSheet`의 작은 presentation 조각을 조합할 수 있다. 다만 다른 `ModalSheet` 소비자의 계약이나 기본 크기를 변경해서는 안 된다.
 - Expo Router navigation guard 또는 Web history listener 중 어느 방식을 사용해도 된다. dirty 취소 시 URL과 overlay가 유지되고, 내부 push와 fresh-load barrier 결과가 spec과 일치해야 한다.
-- `beforeunload`, raw history marker·자동 압축 또는 복수 same-document barrier로 no-index 다중 entry 이탈까지 일반화하는 대안은 승인된 범위가 아니다.
+- `beforeunload`, raw history marker·자동 압축 또는 복수 same-document barrier로 빠른 다중 entry 이탈까지 일반화하는 대안은 승인된 범위가 아니다.
 
 ### Known Traps
 
@@ -64,7 +64,7 @@ barrier entry를 브라우저 history에서 강제로 압축하거나 제거하�
 
 - [browser back은 이미 시작된 traversal이라 dirty guard 구현이 복잡할 수 있음] → URL, overlay, draft가 취소 후 함께 유지되는지 실제 browser history로 검증한다.
 - [fresh-load barrier의 forward entry가 close 뒤 남음] → forward 재진입은 초기화된 form으로 허용하고 history 압축·marker 일반화는 범위에서 제외한다.
-- [Navigation API history index가 없는 환경의 빠른 연속 Back은 단일 barrier보다 여러 entry를 지나 이전 document로 이탈할 수 있음] → 일반적인 단일 Back과 index-backed 연속 Back을 검증하고 `beforeunload`·raw marker·복수 barrier 일반화는 제외한다.
+- [빠른 연속 Back은 Navigation API history index 제공 여부와 관계없이 단일 barrier보다 여러 entry를 지나 이전 document로 이탈할 수 있음] → 일반적인 단일 Back과 현재 document에서 관찰되는 단일 다단계 traversal을 검증하고 `beforeunload`·raw marker·복수 barrier 일반화는 제외한다.
 - [React Native Web `Modal`만으로 focus trap과 background inert가 충분하지 않을 수 있음] → 명시적 Web focus 관리와 keyboard 수동 QA를 포함한다.
 - [drawer body lock과 overlay body lock이 연속되면 scroll 복원이 경쟁할 수 있음] → mobile drawer를 먼저 닫고 같은 scroll 좌표를 overlay lifecycle이 인수하는 경로를 검증한다.
 - [shell root 변경이 route header와 rail에 회귀를 만들 수 있음] → overlay가 닫힌 상태의 mobile/compact/full shell story와 기존 shell tests를 함께 실행한다.

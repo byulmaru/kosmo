@@ -70,13 +70,13 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - overlay는 `UniversalShellContent`의 shell root와 나란한 단일 Web 인스턴스다.
 - 현재 pathname과 feedback 이외 query를 보존하고 query-only open/close를 primary route scroll reset으로 기록하지 않는다.
 - Android/iOS 진입과 `/feedback` direct page, PROD-591 mobile header ownership은 변경하지 않는다.
-- 일반적인 단일 Back과 Navigation API history index를 제공하는 환경의 빠른 연속 Back을 보호한다. index가 없는 환경의 빠른 다중 entry 이탈을 막기 위한 `beforeunload`, raw history marker·자동 압축 또는 복수 barrier는 추가하지 않는다.
+- 일반적인 단일 Back과 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 보호한다. Navigation API history index 제공 여부와 관계없이 빠른 다중 entry 이탈을 막기 위한 `beforeunload`, raw history marker·자동 압축 또는 복수 barrier는 추가하지 않는다.
 
 **Verification**
 
 - full sidebar, compact rail, mobile drawer가 동일한 overlay를 열고 mobile drawer가 먼저 닫히는지 확인한다.
 - internal push/back/forward, fresh-load same-document barrier close, 기존 query 보존과 `/feedback` 중복 overlay 방지를 확인한다.
-- history index를 제공하는 환경에서 fresh-load overlay의 빠른 연속 Back이 target을 복원하고 `requestClose` 정책을 유지하는지 확인한다.
+- fresh-load overlay의 일반적인 단일 Back과 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal이 `requestClose` 정책을 유지하는지 확인한다.
 
 - [x] 3.1 기존 Storybook Expo Router mock이 query push·replace·back/forward 결과를 표현하도록 최소 범위로 확장하고 shell history assertion을 먼저 추가한다.
 - [x] 3.2 Web shell 진입은 `feedback=open`을 사용하고 Android/iOS는 `/feedback` route를 유지하도록 responsive navigation을 연결한다.
@@ -140,4 +140,4 @@ PROD-594의 구현·문서·검증 결과가 하나의 리뷰 가능한 Web-only
 - [x] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.
 - [x] 5.3 후속 독립 리뷰에서 확인된 동적 route query, history fallback과 폐기 직후 재개방 회귀를 해결하고 검증 증거를 다시 동기화한다.
 - [x] 5.4 reload 후 history index와 origin ID가 모두 없는 환경에서 현재 document의 `popstate`로 관찰되는 단일 다단계 browser traversal 회귀를 해결하고 전용 Web E2E로 검증한다.
-- [x] 5.5 fresh-load history target 복원과 no-index 제한의 OpenSpec strict validation, 관련 자동화와 독립 구현 리뷰를 통과시키고 Draft PR 본문·검증 증거를 동기화한다.
+- [ ] 5.5 빠른 다중 entry 연속 Back 제한을 모든 환경에 동기화하고 불가능한 history target retry와 해당 E2E를 제거한 뒤 OpenSpec strict validation, 관련 자동화와 독립 구현 리뷰를 통과시키고 Draft PR 본문·검증 증거를 동기화한다.

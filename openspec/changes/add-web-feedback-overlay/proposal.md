@@ -8,7 +8,7 @@
 - 기존 `FeedbackForm`, `submitFeedback` mutation, 성공·실패·재시도 동작을 재사용하고 form은 `{ dirty, submitting }` 상태만 presentation에 보고한다.
 - Web `<768px`에서는 bottom sheet, `>=768px`에서는 최대 약 `600px` 너비와 `85dvh` 높이의 중앙 dialog를 제공한다.
 - browser back, `Escape`, backdrop, 닫기 버튼을 하나의 `requestClose` 경계로 통합하고 dirty 확인, submitting 차단, focus trap·복원, 배경 상호작용 차단과 scroll 복원을 제공한다.
-- fresh-load overlay는 단일 same-document barrier를 사용한다. 일반적인 단일 Back과 Navigation API history index를 제공하는 환경의 빠른 연속 Back을 보호하되, index가 없는 환경에서 barrier보다 여러 entry를 한 번에 지나는 연속 Back은 이번 범위에서 보장하지 않는다.
+- fresh-load overlay는 단일 same-document barrier를 사용한다. 일반적인 단일 Back과 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 보호하되, Navigation API history index 제공 여부와 관계없이 barrier보다 여러 entry를 매우 빠르게 지나는 연속 Back은 이번 범위에서 보장하지 않는다.
 - `/feedback` 직접 접근과 새로고침은 기존 보호 route의 독립 페이지 fallback으로 유지한다.
 - Android/iOS 피드백 진입과 화면, GraphQL/API, Slack 전달 계약, 피드백 필드 정책은 변경하지 않는다.
 
