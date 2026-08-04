@@ -397,10 +397,14 @@ export const HeroNameAndLoadingStates: Story = {
     const narrowFixture = tagSection.getByTestId('profile-tags-narrow-fixture');
     const narrowTagList = within(narrowFixture).getByTestId('profile-tag-list');
     const narrowChips = within(narrowTagList).getAllByTestId('profile-tag-chip');
+    expect(narrowChips).toHaveLength(withManyLongTags.tags.length);
     const maxLengthTagText = within(narrowTagList).getByText(`#${maxLengthProfileTag}`);
+    expect(within(narrowTagList).getByLabelText(`#${maxLengthProfileTag}`)).toBe(maxLengthTagText);
     const fixtureBounds = narrowFixture.getBoundingClientRect();
     const listBounds = narrowTagList.getBoundingClientRect();
+    const maxLengthChipBounds = maxLengthTagText.parentElement!.getBoundingClientRect();
     const maxLengthTagTextBounds = maxLengthTagText.getBoundingClientRect();
+    const maxLengthTagTextStyle = getComputedStyle(maxLengthTagText);
 
     expect(
       new Set(narrowChips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
@@ -410,8 +414,16 @@ export const HeroNameAndLoadingStates: Story = {
     expect(narrowTagList.scrollWidth).toBeLessThanOrEqual(narrowTagList.clientWidth + 1);
     expect(maxLengthTagTextBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
     expect(maxLengthTagTextBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
+    expect(maxLengthChipBounds.height).toBe(32);
+    expect(maxLengthTagTextStyle.whiteSpace).toBe('nowrap');
+    expect(maxLengthTagTextStyle.textOverflow).toBe('ellipsis');
+    expect(maxLengthTagTextStyle.overflow).toBe('hidden');
+    expect(maxLengthTagText.scrollWidth).toBeGreaterThan(maxLengthTagText.clientWidth);
+    expect(maxLengthTagTextBounds.top).toBeGreaterThanOrEqual(maxLengthChipBounds.top - 1);
+    expect(maxLengthTagTextBounds.bottom).toBeLessThanOrEqual(maxLengthChipBounds.bottom + 1);
     for (const chip of narrowChips) {
       const chipBounds = chip.getBoundingClientRect();
+      expect(chipBounds.height).toBe(32);
       expect(chipBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
       expect(chipBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
     }

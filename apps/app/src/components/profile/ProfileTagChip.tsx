@@ -18,7 +18,14 @@ export function ProfileTagChip({ name, style }: ProfileTagChipProps) {
       style={[styles.root, { backgroundColor: theme.surface, borderColor: theme.border }, style]}
       testID="profile-tag-chip"
     >
-      <Text style={[styles.text, { color: theme.text }]}>#{name}</Text>
+      <Text
+        accessibilityLabel={`#${name}`}
+        ellipsizeMode="tail"
+        numberOfLines={1}
+        style={[styles.text, { color: theme.text }]}
+      >
+        #{name}
+      </Text>
     </View>
   );
 }
@@ -34,6 +41,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   text: {
+    flexShrink: 1,
     fontFamily: 'SUIT',
     ...typography.sm,
   },

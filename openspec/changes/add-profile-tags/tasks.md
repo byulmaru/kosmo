@@ -71,14 +71,14 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 
 - `PROD-491` editor의 기본·추가·제거·임의 개수·invalid·canonical identity duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다. 순서 변경·max count 제약이 추가되지 않았는지도 확인한다.
 - Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, 공통 `32×32` 시각 크기와 Web `32×32 CSS px` target, Web Tab·focus-visible·Enter/Space 입력과 pointer·touch 결과 parity, accessibility label/state·색 외 상태 표현을 React Native Web 접근성·layout test로 보강한다. 인접한 두 TagChip과 wrapping으로 서로 다른 줄에 배치된 TagChip fixture도 Web target의 비중첩 증거로 사용한다. iOS `44×44 pt`·Android `48×48 dp` target mapping은 현재 구현의 정적 확인 범위로 기록한다. 실제 iOS·Android 기기·simulator의 target·인접 action 비중첩·여러 줄 wrapping·접근성 runtime 관찰은 `PROD-527` Ready와 구현 완료 조건에서 제외하고 Native 출시 gate에서 다시 수행하며, 현재 자동화 또는 완료 증거로 주장하지 않는다.
-- 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 React Native Web Storybook 상태 카탈로그에서 검증한다.
+- 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 React Native Web Storybook 상태 카탈로그에서 검증한다. `240px` fixture에서는 모든 TagChip 관계가 남아 있으면서 개별 공용 chip이 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 유지하는지 확인한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
 - [x] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
-- [x] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target 구현을 재사용하고 회귀·server parity를 검증한다. React Native Web component와 adjacent/wrapping fixture로 Web `32×32 CSS px` target, Tab focus·focus-visible 유지와 Enter/Space의 pointer·touch 결과 parity 및 Web layout을 확인한다. iOS `44×44 pt`·Android `48×48 dp` target mapping은 소스에서 확인했으며, 실제 Native target·비중첩·wrapping·접근성 QA는 Native 출시 gate로 이관해 현재 자동화 또는 완료 증거로 주장하지 않는다. max count·순서 변경 control은 추가하지 않는다.
+- [x] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target 구현을 재사용하고 회귀·server parity를 검증한다. 편집기와 공개 Profile이 공유하는 TagChip은 높이 `32`, 한 줄 tail ellipsis와 전체 접근성 이름을 제공한다. React Native Web component와 adjacent/wrapping fixture로 Web `32×32 CSS px` target, Tab focus·focus-visible 유지와 Enter/Space의 pointer·touch 결과 parity 및 Web layout을 확인한다. iOS `44×44 pt`·Android `48×48 dp` target mapping은 소스에서 확인했으며, 실제 Native target·비중첩·wrapping·접근성 QA는 Native 출시 gate로 이관해 현재 자동화 또는 완료 증거로 주장하지 않는다. max count·순서 변경 control은 추가하지 않는다.
 - [x] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
-- [x] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
-- [x] 2.5 React Native Web Storybook 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E 관련 범위를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거와 현재 Web runtime 검증 경계를 기록한다. 실제 iOS·Android runtime QA는 Native 출시 gate로 이관한다.
+- [x] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고, 목록은 chip 사이에서 감싸되 개별 공용 chip은 높이 `32`·한 줄 ellipsis·전체 접근성 이름을 유지하도록 한다. 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
+- [x] 2.5 React Native Web Storybook의 `240px` fixture에서 공용 TagChip 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 검증한다. 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E 관련 범위를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거와 현재 Web runtime 검증 경계를 기록한다. 실제 iOS·Android runtime QA는 Native 출시 gate로 이관한다.
 
 ## 3. PROD-522 통합 검증과 OpenSpec archive
 

@@ -24,7 +24,8 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 - 공개 Profile의 bio 다음, 주요 Profile 통계나 콘텐츠 목록보다 앞에 TagChip 목록을 표시한다.
 - TagChip 목록은 안정적인 표시 순서에 의존하지 않는다.
 - 태그가 없으면 빈 섹션이나 안내 문구를 표시하지 않는다.
-- TagChip은 줄바꿈할 수 있으며 긴 허용값과 좁은 화면에서도 Profile 본문을 가로로 넘치게 하지 않는다.
+- TagChip 목록은 chip 사이에서 여러 줄로 감쌀 수 있으며, 긴 허용값과 좁은 화면에서도 Profile 본문을 가로로
+  넘치게 하지 않는다.
 - PROD-525가 전체 탐색을 전달하기 전에는 TagChip을 비대화형으로 표시한다. PROD-529가 소유한 navigation 구현은 PROD-525가 전체 탐색을 전달한 후 TagChip을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크 또는 버튼으로 활성화한다.
 - Profile이 공개 조회 조건을 통과하지 않으면 Profile Tag만 별도로 표시하지 않는다.
 
@@ -32,6 +33,9 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하고 Web·Android·iOS가 같은 정보 구조를
   공유한다.
+- 편집기와 공개 Profile이 공유하는 TagChip은 시각 높이 `32`를 유지하고 표시 text를 한 줄로 제한하며, 너비를
+  넘는 Display Hashtag Name은 ellipsis로 생략한다. 시각적으로 생략해도 저장된 이름을 바꾸지 않고 접근성 이름에는
+  전체 `#<Display Hashtag Name>`을 제공한다.
 - 제거 action은 시각 크기 `32×32`를 유지하고 실제 입력 target은 Web `32×32 CSS px`, iOS `44×44 pt`,
   Android `48×48 dp`로 제공한다. 공용 component는 시각 geometry와 platform별 입력 target을 분리한다.
 - 현재 Profile Tag 제품 출시와 runtime 검증 범위는 Web이다. iOS·Android 실제 기기·simulator QA는

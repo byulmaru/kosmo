@@ -88,6 +88,18 @@
 - Consequences: OpenSpec task 2.2와 2.5 및 `PROD-527` PR은 Web runtime과 자동화 증거로 완료할 수 있다. Native runtime 미수행은 이 PR의 Ready 또는 구현 완료 blocker가 아니지만, Native 출시 전에 실제 환경 검증이 필요하다.
 - Confirmation / Follow-up: 현재는 React Native Web component·Storybook·app check와 Web E2E로 회귀를 확인하고 iOS·Android target mapping은 소스에서 확인한다. 향후 Native 출시 owner가 실제 환경에서 target·인접 action 비중첩·여러 줄 wrapping·접근성을 다시 검증한다.
 
+### 공용 ProfileTagChip은 높이 32와 한 줄 ellipsis를 사용한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-tags.md`, `PROD-527` 긴 Profile Tag 표시 결정 (2026-08-04), PR #484 review thread
+- Status: Active
+- Context / Problem: 좁은 너비에서 허용되는 긴 Display Hashtag Name이 여러 줄로 감싸지면 고정 높이 `32`인 공용 TagChip 밖으로 text가 넘치거나 인접 UI와 겹칠 수 있다. 반대로 목록 wrapping과 개별 chip text wrapping을 같은 동작으로 해석하면 compact geometry를 보장할 수 없다.
+- Decision Outcome: 편집기와 공개 Profile이 공유하는 TagChip은 시각 높이 `32`와 한 줄을 유지하고, 너비를 넘는 표시 text를 tail ellipsis로 생략한다. 목록은 chip 사이에서 여러 줄로 감싸 모든 TagChip 관계를 유지한다. 접근성 이름은 시각적 생략과 무관하게 전체 `#<Display Hashtag Name>`을 제공하며 저장된 Display Hashtag Name은 변경하지 않는다.
+- Alternatives Considered: 긴 text에 따라 chip 높이를 늘리거나 여러 줄로 표시하는 방식은 compact geometry와 인접 layout을 불안정하게 만들어 제외했다.
+- Consequences: `240px` Web fixture는 공용 TagChip의 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 함께 검증해야 한다. 현재 완료 증거는 Web runtime에 한정하며 Native runtime QA 이관 결정은 유지한다.
+- Confirmation / Follow-up: editor와 공개 Profile이 같은 `ProfileTagChip`을 사용하는지 확인하고 Storybook interaction test에서 좁은 fixture의 layout과 접근성 이름을 검증한다.
+
 ## Remaining Decisions
 
 - 없음.
