@@ -297,6 +297,42 @@ const loadErrorMediaPost = post({
     },
   ],
 });
+const loadErrorThreeMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '세 장 gallery의 오른쪽 이미지 로딩 실패입니다.' }],
+      },
+      { type: 'media', attrs: { mediaId: 'media-three-error-safe-first-story' } },
+      { type: 'media', attrs: { mediaId: 'media-three-error-story' } },
+      { type: 'media', attrs: { mediaId: 'media-three-error-safe-last-story' } },
+    ],
+  },
+  bodyText: '세 장 gallery의 오른쪽 이미지 로딩 실패입니다.',
+  id: 'media-load-error-three',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '첫 번째 정상 이미지',
+      id: 'media-three-error-safe-first-story',
+      url: postMediaImageUri,
+    },
+    {
+      __typename: 'Media',
+      altText: '오른쪽 실패 이미지',
+      id: 'media-three-error-story',
+      url: 'data:image/png;base64,not-valid',
+    },
+    {
+      __typename: 'Media',
+      altText: '세 번째 정상 이미지',
+      id: 'media-three-error-safe-last-story',
+      url: postMediaImageUri,
+    },
+  ],
+});
 const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
 const repostAuthorAvatarUrl = '/icon-192.png';
 const sourceAuthor = profile({
@@ -653,6 +689,7 @@ const storyPosts = [
   fourMediaPost,
   unavailableMediaPost,
   loadErrorMediaPost,
+  loadErrorThreeMediaPost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -948,6 +985,14 @@ function PostCatalog(_args: PostsStoryArgs) {
             post={requireFragment(
               requirePostById(posts, loadErrorMediaPost.id).listItem,
               'load-error media post list item',
+            )}
+          />
+        </View>
+        <View testID="media-load-error-three-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, loadErrorThreeMediaPost.id).listItem,
+              'three-image load-error media post list item',
             )}
           />
         </View>
@@ -2332,6 +2377,20 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(compactRetryBounds.left).toBeGreaterThanOrEqual(twoTileBounds[0]!.left);
     expect(compactRetryBounds.right).toBeLessThanOrEqual(twoTileBounds[0]!.right);
     expect(compactRetryBounds.width).toBeLessThanOrEqual(twoTileBounds[0]!.width);
+    const loadErrorThreeMediaList = within(canvas.getByTestId('media-load-error-three-list'));
+    const threeErrorGalleryBounds = loadErrorThreeMediaList
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    expect(threeErrorGalleryBounds.width / threeErrorGalleryBounds.height).toBeCloseTo(16 / 9, 1);
+    const compactThreeErrorTileBounds = loadErrorThreeMediaList
+      .getByTestId('post-media-tile-3-1')
+      .getBoundingClientRect();
+    const compactThreeRetryBounds = (
+      await loadErrorThreeMediaList.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' })
+    ).getBoundingClientRect();
+    expect(compactThreeRetryBounds.height).toBeGreaterThanOrEqual(48);
+    expect(compactThreeRetryBounds.top).toBeGreaterThanOrEqual(compactThreeErrorTileBounds.top);
+    expect(compactThreeRetryBounds.bottom).toBeLessThanOrEqual(compactThreeErrorTileBounds.bottom);
     expect(
       within(canvas.getByTestId('media-list')).getByTestId('post-media-image-media-story'),
     ).toBeVisible();

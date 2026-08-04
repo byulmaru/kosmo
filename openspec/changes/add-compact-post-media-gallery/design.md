@@ -39,6 +39,8 @@ Sensitive Media는 별도 surface 안에서 단일 가림 placeholder와 공개�
 
 다중 gallery는 기존 theme의 spacing·radius token을 재사용하되 외곽 border를 두지 않고 tile은 `cover`로 경계를 채운다. tile 자체에는 press handler나 interactive role을 추가하지 않는다. 기존 재시도와 Sensitive control은 interactive 목록·상세에서만 상호작용 가능하게 유지한다.
 
+3장 16:9의 오른쪽 tile처럼 높이가 짧은 interactive 오류 fallback은 긴 시각 설명보다 전체 48 logical unit 재시도 control을 우선한다. 영향받은 이미지 맥락은 기존 재시도 accessible name으로 유지하고 긴 설명은 이 compact 경계에서만 생략한다. URL이 없거나 `interactive=false`라 재시도 control이 없는 fallback은 기존 오류 설명을 계속 표시한다.
+
 ### Allowed Alternatives
 
 - gallery가 tile wrapper를 두고 이미지 표현을 채우게 하거나, 이미지 컴포넌트에 frame을 채우는 presentation prop을 전달하는 방식 모두 허용한다. 한 장의 측정 비율과 다중 fixed tile 책임이 분리되고 loading·error 표현까지 같은 경계를 채워야 한다.
@@ -49,6 +51,7 @@ Sensitive Media는 별도 surface 안에서 단일 가림 placeholder와 공개�
 - 다중 tile에도 원본 측정 `aspectRatio`를 적용하면 승인된 전체 surface와 같은 크기 배치가 깨진다.
 - `stretch` 또는 원본 비율과 무관한 이미지 확대는 금지되며, fixed tile에서는 `cover` crop을 사용해야 한다.
 - error fallback의 기존 `minHeight`와 padding을 그대로 두면 작은 tile을 넘을 수 있다.
+- 짧은 tile에 긴 오류 설명과 48 logical unit 재시도 control을 함께 쌓으면 tile의 `overflow: hidden`에 control 일부가 잘릴 수 있다.
 - Sensitive 이미지를 가림 상태에서 미리 mount하거나 크기 측정용으로 load하면 기존 공개 전 byte 미로드 계약을 깨뜨린다.
 - Sensitive 가림 상태에서 공개 gallery의 빈 tile wrapper를 렌더하면 실제 이미지를 가렸는데도 분할선과 내부 gap이 노출된다.
 - visibility control을 상태별로 다른 element로 교체하면 Web focus 유지와 screen reader state가 깨질 수 있다.

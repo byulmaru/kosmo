@@ -4,6 +4,18 @@
 
 ## Decision Records
 
+### 짧은 interactive 오류 tile은 전체 재시도 control을 우선한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-media-gallery.md`, `docs/design/accessibility.md`, PROD-626
+- Status: Active
+- Context / Problem: 3장 16:9 gallery의 오른쪽 tile은 compact Post 폭에서 긴 오류 설명과 48 logical unit 재시도 control을 함께 수용하지 못해, tile의 `overflow: hidden` 경계에서 재시도 control 하단이 잘린다.
+- Decision Outcome: URL이 있고 interactive인 다중 tile 오류 fallback은 긴 시각 설명을 생략하고, 영향받은 이미지 맥락이 포함된 기존 재시도 accessible name과 48 logical unit control 전체를 tile 안에 유지한다. URL이 없거나 비대화형 부모 preview여서 재시도 control이 없는 fallback은 기존 오류 설명을 표시한다.
+- Alternatives Considered: 3장 surface 높이를 다시 늘리는 안은 승인된 16:9 compact geometry를 깨뜨린다. 재시도 control을 줄이는 안은 Android 48dp 기본 target과 기존 component 계약을 약화한다. 긴 설명과 control을 모두 유지하는 안은 compact 오른쪽 tile에서 잘림을 피할 수 없다.
+- Consequences: interactive 다중 오류 tile은 시각적으로 재시도 action만 표시하지만 오류 대상은 accessible name으로 식별된다. 한 장·URL 없음·비대화형 오류 fallback의 설명은 바뀌지 않는다.
+- Confirmation / Follow-up: compact 3장 Storybook fixture에서 16:9 surface와 48px 재시도 button의 상·하단이 오류 tile 안에 남는지 검증하고, component test에서 compact interactive 예외와 기존 accessible name을 확인한다.
+
 ### 3장 16:9와 borderless 다중 gallery surface를 사용한다
 
 - Decision Date: 2026-08-04

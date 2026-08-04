@@ -180,3 +180,52 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 - Storybook에 2장 Sensitive fixture를 추가해 최초 가림 높이 `(width - spacing.sm) / 2`, 공개 전후 동일 높이, tile 미렌더와 border 부재를 실제 browser layout에서 검증했다. Watchman 없이 Expo Web 정적 export도 다시 생성해 localhost:5173에서 Post 폭 475의 2장 일반 gallery와 2장 Sensitive 단일 placeholder가 모두 475×233.5이고 3장 gallery가 475×267.1875로 정확히 16:9임을 확인했다. 두 다중 surface의 computed border는 0px였고 가림 상태의 Sensitive tile test id는 0개였다.
 - 2장 Sensitive 공개 뒤 gallery도 475×233.5를 유지했고 공개·다시 가리기 후 같은 control에 Web focus가 남았다. 버튼 크기·배치와 PROD-650 viewer interaction은 변경하지 않았다.
 - 기존 iOS·Android binary runtime과 archive gate는 각각 3.3·3.4에서 계속 미완료로 유지한다.
+
+## 5. PROD-626 compact 오류 tile 재시도 안정성
+
+**Authority / Provenance**
+
+- `docs/design/post-media-gallery.md`
+- `docs/design/accessibility.md`
+- PROD-626
+
+**Deliverable**
+
+3장 16:9 gallery의 짧은 오른쪽 오류 tile에서도 48 logical unit 재시도 control 전체가 잘리지 않고, 영향받은 이미지 맥락이 accessible name으로 유지된다.
+
+**Guardrails**
+
+- 승인된 3장 16:9 surface와 다중 gallery geometry를 변경하지 않는다.
+- 재시도 control을 48 logical unit보다 줄이지 않는다.
+- URL 없음·비대화형 부모 preview의 오류 설명과 재시도 미표시 계약을 변경하지 않는다.
+- GitHub 리뷰 답글·thread resolve는 구현과 별도 승인 대상으로 유지한다.
+
+**Verification**
+
+- compact 3장 Storybook fixture에서 오른쪽 오류 tile의 재시도 control 높이와 상·하단 containment를 직접 측정한다.
+- Post Media Image component test에서 compact interactive fallback의 긴 시각 설명 생략, 기존 accessible name과 48 logical unit control을 확인한다.
+
+**테스트 코드 범위**
+
+- `apps/app/src/components/post/PostMediaImage.test.ts`
+- `apps/app/src/stories/Posts.stories.tsx`의 3장 오류 fixture와 기존 interaction
+
+**테스트 필요성**
+
+- 16:9 오른쪽 tile의 `overflow: hidden`에 재시도 control 일부가 잘리는 실제 회귀를 직접 차단한다.
+
+**테스트 제외 범위**
+
+- 새 screenshot harness, 3장 surface 재설계, 전역 fallback copy 변경, viewer interaction과 unrelated Storybook coverage.
+
+- [x] 5.1 compact 3장 오류 fixture와 재시도 control containment assertion을 추가하고 기존 구현에서 하단이 약 5.84px 잘리는 RED를 확인한다.
+- [x] 5.2 짧은 interactive tile에서 긴 시각 설명만 생략하고 기존 accessible name·48 logical unit 재시도 control을 보존하며 canonical design·spec·decision을 동기화한다.
+- [x] 5.3 targeted unit·Storybook·정적 검사·strict OpenSpec validation과 localhost:5173 Web runtime을 확인한다.
+
+### 2026-08-04 compact 오류 tile 검증 증거
+
+- compact 3장 Storybook fixture에서 기존 구현의 재시도 button 하단 `1826.125px`가 tile 하단 `1820.28125px`를 약 `5.84px` 넘어가는 RED를 확인했다.
+- 긴 시각 설명을 compact interactive fallback에서만 생략한 뒤 같은 fixture가 16:9 surface, 48px 재시도 button과 tile 상·하단 containment assertion을 통과했다. URL 없음·비대화형 fallback의 기존 설명과 재시도 미표시는 component test로 유지했다.
+- App unit test 169개, Storybook test 267개, production Storybook build, `tsc --noEmit`, 변경 TypeScript ESLint, 변경 파일 Prettier check와 strict OpenSpec validation이 통과했다.
+- Watchman 없이 Expo Web export를 다시 생성했고, 기존 localhost:5173 서버를 재시작하지 않은 채 Home runtime에서 3장 gallery가 `476×267.75`로 정확히 16:9이고 오른쪽 두 tile이 각각 `234×129.875`인 것을 확인했다.
+- 기존 iOS·Android binary runtime과 archive gate는 각각 3.3·3.4에서 계속 미완료로 유지한다.

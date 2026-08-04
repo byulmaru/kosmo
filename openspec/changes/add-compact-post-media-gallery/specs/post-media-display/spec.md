@@ -98,7 +98,7 @@
 
 ### Requirement: Media 로딩 실패 격리와 재시도
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/design/accessibility.md`, PROD-571, PROD-626 — 공용 Post Media UI는 URL을 사용할 수 없거나 이미지 로딩이 실패해도 Post 전체 rendering을 MUST NOT 실패시킨다. 일반 목록·상세의 interactive gallery는 실패한 Media 자리에 상태 설명과 현재 viewer-authorized 표시 URL을 다시 로드하는 접근 가능한 재시도 action을 MUST 제공한다. 비대화형 Reply Composer 부모 preview는 같은 오류 fallback을 표시하되 재시도 action을 MUST NOT 제공한다. 이미지별 loading·ready·error 상태는 해당 tile 경계를 채우고 전체 gallery의 geometry·순서·인접 tile 배치를 변경하지 MUST NOT 한다.
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/design/accessibility.md`, `docs/design/post-media-gallery.md`, PROD-571, PROD-626 — 공용 Post Media UI는 URL을 사용할 수 없거나 이미지 로딩이 실패해도 Post 전체 rendering을 MUST NOT 실패시킨다. 일반 목록·상세의 interactive gallery는 실패한 Media 자리에 상태 설명과 현재 viewer-authorized 표시 URL을 다시 로드하는 접근 가능한 재시도 action을 MUST 제공한다. 높이가 짧은 다중 tile에서는 영향받은 이미지 맥락을 재시도 action의 accessible name으로 전달하고 48 logical unit control 전체를 tile 안에 유지하기 위해 긴 시각 설명을 생략할 수 있다. 비대화형 Reply Composer 부모 preview는 같은 오류 fallback을 표시하되 재시도 action을 MUST NOT 제공한다. 이미지별 loading·ready·error 상태는 해당 tile 경계를 채우고 전체 gallery의 geometry·순서·인접 tile 배치를 변경하지 MUST NOT 한다.
 
 #### Scenario: 한 이미지 로딩 실패
 
@@ -117,6 +117,13 @@
 - **WHEN** 사용자가 실패한 Media의 재시도 action을 실행한다
 - **THEN** UI는 같은 tile 경계에서 해당 Media의 현재 표시 URL로 새 이미지 load를 시작하고 loading 상태를 전달한다
 - **AND** 다시 실패하면 같은 tile의 fallback과 재시도 action으로 돌아간다
+
+#### Scenario: 짧은 분할 tile의 이미지 로딩 실패
+
+- **WHEN** interactive gallery의 오류 tile 높이가 긴 상태 설명과 48 logical unit 재시도 action을 함께 수용하지 못한다
+- **THEN** UI는 영향받은 이미지 맥락을 재시도 action의 accessible name으로 전달한다
+- **AND** 재시도 action의 전체 48 logical unit 높이를 tile 경계 안에 유지한다
+- **AND** gallery surface 비율을 바꾸거나 재시도 action을 축소하지 않는다
 
 #### Scenario: 비대화형 preview의 이미지 로딩 실패
 

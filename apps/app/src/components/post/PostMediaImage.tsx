@@ -29,6 +29,7 @@ export function PostMediaImage({
   const measuredUrl = useRef<string | null>(null);
   currentUrl.current = item.url;
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
+  const compactRetry = fill && Boolean(item.url) && interactive;
   const handleError = useCallback(() => setStatus('error'), []);
   const handleLoadStart = useCallback(() => setStatus('loading'), []);
   const updateAspectRatio = useCallback((url: string, width: number, height: number) => {
@@ -92,9 +93,11 @@ export function PostMediaImage({
         ]}
         testID={`post-media-error-${item.id}`}
       >
-        <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
-          {accessibilityLabel}을 불러오지 못했습니다.
-        </Text>
+        {compactRetry ? null : (
+          <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
+            {accessibilityLabel}을 불러오지 못했습니다.
+          </Text>
+        )}
         {item.url && interactive ? (
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}

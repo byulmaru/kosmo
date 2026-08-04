@@ -28,6 +28,8 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 일반 목록·상세의 Sensitive 공개·다시 가리기와 실패 이미지 재시도는 독립된 control이다. 기존 role, accessible name, state, keyboard·touch 입력을 유지하고 실행할 때 주변 Post navigation을 함께 실행하지 않는다. 비대화형 부모 preview의 error fallback은 같은 tile에 남지만 재시도 control을 제공하지 않는다.
 
+3장 16:9처럼 분할 tile의 높이가 긴 오류 설명과 48 logical unit 재시도 control을 함께 수용하지 못하는 경우, interactive gallery는 긴 시각 설명을 생략하고 영향받은 이미지 맥락이 포함된 재시도 accessible name을 사용한다. 재시도 control은 48 logical unit 높이 전체가 tile 안에 남아야 한다. URL이 없거나 비대화형 부모 preview여서 재시도 control이 없는 fallback은 기존 오류 설명을 계속 표시한다.
+
 ## 검증 경계
 
 - Component test는 1·2·3·4장의 구조·순서·surface·tile geometry, 단일 이미지 비율, Sensitive 미mount·공개 전후, error·retry 격리와 비대화형 예외를 확인한다.

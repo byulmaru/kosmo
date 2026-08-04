@@ -94,6 +94,7 @@ describe('PostMediaImage', () => {
 
     await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Image').length, 0);
+    assert.equal(textContents().includes('가로 이미지을 불러오지 못했습니다.'), true);
 
     await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
     assert.deepEqual(image('landscape').props.source, source);
@@ -103,18 +104,20 @@ describe('PostMediaImage', () => {
   });
 
   it('URL이 없으면 재시도 없이 fallback을 표시한다', async () => {
-    await render(0, { ...media('missing', null), url: null });
+    await render(0, { ...media('missing', null), url: null }, true, true);
 
     assert.ok(byTestId('post-media-error-missing'));
     assert.equal(rendered('Pressable').length, 0);
+    assert.equal(textContents().includes('1번째 첨부 이미지을 불러오지 못했습니다.'), true);
   });
 
   it('비대화형 이미지 오류에서는 재시도 control을 표시하지 않는다', async () => {
-    await render(0, media('landscape', '가로 이미지'), false);
+    await render(0, media('landscape', '가로 이미지'), false, true);
 
     await act(async () => image('landscape').props.onError());
     assert.ok(byTestId('post-media-error-landscape'));
     assert.equal(rendered('Pressable').length, 0);
+    assert.equal(textContents().includes('가로 이미지을 불러오지 못했습니다.'), true);
   });
 
   it('tile 경계에서는 measured aspect ratio 대신 frame을 채우고 fallback도 같은 경계를 채운다', async () => {
@@ -129,6 +132,7 @@ describe('PostMediaImage', () => {
     const fallbackStyle = flattenStyle(byTestId('post-media-error-landscape').props.style);
     assert.equal(fallbackStyle.height, '100%');
     assert.equal(fallbackStyle.minHeight, 0);
+    assert.deepEqual(textContents(), ['다시 시도']);
     const retryStyle = flattenPressableStyle(pressable('가로 이미지 다시 시도').props.style);
     assert.equal(retryStyle.minHeight, 48);
     assert.equal(retryStyle.minWidth, 0);
@@ -178,6 +182,12 @@ function frameAspectRatio(id: string): number | undefined {
 function byTestId(testID: string): ReactTestInstance {
   assert.ok(renderer);
   return renderer.root.findByProps({ testID });
+}
+
+function textContents(): string[] {
+  return rendered('Text').map((node) =>
+    node.children.filter((child): child is string => typeof child === 'string').join(''),
+  );
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {
