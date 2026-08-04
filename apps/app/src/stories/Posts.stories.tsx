@@ -4402,14 +4402,14 @@ export const ComposerClipboardPasteInteraction: Story = {
     relay: {
       operationResponses: {
         PostComposerCompleteMediaUploadMutation: {
-          sequence: [1, 2, 3].map((index) => ({
+          sequence: [1, 2, 3, 4].map((index) => ({
             data: {
               completeMediaUpload: { media: { id: `media-clipboard-${index}`, state: 'READY' } },
             },
           })),
         },
         PostComposerIssueMediaUploadUrlMutation: {
-          sequence: [1, 2, 3].map((index) => ({
+          sequence: [1, 2, 3, 4].map((index) => ({
             data: {
               issueMediaUploadUrl: {
                 media: { id: `media-clipboard-${index}` },
@@ -4427,27 +4427,13 @@ export const ComposerClipboardPasteInteraction: Story = {
     const originalFetch = globalThis.fetch;
     const upload = fn(async () => new Response(null, { status: 200 }));
     globalThis.fetch = upload;
-    const pickerFile = new File(['picker'], 'picker.png', { type: 'image/png' });
     const clipboardImageOne = new File(['one'], 'one.png', { type: 'image/png' });
     const clipboardImageTwo = new File(['two'], 'two.webp', { type: 'image/webp' });
+    const pickerFileOne = new File(['picker-one'], 'picker-one.png', { type: 'image/png' });
+    const pickerFileTwo = new File(['picker-two'], 'picker-two.webp', { type: 'image/webp' });
 
     try {
-      setNextImagePickerResult({
-        assets: [
-          {
-            ...composerMediaAsset,
-            file: pickerFile,
-            mimeType: 'image/png',
-            uri: 'blob:https://kosmo.example/picker-first',
-          },
-        ],
-        canceled: false,
-      });
       await userEvent.type(body, '기존 본문');
-      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
-      await waitFor(() => {
-        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
-      });
 
       const clipboardData = new DataTransfer();
       clipboardData.items.add(clipboardImageOne);
@@ -4463,10 +4449,47 @@ export const ComposerClipboardPasteInteraction: Story = {
       expect(pasteEvent.defaultPrevented).toBe(true);
       expect(body).toHaveValue('기존 본문');
       await waitFor(() => {
-        expect(canvas.getByLabelText('첨부 이미지 3, 업로드 완료')).toBeVisible();
+        expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
       });
-      expect(upload).toHaveBeenCalledTimes(3);
-      expect(canvas.getByRole('button', { name: '이미지 추가, 1개 더 선택 가능' })).toBeVisible();
+
+      setNextImagePickerResult({
+        assets: [
+          {
+            ...composerMediaAsset,
+            file: pickerFileOne,
+            mimeType: 'image/png',
+            uri: 'blob:https://kosmo.example/picker-first',
+          },
+          {
+            ...composerMediaAsset,
+            file: pickerFileTwo,
+            mimeType: 'image/webp',
+            uri: 'blob:https://kosmo.example/picker-second',
+          },
+        ],
+        canceled: false,
+      });
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 2개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+      });
+      expect(getImagePickerLaunchCount()).toBe(1);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
+
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+
+      const ignoredOverflowData = new DataTransfer();
+      ignoredOverflowData.items.add(new File(['overflow'], 'overflow.png', { type: 'image/png' }));
+      const ignoredOverflowPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: ignoredOverflowData,
+      });
+      body.dispatchEvent(ignoredOverflowPaste);
+      expect(ignoredOverflowPaste.defaultPrevented).toBe(true);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
 
       await userEvent.click(body);
       await userEvent.paste('https://example.com/post');
@@ -4484,7 +4507,8 @@ export const ComposerClipboardPasteInteraction: Story = {
             clipboardData: outsidePasteData,
           }),
         );
-        expect(canvas.queryByLabelText('첨부 이미지 4, 업로드 중')).not.toBeInTheDocument();
+        expect(upload).toHaveBeenCalledTimes(4);
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
       } finally {
         outsideEditor.remove();
       }
@@ -4493,6 +4517,134 @@ export const ComposerClipboardPasteInteraction: Story = {
     }
   },
   render: () => <ComposerStory />,
+};
+
+function ComposerClipboardScopeStory() {
+  const data = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <View testID="primary-composer">
+        <PostComposer profile={data.composerProfile} />
+      </View>
+      <View testID="secondary-composer">
+        <PostComposer profile={data.alternateComposerProfile} />
+      </View>
+    </Catalog>
+  );
+}
+
+export const ComposerClipboardFailureAndScopeInteraction: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2].map((index) => ({
+            data: {
+              completeMediaUpload: {
+                media: { id: `media-clipboard-scope-${index}`, state: 'READY' },
+              },
+            },
+          })),
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [
+            { error: 'clipboard upload failed' },
+            { error: 'clipboard upload failed' },
+            {
+              data: {
+                issueMediaUploadUrl: {
+                  media: { id: 'media-clipboard-scope-retry' },
+                  uploadUrl: 'https://upload.example/clipboard-scope/retry',
+                },
+              },
+            },
+            {
+              data: {
+                issueMediaUploadUrl: {
+                  media: { id: 'media-clipboard-scope-secondary' },
+                  uploadUrl: 'https://upload.example/clipboard-scope/secondary',
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const primary = within(canvas.getByTestId('primary-composer'));
+    const secondary = within(canvas.getByTestId('secondary-composer'));
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+
+    try {
+      const primaryPasteData = new DataTransfer();
+      primaryPasteData.items.add(new File(['failed-one'], 'failed-one.png', { type: 'image/png' }));
+      primaryPasteData.items.add(new File(['failed-two'], 'failed-two.png', { type: 'image/png' }));
+      const primaryPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: primaryPasteData,
+      });
+      primary.getByRole('textbox', { name: '게시글 본문' }).dispatchEvent(primaryPaste);
+
+      expect(primaryPaste.defaultPrevented).toBe(true);
+      const failedFirst = await primary.findByLabelText('첨부 이미지 1, 업로드 실패');
+      const failedSecond = await primary.findByLabelText('첨부 이미지 2, 업로드 실패');
+      await userEvent.click(
+        within(failedFirst).getByRole('button', { name: '첨부 이미지 1 업로드 재시도' }),
+      );
+      await waitFor(() => {
+        expect(primary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      await userEvent.click(
+        within(failedSecond).getByRole('button', { name: '첨부 이미지 2 제거' }),
+      );
+      await waitFor(() => {
+        expect(primary.queryByLabelText('첨부 이미지 2, 업로드 실패')).not.toBeInTheDocument();
+      });
+
+      const secondaryPasteData = new DataTransfer();
+      secondaryPasteData.items.add(new File(['secondary'], 'secondary.png', { type: 'image/png' }));
+      const secondaryPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: secondaryPasteData,
+      });
+      secondary.getByRole('textbox', { name: '게시글 본문' }).dispatchEvent(secondaryPaste);
+      expect(secondaryPaste.defaultPrevented).toBe(true);
+      await waitFor(() => {
+        expect(secondary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      expect(primary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      expect(upload).toHaveBeenCalledTimes(2);
+
+      const outsideEditor = document.createElement('textarea');
+      document.body.append(outsideEditor);
+      try {
+        const outsidePasteData = new DataTransfer();
+        outsidePasteData.items.add(new File(['outside'], 'outside.png', { type: 'image/png' }));
+        outsideEditor.dispatchEvent(
+          new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: outsidePasteData,
+          }),
+        );
+        expect(upload).toHaveBeenCalledTimes(2);
+        expect(primary.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(1);
+        expect(secondary.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(1);
+      } finally {
+        outsideEditor.remove();
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerClipboardScopeStory />,
 };
 
 export const ComposerPickerResultAfterUnmount: Story = {

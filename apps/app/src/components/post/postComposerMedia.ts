@@ -24,9 +24,8 @@ export function getClipboardImageFiles(
 export function takeAvailableComposerMedia<T>(
   assets: readonly T[],
   currentCount: number,
-  limit: number = postComposerMediaLimit,
 ): readonly T[] {
-  return assets.slice(0, Math.max(0, limit - currentCount));
+  return assets.slice(0, Math.max(0, postComposerMediaLimit - currentCount));
 }
 
 export function createClipboardMediaAsset(
