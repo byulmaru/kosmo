@@ -93,9 +93,10 @@ export type StoryPost = {
   content: {
     __typename: 'PostContent';
     bodyText: string;
+    contentWarning: string | null;
     document: {
       body: PostContentBodyDocumentV1;
-      summary: null;
+      summary: string | null;
       version: 1;
     };
     id: string;
@@ -118,6 +119,7 @@ export function post({
   bodyDocument,
   bodyText = '코스모에서 전하는 첫 번째 소식입니다.',
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
+  contentWarning = null,
   id = 'post-1',
   media = [],
   profile: author = profile(),
@@ -131,6 +133,7 @@ export function post({
   bodyDocument?: PostContentBodyDocumentV1;
   bodyText?: string | null;
   createdAt?: string;
+  contentWarning?: string | null;
   id?: string;
   media?: StoryMedia[] | null;
   profile?: StoryProfile;
@@ -150,10 +153,11 @@ export function post({
             __typename: 'PostContent' as const,
             document: {
               body: bodyDocument ?? storyDocumentFromText(bodyText),
-              summary: null,
+              summary: contentWarning,
               version: 1,
             },
             bodyText,
+            contentWarning,
             id: `content-${id}`,
             media,
           },

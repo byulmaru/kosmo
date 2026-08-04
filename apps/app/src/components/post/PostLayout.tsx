@@ -24,6 +24,7 @@ const PostLayoutFragment = graphql`
     visibility
     content {
       bodyText
+      contentWarning
     }
     profile {
       avatar {
@@ -46,6 +47,7 @@ const PostLayoutFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
       }
       profile {
@@ -89,7 +91,12 @@ export function PostLayout({
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
-          ? { bodyText: source.content.bodyText, document: source.content.document }
+          ? {
+              bodyText: source.content.bodyText,
+              contentWarning: source.content.contentWarning,
+              document: source.content.document,
+              postId: source.id,
+            }
           : null,
         createdAt: source.createdAt,
         id: source.id,

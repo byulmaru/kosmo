@@ -15,7 +15,7 @@
 - `replyParentId`는 nullable concrete `Post` global ID이며 Parent는 행동 주체 Profile 기준 Visibility·Eligibility와 Content 검증을 통과해야 한다.
 - Reply Visibility는 Parent와 독립적이고 `repostSourceId`는 작성 입력에 추가하지 않는다.
 - Parent 검증과 Post·Content·Reply Parent 저장은 원자적이어야 하며 실패 시 부분 데이터를 남기지 않는다.
-- Content Warning, Media/Sensitive Media capability의 변경, Mentioned Profiles/DIRECT와 Reply+Quote 작성은 포함하지 않는다. 기존 `createPost`의 Media/Sensitive Media 입력 계약은 보존한다.
+- `PostContentDocument` 구조, Content Warning 전용 저장 모델·DB 컬럼, Media/Sensitive Media capability의 변경, Mentioned Profiles/DIRECT와 Reply+Quote 작성은 포함하지 않는다. Local Content Warning write/reveal은 PROD-642가 기존 `document.summary` 계약으로 추가하고, 기존 `createPost`의 Media/Sensitive Media 입력 계약은 보존한다.
 
 **Verification**
 
@@ -155,7 +155,51 @@
 - `pnpm --filter @kosmo/app build-storybook`과 `pnpm --filter @kosmo/app build` Web production export 통과
 - Web 자동화와 공용 코드는 현재 PR의 Ready 근거로 검증했다. 격리 API 3100·BFF 5184·App 5183 runtime에서는 인증 화면, picker와 upload URL 발급까지 확인했지만 Media Storage의 local CORS가 기본 `http://localhost:5173`만 허용해 5183 origin의 PUT은 환경 제한으로 완료하지 못했다. 기본 5173 origin의 실제 cross-service upload lifecycle은 통합 테스트로 통과했다. Android·iOS picker·keyboard·safe area·platform back·접근성 runtime은 이번 Web 우선 PR의 Ready 조건이 아니며 Native 출시 gate에서 별도로 확인한다.
 
-## 5. PROD-423 통합 검증·OpenSpec 완료
+## 5. PROD-642 Content Warning 작성·표시 계약
+
+**Authority / Provenance**
+
+- `docs/domain/objects/post.md`
+- `docs/domain/objects/post-content.md`
+- `docs/design/reply-composer.md`
+- `PROD-642`
+
+**Deliverable**
+
+일반 Post와 Reply가 optional Content Warning을 기존 `PostContentDocument.summary`에 저장하고, Reply Composer는 direct Parent의 Content Warning을 수정·제거 가능한 초기값으로 사용하며, reveal 상태는 canonical `Post.id` 기준으로 모든 surface에서 공유한다.
+
+**Guardrails**
+
+- `CreatePostInput.contentWarning`은 optional nullable Plain Text이며 기존 canonical document builder와 `post_content.document.summary` 저장 경로를 사용한다.
+- `PostContentDocument` 구조나 schema version을 바꾸지 않고 Content Warning 전용 모델·DB 컬럼을 만들지 않는다.
+- Parent Content Warning은 Reply draft 초기화 시 한 번만 복사한다. 이후 Parent와 동기화하지 않으며 사용자의 수정·제거를 허용한다.
+- Content Warning은 본문과 합산한 500자 검증, dirty/reset/error/pending lifecycle에 참여한다. Content Warning만 있고 본문과 Media가 모두 없는 입력은 contentful Post 또는 Reply로 취급하지 않는다.
+- reveal 상태는 component·route·surface·selected Profile·PostContent revision이 아닌 canonical `Post.id`를 key로 하며 Home·Profile·Thread와 Reply Parent preview가 공유한다.
+- reveal 상태는 client 표시 상태로만 관리하고 서버에 저장·동기화하지 않는다. Sensitive Media 공개 상태와도 독립적이다.
+
+**Verification**
+
+- 일반 Post와 Reply의 optional `contentWarning` GraphQL 입력, normalization, `document.summary` 저장, 조회 projection과 null/합산 길이 validation을 검증한다.
+- Parent Content Warning 유무에 따른 Reply 초기값, 사용자 수정·제거, pristine/dirty, discard/reset, 실패 유지와 Parent·Profile·Relay Environment 전환을 검증한다.
+- Home·Profile·Thread·Reply Parent preview의 cross-surface reveal·다시 가리기, remount 유지, 서로 다른 Post 및 Sensitive Media 상태 독립성을 검증한다.
+- DB/schema migration과 새 Content Warning 저장 모델이 없고 기존 ActivityPub summary materialization 및 일반 Post·Reply·Media 회귀가 유지되는지 확인한다.
+
+- [x] 5.1 canonical domain·현재 구현·활성 OpenSpec의 불일치를 조사하고 proposal, design, delta spec, canonical spec과 Reply Composer 설계를 위 계약으로 정렬한다.
+- [x] 5.2 optional `CreatePostInput.contentWarning`을 기존 canonical builder와 `document.summary` 저장 경로에 연결하고 API·core 회귀 테스트를 추가한다.
+- [x] 5.3 일반·Reply Composer에 Content Warning 입력, 합산 길이 검증, Parent 초기값과 수정·제거 가능한 draft lifecycle을 연결하고 client 검증을 추가한다.
+- [x] 5.4 canonical `Post.id` 기반 공용 reveal 상태를 모든 Post surface와 Reply Parent preview에 연결하고 cross-surface 회귀를 검증한다.
+- [x] 5.5 Relay·TypeScript·lint/format·unit·Storybook과 실행 가능한 Web·Android·iOS 검증을 수행하고 platform별 evidence를 기록한다.
+
+**Verification Evidence (2026-08-04)**
+
+- `./node_modules/.bin/relay-compiler`: Relay documents compiled successfully.
+- `NODE_ENV=production ./node_modules/.bin/tsx scripts/check-schema.ts`: runtime and committed GraphQL schema matched.
+- API `createPost` contract tests: 2 passed; Core PostContent summary regression tests: 22 passed.
+- App TypeScript check, changed-file ESLint and Prettier checks passed.
+- App unit tests: 176 passed; Storybook tests: 288 passed.
+- Post identity reveal store test covers same-Post sharing, different-Post isolation and re-hide. Android/iOS native runtime validation was not executed in this Web-focused gate and remains a native release gate.
+
+## 6. PROD-423 통합 검증·OpenSpec 완료
 
 **Authority / Provenance**
 
@@ -168,14 +212,15 @@
 - `PROD-425`
 - `PROD-426`
 - `PROD-640`
+- `PROD-642`
 
 **Deliverable**
 
-Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read·Reply 이동까지의 전체 사용자 흐름을 검증하고 canonical·Linear·OpenSpec을 동기화한 뒤 change를 archive한다.
+Content Warning과 Media를 포함한 Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read·Reply 이동까지의 전체 사용자 흐름을 검증하고 canonical·Linear·OpenSpec을 동기화한 뒤 change를 archive한다.
 
 **Guardrails**
 
-- PROD-424·425·426·640 전체 Deliverable·Guardrail·Verification과 필수 dependency가 완료되기 전에 change를 archive하지 않는다.
+- PROD-424·425·426·640·642 전체 Deliverable·Guardrail·Verification과 필수 dependency가 완료되기 전에 change를 archive하지 않는다.
 - PROD-460·461·462와 Reply+Quote·ActivityPub·retry/outbox 범위를 통합 완료 조건으로 승격시키지 않는다.
 - Pull Request readiness와 OpenSpec archive를 별도로 판단한다.
 
@@ -183,19 +228,10 @@ Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read
 
 - 두 Local Profile로 Reply 작성 → Parent thread 반영 → Parent Author inbox/count → item Read 및 결과 Reply 이동을 검증한다.
 - self-reply, Parent와 독립 Visibility, contentless Repost disabled, Notification 실패 격리와 selected Profile 전환 회귀를 검증한다.
-- Reply Media를 포함한 관련 전체 check, OpenSpec strict validation, task 완료와 canonical delta 동기화 결과를 기록한다.
+- Reply Content Warning·Post identity reveal·Media를 포함한 관련 전체 check, OpenSpec strict validation, task 완료와 canonical delta 동기화 결과를 기록한다.
 
-- [x] 5.1 PROD-424·425·426·640의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
-- [x] 5.2 Local Reply 작성·Media·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
-- [x] 5.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
-- [x] 5.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
-- [x] 5.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.
-
-**Verification Evidence (2026-08-05)**
-
-- PROD-424·425·426·640 및 필수 dependency(PROD-388·417·418·420·422·445·274·277·324·372·381·393·398·399·400·432·507)는 Linear에서 Done이며, 연결된 구현 PR #332·#413·#354·#490·#437은 `main`에 merge되고 required checks가 성공했다.
-- `apps/api/tests/integration/graphql/notification.test.ts`에 Local Reply 생성 → Parent thread → Parent Author inbox/Unread count → Read → 결과 Reply ID 확인 수직 테스트를 추가했다. `pnpm --filter @kosmo/api test:integration`: 219 tests, 218 passed, 0 failed, 1 skipped(로컬 Media Storage Service 사전조건).
-- `pnpm test:e2e`: 84 passed. Web UI의 Reply 상세/inline surface와 기존 인증·작성·탐색 회귀를 실행했다.
-- `pnpm --filter @kosmo/app test:unit`: 183 passed; `test:storybook`: 293 passed; `check`(Relay compiler·TypeScript), `build-storybook`, `build` 통과.
-- `pnpm --filter @kosmo/api lint:schema`와 API unit 26 tests, Web check와 unit 34 tests, Core unit 51 tests, `pnpm test:fedify` 203 tests 통과. Root ESLint·Prettier·변경 diff check도 통과했다.
-- `pnpm exec openspec validate add-local-reply-creation --strict` 통과. 구현 결과와 proposal/specs/design/decisions를 확인했고 새 durable decision은 필요하지 않았으며, archive 단계에서 기존 delta를 canonical specs에 반영했다. Android·iOS picker·keyboard·safe-area·platform back·접근성 runtime gate는 별도 Native 출시 검증으로 남기고 이번 증거에서는 실행·Ready 근거로 주장하지 않는다.
+- [ ] 6.1 PROD-424·425·426·640·642의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
+- [ ] 6.2 Local Reply 작성·Content Warning·Post identity reveal·Media·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
+- [ ] 6.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
+- [ ] 6.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
+- [ ] 6.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.

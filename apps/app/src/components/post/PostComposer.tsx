@@ -10,7 +10,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { TextArea } from '@/components/ui/TextField';
+import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -93,6 +93,7 @@ type PostComposerProps = {
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
   focusOnMount?: boolean;
+  initialContentWarning?: string | null;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
   onStateChange?: (state: PostComposerState) => void;
   profile: PostComposer_profile$key;
@@ -144,6 +145,7 @@ function PostComposerContents({
   editorRef,
   environmentGenerationRef,
   focusOnMount = false,
+  initialContentWarning,
   onPostCreated,
   onStateChange,
   profile,
@@ -158,7 +160,11 @@ function PostComposerContents({
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
   const remainingDescriptionId = useId();
+  const [initialContentWarningValue] = useState(() =>
+    normalizePostContentPlainText(initialContentWarning ?? ''),
+  );
   const [body, setBody] = useState('');
+  const [contentWarning, setContentWarning] = useState(initialContentWarningValue);
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
@@ -174,10 +180,12 @@ function PostComposerContents({
     isPostComposerVisibilityAllowed(option.value, replyParentId),
   );
   const bodyText = normalizePostContentPlainText(body);
-  const remaining = postBodyMaxLength - bodyText.length;
+  const contentWarningText = normalizePostContentPlainText(contentWarning);
+  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const dirty =
     body !== '' ||
+    contentWarningText !== initialContentWarningValue ||
     visibility !== PostVisibility.UNLISTED ||
     media.items.length > 0 ||
     media.hasPendingMedia ||
@@ -208,7 +216,12 @@ function PostComposerContents({
       variables: {
         connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
         input: {
-          ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
+          ...createPostComposerMutationInput(
+            bodyText,
+            visibility,
+            replyParentId,
+            contentWarningText,
+          ),
           media: media.items,
           sensitiveMedia: media.sensitiveMedia,
         },
@@ -236,6 +249,7 @@ function PostComposerContents({
           visibility,
         });
         setBody('');
+        setContentWarning(initialContentWarningValue);
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
         setVisibility(PostVisibility.UNLISTED);
@@ -505,6 +519,13 @@ function PostComposerContents({
           placeholder={replyMode ? '답글을 입력하세요…' : '무슨 일이 일어나고 있나요?'}
           style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
           value={body}
+        />
+        <TextField
+          accessibilityLabel={replyMode ? '답글 내용 경고' : '게시글 내용 경고'}
+          editable={!submitting}
+          onChangeText={setContentWarning}
+          placeholder="내용 경고 (선택)"
+          value={contentWarning}
         />
         {error ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>

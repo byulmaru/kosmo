@@ -41,6 +41,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
     createdAt
     content {
       bodyText
+      contentWarning
     }
     profile {
       displayName
@@ -56,6 +57,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
       }
       profile {
@@ -359,6 +361,7 @@ function ReplyComposerSurfaceContents({
             contextGuard={contextGuard}
             editorRef={editorRef}
             focusOnMount
+            initialContentWarning={parent.content?.contentWarning}
             onPostCreated={handlePostCreated}
             onStateChange={setComposerState}
             profile={profile.composer}
@@ -374,7 +377,9 @@ function ReplyComposerSurfaceContents({
     ? {
         content: parent.repostSource.content
           ? {
+              postId: parent.repostSource.id,
               bodyText: parent.repostSource.content.bodyText,
+              contentWarning: parent.repostSource.content.contentWarning,
               document: parent.repostSource.content.document,
             }
           : null,
@@ -485,6 +490,7 @@ function ReplyComposerSurfaceContents({
                   contextGuard={contextGuard}
                   editorRef={editorRef}
                   focusOnMount
+                  initialContentWarning={parent.content?.contentWarning}
                   onPostCreated={handlePostCreated}
                   onStateChange={setComposerState}
                   profile={profile.composer}

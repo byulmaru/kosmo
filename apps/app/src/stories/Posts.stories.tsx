@@ -879,14 +879,28 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
   const repostSource = post.repostSource ?? null;
 
   return {
-    content: post.content ?? null,
+    content: post.content
+      ? {
+          bodyText: post.content.bodyText,
+          contentWarning: post.content.contentWarning,
+          document: post.content.document,
+          postId: post.id,
+        }
+      : null,
     createdAt: post.createdAt,
     id: post.id,
     profile: post.profile,
     replyParent: post.replyParent ?? null,
     repostSource: repostSource
       ? {
-          content: repostSource.content ?? null,
+          content: repostSource.content
+            ? {
+                bodyText: repostSource.content.bodyText,
+                contentWarning: repostSource.content.contentWarning,
+                document: repostSource.content.document,
+                postId: repostSource.id,
+              }
+            : null,
           createdAt: repostSource.createdAt,
           id: repostSource.id,
           profile: repostSource.profile,

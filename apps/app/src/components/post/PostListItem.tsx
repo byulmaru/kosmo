@@ -25,6 +25,7 @@ const PostListRowFragment = graphql`
     createdAt
     content {
       bodyText
+      contentWarning
     }
     profile {
       avatar {
@@ -47,6 +48,7 @@ const PostListItemFragment = graphql`
     createdAt
     content {
       bodyText
+      contentWarning
       document
     }
     profile {
@@ -69,6 +71,7 @@ const PostListItemFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
       }
       profile {
@@ -204,7 +207,12 @@ export function PostListItem({
   }
 
   const presentationPost: PostSourcePresentationData = {
-    content: { bodyText: post.content.bodyText, document: post.content.document },
+    content: {
+      bodyText: post.content.bodyText,
+      contentWarning: post.content.contentWarning,
+      document: post.content.document,
+      postId: post.id,
+    },
     createdAt: post.createdAt,
     id: post.id,
     profile: {
@@ -216,7 +224,12 @@ export function PostListItem({
     replyParent: post.replyParent ? { id: post.replyParent.id } : null,
     repostSource: {
       content: source.content
-        ? { bodyText: source.content.bodyText, document: source.content.document }
+        ? {
+            bodyText: source.content.bodyText,
+            contentWarning: source.content.contentWarning,
+            document: source.content.document,
+            postId: source.id,
+          }
         : null,
       createdAt: source.createdAt,
       id: source.id,

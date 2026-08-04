@@ -2,13 +2,22 @@
 
 ### Requirement: 기존 composer를 사용한 Reply 작성
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/design/reply-composer.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`, `PROD-425` 유니버설 클라이언트는 목록·상세의 contentful Post에서 기존 일반 Post composer를 Reply Parent 맥락으로 열고, 현재 composer가 지원하는 본문과 Visibility로 Reply를 제출해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/design/reply-composer.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`, `PROD-425`, `PROD-642` 유니버설 클라이언트는 목록·상세의 contentful Post에서 기존 일반 Post composer를 Reply Parent 맥락으로 열고, 현재 composer가 지원하는 본문, optional Content Warning, Visibility와 Media로 Reply를 제출해야 한다(MUST).
 
 #### Scenario: contentful Post에서 Reply 진입
 
 - **WHEN** 사용자가 Content를 가진 일반 Post, Reply 또는 Quote의 목록 또는 상세에서 Reply action을 활성화한다
 - **THEN** 클라이언트는 해당 Post를 Parent로 하는 기존 composer를 연다
 - **AND** 제출 mutation에 Parent의 concrete `Post` global ID를 `replyParentId`로 전달한다
+
+#### Scenario: Parent Content Warning 초기값
+
+- **WHEN** Content Warning이 있는 direct Parent에서 Reply Composer를 연다
+- **THEN** 클라이언트는 Parent의 `contentWarning`을 Reply Content Warning의 초기값으로 한 번 복사한다
+- **AND** 사용자는 복사된 값을 자유롭게 수정하거나 제거할 수 있다
+- **AND** 복사된 값은 Parent와 계속 동기화되는 상속값이 아니라 독립적인 Reply draft다
+- **WHEN** direct Parent에 Content Warning이 없다
+- **THEN** Reply Content Warning은 빈 초기값으로 시작한다
 
 #### Scenario: Parent와 독립적인 Visibility
 
@@ -30,7 +39,7 @@
 
 ### Requirement: Reply 작성 상태와 thread cache 격리
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/design/reply-composer.md`, `PROD-425` 클라이언트는 Reply 작성의 validation·pending·실패·성공 상태를 selected Profile별로 격리하고, 현재 query의 thread 계약을 합성하지 않으면서 성공한 Reply에 접근할 수 있게 해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/design/reply-composer.md`, `PROD-425`, `PROD-642` 클라이언트는 Reply 작성의 Content Warning·validation·pending·실패·성공 상태를 selected Profile과 Parent 문맥별로 격리하고, 현재 query의 thread 계약을 합성하지 않으면서 성공한 Reply에 접근할 수 있게 해야 한다(MUST).
 
 #### Scenario: 성공한 Reply의 thread 반영
 
@@ -49,7 +58,13 @@
 #### Scenario: selected Profile 전환
 
 - **WHEN** Reply 작성 중 selected Profile이 바뀌거나 다른 Profile의 Relay Environment가 활성화된다
-- **THEN** 클라이언트는 이전 Profile의 입력, pending, error, 성공 결과를 새 Profile의 composer나 thread cache에 노출하지 않는다
+- **THEN** 클라이언트는 이전 Profile의 본문·Content Warning 입력, pending, error, 성공 결과를 새 Profile의 composer나 thread cache에 노출하지 않는다
+
+#### Scenario: Parent 문맥 전환
+
+- **WHEN** Reply 작성 중 다른 direct Parent로 전환한다
+- **THEN** 클라이언트는 이전 Parent에서 수정한 Content Warning을 새 draft로 이어받지 않는다
+- **AND** 새 Parent의 Content Warning을 새 Reply draft의 초기값으로 한 번 복사한다
 
 ### Requirement: surface별 Reply Composer presentation
 
@@ -77,9 +92,10 @@
 #### Scenario: direct Parent presentation
 
 - **WHEN** Reply surface가 열린다
-- **THEN** 클라이언트는 direct Parent의 작성자·시각·전체 본문과 Quote이면 기존 Source preview를 비대화형으로 표시한다
+- **THEN** 클라이언트는 direct Parent의 작성자·시각·Content Warning·전체 본문과 Quote이면 기존 Source preview를 표시한다
 - **AND** Source preview는 일반 본문과 같은 background와 semantic border를 사용한다
-- **AND** 일반 첨부 이미지는 표시하되 Sensitive Media는 가림 상태를 유지하고 공개·이미지 오류 재시도 control을 노출하지 않는다
+- **AND** Content Warning reveal control 외의 Parent 맥락은 비대화형이며, Parent 본문과 Media는 canonical `Post.id`의 공용 reveal 상태를 따른다
+- **AND** 일반 첨부 이미지는 표시하되 Sensitive Media는 Content Warning reveal과 독립된 가림 상태를 유지하고 공개·이미지 오류 재시도 control을 노출하지 않는다
 - **AND** Parent Action Bar·Post menu와 전체 조상 thread를 중복 표시하지 않는다
 
 ### Requirement: Reply surface lifecycle
@@ -88,23 +104,44 @@
 
 #### Scenario: pristine과 dirty close
 
-- **WHEN** 초기 본문과 Visibility가 유지된 surface를 `X`, backdrop 또는 `Escape`로 닫는다
+- **WHEN** 초기 본문, Content Warning과 Visibility가 유지된 surface를 `X`, backdrop 또는 `Escape`로 닫는다
 - **THEN** 클라이언트는 즉시 닫고 원래 Reply action으로 focus를 복원한다
-- **BUT WHEN** 본문 또는 Visibility가 초기값에서 바뀌었다
+- **BUT WHEN** 본문, Content Warning 또는 Visibility가 각 초기값에서 바뀌었다
 - **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
 - **AND** 상세 inline surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
+- **AND** Parent에서 복사된 Content Warning을 그대로 유지한 것만으로는 dirty가 아니지만 이를 수정하거나 제거하면 dirty다
 
 #### Scenario: pending close 차단
 
 - **WHEN** Reply 제출이 pending이다
-- **THEN** 클라이언트는 본문·Visibility 변경과 `X`, backdrop, `Escape`, platform back 또는 상세 Reply action을 통한 close·Parent 전환을 차단한다
+- **THEN** 클라이언트는 본문·Content Warning·Visibility 변경과 `X`, backdrop, `Escape`, platform back 또는 상세 Reply action을 통한 close·Parent 전환을 차단한다
 - **AND** button에 `게시 중` 상태를 표시한다
 
 #### Scenario: 실패와 성공 close
 
 - **WHEN** validation 또는 network 오류가 발생한다
-- **THEN** 클라이언트는 direct Parent, 본문과 Visibility를 유지하고 editor와 footer 사이에 accessible inline alert를 표시한다
+- **THEN** 클라이언트는 direct Parent, 본문, Content Warning과 Visibility를 유지하고 editor와 footer 사이에 accessible inline alert를 표시한다
 - **WHEN** mutation이 성공한다
 - **THEN** 클라이언트는 surface를 닫고 원래 Reply action으로 focus를 복원하며 약 3초 뒤 자동으로 사라지는 `답글을 게시했어요` snackbar와 표시 중 결과 Reply `보기` action을 표시한다
 - **AND** 사용자가 `보기`를 활성화할 때만 결과 Reply 상세로 이동한다
 - **AND** 상세 route는 현재 query만 targeted refetch하고 목록 membership이나 다른 actor Store를 합성하지 않는다
+
+### Requirement: Post identity 기반 Content Warning reveal 상태
+
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/design/reply-composer.md`, `PROD-642` 유니버설 클라이언트는 Content Warning reveal 상태를 canonical `Post.id` 기준으로 관리하고 같은 Post가 표시되는 모든 surface에서 공유해야 한다(MUST).
+
+#### Scenario: 같은 Post의 cross-surface reveal
+
+- **WHEN** 사용자가 Home, Profile, Thread 또는 Reply Parent preview 중 한 surface에서 Content Warning이 있는 Post를 reveal하거나 다시 가린다
+- **THEN** 현재 mounted되어 있거나 이후 표시되는 다른 surface의 같은 `Post.id`도 동일한 reveal 상태를 사용한다
+- **AND** component instance, route, surface, selected Profile 또는 PostContent revision별 별도 reveal 상태를 만들지 않는다
+- **AND** component unmount·remount나 surface 이동만으로 같은 Post의 reveal 상태를 초기화하지 않는다
+
+#### Scenario: Content Warning의 초기 가림과 독립 상태
+
+- **WHEN** 공용 reveal 상태에서 아직 reveal되지 않은 Content Warning Post를 표시한다
+- **THEN** 클라이언트는 Content Warning을 표시하고 본문과 Media를 가린다
+- **WHEN** 서로 다른 `Post.id`의 Content Warning Post를 표시한다
+- **THEN** 각 Post의 reveal 상태는 서로 독립적이다
+- **AND** Content Warning reveal은 Sensitive Media 공개 상태를 변경하지 않는다
+- **AND** reveal 상태를 PostContent, 별도 서버 모델 또는 DB 컬럼에 저장하지 않는다

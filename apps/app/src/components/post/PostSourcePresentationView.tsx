@@ -24,7 +24,9 @@ export type PresentationProfile = {
 
 export type PresentationContent = {
   readonly bodyText: string;
+  readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly postId: string;
 };
 
 export type SourcePostPresentationData = {
@@ -168,9 +170,11 @@ export function PostSourcePreview({
         <View style={styles.sourceBody} testID="source-post-body">
           <PostContentRenderer
             bodyText={source.content.bodyText}
+            contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
             media={[]}
+            postId={source.content.postId}
             size="md"
           />
         </View>
@@ -234,8 +238,10 @@ function PostBodyPressTarget({
     >
       <PostContentRenderer
         bodyText={content.bodyText}
+        contentWarning={content.contentWarning}
         document={content.document}
         media={[]}
+        postId={content.postId}
         size="md"
       />
     </Pressable>

@@ -9,6 +9,7 @@ import {
 } from '@/session/SessionProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
+import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
 import { Splash } from './Splash';
 import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
@@ -46,9 +47,11 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <RelayActorProvider>
-          <RelaySessionBoundary>{children}</RelaySessionBoundary>
-        </RelayActorProvider>
+        <PostContentWarningRevealProvider>
+          <RelayActorProvider>
+            <RelaySessionBoundary>{children}</RelaySessionBoundary>
+          </RelayActorProvider>
+        </PostContentWarningRevealProvider>
       </ToastProvider>
     </ThemeProvider>
   );

@@ -19,6 +19,7 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostInput));
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
+  assert.equal(String(createPostInput.getFields().contentWarning?.type), 'String');
   assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
   assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
   assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');
@@ -45,6 +46,11 @@ test('validates createPost input before running the resolver', async () => {
       { bodyText: '가'.repeat(501), visibility: 'UNLISTED' },
       '본문은 500자까지 작성할 수 있어요.',
       'bodyText',
+    ],
+    [
+      { bodyText: '가'.repeat(499), contentWarning: '경고', visibility: 'UNLISTED' },
+      '본문과 내용 경고는 500자까지 작성할 수 있어요.',
+      'contentWarning',
     ],
     [
       {
