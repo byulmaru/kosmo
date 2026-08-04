@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import {
+  formatImageUploadFailureMessage,
+  formatImageUploadRetryLabel,
+} from '../media/imageUploadErrors';
 import type { ImagePickerAsset, ImagePickerResult } from 'expo-image-picker';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileEditRoute as ProfileEditRouteExport } from './ProfileEditRoute';
@@ -407,6 +411,63 @@ describe('ProfileEditRoute', () => {
     assert.equal(issued, 3);
     assert.equal(fetchMock.mock.callCount(), 3);
     assert.deepEqual(routerReplacements, ['/@updated']);
+  });
+
+  it('allowlisted signed PUT 실패를 Profile field 오류와 retry name으로 연결한다', async () => {
+    let issued = 0;
+    let completed = 0;
+    mutationHandlers.set('ProfileEditRouteIssueMediaUploadUrlMutation', (config) => {
+      issued += 1;
+      config.onCompleted({
+        issueMediaUploadUrl: {
+          media: { id: `media-issued-${issued}` },
+          uploadUrl: `https://upload.example/${issued}`,
+        },
+      } as never);
+    });
+    mutationHandlers.set('ProfileEditRouteCompleteMediaUploadMutation', (config) => {
+      completed += 1;
+      config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never);
+    });
+    const fetchMock = mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: 'size_limit_exceeded', message: 'storage secret' },
+          }),
+          { status: 413, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    await renderRoute();
+
+    pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/avatar')] };
+    await act(async () => requireScreenProps().onAvatarEdit());
+    await flush();
+
+    assert.equal(issued, 1);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.equal(completed, 0);
+    assert.deepEqual(requireScreenProps().value.avatar.failure, {
+      reason: 'file-too-large',
+      stage: 'transfer',
+    });
+    assert.equal(
+      formatImageUploadFailureMessage('아바타 이미지', {
+        reason: 'file-too-large',
+        stage: 'transfer',
+      }),
+      '아바타 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
+    );
+    assert.equal(formatImageUploadRetryLabel('아바타 이미지'), '아바타 이미지 업로드 다시 시도');
+    assert.doesNotMatch(
+      formatImageUploadFailureMessage('아바타 이미지', {
+        reason: 'file-too-large',
+        stage: 'transfer',
+      }),
+      /storage secret|https?:\/\/|token/,
+    );
   });
 
   it('변경된 draft의 닫기, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {

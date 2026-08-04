@@ -70,13 +70,6 @@ export function asImageUploadError(error: unknown, stage: ImageUploadStage): Ima
   return new ImageUploadError({ reason: 'transient', stage });
 }
 
-export function getImageUploadFailure(
-  error: unknown,
-  fallbackStage: ImageUploadStage = 'transfer',
-): ImageUploadFailure {
-  return asImageUploadError(error, fallbackStage).failure;
-}
-
 export function formatImageUploadFailureMessage(
   subject: string,
   failure: ImageUploadFailure,

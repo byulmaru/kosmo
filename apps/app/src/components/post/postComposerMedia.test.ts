@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ImageUploadError } from '../media/imageUploadErrors';
+import {
+  assertImageUploadResponse,
+  formatImageUploadFailureMessage,
+  formatImageUploadRetryLabel,
+  ImageUploadError,
+} from '../media/imageUploadErrors';
 import { releaseComposerMediaPreview, uploadComposerMedia } from './postComposerMedia';
 
 test('releases only Web object URL previews', () => {
@@ -158,4 +163,43 @@ test('attributes issue, transfer, and complete failures without exposing callbac
       error.failure.reason === 'transient' &&
       !error.message.includes('private complete detail'),
   );
+});
+
+test('production PUT response keeps the allowlisted transfer reason through the Composer sequence', async () => {
+  let completed = false;
+
+  await assert.rejects(
+    uploadComposerMedia({
+      complete: async () => {
+        completed = true;
+      },
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+      put: async () => {
+        await assertImageUploadResponse(
+          new Response(
+            JSON.stringify({
+              error: { code: 'size_limit_exceeded', message: 'storage secret' },
+            }),
+            { status: 413, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      },
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'transfer' &&
+      error.failure.reason === 'file-too-large' &&
+      !error.message.includes('storage secret'),
+  );
+
+  assert.equal(completed, false);
+  assert.equal(
+    formatImageUploadFailureMessage('첨부 이미지 1', {
+      reason: 'file-too-large',
+      stage: 'transfer',
+    }),
+    '첨부 이미지 1 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
+  );
+  assert.equal(formatImageUploadRetryLabel('첨부 이미지 1'), '첨부 이미지 1 업로드 다시 시도');
 });

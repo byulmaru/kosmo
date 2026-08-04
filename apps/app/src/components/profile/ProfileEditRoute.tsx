@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import {
+  asImageUploadError,
   assertImageUploadResponse,
-  getImageUploadFailure,
 } from '@/components/media/imageUploadErrors';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
@@ -252,7 +252,11 @@ function EditableProfileRoute({
       } catch (error) {
         if (mounted.current) {
           updateImage(field, (current) =>
-            failProfileEditImageUpload(current, generation, getImageUploadFailure(error)),
+            failProfileEditImageUpload(
+              current,
+              generation,
+              asImageUploadError(error, 'transfer').failure,
+            ),
           );
         }
       }

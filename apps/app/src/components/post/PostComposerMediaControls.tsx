@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import {
+  asImageUploadError,
   assertImageUploadResponse,
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
-  getImageUploadFailure,
 } from '@/components/media/imageUploadErrors';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -166,7 +166,7 @@ export function PostComposerMediaControls({
       updateMedia((items) =>
         items.map((item) =>
           item.key === key
-            ? { ...item, failure: getImageUploadFailure(error), state: 'failed' }
+            ? { ...item, failure: asImageUploadError(error, 'transfer').failure, state: 'failed' }
             : item,
         ),
       );
@@ -324,7 +324,7 @@ export function PostComposerMediaItems({
                 ? '업로드 완료'
                 : '업로드 실패'
           }`}
-          accessibilityLiveRegion="polite"
+          accessibilityLiveRegion={item.state === 'failed' ? undefined : 'polite'}
           key={item.key}
           style={styles.mediaItem}
         >
