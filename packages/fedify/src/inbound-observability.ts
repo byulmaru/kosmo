@@ -115,6 +115,9 @@ const observedErrors = new WeakSet<object>();
 const canTrackError = (error: unknown): error is object =>
   (typeof error === 'object' && error !== null) || typeof error === 'function';
 
+const normalizeInboundError = (error: unknown): object =>
+  canTrackError(error) ? error : new Error('ActivityPub inbound listener threw a non-Error value');
+
 export const markInboundErrorObserved = (error: unknown): void => {
   if (canTrackError(error)) {
     observedErrors.add(error);
@@ -223,7 +226,9 @@ export const withInboundObservability =
     try {
       await listener(context, activity);
     } catch (error) {
-      markInboundErrorObserved(error);
+      const normalizedError = normalizeInboundError(error);
+      const external = isExternalInboundError(normalizedError);
+      markInboundErrorObserved(normalizedError);
       observeInbound({
         activityType: getInboundActivityType(activity),
         activityOrigin:
@@ -236,15 +241,13 @@ export const withInboundObservability =
           'objectId' in activity && activity.objectId instanceof URL
             ? activity.objectId.origin
             : undefined,
-        error,
+        error: normalizedError,
         handler,
-        outcome: isExternalInboundError(error) ? 'external_failure' : 'internal_failure',
+        outcome: external ? 'external_failure' : 'internal_failure',
         phase: 'listener',
-        reasonCode: isExternalInboundError(error)
-          ? 'external_listener_error'
-          : 'unexpected_listener_error',
+        reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
       });
-      throw error;
+      throw normalizedError;
     }
   };
 
