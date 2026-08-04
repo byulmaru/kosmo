@@ -16,12 +16,12 @@
 
 ### Requirement: 플랫폼 최소 interaction target
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `PROD-548` — 공통 `IconButton`은 Web에서 `32×32 CSS px`, iOS에서 `44×44 pt`, Android에서 `48×48 dp` 이상의 interaction target을 제공해야 한다(MUST). Public target override와 caller style은 해당 플랫폼 floor를 낮출 수 없어야 하며(MUST), component-specific larger target은 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `PROD-548` — 공통 `IconButton`은 Web에서 `32×32 CSS px`, iOS에서 `44×44 pt`, Android에서 `48×48 dp` 이상의 interaction target을 제공해야 한다(MUST). Web floor는 실제 interactive element가 소유해야 하고(MUST), Native는 기존 visual·layout box를 유지해야 할 때 공용 `hitSlop` 계산으로 부족분을 보충할 수 있다(MAY). Public target override, caller style 또는 caller `hitSlop`은 해당 플랫폼의 effective floor를 낮출 수 없어야 하며(MUST), component-specific larger target은 유지해야 한다(MUST).
 
 #### Scenario: caller가 floor보다 작은 값을 요청한다
 
 - **WHEN** caller가 현재 플랫폼 floor보다 작은 target size나 width·height style을 전달한다
-- **THEN** 실제 interactive element는 현재 플랫폼 floor보다 작아지지 않는다
+- **THEN** Web의 실제 interactive element는 floor보다 작아지지 않고 Native의 실제 box와 공용 `hitSlop`을 합친 effective target은 floor보다 작아지지 않는다
 
 #### Scenario: caller가 더 큰 target을 사용한다
 
@@ -33,6 +33,11 @@
 - **WHEN** Web에서 공통 `IconButton`의 pointer와 keyboard focus target을 측정한다
 - **THEN** 렌더된 interactive element가 최소 `32×32 CSS px`를 제공하고 `hitSlop`만으로 floor 충족을 주장하지 않는다
 
+#### Scenario: Native layout을 유지한다
+
+- **WHEN** 기존 Native visual·layout box가 iOS 또는 Android floor보다 작다
+- **THEN** 공용 component는 기존 box를 확대해 visual center나 layout slot을 이동시키지 않고 플랫폼별 부족분을 공용 `hitSlop`에 반영한다
+
 #### Scenario: 기존 hit region을 공용 target으로 옮긴다
 
 - **WHEN** 작은 visual box와 `hitSlop`을 결합해 target을 확장하던 action을 전환한다
@@ -40,7 +45,7 @@
 
 ### Requirement: Visual geometry와 interaction target 분리
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/page-header.md`, `docs/design/feedback.md`, `docs/design/post-media-gallery.md`, `docs/design/reactions.md`, `docs/design/reply-composer.md`, `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-548` — 공통 `IconButton`은 visible glyph·background·control geometry와 interaction target을 독립적으로 표현해야 한다(MUST). 기존 surface의 glyph 크기, visual box, 배치, 색상, focus 표시와 pressed·disabled feedback은 전환 전과 같아야 하며(MUST), 확장 target은 인접 action과 겹치거나 부모 clipping으로 잘리지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/page-header.md`, `docs/design/feedback.md`, `docs/design/post-media-gallery.md`, `docs/design/reactions.md`, `docs/design/reply-composer.md`, `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-548` — 공통 `IconButton`은 visible glyph·background·control geometry와 interaction target을 독립적으로 표현해야 한다(MUST). 기존 surface의 glyph 크기, visual box, 배치, 색상, Web focus 표시와 pressed·disabled feedback은 전환 전과 같아야 하며(MUST), Web의 확장된 실제 target은 인접 action과 겹치거나 부모 clipping으로 잘리지 않아야 한다(MUST). Native `hitSlop`의 parent clipping·sibling 우선순위와 focus boundary는 출시 전 runtime에서 검증해야 한다(MUST).
 
 #### Scenario: 작은 visual control을 유지한다
 

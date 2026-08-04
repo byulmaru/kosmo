@@ -17,7 +17,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 ### 형태
 
 - Web option은 Figma Post Action Bar의 28px 밀도와 함께 사용할 수 있도록 32×32 CSS px의 둥근 사각형으로 정규화하며 radius는 12px이다. emoji는 20px, option 사이 gap과 panel padding은 각각 4px이다. border를 포함한 panel의 전체 높이는 약 42px이다.
-- 이번 Web 우선 변경은 Native interaction geometry를 변경하지 않는다. 현재 selector·summary는 iOS·Android 모두 44 logical unit을 사용하고 Profile tab은 32 minimum을 사용하므로, iOS Profile tab과 Android target은 각각 44×44pt·48×48dp baseline을 아직 충족하지 않는다. Native 출시 전 iOS target을 최소 44×44pt, Android target을 최소 48×48dp로 복구하고 assistive technology·touch runtime에서 검증한다.
+- 이번 Web 우선 변경은 Native selector와 icon+count summary token의 interaction geometry를 변경하지 않는다. 이 control들은 iOS·Android 모두 44 logical unit을 사용하고 Profile tab은 32 minimum을 사용하므로 Android 48×48dp baseline을 아직 충족하지 않는다. 공통 `IconButton` 대상인 summary More는 아래 별도 계약을 사용한다. Native 출시 전 나머지 control도 iOS 44pt·Android 48dp target으로 복구하고 assistive technology·touch runtime에서 검증한다.
 - 바깥 컨테이너는 border가 있는 둥근 직사각형이며 radius는 16px이다.
 - option 자체에는 border를 표시하지 않는다.
 - 선택 여부는 border가 아니라 option 아래에 분리한 배경 layer로만 구분한다.
@@ -63,7 +63,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
 - 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. mutation이 성공하기 전에는 count나 선택 상태를 바꾸지 않는다.
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
-- 양수 count Type 뒤에는 radius 12px의 32×32px More button을 둔다. glyph는 16px ellipsis이며 Profile 목록 modal을 연다. More는 selected Profile이 없어도 사용할 수 있다.
+- 양수 count Type 뒤의 More button은 Web visual과 실제 target이 radius 12px의 32×32 CSS px이고, Native visual·layout box는 기존 44 logical unit을 유지한다. iOS는 44pt box 자체로, Android는 공용 `IconButton`이 2dp `hitSlop`을 더해 48dp effective touch target을 source에 표현한다. glyph는 16px ellipsis이며 Profile 목록 modal을 연다. More는 selected Profile이 없어도 사용할 수 있다. Native parent clipping·focus boundary와 assistive technology 결과는 출시 전 실제 runtime에서 검증한다.
 - 가용 너비가 좁으면 token과 More를 줄이거나 여러 줄로 바꾸지 않고 feature-local horizontal `ScrollView` shell에서 같은 한 줄을 유지한다.
 
 ## Reaction Profile 목록

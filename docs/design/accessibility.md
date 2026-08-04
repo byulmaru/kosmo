@@ -83,7 +83,9 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
 실제 interactive element가 button role, 필수 accessible name과 현재 상태를 소유한다.
 
 - 최소 interaction target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`다. 컴포넌트별로
-  더 큰 target을 사용할 수 있지만 public target override나 caller style로 이 floor를 낮출 수 없다.
+  더 큰 target을 사용할 수 있지만 public target override, caller style 또는 `hitSlop`으로 이 floor를
+  낮출 수 없다. Web은 실제 interactive element가 floor를 소유하고, Native는 기존 layout box를 유지해야 할 때
+  부족분을 공용 `hitSlop`으로 보충할 수 있다.
 - 보이는 glyph·background·control geometry와 interaction target은 분리한다. target을 확대해도 기존 surface의
   glyph 크기, visual box, 배치, 색상, focus 표시와 pressed·disabled feedback을 바꾸지 않는다.
 - Web target은 렌더된 interactive element에서 pointer와 keyboard focus로 검증할 수 있어야 하며, React Native
@@ -91,12 +93,14 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
   effective input region을 줄이거나 이중 확장하지 않는다.
 - pressed, disabled, pending, busy, expanded 상태와 focus ref, `onPressIn` 같은 event handler는 각 action의
   기존 제품 동작을 유지하도록 전달한다. 공통 컴포넌트가 모든 surface에 하나의 visual feedback을 강제하지 않는다.
-- 확장된 target은 인접한 서로 다른 action과 겹치거나 부모의 clipping으로 잘리지 않아야 한다.
+- Web의 확장된 실제 target은 인접한 서로 다른 action과 겹치거나 부모의 clipping으로 잘리지 않아야 한다.
+  Native `hitSlop` source mapping은 출시 전 실제 기기에서 parent bounds, sibling 우선순위와 focus boundary를
+  별도로 검증한다.
 - 이 계약은 상태 선택·토글 또는 count가 핵심인 control, icon+count action, pill·tab·switch, Link와
   navigation/menu/list row, whole-preview/content action, avatar·label·chevron 같은 compound control 및 텍스트
   `Button`을 공용 `IconButton`으로 바꾸지 않는다.
-- iOS·Android floor mapping은 공용 source와 자동화에서 유지하되, Web 자동화나 runtime 결과를 Native 실제
-  기기·simulator의 touch·focus·assistive technology 검증 완료 증거로 사용하지 않는다.
+- iOS·Android floor mapping과 부족분 계산은 공용 source와 자동화에서 유지하되, Web 자동화나 source 계산을
+  Native 실제 기기·simulator의 touch·focus·assistive technology 검증 완료 증거로 사용하지 않는다.
 
 ### Post Action Bar의 출시 전 임시 예외
 
@@ -109,7 +113,7 @@ Post Action Bar는 현재 Web 우선 출시 범위의 Figma geometry를 먼저 �
 ### 기존 컴포넌트 계약
 
 - Reaction Quick Picker와 Reaction 요약 token은 [reactions.md](./reactions.md)의 Web 32×32 CSS px geometry를 사용한다. 이 값은 SC 2.5.8의 24×24 CSS px minimum을 자체 크기로 충족하며, `apps/app/src/stories/Reactions.stories.tsx`의 Web exact-size assertion도 32×32로 맞춘다.
-- 이번 Web 우선 Reaction 변경은 Native interaction geometry를 수정하지 않는다. 현재 selector·summary의 44 logical unit과 Profile tab의 32 minimum은 iOS Profile tab 44×44pt 및 Android 48×48dp baseline을 모두 충족하는 구현이 아니다. Native 출시 전 iOS target을 최소 44×44pt, Android target을 최소 48×48dp로 복구하고 assistive technology·touch runtime에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
+- Reaction selector와 icon+count summary token은 Native에서 기존 44 logical unit을 유지하므로 Android 48×48dp baseline을 충족하지 않는다. 공통 `IconButton` 대상인 More만 visual 44를 유지한 채 Android 부족분을 공용 `hitSlop` mapping으로 보충한다. Native 출시 전 selector·summary token과 Profile tab을 포함한 모든 target을 실제 iOS 44pt·Android 48dp touch/focus boundary와 assistive technology에서 검증한다. Web 검증은 이 출시 gate를 대체하지 않는다.
 - 순수 Repost의 `{displayName}님이 재게시함` Profile link는 독립 icon button이 아니라 attribution 문장 전체에 적용된 text link다. Web에서는 SC 2.5.8의 inline target 예외를 사용해 14/20 line box를 유지하며 role, accessible name, keyboard focus와 navigation을 보존한다. Native 출시 전에는 이 링크의 44pt·48dp target, focus boundary와 바로 아래 Source Author link 비중첩을 runtime에서 다시 검증한다.
 - 기존 컴포넌트별 강화 계약은 이 전역 문서만으로 축소하거나 폐기하지 않는다. exact contract를 바꾸려면 해당 컴포넌트의 canonical 디자인 문서와 Linear·OpenSpec·검증을 먼저 정렬한다.
 

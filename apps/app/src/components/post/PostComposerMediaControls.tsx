@@ -441,6 +441,7 @@ export function PostComposerMediaItems({
               disabled={disabled}
               onPress={() => onRemove(item.key)}
               style={styles.mediaRemoveTarget}
+              targetSize={mediaRemoveGeometry.targetSize}
               visualSize={mediaRemoveVisualSize}
               visualStyle={({ pressed }) => [
                 styles.mediaRemoveVisual,

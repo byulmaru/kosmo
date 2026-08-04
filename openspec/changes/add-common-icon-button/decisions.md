@@ -23,7 +23,7 @@ PR inventory와 `design.md`의 구현 제약을 반영한다. 구현 전에는 �
 - Confirmation / Follow-up: `add-local-profile-edit` diff에서 PROD-548 section과 archive dependency가 제거됐는지
   strict validation과 review로 확인한다.
 
-### 플랫폼 floor는 실제 interactive element가 소유한다
+### Web floor는 실제 element가, Native floor는 공용 effective target 계산이 소유한다
 
 - Decision Date: 2026-08-05
 - Decision Class: Derived Contract
@@ -31,15 +31,18 @@ PR inventory와 `design.md`의 구현 제약을 반영한다. 구현 전에는 �
 - Status: Active
 - Context / Problem: caller target/style override와 Web에서 입증되지 않은 `hitSlop`만으로는 공용 floor를
   일관되게 보장할 수 없다.
-- Decision Outcome: 공용 `IconButton`은 Web 32, iOS 44, Android 48 floor와 component-specific larger target을
-  실제 interactive element에 유지한다. Caller target/style은 floor를 낮출 수 없고 Web 완료 증거는 rendered
-  pointer·focus target을 측정한다.
+- Decision Outcome: 공용 `IconButton`은 Web 32 floor와 component-specific larger target을 실제 interactive
+  element에 유지한다. Native는 기존 visual·layout box를 확대하지 않고 iOS 44, Android 48에서 부족한 값을
+  공용 `hitSlop`으로 보충한다. Caller target/style/`hitSlop`은 effective floor를 낮출 수 없고 Web 완료 증거는
+  rendered pointer·focus target을 측정한다.
 - Alternatives Considered: 각 caller가 플랫폼 target 계산 — 현재 중복 문제를 유지하므로 선택하지 않았다.
-  `hitSlop`만 사용 — 현재 React Native Web source와 focus bounds에서 floor를 증명하지 못하므로 선택하지 않았다.
-- Consequences: target enforcement는 caller visual style보다 우선하며, 작은 visual control에는 별도 visual
-  layer가 필요하다. 기존 `hitSlop`은 effective region이 줄거나 이중 확장되지 않게 정규화한다.
-- Confirmation / Follow-up: component test에서 smaller target/style override와 larger target을 검증하고 Web
-  runtime에서 bounding box, pointer와 keyboard focus를 확인한다.
+  모든 플랫폼에서 `hitSlop`만 사용 — 현재 React Native Web source와 focus bounds에서 floor를 증명하지 못하므로
+  선택하지 않았다. 모든 플랫폼에서 실제 box를 확대 — Android에서 기존 44-unit layout과 visual center를
+  이동시키므로 선택하지 않았다.
+- Consequences: Web target enforcement는 caller visual style보다 우선하고, Native `hitSlop`은 effective region이
+  줄거나 기존 expansion과 이중 적용되지 않게 정규화한다. Native focus·clipping은 source 계산만으로 완료하지 않는다.
+- Confirmation / Follow-up: component test에서 Web smaller target/style override와 larger target, Native layout
+  보존·부족분 계산을 검증하고 Web runtime에서 bounding box, pointer와 keyboard focus를 확인한다.
 
 ### 공용 component는 surface별 visual feedback을 강제하지 않는다
 

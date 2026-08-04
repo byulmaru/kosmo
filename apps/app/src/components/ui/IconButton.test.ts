@@ -53,6 +53,13 @@ let getIconButtonOverlayGeometry:
       visualInset: number,
     ) => { targetInset: number; targetSize: number; visualInset: number })
   | undefined;
+let getIconButtonPlatformGeometry:
+  | ((
+      platform: string,
+      targetSize: number,
+      visualSize?: number,
+    ) => { minimumHitSlop: number; minimumTargetSize: number })
+  | undefined;
 let getIconButtonTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
@@ -61,6 +68,9 @@ before(async () => {
   getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
   getIconButtonOverlayGeometry = module?.getIconButtonOverlayGeometry as
     | typeof getIconButtonOverlayGeometry
+    | undefined;
+  getIconButtonPlatformGeometry = module?.getIconButtonPlatformGeometry as
+    | typeof getIconButtonPlatformGeometry
     | undefined;
   getIconButtonTargetSize = module?.getIconButtonTargetSize as
     | ((platform: string) => number)
@@ -134,10 +144,31 @@ test('overlay geometry preserves the visual inset while keeping the platform tar
   });
 });
 
+test('Native target expansion preserves the rendered layout while Web keeps an actual element floor', () => {
+  assert.ok(getIconButtonPlatformGeometry, 'platform geometry resolver must exist');
+  assert.deepEqual(getIconButtonPlatformGeometry('web', 16, 12), {
+    minimumHitSlop: 0,
+    minimumTargetSize: 32,
+  });
+  assert.deepEqual(getIconButtonPlatformGeometry('ios', 40, 40), {
+    minimumHitSlop: 2,
+    minimumTargetSize: 40,
+  });
+  assert.deepEqual(getIconButtonPlatformGeometry('android', 44, 44), {
+    minimumHitSlop: 2,
+    minimumTargetSize: 44,
+  });
+  assert.deepEqual(getIconButtonPlatformGeometry('android', 48, 32), {
+    minimumHitSlop: 0,
+    minimumTargetSize: 48,
+  });
+});
+
 test('caller target and style cannot lower the Web interaction floor', () => {
   const button = renderIconButton({
     accessibilityLabel: '검색 지우기',
     children: '×',
+    hitSlop: -4,
     style: { height: 12, minHeight: 12, minWidth: 12, width: 12 },
     targetSize: 16,
   });
@@ -147,6 +178,7 @@ test('caller target and style cannot lower the Web interaction floor', () => {
 
   assert.equal(targetStyle.minHeight, 32);
   assert.equal(targetStyle.minWidth, 32);
+  assert.equal(button.props.hitSlop, 0);
 });
 
 test('caller can preserve an interaction target larger than the platform floor', () => {

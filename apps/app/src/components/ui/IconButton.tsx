@@ -24,6 +24,27 @@ export function getIconButtonHitSlop(
   return Math.max(0, (effectiveTargetSize - renderedTargetSize) / 2);
 }
 
+export function getIconButtonPlatformGeometry(
+  platform: string,
+  targetSize: number,
+  visualSize?: number,
+): { minimumHitSlop: number; minimumTargetSize: number } {
+  const renderedTargetSize = Math.max(0, targetSize, visualSize ?? 0);
+  const platformTargetSize = getIconButtonTargetSize(platform);
+
+  if (platform === 'web') {
+    return {
+      minimumHitSlop: 0,
+      minimumTargetSize: Math.max(platformTargetSize, renderedTargetSize),
+    };
+  }
+
+  return {
+    minimumHitSlop: Math.max(0, (platformTargetSize - renderedTargetSize) / 2),
+    minimumTargetSize: renderedTargetSize,
+  };
+}
+
 export function getIconButtonOverlayGeometry(
   platform: string,
   visualSize: number,
@@ -40,6 +61,26 @@ export function getIconButtonOverlayGeometry(
 }
 
 export const ICON_BUTTON_TARGET_SIZE = getIconButtonTargetSize(Platform.OS);
+
+function mergeHitSlop(
+  hitSlop: PressableProps['hitSlop'],
+  minimumHitSlop: number,
+): PressableProps['hitSlop'] {
+  if (hitSlop == null && minimumHitSlop === 0) {
+    return hitSlop;
+  }
+
+  if (typeof hitSlop === 'number') {
+    return Math.max(hitSlop, minimumHitSlop);
+  }
+
+  return {
+    bottom: Math.max(hitSlop?.bottom ?? 0, minimumHitSlop),
+    left: Math.max(hitSlop?.left ?? 0, minimumHitSlop),
+    right: Math.max(hitSlop?.right ?? 0, minimumHitSlop),
+    top: Math.max(hitSlop?.top ?? 0, minimumHitSlop),
+  };
+}
 
 export type IconButtonProps = Omit<
   PressableProps,
@@ -62,14 +103,20 @@ export function IconButton({
   controlRef,
   disabled = false,
   feedback = 'none',
+  hitSlop,
   style,
-  targetSize = ICON_BUTTON_TARGET_SIZE,
+  targetSize,
   visualSize,
   visualStyle,
   ...props
 }: IconButtonProps): ReactNode {
   const buttonDisabled = disabled === true;
-  const resolvedTargetSize = Math.max(ICON_BUTTON_TARGET_SIZE, targetSize);
+  const requestedTargetSize = targetSize ?? visualSize ?? ICON_BUTTON_TARGET_SIZE;
+  const { minimumHitSlop, minimumTargetSize } = getIconButtonPlatformGeometry(
+    Platform.OS,
+    requestedTargetSize,
+    visualSize,
+  );
 
   return (
     <Pressable
@@ -78,6 +125,7 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityState={{ ...accessibilityState, disabled: buttonDisabled }}
       disabled={buttonDisabled}
+      hitSlop={mergeHitSlop(hitSlop, minimumHitSlop)}
       ref={controlRef}
       style={(state) => [
         styles.target,
@@ -85,7 +133,7 @@ export function IconButton({
           ? { opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1 }
           : undefined,
         typeof style === 'function' ? style(state) : style,
-        { minHeight: resolvedTargetSize, minWidth: resolvedTargetSize },
+        { minHeight: minimumTargetSize, minWidth: minimumTargetSize },
       ]}
     >
       {(state) => {

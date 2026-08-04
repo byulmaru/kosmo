@@ -48,13 +48,14 @@ OpenSpec이 계속 소유한다. 이 change는 그 제품 동작을 재정의하
 
 ### Recommended Approach
 
-공용 component는 requested target과 플랫폼 floor 중 큰 값을 실제 interactive element의 minimum target으로
-계산하고, caller style 뒤에 floor를 적용한다. Visible control은 별도 내부 visual layer에 두어 glyph, background와
-surface별 feedback을 기존 크기로 유지한다. Target positioning과 visual styling을 분리할 수 있는 style seam을
-제공하되, 공용 component는 기본 visual opacity나 background를 강제하지 않는다.
+공용 component는 Web에서 requested target과 32 floor 중 큰 값을 실제 interactive element의 minimum target으로
+계산하고 caller style 뒤에 적용한다. Native에서는 requested visual·layout box를 유지하고 iOS 44, Android 48에
+부족한 절반 값을 공용 `hitSlop` 최소값으로 병합한다. Visible control은 별도 내부 visual layer에 두어 glyph,
+background와 surface별 feedback을 기존 크기로 유지한다. Target positioning과 visual styling을 분리할 수 있는
+style seam을 제공하되, 공용 component는 기본 visual opacity나 background를 강제하지 않는다.
 
-기존 `hitSlop` action은 전환 전 effective region을 먼저 계산한다. 공용 target이 같은 region을 실제 element로
-제공하면 중복 `hitSlop`을 제거하거나 줄이고, 더 큰 기존 target은 requested target으로 유지한다. Web에서는
+기존 `hitSlop` action은 전환 전 effective region을 먼저 계산한다. Web actual target과 Native 공용 부족분이 기존
+expansion과 중복되지 않게 큰 값을 사용하고, 더 큰 기존 target은 requested target으로 유지한다. Web에서는
 rendered bounding box, pointer와 keyboard focus를 함께 확인한다.
 
 State와 behavior는 Pressable contract를 통해 전달한다. Disabled는 실제 `disabled`와 accessibility state를
@@ -77,8 +78,8 @@ merge 전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로
 
 ### Allowed Alternatives
 
-- Internal visual layer 대신 동등한 wrapper 구조를 사용해도 된다. 단, 실제 interactive element floor, visible
-  geometry, focus와 overlap·clipping requirement를 동일하게 충족해야 한다.
+- Internal visual layer 대신 동등한 wrapper 구조를 사용해도 된다. 단, Web actual floor, Native effective target
+  mapping, visible geometry, focus와 현재 scope의 overlap·clipping requirement를 동일하게 충족해야 한다.
 - Standard ref forwarding 또는 저장소 type과 호환되는 명시적 ref prop을 사용할 수 있다. 소비자 focus 계약과
   public type이 동등해야 한다.
 - Surface별 기존 테스트에 assertion을 추가하거나 공용 Storybook story에서 geometry를 검증할 수 있다. 각
@@ -86,8 +87,8 @@ merge 전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로
 
 ### Known Traps
 
-- `minWidth`·`minHeight`를 caller style보다 먼저 적용해 floor를 다시 우회하게 만드는 것
-- `hitSlop` 숫자를 그대로 유지하면서 actual target도 확대해 effective region을 두 번 키우는 것
+- Web `minWidth`·`minHeight`를 caller style보다 먼저 적용해 floor를 다시 우회하게 만드는 것
+- Native visual·layout box와 공용 `hitSlop`을 동시에 확대해 effective region을 두 번 키우는 것
 - 모든 소비자에 같은 opacity feedback을 기본 적용하는 것
 - icon library나 glyph 종류를 공용 component API에 고정하는 것
 - Search back Link, Profile preview, media retry, reaction entry나 Post Action Bar를 inventory 숫자만 보고 전환하는 것
@@ -96,8 +97,8 @@ merge 전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로
 
 ## Risks / Trade-offs
 
-- [실제 target 확대로 layout slot이나 absolute center가 이동할 수 있음] → visual layer와 target style을 분리하고
-  기존 화면 중심 좌표·간격을 Storybook과 Web runtime에서 비교한다.
+- [Web actual target 확대로 layout slot이나 absolute center가 이동할 수 있음] → visual layer와 target style을
+  분리하고 기존 화면 중심 좌표·간격을 Storybook과 Web runtime에서 비교한다. Native는 기존 layout box를 유지한다.
 - [작은 overlay target이 인접 action 또는 부모 bounds와 충돌할 수 있음] → effective region을 계산하고
   overlap·clipping을 surface별로 검증한다.
 - [기존 `hitSlop` 제거가 Native touch behavior를 바꿀 수 있음] → source mapping과 자동화에는 의도를 남기고

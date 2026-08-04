@@ -39,7 +39,7 @@
 
 **Guardrails**
 
-- Caller target과 style은 Web 32, iOS 44, Android 48 floor를 낮추지 못한다.
+- Caller target, style과 `hitSlop`은 Web actual 32, iOS effective 44, Android effective 48 floor를 낮추지 못한다.
 - 공용 component는 모든 surface에 하나의 visual feedback을 강제하지 않는다.
 - Profile header/avatar preview와 camera affordance의 단일 whole-image button·비포커스 계약을 바꾸지 않는다.
 - Profile 저장, Media와 navigation 동작을 변경하지 않는다.
@@ -47,8 +47,9 @@
 **Verification**
 
 - 테스트 코드 범위: `apps/app/src/components/ui/IconButton.test.ts`와 기존 Profile story/test의 오범위 assertion 제거.
-- 테스트 필요성: target mapping·floor clamp·caller style override·larger target, visual separation, disabled와 추가
-  accessibility state 병합, press state·ref·event 전달, 기본 visual feedback 무강제를 직접 검증한다.
+- 테스트 필요성: target mapping·Web actual floor clamp·caller style override·larger target, Native layout
+  보존·부족분 계산, visual separation, disabled와 추가 accessibility state 병합, press state·ref·event 전달,
+  기본 visual feedback 무강제를 직접 검증한다.
 - 테스트 제외 범위: 새 fixture·helper·harness, 광범위 snapshot, Profile 제품 동작 coverage 확대와 Native runtime test.
 - 관련 component test, Profile story interaction, TypeScript와 formatter를 통과시킨다.
 
@@ -83,12 +84,13 @@ UniversalShell menu/back, Post detail back, ModalSheet close, ReplyComposer clos
   `Search.stories.tsx`와 `Posts.stories.tsx`에서 직접 관찰할 수 없는 회귀만 가장 가까운 기존 interaction에 보완한다.
 - 테스트 필요성: menu expanded, search focus, reply disabled와 각 action 실행 결과가 전환 전과 같음을 검증한다.
 - 테스트 제외 범위: navigation·modal·search 제품 기능 coverage 확대, 새 Storybook harness와 unrelated snapshot.
-- Web의 compact/full shell, Post detail, modal/reply와 search story/runtime에서 geometry·focus·pressed 결과를 확인한다.
+- Web의 compact/full shell, Post detail, modal/reply와 search Storybook Chromium interaction에서
+  geometry·focus·pressed 결과를 확인한다.
 
 - [x] 3.1 UniversalShell menu/back와 Post detail back을 전환하고 기존 target·expanded·navigation 계약을 유지한다.
 - [x] 3.2 ModalSheet와 ReplyComposer close를 전환하고 기존 target·hit region·disabled·pressed 표현을 유지한다.
 - [x] 3.3 Search clear와 recent-delete를 전환하고 `onPressIn`, persistence와 input refocus 결과를 유지한다.
-- [x] 3.4 관련 기존 자동화와 Web Storybook/runtime을 실행해 visual·focus·제품 동작 무변경을 확인한다.
+- [x] 3.4 관련 기존 자동화와 Web Storybook Chromium interaction에서 target geometry·focus·제품 동작을 확인한다.
 
 ## 4. PROD-548 media·reaction·logout action 전환
 
@@ -117,12 +119,13 @@ visual geometry, effective input region, 상태와 제품 동작을 유지한다
   `Reactions.stories.tsx`, `Shell.stories.tsx`에서 필요한 최소 interaction assertion.
 - 테스트 필요성: media disabled·position, Reaction more geometry, Logout pending content와 busy/disabled를 직접 검증한다.
 - 테스트 제외 범위: upload·reaction·session 제품 coverage 확대, reaction entry·Post Action Bar 변경과 Native runtime test.
-- Web Storybook/runtime에서 media overlay, reaction row와 compact shell visual·pointer·focus 결과를 확인한다.
+- Web Storybook Chromium interaction에서 media overlay, reaction row와 compact shell visual·pointer·focus 결과를
+  확인한다.
 
 - [x] 4.1 Post Composer media add/remove를 전환하고 visual size·absolute position과 기존 effective input region을 유지한다.
 - [x] 4.2 ReactionSummary more만 전환하고 인접 reaction entry·spacing과 Web 32 visual geometry를 유지한다.
 - [x] 4.3 Compact Logout만 전환하고 pending spinner, busy·disabled와 session 결과를 유지한다.
-- [x] 4.4 관련 자동화와 Web Storybook/runtime을 실행해 geometry·state·제품 동작 무변경을 확인한다.
+- [x] 4.4 관련 자동화와 Web Storybook Chromium interaction에서 geometry·state·제품 동작을 확인한다.
 
 ## 5. PROD-594·PROD-650 열린 PR 소비자 조정
 
@@ -177,11 +180,26 @@ Production과 열린 PR의 확정 대상이 공용 `IconButton`을 사용하고,
 **Verification**
 
 - 구현 시작과 merge 직전 `apps/app/src` production 및 열린 PR inventory를 같은 기준으로 반복한다.
-- App unit·typecheck·lint·Storybook build·interaction과 대상 Web runtime을 실행하고 실행하지 못한 검증을 기록한다.
+- App unit·typecheck·lint·Storybook build와 Chromium interaction을 실행하고 실행하지 못한 검증을 기록한다.
 - Canonical·Linear·OpenSpec·구현·PR 본문과 unresolved review thread를 대조하고 archive 전후 strict validation을 확인한다.
 
+**현재 검증 증거 (2026-08-05)**
+
+- 전체 20개 Storybook 파일의 Chromium interaction 293개를 통과했다. `Posts`, `Reactions`, `Search`, `Shell`
+  대상 subset 145개도 별도로 실행했고, Reaction은 320·390·600px viewport에서 More 32×32와 마지막 token 사이
+  4px 간격·컨테이너 overflow를 확인했다.
+- Reply compact viewport에서 close 36×36, Search clear/recent-delete와 compact Logout은 각각 44×44,
+  Media remove는 실제 target·visual 32×32와 preview 상·우 4px inset을 확인했다. Search는 pointer click 후
+  입력값 초기화·focus 복귀와 recent-delete 뒤 focus 복귀를 함께 확인했다.
+- component test는 Web actual floor·음수 `hitSlop` clamp와 Native layout 보존·플랫폼 부족분 계산을 확인했다.
+- Relay `--noWatchman`, TypeScript, App unit 192개, ESLint, Prettier, syncpack, Storybook production build와 두
+  OpenSpec strict validation을 통과했다.
+- 독립 리뷰 4개를 분리 실행했다. code-only와 production/open-PR 누락 검토는 발견 사항 없이 통과했고,
+  repository rules와 docs-to-code 검토의 Android layout·검증 근거·Reaction 문서 지적은 수정 후 재검토를 통과했다.
+- iOS·Android 실제 기기·simulator의 touch·focus·VoiceOver·TalkBack은 실행하지 않았고 후속 출시 gate로 남긴다.
+
 - [x] 6.1 구현 시작 inventory에서 포함·제외 대상과 직접 플랫폼 target 계산 baseline을 기록한다.
-- [x] 6.2 App unit·typecheck·lint·Storybook build·interaction과 대상 Web runtime 검증을 완료한다.
+- [x] 6.2 App unit·typecheck·lint·Storybook build·Chromium interaction 검증을 완료한다.
 - [x] 6.3 독립 구현 리뷰에서 target floor, visual 무변경, 상태·제품 동작 전달, 누락과 검증 공백을 확인한다.
 - [ ] 6.4 Merge 직전 production/open PR inventory와 review thread를 다시 읽고 새 대상의 누락·잘못된 전환이 없음을 확인한다.
 - [ ] 6.5 각 적용 PR 본문에 구현·검증·Native 미실행·남은 owner를 동기화한다.

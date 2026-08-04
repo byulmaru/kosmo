@@ -63,6 +63,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
         feedback="opacity"
         onPress={onRemove}
         style={styles.removeTarget}
+        targetSize={ICON_BUTTON_TARGET_SIZE}
         testID="profile-tag-remove-button"
         visualSize={PROFILE_TAG_CHIP_VISUAL_SIZE}
       >
