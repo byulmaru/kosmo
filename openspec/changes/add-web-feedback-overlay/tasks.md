@@ -140,4 +140,4 @@ PROD-594의 구현·문서·검증 결과가 하나의 리뷰 가능한 Web-only
 - [x] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.
 - [x] 5.3 후속 독립 리뷰에서 확인된 동적 route query, history fallback과 폐기 직후 재개방 회귀를 해결하고 검증 증거를 다시 동기화한다.
 - [x] 5.4 reload 후 history index와 origin ID가 모두 없는 환경에서 현재 document의 `popstate`로 관찰되는 단일 다단계 browser traversal 회귀를 해결하고 전용 Web E2E로 검증한다.
-- [ ] 5.5 fresh-load history target 복원과 no-index 제한의 OpenSpec strict validation, 관련 자동화와 독립 구현 리뷰를 통과시키고 Draft PR 본문·검증 증거를 동기화한다.
+- [x] 5.5 fresh-load history target 복원과 no-index 제한의 OpenSpec strict validation, 관련 자동화와 독립 구현 리뷰를 통과시키고 Draft PR 본문·검증 증거를 동기화한다.
