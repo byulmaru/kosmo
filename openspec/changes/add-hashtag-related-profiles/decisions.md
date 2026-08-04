@@ -64,6 +64,42 @@
 - Consequences: PROD-528 task가 모두 끝나도 shared change 전체 완료나 archive를 의미하지 않는다. PROD-525는 후속 task와 최종 통합 결과까지 확인한 뒤에만 archive한다.
 - Confirmation / Follow-up: tasks heading과 PR scope가 PROD-528만 식별하고, handoff가 `NEXT_PHASE: implement`로 API slice만 전달하는지 확인한다.
 
+### Hashtag global ID route와 관계 목록 제목을 사용한다
+
+- Decision Date: 2026-08-05
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/design/hashtag-related-profiles.md`, `PROD-525`, `PROD-529` (2026-08-05 route 선택과 제목 승인)
+- Status: Active
+- Context / Problem: canonical은 TagChip이 정확한 Hashtag identity를 전달하고 관계 목록임을 URL·UI·접근성에서 구분하도록 요구하지만, route path와 화면 제목은 구현 이슈에 맡겼다. 이름 기반 path는 별도 name-to-identity 조회와 이름 변경 시 URL 안정성 결정을 추가한다.
+- Decision Outcome: client는 `/hashtags/[hashtagId]/profiles` path에서 Hashtag global ID를 `node(id:)`로 조회한다. canonical Hashtag 이름은 identity로 사용하지 않고 화면 제목 `#<태그명> 관련 프로필`에만 사용한다. 첫 응답 전에는 `관련 프로필` 제목을 유지하고 성공한 Node 응답 뒤 전체 제목으로 갱신한다.
+- Alternatives Considered: `/hashtags/[normalizedName]/profiles`는 읽기 쉽지만 exact row identity를 이름 해석 계약으로 바꾸고 이름 변경 시 URL 안정성을 새로 결정해야 한다. 검색 URL이나 query-only route는 사람 검색과 관계 목록의 의미를 다시 결합한다.
+- Consequences: URL은 사람이 읽기 어렵지만 exact identity와 이름 변경 안정성을 보존한다. 직접 route 진입과 TagChip 진입은 같은 Node query를 사용하며 stale 이름 parameter가 identity를 바꾸지 않는다.
+- Confirmation / Follow-up: TagChip link와 직접 진입이 같은 Hashtag ID를 query하고, URL·PageHeader·접근성 이름이 검색이 아닌 관계 목록임을 Web test에서 검증한다.
+
+### Hashtag 관계 목록은 전용 Relay 상태에서 기존 Profile item을 재사용한다
+
+- Decision Date: 2026-08-05
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/hashtag-related-profiles.md`, `docs/design/profile-tags.md`, `PROD-525`, `PROD-529`
+- Status: Active
+- Context / Problem: 기존 search, followers와 following에는 각자의 Profile connection과 pagination UI가 있지만 query owner와 상태 계약이 다르다. 이를 직접 재사용하거나 한 connection key에 결합하면 filter와 retry 상태가 충돌할 수 있다.
+- Decision Outcome: PROD-529는 `Hashtag.relatedProfiles` 전용 Relay connection을 소유하고 기존 Profile 목록 item·Profile 이동·follow action과 공용 pagination UX를 재사용한다. 공개 Profile TagChip visual component는 유지하며 진입점의 `Link`·`Pressable` wrapper가 exact ID navigation과 접근성 target을 소유한다.
+- Alternatives Considered: followers/following fragment를 범용화하면 승인 범위 밖의 route와 query owner를 함께 변경한다. search mode 추가는 기존 `searchProfiles`와의 분리 계약을 위반한다. TagChip 자체에 표시·편집·navigation variant를 모두 넣으면 component 책임이 다시 결합된다.
+- Consequences: Hashtag list에 작은 전용 query/fragment가 추가되지만 기존 검색·팔로워 목록의 cache와 pagination 상태는 바뀌지 않는다. 다음 page 실패는 기존 edge를 유지하고 실패한 요청만 재시도한다.
+- Confirmation / Follow-up: connection key 격리, 첫/다음 page error, retry, empty, terminal, 중복 요청 방지와 기존 검색 회귀를 unit·상태 catalog·Web E2E에서 확인한다.
+
+### Web 검증과 Native runtime 출시 gate를 분리한다
+
+- Decision Date: 2026-08-05
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/hashtag-related-profiles.md`, `docs/design/profile-tags.md`, `PROD-525`, `PROD-529`
+- Status: Active
+- Context / Problem: 공용 React Native component와 platform target mapping은 Web 자동화와 source inspection으로 확인할 수 있지만 실제 iOS·Android focus·touch·screen reader 동작까지 증명하지 않는다.
+- Decision Outcome: PROD-529는 App unit·상태 catalog·Relay·Web E2E와 platform target source mapping을 구현 완료 증거로 소유한다. iOS·Android 실제 runtime QA는 Native 출시 gate로 남기며 Web 결과를 Native 완료로 표현하지 않는다.
+- Alternatives Considered: Web 자동화를 세 플랫폼 완료로 간주하면 검증 범위를 과장한다. 반대로 Native runtime QA를 PROD-529 PR readiness의 필수 gate로 두면 현재 Web 중심 출시 범위를 불필요하게 막는다.
+- Consequences: 공용 정보 구조와 target mapping은 유지하되 Native 실제 환경의 focus·target 비중첩·screen reader 검증은 후속 책임으로 명시된다.
+- Confirmation / Follow-up: PROD-529 handoff와 PR 본문이 Web proof, Native source mapping과 남은 Native runtime QA를 구분하고 PROD-525가 최종 통합·archive 책임을 유지하는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
