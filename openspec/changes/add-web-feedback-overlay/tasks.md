@@ -135,3 +135,4 @@ PROD-594의 구현·문서·검증 결과가 하나의 리뷰 가능한 Web-only
 - [x] 5.1 OpenSpec strict validation과 관련 자동화·정적 검사를 통과시키고 실행하지 못한 runtime/platform 검증을 분리해 기록한다.
 - [x] 5.2 독립 구현 리뷰 findings를 해결한 뒤 task·Draft PR 본문과 최종 검증 증거를 동기화한다.
 - [x] 5.3 후속 독립 리뷰에서 확인된 동적 route query, history fallback과 폐기 직후 재개방 회귀를 해결하고 검증 증거를 다시 동기화한다.
+- [x] 5.4 reload 후 history index와 origin ID가 모두 없는 다단계 browser back 회귀를 해결하고 전용 Web E2E로 검증한다.

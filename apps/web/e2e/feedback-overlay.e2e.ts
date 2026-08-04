@@ -96,7 +96,7 @@ test('dirty browser back은 query와 draft를 유지하고 폐기 확인 뒤에�
   await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
 });
 
-test('history index가 없어도 다단계 back을 복원하고 확인 뒤 같은 목적지로 이동한다', async ({
+test('reload 후 history index와 origin이 없어도 다단계 back 목적지를 복원한다', async ({
   context,
   page,
 }) => {
@@ -110,6 +110,7 @@ test('history index가 없어도 다단계 back을 복원하고 확인 뒤 같�
   await page.getByRole('link', { name: '홈' }).click();
   await expect(page).toHaveURL(/\/home$/u);
   await page.getByRole('link', { name: '피드백 보내기' }).click();
+  await page.reload();
   const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
   const body = dialog.getByRole('textbox', { name: '피드백 내용' });
   await body.fill('다단계 back에서도 남아야 하는 피드백');

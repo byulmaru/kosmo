@@ -469,7 +469,7 @@ function getAttemptedHistoryDelta({
     }
   }
 
-  if (originHistoryId && destination.id !== originHistoryId) {
+  if (!originHistoryId || destination.id !== originHistoryId) {
     return null;
   }
   return -1;
