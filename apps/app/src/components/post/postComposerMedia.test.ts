@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  assertImageUploadResponse,
-  ImageUploadError,
-} from '../media/imageUploadErrors';
+import { assertImageUploadResponse, ImageUploadError } from '../media/imageUploadErrors';
 import { releaseComposerMediaPreview, uploadComposerMedia } from './postComposerMedia';
 
 test('releases only Web object URL previews', () => {
