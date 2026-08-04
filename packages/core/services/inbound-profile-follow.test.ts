@@ -131,7 +131,7 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
         .from(Notifications)
         .where(eq(Notifications.recipientProfileId, followee.id))
         .then((rows) => rows.length),
-      0,
+      1,
     );
     assert.equal((await removeInboundFollowThroughLifecycle(input)).profileFollowId, null);
     assert.equal(
@@ -139,6 +139,14 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
         .select()
         .from(ProfileFollowRequests)
         .where(eq(ProfileFollowRequests.followerProfileId, follower.id))
+        .then((rows) => rows.length),
+      0,
+    );
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.recipientProfileId, followee.id))
         .then((rows) => rows.length),
       0,
     );
@@ -186,6 +194,14 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
       1,
     );
     assert.deepEqual(await getProfiles(follower.id, followee.id), { followee, follower });
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.recipientProfileId, followee.id))
+        .then((rows) => rows.length),
+      1,
+    );
   });
 
   test('does not delete a new exact-row refollow that replaces the captured row', async () => {

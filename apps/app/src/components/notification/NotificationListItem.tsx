@@ -8,6 +8,7 @@ import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
+import type { FollowRequestNotificationListItem_notification$key } from './__generated__/FollowRequestNotificationListItem_notification.graphql';
 import type { NotificationListItem_notification$key } from './__generated__/NotificationListItem_notification.graphql';
 import type { NotificationListItemMarkReadMutation } from './__generated__/NotificationListItemMarkReadMutation.graphql';
 import type { ReactionNotificationListItem_notification$key } from './__generated__/ReactionNotificationListItem_notification.graphql';
@@ -24,7 +25,7 @@ type NotificationRowProps = {
   destination: string;
   href: Href;
   id: string;
-  kind: 'follow' | 'reaction' | 'reply' | 'repost';
+  kind: 'follow' | 'followRequest' | 'reaction' | 'reply' | 'repost';
   name: string;
   readAt: string | null | undefined;
   timestamp: string;
@@ -74,6 +75,46 @@ export function NotificationListItem({ notification }: NotificationListItemProps
       href={`/${data.profile.relativeHandle}` as Href}
       id={data.id}
       kind="follow"
+      name={name}
+      readAt={data.readAt}
+      timestamp={formatTimelineTimestamp(data.createdAt)}
+    />
+  );
+}
+
+const followRequestNotificationFragment = graphql`
+  fragment FollowRequestNotificationListItem_notification on FollowRequestNotification {
+    id
+    createdAt
+    readAt
+    profile {
+      displayName
+      handle
+      relativeHandle
+      avatar {
+        id
+        url
+      }
+    }
+  }
+`;
+
+export function FollowRequestNotificationListItem({
+  notification,
+}: {
+  notification: FollowRequestNotificationListItem_notification$key;
+}) {
+  const data = useFragment(followRequestNotificationFragment, notification);
+  const name = data.profile.displayName || data.profile.handle;
+
+  return (
+    <NotificationRow
+      action="팔로우를 요청했습니다"
+      avatarUrl={data.profile.avatar?.url}
+      destination="프로필"
+      href={`/${data.profile.relativeHandle}` as Href}
+      id={data.id}
+      kind="followRequest"
       name={name}
       readAt={data.readAt}
       timestamp={formatTimelineTimestamp(data.createdAt)}
@@ -258,7 +299,7 @@ function NotificationRow({
         importantForAccessibility="no-hide-descendants"
         style={[styles.kind, { backgroundColor: theme.primary }]}
       >
-        {kind === 'follow' ? (
+        {kind === 'follow' || kind === 'followRequest' ? (
           <UserPlus color={theme.text} size={18} strokeWidth={2} />
         ) : kind === 'reaction' ? (
           <Smile color={theme.text} size={18} strokeWidth={2} />

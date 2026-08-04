@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import {
   followNotification,
+  followRequestNotification,
   notificationsProfile,
   post,
   profile,
@@ -38,6 +39,12 @@ const readFollower = profile({
   id: 'notification-follower-read',
   relativeHandle: '@galaxy',
 });
+const followRequestFollower = profile({
+  displayName: '새 요청자',
+  handle: 'requester',
+  id: 'notification-follower-requester',
+  relativeHandle: '@requester',
+});
 const longFollower = profile({
   displayName: '아주 긴 표시 이름을 가진 먼 우주의 새로운 팔로워',
   handle: 'a-very-long-remote-follower',
@@ -53,6 +60,10 @@ const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-em
 const contentProfile = notificationsProfile(
   [
     followNotification({ id: 'notification-unread', profile: unreadFollower }),
+    followRequestNotification({
+      id: 'notification-follow-request',
+      profile: followRequestFollower,
+    }),
     followNotification({
       id: 'notification-read',
       profile: readFollower,
@@ -262,6 +273,9 @@ export const StatesAndFollowItems: Story = {
         name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
       }),
     ).toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ }),
+    ).toHaveAttribute('href', '/@requester');
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 🎉 반응을 남겼습니다/ }),

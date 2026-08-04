@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
-import { eq, inArray, or } from 'drizzle-orm';
+import { after, mock, test } from 'node:test';
+import { eq, inArray, or, sql } from 'drizzle-orm';
 import {
   db,
   firstOrThrow,
@@ -9,6 +9,7 @@ import {
   pg,
   PostContents,
   Posts,
+  ProfileFollowRequests,
   ProfileFollows,
   Profiles,
   Reactions,
@@ -26,10 +27,14 @@ import { NotFoundError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import {
   createFollowNotification,
+  createFollowRequestNotification,
+  createFollowRequestNotificationPostCommit,
   createReactionNotification,
   createReplyNotification,
   createRepostNotification,
+  deleteFollowRequestNotificationPostCommit,
   deleteNotificationBySource,
+  setNotificationEffectErrorReporter,
 } from './notification';
 import { createPost, repostPost } from './post';
 import { followProfile, unfollowProfile } from './profile-follow';
@@ -237,6 +242,130 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
   assert.deepEqual(await readNotifications(profileFollow.id), []);
+});
+
+test('Follow Request 알림은 pending source에서 requester와 Local Recipient를 파생한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await Promise.all([
+    createFollowRequestNotification(request.id),
+    createFollowRequestNotification(request.id),
+  ]);
+
+  const [notification] = await readNotifications(request.id);
+  assert.ok(notification);
+  assert.equal(notification.kind, NotificationKind.FOLLOW_REQUEST);
+  assert.equal(notification.sourceId, request.id);
+  assert.equal(notification.recipientProfileId, followee.id);
+  assert.deepEqual(notification.data, {});
+  assert.equal(notification.readAt, null);
+
+  await deleteNotificationBySource(NotificationKind.FOLLOW_REQUEST, request.id);
+  assert.deepEqual(await readNotifications(request.id), []);
+});
+
+test('Follow Request 알림은 Remote Recipient에 투영하지 않는다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile(InstanceKind.ACTIVITYPUB);
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await createFollowRequestNotification(request.id);
+  assert.deepEqual(await readNotifications(request.id), []);
+});
+
+test('Follow Request 알림 create 실패는 source lifecycle과 최소 context 보고를 분리한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+  const reporter = mock.fn();
+  const restoreReporter = setNotificationEffectErrorReporter(reporter);
+
+  await db.execute(
+    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_follow_request_create_failure CHECK (false) NOT VALID`,
+  );
+  try {
+    await createFollowRequestNotificationPostCommit(request.id);
+  } finally {
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_follow_request_create_failure`,
+    );
+    restoreReporter();
+  }
+
+  assert.equal(
+    (await db.select().from(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, request.id)))
+      .length,
+    1,
+  );
+  assert.equal(reporter.mock.calls.length, 1);
+  assert.deepEqual(reporter.mock.calls[0]?.arguments[1], {
+    notificationKind: NotificationKind.FOLLOW_REQUEST,
+    operation: 'create',
+    sourceId: request.id,
+  });
+});
+
+test('Follow Request 알림 delete 실패는 source lifecycle과 최소 context 보고를 분리한다', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
+    .returning()
+    .then(firstOrThrow);
+  await db.insert(Notifications).values({
+    data: {},
+    kind: NotificationKind.FOLLOW_REQUEST,
+    recipientProfileId: followee.id,
+    sourceId: request.id,
+  });
+  const reporter = mock.fn();
+  const restoreReporter = setNotificationEffectErrorReporter(reporter);
+
+  await db.execute(sql`
+    CREATE FUNCTION fail_follow_request_notification_delete() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      RAISE EXCEPTION 'follow request notification delete failed';
+    END;
+    $$
+  `);
+  await db.execute(sql`
+    CREATE TRIGGER notification_follow_request_delete_failure
+    BEFORE DELETE ON ${Notifications}
+    FOR EACH ROW EXECUTE FUNCTION fail_follow_request_notification_delete()
+  `);
+  try {
+    await deleteFollowRequestNotificationPostCommit(request.id);
+  } finally {
+    await db.execute(
+      sql`DROP TRIGGER notification_follow_request_delete_failure ON ${Notifications}`,
+    );
+    await db.execute(sql`DROP FUNCTION fail_follow_request_notification_delete()`);
+    restoreReporter();
+  }
+
+  assert.equal((await readNotifications(request.id)).length, 1);
+  assert.equal(reporter.mock.calls.length, 1);
+  assert.deepEqual(reporter.mock.calls[0]?.arguments[1], {
+    notificationKind: NotificationKind.FOLLOW_REQUEST,
+    operation: 'delete',
+    sourceId: request.id,
+  });
 });
 
 test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', async () => {

@@ -7,6 +7,7 @@ import {
   Instances,
   Notifications,
   Posts,
+  ProfileFollowRequests,
   ProfileFollows,
   Profiles,
   Reactions,
@@ -34,6 +35,57 @@ const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
 const ReplyAuthorInstances = alias(Instances, 'reply_notification_author_instance');
 
+export type NotificationEffectOperation = 'create' | 'delete';
+
+export type NotificationEffectErrorContext = {
+  readonly notificationKind: NotificationKind;
+  readonly operation: NotificationEffectOperation;
+  readonly sourceId: string;
+};
+
+export type NotificationEffectErrorReporter = (
+  error: unknown,
+  context: NotificationEffectErrorContext,
+) => void;
+
+let notificationEffectErrorReporter: NotificationEffectErrorReporter = (error, context) => {
+  console.error('Notification effect failed', { context, error });
+};
+
+export const setNotificationEffectErrorReporter = (
+  reporter: NotificationEffectErrorReporter,
+): (() => void) => {
+  const previous = notificationEffectErrorReporter;
+  notificationEffectErrorReporter = reporter;
+  return () => {
+    if (notificationEffectErrorReporter === reporter) {
+      notificationEffectErrorReporter = previous;
+    }
+  };
+};
+
+const reportNotificationEffectError = (
+  error: unknown,
+  context: NotificationEffectErrorContext,
+): void => {
+  try {
+    notificationEffectErrorReporter(error, context);
+  } catch (reportingError) {
+    console.error('Notification effect error reporting failed', { context, reportingError });
+  }
+};
+
+const runPostCommitNotificationEffect = async (
+  context: NotificationEffectErrorContext,
+  effect: () => Promise<void>,
+): Promise<void> => {
+  try {
+    await effect();
+  } catch (error) {
+    reportNotificationEffectError(error, context);
+  }
+};
+
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
   const source = await db
     .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
@@ -56,6 +108,55 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
       target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
     });
 };
+
+export const createFollowRequestNotification = async (sourceId: string): Promise<void> => {
+  const source = await db
+    .select({
+      id: ProfileFollowRequests.id,
+      recipientProfileId: ProfileFollowRequests.followeeProfileId,
+    })
+    .from(ProfileFollowRequests)
+    .innerJoin(Profiles, eq(Profiles.id, ProfileFollowRequests.followeeProfileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(
+      and(
+        eq(ProfileFollowRequests.id, sourceId),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0]);
+
+  // The source may have reached a terminal state between the source commit and this
+  // post-commit effect. In that case there is no Notification to project.
+  if (!source) {
+    return;
+  }
+
+  await db
+    .insert(Notifications)
+    .values({
+      data: {},
+      kind: NotificationKind.FOLLOW_REQUEST,
+      recipientProfileId: source.recipientProfileId,
+      sourceId: source.id,
+    })
+    .onConflictDoNothing({
+      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+    });
+};
+
+export const createFollowRequestNotificationPostCommit = async (sourceId: string): Promise<void> =>
+  runPostCommitNotificationEffect(
+    {
+      notificationKind: NotificationKind.FOLLOW_REQUEST,
+      operation: 'create',
+      sourceId,
+    },
+    () => createFollowRequestNotification(sourceId),
+  );
 
 export const createReactionNotification = async (sourceId: string): Promise<void> => {
   const source = await db
@@ -251,3 +352,13 @@ export const deleteNotificationBySource = async (
     .delete(Notifications)
     .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
 };
+
+export const deleteFollowRequestNotificationPostCommit = async (sourceId: string): Promise<void> =>
+  runPostCommitNotificationEffect(
+    {
+      notificationKind: NotificationKind.FOLLOW_REQUEST,
+      operation: 'delete',
+      sourceId,
+    },
+    () => deleteNotificationBySource(NotificationKind.FOLLOW_REQUEST, sourceId),
+  );

@@ -73,6 +73,7 @@ export type MediaState = keyof typeof MediaState;
 
 export const NotificationKind = {
   FOLLOW: 'FOLLOW',
+  FOLLOW_REQUEST: 'FOLLOW_REQUEST',
   REACTION: 'REACTION',
   REPLY: 'REPLY',
   REPOST: 'REPOST',

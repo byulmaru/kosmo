@@ -1,4 +1,11 @@
-import { db, Notifications, Posts, ProfileFollows, Reactions } from '@kosmo/core/db';
+import {
+  db,
+  Notifications,
+  Posts,
+  ProfileFollowRequests,
+  ProfileFollows,
+  Reactions,
+} from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -11,13 +18,23 @@ import {
 } from './access/visibility';
 import type { UserContext } from '@/context';
 
-export type NotificationRow = typeof Notifications.$inferSelect;
+export type NotificationRow = typeof Notifications.$inferSelect & {
+  /**
+   * Follow Request source captured by the same statement as the visible
+   * Notification row. It is present on connection/Node rows and lets fields
+   * resolve the source from a consistent snapshot instead of issuing a second
+   * query after visibility has been checked.
+   */
+  followRequestSource?: FollowRequestNotificationSourceRow | null;
+};
 export type FollowNotificationRow = NotificationRow;
+export type FollowRequestNotificationRow = NotificationRow;
 export type ReactionNotificationRow = NotificationRow;
 export type RepostNotificationRow = NotificationRow;
 export type ReplyNotificationRow = NotificationRow;
 
 type NotificationSource = {
+  followRequest?: typeof ProfileFollowRequests.$inferSelect;
   post?: typeof Posts.$inferSelect;
   profileId: string;
   type?: string;
@@ -26,6 +43,54 @@ type NotificationSource = {
 type FollowNotificationSourceRow = {
   id: string;
   profileId: string;
+};
+
+type FollowRequestNotificationSourceRow = {
+  followRequest: typeof ProfileFollowRequests.$inferSelect;
+  id: string;
+  profileId: string;
+};
+
+export const notificationRowSelection = {
+  ...getColumns(Notifications),
+  followRequestSourceId: ProfileFollowRequests.id,
+  followRequestSourceFollowerProfileId: ProfileFollowRequests.followerProfileId,
+  followRequestSourceFolloweeProfileId: ProfileFollowRequests.followeeProfileId,
+  followRequestSourceCreatedAt: ProfileFollowRequests.createdAt,
+};
+
+type NotificationRowSelection = typeof Notifications.$inferSelect & {
+  followRequestSourceId: string | null;
+  followRequestSourceFollowerProfileId: string | null;
+  followRequestSourceFolloweeProfileId: string | null;
+  followRequestSourceCreatedAt: Temporal.Instant | null;
+};
+
+export const notificationRowFromSelection = (row: NotificationRowSelection): NotificationRow => {
+  const {
+    followRequestSourceId,
+    followRequestSourceFollowerProfileId,
+    followRequestSourceFolloweeProfileId,
+    followRequestSourceCreatedAt,
+    ...notification
+  } = row;
+
+  return {
+    ...notification,
+    followRequestSource:
+      followRequestSourceId === null
+        ? null
+        : {
+            followRequest: {
+              id: followRequestSourceId,
+              followerProfileId: followRequestSourceFollowerProfileId!,
+              followeeProfileId: followRequestSourceFolloweeProfileId!,
+              createdAt: followRequestSourceCreatedAt!,
+            },
+            id: followRequestSourceId,
+            profileId: followRequestSourceFollowerProfileId!,
+          },
+  };
 };
 
 type ReactionNotificationSourceRow = {
@@ -131,11 +196,13 @@ export const getNotificationSource = async (
   const source =
     notification.kind === NotificationKind.FOLLOW
       ? await followNotificationSourceLoader(ctx).load(notification.sourceId)
-      : notification.kind === NotificationKind.REACTION
-        ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
-        : notification.kind === NotificationKind.REPLY
-          ? await replyNotificationSourceLoader(ctx).load(notification.sourceId)
-          : await repostNotificationSourceLoader(ctx).load(notification.sourceId);
+      : notification.kind === NotificationKind.FOLLOW_REQUEST
+        ? notification.followRequestSource
+        : notification.kind === NotificationKind.REACTION
+          ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
+          : notification.kind === NotificationKind.REPLY
+            ? await replyNotificationSourceLoader(ctx).load(notification.sourceId)
+            : await repostNotificationSourceLoader(ctx).load(notification.sourceId);
 
   if (!source) {
     throw new Error('Notification source not found');
@@ -147,24 +214,28 @@ export const getNotificationSource = async (
 export const notificationNodeType = (kind: string) =>
   kind === NotificationKind.FOLLOW
     ? ('FollowNotification' as const)
-    : kind === NotificationKind.REACTION
-      ? ('ReactionNotification' as const)
-      : kind === NotificationKind.REPOST
-        ? ('RepostNotification' as const)
-        : kind === NotificationKind.REPLY
-          ? ('ReplyNotification' as const)
-          : null;
+    : kind === NotificationKind.FOLLOW_REQUEST
+      ? ('FollowRequestNotification' as const)
+      : kind === NotificationKind.REACTION
+        ? ('ReactionNotification' as const)
+        : kind === NotificationKind.REPOST
+          ? ('RepostNotification' as const)
+          : kind === NotificationKind.REPLY
+            ? ('ReplyNotification' as const)
+            : null;
 
 export const notificationKindForNodeType = (typename: string) =>
   typename === 'FollowNotification'
     ? NotificationKind.FOLLOW
-    : typename === 'ReactionNotification'
-      ? NotificationKind.REACTION
-      : typename === 'RepostNotification'
-        ? NotificationKind.REPOST
-        : typename === 'ReplyNotification'
-          ? NotificationKind.REPLY
-          : null;
+    : typename === 'FollowRequestNotification'
+      ? NotificationKind.FOLLOW_REQUEST
+      : typename === 'ReactionNotification'
+        ? NotificationKind.REACTION
+        : typename === 'RepostNotification'
+          ? NotificationKind.REPOST
+          : typename === 'ReplyNotification'
+            ? NotificationKind.REPLY
+            : null;
 
 export const Notification = builder.interfaceRef<NotificationRow>('Notification');
 
@@ -204,6 +275,37 @@ export const FollowNotification = createObjectRef<FollowNotificationRow>(
 );
 
 FollowNotification.implement({
+  interfaces: [Notification],
+  fields: (t) => ({
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    readAt: t.expose('readAt', { type: 'DateTime', nullable: true }),
+  }),
+});
+
+export const FollowRequestNotification = createObjectRef<FollowRequestNotificationRow>(
+  'FollowRequestNotification',
+  (ids, ctx) =>
+    db
+      .select(notificationRowSelection)
+      .from(Notifications)
+      .leftJoin(
+        ProfileFollowRequests,
+        and(
+          eq(ProfileFollowRequests.id, Notifications.sourceId),
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+        ),
+      )
+      .where(
+        and(
+          inArray(Notifications.id, ids),
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+          visibleNotificationWhere({ ctx }),
+        ),
+      )
+      .then((rows) => rows.map(notificationRowFromSelection)),
+);
+
+FollowRequestNotification.implement({
   interfaces: [Notification],
   fields: (t) => ({
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
