@@ -39,8 +39,10 @@ type BrowserHistoryEntry = {
 };
 
 type FallbackHistoryRestore = {
+  delta: number;
+  direction: -1 | 1;
   overlayId: string;
-  steps: number;
+  timeout: ReturnType<typeof setTimeout> | null;
 };
 
 export function FeedbackOverlay({
@@ -167,12 +169,33 @@ export function FeedbackOverlay({
       overlayHistoryEntryRef.current = getBrowserHistoryEntry();
     });
     return () => cancelAnimationFrame(frame);
-  }, [visible]);
+  }, [closeUsesHistoryTraversal, visible]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !overlayVisible) {
       return;
     }
+
+    const moveFallbackHistory = (restore: FallbackHistoryRestore) => {
+      if (restore.timeout) {
+        clearTimeout(restore.timeout);
+      }
+      restore.timeout = setTimeout(() => {
+        if (fallbackHistoryRestoreRef.current !== restore) {
+          return;
+        }
+        if (restore.direction === 1) {
+          restore.direction = -1;
+          moveFallbackHistory(restore);
+          return;
+        }
+
+        fallbackHistoryRestoreRef.current = null;
+        historyRestoringRef.current = false;
+        setHistoryRestorePending(false);
+      }, 250);
+      window.history.go(restore.direction);
+    };
 
     const handlePopState = (event: PopStateEvent) => {
       if (bypassHistoryGuardRef.current) {
@@ -186,9 +209,13 @@ export function FeedbackOverlay({
       const fallbackRestore = fallbackHistoryRestoreRef.current;
       if (fallbackRestore) {
         event.stopImmediatePropagation();
-        fallbackRestore.steps += 1;
+        if (fallbackRestore.timeout) {
+          clearTimeout(fallbackRestore.timeout);
+          fallbackRestore.timeout = null;
+        }
+        fallbackRestore.delta += fallbackRestore.direction;
         if (getBrowserHistoryEntry().id !== fallbackRestore.overlayId) {
-          window.history.forward();
+          moveFallbackHistory(fallbackRestore);
           return;
         }
 
@@ -197,7 +224,7 @@ export function FeedbackOverlay({
         setHistoryRestorePending(false);
         requestCloseRef.current(() => {
           armHistoryGuardBypass();
-          window.history.go(-fallbackRestore.steps);
+          window.history.go(-fallbackRestore.delta);
         });
         return;
       }
@@ -221,8 +248,14 @@ export function FeedbackOverlay({
       historyRestoringRef.current = true;
       setHistoryRestorePending(true);
       if (attemptedDelta === null && overlayEntry?.id) {
-        fallbackHistoryRestoreRef.current = { overlayId: overlayEntry.id, steps: 0 };
-        window.history.forward();
+        const fallbackRestore: FallbackHistoryRestore = {
+          delta: 0,
+          direction: 1,
+          overlayId: overlayEntry.id,
+          timeout: null,
+        };
+        fallbackHistoryRestoreRef.current = fallbackRestore;
+        moveFallbackHistory(fallbackRestore);
         return;
       }
       const resolvedDelta = attemptedDelta ?? -1;
@@ -240,6 +273,9 @@ export function FeedbackOverlay({
     () => () => {
       if (bypassHistoryGuardTimeoutRef.current) {
         clearTimeout(bypassHistoryGuardTimeoutRef.current);
+      }
+      if (fallbackHistoryRestoreRef.current?.timeout) {
+        clearTimeout(fallbackHistoryRestoreRef.current.timeout);
       }
     },
     [],

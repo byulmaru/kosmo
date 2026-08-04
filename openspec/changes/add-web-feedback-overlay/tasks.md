@@ -80,7 +80,7 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - [x] 3.2 Web shell 진입은 `feedback=open`을 사용하고 Android/iOS는 `/feedback` route를 유지하도록 responsive navigation을 연결한다.
 - [x] 3.3 `UniversalShellContent`의 shell root 다음에 단일 Web feedback overlay를 조립하고 `/feedback` direct route에서는 중복 렌더링하지 않는다.
 - [x] 3.4 internal open, fresh-load restore, clean/dirty/submitting browser traversal과 close 후 route·scroll·focus 복원을 구현한다.
-- [ ] 3.5 fresh-load overlay 뒤에 query 없는 현재 route barrier를 만들고 dirty 폐기 뒤 현재 route 유지와 submitting browser back 차단을 기존 `requestClose` 경계에 연결한다.
+- [x] 3.5 fresh-load overlay 뒤에 query 없는 현재 route barrier를 만들고 dirty 폐기 뒤 현재 route 유지와 submitting browser back 차단을 기존 `requestClose` 경계에 연결한다.
 
 ## 4. PROD-594 직접 동작 검증
 
@@ -108,7 +108,7 @@ Web 사용자가 현재 shell 전체 위에서 accessible feedback bottom sheet 
 - [x] 4.1 전용 Web E2E에 query open·clean close/back/forward·fresh-load close와 direct `/feedback` fallback 시나리오를 추가하고 통과시킨다.
 - [x] 4.2 전용 Web E2E에 dirty 취소·폐기, submitting close 차단, success 후 overlay 유지·연속 제출과 focus/scroll 복원 시나리오를 추가하고 통과시킨다.
 - [x] 4.3 390px·900px·1400px 실제 Web runtime에서 responsive geometry, keyboard focus trap/restore, `Escape`, backdrop, background 차단과 document scroll을 수동 확인한다.
-- [ ] 4.4 전용 Web E2E에서 이전 document로부터 fresh-load한 overlay의 dirty 취소·폐기, submitting back 차단, 폐기 뒤 현재 route 유지와 forward 시 초기화된 overlay 재진입을 검증한다.
+- [x] 4.4 전용 Web E2E에서 이전 document로부터 fresh-load한 overlay의 dirty 취소·폐기, submitting back 차단, 폐기 뒤 현재 route 유지와 forward 시 초기화된 overlay 재진입을 검증한다.
 
 ## 5. PROD-594 통합과 전달
 

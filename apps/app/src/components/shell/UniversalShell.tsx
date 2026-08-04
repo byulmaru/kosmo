@@ -31,8 +31,16 @@ import { ShellChromeProvider } from './ShellChromeContext';
 import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
+import type { Href } from 'expo-router';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
+
+type FeedbackHistoryBarrierState =
+  | 'inactive'
+  | 'pending'
+  | 'creating-base'
+  | 'restoring-overlay'
+  | 'ready';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -109,7 +117,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const feedbackHistoryBarrierAttemptedRef = useRef(false);
   const feedbackHistoryOriginIdRef = useRef<string | null>(null);
+  const feedbackOpenedInternallyRef = useRef(false);
   const menuButtonRef = useRef<NativeView>(null);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
@@ -125,32 +135,79 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const feedbackOverlayOpen = web && pathname !== '/feedback' && feedback === 'open';
-  const [feedbackOpenedFromFreshLoad, setFeedbackOpenedFromFreshLoad] =
-    useState(feedbackOverlayOpen);
-  const previousFeedbackOverlayOpenRef = useRef(feedbackOverlayOpen);
+  const [feedbackHistoryBarrierState, setFeedbackHistoryBarrierState] =
+    useState<FeedbackHistoryBarrierState>(() => (feedbackOverlayOpen ? 'pending' : 'inactive'));
+  const feedbackOverlayHrefRef = useRef<Href | null>(null);
+  const feedbackHistoryReady =
+    feedbackHistoryBarrierState === 'inactive' || feedbackHistoryBarrierState === 'ready';
+  const feedbackOverlayVisible = feedbackOverlayOpen || !feedbackHistoryReady;
 
   useEffect(() => {
-    if (feedbackOverlayOpen && !previousFeedbackOverlayOpenRef.current) {
-      setFeedbackOpenedFromFreshLoad(false);
-    }
-    previousFeedbackOverlayOpenRef.current = feedbackOverlayOpen;
-  }, [feedbackOverlayOpen]);
-
-  const closeFeedbackOverlay = useCallback(() => {
-    if (!feedbackOpenedFromFreshLoad) {
-      router.back();
+    if (
+      feedbackHistoryBarrierState === 'inactive' &&
+      feedbackOverlayOpen &&
+      !feedbackOpenedInternallyRef.current &&
+      !feedbackHistoryBarrierAttemptedRef.current
+    ) {
+      feedbackHistoryBarrierAttemptedRef.current = true;
+      setFeedbackHistoryBarrierState('pending');
       return;
     }
 
-    const remainingParams = withoutDynamicRouteParams(searchParams, routeSegments);
-    delete remainingParams.feedback;
-    router.replace({ pathname, params: remainingParams });
-  }, [feedbackOpenedFromFreshLoad, pathname, routeSegments, router, searchParams]);
+    if (feedbackHistoryBarrierState === 'pending') {
+      if (!feedbackOverlayOpen) {
+        setFeedbackHistoryBarrierState('inactive');
+        return;
+      }
+
+      const overlayParams = withoutDynamicRouteParams(searchParams, routeSegments);
+      const remainingParams = { ...overlayParams };
+      delete remainingParams.feedback;
+      feedbackOverlayHrefRef.current = { pathname, params: overlayParams };
+      setFeedbackHistoryBarrierState('creating-base');
+      router.replace({ pathname, params: remainingParams });
+      return;
+    }
+
+    if (feedbackHistoryBarrierState === 'creating-base' && !feedbackOverlayOpen) {
+      const overlayHref = feedbackOverlayHrefRef.current;
+      if (!overlayHref) {
+        setFeedbackHistoryBarrierState('inactive');
+        return;
+      }
+
+      const frame = requestAnimationFrame(() => {
+        setFeedbackHistoryBarrierState('restoring-overlay');
+        router.push(overlayHref);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (feedbackHistoryBarrierState === 'restoring-overlay' && feedbackOverlayOpen) {
+      setFeedbackHistoryBarrierState('ready');
+    }
+  }, [
+    feedbackHistoryBarrierState,
+    feedbackOverlayOpen,
+    pathname,
+    routeSegments,
+    router,
+    searchParams,
+  ]);
+
+  const closeFeedbackOverlay = useCallback(() => {
+    if (!feedbackHistoryReady) {
+      return;
+    }
+
+    router.back();
+  }, [feedbackHistoryReady, router]);
 
   const recordFeedbackHistoryOrigin = useCallback(() => {
     if (Platform.OS !== 'web') {
       return;
     }
+    feedbackOpenedInternallyRef.current = true;
     const state = window.history.state as { id?: unknown } | null;
     feedbackHistoryOriginIdRef.current = typeof state?.id === 'string' ? state.id : null;
   }, []);
@@ -242,13 +299,13 @@ function UniversalShellContent({ revision }: { revision: number }) {
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
         {...swipeToOpenDrawer.panHandlers}
-        accessibilityElementsHidden={feedbackOverlayOpen}
-        aria-hidden={feedbackOverlayOpen || undefined}
-        importantForAccessibility={feedbackOverlayOpen ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={feedbackOverlayVisible}
+        aria-hidden={feedbackOverlayVisible || undefined}
+        importantForAccessibility={feedbackOverlayVisible ? 'no-hide-descendants' : 'auto'}
         style={[
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
-          feedbackOverlayOpen ? styles.backgroundBlocked : null,
+          feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.background },
         ]}
         testID="universal-shell-root"
@@ -367,11 +424,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
         </Modal>
       </View>
       <FeedbackOverlay
-        closeUsesHistoryTraversal={!feedbackOpenedFromFreshLoad}
+        closeUsesHistoryTraversal={feedbackHistoryReady}
         fallbackFocusRef={menuButtonRef}
         originHistoryId={feedbackHistoryOriginIdRef.current}
         onRequestClose={closeFeedbackOverlay}
-        visible={feedbackOverlayOpen}
+        visible={feedbackOverlayVisible}
       />
     </ShellChromeProvider>
   );
