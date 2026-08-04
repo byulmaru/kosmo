@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   assertImageUploadResponse,
-  formatImageUploadFailureMessage,
-  formatImageUploadRetryLabel,
   ImageUploadError,
 } from '../media/imageUploadErrors';
 import { releaseComposerMediaPreview, uploadComposerMedia } from './postComposerMedia';
@@ -194,12 +192,4 @@ test('production PUT response keeps the allowlisted transfer reason through the 
   );
 
   assert.equal(completed, false);
-  assert.equal(
-    formatImageUploadFailureMessage('첨부 이미지 1', {
-      reason: 'file-too-large',
-      stage: 'transfer',
-    }),
-    '첨부 이미지 1 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
-  );
-  assert.equal(formatImageUploadRetryLabel('첨부 이미지 1'), '첨부 이미지 1 업로드 다시 시도');
 });

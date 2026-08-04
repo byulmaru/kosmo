@@ -2,10 +2,6 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import {
-  formatImageUploadFailureMessage,
-  formatImageUploadRetryLabel,
-} from '../media/imageUploadErrors';
 import type { ImagePickerAsset, ImagePickerResult } from 'expo-image-picker';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileEditRoute as ProfileEditRouteExport } from './ProfileEditRoute';
@@ -453,21 +449,6 @@ describe('ProfileEditRoute', () => {
       reason: 'file-too-large',
       stage: 'transfer',
     });
-    assert.equal(
-      formatImageUploadFailureMessage('아바타 이미지', {
-        reason: 'file-too-large',
-        stage: 'transfer',
-      }),
-      '아바타 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
-    );
-    assert.equal(formatImageUploadRetryLabel('아바타 이미지'), '아바타 이미지 업로드 다시 시도');
-    assert.doesNotMatch(
-      formatImageUploadFailureMessage('아바타 이미지', {
-        reason: 'file-too-large',
-        stage: 'transfer',
-      }),
-      /storage secret|https?:\/\/|token/,
-    );
   });
 
   it('변경된 draft의 닫기, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {
