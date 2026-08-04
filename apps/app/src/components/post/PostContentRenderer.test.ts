@@ -74,14 +74,13 @@ describe('PostContentRenderer', () => {
       postId: 'post-1',
     });
 
+    const contentRoot = byTestId('post-content-renderer');
+    assert.deepEqual(contentRoot.props.dataSet, { openpanelReplayBlock: '' });
     assert.equal(rendered('PostMediaGallery').length, 0);
     const toggle = rendered('Pressable').find(
       (node) => node.props.testID === 'post-content-warning-toggle',
     );
     assert.ok(toggle);
-    const warning = rendered('Text').find((node) => node.props.children === '민감한 내용');
-    assert.ok(warning);
-    assert.deepEqual(warning.props.dataSet, { openpanelReplayBlock: '' });
     assert.equal(
       rendered('Text').some((node) => node.props.children === '원문 본문'),
       false,
@@ -97,12 +96,16 @@ describe('PostContentRenderer', () => {
     assert.equal(galleries.length, 1);
     assert.deepEqual(galleries[0].props.media, media);
     assert.equal(
+      contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
+      1,
+    );
+    assert.equal(
       rendered('Text').some((node) => node.props.children === '원문 본문'),
       true,
     );
   });
 
-  it('marks the original body subtree as an OpenPanel replay block', async () => {
+  it('keeps the canonical content root around warning and revealed body content', async () => {
     await render({
       bodyText: '원문 본문',
       contentWarning: '민감한 내용',
@@ -111,9 +114,12 @@ describe('PostContentRenderer', () => {
       postId: 'post-2',
     });
 
-    const warning = rendered('Text').find((node) => node.props.children === '민감한 내용');
-    assert.ok(warning);
-    assert.deepEqual(warning.props.dataSet, { openpanelReplayBlock: '' });
+    const contentRoot = byTestId('post-content-renderer');
+    assert.deepEqual(contentRoot.props.dataSet, { openpanelReplayBlock: '' });
+    assert.equal(
+      contentRoot.findAll((node) => node.props.testID === 'post-content-warning').length,
+      1,
+    );
 
     const toggle = rendered('Pressable').find(
       (node) => node.props.testID === 'post-content-warning-toggle',
@@ -127,7 +133,12 @@ describe('PostContentRenderer', () => {
 
     const body = rendered('Text').find((node) => node.props.children === '원문 본문');
     assert.ok(body);
-    assert.deepEqual(body.props.dataSet, { openpanelReplayBlock: '' });
+    const galleries = rendered('PostMediaGallery');
+    assert.equal(galleries.length, 1);
+    assert.equal(
+      contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
+      1,
+    );
   });
 });
 
@@ -163,4 +174,9 @@ async function render(props: {
 function rendered(type: string): ReactTestInstance[] {
   assert.ok(renderer);
   return renderer.root.findAll((node) => node.type === type);
+}
+
+function byTestId(testID: string): ReactTestInstance {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ testID });
 }

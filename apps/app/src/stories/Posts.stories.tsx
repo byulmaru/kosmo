@@ -2313,11 +2313,14 @@ export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-block', '');
-    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toHaveAttribute(
-      'data-openpanel-replay-block',
-      '',
-    );
+    expect(
+      canvas.getByText('짧은 본문 한 줄.').closest('[data-openpanel-replay-block]'),
+    ).not.toBeNull();
+    expect(
+      canvas
+        .getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')
+        .closest('[data-openpanel-replay-block]'),
+    ).not.toBeNull();
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),

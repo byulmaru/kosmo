@@ -25,7 +25,7 @@ const preview: Preview = {
         <SafeAreaProvider>
           <ThemeProvider>
             <ToastProvider>
-              <PostContentWarningRevealProvider>
+              <PostContentWarningRevealProvider key={context.id}>
                 <RelayStoryProvider
                   mutationError={relay.mutationError}
                   mutationGraphQLErrors={relay.mutationGraphQLErrors}

@@ -13,7 +13,7 @@ import type {
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
-import type { StyleProp, TextProps, TextStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewProps } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
@@ -23,7 +23,7 @@ interface RenderContext {
   readonly interactive: boolean;
 }
 
-const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as TextProps;
+const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as ViewProps;
 
 export function PostContentRenderer({
   bodyText,
@@ -56,9 +56,7 @@ export function PostContentRenderer({
   ];
 
   const body = !contentVisible ? null : !bodyText ? null : !document ? (
-    <Text {...replayBlockProps} style={bodyStyle}>
-      {bodyText}
-    </Text>
+    <Text style={bodyStyle}>{bodyText}</Text>
   ) : (
     renderNode(document, 'body', { bodyStyle, interactive })
   );
@@ -81,7 +79,7 @@ export function PostContentRenderer({
     return null;
   }
   return (
-    <View style={styles.root} testID="post-content-renderer">
+    <View {...replayBlockProps} style={styles.root} testID="post-content-renderer">
       {contentWarning ? (
         <View
           accessibilityLiveRegion="polite"
@@ -89,9 +87,7 @@ export function PostContentRenderer({
           testID="post-content-warning"
         >
           <Text style={[styles.warningLabel, { color: theme.text }]}>내용 경고</Text>
-          <Text {...replayBlockProps} style={[styles.warningText, { color: theme.textSecondary }]}>
-            {contentWarning}
-          </Text>
+          <Text style={[styles.warningText, { color: theme.textSecondary }]}>{contentWarning}</Text>
           <Pressable
             accessibilityLabel={revealed ? '내용 다시 가리기' : '내용 보기'}
             accessibilityRole="button"
@@ -130,7 +126,7 @@ type PostContentNode = PostContentBodyDocumentV1 | PostContentBlockNode | PostCo
 function renderNode(node: PostContentNode, key: Key, context: RenderContext): ReactNode {
   return match(node)
     .with({ type: 'doc' }, (document) => (
-      <Text {...replayBlockProps} key={key} style={context.bodyStyle}>
+      <Text key={key} style={context.bodyStyle}>
         {document.content
           .filter((child) => child.type === 'paragraph')
           .map((child, index) => (
