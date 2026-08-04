@@ -719,6 +719,22 @@ describe('ActivityPub Local Post Note', () => {
     }
   });
 
+  test('counts more than one page with a single aggregate reaction query', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    for (let index = 0; index < 51; index++) {
+      const profile = await createProfile({
+        handle: `aggregate-count-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, post.id, '🥹');
+    }
+
+    const select = mock.method(db, 'select');
+    assert.equal(await countLocalPostEmojiReactions(createContext(), { id: post.id }), 51);
+    assert.equal(select.mock.callCount(), 2);
+  });
+
   test('serves Public and Unlisted collections to anonymous requests', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const federation = createUnsignedCollectionFederation();
