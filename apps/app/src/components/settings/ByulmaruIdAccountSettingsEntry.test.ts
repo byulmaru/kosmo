@@ -156,10 +156,14 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     await render();
 
     const entry = byTestId('byulmaru-id-account-settings-entry');
+    const onPress = entry.props.onPress;
     await act(async () => {
-      void entry.props.onPress();
+      void onPress();
+      void onPress();
       await Promise.resolve();
     });
+    assert.equal(canOpenURL.mock.callCount(), 1);
+    assert.equal(openURL.mock.callCount(), 1);
     assert.equal(entry.props.disabled, true);
     assert.equal(byTestId('byulmaru-id-account-settings-entry').props.disabled, true);
     assert.equal(

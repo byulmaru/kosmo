@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -14,15 +14,17 @@ export function ByulmaruIdAccountSettingsEntry() {
   const theme = useTheme();
   const [status, setStatus] = useState<'idle' | 'opening' | 'error'>('idle');
   const [focused, setFocused] = useState(false);
+  const isOpeningRef = useRef(false);
   const web = Platform.OS === 'web';
   const isOpening = status === 'opening';
   const hasError = status === 'error';
 
   const openAccountSettings = useCallback(async () => {
-    if (isOpening) {
+    if (isOpening || isOpeningRef.current) {
       return;
     }
 
+    isOpeningRef.current = true;
     setStatus('opening');
     try {
       if (!(await Linking.canOpenURL(BYULMARU_ID_ACCOUNT_SETTINGS_URL))) {
@@ -33,6 +35,8 @@ export function ByulmaruIdAccountSettingsEntry() {
       setStatus('idle');
     } catch {
       setStatus('error');
+    } finally {
+      isOpeningRef.current = false;
     }
   }, [isOpening]);
 
