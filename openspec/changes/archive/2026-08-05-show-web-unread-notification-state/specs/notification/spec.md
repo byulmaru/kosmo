@@ -37,12 +37,6 @@
 - **THEN** link navigation은 유지된다
 - **AND** client는 item과 count cache를 보정하지 않으며 cached `readAt = null`인 동안 Unread 시각·접근성 상태를 유지한다
 
-#### Scenario: Native 표시 유지
-
-- **WHEN** 같은 Read 또는 Unread item을 Android나 iOS 알림 목록에서 표시한다
-- **THEN** item은 Read 상태와 관계없이 기존 `card` 기본 배경을 유지한다
-- **AND** PROD-680의 Web 좌측 상태선이나 배경 강조를 Native에 추가하지 않는다
-
 ## MODIFIED Requirements
 
 ### Requirement: Selected Profile Follow Notification 목록 UI

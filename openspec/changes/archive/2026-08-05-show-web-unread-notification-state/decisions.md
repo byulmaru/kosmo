@@ -11,10 +11,10 @@
 - Authority / Provenance: `docs/design/accessibility.md`, `PROD-680`
 - Status: Active
 - Context / Problem: Web 알림 목록에서 사용자가 미확인 항목을 식별할 수 있어야 하지만, 목록 진입·가시성만으로 Read 처리하거나 전체 읽음·모바일 범위까지 포함하면 현재 이슈 계약을 넘어선다.
-- Decision Outcome: 모든 visible Web Notification kind는 기존 `readAt`을 Read/Unread source of truth로 사용하고, Unread일 때 좌측 상태선·은은한 배경과 기존 접근성 설명을 제공한다. Read는 item activation으로만 시작하며 Native, 자동 Read와 전체 읽음은 변경하지 않는다.
-- Alternatives Considered: 목록 진입 또는 viewport 노출 시 자동 Read는 activation-only 계약과 충돌해 제외했다. 모바일에도 같은 강조를 추가하는 안과 전체 읽음은 각각 별도 제품 범위이므로 제외했다.
-- Consequences: 공용 Notification row의 Web 표현만 바뀌며 GraphQL API, notification kind별 renderer, navigation과 Native 기본 표시는 그대로 유지된다.
-- Confirmation / Follow-up: Storybook에서 Read/Unread와 접근성명 차이를 확인하고, Native style에 새 상태선·배경이 적용되지 않는지 검증한다.
+- Decision Outcome: 모든 visible Web Notification kind는 기존 `readAt`을 Read/Unread source of truth로 사용하고, Unread일 때 좌측 상태선·은은한 배경과 기존 접근성 설명을 제공한다. Read는 item activation으로만 시작한다. Native 시각 표현, 자동 Read와 전체 읽음은 이 change에서 정의하지 않는다.
+- Alternatives Considered: 목록 진입 또는 viewport 노출 시 자동 Read는 activation-only 계약과 충돌해 제외했다. 모바일 Unread 표현과 전체 읽음은 각각 별도 제품 범위이며, 이 change에서는 구현하거나 허용 동작을 결정하지 않았다.
+- Consequences: 공용 Notification row의 Web 표현만 바뀌며 GraphQL API, notification kind별 renderer와 navigation은 그대로 유지된다. 이번 구현은 현재 Native 렌더링을 변경하지 않지만 향후 Native Unread 제품 계약을 제한하지 않는다.
+- Confirmation / Follow-up: Storybook에서 Read/Unread와 접근성명 차이를 확인하고, Web 한정 style branch가 현재 Native 렌더링을 회귀시키지 않는지 정적으로 검증한다. 이 검증은 이번 change의 delivery evidence이며 지속적인 Native 시각 계약을 뜻하지 않는다.
 
 ### Web row 자체에 primary 상태선과 30% alpha 배경을 적용한다
 

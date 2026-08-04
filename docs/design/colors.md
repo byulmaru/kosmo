@@ -24,7 +24,7 @@ Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 �
 - `primarySubtle`은 `primary`의 30% alpha 표현이며 light와 dark 양쪽 mode에서 함께 정의한다.
 - Web 알림 목록의 Unread 행은 불투명한 `primary` 좌측 상태선과 `primarySubtle` 배경을 하나의 결합 표현으로 사용해 `card`인 Read 행과 구분한다.
 - 좌측 상태선은 `primarySubtle`과 분리되는 고대비 edge가 아니다. Unread 상태는 기존 접근성명도 함께 제공하며 별도 고대비 경계를 추가하지 않는다.
-- 이 의미를 다른 selected·pressed·visibility 상태나 Native 알림 행으로 일반화하지 않는다.
+- 이 의미를 다른 selected·pressed·visibility 상태로 일반화하지 않는다. `primarySubtle`의 Native 알림 행 사용 여부는 이 Web 정책으로 결정하지 않으며, 별도의 Native 제품 계약과 runtime 검증에서 정한다.
 
 ## Focus
 
