@@ -24,7 +24,10 @@ async function signIn(page: Page, handle = 'e2e-navigation-scroll') {
 }
 
 async function visiblePrimaryNavigation(page: Page): Promise<Locator> {
-  for (const navigation of await page.getByRole('navigation', { name: '주요 메뉴' }).all()) {
+  const navigations = page.getByRole('navigation', { name: '주요 메뉴' });
+  await expect(navigations.first()).toBeAttached();
+
+  for (const navigation of await navigations.all()) {
     if (await navigation.isVisible()) {
       return navigation;
     }
@@ -95,6 +98,55 @@ test('주요 Web navigation은 mobile bottom tab, drawer, compact rail과 full s
 
   await expect(page).toHaveURL(/\/home$/);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test('팔로워 요청 진입점은 full, compact와 mobile drawer에서 canonical route를 연다', async ({
+  page,
+}) => {
+  await signIn(page, 'e2e-follow-request-navigation');
+
+  for (const viewport of [
+    { height: 720, width: 1440 },
+    { height: 720, width: 1024 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/home');
+    const navigation = await visiblePrimaryNavigation(page);
+    const link = navigation.getByRole('link', { name: '팔로워 요청', exact: true });
+    await expect(link).toHaveAttribute('href', '/follow-requests');
+    await expect(navigation.locator('a[href="/menu"]')).toHaveCount(0);
+    await link.click();
+    await expect(page).toHaveURL(/\/follow-requests$/);
+    await expect(page.getByRole('heading', { name: '팔로워 요청' })).toBeVisible();
+    await expect(
+      (await visiblePrimaryNavigation(page)).getByRole('link', {
+        name: '팔로워 요청',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+  }
+
+  await page.setViewportSize({ height: 720, width: 390 });
+  await page.goto('/home');
+  await expect(
+    (await visiblePrimaryNavigation(page)).getByRole('link', {
+      name: '팔로워 요청',
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  const drawer = page.locator('#mobile-sidebar');
+  const drawerNavigation = drawer.getByRole('navigation', { name: '주요 메뉴' });
+  const drawerLink = drawerNavigation.getByRole('link', {
+    name: '팔로워 요청',
+    exact: true,
+  });
+  await expect(drawerLink).toHaveAttribute('href', '/follow-requests');
+  await expect(drawerNavigation.locator('a[href="/menu"]')).toHaveCount(0);
+  await drawerLink.tap();
+  await expect(page).toHaveURL(/\/follow-requests$/);
+  await expect(page.getByRole('heading', { name: '팔로워 요청' })).toBeVisible();
+  await expect(drawer).toHaveCount(0);
 });
 
 test('loading target도 pathname commit 직후 이전 document offset을 노출하지 않는다', async ({

@@ -59,10 +59,22 @@
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-566`, `PROD-654`
 - Status: Active
 - Context / Problem: 화면·Relay 구현과 세 shell surface 복원은 별도로 리뷰 가능한 변경이지만 route 없이 진입점만 배포할 수는 없고 하나의 통합 결과가 필요하다.
-- Decision Outcome: PROD-566이 route·화면·Relay 처리와 최종 통합·정합성·archive를 소유하고, PROD-654가 full Web sidebar·compact Web rail·mobile drawer 진입점과 shell 검증을 소유한다. 두 이슈는 이 change를 공유하며 화면 slice를 먼저 전달한다.
+- Decision Outcome: PROD-566이 route·화면·Relay 처리와 최종 통합·정합성·archive를 소유하고, PROD-654가 full Web sidebar·compact Web rail·mobile Web drawer 진입점과 shell 검증을 소유한다. 두 이슈는 이 change를 공유하며 화면 slice를 먼저 전달한다.
 - Alternatives Considered: 한 이슈·PR에 모두 포함, 별도 OpenSpec 두 개, bottom tab까지 navigation 확장. 리뷰 단위가 크거나 하나의 완료 계약이 분리되고 승인 범위를 넘기 때문에 제외했다.
 - Consequences: PROD-654는 `UserRoundPlus`와 `/follow-requests`만 복원하며 mobile bottom tab과 `/menu`를 수정하지 않는다. change는 두 slice와 통합 검증이 끝나기 전 archive하지 않는다.
 - Confirmation / Follow-up: 각 이슈의 담당 tests와 결합된 responsive navigation 흐름을 확인한 뒤 PROD-566 담당자가 archive한다.
+
+### PROD-654 navigation slice를 Web surface로 한정한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-654`
+- Status: Active
+- Context / Problem: PROD-654는 준비된 route에 정적 navigation item을 연결하는 좁은 slice이며, 공통 component가 Native에서도 사용된다는 사실만으로 Android/iOS UI·runtime QA와 개별 glyph DOM 검증까지 완료 조건에 포함하면 승인된 Web 전달 범위를 넘는다.
+- Decision Outcome: PROD-654는 full Web sidebar, compact Web rail과 mobile Web drawer만 소유한다. Android/iOS UI·runtime QA와 Native touch target은 제외하고, 기존 shared navigation의 role·accessible name·current state·focus·keyboard·drawer lifecycle 계약을 재사용한다. 제품 구현은 Lucide `UserRoundPlus`를 유지하지만 자동화는 Lucide 내부 SVG path를 고정하지 않는다.
+- Alternatives Considered: Android/iOS target 수정까지 같은 PR에 포함, 항목별 수동 Web keyboard·screen reader QA 추가, Lucide SVG path를 1:1 assertion으로 유지. 첫 번째는 승인 범위와 Native QA 책임을 확장하고, 나머지는 새 semantics가 없는 정적 shared item에 중복 검증 또는 라이브러리 내부 구현 결합을 만들기 때문에 제외했다.
+- Consequences: PROD-654 자동화는 label·destination·current state·순서·drawer close와 bottom tab·`/menu` 비노출을 검증한다. 기존 Native shell은 변경하지 않으며 PROD-566 화면·Relay slice와 최종 통합·archive 책임은 그대로 유지한다.
+- Confirmation / Follow-up: Shell Storybook addon-a11y와 Web E2E 통과, production navigation mapping의 `UserRoundPlus` 사용과 Android/iOS diff 부재를 확인한다.
 
 ## Remaining Decisions
 
