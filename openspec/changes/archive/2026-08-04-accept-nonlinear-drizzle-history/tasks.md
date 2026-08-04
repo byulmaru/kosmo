@@ -79,7 +79,7 @@ Runtime migration command가 정상적인 비선형 Drizzle history를 그대로
 - 최신 main Docker Build, Deploy Dev Argo CD PreSync Job과 API/Web Rollout 결과를 확인한다.
 - 같은 release 또는 후속 sync의 migration no-op과 history name/hash count 불변을 확인한다.
 
-- [ ] 3.1 후속 PR에 실패 원인, runner 계약 정정과 자동 검증 결과를 기록하고 merge한다.
-- [ ] 3.2 Merge 뒤 dev PreSync migration과 API/Web Rollout 성공을 관찰한다.
-- [ ] 3.3 같은 release 또는 후속 sync에서 no-op 재실행과 history/schema 불변을 확인한다.
-- [ ] 3.4 운영 증거를 PROD-656에 기록한 뒤 이슈 완료와 OpenSpec archive를 판단한다.
+- [x] 3.1 후속 PR에 실패 원인, runner 계약 정정과 자동 검증 결과를 기록하고 merge한다.
+- [x] 3.2 Merge 뒤 dev PreSync migration과 API/Web Rollout 성공을 관찰한다.
+- [x] 3.3 같은 release 또는 후속 sync에서 no-op 재실행과 history/schema 불변을 확인한다.
+- [x] 3.4 운영 증거를 PROD-656에 기록한 뒤 이슈 완료와 OpenSpec archive를 판단한다.
