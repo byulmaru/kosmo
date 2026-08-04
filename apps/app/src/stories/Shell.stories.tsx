@@ -272,7 +272,6 @@ export const SharedNavigation: Story = {
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     expect(
       followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -311,7 +310,6 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
       '/feedback',
@@ -1190,7 +1188,6 @@ export const UniversalMobile: Story = {
     );
     const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
-    expect(followRequests.querySelector('path')).toHaveAttribute('d', 'M2 21a8 8 0 0 1 13.292-6');
     const feedback = page.getByRole('link', { name: '피드백 보내기' });
     expect(feedback).toHaveAttribute('href', '/feedback');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();

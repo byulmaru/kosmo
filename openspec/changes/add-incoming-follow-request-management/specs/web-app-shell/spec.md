@@ -2,7 +2,7 @@
 
 ### Requirement: 준비되지 않은 sidebar 진입점 비노출
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566`, `PROD-654` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST). 받은 팔로우 요청 관리 화면이 제공되면 full Web sidebar, compact Web rail과 mobile drawer는 같은 canonical route 진입점을 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566`, `PROD-654` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST). 받은 팔로우 요청 관리 화면이 제공되면 full Web sidebar, compact Web rail과 mobile Web drawer는 같은 canonical route 진입점을 제공해야 한다(MUST).
 
 #### Scenario: responsive sidebar에서 프로필 설정 비노출
 
@@ -18,11 +18,11 @@
 
 #### Scenario: 관리 화면 준비 후 responsive navigation 진입점
 
-- **WHEN** `/follow-requests` 받은 팔로우 요청 관리 화면이 제공된 상태에서 인증된 사용자가 full Web sidebar, compact Web rail 또는 mobile drawer를 연다
+- **WHEN** `/follow-requests` 받은 팔로우 요청 관리 화면이 제공된 상태에서 인증된 사용자가 full Web sidebar, compact Web rail 또는 mobile Web drawer를 연다
 - **THEN** 시스템은 `팔로워 요청` label과 Lucide `UserRoundPlus` glyph를 사용하는 진입점을 표시한다
 - **AND** 세 shell surface의 진입점은 모두 `/follow-requests`로 이동한다
 - **AND** mobile bottom tab에는 팔로워 요청 진입점을 추가하지 않는다
-- **AND** mobile drawer에서 진입하면 기존 route navigation과 drawer close 동작을 유지한다
+- **AND** mobile Web drawer에서 진입하면 기존 route navigation과 drawer close 동작을 유지한다
 
 #### Scenario: 실제 동작하는 navigation 유지
 

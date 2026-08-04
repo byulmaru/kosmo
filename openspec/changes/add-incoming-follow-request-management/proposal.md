@@ -9,7 +9,7 @@ Follow Request의 pending-only 저장·GraphQL 처리 계약은 이미 제공되
 - 각 요청 행에서 승인·거절을 처리하고, 서버 성공 후 삭제된 request ID로 현재 connection을 정리하며 실패 시 행과 재시도를 유지한다.
 - unavailable requester가 있는 요청도 숨기지 않고 fallback 행과 거절 동작을 제공한다.
 - Profile 전환 시 이전 actor의 요청, pending, error와 Relay cache state가 새 Profile에 섞이지 않게 한다.
-- 화면이 준비된 뒤 full Web sidebar, compact Web rail과 mobile drawer에 `UserRoundPlus` 진입점을 복원한다.
+- 화면이 준비된 뒤 full Web sidebar, compact Web rail과 mobile Web drawer에 `UserRoundPlus` 진입점을 복원한다.
 - mobile bottom tab과 generic `/menu` placeholder는 복원하지 않으며 Follow Request API·저장 모델·알림 전달 계약은 변경하지 않는다.
 
 ## Authority / Provenance
@@ -26,7 +26,7 @@ Follow Request의 pending-only 저장·GraphQL 처리 계약은 이미 제공되
 
 ### Modified Capabilities
 
-- `web-app-shell`: 관리 화면이 제공된 이후 full Web sidebar, compact Web rail과 mobile drawer가 동일한 `/follow-requests` route를 노출하도록 기존 임시 비노출 계약을 확장
+- `web-app-shell`: 관리 화면이 제공된 이후 full Web sidebar, compact Web rail과 mobile Web drawer가 동일한 `/follow-requests` route를 노출하도록 기존 임시 비노출 계약을 확장
 
 ## Impact
 
