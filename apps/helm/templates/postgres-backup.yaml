@@ -27,6 +27,14 @@ rules:
       - kosmo-postgres-backup
     verbs:
       - get
+  - apiGroups:
+      - barmancloud.cnpg.io
+    resources:
+      - objectstores/status
+    resourceNames:
+      - kosmo-postgres-backup
+    verbs:
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

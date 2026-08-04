@@ -18,7 +18,7 @@
 
 **Authority / Provenance:** `PROD-546`. 시스템은 production backup과 별도 restore workload가 EKS Pod Identity로 같은 최소 권한 IAM role의 단기 자격 증명을 받게 해야 한다(MUST). 시스템은 AWS access key, secret key 또는 session token을 repository, Kubernetes Secret이나 workflow 입력으로 저장해서는 안 된다. 이 role은 Barman의 `HeadBucket` 확인에 필요한 bucket-level list 권한을 전용 backup bucket 하나에만 가져야 하며(MUST), 객체 읽기·쓰기·삭제와 multipart 권한은 prod prefix로 제한해야 한다(MUST).
 
-Production backup ServiceAccount는 같은 namespace의 `kosmo-postgres-backup` ObjectStore 하나를 읽을 수 있어야 하며(MUST), 다른 ObjectStore나 write verb 권한을 받아서는 안 된다(MUST NOT).
+Production backup ServiceAccount는 같은 namespace에서 이름이 `kosmo-postgres-backup`인 ObjectStore 본문을 `get`할 수 있어야 하며, 같은 exact-name `objectstores/status` 서브리소스를 `update`할 수 있어야 한다(MUST). 다른 ObjectStore 이름이나 ObjectStore 본문에 대한 `update`, `patch`, `create`, `delete` 및 `list`·`watch` 권한은 받아서는 안 되며, cluster-wide 권한도 없어야 한다(MUST NOT).
 
 #### Scenario: Production backup Pod의 S3 접근
 
@@ -30,10 +30,15 @@ Production backup ServiceAccount는 같은 namespace의 `kosmo-postgres-backup` 
 - **WHEN** `kosmo-prod-restore`의 복구 Pod가 source backup을 읽는다
 - **THEN** 같은 이름의 restore ServiceAccount에 연결된 Pod Identity role로 source prefix를 읽고 static credential을 사용하지 않는다
 
-#### Scenario: Production plugin의 ObjectStore 조회
+#### Scenario: Production plugin의 ObjectStore 조회와 recovery window 상태 갱신
 
 - **WHEN** production PostgreSQL Pod의 Barman plugin이 backup 설정을 해석한다
-- **THEN** `kosmo-postgres-backup` ServiceAccount는 같은 namespace의 동명 ObjectStore에 대한 `get`만 허용받고 WAL archive와 base backup을 시작할 수 있다
+- **THEN** `kosmo-postgres-backup` ServiceAccount는 같은 namespace의 동명 ObjectStore 본문을 `get`하고 `objectstores/status`를 `update`해 recovery window 상태를 갱신할 수 있으며 WAL archive와 base backup을 시작할 수 있다
+
+#### Scenario: ObjectStore RBAC의 exact-name 최소 권한
+
+- **WHEN** 해당 ServiceAccount가 다른 ObjectStore나 ObjectStore 본문·서브리소스에 쓰기 또는 cluster-wide 조회를 시도한다
+- **THEN** `update`, `patch`, `create`, `delete`, `list`, `watch`가 거부되고 `kosmo-postgres-backup`의 `objectstores/status` `update`만 허용된다
 
 ### Requirement: 연속 WAL archive와 매일 base backup
 
