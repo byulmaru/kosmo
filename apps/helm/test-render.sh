@@ -209,6 +209,8 @@ done
 
 required_prod_markers=(
   "kind: ServiceAccount"
+  "kind: Role"
+  "name: kosmo-postgres-backup-objectstore-reader"
   "name: kosmo-postgres-backup"
   "kind: ObjectStore"
   "destinationPath: s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/"
@@ -232,6 +234,119 @@ for marker in "${required_prod_markers[@]}"; do
     exit 1
   fi
 done
+
+if ! awk '
+  function reset_document() {
+    kind = ""
+    name = ""
+    current_resource = ""
+    body_name = body_get = 0
+    status_name = status_update = 0
+    in_resources = in_resource_names = in_verbs = 0
+    resource_count = resource_name_count = verb_count = 0
+    forbidden_resource = forbidden_name = forbidden_verb = 0
+    rule_count = 0
+  }
+  function check_document() {
+    if (kind != "Role" || name != "kosmo-postgres-backup-objectstore-reader") {
+      return 0
+    }
+    found = 1
+    return rule_count == 2 && resource_count == 2 && resource_name_count == 2 && verb_count == 2 &&
+      body_name && body_get && status_name && status_update &&
+      !forbidden_resource && !forbidden_name && !forbidden_verb
+  }
+  BEGIN { reset_document() }
+  /^---$/ {
+    if (check_document()) {
+      valid = 1
+    }
+    reset_document()
+    next
+  }
+  $0 == "kind: Role" { kind = "Role"; next }
+  kind == "Role" && $0 == "  name: kosmo-postgres-backup-objectstore-reader" {
+    name = "kosmo-postgres-backup-objectstore-reader"
+    next
+  }
+  name != "" && $0 == "  - apiGroups:" {
+    in_resources = in_resource_names = in_verbs = 0
+    next
+  }
+  name != "" && $0 == "    resources:" {
+    current_resource = ""
+    in_resources = 1
+    in_resource_names = in_verbs = 0
+    rule_count++
+    next
+  }
+  name != "" && in_resources && $0 == "      - objectstores" {
+    current_resource = "objectstores"
+    resource_count++
+    next
+  }
+  name != "" && in_resources && $0 == "      - objectstores/status" {
+    current_resource = "objectstores/status"
+    resource_count++
+    next
+  }
+  name != "" && in_resources && $0 ~ /^      - / {
+    forbidden_resource = 1
+    next
+  }
+  name != "" && $0 == "    resourceNames:" {
+    in_resources = in_verbs = 0
+    in_resource_names = 1
+    next
+  }
+  name != "" && in_resource_names && $0 == "      - kosmo-postgres-backup" && current_resource == "objectstores" {
+    body_name = 1
+    resource_name_count++
+    next
+  }
+  name != "" && in_resource_names && $0 == "      - kosmo-postgres-backup" && current_resource == "objectstores/status" {
+    status_name = 1
+    resource_name_count++
+    next
+  }
+  name != "" && in_resource_names && $0 ~ /^      - / {
+    forbidden_name = 1
+    next
+  }
+  name != "" && $0 == "    verbs:" {
+    in_resources = in_resource_names = 0
+    in_verbs = 1
+    next
+  }
+  name != "" && in_verbs && $0 == "      - get" && current_resource == "objectstores" {
+    body_get = 1
+    verb_count++
+    next
+  }
+  name != "" && in_verbs && $0 == "      - update" && current_resource == "objectstores/status" {
+    status_update = 1
+    verb_count++
+    next
+  }
+  name != "" && in_verbs && $0 ~ /^      - / {
+    forbidden_verb = 1
+    next
+  }
+  END {
+    if (check_document()) {
+      valid = 1
+    }
+    exit !(found && valid)
+  }
+' "${render_dir}/prod-runtime.yaml"; then
+  echo "prod ObjectStore Role must grant only exact-name get and status update" >&2
+  exit 1
+fi
+
+if grep -Fq 'objectstores/status' "${render_dir}/dev.yaml" || grep -Fq 'kosmo-postgres-backup-objectstore-reader' "${render_dir}/dev.yaml"; then
+  echo "dev manifest unexpectedly contains ObjectStore RBAC" >&2
+  exit 1
+fi
 
 required_migration_markers=(
   "ghcr.io/byulmaru/kosmo@${image_digest}"
