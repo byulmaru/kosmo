@@ -11,8 +11,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   [`Edit / Reply` node 277:73](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=277-73),
   상세 진입점은
   [`ReplyComposer` node 693:518](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=693-518)을 기준으로 한다.
-- 일반 Post Composer가 지원하는 Plain Text 본문, Visibility, 글자 수, validation, pending과 오류 상태를
-  그대로 재사용한다.
+- 일반 Post Composer가 지원하는 Plain Text 본문, Visibility, 글자 수, Media 선택·업로드·미리보기·제거·재시도,
+  Alt Text, Sensitive Media, validation, pending과 오류 상태를 그대로 재사용한다.
 - Parent가 일반 Post, Reply 또는 Quote이면 화면에 표시되는 direct Parent의 자체 Content와 Source preview를
   보여준다. Action Bar와 Post menu는 Parent 맥락 안에 중복 표시하지 않는다.
 
@@ -65,10 +65,16 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   상태에서는 같은 경계를 semantic danger border로 바꾼다. placeholder는 `답글을 입력하세요…`다.
 - 제목·control label·button에는 공용 UI typography를, Parent·입력 본문에는 공용 body typography를 사용한다.
   modal 전용 raw font size나 font family를 만들지 않는다.
+- 기존 Composer의 Media control은 editor 안에서 본문 아래에 둔다. 선택한 이미지의 미리보기, 업로드 상태,
+  제거·재시도, nullable Alt Text와 Sensitive Media control이 늘어나면 Parent와 editor가 공유하는 중앙 영역에서
+  함께 스크롤하고 고정 footer를 밀어내지 않는다.
 - footer 좌측에는 Visibility control을 둔다.
 - footer 우측에는 남은 글자 수와 `답글 게시` primary button을 이 순서로 둔다.
 - 남은 글자 수는 `500`에서 시작해 항상 표시하며 초과 시 semantic danger 상태로 표시한다.
-- 빈 본문, 500자 초과와 제출 중에는 `답글 게시`를 disabled로 표시한다.
+- trim한 본문과 업로드를 완료한 Media가 모두 없거나, 본문이 500자를 초과하거나, Media가 업로드 중·실패
+  상태이거나, Reply 제출 중이면 `답글 게시`를 disabled로 표시한다. 본문이 없어도 Ready Media가 하나 이상
+  있으면 Media-only Reply를 제출할 수 있다.
+- Media 업로드 실패는 현재 preview와 Parent 맥락을 유지한 채 같은 위치에서 재시도하거나 제거할 수 있게 한다.
 - 제출 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Visibility의 중복 변경과 닫기를 막는다.
 - validation 또는 network 오류는 editor 아래, 고정 footer 위에 inline alert로 표시한다.
 
@@ -84,15 +90,17 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - 빈 상태에서는 `X`, backdrop과 `Escape`로 즉시 닫는다.
-- 본문 또는 Visibility가 초기값에서 바뀐 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시한다.
-  사용자는 `계속 작성` 또는 `작성 취소`를 선택한다.
+- 본문·Visibility가 초기값에서 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive Media 상태가 있으면 dirty로
+  취급한다. 이 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시하고 사용자가 `계속 작성` 또는
+  `작성 취소`를 선택하게 한다. Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는
+  닫힌 surface를 다시 열거나 상태를 변경하지 않는다.
 - 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
-  같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, pending 상태에서는
-  현재 작성과 active Parent를 유지한다.
-- 제출 실패 시 modal, direct Parent 맥락, 본문과 Visibility를 유지한다.
+  같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
+  상태에서는 현재 작성과 active Parent를 유지한다.
+- 제출 실패 시 modal, direct Parent 맥락, 본문, Visibility와 Media 작성 상태를 유지한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
-  Visibility, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 mutation completion은 새 문맥의 상태나
-  성공 callback을 변경하지 않는다.
+  Visibility, Media, error와 pending을 초기 상태로 시작한다. 이전 문맥의 늦은 upload·mutation completion은 새
+  문맥의 상태나 성공 callback을 변경하지 않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
@@ -105,6 +113,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Web modal은 이름이 `답글 쓰기`인 modal dialog semantics와 focus trap을 제공한다.
 - `X`, backdrop, `Escape`, 취소 확인과 성공 close에서 focus 이동을 각각 검증한다.
 - 오류는 alert semantics, Visibility와 Reply action은 name/state, 남은 글자 수는 입력과 연관된 설명을 제공한다.
+- Media 추가·제거·재시도, 업로드 상태, Alt Text와 Sensitive Media control은 기존 일반 Composer와 같은
+  accessible name·state·live feedback을 제공한다.
 - interactive target 수치는 이 문서에서 고정하지 않는다. Web·Android·iOS의 최신 승인 접근성 지침과 runtime
   관찰을 source of truth로 삼고, 이전 target-size 수치를 자동으로 이식하지 않는다.
 - 중앙 scroll은 keyboard focus가 Parent 또는 editor의 현재 위치를 가리지 않게 유지한다. Parent 전용 nested
@@ -113,7 +123,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ## 제외 범위
 
 - Mentioned Profiles recipient와 `DIRECT` Reply
-- Media, Poll, Content Warning과 Sensitive Media를 포함한 Reply 작성
+- Poll과 Content Warning을 포함한 Reply 작성
+- 새 Media 형식·제한, Reply 전용 Media 모델·storage·API·uploader 또는 일반 Composer Media UI 재설계
 - Reply+Quote 동시 작성
 - ActivityPub Reply와 Notification inbox
 - modal 안의 전체 조상 thread, Parent Action Bar와 Post menu
@@ -121,8 +132,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 구현 정렬 gate
 
-- 이 디자인의 목록 modal, 좁은 화면 전체 작성기와 상세 inline surface를 구현하기 전에 PROD-425와
-  `add-local-reply-creation`의 UI scope를 이 문서와 동기화한다.
+- 이 디자인의 목록 modal, 좁은 화면 전체 작성기와 상세 inline surface는 PROD-425의 기본 Reply 작성 계약과
+  PROD-640의 기존 Media 계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
+  전체 통합 검증을 소유한 PROD-423에서 수행한다.
 - Figma component와 screen state를 먼저 검토한 뒤 구현 계획을 확정한다. 디자인 문서나 Figma 완료만으로
   Reply 작성·cache 통합 또는 runtime 검증 완료를 주장하지 않는다.
 
@@ -133,8 +145,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
+- 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
+  Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
+  다시 계산해야 한다.
 - pristine/dirty/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
-  없음, selected Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 completion 격리를 확인한다.
+  없음, Media upload 중 dirty close, selected Profile·Parent·Relay Environment 전환의 첫 commit과 늦은
+  upload·mutation completion 격리를 확인한다.
 - Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의
   targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,

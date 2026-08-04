@@ -110,7 +110,52 @@
 - [x] 3.7 inbox 표시·이동·Read·cache·Profile 전환 client 검증과 Relay compiler/check를 통과시킨다.
 - [x] 3.8 PROD-507에서 Local·ActivityPub Reply가 transaction 인자와 무관한 공통 Best Effort Notification lifecycle을 사용하도록 정렬하고, duplicate no-op·outer transaction 회귀를 검증한다.
 
-## 4. PROD-423 통합 검증·OpenSpec 완료
+## 4. PROD-640 Reply Composer Media 계약 복구
+
+**Authority / Provenance**
+
+- `docs/domain/objects/post.md`
+- `docs/domain/objects/post-content.md`
+- `docs/domain/objects/media.md`
+- `docs/domain/decisions/0014-post-structure-relations.md`
+- `docs/domain/decisions/0022-post-content-revision-media-nodes.md`
+- `PROD-640`
+
+**Deliverable**
+
+모든 지원 Reply Composer surface에서 기존 일반 Post의 이미지 선택·업로드·미리보기·제거·재시도, Alt Text와 Sensitive Media lifecycle을 사용하고 Parent·본문·Media가 하나의 Reply 결과로 저장된다.
+
+**Guardrails**
+
+- 기존 `PostComposer`, Media control·uploader와 `createPost`의 ordered Media item·nullable Alt Text·Sensitive Media 입력을 재사용하고 Reply 전용 Media state, 모델, storage, API 또는 cache updater를 만들지 않는다.
+- Media-only Reply는 유효하고, uploading 또는 failed Media item이 남아 있는 동안 제출을 차단하며 실패·재시도·제거가 일반 Post와 같은 lifecycle을 따른다.
+- Media state는 기존 Reply surface의 dirty·discard confirmation에 참여하고, close·Parent 전환의 강제 차단은 Reply mutation 제출 pending에만 적용한다.
+- selected Profile·Parent·Relay Environment 전환 시 Reply body·Media·pending·error와 늦은 upload/mutation completion을 새 문맥과 격리한다.
+- clipboard paste, 새 파일 형식·크기 정책, Media Storage Service, 일반 Post 갤러리·viewer 재설계는 포함하지 않는다.
+- 성공 결과 반영은 기존 Reply surface callback과 detail targeted refetch를 사용하며 다른 actor Store나 전역 목록 membership을 합성하지 않는다.
+
+**Verification**
+
+- 목록 modal·좁은 Web/Native 전체 화면·상세 inline surface에서 선택·preview·Alt Text·Sensitive Media·제거·실패·재시도와 최대 4개 계약을 검증한다.
+- 본문+Media와 Media-only Reply가 `replyParentId`, ordered `{ mediaId, altText }`, `sensitiveMedia`를 함께 제출하고 uploading 또는 failed item이 남아 있으면 제출을 차단하며 재시도·제거 뒤에만 제출할 수 있는지 검증한다.
+- Media 선택·upload 상태가 dirty에 반영되어 close·Parent 전환 시 기존 discard confirmation을 거치고, 확인된 폐기 뒤 늦은 upload completion이 닫힌 문맥을 복원하지 않는지 검증한다.
+- selected Profile·Parent·Relay Environment 전환과 늦은 upload/mutation completion, 일반 Post Composer 회귀를 자동화로 검증한다.
+- Web runtime과 Android·iOS picker·keyboard·safe area·platform back·접근성은 실행한 환경의 증거를 분리해 기록하고 미실행 Native 항목을 Ready 근거로 주장하지 않는다.
+
+- [x] 4.1 Reply mode에서 기존 Media control을 노출하고 Media state를 dirty·media-only 유효성·pending 제출 차단과 `createPost` 입력에 연결한다.
+- [x] 4.2 Reply Media payload·lifecycle·일반 Post 회귀와 selected Profile·Parent·Relay Environment 전환의 늦은 completion 격리 테스트를 추가한다.
+- [x] 4.3 App unit·Storybook·Relay/TypeScript·lint/format·build와 실행 가능한 Web·Android·iOS 검증을 수행하고 결과와 미실행 platform gate를 기록한다.
+
+**Verification Evidence (2026-08-03)**
+
+- `pnpm --filter @kosmo/app test:unit`: 166 passed
+- `pnpm --filter @kosmo/app test:storybook`: 278 passed; 새 Relay Environment Media 격리 Story는 focused run 1 passed
+- `pnpm --filter @kosmo/app check`: Relay compiler와 TypeScript 통과
+- 변경 TSX의 ESLint와 변경 파일의 Prettier check 통과
+- `pnpm --filter @kosmo/app build-storybook`과 `pnpm --filter @kosmo/app build` Web production export 통과
+- Web 자동화와 공용 코드는 현재 PR의 Ready 근거로 검증했다. 격리 API 3100·BFF 5184·App 5183 runtime에서는 인증 화면, picker와 upload URL 발급까지 확인했지만 Media Storage의 local CORS가 기본 `http://localhost:5173`만 허용해 5183 origin의 PUT은 환경 제한으로 완료하지 못했다. 기본 5173 origin의 실제 cross-service upload lifecycle은 통합 테스트로 통과했다. Android·iOS picker·keyboard·safe area·platform back·접근성 runtime은 이번 Web 우선 PR의 Ready 조건이 아니며 Native 출시 gate에서 별도로 확인한다.
+
+## 5. PROD-423 통합 검증·OpenSpec 완료
 
 **Authority / Provenance**
 
@@ -122,6 +167,7 @@
 - `PROD-424`
 - `PROD-425`
 - `PROD-426`
+- `PROD-640`
 
 **Deliverable**
 
@@ -129,7 +175,7 @@ Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read
 
 **Guardrails**
 
-- PROD-424·425·426 전체 Deliverable·Guardrail·Verification과 필수 dependency가 완료되기 전에 change를 archive하지 않는다.
+- PROD-424·425·426·640 전체 Deliverable·Guardrail·Verification과 필수 dependency가 완료되기 전에 change를 archive하지 않는다.
 - PROD-460·461·462와 Reply+Quote·ActivityPub·retry/outbox 범위를 통합 완료 조건으로 승격시키지 않는다.
 - Pull Request readiness와 OpenSpec archive를 별도로 판단한다.
 
@@ -137,10 +183,10 @@ Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read
 
 - 두 Local Profile로 Reply 작성 → Parent thread 반영 → Parent Author inbox/count → item Read 및 결과 Reply 이동을 검증한다.
 - self-reply, Parent와 독립 Visibility, contentless Repost disabled, Notification 실패 격리와 selected Profile 전환 회귀를 검증한다.
-- 관련 전체 check, OpenSpec strict validation, task 완료와 canonical delta 동기화 결과를 기록한다.
+- Reply Media를 포함한 관련 전체 check, OpenSpec strict validation, task 완료와 canonical delta 동기화 결과를 기록한다.
 
-- [ ] 4.1 PROD-424·425·426의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
-- [ ] 4.2 Local Reply 작성·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
-- [ ] 4.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
-- [ ] 4.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
-- [ ] 4.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.
+- [ ] 5.1 PROD-424·425·426·640의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
+- [ ] 5.2 Local Reply 작성·Media·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
+- [ ] 5.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
+- [ ] 5.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
+- [ ] 5.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.
