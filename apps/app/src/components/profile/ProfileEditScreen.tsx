@@ -1,8 +1,9 @@
 import { ArrowLeft } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
+import { IconButton } from '../ui/IconButton';
 import { ProfileEditForm } from './ProfileEditForm';
 import { canSubmitProfileEdit, validateProfileEditDraft } from './profileEditState';
 import type { ViewStyle } from 'react-native';
@@ -122,19 +123,15 @@ export function ProfileEditScreen({
         ]}
       >
         {onBack ? (
-          <Pressable
+          <IconButton
             accessibilityLabel="프로필 편집 닫기"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: saving }}
             disabled={saving}
             onPress={onBack}
-            style={({ pressed }) => [
-              styles.backAction,
-              { opacity: saving ? 0.45 : pressed ? 0.7 : 1 },
-            ]}
+            style={styles.backAction}
+            targetSize={48}
           >
             <ArrowLeft color={theme.text} size={22} strokeWidth={2} />
-          </Pressable>
+          </IconButton>
         ) : (
           <View style={styles.backAction} />
         )}

@@ -252,7 +252,7 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
   기존 geometry, overlap·clipping 없는 배치를 유지하는지 확인한다.
 - app 단위 test, TypeScript, Storybook build·interaction과 Web runtime을 통과하고 Native runtime 미실행을 PR에 기록한다.
 
-- [ ] 4.1 공용 `IconButton`을 component test로 정의하고 Profile edit 뒤로가기·이미지 편집·Profile Tag 제거 action을
+- [x] 4.1 공용 `IconButton`을 component test로 정의하고 Profile edit 뒤로가기·이미지 편집·Profile Tag 제거 action을
       교체해 플랫폼별 target mapping과 기존 single-focus·geometry를 유지한다.
 - [ ] 4.2 app 필수 자동화와 Web runtime을 검증하고 독립 구현 리뷰를 통과한 뒤 PROD-548 PR에 증거와 Native 실제
       기기·simulator runtime QA 제외를 기록한다.
