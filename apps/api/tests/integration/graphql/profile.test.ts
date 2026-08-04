@@ -2783,11 +2783,13 @@ describe('GraphQL remote profile boundary', () => {
     await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
 
     const result = await requestGraphQL<{
-      createProfile: { profile: { id: string; instance: { kind: string } } } | null;
+      createProfile: {
+        profile: { defaultPostVisibility: string | null; id: string; instance: { kind: string } };
+      } | null;
     }>(
       `mutation CreateLocalDuplicate($handle: String!) {
         createProfile(input: { handle: $handle }) {
-          profile { id instance { kind } }
+          profile { id instance { kind } defaultPostVisibility }
         }
       }`,
       { handle: 'alice' },
@@ -2796,14 +2798,20 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
+    assert.equal(result.data?.createProfile?.profile.defaultPostVisibility, 'UNLISTED');
 
     const created = await db
-      .select()
+      .select({
+        defaultPostVisibility: Profiles.defaultPostVisibility,
+        id: Profiles.id,
+        instanceId: Profiles.instanceId,
+      })
       .from(Profiles)
       .where(and(eq(Profiles.instanceId, localInstanceId), eq(Profiles.normalizedHandle, 'alice')))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(created.instanceId, localInstanceId);
+    assert.equal(created.defaultPostVisibility, PostVisibility.UNLISTED);
 
     const ownership = await db
       .select()

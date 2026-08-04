@@ -432,20 +432,26 @@ test('Local Profile 기본 Post Visibility는 지원 값만 저장하고 omitted
       updateProfile({
         accountId: account.id,
         defaultPostVisibility: visibility,
+        displayName: 'Should not commit',
         profileId: profile.id,
       }),
       (error) => error instanceof ValidationError && error.field === 'defaultPostVisibility',
     );
   }
 
-  assert.equal(
+  assert.deepEqual(
     await db
-      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .select({
+        defaultPostVisibility: Profiles.defaultPostVisibility,
+        displayName: Profiles.displayName,
+      })
       .from(Profiles)
       .where(eq(Profiles.id, profile.id))
-      .then(firstOrThrow)
-      .then(({ defaultPostVisibility }) => defaultPostVisibility),
-    PostVisibility.PUBLIC,
+      .then(firstOrThrow),
+    {
+      defaultPostVisibility: PostVisibility.PUBLIC,
+      displayName: profile.displayName,
+    },
   );
 });
 
@@ -462,7 +468,15 @@ test('Remote Profile은 기본 Post Visibility를 저장할 수 없다', async (
     }),
     NotFoundError,
   );
-  assert.equal(profile.defaultPostVisibility, null);
+  assert.equal(
+    await db
+      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .from(Profiles)
+      .where(eq(Profiles.id, profile.id))
+      .then(firstOrThrow)
+      .then(({ defaultPostVisibility }) => defaultPostVisibility),
+    null,
+  );
 });
 
 test('Profile 기본 Post Visibility DB 제약은 DIRECT를 거부한다', async () => {
