@@ -4,12 +4,26 @@
 
 ## Decision Records
 
-### 짧은 interactive 오류 tile은 전체 재시도 control을 우선한다
+### 재시도 가능한 오류 fallback은 action만 표시한다
 
 - Decision Date: 2026-08-04
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/post-media-gallery.md`, `docs/design/accessibility.md`, PROD-626
 - Status: Active
+- Supersedes: 2026-08-04 `짧은 interactive 오류 tile은 전체 재시도 control을 우선한다` 결정
+- Context / Problem: 기존 compact tile 예외는 같은 이미지 로딩 실패라도 단일 이미지에는 일반 오류 설명과 재시도 control을 함께 표시하고 다중 이미지는 control만 표시해, 실패 원인이나 별도 조치를 설명하지 않는 문구를 gallery geometry에 따라 다르게 노출한다.
+- Decision Outcome: 현재 표시 URL이 있고 interactive여서 재시도할 수 있는 오류 fallback은 단일·다중 이미지 모두 시각 오류 설명을 생략하고, 영향받은 이미지 맥락이 포함된 accessible name과 재시도 control만 표시한다. 재시도 control은 48 logical unit 높이를 사용하며 분할 tile에서는 전체 높이가 경계 안에 남아야 한다. URL이 없거나 비대화형 부모 preview여서 재시도할 수 없는 fallback은 기존 오류 설명을 표시한다.
+- Alternatives Considered: 단일 이미지에서만 기존 설명을 유지하는 안은 원인이나 추가 조치를 제공하지 않는 같은 문구를 gallery geometry에 따라 다르게 노출한다. 모든 fallback에서 설명을 제거하는 안은 URL 없음·비대화형 preview처럼 사용자가 복구 action을 실행할 수 없는 상태의 안내까지 없앤다.
+- Consequences: 재시도 가능한 단일·다중 오류는 시각적으로 같은 action-only 표현을 사용한다. 오류 대상은 재시도 accessible name으로 식별되고, 재시도 불가능한 fallback은 설명으로 상태를 전달한다.
+- Confirmation / Follow-up: component test에서 단일·다중 재시도 가능 오류가 설명 없이 action만 표시하는지와 URL 없음·비대화형 fallback이 설명을 유지하는지 확인한다. compact 3장 fixture의 48 logical unit containment 검증은 계속 유지한다.
+
+### 짧은 interactive 오류 tile은 전체 재시도 control을 우선한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/post-media-gallery.md`, `docs/design/accessibility.md`, PROD-626
+- Status: Superseded
+- Superseded By: 2026-08-04 `재시도 가능한 오류 fallback은 action만 표시한다` 결정
 - Context / Problem: 3장 16:9 gallery의 오른쪽 tile은 compact Post 폭에서 긴 오류 설명과 48 logical unit 재시도 control을 함께 수용하지 못해, tile의 `overflow: hidden` 경계에서 재시도 control 하단이 잘린다.
 - Decision Outcome: URL이 있고 interactive인 다중 tile 오류 fallback은 긴 시각 설명을 생략하고, 영향받은 이미지 맥락이 포함된 기존 재시도 accessible name과 48 logical unit control 전체를 tile 안에 유지한다. URL이 없거나 비대화형 부모 preview여서 재시도 control이 없는 fallback은 기존 오류 설명을 표시한다.
 - Alternatives Considered: 3장 surface 높이를 다시 늘리는 안은 승인된 16:9 compact geometry를 깨뜨린다. 재시도 control을 줄이는 안은 Android 48dp 기본 target과 기존 component 계약을 약화한다. 긴 설명과 control을 모두 유지하는 안은 compact 오른쪽 tile에서 잘림을 피할 수 없다.

@@ -39,7 +39,7 @@ Sensitive Media는 별도 surface 안에서 단일 가림 placeholder와 공개�
 
 다중 gallery는 기존 theme의 spacing·radius token을 재사용하되 외곽 border를 두지 않고 tile은 `cover`로 경계를 채운다. tile 자체에는 press handler나 interactive role을 추가하지 않는다. 기존 재시도와 Sensitive control은 interactive 목록·상세에서만 상호작용 가능하게 유지한다.
 
-3장 16:9의 오른쪽 tile처럼 높이가 짧은 interactive 오류 fallback은 긴 시각 설명보다 전체 48 logical unit 재시도 control을 우선한다. 영향받은 이미지 맥락은 기존 재시도 accessible name으로 유지하고 긴 설명은 이 compact 경계에서만 생략한다. URL이 없거나 `interactive=false`라 재시도 control이 없는 fallback은 기존 오류 설명을 계속 표시한다.
+현재 표시 URL이 있고 interactive여서 재시도할 수 있는 오류 fallback은 단일·다중 이미지 모두 시각 오류 설명을 생략하고 재시도 control만 표시한다. 영향받은 이미지 맥락은 기존 재시도 accessible name으로 유지하며 control은 48 logical unit 높이를 사용하고 분할 tile 경계 안에 온전히 남는다. URL이 없거나 `interactive=false`라 재시도할 수 없는 fallback은 기존 오류 설명을 계속 표시한다.
 
 ### Allowed Alternatives
 

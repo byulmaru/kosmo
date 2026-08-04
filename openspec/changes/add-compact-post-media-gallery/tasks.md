@@ -229,3 +229,50 @@ Sensitive 공개 전후와 이미지별 loading·ready·error·retry 상태가 �
 - App unit test 169개, Storybook test 267개, production Storybook build, `tsc --noEmit`, 변경 TypeScript ESLint, 변경 파일 Prettier check와 strict OpenSpec validation이 통과했다.
 - Watchman 없이 Expo Web export를 다시 생성했고, 기존 localhost:5173 서버를 재시작하지 않은 채 Home runtime에서 3장 gallery가 `476×267.75`로 정확히 16:9이고 오른쪽 두 tile이 각각 `234×129.875`인 것을 확인했다.
 - 기존 iOS·Android binary runtime과 archive gate는 각각 3.3·3.4에서 계속 미완료로 유지한다.
+
+## 6. PROD-626 재시도 가능 오류 표현 통일
+
+**Authority / Provenance**
+
+- `docs/design/post-media-gallery.md`
+- `docs/design/accessibility.md`
+- PROD-626
+
+**Deliverable**
+
+현재 표시 URL이 있고 interactive여서 재시도할 수 있는 이미지 오류는 단일·다중 gallery 모두 시각 오류 설명 없이 이미지 맥락이 포함된 재시도 control만 표시한다. URL이 없거나 비대화형 preview여서 재시도할 수 없을 때만 기존 오류 설명을 유지한다.
+
+**Guardrails**
+
+- 기존 재시도 accessible name·동작과 48 logical unit control을 유지한다.
+- URL 없음·비대화형 부모 preview의 오류 설명과 재시도 미표시를 변경하지 않는다.
+- gallery geometry, Sensitive 동작, Storybook fixture와 PROD-650 viewer 범위를 변경하지 않는다.
+- GitHub 리뷰 답글·thread resolve는 구현과 별도 승인 대상으로 유지한다.
+
+**Verification**
+
+- 기존 Post Media Image component test에서 단일·다중 재시도 가능 오류가 action만 표시하고 URL 없음·비대화형 오류가 설명을 유지하는지 확인한다.
+- App unit·Storybook·정적 검사·strict OpenSpec validation과 Web runtime에서 기존 compact containment와 새 단일 이미지 표현을 확인한다.
+
+**테스트 코드 범위**
+
+- `apps/app/src/components/post/PostMediaImage.test.ts`의 기존 단일 interactive 오류 사례.
+
+**테스트 필요성**
+
+- 같은 재시도 가능 상태가 gallery geometry에 따라 서로 다른 시각 표현으로 돌아가는 회귀를 직접 차단한다.
+
+**테스트 제외 범위**
+
+- 새 Storybook fixture·screenshot harness, gallery geometry, viewer interaction, unrelated fallback copy·coverage와 테스트 인프라 변경.
+
+- [x] 6.1 재시도 가능 여부 기준을 canonical design과 Linear PROD-626에 동기화한다.
+- [x] 6.2 단일 interactive 오류의 action-only 표현을 기존 component test에서 RED로 확인한 뒤 공용 이미지 fallback을 최소 수정하고 OpenSpec 계약을 동기화한다.
+- [x] 6.3 targeted unit·Storybook·정적 검사·strict OpenSpec validation과 Web runtime을 확인한다.
+
+### 2026-08-04 재시도 가능 오류 표현 검증 증거
+
+- 단일 interactive 오류의 기존 설명+버튼 표현을 `['가로 이미지을 불러오지 못했습니다.', '다시 시도']` 대 `['다시 시도']`의 component test RED로 먼저 확인했다. URL·interactive 공통 재시도 가능 조건을 적용한 뒤 targeted `PostMediaImage` test 7개와 전체 App unit test 169개가 통과했고, 같은 URL로의 Image remount·URL 없음·비대화형 설명 유지·compact 48 logical unit containment 회귀도 함께 확인했다.
+- Storybook test 267개와 production build, `tsc --noEmit`, 변경 TypeScript ESLint, 변경 파일 Prettier check, strict OpenSpec validation, `git diff --check`와 Watchman 없는 Expo Web export가 통과했다. Storybook test의 기존 fixture console log·React `act` warning과 App unit의 `react-test-renderer` deprecation warning은 exit 0인 기존 경고로 남는다.
+- 별도 임시 포트의 production Storybook Web runtime에서 재시도 가능한 오류 fallback이 시각 설명 없이 이미지 맥락을 포함한 `실패 이미지 다시 시도` control만 표시하는 것을 확인했다. 기존 3장 오류 fixture는 `524×294.75`의 정확한 16:9 surface에서 오른쪽 실패 tile 안에 높이 48px control을 유지했다.
+- 단일 이미지 표현 변경은 새 fixture를 추가하지 않는 승인 범위에 따라 component RED/GREEN으로 직접 검증했고, Web runtime은 기존 다중 fixture에서 공용 fallback의 action-only 표현과 compact containment를 재확인했다. 기존 iOS·Android binary runtime과 archive gate는 각각 3.3·3.4에서 계속 미완료로 유지한다.

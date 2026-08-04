@@ -88,13 +88,13 @@ describe('PostMediaImage', () => {
     assert.equal(getSizeAttempts.get(media('transient-size-error', null).url!), 2);
   });
 
-  it('오류 뒤 같은 URL로 Image를 다시 mount한다', async () => {
+  it('단일 이미지 오류에서 action만 표시하고 같은 URL로 Image를 다시 mount한다', async () => {
     await render(0, media('landscape', '가로 이미지'));
     const source = image('landscape').props.source;
 
     await act(async () => image('landscape').props.onError());
     assert.equal(rendered('Image').length, 0);
-    assert.equal(textContents().includes('가로 이미지을 불러오지 못했습니다.'), true);
+    assert.deepEqual(textContents(), ['다시 시도']);
 
     await act(async () => pressable('가로 이미지 다시 시도').props.onPress());
     assert.deepEqual(image('landscape').props.source, source);
