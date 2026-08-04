@@ -98,17 +98,6 @@ const externalErrorNames = new Set([
   'WebFingerError',
 ]);
 
-const externalErrorCodes = new Set([
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'ENETUNREACH',
-  'ENOTFOUND',
-  'ETIMEDOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_SOCKET',
-]);
-
 const defaultReporter: InboundObservabilityReporter = {
   log: (observation) => {
     const log =
@@ -215,16 +204,6 @@ export const isExternalInboundError = (error: unknown, seen = new Set<object>())
 
   const name = getErrorName(error);
   if (name && externalErrorNames.has(name)) {
-    return true;
-  }
-
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    typeof error.code === 'string' &&
-    externalErrorCodes.has(error.code)
-  ) {
     return true;
   }
 

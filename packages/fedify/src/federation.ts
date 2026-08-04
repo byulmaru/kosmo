@@ -180,7 +180,11 @@ federation
       return;
     }
 
-    const external = isExternalInboundError(error);
+    // Fedify invokes this boundary for failures that happen before a typed
+    // listener receives an Activity (for example, malformed request JSON).
+    // Typed listener errors are marked observed by withInboundObservability,
+    // so SyntaxError is external only at this unobserved pre-dispatch edge.
+    const external = error instanceof SyntaxError || isExternalInboundError(error);
     observeInbound({
       activityType: 'Unknown',
       error,

@@ -56,6 +56,7 @@ export const handleInboundUpdate = async (
       phase: 'object_lookup',
       reasonCode: 'update_object_lookup_failed',
     });
+    return;
   }
 
   if (!isActor(object) || object.id?.href !== actorUri.href) {

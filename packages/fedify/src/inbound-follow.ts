@@ -124,14 +124,16 @@ export const handleInboundFollow = async (
   });
 
   if (result.result.kind !== 'ESTABLISHED') {
-    observeInboundNoop({
-      activityType: 'Follow',
-      actorOrigin: actorUri.origin,
-      handler: 'follow',
-      objectOrigin: objectUri.origin,
-      phase: 'projection',
-      reasonCode: 'follow_policy_pending_or_rejected',
-    });
+    if (!result.created) {
+      observeInboundNoop({
+        activityType: 'Follow',
+        actorOrigin: actorUri.origin,
+        handler: 'follow',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'duplicate_pending_follow_noop',
+      });
+    }
     return;
   }
 
@@ -172,7 +174,12 @@ const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
-const handleInboundUndoAnnounce = async (activityUri: URL, actorUri: URL): Promise<boolean> => {
+type UndoAnnounceResult = 'deleted' | 'ignored' | null;
+
+const handleInboundUndoAnnounce = async (
+  activityUri: URL,
+  actorUri: URL,
+): Promise<UndoAnnounceResult> => {
   return db.transaction(async (tx) => {
     const row = await tx
       .select({
@@ -200,7 +207,7 @@ const handleInboundUndoAnnounce = async (activityUri: URL, actorUri: URL): Promi
       .then(first);
 
     if (!row) {
-      return false;
+      return null;
     }
     if (
       activityUri.origin !== actorUri.origin ||
@@ -211,11 +218,11 @@ const handleInboundUndoAnnounce = async (activityUri: URL, actorUri: URL): Promi
       row.profileState !== ProfileState.ACTIVE ||
       row.postState !== PostState.ACTIVE
     ) {
-      return true;
+      return 'ignored';
     }
 
     await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
-    return true;
+    return 'deleted';
   });
 };
 
@@ -255,16 +262,22 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     return;
   }
 
-  if (objectUri && (await handleInboundUndoAnnounce(objectUri, actorUri))) {
-    observeInboundNoop({
-      activityType: 'Undo',
-      actorOrigin: actorUri.origin,
-      handler: 'undo',
-      objectOrigin: objectUri.origin,
-      phase: 'projection',
-      reasonCode: 'announce_undo_handled_or_noop',
-    });
-    return;
+  if (objectUri) {
+    const announceResult = await handleInboundUndoAnnounce(objectUri, actorUri);
+    if (announceResult === 'deleted') {
+      return;
+    }
+    if (announceResult === 'ignored') {
+      observeInboundNoop({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'announce_undo_ignored',
+      });
+      return;
+    }
   }
 
   // Undo never materializes or dereferences an unknown actor.
@@ -313,6 +326,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       phase: 'object_lookup',
       reasonCode: 'undo_object_lookup_failed',
     });
+    return;
   }
   if (embedded instanceof Follow) {
     const objectUri = embedded.objectId;

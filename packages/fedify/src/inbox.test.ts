@@ -133,7 +133,9 @@ describe('Fedify inbox routes', () => {
     });
 
     try {
-      const error = new Error('internal projection failure');
+      const error = Object.assign(new SyntaxError('internal projection failure'), {
+        code: 'ECONNREFUSED',
+      });
       const fixture = await createInboxFixture(async () => {
         throw error;
       });

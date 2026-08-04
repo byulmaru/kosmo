@@ -138,4 +138,12 @@ describe('inbound ActivityPub observability', () => {
     markInboundErrorObserved(error);
     assert.equal(hasInboundErrorBeenObserved(error), true);
   });
+
+  test('does not infer a remote failure from a generic socket code', () => {
+    const error = Object.assign(new Error('connection refused'), {
+      code: 'ECONNREFUSED',
+    });
+
+    assert.equal(isExternalInboundError(error), false);
+  });
 });

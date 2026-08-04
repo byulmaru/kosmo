@@ -12,6 +12,7 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne, sql } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -220,6 +221,40 @@ describe('inbound Follow and Undo', () => {
     }
   });
 
+  test('logs malformed federation JSON without capturing it in Sentry', async () => {
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const response = await federation.fetch(
+        new Request(new URL('/inbox', publicOrigin), {
+          body: '{"type":',
+          headers: { 'content-type': 'application/activity+json' },
+          method: 'POST',
+        }),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 400, await response.text());
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Unknown',
+          handler: 'listener',
+          outcome: 'external_failure',
+          phase: 'listener',
+          reasonCode: 'external_listener_error',
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   test('preserves the projection for embedded Undo actor or object mismatch', async () => {
     await createFixture();
     const context = createContext({ recipient: localProfileId });
@@ -315,6 +350,84 @@ describe('inbound Follow and Undo', () => {
     );
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
+  });
+
+  test('does not log a newly created pending Follow as a noop', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: null }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+
+      assert.deepEqual(logs, []);
+    } finally {
+      restore();
+    }
+  });
+
+  test('logs an existing pending Follow as a noop', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+      await handleInboundFollow(createContext({ recipient: null }), follow);
+      await handleInboundFollow(createContext({ recipient: null }), follow);
+
+      assert.equal(logs.length, 1);
+      assert.deepEqual(logs[0], {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_pending_follow_noop',
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test('logs an object-less Undo lookup failure once and returns', async () => {
+    await createFixture();
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundUndo(
+        createContext({ recipient: localProfileId }),
+        new Undo({ actor: remoteActorUri }),
+      );
+
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Undo',
+          actorOrigin: remoteActorUri.origin,
+          handler: 'undo',
+          objectOrigin: undefined,
+          outcome: 'external_failure',
+          phase: 'object_lookup',
+          reasonCode: 'undo_object_lookup_failed',
+        },
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test('keeps inbound Follow successful when Notification creation fails', async () => {

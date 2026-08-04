@@ -76,3 +76,21 @@ production personal/shared inbox listener가 대표 외부 실패를 로그 전�
 
 - [x] 3.1 federation listener와 Web BFF 기존 Sentry callback을 좁은 seam으로 연결한다.
 - [x] 3.2 대표 listener integration 및 package/runtime focused tests와 typecheck를 통과시킨다.
+
+## 4. PROD-634 review-fix verification
+
+**Authority / Provenance**
+
+- `PROD-634`
+- `docs/operations/sentry.md`
+
+**Deliverable**
+
+리뷰에서 확인된 관측 경계·no-op 분류 회귀를 기존 계약을 바꾸지 않고 검증한다.
+
+**Verification**
+
+- [x] 4.1 malformed/pre-dispatch JSON과 typed listener 오류의 Sentry 경계, 명시적 remote error 분류를
+      회귀 테스트로 검증한다.
+- [x] 4.2 Update/Undo object lookup 조기 반환, Announce Undo 삭제 결과와 pending Follow 생성 여부의
+      로그 의미를 회귀 테스트로 검증한다.
