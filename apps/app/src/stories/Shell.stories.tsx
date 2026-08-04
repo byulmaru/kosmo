@@ -5,6 +5,7 @@ import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import {
@@ -209,17 +210,15 @@ function GuardedProfileSwitcherStory() {
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
       <ProfileSwitcherStory />
-      <Pressable
-        accessibilityRole="button"
-        disabled={!pending}
-        onPress={() => {
+      <ProfileEditDiscardDialog
+        onContinue={() => setPending(null)}
+        onDiscard={() => {
           const action = pending;
           setPending(null);
           action?.();
         }}
-      >
-        <Text>버리기</Text>
-      </Pressable>
+        visible={pending !== null}
+      />
     </NavigationGuardProvider>
   );
 }
@@ -913,17 +912,65 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(trigger);
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     await userEvent.click(within(list).getAllByRole('button')[1]!);
     expect(trackAnalytics).not.toHaveBeenCalled();
 
-    await userEvent.click(canvas.getByRole('button', { name: '버리기' }));
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
     await waitFor(() =>
       expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
         selected_profile_id: secondProfile.id,
       }),
     );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['프로필을 전환할 수 없습니다.'],
+      mutationResponse: {
+        selectProfile: {
+          profile: query.currentSession.selectedProfile,
+          session: { id: 'session-story', selectedProfile: query.currentSession.selectedProfile },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
+
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 전환하지 못했습니다.',
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(pickerRegion).toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <GuardedProfileSwitcherStory />,
 };
@@ -1054,6 +1101,73 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherEscapeContinueEditingPreservesDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const body = within(ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await userEvent.keyboard('{Escape}');
+    expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
+
+    await body.findByRole('dialog', { name: '변경사항을 버릴까요?' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(
+        ownerDocument.querySelector('[aria-label="변경사항을 버릴까요?"][aria-modal="true"]'),
+      ).toBeNull(),
+    );
+    expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherApprovedCreateGraphQLErrorPreservesDraft: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['이미 사용 중인 핸들입니다.'],
+      mutationResponse: {
+        createProfile: { account: query.me, profile: secondProfile },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(pickerRegion).toBeVisible();
+    expect(input).toHaveValue('kept_handle');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
 };
 
 const universalParameters = {
