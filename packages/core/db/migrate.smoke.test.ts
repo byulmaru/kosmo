@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
 import drizzleConfig from '../drizzle.config';
 
@@ -18,12 +17,8 @@ const repositoryRoot = join(packageRoot, '../..');
 const migrationsRoot = drizzleConfig.out;
 const migrationCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
-const migrationNames = (await readdir(migrationsRoot, { withFileTypes: true }))
-  .filter(
-    (entry) => entry.isDirectory() && existsSync(join(migrationsRoot, entry.name, 'migration.sql')),
-  )
-  .map((entry) => entry.name)
-  .sort((a, b) => a.localeCompare(b));
+const localMigrations = readMigrationFiles({ migrationsFolder: migrationsRoot });
+const migrationNames = localMigrations.map(({ name }) => name);
 
 assert.ok(migrationNames.length > 0, 'The repository must contain Drizzle migrations.');
 
@@ -35,34 +30,66 @@ assert.equal(
   formatFailure('blank database migration replay was signalled', firstRun),
 );
 
-// Pending-suffix retry is covered by migrate.test.ts; this process smoke stays focused on the CLI boundary.
-const secondRun = runMigrationEntrypoint();
-assert.equal(secondRun.status, 0, formatFailure('migration no-op rerun failed', secondRun));
-assert.equal(
-  secondRun.signal,
-  null,
-  formatFailure('migration no-op rerun was signalled', secondRun),
-);
-
 const sql = postgres(databaseUrl, { max: 1 });
 const { schema: migrationsSchema, table: migrationsTable } = drizzleConfig.migrations;
+type MigrationHistoryRow = {
+  id: number;
+  name: string | null;
+  hash: string;
+  createdAt: string;
+  appliedAt: string | null;
+};
+const readHistory = () => sql<MigrationHistoryRow[]>`
+  SELECT id, name, hash, created_at::text AS "createdAt", applied_at::text AS "appliedAt"
+  FROM ${sql(migrationsSchema)}.${sql(migrationsTable)}
+  ORDER BY id ASC
+`;
 
 try {
-  const history = await sql<{ name: string | null }[]>`
-    SELECT name
-    FROM ${sql(migrationsSchema)}.${sql(migrationsTable)}
-    ORDER BY id ASC
-  `;
+  const freshHistory = await readHistory();
 
   assert.equal(
-    history.length,
+    freshHistory.length,
     migrationNames.length,
     'Migration history row count must match local files.',
   );
   assert.deepEqual(
-    history.map(({ name }) => name),
+    freshHistory.map(({ name }) => name),
     migrationNames,
-    'Migration history must contain the complete local migration prefix in order.',
+    'Fresh migration history must contain all local migration names in version-control order.',
+  );
+  // Reverse the disposable fixture's history IDs to model a parallel-branch
+  // apply order while preserving each migration's name, hash, and timestamps.
+  await sql`UPDATE ${sql(migrationsSchema)}.${sql(migrationsTable)} SET id = -id`;
+  const nonlinearHistory = await readHistory();
+  assert.notDeepEqual(
+    nonlinearHistory.map(({ name }) => name),
+    freshHistory.map(({ name }) => name),
+    'Smoke fixture must reorder history into a non-linear order.',
+  );
+  assert.deepEqual(
+    [...nonlinearHistory].sort((a, b) => a.name!.localeCompare(b.name!)).map(({ name }) => name),
+    migrationNames,
+    'Non-linear history must preserve the complete local name set.',
+  );
+
+  const secondRun = runMigrationEntrypoint();
+  assert.equal(
+    secondRun.status,
+    0,
+    formatFailure('non-linear history no-op rerun failed', secondRun),
+  );
+  assert.equal(
+    secondRun.signal,
+    null,
+    formatFailure('non-linear history no-op rerun was signalled', secondRun),
+  );
+
+  const historyAfterNoop = await readHistory();
+  assert.deepEqual(
+    historyAfterNoop,
+    nonlinearHistory,
+    'Non-linear no-op rerun must not change migration history.',
   );
 
   const objects = await sql<{ objectName: string | null }[]>`
