@@ -1,6 +1,7 @@
 import { graphql, useFragment } from 'react-relay';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { PostBody_post$key } from './__generated__/PostBody_post.graphql';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostBodyFragment = graphql`
   fragment PostBody_post on Post {
@@ -22,11 +23,15 @@ export function PostBody({
   interactive = true,
   post: postKey,
   onBodyPress,
+  onMediaOpen,
+  onMediaUnavailable,
   size = 'md',
 }: {
   interactive?: boolean;
   post: PostBody_post$key;
   onBodyPress?: () => void;
+  onMediaOpen?: PostMediaOpenHandler;
+  onMediaUnavailable?: () => void;
   size?: 'md' | 'lg';
 }) {
   const post = useFragment(PostBodyFragment, postKey);
@@ -49,6 +54,8 @@ export function PostBody({
         })) ?? null
       }
       onBodyPress={onBodyPress}
+      onMediaOpen={onMediaOpen}
+      onMediaUnavailable={onMediaUnavailable}
       size={size}
     />
   );

@@ -1,5 +1,5 @@
 import { Link, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,6 +10,12 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { PostMediaViewer } from './PostMediaViewer';
+import {
+  createPostMediaViewerSession,
+  focusPostMediaViewerTarget,
+  reconcilePostMediaViewerSession,
+} from './postMediaViewerSession';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -17,6 +23,8 @@ import { getReplyProcessingState } from './replySurface';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostMediaOpenHandler } from './PostMediaImage';
+import type { PostMediaViewerSession } from './postMediaViewerSession';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
@@ -24,13 +32,20 @@ const PostListRowFragment = graphql`
     id
     createdAt
     content {
+      id
       bodyText
+      media {
+        id
+        altText
+        url
+      }
     }
     profile {
       avatar {
         id
         url
       }
+      id
       handle
       relativeHandle
       displayName
@@ -46,8 +61,14 @@ const PostListItemFragment = graphql`
     id
     createdAt
     content {
+      id
       bodyText
       document
+      media {
+        id
+        altText
+        url
+      }
     }
     profile {
       avatar {
@@ -95,12 +116,17 @@ export function PostListItem({
 }) {
   const theme = useTheme();
   const [deleted, setDeleted] = useState(false);
+  const [quoteViewerSession, setQuoteViewerSession] = useState<PostMediaViewerSession | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
   const replyBinding = usePostReplyBinding(post.id);
-  const onDeleted = useCallback(() => setDeleted(true), []);
+  const onDeleted = useCallback(() => {
+    setQuoteViewerSession(null);
+    setDeleted(true);
+  }, []);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
+  const quoteSurfaceRef = useRef<View>(null);
   const reply = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -141,6 +167,54 @@ export function PostListItem({
     ) : (
       replySurface
     );
+  const quoteContent = post.content;
+  const quoteViewerIdentity = quoteContent
+    ? `${post.profile.id}:${post.id}:${quoteContent.id}`
+    : '';
+  const quoteViewerMedia =
+    quoteContent?.media?.map(({ altText, id, url }) => ({
+      altText: altText ?? null,
+      id,
+      url: url ?? null,
+    })) ?? null;
+  const activeQuoteViewerSession = reconcilePostMediaViewerSession(
+    quoteViewerSession,
+    quoteViewerIdentity,
+    Boolean(quoteViewerMedia?.length),
+  );
+  const closeQuoteViewer = useCallback(() => setQuoteViewerSession(null), []);
+  const handleQuoteMediaUnavailable = useCallback(() => {
+    if (quoteViewerSession) {
+      setQuoteViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(quoteSurfaceRef));
+    }
+  }, [quoteViewerSession]);
+  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      if (quoteViewerIdentity) {
+        setQuoteViewerSession(
+          createPostMediaViewerSession(quoteViewerIdentity, selectedIndex, originControl),
+        );
+      }
+    },
+    [quoteViewerIdentity],
+  );
+  const quoteViewerReply = reply
+    ? {
+        ...reply,
+        controlRef: undefined,
+        onPress: () => {
+          closeQuoteViewer();
+          requestAnimationFrame(() => reply.onPress());
+        },
+      }
+    : undefined;
+  useEffect(() => {
+    if (quoteViewerSession && !activeQuoteViewerSession) {
+      setQuoteViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(quoteSurfaceRef));
+    }
+  }, [activeQuoteViewerSession, quoteViewerSession]);
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
@@ -204,7 +278,11 @@ export function PostListItem({
   }
 
   const presentationPost: PostSourcePresentationData = {
-    content: { bodyText: post.content.bodyText, document: post.content.document },
+    content: {
+      bodyText: post.content.bodyText,
+      document: post.content.document,
+      media: quoteViewerMedia,
+    },
     createdAt: post.createdAt,
     id: post.id,
     profile: {
@@ -231,7 +309,7 @@ export function PostListItem({
 
   return (
     <>
-      <View style={[...cardStyle, styles.quoteRow]}>
+      <View ref={quoteSurfaceRef} style={[...cardStyle, styles.quoteRow]} tabIndex={-1}>
         <Link asChild href={profileHref}>
           <Pressable
             aria-hidden
@@ -251,6 +329,8 @@ export function PostListItem({
         </Link>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
+            onMediaOpen={handleQuoteMediaOpen}
+            onMediaUnavailable={handleQuoteMediaUnavailable}
             post={presentationPost}
             showPostAvatar={false}
             sourcePreviewStyle={styles.quoteSourcePreview}
@@ -263,6 +343,30 @@ export function PostListItem({
             socialActionTarget={post.actionSurface!}
           />
         </View>
+        {activeQuoteViewerSession && quoteContent && quoteViewerMedia ? (
+          <PostMediaViewer
+            actionBar={
+              <PostActionSurface
+                onDeleted={onDeleted}
+                reactionSummaryStyle={styles.viewerReactionSummary}
+                reply={quoteViewerReply}
+                socialActionTarget={post.actionSurface!}
+              />
+            }
+            bodyText={quoteContent.bodyText}
+            contentId={quoteContent.id}
+            fallbackFocus={quoteSurfaceRef}
+            media={quoteViewerMedia}
+            onClose={closeQuoteViewer}
+            originControl={activeQuoteViewerSession.originControl}
+            profile={{
+              avatarUrl: post.profile.avatar?.url ?? null,
+              displayName: post.profile.displayName,
+              handle: post.profile.handle,
+            }}
+            selectedIndex={activeQuoteViewerSession.selectedIndex}
+          />
+        ) : null}
       </View>
       {presentedReplySurface}
     </>
@@ -281,11 +385,63 @@ function PostListRow({
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
+  const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
+  const surfaceRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const content = post.content;
+  const viewerIdentity = content ? `${post.profile.id}:${post.id}:${content.id}` : '';
+  const viewerMedia =
+    content?.media?.map(({ altText, id, url }) => ({
+      altText: altText ?? null,
+      id,
+      url: url ?? null,
+    })) ?? null;
+  const activeViewerSession = reconcilePostMediaViewerSession(
+    viewerSession,
+    viewerIdentity,
+    Boolean(viewerMedia?.length),
+  );
+  const closeViewer = useCallback(() => setViewerSession(null), []);
+  const handleMediaUnavailable = useCallback(() => {
+    if (viewerSession) {
+      setViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
+    }
+  }, [viewerSession]);
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      if (viewerIdentity) {
+        setViewerSession(
+          createPostMediaViewerSession(viewerIdentity, selectedIndex, originControl),
+        );
+      }
+    },
+    [viewerIdentity],
+  );
+  const handleDeleted = useCallback(() => {
+    closeViewer();
+    onDeleted();
+  }, [closeViewer, onDeleted]);
+  const viewerReply = reply
+    ? {
+        ...reply,
+        controlRef: undefined,
+        onPress: () => {
+          closeViewer();
+          requestAnimationFrame(() => reply.onPress());
+        },
+      }
+    : undefined;
+  useEffect(() => {
+    if (viewerSession && !activeViewerSession) {
+      setViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
+    }
+  }, [activeViewerSession, viewerSession]);
 
   return (
-    <View style={styles.standardRow} testID="post-list-standard-row">
+    <View ref={surfaceRef} style={styles.standardRow} tabIndex={-1} testID="post-list-standard-row">
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -316,17 +472,46 @@ function PostListRow({
         </View>
         {post.content ? (
           <View style={styles.bodyLink}>
-            <PostBody onBodyPress={() => router.push(detailHref)} post={post} />
+            <PostBody
+              onBodyPress={() => router.push(detailHref)}
+              onMediaOpen={handleMediaOpen}
+              onMediaUnavailable={handleMediaUnavailable}
+              post={post}
+            />
           </View>
         ) : null}
         <PostActionSurface
           actionBarStyle={styles.actionBarSlot}
-          onDeleted={onDeleted}
+          onDeleted={handleDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}
         />
       </View>
+      {activeViewerSession && content && viewerMedia ? (
+        <PostMediaViewer
+          actionBar={
+            <PostActionSurface
+              onDeleted={handleDeleted}
+              reactionSummaryStyle={styles.viewerReactionSummary}
+              reply={viewerReply}
+              socialActionTarget={post.actionSurface!}
+            />
+          }
+          bodyText={content.bodyText}
+          contentId={content.id}
+          fallbackFocus={surfaceRef}
+          media={viewerMedia}
+          onClose={closeViewer}
+          originControl={activeViewerSession.originControl}
+          profile={{
+            avatarUrl: post.profile.avatar?.url ?? null,
+            displayName: post.profile.displayName,
+            handle: post.profile.handle,
+          }}
+          selectedIndex={activeViewerSession.selectedIndex}
+        />
+      ) : null}
     </View>
   );
 }
@@ -373,6 +558,7 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
+  viewerReactionSummary: { display: 'none' },
   sourcePresentation: { flex: 1, minWidth: 0 },
   repostAttribution: {
     alignItems: 'center',

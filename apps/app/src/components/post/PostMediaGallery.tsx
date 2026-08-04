@@ -1,24 +1,34 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostMediaImage } from './PostMediaImage';
 import type { ReactNode } from 'react';
-import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 export type { PostMediaItem } from './PostMediaImage';
 
 export function PostMediaGallery({
   interactive = true,
   media,
+  onMediaOpen,
+  onMediaUnavailable,
   sensitive,
 }: {
   readonly interactive?: boolean;
   readonly media: ReadonlyArray<PostMediaItem> | null;
+  readonly onMediaOpen?: PostMediaOpenHandler;
+  readonly onMediaUnavailable?: () => void;
   readonly sensitive: boolean;
 }) {
   const theme = useTheme();
   const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    if (interactive && sensitive && !revealed) {
+      onMediaUnavailable?.();
+    }
+  }, [interactive, onMediaUnavailable, revealed, sensitive]);
 
   if (media === null) {
     return (
@@ -54,10 +64,22 @@ export function PostMediaGallery({
             style={tileStyle(items.length)}
             testID={`post-media-tile-${items.length}-${index}`}
           >
-            <PostMediaImage fill index={index} interactive={interactive} item={item} />
+            <PostMediaImage
+              fill
+              index={index}
+              interactive={interactive}
+              item={item}
+              onOpen={interactive ? onMediaOpen : undefined}
+            />
           </View>
         ) : (
-          <PostMediaImage index={index} interactive={interactive} item={item} key={item.id} />
+          <PostMediaImage
+            index={index}
+            interactive={interactive}
+            item={item}
+            key={item.id}
+            onOpen={interactive ? onMediaOpen : undefined}
+          />
         ),
       )}
     </View>

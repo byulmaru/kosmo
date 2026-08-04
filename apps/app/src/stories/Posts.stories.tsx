@@ -9,6 +9,7 @@ import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { startWebLogin } from '@/auth/webLogin';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
@@ -16,6 +17,7 @@ import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewer } from '@/components/post/PostMediaViewer';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
@@ -409,6 +411,18 @@ const quotePost = {
   repostCount: 3,
   viewerRepost: null,
 };
+const mediaViewerQuotePost = {
+  ...post({
+    bodyText: `${longBody}\n${longBody}`,
+    id: 'post-media-viewer-quote',
+    media: fourMediaPost.content?.media ?? [],
+    profile: repostAuthor,
+    reactionCounts: [{ count: 6, type: '🌌' }],
+    repostSource: sourcePost,
+  }),
+  repostCount: 5,
+  viewerRepost: null,
+};
 const pureRepostOfQuote = post({
   bodyText: null,
   id: 'post-repost-of-quote',
@@ -660,6 +674,7 @@ const storyPosts = [
   pureRepost,
   longPureRepost,
   quotePost,
+  mediaViewerQuotePost,
   replyQuotePost,
   quoteWithoutSource,
   invalidContentlessReplySource,
@@ -723,6 +738,7 @@ const PostsStoriesQuery = graphql`
           id
         }
         ...PostBody_post @alias(as: "body")
+        ...PostActionSurface_post @alias(as: "actionSurface")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
         ...ReplyComposerSurface_parent @alias(as: "replySurface")
@@ -2118,6 +2134,66 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
   );
 }
 
+function DirectPostMediaViewerStory({
+  failCurrentImage = false,
+  postId,
+  selectedIndex,
+}: {
+  failCurrentImage?: boolean;
+  postId: string;
+  selectedIndex: number;
+}) {
+  const { posts } = usePostsStoryData();
+  const node = requirePostById(posts, postId);
+  const storyPost = requireStoryPostById(storyPosts, postId);
+  const [open, setOpen] = useState(true);
+  const originRef = useRef<View>(null);
+  const content = storyPost.content;
+  if (!content?.media?.length) {
+    throw new Error(`Direct Post Media Viewer fixture ${postId} needs Media.`);
+  }
+  const media = content.media.map((item, index) => ({
+    altText: item.altText,
+    id: item.id,
+    url: failCurrentImage && index === selectedIndex ? 'data:image/png;base64,not-valid' : item.url,
+  }));
+
+  return (
+    <Catalog>
+      <Pressable
+        accessibilityLabel="이미지 뷰어 다시 열기"
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        ref={originRef}
+      >
+        <Text>이미지 뷰어 다시 열기</Text>
+      </Pressable>
+      {open ? (
+        <PostMediaViewer
+          actionBar={
+            <PostActionSurface
+              reactionSummaryStyle={{ display: 'none' }}
+              socialActionTarget={requireFragment(node.actionSurface, 'viewer action surface')}
+            />
+          }
+          bodyText={content.bodyText}
+          contentId={content.id}
+          fallbackFocus={originRef}
+          media={media}
+          onClose={() => setOpen(false)}
+          originControl={originRef}
+          profile={{
+            avatarUrl: storyPost.profile.avatar?.url ?? null,
+            displayName: storyPost.profile.displayName,
+            handle: storyPost.profile.handle,
+          }}
+          selectedIndex={selectedIndex}
+        />
+      ) : null}
+    </Catalog>
+  );
+}
+
 function StoryPathname({ testID }: { testID: string }) {
   return (
     <Text style={{ display: 'none' }} testID={testID}>
@@ -3444,6 +3520,130 @@ export const OrdinaryPost: Story = {
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
   },
   render: () => <ProductionPostListItemStory postId="short" />,
+};
+
+export const PostMediaViewerCompact: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const origin = canvas.getByRole('button', {
+      name: '2번째 첨부 이미지 크게 보기',
+    });
+    origin.focus();
+    await userEvent.click(origin);
+
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus();
+    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({
+      flexDirection: 'column',
+    });
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
+      'aria-label',
+      '2번째 첨부 이미지',
+    );
+    const actionBar = viewer.getByRole('toolbar', { name: '액션 바' });
+    expect(within(actionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('5');
+    expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
+
+    await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
+    expect(viewer.getByTestId('post-media-viewer-body-scroll')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(origin).toHaveFocus();
+
+    await userEvent.click(origin);
+    await screen.findByRole('dialog');
+    await userEvent.click(screen.getByTestId('post-media-viewer-backdrop-dismiss'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(origin).toHaveFocus();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWide: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '1번째 순서 이미지 크게 보기' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
+    const detailWidth = viewer
+      .getByTestId('post-media-viewer-detail')
+      .getBoundingClientRect().width;
+    expect(detailWidth).toBeGreaterThanOrEqual(320);
+    expect(detailWidth).toBeLessThanOrEqual(420);
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
+    await userEvent.click(viewer.getByRole('button', { name: '다음 이미지' }));
+    await userEvent.click(viewer.getByRole('button', { name: '다음 이미지' }));
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4');
+    expect(viewer.getByRole('button', { name: '다음 이미지' })).toBeDisabled();
+
+    const actionBar = viewer.getByRole('toolbar', { name: '액션 바' });
+    await userEvent.click(within(actionBar).getByRole('button', { name: '재게시' }));
+    expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+    expect(screen.getByRole('dialog')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+    expect(screen.getByRole('dialog')).toBeVisible();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerSingle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: '회색 배경의 첫 번째 첨부 이미지 크게 보기',
+      }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
+      'aria-label',
+      '회색 배경의 첫 번째 첨부 이미지',
+    );
+    expect(viewer.queryByTestId('post-media-viewer-counter')).toBeNull();
+    expect(viewer.queryByRole('button', { name: '이전 이미지' })).toBeNull();
+    expect(viewer.queryByRole('button', { name: '다음 이미지' })).toBeNull();
+    expect(viewer.getByTestId('post-media-viewer-position')).toHaveTextContent('1 / 1');
+  },
+  render: () => <ProductionPostListItemStory postId="media-text" />,
+};
+
+export const PostMediaViewerLoadingAndError: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('3 / 4');
+    expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
+    const retry = await viewer.findByRole('button', { name: '3번째 순서 이미지 다시 시도' });
+    expect(retry).toBeVisible();
+    expect(dialog.textContent).not.toContain('data:image');
+    await userEvent.click(retry);
+    await expect(
+      viewer.findByRole('button', { name: '3번째 순서 이미지 다시 시도' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => (
+    <DirectPostMediaViewerStory
+      failCurrentImage
+      postId="post-media-viewer-quote"
+      selectedIndex={2}
+    />
+  ),
 };
 
 export const InvalidContentlessReplySource: Story = {

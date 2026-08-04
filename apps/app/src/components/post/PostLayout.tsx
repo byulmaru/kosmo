@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,11 +10,20 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { PostMediaViewer } from './PostMediaViewer';
+import {
+  createPostMediaViewerSession,
+  focusPostMediaViewerTarget,
+  reconcilePostMediaViewerSession,
+} from './postMediaViewerSession';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
+import type { PostActionBarProps } from './PostActionBar';
+import type { PostMediaOpenHandler } from './PostMediaImage';
+import type { PostMediaViewerSession } from './postMediaViewerSession';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
@@ -23,7 +32,13 @@ const PostLayoutFragment = graphql`
     createdAt
     visibility
     content {
+      id
       bodyText
+      media {
+        id
+        altText
+        url
+      }
     }
     profile {
       avatar {
@@ -79,13 +94,83 @@ export function PostLayout({
 }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
+  const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
   const replyBinding = usePostReplyBinding(post.id);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
+  const surfaceRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
+  const content = post.content;
+  const viewerIdentity = content ? `${post.profile.id}:${post.id}:${content.id}` : '';
+  const viewerMedia =
+    content?.media?.map(({ altText, id, url }) => ({
+      altText: altText ?? null,
+      id,
+      url: url ?? null,
+    })) ?? null;
+  const activeViewerSession = reconcilePostMediaViewerSession(
+    viewerSession,
+    viewerIdentity,
+    Boolean(viewerMedia?.length),
+  );
+  const closeViewer = useCallback(() => setViewerSession(null), []);
+  const handleMediaUnavailable = useCallback(() => {
+    if (viewerSession) {
+      setViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
+    }
+  }, [viewerSession]);
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      if (viewerIdentity) {
+        setViewerSession(
+          createPostMediaViewerSession(viewerIdentity, selectedIndex, originControl),
+        );
+      }
+    },
+    [viewerIdentity],
+  );
+  const handleDeleted = useCallback(() => {
+    closeViewer();
+    onDeleted?.();
+  }, [closeViewer, onDeleted]);
+  const reply: PostActionBarProps['reply'] = replyBinding
+    ? {
+        accessibilityLabel: '답글',
+        controlRef: replyTriggerRef,
+        expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+        onPress: () => {
+          if (replyAuthentication.execution.kind === 'resolution-required') {
+            replyAuthentication.resolve(replyAuthentication.execution.reason);
+          } else if (replyAuthentication.execution.kind === 'enabled') {
+            replyBinding.onPress();
+          }
+        },
+        processing: getReplyProcessingState(
+          replyAuthentication.execution,
+          Boolean(replyBinding.profile),
+        ),
+      }
+    : undefined;
+  const viewerReply = reply
+    ? {
+        ...reply,
+        controlRef: undefined,
+        onPress: () => {
+          closeViewer();
+          requestAnimationFrame(() => reply.onPress());
+        },
+      }
+    : undefined;
+  useEffect(() => {
+    if (viewerSession && !activeViewerSession) {
+      setViewerSession(null);
+      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
+    }
+  }, [activeViewerSession, viewerSession]);
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -103,7 +188,7 @@ export function PostLayout({
     : null;
 
   return (
-    <View style={styles.root}>
+    <View ref={surfaceRef} style={styles.root} tabIndex={-1}>
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -124,7 +209,12 @@ export function PostLayout({
       <View style={styles.content}>
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
-          <PostBody post={post} size="lg" />
+          <PostBody
+            onMediaOpen={handleMediaOpen}
+            onMediaUnavailable={handleMediaUnavailable}
+            post={post}
+            size="lg"
+          />
           {presentationSource ? (
             <PostSourcePreview source={presentationSource} style={styles.source} />
           ) : null}
@@ -133,29 +223,9 @@ export function PostLayout({
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
           <PostActionSurface
-            onDeleted={onDeleted}
+            onDeleted={handleDeleted}
             reactionSummaryStyle={styles.reactionSummary}
-            reply={
-              replyBinding
-                ? {
-                    accessibilityLabel: '답글',
-                    controlRef: replyTriggerRef,
-                    expanded:
-                      replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
-                    onPress: () => {
-                      if (replyAuthentication.execution.kind === 'resolution-required') {
-                        replyAuthentication.resolve(replyAuthentication.execution.reason);
-                      } else if (replyAuthentication.execution.kind === 'enabled') {
-                        replyBinding.onPress();
-                      }
-                    },
-                    processing: getReplyProcessingState(
-                      replyAuthentication.execution,
-                      Boolean(replyBinding.profile),
-                    ),
-                  }
-                : undefined
-            }
+            reply={reply}
             socialActionTarget={socialActionTarget!}
           />
           {replyBinding?.expanded &&
@@ -178,6 +248,30 @@ export function PostLayout({
           ) : null}
         </View>
       </View>
+      {activeViewerSession && content && viewerMedia ? (
+        <PostMediaViewer
+          actionBar={
+            <PostActionSurface
+              onDeleted={handleDeleted}
+              reactionSummaryStyle={styles.viewerReactionSummary}
+              reply={viewerReply}
+              socialActionTarget={socialActionTarget!}
+            />
+          }
+          bodyText={content.bodyText}
+          contentId={content.id}
+          fallbackFocus={surfaceRef}
+          media={viewerMedia}
+          onClose={closeViewer}
+          originControl={activeViewerSession.originControl}
+          profile={{
+            avatarUrl: post.profile.avatar?.url ?? null,
+            displayName: post.profile.displayName,
+            handle: post.profile.handle,
+          }}
+          selectedIndex={activeViewerSession.selectedIndex}
+        />
+      ) : null}
     </View>
   );
 }
@@ -191,4 +285,5 @@ const styles = StyleSheet.create({
   reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
+  viewerReactionSummary: { display: 'none' },
 });

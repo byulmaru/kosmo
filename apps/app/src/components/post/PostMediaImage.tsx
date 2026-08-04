@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import type { ImageLoadEvent } from 'react-native';
+import type { RefObject } from 'react';
+import type { GestureResponderEvent, ImageLoadEvent, View as NativeView } from 'react-native';
 
 export type PostMediaItem = {
   readonly altText: string | null;
@@ -10,18 +11,26 @@ export type PostMediaItem = {
   readonly url: string | null;
 };
 
+export type PostMediaOpenHandler = (
+  index: number,
+  originControl: RefObject<NativeView | null>,
+) => void;
+
 export function PostMediaImage({
   fill = false,
   index,
   interactive = true,
   item,
+  onOpen,
 }: {
   readonly fill?: boolean;
   readonly index: number;
   readonly interactive?: boolean;
   readonly item: PostMediaItem;
+  readonly onOpen?: PostMediaOpenHandler;
 }) {
   const theme = useTheme();
+  const triggerRef = useRef<NativeView>(null);
   const [generation, setGeneration] = useState(0);
   const [aspectRatio, setAspectRatio] = useState(1);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -119,7 +128,7 @@ export function PostMediaImage({
     );
   }
 
-  return (
+  const imageFrame = (
     <View
       style={[
         styles.imageFrame,
@@ -129,6 +138,7 @@ export function PostMediaImage({
       testID={`post-media-frame-${item.id}`}
     >
       <Image
+        accessible={!onOpen || !interactive}
         accessibilityLabel={accessibilityLabel}
         accessibilityState={{ busy: status === 'loading' }}
         key={`${item.id}:${generation}`}
@@ -142,11 +152,35 @@ export function PostMediaImage({
       />
     </View>
   );
+
+  if (!interactive || !onOpen) {
+    return imageFrame;
+  }
+
+  const handleOpen = (event: GestureResponderEvent) => {
+    event.stopPropagation();
+    onOpen(index, triggerRef);
+  };
+
+  return (
+    <Pressable
+      accessibilityLabel={`${accessibilityLabel} 크게 보기`}
+      accessibilityRole="button"
+      onPress={handleOpen}
+      ref={triggerRef}
+      style={fill ? styles.fillOpenTarget : styles.openTarget}
+      testID={`post-media-open-${item.id}`}
+    >
+      {imageFrame}
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
   imageFrame: { borderRadius: radii.md, overflow: 'hidden', width: '100%' },
   image: { height: '100%', width: '100%' },
+  openTarget: { borderRadius: radii.md, width: '100%' },
+  fillOpenTarget: { borderRadius: radii.md, height: '100%', width: '100%' },
   fallback: {
     alignItems: 'center',
     borderRadius: radii.md,

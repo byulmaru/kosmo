@@ -4,7 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
-import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -43,6 +43,7 @@ let PostMediaImage: ComponentType<{
   index: number;
   interactive?: boolean;
   item: PostMediaItem;
+  onOpen?: PostMediaOpenHandler;
 }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -76,6 +77,33 @@ describe('PostMediaImage', () => {
     await act(async () => firstOnLoad());
 
     assert.equal(image('landscape').props.onLoad, firstOnLoad);
+  });
+
+  it('interactive 정상 image tile은 viewer 목적을 알리고 선택 index만 연다', async () => {
+    let openedIndex: number | null = null;
+    let originControl: unknown;
+    let stopped = false;
+    await render(2, media('landscape', '가로 이미지'), true, true, (index, origin) => {
+      openedIndex = index;
+      originControl = origin;
+    });
+
+    const open = pressable('가로 이미지 크게 보기');
+    assert.equal(open.props.accessibilityRole, 'button');
+    await act(async () =>
+      open.props.onPress({
+        stopPropagation: () => {
+          stopped = true;
+        },
+      }),
+    );
+
+    assert.equal(openedIndex, 2);
+    assert.equal(stopped, true);
+    assert.equal(typeof originControl, 'object');
+
+    await render(2, media('landscape', '가로 이미지'), false, true, () => undefined);
+    assert.equal(rendered('Pressable').length, 0);
   });
 
   it('초기 크기 조회가 실패해도 성공한 Image load 뒤 원본 비율을 다시 조회한다', async () => {
@@ -144,12 +172,18 @@ function media(id: string, altText: string | null): PostMediaItem {
   return { altText, id, url: `https://media.example/${id}.webp` };
 }
 
-async function render(index: number, item: PostMediaItem, interactive = true, fill = false) {
+async function render(
+  index: number,
+  item: PostMediaItem,
+  interactive = true,
+  fill = false,
+  onOpen?: PostMediaOpenHandler,
+) {
   await act(async () => {
     if (renderer) {
-      renderer.update(createElement(PostMediaImage, { fill, index, interactive, item }));
+      renderer.update(createElement(PostMediaImage, { fill, index, interactive, item, onOpen }));
     } else {
-      renderer = create(createElement(PostMediaImage, { fill, index, interactive, item }));
+      renderer = create(createElement(PostMediaImage, { fill, index, interactive, item, onOpen }));
     }
   });
   assert.ok(renderer);

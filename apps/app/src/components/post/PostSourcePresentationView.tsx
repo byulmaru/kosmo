@@ -8,6 +8,7 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 export type PresentationProfile = {
   readonly avatar:
@@ -25,6 +26,7 @@ export type PresentationProfile = {
 export type PresentationContent = {
   readonly bodyText: string;
   readonly document: unknown;
+  readonly media?: ReadonlyArray<PostMediaItem> | null;
 };
 
 export type SourcePostPresentationData = {
@@ -53,10 +55,14 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 }
 
 export function PostSourcePresentationView({
+  onMediaOpen,
+  onMediaUnavailable,
   post,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
+  onMediaOpen?: PostMediaOpenHandler;
+  onMediaUnavailable?: () => void;
   post: PostSourcePresentationData;
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
@@ -99,7 +105,13 @@ export function PostSourcePresentationView({
     return (
       <View role="article" style={styles.root} testID="post-source-presentation">
         {postHeader}
-        <PostBodyPressTarget content={post.content} href={postDetailHref} testID="post-body" />
+        <PostBodyPressTarget
+          content={post.content}
+          href={postDetailHref}
+          onMediaOpen={onMediaOpen}
+          onMediaUnavailable={onMediaUnavailable}
+          testID="post-body"
+        />
       </View>
     );
   }
@@ -112,7 +124,13 @@ export function PostSourcePresentationView({
   return (
     <View role="article" style={styles.root} testID="post-source-presentation">
       {postHeader}
-      <PostBodyPressTarget content={post.content} href={postDetailHref} testID="post-body" />
+      <PostBodyPressTarget
+        content={post.content}
+        href={postDetailHref}
+        onMediaOpen={onMediaOpen}
+        onMediaUnavailable={onMediaUnavailable}
+        testID="post-body"
+      />
       <PostSourcePreview source={source} style={sourcePreviewStyle} />
     </View>
   );
@@ -159,7 +177,7 @@ export function PostSourcePreview({
       </View>
       {source.content && interactive ? (
         <PostBodyPressTarget
-          content={source.content}
+          content={{ ...source.content, media: [] }}
           href={sourcePostHref}
           style={styles.sourceBody}
           testID="source-post-body"
@@ -213,11 +231,15 @@ function PresentationLink({
 function PostBodyPressTarget({
   content,
   href,
+  onMediaOpen,
+  onMediaUnavailable,
   style,
   testID,
 }: {
   content: PresentationContent;
   href: Href;
+  onMediaOpen?: PostMediaOpenHandler;
+  onMediaUnavailable?: () => void;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
@@ -235,7 +257,9 @@ function PostBodyPressTarget({
       <PostContentRenderer
         bodyText={content.bodyText}
         document={content.document}
-        media={[]}
+        media={content.media ?? []}
+        onMediaOpen={onMediaOpen}
+        onMediaUnavailable={onMediaUnavailable}
         size="md"
       />
     </Pressable>

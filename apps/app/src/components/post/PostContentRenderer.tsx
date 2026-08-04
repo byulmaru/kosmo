@@ -14,6 +14,7 @@ import type {
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextProps, TextStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
@@ -30,6 +31,8 @@ export function PostContentRenderer({
   interactive = true,
   media,
   onBodyPress,
+  onMediaOpen,
+  onMediaUnavailable,
   size = 'md',
 }: {
   bodyText: string;
@@ -37,6 +40,8 @@ export function PostContentRenderer({
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   onBodyPress?: () => void;
+  onMediaOpen?: PostMediaOpenHandler;
+  onMediaUnavailable?: () => void;
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
@@ -78,6 +83,8 @@ export function PostContentRenderer({
       <PostMediaGallery
         interactive={interactive}
         media={media}
+        onMediaOpen={onMediaOpen}
+        onMediaUnavailable={onMediaUnavailable}
         sensitive={document?.attrs?.sensitiveMedia ?? false}
       />
     </View>
