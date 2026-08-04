@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-639가 기존 Post Composer Media 첨부 계약에 Web clipboard image source를 추가할 때 지켜야 할 공용 lifecycle, Web event 범위, validation 소유권과 아직 상위 결정을 요구하는 혼합 payload 행동을 구분한다.
+이 기록은 PROD-639가 기존 Post Composer Media 첨부 계약에 Web clipboard image source를 추가할 때 지켜야 할 공용 lifecycle, Web event 범위, validation 소유권과 혼합 payload 결정의 Blocked→Active 이력을 구분한다.
 
 ## Decision Records
 
@@ -45,17 +45,29 @@
 - Decision Date: 2026-08-04
 - Decision Class: Upstream Change Required
 - Authority / Provenance: 없음.
-- Status: Blocked
+- Status: Superseded
 - Context / Problem: PROD-639는 혼합 payload에 명확한 우선순위가 필요하다고 기록하지만 이미지 첨부, 본문 텍스트 삽입 또는 둘 다 수행 중 어떤 사용자 결과를 선택하는지 정하지 않았다. 이 선택은 Post 본문과 첨부 결과를 바꾸는 제품 행동이다.
 - Decision Outcome: 현재 OpenSpec은 이미지 우선, 텍스트 우선 또는 둘 다 처리 중 어느 것도 구현 계약으로 채택하지 않는다. 혼합 payload를 만난 listener의 기본 동작 취소와 Media 추가 여부는 upstream 결정 전까지 구현하지 않는다.
 - Alternatives Considered: 이미지 우선은 clipboard text를 버리고, 텍스트 우선은 사용자가 기대한 이미지 첨부를 건너뛴다. 둘 다 처리는 clipboard가 제공한 대체 표현까지 중복 삽입할 수 있다. 현재 authority로 trade-off를 선택할 수 없다.
-- Consequences: PROD-639의 전체 완료 조건과 구현 착수는 이 결과가 상위 계약에 기록되고 승인될 때까지 막힌다. image-only와 text-only spec은 유지할 수 있지만 tasks에 혼합 payload 구현 checkbox를 추가할 수 없다.
-- Confirmation / Follow-up: PROD-639 본문 또는 계약 변경 댓글에 선택 결과와 이유를 기록하고 Issue Gate 승인을 받은 뒤, 이 record를 구체 authority가 있는 Active class로 재작성하며 specs·tasks·strict validation을 갱신한다.
+- Consequences: 이 기록이 Active인 동안 PROD-639의 전체 완료 조건과 구현 착수는 상위 계약 결정을 기다렸다.
+- Confirmation / Follow-up: 아래 `혼합 payload에서는 이미지만 첨부한다` record가 최신 PROD-639 authority로 이 기록을 대체한다.
+
+### 혼합 payload에서는 이미지만 첨부한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-639
+- Status: Active
+- Context / Problem: browser clipboard는 하나의 복사 결과를 image File과 Plain Text·링크·HTML로 함께 제공할 수 있다. 두 표현을 모두 적용하면 사용자가 의도하지 않은 본문과 이미지가 동시에 추가될 수 있다.
+- Decision Outcome: clipboard payload에 하나 이상의 image item이 있으면 지원 이미지만 현재 Composer Media 목록에 추가하고 함께 제공된 Plain Text·링크·HTML은 본문에 넣지 않는다. image item이 없을 때만 browser 기본 Plain Text·링크 paste를 유지한다.
+- Alternatives Considered: 텍스트 우선은 사용자가 붙여넣은 이미지를 첨부하지 못한다. 둘 다 처리는 clipboard의 대체 표현을 중복 반영할 수 있다. PROD-639는 이미지 첨부 결과만 선택했다.
+- Consequences: image 후보가 있는 paste event의 기본 동작을 취소하고 기존 본문과 selection을 보존해야 한다. clipboard HTML rich-text 변환은 계속 제외한다.
+- Confirmation / Follow-up: image+text/link/HTML payload에서 Media만 추가되고 본문과 selection은 바뀌지 않는지 component/E2E로 검증한다.
 
 ## Remaining Decisions
 
-- `이미지와 텍스트가 함께 있는 clipboard payload 결과`가 Blocked 상태다.
+- 없음.
 
 ## Superseded Decisions
 
-- 없음.
+- `이미지와 텍스트가 함께 있는 clipboard payload 결과`의 Upstream Change Required 기록은 최신 PROD-639에 근거한 `혼합 payload에서는 이미지만 첨부한다` Active Derived Contract로 대체됐다.

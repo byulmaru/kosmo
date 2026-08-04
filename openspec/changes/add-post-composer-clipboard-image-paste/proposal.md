@@ -6,9 +6,9 @@ Web Post Composer는 갤러리에서 고른 이미지를 기존 Media 업로드 
 
 - Web Composer의 본문 입력에서 clipboard `paste`를 관찰하고 지원 가능한 image item을 현재 남은 Media 슬롯 순서대로 받는다.
 - 붙여넣은 이미지를 기존 `issueMediaUploadUrl` → 제한 URL `PUT` → `completeMediaUpload` lifecycle과 preview·실패·재시도·제거·제출 상태에 연결한다.
+- clipboard payload에 하나 이상의 image item이 있으면 지원 이미지만 첨부하고 함께 제공된 Plain Text·링크·HTML은 본문에 넣지 않는다.
 - 이미지가 없는 clipboard payload는 browser의 기본 Plain Text·링크 붙여넣기를 그대로 유지한다.
 - picker와 paste로 추가한 Media를 하나의 최대 4개 목록에서 추가 순서대로 관리하고 같은 오류·제출 계약을 적용한다.
-- 이미지와 일반 텍스트가 함께 있는 clipboard payload의 결과는 PROD-639에 현재 권위가 없으므로 upstream 결정 전까지 구현 근거에서 제외한다.
 - Android·iOS clipboard 접근, 새 변환·압축·HEIC 지원, Reply 이미지 버그 수정과 clipboard HTML rich-text 변환은 추가하지 않는다.
 
 ## Authority / Provenance

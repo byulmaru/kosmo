@@ -2,7 +2,7 @@
 
 ### Requirement: Web Composer clipboard 이미지 입력
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, `docs/design/accessibility.md`, PROD-639. Web 앱은 사용자가 Media 첨부를 지원하는 Post Composer의 본문 입력에 focus한 상태에서 붙여넣은 clipboard image item을 현재 Composer Media 목록에 추가해야 하며(MUST), picker로 고른 이미지와 동일한 최대 4개·추가 순서·직접 업로드·항목 상태·제출 계약을 사용해야 한다(MUST). clipboard source를 이유로 새 MIME·크기·변환 정책이나 별도 업로드 lifecycle을 만들면 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/domain/objects/post-content.md`, `docs/design/accessibility.md`, PROD-639. Web 앱은 사용자가 Media 첨부를 지원하는 Post Composer의 본문 입력에 focus한 상태에서 붙여넣은 clipboard image item을 현재 Composer Media 목록에 추가해야 하며(MUST), picker로 고른 이미지와 동일한 최대 4개·추가 순서·직접 업로드·항목 상태·제출 계약을 사용해야 한다(MUST). clipboard payload에 하나 이상의 image item이 있으면 지원 이미지만 첨부하고 함께 제공된 Plain Text·링크·HTML을 본문에 삽입하면 안 된다(MUST NOT). clipboard source를 이유로 새 MIME·크기·변환 정책이나 별도 업로드 lifecycle을 만들면 안 된다(MUST NOT).
 
 #### Scenario: 이미지 하나를 붙여넣음
 
@@ -10,6 +10,13 @@
 - **THEN** 앱은 해당 File을 다음 Composer Media item으로 추가한다
 - **AND** local preview와 upload 중 상태를 표시한다
 - **AND** `issueMediaUploadUrl` → 제한 URL `PUT` → `completeMediaUpload` 순서로 같은 Media를 Ready로 만든다
+
+#### Scenario: 이미지와 텍스트가 함께 있는 payload를 붙여넣음
+
+- **WHEN** Web 사용자가 focus된 지원 Composer 본문 입력에 하나 이상의 image item과 Plain Text·링크 또는 HTML이 함께 있는 clipboard payload를 붙여넣는다
+- **THEN** 앱은 지원 image item만 현재 남은 Composer Media 슬롯에 추가한다
+- **AND** 함께 제공된 Plain Text·링크·HTML을 본문에 삽입하거나 rich text로 변환하지 않는다
+- **AND** 기존 본문과 selection을 변경하지 않는다
 
 #### Scenario: 여러 이미지를 남은 슬롯에 붙여넣음
 
@@ -33,7 +40,7 @@
 
 #### Scenario: 지원하는 공용 Composer Web surface
 
-- **WHEN** 일반 Post 또는 현재 공용 Post Composer Media 경계를 사용하는 다른 지원 Web surface에서 본문 입력에 image-only paste가 발생한다
+- **WHEN** 일반 Post 또는 현재 공용 Post Composer Media 경계를 사용하는 다른 지원 Web surface에서 본문 입력에 하나 이상의 image item이 있는 paste가 발생한다
 - **THEN** surface는 같은 clipboard 이미지 첨부 결과와 Media lifecycle을 제공한다
 - **AND** 이 변경만으로 Reply 전용 Media 버그나 별도 Composer 구현을 추가하지 않는다
 
