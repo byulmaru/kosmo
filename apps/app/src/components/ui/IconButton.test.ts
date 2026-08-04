@@ -44,7 +44,7 @@ type IconButtonComponent = (props: IconButtonProps) => TestElement;
 
 let IconButton: IconButtonComponent | undefined;
 let getIconButtonHitSlop:
-  | ((platform: string, visualSize: number, effectiveTargetSize: number) => number)
+  | ((renderedTargetSize: number, effectiveTargetSize: number) => number)
   | undefined;
 let getIconButtonOverlayGeometry:
   | ((
@@ -115,14 +115,11 @@ test('platform target mapping stays centralized for Web, iOS, and Android', () =
   assert.equal(getIconButtonTargetSize('windows'), 48);
 });
 
-test('hit slop preserves a larger effective region without double-expanding the platform floor', () => {
+test('hit slop preserves the requested effective region from the rendered layout box', () => {
   assert.ok(getIconButtonHitSlop, 'hit slop resolver must exist');
-  assert.equal(getIconButtonHitSlop('web', 40, 48), 4);
-  assert.equal(getIconButtonHitSlop('ios', 40, 48), 2);
-  assert.equal(getIconButtonHitSlop('android', 40, 48), 0);
-  assert.equal(getIconButtonHitSlop('web', 32, 48), 8);
-  assert.equal(getIconButtonHitSlop('ios', 32, 48), 2);
-  assert.equal(getIconButtonHitSlop('android', 32, 48), 0);
+  assert.equal(getIconButtonHitSlop(40, 48), 4);
+  assert.equal(getIconButtonHitSlop(32, 48), 8);
+  assert.equal(getIconButtonHitSlop(48, 44), 0);
 });
 
 test('overlay geometry preserves the visual inset while keeping the platform target in bounds', () => {

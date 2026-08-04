@@ -15,12 +15,9 @@ export function getIconButtonTargetSize(platform: string): number {
 }
 
 export function getIconButtonHitSlop(
-  platform: string,
-  visualSize: number,
+  renderedTargetSize: number,
   effectiveTargetSize: number,
 ): number {
-  const renderedTargetSize = Math.max(getIconButtonTargetSize(platform), visualSize);
-
   return Math.max(0, (effectiveTargetSize - renderedTargetSize) / 2);
 }
 

@@ -348,11 +348,7 @@ export function PostComposerMediaControls({
         <IconButton
           accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
           disabled={disabled || media.length >= postComposerMediaLimit}
-          hitSlop={getIconButtonHitSlop(
-            Platform.OS,
-            mediaAddVisualSize,
-            mediaActionEffectiveTargetSize,
-          )}
+          hitSlop={getIconButtonHitSlop(mediaAddVisualSize, mediaActionEffectiveTargetSize)}
           onPress={() => void selectMedia()}
           style={styles.addMediaTarget}
           visualSize={mediaAddVisualSize}
