@@ -34,6 +34,10 @@ describe('getShellLayout', () => {
       leading: 'menu',
       title: '알림',
     });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings', []), {
+      leading: 'menu',
+      title: '설정',
+    });
     assert.deepEqual(getWebMobileShellHeader(true, 390, '/@writer/post-id', postDetailSegments), {
       leading: 'back',
       title: '게시글',

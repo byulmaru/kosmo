@@ -12,7 +12,7 @@ export function getShellLayout(web: boolean, width: number) {
 
 export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
-  title: '게시글' | '글쓰기' | '알림';
+  title: '게시글' | '글쓰기' | '설정' | '알림';
 }>;
 
 export function getWebMobileShellHeader(
@@ -30,6 +30,9 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/notifications') {
     return { leading: 'menu', title: '알림' };
+  }
+  if (pathname === '/settings') {
+    return { leading: 'menu', title: '설정' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
