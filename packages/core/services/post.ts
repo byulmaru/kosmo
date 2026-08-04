@@ -508,14 +508,24 @@ export async function createPost(
         .then(firstOrThrow);
 
       if (input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch((error) => {
-          if (input.onPostCommitError) {
-            return input.onPostCommitError(error);
+        await createReplyNotification(linkedPost.id, tx).catch(async (error) => {
+          if (!input.onPostCommitError) {
+            console.error('Reply notification creation failed', {
+              error,
+              postId: linkedPost.id,
+            });
+            return;
           }
-          console.error('Reply notification creation failed', {
-            error,
-            postId: linkedPost.id,
-          });
+
+          try {
+            await input.onPostCommitError(error);
+          } catch (observerError) {
+            console.error('Reply notification creation failed', {
+              error,
+              observerError,
+              postId: linkedPost.id,
+            });
+          }
         });
       }
 

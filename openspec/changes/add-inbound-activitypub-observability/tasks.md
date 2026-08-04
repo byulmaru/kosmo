@@ -94,3 +94,5 @@ production personal/shared inbox listener가 대표 외부 실패를 로그 전�
       회귀 테스트로 검증한다.
 - [x] 4.2 Update/Undo object lookup 조기 반환, Announce Undo 삭제 결과와 pending Follow 생성 여부의
       로그 의미를 회귀 테스트로 검증한다.
+- [x] 4.3 core post-commit observer의 동기 throw/비동기 reject가 커밋된 상태와 후속 delivery를
+      중단하지 않는지 회귀 테스트로 검증한다.

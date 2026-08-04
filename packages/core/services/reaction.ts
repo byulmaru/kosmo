@@ -91,7 +91,19 @@ export const addReaction = async (
     postCommit: result.created
       ? oncePostCommit(async () => {
           await createReactionNotification(result.reaction.id).catch(async (error) => {
-            await onPostCommitError?.(error);
+            if (!onPostCommitError) {
+              return;
+            }
+
+            try {
+              await onPostCommitError(error);
+            } catch (observerError) {
+              console.error('Reaction notification creation observation failed', {
+                error,
+                observerError,
+                reactionId: result.reaction.id,
+              });
+            }
           });
 
           if (origin === 'LOCAL') {
@@ -146,13 +158,21 @@ export const deleteReaction = async (
           try {
             await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
           } catch (error) {
-            if (input.onPostCommitError) {
-              await input.onPostCommitError(error);
-            } else {
+            if (!input.onPostCommitError) {
               console.error('Failed to clean up Reaction Notification', {
                 error,
                 reactionId: reaction.id,
               });
+            } else {
+              try {
+                await input.onPostCommitError(error);
+              } catch (observerError) {
+                console.error('Reaction notification cleanup observation failed', {
+                  error,
+                  observerError,
+                  reactionId: reaction.id,
+                });
+              }
             }
           }
 

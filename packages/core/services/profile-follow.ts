@@ -180,7 +180,20 @@ export const followProfile = async ({
   if (result.created && result.result.kind === 'ESTABLISHED') {
     // Notification delivery is best-effort and must not change the committed Follow result.
     await createFollowNotification(result.result.profileFollow.id).catch(async (error) => {
-      await onPostCommitError?.(error);
+      if (!onPostCommitError) {
+        return;
+      }
+
+      try {
+        await onPostCommitError(error);
+      } catch (observerError) {
+        console.error('Follow notification creation observation failed', {
+          error,
+          observerError,
+          followeeProfileId,
+          followerProfileId,
+        });
+      }
     });
   }
 
@@ -274,7 +287,20 @@ export const unfollowProfile = async ({
     // Notification cleanup is best-effort and must not change the committed Unfollow result.
     await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId).catch(
       async (error) => {
-        await onPostCommitError?.(error);
+        if (!onPostCommitError) {
+          return;
+        }
+
+        try {
+          await onPostCommitError(error);
+        } catch (observerError) {
+          console.error('Follow notification cleanup observation failed', {
+            error,
+            observerError,
+            followeeProfileId,
+            followerProfileId,
+          });
+        }
       },
     );
   }
