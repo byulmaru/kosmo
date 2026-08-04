@@ -310,7 +310,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-277`, `PROD-372`, `PROD-541` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -330,9 +330,9 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: Read와 Unread 표시
 
 - **WHEN** Follow item의 `readAt`이 `null`이다
-- **THEN** item은 `card` 기본 배경과 접근성 Unread 상태를 제공한다
-- **AND** `readAt`이 존재하면 같은 `card` 기본 배경을 사용하고 Unread 상태를 제공하지 않는다
-- **AND** Web에서는 pointer hover 중인 item만 `surface` 배경으로 강조한다
+- **THEN** Web item은 토큰 기반의 분명한 좌측 상태선, 은은한 배경과 접근성 Unread 상태를 제공한다
+- **AND** `readAt`이 존재하면 Web item은 Unread 좌측 상태선·배경 강조·접근성 Unread 상태를 제공하지 않는다
+- **AND** Web pointer hover 중에는 기존 `surface` 배경을 사용하며 Unread item의 좌측 상태선은 유지한다
 - **AND** hover가 없는 native 화면은 Read 상태와 관계없이 `card` 기본 배경을 유지한다
 
 #### Scenario: Profile 이동과 Read side effect 분리
@@ -346,6 +346,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** Avatar 또는 본문 link activation에서 시작한 Read mutation이 `notification`과 `recipientProfile` payload로 성공한다
 - **THEN** 클라이언트는 payload가 반환한 ID를 기준으로 item의 `readAt`과 정확한 Recipient Profile의 `unreadNotificationCount`를 Relay cache에 정규화한다
+- **AND** 성공한 `readAt` 정규화로 item의 Unread 시각·접근성 상태를 제거하고 count가 0이면 기존 전역 알림 인디케이터도 제거한다
 - **AND** 현재 selected Profile을 cache target으로 다시 추론하거나 client-side count 산술, optimistic update와 성공 뒤 추가 refetch를 수행하지 않는다
 - **AND** 같은 Unread item에 대한 반복 activation 또는 동시 Read의 성공 payload는 서버가 보존한 동일 `readAt`과 일관된 visible Unread count를 반환하며, 어떤 순서로 적용되어도 같은 item/Recipient record로 수렴하고 다른 Profile cache를 변경하지 않는다
 
@@ -353,6 +354,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** navigation과 독립적으로 시작한 Read mutation이 pending이거나 실패한다
 - **THEN** 클라이언트는 navigation을 유지하고 item 또는 count cache를 보정하지 않는다
+- **AND** cached `readAt = null`인 동안 item의 Unread 시각·접근성 상태를 유지한다
 - **AND** 앱 수준 자동 retry나 오류 UI를 추가하지 않으며 이후 activation 또는 refetch에서 서버 source of truth로 수렴한다
 
 #### Scenario: Initial loading, error와 empty
@@ -511,3 +513,46 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **AND** cleanup 실패는 source Reaction을 식별할 수 있는 context와 함께 관측 가능하게 기록된다
 - **AND** 남은 Notification row는 source가 없으므로 모든 API 표면에서 숨겨진다
 - **AND** retry, cron, queue, backfill 또는 bulk cleanup은 이번 capability에 포함하지 않는다
+
+### Requirement: Selected Profile Web Notification Unread 시각 상태
+
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680` — 클라이언트는 selected Profile의 Web 알림 목록에서 visible Notification item의 Read와 Unread 상태를 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
+
+#### Scenario: Web Unread 기본 표시
+
+- **WHEN** Web 알림 목록의 visible Notification item이 `readAt = null`이고 pointer hover 중이 아니다
+- **THEN** item은 토큰 기반의 분명한 좌측 상태선과 은은한 배경으로 Unread임을 표시한다
+- **AND** 기존 접근성 Unread 설명을 함께 제공해 상태를 색만으로 전달하지 않는다
+- **AND** 텍스트, icon과 link는 배경 강조와 독립적으로 기존 가독성과 상호작용을 유지한다
+
+#### Scenario: Web Read 기본 표시
+
+- **WHEN** Web 알림 목록의 visible Notification item에 `readAt`이 존재하고 pointer hover 중이 아니다
+- **THEN** item은 Unread 좌측 상태선과 배경 강조를 표시하지 않는다
+- **AND** 접근성 Unread 설명을 제공하지 않는다
+- **AND** Read와 Unread 전환 전후에 item 콘텐츠의 수평 정렬이 움직이지 않는다
+
+#### Scenario: Web pointer hover
+
+- **WHEN** pointer가 Web 알림 목록 item 위에 있다
+- **THEN** item은 기존 `surface` hover 배경을 제공한다
+- **AND** item이 Unread이면 좌측 상태선을 유지하고 Read이면 Unread 상태선을 표시하지 않는다
+
+#### Scenario: activation Read 성공과 전역 인디케이터 수렴
+
+- **WHEN** 사용자가 Unread item의 link를 활성화하고 Read mutation이 갱신된 `notification`과 `recipientProfile` payload로 성공한다
+- **THEN** link navigation은 Read 응답과 독립적으로 즉시 진행된다
+- **AND** Relay는 payload ID를 기준으로 item의 `readAt`과 Recipient Profile의 `unreadNotificationCount`를 정규화한다
+- **AND** item의 Unread 시각·접근성 상태가 제거되고 count가 0이면 기존 전역 알림 인디케이터도 사라진다
+
+#### Scenario: activation Read pending 또는 실패
+
+- **WHEN** 사용자가 Unread item의 link를 활성화했지만 Read mutation이 pending이거나 실패한다
+- **THEN** link navigation은 유지된다
+- **AND** client는 item과 count cache를 보정하지 않으며 cached `readAt = null`인 동안 Unread 시각·접근성 상태를 유지한다
+
+#### Scenario: Native 표시 유지
+
+- **WHEN** 같은 Read 또는 Unread item을 Android나 iOS 알림 목록에서 표시한다
+- **THEN** item은 Read 상태와 관계없이 기존 `card` 기본 배경을 유지한다
+- **AND** PROD-680의 Web 좌측 상태선이나 배경 강조를 Native에 추가하지 않는다
