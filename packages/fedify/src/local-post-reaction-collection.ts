@@ -12,10 +12,11 @@ import {
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { reactionTypes, reactionTypeSchema } from '@kosmo/core/validation';
-import { and, desc, eq, inArray, isNotNull, lt, ne, or } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import { isCanonicalPostId } from './activitypub-post-uri';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
+import type { SQLWrapper } from 'drizzle-orm';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';
@@ -73,6 +74,11 @@ const parseCursor = (cursor: string | null): Cursor | null => {
 const encodeCursor = (createdAt: Temporal.Instant, id: string): string =>
   `v1:${Buffer.from(JSON.stringify({ createdAt: createdAt.toString(), id }), 'utf8').toString('base64url')}`;
 
+// Authorized write paths store normalized HTTP(S) hrefs. Keep obvious non-HTTP or malformed rows
+// out of the aggregate without materializing vocabulary objects just to count them.
+const httpUriWhere = (column: SQLWrapper) =>
+  sql`${column} ~ ${'^(https?)://[^/?#[:space:]]+([/?#].*)?$'}`;
+
 const eligibleReactionWhere = (postId: string) =>
   and(
     eq(Reactions.postId, postId),
@@ -89,6 +95,19 @@ const eligibleReactionWhere = (postId: string) =>
         ne(Instances.state, InstanceState.SUSPENDED),
         isNotNull(ActivityPubActors.uri),
         isNotNull(ActivityPubReactions.uri),
+      ),
+    ),
+  );
+
+const countableReactionWhere = (postId: string) =>
+  and(
+    eligibleReactionWhere(postId),
+    or(
+      and(eq(Instances.kind, InstanceKind.LOCAL), httpUriWhere(Instances.canonicalOrigin)),
+      and(
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        httpUriWhere(ActivityPubActors.uri),
+        httpUriWhere(ActivityPubReactions.uri),
       ),
     ),
   );
@@ -269,27 +288,16 @@ export const countLocalPostEmojiReactions = async (
   if (!note) {
     return null;
   }
-  let total = 0;
-  let after: Extract<Cursor, { kind: 'after' }> | null = null;
-  while (true) {
-    const rows = await loadReactionRows(note.id, after, PAGE_SIZE + 1);
-    if (rows.length === 0) {
-      break;
-    }
-    total += rows.reduce(
-      (count, row) => count + (projectReaction(row, note.id, note.canonicalOrigin) ? 1 : 0),
-      0,
-    );
-    if (rows.length < PAGE_SIZE + 1) {
-      break;
-    }
-    const last = rows.at(-1);
-    if (!last) {
-      break;
-    }
-    after = { kind: 'after', createdAt: last.createdAt, id: last.id };
-  }
-  return total;
+  const row = await db
+    .select({ count: count() })
+    .from(Reactions)
+    .innerJoin(Profiles, eq(Profiles.id, Reactions.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .leftJoin(ActivityPubReactions, eq(ActivityPubReactions.reactionId, Reactions.id))
+    .where(countableReactionWhere(note.id))
+    .then(first);
+  return row?.count ?? 0;
 };
 
 export const firstLocalPostEmojiReactionsCursor = async (
