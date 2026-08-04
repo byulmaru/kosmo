@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, describe, it, mock } from 'node:test';
 import { createRequire } from 'node:module';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType } from 'react';
@@ -20,7 +20,8 @@ const canOpenURL = mock.fn(async () => {
   }
   return canOpenResult;
 });
-const openURL = mock.fn(async (_url: string) => {
+const openURL = mock.fn(async (url: string) => {
+  void url;
   openAttempts += 1;
   if (openImplementation) {
     return await openImplementation();

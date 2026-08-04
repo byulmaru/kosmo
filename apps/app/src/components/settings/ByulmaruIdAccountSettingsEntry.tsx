@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
 import { ChevronRightIcon } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';

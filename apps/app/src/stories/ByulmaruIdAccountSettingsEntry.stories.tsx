@@ -1,8 +1,8 @@
 import { Linking, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import {
-  ByulmaruIdAccountSettingsEntry,
   BYULMARU_ID_ACCOUNT_SETTINGS_URL,
+  ByulmaruIdAccountSettingsEntry,
 } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
