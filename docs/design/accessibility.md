@@ -76,6 +76,28 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 
 이 문서는 컴포넌트의 플랫폼별 exact contract를 임의로 바꾸지 않는다. 새 컴포넌트는 이 문서의 플랫폼 baseline을 사용하고, 더 큰 target이나 엄격한 검증이 필요하면 컴포넌트 디자인 문서·Linear·OpenSpec에 이유와 exact contract를 기록한다.
 
+### 공통 IconButton
+
+앱 전역의 single-action compact square control은 공통 `IconButton`을 사용한다. 이 컴포넌트는 특정 icon
+library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading indicator를 content로 받을 수 있으며,
+실제 interactive element가 button role, 필수 accessible name과 현재 상태를 소유한다.
+
+- 최소 interaction target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`다. 컴포넌트별로
+  더 큰 target을 사용할 수 있지만 public target override나 caller style로 이 floor를 낮출 수 없다.
+- 보이는 glyph·background·control geometry와 interaction target은 분리한다. target을 확대해도 기존 surface의
+  glyph 크기, visual box, 배치, 색상, focus 표시와 pressed·disabled feedback을 바꾸지 않는다.
+- Web target은 렌더된 interactive element에서 pointer와 keyboard focus로 검증할 수 있어야 하며, React Native
+  `hitSlop`만으로 Web floor 충족을 주장하지 않는다. 기존 `hitSlop` 기반 target을 공용 target으로 옮길 때는
+  effective input region을 줄이거나 이중 확장하지 않는다.
+- pressed, disabled, pending, busy, expanded 상태와 focus ref, `onPressIn` 같은 event handler는 각 action의
+  기존 제품 동작을 유지하도록 전달한다. 공통 컴포넌트가 모든 surface에 하나의 visual feedback을 강제하지 않는다.
+- 확장된 target은 인접한 서로 다른 action과 겹치거나 부모의 clipping으로 잘리지 않아야 한다.
+- 이 계약은 상태 선택·토글 또는 count가 핵심인 control, icon+count action, pill·tab·switch, Link와
+  navigation/menu/list row, whole-preview/content action, avatar·label·chevron 같은 compound control 및 텍스트
+  `Button`을 공용 `IconButton`으로 바꾸지 않는다.
+- iOS·Android floor mapping은 공용 source와 자동화에서 유지하되, Web 자동화나 runtime 결과를 Native 실제
+  기기·simulator의 touch·focus·assistive technology 검증 완료 증거로 사용하지 않는다.
+
 ### Post Action Bar의 출시 전 임시 예외
 
 Post Action Bar는 현재 Web 우선 출시 범위의 Figma geometry를 먼저 맞추기 위해 모든 플랫폼 구현에서 control 높이와 실제 interactive target 높이를 28 logical unit(CSS px·pt·dp)로 통일한다. 이 예외는 [post-action-bar.md](./post-action-bar.md)가 소유하며 다른 toolbar나 icon button의 선례로 일반화하지 않는다.

@@ -18,6 +18,7 @@ import {
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
+import { getIconButtonHitSlop, IconButton } from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
@@ -58,6 +59,10 @@ export const emptyPostComposerMediaValue: PostComposerMediaValue = {
   items: [],
   sensitiveMedia: false,
 };
+
+const mediaActionEffectiveTargetSize = 48;
+const mediaAddVisualSize = 40;
+const mediaRemoveVisualSize = 32;
 
 export function PostComposerMediaControls({
   actions,
@@ -331,15 +336,19 @@ export function PostComposerMediaControls({
         </Text>
       ) : null}
       <View style={styles.footer}>
-        <Pressable
+        <IconButton
           accessibilityLabel={`이미지 추가, ${postComposerMediaLimit - media.length}개 더 선택 가능`}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: disabled || media.length >= postComposerMediaLimit }}
           disabled={disabled || media.length >= postComposerMediaLimit}
-          hitSlop={4}
+          hitSlop={getIconButtonHitSlop(
+            Platform.OS,
+            mediaAddVisualSize,
+            mediaActionEffectiveTargetSize,
+          )}
           onPress={() => void selectMedia()}
-          style={({ pressed }) => [
-            styles.addMedia,
+          style={styles.addMediaTarget}
+          visualSize={mediaAddVisualSize}
+          visualStyle={({ pressed }) => [
+            styles.addMediaVisual,
             {
               backgroundColor: pressed ? theme.surface : 'transparent',
               opacity: disabled || media.length >= postComposerMediaLimit ? 0.45 : 1,
@@ -347,7 +356,7 @@ export function PostComposerMediaControls({
           ]}
         >
           <ImagePlusIcon color={theme.primary} size={24} />
-        </Pressable>
+        </IconButton>
         {actions}
       </View>
     </>
@@ -418,20 +427,24 @@ export function PostComposerMediaItems({
                 )}
               </>
             ) : null}
-            <Pressable
+            <IconButton
               accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
-              accessibilityRole="button"
-              accessibilityState={{ disabled }}
               disabled={disabled}
-              hitSlop={8}
+              hitSlop={getIconButtonHitSlop(
+                Platform.OS,
+                mediaRemoveVisualSize,
+                mediaActionEffectiveTargetSize,
+              )}
               onPress={() => onRemove(item.key)}
-              style={({ pressed }) => [
-                styles.mediaRemove,
+              style={styles.mediaRemoveTarget}
+              visualSize={mediaRemoveVisualSize}
+              visualStyle={({ pressed }) => [
+                styles.mediaRemoveVisual,
                 { opacity: disabled ? 0.45 : pressed ? 0.75 : 1 },
               ]}
             >
               <XIcon color={colors.light.background} size={18} />
-            </Pressable>
+            </IconButton>
           </View>
           {item.state === 'ready' ? (
             <View style={styles.mediaItemBody}>
@@ -486,13 +499,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     justifyContent: 'space-between',
   },
-  addMedia: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
+  addMediaTarget: { height: mediaAddVisualSize, width: mediaAddVisualSize },
+  addMediaVisual: { borderRadius: radii.sm },
   mediaItem: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   mediaPreviewContainer: {
     borderRadius: radii.sm,
@@ -504,17 +512,17 @@ const styles = StyleSheet.create({
   mediaPreview: { height: 96, width: 96 },
   mediaOverlayBackdrop: { backgroundColor: colors.light.text, opacity: 0.58 },
   mediaOverlay: { alignItems: 'center', justifyContent: 'center' },
-  mediaRemove: {
-    alignItems: 'center',
-    backgroundColor: colors.light.text,
-    borderRadius: radii.full,
-    height: 32,
-    justifyContent: 'center',
+  mediaRemoveTarget: {
+    height: mediaRemoveVisualSize,
     position: 'absolute',
     right: spacing.xs,
     top: spacing.xs,
-    width: 32,
+    width: mediaRemoveVisualSize,
     zIndex: 1,
+  },
+  mediaRemoveVisual: {
+    backgroundColor: colors.light.text,
+    borderRadius: radii.full,
   },
   mediaItemBody: { flex: 1 },
   sensitiveMedia: {

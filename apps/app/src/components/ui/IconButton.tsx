@@ -14,6 +14,16 @@ export function getIconButtonTargetSize(platform: string): number {
   return 48;
 }
 
+export function getIconButtonHitSlop(
+  platform: string,
+  visualSize: number,
+  effectiveTargetSize: number,
+): number {
+  const renderedTargetSize = Math.max(getIconButtonTargetSize(platform), visualSize);
+
+  return Math.max(0, (effectiveTargetSize - renderedTargetSize) / 2);
+}
+
 export const ICON_BUTTON_TARGET_SIZE = getIconButtonTargetSize(Platform.OS);
 
 export type IconButtonProps = Omit<
@@ -27,6 +37,7 @@ export type IconButtonProps = Omit<
   style?: PressableProps['style'];
   targetSize?: number;
   visualSize?: number;
+  visualStyle?: PressableProps['style'];
 };
 
 export function IconButton({
@@ -35,13 +46,15 @@ export function IconButton({
   children,
   controlRef,
   disabled = false,
-  feedback = 'opacity',
+  feedback = 'none',
   style,
   targetSize = ICON_BUTTON_TARGET_SIZE,
   visualSize,
+  visualStyle,
   ...props
 }: IconButtonProps): ReactNode {
   const buttonDisabled = disabled === true;
+  const resolvedTargetSize = Math.max(ICON_BUTTON_TARGET_SIZE, targetSize);
 
   return (
     <Pressable
@@ -53,23 +66,27 @@ export function IconButton({
       ref={controlRef}
       style={(state) => [
         styles.target,
-        { minHeight: targetSize, minWidth: targetSize },
         feedback === 'opacity'
           ? { opacity: buttonDisabled ? 0.45 : state.pressed ? 0.7 : 1 }
           : undefined,
         typeof style === 'function' ? style(state) : style,
+        { minHeight: resolvedTargetSize, minWidth: resolvedTargetSize },
       ]}
     >
       {(state) => {
         const content = typeof children === 'function' ? children(state) : children;
 
-        return visualSize === undefined ? (
+        return visualSize === undefined && visualStyle === undefined ? (
           content
         ) : (
           <View
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            style={[styles.visual, { height: visualSize, width: visualSize }]}
+            style={[
+              styles.visual,
+              visualSize === undefined ? undefined : { height: visualSize, width: visualSize },
+              typeof visualStyle === 'function' ? visualStyle(state) : visualStyle,
+            ]}
           >
             {content}
           </View>

@@ -221,43 +221,7 @@ race를 수정한다. 정상 저장은 실제 Profile route commit으로 끝나�
 - [x] 3.5 관련 app·API·BFF·core 필수 검증과 Web dev runtime QA를 완료하고 원인·수정·남은 위험을 기록한 뒤
       PROD-490 통합 검증 담당자에게 evidence를 전달한다.
 
-## 4. PROD-548 공용 IconButton과 Profile edit action 정렬
-
-**Authority / Provenance**
-
-- `docs/design/accessibility.md`
-- `docs/design/profile-edit.md`
-- `docs/design/profile-tags.md`
-- `PROD-548`
-
-**Deliverable**
-
-플랫폼별 최소 입력 target, 접근성 button semantics와 pressed·disabled 상태를 소유하는 React Native 공용
-`IconButton`을 추가하고 Profile edit의 뒤로가기, avatar/header 이미지 편집, Profile Tag 제거 action에 적용한다.
-
-**Guardrails**
-
-- 기존 시각 크기와 배치를 유지하면서 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` 최소 입력
-  target mapping을 공용 구현으로 중앙화한다.
-- header/avatar preview 전체를 각각 하나의 button으로 유지하고 camera affordance를 별도 focus target으로 만들지 않는다.
-- Profile edit의 저장·Media·navigation 동작, 다른 화면의 icon action과 공용 Button 계약을 변경하지 않는다.
-- 현재 완료 조건은 Web component test와 Web runtime 검증이다. iOS·Android mapping은 공용 구현과 자동화로
-  유지하되 실제 기기·simulator runtime QA는 Native 출시 gate에서 수행한다.
-
-**Verification**
-
-- 공용 component test에서 플랫폼별 target mapping, 필수 accessibility label, disabled state와 시각 크기·입력
-  target 분리를 검증한다.
-- Profile edit Storybook에서 뒤로가기와 이미지 편집 preview, Profile Tag 제거 action이 단일 button semantics,
-  기존 geometry, overlap·clipping 없는 배치를 유지하는지 확인한다.
-- app 단위 test, TypeScript, Storybook build·interaction과 Web runtime을 통과하고 Native runtime 미실행을 PR에 기록한다.
-
-- [x] 4.1 공용 `IconButton`을 component test로 정의하고 Profile edit 뒤로가기·이미지 편집·Profile Tag 제거 action을
-      교체해 플랫폼별 target mapping과 기존 single-focus·geometry를 유지한다.
-- [x] 4.2 app 필수 자동화와 Web runtime을 검증하고 독립 구현 리뷰를 통과한 뒤 PROD-548 PR에 증거와 Native 실제
-      기기·simulator runtime QA 제외를 기록한다.
-
-## 5. PROD-490 통합 검증과 OpenSpec archive
+## 4. PROD-490 통합 검증과 OpenSpec archive
 
 **Authority / Provenance**
 
@@ -289,11 +253,11 @@ canonical·Linear·구현·OpenSpec이 일치할 때 `add-local-profile-edit`을
   followPolicy Switch가 enum과 동일 저장 경계로 제공되는지 확인한다.
 - archive 전후 strict validation과 delta spec 동기화를 확인한다.
 
-- [ ] 5.1 PROD-491·492·613·548 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
-- [ ] 5.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·post-commit 응답 이상·
+- [ ] 4.1 PROD-491·492·613 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
+- [ ] 4.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·post-commit 응답 이상·
       dirty navigation 복구를
       종단 간 검증한다.
-- [ ] 5.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
+- [ ] 4.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
       Pending Follow Request 불변과 Profile Link 제외 범위·기존 Profile 조회 회귀를 확인한다.
-- [ ] 5.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
-- [ ] 5.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
+- [ ] 4.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
+- [ ] 4.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.

@@ -17,28 +17,41 @@ mockModule('react-native', {
 type TestElementProps = {
   accessibilityLabel?: string;
   accessibilityRole?: string;
-  accessibilityState?: { disabled?: boolean; expanded?: boolean };
+  accessibilityState?: { busy?: boolean; disabled?: boolean; expanded?: boolean };
   children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   disabled?: boolean;
+  hitSlop?: number;
+  onPressIn?: () => void;
+  ref?: unknown;
   style?: unknown;
 };
 type TestElement = ReactElement<TestElementProps>;
 type IconButtonProps = {
   accessibilityLabel: string;
-  accessibilityState?: { expanded?: boolean };
-  children: ReactNode;
+  accessibilityState?: { busy?: boolean; expanded?: boolean };
+  children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
+  controlRef?: unknown;
   disabled?: boolean;
+  feedback?: 'none' | 'opacity';
+  hitSlop?: number;
+  onPressIn?: () => void;
+  style?: unknown;
   targetSize?: number;
   visualSize?: number;
+  visualStyle?: unknown;
 };
 type IconButtonComponent = (props: IconButtonProps) => TestElement;
 
 let IconButton: IconButtonComponent | undefined;
+let getIconButtonHitSlop:
+  | ((platform: string, visualSize: number, effectiveTargetSize: number) => number)
+  | undefined;
 let getIconButtonTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
   const module = await import('./IconButton').catch(() => null);
   IconButton = module?.IconButton as IconButtonComponent | undefined;
+  getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
   getIconButtonTargetSize = module?.getIconButtonTargetSize as
     | ((platform: string) => number)
     | undefined;
@@ -82,12 +95,56 @@ test('platform target mapping stays centralized for Web, iOS, and Android', () =
   assert.equal(getIconButtonTargetSize('windows'), 48);
 });
 
+test('hit slop preserves a larger effective region without double-expanding the platform floor', () => {
+  assert.ok(getIconButtonHitSlop, 'hit slop resolver must exist');
+  assert.equal(getIconButtonHitSlop('web', 40, 48), 4);
+  assert.equal(getIconButtonHitSlop('ios', 40, 48), 2);
+  assert.equal(getIconButtonHitSlop('android', 40, 48), 0);
+  assert.equal(getIconButtonHitSlop('web', 32, 48), 8);
+  assert.equal(getIconButtonHitSlop('ios', 32, 48), 2);
+  assert.equal(getIconButtonHitSlop('android', 32, 48), 0);
+});
+
+test('caller target and style cannot lower the Web interaction floor', () => {
+  const button = renderIconButton({
+    accessibilityLabel: '검색 지우기',
+    children: '×',
+    style: { height: 12, minHeight: 12, minWidth: 12, width: 12 },
+    targetSize: 16,
+  });
+  const targetStyle = flattenStyle(
+    (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
+  );
+
+  assert.equal(targetStyle.minHeight, 32);
+  assert.equal(targetStyle.minWidth, 32);
+});
+
+test('caller can preserve an interaction target larger than the platform floor', () => {
+  const button = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    targetSize: 56,
+  });
+  const targetStyle = flattenStyle(
+    (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
+  );
+
+  assert.equal(targetStyle.minHeight, 56);
+  assert.equal(targetStyle.minWidth, 56);
+});
+
 test('visual size remains independent from the accessible input target', () => {
   const button = renderIconButton({
     accessibilityLabel: '#공예 제거',
     children: '×',
+    style: { position: 'absolute' },
     targetSize: 44,
     visualSize: 32,
+    visualStyle: ({ pressed }: { pressed: boolean }) => ({
+      backgroundColor: pressed ? 'gray' : 'white',
+      borderWidth: 1,
+    }),
   });
   const targetStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
@@ -101,26 +158,67 @@ test('visual size remains independent from the accessible input target', () => {
   assert.equal(button.type, 'Pressable');
   assert.equal(targetStyle.minHeight, 44);
   assert.equal(targetStyle.minWidth, 44);
+  assert.equal(targetStyle.position, 'absolute');
+  assert.equal(targetStyle.backgroundColor, undefined);
   assert.ok(visual);
   const visualStyle = flattenStyle(visual.props.style);
   assert.equal(visualStyle.height, 32);
   assert.equal(visualStyle.width, 32);
+  assert.equal(visualStyle.backgroundColor, 'white');
+  assert.equal(visualStyle.borderWidth, 1);
 });
 
-test('button semantics merge the real disabled state with caller accessibility state', () => {
+test('button semantics and interaction props are forwarded without losing press state', () => {
+  const controlRef = { current: null };
+  const onPressIn = () => undefined;
   const button = renderIconButton({
     accessibilityLabel: '프로필 편집 닫기',
-    accessibilityState: { expanded: true },
-    children: '아이콘',
+    accessibilityState: { busy: true, expanded: true },
+    children: ({ pressed }) => (pressed ? '눌림' : '기본'),
+    controlRef,
     disabled: true,
+    hitSlop: 4,
+    onPressIn,
+    style: ({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? 'gray' : 'white' }),
   });
   const disabledStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
   );
+  const pressedChildren =
+    typeof button.props.children === 'function'
+      ? button.props.children({ pressed: true })
+      : button.props.children;
 
   assert.equal(button.props.accessibilityLabel, '프로필 편집 닫기');
   assert.equal(button.props.accessibilityRole, 'button');
   assert.equal(button.props.disabled, true);
-  assert.deepEqual(button.props.accessibilityState, { disabled: true, expanded: true });
-  assert.equal(disabledStyle.opacity, 0.45);
+  assert.deepEqual(button.props.accessibilityState, { busy: true, disabled: true, expanded: true });
+  assert.equal(button.props.hitSlop, 4);
+  assert.equal(button.props.onPressIn, onPressIn);
+  assert.equal(button.props.ref, controlRef);
+  assert.equal(disabledStyle.backgroundColor, 'gray');
+  assert.equal(pressedChildren, '눌림');
+});
+
+test('visual feedback is opt-in and explicit opacity feedback preserves prior states', () => {
+  const defaultButton = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    disabled: true,
+  });
+  const defaultStyle = flattenStyle(
+    (defaultButton.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+  );
+  const opacityButton = renderIconButton({
+    accessibilityLabel: '닫기',
+    children: '×',
+    disabled: true,
+    feedback: 'opacity',
+  });
+  const opacityStyle = flattenStyle(
+    (opacityButton.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+  );
+
+  assert.equal(defaultStyle.opacity, undefined);
+  assert.equal(opacityStyle.opacity, 0.45);
 });

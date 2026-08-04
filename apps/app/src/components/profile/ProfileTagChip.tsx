@@ -60,6 +60,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
       <IconButton
         accessibilityLabel={`#${name} 제거`}
         disabled={disabled}
+        feedback="opacity"
         onPress={onRemove}
         style={styles.removeTarget}
         testID="profile-tag-remove-button"

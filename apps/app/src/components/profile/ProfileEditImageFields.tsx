@@ -5,7 +5,6 @@ import {
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
-import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
 import type { Ref } from 'react';
@@ -139,13 +138,13 @@ function ImageEditControl({
     onPress: () => void;
     ref: Ref<View>;
   }) => (
-    <IconButton
+    <Pressable
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ expanded }}
-      controlRef={ref}
+      accessibilityRole="button"
+      accessibilityState={{ disabled, expanded }}
       disabled={disabled}
-      feedback="none"
       onPress={onPress}
+      ref={ref}
       style={style}
       testID={testID}
     >
@@ -165,7 +164,7 @@ function ImageEditControl({
           <CameraAffordance disabled={disabled} />
         </>
       )}
-    </IconButton>
+    </Pressable>
   );
 
   if (!draft.previewUri || !onRemove) {
