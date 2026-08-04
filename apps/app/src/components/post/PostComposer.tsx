@@ -629,7 +629,6 @@ const styles = StyleSheet.create({
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   webVisibilityMenu: {
     left: 0,
-    maxWidth: '100%',
     position: 'absolute',
     width: 256,
     zIndex: 50,
