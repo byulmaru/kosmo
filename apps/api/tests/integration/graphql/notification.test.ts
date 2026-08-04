@@ -784,6 +784,47 @@ describe('Notification GraphQL Node boundary', () => {
     }
   });
 
+  test('Local Reply 작성부터 thread 반영·inbox·Read·결과 Reply 이동 대상까지 수직 흐름을 유지한다', async () => {
+    const parentAuthor = await createAuthenticatedSession();
+    const replyAuthor = await createAuthenticatedSession();
+    const parent = await createContentPost(parentAuthor.profile.id);
+
+    const created = await requestCreateReply(parent.id, replyAuthor.token, PostVisibility.UNLISTED);
+    assertNoGraphQLErrors(created);
+    const replyId = created.data?.createPost.post.id;
+    assert.ok(replyId);
+
+    const thread = await requestReplyDescendants(parent.id, parentAuthor.token);
+    assertNoGraphQLErrors(thread);
+    assert.deepEqual(
+      thread.data?.node?.replyDescendants.edges.map(({ node }) => node.id),
+      [replyId],
+    );
+
+    const recipientId = encodeGlobalId('Profile', parentAuthor.profile.id);
+    const connection = await loadNotificationConnection(recipientId, parentAuthor.token, {
+      first: 10,
+    });
+    assertNoGraphQLErrors(connection);
+    const notification = connection.data?.node?.notifications.edges[0]?.node;
+    assert.equal(notification?.__typename, 'ReplyNotification');
+    assert.equal(notification?.profile.id, encodeGlobalId('Profile', replyAuthor.profile.id));
+    assert.equal(notification?.post?.id, replyId);
+
+    const count = await loadUnreadNotificationCounts([recipientId], parentAuthor.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
+
+    assert.ok(notification);
+    const read = await markNotificationRead(notification.id, parentAuthor.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notification.id, notification.id);
+    assert.equal(read.data?.markNotificationRead.notification.post?.id, replyId);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.id, recipientId);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
+    assert.ok(read.data?.markNotificationRead.notification.readAt);
+  });
+
   test('filters unavailable Reply Notifications before pagination and from Read', async () => {
     const viewer = await createAuthenticatedSession();
     const recipient = await createProfile('reply-hidden-recipient');
@@ -1804,6 +1845,23 @@ const requestCreateReply = (
     token,
   );
 
+const requestReplyDescendants = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      replyDescendants: { edges: Array<{ node: { id: string } }> };
+    } | null;
+  }>(
+    `query LocalReplyThread($postId: ID!) {
+      node(id: $postId) {
+        ... on Post {
+          replyDescendants(first: 10) { edges { node { id } } }
+        }
+      }
+    }`,
+    { postId: encodeGlobalId('Post', postId) },
+    token,
+  );
+
 const loadNodes = async (ids: string[], token: string) => {
   const result = await requestGraphQL<{ nodes: Array<{ id: string } | null> }>(
     `query NotificationVisibility($ids: [ID!]!) {
@@ -1835,6 +1893,7 @@ const loadNotificationConnection = (
                 ... on FollowNotification { profile { id } }
                 ... on ReactionNotification { type profile { id } post { id } }
                 ... on RepostNotification { profile { id } post { id } }
+                ... on ReplyNotification { profile { id } post { id } }
               }
             }
             pageInfo { endCursor hasNextPage }
@@ -1861,6 +1920,7 @@ const markNotificationRead = (id: string, token?: string) =>
           ... on FollowNotification { profile { id } }
           ... on ReactionNotification { type profile { id } post { id } }
           ... on RepostNotification { profile { id } post { id } }
+          ... on ReplyNotification { profile { id } post { id } }
         }
         recipientProfile { id unreadNotificationCount }
       }
