@@ -110,7 +110,7 @@ PROD-500의 구현·테스트·정합성 evidence가 canonical domain contract�
       Fedify/domain test를 추가하고 통과시킨다.
 - [x] 3.2 packages/fedify의 typecheck·lint·관련 test와 workspace Prettier, `git diff --check`를 통과시키고
       기존 Reaction 송수신 회귀가 없는지 확인한다.
-- [ ] 3.3 PROD-500 구현 PR의 scope·verification evidence와 OpenSpec strict validation 결과를 정리해
+- [x] 3.3 PROD-500 구현 PR의 scope·verification evidence와 OpenSpec strict validation 결과를 정리해
       canonical/Linear 정합성을 확인한다.
-- [ ] 3.4 PROD-500 owner가 모든 구현·검증 task와 completion evidence를 확인한 뒤에만
+- [x] 3.4 PROD-500 owner가 모든 구현·검증 task와 completion evidence를 확인한 뒤에만
       `expose-activitypub-emoji-reactions` change를 archive한다.
