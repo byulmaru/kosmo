@@ -37,7 +37,7 @@ PROD-680은 이 데이터·navigation 계약을 바꾸지 않고 Web row의 Unre
 - 공용 Notification row의 Web style에서 항상 같은 좌측 border 폭을 예약하고, Unread이면 불투명한 `primary`, Read이면 transparent를 사용한다. 기존 콘텐츠 시작 위치가 유지되도록 좌측 padding을 border 폭만큼 보정한다.
 - Web에서 hover가 아니면 Unread row는 primary 30% alpha 배경, Read row는 `card` 배경을 사용한다. hover 중에는 둘 다 `surface` 배경을 사용하되 Unread 좌측 상태선은 유지한다.
 - 시각 상태는 기존 `readAt === null` predicate에서만 파생한다. 성공 payload가 `readAt`을 갱신하면 같은 render에서 강조가 제거되고, pending·실패로 cache가 바뀌지 않으면 강조가 남는다.
-- 기존 Notifications Storybook에서 computed row style과 접근성명을 함께 검증하고, 기존 Relay unit과 Web E2E를 회귀 검증으로 실행한다.
+- 기존 Notifications Storybook의 현재 light runtime에서 computed row style과 접근성명을 함께 검증하고, dark mode는 양 mode token 정의를 정적으로 확인한다. 기존 Relay unit과 Web E2E를 회귀 검증으로 실행한다.
 
 ### Allowed Alternatives
 
@@ -53,7 +53,8 @@ PROD-680은 이 데이터·navigation 계약을 바꾸지 않고 Web row의 Unre
 
 ## Risks / Trade-offs
 
-- [같은 30% alpha도 light와 dark card 위에서 다른 합성색으로 보임] → light/dark Storybook에서 상태 식별과 텍스트 가독성을 각각 관찰하고 검증 범위를 기록한다.
+- [`primary` 상태선과 30% alpha 배경 사이의 내부 대비가 낮음] → 상태선은 tint와 분리된 고대비 경계가 아니라 미확인 행 전체 표현의 일부로 사용한다. 비교 대상은 `card`인 Read 행과 `primary` 상태선·30% tint·접근성명을 함께 제공하는 Unread 행이며, light Storybook에서 이 결합 표현의 식별성과 텍스트 가독성을 관찰한다.
+- [현재 `ThemeProvider`가 light theme만 제공해 dark Storybook runtime을 재현할 수 없음] → 이번 change는 dark mode 전환 인프라를 추가하지 않고 light Storybook과 light/dark token 정의의 정적 확인으로 검증 범위를 제한한다.
 - [투명 border 공간이 기존 row geometry를 바꿀 수 있음] → 모든 Web row에 동일한 폭을 예약하고 padding을 보정한 뒤 기존 compact geometry assertion을 재실행한다.
 - [hover 중 Unread 배경 tint가 `surface`로 바뀜] → Unread 좌측 상태선을 유지해 상태 식별을 보존하고 기존 pointer 피드백을 우선한다.
 - [곧 진행될 컬러 토큰 리팩터링에서 파생 token 이름이 바뀔 수 있음] → 이번 change는 primary 30% alpha의 관찰 결과만 소유하며 전면 리팩터링을 선행 조건이나 task로 포함하지 않는다.

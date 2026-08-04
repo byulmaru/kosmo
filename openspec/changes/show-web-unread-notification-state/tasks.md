@@ -13,7 +13,8 @@
 **Guardrails**
 
 - 시각 상태는 기존 `readAt`을 source of truth로 사용하고, Read mutation 성공 전에는 제거하지 않는다.
-- Web Unread 행은 불투명한 `primary` 좌측 4px 상태선과 `primary` 30% alpha 배경을 사용하며, Read 전환 전후 콘텐츠 정렬을 유지한다.
+- Web Unread 행은 불투명한 `primary` 좌측 4px 상태선과 `primary` 30% alpha 배경을 하나의 결합 표현으로 사용하며, Read의 일반 배경과 구분되고 Read 전환 전후 콘텐츠 정렬을 유지한다.
+- 상태선과 30% alpha 배경 사이에 별도 고대비 edge를 추가하지 않는다.
 - Web pointer hover의 기존 `surface` 배경과 Unread 상태선을 함께 유지한다.
 - 배경 alpha를 콘텐츠 전체 opacity나 별도 absolute·z-index stacking layer로 구현하지 않는다.
 - 기존 접근성 Unread 설명, 즉시 navigation, Relay ID 정규화와 Profile별 cache 격리를 유지한다.
@@ -21,7 +22,8 @@
 
 **Verification**
 
-- light/dark Web Storybook에서 Read·Unread 기본 배경과 상태선, hover, 접근성명, Read 성공 및 실패 결과를 확인한다.
+- 현재 지원되는 light Web Storybook에서 Read·Unread 기본 배경과 상태선, hover, 접근성명, Read 성공 및 실패 결과를 확인한다.
+- dark는 light와 함께 theme token이 정의되었는지 정적으로 확인하고, dark Storybook runtime은 이번 검증 범위에 포함하지 않는다.
 - 기존 Notification Relay unit test에서 item `readAt`, 정확한 Recipient Profile count, 다른 Profile 격리와 실패 시 cache 보존을 확인한다.
 - Notification Web E2E에서 activation navigation, Read 수렴과 전역 인디케이터 제거 회귀를 확인한다.
 - Relay compiler, app TypeScript check와 strict OpenSpec validation을 통과시키고 Native style branch가 변경되지 않았음을 diff로 확인한다.

@@ -22,11 +22,11 @@
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680`
 - Status: Active
-- Context / Problem: 좌측 상태선과 은은한 배경을 구현하면서 콘텐츠 opacity, stacking layer, Read 전환 시 layout 이동, 기존 hover 피드백을 피해야 한다.
-- Decision Outcome: Web row는 좌측 4px 공간을 항상 예약한다. Unread에서는 좌측 border를 불투명한 `primary`, 기본 배경을 `primary` 30% alpha의 theme 파생값으로 표시하고, Read에서는 같은 border를 transparent로 유지해 정렬을 보존한다. 기존 좌측 padding은 border 폭만큼 보정한다. pointer hover에서는 기존 `surface` 배경으로 전환하되 Unread의 `primary` 상태선은 유지한다.
-- Alternatives Considered: row 전체 `opacity: 0.3`은 콘텐츠와 상호작용까지 흐리므로 제외했다. absolute background child와 z-index 조합은 불필요한 stacking 구조를 만들므로 제외했다. Unread에서만 border를 추가하는 안은 Read 전환 시 콘텐츠 이동을 만들어 제외했다. `surface`를 Unread 기본 배경으로 재사용하면 hover와 상태 표현이 구분되지 않아 제외했다.
+- Context / Problem: 좌측 상태선과 은은한 배경을 구현하면서 콘텐츠 opacity, stacking layer, Read 전환 시 layout 이동, 기존 hover 피드백을 피해야 한다. 상태선은 30% tint와 분리된 고대비 경계가 아니라 Read 행의 일반 `card` 배경과 구분되는 Unread 행 전체 표현의 일부다.
+- Decision Outcome: Web row는 좌측 4px 공간을 항상 예약한다. Unread에서는 좌측 border를 불투명한 `primary`, 기본 배경을 `primary` 30% alpha의 theme 파생값으로 표시하고, Read에서는 같은 border를 transparent로 유지해 정렬을 보존한다. 기존 좌측 padding은 border 폭만큼 보정한다. pointer hover에서는 기존 `surface` 배경으로 전환하되 Unread의 `primary` 상태선은 유지한다. Unread는 상태선·tint와 기존 접근성명을 결합해 Read의 일반 배경과 구분하며 상태선과 tint 사이의 별도 대비 경계를 추가하지 않는다.
+- Alternatives Considered: row 전체 `opacity: 0.3`은 콘텐츠와 상호작용까지 흐리므로 제외했다. absolute background child와 z-index 조합은 불필요한 stacking 구조를 만들므로 제외했다. Unread에서만 border를 추가하는 안은 Read 전환 시 콘텐츠 이동을 만들어 제외했다. `surface`를 Unread 기본 배경으로 재사용하면 hover와 상태 표현이 구분되지 않아 제외했다. 상태선과 tint 사이에 고대비 edge를 추가하는 안은 승인된 `primary` 결합 표현과 다른 시각 계층을 만들어 제외했다.
 - Consequences: light와 dark theme 경계에 동일한 `primary` 30% alpha 의미를 제공하는 작은 파생 token이 필요하다. token의 구체적인 내부 이름은 동등한 표현으로 조정할 수 있지만, raw color를 row에 직접 쓰거나 앱 전체 컬러 토큰을 리팩터링하지 않는다.
-- Confirmation / Follow-up: light/dark Storybook에서 배경·텍스트 가독성, hover 상태선 유지와 Read 전환 전후 콘텐츠 시작 위치를 확인하고 관련 compact geometry assertion을 실행한다.
+- Confirmation / Follow-up: 현재 지원되는 light Storybook runtime에서 Read 일반 배경과 Unread 결합 표현의 식별성·텍스트 가독성, hover 상태선 유지와 Read 전환 전후 콘텐츠 시작 위치를 확인한다. dark는 양 mode token 정의를 정적으로 확인하며, dark Storybook runtime은 이번 change의 검증 범위에 포함하지 않는다.
 
 ### Read 성공 payload의 Relay 정규화만으로 시각 상태를 수렴시킨다
 
