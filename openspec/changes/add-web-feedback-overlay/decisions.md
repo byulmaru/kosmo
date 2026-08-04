@@ -16,6 +16,18 @@
 - Consequences: overlay open 상태를 URL에서 복원할 수 있고 browser back/forward가 동작한다. query-only 이동은 primary route scroll reset으로 취급하지 않는다.
 - Confirmation / Follow-up: open·back·forward·fresh-load close와 기존 query 보존을 Web runtime에서 확인한다.
 
+### fresh-load browser back은 단일 same-document barrier로 처리한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/feedback.md`, `PROD-594`
+- Status: Active
+- Context / Problem: `feedback=open` route를 직접 열거나 새로고침한 document의 browser back은 이전 document로 이탈하므로 현재 document의 `popstate` 기반 dirty/submitting 정책을 우회할 수 있다.
+- Decision Outcome: fresh-load overlay 뒤에 현재 route의 query 없는 history entry를 한 번 만들고 overlay entry를 push한다. Browser back은 이 same-document barrier에서 기존 `requestClose` 정책을 적용하며, 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다.
+- Alternatives Considered: `beforeunload`는 reload와 tab close까지 native prompt를 노출하고 submitting 이탈을 확실히 차단하지 못한다. Navigation API 전용 interception은 API가 없거나 비활성화된 환경을 보호하지 못한다. Marker와 자동 history 압축은 Expo Router history와 이중 상태를 만들고 범위를 불필요하게 넓힌다.
+- Consequences: close 뒤 남은 forward entry를 방문하면 초기화된 overlay가 다시 열릴 수 있다. 이 동작을 허용하고 별도 marker·자동 skip·raw history state는 추가하지 않는다.
+- Confirmation / Follow-up: 이전 document에서 fresh-load overlay로 진입한 뒤 dirty 취소·폐기와 submitting browser back을 검증하고, 폐기 뒤 현재 route 유지 및 forward 시 빈 overlay 재진입을 확인한다.
+
 ### 성공 후 overlay를 유지해 연속 제출을 허용한다
 
 - Decision Date: 2026-08-03

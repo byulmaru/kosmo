@@ -58,7 +58,10 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - `/feedback` 직접 URL 접근과 새로고침은 기존 `PageHeader`와 page surface를 가진 보호 route fallback을
   유지한다. `/feedback` 위에는 query overlay를 중복 표시하지 않는다.
 - `feedback=open` query가 있는 다른 shell route를 직접 열거나 새로고침하면 overlay를 복원한다. 이 fresh-load
-  overlay를 닫을 때는 다른 history page로 이동하지 않고 `feedback` query만 replace해 제거한다.
+  overlay는 현재 route의 query 없는 history entry를 뒤에 둬 browser back도 같은 document 안에서 처리한다.
+  닫거나 dirty draft 폐기를 확인하면 이전 document로 이동하지 않고 현재 route에 남아 `feedback` query만
+  제거한다. 이 단순 barrier는 닫힌 뒤 forward history에 남을 수 있으므로 browser forward가 초기화된 overlay를
+  다시 열 수 있다.
 - shell 진입으로 연 overlay의 clean close는 push 전 history entry로 돌아간다. browser forward로 query entry를
   다시 방문하면 overlay를 다시 연다.
 - 종류나 본문이 초기값에서 바뀐 dirty 상태의 close는 draft 폐기 확인을 거친다. 취소하면 overlay, query와
@@ -94,8 +97,8 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - 첫 번째·중간·마지막 종류를 각각 선택해 8px 선택 surface, 구분선 연속성, 누름·keyboard focus 표시가 평면
   목록 위계를 유지하는지 확인한다.
 - 기존 Web E2E로 인증된 진입, 제출 payload, 성공 초기화, 실패 후 입력 유지가 바뀌지 않았음을 검증한다.
-- Web shell에서 현재 route query를 보존한 open, clean close와 browser back/forward, fresh-load query close,
-  dirty 폐기 확인, submitting close 차단을 검증한다.
+- Web shell에서 현재 route query를 보존한 open, clean close와 browser back/forward, fresh-load barrier close,
+  dirty 폐기 확인 뒤 현재 route 유지, submitting close 차단과 fresh-load close 뒤 forward 재진입을 검증한다.
 - `390px`에서 bottom sheet, `900px`와 `1400px`에서 중앙 dialog geometry와 body 내부 scroll을 확인한다.
 - keyboard로 open, focus trap, `Escape`, 닫기 후 trigger focus·document scroll 복원과 배경 상호작용 차단을
   실제 Web runtime에서 확인한다.

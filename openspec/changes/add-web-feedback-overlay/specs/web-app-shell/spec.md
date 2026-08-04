@@ -40,7 +40,9 @@
 
 - **WHEN** 로그인한 Web 사용자가 `/feedback`이 아닌 shell route를 `feedback=open` query와 함께 직접 열거나 새로고침한다
 - **THEN** 시스템은 해당 route 위에 피드백 overlay를 복원한다
-- **AND** 사용자가 overlay를 닫으면 현재 history에서 다른 page로 이동하지 않고 `feedback` query만 replace해 제거한다
+- **AND** 현재 route의 query 없는 history entry를 overlay entry 뒤에 둬 browser back을 같은 document 안에서 처리한다
+- **AND** 사용자가 overlay를 닫거나 dirty draft 폐기를 확인하면 이전 document로 이동하지 않고 현재 route에 남아 `feedback` query를 제거한다
+- **AND** browser forward가 남은 `feedback=open` entry를 다시 방문하면 초기화된 overlay를 다시 열 수 있다
 
 #### Scenario: Close a clean internally opened overlay
 
@@ -60,6 +62,7 @@
 - **THEN** 시스템은 작성 중인 피드백을 버릴지 확인한다
 - **AND** 사용자가 취소하면 overlay, `feedback=open` query와 draft를 유지한다
 - **AND** 사용자가 폐기를 확인하면 overlay를 닫고 해당 close source에 맞는 history 결과를 적용한다
+- **AND** fresh-load overlay의 browser back에서 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다
 
 #### Scenario: Block closing while submitting
 

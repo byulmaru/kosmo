@@ -39,10 +39,14 @@ overlay는 기존 `ModalSheet`를 확장하지 않는 전용 presentation으로 
 
 `FeedbackForm`에는 presentation-neutral 상태 callback만 추가한다. callback은 초기 종류·빈 본문에서 벗어나면 `dirty=true`, Relay mutation이 진행 중이면 `submitting=true`를 보고한다. Form은 query, close, confirmation 또는 history를 알지 않는다. Overlay의 `requestClose`가 close button, backdrop, `Escape`, browser traversal을 받아 submitting이면 차단하고 dirty이면 폐기 확인을 거친 뒤 source에 맞게 back 또는 query-only replace를 수행한다.
 
+fresh-load query overlay는 현재 route의 query 없는 entry를 한 번 만든 뒤 overlay entry를 push하는 단일 same-document barrier를 사용한다. Expo Router의 replace/push 흐름으로 두 entry를 만들고 정규화 중에도 overlay를 유지해 route tree나 draft가 끊기지 않게 한다. 이후 browser back은 이전 document로 빠져나가기 전에 query 없는 현재 route에 도달하므로 기존 `requestClose`가 dirty 확인과 submitting 차단을 적용할 수 있다. 폐기를 확인하거나 clean close하면 그 query 없는 route에 남는다.
+
+barrier entry를 브라우저 history에서 강제로 압축하거나 제거하지 않는다. 따라서 close 뒤 browser forward가 남은 `feedback=open` entry를 방문해 초기화된 overlay를 다시 열 수 있다. 이를 없애기 위한 raw `history.pushState`, marker, 자동 skip 로직은 Expo Router history와의 이중 상태 및 추가 회귀 위험에 비해 이 변경의 필요 범위를 넘으므로 추가하지 않는다.
+
 ### Allowed Alternatives
 
 - 전용 overlay가 spec의 responsive geometry와 lifecycle을 모두 소유한다면 내부에서 기존 `ModalSheet`의 작은 presentation 조각을 조합할 수 있다. 다만 다른 `ModalSheet` 소비자의 계약이나 기본 크기를 변경해서는 안 된다.
-- Expo Router navigation guard 또는 Web history listener 중 어느 방식을 사용해도 된다. dirty 취소 시 URL과 overlay가 유지되고, 내부 push와 fresh-load replace 결과가 spec과 일치해야 한다.
+- Expo Router navigation guard 또는 Web history listener 중 어느 방식을 사용해도 된다. dirty 취소 시 URL과 overlay가 유지되고, 내부 push와 fresh-load barrier 결과가 spec과 일치해야 한다.
 
 ### Known Traps
 
@@ -55,6 +59,7 @@ overlay는 기존 `ModalSheet`를 확장하지 않는 전용 presentation으로 
 ## Risks / Trade-offs
 
 - [browser back은 이미 시작된 traversal이라 dirty guard 구현이 복잡할 수 있음] → URL, overlay, draft가 취소 후 함께 유지되는지 실제 browser history로 검증한다.
+- [fresh-load barrier의 forward entry가 close 뒤 남음] → forward 재진입은 초기화된 form으로 허용하고 history 압축·marker 일반화는 범위에서 제외한다.
 - [React Native Web `Modal`만으로 focus trap과 background inert가 충분하지 않을 수 있음] → 명시적 Web focus 관리와 keyboard 수동 QA를 포함한다.
 - [drawer body lock과 overlay body lock이 연속되면 scroll 복원이 경쟁할 수 있음] → mobile drawer를 먼저 닫고 같은 scroll 좌표를 overlay lifecycle이 인수하는 경로를 검증한다.
 - [shell root 변경이 route header와 rail에 회귀를 만들 수 있음] → overlay가 닫힌 상태의 mobile/compact/full shell story와 기존 shell tests를 함께 실행한다.
