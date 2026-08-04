@@ -50,6 +50,11 @@ const PostListItemFragment = graphql`
       bodyText
       contentWarning
       document
+      media {
+        id
+        altText
+        url
+      }
     }
     profile {
       avatar {
@@ -73,6 +78,11 @@ const PostListItemFragment = graphql`
         bodyText
         contentWarning
         document
+        media {
+          id
+          altText
+          url
+        }
       }
       profile {
         avatar {
@@ -211,6 +221,12 @@ export function PostListItem({
       bodyText: post.content.bodyText,
       contentWarning: post.content.contentWarning,
       document: post.content.document,
+      media:
+        post.content.media?.map(({ altText, id, url }) => ({
+          altText: altText ?? null,
+          id,
+          url: url ?? null,
+        })) ?? null,
       postId: post.id,
     },
     createdAt: post.createdAt,
@@ -228,6 +244,12 @@ export function PostListItem({
             bodyText: source.content.bodyText,
             contentWarning: source.content.contentWarning,
             document: source.content.document,
+            media:
+              source.content.media?.map(({ altText, id, url }) => ({
+                altText: altText ?? null,
+                id,
+                url: url ?? null,
+              })) ?? null,
             postId: source.id,
           }
         : null,

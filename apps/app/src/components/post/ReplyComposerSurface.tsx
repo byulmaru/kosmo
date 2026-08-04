@@ -59,6 +59,11 @@ const ReplyComposerSurfaceParentFragment = graphql`
         bodyText
         contentWarning
         document
+        media {
+          id
+          altText
+          url
+        }
       }
       profile {
         displayName
@@ -381,6 +386,12 @@ function ReplyComposerSurfaceContents({
               bodyText: parent.repostSource.content.bodyText,
               contentWarning: parent.repostSource.content.contentWarning,
               document: parent.repostSource.content.document,
+              media:
+                parent.repostSource.content.media?.map(({ altText, id, url }) => ({
+                  altText: altText ?? null,
+                  id,
+                  url: url ?? null,
+                })) ?? null,
             }
           : null,
         createdAt: parent.repostSource.createdAt,

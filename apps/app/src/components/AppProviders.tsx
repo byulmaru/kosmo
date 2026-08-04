@@ -23,7 +23,7 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
         fallback={
           <SessionErrorProvider>
             <AnalyticsSessionBridge />
-            {children}
+            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
           </SessionErrorProvider>
         }
         resetKey={revision}
@@ -31,7 +31,7 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
           <SessionProvider>
             <AnalyticsSessionBridge />
-            {children}
+            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
           </SessionProvider>
         </Suspense>
       </SessionFailOpenBoundary>
@@ -47,11 +47,9 @@ export function AppProviders({ children }: PropsWithChildren) {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <PostContentWarningRevealProvider>
-          <RelayActorProvider>
-            <RelaySessionBoundary>{children}</RelaySessionBoundary>
-          </RelayActorProvider>
-        </PostContentWarningRevealProvider>
+        <RelayActorProvider>
+          <RelaySessionBoundary>{children}</RelaySessionBoundary>
+        </RelayActorProvider>
       </ToastProvider>
     </ThemeProvider>
   );

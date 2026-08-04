@@ -8,6 +8,7 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { PostMediaItem } from './PostMediaGallery';
 
 export type PresentationProfile = {
   readonly avatar:
@@ -26,6 +27,7 @@ export type PresentationContent = {
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly media: ReadonlyArray<PostMediaItem> | null;
   readonly postId: string;
 };
 
@@ -173,7 +175,7 @@ export function PostSourcePreview({
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
-            media={[]}
+            media={source.content.media ?? null}
             postId={source.content.postId}
             size="md"
           />
@@ -240,7 +242,7 @@ function PostBodyPressTarget({
         bodyText={content.bodyText}
         contentWarning={content.contentWarning}
         document={content.document}
-        media={[]}
+        media={content.media ?? null}
         postId={content.postId}
         size="md"
       />

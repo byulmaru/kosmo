@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { sb } from 'storybook/test';
+import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
@@ -24,37 +25,39 @@ const preview: Preview = {
         <SafeAreaProvider>
           <ThemeProvider>
             <ToastProvider>
-              <RelayStoryProvider
-                mutationError={relay.mutationError}
-                mutationGraphQLErrors={relay.mutationGraphQLErrors}
-                mutationLoading={relay.mutationLoading}
-                mutationResponse={relay.mutationResponse}
-                paginationError={relay.paginationError}
-                paginationLoading={relay.paginationLoading}
-                paginationResponse={relay.paginationResponse}
-                paginationResponses={relay.paginationResponses}
-                operationResponses={relay.operationResponses}
-                queryData={relay.data}
-              >
-                <RouterMockProvider
-                  params={router.params}
-                  pathname={router.pathname}
-                  segments={router.segments}
-                  slotLabel={router.slotLabel}
+              <PostContentWarningRevealProvider>
+                <RelayStoryProvider
+                  mutationError={relay.mutationError}
+                  mutationGraphQLErrors={relay.mutationGraphQLErrors}
+                  mutationLoading={relay.mutationLoading}
+                  mutationResponse={relay.mutationResponse}
+                  paginationError={relay.paginationError}
+                  paginationLoading={relay.paginationLoading}
+                  paginationResponse={relay.paginationResponse}
+                  paginationResponses={relay.paginationResponses}
+                  operationResponses={relay.operationResponses}
+                  queryData={relay.data}
                 >
-                  <Suspense
-                    fallback={
-                      <View style={{ padding: 24 }}>
-                        <Text>스토리를 불러오는 중입니다.</Text>
-                      </View>
-                    }
+                  <RouterMockProvider
+                    params={router.params}
+                    pathname={router.pathname}
+                    segments={router.segments}
+                    slotLabel={router.slotLabel}
                   >
-                    <View style={{ flex: 1, minHeight: '100%', width: '100%' }}>
-                      <Story />
-                    </View>
-                  </Suspense>
-                </RouterMockProvider>
-              </RelayStoryProvider>
+                    <Suspense
+                      fallback={
+                        <View style={{ padding: 24 }}>
+                          <Text>스토리를 불러오는 중입니다.</Text>
+                        </View>
+                      }
+                    >
+                      <View style={{ flex: 1, minHeight: '100%', width: '100%' }}>
+                        <Story />
+                      </View>
+                    </Suspense>
+                  </RouterMockProvider>
+                </RelayStoryProvider>
+              </PostContentWarningRevealProvider>
             </ToastProvider>
           </ThemeProvider>
         </SafeAreaProvider>

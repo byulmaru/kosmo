@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react';
+import { useSession } from '@/session/SessionProvider';
 import type { PropsWithChildren } from 'react';
 
 type Listener = () => void;
@@ -6,12 +7,12 @@ type Listener = () => void;
 export type PostContentWarningRevealStore = {
   get: (postId: string) => boolean;
   set: (postId: string, revealed: boolean) => void;
-  subscribe: (listener: Listener) => () => void;
+  subscribe: (postId: string, listener: Listener) => () => void;
 };
 
 export function createPostContentWarningRevealStore(): PostContentWarningRevealStore {
   const revealedPostIds = new Set<string>();
-  const listeners = new Set<Listener>();
+  const listenersByPostId = new Map<string, Set<Listener>>();
 
   return {
     get(postId) {
@@ -28,32 +29,49 @@ export function createPostContentWarningRevealStore(): PostContentWarningRevealS
       } else {
         revealedPostIds.delete(postId);
       }
-      listeners.forEach((listener) => listener());
+      listenersByPostId.get(postId)?.forEach((listener) => listener());
     },
-    subscribe(listener) {
+    subscribe(postId, listener) {
+      const listeners = listenersByPostId.get(postId) ?? new Set<Listener>();
       listeners.add(listener);
+      listenersByPostId.set(postId, listeners);
       return () => {
         listeners.delete(listener);
+        if (listeners.size === 0) {
+          listenersByPostId.delete(postId);
+        }
       };
     },
   };
 }
 
-const revealStore = createPostContentWarningRevealStore();
-
-const PostContentWarningRevealContext = createContext(revealStore);
+const PostContentWarningRevealContext = createContext<PostContentWarningRevealStore | null>(null);
 
 export function PostContentWarningRevealProvider({ children }: PropsWithChildren) {
+  const { selectedProfileId, sessionId } = useSession();
+  const store = useMemo(
+    () => createPostContentWarningRevealStore(),
+    [selectedProfileId, sessionId],
+  );
+
   return (
-    <PostContentWarningRevealContext.Provider value={revealStore}>
+    <PostContentWarningRevealContext.Provider value={store}>
       {children}
     </PostContentWarningRevealContext.Provider>
   );
 }
 
-export function usePostContentWarningReveal(postId: string) {
+export function usePostContentWarningReveal(postId: string, enabled = true) {
   const store = useContext(PostContentWarningRevealContext);
-  const subscribe = useCallback((listener: Listener) => store.subscribe(listener), [store]);
+  if (!store) {
+    throw new Error(
+      'usePostContentWarningReveal must be used within PostContentWarningRevealProvider.',
+    );
+  }
+  const subscribe = useCallback(
+    (listener: Listener) => (enabled ? store.subscribe(postId, listener) : () => undefined),
+    [enabled, postId, store],
+  );
   const getSnapshot = useCallback(() => store.get(postId), [postId, store]);
   const revealed = useSyncExternalStore(subscribe, getSnapshot, () => false);
   const toggle = useCallback(() => store.set(postId, !store.get(postId)), [postId, store]);

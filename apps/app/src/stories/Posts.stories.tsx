@@ -884,6 +884,12 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
           bodyText: post.content.bodyText,
           contentWarning: post.content.contentWarning,
           document: post.content.document,
+          media:
+            post.content.media?.map(({ altText, id, url }) => ({
+              altText,
+              id,
+              url,
+            })) ?? null,
           postId: post.id,
         }
       : null,
@@ -898,6 +904,12 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
                 bodyText: repostSource.content.bodyText,
                 contentWarning: repostSource.content.contentWarning,
                 document: repostSource.content.document,
+                media:
+                  repostSource.content.media?.map(({ altText, id, url }) => ({
+                    altText,
+                    id,
+                    url,
+                  })) ?? null,
                 postId: repostSource.id,
               }
             : null,

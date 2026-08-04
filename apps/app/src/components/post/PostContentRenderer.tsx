@@ -1,9 +1,9 @@
 import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { match } from 'ts-pattern';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
 import { PostMediaGallery } from './PostMediaGallery';
 import type {
@@ -45,9 +45,9 @@ export function PostContentRenderer({
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
-  const { revealed, toggle } = usePostContentWarningReveal(postId);
   const document = isPostContentDocumentV1(value) ? value.body : null;
   const isProtected = Boolean(contentWarning);
+  const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
   const contentVisible = !isProtected || revealed;
   const bodyStyle = [
     styles.body,
@@ -89,7 +89,9 @@ export function PostContentRenderer({
           testID="post-content-warning"
         >
           <Text style={[styles.warningLabel, { color: theme.text }]}>내용 경고</Text>
-          <Text style={[styles.warningText, { color: theme.textSecondary }]}>{contentWarning}</Text>
+          <Text {...replayBlockProps} style={[styles.warningText, { color: theme.textSecondary }]}>
+            {contentWarning}
+          </Text>
           <Pressable
             accessibilityLabel={revealed ? '내용 다시 가리기' : '내용 보기'}
             accessibilityRole="button"
@@ -194,7 +196,7 @@ const styles = StyleSheet.create({
   link: { textDecorationLine: 'underline' },
   warning: {
     alignItems: 'flex-start',
-    borderRadius: 12,
+    borderRadius: radii.md,
     borderWidth: 1,
     gap: spacing.xs,
     padding: spacing.md,
@@ -203,9 +205,9 @@ const styles = StyleSheet.create({
   warningText: { fontFamily: 'SUIT', ...typography.sm },
   warningButton: {
     alignItems: 'center',
-    borderRadius: 999,
+    borderRadius: radii.full,
     marginTop: spacing.xs,
-    minHeight: 44,
+    minHeight: Platform.OS === 'android' ? 48 : 44,
     paddingHorizontal: spacing.lg,
   },
   warningButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
