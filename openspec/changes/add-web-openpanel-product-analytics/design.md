@@ -16,7 +16,8 @@ OpenPanel Web SDK의 자동 화면·외부 링크·속성 추적은 브라우저
 
 **Non-Goals:**
 
-- Android·iOS 분석 SDK 도입
+- 이번 Web 분석 slice에서 Android·iOS 분석 SDK를 도입하지 않는다. Native 분석 지원·검증은 PROD-537에서
+  별도로 결정한다.
 - 재게시·반응·북마크 이벤트 계측
 - 사용자 설정 기반 분석 opt-out UI
 - OpenPanel Account 데이터 삭제 자동화
@@ -33,7 +34,11 @@ OpenPanel Web SDK의 자동 화면·외부 링크·속성 추적은 브라우저
 
 ### Recommended Approach
 
-플랫폼별 모듈 해석을 사용해 Web 구현은 `@openpanel/web` singleton을 지연 생성하고 native 구현은 동일 API의 no-op으로 둔다. 공통 event helper가 OpenPanel의 event name과 선택적 properties를 그대로 전달하고, 모든 SDK 호출은 오류를 흡수하는 fire-and-forget 경계 뒤에 둔다. 허용된 이벤트와 속성은 실제 성공 경계의 호출부와 payload test로 유지한다.
+플랫폼별 모듈 해석을 사용해 현재 Web 구현은 `@openpanel/web` singleton을 지연 생성하고 Native 구현은 동일 API의
+no-op으로 둔다. 이는 Web SDK가 Native bundle에 도달하지 않게 하는 현재 배포·검증 경계이며, Native 분석 지원을
+영구적으로 막는 계약이 아니다. 공통 event helper가 OpenPanel의 event name과 선택적 properties를 그대로 전달하고,
+모든 SDK 호출은 오류를 흡수하는 fire-and-forget 경계 뒤에 둔다. 허용된 이벤트와 속성은 실제 성공 경계의 호출부와
+payload test로 유지한다.
 
 App provider가 Session query 경계 밖에서 anonymous client를 초기화하여 guest·Session error 화면에서도 자동 수집과 replay를 유지한다. Session 내부의 bridge는 guest에서 이전 identity를 clear하고, valid Session에서 Account ID를 identify한다. 명시적 로그아웃 경계도 서버 로그아웃과 actor reset이 완료된 뒤 identity를 clear한다. Profile·Post·Follow mutation과 검색 UI는 기존 성공 callback에서만 event helper를 호출한다.
 

@@ -1,6 +1,6 @@
 ## Why
 
-Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중앙에서 조사할 수 없어 릴리스별 회귀와 원인을 stack trace 기준으로 추적할 수 없다. 7월 29일 서버·Web 배포 범위에 Sentry 오류 수집을 연결하고 Web 원본 소스 symbolication을 제공하되, 서버 source map과 Android·iOS 범위는 후속 Backlog로 남긴다.
+Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중앙에서 조사할 수 없어 릴리스별 회귀와 원인을 stack trace 기준으로 추적할 수 없다. 7월 29일 서버·Web 배포 범위에 Sentry 오류 수집을 연결하고 Web 원본 소스 symbolication을 제공한다. 현재 Native runtime 관측과 실기기 검증은 이 Web 출시·검증 범위에 포함하지 않으며, 관련 결정·구현은 후속 PROD-483에서 별도로 다룬다.
 
 ## What Changes
 
@@ -10,7 +10,7 @@ Kosmo의 API, Web BFF, Web 앱은 프로덕션 처리되지 않은 예외를 중
 - Sentry SDK가 만든 event와 exception은 `beforeSend`로 정제하지 않고 그대로 전송하며 자동 breadcrumb만 비활성화한다.
 - 로컬 개발과 테스트에는 배포 DSN·환경·release를 기본 주입하지 않아 외부 전송하지 않는다.
 - DSN과 source map 업로드 자격 증명을 Vault·GitHub 배포 설정으로 분리하고 운영 검증·triage 절차를 문서화한다.
-- Android·iOS native runtime과 debug symbol 업로드는 Backlog인 PROD-483에 남긴다.
+- Android·iOS native runtime과 debug symbol 업로드는 현재 변경의 Web 출시·검증에 포함하지 않으며, 후속 PROD-483에서 별도로 결정·검증한다.
 - API·Web BFF의 JavaScript artifact와 TypeScript source map은 Backlog인 PROD-516에 남기고 기존 `tsx` 실행을 유지한다.
 
 ## Authority / Provenance
