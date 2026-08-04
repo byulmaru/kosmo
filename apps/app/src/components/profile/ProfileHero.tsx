@@ -108,7 +108,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
-              <ProfileTagChip key={tag.id} name={tag.name} />
+              <ProfileTagChip key={tag.id} name={tag.name} removable={false} />
             ))}
           </View>
         ) : null}

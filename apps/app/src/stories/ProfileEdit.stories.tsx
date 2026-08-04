@@ -155,9 +155,11 @@ function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyA
 }
 
 function ProfileTagWrappingHarness() {
+  const maxLengthTag = '가'.repeat(20);
+
   return (
     <View style={{ width: 180 }} testID="profile-tag-layout-fixture">
-      <ProfileTagEditor onChange={() => undefined} tags={['가', '나', '아주긴태그이름']} />
+      <ProfileTagEditor onChange={() => undefined} tags={['가', '나', maxLengthTag]} />
     </View>
   );
 }
@@ -546,13 +548,29 @@ export const TagAdjacentAndWrappingTargetsDoNotOverlap: Story = {
   render: () => <ProfileTagWrappingHarness />,
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const fixture = canvas.getByTestId('profile-tag-layout-fixture');
     const actions = canvas.getAllByRole('button', { name: /제거$/ });
     const [first, second, wrapped] = actions.map((action) => action.getBoundingClientRect());
+    const maxLengthTag = '가'.repeat(20);
+    const maxLengthText = canvas.getByText(`#${maxLengthTag}`);
+    const maxLengthChip = maxLengthText.parentElement!;
+    const fixtureBounds = fixture.getBoundingClientRect();
+    const maxLengthChipBounds = maxLengthChip.getBoundingClientRect();
+    const maxLengthTextStyle = getComputedStyle(maxLengthText);
 
     expect(actions).toHaveLength(3);
     expect(Math.round(first!.top)).toBe(Math.round(second!.top));
     expect(first!.right).toBeLessThanOrEqual(second!.left);
     expect(wrapped!.top).toBeGreaterThanOrEqual(first!.bottom);
+    expect(fixture.scrollWidth).toBeLessThanOrEqual(fixture.clientWidth + 1);
+    expect(maxLengthChipBounds.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(wrapped!.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(maxLengthChipBounds.height).toBe(32);
+    expect(maxLengthTextStyle.whiteSpace).toBe('nowrap');
+    expect(maxLengthTextStyle.textOverflow).toBe('ellipsis');
+    expect(maxLengthTextStyle.overflow).toBe('hidden');
+    expect(maxLengthText.scrollWidth).toBeGreaterThan(maxLengthText.clientWidth);
+    expect(canvas.getByLabelText(`#${maxLengthTag}`)).toBe(maxLengthText);
     for (const target of [first!, second!, wrapped!]) {
       expect(Math.round(target.width)).toBe(32);
       expect(Math.round(target.height)).toBe(32);
