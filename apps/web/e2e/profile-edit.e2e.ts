@@ -136,6 +136,84 @@ test('Ready avatar/header ID 저장도 응답 결과와 최종 Profile route를 
   await expect(page).toHaveURL(/\/@prod613-ready-media$/);
 });
 
+test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프로필에 비상호작용 칩으로 표시된다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession({ handle: 'prod527-tags' });
+  expect(session.profile).not.toBeNull();
+  await setE2ESessionCookie(context, session.token);
+
+  let updateVariables: Record<string, unknown> | null = null;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'ProfileEditRouteUpdateProfileMutation') {
+      updateVariables = operation.variables ?? null;
+    }
+    await route.fallback();
+  });
+
+  await page.goto('/profile-edit');
+  await page.getByRole('textbox', { name: '소개' }).fill('PROD-527 공개 표시 순서');
+  await addProfileTag(page, 'FirstWrite');
+  await addProfileTag(page, '길게표시되는프로필태그');
+
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/graphql' &&
+      isGraphQLOperation(response.request().postData(), 'ProfileEditRouteUpdateProfileMutation'),
+  );
+  await page.getByRole('button', { name: '저장', exact: true }).click();
+  const body = (await (await responsePromise).json()) as {
+    data?: {
+      updateProfile?: {
+        profile?: {
+          relativeHandle?: string | null;
+          tags?: ReadonlyArray<{ id?: string | null; name?: string | null }>;
+        } | null;
+      } | null;
+    } | null;
+    errors?: unknown[];
+  };
+
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  expect(updateVariables).toMatchObject({
+    input: { tags: ['FirstWrite', '길게표시되는프로필태그'] },
+  });
+  const updatedProfile = body.data?.updateProfile?.profile;
+  expect(updatedProfile?.relativeHandle).toBe('@prod527-tags');
+  expect(updatedProfile?.tags).toHaveLength(2);
+  expect(updatedProfile?.tags).toEqual(
+    expect.arrayContaining([
+      { id: expect.any(String), name: 'FirstWrite' },
+      { id: expect.any(String), name: '길게표시되는프로필태그' },
+    ]),
+  );
+  await expect(page).toHaveURL(/\/@prod527-tags$/);
+
+  // Relay cache만이 아니라 저장된 서버 상태를 다시 조회한다.
+  await page.reload();
+  await expect(page.getByText('#FirstWrite', { exact: true })).toBeVisible();
+  await expect(page.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
+
+  const tagList = page.getByTestId('profile-tag-list');
+  await expect(tagList).toBeVisible();
+  await expect(tagList).toHaveCSS('flex-wrap', 'wrap');
+  await expect(tagList.getByText('#FirstWrite', { exact: true })).toBeVisible();
+  await expect(tagList.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
+  await expect(
+    tagList.evaluate((node) => ({
+      next: node.nextElementSibling?.textContent,
+      previous: node.previousElementSibling?.textContent,
+    })),
+  ).resolves.toMatchObject({
+    next: expect.stringContaining('팔로잉'),
+    previous: 'PROD-527 공개 표시 순서',
+  });
+  await expect(page.getByRole('link', { name: '#FirstWrite' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '#FirstWrite' })).toHaveCount(0);
+});
+
 async function selectReplacement(page: Page, triggerName: string, fileName: string) {
   await page.getByRole('button', { name: triggerName, exact: true }).click();
   const chooserPromise = page.waitForEvent('filechooser');
@@ -146,4 +224,9 @@ async function selectReplacement(page: Page, triggerName: string, fileName: stri
     mimeType: 'image/webp',
     name: fileName,
   });
+}
+
+async function addProfileTag(page: Page, tag: string) {
+  await page.getByRole('textbox', { name: '프로필 태그' }).fill(tag);
+  await page.getByRole('button', { name: '태그 추가', exact: true }).click();
 }

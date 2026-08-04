@@ -33,11 +33,11 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 - Active Account가 현재 선택한 Active Local Owner Profile의 성공과 Member·비-Owner·selected Profile 없음·inactive Account·Deactivated·Remote·Deleted·Suspended 거부, omitted·null·empty·임의 개수 tags, canonical identity duplicate, rollback, 서로 다른 field의 partial scalar 동시 보존과 서로 다른 Profile의 Hashtag 역순 upsert 경합을 service·GraphQL database integration test로 검증한다. 같은 Profile concurrent replacement의 strict 전체 목록 결과는 계약하지 않으며 해당 보장을 가정하는 테스트를 두지 않는다. 관계 저장·조회와 API 배열의 순서를 가정하지 않는 테스트를 포함한다.
 - schema snapshot, Hashtag global ID·first-write-wins 표시 이름, Profile Origin/연결 Instance Kind가 Local인 모든 Profile의 관계 batch 조회·Remote 빈 목록·query count와 `Profile.tags: [Hashtag!]!` 배열 순서 비보장 계약을 API test로 검증하고 `pnpm --filter @kosmo/core test`, `pnpm --filter @kosmo/api test`, schema·type check를 통과시킨다.
 
-- [ ] 1.1 Hashtag-owned Name normalization·syntax·length·canonical-name uniqueness와 first-write-wins Display Hashtag Name, Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
-- [ ] 1.2 canonical Hashtag identity와 `(profile_id, hashtag_id)` Profile 관계의 additive schema·migration을 구현하고 position column·position unique/check·제품 max count 없이 fresh/upgrade·제약 test를 추가한다. 상태 전이 관계 보존과 물리 Profile row 삭제 FK cascade를 각각 검증한다.
-- [ ] 1.3 Active Account Owner·Active·Local·Normal 조건을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated/Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
-- [ ] 1.4 global `id`와 Display Hashtag Name을 가진 GraphQL `Profile.tags: [Hashtag!]!`와 대상 ID 없는 selected Profile update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 공개 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 selected Profile authorization integration test를 추가한다.
-- [ ] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 및 상태별 관계 보존 증거를 기록한다.
+- [x] 1.1 Hashtag-owned Name normalization·syntax·length·canonical-name uniqueness와 first-write-wins Display Hashtag Name, Profile Tag 목록의 canonical identity duplicate validation을 구현하고 경계·동등성·중복 unit test를 추가한다.
+- [x] 1.2 canonical Hashtag identity와 `(profile_id, hashtag_id)` Profile 관계의 additive schema·migration을 구현하고 position column·position unique/check·제품 max count 없이 fresh/upgrade·제약 test를 추가한다. 상태 전이 관계 보존과 물리 Profile row 삭제 FK cascade를 각각 검증한다.
+- [x] 1.3 Active Account Owner·Active·Local·Normal 조건을 검증하면서 Profile 값과 전체 Tag 목록을 원자적으로 교체하는 service 동작을 구현하고 성공·Deactivated/Deleted/Suspended/Remote/non-Owner/inactive Account 거부·canonical identity duplicate·rollback·동시성 DB test를 추가한다. 관계나 반환 배열 순서를 의미 있는 결과로 가정하지 않는다.
+- [x] 1.4 global `id`와 Display Hashtag Name을 가진 GraphQL `Profile.tags: [Hashtag!]!`와 대상 ID 없는 selected Profile update input·payload를 구현하고 Profile Origin/연결 Instance Kind가 Local인 모든 공개 Profile의 관계 batch 조회, Remote 빈 목록, 배열 순서 비보장, 입력 의미와 selected Profile authorization integration test를 추가한다.
+- [x] 1.5 `@kosmo/core`·`@kosmo/api` 필수 검증과 schema 동기화를 통과시키고 `PROD-526` PR에 migration·권한·transaction·query-count 및 상태별 관계 보존 증거를 기록한다.
 
 ## 2. PROD-527 프로필 수정·공개 화면 연결
 
@@ -70,15 +70,15 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 **Verification**
 
 - `PROD-491` editor의 기본·추가·제거·임의 개수·invalid·canonical identity duplicate 상태가 연결 뒤에도 회귀하지 않고 pending·server failure·retry·Relay 성공 상태와 함께 동작하는지 component/Storybook interaction test로 검증한다. 순서 변경·max count 제약이 추가되지 않았는지도 확인한다.
-- Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, 공통 `32×32` 시각 크기와 Web `32×32 CSS px`·iOS `44×44 pt`·Android `48×48 dp` 실제 target, Web Tab·focus-visible·Enter/Space 입력과 pointer·touch 결과 parity, accessibility label/state·색 외 상태 표현을 접근성·layout test로 보강한다. iOS·Android 확장 target의 인접한 다른 TagChip 제거 action 비중첩과 좁은 화면 여러 줄 wrapping을 검증하는 최소 fixture(인접한 두 TagChip과 wrapping으로 서로 다른 줄에 배치된 TagChip)를 보조 증거로 포함하되 runtime 관찰을 대체하지 않는다. 실제 iOS·Android 기기 또는 시뮬레이터에서 인접 및 wrapping 경계의 hit/touch target 비중첩을 관찰하고 플랫폼·viewport·입력 방식·결과 증거를 `PROD-527` PR에 기록하며, 순서 변경 control이 없음을 검증한다.
-- 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 Web·Android·iOS 공용 상태 카탈로그에서 검증한다.
+- Hashtag-owned client validation과 server parity를 재사용했는지 확인하고, 공통 `32×32` 시각 크기와 Web `32×32 CSS px` target, Web Tab·focus-visible·Enter/Space 입력과 pointer·touch 결과 parity, accessibility label/state·색 외 상태 표현을 React Native Web 접근성·layout test로 보강한다. 인접한 두 TagChip과 wrapping으로 서로 다른 줄에 배치된 TagChip fixture도 Web target의 비중첩 증거로 사용한다. iOS `44×44 pt`·Android `48×48 dp` target mapping은 현재 구현의 정적 확인 범위로 기록한다. 실제 iOS·Android 기기·simulator의 target·인접 action 비중첩·여러 줄 wrapping·접근성 runtime 관찰은 `PROD-527` Ready와 구현 완료 조건에서 제외하고 Native 출시 gate에서 다시 수행하며, 현재 자동화 또는 완료 증거로 주장하지 않는다.
+- 빈/임의 개수/긴 Local tags와 Remote 빈 tags를 React Native Web Storybook 상태 카탈로그에서 검증한다. `240px` fixture에서는 모든 TagChip 관계가 남아 있으면서 개별 공용 chip이 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 유지하는지 확인한다.
 - Owner 편집 저장부터 공개 Profile 재조회·표시까지 Web E2E를 검증하고 `pnpm --filter @kosmo/app test`, `pnpm --filter @kosmo/web test`의 관련 suite를 통과시킨다.
 
-- [ ] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
-- [ ] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target을 재사용하고 회귀·server parity를 검증하며, `PROD-527` 연결 뒤 Web `32×32 CSS px`·iOS `44×44 pt`·Android `48×48 dp` runtime 상태를 보강한다. Web 제거 action의 Tab focus·focus-visible 유지와 Enter/Space의 pointer·touch 결과 parity, iOS·Android 확장 target의 인접한 다른 TagChip 제거 action 비중첩 및 여러 줄 wrapping을 검증하는 최소 adjacent/wrapping fixture(인접한 두 TagChip과 wrapping으로 서로 다른 줄에 배치된 TagChip)를 보조로 포함한다. 실제 iOS·Android 기기 또는 시뮬레이터에서 같은 경계의 hit/touch target 비중첩을 관찰하고 플랫폼·viewport·입력 방식·결과 증거를 `PROD-527` PR에 기록한다. max count·순서 변경 control은 추가하지 않는다.
-- [ ] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
-- [ ] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
-- [ ] 2.5 Web·Android·iOS 공용 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거를 기록한다.
+- [x] 2.1 `PROD-491`의 controlled Profile Tag editor를 재작성하지 않고 `PROD-492` Profile edit route·저장 흐름에 연결해 현재 tags를 초기화한다.
+- [x] 2.2 `PROD-491`의 Hashtag Name normalization 미리보기·문자·길이·canonical identity duplicate validation과 플랫폼별 제거 target 구현을 재사용하고 회귀·server parity를 검증한다. 편집기와 공개 Profile이 공유하는 TagChip은 높이 `32`, 한 줄 tail ellipsis와 전체 접근성 이름을 제공한다. React Native Web component와 adjacent/wrapping fixture로 Web `32×32 CSS px` target, Tab focus·focus-visible 유지와 Enter/Space의 pointer·touch 결과 parity 및 Web layout을 확인한다. iOS `44×44 pt`·Android `48×48 dp` target mapping은 소스에서 확인했으며, 실제 Native target·비중첩·wrapping·접근성 QA는 Native 출시 gate로 이관해 현재 자동화 또는 완료 증거로 주장하지 않는다. max count·순서 변경 control은 추가하지 않는다.
+- [x] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
+- [x] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고, 목록은 chip 사이에서 감싸되 개별 공용 chip은 높이 `32`·한 줄 ellipsis·전체 접근성 이름을 유지하도록 한다. 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
+- [x] 2.5 React Native Web Storybook의 `240px` fixture에서 공용 TagChip 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 검증한다. 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E 관련 범위를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거와 현재 Web runtime 검증 경계를 기록한다. 실제 iOS·Android runtime QA는 Native 출시 gate로 이관한다.
 
 ## 3. PROD-522 통합 검증과 OpenSpec archive
 
