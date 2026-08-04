@@ -93,7 +93,7 @@ describe('PostContentWarningRevealStore', () => {
 });
 
 describe('PostContentWarningRevealProvider', () => {
-  it('creates a new store when the selected profile or session changes', async () => {
+  it('shares Post.id reveal state within one selected Profile/session lifecycle and resets on transition', async () => {
     await act(async () => {
       renderer = create(renderProvider());
     });

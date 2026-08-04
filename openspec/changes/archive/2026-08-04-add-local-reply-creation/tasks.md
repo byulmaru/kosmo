@@ -174,7 +174,7 @@
 - `PostContentDocument` 구조나 schema version을 바꾸지 않고 Content Warning 전용 모델·DB 컬럼을 만들지 않는다.
 - Parent Content Warning은 Reply draft 초기화 시 한 번만 복사한다. 이후 Parent와 동기화하지 않으며 사용자의 수정·제거를 허용한다.
 - Content Warning은 본문과 합산한 500자 검증, dirty/reset/error/pending lifecycle에 참여한다. Content Warning만 있고 본문과 Media가 모두 없는 입력은 contentful Post 또는 Reply로 취급하지 않는다.
-- reveal 상태는 component·route·surface·selected Profile·PostContent revision이 아닌 canonical `Post.id`를 key로 하며 Home·Profile·Thread와 Reply Parent preview가 공유한다.
+- reveal 상태는 하나의 selected Profile·session lifecycle 안에서 component·route·surface·PostContent revision이 아닌 canonical `Post.id`를 key로 하며 Home·Profile·Thread와 Reply Parent preview가 공유한다. selected Profile 또는 session 전환 시 Provider는 새 store를 만들어 이전 lifecycle 상태를 초기화한다.
 - reveal 상태는 client 표시 상태로만 관리하고 서버에 저장·동기화하지 않는다. Sensitive Media 공개 상태와도 독립적이다.
 
 **Verification**

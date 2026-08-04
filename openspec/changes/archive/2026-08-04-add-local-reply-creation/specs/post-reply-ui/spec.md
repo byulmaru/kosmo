@@ -136,6 +136,14 @@
 - **THEN** 현재 mounted되어 있거나 이후 표시되는 다른 surface의 같은 `Post.id`도 동일한 reveal 상태를 사용한다
 - **AND** component instance, route, surface, selected Profile 또는 PostContent revision별 별도 reveal 상태를 만들지 않는다
 - **AND** component unmount·remount나 surface 이동만으로 같은 Post의 reveal 상태를 초기화하지 않는다
+- **AND** 이 공유는 현재 selected Profile·session lifecycle 안에서만 적용하며, 그 lifecycle의 공용 key는 canonical `Post.id`다
+
+#### Scenario: selected Profile 또는 session 전환
+
+- **WHEN** selected Profile이 바뀌거나 session이 로그아웃·교체되어 새 lifecycle이 시작된다
+- **THEN** Provider는 새 reveal store를 생성하고 이전 lifecycle의 모든 Post reveal 상태를 초기화한다
+- **AND** 이전 lifecycle에서 reveal된 Post가 새 Profile·session의 같은 `Post.id`로 표시되어도 가림 상태로 시작한다
+- **AND** 이 reset은 같은 lifecycle 안의 surface 이동·component remount reset과 구분된다
 
 #### Scenario: Content Warning의 초기 가림과 독립 상태
 

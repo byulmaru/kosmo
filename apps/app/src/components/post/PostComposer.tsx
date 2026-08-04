@@ -509,7 +509,7 @@ function PostComposerContents({
         <TextArea
           ref={editor}
           aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-          aria-invalid={Boolean(error)}
+          aria-invalid={Boolean(error) || remaining < 0}
           accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
           accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
           editable={!submitting}
@@ -521,6 +521,9 @@ function PostComposerContents({
           value={body}
         />
         <TextField
+          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+          aria-invalid={remaining < 0}
+          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
           accessibilityLabel={replyMode ? '답글 내용 경고' : '게시글 내용 경고'}
           editable={!submitting}
           onChangeText={setContentWarning}

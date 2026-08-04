@@ -111,6 +111,10 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - reveal 상태의 key는 component instance, route, surface, selected Profile 또는 Post Content revision이 아니라
   canonical `Post.id`다. Home, Profile, Thread와 Reply Composer의 Parent preview를 포함해 같은 Post를 표시하는
   모든 surface는 하나의 공용 상태를 관찰한다.
+- 이 공용 상태의 수명은 하나의 selected Profile·session lifecycle 안으로 한정한다. 같은 lifecycle에서는
+  canonical `Post.id`만으로 surface와 remount 사이의 상태를 공유하지만, selected Profile 또는 session이 바뀌면
+  Provider가 새 store를 만들고 모든 reveal 상태를 안전하게 초기화한다. 이 lifecycle reset은 다른 Post·Profile·session으로
+  상태가 전파되지 않게 하는 예외이며, 같은 Post의 surface 이동·remount reset과 구분한다.
 - 한 surface에서 같은 Post를 reveal하거나 다시 가리면 이미 mounted된 다른 surface와 이후 표시되는 surface도
   같은 상태를 사용한다. component unmount·remount나 surface 간 이동만으로 같은 Post의 상태를 초기화하지
   않는다.

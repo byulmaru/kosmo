@@ -12,6 +12,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
+import { PostContentRenderer } from '@/components/post/PostContentRenderer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
@@ -1617,6 +1618,26 @@ function ComposerStory() {
   return (
     <Catalog>
       <PostComposer profile={usePostsStoryData().composerProfile} />
+    </Catalog>
+  );
+}
+
+function ContentWarningRevealStory() {
+  return (
+    <Catalog>
+      <PostContentRenderer
+        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        contentWarning="민감한 내용이 포함되어 있습니다."
+        document={null}
+        media={[
+          {
+            altText: '가림 해제 뒤 표시되는 이미지',
+            id: 'content-warning-media',
+            url: postMediaImageUri,
+          },
+        ]}
+        postId="content-warning-story-post"
+      />
     </Catalog>
   );
 }
@@ -4540,6 +4561,30 @@ export const ComposerDefault: Story = {
     expect(getComputedStyle(body).outlineStyle).not.toBe('none');
   },
   render: () => <ComposerStory />,
+};
+
+export const ContentWarningReveal: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = canvas.getByTestId('post-content-renderer');
+    expect(root).toHaveAttribute('data-openpanel-replay-block', '');
+    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
+
+    const toggle = canvas.getByRole('button', { name: '내용 보기' });
+    toggle.focus();
+    expect(toggle).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
+    const gallery = canvas.getByTestId('post-media-gallery');
+    expect(gallery).toBeVisible();
+    expect(gallery.closest('[data-openpanel-replay-block]')).toBe(root);
+
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
+  },
+  render: () => <ContentWarningRevealStory />,
 };
 
 export const ComposerMediaStates: Story = {
