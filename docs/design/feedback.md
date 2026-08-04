@@ -62,6 +62,10 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
   닫거나 dirty draft 폐기를 확인하면 이전 document로 이동하지 않고 현재 route에 남아 `feedback` query만
   제거한다. 이 단순 barrier는 닫힌 뒤 forward history에 남을 수 있으므로 browser forward가 초기화된 overlay를
   다시 열 수 있다.
+- Navigation API history index를 제공하지 않는 환경에서 사용자가 browser Back을 매우 빠르게 연속 실행해 단일
+  same-document barrier보다 여러 entry를 한 번에 지나가면 현재 document의 `popstate` guard가 이전 document
+  이탈을 가로채지 못할 수 있다. 이번 범위는 이 제한을 허용한다. 일반적인 단일 Back과 history index를 제공하는
+  환경의 연속 Back은 기존 `requestClose` 정책으로 보호한다.
 - shell 진입으로 연 overlay의 clean close는 push 전 history entry로 돌아간다. browser forward로 query entry를
   다시 방문하면 overlay를 다시 연다.
 - 종류나 본문이 초기값에서 바뀐 dirty 상태의 close는 draft 폐기 확인을 거친다. 취소하면 overlay, query와
@@ -99,6 +103,8 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - 기존 Web E2E로 인증된 진입, 제출 payload, 성공 초기화, 실패 후 입력 유지가 바뀌지 않았음을 검증한다.
 - Web shell에서 현재 route query를 보존한 open, clean close와 browser back/forward, fresh-load barrier close,
   dirty 폐기 확인 뒤 현재 route 유지, submitting close 차단과 fresh-load close 뒤 forward 재진입을 검증한다.
+- history index를 제공하는 환경에서 fresh-load overlay의 빠른 연속 Back도 `requestClose` 정책과 현재 route를
+  유지하는지 검증한다. index가 없는 환경의 다중 entry 연속 이탈 보장은 검증 범위가 아니다.
 - `390px`에서 bottom sheet, `900px`와 `1400px`에서 중앙 dialog geometry와 body 내부 scroll을 확인한다.
 - keyboard로 open, focus trap, `Escape`, 닫기 후 trigger focus·document scroll 복원과 배경 상호작용 차단을
   실제 Web runtime에서 확인한다.
@@ -112,6 +118,8 @@ surface 변경으로 Native의 기존 page chrome이나 시각 구조를 바꾸�
 - `/feedback` route 및 인증 경계 변경
 - Android/iOS 피드백 화면 변경
 - PROD-487이 소유한 접근성 semantics 재설계
+- history index가 없는 환경의 빠른 다중 entry Back 이탈을 막기 위한 `beforeunload` native prompt, raw history
+  marker·자동 압축 또는 복수 same-document barrier 일반화
 
 PROD-547은 새 사용자 행동이나 제출 계약을 추가하지 않고 기존 행동을 보존한 채 Web 시각 구조를 정리했다.
 PROD-594는 그 form과 `/feedback` page를 유지하면서 Web shell의 query-backed overlay navigation과 lifecycle만

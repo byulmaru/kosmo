@@ -23,10 +23,10 @@
 - Authority / Provenance: `docs/design/feedback.md`, `PROD-594`
 - Status: Active
 - Context / Problem: `feedback=open` route를 직접 열거나 새로고침한 document의 browser back은 이전 document로 이탈하므로 현재 document의 `popstate` 기반 dirty/submitting 정책을 우회할 수 있다.
-- Decision Outcome: fresh-load overlay 뒤에 현재 route의 query 없는 history entry를 한 번 만들고 overlay entry를 push한다. Browser back은 이 same-document barrier에서 기존 `requestClose` 정책을 적용하며, 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다.
+- Decision Outcome: fresh-load overlay 뒤에 현재 route의 query 없는 history entry를 한 번 만들고 overlay entry를 push한다. 일반적인 단일 Back은 이 same-document barrier에서 기존 `requestClose` 정책을 적용한다. Navigation API history index를 제공하는 환경에서 빠른 연속 Back이 target을 지나치면 ID/index로 target을 확인해 복원한다. 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다.
 - Alternatives Considered: `beforeunload`는 reload와 tab close까지 native prompt를 노출하고 submitting 이탈을 확실히 차단하지 못한다. Navigation API 전용 interception은 API가 없거나 비활성화된 환경을 보호하지 못한다. Marker와 자동 history 압축은 Expo Router history와 이중 상태를 만들고 범위를 불필요하게 넓힌다.
-- Consequences: close 뒤 남은 forward entry를 방문하면 초기화된 overlay가 다시 열릴 수 있다. 이 동작을 허용하고 별도 marker·자동 skip·raw history state는 추가하지 않는다.
-- Confirmation / Follow-up: 이전 document에서 fresh-load overlay로 진입한 뒤 dirty 취소·폐기와 submitting browser back을 검증하고, 폐기 뒤 현재 route 유지 및 forward 시 빈 overlay 재진입을 확인한다.
+- Consequences: close 뒤 남은 forward entry를 방문하면 초기화된 overlay가 다시 열릴 수 있다. Navigation API history index가 없는 환경에서 사용자가 단일 barrier보다 여러 entry를 매우 빠르게 지나가면 현재 document의 guard가 적용되기 전에 이전 document로 이탈할 수 있다. 두 동작을 허용하고 `beforeunload`, 별도 marker·자동 skip·raw history state 또는 복수 barrier는 추가하지 않는다.
+- Confirmation / Follow-up: 이전 document에서 fresh-load overlay로 진입한 뒤 일반적인 단일 Back의 dirty 취소·폐기와 submitting 차단, index-backed 빠른 연속 Back의 target 복원, 폐기 뒤 현재 route 유지 및 forward 시 빈 overlay 재진입을 확인한다. no-index 빠른 다중 entry 이탈은 알려진 제한으로 기록한다.
 
 ### 성공 후 overlay를 유지해 연속 제출을 허용한다
 

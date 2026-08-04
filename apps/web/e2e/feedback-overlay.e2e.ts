@@ -220,6 +220,47 @@ test('dirty browser back은 query와 draft를 유지하고 폐기 확인 뒤에�
   await expect(page.getByRole('dialog', { name: '피드백 보내기' })).toHaveCount(0);
 });
 
+test('history index 환경의 fresh-load 연속 browser back은 query와 draft를 유지한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({ profile: false });
+  await setE2ESessionCookie(context, viewer.token);
+
+  await page.goto('/search');
+  await page.goto('/home?feedback=open');
+  expect(
+    await page.evaluate(
+      () =>
+        typeof (
+          window as typeof window & {
+            navigation?: { currentEntry?: { index?: unknown } };
+          }
+        ).navigation?.currentEntry?.index,
+    ),
+  ).toBe('number');
+  const dialog = page.getByRole('dialog', { name: '피드백 보내기' });
+  const body = dialog.getByRole('textbox', { name: '피드백 내용' });
+  await body.fill('연속 뒤로가기에도 남아야 하는 피드백');
+
+  await page.evaluate(() => {
+    history.back();
+    history.back();
+  });
+
+  const confirm = page.getByRole('alertdialog', { name: '작성 중인 피드백을 버릴까요?' });
+  await expect(confirm).toBeVisible();
+  await expect(page).toHaveURL(/\/home\?feedback=open$/u);
+  await confirm.getByRole('button', { name: '피드백 버리기' }).click();
+  await expect(page).toHaveURL(/\/home$/u);
+  await expect(dialog).toHaveCount(0);
+
+  await page.goForward();
+  await expect(page).toHaveURL(/\/home\?feedback=open$/u);
+  await expect(dialog).toBeVisible();
+  await expect(body).toHaveValue('');
+});
+
 test('reload 후 history index와 origin이 없어도 다단계 back을 현재 route에서 처리한다', async ({
   context,
   page,

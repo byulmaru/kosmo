@@ -67,7 +67,9 @@ export function FeedbackOverlay({
   const bypassHistoryGuardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackHistoryRestoreRef = useRef<FallbackHistoryRestore | null>(null);
   const formStateRef = useRef(formState);
+  const historyRestoreRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyRestoringRef = useRef(false);
+  const historyRestoreTargetRef = useRef<BrowserHistoryEntry | null>(null);
   const mainRef = useRef<NativeView>(null);
   const overlayHistoryEntryRef = useRef<BrowserHistoryEntry | null>(null);
   const pendingCloseActionRef = useRef<CloseAction | null>(null);
@@ -177,6 +179,10 @@ export function FeedbackOverlay({
     }
 
     const moveFallbackHistory = (restore: FallbackHistoryRestore) => {
+      if (historyRestoreRetryTimeoutRef.current) {
+        clearTimeout(historyRestoreRetryTimeoutRef.current);
+        historyRestoreRetryTimeoutRef.current = null;
+      }
       if (restore.timeout) {
         clearTimeout(restore.timeout);
       }
@@ -192,9 +198,33 @@ export function FeedbackOverlay({
 
         fallbackHistoryRestoreRef.current = null;
         historyRestoringRef.current = false;
+        historyRestoreTargetRef.current = null;
         setHistoryRestorePending(false);
       }, 250);
       window.history.go(restore.direction);
+    };
+
+    const moveHistoryToTarget = (target: BrowserHistoryEntry, fallbackDelta?: number) => {
+      if (historyRestoreRetryTimeoutRef.current) {
+        clearTimeout(historyRestoreRetryTimeoutRef.current);
+      }
+      const currentEntry = getBrowserHistoryEntry();
+      const delta =
+        currentEntry.index !== null && target.index !== null
+          ? target.index - currentEntry.index
+          : fallbackDelta;
+      if (!delta) {
+        historyRestoreRetryTimeoutRef.current = null;
+        return;
+      }
+
+      window.history.go(delta);
+      historyRestoreRetryTimeoutRef.current = setTimeout(() => {
+        if (historyRestoreTargetRef.current !== target) {
+          return;
+        }
+        moveHistoryToTarget(target, delta);
+      }, 250);
     };
 
     const handlePopState = (event: PopStateEvent) => {
@@ -221,11 +251,43 @@ export function FeedbackOverlay({
 
         fallbackHistoryRestoreRef.current = null;
         historyRestoringRef.current = false;
+        historyRestoreTargetRef.current = null;
         setHistoryRestorePending(false);
         requestCloseRef.current(() => {
           armHistoryGuardBypass();
           window.history.go(-fallbackRestore.delta);
         });
+        return;
+      }
+      const historyRestoreTarget = historyRestoreTargetRef.current;
+      if (historyRestoreTarget) {
+        const currentEntry = getBrowserHistoryEntry();
+        if (isSameBrowserHistoryEntry(currentEntry, historyRestoreTarget)) {
+          if (historyRestoreRetryTimeoutRef.current) {
+            clearTimeout(historyRestoreRetryTimeoutRef.current);
+            historyRestoreRetryTimeoutRef.current = null;
+          }
+          historyRestoringRef.current = false;
+          historyRestoreTargetRef.current = null;
+          setHistoryRestorePending(false);
+          return;
+        }
+
+        event.stopImmediatePropagation();
+        if (currentEntry.index !== null && historyRestoreTarget.index !== null) {
+          moveHistoryToTarget(historyRestoreTarget);
+          return;
+        }
+        if (historyRestoreTarget.id) {
+          const fallbackRestore: FallbackHistoryRestore = {
+            delta: 0,
+            direction: 1,
+            overlayId: historyRestoreTarget.id,
+            timeout: null,
+          };
+          fallbackHistoryRestoreRef.current = fallbackRestore;
+          moveFallbackHistory(fallbackRestore);
+        }
         return;
       }
       if (historyRestoringRef.current) {
@@ -246,6 +308,7 @@ export function FeedbackOverlay({
         overlay: overlayEntry,
       });
       historyRestoringRef.current = true;
+      historyRestoreTargetRef.current = overlayEntry;
       setHistoryRestorePending(true);
       if (attemptedDelta === null && overlayEntry?.id) {
         const fallbackRestore: FallbackHistoryRestore = {
@@ -263,7 +326,11 @@ export function FeedbackOverlay({
         armHistoryGuardBypass();
         window.history.go(resolvedDelta);
       });
-      window.history.go(-resolvedDelta);
+      if (overlayEntry) {
+        moveHistoryToTarget(overlayEntry, -resolvedDelta);
+      } else {
+        window.history.go(-resolvedDelta);
+      }
     };
 
     return registerFeedbackHistoryGuard(handlePopState);
@@ -276,6 +343,9 @@ export function FeedbackOverlay({
       }
       if (fallbackHistoryRestoreRef.current?.timeout) {
         clearTimeout(fallbackHistoryRestoreRef.current.timeout);
+      }
+      if (historyRestoreRetryTimeoutRef.current) {
+        clearTimeout(historyRestoreRetryTimeoutRef.current);
       }
     },
     [],
@@ -487,6 +557,13 @@ function getBrowserHistoryEntry(): BrowserHistoryEntry {
     id: typeof state?.id === 'string' ? state.id : null,
     index: typeof index === 'number' ? index : null,
   };
+}
+
+function isSameBrowserHistoryEntry(current: BrowserHistoryEntry, expected: BrowserHistoryEntry) {
+  if (expected.id) {
+    return current.id === expected.id;
+  }
+  return expected.index !== null && current.index === expected.index;
 }
 
 function getAttemptedHistoryDelta({

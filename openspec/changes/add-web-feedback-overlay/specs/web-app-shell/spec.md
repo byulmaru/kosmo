@@ -44,6 +44,19 @@
 - **AND** 사용자가 overlay를 닫거나 dirty draft 폐기를 확인하면 이전 document로 이동하지 않고 현재 route에 남아 `feedback` query를 제거한다
 - **AND** browser forward가 남은 `feedback=open` entry를 다시 방문하면 초기화된 overlay를 다시 열 수 있다
 
+#### Scenario: Protect supported fresh-load browser traversal
+
+- **WHEN** fresh-load overlay에서 사용자가 browser Back을 한 번 실행하거나, 현재 document의 `popstate`에서 관찰되는 단일 다단계 traversal을 실행하거나, Navigation API history index를 제공하는 환경에서 Back을 빠르게 연속 실행한다
+- **THEN** 시스템은 same-document barrier와 history target 복원을 통해 `requestClose` 정책을 적용한다
+- **AND** dirty 취소 또는 submitting 차단이면 overlay, `feedback=open` query와 form 상태를 유지한다
+- **AND** dirty 폐기를 확인하면 이전 document가 아니라 현재 query 없는 route에 남는다
+
+#### Scenario: Allow no-index rapid multi-entry escape
+
+- **WHEN** Navigation API history index를 제공하지 않는 환경에서 사용자가 browser Back을 매우 빠르게 연속 실행해 단일 same-document barrier보다 여러 entry를 한 번에 지나간다
+- **THEN** 현재 document의 `popstate` guard가 dirty/submitting 정책을 적용하기 전에 이전 document로 이탈할 수 있다
+- **AND** 시스템은 이 제한을 없애기 위한 `beforeunload` native prompt, raw history marker·자동 압축 또는 복수 same-document barrier를 추가하지 않는다
+
 #### Scenario: Close a clean internally opened overlay
 
 - **WHEN** shell 진입점이 push한 피드백 overlay에 변경된 draft가 없고 제출 중이 아닌 상태에서 사용자가 닫기 버튼, backdrop 또는 `Escape`를 실행한다
@@ -52,7 +65,7 @@
 
 #### Scenario: Close with browser back
 
-- **WHEN** shell 진입점이 push한 피드백 overlay가 열려 있고 사용자가 browser back을 실행한다
+- **WHEN** shell 진입점이 push한 피드백 overlay가 열려 있고 사용자가 현재 document에서 관찰 가능한 browser back을 실행한다
 - **THEN** 시스템은 현재 route의 직전 history entry로 돌아가 overlay를 닫는다
 - **AND** draft 또는 제출 상태가 있으면 같은 `requestClose` 정책을 적용한다
 
@@ -66,7 +79,7 @@
 
 #### Scenario: Block closing while submitting
 
-- **WHEN** 피드백 제출이 진행 중인 상태에서 사용자가 닫기 버튼, backdrop, `Escape` 또는 browser back으로 overlay를 닫으려 한다
+- **WHEN** 피드백 제출이 진행 중인 상태에서 사용자가 닫기 버튼, backdrop, `Escape` 또는 현재 document에서 관찰 가능한 browser back으로 overlay를 닫으려 한다
 - **THEN** 시스템은 overlay, `feedback=open` query와 form 상태를 유지한다
 - **AND** 중복 제출이나 별도 API 호출 경로를 만들지 않는다
 
