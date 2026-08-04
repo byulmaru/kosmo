@@ -1,29 +1,27 @@
 ## Why
 
-일반 Post와 Reply Composer가 공개 범위를 항상 `UNLISTED`로 시작해, 여러 Local Profile을 운영하는 Account가
-Profile별 게시 성격에 맞는 기본값을 유지할 수 없다. Local Profile이 자신의 기본 게시 공개 범위를 소유하고
-새 Composer가 그 값을 안전하게 소비하도록 해 반복 선택을 줄이면서 Profile 간 설정과 draft 격리를 보장한다.
+Local Profile은 새 게시물 작성에 사용할 기본 Post Visibility를 durable하게 소유하지 않으며, Profile Member가
+조회하고 Owner가 변경할 수 있는 Backend 계약도 없다. DB/Core/GraphQL을 Relay·Composer·Settings UI와 분리해
+Backend 결과를 client와 Storybook 상태에 관계없이 독립적으로 배포·검증·archive할 수 있게 한다.
 
 ## What Changes
 
-- Local Profile에 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나인 기본 Post Visibility를 저장하고, 기존·미설정
-  Profile은 `UNLISTED`로 해석한다.
-- Profile Member가 기본값을 조회해 새 Post·Reply Composer 초기값으로 사용할 수 있게 하되, Local Profile
-  Owner만 설정을 변경할 수 있게 한다.
-- 설정 control에 현재 대상 Profile, dirty·pending·success·error·retry 상태를 제공하고 Profile 또는 Relay
-  Environment 전환의 늦은 응답을 격리한다.
-- Composer의 개별 Visibility 변경은 Profile 기본값을 바꾸지 않으며, 열린 draft는 설정 변경으로 자동
-  덮어쓰지 않는다. 새 문맥과 다음 새 Composer만 최신 기본값을 사용한다.
-- 설정 조회 실패나 unavailable 상태에서는 다른 Profile 값을 재사용하지 않고 `UNLISTED`로 fallback한다.
-- `DIRECT`와 Mentioned Profiles, Repost visibility 파생, 기존 Post visibility 변경, Quote 작성 기능 자체는
-  추가하지 않는다. 향후 Quote Composer는 같은 Profile 기본값 계약을 소비한다.
+- Local Profile에 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나인 기본 Post Visibility를 저장하고 기존·미설정
+  Local Profile은 `UNLISTED`로 해석한다.
+- Profile Member가 기본값을 조회하고 Local Profile Owner가 기존 Profile update 경계에서 변경할 수 있는
+  GraphQL field·input·payload 계약을 제공한다.
+- Remote Profile과 non-member에는 Kosmo Local 설정을 노출하거나 만들지 않고 `DIRECT`, 명시적 `null`과
+  지원하지 않는 입력을 거부한다.
+- Relay, Composer, Profile Settings UI, canonical `/settings` 연결과 Storybook 검증은 PROD-667의 별도
+  Frontend change로 분리한다.
+- 기존 Post Visibility, Repost, Quote Composer, `DIRECT` recipient와 ActivityPub 표현은 변경하지 않는다.
 
 ## Authority / Provenance
 
-- Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`,
-  `docs/domain/policies/post-list.md`, `docs/design/reply-composer.md`
+- Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/account-profile-membership.md`,
+  `docs/domain/objects/post.md`
 - Linear Contract: `PROD-648`
-- Linear Implementations: `PROD-648`; `/settings` 공통 route·page shell과 최종 페이지 통합은 `PROD-653`
+- Linear Implementations: `PROD-648`; Frontend 소비와 UI는 `PROD-667`
 
 ## Capabilities
 
@@ -33,17 +31,13 @@ Profile별 게시 성격에 맞는 기본값을 유지할 수 없다. Local Prof
 
 ### Modified Capabilities
 
-- `profile`: Local Profile이 기본 Post Visibility를 소유하고 Member 조회·Owner 변경 권한을 적용한다.
-- `post`: 새 Post·Reply·Quote Composer의 Profile별 초기 Visibility, fallback, draft 독립성과 문맥 격리 계약을
+- `profile`: Local Profile 기본 Post Visibility의 Member 조회·Owner 변경과 GraphQL Profile 계약을 추가한다.
+- `data-model`: Profile 기본 Post Visibility의 durable 저장값, 기존 row 호환 fallback과 허용 값 제약을
   추가한다.
-- `data-model`: Profile 기본 Post Visibility의 durable 저장값, 기존 row 호환 기본값과 허용 값 제약을 추가한다.
 
 ## Impact
 
-- `packages/core`: Profile table·migration과 Profile 설정 조회·변경 정책 및 테스트
-- `apps/api`: GraphQL `Profile` 설정 field, 변경 input/payload, enum 검증과 integration test
-- `apps/app`: Relay Profile fragment, Profile 설정 control, Post/Reply Composer 초기화·reset·문맥 격리와
-  Storybook 검증
-- `PROD-653`: 현재 change가 제공하는 Profile 설정 component를 canonical `/settings` page shell에 통합하는
-  후속 페이지 수준 검증
-- dependency 또는 ActivityPub actor 표현 변경 없음
+- `packages/core`: Profile table·migration, Local/Remote projection, 생성·조회·Owner update 정책 및 테스트
+- `apps/api`: GraphQL `Profile.defaultPostVisibility`, optional update input/payload, membership 검증과
+  integration test
+- `apps/app`, settings route·navigation, dependency와 ActivityPub actor 표현 변경 없음

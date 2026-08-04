@@ -1,19 +1,5 @@
 import type { PostVisibility } from '@kosmo/core/enums';
 
-export type PostComposerVisibility = 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
-
-export function resolvePostComposerVisibility(
-  value: string | null | undefined,
-): PostComposerVisibility {
-  if (value === 'PUBLIC') {
-    return 'PUBLIC';
-  }
-  if (value === 'FOLLOWERS') {
-    return 'FOLLOWERS';
-  }
-  return 'UNLISTED';
-}
-
 export function createPostComposerMutationInput(
   bodyText: string,
   visibility: PostVisibility,
