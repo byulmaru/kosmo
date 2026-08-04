@@ -36,8 +36,18 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
   표시하지 않는다.
 - `< compact` mobile Web과 Android/iOS: mobile drawer에 개인정보 처리방침 진입점을 표시하지 않는다.
 - 가입·로그인 온보딩 안의 추가 개인정보 처리방침 진입점은 후속 범위에서 결정한다. 현재 범위에서는 공개
-  route와 landing 링크, full Web 보조 진입점만 유지하며 준비되지 않은 설정, 팔로워 요청 또는 generic menu
+  route와 landing 링크, full Web 보조 진입점만 유지하며 준비되지 않은 팔로워 요청 또는 generic menu
   navigation을 다시 만들지 않는다.
+
+## 설정 진입
+
+인증 설정의 canonical route와 정보 구조는 [설정 페이지](./settings.md)가 소유한다.
+
+- `compact` 이상 Web에서는 full sidebar와 compact icon rail의 주요 navigation에 `설정`을 표시한다.
+- `< compact` mobile Web과 Android·iOS에서는 mobile drawer에 `설정`을 표시한다. 하단 탭 바와 우측 레일에는
+  중복 진입점을 두지 않는다.
+- route와 page shell이 같은 구현 slice에서 준비된 뒤 진입점을 노출하며, 준비되지 않은 placeholder route를
+  먼저 만들지 않는다.
 
 ## 프로필 피커
 
