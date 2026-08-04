@@ -196,11 +196,15 @@ Production과 열린 PR의 확정 대상이 공용 `IconButton`을 사용하고,
   OpenSpec strict validation을 통과했다.
 - 독립 리뷰 4개를 분리 실행했다. code-only와 production/open-PR 누락 검토는 발견 사항 없이 통과했고,
   repository rules와 docs-to-code 검토의 Android layout·검증 근거·Reaction 문서 지적은 수정 후 재검토를 통과했다.
+- 최신 `origin/main=a6c94c1e` 재베이스 뒤 production의 직접 `Pressable` 65곳과 `IconButton` 13곳, 열린 PR
+  16개의 patch를 다시 검색했다. 새 대상은 없고, 남은 대상은 PR #486 close와 PR #510 close·previous·next
+  4개다. PR #516의 review·comment·review thread는 모두 0개이며 #486은 Open/Ready·CHANGES_REQUESTED,
+  #510은 Open/Draft다.
 - iOS·Android 실제 기기·simulator의 touch·focus·VoiceOver·TalkBack은 실행하지 않았고 후속 출시 gate로 남긴다.
 
 - [x] 6.1 구현 시작 inventory에서 포함·제외 대상과 직접 플랫폼 target 계산 baseline을 기록한다.
 - [x] 6.2 App unit·typecheck·lint·Storybook build·Chromium interaction 검증을 완료한다.
 - [x] 6.3 독립 구현 리뷰에서 target floor, visual 무변경, 상태·제품 동작 전달, 누락과 검증 공백을 확인한다.
-- [ ] 6.4 Merge 직전 production/open PR inventory와 review thread를 다시 읽고 새 대상의 누락·잘못된 전환이 없음을 확인한다.
+- [x] 6.4 Merge 직전 production/open PR inventory와 review thread를 다시 읽고 새 대상의 누락·잘못된 전환이 없음을 확인한다.
 - [ ] 6.5 각 적용 PR 본문에 구현·검증·Native 미실행·남은 owner를 동기화한다.
 - [ ] 6.6 모든 task와 cross-PR 완료 증거가 준비되면 실제 마지막 owner가 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
