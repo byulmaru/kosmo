@@ -37,10 +37,13 @@ Phase, schema authority, restore point, target LSN, workload compatibility 또�
 
 `migrate`는 release image의 `packages/core/drizzle.config.ts`가 지정한 Drizzle migration directory를
 version-control 순서로 읽고, config의 `migrations.schema`·`migrations.table`이 지정한 history(현재
-`drizzle.__drizzle_migrations`)가 local migration의 유효한 prefix인지 name·hash로
-검증한 뒤 pending suffix만 실행한다. 각 migration 파일의 statement와 해당 history insert는 같은 독립
-transaction에 넣는다. 따라서 파일 하나가 성공하면 schema와 history가 함께 commit되고, 실패하면 그 파일의
-변경만 함께 rollback된다. 앞에서 성공한 파일은 뒤 파일 실패로 되돌리지 않는다.
+`drizzle.__drizzle_migrations`)의 각 적용 name이 local migration에 존재하고 hash가 같은지 검증한다. 병렬
+branch가 timestamp와 다른 순서로 merge·배포되어 history row 순서가 local 정렬과 달라도 같은 name/hash
+집합이면 유효하게 인식하고, 이미 적용된 name을 제외한 pending 파일만 version-control 순서로 실행한다. Local에
+없는 history, 같은 name의 hash 변경과 중복 name/history는 새 SQL 실행 전에 거부한다. 각 migration 파일의
+statement와 해당 history insert는 같은 독립 transaction에 넣는다. 따라서 파일 하나가 성공하면 schema와
+history가 함께 commit되고, 실패하면 그 파일의 변경만 함께 rollback된다. 앞에서 성공한 파일은 뒤 파일 실패로
+되돌리지 않는다.
 
 `drizzle.config.ts`의 `dbCredentials`는 Drizzle Kit CLI 설정이다. Runtime `migrate`는 이를 connection source로
 사용하지 않고, injectable `DATABASE_URL` 또는 PostgreSQL environment와 `DATABASE_MIGRATION_ROLE`을 사용한다.
@@ -74,7 +77,7 @@ Contract SQL은 transition image에 미리 포함하지 않는다. 각 단계는
 - Credential 또는 Secret 실패: SQL을 실행하지 않는다. Runtime credential로 우회하지 않는다.
 - Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 새 tag build와 같은 승인 경로로 재시도한다.
 - SQL 또는 timeout 실패: 실패한 migration 파일의 schema와 history를 rollback하고 API/Web 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
-- 부분 적용: 앞서 성공한 파일의 schema와 history는 유지한다. 자동 down migration이나 database rollback을 실행하지 않고, 원인을 수정한 새 tag build가 실패한 파일부터 재시도하거나 새 forward migration을 사용한다.
+- 부분 적용: 앞서 성공한 파일의 schema와 history는 유지한다. 자동 down migration이나 database rollback을 실행하지 않고, 원인을 수정한 새 tag build가 이미 적용된 name/hash를 건너뛰고 아직 적용되지 않은 파일만 재시도하거나 새 forward migration을 사용한다.
 - Destructive migration의 restore 판단: 해당 schema migration runbook과 [Production PostgreSQL backup과 복구](./postgres-backup.md)를 따른다.
 
 완료 여부와 Drizzle migration count/hash 같은 비민감 식별 정보만 감사 기록에 남긴다. Credential, connection string과 database row 값은 출력하지 않는다.

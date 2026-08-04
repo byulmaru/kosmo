@@ -46,7 +46,7 @@ Production migration이 고정된 database 대상과 분리된 credential을 사
 
 ### Requirement: 단순한 migration 실행기
 
-**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-269`, `PROD-564`, `PROD-656`. Production migration Job은 release image의 `migrate` command만 실행해야 하며(MUST), 이 command는 version-controlled Drizzle migration 형식과 기존 history를 유지하면서 각 pending migration 파일의 SQL과 history insert를 독립 transaction으로 적용해야 한다(MUST). Generic phase selector, schema authority input, database target input, restore-point command 또는 backup/compatibility collector를 포함해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-269`, `PROD-564`, `PROD-656`. Production migration Job은 release image의 `migrate` command만 실행해야 하며(MUST), 이 command는 version-controlled Drizzle migration 형식과 기존 history를 유지하면서 DB history의 각 적용 name/hash를 local migration과 검증하고 적용된 name을 제외한 pending migration 파일의 SQL과 history insert를 독립 transaction으로 적용해야 한다(MUST). DB row 순서가 local timestamp 정렬과 달라도 같은 name/hash 집합이면 유효하게 인식해야 하며(MUST), local에 없는 history, hash 변경과 중복 name/history는 새 SQL 전에 거부해야 한다(MUST NOT). Generic phase selector, schema authority input, database target input, restore-point command 또는 backup/compatibility collector를 포함해서는 안 된다(MUST NOT).
 
 #### Scenario: Production migration 실행
 
@@ -54,6 +54,25 @@ Production migration이 고정된 database 대상과 분리된 credential을 사
 - **THEN** container argument는 `migrate`이다
 - **AND** runner는 기존 Drizzle migration directory, history와 advisory lock을 사용한다
 - **AND** 각 pending migration 파일의 SQL과 history insert를 같은 독립 transaction에서 적용한다
+
+#### Scenario: 비선형 existing history 재실행
+
+- **WHEN** production database의 Drizzle history row 순서가 local migration timestamp 정렬과 다르지만 모든 적용 name/hash가 local과 일치한다
+- **THEN** runner는 history row와 ID를 재작성하지 않고 이미 적용된 name을 건너뛴다
+- **AND** 아직 적용되지 않은 migration만 local version-control 순서로 실행한다
+
+#### Scenario: Legacy history 승격
+
+- **WHEN** production database의 기존 Drizzle history에 name이 없고 각 row의 timestamp/hash가 local migration과 대응한다
+- **THEN** runner는 Drizzle beta.22와 호환되는 timestamp 우선·hash 보조 mapping으로 name을 backfill한다
+- **AND** 기존 history row 순서와 ID를 보존한 뒤 pending migration을 local 순서로 실행한다
+- **AND** unknown·ambiguous·duplicate mapping은 history shape 또는 schema를 변경하거나 새 SQL을 실행하기 전에 실패한다
+
+#### Scenario: History 무결성 위반
+
+- **WHEN** production database history에 local에 없는 name, hash가 변경된 name 또는 duplicate name이 있다
+- **THEN** runner는 새 migration SQL을 실행하기 전에 실패한다
+- **AND** history를 현재 local 상태로 덮어쓰거나 재정렬하지 않는다
 
 #### Scenario: Production enum 연속 migration
 
@@ -88,7 +107,7 @@ Production migration이 고정된 database 대상과 분리된 credential을 사
 
 - **WHEN** 실패 원인을 수정한 새 승인 release가 같은 database에서 migration command를 실행한다
 - **THEN** runner는 앞서 성공해 history에 기록된 파일을 다시 실행하지 않는다
-- **AND** 이전에 실패한 파일부터 적용을 계속한다
+- **AND** 이전에 실패한 파일을 포함해 history에 없는 파일만 local version-control 순서로 적용을 계속한다
 
 #### Scenario: 중복 승인 금지
 
