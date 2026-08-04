@@ -4238,6 +4238,19 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
 
+    const parentRow = canvas.getByTestId('post-thread-item-route-visible-parent');
+    const parentComposer = within(parentRow).getByLabelText('답글 작성');
+    const parentConnector = canvas.getByTestId(
+      'post-thread-connector-route-visible-parent-route-current-after',
+    );
+    const parentRowBox = parentRow.getBoundingClientRect();
+    const parentComposerBox = parentComposer.getBoundingClientRect();
+    const parentConnectorBox = parentConnector.getBoundingClientRect();
+    expect(parentComposerBox.left - parentRowBox.left).toBe(64);
+    expect(parentRowBox.right - parentComposerBox.right).toBe(8);
+    expect(parentConnector).toBeVisible();
+    expect(parentConnectorBox.right).toBeLessThan(parentComposerBox.left);
+
     const body = canvas.getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '첫 Parent draft');
     await userEvent.click(replyButtons[1]!);
