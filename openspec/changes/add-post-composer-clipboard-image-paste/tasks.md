@@ -27,9 +27,9 @@ Web 사용자가 Media 첨부를 지원하는 Post Composer 본문에 image item
 - `pnpm --filter @kosmo/app test`와 PROD-639 범위의 `apps/web/e2e/compose.e2e.ts`를 격리 테스트 DB에서 통과시킨다.
 - 모든 PROD-639 task와 required verification 완료 뒤 최신 canonical·Linear·OpenSpec 정합성, archive 전후 strict validation을 확인한다.
 
-- [ ] 1.1 focus된 Web editor의 clipboard image item을 현재 남은 슬롯 순서대로 기존 Composer Media 추가·업로드 lifecycle에 연결하고 함께 제공된 Plain Text·링크·HTML은 본문에 넣지 않는다.
-- [ ] 1.2 picker·paste 공용 item의 preview lifecycle, 실패·재시도·제거·Alt Text·Sensitive Media와 제출 순서를 보존한다.
-- [ ] 1.3 image item이 있는 payload는 본문·selection을 보존하고, image item이 없는 Plain Text·링크, 다른 editor·Composer 밖 paste와 Android·iOS 입력은 기존 동작을 유지하게 한다.
-- [ ] 1.4 clipboard 후보·슬롯·cleanup 단위 검증과 실제 Web component/browser 회귀 검증을 추가한다.
-- [ ] 1.5 compose E2E로 clipboard File의 upload·제출 흐름을 증명하고 관련 app check·test를 통과시킨다.
+- [x] 1.1 focus된 Web editor의 clipboard image item을 현재 남은 슬롯 순서대로 기존 Composer Media 추가·업로드 lifecycle에 연결하고 함께 제공된 Plain Text·링크·HTML은 본문에 넣지 않는다.
+- [x] 1.2 picker·paste 공용 item의 preview lifecycle, 실패·재시도·제거·Alt Text·Sensitive Media와 제출 순서를 보존한다.
+- [x] 1.3 image item이 있는 payload는 본문·selection을 보존하고, image item이 없는 Plain Text·링크, 다른 editor·Composer 밖 paste와 Android·iOS 입력은 기존 동작을 유지하게 한다.
+- [x] 1.4 clipboard 후보·슬롯·cleanup 단위 검증과 실제 Web component/browser 회귀 검증을 추가한다.
+- [x] 1.5 compose E2E로 clipboard File의 upload·제출 흐름을 증명하고 관련 app check·test를 통과시킨다.
 - [ ] 1.6 모든 구현·검증 결과가 완료되면 최신 authority와 delta spec을 다시 대조하고 change 전체를 archive한 뒤 strict validation을 통과시킨다.

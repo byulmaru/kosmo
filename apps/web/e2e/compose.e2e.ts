@@ -100,6 +100,102 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await expect(page.getByText(body)).toBeVisible();
 });
 
+test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 Media 제출 흐름을 사용한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Clipboard Composer',
+    handle: 'e2e-clipboard-composer',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  const mediaId = 'media-clipboard-e2e';
+  let createPostVariables: Record<string, unknown> | null = null;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName === 'PostComposerIssueMediaUploadUrlMutation') {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            issueMediaUploadUrl: {
+              media: { id: mediaId },
+              uploadUrl: 'https://upload.example/clipboard',
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    if (operation?.operationName === 'PostComposerCompleteMediaUploadMutation') {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            completeMediaUpload: {
+              media: { id: mediaId, state: 'READY' },
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    if (operation?.operationName === 'PostComposerCreatePostMutation') {
+      createPostVariables = operation.variables ?? null;
+      await route.fulfill({
+        body: JSON.stringify({ data: { createPost: { post: { id: 'post-clipboard-e2e' } } } }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.route('https://upload.example/**', async (route) => {
+    await route.fulfill({ body: '', status: 204 });
+  });
+
+  await page.goto('/compose');
+  const composer = page.getByLabel('새 게시글 작성').first();
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  const submit = composer.getByRole('button', { name: '게시', exact: true });
+  await input.fill('기존 본문');
+  await input.evaluate((element) => element.setSelectionRange(2, 2));
+
+  await input.evaluate((element) => {
+    const clipboardData = new DataTransfer();
+    clipboardData.items.add(new File(['clipboard image'], 'clipboard.png', { type: 'image/png' }));
+    clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
+    element.dispatchEvent(
+      new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData,
+      }),
+    );
+  });
+
+  await expect(input).toHaveValue('기존 본문');
+  await expect(input).toHaveJSProperty('selectionStart', 2);
+  await expect(composer.getByLabel('첨부 이미지 1, 업로드 완료')).toBeVisible();
+  await expect(submit).toBeEnabled();
+
+  const createResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  await submit.click();
+  const response = await createResponse;
+  expect(response.status()).toBe(200);
+  expect(createPostVariables).toMatchObject({
+    input: {
+      bodyText: '기존 본문',
+      media: [{ altText: null, mediaId }],
+    },
+  });
+  await expect(input).toHaveValue('');
+});
+
 test('compose의 touch 취소가 본문 포커스와 편집기 강조 상태를 유지한다', async ({
   context,
   page,

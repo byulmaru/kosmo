@@ -4397,6 +4397,104 @@ export const ComposerMediaUploadInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerClipboardPasteInteraction: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2, 3].map((index) => ({
+            data: {
+              completeMediaUpload: { media: { id: `media-clipboard-${index}`, state: 'READY' } },
+            },
+          })),
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [1, 2, 3].map((index) => ({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-clipboard-${index}` },
+                uploadUrl: `https://upload.example/clipboard/${index}`,
+              },
+            },
+          })),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+    const pickerFile = new File(['picker'], 'picker.png', { type: 'image/png' });
+    const clipboardImageOne = new File(['one'], 'one.png', { type: 'image/png' });
+    const clipboardImageTwo = new File(['two'], 'two.webp', { type: 'image/webp' });
+
+    try {
+      setNextImagePickerResult({
+        assets: [
+          {
+            ...composerMediaAsset,
+            file: pickerFile,
+            mimeType: 'image/png',
+            uri: 'blob:https://kosmo.example/picker-first',
+          },
+        ],
+        canceled: false,
+      });
+      await userEvent.type(body, '기존 본문');
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(clipboardImageOne);
+      clipboardData.items.add(clipboardImageTwo);
+      clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData,
+      });
+      body.dispatchEvent(pasteEvent);
+
+      expect(pasteEvent.defaultPrevented).toBe(true);
+      expect(body).toHaveValue('기존 본문');
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 3, 업로드 완료')).toBeVisible();
+      });
+      expect(upload).toHaveBeenCalledTimes(3);
+      expect(canvas.getByRole('button', { name: '이미지 추가, 1개 더 선택 가능' })).toBeVisible();
+
+      await userEvent.click(body);
+      await userEvent.paste('https://example.com/post');
+      expect(body).toHaveValue('기존 본문https://example.com/post');
+
+      const outsideEditor = document.createElement('textarea');
+      document.body.append(outsideEditor);
+      try {
+        const outsidePasteData = new DataTransfer();
+        outsidePasteData.items.add(new File(['outside'], 'outside.png', { type: 'image/png' }));
+        outsideEditor.dispatchEvent(
+          new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: outsidePasteData,
+          }),
+        );
+        expect(canvas.queryByLabelText('첨부 이미지 4, 업로드 중')).not.toBeInTheDocument();
+      } finally {
+        outsideEditor.remove();
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerStory />,
+};
+
 export const ComposerPickerResultAfterUnmount: Story = {
   parameters: {
     relay: {
