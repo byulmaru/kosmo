@@ -31,9 +31,9 @@ Account 외부 진입점 계약을 독립 대조한 결과를 반영한다. 제�
 - Authority / Provenance: `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-645`
 - Status: Active
 - Context / Problem: 별도 heading·소유자 설명을 추가하면 승인된 평면 정보 밀도를 깨뜨리고, generic `계정
-  설정`만 표시하면 Byulmaru ID 외부 서비스라는 사실을 전달하지 못한다.
+설정`만 표시하면 Byulmaru ID 외부 서비스라는 사실을 전달하지 못한다.
 - Decision Outcome: 시각 label은 `Byulmaru ID 계정 설정`, accessible name은 `Byulmaru ID 계정 설정, 외부
-  서비스로 이동`을 사용한다. 전체 행이 하나의 link target이며 chevron은 장식 요소로만 표시한다.
+서비스로 이동`을 사용한다. 전체 행이 하나의 link target이며 chevron은 장식 요소로만 표시한다.
 - Alternatives Considered: `계정 설정` generic label, 별도 `Byulmaru ID` owner label과 설명, chevron을 별도
   button으로 만드는 방식. 각각 서비스 경계를 숨기거나 중복 block·focus target을 만들므로 채택하지 않았다.
 - Consequences: 부모 shell은 child 주변에 `계정 설정` heading·owner copy를 덧붙이지 않는다. copy가 바뀌어도
