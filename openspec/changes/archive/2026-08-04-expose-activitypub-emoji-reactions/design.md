@@ -59,8 +59,9 @@ identity를 projection해야 하며, 원격 Note/Profile을 새로 조회해 col
    actor/activity URI를 그대로 사용하며, 부족한 identity를 위해 remote fetch/backfill을 시도하지 않는다.
 4. 결과를 `createdAt DESC`, 같은 시각의 Reaction UUID `DESC`로 정렬하고 이 두 값을 opaque keyset cursor에
    담는다. 첫 page와 다음 page의 경계를 같은 collection ordering으로 해석하며, decode 또는 boundary 검증에
-   실패한 cursor는 정상 page로 처리하지 않는다. Collection의 `totalItems`는 현재 노출 가능한 item 수를
-   나타내고 page에는 최대 50개 item만 포함한다.
+   실패한 cursor는 정상 page로 처리하지 않는다. 특히 경계 Reaction이 삭제되었거나 더 이상 ActivityPub item으로
+   표현되지 않으면 해당 cursor를 현재 collection 경계로 해석할 수 없으므로 invalid cursor와 동일하게 거부한다.
+   Collection의 `totalItems`는 현재 노출 가능한 item 수를 나타내고 page에는 최대 50개 item만 포함한다.
 5. 기존 outbound reaction projection의 six-type mapping과 identity/object 규칙을 재사용하되, collection
    read 중 delivery side effect를 호출하지 않는다. `❤️`는 `Like(content: "❤️")`, 나머지 허용 five type은
    `EmojiReact(content: type)`으로 만들고 모든 object를 Local Note URI로 설정한다.
@@ -95,9 +96,10 @@ identity를 projection해야 하며, 원격 Note/Profile을 새로 조회해 col
 
 ## Risks / Trade-offs
 
-- **동시 Reaction 변경과 page 안정성:** keyset ordering은 page 경계의 중복·누락을 줄이지만, 요청 사이의 새
+- **동시 Reaction 변경과 page 경계:** keyset ordering은 page 경계의 중복·누락을 줄이지만, 요청 사이의 새
   Reaction 추가·삭제를 영속 snapshot으로 고정하지는 않는다. 현재 collection ordering과 `totalItems`를 각
-  요청에서 다시 계산하고 tie-break를 항상 검증한다.
+  요청에서 다시 계산하고 tie-break를 항상 검증한다. 발급된 cursor의 경계 Reaction이 삭제되거나 더 이상
+  ActivityPub item으로 표현되지 않으면 cursor를 현재 경계로 해석할 수 없어 invalid page로 거부한다.
 - **현재 row만 표현 가능:** 삭제되거나 identity가 사라진 Reaction을 복구하기 위한 history/backfill을 두지
   않는다. 이는 PROD-500의 no-fetch/no-backfill 경계를 지키지만 과거 활동의 collection 재현은 보장하지 않는다.
 - **다중 Instance join 비용:** Local actor identity와 Remote mapping을 함께 확인하는 read query는 단순

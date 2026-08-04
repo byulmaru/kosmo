@@ -670,6 +670,36 @@ describe('ActivityPub Local Post Note', () => {
     );
   });
 
+  test('rejects a keyset cursor after its boundary Reaction is deleted', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    for (let index = 0; index < 51; index++) {
+      const profile = await createProfile({
+        handle: `deleted-boundary-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, post.id, '🥹', {
+        createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+      });
+    }
+
+    const firstPage = await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, null);
+    assert.ok(firstPage);
+    const cursor = firstPage.nextCursor;
+    assert.ok(cursor);
+    const boundaryActivityUri = firstPage.items.at(-1)?.id;
+    assert.ok(boundaryActivityUri);
+    const boundaryReactionId = new URL(boundaryActivityUri).pathname.split('/').at(-1);
+    assert.ok(boundaryReactionId);
+
+    await db.delete(Reactions).where(eq(Reactions.id, boundaryReactionId));
+
+    assert.equal(
+      await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, cursor),
+      null,
+    );
+  });
+
   test('serves empty, one-item, and exactly-full collections', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     for (const size of [0, 1, 50]) {

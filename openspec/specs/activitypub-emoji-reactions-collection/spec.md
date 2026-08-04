@@ -3,7 +3,7 @@
 ## Purpose
 
 Local Note가 현재 표현 가능한 Local·Remote Reaction을 FEP-c0e0 `emojiReactions` collection으로 광고하고,
-기존 Note 접근 경계와 canonical Reaction identity를 유지한 채 안정적으로 조회할 수 있도록 정의한다.
+기존 Note 접근 경계와 canonical Reaction identity를 유지한 채 현재 collection 경계에 따라 조회할 수 있도록 정의한다.
 
 ## Requirements
 
@@ -26,12 +26,13 @@ Local Note가 현재 표현 가능한 Local·Remote Reaction을 FEP-c0e0 `emojiR
   통과하지 못한다
 - **THEN** 시스템은 Note와 `emojiReactions` collection property를 제공하지 않는다
 
-### Requirement: ActivityStreams Collection과 안정적인 keyset page를 제공한다
+### Requirement: ActivityStreams Collection과 keyset page를 제공한다
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `PROD-500`, FEP-c0e0 시스템은 광고된 URI를 역참조 가능한 ActivityStreams `Collection`으로 응답해야 하며(MUST), collection에 현재
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `PROD-500`, FEP-c0e0. FEP-c0e0에 따른 PROD-500 시스템은 광고된 URI를 역참조 가능한 ActivityStreams `Collection`으로 응답해야 하며(MUST), collection에 현재
 노출 가능한 전체 item 수를 나타내는 `totalItems`를 제공해야 한다(MUST). Page는 최대 50개 item을 포함해야 하며
 (MUST), `createdAt DESC`를 우선하고 같은 시각에는 Reaction UUID `DESC`를 적용하는 opaque keyset cursor를
-사용해야 한다(MUST). Cursor는 page 사이의 경계를 안정적으로 이어야 하며(MUST), 잘못된 cursor는 collection page로
+사용해야 한다(MUST). Cursor는 현재 collection에서 해석 가능한 `(createdAt, Reaction UUID)` 경계를 사용해 page를
+이어야 하며(MUST), 잘못된 cursor 또는 삭제·identity 불가로 현재 경계를 해석할 수 없는 cursor는 collection page로
 응답해서는 안 된다(MUST NOT).
 
 #### Scenario: 빈 collection을 반환한다
@@ -58,6 +59,12 @@ Local Note가 현재 표현 가능한 Local·Remote Reaction을 FEP-c0e0 `emojiR
 - **WHEN** cursor가 opaque 형식이 아니거나 현재 collection 경계로 해석되지 않는다
 - **THEN** 시스템은 해당 값을 정상 page cursor로 사용하지 않는다
 - **AND** collection page item을 반환하지 않는다
+
+#### Scenario: 삭제된 경계 Reaction의 cursor를 거부한다
+
+- **WHEN** 이전 page가 발급한 cursor의 경계 Reaction이 삭제되었거나 현재 ActivityPub item으로 표현할 수 없게 된다
+- **THEN** 시스템은 해당 cursor를 현재 collection 경계로 해석하지 않는다
+- **AND** 잘못된 cursor와 동일하게 collection page item을 반환하지 않는다
 
 ### Requirement: 현재 표현 가능한 Local·Remote Reaction만 item으로 투영한다
 

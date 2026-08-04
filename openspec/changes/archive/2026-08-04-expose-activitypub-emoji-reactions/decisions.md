@@ -39,11 +39,11 @@ specification과 design은 이 authority를 구현 가능한 경계로 정리하
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`; Linear: `PROD-500`; FEP-c0e0 (`https://fep.swf.pub/fep/c0e0/fep-c0e0.html`)
 - Status: Active
-- Context / Problem: collection을 역참조 가능하게 만들면서 empty result, 51개 이상 result와 동일 timestamp Reaction의 순서를 wire에서 결정해야 한다.
-- Decision Outcome: 광고된 URI는 ActivityStreams `Collection`으로 응답하고 현재 노출 가능한 전체 item 수를 `totalItems`로 제공한다. 각 page는 최대 50개 item을 가지며 `createdAt DESC` 후 Reaction UUID `DESC`로 정렬한다. 다음 page는 이 두 값의 opaque keyset cursor를 사용해 경계를 이어가고, invalid 또는 현재 collection 경계로 해석할 수 없는 cursor는 정상 collection page로 응답하지 않는다.
+- Context / Problem: FEP-c0e0는 `emojiReactions` property와 reaction collection 표현을 정의하지만 cursor lifetime이나 삭제 후 page continuation은 정의하지 않는다. Collection을 역참조 가능하게 만들면서 empty result, 51개 이상 result와 동일 timestamp Reaction의 순서를 wire에서 결정해야 한다.
+- Decision Outcome: 광고된 URI는 ActivityStreams `Collection`으로 응답하고 현재 노출 가능한 전체 item 수를 `totalItems`로 제공한다. 각 page는 최대 50개 item을 가지며 `createdAt DESC` 후 Reaction UUID `DESC`로 정렬한다. 다음 page는 이 두 값의 opaque keyset cursor를 사용해 현재 collection에서 해석 가능한 경계를 이어가고, invalid 또는 현재 collection 경계로 해석할 수 없는 cursor는 정상 collection page로 응답하지 않는다. 따라서 이미 발급된 cursor라도 경계 Reaction이 삭제되었거나 더 이상 ActivityPub item으로 표현되지 않으면 invalid cursor처럼 거부한다.
 - Alternatives Considered: offset/page number는 삽입·삭제와 동일 timestamp에서 중복·누락을 만들 수 있다. `createdAt` 단독 cursor는 tie-break를 보존하지 못하므로 선택하지 않았다. cursor 원문을 공개 query parameter로 신뢰하는 방식도 opaque/invalid cursor 계약을 위반한다.
-- Consequences: page size와 comparator는 public wire behavior가 되며, cursor codec은 이 comparator를 손실 없이 encode/decode하고 invalid 입력을 명확히 거부해야 한다.
-- Confirmation / Follow-up: 0, 50, 51개, 동일 `createdAt`, invalid cursor와 첫/다음 page의 순서·`totalItems`를 Fedify endpoint test로 증명한다.
+- Consequences: page size와 comparator는 public wire behavior가 되며, cursor codec은 이 comparator를 손실 없이 encode/decode하고 invalid 입력을 명확히 거부해야 한다. 이 결정은 요청 사이의 collection snapshot 또는 삭제된 경계 Reaction 이후 cursor 지속성을 보장하지 않는다.
+- Confirmation / Follow-up: 0, 50, 51개, 동일 `createdAt`, invalid cursor, 삭제된 경계 cursor와 첫/다음 page의 순서·`totalItems`를 Fedify endpoint test로 증명한다.
 
 ### Collection dispatcher는 기존 Local Note 접근 경계를 재사용한다
 

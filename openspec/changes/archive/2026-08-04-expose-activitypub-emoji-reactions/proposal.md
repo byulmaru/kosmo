@@ -11,6 +11,8 @@ Reaction identity·권한 계약을 재사용해 현재 표현 가능한 local·
   `/ap/note/{postId}/emoji-reactions` collection URI를 광고한다.
 - ActivityStreams `Collection`과 `totalItems`, 50개 page, `createdAt DESC`와 Reaction UUID DESC를 결합한
   opaque keyset cursor를 제공한다.
+- 이미 발급된 cursor의 경계 Reaction이 삭제되었거나 현재 ActivityPub item으로 표현할 수 없게 되면 그 cursor를
+  현재 collection 경계로 해석하지 않고 invalid cursor처럼 거부한다.
 - 현재 존재하고 ActivityPub identity로 표현 가능한 Local Profile·Remote Profile Reaction을 collection item으로
   투영한다. 각 item의 `object`는 대상 Local Note URI다.
 - `❤️`는 정확한 `content: "❤️"`를 가진 `Like`, 나머지 허용 Type(`🥹`, `🎉`, `👀`, `☘️`, `🌈`)은 정확한

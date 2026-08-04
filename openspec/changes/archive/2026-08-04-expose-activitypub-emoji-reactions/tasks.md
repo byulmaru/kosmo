@@ -35,7 +35,7 @@ ActivityStreams collection으로 응답된다.
 - [x] 1.3 Public·Unlisted·Followers Only·unauthorized·unavailable 경계와 signed-fetch 결과를 기존 Local
       Note 정책과 함께 검증한다.
 
-## 2. PROD-500 Reaction item projection과 stable pagination
+## 2. PROD-500 Reaction item projection과 keyset pagination
 
 **Authority / Provenance**
 
@@ -49,7 +49,8 @@ ActivityStreams collection으로 응답된다.
 
 현재 AP-expressible Local·Remote Reaction이 canonical actor/activity/object identity와 허용된
 `Like`·`EmojiReact` 표현으로 collection item에 투영되고, 50개 단위 page가 `createdAt DESC`와 Reaction UUID
-`DESC` 경계를 잃지 않고 연결된다.
+`DESC` 경계를 현재 collection에서 해석할 수 있는 동안 이어가며, 삭제·identity 불가 경계는 invalid cursor로
+거부된다.
 
 **Guardrails**
 
@@ -66,15 +67,15 @@ ActivityStreams collection으로 응답된다.
   mapping을 검증한다.
 - 0, 1, 50, 51개와 같은 `createdAt` tie-break에서 `totalItems`, first/next page, opaque keyset cursor의
   중복·누락 없는 순서를 검증한다.
-- invalid cursor가 정상 page로 처리되지 않고 deleted/unavailable/unsupported item이 반환되지 않는지
-  검증한다.
+- invalid cursor가 정상 page로 처리되지 않고 deleted/unavailable/unsupported item이 반환되지 않는지, 이전 page가
+  발급한 cursor의 경계 Reaction 삭제 후에도 해당 cursor가 invalid로 거부되는지 검증한다.
 
 - [x] 2.1 현재 Reaction row와 저장된 inbound identity를 이용해 Local·Remote actor/activity/object와
       `Like`·`EmojiReact` item을 투영한다.
 - [x] 2.2 `createdAt DESC`와 Reaction UUID `DESC`를 보존하는 opaque keyset cursor, 최대 50개 page와
       `totalItems` 계산을 구현한다.
-- [x] 2.3 Local/Remote identity, six allowed type, empty/multiple/deleted/unsupported item, invalid cursor와
-      no-fetch/no-side-effect 범위를 검증한다.
+- [x] 2.3 Local/Remote identity, six allowed type, empty/multiple/deleted/unsupported item, invalid cursor와 삭제된
+      경계 cursor 거부, no-fetch/no-side-effect 범위를 검증한다.
 
 ## 3. PROD-500 통합 검증과 archive 책임
 
