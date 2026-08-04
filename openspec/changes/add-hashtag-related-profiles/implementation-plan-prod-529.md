@@ -316,10 +316,10 @@
 
 - [ ] **Step 4: Verify GREEN and regression boundary**
 
-  Targeted unit/Storybook tests를 재실행한다. 추가로 기존 `ProfileTagChip.test.ts`와 Profile edit story를 실행해 편집 제거 action, disabled state와 validation surface가 변하지 않았음을 확인한다.
+  Targeted unit/Storybook tests를 재실행한다. 기존 Profile edit story를 실행해 편집 제거 action, disabled state와 validation surface가 변하지 않았음을 확인한다.
 
   ```bash
-  pnpm --filter @kosmo/app exec node --experimental-test-module-mocks --import tsx --test src/components/profile/ProfileTagChip.test.ts src/components/profile/ProfileHero.test.ts
+  pnpm --filter @kosmo/app exec node --experimental-test-module-mocks --import tsx --test src/components/profile/ProfileHero.test.ts
   pnpm --filter @kosmo/app test:storybook -- src/stories/Profiles.stories.tsx src/stories/ProfileEdit.stories.tsx
   ```
 
