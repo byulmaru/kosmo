@@ -27,14 +27,14 @@ Profile picker를 열면 현재 Account가 접근할 수 있는 각 Profile의 �
 - 새 API 동작이 없으므로 API 구현·schema test는 추가하지 않고, 기존 다중 Profile notification count integration
   test를 회귀 검증으로 실행한다.
 
-- [ ] 1.1 Profile별 count 응답을 격리된 boolean 성공 상태로 변환하는 동작을 unit test로 먼저 고정한다.
-- [ ] 1.2 picker open에서 현재 Account의 Profile별 Unread를 별도 non-suspending network operation으로
+- [x] 1.1 Profile별 count 응답을 격리된 boolean 성공 상태로 변환하는 동작을 unit test로 먼저 고정한다.
+- [x] 1.2 picker open에서 현재 Account의 Profile별 Unread를 별도 non-suspending network operation으로
       갱신하고, 최초 loading/error가 picker와 Profile 선택을 막지 않게 한다.
-- [ ] 1.3 refresh failure·성공 응답 누락·Account 변경에 대한 last-success 교체 동작을 구현하고 unit test를
+- [x] 1.3 refresh failure·성공 응답 누락·Account 변경에 대한 last-success 교체 동작을 구현하고 unit test를
       통과시킨다.
-- [ ] 1.4 close/reopen과 actor environment 교체 뒤 늦은 완료를 취소·무시하는 동작을 구현하고 순서 제어 test를
+- [x] 1.4 close/reopen과 actor environment 교체 뒤 늦은 완료를 취소·무시하는 동작을 구현하고 순서 제어 test를
       통과시킨다.
-- [ ] 1.5 별도 Profile별 Unread query의 Relay generated artifact를 갱신하고 app type check를 통과시킨다.
+- [x] 1.5 별도 Profile별 Unread query의 Relay generated artifact를 갱신하고 app type check를 통과시킨다.
 
 ## 2. PROD-643 12-unit avatar dot과 접근성
 
@@ -67,11 +67,11 @@ unit `accent` dot을 표시하며, screen reader는 기존 Profile 이름·handl
   state와 touch target을 확인한다. 실행하지 못한 platform QA는 자동화 통과와 구분해 보고한다.
 - exact count 표시, 새 알림 content UI, push·realtime·OS badge 검증은 승인 범위 밖이므로 추가하지 않는다.
 
-- [ ] 2.1 Profile option avatar의 12 logical unit `accent` dot을 selected/non-selected와 모든 surface에서 행
+- [x] 2.1 Profile option avatar의 12 logical unit `accent` dot을 selected/non-selected와 모든 surface에서 행
       geometry를 바꾸지 않게 표시한다.
-- [ ] 2.2 dot을 모든 platform의 접근성 트리에서 숨기고 option의 기존 이름·handle에 boolean
+- [x] 2.2 dot을 모든 platform의 접근성 트리에서 숨기고 option의 기존 이름·handle에 boolean
       `읽지 않은 알림 있음`만 조건부로 추가한다.
-- [ ] 2.3 0·양수·큰 count, selected/non-selected, 기존 check·hit target과 접근성 상태를 Storybook
+- [x] 2.3 0·양수·큰 count, selected/non-selected, 기존 check·hit target과 접근성 상태를 Storybook
       interaction/visual fixture로 검증한다.
 - [ ] 2.4 Web·Android·iOS 적용 surface에서 12-unit dot의 위치·크기, avatar clipping과 행 geometry를 수동
       시각 확인하고, Web keyboard/screen reader, Android TalkBack과 iOS VoiceOver QA를 실행하며 확인하지 못한
@@ -107,12 +107,12 @@ unit `accent` dot을 표시하며, screen reader는 기존 Profile 이름·handl
 - 전체 OpenSpec strict validation, formatting/diff check와 독립 누락 검토를 통과한다.
 - 새 API/DB/dependency 동작이 없으므로 별도 API 구현 test, migration test와 dependency audit 확장은 제외한다.
 
-- [ ] 3.1 다른 Profile의 picker dot 확인부터 선택, 새 actor의 기존 셸 badge·알림 목록 수렴까지 Web E2E로
+- [x] 3.1 다른 Profile의 picker dot 확인부터 선택, 새 actor의 기존 셸 badge·알림 목록 수렴까지 Web E2E로
       검증한다.
-- [ ] 3.2 기존 selected Profile badge와 notification integration 회귀 test를 실행해 Profile 격리가 유지됨을
+- [x] 3.2 기존 selected Profile badge와 notification integration 회귀 test를 실행해 Profile 격리가 유지됨을
       확인한다.
-- [ ] 3.3 app unit·Relay/type check·Storybook test/build와 targeted Web E2E를 실행하고 실패를 해소한다.
-- [ ] 3.4 canonical 문서, Linear `PROD-643`, delta spec, decisions와 구현을 교차 확인하고 OpenSpec strict
+- [x] 3.3 app unit·Relay/type check·Storybook test/build와 targeted Web E2E를 실행하고 실패를 해소한다.
+- [x] 3.4 canonical 문서, Linear `PROD-643`, delta spec, decisions와 구현을 교차 확인하고 OpenSpec strict
       validation·formatting/diff check를 통과시킨다.
-- [ ] 3.5 독립 구현 리뷰에서 scope·race·접근성·검증 누락이 없는지 확인하고 actionable finding을 반영한다.
+- [x] 3.5 독립 구현 리뷰에서 scope·race·접근성·검증 누락이 없는지 확인하고 actionable finding을 반영한다.
 - [ ] 3.6 전체 task와 필요한 runtime QA 근거가 완료된 뒤 change를 main spec과 동기화하고 archive한다.

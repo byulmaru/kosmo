@@ -1,10 +1,86 @@
-import { resetE2EDatabase } from './db-fixtures';
+import {
+  createE2EAccountProfile,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
 import { expect, test } from './fixtures';
 import { readGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
+});
+
+test('다른 Profile의 Unread dot에서 전환하면 기존 badge와 알림 목록이 새 actor에 수렴한다', async ({
+  browser,
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'E2E Picker Recipient A',
+    handle: 'e2e-picker-recipient-a',
+  });
+  const recipientProfileB = await createE2EAccountProfile({
+    accountId: recipient.account.id,
+    displayName: 'E2E Picker Recipient B',
+    handle: 'e2e-picker-recipient-b',
+  });
+  const follower = await createE2ESession({
+    displayName: 'E2E Picker Follower',
+    handle: 'e2e-picker-follower',
+  });
+
+  await setE2ESessionCookie(context, recipient.token);
+  await page.goto('/notifications');
+  await selectProfileFromSwitcher(page, recipientProfileB.handle);
+  await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+
+  const followerContext = await browser.newContext();
+  const followerPage = await followerContext.newPage();
+
+  try {
+    await setE2ESessionCookie(followerContext, follower.token);
+    await followerPage.goto(`/@${recipient.profile!.handle}`);
+    const followResponse = waitForGraphQLOperation(
+      followerPage,
+      'FollowButtonFollowProfileMutation',
+    );
+    await followerPage.getByRole('button', { name: '팔로우' }).click();
+    await followResponse;
+
+    const unreadResponse = waitForGraphQLOperation(page, 'ProfileSwitcherUnreadQuery');
+    await openProfileSwitcher(page);
+    await unreadResponse;
+
+    const list = page.getByLabel('전환할 프로필 목록');
+    const unreadOption = list.getByRole('button', {
+      name: `${recipient.profile!.displayName}, @${recipient.profile!.handle}, 읽지 않은 알림 있음`,
+    });
+    const selectedOption = list.getByRole('button', {
+      name: `${recipientProfileB.displayName}, @${recipientProfileB.handle}`,
+    });
+
+    await expect(unreadOption).toBeVisible();
+    await expect(unreadOption.getByTestId('profile-switcher-unread-dot')).toBeVisible();
+    await expect(unreadOption).not.toHaveAccessibleName(/1개/);
+    await expect(selectedOption).toHaveAttribute('aria-pressed', 'true');
+    await expect(selectedOption.getByTestId('profile-switcher-unread-dot')).toHaveCount(0);
+
+    const selectResponse = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
+    await unreadOption.click();
+    await selectResponse;
+    await expect(page.getByRole('progressbar')).toHaveCount(0);
+
+    await expect(page.getByRole('link', { name: '알림, 읽지 않은 알림 1개' })).toBeVisible();
+    await expect(
+      page.getByRole('link', {
+        name: /E2E Picker Follower님이 팔로우했습니다.*읽지 않은 알림.*프로필로 이동/,
+      }),
+    ).toBeVisible();
+  } finally {
+    await followerContext.close();
+  }
 });
 
 test('selectProfile response carries selectedProfile and recreates the active Relay environment', async ({
