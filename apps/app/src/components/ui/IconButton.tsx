@@ -24,6 +24,21 @@ export function getIconButtonHitSlop(
   return Math.max(0, (effectiveTargetSize - renderedTargetSize) / 2);
 }
 
+export function getIconButtonOverlayGeometry(
+  platform: string,
+  visualSize: number,
+  visualInset: number,
+): { targetInset: number; targetSize: number; visualInset: number } {
+  const targetSize = Math.max(getIconButtonTargetSize(platform), visualSize);
+  const targetInset = Math.max(0, visualInset - (targetSize - visualSize) / 2);
+
+  return {
+    targetInset,
+    targetSize,
+    visualInset: visualInset - targetInset,
+  };
+}
+
 export const ICON_BUTTON_TARGET_SIZE = getIconButtonTargetSize(Platform.OS);
 
 export type IconButtonProps = Omit<

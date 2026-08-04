@@ -18,7 +18,11 @@ import {
   formatImageUploadFailureMessage,
   formatImageUploadRetryLabel,
 } from '@/components/media/imageUploadErrors';
-import { getIconButtonHitSlop, IconButton } from '@/components/ui/IconButton';
+import {
+  getIconButtonHitSlop,
+  getIconButtonOverlayGeometry,
+  IconButton,
+} from '@/components/ui/IconButton';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
@@ -63,6 +67,11 @@ export const emptyPostComposerMediaValue: PostComposerMediaValue = {
 const mediaActionEffectiveTargetSize = 48;
 const mediaAddVisualSize = 40;
 const mediaRemoveVisualSize = 32;
+const mediaRemoveGeometry = getIconButtonOverlayGeometry(
+  Platform.OS,
+  mediaRemoveVisualSize,
+  spacing.xs,
+);
 
 export function PostComposerMediaControls({
   actions,
@@ -430,11 +439,6 @@ export function PostComposerMediaItems({
             <IconButton
               accessibilityLabel={`첨부 이미지 ${index + 1} 제거`}
               disabled={disabled}
-              hitSlop={getIconButtonHitSlop(
-                Platform.OS,
-                mediaRemoveVisualSize,
-                mediaActionEffectiveTargetSize,
-              )}
               onPress={() => onRemove(item.key)}
               style={styles.mediaRemoveTarget}
               visualSize={mediaRemoveVisualSize}
@@ -513,16 +517,19 @@ const styles = StyleSheet.create({
   mediaOverlayBackdrop: { backgroundColor: colors.light.text, opacity: 0.58 },
   mediaOverlay: { alignItems: 'center', justifyContent: 'center' },
   mediaRemoveTarget: {
-    height: mediaRemoveVisualSize,
+    height: mediaRemoveGeometry.targetSize,
     position: 'absolute',
-    right: spacing.xs,
-    top: spacing.xs,
-    width: mediaRemoveVisualSize,
+    right: mediaRemoveGeometry.targetInset,
+    top: mediaRemoveGeometry.targetInset,
+    width: mediaRemoveGeometry.targetSize,
     zIndex: 1,
   },
   mediaRemoveVisual: {
     backgroundColor: colors.light.text,
     borderRadius: radii.full,
+    position: 'absolute',
+    right: mediaRemoveGeometry.visualInset,
+    top: mediaRemoveGeometry.visualInset,
   },
   mediaItemBody: { flex: 1 },
   sensitiveMedia: {

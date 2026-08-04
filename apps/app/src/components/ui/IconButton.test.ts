@@ -46,12 +46,22 @@ let IconButton: IconButtonComponent | undefined;
 let getIconButtonHitSlop:
   | ((platform: string, visualSize: number, effectiveTargetSize: number) => number)
   | undefined;
+let getIconButtonOverlayGeometry:
+  | ((
+      platform: string,
+      visualSize: number,
+      visualInset: number,
+    ) => { targetInset: number; targetSize: number; visualInset: number })
+  | undefined;
 let getIconButtonTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
   const module = await import('./IconButton').catch(() => null);
   IconButton = module?.IconButton as IconButtonComponent | undefined;
   getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
+  getIconButtonOverlayGeometry = module?.getIconButtonOverlayGeometry as
+    | typeof getIconButtonOverlayGeometry
+    | undefined;
   getIconButtonTargetSize = module?.getIconButtonTargetSize as
     | ((platform: string) => number)
     | undefined;
@@ -103,6 +113,25 @@ test('hit slop preserves a larger effective region without double-expanding the 
   assert.equal(getIconButtonHitSlop('web', 32, 48), 8);
   assert.equal(getIconButtonHitSlop('ios', 32, 48), 2);
   assert.equal(getIconButtonHitSlop('android', 32, 48), 0);
+});
+
+test('overlay geometry preserves the visual inset while keeping the platform target in bounds', () => {
+  assert.ok(getIconButtonOverlayGeometry, 'overlay geometry resolver must exist');
+  assert.deepEqual(getIconButtonOverlayGeometry('web', 32, 4), {
+    targetInset: 4,
+    targetSize: 32,
+    visualInset: 0,
+  });
+  assert.deepEqual(getIconButtonOverlayGeometry('ios', 32, 4), {
+    targetInset: 0,
+    targetSize: 44,
+    visualInset: 4,
+  });
+  assert.deepEqual(getIconButtonOverlayGeometry('android', 32, 4), {
+    targetInset: 0,
+    targetSize: 48,
+    visualInset: 4,
+  });
 });
 
 test('caller target and style cannot lower the Web interaction floor', () => {

@@ -152,7 +152,7 @@ FeedbackOverlay close와 PostMediaViewer close/previous/next가 merge 순서와 
 - 먼저 production에 들어온 action은 PROD-548 검증에 포함하고, 남아 있는 branch는 자신의 기존 자동화와 Web
   runtime에서 전환 결과를 검증한다.
 
-- [ ] 5.1 PR #486·#510과 production의 최신 상태를 읽고 대상별 전환 owner와 merge 순서를 기록한다.
+- [x] 5.1 PR #486·#510과 production의 최신 상태를 읽고 대상별 전환 owner와 merge 순서를 기록한다.
 - [ ] 5.2 먼저 merge된 action은 PROD-548 branch가 흡수하고, 공용 component 뒤에 남은 PR은 자신의 대상 action을 전환한다.
 - [ ] 5.3 각 소비자 PR의 기존 자동화와 Web runtime에서 close·navigation geometry·focus·제품 동작 무변경을 확인한다.
 
@@ -181,8 +181,8 @@ Production과 열린 PR의 확정 대상이 공용 `IconButton`을 사용하고,
 - Canonical·Linear·OpenSpec·구현·PR 본문과 unresolved review thread를 대조하고 archive 전후 strict validation을 확인한다.
 
 - [x] 6.1 구현 시작 inventory에서 포함·제외 대상과 직접 플랫폼 target 계산 baseline을 기록한다.
-- [ ] 6.2 App unit·typecheck·lint·Storybook build·interaction과 대상 Web runtime 검증을 완료한다.
-- [ ] 6.3 독립 구현 리뷰에서 target floor, visual 무변경, 상태·제품 동작 전달, 누락과 검증 공백을 확인한다.
+- [x] 6.2 App unit·typecheck·lint·Storybook build·interaction과 대상 Web runtime 검증을 완료한다.
+- [x] 6.3 독립 구현 리뷰에서 target floor, visual 무변경, 상태·제품 동작 전달, 누락과 검증 공백을 확인한다.
 - [ ] 6.4 Merge 직전 production/open PR inventory와 review thread를 다시 읽고 새 대상의 누락·잘못된 전환이 없음을 확인한다.
 - [ ] 6.5 각 적용 PR 본문에 구현·검증·Native 미실행·남은 owner를 동기화한다.
 - [ ] 6.6 모든 task와 cross-PR 완료 증거가 준비되면 실제 마지막 owner가 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
