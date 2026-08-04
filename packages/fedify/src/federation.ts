@@ -8,6 +8,7 @@ import {
   Follow,
   Like,
   Note,
+  Object as ActivityObject,
   Reject,
   Undo,
   Update,
@@ -26,6 +27,11 @@ import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
+import {
+  countLocalPostEmojiReactions,
+  dispatchLocalPostEmojiReactions,
+  firstLocalPostEmojiReactionsCursor,
+} from './local-post-reaction-collection';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
@@ -137,6 +143,17 @@ federation
 federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
   .authorize(authorizeLocalPostNote);
+
+federation
+  .setCollectionDispatcher(
+    'activitypub-note-emoji-reactions',
+    ActivityObject,
+    '/ap/note/{id}/emoji-reactions',
+    dispatchLocalPostEmojiReactions,
+  )
+  .setCounter(countLocalPostEmojiReactions)
+  .setFirstCursor(firstLocalPostEmojiReactionsCursor)
+  .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
 
 federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFollow);
 

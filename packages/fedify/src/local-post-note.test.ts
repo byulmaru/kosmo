@@ -8,7 +8,16 @@ import {
   MemoryKvStore,
   signRequest,
 } from '@fedify/fedify';
-import { CryptographicKey, Image, Note, Person, PUBLIC_COLLECTION } from '@fedify/vocab';
+import {
+  CryptographicKey,
+  EmojiReact,
+  Image,
+  Like,
+  Note,
+  Object as ActivityObject,
+  Person,
+  PUBLIC_COLLECTION,
+} from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
 import {
   AccountState,
@@ -28,6 +37,7 @@ import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
 import type * as LocalPostNoteModule from './local-post-note';
+import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -35,6 +45,7 @@ const remoteActorUri = new URL('https://prod-494.remote.example/users/follower')
 const remoteKeyUri = new URL('#main-key', remoteActorUri);
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
+let ActivityPubReactions: typeof CoreDb.ActivityPubReactions;
 let Accounts: typeof CoreDb.Accounts;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
@@ -51,7 +62,11 @@ let Posts: typeof CoreDb.Posts;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Reactions: typeof CoreDb.Reactions;
 let resolveActivityPubPostUri: typeof PostUriModule.resolveActivityPubPostUri;
+let countLocalPostEmojiReactions: typeof LocalPostReactionCollectionModule.countLocalPostEmojiReactions;
+let dispatchLocalPostEmojiReactions: typeof LocalPostReactionCollectionModule.dispatchLocalPostEmojiReactions;
+let firstLocalPostEmojiReactionsCursor: typeof LocalPostReactionCollectionModule.firstLocalPostEmojiReactionsCursor;
 let testInstanceIds: string[] = [];
 let testAccountIds: string[] = [];
 let testProfileIds: string[] = [];
@@ -62,6 +77,7 @@ describe('ActivityPub Local Post Note', () => {
     process.env.PUBLIC_ORIGIN = publicOrigin;
     ({
       ActivityPubActors,
+      ActivityPubReactions,
       Accounts,
       ActivityPubPosts,
       db,
@@ -74,10 +90,16 @@ describe('ActivityPub Local Post Note', () => {
       ProfileFollowRequests,
       ProfileFollows,
       Profiles,
+      Reactions,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ isCanonicalPostId, resolveActivityPubPostUri } = await import('./activitypub-post-uri'));
     ({ authorizeLocalPostNote, dispatchLocalPostNote } = await import('./local-post-note'));
+    ({
+      countLocalPostEmojiReactions,
+      dispatchLocalPostEmojiReactions,
+      firstLocalPostEmojiReactionsCursor,
+    } = await import('./local-post-reaction-collection'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -166,6 +188,11 @@ describe('ActivityPub Local Post Note', () => {
 
     assert.ok(publicNote);
     assert.equal(publicNote.id?.href, `${publicOrigin}/ap/note/${publicReply.id}`);
+    assert.equal(
+      publicNote.emojiReactionsId?.href,
+      `${publicOrigin}/ap/note/${publicReply.id}/emoji-reactions`,
+    );
+    assert.match(JSON.stringify(await publicNote.toJsonLd()), /"emojiReactions":/);
     assert.equal(publicNote.attributionId?.href, `${publicOrigin}/ap/actor/${author.id}`);
     assert.equal(publicNote.replyTargetId?.href, `${publicOrigin}/ap/note/${localParent.id}`);
     assert.equal(publicNote.toId?.href, PUBLIC_COLLECTION.href);
@@ -409,6 +436,321 @@ describe('ActivityPub Local Post Note', () => {
     assert.equal(await authorizeLocalPostNote(createContext(), { id: followersPost.id }), false);
     assert.equal(mediaLookup.mock.callCount(), 0);
   });
+
+  test('projects Local and stored Remote reactions with the eligible Activity vocabulary', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const localPost = await createPost(author.id);
+    const remoteProfile = await createProfile({ domain: 'remote.example' });
+    const remoteActor = new URL('https://remote.example/users/reactor');
+    await db.insert(ActivityPubActors).values({
+      profileId: remoteProfile.id,
+      type: ActivityPubActorType.PERSON,
+      uri: remoteActor.href,
+    });
+
+    const localReaction = await createReaction(author.id, localPost.id, '❤️', {
+      createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+    });
+    await createReaction(remoteProfile.id, localPost.id, '🎉', {
+      activityUri: 'https://remote.example/activities/reaction-1',
+      createdAt: Temporal.Instant.from('2026-08-01T00:01:00Z'),
+    });
+    await createReaction(remoteProfile.id, localPost.id, '👀', {
+      activityUri: 'not-a-url',
+      createdAt: Temporal.Instant.from('2026-08-01T00:02:00Z'),
+    });
+    await createReaction(remoteProfile.id, localPost.id, '☘️', {
+      createdAt: Temporal.Instant.from('2026-08-01T00:03:00Z'),
+    });
+    const networkRead = mock.method(globalThis, 'fetch', async () => {
+      throw new Error('Collection projection must not fetch remote identities');
+    });
+    const context = createContext();
+    const page = await dispatchLocalPostEmojiReactions(context, { id: localPost.id }, null);
+
+    assert.ok(page);
+    assert.equal(page.items.length, 2);
+    assert.ok(page.items[0] instanceof EmojiReact);
+    assert.ok(page.items[1] instanceof Like);
+    assert.equal(page.items[0]?.id?.href, 'https://remote.example/activities/reaction-1');
+    assert.equal(page.items[0]?.actorId?.href, remoteActor.href);
+    assert.equal(page.items[0]?.objectId?.href, `${publicOrigin}/ap/note/${localPost.id}`);
+    assert.equal(page.items[1]?.id?.href, `${publicOrigin}/ap/reaction/${localReaction.id}`);
+    assert.equal(page.items[1]?.actorId?.href, `${publicOrigin}/ap/actor/${author.id}`);
+    assert.equal(await countLocalPostEmojiReactions(context, { id: localPost.id }), 2);
+    assert.equal(networkRead.mock.callCount(), 0);
+
+    await db.update(Reactions).set({ type: 'custom' }).where(eq(Reactions.id, localReaction.id));
+    assert.equal(
+      (await dispatchLocalPostEmojiReactions(createContext(), { id: localPost.id }, null))?.items
+        .length,
+      1,
+    );
+    assert.equal(await countLocalPostEmojiReactions(createContext(), { id: localPost.id }), 1);
+  });
+
+  test('uses the reacting Local Instance identity for all six reaction types', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    const reactorInstance = await db
+      .insert(Instances)
+      .values({
+        canonicalOrigin: 'https://reactor.local.example',
+        domain: 'reactor.local.example',
+        kind: InstanceKind.LOCAL,
+        state: InstanceState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+    testInstanceIds.push(reactorInstance.id);
+    const reactor = await createProfile({
+      handle: 'local-reactor',
+      instanceId: reactorInstance.id,
+      kind: InstanceKind.LOCAL,
+    });
+    const types = ['🥹', '❤️', '🎉', '👀', '☘️', '🌈'] as const;
+    for (const [index, type] of types.entries()) {
+      await createReaction(reactor.id, post.id, type, {
+        createdAt: Temporal.Instant.from(`2026-08-01T00:0${index}:00Z`),
+      });
+    }
+
+    const page = await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, null);
+    assert.ok(page);
+    assert.equal(page.items.length, types.length);
+    const itemsByType = new Map<string, Like | EmojiReact>();
+    for (const candidate of page.items) {
+      itemsByType.set(candidate.content?.toString() ?? '', candidate);
+    }
+    for (const type of types) {
+      const item: Like | EmojiReact | undefined = itemsByType.get(type);
+      assert.ok(item);
+      assert.equal(item.content?.toString(), type);
+      assert.equal(item.objectId?.href, `${publicOrigin}/ap/note/${post.id}`);
+      assert.equal(item.actorId?.href, `${reactorInstance.canonicalOrigin}/ap/actor/${reactor.id}`);
+      assert.equal(
+        item.id?.href.startsWith(`${reactorInstance.canonicalOrigin}/ap/reaction/`),
+        true,
+      );
+      assert.equal(type === '❤️', item instanceof Like);
+      assert.equal(type !== '❤️', item instanceof EmojiReact);
+    }
+  });
+
+  test('uses opaque keyset cursors and a stable maximum page size', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const post = await createPost(author.id);
+    for (let index = 0; index < 51; index++) {
+      const profile = await createProfile({
+        handle: `reaction-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, post.id, '🥹', {
+        createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+      });
+    }
+
+    const firstPage = await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, null);
+    assert.ok(firstPage);
+    assert.equal(firstPage.items.length, 50);
+    assert.match(firstPage.nextCursor ?? '', /^v1:[A-Za-z0-9_-]+$/);
+    const secondPage = await dispatchLocalPostEmojiReactions(
+      createContext(),
+      { id: post.id },
+      firstPage.nextCursor ?? null,
+    );
+    assert.ok(secondPage);
+    assert.equal(secondPage.items.length, 1);
+    assert.equal(secondPage.nextCursor, undefined);
+    assert.equal(
+      new Set([...firstPage.items, ...secondPage.items].map((item) => item.id?.href)).size,
+      51,
+    );
+    const pagedReactionIds = [...firstPage.items, ...secondPage.items].map((item) =>
+      new URL(item.id!).pathname.split('/').at(-1),
+    );
+    assert.deepEqual(pagedReactionIds, [...pagedReactionIds].sort().reverse());
+
+    const spreadPost = await createPost(author.id);
+    for (let index = 0; index < 51; index++) {
+      const profile = await createProfile({
+        handle: `spread-valid-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, spreadPost.id, '🥹', {
+        createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+      });
+    }
+    const malformedReactionIds: string[] = [];
+    for (let index = 0; index < 26; index++) {
+      const profile = await createProfile({
+        domain: 'malformed.example',
+        handle: `spread-malformed-${index}`,
+      });
+      await db.insert(ActivityPubActors).values({
+        profileId: profile.id,
+        type: ActivityPubActorType.PERSON,
+        uri: `https://malformed.example/users/${index}`,
+      });
+      const malformedReaction = await createReaction(profile.id, spreadPost.id, '🥹', {
+        activityUri: `not-a-url-${index}`,
+        createdAt: Temporal.Instant.from('2026-08-02T00:00:00Z'),
+      });
+      malformedReactionIds.push(malformedReaction.id);
+    }
+    const spreadFirst = await dispatchLocalPostEmojiReactions(
+      createContext(),
+      { id: spreadPost.id },
+      null,
+    );
+    assert.ok(spreadFirst);
+    assert.equal(spreadFirst.items.length, 50);
+    assert.ok(spreadFirst.nextCursor);
+    const spreadSecond = await dispatchLocalPostEmojiReactions(
+      createContext(),
+      { id: spreadPost.id },
+      spreadFirst.nextCursor ?? null,
+    );
+    assert.ok(spreadSecond);
+    assert.equal(spreadSecond.items.length, 1);
+    assert.equal(spreadSecond.nextCursor, undefined);
+    const malformedId = malformedReactionIds[0];
+    assert.ok(malformedId);
+    const malformedCursor = `v1:${Buffer.from(
+      JSON.stringify({
+        createdAt: '2026-08-02T00:00:00Z',
+        id: malformedId,
+      }),
+      'utf8',
+    ).toString('base64url')}`;
+    assert.equal(
+      await dispatchLocalPostEmojiReactions(
+        createContext(),
+        { id: spreadPost.id },
+        malformedCursor,
+      ),
+      null,
+    );
+
+    const exactPost = await createPost(author.id);
+    for (let index = 0; index < 50; index++) {
+      const profile = await createProfile({
+        handle: `exact-valid-${index}`,
+        kind: InstanceKind.LOCAL,
+      });
+      await createReaction(profile.id, exactPost.id, '🥹', {
+        createdAt: Temporal.Instant.from('2026-08-02T00:00:00Z'),
+      });
+    }
+    const tailProfile = await createProfile({ domain: 'tail-malformed.example' });
+    await db.insert(ActivityPubActors).values({
+      profileId: tailProfile.id,
+      type: ActivityPubActorType.PERSON,
+      uri: 'https://tail-malformed.example/users/1',
+    });
+    await createReaction(tailProfile.id, exactPost.id, '🥹', {
+      activityUri: 'not-a-url-tail',
+      createdAt: Temporal.Instant.from('2026-08-01T00:00:00Z'),
+    });
+    const exactPage = await dispatchLocalPostEmojiReactions(
+      createContext(),
+      { id: exactPost.id },
+      null,
+    );
+    assert.ok(exactPage);
+    assert.equal(exactPage.items.length, 50);
+    assert.equal(exactPage.nextCursor, undefined);
+    assert.equal(
+      await firstLocalPostEmojiReactionsCursor(createContext(), { id: post.id }),
+      'v1:first',
+    );
+    assert.equal(
+      await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, 'v1:not-a-cursor'),
+      null,
+    );
+  });
+
+  test('serves empty, one-item, and exactly-full collections', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    for (const size of [0, 1, 50]) {
+      const post = await createPost(author.id);
+      for (let index = 0; index < size; index++) {
+        const profile = await createProfile({
+          handle: `boundary-${size}-${index}`,
+          kind: InstanceKind.LOCAL,
+        });
+        await createReaction(profile.id, post.id, '🥹');
+      }
+      const page = await dispatchLocalPostEmojiReactions(createContext(), { id: post.id }, null);
+      assert.ok(page);
+      assert.equal(page.items.length, size);
+      assert.equal(page.nextCursor, undefined);
+      assert.equal(await countLocalPostEmojiReactions(createContext(), { id: post.id }), size);
+    }
+  });
+
+  test('serves Public and Unlisted collections to anonymous requests', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const federation = createUnsignedCollectionFederation();
+    const fetchCollection = async (postId: string) =>
+      federation.fetch(
+        new Request(`${publicOrigin}/ap/note/${postId}/emoji-reactions`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        {
+          contextData: undefined,
+          onNotFound: () => new Response('Not found', { status: 404 }),
+          onUnauthorized: () => new Response('Not found', { status: 404 }),
+        },
+      );
+    for (const visibility of [PostVisibility.PUBLIC, PostVisibility.UNLISTED]) {
+      const post = await createPost(author.id, { visibility });
+      const response = await fetchCollection(post.id);
+      assert.equal(response.status, 200);
+      const document = (await response.json()) as { totalItems?: number; type?: string };
+      assert.equal(document.type, 'Collection');
+      assert.equal(document.totalItems, 0);
+    }
+    assert.equal(
+      (
+        await fetchCollection(
+          (await createPost(author.id, { visibility: PostVisibility.DIRECT })).id,
+        )
+      ).status,
+      404,
+    );
+    const contentless = await db
+      .insert(Posts)
+      .values({ profileId: author.id, state: PostState.ACTIVE, visibility: PostVisibility.PUBLIC })
+      .returning()
+      .then(firstOrThrow);
+    assert.equal((await fetchCollection(contentless.id)).status, 404);
+  });
+
+  test('hides the collection with the same signed Followers Only boundary as its Note', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
+    const remoteFollower = await createProfile({ domain: 'remote.example' });
+    const signedFixture = await createSignedFederation();
+    const fetchCollection = () => signedFixture.fetchCollection(followersPost.id);
+
+    assert.equal((await fetchCollection()).status, 404);
+    await db.insert(ActivityPubActors).values({
+      profileId: remoteFollower.id,
+      type: ActivityPubActorType.PERSON,
+      uri: remoteActorUri.href,
+    });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: remoteFollower.id,
+    });
+    assert.equal((await fetchCollection()).status, 200);
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, remoteFollower.instanceId));
+    assert.equal((await fetchCollection()).status, 404);
+  });
 });
 
 const createContext = (): RequestContext<void> => {
@@ -421,6 +763,25 @@ const createContext = (): RequestContext<void> => {
     new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
     undefined,
   );
+};
+
+const createUnsignedCollectionFederation = () => {
+  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+  federation.setActorDispatcher(
+    '/ap/actor/{identifier}',
+    (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
+  );
+  federation
+    .setCollectionDispatcher(
+      'activitypub-note-emoji-reactions',
+      ActivityObject,
+      '/ap/note/{id}/emoji-reactions',
+      dispatchLocalPostEmojiReactions,
+    )
+    .setCounter(countLocalPostEmojiReactions)
+    .setFirstCursor(firstLocalPostEmojiReactionsCursor)
+    .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
+  return federation;
 };
 
 const createSignedFederation = async () => {
@@ -454,6 +815,16 @@ const createSignedFederation = async () => {
   federation
     .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
     .authorize(authorizeLocalPostNote);
+  federation
+    .setCollectionDispatcher(
+      'activitypub-note-emoji-reactions',
+      ActivityObject,
+      '/ap/note/{id}/emoji-reactions',
+      dispatchLocalPostEmojiReactions,
+    )
+    .setCounter(countLocalPostEmojiReactions)
+    .setFirstCursor(firstLocalPostEmojiReactionsCursor)
+    .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
 
   const createRequest = (postId: string) =>
     signRequest(
@@ -470,22 +841,39 @@ const createSignedFederation = async () => {
       onUnauthorized: () => new Response('Not found', { status: 404 }),
     });
   };
-  return { createRequest, federation, fetch };
+  const fetchCollection = async (postId: string) => {
+    const request = await signRequest(
+      new Request(`${publicOrigin}/ap/note/${postId}/emoji-reactions`, {
+        headers: { accept: 'application/activity+json' },
+      }),
+      remoteKeyPair.privateKey,
+      remoteKeyUri,
+    );
+    return federation.fetch(request, {
+      contextData: undefined,
+      onUnauthorized: () => new Response('Not found', { status: 404 }),
+      onNotFound: () => new Response('Not found', { status: 404 }),
+    });
+  };
+  return { createRequest, federation, fetch, fetchCollection };
 };
 
 const createProfile = async ({
   domain,
   handle = 'profile',
+  instanceId: requestedInstanceId,
   kind = InstanceKind.ACTIVITYPUB,
   state = ProfileState.ACTIVE,
 }: {
   domain?: string;
   handle?: string;
+  instanceId?: string;
   kind?: (typeof InstanceKind)[keyof typeof InstanceKind];
   state?: (typeof ProfileState)[keyof typeof ProfileState];
 }) => {
-  const instanceId =
-    kind === InstanceKind.LOCAL
+  const instanceId = requestedInstanceId
+    ? requestedInstanceId
+    : kind === InstanceKind.LOCAL
       ? localInstanceId
       : await db
           .insert(Instances)
@@ -571,6 +959,23 @@ const createPost = async (
     .where(eq(Posts.id, post.id))
     .returning()
     .then(firstOrThrow);
+};
+
+const createReaction = async (
+  profileId: string,
+  postId: string,
+  type: string,
+  { activityUri, createdAt }: { activityUri?: string; createdAt?: Temporal.Instant } = {},
+) => {
+  const reaction = await db
+    .insert(Reactions)
+    .values({ profileId, postId, type, ...(createdAt ? { createdAt } : {}) })
+    .returning()
+    .then(firstOrThrow);
+  if (activityUri) {
+    await db.insert(ActivityPubReactions).values({ reactionId: reaction.id, uri: activityUri });
+  }
+  return reaction;
 };
 
 const createMedia = async (

@@ -98,6 +98,21 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
   원본 activity URI에 `#undo`를 결합하고, 원본 activity URI를 생성과 취소 delivery의 같은 ordering key로
   사용한다.
 
+## ActivityPub emojiReactions collection projection
+
+- Local Note가 광고한 FEP-c0e0 `emojiReactions` collection은 대상 Local Post에 현재 존재하는 Reaction 중
+  ActivityPub identity로 표현할 수 있는 Local Profile과 Remote Profile의 Reaction을 모두 포함한다. 삭제되어
+  현재 존재하지 않는 Reaction, Profile actor/activity identity를 표현할 수 없는 Reaction과 unavailable Post의
+  Reaction은 item으로 노출하지 않는다.
+- `❤️` Reaction은 `content: "❤️"`를 가진 `Like` item으로, 나머지 허용 Reaction Type(`🥹`, `🎉`, `👀`, `☘️`,
+  `🌈`)은 정확한 Type을 `content`에 가진 `EmojiReact` item으로 표현한다. 각 item의 `object`는 대상 Local Note
+  URI다.
+- Local Reaction item의 `actor` URI와 `/ap/reaction/{reactionId}` activity URI는 Reaction Profile이 속한 LOCAL
+  Instance의 canonical origin에서 파생한다. Remote Reaction item은 저장된 ActivityPub actor URI와 activity URI를
+  그대로 재사용하며, collection을 채우기 위해 Remote Profile이나 Note를 새로 fetch하거나 backfill하지 않는다.
+- collection은 대상 Local Note와 동일한 Post Visibility, Post Eligibility와 Author Profile/Instance availability
+  조회 조건을 적용한다. Mentioned Profiles처럼 Note 자체를 제공하지 않는 Visibility에는 collection도 제공하지 않는다.
+
 ## 권한
 
 | 권한             | 종류      | 성립 조건                                  |
@@ -128,3 +143,5 @@ Reaction 삭제는 입력한 Post와 Reaction Type에서 행동 주체 Profile�
 - 좋아요, 부스트 같은 별도 canonical term은 사용하지 않는다.
 - 임의 Unicode와 custom emoji Reaction 저장, legacy `EmojiReaction`, Misskey `_misskey_reaction` 확장은
   지원하지 않는다.
+- `emojiReactions` collection은 custom emoji, legacy `EmojiReaction`, Misskey extension 또는 remote Note fetch/backfill을
+  지원하지 않으며, GraphQL Reaction 계약을 변경하지 않는다.
