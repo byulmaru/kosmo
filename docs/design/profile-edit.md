@@ -70,9 +70,9 @@
   Storybook의 controlled state로 검증한다.
 - Switch는 `followPolicy` enum을 controlled draft로 유지하며 별도 즉시 저장하지 않는다. 토글만 바꿔도
   draft가 dirty가 되고, 저장 callback에는 다른 Profile draft와 함께 현재 enum 값이 전달된다.
-- 이미지 업로드 오류는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로
-  안내하고 현재 image draft를 보존한다. 내부 오류 detail이나 caller가 제공한 임의 문구를 사용자에게 그대로
-  표시하지 않는다.
+- 이미지 업로드 오류는 [공통 이미지 업로드 오류 안내](./media-upload-errors.md)의 단계·원인 분류와 안전한
+  한국어 문구를 사용하고 현재 image draft를 보존한다. `{subject}`는 `아바타 이미지` 또는 `헤더 이미지`로
+  한정하며 Storage Service 원문 message나 caller가 제공한 임의 문구를 사용자에게 그대로 표시하지 않는다.
 
 ### Production route와 저장
 
