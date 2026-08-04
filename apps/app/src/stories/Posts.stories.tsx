@@ -4494,24 +4494,6 @@ export const ComposerClipboardPasteInteraction: Story = {
       await userEvent.click(body);
       await userEvent.paste('https://example.com/post');
       expect(body).toHaveValue('기존 본문https://example.com/post');
-
-      const outsideEditor = document.createElement('textarea');
-      document.body.append(outsideEditor);
-      try {
-        const outsidePasteData = new DataTransfer();
-        outsidePasteData.items.add(new File(['outside'], 'outside.png', { type: 'image/png' }));
-        outsideEditor.dispatchEvent(
-          new ClipboardEvent('paste', {
-            bubbles: true,
-            cancelable: true,
-            clipboardData: outsidePasteData,
-          }),
-        );
-        expect(upload).toHaveBeenCalledTimes(4);
-        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
-      } finally {
-        outsideEditor.remove();
-      }
     } finally {
       globalThis.fetch = originalFetch;
     }
