@@ -433,7 +433,7 @@ describe('Notification GraphQL Node boundary', () => {
     }
   });
 
-  test('hides a stale row when terminal request deletion overlaps post-commit creation', async () => {
+  test('does not leave a stale row when terminal request deletion overlaps post-commit creation', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('follow-request-race-recipient');
     const requester = await createProfile('follow-request-race-requester');
@@ -444,13 +444,15 @@ describe('Notification GraphQL Node boundary', () => {
       .where(eq(Profiles.id, recipient.id));
 
     // The trigger is test-only: it pauses the INSERT after the source SELECT has
-    // observed the pending row, allowing the terminal delete and cleanup to commit.
+    // observed and locked the pending row. The terminal delete must reach that row
+    // lock before the INSERT is released, proving the final state has no orphan.
     const advisoryKey = 321_321;
     const control = await pg.reserve();
     let unlocked = false;
     let functionInstalled = false;
     let triggerInstalled = false;
     let followPromise: ReturnType<typeof followProfile> | undefined;
+    let cancelPromise: ReturnType<typeof cancelProfileFollowRequest> | undefined;
     try {
       await control`SELECT pg_advisory_lock(${advisoryKey})`;
       await db.execute(
@@ -507,13 +509,31 @@ describe('Notification GraphQL Node boundary', () => {
           ),
         )
         .then(firstOrThrow);
-      const cancelResult = await cancelProfileFollowRequest({
+      cancelPromise = cancelProfileFollowRequest({
         actorProfileId: requester.id,
         profileFollowRequestId: request.id,
       });
-      assert.equal(cancelResult.profileFollowRequestId, request.id);
+      let deleteBlocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const activity = await db.execute(sql`
+          SELECT 1
+          FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock'
+            AND wait_event IN ('transactionid', 'tuple')
+            AND query ILIKE '%delete from "profile_follow_request"%'
+          LIMIT 1
+        `);
+        if (activity.length > 0) {
+          deleteBlocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(deleteBlocked, true);
       await control`SELECT pg_advisory_unlock(${advisoryKey})`;
       unlocked = true;
+      const cancelResult = await cancelPromise;
+      assert.equal(cancelResult.profileFollowRequestId, request.id);
       const result = await followPromise;
       assert.equal(result.result.kind, 'PENDING');
 
@@ -521,8 +541,8 @@ describe('Notification GraphQL Node boundary', () => {
         .select()
         .from(Notifications)
         .where(eq(Notifications.sourceId, request.id));
-      assert.equal(stale.length, 1);
-      const notificationId = encodeGlobalId('FollowRequestNotification', stale[0]!.id);
+      assert.equal(stale.length, 0);
+      const notificationId = encodeGlobalId('FollowRequestNotification', request.id);
       const recipientId = encodeGlobalId('Profile', recipient.id);
       assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
       const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
@@ -538,6 +558,7 @@ describe('Notification GraphQL Node boundary', () => {
       }
       // If setup or the blocking poll failed, let the in-flight source action
       // finish before dropping its test-only trigger/function.
+      await cancelPromise?.catch(() => undefined);
       await followPromise?.catch(() => undefined);
       if (triggerInstalled) {
         await db.execute(
