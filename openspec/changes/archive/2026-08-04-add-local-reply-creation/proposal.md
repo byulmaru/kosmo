@@ -1,22 +1,20 @@
 ## Why
 
-Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사용자가 Local Reply를 작성하고 현재 thread에서 확인하며 Parent Author가 기존 inbox에서 알림을 받는 수직 흐름은 아직 연결되지 않았다. PROD-424·425·426이 공유할 작성 계약을 하나의 `add-local-reply-creation` OpenSpec Gate에서 정렬하고, 후행 PROD-423에서 전체 흐름을 통합 검증해 archive할 수 있어야 한다. 후행 Media 계약이 일반 Post와 Reply에 공통 적용된 뒤에도 Reply Composer가 해당 입력과 lifecycle을 차단하는 결손은 PROD-640에서 기존 계약 복구로 해결한다. Canonical domain은 Post와 Reply 모두 Content Warning을 허용하지만 Local `createPost`와 Reply Composer 및 이 change의 기존 계약은 이를 제외하므로, PROD-642에서 기존 `PostContentDocument.summary` capability를 정식 작성·표시 범위에 포함한다.
+Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사용자가 Local Reply를 작성하고 현재 thread에서 확인하며 Parent Author가 기존 inbox에서 알림을 받는 수직 흐름은 아직 연결되지 않았다. PROD-424·425·426이 공유할 작성 계약을 하나의 `add-local-reply-creation` OpenSpec Gate에서 정렬하고, 후행 PROD-423에서 전체 흐름을 통합 검증해 archive할 수 있어야 한다. 후행 Media 계약이 일반 Post와 Reply에 공통 적용된 뒤에도 Reply Composer가 해당 입력과 lifecycle을 차단하는 결손은 PROD-640에서 기존 계약 복구로 해결한다.
 
 ## What Changes
 
-- 기존 `createPost` 입력에 nullable `replyParentId`와 optional nullable `contentWarning`을 추가하고, 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 본문·Content Warning·Visibility를 가진 일반 Reply를 생성한다. Content Warning은 기존 `PostContentDocument.summary`에 저장한다.
+- 기존 `createPost` 입력에 nullable `replyParentId`를 추가하고, 요청 Profile이 조회할 수 있는 contentful Parent에 현재 지원 본문·Visibility를 가진 일반 Reply를 생성한다.
 - 목록의 Reply action은 화면 폭과 platform에 맞는 modal 또는 전체 화면 surface에서, Post 상세의 Reply action은 현재 thread 안의 inline surface에서 기존 composer를 Parent 맥락으로 연다. 성공하면 현재 화면과 focus를 유지하면서 결과 Reply로 이동할 수 있는 `보기` action을 제공하고 현재 detail query만 갱신하며, Content 없는 Repost의 action은 표시하되 진입을 차단한다.
 - Reply Composer는 일반 Post와 같은 기존 Media 선택·업로드·미리보기·제거·재시도, Alt Text와 Sensitive Media 계약을 적용하고 Parent·본문·Media를 기존 `createPost` 결과 하나로 저장한다.
-- Reply Composer는 direct Parent에 Content Warning이 있으면 이를 Reply Content Warning의 초기값으로 한 번 복사한다. 사용자는 복사된 값을 자유롭게 수정하거나 제거할 수 있으며, Content Warning은 본문·Visibility·Media와 함께 dirty/reset/error lifecycle에 참여한다.
-- Content Warning reveal 상태는 canonical `Post.id`를 key로 Home·Profile·Thread와 Reply Parent preview를 포함한 모든 surface에서 공유한다. 별도 Content Warning 모델·DB 컬럼이나 서버 저장 reveal preference는 만들지 않는다.
 - 다른 Profile의 Post에 새 Reply가 생성되면 origin과 무관하게 Parent Author에게 Reply Notification을 같은 생성 lifecycle의 격리된 Best Effort savepoint로 생성하고, 기존 connection·Unread count·Read·badge/cache·inbox 흐름에 연결한다.
-- `PostContentDocument` 구조, Content Warning 전용 모델·DB 컬럼, 서버 동기화 reveal preference, Media/Sensitive Media capability 자체의 신규 설계·변경, Mentioned Profile recipient·Mentioned Profiles 작성/조회, Reply+Quote 작성, ActivityPub Reply materialization·delivery, Action Bar 전체 rollout, retry/outbox와 동기 cleanup은 제외한다. 이미 materialize된 새 ActivityPub Reply의 기존 Notification integration은 포함하며, PROD-640은 기존 `createPost`의 Media/Sensitive Media 계약을 Reply Composer에 적용할 뿐 모델·storage·API 정책을 수정하지 않는다.
+- Content Warning, Media/Sensitive Media capability 자체의 신규 설계·변경, Mentioned Profile recipient·Mentioned Profiles 작성/조회, Reply+Quote 작성, ActivityPub Reply materialization·delivery, Action Bar 전체 rollout, retry/outbox와 동기 cleanup은 제외한다. 이미 materialize된 새 ActivityPub Reply의 기존 Notification integration은 포함하며, PROD-640은 기존 `createPost`의 Media/Sensitive Media 계약을 Reply Composer에 적용할 뿐 모델·storage·API 정책을 수정하지 않는다.
 
 ## Authority / Provenance
 
 - Canonical: `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/README.md`, `docs/design/reply-composer.md`, `docs/design/colors.md`, `docs/design/typography.md`, `docs/design/breakpoints.md`
-- Linear Contract: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507), [PROD-640](https://linear.app/byulmaru/issue/PROD-640), [PROD-642](https://linear.app/byulmaru/issue/PROD-642)
-- Linear Implementations: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507), [PROD-640](https://linear.app/byulmaru/issue/PROD-640), [PROD-642](https://linear.app/byulmaru/issue/PROD-642)
+- Linear Contract: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507), [PROD-640](https://linear.app/byulmaru/issue/PROD-640)
+- Linear Implementations: [PROD-424](https://linear.app/byulmaru/issue/PROD-424), [PROD-425](https://linear.app/byulmaru/issue/PROD-425), [PROD-426](https://linear.app/byulmaru/issue/PROD-426), [PROD-507](https://linear.app/byulmaru/issue/PROD-507), [PROD-640](https://linear.app/byulmaru/issue/PROD-640)
 
 ## Capabilities
 
@@ -28,12 +26,12 @@ Kosmo의 Reply Parent 저장·조회와 thread 표시 기반은 있지만, 사�
 
 ### Modified Capabilities
 
-- `post`: Plain Text `createPost` GraphQL 계약이 선택적 Content Warning과 Reply Parent를 받고 기존 단일 `Post` payload로 일반 Post 또는 Reply를 반환하도록 확장
+- `post`: Plain Text `createPost` GraphQL 계약이 선택적 Reply Parent를 받고 기존 단일 `Post` payload로 Reply를 반환하도록 확장
 
 ## Impact
 
-- Linear: 구현 계약 PROD-424·425·426·640·642와 후행 통합·archive 이슈 PROD-423
-- Core/API: 기존 Reply Parent 저장 경계, Post visibility predicate, optional `CreatePostInput.contentWarning`, 기존 `PostContentDocument.summary` 저장 경로, Reply Notification source·concrete Node·visible predicate
-- Universal client: 목록 modal·전체 화면 Reply surface, 상세 inline Reply surface, 기존 composer mutation·Content Warning·Media lifecycle, Post identity 기반 reveal 상태, thread Relay cache, Notification inbox item·Read·badge cache
+- Linear: 구현 계약 PROD-424·425·426·640과 후행 통합·archive 이슈 PROD-423
+- Core/API: 기존 Reply Parent 저장 경계, Post visibility predicate, `CreatePostInput`, Reply Notification source·concrete Node·visible predicate
+- Universal client: 목록 modal·전체 화면 Reply surface, 상세 inline Reply surface, 기존 composer mutation·Media lifecycle, thread Relay cache, Notification inbox item·Read·badge cache
 - Verification: backend service/schema/resolver, client component/route/cache, Notification connection·count·Read·Node와 통합 flow
 - Dependencies: `add-post-replies`의 Reply Parent·thread 기반과 `add-in-app-notifications`의 공통 Notification 기반을 재사용한다. `add-post-reposts`의 merged Repost Notification loader·bounded source visibility 구조와 같은 request-scoped loader contract를 공유한다.

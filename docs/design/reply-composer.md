@@ -176,6 +176,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 이 디자인의 목록 modal, 좁은 화면 전체 작성기와 상세 inline surface는 PROD-425의 기본 Reply 작성 계약과
   PROD-640의 기존 Media 계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
   전체 통합 검증을 소유한 PROD-423에서 수행한다.
+- Local API 입력·저장(PROD-460)과 일반·Reply Composer 및 공용 reveal UI(PROD-642)의 Content Warning 계약은
+  `add-local-content-warning` change가 공동 소유한다. PR readiness와 별개로 Android/iOS 및 원격 federation
+  runtime gate가 완료되기 전에는 이 change를 archive하지 않는다.
 - Figma component와 screen state를 먼저 검토한 뒤 구현 계획을 확정한다. 디자인 문서나 Figma 완료만으로
   Reply 작성·cache 통합 또는 runtime 검증 완료를 주장하지 않는다.
 
@@ -187,7 +190,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, `UNLISTED` 기본값, `DIRECT` 제외, 500자 count와 disabled/pending/error 상태를 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, 합산 500자 검증과
-  dirty/reset/error 유지 상태를 확인한다.
+  Reply-open discard/reset/error 유지 상태를 확인한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
