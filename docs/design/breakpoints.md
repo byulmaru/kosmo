@@ -49,6 +49,26 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 - route와 page shell이 같은 구현 slice에서 준비된 뒤 진입점을 노출하며, 준비되지 않은 placeholder route를
   먼저 만들지 않는다.
 
+## 프로필 편집 진입
+
+인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 shared navigation에 `프로필 편집`
+진입점을 표시한다.
+
+- `compact` 이상 Web에서는 full sidebar와 compact icon rail의 주요 navigation에 표시한다.
+- `< compact` mobile Web과 Android·iOS에서는 mobile drawer에 표시한다. 하단 탭 바와 우측 레일에는 중복
+  진입점을 두지 않는다.
+- 항목은 selected Profile의 공개 `프로필` 진입점 바로 다음에 `UserRoundPen` 아이콘으로 표시하고 canonical
+  `/profile-edit` route를 연다. `/profile-edit`가 현재 route이면 active state를 노출한다.
+- mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나
+  ProfileSwitcher 전용 action을 만들지 않는다.
+- 노출 여부는 nullable `selectedProfileForEdit` 결과를 사용한다. client는 selected Profile id,
+  `Profile.instance.kind` 또는 route 존재만으로 Owner 권한을 추측하지 않으며, 결과가 `null`이면 disabled
+  placeholder 없이 항목 자체를 숨긴다.
+- PROD-541에서 제거한 generic `/menu`의 `프로필 설정` placeholder는 복원하지 않는다. PROD-660은 준비된
+  `/profile-edit` route에 연결되는 실제 Profile 편집 진입점만 복원한다.
+- 현재 제품 runtime 검증 범위는 Web이다. 공용 mobile drawer와 자동화는 platform별 target·semantics를
+  유지하되 Android·iOS 실제 기기·simulator 검증 완료로 일반화하지 않는다.
+
 ## 프로필 피커
 
 Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사용한다. Android/iOS profile picker는
