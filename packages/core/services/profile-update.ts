@@ -18,6 +18,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  PostVisibility,
   ProfileMediaKind,
   ProfileState,
 } from '../enums';
@@ -32,6 +33,7 @@ export type UpdateProfileInput = {
   readonly avatarMediaId?: string | null;
   readonly displayName?: string;
   readonly bio?: string | null;
+  readonly defaultPostVisibility?: PostVisibility | null;
   readonly followPolicy?: ProfileFollowPolicy;
   readonly headerMediaId?: string | null;
   readonly tags?: readonly string[] | null;
@@ -98,6 +100,28 @@ const normalizeTags = (tags: UpdateProfileInput['tags']) => {
   return result.data;
 };
 
+const defaultPostVisibilityValues = new Set<PostVisibility>([
+  PostVisibility.PUBLIC,
+  PostVisibility.UNLISTED,
+  PostVisibility.FOLLOWERS,
+]);
+
+const normalizeDefaultPostVisibility = (
+  visibility: UpdateProfileInput['defaultPostVisibility'],
+): PostVisibility | undefined => {
+  if (visibility === undefined) {
+    return undefined;
+  }
+
+  if (visibility === null || !defaultPostVisibilityValues.has(visibility)) {
+    throw new ValidationError('지원하지 않는 기본 공개 범위예요.', {
+      field: 'defaultPostVisibility',
+    });
+  }
+
+  return visibility;
+};
+
 export const updateProfile = async (
   input: UpdateProfileInput,
   tx?: Transaction,
@@ -132,6 +156,7 @@ export const updateProfile = async (
 
     const displayName = normalizeDisplayName(input.displayName, profile.profile.displayName);
     const bio = normalizeBio(input.bio);
+    const defaultPostVisibility = normalizeDefaultPostVisibility(input.defaultPostVisibility);
     const normalizedTags = normalizeTags(input.tags);
 
     const requestedMedia = [
@@ -182,6 +207,7 @@ export const updateProfile = async (
     const scalarChanges: {
       displayName?: string;
       bio?: string | null;
+      defaultPostVisibility?: PostVisibility;
       followPolicy?: ProfileFollowPolicy;
     } = {};
     if (displayName !== undefined && displayName !== profile.profile.displayName) {
@@ -189,6 +215,12 @@ export const updateProfile = async (
     }
     if (bio !== undefined && bio !== profile.profile.bio) {
       scalarChanges.bio = bio;
+    }
+    if (
+      defaultPostVisibility !== undefined &&
+      defaultPostVisibility !== profile.profile.defaultPostVisibility
+    ) {
+      scalarChanges.defaultPostVisibility = defaultPostVisibility;
     }
     if (input.followPolicy !== undefined && input.followPolicy !== profile.profile.followPolicy) {
       scalarChanges.followPolicy = input.followPolicy;
@@ -203,7 +235,11 @@ export const updateProfile = async (
         mediaChanges.push([kind, mediaId]);
       }
     }
-    const actorProjectionChanged = Object.keys(scalarChanges).length > 0 || mediaChanges.length > 0;
+    const actorProjectionActuallyChanged =
+      (displayName !== undefined && displayName !== profile.profile.displayName) ||
+      (bio !== undefined && bio !== profile.profile.bio) ||
+      (input.followPolicy !== undefined && input.followPolicy !== profile.profile.followPolicy) ||
+      mediaChanges.length > 0;
 
     const updatedProfile =
       Object.keys(scalarChanges).length > 0
@@ -259,7 +295,7 @@ export const updateProfile = async (
         });
     }
 
-    return { actorProjectionChanged, profile: updatedProfile };
+    return { actorProjectionChanged: actorProjectionActuallyChanged, profile: updatedProfile };
   });
 
   return {

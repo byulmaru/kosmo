@@ -1,4 +1,4 @@
-import { ProfileFollowPolicy } from '@kosmo/core/enums';
+import { PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { updateProfile } from '@kosmo/core/services';
 import { profileBioSchema, profileTagsInputSchema } from '@kosmo/core/validation';
@@ -17,6 +17,7 @@ builder.mutationField('updateProfile', (t) =>
       displayName: t.input.string({ required: false }),
       bio: t.input.string({ required: false, validate: profileBioSchema.optional() }),
       followPolicy: t.input.field({ type: ProfileFollowPolicy, required: false }),
+      defaultPostVisibility: t.input.field({ type: PostVisibility, required: false }),
       tags: t.input.stringList({ required: false, validate: profileTagsInputSchema }),
       avatarId: t.input.globalID({ for: Media, required: false }),
       headerId: t.input.globalID({ for: Media, required: false }),
@@ -29,6 +30,7 @@ builder.mutationField('updateProfile', (t) =>
           displayName: input.displayName ?? undefined,
           bio: input.bio,
           followPolicy: input.followPolicy ?? undefined,
+          defaultPostVisibility: input.defaultPostVisibility,
           tags: input.tags,
           avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
           headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),

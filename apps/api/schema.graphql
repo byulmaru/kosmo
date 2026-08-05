@@ -353,6 +353,7 @@ type Profile implements Node {
   notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
   posts(after: String, before: String, first: Int, last: Int): PostConnection!
+  private: ProfilePrivate
   relativeHandle: String!
   tags: [Hashtag!]!
   unreadNotificationCount: Int!
@@ -432,6 +433,10 @@ type ProfileOutgoingProfileFollowRequestsConnection {
 type ProfileOutgoingProfileFollowRequestsConnectionEdge {
   cursor: String!
   node: ProfileFollowRequest!
+}
+
+type ProfilePrivate {
+  defaultPostVisibility: PostVisibility!
 }
 
 enum ProfileState {
@@ -551,6 +556,7 @@ type UnfollowProfilePayload {
 input UpdateProfileInput {
   avatarId: ID
   bio: String
+  defaultPostVisibility: PostVisibility
   displayName: String
   followPolicy: ProfileFollowPolicy
   headerId: ID
