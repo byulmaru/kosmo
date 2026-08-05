@@ -96,7 +96,7 @@ Viewer가 Compact Web·Native에서는 작성자, 3줄 원문과 고정된 기�
 - [x] 3.3 기존 Post Action Bar fragment·binding을 같은 Post target으로 연결하고 Viewer 전용 Media action이 없음을 회귀 검증한다.
 - [ ] 3.4 Reaction·Repost·More·Reply overlay를 세 플랫폼에서 확인하고 기존 동작을 보존하는 layer 처리만 적용한다.
 - [x] 3.5 기존 `PostDetailThread`의 reply ancestors·현재 Post·reply descendants 표시를 route와 Viewer가 재사용할 수 있는 surface로 추출하고, 현재 Post의 원본 Media·nested Viewer만 생략하며 Reply action으로 Composer를 펼치는 기존 상세 동작을 유지한다.
-- [x] 3.6 Wide Viewer가 같은 Post identity의 thread data를 독립 loading·error boundary로 공급받고 기존 reply connection pagination을 오른쪽 scroller에 연결하며, 상세 route에서는 배경 document pagination을 중지해 단일 owner만 load하도록 한다.
+- [x] 3.6 Wide Viewer가 같은 Post identity의 thread data를 독립 loading·error boundary로 공급받고 기존 reply connection pagination을 오른쪽 scroller에 연결하며, 현재 Post Viewer가 배경 상세 route와 같은 reply connection을 재사용하는 경우에만 배경 document pagination을 중지해 단일 owner만 load하도록 한다. 다른 Post identity의 Viewer가 사용하는 별도 reply connection은 이 gate에서 제외한다.
 - [x] 3.7 Wide Viewer의 전체 원문·Composer·Post/reply action과 child overlay를 직접 사용할 수 있게 하고 route·history 유지, 배경 비활성화와 focus lifecycle을 자동화한다.
 - [x] 3.8 Wide Web의 `clamp(320px, 25vw, 350px)` thread rail과 Compact Web·Native의 내용 높이·`clamp(192px, 32vh, 240px)` detail panel을 구현하고, Wide Action Bar의 가로 overflow 방지·390px 높이의 고정 chrome 보존·짧은 원문 Action Bar 인접 배치와 expanded text-only scroll을 회귀 검증한다.
 
