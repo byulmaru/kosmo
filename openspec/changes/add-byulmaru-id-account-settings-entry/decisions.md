@@ -1,82 +1,82 @@
 ## Context
 
-이 기록은 `docs/design/settings.md`, `docs/design/accessibility.md`와 최신 Linear `PROD-645`·`PROD-653`의
-Account 외부 진입점 계약을 독립 대조한 결과를 반영한다. 제품 소유 경계와 관찰 가능한 동작은 upstream을
-재서술하고, 그 범위 안에서 플랫폼 공용 구현과 실패 복구 방식을 선택한다.
+이 기록은 `docs/design/settings.md`와 최신 Linear `PROD-645`, `PROD-685`, `PROD-684`의 Account 외부
+진입점·소유권 계약을 대조한 결과다. `PROD-653`은 완료된 선행 정보 구조 산출물로 기록하며 active 통합·archive
+owner로 취급하지 않는다.
 
 ## Decision Records
 
-### Byulmaru ID root를 Account Settings의 유일한 외부 destination으로 사용한다
+### canonical Account Settings URL은 external Link의 href로만 사용한다
 
-- Decision Date: 2026-08-04
+- Decision Date: 2026-08-05
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/settings.md`, `PROD-645`
 - Status: Active
 - Context / Problem: Kosmo 내부 route나 추론한 provider subpath를 사용하면 Account Settings의 서비스 소유
-  경계가 흐려지거나 존재하지 않는 destination으로 이동할 수 있다.
-- Decision Outcome: Account 진입점은 `https://id.byulmaru.co`만 외부로 연다. Kosmo 내부 Account route,
-  generic placeholder, query가 붙은 URL 또는 추론한 `/settings` subpath를 사용하지 않는다.
-- Alternatives Considered: Kosmo `/settings/account` route, provider `/settings` subpath, runtime OIDC discovery
-  결과로 Account UI URL을 조립하는 방식. 현재 canonical·Linear authority가 없거나 실제 endpoint와 맞지 않아
-  채택하지 않았다.
-- Consequences: destination 변경은 코드 상수만 임의 수정하지 않고 canonical 디자인과 PROD-645 계약을 먼저
-  갱신해야 한다. Kosmo는 provider 인증 뒤 redirect destination을 소유하지 않는다.
-- Confirmation / Follow-up: exact URL unit test와 Web·Android·iOS 외부 이동 검증에서 내부 Router가 호출되지
-  않는지 확인한다.
+  경계가 흐려진다.
+- Decision Outcome: Account 행은 `https://id.byulmaru.co`를 Expo Router `Link`의 exact external `href`로
+  사용한다. Kosmo 내부 Account route, generic placeholder, query가 붙은 URL 또는 추론한 `/settings` subpath를
+  사용하지 않는다.
+- Alternatives Considered: Kosmo `/settings/account` route, provider `/settings` subpath, runtime discovery로
+  URL을 조립하는 방식. 현재 canonical authority가 없어 채택하지 않았다.
+- Consequences: destination 변경은 canonical 디자인과 PROD-645 계약을 먼저 갱신한다. navigation 결과와
+  provider redirect는 브라우저·OS가 소유한다.
+- Confirmation / Follow-up: component test와 Storybook에서 exact href와 실제 link semantics를 확인하고,
+  production route 조립은 `PROD-685`가 검증한다.
 
-### 소유권과 외부 이동 의미를 하나의 평면 Account 행에 담는다
+### 시각 label과 accessible name으로 서로 다른 소유 정보를 전달한다
 
-- Decision Date: 2026-08-04
+- Decision Date: 2026-08-05
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-645`
 - Status: Active
-- Context / Problem: 별도 heading·소유자 설명을 추가하면 승인된 평면 정보 밀도를 깨뜨리고, generic `계정
-설정`만 표시하면 Byulmaru ID 외부 서비스라는 사실을 전달하지 못한다.
-- Decision Outcome: 시각 label은 `Byulmaru ID 계정 설정`, accessible name은 `Byulmaru ID 계정 설정, 외부
-서비스로 이동`을 사용한다. 전체 행이 하나의 link target이며 chevron은 장식 요소로만 표시한다.
-- Alternatives Considered: `계정 설정` generic label, 별도 `Byulmaru ID` owner label과 설명, chevron을 별도
-  button으로 만드는 방식. 각각 서비스 경계를 숨기거나 중복 block·focus target을 만들므로 채택하지 않았다.
-- Consequences: 부모 shell은 child 주변에 `계정 설정` heading·owner copy를 덧붙이지 않는다. copy가 바뀌어도
-  Byulmaru ID, Account 수준 설정과 외부 이동 의미를 모두 보존해야 한다.
-- Confirmation / Follow-up: component/Storybook accessibility tree에서 link role, accessible name, chevron의
-  focus target 부재와 Account/Profile 순서를 확인한다.
+- Context / Problem: 시각적으로 `Byulmaru ID 계정 설정`을 반복하면 평면 정보 구조의 generic section label을
+  대체하고, `계정 설정`만 사용하면 외부 서비스 소유권이 보조기술에 전달되지 않는다.
+- Decision Outcome: 시각 label은 `계정 설정`, accessible name은 `Byulmaru ID Account Settings 외부 서비스로
+이동`으로 둔다. 전체 행이 하나의 link target이며 chevron은 장식 요소다.
+- Alternatives Considered: 시각 label에 owner를 반복하거나, 별도 owner label·설명 block 또는 chevron button을
+  추가하는 방식. 정보 구조와 focus target을 중복하므로 채택하지 않았다.
+- Consequences: 부모 shell은 시각 label·owner 설명을 다시 만들지 않는다. accessible name과 canonical href는
+  Byulmaru ID 외부 Account Settings 의미를 함께 유지해야 한다.
+- Confirmation / Follow-up: component/Storybook accessibility tree에서 visible label, link role, accessible
+  name, href와 chevron의 focus target 부재를 확인한다.
 
-### 외부 이동 확인과 실행 실패를 child-local retry 상태로 처리한다
+### 모든 플랫폼에서 Expo Router external Link가 navigation 경계를 소유한다
 
-- Decision Date: 2026-08-04
+- Decision Date: 2026-08-05
 - Decision Class: Implementation Choice
-- Authority / Provenance: `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-645`
+- Authority / Provenance: `docs/design/settings.md`, `PROD-645`
 - Status: Active
-- Context / Problem: 외부 handler가 없거나 navigation API가 거부될 수 있으며 Promise rejection을 버리면
-  사용자가 실패를 알거나 복구할 수 없다. 반대로 page-wide boundary는 정상인 Profile 기능까지 숨긴다.
-- Decision Outcome: 한 action 안에서 canonical URL의 지원 여부를 확인하고 지원될 때만 외부 이동을 실행한다.
-  어느 단계든 실패하면 `Byulmaru ID 계정 설정을 열지 못했어요.`와 `다시 시도`를 Account child 가까이에
-  표시한다. 재시도는 동일한 확인과 이동을 반복하고 성공하면 오류를 제거한다.
-- Alternatives Considered: `openURL` fire-and-forget, page-wide error boundary, toast만 표시하고 retry를
-  제공하지 않는 방식. 실패 관찰·재시도 또는 독립 오류 경계를 충족하지 않아 채택하지 않았다.
-- Consequences: child는 작은 interaction state를 소유하지만 Account 데이터 loading·save state는 만들지 않는다.
-  같은 오류를 alert와 toast로 중복 announce하지 않는다.
-- Confirmation / Follow-up: can-open false/rejection, open rejection, retry success와 중복 announcement를 unit
-  test와 Storybook interaction으로 검증한다.
+- Context / Problem: component가 Platform·Linking API와 JS 상태를 소유하면 browser·OS의 실제 link 의미와
+  modifier, 새 탭, 주소 복사 및 native external flow를 가로채게 된다.
+- Decision Outcome: `Link asChild href={BYULMARU_ID_ACCOUNT_SETTINGS_URL}`와 row UI만 유지한다. component에는
+  JS `onPress`, Platform/Linking, URL support check, navigation success/failure, loading/error/retry/lock
+  상태와 helper를 두지 않는다. focus-visible 표시를 위한 local `useState`와 `onFocus`/`onBlur`는 plain static
+  style object를 만들기 위해 허용한다.
+- Alternatives Considered: `Linking.canOpenURL/openURL`, custom `onPress`, child-local error/retry state,
+  platform별 branch. browser·OS navigation lifecycle을 중복 소유하므로 채택하지 않았다.
+- Consequences: Kosmo는 외부 이동 결과를 확인·복구·잠금하지 않는다. 단위 테스트와 Storybook은 실제 외부 이동을
+  실행하지 않고 정적 link semantics를 검증한다.
+- Confirmation / Follow-up: unit test에서 child custom JS `onPress`와 navigation 상태 요소가 없음을 확인하고,
+  Storybook에서 focus와 href만 확인한다.
 
-### PROD-645는 concrete child를 전달하고 PROD-653이 production page에 통합한다
+### 구현·통합·archive 소유권을 분리한다
 
-- Decision Date: 2026-08-04
+- Decision Date: 2026-08-05
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/settings.md`, `PROD-645`, `PROD-653`
+- Authority / Provenance: `PROD-645`, `PROD-685`, `PROD-684`, `PROD-653`
 - Status: Active
-- Context / Problem: parent settings shell과 route가 아직 production component로 존재하지 않는 상태에서
-  PROD-645가 page shell을 만들면 두 이슈의 책임이 합쳐지고 임시 slot API가 다시 생긴다.
-- Decision Outcome: PROD-645는 concrete Account 외부 진입점, navigation·오류 복구와 기능 검증을 소유한다.
-  PROD-653은 이 child를 `/settings` 첫 행에 직접 통합하고 route·Profile content·page-level 플랫폼 검증을
-  소유한다.
-- Alternatives Considered: PROD-645가 `/settings` 전체와 route navigation을 함께 구현하는 방식, parent가
-  callback/ReactElement slot만 먼저 공개하는 방식. Linear 소유권을 침범하거나 제거된 임시 조립 경계를
-  복원하므로 채택하지 않았다.
-- Consequences: PROD-645 branch의 standalone catalog는 통합 가능한 결과지만 production 노출 증거는 아니다.
-  PROD-653 완료와 `add-settings-page-shell` archive는 두 child 통합 이후에만 가능하다.
-- Confirmation / Follow-up: PROD-645 diff에 route·page shell·Profile 구현이 없는지, PROD-653 통합에서 concrete
-  child가 첫 번째 Account 행으로 사용되는지 확인한다.
+- Context / Problem: 선행 정보 구조 산출물 또는 child 구현 PR의 존재만으로 production 통합·OpenSpec archive
+  책임을 추론할 수 없다.
+- Decision Outcome: `PROD-645`는 concrete Account Link child와 그 기능 계약을 소유한다. `PROD-685`는
+  production `/settings` route/navigation, `PROD-645`·`PROD-667` child 조립과 page-level 검증을 소유한다.
+  `PROD-684`는 최종 Settings 통합과 전체 OpenSpec 완료·archive 판단을 소유한다. `PROD-653`은 완료된 선행
+  정보 구조 산출물이다.
+- Alternatives Considered: `PROD-653`이 계속 active integration/archive owner가 되거나, child PR 완료만으로
+  change archive를 판단하는 방식. 현재 Linear ownership과 완료 gate를 반영하지 못해 채택하지 않았다.
+- Consequences: child handoff, page-level 검증과 최종 archive 증거를 각각 해당 owner가 제공한다.
+- Confirmation / Follow-up: tasks와 proposal에 동일한 owner mapping을 유지하고, `PROD-684`가 전체 scope와
+  delta spec 정합성을 최종 확인한다.
 
 ## Remaining Decisions
 
@@ -84,4 +84,21 @@ Account 외부 진입점 계약을 독립 대조한 결과를 반영한다. 제�
 
 ## Superseded Decisions
 
-- 없음.
+### 외부 이동을 child-local 지원 확인·오류·재시도로 소유한다 (Superseded)
+
+- Original Decision Date: 2026-08-04
+- Original Outcome: `Linking.canOpenURL`·`openURL` 호출, 지원 불가·rejection 오류 표시, retry·loading·lock
+  상태를 component가 소유한다.
+- Superseded Date: 2026-08-05
+- Superseded By: `모든 플랫폼에서 Expo Router external Link가 navigation 경계를 소유한다`
+- Reason: 최신 `PROD-645`는 browser·OS가 external navigation을 소유하고 Kosmo가 URL support, success/failure,
+  loading/error/retry/lock 상태를 소유하지 않도록 계약을 변경했다.
+
+### PROD-653이 production 통합·archive를 소유한다 (Superseded)
+
+- Original Decision Date: 2026-08-04
+- Original Outcome: `PROD-653`이 child를 `/settings`에 통합하고 page-level 검증 및 OpenSpec archive를 소유한다.
+- Superseded Date: 2026-08-05
+- Superseded By: `구현·통합·archive 소유권을 분리한다`
+- Reason: 최신 Linear ownership은 `PROD-685`를 production route/navigation과 child assembly/page-level 검증 owner로,
+  `PROD-684`를 final Settings integration과 OpenSpec completion/archive owner로 지정한다.

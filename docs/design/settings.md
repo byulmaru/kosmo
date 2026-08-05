@@ -29,23 +29,24 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
   붙이지 않는다.
 - 본문은 Byulmaru ID Account 외부 진입점과 현재 Local Profile의 Kosmo 설정 content를 이 순서로 제공한다.
   `계정 설정`·`프로필 설정` heading, 소유자 label과 설명을 별도 시각 block으로 반복하지 않는다. Account
-  진입점은 행 label·이동 동작·accessible name에서 **Byulmaru ID 외부 서비스**임을 전달하고, Profile
-  control은 accessible name에서 **Kosmo 내부 기능**과 현재 대상을 전달한다.
+  진입점의 시각 label은 `계정 설정`으로 두고, link의 accessible name과 canonical destination에서
+  **Byulmaru ID가 소유한 외부 Account Settings**임을 전달한다. Profile control은 accessible name에서
+  **Kosmo 내부 기능**과 현재 대상을 전달한다.
 - `계정 설정` section은 Byulmaru ID가 소유하는 canonical Account Settings 페이지로 이동하는 진입점만
   제공한다. Kosmo는 이 section에 Account 데이터, 현재 값, 입력 form, 저장 action 또는 Account 관리 기능을
   구현하지 않는다.
-- Account 진입점을 선택하면 Web은 canonical HTTPS URL로 external navigation하고, Android·iOS는 시스템
-  브라우저 또는 승인된 external link flow를 사용한다. canonical URL 결정, 플랫폼별 외부 이동과 실패 복구는
-  PROD-645가 소유하며 PROD-653 page shell은 이를 내부 route나 저장 기능으로 바꾸지 않는다.
+- Account 진입점은 모든 플랫폼에서 Expo Router의 실제 external `Link`와 canonical HTTPS `href`를 사용한다.
+  브라우저 또는 OS가 외부 navigation을 소유하며 Kosmo는 이를 내부 route나 저장 기능으로 바꾸지 않는다.
+  URL 지원 확인, navigation 성공·실패, loading·error·retry·lock 상태를 Kosmo가 소유하지 않는다.
 - `프로필 설정`은 현재 설정 대상인 Local Profile의 표시 이름과 `relativeHandle`을 section 안에서 함께
   표시한다. shell의 selected Profile을 기본 대상으로 사용하며, Profile 데이터 조회·입력·저장은 Kosmo
   내부 기능으로만 제공한다.
 - Account가 접근할 수 있는 Local Profile이 없거나 selected Profile이 없으면 Byulmaru ID Account 설정 외부
   진입점은 계속 표시하고, `프로필 설정`에는 대상이 없음을 설명하는 empty state와 Profile 선택·생성 흐름으로
   이동할 수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
-- 공통 page shell은 두 소유 단위의 순서·구분선과 현재 Profile identity 배치만 소유한다. PROD-645는 Account
-  외부 진입점 label·accessible name과 이동을, PROD-648은 Profile control accessible name, 입력·저장과 세부
-  상태를 소유한다.
+- 공통 page shell은 두 소유 단위의 순서·구분선과 현재 Profile identity 배치만 소유한다. Account 외부
+  진입점 child의 label·accessible name·canonical link는 PROD-645가, Profile child와 그 입력·저장 세부 상태는
+  해당 Profile child 이슈가 소유한다. production 조립과 page-level 검증은 PROD-685가 소유한다.
 
 ## Header와 responsive layout
 
@@ -62,28 +63,28 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 
 - route loading, error, empty와 content 상태에서 page heading과 외부 Account 진입점/내부 Profile 설정의
   소유권 구조를 서로 다른 화면처럼 복제하지 않는다.
-- Account 진입점에는 Kosmo가 조회할 Account 값이 없으므로 Account 데이터 loading·empty·save 상태를 만들지
-  않는다. Profile identity 또는 Profile 설정을 불러오는 동안 확인되지 않은 Profile 값을 확정된 것처럼
-  표시하지 않는다.
+- Account 진입점에는 Kosmo가 조회할 Account 값이나 외부 navigation 상태가 없으므로 Account 데이터 및
+  외부 이동 loading·empty·save·error·retry·lock 상태를 만들지 않는다. Profile identity 또는 Profile 설정을
+  불러오는 동안 확인되지 않은 Profile 값을 확정된 것처럼 표시하지 않는다.
 - route-level error는 안전한 한국어 설명과 재시도 action을 제공한다. 이전 Profile의 설정값을 fallback으로
   남기거나 backend 오류 원문을 그대로 노출하지 않는다.
 - Profile 전환 중에는 새 대상의 identity와 데이터가 일치할 때까지 이전 Profile 설정 control을 새 대상의
   값처럼 표시하지 않는다. 세부 pending·dirty 상태와 늦은 응답 격리는 Profile 설정 기능이 소유한다.
-- PROD-645의 외부 이동 action과 PROD-648의 Profile 조회·저장은 각 section 안에서 독립적으로 실패하고
-  복구할 수 있다. Account 외부 이동 실패를 Account 데이터 조회 실패처럼 표현하거나, 공통 route-level
-  boundary가 정상인 다른 section까지 불필요하게 숨기지 않는다.
+- 외부 Account navigation의 실행과 결과는 브라우저 또는 OS가 소유한다. 이를 Account 데이터 조회 실패나
+  공통 route-level boundary로 표현하지 않으며, 정상인 다른 section을 불필요하게 숨기지 않는다.
 
 ## 접근성
 
 - `설정`을 페이지의 단일 heading으로 programmatic하게 노출하고, 문서·보조기술 읽기 순서는 `설정` page
   heading → Account 외부 진입점 → 비상호작용 Profile identity → Profile control을 따른다. 시각적으로 제거한
   `계정 설정`·`프로필 설정` heading을 screen reader 전용 중복 heading으로 다시 만들지 않는다.
-- Account 진입점은 행 label과 accessible name에서 Byulmaru ID 외부 서비스로 이동한다는 사실을 전달한다.
-  Profile control의 accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다. navigation과 page action은
+- Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
+  Account Settings로 이동한다는 사실을 전달한다. Profile control의 accessible name은 Kosmo 내부 기능과 현재
+  대상을 전달한다. navigation과 page action은
   실제 동작에 맞는 role, accessible name, current/disabled/busy 상태를 제공한다.
 - Web keyboard Tab 순서는 Account 외부 진입점 → Profile 선택 control(있는 경우) → Profile control이다. page
-  heading과 비상호작용 Profile identity는 tab stop이 아니다. Account 외부 이동 오류 announcement는 PROD-645가,
-  Profile 저장 결과 announcement는 PROD-648이 중복 없이 소유한다.
+  heading과 비상호작용 Profile identity는 tab stop이 아니다. 외부 이동 결과 announcement나 재시도 상태는
+  Kosmo가 소유하지 않으며, Profile 저장 결과 announcement는 Profile 기능이 소유한다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지
@@ -91,24 +92,18 @@ Account 설정의 **외부 진입점**과 Kosmo가 소유한 선택 Local Profil
 
 ## 기능 이슈 경계와 완료 검증
 
-- PROD-653은 `/settings` route, 공통 page shell, shell navigation, Byulmaru ID Account 외부 진입점과 Kosmo
-  Profile 설정의 정보 구조 및 페이지 수준 통합 검증만 소유한다.
-- PROD-645는 Byulmaru ID 소유권을 드러내는 Account 외부 진입점 label·accessible name, canonical Account
-  Settings URL, Web HTTPS external navigation, Android·iOS external link flow, 이동 오류 처리와 해당 기능
-  검증을 소유한다.
-- PROD-648은 `프로필 설정` section의 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer
-  연결 및 해당 기능 검증을 소유한다.
-- PROD-653의 통합 검증은 PROD-645의 외부 navigation 세부 테스트나 PROD-648의 Profile 기능 테스트를
-  반복하지 않는다. 두 section이 한 route에서 `Account 설정(Byulmaru ID 외부 서비스)`과 `Profile
-설정(Kosmo)`의 소유 경계를 전달하고, 지원 navigation surface와 Web·Android·iOS에서 함께 동작하는지만
-  확인한다.
-- PROD-653이 자신의 OpenSpec 정합성 확인과 archive를 소유하며, PROD-645와 PROD-648의 통합 가능한 결과가
-  준비되기 전에는 완료하지 않는다.
+- PROD-653은 완료된 선행 정보 구조 산출물이며 active integration 또는 archive owner가 아니다.
+- PROD-645는 시각 label `계정 설정`, Byulmaru ID 외부 Account Settings accessible name과 canonical `href`를
+  가진 Expo Router external `Link` child 및 그 기능 계약을 소유한다. 브라우저·OS navigation 결과와
+  loading·error·retry·lock은 소유하지 않는다.
+- PROD-685는 production `/settings` route/navigation, PROD-645·PROD-667 child 조립과 page-level 검증을
+  소유한다.
+- PROD-684는 최종 Settings 통합과 전체 OpenSpec 완료·archive 판단을 소유한다.
 
 ## 제외 범위
 
 - 별마루 ID Account Settings 페이지 자체와 Account 데이터 조회·입력·저장·관리 기능
-- Byulmaru ID canonical URL 결정과 플랫폼별 외부 navigation 구현(PROD-645)
+- 브라우저·OS가 소유하는 외부 navigation 결과와 URL 지원 확인·loading·error·retry·lock 상태
 - Profile 기본 게시 공개 범위의 DB, GraphQL, Relay와 Composer 계약
 - 알림 설정, Follow Approval Policy와 아직 승인되지 않은 설정 category
 - 향후 설정 전체의 장기 정보 구조나 별도 nested route를 미리 확정하는 것
