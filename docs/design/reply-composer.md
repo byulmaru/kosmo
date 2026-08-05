@@ -126,13 +126,12 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
   Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다.
-- 본문·Visibility 또는 Content Warning이 각 초기값에서 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive
-  Media 상태가 있으면 dirty로 취급한다. Parent에서 복사된 Content Warning을
-  수정하거나 제거한 경우도 독립적인 draft 변경으로 dirty 상태를 유지한다. Reply mode에서는 복사된 초기값을
-  그대로 둔 경우에도 Reply 맥락 자체가 dirty이므로 이 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인에서
-  사용자가 `계속 작성` 또는
-  `작성 취소`를 선택하게 한다. Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는
-  닫힌 surface를 다시 열거나 상태를 변경하지 않는다.
+- Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. Reply surface는 입력별 dirty를
+  다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
+  전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
+  `답글 작성을 취소할까요?` 확인에서 사용자가 `계속 작성` 또는 `작성 취소`를 선택하게 한다. Media 업로드
+  중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는 닫힌 surface를 다시 열거나 상태를 변경하지
+  않는다.
 - 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.

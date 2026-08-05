@@ -62,7 +62,6 @@ const visibilityOptions = [
 ] as const;
 type Visibility = (typeof visibilityOptions)[number]['value'];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
-export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -95,7 +94,7 @@ type PostComposerProps = {
   focusOnMount?: boolean;
   initialContentWarning?: string | null;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onStateChange?: (state: PostComposerState) => void;
+  onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   replyParentId?: string;
   scrollable?: boolean;
@@ -147,7 +146,7 @@ function PostComposerContents({
   focusOnMount = false,
   initialContentWarning,
   onPostCreated,
-  onStateChange,
+  onSubmittingChange,
   profile,
   replyParentId,
   scrollable = false,
@@ -182,14 +181,6 @@ function PostComposerContents({
   const contentWarningText = normalizePostContentPlainText(contentWarning);
   const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
-  const dirty =
-    replyMode ||
-    body !== '' ||
-    contentWarningText !== '' ||
-    visibility !== PostVisibility.UNLISTED ||
-    media.items.length > 0 ||
-    media.hasPendingMedia ||
-    media.sensitiveMedia;
   const disabled =
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
@@ -283,8 +274,8 @@ function PostComposerContents({
   }, []);
 
   useEffect(() => {
-    onStateChange?.({ dirty, submitting });
-  }, [dirty, onStateChange, submitting]);
+    onSubmittingChange?.(submitting);
+  }, [onSubmittingChange, submitting]);
 
   useEffect(() => {
     if (!focusOnMount) {
