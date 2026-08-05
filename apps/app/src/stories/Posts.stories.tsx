@@ -2186,7 +2186,7 @@ function DirectPostMediaViewerStory({
           profile={{
             avatarUrl: storyPost.profile.avatar?.url ?? null,
             displayName: storyPost.profile.displayName,
-            handle: storyPost.profile.handle,
+            relativeHandle: storyPost.profile.relativeHandle,
           }}
           selectedIndex={selectedIndex}
           wideDetail={

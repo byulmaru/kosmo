@@ -90,7 +90,7 @@ type ViewerProps = {
   profile: {
     avatarUrl: string | null;
     displayName: string;
-    handle: string;
+    relativeHandle: string;
   };
   selectedIndex: number;
   wideDetail: ReactNode;
@@ -279,6 +279,18 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
+  it('Compact 작성자에 원격 Profile의 relative handle을 표시한다', async () => {
+    await render({
+      profile: {
+        avatarUrl: null,
+        displayName: '원격 작성자',
+        relativeHandle: '@alice@remote.example',
+      },
+    });
+
+    assert.equal(textContents().includes('@alice@remote.example'), true);
+  });
+
   it('실제 3줄 초과 원문만 펼치고 text 영역 안에서 접는다', async () => {
     viewport.height = 390;
     await render();
@@ -402,7 +414,7 @@ function defaultProps(): ViewerProps {
     profile: {
       avatarUrl: 'https://media.example/avatar.webp',
       displayName: '작성자',
-      handle: 'author',
+      relativeHandle: '@author',
     },
     selectedIndex: 0,
     wideDetail: createElement('WideDetail'),

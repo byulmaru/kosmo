@@ -35,7 +35,7 @@ type Props = Readonly<{
   profile: {
     avatarUrl: string | null;
     displayName: string;
-    handle: string;
+    relativeHandle: string;
   };
   selectedIndex: number;
   wideDetail: ReactNode;
@@ -350,7 +350,7 @@ export function PostMediaViewer({
                 <View style={styles.author}>
                   <Avatar
                     imageUri={profile.avatarUrl}
-                    label={profile.displayName || profile.handle}
+                    label={profile.displayName || profile.relativeHandle}
                     size={40}
                   />
                   <View style={styles.authorText}>
@@ -358,7 +358,7 @@ export function PostMediaViewer({
                       {profile.displayName}
                     </Text>
                     <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                      @{profile.handle}
+                      {profile.relativeHandle}
                     </Text>
                   </View>
                 </View>

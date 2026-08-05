@@ -288,7 +288,7 @@ export function PostLayout({
           profile={{
             avatarUrl: post.profile.avatar?.url ?? null,
             displayName: post.profile.displayName,
-            handle: post.profile.handle,
+            relativeHandle: post.profile.relativeHandle,
           }}
           selectedIndex={activeViewerSession.selectedIndex}
           wideDetail={viewerWideDetail}

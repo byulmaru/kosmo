@@ -244,7 +244,7 @@ describe('Post Media Viewer production surface wiring', () => {
     await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
     assertViewerTarget('action-quote');
     assertViewerWideDetail('quote', 'quote-content');
-    assert.equal(currentViewer().props.profile.handle, 'quote-profile');
+    assert.equal(currentViewer().props.profile.relativeHandle, '@quote-profile');
 
     const pureRepost = {
       ...storyPost('repost', 'reposter-profile', null),
@@ -254,7 +254,7 @@ describe('Post Media Viewer production surface wiring', () => {
     await openViewerFromBody(originControl);
     assertViewerTarget('action-source');
     assertViewerWideDetail('source', 'source-content');
-    assert.equal(currentViewer().props.profile.handle, 'source-profile');
+    assert.equal(currentViewer().props.profile.relativeHandle, '@source-profile');
     assert.equal(currentViewer().props.actionBar.props.reply.processing, 'disabled');
   });
 });
