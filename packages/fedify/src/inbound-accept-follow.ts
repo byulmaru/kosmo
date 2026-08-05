@@ -111,5 +111,14 @@ export const handleInboundAcceptFollow = async ({
       phase: 'projection',
       reasonCode: 'duplicate_accept_noop',
     });
+  } else if (result.kind === 'NOOP') {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'accept_follow_state_changed_noop',
+    });
   }
 };

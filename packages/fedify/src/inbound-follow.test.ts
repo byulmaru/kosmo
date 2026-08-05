@@ -291,8 +291,19 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture();
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
 
-    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
+    try {
+      await Promise.all([
+        handleInboundFollow(context, follow),
+        handleInboundFollow(context, follow),
+      ]);
+    } finally {
+      restoreReporter();
+    }
 
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
@@ -324,6 +335,17 @@ describe('inbound Follow and Undo', () => {
       ).followingCount,
       1,
     );
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_established_follow_noop',
+      },
+    ]);
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {

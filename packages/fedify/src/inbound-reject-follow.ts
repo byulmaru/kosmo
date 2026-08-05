@@ -97,9 +97,20 @@ export const handleInboundRejectFollow = async ({
     return;
   }
 
-  await removeInboundFollow({
+  const removed = await removeInboundFollow({
     expectedRowId: projection.id,
     followeeProfileId,
     followerProfileId: followerProfile.id,
   });
+
+  if (!removed) {
+    observeInboundNoop({
+      activityType: 'Reject',
+      actorOrigin: followerActorUri.origin,
+      handler: 'reject',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'reject_follow_state_changed_noop',
+    });
+  }
 };

@@ -42,12 +42,12 @@ Production Web BFF의 Fedify inbox listener가 처리한 inbound ActivityPub 실
 projection 및 post-commit delivery 경계를 inventory로 유지한다. Listener 등록은
 `packages/fedify/src/federation.ts`에서 같은 경계를 통과한다.
 
-| 분류                 | 구체적인 예시·reason code                                                                                                       | 구조화 로그 | Sentry                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
-| 보안·정책 거절       | malformed/foreign/mismatched activity, `invalid_*`, `*_projection_rejected`                                                     | 1회 기록    | 기록하지 않음                       |
-| 멱등·현재 상태 no-op | 없는 대상, 이미 처리된 관계, `duplicate_pending_follow_noop`, `announce_undo_ignored`                                           | 1회 기록    | 기록하지 않음                       |
-| 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `*_object_lookup_failed`, `external_listener_error` | 1회 기록    | 기록하지 않음                       |
-| Kosmo 내부 오류      | DB projection, post-commit effect, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error`                          | 1회 기록    | 기존 runtime reporter로 1회 capture |
+| 분류                 | 구체적인 예시·reason code                                                                                                                                                                                                   | 구조화 로그 | Sentry                              |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
+| 보안·정책 거절       | malformed/foreign/mismatched activity, `invalid_*`, `*_projection_rejected`                                                                                                                                                 | 1회 기록    | 기록하지 않음                       |
+| 멱등·현재 상태 no-op | 없는 대상, 이미 처리된 관계, `duplicate_pending_follow_noop`, `duplicate_established_follow_noop`, `duplicate_accept_noop`, `accept_follow_state_changed_noop`, `reject_follow_state_changed_noop`, `announce_undo_ignored` | 1회 기록    | 기록하지 않음                       |
+| 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `*_object_lookup_failed`, `external_listener_error`                                                                                             | 1회 기록    | 기록하지 않음                       |
+| Kosmo 내부 오류      | DB projection, post-commit effect, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error`                                                                                                                      | 1회 기록    | 기존 runtime reporter로 1회 capture |
 
 오류 분류의 경계는 다음과 같다.
 

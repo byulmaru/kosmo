@@ -299,6 +299,27 @@ test('ActivityPub origin의 postCommit은 Notification만 생성한다', async (
   assert.equal(await countReactionNotifications(result.reaction.id), 1);
 });
 
+test('Notification materialization 전에 Reaction source가 삭제된 terminal race는 내부 오류로 관측하지 않는다', async () => {
+  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const recipient = await createFixture();
+  let observerCalls = 0;
+  const result = await addReaction({
+    actorProfileId: actor.profile.id,
+    onPostCommitError: () => {
+      observerCalls += 1;
+    },
+    origin: 'ACTIVITYPUB',
+    postId: recipient.post.id,
+    type: '🎉',
+  });
+
+  await db.delete(Reactions).where(eq(Reactions.id, result.reaction.id));
+  await assert.doesNotReject(result.postCommit());
+
+  assert.equal(observerCalls, 0);
+  assert.equal(await countReactionNotifications(result.reaction.id), 0);
+});
+
 test('postCommit observer 실패에도 Reaction 상태와 후속 delivery를 유지한다', async () => {
   let deliveryCalls = 0;
   let observerCalls = 0;

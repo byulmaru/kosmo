@@ -609,6 +609,10 @@ describe('inbound Accept and Reject', () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = createOutboundFollow(fixture.projection);
     const loading = blockDocumentLoad(follow);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
     const handling = handleInboundAccept(
       createContext(localProfileId, loading.documentLoader),
       new Accept({ actor: remoteActorUri, object: follow.id }),
@@ -620,17 +624,36 @@ describe('inbound Accept and Reject', () => {
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, fixture.remoteInstance.id));
     loading.release();
-    await handling;
+    try {
+      await handling;
+    } finally {
+      restoreReporter();
+    }
 
     assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'accept_follow_state_changed_noop',
+      },
+    ]);
   });
 
   test('preserves an established relation when the remote instance is suspended after Reject verification', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
     const follow = createOutboundFollow(fixture.projection);
     const loading = blockDocumentLoad(follow);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
     const handling = handleInboundReject(
       createContext(localProfileId, loading.documentLoader),
       new Reject({
@@ -646,10 +669,25 @@ describe('inbound Accept and Reject', () => {
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, fixture.remoteInstance.id));
     loading.release();
-    await handling;
+    try {
+      await handling;
+    } finally {
+      restoreReporter();
+    }
 
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Reject',
+        actorOrigin: localActorUri.origin,
+        handler: 'reject',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'reject_follow_state_changed_noop',
+      },
+    ]);
   });
 });
 

@@ -98,3 +98,5 @@ production personal/shared inbox listener가 대표 외부 실패를 로그 전�
       중단하지 않는지 회귀 테스트로 검증한다.
 - [x] 4.4 duplicate Create, established Accept 재처리와 Follow Undo의 pending 삭제/true noop을
       structured log로 구분하는 회귀 테스트를 추가한다.
+- [x] 4.5 Accept/Follow/Reject의 state-change 경쟁 no-op을 별도 reason code로 기록하고, Follow·Reaction
+      post-commit source가 terminal race로 사라진 경우 Sentry 관측 없이 커밋 결과를 유지하는 회귀 테스트를 추가한다.

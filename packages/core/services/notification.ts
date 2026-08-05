@@ -94,7 +94,13 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(and(eq(ProfileFollows.id, sourceId), eq(Instances.kind, InstanceKind.LOCAL)))
     .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Profile follow not found')));
+    .then((rows) => rows[0]);
+
+  // The relation may be consumed by a concurrent terminal action before this
+  // post-commit projection is materialized. There is no Notification to project.
+  if (!source) {
+    return;
+  }
 
   await db
     .insert(Notifications)
@@ -172,7 +178,13 @@ export const createReactionNotification = async (sourceId: string): Promise<void
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(eq(Reactions.id, sourceId))
     .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Reaction not found')));
+    .then((rows) => rows[0]);
+
+  // An inbound Undo may remove the source before notification materialization.
+  // The committed reaction lifecycle remains authoritative, so this is an expected no-op.
+  if (!source) {
+    return;
+  }
 
   if (
     source.actorProfileId === source.recipientProfileId ||

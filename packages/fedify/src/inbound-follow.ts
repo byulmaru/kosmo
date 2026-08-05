@@ -137,6 +137,17 @@ export const handleInboundFollow = async (
     return;
   }
 
+  if (!result.created) {
+    observeInboundNoop({
+      activityType: 'Follow',
+      actorOrigin: actorUri.origin,
+      handler: 'follow',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'duplicate_established_follow_noop',
+    });
+  }
+
   const recipientActor = toRecipient(remoteActor.actor);
   if (!recipientActor) {
     observeInboundNoop({

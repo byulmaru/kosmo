@@ -188,7 +188,7 @@ test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 �
   assert.equal(profileFollow.followerProfileId, follower.id);
 });
 
-test('Follow 알림은 Remote Recipient source를 거부한다', async () => {
+test('Follow 알림은 Remote Recipient source를 post-commit no-op으로 처리한다', async () => {
   const follower = await createProfile();
   const followee = await createProfile(InstanceKind.ACTIVITYPUB);
   const profileFollow = await db
@@ -197,13 +197,13 @@ test('Follow 알림은 Remote Recipient source를 거부한다', async () => {
     .returning()
     .then(firstOrThrow);
 
-  await assert.rejects(createFollowNotification(profileFollow.id), NotFoundError);
+  await assert.doesNotReject(createFollowNotification(profileFollow.id));
   assert.deepEqual(await readNotifications(profileFollow.id), []);
 });
 
-test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다', async () => {
+test('Follow 알림은 존재하지 않거나 삭제된 source를 post-commit no-op으로 처리한다', async () => {
   const missingSourceId = crypto.randomUUID();
-  await assert.rejects(createFollowNotification(missingSourceId), NotFoundError);
+  await assert.doesNotReject(createFollowNotification(missingSourceId));
   assert.deepEqual(await readNotifications(missingSourceId), []);
 
   const follower = await createProfile();
@@ -216,7 +216,7 @@ test('Follow 알림은 존재하지 않거나 삭제된 source를 거부한다',
   );
   await unfollowProfile({ followerProfileId: follower.id, followeeProfileId: followee.id });
 
-  await assert.rejects(createFollowNotification(profileFollow.id), NotFoundError);
+  await assert.doesNotReject(createFollowNotification(profileFollow.id));
   assert.deepEqual(await readNotifications(profileFollow.id), []);
 });
 
@@ -425,8 +425,10 @@ test('Reaction 알림은 자기 Post와 Remote Recipient에서 no-op이다', asy
   assert.deepEqual(await readNotifications(remoteReaction.id), []);
 });
 
-test('Reaction 알림은 존재하지 않는 source를 거부한다', async () => {
-  await assert.rejects(createReactionNotification(crypto.randomUUID()), NotFoundError);
+test('Reaction 알림은 존재하지 않는 source를 post-commit no-op으로 처리한다', async () => {
+  const sourceId = crypto.randomUUID();
+  await assert.doesNotReject(createReactionNotification(sourceId));
+  assert.deepEqual(await readNotifications(sourceId), []);
 });
 
 test('Repost 알림은 direct Source에서 Recipient와 Related 객체를 파생하고 idempotent하다', async () => {
