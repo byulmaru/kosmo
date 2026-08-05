@@ -149,6 +149,82 @@ test('팔로워 요청 진입점은 full, compact와 mobile drawer에서 canonic
   await expect(drawer).toHaveCount(0);
 });
 
+test('프로필 편집 진입점은 반응형 navigation에서 canonical route를 연다', async ({ page }) => {
+  await signIn(page, 'e2e-profile-edit-navigation');
+
+  for (const viewport of [
+    { height: 720, width: 1440 },
+    { height: 720, width: 1024 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/home');
+    const navigation = await visiblePrimaryNavigation(page);
+    const profile = navigation.getByRole('link', { name: '프로필', exact: true });
+    const profileEdit = navigation.getByRole('link', { name: '프로필 편집', exact: true });
+    const followRequests = navigation.getByRole('link', {
+      name: '팔로워 요청',
+      exact: true,
+    });
+    const profileHref = await profile.getAttribute('href');
+    const hrefs = await navigation
+      .locator('a')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+
+    await expect(profileEdit).toHaveAttribute('href', '/profile-edit');
+    await expect(profileEdit).toHaveCount(1);
+    expect(profileHref).not.toBeNull();
+    expect(hrefs.indexOf(profileHref)).toBeLessThan(hrefs.indexOf('/profile-edit'));
+    expect(hrefs.indexOf('/profile-edit')).toBeLessThan(hrefs.indexOf('/follow-requests'));
+    await expect(followRequests).toHaveAttribute('href', '/follow-requests');
+
+    await profileEdit.click();
+    await expect(page).toHaveURL(/\/profile-edit$/);
+    await expect(page.getByRole('heading', { name: '프로필 수정', exact: true })).toBeVisible();
+    await expect(
+      (await visiblePrimaryNavigation(page)).getByRole('link', {
+        name: '프로필 편집',
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-current', 'page');
+  }
+
+  await page.setViewportSize({ height: 720, width: 390 });
+  await page.goto('/home');
+  const bottomNavigation = await visiblePrimaryNavigation(page);
+  await expect(
+    bottomNavigation.getByRole('link', { name: '프로필 편집', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+
+  const drawer = page.locator('#mobile-sidebar');
+  const drawerNavigation = drawer.getByRole('navigation', { name: '주요 메뉴' });
+  const profile = drawerNavigation.getByRole('link', { name: '프로필', exact: true });
+  const profileEdit = drawerNavigation.getByRole('link', {
+    name: '프로필 편집',
+    exact: true,
+  });
+  const followRequests = drawerNavigation.getByRole('link', {
+    name: '팔로워 요청',
+    exact: true,
+  });
+  const profileHref = await profile.getAttribute('href');
+  const hrefs = await drawerNavigation
+    .locator('a')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+
+  await expect(profileEdit).toHaveAttribute('href', '/profile-edit');
+  await expect(profileEdit).toHaveCount(1);
+  expect(profileHref).not.toBeNull();
+  expect(hrefs.indexOf(profileHref)).toBeLessThan(hrefs.indexOf('/profile-edit'));
+  expect(hrefs.indexOf('/profile-edit')).toBeLessThan(hrefs.indexOf('/follow-requests'));
+  await expect(followRequests).toHaveAttribute('href', '/follow-requests');
+
+  await profileEdit.tap();
+  await expect(page).toHaveURL(/\/profile-edit$/);
+  await expect(page.getByRole('heading', { name: '프로필 수정', exact: true })).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+});
+
 test('loading target도 pathname commit 직후 이전 document offset을 노출하지 않는다', async ({
   page,
 }) => {
