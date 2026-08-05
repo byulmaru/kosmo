@@ -10,9 +10,16 @@ import {
   Posts,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  PostState,
+  ProfileState,
+} from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import {
+  deleteNotificationBySource,
   deletePost,
   followProfile,
   undoInboundReaction,
@@ -191,7 +198,7 @@ const handleInboundUndoAnnounce = async (
   activityUri: URL,
   actorUri: URL,
 ): Promise<UndoAnnounceResult> => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const row = await tx
       .select({
         actorUri: ActivityPubActors.uri,
@@ -229,12 +236,25 @@ const handleInboundUndoAnnounce = async (
       row.profileState !== ProfileState.ACTIVE ||
       row.postState !== PostState.ACTIVE
     ) {
-      return 'ignored';
+      return { outcome: 'ignored' as const };
     }
 
     await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
-    return 'deleted';
+    return { outcome: 'deleted' as const, postId: row.postId };
   });
+
+  // deletePost joins the caller transaction, so its Repost Notification cleanup
+  // must run only after the Announce Undo transaction commits.
+  if (result?.outcome === 'deleted') {
+    await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch((error) => {
+      console.error('Post-commit Repost notification cleanup failed', {
+        error,
+        postId: result.postId,
+      });
+    });
+  }
+
+  return result?.outcome ?? null;
 };
 
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {

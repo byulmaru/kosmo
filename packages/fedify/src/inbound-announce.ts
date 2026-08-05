@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubPosts, db, first, isUniqueViolation, Posts } from '@kosmo/core/db';
 import { InstanceState, PostState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
-import { repostPost } from '@kosmo/core/services';
+import { createRepostNotification, repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -156,8 +156,9 @@ export const handleInboundAnnounce = async (
     return;
   }
 
+  let materialized: { created: boolean; repostId: string };
   try {
-    await db.transaction(async (tx) => {
+    materialized = await db.transaction(async (tx) => {
       let result = await repostPost({ actorProfileId: storedActor.profile.id, sourcePostId }, tx);
       const save = (postId: string) =>
         saveCurrentAnnounce(tx, {
@@ -175,6 +176,8 @@ export const handleInboundAnnounce = async (
           throw new Error('Active Repost not found after current Announce retry');
         }
       }
+
+      return { created: result.created, repostId: result.repost.id };
     });
   } catch (error) {
     if (isExpectedRepostRejection(error)) {
@@ -190,5 +193,14 @@ export const handleInboundAnnounce = async (
     }
 
     throw error;
+  }
+
+  if (materialized.created) {
+    await createRepostNotification(materialized.repostId).catch((error) => {
+      console.error('Post-commit Repost notification creation failed', {
+        error,
+        repostId: materialized.repostId,
+      });
+    });
   }
 };
