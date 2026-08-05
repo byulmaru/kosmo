@@ -71,6 +71,14 @@ spec:
     s3Credentials:
       inheritFromIAMRole: true
   retentionPolicy: 7d
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 96Mi
+      limits:
+        cpu: 50m
+        memory: 96Mi
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
