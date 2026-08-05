@@ -324,6 +324,45 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
     );
   });
 
+  test('pending Follow notification observer rejection does not change the committed request', async () => {
+    const { followee, follower } = await createPair(ProfileFollowPolicy.APPROVAL_REQUIRED);
+    let observerCalls = 0;
+    let followed: Awaited<ReturnType<typeof followProfile>>;
+
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_pending_observer_failure CHECK (false) NOT VALID`,
+    );
+    try {
+      followed = await followProfile({
+        followerProfileId: follower.id,
+        followeeProfileId: followee.id,
+        onPostCommitError: async () => {
+          observerCalls += 1;
+          await Promise.resolve();
+          throw new Error('observer failure');
+        },
+      });
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_pending_observer_failure`,
+      );
+    }
+
+    assert.equal(followed.result.kind, 'PENDING');
+    if (followed.result.kind !== 'PENDING') {
+      assert.fail('Expected a pending profile follow request');
+    }
+    assert.equal(observerCalls, 1);
+    assert.equal(
+      await db
+        .select()
+        .from(ProfileFollowRequests)
+        .where(eq(ProfileFollowRequests.id, followed.result.profileFollowRequest.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
   test('post-commit observer 실패가 inbound Follow와 Unfollow 호출을 실패시키지 않는다', async () => {
     const { followee, follower } = await createPair(ProfileFollowPolicy.OPEN);
     const input = { followeeProfileId: followee.id, followerProfileId: follower.id };

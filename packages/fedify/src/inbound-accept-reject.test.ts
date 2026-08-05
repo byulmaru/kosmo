@@ -8,6 +8,7 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
@@ -32,6 +33,7 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -52,6 +54,7 @@ describe('inbound Accept and Reject', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       ProfileFollowRequests,
       ProfileFollows,
@@ -651,7 +654,9 @@ describe('inbound Accept and Reject', () => {
     const follow = createOutboundFollow(fixture.projection);
     const loading = blockDocumentLoad(follow);
     const logs: unknown[] = [];
+    const captures: unknown[] = [];
     const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
       log: (observation) => logs.push(observation),
     });
     const handling = handleInboundReject(
@@ -688,6 +693,100 @@ describe('inbound Accept and Reject', () => {
         reasonCode: 'reject_follow_state_changed_noop',
       },
     ]);
+    assert.equal(captures.length, 0);
+  });
+
+  test('observes Reject Follow notification cleanup failure once after committed removal', async () => {
+    const fixture = await createFixture({ projection: 'ESTABLISHED' });
+    await db.insert(Notifications).values({
+      data: {},
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: fixture.remoteProfile.id,
+      sourceId: fixture.projection.id,
+    });
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reject_follow_notification_cleanup() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'reject Follow notification cleanup failed';
+      END;
+      $$;
+      CREATE TRIGGER reject_follow_notification_cleanup_failure
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reject_follow_notification_cleanup();
+    `);
+
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ error, context }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundReject(
+        createContext(localProfileId),
+        new Reject({
+          actor: remoteActorUri,
+          object: createOutboundFollow(fixture.projection),
+          published: fixture.projection.createdAt,
+        }),
+      );
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS reject_follow_notification_cleanup_failure ON notification;
+        DROP FUNCTION IF EXISTS fail_reject_follow_notification_cleanup();
+      `);
+      restoreReporter();
+    }
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, fixture.projection.id))
+        .then((rows) => rows.length),
+      1,
+    );
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Reject',
+        actorOrigin: localActorUri.origin,
+        handler: 'reject',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'follow_notification_effect_failed',
+      },
+    ]);
+    assert.equal(captures.length, 1);
+    const capture = captures[0] as {
+      context: {
+        extra?: Record<string, string>;
+        fingerprint: string[];
+        tags: Record<string, string>;
+      };
+    };
+    assert.deepEqual(capture.context.tags, {
+      activity_type: 'Reject',
+      handler: 'reject',
+      outcome: 'internal_failure',
+      phase: 'effect',
+      reason_code: 'follow_notification_effect_failed',
+    });
+    assert.deepEqual(capture.context.fingerprint, [
+      'activitypub-inbound',
+      'Reject',
+      'reject',
+      'effect',
+      'follow_notification_effect_failed',
+    ]);
+    assert.deepEqual(capture.context.extra, {
+      actor_origin: localActorUri.origin,
+      object_origin: remoteActorUri.origin,
+    });
   });
 });
 

@@ -59,6 +59,8 @@ export const handleInboundDelete = async (
       phase: 'object_lookup',
       reasonCode: 'delete_object_lookup_failed',
     });
+    // Without the direct object identity, a failed lookup cannot authenticate the target.
+    return;
   }
   if (
     embedded !== null &&

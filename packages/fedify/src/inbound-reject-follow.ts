@@ -6,7 +6,11 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
-import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
+import {
+  observeInbound,
+  observeInboundNoop,
+  observeInboundRejected,
+} from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -101,6 +105,17 @@ export const handleInboundRejectFollow = async ({
     expectedRowId: projection.id,
     followeeProfileId,
     followerProfileId: followerProfile.id,
+    onPostCommitError: (error) =>
+      observeInbound({
+        activityType: 'Reject',
+        actorOrigin: followerActorUri.origin,
+        error,
+        handler: 'reject',
+        objectOrigin: objectUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'follow_notification_effect_failed',
+      }),
   });
 
   if (!removed) {

@@ -100,3 +100,9 @@ production personal/shared inbox listener가 대표 외부 실패를 로그 전�
       structured log로 구분하는 회귀 테스트를 추가한다.
 - [x] 4.5 Accept/Follow/Reject의 state-change 경쟁 no-op을 별도 reason code로 기록하고, Follow·Reaction
       post-commit source가 terminal race로 사라진 경우 Sentry 관측 없이 커밋 결과를 유지하는 회귀 테스트를 추가한다.
+- [x] 4.6 object-less Delete lookup 실패의 조기 반환과 pending Follow notification effect의 inbound
+      observer 전달을 회귀 테스트로 고정하고, 외부 실패는 Sentry 없이 내부 effect 실패는 metadata와 함께
+      정확히 한 번 capture되는지 검증한다.
+- [x] 4.7 Follow/Follow Request/Reaction notification source를 row lock transaction으로 읽고 투영해 terminal
+      delete와의 경쟁에서 orphan을 만들지 않으며, Reject Follow notification cleanup DB 실패를 inbound observer에
+      정확히 전달하는 회귀 테스트를 추가한다.

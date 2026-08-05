@@ -16,6 +16,7 @@ import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
 
@@ -37,6 +38,7 @@ let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
+let setNotificationEffectErrorReporter: typeof CoreServices.setNotificationEffectErrorReporter;
 let localInstanceId: string;
 
 describe('inbound Follow and Undo', () => {
@@ -55,6 +57,8 @@ describe('inbound Follow and Undo', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
+    ({ setNotificationEffectErrorReporter } =
+      (await import('@kosmo/core/services')) as typeof CoreServices);
     ({ handleInboundFollow, handleInboundUndo } = await import('./inbound-follow'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -516,6 +520,17 @@ describe('inbound Follow and Undo', () => {
 
   test('keeps approval-required inbound Follow successful when request Notification creation fails', async () => {
     const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const effectReports: unknown[] = [];
+    const restoreInboundReporter = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ error, context }),
+      log: (observation) => logs.push(observation),
+    });
+    const restoreEffectReporter = setNotificationEffectErrorReporter((error, context) =>
+      effectReports.push({ error, context }),
+    );
+
     await db.execute(
       sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_pending_create_failure CHECK (false) NOT VALID`,
     );
@@ -529,6 +544,8 @@ describe('inbound Follow and Undo', () => {
       await db.execute(
         sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_pending_create_failure`,
       );
+      restoreEffectReporter();
+      restoreInboundReporter();
     }
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
@@ -545,6 +562,44 @@ describe('inbound Follow and Undo', () => {
         .then(firstOrThrow),
       { followersCount: 0, followingCount: 0 },
     );
+    assert.equal(effectReports.length, 0);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'follow_notification_effect_failed',
+      },
+    ]);
+    assert.equal(captures.length, 1);
+    const capture = captures[0] as {
+      context: {
+        extra?: Record<string, string>;
+        fingerprint: string[];
+        tags: Record<string, string>;
+      };
+    };
+    assert.deepEqual(capture.context.tags, {
+      activity_type: 'Follow',
+      handler: 'follow',
+      outcome: 'internal_failure',
+      phase: 'effect',
+      reason_code: 'follow_notification_effect_failed',
+    });
+    assert.deepEqual(capture.context.fingerprint, [
+      'activitypub-inbound',
+      'Follow',
+      'follow',
+      'effect',
+      'follow_notification_effect_failed',
+    ]);
+    assert.deepEqual(capture.context.extra, {
+      actor_origin: remoteActorUri.origin,
+      object_origin: localActorUri.origin,
+    });
   });
 
   test('keeps inbound Undo successful when Notification cleanup fails', async () => {

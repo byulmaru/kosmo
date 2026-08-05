@@ -198,7 +198,10 @@ export const followProfile = async ({
   }
 
   if (result.created && result.result.kind === 'PENDING') {
-    await createFollowRequestNotificationPostCommit(result.result.profileFollowRequest.id);
+    await createFollowRequestNotificationPostCommit(
+      result.result.profileFollowRequest.id,
+      onPostCommitError,
+    );
   }
 
   if (pendingNotificationSourceId) {
@@ -431,12 +434,28 @@ export const removeInboundFollow = async (input: {
   readonly expectedRowId?: string;
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
+  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
 }): Promise<boolean> => {
   const deleted = await db.transaction((tx) => removeProfileFollowProjection(input, tx));
 
   if (deleted.profileFollow) {
     await deleteNotificationBySource(NotificationKind.FOLLOW, deleted.profileFollow.id).catch(
-      () => undefined,
+      async (error) => {
+        if (!input.onPostCommitError) {
+          return;
+        }
+
+        try {
+          await input.onPostCommitError(error);
+        } catch (observerError) {
+          console.error('Follow notification cleanup observation failed', {
+            error,
+            observerError,
+            followeeProfileId: input.followeeProfileId,
+            followerProfileId: input.followerProfileId,
+          });
+        }
+      },
     );
   }
   if (deleted.profileFollowRequest) {
