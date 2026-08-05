@@ -50,9 +50,10 @@ PROD-648은 Local Profile이 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나인 기
 2. 기존 Profile update service의 optional input에 기본값을 추가한다. 값이 제공되면 Owner·Local·active 검증
    뒤 세 허용 값만 같은 transaction에서 update하고, 생략하면 기존 값을 유지한다. `DIRECT`와 명시적
    `null`은 write 전에 validation 오류로 거부한다.
-3. `Profile.defaultPostVisibility`는 nullable GraphQL field로 두고 로그인 Account와 대상 Profile의
-   membership을 batching 가능한 loader로 검증한다. Local Member에게 저장값 또는 `UNLISTED`를 반환하고,
-   Remote·non-member에는 `null`을 반환한다.
+3. `Profile.private`는 nullable GraphQL projection으로 두고 로그인 Account와 대상 Profile의 membership을
+   batching 가능한 access-only loader로 검증한다. Local Member에게만 projection을 반환하고 그 안의
+   non-null `defaultPostVisibility`는 이미 로드한 Profile 값 또는 `UNLISTED` fallback으로 채운다. Remote·
+   non-member에는 `private: null`을 반환하며 access loader는 value column을 재조회하지 않는다.
 4. 기존 `UpdateProfileInput`에 optional field를 추가하고 mutation payload로 갱신된 Profile을 반환한다.
    기존 caller가 새 field를 생략하면 종전과 동일하게 동작한다.
 5. migration/schema, Core 생성·조회·update, GraphQL permission·validation·payload를 각각 focused test로
@@ -90,7 +91,8 @@ PROD-648은 Local Profile이 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나인 기
 
 1. nullable column을 추가하는 additive migration을 적용한다. 기존 Post와 Profile row를 rewrite하지 않는다.
 2. Core/API가 Local `null`을 `UNLISTED`로 project하고 지원 값만 write하도록 배포한다.
-3. PROD-667 client는 nullable GraphQL field를 소비하고 unavailable 상태에서 `UNLISTED`로 fallback한다.
+3. PROD-667 client는 nullable `Profile.private` projection을 소비하고 unavailable 상태에서 `UNLISTED`로
+   fallback한다.
 4. rollback은 client와 API write surface를 먼저 되돌린 뒤 nullable column을 보존한다. column 제거는 저장된
    사용자 설정을 잃으므로 별도 contract와 데이터 보존 판단 없이 수행하지 않는다.
 

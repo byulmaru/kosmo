@@ -8,8 +8,8 @@ Backend 결과를 client와 Storybook 상태에 관계없이 독립적으로 배
 
 - Local Profile에 `PUBLIC`, `UNLISTED`, `FOLLOWERS` 중 하나인 기본 Post Visibility를 저장하고 기존·미설정
   Local Profile은 `UNLISTED`로 해석한다.
-- Profile Member가 기본값을 조회하고 Local Profile Owner가 기존 Profile update 경계에서 변경할 수 있는
-  GraphQL field·input·payload 계약을 제공한다.
+- Profile Member가 `Profile.private.defaultPostVisibility`를 조회하고 Local Profile Owner가 기존 Profile
+  update 경계에서 변경할 수 있는 GraphQL projection·input·payload 계약을 제공한다.
 - Remote Profile과 non-member에는 Kosmo Local 설정을 노출하거나 만들지 않고 `DIRECT`, 명시적 `null`과
   지원하지 않는 입력을 거부한다.
 - Relay, Composer, Profile Settings UI, canonical `/settings` 연결과 Storybook 검증은 PROD-667의 별도
@@ -38,6 +38,6 @@ Backend 결과를 client와 Storybook 상태에 관계없이 독립적으로 배
 ## Impact
 
 - `packages/core`: Profile table·migration, Local/Remote projection, 생성·조회·Owner update 정책 및 테스트
-- `apps/api`: GraphQL `Profile.defaultPostVisibility`, optional update input/payload, membership 검증과
-  integration test
+- `apps/api`: GraphQL `Profile.private.defaultPostVisibility` projection, optional update input/payload,
+  membership 검증과 integration test
 - `apps/app`, settings route·navigation, dependency와 ActivityPub actor 표현 변경 없음

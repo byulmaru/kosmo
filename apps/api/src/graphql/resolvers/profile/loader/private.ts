@@ -3,13 +3,13 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
-type DefaultPostVisibilityAccessRow = {
+type ProfilePrivateAccessRow = {
   profileId: string;
 };
 
-export const profileDefaultPostVisibilityLoader = (ctx: UserContext) =>
-  ctx.loader<string, DefaultPostVisibilityAccessRow, string, true>({
-    name: 'profile.defaultPostVisibility',
+export const profilePrivateAccessLoader = (ctx: UserContext) =>
+  ctx.loader<string, ProfilePrivateAccessRow, string, true>({
+    name: 'profile.private.access',
     nullable: true,
     load: async (profileIds) => {
       const accountId = ctx.session?.accountId;

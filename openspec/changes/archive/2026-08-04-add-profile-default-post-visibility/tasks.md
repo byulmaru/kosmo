@@ -53,7 +53,8 @@ GraphQL payload 호환성을 유지한다.
 - `DIRECT`와 명시적 `null` 거부, omitted input의 변경 없음과 payload Profile 값을 검증한다.
 - GraphQL schema generation/check와 API typecheck를 통과한다.
 
-- [x] 2.1 membership을 검증하는 nullable Profile 기본값 field와 optional Owner update input/payload 계약을 구현한다.
+- [x] 2.1 membership을 검증하는 nullable `Profile.private` projection과 그 안의 non-null 기본값 field,
+      optional Owner update input/payload 계약을 구현한다.
 - [x] 2.2 Owner·Member·non-member·Remote와 허용/거부 값의 GraphQL integration test를 추가한다.
 - [x] 2.3 GraphQL schema 산출물을 갱신하고 API schema check와 typecheck를 통과시킨다.
 

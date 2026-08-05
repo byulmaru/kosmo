@@ -1,10 +1,5 @@
 import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
-import {
-  AccountProfileRole,
-  PostVisibility,
-  ProfileFollowPolicy,
-  ProfileMediaKind,
-} from '@kosmo/core/enums';
+import { AccountProfileRole, ProfileFollowPolicy, ProfileMediaKind } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -12,7 +7,6 @@ import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
 import { visibleProfileWhere } from '@/profile/visibility';
 import { Media } from '../media/ref';
-import { profileDefaultPostVisibilityLoader } from './loader/default-post-visibility';
 import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
@@ -70,14 +64,6 @@ Profile.implement({
     }),
     followPolicy: t.expose('followPolicy', {
       type: ProfileFollowPolicy,
-    }),
-    defaultPostVisibility: t.withAuth({ login: true }).field({
-      type: PostVisibility,
-      nullable: true,
-      resolve: (profile, _, ctx) =>
-        profileDefaultPostVisibilityLoader(ctx)
-          .load(profile.id)
-          .then((row) => (row ? (profile.defaultPostVisibility ?? PostVisibility.UNLISTED) : null)),
     }),
     createdAt: t.expose('createdAt', {
       type: 'DateTime',

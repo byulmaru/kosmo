@@ -1257,52 +1257,54 @@ describe('GraphQL remote profile boundary', () => {
       .where(eq(Sessions.id, member.session.id));
 
     const ownerRead = await requestGraphQL<{
-      node: { defaultPostVisibility: string | null } | null;
+      node: { private: { defaultPostVisibility: string } | null } | null;
     }>(
       `query DefaultVisibility($id: ID!) {
-        node(id: $id) { ... on Profile { defaultPostVisibility } }
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
       }`,
       { id: globalId('Profile', owner.profile.id) },
       owner.token,
     );
     assertNoGraphQLErrors(ownerRead);
-    assert.deepEqual(ownerRead.data?.node, { defaultPostVisibility: 'UNLISTED' });
+    assert.deepEqual(ownerRead.data?.node, { private: { defaultPostVisibility: 'UNLISTED' } });
 
     const memberRead = await requestGraphQL<{
-      node: { defaultPostVisibility: string | null } | null;
+      node: { private: { defaultPostVisibility: string } | null } | null;
     }>(
       `query MemberDefaultVisibility($id: ID!) {
-        node(id: $id) { ... on Profile { defaultPostVisibility } }
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
       }`,
       { id: globalId('Profile', owner.profile.id) },
       member.token,
     );
     assertNoGraphQLErrors(memberRead);
-    assert.deepEqual(memberRead.data?.node, { defaultPostVisibility: 'UNLISTED' });
+    assert.deepEqual(memberRead.data?.node, { private: { defaultPostVisibility: 'UNLISTED' } });
 
     const nonMemberRead = await requestGraphQL<{
-      node: { defaultPostVisibility: string | null } | null;
+      node: { private: { defaultPostVisibility: string } | null } | null;
     }>(
       `query NonMemberDefaultVisibility($id: ID!) {
-        node(id: $id) { ... on Profile { defaultPostVisibility } }
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
       }`,
       { id: globalId('Profile', owner.profile.id) },
       outsider.token,
     );
     assertNoGraphQLErrors(nonMemberRead);
-    assert.deepEqual(nonMemberRead.data?.node, { defaultPostVisibility: null });
+    assert.deepEqual(nonMemberRead.data?.node, { private: null });
 
     const updated = await requestGraphQL<{
-      updateProfile: { profile: { defaultPostVisibility: string | null } };
+      updateProfile: { profile: { private: { defaultPostVisibility: string } | null } };
     }>(
       `mutation SetDefaultVisibility($input: UpdateProfileInput!) {
-        updateProfile(input: $input) { profile { defaultPostVisibility } }
+        updateProfile(input: $input) { profile { private { defaultPostVisibility } } }
       }`,
       { input: { defaultPostVisibility: 'PUBLIC' } },
       owner.token,
     );
     assertNoGraphQLErrors(updated);
-    assert.deepEqual(updated.data?.updateProfile.profile, { defaultPostVisibility: 'PUBLIC' });
+    assert.deepEqual(updated.data?.updateProfile.profile, {
+      private: { defaultPostVisibility: 'PUBLIC' },
+    });
 
     const memberWrite = await requestGraphQL(
       `mutation MemberSetDefaultVisibility {
@@ -1332,16 +1334,16 @@ describe('GraphQL remote profile boundary', () => {
     assertGraphQLErrorCode(explicitNull, 'VALIDATION');
 
     const remoteRead = await requestGraphQL<{
-      node: { defaultPostVisibility: string | null } | null;
+      node: { private: { defaultPostVisibility: string } | null } | null;
     }>(
       `query RemoteDefaultVisibility($id: ID!) {
-        node(id: $id) { ... on Profile { defaultPostVisibility } }
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
       }`,
       { id: globalId('Profile', remote.id) },
       owner.token,
     );
     assertNoGraphQLErrors(remoteRead);
-    assert.deepEqual(remoteRead.data?.node, { defaultPostVisibility: null });
+    assert.deepEqual(remoteRead.data?.node, { private: null });
   });
 
   test('rejects a non-Media global ID before updating Profile media', async () => {
@@ -2784,12 +2786,16 @@ describe('GraphQL remote profile boundary', () => {
 
     const result = await requestGraphQL<{
       createProfile: {
-        profile: { defaultPostVisibility: string | null; id: string; instance: { kind: string } };
+        profile: {
+          id: string;
+          instance: { kind: string };
+          private: { defaultPostVisibility: string } | null;
+        };
       } | null;
     }>(
       `mutation CreateLocalDuplicate($handle: String!) {
         createProfile(input: { handle: $handle }) {
-          profile { id instance { kind } defaultPostVisibility }
+          profile { id instance { kind } private { defaultPostVisibility } }
         }
       }`,
       { handle: 'alice' },
@@ -2798,7 +2804,7 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
-    assert.equal(result.data?.createProfile?.profile.defaultPostVisibility, 'UNLISTED');
+    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'UNLISTED');
 
     const created = await db
       .select({

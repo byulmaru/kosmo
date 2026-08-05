@@ -64,13 +64,13 @@ Backend 저장·권한·API가 독립적으로 지켜야 할 durable choice만 �
 - Status: Active
 - Context / Problem: 기존 `updateProfile`은 Owner·Local·active 검증, partial update transaction과 Profile
   payload를 소유한다. 별도 top-level 설정 query/mutation은 소유 object와 권한을 분리한다.
-- Decision Outcome: nullable `Profile.defaultPostVisibility` field를 추가해 membership을 검증하고 기존
-  `UpdateProfileInput`에 optional `defaultPostVisibility`를 추가한다. mutation payload는 갱신된 Profile을
-  반환한다. 입력 `DIRECT`와 명시적 `null`은 validation에서 거부한다.
+- Decision Outcome: nullable `Profile.private` projection과 그 안의 non-null `defaultPostVisibility` field를
+  추가해 membership을 검증하고 기존 `UpdateProfileInput`에 optional `defaultPostVisibility`를 추가한다.
+  mutation payload는 갱신된 Profile을 반환한다. 입력 `DIRECT`와 명시적 `null`은 validation에서 거부한다.
 - Alternatives Considered: top-level settings query, 별도 setting object/mutation, public scalar 무조건 expose.
   현재 Profile 소유 경계와 중복 권한·transaction 책임 때문에 채택하지 않는다.
-- Consequences: field resolver는 공개 Profile 조회에서 Member 전용 값을 노출하지 않아야 하고 membership
-  조회는 batching해야 한다. 기존 mutation caller는 새 optional field로 인해 깨지지 않는다.
+- Consequences: private projection resolver는 공개 Profile 조회에서 Member 전용 값을 노출하지 않아야 하고
+  access-only membership 조회는 batching해야 한다. 기존 mutation caller는 새 optional field로 인해 깨지지 않는다.
 - Confirmation / Follow-up: schema snapshot, owner/member/non-member integration, omitted/null/unsupported input과
   mutation Profile payload를 검증한다.
 
