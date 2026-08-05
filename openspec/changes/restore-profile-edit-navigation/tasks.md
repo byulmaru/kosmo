@@ -32,7 +32,7 @@ drawer의 `프로필 편집` 진입점으로 canonical `/profile-edit` route를 
 - 테스트 필요성: eligible/ineligible 노출, `/profile-edit` href, `프로필` 다음 순서, icon·accessible name,
   exact active state, mobile drawer close와 bottom tab 비노출을 직접 증명하고 기존 팔로워 요청·북마크 순서
   회귀를 막는다.
-- 테스트 제외 범위: Profile edit form/API/DB/Media 저장 조합, 새 fixture·helper·harness, 광범위한 snapshot,
+- 테스트 제외 범위: Profile edit form/API/DB/Media 저장 조합, 기존 Shell fixture 구조 밖의 새 공용 fixture/helper/harness, 광범위한 snapshot,
   관련 없는 Shell 상태, Android·iOS 실제 runtime 자동화와 테스트 인프라 변경.
 
 - [ ] 1.1 승인된 eligibility·surface·label·icon·순서·destination 계약을 shared navigation에 구현한다.
