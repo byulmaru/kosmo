@@ -98,6 +98,33 @@ const baseProfile: ProfileData = {
   tags: [],
 };
 
+const findCoverStyle = () => {
+  const cover = renderer!.root.find(
+    (node) =>
+      (node.type as unknown) === 'View' &&
+      Array.isArray(node.props.style) &&
+      node.props.style[0]?.width === '100%',
+  );
+  return cover.props.style[0];
+};
+
+describe('ProfileHero cover geometry', () => {
+  it('data/no-header branch uses the shared 3:1 cover geometry', async () => {
+    await renderProfile(baseProfile);
+
+    assert.deepEqual(findCoverStyle(), { aspectRatio: 3, width: '100%' });
+  });
+
+  it('loading branch uses the shared 3:1 cover geometry', async () => {
+    await act(async () => {
+      renderer = create(createElement(ProfileHero, { loading: true }));
+    });
+    assert.ok(renderer);
+
+    assert.deepEqual(findCoverStyle(), { aspectRatio: 3, width: '100%' });
+  });
+});
+
 describe('ProfileHero media presentation', () => {
   it('header와 avatar URL을 각각 cover 이미지로 렌더한다', async () => {
     await renderProfile({
