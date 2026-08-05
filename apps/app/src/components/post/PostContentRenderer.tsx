@@ -202,6 +202,7 @@ const styles = StyleSheet.create({
   warningButton: {
     alignItems: 'center',
     borderRadius: radii.full,
+    justifyContent: 'center',
     marginTop: spacing.xs,
     minHeight: Platform.OS === 'android' ? 48 : 44,
     paddingHorizontal: spacing.lg,

@@ -199,6 +199,11 @@ const mediaOnlyPost = post({
     },
   ],
 });
+const contentWarningPost = post({
+  bodyText: '실제 Post 소비자에서 가림 해제되는 본문입니다.',
+  contentWarning: '실제 Post 소비자 통합 검증 경고',
+  id: 'content-warning-consumer',
+});
 const sensitiveTwoMediaPost = post({
   bodyDocument: {
     type: 'doc',
@@ -685,6 +690,7 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  contentWarningPost,
   sensitiveTwoMediaPost,
   threeMediaPost,
   fourMediaPost,
@@ -1638,6 +1644,21 @@ function ContentWarningRevealStory() {
         ]}
         postId="content-warning-story-post"
       />
+    </Catalog>
+  );
+}
+
+function ContentWarningConsumerIntegrationStory() {
+  const post = requirePostById(usePostsStoryData().posts, contentWarningPost.id);
+
+  return (
+    <Catalog>
+      <View testID="content-warning-list-surface">
+        <PostListItem post={requireFragment(post.listItem, 'Content Warning list item consumer')} />
+      </View>
+      <View testID="content-warning-body-surface">
+        <PostBody post={requireFragment(post.body, 'Content Warning body consumer')} size="lg" />
+      </View>
     </Catalog>
   );
 }
@@ -4578,6 +4599,15 @@ export const ContentWarningReveal: Story = {
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
     const toggle = canvas.getByRole('button', { name: '내용 보기' });
+    const toggleLabel = within(toggle).getByText('내용 보기');
+    expect(getComputedStyle(toggle).justifyContent).toBe('center');
+    const toggleBox = toggle.getBoundingClientRect();
+    const toggleLabelBox = toggleLabel.getBoundingClientRect();
+    expect(
+      Math.abs(
+        toggleBox.top + toggleBox.height / 2 - (toggleLabelBox.top + toggleLabelBox.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
     toggle.focus();
     expect(toggle).toHaveFocus();
     await userEvent.keyboard('{Enter}');
@@ -4591,6 +4621,24 @@ export const ContentWarningReveal: Story = {
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
   render: () => <ContentWarningRevealStory />,
+};
+
+export const ContentWarningProductionConsumersShareRevealState: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
+    const bodySurface = within(canvas.getByTestId('content-warning-body-surface'));
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: '내용 보기' }));
+    expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
+    expect(bodySurface.getByRole('button', { name: '내용 다시 가리기' })).toBeVisible();
+
+    await userEvent.click(bodySurface.getByRole('button', { name: '내용 다시 가리기' }));
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(listSurface.getByRole('button', { name: '내용 보기' })).toBeVisible();
+  },
+  render: () => <ContentWarningConsumerIntegrationStory />,
 };
 
 export const ComposerMediaStates: Story = {
