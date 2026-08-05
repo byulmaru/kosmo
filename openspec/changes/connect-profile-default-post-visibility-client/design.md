@@ -54,8 +54,11 @@ entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실�
    Member 상태에서는 저장 action을 만들거나 mutation을 호출하지 않는다.
 4. `PostComposer`의 공유 Profile fragment에서 기본값을 읽고 mount 및 새 문맥의 initial seed로만 사용한다.
    fragment가 `null`이면 `UNLISTED`를 사용하고 mount 뒤 값 변경을 현재 draft에 effect로 복사하지 않는다.
-5. 제출 성공 reset은 같은 문맥의 최신 Profile 기본값을 사용한다. selected Profile·Reply Parent·Environment가
-   바뀌면 기존 key/generation 경계로 새 draft를 만들고 이전 upload/query/mutation completion을 무시한다.
+   Visibility-only 변경은 보호할 draft content가 아니므로 Composer의 dirty 상태에 포함하지 않는다.
+5. 제출 성공 reset은 성공 callback을 만든 render가 캡처한 같은 문맥의 Profile fragment 값을 best-effort seed로
+   사용하며 제출 중 별도 render에서 갱신된 최신값까지 보장하지 않는다. selected Profile·Reply Parent·
+   Environment가 바뀌면 기존 key/generation 경계로 새 draft를 만들고 이전 upload/query/mutation completion을
+   무시한다.
 6. generic settings host가 준비되면 그 Profile child 경계에 control을 연결한다. PROD-645 Account entry의
    label·navigation·오류 상태와 PROD-653 shell의 route·navigation을 재구현하지 않고 page-level test에서 두
    child 상태가 독립적인지만 확인한다.

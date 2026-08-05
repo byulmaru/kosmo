@@ -15,13 +15,16 @@ Frontend가 여러 surface에서 일관되게 지켜야 할 seed·state·integra
 - Status: Active
 - Context / Problem: Relay Profile 값이 바뀔 때 열린 draft를 동기화하면 사용자가 선택한 개별 Visibility와 작성
   상태를 잃을 수 있다.
-- Decision Outcome: selected Profile 기본값은 새 일반 Post·Reply 문맥의 initial/reset seed로만 사용한다. 열린
-  draft를 자동 덮어쓰지 않고 Composer의 개별 Visibility 변경도 Profile 설정을 저장하지 않는다.
+- Decision Outcome: selected Profile 기본값은 새 일반 Post·Reply 문맥의 initial seed와 제출 성공 reset의
+  best-effort seed로만 사용한다. reset은 성공 callback을 만든 render가 캡처한 Fragment 값을 사용하며 최신값을
+  별도로 보장하지 않는다. 열린 draft를 자동 덮어쓰지 않고 Visibility-only 변경은 dirty에 포함하지 않으며,
+  Composer의 개별 Visibility 변경도 Profile 설정을 저장하지 않는다.
 - Alternatives Considered: Relay record와 열린 draft의 지속 동기화, Reply Parent Visibility 상속, Composer
   변경 자동 저장. 모두 draft 독립성과 승인된 소유 계약을 위반한다.
 - Consequences: client state는 fragment 값을 effect로 계속 복사하지 않고 Profile·Parent·Environment의 새
   문맥 경계에서만 초기화해야 한다.
-- Confirmation / Follow-up: initial seed, fallback, 열린 draft, 제출 성공 reset과 문맥 전환 test로 확인한다.
+- Confirmation / Follow-up: initial seed, fallback, Visibility-only close, 열린 draft, 제출 성공 reset과 문맥 전환
+  test로 확인한다.
 
 ### 설정 control과 Composer는 normalized Relay Profile 값을 공유한다
 

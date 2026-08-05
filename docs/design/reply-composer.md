@@ -96,10 +96,11 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
 - 빈 상태에서는 `X`, backdrop과 `Escape`로 즉시 닫는다.
-- 본문·Visibility가 초기값에서 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive Media 상태가 있으면 dirty로
-  취급한다. 이 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시하고 사용자가 `계속 작성` 또는
-  `작성 취소`를 선택하게 한다. Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는
-  닫힌 surface를 다시 열거나 상태를 변경하지 않는다.
+- 본문이 입력됐거나 Media 선택·업로드·Alt Text·Sensitive Media 상태가 있으면 dirty로 취급한다. Visibility만
+  초기값에서 바꾼 상태는 보호할 draft content가 아니므로 취소 확인 없이 닫는다. dirty 상태로 닫기를 시도하면
+  `답글 작성을 취소할까요?` 확인을 표시하고 사용자가 `계속 작성` 또는 `작성 취소`를 선택하게 한다. Media 업로드
+  중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는 닫힌 surface를 다시 열거나 상태를 변경하지
+  않는다.
 - 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
@@ -109,6 +110,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   조회·upload·mutation completion은 새 문맥의 상태나 성공 callback을 변경하지 않는다. Composer를 연 뒤
   Profile 기본값이 저장되거나 다른 화면에서 바뀌어도 현재 draft의 개별 Visibility는 자동으로 덮어쓰지 않으며,
   다음 새 Composer부터 갱신된 기본값을 사용한다.
+- 제출 성공 뒤 같은 Composer가 초기화될 때의 Visibility는 성공 callback을 만든 render가 캡처한 Profile
+  Fragment 값을 best-effort seed로 사용한다. 제출 중 별도 render에서 갱신된 최신 Profile 기본값까지 보장하지
+  않는다.
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
