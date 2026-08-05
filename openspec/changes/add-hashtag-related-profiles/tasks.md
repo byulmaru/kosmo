@@ -82,7 +82,7 @@
 - Relay compiler, App TypeScript·unit·Storybook, 관련 Web E2E, ESLint·Prettier, `git diff --check`
 - `openspec validate add-hashtag-related-profiles --strict`
 
-- [x] 2.1 보호된 `/hashtags/[hashtagId]/profiles` route와 Hashtag Node query를 추가하고 canonical 이름의 PageHeader·직접 진입·존재하지 않는 Node 상태를 연결한다.
+- [x] 2.1 보호된 `/hashtags/[hashtagId]/profiles` route와 Hashtag Node query를 추가하고 Display Hashtag Name의 PageHeader·직접 진입·존재하지 않는 Node 상태를 연결한다.
 - [x] 2.2 공개 Profile TagChip 진입점에 exact ID Link·Pressable, 관계 목록 접근성 이름과 Web·iOS·Android target mapping을 추가하되 표시 chip과 편집 action 책임을 유지한다.
 - [x] 2.3 `Hashtag.relatedProfiles` 전용 Relay pagination fragment와 기존 Profile 목록 item을 연결하고 loading·error·retry·empty·next-page·terminal·중복 요청 상태를 구현한다.
 - [x] 2.4 route와 목록의 최소 unit test·상태 catalog를 추가해 identity, 제목, 상태 보존, Profile action과 검색 connection 격리를 검증한다.
@@ -90,10 +90,10 @@
 
 **2026-08-05 PROD-529 검증 기록**
 
-- exact Hashtag global ID를 사용하는 보호 route, `node(id:)` Hashtag 판별, canonical 제목과 first-load/not-found/error/retry 상태를 route unit test 6건으로 확인했다.
+- exact Hashtag global ID를 사용하는 보호 route, `node(id:)` Hashtag 판별, Display Hashtag Name 제목과 first-load/not-found/error/retry 상태를 route unit test 6건으로 확인했다.
 - 전용 `HashtagRelatedProfileList_relatedProfiles` connection의 empty/content, `loadNext(20)` 요청 변수, next-page error-retry/terminal, loading 중 단일 요청과 기존 `ProfileListItem linked` 재사용을 Storybook catalog에서 확인했다.
 - `pnpm --filter @kosmo/app exec relay-compiler --noWatchman`, `pnpm --filter @kosmo/app exec tsc --noEmit`, App unit 189건과 Storybook 296건이 통과했다. 기본 Relay/build는 호스트 Watchman FSEvents 오류로 실행되지 않아 compiler와 TypeScript를 분리했고 E2E Web export에도 같은 `--noWatchman` 우회를 사용한 뒤 임시 Playwright config 변경을 되돌렸다.
-- Profile 편집·공개 Tag link·TagChip keyboard→관련 Profile 목록→기존 Profile route Web E2E 4건과 기존 사람 검색 E2E 14건이 통과했다. test-only Hashtag 관계 helper 외 production DB/schema/API 변경은 없다.
+- Profile Tag 계약 Web E2E 2건(편집 저장 후 공개 Tag link 1건, TagChip keyboard→관련 Profile 목록→기존 Profile route 1건), 동반 기존 Profile Edit 회귀 E2E 2건과 기존 사람 검색 E2E 14건이 통과했다. test-only Hashtag 관계 helper 외 production DB/schema/API 변경은 없다.
 - `pnpm lint:eslint`, `pnpm lint:prettier`, `git diff --check`, `openspec validate add-hashtag-related-profiles --strict`가 통과했고 generated Relay artifact는 repository 관례대로 commit 대상에 포함하지 않았다.
 - `sol medium` 독립 구현 리뷰에서 발견한 PROD-525 활성화 시점 canonical 문구 충돌을 `docs/design/profile-tags.md`의 PROD-529 activation·PROD-525 integration/archive 분업으로 동기화했고 재리뷰에서 추가 finding 없이 통과했다.
 - Web은 32 CSS px target과 Tab/Enter/accessible link를 runtime에서 확인했다. React Native는 `Platform.select`의 iOS 44 pt·Android 48 dp source mapping과 unit contract만 확인했으며 실제 iOS·Android focus/touch/screen reader runtime QA는 수행하지 않았다.

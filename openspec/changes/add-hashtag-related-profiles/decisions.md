@@ -71,7 +71,7 @@
 - Authority / Provenance: `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`, `docs/design/hashtag-related-profiles.md`, `PROD-525`, `PROD-529` (2026-08-05 route 선택과 제목 승인)
 - Status: Active
 - Context / Problem: canonical은 TagChip이 정확한 Hashtag identity를 전달하고 관계 목록임을 URL·UI·접근성에서 구분하도록 요구하지만, route path와 화면 제목은 구현 이슈에 맡겼다. 이름 기반 path는 별도 name-to-identity 조회와 이름 변경 시 URL 안정성 결정을 추가한다.
-- Decision Outcome: client는 `/hashtags/[hashtagId]/profiles` path에서 Hashtag global ID를 `node(id:)`로 조회한다. canonical Hashtag 이름은 identity로 사용하지 않고 화면 제목 `#<태그명> 관련 프로필`에만 사용한다. 첫 응답 전에는 `관련 프로필` 제목을 유지하고 성공한 Node 응답 뒤 전체 제목으로 갱신한다.
+- Decision Outcome: client는 `/hashtags/[hashtagId]/profiles` path에서 Hashtag global ID를 `node(id:)`로 조회한다. Canonical Hashtag Name과 Display Hashtag Name은 identity로 사용하지 않고, 성공한 Node의 Display Hashtag Name을 화면 제목 `#<태그명> 관련 프로필`에 사용한다. 첫 응답 전에는 `관련 프로필` 제목을 유지하고 성공한 Node 응답 뒤 전체 제목으로 갱신한다.
 - Alternatives Considered: `/hashtags/[normalizedName]/profiles`는 읽기 쉽지만 exact row identity를 이름 해석 계약으로 바꾸고 이름 변경 시 URL 안정성을 새로 결정해야 한다. 검색 URL이나 query-only route는 사람 검색과 관계 목록의 의미를 다시 결합한다.
 - Consequences: URL은 사람이 읽기 어렵지만 exact identity와 이름 변경 안정성을 보존한다. 직접 route 진입과 TagChip 진입은 같은 Node query를 사용하며 stale 이름 parameter가 identity를 바꾸지 않는다.
 - Confirmation / Follow-up: TagChip link와 직접 진입이 같은 Hashtag ID를 query하고, URL·PageHeader·접근성 이름이 검색이 아닌 관계 목록임을 Web test에서 검증한다.

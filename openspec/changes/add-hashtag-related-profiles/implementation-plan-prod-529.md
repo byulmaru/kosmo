@@ -4,14 +4,14 @@
 
 **Goal:** 로그인한 Account가 공개 Profile의 TagChip 또는 보호된 `/hashtags/[hashtagId]/profiles` 직접 진입에서 exact Hashtag identity의 관련 공개 Profile을 20개씩 탐색하고 기존 Profile route로 이동할 수 있게 한다.
 
-**Architecture:** Expo Router route가 path의 Hashtag global ID, actor revision과 첫 query boundary를 소유하고 `node(id:)`로 canonical Hashtag 이름을 조회한다. Hashtag-colocated Relay pagination fragment는 `relatedProfiles` 전용 connection과 이미 표시한 edge를 보존하는 명시적 load-more 상태를 소유한다. 공개 `ProfileHero`만 표시 전용 `ProfileTagChip` 주위의 Link/Pressable navigation target을 소유하며 기존 `ProfileListItem`이 Profile 이동과 follow action을 그대로 제공한다.
+**Architecture:** Expo Router route가 path의 Hashtag global ID, actor revision과 첫 query boundary를 소유하고 `node(id:)`로 Display Hashtag Name을 노출하는 GraphQL `name` projection을 조회한다. Hashtag-colocated Relay pagination fragment는 `relatedProfiles` 전용 connection과 이미 표시한 edge를 보존하는 명시적 load-more 상태를 소유한다. 공개 `ProfileHero`만 표시 전용 `ProfileTagChip` 주위의 Link/Pressable navigation target을 소유하며 기존 `ProfileListItem`이 Profile 이동과 follow action을 그대로 제공한다.
 
 **Tech Stack:** Expo Router, React Native / React Native Web, React Relay 21, Node test runner, React Test Renderer, Storybook 10 + Vitest Browser, Playwright, PostgreSQL E2E fixtures, OpenSpec.
 
 ## Global Constraints
 
 - 구현 대상은 OpenSpec task 2.1–2.5와 Linear PROD-529뿐이다. 완료된 PROD-528 API·schema·ordering을 변경하지 않고 PROD-525 통합 검증·archive는 남긴다.
-- canonical route는 `/hashtags/[hashtagId]/profiles`이며 path에는 Hashtag global ID만 전달한다. Hashtag `name`과 `#` text는 화면 제목·접근성 copy에만 사용하고 identity나 검색 입력으로 사용하지 않는다.
+- canonical route는 `/hashtags/[hashtagId]/profiles`이며 path에는 Hashtag global ID만 전달한다. Display Hashtag Name을 노출하는 GraphQL `name` projection과 `#` text는 화면 제목·접근성 copy에만 사용하고 identity나 검색 입력으로 사용하지 않는다.
 - route는 Account 로그인을 전제로 하되 selected Profile을 요구하지 않는다. actor revision 또는 Hashtag ID가 바뀌면 첫 query retry state를 remount한다.
 - 첫 응답 전 PageHeader는 `관련 프로필`, Hashtag 응답 뒤에는 `#<태그명> 관련 프로필`이다. 첫 loading/error/retry, 존재하지 않거나 Hashtag가 아닌 Node, empty, next-page loading/error/retry와 terminal을 명시적으로 표시한다.
 - `HashtagRelatedProfileList_relatedProfiles` connection key는 search/followers/following과 공유하지 않는다. page size는 20이고 `isLoadingNext` 동안 추가 요청을 막으며 다음 page 오류에서 기존 edge를 유지한다.
@@ -28,7 +28,7 @@
 ## File Map
 
 - Create `apps/app/src/app/(tabs)/(protected)/hashtags/[hashtagId]/profiles.tsx`: Hashtag ID normalization, actor revision key, Node query와 첫 loading/error/not-found boundary.
-- Create `apps/app/src/components/profile/HashtagRelatedProfileList.tsx`: Hashtag pagination fragment, canonical header, empty/content/next-page/terminal states.
+- Create `apps/app/src/components/profile/HashtagRelatedProfileList.tsx`: Hashtag pagination fragment, Display Hashtag Name header, empty/content/next-page/terminal states.
 - Create `apps/app/src/components/profile/HashtagRelatedProfilesRoute.test.ts`: exact ID query, title/state handoff, retry fetchKey와 route identity remount 검증.
 - Modify `apps/app/src/components/profile/ProfileHero.tsx`: 공개 TagChip의 Link/Pressable wrapper와 platform target mapping.
 - Modify `apps/app/src/components/profile/ProfileHero.test.ts`: exact href/params, role/name/target과 기존 표시 순서 검증.
@@ -209,7 +209,7 @@
   }
   ```
 
-  `HashtagRelatedProfileList`는 `usePaginationFragment` 결과에서 rows를 만들고 canonical PageHeader를 먼저 렌더한다. `profiles.length === 0`이면 empty state를 표시한다. load-more handler는 다음 guard와 completion만 소유한다.
+  `HashtagRelatedProfileList`는 `usePaginationFragment` 결과에서 rows를 만들고 Display Hashtag Name의 PageHeader를 먼저 렌더한다. `profiles.length === 0`이면 empty state를 표시한다. load-more handler는 다음 guard와 completion만 소유한다.
 
   ```ts
   const loadMore = () => {

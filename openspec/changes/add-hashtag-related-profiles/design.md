@@ -33,7 +33,7 @@ PROD-526이 `hashtag`와 `profile_hashtag` 저장 구조, Hashtag Node, `Profile
 
 - PROD-528이 `Hashtag.relatedProfiles(first:, after:): ProfileConnection!`, Account `login`, exact relation과 visibility-before-limit, `Profile.id ASC` opaque cursor, 기본·최대 20개 상한을 구현·검증했다. PROD-529는 이 API를 소비하며 schema·resolver·ordering을 변경하지 않는다.
 - parent Node가 존재하지 않으면 기존 Node lookup이 `null`을 반환하고, 존재하는 Hashtag에 관련 Profile이 없으면 `relatedProfiles`가 빈 connection을 반환한다.
-- 공개 `ProfileHero`는 TagChip에 필요한 Hashtag global ID와 canonical `name`을 조회하지만 현재 표시 전용 chip에는 이름만 전달하고 navigation target을 제공하지 않는다.
+- 공개 `ProfileHero`는 TagChip에 필요한 Hashtag global ID와 Display Hashtag Name을 노출하는 GraphQL `name` projection을 조회하지만 현재 표시 전용 chip에는 이름만 전달하고 navigation target을 제공하지 않는다.
 - 기존 search, followers와 following 화면은 Profile 목록 item과 pagination UX를 제공하지만 각자 query owner와 Relay connection key를 소유한다. Hashtag 관계 목록은 이 상태와 결합하지 않는다.
 - 보호된 App route는 로그인 Account를 전제로 하지만 selected Profile을 요구하지 않아야 한다. API의 field-level login 경계보다 강한 client 전제나 별도 permission contract를 만들지 않는다.
 
@@ -41,7 +41,7 @@ PROD-526이 `hashtag`와 `profile_hashtag` 저장 구조, Hashtag Node, `Profile
 
 PROD-528은 기존 `Hashtag` Node에 field-level `login` auth scope의 `relatedProfiles` field를 추가했다. field는 공용 `ProfileConnection`, `first`·`after`, default/max 20과 `Profile.id ASC` cursor를 사용하며 exact relation·공용 visibility·cursor 경계를 page limit 전에 적용한다. API integration test가 인증 선행, selected Profile 없는 Session, exact/empty relation, visibility, 원격 조회 미수행과 pagination 회귀를 검증했다. 이 완료된 API 계약은 PROD-529 client의 입력이며 이번 slice에서 다시 구현하거나 변경하지 않는다.
 
-PROD-529 client는 보호된 `/hashtags/[hashtagId]/profiles` route에서 path의 Hashtag global ID를 `node(id:)`에 전달하고, 응답이 Hashtag일 때 canonical `name`과 `relatedProfiles` 전용 Relay pagination fragment를 소비한다. 이름은 identity나 query 입력으로 사용하지 않고 성공한 Node 응답의 화면 제목 `#<태그명> 관련 프로필`에만 사용한다.
+PROD-529 client는 보호된 `/hashtags/[hashtagId]/profiles` route에서 path의 Hashtag global ID를 `node(id:)`에 전달하고, 응답이 Hashtag일 때 Display Hashtag Name을 노출하는 GraphQL `name` projection과 `relatedProfiles` 전용 Relay pagination fragment를 소비한다. Canonical Hashtag Name과 Display Hashtag Name은 identity나 query 입력으로 사용하지 않고 성공한 Node 응답의 화면 제목 `#<태그명> 관련 프로필`에는 Display Hashtag Name만 사용한다.
 
 공개 Profile의 TagChip visual component는 표시 책임만 유지한다. `ProfileHero`의 공개 태그 진입점이 기존 chip을 `Link`·`Pressable`로 감싸 exact ID route와 `#<태그명> 관련 프로필 보기` 접근성 이름, Web 32 CSS px·iOS 44 pt·Android 48 dp 입력 target을 제공한다. 편집기의 제거 action과 validation은 변경하지 않는다.
 
@@ -71,8 +71,8 @@ client는 승인된 path·Node ID identity·제목·검색 상태 격리·관찰
 - [결과 집합이 page 사이에 변경되면 새 관계가 이미 지난 cursor 앞에 들어갈 수 있다] → cursor 계약은 변경되지 않은 결과 집합의 중복·누락 방지를 보장하고 snapshot pagination은 도입하지 않는다.
 - [Hashtag Node가 공개 lookup 가능하므로 비로그인 요청이 parent Hashtag 존재를 확인할 수 있다] → 기존 Hashtag Node 공개 계약은 유지하되 관련 Profile 후보 query는 field-level login scope 뒤에서만 실행한다.
 - [additive field를 먼저 배포하면 아직 client 소비자가 없다] → PROD-528을 독립 배포 가능한 API slice로 유지하고 PROD-529가 schema를 소비한 뒤 전체 탐색을 활성화한다.
-- [path가 opaque Hashtag ID라 사람이 URL만 보고 태그를 식별하기 어렵다] → exact identity와 이름 변경 안정성을 우선하고 canonical Hashtag 이름은 성공한 Node 응답의 화면 제목에 표시한다.
-- [첫 network 요청이 완료되기 전에는 canonical Hashtag 이름을 표시할 수 없다] → 공용 PageHeader는 `관련 프로필` 맥락을 유지하고 Node 응답 뒤 승인된 전체 제목으로 갱신하며, 이름 query parameter나 stale client copy를 identity로 사용하지 않는다.
+- [path가 opaque Hashtag ID라 사람이 URL만 보고 태그를 식별하기 어렵다] → exact identity와 이름 변경 안정성을 우선하고 Display Hashtag Name은 성공한 Node 응답의 화면 제목에 표시한다.
+- [첫 network 요청이 완료되기 전에는 Display Hashtag Name을 표시할 수 없다] → 공용 PageHeader는 `관련 프로필` 맥락을 유지하고 Node 응답 뒤 승인된 전체 제목으로 갱신하며, 이름 query parameter나 stale client copy를 identity로 사용하지 않는다.
 - [Web 자동화만 통과한 상태에서 Native 탐색이 완료됐다고 오해할 수 있다] → 공용 React Native 구현과 platform target mapping은 source 수준으로 검증하고 iOS·Android 실제 runtime QA는 별도 출시 gate로 남긴다.
 
 ## Migration Plan
