@@ -4435,6 +4435,18 @@ export const ComposerClipboardPasteInteraction: Story = {
     try {
       await userEvent.type(body, '기존 본문');
 
+      let rejectSelection!: (reason: Error) => void;
+      setNextImagePickerResult(
+        new Promise((_resolve, reject) => {
+          rejectSelection = reject;
+        }),
+      );
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      rejectSelection(new Error('picker failed'));
+      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+        '이미지를 선택하지 못했습니다.',
+      );
+
       const clipboardData = new DataTransfer();
       clipboardData.items.add(clipboardImageOne);
       clipboardData.items.add(clipboardImageTwo);
@@ -4451,6 +4463,7 @@ export const ComposerClipboardPasteInteraction: Story = {
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
       });
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
 
       setNextImagePickerResult({
         assets: [
@@ -4473,7 +4486,7 @@ export const ComposerClipboardPasteInteraction: Story = {
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
       });
-      expect(getImagePickerLaunchCount()).toBe(1);
+      expect(getImagePickerLaunchCount()).toBe(2);
       expect(upload).toHaveBeenCalledTimes(4);
       expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
 

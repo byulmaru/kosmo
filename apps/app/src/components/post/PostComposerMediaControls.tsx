@@ -182,6 +182,7 @@ export function PostComposerMediaControls({
       return;
     }
 
+    setError(null);
     updateMedia((items) => [...items, ...selected]);
     for (const item of selected) {
       void uploadMedia(item.key, item.asset);
