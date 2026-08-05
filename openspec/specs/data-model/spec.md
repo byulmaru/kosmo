@@ -762,4 +762,4 @@ canonical application projection에서 `UNLISTED`로 동작해야 한다(MUST). 
 
 - **WHEN** `DIRECT` 또는 지원하지 않는 값을 Local Profile 기본값으로 저장하려 한다
 - **THEN** application validation은 write 전에 요청을 거부한다
-- **AND** database storage는 지원하는 세 값 또는 미설정 상태만 유지한다
+- **AND** 요청은 기존 저장값을 변경하지 않는다
