@@ -17,6 +17,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq, ne } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -306,6 +307,37 @@ describe('inbound Announce materialization', () => {
 
     await handleInboundUndo(context(), undo(actorUri, b.id!));
     assert.equal(await postState(recreated.id), PostState.ACTIVE);
+  });
+
+  test('does not log a successful Announce Undo deletion as a noop', async () => {
+    await createRemoteActor(actorUri);
+    await createRemoteSource();
+    const activity = announce('logged-delete', sourceUri);
+    await handleInboundAnnounce(context(), activity);
+
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    try {
+      await handleInboundUndo(context(), undo(actorUri, activity.id!));
+      assert.deepEqual(logs, []);
+
+      await handleInboundUndo(context(), undo(actorUri, activity.id!));
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Undo',
+          actorOrigin: actorUri.origin,
+          handler: 'undo',
+          objectOrigin: actorUri.origin,
+          outcome: 'noop',
+          phase: 'projection',
+          reasonCode: 'announce_undo_ignored',
+        },
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test('ignores Undo from another actor', async () => {

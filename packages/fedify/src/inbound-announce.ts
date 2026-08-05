@@ -7,6 +7,7 @@ import { repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
@@ -102,12 +103,26 @@ export const handleInboundAnnounce = async (
   const objectHref = uniqueHref(announce.objectIds);
 
   if (!isHttpUri(activityUri) || !actorHref || !objectHref) {
+    observeInboundRejected({
+      activityType: 'Announce',
+      handler: 'announce',
+      phase: 'validation',
+      reasonCode: 'invalid_announce_identity',
+    });
     return;
   }
 
   const actorUri = new URL(actorHref);
   const objectUri = new URL(objectHref);
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri) || activityUri.origin !== actorUri.origin) {
+    observeInboundRejected({
+      activityType: 'Announce',
+      actorOrigin: actorUri.origin,
+      handler: 'announce',
+      objectOrigin: objectUri.origin,
+      phase: 'validation',
+      reasonCode: 'announce_origin_mismatch',
+    });
     return;
   }
 
@@ -117,11 +132,27 @@ export const handleInboundAnnounce = async (
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {
+    observeInboundNoop({
+      activityType: 'Announce',
+      actorOrigin: actorUri.origin,
+      handler: 'announce',
+      objectOrigin: objectUri.origin,
+      phase: 'actor_lookup',
+      reasonCode: 'remote_actor_unavailable',
+    });
     return;
   }
 
   const sourcePostId = await findPostByActivityPubUri(context, objectUri);
   if (!sourcePostId) {
+    observeInboundNoop({
+      activityType: 'Announce',
+      actorOrigin: actorUri.origin,
+      handler: 'announce',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'announce_source_post_missing',
+    });
     return;
   }
 
@@ -146,8 +177,18 @@ export const handleInboundAnnounce = async (
       }
     });
   } catch (error) {
-    if (!isExpectedRepostRejection(error)) {
-      throw error;
+    if (isExpectedRepostRejection(error)) {
+      observeInboundRejected({
+        activityType: 'Announce',
+        actorOrigin: actorUri.origin,
+        handler: 'announce',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'repost_projection_rejected',
+      });
+      return;
     }
+
+    throw error;
   }
 };

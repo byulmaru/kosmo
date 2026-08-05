@@ -4,6 +4,11 @@ import { Note } from '@fedify/vocab';
 import { InstanceState } from '@kosmo/core/enums';
 import { uniqueHref } from './activitypub-uri';
 import { handleInboundCreateNote } from './inbound-create-note';
+import {
+  observeInboundExternalFailure,
+  observeInboundNoop,
+  observeInboundRejected,
+} from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
@@ -17,6 +22,12 @@ export const handleInboundCreate = async (
   const objectUri = uniqueHref(create.objectIds);
 
   if (!actorUri || !objectUri) {
+    observeInboundRejected({
+      activityType: 'Create',
+      handler: 'create',
+      phase: 'validation',
+      reasonCode: 'missing_activity_identity',
+    });
     return undefined;
   }
 
@@ -26,6 +37,13 @@ export const handleInboundCreate = async (
     (storedActor.instance.state !== InstanceState.ACTIVE &&
       storedActor.instance.state !== InstanceState.UNRESPONSIVE)
   ) {
+    observeInboundNoop({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      phase: 'actor_lookup',
+      reasonCode: 'remote_actor_unavailable',
+    });
     return undefined;
   }
 
@@ -33,6 +51,14 @@ export const handleInboundCreate = async (
   try {
     object = await create.getObject({ documentLoader: context.documentLoader });
   } catch {
+    observeInboundExternalFailure({
+      activityType: 'Create',
+      actorOrigin: actorUri,
+      handler: 'create',
+      objectOrigin: objectUri,
+      phase: 'object_lookup',
+      reasonCode: 'create_object_lookup_failed',
+    });
     return undefined;
   }
 
@@ -45,5 +71,15 @@ export const handleInboundCreate = async (
       storedActor,
       receivedAt,
     });
+    return;
   }
+
+  observeInboundExternalFailure({
+    activityType: 'Create',
+    actorOrigin: actorUri,
+    handler: 'create',
+    objectOrigin: objectUri,
+    phase: 'protocol',
+    reasonCode: 'create_object_not_note',
+  });
 };

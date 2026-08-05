@@ -43,6 +43,7 @@ type LocalPostInput = {
     altText: string | null;
     mediaId: string;
   }[];
+  onPostCommitError?: (error: unknown) => void | Promise<void>;
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
@@ -52,6 +53,7 @@ type LocalPostInput = {
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   media?: readonly RemoteMediaCandidate[];
+  onPostCommitError?: (error: unknown) => void | Promise<void>;
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -506,11 +508,24 @@ export async function createPost(
         .then(firstOrThrow);
 
       if (input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch((error) => {
-          console.error('Reply notification creation failed', {
-            error,
-            postId: linkedPost.id,
-          });
+        await createReplyNotification(linkedPost.id, tx).catch(async (error) => {
+          if (!input.onPostCommitError) {
+            console.error('Reply notification creation failed', {
+              error,
+              postId: linkedPost.id,
+            });
+            return;
+          }
+
+          try {
+            await input.onPostCommitError(error);
+          } catch (observerError) {
+            console.error('Reply notification creation failed', {
+              error,
+              observerError,
+              postId: linkedPost.id,
+            });
+          }
         });
       }
 

@@ -20,6 +20,7 @@ type MaterializeInboundReactionInput = {
   readonly activityUri: string;
   readonly actorUri: string;
   readonly objectUri: string;
+  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly type: string;
 };
 
@@ -204,6 +205,7 @@ export const materializeInboundReaction = async (
 
       const identity = {
         actorProfileId: actor.profileId,
+        onPostCommitError: input.onPostCommitError,
         origin: 'ACTIVITYPUB' as const,
         postId: target.postId,
         type: parsedType.data,
@@ -261,9 +263,11 @@ export const materializeInboundReaction = async (
 export const undoInboundReaction = async ({
   activityUri,
   actorUri,
+  onPostCommitError,
 }: {
   readonly activityUri: string;
   readonly actorUri: string;
+  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
 }): Promise<{ readonly reactionId: string | null }> => {
   if (!isHttpUri(activityUri) || !isHttpUri(actorUri)) {
     return { reactionId: null };
@@ -296,6 +300,7 @@ export const undoInboundReaction = async ({
       {
         actorProfileId: mapped.reaction.profileId,
         expectedReactionId: mapped.reaction.id,
+        onPostCommitError,
         origin: 'ACTIVITYPUB',
         postId: mapped.reaction.postId,
         type: mapped.reaction.type,

@@ -2,6 +2,11 @@ import { Follow } from '@fedify/vocab';
 import { NotFoundError } from '@kosmo/core/error';
 import { isHttpUri } from './activitypub-uri';
 import { handleInboundAcceptFollow } from './inbound-accept-follow';
+import {
+  observeInboundExternalFailure,
+  observeInboundNoop,
+  observeInboundRejected,
+} from './inbound-observability';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
@@ -12,6 +17,12 @@ export const handleInboundAccept = async (
 ): Promise<void> => {
   const actorUri = accept.actorId;
   if (!isHttpUri(actorUri)) {
+    observeInboundRejected({
+      activityType: 'Accept',
+      handler: 'accept',
+      phase: 'validation',
+      reasonCode: 'invalid_actor_identity',
+    });
     return;
   }
 
@@ -20,11 +31,26 @@ export const handleInboundAccept = async (
     remoteActor = await findUsableStoredRemoteProfileActorByUri(actorUri);
   } catch (error) {
     if (error instanceof NotFoundError) {
+      observeInboundNoop({
+        activityType: 'Accept',
+        actorOrigin: actorUri.origin,
+        error,
+        handler: 'accept',
+        phase: 'actor_lookup',
+        reasonCode: 'remote_actor_not_found',
+      });
       return;
     }
     throw error;
   }
   if (!remoteActor) {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: actorUri.origin,
+      handler: 'accept',
+      phase: 'actor_lookup',
+      reasonCode: 'remote_actor_missing',
+    });
     return;
   }
 
@@ -32,6 +58,16 @@ export const handleInboundAccept = async (
     documentLoader: context.documentLoader,
     suppressError: true,
   });
+  if (object === null) {
+    observeInboundExternalFailure({
+      activityType: 'Accept',
+      actorOrigin: actorUri.origin,
+      handler: 'accept',
+      phase: 'object_lookup',
+      reasonCode: 'accept_object_lookup_failed',
+    });
+    return;
+  }
   if (object instanceof Follow) {
     await handleInboundAcceptFollow({
       context,
@@ -40,10 +76,14 @@ export const handleInboundAccept = async (
       followeeProfileId: remoteActor.profile.id,
     });
   } else {
-    console.error('Inbound ActivityPub Accept object could not be resolved as Follow', {
-      acceptId: accept.id?.href,
-      actorUri: actorUri.href,
-      objectUri: accept.objectId?.href,
+    observeInboundExternalFailure({
+      activityType: 'Accept',
+      actorOrigin: actorUri.origin,
+      handler: 'accept',
+      objectOrigin: accept.objectId?.origin,
+      phase: 'protocol',
+      reasonCode: 'accept_object_not_follow',
+      message: 'Inbound ActivityPub Accept object could not be resolved as Follow',
     });
   }
 };
