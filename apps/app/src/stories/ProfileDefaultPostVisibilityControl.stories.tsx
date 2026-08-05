@@ -59,8 +59,10 @@ function createEnvironment({
                   updateProfile: {
                     profile: {
                       __typename: 'Profile',
-                      defaultPostVisibility: variables.input.defaultPostVisibility,
                       id: targetId,
+                      private: {
+                        defaultPostVisibility: variables.input.defaultPostVisibility,
+                      },
                     },
                   },
                 },
@@ -77,8 +79,10 @@ function createEnvironment({
             updateProfile: {
               profile: {
                 __typename: 'Profile',
-                defaultPostVisibility: variables.input.defaultPostVisibility,
                 id: targetId,
+                private: {
+                  defaultPostVisibility: variables.input.defaultPostVisibility,
+                },
               },
             },
           },
@@ -95,9 +99,9 @@ function createEnvironment({
     {
       node: {
         __typename: 'Profile',
-        defaultPostVisibility,
         displayName: targetId.endsWith(':1') ? '두 번째 Profile' : '현재 Profile',
         id: targetId,
+        private: { defaultPostVisibility },
         relativeHandle: targetId.endsWith(':1') ? '@second-profile' : '@current-profile',
       },
     },

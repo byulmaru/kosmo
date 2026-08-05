@@ -51,7 +51,9 @@ export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
-    defaultPostVisibility
+    private {
+      defaultPostVisibility
+    }
     displayName
     handle
     avatar {
@@ -146,7 +148,7 @@ function PostComposerContents({
   const [body, setBody] = useState('');
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(() =>
-    resolvePostComposerVisibility(profile.defaultPostVisibility),
+    resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
   );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +223,7 @@ function PostComposerContents({
         setBody('');
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
-        setVisibility(resolvePostComposerVisibility(profile.defaultPostVisibility));
+        setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },

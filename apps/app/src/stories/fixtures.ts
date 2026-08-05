@@ -6,7 +6,7 @@ export type StoryProfile = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
   displayName: string;
-  defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+  defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
   followers: {
     edges: Array<{
       cursor: string;
@@ -28,6 +28,7 @@ export type StoryProfile = {
   header: { id: string; url: string | null } | null;
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
   relativeHandle: string;
   tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
@@ -55,12 +56,13 @@ function pageInfo(hasNextPage = false, endCursor: string | null = null): StoryPa
 }
 
 export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
+  const defaultPostVisibility =
+    overrides.defaultPostVisibility === undefined ? 'UNLISTED' : overrides.defaultPostVisibility;
   return {
     __typename: 'Profile',
     avatar: null,
     bio: '우주와 사람을 잇는 코스모 프로필입니다.',
     displayName: '코스모 작가',
-    defaultPostVisibility: 'UNLISTED',
     followers: { edges: [], pageInfo: pageInfo() },
     followersCount: 128,
     followPolicy: 'OPEN',
@@ -75,6 +77,13 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     unreadNotificationCount: 0,
     viewerState: { follow: null, followRequest: null, isSelf: false },
     ...overrides,
+    defaultPostVisibility,
+    private:
+      overrides.defaultPostVisibility === undefined
+        ? (overrides.private ?? (defaultPostVisibility === null ? null : { defaultPostVisibility }))
+        : defaultPostVisibility === null
+          ? null
+          : { defaultPostVisibility },
   };
 }
 

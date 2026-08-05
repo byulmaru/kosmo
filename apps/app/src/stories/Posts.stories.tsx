@@ -704,6 +704,7 @@ const composerPublicProfile = profile({
 const composerUnavailableProfile = {
   ...composerProfile,
   defaultPostVisibility: null,
+  private: null,
 } as unknown as typeof composerProfile;
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });

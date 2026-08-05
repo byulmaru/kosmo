@@ -29,7 +29,9 @@ const ProfileFragment = graphql`
     id
     displayName
     relativeHandle
-    defaultPostVisibility
+    private {
+      defaultPostVisibility
+    }
   }
 `;
 
@@ -38,7 +40,9 @@ const UpdateMutation = graphql`
     updateProfile(input: $input) {
       profile {
         id
-        defaultPostVisibility
+        private {
+          defaultPostVisibility
+        }
       }
     }
   }
@@ -84,7 +88,7 @@ function ProfileDefaultPostVisibilityControlContents({
   const theme = useTheme();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
 
-  const savedFromRelay = resolveProfileDefaultVisibility(profile.defaultPostVisibility);
+  const savedFromRelay = resolveProfileDefaultVisibility(profile.private?.defaultPostVisibility);
   const [saved, setSaved] = useState(savedFromRelay);
   const [selected, setSelected] = useState(savedFromRelay);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -119,7 +123,7 @@ function ProfileDefaultPostVisibilityControlContents({
           return;
         }
         const next = resolveProfileDefaultVisibility(
-          response.updateProfile.profile.defaultPostVisibility,
+          response.updateProfile.profile.private?.defaultPostVisibility,
         );
         setSaved(next);
         setSelected(next);
