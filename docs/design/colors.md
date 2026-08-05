@@ -33,6 +33,15 @@ Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 �
   dark `focus`는 `#fce79a`에 매핑하며 각각 Reply editor background와 약 4.15:1, 15.32:1 대비를 갖는다.
 - 기본 browser outline을 유지하는 control이나 Native focus style을 `focus` token으로 일괄 덮어쓰지 않는다.
 
+## Selected
+
+- `selectedSurface`와 `selectedBorder`는 radio·option처럼 현재 선택된 행의 배경과 경계를 함께 표시한다.
+- light에서는 각각 `#fff8dc`, `#9a7800`, dark에서는 `#3a3524`, `#fce79a`에 매핑하며 경계와 배경은
+  각각 약 3.90:1, 9.94:1 대비를 갖는다.
+- 선택 상태는 이 토큰만으로 전달하지 않고 `checked`·`selected` 같은 접근성 state를 함께 제공한다.
+- `focus`는 선택 상태에 재사용하지 않는다. focus와 selected가 동시에 필요한 control은 두 상태를 독립적으로
+  표현한다.
+
 ## Divider
 
 - `divider`는 서로 이어지는 콘텐츠 행을 나누는 저강도 1px 구분선에 사용한다.

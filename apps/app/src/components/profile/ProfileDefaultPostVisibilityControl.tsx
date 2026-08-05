@@ -1,5 +1,4 @@
 import { PostVisibility } from '@kosmo/core/enums';
-import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
@@ -7,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { postVisibilityPresentation } from '../post/postVisibilityPresentation';
 import { resolveProfileDefaultVisibility } from './profileDefaultPostVisibilityState';
 import type {
   ProfileDefaultPostVisibilityControl_profile$data,
@@ -14,26 +14,15 @@ import type {
 } from './__generated__/ProfileDefaultPostVisibilityControl_profile.graphql';
 import type { ProfileDefaultPostVisibilityControlMutation } from './__generated__/ProfileDefaultPostVisibilityControlMutation.graphql';
 
-const options = [
-  {
-    description: '모두가 볼 수 있어요.',
-    icon: GlobeIcon,
-    label: '공개',
-    value: PostVisibility.PUBLIC,
-  },
-  {
-    description: '모두가 볼 수 있지만 검색되지 않아요.',
-    icon: MoonIcon,
-    label: '조용한 공개',
-    value: PostVisibility.UNLISTED,
-  },
-  {
-    description: '팔로워만 볼 수 있어요.',
-    icon: LockIcon,
-    label: '팔로워만',
-    value: PostVisibility.FOLLOWERS,
-  },
+const profileDefaultVisibilityValues = [
+  PostVisibility.PUBLIC,
+  PostVisibility.UNLISTED,
+  PostVisibility.FOLLOWERS,
 ] as const;
+const options = profileDefaultVisibilityValues.map((value) => ({
+  ...postVisibilityPresentation[value],
+  value,
+}));
 
 const ProfileFragment = graphql`
   fragment ProfileDefaultPostVisibilityControl_profile on Profile {
@@ -170,7 +159,7 @@ function ProfileDefaultPostVisibilityControlContents({
           {profile.relativeHandle}
         </Text>
       </View>
-      <View accessibilityRole="radiogroup" style={styles.options}>
+      <View accessibilityLabel={label} accessibilityRole="radiogroup" style={styles.options}>
         {options.map((option) => {
           const selectedOption = option.value === selected;
           const Icon = option.icon;
@@ -190,11 +179,11 @@ function ProfileDefaultPostVisibilityControlContents({
                 styles.option,
                 {
                   backgroundColor: selectedOption
-                    ? 'rgba(252, 231, 154, 0.45)'
+                    ? theme.selectedSurface
                     : pressed
                       ? theme.surface
                       : 'transparent',
-                  borderColor: selectedOption ? theme.focus : theme.border,
+                  borderColor: selectedOption ? theme.selectedBorder : theme.border,
                   opacity: editable ? 1 : 0.6,
                 },
               ]}
@@ -252,8 +241,8 @@ function ProfileDefaultPostVisibilityControlContents({
 const styles = StyleSheet.create({
   root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  target: { ...typography.sm },
-  targetHandle: { ...typography.xsm },
+  target: { fontFamily: 'SUIT', ...typography.sm },
+  targetHandle: { fontFamily: 'SUIT', ...typography.xsm },
   options: { gap: spacing.sm },
   option: {
     alignItems: 'center',
@@ -265,9 +254,9 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, gap: spacing.xs },
   optionLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  description: { ...typography.sm },
-  error: { ...typography.sm },
-  success: { ...typography.sm },
-  memberNote: { ...typography.sm },
+  description: { fontFamily: 'SUIT', ...typography.sm },
+  error: { fontFamily: 'SUIT', ...typography.sm },
+  success: { fontFamily: 'SUIT', ...typography.sm },
+  memberNote: { fontFamily: 'SUIT', ...typography.sm },
   save: { alignSelf: 'flex-start' },
 });

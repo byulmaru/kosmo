@@ -12,6 +12,7 @@ import {
 } from 'relay-runtime';
 import { expect, userEvent, within } from 'storybook/test';
 import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
+import { colors } from '@/theme/tokens';
 import ProfileDefaultPostVisibilityControlStoriesQueryNode from './__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -190,11 +191,20 @@ export const OwnerOptionsAndSuccess: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByText('현재 Profile')).toBeVisible();
     expect(canvas.getByText('@current-profile')).toBeVisible();
+    expect(
+      canvas.getByRole('radiogroup', {
+        name: 'Kosmo 내부 Profile 현재 Profile @current-profile 기본 게시 공개 범위',
+      }),
+    ).toBeVisible();
     expect(canvas.getAllByRole('radio')).toHaveLength(3);
     expect(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' })).toBeDisabled();
     const option = canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' });
     await userEvent.click(option);
     expect(option).toHaveAttribute('aria-checked', 'true');
+    expect(option).toHaveStyle({
+      backgroundColor: colors.light.selectedSurface,
+      borderColor: colors.light.selectedBorder,
+    });
     await userEvent.click(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },

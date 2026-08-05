@@ -5620,6 +5620,15 @@ export const ReplyModalPresentation: Story = {
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(visibilityButton).toHaveFocus();
 
+    await userEvent.click(visibilityButton);
+    await userEvent.click(
+      within(await within(dialog).findByRole('menu', { name: '답글 공개 설정' })).getByRole(
+        'menuitemradio',
+        { name: /^공개/ },
+      ),
+    );
+    expect(within(dialog).getByRole('button', { name: '공개' })).toBeVisible();
+
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
