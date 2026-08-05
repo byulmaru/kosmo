@@ -45,4 +45,14 @@ describe('PostComposer Reply context contract', () => {
       createPostComposerContextKey('profile-a', 'post-parent'),
     );
   });
+
+  it('projects only supported Profile defaults and falls back to UNLISTED', async () => {
+    const { resolvePostComposerVisibility } = await import('./postComposerState');
+
+    assert.equal(resolvePostComposerVisibility('PUBLIC'), 'PUBLIC');
+    assert.equal(resolvePostComposerVisibility('FOLLOWERS'), 'FOLLOWERS');
+    assert.equal(resolvePostComposerVisibility('UNLISTED'), 'UNLISTED');
+    assert.equal(resolvePostComposerVisibility('DIRECT'), 'UNLISTED');
+    assert.equal(resolvePostComposerVisibility(null), 'UNLISTED');
+  });
 });
