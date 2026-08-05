@@ -80,4 +80,22 @@ describe('PostContentRenderer', () => {
     assert.equal(gallery.props.onMediaOpen, onMediaOpen);
     assert.equal(gallery.props.onMediaUnavailable, onMediaUnavailable);
   });
+
+  it('Media를 숨기는 상세 표현에서는 unavailable Gallery도 렌더하지 않는다', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(PostContentRenderer, {
+          bodyText: '',
+          document: { body: { attrs: { sensitiveMedia: false }, content: [], type: 'doc' } },
+          media: null,
+          mediaPresentation: 'hidden',
+        }),
+      );
+    });
+    assert.ok(renderer);
+    assert.equal(
+      renderer.root.findAllByProps({ testID: 'post-content-renderer-gallery' }).length,
+      0,
+    );
+  });
 });

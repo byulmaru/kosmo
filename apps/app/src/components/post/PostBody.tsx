@@ -21,6 +21,7 @@ const PostBodyFragment = graphql`
 
 export function PostBody({
   interactive = true,
+  mediaPresentation = 'default',
   post: postKey,
   onBodyPress,
   onMediaOpen,
@@ -28,6 +29,7 @@ export function PostBody({
   size = 'md',
 }: {
   interactive?: boolean;
+  mediaPresentation?: 'default' | 'hidden';
   post: PostBody_post$key;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
@@ -47,15 +49,18 @@ export function PostBody({
       document={content.document}
       interactive={interactive}
       media={
-        content.media?.map(({ altText, id, url }) => ({
-          altText: altText ?? null,
-          id,
-          url: url ?? null,
-        })) ?? null
+        mediaPresentation === 'hidden'
+          ? null
+          : (content.media?.map(({ altText, id, url }) => ({
+              altText: altText ?? null,
+              id,
+              url: url ?? null,
+            })) ?? null)
       }
+      mediaPresentation={mediaPresentation}
       onBodyPress={onBodyPress}
-      onMediaOpen={onMediaOpen}
-      onMediaUnavailable={onMediaUnavailable}
+      onMediaOpen={mediaPresentation === 'hidden' ? undefined : onMediaOpen}
+      onMediaUnavailable={mediaPresentation === 'hidden' ? undefined : onMediaUnavailable}
       size={size}
     />
   );

@@ -27,6 +27,7 @@
 - [x] 1.1 Post surface에서 현재 Post·Content identity와 선택 index를 소유하고 Gallery의 정상 tile 선택을 받을 수 있게 한다.
 - [x] 1.2 공개된 정상 tile에 viewer trigger semantics와 접근 가능한 이름을 제공하고 주변 navigation과 기존 gallery control 실행을 격리한다.
 - [x] 1.3 Sensitive 가림·다시 가리기, 열린 session의 Sensitive 재가림·삭제·조회 무효화, Reply 부모 preview와 Post·Profile·revision lifecycle 경계의 자동화 회귀 검증을 추가한다.
+- [x] 1.4 선택된 action Profile 또는 Relay actor/environment generation 변경 시 열린 Viewer를 닫고 이전 Composer·action state를 유지하지 않는 production-surface 회귀 검증을 추가한다.
 
 ## 2. PROD-650 Image surface와 Media 탐색
 
@@ -59,7 +60,7 @@
 - [x] 2.3 Web arrow key와 vertical scroll을 침범하지 않는 Native 수평 swipe를 같은 탐색 결과에 연결한다.
 - [x] 2.4 탐색·상태·오류 격리의 focused component test를 추가하고 통과시킨다.
 
-## 3. PROD-650 반응형 Post detail과 기존 Action Bar
+## 3. PROD-650 반응형 Post detail·thread와 기존 interaction
 
 **Authority / Provenance**
 
@@ -72,24 +73,32 @@
 
 **Deliverable**
 
-Viewer가 Mobile 세로·Web 분할 layout에서 작성자, 3줄 원문과 고정된 기존 Post Action Bar를 같은 Post 맥락으로 제공한다.
+Viewer가 Compact Web·Native에서는 작성자, 3줄 원문과 고정된 기존 Post Action Bar를 제공하고, Wide Web에서는 기존 Post 상세의 원문 전체·Action Bar·Reply Composer·reply thread를 같은 Post 맥락으로 제공한다.
 
 **Guardrails**
 
-- Web `<768px`와 Native는 세로, Web `>=768px`는 image 왼쪽·detail 오른쪽 layout을 사용한다.
-- 실제로 3줄을 넘는 원문에만 더 보기·접기를 제공하고 펼친 text 영역만 scroll한다.
+- Web `<768px`와 Native는 image 위·compact detail 아래의 세로 layout을 사용한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, 32vh, 240px)`로 계산한다. `192px`은 낮은 viewport에서 고정 chrome을 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. 실제로 3줄을 넘는 원문에만 더 보기·접기를 제공하며, 상한을 넘으면 펼친 text 영역만 줄어들고 scroll한다.
+- Web `>=768px`는 `24px` viewport inset 안에서 image 왼쪽·`clamp(320px, 25vw, 350px)`의 기존 Post 상세 thread surface 오른쪽 layout을 사용하고 원문 전체·Reply Composer·reply descendants를 표시한다.
+- Wide 원본 Post Media와 nested Viewer trigger는 오른쪽에서 생략하되 thread 안의 Media는 기존 표현을 유지한다.
+- Wide 오른쪽 전체는 독립 scroll하고 기존 reply connection의 loading·error·retry·pagination을 재사용한다. Thread data가 없거나 실패해도 왼쪽 image와 modal chrome은 유지한다.
 - 기존 Post Action Bar의 Reply·Repost·Reaction·Bookmark·More target·authentication·selected Profile·count·pending·cache·failure 계약과 일반·Repost·Quote Post surface의 target routing을 재사용하고 Quote를 새 action으로 추가하지 않는다.
+- Viewer open·탐색·close 중 route·browser history를 바꾸지 않고 배경 Post surface를 focus·interaction 대상에서 제외한다.
 - Media 파일 공유·다운로드·기기 저장, Viewer 전용 action과 새 Post 링크 계약을 추가하지 않는다.
 
 **Verification**
 
-- Component·Storybook test로 짧은·긴 원문, expanded state, text-only scroll 경계, fixed Action Bar와 767·768px layout을 검증한다.
-- Web·iOS·Android runtime에서 Action Bar child overlay의 layering, dismiss 순서와 focus를 action별로 확인한다.
+- Component test와 Web runtime으로 compact 짧은·긴 원문, 내용 높이·`clamp(192px, 32vh, 240px)` 최대 높이, 390px 높이의 고정 chrome 보존, expanded state, text-only scroll 경계, fixed Action Bar와 767·768px layout을 검증한다. Storybook은 기존 상태 fixture를 유지하고, wide rail clamp·원문 전체·Composer·reply thread·Media 비중복을 함께 확인한다.
+- Web runtime에서 오른쪽 독립 scroll·reply pagination·loading·error·retry, Composer·Post/reply action, route·history 유지와 child overlay layering·dismiss·focus를 확인한다.
+- iOS·Android runtime에서는 compact Action Bar child overlay의 layering, dismiss 순서와 focus를 action별로 확인한다.
 
 - [x] 3.1 작성자와 실제 overflow 기반 3줄 원문·더 보기·접기·text scroller를 detail panel에 제공한다.
 - [x] 3.2 Web 768px 경계와 Native 고정 Mobile layout에서 image·detail·고정 Action Bar 영역을 조합한다.
 - [x] 3.3 기존 Post Action Bar fragment·binding을 같은 Post target으로 연결하고 Viewer 전용 Media action이 없음을 회귀 검증한다.
 - [ ] 3.4 Reaction·Repost·More·Reply overlay를 세 플랫폼에서 확인하고 기존 동작을 보존하는 layer 처리만 적용한다.
+- [x] 3.5 기존 `PostDetailThread`의 reply ancestors·현재 Post·reply descendants 표시를 route와 Viewer가 재사용할 수 있는 surface로 추출하고, 현재 Post의 원본 Media·nested Viewer만 생략하며 Reply action으로 Composer를 펼치는 기존 상세 동작을 유지한다.
+- [x] 3.6 Wide Viewer가 같은 Post identity의 thread data를 독립 loading·error boundary로 공급받고 기존 reply connection pagination을 오른쪽 scroller에 연결하며, 상세 route에서는 배경 document pagination을 중지해 단일 owner만 load하도록 한다.
+- [x] 3.7 Wide Viewer의 전체 원문·Composer·Post/reply action과 child overlay를 직접 사용할 수 있게 하고 route·history 유지, 배경 비활성화와 focus lifecycle을 자동화한다.
+- [x] 3.8 Wide Web의 `clamp(320px, 25vw, 350px)` thread rail과 Compact Web·Native의 내용 높이·`clamp(192px, 32vh, 240px)` detail panel을 구현하고, Wide Action Bar의 가로 overflow 방지·390px 높이의 고정 chrome 보존·짧은 원문 Action Bar 인접 배치와 expanded text-only scroll을 회귀 검증한다.
 
 ## 4. PROD-650 Modal 접근성과 플랫폼 runtime 검증
 
@@ -102,22 +111,23 @@ Viewer가 Mobile 세로·Web 분할 layout에서 작성자, 3줄 원문과 고�
 
 **Deliverable**
 
-Viewer를 keyboard·touch·VoiceOver·TalkBack으로 열고 탐색하고 닫을 수 있으며, 닫은 뒤 원래 tile 또는 안전한 Post target으로 돌아간다.
+Viewer를 keyboard·touch·VoiceOver·TalkBack으로 열고 탐색하고 닫을 수 있으며, 배경 Post와 route·history를 유지한 채 닫은 뒤 원래 tile 또는 안전한 Post target으로 돌아간다.
 
 **Guardrails**
 
 - 명시적인 close control과 modal semantics를 제공한다. Web backdrop 직접 press는 닫되 image·detail panel·modal 내부 control press는 backdrop dismiss로 전파하지 않고, backdrop을 유일한 dismiss 수단으로 사용하지 않는다.
 - Web `Escape`, close control과 Native back이 같은 close lifecycle을 사용한다.
+- Modal이 열린 동안 배경 Post surface를 focus·interaction 대상에서 제외하고 Viewer lifecycle로 route·browser history를 변경하지 않는다.
 - 자동화·Storybook·Web 관찰을 iOS·Android runtime 접근성 증거로 대체하지 않는다.
 
 **Verification**
 
-- Component·Storybook에서 modal role, close 초기 focus, backdrop·내부 press 격리, focus boundary·복귀, disabled·expanded·busy state와 accessible name을 확인한다.
-- Web backdrop·내부 pointer·keyboard·Screen Reader, iOS touch·swipe·back·VoiceOver, Android touch·swipe·back·TalkBack 결과를 별도 증거로 기록한다.
+- Component·Storybook에서 modal role, close 초기 focus, backdrop·내부 press 격리, 배경 비활성화, focus boundary·복귀, route·history 유지, disabled·expanded·busy state와 accessible name을 확인한다.
+- Web backdrop·내부 pointer·keyboard·Screen Reader·wide thread focus, iOS touch·swipe·back·VoiceOver, Android touch·swipe·back·TalkBack 결과를 별도 증거로 기록한다.
 
 - [x] 4.1 Modal semantics, close 초기 focus, Web backdrop·내부 press 격리, focus boundary·Escape와 origin tile·fallback Post target 복귀를 구현하고 자동화한다.
-- [x] 4.2 1장·다중·긴 원문·첫/중간/마지막·loading/error와 compact/wide Viewer Storybook 사례를 추가한다.
-- [ ] 4.3 Web `<768px`·`>=768px`에서 backdrop·내부 pointer, keyboard·focus·Screen Reader runtime을 확인하고 결과를 기록한다.
+- [x] 4.2 1장·다중·긴 원문·첫/중간/마지막·loading/error와 compact Viewer 사례를 유지하고 wide 원문 전체·Composer·reply thread·Media 비중복·독립 scroll Storybook 사례를 추가한다.
+- [ ] 4.3 Web `<768px`·`>=768px`에서 backdrop·내부 pointer, keyboard·focus·배경 비활성화·route/history·Screen Reader와 wide thread interaction runtime을 확인하고 결과를 기록한다.
 - [ ] 4.4 iOS에서 touch·button·swipe·back·VoiceOver runtime을 확인하고 결과를 기록한다.
 - [ ] 4.5 Android에서 touch·button·swipe·back·TalkBack runtime을 확인하고 결과를 기록한다.
 
@@ -133,20 +143,20 @@ Viewer를 keyboard·touch·VoiceOver·TalkBack으로 열고 탐색하고 닫을 
 
 **Deliverable**
 
-PROD-626 위의 Viewer 고유 diff가 자동화와 플랫폼별 runtime 증거를 갖춘 review 가능한 PR로 전달되고, 선행 gallery 계약과 archive 순서를 지킨다.
+병합된 PROD-626 gallery 계약 위의 Viewer 고유 diff가 자동화와 플랫폼별 runtime 증거를 갖춘 review 가능한 PR로 전달되고 각 change의 archive 책임을 구분한다.
 
 **Guardrails**
 
-- PROD-626의 최신 검증된 head 위에 stack하고 부모 고유 구현이나 남은 Native QA·archive 책임을 PROD-650에 포함하지 않는다.
+- 최신 `main`을 부모로 사용하고 PROD-626의 병합된 gallery 계약을 재사용하되 남은 Native QA·archive 책임을 PROD-650에 포함하지 않는다.
 - PR 자체 범위와 필수 검증이 끝나면 Ready 판단을 OpenSpec archive와 분리한다.
 - PROD-650 OpenSpec은 PROD-626의 gallery requirement가 canonical spec에 반영되고 PROD-650 전체 task·검증이 끝난 뒤에만 archive한다.
 
 **Verification**
 
 - Focused unit·Storybook 뒤 `pnpm --filter @kosmo/app test`, 관련 lint·Prettier, `git diff --check`, scoped와 전체 OpenSpec strict validation을 통과시킨다.
-- Exact parent SHA, stack-only diff, CI와 미실행 runtime 항목을 PR에 분리해 기록한다.
+- Exact `main` parent SHA, branch-only diff, CI와 미실행 runtime 항목을 PR에 분리해 기록한다.
 
-- [ ] 5.1 Focused test와 전체 App test, lint·Prettier, diff check와 `add-post-media-viewer` strict validation을 통과시킨다.
-- [x] 5.2 PROD-626 exact parent SHA와 stack-only diff를 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
-- [ ] 5.3 PROD-650 자체 구현과 필수 검증이 완료되면 PR readiness를 판단하되 OpenSpec을 조기 archive하지 않는다.
+- [x] 5.1 Focused test와 전체 App test, lint·Prettier, diff check와 `add-post-media-viewer` strict validation을 통과시킨다.
+- [x] 5.2 exact `main` parent SHA와 branch-only diff를 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
+- [x] 5.3 PROD-650 자체 구현과 필수 검증이 완료되면 PR readiness를 판단하되 OpenSpec을 조기 archive하지 않는다.
 - [ ] 5.4 PROD-626 archive 뒤 canonical `post-media-display`와 이 delta를 동기화하고 모든 PROD-650 task·runtime·CI가 완료된 경우 PROD-650 소유로 change를 archive한 뒤 strict validation을 통과시킨다.

@@ -38,6 +38,7 @@ type Props = Readonly<{
     handle: string;
   };
   selectedIndex: number;
+  wideDetail: ReactNode;
 }>;
 
 export function PostMediaViewer({
@@ -50,9 +51,10 @@ export function PostMediaViewer({
   originControl,
   profile,
   selectedIndex,
+  wideDetail,
 }: Props) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
@@ -61,6 +63,8 @@ export function PostMediaViewer({
   const [hasOverflow, setHasOverflow] = useState(false);
   const [imageStates, setImageStates] = useState<Record<string, ImageState>>({});
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const wideDetailWidth = Math.min(350, Math.max(320, width / 4));
+  const compactDetailMaxHeight = Math.min(240, Math.max(192, height * 0.32));
   const currentMedia = media[currentIndex];
   const currentMediaId = currentMedia?.id;
   const currentMediaUrl = currentMedia?.url;
@@ -320,74 +324,92 @@ export function PostMediaViewer({
               </Text>
             </View>
 
-            <View
-              style={[
-                styles.detailPanel,
-                wide ? styles.wideDetailPanel : null,
-                { backgroundColor: theme.card },
-              ]}
-              testID="post-media-viewer-detail"
-            >
-              <View style={styles.author}>
-                <Avatar
-                  imageUri={profile.avatarUrl}
-                  label={profile.displayName || profile.handle}
-                  size={40}
-                />
-                <View style={styles.authorText}>
-                  <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
-                    {profile.displayName}
-                  </Text>
-                  <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                    @{profile.handle}
-                  </Text>
-                </View>
+            {wide ? (
+              <View
+                style={[
+                  styles.wideDetail,
+                  {
+                    backgroundColor: theme.background,
+                    flexBasis: wideDetailWidth,
+                    maxWidth: wideDetailWidth,
+                    minWidth: wideDetailWidth,
+                  },
+                ]}
+                testID="post-media-viewer-wide-detail"
+              >
+                {wideDetail}
               </View>
+            ) : (
+              <View
+                style={[
+                  styles.detailPanel,
+                  { backgroundColor: theme.card, maxHeight: compactDetailMaxHeight },
+                ]}
+                testID="post-media-viewer-detail"
+              >
+                <View style={styles.author}>
+                  <Avatar
+                    imageUri={profile.avatarUrl}
+                    label={profile.displayName || profile.handle}
+                    size={40}
+                  />
+                  <View style={styles.authorText}>
+                    <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
+                      {profile.displayName}
+                    </Text>
+                    <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+                      @{profile.handle}
+                    </Text>
+                  </View>
+                </View>
 
-              <View style={styles.bodyRegion}>
-                <Text
-                  accessible={false}
-                  onLayout={handleBodyLayout}
-                  style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
-                  testID="post-media-viewer-body-measure"
-                >
-                  {bodyText}
-                </Text>
-                {expanded ? (
-                  <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
-                    <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
-                  </ScrollView>
-                ) : (
+                <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
                   <Text
-                    numberOfLines={3}
-                    style={[styles.bodyText, { color: theme.text }]}
-                    testID="post-media-viewer-body"
+                    accessible={false}
+                    onLayout={handleBodyLayout}
+                    style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
+                    testID="post-media-viewer-body-measure"
                   >
                     {bodyText}
                   </Text>
-                )}
-                {hasOverflow ? (
-                  <Pressable
-                    accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded }}
-                    onPress={() => setExpanded((value) => !value)}
-                    style={styles.moreButton}
-                  >
-                    <Text style={[styles.moreText, { color: theme.textSecondary }]}>
-                      {expanded ? '접기' : '더 보기'}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
+                  {expanded ? (
+                    <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
+                      <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
+                    </ScrollView>
+                  ) : (
+                    <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
+                      <Text
+                        numberOfLines={3}
+                        style={[styles.bodyText, { color: theme.text }]}
+                        testID="post-media-viewer-body"
+                      >
+                        {bodyText}
+                      </Text>
+                    </View>
+                  )}
+                  {hasOverflow ? (
+                    <Pressable
+                      accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded }}
+                      onPress={() => setExpanded((value) => !value)}
+                      style={styles.moreButton}
+                    >
+                      <Text style={[styles.moreText, { color: theme.textSecondary }]}>
+                        {expanded ? '접기' : '더 보기'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
 
-              <View
-                style={[styles.actionBar, { borderColor: theme.border }]}
-                testID="post-media-viewer-action-bar"
-              >
-                {actionBar}
+                <View
+                  style={[styles.actionBar, { borderColor: theme.border }]}
+                  testID="post-media-viewer-action-bar"
+                >
+                  {actionBar}
+                </View>
               </View>
-            </View>
+            )}
           </View>
         </View>
       </View>
@@ -466,7 +488,7 @@ const styles = StyleSheet.create({
     width: '100%',
     zIndex: 1,
   },
-  webDialog: { borderRadius: radii.lg, maxWidth: 1280, overflow: 'hidden' },
+  webDialog: { borderRadius: radii.lg, overflow: 'hidden' },
   chrome: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -527,23 +549,29 @@ const styles = StyleSheet.create({
   navigationIcon: { color: '#ffffff', fontFamily: 'SUIT', fontSize: 36, lineHeight: 38 },
   screenReaderOnly: { height: 1, opacity: 0, position: 'absolute', width: 1 },
   detailPanel: {
-    flex: 2,
+    flexShrink: 1,
     gap: spacing.sm,
     minHeight: 0,
     minWidth: 0,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  wideDetailPanel: { flex: 0, flexBasis: 360, maxWidth: 420, minWidth: 320 },
+  wideDetail: { flex: 0, minHeight: 0 },
   author: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
   authorText: { flex: 1, minWidth: 0 },
   displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   handle: { fontFamily: 'SUIT', ...typography.sm },
-  bodyRegion: { flex: 1, minHeight: 0, position: 'relative' },
+  bodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyMeasure: { left: 0, opacity: 0, position: 'absolute', right: 0, top: 0 },
   bodyText: { fontFamily: 'Pretendard', ...typography.md },
-  bodyScroll: { flex: 1, minHeight: 0 },
-  moreButton: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  collapsedBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },
+  bodyScroll: { flexShrink: 1, minHeight: 0 },
+  moreButton: {
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
   moreText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   actionBar: { borderTopWidth: 1, paddingBottom: spacing.sm, paddingTop: spacing.sm },
 });

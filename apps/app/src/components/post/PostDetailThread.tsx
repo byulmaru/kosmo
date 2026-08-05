@@ -4,7 +4,6 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import {
   createNativeScrollHandlers,
   isScrollNearEnd,
-  resumeNativePagination,
 } from '@/components/pagination/nativeScrollPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
@@ -14,7 +13,7 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { PropsWithChildren, ReactNode, RefObject } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
@@ -97,23 +96,30 @@ export function PostDetailThread({
   identity,
   onReplyCreated,
   onPostDeleted,
+  paginationRequestRef,
   post: postKey,
+  presentation = 'route',
   replyProfile,
 }: {
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
+  paginationRequestRef?: RefObject<false | symbol>;
   post: PostDetailThread_post$key;
+  presentation?: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   return (
     <PostDetailThreadContent
       header={header}
+      identity={identity}
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
+      paginationRequestRef={paginationRequestRef}
       post={postKey}
+      presentation={presentation}
       replyProfile={replyProfile}
     />
   );
@@ -121,15 +127,21 @@ export function PostDetailThread({
 
 function PostDetailThreadContent({
   header,
+  identity,
   onReplyCreated,
   onPostDeleted,
+  paginationRequestRef,
   post: postKey,
+  presentation,
   replyProfile,
 }: {
   header: ReactNode;
+  identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
+  paginationRequestRef?: RefObject<false | symbol>;
   post: PostDetailThread_post$key;
+  presentation: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
@@ -137,15 +149,23 @@ function PostDetailThreadContent({
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
   const [loadError, setLoadError] = useState(false);
-  const [nativePageRevision, setNativePageRevision] = useState(0);
-  const handledNativePageRevisionRef = useRef(0);
-  const requestInFlightRef = useRef(false);
+  const [currentViewerOpen, setCurrentViewerOpen] = useState(false);
+  const [scrollPageRevision, setScrollPageRevision] = useState(0);
+  const handledScrollPageRevisionRef = useRef(0);
+  const localPaginationRequestRef = useRef<false | symbol>(false);
+  const requestInFlightRef = paginationRequestRef ?? localPaginationRequestRef;
+  const requestOwnerRef = useRef(Symbol('post-detail-thread-pagination'));
+  const releaseOwnedRequest = useCallback(() => {
+    if (requestInFlightRef.current === requestOwnerRef.current) {
+      requestInFlightRef.current = false;
+    }
+  }, [requestInFlightRef]);
   const pageErrorRef = useRef(false);
   const loadNextPage = useCallback(() => {
     if (!hasNext || isLoadingNext || requestInFlightRef.current) {
       return;
     }
-    requestInFlightRef.current = true;
+    requestInFlightRef.current = requestOwnerRef.current;
     pageErrorRef.current = false;
     setLoadError(false);
     loadNext(20, {
@@ -153,19 +173,22 @@ function PostDetailThreadContent({
         pageErrorRef.current = Boolean(error);
         setLoadError(Boolean(error));
         if (error) {
-          requestInFlightRef.current = false;
+          releaseOwnedRequest();
         } else {
           setTimeout(() => {
-            if (Platform.OS === 'web') {
-              requestInFlightRef.current = false;
+            if (requestInFlightRef.current !== requestOwnerRef.current) {
+              return;
+            }
+            if (Platform.OS === 'web' && presentation === 'route') {
+              releaseOwnedRequest();
             } else {
-              setNativePageRevision((revision) => revision + 1);
+              setScrollPageRevision((revision) => revision + 1);
             }
           }, 0);
         }
       },
     });
-  }, [hasNext, isLoadingNext, loadNext]);
+  }, [hasNext, isLoadingNext, loadNext, presentation, releaseOwnedRequest, requestInFlightRef]);
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
       if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
@@ -186,19 +209,22 @@ function PostDetailThreadContent({
 
   useEffect(() => {
     if (
-      Platform.OS === 'web' ||
-      nativePageRevision === 0 ||
+      (Platform.OS === 'web' && presentation === 'route') ||
+      scrollPageRevision === 0 ||
       isLoadingNext ||
-      handledNativePageRevisionRef.current === nativePageRevision
+      handledScrollPageRevisionRef.current === scrollPageRevision
     ) {
       return;
     }
-    handledNativePageRevisionRef.current = nativePageRevision;
-    resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
-  }, [isLoadingNext, maybeLoadNextPage, nativePageRevision]);
+    handledScrollPageRevisionRef.current = scrollPageRevision;
+    releaseOwnedRequest();
+    maybeLoadNextPage(nativeMetricsRef.current);
+  }, [isLoadingNext, maybeLoadNextPage, scrollPageRevision, presentation, releaseOwnedRequest]);
+
+  useEffect(() => releaseOwnedRequest, [releaseOwnedRequest]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' || presentation !== 'route' || currentViewerOpen) {
       return;
     }
     const check = () =>
@@ -215,7 +241,7 @@ function PostDetailThreadContent({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [data.replyDescendants.edges.length, maybeLoadNextPage]);
+  }, [currentViewerOpen, data.replyDescendants.edges.length, maybeLoadNextPage, presentation]);
   const ancestors = data.replyAncestors
     .filter((post) => post != null)
     .reverse()
@@ -249,6 +275,60 @@ function PostDetailThreadContent({
     } satisfies ThreadRenderablePost,
   };
 
+  const thread = (
+    <>
+      <PostThreadLayout<ThreadRenderablePost>
+        ancestors={ancestors}
+        current={current}
+        descendants={descendants}
+        renderPost={({ item, role }) => (
+          <View>
+            {role === 'current' ? (
+              <PostLayout
+                mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
+                onDeleted={onPostDeleted}
+                onMediaViewerVisibilityChange={
+                  presentation === 'route' ? setCurrentViewerOpen : undefined
+                }
+                post={requireThreadFragment(item.post.detail, 'current detail')}
+                viewerWideDetail={
+                  presentation === 'route' ? (
+                    <PostDetailThread
+                      header={null}
+                      identity={`${identity}:viewer`}
+                      onPostDeleted={onPostDeleted}
+                      onReplyCreated={onReplyCreated}
+                      paginationRequestRef={requestInFlightRef}
+                      post={postKey}
+                      presentation="viewer"
+                      replyProfile={replyProfile}
+                    />
+                  ) : null
+                }
+              />
+            ) : (
+              <PostListItem
+                post={requireThreadFragment(item.post.listItem, `${role} list item`)}
+                showDivider={false}
+              />
+            )}
+          </View>
+        )}
+      />
+      {isLoadingNext ? (
+        <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
+      ) : loadError ? (
+        <View accessibilityRole="alert">
+          <Text>답글을 더 불러오지 못했어요</Text>
+          <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
+          <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
+            답글 다시 불러오기
+          </Button>
+        </View>
+      ) : null}
+    </>
+  );
+
   return (
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider
@@ -256,39 +336,19 @@ function PostDetailThreadContent({
         owner="detail"
         profile={replyProfile ?? null}
       >
-        <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
-          <PostThreadLayout<ThreadRenderablePost>
-            ancestors={ancestors}
-            current={current}
-            descendants={descendants}
-            renderPost={({ item, role }) => (
-              <View>
-                {role === 'current' ? (
-                  <PostLayout
-                    onDeleted={onPostDeleted}
-                    post={requireThreadFragment(item.post.detail, 'current detail')}
-                  />
-                ) : (
-                  <PostListItem
-                    post={requireThreadFragment(item.post.listItem, `${role} list item`)}
-                    showDivider={false}
-                  />
-                )}
-              </View>
-            )}
-          />
-          {isLoadingNext ? (
-            <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
-          ) : loadError ? (
-            <View accessibilityRole="alert">
-              <Text>답글을 더 불러오지 못했어요</Text>
-              <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
-              <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
-                답글 다시 불러오기
-              </Button>
-            </View>
-          ) : null}
-        </PostDetailFrame>
+        {presentation === 'viewer' ? (
+          <ScrollView
+            {...nativeScrollProps}
+            contentContainerStyle={styles.frame}
+            testID="post-media-viewer-thread-scroll"
+          >
+            {thread}
+          </ScrollView>
+        ) : (
+          <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+            {thread}
+          </PostDetailFrame>
+        )}
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

@@ -5,6 +5,7 @@ import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
+import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
@@ -20,6 +21,7 @@ import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
+import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostMediaOpenHandler } from './PostMediaImage';
@@ -86,13 +88,20 @@ const visibilityLabels: Record<string, string> = {
 };
 
 export function PostLayout({
+  mediaPresentation = 'default',
+  onMediaViewerVisibilityChange,
   onDeleted,
   post: postKey,
+  viewerWideDetail,
 }: {
+  mediaPresentation?: 'default' | 'hidden';
+  onMediaViewerVisibilityChange?: (visible: boolean) => void;
   onDeleted?: () => void;
   post: PostLayout_post$key;
+  viewerWideDetail?: ReactNode;
 }) {
   const theme = useTheme();
+  const { revision: actorRevision } = useRelayActor();
   const post = useFragment(PostLayoutFragment, postKey);
   const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
   const replyBinding = usePostReplyBinding(post.id);
@@ -104,7 +113,9 @@ export function PostLayout({
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
   const content = post.content;
-  const viewerIdentity = content ? `${post.profile.id}:${post.id}:${content.id}` : '';
+  const viewerIdentity = content
+    ? `${actorRevision}:${post.profile.id}:${post.id}:${content.id}`
+    : '';
   const viewerMedia =
     content?.media?.map(({ altText, id, url }) => ({
       altText: altText ?? null,
@@ -171,6 +182,15 @@ export function PostLayout({
       requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
     }
   }, [activeViewerSession, viewerSession]);
+  useEffect(() => {
+    onMediaViewerVisibilityChange?.(Boolean(activeViewerSession));
+  }, [activeViewerSession, onMediaViewerVisibilityChange]);
+  useEffect(
+    () => () => {
+      onMediaViewerVisibilityChange?.(false);
+    },
+    [onMediaViewerVisibilityChange],
+  );
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -210,8 +230,9 @@ export function PostLayout({
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
           <PostBody
-            onMediaOpen={handleMediaOpen}
-            onMediaUnavailable={handleMediaUnavailable}
+            mediaPresentation={mediaPresentation}
+            onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
+            onMediaUnavailable={mediaPresentation === 'hidden' ? undefined : handleMediaUnavailable}
             post={post}
             size="lg"
           />
@@ -248,7 +269,7 @@ export function PostLayout({
           ) : null}
         </View>
       </View>
-      {activeViewerSession && content && viewerMedia ? (
+      {mediaPresentation === 'default' && activeViewerSession && content && viewerMedia ? (
         <PostMediaViewer
           actionBar={
             <PostActionSurface
@@ -270,6 +291,7 @@ export function PostLayout({
             handle: post.profile.handle,
           }}
           selectedIndex={activeViewerSession.selectedIndex}
+          wideDetail={viewerWideDetail}
         />
       ) : null}
     </View>

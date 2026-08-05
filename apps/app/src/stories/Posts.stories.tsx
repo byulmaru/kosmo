@@ -18,6 +18,7 @@ import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewer } from '@/components/post/PostMediaViewer';
+import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
@@ -2188,6 +2189,13 @@ function DirectPostMediaViewerStory({
             handle: storyPost.profile.handle,
           }}
           selectedIndex={selectedIndex}
+          wideDetail={
+            <PostMediaViewerThread
+              contentId={content.id}
+              onUnavailable={() => setOpen(false)}
+              postId={storyPost.id}
+            />
+          }
         />
       ) : null}
     </Catalog>
@@ -2292,6 +2300,62 @@ const defaultSession = shellQuery({
   profiles: [defaultStoryProfile],
   selectedProfile: defaultStoryProfile,
 });
+const mediaViewerThreadCurrentPost = {
+  ...withReactionViewerState(mediaViewerQuotePost),
+  replyParent: { __typename: 'Post' as const, id: routeParentPost.id },
+};
+const mediaViewerThreadMediaReply = {
+  ...post({
+    bodyDocument: {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Media Reply' }] },
+        { type: 'media', attrs: { mediaId: 'media-viewer-thread-reply-asset' } },
+      ],
+    },
+    bodyText: '주변 Reply Media 본문',
+    id: 'media-viewer-thread-reply',
+    media: [
+      {
+        __typename: 'Media',
+        altText: '주변 Reply 이미지',
+        id: 'media-viewer-thread-reply-asset',
+        url: postMediaImageUri,
+      },
+    ],
+    replyParent: { __typename: 'Post', id: mediaViewerThreadCurrentPost.id },
+  }),
+  viewerReactions: [],
+};
+const mediaViewerThreadNextReply = {
+  ...post({
+    bodyText: 'Viewer 오른쪽 scroller로 불러온 Reply',
+    id: 'media-viewer-thread-next-reply',
+    replyParent: { __typename: 'Post', id: mediaViewerThreadMediaReply.id },
+  }),
+  viewerReactions: [],
+};
+const postMediaViewerThreadResponseData = {
+  currentSession: defaultSession.currentSession,
+  node: {
+    ...mediaViewerThreadCurrentPost,
+    replyAncestors: [routeParentPost, routeRootPost],
+    replyDescendants: {
+      edges: [{ cursor: mediaViewerThreadMediaReply.id, node: mediaViewerThreadMediaReply }],
+      pageInfo: { endCursor: mediaViewerThreadMediaReply.id, hasNextPage: true },
+    },
+  },
+};
+const postMediaViewerThreadNextPageData = {
+  node: {
+    ...mediaViewerThreadCurrentPost,
+    replyAncestors: [routeParentPost, routeRootPost],
+    replyDescendants: {
+      edges: [{ cursor: mediaViewerThreadNextReply.id, node: mediaViewerThreadNextReply }],
+      pageInfo: { endCursor: null, hasNextPage: false },
+    },
+  },
+};
 const postsStoryRelayData = {
   alternateComposerProfile,
   composerProfile,
@@ -3567,18 +3631,46 @@ export const PostMediaViewerCompact: Story = {
 
 export const PostMediaViewerWide: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerThreadQuery: { data: postMediaViewerThreadResponseData },
+      },
+      paginationResponses: [{ data: postMediaViewerThreadNextPageData }],
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '1번째 순서 이미지 크게 보기' }));
+    const pathname = canvas.getByTestId('presentation-story-pathname').textContent;
+    const historyLength = canvasElement.ownerDocument.defaultView!.history.length;
+    const origin = canvas.getByRole('button', { name: '1번째 순서 이미지 크게 보기' });
+    await userEvent.click(origin);
 
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
-    const detailWidth = viewer
-      .getByTestId('post-media-viewer-detail')
-      .getBoundingClientRect().width;
-    expect(detailWidth).toBeGreaterThanOrEqual(320);
-    expect(detailWidth).toBeLessThanOrEqual(420);
+    const wideDetail = viewer.getByTestId('post-media-viewer-wide-detail');
+    expect(wideDetail.getBoundingClientRect().width).toBe(320);
+    const thread = await within(wideDetail).findByTestId('post-thread');
+    const rows = Array.from(thread.children) as HTMLElement[];
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-root',
+      'post-thread-item-route-parent',
+      'post-thread-current-post-media-viewer-quote',
+      'post-thread-item-media-viewer-thread-reply',
+    ]);
+
+    const currentRow = within(
+      within(wideDetail).getByTestId('post-thread-current-post-media-viewer-quote'),
+    );
+    expect(currentRow.queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
+    expect(currentRow.queryByRole('alert')).toBeNull();
+    expect(currentRow.queryByRole('button', { name: '원문 더 보기' })).toBeNull();
+    expect(currentRow.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(
+      within(wideDetail).getByRole('button', { name: '주변 Reply 이미지 크게 보기' }),
+    ).toBeEnabled();
 
     await userEvent.keyboard('{ArrowRight}');
     expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
@@ -3587,13 +3679,88 @@ export const PostMediaViewerWide: Story = {
     expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4');
     expect(viewer.getByRole('button', { name: '다음 이미지' })).toBeDisabled();
 
-    const actionBar = viewer.getByRole('toolbar', { name: '액션 바' });
-    await userEvent.click(within(actionBar).getByRole('button', { name: '재게시' }));
+    const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
+    expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
+    expect(currentRow.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
+
+    const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
+    expect(getComputedStyle(threadScroll).overflowY).toBe('auto');
+    expect(threadScroll.scrollHeight).toBeGreaterThan(threadScroll.clientHeight);
+    threadScroll.scrollTop = threadScroll.scrollHeight;
+    expect(threadScroll.scrollTop).toBeGreaterThan(0);
+    threadScroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await expect(
+      within(wideDetail).findByText('Viewer 오른쪽 scroller로 불러온 Reply'),
+    ).resolves.toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(pathname ?? '');
+    expect(canvasElement.ownerDocument.defaultView!.history.length).toBe(historyLength);
+
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '재게시' }));
     expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
     expect(screen.getByRole('dialog')).toBeVisible();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
     expect(screen.getByRole('dialog')).toBeVisible();
+    origin.focus();
+    await waitFor(() =>
+      expect(dialog).toContainElement(document.activeElement as HTMLElement | null),
+    );
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWideThreadLoading: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerThreadQuery: {
+          data: postMediaViewerThreadResponseData,
+          delayMs: 60_000,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByRole('progressbar', { name: '답글을 불러오는 중입니다.' })).toBeVisible();
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWideThreadErrorRetry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerThreadQuery: {
+          sequence: [
+            { error: 'Viewer thread fixture failure' },
+            { data: postMediaViewerThreadResponseData },
+          ],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(await viewer.findByRole('alert')).toHaveTextContent('답글을 불러오지 못했어요');
+    await userEvent.click(viewer.getByRole('button', { name: '다시 시도' }));
+    await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
   },
   render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
 };
@@ -3623,7 +3790,7 @@ export const PostMediaViewerSingle: Story = {
 };
 
 export const PostMediaViewerLoadingAndError: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async () => {
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);

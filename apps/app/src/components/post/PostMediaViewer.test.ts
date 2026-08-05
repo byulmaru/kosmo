@@ -93,6 +93,7 @@ type ViewerProps = {
     handle: string;
   };
   selectedIndex: number;
+  wideDetail: ReactNode;
 };
 
 let PostMediaViewer: ComponentType<ViewerProps>;
@@ -214,8 +215,31 @@ describe('PostMediaViewer', () => {
       flattenStyle(byTestId('post-media-viewer-layout').props.style).flexDirection,
       'row',
     );
-    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).flexBasis, 360);
+    assert.ok(byTestId('post-media-viewer-wide-detail'));
+    assert.equal(renderer?.root.findAllByProps({ testID: 'post-media-viewer-detail' }).length, 0);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
+      320,
+    );
     assert.equal(flattenStyle(byTestId('post-media-viewer-backdrop').props.style).padding, 24);
+
+    viewport.width = 1200;
+    await render();
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
+      320,
+    );
+
+    viewport.width = 1440;
+    await render();
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-wide-detail').props.style).flexBasis,
+      350,
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-dialog').props.style).maxWidth,
+      undefined,
+    );
 
     platform.OS = 'android';
     viewport.width = 1200;
@@ -234,7 +258,29 @@ describe('PostMediaViewer', () => {
     );
   });
 
+  it('Compact detail은 내용 높이를 따르고 viewport 상한 안에서 body만 줄어든다', async () => {
+    await render();
+    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 240);
+    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).flex, undefined);
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-body-region').props.style).flex,
+      undefined,
+    );
+    assert.equal(flattenStyle(byTestId('post-media-viewer-body-region').props.style).flexShrink, 1);
+
+    viewport.height = 600;
+    await render();
+    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
+    assert.ok(byTestId('post-media-viewer-action-bar'));
+
+    viewport.height = 390;
+    await render();
+    assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
+    assert.ok(byTestId('post-media-viewer-action-bar'));
+  });
+
   it('실제 3줄 초과 원문만 펼치고 text 영역 안에서 접는다', async () => {
+    viewport.height = 390;
     await render();
     assert.equal(
       rendered('Pressable').some((node) => node.props.accessibilityLabel === '원문 더 보기'),
@@ -248,6 +294,11 @@ describe('PostMediaViewer', () => {
     );
     const more = pressable('원문 더 보기');
     assert.deepEqual(more.props.accessibilityState, { expanded: false });
+    const collapsedBody = flattenStyle(byTestId('post-media-viewer-collapsed-body').props.style);
+    assert.equal(collapsedBody.flexShrink, 1);
+    assert.equal(collapsedBody.minHeight, 0);
+    assert.equal(collapsedBody.overflow, 'hidden');
+    assert.equal(flattenStyle(more.props.style).flexShrink, 0);
     await act(async () => more.props.onPress());
     assert.ok(byTestId('post-media-viewer-body-scroll'));
     assert.deepEqual(pressable('원문 접기').props.accessibilityState, { expanded: true });
@@ -354,6 +405,7 @@ function defaultProps(): ViewerProps {
       handle: 'author',
     },
     selectedIndex: 0,
+    wideDetail: createElement('WideDetail'),
   };
 }
 

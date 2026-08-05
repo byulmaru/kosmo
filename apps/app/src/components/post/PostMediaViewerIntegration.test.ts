@@ -25,6 +25,7 @@ const replyBinding = {
   profile: null,
   surfaceRef: { current: null },
 };
+let actorRevision = 0;
 
 mock.module('expo-router', {
   exports: {
@@ -68,6 +69,10 @@ mock.module('@/lib/date', {
     formatPostDate: () => '2026. 8. 4.',
     formatTimelineTimestamp: () => '방금',
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/relay/RelayActorProvider', {
+  exports: { useRelayActor: () => ({ revision: actorRevision }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/ThemeProvider', {
@@ -155,9 +160,24 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  actorRevision = 0;
 });
 
 describe('Post Media Viewer production surface wiring', () => {
+  it('Relay actor generation이 바뀌면 열린 Viewer를 닫는다', async () => {
+    const originControl = { current: { focus: () => undefined } };
+    const post = storyPost('post-actor', 'profile-author', 'content-actor');
+
+    await render(createElement(PostLayout, { post: asLayoutKey(post) }));
+    await openViewerFromBody(originControl);
+    assert.equal(viewers().length, 1);
+
+    actorRevision = 1;
+    await update(createElement(PostLayout, { post: asLayoutKey(post) }));
+
+    assert.equal(viewers().length, 0);
+  });
+
   it('목록과 상세에서 identity·Sensitive unavailable·삭제 lifecycle로 열린 Viewer를 닫는다', async () => {
     const originControl = { current: { focus: () => undefined } };
     const first = storyPost('post-1', 'profile-1', 'content-1');
@@ -211,6 +231,7 @@ describe('Post Media Viewer production surface wiring', () => {
     await render(createElement(PostListItem, { post: asListItemKey(ordinary) }));
     await openViewerFromBody(originControl, 1);
     assertViewerTarget('action-ordinary');
+    assertViewerWideDetail('ordinary', 'ordinary-content');
     assert.equal(currentViewer().props.selectedIndex, 1);
 
     const source = storyPost('source', 'source-profile', 'source-content');
@@ -222,6 +243,7 @@ describe('Post Media Viewer production surface wiring', () => {
     const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
     await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
     assertViewerTarget('action-quote');
+    assertViewerWideDetail('quote', 'quote-content');
     assert.equal(currentViewer().props.profile.handle, 'quote-profile');
 
     const pureRepost = {
@@ -231,6 +253,7 @@ describe('Post Media Viewer production surface wiring', () => {
     await update(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
     await openViewerFromBody(originControl);
     assertViewerTarget('action-source');
+    assertViewerWideDetail('source', 'source-content');
     assert.equal(currentViewer().props.profile.handle, 'source-profile');
     assert.equal(currentViewer().props.actionBar.props.reply.processing, 'disabled');
   });
@@ -274,6 +297,12 @@ function currentViewer() {
 
 function assertViewerTarget(expectedId: string) {
   assert.equal(currentViewer().props.actionBar.props.socialActionTarget.id, expectedId);
+}
+
+function assertViewerWideDetail(postId: string, contentId: string) {
+  assert.equal(currentViewer().props.wideDetail.props.postId, postId);
+  assert.equal(currentViewer().props.wideDetail.props.contentId, contentId);
+  assert.equal(typeof currentViewer().props.wideDetail.props.onUnavailable, 'function');
 }
 
 function asListItemKey(value: unknown): PostListItem_post$key {

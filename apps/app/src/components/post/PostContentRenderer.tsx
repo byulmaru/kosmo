@@ -30,6 +30,7 @@ export function PostContentRenderer({
   document: value,
   interactive = true,
   media,
+  mediaPresentation = 'default',
   onBodyPress,
   onMediaOpen,
   onMediaUnavailable,
@@ -39,6 +40,7 @@ export function PostContentRenderer({
   document: unknown;
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
+  mediaPresentation?: 'default' | 'hidden';
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   onMediaUnavailable?: () => void;
@@ -74,19 +76,22 @@ export function PostContentRenderer({
       body
     );
 
-  if (!bodyContent && media !== null && media.length === 0) {
+  const showMedia = mediaPresentation === 'default';
+  if (!bodyContent && (!showMedia || (media !== null && media.length === 0))) {
     return null;
   }
   return (
     <View style={styles.root} testID="post-content-renderer">
       {bodyContent}
-      <PostMediaGallery
-        interactive={interactive}
-        media={media}
-        onMediaOpen={onMediaOpen}
-        onMediaUnavailable={onMediaUnavailable}
-        sensitive={document?.attrs?.sensitiveMedia ?? false}
-      />
+      {showMedia ? (
+        <PostMediaGallery
+          interactive={interactive}
+          media={media}
+          onMediaOpen={onMediaOpen}
+          onMediaUnavailable={onMediaUnavailable}
+          sensitive={document?.attrs?.sensitiveMedia ?? false}
+        />
+      ) : null}
     </View>
   );
 }
