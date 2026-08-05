@@ -83,7 +83,7 @@
 
 ### Requirement: Production과 열린 PR inventory 전환
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `PROD-548` — PROD-548은 구현 시작과 merge 직전에 production 및 열린 PR inventory를 다시 확인해야 한다(MUST). 현재 production의 Profile back·Tag remove, UniversalShell menu/back, Post detail back, ModalSheet close, ReplyComposer close, search clear/recent-delete, Post Composer media add/remove, ReactionSummary more와 compact Logout action은 공통 `IconButton`을 사용해야 한다(MUST). PR #486의 FeedbackOverlay close와 PR #510의 PostMediaViewer close/previous/next는 merge 순서와 관계없이 최종 production 또는 merge 가능한 branch에 직접 `Pressable` 구현으로 남지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `PROD-548` — PROD-548은 구현 시작과 merge 직전에 production 및 열린 PR inventory를 다시 확인해야 한다(MUST). 현재 production의 Profile back·Tag remove, UniversalShell menu/back, Post detail back, ModalSheet close, ReplyComposer close, FeedbackOverlay close, search clear/recent-delete, Post Composer media add/remove, ReactionSummary more와 compact Logout action은 공통 `IconButton`을 사용해야 한다(MUST). PR #486의 FeedbackOverlay close와 PR #510의 PostMediaViewer close/previous/next는 merge 순서와 관계없이 최종 production 또는 merge 가능한 branch에 직접 `Pressable` 구현으로 남지 않아야 한다(MUST).
 
 #### Scenario: 관련 PR이 공통 component보다 먼저 merge된다
 

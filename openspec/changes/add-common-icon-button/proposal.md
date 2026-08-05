@@ -12,10 +12,10 @@
 - visual geometry와 interaction target을 분리하고 기존 accessible name·state, focus/ref·event handler,
   pressed·disabled feedback, hit region과 absolute positioning을 보존한다.
 - 현재 production의 Profile back·Tag remove, shell menu/back, Post detail back, modal·composer close,
-  search clear/delete, media add/remove, ReactionSummary more와 compact Logout action을 공용 component로 옮긴다.
-- 열린 PR #486의 FeedbackOverlay close와 PR #510의 PostMediaViewer close/previous/next는 merge 순서에 따라
-  먼저 production이 된 action은 이 change가 흡수하고, 아직 열린 PR은 공용 component merge 뒤 자체 branch에서
-  전환한다.
+  search clear/delete, media add/remove, ReactionSummary more, compact Logout과 먼저 merge된 PR #486의
+  FeedbackOverlay close를 공용 component로 옮긴다.
+- 열린 PR #510의 PostMediaViewer close/previous/next는 공용 component merge 뒤 자체 branch에서 전환한다.
+  이후 먼저 production이 되는 대상도 이 change의 동적 소유 규칙에 따라 흡수한다.
 - Profile header/avatar whole-preview에 잘못 적용한 `IconButton`과 Profile edit OpenSpec의 PROD-548 소유를
   제거한다.
 - 상태형·icon+count·pill·tab·switch, Link·row, whole-preview/content action, compound control과 텍스트
@@ -43,8 +43,9 @@
 
 ## Impact
 
-- Universal client: `apps/app` 공용 UI primitive와 현재 production의 13개 compact action
-- Open pull requests: PR #486의 FeedbackOverlay close, PR #510의 PostMediaViewer close/previous/next
+- Universal client: `apps/app` 공용 UI primitive와 현재 production의 14개 compact action
+- Merged consumer: PR #486의 FeedbackOverlay close를 production에서 흡수
+- Open pull request: PR #510의 PostMediaViewer close/previous/next
 - Canonical design: `docs/design/accessibility.md`의 공통 `IconButton` exact contract
 - OpenSpec ownership: `add-local-profile-edit`에서 PROD-548를 분리하고 이 change가 cross-surface 완료 증거를 소유
 - Verification: component tests, 기존 surface 회귀 테스트, Storybook·Web runtime, 구현 시작·merge 직전 inventory

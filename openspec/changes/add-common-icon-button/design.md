@@ -6,8 +6,9 @@ pressed·disabled 표현을 직접 소유한다. 현재 PROD-548 branch의 `Icon
 opacity feedback을 기본 적용한다. 또한 Profile header/avatar whole-preview를 `IconButton`으로 바꿔 새 scope의
 명시적 제외와 충돌한다.
 
-현재 production에는 서로 다른 visual size, hit region, focus handler, absolute positioning과 상태를 가진 13개
-대상 action이 있다. 열린 PR #486과 #510도 4개 action을 추가한다. React Native 0.85.3의 Native Pressability는
+현재 production에는 서로 다른 visual size, hit region, focus handler, absolute positioning과 상태를 가진 14개
+대상 action이 있다. PR #486의 FeedbackOverlay close는 production에 먼저 들어와 흡수 대상이 됐고, 열린 PR
+#510은 3개 action을 추가한다. React Native 0.85.3의 Native Pressability는
 `hitSlop`으로 responder region을 확장하지만, 현재 React Native Web 0.21.2의 Pressable source에서는 같은 확장
 근거를 확인하지 못했다. 따라서 작은 visual box의 기존 `hitSlop`만 공용 Web floor의 근거로 사용할 수 없다.
 
@@ -44,7 +45,7 @@ OpenSpec이 계속 소유한다. 이 change는 그 제품 동작을 재정의하
 - Profile header/avatar preview는 canonical하게 각각 하나의 whole-image button이지만 compact `IconButton`은 아니다.
 - menu expanded, search `onPressIn`, media disabled·absolute overlay, Reaction more geometry, Logout busy·spinner는
   각 소비자가 보존해야 하는 기존 계약이다.
-- PR #486과 #510의 merge 순서는 PROD-548가 고정하지 않는다.
+- PR #486은 먼저 merge되어 production 흡수 대상이고, PR #510의 merge 순서는 PROD-548가 고정하지 않는다.
 
 ### Recommended Approach
 
@@ -72,9 +73,9 @@ State와 behavior는 Pressable contract를 통해 전달한다. Disabled는 실�
 4. media/reaction/logout action을 전환하고 visual geometry·absolute position·disabled/busy state를 검증한다.
 5. 구현 시작과 merge 직전 production/open PR inventory를 반복한다.
 
-열린 PR에는 승인된 동적 소유 규칙을 사용한다. #486 또는 #510이 먼저 merge되면 PROD-548가 최신 production을
-반영해 흡수한다. 공용 component merge 뒤에도 열린 PR은 최신 production을 반영하고 자신의 대상 action을
-merge 전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로 만들지 않는다.
+열린 PR에는 승인된 동적 소유 규칙을 사용한다. 먼저 merge된 #486은 PROD-548가 최신 production을 반영해
+흡수하고, 공용 component merge 뒤에도 열려 있는 #510은 최신 production을 반영해 자신의 대상 action을 merge
+전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로 만들지 않는다.
 
 ### Allowed Alternatives
 
@@ -112,8 +113,9 @@ merge 전에 전환한다. 별도 stack이나 PR base 변경을 기본 경로로
 1. Canonical 접근성 문서와 이 change를 PROD-548 authority에 맞춘다.
 2. `add-local-profile-edit`의 PROD-548 section과 archive dependency를 원래 Profile edit 경계로 되돌린다.
 3. 공용 component와 최소 component test를 수정한 뒤 Profile의 오범위 적용을 제거한다.
-4. 현재 production 대상 13개 action을 위험 묶음별로 전환하고 각 묶음의 회귀 검증을 수행한다.
-5. PR #486/#510 상태를 다시 읽고 동적 소유 규칙에 따라 production 또는 열린 branch의 4개 action을 전환한다.
+4. 현재 production 대상 14개 action을 위험 묶음별로 전환하고 각 묶음의 회귀 검증을 수행한다.
+5. PR #486/#510 상태를 다시 읽고 동적 소유 규칙에 따라 production의 FeedbackOverlay close와 열린 #510
+   branch의 3개 action을 전환한다.
 6. 전체 app 자동화, Storybook build·interaction과 Web runtime을 실행하고 merge 직전 inventory를 기록한다.
 7. 모든 적용 PR의 전환 증거가 준비되면 마지막 완료 증거를 소유한 PR이 이 change를 archive한다.
 

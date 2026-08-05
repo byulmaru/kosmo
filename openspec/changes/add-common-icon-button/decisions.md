@@ -77,6 +77,8 @@ PR inventory와 `design.md`의 구현 제약을 반영한다. 구현 전에는 �
   PR이 소유할 수 있다. Change archive owner는 마지막 남은 전환·검증 증거를 가진 실제 구현 PR로 결정한다.
 - Confirmation / Follow-up: 각 merge readiness 시점에 GitHub state와 production/open PR inventory를 다시 읽고
   전환 owner와 남은 task를 PR 본문에 기록한다.
+- Current Outcome (2026-08-05): PR #486이 먼저 merge되어 FeedbackOverlay close를 PROD-548 production branch가
+  흡수한다. PR #510의 close·previous·next는 아직 열린 consumer branch가 소유한다.
 
 ### Native source mapping과 runtime 완료를 분리한다
 
