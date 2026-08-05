@@ -35,10 +35,10 @@ drawer의 `프로필 편집` 진입점으로 canonical `/profile-edit` route를 
 - 테스트 제외 범위: Profile edit form/API/DB/Media 저장 조합, 기존 Shell fixture 구조 밖의 새 공용 fixture/helper/harness, 광범위한 snapshot,
   관련 없는 Shell 상태, Android·iOS 실제 runtime 자동화와 테스트 인프라 변경.
 
-- [ ] 1.1 승인된 eligibility·surface·label·icon·순서·destination 계약을 shared navigation에 구현한다.
-- [ ] 1.2 eligible/ineligible 및 full·compact·drawer·active 상태를 기존 Shell Storybook component test
+- [x] 1.1 승인된 eligibility·surface·label·icon·순서·destination 계약을 shared navigation에 구현한다.
+- [x] 1.2 eligible/ineligible 및 full·compact·drawer·active 상태를 기존 Shell Storybook component test
       surface에서 직접 검증한다.
-- [ ] 1.3 full·compact·mobile drawer에서 canonical navigation과 drawer close를 검증하는 최소 Web E2E를
+- [x] 1.3 full·compact·mobile drawer에서 canonical navigation과 drawer close를 검증하는 최소 Web E2E를
       추가한다.
 
 ## 2. PROD-660 정합성·검증·OpenSpec 완료

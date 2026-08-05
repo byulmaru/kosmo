@@ -7,6 +7,7 @@ import {
   PenLine,
   Search,
   UserRound,
+  UserRoundPen,
   UserRoundPlus,
 } from 'lucide-react-native';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -33,19 +34,24 @@ const SidebarNavigationFragment = graphql`
         relativeHandle
       }
     }
+    selectedProfileForEdit {
+      id
+    }
   }
 `;
 
-type RouteNavigationItem = {
-  href: Href;
+type NavigationItemBase = {
   Icon: LucideIcon;
   label: string;
+  requiresEditableProfile?: boolean;
+};
+
+type RouteNavigationItem = NavigationItemBase & {
+  href: Href;
   profile?: false;
 };
 
-type ProfileNavigationItem = {
-  Icon: LucideIcon;
-  label: string;
+type ProfileNavigationItem = NavigationItemBase & {
   profile: true;
 };
 
@@ -56,6 +62,12 @@ const navigation: NavigationItem[] = [
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
   { Icon: UserRound, label: '프로필', profile: true },
+  {
+    href: '/profile-edit',
+    Icon: UserRoundPen,
+    label: '프로필 편집',
+    requiresEditableProfile: true,
+  },
   { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
 ];
@@ -128,6 +140,10 @@ export function SidebarNavigation({
       >
         <View accessibilityLabel="주요 메뉴" role="navigation" style={styles.navigation}>
           {navigation.map((item) => {
+            if (item.requiresEditableProfile && data.selectedProfileForEdit == null) {
+              return null;
+            }
+
             const { active, href } = resolveItem(item);
             const control = (
               <Pressable
