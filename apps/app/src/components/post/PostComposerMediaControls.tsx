@@ -22,11 +22,15 @@ import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
 import {
+  createClipboardMediaAsset,
+  getClipboardImageFiles,
   postComposerMediaLimit,
   releaseComposerMediaPreview,
+  takeAvailableComposerMedia,
   uploadComposerMedia,
 } from './postComposerMedia';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
+import type { TextInput } from 'react-native';
 import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
 import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/PostComposerIssueMediaUploadUrlMutation.graphql';
@@ -58,10 +62,12 @@ export const emptyPostComposerMediaValue: PostComposerMediaValue = {
 export function PostComposerMediaControls({
   actions,
   disabled,
+  editorRef,
   onValueChange,
 }: {
   readonly actions: ReactNode;
   readonly disabled: boolean;
+  readonly editorRef: RefObject<TextInput | null>;
   readonly onValueChange: (value: PostComposerMediaValue) => void;
 }) {
   const theme = useTheme();
@@ -173,6 +179,70 @@ export function PostComposerMediaControls({
     }
   };
 
+  const addMediaAssets = (assets: readonly ImagePicker.ImagePickerAsset[]) => {
+    if (!mounted.current || disabled) {
+      return;
+    }
+
+    const selected = takeAvailableComposerMedia(assets, mediaRef.current.length).map((asset) => ({
+      altText: '',
+      asset,
+      key: `composer-media-${++nextMediaKey.current}`,
+      state: 'uploading' as const,
+    }));
+    if (selected.length === 0) {
+      return;
+    }
+
+    setError(null);
+    updateMedia((items) => [...items, ...selected]);
+    for (const item of selected) {
+      void uploadMedia(item.key, item.asset);
+    }
+  };
+
+  const addClipboardMediaFiles = (files: readonly File[]) => {
+    if (!mounted.current || disabled) {
+      return;
+    }
+
+    const selected = takeAvailableComposerMedia(files, mediaRef.current.length);
+    if (selected.length === 0) {
+      return;
+    }
+
+    addMediaAssets(selected.map((file) => createClipboardMediaAsset(file)));
+  };
+
+  const addClipboardMediaFilesRef = useRef(addClipboardMediaFiles);
+  addClipboardMediaFilesRef.current = addClipboardMediaFiles;
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const editor = editorRef.current as unknown as HTMLElement | null;
+    if (!editor) {
+      return;
+    }
+
+    const onPaste = (event: ClipboardEvent) => {
+      const files = getClipboardImageFiles(
+        event.clipboardData ? Array.from(event.clipboardData.items) : null,
+      );
+      if (files.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      addClipboardMediaFilesRef.current(files);
+    };
+
+    editor.addEventListener('paste', onPaste);
+    return () => editor.removeEventListener('paste', onPaste);
+  }, [editorRef]);
+
   const selectMedia = async () => {
     const availableAtOpen = postComposerMediaLimit - mediaRef.current.length;
     if (availableAtOpen <= 0 || disabled || selectingMedia.current) {
@@ -192,17 +262,7 @@ export function PostComposerMediaControls({
         return;
       }
 
-      const availableNow = postComposerMediaLimit - mediaRef.current.length;
-      const selected = result.assets.slice(0, availableNow).map((asset) => ({
-        altText: '',
-        asset,
-        key: `composer-media-${++nextMediaKey.current}`,
-        state: 'uploading' as const,
-      }));
-      updateMedia((items) => [...items, ...selected]);
-      for (const item of selected) {
-        void uploadMedia(item.key, item.asset);
-      }
+      addMediaAssets(takeAvailableComposerMedia(result.assets, mediaRef.current.length));
     } catch {
       if (mounted.current) {
         setError('이미지를 선택하지 못했습니다.');
@@ -332,6 +392,7 @@ export function PostComposerMediaItems({
             <Image
               accessibilityIgnoresInvertColors
               accessibilityLabel={`첨부 이미지 ${index + 1} 미리보기`}
+              accessibilityRole="image"
               source={{ uri: item.asset.uri }}
               style={styles.mediaPreview}
             />

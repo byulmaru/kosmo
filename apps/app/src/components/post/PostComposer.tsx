@@ -514,6 +514,7 @@ function PostComposerContents({
         <PostComposerMediaControls
           actions={replyMode ? null : submitActions}
           disabled={submitting}
+          editorRef={editor}
           key={mediaGeneration}
           onValueChange={setMedia}
         />
