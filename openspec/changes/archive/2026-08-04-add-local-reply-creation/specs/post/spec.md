@@ -2,7 +2,7 @@
 
 ### Requirement: Plain Text post creation
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-424`, `PROD-461`, `PROD-554` 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText`, 선택적 Media item과 Sensitive Media, 선택적 concrete `Post` `replyParentId`로 versioned canonical document의 일반 Post 또는 Reply를 작성할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-424`, `PROD-461`, `PROD-554` 로그인했고 active profile이 있는 사용자는 Plain Text UX의 `bodyText`, 선택적 Media item과 Sensitive Media, 선택적 concrete `Post` `replyParentId`로 versioned canonical document의 일반 Post 또는 Reply를 작성할 수 있어야 한다(MUST). selected Profile은 Local 또는 Remote일 수 있으며(MUST), GraphQL `usingProfile` entry point가 보장한 Active Account, membership과 selected Profile 조회 가능 상태를 resolver가 중복 검증하면 안 된다(MUST NOT).
 
 #### Scenario: Plain Text 게시글 작성 성공
 
@@ -13,9 +13,17 @@
 - **AND** 게시글 공개 범위는 입력받은 `visibility` 값이다
 - **AND** 시스템은 새 `post_content` 행을 생성한다
 - **AND** `post.current_content_id`는 생성된 콘텐츠를 참조한다
+- **AND** Post와 첫 PostContent는 같은 transaction에서 생성되며 하나라도 실패하면 함께 rollback한다
 - **AND** Media item은 입력 순서의 V1 Media node가 되고 Sensitive Media는 document root attr가 된다
 - **AND** `post.reply_parent_id`와 `post.repost_source_id`는 `null`이다
 - **AND** mutation은 `CreatePostPayload.post`로 생성된 `Post`를 반환한다
+
+#### Scenario: Remote selected Profile로 게시글 작성
+
+- **WHEN** Active Account의 Member인 Active/Normal Remote Profile이 selected Profile인 상태에서 유효한 입력으로 `createPost`를 호출한다
+- **THEN** 시스템은 selected Profile을 Author로 하는 Post를 생성한다
+- **AND** Media의 Profile이 selected Profile과 달라도 Upload Account가 같으면 허용한다
+- **AND** selected Profile 또는 Media Profile의 Instance Type만으로 요청을 거부하지 않는다
 
 #### Scenario: Plain Text Reply 작성 성공
 
