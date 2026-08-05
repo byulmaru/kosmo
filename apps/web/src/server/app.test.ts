@@ -21,6 +21,7 @@ const {
   discovery,
   federationFetch,
   revokeSession,
+  setInboundObservabilityReporter,
   setNotificationEffectErrorReporter,
 } = vi.hoisted(() => ({
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
@@ -34,6 +35,7 @@ const {
     vi.fn<
       (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
     >(),
+  setInboundObservabilityReporter: vi.fn(),
   setNotificationEffectErrorReporter: vi.fn(),
 }));
 
@@ -51,6 +53,7 @@ vi.mock('@kosmo/core/services', () => ({
 
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
+  setInboundObservabilityReporter,
 }));
 
 vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedError }));
@@ -70,6 +73,9 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
+  expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
+    captureException: captureUnexpectedError,
+  });
   expect(setNotificationEffectErrorReporter).toHaveBeenCalledWith(captureNotificationEffectError);
 });
 

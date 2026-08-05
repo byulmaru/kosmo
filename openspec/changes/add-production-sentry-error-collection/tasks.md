@@ -39,17 +39,19 @@
 
 **Guardrails**
 
-- Android·iOS platform에서는 Sentry SDK를 초기화하거나 native 범위를 선행하지 않는다.
+- 현재 Web slice에서는 Android·iOS platform의 Sentry SDK를 초기화하지 않고 Native 범위를 선행하지 않는다.
+  Native 관측·debug symbol은 PROD-483의 별도 release gate에서 결정·검증한다.
 - Sentry SDK event는 `beforeSend` 정제 없이 그대로 전달하고 console·UI·network breadcrumb만 제거한다.
 - 업로드 token은 client bundle에 포함하지 않고 local/test는 기본 비전송한다.
 - 기존 `GraphQLErrorBoundary`의 오류 화면·문구·재시도 행동을 변경하지 않는다.
 
 **Verification**
 
-- Web 전용 초기화와 native 관측 제외, event 전달 설정, React boundary capture와 기존 fallback/retry를 단위·Storybook 또는 관련 UI test로 검증한다.
+- Web 전용 초기화와 현재 Native entry의 비변경 경계, event 전달 설정, React boundary capture와 기존 fallback/retry를
+  단위·Storybook 또는 관련 UI test로 검증한다. Native runtime 관측 완료를 주장하지 않는다.
 - Relay, TypeScript, Expo Web export와 Web source map 정적 검증을 통과시킨다.
 
-- [x] 2.1 Web-only Sentry 초기화·event 전달과 native 관측 제외 경계를 구현하고 배포 metadata 설정 테스트를 추가한다.
+- [x] 2.1 Web Sentry 초기화·event 전달과 현재 Native entry 비변경 경계를 구현하고 배포 metadata 설정 테스트를 추가한다.
 - [x] 2.2 공용 React 오류 경계의 Web capture를 기존 fallback·retry 동작에 연결하고 중복 없는 capture를 검증한다.
 - [x] 2.3 Expo Web build가 외부 source map을 생성하고 업로드 뒤 제공 asset에서 map과 참조를 제거하도록 정렬한다.
 
@@ -69,7 +71,7 @@ API, Web BFF와 Web browser가 동일 커밋 release와 일관된 환경/runtime
 
 - source map 업로드 token은 BuildKit secret으로만 소비하고 저장소·로그·image·Web asset에 남기지 않는다.
 - 환경별 Vault dev/prod 객체의 `EXPO_PUBLIC_SENTRY_DSN`을 API, Web BFF와 Web build가 공유한다. 공식 Vault Action이 DSN을 조회하고 build 전용 organization/project slug와 upload token은 각각 GitHub repository variables/secret에서 관리한다. 공개 설정은 build arg, token만 BuildKit secret으로 전달하고 API와 Web BFF는 기존 환경 `env` Secret에서 같은 DSN 변수를 읽는다. Build role이 대응 환경 Vault 객체 전체를 읽는 권한 확대는 사용자 결정으로 수용한다.
-- Android·iOS PROD-483 범위는 통합 완료 조건에 포함하지 않는다.
+- Android·iOS PROD-483의 Native 관측·debug symbol은 이 Web 통합 완료 조건에 포함하지 않으며, 별도 release gate로 남긴다.
 - 실제 event, release, Web symbolication, event 전달 결과와 알림 전달을 확인하기 전에는 부모 통합 검증과 OpenSpec archive를 완료하지 않는다.
 
 **Verification**

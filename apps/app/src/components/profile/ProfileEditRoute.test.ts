@@ -17,6 +17,7 @@ type MutationConfig = {
 type ScreenProps = Record<string, unknown> & {
   initialValue: Record<string, unknown> & {
     followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
+    tags: ReadonlyArray<string>;
   };
   onAvatarEdit: () => Promise<void>;
   onAvatarRetry: () => void;
@@ -24,11 +25,13 @@ type ScreenProps = Record<string, unknown> & {
   onChange: (value: Record<string, unknown>) => void;
   onHeaderEdit: () => Promise<void>;
   onSubmit: (value: Record<string, unknown>) => void;
+  serverErrors?: { tags?: string };
   showTags: boolean;
   submitState: { kind: string };
   value: Record<string, unknown> & {
     avatar: { kind: string; failure?: unknown; uploadState?: string };
     header: { kind: string; failure?: unknown; uploadState?: string };
+    tags: ReadonlyArray<string>;
   };
 };
 
@@ -76,6 +79,7 @@ let queryData: {
     header: { id: string; url: string | null } | null;
     id: string;
     relativeHandle: string;
+    tags: ReadonlyArray<{ id: string; name: string }>;
   } | null;
 };
 let renderer: ReactTestRenderer | null = null;
@@ -219,6 +223,10 @@ const editableQueryData = () => ({
     header: { id: 'media-header-current', url: 'https://media.example/header-current' },
     id: 'profile-owner',
     relativeHandle: '@owner',
+    tags: [
+      { id: 'hashtag-fediverse', name: 'Fediverse' },
+      { id: 'hashtag-development', name: '개발' },
+    ],
   },
 });
 
@@ -292,19 +300,20 @@ describe('ProfileEditRoute', () => {
     assert.equal(screenProps, null);
   });
 
-  it('server 초기값을 production form에 hydrate하고 Tag를 숨긴다', async () => {
+  it('server Profile Tag를 production form에 hydrate하고 editor를 보인다', async () => {
     await renderRoute();
 
     const props = requireScreenProps();
-    assert.equal(props.showTags, false);
+    assert.equal(props.showTags, true);
     assert.deepEqual(props.value, {
       avatar: { kind: 'current', previewUri: 'https://media.example/avatar-current' },
       bio: '기존 소개',
       displayName: '기존 이름',
       followPolicy: 'OPEN',
       header: { kind: 'current', previewUri: 'https://media.example/header-current' },
-      tags: [],
+      tags: ['Fediverse', '개발'],
     });
+    assert.deepEqual(props.initialValue.tags, ['Fediverse', '개발']);
     assert.equal(typeof props.onAvatarRemove, 'function');
     assert.equal(typeof props.onHeaderRetry, 'function');
   });
@@ -365,6 +374,7 @@ describe('ProfileEditRoute', () => {
       bio: ' 저장할 소개 ',
       displayName: '새 이름',
       followPolicy: 'APPROVAL_REQUIRED',
+      tags: ['Fediverse', '새태그'],
     };
     await act(async () => requireScreenProps().onChange(changed));
     let updateAttempts = 0;
@@ -378,7 +388,17 @@ describe('ProfileEditRoute', () => {
         config.onCompleted({} as never, [new Error('save failed')]);
         return;
       }
-      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never);
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@updated',
+            tags: [
+              { id: 'hashtag-fediverse', name: 'Fediverse' },
+              { id: 'hashtag-new', name: '새태그' },
+            ],
+          },
+        },
+      } as never);
     });
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
@@ -393,9 +413,9 @@ describe('ProfileEditRoute', () => {
         displayName: '새 이름',
         followPolicy: 'APPROVAL_REQUIRED',
         headerId: 'media-issued-1',
+        tags: ['Fediverse', '새태그'],
       },
     });
-    assert.equal('tags' in ((firstUpdate?.variables.input as object | undefined) ?? {}), false);
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
     assert.equal(requireScreenProps().submitState.kind, 'idle');
@@ -407,6 +427,51 @@ describe('ProfileEditRoute', () => {
     assert.equal(issued, 3);
     assert.equal(fetchMock.mock.callCount(), 3);
     assert.deepEqual(routerReplacements, ['/@updated']);
+    assert.deepEqual(requireScreenProps().value.tags, ['Fediverse', '새태그']);
+    assert.deepEqual(requireScreenProps().initialValue.tags, ['Fediverse', '새태그']);
+  });
+
+  it('Tag server validation 오류에서 draft를 보존하고 수정 후 server 표시 이름으로 정렬한다', async () => {
+    await renderRoute();
+    const draft = { ...requireScreenProps().value, tags: ['Foo', 'foo'] };
+    await act(async () => requireScreenProps().onChange(draft));
+
+    let attempts = 0;
+    mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) => {
+      attempts += 1;
+      if (attempts === 1) {
+        config.onCompleted({} as never, [
+          {
+            message: '중복된 Profile Tag입니다.',
+            extensions: { code: 'VALIDATION', field: 'tags.1' },
+          },
+        ]);
+        return;
+      }
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@owner',
+            tags: [{ id: 'hashtag-foo', name: 'Foo' }],
+          },
+        },
+      } as never);
+    });
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    assert.equal(requireScreenProps().serverErrors?.tags, '중복된 Profile Tag입니다.');
+    assert.deepEqual(requireScreenProps().value.tags, ['Foo', 'foo']);
+    assert.deepEqual(toastMessages, []);
+
+    await act(async () =>
+      requireScreenProps().onChange({ ...requireScreenProps().value, tags: ['foo'] }),
+    );
+    assert.equal(requireScreenProps().serverErrors?.tags, undefined);
+
+    await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
+    assert.equal(attempts, 2);
+    assert.deepEqual(requireScreenProps().value.tags, ['Foo']);
+    assert.deepEqual(requireScreenProps().initialValue.tags, ['Foo']);
   });
 
   it('allowlisted signed PUT 실패를 Profile field 오류와 retry name으로 연결한다', async () => {
@@ -545,7 +610,17 @@ describe('ProfileEditRoute', () => {
     );
     triggerBeforeRemoveOnReplace = true;
     mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
-      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@updated',
+            tags: [
+              { id: 'hashtag-fediverse', name: 'Fediverse' },
+              { id: 'hashtag-development', name: '개발' },
+            ],
+          },
+        },
+      } as never),
     );
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
@@ -563,7 +638,17 @@ describe('ProfileEditRoute', () => {
     triggerBeforeRemoveOnReplace = true;
     deferBeforeRemoveOnReplace = true;
     mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
-      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@updated',
+            tags: [
+              { id: 'hashtag-fediverse', name: 'Fediverse' },
+              { id: 'hashtag-development', name: '개발' },
+            ],
+          },
+        },
+      } as never),
     );
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
@@ -593,7 +678,17 @@ describe('ProfileEditRoute', () => {
     triggerBeforeRemoveOnReplace = true;
     deferBeforeRemoveOnReplace = true;
     mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
-      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@updated',
+            tags: [
+              { id: 'hashtag-fediverse', name: 'Fediverse' },
+              { id: 'hashtag-development', name: '개발' },
+            ],
+          },
+        },
+      } as never),
     );
 
     await act(async () => requireScreenProps().onSubmit(requireScreenProps().value));
@@ -643,7 +738,17 @@ describe('ProfileEditRoute', () => {
       }),
     );
     mutationHandlers.set('ProfileEditRouteUpdateProfileMutation', (config) =>
-      config.onCompleted({ updateProfile: { profile: { relativeHandle: '@updated' } } } as never),
+      config.onCompleted({
+        updateProfile: {
+          profile: {
+            relativeHandle: '@updated',
+            tags: [
+              { id: 'hashtag-fediverse', name: 'Fediverse' },
+              { id: 'hashtag-development', name: '개발' },
+            ],
+          },
+        },
+      } as never),
     );
 
     noOpReplace = true;
@@ -670,6 +775,7 @@ describe('ProfileEditRoute', () => {
           displayName: '기존 이름',
           followPolicy: 'APPROVAL_REQUIRED',
           headerId: 'media-issued-1',
+          tags: ['Fediverse', '개발'],
         },
         {
           avatarId: 'media-issued-2',
@@ -677,6 +783,7 @@ describe('ProfileEditRoute', () => {
           displayName: '기존 이름',
           followPolicy: 'APPROVAL_REQUIRED',
           headerId: 'media-issued-1',
+          tags: ['Fediverse', '개발'],
         },
       ],
     );

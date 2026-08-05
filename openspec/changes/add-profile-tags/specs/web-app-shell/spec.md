@@ -26,7 +26,9 @@
 #### Scenario: Wrap Profile Tags without overflow
 
 - **WHEN** 좁은 화면에서 긴 허용값 또는 임의 개수의 Profile Tag를 모두 표시한다
-- **THEN** chip 목록은 여러 줄로 감싸지고 Profile 본문을 가로로 넘치지 않는다
+- **THEN** chip 목록은 chip 사이에서 여러 줄로 감싸지고 모든 TagChip 관계를 유지하며 Profile 본문을 가로로 넘치지 않는다
+- **AND** 개별 TagChip은 시각 높이 `32`와 한 줄을 유지하고 너비를 넘는 표시 text를 tail ellipsis로 생략한다
+- **AND** 개별 TagChip의 접근성 이름은 생략하지 않은 전체 `#<Display Hashtag Name>`을 제공한다
 
 #### Scenario: Default avatar fallback
 

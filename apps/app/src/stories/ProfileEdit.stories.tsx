@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { expect, waitFor, within } from 'storybook/test';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
@@ -152,6 +152,16 @@ function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyA
   const [tags, setTags] = useState(initialTags);
 
   return <ProfileTagEditor onChange={setTags} tags={tags} />;
+}
+
+function ProfileTagWrappingHarness() {
+  const maxLengthTag = '가'.repeat(20);
+
+  return (
+    <View style={{ width: 180 }} testID="profile-tag-layout-fixture">
+      <ProfileTagEditor onChange={() => undefined} tags={['가', '나', maxLengthTag]} />
+    </View>
+  );
 }
 
 function expectResponsiveSurface(
@@ -336,23 +346,6 @@ export const TextFieldsAndSubmitGate: Story = {
   },
 };
 
-export const ProductionTagsHidden: Story = {
-  render: () => (
-    <ProfileEditScreen
-      initialValue={initialDraft}
-      onChange={() => undefined}
-      onSubmit={() => undefined}
-      showTags={false}
-      value={{ ...initialDraft, bio: 'production draft' }}
-    />
-  ),
-  play: ({ canvasElement }) => {
-    expect(
-      within(canvasElement).queryByRole('textbox', { name: '프로필 태그' }),
-    ).not.toBeInTheDocument();
-  },
-};
-
 export const DiscardConfirmation: Story = {
   render: () => (
     <ProfileEditDiscardDialog onContinue={() => undefined} onDiscard={() => undefined} visible />
@@ -521,6 +514,66 @@ export const TagAddDuplicateAndRemove: Story = {
 
     await userEvent.click(remove);
     expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagRemovalKeyboardParity: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['Foo', 'Bar', 'Baz']} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const enterAction = canvas.getByRole('button', { name: '#Baz 제거' });
+    expect(enterAction).toHaveFocus();
+    expect(getComputedStyle(enterAction).outlineStyle).not.toBe('none');
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.queryByText('#Baz')).not.toBeInTheDocument();
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const spaceAction = canvas.getByRole('button', { name: '#Bar 제거' });
+    expect(spaceAction).toHaveFocus();
+    await userEvent.keyboard(' ');
+    expect(canvas.queryByText('#Bar')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '#Foo 제거' }));
+    expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagAdjacentAndWrappingTargetsDoNotOverlap: Story = {
+  render: () => <ProfileTagWrappingHarness />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const fixture = canvas.getByTestId('profile-tag-layout-fixture');
+    const actions = canvas.getAllByRole('button', { name: /제거$/ });
+    const [first, second, wrapped] = actions.map((action) => action.getBoundingClientRect());
+    const maxLengthTag = '가'.repeat(20);
+    const maxLengthText = canvas.getByText(`#${maxLengthTag}`);
+    const maxLengthChip = maxLengthText.parentElement!;
+    const fixtureBounds = fixture.getBoundingClientRect();
+    const maxLengthChipBounds = maxLengthChip.getBoundingClientRect();
+    const maxLengthTextStyle = getComputedStyle(maxLengthText);
+
+    expect(actions).toHaveLength(3);
+    expect(Math.round(first!.top)).toBe(Math.round(second!.top));
+    expect(first!.right).toBeLessThanOrEqual(second!.left);
+    expect(wrapped!.top).toBeGreaterThanOrEqual(first!.bottom);
+    expect(fixture.scrollWidth).toBeLessThanOrEqual(fixture.clientWidth + 1);
+    expect(maxLengthChipBounds.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(wrapped!.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(maxLengthChipBounds.height).toBe(32);
+    expect(maxLengthTextStyle.whiteSpace).toBe('nowrap');
+    expect(maxLengthTextStyle.textOverflow).toBe('ellipsis');
+    expect(maxLengthTextStyle.overflow).toBe('hidden');
+    expect(maxLengthText.scrollWidth).toBeGreaterThan(maxLengthText.clientWidth);
+    expect(canvas.getByLabelText(`#${maxLengthTag}`)).toBe(maxLengthText);
+    for (const target of [first!, second!, wrapped!]) {
+      expect(Math.round(target.width)).toBe(32);
+      expect(Math.round(target.height)).toBe(32);
+    }
   },
 };
 

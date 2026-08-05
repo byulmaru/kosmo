@@ -14,6 +14,11 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import {
+  observeInboundExternalFailure,
+  observeInboundNoop,
+  observeInboundRejected,
+} from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
 
@@ -31,6 +36,12 @@ export const handleInboundDelete = async (
   const objectUri = objectHref ? new URL(objectHref) : null;
 
   if (!isHttpUri(actorUri) || !isHttpUri(objectUri)) {
+    observeInboundRejected({
+      activityType: 'Delete',
+      handler: 'delete',
+      phase: 'validation',
+      reasonCode: 'invalid_activity_identity',
+    });
     return;
   }
 
@@ -39,10 +50,30 @@ export const handleInboundDelete = async (
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   });
+  if (embedded === null && !activity.objectId) {
+    observeInboundExternalFailure({
+      activityType: 'Delete',
+      actorOrigin: actorUri.origin,
+      handler: 'delete',
+      objectOrigin: objectUri.origin,
+      phase: 'object_lookup',
+      reasonCode: 'delete_object_lookup_failed',
+    });
+    // Without the direct object identity, a failed lookup cannot authenticate the target.
+    return;
+  }
   if (
     embedded !== null &&
     (!(embedded instanceof Tombstone) || embedded.id?.href !== objectUri.href)
   ) {
+    observeInboundRejected({
+      activityType: 'Delete',
+      actorOrigin: actorUri.origin,
+      handler: 'delete',
+      objectOrigin: objectUri.origin,
+      phase: 'protocol',
+      reasonCode: 'delete_object_not_matching_tombstone',
+    });
     return;
   }
 
@@ -64,6 +95,14 @@ export const handleInboundDelete = async (
       .then(first);
 
     if (!row || row.actorUri !== actorUri.href || row.instanceKind !== InstanceKind.ACTIVITYPUB) {
+      observeInboundNoop({
+        activityType: 'Delete',
+        actorOrigin: actorUri.origin,
+        handler: 'delete',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'delete_target_missing_or_mismatched',
+      });
       return;
     }
 
