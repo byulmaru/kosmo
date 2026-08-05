@@ -1,5 +1,6 @@
 import { releaseComposerMediaPreview } from '@/components/post/postComposerMedia';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 import type { ProfileEditImageDraft } from './profileEditState';
 
 export type ProfileEditRouteImage = {
@@ -61,13 +62,18 @@ export function completeProfileEditImageUpload(
   return {
     ...current,
     mediaId,
-    presentation: { ...current.presentation, uploadState: 'ready' },
+    presentation: {
+      kind: 'replacement',
+      previewUri: current.presentation.previewUri,
+      uploadState: 'ready',
+    },
   };
 }
 
 export function failProfileEditImageUpload(
   current: ProfileEditRouteImage,
   generation: number,
+  failure: ImageUploadFailure,
 ): ProfileEditRouteImage {
   if (current.generation !== generation || current.presentation.kind !== 'replacement') {
     return current;
@@ -76,7 +82,7 @@ export function failProfileEditImageUpload(
   return {
     ...current,
     mediaId: null,
-    presentation: { ...current.presentation, uploadState: 'error' },
+    presentation: { ...current.presentation, failure, uploadState: 'error' },
   };
 }
 
@@ -89,7 +95,11 @@ export function retryProfileEditImageUpload(current: ProfileEditRouteImage): Pro
     ...current,
     generation: current.generation + 1,
     mediaId: null,
-    presentation: { ...current.presentation, uploadState: 'uploading' },
+    presentation: {
+      kind: 'replacement',
+      previewUri: current.presentation.previewUri,
+      uploadState: 'uploading',
+    },
   };
 }
 

@@ -142,7 +142,7 @@ test('submit gate는 callback, dirty, errors, upload과 saving 상태를 모두 
           kind: 'replacement',
           previewUri: 'avatar://error',
           uploadState: 'error',
-          error: '실패',
+          failure: { stage: 'transfer', reason: 'transient' },
         },
       },
     }),

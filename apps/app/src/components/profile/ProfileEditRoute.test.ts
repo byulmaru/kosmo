@@ -29,8 +29,8 @@ type ScreenProps = Record<string, unknown> & {
   showTags: boolean;
   submitState: { kind: string };
   value: Record<string, unknown> & {
-    avatar: { kind: string; uploadState?: string };
-    header: { kind: string; uploadState?: string };
+    avatar: { kind: string; failure?: unknown; uploadState?: string };
+    header: { kind: string; failure?: unknown; uploadState?: string };
     tags: ReadonlyArray<string>;
   };
 };
@@ -355,6 +355,10 @@ describe('ProfileEditRoute', () => {
     await act(async () => requireScreenProps().onAvatarEdit());
     await flush();
     assert.equal(requireScreenProps().value.avatar.uploadState, 'error');
+    assert.deepEqual(requireScreenProps().value.avatar.failure, {
+      reason: 'transient',
+      stage: 'complete',
+    });
     assert.equal(issued, 2);
     assert.equal(fetchMock.mock.callCount(), 2);
 
@@ -468,6 +472,48 @@ describe('ProfileEditRoute', () => {
     assert.equal(attempts, 2);
     assert.deepEqual(requireScreenProps().value.tags, ['Foo']);
     assert.deepEqual(requireScreenProps().initialValue.tags, ['Foo']);
+  });
+
+  it('allowlisted signed PUT 실패를 Profile field 오류와 retry name으로 연결한다', async () => {
+    let issued = 0;
+    let completed = 0;
+    mutationHandlers.set('ProfileEditRouteIssueMediaUploadUrlMutation', (config) => {
+      issued += 1;
+      config.onCompleted({
+        issueMediaUploadUrl: {
+          media: { id: `media-issued-${issued}` },
+          uploadUrl: `https://upload.example/${issued}`,
+        },
+      } as never);
+    });
+    mutationHandlers.set('ProfileEditRouteCompleteMediaUploadMutation', (config) => {
+      completed += 1;
+      config.onCompleted({ completeMediaUpload: { media: { state: 'READY' } } } as never);
+    });
+    const fetchMock = mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: 'size_limit_exceeded', message: 'storage secret' },
+          }),
+          { status: 413, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    await renderRoute();
+
+    pickerResult = { canceled: false, assets: [asset('blob:https://kosmo.example/avatar')] };
+    await act(async () => requireScreenProps().onAvatarEdit());
+    await flush();
+
+    assert.equal(issued, 1);
+    assert.equal(fetchMock.mock.callCount(), 1);
+    assert.equal(completed, 0);
+    assert.deepEqual(requireScreenProps().value.avatar.failure, {
+      reason: 'file-too-large',
+      stage: 'transfer',
+    });
   });
 
   it('변경된 draft의 닫기, Web, Android 이탈을 같은 확인 dialog로 막는다', async () => {

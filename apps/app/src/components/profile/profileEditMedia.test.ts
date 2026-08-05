@@ -67,11 +67,16 @@ test('실패한 field만 같은 asset으로 새 generation에서 재시도한다
     createProfileEditRouteImage(null),
     asset('file:///avatar.webp'),
   );
-  const failed = failProfileEditImageUpload(replacing, replacing.generation);
+  const failure = { stage: 'transfer' as const, reason: 'file-too-large' as const };
+  const failed = failProfileEditImageUpload(replacing, replacing.generation, failure);
   assert.equal(failed.presentation.kind, 'replacement');
   assert.equal(
     failed.presentation.kind === 'replacement' && failed.presentation.uploadState,
     'error',
+  );
+  assert.deepEqual(
+    failed.presentation.kind === 'replacement' && failed.presentation.failure,
+    failure,
   );
 
   const retried = retryProfileEditImageUpload(failed);
@@ -81,6 +86,10 @@ test('실패한 field만 같은 asset으로 새 generation에서 재시도한다
   assert.equal(
     retried.presentation.kind === 'replacement' && retried.presentation.uploadState,
     'uploading',
+  );
+  assert.equal(
+    retried.presentation.kind === 'replacement' && retried.presentation.failure,
+    undefined,
   );
 });
 
