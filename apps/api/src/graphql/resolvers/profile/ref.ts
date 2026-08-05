@@ -77,7 +77,7 @@ Profile.implement({
       resolve: (profile, _, ctx) =>
         profileDefaultPostVisibilityLoader(ctx)
           .load(profile.id)
-          .then((row) => (row ? (row.defaultPostVisibility ?? PostVisibility.UNLISTED) : null)),
+          .then((row) => (row ? (profile.defaultPostVisibility ?? PostVisibility.UNLISTED) : null)),
     }),
     createdAt: t.expose('createdAt', {
       type: 'DateTime',

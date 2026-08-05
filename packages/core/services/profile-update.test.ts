@@ -479,21 +479,6 @@ test('Remote Profile은 기본 Post Visibility를 저장할 수 없다', async (
   );
 });
 
-test('Profile 기본 Post Visibility DB 제약은 DIRECT를 거부한다', async () => {
-  const { profile } = await createProfileFixture();
-
-  await assert.rejects(
-    db
-      .update(Profiles)
-      .set({ defaultPostVisibility: PostVisibility.DIRECT })
-      .where(eq(Profiles.id, profile.id)),
-    (error) => {
-      const cause = error && typeof error === 'object' && 'cause' in error ? error.cause : error;
-      return cause && typeof cause === 'object' && 'code' in cause && cause.code === '23514';
-    },
-  );
-});
-
 test('같은 canonical Hashtag의 최초 display name을 유지한다', async () => {
   const first = await createProfileFixture();
   const second = await createProfileFixture();

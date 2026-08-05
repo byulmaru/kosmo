@@ -395,16 +395,7 @@ export const Profiles = pgTable(
     followingCount: integer('following_count').notNull().default(0),
     createdAt: createdAt(),
   },
-  (table) => [
-    unique().on(table.instanceId, table.normalizedHandle),
-    check(
-      'profile_default_post_visibility_check',
-      sql`
-        ${table.defaultPostVisibility} IN ('PUBLIC', 'UNLISTED', 'FOLLOWERS')
-        OR ${table.defaultPostVisibility} IS NULL
-      `,
-    ),
-  ],
+  (table) => [unique().on(table.instanceId, table.normalizedHandle)],
 );
 
 export const ProfileFollows = pgTable(

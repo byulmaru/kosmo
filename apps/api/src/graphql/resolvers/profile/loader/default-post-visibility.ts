@@ -1,16 +1,14 @@
 import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
-import type { PostVisibility } from '@kosmo/core/enums';
 import type { UserContext } from '@/context';
 
-type DefaultPostVisibilityRow = {
+type DefaultPostVisibilityAccessRow = {
   profileId: string;
-  defaultPostVisibility: PostVisibility | null;
 };
 
 export const profileDefaultPostVisibilityLoader = (ctx: UserContext) =>
-  ctx.loader<string, DefaultPostVisibilityRow, string, true>({
+  ctx.loader<string, DefaultPostVisibilityAccessRow, string, true>({
     name: 'profile.defaultPostVisibility',
     nullable: true,
     load: async (profileIds) => {
@@ -22,7 +20,6 @@ export const profileDefaultPostVisibilityLoader = (ctx: UserContext) =>
       return db
         .select({
           profileId: Profiles.id,
-          defaultPostVisibility: Profiles.defaultPostVisibility,
         })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))

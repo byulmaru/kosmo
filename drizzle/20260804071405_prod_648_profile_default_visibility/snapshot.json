@@ -4036,13 +4036,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "post"
-    },
-    {
-      "value": "\n        \"default_post_visibility\" IN ('PUBLIC', 'UNLISTED', 'FOLLOWERS')\n        OR \"default_post_visibility\" IS NULL\n      ",
-      "name": "profile_default_post_visibility_check",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "profile"
     }
   ],
   "renames": []
