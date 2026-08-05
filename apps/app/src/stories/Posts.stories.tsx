@@ -4812,7 +4812,7 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
       const failedFirst = await primary.findByLabelText('첨부 이미지 1, 업로드 실패');
       const failedSecond = await primary.findByLabelText('첨부 이미지 2, 업로드 실패');
       await userEvent.click(
-        within(failedFirst).getByRole('button', { name: '첨부 이미지 1 업로드 재시도' }),
+        within(failedFirst).getByRole('button', { name: '1번째 이미지 업로드 다시 시도' }),
       );
       await waitFor(() => {
         expect(primary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();

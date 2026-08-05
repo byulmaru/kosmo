@@ -1,5 +1,5 @@
-import type { ImagePickerAsset } from 'expo-image-picker';
 import { asImageUploadError } from '@/components/media/imageUploadErrors';
+import type { ImagePickerAsset } from 'expo-image-picker';
 
 export const postComposerMediaLimit = 4;
 
