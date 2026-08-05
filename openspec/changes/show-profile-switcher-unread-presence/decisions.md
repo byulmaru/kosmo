@@ -50,12 +50,14 @@
 - Status: Active
 - Context / Problem: 기존 navigation badge는 selected Profile의 8px dot과 실제 count accessible name을
   제공하지만, picker는 모든 Profile의 12-unit dot과 boolean accessible name을 요구한다.
-- Decision Outcome: picker presentation은 기존 셸 badge 컴포넌트와 controller를 재사용하지 않는다. Profile
-  선택 성공 뒤 기존 `resetActor`, 셸 badge와 알림 목록의 서버 재조회 수렴 계약은 변경하지 않는다.
+- Decision Outcome: picker는 기존 셸 badge 컴포넌트와 controller를 재사용하지 않는다. 두 dot은
+  `accent`·원형·접근성 숨김만 presentation-only `UnreadDot`으로 공유하고, 표시 조건·geometry·selector와
+  accessible name은 각 호출부가 소유한다. Profile 선택 성공 뒤 기존 `resetActor`, 셸 badge와 알림 목록의
+  서버 재조회 수렴 계약은 변경하지 않는다.
 - Alternatives Considered: 기존 badge에 size와 mode를 추가하는 일반화는 서로 다른 표시와 접근성 계약을 한
   컴포넌트에 결합해 거절했다. picker 존재 표시를 셸 badge count로 사용하는 방식은 exact count와 selected
   Profile 격리를 잃어 거절했다.
-- Consequences: 작은 picker 전용 presentation이 추가되지만 기존 badge 회귀 위험이 줄어든다.
+- Consequences: 작은 semantic primitive가 추가되지만 두 consumer의 geometry와 접근성 label 계약은 분리된다.
 - Confirmation / Follow-up: 기존 badge 자동 검증을 유지하고 Profile 전환 E2E에서 새 actor의 badge와 알림 목록
   수렴을 확인한다.
 

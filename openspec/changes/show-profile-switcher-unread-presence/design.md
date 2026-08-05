@@ -6,7 +6,8 @@
 않는다.
 
 기존 selected Profile 알림 badge는 현재 actor의 count와 알림 목록을 소유한다. picker의 12-unit boolean dot은
-그 8px badge와 표시·접근성 목적이 다르므로 presentation을 공유하지 않는다.
+그 8px badge와 표시·접근성 목적과 geometry가 다르므로 badge component·controller 계약을 재사용하지
+않는다. 단, 두 dot의 `accent`·원형·접근성 숨김 invariant만 presentation-only primitive로 공유한다.
 
 ## Goals / Non-Goals
 
@@ -43,16 +44,19 @@
    별도 local snapshot이나 network lifecycle은 두지 않는다.
 3. dot은 avatar wrapper 안의 absolute upper-right overlay로 두고 `accent` token과 원형 radius를 사용한다.
    모든 접근성 platform에서 dot 자체를 숨긴다.
-4. 기존 display name과 relative handle을 유지하고, Unread가 있을 때만 `읽지 않은 알림 있음`을 option 이름에
+4. presentation-only `UnreadDot`은 `accent`·원형·접근성 숨김만 소유한다. picker와 셸 badge
+   호출부는 각각 표시 조건, 12/8px geometry, offset, test selector와 accessible name을 계속 소유한다.
+5. 기존 display name과 relative handle을 유지하고, Unread가 있을 때만 `읽지 않은 알림 있음`을 option 이름에
    추가한다. selected/disabled state, role, press handler와 check는 그대로 둔다.
-5. Storybook에서 0·양수·큰 count, selected/non-selected, geometry와 접근성 이름을 검증한다. Web E2E에서는 최신
+6. Storybook에서 0·양수·큰 count, selected/non-selected, geometry와 접근성 이름을 검증한다. Web E2E에서는 최신
    shell query를 받은 뒤 다른 Profile의 dot을 확인하고 선택해 기존 actor 재조회와 셸 badge·알림 목록 수렴을
    검증한다.
 
 ### Allowed Alternatives
 
-- 12 logical unit dot은 ProfileSwitcher 내부의 작은 presentation 또는 Profile picker 전용 컴포넌트로 둘 수
-  있다. 기존 8px 셸 badge의 기본 geometry·test selector·exact-count 계약을 바꾸지 않아야 한다.
+- 공통 `UnreadDot` primitive는 semantic presentation invariant만 공유할 수 있다. 12 logical unit picker dot과
+  8px 셸 badge의 geometry·test selector·visibility·accessible name 계약을 primitive prop으로 일반화하지
+  않아야 한다.
 
 ### Known Traps
 

@@ -21,6 +21,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
+import { UnreadDot } from './UnreadDot';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -352,14 +353,7 @@ export function ProfileSwitcher({
             size={selected ? 48 : 32}
           />
           {hasUnread ? (
-            <View
-              accessible={false}
-              accessibilityElementsHidden
-              aria-hidden
-              importantForAccessibility="no-hide-descendants"
-              style={[styles.profileUnreadDot, { backgroundColor: theme.accent }]}
-              testID="profile-switcher-unread-dot"
-            />
+            <UnreadDot style={styles.profileUnreadDot} testID="profile-switcher-unread-dot" />
           ) : null}
         </View>
         <View style={styles.profileLabel}>
@@ -737,7 +731,6 @@ const styles = StyleSheet.create({
   },
   profileAvatar: { position: 'relative' },
   profileUnreadDot: {
-    borderRadius: radii.full,
     height: 12,
     position: 'absolute',
     right: -2,
