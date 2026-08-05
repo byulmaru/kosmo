@@ -50,7 +50,7 @@
 
 ### Requirement: 안전한 공통 한국어 안내
 
-**Authority / Provenance:** `docs/design/media-upload-errors.md`, `docs/design/profile-edit.md`, `PROD-657` — 유니버설 앱은 외부 응답에서 가져오지 않은 안전한 UI `{subject}`와 공통 단계·원인으로 한국어 오류 문구를 생성해야 한다(MUST). `unsupported-format`은 지원 형식을, `file-too-large`는 16 MiB 상한을, `image-too-large`는 더 작은 해상도 선택을, `invalid-image`는 다른 이미지 선택을 안내해야 하며(MUST), `transient`는 `issue | transfer | complete` 단계에 맞는 재시도를 안내해야 한다(MUST).
+**Authority / Provenance:** `docs/design/media-upload-errors.md`, `docs/design/profile-edit.md`, `PROD-657` — 유니버설 앱은 외부 응답에서 가져오지 않은 안전한 UI `{subject}`와 공통 단계·원인으로 한국어 오류 문구를 생성해야 한다(MUST). `unsupported-format`은 지원하지 않는 이미지 형식임을, `file-too-large`는 16 MiB 상한을, `image-too-large`는 더 작은 해상도 선택을, `invalid-image`는 다른 이미지 선택을 안내해야 하며(MUST), `transient`는 `issue | transfer | complete` 단계에 맞는 재시도를 안내해야 한다(MUST).
 
 #### Scenario: 원인별 다음 행동 안내
 

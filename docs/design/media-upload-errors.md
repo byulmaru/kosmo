@@ -40,7 +40,7 @@ accessible name에 사용하지 않는다.
 
 | 조건                   | 문구                                                                |
 | ---------------------- | ------------------------------------------------------------------- |
-| `unsupported-format`   | `{subject}는 JPEG, PNG 또는 WebP 형식만 업로드할 수 있어요.`        |
+| `unsupported-format`   | `{subject}는 지원하지 않는 이미지 형식이에요.`                      |
 | `file-too-large`       | `{subject} 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.` |
 | `image-too-large`      | `{subject} 해상도가 너무 커요. 더 작은 이미지를 선택해 주세요.`     |
 | `invalid-image`        | `{subject} 파일을 읽을 수 없어요. 다른 이미지를 선택해 주세요.`     |

@@ -76,7 +76,7 @@ export function formatImageUploadFailureMessage(
 ): string {
   switch (failure.reason) {
     case 'unsupported-format':
-      return `${subject}는 JPEG, PNG 또는 WebP 형식만 업로드할 수 있어요.`;
+      return `${subject}는 지원하지 않는 이미지 형식이에요.`;
     case 'file-too-large':
       return `${subject} 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.`;
     case 'image-too-large':

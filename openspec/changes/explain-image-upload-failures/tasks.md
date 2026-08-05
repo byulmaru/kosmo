@@ -129,4 +129,4 @@ Post Composer와 Profile 편집이 동일한 분류·문구·재시도 정책을
 
 - [ ] 4.1 App Relay·TypeScript·unit·Storybook 검증과 workspace Markdown formatting을 통과시킨다.
 - [ ] 4.2 현재 출시 대상 Web에서 원인별/단계별 대표 실패, 보존·재시도와 접근성 상태를 수동 확인하고 Native runtime 미실행 범위를 기록한다.
-- [ ] 4.3 전체 task와 필수 검증이 완료되면 canonical 문서·Linear·delta spec 정합성과 archive 가능 상태를 확인한다.
+- [ ] 4.3 1~3 및 4.1~4.2 완료 후 canonical 문서·Linear·delta spec 정합성을 확인하고, `openspec validate explain-image-upload-failures --strict`를 실행한다. 이후 active spec을 동기화한 뒤 archive하고, archive 후 `openspec validate --all --strict`를 실행한다.

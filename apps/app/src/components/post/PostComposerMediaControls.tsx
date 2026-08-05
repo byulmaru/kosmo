@@ -347,7 +347,7 @@ export function PostComposerMediaItems({
                   </View>
                 ) : (
                   <Pressable
-                    accessibilityLabel={formatImageUploadRetryLabel(`첨부 이미지 ${index + 1}`)}
+                    accessibilityLabel={formatImageUploadRetryLabel(`${index + 1}번째 이미지`)}
                     accessibilityRole="button"
                     onPress={() => onRetry(item)}
                     style={[StyleSheet.absoluteFill, styles.mediaOverlay]}
@@ -387,7 +387,7 @@ export function PostComposerMediaItems({
             <View style={styles.mediaItemBody}>
               <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
                 {formatImageUploadFailureMessage(
-                  `첨부 이미지 ${index + 1}`,
+                  `${index + 1}번째 이미지`,
                   item.failure ?? { reason: 'transient', stage: 'transfer' },
                 )}
               </Text>

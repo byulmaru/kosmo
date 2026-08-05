@@ -71,15 +71,28 @@ test('malformed, empty, 5xx, and network-like transfer failures are transient', 
   }
 });
 
-test('user-facing copy and retry names contain only the safe subject and canonical text', () => {
-  const subject = '첨부 이미지 2';
+test('numeric subjects use the canonical Korean particles and safe retry name', () => {
+  const subject = '2번째 이미지';
+
+  assert.equal(
+    formatImageUploadFailureMessage(subject, {
+      reason: 'unsupported-format',
+      stage: 'transfer',
+    }),
+    '2번째 이미지는 지원하지 않는 이미지 형식이에요.',
+  );
+  assert.equal(
+    formatImageUploadFailureMessage(subject, { reason: 'transient', stage: 'transfer' }),
+    '2번째 이미지를 업로드하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  );
+  assert.equal(formatImageUploadRetryLabel(subject), '2번째 이미지 업로드 다시 시도');
+
   const message = formatImageUploadFailureMessage(subject, {
     reason: 'file-too-large',
     stage: 'transfer',
   });
 
-  assert.equal(message, '첨부 이미지 2 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.');
-  assert.equal(formatImageUploadRetryLabel(subject), '첨부 이미지 2 업로드 다시 시도');
+  assert.equal(message, '2번째 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.');
   assert.doesNotMatch(message, /storage detail|https?:\/\/|token|413|size_limit_exceeded/);
   assert.equal(
     formatImageUploadFailureMessage('아바타 이미지', { reason: 'transient', stage: 'issue' }),
