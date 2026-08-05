@@ -1664,6 +1664,7 @@ function ComposerMediaStatesStory() {
     {
       altText: '',
       asset: composerMediaAsset,
+      failure: { reason: 'file-too-large', stage: 'transfer' },
       key: 'failed',
       state: 'failed',
     },
@@ -4522,12 +4523,15 @@ export const ComposerMediaStates: Story = {
     expect(canvas.queryByText('업로드 중…')).not.toBeInTheDocument();
     expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('alert')).toHaveTextContent(
+      '3번째 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
+    );
     expect(canvas.getByRole('button', { name: '첨부 이미지 1 제거' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '첨부 이미지 2 대체 텍스트' })).toHaveValue(
       '회색 이미지의 대체 텍스트',
     );
     expect(canvas.getByRole('switch', { name: '민감한 이미지로 표시' })).toBeChecked();
-    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 3 업로드 재시도' }));
+    await userEvent.click(canvas.getByLabelText('3번째 이미지 업로드 다시 시도'));
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 중')).toBeVisible();
   },
   render: () => <ComposerMediaStatesStory />,
@@ -5014,7 +5018,7 @@ export const ComposerReplyMediaFailureLifecycle: Story = {
       });
       expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
 
-      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 업로드 재시도' }));
+      await userEvent.click(canvas.getByLabelText('1번째 이미지 업로드 다시 시도'));
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
       });

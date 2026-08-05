@@ -16,7 +16,8 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 **Non-Goals:**
 
-- Android·iOS SDK, native crash 수집과 debug symbol
+- 이번 변경에서 Android·iOS SDK, native crash 수집과 debug symbol을 활성화하지 않는다. Native 지원·검증은
+  PROD-483에서 별도 결정·검증한다.
 - tracing, Session Replay, 전면 로그 수집, 사용자 식별
 - 예상 도메인 오류 전송과 사용자 오류 UI·event ID 변경
 - Sentry 조직·프로젝트·알림 rule 자체를 저장소에서 자동 생성하는 provisioning
@@ -27,7 +28,8 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - API GraphQL 오류는 Yoga가 응답으로 소비하므로 Hono `onError`만 연결하면 resolver unexpected 오류가 누락된다. 반대로 두 경계에서 무조건 capture하면 같은 오류가 중복될 수 있다.
 - `NODE_ENV=production`은 API unit test에서도 사용하므로 활성화 조건으로 사용할 수 없다. 로컬·테스트에는 배포 DSN·환경·release를 기본 주입하지 않아야 한다.
-- `apps/app`의 공용 source에 Web SDK를 직접 import하면 PROD-483보다 먼저 native bundle과 runtime을 바꾼다. platform module 경계가 필요하다.
+- `apps/app`의 공용 source에 Web SDK를 직접 import하면 PROD-483보다 먼저 native bundle과 runtime을 바꾼다. 현재
+  Web slice에서는 platform module 경계를 사용해 Native entry를 유지하고, Native 관측의 향후 지원 가능성은 닫지 않는다.
 - Expo Web source map을 그대로 정적 root에 복사하면 원본 source가 공개된다. 업로드는 gzip과 runtime image 복사보다 먼저 끝나야 한다.
 - 서버는 TypeScript source를 `tsx`로 직접 실행한다. 서버 JavaScript artifact와 source map을 만들기 위한 build/runtime 전환은 오류 event 수집에 필수적이지 않으므로 PROD-516으로 연기한다.
 
@@ -35,7 +37,7 @@ API와 Web BFF는 Hono/Node ESM 애플리케이션이며 TypeScript source를 `t
 
 - API와 BFF는 작은 공용 server 관측 모듈을 공유하지 말고 각 앱이 같은 최소 설정을 소유한다. Sentry SDK는 DSN, environment와 release가 모두 있으면 활성화한다.
 - API GraphQL plugin은 Kosmo/validation 오류와 명시적으로 던진 `GraphQLError`를 capture하지 않고, plain `Error`와 non-null field 위반 같은 unexpected execution 원인만 capture한다. GraphQL 밖 API 오류와 Web BFF unexpected 오류는 각 Hono `onError`가 capture한다.
-- Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 generic 오류 reporter context를 제공한다. `react-error-boundary`로 구성한 단일 GraphQL 경계가 이 reporter를 상속하며 내부 route·session 경계의 `onError`도 같은 reporter로 capture한다. Android·iOS entry는 Sentry 관측 module을 import하지 않는다.
+- Web platform entry가 router와 애플리케이션 module보다 먼저 browser SDK를 초기화하고 generic 오류 reporter context를 제공한다. `react-error-boundary`로 구성한 단일 GraphQL 경계가 이 reporter를 상속하며 내부 route·session 경계의 `onError`도 같은 reporter로 capture한다. 현재 Web slice에서 Android·iOS entry는 Sentry 관측 module을 import하지 않고 기존 동작을 유지하며, Native 관측은 PROD-483의 별도 release gate로 검증한다.
 - `beforeSend` event processor를 두지 않고 SDK event 전체를 전달한다. environment/release/runtime metadata는 유지하고 자동 breadcrumb와 Web session tracking은 전부 비활성화한다.
 - Docker build는 Expo Web export에 external source map을 요청한다. Sentry CLI의 debug ID inject와 upload를 업로드 token BuildKit secret으로 수행한 뒤 Web map과 sourceMappingURL을 제거한다. API와 Web BFF는 기존 TypeScript source와 `tsx` runtime entry를 유지한다.
 - API, Web BFF와 Web browser는 Sentry project 하나를 공유하고 `runtime` tag로 구분한다. GitHub Actions는 공식 Vault Action과 branch/dev·SemVer tag/prod role을 사용해 각각 Vault의 `secret/kubernetes/kosmo/dev|prod`에서 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. 공개 DSN과 GitHub repository variables의 조직·project slug는 build arg, repository secret의 upload token만 BuildKit secret으로 전달한다. API와 Web BFF는 Vault Secrets Operator가 환경별 객체를 변환한 기존 `env` Kubernetes Secret에서 같은 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다.

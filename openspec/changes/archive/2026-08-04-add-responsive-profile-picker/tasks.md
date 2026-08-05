@@ -5,6 +5,7 @@
 - `docs/design/breakpoints.md`
 - `docs/design/figma.md`
 - `PROD-238`
+- `PROD-541` (후속 trigger 정렬 supersession)
 
 **Deliverable**
 
@@ -21,9 +22,10 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - profile option과 add action은 일반 Web 버튼으로 노출하고 create form·operation error alert은 같은 고정 footer
   위치에 유지한다. 완전한 menu keyboard model은 `PROD-213`에 남긴다.
 - 기존 프로필 선택·생성·실패 상태와 GraphQL·Relay actor 전환 계약을 바꾸지 않는다.
-- Web full과 mobile Web drawer는 이름·chevron 내부 content의 6px 광학 보정과 Web 전용 open chevron만 변경한다.
-  trigger hitbox·picker anchor·navigation geometry, drawer content·close lifecycle, compact avatar trigger와
-  Android/iOS picker는 재설계하지 않는다.
+- Web full과 mobile Web drawer는 Web 전용 open chevron을 유지한다. 이 change에서 도입했던 이름·chevron 내부
+  content의 6px 하향 transform은 후속 `PROD-541`에서 제거됐으므로 복원하지 않는다. trigger hitbox·picker
+  anchor·navigation geometry, drawer content·close lifecycle, compact avatar trigger와 Android/iOS picker는
+  재설계하지 않는다.
 - PROD-213/214/215와 디자인 시스템·Figma 라이브러리 전면 정리를 포함하지 않는다.
 
 **Verification**
@@ -35,8 +37,10 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
   순서, Full summary link focus close, focus 가시성·`Escape` focus 복원과 고정 add/create footer를 검증한다.
 - 선택·생성 성공과 실패 상태의 기존 interaction을 검증한다.
 - Storybook browser를 768·1024·1279·1280·1440px로 직접 조절해 surface, stacking과 scroll을 시각 확인한다.
-- full Storybook에서 이름·chevron의 6px 광학 보정과 open 전후 trigger·navigation 위치 불변을 확인한다.
-- mobile Storybook에서 drawer trigger의 닫힘/열림 chevron, 6px 광학 보정과 navigation 위치 불변을 확인한다.
+- full Storybook에서 이름·chevron의 transform 없는 수직 중심 정렬과 open 전후 trigger·navigation 위치 불변을
+  확인한다.
+- mobile Storybook에서 drawer trigger의 닫힘/열림 chevron, transform 없는 수직 중심 정렬과 navigation 위치
+  불변을 확인한다.
 - `pnpm --filter @kosmo/app test:storybook -- Shell`, app check·Storybook build, 기존 profile-switcher E2E, scoped/all OpenSpec strict validation과 `git diff --check`를 실행한다.
 
 **테스트 코드 범위**
@@ -103,3 +107,5 @@ Web full sidebar와 compact icon rail에서 각각 자연스러운 trigger와 su
 - [x] 1.14 코드 리뷰에 따라 Full Web에서 기본 `Tab` 순서로 summary link가 focus되면 picker를 닫고 link focus를
       유지해 focus indicator가 overlay에 가려지지 않게 한다. 기존 Full Shell Storybook에서 focus close와 trigger
       expanded 상태를 검증하고 compact·mobile Web drawer·native 및 overlay anchor·navigation geometry를 유지한다.
+- [x] 1.15 archive 재검증에서 후속 `PROD-541`이 제거한 full·mobile Web 6px 하향 transform을 Active decision,
+      Guardrail, Verification과 delta에서 supersede하고, current main의 transform 없는 중심 정렬을 보존한다.

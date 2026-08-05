@@ -191,7 +191,7 @@
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 4px 보정으로 이동은 분명해졌지만 사용자가 mobile Web Storybook을 직접 확인한 결과 닉네임과
   chevron을 2px 더 내려야 상자 안에서 자연스럽게 보인다.
 - Decision Outcome: `Platform.OS === 'web' && surface === 'drawer'`인 이름·chevron 내부 content만 아래로 6px
@@ -208,7 +208,7 @@
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-238`
-- Status: Active
+- Status: Superseded
 - Context / Problem: full Web의 42px trigger에서 32px 이름 line box와 16px chevron box는 수학적으로 중앙이지만,
   SUIT glyph와 chevron의 시각적 무게가 위로 치우쳐 보인다. 사용자가 full Storybook을 확인한 뒤 mobile Web과 같은
   내부 영역을 같은 6px만큼 보정하기로 확정했다.
@@ -221,6 +221,27 @@
   navigation geometry 불변을 검증해야 한다.
 - Confirmation / Follow-up: Responsive Profile Picker Full과 Profile Switcher Interaction story의 직접 시각 확인에서
   이름·chevron의 6px 위치와 picker anchor·navigation 불변을 확인한다.
+
+### PROD-541 이후 ProfileSwitcher trigger의 하향 transform을 제거한다
+
+- Decision Date: 2026-07-30
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-541`, archived
+  `2026-07-30-hide-notification-settings-entry`, PR #412
+- Status: Active
+- Context / Problem: 이 change가 full·mobile Web trigger 내부 content에 도입한 6px 하향 transform은 후속
+  `PROD-541`의 sidebar 정렬 범위에서 제거됐고, current main 구현과 active `web-app-shell` spec은 별도 transform
+  없는 trigger 수직 중심 정렬을 요구한다. 이전 delta를 그대로 sync하면 최신 계약을 되돌린다.
+- Decision Outcome: full Web과 mobile Web drawer의 이름·chevron은 별도 하향 transform 없이 trigger 수직 중심에
+  정렬한다. down/up chevron, expanded 상태, trigger hitbox, picker anchor, navigation geometry와 compact avatar
+  geometry는 유지한다. archive delta에서 superseded 6px 문구를 제거하고 기존 main의 최신 중심 정렬 scenario를
+  변경하지 않는다.
+- Alternatives Considered: 역사적 6px 문구를 delta에 남긴 채 main sync에서만 수동 제외하면 active artifact와
+  synced spec의 의미가 계속 충돌한다. 6px transform을 복원하면 PROD-541과 현재 구현을 직접 위반한다.
+- Consequences: 6px 결정을 역사적 Superseded 기록으로 보존하되 normative delta, Guardrail과 Verification에서는
+  현재 중심 정렬을 사용한다.
+- Confirmation / Follow-up: current `ProfileSwitcher.webTriggerContent`에 translate transform이 없고 main
+  `web-app-shell`의 `ProfileSwitcher nickname 중심 정렬` scenario와 PROD-541 완료 조건이 일치함을 확인했다.
 
 ## Remaining Decisions
 

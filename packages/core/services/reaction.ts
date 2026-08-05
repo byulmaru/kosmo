@@ -8,6 +8,7 @@ import type { Transaction } from '../db';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
+  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
   readonly type: string;
@@ -16,6 +17,7 @@ type AddReactionInput = {
 type DeleteReactionInput = {
   readonly actorProfileId: string;
   readonly expectedReactionId?: string;
+  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
   readonly type: string;
@@ -36,7 +38,7 @@ const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
 };
 
 export const addReaction = async (
-  { actorProfileId, origin, postId, type }: AddReactionInput,
+  { actorProfileId, onPostCommitError, origin, postId, type }: AddReactionInput,
   tx?: Transaction,
 ): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
@@ -88,7 +90,21 @@ export const addReaction = async (
     ...result,
     postCommit: result.created
       ? oncePostCommit(async () => {
-          await createReactionNotification(result.reaction.id).catch(() => undefined);
+          await createReactionNotification(result.reaction.id).catch(async (error) => {
+            if (!onPostCommitError) {
+              return;
+            }
+
+            try {
+              await onPostCommitError(error);
+            } catch (observerError) {
+              console.error('Reaction notification creation observation failed', {
+                error,
+                observerError,
+                reactionId: result.reaction.id,
+              });
+            }
+          });
 
           if (origin === 'LOCAL') {
             try {
@@ -142,10 +158,22 @@ export const deleteReaction = async (
           try {
             await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
           } catch (error) {
-            console.error('Failed to clean up Reaction Notification', {
-              error,
-              reactionId: reaction.id,
-            });
+            if (!input.onPostCommitError) {
+              console.error('Failed to clean up Reaction Notification', {
+                error,
+                reactionId: reaction.id,
+              });
+            } else {
+              try {
+                await input.onPostCommitError(error);
+              } catch (observerError) {
+                console.error('Reaction notification cleanup observation failed', {
+                  error,
+                  observerError,
+                  reactionId: reaction.id,
+                });
+              }
+            }
           }
 
           if (input.origin === 'LOCAL') {

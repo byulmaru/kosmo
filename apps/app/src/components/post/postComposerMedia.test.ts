@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { assertImageUploadResponse, ImageUploadError } from '../media/imageUploadErrors';
 import { releaseComposerMediaPreview, uploadComposerMedia } from './postComposerMedia';
 
 test('releases only Web object URL previews', () => {
@@ -108,4 +109,84 @@ test('every retry calls issue again and never reuses a failed upload URL', async
 
   assert.equal(result, 'media-2');
   assert.equal(issued, 2);
+});
+
+test('attributes issue, transfer, and complete failures without exposing callback details', async () => {
+  await assert.rejects(
+    uploadComposerMedia({
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => {
+        throw new Error('private issue detail');
+      },
+      put: async () => undefined,
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'issue' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes('private issue detail'),
+  );
+
+  await assert.rejects(
+    uploadComposerMedia({
+      complete: async () => undefined,
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+      put: async () => {
+        throw new ImageUploadError({ reason: 'invalid-image', stage: 'transfer' });
+      },
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'transfer' &&
+      error.failure.reason === 'invalid-image',
+  );
+
+  await assert.rejects(
+    uploadComposerMedia({
+      complete: async () => {
+        throw new Error('private complete detail');
+      },
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+      put: async () => undefined,
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'complete' &&
+      error.failure.reason === 'transient' &&
+      !error.message.includes('private complete detail'),
+  );
+});
+
+test('production PUT response keeps the allowlisted transfer reason through the Composer sequence', async () => {
+  let completed = false;
+
+  await assert.rejects(
+    uploadComposerMedia({
+      complete: async () => {
+        completed = true;
+      },
+      isActive: () => true,
+      issue: async () => ({ mediaId: 'media-1', uploadUrl: 'https://upload.example/1' }),
+      put: async () => {
+        await assertImageUploadResponse(
+          new Response(
+            JSON.stringify({
+              error: { code: 'size_limit_exceeded', message: 'storage secret' },
+            }),
+            { status: 413, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      },
+    }),
+    (error: unknown) =>
+      error instanceof ImageUploadError &&
+      error.failure.stage === 'transfer' &&
+      error.failure.reason === 'file-too-large' &&
+      !error.message.includes('storage secret'),
+  );
+
+  assert.equal(completed, false);
 });

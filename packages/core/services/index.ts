@@ -5,6 +5,7 @@ export { setNotificationEffectErrorReporter } from './notification';
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
 export { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';
+export type { AcceptProfileFollowRequestResult } from './profile-follow-request';
 export {
   acceptProfileFollowRequest,
   approveProfileFollowRequest,

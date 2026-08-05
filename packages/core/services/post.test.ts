@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   Accounts,
   ActivityPubPosts,
@@ -594,6 +594,48 @@ test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 
 
   assert.equal(duplicate.created, false);
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
+});
+
+test('ActivityPub Reply의 post-commit observer 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
+  const author = await createProfile();
+  const recipient = await createProfile();
+  const parent = await createPost({
+    document: postContentDocumentFromText('parent'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const objectUri = `https://remote.example/notes/reply-observer-failure-${crypto.randomUUID()}`;
+  let observerCalls = 0;
+
+  await db.execute(
+    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_reply_observer_failure CHECK (false) NOT VALID`,
+  );
+  try {
+    const result = await createPost({
+      document: postContentDocumentFromText('remote reply'),
+      objectUri,
+      onPostCommitError: () => {
+        observerCalls += 1;
+        throw new Error('observer failure');
+      },
+      origin: 'ACTIVITYPUB',
+      profileId: author.id,
+      publishedAt: null,
+      receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
+      replyParentId: parent.post.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+
+    assert.equal(result.created, true);
+    assert.equal(observerCalls, 1);
+    assert.equal(result.post.replyParentId, parent.post.id);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
+  } finally {
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_reply_observer_failure`,
+    );
+  }
 });
 
 test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {

@@ -1,3 +1,5 @@
+import { asImageUploadError } from '@/components/media/imageUploadErrors';
+
 export const postComposerMediaLimit = 4;
 
 export function releaseComposerMediaPreview(
@@ -24,16 +26,29 @@ export async function uploadComposerMedia({
     return null;
   }
 
-  const { mediaId, uploadUrl } = await issue();
+  let issued: { readonly mediaId: string; readonly uploadUrl: string };
+  try {
+    issued = await issue();
+  } catch (error) {
+    throw asImageUploadError(error, 'issue');
+  }
   if (!isActive()) {
     return null;
   }
 
-  await put(uploadUrl);
+  try {
+    await put(issued.uploadUrl);
+  } catch (error) {
+    throw asImageUploadError(error, 'transfer');
+  }
   if (!isActive()) {
     return null;
   }
 
-  await complete(mediaId);
-  return isActive() ? mediaId : null;
+  try {
+    await complete(issued.mediaId);
+  } catch (error) {
+    throw asImageUploadError(error, 'complete');
+  }
+  return isActive() ? issued.mediaId : null;
 }
