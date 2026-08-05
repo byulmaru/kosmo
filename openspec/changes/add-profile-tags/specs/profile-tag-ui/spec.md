@@ -40,7 +40,14 @@
 
 ### Requirement: Accessible universal Profile Tag controls
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/design/accessibility.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 제거 action은 compact `32×32` 시각 크기와 별도로 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` 실제 target 및 동작을 설명하는 accessibility label·state를 제공해야 한다(MUST). iOS `44×44 pt`와 Android `48×48 dp`로 시각 크기보다 확장된 실제 target은 인접한 다른 TagChip 제거 action target과 겹치지 않아야 하며(MUST), 여러 줄 wrapping에서도 이 비중첩 조건을 유지해야 한다(MUST). Profile Tag 순서 변경 control은 제공하지 않는다.
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/design/accessibility.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — Profile Tag 편집·표시 UI는 React Native primitive와 기존 theme token으로 Web·Android·iOS에서 같은 정보 구조를 사용해야 한다(MUST). 편집기와 공개 Profile이 공유하는 TagChip은 시각 높이 `32`를 유지하고 표시 text를 한 줄과 tail ellipsis로 제한하되, 접근성 이름에는 생략하지 않은 전체 `#<Display Hashtag Name>`을 제공해야 한다(MUST). 제거 action은 compact `32×32` 시각 크기와 별도로 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` 실제 target 및 동작을 설명하는 accessibility label·state를 제공해야 한다(MUST). iOS `44×44 pt`와 Android `48×48 dp`로 시각 크기보다 확장된 실제 target은 인접한 다른 TagChip 제거 action target과 겹치지 않아야 하며(MUST), 여러 줄 wrapping에서도 이 비중첩 조건을 유지해야 한다(MUST). Profile Tag 순서 변경 control은 제공하지 않는다.
+
+#### Scenario: Keep a long shared TagChip compact and accessible
+
+- **WHEN** 편집기 또는 공개 Profile이 너비보다 긴 유효한 Display Hashtag Name을 TagChip에 표시한다
+- **THEN** TagChip은 시각 높이 `32`와 한 줄을 유지하고 넘치는 text를 tail ellipsis로 생략한다
+- **AND** TagChip의 접근성 이름은 생략하지 않은 전체 `#<Display Hashtag Name>`을 제공한다
+- **AND** 시각적 생략은 저장된 Display Hashtag Name을 변경하지 않는다
 
 #### Scenario: Operate removal with pointer, touch, assistive technology, or Web keyboard
 

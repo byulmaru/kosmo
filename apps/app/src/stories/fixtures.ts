@@ -28,6 +28,7 @@ export type StoryProfile = {
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
   relativeHandle: string;
+  tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
   viewerState: {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
@@ -68,6 +69,7 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     id: 'profile-kosmo',
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',
+    tags: [],
     unreadNotificationCount: 0,
     viewerState: { follow: null, followRequest: null, isSelf: false },
     ...overrides,
@@ -264,6 +266,26 @@ export function followNotification({
   };
 }
 
+export function followRequestNotification({
+  createdAt = Temporal.Now.instant().subtract({ minutes: 4 }).toString(),
+  id = 'notification-follow-request-1',
+  profile: relatedProfile = profile(),
+  readAt = null,
+}: {
+  createdAt?: string;
+  id?: string;
+  profile?: StoryProfile;
+  readAt?: string | null;
+} = {}) {
+  return {
+    __typename: 'FollowRequestNotification' as const,
+    createdAt,
+    id,
+    profile: relatedProfile,
+    readAt,
+  };
+}
+
 export function reactionNotification({
   createdAt = Temporal.Now.instant().subtract({ minutes: 3 }).toString(),
   id = 'notification-reaction-1',
@@ -339,6 +361,7 @@ export function repostNotification({
 export function notificationsProfile(
   notifications: Array<
     | ReturnType<typeof followNotification>
+    | ReturnType<typeof followRequestNotification>
     | ReturnType<typeof reactionNotification>
     | ReturnType<typeof replyNotification>
     | ReturnType<typeof repostNotification>

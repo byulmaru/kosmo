@@ -5,6 +5,7 @@ import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
+import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
 import {
@@ -209,17 +210,15 @@ function GuardedProfileSwitcherStory() {
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
       <ProfileSwitcherStory />
-      <Pressable
-        accessibilityRole="button"
-        disabled={!pending}
-        onPress={() => {
+      <ProfileEditDiscardDialog
+        onContinue={() => setPending(null)}
+        onDiscard={() => {
           const action = pending;
           setPending(null);
           action?.();
         }}
-      >
-        <Text>버리기</Text>
-      </Pressable>
+        visible={pending !== null}
+      />
     </NavigationGuardProvider>
   );
 }
@@ -267,9 +266,14 @@ type Story = StoryObj<typeof meta>;
 export const SharedNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    const bookmarks = canvas.getByRole('link', { name: '북마크' });
+    expect(bookmarks).toHaveAttribute('href', '/bookmarks');
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
-    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(
+      followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
       '/feedback',
@@ -293,6 +297,7 @@ export const BottomNavigation: Story = {
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
+    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
   },
   render: () => <BottomNavigationStory />,
 };
@@ -302,7 +307,8 @@ export const CompactSidebar: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
-    expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
     expect(canvas.getByRole('link', { name: '피드백 보내기' })).toHaveAttribute(
       'href',
       '/feedback',
@@ -361,6 +367,18 @@ export const FeedbackNavigationCurrentState: Story = {
       'd',
       'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7',
     );
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const FollowRequestsNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/follow-requests' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(link).toHaveAttribute('href', '/follow-requests');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -894,17 +912,65 @@ export const ProfileSwitcherApprovedSelectRunsOnce: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const body = within(canvasElement.ownerDocument.body);
+    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
+    await userEvent.click(trigger);
     const list = await canvas.findByLabelText('전환할 프로필 목록');
     await userEvent.click(within(list).getAllByRole('button')[1]!);
     expect(trackAnalytics).not.toHaveBeenCalled();
 
-    await userEvent.click(canvas.getByRole('button', { name: '버리기' }));
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
     await waitFor(() =>
       expect(trackAnalytics).toHaveBeenCalledWith('profile_selected', {
         selected_profile_id: secondProfile.id,
       }),
     );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(canvas.queryByLabelText('프로필 전환')).not.toBeInTheDocument();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherApprovedSelectGraphQLErrorPreservesPicker: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['프로필을 전환할 수 없습니다.'],
+      mutationResponse: {
+        selectProfile: {
+          profile: query.currentSession.selectedProfile,
+          session: { id: 'session-story', selectedProfile: query.currentSession.selectedProfile },
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    const list = canvas.getByLabelText('전환할 프로필 목록');
+    await userEvent.click(within(list).getAllByRole('button')[1]!);
+
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 전환하지 못했습니다.',
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(pickerRegion).toBeVisible();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <GuardedProfileSwitcherStory />,
 };
@@ -1037,6 +1103,73 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
   render: () => <ProfileSwitcherStory />,
 };
 
+export const ProfileSwitcherEscapeContinueEditingPreservesDraft: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const ownerDocument = canvasElement.ownerDocument;
+    const body = within(ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await userEvent.keyboard('{Escape}');
+    expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
+
+    await body.findByRole('dialog', { name: '변경사항을 버릴까요?' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(
+        ownerDocument.querySelector('[aria-label="변경사항을 버릴까요?"][aria-modal="true"]'),
+      ).toBeNull(),
+    );
+    expect(await canvas.findByLabelText('프로필 전환')).toBeVisible();
+    expect(canvas.getByRole('textbox', { name: '프로필 핸들' })).toHaveValue('kept_handle');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherApprovedCreateGraphQLErrorPreservesDraft: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['이미 사용 중인 핸들입니다.'],
+      mutationResponse: {
+        createProfile: { account: query.me, profile: secondProfile },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const pickerRegion = await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'kept_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await userEvent.click(body.getByRole('button', { name: '버리기' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '프로필을 생성하지 못했습니다.',
+    );
+    await waitFor(() =>
+      expect(
+        canvasElement.ownerDocument.querySelector(
+          '[aria-label="변경사항을 버릴까요?"][aria-modal="true"]',
+        ),
+      ).toBeNull(),
+    );
+    expect(pickerRegion).toBeVisible();
+    expect(input).toHaveValue('kept_handle');
+    expect(trackAnalytics).not.toHaveBeenCalled();
+  },
+  render: () => <GuardedProfileSwitcherStory />,
+};
+
 const universalParameters = {
   layout: 'fullscreen',
   relay: { data: query },
@@ -1167,7 +1300,8 @@ export const UniversalMobile: Story = {
       'href',
       '/@selected',
     );
-    expect(within(drawer).queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
+    expect(followRequests).toHaveAttribute('href', '/follow-requests');
     const feedback = page.getByRole('link', { name: '피드백 보내기' });
     expect(feedback).toHaveAttribute('href', '/feedback');
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();

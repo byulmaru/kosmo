@@ -12,9 +12,11 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne, sql } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
 
@@ -36,6 +38,7 @@ let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
+let setNotificationEffectErrorReporter: typeof CoreServices.setNotificationEffectErrorReporter;
 let localInstanceId: string;
 
 describe('inbound Follow and Undo', () => {
@@ -54,6 +57,8 @@ describe('inbound Follow and Undo', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
+    ({ setNotificationEffectErrorReporter } =
+      (await import('@kosmo/core/services')) as typeof CoreServices);
     ({ handleInboundFollow, handleInboundUndo } = await import('./inbound-follow'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -220,6 +225,40 @@ describe('inbound Follow and Undo', () => {
     }
   });
 
+  test('logs malformed federation JSON without capturing it in Sentry', async () => {
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const response = await federation.fetch(
+        new Request(new URL('/inbox', publicOrigin), {
+          body: '{"type":',
+          headers: { 'content-type': 'application/activity+json' },
+          method: 'POST',
+        }),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 400, await response.text());
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Unknown',
+          handler: 'listener',
+          outcome: 'external_failure',
+          phase: 'listener',
+          reasonCode: 'external_listener_error',
+        },
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   test('preserves the projection for embedded Undo actor or object mismatch', async () => {
     await createFixture();
     const context = createContext({ recipient: localProfileId });
@@ -256,8 +295,19 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture();
     const context = createContext({ recipient: localProfileId });
     const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
 
-    await Promise.all([handleInboundFollow(context, follow), handleInboundFollow(context, follow)]);
+    try {
+      await Promise.all([
+        handleInboundFollow(context, follow),
+        handleInboundFollow(context, follow),
+      ]);
+    } finally {
+      restoreReporter();
+    }
 
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
@@ -289,6 +339,17 @@ describe('inbound Follow and Undo', () => {
       ).followingCount,
       1,
     );
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_established_follow_noop',
+      },
+    ]);
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {
@@ -303,7 +364,7 @@ describe('inbound Follow and Undo', () => {
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
-    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
     assert.equal(sendActivity.mock.calls.length, 0);
 
     await handleInboundUndo(
@@ -315,6 +376,115 @@ describe('inbound Follow and Undo', () => {
     );
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
+  });
+
+  test('logs only a true-noop after an inbound pending Follow Undo was already consumed', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    const context = createContext({ recipient: null });
+    const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+    const undo = new Undo({ actor: remoteActorUri, object: follow });
+
+    try {
+      await handleInboundFollow(context, follow);
+      await handleInboundUndo(context, undo);
+      await handleInboundUndo(context, undo);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Undo',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'undo',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'follow_undo_missing_or_repeated',
+      },
+    ]);
+  });
+
+  test('does not log a newly created pending Follow as a noop', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: null }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+
+      assert.deepEqual(logs, []);
+    } finally {
+      restore();
+    }
+  });
+
+  test('logs an existing pending Follow as a noop', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const follow = new Follow({ actor: remoteActorUri, object: localActorUri });
+      await handleInboundFollow(createContext({ recipient: null }), follow);
+      await handleInboundFollow(createContext({ recipient: null }), follow);
+
+      assert.equal(logs.length, 1);
+      assert.deepEqual(logs[0], {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_pending_follow_noop',
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test('logs an object-less Undo lookup failure once and returns', async () => {
+    await createFixture();
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundUndo(
+        createContext({ recipient: localProfileId }),
+        new Undo({ actor: remoteActorUri }),
+      );
+
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Undo',
+          actorOrigin: remoteActorUri.origin,
+          handler: 'undo',
+          objectOrigin: undefined,
+          outcome: 'external_failure',
+          phase: 'object_lookup',
+          reasonCode: 'undo_object_lookup_failed',
+        },
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test('keeps inbound Follow successful when Notification creation fails', async () => {
@@ -346,6 +516,90 @@ describe('inbound Follow and Undo', () => {
       ).followersCount,
       1,
     );
+  });
+
+  test('keeps approval-required inbound Follow successful when request Notification creation fails', async () => {
+    const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const effectReports: unknown[] = [];
+    const restoreInboundReporter = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ error, context }),
+      log: (observation) => logs.push(observation),
+    });
+    const restoreEffectReporter = setNotificationEffectErrorReporter((error, context) =>
+      effectReports.push({ error, context }),
+    );
+
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_pending_create_failure CHECK (false) NOT VALID`,
+    );
+
+    try {
+      await handleInboundFollow(
+        createContext({ recipient: localProfileId }),
+        new Follow({ actor: remoteActorUri, object: localActorUri }),
+      );
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_pending_create_failure`,
+      );
+      restoreEffectReporter();
+      restoreInboundReporter();
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.deepEqual(
+      await db
+        .select({
+          followersCount: Profiles.followersCount,
+          followingCount: Profiles.followingCount,
+        })
+        .from(Profiles)
+        .where(eq(Profiles.id, fixture.localProfile.id))
+        .then(firstOrThrow),
+      { followersCount: 0, followingCount: 0 },
+    );
+    assert.equal(effectReports.length, 0);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Follow',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'follow',
+        objectOrigin: localActorUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'follow_notification_effect_failed',
+      },
+    ]);
+    assert.equal(captures.length, 1);
+    const capture = captures[0] as {
+      context: {
+        extra?: Record<string, string>;
+        fingerprint: string[];
+        tags: Record<string, string>;
+      };
+    };
+    assert.deepEqual(capture.context.tags, {
+      activity_type: 'Follow',
+      handler: 'follow',
+      outcome: 'internal_failure',
+      phase: 'effect',
+      reason_code: 'follow_notification_effect_failed',
+    });
+    assert.deepEqual(capture.context.fingerprint, [
+      'activitypub-inbound',
+      'Follow',
+      'follow',
+      'effect',
+      'follow_notification_effect_failed',
+    ]);
+    assert.deepEqual(capture.context.extra, {
+      actor_origin: remoteActorUri.origin,
+      object_origin: localActorUri.origin,
+    });
   });
 
   test('keeps inbound Undo successful when Notification cleanup fails', async () => {
@@ -391,6 +645,55 @@ describe('inbound Follow and Undo', () => {
         .select()
         .from(Notifications)
         .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
+  });
+
+  test('keeps approval-required inbound Undo successful when request Notification cleanup fails', async () => {
+    await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
+    const context = createContext({ recipient: localProfileId });
+    await handleInboundFollow(
+      context,
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
+    );
+    const request = await db.select().from(ProfileFollowRequests).then(firstOrThrow);
+    await db.execute(sql`
+      CREATE FUNCTION fail_inbound_pending_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'pending notification delete failed';
+      END;
+      $$
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER notification_inbound_pending_delete_failure
+      BEFORE DELETE ON ${Notifications}
+      FOR EACH ROW EXECUTE FUNCTION fail_inbound_pending_notification_delete()
+    `);
+
+    try {
+      await handleInboundUndo(
+        context,
+        new Undo({
+          actor: remoteActorUri,
+          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+        }),
+      );
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER notification_inbound_pending_delete_failure ON ${Notifications}`,
+      );
+      await db.execute(sql`DROP FUNCTION fail_inbound_pending_notification_delete()`);
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, request.id))
         .then((rows) => rows.length),
       1,
     );

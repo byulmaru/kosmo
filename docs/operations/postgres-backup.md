@@ -31,8 +31,13 @@ kubectl get backup -n kosmo-prod --sort-by=.metadata.creationTimestamp
 ```sh
 kubectl describe objectstore kosmo-postgres-backup -n kosmo-prod
 kubectl get serviceaccount kosmo-postgres-backup -n kosmo-prod -o yaml
-kubectl auth can-i get objectstores.barmancloud.cnpg.io \
-  --resource-name=kosmo-postgres-backup \
+kubectl auth whoami \
+  --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
+kubectl auth can-i get objectstores.barmancloud.cnpg.io/kosmo-postgres-backup \
+  --namespace=kosmo-prod \
+  --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
+kubectl auth can-i update objectstores.barmancloud.cnpg.io/kosmo-postgres-backup \
+  --subresource=status \
   --namespace=kosmo-prod \
   --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
 aws eks list-pod-identity-associations --cluster-name byulmaru --region ap-northeast-2
@@ -49,7 +54,7 @@ kubectl logs -n kosmo-prod POD_NAME -c PLUGIN_SIDECAR_NAME --since=30m
 
 - `AccessDenied`: association의 namespace, ServiceAccount, role ARN과 요청된 S3 prefix를 확인한다.
 - credential endpoint 오류: `eks-pod-identity-agent` 상태와 Pod 재생성 후 credential 주입 여부를 확인한다.
-- ObjectStore/plugin 연결 오류: `cnpg-system`의 plugin Deployment, client/server Certificate와 ObjectStore condition을 확인한다.
+- ObjectStore/plugin 연결 오류: `cnpg-system`의 plugin Deployment, client/server Certificate와 ObjectStore condition을 확인한다. `auth whoami`가 요청한 ServiceAccount가 아니라 관리자 identity를 반환하면 proxy가 impersonation을 무시한 것이므로 이어지는 `can-i`의 `yes`를 workload 권한 증거로 사용하지 않는다. 유효한 ServiceAccount identity에서 두 `can-i` 결과가 각각 `yes`인지 확인한다. 첫 번째는 정확한 `kosmo-postgres-backup` ObjectStore 본문 조회이고, 두 번째는 같은 이름의 `objectstores/status` recovery-window 상태 갱신이다. 본문 `update`·`patch`·`create`·`delete`나 다른 ObjectStore 이름에 대한 권한은 `no`여야 한다.
 - WAL archive 오류가 지속되면 새 base backup을 실행하기 전에 원인을 해결한다. WAL 연속성이 끊긴 기간은 복구 가능 시점에서 제외될 수 있다.
 
 ## On-demand base backup

@@ -198,6 +198,47 @@ const mediaOnlyPost = post({
     },
   ],
 });
+const sensitiveTwoMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    attrs: { sensitiveMedia: true },
+    content: [
+      { type: 'paragraph' },
+      ...Array.from({ length: 2 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-sensitive-two-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '',
+  id: 'media-sensitive-two',
+  media: Array.from({ length: 2 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: `${index + 1}번째 Sensitive 이미지`,
+    id: `media-sensitive-two-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
+const threeMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: '세 장의 이미지입니다.' }] },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        type: 'media' as const,
+        attrs: { mediaId: `media-three-${index + 1}` },
+      })),
+    ],
+  },
+  bodyText: '세 장의 이미지입니다.',
+  id: 'media-three',
+  media: Array.from({ length: 3 }, (_, index) => ({
+    __typename: 'Media' as const,
+    altText: `${index + 1}번째 3장 gallery 이미지`,
+    id: `media-three-${index + 1}`,
+    url: postMediaImageUri,
+  })),
+});
 const fourMediaPost = post({
   bodyDocument: {
     type: 'doc',
@@ -252,6 +293,42 @@ const loadErrorMediaPost = post({
       __typename: 'Media',
       altText: '정상 이미지',
       id: 'media-error-safe-story',
+      url: postMediaImageUri,
+    },
+  ],
+});
+const loadErrorThreeMediaPost = post({
+  bodyDocument: {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '세 장 gallery의 오른쪽 이미지 로딩 실패입니다.' }],
+      },
+      { type: 'media', attrs: { mediaId: 'media-three-error-safe-first-story' } },
+      { type: 'media', attrs: { mediaId: 'media-three-error-story' } },
+      { type: 'media', attrs: { mediaId: 'media-three-error-safe-last-story' } },
+    ],
+  },
+  bodyText: '세 장 gallery의 오른쪽 이미지 로딩 실패입니다.',
+  id: 'media-load-error-three',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '첫 번째 정상 이미지',
+      id: 'media-three-error-safe-first-story',
+      url: postMediaImageUri,
+    },
+    {
+      __typename: 'Media',
+      altText: '오른쪽 실패 이미지',
+      id: 'media-three-error-story',
+      url: 'data:image/png;base64,not-valid',
+    },
+    {
+      __typename: 'Media',
+      altText: '세 번째 정상 이미지',
+      id: 'media-three-error-safe-last-story',
       url: postMediaImageUri,
     },
   ],
@@ -607,9 +684,12 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  sensitiveTwoMediaPost,
+  threeMediaPost,
   fourMediaPost,
   unavailableMediaPost,
   loadErrorMediaPost,
+  loadErrorThreeMediaPost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -848,6 +928,22 @@ function PostCatalog(_args: PostsStoryArgs) {
             )}
           />
         </View>
+        <View testID="media-sensitive-two">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, sensitiveTwoMediaPost.id).body,
+              'two-media sensitive post body',
+            )}
+          />
+        </View>
+        <View testID="media-three">
+          <PostBody
+            post={requireFragment(
+              requirePostById(posts, threeMediaPost.id).body,
+              'three-media post body',
+            )}
+          />
+        </View>
         <View testID="media-four">
           <PostBody
             post={requireFragment(
@@ -888,6 +984,22 @@ function PostCatalog(_args: PostsStoryArgs) {
             post={requireFragment(
               requirePostById(posts, mediaOnlyPost.id).listItem,
               'media-only post list item',
+            )}
+          />
+        </View>
+        <View testID="media-load-error-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, loadErrorMediaPost.id).listItem,
+              'load-error media post list item',
+            )}
+          />
+        </View>
+        <View testID="media-load-error-three-list">
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, loadErrorThreeMediaPost.id).listItem,
+              'three-image load-error media post list item',
             )}
           />
         </View>
@@ -1552,6 +1664,7 @@ function ComposerMediaStatesStory() {
     {
       altText: '',
       asset: composerMediaAsset,
+      failure: { reason: 'file-too-large', stage: 'transfer' },
       key: 'failed',
       state: 'failed',
     },
@@ -2171,6 +2284,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const BodyTimeAndLayoutStates: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-block', '');
@@ -2232,6 +2346,43 @@ export const BodyTimeAndLayoutStates: Story = {
     expect(mediaOnly.queryByRole('img')).not.toBeInTheDocument();
     expect(mediaOnly.getByRole('button', { name: '민감한 이미지 표시' })).toHaveFocus();
 
+    const sensitiveTwoMedia = within(canvas.getByTestId('media-sensitive-two'));
+    const hiddenSensitiveTwo = sensitiveTwoMedia.getByTestId('post-media-sensitive');
+    const hiddenSensitiveTwoBounds = hiddenSensitiveTwo.getBoundingClientRect();
+    expect(hiddenSensitiveTwoBounds.height).toBeCloseTo(
+      (hiddenSensitiveTwoBounds.width - 8) / 2,
+      0,
+    );
+    expect(getComputedStyle(hiddenSensitiveTwo).borderTopWidth).toBe('0px');
+    expect(
+      hiddenSensitiveTwo.querySelector('[data-testid^="post-media-sensitive-tile-"]'),
+    ).toBeNull();
+    await userEvent.click(sensitiveTwoMedia.getByRole('button', { name: '민감한 이미지 표시' }));
+    const revealedSensitiveTwoBounds = sensitiveTwoMedia
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    expect(revealedSensitiveTwoBounds.height).toBeCloseTo(hiddenSensitiveTwoBounds.height, 0);
+    expect(sensitiveTwoMedia.getAllByRole('img')).toHaveLength(2);
+
+    const threeMedia = within(canvas.getByTestId('media-three'));
+    expect(threeMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
+      '1번째 3장 gallery 이미지',
+      '2번째 3장 gallery 이미지',
+      '3번째 3장 gallery 이미지',
+    ]);
+    const threeGallery = threeMedia.getByTestId('post-media-gallery');
+    const [firstThreeTile, secondThreeTile, thirdThreeTile] = [0, 1, 2].map((index) =>
+      threeMedia.getByTestId(`post-media-tile-3-${index}`).getBoundingClientRect(),
+    );
+    expect(
+      threeGallery.getBoundingClientRect().width / threeGallery.getBoundingClientRect().height,
+    ).toBeCloseTo(16 / 9, 1);
+    expect(getComputedStyle(threeGallery).borderTopWidth).toBe('0px');
+    expect(firstThreeTile!.height).toBeGreaterThan(secondThreeTile!.height);
+    expect(firstThreeTile!.left).toBeLessThan(secondThreeTile!.left);
+    expect(secondThreeTile!.left).toBeCloseTo(thirdThreeTile!.left, 0);
+    expect(secondThreeTile!.top).toBeLessThan(thirdThreeTile!.top);
+
     const fourMedia = within(canvas.getByTestId('media-four'));
     expect(fourMedia.getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
       '1번째 순서 이미지',
@@ -2239,6 +2390,22 @@ export const BodyTimeAndLayoutStates: Story = {
       '3번째 순서 이미지',
       '4번째 순서 이미지',
     ]);
+    const fourGallery = fourMedia.getByTestId('post-media-gallery');
+    const fourTiles = [0, 1, 2, 3].map((index) =>
+      fourMedia.getByTestId(`post-media-tile-4-${index}`).getBoundingClientRect(),
+    );
+    expect(
+      fourGallery.getBoundingClientRect().width / fourGallery.getBoundingClientRect().height,
+    ).toBeCloseTo(1, 1);
+    expect(getComputedStyle(fourGallery).borderTopWidth).toBe('0px');
+    for (const tile of fourTiles.slice(1)) {
+      expect(tile.width).toBeCloseTo(fourTiles[0]!.width, 0);
+      expect(tile.height).toBeCloseTo(fourTiles[0]!.height, 0);
+    }
+    expect(fourTiles[0]!.top).toBeCloseTo(fourTiles[1]!.top, 0);
+    expect(fourTiles[0]!.left).toBeCloseTo(fourTiles[2]!.left, 0);
+    expect(fourTiles[0]!.left).toBeLessThan(fourTiles[1]!.left);
+    expect(fourTiles[0]!.top).toBeLessThan(fourTiles[2]!.top);
     expect(within(canvas.getByTestId('media-unavailable')).getByRole('alert')).toHaveTextContent(
       '이미지를 불러올 수 없습니다.',
     );
@@ -2252,6 +2419,45 @@ export const BodyTimeAndLayoutStates: Story = {
       loadErrorMedia.findByRole('button', { name: '실패 이미지 다시 시도' }),
     ).resolves.toBeVisible();
     expect(loadErrorMedia.getByRole('img', { name: '정상 이미지' })).toBeInTheDocument();
+    const loadErrorMediaList = within(canvas.getByTestId('media-load-error-list'));
+    const twoGalleryBounds = loadErrorMediaList
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    const twoTileBounds = [0, 1].map((index) =>
+      loadErrorMediaList.getByTestId(`post-media-tile-2-${index}`).getBoundingClientRect(),
+    );
+    for (const tile of twoTileBounds) {
+      expect(tile.width / tile.height).toBeCloseTo(1, 1);
+    }
+    expect(twoTileBounds[0]!.width).toBeCloseTo(twoTileBounds[1]!.width, 0);
+    expect(twoGalleryBounds.height).toBeCloseTo(twoTileBounds[0]!.height, 0);
+    expect(twoGalleryBounds.width).toBeCloseTo(
+      twoTileBounds[0]!.width + twoTileBounds[1]!.width + 8,
+      0,
+    );
+    expect(
+      getComputedStyle(loadErrorMediaList.getByTestId('post-media-gallery')).borderTopWidth,
+    ).toBe('0px');
+    const compactRetryBounds = (
+      await loadErrorMediaList.findByRole('button', { name: '실패 이미지 다시 시도' })
+    ).getBoundingClientRect();
+    expect(compactRetryBounds.left).toBeGreaterThanOrEqual(twoTileBounds[0]!.left);
+    expect(compactRetryBounds.right).toBeLessThanOrEqual(twoTileBounds[0]!.right);
+    expect(compactRetryBounds.width).toBeLessThanOrEqual(twoTileBounds[0]!.width);
+    const loadErrorThreeMediaList = within(canvas.getByTestId('media-load-error-three-list'));
+    const threeErrorGalleryBounds = loadErrorThreeMediaList
+      .getByTestId('post-media-gallery')
+      .getBoundingClientRect();
+    expect(threeErrorGalleryBounds.width / threeErrorGalleryBounds.height).toBeCloseTo(16 / 9, 1);
+    const compactThreeErrorTileBounds = loadErrorThreeMediaList
+      .getByTestId('post-media-tile-3-1')
+      .getBoundingClientRect();
+    const compactThreeRetryBounds = (
+      await loadErrorThreeMediaList.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' })
+    ).getBoundingClientRect();
+    expect(compactThreeRetryBounds.height).toBeGreaterThanOrEqual(48);
+    expect(compactThreeRetryBounds.top).toBeGreaterThanOrEqual(compactThreeErrorTileBounds.top);
+    expect(compactThreeRetryBounds.bottom).toBeLessThanOrEqual(compactThreeErrorTileBounds.bottom);
     expect(
       within(canvas.getByTestId('media-list')).getByTestId('post-media-image-media-story'),
     ).toBeVisible();
@@ -4238,6 +4444,19 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
       replyButtons.filter((button) => button.getAttribute('aria-expanded') === 'true'),
     ).toEqual([replyButtons[0]]);
 
+    const parentRow = canvas.getByTestId('post-thread-item-route-visible-parent');
+    const parentComposer = within(parentRow).getByLabelText('답글 작성');
+    const parentConnector = canvas.getByTestId(
+      'post-thread-connector-route-visible-parent-route-current-after',
+    );
+    const parentRowBox = parentRow.getBoundingClientRect();
+    const parentComposerBox = parentComposer.getBoundingClientRect();
+    const parentConnectorBox = parentConnector.getBoundingClientRect();
+    expect(parentComposerBox.left - parentRowBox.left).toBe(64);
+    expect(parentRowBox.right - parentComposerBox.right).toBe(8);
+    expect(parentConnector).toBeVisible();
+    expect(parentConnectorBox.right).toBeLessThan(parentComposerBox.left);
+
     const body = canvas.getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '첫 Parent draft');
     await userEvent.click(replyButtons[1]!);
@@ -4304,12 +4523,15 @@ export const ComposerMediaStates: Story = {
     expect(canvas.queryByText('업로드 중…')).not.toBeInTheDocument();
     expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 실패')).toBeVisible();
+    expect(canvas.getByRole('alert')).toHaveTextContent(
+      '3번째 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
+    );
     expect(canvas.getByRole('button', { name: '첨부 이미지 1 제거' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '첨부 이미지 2 대체 텍스트' })).toHaveValue(
       '회색 이미지의 대체 텍스트',
     );
     expect(canvas.getByRole('switch', { name: '민감한 이미지로 표시' })).toBeChecked();
-    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 3 업로드 재시도' }));
+    await userEvent.click(canvas.getByLabelText('3번째 이미지 업로드 다시 시도'));
     expect(canvas.getByLabelText('첨부 이미지 3, 업로드 중')).toBeVisible();
   },
   render: () => <ComposerMediaStatesStory />,
@@ -5041,7 +5263,7 @@ export const ComposerReplyMediaFailureLifecycle: Story = {
       });
       expect(canvas.getByRole('button', { name: '답글 게시' })).toBeDisabled();
 
-      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 업로드 재시도' }));
+      await userEvent.click(canvas.getByLabelText('1번째 이미지 업로드 다시 시도'));
       await waitFor(() => {
         expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
       });

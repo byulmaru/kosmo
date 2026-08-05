@@ -8,6 +8,7 @@ import {
   Follow,
   Like,
   Note,
+  Object as ActivityObject,
   Reject,
   Undo,
   Update,
@@ -21,11 +22,22 @@ import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
 import { handleInboundDelete } from './inbound-delete';
 import { handleInboundFollow, handleInboundUndo } from './inbound-follow';
+import {
+  hasInboundErrorBeenObserved,
+  isExternalInboundError,
+  observeInbound,
+  withInboundObservability,
+} from './inbound-observability';
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
+import {
+  countLocalPostEmojiReactions,
+  dispatchLocalPostEmojiReactions,
+  firstLocalPostEmojiReactionsCursor,
+} from './local-post-reaction-collection';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
@@ -138,17 +150,47 @@ federation
   .setObjectDispatcher(Note, '/ap/note/{id}', dispatchLocalPostNote)
   .authorize(authorizeLocalPostNote);
 
+federation
+  .setCollectionDispatcher(
+    'activitypub-note-emoji-reactions',
+    ActivityObject,
+    '/ap/note/{id}/emoji-reactions',
+    dispatchLocalPostEmojiReactions,
+  )
+  .setCounter(countLocalPostEmojiReactions)
+  .setFirstCursor(firstLocalPostEmojiReactionsCursor)
+  .authorize((context, values) => authorizeLocalPostNote(context, { id: values.id ?? '' }));
+
 federation.setObjectDispatcher(Follow, '/ap/follow/{id}', dispatchLocalProfileFollow);
 
 federation
   .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
-  .on(Accept, handleInboundAccept)
-  .on(Announce, handleInboundAnnounce)
-  .on(Create, handleInboundCreate)
-  .on(Delete, handleInboundDelete)
-  .on(EmojiReact, handleInboundReaction)
-  .on(Follow, handleInboundFollow)
-  .on(Like, handleInboundReaction)
-  .on(Reject, handleInboundReject)
-  .on(Undo, handleInboundUndo)
-  .on(Update, handleInboundUpdate);
+  .on(Accept, withInboundObservability('accept', handleInboundAccept))
+  .on(Announce, withInboundObservability('announce', handleInboundAnnounce))
+  .on(Create, withInboundObservability('create', handleInboundCreate))
+  .on(Delete, withInboundObservability('delete', handleInboundDelete))
+  .on(EmojiReact, withInboundObservability('reaction', handleInboundReaction))
+  .on(Follow, withInboundObservability('follow', handleInboundFollow))
+  .on(Like, withInboundObservability('reaction', handleInboundReaction))
+  .on(Reject, withInboundObservability('reject', handleInboundReject))
+  .on(Undo, withInboundObservability('undo', handleInboundUndo))
+  .on(Update, withInboundObservability('update', handleInboundUpdate))
+  .onError((_context, error) => {
+    if (hasInboundErrorBeenObserved(error)) {
+      return;
+    }
+
+    // Fedify invokes this boundary for failures that happen before a typed
+    // listener receives an Activity (for example, malformed request JSON).
+    // Typed listener errors are marked observed by withInboundObservability,
+    // so SyntaxError is external only at this unobserved pre-dispatch edge.
+    const external = error instanceof SyntaxError || isExternalInboundError(error);
+    observeInbound({
+      activityType: 'Unknown',
+      error,
+      handler: 'listener',
+      outcome: external ? 'external_failure' : 'internal_failure',
+      phase: 'listener',
+      reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
+    });
+  });

@@ -33,13 +33,10 @@ type ApproveProfileFollowRequest = (input: {
   profileFollowRequestId: string;
 }>;
 
-type RejectProfileFollowRequest = (
-  input: {
-    actorProfileId: string;
-    profileFollowRequestId: string;
-  },
-  tx?: Transaction,
-) => Promise<{
+type RejectProfileFollowRequest = (input: {
+  actorProfileId: string;
+  profileFollowRequestId: string;
+}) => Promise<{
   followeeProfile: typeof Profiles.$inferSelect;
   profileFollowRequestId: string;
 }>;
@@ -163,6 +160,7 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(found.id), []);
   assert.equal(
     await db
       .select()
@@ -203,6 +201,7 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(request.id), []);
   await assert.rejects(
     lifecycle.rejectProfileFollowRequest!({
       actorProfileId: followee.id,
@@ -237,6 +236,7 @@ test('follower는 request를 취소하고 actor Profile과 삭제 ID를 받는�
       .then((rows) => rows.length),
     0,
   );
+  assert.deepEqual(await readNotifications(request.id), []);
 });
 
 test('participant가 아닌 actor는 request transition을 실행할 수 없다', async () => {
@@ -582,13 +582,13 @@ test('원격 Accept는 비활성 local participant의 pending을 보존한다', 
     .set({ state: ProfileState.DISABLED })
     .where(eq(Profiles.id, fixture.follower.id));
 
-  assert.equal(
+  assert.deepEqual(
     await lifecycle.acceptProfileFollowRequest({
       expectedRowId: fixture.request.id,
       followeeProfileId: fixture.followee.id,
       followerProfileId: fixture.follower.id,
     }),
-    false,
+    { kind: 'NOOP' },
   );
   assert.equal(await countRemotePairRows(ProfileFollowRequests, fixture), 1);
   assert.equal(await countRemotePairRows(ProfileFollows, fixture), 0);
@@ -633,7 +633,7 @@ test('원격 Accept 동시 처리는 pending을 한 번만 relation으로 승격
     lifecycle.acceptProfileFollowRequest(input),
   ]);
 
-  assert.equal(results.filter(Boolean).length, 1);
+  assert.deepEqual(results.map(({ kind }) => kind).sort(), ['ACCEPTED', 'ALREADY_ESTABLISHED']);
   assert.equal(await countRemotePairRows(ProfileFollowRequests, fixture), 0);
   assert.equal(await countRemotePairRows(ProfileFollows, fixture), 1);
   assert.deepEqual(await readRemotePairCounts(fixture), {
@@ -654,7 +654,12 @@ test('원격 Accept와 Reject 경쟁에서는 exact row 전이 하나만 성공�
     removeInboundFollow(input),
   ]);
 
-  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(
+    results.filter(
+      (result) => result === true || (typeof result === 'object' && result.kind === 'ACCEPTED'),
+    ).length,
+    1,
+  );
   assert.equal(await countRemotePairRows(ProfileFollowRequests, fixture), 0);
   const relationCount = await countRemotePairRows(ProfileFollows, fixture);
   assert.deepEqual(await readRemotePairCounts(fixture), {
@@ -680,7 +685,7 @@ test('원격 Accept와 Reject는 교체된 pending에 이전 request id를 적�
     followerProfileId: fixture.follower.id,
   };
 
-  assert.equal(await lifecycle.acceptProfileFollowRequest(staleInput), false);
+  assert.deepEqual(await lifecycle.acceptProfileFollowRequest(staleInput), { kind: 'NOOP' });
   assert.equal(await removeInboundFollow(staleInput), false);
   assert.deepEqual(
     await db

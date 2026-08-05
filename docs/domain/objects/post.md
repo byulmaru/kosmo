@@ -164,6 +164,13 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
   제거로 Reply Parent 관계가 `null`이 된 뒤에는 `inReplyTo`를 제공하지 않는다.
 - Content와 Reply Parent 없이 Repost Source만 있는 Repost는 Note로 표현하지 않는다. 후속 Announce와
   Reaction Activity는 대상 Post의 같은 ActivityPub Post identity를 `object`로 재사용한다.
+- Local Note는 FEP-c0e0 `emojiReactions` collection URI를 광고한다. collection projection은 현재 Note에
+  연결된 Reaction 중 ActivityPub identity로 표현할 수 있는 Local Profile과 Remote Profile의 Reaction을 포함하며,
+  collection 접근은 Note 역참조와 같은 Post Visibility, Post Eligibility와 Author Profile/Instance availability
+  조건을 따른다. Tombstone, Content가 없는 Post 또는 unavailable Post는 Note와 collection을 제공하지 않는다.
+- collection item의 `object`는 항상 대상 Local Note URI다. Reaction별 ActivityPub item identity와 `Like`·`EmojiReact`
+  투영은 [Reaction](./reaction.md)의 collection projection 계약을 따른다. Remote Note를 새로 fetch하거나
+  collection을 backfill해 item을 만들지 않는다.
 
 ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 
@@ -216,8 +223,8 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   unavailable이거나, 지원하지 않는 Visibility이면 Note를 제공하지 않는다. Author Local Instance의 HTTP
   경계는 그 Instance origin의 Author Profile과 Note를 역참조할 수 있어야 한다. 이 unavailable 응답은 Post의
   존재를 노출하지 않는다.
-- Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery는 각
-  lifecycle과 delivery 계약이 소유한다.
+- Local Note의 ActivityPub Tombstone, `Delete`, `Create`, `Announce`, `Like`, `EmojiReact`, `Undo` delivery와
+  `emojiReactions` collection projection은 각 lifecycle과 delivery 계약이 소유한다.
 
 ### 검색
 
@@ -244,6 +251,7 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
 - 게시 공유 참조: Post Share Reference
 - ActivityPub 게시 정체성: ActivityPub Post Identity
 - 로컬 Note 표현: Local Note Representation
+- `emojiReactions` collection: Local Note가 광고하는 FEP-c0e0 Reaction collection projection
 
 ## 제외/보류
 

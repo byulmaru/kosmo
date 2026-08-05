@@ -3,6 +3,10 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import {
+  asImageUploadError,
+  assertImageUploadResponse,
+} from '@/components/media/imageUploadErrors';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -26,7 +30,11 @@ import type { ProfileEditRouteIssueMediaUploadUrlMutation } from './__generated_
 import type { ProfileEditRouteQuery } from './__generated__/ProfileEditRouteQuery.graphql';
 import type { ProfileEditRouteUpdateProfileMutation } from './__generated__/ProfileEditRouteUpdateProfileMutation.graphql';
 import type { ProfileEditRouteImage } from './profileEditMedia';
-import type { ProfileEditDraft, ProfileEditSubmitState } from './profileEditState';
+import type {
+  ProfileEditDraft,
+  ProfileEditFieldErrors,
+  ProfileEditSubmitState,
+} from './profileEditState';
 
 type ImageField = 'avatar' | 'header';
 
@@ -35,6 +43,31 @@ function requireProfileFollowPolicy(value: string): ProfileEditDraft['followPoli
     return value;
   }
   throw new Error('Unsupported Profile follow policy');
+}
+
+function profileTagValidationError(errors: ReadonlyArray<unknown> | null | undefined) {
+  for (const error of errors ?? []) {
+    if (!error || typeof error !== 'object') {
+      continue;
+    }
+    const { extensions, message } = error as { extensions?: unknown; message?: unknown };
+    if (!extensions || typeof extensions !== 'object' || typeof message !== 'string') {
+      continue;
+    }
+    const { code, field } = extensions as { code?: unknown; field?: unknown };
+    if (
+      code === 'VALIDATION' &&
+      typeof field === 'string' &&
+      (field === 'tags' || field.startsWith('tags.'))
+    ) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
+function areTagsEqual(left: ReadonlyArray<string>, right: ReadonlyArray<string>) {
+  return left.length === right.length && left.every((tag, index) => tag === right[index]);
 }
 
 const query = graphql`
@@ -50,6 +83,10 @@ const query = graphql`
       displayName
       bio
       followPolicy
+      tags {
+        id
+        name
+      }
       avatar {
         id
         url
@@ -93,6 +130,10 @@ const updateProfileMutation = graphql`
         displayName
         bio
         followPolicy
+        tags {
+          id
+          name
+        }
         avatar {
           id
           url
@@ -144,7 +185,7 @@ function EditableProfileRoute({
     displayName: profile.displayName,
     followPolicy: requireProfileFollowPolicy(profile.followPolicy),
     header: initialHeader.presentation,
-    tags: [],
+    tags: profile.tags.map((tag) => tag.name),
   };
   const [avatar, setAvatar] = useState(initialAvatar);
   const [header, setHeader] = useState(initialHeader);
@@ -154,6 +195,7 @@ function EditableProfileRoute({
   const selecting = useRef(false);
   const [cleanValue, setCleanValue] = useState(initialValue);
   const [value, setValue] = useState(initialValue);
+  const [serverErrors, setServerErrors] = useState<ProfileEditFieldErrors>();
   const [submitState, setSubmitState] = useState<ProfileEditSubmitState>({ kind: 'idle' });
   const [commitIssueMediaUploadUrl] = useMutation<ProfileEditRouteIssueMediaUploadUrlMutation>(
     issueMediaUploadUrlMutation,
@@ -237,9 +279,7 @@ function EditableProfileRoute({
               headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
               method: 'PUT',
             });
-            if (!response.ok) {
-              throw new Error('Profile image upload failed');
-            }
+            await assertImageUploadResponse(response);
           },
         });
         if (mediaId) {
@@ -247,9 +287,15 @@ function EditableProfileRoute({
             completeProfileEditImageUpload(current, generation, mediaId),
           );
         }
-      } catch {
+      } catch (error) {
         if (mounted.current) {
-          updateImage(field, (current) => failProfileEditImageUpload(current, generation));
+          updateImage(field, (current) =>
+            failProfileEditImageUpload(
+              current,
+              generation,
+              asImageUploadError(error, 'transfer').failure,
+            ),
+          );
         }
       }
     },
@@ -310,10 +356,23 @@ function EditableProfileRoute({
     showToast('프로필을 저장하지 못했어요.');
   }, [showToast]);
 
+  const handleChange = useCallback(
+    (next: ProfileEditDraft) => {
+      if (!areTagsEqual(value.tags, next.tags)) {
+        setServerErrors((current) =>
+          current?.tags === undefined ? current : { ...current, tags: undefined },
+        );
+      }
+      setValue(next);
+    },
+    [value.tags],
+  );
+
   const submit = useCallback(
     (draft: ProfileEditDraft) => {
       const avatarId = profileEditImageInput(avatarRef.current);
       const headerId = profileEditImageInput(headerRef.current);
+      setServerErrors(undefined);
       setSubmitState({ kind: 'saving' });
       commitUpdateProfile({
         variables: {
@@ -323,14 +382,26 @@ function EditableProfileRoute({
             displayName: draft.displayName,
             followPolicy: draft.followPolicy,
             ...(headerId === undefined ? {} : { headerId }),
+            tags: [...draft.tags],
           },
         },
         onCompleted: (response, errors) => {
           if (errors?.length) {
+            const tagsError = profileTagValidationError(errors);
+            if (tagsError) {
+              setServerErrors({ tags: tagsError });
+              setSubmitState({ kind: 'idle' });
+              return;
+            }
             handleSaveFailure();
             return;
           }
-          setCleanValue(draft);
+          const savedDraft = {
+            ...draft,
+            tags: response.updateProfile.profile.tags.map((tag) => tag.name),
+          };
+          setValue(savedDraft);
+          setCleanValue(savedDraft);
           setSubmitState({ kind: 'idle' });
           allowNextNavigation(() => {
             try {
@@ -367,14 +438,15 @@ function EditableProfileRoute({
         onBack={() =>
           router.canGoBack() ? router.back() : router.replace(`/${profile.relativeHandle}` as Href)
         }
-        onChange={setValue}
+        onChange={handleChange}
         onHeaderEdit={() => selectImage('header')}
         onHeaderRemove={() => removeImage('header')}
         onHeaderRetry={() => retryImage('header')}
         onSubmit={submit}
-        showTags={false}
+        serverErrors={serverErrors}
+        showTags
         submitState={submitState}
-        value={{ ...value, avatar: avatar.presentation, header: header.presentation, tags: [] }}
+        value={{ ...value, avatar: avatar.presentation, header: header.presentation }}
       />
       <ProfileEditDiscardDialog {...dialogProps} />
     </>

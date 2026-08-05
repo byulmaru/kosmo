@@ -22,6 +22,11 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Web `< compact`와 Android/iOS 목록 surface에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.
 - Post 상세에서는 compact `ReplyComposer` 진입점을 현재 thread 안에 유지하고, 활성화하면 그 자리에서 기존
   Composer를 인라인으로 펼친다.
+- Post 상세의 ancestor·descendant `PostListItem`에서 inline Composer 외곽은 thread row의 왼쪽 `64px`,
+  오른쪽 `8px` content boundary를 따른다. current Post의 inline Composer는 기존 `PostLayout` content column
+  boundary를 유지한다.
+- 이 boundary는 connector의 위치·길이를 바꾸거나 숨기지 않고 Composer가 connector lane을 침범하지 않게
+  한다. connector는 caller가 공급한 direct relation을 계속 표현한다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
 
 ## Web Reply modal
@@ -153,6 +158,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
   upload·mutation completion 격리를 확인한다.
 - Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의
   targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
+- 상세 ancestor inline Composer가 row 기준 왼쪽 `64px`, 오른쪽 `8px`에 놓이고 connector를 표시한 채
+  `connector.right < composer.left`를 만족하는지 Storybook과 `390px` Web E2E에서 확인한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,
   platform back과 접근성 runtime은 이번 Web 우선 PR의 Ready 근거로 사용하지 않고 Native 출시 gate에서 별도로
   확인한다.

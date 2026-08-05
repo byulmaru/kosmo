@@ -12,6 +12,12 @@ import {
   View,
 } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
+import {
+  asImageUploadError,
+  assertImageUploadResponse,
+  formatImageUploadFailureMessage,
+  formatImageUploadRetryLabel,
+} from '@/components/media/imageUploadErrors';
 import { TextField } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
@@ -25,6 +31,7 @@ import {
 } from './postComposerMedia';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
+import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 import type { PostComposerCompleteMediaUploadMutation } from './__generated__/PostComposerCompleteMediaUploadMutation.graphql';
 import type { PostComposerIssueMediaUploadUrlMutation } from './__generated__/PostComposerIssueMediaUploadUrlMutation.graphql';
 
@@ -32,6 +39,7 @@ export type ComposerMediaItem = {
   readonly asset: ImagePicker.ImagePickerAsset;
   readonly key: string;
   readonly mediaId?: string;
+  readonly failure?: ImageUploadFailure;
   readonly state: 'uploading' | 'ready' | 'failed';
   readonly altText: string;
 };
@@ -102,7 +110,9 @@ export function PostComposerMediaControls({
 
   const uploadMedia = async (key: string, asset: ImagePicker.ImagePickerAsset) => {
     updateMedia((items) =>
-      items.map((item) => (item.key === key ? { ...item, state: 'uploading' } : item)),
+      items.map((item) =>
+        item.key === key ? { ...item, failure: undefined, state: 'uploading' } : item,
+      ),
     );
 
     try {
@@ -146,9 +156,7 @@ export function PostComposerMediaControls({
             headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
             method: 'PUT',
           });
-          if (!uploaded.ok) {
-            throw new Error('이미지 전송에 실패했습니다.');
-          }
+          await assertImageUploadResponse(uploaded);
         },
       });
       if (mediaId === null) {
@@ -157,12 +165,16 @@ export function PostComposerMediaControls({
       updateMedia((items) =>
         items.map((item) => (item.key === key ? { ...item, mediaId, state: 'ready' } : item)),
       );
-    } catch {
+    } catch (error) {
       if (!mounted.current || removedMediaKeys.current.has(key)) {
         return;
       }
       updateMedia((items) =>
-        items.map((item) => (item.key === key ? { ...item, state: 'failed' } : item)),
+        items.map((item) =>
+          item.key === key
+            ? { ...item, failure: asImageUploadError(error, 'transfer').failure, state: 'failed' }
+            : item,
+        ),
       );
     }
   };
@@ -372,7 +384,7 @@ export function PostComposerMediaItems({
                 ? '업로드 완료'
                 : '업로드 실패'
           }`}
-          accessibilityLiveRegion="polite"
+          accessibilityLiveRegion={item.state === 'failed' ? undefined : 'polite'}
           key={item.key}
           style={styles.mediaItem}
         >
@@ -396,7 +408,7 @@ export function PostComposerMediaItems({
                   </View>
                 ) : (
                   <Pressable
-                    accessibilityLabel={`첨부 이미지 ${index + 1} 업로드 재시도`}
+                    accessibilityLabel={formatImageUploadRetryLabel(`${index + 1}번째 이미지`)}
                     accessibilityRole="button"
                     onPress={() => onRetry(item)}
                     style={[StyleSheet.absoluteFill, styles.mediaOverlay]}
@@ -430,6 +442,16 @@ export function PostComposerMediaItems({
                 onChangeText={(altText) => onAltTextChange(item.key, altText)}
                 value={item.altText}
               />
+            </View>
+          ) : null}
+          {item.state === 'failed' ? (
+            <View style={styles.mediaItemBody}>
+              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+                {formatImageUploadFailureMessage(
+                  `${index + 1}번째 이미지`,
+                  item.failure ?? { reason: 'transient', stage: 'transfer' },
+                )}
+              </Text>
             </View>
           ) : null}
         </View>

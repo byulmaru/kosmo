@@ -10,14 +10,16 @@ Client ID가 있는 Kosmo Web은 OpenPanel 자동 수집과 10% replay를 시작
 
 **Guardrails**
 
-- Client ID가 없거나 native인 경우 client와 분석 전송을 만들지 않고 Web SDK를 native bundle에 포함하지 않는다.
+- Client ID가 없거나 현재 Native runtime인 경우 client와 분석 전송을 만들지 않는다. Web SDK는 Native bundle에
+  포함하지 않으며, Native 분석 지원·검증은 PROD-537의 별도 gate에서 결정한다.
 - Account의 opaque ID만 identity로 사용한다.
 - 모든 입력값과 canonical Post Content를 replay에서 마스킹한다.
 - 분석 실패는 인증·렌더링·navigation을 실패시키지 않는다.
 
 **Verification**
 
-- Client ID 유무, guest 초기화, identify·clear, native no-op, replay 설정과 Post Content mask를 unit test와 typecheck로 검증한다.
+- Client ID 유무, guest 초기화, identify·clear, 현재 Native no-op 경계, replay 설정과 Post Content mask를 unit test와
+  typecheck로 검증한다. 이 결과를 Native 분석 runtime 완료로 일반화하지 않는다.
 
 - [x] 1.1 Web 전용 OpenPanel dependency와 Client ID 기반 초기화를 구현한다.
 - [x] 1.2 Session의 Account identify와 로그아웃 clear를 구현한다.
@@ -89,7 +91,8 @@ Web의 Profile 생성·선택, Post 생성, Follow와 검색 흐름이 실제 �
 
 **Guardrails**
 
-- Android·iOS와 재게시·반응·북마크 구현을 현재 변경에 포함하지 않는다.
+- 현재 Web 변경의 deliverable·verification에는 Android·iOS 분석 구현과 재게시·반응·북마크 계측을 포함하지 않는다.
+  Native 분석 지원·검증은 PROD-537의 별도 release gate로 남긴다.
 - 실제 production Client ID나 인증 정보를 repository에 저장하지 않는다.
 
 **Verification**

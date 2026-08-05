@@ -11,10 +11,12 @@ export type PostMediaItem = {
 };
 
 export function PostMediaImage({
+  fill = false,
   index,
   interactive = true,
   item,
 }: {
+  readonly fill?: boolean;
   readonly index: number;
   readonly interactive?: boolean;
   readonly item: PostMediaItem;
@@ -27,6 +29,7 @@ export function PostMediaImage({
   const measuredUrl = useRef<string | null>(null);
   currentUrl.current = item.url;
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
+  const canRetry = Boolean(item.url) && Boolean(interactive);
   const handleError = useCallback(() => setStatus('error'), []);
   const handleLoadStart = useCallback(() => setStatus('loading'), []);
   const updateAspectRatio = useCallback((url: string, width: number, height: number) => {
@@ -38,7 +41,7 @@ export function PostMediaImage({
   const handleLoad = useCallback(
     (event?: ImageLoadEvent) => {
       setStatus('ready');
-      if (!item.url || measuredUrl.current === item.url) {
+      if (fill || !item.url || measuredUrl.current === item.url) {
         return;
       }
 
@@ -55,11 +58,11 @@ export function PostMediaImage({
         () => undefined,
       );
     },
-    [item.url, updateAspectRatio],
+    [fill, item.url, updateAspectRatio],
   );
 
   useEffect(() => {
-    if (!item.url) {
+    if (fill || !item.url) {
       return;
     }
 
@@ -77,19 +80,25 @@ export function PostMediaImage({
     return () => {
       active = false;
     };
-  }, [generation, item.url, updateAspectRatio]);
+  }, [fill, generation, item.url, updateAspectRatio]);
 
   if (!item.url || status === 'error') {
     return (
       <View
         accessibilityLiveRegion="polite"
-        style={[styles.fallback, { backgroundColor: theme.surface, borderColor: theme.border }]}
+        style={[
+          styles.fallback,
+          fill ? styles.fillFallback : null,
+          { backgroundColor: theme.surface, borderColor: theme.border },
+        ]}
         testID={`post-media-error-${item.id}`}
       >
-        <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
-          {accessibilityLabel}을 불러오지 못했습니다.
-        </Text>
-        {item.url && interactive ? (
+        {canRetry ? null : (
+          <Text style={[styles.fallbackText, { color: theme.textSecondary }]}>
+            {accessibilityLabel}을 불러오지 못했습니다.
+          </Text>
+        )}
+        {canRetry ? (
           <Pressable
             accessibilityLabel={`${accessibilityLabel} 다시 시도`}
             accessibilityRole="button"
@@ -99,6 +108,7 @@ export function PostMediaImage({
             }}
             style={({ pressed }) => [
               styles.retryButton,
+              fill ? styles.fillRetryButton : null,
               { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
             ]}
           >
@@ -111,7 +121,11 @@ export function PostMediaImage({
 
   return (
     <View
-      style={[styles.imageFrame, { aspectRatio, backgroundColor: theme.surface }]}
+      style={[
+        styles.imageFrame,
+        fill ? styles.fillFrame : { aspectRatio },
+        { backgroundColor: theme.surface },
+      ]}
       testID={`post-media-frame-${item.id}`}
     >
       <Image
@@ -142,7 +156,10 @@ const styles = StyleSheet.create({
     minHeight: 144,
     padding: spacing.lg,
   },
+  fillFallback: { height: '100%', minHeight: 0, padding: spacing.xs, width: '100%' },
   fallbackText: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  fillFrame: { height: '100%', minHeight: 0, width: '100%' },
+  fillRetryButton: { minWidth: 0, paddingHorizontal: spacing.xs, width: '100%' },
   retryButton: {
     alignItems: 'center',
     borderRadius: radii.full,

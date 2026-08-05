@@ -14,8 +14,9 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { cancelProfileFollowRequest, followProfile } from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -35,6 +36,7 @@ let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
+let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
@@ -63,6 +65,7 @@ describe('Notification GraphQL Node boundary', () => {
       pg,
       PostContents,
       Posts,
+      ProfileFollowRequests,
       ProfileFollows,
       Profiles,
       Reactions,
@@ -164,6 +167,529 @@ describe('Notification GraphQL Node boundary', () => {
     );
     assert.equal((result.data?.nodes[0] as NotificationNode).profile.id, relatedProfileIds[1]);
     assert.equal((result.data?.nodes[2] as NotificationNode).profile.id, relatedProfileIds[0]);
+  });
+
+  test('resolves FOLLOW_REQUEST rows through Node, list, unread count and Read', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-recipient');
+    const requester = await createProfile('follow-request-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: requester.id })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: request.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('FollowRequestNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const requesterId = encodeGlobalId('Profile', requester.id);
+    const requestId = encodeGlobalId('ProfileFollowRequest', request.id);
+
+    const result = await requestGraphQL<{
+      node: {
+        __typename: string;
+        followRequest: { id: string };
+        profile: { id: string };
+      } | null;
+      profile: {
+        unreadNotificationCount: number;
+        notifications: {
+          edges: Array<{
+            node: {
+              __typename: string;
+              followRequest: { id: string };
+              profile: { id: string };
+            };
+          }>;
+        };
+      } | null;
+    }>(
+      `query FollowRequestNotification($notificationId: ID!, $profileId: ID!) {
+        node(id: $notificationId) {
+          __typename
+          ... on FollowRequestNotification { profile { id } followRequest { id } }
+        }
+        profile: node(id: $profileId) {
+          ... on Profile {
+            unreadNotificationCount
+            notifications(first: 10) {
+              edges {
+                node {
+                  __typename
+                  ... on FollowRequestNotification { profile { id } followRequest { id } }
+                }
+              }
+            }
+          }
+        }
+      }`,
+      { notificationId, profileId: recipientId },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node, {
+      __typename: 'FollowRequestNotification',
+      followRequest: { id: requestId },
+      profile: { id: requesterId },
+    });
+    assert.equal(result.data?.profile?.unreadNotificationCount, 1);
+    assert.deepEqual(result.data?.profile?.notifications.edges[0]?.node, {
+      __typename: 'FollowRequestNotification',
+      followRequest: { id: requestId },
+      profile: { id: requesterId },
+    });
+
+    const marked = await markNotificationRead(notificationId, auth.token);
+    assertNoGraphQLErrors(marked);
+    assert.equal(marked.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
+  });
+
+  test('uses the visible Follow Request source snapshot for Node and connection fields', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-snapshot-recipient');
+    const requester = await createProfile('follow-request-snapshot-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: requester.id })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: request.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('FollowRequestNotification', notification.id);
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+    const requestId = encodeGlobalId('ProfileFollowRequest', request.id);
+    const requesterId = encodeGlobalId('Profile', requester.id);
+
+    try {
+      const result = await requestGraphQL<{
+        node: {
+          __typename: string;
+          profile: { id: string };
+          followRequest: { id: string };
+        } | null;
+        profile: {
+          notifications: {
+            edges: Array<{
+              node: {
+                __typename: string;
+                profile: { id: string };
+                followRequest: { id: string };
+              };
+            }>;
+          };
+        } | null;
+      }>(
+        `query FollowRequestSourceSnapshot($notificationId: ID!, $profileId: ID!) {
+          node(id: $notificationId) {
+            __typename
+            ... on FollowRequestNotification { profile { id } followRequest { id } }
+          }
+          profile: node(id: $profileId) {
+            ... on Profile {
+              notifications(first: 10) {
+                edges {
+                  node {
+                    __typename
+                    ... on FollowRequestNotification { profile { id } followRequest { id } }
+                  }
+                }
+              }
+            }
+          }
+        }`,
+        { notificationId, profileId: recipientId },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.node, {
+        __typename: 'FollowRequestNotification',
+        followRequest: { id: requestId },
+        profile: { id: requesterId },
+      });
+      assert.deepEqual(result.data?.profile?.notifications.edges[0]?.node, {
+        __typename: 'FollowRequestNotification',
+        followRequest: { id: requestId },
+        profile: { id: requesterId },
+      });
+    } finally {
+      await db.delete(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, request.id));
+    }
+  });
+
+  test('keeps the Follow Request Read payload source snapshot when source deletion overlaps update', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-read-snapshot-recipient');
+    const requester = await createProfile('follow-request-read-snapshot-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: requester.id })
+      .returning()
+      .then(firstOrThrow);
+    const notification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: request.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const notificationId = encodeGlobalId('FollowRequestNotification', notification.id);
+    const requestId = encodeGlobalId('ProfileFollowRequest', request.id);
+    const requesterId = encodeGlobalId('Profile', requester.id);
+    let functionInstalled = false;
+    let triggerInstalled = false;
+    try {
+      await db.execute(
+        sql.raw(`
+        CREATE FUNCTION delete_follow_request_on_notification_read() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.kind = 'FOLLOW_REQUEST'::notification_kind
+             AND OLD.read_at IS NULL
+             AND NEW.read_at IS NOT NULL THEN
+            DELETE FROM "profile_follow_request" WHERE id = OLD.source_id;
+          END IF;
+          RETURN NEW;
+        END;
+        $$
+      `),
+      );
+      functionInstalled = true;
+      await db.execute(
+        sql.raw(`
+        CREATE TRIGGER delete_follow_request_on_notification_read
+        BEFORE UPDATE OF read_at ON "notification"
+        FOR EACH ROW
+        EXECUTE FUNCTION delete_follow_request_on_notification_read()
+      `),
+      );
+      triggerInstalled = true;
+
+      const result = await requestGraphQL<{
+        markNotificationRead: {
+          notification: {
+            id: string;
+            readAt: string | null;
+            profile: { id: string };
+            followRequest: { id: string };
+          };
+        };
+      }>(
+        `mutation MarkFollowRequestRead($id: ID!) {
+          markNotificationRead(input: { id: $id }) {
+            notification {
+              id
+              readAt
+              ... on FollowRequestNotification { profile { id } followRequest { id } }
+            }
+          }
+        }`,
+        { id: notificationId },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.markNotificationRead.notification.id, notificationId);
+      assert.equal(result.data?.markNotificationRead.notification.profile.id, requesterId);
+      assert.equal(result.data?.markNotificationRead.notification.followRequest.id, requestId);
+      assert.equal(
+        (
+          await db
+            .select({ id: ProfileFollowRequests.id })
+            .from(ProfileFollowRequests)
+            .where(eq(ProfileFollowRequests.id, request.id))
+        ).length,
+        0,
+      );
+    } finally {
+      if (triggerInstalled) {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS delete_follow_request_on_notification_read ON ${Notifications}`,
+        );
+      }
+      if (functionInstalled) {
+        await db.execute(sql`DROP FUNCTION IF EXISTS delete_follow_request_on_notification_read()`);
+      }
+    }
+  });
+
+  test('does not leave a stale row when terminal request deletion overlaps post-commit creation', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-race-recipient');
+    const requester = await createProfile('follow-request-race-requester');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    await db
+      .update(Profiles)
+      .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
+      .where(eq(Profiles.id, recipient.id));
+
+    // The trigger is test-only: it pauses the INSERT after the source SELECT has
+    // observed and locked the pending row. The terminal delete must reach that row
+    // lock before the INSERT is released, proving the final state has no orphan.
+    const advisoryKey = 321_321;
+    const control = await pg.reserve();
+    let unlocked = false;
+    let functionInstalled = false;
+    let triggerInstalled = false;
+    let followPromise: ReturnType<typeof followProfile> | undefined;
+    let cancelPromise: ReturnType<typeof cancelProfileFollowRequest> | undefined;
+    try {
+      await control`SELECT pg_advisory_lock(${advisoryKey})`;
+      await db.execute(
+        sql.raw(`
+        CREATE FUNCTION block_follow_request_notification_insert() RETURNS trigger
+        LANGUAGE plpgsql AS $$
+        BEGIN
+          PERFORM pg_advisory_lock(${advisoryKey});
+          PERFORM pg_advisory_unlock(${advisoryKey});
+          RETURN NEW;
+        END;
+        $$
+      `),
+      );
+      functionInstalled = true;
+      await db.execute(
+        sql.raw(`
+        CREATE TRIGGER follow_request_notification_race
+        BEFORE INSERT ON "notification"
+        FOR EACH ROW WHEN (NEW.kind = 'FOLLOW_REQUEST'::notification_kind)
+        EXECUTE FUNCTION block_follow_request_notification_insert()
+      `),
+      );
+      triggerInstalled = true;
+
+      followPromise = followProfile({
+        followerProfileId: requester.id,
+        followeeProfileId: recipient.id,
+      });
+      let insertBlocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const activity = await db.execute(sql`
+          SELECT 1
+          FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock'
+            AND query ILIKE '%insert into "notification"%'
+          LIMIT 1
+        `);
+        if (activity.length > 0) {
+          insertBlocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(insertBlocked, true);
+
+      const request = await db
+        .select()
+        .from(ProfileFollowRequests)
+        .where(
+          and(
+            eq(ProfileFollowRequests.followerProfileId, requester.id),
+            eq(ProfileFollowRequests.followeeProfileId, recipient.id),
+          ),
+        )
+        .then(firstOrThrow);
+      cancelPromise = cancelProfileFollowRequest({
+        actorProfileId: requester.id,
+        profileFollowRequestId: request.id,
+      });
+      let deleteBlocked = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const activity = await db.execute(sql`
+          SELECT 1
+          FROM pg_stat_activity
+          WHERE wait_event_type = 'Lock'
+            AND wait_event IN ('transactionid', 'tuple')
+            AND query ILIKE '%delete from "profile_follow_request"%'
+          LIMIT 1
+        `);
+        if (activity.length > 0) {
+          deleteBlocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      assert.equal(deleteBlocked, true);
+      await control`SELECT pg_advisory_unlock(${advisoryKey})`;
+      unlocked = true;
+      const cancelResult = await cancelPromise;
+      assert.equal(cancelResult.profileFollowRequestId, request.id);
+      const result = await followPromise;
+      assert.equal(result.result.kind, 'PENDING');
+
+      const stale = await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, request.id));
+      assert.equal(stale.length, 0);
+      const notificationId = encodeGlobalId('FollowRequestNotification', request.id);
+      const recipientId = encodeGlobalId('Profile', recipient.id);
+      assert.deepEqual(await loadNodes([notificationId], auth.token), [null]);
+      const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+      assertNoGraphQLErrors(connection);
+      assert.deepEqual(connection.data?.node?.notifications.edges, []);
+      const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+      assertNoGraphQLErrors(count);
+      assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
+    } finally {
+      if (!unlocked) {
+        await control`SELECT pg_advisory_unlock(${advisoryKey})`;
+        unlocked = true;
+      }
+      // If setup or the blocking poll failed, let the in-flight source action
+      // finish before dropping its test-only trigger/function.
+      await cancelPromise?.catch(() => undefined);
+      await followPromise?.catch(() => undefined);
+      if (triggerInstalled) {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS follow_request_notification_race ON ${Notifications}`,
+        );
+      }
+      if (functionInstalled) {
+        await db.execute(sql`DROP FUNCTION IF EXISTS block_follow_request_notification_insert()`);
+      }
+      control.release();
+    }
+  });
+
+  test('hides unavailable FOLLOW_REQUEST rows from Node, connection, count and Read', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('follow-request-hidden-recipient');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+
+    const visibleRequester = await createProfile('follow-request-visible-requester');
+    const visibleRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: visibleRequester.id })
+      .returning()
+      .then(firstOrThrow);
+    const visibleNotification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: visibleRequest.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const hiddenRequester = await createProfile('follow-request-hidden-requester');
+    const hiddenRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: hiddenRequester.id })
+      .returning()
+      .then(firstOrThrow);
+    const hiddenNotification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: hiddenRequest.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const mismatchedFollowee = await createProfile('follow-request-mismatched-followee');
+    const mismatchedRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: mismatchedFollowee.id, followerProfileId: visibleRequester.id })
+      .returning()
+      .then(firstOrThrow);
+    const mismatchedNotification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: mismatchedRequest.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const missingSource = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: crypto.randomUUID(),
+      })
+      .returning()
+      .then(firstOrThrow);
+    const deletedRequester = await createProfile('follow-request-deleted-requester');
+    const deletedRequest = await db
+      .insert(ProfileFollowRequests)
+      .values({ followeeProfileId: recipient.id, followerProfileId: deletedRequester.id })
+      .returning()
+      .then(firstOrThrow);
+    const deletedNotification = await db
+      .insert(Notifications)
+      .values({
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: recipient.id,
+        sourceId: deletedRequest.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.delete(ProfileFollowRequests).where(eq(ProfileFollowRequests.id, deletedRequest.id));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, hiddenRequester.id));
+
+    const ids = [
+      visibleNotification,
+      hiddenNotification,
+      mismatchedNotification,
+      missingSource,
+      deletedNotification,
+    ].map(({ id }) => encodeGlobalId('FollowRequestNotification', id));
+    const recipientId = encodeGlobalId('Profile', recipient.id);
+
+    assert.deepEqual(
+      await loadNodes(ids.slice(1), auth.token),
+      ids.slice(1).map(() => null),
+    );
+    const connection = await loadNotificationConnection(recipientId, auth.token, { first: 10 });
+    assertNoGraphQLErrors(connection);
+    assert.deepEqual(
+      connection.data?.node?.notifications.edges.map(({ node }) => node.id),
+      [ids[0]],
+    );
+    const count = await loadUnreadNotificationCounts([recipientId], auth.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
+
+    for (const id of ids.slice(1)) {
+      const result = await markNotificationRead(id, auth.token);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    }
+    assert.deepEqual(
+      await Promise.all(
+        [hiddenNotification, mismatchedNotification, missingSource, deletedNotification].map(
+          ({ id }) => notificationReadAt(id),
+        ),
+      ),
+      [null, null, null, null],
+    );
   });
 
   test('loads Reply sources only for concrete source fields and batches them per request', async () => {
@@ -277,6 +803,47 @@ describe('Notification GraphQL Node boundary', () => {
         `DROP TRIGGER IF EXISTS fail_reply_notification_insert ON notification; DROP FUNCTION IF EXISTS fail_reply_notification_insert();`,
       );
     }
+  });
+
+  test('Local Reply 작성부터 thread 반영·inbox·Read·결과 Reply 이동 대상까지 수직 흐름을 유지한다', async () => {
+    const parentAuthor = await createAuthenticatedSession();
+    const replyAuthor = await createAuthenticatedSession();
+    const parent = await createContentPost(parentAuthor.profile.id);
+
+    const created = await requestCreateReply(parent.id, replyAuthor.token, PostVisibility.UNLISTED);
+    assertNoGraphQLErrors(created);
+    const replyId = created.data?.createPost.post.id;
+    assert.ok(replyId);
+
+    const thread = await requestReplyDescendants(parent.id, parentAuthor.token);
+    assertNoGraphQLErrors(thread);
+    assert.deepEqual(
+      thread.data?.node?.replyDescendants.edges.map(({ node }) => node.id),
+      [replyId],
+    );
+
+    const recipientId = encodeGlobalId('Profile', parentAuthor.profile.id);
+    const connection = await loadNotificationConnection(recipientId, parentAuthor.token, {
+      first: 10,
+    });
+    assertNoGraphQLErrors(connection);
+    const notification = connection.data?.node?.notifications.edges[0]?.node;
+    assert.equal(notification?.__typename, 'ReplyNotification');
+    assert.equal(notification?.profile.id, encodeGlobalId('Profile', replyAuthor.profile.id));
+    assert.equal(notification?.post?.id, replyId);
+
+    const count = await loadUnreadNotificationCounts([recipientId], parentAuthor.token);
+    assertNoGraphQLErrors(count);
+    assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
+
+    assert.ok(notification);
+    const read = await markNotificationRead(notification.id, parentAuthor.token);
+    assertNoGraphQLErrors(read);
+    assert.equal(read.data?.markNotificationRead.notification.id, notification.id);
+    assert.equal(read.data?.markNotificationRead.notification.post?.id, replyId);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.id, recipientId);
+    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
+    assert.ok(read.data?.markNotificationRead.notification.readAt);
   });
 
   test('filters unavailable Reply Notifications before pagination and from Read', async () => {
@@ -1299,6 +1866,23 @@ const requestCreateReply = (
     token,
   );
 
+const requestReplyDescendants = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      replyDescendants: { edges: Array<{ node: { id: string } }> };
+    } | null;
+  }>(
+    `query LocalReplyThread($postId: ID!) {
+      node(id: $postId) {
+        ... on Post {
+          replyDescendants(first: 10) { edges { node { id } } }
+        }
+      }
+    }`,
+    { postId: encodeGlobalId('Post', postId) },
+    token,
+  );
+
 const loadNodes = async (ids: string[], token: string) => {
   const result = await requestGraphQL<{ nodes: Array<{ id: string } | null> }>(
     `query NotificationVisibility($ids: [ID!]!) {
@@ -1330,6 +1914,7 @@ const loadNotificationConnection = (
                 ... on FollowNotification { profile { id } }
                 ... on ReactionNotification { type profile { id } post { id } }
                 ... on RepostNotification { profile { id } post { id } }
+                ... on ReplyNotification { profile { id } post { id } }
               }
             }
             pageInfo { endCursor hasNextPage }
@@ -1356,6 +1941,7 @@ const markNotificationRead = (id: string, token?: string) =>
           ... on FollowNotification { profile { id } }
           ... on ReactionNotification { type profile { id } post { id } }
           ... on RepostNotification { profile { id } post { id } }
+          ... on ReplyNotification { profile { id } post { id } }
         }
         recipientProfile { id unreadNotificationCount }
       }

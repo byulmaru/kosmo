@@ -1,4 +1,5 @@
 import { profileBioSchema, profileTagsSchema } from '@kosmo/core/validation';
+import type { ImageUploadFailure } from '@/components/media/imageUploadErrors';
 
 export type ProfileEditImageDraft =
   | { kind: 'current'; previewUri: string | null }
@@ -6,7 +7,7 @@ export type ProfileEditImageDraft =
       kind: 'replacement';
       previewUri: string | null;
       uploadState: 'ready' | 'uploading' | 'error';
-      error?: string;
+      failure?: ImageUploadFailure;
     }
   | { kind: 'removed'; previewUri: null };
 
@@ -82,7 +83,11 @@ function areProfileEditImagesEqual(
   }
 
   if (initial.kind === 'replacement' && value.kind === 'replacement') {
-    return initial.uploadState === value.uploadState && initial.error === value.error;
+    return (
+      initial.uploadState === value.uploadState &&
+      initial.failure?.reason === value.failure?.reason &&
+      initial.failure?.stage === value.failure?.stage
+    );
   }
 
   return true;

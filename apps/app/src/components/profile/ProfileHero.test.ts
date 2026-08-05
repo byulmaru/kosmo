@@ -17,6 +17,7 @@ type ProfileData = {
   handle: string;
   header: { id: string; url: string | null } | null;
   relativeHandle: string;
+  tags: ReadonlyArray<{ id: string; name: string }>;
 };
 
 let fragmentData: ProfileData;
@@ -94,6 +95,7 @@ const baseProfile: ProfileData = {
   handle: 'kosmo',
   header: null,
   relativeHandle: '@kosmo',
+  tags: [],
 };
 
 describe('ProfileHero media presentation', () => {
@@ -118,5 +120,41 @@ describe('ProfileHero media presentation', () => {
     const images = renderer!.root.findAll((node) => (node.type as unknown) === 'Image');
     assert.equal(images.length, 1);
     assert.match(String((images[0]!.props.source as { uri?: string }).uri), /default-avatar\.png$/);
+  });
+});
+
+describe('ProfileHero Profile Tag presentation', () => {
+  it('빈 Profile Tag 목록은 섹션을 렌더하지 않는다', async () => {
+    await renderProfile(baseProfile);
+
+    assert.equal(renderer!.root.findAllByProps({ testID: 'profile-tag-list' }).length, 0);
+  });
+
+  it('Profile Tag를 bio 다음과 통계 전에 비대화형 wrapping chip으로 표시한다', async () => {
+    await renderProfile({
+      ...baseProfile,
+      tags: [
+        { id: 'hashtag-fediverse', name: 'Fediverse' },
+        { id: 'hashtag-development', name: '개발' },
+      ],
+    });
+
+    const tagList = renderer!.root.findByProps({ testID: 'profile-tag-list' });
+    assert.equal(tagList.props.style.flexDirection, 'row');
+    assert.equal(tagList.props.style.flexWrap, 'wrap');
+    assert.equal(tagList.findAll((node) => (node.type as unknown) === 'Pressable').length, 0);
+    assert.equal(tagList.findAll((node) => (node.type as unknown) === 'Link').length, 0);
+
+    const text = renderer!.root
+      .findAll((node) => (node.type as unknown) === 'Text')
+      .map((node) => node.children.join(''));
+    const bioIndex = text.indexOf('소개');
+    const fediverseIndex = text.indexOf('#Fediverse');
+    const developmentIndex = text.indexOf('#개발');
+    const followingIndex = text.indexOf('팔로잉');
+    assert.ok(bioIndex < fediverseIndex);
+    assert.ok(bioIndex < developmentIndex);
+    assert.ok(fediverseIndex < followingIndex);
+    assert.ok(developmentIndex < followingIndex);
   });
 });

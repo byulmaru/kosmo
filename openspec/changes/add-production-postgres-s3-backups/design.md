@@ -32,12 +32,13 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 - Kubernetes CI의 `iam:PassRole` 범위는 `byulmaru*` role 이름에 한정되어 있다.
 - Kosmo Terraform bootstrap policy는 새 bucket과 role을 관리할 최소 권한을 plan 전에 먼저 받아야 한다.
 - production Application과 Cluster가 아직 없으므로 선언형 검증은 가능하지만 live backup/restore 검증은 `PROD-545` 준비 이후에만 가능하다.
+- 2026-08-04 live activation에서는 최근 `Backup` CR이 completed이고 S3 Barman catalog에 DONE backup 5개, `ContinuousArchiving=True`와 WAL 정상 상태가 확인되었지만, backup 완료 직후 plugin이 recovery window를 갱신하면서 `cannot update resource objectstores/status`를 기록했다. 따라서 기존 ObjectStore 본문 `get`만으로는 현재 plugin 동작 계약을 충족하지 않는다.
 
 ### Recommended Approach
 
 1. `PROD-549`에서 `ap-northeast-2`의 `byulmaru-kosmo-prod-postgresql-backups-822638974464` bucket과 `byulmaru-kosmo-prod-postgres-backup` role을 만든다. Role은 Barman의 `HeadBucket` 확인에 필요한 bucket-level list 권한을 이 전용 bucket에만 허용하고 객체 작업은 `kosmo-prod/` prefix로 제한한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket에는 public access block, TLS-only policy, versioning, current 10일/non-current 30일/incomplete multipart 1일 lifecycle, `prevent_destroy = true`, `force_destroy = false`를 적용한다.
 2. `PROD-550`에서 공식 CNPG Helm repository의 `plugin-barman-cloud` chart 0.7.0(app v0.13.0)을 `cnpg-system`에 설치한다. CloudNativePG operator와 cert-manager 이후 준비되게 하고 같은 role을 `kosmo-prod/kosmo-postgres-backup`, `kosmo-prod-restore/kosmo-postgres-backup`에 연결한다.
-3. `PROD-551`에서 prod 값에만 ServiceAccount, ObjectStore, Cluster plugin과 ScheduledBackup을 렌더한다. ObjectStore는 IAM role을 상속하고 7일 retention을 사용한다. Cluster는 plugin을 WAL archiver로 지정하고 `archive_timeout=4min`을 사용한다. ScheduledBackup은 plugin method, self ownership, immediate 실행과 6-field UTC cron `0 0 18 * * *`을 사용한다.
+3. `PROD-551`에서 prod 값에만 ServiceAccount, ObjectStore, Cluster plugin과 ScheduledBackup을 렌더한다. ObjectStore는 IAM role을 상속하고 7일 retention을 사용한다. Cluster는 plugin을 WAL archiver로 지정하고 `archive_timeout=4min`을 사용한다. ScheduledBackup은 plugin method, self ownership, immediate 실행과 6-field UTC cron `0 0 18 * * *`을 사용한다. Backup ServiceAccount의 namespaced Role은 `kosmo-postgres-backup` 본문에 exact-name `get` 하나와 `objectstores/status`에 exact-name `update` 하나만 허용하며, 본문·status의 `patch`·`create`·`delete` 및 다른 이름·cluster-wide 권한을 부여하지 않는다.
 4. runbook은 on-demand backup, 상태·접근 장애 확인, 격리된 PITR restore, 검증과 정리를 포함한다. Application write pause 중 불변 snapshot과 named restore point를 만들고 WAL 전환을 강제하지 않은 상태에서 실제 workload 또는 `archive_timeout`에 따른 대상 WAL의 자연 archive 성공을 확인한 뒤 restore를 시작한다. 이후 현재 production count를 비교 기준으로 사용하지 않는다. Restore workload는 source prefix를 읽을 수 있지만 ScheduledBackup 또는 WAL archiver destination을 구성하지 않는다.
 
 ### Allowed Alternatives
@@ -53,6 +54,7 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 - S3/IAM 적용 전에 Pod Identity association을 만들거나 plugin 준비 전에 workload backup을 활성화하지 않는다.
 - restore Cluster에 production과 같은 WAL archiver destination 또는 ScheduledBackup을 연결하지 않는다.
 - dev render에 ServiceAccount, ObjectStore, plugin 또는 ScheduledBackup이 섞이지 않게 한다.
+- `objectstores` 본문과 `objectstores/status`는 Kubernetes RBAC에서 별도 resource rule이다. status 갱신을 위해 ObjectStore 전체에 `update`·`patch`를 주거나 `resourceNames`를 생략하지 않는다.
 - CloudNativePG schedule은 일반 5-field cron이 아니라 초를 포함한 6-field 표현식이다.
 - S3 lifecycle이 7일 recovery window보다 먼저 필요한 current object를 지우지 않게 한다.
 - 실제 backup/restore 증거가 없는데 `PROD-546` 또는 OpenSpec을 완료·archive하지 않는다.
@@ -61,6 +63,7 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 
 - [S3 lifecycle과 Barman retention 정리 시점이 어긋날 수 있음] → current object에 10일 여유를 두고 versioning/non-current 30일을 유지하며 최초 backup 후 실제 object 만료 상태를 확인한다.
 - [S3 또는 Pod Identity 장애가 WAL archive를 지연시킬 수 있음] → Cluster/ObjectStore/plugin 상태와 로그를 runbook에서 수동 확인하고 자동 알림은 `PROD-552`에서 추가한다.
+- [plugin이 recovery window 상태를 갱신하지 못할 수 있음] → exact-name `objectstores/status` `update`만 추가하고 Helm render, API server dry-run과 `kubectl auth can-i`로 본문 `get`·status `update`를 각각 검증한다. 실제 post-merge plugin 상태는 live 검증이 끝날 때까지 완료로 표시하지 않는다.
 - [일일 base backup이 database I/O를 증가시킬 수 있음] → 초기 10Gi 규모에서는 plugin 기본 압축·병렬화로 시작하고 실제 소요 시간과 영향이 문제일 때만 후속 조정한다.
 - [서울 단일 bucket은 리전 재해를 방어하지 못함] → 이번 RPO/RTO는 cluster/PVC와 운영 장애 범위로 한정하고 cross-region/account DR은 별도 계약으로 남긴다.
 - [production 준비 지연으로 복구 가능성이 선언만 된 상태가 지속될 수 있음] → 선언형 PR은 병합하되 live rehearsal task, `PROD-546`과 OpenSpec을 열린 상태로 유지한다.
@@ -69,8 +72,8 @@ CloudNativePG 1.30.0에서는 내장 `barmanObjectStore` 경로가 deprecated되
 
 1. `PROD-549`의 Kosmo Terraform plan을 검토·적용해 bucket과 role을 먼저 준비한다.
 2. `PROD-550`의 Kubernetes Terraform plan을 검토·적용해 plugin과 두 Pod Identity association을 준비하고 live 상태를 확인한다.
-3. `PROD-551`의 Helm/runbook 변경을 병합한다. dev render에는 변화가 없어야 한다.
-4. `PROD-545`가 production Cluster를 제공하면 production Application을 동기화하고 immediate backup, WAL archive와 S3 object를 확인한다.
+3. `PROD-551`의 Helm/runbook 변경을 병합한다. dev render에는 변화가 없어야 한다. 변경 전후 Role/RoleBinding을 API server server-side dry-run으로 검증하고, 실제 ServiceAccount identity로 인증된 context에서 exact-name `get`과 `objectstores/status` `update`의 `kubectl auth can-i` 결과를 기록한다. 관리자 proxy가 반환한 `yes`는 workload permission evidence로 사용하지 않는다. 어떠한 manifest도 production에 apply하지 않는다.
+4. `PROD-545`가 production Cluster를 제공하면 production Application을 동기화하고 immediate backup, WAL archive와 S3 object를 확인한다. 이 post-merge live 검증 전에는 recovery-window 갱신 성공을 가정하지 않는다.
 5. 별도 restore namespace에서 PITR rehearsal과 RPO/RTO·데이터 검증을 수행하고 증거를 `PROD-546`에 남긴 뒤 namespace를 제거한다.
 6. 이후 월 1회 같은 rehearsal을 수행한다. 최초 live 검증 전에는 이 change를 archive하지 않는다.
 

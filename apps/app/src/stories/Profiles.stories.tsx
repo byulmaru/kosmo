@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, mocked, userEvent, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
@@ -73,6 +74,25 @@ const withImages = profile({
   header: { id: 'media-profile-header', url: '/og-default.png' },
   id: 'profile-with-images',
 });
+const withTags = profile({
+  id: 'profile-with-tags',
+  tags: [
+    { id: 'hashtag-fediverse', name: 'Fediverse' },
+    { id: 'hashtag-development', name: '개발' },
+  ],
+});
+const maxLengthProfileTag = '가'.repeat(20);
+const withManyLongTags = profile({
+  id: 'profile-with-many-long-tags',
+  tags: [
+    { id: 'hashtag-craft', name: '공예' },
+    { id: 'hashtag-photography', name: '사진' },
+    { id: 'hashtag-reading', name: '독서' },
+    { id: 'hashtag-music', name: '음악' },
+    { id: 'hashtag-long', name: '아주긴프로필태그이름입니다' },
+    { id: 'hashtag-max-length', name: maxLengthProfileTag },
+  ],
+});
 const followersEmpty = { ...followersProfile([]), id: 'profile-followers-empty' };
 const followersContent = {
   ...followersProfile([followable, followed], { hasNext: true }),
@@ -98,6 +118,8 @@ const storyProfiles = [
   remoteApprovalRequired,
   pending,
   withImages,
+  withTags,
+  withManyLongTags,
 ];
 
 const ProfilesStoriesQuery = graphql`
@@ -156,6 +178,8 @@ function ProfileCatalog() {
   const remoteRef = requireProfile(profiles, 3);
   const noBioRef = requireProfile(profiles, 4);
   const withImagesRef = requireProfile(profiles, 12);
+  const withTagsRef = requireProfile(profiles, 13);
+  const withManyLongTagsRef = requireProfile(profiles, 14);
 
   return (
     <Catalog>
@@ -175,6 +199,17 @@ function ProfileCatalog() {
         <ProfileHero profile={requireFragment(noBioRef.hero, 'no-bio profile hero')} />
         <ProfileHero profile={requireFragment(remoteRef.hero, 'remote profile hero')} />
         <ProfileHero loading />
+      </Section>
+
+      <Section title="Hero · tags empty / long / many / remote empty">
+        <ProfileHero profile={requireFragment(followableRef.hero, 'empty tags profile hero')} />
+        <ProfileHero profile={requireFragment(withTagsRef.hero, 'profile hero with tags')} />
+        <View style={{ width: 240 }} testID="profile-tags-narrow-fixture">
+          <ProfileHero
+            profile={requireFragment(withManyLongTagsRef.hero, 'profile hero with many long tags')}
+          />
+        </View>
+        <ProfileHero profile={requireFragment(remoteRef.hero, 'remote empty tags profile hero')} />
       </Section>
     </Catalog>
   );
@@ -349,6 +384,49 @@ export const HeroNameAndLoadingStates: Story = {
     expect(
       canvasElement.querySelector('a[href="/@remote-user@very-long-instance.example/followers"]'),
     ).toBeInTheDocument();
+    const canvas = within(canvasElement);
+    const tagSection = within(
+      canvas.getByText('Hero · tags empty / long / many / remote empty').parentElement!,
+    );
+    expect(tagSection.getByText('#Fediverse')).toBeVisible();
+    expect(tagSection.getByText('#개발')).toBeVisible();
+    expect(tagSection.getByText('#아주긴프로필태그이름입니다')).toBeVisible();
+    expect(tagSection.getByText(`#${maxLengthProfileTag}`)).toBeVisible();
+    expect(tagSection.getAllByTestId('profile-tag-list')).toHaveLength(2);
+
+    const narrowFixture = tagSection.getByTestId('profile-tags-narrow-fixture');
+    const narrowTagList = within(narrowFixture).getByTestId('profile-tag-list');
+    const narrowChips = within(narrowTagList).getAllByTestId('profile-tag-chip');
+    expect(narrowChips).toHaveLength(withManyLongTags.tags.length);
+    const maxLengthTagText = within(narrowTagList).getByText(`#${maxLengthProfileTag}`);
+    expect(within(narrowTagList).getByLabelText(`#${maxLengthProfileTag}`)).toBe(maxLengthTagText);
+    const fixtureBounds = narrowFixture.getBoundingClientRect();
+    const listBounds = narrowTagList.getBoundingClientRect();
+    const maxLengthChipBounds = maxLengthTagText.parentElement!.getBoundingClientRect();
+    const maxLengthTagTextBounds = maxLengthTagText.getBoundingClientRect();
+    const maxLengthTagTextStyle = getComputedStyle(maxLengthTagText);
+
+    expect(
+      new Set(narrowChips.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
+    ).toBeGreaterThan(1);
+    expect(listBounds.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(narrowFixture.scrollWidth).toBeLessThanOrEqual(narrowFixture.clientWidth + 1);
+    expect(narrowTagList.scrollWidth).toBeLessThanOrEqual(narrowTagList.clientWidth + 1);
+    expect(maxLengthTagTextBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
+    expect(maxLengthTagTextBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
+    expect(maxLengthChipBounds.height).toBe(32);
+    expect(maxLengthTagTextStyle.whiteSpace).toBe('nowrap');
+    expect(maxLengthTagTextStyle.textOverflow).toBe('ellipsis');
+    expect(maxLengthTagTextStyle.overflow).toBe('hidden');
+    expect(maxLengthTagText.scrollWidth).toBeGreaterThan(maxLengthTagText.clientWidth);
+    expect(maxLengthTagTextBounds.top).toBeGreaterThanOrEqual(maxLengthChipBounds.top - 1);
+    expect(maxLengthTagTextBounds.bottom).toBeLessThanOrEqual(maxLengthChipBounds.bottom + 1);
+    for (const chip of narrowChips) {
+      const chipBounds = chip.getBoundingClientRect();
+      expect(chipBounds.height).toBe(32);
+      expect(chipBounds.left).toBeGreaterThanOrEqual(listBounds.left - 1);
+      expect(chipBounds.right).toBeLessThanOrEqual(listBounds.right + 1);
+    }
   },
 };
 

@@ -16,7 +16,10 @@ const notificationId = 'notification-unread';
 const recipientId = 'notification-profile-content';
 const otherRecipientId = 'notification-profile-other';
 const readAt = '2026-07-21T12:00:00Z';
-type NotificationTypename = 'FollowNotification' | 'RepostNotification';
+type NotificationTypename =
+  | 'FollowNotification'
+  | 'FollowRequestNotification'
+  | 'RepostNotification';
 
 function createEnvironment(typename: NotificationTypename = 'FollowNotification') {
   const source = new RecordSource();
@@ -90,6 +93,19 @@ describe('NotificationListItem Read cache', () => {
     assert.equal(requireRecord(environment, notificationId).readAt, readAt);
     assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
     assert.equal(requireRecord(environment, otherRecipientId).unreadNotificationCount, 7);
+  });
+
+  it('normalizes a Follow Request Notification and Recipient Profile', () => {
+    const environment = createEnvironment('FollowRequestNotification');
+
+    commitReadPayload(environment, 'FollowRequestNotification');
+
+    assert.equal(
+      requireRecord(environment, notificationId).__typename,
+      'FollowRequestNotification',
+    );
+    assert.equal(requireRecord(environment, notificationId).readAt, readAt);
+    assert.equal(requireRecord(environment, recipientId).unreadNotificationCount, 1);
   });
 
   it('keeps repeated final payloads and another actor Store isolated', () => {

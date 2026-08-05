@@ -85,7 +85,7 @@
 
 **Deliverable**
 
-준비된 `/follow-requests` 화면으로 이동하는 `팔로워 요청` 진입점이 full Web sidebar, compact Web rail과 mobile drawer에 동일하게 제공된다.
+준비된 `/follow-requests` 화면으로 이동하는 `팔로워 요청` 진입점이 full Web sidebar, compact Web rail과 mobile Web drawer에 동일하게 제공된다.
 
 **Guardrails**
 
@@ -93,17 +93,30 @@
 - route가 준비되기 전에 진입점만 노출하지 않는다.
 - mobile bottom tab과 generic `/menu`를 추가하지 않는다.
 - 기존 feedback, Profile, Bookmark, logout, active state와 drawer close 동작을 유지한다.
+- Android/iOS UI·runtime QA와 Native touch target은 이 navigation slice에서 제외하고 기존 Native shell 동작을 변경하지 않는다.
+- 기존 shared navigation의 role·accessible name·current state·focus·keyboard·drawer lifecycle 계약을 재사용한다.
 
 **Verification**
 
-- 테스트 코드 범위: shared navigation item의 full/compact/mobile 표시, label·icon·destination, drawer close·active state와 bottom tab·`/menu` 비노출을 직접 검증하는 최소 shell component/Storybook/Web E2E 영역.
-- 테스트 필요성: PROD-541의 dead-entry 제거 회귀 없이 세 surface가 준비된 route로 연결됨을 증명한다.
-- 테스트 제외 범위: PROD-566 목록·mutation 동작, notification activation, unrelated shell snapshot·fixture 확대.
-- Web breakpoint별 keyboard·screen-reader와 Android/iOS drawer touch target을 runtime에서 확인한다.
+- 테스트 코드 범위: shared navigation item의 full/compact/mobile Web 표시, label·destination·순서, drawer close·active state와 bottom tab·`/menu` 비노출을 직접 검증하는 최소 shell component/Storybook/Web E2E 영역.
+- 테스트 필요성: PROD-541의 dead-entry 제거 회귀 없이 세 Web surface가 준비된 route로 연결되고 기존 shared navigation semantics를 유지함을 증명한다.
+- 테스트 제외 범위: Lucide 내부 SVG/path 1:1 assertion, 항목별 수동 Web keyboard·screen reader QA, Android/iOS UI·runtime QA, Native touch target, PROD-566 목록·mutation 동작, notification activation, unrelated shell snapshot·fixture 확대.
+- production navigation mapping의 `UserRoundPlus` 사용은 코드 리뷰와 Storybook 표시로 확인하고, 자동화는 라이브러리 내부 DOM 구조에 결합하지 않는다.
 
-- [ ] 3.1 full Web sidebar, compact Web rail과 mobile drawer의 shared navigation ownership에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 진입점을 복원한다.
-- [ ] 3.2 기존 navigation 동작을 유지하고 bottom tab·`/menu`가 추가되지 않음을 검증한다.
-- [ ] 3.3 최소 shell component/Storybook/Web E2E 검증과 platform runtime QA 결과를 기록한다.
+- [x] 3.1 full Web sidebar, compact Web rail과 mobile Web drawer의 shared navigation ownership에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 진입점을 복원한다.
+- [x] 3.2 기존 navigation 동작을 유지하고 bottom tab·`/menu`가 추가되지 않음을 검증한다.
+- [x] 3.3 최소 shell component/Storybook/Web E2E 검증과 승인된 Web-only 제외 범위를 기록한다.
+
+**2026-08-04 검증 기록**
+
+- passed — targeted `Shell.stories.tsx`: 전체 20 files / 289 interactions, including full·compact·mobile Web drawer의 `팔로워 요청` label·`/follow-requests`, 항목 순서, active state와 bottom tab 비노출. production mapping은 `UserRoundPlus`를 사용하며 test는 Lucide 내부 SVG path를 고정하지 않는다.
+- passed — `node scripts/test-db.mjs run -- pnpm test:e2e:database -- navigation-scroll.e2e.ts`: 4 tests, including full·compact·mobile Web drawer route 진입, drawer close와 bottom tab·`/menu` 비노출
+- passed — `pnpm --filter @kosmo/app check`: Relay 99 reader / 63 normalization / 107 operation text와 TypeScript 검사. 현재 worktree의 Watchman FSEvents 등록 실패는 비커밋 `relay-compiler --noWatchman` local workaround로 우회했다.
+- passed — `pnpm --filter @kosmo/app test:unit`: 175 tests
+- passed — 기존 local Storybook executable의 `build --disable-telemetry`: production bundle 생성
+- passed — `pnpm lint:eslint`, 기존 local executable의 Prettier 전체 check와 `openspec validate add-incoming-follow-request-management --strict`
+- excluded by approved PROD-654 scope — Android/iOS UI·runtime QA, Native touch target과 항목별 수동 Web keyboard·screen reader 1:1 QA. 기존 shared navigation 접근성 계약과 Storybook addon-a11y·Web E2E를 재사용한다.
+- not rerun by explicit user direction — Web-only 문서 정렬과 Lucide 내부 SVG path assertion 3개 제거 후 local 검증은 다시 실행하지 않았다. 위 passing evidence는 production navigation 동작이 같은 이전 HEAD에서 확보했으며, push 이후 hosted CI가 새 HEAD를 검증한다.
 
 ## 4. PROD-566 통합 검증과 OpenSpec 완료
 

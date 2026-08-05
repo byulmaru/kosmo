@@ -4,17 +4,21 @@
 
 ## Decision Records
 
-### Android·iOS는 Web 관측 조합에서 제외한다
+### Android·iOS 관측은 현재 Web slice와 별도 release gate로 둔다
 
 - Decision Date: 2026-07-27
 - Decision Class: Derived Contract
 - Authority / Provenance: PROD-477, PROD-483, PROD-493
 - Status: Active
 - Context / Problem: 공용 Expo source에 Web 수집을 추가하면 native runtime에도 같은 import와 초기화가 도달할 수 있다.
-- Decision Outcome: Web platform entry만 Sentry browser client를 import·초기화하고 generic 오류 reporter context를 제공하며 Android·iOS에는 Sentry 관측 구현을 추가하지 않는다.
+- Decision Outcome: 현재 Web 출시·검증 slice에서는 Web platform entry만 Sentry browser client를 import·초기화하고
+  generic 오류 reporter context를 제공한다. Android·iOS native runtime 관측과 debug symbol은 PROD-483에서 별도로
+  결정·검증하며, 이 change는 Native entry의 기존 동작을 유지한다.
 - Alternatives Considered: 공용 `@sentry/react-native` 초기화는 Backlog인 PROD-483의 SDK·native crash·debug symbol 범위를 선행하므로 선택하지 않는다.
-- Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 Sentry capture callback은 Web entry만 소유한다.
-- Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 native bundle에는 Sentry 관측 module import가 없는지 검증한다.
+- Consequences: 공용 오류 경계의 UI·retry 구현은 공유하지만 현재 Sentry capture callback은 Web entry만 소유한다.
+  PROD-483에서 Native 관측을 도입할 때 같은 경계를 재검토할 수 있다.
+- Confirmation / Follow-up: Web bundle에는 SDK가 포함되고 Native bundle에는 이번 Web slice의 Sentry 관측 module
+  import가 없는지 검증한다. 이 결과를 Native 지원 완료 또는 영구 비적용의 증거로 해석하지 않는다.
 
 ### SDK event를 beforeSend 정제 없이 전달한다
 
