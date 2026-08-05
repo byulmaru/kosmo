@@ -160,11 +160,10 @@ function PostComposerContents({
   const visibilityMenuRef = useRef<View>(null);
   const visibilityTrigger = useRef<View>(null);
   const remainingDescriptionId = useId();
-  const [initialContentWarningValue] = useState(() =>
+  const [body, setBody] = useState('');
+  const [contentWarning, setContentWarning] = useState(() =>
     normalizePostContentPlainText(initialContentWarning ?? ''),
   );
-  const [body, setBody] = useState('');
-  const [contentWarning, setContentWarning] = useState(initialContentWarningValue);
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
   const [visibilityOpen, setVisibilityOpen] = useState(false);
@@ -184,8 +183,9 @@ function PostComposerContents({
   const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
   const dirty =
+    replyMode ||
     body !== '' ||
-    contentWarningText !== initialContentWarningValue ||
+    contentWarningText !== '' ||
     visibility !== PostVisibility.UNLISTED ||
     media.items.length > 0 ||
     media.hasPendingMedia ||
@@ -249,7 +249,9 @@ function PostComposerContents({
           visibility,
         });
         setBody('');
-        setContentWarning(initialContentWarningValue);
+        if (!submissionReplyMode) {
+          setContentWarning('');
+        }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
         setVisibility(PostVisibility.UNLISTED);

@@ -124,11 +124,13 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ## lifecycle
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
-- pristine 상태에서는 `X`, backdrop과 `Escape`로 즉시 닫는다.
+- Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
+  Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다.
 - 본문·Visibility 또는 Content Warning이 각 초기값에서 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive
   Media 상태가 있으면 dirty로 취급한다. Parent에서 복사된 Content Warning을
-  수정하거나 제거한 경우도 dirty이고, 복사된 초기값을 그대로 둔 경우는 그것만으로 dirty가 아니다. 이 상태로
-  닫기를 시도하면 `답글 작성을 취소할까요?` 확인을 표시하고 사용자가 `계속 작성` 또는
+  수정하거나 제거한 경우도 독립적인 draft 변경으로 dirty 상태를 유지한다. Reply mode에서는 복사된 초기값을
+  그대로 둔 경우에도 Reply 맥락 자체가 dirty이므로 이 상태로 닫기를 시도하면 `답글 작성을 취소할까요?` 확인에서
+  사용자가 `계속 작성` 또는
   `작성 취소`를 선택하게 한다. Media 업로드 중에도 확인 뒤 작성 전체를 폐기할 수 있으며, 늦은 업로드 완료는
   닫힌 surface를 다시 열거나 상태를 변경하지 않는다.
 - 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
@@ -192,7 +194,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
   Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
   다시 계산해야 한다.
-- pristine/dirty/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
+- Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
   없음, Media upload 중 dirty close, selected Profile·Parent·Relay Environment 전환의 첫 commit과 늦은
   upload·mutation completion 격리를 확인한다.
 - Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의

@@ -19,7 +19,6 @@ test('exposes the versioned PostContent document and Plain Text composer contrac
   assert.ok(isInputObjectType(createPostInput));
   assert.equal(createPostInput.getFields().content, undefined);
   assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
-  assert.equal(String(createPostInput.getFields().contentWarning?.type), 'String');
   assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
   assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
   assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');

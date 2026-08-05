@@ -103,7 +103,7 @@ export type ReplyComposerSurfaceHandle = {
   requestClose: (onClosed?: () => void) => void;
 };
 
-const initialComposerState: PostComposerState = { dirty: false, submitting: false };
+const initialComposerState: PostComposerState = { dirty: true, submitting: false };
 
 export const ReplyComposerSurface = forwardRef<
   ReplyComposerSurfaceHandle,

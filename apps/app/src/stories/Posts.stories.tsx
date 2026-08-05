@@ -4543,6 +4543,12 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     ).toEqual([replyButtons[1]]);
 
     await userEvent.click(replyButtons[1]!);
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButtons[1]).toHaveFocus();
   },
@@ -5392,6 +5398,10 @@ export const ReplyModalPresentation: Story = {
     expect(visibilityButton).toHaveFocus();
 
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    const initialDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(initialDiscardConfirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
 
@@ -5481,6 +5491,10 @@ export const ReplyListSurfaceIntegration: Story = {
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(replyButtons[0]).toHaveFocus();
     expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'false');
@@ -5511,6 +5525,10 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
 
     await userEvent.click(replyButton);
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButton).toHaveAttribute('aria-expanded', 'false');
   },

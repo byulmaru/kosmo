@@ -102,14 +102,14 @@
 
 **Authority / Provenance:** `docs/design/reply-composer.md`, `PROD-425` Reply surface는 작성 상태에 따라 close·focus·error lifecycle을 일관되게 제어해야 한다(MUST).
 
-#### Scenario: pristine과 dirty close
+#### Scenario: Reply-open dirty와 dirty close
 
-- **WHEN** 초기 본문, Content Warning과 Visibility가 유지된 surface를 `X`, backdrop 또는 `Escape`로 닫는다
-- **THEN** 클라이언트는 즉시 닫고 원래 Reply action으로 focus를 복원한다
-- **BUT WHEN** 본문, Content Warning 또는 Visibility가 각 초기값에서 바뀌었다
+- **WHEN** Reply surface가 열리고 본문, Content Warning과 Visibility가 초기값인 상태에서 `X`, backdrop 또는 `Escape`로 닫는다
+- **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
+- **BUT WHEN** 본문, Content Warning 또는 Visibility가 각 초기값에서 바뀌었거나 Reply surface의 Media 상태가 바뀌었다
 - **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
 - **AND** 상세 inline surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
-- **AND** Parent에서 복사된 Content Warning을 그대로 유지한 것만으로는 dirty가 아니지만 이를 수정하거나 제거하면 dirty다
+- **AND** Parent에서 복사된 Content Warning은 독립 Reply draft이며, 이를 수정하거나 제거하면 draft 변경으로 dirty 상태를 유지한다
 
 #### Scenario: pending close 차단
 
