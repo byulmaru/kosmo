@@ -76,7 +76,7 @@
 **Verification**
 
 - unit test에서 exact ID link, link role, `#<태그명> 관련 프로필 보기` 접근성 이름, 플랫폼 target과 기존 편집 제거 action 비회귀를 검증한다.
-- route/list test와 상태 catalog에서 제목, loading, 첫 error/retry, empty, 20개 page, 다음 page error에서 기존 edge 유지·retry, terminal과 중복 요청 방지를 검증한다.
+- route/list test와 상태 catalog에서 제목, loading, 첫 error/retry, empty, `loadNext(20)` 요청, 다음 page error에서 기존 edge 유지·retry, terminal과 loading 중 단일 요청을 검증한다.
 - Web E2E에서 keyboard Tab으로 공개 Profile TagChip link에 focus하고 접근성 이름·role을 확인한 뒤 Enter로 활성화해 승인된 URL·제목·관련 Profile 목록 → 기존 Profile route 이동을 검증한다.
 - 기존 사람 검색 입력·결과·pagination 회귀를 유지한다.
 - Relay compiler, App TypeScript·unit·Storybook, 관련 Web E2E, ESLint·Prettier, `git diff --check`
@@ -91,7 +91,7 @@
 **2026-08-05 PROD-529 검증 기록**
 
 - exact Hashtag global ID를 사용하는 보호 route, `node(id:)` Hashtag 판별, canonical 제목과 first-load/not-found/error/retry 상태를 route unit test 6건으로 확인했다.
-- 전용 `HashtagRelatedProfileList_relatedProfiles` connection의 empty/content/20개 pagination/next-page error-retry/terminal/중복 요청 guard와 기존 `ProfileListItem linked` 재사용을 Storybook catalog에서 확인했다.
+- 전용 `HashtagRelatedProfileList_relatedProfiles` connection의 empty/content, `loadNext(20)` 요청 변수, next-page error-retry/terminal, loading 중 단일 요청과 기존 `ProfileListItem linked` 재사용을 Storybook catalog에서 확인했다.
 - `pnpm --filter @kosmo/app exec relay-compiler --noWatchman`, `pnpm --filter @kosmo/app exec tsc --noEmit`, App unit 189건과 Storybook 296건이 통과했다. 기본 Relay/build는 호스트 Watchman FSEvents 오류로 실행되지 않아 compiler와 TypeScript를 분리했고 E2E Web export에도 같은 `--noWatchman` 우회를 사용한 뒤 임시 Playwright config 변경을 되돌렸다.
 - Profile 편집·공개 Tag link·TagChip keyboard→관련 Profile 목록→기존 Profile route Web E2E 4건과 기존 사람 검색 E2E 14건이 통과했다. test-only Hashtag 관계 helper 외 production DB/schema/API 변경은 없다.
 - `pnpm lint:eslint`, `pnpm lint:prettier`, `git diff --check`, `openspec validate add-hashtag-related-profiles --strict`가 통과했고 generated Relay artifact는 repository 관례대로 commit 대상에 포함하지 않았다.

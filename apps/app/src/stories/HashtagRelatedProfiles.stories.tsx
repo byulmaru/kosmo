@@ -101,6 +101,7 @@ const paginationNextPage = {
   },
 };
 const initialRetry = fn();
+const paginationRequestObserver = fn();
 
 const HashtagRelatedProfilesStoriesQuery = graphql`
   query HashtagRelatedProfilesStoriesQuery($ids: [ID!]!) {
@@ -174,6 +175,7 @@ function PaginationList() {
 const meta = {
   beforeEach: () => {
     initialRetry.mockClear();
+    paginationRequestObserver.mockClear();
   },
   component: HashtagRelatedProfilesCatalog,
   parameters: {
@@ -229,14 +231,22 @@ export const NextPageFailurePreservesRowsAndRetrySucceeds: Story = {
 };
 
 export const NextPageLoadingDisablesDuplicateActivation: Story = {
-  parameters: { relay: { paginationLoading: true } },
+  parameters: { relay: { paginationLoading: true, paginationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const button = canvas.getByRole('button', { name: '더 불러오기' });
     await userEvent.click(button);
+    expect(paginationRequestObserver).toHaveBeenCalledOnce();
+    expect(paginationRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'HashtagRelatedProfilesNextPageQuery' }),
+      expect.objectContaining({ count: 20 }),
+    );
     await expect(button).toBeDisabled();
     await expect(canvas.findByText('관련 프로필을 더 불러오는 중입니다.')).resolves.toBeVisible();
     expect(canvas.getByText('별빛 여행자')).toBeVisible();
+
+    button.click();
+    expect(paginationRequestObserver).toHaveBeenCalledOnce();
   },
   render: () => <PaginationList />,
 };

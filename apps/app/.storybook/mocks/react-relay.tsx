@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
-import type { GraphQLResponse, RequestParameters } from 'relay-runtime';
+import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
 type RelayMockValue = {
   mutationError?: string;
@@ -11,6 +11,7 @@ type RelayMockValue = {
   mutationResponse?: unknown;
   paginationError?: string | boolean;
   paginationLoading?: boolean;
+  paginationRequestObserver?: (request: RequestParameters, variables: Variables) => void;
   paginationResponse?: unknown;
   paginationResponses?: StoryOperationResponse[];
   operationResponses?: Record<
@@ -38,6 +39,7 @@ export function RelayStoryProvider({
   mutationResponse,
   paginationError,
   paginationLoading,
+  paginationRequestObserver,
   paginationResponse,
   paginationResponses,
   operationResponses,
@@ -51,6 +53,7 @@ export function RelayStoryProvider({
       mutationResponse,
       paginationError,
       paginationLoading,
+      paginationRequestObserver,
       paginationResponse,
       paginationResponses,
       operationResponses,
@@ -63,6 +66,7 @@ export function RelayStoryProvider({
       mutationResponse,
       paginationError,
       paginationLoading,
+      paginationRequestObserver,
       paginationResponse,
       paginationResponses,
       operationResponses,
@@ -92,9 +96,10 @@ function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number):
   };
 
   return new Environment({
-    network: Network.create((request) =>
+    network: Network.create((request, variables) =>
       executeStoryOperation(
         request,
+        variables,
         mock,
         environmentIndex,
         () => paginationResponseIndex++,
@@ -107,6 +112,7 @@ function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number):
 
 async function executeStoryOperation(
   request: RequestParameters,
+  variables: Variables,
   mock: RelayMockValue,
   environmentIndex: number,
   nextPaginationResponseIndex: () => number,
@@ -158,6 +164,7 @@ async function executeStoryOperation(
   }
 
   if (request.name.endsWith('NextPageQuery')) {
+    mock.paginationRequestObserver?.(request, variables);
     const configuredResponse =
       mock.paginationResponses?.[
         Math.min(nextPaginationResponseIndex(), mock.paginationResponses.length - 1)
