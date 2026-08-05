@@ -187,19 +187,24 @@ Production과 열린 PR의 확정 대상이 공용 `IconButton`을 사용하고,
 
 - 전체 20개 Storybook 파일의 Chromium interaction 293개를 통과했다. `Posts`, `Reactions`, `Search`, `Shell`
   대상 subset 145개도 별도로 실행했고, Reaction은 320·390·600px viewport에서 More 32×32와 마지막 token 사이
-  4px 간격·컨테이너 overflow를 확인했다.
+  4px 간격·컨테이너 overflow를 확인했다. 최신 `origin/main` 재베이스 뒤 `Posts` 단독 interaction 78개도
+  통과했다.
 - Reply compact viewport에서 close 36×36, Search clear/recent-delete와 compact Logout은 각각 44×44,
   Media remove는 실제 target·visual 32×32와 preview 상·우 4px inset을 확인했다. Search는 pointer click 후
   입력값 초기화·focus 복귀와 recent-delete 뒤 focus 복귀를 함께 확인했다.
 - component test는 Web actual floor·음수 `hitSlop` clamp와 Native layout 보존·플랫폼 부족분 계산을 확인했다.
-- Relay `--noWatchman`, TypeScript, App unit 192개, ESLint, Prettier, syncpack, Storybook production build와 두
+  `targetSize`·`visualSize`가 없는 40×40 static style도 Native layout을 40×40으로 유지하고 iOS 2pt·Android 4dp
+  부족분을 `hitSlop`으로 보충하는 회귀를 추가했다.
+- Relay `--noWatchman`, TypeScript, App unit 206개, ESLint, Prettier, syncpack, Storybook production build와 두
   OpenSpec strict validation을 통과했다.
 - 독립 리뷰 4개를 분리 실행했다. code-only와 production/open-PR 누락 검토는 발견 사항 없이 통과했고,
   repository rules와 docs-to-code 검토의 Android layout·검증 근거·Reaction 문서 지적은 수정 후 재검토를 통과했다.
-- 최신 `origin/main=a6c94c1e` 재베이스 뒤 production의 직접 `Pressable` 65곳과 `IconButton` 13곳, 열린 PR
-  16개의 patch를 다시 검색했다. 새 대상은 없고, 남은 대상은 PR #486 close와 PR #510 close·previous·next
-  4개다. PR #516의 review·comment·review thread는 모두 0개이며 #486은 Open/Ready·CHANGES_REQUESTED,
-  #510은 Open/Draft다.
+- 최신 `origin/main=3fc1d243` 재베이스 뒤 production의 직접 `Pressable` 66곳과 `IconButton` 13곳을 다시
+  검색했다. 새 direct `Pressable` 1곳은 전체 계정 설정 link라 제외 대상이며 새 compact icon action 대상은 없다.
+  열린 PR inventory는 `origin/main=a6c94c1e` 당시 16개 patch를 검색했고, 남은 대상은 PR #486 close와 PR #510
+  close·previous·next 4개였다. 이후 PR #516 재리뷰에서 style-only Native layout 보존 P2 1개와 이를 반영하라는
+  `CHANGES_REQUESTED`가 추가되어 source와 회귀 테스트를 정렬했다. GitHub 답변·resolve·재리뷰 요청은 별도 승인
+  gate로 남는다. #486은 Open/Ready·CHANGES_REQUESTED, #510은 Open/Draft다.
 - iOS·Android 실제 기기·simulator의 touch·focus·VoiceOver·TalkBack은 실행하지 않았고 후속 출시 gate로 남긴다.
 
 - [x] 6.1 구현 시작 inventory에서 포함·제외 대상과 직접 플랫폼 target 계산 baseline을 기록한다.

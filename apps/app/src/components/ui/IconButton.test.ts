@@ -7,10 +7,15 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+const mockPlatform: { OS: string } = { OS: 'web' };
+
 mockModule('react-native', {
-  Platform: { OS: 'web' },
+  Platform: mockPlatform,
   Pressable: 'Pressable',
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: {
+    create: <T>(styles: T) => styles,
+    flatten: (style: unknown) => flattenStyle(style),
+  },
   View: 'View',
 });
 
@@ -20,7 +25,7 @@ type TestElementProps = {
   accessibilityState?: { busy?: boolean; disabled?: boolean; expanded?: boolean };
   children?: ReactNode | ((state: { pressed: boolean }) => ReactNode);
   disabled?: boolean;
-  hitSlop?: number;
+  hitSlop?: number | { bottom: number; left: number; right: number; top: number };
   onPressIn?: () => void;
   ref?: unknown;
   style?: unknown;
@@ -63,18 +68,23 @@ let getIconButtonPlatformGeometry:
 let getIconButtonTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
-  const module = await import('./IconButton').catch(() => null);
-  IconButton = module?.IconButton as IconButtonComponent | undefined;
-  getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
-  getIconButtonOverlayGeometry = module?.getIconButtonOverlayGeometry as
-    | typeof getIconButtonOverlayGeometry
-    | undefined;
-  getIconButtonPlatformGeometry = module?.getIconButtonPlatformGeometry as
-    | typeof getIconButtonPlatformGeometry
-    | undefined;
-  getIconButtonTargetSize = module?.getIconButtonTargetSize as
-    | ((platform: string) => number)
-    | undefined;
+  mockPlatform.OS = 'ios';
+  try {
+    const module = await import('./IconButton').catch(() => null);
+    IconButton = module?.IconButton as IconButtonComponent | undefined;
+    getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
+    getIconButtonOverlayGeometry = module?.getIconButtonOverlayGeometry as
+      | typeof getIconButtonOverlayGeometry
+      | undefined;
+    getIconButtonPlatformGeometry = module?.getIconButtonPlatformGeometry as
+      | typeof getIconButtonPlatformGeometry
+      | undefined;
+    getIconButtonTargetSize = module?.getIconButtonTargetSize as
+      | ((platform: string) => number)
+      | undefined;
+  } finally {
+    mockPlatform.OS = 'web';
+  }
 });
 
 function renderIconButton(props: IconButtonProps) {
@@ -159,6 +169,38 @@ test('Native target expansion preserves the rendered layout while Web keeps an a
     minimumHitSlop: 0,
     minimumTargetSize: 48,
   });
+});
+
+test('Native style-only square preserves its layout and moves the platform deficit into hit slop', () => {
+  for (const [platform, expectedHitSlop] of [
+    ['ios', 2],
+    ['android', 4],
+  ] as const) {
+    mockPlatform.OS = platform;
+    try {
+      const button = renderIconButton({
+        accessibilityLabel: '미디어 추가',
+        children: '+',
+        style: { height: 40, width: 40 },
+      });
+      const targetStyle = flattenStyle(
+        (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: false }),
+      );
+
+      assert.equal(targetStyle.height, 40);
+      assert.equal(targetStyle.width, 40);
+      assert.equal(targetStyle.minHeight, 40);
+      assert.equal(targetStyle.minWidth, 40);
+      assert.deepEqual(button.props.hitSlop, {
+        bottom: expectedHitSlop,
+        left: expectedHitSlop,
+        right: expectedHitSlop,
+        top: expectedHitSlop,
+      });
+    } finally {
+      mockPlatform.OS = 'web';
+    }
+  }
 });
 
 test('caller target and style cannot lower the Web interaction floor', () => {

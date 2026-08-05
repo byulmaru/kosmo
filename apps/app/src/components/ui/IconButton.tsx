@@ -108,7 +108,17 @@ export function IconButton({
   ...props
 }: IconButtonProps): ReactNode {
   const buttonDisabled = disabled === true;
-  const requestedTargetSize = targetSize ?? visualSize ?? ICON_BUTTON_TARGET_SIZE;
+  const flattenedStyle =
+    targetSize === undefined && visualSize === undefined && typeof style !== 'function'
+      ? StyleSheet.flatten(style)
+      : undefined;
+  const styleSize =
+    typeof flattenedStyle?.width === 'number' &&
+    typeof flattenedStyle.height === 'number' &&
+    flattenedStyle.width === flattenedStyle.height
+      ? Math.max(0, flattenedStyle.width)
+      : undefined;
+  const requestedTargetSize = targetSize ?? visualSize ?? styleSize ?? ICON_BUTTON_TARGET_SIZE;
   const { minimumHitSlop, minimumTargetSize } = getIconButtonPlatformGeometry(
     Platform.OS,
     requestedTargetSize,
