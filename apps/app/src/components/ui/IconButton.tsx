@@ -79,6 +79,26 @@ function mergeHitSlop(
   };
 }
 
+type IconButtonFunctionStyle = Extract<PressableProps['style'], (...args: never[]) => unknown>;
+type IconButtonStaticStyle = Exclude<PressableProps['style'], IconButtonFunctionStyle>;
+
+type IconButtonSizeProps =
+  | {
+      style?: IconButtonStaticStyle;
+      targetSize?: number;
+      visualSize?: number;
+    }
+  | {
+      style: IconButtonFunctionStyle;
+      targetSize: number;
+      visualSize?: number;
+    }
+  | {
+      style: IconButtonFunctionStyle;
+      targetSize?: number;
+      visualSize: number;
+    };
+
 export type IconButtonProps = Omit<
   PressableProps,
   'accessibilityLabel' | 'accessibilityRole' | 'children' | 'role' | 'style'
@@ -87,11 +107,8 @@ export type IconButtonProps = Omit<
   children: PressableProps['children'];
   controlRef?: Ref<View>;
   feedback?: 'none' | 'opacity';
-  style?: PressableProps['style'];
-  targetSize?: number;
-  visualSize?: number;
   visualStyle?: PressableProps['style'];
-};
+} & IconButtonSizeProps;
 
 export function IconButton({
   accessibilityLabel,

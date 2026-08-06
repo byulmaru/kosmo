@@ -64,6 +64,10 @@ State와 behavior는 Pressable contract를 통해 전달한다. Disabled는 실�
 `onPressIn`, `hitSlop`을 포함한 필요한 event·interaction prop은 보존한다. Ref 전달의 구체적인 React API는 현재
 저장소와 React Native type에 맞는 가장 작은 방식을 사용한다.
 
+Outer `style`이 press state를 받는 함수라면 component가 안정적인 layout 크기를 추론할 수 없으므로
+`targetSize` 또는 `visualSize` 중 하나를 public type에서 필수로 요구한다. 정적 square style의 width·height 추론은
+유지하고, 함수 callback을 임의의 state로 미리 실행하거나 별도 `layoutSize` prop을 추가하지 않는다.
+
 전환은 다음 묶음으로 진행한다.
 
 1. 현재 잘못 적용된 Profile header/avatar whole-preview와 관련 Storybook assertion을 기존 `Pressable` 계약으로
@@ -89,6 +93,7 @@ State와 behavior는 Pressable contract를 통해 전달한다. Disabled는 실�
 ### Known Traps
 
 - Web `minWidth`·`minHeight`를 caller style보다 먼저 적용해 floor를 다시 우회하게 만드는 것
+- 함수형 outer style의 크기를 추론하지 못하면서 size prop 없이 플랫폼 default layout을 적용하는 것
 - Native visual·layout box와 공용 `hitSlop`을 동시에 확대해 effective region을 두 번 키우는 것
 - 모든 소비자에 같은 opacity feedback을 기본 적용하는 것
 - icon library나 glyph 종류를 공용 component API에 고정하는 것

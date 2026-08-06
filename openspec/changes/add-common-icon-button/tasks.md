@@ -49,7 +49,7 @@
 - 테스트 코드 범위: `apps/app/src/components/ui/IconButton.test.ts`와 기존 Profile story/test의 오범위 assertion 제거.
 - 테스트 필요성: target mapping·Web actual floor clamp·caller style override·larger target, Native layout
   보존·부족분 계산, visual separation, disabled와 추가 accessibility state 병합, press state·ref·event 전달,
-  기본 visual feedback 무강제를 직접 검증한다.
+  함수형 outer style의 안정적인 size prop 요구와 기본 visual feedback 무강제를 직접 검증한다.
 - 테스트 제외 범위: 새 fixture·helper·harness, 광범위 snapshot, Profile 제품 동작 coverage 확대와 Native runtime test.
 - 관련 component test, Profile story interaction, TypeScript와 formatter를 통과시킨다.
 
@@ -195,19 +195,22 @@ Production과 열린 PR의 확정 대상이 공용 `IconButton`을 사용하고,
   입력값 초기화·focus 복귀와 recent-delete 뒤 focus 복귀를 함께 확인했다.
 - component test는 Web actual floor·음수 `hitSlop` clamp와 Native layout 보존·플랫폼 부족분 계산을 확인했다.
   `targetSize`·`visualSize`가 없는 40×40 static style도 Native layout을 40×40으로 유지하고 iOS 2pt·Android 4dp
-  부족분을 `hitSlop`으로 보충하는 회귀를 추가했다.
-- Relay `--noWatchman`, TypeScript, App unit 213개, ESLint, Prettier, syncpack, Storybook production build와 세
+  부족분을 `hitSlop`으로 보충한다. 함수형 outer style은 `targetSize` 또는 `visualSize`를 타입상 요구하고, 명시적
+  40×40 layout에서 iOS 2pt·Android 4dp 부족분을 유지하는 component 회귀 11개를 통과했다.
+- Relay `--noWatchman`, TypeScript, App unit 214개, ESLint, Prettier, syncpack, Storybook production build와 세
   OpenSpec strict validation을 통과했다.
 - 독립 리뷰 4개를 분리 실행했다. code-only와 production/open-PR 누락 검토는 발견 사항 없이 통과했고,
   repository rules와 docs-to-code 검토의 Android layout·검증 근거·Reaction 문서 지적은 수정 후 재검토를 통과했다.
+  함수형 outer style public type 정렬도 별도 독립 구현 재검토에서 발견 사항 없이 통과했다.
 - 최신 `origin/main=664c1642` 재베이스 뒤 production의 직접 `Pressable` 69곳과 `IconButton` 14곳을 다시
   검색했다. PR #486이 먼저 merge되어 FeedbackOverlay close를 공용 component로 흡수했고, 추가된 feedback menu
   row, Content Warning text action과 상태형 visibility radio의 `Pressable`은 제외 대상이다. 열린 PR inventory는
   `origin/main=a6c94c1e` 당시
   16개 patch를 검색했고, 당시 남은 대상은 PR #486 close와 PR #510 close·previous·next 4개였다. 현재 #486은
-  merge·Done이고 #510의 3개 action은 열린 consumer branch에 남는다. 이후 PR #516 재리뷰에서 style-only Native
-  layout 보존 P2 1개와 이를 반영하라는 `CHANGES_REQUESTED`가 추가되어 source와 회귀 테스트를 정렬했다. GitHub
-  답변·resolve와 Codex·robin-maki 재리뷰 요청을 완료했고, 새 review 전까지 기존 decision이 남는다. 최신 main의
+  merge·Done이고 #510의 3개 action은 열린 consumer branch에 남는다. 이후 PR #516 재리뷰에서 static style-only
+  Native layout 보존 P2를 반영하고 답변·resolve와 Codex·robin-maki 재리뷰 요청을 완료했다. 같은 thread의 후속
+  review가 함수형 style-without-size 경로를 다시 열어 public type·source 회귀·canonical·OpenSpec을 정렬했으며,
+  새 답변·resolve·재리뷰 요청은 공개 승인 gate로 남는다. 최신 main의
   Content Warning·reply submitting/discard 흐름, 모바일 Web visibility menu, ProfileSwitcher unread 표시와 Shell
   assertion을 보존했다. PROD-548의 Reply close `IconButton`·geometry assertion 충돌도 양쪽 계약을 모두 보존해
   해소했다.

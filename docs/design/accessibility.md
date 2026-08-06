@@ -93,6 +93,9 @@ library에 종속하지 않고 icon, glyph, 짧은 기호 문자 또는 loading 
   effective input region을 줄이거나 이중 확장하지 않는다.
 - pressed, disabled, pending, busy, expanded 상태와 focus ref, `onPressIn` 같은 event handler는 각 action의
   기존 제품 동작을 유지하도록 전달한다. 공통 컴포넌트가 모든 surface에 하나의 visual feedback을 강제하지 않는다.
+- Outer `style`이 press state를 받는 함수라면 Native layout과 `hitSlop` 계산에 사용할 안정적인 크기로
+  `targetSize` 또는 `visualSize`를 반드시 제공한다. 정적 square `style`은 width·height가 같을 때만 layout 크기를
+  추론할 수 있으며, 함수형 style callback을 미리 실행해 크기를 추측하지 않는다.
 - Web의 확장된 실제 target은 인접한 서로 다른 action과 겹치거나 부모의 clipping으로 잘리지 않아야 한다.
   Native `hitSlop` source mapping은 출시 전 실제 기기에서 parent bounds, sibling 우선순위와 focus boundary를
   별도로 검증한다.

@@ -38,6 +38,11 @@
 - **WHEN** 기존 Native visual·layout box가 iOS 또는 Android floor보다 작다
 - **THEN** 공용 component는 기존 box를 확대해 visual center나 layout slot을 이동시키지 않고 플랫폼별 부족분을 공용 `hitSlop`에 반영한다
 
+#### Scenario: 함수형 target style에 안정적인 크기를 제공한다
+
+- **WHEN** caller가 press state를 받는 함수형 outer `style`을 사용한다
+- **THEN** caller는 `targetSize` 또는 `visualSize`를 제공하고 공용 component는 그 안정적인 크기로 Native layout과 플랫폼별 `hitSlop`을 계산한다
+
 #### Scenario: 기존 hit region을 공용 target으로 옮긴다
 
 - **WHEN** 작은 visual box와 `hitSlop`을 결합해 target을 확장하던 action을 전환한다

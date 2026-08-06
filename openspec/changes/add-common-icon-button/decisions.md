@@ -61,6 +61,25 @@ PR inventory와 `design.md`의 구현 제약을 반영한다. 구현 전에는 �
 - Confirmation / Follow-up: surface 회귀 테스트와 Storybook/Web runtime에서 pressed·disabled 시각 결과를
   전환 전 geometry와 비교한다.
 
+### 함수형 outer style은 안정적인 target 또는 visual size를 요구한다
+
+- Decision Date: 2026-08-06
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/accessibility.md`, `PROD-548`, 2026-08-06 사용자 승인
+- Status: Active
+- Context / Problem: 정적 square style은 width·height를 flatten해 Native layout 크기를 추론할 수 있지만,
+  press state를 받는 함수형 style은 실행 전 안정적인 크기를 알 수 없다. Size prop이 없으면 iOS 44·Android 48
+  default min size가 caller의 40×40 style 뒤에 적용되어 기존 layout box를 확대할 수 있다.
+- Decision Outcome: 함수형 outer `style`은 `targetSize` 또는 `visualSize` 중 하나를 public type에서 필수로
+  제공한다. 정적 square style 추론과 함수형 `visualStyle`·children의 press-state 전달은 유지한다.
+- Alternatives Considered: 별도 `layoutSize` prop 추가 — `targetSize`·`visualSize`와 중복되는 public API를
+  늘리므로 선택하지 않았다. Function style callback을 기본 state로 미리 실행해 크기 추론 — pressed state에 따라
+  layout이 달라질 수 있고 callback 실행 시점을 추가하므로 선택하지 않았다.
+- Consequences: 현재 production의 유일한 함수형 outer style caller는 이미 `targetSize`를 제공해 시각 변경이 없다.
+  새 caller의 누락은 TypeScript에서 차단하며 cast·비TypeScript 호출은 보장 범위 밖이다.
+- Confirmation / Follow-up: type-test에서 함수형 style의 size 누락을 거부하고 `targetSize`·`visualSize` 허용을
+  확인한다. Component test에서 명시적 40 layout이 iOS 2pt·Android 4dp `hitSlop`을 유지하는지 검증한다.
+
 ### 열린 PR은 merge 순서에 따라 동적으로 전환을 소유한다
 
 - Decision Date: 2026-08-05

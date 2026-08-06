@@ -203,6 +203,44 @@ test('Native style-only square preserves its layout and moves the platform defic
   }
 });
 
+test('Native function style uses an explicit stable size for layout and hit slop', () => {
+  for (const [platform, expectedHitSlop] of [
+    ['ios', 2],
+    ['android', 4],
+  ] as const) {
+    mockPlatform.OS = platform;
+    try {
+      const button = renderIconButton({
+        accessibilityLabel: '미디어 추가',
+        children: '+',
+        style: ({ pressed }: { pressed: boolean }) => ({
+          backgroundColor: pressed ? 'gray' : 'white',
+          height: 40,
+          width: 40,
+        }),
+        targetSize: 40,
+      });
+      const targetStyle = flattenStyle(
+        (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
+      );
+
+      assert.equal(targetStyle.backgroundColor, 'gray');
+      assert.equal(targetStyle.height, 40);
+      assert.equal(targetStyle.width, 40);
+      assert.equal(targetStyle.minHeight, 40);
+      assert.equal(targetStyle.minWidth, 40);
+      assert.deepEqual(button.props.hitSlop, {
+        bottom: expectedHitSlop,
+        left: expectedHitSlop,
+        right: expectedHitSlop,
+        top: expectedHitSlop,
+      });
+    } finally {
+      mockPlatform.OS = 'web';
+    }
+  }
+});
+
 test('caller target and style cannot lower the Web interaction floor', () => {
   const button = renderIconButton({
     accessibilityLabel: '검색 지우기',
@@ -280,6 +318,7 @@ test('button semantics and interaction props are forwarded without losing press 
     hitSlop: 4,
     onPressIn,
     style: ({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? 'gray' : 'white' }),
+    targetSize: 44,
   });
   const disabledStyle = flattenStyle(
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
