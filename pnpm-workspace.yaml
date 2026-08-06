@@ -19,6 +19,10 @@ allowBuilds:
   esbuild: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
+  # Security fixes GHSA-rgw5-rvv9-x895 for brace-expansion were published
+  # 2026-07-30; exempt only the patched versions while the seven-day gate matures.
+  - brace-expansion@1.1.18
+  - brace-expansion@5.0.9
   - esbuild@0.28.1
   - '@esbuild/aix-ppc64@0.28.1'
   - '@esbuild/android-arm@0.28.1'
@@ -63,5 +67,8 @@ overrides:
   esbuild@<0.28.1: ^0.28.1
   # Keep fbjs's declared parser without crossing into the later provenance-downgrade releases.
   'fbjs@3.0.5>ua-parser-js': 1.0.39
+  # xcode@3.0.1 requires uuid ^7 but only uses the CommonJS v4 API; uuid 11.1.1
+  # preserves that API while resolving GHSA-w5hq-g745-h8pq.
+  'xcode@3.0.1>uuid': 11.1.1
   react-native-reanimated: 4.3.1
   react-native-worklets: 0.8.3

@@ -16,7 +16,7 @@
     "@playwright/test": "^1.60.0",
     "temporal-polyfill": "^0.3.2",
     "uuid": "^14.0.1",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.10"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.10",
