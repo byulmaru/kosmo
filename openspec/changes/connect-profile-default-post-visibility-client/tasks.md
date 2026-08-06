@@ -87,8 +87,8 @@ identity와 함께 동작하며 Account 외부 entry와 Profile 내부 설정의
 - 실제 settings host의 Profile detail에서 selected/no-profile, loading/error와 변경 성공·실패 상태를 확인한다.
 - Profile detail의 상태가 shell이나 Account entry의 공통 상태로 재구현되지 않는지 page-level test로 검증한다.
 
-- [ ] 3.1 실제 PROD-685 settings host의 Profile detail에 현재 Profile identity와 공개 범위 기능을 연결하되 구체적인 선택·저장 상호작용은 page shell contract로 고정하지 않는다.
-- [ ] 3.2 selected/no-profile, loading·error·retry와 Profile/Relay actor 전환의 page-level 회귀 검증을 추가한다.
+- [x] 3.1 실제 PROD-685 settings host의 Profile detail에 현재 Profile identity와 공개 범위 기능을 연결하되 구체적인 선택·저장 상호작용은 page shell contract로 고정하지 않는다.
+- [x] 3.2 selected/no-profile, loading·error·retry와 Profile/Relay actor 전환의 page-level 회귀 검증을 추가한다.
 
 ## 4. PROD-667 Frontend 검증·PROD-684 archive handoff
 

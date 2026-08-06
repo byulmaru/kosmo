@@ -1,9 +1,9 @@
 import { Link } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { SettingsItem } from './SettingsItem';
 
 export const BYULMARU_ID_ACCOUNT_SETTINGS_URL = 'https://id.byulmaru.co';
 
@@ -33,13 +33,18 @@ export function ByulmaruIdAccountSettingsEntry() {
           style={entryStyle}
           testID="byulmaru-id-account-settings-entry"
         >
-          <Text style={[styles.label, { color: theme.text }]}>{ENTRY_LABEL}</Text>
-          <ChevronRightIcon
-            accessibilityElementsHidden
-            color={theme.textSecondary}
-            pointerEvents="none"
-            size={20}
-            strokeWidth={2}
+          <SettingsItem
+            label={ENTRY_LABEL}
+            testID="byulmaru-id-account-settings-item"
+            trailing={
+              <ChevronRightIcon
+                accessibilityElementsHidden
+                color={theme.textSecondary}
+                pointerEvents="none"
+                size={20}
+                strokeWidth={2}
+              />
+            }
           />
         </Pressable>
       </Link>
@@ -50,24 +55,11 @@ export function ByulmaruIdAccountSettingsEntry() {
 const styles = StyleSheet.create({
   root: { width: '100%' },
   entry: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
     minHeight: 64,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
     width: '100%',
   },
   entryFocused: {
     outlineStyle: 'solid' as never,
     outlineWidth: 2,
-  },
-  label: {
-    flex: 1,
-    flexShrink: 1,
-    fontFamily: 'SUIT',
-    fontWeight: '700',
-    ...typography.md,
   },
 });

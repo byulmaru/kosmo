@@ -289,9 +289,14 @@ export const SharedNavigation: Story = {
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    const settings = canvas.getByRole('link', { name: '설정' });
+    expect(settings).toHaveAttribute('href', '/settings');
     expect(
       followRequests.compareDocumentPosition(bookmarks) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(bookmarks.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
     expect(canvas.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
     expect(canvas.getByRole('button', { name: '로그아웃' }).querySelector('svg')).toHaveAttribute(
@@ -313,6 +318,7 @@ export const BottomNavigation: Story = {
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
     expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '설정' })).not.toBeInTheDocument();
   },
   render: () => <BottomNavigationStory />,
 };
@@ -324,6 +330,7 @@ export const CompactSidebar: Story = {
     expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(canvas.getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     const feedback = canvas.getByRole('button', { name: '피드백 보내기' });
     const trigger = canvas.getByRole('button', { name: '프로필 목록' });
@@ -355,6 +362,16 @@ export const CompactSidebar: Story = {
     expect(canvas.queryByRole('link', { name: '프로필 설정' })).not.toBeInTheDocument();
   },
   render: () => <CompactSidebarStory />,
+};
+
+export const SettingsNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/settings/default-post-visibility' } },
+  play: ({ canvasElement }) => {
+    const settings = within(canvasElement).getByRole('link', { name: '설정' });
+    expect(settings).toHaveAttribute('href', '/settings');
+    expect(settings).toHaveAttribute('aria-current', 'page');
+  },
+  render: () => <FeedbackNavigationFullStory />,
 };
 
 export const FeedbackNavigationCurrentState: Story = {
@@ -1353,6 +1370,7 @@ export const UniversalMobile: Story = {
     );
     const followRequests = within(drawer).getByRole('link', { name: '팔로워 요청' });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
+    expect(within(drawer).getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
     expect(page.getByRole('button', { name: '피드백 보내기' })).toBeInTheDocument();
     expect(within(drawer).queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();

@@ -20,6 +20,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { returnToSettingsRoot } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -28,7 +29,12 @@ import {
 } from './PrimaryNavigationScrollContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
+import {
+  getShellRoutePresentation,
+  getWebMobileShellHeader,
+  isSettingsRoute,
+  webMobileShellHeaderHeight,
+} from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { View as NativeView, ViewStyle } from 'react-native';
@@ -116,7 +122,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
-  const layout = getShellLayout(web, width);
+  const { layout, settingsWorkspace, showRightRail } = getShellRoutePresentation(
+    web,
+    width,
+    pathname,
+  );
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
@@ -206,7 +216,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      onPress={() => router.back()}
+      accessibilityRole="button"
+      onPress={() => (isSettingsRoute(pathname) ? returnToSettingsRoot(router) : router.back())}
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}
@@ -254,7 +265,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
           style={[
             styles.center,
             web && webDocumentColumn,
-            full && styles.centerWithRightRail,
+            settingsWorkspace && styles.settingsCenter,
+            showRightRail && styles.centerWithRightRail,
             { borderColor: theme.border },
           ]}
         >
@@ -299,7 +311,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           ) : null}
         </View>
 
-        {full ? (
+        {showRightRail ? (
           <View
             style={[
               styles.rightRail,
@@ -361,6 +373,7 @@ const styles = StyleSheet.create({
   sidebar: { borderRightWidth: 1, minHeight: '100%' },
   sidebarWithOverlay: { zIndex: 30 },
   center: { flex: 1, maxWidth: 600, minHeight: '100%', minWidth: 0 },
+  settingsCenter: { maxWidth: 950 },
   centerWithRightRail: { borderRightWidth: 1 },
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },

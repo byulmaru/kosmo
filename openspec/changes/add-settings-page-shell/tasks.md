@@ -30,10 +30,10 @@ destination과 내부 Profile detail로 이동할 수 있다.
   검증한다.
 - Account section에 Kosmo Account 데이터 loading·empty·save UI나 내부 Account route가 없는지 검증한다.
 
-- [ ] 1.1 Mobile Figma cell의 시각 규칙과 필수 label·선택적 leading·description·trailing·selected composition을 container 폭에 맞게 제공하는 presentational `SettingsItem`을 구현한다.
-- [ ] 1.2 Settings root에 시각 label `계정 설정`인 Byulmaru ID 외부 entry와 `게시물 기본 공개 범위` 내부 entry를 직접 구성하고 미래 category·placeholder·registry를 추가하지 않는다.
-- [ ] 1.3 Profile detail에 현재 Profile identity, selected/no-profile, loading·error·content와 기존 Profile 선택·생성 action을 연결하고 다른 Profile 값을 fallback으로 쓰지 않는다.
-- [ ] 1.4 root entry 순서·selected state, SettingsItem width/reflow와 Profile detail 상태의 component test·Storybook catalog를 추가한다.
+- [x] 1.1 Mobile Figma cell의 시각 규칙과 필수 label·선택적 leading·description·trailing·selected composition을 container 폭에 맞게 제공하는 presentational `SettingsItem`을 구현한다.
+- [x] 1.2 Settings root에 시각 label `계정 설정`인 Byulmaru ID 외부 entry와 `게시물 기본 공개 범위` 내부 entry를 직접 구성하고 미래 category·placeholder·registry를 추가하지 않는다.
+- [x] 1.3 Profile detail에 현재 Profile identity, selected/no-profile, loading·error·content와 기존 Profile 선택·생성 action을 연결하고 다른 Profile 값을 fallback으로 쓰지 않는다.
+- [x] 1.4 root entry 순서·selected state, SettingsItem width/reflow와 Profile detail 상태의 component test·Storybook catalog를 추가한다.
 
 ## 2. PROD-685 Account 외부 진입점과 Profile 내부 기능 통합
 
@@ -67,9 +67,9 @@ Settings root/detail에 배치되고 각 자식 결과의 기존 동작·상태 
   검증한다.
 
 - [x] 2.1 PROD-645·PROD-667과 Backend PROD-648의 최신 통합 surface, 완료 상태와 변경 댓글을 다시 확인하고 current branch의 통합 경계를 정렬한다.
-- [ ] 2.2 PROD-645의 Byulmaru ID Account 외부 진입점을 root의 첫 entry에 연결하고 Web HTTPS·Android/iOS 승인 external `Link` 계약을 보존한다.
-- [ ] 2.3 PROD-667 Profile 공개 범위 기능을 root의 두 번째 entry가 여는 detail에 연결하고 actor/Profile 데이터·권한 경계를 보존하되 구체적인 선택·저장 상호작용은 page shell contract로 고정하지 않는다.
-- [ ] 2.4 Profile detail의 selected/no-profile, loading·error·retry·성공 content와 actor 전환의 page-level 통합 검증을 추가한다.
+- [x] 2.2 PROD-645의 Byulmaru ID Account 외부 진입점을 root의 첫 entry에 연결하고 Web HTTPS·Android/iOS 승인 external `Link` 계약을 보존한다.
+- [x] 2.3 PROD-667 Profile 공개 범위 기능을 root의 두 번째 entry가 여는 detail에 연결하고 actor/Profile 데이터·권한 경계를 보존하되 구체적인 선택·저장 상호작용은 page shell contract로 고정하지 않는다.
+- [x] 2.4 Profile detail의 selected/no-profile, loading·error·retry·성공 content와 actor 전환의 page-level 통합 검증을 추가한다.
 
 ## 3. PROD-685 Canonical route와 shell navigation
 
@@ -107,10 +107,10 @@ route family를 열고, full master-detail 또는 one-pane drill-in으로 설정
   back·heading 소유권을 검증한다.
 - mobile Web forward navigation과 browser back/forward scroll restoration을 실제 browser에서 확인한다.
 
-- [ ] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고 guest·session loading/error guard 동작을 유지한다.
-- [ ] 3.2 full sidebar, compact icon rail과 mobile drawer에 `/settings` 진입점·route-family page-current·drawer close를 연결하되 bottom tab에 중복하지 않는다.
-- [ ] 3.3 full Web에서 일반 RightRail을 숨기고 center+right에 약 320px master+flex detail workspace와 Profile 기본 선택을 제공하며, 다른 route의 center/right rail 계약을 유지한다.
-- [ ] 3.4 compact/mobile/native에서 root 목록부터 시작하고 Profile detail의 back navigation과 root/detail heading을 중복 없이 제공한다.
+- [x] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고 guest·session loading/error guard 동작을 유지한다.
+- [x] 3.2 full sidebar, compact icon rail과 mobile drawer에 `/settings` 진입점·route-family page-current·drawer close를 연결하되 bottom tab에 중복하지 않는다.
+- [x] 3.3 full Web에서 일반 RightRail을 숨기고 center+right에 약 320px master+flex detail workspace와 Profile 기본 선택을 제공하며, 다른 route의 center/right rail 계약을 유지한다.
+- [x] 3.4 compact/mobile/native에서 root 목록부터 시작하고 Profile detail의 back navigation과 root/detail heading을 중복 없이 제공한다.
 - [ ] 3.5 route parity·보호 guard·deep link/back, pane visibility, surface navigation·header와 Web forward/history 회귀 테스트를 추가한다.
 
 ## 4. PROD-685 페이지 수준 접근성·플랫폼 검증과 완료 증거
@@ -145,7 +145,7 @@ Web·Android·iOS와 keyboard·screen reader·작은 화면에서 Settings route
 - 최신 canonical 문서, PROD-685·PROD-684·PROD-645·PROD-667·PROD-648 본문·관계·계약 변경 댓글과 구현 diff를 handoff 전에 다시
   대조한다.
 
-- [ ] 4.1 Relay compiler, TypeScript, 관련 unit/component test와 Storybook test·static build·a11y를 통과시킨다.
+- [x] 4.1 Relay compiler, TypeScript, 관련 unit/component test와 Storybook test·static build·a11y를 통과시킨다.
 - [ ] 4.2 mobile·compact·full Web에서 master/detail 또는 root/detail의 keyboard 순서, screen reader heading·selected state, zoom·reflow, forward/history와 외부 Account/내부 Profile 통합 흐름을 확인하고, 기존 frames를 보존한 새 PROD-685 Figma frames와 구현을 정렬한다.
 - [ ] 4.3 Android와 iOS에서 drawer 진입, heading·focus, font scaling, screen reader와 platform touch target을 확인하고 증거를 기록한다.
 - [ ] 4.4 최신 canonical·Linear authority와 구현·delta spec 정합성을 다시 확인하고 `openspec validate add-settings-page-shell --strict`를 통과시켜 PROD-684에 완료·archive 증거를 인계한다.
