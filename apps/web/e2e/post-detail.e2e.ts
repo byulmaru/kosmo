@@ -112,7 +112,7 @@ test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화
   await expect(page.getByText(body)).toBeVisible();
 });
 
-test('Child Reply 상세에서 Parent inline Reply composer는 connector lane 밖에 표시된다', async ({
+test('Child Reply 상세의 Parent inline Reply geometry를 320px까지 유지한다', async ({
   context,
   page,
 }) => {
@@ -165,4 +165,17 @@ test('Child Reply 상세에서 Parent inline Reply composer는 connector lane �
     parentRowBox!.x + parentRowBox!.width - (parentComposerBox!.x + parentComposerBox!.width),
   ).toBe(8);
   expect(parentConnectorBox!.x + parentConnectorBox!.width).toBeLessThan(parentComposerBox!.x);
+
+  await page.setViewportSize({ height: 844, width: 320 });
+  await parentComposer.getByRole('button', { name: '조용한 공개' }).click();
+
+  const visibilityMenu = parentComposer.getByRole('menu', { name: '답글 공개 설정' });
+  await expect(visibilityMenu).toBeVisible();
+  const visibilityMenuBox = await visibilityMenu.boundingBox();
+  const viewport = page.viewportSize();
+  expect(visibilityMenuBox).not.toBeNull();
+  expect(visibilityMenuBox?.width).toBe(256);
+  expect(viewport).not.toBeNull();
+  expect(visibilityMenuBox?.x).toBeGreaterThanOrEqual(0);
+  expect(visibilityMenuBox!.x + visibilityMenuBox!.width).toBeLessThanOrEqual(viewport!.width);
 });

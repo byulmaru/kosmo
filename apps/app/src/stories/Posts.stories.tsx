@@ -5070,15 +5070,26 @@ export const ComposerSubmitting: Story = {
 };
 
 export const ComposerVisibilityAndSubmitInteraction: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    const bodyTop = body.getBoundingClientRect().top;
+    const triggerWidth = visibilityButton.getBoundingClientRect().width;
     expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
     await userEvent.click(visibilityButton);
 
     let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = canvasElement.ownerDocument.defaultView?.innerWidth;
+    expect(viewportWidth).toBeDefined();
+    expect(menuRect.width).toBe(256);
+    expect(menuRect.width).toBeGreaterThan(triggerWidth);
+    expect(menuRect.left).toBeGreaterThanOrEqual(0);
+    expect(menuRect.right).toBeLessThanOrEqual(viewportWidth!);
+    expect(body.getBoundingClientRect().top).toBe(bodyTop);
     expect(menu).toBeVisible();
     await userEvent.click(body);
     await waitFor(() => {

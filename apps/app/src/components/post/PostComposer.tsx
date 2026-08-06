@@ -1,7 +1,7 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
@@ -155,6 +155,7 @@ function PostComposerContents({
     resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
   );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaGeneration, setMediaGeneration] = useState(0);
@@ -273,6 +274,48 @@ function PostComposerContents({
     const frame = requestAnimationFrame(() => editor.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [contextKey, focusOnMount]);
+
+  const positionWebVisibilityMenu = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const control = visibilityControl.current as unknown as HTMLElement | null;
+    const menu = visibilityMenuRef.current as unknown as HTMLElement | null;
+    const ownerDocument = control?.ownerDocument;
+    if (!control || !menu || !ownerDocument) {
+      return;
+    }
+
+    const controlRect = control.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const minLeft = -controlRect.left;
+    const maxLeft = ownerDocument.documentElement.clientWidth - menuRect.width - controlRect.left;
+    const nextLeft = Math.max(minLeft, Math.min(0, maxLeft));
+
+    setWebVisibilityMenuLeft((current) => (current === nextLeft ? current : nextLeft));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !visibilityOpen) {
+      return;
+    }
+
+    positionWebVisibilityMenu();
+    const control = visibilityControl.current as unknown as HTMLElement | null;
+    const ownerDocument = control?.ownerDocument;
+    const ownerWindow = ownerDocument?.defaultView;
+    if (!ownerDocument || !ownerWindow) {
+      return;
+    }
+
+    ownerWindow.addEventListener('resize', positionWebVisibilityMenu);
+    ownerDocument.addEventListener('scroll', positionWebVisibilityMenu, true);
+    return () => {
+      ownerWindow.removeEventListener('resize', positionWebVisibilityMenu);
+      ownerDocument.removeEventListener('scroll', positionWebVisibilityMenu, true);
+    };
+  }, [positionWebVisibilityMenu, visibilityOpen]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -431,6 +474,7 @@ function PostComposerContents({
           style={[
             styles.webVisibilityMenu,
             surface ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
+            { left: webVisibilityMenuLeft },
           ]}
         >
           {visibilityMenu}
@@ -636,7 +680,6 @@ const styles = StyleSheet.create({
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   webVisibilityMenu: {
     left: 0,
-    maxWidth: '100%',
     position: 'absolute',
     width: 256,
     zIndex: 50,
