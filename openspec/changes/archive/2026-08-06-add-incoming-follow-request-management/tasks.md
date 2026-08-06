@@ -58,12 +58,12 @@
 - 테스트 코드 범위: approve/reject 성공, 실패·같은 동작 재시도, 행별 동시 처리, 정확한 edge 제거, approve follow normalization과 Profile 전환 race를 직접 검증하는 최소 Relay/component test.
 - 테스트 필요성: pending-only terminal 처리, stale connection 방지와 actor cache 격리를 증명한다.
 - 테스트 제외 범위: GraphQL API lifecycle 중복 통합 test, optimistic UI 조합, 전역 toast infrastructure와 unrelated Relay cache coverage.
-- Web keyboard·screen-reader와 Android/iOS action target·busy/disabled 상태를 runtime에서 확인한다.
+- Web keyboard·screen-reader에서 action target·busy/disabled 상태를 runtime으로 확인한다. Android/iOS runtime QA는 PROD-699의 향후 비차단 범위이며 이 task의 완료 증거로 요구하지 않는다.
 
 - [x] 2.1 각 요청 행에 분리된 승인·거절 동작과 행별 pending, inline error, 같은 동작 재시도를 구현한다.
 - [x] 2.2 approve/reject 성공 payload의 삭제 ID로 현재 connection의 정확한 요청을 제거하고 approve follow 관계를 정규화한다.
 - [x] 2.3 selected Profile 전환 시 목록·pagination·행 state와 늦은 이전 actor 응답을 격리한다.
-- [ ] 2.4 승인·거절과 actor 격리의 최소 Relay/component test를 추가하고 정적·runtime 검증 결과를 기록한다.
+- [x] 2.4 승인·거절과 actor 격리의 최소 Relay/component test를 추가하고 정적·runtime 검증 결과를 기록한다.
 
 **2026-08-03 검증 기록**
 
@@ -72,7 +72,14 @@
 - passed — targeted `FollowRequests.stories.tsx`: 9 interactions, including common header states, regular/unavailable requester, row-local pending, mutation failure/retry, approve/reject exact removal, approve participant count normalization, automatic pagination retry와 late previous-actor response isolation
 - passed — `pnpm --filter @kosmo/app build-storybook`와 전체 `pnpm --filter @kosmo/app test:storybook`: 282 tests
 - passed — `pnpm lint:eslint`, `pnpm lint:prettier`, `pnpm exec openspec validate add-incoming-follow-request-management --strict`
-- not run — 실제 Web keyboard·screen-reader와 Android/iOS action target·busy/disabled runtime QA. 해당 증거가 없으므로 2.4는 완료 처리하지 않는다.
+- not run — 실제 Web keyboard·screen-reader action target·busy/disabled runtime QA. 해당 증거가 없으므로 2.4는 완료 처리하지 않는다.
+- deferred, non-blocking — Android/iOS runtime QA는 PROD-699에서 향후 QA 관련 이슈들과 함께 수행하며 이 task와 change archive를 차단하지 않는다.
+
+**2026-08-06 PROD-668 완료 검증 기록**
+
+- passed — 실제 Playwright Web runtime에서 requester Profile link → 승인 → 거절의 Tab/Shift+Tab focus 순서와 Enter 승인·거절을 확인했다. 승인·거절 후 정확한 row가 제거되고 Profile 전환 전후 다른 actor의 row가 노출되지 않았다.
+- passed — 실행 중인 Storybook Web의 browser accessibility tree에서 requester link와 승인·거절 button의 분리된 role·accessible name을 확인했다. row-local pending에서는 대상 행의 승인·거절만 disabled이고 승인 control 아래 `별빛 여행자 팔로우 요청 승인 처리 중` progressbar가 노출되며 다른 행의 action은 enabled였다. error state는 별도 `alert`로 노출됐다.
+- limitation — 실제 VoiceOver/NVDA announcement audio는 실행하지 않았다. 위 screen-reader 증거는 browser accessibility-tree의 role·name·disabled·progressbar·alert 의미에 한정하며 실제 announcement나 저장소 전체 접근성 적합성으로 일반화하지 않는다.
 
 ## 3. PROD-654 반응형 navigation 진입점 복원
 
@@ -118,7 +125,7 @@
 - excluded by approved PROD-654 scope — Android/iOS UI·runtime QA, Native touch target과 항목별 수동 Web keyboard·screen reader 1:1 QA. 기존 shared navigation 접근성 계약과 Storybook addon-a11y·Web E2E를 재사용한다.
 - not rerun by explicit user direction — Web-only 문서 정렬과 Lucide 내부 SVG path assertion 3개 제거 후 local 검증은 다시 실행하지 않았다. 위 passing evidence는 production navigation 동작이 같은 이전 HEAD에서 확보했으며, push 이후 hosted CI가 새 HEAD를 검증한다.
 
-## 4. PROD-566 통합 검증과 OpenSpec 완료
+## 4. PROD-668 통합 검증과 OpenSpec 완료
 
 **Authority / Provenance**
 
@@ -130,6 +137,8 @@
 - `PROD-272`
 - `PROD-566`
 - `PROD-654`
+- `PROD-668`
+- `PROD-699` — deferred non-blocking Native QA boundary
 
 **Deliverable**
 
@@ -138,7 +147,8 @@
 **Guardrails**
 
 - 두 구현 이슈가 각자 소유한 deliverable과 verification을 완료하기 전 change를 archive하지 않는다.
-- passing automation과 실행하지 않은 Web·Android·iOS·keyboard·screen-reader QA를 구분해 기록한다.
+- passing automation, Web keyboard·screen-reader runtime과 실행하지 않은 actual screen-reader audio를 구분해 기록한다.
+- Android/iOS runtime QA는 PROD-699에만 기록하고 현재 완료·archive를 차단하지 않는다.
 - DB·GraphQL lifecycle, outgoing FollowButton와 notification 범위를 확장하지 않는다.
 
 **Verification**
@@ -147,8 +157,17 @@
 - 테스트 필요성: 두 PR을 함께 사용해야만 확인되는 route·navigation·actor 통합을 증명한다.
 - 테스트 제외 범위: 구현 이슈 test 반복, archive-only test helper와 새로운 platform harness.
 - 최신 Linear·canonical 문서를 독립 대조하고 `openspec validate add-incoming-follow-request-management --strict`, archive 후 전체 strict validation을 통과시킨다.
+- 세 navigation surface의 route 증거와 대표 Web surface의 selected Profile·approve/reject flow를 조합해 중복 action E2E를 만들지 않는다.
 
-- [ ] 4.1 PROD-566과 PROD-654의 담당 task·test·runtime QA 완료 증거를 대조한다.
-- [ ] 4.2 세 shell surface에서 `/follow-requests`로 진입해 selected Profile 목록·전환·승인·거절이 연결되는 최소 cross-slice 흐름을 검증한다.
-- [ ] 4.3 active specs와 구현 정합성을 확인하고 모든 task가 완료된 뒤 change를 archive한다.
-- [ ] 4.4 archive 후 OpenSpec strict validation과 최종 repository check 결과를 기록한다.
+- [x] 4.1 PROD-566과 PROD-654의 담당 task·test·Web runtime 완료 증거를 대조하고 PROD-699가 비차단 후속 범위임을 확인한다.
+- [x] 4.2 세 shell surface에서 `/follow-requests`로 진입해 selected Profile 목록·전환·승인·거절이 연결되는 최소 cross-slice 흐름을 검증한다.
+- [x] 4.3 active specs와 구현 정합성을 확인하고 모든 task가 완료된 뒤 change를 archive한다.
+- [x] 4.4 archive 후 OpenSpec strict validation과 최종 repository check 결과를 기록한다.
+
+**2026-08-06 PROD-668 통합 검증 기록**
+
+- passed — PROD-566 PR #492와 PROD-654 PR #504가 승인·병합되고 current main의 ancestor이며 각 OpenSpec slice 1.x, 2.1–2.3, 3.x와 자동화 증거가 완료됐음을 대조했다. PROD-699는 Linear에서 이 change를 차단하지 않는 향후 Native QA로 확인했다.
+- passed — Watchman 우회용 비커밋 local config에서 `navigation-scroll.e2e.ts` 5 tests. 기존 full sidebar·compact rail·mobile Web drawer route 증거와 대표 full sidebar의 selected Profile A/B 격리, keyboard 승인·거절, 정확한 row 제거를 조합해 검증했다.
+- passed — `/follow-requests` destination을 임시로 깨뜨렸을 때 새 integration test가 canonical route assertion에서 실패했고, 즉시 원복한 뒤 production diff가 없음을 확인했다.
+- passed — delta의 5개 `profile-follow-request-management` 요구사항을 새 active spec에 추가하고, `web-app-shell`의 기존 준비 전 비노출 계약을 보존하면서 준비 후 `/follow-requests` 진입점 scenario를 동기화했다. change는 `openspec/changes/archive/2026-08-06-add-incoming-follow-request-management/`로 archive했다.
+- passed — archive 후 `openspec validate --all --strict`: 83 items, 0 failed. `git diff --check`와 archived change·active specs 대상 Prettier check도 통과했다.
