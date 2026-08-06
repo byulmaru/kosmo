@@ -177,7 +177,9 @@ test('프로필 편집 진입점은 반응형 navigation에서 canonical route�
     expect(hrefs.indexOf('/profile-edit')).toBeLessThan(hrefs.indexOf('/follow-requests'));
     await expect(followRequests).toHaveAttribute('href', '/follow-requests');
 
-    await profileEdit.focus();
+    await profile.focus();
+    await expect(profile).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(profileEdit).toBeFocused();
     await profileEdit.press('Enter');
     await expect(page).toHaveURL(/\/profile-edit$/);
@@ -221,7 +223,9 @@ test('프로필 편집 진입점은 반응형 navigation에서 canonical route�
   expect(hrefs.indexOf('/profile-edit')).toBeLessThan(hrefs.indexOf('/follow-requests'));
   await expect(followRequests).toHaveAttribute('href', '/follow-requests');
 
-  await profileEdit.focus();
+  await profile.focus();
+  await expect(profile).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(profileEdit).toBeFocused();
   await profileEdit.press('Enter');
   await expect(page).toHaveURL(/\/profile-edit$/);
