@@ -68,7 +68,7 @@ const webRightRailOverflow = {
 } as unknown as ViewStyle;
 
 const webStickyHeader = {
-  height: webMobileShellHeaderHeight,
+  minHeight: webMobileShellHeaderHeight,
   position: 'sticky',
   top: 0,
   zIndex: 20,

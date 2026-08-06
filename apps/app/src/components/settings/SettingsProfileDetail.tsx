@@ -14,6 +14,9 @@ const SettingsProfileQuery = graphql`
     currentSession {
       selectedProfile {
         id
+        instance {
+          kind
+        }
         ...ProfileDefaultPostVisibilityControl_profile
       }
     }
@@ -49,7 +52,7 @@ function SettingsProfileDetailContents({ fetchKey }: { fetchKey: string }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
 
-  if (!profile) {
+  if (!profile || profile.instance.kind !== 'LOCAL') {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}

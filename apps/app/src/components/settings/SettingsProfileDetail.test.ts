@@ -8,7 +8,12 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type QueryData = {
-  currentSession: { selectedProfile: { id: string } | null } | null;
+  currentSession: {
+    selectedProfile: {
+      id: string;
+      instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+    } | null;
+  } | null;
   selectedProfileForEdit: { id: string } | null;
 };
 
@@ -86,7 +91,7 @@ afterEach(async () => {
 
 describe('SettingsProfileDetail', () => {
   it('selected Owner Profile을 편집 가능한 기존 control에 연결한다', async () => {
-    const profile = { id: 'profile:owner' };
+    const profile = { id: 'profile:owner', instance: { kind: 'LOCAL' as const } };
     queryData = {
       currentSession: { selectedProfile: profile },
       selectedProfileForEdit: { id: 'profile:owner' },
@@ -101,11 +106,27 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('selected Member Profile에는 같은 control을 읽기 전용으로 연결한다', async () => {
-    const profile = { id: 'profile:member' };
+    const profile = { id: 'profile:member', instance: { kind: 'LOCAL' as const } };
     queryData = { currentSession: { selectedProfile: profile }, selectedProfileForEdit: null };
     await render();
 
     assert.equal(rendered('ProfileDefaultPostVisibilityControl')[0].props.editable, false);
+  });
+
+  it('selected Remote Profile에는 Local 공개 범위 control을 표시하지 않는다', async () => {
+    queryData = {
+      currentSession: {
+        selectedProfile: {
+          id: 'profile:remote',
+          instance: { kind: 'ACTIVITYPUB' },
+        },
+      },
+      selectedProfileForEdit: null,
+    };
+    await render();
+
+    assert.equal(rendered('ProfileDefaultPostVisibilityControl').length, 0);
+    assert.equal(rendered('StateView')[0].props.title, '설정할 Profile이 없어요');
   });
 
   it('selected Profile이 없으면 기존 Profile 선택 흐름을 연다', async () => {
