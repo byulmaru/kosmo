@@ -273,6 +273,7 @@ function NotificationRow({
   const [commitMarkRead] = useMutation<NotificationListItemMarkReadMutation>(
     notificationListItemMarkReadMutation,
   );
+  const web = Platform.OS === 'web';
   const unread = readAt === null;
   const unreadDescription = unread ? ' 읽지 않은 알림.' : '';
   const markRead = () => {
@@ -284,13 +285,19 @@ function NotificationRow({
 
   return (
     <View
-      onPointerEnter={Platform.OS === 'web' ? () => setHovered(true) : undefined}
-      onPointerLeave={Platform.OS === 'web' ? () => setHovered(false) : undefined}
+      onPointerEnter={web ? () => setHovered(true) : undefined}
+      onPointerLeave={web ? () => setHovered(false) : undefined}
       style={[
         styles.root,
+        web ? styles.webRoot : undefined,
         {
-          backgroundColor: hovered ? theme.surface : theme.card,
-          borderColor: theme.border,
+          backgroundColor: hovered
+            ? theme.surface
+            : web && unread
+              ? theme.primarySubtle
+              : theme.card,
+          borderBottomColor: theme.border,
+          borderLeftColor: web ? (unread ? theme.primary : 'transparent') : undefined,
         },
       ]}
     >
@@ -348,6 +355,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
+  },
+  webRoot: {
+    borderLeftWidth: 4,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.lg,
   },
   content: { flex: 1, gap: spacing.sm, minWidth: 0 },
   kind: {

@@ -1,7 +1,6 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
@@ -22,7 +21,9 @@ import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
   isPostComposerVisibilityAllowed,
+  resolvePostComposerVisibility,
 } from './postComposerState';
+import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type {
@@ -32,40 +33,26 @@ import type {
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 
-const visibilityOptions = [
-  {
-    description: '모두가 볼 수 있어요.',
-    icon: GlobeIcon,
-    label: '공개',
-    value: PostVisibility.PUBLIC,
-  },
-  {
-    description: '모두가 볼 수 있지만 검색되지 않아요.',
-    icon: MoonIcon,
-    label: '조용한 공개',
-    value: PostVisibility.UNLISTED,
-  },
-  {
-    description: '팔로워만 볼 수 있어요.',
-    icon: LockIcon,
-    label: '팔로워만',
-    value: PostVisibility.FOLLOWERS,
-  },
-  // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면 복원한다.
-  // Local Post는 현재 이 공개 범위를 선택해도 해당 계약을 보장할 수 없어 임시로 숨긴다.
-  // {
-  //   description: '이 글에서 언급한 계정만 볼 수 있어요.',
-  //   icon: AtSignIcon,
-  //   label: '언급한 계정만',
-  //   value: PostVisibility.DIRECT,
-  // },
+// TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
+// PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
+const postComposerVisibilityValues = [
+  PostVisibility.PUBLIC,
+  PostVisibility.UNLISTED,
+  PostVisibility.FOLLOWERS,
 ] as const;
-type Visibility = (typeof visibilityOptions)[number]['value'];
+const visibilityOptions = postComposerVisibilityValues.map((value) => ({
+  ...postVisibilityPresentation[value],
+  value,
+}));
+type Visibility = (typeof postComposerVisibilityValues)[number];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
+    private {
+      defaultPostVisibility
+    }
     displayName
     handle
     avatar {
@@ -164,7 +151,9 @@ function PostComposerContents({
     normalizePostContentPlainText(initialContentWarning ?? ''),
   );
   const [editorFocused, setEditorFocused] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
+  const [visibility, setVisibility] = useState<Visibility>(() =>
+    resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
+  );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
@@ -245,7 +234,7 @@ function PostComposerContents({
         }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
-        setVisibility(PostVisibility.UNLISTED);
+        setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
@@ -385,7 +374,7 @@ function PostComposerContents({
               styles.visibilityOption,
               {
                 backgroundColor: selected
-                  ? 'rgba(252, 231, 154, 0.45)'
+                  ? theme.selectedSurface
                   : pressed
                     ? theme.surface
                     : 'transparent',
@@ -531,6 +520,7 @@ function PostComposerContents({
         <PostComposerMediaControls
           actions={replyMode ? null : submitActions}
           disabled={submitting}
+          editorRef={editor}
           key={mediaGeneration}
           onValueChange={setMedia}
         />

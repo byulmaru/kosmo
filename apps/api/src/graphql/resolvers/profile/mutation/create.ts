@@ -1,5 +1,5 @@
 import { AccountProfiles, db, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy } from '@kosmo/core/enums';
+import { AccountProfileRole, PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
@@ -29,6 +29,7 @@ builder.mutationField('createProfile', (t) =>
             instanceId: localInstance.id,
             normalizedHandle: normalizeHandle(input.handle),
             displayName: input.handle,
+            defaultPostVisibility: PostVisibility.UNLISTED,
             followPolicy: ProfileFollowPolicy.OPEN,
           })
           .returning()

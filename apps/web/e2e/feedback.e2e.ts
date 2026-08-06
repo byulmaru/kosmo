@@ -6,7 +6,10 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
-test('인증된 Web 사용자는 메뉴에서 피드백을 보내고 성공 상태를 본다', async ({ context, page }) => {
+test('인증된 Web 사용자는 직접 피드백 페이지에서 전송하고 성공 상태를 본다', async ({
+  context,
+  page,
+}) => {
   const viewer = await createE2ESession({ profile: false });
   await setE2ESessionCookie(context, viewer.token);
 
@@ -25,10 +28,7 @@ test('인증된 Web 사용자는 메뉴에서 피드백을 보내고 성공 상�
     });
   });
 
-  await page.goto('/home');
-  const feedbackLink = page.getByRole('link', { name: '피드백 보내기' });
-  await expect(feedbackLink).toHaveAttribute('href', '/feedback');
-  await feedbackLink.click();
+  await page.goto('/feedback');
   await expect(page).toHaveURL(/\/feedback$/u);
   await expect(page.getByText('프로필과 설정 등 주요 메뉴를 확인합니다.')).toHaveCount(0);
   await expect(page.getByRole('link', { name: '로그인 테스트' })).toHaveCount(0);

@@ -704,6 +704,15 @@ const composerProfile = profile({
   avatar: { id: 'media-composer-avatar', url: composerAvatarUrl },
   id: 'profile-composer',
 });
+const composerPublicProfile = profile({
+  ...composerProfile,
+  defaultPostVisibility: 'PUBLIC',
+});
+const composerUnavailableProfile = {
+  ...composerProfile,
+  defaultPostVisibility: null,
+  private: null,
+} as unknown as typeof composerProfile;
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
@@ -1797,9 +1806,15 @@ type ReplyComposerRequest = Readonly<{
   visibility: string;
 }>;
 
-function ReplyComposerContractStory() {
+function ReplyComposerContractStory({
+  defaultPostVisibility = 'UNLISTED',
+}: {
+  defaultPostVisibility?: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
+} = {}) {
   const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
   const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
+  const fixtureProfile =
+    defaultPostVisibility === 'PUBLIC' ? composerPublicProfile : composerProfile;
   const environment = useMemo(() => {
     let nextMediaId = 0;
     return new Environment({
@@ -1808,7 +1823,7 @@ function ReplyComposerContractStory() {
           return Promise.resolve({
             data: {
               alternateComposerProfile,
-              composerProfile,
+              composerProfile: fixtureProfile,
               contentPostsProfile,
               emptyPostsProfile,
               homeTimeline,
@@ -1848,7 +1863,7 @@ function ReplyComposerContractStory() {
       }),
       store: new Store(new RecordSource()),
     });
-  }, []);
+  }, [fixtureProfile]);
 
   return (
     <RelayEnvironmentProvider environment={environment}>
@@ -4747,6 +4762,251 @@ export const ComposerMediaUploadInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerClipboardPasteInteraction: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              completeMediaUpload: { media: { id: `media-clipboard-${index}`, state: 'READY' } },
+            },
+          })),
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-clipboard-${index}` },
+                uploadUrl: `https://upload.example/clipboard/${index}`,
+              },
+            },
+          })),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+    const clipboardImageOne = new File(['one'], 'one.png', { type: 'image/png' });
+    const clipboardImageTwo = new File(['two'], 'two.webp', { type: 'image/webp' });
+    const pickerFileOne = new File(['picker-one'], 'picker-one.png', { type: 'image/png' });
+    const pickerFileTwo = new File(['picker-two'], 'picker-two.webp', { type: 'image/webp' });
+
+    try {
+      await userEvent.type(body, '기존 본문');
+
+      let rejectSelection!: (reason: Error) => void;
+      setNextImagePickerResult(
+        new Promise((_resolve, reject) => {
+          rejectSelection = reject;
+        }),
+      );
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
+      rejectSelection(new Error('picker failed'));
+      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+        '이미지를 선택하지 못했습니다.',
+      );
+
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(clipboardImageOne);
+      clipboardData.items.add(clipboardImageTwo);
+      clipboardData.setData('text/plain', '이 텍스트는 본문에 들어가면 안 됩니다.');
+      const pasteEvent = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData,
+      });
+      body.dispatchEvent(pasteEvent);
+
+      expect(pasteEvent.defaultPrevented).toBe(true);
+      expect(body).toHaveValue('기존 본문');
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 2, 업로드 완료')).toBeVisible();
+      });
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+
+      setNextImagePickerResult({
+        assets: [
+          {
+            ...composerMediaAsset,
+            file: pickerFileOne,
+            mimeType: 'image/png',
+            uri: 'blob:https://kosmo.example/picker-first',
+          },
+          {
+            ...composerMediaAsset,
+            file: pickerFileTwo,
+            mimeType: 'image/webp',
+            uri: 'blob:https://kosmo.example/picker-second',
+          },
+        ],
+        canceled: false,
+      });
+      await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 2개 더 선택 가능' }));
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+      });
+      expect(getImagePickerLaunchCount()).toBe(2);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(canvas.getByRole('button', { name: '이미지 추가, 0개 더 선택 가능' })).toBeDisabled();
+
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+
+      const ignoredOverflowData = new DataTransfer();
+      ignoredOverflowData.items.add(new File(['overflow'], 'overflow.png', { type: 'image/png' }));
+      const ignoredOverflowPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: ignoredOverflowData,
+      });
+      body.dispatchEvent(ignoredOverflowPaste);
+      expect(ignoredOverflowPaste.defaultPrevented).toBe(true);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+
+      await userEvent.click(body);
+      await userEvent.paste('https://example.com/post');
+      expect(body).toHaveValue('기존 본문https://example.com/post');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerStory />,
+};
+
+function ComposerClipboardScopeStory() {
+  const data = usePostsStoryData();
+
+  return (
+    <Catalog>
+      <View testID="primary-composer">
+        <PostComposer profile={data.composerProfile} />
+      </View>
+      <View testID="secondary-composer">
+        <PostComposer profile={data.alternateComposerProfile} />
+      </View>
+    </Catalog>
+  );
+}
+
+export const ComposerClipboardFailureAndScopeInteraction: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2].map((index) => ({
+            data: {
+              completeMediaUpload: {
+                media: { id: `media-clipboard-scope-${index}`, state: 'READY' },
+              },
+            },
+          })),
+        },
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [
+            { error: 'clipboard upload failed' },
+            { error: 'clipboard upload failed' },
+            {
+              data: {
+                issueMediaUploadUrl: {
+                  media: { id: 'media-clipboard-scope-retry' },
+                  uploadUrl: 'https://upload.example/clipboard-scope/retry',
+                },
+              },
+            },
+            {
+              data: {
+                issueMediaUploadUrl: {
+                  media: { id: 'media-clipboard-scope-secondary' },
+                  uploadUrl: 'https://upload.example/clipboard-scope/secondary',
+                },
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const primary = within(canvas.getByTestId('primary-composer'));
+    const secondary = within(canvas.getByTestId('secondary-composer'));
+    const originalFetch = globalThis.fetch;
+    const upload = fn(async () => new Response(null, { status: 200 }));
+    globalThis.fetch = upload;
+
+    try {
+      const primaryPasteData = new DataTransfer();
+      primaryPasteData.items.add(new File(['failed-one'], 'failed-one.png', { type: 'image/png' }));
+      primaryPasteData.items.add(new File(['failed-two'], 'failed-two.png', { type: 'image/png' }));
+      const primaryPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: primaryPasteData,
+      });
+      primary.getByRole('textbox', { name: '게시글 본문' }).dispatchEvent(primaryPaste);
+
+      expect(primaryPaste.defaultPrevented).toBe(true);
+      const failedFirst = await primary.findByLabelText('첨부 이미지 1, 업로드 실패');
+      const failedSecond = await primary.findByLabelText('첨부 이미지 2, 업로드 실패');
+      await userEvent.click(
+        within(failedFirst).getByRole('button', { name: '1번째 이미지 업로드 다시 시도' }),
+      );
+      await waitFor(() => {
+        expect(primary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      await userEvent.click(
+        within(failedSecond).getByRole('button', { name: '첨부 이미지 2 제거' }),
+      );
+      await waitFor(() => {
+        expect(primary.queryByLabelText('첨부 이미지 2, 업로드 실패')).not.toBeInTheDocument();
+      });
+
+      const secondaryPasteData = new DataTransfer();
+      secondaryPasteData.items.add(new File(['secondary'], 'secondary.png', { type: 'image/png' }));
+      const secondaryPaste = new ClipboardEvent('paste', {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: secondaryPasteData,
+      });
+      secondary.getByRole('textbox', { name: '게시글 본문' }).dispatchEvent(secondaryPaste);
+      expect(secondaryPaste.defaultPrevented).toBe(true);
+      await waitFor(() => {
+        expect(secondary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      });
+      expect(primary.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      expect(upload).toHaveBeenCalledTimes(2);
+
+      const outsideEditor = document.createElement('textarea');
+      document.body.append(outsideEditor);
+      try {
+        const outsidePasteData = new DataTransfer();
+        outsidePasteData.items.add(new File(['outside'], 'outside.png', { type: 'image/png' }));
+        outsideEditor.dispatchEvent(
+          new ClipboardEvent('paste', {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: outsidePasteData,
+          }),
+        );
+        expect(upload).toHaveBeenCalledTimes(2);
+        expect(primary.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(1);
+        expect(secondary.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(1);
+      } finally {
+        outsideEditor.remove();
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+  render: () => <ComposerClipboardScopeStory />,
+};
+
 export const ComposerPickerResultAfterUnmount: Story = {
   parameters: {
     relay: {
@@ -4837,11 +5097,42 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     await expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
     await expect(body).toHaveValue('');
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
     expect(trackAnalytics).toHaveBeenCalledOnce();
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
       selected_profile_id: composerProfile.id,
       visibility: 'PUBLIC',
     });
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerProfileDefaultVisibilitySeed: Story = {
+  parameters: {
+    relay: {
+      data: { ...postsStoryRelayData, composerProfile: composerPublicProfile },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
+    const menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+  },
+  render: () => <ComposerStory />,
+};
+
+export const ComposerUnavailableProfileDefaultFallsBackToUnlisted: Story = {
+  parameters: {
+    relay: {
+      data: { ...postsStoryRelayData, composerProfile: composerUnavailableProfile },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
   },
   render: () => <ComposerStory />,
 };
@@ -5051,8 +5342,21 @@ export const ComposerReplyMutationContract: Story = {
       );
     });
     expect(body).toHaveValue('');
+    expect(canvas.getByRole('button', { name: '조용한 공개' })).toBeVisible();
   },
   render: () => <ReplyComposerContractStory />,
+};
+
+export const ComposerReplyProfileDefaultVisibilitySeed: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '공개' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '공개' }));
+    const menu = await canvas.findByRole('menu', { name: '답글 공개 설정' });
+    expect(within(menu).getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(within(menu).queryByRole('menuitemradio', { name: /^언급한 계정만/ })).toBeNull();
+  },
+  render: () => <ReplyComposerContractStory defaultPostVisibility="PUBLIC" />,
 };
 
 export const ComposerReplyMediaMutationContract: Story = {
@@ -5444,6 +5748,15 @@ export const ReplyModalPresentation: Story = {
     expect(dialog).toBeVisible();
     expect(screen.queryByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).toBeNull();
     expect(visibilityButton).toHaveFocus();
+
+    await userEvent.click(visibilityButton);
+    await userEvent.click(
+      within(await within(dialog).findByRole('menu', { name: '답글 공개 설정' })).getByRole(
+        'menuitemradio',
+        { name: /^공개/ },
+      ),
+    );
+    expect(within(dialog).getByRole('button', { name: '공개' })).toBeVisible();
 
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
     const initialDiscardConfirm = await screen.findByRole('alertdialog', {

@@ -47,7 +47,7 @@ minimumReleaseAgeExclude:
   - '@esbuild/win32-ia32@0.28.1'
   - '@esbuild/win32-x64@0.28.1'
   - ws@8.21.0
-  - hono@4.12.25
+  - hono@4.12.34
 overrides:
   '@opentelemetry/sdk-metrics@<2.8.0': ^2.8.0
   # Expo Router exposes broad native peers; align every peer snapshot with SDK 56 / RN 0.85.
