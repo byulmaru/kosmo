@@ -77,7 +77,7 @@ export const handleInboundDelete = async (
     return;
   }
 
-  await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const row = await tx
       .select({
         actorUri: ActivityPubActors.uri,
@@ -106,6 +106,16 @@ export const handleInboundDelete = async (
       return;
     }
 
-    await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
+    const deleted = await deletePost(
+      {
+        actorProfileId: row.profileId,
+        origin: 'ACTIVITYPUB',
+        postId: row.postId,
+      },
+      tx,
+    );
+    return deleted;
   });
+
+  await result?.postCommit();
 };

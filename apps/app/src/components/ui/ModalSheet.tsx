@@ -2,6 +2,7 @@ import { XIcon } from 'lucide-react-native';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { IconButton } from './IconButton';
 import type { PropsWithChildren } from 'react';
 
 type Props = PropsWithChildren<{
@@ -34,9 +35,15 @@ export function ModalSheet({ children, onClose, title, visible }: Props) {
             <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
               {title}
             </Text>
-            <Pressable accessibilityLabel="닫기" onPress={onClose} style={styles.close}>
+            <IconButton
+              accessibilityLabel="닫기"
+              onPress={onClose}
+              style={styles.close}
+              targetSize={44}
+              visualSize={44}
+            >
               <XIcon color={theme.text} size={20} />
-            </Pressable>
+            </IconButton>
           </View>
           {children}
         </Pressable>

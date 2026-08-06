@@ -9,6 +9,7 @@ import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -477,15 +478,16 @@ export default function SearchScreen() {
               value={input}
             />
             {input ? (
-              <Pressable
+              <IconButton
                 accessibilityLabel="검색 지우기"
-                accessibilityRole="button"
                 onPress={clearSearch}
                 onPressIn={keepSearchFocused}
                 style={styles.clearButton}
+                targetSize={44}
+                visualSize={44}
               >
                 <X color={theme.textSecondary} size={18} strokeWidth={2} />
-              </Pressable>
+              </IconButton>
             ) : null}
           </View>
         </View>
@@ -520,9 +522,8 @@ export default function SearchScreen() {
                       </Text>
                     </Pressable>
                   </Link>
-                  <Pressable
+                  <IconButton
                     accessibilityLabel={`최근 검색 '${term}' 삭제`}
-                    accessibilityRole="button"
                     onPress={() => {
                       const next = recent.filter((item) => item !== term);
                       setRecent(next);
@@ -531,9 +532,11 @@ export default function SearchScreen() {
                     }}
                     onPressIn={keepSearchFocused}
                     style={styles.deleteButton}
+                    targetSize={44}
+                    visualSize={44}
                   >
                     <X color={theme.textSecondary} size={16} strokeWidth={2} />
-                  </Pressable>
+                  </IconButton>
                 </View>
               ))
             ) : (

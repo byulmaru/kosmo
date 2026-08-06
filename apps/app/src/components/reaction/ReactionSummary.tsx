@@ -1,4 +1,5 @@
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
@@ -27,6 +28,8 @@ const copy = {
   errorTitle: '반응을 불러오지 못했어요',
   loadingTitle: '반응 요약을 불러오는 중입니다.',
 } as const;
+
+const moreControlSize = Platform.OS === 'web' ? 32 : 44;
 
 export function ReactionSummary({
   disabled = false,
@@ -110,12 +113,14 @@ export function ReactionSummary({
               );
             })}
             {onMore ? (
-              <Pressable
+              <IconButton
                 accessibilityLabel="반응한 프로필 보기"
-                accessibilityRole="button"
                 onPress={onMore}
-                style={({ pressed }) => [
-                  styles.more,
+                style={styles.moreTarget}
+                targetSize={moreControlSize}
+                visualSize={moreControlSize}
+                visualStyle={({ pressed }) => [
+                  styles.moreVisual,
                   {
                     backgroundColor: theme.card,
                     borderColor: theme.border,
@@ -124,7 +129,7 @@ export function ReactionSummary({
                 ]}
               >
                 <Text style={[styles.moreGlyph, { color: theme.text }]}>…</Text>
-              </Pressable>
+              </IconButton>
             ) : null}
           </ScrollView>
         )
@@ -186,15 +191,14 @@ const styles = StyleSheet.create({
       web: { fontSize: 20, lineHeight: 24 },
     }),
   },
-  more: {
-    alignItems: 'center',
+  moreTarget: {
+    borderRadius: radii.md,
+    height: moreControlSize,
+    width: moreControlSize,
+  },
+  moreVisual: {
     borderRadius: radii.md,
     borderWidth: 1,
-    justifyContent: 'center',
-    ...Platform.select({
-      default: { height: 44, width: 44 },
-      web: { height: 32, width: 32 },
-    }),
   },
   moreGlyph: {
     fontFamily: 'SUIT',

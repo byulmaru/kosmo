@@ -4,6 +4,7 @@ import { NotificationKind, PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import { createReactionNotification, deleteNotificationBySource } from './notification';
+import { noPostCommit, oncePostCommit } from './post-commit';
 import type { Transaction } from '../db';
 
 type AddReactionInput = {
@@ -27,14 +28,6 @@ type AddReactionResult = {
   readonly created: boolean;
   readonly postCommit: () => Promise<void>;
   readonly reaction: typeof Reactions.$inferSelect;
-};
-
-const noPostCommit = async (): Promise<void> => {};
-
-const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
-  let pending: Promise<void> | undefined;
-
-  return () => (pending ??= effect());
 };
 
 export const addReaction = async (

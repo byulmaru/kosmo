@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, mock, test } from 'node:test';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   db,
@@ -23,7 +23,8 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
-import { createPost, deletePost, repostPost } from './post';
+import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
+import type { Transaction } from '../db';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -117,12 +118,34 @@ const createRemoteFollower = async (followeeProfileId: string) => {
   });
 };
 
+const runRepost = async (
+  input: { actorProfileId: string; origin?: 'LOCAL' | 'ACTIVITYPUB'; sourcePostId: string },
+  tx?: Transaction,
+) => {
+  const result = await repostPostAction({ ...input, origin: input.origin ?? 'LOCAL' }, tx);
+  if (!tx) {
+    await result.postCommit();
+  }
+  return result;
+};
+
+const runDelete = async (
+  input: { actorProfileId: string; origin?: 'LOCAL' | 'ACTIVITYPUB'; postId: string },
+  tx?: Transaction,
+) => {
+  const result = await deletePostAction({ ...input, origin: input.origin ?? 'LOCAL' }, tx);
+  if (!tx) {
+    await result.postCommit();
+  }
+  return { postId: result.postId };
+};
+
 test('repostPost는 Public과 Unlisted Source를 direct Unlisted Repost로 생성한다', async () => {
   const actor = await createProfile();
 
   for (const sourceVisibility of [PostVisibility.PUBLIC, PostVisibility.UNLISTED]) {
     const source = await createContentPost(actor.profile.id, sourceVisibility);
-    const { repost } = await repostPost({
+    const { repost } = await runRepost({
       actorProfileId: actor.profile.id,
       sourcePostId: source.id,
     });
@@ -140,7 +163,7 @@ test('repostPost는 자신의 Followers Only Source를 Followers Only로 생성�
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id, PostVisibility.FOLLOWERS);
 
-  const { repost } = await repostPost({
+  const { repost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
@@ -172,7 +195,7 @@ test('repostPost는 조회 가능한 허용 불가 Source를 sourceId VALIDATION
 
   for (const sourcePostId of [followersSource.id, directSource.id, contentlessSource.id]) {
     await assert.rejects(
-      repostPost({
+      runRepost({
         actorProfileId: actor.profile.id,
         sourcePostId,
       }),
@@ -193,7 +216,7 @@ test('repostPost는 누락·Tombstone·조회 불가 Source를 같은 NOT_FOUND�
 
   for (const sourcePostId of [crypto.randomUUID(), hidden.id, tombstone.id]) {
     await assert.rejects(
-      repostPost({
+      runRepost({
         actorProfileId: actor.profile.id,
         sourcePostId,
       }),
@@ -218,7 +241,7 @@ test('repostPost core는 entry에서 검증된 행동 주체의 Profile/Instance
       instanceState: InstanceState.SUSPENDED,
     }),
   ]) {
-    const { repost } = await repostPost({
+    const { repost } = await runRepost({
       actorProfileId: actor.profile.id,
       sourcePostId: source.id,
     });
@@ -232,7 +255,7 @@ test('repostPost는 조회 가능한 Quote의 Source 상태와 무관하게 Quot
   const quote = await createContentPost(actor.profile.id);
   await db.update(Posts).set({ repostSourceId: base.id }).where(eq(Posts.id, quote.id));
 
-  const { repost } = await repostPost({
+  const { repost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: quote.id,
   });
@@ -246,7 +269,7 @@ test('repostPost는 조회 가능한 Quote의 Source 상태와 무관하게 Quot
     .where(eq(Posts.id, unavailableQuote.id));
   await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, hiddenBase.id));
 
-  const { repost: unavailableSourceRepost } = await repostPost({
+  const { repost: unavailableSourceRepost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: unavailableQuote.id,
   });
@@ -261,9 +284,9 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
     sourcePostId: source.id,
   };
 
-  const concurrent = await Promise.all(Array.from({ length: 4 }, () => repostPost(input)));
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => runRepost(input)));
   const first = concurrent[0]!.repost;
-  const repeatedResult = await repostPost(input);
+  const repeatedResult = await runRepost(input);
   const repeated = repeatedResult.repost;
 
   assert.equal(repeated.id, first.id);
@@ -299,7 +322,7 @@ test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를
   mock.method(federation, 'createContext', () => fixture.context);
   const input = { actorProfileId: actor.id, sourcePostId: source.id };
 
-  const concurrent = await Promise.all(Array.from({ length: 4 }, () => repostPost(input)));
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => runRepost(input)));
   const repost = concurrent.find(({ created }) => created)?.repost;
   assert.ok(repost);
   assert.equal(fixture.calls.length, 1);
@@ -315,7 +338,7 @@ test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를
     1,
   );
 
-  await repostPost(input);
+  await runRepost(input);
   assert.equal(fixture.calls.length, 1);
   assert.equal(
     await db
@@ -329,17 +352,17 @@ test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를
   );
 
   const deleteInput = { actorProfileId: actor.id, postId: repost.id };
-  await Promise.all(Array.from({ length: 4 }, () => deletePost(deleteInput)));
+  await Promise.all(Array.from({ length: 4 }, () => runDelete(deleteInput)));
   assert.equal(fixture.calls.length, 2);
   assert.equal(fixture.calls[1]?.constructor.name, 'Undo');
 
-  await deletePost(deleteInput);
+  await runDelete(deleteInput);
   assert.equal(fixture.calls.length, 2);
 
   const rollbackSource = await createContentPost(actor.id);
   await assert.rejects(
     db.transaction(async (tx) => {
-      await repostPost({ actorProfileId: actor.id, sourcePostId: rollbackSource.id }, tx);
+      await runRepost({ actorProfileId: actor.id, sourcePostId: rollbackSource.id }, tx);
       throw new Error('rollback');
     }),
     /rollback/,
@@ -347,12 +370,130 @@ test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를
   assert.equal(fixture.calls.length, 2);
 
   const remoteActor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
-  await repostPost({ actorProfileId: remoteActor.profile.id, sourcePostId: source.id });
+  await runRepost({
+    actorProfileId: remoteActor.profile.id,
+    origin: 'ACTIVITYPUB',
+    sourcePostId: source.id,
+  });
   assert.equal(fixture.calls.length, 2);
 
   const ordinaryPost = await createContentPost(actor.id);
-  await deletePost({ actorProfileId: actor.id, postId: ordinaryPost.id });
+  await runDelete({ actorProfileId: actor.id, postId: ordinaryPost.id });
   assert.equal(fixture.calls.length, 2);
+});
+
+test('Local·ActivityPub origin과 top-level·caller transaction 모두 같은 Repost lifecycle을 사용한다', async () => {
+  const recipient = await createConfiguredLocalProfile();
+  const source = await createContentPost(recipient.id);
+  const localActor = await createConfiguredLocalProfile();
+  const remoteActor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+
+  for (const [origin, actorProfileId] of [
+    ['LOCAL', localActor.id],
+    ['ACTIVITYPUB', remoteActor.profile.id],
+  ] as const) {
+    const topLevel = await repostPostAction({ actorProfileId, origin, sourcePostId: source.id });
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 0);
+    const firstPostCommit = topLevel.postCommit();
+    assert.equal(topLevel.postCommit(), firstPostCommit);
+    await firstPostCommit;
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
+
+    const duplicate = await repostPostAction({ actorProfileId, origin, sourcePostId: source.id });
+    assert.equal(duplicate.created, false);
+    await duplicate.postCommit();
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
+
+    const deleted = await deletePostAction({ actorProfileId, origin, postId: topLevel.repost.id });
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
+    const deletePostCommit = deleted.postCommit();
+    assert.equal(deleted.postCommit(), deletePostCommit);
+    await deletePostCommit;
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 0);
+
+    const callerTx = await db.transaction(async (tx) => {
+      const created = await repostPostAction(
+        { actorProfileId, origin, sourcePostId: source.id },
+        tx,
+      );
+      assert.equal(
+        await db.$count(Notifications, eq(Notifications.sourceId, created.repost.id)),
+        0,
+      );
+      return created;
+    });
+    await callerTx.postCommit();
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)), 1);
+
+    const callerTxDelete = await db.transaction(async (tx) => {
+      const deleted = await deletePostAction(
+        { actorProfileId, origin, postId: callerTx.repost.id },
+        tx,
+      );
+      assert.equal(
+        await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)),
+        1,
+      );
+      return deleted;
+    });
+    await callerTxDelete.postCommit();
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)), 0);
+  }
+});
+
+test('caller transaction rollback 뒤 postCommit을 실행해도 Repost lifecycle이 materialize되지 않는다', async () => {
+  const actor = await createConfiguredLocalProfile();
+  const source = await createContentPost(actor.id);
+  let created: Awaited<ReturnType<typeof repostPostAction>> | undefined;
+
+  await assert.rejects(
+    db.transaction(async (tx) => {
+      created = await repostPostAction(
+        { actorProfileId: actor.id, origin: 'LOCAL', sourcePostId: source.id },
+        tx,
+      );
+      throw new Error('rollback');
+    }),
+    /rollback/,
+  );
+
+  assert.ok(created);
+  await assert.doesNotReject(created.postCommit());
+  assert.equal(
+    await db.$count(Posts, and(eq(Posts.profileId, actor.id), eq(Posts.repostSourceId, source.id))),
+    0,
+  );
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.repost.id)), 0);
+});
+
+test('Repost Notification 실패가 committed Repost 상태와 postCommit 후속 실행을 격리한다', async () => {
+  const actor = await createConfiguredLocalProfile();
+  const recipient = await createConfiguredLocalProfile();
+  const source = await createContentPost(recipient.id);
+  await db.execute(
+    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_repost_post_commit_failure CHECK (false) NOT VALID`,
+  );
+  try {
+    const result = await repostPostAction({
+      actorProfileId: actor.id,
+      origin: 'LOCAL',
+      sourcePostId: source.id,
+    });
+    await assert.doesNotReject(result.postCommit());
+    assert.equal(
+      await db
+        .select({ state: Posts.state })
+        .from(Posts)
+        .where(eq(Posts.id, result.repost.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      PostState.ACTIVE,
+    );
+  } finally {
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_repost_post_commit_failure`,
+    );
+  }
 });
 
 test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를 바꾸지 않는다', async () => {
@@ -370,7 +511,7 @@ test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를
   mock.method(federation, 'createContext', () => context);
   const errorLog = mock.method(console, 'error', () => undefined);
 
-  const result = await repostPost({ actorProfileId: actor.id, sourcePostId: source.id });
+  const result = await runRepost({ actorProfileId: actor.id, sourcePostId: source.id });
   assert.equal(result.created, true);
   assert.equal(
     await db
@@ -382,7 +523,7 @@ test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를
     PostState.ACTIVE,
   );
 
-  assert.deepEqual(await deletePost({ actorProfileId: actor.id, postId: result.repost.id }), {
+  assert.deepEqual(await runDelete({ actorProfileId: actor.id, postId: result.repost.id }), {
     postId: result.repost.id,
   });
   assert.equal(
@@ -409,7 +550,7 @@ test('repostPost는 caller transaction rollback에 합류한다', async () => {
 
   await assert.rejects(
     db.transaction(async (tx) => {
-      await repostPost(
+      await runRepost(
         {
           actorProfileId: actor.profile.id,
           sourcePostId: source.id,
@@ -434,12 +575,12 @@ test('repostPost는 caller transaction rollback에 합류한다', async () => {
 test('deletePost는 Author의 Repost를 Tombstone 처리하고 새 Repost를 허용한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
-  const { repost } = await repostPost({
+  const { repost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
 
-  assert.deepEqual(await deletePost({ actorProfileId: actor.profile.id, postId: repost.id }), {
+  assert.deepEqual(await runDelete({ actorProfileId: actor.profile.id, postId: repost.id }), {
     postId: repost.id,
   });
 
@@ -462,7 +603,7 @@ test('deletePost는 Author의 Repost를 Tombstone 처리하고 새 Repost를 허
     0,
   );
 
-  const { repost: recreated } = await repostPost({
+  const { repost: recreated } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
@@ -473,13 +614,13 @@ test('deletePost는 Author의 Repost를 Tombstone 처리하고 새 Repost를 허
 test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하며 멱등 성공한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
-  const { repost } = await repostPost({
+  const { repost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
   const input = { actorProfileId: actor.profile.id, postId: repost.id };
 
-  const concurrent = await Promise.all(Array.from({ length: 4 }, () => deletePost(input)));
+  const concurrent = await Promise.all(Array.from({ length: 4 }, () => runDelete(input)));
   assert.deepEqual(
     concurrent,
     Array.from({ length: 4 }, () => ({ postId: repost.id })),
@@ -493,7 +634,7 @@ test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하�
     .then(({ deletedAt }) => deletedAt);
   assert.ok(firstDeletedAt);
 
-  assert.deepEqual(await deletePost(input), { postId: repost.id });
+  assert.deepEqual(await runDelete(input), { postId: repost.id });
   const repeatedDeletedAt = await db
     .select({ deletedAt: Posts.deletedAt })
     .from(Posts)
@@ -503,7 +644,7 @@ test('deletePost의 반복·동시 호출은 최초 삭제 시각을 보존하�
   assert.equal(repeatedDeletedAt?.toString(), firstDeletedAt.toString());
 });
 
-test('deletePost는 ActivityPub mapping을 remote provenance로 사용해 local cleanup을 만들지 않는다', async () => {
+test('deletePost는 pure Repost 구조가 아니면 Repost Notification cleanup을 만들지 않는다', async () => {
   const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
   const recipient = await createProfile();
   const created = await createPost({
@@ -522,7 +663,11 @@ test('deletePost는 ActivityPub mapping을 remote provenance로 사용해 local 
     sourceId: created.post.id,
   });
 
-  await deletePost({ actorProfileId: author.profile.id, postId: created.post.id });
+  await runDelete({
+    actorProfileId: author.profile.id,
+    origin: 'ACTIVITYPUB',
+    postId: created.post.id,
+  });
 
   assert.equal(
     await db
@@ -549,11 +694,11 @@ test('deletePost는 다른 Author의 Post를 거부하고 누락 Post를 숨긴�
   const post = await createContentPost(author.profile.id);
 
   await assert.rejects(
-    deletePost({ actorProfileId: other.profile.id, postId: post.id }),
+    runDelete({ actorProfileId: other.profile.id, postId: post.id }),
     (error) => error instanceof PermissionDeniedError && error.code === 'PERMISSION_DENIED',
   );
   await assert.rejects(
-    deletePost({ actorProfileId: author.profile.id, postId: crypto.randomUUID() }),
+    runDelete({ actorProfileId: author.profile.id, postId: crypto.randomUUID() }),
     (error) => error instanceof NotFoundError && error.code === 'NOT_FOUND',
   );
 
@@ -570,12 +715,12 @@ test('deletePost는 대상 Quote만 삭제하고 별도 Active Repost는 유지�
   const source = await createContentPost(actor.profile.id);
   const quote = await createContentPost(actor.profile.id);
   await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, quote.id));
-  const { repost } = await repostPost({
+  const { repost } = await runRepost({
     actorProfileId: actor.profile.id,
     sourcePostId: source.id,
   });
 
-  await deletePost({ actorProfileId: actor.profile.id, postId: quote.id });
+  await runDelete({ actorProfileId: actor.profile.id, postId: quote.id });
 
   const [deletedQuote, activeRepost] = await Promise.all([
     db.select().from(Posts).where(eq(Posts.id, quote.id)).then(firstOrThrow),
@@ -592,7 +737,7 @@ test('deletePost는 caller transaction rollback에 합류한다', async () => {
 
   await assert.rejects(
     db.transaction(async (tx) => {
-      await deletePost({ actorProfileId: actor.profile.id, postId: post.id }, tx);
+      await runDelete({ actorProfileId: actor.profile.id, postId: post.id }, tx);
       throw new Error('rollback');
     }),
     /rollback/,

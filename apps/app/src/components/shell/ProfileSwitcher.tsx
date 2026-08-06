@@ -21,6 +21,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
+import { UnreadDot } from './UnreadDot';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
 import type { ProfileSwitcherCreateProfileMutation } from './__generated__/ProfileSwitcherCreateProfileMutation.graphql';
@@ -53,6 +54,7 @@ const ProfileSwitcherFragment = graphql`
         handle
         relativeHandle
         displayName
+        unreadNotificationCount
         avatar {
           id
           url
@@ -322,10 +324,12 @@ export function ProfileSwitcher({
         : webFullPickerBounds;
   const profileOptions = profiles.map((profile) => {
     const selected = active?.id === profile.id;
+    const hasUnread = profile.unreadNotificationCount > 0;
     return (
       <Pressable
         aria-checked={Platform.OS === 'web' && !redesignedWeb ? selected : undefined}
         aria-pressed={redesignedWeb ? selected : undefined}
+        accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
         accessibilityRole={redesignedWeb ? 'button' : Platform.OS === 'web' ? undefined : 'radio'}
         accessibilityState={
           redesignedWeb ? { disabled: busy } : { checked: selected, disabled: busy }
@@ -342,11 +346,16 @@ export function ProfileSwitcher({
           },
         ]}
       >
-        <Avatar
-          imageUri={profile.avatar?.url}
-          label={profile.displayName}
-          size={selected ? 48 : 32}
-        />
+        <View style={styles.profileAvatar}>
+          <Avatar
+            imageUri={profile.avatar?.url}
+            label={profile.displayName}
+            size={selected ? 48 : 32}
+          />
+          {hasUnread ? (
+            <UnreadDot style={styles.profileUnreadDot} testID="profile-switcher-unread-dot" />
+          ) : null}
+        </View>
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
             {profile.displayName}
@@ -719,6 +728,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     padding: spacing.sm,
+  },
+  profileAvatar: { position: 'relative' },
+  profileUnreadDot: {
+    height: 12,
+    position: 'absolute',
+    right: -2,
+    top: -2,
+    width: 12,
+    zIndex: 1,
   },
   profileLabel: { flex: 1, minWidth: 0 },
   divider: { height: 1, marginVertical: 2, width: '100%' },

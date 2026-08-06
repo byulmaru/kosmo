@@ -4669,7 +4669,21 @@ export const ComposerMediaStates: Story = {
     expect(canvas.getByRole('alert')).toHaveTextContent(
       '3번째 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
     );
-    expect(canvas.getByRole('button', { name: '첨부 이미지 1 제거' })).toBeVisible();
+    const remove = canvas.getByRole('button', { name: '첨부 이미지 1 제거' });
+    const removeVisual = remove.firstElementChild as HTMLElement | null;
+    const preview = remove.parentElement;
+    const removeBounds = remove.getBoundingClientRect();
+    const removeVisualBounds = removeVisual?.getBoundingClientRect();
+    const previewBounds = preview?.getBoundingClientRect();
+    expect(remove).toBeVisible();
+    expect(removeBounds.width).toBe(32);
+    expect(removeBounds.height).toBe(32);
+    expect(removeVisualBounds?.width).toBe(32);
+    expect(removeVisualBounds?.height).toBe(32);
+    expect(removeBounds.left).toBe(removeVisualBounds?.left);
+    expect(removeBounds.top).toBe(removeVisualBounds?.top);
+    expect(removeBounds.top - (previewBounds?.top ?? 0)).toBe(4);
+    expect((previewBounds?.right ?? 0) - removeBounds.right).toBe(4);
     expect(canvas.getByRole('textbox', { name: '첨부 이미지 2 대체 텍스트' })).toHaveValue(
       '회색 이미지의 대체 텍스트',
     );
@@ -5070,15 +5084,26 @@ export const ComposerSubmitting: Story = {
 };
 
 export const ComposerVisibilityAndSubmitInteraction: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    const bodyTop = body.getBoundingClientRect().top;
+    const triggerWidth = visibilityButton.getBoundingClientRect().width;
     expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
     await userEvent.click(visibilityButton);
 
     let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = canvasElement.ownerDocument.defaultView?.innerWidth;
+    expect(viewportWidth).toBeDefined();
+    expect(menuRect.width).toBe(256);
+    expect(menuRect.width).toBeGreaterThan(triggerWidth);
+    expect(menuRect.left).toBeGreaterThanOrEqual(0);
+    expect(menuRect.right).toBeLessThanOrEqual(viewportWidth!);
+    expect(body.getBoundingClientRect().top).toBe(bodyTop);
     expect(menu).toBeVisible();
     await userEvent.click(body);
     await waitFor(() => {
@@ -5691,7 +5716,10 @@ export const ReplyModalPresentation: Story = {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
 
     expect(within(dialog).getByRole('heading', { name: '답글 쓰기' })).toBeVisible();
-    expect(within(dialog).getByRole('button', { name: '닫기' })).toBeVisible();
+    const close = within(dialog).getByRole('button', { name: '닫기' });
+    expect(close).toBeVisible();
+    expect(close.getBoundingClientRect().width).toBe(36);
+    expect(close.getBoundingClientRect().height).toBe(36);
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     const initialBody = within(dialog).getByRole('textbox', { name: '답글 본문' });
     expect(initialBody).toBeVisible();

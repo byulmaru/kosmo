@@ -3,7 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, shadow, spacing, typography } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
@@ -203,12 +203,11 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
               <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
                 피드백 보내기
               </Text>
-              <Pressable
+              <IconButton
                 accessibilityLabel="피드백 닫기"
-                accessibilityRole="button"
+                controlRef={closeRef}
                 disabled={formState.submitting}
                 onPress={() => requestClose()}
-                ref={closeRef}
                 style={({ pressed }) => [
                   styles.close,
                   {
@@ -216,9 +215,10 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
                     opacity: formState.submitting ? 0.45 : 1,
                   },
                 ]}
+                targetSize={36}
               >
                 <XIcon color={theme.text} size={20} strokeWidth={2} />
-              </Pressable>
+              </IconButton>
             </View>
             <ScrollView
               contentContainerStyle={styles.body}
