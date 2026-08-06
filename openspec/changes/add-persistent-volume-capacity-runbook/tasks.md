@@ -25,11 +25,11 @@
 - 모든 command가 명시적 placeholder를 사용하고 destructive operation이나 Secret/data 출력 경로가 없는지 검토한다.
 - 내부 workload runbook과 Kubernetes 전달 경로 문서 링크의 목적과 소유권이 중복되지 않는지 확인한다.
 
-- [ ] 1.1 Alert 필드, 적용 대상과 Kosmo/Kubernetes 책임 경계를 설명하는 runbook 진입부를 작성한다.
-- [ ] 1.2 PVC request/status, 사용량·여유 공간·증가 추세, PV·StorageClass, mount Pod·상위 workload owner와 event를 확인하는 read-only 진단 절차를 작성한다.
-- [ ] 1.3 Service owner와 workload별 retention·backup·export·rebalance 절차로 연결하고, 확인되지 않은 데이터 정리와 파괴 작업을 중단하는 판단 경계를 작성한다.
-- [ ] 1.4 Live expansion 지원, workload 선언 owner와 목표 용량을 확인한 뒤 PVC request를 늘리고 필요한 경우에만 통제된 restart를 수행하는 절차를 작성한다.
-- [ ] 1.5 PVC/filesystem/workload 복구, 새 여유 공간·추세와 alert resolved를 확인하고 비민감 증거만 남기는 완료 절차를 작성한다.
+- [x] 1.1 Alert 필드, 적용 대상과 Kosmo/Kubernetes 책임 경계를 설명하는 runbook 진입부를 작성한다.
+- [x] 1.2 PVC request/status, 사용량·여유 공간·증가 추세, PV·StorageClass, mount Pod·상위 workload owner와 event를 확인하는 read-only 진단 절차를 작성한다.
+- [x] 1.3 Service owner와 workload별 retention·backup·export·rebalance 절차로 연결하고, 확인되지 않은 데이터 정리와 파괴 작업을 중단하는 판단 경계를 작성한다.
+- [x] 1.4 Live expansion 지원, workload 선언 owner와 목표 용량을 확인한 뒤 PVC request를 늘리고 필요한 경우에만 통제된 restart를 수행하는 절차를 작성한다.
+- [x] 1.5 PVC/filesystem/workload 복구, 새 여유 공간·추세와 alert resolved를 확인하고 비민감 증거만 남기는 완료 절차를 작성한다.
 
 ## 2. PROD-698 실행 가능성 검증과 교차 저장소 handoff
 
@@ -59,8 +59,8 @@ Runbook의 read-only 진단 명령과 내부·외부 참고 링크·안전 gate�
 - `openspec validate add-persistent-volume-capacity-runbook --strict`
 - Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 메시지 형식 유지와 남은 통합 검증을 `PROD-698` handoff에서 확인
 
-- [ ] 2.1 Markdown formatting, local/external link, placeholder, destructive command와 민감정보 노출 경계를 정적 검토한다.
-- [ ] 2.2 서로 다른 owner 유형의 PVC 두 개 이상에서 read-only 진단·owner 추적 명령을 실행하고 비민감 성공·실패 증거만 기록한다.
-- [ ] 2.3 모든 requirement scenario를 runbook section에 대조하고 expansion·restart·실패·escalation 분기가 누락되지 않았는지 검토한다.
-- [ ] 2.4 OpenSpec strict validation을 통과하고 runbook 구현과 delta spec의 정합성을 확인한다.
+- [x] 2.1 Markdown formatting, local/external link, placeholder, destructive command와 민감정보 노출 경계를 정적 검토한다.
+- [x] 2.2 서로 다른 owner 유형의 PVC 두 개 이상에서 read-only 진단·owner 추적 명령을 실행하고 비민감 성공·실패 증거만 기록한다.
+- [x] 2.3 모든 requirement scenario를 runbook section에 대조하고 expansion·restart·실패·escalation 분기가 누락되지 않았는지 검토한다.
+- [x] 2.4 OpenSpec strict validation을 통과하고 runbook 구현과 delta spec의 정합성을 확인한다.
 - [ ] 2.5 Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 receiver·메시지 형식 유지, 통합·archive owner와 남은 검증을 `PROD-698`에 handoff한다.
