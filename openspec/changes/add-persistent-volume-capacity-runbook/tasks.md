@@ -63,4 +63,4 @@ Runbook의 read-only 진단 명령과 내부·외부 참고 링크·안전 gate�
 - [x] 2.2 서로 다른 owner 유형의 PVC 두 개 이상에서 read-only 진단·owner 추적 명령을 실행하고 비민감 성공·실패 증거만 기록한다.
 - [x] 2.3 모든 requirement scenario를 runbook section에 대조하고 expansion·restart·실패·escalation 분기가 누락되지 않았는지 검토한다.
 - [x] 2.4 OpenSpec strict validation을 통과하고 runbook 구현과 delta spec의 정합성을 확인한다.
-- [ ] 2.5 Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 receiver·메시지 형식 유지, 통합·archive owner와 남은 검증을 `PROD-698`에 handoff한다.
+- [x] 2.5 Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 receiver·메시지 형식 유지, 통합·archive owner와 남은 검증을 `PROD-698`에 handoff한다.
