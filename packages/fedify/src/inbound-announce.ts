@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubPosts, db, first, isUniqueViolation, Posts } from '@kosmo/core/db';
 import { InstanceState, PostState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
-import { createRepostNotification, repostPost } from '@kosmo/core/services';
+import { repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
@@ -156,10 +156,17 @@ export const handleInboundAnnounce = async (
     return;
   }
 
-  let materialized: { created: boolean; repostId: string };
+  let materialized: Awaited<ReturnType<typeof repostPost>>;
   try {
     materialized = await db.transaction(async (tx) => {
-      let result = await repostPost({ actorProfileId: storedActor.profile.id, sourcePostId }, tx);
+      let result = await repostPost(
+        {
+          actorProfileId: storedActor.profile.id,
+          origin: 'ACTIVITYPUB',
+          sourcePostId,
+        },
+        tx,
+      );
       const save = (postId: string) =>
         saveCurrentAnnounce(tx, {
           activityUri: activityUri.href,
@@ -171,13 +178,20 @@ export const handleInboundAnnounce = async (
         });
 
       if (!(await save(result.repost.id))) {
-        result = await repostPost({ actorProfileId: storedActor.profile.id, sourcePostId }, tx);
+        result = await repostPost(
+          {
+            actorProfileId: storedActor.profile.id,
+            origin: 'ACTIVITYPUB',
+            sourcePostId,
+          },
+          tx,
+        );
         if (!(await save(result.repost.id))) {
           throw new Error('Active Repost not found after current Announce retry');
         }
       }
 
-      return { created: result.created, repostId: result.repost.id };
+      return result;
     });
   } catch (error) {
     if (isExpectedRepostRejection(error)) {
@@ -195,12 +209,5 @@ export const handleInboundAnnounce = async (
     throw error;
   }
 
-  if (materialized.created) {
-    await createRepostNotification(materialized.repostId).catch((error) => {
-      console.error('Post-commit Repost notification creation failed', {
-        error,
-        repostId: materialized.repostId,
-      });
-    });
-  }
+  await materialized.postCommit();
 };

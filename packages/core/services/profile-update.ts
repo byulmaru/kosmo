@@ -24,6 +24,7 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { profileBioSchema, profileTagsSchema } from '../validation';
+import { noPostCommit, oncePostCommit } from './post-commit';
 import type { Transaction } from '../db';
 import type { ProfileFollowPolicy } from '../enums';
 
@@ -42,14 +43,6 @@ export type UpdateProfileInput = {
 export type UpdateProfileResult = {
   readonly postCommit: () => Promise<void>;
   readonly profile: typeof Profiles.$inferSelect;
-};
-
-const noPostCommit = async (): Promise<void> => {};
-
-const oncePostCommit = (effect: () => Promise<void>): (() => Promise<void>) => {
-  let pending: Promise<void> | undefined;
-
-  return () => (pending ??= effect());
 };
 
 const normalizeDisplayName = (next: string | undefined, current: string) => {

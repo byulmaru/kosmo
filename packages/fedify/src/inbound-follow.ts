@@ -10,16 +10,9 @@ import {
   Posts,
   Profiles,
 } from '@kosmo/core/db';
-import {
-  InstanceKind,
-  InstanceState,
-  NotificationKind,
-  PostState,
-  ProfileState,
-} from '@kosmo/core/enums';
+import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import {
-  deleteNotificationBySource,
   deletePost,
   followProfile,
   undoInboundReaction,
@@ -239,19 +232,19 @@ const handleInboundUndoAnnounce = async (
       return { outcome: 'ignored' as const };
     }
 
-    await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
-    return { outcome: 'deleted' as const, postId: row.postId };
+    const deleted = await deletePost(
+      {
+        actorProfileId: row.profileId,
+        origin: 'ACTIVITYPUB',
+        postId: row.postId,
+      },
+      tx,
+    );
+    return { outcome: 'deleted' as const, postCommit: deleted.postCommit };
   });
 
-  // deletePost joins the caller transaction, so its Repost Notification cleanup
-  // must run only after the Announce Undo transaction commits.
   if (result?.outcome === 'deleted') {
-    await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch((error) => {
-      console.error('Post-commit Repost notification cleanup failed', {
-        error,
-        postId: result.postId,
-      });
-    });
+    await result.postCommit();
   }
 
   return result?.outcome ?? null;

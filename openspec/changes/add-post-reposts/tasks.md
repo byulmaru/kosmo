@@ -54,7 +54,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
 - 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, 진입점 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
-- Quote 작성과 ActivityPub Repost ingress·delivery를 포함하지 않는다.
+- Quote 작성과 새로운 ActivityPub Repost ingress·delivery capability를 포함하지 않는다. 단, PROD-669는 기존 inbound Announce·Undo·Delete caller를 공용 Repost action lifecycle에 연결하는 wiring만 다룬다.
 
 **Verification**
 
@@ -428,3 +428,40 @@ Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 sel
 - [ ] 13.2 전체 Repost 사용자·Notification lifecycle과 mixed Post/Notification 회귀 통합 검증을 실행한다.
 - [ ] 13.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
 - [ ] 13.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
+
+## 14. PROD-669 Repost 공용 action lifecycle 통합
+
+**Authority / Provenance**
+
+- `docs/domain/objects/post.md`
+- `docs/domain/objects/notification.md`
+- `docs/domain/decisions/0010-post-interaction-contracts.md`
+- `PROD-669`
+
+`memory/review-style.md`의 Commit And Side Effects와 `packages/core/services/reaction.ts`는 기존 구현
+패턴으로 참고한다.
+
+**Deliverable**
+
+Repost 생성·삭제 action이 transaction composition과 무관하게 실제 상태 전이에서 파생한 once-only
+`postCommit()`을 반환하고, GraphQL과 ActivityPub caller가 origin을 명시해 동일한 Notification·delivery
+lifecycle을 사용한다.
+
+**Guardrails**
+
+- `tx` 유무나 ActivityPub mapping 존재를 lifecycle provenance로 사용하지 않는다.
+- ActivityPub caller의 mapping/domain state와 core action은 caller transaction에서 원자적으로 저장하고
+  outer commit 뒤 반환된 `postCommit()`을 실행한다.
+- Notification 실패는 Repost 생성·삭제와 독립적으로 격리하고, ActivityPub origin에서는 outbound echo를
+  시도하지 않는다.
+
+**Verification**
+
+- Local/ActivityPub 및 top-level/caller-owned transaction 조합, rollback-before-postCommit, repeated
+  `postCommit()`, duplicate/no-op, Notification failure isolation, inbound Announce/Undo/Delete와 GraphQL
+  payload·delivery regression을 core/Fedify/API check로 검증한다.
+
+- [x] 14.1 `repostPost`·`deletePost`의 명시적 origin과 once-only post-commit result를 구현하고 모든
+      production caller를 연결한다.
+- [x] 14.2 transaction rollback, post-commit failure isolation, idempotent lifecycle과 ActivityPub
+      outbound echo suppression 회귀 검증을 완료한다.

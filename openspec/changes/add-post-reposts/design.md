@@ -1,6 +1,6 @@
 ## Context
 
-PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/post-action-bar.md`와 ADR 0010·0014에서 확정됐고, 구현은 11개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다.
+PROD-389는 Repost 저장부터 생성·취소, GraphQL 조회·count, Home/Profile 목록, 유니버설 UI와 Notification lifecycle까지 하나의 계약으로 통합 검증한다. Domain Gate는 `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/policies/post-list.md`, `docs/design/post-action-bar.md`와 ADR 0010·0014에서 확정됐고, 구현은 11개 직접 자식과 PROD-415의 하위 presentation slice인 PROD-453으로 나뉜다. PROD-669는 이 계약의 기존 Repost action을 ActivityPub caller까지 공용 lifecycle로 연결하는 후속 구현이다.
 
 PROD-394와 PROD-393이 main에 merge되어 현재 `post` table은 nullable `repost_source_id`와
 `reply_parent_id` self-reference, Active contentless Repost용 partial unique index를 가진다. core
@@ -26,7 +26,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 **Non-Goals:**
 
-- Quote 작성 action·composer, Mentioned Profiles Repost, Post Media와 ActivityPub Repost/Quote ingress·delivery
+- Quote 작성 action·composer, Mentioned Profiles Repost, Post Media와 새로운 ActivityPub Repost/Quote ingress·delivery capability
 - 별도 Post Kind, Repost table, Quote Source, GraphQL concrete Post subtype
 - Notification retry/outbox/backfill·범용 cleanup worker, Repost 외 action의 production 조립과 최종 공통 정책
 - 기존 Notification 기반이나 Post list/pagination 체계의 범용 재설계
@@ -57,7 +57,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 ### Recommended Approach
 
 1. 완료된 PROD-394의 nullable `repost_source_id`, Active contentless Repost partial unique index와 migration 검증을 저장 경계로 재사용한다. 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
-2. PROD-401의 Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 `ctx.session.profileId`를 별도 역할 제한 없이 공통 Repost action에 전달한다. core action은 `actorProfileId`와 `sourcePostId`만 받아 행동 주체 Profile/Instance 상태를 다시 조회하지 않고 Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote Profile도 재사용할 수 있지만 ActivityPub ingress·delivery는 구현하지 않는다. Quote Source 연결은 실제 Quote 작성 action이 생기는 후속 작업에서 소유한다.
+2. PROD-401의 Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 `ctx.session.profileId`를 별도 역할 제한 없이 공통 Repost action에 전달한다. core action은 `actorProfileId`와 `sourcePostId`만 받아 행동 주체 Profile/Instance 상태를 다시 조회하지 않고 Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote Profile도 재사용할 수 있다. 새로운 ActivityPub ingress·delivery capability와 Quote Source 연결은 각각 후속 작업이 소유한다. PROD-669는 기존 inbound Announce·Undo·Delete와 Local delivery caller를 이 공용 action lifecycle에 연결하는 wiring만 다룬다.
 3. PROD-402·403은 direct `repostSource`와 batched count/selected Profile relation loader를 추가한다. viewer-independent count query와 viewer-relative Node loader를 분리한다.
 4. Post Node와 목록 query는 Content 없는 Repost에만 direct Source visibility/eligibility를 적용하고 hidden
    Source Repost 후보를 page limit 전에 제거한다. Quote는 자신의 visibility/eligibility로 반환하며 nullable
