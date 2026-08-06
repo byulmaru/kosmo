@@ -1,7 +1,8 @@
 import { PostVisibility } from '@kosmo/core/enums';
+import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
-import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
+import { postBodyMaxLength, postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Media } from '../../media/ref';
@@ -25,16 +26,31 @@ builder.mutationField('createPost', (t) =>
       validate: z
         .object({
           bodyText: z.string(),
+          contentWarning: z.string().nullish(),
           media: z.array(z.unknown()).nullish(),
         })
         .passthrough()
         .refine(({ bodyText, media }) => bodyText.length > 0 || (media?.length ?? 0) > 0, {
           message: '본문 또는 이미지를 추가해주세요.',
           path: ['bodyText'],
-        }),
+        })
+        .refine(
+          ({ bodyText, contentWarning }) =>
+            normalizePostContentPlainText(bodyText).length +
+              normalizePostContentPlainText(contentWarning ?? '').length <=
+            postBodyMaxLength,
+          {
+            message:
+              '본문과 내용 경고는 ' +
+              postBodyMaxLength.toLocaleString('ko-KR') +
+              '자까지 작성할 수 있어요.',
+            path: ['contentWarning'],
+          },
+        ),
     },
     input: {
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
+      contentWarning: t.input.string({ required: false }),
       media: t.input.field({
         type: [CreatePostMediaInput],
         required: false,
@@ -46,6 +62,7 @@ builder.mutationField('createPost', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const media = input.media ?? [];
+      const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
 
       const { post } = await createPost({
         accountId: ctx.session.accountId,
@@ -55,6 +72,7 @@ builder.mutationField('createPost', (t) =>
             mediaId: mediaId.id,
           })),
           input.sensitiveMedia ?? false,
+          contentWarning || null,
         ),
         media: media.map(({ altText, mediaId }) => ({
           altText: altText ?? null,

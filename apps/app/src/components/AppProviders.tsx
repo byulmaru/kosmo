@@ -9,6 +9,7 @@ import {
 } from '@/session/SessionProvider';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
+import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
 import { Splash } from './Splash';
 import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
@@ -22,7 +23,7 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
         fallback={
           <SessionErrorProvider>
             <AnalyticsSessionBridge />
-            {children}
+            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
           </SessionErrorProvider>
         }
         resetKey={revision}
@@ -30,7 +31,7 @@ function RelaySessionBoundary({ children }: PropsWithChildren) {
         <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
           <SessionProvider>
             <AnalyticsSessionBridge />
-            {children}
+            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
           </SessionProvider>
         </Suspense>
       </SessionFailOpenBoundary>
