@@ -34,6 +34,7 @@ mockModule('expo-router', {
 });
 mockModule('react-native', {
   Image: 'Image',
+  Platform: { OS: 'web' },
   Pressable: 'Pressable',
   StyleSheet: {
     absoluteFillObject: {},

@@ -1,5 +1,6 @@
 import { LogOut } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { IconButton } from '@/components/ui/IconButton';
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -16,28 +17,43 @@ export function LogoutControl({
   const theme = useTheme();
   const { error, logout, pending } = useLogout();
   const { request: requestNavigation } = useNavigationGuard();
+  const handleLogout = () => {
+    if (!requestNavigation(logout)) {
+      logout();
+    }
+  };
+  const icon = pending ? (
+    <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={theme.textSecondary} />
+  ) : (
+    <LogOut color={theme.textSecondary} size={20} strokeWidth={2} />
+  );
 
   return (
     <View style={[styles.root, compact && styles.compactRoot]}>
-      <Pressable
-        accessibilityLabel="로그아웃"
-        accessibilityRole="button"
-        accessibilityState={{ busy: pending, disabled: pending }}
-        disabled={pending}
-        onPress={() => {
-          if (!requestNavigation(logout)) {
-            logout();
-          }
-        }}
-        style={[styles.control, compact && styles.compactControl, style]}
-      >
-        {pending ? (
-          <ActivityIndicator accessibilityLabel="로그아웃 처리 중" color={theme.textSecondary} />
-        ) : (
-          <LogOut color={theme.textSecondary} size={20} strokeWidth={2} />
-        )}
-        {!compact ? <Text style={[styles.label, { color: theme.text }]}>로그아웃</Text> : null}
-      </Pressable>
+      {compact ? (
+        <IconButton
+          accessibilityLabel="로그아웃"
+          accessibilityState={{ busy: pending }}
+          disabled={pending}
+          onPress={handleLogout}
+          style={[styles.control, styles.compactControl, style]}
+          targetSize={44}
+        >
+          {icon}
+        </IconButton>
+      ) : (
+        <Pressable
+          accessibilityLabel="로그아웃"
+          accessibilityRole="button"
+          accessibilityState={{ busy: pending, disabled: pending }}
+          disabled={pending}
+          onPress={handleLogout}
+          style={[styles.control, style]}
+        >
+          {icon}
+          <Text style={[styles.label, { color: theme.text }]}>로그아웃</Text>
+        </Pressable>
+      )}
       {error ? (
         <Text
           accessibilityLiveRegion="polite"

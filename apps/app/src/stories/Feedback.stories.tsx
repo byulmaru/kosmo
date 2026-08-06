@@ -185,6 +185,9 @@ export const OverlayFocusLifecycle: Story = {
     const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
     const close = within(dialog).getByRole('button', { name: '피드백 닫기' });
     await waitFor(() => expect(close).toHaveFocus());
+    const closeBounds = close.getBoundingClientRect();
+    expect(closeBounds.width).toBe(36);
+    expect(closeBounds.height).toBe(36);
     expect(ownerDocument.body.style.overflow).toBe('hidden');
     await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
     await waitFor(() =>

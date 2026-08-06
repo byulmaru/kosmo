@@ -17,6 +17,7 @@ import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
@@ -437,24 +438,24 @@ function ReplyComposerSurfaceContents({
                 <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
                   답글 쓰기
                 </Text>
-                <Pressable
+                <IconButton
                   accessibilityLabel="닫기"
-                  accessibilityRole="button"
                   disabled={submitting}
                   hitSlop={4}
                   onPress={() => requestClose()}
-                  style={({ pressed }) => [
+                  style={{ height: closeControlSize, width: closeControlSize }}
+                  targetSize={closeControlSize}
+                  visualSize={closeControlSize}
+                  visualStyle={({ pressed }) => [
                     styles.close,
                     {
                       backgroundColor: pressed ? theme.surface : 'transparent',
-                      height: closeControlSize,
                       opacity: submitting ? 0.45 : 1,
-                      width: closeControlSize,
                     },
                   ]}
                 >
                   <XIcon color={theme.text} size={20} strokeWidth={2} />
-                </Pressable>
+                </IconButton>
               </View>
               <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}

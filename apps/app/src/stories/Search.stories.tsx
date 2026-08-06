@@ -180,10 +180,24 @@ export const RecentSearchInteraction: Story = {
     const canvas = within(canvasElement);
     const input = canvas.getByRole('textbox', { name: '검색어' });
     await userEvent.click(input);
+    await userEvent.type(input, '검색');
+    const clear = canvas.getByRole('button', { name: '검색 지우기' });
+    expect(clear.getBoundingClientRect().width).toBe(44);
+    expect(clear.getBoundingClientRect().height).toBe(44);
+    await userEvent.click(clear);
+    await expect(input).toHaveValue('');
+    await expect(input).toHaveFocus();
     await expect(canvas.findByText('별마루')).resolves.toBeVisible();
     await userEvent.tab();
     await expect(canvas.getByRole('link', { name: '별마루' })).toHaveFocus();
-    await userEvent.click(canvas.getByRole('button', { name: "최근 검색 '별마루' 삭제" }));
+    const recentLink = canvas.getByRole('link', { name: '별마루' });
+    const remove = canvas.getByRole('button', { name: "최근 검색 '별마루' 삭제" });
+    expect(remove.getBoundingClientRect().width).toBe(44);
+    expect(remove.getBoundingClientRect().height).toBe(44);
+    expect(recentLink.getBoundingClientRect().right).toBeLessThanOrEqual(
+      remove.getBoundingClientRect().left,
+    );
+    await userEvent.click(remove);
     await expect(canvas.queryByText('별마루')).not.toBeInTheDocument();
     await expect(canvas.findByText('@remote@space.example')).resolves.toBeVisible();
     await expect(input).toHaveFocus();

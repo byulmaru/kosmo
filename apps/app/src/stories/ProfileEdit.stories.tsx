@@ -176,6 +176,9 @@ function expectResponsiveSurface(
   const backAction = canvas
     .getByRole('button', { name: '프로필 편집 닫기' })
     .getBoundingClientRect();
+  const tagRemoveButton = canvas.getByRole('button', { name: '#공예 제거' });
+  const tagRemoveAction = tagRemoveButton.getBoundingClientRect();
+  const tagRemoveLayout = tagRemoveButton.parentElement;
 
   expect(Math.round(surface.width)).toBe(expectedWidth);
   expect(Math.round(header.width)).toBe(expectedWidth);
@@ -184,6 +187,12 @@ function expectResponsiveSurface(
   expect(Math.round(navigationHeader.height)).toBe(48);
   expect(Math.round(backAction.width)).toBe(48);
   expect(Math.round(backAction.height)).toBe(48);
+  expect(Math.round(tagRemoveAction.width)).toBe(32);
+  expect(Math.round(tagRemoveAction.height)).toBe(32);
+  expect(tagRemoveLayout).not.toBeNull();
+  const tagRemoveLayoutRect = tagRemoveLayout?.getBoundingClientRect();
+  expect(tagRemoveAction.left).toBeGreaterThanOrEqual(tagRemoveLayoutRect?.left ?? 0);
+  expect(tagRemoveAction.right).toBeLessThanOrEqual(tagRemoveLayoutRect?.right ?? 0);
   expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
 }
 
