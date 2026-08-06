@@ -253,11 +253,11 @@ canonical·Linear·구현·OpenSpec이 일치할 때 `add-local-profile-edit`을
   followPolicy Switch가 enum과 동일 저장 경계로 제공되는지 확인한다.
 - archive 전후 strict validation과 delta spec 동기화를 확인한다.
 
-- [ ] 4.1 PROD-491·492·613 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
-- [ ] 4.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·post-commit 응답 이상·
+- [x] 4.1 PROD-491·492·613 완료 조건, PR, 필수 test와 unresolved review thread를 확인한다.
+- [x] 4.2 Owner 성공과 guest/Member/무관 Account·invalid text/Media·upload/save 실패·post-commit 응답 이상·
       dirty navigation 복구를
       종단 간 검증한다.
-- [ ] 4.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
+- [x] 4.3 Profile Tag 저장·공개 표시와 Settings 이전은 제외 범위로 유지하고, 현재 followPolicy 저장 경계·기존
       Pending Follow Request 불변과 Profile Link 제외 범위·기존 Profile 조회 회귀를 확인한다.
-- [ ] 4.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
-- [ ] 4.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
+- [x] 4.4 canonical·Linear·OpenSpec 정합성과 strict validation을 확인한다.
+- [x] 4.5 모든 task와 통합 gate 완료 뒤 change를 archive하고 archive 후 validation·Linear 상태를 확인한다.
