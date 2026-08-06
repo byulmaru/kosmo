@@ -440,14 +440,14 @@ function ReactionContractControls({
   onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
   requests: ReadonlyArray<ReactionRequestSummary>;
 }) {
-  const { resetActor, revision } = useRelayActor();
+  const { resetActor } = useRelayActor();
 
   return (
     <View>
       <Text
         accessibilityLabel="Reaction actor 전환"
         accessibilityRole="button"
-        onPress={() => resetActor(`profile-${revision + 2}`)}
+        onPress={() => resetActor('profile-reaction-next')}
       >
         Reaction actor 전환
       </Text>
@@ -458,7 +458,7 @@ function ReactionContractControls({
       >
         {mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
       </Text>
-      <Text testID="reaction-actor-revision">{revision}</Text>
+      <Text testID="reaction-actor">현재 Profile</Text>
       <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
       {requests.map((request) => (
         <View key={request.id}>
@@ -1260,7 +1260,7 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
     canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
     await waitFor(() =>
-      expect(canvas.getByTestId('reaction-actor-revision')).toHaveTextContent('1'),
+      expect(canvas.getByTestId('reaction-actor')).toHaveTextContent('현재 Profile'),
     );
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
 

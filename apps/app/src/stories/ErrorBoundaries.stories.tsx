@@ -67,7 +67,7 @@ function SessionBoundaryHarness() {
         >
           <Text>세션 갱신</Text>
         </Pressable>
-        <SessionFailOpenBoundary fallback={<Text>세션 오류 상태</Text>} resetKey={resetKey}>
+        <SessionFailOpenBoundary fallback={<Text>세션 오류 상태</Text>} key={resetKey}>
           <ThrowOnRender active={failed} />
         </SessionFailOpenBoundary>
       </View>

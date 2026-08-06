@@ -14,10 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { PageHeader } from '@/components/PageHeader';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsRoot } from '../settings/settingsNavigation';
@@ -86,18 +85,15 @@ const webFixedBottomBar = {
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
-  const { retry, revision } = useRelayActor();
-
   return (
     <UnreadNotificationBadgeController>
       <NavigationGuardProvider>
         <PrimaryNavigationScrollProvider>
           <RouteBoundary
             loading={<Splash label="앱을 불러오는 중입니다." />}
-            onRetry={retry}
             title="앱을 불러오지 못했어요"
           >
-            <UniversalShellContent revision={revision} />
+            <UniversalShellContent />
           </RouteBoundary>
         </PrimaryNavigationScrollProvider>
       </NavigationGuardProvider>
@@ -105,7 +101,7 @@ export function UniversalShell() {
   );
 }
 
-function UniversalShellContent({ revision }: { revision: number }) {
+function UniversalShellContent() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
@@ -116,10 +112,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
-    { fetchKey: revision, fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';

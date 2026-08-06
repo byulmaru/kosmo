@@ -39,11 +39,11 @@ const SessionProviderQuery = graphql`
 `;
 
 export function SessionProvider({ children }: PropsWithChildren) {
-  const { clearNativeSession, nativeToken, revision } = useRelayActor();
+  const { clearNativeSession, nativeToken } = useRelayActor();
   const data = useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQuery,
     {},
-    { fetchKey: revision, fetchPolicy: 'store-and-network' },
+    { fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
 
@@ -91,12 +91,11 @@ export function SessionErrorProvider({ children }: PropsWithChildren) {
 export function SessionFailOpenBoundary({
   children,
   fallback,
-  resetKey,
-}: PropsWithChildren<{ fallback: ReactNode; resetKey: number }>) {
+}: PropsWithChildren<{ fallback: ReactNode }>) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
 
   return (
-    <ErrorBoundary fallback={fallback} onError={reportUnexpectedError} resetKeys={[resetKey]}>
+    <ErrorBoundary fallback={fallback} onError={reportUnexpectedError}>
       {children}
     </ErrorBoundary>
   );

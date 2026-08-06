@@ -1,14 +1,12 @@
 import { Link, Slot, useGlobalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
@@ -37,9 +35,6 @@ export default function ProfileLayout() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-
   return (
     <RouteBoundary
       key={handle}
@@ -48,15 +43,15 @@ export default function ProfileLayout() {
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
+      <ProfileLayoutContent handle={handle} />
     </RouteBoundary>
   );
 }
 
-function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
+function ProfileLayoutContent({ handle }: { handle: string }) {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },

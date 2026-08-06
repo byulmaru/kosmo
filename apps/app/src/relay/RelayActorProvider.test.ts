@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, Environment, Network, RecordSource, Store } from 'relay-runtime';
 import type { ComponentType, PropsWithChildren } from 'react';
@@ -20,6 +20,7 @@ type RelayActorBoundary = Omit<RelayActorSnapshot, 'environment'>;
 
 let deleteFailure = false;
 let deleteItemCallCount = 0;
+let actorSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
@@ -68,6 +69,7 @@ before(async () => {
 beforeEach(() => {
   deleteFailure = false;
   deleteItemCallCount = 0;
+  actorSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
 });
@@ -88,6 +90,9 @@ function createEnvironment(token: string | null): Environment {
 
 function Probe() {
   const actor = useRelayActor();
+  useEffect(() => {
+    actorSubtreeMountCount += 1;
+  }, []);
   snapshot = {
     clearNativeSession: actor.clearNativeSession,
     environment: useRelayEnvironment(),
@@ -112,6 +117,7 @@ describe('RelayActorProvider session cleanup', () => {
     await renderProvider();
 
     assert.ok(snapshot);
+    assert.equal(actorSubtreeMountCount, 1);
     const previousEnvironment = snapshot.environment;
     commitLocalUpdate(previousEnvironment, (store) => {
       store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
@@ -123,6 +129,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
+    assert.equal(actorSubtreeMountCount, 2);
   });
 
   it('SecureStore token을 삭제하고 이전 Store를 새 guest Store와 다음 Session에서 재사용하지 않는다', async () => {

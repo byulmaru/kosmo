@@ -8,6 +8,7 @@ import {
   assertImageUploadResponse,
 } from '@/components/media/imageUploadErrors';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
+import { useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ProfileEditDiscardDialog } from './ProfileEditDiscardDialog';
@@ -152,8 +153,9 @@ const updateProfileMutation = graphql`
   }
 `;
 
-export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
+export function ProfileEditRoute() {
   const router = useRouter();
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileEditRouteQuery>(
     query,
     {},

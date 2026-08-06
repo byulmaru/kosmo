@@ -1,15 +1,13 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import type { PropsWithChildren } from 'react';
@@ -45,17 +43,13 @@ const HomeQuery = graphql`
 `;
 
 export default function HomeScreen() {
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-
   return (
     <HomeFrame>
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
-        onRetry={() => setFetchKey((key) => key + 1)}
         title="홈을 불러오지 못했어요"
       >
-        <HomeContent fetchKey={`${revision}:${fetchKey}`} />
+        <HomeContent />
       </RouteBoundary>
     </HomeFrame>
   );
@@ -73,9 +67,10 @@ function HomeFrame({ children }: PropsWithChildren) {
   );
 }
 
-function HomeContent({ fetchKey }: { fetchKey: string }) {
+function HomeContent() {
   const theme = useTheme();
   const shellChrome = useShellChrome();
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
