@@ -191,7 +191,7 @@ const handleInboundUndoAnnounce = async (
   activityUri: URL,
   actorUri: URL,
 ): Promise<UndoAnnounceResult> => {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const row = await tx
       .select({
         actorUri: ActivityPubActors.uri,
@@ -229,12 +229,25 @@ const handleInboundUndoAnnounce = async (
       row.profileState !== ProfileState.ACTIVE ||
       row.postState !== PostState.ACTIVE
     ) {
-      return 'ignored';
+      return { outcome: 'ignored' as const };
     }
 
-    await deletePost({ actorProfileId: row.profileId, postId: row.postId }, tx);
-    return 'deleted';
+    const deleted = await deletePost(
+      {
+        actorProfileId: row.profileId,
+        origin: 'ACTIVITYPUB',
+        postId: row.postId,
+      },
+      tx,
+    );
+    return { outcome: 'deleted' as const, postCommit: deleted.postCommit };
   });
+
+  if (result?.outcome === 'deleted') {
+    await result.postCommit();
+  }
+
+  return result?.outcome ?? null;
 };
 
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {

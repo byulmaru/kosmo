@@ -92,6 +92,10 @@ export type StoryPostReference = {
   id: string;
 };
 
+export type StoryReplyParentReference = StoryPostReference & {
+  profile: StoryProfile;
+};
+
 export type StoryMedia = {
   __typename: 'Media';
   altText: string | null;
@@ -118,7 +122,7 @@ export type StoryPost = {
   profile: StoryProfile;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
-  replyParent: StoryPostReference | null;
+  replyParent: StoryReplyParentReference | null;
   repostSource: StoryPost | null;
   state: 'ACTIVE';
   viewerBookmark: { __typename: 'Bookmark'; id: string } | null;
@@ -150,7 +154,7 @@ export function post({
   profile?: StoryProfile;
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
-  replyParent?: StoryPostReference | null;
+  replyParent?: StoryReplyParentReference | null;
   repostSource?: StoryPost | null;
   viewerRepost?: StoryPostReference | null;
   visibility?: StoryPost['visibility'];

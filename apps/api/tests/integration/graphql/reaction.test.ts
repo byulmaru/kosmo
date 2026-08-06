@@ -1161,6 +1161,7 @@ describe('GraphQL Reaction', () => {
     });
     const { repost } = await repostPost({
       actorProfileId: auth.profile.id,
+      origin: 'LOCAL',
       sourcePostId: source.id,
     });
     const reactionProfile = await createProfile('raw-post-reaction-profile');

@@ -32,9 +32,11 @@ import {
   createRepostNotification,
   deleteNotificationBySource,
 } from './notification';
+import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
+import type { PostCommit } from './post-commit';
 
 type LocalPostInput = {
   accountId?: string;
@@ -68,6 +70,8 @@ type RemoteMediaCandidate = {
   mediaType: string | null;
   url: string;
 };
+
+type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
 type CreatedPost = {
   content: typeof PostContents.$inferSelect;
@@ -162,23 +166,21 @@ const materializeRemoteMedia = async (
 export const deletePost = async (
   {
     actorProfileId,
+    origin,
     postId,
   }: {
     readonly actorProfileId: string;
+    readonly origin: PostOrigin;
     readonly postId: string;
   },
   tx?: Transaction,
-): Promise<{ readonly postId: string }> => {
-  const { isActivityPubPost, localPostId, repostId, result } = await getDatabaseConnection(
-    tx,
-  ).transaction(async (tx) => {
+): Promise<{ readonly postCommit: PostCommit; readonly postId: string }> => {
+  const { deleted, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
     const post = await tx
       .select({
-        activityPubPostId: ActivityPubPosts.id,
         profileId: Posts.profileId,
       })
       .from(Posts)
-      .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
       .where(eq(Posts.id, postId))
       .limit(1)
       .then(first);
@@ -186,7 +188,6 @@ export const deletePost = async (
       throw new NotFoundError('Post not found');
     }
 
-    const isActivityPubPost = post.activityPubPostId !== null;
     if (post.profileId !== actorProfileId) {
       throw new PermissionDeniedError('Post author permission is required');
     }
@@ -209,70 +210,75 @@ export const deletePost = async (
       })
       .then(first);
 
-    return {
-      isActivityPubPost,
-      localPostId: !isActivityPubPost && deleted?.currentContentId ? deleted.id : undefined,
-      repostId:
-        !isActivityPubPost &&
-        deleted &&
-        deleted.currentContentId === null &&
-        deleted.replyParentId === null &&
-        deleted.repostSourceId !== null
-          ? deleted.id
-          : undefined,
-      result: { postId },
-    };
+    return { deleted, result: { postId } };
   });
 
-  // A caller-owned transaction has no after-commit hook. Its caller owns any
-  // post-commit side effect so delivery cannot run before the outer commit.
-  if (!tx && !isActivityPubPost) {
-    await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch((error) => {
-      console.error('Post-commit Repost notification cleanup failed', {
-        error,
-        postId: result.postId,
-      });
-    });
-  }
+  const pureRepost =
+    deleted !== undefined &&
+    deleted.currentContentId === null &&
+    deleted.replyParentId === null &&
+    deleted.repostSourceId !== null;
+  const localPostId = deleted?.currentContentId ? deleted.id : undefined;
 
-  if (!tx && repostId) {
-    try {
-      const { sendRepostUndo } = await import('@kosmo/fedify');
-      await sendRepostUndo(repostId);
-    } catch (error) {
-      console.error('Post-commit ActivityPub Repost Undo delivery failed', {
-        error,
-        repostId,
-      });
-    }
-  }
+  return {
+    ...result,
+    postCommit: deleted
+      ? oncePostCommit(async () => {
+          if (pureRepost) {
+            await deleteNotificationBySource(NotificationKind.REPOST, result.postId).catch(
+              (error) => {
+                console.error('Post-commit Repost notification cleanup failed', {
+                  error,
+                  postId: result.postId,
+                });
+              },
+            );
+          }
 
-  if (localPostId) {
-    try {
-      const { sendLocalPostDelete } = await import('@kosmo/fedify');
-      await sendLocalPostDelete(localPostId);
-    } catch (error) {
-      console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
-        error,
-        postId: localPostId,
-      });
-    }
-  }
+          if (origin !== 'LOCAL') {
+            return;
+          }
 
-  return result;
+          if (pureRepost) {
+            try {
+              const { sendRepostUndo } = await import('@kosmo/fedify');
+              await sendRepostUndo(result.postId);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Repost Undo delivery failed', {
+                error,
+                repostId: result.postId,
+              });
+            }
+          } else if (localPostId) {
+            try {
+              const { sendLocalPostDelete } = await import('@kosmo/fedify');
+              await sendLocalPostDelete(localPostId);
+            } catch (error) {
+              console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
+                error,
+                postId: localPostId,
+              });
+            }
+          }
+        })
+      : noPostCommit,
+  };
 };
 
 export const repostPost = async (
   {
     actorProfileId,
+    origin,
     sourcePostId,
   }: {
     readonly actorProfileId: string;
+    readonly origin: PostOrigin;
     readonly sourcePostId: string;
   },
   tx?: Transaction,
 ): Promise<{
   readonly created: boolean;
+  readonly postCommit: PostCommit;
   readonly repost: typeof Posts.$inferSelect;
 }> => {
   const result = await getDatabaseConnection(tx).transaction(async (tx) => {
@@ -334,23 +340,33 @@ export const repostPost = async (
     return { created: false, repost: existing };
   });
 
-  // See deletePost: caller-owned transactions cannot safely emit before their
-  // outer commit, so only this top-level transaction owns post-commit effects.
-  if (!tx && result.created) {
-    await createRepostNotification(result.repost.id).catch(() => undefined);
+  return {
+    ...result,
+    postCommit: result.created
+      ? oncePostCommit(async () => {
+          await createRepostNotification(result.repost.id).catch((error) => {
+            console.error('Post-commit Repost notification creation failed', {
+              error,
+              postId: result.repost.id,
+            });
+          });
 
-    try {
-      const { sendRepostAnnounce } = await import('@kosmo/fedify');
-      await sendRepostAnnounce(result.repost.id);
-    } catch (error) {
-      console.error('Post-commit ActivityPub Repost Announce delivery failed', {
-        error,
-        repostId: result.repost.id,
-      });
-    }
-  }
+          if (origin !== 'LOCAL') {
+            return;
+          }
 
-  return result;
+          try {
+            const { sendRepostAnnounce } = await import('@kosmo/fedify');
+            await sendRepostAnnounce(result.repost.id);
+          } catch (error) {
+            console.error('Post-commit ActivityPub Repost Announce delivery failed', {
+              error,
+              repostId: result.repost.id,
+            });
+          }
+        })
+      : noPostCommit,
+  };
 };
 export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
 export function createPost(

@@ -63,6 +63,22 @@ const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
 };
+const selectedProfileWithUnread = { ...selectedProfile, unreadNotificationCount: 1 };
+const secondProfileWithLargeUnread = { ...secondProfile, unreadNotificationCount: 127 };
+const profileWithoutUnread = profile({
+  displayName: '알림 없는 프로필',
+  handle: 'no_unread',
+  id: 'profile-no-unread',
+  relativeHandle: '@no_unread',
+  viewerState: { follow: null, followRequest: null, isSelf: true },
+});
+const profileSwitcherUnreadQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithUnread, secondProfileWithLargeUnread, profileWithoutUnread],
+    selectedProfile: selectedProfileWithUnread,
+  }),
+};
 const additionalProfiles = Array.from({ length: 11 }, (_, index) =>
   profile({
     displayName: `테스트 프로필 ${index + 1}`,
@@ -101,7 +117,6 @@ const headerFallbackQuery = {
     selectedProfile: selectedProfileWithoutHeader,
   }),
 };
-
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
     ...ProfileSwitcher_query
@@ -180,10 +195,13 @@ function FeedbackNavigationDrawerStory() {
 }
 
 function ProfileSwitcherStory() {
+  const data = useShellStoryData();
   return (
-    <View style={{ maxWidth: 360 }}>
-      <ProfileSwitcher query={useShellStoryData().query} surface="full" />
-    </View>
+    <SessionProvider>
+      <View style={{ maxWidth: 360 }}>
+        <ProfileSwitcher query={data.query} surface="full" />
+      </View>
+    </SessionProvider>
   );
 }
 
@@ -316,6 +334,8 @@ export const CompactSidebar: Story = {
     const feedbackRect = feedback.getBoundingClientRect();
 
     expect(logout).toBeInTheDocument();
+    expect(logoutRect.width).toBe(44);
+    expect(logoutRect.height).toBe(44);
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(avatarRect.x + avatarRect.width / 2).toBeCloseTo(
       feedbackRect.x + feedbackRect.width / 2,
@@ -809,6 +829,45 @@ export const ProfileSwitcherInteraction: Story = {
     const reopenedPicker = await canvas.findByLabelText('프로필 전환');
     expect(within(reopenedPicker).queryByRole('form', { name: '새 프로필 만들기' })).toBeNull();
     expect(canvas.getByRole('button', { name: '새 프로필 추가' })).toBeVisible();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherUnreadPresence: Story = {
+  parameters: {
+    relay: { data: profileSwitcherUnreadQuery },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    const list = await canvas.findByLabelText('전환할 프로필 목록');
+    const selectedOption = within(list).getByRole('button', {
+      name: `${selectedProfile.displayName}, ${selectedProfile.relativeHandle}, 읽지 않은 알림 있음`,
+    });
+    const unreadOption = await within(list).findByRole('button', {
+      name: `${secondProfile.displayName}, ${secondProfile.relativeHandle}, 읽지 않은 알림 있음`,
+    });
+    const noUnreadOption = within(list).getByRole('button', {
+      name: `${profileWithoutUnread.displayName}, ${profileWithoutUnread.relativeHandle}`,
+    });
+    const selectedDot = within(selectedOption).getByTestId('profile-switcher-unread-dot');
+    const unreadDot = within(unreadOption).getByTestId('profile-switcher-unread-dot');
+
+    expect(selectedOption).toHaveAttribute('aria-pressed', 'true');
+    expect(unreadOption).toHaveAttribute('aria-pressed', 'false');
+    expect(noUnreadOption).toHaveAttribute('aria-pressed', 'false');
+    expect(within(noUnreadOption).queryByTestId('profile-switcher-unread-dot')).toBeNull();
+    expect(noUnreadOption).not.toHaveAccessibleName(/읽지 않은 알림 있음/);
+    expect(selectedDot).toHaveAttribute('aria-hidden', 'true');
+    expect(unreadDot).toHaveAttribute('aria-hidden', 'true');
+    expect(selectedDot).toHaveStyle({ height: '12px', width: '12px' });
+    expect(unreadDot).toHaveStyle({ height: '12px', width: '12px' });
+    expect(selectedOption).not.toHaveAccessibleName(/1/);
+    expect(unreadOption).not.toHaveAccessibleName(/127/);
+    expect(unreadOption.getBoundingClientRect().height).toBe(52);
+    expect(unreadDot.getBoundingClientRect().right).toBeLessThanOrEqual(
+      unreadOption.getBoundingClientRect().right,
+    );
   },
   render: () => <ProfileSwitcherStory />,
 };

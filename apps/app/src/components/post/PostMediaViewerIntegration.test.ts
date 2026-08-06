@@ -50,6 +50,10 @@ mock.module('react-relay', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module(require.resolve('lucide-react-native'), {
+  exports: { MessageCircle: 'MessageCircle' },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('@/components/profile/ProfileNameBlock', {
   exports: {
     ProfileNameBlock: (props: Record<string, unknown>) =>

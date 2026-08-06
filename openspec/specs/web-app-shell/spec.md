@@ -1230,3 +1230,19 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **WHEN** 비로그인 방문자가 landing 또는 `/privacy`에 접근한다
 - **THEN** landing의 개인정보 처리방침 link와 로그인 없는 공개 처리방침 열람을 유지한다
 - **AND** 가입·로그인 온보딩 안의 추가 진입점은 현재 범위에서 구현하지 않는다
+
+### Requirement: Profile edit route in the responsive shell
+
+**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `PROD-490`, `PROD-491`, `PROD-492` — Web Profile edit route는 기존 responsive shell의 중앙 최대 600px column에 표시해야 하며(MUST), 별도 desktop-only route tree나 modal을 primary surface로 사용해서는 안 된다(MUST NOT).
+
+#### Scenario: Render Profile edit at full desktop width
+
+- **WHEN** Web viewport가 `full` 이상이고 권한 있는 사용자가 Profile edit route에 진입한다
+- **THEN** shell은 full sidebar와 right rail 사이 중앙 최대 600px surface에 Profile edit를 표시한다
+- **AND** route header/save action이 sticky하더라도 document scroll 소유권을 유지한다
+
+#### Scenario: Render Profile edit at compact desktop width
+
+- **WHEN** Web viewport가 `compact` 이상 `full` 미만이고 권한 있는 사용자가 Profile edit route에 진입한다
+- **THEN** shell은 icon rail 다음 중앙 최대 600px surface에 Profile edit를 표시한다
+- **AND** right rail이나 Profile edit 전용 breakpoint를 추가하지 않는다

@@ -21,6 +21,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내
 - [reactions.md](./reactions.md) — Reaction Quick Picker, 요약 token toggle과 Profile 목록의 형태·상태·대상 Post 계약
 - [profile-edit.md](./profile-edit.md) — Local Profile 편집 화면의 필드, 상태와 route 연결 경계
+- [profile-hero.md](./profile-hero.md) — 공개 Profile Hero의 header 이미지 비율, 상태와 검증 범위
 - [profile-tags.md](./profile-tags.md) — Profile Tag 편집·공개 표시의 플랫폼 공통 계약
 - [hashtag-related-profiles.md](./hashtag-related-profiles.md) — Hashtag 관련 Profile 목록 탐색의 결과·상태 계약
 

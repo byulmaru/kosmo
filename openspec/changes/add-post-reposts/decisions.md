@@ -175,6 +175,19 @@
 - Consequences: 성공 응답 latency에 짧은 Notification 시도가 포함되지만 source 결과는 보존된다. cleanup 실패 잔존 행은 visible predicate가 숨긴다.
 - Confirmation / Follow-up: 저장·cleanup 실패 주입, 반복 처리와 프로세스 간격의 hidden-row API 테스트를 수행한다.
 
+### Repost lifecycle은 transaction composition과 독립된 공용 action이 소유한다
+
+- Decision Date: 2026-08-05
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-412`, `PROD-416`, `PROD-669`
+- Status: Active
+- Context / Problem: 기존 Repost action은 optional caller transaction의 존재를 Notification과 ActivityPub lifecycle의 provenance처럼 해석해 inbound Announce가 공용 action을 사용해도 post-commit effect를 빠뜨릴 수 있었다. `memory/review-style.md`의 Commit And Side Effects 원칙과 `packages/core/services/reaction.ts`의 명시적 origin·postCommit 구현은 이 저장소의 기존 구현 패턴으로 참고한다.
+- Decision Outcome: `repostPost`와 `deletePost`는 `origin = LOCAL | ACTIVITYPUB`를 명시적으로 받고 transaction 유무와 무관하게 실제 상태 전이 결과를 기준으로 한 번 실행 가능한 `postCommit()`을 반환한다. caller-owned transaction은 mapping/domain mutation을 같은 transaction에 합친 뒤 outer commit 후 반환된 lifecycle을 실행한다. Notification create/cleanup은 실제 새 Repost 또는 실제 삭제된 pure Repost를 기준으로 하고, Fedify Announce/Undo와 Local Post Delete delivery는 `origin = LOCAL`인 경우에만 시도한다. duplicate/no-transition 결과의 lifecycle은 no-op이다.
+- Supersedes: PROD-669의 tx-gated Repost lifecycle 구현 선택
+- Alternatives Considered: transaction 유무에 따른 분기, inbound handler의 Notification 직접 호출, Repost 전용 in-transaction helper 분리. 모두 공용 action의 lifecycle ownership을 caller별로 복제하거나 transaction composition과 provenance를 결합한다.
+- Consequences: GraphQL과 ActivityPub caller는 동일한 core action과 result shape를 사용하고, ActivityPub caller는 commit 경계만 소유한다. Notification/delivery failure는 committed domain transition을 실패시키지 않는다.
+- Confirmation / Follow-up: Local/ActivityPub 및 top-level/caller-tx 조합, rollback-before-postCommit, repeated postCommit, duplicate/no-op, failure isolation과 ActivityPub outbound echo suppression을 core·Fedify·API 테스트로 검증한다.
+
 ### Presentation, renderer 연결과 action child를 독립 client slice로 유지한다
 
 - Decision Date: 2026-07-21

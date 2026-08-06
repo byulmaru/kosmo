@@ -1,12 +1,13 @@
 import { useLocalSearchParams, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
+import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -109,14 +110,15 @@ function PostDetailHeader() {
   return (
     <PageHeader
       leading={
-        <Pressable
+        <IconButton
           accessibilityLabel="뒤로 가기"
-          accessibilityRole="button"
           onPress={() => router.back()}
           style={styles.back}
+          targetSize={44}
+          visualSize={44}
         >
           <ChevronLeftIcon color={theme.text} size={20} />
-        </Pressable>
+        </IconButton>
       }
       title="게시글"
     />

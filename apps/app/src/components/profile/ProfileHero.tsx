@@ -137,7 +137,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
 
 const styles = StyleSheet.create({
   root: { marginBottom: spacing.xl },
-  cover: { height: 104, width: '100%' },
+  cover: { aspectRatio: 3, width: '100%' },
   coverImage: { height: '100%', width: '100%' },
   body: { paddingHorizontal: spacing.lg },
   avatarRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
