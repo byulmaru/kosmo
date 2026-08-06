@@ -59,7 +59,7 @@
 
 - [x] **Step 3: 공통 Web 48px style을 최소 구현한다**
 
-  `styles.webInputShell`의 높이를 `48px`로 바꾸고 breakpoint별 `desktopWebInputShell` override를 제거한다. 다른 style과 event handler는 변경하지 않는다.
+  공통 `styles.webInputShell`의 높이를 `48px`로 바꾼다. 다른 style과 event handler는 변경하지 않는다.
 
 - [x] **Step 4: scoped E2E와 정적 검증을 통과시킨다**
 

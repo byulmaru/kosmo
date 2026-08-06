@@ -1249,12 +1249,14 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 ### Requirement: Web 검색 상단바 geometry와 소유권
 
-**Authority / Provenance:** `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-590` — Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 route 소유 검색 도구막대와 그 안의 높이 `56px` 검색 입력을 표시해야 한다(MUST). 도구막대 위의 `32px` 상단 여백과 도구막대 바깥 가로 여백은 제거하되, 최근 검색·검색 결과·empty 상태 등 도구막대 아래 콘텐츠의 기존 본문 여백은 유지해야 한다(MUST). `compact` 미만 모바일 Web에서는 셸의 메뉴 전용 헤더와 route 검색 도구막대를 중복 렌더링해서는 안 된다(MUST NOT). 최초 검색 상태에는 `44×44px` leading 영역의 햄버거 메뉴를 표시하고, 입력 중·검색 후 상태에는 같은 영역을 현재 `tab`의 최초 검색 상태로 돌아가는 검색 초기화 뒤로가기로 교체해야 한다(MUST). 이 전환은 도구막대 높이, 검색 입력의 시작점과 본문 시작 위치를 바꾸지 않아야 한다(MUST NOT). 검색 초기화 뒤로가기는 실제 browser history를 이동하지 않고 검색 입력과 URL `q`를 비우며 포커스를 해제해야 한다(MUST). 입력 내부 지우기는 검색 입력과 URL `q`를 비우되 포커스를 유지해야 한다(MUST). 기존 `q`·`tab` deep link, browser back/forward, query-only navigation 위치·포커스 보존과 모바일 왼쪽 edge swipe drawer 동작은 유지해야 한다(MUST). Android/iOS 검색 헤더는 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-590`, PROD-590 owner confirmation on 2026-08-06 — Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 route 소유 검색 도구막대를 표시해야 한다(MUST). 그 안의 검색 입력은 모든 Web breakpoint에서 높이 `48px`를 사용하고 수직 중앙에 배치해 위·아래 `8px` 여백을 만들어야 한다(MUST). 도구막대 위의 `32px` 상단 여백과 도구막대 바깥 가로 여백은 제거하되, 최근 검색·검색 결과·empty 상태 등 도구막대 아래 콘텐츠의 기존 본문 여백은 유지해야 한다(MUST). `compact` 미만 모바일 Web에서는 셸의 메뉴 전용 헤더와 route 검색 도구막대를 중복 렌더링해서는 안 된다(MUST NOT). 최초 검색 상태에는 `44×44px` leading 영역의 햄버거 메뉴를 표시하고, 입력 중·검색 후 상태에는 같은 영역을 현재 `tab`의 최초 검색 상태로 돌아가는 검색 초기화 뒤로가기로 교체해야 한다(MUST). 이 전환은 도구막대 높이, 검색 입력의 시작점과 본문 시작 위치를 바꾸지 않아야 한다(MUST NOT). 검색 초기화 뒤로가기는 실제 browser history를 이동하지 않고 검색 입력과 URL `q`를 비우며 포커스를 해제해야 한다(MUST). 입력 내부 지우기는 검색 입력과 URL `q`를 비우되 포커스를 유지해야 한다(MUST). 기존 `q`·`tab` deep link, browser back/forward, query-only navigation 위치·포커스 보존과 모바일 왼쪽 edge swipe drawer 동작은 유지해야 한다(MUST). Android/iOS 검색 헤더는 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 모든 Web breakpoint에서 검색 도구막대 정렬
 
 - **WHEN** 사용자가 `390px`, `900px` 또는 `1400px` Web viewport에서 `/search`를 연다
-- **THEN** 중앙 컬럼 최상단의 검색 도구막대 높이는 `64px`이고 그 안의 검색 입력 높이는 `56px`다
+- **THEN** 중앙 컬럼 최상단의 검색 도구막대 높이는 `64px`다
+- **AND** 검색 입력 높이는 세 viewport에서 모두 `48px`다
+- **AND** 검색 입력은 도구막대 안에서 수직 중앙에 놓여 위·아래 여백이 각각 `8px`다
 - **AND** 도구막대 위와 바깥에는 별도 route 여백이 없다
 - **AND** 도구막대 아래 콘텐츠는 기존 본문 여백을 유지한다
 
