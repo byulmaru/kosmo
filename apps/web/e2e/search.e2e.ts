@@ -140,6 +140,28 @@ test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 lead
   await expect(menu).toHaveCount(1);
 });
 
+test('모바일 검색 drawer의 피드백 overlay를 닫으면 햄버거로 포커스를 복원한다', async ({
+  context,
+  page,
+}) => {
+  await signInSearchUser(context);
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto('/search');
+
+  const menu = page.getByRole('button', { name: '메뉴 열기' });
+  await menu.click();
+  await page
+    .getByRole('dialog', { name: '메뉴' })
+    .getByRole('button', { name: '피드백 보내기' })
+    .click();
+
+  const feedback = page.getByRole('dialog', { name: '피드백 보내기' });
+  await feedback.getByRole('button', { name: '피드백 닫기' }).click();
+
+  await expect(feedback).toHaveCount(0);
+  await expect(menu).toBeFocused();
+});
+
 test('검색 전 상태와 최근 검색을 React Native Web semantics로 표시한다', async ({
   context,
   page,

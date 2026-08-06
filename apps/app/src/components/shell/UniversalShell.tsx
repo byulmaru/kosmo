@@ -227,6 +227,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   return (
     <ShellChromeProvider
       navigationDrawerOpen={drawerOpen}
+      navigationDrawerTriggerRef={menuButtonRef}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
     >

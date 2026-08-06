@@ -472,6 +472,7 @@ export default function SearchScreen() {
               aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
               accessibilityLabel="메뉴 열기"
               accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
+              controlRef={shellChrome?.navigationDrawerTriggerRef}
               feedback="opacity"
               onFocus={(event) => event.stopPropagation()}
               onPress={shellChrome?.openNavigationDrawer}
