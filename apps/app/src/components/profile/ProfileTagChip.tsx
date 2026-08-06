@@ -1,4 +1,5 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { ICON_BUTTON_TARGET_SIZE, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 
@@ -46,34 +47,28 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
   }
 
   const { disabled = false, onRemove } = props;
-  const removeActionTargetSize = Platform.select({ android: 48, ios: 44, web: 32, default: 48 });
-  const removeActionTargetInset = (removeActionTargetSize - PROFILE_TAG_CHIP_VISUAL_SIZE) / 2;
+  const removeActionTargetInset = (ICON_BUTTON_TARGET_SIZE - PROFILE_TAG_CHIP_VISUAL_SIZE) / 2;
 
   return (
     <View
       style={[
         styles.removableRoot,
-        { minHeight: removeActionTargetSize, paddingRight: removeActionTargetInset },
+        { minHeight: ICON_BUTTON_TARGET_SIZE, paddingRight: removeActionTargetInset },
       ]}
     >
       {chip}
-      <Pressable
+      <IconButton
         accessibilityLabel={`#${name} 제거`}
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
         disabled={disabled}
+        feedback="opacity"
         onPress={onRemove}
-        style={({ pressed }) => [
-          styles.removeTarget,
-          { height: removeActionTargetSize, width: removeActionTargetSize },
-          { opacity: disabled ? 0.45 : pressed ? 0.7 : 1 },
-        ]}
+        style={styles.removeTarget}
+        targetSize={ICON_BUTTON_TARGET_SIZE}
         testID="profile-tag-remove-button"
+        visualSize={PROFILE_TAG_CHIP_VISUAL_SIZE}
       >
-        <View style={styles.removeVisual}>
-          <Text style={[styles.removeLabel, { color: theme.textSecondary }]}>×</Text>
-        </View>
-      </Pressable>
+        <Text style={[styles.removeLabel, { color: theme.textSecondary }]}>×</Text>
+      </IconButton>
     </View>
   );
 }
@@ -100,17 +95,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   removeTarget: {
-    alignItems: 'center',
-    justifyContent: 'center',
     position: 'absolute',
     right: 0,
-  },
-  removeVisual: {
-    alignItems: 'center',
-    height: PROFILE_TAG_CHIP_VISUAL_SIZE,
-    justifyContent: 'center',
-    pointerEvents: 'none',
-    width: PROFILE_TAG_CHIP_VISUAL_SIZE,
   },
   removeLabel: {
     fontFamily: 'SUIT',

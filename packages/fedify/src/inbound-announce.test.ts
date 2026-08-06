@@ -9,6 +9,7 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -16,7 +17,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -38,6 +39,7 @@ let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
@@ -57,6 +59,7 @@ describe('inbound Announce materialization', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       PostContents,
       Posts,
@@ -114,6 +117,88 @@ describe('inbound Announce materialization', () => {
 
     const repost = await findReposts(actor.id, source.id).then((rows) => rows[0]);
     assert.equal(repost?.state, PostState.ACTIVE);
+  });
+
+  test('creates one Repost Notification only for a newly materialized Announce', async () => {
+    await createRemoteActor(actorUri);
+    const localAuthor = await createProfile({ instanceId: localInstanceId, handle: 'local' });
+    const source = await createLocalSource(localAuthor.id);
+    const localSourceUri = new URL(`/ap/note/${source.id}`, publicOrigin);
+    const first = announce('notification-a', localSourceUri);
+    const second = announce('notification-b', localSourceUri);
+
+    await handleInboundAnnounce(context(), first, receivedAt);
+    const original = await currentRepost(first.id!).then(({ repost }) => repost);
+    const notifications = () =>
+      db
+        .select()
+        .from(Notifications)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.REPOST),
+            eq(Notifications.sourceId, original.id),
+          ),
+        );
+
+    assert.equal((await notifications()).length, 1);
+    assert.equal((await notifications())[0]?.recipientProfileId, localAuthor.id);
+
+    await handleInboundAnnounce(context(), first, receivedAt);
+    await handleInboundAnnounce(context(), second, receivedAt);
+
+    assert.equal((await currentRepost(second.id!).then(({ repost }) => repost)).id, original.id);
+    assert.equal((await notifications()).length, 1);
+  });
+
+  test('suppresses Repost Notification when a remote actor reposts its own Post', async () => {
+    const actor = await createRemoteActor(actorUri);
+    const source = await createPost({
+      document: postContentDocumentFromText('self source'),
+      objectUri: sourceUri.href,
+      origin: 'ACTIVITYPUB',
+      profileId: actor.id,
+      publishedAt: null,
+      receivedAt,
+      visibility: PostVisibility.PUBLIC,
+    });
+    assert.equal(source.created, true);
+
+    const activity = announce('self-notification', sourceUri);
+    await handleInboundAnnounce(context(), activity, receivedAt);
+
+    const repost = await currentRepost(activity.id!).then(({ repost }) => repost);
+    assert.equal(repost.profileId, actor.id);
+    assert.equal(
+      await db.$count(
+        Notifications,
+        and(eq(Notifications.kind, NotificationKind.REPOST), eq(Notifications.sourceId, repost.id)),
+      ),
+      0,
+    );
+  });
+
+  test('keeps the Announce Repost when Repost Notification creation fails', async () => {
+    await createRemoteActor(actorUri);
+    const localAuthor = await createProfile({ instanceId: localInstanceId, handle: 'local' });
+    const source = await createLocalSource(localAuthor.id);
+    const activity = announce(
+      'notification-create-failure',
+      new URL(`/ap/note/${source.id}`, publicOrigin),
+    );
+
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_repost_create_failure CHECK (false) NOT VALID`,
+    );
+    try {
+      await assert.doesNotReject(handleInboundAnnounce(context(), activity, receivedAt));
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_repost_create_failure`,
+      );
+    }
+
+    const { repost } = await currentRepost(activity.id!);
+    assert.equal(repost.state, PostState.ACTIVE);
   });
 
   test('ignores unknown identities, non-exact targets, and inadmissible nested Repost sources', async () => {
@@ -307,6 +392,66 @@ describe('inbound Announce materialization', () => {
 
     await handleInboundUndo(context(), undo(actorUri, b.id!));
     assert.equal(await postState(recreated.id), PostState.ACTIVE);
+  });
+
+  test('cleans the Repost Notification after the current Announce Undo commits', async () => {
+    await createRemoteActor(actorUri);
+    const localAuthor = await createProfile({ instanceId: localInstanceId, handle: 'local' });
+    const source = await createLocalSource(localAuthor.id);
+    const activity = announce('notification-undo', new URL(`/ap/note/${source.id}`, publicOrigin));
+
+    await handleInboundAnnounce(context(), activity, receivedAt);
+    const repost = await currentRepost(activity.id!).then(({ repost }) => repost);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 1);
+
+    await handleInboundUndo(context(), undo(actorUri, activity.id!));
+
+    assert.equal(await postState(repost.id), PostState.DELETED);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 0);
+
+    await handleInboundUndo(context(), undo(actorUri, activity.id!));
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 0);
+  });
+
+  test('keeps the Undo Repost deletion when Repost Notification cleanup fails', async () => {
+    await createRemoteActor(actorUri);
+    const localAuthor = await createProfile({ instanceId: localInstanceId, handle: 'local' });
+    const source = await createLocalSource(localAuthor.id);
+    const activity = announce(
+      'notification-undo-failure',
+      new URL(`/ap/note/${source.id}`, publicOrigin),
+    );
+
+    await handleInboundAnnounce(context(), activity, receivedAt);
+    const repost = await currentRepost(activity.id!).then(({ repost }) => repost);
+
+    await db.execute(sql`
+      CREATE FUNCTION fail_inbound_repost_notification_delete() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF OLD.kind = 'REPOST' THEN
+          RAISE EXCEPTION 'forced Repost Notification cleanup failure';
+        END IF;
+        RETURN OLD;
+      END;
+      $$
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER notification_inbound_repost_delete_failure
+      BEFORE DELETE ON ${Notifications}
+      FOR EACH ROW EXECUTE FUNCTION fail_inbound_repost_notification_delete()
+    `);
+    try {
+      await assert.doesNotReject(handleInboundUndo(context(), undo(actorUri, activity.id!)));
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER notification_inbound_repost_delete_failure ON ${Notifications}`,
+      );
+      await db.execute(sql`DROP FUNCTION fail_inbound_repost_notification_delete()`);
+    }
+
+    assert.equal(await postState(repost.id), PostState.DELETED);
+    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, repost.id)), 1);
   });
 
   test('does not log a successful Announce Undo deletion as a noop', async () => {

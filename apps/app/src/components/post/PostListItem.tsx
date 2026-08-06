@@ -1,4 +1,5 @@
 import { Link, useRouter } from 'expo-router';
+import { MessageCircle } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -14,6 +15,7 @@ import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
+import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
@@ -68,6 +70,9 @@ const PostListItemFragment = graphql`
     }
     replyParent {
       id
+      profile {
+        displayName
+      }
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
@@ -102,9 +107,11 @@ const PostListItemFragment = graphql`
 export function PostListItem({
   post: postKey,
   showDivider = true,
+  showReplyAttribution = true,
 }: {
   post: PostListItem_post$key;
   showDivider?: boolean;
+  showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
   const [deleted, setDeleted] = useState(false);
@@ -159,6 +166,25 @@ export function PostListItem({
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.divider },
   ];
+  const replyAttribution =
+    showReplyAttribution && post.replyParent ? (
+      <PostAttributionRow
+        icon={
+          <View
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            importantForAccessibility="no-hide-descendants"
+          >
+            <MessageCircle color={theme.textSecondary} size={16} />
+          </View>
+        }
+      >
+        <Text numberOfLines={1} style={[styles.attributionLabel, { color: theme.textSecondary }]}>
+          {post.replyParent.profile.displayName}님에게 답글
+        </Text>
+      </PostAttributionRow>
+    ) : null;
 
   if (deleted) {
     return null;
@@ -171,6 +197,7 @@ export function PostListItem({
     return (
       <>
         <View role="article" style={cardStyle}>
+          {replyAttribution}
           <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
         </View>
         {presentedReplySurface}
@@ -188,27 +215,24 @@ export function PostListItem({
     return (
       <>
         <View role="article" style={cardStyle}>
-          <View style={styles.repostAttribution}>
-            <View style={styles.repostIconColumn}>
-              <Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>
-            </View>
-            <View style={styles.repostAuthorSlot}>
-              <Link asChild href={profileHref}>
-                <Pressable
-                  accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
-                  accessibilityRole="link"
-                  style={styles.repostLabelTarget}
+          <PostAttributionRow
+            icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
+          >
+            <Link asChild href={profileHref}>
+              <Pressable
+                accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+                accessibilityRole="link"
+                style={styles.repostLabelTarget}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[styles.attributionLabel, { color: theme.textSecondary }]}
                 >
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.repostLabel, { color: theme.textSecondary }]}
-                  >
-                    {post.profile.displayName}님이 재게시함
-                  </Text>
-                </Pressable>
-              </Link>
-            </View>
-          </View>
+                  {post.profile.displayName}님이 재게시함
+                </Text>
+              </Pressable>
+            </Link>
+          </PostAttributionRow>
           <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
         </View>
         {presentedReplySurface}
@@ -266,41 +290,53 @@ export function PostListItem({
 
   return (
     <>
-      <View style={[...cardStyle, styles.quoteRow]}>
-        <Link asChild href={profileHref}>
-          <Pressable
-            aria-hidden
-            accessibilityElementsHidden
-            accessible={false}
-            focusable={false}
-            importantForAccessibility="no-hide-descendants"
-            style={styles.avatar}
-            tabIndex={-1}
-          >
-            <Avatar
-              imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
-              size={48}
+      <View style={cardStyle}>
+        {replyAttribution}
+        <View style={styles.quoteRow}>
+          <Link asChild href={profileHref}>
+            <Pressable
+              aria-hidden
+              accessibilityElementsHidden
+              accessible={false}
+              focusable={false}
+              importantForAccessibility="no-hide-descendants"
+              style={styles.avatar}
+              tabIndex={-1}
+            >
+              <Avatar
+                imageUri={post.profile.avatar?.url}
+                label={post.profile.displayName || post.profile.handle}
+                size={48}
+              />
+            </Pressable>
+          </Link>
+          <View style={styles.sourcePresentation}>
+            <PostSourcePresentationView
+              post={presentationPost}
+              showPostAvatar={false}
+              sourcePreviewStyle={styles.quoteSourcePreview}
             />
-          </Pressable>
-        </Link>
-        <View style={styles.sourcePresentation}>
-          <PostSourcePresentationView
-            post={presentationPost}
-            showPostAvatar={false}
-            sourcePreviewStyle={styles.quoteSourcePreview}
-          />
-          <PostActionSurface
-            actionBarStyle={styles.actionBarSlot}
-            onDeleted={onDeleted}
-            reactionSummaryStyle={styles.quoteReactionSummary}
-            reply={reply}
-            socialActionTarget={post.actionSurface!}
-          />
+            <PostActionSurface
+              actionBarStyle={styles.actionBarSlot}
+              onDeleted={onDeleted}
+              reactionSummaryStyle={styles.quoteReactionSummary}
+              reply={reply}
+              socialActionTarget={post.actionSurface!}
+            />
+          </View>
         </View>
       </View>
       {presentedReplySurface}
     </>
+  );
+}
+
+function PostAttributionRow({ children, icon }: { children: ReactNode; icon: ReactNode }) {
+  return (
+    <View style={styles.attributionRow}>
+      <View style={styles.attributionIconColumn}>{icon}</View>
+      <View style={styles.attributionContent}>{children}</View>
+    </View>
   );
 }
 
@@ -409,15 +445,15 @@ const styles = StyleSheet.create({
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },
-  repostAttribution: {
+  attributionRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
     minWidth: 0,
   },
-  repostIconColumn: { alignItems: 'flex-end', width: 48 },
+  attributionIconColumn: { alignItems: 'flex-end', width: 48 },
+  attributionContent: { flex: 1, minWidth: 0 },
+  attributionLabel: { fontFamily: 'SUIT', ...typography.sm },
   repeat: { fontFamily: 'SUIT', ...typography.sm },
-  repostAuthorSlot: { flex: 1, minWidth: 0 },
   repostLabelTarget: { minWidth: 0 },
-  repostLabel: { fontFamily: 'SUIT', ...typography.sm },
 });

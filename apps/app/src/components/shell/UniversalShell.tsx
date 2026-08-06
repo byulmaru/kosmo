@@ -16,6 +16,7 @@ import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
+import { IconButton } from '@/components/ui/IconButton';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -188,27 +189,30 @@ function UniversalShellContent({ revision }: { revision: number }) {
     setFeedbackOpen(true);
   };
   const menuButton = (
-    <Pressable
+    <IconButton
       aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
       accessibilityLabel="메뉴 열기"
-      accessibilityRole="button"
       accessibilityState={{ expanded: drawerOpen }}
+      controlRef={menuButtonRef}
+      feedback="opacity"
       onPress={() => setDrawerOpen(true)}
-      ref={menuButtonRef}
-      style={({ pressed }) => [styles.menuButton, { opacity: pressed ? 0.7 : 1 }]}
+      style={styles.menuButton}
+      targetSize={44}
+      visualSize={44}
     >
       <Menu color={theme.text} size={24} strokeWidth={2} />
-    </Pressable>
+    </IconButton>
   );
   const backButton = (
-    <Pressable
+    <IconButton
       accessibilityLabel="뒤로 가기"
-      accessibilityRole="button"
       onPress={() => router.back()}
       style={styles.menuButton}
+      targetSize={44}
+      visualSize={44}
     >
       <ChevronLeftIcon color={theme.text} size={20} />
-    </Pressable>
+    </IconButton>
   );
 
   return (

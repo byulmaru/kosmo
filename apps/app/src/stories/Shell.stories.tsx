@@ -374,6 +374,8 @@ export const CompactSidebar: Story = {
     const feedbackRect = feedback.getBoundingClientRect();
 
     expect(logout).toBeInTheDocument();
+    expect(logoutRect.width).toBe(44);
+    expect(logoutRect.height).toBe(44);
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
     expect(avatarRect.x + avatarRect.width / 2).toBeCloseTo(
       feedbackRect.x + feedbackRect.width / 2,

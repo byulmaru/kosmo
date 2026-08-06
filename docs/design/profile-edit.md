@@ -121,7 +121,7 @@
 - 공개 `Profile.avatar`와 `Profile.header`는 해당 Profile 조회 정책을 통과한 viewer에게 Profile 관계를 통해
   Media identity와 표시 URL을 제공한다. 일반 Media Node의 owner-only loader 정책은 넓히지 않는다. 초기 query와
   update payload는 같은 Media `id`와 표시 field를 선택해 Relay가 같은 record를 정규화하며 `ProfileHero`가 실제
-  avatar/header를 표시한다.
+  avatar/header를 표시한다. 공개 header의 비율과 crop은 [공개 Profile Hero 디자인](./profile-hero.md)을 따른다.
 
 ### Upload, 실패 복구와 navigation
 

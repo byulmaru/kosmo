@@ -477,6 +477,9 @@ async function assertReactionViewport(
     ),
   ).toBe(true);
   expect(more.getBoundingClientRect().top).toBe(summaryButtons[0]!.getBoundingClientRect().top);
+  expect(
+    more.getBoundingClientRect().left - summaryButtons.at(-1)!.getBoundingClientRect().right,
+  ).toBe(4);
   expect(picker.scrollWidth).toBeLessThanOrEqual(picker.clientWidth);
   expect(pickerRect.left).toBeGreaterThanOrEqual(canvasRect.left);
   expect(pickerRect.right).toBeLessThanOrEqual(canvasRect.right);

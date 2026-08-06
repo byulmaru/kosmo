@@ -15,6 +15,9 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 - `PostThreadLayout`은 caller가 공급한 item, role, 순서, direct connector metadata와 thread row boundary presentation을 소유한다.
 - caller는 API 결과, 관계 metadata, pagination, loading과 오류 상태를 소유한다. `PostThreadLayout`은 공급되지 않은 관계를 추론하거나 숨겨진 Post를 암시하지 않는다.
 - 각 Post renderer는 자신의 Profile·Post navigation과 nullable direct Repost Source presentation을 소유한다. thread layout은 Source를 별도로 선택하거나 중복 렌더링하지 않는다.
+- 상세 thread는 조상·현재·하위 Reply의 관계를 이미 connector와 행 순서로 제공하므로, 일반 목록용
+  `{displayName}님에게 답글` attribution을 어느 행에도 중복 표시하지 않는다. 조상과 하위가 공용
+  `PostListItem`을 사용하더라도 상세 thread caller가 이 목록 전용 metadata를 명시적으로 끈다.
 
 ## Row boundary
 
@@ -33,5 +36,7 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 ## 검증과 rollout
 
 - Storybook에서 N-1 구분선, 마지막·단일 행 예외, 1px `theme.divider`, 64px/8px inset, 현재 상세 본문 열 정렬, connector 비중첩, thread 내부 중복 border 제거와 thread 밖 기본 divider 유지를 검증한다.
+- Reply 대상 attribution이 일반 목록에서는 유지되지만 상세 thread의 조상·현재·하위 모든 행에서는
+  표시되지 않는지 검증한다.
 - Web Light 화면에서 구분선 x=64, connector x=32~34, 오른쪽 inset 8px과 비중첩을 확인했다.
 - Dark theme, 390px·600px 지원 viewport와 iOS·Android 실기기 paint 확인은 출시 gate에 남긴다.
