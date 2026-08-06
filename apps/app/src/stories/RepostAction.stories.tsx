@@ -55,7 +55,7 @@ function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
 }
 
 function ResetActor() {
-  const { resetActor, revision } = useRelayActor();
+  const { resetActor } = useRelayActor();
 
   return (
     <View>
@@ -66,7 +66,7 @@ function ResetActor() {
       >
         두 번째 프로필로 전환
       </Text>
-      <Text testID="actor-revision">{revision}</Text>
+      <Text testID="actor">현재 Profile</Text>
     </View>
   );
 }
@@ -410,7 +410,7 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     );
 
     await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
-    await waitFor(() => expect(canvas.getByTestId('actor-revision')).toHaveTextContent('1'));
+    await waitFor(() => expect(canvas.getByTestId('actor')).toHaveTextContent('현재 Profile'));
     const secondActorRepost = canvas.getByRole('button', { name: '재게시' });
     await userEvent.click(secondActorRepost);
     await userEvent.click(

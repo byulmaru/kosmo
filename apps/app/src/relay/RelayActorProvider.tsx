@@ -20,9 +20,7 @@ import type { Environment } from 'relay-runtime';
 type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
-  revision: number;
   resetActor: (profileId?: string | null) => void;
-  retry: () => void;
   setNativeSession: (token: string) => Promise<void>;
 };
 
@@ -52,7 +50,6 @@ export function RelayActorProvider({
     await writeSessionToken(token);
     environmentGenerationRef.current += 1;
     setNativeToken(token);
-    dispatchActor({ type: 'retry' });
   }, []);
 
   const clearNativeSession = useCallback(async () => {
@@ -67,26 +64,20 @@ export function RelayActorProvider({
     dispatchActor({ type: 'profile-selected', profileId });
   }, []);
 
-  const retry = useCallback(() => {
-    environmentGenerationRef.current += 1;
-    dispatchActor({ type: 'retry' });
-  }, []);
-
   const environment = useMemo(
     () => createEnvironment(nativeToken ?? null),
-    // actorId intentionally invalidates selected-profile-scoped cached fields.
-    [actor.id, actor.revision, createEnvironment, nativeToken],
+    // Every actor lifecycle action receives a fresh state object, even when the selected ID is
+    // unchanged. That keeps resetActor an explicit Store reset without exposing a public counter.
+    [actor, createEnvironment, nativeToken],
   );
   const value = useMemo(
     () => ({
       clearNativeSession,
       nativeToken: nativeToken ?? null,
       resetActor,
-      retry,
-      revision: actor.revision,
       setNativeSession,
     }),
-    [actor.revision, clearNativeSession, nativeToken, resetActor, retry, setNativeSession],
+    [clearNativeSession, nativeToken, resetActor, setNativeSession],
   );
 
   if (nativeToken === undefined) {
@@ -95,7 +86,14 @@ export function RelayActorProvider({
 
   return (
     <RelayActorContext.Provider value={value}>
-      <RelayEnvironmentBoundary environment={environment} generationRef={environmentGenerationRef}>
+      <RelayEnvironmentBoundary
+        // Keep the actor-dependent tree isolated while leaving Theme/Toast and other app-level
+        // providers outside this boundary. The generation is intentionally private to this
+        // provider; routes do not need to construct lifecycle keys themselves.
+        key={`${actor.id}:${environmentGenerationRef.current}`}
+        environment={environment}
+        generationRef={environmentGenerationRef}
+      >
         {children}
       </RelayEnvironmentBoundary>
     </RelayActorContext.Provider>
