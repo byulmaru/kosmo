@@ -16,11 +16,12 @@ type RelayActorSnapshot = {
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type RelayActorBoundary = Omit<RelayActorSnapshot, 'environment'>;
+type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'environment'>;
 
 let deleteFailure = false;
 let deleteItemCallCount = 0;
 let actorSubtreeMountCount = 0;
+let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
@@ -55,14 +56,19 @@ mockModule(new URL('../components/Splash.tsx', import.meta.url), {
 let RelayActorProvider: ComponentType<
   PropsWithChildren<{ createEnvironment?: (token: string | null) => Environment }>
 >;
-let useRelayActor: () => RelayActorBoundary;
+let ActorBoundary: ComponentType<PropsWithChildren>;
+let useRelayActor: () => RelayActorSnapshotValue;
 let useRelayEnvironment: () => Environment;
 
 before(async () => {
   process.env.EXPO_PUBLIC_API_ORIGIN = 'http://127.0.0.1:4000';
   process.env.EXPO_PUBLIC_OIDC_ISSUER = 'https://oidc.example.com';
   process.env.EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID = 'kosmo-native';
-  ({ RelayActorProvider, useRelayActor } = await import('./RelayActorProvider'));
+  ({
+    RelayActorBoundary: ActorBoundary,
+    RelayActorProvider,
+    useRelayActor,
+  } = await import('./RelayActorProvider'));
   ({ useRelayEnvironment } = await import('react-relay'));
 });
 
@@ -70,6 +76,7 @@ beforeEach(() => {
   deleteFailure = false;
   deleteItemCallCount = 0;
   actorSubtreeMountCount = 0;
+  stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
 });
@@ -103,10 +110,18 @@ function Probe() {
   return null;
 }
 
+function StableProbe() {
+  useEffect(() => {
+    stableSubtreeMountCount += 1;
+  }, []);
+
+  return createElement(ActorBoundary, null, createElement(Probe));
+}
+
 async function renderProvider() {
   await act(async () => {
     renderer = create(
-      createElement(RelayActorProvider, { createEnvironment }, createElement(Probe)),
+      createElement(RelayActorProvider, { createEnvironment }, createElement(StableProbe)),
     );
   });
   assert.ok(snapshot);
@@ -118,6 +133,7 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.ok(snapshot);
     assert.equal(actorSubtreeMountCount, 1);
+    assert.equal(stableSubtreeMountCount, 1);
     const previousEnvironment = snapshot.environment;
     commitLocalUpdate(previousEnvironment, (store) => {
       store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
@@ -130,6 +146,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
     assert.equal(actorSubtreeMountCount, 2);
+    assert.equal(stableSubtreeMountCount, 1);
   });
 
   it('SecureStore token을 삭제하고 이전 Store를 새 guest Store와 다음 Session에서 재사용하지 않는다', async () => {
@@ -162,6 +179,23 @@ describe('RelayActorProvider session cleanup', () => {
     assert.notEqual(snapshot.environment, guestEnvironment);
     assert.notEqual(snapshot.environment, authenticatedEnvironment);
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
+  });
+
+  it('같은 SecureStore token을 다시 설정해도 auth lifecycle을 새 Store로 교체한다', async () => {
+    await renderProvider();
+    await act(async () => snapshot?.setNativeSession('same-session-token'));
+
+    assert.ok(snapshot);
+    const previousEnvironment = snapshot.environment;
+    const previousMountCount = actorSubtreeMountCount;
+
+    await act(async () => snapshot?.setNativeSession('same-session-token'));
+
+    assert.ok(snapshot);
+    assert.notEqual(snapshot.environment, previousEnvironment);
+    assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
+    assert.equal(actorSubtreeMountCount, previousMountCount + 1);
+    assert.equal(stableSubtreeMountCount, 1);
   });
 
   it('SecureStore 삭제 실패에서는 기존 token과 Store를 유지한다', async () => {

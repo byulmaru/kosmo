@@ -16,7 +16,7 @@ import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
-import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
@@ -185,11 +185,13 @@ function PostActionBarFixture({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <Suspense fallback={<View />}>
-        <SessionProvider>
-          <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
-        </SessionProvider>
-      </Suspense>
+      <RelayActorBoundary>
+        <Suspense fallback={<View />}>
+          <SessionProvider>
+            <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
+          </SessionProvider>
+        </Suspense>
+      </RelayActorBoundary>
     </RelayActorProvider>
   );
 }
@@ -419,12 +421,14 @@ function ReactionContractHarness() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <ReactionContractControls
-        mounted={mounted}
-        onMountedChange={setMounted}
-        onSettleRequest={settleRequest}
-        requests={requests}
-      />
+      <RelayActorBoundary>
+        <ReactionContractControls
+          mounted={mounted}
+          onMountedChange={setMounted}
+          onSettleRequest={settleRequest}
+          requests={requests}
+        />
+      </RelayActorBoundary>
     </RelayActorProvider>
   );
 }
