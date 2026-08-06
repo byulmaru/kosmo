@@ -342,6 +342,22 @@ const sourceAuthor = profile({
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
 });
+const replyTargetProfile = profile({
+  displayName: 'Reply 대상 작성자',
+  handle: 'reply-target',
+  id: 'profile-reply-target',
+  relativeHandle: '@reply-target',
+});
+const replyTargetReference = {
+  __typename: 'Post' as const,
+  id: 'post-reply-parent',
+  profile: replyTargetProfile,
+};
+const replyPost = post({
+  bodyText: '일반 목록에 표시되는 Reply입니다.',
+  id: 'post-reply',
+  replyParent: replyTargetReference,
+});
 const repostAuthor = profile({
   avatar: { id: 'media-repost-avatar', url: repostAuthorAvatarUrl },
   displayName: '재게시한 코스모 사용자',
@@ -425,7 +441,7 @@ const replyQuotePost = post({
   bodyText: '답글 관계를 유지하는 인용입니다.',
   id: 'post-reply-quote',
   profile: repostAuthor,
-  replyParent: { __typename: 'Post', id: 'post-reply-parent' },
+  replyParent: replyTargetReference,
   repostSource: sourcePost,
 });
 const quoteWithoutSource = post({
@@ -437,7 +453,7 @@ const invalidContentlessReplySource = post({
   bodyText: null,
   id: 'post-invalid-contentless-reply-source',
   profile: repostAuthor,
-  replyParent: { __typename: 'Post', id: 'post-reply-parent' },
+  replyParent: replyTargetReference,
   repostSource: sourcePost,
 });
 const longSourcePost = post({
@@ -463,10 +479,42 @@ const linkedSourceQuote = {
   repostSource: { ...linkedPost, id: 'post-linked-source', profile: sourceAuthor },
 };
 const threadRootPost = post({ bodyText: '대화의 시작입니다.', id: 'thread-root' });
-const threadParentPost = post({ bodyText: '직접 Parent Reply입니다.', id: 'thread-parent' });
-const threadCurrentPost = post({ bodyText: '지금 보고 있는 Reply입니다.', id: 'thread-current' });
-const threadChildPost = post({ bodyText: '현재 Reply에 이어진 답글입니다.', id: 'thread-child' });
-const threadSiblingPost = post({ bodyText: '별도 분기의 답글입니다.', id: 'thread-sibling' });
+const threadParentPost = post({
+  bodyText: '직접 Parent Reply입니다.',
+  id: 'thread-parent',
+  replyParent: {
+    __typename: 'Post',
+    id: threadRootPost.id,
+    profile: threadRootPost.profile,
+  },
+});
+const threadCurrentPost = post({
+  bodyText: '지금 보고 있는 Reply입니다.',
+  id: 'thread-current',
+  replyParent: {
+    __typename: 'Post',
+    id: threadParentPost.id,
+    profile: threadParentPost.profile,
+  },
+});
+const threadChildPost = post({
+  bodyText: '현재 Reply에 이어진 답글입니다.',
+  id: 'thread-child',
+  replyParent: {
+    __typename: 'Post',
+    id: threadCurrentPost.id,
+    profile: threadCurrentPost.profile,
+  },
+});
+const threadSiblingPost = post({
+  bodyText: '별도 분기의 답글입니다.',
+  id: 'thread-sibling',
+  replyParent: {
+    __typename: 'Post',
+    id: threadCurrentPost.id,
+    profile: threadCurrentPost.profile,
+  },
+});
 const threadQuoteSourcePost = post({
   bodyText: '인용된 Source 본문입니다.',
   id: 'thread-quote-source',
@@ -475,6 +523,11 @@ const threadReplyQuotePost = {
   ...post({
     bodyText: 'Reply이면서 Quote인 Post의 자체 Content입니다.',
     id: 'thread-reply-quote',
+    replyParent: {
+      __typename: 'Post',
+      id: threadSiblingPost.id,
+      profile: threadSiblingPost.profile,
+    },
   }),
   repostSource: threadQuoteSourcePost,
 };
@@ -486,7 +539,7 @@ const routeParentPost = {
   ...post({
     bodyText: 'Route Parent 본문',
     id: 'route-parent',
-    replyParent: { __typename: 'Post', id: routeRootPost.id },
+    replyParent: { __typename: 'Post', id: routeRootPost.id, profile: routeRootPost.profile },
   }),
   viewerReactions: [],
 };
@@ -498,7 +551,11 @@ const routeCurrentPost = {
   ...post({
     bodyText: '현재 Reply 본문',
     id: 'route-current',
-    replyParent: { __typename: 'Post', id: routeParentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeParentPost.id,
+      profile: routeParentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -516,7 +573,11 @@ const routeChildPost = {
   ...post({
     bodyText: 'Child 본문',
     id: 'route-child',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -524,7 +585,11 @@ const routeCreatedReply = {
   ...post({
     bodyText: 'targeted refetch로 반영된 새 Reply',
     id: 'route-created-reply',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -532,7 +597,11 @@ const routeSiblingPost = {
   ...post({
     bodyText: 'Sibling 본문',
     id: 'route-sibling',
-    replyParent: { __typename: 'Post', id: routeParentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeParentPost.id,
+      profile: routeParentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -540,7 +609,11 @@ const routeReplyQuotePost = {
   ...post({
     bodyText: 'Reply+Quote 자체 Content',
     id: 'route-reply-quote',
-    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeSiblingPost.id,
+      profile: routeSiblingPost.profile,
+    },
     repostSource: routeSourcePost,
   }),
   viewerReactions: [],
@@ -549,7 +622,11 @@ const routeSourceNullPost = {
   ...post({
     bodyText: 'Source가 없어도 남는 Content',
     id: 'route-source-null',
-    replyParent: { __typename: 'Post', id: routeSiblingPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeSiblingPost.id,
+      profile: routeSiblingPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -564,7 +641,11 @@ const routeVisibleParentPost = {
   ...post({
     bodyText: '조회 가능한 직접 Parent',
     id: 'route-visible-parent',
-    replyParent: { __typename: 'Post', id: routeHiddenAncestorPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeHiddenAncestorPost.id,
+      profile: routeHiddenAncestorPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -572,7 +653,11 @@ const routeBoundaryCurrentPost = {
   ...post({
     bodyText: '경계 Current 본문',
     id: 'route-boundary-current',
-    replyParent: { __typename: 'Post', id: routeVisibleParentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeVisibleParentPost.id,
+      profile: routeVisibleParentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -584,7 +669,11 @@ const paginationInitialReplies = Array.from({ length: 20 }, (_, index) => ({
   ...post({
     bodyText: `기존 Reply ${index + 1}\n${Array.from({ length: 8 }, () => '긴 document scroll 검증 본문').join('\n')}`,
     id: `pagination-initial-${index + 1}`,
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 }));
@@ -592,7 +681,11 @@ const paginationInitialReply = {
   ...post({
     bodyText: '짧은 화면의 초기 Reply',
     id: 'pagination-short-initial',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -600,7 +693,11 @@ const paginationFirstNextReply = {
   ...post({
     bodyText: '첫 다음 page Reply',
     id: 'pagination-next-first',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -608,7 +705,11 @@ const paginationDuplicateNextReply = {
   ...post({
     bodyText: '중복 요청이면 나타나는 Reply',
     id: 'pagination-next-duplicate',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -616,7 +717,11 @@ const paginationRetryReply = {
   ...post({
     bodyText: '재시도로 추가된 Reply',
     id: 'pagination-next-retry',
-    replyParent: { __typename: 'Post', id: routeCurrentPost.id },
+    replyParent: {
+      __typename: 'Post',
+      id: routeCurrentPost.id,
+      profile: routeCurrentPost.profile,
+    },
   }),
   viewerReactions: [],
 };
@@ -690,6 +795,7 @@ const storyPosts = [
   unavailableMediaPost,
   loadErrorMediaPost,
   loadErrorThreeMediaPost,
+  replyPost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -716,9 +822,15 @@ const deletionProfile = profileWithPosts([withReactionViewerState(shortPost)], {
   id: 'profile-posts-deletion',
 });
 const homeTimeline = timeline(
-  ...[shortPost, pureRepost, quotePost, replyQuotePost, quoteOfQuotePost, linkedSourceQuote].map(
-    withReactionViewerState,
-  ),
+  ...[
+    shortPost,
+    replyPost,
+    pureRepost,
+    quotePost,
+    replyQuotePost,
+    quoteOfQuotePost,
+    linkedSourceQuote,
+  ].map(withReactionViewerState),
 );
 const deletionHomeTimeline = timeline(withReactionViewerState(shortPost));
 
@@ -2185,6 +2297,7 @@ function ThreadCatalog() {
                   <PostListItem
                     post={requireFragment(item.post.listItem, 'thread list item')}
                     showDivider={false}
+                    showReplyAttribution={false}
                   />
                 </View>
               )}
@@ -2557,6 +2670,9 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const replyQuoteRow = home
       .getByText('답글 관계를 유지하는 인용입니다.')
       .closest<HTMLElement>('[role="article"]');
+    const replyRow = home
+      .getByText('일반 목록에 표시되는 Reply입니다.')
+      .closest<HTMLElement>('[role="article"]');
     const linkedSourceRow = home
       .getAllByText(/두 번째 문단입니다\./)[0]!
       .closest<HTMLElement>('[role="article"]');
@@ -2573,10 +2689,20 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(pureRepostRow).not.toBeNull();
     expect(quoteRow).not.toBeNull();
     expect(replyQuoteRow).not.toBeNull();
+    expect(replyRow).not.toBeNull();
     expect(linkedSourceRow).not.toBeNull();
     expect(quoteOfQuoteRow).not.toBeNull();
     expect(repostOfQuoteRow).not.toBeNull();
     expect(sourceNullQuoteRow).not.toBeNull();
+    const replyLabel = within(replyRow!).getByText('Reply 대상 작성자님에게 답글');
+    expect(replyLabel).toBeVisible();
+    expect(replyLabel.closest('a, button')).toBeNull();
+    expect(within(replyRow!).getAllByText('Reply 대상 작성자님에게 답글')).toHaveLength(1);
+    expect(within(replyRow!).queryByText('재게시한 코스모 사용자님이 재게시함')).toBeNull();
+    const replyQuoteCard = replyQuoteRow!.parentElement!.parentElement!.parentElement!;
+    expect(within(replyQuoteCard).getAllByText('Reply 대상 작성자님에게 답글')).toHaveLength(1);
+    expect(home.getAllByText('Reply 대상 작성자님에게 답글')).toHaveLength(2);
+    expect(within(pureRepostRow!).queryByText(/님에게 답글$/)).toBeNull();
     const pureRepostActionBar = within(pureRepostRow!).getByRole('toolbar', {
       name: '액션 바',
     });
@@ -2587,11 +2713,17 @@ export const ProductionRepostQuoteListIntegration: Story = {
       name: '액션 바',
     });
     const ordinaryCard = ordinaryActionBar.closest<HTMLElement>('[role="article"]')!;
-    const quoteCard = quoteRow!.parentElement!.parentElement!;
+    expect(within(ordinaryCard).queryByText(/님에게 답글$/)).toBeNull();
+    const quoteCard = quoteRow!.parentElement!.parentElement!.parentElement!;
     const pureRepostAttributionLink = home
       .getByText('재게시한 코스모 사용자님이 재게시함')
       .closest<HTMLAnchorElement>('a')!;
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
+    const replyStandardRow = within(replyRow!).getByTestId('post-list-standard-row');
+    expect(replyLabel.getBoundingClientRect().height).toBe(20);
+    expect(
+      replyStandardRow.getBoundingClientRect().top - replyLabel.getBoundingClientRect().bottom,
+    ).toBeCloseTo(0, 0);
     const quoteSourcePreview = within(quoteRow!).getByTestId('source-post-preview');
     const quoteSourceBody = within(quoteSourcePreview).getByTestId('source-post-body');
     const quoteReactionSummary = within(quoteCard).getByRole('button', {
@@ -2649,6 +2781,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     ).toHaveTextContent('7');
     expect(home.getAllByRole('article').map((row) => row.textContent)).toEqual([
       expect.stringContaining('짧은 본문 한 줄.'),
+      expect.stringContaining('일반 목록에 표시되는 Reply입니다.'),
       expect.stringContaining('재게시한 코스모 사용자님이 재게시함'),
       expect.stringContaining('이 원문에 덧붙이는 인용자의 본문입니다.'),
       expect.stringContaining('답글 관계를 유지하는 인용입니다.'),
@@ -3743,6 +3876,7 @@ export const PostDetailThreadRoute: Story = {
       'post-thread-item-route-reply-quote',
       'post-thread-item-route-source-null',
     ]);
+    expect(canvas.queryByText(/님에게 답글$/)).not.toBeInTheDocument();
     expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 1);
     expect(
       window.getComputedStyle(
@@ -5850,7 +5984,11 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
             post({
               bodyText: '목록에서 작성한 답글',
               id: 'reply-created-from-list',
-              replyParent: { __typename: 'Post', id: shortPost.id },
+              replyParent: {
+                __typename: 'Post',
+                id: shortPost.id,
+                profile: shortPost.profile,
+              },
             }),
           ),
         },

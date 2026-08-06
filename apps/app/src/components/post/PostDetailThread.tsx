@@ -272,6 +272,7 @@ function PostDetailThreadContent({
                   <PostListItem
                     post={requireThreadFragment(item.post.listItem, `${role} list item`)}
                     showDivider={false}
+                    showReplyAttribution={false}
                   />
                 )}
               </View>

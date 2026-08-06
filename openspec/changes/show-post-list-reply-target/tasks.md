@@ -31,7 +31,7 @@
 - Web에서 일반 Reply·Reply+Quote·상세 thread의 문구, 배치와 비대화형 semantics를 확인하고 실행하지 못한 Native runtime 검증을 별도로 기록한다.
 
 - [x] 1.1 승인된 목록 attribution과 상세 thread 제외 계약을 canonical design 문서에 동기화한다.
-- [ ] 1.2 일반 목록의 Reply 대상 attribution과 상세 thread 제외 동작을 구현한다.
-- [ ] 1.3 승인 동작과 기존 Repost·Quote 회귀를 직접 증명하는 최소 Storybook/컴포넌트 assertion을 추가한다.
-- [ ] 1.4 Relay compiler, App typecheck·관련 테스트, Storybook a11y, Web 수동 확인과 저장소 정적 검증을 수행하고 플랫폼별 검증 공백을 기록한다.
+- [x] 1.2 일반 목록의 Reply 대상 attribution과 상세 thread 제외 동작을 구현한다.
+- [x] 1.3 승인 동작과 기존 Repost·Quote 회귀를 직접 증명하는 최소 Storybook/컴포넌트 assertion을 추가한다.
+- [x] 1.4 Relay compiler, App typecheck·관련 테스트, Storybook a11y, Web 수동 확인과 저장소 정적 검증을 수행하고 플랫폼별 검증 공백을 기록한다.
 - [ ] 1.5 최신 canonical·Linear와 구현·delta spec 정합성을 대조하고 change를 archive한 뒤 strict validation을 다시 통과시킨다.
