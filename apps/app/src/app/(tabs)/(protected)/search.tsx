@@ -1,13 +1,24 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, History, Search as SearchIcon, X } from 'lucide-react-native';
+import { ArrowLeft, History, Menu, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
+import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
@@ -256,6 +267,10 @@ function isPrimarySearchLinkActivation(event: unknown) {
 export default function SearchScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const shellChrome = useShellChrome();
+  const { width } = useWindowDimensions();
+  const web = Platform.OS === 'web';
+  const mobileWeb = web && getShellLayout(web, width) === 'mobile';
   const params = useLocalSearchParams<{ q?: string; tab?: string }>();
   const query = typeof params.q === 'string' ? params.q.trim() : '';
   const activeTab = parseSearchTab(params.tab ?? null);
@@ -439,13 +454,34 @@ export default function SearchScreen() {
   const phase = focused ? 'input' : query ? 'results' : 'before';
 
   return (
-    <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={[styles.root, web && styles.webRoot]}
+      keyboardShouldPersistTaps="handled"
+    >
       <View onBlur={leaveSearchFocus} onFocus={keepSearchFocused}>
         <View
           accessibilityLabel="검색"
-          style={[styles.searchBar, { backgroundColor: theme.card, borderColor: theme.border }]}
+          style={[
+            styles.searchBar,
+            web && styles.webSearchBar,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
         >
-          {phase !== 'before' ? (
+          {phase === 'before' && mobileWeb ? (
+            <IconButton
+              aria-controls={shellChrome?.navigationDrawerOpen ? 'mobile-sidebar' : undefined}
+              accessibilityLabel="메뉴 열기"
+              accessibilityState={{ expanded: shellChrome?.navigationDrawerOpen ?? false }}
+              feedback="opacity"
+              onFocus={(event) => event.stopPropagation()}
+              onPress={shellChrome?.openNavigationDrawer}
+              style={styles.iconButton}
+              targetSize={44}
+              visualSize={44}
+            >
+              <Menu color={theme.text} size={24} strokeWidth={2} />
+            </IconButton>
+          ) : phase !== 'before' ? (
             <Link asChild href={searchHref('', activeTab)}>
               <Pressable
                 accessibilityLabel="뒤로"
@@ -462,7 +498,14 @@ export default function SearchScreen() {
               </Pressable>
             </Link>
           ) : null}
-          <View style={[styles.inputShell, { backgroundColor: theme.surface }]}>
+          <View
+            style={[
+              styles.inputShell,
+              web && styles.webInputShell,
+              { backgroundColor: theme.surface },
+            ]}
+            testID="search-input-shell"
+          >
             <SearchIcon color={theme.textSecondary} size={20} strokeWidth={2} />
             <TextInput
               ref={inputRef}
@@ -493,7 +536,7 @@ export default function SearchScreen() {
         </View>
 
         {phase === 'input' ? (
-          <View style={styles.recent}>
+          <View style={[styles.recent, web && styles.webContent]}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>최근 검색</Text>
             {recent.length ? (
               recent.map((term) => (
@@ -549,7 +592,7 @@ export default function SearchScreen() {
       </View>
 
       {phase === 'results' ? (
-        <>
+        <View style={web && styles.webContent}>
           <View
             accessibilityLabel="검색 결과 유형"
             accessibilityRole="tablist"
@@ -590,12 +633,14 @@ export default function SearchScreen() {
               title="준비 중인 검색이에요"
             />
           )}
-        </>
+        </View>
       ) : phase === 'before' ? (
-        <StateView
-          description="handle을 입력하면 일치하는 프로필을 찾아드려요."
-          title="프로필을 검색해보세요"
-        />
+        <View style={web && styles.webContent}>
+          <StateView
+            description="handle을 입력하면 일치하는 프로필을 찾아드려요."
+            title="프로필을 검색해보세요"
+          />
+        </View>
       ) : null}
     </ScrollView>
   );
@@ -607,6 +652,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
   },
+  webRoot: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  webContent: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
+  },
   searchBar: {
     alignItems: 'center',
     borderBottomWidth: 1,
@@ -615,6 +668,7 @@ const styles = StyleSheet.create({
     height: 56,
     paddingHorizontal: spacing.lg,
   },
+  webSearchBar: { height: 64 },
   iconButton: { alignItems: 'center', height: 44, justifyContent: 'center', width: 44 },
   inputShell: {
     alignItems: 'center',
@@ -624,6 +678,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingLeft: spacing.lg,
   },
+  webInputShell: { height: 56 },
   input: {
     flex: 1,
     fontFamily: 'SUIT',
