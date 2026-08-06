@@ -98,6 +98,12 @@
 - **AND** `게시물 기본 공개 범위`를 선택하면 Profile detail 한 화면으로 이동한다
 - **AND** back action은 Settings root 목록으로 돌아간다
 
+#### Scenario: 이전 navigation stack과 무관하게 Settings root로 돌아간다
+
+- **WHEN** compact Web, mobile Web, Android 또는 iOS 사용자가 unrelated 화면이 이전 history 또는 navigation stack에 남아 있는 상태에서 direct/deep link로 내부 Settings detail을 연다
+- **AND** 사용자가 detail의 back action을 실행한다
+- **THEN** 시스템은 이전 unrelated 화면을 열지 않고 `/settings` root 목록을 연다
+
 #### Scenario: mobile Web heading을 중복하지 않는다
 
 - **WHEN** mobile Web 사용자가 Settings root 또는 detail을 연다

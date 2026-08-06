@@ -40,7 +40,8 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
 - Decision Outcome: `/settings`는 canonical hub이고 지원되는 내부 detail은 같은 route family에 속한다. full
   Web은 global sidebar를 유지하고 일반 RightRail을 숨긴 뒤 center+right 폭을 약 320px master와 flexible
   detail workspace로 사용한다. compact/mobile/native는 root 목록과 detail을 한 화면씩 보여 주며 detail의
-  back action으로 root에 돌아간다. Settings navigation은 root와 내부 detail에서 current 상태를 유지한다.
+  back action은 이전 navigation stack과 무관하게 `/settings` root를 명시적으로 연다. Settings navigation은
+  root와 내부 detail에서 current 상태를 유지한다.
 - Alternatives Considered: 모든 platform의 600px 중앙 column에 master+detail을 동시에 압축하는 방식,
   Mastodon처럼 영구 tree와 긴 form을 한 화면에 표시하는 방식, 모든 platform에서 root/detail을 동시에
   표시하는 방식. 각각 가독성, 가용 폭 또는 작은 화면 navigation과 충돌해 채택하지 않았다.
@@ -48,7 +49,7 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
   달리해야 한다. route family는 mobile Web root/detail header와 compact/native route-owned back header를
   구분해야 하며 Web document scroll을 유지해야 한다.
 - Confirmation / Follow-up: full workspace 폭·pane 경계·RightRail 부재와 다른 route rail 유지, compact/mobile/
-  native root-first·deep link·back·heading 중복 부재를 검증한다.
+  native root-first·deep link·unrelated-history back·heading 중복 부재를 검증한다.
 
 ### Byulmaru ID가 Account Settings를 소유하고 Kosmo는 외부 진입점만 제공한다
 

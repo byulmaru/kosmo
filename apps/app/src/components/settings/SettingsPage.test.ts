@@ -124,7 +124,7 @@ describe('SettingsPage', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
-  it('compact Web detail은 route-owned back header로 root에 돌아간다', async () => {
+  it('compact Web detail은 unrelated history가 있어도 route-owned back header로 root를 연다', async () => {
     width = 768;
     await render(SettingsDefaultPostVisibilityPage);
 
@@ -133,8 +133,8 @@ describe('SettingsPage', () => {
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 1);
-    assert.deepEqual(replacedPaths, []);
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replacedPaths, ['/settings']);
   });
 
   it('direct detail entry에 history가 없으면 Settings root로 대체한다', async () => {

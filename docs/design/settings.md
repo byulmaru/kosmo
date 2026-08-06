@@ -75,7 +75,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 ## Compact·mobile·Native layout과 header
 
 - compact Web, mobile Web, Android와 iOS에서는 Settings root 목록과 detail을 동시에 나누어 표시하지 않고
-  한 화면씩 보여 준다. 내부 detail은 기존 navigation history와 back action으로 root 목록에 돌아간다.
+  한 화면씩 보여 준다. 내부 detail의 back action은 이전 navigation stack의 화면과 무관하게 `/settings`
+  root 목록을 명시적으로 연다.
 - `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
   [PageHeader](./page-header.md)를 렌더링한다. 내부 detail에서는 shell이 back action과 detail heading을
   렌더링하고 route 본문은 같은 heading을 복제하지 않는다.

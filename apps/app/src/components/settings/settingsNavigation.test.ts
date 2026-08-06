@@ -11,7 +11,7 @@ before(async () => {
 });
 
 describe('Settings detail back navigation', () => {
-  it('기존 history가 있으면 이전 Settings root entry로 돌아간다', () => {
+  it('unrelated history가 있어도 Settings root를 명시적으로 연다', () => {
     let backCalls = 0;
     const replaced: string[] = [];
 
@@ -21,8 +21,8 @@ describe('Settings detail back navigation', () => {
       replace: (href) => replaced.push(String(href)),
     });
 
-    assert.equal(backCalls, 1);
-    assert.deepEqual(replaced, []);
+    assert.equal(backCalls, 0);
+    assert.deepEqual(replaced, ['/settings']);
   });
 
   it('direct detail entry에 이전 history가 없으면 Settings root로 대체한다', () => {

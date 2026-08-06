@@ -18,7 +18,8 @@ change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이
 - Expo Router 보호 route에 `/settings` page shell을 추가하고 모든 승인된 shell surface에서 진입하게 한다.
 - root 목록에 현재 승인된 Account 외부 진입점과 Profile 내부 진입점을 직접 제공한다.
 - full Web에서 전역 sidebar를 유지하고 일반 RightRail 대신 Settings master-detail workspace를 제공한다.
-- compact/mobile/native에서 root 목록과 detail을 한 화면씩 탐색하고 기존 history/back 동작을 유지한다.
+- compact/mobile/native에서 root 목록과 detail을 한 화면씩 탐색하고 이전 navigation stack과 무관하게
+  detail의 back action으로 Settings root에 돌아간다.
 - PROD-645의 외부 navigation과 PROD-667의 Profile detail 데이터·상태·오류 경계를 유지한다.
 - shell·route·Storybook과 platform별 검증에서 pane/header 중복, stale Profile data와 navigation 회귀를 잡는다.
 
@@ -68,8 +69,9 @@ change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이
    flexible detail로 나눈다. `/settings` root는 Profile detail을 기본 선택한다. document scroll과 기존
    `full=1280` breakpoint는 유지한다.
 3. compact/mobile/native root는 두 entry 목록부터 표시한다. 내부 entry는 한 화면짜리 detail route를 열고
-   shell 또는 route-owned header의 back action으로 root에 돌아간다. full에서도 같은 detail route를 직접 열 수
-   있으며 Settings navigation은 root와 detail에서 current 상태를 유지한다.
+   shell 또는 route-owned header의 back action으로 `/settings` root를 명시적으로 연다. full에서도 같은
+   detail route를 직접 열 수 있으며 Settings navigation은 root와 detail에서 current 상태를 유지한다. Native
+   inbound link처럼 unrelated 화면이 이전 navigation stack에 남아 있어도 back action은 그 화면을 열지 않는다.
 4. `SettingsItem`은 master·하위 목록의 공통 geometry와 composition만 제공한다. Account child는 external
    Link·focus·accessible name을, Profile entry/detail은 내부 navigation·Profile query·상태·persistence를
    소유한다. Profile 공개 범위의 구체적인 선택·저장 interaction은 shell contract로 고정하지 않는다.
