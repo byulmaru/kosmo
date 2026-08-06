@@ -1,7 +1,7 @@
 ## Context
 
 이 기록은 PROD-667의 승인된 Frontend Feature Slice, Profile·Post·Reply·settings canonical, PROD-648 Backend API와
-PROD-653·PROD-645의 settings 소유 경계를 반영한다. Backend 저장·권한 결정은 Backend change에 남기고,
+PROD-685·PROD-645의 settings 소유 경계, PROD-684 archive 책임을 반영한다. Backend 저장·권한 결정은 Backend change에 남기고,
 Frontend가 여러 surface에서 일관되게 지켜야 할 seed·state·integration 결정만 기록한다.
 
 ## Decision Records
@@ -44,24 +44,25 @@ Frontend가 여러 surface에서 일관되게 지켜야 할 seed·state·integra
 - Confirmation / Follow-up: 저장 성공 뒤 다음 Composer seed와 Profile/Environment 전환의 늦은 completion
   격리를 component·Storybook test로 확인한다.
 
-### Profile child 연결과 generic settings host 책임을 분리한다
+### Profile child 연결과 production settings host 책임을 분리한다
 
 - Decision Date: 2026-08-04
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-667`, `PROD-653`,
+- Authority / Provenance: `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-667`, `PROD-685`,
   `PROD-645`
 - Status: Active
 - Context / Problem: PROD-667이 Profile 설정을 실제 `/settings`에 연결해야 하지만 generic route·navigation과
   Byulmaru ID Account entry를 함께 소유하면 독립 Feature Slice 경계가 무너진다.
 - Decision Outcome: PROD-667은 current Profile identity에 연결된 설정 control과 Profile child integration을
-  소유한다. PROD-653은 generic route·page shell·navigation과 정보 구조를, PROD-645는 Account entry의 label·
-  external navigation·오류 처리를 유지한다.
-- Alternatives Considered: PROD-667의 임시 settings route 생성, Account entry 재구현, PROD-653에서 Profile
+  소유한다. 이 child는 canonical Settings의 Profile detail에 배치된다. PROD-685는 production route family·
+  page shell·navigation과 정보 구조 조립을, PROD-645는 Account entry의
+  label·external Link·focus·accessible name을 유지한다. PROD-684는 최종 Settings 통합·archive를 소유한다.
+- Alternatives Considered: PROD-667의 임시 settings route 생성, Account entry 재구현, PROD-685에서 Profile
   설정 기능 재구현. 모두 승인된 서비스·이슈 소유권과 독립 검증 책임을 침범한다.
 - Consequences: standalone control 검증만으로 `/settings` 연결을 완료했다고 할 수 없으며, 실제 host가 준비된
   뒤 Profile child 연결과 페이지 수준 경계를 확인해야 한다.
-- Confirmation / Follow-up: 실제 canonical `/settings`에서 Account entry 다음 Profile identity/control 순서와
-  두 child의 독립 오류 상태를 검증한다.
+- Confirmation / Follow-up: 실제 canonical Settings Profile detail에서 current identity/control,
+  selected/no-profile·loading·error·retry와 actor 전환을 검증한다.
 
 ### 존재하지 않는 Quote와 Repost·DIRECT를 현재 Frontend 완료 범위에서 제외한다
 
