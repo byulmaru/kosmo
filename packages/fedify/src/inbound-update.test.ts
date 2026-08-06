@@ -11,6 +11,7 @@ import {
   ProfileMediaKind,
 } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -190,6 +191,38 @@ describe('inbound actor Update', () => {
         .then((rows) => rows.length),
       0,
     );
+  });
+
+  test('logs a failed Update object lookup once and returns', async () => {
+    await createRemoteActor(ProfileFollowPolicy.OPEN);
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundUpdate(
+        createContext(),
+        new Update({ actor: remoteActorUri, object: remoteActorUri }),
+      );
+
+      assert.equal(captures.length, 0);
+      assert.deepEqual(logs, [
+        {
+          activityType: 'Update',
+          actorOrigin: remoteActorUri.origin,
+          handler: 'update',
+          objectOrigin: remoteActorUri.origin,
+          outcome: 'external_failure',
+          phase: 'object_lookup',
+          reasonCode: 'update_object_lookup_failed',
+        },
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   test('processes a duplicate update idempotently', async () => {

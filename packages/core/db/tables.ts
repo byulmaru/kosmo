@@ -389,6 +389,7 @@ export const Profiles = pgTable(
     normalizedHandle: text('normalized_handle').notNull(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),
+    defaultPostVisibility: Enum.postVisibility('default_post_visibility'),
     followPolicy: Enum.profileFollowPolicy('follow_policy').notNull(),
     followersCount: integer('followers_count').notNull().default(0),
     followingCount: integer('following_count').notNull().default(0),

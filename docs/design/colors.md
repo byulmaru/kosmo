@@ -19,12 +19,28 @@ Color 변수 컬렉션은 라이트/다크 두 모드를 가진다. 새 컬러 �
 - toast foreground는 현재 theme `background`를 사용해 accent와 반전 대비를 만들며, 다른 조합이 필요해지기
   전에는 별도의 짝 토큰을 선제 정의하지 않는다.
 
+## Primary 상태 배경
+
+- `primarySubtle`은 `primary`의 30% alpha 표현이며 light와 dark 양쪽 mode에서 함께 정의한다.
+- Web 알림 목록의 Unread 행은 불투명한 `primary` 좌측 상태선과 `primarySubtle` 배경을 하나의 결합 표현으로 사용해 `card`인 Read 행과 구분한다.
+- 좌측 상태선은 `primarySubtle`과 분리되는 고대비 edge가 아니다. Unread 상태는 기존 접근성명도 함께 제공하며 별도 고대비 경계를 추가하지 않는다.
+- 이 의미를 다른 selected·pressed·visibility 상태로 일반화하지 않는다. `primarySubtle`의 Native 알림 행 사용 여부는 이 Web 정책으로 결정하지 않으며, 별도의 Native 제품 계약과 runtime 검증에서 정한다.
+
 ## Focus
 
 - `focus`는 브라우저 기본 focus indicator를 컴포넌트 경계로 대체해야 하는 제한된 Web surface에 사용한다.
 - focus 경계와 인접 배경은 상태 식별에 필요한 3:1 이상의 대비를 유지한다. 현재 light `focus`는 `#9a7800`,
   dark `focus`는 `#fce79a`에 매핑하며 각각 Reply editor background와 약 4.15:1, 15.32:1 대비를 갖는다.
 - 기본 browser outline을 유지하는 control이나 Native focus style을 `focus` token으로 일괄 덮어쓰지 않는다.
+
+## Selected
+
+- `selectedSurface`와 `selectedBorder`는 radio·option처럼 현재 선택된 행의 배경과 경계를 함께 표시한다.
+- light에서는 각각 `#fff8dc`, `#9a7800`, dark에서는 `#3a3524`, `#fce79a`에 매핑하며 경계와 배경은
+  각각 약 3.90:1, 9.94:1 대비를 갖는다.
+- 선택 상태는 이 토큰만으로 전달하지 않고 `checked`·`selected` 같은 접근성 state를 함께 제공한다.
+- `focus`는 선택 상태에 재사용하지 않는다. focus와 selected가 동시에 필요한 control은 두 상태를 독립적으로
+  표현한다.
 
 ## Divider
 

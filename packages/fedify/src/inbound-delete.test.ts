@@ -29,6 +29,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, ne } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -121,6 +122,53 @@ describe('inbound Delete dispatch', () => {
     const repeated = await storedProjection(objectUri);
     assert.equal(repeated.post.deletedAt?.toString(), firstDelete.post.deletedAt.toString());
     assert.equal(documentLoader.mock.calls.length, 0);
+  });
+
+  test('does not delete a mapped Post when an object-less Delete lookup fails', async () => {
+    const actorUri = new URL('https://remote.example/users/alice');
+    const objectUri = new URL('https://remote.example/notes/lookup-failure');
+    const profile = await createStoredRemoteActor(actorUri);
+    await materializeRemotePost(profile.id, objectUri);
+
+    class FailedLookupDelete extends Delete {
+      override get objectId(): URL | null {
+        return null;
+      }
+
+      override async getObject(): Promise<null> {
+        return null;
+      }
+    }
+
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundDelete(
+        createContext(),
+        new FailedLookupDelete({ actor: actorUri, object: objectUri }),
+      );
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal((await storedProjection(objectUri)).post.state, PostState.ACTIVE);
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Delete',
+        actorOrigin: actorUri.origin,
+        handler: 'delete',
+        objectOrigin: objectUri.origin,
+        outcome: 'external_failure',
+        phase: 'object_lookup',
+        reasonCode: 'delete_object_lookup_failed',
+      },
+    ]);
+    assert.equal(captures.length, 0);
   });
 
   test('accepts a same-id embedded Tombstone and rejects other embedded objects', async () => {

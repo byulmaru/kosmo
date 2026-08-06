@@ -1230,6 +1230,122 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('Profile 기본 Post Visibility는 Member 조회·Owner 변경과 Local 경계를 지킨다', async () => {
+    const owner = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession();
+    const outsider = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({
+      domain: 'default-visibility.remote.example',
+    });
+    const remote = await createProfile({
+      handle: 'default-visibility-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: member.account.id,
+      profileId: owner.profile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: remote.id,
+      role: AccountProfileRole.OWNER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: owner.profile.id })
+      .where(eq(Sessions.id, member.session.id));
+
+    const ownerRead = await requestGraphQL<{
+      node: { private: { defaultPostVisibility: string } | null } | null;
+    }>(
+      `query DefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      owner.token,
+    );
+    assertNoGraphQLErrors(ownerRead);
+    assert.deepEqual(ownerRead.data?.node, { private: { defaultPostVisibility: 'UNLISTED' } });
+
+    const memberRead = await requestGraphQL<{
+      node: { private: { defaultPostVisibility: string } | null } | null;
+    }>(
+      `query MemberDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      member.token,
+    );
+    assertNoGraphQLErrors(memberRead);
+    assert.deepEqual(memberRead.data?.node, { private: { defaultPostVisibility: 'UNLISTED' } });
+
+    const nonMemberRead = await requestGraphQL<{
+      node: { private: { defaultPostVisibility: string } | null } | null;
+    }>(
+      `query NonMemberDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+      outsider.token,
+    );
+    assertNoGraphQLErrors(nonMemberRead);
+    assert.deepEqual(nonMemberRead.data?.node, { private: null });
+
+    const updated = await requestGraphQL<{
+      updateProfile: { profile: { private: { defaultPostVisibility: string } | null } };
+    }>(
+      `mutation SetDefaultVisibility($input: UpdateProfileInput!) {
+        updateProfile(input: $input) { profile { private { defaultPostVisibility } } }
+      }`,
+      { input: { defaultPostVisibility: 'PUBLIC' } },
+      owner.token,
+    );
+    assertNoGraphQLErrors(updated);
+    assert.deepEqual(updated.data?.updateProfile.profile, {
+      private: { defaultPostVisibility: 'PUBLIC' },
+    });
+
+    const memberWrite = await requestGraphQL(
+      `mutation MemberSetDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: FOLLOWERS }) { profile { id } }
+      }`,
+      {},
+      member.token,
+    );
+    assertGraphQLErrorCode(memberWrite, 'PERMISSION_DENIED');
+
+    const direct = await requestGraphQL(
+      `mutation RejectDirectDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: DIRECT }) { profile { id } }
+      }`,
+      {},
+      owner.token,
+    );
+    assertGraphQLErrorCode(direct, 'VALIDATION');
+
+    const explicitNull = await requestGraphQL(
+      `mutation RejectNullDefaultVisibility {
+        updateProfile(input: { defaultPostVisibility: null }) { profile { id } }
+      }`,
+      {},
+      owner.token,
+    );
+    assertGraphQLErrorCode(explicitNull, 'VALIDATION');
+
+    const remoteRead = await requestGraphQL<{
+      node: { private: { defaultPostVisibility: string } | null } | null;
+    }>(
+      `query RemoteDefaultVisibility($id: ID!) {
+        node(id: $id) { ... on Profile { private { defaultPostVisibility } } }
+      }`,
+      { id: globalId('Profile', remote.id) },
+      owner.token,
+    );
+    assertNoGraphQLErrors(remoteRead);
+    assert.deepEqual(remoteRead.data?.node, { private: null });
+  });
+
   test('rejects a non-Media global ID before updating Profile media', async () => {
     const auth = await createAuthenticatedSession();
 
@@ -2669,11 +2785,17 @@ describe('GraphQL remote profile boundary', () => {
     await createProfile({ handle: 'alice', instanceId: remoteInstance.id });
 
     const result = await requestGraphQL<{
-      createProfile: { profile: { id: string; instance: { kind: string } } } | null;
+      createProfile: {
+        profile: {
+          id: string;
+          instance: { kind: string };
+          private: { defaultPostVisibility: string } | null;
+        };
+      } | null;
     }>(
       `mutation CreateLocalDuplicate($handle: String!) {
         createProfile(input: { handle: $handle }) {
-          profile { id instance { kind } }
+          profile { id instance { kind } private { defaultPostVisibility } }
         }
       }`,
       { handle: 'alice' },
@@ -2682,14 +2804,20 @@ describe('GraphQL remote profile boundary', () => {
 
     assertNoGraphQLErrors(result);
     assert.equal(result.data?.createProfile?.profile.instance.kind, 'LOCAL');
+    assert.equal(result.data?.createProfile?.profile.private?.defaultPostVisibility, 'UNLISTED');
 
     const created = await db
-      .select()
+      .select({
+        defaultPostVisibility: Profiles.defaultPostVisibility,
+        id: Profiles.id,
+        instanceId: Profiles.instanceId,
+      })
       .from(Profiles)
       .where(and(eq(Profiles.instanceId, localInstanceId), eq(Profiles.normalizedHandle, 'alice')))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(created.instanceId, localInstanceId);
+    assert.equal(created.defaultPostVisibility, PostVisibility.UNLISTED);
 
     const ownership = await db
       .select()

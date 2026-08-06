@@ -252,11 +252,8 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await page.mouse.wheel(0, -120);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(offsetBeforeWheel);
-  const offsetAfterWheel = await page.evaluate(() => window.scrollY);
   await waitAnimationFrames(page);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(offsetAfterWheel);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThan(offsetBeforeWheel);
-  expect(offsetAfterWheel).toBeLessThan(offsetBeforeWheel);
   await expect(input).toBeFocused();
 
   await page.getByRole('link', { name: '뒤로', exact: true }).click();

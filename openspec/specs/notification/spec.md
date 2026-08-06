@@ -310,7 +310,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-277`, `PROD-372`, `PROD-541` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -330,9 +330,9 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 #### Scenario: Read와 Unread 표시
 
 - **WHEN** Follow item의 `readAt`이 `null`이다
-- **THEN** item은 `card` 기본 배경과 접근성 Unread 상태를 제공한다
-- **AND** `readAt`이 존재하면 같은 `card` 기본 배경을 사용하고 Unread 상태를 제공하지 않는다
-- **AND** Web에서는 pointer hover 중인 item만 `surface` 배경으로 강조한다
+- **THEN** Web item은 토큰 기반의 분명한 좌측 상태선, 은은한 배경과 접근성 Unread 상태를 제공한다
+- **AND** `readAt`이 존재하면 Web item은 Unread 좌측 상태선·배경 강조·접근성 Unread 상태를 제공하지 않는다
+- **AND** Web pointer hover 중에는 기존 `surface` 배경을 사용하며 Unread item의 좌측 상태선은 유지한다
 - **AND** hover가 없는 native 화면은 Read 상태와 관계없이 `card` 기본 배경을 유지한다
 
 #### Scenario: Profile 이동과 Read side effect 분리
@@ -346,6 +346,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** Avatar 또는 본문 link activation에서 시작한 Read mutation이 `notification`과 `recipientProfile` payload로 성공한다
 - **THEN** 클라이언트는 payload가 반환한 ID를 기준으로 item의 `readAt`과 정확한 Recipient Profile의 `unreadNotificationCount`를 Relay cache에 정규화한다
+- **AND** 성공한 `readAt` 정규화로 item의 Unread 시각·접근성 상태를 제거하고 count가 0이면 기존 전역 알림 인디케이터도 제거한다
 - **AND** 현재 selected Profile을 cache target으로 다시 추론하거나 client-side count 산술, optimistic update와 성공 뒤 추가 refetch를 수행하지 않는다
 - **AND** 같은 Unread item에 대한 반복 activation 또는 동시 Read의 성공 payload는 서버가 보존한 동일 `readAt`과 일관된 visible Unread count를 반환하며, 어떤 순서로 적용되어도 같은 item/Recipient record로 수렴하고 다른 Profile cache를 변경하지 않는다
 
@@ -353,6 +354,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 - **WHEN** navigation과 독립적으로 시작한 Read mutation이 pending이거나 실패한다
 - **THEN** 클라이언트는 navigation을 유지하고 item 또는 count cache를 보정하지 않는다
+- **AND** cached `readAt = null`인 동안 item의 Unread 시각·접근성 상태를 유지한다
 - **AND** 앱 수준 자동 retry나 오류 UI를 추가하지 않으며 이후 activation 또는 refetch에서 서버 source of truth로 수렴한다
 
 #### Scenario: Initial loading, error와 empty
@@ -511,3 +513,132 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **AND** cleanup 실패는 source Reaction을 식별할 수 있는 context와 함께 관측 가능하게 기록된다
 - **AND** 남은 Notification row는 source가 없으므로 모든 API 표면에서 숨겨진다
 - **AND** retry, cron, queue, backfill 또는 bulk cleanup은 이번 capability에 포함하지 않는다
+
+### Requirement: Selected Profile Web Notification Unread 시각 상태
+
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680` — 클라이언트는 selected Profile의 Web 알림 목록에서 visible Notification item의 Read와 Unread 상태를 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
+
+#### Scenario: Web Unread 기본 표시
+
+- **WHEN** Web 알림 목록의 visible Notification item이 `readAt = null`이고 pointer hover 중이 아니다
+- **THEN** item은 토큰 기반의 분명한 좌측 상태선과 은은한 배경으로 Unread임을 표시한다
+- **AND** 기존 접근성 Unread 설명을 함께 제공해 상태를 색만으로 전달하지 않는다
+- **AND** 텍스트, icon과 link는 배경 강조와 독립적으로 기존 가독성과 상호작용을 유지한다
+
+#### Scenario: Web Read 기본 표시
+
+- **WHEN** Web 알림 목록의 visible Notification item에 `readAt`이 존재하고 pointer hover 중이 아니다
+- **THEN** item은 Unread 좌측 상태선과 배경 강조를 표시하지 않는다
+- **AND** 접근성 Unread 설명을 제공하지 않는다
+- **AND** Read와 Unread 전환 전후에 item 콘텐츠의 수평 정렬이 움직이지 않는다
+
+#### Scenario: Web pointer hover
+
+- **WHEN** pointer가 Web 알림 목록 item 위에 있다
+- **THEN** item은 기존 `surface` hover 배경을 제공한다
+- **AND** item이 Unread이면 좌측 상태선을 유지하고 Read이면 Unread 상태선을 표시하지 않는다
+
+#### Scenario: activation Read 성공과 전역 인디케이터 수렴
+
+- **WHEN** 사용자가 Unread item의 link를 활성화하고 Read mutation이 갱신된 `notification`과 `recipientProfile` payload로 성공한다
+- **THEN** link navigation은 Read 응답과 독립적으로 즉시 진행된다
+- **AND** Relay는 payload ID를 기준으로 item의 `readAt`과 Recipient Profile의 `unreadNotificationCount`를 정규화한다
+- **AND** item의 Unread 시각·접근성 상태가 제거되고 count가 0이면 기존 전역 알림 인디케이터도 사라진다
+
+#### Scenario: activation Read pending 또는 실패
+
+- **WHEN** 사용자가 Unread item의 link를 활성화했지만 Read mutation이 pending이거나 실패한다
+- **THEN** link navigation은 유지된다
+- **AND** client는 item과 count cache를 보정하지 않으며 cached `readAt = null`인 동안 Unread 시각·접근성 상태를 유지한다
+
+### Requirement: Reply Notification source correlation
+
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `PROD-426`, `PROD-507` 시스템은 origin과 application entrypoint에 관계없이 다른 Profile의 Post에 새 Reply가 실제 생성되면 결과 Reply를 source로 하는 Profile-scoped Reply Notification을 공통 생성 lifecycle의 격리된 Best Effort savepoint에서 생성해야 한다(MUST).
+
+#### Scenario: 다른 Profile의 Post에 Reply
+
+- **WHEN** 새 Reply transaction이 commit되고 Reply Author와 Parent Author가 다르며 Recipient가 결과 Reply와 Reply Author를 조회할 수 있다
+- **THEN** 시스템은 결과 Reply를 Related Post와 source로, Reply Author를 Related Profile로, Parent Author를 Recipient로 하는 Unread Reply Notification 생성을 시도한다
+- **AND** 이름, handle, Profile 또는 Post snapshot을 kind data에 저장하지 않는다
+
+#### Scenario: ActivityPub 원격 Reply
+
+- **WHEN** 새 ActivityPub 원격 Reply가 Local Parent를 참조해 commit된다
+- **THEN** 공통 core Post 생성 lifecycle은 Local Parent Author를 Recipient, 원격 Reply Author를 Related Profile, 결과 Reply를 source와 Related Post로 하는 Notification을 정확히 하나 생성한다
+- **AND** Fedify adapter는 Notification side effect를 직접 호출하지 않는다
+
+#### Scenario: duplicate 또는 concurrent ActivityPub Create
+
+- **WHEN** ActivityPub object URI가 이미 저장되어 duplicate 또는 concurrent Create가 no-op이 된다
+- **THEN** 시스템은 Reply Notification lifecycle을 다시 실행하지 않는다
+- **AND** 과거에 누락된 Notification을 backfill하지 않는다
+
+#### Scenario: self-reply
+
+- **WHEN** Reply Author와 Parent Author가 같다
+- **THEN** 시스템은 Reply 생성 결과를 유지한다
+- **AND** Reply Notification을 생성하지 않는다
+
+#### Scenario: Recipient에게 결과가 보이지 않음
+
+- **WHEN** Parent Author Profile이 결과 Reply 또는 Reply Author Profile을 조회할 수 없다
+- **THEN** 시스템은 Reply Notification을 생성하지 않는다
+
+#### Scenario: 동일 source 재처리
+
+- **WHEN** 같은 결과 Reply source의 Notification 저장 경계가 중복 또는 동시 호출된다
+- **THEN** 같은 Recipient, Reply kind와 source ID의 Notification은 하나만 존재한다
+- **AND** 재처리는 기존 item을 나타내는 성공 또는 동등한 멱등 no-op으로 끝난다
+
+### Requirement: Reply Notification 실패 격리
+
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-426`, `PROD-507` Reply Notification 생성 실패는 Reply transaction, GraphQL 성공 또는 ActivityPub 수신 성공을 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
+
+#### Scenario: Notification 저장 실패
+
+- **WHEN** Reply 생성 lifecycle에서 별도 savepoint로 await한 Notification 저장이 실패한다
+- **THEN** 시스템은 Reply와 Reply 생성 성공 결과를 유지한다
+- **AND** 누락 item을 retry, outbox, queue 또는 backfill로 자동 복구하지 않는다
+
+#### Scenario: caller-owned outer transaction
+
+- **WHEN** 공통 Post 생성 action이 caller-owned transaction에 참여해 새 Reply를 만든다
+- **THEN** Reply Notification은 outer transaction이 실제 commit되기 전에 다른 transaction에 보이지 않는다
+- **AND** 같은 Best Effort savepoint를 사용해 transaction 인자의 존재 여부로 Notification lifecycle을 분기하지 않는다
+- **AND** outer transaction이 rollback되면 Reply와 Notification을 모두 남기지 않는다
+
+### Requirement: Reply Notification GraphQL과 inbox 통합
+
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-426` API와 클라이언트는 visible Reply Notification을 기존 Notification interface·connection·Unread count·Read·badge/cache·inbox 계약에 통합해야 한다(MUST).
+
+#### Scenario: Reply Notification concrete object·Node
+
+- **WHEN** GraphQL schema가 Reply kind Notification을 노출한다
+- **THEN** API는 이를 Notification과 Node를 구현하는 concrete `ReplyNotification` object로 resolve한다
+- **AND** object는 Reply Author `profile`과 결과 Reply `post`를 제공한다
+- **AND** concrete global ID로 Node를 조회할 때 row kind, Recipient membership과 visible predicate를 검증하고, 실패하면 다른 type으로 재시도하지 않고 `null`을 반환한다
+
+#### Scenario: visible Recipient inbox
+
+- **WHEN** membership이 있는 Account가 Recipient Profile의 Notification inbox를 조회한다
+- **THEN** visible Reply Notification은 기존 connection 정렬·pagination과 Unread count에 포함된다
+- **AND** inbox item은 Reply Author를 표시하고 결과 Reply 상세로 이동한다
+
+#### Scenario: Read side effect와 이동 분리
+
+- **WHEN** 사용자가 Reply Notification item을 활성화한다
+- **THEN** 클라이언트는 결과 Reply 이동을 즉시 시작한다
+- **AND** Best Effort Read의 pending, 실패 또는 재시도가 이동을 지연·취소·되돌리지 않는다
+- **AND** Read 성공 payload는 item과 Recipient Profile Unread count를 같은 actor Relay Store에서 갱신한다
+
+#### Scenario: selected Profile 격리
+
+- **WHEN** Account가 여러 Profile membership을 가지고 하나의 Recipient Profile inbox를 조회하거나 읽는다
+- **THEN** 시스템은 대상 Profile의 Reply Notification, count, Read와 cache만 반환·갱신한다
+- **AND** 다른 selected Profile의 item, badge 또는 Relay Store를 변경하지 않는다
+
+#### Scenario: unavailable item
+
+- **WHEN** source Reply가 없거나 Recipient·Parent·Author 관계가 저장계약과 다르거나 Recipient 기준 Related Post 또는 Related Profile을 조회할 수 없다
+- **THEN** API는 item을 page limit 전 connection과 Unread count에서 제외한다
+- **AND** Node는 `null`, Read는 `NOT_FOUND`로 처리하며 generic Notification으로 대신 노출하지 않는다

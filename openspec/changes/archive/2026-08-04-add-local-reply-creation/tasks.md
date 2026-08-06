@@ -185,8 +185,17 @@ Local Reply 작성에서 thread 반영과 Parent Author Notification inbox·Read
 - self-reply, Parent와 독립 Visibility, contentless Repost disabled, Notification 실패 격리와 selected Profile 전환 회귀를 검증한다.
 - Reply Media를 포함한 관련 전체 check, OpenSpec strict validation, task 완료와 canonical delta 동기화 결과를 기록한다.
 
-- [ ] 5.1 PROD-424·425·426·640의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
-- [ ] 5.2 Local Reply 작성·Media·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
-- [ ] 5.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
-- [ ] 5.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
-- [ ] 5.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.
+- [x] 5.1 PROD-424·425·426·640의 구현·검증·dependency 완료와 제외 범위 유지를 확인한다.
+- [x] 5.2 Local Reply 작성·Media·thread·Notification·Read·이동 수직 flow와 필수 회귀 시나리오를 최종 검증한다.
+- [x] 5.3 구현 결과에 맞게 delta spec, decision, task와 필요한 canonical 문서를 동기화한다.
+- [x] 5.4 전체 필수 check와 `openspec validate add-local-reply-creation --strict`를 통과시키고 검증 evidence를 기록한다.
+- [x] 5.5 전체 scope와 task가 완료되고 delta spec이 동기화된 뒤 `add-local-reply-creation`을 archive한다.
+
+**Verification Evidence (2026-08-05)**
+
+- PROD-424·425·426·640 및 필수 dependency(PROD-388·417·418·420·422·445·274·277·324·372·381·393·398·399·400·432·507)는 Linear에서 Done이며, 연결된 구현 PR #332·#413·#354·#490·#437은 `main`에 merge되고 required checks가 성공했다.
+- `apps/api/tests/integration/graphql/notification.test.ts`에 Local Reply 생성 → Parent thread → Parent Author inbox/Unread count → Read → 결과 Reply ID 확인 수직 테스트를 추가했다. `pnpm --filter @kosmo/api test:integration`: 219 tests, 218 passed, 0 failed, 1 skipped(로컬 Media Storage Service 사전조건).
+- `pnpm test:e2e`: 84 passed. Web UI의 Reply 상세/inline surface와 기존 인증·작성·탐색 회귀를 실행했다.
+- `pnpm --filter @kosmo/app test:unit`: 183 passed; `test:storybook`: 293 passed; `check`(Relay compiler·TypeScript), `build-storybook`, `build` 통과.
+- `pnpm --filter @kosmo/api lint:schema`와 API unit 26 tests, Web check와 unit 34 tests, Core unit 51 tests, `pnpm test:fedify` 203 tests 통과. Root ESLint·Prettier·변경 diff check도 통과했다.
+- `pnpm exec openspec validate add-local-reply-creation --strict` 통과. 구현 결과와 proposal/specs/design/decisions를 확인했고 새 durable decision은 필요하지 않았으며, archive 단계에서 기존 delta를 canonical specs에 반영했다. Android·iOS picker·keyboard·safe-area·platform back·접근성 runtime gate는 별도 Native 출시 검증으로 남기고 이번 증거에서는 실행·Ready 근거로 주장하지 않는다.

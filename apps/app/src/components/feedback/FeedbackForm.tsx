@@ -1,5 +1,5 @@
 import { feedbackBodySchema } from '@kosmo/core/validation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
@@ -18,6 +18,15 @@ const feedbackOptions = [
 
 type FeedbackStatus = 'idle' | 'success' | 'error';
 
+export type FeedbackFormState = {
+  dirty: boolean;
+  submitting: boolean;
+};
+
+type Props = {
+  onStateChange?: (state: FeedbackFormState) => void;
+};
+
 const SubmitFeedbackMutation = graphql`
   mutation FeedbackFormSubmitFeedbackMutation($input: SubmitFeedbackInput!) {
     submitFeedback(input: $input) {
@@ -26,7 +35,7 @@ const SubmitFeedbackMutation = graphql`
   }
 `;
 
-export function FeedbackForm() {
+export function FeedbackForm({ onStateChange }: Props) {
   const theme = useTheme();
   const web = Platform.OS === 'web';
   const [kind, setKind] = useState<FeedbackKind>('POSITIVE');
@@ -37,21 +46,34 @@ export function FeedbackForm() {
   const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
+  const dirty = kind !== 'POSITIVE' || body.length > 0;
+  const latestStateRef = useRef<FeedbackFormState>({ dirty, submitting });
+  latestStateRef.current = { dirty, submitting };
   const parsedBody = feedbackBodySchema.safeParse(body);
   const bodyError = parsedBody.success ? null : parsedBody.error.issues[0]?.message;
   const showBodyError = bodyTouched || status === 'error';
   const canSubmit = !submitting && !bodyError;
   const actionLabel = status === 'error' ? '다시 시도' : '보내기';
+  const reportState = (state: FeedbackFormState) => {
+    latestStateRef.current = state;
+    onStateChange?.(state);
+  };
   const selectKind = (value: FeedbackKind) => {
+    reportState({ dirty: value !== 'POSITIVE' || body.length > 0, submitting });
     setKind(value);
     setStatus('idle');
   };
+
+  useEffect(() => {
+    onStateChange?.(latestStateRef.current);
+  }, [dirty, onStateChange, submitting]);
 
   const submit = () => {
     if (!canSubmit || !parsedBody.success) {
       return;
     }
 
+    reportState({ dirty, submitting: true });
     setStatus('idle');
     commit({
       variables: {
@@ -62,16 +84,19 @@ export function FeedbackForm() {
       },
       onCompleted: (response, errors) => {
         if (errors?.length || !response.submitFeedback?.completed) {
+          reportState({ dirty, submitting: false });
           setStatus('error');
           return;
         }
 
+        reportState({ dirty: false, submitting: false });
         setKind('POSITIVE');
         setBody('');
         setBodyTouched(false);
         setStatus('success');
       },
       onError: () => {
+        reportState({ dirty, submitting: false });
         setStatus('error');
       },
     });
@@ -187,6 +212,7 @@ export function FeedbackForm() {
         error={showBodyError ? (bodyError ?? undefined) : undefined}
         label="피드백 내용"
         onChangeText={(value) => {
+          reportState({ dirty: kind !== 'POSITIVE' || value.length > 0, submitting });
           setBody(value);
           setBodyTouched(true);
           setStatus('idle');

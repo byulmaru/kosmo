@@ -19,39 +19,33 @@ jobs:
       matrix:
         include:
           - name: Root
-            command: pnpm test:eslint && pnpm test:helm
+            command: pnpm test:eslint
             database: false
-            helm: true
             id: root
             playwright: false
           - name: Core
             command: pnpm --filter @kosmo/core test
             database: true
-            helm: false
             id: core
             playwright: false
           - name: Fedify
             command: pnpm --filter @kosmo/fedify test
             database: true
-            helm: false
             id: fedify
             playwright: false
           - name: API
             command: pnpm --filter @kosmo/api test
             database: true
-            helm: false
             id: api
             playwright: false
           - name: App
             command: pnpm --filter @kosmo/app test
             database: false
-            helm: false
             id: app
             playwright: true
           - name: Web
             command: pnpm --filter @kosmo/web test
             database: true
-            helm: false
             id: web
             playwright: true
     steps:
@@ -82,14 +76,6 @@ jobs:
       - name: Install Playwright Chromium
         if: matrix.playwright
         run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
-
-      - name: Set up Helm
-        if: matrix.helm
-        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
-        with:
-          cache: true
-          install_args: helm
-          working_directory: apps/helm
 
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}
