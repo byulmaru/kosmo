@@ -77,12 +77,12 @@
 
 ### Requirement: 저장소 책임 분리와 비민감 대응 증거
 
-**Authority / Provenance:** `docs/operations/postgres-backup.md`, Linear `PROD-698`, 관련 운영 알림 계약 `PROD-530`. Kosmo runbook은 PVC 사용량 진단, owner 확인, 안전한 완화·확장과 후속 검증만 MUST 소유하며, Alertmanager receiver·allowlist·Slack notification test와 전달 실패 복구 절차를 MUST NOT 복제한다. PostgreSQL처럼 기존 workload별 runbook이 있으면 MUST 연결하고, 대응 증거에는 alert context, 비민감 측정값, 선택한 조치, 승인자와 검증 결과만 MUST 남긴다. Credential·Secret 값·database row·object 내용 또는 기타 실제 사용자 데이터는 command output, Linear, CI log나 Slack payload에 MUST NOT 복사한다.
+**Authority / Provenance:** `docs/operations/postgres-backup.md`, Linear `PROD-698`, 관련 운영 알림 계약 `PROD-530`. Kosmo runbook은 PVC 사용량 진단, owner 확인, 안전한 완화·확장과 후속 검증만 MUST 소유하며, Alertmanager receiver·allowlist·`runbook_url` annotation·Slack runbook 링크나 custom title/text·notification test와 전달 실패 복구 절차를 MUST NOT 포함하거나 요구한다. PostgreSQL처럼 기존 workload별 runbook이 있으면 MUST 연결하고, 대응 증거에는 alert context, 비민감 측정값, 선택한 조치, 승인자와 검증 결과만 MUST 남긴다. Credential·Secret 값·database row·object 내용 또는 기타 실제 사용자 데이터는 command output, Linear, CI log나 Slack payload에 MUST NOT 복사한다.
 
-#### Scenario: 전달 경로 자체가 실패함
+#### Scenario: 기존 Slack 계약과 독립된 runbook
 
-- **WHEN** PVC 대응 중 Alertmanager routing, Slack delivery 또는 resolved notification 전달 실패를 진단해야 한다
-- **THEN** 운영자는 `byulmaru/kubernetes/docs/operations.md`의 전달 경로 절차로 이동하고 Kosmo runbook에 중복된 routing 절차를 추가하지 않는다
+- **WHEN** 운영자가 Kosmo의 PVC 대응 runbook을 작성하거나 사용한다
+- **THEN** runbook은 Alertmanager routing이나 Slack 링크·메시지 template을 정의하지 않고 PVC 장애 대응 절차만 제공한다
 
 #### Scenario: 대응 증거를 남김
 

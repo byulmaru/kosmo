@@ -10,11 +10,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-698`
 - Status: Active
-- Context / Problem: 최초 사례는 PostgreSQL이지만 같은 용량 부족 위험이 Vault, Prometheus와 미래의 모든 PVC 기반 workload에 존재하고, Kubernetes 저장소의 Slack message가 안정적인 내부 runbook URL을 필요로 한다.
+- Context / Problem: 최초 사례는 PostgreSQL이지만 같은 용량 부족 위험이 Vault, Prometheus와 미래의 모든 PVC 기반 workload에 존재하므로 특정 workload에 종속되지 않은 공통 대응 절차가 필요하다.
 - Decision Outcome: 모든 대상 PVC에 공통인 runbook을 `docs/operations/persistent-volume-capacity.md`에 추가하고, workload별 차이는 이 문서에서 전용 runbook과 owner 판단으로 연결한다.
-- Alternatives Considered: `docs/operations/postgres-backup.md`에 PostgreSQL 전용 절차만 추가하는 방식은 다른 workload와 Linear가 고정한 공통 URL을 충족하지 않는다. Workload마다 별도 PVC runbook을 먼저 만드는 방식은 현재 존재하지 않는 정책을 중복 작성한다.
-- Consequences: Kubernetes Slack link는 하나의 안정된 Kosmo 경로를 소비할 수 있다. 범용 문서는 애플리케이션별 데이터·복구 결정을 소유하지 않는다.
-- Confirmation / Follow-up: PostgreSQL이 아닌 PVC를 포함한 진입·진단 scenario와 신규 문서 링크를 검증한다.
+- Alternatives Considered: `docs/operations/postgres-backup.md`에 PostgreSQL 전용 절차만 추가하는 방식은 다른 workload의 대응 공백을 남긴다. Workload마다 별도 PVC runbook을 먼저 만드는 방식은 현재 존재하지 않는 정책을 중복 작성한다.
+- Consequences: 운영자는 하나의 범용 PVC 대응 절차를 사용할 수 있지만 Slack 메시지에서 이 문서로 연결되는 계약은 생기지 않는다. 범용 문서는 애플리케이션별 데이터·복구 결정을 소유하지 않는다.
+- Confirmation / Follow-up: PostgreSQL이 아닌 PVC를 포함한 진입·진단 scenario, 신규 문서 경로와 workload별 참고 링크를 검증한다.
 
 ### Kosmo 대응과 Kubernetes 알림 전달의 책임을 분리한다
 
@@ -22,11 +22,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-698`, 관련 운영 알림 계약 `PROD-530`
 - Status: Active
-- Context / Problem: 하나의 `PROD-698` 결과가 두 저장소에 걸치지만 routing과 service 대응을 양쪽 문서에 모두 작성하면 절차가 drift하고, runbook보다 routing PR이 먼저 병합되면 Slack에 깨진 링크가 노출된다.
-- Decision Outcome: Kosmo는 PVC 진단·owner 확인·완화·확장·사후 검증만 문서화하고, Alertmanager receiver·allowlist·Slack message·notification test와 전달 실패 복구는 `byulmaru/kubernetes`가 소유한다. Kosmo runbook PR을 먼저 병합하고 Kubernetes routing PR을 나중에 병합한다.
-- Alternatives Considered: 두 저장소에 end-to-end 절차를 복제하는 방식은 소유권과 업데이트 시점을 불명확하게 한다. Kubernetes PR을 먼저 병합하는 방식은 아직 존재하지 않는 Kosmo URL을 알림에 노출한다.
-- Consequences: 두 PR은 독립 리뷰할 수 있지만 어느 한 PR만으로 `PROD-698`을 완료할 수 없다. 전체 이슈 담당자가 링크 정합성과 firing/resolved 통합 증거를 확인해야 한다.
-- Confirmation / Follow-up: Kosmo 문서에는 Kubernetes 운영 문서로 가는 책임 링크만 두고 routing 명령을 복제하지 않는다. 두 PR의 merge 순서와 최종 link smoke를 확인한다.
+- Context / Problem: 하나의 `PROD-698` 결과가 두 저장소에 걸치지만 routing과 service 대응을 양쪽 문서에 모두 작성하면 절차가 drift한다. 현재 Alertmanager에는 runbook 링크나 custom Slack template 계약이 없으므로 이 이슈에서 새 메시지 계약까지 도입하면 allowlist 추가보다 범위가 커진다.
+- Decision Outcome: Kosmo는 PVC 진단·owner 확인·완화·확장·사후 검증만 문서화한다. `byulmaru/kubernetes`는 기존 receiver, `#monitoring`, `sendResolved=true`와 Slack 메시지 형식을 유지하면서 allowlist·notification test·전달 실패 복구를 소유한다. `runbook_url`, Slack runbook 링크와 custom title/text는 추가하지 않으며 두 PR에 병합 순서 제약을 두지 않는다.
+- Alternatives Considered: 두 저장소에 end-to-end 절차를 복제하는 방식은 소유권과 업데이트 시점을 불명확하게 한다. Slack에 Kosmo runbook 링크를 추가하는 방식은 기존에 없는 공통 메시지 계약을 이 이슈에서 부분적으로 도입하므로 제외한다.
+- Consequences: 두 PR은 독립적으로 리뷰·병합할 수 있지만 어느 한 PR만으로 `PROD-698`을 완료할 수 없다. 전체 이슈 담당자가 runbook 검증과 기존 형식의 firing/resolved·negative routing 증거를 모두 확인해야 한다.
+- Confirmation / Follow-up: Kosmo 문서에 routing·Slack 링크 계약을 복제하지 않는지, Kubernetes diff가 allowlist와 기존 형식의 notification test로 제한되는지 확인한다.
 
 ### 범용 절차는 데이터 정리를 결정하지 않는다
 
@@ -58,10 +58,10 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-698`, 관련 운영 알림 계약 `PROD-530`
 - Status: Active
-- Context / Problem: PVC request만 변경됐다고 filesystem과 workload가 복구되거나 용량 위험과 Slack alert가 해소됐다고 볼 수 없다. 반대로 실제 data·Secret 원문을 증거에 복사하면 운영 보안 경계를 위반한다.
+- Context / Problem: PVC request만 변경됐다고 filesystem과 workload가 복구되거나 용량 위험과 alert가 해소됐다고 볼 수 없다. 반대로 실제 data·Secret 원문을 증거에 복사하면 운영 보안 경계를 위반한다.
 - Decision Outcome: PVC request/status·resize condition/event, mount filesystem, Pod·상위 workload readiness와 workload별 health, 새 여유 공간·증가 추세를 확인하고 `KubePersistentVolumeFillingUp` resolved를 추적한다. 이슈에는 alert context, 비민감 측정값, 선택한 조치·승인자와 검증 결과만 기록한다.
 - Alternatives Considered: PVC spec 변경 직후 완료하는 방식은 비동기 volume/filesystem resize와 workload 장애를 놓친다. Raw command output 전체를 첨부하는 방식은 credential, Secret 값이나 사용자 데이터 노출 위험이 있다.
-- Consequences: Kosmo PR은 실행 가능한 response 절차를 검증하지만 resolved Slack delivery의 end-to-end 증거는 Kubernetes PR과 전체 `PROD-698` 담당자의 통합 검증을 기다린다.
+- Consequences: Kosmo PR은 실행 가능한 response 절차를 검증하지만 기존 메시지 형식의 resolved Slack delivery 증거는 Kubernetes PR과 전체 `PROD-698` 담당자의 통합 검증을 기다린다.
 - Confirmation / Follow-up: Resize 실패 상태는 완료로 기록하지 않는지, evidence 예시가 namespace·PVC·severity와 비민감 상태만 허용하는지 검토한다.
 
 ## Remaining Decisions

@@ -16,7 +16,7 @@
 - Mutation 전에 read-only 진단, service owner, 데이터 성격, backup·가용성 영향을 확인한다.
 - 범용 문서에서 애플리케이션별 보존 정책을 결정하거나 데이터 삭제, PVC/PV 삭제·재생성, reclaim policy 변경, purge, 자동 증설을 안내하지 않는다.
 - Expansion은 live StorageClass·CSI 지원과 workload 선언 owner를 확인하고 기존 PVC request를 증가시키며, PV를 직접 편집하거나 PVC를 축소하지 않는다.
-- Restart는 condition과 workload 특성이 요구할 때만 수행하고, routing·Slack notification test는 `byulmaru/kubernetes` 운영 문서에 남긴다.
+- Restart는 condition과 workload 특성이 요구할 때만 수행하고, routing·Slack notification test는 `byulmaru/kubernetes` 운영 문서에 남긴다. Kosmo runbook에는 `runbook_url`, Slack 링크나 custom title/text 계약을 추가하지 않는다.
 - Credential, Secret 값, database row·object 내용과 실제 사용자 데이터를 command output, 문서 예시나 협업 시스템에 노출하지 않는다.
 
 **Verification**
@@ -41,13 +41,13 @@
 
 **Deliverable**
 
-Runbook의 read-only 진단 명령과 링크·안전 gate가 현재 cluster에서 실행 가능하고 리뷰 가능한 증거를 가지며, 먼저 병합된 Kosmo 문서 URL을 Kubernetes routing slice가 안전하게 소비할 수 있다.
+Runbook의 read-only 진단 명령과 내부·외부 참고 링크·안전 gate가 현재 cluster에서 실행 가능하고 리뷰 가능한 증거를 가진다. Kubernetes routing slice는 Kosmo 문서 URL을 소비하지 않고 기존 Alertmanager receiver와 Slack 메시지 형식을 유지한 채 allowlist와 firing/resolved 검증을 소유한다.
 
 **Guardrails**
 
 - Live 검증에서는 read-only 진단만 실행하고 incident 없는 PVC에 size·data·workload mutation을 만들지 않는다.
 - 실제 identifier와 raw output을 commit, CI log, Linear 또는 Slack에 복사하지 않고 성공 여부와 비민감 측정 범위만 기록한다.
-- Kosmo runbook PR을 Kubernetes routing PR보다 먼저 병합한다.
+- 두 PR 사이에 runbook 링크나 병합 순서 의존성을 만들지 않는다.
 - OpenSpec archive owner는 `PROD-698` assignee이며, Kosmo runbook 구현·검증·delta spec 동기화와 strict validation이 모두 끝난 뒤에만 이 change를 archive한다.
 - Cross-repository integration과 Linear 완료 owner는 `PROD-698` assignee이며, 두 PR과 firing/resolved·negative routing 증거가 모두 확인되기 전에는 이슈를 완료하지 않는다.
 
@@ -57,10 +57,10 @@ Runbook의 read-only 진단 명령과 링크·안전 gate가 현재 cluster에�
 - 신규 문서의 local Markdown link와 Prometheus Operator·Kubernetes 공식 문서 URL 확인
 - 서로 다른 owner 유형의 PVC 두 개 이상(그중 하나는 비-PostgreSQL)에서 진단·owner 추적 command의 read-only smoke와 redacted 결과
 - `openspec validate add-persistent-volume-capacity-runbook --strict`
-- Kosmo 병합 URL, Kubernetes 후속 dependency와 남은 통합 검증을 `PROD-698` handoff에서 확인
+- Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 메시지 형식 유지와 남은 통합 검증을 `PROD-698` handoff에서 확인
 
 - [ ] 2.1 Markdown formatting, local/external link, placeholder, destructive command와 민감정보 노출 경계를 정적 검토한다.
 - [ ] 2.2 서로 다른 owner 유형의 PVC 두 개 이상에서 read-only 진단·owner 추적 명령을 실행하고 비민감 성공·실패 증거만 기록한다.
 - [ ] 2.3 모든 requirement scenario를 runbook section에 대조하고 expansion·restart·실패·escalation 분기가 누락되지 않았는지 검토한다.
 - [ ] 2.4 OpenSpec strict validation을 통과하고 runbook 구현과 delta spec의 정합성을 확인한다.
-- [ ] 2.5 Kosmo 문서의 안정된 병합 URL, Kubernetes PR의 후속 dependency, 통합·archive owner와 남은 검증을 `PROD-698`에 handoff한다.
+- [ ] 2.5 Kosmo runbook과 Kubernetes allowlist의 독립 범위, 기존 receiver·메시지 형식 유지, 통합·archive owner와 남은 검증을 `PROD-698`에 handoff한다.

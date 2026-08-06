@@ -8,7 +8,7 @@
 - namespace와 PVC에서 사용량·증가 추세, 연결된 PV·Pod·상위 workload와 service owner를 확인하는 진단 순서를 정의한다.
 - 애플리케이션별 데이터 정리·보존 변경은 owner가 판단하도록 경계를 두고, StorageClass와 CSI의 확장 지원을 확인한 뒤 PVC 요청 용량만 늘리는 안전한 확장 절차를 정의한다.
 - 확장 상태, filesystem 반영, workload readiness와 용량 여유를 확인하고 alert가 resolved되는지 추적하는 사후 검증을 정의한다.
-- 기존 PostgreSQL backup runbook과 workload별 추가 runbook을 연결하되, 자동 증설·애플리케이션별 보존 정책 결정·PVC/PV 삭제나 migration 절차·Alertmanager routing은 현재 Kosmo slice에서 제외한다.
+- 기존 PostgreSQL backup runbook과 workload별 추가 runbook을 연결하되, 자동 증설·애플리케이션별 보존 정책 결정·PVC/PV 삭제나 migration 절차·Alertmanager routing과 Slack runbook 링크 계약은 현재 Kosmo slice에서 제외한다.
 
 ## Authority / Provenance
 
@@ -30,5 +30,5 @@
 
 - `docs/operations/persistent-volume-capacity.md`: 모든 쓰기 가능한 대상 PVC에 공통으로 적용할 신규 runbook
 - `docs/operations/postgres-backup.md`: 변경하지 않고 PostgreSQL 데이터 보호·복구 절차의 참조 대상으로 사용
-- `byulmaru/kubernetes`: 별도 `PROD-698` PR이 Alertmanager allowlist, Slack runbook 링크와 firing/resolved 통합 검증을 소유하며, 깨진 링크를 피하기 위해 Kosmo runbook PR이 먼저 병합되어야 함
+- `byulmaru/kubernetes`: 별도 `PROD-698` PR이 기존 Alertmanager receiver 계약을 유지하면서 `KubePersistentVolumeFillingUp` allowlist와 기존 Slack 메시지 형식의 firing/resolved 통합 검증을 소유함. `runbook_url`, runbook 링크 출력과 custom title/text는 추가하지 않음
 - 애플리케이션 코드, API, database schema, package dependency 변경 없음
