@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   getShellLayout,
+  getSidebarNavigationItemHeight,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
 } from './shellLayout';
@@ -11,6 +12,12 @@ describe('getShellLayout', () => {
 
   it('keeps native tablets on the mobile shell', () => {
     assert.equal(getShellLayout(false, 1_024), 'mobile');
+  });
+
+  it('maps shared navigation rows to each platform target baseline', () => {
+    assert.equal(getSidebarNavigationItemHeight('android'), 48);
+    assert.equal(getSidebarNavigationItemHeight('ios'), 45);
+    assert.equal(getSidebarNavigationItemHeight('web'), 45);
   });
 
   it('applies compact and full breakpoints only on web', () => {

@@ -222,6 +222,10 @@ test('프로필 편집 진입점은 반응형 navigation에서 canonical route�
   expect(hrefs.indexOf(profileHref)).toBeLessThan(hrefs.indexOf('/profile-edit'));
   expect(hrefs.indexOf('/profile-edit')).toBeLessThan(hrefs.indexOf('/follow-requests'));
   await expect(followRequests).toHaveAttribute('href', '/follow-requests');
+  const profileEditBounds = await profileEdit.boundingBox();
+  expect(profileEditBounds).not.toBeNull();
+  expect(profileEditBounds!.height).toBeGreaterThanOrEqual(24);
+  expect(profileEditBounds!.width).toBeGreaterThanOrEqual(24);
 
   await profile.focus();
   await expect(profile).toBeFocused();
@@ -231,6 +235,20 @@ test('프로필 편집 진입점은 반응형 navigation에서 canonical route�
   await expect(page).toHaveURL(/\/profile-edit$/);
   await expect(page.getByRole('heading', { name: '프로필 수정', exact: true })).toBeVisible();
   await expect(drawer).toHaveCount(0);
+
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  const currentDrawer = page.locator('#mobile-sidebar');
+  await expect(
+    currentDrawer.getByRole('link', { name: '프로필 편집', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+
+  await page.goto('/home');
+  await page.getByRole('button', { name: '메뉴 열기' }).click();
+  const touchDrawer = page.locator('#mobile-sidebar');
+  await touchDrawer.getByRole('link', { name: '프로필 편집', exact: true }).tap();
+  await expect(page).toHaveURL(/\/profile-edit$/);
+  await expect(page.getByRole('heading', { name: '프로필 수정', exact: true })).toBeVisible();
+  await expect(touchDrawer).toHaveCount(0);
 });
 
 test('loading target도 pathname commit 직후 이전 document offset을 노출하지 않는다', async ({

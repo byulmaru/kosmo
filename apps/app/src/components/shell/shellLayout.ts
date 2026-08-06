@@ -2,6 +2,10 @@ import { breakpoints } from '@/theme/tokens';
 
 export const webMobileShellHeaderHeight = 64;
 
+export function getSidebarNavigationItemHeight(platform: string) {
+  return platform === 'android' ? 48 : 45;
+}
+
 export function getShellLayout(web: boolean, width: number) {
   if (!web || width < breakpoints.compact) {
     return 'mobile';
