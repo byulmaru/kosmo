@@ -4,7 +4,7 @@
 
 **Goal:** 병합된 PROD-566 화면·Relay slice와 PROD-654 Web navigation slice를 하나의 selected Profile 사용자 흐름으로 검증하고, 승인된 Web 범위만 OpenSpec에 반영해 `add-incoming-follow-request-management`를 archive한다.
 
-**Architecture:** production App·GraphQL·DB 동작은 변경하지 않는다. 기존 `navigation-scroll.e2e.ts`의 세 Web navigation surface 증거에 selected Profile별 incoming request, Profile 전환, 승인·거절을 연결하는 한 개의 통합 E2E를 추가한다. OpenSpec은 PROD-668을 통합·archive owner로, PROD-699를 현재 change를 차단하지 않는 향후 Native QA 범위로 기록한다.
+**Architecture:** production App·GraphQL·DB 동작은 변경하지 않는다. 기존 `navigation-scroll.e2e.ts`의 세 Web navigation surface 증거에 selected Profile별 incoming request, Profile 전환, 승인·거절을 연결하는 한 개의 통합 E2E를 추가한다. OpenSpec은 PROD-668을 통합·archive owner로, PROD-699를 현재 change를 차단하지 않는 향후 실제 Web screen-reader·Native QA 범위로 기록한다.
 
 **Tech Stack:** Expo Router, React Native Web, React Relay, Playwright, PostgreSQL test database, OpenSpec `spec-driven-decisions`.
 
@@ -15,8 +15,8 @@
 - current session의 selected Profile만 `incomingProfileFollowRequests`를 읽고 처리한다.
 - 승인·거절은 서버 성공 뒤 정확한 request ID만 현재 actor connection에서 제거한다.
 - full Web sidebar, compact Web rail, mobile Web drawer는 `/follow-requests`로 진입한다. mobile bottom tab과 `/menu`는 추가하지 않는다.
-- Android/iOS runtime QA는 PROD-699의 향후 비차단 범위이며 이 change의 task·archive gate에 포함하지 않는다.
-- Web keyboard·screen-reader 의미와 cross-slice Web E2E는 PROD-668의 완료 증거다.
+- 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 PROD-699의 향후 비차단 범위이며 이 change의 task·archive gate에 포함하지 않는다.
+- Web keyboard runtime, browser accessibility-tree의 role/name/state 의미와 cross-slice Web E2E는 PROD-668의 완료 증거다.
 - production App, GraphQL/API, DB schema·migration, notification, outgoing FollowButton와 새 dependency를 변경하지 않는다.
 - 테스트 코드 범위: 기존 `apps/web/e2e/navigation-scroll.e2e.ts`의 통합 test와 필요한 file-local test setup만 변경한다.
 - 테스트 필요성: 세 navigation surface의 기존 route 증거와 selected Profile 전환·승인·거절의 route 통합을 하나의 실제 App/API/DB 흐름으로 연결한다.
@@ -40,22 +40,22 @@
 **Interfaces:**
 
 - Consumes: live PROD-668/699 descriptions and relations read back on 2026-08-06.
-- Produces: PROD-668-owned Web completion tasks, a non-blocking PROD-699 Native QA boundary, and exact archive guardrails.
+- Produces: PROD-668-owned Web completion tasks, a non-blocking PROD-699 실제 screen-reader·Native QA boundary, and exact archive guardrails.
 
 - [x] **Step 1: proposal ownership을 현재 Linear 계약에 맞춘다**
 
-  `Authority / Provenance`에 PROD-668을 completion owner로 추가하고 PROD-699를 non-blocking deferred QA reference로 추가한다. `Impact`에는 production code/API/DB가 바뀌지 않고 integration test·spec/archive만 남았음을 기록한다.
+  `Authority / Provenance`에 PROD-668을 completion owner로 추가하고 PROD-699를 non-blocking deferred 실제 screen-reader·Native QA reference로 추가한다. `Impact`에는 production code/API/DB가 바뀌지 않고 integration test·spec/archive만 남았음을 기록한다.
 
 - [x] **Step 2: design의 현재 상태와 migration plan을 갱신한다**
 
-  이미 병합된 PROD-566/#492와 PROD-654/#504를 current state로 기록한다. 최종 통합·정합성·archive owner를 PROD-668로 바꾸고, Android/iOS runtime QA는 PROD-699에서 향후 수행하되 현재 archive를 막지 않는다고 명시한다. Web keyboard/screen-reader와 cross-slice E2E는 유지한다.
+  이미 병합된 PROD-566/#492와 PROD-654/#504를 current state로 기록한다. 최종 통합·정합성·archive owner를 PROD-668로 바꾸고, 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 PROD-699에서 향후 수행하되 현재 archive를 막지 않는다고 명시한다. Web keyboard runtime, browser accessibility-tree와 cross-slice E2E는 유지한다.
 
 - [x] **Step 3: durable verification boundary decision을 추가한다**
 
   `decisions.md`에 다음 속성의 record를 추가한다.
 
   ```md
-  ### PROD-668 완료는 Web 통합 증거로 한정하고 Native QA는 후속으로 분리한다
+  ### PROD-668 완료는 Web 통합 증거로 한정하고 실제 screen-reader·Native QA는 후속으로 분리한다
 
   - Decision Date: 2026-08-06
   - Decision Class: Derived Contract
@@ -63,11 +63,11 @@
   - Status: Active
   ```
 
-  Outcome은 Web Relay/component 자동화, cross-slice E2E, keyboard·screen-reader 의미를 현재 완료 증거로 사용하고 Android/iOS runtime 결과는 PROD-699에만 기록한다. 대안은 Native evidence까지 archive를 막는 기존 gate와 Native를 검증 완료로 간주하는 방식이며 둘 다 승인된 운영 범위와 맞지 않아 제외한다.
+  Outcome은 Web Relay/component 자동화, cross-slice E2E, keyboard runtime과 browser accessibility-tree 의미를 현재 완료 증거로 사용하고 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime 결과는 PROD-699에만 기록한다. 대안은 실제 screen-reader·Native evidence까지 archive를 막는 기존 gate와 실행하지 않은 runtime QA를 검증 완료로 간주하는 방식이며 둘 다 승인된 운영 범위와 맞지 않아 제외한다.
 
 - [x] **Step 4: tasks의 owner와 task 2.4/4.x guardrail을 갱신한다**
 
-  task 2.4의 runtime 문구에서 Android/iOS를 제거하고 Web keyboard·screen-reader를 유지한다. section 4 heading과 provenance에 PROD-668을 추가하고, 4.1은 child slice evidence 대조, 4.2는 compositional Web flow, 4.3은 active spec sync/archive, 4.4는 post-archive strict validation으로 유지한다.
+  task 2.4의 완료 증거를 Web keyboard runtime과 browser accessibility-tree로 한정하고 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 PROD-699 후속으로 분리한다. section 4 heading과 provenance에 PROD-668을 추가하고, 4.1은 child slice evidence 대조, 4.2는 compositional Web flow, 4.3은 active spec sync/archive, 4.4는 post-archive strict validation으로 유지한다.
 
 - [x] **Step 5: strict validation으로 artifact 정합성을 확인한다**
 
@@ -174,7 +174,7 @@
 
 ---
 
-### Task 3: Web keyboard·screen-reader runtime evidence
+### Task 3: Web keyboard runtime과 accessibility-tree evidence
 
 **Files:**
 
@@ -184,19 +184,19 @@
 **Interfaces:**
 
 - Consumes: Task 2와 같은 seeded Web runtime.
-- Produces: actual keyboard focus/activation observations and browser accessibility-tree role/name/state evidence. Real screen-reader audio was not run unless explicitly available.
+- Produces: actual keyboard focus/activation observations and browser accessibility-tree role/name/state evidence. 실제 screen-reader audio는 PROD-699 후속 범위다.
 
 - [x] **Step 1: keyboard flow를 실행한다**
 
   Web runtime에서 Tab/Shift+Tab으로 requester Profile link, `승인`, `거절`을 각각 도달하고 Enter/Space가 올바른 target만 활성화하는지 확인한다. pending 동안 해당 row의 두 action만 disabled/busy이며 다른 row target은 사용 가능한지 확인한다.
 
-- [x] **Step 2: screen-reader semantics를 확인한다**
+- [x] **Step 2: accessibility-tree semantics를 확인한다**
 
-  브라우저 accessibility tree에서 Profile link와 approve/reject button의 role/name, pending의 disabled/busy, failure alert가 분리되어 있는지 확인한다. 실제 VoiceOver/NVDA audio를 실행하지 못하면 이를 browser accessibility-tree evidence로 정확히 기록하고 실제 screen-reader runtime으로 일반화하지 않는다.
+  브라우저 accessibility tree에서 Profile link와 approve/reject button의 role/name, pending의 disabled/busy, failure alert가 분리되어 있는지 확인한다. 이를 browser accessibility-tree evidence로 정확히 기록하고 실제 screen-reader runtime으로 일반화하지 않는다. 실제 VoiceOver/NVDA announcement는 PROD-699가 소유한다.
 
 - [x] **Step 3: evidence가 완료 조건을 만족하는지 판단한다**
 
-  keyboard와 accessibility-tree evidence가 승인된 Web gate를 만족하면 task 2.4 evidence에 기록한다. 실제 screen-reader audio가 필수인데 실행할 수 없으면 2.4를 체크하지 않고 PROD-668 owner gate로 반환한다.
+  keyboard와 accessibility-tree evidence를 승인된 Web gate인 task 2.4 evidence에 기록한다. 실제 VoiceOver/NVDA announcement는 PROD-699 후속으로 남긴다.
 
 ---
 
@@ -216,7 +216,7 @@
 
 - [x] **Step 1: task 2.4와 4.1–4.2 evidence를 기록한다**
 
-  Automation, Web keyboard/accessibility-tree runtime, hosted historical CI와 실행하지 않은 actual screen-reader audio를 구분한다. Task 2.4와 4.1–4.2는 각각의 실제 evidence가 있을 때만 `[x]`로 바꾼다.
+  Automation, Web keyboard/accessibility-tree runtime, hosted historical CI와 PROD-699로 분리한 실제 screen-reader·Native runtime QA를 구분한다. Task 2.4와 4.1–4.2는 각각의 실제 evidence가 있을 때만 `[x]`로 바꾼다.
 
 - [x] **Step 2: pre-archive 검증을 실행한다**
 
@@ -275,6 +275,6 @@
 
   첫 commit은 integration E2E, 두 번째 commit은 authority 정렬·active spec sync·archive와 최종 evidence를 소유한다. `.superpowers/**`, `docs/superpowers/**`, generated Relay artifact와 temporary local config를 stage하지 않는다. agent `Co-authored-by` trailer를 추가하지 않는다.
 
-- [ ] **Step 5: Draft PR 공개 변경을 별도 승인받는다**
+- [x] **Step 5: Draft PR 공개 변경을 별도 승인받는다**
 
-  push 전에 exact commit scope를 보여준다. Korean Draft PR title/body에는 PROD-668, PROD-566/654 merge evidence, PROD-699 non-blocking boundary, verification, actual screen-reader limitation과 archive 결과를 기록한다. exact wording·target·review request를 사용자가 승인한 뒤에만 push/PR/Linear status mutation을 수행한다.
+  push 전에 exact commit scope를 보여준다. Korean Draft PR title/body에는 PROD-668, PROD-566/654 merge evidence, PROD-699 non-blocking boundary, verification, 실제 Web VoiceOver/NVDA·Native QA 후속 경계와 archive 결과를 기록한다. exact wording·target·review request를 사용자가 승인한 뒤에만 push/PR/Linear status mutation을 수행한다.

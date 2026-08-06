@@ -4,7 +4,7 @@ Follow Request의 pending-only lifecycle, selected Profile 전용 incoming conne
 
 현재 `apps/app`의 protected route는 top-level query에서 `currentSession.selectedProfile`을 조회하고 Relay actor revision을 route boundary의 key와 fetch key로 사용한다. Profile 전환은 actor environment를 교체하므로 selected Profile 전용 데이터와 local component state를 함께 격리할 수 있다. 기존 Profile connection과 Notification 목록은 refetchable pagination fragment, loading·empty·error와 다음 페이지 복구의 가까운 구현 선례다.
 
-PROD-566의 화면·Relay slice와 PROD-654의 full Web sidebar·compact Web rail·mobile Web drawer navigation slice는 main에 병합되었다. PROD-668은 두 slice의 Web 통합 검증, active spec 정합성과 archive를 이어받는다. Android/iOS runtime QA는 PROD-699에서 향후 QA 관련 이슈와 함께 수행하며 현재 change의 완료·archive를 차단하지 않는다.
+PROD-566의 화면·Relay slice와 PROD-654의 full Web sidebar·compact Web rail·mobile Web drawer navigation slice는 main에 병합되었다. PROD-668은 두 slice의 Web 통합 검증, active spec 정합성과 archive를 이어받는다. 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 PROD-699에서 향후 QA 관련 이슈와 함께 수행하며 현재 change의 완료·archive를 차단하지 않는다.
 
 ## Goals / Non-Goals
 
@@ -22,7 +22,7 @@ PROD-566의 화면·Relay slice와 PROD-654의 full Web sidebar·compact Web rai
 - outgoing FollowButton, Follow Request notification source·activation, push/realtime을 변경하지 않는다.
 - mobile bottom tab 또는 generic `/menu`를 복원하지 않는다.
 - 새 dependency, DB migration이나 공통 전역 toast infrastructure를 추가하지 않는다.
-- Android/iOS 받은 팔로우 요청 runtime QA를 현재 change의 완료 증거로 요구하지 않는다.
+- 실제 Web VoiceOver/NVDA announcement와 Android/iOS 받은 팔로우 요청 runtime QA를 현재 change의 완료 증거로 요구하지 않는다.
 
 ## Implementation Guidance
 
@@ -67,14 +67,14 @@ PROD-566의 화면·Relay slice와 PROD-654의 full Web sidebar·compact Web rai
 - [Profile 전환 race가 새 actor state를 오염] → 기존 actor environment 교체 경계를 사용하고 늦은 응답 격리 회귀 test를 둔다.
 - [unavailable requester를 숨겨 정리 불가] → fallback row와 reject-only 동작을 Storybook/component test로 고정한다.
 - [두 PR의 배포 순서로 dead navigation 노출] → screen route slice를 먼저 전달하고 PROD-654 진입점 slice가 준비된 route를 기준으로 stack·검증한다.
-- [정적 link 항목을 라이브러리 내부 구조에 과결합] → PROD-654는 사용자 관찰 가능한 label·destination·current state·순서·drawer close를 검증하고 Lucide 내부 SVG path를 고정하지 않는다. PROD-668은 Web keyboard·screen-reader 의미를 확인하고 Android/iOS runtime QA는 비차단 PROD-699에 남긴다.
+- [정적 link 항목을 라이브러리 내부 구조에 과결합] → PROD-654는 사용자 관찰 가능한 label·destination·current state·순서·drawer close를 검증하고 Lucide 내부 SVG path를 고정하지 않는다. PROD-668은 Web keyboard runtime과 browser accessibility-tree의 role/name/state 의미를 확인하고, 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 비차단 PROD-699에 남긴다.
 
 ## Migration Plan
 
 1. PROD-566 slice가 `/follow-requests`, 목록·행 UI와 Relay 검증을 전달했다.
 2. PROD-654 slice가 full Web sidebar, compact Web rail과 mobile Web drawer 진입점과 shell 검증을 전달했다.
 3. PROD-668 담당자가 두 slice를 결합해 route navigation, Profile 전환, 승인·거절과 Web responsive/accessibility 흐름을 검증하고 active specs와 정합성을 확인한 뒤 archive한다.
-4. Android/iOS runtime QA는 PROD-699에서 향후 별도 QA 묶음으로 수행하며 3단계와 archive를 차단하지 않는다.
+4. 실제 Web VoiceOver/NVDA announcement와 Android/iOS runtime QA는 PROD-699에서 향후 별도 QA 묶음으로 수행하며 3단계와 archive를 차단하지 않는다.
 
 Rollback은 PROD-654의 shell 진입점을 먼저 제거해 dead entry를 차단하고, 필요하면 `/follow-requests` route·UI를 뒤이어 되돌린다. 기존 GraphQL·DB 계약에는 migration이나 rollback 작업이 없다.
 

@@ -18,7 +18,7 @@ Follow Request의 pending-only 저장·GraphQL 처리 계약은 이미 제공되
 - Linear Contract: [PROD-272](https://linear.app/byulmaru/issue/PROD-272), [PROD-566](https://linear.app/byulmaru/issue/PROD-566)
 - Linear Implementations: [PROD-566](https://linear.app/byulmaru/issue/PROD-566), [PROD-654](https://linear.app/byulmaru/issue/PROD-654)
 - Linear Completion: [PROD-668](https://linear.app/byulmaru/issue/PROD-668)
-- Deferred Non-blocking Native QA: [PROD-699](https://linear.app/byulmaru/issue/PROD-699)
+- Deferred Non-blocking Web Screen Reader and Native QA: [PROD-699](https://linear.app/byulmaru/issue/PROD-699)
 
 ## Capabilities
 
