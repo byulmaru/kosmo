@@ -86,8 +86,8 @@ Storybook screenshot 확인과 독립 리뷰·strict validation을 통과한 뒤
 - [x] 2.1 Relay·TypeScript·lint·format과 변경 동작을 직접 소유한 App unit·Storybook·Web E2E 검증을 통과시킨다.
 - [x] 2.2 지원 Web viewport의 keyboard·접근성 semantics·pointer/touch geometry를 runtime에서 확인하고 correct
       Storybook screenshot을 제품 owner에게 제시한다.
-- [ ] 2.3 제품 owner가 screenshot을 확인한 뒤에만 Draft PR Ready 전환 여부를 결정한다.
+- [x] 2.3 제품 owner가 screenshot을 확인한 뒤에만 Draft PR Ready 전환 여부를 결정한다.
 - [x] 2.4 세 독립 리뷰 결과를 반영하고 승인 범위 밖 요구가 발견되면 구현을 멈춰 별도 판단으로 돌린다.
 - [x] 2.5 최신 canonical·Figma·Linear와 구현·delta spec을 대조하고 active strict validation을 통과시킨다.
-- [ ] 2.6 모든 task와 검증이 완료되면 `restore-profile-edit-navigation`만 canonical spec에 동기화·archive하고
+- [x] 2.6 모든 task와 검증이 완료되면 `restore-profile-edit-navigation`만 canonical spec에 동기화·archive하고
       archive 후 전체 strict validation과 diff check를 통과시킨다.

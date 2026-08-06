@@ -1231,44 +1231,49 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **THEN** landing의 개인정보 처리방침 link와 로그인 없는 공개 처리방침 열람을 유지한다
 - **AND** 가입·로그인 온보딩 안의 추가 진입점은 현재 범위에서 구현하지 않는다
 
-### Requirement: 편집 가능한 selected Profile의 반응형 navigation 진입점
+### Requirement: 편집 가능한 selected Profile의 sidebar Profile 요약 진입점
 
-**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, PROD-660 — 유니버설 애플리케이션은 nullable `selectedProfileForEdit`이 반환되는 인증 사용자에게 full Web sidebar, compact Web icon rail과 shared mobile drawer에서 canonical `/profile-edit` 진입점을 제공해야 한다(MUST). 이 진입점은 기존 selected Profile 공개 페이지 진입점 바로 다음에 `UserRoundPen` 아이콘과 `프로필 편집` label로 표시되어야 하며(MUST), `selectedProfileForEdit`이 `null`이면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). mobile bottom tab과 우측 레일에는 중복 진입점을 제공하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, Figma `WebSidebar` node `901:610`, `UserInfo` node `148:852`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660 — 유니버설 애플리케이션은 nullable `selectedProfileForEdit`이 반환되는 인증 사용자에게 full Web sidebar와 shared mobile drawer의 expanded Profile 요약에서 canonical `/profile-edit` action을 제공해야 한다(MUST). 이 action은 Figma의 오른쪽 mini-profile cluster 아래 좌표를 예약한 위치에 우측 정렬한 작은 노란 `편집` button으로 표시되어야 하며(MUST), `selectedProfileForEdit`이 `null`이면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에는 중복 진입점을 제공하지 않아야 한다(MUST NOT). 이 change는 production에 없는 mini-profile thumbnail visual이나 switching data·interaction을 추가하지 않아야 한다(MUST NOT).
 
-#### Scenario: full Web sidebar에서 Profile 편집 진입
+#### Scenario: full Web sidebar의 Profile 요약에서 편집 진입
 
 - **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 full Web sidebar가 렌더링된다
-- **THEN** 시스템은 selected Profile의 `프로필` 진입점 바로 다음에 `UserRoundPen` 아이콘과 `프로필 편집`
-  label을 가진 link를 표시한다
-- **AND** link의 destination은 `/profile-edit`이다
+- **THEN** 시스템은 selected Profile 요약에서 Figma `UserInfo`의 오른쪽 mini-profile cluster 아래 좌표에 맞춘
+  우측 정렬 `편집` action을 표시한다
+- **AND** 시각 button은 `72x32 CSS px`, primary 배경, `radius.sm`, SUIT 14px bold label을 사용한다
+- **AND** link의 destination은 `/profile-edit`이고 accessible name은 `프로필 편집`이다
 
-#### Scenario: compact Web icon rail에서 Profile 편집 진입
-
-- **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 compact Web icon rail이 렌더링된다
-- **THEN** 시스템은 accessible name이 `프로필 편집`인 `UserRoundPen` link를 표시한다
-- **AND** link의 destination은 `/profile-edit`이다
-
-#### Scenario: shared mobile drawer에서 Profile 편집 진입
+#### Scenario: shared mobile drawer의 Profile 요약에서 편집 진입
 
 - **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 mobile Web, Android 또는 iOS의 drawer가 열린다
-- **THEN** 시스템은 selected Profile의 `프로필` 진입점 바로 다음에 `프로필 편집` link를 표시한다
-- **AND** 사용자가 link를 실행하면 guarded forward navigation으로 `/profile-edit`를 열고 drawer를 닫는다
+- **THEN** 시스템은 full sidebar와 같은 Profile 요약 위치와 `72x32` 시각 geometry로 `편집` action을 표시한다
+- **AND** Web의 pointer target은 `72x32 CSS px`, iOS와 Android의 input target은 시각 geometry를 바꾸지 않은
+  각각 최소 `44pt`와 `48dp` 높이의 투명 slot이다
+- **AND** 사용자가 action을 실행하면 guarded forward navigation으로 `/profile-edit`를 열고 drawer를 닫는다
 
-#### Scenario: 편집할 수 없는 selected Profile의 진입점 비노출
+#### Scenario: compact Web icon rail에서 편집 action 비노출
+
+- **WHEN** compact Web icon rail이 렌더링된다
+- **THEN** 시스템은 `프로필 편집` navigation item, icon 또는 별도 compact action을 표시하지 않는다
+- **AND** selected Profile avatar trigger의 기존 동작과 geometry를 유지한다
+
+#### Scenario: 편집할 수 없는 selected Profile의 action 비노출
 
 - **WHEN** 세션이 없거나 `selectedProfileForEdit`이 `null`이다
-- **THEN** 시스템은 full sidebar, compact icon rail과 mobile drawer에 `프로필 편집` 항목을 시각적으로 표시하지
-  않는다
-- **AND** 해당 항목을 disabled link, button 또는 다른 interactive element로 접근성 트리에 노출하지 않는다
+- **THEN** 시스템은 full sidebar와 mobile drawer의 Profile 요약에 `편집` action을 시각적으로 표시하지 않는다
+- **AND** 해당 action을 disabled link, button 또는 다른 interactive element로 접근성 트리에 노출하지 않는다
 
 #### Scenario: Profile 편집 현재 route 상태
 
-- **WHEN** 현재 pathname이 `/profile-edit`이고 `프로필 편집` link가 렌더링된다
-- **THEN** 시스템은 해당 link를 active로 표시한다
-- **AND** link는 page-current semantics와 `프로필 편집` accessible name을 유지한다
+- **WHEN** 현재 pathname이 exact `/profile-edit`이고 Profile 요약의 `편집` action이 렌더링된다
+- **THEN** 시스템은 action에 page-current semantics를 제공한다
+- **AND** action은 `프로필 편집` accessible name과 노란 button의 시각 geometry를 유지한다
 
 #### Scenario: 중복 shell 진입점과 placeholder 비노출
 
-- **WHEN** `프로필 편집` 진입점이 responsive navigation에 표시된다
-- **THEN** 시스템은 mobile bottom tab과 우측 레일에 같은 진입점을 추가하지 않는다
+- **WHEN** Profile 요약의 `편집` action이 표시된다
+- **THEN** 시스템은 주요 navigation, compact Web icon rail, mobile bottom tab과 우측 레일에 같은 진입점을
+  추가하지 않는다
 - **AND** generic `/menu`를 가리키는 `프로필 설정` placeholder를 복원하지 않는다
+- **AND** production에 없는 mini-profile thumbnail visual이나 실제 Profile switching data·interaction을
+  추가하지 않는다
