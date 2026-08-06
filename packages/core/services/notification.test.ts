@@ -600,6 +600,7 @@ test('Repost 알림은 direct Source에서 Recipient와 Related 객체를 파생
   for (const relatedPost of [original, reply, quote]) {
     const { repost } = await repostPost({
       actorProfileId: author.id,
+      origin: 'LOCAL',
       sourcePostId: relatedPost.id,
     });
 
@@ -621,6 +622,7 @@ test('Repost 알림은 자기 Post와 Remote Recipient에서 no-op이다', async
   const selfSource = await createContentPost(self.id);
   const { repost: selfRepost } = await repostPost({
     actorProfileId: self.id,
+    origin: 'LOCAL',
     sourcePostId: selfSource.id,
   });
   await createRepostNotification(selfRepost.id);
@@ -631,6 +633,7 @@ test('Repost 알림은 자기 Post와 Remote Recipient에서 no-op이다', async
   const remoteSource = await createContentPost(remoteRecipient.id);
   const { repost: remoteRepost } = await repostPost({
     actorProfileId: author.id,
+    origin: 'LOCAL',
     sourcePostId: remoteSource.id,
   });
   await createRepostNotification(remoteRepost.id);
@@ -651,6 +654,7 @@ test('Repost 알림 정리는 정상·반복·없는 source에 idempotent하다'
   const source = await createContentPost(recipient.id);
   const { repost } = await repostPost({
     actorProfileId: author.id,
+    origin: 'LOCAL',
     sourcePostId: source.id,
   });
 

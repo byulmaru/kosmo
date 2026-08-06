@@ -156,9 +156,17 @@ export const handleInboundAnnounce = async (
     return;
   }
 
+  let materialized: Awaited<ReturnType<typeof repostPost>>;
   try {
-    await db.transaction(async (tx) => {
-      let result = await repostPost({ actorProfileId: storedActor.profile.id, sourcePostId }, tx);
+    materialized = await db.transaction(async (tx) => {
+      let result = await repostPost(
+        {
+          actorProfileId: storedActor.profile.id,
+          origin: 'ACTIVITYPUB',
+          sourcePostId,
+        },
+        tx,
+      );
       const save = (postId: string) =>
         saveCurrentAnnounce(tx, {
           activityUri: activityUri.href,
@@ -170,11 +178,20 @@ export const handleInboundAnnounce = async (
         });
 
       if (!(await save(result.repost.id))) {
-        result = await repostPost({ actorProfileId: storedActor.profile.id, sourcePostId }, tx);
+        result = await repostPost(
+          {
+            actorProfileId: storedActor.profile.id,
+            origin: 'ACTIVITYPUB',
+            sourcePostId,
+          },
+          tx,
+        );
         if (!(await save(result.repost.id))) {
           throw new Error('Active Repost not found after current Announce retry');
         }
       }
+
+      return result;
     });
   } catch (error) {
     if (isExpectedRepostRejection(error)) {
@@ -191,4 +208,6 @@ export const handleInboundAnnounce = async (
 
     throw error;
   }
+
+  await materialized.postCommit();
 };
