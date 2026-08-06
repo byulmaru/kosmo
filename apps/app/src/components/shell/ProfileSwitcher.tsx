@@ -22,7 +22,11 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
-import { getProfileEditActionTargetMetrics, profileEditActionLabelColor } from './shellLayout';
+import {
+  getProfileEditActionCurrentState,
+  getProfileEditActionTargetMetrics,
+  profileEditActionLabelColor,
+} from './shellLayout';
 import { UnreadDot } from './UnreadDot';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
@@ -529,7 +533,7 @@ export function ProfileSwitcher({
     </Pressable>
   );
   const profileSummaryOnNavigate = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
-  const profileEditActive = pathname === '/profile-edit';
+  const profileEditCurrentState = getProfileEditActionCurrentState(pathname);
   const profileDetails = active ? (
     <>
       <Text
@@ -620,9 +624,10 @@ export function ProfileSwitcher({
       {data.selectedProfileForEdit ? (
         <GuardedLink href="/profile-edit" onNavigate={profileSummaryOnNavigate} primary>
           <Pressable
-            aria-current={profileEditActive ? 'page' : undefined}
+            aria-current={profileEditCurrentState.ariaCurrent}
             accessibilityLabel="프로필 편집"
             accessibilityRole="link"
+            accessibilityState={profileEditCurrentState.accessibilityState}
             onFocus={fullWeb && open ? dismissPicker : undefined}
             style={StyleSheet.flatten([
               styles.profileEditTarget,

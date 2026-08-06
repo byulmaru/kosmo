@@ -17,6 +17,15 @@ export function getProfileEditActionTargetMetrics(platform: string) {
   return { height: 32, top: 158 } as const;
 }
 
+export function getProfileEditActionCurrentState(pathname: string) {
+  const selected = pathname === '/profile-edit';
+
+  return {
+    accessibilityState: { selected },
+    ariaCurrent: selected ? ('page' as const) : undefined,
+  };
+}
+
 export const profileEditActionLabelColor = '#111111';
 
 export function getShellLayout(web: boolean, width: number) {
