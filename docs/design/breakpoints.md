@@ -58,13 +58,15 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
   compact Web icon rail에는 expanded Profile 요약이 없으므로 별도 icon이나 navigation 항목을 추가하지 않는다.
   하단 탭 바와 우측 레일에도 중복 진입점을 두지 않는다.
 - 기준 geometry는 Figma `KOSMO` 파일의 [`WebSidebar` node 901:610](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=901-610),
+  [`UserInfo` node 148:852](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=148-852),
   [`ProfileHero`의 `편집` button node 560:453](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=560-453)과
   [`Button` primary/sm node 271:3](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=271-3)이다.
-  320px Profile 요약에서 오른쪽 멀티프로필 이미지 묶음의 바로 아래에 우측 20px로 정렬하고, 시각 영역은
-  `72x32`, `primary` 배경, `radius.sm`, SUIT 14px bold의 `편집` label을 사용한다.
+  320px Profile 요약에서 Figma의 오른쪽 멀티프로필 cluster 바로 아래 좌표(`top: 158`, `right: 20`)에 정렬하고,
+  시각 영역은 `72x32`, `primary` 배경, `radius.sm`, SUIT 14px bold의 `편집` label을 사용한다. 현재 production
+  Profile 요약에는 그 thumbnail visual이 없으므로 PROD-660은 action만 예약 좌표에 복원하며 thumbnail
+  visual·data·전환 interaction은 추가하지 않는다.
 - Web pointer target은 시각 영역과 같은 `72x32 CSS px`로 유지한다. iOS와 Android에서는 시각 영역을 키우지
-  않고 각각 최소 `44pt`, `48dp` 높이의 투명 입력 slot 중앙에 배치해 바로 위 profile image target과 겹치지
-  않게 한다.
+  않고 각각 최소 `44pt`, `48dp` 높이의 투명 입력 slot 중앙에 배치한다.
 - action은 canonical `/profile-edit` route를 열고 accessible name `프로필 편집`을 제공한다. `/profile-edit`가
   현재 route이면 page-current semantics를 노출하되 노란 button의 시각 geometry는 바꾸지 않는다.
 - mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나 주요

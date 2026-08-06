@@ -25,25 +25,26 @@ PROD-660과 canonical Profile edit·breakpoint 디자인, 제품 owner가 확인
 - Confirmation / Follow-up: eligible/ineligible Relay fixture와 rendered accessibility tree assertion으로 직접
   검증한다.
 
-### expanded Profile 요약의 mini-profile 묶음 아래에 편집 action을 둔다
+### expanded Profile 요약의 future cluster 예약 위치에 편집 action을 둔다
 
 - Decision Date: 2026-08-06
-- Decision Class: Owner-confirmed Product Contract
+- Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, `docs/design/profile-edit.md`, Figma `WebSidebar` node
-  `901:610`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660
+  `901:610`, `UserInfo` node `148:852`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`,
+  PROD-660 owner confirmation
 - Status: Active
 - Context / Problem: 최초 구현은 복원할 진입점을 주요 navigation row로 잘못 해석했다. 제품 의도는 future
   multi-profile switching cluster와 같은 Profile summary 문맥에 편집 action을 두는 것이다.
-- Decision Outcome: full Web sidebar와 shared mobile drawer의 non-compact ProfileSwitcher에서 오른쪽
-  mini-profile 이미지 묶음 바로 아래에 우측 정렬한 작은 노란 `편집` action을 표시한다. 시각 geometry는
-  `72x32`, primary, `radius.sm`, SUIT 14px bold다. Web target은 `72x32`; iOS·Android는 각각 최소
-  `44pt`·`48dp` 높이의 투명 slot을 사용한다. compact rail, mobile bottom tab, 우측 레일과 주요 navigation에는
-  추가하지 않는다.
+- Decision Outcome: full Web sidebar와 shared mobile drawer의 non-compact ProfileSwitcher에서 Figma가 오른쪽
+  future mini-profile cluster 아래에 예약한 좌표에 작은 노란 `편집` action을 우측 정렬한다. 현재 production에
+  없는 thumbnail visual은 추가하지 않는다. 시각 geometry는 `72x32`, primary, `radius.sm`, SUIT 14px bold다.
+  Web target은 `72x32`; iOS·Android는 각각 최소 `44pt`·`48dp` 높이의 투명 slot을 사용한다. compact rail,
+  mobile bottom tab, 우측 레일과 주요 navigation에는 추가하지 않는다.
 - Alternatives Considered: `프로필` row 다음의 `UserRoundPen` navigation item은 Profile summary 문맥과 Figma
   위치를 잃고 compact rail까지 불필요하게 확장한다. mini-profile 이미지에 edit affordance를 합치면 향후
   switching target과 역할·accessible name이 충돌한다.
 - Consequences: `ProfileSwitcher`가 eligibility와 action rendering을 소유하며 `SidebarNavigation`의 별도 row와
-  관련 테스트는 제거된다. 실제 mini-profile switching 구현은 이 change 범위 밖이다.
+  관련 테스트는 제거된다. mini-profile thumbnail visual과 실제 switching 구현은 이 change 범위 밖이다.
 - Confirmation / Follow-up: Shell Storybook에서 full·drawer 위치·geometry와 compact·main navigation 비노출을
   검증하고, 제품 owner가 correction screenshot을 확인하기 전에는 PR을 Ready로 전환하지 않는다.
 
@@ -78,6 +79,6 @@ PROD-660과 canonical Profile edit·breakpoint 디자인, 제품 owner가 확인
 - Status: Superseded
 - Original Outcome: full Web sidebar, compact Web icon rail과 mobile drawer에서 `프로필` row 다음에
   `UserRoundPen`·`프로필 편집` navigation item을 표시한다.
-- Superseded By: `expanded Profile 요약의 mini-profile 묶음 아래에 편집 action을 둔다`
+- Superseded By: `expanded Profile 요약의 future cluster 예약 위치에 편집 action을 둔다`
 - Reason: 제품 owner가 Figma sidebar component를 기준으로 복원 대상은 주요 navigation row가 아니라 향후
   multi-profile cluster 아래의 작은 노란 edit action임을 확인했다.

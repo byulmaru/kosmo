@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  getProfileEditActionTargetMetrics,
   getShellLayout,
   getSidebarNavigationItemHeight,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
+  profileEditActionLabelColor,
 } from './shellLayout';
 
 describe('getShellLayout', () => {
@@ -18,6 +20,16 @@ describe('getShellLayout', () => {
     assert.equal(getSidebarNavigationItemHeight('android'), 48);
     assert.equal(getSidebarNavigationItemHeight('ios'), 45);
     assert.equal(getSidebarNavigationItemHeight('web'), 45);
+  });
+
+  it('maps the Profile summary edit action to each platform input target', () => {
+    assert.deepEqual(getProfileEditActionTargetMetrics('web'), { height: 32, top: 158 });
+    assert.deepEqual(getProfileEditActionTargetMetrics('ios'), { height: 44, top: 152 });
+    assert.deepEqual(getProfileEditActionTargetMetrics('android'), { height: 48, top: 150 });
+  });
+
+  it('keeps the yellow edit action label dark in every color scheme', () => {
+    assert.equal(profileEditActionLabelColor, '#111111');
   });
 
   it('applies compact and full breakpoints only on web', () => {

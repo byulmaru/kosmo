@@ -1,4 +1,5 @@
 import { profileHandleSchema } from '@kosmo/core/validation/profile';
+import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -21,6 +22,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
+import { getProfileEditActionTargetMetrics, profileEditActionLabelColor } from './shellLayout';
 import { UnreadDot } from './UnreadDot';
 import type { ViewStyle } from 'react-native';
 import type { ProfileSwitcher_query$key } from './__generated__/ProfileSwitcher_query.graphql';
@@ -46,6 +48,9 @@ const ProfileSwitcherFragment = graphql`
           url
         }
       }
+    }
+    selectedProfileForEdit {
+      id
     }
     me {
       id
@@ -145,6 +150,7 @@ export function ProfileSwitcher({
   surface,
 }: Props) {
   const theme = useTheme();
+  const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
   const { request: requestNavigation } = useNavigationGuard();
@@ -523,6 +529,7 @@ export function ProfileSwitcher({
     </Pressable>
   );
   const profileSummaryOnNavigate = onNavigate ?? (fullWeb && open ? dismissPicker : undefined);
+  const profileEditActive = pathname === '/profile-edit';
   const profileDetails = active ? (
     <>
       <Text
@@ -600,11 +607,44 @@ export function ProfileSwitcher({
           style={avatarShadow}
         />
       </View>
-      <View style={styles.profileCopy}>
+      <View
+        style={[
+          styles.profileCopy,
+          data.selectedProfileForEdit ? styles.profileCopyWithEditAction : undefined,
+        ]}
+      >
         {trigger}
         {fullWebPicker}
         {profileDetails}
       </View>
+      {data.selectedProfileForEdit ? (
+        <GuardedLink href="/profile-edit" onNavigate={profileSummaryOnNavigate} primary>
+          <Pressable
+            aria-current={profileEditActive ? 'page' : undefined}
+            accessibilityLabel="프로필 편집"
+            accessibilityRole="link"
+            onFocus={fullWeb && open ? dismissPicker : undefined}
+            style={StyleSheet.flatten([
+              styles.profileEditTarget,
+              getProfileEditActionTargetMetrics(Platform.OS),
+            ])}
+          >
+            {({ pressed }) => (
+              <View
+                style={[
+                  styles.profileEditVisual,
+                  { backgroundColor: theme.primary, opacity: pressed ? 0.7 : 1 },
+                ]}
+                testID="profile-edit-action-visual"
+              >
+                <Text style={[styles.profileEditLabel, { color: profileEditActionLabelColor }]}>
+                  편집
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        </GuardedLink>
+      ) : null}
     </View>
   ) : (
     trigger
@@ -693,6 +733,23 @@ const styles = StyleSheet.create({
     top: 140,
     width: 300,
   },
+  profileCopyWithEditAction: { width: 210 },
+  profileEditTarget: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 20,
+    width: 72,
+    zIndex: 1,
+  },
+  profileEditVisual: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    height: 32,
+    justifyContent: 'center',
+    width: 72,
+  },
+  profileEditLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   profileHandle: { fontFamily: 'SUIT', ...typography.sm },
   emptyProfile: { fontFamily: 'SUIT', marginTop: spacing.sm, ...typography.sm },
   counts: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },

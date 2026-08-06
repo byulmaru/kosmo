@@ -1,14 +1,19 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: 편집 가능한 selected Profile의 반응형 navigation 진입점`
+- TO: `### Requirement: 편집 가능한 selected Profile의 sidebar Profile 요약 진입점`
+
 ## MODIFIED Requirements
 
 ### Requirement: 편집 가능한 selected Profile의 sidebar Profile 요약 진입점
 
-**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, Figma `WebSidebar` node `901:610`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660 — 유니버설 애플리케이션은 nullable `selectedProfileForEdit`이 반환되는 인증 사용자에게 full Web sidebar와 shared mobile drawer의 expanded Profile 요약에서 canonical `/profile-edit` action을 제공해야 한다(MUST). 이 action은 오른쪽 mini-profile 이미지 묶음 바로 아래에 우측 정렬한 작은 노란 `편집` button으로 표시되어야 하며(MUST), `selectedProfileForEdit`이 `null`이면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에는 중복 진입점을 제공하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, Figma `WebSidebar` node `901:610`, `UserInfo` node `148:852`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660 — 유니버설 애플리케이션은 nullable `selectedProfileForEdit`이 반환되는 인증 사용자에게 full Web sidebar와 shared mobile drawer의 expanded Profile 요약에서 canonical `/profile-edit` action을 제공해야 한다(MUST). 이 action은 Figma의 오른쪽 mini-profile cluster 아래 좌표를 예약한 위치에 우측 정렬한 작은 노란 `편집` button으로 표시되어야 하며(MUST), `selectedProfileForEdit`이 `null`이면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에는 중복 진입점을 제공하지 않아야 한다(MUST NOT). 이 change는 production에 없는 mini-profile thumbnail visual이나 switching data·interaction을 추가하지 않아야 한다(MUST NOT).
 
 #### Scenario: full Web sidebar의 Profile 요약에서 편집 진입
 
 - **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 full Web sidebar가 렌더링된다
-- **THEN** 시스템은 selected Profile 요약의 오른쪽 mini-profile 이미지 묶음 바로 아래에 우측 정렬한 `편집`
-  action을 표시한다
+- **THEN** 시스템은 selected Profile 요약에서 Figma `UserInfo`의 오른쪽 mini-profile cluster 아래 좌표에 맞춘
+  우측 정렬 `편집` action을 표시한다
 - **AND** 시각 button은 `72x32 CSS px`, primary 배경, `radius.sm`, SUIT 14px bold label을 사용한다
 - **AND** link의 destination은 `/profile-edit`이고 accessible name은 `프로필 편집`이다
 
@@ -44,4 +49,5 @@
 - **THEN** 시스템은 주요 navigation, compact Web icon rail, mobile bottom tab과 우측 레일에 같은 진입점을
   추가하지 않는다
 - **AND** generic `/menu`를 가리키는 `프로필 설정` placeholder를 복원하지 않는다
-- **AND** mini-profile 이미지 묶음에 실제 Profile switching data나 interaction을 추가하지 않는다
+- **AND** production에 없는 mini-profile thumbnail visual이나 실제 Profile switching data·interaction을
+  추가하지 않는다

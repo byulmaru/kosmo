@@ -3,7 +3,8 @@
 `/profile-edit` route와 nullable `selectedProfileForEdit` 권한 query는 이미 production에 존재한다. 공개 Profile의
 Owner 전용 편집 button도 같은 field의 id 일치로 노출한다. PROD-660의 최초 구현은 이를 shared navigation
 항목으로 추가했지만, 제품 owner가 확인한 Figma 의도는 `WebSidebar`의 selected Profile 요약 안에서 향후
-멀티프로필 전환을 담을 오른쪽 mini-profile 묶음 바로 아래에 작은 노란 `편집` action을 배치하는 것이다.
+멀티프로필 전환 cluster 아래에 예약된 좌표에 작은 노란 `편집` action을 배치하는 것이다. 현재 production에는
+그 thumbnail visual이 없으므로 PROD-660은 action만 복원하고 cluster visual·data·interaction은 추가하지 않는다.
 
 `ProfileSwitcher`는 full Web sidebar와 shared mobile drawer의 expanded Profile 요약을 함께 렌더링한다. compact
 Web icon rail에서는 avatar trigger만 렌더링하므로 이 action의 surface가 아니다. `SidebarNavigation`은 주요
@@ -24,7 +25,7 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
 
 - Profile edit form, API, DB, mutation, Media와 공개 ProfileHero 편집 button을 변경하지 않는다.
 - compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에 별도 편집 진입점을 추가하지 않는다.
-- mini-profile 이미지의 데이터·선택·전환 동작을 구현하지 않는다.
+- mini-profile thumbnail visual이나 데이터·선택·전환 동작을 구현하지 않는다.
 - 새 Profile 권한 정책, client-side Owner 판정, 새 breakpoint·modal·navigation wrapper를 만들지 않는다.
 - Web 자동화나 공용 source mapping을 Android·iOS 실제 runtime QA 완료로 일반화하지 않는다.
 
@@ -38,8 +39,9 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
   Owner Membership을 증명할 수 없다.
 - full sidebar와 mobile drawer는 같은 non-compact `ProfileSwitcher` rendering 경계를 사용한다. compact surface는
   별도 avatar-only trigger이므로 편집 action을 조건부로 렌더링하지 않아야 한다.
-- Figma `WebSidebar` Profile 요약은 320px 폭, large selected avatar와 오른쪽 mini-profile 이미지 묶음을 갖는다.
-  action은 그 묶음 아래 우측 20px에 정렬하며 Profile name·handle과 겹치지 않아야 한다.
+- Figma `UserInfo` Profile 요약은 320px 폭, large selected avatar와 오른쪽 mini-profile 이미지 묶음을 갖는다.
+  현재 production에는 오른쪽 묶음이 없으므로 action만 그 아래의 예약 좌표인 우측 20px에 정렬하며 Profile
+  name·handle과 겹치지 않아야 한다.
 - 공용 `Button` primary는 기본 최소 폭·높이가 이 action보다 크다. 공용 primitive 계약을 전역 변경하지 않고
   feature-local style로 정확한 시각 geometry와 platform별 input slot을 제공해야 한다.
 - `add-local-profile-edit`의 통합·canonical sync·archive는 PROD-490이 소유하며 미완료다. PROD-660은 그 change를
@@ -48,15 +50,15 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
 ### Recommended Approach
 
 `selectedProfileForEdit { id }` 선택을 `SidebarNavigation`에서 제거하고 기존 `ProfileSwitcher_query` fragment로
-옮긴다. non-compact Profile summary에서 이 field가 존재할 때만 action slot을 렌더한다. slot은 오른쪽 20px에
-정렬하고, mini-profile 이미지 target 바로 아래에 시각적으로 8px 간격을 두며, name·handle 영역이 침범하지
-않도록 Profile copy의 사용 가능 폭을 제한한다.
+옮긴다. non-compact Profile summary에서 이 field가 존재할 때만 action slot을 렌더한다. slot은 Figma
+`UserInfo`의 future cluster 아래 좌표인 `top: 158`, `right: 20`에 정렬하고, name·handle 영역이 침범하지 않도록
+Profile copy의 사용 가능 폭을 제한한다. production에 없는 cluster target 자체는 만들지 않는다.
 
 action은 기존 guarded link 경계를 사용해 `/profile-edit` navigation guard, document scroll reset과 drawer
 `onNavigate` close를 재사용한다. 시각 button은 `72x32`, primary background, `radius.sm`, SUIT 14px bold `편집`
 label을 사용한다. Web target은 `72x32`; iOS·Android는 각각 44pt·48dp 높이의 투명 slot 중앙에 같은 시각
-button을 배치하고, 바로 위 mini-profile target과 hit area가 겹치지 않게 한다. accessible name은 `프로필 편집`,
-exact `/profile-edit`에서는 page-current semantics를 제공한다.
+button을 배치한다. accessible name은 `프로필 편집`, exact `/profile-edit`에서는 page-current semantics를
+제공한다.
 
 Shell Storybook Relay fixture에서 eligible과 ineligible 응답을 명시하고 full·drawer의 role/name/href/current,
 geometry와 compact·main navigation·bottom tab 비노출을 검증한다. navigation Web E2E에는 local Owner session으로
@@ -74,15 +76,15 @@ rendering 경계를 공유해야 하며, 새 client 권한 helper·추가 networ
 - `currentSession.selectedProfile`, id 비교 또는 `Profile.instance.kind`만으로 action을 노출하지 않는다.
 - link를 항상 노출하고 route의 `이 프로필을 수정할 수 없어요` fallback에 권한 처리를 떠넘기지 않는다.
 - `UserRoundPen` navigation row, compact rail icon 또는 generic `/menu`의 `프로필 설정` placeholder를 남기지 않는다.
-- mini-profile 이미지 묶음에 실제 switching data·state·interaction을 추가하지 않는다.
+- production에 없는 mini-profile thumbnail visual이나 switching data·state·interaction을 추가하지 않는다.
 - 공용 Button의 최소 크기나 다른 ProfileHero button geometry를 전역 변경하지 않는다.
 - `GuardedLink`를 우회해 mobile drawer close, dirty navigation guard 또는 primary scroll reset을 잃지 않는다.
 - 이 change에서 `add-local-profile-edit` 또는 다른 OpenSpec change를 archive하지 않는다.
 
 ## Risks / Trade-offs
 
-- [절대 위치 action이 name·handle 또는 mini-profile target과 겹칠 수 있음] → Figma 기준 offset과 copy 폭을
-  Storybook geometry assertion 및 320px summary visual review로 확인한다.
+- [절대 위치 action이 name·handle과 겹치거나 future cluster 좌표에서 벗어날 수 있음] → Figma 기준 offset과
+  copy 폭을 Storybook geometry assertion 및 320px summary visual review로 확인한다.
 - [32px 시각 button을 그대로 Native input target으로 사용해 최소 target을 어길 수 있음] → 시각 영역과 입력
   slot을 분리하고 Web 32px, iOS 44pt, Android 48dp 계약을 platform별 style assertion으로 검증한다.
 - [Relay mock에 새 nullable field가 빠져 권한 상태를 증명하지 못할 수 있음] → eligible/ineligible fixture 모두에
