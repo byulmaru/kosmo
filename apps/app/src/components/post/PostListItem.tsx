@@ -41,6 +41,7 @@ const PostListRowFragment = graphql`
         altText
         url
       }
+      contentWarning
     }
     profile {
       avatar {
@@ -65,6 +66,7 @@ const PostListItemFragment = graphql`
     content {
       id
       bodyText
+      contentWarning
       document
       media {
         id
@@ -92,7 +94,13 @@ const PostListItemFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
+        media {
+          id
+          altText
+          url
+        }
       }
       profile {
         avatar {
@@ -283,8 +291,10 @@ export function PostListItem({
   const presentationPost: PostSourcePresentationData = {
     content: {
       bodyText: post.content.bodyText,
+      contentWarning: post.content.contentWarning,
       document: post.content.document,
       media: quoteViewerMedia,
+      postId: post.id,
     },
     createdAt: post.createdAt,
     id: post.id,
@@ -297,7 +307,18 @@ export function PostListItem({
     replyParent: post.replyParent ? { id: post.replyParent.id } : null,
     repostSource: {
       content: source.content
-        ? { bodyText: source.content.bodyText, document: source.content.document }
+        ? {
+            bodyText: source.content.bodyText,
+            contentWarning: source.content.contentWarning,
+            document: source.content.document,
+            media:
+              source.content.media?.map(({ altText, id, url }) => ({
+                altText: altText ?? null,
+                id,
+                url: url ?? null,
+              })) ?? null,
+            postId: source.id,
+          }
         : null,
       createdAt: source.createdAt,
       id: source.id,

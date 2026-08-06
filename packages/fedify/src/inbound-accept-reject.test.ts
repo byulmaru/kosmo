@@ -8,14 +8,18 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type * as CoreServices from '@kosmo/core/services';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
+import type * as InboundAcceptFollow from './inbound-accept-follow';
 import type * as InboundReject from './inbound-reject';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -29,12 +33,15 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
+let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
+let acceptProfileFollowRequest: typeof CoreServices.acceptProfileFollowRequest;
 let localInstanceId: string;
 let federation: typeof productionFederation;
 
@@ -47,6 +54,7 @@ describe('inbound Accept and Reject', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       ProfileFollowRequests,
       ProfileFollows,
@@ -54,7 +62,9 @@ describe('inbound Accept and Reject', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundAccept } = await import('./inbound-accept'));
+    ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
+    ({ acceptProfileFollowRequest } = await import('@kosmo/core/services'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -222,6 +232,64 @@ describe('inbound Accept and Reject', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 
+  test('logs a concurrent pending Accept loser as an established noop', async () => {
+    const fixture = await createFixture({ projection: 'PENDING' });
+    const follow = createOutboundFollow(fixture.projection);
+    let arrived = 0;
+    let release!: () => void;
+    const bothArrived = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const acceptWithBarrier: typeof acceptProfileFollowRequest = async (input) => {
+      arrived += 1;
+      if (arrived === 2) {
+        release();
+      }
+      await bothArrived;
+      return acceptProfileFollowRequest(input);
+    };
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await Promise.all([
+        handleInboundAcceptFollow({
+          acceptProfileFollowRequest: acceptWithBarrier,
+          context: createContext(localProfileId),
+          follow,
+          followeeActorUri: remoteActorUri,
+          followeeProfileId: fixture.remoteProfile.id,
+        }),
+        handleInboundAcceptFollow({
+          acceptProfileFollowRequest: acceptWithBarrier,
+          context: createContext(localProfileId),
+          follow,
+          followeeActorUri: remoteActorUri,
+          followeeProfileId: fixture.remoteProfile.id,
+        }),
+      ]);
+    } finally {
+      restoreReporter();
+    }
+
+    assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
+    assert.equal((await db.select().from(ProfileFollows)).length, 1);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+    ]);
+  });
+
   test('uses verified actor pair fallback for same-origin non-kosmo embedded Follow', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = new Follow({
@@ -363,25 +431,23 @@ describe('inbound Accept and Reject', () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const object = new URL(`/ap/follow/${fixture.projection.id}`, publicOrigin);
     const context = createContext(localProfileId);
-    const errors: unknown[][] = [];
-    const originalConsoleError = console.error;
-    console.error = (...args) => errors.push(args);
+    const observations: { reasonCode: string }[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
     try {
       await handleInboundAccept(context, new Accept({ actor: remoteActorUri, object }));
       await handleInboundReject(context, new Reject({ actor: remoteActorUri, object }));
     } finally {
-      console.error = originalConsoleError;
+      restoreReporter();
     }
 
     assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
     assert.deepEqual(
-      errors.map(([message]) => message),
-      [
-        'Inbound ActivityPub Accept object could not be resolved as Follow',
-        'Inbound ActivityPub Reject object could not be resolved as Follow',
-      ],
+      observations.map(({ reasonCode }) => reasonCode),
+      ['accept_object_lookup_failed', 'reject_object_lookup_failed'],
     );
   });
 
@@ -395,11 +461,40 @@ describe('inbound Accept and Reject', () => {
       }).toJsonLd(),
     );
 
-    await handleInboundAccept(createContext(localProfileId), accept);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
+    try {
+      await handleInboundAccept(createContext(localProfileId), accept);
+      await handleInboundAccept(createContext(localProfileId), accept);
+    } finally {
+      restoreReporter();
+    }
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'duplicate_accept_noop',
+      },
+    ]);
   });
 
   test('ignores embedded non-Follow responses with a canonical Follow-shaped id', async () => {
@@ -517,6 +612,10 @@ describe('inbound Accept and Reject', () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = createOutboundFollow(fixture.projection);
     const loading = blockDocumentLoad(follow);
+    const logs: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => logs.push(observation),
+    });
     const handling = handleInboundAccept(
       createContext(localProfileId, loading.documentLoader),
       new Accept({ actor: remoteActorUri, object: follow.id }),
@@ -528,17 +627,38 @@ describe('inbound Accept and Reject', () => {
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, fixture.remoteInstance.id));
     loading.release();
-    await handling;
+    try {
+      await handling;
+    } finally {
+      restoreReporter();
+    }
 
     assert.deepEqual(await db.select().from(ProfileFollowRequests), [fixture.projection]);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Accept',
+        actorOrigin: localActorUri.origin,
+        handler: 'accept',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'accept_follow_state_changed_noop',
+      },
+    ]);
   });
 
   test('preserves an established relation when the remote instance is suspended after Reject verification', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
     const follow = createOutboundFollow(fixture.projection);
     const loading = blockDocumentLoad(follow);
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
     const handling = handleInboundReject(
       createContext(localProfileId, loading.documentLoader),
       new Reject({
@@ -554,10 +674,119 @@ describe('inbound Accept and Reject', () => {
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, fixture.remoteInstance.id));
     loading.release();
-    await handling;
+    try {
+      await handling;
+    } finally {
+      restoreReporter();
+    }
 
     assert.deepEqual(await db.select().from(ProfileFollows), [fixture.projection]);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Reject',
+        actorOrigin: localActorUri.origin,
+        handler: 'reject',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'noop',
+        phase: 'projection',
+        reasonCode: 'reject_follow_state_changed_noop',
+      },
+    ]);
+    assert.equal(captures.length, 0);
+  });
+
+  test('observes Reject Follow notification cleanup failure once after committed removal', async () => {
+    const fixture = await createFixture({ projection: 'ESTABLISHED' });
+    await db.insert(Notifications).values({
+      data: {},
+      kind: NotificationKind.FOLLOW,
+      recipientProfileId: fixture.remoteProfile.id,
+      sourceId: fixture.projection.id,
+    });
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reject_follow_notification_cleanup() RETURNS trigger
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        RAISE EXCEPTION 'reject Follow notification cleanup failed';
+      END;
+      $$;
+      CREATE TRIGGER reject_follow_notification_cleanup_failure
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reject_follow_notification_cleanup();
+    `);
+
+    const logs: unknown[] = [];
+    const captures: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ error, context }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      await handleInboundReject(
+        createContext(localProfileId),
+        new Reject({
+          actor: remoteActorUri,
+          object: createOutboundFollow(fixture.projection),
+          published: fixture.projection.createdAt,
+        }),
+      );
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS reject_follow_notification_cleanup_failure ON notification;
+        DROP FUNCTION IF EXISTS fail_reject_follow_notification_cleanup();
+      `);
+      restoreReporter();
+    }
+
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, fixture.projection.id))
+        .then((rows) => rows.length),
+      1,
+    );
+    assert.deepEqual(logs, [
+      {
+        activityType: 'Reject',
+        actorOrigin: localActorUri.origin,
+        handler: 'reject',
+        objectOrigin: remoteActorUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'follow_notification_effect_failed',
+      },
+    ]);
+    assert.equal(captures.length, 1);
+    const capture = captures[0] as {
+      context: {
+        extra?: Record<string, string>;
+        fingerprint: string[];
+        tags: Record<string, string>;
+      };
+    };
+    assert.deepEqual(capture.context.tags, {
+      activity_type: 'Reject',
+      handler: 'reject',
+      outcome: 'internal_failure',
+      phase: 'effect',
+      reason_code: 'follow_notification_effect_failed',
+    });
+    assert.deepEqual(capture.context.fingerprint, [
+      'activitypub-inbound',
+      'Reject',
+      'reject',
+      'effect',
+      'follow_notification_effect_failed',
+    ]);
+    assert.deepEqual(capture.context.extra, {
+      actor_origin: localActorUri.origin,
+      object_origin: remoteActorUri.origin,
+    });
   });
 });
 

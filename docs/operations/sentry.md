@@ -33,6 +33,35 @@ Sentry SDK가 만든 event는 `beforeSend`에서 재구성하거나 제거하지
 
 - console, network, navigation과 UI breadcrumb
 
+### ActivityPub inbound 처리 실패
+
+Production Web BFF의 Fedify inbox listener가 처리한 inbound ActivityPub 실패는 전역 HTTP 오류 경계와
+별도의 공통 관측 경계를 따른다. `packages/fedify/src/inbound-accept.ts`, `inbound-announce.ts`,
+`inbound-create.ts`/`inbound-create-note.ts`, `inbound-delete.ts`, `inbound-follow.ts`,
+`inbound-reaction.ts`, `inbound-reject.ts`와 `inbound-update.ts`의 `suppressError`, 예상 오류 catch,
+projection 및 post-commit delivery 경계를 inventory로 유지한다. Listener 등록은
+`packages/fedify/src/federation.ts`에서 같은 경계를 통과한다.
+
+| 분류                 | 구체적인 예시·reason code                                                                                                                                                                                                   | 구조화 로그 | Sentry                              |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
+| 보안·정책 거절       | malformed/foreign/mismatched activity, `invalid_*`, `*_projection_rejected`                                                                                                                                                 | 1회 기록    | 기록하지 않음                       |
+| 멱등·현재 상태 no-op | 없는 대상, 이미 처리된 관계, `duplicate_pending_follow_noop`, `duplicate_established_follow_noop`, `duplicate_accept_noop`, `accept_follow_state_changed_noop`, `reject_follow_state_changed_noop`, `announce_undo_ignored` | 1회 기록    | 기록하지 않음                       |
+| 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `delete_object_lookup_failed`, `*_object_lookup_failed`, `external_listener_error`                                                              | 1회 기록    | 기록하지 않음                       |
+| Kosmo 내부 오류      | DB projection, post-commit effect, `follow_notification_effect_failed`, `reaction_notification_effect_failed`, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error`                                          | 1회 기록    | 기존 runtime reporter로 1회 capture |
+
+오류 분류의 경계는 다음과 같다.
+
+- 외부 실패는 `AbortError`, `FetchError`, `RemoteActorMaterializationError`, `SendActivityError`,
+  `UrlError`, `WebFingerError`라는 명시된 remote error name(또는 그 `cause`)으로만 판단한다. `ECONNREFUSED`,
+  `ECONNRESET` 같은 generic `error.code`만으로는 외부 오류라고 추정하지 않는다. 예를 들어 typed
+  handler가 `code = "ECONNREFUSED"`인 일반 `Error`를 던지면 내부 오류로 Sentry에 capture한다.
+- Fedify가 typed listener에 도달하기 전 request JSON을 파싱하다 던진 `SyntaxError`는
+  `federation.ts`의 관측되지 않은 `onError` 경계에서 malformed body 외부 실패로 로그만 남긴다.
+  `withInboundObservability`가 typed listener 오류를 먼저 observed로 표시하므로 typed handler 안에서
+  발생한 `SyntaxError`는 이 예외에 해당하지 않고 내부 오류로 capture한다.
+- raw Activity JSON, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
+  URI는 필요한 경우 origin 수준 context로만 남기며 tag/fingerprint에는 넣지 않는다.
+
 Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 
 ## Build와 source map

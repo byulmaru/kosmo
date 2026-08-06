@@ -46,7 +46,7 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
 - orphan Media cleanup, thumbnail·variant, Remote Profile Media, Fedify/ActivityPub projection
 - Admin role 제거, client-side Owner 추측과 API 미연결 local persistence
 - 근거 없는 이미지 압축·resize, Media Storage Service 성능 개선, 전체 GraphQL 요청에 대한 범용 tracing·
-  timeout 정책, Native 실제 기기 QA
+  timeout 정책. Native 실제 기기 QA는 아직 실행하지 않았고 현재 Web 출시·검증 범위의 완료 증거로 삼지 않는다.
 
 ## Implementation Guidance
 
@@ -140,8 +140,8 @@ BFF body 종료, browser JSON parse와 Relay `onCompleted`까지 끝난 뒤 영�
     보호한다. navigation no-op/실패에도 draft와 Ready Media ID를 유지하며 mutation 자동 재전송·이미지 자동
     재업로드를 실행하지 않는다.
 14. text-only·Ready Media ID 성공, 비동기 `beforeRemove`, navigation no-op/실패, 기존 discard와 transport 실패를
-    자동화하고 실제 Web dev에서 재검증한다. API/BFF timeout·buffering은 변경하지 않으며 Native 실제 기기 QA
-    미실행과 PROD-490 통합 검증 handoff를 기록한다.
+    자동화하고 실제 Web dev에서 재검증한다. API/BFF timeout·buffering은 변경하지 않으며 Native 실제 기기 QA가
+    아직 실행되지 않았고 현재 Web 완료 증거에 포함되지 않는다는 상태와 PROD-490 통합 검증 handoff를 기록한다.
 
 ### Allowed Alternatives
 

@@ -4,7 +4,7 @@ Follow Request의 pending-only lifecycle, selected Profile 전용 incoming conne
 
 현재 `apps/app`의 protected route는 top-level query에서 `currentSession.selectedProfile`을 조회하고 Relay actor revision을 route boundary의 key와 fetch key로 사용한다. Profile 전환은 actor environment를 교체하므로 selected Profile 전용 데이터와 local component state를 함께 격리할 수 있다. 기존 Profile connection과 Notification 목록은 refetchable pagination fragment, loading·empty·error와 다음 페이지 복구의 가까운 구현 선례다.
 
-PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비된 route로 향하는 full/compact/mobile navigation 복원을 소유한다.
+PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비된 route로 향하는 full Web sidebar·compact Web rail·mobile Web drawer navigation 복원을 소유한다.
 
 ## Goals / Non-Goals
 
@@ -13,7 +13,7 @@ PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비�
 - `/follow-requests`에서 selected Profile의 받은 요청을 조회하고 승인·거절한다.
 - 공통 `PageHeader`, 기존 list/pagination와 Relay actor 경계를 재사용한다.
 - unavailable requester, mutation 실패와 추가 페이지 실패를 사용자가 정리·복구할 수 있는 상태로 표시한다.
-- route가 준비된 뒤 세 shell surface의 진입점을 함께 복원한다.
+- route가 준비된 뒤 세 Web shell surface의 진입점을 함께 복원한다.
 - 각 구현 이슈가 자신의 테스트를 소유하고 PROD-566이 두 slice의 통합을 검증한다.
 
 **Non-Goals:**
@@ -31,7 +31,9 @@ PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비�
 - request의 requester Profile은 unavailable participant 정책 때문에 nullable이다. null node를 client에서 제거하면 사용자가 거절로 pending row를 정리할 수 없다.
 - approve/reject payload는 삭제된 request global ID를 반환하지만 삭제된 Node 자체나 현재 connection edge를 반환하지 않는다. 성공 payload만 정규화해 두면 connection에 stale edge가 남을 수 있다.
 - Profile 전환 중 이전 environment의 비동기 응답과 행별 local pending/error가 새 actor 화면에 남지 않아야 한다.
-- shell navigation은 full sidebar, compact rail과 mobile drawer가 공유하는 navigation ownership을 사용한다. route보다 진입점이 먼저 배포되면 PROD-541에서 제거한 dead entry가 다시 생긴다.
+- shell navigation은 full Web sidebar, compact Web rail과 mobile Web drawer가 공유하는 navigation ownership을 사용한다. route보다 진입점이 먼저 배포되면 PROD-541에서 제거한 dead entry가 다시 생긴다.
+- PROD-654 navigation slice는 Web 전용이다. Android/iOS UI·runtime QA와 Native touch target은 이 slice의 범위가 아니며 기존 Native shell 동작은 변경하지 않는다.
+- `팔로워 요청`은 기존 shared navigation의 정적 link item이다. 공통 role·accessible name·current state·focus·keyboard·drawer lifecycle 계약을 재사용하며, 이 항목만을 위한 수동 keyboard·screen reader 1:1 QA나 Lucide 내부 SVG path assertion을 추가하지 않는다.
 - Storybook a11y automation은 keyboard, screen reader와 모든 color contrast를 완전히 증명하지 않으므로 runtime 검증을 대체하지 않는다.
 
 ### Recommended Approach
@@ -42,7 +44,7 @@ PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비�
 - 성공 payload의 삭제 ID로 현재 selected Profile connection의 정확한 edge를 제거하고 request record도 정리한다. Relay declarative directive 또는 좁은 store updater 중 현재 compiler·connection 계약에 맞는 최소 방식을 사용한다.
 - approve 성공 payload의 `ProfileFollow`와 participant Profile은 Relay normalization에 맡기고, reject는 follow 관계를 만들지 않는다.
 - requester가 null이면 fallback row를 렌더링하고 reject mutation만 연결한다.
-- PROD-654는 shared shell navigation source에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 항목을 복원한다. bottom tab collection은 수정하지 않는다.
+- PROD-654는 shared shell navigation source에 `팔로워 요청`·`UserRoundPlus`·`/follow-requests` 항목을 복원한다. Web shell surface만 검증하고 bottom tab collection은 수정하지 않는다.
 
 ### Allowed Alternatives
 
@@ -64,12 +66,12 @@ PROD-566은 화면·Relay 처리·통합 검증·archive를, PROD-654는 준비�
 - [Profile 전환 race가 새 actor state를 오염] → 기존 actor environment 교체 경계를 사용하고 늦은 응답 격리 회귀 test를 둔다.
 - [unavailable requester를 숨겨 정리 불가] → fallback row와 reject-only 동작을 Storybook/component test로 고정한다.
 - [두 PR의 배포 순서로 dead navigation 노출] → screen route slice를 먼저 전달하고 PROD-654 진입점 slice가 준비된 route를 기준으로 stack·검증한다.
-- [자동화가 platform 접근성을 과대평가] → Web keyboard·screen reader와 Android/iOS target을 별도 runtime QA로 기록한다.
+- [정적 link 항목을 라이브러리 내부 구조에 과결합] → PROD-654는 사용자 관찰 가능한 label·destination·current state·순서·drawer close를 검증하고 Lucide 내부 SVG path를 고정하지 않는다. PROD-566 화면의 platform runtime QA는 별도 책임으로 유지한다.
 
 ## Migration Plan
 
 1. PROD-566 slice에서 `/follow-requests`, 목록·행 UI와 Relay 검증을 먼저 전달한다. 이 단계에서는 shell 진입점을 복원하지 않아 direct route만 존재할 수 있다.
-2. PROD-654 slice에서 full Web sidebar, compact Web rail과 mobile drawer 진입점을 함께 복원하고 shell 검증을 수행한다.
+2. PROD-654 slice에서 full Web sidebar, compact Web rail과 mobile Web drawer 진입점을 함께 복원하고 shell 검증을 수행한다. Android/iOS는 이 slice에서 명시적으로 제외한다.
 3. PROD-566 담당자가 두 slice를 결합해 route navigation, Profile 전환, 승인·거절과 responsive/accessibility 흐름을 검증하고 active specs와 정합성을 확인한 뒤 archive한다.
 
 Rollback은 PROD-654의 shell 진입점을 먼저 제거해 dead entry를 차단하고, 필요하면 `/follow-requests` route·UI를 뒤이어 되돌린다. 기존 GraphQL·DB 계약에는 migration이나 rollback 작업이 없다.

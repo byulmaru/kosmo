@@ -1,5 +1,9 @@
 import { Camera } from 'lucide-react-native';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  formatImageUploadFailureMessage,
+  formatImageUploadRetryLabel,
+} from '@/components/media/imageUploadErrors';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, radii, spacing, typography } from '@/theme/tokens';
@@ -25,11 +29,11 @@ type ImageFieldStatus = {
 };
 
 function getImageFieldStatus(
-  label: '아바타' | '헤더',
+  subject: '아바타 이미지' | '헤더 이미지',
   draft: ProfileEditImageDraft,
 ): ImageFieldStatus | null {
   if (draft.kind === 'removed') {
-    return { kind: 'info', message: `${label} 이미지가 제거됩니다.` };
+    return { kind: 'info', message: `${subject}가 제거됩니다.` };
   }
 
   if (draft.kind !== 'replacement') {
@@ -37,25 +41,28 @@ function getImageFieldStatus(
   }
 
   if (draft.uploadState === 'uploading') {
-    return { kind: 'info', message: `${label} 이미지 업로드를 기다리고 있어요.` };
+    return { kind: 'info', message: `${subject} 업로드를 기다리고 있어요.` };
   }
 
   if (draft.uploadState === 'error') {
     return {
       kind: 'error',
-      message: `${label} 이미지 업로드에 실패했어요. 다시 시도해 주세요.`,
+      message: formatImageUploadFailureMessage(
+        subject,
+        draft.failure ?? { reason: 'transient', stage: 'transfer' },
+      ),
     };
   }
 
-  return { kind: 'info', message: `새 ${label} 이미지가 선택됐어요.` };
+  return { kind: 'info', message: `새 ${subject}가 선택됐어요.` };
 }
 
 function ImageStatus({
-  label,
+  subject,
   onRetry,
   status,
 }: {
-  label: '아바타' | '헤더';
+  subject: '아바타 이미지' | '헤더 이미지';
   onRetry?: () => void;
   status: ImageFieldStatus | null;
 }) {
@@ -79,7 +86,7 @@ function ImageStatus({
       </Text>
       {status.kind === 'error' && onRetry ? (
         <Pressable
-          accessibilityLabel={`${label} 이미지 업로드 다시 시도`}
+          accessibilityLabel={formatImageUploadRetryLabel(subject)}
           accessibilityRole="button"
           onPress={onRetry}
           style={({ pressed }) => [styles.retry, { opacity: pressed ? 0.7 : 1 }]}
@@ -222,14 +229,14 @@ export function ProfileEditImageFields({
 
       <View style={styles.statuses}>
         <ImageStatus
-          label="헤더"
+          subject="헤더 이미지"
           onRetry={onHeaderRetry}
-          status={getImageFieldStatus('헤더', header)}
+          status={getImageFieldStatus('헤더 이미지', header)}
         />
         <ImageStatus
-          label="아바타"
+          subject="아바타 이미지"
           onRetry={onAvatarRetry}
-          status={getImageFieldStatus('아바타', avatar)}
+          status={getImageFieldStatus('아바타 이미지', avatar)}
         />
       </View>
     </View>

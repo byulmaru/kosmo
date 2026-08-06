@@ -48,6 +48,8 @@ export type NotificationEffectErrorReporter = (
   context: NotificationEffectErrorContext,
 ) => void;
 
+type NotificationEffectErrorHandler = (error: unknown) => void | Promise<void>;
+
 let notificationEffectErrorReporter: NotificationEffectErrorReporter = (error, context) => {
   console.error('Notification effect failed', { context, error });
 };
@@ -78,77 +80,106 @@ const reportNotificationEffectError = (
 const runPostCommitNotificationEffect = async (
   context: NotificationEffectErrorContext,
   effect: () => Promise<void>,
+  onError?: NotificationEffectErrorHandler,
 ): Promise<void> => {
   try {
     await effect();
   } catch (error) {
-    reportNotificationEffectError(error, context);
+    if (!onError) {
+      reportNotificationEffectError(error, context);
+      return;
+    }
+
+    try {
+      await onError(error);
+    } catch (observerError) {
+      console.error('Notification effect observation failed', {
+        context,
+        error,
+        observerError,
+      });
+    }
   }
 };
 
 export const createFollowNotification = async (sourceId: string): Promise<void> => {
-  const source = await db
-    .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
-    .from(ProfileFollows)
-    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(and(eq(ProfileFollows.id, sourceId), eq(Instances.kind, InstanceKind.LOCAL)))
-    .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Profile follow not found')));
+  await db.transaction(async (tx) => {
+    const source = await tx
+      .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
+      .from(ProfileFollows)
+      .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followeeProfileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(and(eq(ProfileFollows.id, sourceId), eq(Instances.kind, InstanceKind.LOCAL)))
+      .limit(1)
+      .for('update', { of: ProfileFollows })
+      .then((rows) => rows[0]);
 
-  await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.FOLLOW,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+    // The relation may be consumed by a concurrent terminal action before this
+    // post-commit projection is materialized. There is no Notification to project.
+    if (!source) {
+      return;
+    }
+
+    await tx
+      .insert(Notifications)
+      .values({
+        data: {},
+        kind: NotificationKind.FOLLOW,
+        recipientProfileId: source.recipientProfileId,
+        sourceId: source.id,
+      })
+      .onConflictDoNothing({
+        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+      });
+  });
 };
 
 export const createFollowRequestNotification = async (sourceId: string): Promise<void> => {
-  const source = await db
-    .select({
-      id: ProfileFollowRequests.id,
-      recipientProfileId: ProfileFollowRequests.followeeProfileId,
-    })
-    .from(ProfileFollowRequests)
-    .innerJoin(Profiles, eq(Profiles.id, ProfileFollowRequests.followeeProfileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(ProfileFollowRequests.id, sourceId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows[0]);
+  await db.transaction(async (tx) => {
+    const source = await tx
+      .select({
+        id: ProfileFollowRequests.id,
+        recipientProfileId: ProfileFollowRequests.followeeProfileId,
+      })
+      .from(ProfileFollowRequests)
+      .innerJoin(Profiles, eq(Profiles.id, ProfileFollowRequests.followeeProfileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(ProfileFollowRequests.id, sourceId),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .for('update', { of: ProfileFollowRequests })
+      .then((rows) => rows[0]);
 
-  // The source may have reached a terminal state between the source commit and this
-  // post-commit effect. In that case there is no Notification to project.
-  if (!source) {
-    return;
-  }
+    // The source may have reached a terminal state between the source commit and this
+    // post-commit effect. In that case there is no Notification to project.
+    if (!source) {
+      return;
+    }
 
-  await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.FOLLOW_REQUEST,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+    await tx
+      .insert(Notifications)
+      .values({
+        data: {},
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: source.recipientProfileId,
+        sourceId: source.id,
+      })
+      .onConflictDoNothing({
+        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+      });
+  });
 };
 
-export const createFollowRequestNotificationPostCommit = async (sourceId: string): Promise<void> =>
+export const createFollowRequestNotificationPostCommit = async (
+  sourceId: string,
+  onError?: NotificationEffectErrorHandler,
+): Promise<void> =>
   runPostCommitNotificationEffect(
     {
       notificationKind: NotificationKind.FOLLOW_REQUEST,
@@ -156,42 +187,52 @@ export const createFollowRequestNotificationPostCommit = async (sourceId: string
       sourceId,
     },
     () => createFollowRequestNotification(sourceId),
+    onError,
   );
 
 export const createReactionNotification = async (sourceId: string): Promise<void> => {
-  const source = await db
-    .select({
-      actorProfileId: Reactions.profileId,
-      id: Reactions.id,
-      recipientInstanceKind: Instances.kind,
-      recipientProfileId: Posts.profileId,
-    })
-    .from(Reactions)
-    .innerJoin(Posts, eq(Posts.id, Reactions.postId))
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Reactions.id, sourceId))
-    .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Reaction not found')));
+  await db.transaction(async (tx) => {
+    const source = await tx
+      .select({
+        actorProfileId: Reactions.profileId,
+        id: Reactions.id,
+        recipientInstanceKind: Instances.kind,
+        recipientProfileId: Posts.profileId,
+      })
+      .from(Reactions)
+      .innerJoin(Posts, eq(Posts.id, Reactions.postId))
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(eq(Reactions.id, sourceId))
+      .limit(1)
+      .for('update', { of: Reactions })
+      .then((rows) => rows[0]);
 
-  if (
-    source.actorProfileId === source.recipientProfileId ||
-    source.recipientInstanceKind !== InstanceKind.LOCAL
-  ) {
-    return;
-  }
+    // An inbound Undo may remove the source before notification materialization.
+    // The committed reaction lifecycle remains authoritative, so this is an expected no-op.
+    if (!source) {
+      return;
+    }
 
-  await db
-    .insert(Notifications)
-    .values({
-      data: {},
-      kind: NotificationKind.REACTION,
-      recipientProfileId: source.recipientProfileId,
-      sourceId: source.id,
-    })
-    .onConflictDoNothing({
-      target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-    });
+    if (
+      source.actorProfileId === source.recipientProfileId ||
+      source.recipientInstanceKind !== InstanceKind.LOCAL
+    ) {
+      return;
+    }
+
+    await tx
+      .insert(Notifications)
+      .values({
+        data: {},
+        kind: NotificationKind.REACTION,
+        recipientProfileId: source.recipientProfileId,
+        sourceId: source.id,
+      })
+      .onConflictDoNothing({
+        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
+      });
+  });
 };
 
 const selectReplyVisibleToProfile = async (

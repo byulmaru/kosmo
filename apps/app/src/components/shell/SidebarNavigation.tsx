@@ -1,6 +1,15 @@
 import { usePathname } from 'expo-router';
-import { Bell, Bookmark, House, Mail, PenLine, Search, UserRound } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Bell,
+  Bookmark,
+  House,
+  Mail,
+  PenLine,
+  Search,
+  UserRound,
+  UserRoundPlus,
+} from 'lucide-react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
@@ -18,6 +27,7 @@ const SidebarNavigationFragment = graphql`
   fragment SidebarNavigation_query on Query {
     ...ProfileSwitcher_query
     currentSession {
+      id
       selectedProfile {
         id
         relativeHandle
@@ -46,11 +56,13 @@ const navigation: NavigationItem[] = [
   { href: '/search', Icon: Search, label: '검색' },
   { href: '/notifications', Icon: Bell, label: '알림' },
   { Icon: UserRound, label: '프로필', profile: true },
+  { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
 ];
 
 type Props = {
   compact?: boolean;
+  onFeedbackOpen?: () => void;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -60,6 +72,7 @@ type Props = {
 
 export function SidebarNavigation({
   compact = false,
+  onFeedbackOpen,
   onNavigate,
   onSwitcherOpenChange,
   query,
@@ -72,6 +85,7 @@ export function SidebarNavigation({
   const unreadNotificationCount = useUnreadNotificationCount();
   const profile = data.currentSession?.selectedProfile ?? null;
   const feedbackActive = pathname === '/feedback';
+  const feedbackUsesOverlay = Platform.OS === 'web' && !feedbackActive;
 
   const resolveItem = (item: NavigationItem) => {
     if (item.profile) {
@@ -202,40 +216,62 @@ export function SidebarNavigation({
         <View
           style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
         >
-          <GuardedLink href="/feedback" onNavigate={onNavigate}>
-            <Pressable
-              aria-current={feedbackActive ? 'page' : undefined}
-              accessibilityLabel="피드백 보내기"
-              accessibilityRole="link"
-              accessibilityState={{ selected: feedbackActive }}
-              style={StyleSheet.flatten([
-                styles.footerItem,
-                compact && styles.compactItem,
-                styles.feedbackFooterItem,
-                {
-                  backgroundColor: feedbackActive ? theme.surface : 'transparent',
-                },
-              ])}
-            >
-              <Mail
-                color={feedbackActive ? theme.text : theme.textSecondary}
-                size={20}
-                strokeWidth={2}
-              />
-              {!compact ? (
-                <Text
-                  style={[
-                    styles.footerLabel,
-                    styles.footerLabelGrow,
-                    feedbackActive && styles.activeItemLabel,
-                    { color: theme.text },
-                  ]}
+          {data.currentSession ? (
+            feedbackUsesOverlay ? (
+              <Pressable
+                accessibilityLabel="피드백 보내기"
+                accessibilityRole="button"
+                onPress={onFeedbackOpen}
+                style={StyleSheet.flatten([
+                  styles.footerItem,
+                  compact && styles.compactItem,
+                  styles.feedbackFooterItem,
+                ])}
+              >
+                <Mail color={theme.textSecondary} size={20} strokeWidth={2} />
+                {!compact ? (
+                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
+                    피드백 보내기
+                  </Text>
+                ) : null}
+              </Pressable>
+            ) : (
+              <GuardedLink href="/feedback" onNavigate={onNavigate}>
+                <Pressable
+                  aria-current={feedbackActive ? 'page' : undefined}
+                  accessibilityLabel="피드백 보내기"
+                  accessibilityRole="link"
+                  accessibilityState={{ selected: feedbackActive }}
+                  style={StyleSheet.flatten([
+                    styles.footerItem,
+                    compact && styles.compactItem,
+                    styles.feedbackFooterItem,
+                    {
+                      backgroundColor: feedbackActive ? theme.surface : 'transparent',
+                    },
+                  ])}
                 >
-                  피드백 보내기
-                </Text>
-              ) : null}
-            </Pressable>
-          </GuardedLink>
+                  <Mail
+                    color={feedbackActive ? theme.text : theme.textSecondary}
+                    size={20}
+                    strokeWidth={2}
+                  />
+                  {!compact ? (
+                    <Text
+                      style={[
+                        styles.footerLabel,
+                        styles.footerLabelGrow,
+                        feedbackActive && styles.activeItemLabel,
+                        { color: theme.text },
+                      ]}
+                    >
+                      피드백 보내기
+                    </Text>
+                  ) : null}
+                </Pressable>
+              </GuardedLink>
+            )
+          ) : null}
           {compact ? (
             <LogoutControl compact style={[styles.footerItem, styles.compactItem]} />
           ) : (

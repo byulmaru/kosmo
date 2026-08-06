@@ -8,11 +8,14 @@
 
 ## 출시와 검증 범위
 
-- 현재 출시와 수동 runtime QA 범위는 Web이다.
+- 현재 Profile edit 제품 출시와 일반 수동 runtime QA 범위는 Web이다.
 - 공용 React Native 구현과 자동화 검증은 Web·Android·iOS가 같은 정보 구조와 저장 계약을 유지하도록 계속
   적용한다.
-- iOS·Android 실제 기기 QA는 현재 Profile edit 출시 완료 조건에서 제외하고 Native 출시 gate에서 별도로
-  수행한다. Web runtime 검증이나 공용 코드 자동화 결과를 Native runtime 완료 증거로 사용하지 않는다.
+- iOS·Android 실제 기기·simulator runtime QA는 현재 Profile edit 제품 출시 완료 조건과 `PROD-527` PR
+  readiness에서 제외하고 Native 출시 gate에서 별도로 수행한다. 공용 코드와 자동화가 플랫폼별 target 계약을
+  유지하더라도 이를 Native runtime 완료 증거로 사용하지 않는다.
+- Native 출시 전에는 iOS·Android 실제 환경에서 플랫폼별 target, 인접 action 비중첩, 여러 줄 wrapping과 접근성
+  동작을 다시 검증한다.
 
 ## 정보 구조와 필드
 
@@ -23,7 +26,7 @@
 3. 표시 이름
 4. 소개(bio)
 5. 팔로우 요청 자동 승인
-6. 프로필 태그 presentation(PROD-491 상태 카탈로그 전용)
+6. 프로필 태그
 
 - 표시 이름은 새로 입력하거나 변경할 때 Unicode code point 기준 1~40이다. 서버 구현 정렬 전의 호환 경계로,
   40 code point를 초과하는
@@ -70,9 +73,9 @@
   Storybook의 controlled state로 검증한다.
 - Switch는 `followPolicy` enum을 controlled draft로 유지하며 별도 즉시 저장하지 않는다. 토글만 바꿔도
   draft가 dirty가 되고, 저장 callback에는 다른 Profile draft와 함께 현재 enum 값이 전달된다.
-- 이미지 업로드 오류는 해당 field의 `<label> 이미지 업로드에 실패했어요. 다시 시도해 주세요.` 문구로
-  안내하고 현재 image draft를 보존한다. 내부 오류 detail이나 caller가 제공한 임의 문구를 사용자에게 그대로
-  표시하지 않는다.
+- 이미지 업로드 오류는 [공통 이미지 업로드 오류 안내](./media-upload-errors.md)의 단계·원인 분류와 안전한
+  한국어 문구를 사용하고 현재 image draft를 보존한다. `{subject}`는 `아바타 이미지` 또는 `헤더 이미지`로
+  한정하며 Storage Service 원문 message나 caller가 제공한 임의 문구를 사용자에게 그대로 표시하지 않는다.
 
 ### Production route와 저장
 
@@ -88,12 +91,13 @@
   Membership과 Account의 현재 eligibility를 server-authoritative하게 다시 확인하되 명시적인 `FOR UPDATE`,
   shared lock 또는 atomic guard로 해당 상태를 commit까지 고정하지 않는다. 확인 뒤 동시에 eligibility가
   바뀌더라도 이미 승인된 실행 중 요청은 완료될 수 있고, 이후 요청부터 거부한다.
-- route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile avatar/header 표시, 성공
+- route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile avatar/header·Tag 표시, 성공
   navigation과 production 진입점을 연결한다.
 - route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로
   제출한다. Settings 이전 전까지 이 Profile 편집 경계를 우회하는 별도 정책 저장을 만들지 않는다.
-- production route는 Profile Tag editor를 렌더하지 않고 update input에도 Tag 값을 포함하지 않는다. 기존
-  presentation과 Storybook 상태는 `PROD-527`이 재사용할 수 있게 유지한다.
+- production route는 현재 Profile Tag를 초기 draft로 조회해 기존 editor를 렌더하고 다른 Profile 값과 전체 Tag
+  목록을 같은 update input으로 제출한다. server validation은 Tag field에 연결하고 성공 payload의 Hashtag Node
+  목록으로 편집 baseline과 공개 Profile Relay record를 동기화한다.
 
 ### Media 관계와 공개 표시
 
@@ -150,8 +154,8 @@
 - 태그를 추가하거나 기존 TagChip을 제거할 수 있다. 개수 상한을 두지 않으며 순서 변경
   control이나 drag gesture를 제공하지 않는다.
 - 추천, 자동완성, trend, 검색 link를 표시하지 않는다.
-- 저장과 서버 validation, Relay 동기화는 Profile Tag 연결 이슈가 같은 presentation component를 재사용해
-  제공한다. 별도의 태그 편집기를 다시 만들지 않는다.
+- 저장과 서버 validation, Relay 동기화는 production route가 같은 presentation component를 재사용해 제공한다.
+  별도의 태그 편집기를 다시 만들지 않는다.
 
 ## 반응형 레이아웃
 
@@ -182,8 +186,8 @@
 - validation, disabled, saving과 failure를 색만으로 구분하지 않는다.
 - presentation은 저장 성공 문구를 남기지 않는다. production route가 성공 payload로 갱신된 Profile을 확보한 뒤
   해당 Profile로 복귀한다.
-- presentation 상태 카탈로그는 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를 보존한다. production은
-  Tag를 렌더링하거나 제출하지 않고 text·policy·Ready image draft를 보존해 같은 draft로 재시도할 수 있게 한다.
+- presentation 상태 카탈로그와 production route는 실패 뒤 표시 이름·bio·Profile Tag·이미지 선택 상태를
+  보존한다. production은 text·policy·Tag·Ready image draft를 같은 저장 action으로 다시 제출할 수 있게 한다.
 - 긴 표시 이름·bio, 빈 값, 여러 개·긴 태그, 이미지 없음과 오류, compact/desktop 폭을 상태 카탈로그에서
   확인한다.
 

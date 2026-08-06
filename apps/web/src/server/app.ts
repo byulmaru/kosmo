@@ -1,5 +1,5 @@
 import { setNotificationEffectErrorReporter } from '@kosmo/core/services';
-import { federation } from '@kosmo/fedify';
+import { federation, setInboundObservabilityReporter } from '@kosmo/fedify';
 import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
@@ -9,6 +9,8 @@ import logoutRoutes from './routes/logout';
 import staticRoutes from './routes/static';
 import { captureNotificationEffectError, captureUnexpectedError } from './sentry';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+
+setInboundObservabilityReporter({ captureException: captureUnexpectedError });
 
 const app = new Hono();
 

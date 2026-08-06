@@ -25,8 +25,10 @@ export type PresentationProfile = {
 
 export type PresentationContent = {
   readonly bodyText: string;
+  readonly contentWarning: string | null | undefined;
   readonly document: unknown;
-  readonly media?: ReadonlyArray<PostMediaItem> | null;
+  readonly media: ReadonlyArray<PostMediaItem> | null;
+  readonly postId: string;
 };
 
 export type SourcePostPresentationData = {
@@ -177,7 +179,7 @@ export function PostSourcePreview({
       </View>
       {source.content && interactive ? (
         <PostBodyPressTarget
-          content={{ ...source.content, media: [] }}
+          content={source.content}
           href={sourcePostHref}
           style={styles.sourceBody}
           testID="source-post-body"
@@ -186,9 +188,11 @@ export function PostSourcePreview({
         <View style={styles.sourceBody} testID="source-post-body">
           <PostContentRenderer
             bodyText={source.content.bodyText}
+            contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
-            media={[]}
+            media={source.content.media ?? null}
+            postId={source.content.postId}
             size="md"
           />
         </View>
@@ -256,10 +260,12 @@ function PostBodyPressTarget({
     >
       <PostContentRenderer
         bodyText={content.bodyText}
+        contentWarning={content.contentWarning}
         document={content.document}
-        media={content.media ?? []}
+        media={content.media}
         onMediaOpen={onMediaOpen}
         onMediaUnavailable={onMediaUnavailable}
+        postId={content.postId}
         size="md"
       />
     </Pressable>

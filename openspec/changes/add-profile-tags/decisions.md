@@ -73,8 +73,32 @@
 - Context / Problem: 공용 제거 action을 `44×44` 하나로 고정하면 Web compact geometry와 충돌하고 Android의 `48×48 dp` 기본 target보다 작다. 반대로 공용 `32×32` control만 사용하면 iOS·Android target을 충족하지 못한다.
 - Decision Outcome: 제거 action은 compact `32×32` 시각 크기를 유지하되 실제 target을 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`로 분리한다. target 확장은 동작과 대상 Tag를 설명하는 accessibility label/state 및 키보드 동작을 바꾸지 않는다.
 - Alternatives Considered: 모든 플랫폼에 `44×44`를 적용하는 방식은 Android 기준보다 작고 Web 밀도를 불필요하게 키워 제외했다. Native target을 후속으로 미루는 방식은 공용 component가 Android/iOS에서도 사용되는 현재 범위와 맞지 않아 제외했다.
-- Consequences: 공용 component는 플랫폼별 target 값을 선택하되 보이는 chip과 제거 glyph의 compact geometry를 유지해야 한다. `PROD-491`이 target 구현과 component 검증을 소유하고 `PROD-527`은 route 연결 뒤 Web·Android·iOS runtime 회귀를 검증한다.
-- Confirmation / Follow-up: Web에서 `32×32 CSS px`, iOS에서 `44×44 pt`, Android에서 `48×48 dp` 실제 target과 공통 `32×32` 시각 크기를 component·runtime 검증으로 확인한다.
+- Consequences: 공용 component는 플랫폼별 target 값을 선택하되 보이는 chip과 제거 glyph의 compact geometry를 유지해야 한다. `PROD-491`이 target 구현과 component 검증을 소유하고, `PROD-527`의 runtime 검증 일정은 아래 Web 중심 검증 결정에 따른다.
+- Confirmation / Follow-up: React Native Web component 자동화에서 Web `32×32 CSS px` target과 공통 `32×32` 시각 크기를 확인하고, iOS `44×44 pt`·Android `48×48 dp` mapping은 현재 구현의 정적 확인 범위로 기록한다. 실제 Native target·layout·runtime 검증은 Native 출시 gate에서 수행한다.
+
+### PROD-527 런타임 검증은 Web으로 한정하고 Native QA는 출시 gate로 이관한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-527` 검증 범위 결정 (2026-08-04)
+- Status: Active
+- Context / Problem: 공용 React Native 구현이 유지해야 하는 플랫폼별 target 계약과 현재 제품 출시의 runtime 검증 범위를 같은 gate로 취급해, 당분간 미루기로 한 Native 환경의 부재가 Web 전달과 PR readiness를 막고 있었다.
+- Decision Outcome: `PROD-527`의 PR readiness와 구현 완료는 Web runtime 검증과 공용 코드 자동화 증거를 사용한다. 공용 구현은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp` target 계약과 인접·wrapping 비중첩 구조를 계속 유지한다. iOS·Android 실제 기기·simulator의 target·비중첩·접근성 runtime QA는 Native 출시 gate로 이관하고 현재 완료 증거로 주장하지 않는다.
+- Alternatives Considered: Native 환경이 준비될 때까지 Web 전달을 대기하는 방식은 현재 Native 출시 연기 결정과 맞지 않아 제외했다. 공용 구현에서 Native target 계약 자체를 제거하는 방식은 향후 Native 출시의 호환 경계를 없애므로 제외했다.
+- Consequences: OpenSpec task 2.2와 2.5 및 `PROD-527` PR은 Web runtime과 자동화 증거로 완료할 수 있다. Native runtime 미수행은 이 PR의 Ready 또는 구현 완료 blocker가 아니지만, Native 출시 전에 실제 환경 검증이 필요하다.
+- Confirmation / Follow-up: 현재는 React Native Web component·Storybook·app check와 Web E2E로 회귀를 확인하고 iOS·Android target mapping은 소스에서 확인한다. 향후 Native 출시 owner가 실제 환경에서 target·인접 action 비중첩·여러 줄 wrapping·접근성을 다시 검증한다.
+
+### 공용 ProfileTagChip은 높이 32와 한 줄 ellipsis를 사용한다
+
+- Decision Date: 2026-08-04
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/profile-tags.md`, `PROD-527` 긴 Profile Tag 표시 결정 (2026-08-04), PR #484 review thread
+- Status: Active
+- Context / Problem: 좁은 너비에서 허용되는 긴 Display Hashtag Name이 여러 줄로 감싸지면 고정 높이 `32`인 공용 TagChip 밖으로 text가 넘치거나 인접 UI와 겹칠 수 있다. 반대로 목록 wrapping과 개별 chip text wrapping을 같은 동작으로 해석하면 compact geometry를 보장할 수 없다.
+- Decision Outcome: 편집기와 공개 Profile이 공유하는 TagChip은 시각 높이 `32`와 한 줄을 유지하고, 너비를 넘는 표시 text를 tail ellipsis로 생략한다. 목록은 chip 사이에서 여러 줄로 감싸 모든 TagChip 관계를 유지한다. 접근성 이름은 시각적 생략과 무관하게 전체 `#<Display Hashtag Name>`을 제공하며 저장된 Display Hashtag Name은 변경하지 않는다.
+- Alternatives Considered: 긴 text에 따라 chip 높이를 늘리거나 여러 줄로 표시하는 방식은 compact geometry와 인접 layout을 불안정하게 만들어 제외했다.
+- Consequences: `240px` Web fixture는 공용 TagChip의 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 함께 검증해야 한다. 현재 완료 증거는 Web runtime에 한정하며 Native runtime QA 이관 결정은 유지한다.
+- Confirmation / Follow-up: editor와 공개 Profile이 같은 `ProfileTagChip`을 사용하는지 확인하고 Storybook interaction test에서 좁은 fixture의 layout과 접근성 이름을 검증한다.
 
 ## Remaining Decisions
 
@@ -82,4 +106,5 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-07-29 제거 action 결정에서 `PROD-527`에 Web·Android·iOS runtime 회귀를 모두 배정한 검증 일정만
+  2026-08-04 Web 중심 검증 결정으로 대체한다. 플랫폼별 target과 공용 component 계약은 계속 Active다.

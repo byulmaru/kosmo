@@ -6,6 +6,7 @@ export type StoryProfile = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
   displayName: string;
+  defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' | null;
   followers: {
     edges: Array<{
       cursor: string;
@@ -27,7 +28,9 @@ export type StoryProfile = {
   header: { id: string; url: string | null } | null;
   id: string;
   instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
   relativeHandle: string;
+  tags: Array<{ id: string; name: string }>;
   unreadNotificationCount: number;
   viewerState: {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
@@ -53,6 +56,8 @@ function pageInfo(hasNextPage = false, endCursor: string | null = null): StoryPa
 }
 
 export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
+  const defaultPostVisibility =
+    overrides.defaultPostVisibility === undefined ? 'UNLISTED' : overrides.defaultPostVisibility;
   return {
     __typename: 'Profile',
     avatar: null,
@@ -68,9 +73,17 @@ export function profile(overrides: Partial<StoryProfile> = {}): StoryProfile {
     id: 'profile-kosmo',
     instance: { kind: 'LOCAL' },
     relativeHandle: '@kosmo',
+    tags: [],
     unreadNotificationCount: 0,
     viewerState: { follow: null, followRequest: null, isSelf: false },
     ...overrides,
+    defaultPostVisibility,
+    private:
+      overrides.defaultPostVisibility === undefined
+        ? (overrides.private ?? (defaultPostVisibility === null ? null : { defaultPostVisibility }))
+        : defaultPostVisibility === null
+          ? null
+          : { defaultPostVisibility },
   };
 }
 
@@ -91,9 +104,10 @@ export type StoryPost = {
   content: {
     __typename: 'PostContent';
     bodyText: string;
+    contentWarning: string | null;
     document: {
       body: PostContentBodyDocumentV1;
-      summary: null;
+      summary: string | null;
       version: 1;
     };
     id: string;
@@ -116,6 +130,7 @@ export function post({
   bodyDocument,
   bodyText = '코스모에서 전하는 첫 번째 소식입니다.',
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
+  contentWarning = null,
   id = 'post-1',
   media = [],
   profile: author = profile(),
@@ -129,6 +144,7 @@ export function post({
   bodyDocument?: PostContentBodyDocumentV1;
   bodyText?: string | null;
   createdAt?: string;
+  contentWarning?: string | null;
   id?: string;
   media?: StoryMedia[] | null;
   profile?: StoryProfile;
@@ -148,10 +164,11 @@ export function post({
             __typename: 'PostContent' as const,
             document: {
               body: bodyDocument ?? storyDocumentFromText(bodyText),
-              summary: null,
+              summary: contentWarning,
               version: 1,
             },
             bodyText,
+            contentWarning,
             id: `content-${id}`,
             media,
           },

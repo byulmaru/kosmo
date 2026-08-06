@@ -4,17 +4,21 @@
 
 ## Decision Records
 
-### Web 전용 OpenPanel 도입과 후속 범위 분리
+### Web OpenPanel 도입과 Native 후속 범위 분리
 
 - Decision Date: 2026-07-29
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-469`, `PROD-537`, `PROD-539`
 - Status: Active
 - Context / Problem: 첫 분석 도입에 Web과 native, 현재 핵심 행동과 추가 소셜 행동을 모두 포함하면 독립 배포 가능한 범위가 섞인다.
-- Decision Outcome: PROD-469는 Web만 구현한다. Android·iOS는 PROD-537, 재게시·반응·북마크는 PROD-539로 분리한다.
+- Decision Outcome: PROD-469는 현재 Web 출시·검증 범위의 OpenPanel만 구현한다. Android·iOS 분석 지원·검증은
+  PROD-537에서 별도로 결정하고, 재게시·반응·북마크는 PROD-539로 분리한다. 이 분리는 현재 delivery 경계를
+  설명하며 Native의 영구 비적용을 결정하지 않는다.
 - Alternatives Considered: 모든 플랫폼과 이벤트를 한 번에 구현하는 방법은 배포·검증 경계가 커져 제외했다.
-- Consequences: 이번 변경의 공통 import는 native에서 no-op이어야 하며, 후속 이슈가 현재 변경의 완료를 막지 않는다.
-- Confirmation / Follow-up: native bundle에 OpenPanel client가 생성되지 않는지 확인한다.
+- Consequences: 이번 변경의 공통 import는 Native에서 no-op이어야 하며, 후속 이슈가 현재 Web 변경의 완료를 막지
+  않는다. PROD-537은 Native 지원이 필요할 때 별도 결정·검증을 소유한다.
+- Confirmation / Follow-up: Native bundle에 이번 Web slice의 OpenPanel client가 생성되지 않는지 확인하고, 이를
+  Native 지원 완료 또는 영구 비적용의 증거로 해석하지 않는다.
 
 ### Client ID 존재 여부를 유일한 활성화 조건으로 사용
 

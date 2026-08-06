@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { expect, waitFor, within } from 'storybook/test';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
@@ -154,6 +154,16 @@ function ProfileTagEditorHarness({ initialTags = [] }: { initialTags?: ReadonlyA
   return <ProfileTagEditor onChange={setTags} tags={tags} />;
 }
 
+function ProfileTagWrappingHarness() {
+  const maxLengthTag = '가'.repeat(20);
+
+  return (
+    <View style={{ width: 180 }} testID="profile-tag-layout-fixture">
+      <ProfileTagEditor onChange={() => undefined} tags={['가', '나', maxLengthTag]} />
+    </View>
+  );
+}
+
 function expectResponsiveSurface(
   canvasElement: HTMLElement,
   expectedWidth: number,
@@ -305,17 +315,16 @@ export const HeaderErrorKeepsCurrentAvatar: Story = {
       kind: 'replacement',
       previewUri: null,
       uploadState: 'error',
-      error: '업로드 서버 내부 detail',
+      failure: { stage: 'transfer', reason: 'file-too-large' },
     },
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
     expect(canvas.getByRole('alert')).toHaveTextContent(
-      '헤더 이미지 업로드에 실패했어요. 다시 시도해 주세요.',
+      '헤더 이미지 파일이 너무 커요. 16 MiB 이하의 이미지를 선택해 주세요.',
     );
     expect(canvas.getByRole('button', { name: '헤더 이미지 업로드 다시 시도' })).toBeVisible();
-    expect(canvas.queryByText('업로드 서버 내부 detail')).not.toBeInTheDocument();
     expect(canvas.getByTestId('profile-edit-avatar-preview')).toBeVisible();
     expect(canvas.getByRole('button', { name: '아바타 이미지 편집' })).toBeEnabled();
     expect(canvas.queryByText(/아바타 이미지 업로드에 실패/)).not.toBeInTheDocument();
@@ -334,23 +343,6 @@ export const TextFieldsAndSubmitGate: Story = {
     expect(canvas.getByText('표시 이름을 입력해 주세요.')).toBeVisible();
     await userEvent.type(displayName, '새 이름');
     expect(save).toBeEnabled();
-  },
-};
-
-export const ProductionTagsHidden: Story = {
-  render: () => (
-    <ProfileEditScreen
-      initialValue={initialDraft}
-      onChange={() => undefined}
-      onSubmit={() => undefined}
-      showTags={false}
-      value={{ ...initialDraft, bio: 'production draft' }}
-    />
-  ),
-  play: ({ canvasElement }) => {
-    expect(
-      within(canvasElement).queryByRole('textbox', { name: '프로필 태그' }),
-    ).not.toBeInTheDocument();
   },
 };
 
@@ -522,6 +514,66 @@ export const TagAddDuplicateAndRemove: Story = {
 
     await userEvent.click(remove);
     expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagRemovalKeyboardParity: Story = {
+  render: () => <ProfileTagEditorHarness initialTags={['Foo', 'Bar', 'Baz']} />,
+  play: async ({ canvasElement, userEvent }) => {
+    const canvas = within(canvasElement);
+    const input = canvas.getByRole('textbox', { name: '프로필 태그' });
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const enterAction = canvas.getByRole('button', { name: '#Baz 제거' });
+    expect(enterAction).toHaveFocus();
+    expect(getComputedStyle(enterAction).outlineStyle).not.toBe('none');
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.queryByText('#Baz')).not.toBeInTheDocument();
+
+    await userEvent.click(input);
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const spaceAction = canvas.getByRole('button', { name: '#Bar 제거' });
+    expect(spaceAction).toHaveFocus();
+    await userEvent.keyboard(' ');
+    expect(canvas.queryByText('#Bar')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '#Foo 제거' }));
+    expect(canvas.queryByText('#Foo')).not.toBeInTheDocument();
+  },
+};
+
+export const TagAdjacentAndWrappingTargetsDoNotOverlap: Story = {
+  render: () => <ProfileTagWrappingHarness />,
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const fixture = canvas.getByTestId('profile-tag-layout-fixture');
+    const actions = canvas.getAllByRole('button', { name: /제거$/ });
+    const [first, second, wrapped] = actions.map((action) => action.getBoundingClientRect());
+    const maxLengthTag = '가'.repeat(20);
+    const maxLengthText = canvas.getByText(`#${maxLengthTag}`);
+    const maxLengthChip = maxLengthText.parentElement!;
+    const fixtureBounds = fixture.getBoundingClientRect();
+    const maxLengthChipBounds = maxLengthChip.getBoundingClientRect();
+    const maxLengthTextStyle = getComputedStyle(maxLengthText);
+
+    expect(actions).toHaveLength(3);
+    expect(Math.round(first!.top)).toBe(Math.round(second!.top));
+    expect(first!.right).toBeLessThanOrEqual(second!.left);
+    expect(wrapped!.top).toBeGreaterThanOrEqual(first!.bottom);
+    expect(fixture.scrollWidth).toBeLessThanOrEqual(fixture.clientWidth + 1);
+    expect(maxLengthChipBounds.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(wrapped!.right).toBeLessThanOrEqual(fixtureBounds.right + 1);
+    expect(maxLengthChipBounds.height).toBe(32);
+    expect(maxLengthTextStyle.whiteSpace).toBe('nowrap');
+    expect(maxLengthTextStyle.textOverflow).toBe('ellipsis');
+    expect(maxLengthTextStyle.overflow).toBe('hidden');
+    expect(maxLengthText.scrollWidth).toBeGreaterThan(maxLengthText.clientWidth);
+    expect(canvas.getByLabelText(`#${maxLengthTag}`)).toBe(maxLengthText);
+    for (const target of [first!, second!, wrapped!]) {
+      expect(Math.round(target.width)).toBe(32);
+      expect(Math.round(target.height)).toBe(32);
+    }
   },
 };
 

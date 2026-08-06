@@ -41,6 +41,7 @@ const PostLayoutFragment = graphql`
         altText
         url
       }
+      contentWarning
     }
     profile {
       avatar {
@@ -63,7 +64,13 @@ const PostLayoutFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
+        media {
+          id
+          altText
+          url
+        }
       }
       profile {
         avatar {
@@ -194,7 +201,18 @@ export function PostLayout({
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
-          ? { bodyText: source.content.bodyText, document: source.content.document }
+          ? {
+              bodyText: source.content.bodyText,
+              contentWarning: source.content.contentWarning,
+              document: source.content.document,
+              media:
+                source.content.media?.map(({ altText, id, url }) => ({
+                  altText: altText ?? null,
+                  id,
+                  url: url ?? null,
+                })) ?? null,
+              postId: source.id,
+            }
           : null,
         createdAt: source.createdAt,
         id: source.id,

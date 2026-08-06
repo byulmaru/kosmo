@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 구현 대상은 OpenSpec task 1.1–2.4와 Linear PROD-566뿐이다. task 3.x의 full sidebar, compact rail, mobile drawer, `UserRoundPlus`는 PROD-654에 남긴다.
+- 구현 대상은 OpenSpec task 1.1–2.4와 Linear PROD-566뿐이다. task 3.x의 full Web sidebar, compact Web rail, mobile Web drawer, `UserRoundPlus`는 PROD-654에 남긴다.
 - 공통 `PageHeader`의 제목은 `팔로워 요청`이며 loading, error, profile-required, empty, content 상태 모두 같은 header를 유지한다.
 - 요청 목록은 selected Profile의 nullable `incomingProfileFollowRequests`만 사용하고 root query나 다른 Profile connection을 만들지 않는다.
 - requester가 null인 request를 숨기지 않고 `확인할 수 없는 프로필`과 `거절`만 제공한다. 요청 시각은 조회하거나 표시하지 않는다.
@@ -343,7 +343,7 @@
 
 - [ ] **Step 3: OpenSpec progress update**
 
-  Mark only 1.1–2.4 complete after their verification evidence exists. Leave 3.1–3.3 and 4.1–4.4 unchecked and do not archive the change.
+  Mark only 1.1–2.4 complete from this PROD-566 plan after their verification evidence exists. Do not change 3.1–3.3 here; PROD-654 owns those tasks independently. Leave 4.1–4.4 unchecked and do not archive the change.
 
 - [ ] **Step 4: Independent implementation review**
 

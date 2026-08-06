@@ -47,6 +47,11 @@ test('validates createPost input before running the resolver', async () => {
       'bodyText',
     ],
     [
+      { bodyText: '가'.repeat(499), contentWarning: '경고', visibility: 'UNLISTED' },
+      '본문과 내용 경고는 500자까지 작성할 수 있어요.',
+      'contentWarning',
+    ],
+    [
       {
         bodyText: '',
         media: Array.from({ length: 5 }, () => ({ mediaId })),

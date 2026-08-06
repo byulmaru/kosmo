@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
-import { and, eq } from 'drizzle-orm';
-import { db, firstOrThrow, Instances, Notifications, pg, Posts, Profiles, Reactions } from '../db';
+import { after, mock, test } from 'node:test';
+import { and, eq, sql } from 'drizzle-orm';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  firstOrThrow,
+  Instances,
+  Notifications,
+  pg,
+  Posts,
+  Profiles,
+  Reactions,
+} from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -25,7 +36,9 @@ const createFixture = async ({
   instanceState = InstanceState.ACTIVE,
   postState = PostState.ACTIVE,
   profileState = ProfileState.ACTIVE,
+  canonicalOrigin,
 }: {
+  canonicalOrigin?: string | null;
   instanceKind?: InstanceKind;
   instanceState?: InstanceState;
   postState?: PostState;
@@ -35,6 +48,7 @@ const createFixture = async ({
   const instance = await db
     .insert(Instances)
     .values({
+      canonicalOrigin,
       domain: `${suffix}.example`,
       kind: instanceKind,
       state: instanceState,
@@ -283,6 +297,139 @@ test('ActivityPub origin의 postCommit은 Notification만 생성한다', async (
   await firstPostCommit;
 
   assert.equal(await countReactionNotifications(result.reaction.id), 1);
+});
+
+test('Notification materialization 전에 Reaction source가 삭제된 terminal race는 내부 오류로 관측하지 않는다', async () => {
+  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const recipient = await createFixture();
+  let observerCalls = 0;
+  const result = await addReaction({
+    actorProfileId: actor.profile.id,
+    onPostCommitError: () => {
+      observerCalls += 1;
+    },
+    origin: 'ACTIVITYPUB',
+    postId: recipient.post.id,
+    type: '🎉',
+  });
+
+  await db.delete(Reactions).where(eq(Reactions.id, result.reaction.id));
+  await assert.doesNotReject(result.postCommit());
+
+  assert.equal(observerCalls, 0);
+  assert.equal(await countReactionNotifications(result.reaction.id), 0);
+});
+
+test('postCommit observer 실패에도 Reaction 상태와 후속 delivery를 유지한다', async () => {
+  let deliveryCalls = 0;
+  let observerCalls = 0;
+
+  const originalConsoleError = console.error;
+  console.error = () => undefined;
+  const fetchMock = mock.method(globalThis, 'fetch', async () => {
+    deliveryCalls += 1;
+    throw new Error('forced reaction delivery failure');
+  });
+  try {
+    const actor = await createFixture({
+      canonicalOrigin: `https://${crypto.randomUUID()}.local.test`,
+    });
+    const localRecipient = await createFixture();
+    await db.execute(
+      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_reaction_observer_failure CHECK (false) NOT VALID`,
+    );
+
+    let created: Awaited<ReturnType<typeof addReaction>> | undefined;
+    try {
+      created = await addReaction({
+        ...actor.input,
+        onPostCommitError: () => {
+          observerCalls += 1;
+          return Promise.resolve().then(() => {
+            throw new Error('observer failure');
+          });
+        },
+        postId: localRecipient.post.id,
+        type: '👀',
+      });
+      await assert.doesNotReject(created.postCommit());
+    } finally {
+      await db.execute(
+        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_reaction_observer_failure`,
+      );
+    }
+
+    if (!created) {
+      assert.fail('Expected a created Reaction');
+    }
+
+    assert.equal(await countReactions(localRecipient.post.id), 1);
+    assert.equal(observerCalls, 1);
+
+    const remoteRecipient = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+    const recipientActorUri = `https://${remoteRecipient.profile.displayName}.example/users/${remoteRecipient.profile.id}`;
+    await db.insert(ActivityPubActors).values({
+      inboxUri: `${recipientActorUri}/inbox`,
+      profileId: remoteRecipient.profile.id,
+      sharedInboxUri: `https://${remoteRecipient.profile.displayName}.example/inbox`,
+      type: 'PERSON',
+      uri: recipientActorUri,
+    });
+    await db.insert(ActivityPubPosts).values({
+      postId: remoteRecipient.post.id,
+      receivedAt: Temporal.Now.instant(),
+      uri: `https://${remoteRecipient.profile.displayName}.example/notes/${remoteRecipient.post.id}`,
+    });
+    const remoteCreated = await addReaction({
+      ...actor.input,
+      postId: remoteRecipient.post.id,
+      type: '🎉',
+    });
+
+    await db.insert(Notifications).values({
+      kind: NotificationKind.REACTION,
+      recipientProfileId: remoteRecipient.profile.id,
+      sourceId: remoteCreated.reaction.id,
+    });
+    await pg.unsafe(`
+      CREATE FUNCTION fail_reaction_notification_observer() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN
+        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced reaction notification cleanup failure'; END IF;
+        RETURN OLD;
+      END $$;
+      CREATE TRIGGER fail_reaction_notification_observer
+      BEFORE DELETE ON notification
+      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_observer();
+    `);
+
+    try {
+      const deleted = await deleteReaction({
+        actorProfileId: actor.profile.id,
+        onPostCommitError: () => {
+          observerCalls += 1;
+          return Promise.resolve().then(() => {
+            throw new Error('observer failure');
+          });
+        },
+        origin: 'LOCAL',
+        postId: remoteRecipient.post.id,
+        type: remoteCreated.reaction.type,
+      });
+      await assert.doesNotReject(deleted.postCommit());
+
+      assert.equal(await countReactions(remoteRecipient.post.id), 0);
+      assert.equal(observerCalls, 2);
+      assert.ok(deliveryCalls > 0);
+    } finally {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS fail_reaction_notification_observer ON notification;
+        DROP FUNCTION IF EXISTS fail_reaction_notification_observer();
+      `);
+    }
+  } finally {
+    fetchMock.mock.restore();
+    console.error = originalConsoleError;
+  }
 });
 
 test('Local과 ActivityPub 삭제는 caller transaction에 독립적으로 참여한다', async () => {
