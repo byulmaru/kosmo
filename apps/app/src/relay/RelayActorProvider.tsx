@@ -25,6 +25,7 @@ type RelayActorValue = {
 };
 
 const RelayActorContext = createContext<RelayActorValue | null>(null);
+const RelayActorBoundaryContext = createContext<string | null>(null);
 
 export function RelayActorProvider({
   children,
@@ -46,11 +47,17 @@ export function RelayActorProvider({
     void readSessionToken().then(setNativeToken, () => setNativeToken(null));
   }, []);
 
-  const setNativeSession = useCallback(async (token: string) => {
-    await writeSessionToken(token);
-    environmentGenerationRef.current += 1;
-    setNativeToken(token);
-  }, []);
+  const setNativeSession = useCallback(
+    async (token: string) => {
+      await writeSessionToken(token);
+      environmentGenerationRef.current += 1;
+      setNativeToken(token);
+      // Keep the active actor ID while still creating a fresh actor state object. This preserves the
+      // auth lifecycle reset even when the token value is unchanged and React bails out of setState.
+      dispatchActor({ type: 'profile-selected', profileId: actor.id });
+    },
+    [actor.id],
+  );
 
   const clearNativeSession = useCallback(async () => {
     await deleteSessionToken();
@@ -84,20 +91,41 @@ export function RelayActorProvider({
     return <Splash label="세션을 복원하는 중입니다." />;
   }
 
+  const actorBoundaryKey = `${actor.id}:${environmentGenerationRef.current}`;
+
   return (
     <RelayActorContext.Provider value={value}>
-      <RelayEnvironmentBoundary
-        // Keep the actor-dependent tree isolated while leaving Theme/Toast and other app-level
-        // providers outside this boundary. The generation is intentionally private to this
-        // provider; routes do not need to construct lifecycle keys themselves.
-        key={`${actor.id}:${environmentGenerationRef.current}`}
-        environment={environment}
-        generationRef={environmentGenerationRef}
-      >
-        {children}
-      </RelayEnvironmentBoundary>
+      <RelayActorBoundaryContext.Provider value={actorBoundaryKey}>
+        <RelayEnvironmentBoundary
+          environment={environment}
+          generationRef={environmentGenerationRef}
+        >
+          {children}
+        </RelayEnvironmentBoundary>
+      </RelayActorBoundaryContext.Provider>
     </RelayActorContext.Provider>
   );
+}
+
+/**
+ * Remounts an actor-dependent subtree without remounting the app's navigation state.
+ *
+ * The root Relay environment provider remains stable while its environment changes; consumers
+ * place this boundary below navigators (for example around the tabs Slot) when local actor state
+ * must be recreated for a new Store.
+ */
+export function RelayActorBoundary({ children }: PropsWithChildren) {
+  const actorBoundaryKey = useContext(RelayActorBoundaryContext);
+
+  if (!actorBoundaryKey) {
+    throw new Error('RelayActorBoundary must be used inside RelayActorProvider.');
+  }
+
+  return <RelayActorBoundaryContent key={actorBoundaryKey}>{children}</RelayActorBoundaryContent>;
+}
+
+function RelayActorBoundaryContent({ children }: PropsWithChildren) {
+  return children;
 }
 
 export function useRelayActor(): RelayActorValue {

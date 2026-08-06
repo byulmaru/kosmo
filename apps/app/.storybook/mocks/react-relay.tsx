@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
-import { RelayActorProvider } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
@@ -83,7 +83,11 @@ export function RelayStoryProvider({
     return createStoryEnvironment(mock, index);
   }, [mock]);
 
-  return <RelayActorProvider createEnvironment={createEnvironment}>{children}</RelayActorProvider>;
+  return (
+    <RelayActorProvider createEnvironment={createEnvironment}>
+      <RelayActorBoundary>{children}</RelayActorBoundary>
+    </RelayActorProvider>
+  );
 }
 
 function createStoryEnvironment(mock: RelayMockValue, environmentIndex: number): Environment {

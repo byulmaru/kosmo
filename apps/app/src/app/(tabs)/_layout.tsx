@@ -1,5 +1,10 @@
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 
 export default function TabsLayout() {
-  return <UniversalShell />;
+  return (
+    <RelayActorBoundary>
+      <UniversalShell />
+    </RelayActorBoundary>
+  );
 }
