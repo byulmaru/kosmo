@@ -79,6 +79,7 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 - [x] 2.3 기존 Profile mutation에 전체 Tag draft를 포함하고 pending·server field error·retry·성공 Relay record 동기화를 구현해 상태 전이를 검증한다.
 - [x] 2.4 공개 Profile의 bio 다음에 비대화형 wrapping TagChip 목록을 연결하고, 목록은 chip 사이에서 감싸되 개별 공용 chip은 높이 `32`·한 줄 ellipsis·전체 접근성 이름을 유지하도록 한다. 빈·임의 개수·긴·Remote 상태와 배열 순서 비보장 test를 추가한다.
 - [x] 2.5 React Native Web Storybook의 `240px` fixture에서 공용 TagChip 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 검증한다. 상태 카탈로그, app 필수 check와 Owner 편집→공개 표시 Web E2E 관련 범위를 통과시키고 `PROD-527` PR에 접근성·layout·Relay 증거와 현재 Web runtime 검증 경계를 기록한다. 실제 iOS·Android runtime QA는 Native 출시 gate로 이관한다.
+- [x] 2.6 `add-local-profile-edit` archive가 canonical에 반영한 production Profile Tag 미연결 임시 요구사항을 이 change의 `profile-edit-ui` delta에서 명시적으로 제거해 후속 archive 시 현재 연결 계약과 충돌하지 않게 한다.
 
 ## 3. PROD-522 통합 검증과 OpenSpec archive
 
