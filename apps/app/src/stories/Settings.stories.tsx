@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { expect, within } from 'storybook/test';
+import { expect, spyOn, userEvent, within } from 'storybook/test';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsRootPage } from '@/components/settings/SettingsPage';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
@@ -109,6 +109,59 @@ export const NoSelectedProfile: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByText('설정할 Profile이 없어요')).toBeVisible();
     expect(canvas.queryByRole('radiogroup')).toBeNull();
+  },
+  render: () => <SettingsProfileDetail />,
+};
+
+export const ProfileLoading: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        SettingsProfileDetailQuery: { data: ownerData, delayMs: 60_000 },
+      },
+    },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(
+      canvas.getByRole('progressbar', { name: 'Profile 설정을 불러오는 중입니다.' }),
+    ).toBeVisible();
+  },
+  render: () => <SettingsProfileDetail />,
+};
+
+export const ProfileErrorRetry: Story = {
+  beforeEach: () => {
+    const originalError = console.error;
+    const errorSpy = spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((argument) => String(argument).includes('Profile 설정 조회 실패'))) {
+        originalError(...args);
+      }
+    });
+
+    return () => errorSpy.mockRestore();
+  },
+  parameters: {
+    relay: {
+      operationResponses: {
+        SettingsProfileDetailQuery: {
+          sequence: [{ error: 'Profile 설정 조회 실패' }, { data: ownerData }],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      'Profile 설정을 불러오지 못했어요',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(
+      canvas.findByRole('radiogroup', {
+        name: 'Kosmo 내부 Profile 현재 Profile @settings-owner 기본 게시 공개 범위',
+      }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
   },
   render: () => <SettingsProfileDetail />,
 };

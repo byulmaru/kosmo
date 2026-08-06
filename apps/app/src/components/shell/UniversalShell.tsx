@@ -216,7 +216,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      accessibilityRole="button"
       onPress={() => (isSettingsRoute(pathname) ? returnToSettingsRoot(router) : router.back())}
       style={styles.menuButton}
       targetSize={44}
