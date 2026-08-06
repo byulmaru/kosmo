@@ -32,7 +32,7 @@ import type { ForwardedRef, RefObject } from 'react';
 import type { TextInput, View as NativeView } from 'react-native';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
-import type { PostComposerCreatedPost, PostComposerState } from './PostComposer';
+import type { PostComposerCreatedPost } from './PostComposer';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const ReplyComposerSurfaceParentFragment = graphql`
@@ -41,6 +41,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
     createdAt
     content {
       bodyText
+      contentWarning
     }
     profile {
       displayName
@@ -56,7 +57,13 @@ const ReplyComposerSurfaceParentFragment = graphql`
       createdAt
       content {
         bodyText
+        contentWarning
         document
+        media {
+          id
+          altText
+          url
+        }
       }
       profile {
         displayName
@@ -95,8 +102,6 @@ type ReplyComposerSurfaceProps = {
 export type ReplyComposerSurfaceHandle = {
   requestClose: (onClosed?: () => void) => void;
 };
-
-const initialComposerState: PostComposerState = { dirty: false, submitting: false };
 
 export const ReplyComposerSurface = forwardRef<
   ReplyComposerSurfaceHandle,
@@ -158,7 +163,7 @@ function ReplyComposerSurfaceContents({
   const { width } = useWindowDimensions();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
-  const [composerState, setComposerState] = useState<PostComposerState>(initialComposerState);
+  const [submitting, setSubmitting] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const dialogRef = useRef<NativeView>(null);
   const discardConfirmRef = useRef<NativeView>(null);
@@ -171,7 +176,7 @@ function ReplyComposerSurfaceContents({
 
   useEffect(() => {
     if (open) {
-      setComposerState(initialComposerState);
+      setSubmitting(false);
       setDiscardConfirmOpen(false);
       closeAfterDiscardRef.current = undefined;
     }
@@ -189,17 +194,13 @@ function ReplyComposerSurfaceContents({
 
   const requestClose = useCallback(
     (onClosed?: () => void) => {
-      if (composerState.submitting || discardConfirmOpen) {
+      if (submitting || discardConfirmOpen) {
         return;
       }
-      if (composerState.dirty) {
-        closeAfterDiscardRef.current = onClosed;
-        setDiscardConfirmOpen(true);
-        return;
-      }
-      closeImmediately(onClosed);
+      closeAfterDiscardRef.current = onClosed;
+      setDiscardConfirmOpen(true);
     },
-    [closeImmediately, composerState, discardConfirmOpen],
+    [discardConfirmOpen, submitting],
   );
   const requestCloseRef = useRef(requestClose);
   requestCloseRef.current = requestClose;
@@ -359,8 +360,9 @@ function ReplyComposerSurfaceContents({
             contextGuard={contextGuard}
             editorRef={editorRef}
             focusOnMount
+            initialContentWarning={parent.content?.contentWarning}
             onPostCreated={handlePostCreated}
-            onStateChange={setComposerState}
+            onSubmittingChange={setSubmitting}
             profile={profile.composer}
             replyParentId={parent.id}
           />
@@ -374,8 +376,16 @@ function ReplyComposerSurfaceContents({
     ? {
         content: parent.repostSource.content
           ? {
+              postId: parent.repostSource.id,
               bodyText: parent.repostSource.content.bodyText,
+              contentWarning: parent.repostSource.content.contentWarning,
               document: parent.repostSource.content.document,
+              media:
+                parent.repostSource.content.media?.map(({ altText, id, url }) => ({
+                  altText: altText ?? null,
+                  id,
+                  url: url ?? null,
+                })) ?? null,
             }
           : null,
         createdAt: parent.repostSource.createdAt,
@@ -430,7 +440,7 @@ function ReplyComposerSurfaceContents({
                 <Pressable
                   accessibilityLabel="닫기"
                   accessibilityRole="button"
-                  disabled={composerState.submitting}
+                  disabled={submitting}
                   hitSlop={4}
                   onPress={() => requestClose()}
                   style={({ pressed }) => [
@@ -438,7 +448,7 @@ function ReplyComposerSurfaceContents({
                     {
                       backgroundColor: pressed ? theme.surface : 'transparent',
                       height: closeControlSize,
-                      opacity: composerState.submitting ? 0.45 : 1,
+                      opacity: submitting ? 0.45 : 1,
                       width: closeControlSize,
                     },
                   ]}
@@ -485,8 +495,9 @@ function ReplyComposerSurfaceContents({
                   contextGuard={contextGuard}
                   editorRef={editorRef}
                   focusOnMount
+                  initialContentWarning={parent.content?.contentWarning}
                   onPostCreated={handlePostCreated}
-                  onStateChange={setComposerState}
+                  onSubmittingChange={setSubmitting}
                   profile={profile.composer}
                   replyParentId={parent.id}
                   scrollable

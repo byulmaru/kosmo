@@ -1,7 +1,7 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
@@ -9,7 +9,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { TextArea } from '@/components/ui/TextField';
+import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -46,7 +46,6 @@ const visibilityOptions = postComposerVisibilityValues.map((value) => ({
 }));
 type Visibility = (typeof postComposerVisibilityValues)[number];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
-export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -80,8 +79,9 @@ type PostComposerProps = {
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
   focusOnMount?: boolean;
+  initialContentWarning?: string | null;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onStateChange?: (state: PostComposerState) => void;
+  onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   replyParentId?: string;
   scrollable?: boolean;
@@ -131,8 +131,9 @@ function PostComposerContents({
   editorRef,
   environmentGenerationRef,
   focusOnMount = false,
+  initialContentWarning,
   onPostCreated,
-  onStateChange,
+  onSubmittingChange,
   profile,
   replyParentId,
   scrollable = false,
@@ -146,11 +147,15 @@ function PostComposerContents({
   const visibilityTrigger = useRef<View>(null);
   const remainingDescriptionId = useId();
   const [body, setBody] = useState('');
+  const [contentWarning, setContentWarning] = useState(() =>
+    normalizePostContentPlainText(initialContentWarning ?? ''),
+  );
   const [editorFocused, setEditorFocused] = useState(false);
   const [visibility, setVisibility] = useState<Visibility>(() =>
     resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
   );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
+  const [webVisibilityMenuLeft, setWebVisibilityMenuLeft] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
   const [mediaGeneration, setMediaGeneration] = useState(0);
@@ -163,10 +168,9 @@ function PostComposerContents({
     isPostComposerVisibilityAllowed(option.value, replyParentId),
   );
   const bodyText = normalizePostContentPlainText(body);
-  const remaining = postBodyMaxLength - bodyText.length;
+  const contentWarningText = normalizePostContentPlainText(contentWarning);
+  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
-  const dirty =
-    body !== '' || media.items.length > 0 || media.hasPendingMedia || media.sensitiveMedia;
   const disabled =
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
@@ -193,7 +197,12 @@ function PostComposerContents({
       variables: {
         connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
         input: {
-          ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
+          ...createPostComposerMutationInput(
+            bodyText,
+            visibility,
+            replyParentId,
+            contentWarningText,
+          ),
           media: media.items,
           sensitiveMedia: media.sensitiveMedia,
         },
@@ -221,6 +230,9 @@ function PostComposerContents({
           visibility,
         });
         setBody('');
+        if (!submissionReplyMode) {
+          setContentWarning('');
+        }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
         setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
@@ -252,8 +264,8 @@ function PostComposerContents({
   }, []);
 
   useEffect(() => {
-    onStateChange?.({ dirty, submitting });
-  }, [dirty, onStateChange, submitting]);
+    onSubmittingChange?.(submitting);
+  }, [onSubmittingChange, submitting]);
 
   useEffect(() => {
     if (!focusOnMount) {
@@ -262,6 +274,48 @@ function PostComposerContents({
     const frame = requestAnimationFrame(() => editor.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [contextKey, focusOnMount]);
+
+  const positionWebVisibilityMenu = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const control = visibilityControl.current as unknown as HTMLElement | null;
+    const menu = visibilityMenuRef.current as unknown as HTMLElement | null;
+    const ownerDocument = control?.ownerDocument;
+    if (!control || !menu || !ownerDocument) {
+      return;
+    }
+
+    const controlRect = control.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const minLeft = -controlRect.left;
+    const maxLeft = ownerDocument.documentElement.clientWidth - menuRect.width - controlRect.left;
+    const nextLeft = Math.max(minLeft, Math.min(0, maxLeft));
+
+    setWebVisibilityMenuLeft((current) => (current === nextLeft ? current : nextLeft));
+  }, []);
+
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || !visibilityOpen) {
+      return;
+    }
+
+    positionWebVisibilityMenu();
+    const control = visibilityControl.current as unknown as HTMLElement | null;
+    const ownerDocument = control?.ownerDocument;
+    const ownerWindow = ownerDocument?.defaultView;
+    if (!ownerDocument || !ownerWindow) {
+      return;
+    }
+
+    ownerWindow.addEventListener('resize', positionWebVisibilityMenu);
+    ownerDocument.addEventListener('scroll', positionWebVisibilityMenu, true);
+    return () => {
+      ownerWindow.removeEventListener('resize', positionWebVisibilityMenu);
+      ownerDocument.removeEventListener('scroll', positionWebVisibilityMenu, true);
+    };
+  }, [positionWebVisibilityMenu, visibilityOpen]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visibilityOpen) {
@@ -420,6 +474,7 @@ function PostComposerContents({
           style={[
             styles.webVisibilityMenu,
             surface ? styles.webVisibilityMenuAbove : styles.webVisibilityMenuBelow,
+            { left: webVisibilityMenuLeft },
           ]}
         >
           {visibilityMenu}
@@ -480,7 +535,7 @@ function PostComposerContents({
         <TextArea
           ref={editor}
           aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-          aria-invalid={Boolean(error)}
+          aria-invalid={Boolean(error) || remaining < 0}
           accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
           accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
           editable={!submitting}
@@ -490,6 +545,16 @@ function PostComposerContents({
           placeholder={replyMode ? '답글을 입력하세요…' : '무슨 일이 일어나고 있나요?'}
           style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
           value={body}
+        />
+        <TextField
+          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+          aria-invalid={remaining < 0}
+          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
+          accessibilityLabel={replyMode ? '답글 내용 경고' : '게시글 내용 경고'}
+          editable={!submitting}
+          onChangeText={setContentWarning}
+          placeholder="내용 경고 (선택)"
+          value={contentWarning}
         />
         {error ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
@@ -615,7 +680,6 @@ const styles = StyleSheet.create({
   visibilityTriggerLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   webVisibilityMenu: {
     left: 0,
-    maxWidth: '100%',
     position: 'absolute',
     width: 256,
     zIndex: 50,

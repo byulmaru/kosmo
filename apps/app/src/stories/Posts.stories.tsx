@@ -12,6 +12,7 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
+import { PostContentRenderer } from '@/components/post/PostContentRenderer';
 import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
@@ -197,6 +198,11 @@ const mediaOnlyPost = post({
       url: postMediaImageUri,
     },
   ],
+});
+const contentWarningPost = post({
+  bodyText: '실제 Post 소비자에서 가림 해제되는 본문입니다.',
+  contentWarning: '실제 Post 소비자 통합 검증 경고',
+  id: 'content-warning-consumer',
 });
 const sensitiveTwoMediaPost = post({
   bodyDocument: {
@@ -684,6 +690,7 @@ const storyPosts = [
   quoteOfQuotePost,
   mediaTextPost,
   mediaOnlyPost,
+  contentWarningPost,
   sensitiveTwoMediaPost,
   threeMediaPost,
   fourMediaPost,
@@ -888,14 +895,40 @@ function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationDa
   const repostSource = post.repostSource ?? null;
 
   return {
-    content: post.content ?? null,
+    content: post.content
+      ? {
+          bodyText: post.content.bodyText,
+          contentWarning: post.content.contentWarning,
+          document: post.content.document,
+          media:
+            post.content.media?.map(({ altText, id, url }) => ({
+              altText,
+              id,
+              url,
+            })) ?? null,
+          postId: post.id,
+        }
+      : null,
     createdAt: post.createdAt,
     id: post.id,
     profile: post.profile,
     replyParent: post.replyParent ?? null,
     repostSource: repostSource
       ? {
-          content: repostSource.content ?? null,
+          content: repostSource.content
+            ? {
+                bodyText: repostSource.content.bodyText,
+                contentWarning: repostSource.content.contentWarning,
+                document: repostSource.content.document,
+                media:
+                  repostSource.content.media?.map(({ altText, id, url }) => ({
+                    altText,
+                    id,
+                    url,
+                  })) ?? null,
+                postId: repostSource.id,
+              }
+            : null,
           createdAt: repostSource.createdAt,
           id: repostSource.id,
           profile: repostSource.profile,
@@ -1604,6 +1637,41 @@ function ComposerStory() {
   );
 }
 
+function ContentWarningRevealStory() {
+  return (
+    <Catalog>
+      <PostContentRenderer
+        bodyText="가림 해제 뒤 표시되는 원문 본문입니다."
+        contentWarning="민감한 내용이 포함되어 있습니다."
+        document={null}
+        media={[
+          {
+            altText: '가림 해제 뒤 표시되는 이미지',
+            id: 'content-warning-media',
+            url: postMediaImageUri,
+          },
+        ]}
+        postId="content-warning-story-post"
+      />
+    </Catalog>
+  );
+}
+
+function ContentWarningConsumerIntegrationStory() {
+  const post = requirePostById(usePostsStoryData().posts, contentWarningPost.id);
+
+  return (
+    <Catalog>
+      <View testID="content-warning-list-surface">
+        <PostListItem post={requireFragment(post.listItem, 'Content Warning list item consumer')} />
+      </View>
+      <View testID="content-warning-body-surface">
+        <PostBody post={requireFragment(post.body, 'Content Warning body consumer')} size="lg" />
+      </View>
+    </Catalog>
+  );
+}
+
 function ComposerPickerUnmountStory() {
   const [composerVisible, setComposerVisible] = useState(true);
   const profile = usePostsStoryData().composerProfile;
@@ -2302,11 +2370,14 @@ export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByText('짧은 본문 한 줄.')).toHaveAttribute('data-openpanel-replay-block', '');
-    expect(canvas.getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')).toHaveAttribute(
-      'data-openpanel-replay-block',
-      '',
-    );
+    expect(
+      canvas.getByText('짧은 본문 한 줄.').closest('[data-openpanel-replay-block]'),
+    ).not.toBeNull();
+    expect(
+      canvas
+        .getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')
+        .closest('[data-openpanel-replay-block]'),
+    ).not.toBeNull();
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
@@ -4508,6 +4579,12 @@ export const PostDetailThreadReplyOwnerIntegration: Story = {
     ).toEqual([replyButtons[1]]);
 
     await userEvent.click(replyButtons[1]!);
+    await userEvent.click(
+      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
+        'button',
+        { name: '작성 취소' },
+      ),
+    );
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButtons[1]).toHaveFocus();
   },
@@ -4526,6 +4603,57 @@ export const ComposerDefault: Story = {
     expect(getComputedStyle(body).outlineStyle).not.toBe('none');
   },
   render: () => <ComposerStory />,
+};
+
+export const ContentWarningReveal: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const root = canvas.getByTestId('post-content-renderer');
+    expect(root).toHaveAttribute('data-openpanel-replay-block', '');
+    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
+
+    const toggle = canvas.getByRole('button', { name: '내용 보기' });
+    const toggleLabel = within(toggle).getByText('내용 보기');
+    expect(getComputedStyle(toggle).justifyContent).toBe('center');
+    const toggleBox = toggle.getBoundingClientRect();
+    const toggleLabelBox = toggleLabel.getBoundingClientRect();
+    expect(
+      Math.abs(
+        toggleBox.top + toggleBox.height / 2 - (toggleLabelBox.top + toggleLabelBox.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    toggle.focus();
+    expect(toggle).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
+    const gallery = canvas.getByTestId('post-media-gallery');
+    expect(gallery).toBeVisible();
+    expect(gallery.closest('[data-openpanel-replay-block]')).toBe(root);
+
+    await userEvent.keyboard('{Enter}');
+    expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
+  },
+  render: () => <ContentWarningRevealStory />,
+};
+
+export const ContentWarningProductionConsumersShareRevealState: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
+    const bodySurface = within(canvas.getByTestId('content-warning-body-surface'));
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+
+    await userEvent.click(listSurface.getByRole('button', { name: '내용 보기' }));
+    expect(canvas.getAllByText(contentWarningPost.content!.bodyText)).toHaveLength(2);
+    expect(bodySurface.getByRole('button', { name: '내용 다시 가리기' })).toBeVisible();
+
+    await userEvent.click(bodySurface.getByRole('button', { name: '내용 다시 가리기' }));
+    expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
+    expect(listSurface.getByRole('button', { name: '내용 보기' })).toBeVisible();
+  },
+  render: () => <ContentWarningConsumerIntegrationStory />,
 };
 
 export const ComposerMediaStates: Story = {
@@ -4942,15 +5070,26 @@ export const ComposerSubmitting: Story = {
 };
 
 export const ComposerVisibilityAndSubmitInteraction: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
     const visibilityButton = canvas.getByRole('button', { name: '조용한 공개' });
+    const bodyTop = body.getBoundingClientRect().top;
+    const triggerWidth = visibilityButton.getBoundingClientRect().width;
     expect(visibilityButton.getBoundingClientRect().height).toBe(40);
     await userEvent.type(body, '스토리에서 작성한 게시글입니다.');
     await userEvent.click(visibilityButton);
 
     let menu = await canvas.findByRole('menu', { name: '게시글 공개 설정' });
+    const menuRect = menu.getBoundingClientRect();
+    const viewportWidth = canvasElement.ownerDocument.defaultView?.innerWidth;
+    expect(viewportWidth).toBeDefined();
+    expect(menuRect.width).toBe(256);
+    expect(menuRect.width).toBeGreaterThan(triggerWidth);
+    expect(menuRect.left).toBeGreaterThanOrEqual(0);
+    expect(menuRect.right).toBeLessThanOrEqual(viewportWidth!);
+    expect(body.getBoundingClientRect().top).toBe(bodyTop);
     expect(menu).toBeVisible();
     await userEvent.click(body);
     await waitFor(() => {
@@ -5631,6 +5770,10 @@ export const ReplyModalPresentation: Story = {
     expect(within(dialog).getByRole('button', { name: '공개' })).toBeVisible();
 
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    const initialDiscardConfirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(initialDiscardConfirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(canvas.getByTestId('reply-modal-open-state')).toHaveTextContent('closed');
 
@@ -5720,6 +5863,10 @@ export const ReplyListSurfaceIntegration: Story = {
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'true');
     await userEvent.click(within(dialog).getByRole('button', { name: '닫기' }));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
     expect(replyButtons[0]).toHaveFocus();
     expect(replyButtons[0]).toHaveAttribute('aria-expanded', 'false');
@@ -5750,6 +5897,10 @@ export const ReplyDetailInlineIntegration: Story = {
     expect(canvas.getAllByText('짧은 본문 한 줄.')).toHaveLength(1);
 
     await userEvent.click(replyButton);
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    await userEvent.click(within(confirm).getByRole('button', { name: '작성 취소' }));
     await waitFor(() => expect(canvas.queryByRole('textbox', { name: '답글 본문' })).toBeNull());
     expect(replyButton).toHaveAttribute('aria-expanded', 'false');
   },

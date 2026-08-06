@@ -9,6 +9,7 @@ const PostBodyFragment = graphql`
       id
       document
       bodyText
+      contentWarning
       media {
         id
         altText
@@ -39,6 +40,7 @@ export function PostBody({
   return (
     <PostContentRenderer
       bodyText={content.bodyText}
+      contentWarning={content.contentWarning}
       document={content.document}
       interactive={interactive}
       media={
@@ -49,6 +51,7 @@ export function PostBody({
         })) ?? null
       }
       onBodyPress={onBodyPress}
+      postId={post.id}
       size={size}
     />
   );
