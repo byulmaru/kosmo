@@ -1,10 +1,12 @@
 # 공용 Page Header
 
-주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 시각적 높이는 `64px`이며 Android/iOS safe-area inset은 헤더가 아니라 모바일 셸이 바깥에서 추가한다.
+주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이며 Android/iOS safe-area inset은 헤더가 아니라 모바일 셸이 바깥에서 추가한다.
 
 ## Variant
 
 - `text`: `알림`, `북마크`, `글쓰기`, `게시글`처럼 현재 화면을 설명하는 텍스트 제목을 표시한다. 제목은 하나의 heading으로 노출한다.
+- `text` 제목은 leading action 다음의 가용 폭 안에서 줄어들고 여러 줄로 reflow한다. `64px`은 고정 높이가
+  아니라 최소 높이이므로, 좁은 화면이나 font scaling에서 제목을 한 줄로 자르거나 header 밖으로 넘기지 않는다.
 - `brand`: 홈에서 투명 브랜드 마크를 너비 `38px`로 가로 중앙에 표시한다. 좌우에 같은 `44×44px` action slot을 두는 대칭 Auto Layout을 사용해 한쪽 action만 있어도 마크의 중심이 헤더 전체 중심과 일치하게 한다. 비어 있는 우측 slot은 향후 홈 action 위치로 유지한다. 마크 이미지는 접근성 트리에서 숨기고 `홈` heading 하나만 노출한다.
 
 ## Action slot

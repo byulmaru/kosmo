@@ -38,6 +38,8 @@ mock.module('react-native', {
         props,
         typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
       ),
+    ScrollView: ({ children, ...props }: Record<string, unknown>) =>
+      createElement('ScrollView', props, children as ReactNode),
     StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
     useWindowDimensions: () => ({ width }),
     View: 'View',
@@ -122,6 +124,21 @@ describe('SettingsPage', () => {
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
+    assert.equal(rendered('ScrollView').length, 0);
+  });
+
+  it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
+    platform = 'android';
+    width = 320;
+    await render(SettingsDefaultPostVisibilityPage);
+
+    const scrollView = rendered('ScrollView')[0];
+    assert.ok(scrollView);
+    assert.equal(scrollView.findAll((node) => (node.type as unknown) === 'PageHeader').length, 1);
+    assert.equal(
+      scrollView.findAll((node) => (node.type as unknown) === 'SettingsProfileDetail').length,
+      1,
+    );
   });
 
   it('compact Web detail은 unrelated history가 있어도 route-owned back header로 root를 연다', async () => {

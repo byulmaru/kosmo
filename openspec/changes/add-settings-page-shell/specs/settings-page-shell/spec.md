@@ -114,6 +114,8 @@
 
 - **WHEN** Android·iOS 또는 compact Web 사용자가 Settings root 또는 detail을 연다
 - **THEN** route는 root 또는 detail의 text header를 첫 heading으로 표시하고 detail에 back action을 제공한다
+- **AND** Android·iOS에서는 하나의 vertical `ScrollView`가 route header와 root 또는 detail content 전체를 포함한다
+- **AND** 긴 detail title은 leading action 다음의 가용 폭 안에서 여러 줄로 reflow한다
 
 ### Requirement: Profile detail 상태 소유
 

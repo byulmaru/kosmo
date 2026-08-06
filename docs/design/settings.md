@@ -82,6 +82,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
   렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
 - Android·iOS와 compact Web에서는 root 또는 detail route가 자기 text `PageHeader`를 scroll content의 첫
   heading으로 렌더링한다. detail header는 back action을 제공하고 Native safe area는 mobile shell이 소유한다.
+- Android·iOS one-pane route는 `PageHeader`부터 root/detail content 전체를 하나의 platform vertical
+  `ScrollView`에 둔다. compact·mobile·full Web은 기존 document scroll을 계속 사용한다.
 - full Web에서는 master pane의 `설정` heading과 detail pane의 현재 화면 heading을 각각 노출한다. 같은 pane
   안에 중복 heading을 만들지 않는다.
 - 모든 layout은 기존 `compact=768`, `full=1280` breakpoint를 사용한다. text scaling과 reflow에서도 행의

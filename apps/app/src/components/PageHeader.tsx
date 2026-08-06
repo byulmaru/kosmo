@@ -84,6 +84,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
     pointerEvents: 'none',
   },
-  title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.xl },
+  title: {
+    flexShrink: 1,
+    fontFamily: 'SUIT',
+    fontWeight: '700',
+    minWidth: 0,
+    ...typography.xl,
+  },
   srOnly: { height: 1, overflow: 'hidden', position: 'absolute', width: 1 },
 });

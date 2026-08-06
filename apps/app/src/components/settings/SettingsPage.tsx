@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { IconButton } from '@/components/ui/IconButton';
@@ -8,6 +8,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { returnToSettingsRoot } from './settingsNavigation';
 import { SettingsNavigationList } from './SettingsNavigationList';
 import { SettingsProfileDetail } from './SettingsProfileDetail';
+import type { ReactNode } from 'react';
 
 export function SettingsRootPage() {
   const { width } = useWindowDimensions();
@@ -19,10 +20,10 @@ export function SettingsRootPage() {
   }
 
   return (
-    <View style={styles.onePane}>
+    <SettingsOnePane>
       {!web || layout !== 'mobile' ? <PageHeader title="설정" /> : null}
       <SettingsNavigationList />
-    </View>
+    </SettingsOnePane>
   );
 }
 
@@ -50,10 +51,25 @@ export function SettingsDefaultPostVisibilityPage() {
   );
 
   return (
-    <View style={styles.onePane}>
+    <SettingsOnePane>
       {routeOwnsHeader ? <PageHeader leading={backButton} title="게시물 기본 공개 범위" /> : null}
       <SettingsProfileDetail />
-    </View>
+    </SettingsOnePane>
+  );
+}
+
+function SettingsOnePane({ children }: { children: ReactNode }) {
+  if (Platform.OS === 'web') {
+    return <View style={styles.onePane}>{children}</View>;
+  }
+
+  return (
+    <ScrollView
+      contentContainerStyle={styles.nativeOnePaneContent}
+      style={styles.nativeOnePaneScroll}
+    >
+      {children}
+    </ScrollView>
   );
 }
 
@@ -82,6 +98,8 @@ const styles = StyleSheet.create({
   masterPane: { borderRightWidth: 1, flexShrink: 0, minWidth: 0, width: 320 },
   detailPane: { flex: 1, minWidth: 0 },
   onePane: { minHeight: '100%', minWidth: 0, width: '100%' },
+  nativeOnePaneScroll: { flex: 1, minWidth: 0, width: '100%' },
+  nativeOnePaneContent: { flexGrow: 1, minWidth: 0, width: '100%' },
   backButton: {
     alignItems: 'center',
     height: 44,
