@@ -23,6 +23,11 @@ import type { Transaction } from '../db';
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
+export type AcceptProfileFollowRequestResult =
+  | { readonly kind: 'ACCEPTED' }
+  | { readonly kind: 'ALREADY_ESTABLISHED' }
+  | { readonly kind: 'NOOP' };
+
 type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
@@ -96,8 +101,10 @@ export const acceptProfileFollowRequest = async ({
   expectedRowId,
   followeeProfileId,
   followerProfileId,
-}: ProfileFollowPair & { readonly expectedRowId: string }): Promise<boolean> => {
-  const accepted = await db.transaction(async (tx) => {
+}: ProfileFollowPair & {
+  readonly expectedRowId: string;
+}): Promise<AcceptProfileFollowRequestResult> => {
+  const result = await db.transaction(async (tx): Promise<AcceptProfileFollowRequestResult> => {
     const pair = { followeeProfileId, followerProfileId };
     const established = await tx
       .select({ id: ProfileFollows.id })
@@ -107,8 +114,20 @@ export const acceptProfileFollowRequest = async ({
       .then(first);
 
     if (established) {
-      return established.id === expectedRowId;
+      return established.id === expectedRowId ? { kind: 'ALREADY_ESTABLISHED' } : { kind: 'NOOP' };
     }
+
+    const pendingRequest = await tx
+      .select({ id: ProfileFollowRequests.id })
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.id, expectedRowId),
+          pairCondition(ProfileFollowRequests, pair),
+        ),
+      )
+      .limit(1)
+      .then(first);
 
     const unavailableParticipants = tx
       .select({ id: Profiles.id })
@@ -133,18 +152,27 @@ export const acceptProfileFollowRequest = async ({
       .then(first);
 
     if (!deleted) {
-      return false;
+      const establishedAfterDelete = await tx
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(pairCondition(ProfileFollows, pair))
+        .limit(1)
+        .then(first);
+
+      return pendingRequest && establishedAfterDelete
+        ? { kind: 'ALREADY_ESTABLISHED' }
+        : { kind: 'NOOP' };
     }
 
-    await ensureProfileFollow(pair, tx);
-    return true;
+    const ensured = await ensureProfileFollow(pair, tx);
+    return ensured.created ? { kind: 'ACCEPTED' } : { kind: 'ALREADY_ESTABLISHED' };
   });
 
-  if (accepted) {
+  if (result.kind !== 'NOOP') {
     await deleteFollowRequestNotificationPostCommit(expectedRowId);
   }
 
-  return accepted;
+  return result;
 };
 
 type ApproveProfileFollowRequestResult = {

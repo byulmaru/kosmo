@@ -1,7 +1,6 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
-import { GlobeIcon, LockIcon, MoonIcon } from 'lucide-react-native';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
@@ -10,7 +9,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { TextArea } from '@/components/ui/TextField';
+import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -22,7 +21,9 @@ import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
   isPostComposerVisibilityAllowed,
+  resolvePostComposerVisibility,
 } from './postComposerState';
+import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { ReactNode, RefObject } from 'react';
 import type { TextInput } from 'react-native';
 import type {
@@ -32,41 +33,26 @@ import type {
 import type { PostComposerCreatePostMutation } from './__generated__/PostComposerCreatePostMutation.graphql';
 import type { PostComposerMediaValue } from './PostComposerMediaControls';
 
-const visibilityOptions = [
-  {
-    description: '모두가 볼 수 있어요.',
-    icon: GlobeIcon,
-    label: '공개',
-    value: PostVisibility.PUBLIC,
-  },
-  {
-    description: '모두가 볼 수 있지만 검색되지 않아요.',
-    icon: MoonIcon,
-    label: '조용한 공개',
-    value: PostVisibility.UNLISTED,
-  },
-  {
-    description: '팔로워만 볼 수 있어요.',
-    icon: LockIcon,
-    label: '팔로워만',
-    value: PostVisibility.FOLLOWERS,
-  },
-  // TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면 복원한다.
-  // Local Post는 현재 이 공개 범위를 선택해도 해당 계약을 보장할 수 없어 임시로 숨긴다.
-  // {
-  //   description: '이 글에서 언급한 계정만 볼 수 있어요.',
-  //   icon: AtSignIcon,
-  //   label: '언급한 계정만',
-  //   value: PostVisibility.DIRECT,
-  // },
+// TODO(PROD-462): Mentioned Profile recipient 입력·저장과 DIRECT 조회 권한이 구현되면
+// PostVisibility.DIRECT를 Composer 허용 목록에 복원한다.
+const postComposerVisibilityValues = [
+  PostVisibility.PUBLIC,
+  PostVisibility.UNLISTED,
+  PostVisibility.FOLLOWERS,
 ] as const;
-type Visibility = (typeof visibilityOptions)[number]['value'];
+const visibilityOptions = postComposerVisibilityValues.map((value) => ({
+  ...postVisibilityPresentation[value],
+  value,
+}));
+type Visibility = (typeof postComposerVisibilityValues)[number];
 export type PostComposerCreatedPost = Readonly<{ id: string }>;
-export type PostComposerState = Readonly<{ dirty: boolean; submitting: boolean }>;
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
     id
+    private {
+      defaultPostVisibility
+    }
     displayName
     handle
     avatar {
@@ -93,8 +79,9 @@ type PostComposerProps = {
   contextGuard?: RefObject<number>;
   editorRef?: RefObject<TextInput | null>;
   focusOnMount?: boolean;
+  initialContentWarning?: string | null;
   onPostCreated?: (post: PostComposerCreatedPost) => void;
-  onStateChange?: (state: PostComposerState) => void;
+  onSubmittingChange?: (submitting: boolean) => void;
   profile: PostComposer_profile$key;
   replyParentId?: string;
   scrollable?: boolean;
@@ -144,8 +131,9 @@ function PostComposerContents({
   editorRef,
   environmentGenerationRef,
   focusOnMount = false,
+  initialContentWarning,
   onPostCreated,
-  onStateChange,
+  onSubmittingChange,
   profile,
   replyParentId,
   scrollable = false,
@@ -159,8 +147,13 @@ function PostComposerContents({
   const visibilityTrigger = useRef<View>(null);
   const remainingDescriptionId = useId();
   const [body, setBody] = useState('');
+  const [contentWarning, setContentWarning] = useState(() =>
+    normalizePostContentPlainText(initialContentWarning ?? ''),
+  );
   const [editorFocused, setEditorFocused] = useState(false);
-  const [visibility, setVisibility] = useState<Visibility>(PostVisibility.UNLISTED);
+  const [visibility, setVisibility] = useState<Visibility>(() =>
+    resolvePostComposerVisibility(profile.private?.defaultPostVisibility),
+  );
   const [visibilityOpen, setVisibilityOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
@@ -174,14 +167,9 @@ function PostComposerContents({
     isPostComposerVisibilityAllowed(option.value, replyParentId),
   );
   const bodyText = normalizePostContentPlainText(body);
-  const remaining = postBodyMaxLength - bodyText.length;
+  const contentWarningText = normalizePostContentPlainText(contentWarning);
+  const remaining = postBodyMaxLength - bodyText.length - contentWarningText.length;
   const remainingDescription = `남은 글자 수 ${remaining.toLocaleString('ko-KR')}자`;
-  const dirty =
-    body !== '' ||
-    visibility !== PostVisibility.UNLISTED ||
-    media.items.length > 0 ||
-    media.hasPendingMedia ||
-    media.sensitiveMedia;
   const disabled =
     submitting ||
     (bodyText.length === 0 && media.items.length === 0) ||
@@ -208,7 +196,12 @@ function PostComposerContents({
       variables: {
         connections: [ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline')],
         input: {
-          ...createPostComposerMutationInput(bodyText, visibility, replyParentId),
+          ...createPostComposerMutationInput(
+            bodyText,
+            visibility,
+            replyParentId,
+            contentWarningText,
+          ),
           media: media.items,
           sensitiveMedia: media.sensitiveMedia,
         },
@@ -236,9 +229,12 @@ function PostComposerContents({
           visibility,
         });
         setBody('');
+        if (!submissionReplyMode) {
+          setContentWarning('');
+        }
         setMedia(emptyPostComposerMediaValue);
         setMediaGeneration((generation) => generation + 1);
-        setVisibility(PostVisibility.UNLISTED);
+        setVisibility(resolvePostComposerVisibility(profile.private?.defaultPostVisibility));
         editor.current?.focus();
         submittedCallback?.(createdPost);
       },
@@ -267,8 +263,8 @@ function PostComposerContents({
   }, []);
 
   useEffect(() => {
-    onStateChange?.({ dirty, submitting });
-  }, [dirty, onStateChange, submitting]);
+    onSubmittingChange?.(submitting);
+  }, [onSubmittingChange, submitting]);
 
   useEffect(() => {
     if (!focusOnMount) {
@@ -378,7 +374,7 @@ function PostComposerContents({
               styles.visibilityOption,
               {
                 backgroundColor: selected
-                  ? 'rgba(252, 231, 154, 0.45)'
+                  ? theme.selectedSurface
                   : pressed
                     ? theme.surface
                     : 'transparent',
@@ -495,7 +491,7 @@ function PostComposerContents({
         <TextArea
           ref={editor}
           aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
-          aria-invalid={Boolean(error)}
+          aria-invalid={Boolean(error) || remaining < 0}
           accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
           accessibilityLabel={replyMode ? '답글 본문' : '게시글 본문'}
           editable={!submitting}
@@ -506,6 +502,16 @@ function PostComposerContents({
           style={[styles.editor, Platform.OS === 'web' && replyMode ? styles.webEditor : null]}
           value={body}
         />
+        <TextField
+          aria-describedby={Platform.OS === 'web' ? remainingDescriptionId : undefined}
+          aria-invalid={remaining < 0}
+          accessibilityHint={Platform.OS === 'web' ? undefined : remainingDescription}
+          accessibilityLabel={replyMode ? '답글 내용 경고' : '게시글 내용 경고'}
+          editable={!submitting}
+          onChangeText={setContentWarning}
+          placeholder="내용 경고 (선택)"
+          value={contentWarning}
+        />
         {error ? (
           <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
             {error}
@@ -514,6 +520,7 @@ function PostComposerContents({
         <PostComposerMediaControls
           actions={replyMode ? null : submitActions}
           disabled={submitting}
+          editorRef={editor}
           key={mediaGeneration}
           onValueChange={setMedia}
         />

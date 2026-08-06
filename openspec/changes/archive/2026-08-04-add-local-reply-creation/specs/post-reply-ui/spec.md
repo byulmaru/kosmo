@@ -88,9 +88,10 @@
 
 #### Scenario: pristine과 dirty close
 
-- **WHEN** 초기 본문과 Visibility가 유지된 surface를 `X`, backdrop 또는 `Escape`로 닫는다
+- **WHEN** 초기 본문을 유지하고 Media 작성 상태가 없는 surface를 `X`, backdrop 또는 `Escape`로 닫는다
 - **THEN** 클라이언트는 즉시 닫고 원래 Reply action으로 focus를 복원한다
-- **BUT WHEN** 본문 또는 Visibility가 초기값에서 바뀌었다
+- **AND** Visibility만 초기값에서 바뀐 상태도 보호할 draft content가 아니므로 같은 방식으로 즉시 닫는다
+- **BUT WHEN** 본문이 바뀌었거나 Media 선택·업로드·Alt Text·Sensitive Media 상태가 있다
 - **THEN** 클라이언트는 `답글 작성을 취소할까요?` 확인에서 `계속 작성` 또는 `작성 취소`를 선택하게 한다
 - **AND** 상세 inline surface의 현재 Reply action 재활성화와 다른 Parent Reply action 선택도 같은 확인 lifecycle을 사용한다
 

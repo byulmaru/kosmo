@@ -268,11 +268,29 @@ export const StatesAndFollowItems: Story = {
       );
     }
     expect(canvas.getByText('아직 알림이 없어요')).toBeVisible();
-    expect(
-      canvas.getByRole('link', {
-        name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
-      }),
-    ).toBeVisible();
+    const unreadCopyLink = canvas.getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
+    });
+    const readCopyLink = canvas.getByRole('link', {
+      name: /은하 기록자님이 팔로우했습니다/,
+    });
+    const unreadRow = unreadCopyLink.parentElement?.parentElement;
+    const readRow = readCopyLink.parentElement?.parentElement;
+
+    expect(unreadCopyLink).toBeVisible();
+    expect(unreadRow).not.toBeNull();
+    expect(readRow).not.toBeNull();
+    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
+    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    expect(getComputedStyle(unreadRow!).borderLeftWidth).toBe('4px');
+    expect(getComputedStyle(unreadRow!).paddingLeft).toBe('12px');
+    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(getComputedStyle(readRow!).borderLeftColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(readRow!).borderLeftWidth).toBe('4px');
+    expect(getComputedStyle(readRow!).paddingLeft).toBe('12px');
+    expect(unreadRow!.firstElementChild!.getBoundingClientRect().left).toBe(
+      readRow!.firstElementChild!.getBoundingClientRect().left,
+    );
     expect(
       canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ }),
     ).toHaveAttribute('href', '/@requester');
@@ -366,6 +384,16 @@ export const ReadSuccessNormalizesAndNavigates: Story = {
     await expect(
       canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
     ).resolves.toBeVisible();
+    const readCopyLink = await canvas.findByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다/,
+    });
+    const readRow = readCopyLink.parentElement?.parentElement;
+
+    expect(readRow).not.toBeNull();
+    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(246, 246, 246)');
+    expect(getComputedStyle(readRow!).borderLeftColor).toBe('rgba(0, 0, 0, 0)');
+    await userEvent.unhover(readCopyLink);
+    expect(getComputedStyle(readRow!).backgroundColor).toBe('rgb(255, 255, 255)');
   },
   render: () => <ReadNavigationList />,
 };
@@ -402,6 +430,16 @@ export const ReadPendingDoesNotBlockAvatarNavigation: Story = {
         name: '별빛 여행자 프로필로 이동. 읽지 않은 알림.',
       }),
     ).toBeVisible();
+    const unreadCopyLink = canvas.getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
+    });
+    const unreadRow = unreadCopyLink.parentElement?.parentElement;
+
+    expect(unreadRow).not.toBeNull();
+    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgb(246, 246, 246)');
+    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    await userEvent.unhover(unreadCopyLink);
+    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
   },
   render: () => <ReadNavigationList />,
 };
@@ -413,6 +451,16 @@ export const ReadNetworkErrorDoesNotBlockCopyNavigation: Story = {
     await userEvent.click(canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }));
     await expect(canvas.findByText('/@starlight')).resolves.toBeVisible();
     expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    const unreadCopyLink = canvas.getByRole('link', {
+      name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/,
+    });
+    const unreadRow = unreadCopyLink.parentElement?.parentElement;
+
+    expect(unreadRow).not.toBeNull();
+    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgb(246, 246, 246)');
+    expect(getComputedStyle(unreadRow!).borderLeftColor).toBe('rgb(252, 231, 154)');
+    await userEvent.unhover(unreadCopyLink);
+    expect(getComputedStyle(unreadRow!).backgroundColor).toBe('rgba(252, 231, 154, 0.3)');
   },
   render: () => <ReadNavigationList />,
 };
@@ -478,19 +526,21 @@ export const HoverBackgroundFeedback: Story = {
     const row = copyLink.parentElement?.parentElement;
 
     expect(row).not.toBeNull();
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
+    expect(getComputedStyle(row!).borderLeftColor).toBe('rgb(252, 231, 154)');
     await userEvent.hover(row!);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(getComputedStyle(row!).borderLeftColor).toBe('rgb(252, 231, 154)');
     await userEvent.hover(copyLink);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
     await userEvent.unhover(copyLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
     await userEvent.hover(row!);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
     await userEvent.hover(avatarLink);
     expect(row).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
     await userEvent.unhover(avatarLink);
-    expect(row).toHaveStyle({ backgroundColor: 'rgb(255, 255, 255)' });
+    expect(row).toHaveStyle({ backgroundColor: 'rgba(252, 231, 154, 0.3)' });
   },
   render: () => <RefreshList />,
 };

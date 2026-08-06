@@ -118,7 +118,11 @@ describe('Post Reply GraphQL 경계', () => {
     const auth = await createAuthenticatedSession();
 
     const result = await requestCreatePost(
-      { bodyText: '일반 게시글', visibility: PostVisibility.UNLISTED },
+      {
+        bodyText: '일반 게시글',
+        contentWarning: '통합 검증 경고',
+        visibility: PostVisibility.UNLISTED,
+      },
       auth.token,
     );
 
@@ -138,6 +142,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.currentContentId, content.id);
     assert.equal(stored.replyParentId, null);
     assert.equal(stored.repostSourceId, null);
+    assert.equal(content.document.summary, '통합 검증 경고');
   });
 
   test('Ready Media 참조와 Media-owned Alt Text를 저장하고 조회 ID를 global ID로 투영한다', async (t) => {
@@ -1420,6 +1425,7 @@ const requestGraphQL = async <TData>(
 const requestCreatePost = (
   input: {
     bodyText: string;
+    contentWarning?: string | null;
     media?: Array<{ altText: string | null; mediaId: string }>;
     replyParentId?: string;
     sensitiveMedia?: boolean;

@@ -8,6 +8,13 @@ import {
 } from '@fedify/fedify';
 import { CryptographicKey, EmojiReact, Follow, Like, Person } from '@fedify/vocab';
 import { getDocumentLoader } from '@fedify/vocab-runtime';
+import {
+  hasInboundErrorBeenObserved,
+  isExternalInboundError,
+  observeInbound,
+  setInboundObservabilityReporter,
+  withInboundObservability,
+} from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 
 type FollowHandler = (context: InboxContext<void>, activity: Follow) => void | Promise<void>;
@@ -122,6 +129,107 @@ describe('Fedify inbox routes', () => {
       assert.equal(response.status, 404);
     }
   });
+
+  test('keeps listener errors observable without changing personal/shared inbox responses', async () => {
+    const captures: unknown[] = [];
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const error = Object.assign(new SyntaxError('internal projection failure'), {
+        code: 'ECONNREFUSED',
+      });
+      const fixture = await createInboxFixture(async () => {
+        throw error;
+      });
+      const personalResponse = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest(
+          `/ap/actor/${localProfileId}/inbox`,
+          'internal-personal',
+        ),
+        { contextData: undefined },
+      );
+      const sharedResponse = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest('/inbox', 'internal-shared'),
+        { contextData: undefined },
+      );
+
+      assert.equal(personalResponse.status, 500);
+      assert.equal(sharedResponse.status, 500);
+      assert.equal(captures.length, 2);
+      assert.equal(logs.length, 2);
+      assert.deepEqual((captures[0] as { context: { tags: object } }).context.tags, {
+        activity_type: 'Follow',
+        handler: 'follow',
+        outcome: 'internal_failure',
+        phase: 'listener',
+        reason_code: 'unexpected_listener_error',
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test('does not capture a remote listener failure', async () => {
+    const captures: unknown[] = [];
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error) => captures.push(error),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const error = new Error('remote timeout');
+      error.name = 'FetchError';
+      const fixture = await createInboxFixture(async () => {
+        throw error;
+      });
+      const response = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest('/inbox', 'external-shared'),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 500);
+      assert.equal(captures.length, 0);
+      assert.equal(logs.length, 1);
+      assert.equal((logs[0] as { outcome: string }).outcome, 'external_failure');
+    } finally {
+      restore();
+    }
+  });
+
+  test('normalizes primitive listener throws and captures once at the inbox boundary', async () => {
+    const captures: unknown[] = [];
+    const logs: unknown[] = [];
+    const restore = setInboundObservabilityReporter({
+      captureException: (error, context) => captures.push({ context, error }),
+      log: (observation) => logs.push(observation),
+    });
+
+    try {
+      const fixture = await createInboxFixture(async () => {
+        throw 'primitive listener failure';
+      });
+      const response = await fixture.federation.fetch(
+        await fixture.createSignedFollowRequest('/inbox', 'primitive-shared'),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 500);
+      assert.equal(captures.length, 1);
+      assert.equal(logs.length, 1);
+      assert.equal((captures[0] as { error: unknown }).error instanceof Error, true);
+      assert.equal(
+        (captures[0] as { error: Error }).error.message,
+        'ActivityPub inbound listener threw a non-Error value',
+      );
+    } finally {
+      restore();
+    }
+  });
 });
 
 const createInboxFixture = async (onFollow: FollowHandler) => {
@@ -162,7 +270,24 @@ const createInboxFixture = async (onFollow: FollowHandler) => {
       identifier === localProfileId ? new Person({ id: context.getActorUri(identifier) }) : null,
     )
     .setKeyPairsDispatcher(() => [localKeyPair]);
-  federation.setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox').on(Follow, onFollow);
+  federation
+    .setInboxListeners('/ap/actor/{identifier}/inbox', '/inbox')
+    .on(Follow, withInboundObservability('follow', onFollow))
+    .onError((_context, error) => {
+      if (hasInboundErrorBeenObserved(error)) {
+        return;
+      }
+
+      const external = error instanceof SyntaxError || isExternalInboundError(error);
+      observeInbound({
+        activityType: 'Unknown',
+        error,
+        handler: 'listener',
+        outcome: external ? 'external_failure' : 'internal_failure',
+        phase: 'listener',
+        reasonCode: external ? 'external_listener_error' : 'unexpected_listener_error',
+      });
+    });
 
   const createSignedFollowRequest = async (path: string, id: string): Promise<Request> => {
     const activity = new Follow({

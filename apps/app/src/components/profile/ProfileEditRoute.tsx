@@ -3,6 +3,10 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
+import {
+  asImageUploadError,
+  assertImageUploadResponse,
+} from '@/components/media/imageUploadErrors';
 import { uploadComposerMedia } from '@/components/post/postComposerMedia';
 import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -275,9 +279,7 @@ function EditableProfileRoute({
               headers: asset.mimeType ? { 'content-type': asset.mimeType } : undefined,
               method: 'PUT',
             });
-            if (!response.ok) {
-              throw new Error('Profile image upload failed');
-            }
+            await assertImageUploadResponse(response);
           },
         });
         if (mediaId) {
@@ -285,9 +287,15 @@ function EditableProfileRoute({
             completeProfileEditImageUpload(current, generation, mediaId),
           );
         }
-      } catch {
+      } catch (error) {
         if (mounted.current) {
-          updateImage(field, (current) => failProfileEditImageUpload(current, generation));
+          updateImage(field, (current) =>
+            failProfileEditImageUpload(
+              current,
+              generation,
+              asImageUploadError(error, 'transfer').failure,
+            ),
+          );
         }
       }
     },

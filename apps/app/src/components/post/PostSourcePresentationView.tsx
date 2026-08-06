@@ -8,6 +8,7 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { PostMediaItem } from './PostMediaGallery';
 
 export type PresentationProfile = {
   readonly avatar:
@@ -24,7 +25,10 @@ export type PresentationProfile = {
 
 export type PresentationContent = {
   readonly bodyText: string;
+  readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly media: ReadonlyArray<PostMediaItem> | null;
+  readonly postId: string;
 };
 
 export type SourcePostPresentationData = {
@@ -168,9 +172,11 @@ export function PostSourcePreview({
         <View style={styles.sourceBody} testID="source-post-body">
           <PostContentRenderer
             bodyText={source.content.bodyText}
+            contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
-            media={[]}
+            media={source.content.media ?? null}
+            postId={source.content.postId}
             size="md"
           />
         </View>
@@ -234,8 +240,10 @@ function PostBodyPressTarget({
     >
       <PostContentRenderer
         bodyText={content.bodyText}
+        contentWarning={content.contentWarning}
         document={content.document}
-        media={[]}
+        media={content.media ?? null}
+        postId={content.postId}
         size="md"
       />
     </Pressable>

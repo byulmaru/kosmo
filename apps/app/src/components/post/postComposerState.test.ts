@@ -10,13 +10,23 @@ describe('PostComposer Reply context contract', () => {
       visibility: 'PUBLIC',
     });
     assert.deepEqual(
-      createPostComposerMutationInput('부모에게 보내는 답글', 'FOLLOWERS', 'post-parent'),
+      createPostComposerMutationInput(
+        '부모에게 보내는 답글',
+        'FOLLOWERS',
+        'post-parent',
+        '스포일러',
+      ),
       {
         bodyText: '부모에게 보내는 답글',
+        contentWarning: '스포일러',
         replyParentId: 'post-parent',
         visibility: 'FOLLOWERS',
       },
     );
+    assert.deepEqual(createPostComposerMutationInput('본문', 'UNLISTED', undefined, '   '), {
+      bodyText: '본문',
+      visibility: 'UNLISTED',
+    });
   });
 
   it('excludes DIRECT only while composing a Reply', async () => {
@@ -44,5 +54,15 @@ describe('PostComposer Reply context contract', () => {
       createPostComposerContextKey('profile-a'),
       createPostComposerContextKey('profile-a', 'post-parent'),
     );
+  });
+
+  it('projects only supported Profile defaults and falls back to UNLISTED', async () => {
+    const { resolvePostComposerVisibility } = await import('./postComposerState');
+
+    assert.equal(resolvePostComposerVisibility('PUBLIC'), 'PUBLIC');
+    assert.equal(resolvePostComposerVisibility('FOLLOWERS'), 'FOLLOWERS');
+    assert.equal(resolvePostComposerVisibility('UNLISTED'), 'UNLISTED');
+    assert.equal(resolvePostComposerVisibility('DIRECT'), 'UNLISTED');
+    assert.equal(resolvePostComposerVisibility(null), 'UNLISTED');
   });
 });

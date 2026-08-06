@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
+import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
 
@@ -12,7 +13,9 @@ export const handleInboundAcceptFollow = async ({
   follow,
   followeeActorUri,
   followeeProfileId,
+  acceptProfileFollowRequest: acceptFollowRequest = acceptProfileFollowRequest,
 }: {
+  readonly acceptProfileFollowRequest?: typeof acceptProfileFollowRequest;
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
@@ -25,11 +28,27 @@ export const handleInboundAcceptFollow = async ({
     !isHttpUri(objectUri) ||
     objectUri.href !== followeeActorUri.href
   ) {
+    observeInboundRejected({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri?.origin,
+      handler: 'accept',
+      objectOrigin: objectUri?.origin,
+      phase: 'protocol',
+      reasonCode: 'accept_follow_identity_mismatch',
+    });
     return;
   }
 
   const followerProfile = await resolveInboundLocalRecipient(context, followerActorUri);
   if (!followerProfile) {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'accept_follower_profile_missing',
+    });
     return;
   }
 
@@ -67,12 +86,39 @@ export const handleInboundAcceptFollow = async ({
       projection,
     )
   ) {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'accept_follow_projection_missing_or_mismatched',
+    });
     return;
   }
 
-  await acceptProfileFollowRequest({
+  const result = await acceptFollowRequest({
     expectedRowId: projection.id,
     followeeProfileId,
     followerProfileId: followerProfile.id,
   });
+  if (result.kind === 'ALREADY_ESTABLISHED') {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'duplicate_accept_noop',
+    });
+  } else if (result.kind === 'NOOP') {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'accept_follow_state_changed_noop',
+    });
+  }
 };
