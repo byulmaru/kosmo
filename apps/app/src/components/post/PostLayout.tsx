@@ -24,6 +24,7 @@ import { getReplyProcessingState } from './replySurface';
 import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostContentWarningPresentation } from './PostContentRenderer';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 import type { PostMediaViewerSession } from './postMediaViewerSession';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
@@ -59,6 +60,7 @@ const PostLayoutFragment = graphql`
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
+    ...PostMediaViewer_post
     repostSource {
       id
       createdAt
@@ -95,14 +97,14 @@ const visibilityLabels: Record<string, string> = {
 };
 
 export function PostLayout({
+  contentWarningPresentation = 'default',
   mediaPresentation = 'default',
-  onMediaViewerVisibilityChange,
   onDeleted,
   post: postKey,
   viewerWideDetail,
 }: {
+  contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
-  onMediaViewerVisibilityChange?: (visible: boolean) => void;
   onDeleted?: () => void;
   post: PostLayout_post$key;
   viewerWideDetail?: ReactNode;
@@ -123,16 +125,10 @@ export function PostLayout({
   const viewerIdentity = content
     ? `${actorRevision}:${post.profile.id}:${post.id}:${content.id}`
     : '';
-  const viewerMedia =
-    content?.media?.map(({ altText, id, url }) => ({
-      altText: altText ?? null,
-      id,
-      url: url ?? null,
-    })) ?? null;
   const activeViewerSession = reconcilePostMediaViewerSession(
     viewerSession,
     viewerIdentity,
-    Boolean(viewerMedia?.length),
+    Boolean(content?.media?.length),
   );
   const closeViewer = useCallback(() => setViewerSession(null), []);
   const handleMediaUnavailable = useCallback(() => {
@@ -189,15 +185,6 @@ export function PostLayout({
       requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
     }
   }, [activeViewerSession, viewerSession]);
-  useEffect(() => {
-    onMediaViewerVisibilityChange?.(Boolean(activeViewerSession));
-  }, [activeViewerSession, onMediaViewerVisibilityChange]);
-  useEffect(
-    () => () => {
-      onMediaViewerVisibilityChange?.(false);
-    },
-    [onMediaViewerVisibilityChange],
-  );
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -248,6 +235,7 @@ export function PostLayout({
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
           <PostBody
+            contentWarningPresentation={contentWarningPresentation}
             mediaPresentation={mediaPresentation}
             onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
             onMediaUnavailable={mediaPresentation === 'hidden' ? undefined : handleMediaUnavailable}
@@ -287,7 +275,7 @@ export function PostLayout({
           ) : null}
         </View>
       </View>
-      {mediaPresentation === 'default' && activeViewerSession && content && viewerMedia ? (
+      {mediaPresentation === 'default' && activeViewerSession && content ? (
         <PostMediaViewer
           actionBar={
             <PostActionSurface
@@ -297,17 +285,10 @@ export function PostLayout({
               socialActionTarget={socialActionTarget!}
             />
           }
-          bodyText={content.bodyText}
-          contentId={content.id}
           fallbackFocus={surfaceRef}
-          media={viewerMedia}
           onClose={closeViewer}
           originControl={activeViewerSession.originControl}
-          profile={{
-            avatarUrl: post.profile.avatar?.url ?? null,
-            displayName: post.profile.displayName,
-            relativeHandle: post.profile.relativeHandle,
-          }}
+          post={post}
           selectedIndex={activeViewerSession.selectedIndex}
           wideDetail={viewerWideDetail}
         />

@@ -41,6 +41,7 @@ mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
 
 type RendererProps = {
   bodyText: string;
+  contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
   media: ReadonlyArray<PostMediaItem> | null;
@@ -141,6 +142,28 @@ describe('PostContentRenderer', () => {
       rendered('Text').some((node) => node.props.children === '원문 본문'),
       true,
     );
+  });
+
+  it('Viewer 공개 표현은 warning control 없이 원문을 표시하고 Media는 숨긴다', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentWarning: '민감한 내용',
+      contentWarningPresentation: 'revealed',
+      document: null,
+      media: [],
+      mediaPresentation: 'hidden',
+      postId: 'post-viewer-warning',
+    });
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning-toggle'),
+      false,
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '원문 본문'),
+      true,
+    );
+    assert.equal(rendered('PostMediaGallery').length, 0);
   });
 
   it('keeps the canonical content root around warning and revealed body content', async () => {

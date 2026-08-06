@@ -56,6 +56,7 @@ const PostListRowFragment = graphql`
     }
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
+    ...PostMediaViewer_post
   }
 `;
 
@@ -89,6 +90,7 @@ const PostListItemFragment = graphql`
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
+    ...PostMediaViewer_post
     repostSource {
       id
       createdAt
@@ -182,7 +184,7 @@ export function PostListItem({
   const quoteViewerIdentity = quoteContent
     ? `${actorRevision}:${post.profile.id}:${post.id}:${quoteContent.id}`
     : '';
-  const quoteViewerMedia =
+  const quoteMedia =
     quoteContent?.media?.map(({ altText, id, url }) => ({
       altText: altText ?? null,
       id,
@@ -191,7 +193,7 @@ export function PostListItem({
   const activeQuoteViewerSession = reconcilePostMediaViewerSession(
     quoteViewerSession,
     quoteViewerIdentity,
-    Boolean(quoteViewerMedia?.length),
+    Boolean(quoteContent?.media?.length),
   );
   const closeQuoteViewer = useCallback(() => setQuoteViewerSession(null), []);
   const handleQuoteMediaUnavailable = useCallback(() => {
@@ -293,7 +295,7 @@ export function PostListItem({
       bodyText: post.content.bodyText,
       contentWarning: post.content.contentWarning,
       document: post.content.document,
-      media: quoteViewerMedia,
+      media: quoteMedia,
       postId: post.id,
     },
     createdAt: post.createdAt,
@@ -367,7 +369,7 @@ export function PostListItem({
             socialActionTarget={post.actionSurface!}
           />
         </View>
-        {activeQuoteViewerSession && quoteContent && quoteViewerMedia ? (
+        {activeQuoteViewerSession && quoteContent ? (
           <PostMediaViewer
             actionBar={
               <PostActionSurface
@@ -377,17 +379,10 @@ export function PostListItem({
                 socialActionTarget={post.actionSurface!}
               />
             }
-            bodyText={quoteContent.bodyText}
-            contentId={quoteContent.id}
             fallbackFocus={quoteSurfaceRef}
-            media={quoteViewerMedia}
             onClose={closeQuoteViewer}
             originControl={activeQuoteViewerSession.originControl}
-            profile={{
-              avatarUrl: post.profile.avatar?.url ?? null,
-              displayName: post.profile.displayName,
-              relativeHandle: post.profile.relativeHandle,
-            }}
+            post={post}
             selectedIndex={activeQuoteViewerSession.selectedIndex}
             wideDetail={
               <PostMediaViewerThread
@@ -426,16 +421,10 @@ function PostListRow({
   const viewerIdentity = content
     ? `${actorRevision}:${post.profile.id}:${post.id}:${content.id}`
     : '';
-  const viewerMedia =
-    content?.media?.map(({ altText, id, url }) => ({
-      altText: altText ?? null,
-      id,
-      url: url ?? null,
-    })) ?? null;
   const activeViewerSession = reconcilePostMediaViewerSession(
     viewerSession,
     viewerIdentity,
-    Boolean(viewerMedia?.length),
+    Boolean(content?.media?.length),
   );
   const closeViewer = useCallback(() => setViewerSession(null), []);
   const handleMediaUnavailable = useCallback(() => {
@@ -523,7 +512,7 @@ function PostListRow({
           socialActionTarget={post.actionSurface!}
         />
       </View>
-      {activeViewerSession && content && viewerMedia ? (
+      {activeViewerSession && content ? (
         <PostMediaViewer
           actionBar={
             <PostActionSurface
@@ -533,17 +522,10 @@ function PostListRow({
               socialActionTarget={post.actionSurface!}
             />
           }
-          bodyText={content.bodyText}
-          contentId={content.id}
           fallbackFocus={surfaceRef}
-          media={viewerMedia}
           onClose={closeViewer}
           originControl={activeViewerSession.originControl}
-          profile={{
-            avatarUrl: post.profile.avatar?.url ?? null,
-            displayName: post.profile.displayName,
-            relativeHandle: post.profile.relativeHandle,
-          }}
+          post={post}
           selectedIndex={activeViewerSession.selectedIndex}
           wideDetail={
             <PostMediaViewerThread

@@ -16,6 +16,18 @@
 - Consequences: 목록과 상세은 같은 Viewer API를 사용해야 하며 대상 identity, 선택된 action Profile 또는 Relay actor/environment generation 변경·unmount 시 Viewer를 닫는다. Reply 부모 preview는 callback을 받지 않는다.
 - Confirmation / Follow-up: 동일 Post·revision 고정, selected Profile·actor 변경 close, Sensitive 진입 차단, lifecycle close와 origin focus 복귀를 component·runtime에서 확인한다.
 
+### Viewer는 표시용 Post fragment를 읽고 orchestration은 Post surface에 유지한다
+
+- Decision Date: 2026-08-06
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-media-viewer.md`, PROD-650
+- Status: Active
+- Context / Problem: Viewer에 body, Media, Profile scalar를 각각 projection하면 fragment colocation이 깨지고 caller와 Viewer의 표시 데이터 계약이 중복된다. 반대로 Viewer가 session·Action·thread query까지 소유하면 기존 Post surface와 또 하나의 Post orchestrator가 된다.
+- Decision Outcome: `PostMediaViewer`는 Post fragment에서 Content body, Media와 Profile 표시 데이터를 직접 읽는다. Post surface는 Viewer session·identity reconciliation·focus와 Action/Reply binding을 계속 소유하고, Wide thread query와 pagination UI state는 `PostDetailThread`가 소유한다.
+- Alternatives Considered: Caller가 scalar presentation data를 계속 조립, Viewer가 session·Action·thread query까지 모두 소유. 전자는 Relay fragment colocation을 깨뜨리고 후자는 기존 `PostLayout`·`PostListItem` 책임을 중복한다.
+- Consequences: Viewer props에는 Post fragment key와 composable `actionBar`·`wideDetail` slot만 전달한다. 삭제·Sensitive 재가림·actor/Profile/Post/Content identity 변경 close는 기존 surface에 남는다.
+- Confirmation / Follow-up: Caller scalar projection 제거, Viewer fragment 소비, 기존 session·Action·thread·삭제 lifecycle 보존을 focused component test로 확인한다.
+
 ### Web 768px에서 compact detail과 Post 상세 thread를 분기한다
 
 - Decision Date: 2026-08-04
@@ -49,8 +61,20 @@
 - Context / Problem: 현재 detail route가 `PostDetailThread` query와 document scroll을 소유하고 Viewer API에는 thread 입력이 없다. Route를 Viewer 안에 중첩하거나 `PostListItem`을 복제하면 route·focus·Media가 중복되고 Composer·reply pagination이 누락된다.
 - Decision Outcome: Detail route와 Viewer가 reply ancestors·현재 Post·reply descendants 표시를 공유할 수 있도록 Post 상세 thread surface를 추출한다. Reply Composer는 기존 상세처럼 초기에는 닫혀 있고 Reply action으로 현재 Post 아래에서 펼친다. Viewer는 같은 Post identity만 허용하고 원본 Post Media와 nested Viewer trigger를 오른쪽에서 생략하되 thread 안의 다른 Media와 viewer interaction은 유지한다. 목록 caller에서 필요한 thread data는 같은 Post node와 기존 visibility 정책으로 load하되 route·browser history를 변경하지 않는다. Loading·error는 오른쪽에만 표시해 왼쪽 image와 modal chrome을 유지한다.
 - Alternatives Considered: Detail route component 직접 mount, Viewer 전용 thread 구현, `PostListItem` 하나만 표시, open 시 detail route로 navigation. 각각 ownership 중첩·계약 복제·Composer와 descendants 누락·승인된 URL/history 유지 위반을 만든다.
-- Consequences: 기존 reply connection pagination을 오른쪽 scroller에 연결하는 seam과 원본 Media 생략 입력이 필요하다. 현재 Post의 Viewer가 배경 상세 route와 같은 reply connection을 재사용하는 경우에는 배경 document pagination effect를 중지해 Viewer 오른쪽을 단일 owner로 만들어야 한다. Ancestor·descendant·Quote·Repost처럼 다른 Post identity의 Viewer는 별도 reply connection을 사용하므로 배경 route pagination을 유용한 prefetch로 계속할 수 있다. Viewer 뒤 원래 Post surface는 focus와 interaction 대상에서 제외해야 한다.
-- Confirmation / Follow-up: 목록·상세 양쪽에서 같은 원본 Post identity, Media 비중복, Composer 작성, Viewer scroller만 한 번 load하는 reply pagination, loading·error와 route/history 유지·focus 복귀를 확인한다.
+- Consequences: 기존 reply connection pagination을 오른쪽 scroller에 연결하는 seam과 원본 Media 생략 입력이 필요하다. Route와 Viewer의 pagination coordination은 아래 Relay ownership 결정에 따르며 Viewer 뒤 원래 Post surface는 focus와 interaction 대상에서 제외해야 한다.
+- Confirmation / Follow-up: 목록·상세 양쪽에서 같은 원본 Post identity, Media 비중복, Composer 작성, route와 Viewer의 독립 pagination UI state, loading·error와 route/history 유지·focus 복귀를 확인한다.
+
+### Relay가 동일 reply pagination operation을 조정한다
+
+- Decision Date: 2026-08-06
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/post-media-viewer.md`, PROD-650
+- Status: Active
+- Context / Problem: Route와 Viewer 사이에 request ref·owner token·visibility gate를 공유하면 독립 scroll surface의 UI state와 component lifetime이 결합되고 background prefetch를 불필요하게 중지한다.
+- Decision Outcome: Route와 Viewer의 `PostDetailThread`는 component 간 token이나 visibility gate를 공유하지 않는다. 각 surface는 same-surface burst 재진입 guard, local pagination UI state와 completion 뒤 saved metrics 재평가를 소유하며, 두 surface에서 겹친 같은 Relay environment의 동일 query·variables에 대한 in-flight dedupe와 normalized connection merge는 Relay 21이 소유한다.
+- Alternatives Considered: Viewer open 동안 배경 document pagination 중지, shared request ref와 owner token 유지. 두 방식 모두 surface lifecycle을 결합하고 미리 불러올 수 있는 reply를 막는다.
+- Consequences: 같은 surface의 synchronous burst는 local guard가 막지만 두 surface는 서로를 차단하지 않는다. 성공 completion에서는 Relay의 pageInfo 병합이 반영될 다음 task까지 guard 해제를 미뤄 stale cursor 재진입을 막고, error completion에서는 즉시 해제해 해당 surface의 retry를 허용한다. 같은 cursor·count·environment가 아닌 request의 dedupe는 가정하지 않는다. Component test는 두 UI trigger가 Relay boundary에 독립적으로 도달하고 한 surface의 error·retry가 다른 surface를 변경하지 않는지를 검증하되 cross-surface 실제 network 횟수는 앱 계약으로 고정하지 않는다.
+- Confirmation / Follow-up: Independent near-end, surface-local loading·error·retry와 Viewer completion 뒤 saved metrics 재평가를 focused test로 확인한다.
 
 ### Media 탐색은 순환하지 않고 위치를 조건부 표시한다
 
@@ -94,4 +118,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `Wide Viewer는 route가 아닌 재사용 가능한 Post 상세 thread surface를 사용한다` 기록의 “Viewer open 동안 배경 document pagination을 중지해 단일 owner로 둔다” pagination consequence와 그 검증 항목은 2026-08-06의 `Relay가 동일 reply pagination operation을 조정한다` 결정으로 대체한다. 나머지 thread surface 재사용 결정은 Active다.

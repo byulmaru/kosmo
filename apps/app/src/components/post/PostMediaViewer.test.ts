@@ -5,6 +5,7 @@ import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
 import type { PostMediaItem } from './PostMediaImage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -54,6 +55,13 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('react-relay', {
+  exports: {
+    graphql: () => ({}),
+    useFragment: (_fragment: unknown, key: unknown) => key,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('lucide-react-native', {
   exports: {
     ChevronLeftIcon: 'ChevronLeftIcon',
@@ -81,17 +89,10 @@ mock.module('@/theme/ThemeProvider', {
 
 type ViewerProps = {
   actionBar: ReactNode;
-  bodyText: string;
-  contentId: string;
   fallbackFocus?: RefObject<NativeView | null>;
-  media: ReadonlyArray<PostMediaItem>;
   onClose: () => void;
   originControl: RefObject<NativeView | null>;
-  profile: {
-    avatarUrl: string | null;
-    displayName: string;
-    relativeHandle: string;
-  };
+  post: PostMediaViewer_post$key;
   selectedIndex: number;
   wideDetail: ReactNode;
 };
@@ -117,6 +118,15 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewer', () => {
+  it('같은 Post fragment의 Content·Media·Profile 표시 데이터를 사용한다', async () => {
+    await render();
+
+    assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
+    assert.equal(textContents().includes('네 줄 이상이 될 수 있는 원문입니다.'), true);
+    assert.equal(rendered('Avatar')[0]?.props.label, '작성자');
+    assert.equal(textContents().includes('@author'), true);
+  });
+
   it('선택 index에서 시작해 non-wrapping control과 다중 위치를 제공한다', async () => {
     await render({ selectedIndex: 1 });
 
@@ -135,7 +145,7 @@ describe('PostMediaViewer', () => {
   });
 
   it('단일 Media는 시각 counter 없이 Alt Text와 별도 위치 설명을 제공한다', async () => {
-    await render({ media: [media(0, '한 장의 설명')], selectedIndex: 0 });
+    await render({ post: viewerPost({ media: [media(0, '한 장의 설명')] }), selectedIndex: 0 });
 
     assert.equal(currentImage().props.accessibilityLabel, '한 장의 설명');
     assert.equal(
@@ -180,7 +190,7 @@ describe('PostMediaViewer', () => {
     assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
 
     platform.OS = 'ios';
-    await render({ contentId: 'content-2', selectedIndex: 1 });
+    await render({ post: viewerPost({ contentId: 'content-2' }), selectedIndex: 1 });
     assert.ok(panResponderConfig);
     assert.equal(
       panResponderConfig.onMoveShouldSetPanResponder?.(
@@ -281,11 +291,13 @@ describe('PostMediaViewer', () => {
 
   it('Compact 작성자에 원격 Profile의 relative handle을 표시한다', async () => {
     await render({
-      profile: {
-        avatarUrl: null,
-        displayName: '원격 작성자',
-        relativeHandle: '@alice@remote.example',
-      },
+      post: viewerPost({
+        profile: {
+          avatar: null,
+          displayName: '원격 작성자',
+          relativeHandle: '@alice@remote.example',
+        },
+      }),
     });
 
     assert.equal(textContents().includes('@alice@remote.example'), true);
@@ -406,19 +418,40 @@ describe('PostMediaViewer', () => {
 function defaultProps(): ViewerProps {
   return {
     actionBar: createElement('ActionBar'),
-    bodyText: '네 줄 이상이 될 수 있는 원문입니다.',
-    contentId: 'content-1',
-    media: [media(0, '첫 번째 이미지'), media(1, '두 번째 이미지'), media(2, null)],
     onClose: () => undefined,
     originControl: { current: null },
-    profile: {
-      avatarUrl: 'https://media.example/avatar.webp',
-      displayName: '작성자',
-      relativeHandle: '@author',
-    },
+    post: viewerPost(),
     selectedIndex: 0,
     wideDetail: createElement('WideDetail'),
   };
+}
+
+function viewerPost({
+  contentId = 'content-1',
+  media: value = [media(0, '첫 번째 이미지'), media(1, '두 번째 이미지'), media(2, null)],
+  profile = {
+    avatar: { url: 'https://media.example/avatar.webp' },
+    displayName: '작성자',
+    relativeHandle: '@author',
+  },
+}: {
+  contentId?: string;
+  media?: ReadonlyArray<PostMediaItem>;
+  profile?: {
+    avatar: { url: string } | null;
+    displayName: string;
+    relativeHandle: string;
+  };
+} = {}): PostMediaViewer_post$key {
+  return {
+    id: 'post-1',
+    content: {
+      bodyText: '네 줄 이상이 될 수 있는 원문입니다.',
+      id: contentId,
+      media: value,
+    },
+    profile,
+  } as unknown as PostMediaViewer_post$key;
 }
 
 function media(index: number, altText: string | null): PostMediaItem {

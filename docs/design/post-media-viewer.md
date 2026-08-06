@@ -12,7 +12,7 @@
 
 ## 소유권과 데이터 경계
 
-Post surface가 viewer의 open 상태, 대상 Post와 현재 Media index를 소유한다. Gallery는 공개된 정상 tile을 선택했을 때 document index만 전달하며 modal lifecycle이나 Post 데이터를 별도로 소유하지 않는다.
+Post surface가 Viewer session, 현재 Media index, origin focus, action Profile과 Post·Profile·Content·Relay actor identity reconciliation을 소유한다. Gallery는 공개된 정상 tile을 선택했을 때 document index만 전달하며 modal lifecycle이나 Post 데이터를 별도로 소유하지 않는다. `PostMediaViewer`는 같은 surface가 전달한 Post fragment를 직접 읽어 Content body, Media와 작성자 표시 데이터를 소비한다. 기존 `PostActionSurface`와 Wide `PostDetailThread`의 action·reply·query lifecycle은 각 기존 surface가 계속 소유한다.
 
 Viewer는 이미 화면의 Post 조회 정책을 통과한 현재 Post Content revision과 그 `media` 목록만 소비한다. 별도 Media 조회나 standalone authorization을 추가하지 않고, modal이 열린 동안 다른 Post·작성자 Profile·revision의 Media를 섞지 않는다. 대상 Post, 작성자 Profile, Content revision, 선택된 action Profile 또는 Relay actor/environment generation이 바뀌거나 surface가 unmount되면 viewer를 닫는다.
 
@@ -28,7 +28,7 @@ Viewer는 이미 화면의 Post 조회 정책을 통과한 현재 Post Content r
 
 Compact Web과 Native의 detail panel에는 작성자, 원문 text와 기존 Post Action Bar를 이 순서로 둔다. Panel은 내용 높이를 따르되 최대 높이는 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니므로, 짧은 원문의 panel은 내용보다 크게 늘어나지 않는다. 짧은 원문에서 작성자·원문과 Action Bar 사이에 남는 높이를 채우지 않으며, Action Bar는 원문 바로 아래의 고정 영역을 유지한다. 원문은 처음에 3줄로 제한한다. 넘치는 경우에만 `더 보기` control을 제공하고 펼친 뒤에는 `접기`로 바꾼다. 펼친 원문은 detail panel의 text 영역 안에서만 줄어들고 scroll하며 image surface와 고정 Action Bar를 밀어내거나 가리지 않는다. Control은 펼침 상태를 접근성 state로 전달한다.
 
-Wide Web의 오른쪽은 별도의 축약 panel이 아니라 기존 Post 상세와 같은 표현·interaction을 제공하는 thread surface다. 폭은 일반 Post 상세 route의 `600px` column을 복제하지 않고 위의 Viewer 전용 bounded rail 규칙을 따른다. 기존 `PostDetailThread`와 같이 reply ancestors, 선택한 현재 Post, reply descendants를 연결 순서대로 표시한다. 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 제공하고, Reply Composer는 처음부터 열지 않으며 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. 원본 Post의 Media는 왼쪽 image surface가 대표하므로 오른쪽 원본 Post에서 중복 표시하지 않되, ancestors·descendants와 Quote·Repost 등 thread 안의 Media 표현과 viewer interaction은 기존 Post surface 계약을 유지한다. 오른쪽 surface 전체가 왼쪽 image surface와 독립적으로 scroll하고, 끝에 가까워지면 기존 reply pagination을 이어서 수행한다. 상세 route에서 현재 Post의 Viewer가 열려 오른쪽 surface와 배경 route가 같은 reply connection을 재사용하는 경우에만 배경 document pagination을 중지하고 Viewer 오른쪽을 해당 connection의 단일 pagination owner로 둔다. Ancestor·descendant·Quote·Repost처럼 다른 Post identity의 Viewer를 연 경우에는 서로 다른 reply connection을 사용하므로 배경 상세 route의 pagination을 중지하지 않으며, 닫은 뒤 사용할 reply를 미리 불러오는 동작을 허용한다. Action Bar, Composer, reply interaction과 그 child overlay는 기존 Post 상세 계약을 그대로 유지한다.
+Wide Web의 오른쪽은 별도의 축약 panel이 아니라 기존 Post 상세와 같은 표현·interaction을 제공하는 thread surface다. 폭은 일반 Post 상세 route의 `600px` column을 복제하지 않고 위의 Viewer 전용 bounded rail 규칙을 따른다. 기존 `PostDetailThread`와 같이 reply ancestors, 선택한 현재 Post, reply descendants를 연결 순서대로 표시한다. 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 제공하고, Reply Composer는 처음부터 열지 않으며 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. 원본 Post의 Media는 왼쪽 image surface가 대표하므로 오른쪽 원본 Post에서 중복 표시하지 않되, ancestors·descendants와 Quote·Repost 등 thread 안의 Media 표현과 viewer interaction은 기존 Post surface 계약을 유지한다. 오른쪽 surface 전체가 왼쪽 image surface와 독립적으로 scroll하고, 끝에 가까워지면 기존 reply pagination을 이어서 수행한다. Route와 Viewer의 `PostDetailThread`는 각 scroll surface의 near-end, same-surface burst 재진입 guard와 loading·error·retry UI state를 독립적으로 소유한다. 두 surface 사이에는 request token을 공유하지 않으며, 같은 reply connection의 동일 cursor·count 요청이 같은 Relay environment에서 겹치면 Relay가 동일 operation을 in-flight dedupe하고 normalized connection에 병합한다. Viewer가 열렸다는 이유만으로 배경 document pagination을 중지하지 않으며, 미리 불러온 reply는 Viewer를 닫은 뒤 그대로 사용할 수 있다. Action Bar, Composer, reply interaction과 그 child overlay는 기존 Post 상세 계약을 그대로 유지한다.
 
 ## 선택과 탐색
 
@@ -48,6 +48,7 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 ## Sensitive, loading과 오류
 
 - Sensitive Media가 가려진 동안에는 viewer 진입을 제공하지 않는다. Gallery에서 공개한 뒤에만 정상 tile이 viewer trigger가 된다.
+- Viewer는 원래 Post surface에서 Content Warning을 공개한 뒤에만 열 수 있다. 열린 Viewer의 현재 Post는 원문을 공개 상태로 유지하고 Content Warning 안내와 다시 가리기 control을 표시하지 않는다. 이 Viewer 전용 표현은 다른 Post surface의 reveal 저장 상태를 변경하지 않는다.
 - 열린 뒤 Media가 다시 가려지거나 현재 Post 접근 권한·revision이 유효하지 않게 되면 이미지를 계속 표시하지 않고 viewer를 닫는다.
 - 현재 이미지가 loading 또는 실패해도 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface는 유지한다.
 - 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
@@ -62,7 +63,7 @@ Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Re
 
 ## 검증 경계
 
-- Component test는 선택 index, 동일 Post·revision 고정, selected action Profile·Relay actor/environment 변경 close, Sensitive 재가림·삭제·조회 무효화 close, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer·동일 reply connection의 pagination 단일 owner, loading·error·retry와 lifecycle close를 확인한다.
+- Component test는 선택 index, 동일 Post·revision 고정, selected action Profile·Relay actor/environment 변경 close, Sensitive 재가림·삭제·조회 무효화 close, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가, lifecycle close를 확인한다.
 - Storybook은 1장과 다중 이미지, 긴 원문, 첫·중간·마지막 위치, loading·error, compact Web·Native와 wide Web thread layout을 확인한다.
 - Web runtime은 backdrop·modal 내부 pointer 격리, keyboard arrow, Escape, 배경 surface 비활성화, focus trap·복귀, route·history 유지와 `<768px`·`>=768px` layout을 관찰한다. Compact에서는 짧은 원문의 content-height panel과 `clamp(192px, 32vh, 240px)` 최대 높이·낮은 viewport에서의 고정 chrome 보존·text-only scroll·Action Bar 인접 배치를, Wide에서는 `24px` inset·`clamp(320px, 25vw, 350px)` rail과 남은 image 폭, Action Bar의 가로 overflow 방지, 오른쪽 독립 scroll, Composer 작성, reply pagination, Action Bar·reply interaction과 child overlay layering을 함께 확인한다.
 - iOS runtime은 touch, swipe, close·back과 VoiceOver를, Android runtime은 touch, swipe, close·back과 TalkBack을 각각 확인한다.

@@ -16,6 +16,13 @@
 - **THEN** Media byte를 mount하거나 viewer 진입 control을 제공하지 않는다
 - **AND** 사용자는 gallery의 기존 공개 control을 먼저 실행해야 한다
 
+#### Scenario: Viewer 현재 Post의 Content Warning
+
+- **WHEN** 사용자가 Content Warning을 공개한 Post의 Media Viewer를 연다
+- **THEN** Viewer의 현재 Post 원문은 공개 상태로 표시된다
+- **AND** Content Warning 안내와 다시 가리기 control을 표시하지 않는다
+- **AND** 다른 Post surface의 reveal 저장 상태를 변경하지 않는다
+
 #### Scenario: viewer 대상 lifecycle 변경
 
 - **WHEN** 열린 Viewer의 대상 Post·Profile·Content revision이 바뀌거나 소유 surface가 unmount된다
@@ -154,8 +161,9 @@
 
 - **WHEN** 사용자가 Wide Web 오른쪽 thread surface의 끝에 가까워진다
 - **THEN** 기존 reply connection은 같은 pending·error·retry 계약으로 다음 page를 요청할 수 있다
-- **AND** 현재 Post의 Viewer가 상세 route와 같은 reply connection을 재사용하면 배경 document pagination은 Viewer가 열린 동안 해당 connection의 page를 요청하지 않는다
-- **AND** ancestor·descendant·Quote·Repost처럼 다른 Post identity의 Viewer가 별도 reply connection을 사용하면 배경 상세 route의 pagination은 계속될 수 있다
+- **AND** route와 Viewer의 pagination UI state와 same-surface burst 재진입 guard는 각 scroll surface가 독립적으로 유지한다
+- **AND** 같은 Relay environment에서 동일 connection의 동일 cursor·count pagination operation이 겹치면 in-flight dedupe와 결과 병합은 Relay가 소유한다
+- **AND** Viewer open 상태만으로 배경 document pagination을 중지하지 않는다
 - **AND** 오른쪽 scroll과 pagination은 왼쪽 현재 image 위치·loading·error 상태를 변경하지 않는다
 
 #### Scenario: Reply Composer와 thread action

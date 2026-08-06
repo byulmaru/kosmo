@@ -1,6 +1,7 @@
 import { graphql, useFragment } from 'react-relay';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { PostBody_post$key } from './__generated__/PostBody_post.graphql';
+import type { PostContentWarningPresentation } from './PostContentRenderer';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostBodyFragment = graphql`
@@ -21,6 +22,7 @@ const PostBodyFragment = graphql`
 `;
 
 export function PostBody({
+  contentWarningPresentation = 'default',
   interactive = true,
   mediaPresentation = 'default',
   post: postKey,
@@ -29,6 +31,7 @@ export function PostBody({
   onMediaUnavailable,
   size = 'md',
 }: {
+  contentWarningPresentation?: PostContentWarningPresentation;
   interactive?: boolean;
   mediaPresentation?: 'default' | 'hidden';
   post: PostBody_post$key;
@@ -48,6 +51,7 @@ export function PostBody({
     <PostContentRenderer
       bodyText={content.bodyText}
       contentWarning={content.contentWarning}
+      contentWarningPresentation={contentWarningPresentation}
       document={content.document}
       interactive={interactive}
       media={

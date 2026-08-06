@@ -13,7 +13,7 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
-import type { PropsWithChildren, ReactNode, RefObject } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
@@ -96,7 +96,6 @@ export function PostDetailThread({
   identity,
   onReplyCreated,
   onPostDeleted,
-  paginationRequestRef,
   post: postKey,
   presentation = 'route',
   replyProfile,
@@ -105,7 +104,6 @@ export function PostDetailThread({
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
-  paginationRequestRef?: RefObject<false | symbol>;
   post: PostDetailThread_post$key;
   presentation?: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
@@ -117,7 +115,6 @@ export function PostDetailThread({
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
-      paginationRequestRef={paginationRequestRef}
       post={postKey}
       presentation={presentation}
       replyProfile={replyProfile}
@@ -130,7 +127,6 @@ function PostDetailThreadContent({
   identity,
   onReplyCreated,
   onPostDeleted,
-  paginationRequestRef,
   post: postKey,
   presentation,
   replyProfile,
@@ -139,7 +135,6 @@ function PostDetailThreadContent({
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
-  paginationRequestRef?: RefObject<false | symbol>;
   post: PostDetailThread_post$key;
   presentation: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
@@ -149,23 +144,15 @@ function PostDetailThreadContent({
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
   const [loadError, setLoadError] = useState(false);
-  const [currentViewerOpen, setCurrentViewerOpen] = useState(false);
   const [scrollPageRevision, setScrollPageRevision] = useState(0);
   const handledScrollPageRevisionRef = useRef(0);
-  const localPaginationRequestRef = useRef<false | symbol>(false);
-  const requestInFlightRef = paginationRequestRef ?? localPaginationRequestRef;
-  const requestOwnerRef = useRef(Symbol('post-detail-thread-pagination'));
-  const releaseOwnedRequest = useCallback(() => {
-    if (requestInFlightRef.current === requestOwnerRef.current) {
-      requestInFlightRef.current = false;
-    }
-  }, [requestInFlightRef]);
+  const loadInFlightRef = useRef(false);
   const pageErrorRef = useRef(false);
   const loadNextPage = useCallback(() => {
-    if (!hasNext || isLoadingNext || requestInFlightRef.current) {
+    if (!hasNext || isLoadingNext || loadInFlightRef.current) {
       return;
     }
-    requestInFlightRef.current = requestOwnerRef.current;
+    loadInFlightRef.current = true;
     pageErrorRef.current = false;
     setLoadError(false);
     loadNext(20, {
@@ -173,22 +160,28 @@ function PostDetailThreadContent({
         pageErrorRef.current = Boolean(error);
         setLoadError(Boolean(error));
         if (error) {
-          releaseOwnedRequest();
-        } else {
-          setTimeout(() => {
-            if (requestInFlightRef.current !== requestOwnerRef.current) {
-              return;
-            }
-            if (Platform.OS === 'web' && presentation === 'route') {
-              releaseOwnedRequest();
-            } else {
-              setScrollPageRevision((revision) => revision + 1);
-            }
-          }, 0);
+          loadInFlightRef.current = false;
+          return;
         }
+        setTimeout(() => {
+          if (!loadInFlightRef.current) {
+            return;
+          }
+          loadInFlightRef.current = false;
+          if (!(Platform.OS === 'web' && presentation === 'route')) {
+            setScrollPageRevision((revision) => revision + 1);
+          }
+        }, 0);
       },
     });
-  }, [hasNext, isLoadingNext, loadNext, presentation, releaseOwnedRequest, requestInFlightRef]);
+  }, [hasNext, isLoadingNext, loadNext, presentation]);
+
+  useEffect(
+    () => () => {
+      loadInFlightRef.current = false;
+    },
+    [],
+  );
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
       if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
@@ -217,14 +210,11 @@ function PostDetailThreadContent({
       return;
     }
     handledScrollPageRevisionRef.current = scrollPageRevision;
-    releaseOwnedRequest();
     maybeLoadNextPage(nativeMetricsRef.current);
-  }, [isLoadingNext, maybeLoadNextPage, scrollPageRevision, presentation, releaseOwnedRequest]);
-
-  useEffect(() => releaseOwnedRequest, [releaseOwnedRequest]);
+  }, [isLoadingNext, maybeLoadNextPage, scrollPageRevision, presentation]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || presentation !== 'route' || currentViewerOpen) {
+    if (Platform.OS !== 'web' || presentation !== 'route') {
       return;
     }
     const check = () =>
@@ -241,7 +231,7 @@ function PostDetailThreadContent({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [currentViewerOpen, data.replyDescendants.edges.length, maybeLoadNextPage, presentation]);
+  }, [data.replyDescendants.edges.length, maybeLoadNextPage, presentation]);
   const ancestors = data.replyAncestors
     .filter((post) => post != null)
     .reverse()
@@ -285,11 +275,9 @@ function PostDetailThreadContent({
           <View>
             {role === 'current' ? (
               <PostLayout
+                contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
-                onMediaViewerVisibilityChange={
-                  presentation === 'route' ? setCurrentViewerOpen : undefined
-                }
                 post={requireThreadFragment(item.post.detail, 'current detail')}
                 viewerWideDetail={
                   presentation === 'route' ? (
@@ -298,7 +286,6 @@ function PostDetailThreadContent({
                       identity={`${identity}:viewer`}
                       onPostDeleted={onPostDeleted}
                       onReplyCreated={onReplyCreated}
-                      paginationRequestRef={requestInFlightRef}
                       post={postKey}
                       presentation="viewer"
                       replyProfile={replyProfile}

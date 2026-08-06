@@ -11,13 +11,36 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
 import type { LayoutChangeEvent, View as NativeView } from 'react-native';
-import type { PostMediaItem } from './PostMediaImage';
+import type { PostMediaViewer_post$key } from './__generated__/PostMediaViewer_post.graphql';
+
+const PostMediaViewerFragment = graphql`
+  fragment PostMediaViewer_post on Post {
+    id
+    content {
+      id
+      bodyText
+      media {
+        id
+        altText
+        url
+      }
+    }
+    profile {
+      avatar {
+        url
+      }
+      displayName
+      relativeHandle
+    }
+  }
+`;
 
 type ImageState = Readonly<{
   generation: number;
@@ -26,33 +49,41 @@ type ImageState = Readonly<{
 
 type Props = Readonly<{
   actionBar: ReactNode;
-  bodyText: string;
-  contentId: string;
   fallbackFocus?: RefObject<NativeView | null>;
-  media: ReadonlyArray<PostMediaItem>;
   onClose: () => void;
   originControl: RefObject<NativeView | null>;
-  profile: {
-    avatarUrl: string | null;
-    displayName: string;
-    relativeHandle: string;
-  };
+  post: PostMediaViewer_post$key;
   selectedIndex: number;
   wideDetail: ReactNode;
 }>;
 
 export function PostMediaViewer({
   actionBar,
-  bodyText,
-  contentId,
   fallbackFocus,
-  media,
   onClose,
   originControl,
-  profile,
+  post: postKey,
   selectedIndex,
   wideDetail,
 }: Props) {
+  const post = useFragment(PostMediaViewerFragment, postKey);
+  const content = post.content;
+  const media = useMemo(
+    () =>
+      content?.media?.map(({ altText, id, url }) => ({
+        altText: altText ?? null,
+        id,
+        url: url ?? null,
+      })) ?? [],
+    [content?.media],
+  );
+  const bodyText = content?.bodyText ?? '';
+  const contentId = content?.id ?? '';
+  const profile = {
+    avatarUrl: post.profile.avatar?.url ?? null,
+    displayName: post.profile.displayName,
+    relativeHandle: post.profile.relativeHandle,
+  };
   const theme = useTheme();
   const { height, width } = useWindowDimensions();
   const closeRef = useRef<NativeView>(null);

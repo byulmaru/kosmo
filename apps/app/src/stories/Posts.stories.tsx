@@ -761,6 +761,7 @@ const PostsStoriesQuery = graphql`
         ...PostActionSurface_post @alias(as: "actionSurface")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
+        ...PostMediaViewer_post @alias(as: "viewer")
         ...ReplyComposerSurface_parent @alias(as: "replySurface")
       }
     }
@@ -2250,11 +2251,9 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
 }
 
 function DirectPostMediaViewerStory({
-  failCurrentImage = false,
   postId,
   selectedIndex,
 }: {
-  failCurrentImage?: boolean;
   postId: string;
   selectedIndex: number;
 }) {
@@ -2267,12 +2266,6 @@ function DirectPostMediaViewerStory({
   if (!content?.media?.length) {
     throw new Error(`Direct Post Media Viewer fixture ${postId} needs Media.`);
   }
-  const media = content.media.map((item, index) => ({
-    altText: item.altText,
-    id: item.id,
-    url: failCurrentImage && index === selectedIndex ? 'data:image/png;base64,not-valid' : item.url,
-  }));
-
   return (
     <Catalog>
       <Pressable
@@ -2291,17 +2284,10 @@ function DirectPostMediaViewerStory({
               socialActionTarget={requireFragment(node.actionSurface, 'viewer action surface')}
             />
           }
-          bodyText={content.bodyText}
-          contentId={content.id}
           fallbackFocus={originRef}
-          media={media}
           onClose={() => setOpen(false)}
           originControl={originRef}
-          profile={{
-            avatarUrl: storyPost.profile.avatar?.url ?? null,
-            displayName: storyPost.profile.displayName,
-            relativeHandle: storyPost.profile.relativeHandle,
-          }}
+          post={requireFragment(node.viewer, 'viewer Post')}
           selectedIndex={selectedIndex}
           wideDetail={
             <PostMediaViewerThread
@@ -3911,23 +3897,17 @@ export const PostMediaViewerLoadingAndError: Story = {
   play: async () => {
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
-    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('3 / 4');
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 3');
     expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
-    const retry = await viewer.findByRole('button', { name: '3번째 순서 이미지 다시 시도' });
+    const retry = await viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' });
     expect(retry).toBeVisible();
     expect(dialog.textContent).not.toContain('data:image');
     await userEvent.click(retry);
     await expect(
-      viewer.findByRole('button', { name: '3번째 순서 이미지 다시 시도' }),
+      viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' }),
     ).resolves.toBeVisible();
   },
-  render: () => (
-    <DirectPostMediaViewerStory
-      failCurrentImage
-      postId="post-media-viewer-quote"
-      selectedIndex={2}
-    />
-  ),
+  render: () => <DirectPostMediaViewerStory postId="media-load-error-three" selectedIndex={1} />,
 };
 
 export const InvalidContentlessReplySource: Story = {

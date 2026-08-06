@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Fragment } from 'react';
+import { createElement, Fragment, useState } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -12,6 +12,8 @@ let renderer: ReactTestRenderer | null = null;
 let documentScrollListener: (() => void) | null = null;
 let loadNextCalls = 0;
 let loadNextCompletions: Array<(error: Error | null) => void> = [];
+let loadNextCallsByKey: Record<string, number> = {};
+let loadNextCompletionsByKey: Record<string, Array<(error: Error | null) => void>> = {};
 const platform = { OS: 'web' };
 const documentElement = { scrollHeight: 2401 };
 
@@ -52,30 +54,41 @@ mock.module('react-native', {
 mock.module('react-relay', {
   exports: {
     graphql: () => ({}),
-    usePaginationFragment: () => ({
-      data: {
-        detail: { id: 'current-detail' },
-        id: 'post-current',
-        replyAncestors: [{ id: 'post-ancestor', listItem: { id: 'ancestor-list-item' } }],
-        replyDescendants: {
-          edges: [
-            {
-              node: {
-                id: 'post-descendant',
-                listItem: { id: 'descendant-list-item' },
-                replyParent: { id: 'post-current' },
+    usePaginationFragment: (_fragment: unknown, key: { testPaginationKey?: string }) => {
+      const paginationKey = key.testPaginationKey ?? 'default';
+      const [isLoadingNext, setIsLoadingNext] = useState(false);
+      return {
+        data: {
+          detail: { id: 'current-detail' },
+          id: 'post-current',
+          replyAncestors: [{ id: 'post-ancestor', listItem: { id: 'ancestor-list-item' } }],
+          replyDescendants: {
+            edges: [
+              {
+                node: {
+                  id: 'post-descendant',
+                  listItem: { id: 'descendant-list-item' },
+                  replyParent: { id: 'post-current' },
+                },
               },
-            },
-          ],
+            ],
+          },
         },
-      },
-      hasNext: true,
-      isLoadingNext: false,
-      loadNext: (_count: number, options: { onComplete: (error: Error | null) => void }) => {
-        loadNextCalls += 1;
-        loadNextCompletions.push(options.onComplete);
-      },
-    }),
+        hasNext: true,
+        isLoadingNext,
+        loadNext: (_count: number, options: { onComplete: (error: Error | null) => void }) => {
+          loadNextCalls += 1;
+          setIsLoadingNext(true);
+          const complete = (error: Error | null) => {
+            setIsLoadingNext(false);
+            options.onComplete(error);
+          };
+          loadNextCompletions.push(complete);
+          loadNextCallsByKey[paginationKey] = (loadNextCallsByKey[paginationKey] ?? 0) + 1;
+          (loadNextCompletionsByKey[paginationKey] ??= []).push(complete);
+        },
+      };
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -138,6 +151,8 @@ afterEach(async () => {
   documentScrollListener = null;
   loadNextCalls = 0;
   loadNextCompletions = [];
+  loadNextCallsByKey = {};
+  loadNextCompletionsByKey = {};
 });
 
 describe('PostDetailThread Viewer presentation', () => {
@@ -147,24 +162,26 @@ describe('PostDetailThread Viewer presentation', () => {
     const current = renderer!.root.findByProps({ testID: 'thread-current-post' });
     const surrounding = renderer!.root.findAllByProps({ testID: 'thread-list-post' });
 
+    assert.equal(current.props.contentWarningPresentation, 'revealed');
     assert.equal(current.props.mediaPresentation, 'hidden');
     assert.equal(current.props.viewerWideDetail, null);
     assert.equal(surrounding.length, 2);
     assert.ok(renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' }));
   });
 
-  it('Viewer가 열린 상세에서는 배경 document pagination을 중지한다', async () => {
-    await render('route');
-    const current = renderer!.root.findByProps({ testID: 'thread-current-post' });
-    assert.ok(documentScrollListener);
-    assert.equal(current.props.viewerWideDetail.props.presentation, 'viewer');
-    assert.ok(current.props.viewerWideDetail.props.paginationRequestRef);
-
-    await act(async () => current.props.onMediaViewerVisibilityChange(true));
-    assert.equal(documentScrollListener, null);
+  it('route와 Viewer는 component 간 token 없이 각 near-end UI 요청을 시작한다', async () => {
+    await renderRouteAndViewer();
 
     documentElement.scrollHeight = 2400;
-    assert.equal(loadNextCalls, 0);
+    await act(async () => documentScrollListener?.());
+
+    const scroll = renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' });
+    await act(async () => {
+      scroll.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
+      scroll.props.onContentSizeChange(0, 1200);
+    });
+
+    assert.equal(loadNextCalls, 2);
   });
 
   it('Viewer 오른쪽 scroller만 near-end reply page를 요청한다', async () => {
@@ -187,6 +204,8 @@ describe('PostDetailThread Viewer presentation', () => {
     await act(async () => {
       scroll.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
       scroll.props.onContentSizeChange(0, 1200);
+    });
+    await act(async () => {
       scroll.props.onContentSizeChange(0, 1400);
     });
     assert.equal(loadNextCalls, 1);
@@ -199,93 +218,57 @@ describe('PostDetailThread Viewer presentation', () => {
     assert.equal(loadNextCalls, 2);
   });
 
-  it('배경 page 요청 중 Viewer를 열어도 같은 cursor를 다시 요청하지 않는다', async () => {
-    const paginationRequestRef = { current: false };
-    await act(async () => {
-      renderer = create(
-        createElement(
-          Fragment,
-          null,
-          createElement(PostDetailThread, {
-            header: createElement('Header'),
-            identity: 'route-thread',
-            paginationRequestRef,
-            post: {} as never,
-            presentation: 'route',
-          } as never),
-          createElement(PostDetailThread, {
-            header: null,
-            identity: 'viewer-thread',
-            paginationRequestRef,
-            post: {} as never,
-            presentation: 'viewer',
-          } as never),
-        ),
-      );
-    });
+  it('route와 Viewer의 page 오류와 재시도는 각 surface에만 남는다', async () => {
+    await renderRouteAndViewer();
 
     documentElement.scrollHeight = 2400;
     await act(async () => documentScrollListener?.());
-    assert.equal(loadNextCalls, 1);
+    await act(async () => loadNextCompletionsByKey.route?.[0]?.(new Error('route failure')));
 
-    const scroll = renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' });
+    const route = renderer!.root.findByProps({ testID: 'post-detail-scroll' });
+    const viewer = renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' });
+    assert.equal(route.findAllByProps({ accessibilityRole: 'alert' }).length, 1);
+    assert.equal(viewer.findAllByProps({ accessibilityRole: 'alert' }).length, 0);
+
     await act(async () => {
-      scroll.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
-      scroll.props.onContentSizeChange(0, 1200);
+      viewer.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
+      viewer.props.onContentSizeChange(0, 1200);
     });
+    await act(async () => loadNextCompletionsByKey.viewer?.[0]?.(new Error('viewer failure')));
+    assert.equal(route.findAllByProps({ accessibilityRole: 'alert' }).length, 1);
+    assert.equal(viewer.findAllByProps({ accessibilityRole: 'alert' }).length, 1);
 
-    assert.equal(loadNextCalls, 1);
+    await act(async () => route.findByProps({ children: '답글 다시 불러오기' }).props.onPress());
+    await act(async () => viewer.findByProps({ children: '답글 다시 불러오기' }).props.onPress());
+
+    assert.equal(loadNextCallsByKey.route, 2);
+    assert.equal(loadNextCallsByKey.viewer, 2);
   });
+});
 
-  it('Viewer page 요청 중 닫아도 배경 pagination gate를 다시 연다', async () => {
-    const paginationRequestRef = { current: false };
-    await act(async () => {
-      renderer = create(
-        createElement(
-          Fragment,
-          null,
-          createElement(PostDetailThread, {
-            header: createElement('Header'),
-            identity: 'route-thread',
-            paginationRequestRef,
-            post: {} as never,
-            presentation: 'route',
-          } as never),
-          createElement(PostDetailThread, {
-            header: null,
-            identity: 'viewer-thread',
-            paginationRequestRef,
-            post: {} as never,
-            presentation: 'viewer',
-          } as never),
-        ),
-      );
-    });
-
-    const scroll = renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' });
-    await act(async () => {
-      scroll.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
-      scroll.props.onContentSizeChange(0, 1200);
-    });
-    assert.equal(loadNextCalls, 1);
-
-    await act(async () => {
-      renderer!.update(
+async function renderRouteAndViewer() {
+  await act(async () => {
+    renderer = create(
+      createElement(
+        Fragment,
+        null,
         createElement(PostDetailThread, {
           header: createElement('Header'),
           identity: 'route-thread',
-          paginationRequestRef,
-          post: {} as never,
+          post: { testPaginationKey: 'route' } as never,
           presentation: 'route',
         } as never),
-      );
-    });
-    documentElement.scrollHeight = 2400;
-    await act(async () => documentScrollListener?.());
-
-    assert.equal(loadNextCalls, 2);
+        createElement(PostDetailThread, {
+          header: null,
+          identity: 'viewer-thread',
+          post: { testPaginationKey: 'viewer' } as never,
+          presentation: 'viewer',
+        } as never),
+      ),
+    );
   });
-});
+  assert.ok(renderer);
+}
 
 async function render(presentation: 'route' | 'viewer') {
   await act(async () => {

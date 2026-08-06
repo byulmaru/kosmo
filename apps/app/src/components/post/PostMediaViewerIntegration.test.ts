@@ -230,6 +230,7 @@ describe('Post Media Viewer production surface wiring', () => {
 
     await render(createElement(PostListItem, { post: asListItemKey(ordinary) }));
     await openViewerFromBody(originControl, 1);
+    assertViewerPost(ordinary);
     assertViewerTarget('action-ordinary');
     assertViewerWideDetail('ordinary', 'ordinary-content');
     assert.equal(currentViewer().props.selectedIndex, 1);
@@ -242,9 +243,9 @@ describe('Post Media Viewer production surface wiring', () => {
     await update(createElement(PostListItem, { post: asListItemKey(quote) }));
     const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
     await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
+    assertViewerPost(quote);
     assertViewerTarget('action-quote');
     assertViewerWideDetail('quote', 'quote-content');
-    assert.equal(currentViewer().props.profile.relativeHandle, '@quote-profile');
 
     const pureRepost = {
       ...storyPost('repost', 'reposter-profile', null),
@@ -252,9 +253,9 @@ describe('Post Media Viewer production surface wiring', () => {
     };
     await update(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
     await openViewerFromBody(originControl);
+    assertViewerPost(source);
     assertViewerTarget('action-source');
     assertViewerWideDetail('source', 'source-content');
-    assert.equal(currentViewer().props.profile.relativeHandle, '@source-profile');
     assert.equal(currentViewer().props.actionBar.props.reply.processing, 'disabled');
   });
 });
@@ -297,6 +298,14 @@ function currentViewer() {
 
 function assertViewerTarget(expectedId: string) {
   assert.equal(currentViewer().props.actionBar.props.socialActionTarget.id, expectedId);
+}
+
+function assertViewerPost(expectedPost: unknown) {
+  assert.equal(currentViewer().props.post, expectedPost);
+  assert.equal('bodyText' in currentViewer().props, false);
+  assert.equal('contentId' in currentViewer().props, false);
+  assert.equal('media' in currentViewer().props, false);
+  assert.equal('profile' in currentViewer().props, false);
 }
 
 function assertViewerWideDetail(postId: string, contentId: string) {
