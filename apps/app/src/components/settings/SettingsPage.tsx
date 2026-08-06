@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
-import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { getShellLayout } from '@/components/shell/shellLayout';
+import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { returnToSettingsRoot } from './settingsNavigation';
 import { SettingsNavigationList } from './SettingsNavigationList';
@@ -38,14 +39,14 @@ export function SettingsDefaultPostVisibilityPage() {
 
   const routeOwnsHeader = !web || layout !== 'mobile';
   const backButton = (
-    <Pressable
+    <IconButton
       accessibilityLabel="설정으로 돌아가기"
-      accessibilityRole="button"
       onPress={() => returnToSettingsRoot(router)}
-      style={[styles.backButton, Platform.OS === 'android' ? styles.androidBackButton : null]}
+      style={styles.backButton}
+      targetSize={44}
     >
       <ChevronLeftIcon color={theme.text} size={20} strokeWidth={2} />
-    </Pressable>
+    </IconButton>
   );
 
   return (
@@ -88,5 +89,4 @@ const styles = StyleSheet.create({
     minHeight: 44,
     width: 44,
   },
-  androidBackButton: { height: 48, minHeight: 48, width: 48 },
 });

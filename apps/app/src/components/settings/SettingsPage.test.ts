@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -32,8 +32,13 @@ mock.module('react-native', {
         return platform;
       },
     },
-    Pressable: 'Pressable',
-    StyleSheet: { create: <T>(styles: T) => styles },
+    Pressable: ({ children, ...props }: Record<string, unknown>) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ pressed: false }) : (children as ReactNode),
+      ),
+    StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
     useWindowDimensions: () => ({ width }),
     View: 'View',
   },
@@ -43,7 +48,8 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../PageHeader.tsx', import.meta.url), {
   exports: {
-    PageHeader: (props: Record<string, unknown>) => createElement('PageHeader', props),
+    PageHeader: (props: Record<string, unknown>) =>
+      createElement('PageHeader', props, props.leading as ReactNode),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsNavigationList.tsx', import.meta.url), {
@@ -143,15 +149,24 @@ describe('SettingsPage', () => {
     assert.deepEqual(replacedPaths, ['/settings']);
   });
 
-  it('Android detail back action은 최소 48dp target을 제공한다', async () => {
+  it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
     platform = 'android';
     await render(SettingsDefaultPostVisibilityPage);
 
-    const back = rendered('PageHeader')[0].props.leading;
-    const style = flattenStyle(back.props.style);
-    assert.equal(style.height, 48);
-    assert.equal(style.minHeight, 48);
-    assert.equal(style.width, 48);
+    const back = rendered('Pressable').find(
+      (node) => node.props.accessibilityLabel === '설정으로 돌아가기',
+    );
+    assert.ok(back);
+    const resolvedStyle =
+      typeof back.props.style === 'function'
+        ? back.props.style({ pressed: false })
+        : back.props.style;
+    const style = flattenStyle(resolvedStyle);
+    assert.equal(style.height, 44);
+    assert.equal(style.minHeight, 44);
+    assert.equal(style.minWidth, 44);
+    assert.equal(style.width, 44);
+    assert.deepEqual(back.props.hitSlop, { bottom: 2, left: 2, right: 2, top: 2 });
   });
 
   it('Native root는 route-owned 설정 heading을 표시한다', async () => {
