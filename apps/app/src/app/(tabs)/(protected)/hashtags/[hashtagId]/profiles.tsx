@@ -30,23 +30,13 @@ export default function HashtagRelatedProfilesScreen() {
   const { revision } = useRelayActor();
 
   return hashtagId ? (
-    <HashtagRelatedProfilesRoute
-      hashtagId={hashtagId}
-      key={`${revision}:${hashtagId}`}
-      revision={revision}
-    />
+    <HashtagRelatedProfilesRoute hashtagId={hashtagId} key={`${revision}:${hashtagId}`} />
   ) : (
     <HashtagRelatedProfileListState state="notFound" />
   );
 }
 
-function HashtagRelatedProfilesRoute({
-  hashtagId,
-  revision,
-}: {
-  hashtagId: string;
-  revision: number;
-}) {
+function HashtagRelatedProfilesRoute({ hashtagId }: { hashtagId: string }) {
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
@@ -56,7 +46,7 @@ function HashtagRelatedProfilesRoute({
       onRetry={() => setFetchKey((value) => value + 1)}
       title="관련 프로필을 불러오지 못했어요"
     >
-      <HashtagRelatedProfilesContent fetchKey={`${revision}:${fetchKey}`} hashtagId={hashtagId} />
+      <HashtagRelatedProfilesContent fetchKey={fetchKey} hashtagId={hashtagId} />
     </RouteBoundary>
   );
 }
@@ -65,7 +55,7 @@ function HashtagRelatedProfilesContent({
   fetchKey,
   hashtagId,
 }: {
-  fetchKey: string;
+  fetchKey: number;
   hashtagId: string;
 }) {
   const data = useLazyLoadQuery<HashtagRelatedProfilesPageQuery>(

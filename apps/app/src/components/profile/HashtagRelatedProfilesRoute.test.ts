@@ -19,7 +19,7 @@ type HashtagNode =
 type QueryMode = 'error' | 'loading' | 'success';
 
 const pending = new Promise<never>(() => undefined);
-const queryHistory: Array<{ fetchKey: string; variables: { id: string } }> = [];
+const queryHistory: Array<{ fetchKey: number; variables: { id: string } }> = [];
 let hashtagId: string | string[] | undefined = 'hashtag-global-a';
 let hashtagNode: HashtagNode = {
   __typename: 'Hashtag',
@@ -44,7 +44,7 @@ mockModule('react-relay', {
     assert.match(parts.join(''), /query HashtagRelatedProfilesPageQuery/);
     return 'HashtagRelatedProfilesPageQuery';
   },
-  useLazyLoadQuery: (query: string, variables: { id: string }, options: { fetchKey: string }) => {
+  useLazyLoadQuery: (query: string, variables: { id: string }, options: { fetchKey: number }) => {
     assert.equal(query, 'HashtagRelatedProfilesPageQuery');
     queryHistory.push({ fetchKey: options.fetchKey, variables });
 
@@ -133,7 +133,7 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     await renderScreen();
 
     assert.deepEqual(queryHistory.at(-1), {
-      fetchKey: '4:0',
+      fetchKey: 0,
       variables: { id: 'hashtag-global-a' },
     });
     assert.deepEqual(requireRendered('HashtagRelatedProfileList').props, {
@@ -162,7 +162,7 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       queryMode = 'success';
       await act(async () => state.props.onRetry());
 
-      assert.equal(queryHistory.at(-1)?.fetchKey, '4:1');
+      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
       assert.equal(requireRendered('HashtagRelatedProfileList').props.identity, 'hashtag-global-a');
     } finally {
       console.error = originalConsoleError;
@@ -196,7 +196,7 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       await renderScreen();
       queryMode = 'success';
       await act(async () => requireRendered('HashtagRelatedProfileListState').props.onRetry());
-      assert.equal(queryHistory.at(-1)?.fetchKey, '4:1');
+      assert.equal(queryHistory.at(-1)?.fetchKey, 1);
 
       revision = 5;
       hashtagId = 'hashtag-global-b';
@@ -209,7 +209,7 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       await renderScreen();
 
       assert.deepEqual(queryHistory.at(-1), {
-        fetchKey: '5:0',
+        fetchKey: 0,
         variables: { id: 'hashtag-global-b' },
       });
       assert.equal(requireRendered('HashtagRelatedProfileList').props.identity, 'hashtag-global-b');
