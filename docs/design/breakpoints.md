@@ -51,19 +51,27 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 ## 프로필 편집 진입
 
-인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 shared navigation에 `프로필 편집`
-진입점을 표시한다.
+인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 sidebar의 selected Profile 요약에
+`편집` 진입점을 표시한다.
 
-- `compact` 이상 Web에서는 full sidebar와 compact icon rail의 주요 navigation에 표시한다.
-- `< compact` mobile Web과 Android·iOS에서는 mobile drawer에 표시한다. 하단 탭 바와 우측 레일에는 중복
-  진입점을 두지 않는다.
-- 항목은 selected Profile의 공개 `프로필` 진입점 바로 다음에 `UserRoundPen` 아이콘으로 표시하고 canonical
-  `/profile-edit` route를 연다. `/profile-edit`가 현재 route이면 active state를 노출한다.
-- mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나
-  ProfileSwitcher 전용 action을 만들지 않는다.
+- `>= full` Web sidebar와 `< compact` mobile Web·Android·iOS drawer의 expanded Profile 요약에 표시한다.
+  compact Web icon rail에는 expanded Profile 요약이 없으므로 별도 icon이나 navigation 항목을 추가하지 않는다.
+  하단 탭 바와 우측 레일에도 중복 진입점을 두지 않는다.
+- 기준 geometry는 Figma `KOSMO` 파일의 [`WebSidebar` node 901:610](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=901-610),
+  [`ProfileHero`의 `편집` button node 560:453](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=560-453)과
+  [`Button` primary/sm node 271:3](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=271-3)이다.
+  320px Profile 요약에서 오른쪽 멀티프로필 이미지 묶음의 바로 아래에 우측 20px로 정렬하고, 시각 영역은
+  `72x32`, `primary` 배경, `radius.sm`, SUIT 14px bold의 `편집` label을 사용한다.
+- Web pointer target은 시각 영역과 같은 `72x32 CSS px`로 유지한다. iOS와 Android에서는 시각 영역을 키우지
+  않고 각각 최소 `44pt`, `48dp` 높이의 투명 입력 slot 중앙에 배치해 바로 위 profile image target과 겹치지
+  않게 한다.
+- action은 canonical `/profile-edit` route를 열고 accessible name `프로필 편집`을 제공한다. `/profile-edit`가
+  현재 route이면 page-current semantics를 노출하되 노란 button의 시각 geometry는 바꾸지 않는다.
+- mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나 주요
+  navigation row를 만들지 않는다.
 - 노출 여부는 nullable `selectedProfileForEdit` 결과를 사용한다. client는 selected Profile id,
   `Profile.instance.kind` 또는 route 존재만으로 Owner 권한을 추측하지 않으며, 결과가 `null`이면 disabled
-  placeholder 없이 항목 자체를 숨긴다.
+  placeholder 없이 action 자체를 숨긴다.
 - PROD-541에서 제거한 generic `/menu`의 `프로필 설정` placeholder는 복원하지 않는다. PROD-660은 준비된
   `/profile-edit` route에 연결되는 실제 Profile 편집 진입점만 복원한다.
 - 현재 제품 runtime 검증 범위는 Web이다. 공용 mobile drawer와 자동화는 platform별 target·semantics를
