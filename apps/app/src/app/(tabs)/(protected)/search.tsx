@@ -678,7 +678,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingLeft: spacing.lg,
   },
-  webInputShell: { height: 56 },
+  webInputShell: { height: 48 },
   input: {
     flex: 1,
     fontFamily: 'SUIT',

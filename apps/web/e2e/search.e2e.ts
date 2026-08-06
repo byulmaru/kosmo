@@ -64,7 +64,11 @@ test('Web 검색 도구막대를 모든 breakpoint의 중앙 컬럼 최상단에
 }) => {
   await signInSearchUser(context);
 
-  for (const width of [390, 900, 1_400]) {
+  for (const [width, inputHeight] of [
+    [390, 48],
+    [900, 48],
+    [1_400, 48],
+  ] as const) {
     await page.setViewportSize({ height: 900, width });
     await page.goto('/search');
 
@@ -77,11 +81,12 @@ test('Web 검색 도구막대를 모든 breakpoint의 중앙 컬럼 최상단에
         const input = await page.getByTestId('search-input-shell').boundingBox();
         return {
           inputHeight: input && Math.round(input.height),
+          inputY: input && toolbar && Math.round(input.y - toolbar.y),
           toolbarHeight: toolbar && Math.round(toolbar.height),
           toolbarY: toolbar && Math.round(toolbar.y),
         };
       })
-      .toEqual({ inputHeight: 56, toolbarHeight: 64, toolbarY: 0 });
+      .toEqual({ inputHeight, inputY: 8, toolbarHeight: 64, toolbarY: 0 });
   }
 });
 
