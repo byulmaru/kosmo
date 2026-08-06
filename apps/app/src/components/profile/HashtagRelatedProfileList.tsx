@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
@@ -53,7 +53,7 @@ export function HashtagRelatedProfileList({
   };
 
   return (
-    <View>
+    <ScrollView contentContainerStyle={styles.root}>
       <PageHeader title={`#${pagination.data.name} 관련 프로필`} />
       {profiles.length ? (
         profiles.map((edge) => <ProfileListItem key={edge.cursor} linked profile={edge.node} />)
@@ -94,22 +94,20 @@ export function HashtagRelatedProfileList({
           ) : null}
         </View>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
 export function HashtagRelatedProfileListState({
-  name,
   onRetry,
   state,
 }: {
-  name?: string;
   onRetry?: () => void;
   state: 'error' | 'loading' | 'notFound';
 }) {
   return (
     <View>
-      <PageHeader title={name ? `#${name} 관련 프로필` : '관련 프로필'} />
+      <PageHeader title="관련 프로필" />
       {state === 'loading' ? (
         <StateView loading title="관련 프로필을 불러오는 중입니다." />
       ) : state === 'error' ? (
@@ -131,6 +129,7 @@ export function HashtagRelatedProfileListState({
 }
 
 const styles = StyleSheet.create({
+  root: { flexGrow: 1, paddingBottom: spacing.xxxl },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
   paginationAction: { marginTop: spacing.md },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },

@@ -64,15 +64,8 @@ mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
       identity: hashtag.id,
       name: hashtag.name,
     }),
-  HashtagRelatedProfileListState: ({
-    name,
-    onRetry,
-    state,
-  }: {
-    name?: string;
-    onRetry?: () => void;
-    state: string;
-  }) => createElement('HashtagRelatedProfileListState', { name, onRetry, state }),
+  HashtagRelatedProfileListState: ({ onRetry, state }: { onRetry?: () => void; state: string }) =>
+    createElement('HashtagRelatedProfileListState', { onRetry, state }),
 });
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
@@ -149,13 +142,12 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     });
   });
 
-  it('첫 요청 중에는 이름 없는 관련 Profile 맥락을 유지한다', async () => {
+  it('첫 요청 중에는 관련 Profile 맥락을 유지한다', async () => {
     queryMode = 'loading';
     await renderScreen();
 
     const state = requireRendered('HashtagRelatedProfileListState');
     assert.equal(state.props.state, 'loading');
-    assert.equal(state.props.name, undefined);
   });
 
   it('현재 Hashtag query error만 새 fetchKey로 재시도한다', async () => {
