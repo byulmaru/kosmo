@@ -41,8 +41,10 @@ import {
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
+import { createSystemExecutionContext } from './system-execution';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
-import type { Context, Federation } from '@fedify/fedify';
+import type { Context, Federation, FederationFetchOptions } from '@fedify/fedify';
+import type { SystemExecutionContext } from './system-execution';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
@@ -51,6 +53,15 @@ export const federation: Federation<void> = createFederation<void>({
   kv: new MemoryKvStore(),
   ...(federationOrigin ? { origin: federationOrigin } : {}),
 });
+
+export const fetchFederation = (
+  request: Request,
+  options: Omit<FederationFetchOptions<SystemExecutionContext>, 'contextData'>,
+): Promise<Response> =>
+  (federation as unknown as Federation<SystemExecutionContext>).fetch(request, {
+    ...options,
+    contextData: createSystemExecutionContext(),
+  });
 
 federation
   .setActorDispatcher('/ap/actor/{identifier}', async (ctx, identifier) => {

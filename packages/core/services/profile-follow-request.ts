@@ -18,7 +18,7 @@ import {
   deleteFollowRequestNotificationPostCommit,
 } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
-import type { Transaction } from '../db';
+import type { DatabaseHandle, Transaction } from '../db';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -44,7 +44,7 @@ const pairCondition = (
 
 export const ensureProfileFollowRequest = async (
   pair: ProfileFollowPair,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<
   | {
       readonly created: false;
@@ -57,7 +57,7 @@ export const ensureProfileFollowRequest = async (
       readonly profileFollowRequest: ProfileFollowRequestRow;
     }
 > =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+  getDatabaseConnection(handle).transaction(async (tx) => {
     const profileFollow = await tx
       .select()
       .from(ProfileFollows)
@@ -278,9 +278,9 @@ const deleteProfileFollowRequestAsActor = async (
     readonly actorRole: 'FOLLOWEE' | 'FOLLOWER';
     readonly profileFollowRequestId: string;
   },
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ) =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+  getDatabaseConnection(handle).transaction(async (tx) => {
     const request = await tx
       .select()
       .from(ProfileFollowRequests)

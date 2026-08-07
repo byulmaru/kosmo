@@ -25,7 +25,7 @@ import {
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { profileBioSchema, profileTagsSchema } from '../validation';
 import { noPostCommit, oncePostCommit } from './post-commit';
-import type { Transaction } from '../db';
+import type { DatabaseHandle } from '../db';
 import type { ProfileFollowPolicy } from '../enums';
 
 export type UpdateProfileInput = {
@@ -117,9 +117,9 @@ const normalizeDefaultPostVisibility = (
 
 export const updateProfile = async (
   input: UpdateProfileInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<UpdateProfileResult> => {
-  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
     const profile = await tx
       .select({ profile: Profiles, actorRole: AccountProfiles.role })
       .from(Profiles)

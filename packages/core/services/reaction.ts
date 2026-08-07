@@ -5,7 +5,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import { createReactionNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
-import type { Transaction } from '../db';
+import type { DatabaseHandle } from '../db';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
@@ -32,14 +32,14 @@ type AddReactionResult = {
 
 export const addReaction = async (
   { actorProfileId, onPostCommitError, origin, postId, type }: AddReactionInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -117,7 +117,7 @@ export const addReaction = async (
 
 export const deleteReaction = async (
   input: DeleteReactionInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<{
   readonly postId: string;
   readonly postCommit: () => Promise<void>;
@@ -128,7 +128,7 @@ export const deleteReaction = async (
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const reaction = await getDatabaseConnection(tx)
+  const reaction = await getDatabaseConnection(handle)
     .transaction((tx) =>
       tx
         .delete(Reactions)

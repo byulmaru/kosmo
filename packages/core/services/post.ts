@@ -34,7 +34,7 @@ import {
 } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
-import type { Transaction } from '../db';
+import type { DatabaseHandle, Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 import type { PostCommit } from './post-commit';
 
@@ -173,9 +173,9 @@ export const deletePost = async (
     readonly origin: PostOrigin;
     readonly postId: string;
   },
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<{ readonly postCommit: PostCommit; readonly postId: string }> => {
-  const { deleted, result } = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const { deleted, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
     const post = await tx
       .select({
         profileId: Posts.profileId,
@@ -275,13 +275,13 @@ export const repostPost = async (
     readonly origin: PostOrigin;
     readonly sourcePostId: string;
   },
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<{
   readonly created: boolean;
   readonly postCommit: PostCommit;
   readonly repost: typeof Posts.$inferSelect;
 }> => {
-  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
     if (!source) {
       throw new NotFoundError('Post not found');
@@ -368,18 +368,18 @@ export const repostPost = async (
       : noPostCommit,
   };
 };
-export function createPost(input: LocalPostInput, tx?: Transaction): Promise<CreatedPost>;
+export function createPost(input: LocalPostInput, handle?: DatabaseHandle): Promise<CreatedPost>;
 export function createPost(
   input: ActivityPubPostInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<CreatedPost | DuplicatePost> {
   let result: CreatedPost;
   try {
-    result = await getDatabaseConnection(tx).transaction(async (tx) => {
+    result = await getDatabaseConnection(handle).transaction(async (tx) => {
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
