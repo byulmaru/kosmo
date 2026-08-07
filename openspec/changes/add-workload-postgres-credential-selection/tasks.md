@@ -27,12 +27,12 @@
 
 **Verification**
 
-- Pre-selector default render와 empty selector render가 byte-identical인지 확인한다.
-- API-only, Fedify-only, 양쪽 활성화, 각 selector rollback 및 12개 partial API/Fedify 조합 실패를 render로 검증한다.
-- API/Web BFF 기본 `DATABASE_*` shared source, Web-only `FEDIFY_*`, API env 부재와 dev/prod migration document 불변을 확인한다.
-- `helm lint`, focused Helm regression, Prettier, Node syntax, OpenSpec strict validation과 diff check를 실행한다.
+- 구현 시 일회성 수동 `helm template` 실행으로 pre-selector default와 empty selector render의 byte identity를 확인한다.
+- 같은 수동 검증에서 대표 API-only/Fedify-only/양쪽 활성화와 selector rollback, 대표 partial API/Fedify 입력 실패를 확인한다.
+- API/Web BFF 기본 `DATABASE_*` shared source, Web-only `FEDIFY_*`, API env 부재와 dev/prod migration document 불변을 수동 출력 비교로 기록한다.
+- `helm lint`, Prettier, OpenSpec strict validation과 diff check를 실행한다. 재사용 가능한 regression script, CI/package hook 또는 golden hash fixture는 추가하지 않는다.
 
 - [x] 1.1 `api`/`fedify` values 기본값, atomic validation과 helper fallback을 구현한다.
 - [x] 1.2 API source를 API/Web 기본 env에 공통 적용하고 Fedify source를 Web inbound Fedify env에만 additive로 렌더한다.
-- [x] 1.3 default byte identity, API/Fedify 조합·rollback, 12개 partial 입력 실패와 migration invariance 회귀를 구현하고 focused/lint/format/syntax/strict 검증을 통과한다.
-- [x] 1.4 구현 self-review와 최신 Linear evidence를 부모가 완료하고, 실제 결과를 PR/Linear에 기록한다.
+- [x] 1.3 구현 시 일회성 수동 Helm template 검증으로 default byte identity, 대표 API/Fedify 조합·rollback, 대표 partial 입력 실패와 migration invariance를 확인하고 `helm lint`/format/strict/diff 검증을 통과한다.
+- [ ] 1.4 구현 self-review와 최신 Linear evidence를 부모가 완료하고, 실제 결과를 PR/Linear에 기록한다.

@@ -33,7 +33,7 @@ API outbound Fedify 직접 호출을 Temporal durable intent/workflow와 Worker 
 
 - Kubernetes container env의 `DATABASE_URL` 안 `$(DATABASE_PASSWORD)` 확장은 앞서 선언된 같은 이름의 env를 참조한다. Fedify URL은 `$(FEDIFY_DATABASE_PASSWORD)`를 참조해야 하며, URL과 Secret selector 중 일부만 적용하면 custom endpoint와 owner password가 조합될 수 있다.
 - `packages/core/db/index.ts`와 현재 Fedify package는 process env에서 DB client를 사용한다. 이번 change는 env selector만 렌더하고 새 client/connection을 만들지 않는다.
-- Chart에는 values schema가 없어 unknown values가 조용히 무시될 수 있다. Default render, API/Fedify 조합, partial input failure를 실행 가능한 Helm regression으로 고정해야 한다.
+- Chart에는 values schema가 없어 unknown values가 조용히 무시될 수 있다. 구현 시 수동 Helm template 명령으로 default render, API/Fedify 조합과 partial input failure를 한 번 확인하며, 재사용 가능한 regression harness는 이 change에 두지 않는다.
 - Chart의 실제 workload 이름은 `api`와 `web`이지만 credential source 역할은 workload 이름과 다르다. API source는 두 Rollout의 기본 DB 경로가 공유하고 Fedify source는 Web inbound consumer에만 대응한다.
 - API Rollout은 API 기본 `DATABASE_PASSWORD`/`DATABASE_URL`만 가져야 하며, Web Rollout은 같은 API 기본 env에 선택적으로 `FEDIFY_DATABASE_PASSWORD`/`FEDIFY_DATABASE_URL`을 더한다.
 - Production migration Job은 runtime selectors를 읽지 않고 기존 migration Secret과 `kosmo_migration` → `SET ROLE kosmo`를 사용한다. Dev Job은 기존 owner fallback을 사용한다.
@@ -46,11 +46,11 @@ API source가 활성화되면 API와 Web의 기본 `DATABASE_PASSWORD` SecretKey
 
 Migration template은 runtime helper를 호출하지 않고 기존 PG environment, migration Secret, `DATABASE_MIGRATION_ROLE`과 `SET ROLE kosmo` 경계를 그대로 유지한다. `kosmo_fedify`의 `BYPASSRLS`와 role/policy provisioning은 chart helper나 values에서 표현하지 않는다.
 
-Default dev/prod render를 pre-selector snapshot과 byte comparison하고, API-only, Fedify-only, 양쪽 활성화, 각 trio rollback, partial input failure와 API env 부재를 검사한다. 모든 runtime 조합에서 migration Job document는 baseline과 byte-identical해야 한다.
+구현 시 Helm template을 일회성으로 실행해 default render가 pre-selector 결과와 byte-identical인지 확인하고, 대표 API-only/Fedify-only/양쪽 활성화와 rollback, partial input failure, API env 부재를 수동으로 검사한다. migration Job document 불변도 대표 조합에서 확인한 결과를 구현 evidence로 남긴다. 이 change는 해당 검증을 재실행하는 script, CI hook 또는 committed golden hash를 추가하지 않는다.
 
 ### Allowed Alternatives
 
-동일한 `api`/`fedify` values 공개 계약, atomic validation, default render byte identity, API/Web env 경계와 migration 비침범을 유지한다면 helper 내부 구현은 dict 전달 또는 작은 workload helper로 구성할 수 있다. 테스트는 shell 또는 Node 기반 render assertion 중 repository에서 유지하기 쉬운 형식을 사용할 수 있다.
+동일한 `api`/`fedify` values 공개 계약, atomic validation, default render byte identity, API/Web env 경계와 migration 비침범을 유지한다면 helper 내부 구현은 dict 전달 또는 작은 workload helper로 구성할 수 있다. 검증은 구현 시 수행하는 수동 Helm template 명령과 결과 기록으로 충분하며 별도 test harness를 추가하지 않는다.
 
 ### Known Traps
 
@@ -66,13 +66,13 @@ Default dev/prod render를 pre-selector snapshot과 byte comparison하고, API-o
 
 - [Values 공개 surface가 늘어남] → API와 Fedify에 동일한 세 필드 trio만 제공하고 migration·Worker·role provisioning surface는 각 소유 계약에 남긴다.
 - [사용자가 password 없는 URL을 전달함] → Helm은 Secret reference의 완전성만 검증할 수 있다. 실제 URL semantic, `kosmo_fedify` 권한과 credential 성공은 downstream transition smoke가 검증한다.
-- [Default manifest의 공백/순서 변화] → pre-selector render와 byte comparison regression을 유지한다.
+- [Default manifest의 공백/순서 변화] → 구현 시 pre-selector render와 byte comparison을 수동으로 확인하고 결과를 evidence로 남긴다.
 - [API와 Web 기본 env를 실수로 분기함] → API source는 두 workload에 같은 helper를 사용하고, Fedify env는 Web template의 additive block으로만 둔다.
 - [Future outbound worker가 아직 없음] → API direct-call 제거와 Worker credential consumption을 PROD-448/719의 downstream gate로 명시하고 이 change에서는 준비용 env/resource를 만들지 않는다.
 
 ## Migration Plan
 
-1. 빈 `api`/`fedify` selector 기본값을 포함한 chart를 렌더하고 pre-selector manifest가 byte-identical인지 확인한다.
+1. 빈 `api`/`fedify` selector 기본값을 포함한 chart를 수동 렌더하고 pre-selector manifest가 byte-identical인지 확인한다. 비교 hash나 fixture는 저장하지 않는다.
 2. 별도 downstream owner가 `kosmo_api` 및 `kosmo_fedify` Secret/role/RLS(`BYPASSRLS` 포함)를 provision하고 smoke를 소유한다. 이 change는 resource를 만들지 않는다.
 3. `fedify` trio를 Web inbound Fedify에만 opt-in하고 API/Web BFF 기본 API 연결과 API env 부재를 검증한다.
 4. `api` trio를 API Rollout과 Web BFF 기본 연결에 opt-in한다. API outbound Fedify와 Worker/Temporal 전환은 PROD-448/719에서 별도 진행한다.

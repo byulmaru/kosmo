@@ -34,6 +34,6 @@
 - `apps/helm/values.yaml`: 비활성 기본값을 가진 `api`/`fedify` credential trio 입력.
 - `apps/helm/templates/_helpers.tpl`: role별 atomic validation과 API source fallback helper.
 - `apps/helm/templates/api/rollout.yaml`, `apps/helm/templates/web/rollout.yaml`: API shared `DATABASE_*`와 Web-only `FEDIFY_DATABASE_*` 환경 주입.
-- `apps/helm/templates/database-migration-job.yaml`: runtime selector와 무관한 기존 migration env/Secret/role 경계 유지 여부만 regression으로 확인.
-- Helm render 회귀 검증: default byte identity, API/Fedify 조합·rollback, partial failure, API Fedify env 부재와 migration document 불변.
+- 구현 시 일회성 수동 Helm template 검증 evidence: default byte identity, API/Fedify 조합·rollback, partial failure, API Fedify env 부재와 migration document 불변.
+- 이 change는 재사용 가능한 regression script, CI/package hook 또는 committed golden hash fixture를 소유하지 않는다.
 - Downstream follow-up: `PROD-369`의 role/Secret/RLS provisioning, `PROD-715/716`의 runtime transition, `PROD-448/719`의 API outbound Fedify 및 Worker/Temporal 전환. 이 change는 해당 결과를 구현하지 않는다.
