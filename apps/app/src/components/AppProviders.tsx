@@ -1,13 +1,13 @@
 import { Suspense, useEffect } from 'react';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { initializeAnalytics } from '@/analytics/client';
-import { ShellRefreshCoordinatorProvider } from '@/components/shell/ShellRefreshCoordinator';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import {
   SessionErrorProvider,
   SessionFailOpenBoundary,
   SessionProvider,
 } from '@/session/SessionProvider';
+import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
@@ -46,9 +46,9 @@ export function AppProviders({ children }: PropsWithChildren) {
     <ThemeProvider>
       <ToastProvider>
         <RelayActorProvider>
-          <ShellRefreshCoordinatorProvider>
+          <SessionRecoveryProvider>
             <RelaySessionBoundary>{children}</RelaySessionBoundary>
-          </ShellRefreshCoordinatorProvider>
+          </SessionRecoveryProvider>
         </RelayActorProvider>
       </ToastProvider>
     </ThemeProvider>

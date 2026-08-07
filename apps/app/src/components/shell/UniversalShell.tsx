@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
+import { useSessionRecovery } from '@/session/SessionRecoveryCoordinator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsRoot } from '../settings/settingsNavigation';
@@ -35,7 +36,6 @@ import {
   isWebMobileRouteOwnedHeader,
   webMobileShellHeaderHeight,
 } from './shellLayout';
-import { useShellRefresh } from './ShellRefreshCoordinator';
 import { SidebarNavigation } from './SidebarNavigation';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
@@ -85,14 +85,14 @@ const webFixedBottomBar = {
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
-  const refresh = useShellRefresh();
+  const recoverSession = useSessionRecovery();
 
   return (
     <NavigationGuardProvider>
       <PrimaryNavigationScrollProvider>
         <RouteBoundary
           loading={<Splash label="앱을 불러오는 중입니다." />}
-          onRetry={refresh}
+          onRetry={recoverSession}
           title="앱을 불러오지 못했어요"
         >
           <UniversalShellContent />
