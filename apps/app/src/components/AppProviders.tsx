@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { initializeAnalytics } from '@/analytics/client';
+import { ShellRefreshCoordinatorProvider } from '@/components/shell/ShellRefreshCoordinator';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
 import {
   SessionErrorProvider,
@@ -45,7 +46,9 @@ export function AppProviders({ children }: PropsWithChildren) {
     <ThemeProvider>
       <ToastProvider>
         <RelayActorProvider>
-          <RelaySessionBoundary>{children}</RelaySessionBoundary>
+          <ShellRefreshCoordinatorProvider>
+            <RelaySessionBoundary>{children}</RelaySessionBoundary>
+          </ShellRefreshCoordinatorProvider>
         </RelayActorProvider>
       </ToastProvider>
     </ThemeProvider>

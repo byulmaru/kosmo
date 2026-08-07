@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { ShellRefreshCoordinatorProvider } from '@/components/shell/ShellRefreshCoordinator';
 import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 
 type RelayMockValue = {
+  actorBoundary?: boolean;
   mutationError?: string;
   mutationGraphQLErrors?: string[];
   mutationLoading?: boolean;
@@ -32,6 +34,7 @@ type StoryOperationResponseSequence = {
 };
 
 export function RelayStoryProvider({
+  actorBoundary = true,
   children,
   mutationError,
   mutationGraphQLErrors,
@@ -85,7 +88,9 @@ export function RelayStoryProvider({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <RelayActorBoundary>{children}</RelayActorBoundary>
+      <ShellRefreshCoordinatorProvider>
+        {actorBoundary ? <RelayActorBoundary>{children}</RelayActorBoundary> : children}
+      </ShellRefreshCoordinatorProvider>
     </RelayActorProvider>
   );
 }

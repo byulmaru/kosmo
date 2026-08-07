@@ -25,7 +25,8 @@ const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(nul
  * Returns the opaque query lifecycle owned by the nearest RouteBoundary.
  *
  * Route components should not maintain their own retry counters or compose actor and retry
- * revisions. The boundary remounts the query subtree and changes this key when retry is invoked.
+ * lifecycle state. The boundary remounts the query subtree and changes this key when retry is
+ * invoked.
  */
 export function useRouteBoundary(): RouteBoundaryContextValue {
   const value = useContext(RouteBoundaryContext);

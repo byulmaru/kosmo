@@ -16,6 +16,7 @@ import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
+import { ShellRefreshCoordinatorProvider } from '@/components/shell/ShellRefreshCoordinator';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing, typography } from '@/theme/tokens';
@@ -185,13 +186,15 @@ function PostActionBarFixture({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <RelayActorBoundary>
-        <Suspense fallback={<View />}>
-          <SessionProvider>
-            <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
-          </SessionProvider>
-        </Suspense>
-      </RelayActorBoundary>
+      <ShellRefreshCoordinatorProvider>
+        <RelayActorBoundary>
+          <Suspense fallback={<View />}>
+            <SessionProvider>
+              <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
+            </SessionProvider>
+          </Suspense>
+        </RelayActorBoundary>
+      </ShellRefreshCoordinatorProvider>
     </RelayActorProvider>
   );
 }
@@ -421,14 +424,16 @@ function ReactionContractHarness() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <RelayActorBoundary>
-        <ReactionContractControls
-          mounted={mounted}
-          onMountedChange={setMounted}
-          onSettleRequest={settleRequest}
-          requests={requests}
-        />
-      </RelayActorBoundary>
+      <ShellRefreshCoordinatorProvider>
+        <RelayActorBoundary>
+          <ReactionContractControls
+            mounted={mounted}
+            onMountedChange={setMounted}
+            onSettleRequest={settleRequest}
+            requests={requests}
+          />
+        </RelayActorBoundary>
+      </ShellRefreshCoordinatorProvider>
     </RelayActorProvider>
   );
 }
