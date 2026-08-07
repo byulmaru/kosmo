@@ -33,6 +33,7 @@ import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
   isSettingsRoute,
+  isWebMobileRouteOwnedHeader,
   webMobileShellHeaderHeight,
 } from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
@@ -132,6 +133,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
+  const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
@@ -193,6 +195,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
     }
     setSwitcherOpen(true);
   };
+  const openNavigationDrawer = () => {
+    setDrawerOpen(true);
+  };
   const openFeedbackOverlay = () => {
     setDrawerOpen(false);
     setSwitcherOpen(false);
@@ -205,7 +210,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
       accessibilityState={{ expanded: drawerOpen }}
       controlRef={menuButtonRef}
       feedback="opacity"
-      onPress={() => setDrawerOpen(true)}
+      onPress={openNavigationDrawer}
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}
@@ -226,7 +231,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
   );
 
   return (
-    <ShellChromeProvider openProfileSwitcher={openProfileSwitcher}>
+    <ShellChromeProvider
+      navigationDrawerOpen={drawerOpen}
+      navigationDrawerTriggerRef={menuButtonRef}
+      openNavigationDrawer={openNavigationDrawer}
+      openProfileSwitcher={openProfileSwitcher}
+    >
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
         {...swipeToOpenDrawer.panHandlers}
@@ -269,7 +279,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             { borderColor: theme.border },
           ]}
         >
-          {mobile ? (
+          {mobile && !routeOwnsMobileHeader ? (
             <View
               style={[
                 styles.mobileChrome,

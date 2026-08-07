@@ -6,6 +6,7 @@ import {
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
   isSettingsRoute,
+  isWebMobileRouteOwnedHeader,
 } from './shellLayout';
 
 describe('getShellLayout', () => {
@@ -90,5 +91,13 @@ describe('getShellLayout', () => {
       settingsWorkspace: false,
       showRightRail: false,
     });
+  });
+
+  it('assigns only mobile Web search to a route-owned header', () => {
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/search'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/notifications'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 1_280, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);
   });
 });

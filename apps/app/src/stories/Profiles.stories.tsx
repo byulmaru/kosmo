@@ -393,6 +393,12 @@ export const HeroNameAndLoadingStates: Story = {
     expect(tagSection.getByText('#아주긴프로필태그이름입니다')).toBeVisible();
     expect(tagSection.getByText(`#${maxLengthProfileTag}`)).toBeVisible();
     expect(tagSection.getAllByTestId('profile-tag-list')).toHaveLength(2);
+    const fediverseLink = tagSection.getByRole('link', {
+      name: '#Fediverse 관련 프로필 보기',
+    });
+    expect(fediverseLink).toHaveAttribute('href', '/hashtags/[hashtagId]/profiles');
+    expect(fediverseLink.getBoundingClientRect().height).toBe(32);
+    expect(fediverseLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(32);
 
     const narrowFixture = tagSection.getByTestId('profile-tags-narrow-fixture');
     const narrowTagList = within(narrowFixture).getByTestId('profile-tag-list');
@@ -400,6 +406,12 @@ export const HeroNameAndLoadingStates: Story = {
     expect(narrowChips).toHaveLength(withManyLongTags.tags.length);
     const maxLengthTagText = within(narrowTagList).getByText(`#${maxLengthProfileTag}`);
     expect(within(narrowTagList).getByLabelText(`#${maxLengthProfileTag}`)).toBe(maxLengthTagText);
+    const maxLengthTagLink = within(narrowTagList).getByRole('link', {
+      name: `#${maxLengthProfileTag} 관련 프로필 보기`,
+    });
+    expect(maxLengthTagLink).toHaveAttribute('href', '/hashtags/[hashtagId]/profiles');
+    expect(maxLengthTagLink.getBoundingClientRect().height).toBe(32);
+    expect(maxLengthTagLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(32);
     const fixtureBounds = narrowFixture.getBoundingClientRect();
     const listBounds = narrowTagList.getBoundingClientRect();
     const maxLengthChipBounds = maxLengthTagText.parentElement!.getBoundingClientRect();

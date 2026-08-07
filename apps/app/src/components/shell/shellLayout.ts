@@ -60,6 +60,10 @@ export function getWebMobileShellHeader(
   return null;
 }
 
+export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathname: string) {
+  return web && getShellLayout(web, width) === 'mobile' && pathname === '/search';
+}
+
 export function getWebMobileShellHeaderStickyOffset(width: number) {
   return width < breakpoints.compact ? webMobileShellHeaderHeight : 0;
 }

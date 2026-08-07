@@ -65,6 +65,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 순수 Repost의 `{displayName}님이 재게시함` attribution은 `typography.sm`의 14/20 line box에 맞추고 바로
   아래 Source 표준행과의 추가 간격을 두지 않는다. Web의 Profile text link는 inline target 예외를 사용하며,
   Native target과 인접 Source link 비중첩은 출시 전 runtime gate에서 다시 검증한다.
+- Reply Parent가 조회되는 일반 목록의 Content Post는 같은 상단 attribution 행에 기존 Reply action과 같은
+  Message Circle icon과 `{displayName}님에게 답글` 문구를 표시한다. icon은 장식 요소로 보조 기술에서 숨기고,
+  문구는 클릭 동작이나 Post·Profile navigation 없이 일반 텍스트로 인식되게 한다. Reply이면서 Quote인 Post도
+  이 행을 자체 Content·Source preview 위에 한 번 표시한다. Reply Parent를 조회할 수 없거나 일반 Post 또는
+  Content 없는 순수 Repost이면 Reply attribution과 대체 문구를 표시하지 않는다.
+- Repost와 Reply attribution은 icon column, text slot, `typography.sm` line box와 바로 아래 Post 행 사이의
+  간격을 공유한다. Repost의 Profile link 의미와 Reply의 비대화형 텍스트 의미는 각 변형이 따로 소유하며,
+  공용 행이 링크 여부를 추론하지 않는다.
 
 ## Repost action menu
 
@@ -162,6 +170,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 목록의 일반 Post·순수 Repost·Quote에서 Action Bar slot의 상단 padding이 0, 하단 padding이 4이고 1px 구분선이 semantic
   `divider` color를 사용하는지 검증한다. 순수 Repost는 attribution line box가 20이고 Source 표준행과의
   추가 gap이 0인지, Quote는 Source preview 내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
+- 일반 목록의 Reply와 Reply+Quote는 조회 가능한 Parent의 display name을 사용한 Reply attribution을 한 번
+  표시하고, 일반 Post와 Parent를 조회할 수 없는 Reply에는 표시하지 않는지 검증한다. Reply attribution은
+  클릭 가능한 요소가 아니며 장식 icon과 문구를 중복 announce하지 않아야 한다.
 - 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, Reaction Summary 아래부터 Action Bar까지
   4px인지 검증한다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper가 남지 않으며
   Action Bar 아래부터 1px thread divider까지 4px인지 exact geometry로 검증한다.
