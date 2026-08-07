@@ -124,6 +124,22 @@ export function RelayActorBoundary({ children }: PropsWithChildren) {
   return <RelayActorBoundaryContent key={actorBoundaryKey}>{children}</RelayActorBoundaryContent>;
 }
 
+/**
+ * Returns the opaque actor lifecycle identity for infrastructure boundaries.
+ *
+ * Routes and general UI should use their nearest route boundary instead of constructing lifecycle
+ * keys. RelayActorBoundary and session infrastructure are the intended consumers.
+ */
+export function useRelayActorLifecycleKey(): string {
+  const actorLifecycleKey = useContext(RelayActorBoundaryContext);
+
+  if (!actorLifecycleKey) {
+    throw new Error('useRelayActorLifecycleKey must be used inside RelayActorProvider.');
+  }
+
+  return actorLifecycleKey;
+}
+
 function RelayActorBoundaryContent({ children }: PropsWithChildren) {
   return children;
 }
