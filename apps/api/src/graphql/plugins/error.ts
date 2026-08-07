@@ -80,6 +80,11 @@ const transformExecutionResult = (result: ExecutionResult): ExecutionResult => {
   };
 };
 
+export const createExecutionErrorResult = (error: unknown): ExecutionResult => ({
+  data: null,
+  errors: [transformError(error)],
+});
+
 export const useError = (): Plugin<UserContext> => ({
   onPluginInit: ({ registerContextErrorHandler }) => {
     registerContextErrorHandler(({ error, setError }) => {
