@@ -727,6 +727,26 @@ Projection은 현재 session Account로 scope되어야 하고(MUST), 다른 Acco
   그대로 반환한다
 - **AND** Membership projection은 FollowButton의 self·established follow·pending request 동작을 변경하지 않는다
 
+### Requirement: Deprecated selected Profile edit compatibility capability
+
+**Authority / Provenance:** `docs/domain/decisions/0023-profile-viewer-membership-edit-eligibility.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `PROD-705` — 배포된 consumer의 전환이 확인될 때까지 nullable top-level `selectedProfileForEdit` query를 deprecated compatibility alias로 유지해야 한다(MUST). alias는 selected Active/Normal Local Profile의 Owner에게만 Profile을 반환해야 하며(MUST), guest, session 또는 selected Profile 부재와 편집 부적격 Account에는 GraphQL authorization error 대신 `null`을 반환해야 한다(MUST). first-party consumer와 새 production consumer는 이 alias를 사용해서는 안 되고(MUST NOT), `Profile.viewerState.membership`을 사용해야 한다(MUST).
+
+#### Scenario: Preserve deployed client compatibility
+
+- **WHEN** 배포된 client가 deprecated `selectedProfileForEdit`을 조회하고 Active Account의 selected Profile이 Active/Normal Local이며 Account가 Owner다
+- **THEN** query는 해당 Profile을 반환한다
+
+#### Scenario: Keep compatibility query guest-safe
+
+- **WHEN** guest, selected Profile이 없는 session, Member·무관 Account 또는 Remote/inactive/suspended selected Profile이 deprecated query를 조회한다
+- **THEN** `selectedProfileForEdit`은 authorization error 없이 `null`이다
+
+#### Scenario: Prevent new first-party dependency
+
+- **WHEN** main app 또는 후행 ProfileSwitcher가 편집 eligibility를 조회한다
+- **THEN** client는 selected Profile의 `viewerState.membership`을 사용한다
+- **AND** deprecated `selectedProfileForEdit`을 새 operation에 추가하지 않는다
+
 ### Requirement: Profile edit Follow Approval Policy shares the representation save boundary
 
 **Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/decisions/0005-domain-boundary-followup-clarifications.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `PROD-490`, `PROD-492`, `PROD-531` — 현재 Settings 진입점이 제공되기 전 Profile edit의 Follow Approval Policy 변경은 `followPolicy` enum을 displayName·bio·avatar/header와 같은 저장 동작에 포함해야 하며(MUST). 정책 변경은 기존 Pending Follow Request의 상태나 존재를 바꾸어서는 안 된다(MUST NOT).

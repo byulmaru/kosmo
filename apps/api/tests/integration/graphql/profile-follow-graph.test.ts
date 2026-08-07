@@ -259,6 +259,74 @@ describe('GraphQL profile follow graph', () => {
     assert.equal(result.data?.profileByHandle?.viewerState?.membership, null);
   });
 
+  test('limits direct AccountProfile Node access to the Membership Account or Profile Owner', async () => {
+    const owner = await createAuthenticatedSession();
+    const member = await createAuthenticatedSession();
+    const unrelated = await createAuthenticatedSession();
+    const membership = await db
+      .insert(AccountProfiles)
+      .values({
+        accountId: member.account.id,
+        profileId: owner.profile.id,
+        role: AccountProfileRole.MEMBER,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const membershipId = globalId('AccountProfile', membership.id);
+
+    const [asOwner, asMember, asUnrelated, asGuest] = await Promise.all([
+      requestAccountProfileNode(membershipId, owner.token),
+      requestAccountProfileNode(membershipId, member.token),
+      requestAccountProfileNode(membershipId, unrelated.token),
+      requestAccountProfileNode(membershipId),
+    ]);
+
+    for (const result of [asOwner, asMember, asUnrelated, asGuest]) {
+      assertNoGraphQLErrors(result);
+    }
+    assert.deepEqual(asOwner.data?.node, { id: membershipId, role: 'MEMBER' });
+    assert.deepEqual(asMember.data?.node, { id: membershipId, role: 'MEMBER' });
+    assert.equal(asUnrelated.data?.node, null);
+    assert.equal(asGuest.data?.node, null);
+  });
+
+  test('does not treat a Remote Profile OWNER membership as Profile Owner access', async () => {
+    const remoteOwner = await createAuthenticatedSession();
+    const remoteMember = await createAuthenticatedSession();
+    const remoteInstance = await createRemoteInstance({
+      domain: 'account-profile-node.remote.example',
+    });
+    const remoteProfile = await createProfile({
+      handle: 'account-profile-node-remote',
+      instanceId: remoteInstance.id,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: remoteOwner.account.id,
+      profileId: remoteProfile.id,
+      role: AccountProfileRole.OWNER,
+    });
+    const membership = await db
+      .insert(AccountProfiles)
+      .values({
+        accountId: remoteMember.account.id,
+        profileId: remoteProfile.id,
+        role: AccountProfileRole.MEMBER,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const membershipId = globalId('AccountProfile', membership.id);
+
+    const [asRemoteOwner, asMembershipAccount] = await Promise.all([
+      requestAccountProfileNode(membershipId, remoteOwner.token),
+      requestAccountProfileNode(membershipId, remoteMember.token),
+    ]);
+
+    assertNoGraphQLErrors(asRemoteOwner);
+    assertNoGraphQLErrors(asMembershipAccount);
+    assert.equal(asRemoteOwner.data?.node, null);
+    assert.deepEqual(asMembershipAccount.data?.node, { id: membershipId, role: 'MEMBER' });
+  });
+
   test('keeps viewer state nullable for guests and sessions without an active Profile', async () => {
     const withoutViewer = await createAuthenticatedSession({ activeProfile: false });
 
@@ -763,6 +831,10 @@ type ViewerMembershipResult = {
   } | null;
 };
 
+type AccountProfileNodeResult = {
+  node: { id: string; role: 'MEMBER' | 'OWNER' } | null;
+};
+
 type NodeFollowGraph = {
   node: Omit<FollowGraphProfile, 'followersCount' | 'followingCount'> | null;
 };
@@ -807,6 +879,17 @@ const requestViewerMembership = (handle: string, token?: string) =>
       }
     }`,
     { handle },
+    token,
+  );
+
+const requestAccountProfileNode = (id: string, token?: string) =>
+  requestGraphQL<AccountProfileNodeResult>(
+    `query AccountProfileNode($id: ID!) {
+      node(id: $id) {
+        ... on AccountProfile { id role }
+      }
+    }`,
+    { id },
     token,
   );
 

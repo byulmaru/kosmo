@@ -74,8 +74,10 @@ Active Account/Profile·Local·non-Suspended 조건을 유지하고, 호환성 �
       추가하고 route consumer를 전환한다.
 - [x] 2.2 protected route의 selected Owner/부적격 StateView를 고정하는 실패하는 component test를 먼저 추가하고
       초기값 query를 `currentSession.selectedProfile` projection으로 전환한다.
-- [x] 2.3 first-party operation과 알려진 외부/stacked consumer 호환성을 검색한 뒤
+- [ ] 2.3 first-party operation과 알려진 외부/stacked consumer 호환성을 검색한 뒤
       `Query.selectedProfileForEdit` schema/resolver와 관련 operation/generated artifact를 제거한다.
+      production deployment `0.1.1` (`b7cc1443`)에 해당 field와 first-party consumer가 포함된 증거가 있어,
+      현재 선행 PR은 first-party consumer만 전환하고 deprecated compatibility alias를 유지한다.
 - [x] 2.4 public/runtime schema와 Relay generated artifact를 동기화하고 app/API type·schema check를 통과시킨다.
 
 ## 3. PROD-705 통합 검증, 정합성 확인과 archive
@@ -120,7 +122,7 @@ projection, 두 main consumer, legacy query 제거와 독립 mutation authorizat
       재사용하지 않았음을 code/test evidence로 확인한다.
 - [x] 3.2 schema→Relay→공개 Profile→protected route→mutation의 cross-layer 시나리오와 필수 API/app 검증을
       통과시킨다.
-- [x] 3.3 canonical·Linear·OpenSpec·runtime/public schema 정합성, 제외 범위와 PROD-660 handoff를 독립 리뷰하고
+- [ ] 3.3 canonical·Linear·OpenSpec·runtime/public schema 정합성, 제외 범위와 PROD-660 handoff를 독립 리뷰하고
       prerequisite PR에 검증 증거를 기록한다.
-- [x] 3.4 모든 PROD-705 task와 통합 gate가 완료된 뒤 delta specs를 canonical specs에 동기화해 이 change를
+- [ ] 3.4 모든 PROD-705 task와 통합 gate가 완료된 뒤 delta specs를 canonical specs에 동기화해 이 change를
       archive하고 archive 후 validation을 확인한다.
