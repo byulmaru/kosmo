@@ -29,7 +29,6 @@ let hashtagNode: HashtagNode = {
 };
 let queryMode: QueryMode = 'success';
 let renderer: ReactTestRenderer | null = null;
-let revision = 4;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -70,9 +69,6 @@ mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
 });
-mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({ revision }),
-});
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
@@ -100,7 +96,6 @@ afterEach(async () => {
   };
   queryHistory.length = 0;
   queryMode = 'success';
-  revision = 4;
 });
 
 async function renderScreen() {
@@ -188,7 +183,7 @@ describe('hashtag related profiles route identity and lifecycle', () => {
     assert.equal(requireRendered('HashtagRelatedProfileListState').props.state, 'notFound');
   });
 
-  it('actor revision이나 Hashtag ID가 바뀌면 이전 retry state를 재사용하지 않는다', async () => {
+  it('Hashtag ID가 바뀌면 이전 retry state를 재사용하지 않는다', async () => {
     const originalConsoleError = console.error;
     console.error = () => undefined;
     try {
@@ -198,7 +193,6 @@ describe('hashtag related profiles route identity and lifecycle', () => {
       await act(async () => requireRendered('HashtagRelatedProfileListState').props.onRetry());
       assert.equal(queryHistory.at(-1)?.fetchKey, 1);
 
-      revision = 5;
       hashtagId = 'hashtag-global-b';
       hashtagNode = {
         __typename: 'Hashtag',
