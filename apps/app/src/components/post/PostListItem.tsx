@@ -259,55 +259,57 @@ export function PostListItem({
     return null;
   }
 
+  const renderWithQuoteViewer = (presentation: ReactNode) => (
+    <>
+      <View ref={quoteSurfaceRef} tabIndex={-1}>
+        {presentation}
+      </View>
+      {quoteViewer}
+      {presentedReplySurface}
+    </>
+  );
+
   if (!post.repostSource) {
     if (!post.content) {
-      return quoteViewer;
+      return renderWithQuoteViewer(null);
     }
-    return (
-      <>
-        <View ref={quoteSurfaceRef} role="article" style={cardStyle} tabIndex={-1}>
-          {replyAttribution}
-          <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
-        </View>
-        {quoteViewer}
-        {presentedReplySurface}
-      </>
+    return renderWithQuoteViewer(
+      <View role="article" style={cardStyle}>
+        {replyAttribution}
+        <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
+      </View>,
     );
   }
 
   if (!post.content && post.replyParent) {
-    return quoteViewer;
+    return renderWithQuoteViewer(null);
   }
 
   const source = post.repostSource;
 
   if (!post.content) {
-    return (
-      <>
-        <View ref={quoteSurfaceRef} role="article" style={cardStyle} tabIndex={-1}>
-          <PostAttributionRow
-            icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
-          >
-            <Link asChild href={profileHref}>
-              <Pressable
-                accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
-                accessibilityRole="link"
-                style={styles.repostLabelTarget}
+    return renderWithQuoteViewer(
+      <View role="article" style={cardStyle}>
+        <PostAttributionRow
+          icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
+        >
+          <Link asChild href={profileHref}>
+            <Pressable
+              accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+              accessibilityRole="link"
+              style={styles.repostLabelTarget}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.attributionLabel, { color: theme.textSecondary }]}
               >
-                <Text
-                  numberOfLines={1}
-                  style={[styles.attributionLabel, { color: theme.textSecondary }]}
-                >
-                  {post.profile.displayName}님이 재게시함
-                </Text>
-              </Pressable>
-            </Link>
-          </PostAttributionRow>
-          <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
-        </View>
-        {quoteViewer}
-        {presentedReplySurface}
-      </>
+                {post.profile.displayName}님이 재게시함
+              </Text>
+            </Pressable>
+          </Link>
+        </PostAttributionRow>
+        <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
+      </View>,
     );
   }
 
@@ -354,48 +356,44 @@ export function PostListItem({
     },
   };
 
-  return (
-    <>
-      <View ref={quoteSurfaceRef} style={cardStyle} tabIndex={-1}>
-        {replyAttribution}
-        <View style={styles.quoteRow}>
-          <Link asChild href={profileHref}>
-            <Pressable
-              aria-hidden
-              accessibilityElementsHidden
-              accessible={false}
-              focusable={false}
-              importantForAccessibility="no-hide-descendants"
-              style={styles.avatar}
-              tabIndex={-1}
-            >
-              <Avatar
-                imageUri={post.profile.avatar?.url}
-                label={post.profile.displayName || post.profile.handle}
-                size={48}
-              />
-            </Pressable>
-          </Link>
-          <View style={styles.sourcePresentation}>
-            <PostSourcePresentationView
-              onMediaOpen={handleQuoteMediaOpen}
-              post={presentationPost}
-              showPostAvatar={false}
-              sourcePreviewStyle={styles.quoteSourcePreview}
+  return renderWithQuoteViewer(
+    <View style={cardStyle}>
+      {replyAttribution}
+      <View style={styles.quoteRow}>
+        <Link asChild href={profileHref}>
+          <Pressable
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no-hide-descendants"
+            style={styles.avatar}
+            tabIndex={-1}
+          >
+            <Avatar
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.handle}
+              size={48}
             />
-            <PostActionSurface
-              actionBarStyle={styles.actionBarSlot}
-              onDeleted={onDeleted}
-              reactionSummaryStyle={styles.quoteReactionSummary}
-              reply={reply}
-              socialActionTarget={post.actionSurface!}
-            />
-          </View>
+          </Pressable>
+        </Link>
+        <View style={styles.sourcePresentation}>
+          <PostSourcePresentationView
+            onMediaOpen={handleQuoteMediaOpen}
+            post={presentationPost}
+            showPostAvatar={false}
+            sourcePreviewStyle={styles.quoteSourcePreview}
+          />
+          <PostActionSurface
+            actionBarStyle={styles.actionBarSlot}
+            onDeleted={onDeleted}
+            reactionSummaryStyle={styles.quoteReactionSummary}
+            reply={reply}
+            socialActionTarget={post.actionSurface!}
+          />
         </View>
-        {quoteViewer}
       </View>
-      {presentedReplySurface}
-    </>
+    </View>,
   );
 }
 

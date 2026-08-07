@@ -78,7 +78,6 @@ export function PostMediaViewer({
     [content?.media],
   );
   const bodyText = content?.bodyText ?? '';
-  const contentId = content?.id ?? '';
   const profile = {
     avatarUrl: post.profile.avatar?.url ?? null,
     displayName: post.profile.displayName,
@@ -105,13 +104,26 @@ export function PostMediaViewer({
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);
-  }, [contentId, selectedIndex]);
+  }, [selectedIndex]);
 
   useEffect(() => {
-    setExpanded(false);
-    setHasOverflow(false);
-    setImageStates({});
-  }, [contentId, media]);
+    if (media.length === 0) {
+      return;
+    }
+    const currentMediaStateKeys = new Set(media.map((item) => `${item.id}:${item.url ?? ''}`));
+    setImageStates((states) => {
+      const retainedStates: Record<string, ImageState> = {};
+      let removed = false;
+      for (const [key, state] of Object.entries(states)) {
+        if (currentMediaStateKeys.has(key)) {
+          retainedStates[key] = state;
+        } else {
+          removed = true;
+        }
+      }
+      return removed ? retainedStates : states;
+    });
+  }, [media]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));

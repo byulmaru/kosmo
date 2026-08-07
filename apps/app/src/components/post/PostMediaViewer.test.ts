@@ -191,6 +191,7 @@ describe('PostMediaViewer', () => {
 
     platform.OS = 'ios';
     await render({ post: viewerPost({ contentId: 'content-2' }), selectedIndex: 1 });
+    assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
     assert.ok(panResponderConfig);
     assert.equal(
       panResponderConfig.onMoveShouldSetPanResponder?.(
@@ -205,7 +206,7 @@ describe('PostMediaViewer', () => {
     await act(async () => {
       panResponderConfig?.onPanResponderRelease?.(null as never, { dx: -80, dy: 4 } as never);
     });
-    assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
   });
 
   it('767px Web과 Native는 세로, 768px Web은 좌우 layout을 사용한다', async () => {
@@ -396,6 +397,13 @@ describe('PostMediaViewer', () => {
 
     assert.equal(currentImage().props.source.uri, 'https://media.example/replacement.webp');
     assert.notStrictEqual(currentImage(), previousImage);
+    assert.deepEqual(currentImage().props.accessibilityState, { busy: true });
+
+    const replacementImage = currentImage();
+    await render({ post: viewerPost({ media: [original] }) });
+
+    assert.equal(currentImage().props.source.uri, 'https://media.example/1.webp');
+    assert.notStrictEqual(currentImage(), replacementImage);
     assert.deepEqual(currentImage().props.accessibilityState, { busy: true });
   });
 
