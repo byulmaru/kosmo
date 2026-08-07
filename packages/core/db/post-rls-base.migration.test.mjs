@@ -236,7 +236,7 @@ async function verifyRlsCatalog(sql) {
   );
   for (const fn of functions) {
     assert.match(fn.definition, /pg_catalog\.current_setting/);
-    assert.match(fn.definition, /pg_catalog\.regexp_like/);
+    assert.match(fn.definition, /pg_catalog\.pg_input_is_valid/);
   }
 }
 
@@ -304,15 +304,17 @@ async function verifyHelpers(sql) {
       setting: 'kosmo.account_id',
       functionName: 'public.kosmo_current_account_id',
       valid: ids.author,
+      alternates: [ids.author.replaceAll('-', ''), `{${ids.author}}`],
     },
     {
       setting: 'kosmo.profile_id',
       functionName: 'public.kosmo_current_profile_id',
       valid: ids.viewer,
+      alternates: [ids.viewer.replaceAll('-', ''), `{${ids.viewer}}`],
     },
   ];
 
-  for (const { setting, functionName, valid } of helperCases) {
+  for (const { setting, functionName, valid, alternates } of helperCases) {
     assert.equal(await readHelper(sql, setting, functionName), null, `${setting} missing`);
     assert.equal(await readHelper(sql, setting, functionName, ''), null, `${setting} empty`);
     assert.equal(
@@ -321,6 +323,13 @@ async function verifyHelpers(sql) {
       `${setting} invalid`,
     );
     assert.equal(await readHelper(sql, setting, functionName, valid), valid, `${setting} valid`);
+    for (const alternate of alternates) {
+      assert.equal(
+        await readHelper(sql, setting, functionName, alternate),
+        valid,
+        `${setting} alternate UUID ${alternate}`,
+      );
+    }
 
     assert.equal(
       await readHelper(sql, setting, functionName),
