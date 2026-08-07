@@ -14,6 +14,7 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type RelayActorSnapshot = {
+  actorLifecycleKey: string;
   clearNativeSession: () => Promise<void>;
   environment: Environment;
   nativeToken: string | null;
@@ -22,7 +23,10 @@ type RelayActorSnapshot = {
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'environment' | 'recoverSession'>;
+type RelayActorSnapshotValue = Omit<
+  RelayActorSnapshot,
+  'actorLifecycleKey' | 'environment' | 'recoverSession'
+>;
 
 let deleteFailure = false;
 let deleteItemCallCount = 0;
@@ -65,6 +69,7 @@ let RelayActorProvider: ComponentType<
 >;
 let ActorBoundary: ComponentType<PropsWithChildren>;
 let useRelayActor: () => RelayActorSnapshotValue;
+let useRelayActorLifecycleKey: () => string;
 let useRelayEnvironment: () => Environment;
 
 before(async () => {
@@ -75,6 +80,7 @@ before(async () => {
     RelayActorBoundary: ActorBoundary,
     RelayActorProvider,
     useRelayActor,
+    useRelayActorLifecycleKey,
   } = await import('./RelayActorProvider'));
   ({ useRelayEnvironment } = await import('react-relay'));
 });
@@ -105,6 +111,7 @@ function createEnvironment(token: string | null): Environment {
 
 function Probe() {
   const actor = useRelayActor();
+  const actorLifecycleKey = useRelayActorLifecycleKey();
   const recoverSession = useSessionRecovery();
   const generation = useSessionRecoveryGeneration();
   useEffect(() => {
@@ -114,6 +121,7 @@ function Probe() {
     actorSubtreeMountCount += 1;
   }, []);
   snapshot = {
+    actorLifecycleKey,
     clearNativeSession: actor.clearNativeSession,
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
@@ -152,6 +160,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.ok(snapshot);
     const previousEnvironment = snapshot.environment;
     const previousStore = previousEnvironment.getStore();
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
     const previousActorMountCount = actorSubtreeMountCount;
     commitLocalUpdate(previousEnvironment, (store) => {
       store.create('warm-viewer', 'Profile').setValue('warm cache', 'displayName');
@@ -163,6 +172,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(observedRecoveryGeneration, 1);
     assert.equal(snapshot.environment, previousEnvironment);
     assert.equal(snapshot.environment.getStore(), previousStore);
+    assert.equal(snapshot.actorLifecycleKey, previousActorLifecycleKey);
     assert.equal(
       snapshot.environment.getStore().getSource().get('warm-viewer')?.displayName,
       'warm cache',
@@ -178,6 +188,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.equal(actorSubtreeMountCount, 1);
     assert.equal(stableSubtreeMountCount, 1);
     const previousEnvironment = snapshot.environment;
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
     commitLocalUpdate(previousEnvironment, (store) => {
       store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
     });
@@ -187,6 +198,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.ok(snapshot);
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
+    assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
     assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
     assert.equal(actorSubtreeMountCount, 2);
     assert.equal(stableSubtreeMountCount, 1);
@@ -230,6 +242,7 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.ok(snapshot);
     const previousEnvironment = snapshot.environment;
+    const previousActorLifecycleKey = snapshot.actorLifecycleKey;
     const previousMountCount = actorSubtreeMountCount;
 
     await act(async () => snapshot?.setNativeSession('same-session-token'));
@@ -237,6 +250,7 @@ describe('RelayActorProvider session cleanup', () => {
     assert.ok(snapshot);
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
+    assert.notEqual(snapshot.actorLifecycleKey, previousActorLifecycleKey);
     assert.equal(actorSubtreeMountCount, previousMountCount + 1);
     assert.equal(stableSubtreeMountCount, 1);
   });

@@ -1,38 +1,22 @@
-import { Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { initializeAnalytics } from '@/analytics/client';
 import { RelayActorProvider } from '@/relay/RelayActorProvider';
-import {
-  SessionErrorProvider,
-  SessionFailOpenBoundary,
-  SessionProvider,
-} from '@/session/SessionProvider';
+import { SessionProvider } from '@/session/SessionProvider';
 import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { GraphQLErrorBoundary } from './GraphQLErrorBoundary';
 import { PostContentWarningRevealProvider } from './post/PostContentWarningRevealContext';
-import { Splash } from './Splash';
 import { ToastProvider } from './ui/ToastProvider';
 import type { PropsWithChildren } from 'react';
 
 function RelaySessionBoundary({ children }: PropsWithChildren) {
   return (
     <GraphQLErrorBoundary>
-      <SessionFailOpenBoundary
-        fallback={
-          <SessionErrorProvider>
-            <AnalyticsSessionBridge />
-            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
-          </SessionErrorProvider>
-        }
-      >
-        <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
-          <SessionProvider>
-            <AnalyticsSessionBridge />
-            <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
-          </SessionProvider>
-        </Suspense>
-      </SessionFailOpenBoundary>
+      <SessionProvider>
+        <AnalyticsSessionBridge />
+        <PostContentWarningRevealProvider>{children}</PostContentWarningRevealProvider>
+      </SessionProvider>
     </GraphQLErrorBoundary>
   );
 }
