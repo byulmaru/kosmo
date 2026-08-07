@@ -172,15 +172,17 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
 
     const readResult = await mutateGraphQL(
       page,
-      `mutation E2EMarkDeletedNotificationRead($id: ID!) {
-        markNotificationRead(input: { id: $id }) {
-          notification { id }
+      `mutation E2EMarkDeletedNotificationRead($ids: [ID!]!) {
+        markNotificationRead(input: { ids: $ids }) {
+          notifications { id }
+          recipientProfiles { id }
         }
       }`,
-      { id: notificationId },
+      { ids: [notificationId] },
     );
-    expect(readResult.errors?.[0]?.extensions?.code).toBe('NOT_FOUND');
-    expect(readResult.data?.markNotificationRead ?? null).toBeNull();
+    expect(readResult.errors).toBeUndefined();
+    expect(readResult.data?.markNotificationRead.notifications).toEqual([]);
+    expect(readResult.data?.markNotificationRead.recipientProfiles).toEqual([]);
   } finally {
     await followerContext.close();
   }

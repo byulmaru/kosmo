@@ -248,9 +248,12 @@ describe('Notification GraphQL Node boundary', () => {
       profile: { id: requesterId },
     });
 
-    const marked = await markNotificationRead(notificationId, auth.token);
+    const marked = await markNotificationRead([notificationId], auth.token);
     assertNoGraphQLErrors(marked);
-    assert.equal(marked.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
+    assert.equal(
+      marked.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount,
+      0,
+    );
   });
 
   test('uses the visible Follow Request source snapshot for Node and connection fields', async () => {
@@ -387,31 +390,31 @@ describe('Notification GraphQL Node boundary', () => {
 
       const result = await requestGraphQL<{
         markNotificationRead: {
-          notification: {
+          notifications: Array<{
             id: string;
             readAt: string | null;
             profile: { id: string };
             followRequest: { id: string };
-          };
+          }>;
         };
       }>(
-        `mutation MarkFollowRequestRead($id: ID!) {
-          markNotificationRead(input: { id: $id }) {
-            notification {
+        `mutation MarkFollowRequestRead($ids: [ID!]!) {
+          markNotificationRead(input: { ids: $ids }) {
+            notifications {
               id
               readAt
               ... on FollowRequestNotification { profile { id } followRequest { id } }
             }
           }
         }`,
-        { id: notificationId },
+        { ids: [notificationId] },
         auth.token,
       );
 
       assertNoGraphQLErrors(result);
-      assert.equal(result.data?.markNotificationRead.notification.id, notificationId);
-      assert.equal(result.data?.markNotificationRead.notification.profile.id, requesterId);
-      assert.equal(result.data?.markNotificationRead.notification.followRequest.id, requestId);
+      assert.equal(result.data?.markNotificationRead.notifications[0]?.id, notificationId);
+      assert.equal(result.data?.markNotificationRead.notifications[0]?.profile.id, requesterId);
+      assert.equal(result.data?.markNotificationRead.notifications[0]?.followRequest.id, requestId);
       assert.equal(
         (
           await db
@@ -679,8 +682,12 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
 
     for (const id of ids.slice(1)) {
-      const result = await markNotificationRead(id, auth.token);
-      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+      const result = await markNotificationRead([id], auth.token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.markNotificationRead, {
+        notifications: [],
+        recipientProfiles: [],
+      });
     }
     assert.deepEqual(
       await Promise.all(
@@ -837,13 +844,13 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
 
     assert.ok(notification);
-    const read = await markNotificationRead(notification.id, parentAuthor.token);
+    const read = await markNotificationRead([notification.id], parentAuthor.token);
     assertNoGraphQLErrors(read);
-    assert.equal(read.data?.markNotificationRead.notification.id, notification.id);
-    assert.equal(read.data?.markNotificationRead.notification.post?.id, replyId);
-    assert.equal(read.data?.markNotificationRead.recipientProfile.id, recipientId);
-    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
-    assert.ok(read.data?.markNotificationRead.notification.readAt);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, notification.id);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.post?.id, replyId);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.id, recipientId);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
+    assert.ok(read.data?.markNotificationRead.notifications[0]?.readAt);
   });
 
   test('filters unavailable Reply Notifications before pagination and from Read', async () => {
@@ -892,8 +899,12 @@ describe('Notification GraphQL Node boundary', () => {
     );
     const hiddenId = encodeGlobalId('ReplyNotification', hiddenNotification.id);
     assert.deepEqual(await loadNodes([hiddenId], viewer.token), [null]);
-    const read = await markNotificationRead(hiddenId, viewer.token);
-    assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    const read = await markNotificationRead([hiddenId], viewer.token);
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(read.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
     assert.equal(await notificationReadAt(hiddenNotification.id), null);
   });
 
@@ -938,11 +949,11 @@ describe('Notification GraphQL Node boundary', () => {
     const count = await loadUnreadNotificationCounts([recipientId], auth.token);
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 1);
     const read = await markNotificationRead(
-      encodeGlobalId('ReplyNotification', notification.id),
+      [encodeGlobalId('ReplyNotification', notification.id)],
       auth.token,
     );
     assertNoGraphQLErrors(read);
-    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 0);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 0);
   });
 
   test('uses every membership role without depending on the selected Profile', async () => {
@@ -1025,10 +1036,10 @@ describe('Notification GraphQL Node boundary', () => {
     const initialCount = await loadUnreadNotificationCounts([recipientId], auth.token);
     assert.equal(initialCount.data?.nodes[0]?.unreadNotificationCount, 2);
 
-    const read = await markNotificationRead(reactionId, auth.token);
+    const read = await markNotificationRead([reactionId], auth.token);
     assertNoGraphQLErrors(read);
-    assert.equal(read.data?.markNotificationRead.notification.id, reactionId);
-    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 1);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, reactionId);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 1);
     assert.equal(await notificationReadAt(follow.id), null);
   });
 
@@ -1083,18 +1094,18 @@ describe('Notification GraphQL Node boundary', () => {
     const initialCount = await loadUnreadNotificationCounts([recipientId], auth.token);
     assert.equal(initialCount.data?.nodes[0]?.unreadNotificationCount, 3);
 
-    const read = await markNotificationRead(repostId, auth.token);
+    const read = await markNotificationRead([repostId], auth.token);
     assertNoGraphQLErrors(read);
-    assert.equal(read.data?.markNotificationRead.notification.id, repostId);
+    assert.equal(read.data?.markNotificationRead.notifications[0]?.id, repostId);
     assert.equal(
-      read.data?.markNotificationRead.notification.profile.id,
+      read.data?.markNotificationRead.notifications[0]?.profile.id,
       encodeGlobalId('Profile', author.id),
     );
     assert.equal(
-      read.data?.markNotificationRead.notification.post?.id,
+      read.data?.markNotificationRead.notifications[0]?.post?.id,
       encodeGlobalId('Post', repost.post.id),
     );
-    assert.equal(read.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 2);
+    assert.equal(read.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 2);
     assert.equal(await notificationReadAt(follow.id), null);
     assert.equal(await notificationReadAt(reaction.notification.id), null);
   });
@@ -1293,7 +1304,7 @@ describe('Notification GraphQL Node boundary', () => {
       '00000000-0000-8006-8000-000000000700',
     );
     const readResult = await markNotificationRead(
-      encodeGlobalId('FollowNotification', read.id),
+      [encodeGlobalId('FollowNotification', read.id)],
       auth.token,
     );
     assertNoGraphQLErrors(readResult);
@@ -1561,8 +1572,12 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
 
     for (const id of ids) {
-      const result = await markNotificationRead(id, auth.token);
-      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+      const result = await markNotificationRead([id], auth.token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.markNotificationRead, {
+        notifications: [],
+        recipientProfiles: [],
+      });
     }
     assert.deepEqual(
       await Promise.all(notifications.map(({ id }) => notificationReadAt(id))),
@@ -1646,13 +1661,65 @@ describe('Notification GraphQL Node boundary', () => {
     assert.equal(count.data?.nodes[0]?.unreadNotificationCount, 0);
 
     for (const id of ids) {
-      const result = await markNotificationRead(id, auth.token);
-      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+      const result = await markNotificationRead([id], auth.token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.markNotificationRead, {
+        notifications: [],
+        recipientProfiles: [],
+      });
     }
     assert.deepEqual(
       await Promise.all(notifications.map(({ id }) => notificationReadAt(id))),
       notifications.map(() => null),
     );
+  });
+
+  test('marks only distinct specified visible Notifications across Recipient Profiles', async () => {
+    const auth = await createAuthenticatedSession();
+    const firstRecipient = await createProfile('batch-first-recipient');
+    const secondRecipient = await createProfile('batch-second-recipient');
+    const firstRelated = await createProfile('batch-first-related');
+    const secondRelated = await createProfile('batch-second-related');
+    const unlistedRelated = await createProfile('batch-unlisted-related');
+    await addMembership(auth.account.id, firstRecipient.id, AccountProfileRole.MEMBER);
+    await addMembership(auth.account.id, secondRecipient.id, AccountProfileRole.OWNER);
+    const first = await createFollowNotification(firstRecipient.id, firstRelated.id);
+    const second = await createFollowNotification(secondRecipient.id, secondRelated.id);
+    const unlisted = await createFollowNotification(firstRecipient.id, unlistedRelated.id);
+    const wrongConcrete = await createRepostNotification(firstRecipient.id, firstRelated.id);
+    const firstId = encodeGlobalId('FollowNotification', first.id);
+    const secondId = encodeGlobalId('FollowNotification', second.id);
+    const wrongConcreteId = encodeGlobalId('ReactionNotification', wrongConcrete.notification.id);
+    const firstRecipientId = encodeGlobalId('Profile', firstRecipient.id);
+    const secondRecipientId = encodeGlobalId('Profile', secondRecipient.id);
+
+    const result = await markNotificationRead(
+      [firstId, firstId, secondId, wrongConcreteId],
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      new Set(result.data?.markNotificationRead.notifications.map(({ id }) => id)),
+      new Set([firstId, secondId]),
+    );
+    const recipientCounts = new Map(
+      result.data?.markNotificationRead.recipientProfiles.map(({ id, unreadNotificationCount }) => [
+        id,
+        unreadNotificationCount,
+      ]),
+    );
+    assert.deepEqual(
+      recipientCounts,
+      new Map([
+        [firstRecipientId, 2],
+        [secondRecipientId, 0],
+      ]),
+    );
+    assert.ok(await notificationReadAt(first.id));
+    assert.ok(await notificationReadAt(second.id));
+    assert.equal(await notificationReadAt(unlisted.id), null);
+    assert.equal(await notificationReadAt(wrongConcrete.notification.id), null);
   });
 
   test('marks a visible Notification Read once without depending on the selected Profile', async () => {
@@ -1675,27 +1742,30 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(initialCount);
     assert.equal(initialCount.data?.nodes[0]?.unreadNotificationCount, 2);
     const id = encodeGlobalId('FollowNotification', notification.id);
-    const first = await markNotificationRead(id, auth.token);
+    const first = await markNotificationRead([id], auth.token);
     assertNoGraphQLErrors(first);
-    assert.equal(first.data?.markNotificationRead.notification.id, id);
+    assert.equal(first.data?.markNotificationRead.notifications[0]?.id, id);
     assert.equal(
-      first.data?.markNotificationRead.notification.profile.id,
+      first.data?.markNotificationRead.notifications[0]?.profile.id,
       encodeGlobalId('Profile', related.id),
     );
     assert.equal(
-      first.data?.markNotificationRead.recipientProfile.id,
+      first.data?.markNotificationRead.recipientProfiles[0]?.id,
       encodeGlobalId('Profile', recipient.id),
     );
-    assert.ok(first.data?.markNotificationRead.notification.readAt);
-    assert.equal(first.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 1);
+    assert.ok(first.data?.markNotificationRead.notifications[0]?.readAt);
+    assert.equal(first.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount, 1);
 
-    const repeated = await markNotificationRead(id, auth.token);
+    const repeated = await markNotificationRead([id], auth.token);
     assertNoGraphQLErrors(repeated);
     assert.equal(
-      repeated.data?.markNotificationRead.notification.readAt,
-      first.data?.markNotificationRead.notification.readAt,
+      repeated.data?.markNotificationRead.notifications[0]?.readAt,
+      first.data?.markNotificationRead.notifications[0]?.readAt,
     );
-    assert.equal(repeated.data?.markNotificationRead.recipientProfile.unreadNotificationCount, 1);
+    assert.equal(
+      repeated.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount,
+      1,
+    );
     assert.equal(await notificationReadAt(otherNotification.id), null);
   });
 
@@ -1708,19 +1778,88 @@ describe('Notification GraphQL Node boundary', () => {
     const id = encodeGlobalId('FollowNotification', notification.id);
 
     const results = await Promise.all([
-      markNotificationRead(id, auth.token),
-      markNotificationRead(id, auth.token),
+      markNotificationRead([id], auth.token),
+      markNotificationRead([id], auth.token),
     ]);
     results.forEach(assertNoGraphQLErrors);
-    const readAt = results.map((result) => result.data?.markNotificationRead.notification.readAt);
+    const readAt = results.map(
+      (result) => result.data?.markNotificationRead.notifications[0]?.readAt,
+    );
     assert.ok(readAt[0]);
     assert.equal(readAt[1], readAt[0]);
     assert.deepEqual(
       results.map(
-        (result) => result.data?.markNotificationRead.recipientProfile.unreadNotificationCount,
+        (result) => result.data?.markNotificationRead.recipientProfiles[0]?.unreadNotificationCount,
       ),
       [0, 0],
     );
+  });
+
+  test('rolls back every specified Notification when the batch update fails', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createProfile('atomic-recipient');
+    const firstRelated = await createProfile('atomic-first-related');
+    const failingRelated = await createProfile('atomic-failing-related');
+    await addMembership(auth.account.id, recipient.id, AccountProfileRole.MEMBER);
+    const first = await createFollowNotification(recipient.id, firstRelated.id);
+    const failing = await createFollowNotification(recipient.id, failingRelated.id);
+    let functionInstalled = false;
+    let triggerInstalled = false;
+
+    try {
+      await db.execute(
+        sql.raw(`
+          CREATE FUNCTION fail_selected_notification_read() RETURNS trigger
+          LANGUAGE plpgsql AS $$
+          BEGIN
+            IF EXISTS (
+              SELECT 1 FROM notification_read_new_rows
+              WHERE id = '${failing.id}'::uuid
+            ) THEN
+              RAISE EXCEPTION 'forced notification read failure';
+            END IF;
+            RETURN NULL;
+          END;
+          $$;
+        `),
+      );
+      functionInstalled = true;
+      await db.execute(
+        sql.raw(`
+          CREATE TRIGGER fail_selected_notification_read
+          AFTER UPDATE ON "notification"
+          REFERENCING NEW TABLE AS notification_read_new_rows
+          FOR EACH STATEMENT
+          EXECUTE FUNCTION fail_selected_notification_read()
+        `),
+      );
+      triggerInstalled = true;
+
+      const result = await markNotificationRead(
+        [
+          encodeGlobalId('FollowNotification', first.id),
+          encodeGlobalId('FollowNotification', failing.id),
+        ],
+        auth.token,
+      );
+
+      assert.ok(result.errors?.length);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
+      assert.equal(result.data?.markNotificationRead ?? null, null);
+      assert.deepEqual(
+        await Promise.all([notificationReadAt(first.id), notificationReadAt(failing.id)]),
+        [null, null],
+      );
+    } finally {
+      if (triggerInstalled) {
+        await db.execute(
+          sql`DROP TRIGGER IF EXISTS fail_selected_notification_read ON ${Notifications}`,
+        );
+      }
+      if (functionInstalled) {
+        await db.execute(sql`DROP FUNCTION IF EXISTS fail_selected_notification_read()`);
+      }
+    }
   });
 
   test('returns PERMISSION_DENIED for an unauthenticated Read', async () => {
@@ -1728,14 +1867,14 @@ describe('Notification GraphQL Node boundary', () => {
     const related = await createProfile('unauthenticated-related');
     const notification = await createFollowNotification(recipient.id, related.id);
 
-    const result = await markNotificationRead(
+    const result = await markNotificationRead([
       encodeGlobalId('FollowNotification', notification.id),
-    );
+    ]);
     assert.equal(result.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
     assert.equal(await notificationReadAt(notification.id), null);
   });
 
-  test('normalizes missing, unauthorized and hidden Notification Reads to NOT_FOUND', async () => {
+  test('silently excludes missing, unauthorized and hidden Notification Reads', async () => {
     const auth = await createAuthenticatedSession();
 
     const unauthorizedRecipient = await createProfile('unauthorized-recipient');
@@ -1790,14 +1929,46 @@ describe('Notification GraphQL Node boundary', () => {
       .set({ state: ProfileState.SUSPENDED })
       .where(eq(Profiles.id, hiddenRelated.id));
 
+    const visibleRecipient = await createProfile('read-visible-recipient');
+    const visibleRelated = await createProfile('read-visible-related');
+    await addMembership(auth.account.id, visibleRecipient.id, AccountProfileRole.MEMBER);
+    const visible = await createFollowNotification(visibleRecipient.id, visibleRelated.id);
+    const visibleId = encodeGlobalId('FollowNotification', visible.id);
+
     const unavailable = [unauthorized, inactive, missingSource, mismatch, hidden];
     const ids = [crypto.randomUUID(), ...unavailable.map(({ id }) => id)].map((id) =>
       encodeGlobalId('FollowNotification', id),
     );
-    for (const id of ids) {
-      const result = await markNotificationRead(id, auth.token);
-      assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
-    }
+    const mixed = await markNotificationRead(
+      [...ids, encodeGlobalId('Profile', visibleRecipient.id), visibleId],
+      auth.token,
+    );
+    assertNoGraphQLErrors(mixed);
+    assert.deepEqual(
+      mixed.data?.markNotificationRead.notifications.map(({ id }) => id),
+      [visibleId],
+    );
+    assert.deepEqual(mixed.data?.markNotificationRead.recipientProfiles, [
+      {
+        id: encodeGlobalId('Profile', visibleRecipient.id),
+        unreadNotificationCount: 0,
+      },
+    ]);
+    assert.ok(await notificationReadAt(visible.id));
+
+    const excluded = await markNotificationRead(ids, auth.token);
+    assertNoGraphQLErrors(excluded);
+    assert.deepEqual(excluded.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
+
+    const empty = await markNotificationRead([], auth.token);
+    assertNoGraphQLErrors(empty);
+    assert.deepEqual(empty.data?.markNotificationRead, {
+      notifications: [],
+      recipientProfiles: [],
+    });
     assert.deepEqual(
       await Promise.all(unavailable.map(({ id }) => notificationReadAt(id))),
       unavailable.map(() => null),
@@ -1926,27 +2097,28 @@ const loadNotificationConnection = (
     token,
   );
 
-const markNotificationRead = (id: string, token?: string) =>
+const markNotificationRead = (ids: string[], token?: string) =>
   requestGraphQL<{
     markNotificationRead: {
-      notification: NotificationNode;
-      recipientProfile: { id: string; unreadNotificationCount: number };
+      notifications: NotificationNode[];
+      recipientProfiles: Array<{ id: string; unreadNotificationCount: number }>;
     };
   }>(
-    `mutation MarkNotificationRead($id: ID!) {
-      markNotificationRead(input: { id: $id }) {
-        notification {
+    `mutation MarkNotificationRead($ids: [ID!]!) {
+      markNotificationRead(input: { ids: $ids }) {
+        notifications {
           id
           readAt
           ... on FollowNotification { profile { id } }
+          ... on FollowRequestNotification { profile { id } followRequest { id } }
           ... on ReactionNotification { type profile { id } post { id } }
           ... on RepostNotification { profile { id } post { id } }
           ... on ReplyNotification { profile { id } post { id } }
         }
-        recipientProfile { id unreadNotificationCount }
+        recipientProfiles { id unreadNotificationCount }
       }
     }`,
-    { id },
+    { ids },
     token,
   );
 
