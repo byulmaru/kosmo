@@ -330,7 +330,7 @@ export const OAuthTokens = pgTable(
   ],
 );
 
-export const Posts = pgTable(
+export const Posts = pgTable.withRLS(
   'post',
   {
     id: id(),
@@ -364,7 +364,7 @@ export const Posts = pgTable(
   ],
 );
 
-export const PostContents = pgTable(
+export const PostContents = pgTable.withRLS(
   'post_content',
   {
     id: id(),

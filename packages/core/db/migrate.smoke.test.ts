@@ -98,6 +98,7 @@ try {
       'public.account',
       'public.profile',
       'public.post',
+      'public.post_content',
       'public.media',
       'public.profile_media',
       'public.hashtag',
@@ -106,7 +107,7 @@ try {
 
   assert.deepEqual(
     objects.map(({ objectName }) => objectName),
-    ['account', 'profile', 'post', 'media', 'profile_media', 'hashtag'],
+    ['account', 'profile', 'post', 'post_content', 'media', 'profile_media', 'hashtag'],
     'Representative final schema tables must exist.',
   );
 
@@ -140,6 +141,102 @@ try {
       { tableName: 'post', columnName: 'repost_source_id' },
     ],
     'Representative final schema columns must exist.',
+  );
+
+  assert.deepEqual(
+    Array.from(
+      await sql<
+        { tableName: string; rlsEnabled: boolean; forceRls: boolean; policyCount: number }[]
+      >`
+      SELECT
+        relation.relname AS "tableName",
+        relation.relrowsecurity AS "rlsEnabled",
+        relation.relforcerowsecurity AS "forceRls",
+        (
+          SELECT count(*)::int
+          FROM pg_policy
+          WHERE pg_policy.polrelid = relation.oid
+        ) AS "policyCount"
+      FROM pg_class AS relation
+      WHERE relation.oid IN ('public.post'::regclass, 'public.post_content'::regclass)
+      ORDER BY relation.relname
+    `,
+    ),
+    [
+      { tableName: 'post', rlsEnabled: true, forceRls: false, policyCount: 0 },
+      { tableName: 'post_content', rlsEnabled: true, forceRls: false, policyCount: 0 },
+    ],
+    'Post and Post Content must have only the additive RLS base after replay.',
+  );
+
+  assert.deepEqual(
+    Array.from(
+      await sql<
+        {
+          name: string;
+          resultType: string;
+          volatility: string;
+          parallel: string;
+          securityDefiner: boolean;
+        }[]
+      >`
+      SELECT
+        procedure.proname AS name,
+        pg_get_function_result(procedure.oid) AS "resultType",
+        procedure.provolatile AS volatility,
+        procedure.proparallel AS parallel,
+        procedure.prosecdef AS "securityDefiner"
+      FROM pg_proc AS procedure
+      INNER JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+      WHERE namespace.nspname = 'public'
+        AND procedure.proname IN ('kosmo_current_account_id', 'kosmo_current_profile_id')
+      ORDER BY procedure.proname
+    `,
+    ),
+    [
+      {
+        name: 'kosmo_current_account_id',
+        resultType: 'uuid',
+        volatility: 's',
+        parallel: 's',
+        securityDefiner: false,
+      },
+      {
+        name: 'kosmo_current_profile_id',
+        resultType: 'uuid',
+        volatility: 's',
+        parallel: 's',
+        securityDefiner: false,
+      },
+    ],
+    'Actor context helpers must be present with their safe function attributes after replay.',
+  );
+
+  assert.deepEqual(
+    Array.from(
+      await sql<{ tableName: string; indexName: string }[]>`
+      SELECT tablename AS "tableName", indexname AS "indexName"
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND (
+          (tablename = 'post' AND indexname IN ('post_profile_id_id_index', 'post_pkey'))
+          OR (tablename = 'post_content' AND indexname IN ('post_content_post_id_index', 'post_content_pkey'))
+          OR (tablename = 'profile_follow' AND indexname = 'profile_follow_follower_profile_id_followee_profile_id_unique')
+        )
+      ORDER BY tablename, indexname
+    `,
+    ),
+    [
+      { tableName: 'post', indexName: 'post_pkey' },
+      { tableName: 'post', indexName: 'post_profile_id_id_index' },
+      { tableName: 'post_content', indexName: 'post_content_pkey' },
+      { tableName: 'post_content', indexName: 'post_content_post_id_index' },
+      {
+        tableName: 'profile_follow',
+        indexName: 'profile_follow_follower_profile_id_followee_profile_id_unique',
+      },
+    ],
+    'Representative policy join indexes must remain available after replay.',
   );
 } finally {
   await sql.end({ timeout: 5 });
