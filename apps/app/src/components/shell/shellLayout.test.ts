@@ -7,6 +7,7 @@ import {
   getSidebarNavigationItemHeight,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
+  isWebMobileRouteOwnedHeader,
   profileEditActionLabelColor,
 } from './shellLayout';
 
@@ -90,5 +91,13 @@ describe('getShellLayout', () => {
     assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
+  });
+
+  it('assigns only mobile Web search to a route-owned header', () => {
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/search'), true);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 390, '/notifications'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 768, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(true, 1_280, '/search'), false);
+    assert.equal(isWebMobileRouteOwnedHeader(false, 390, '/search'), false);
   });
 });

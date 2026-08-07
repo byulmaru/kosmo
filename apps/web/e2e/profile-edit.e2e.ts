@@ -136,7 +136,7 @@ test('Ready avatar/header ID 저장도 응답 결과와 최종 Profile route를 
   await expect(page).toHaveURL(/\/@prod613-ready-media$/);
 });
 
-test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프로필에 비상호작용 칩으로 표시된다', async ({
+test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프로필의 관계 목록 link로 표시된다', async ({
   context,
   page,
 }) => {
@@ -210,8 +210,12 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
     next: expect.stringContaining('팔로잉'),
     previous: 'PROD-527 공개 표시 순서',
   });
-  await expect(page.getByRole('link', { name: '#FirstWrite' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '#FirstWrite' })).toHaveCount(0);
+  const tagLink = page.getByRole('link', {
+    exact: true,
+    name: '#FirstWrite 관련 프로필 보기',
+  });
+  await expect(tagLink).toHaveAttribute('href', /\/hashtags\/[^/]+\/profiles$/);
+  await expect(page.getByRole('button', { name: '#FirstWrite 제거' })).toHaveCount(0);
 });
 
 async function selectReplacement(page: Page, triggerName: string, fileName: string) {

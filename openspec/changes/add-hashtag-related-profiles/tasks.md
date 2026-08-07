@@ -44,3 +44,86 @@
 - [x] 1.4 인증 실패·selected Profile 없는 성공·exact/empty relation·visibility·원격 조회 미수행·filter-before-limit 경계를 API integration test로 검증한다.
 - [x] 1.5 default/max 20, multi-page cursor 중복·누락 방지, relation row 순서 비의존과 기존 `searchProfiles`·공개 lookup 회귀를 검증한다.
 - [x] 1.6 관련 API typecheck·unit·integration·schema·lint와 strict OpenSpec validation을 완료하고 PROD-528 구현 handoff에 실제 결과와 남은 위험을 기록한다.
+
+## 2. PROD-529 Hashtag 관련 Profile client navigation
+
+**Authority / Provenance**
+
+- `docs/domain/objects/profile.md`
+- `docs/domain/objects/hashtag.md`
+- `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`
+- `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`
+- `docs/design/hashtag-related-profiles.md`
+- `docs/design/profile-tags.md`
+- `PROD-524`
+- `PROD-525`
+- `PROD-528`
+- `PROD-529` (2026-08-05 route 선택과 제목 승인)
+
+**Deliverable**
+
+로그인한 Account가 공개 Profile의 TagChip 또는 직접 `/hashtags/[hashtagId]/profiles` route에서 정확한 Hashtag identity의 관련 공개 Profile을 `#<태그명> 관련 프로필` 맥락과 기존 Profile 목록 경험으로 탐색할 수 있다.
+
+**Guardrails**
+
+- path의 Hashtag global ID와 기존 `node(id:)`·`Hashtag.relatedProfiles(first:, after:)`를 사용하고 이름·`#` text를 identity나 검색 입력으로 사용하지 않는다.
+- 공개 Profile의 표시 전용 TagChip과 편집기의 제거·validation 책임을 유지하고 navigation wrapper만 exact ID route, 접근성 이름과 플랫폼 target을 소유한다.
+- Hashtag 전용 Relay connection을 기존 search·followers·following connection과 격리하고 기존 Profile 목록 item·Profile 이동·follow action을 재사용한다.
+- 첫 loading/error/retry·empty·다음 page error/retry·terminal 상태에서 선택한 Hashtag 맥락과 이미 표시한 Profile을 보존하며 중복 page 요청을 막는다.
+- 기존 `searchProfiles`, Profile Tag 편집·공개 표시 데이터, API·DB·dependency, Remote lookup/materialization과 analytics를 변경하지 않는다.
+- Web 자동화와 React Native source mapping을 iOS·Android 실제 runtime 완료 증거로 표현하지 않는다.
+
+**Verification**
+
+- unit test에서 exact ID link, link role, `#<태그명> 관련 프로필 보기` 접근성 이름, 플랫폼 target과 기존 편집 제거 action 비회귀를 검증한다.
+- route/list test와 상태 catalog에서 제목, loading, 첫 error/retry, empty, `loadNext(20)` 요청, 다음 page error에서 기존 edge 유지·retry, terminal과 loading 중 단일 요청을 검증한다.
+- Web E2E에서 keyboard Tab으로 공개 Profile TagChip link에 focus하고 접근성 이름·role을 확인한 뒤 Enter로 활성화해 승인된 URL·제목·관련 Profile 목록 → 기존 Profile route 이동을 검증한다.
+- 기존 사람 검색 입력·결과·pagination 회귀를 유지한다.
+- Relay compiler, App TypeScript·unit·Storybook, 관련 Web E2E, ESLint·Prettier, `git diff --check`
+- `openspec validate add-hashtag-related-profiles --strict`
+
+- [x] 2.1 보호된 `/hashtags/[hashtagId]/profiles` route와 Hashtag Node query를 추가하고 Display Hashtag Name의 PageHeader·직접 진입·존재하지 않는 Node 상태를 연결한다.
+- [x] 2.2 공개 Profile TagChip 진입점에 exact ID Link·Pressable, 관계 목록 접근성 이름과 Web·iOS·Android target mapping을 추가하되 표시 chip과 편집 action 책임을 유지한다.
+- [x] 2.3 `Hashtag.relatedProfiles` 전용 Relay pagination fragment와 기존 Profile 목록 item을 연결하고 loading·error·retry·empty·next-page·terminal·중복 요청 상태를 구현한다.
+- [x] 2.4 route와 목록의 최소 unit test·상태 catalog를 추가해 identity, 제목, 상태 보존, Profile action과 검색 connection 격리를 검증한다.
+- [x] 2.5 keyboard focus·접근성 이름·link role·Enter 활성화를 포함한 TagChip→관련 Profile→기존 Profile route Web E2E, 기존 검색 회귀, Relay·TypeScript·App·Storybook·lint·format·strict OpenSpec 검증을 완료하고 Native runtime 미검증을 handoff에 기록한다.
+
+**2026-08-05 PROD-529 검증 기록**
+
+- exact Hashtag global ID를 사용하는 보호 route, `node(id:)` Hashtag 판별, Display Hashtag Name 제목과 first-load/not-found/error/retry 상태를 route unit test 6건으로 확인했다.
+- 전용 `HashtagRelatedProfileList_relatedProfiles` connection의 empty/content, `loadNext(20)` 요청 변수, next-page error-retry/terminal, loading 중 단일 요청과 기존 `ProfileListItem linked` 재사용을 Storybook catalog에서 확인했다.
+- `pnpm --filter @kosmo/app exec relay-compiler --noWatchman`, `pnpm --filter @kosmo/app exec tsc --noEmit`, App unit 189건과 Storybook 296건이 통과했다. 기본 Relay/build는 호스트 Watchman FSEvents 오류로 실행되지 않아 compiler와 TypeScript를 분리했고 E2E Web export에도 같은 `--noWatchman` 우회를 사용한 뒤 임시 Playwright config 변경을 되돌렸다.
+- Profile Tag 계약 Web E2E 2건(편집 저장 후 공개 Tag link 1건, TagChip keyboard→관련 Profile 목록→기존 Profile route 1건), 동반 기존 Profile Edit 회귀 E2E 2건과 기존 사람 검색 E2E 14건이 통과했다. test-only Hashtag 관계 helper 외 production DB/schema/API 변경은 없다.
+- `pnpm lint:eslint`, `pnpm lint:prettier`, `git diff --check`, `openspec validate add-hashtag-related-profiles --strict`가 통과했고 generated Relay artifact는 repository 관례대로 commit 대상에 포함하지 않았다.
+- `sol medium` 독립 구현 리뷰에서 발견한 PROD-525 활성화 시점 canonical 문구 충돌을 `docs/design/profile-tags.md`의 PROD-529 activation·PROD-525 integration/archive 분업으로 동기화했고 재리뷰에서 추가 finding 없이 통과했다.
+- Web은 32 CSS px target과 Tab/Enter/accessible link를 runtime에서 확인했다. React Native는 `Platform.select`의 iOS 44 pt·Android 48 dp source mapping과 unit contract만 확인했으며 실제 iOS·Android focus/touch/screen reader runtime QA는 수행하지 않았다.
+- PROD-525가 task 3.1–3.2의 cross-slice 통합 검증과 archive를 계속 소유하므로 이 change는 archive하지 않는다.
+
+## 3. PROD-525 Hashtag 관련 Profile 탐색 통합과 archive
+
+**Authority / Provenance**
+
+- `docs/domain/decisions/0021-hashtag-related-profile-navigation.md`
+- `docs/design/hashtag-related-profiles.md`
+- `PROD-525`
+- `PROD-528`
+- `PROD-529`
+
+**Deliverable**
+
+완료된 API와 client slice가 하나의 exact Hashtag 관계 탐색 흐름으로 정합한지 검증하고, canonical 문서·active spec·구현 증거를 동기화한 뒤 shared change를 archive한다.
+
+**Guardrails**
+
+- PROD-528 API와 PROD-529 client가 각자 소유한 구현·검증을 반복하지 않고 cross-slice identity·auth·visibility·pagination·navigation 연결만 검증한다.
+- API 또는 client task 일부의 완료만으로 shared change를 완료·archive하지 않는다.
+- Web proof와 Native runtime QA 경계를 유지하고 아직 수행하지 않은 플랫폼 검증을 완료로 기록하지 않는다.
+
+**Verification**
+
+- 공개 Profile TagChip에서 exact Hashtag Node·관련 Profile connection·Profile route까지 종단간 identity와 상태 흐름을 확인한다.
+- 최신 canonical·Linear·OpenSpec·API/client 구현과 검증 증거의 정합성을 확인한다.
+- archive 전·후 strict OpenSpec validation을 통과한다.
+
+- [ ] 3.1 PROD-528·529 완료 증거를 연결해 exact identity, Account auth, visibility-before-limit, 20개 cursor와 TagChip→관련 Profile→Profile route의 cross-slice 흐름을 검증한다.
+- [ ] 3.2 canonical·Linear·delta spec·tasks 정합성을 확인하고 shared change를 archive한 뒤 strict validation을 완료한다.
