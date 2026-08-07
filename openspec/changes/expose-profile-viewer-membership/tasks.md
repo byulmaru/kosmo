@@ -39,15 +39,14 @@
 
 - selected Local Owner 경계와 `updateProfile`의 독립 권한 재검증을 유지한다.
 - FollowButton과 PR #529의 ProfileSwitcher action은 변경하지 않는다.
-- 배포 consumer 전환 전에는 deprecated compatibility query를 제거하지 않는다.
+- 기존 production consumer 전환을 확인하기 전에는 query를 제거하지 않는다.
 
 **Verification**
 
-- 두 route의 Owner·부적격 분기와 deprecated query 호환성을 관련 API·app test로 검증한다.
+- 기존 consumer의 Owner·부적격 분기와 schema 제거를 관련 API·app test 및 repository 검색으로 검증한다.
 
 - [x] 2.1 공개 Profile과 `ProfileEditRoute` consumer를 Membership projection으로 전환한다.
-- [x] 2.2 `selectedProfileForEdit`을 deprecated compatibility alias로 유지하고 first-party consumer가 남지 않았는지 확인한다.
-- [ ] 2.3 배포 consumer retirement 증거를 확인한 뒤 deprecated alias와 관련 schema/resolver를 제거한다.
+- [x] 2.2 `selectedProfileForEdit` schema/resolver와 관련 artifact를 제거하고 production consumer가 남지 않았는지 확인한다.
 
 ## 3. PROD-705 통합과 archive
 

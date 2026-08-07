@@ -42,8 +42,9 @@ Profile별 개별 조회 또는 mutation 권한 증거 재사용으로 이어져
   selected Profile, Instance 상태와 Owner Membership을 server-authoritative하게 독립 재검증한다.
 - Profile 목록의 Membership projection은 현재 Account로 scope된 batch 경계를 사용하고 Profile마다 개별
   query를 실행하지 않는다.
-- 기존 production consumer와 호환성 확인이 끝난 뒤 `Query.selectedProfileForEdit` schema와 resolver를
-  제거한다. 공개 GraphQL schema와 runtime schema, Relay operation과 generated artifact를 함께 전환한다.
+- 기존 production consumer를 Membership projection으로 전환한 뒤 `Query.selectedProfileForEdit` schema와
+  resolver를 제거한다. 이 제거는 breaking schema change이며 공개 GraphQL schema와 runtime schema, Relay
+  operation과 generated artifact를 함께 전환한다.
 - `Profile.viewerState.isSelf`, `follow`, `followRequest`와 FollowButton 동작은 변경하지 않는다.
 
 ## 이유
@@ -70,8 +71,7 @@ route는 `currentSession.selectedProfile`에서 같은 경계를 유지한다. m
 
 - 공개 Profile route와 `ProfileEditRoute`는 같은 Membership 관계를 소비하되 서로 다른 selected Profile
   진입 경계를 유지한다.
-- `Query.selectedProfileForEdit`는 first-party와 외부 consumer 호환성을 확인하고 기존 consumer를 전환한 뒤
-  제거한다.
+- `Query.selectedProfileForEdit`는 기존 production consumer를 Membership projection으로 전환한 뒤 제거한다.
 - PR #529에만 존재하는 ProfileSwitcher sidebar consumer와 편집 action의 geometry·배치·접근성·navigation은
   `PROD-660`이 선행 Membership migration 위에서 전환한다.
 - DB 관계 모델, Account Profile Role, `updateProfile` transaction 정책, Profile edit form·Media·Tag 저장 UX와

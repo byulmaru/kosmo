@@ -17,8 +17,7 @@ Account, selected Profile, Instance와 Membership role을 재검증한다. 이 c
 - 현재 session Account와 queried Profile 사이의 실제 Membership을 nullable viewer-relative field로 제공한다.
 - 다른 Account의 role 비노출과 Profile 목록 batching을 보장한다.
 - 공개 Profile과 protected route가 동일한 Membership을 사용하되 각자의 selected Profile 경계를 유지한다.
-- first-party `selectedProfileForEdit` consumer를 전환하고, 배포 consumer retirement 증거를 확인할 때까지 공개
-  schema를 deprecated compatibility alias로 유지한다.
+- first-party `selectedProfileForEdit` consumer를 전환하고 공개 schema에서 field를 제거한다.
 - 기존 FollowButton과 mutation authorization 경계를 회귀 없이 유지한다.
 
 **Non-Goals:**
@@ -64,9 +63,8 @@ Account, selected Profile, Instance와 Membership role을 재검증한다. 이 c
 5. API integration test에서 Owner/Member/무관 Account와 다른 Account Owner, guest/no-viewer, Local/Remote 및
    목록 query count를 검증한다. app test에서는 selected match/mismatch와 protected route 상태를 검증하고 기존
    FollowButton 및 `updateProfile` authorization 회귀 suite를 유지한다.
-6. repository operation·fixture·generated artifact를 검색해 first-party consumer가 전환됐음을 확인한다.
-   배포 consumer retirement 증거가 생길 때까지 `selectedProfileForEdit` resolver와 schema field는 deprecated
-   compatibility alias로 유지한다.
+6. repository operation·fixture·generated artifact를 검색해 first-party consumer가 전환됐음을 확인한 뒤
+   `selectedProfileForEdit` resolver와 schema field를 제거한다.
 
 ### Allowed Alternatives
 
@@ -93,8 +91,8 @@ Account, selected Profile, Instance와 Membership role을 재검증한다. 이 c
 
 ## Risks / Trade-offs
 
-- [공개 GraphQL field 제거가 미확인 consumer를 깨뜨릴 수 있음] → deprecated alias를 유지하고 배포 consumer
-  retirement 증거를 확인한 뒤 별도 breaking 단계에서 제거한다. PR #529는 선행 merge 뒤 별도로 갱신한다.
+- [공개 GraphQL field 제거가 미확인 consumer를 깨뜨릴 수 있음] → repository·generated operation과 알려진
+  PR #529 consumer를 확인하고 breaking change를 PR에 명시한다. PR #529는 선행 merge 뒤 별도로 갱신한다.
 - [잘못된 loader scoping이 다른 Account role을 노출할 수 있음] → query predicate에 current Account id를 포함하고
   다른 Account만 Owner인 fixture로 null을 검증한다.
 - [Membership 추가가 Profile 목록 query 수를 선형 증가시킬 수 있음] → 여러 Profile을 한 request에서 조회하는
@@ -109,13 +107,12 @@ Account, selected Profile, Instance와 Membership role을 재검증한다. 이 c
 1. nullable `Profile.viewerState.membership`과 account-scoped batch projection을 additive하게 추가하고 API schema 및
    resolver test를 통과시킨다.
 2. main의 기존 first-party consumer를 새 projection으로 전환하고 Relay artifacts와 component tests를 갱신한다.
-3. `selectedProfileForEdit`을 deprecated compatibility alias로 유지하고 새 first-party consumer 사용을 금지한다.
-4. schema/runtime/Relay, API·app test, query-count와 OpenSpec strict validation을 통과시킨다. 이 단계의 PR readiness는
-   후속 field 제거와 OpenSpec archive 완료 여부와 별도로 판단한다.
+3. repository consumer 전환을 확인한 뒤 `selectedProfileForEdit` schema/resolver와 관련 artifact를 같은 선행
+   migration에서 제거한다.
+4. schema/runtime/Relay, API·app test, query-count와 OpenSpec strict validation을 통과시킨다.
 5. 선행 migration이 merge되면 PROD-660이 PR #529를 stack/rebase하고 ProfileSwitcher consumer만 새 계약으로
-   전환한다.
-6. 배포 consumer retirement 증거를 확인한 뒤 deprecated schema/resolver와 관련 artifact를 제거하고, 전체 task와
-   canonical/spec 정합성을 다시 검증한 후 PROD-705가 이 change를 archive한다. archived OpenSpec은 수정하지 않는다.
+   전환한다. 전체 task와 canonical/spec 정합성을 확인한 뒤 PROD-705가 이 change를 archive한다. archived
+   OpenSpec은 수정하지 않는다.
 
 Rollback은 consumer와 schema를 한 계약 단위로 되돌린다. 제거 전이면 새 consumers를 기존 query로 되돌리고
 additive Membership field를 남기거나 함께 제거할 수 있다. 제거 후이면 `selectedProfileForEdit` schema/resolver와
