@@ -58,6 +58,110 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+test('Web 검색 도구막대를 모든 breakpoint의 중앙 컬럼 최상단에 정렬한다', async ({
+  context,
+  page,
+}) => {
+  await signInSearchUser(context);
+
+  for (const [width, inputHeight] of [
+    [390, 48],
+    [900, 48],
+    [1_400, 48],
+  ] as const) {
+    await page.setViewportSize({ height: 900, width });
+    await page.goto('/search');
+
+    await expect
+      .poll(async () => {
+        const toolbar = await page
+          .getByLabel('검색', { exact: true })
+          .filter({ has: page.getByRole('textbox', { name: '검색어' }) })
+          .boundingBox();
+        const input = await page.getByTestId('search-input-shell').boundingBox();
+        return {
+          inputHeight: input && Math.round(input.height),
+          inputY: input && toolbar && Math.round(input.y - toolbar.y),
+          toolbarHeight: toolbar && Math.round(toolbar.height),
+          toolbarY: toolbar && Math.round(toolbar.y),
+        };
+      })
+      .toEqual({ inputHeight, inputY: 8, toolbarHeight: 64, toolbarY: 0 });
+  }
+});
+
+test('모바일 검색 상단바가 햄버거와 검색 초기화를 같은 leading 영역에서 전환한다', async ({
+  context,
+  page,
+}) => {
+  const handle = 'e2e-mobile-search-header';
+  await signInSearchUser(context, { handle });
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto('/search?tab=people');
+
+  const toolbar = page
+    .getByLabel('검색', { exact: true })
+    .filter({ has: page.getByRole('textbox', { name: '검색어' }) });
+  const menu = page.getByRole('button', { name: '메뉴 열기' });
+  const input = page.getByRole('textbox', { name: '검색어' });
+  await expect(menu).toHaveCount(1);
+  await expect
+    .poll(async () => {
+      const menuBox = await menu.boundingBox();
+      const toolbarBox = await toolbar.boundingBox();
+      return {
+        menuY: menuBox && Math.round(menuBox.y),
+        toolbarY: toolbarBox && Math.round(toolbarBox.y),
+      };
+    })
+    .toEqual({ menuY: 10, toolbarY: 0 });
+
+  await menu.click();
+  await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
+  await page.getByRole('button', { name: '사이드바 닫기' }).click();
+
+  await input.fill(handle);
+  await input.press('Enter');
+  await expectSearchParams(page, { q: handle, tab: 'people' });
+  await expect(menu).toHaveCount(0);
+
+  await page.mouse.move(1, 240);
+  await page.mouse.down();
+  await page.mouse.move(90, 240, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByRole('dialog', { name: '메뉴' })).toBeVisible();
+  await page.getByRole('button', { name: '사이드바 닫기' }).click();
+
+  await page.getByRole('link', { name: '뒤로' }).click();
+
+  await expectSearchParams(page, { tab: 'people' });
+  await expectSearchParamAbsent(page, 'q');
+  await expect(input).not.toBeFocused();
+  await expect(menu).toHaveCount(1);
+});
+
+test('모바일 검색 drawer의 피드백 overlay를 닫으면 햄버거로 포커스를 복원한다', async ({
+  context,
+  page,
+}) => {
+  await signInSearchUser(context);
+  await page.setViewportSize({ height: 844, width: 390 });
+  await page.goto('/search');
+
+  const menu = page.getByRole('button', { name: '메뉴 열기' });
+  await menu.click();
+  await page
+    .getByRole('dialog', { name: '메뉴' })
+    .getByRole('button', { name: '피드백 보내기' })
+    .click();
+
+  const feedback = page.getByRole('dialog', { name: '피드백 보내기' });
+  await feedback.getByRole('button', { name: '피드백 닫기' }).click();
+
+  await expect(feedback).toHaveCount(0);
+  await expect(menu).toBeFocused();
+});
+
 test('검색 전 상태와 최근 검색을 React Native Web semantics로 표시한다', async ({
   context,
   page,

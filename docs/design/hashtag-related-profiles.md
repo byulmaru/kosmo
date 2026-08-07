@@ -30,7 +30,7 @@ Web·Android·iOS에서 같은 정보 구조와 상태로 탐색한다.
 ## 표시와 접근성
 
 - 결과는 기존 Profile 목록 item을 재사용하고, Hashtag 자체나 Hashtag Name 목록을 결과 item으로 표시하지 않는다.
-- TagChip에는 `#<normalized-name>`과 Hashtag 관련 Profile 목록 탐색 목적을 설명하는 접근성 이름을 제공한다.
+- TagChip에는 전체 `#<Display Hashtag Name>`과 Hashtag 관련 Profile 목록 탐색 목적을 설명하는 접근성 이름을 제공한다.
 - 공용 화면은 React Native primitive와 기존 theme token을 사용하며 Web·Android·iOS가 같은 정보 구조를 공유한다.
 
 ## 제외 범위

@@ -30,7 +30,7 @@
 - [x] 1.1 `markNotificationRead`의 공개 input과 payload를 지정 ID 배열 계약으로 바꾸고 visible 대상의 원자적·멱등적 Read 및 서버 권위 Profile count 결과를 구현한다.
 - [x] 1.2 기존 단건 활성화와 repository의 직접 GraphQL 호출자를 `{ ids: [id] }` 및 배열 payload 계약으로 정렬하고 Relay 생성 결과를 갱신한다.
 - [x] 1.3 지정 ID 처리·조용한 제외·no-op·입력 밖 보존·멱등성·동시성·원자성·Profile별 count를 직접 증명하는 최소 API 및 client 회귀 검증을 추가한다.
-- [x] 1.4 schema/runtime 정합성, Relay 생성, 대상 API 통합 테스트, 관련 app 검증과 repository consumer inventory를 통과시키고 PROD-703 범위 밖 변경이 없는지 확인한다.
+- [x] 1.4 schema/runtime 정합성, Relay 생성, 대상 API 통합 테스트, 관련 app 검증과 repository consumer inventory를 통과시키고, PROD-703 구현 변경과 공유 PROD-679 canonical 계약 선반영이 구분되는지 확인한다.
 
 ## 2. PROD-679 Web 현재 로드된 Notification 모두 읽음
 
