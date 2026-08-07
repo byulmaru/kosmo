@@ -1,3 +1,4 @@
+{{- include "kosmo.validatePostgresCredentials" . -}}
 {{- if .Values.workloads.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -53,10 +54,10 @@ spec:
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
-                  key: password
+                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
+                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
-              value: {{ include "kosmo.databaseUrl" . | quote }}
+              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
           envFrom:
             - secretRef:
                 name: env
