@@ -41,7 +41,7 @@
 
 ### Allowed Alternatives
 
-- UUID 입력 검증은 누락·빈 값·잘못된 PostgreSQL UUID를 모두 `NULL`로 만들고 유효 UUID를 보존한다면 strict canonical UUID 정규식과 guarded cast로 구현할 수 있다.
+- UUID 입력 검증은 누락·빈 값·잘못된 PostgreSQL UUID를 모두 `NULL`로 만들고 PostgreSQL이 허용하는 모든 UUID 표기를 보존하도록 native UUID input validation과 guarded cast로 구현할 수 있다.
 - execution plan 검증은 index catalog와 representative `EXPLAIN`을 같은 수준으로 증명한다면 별도 test file 또는 기존 migration smoke에 둘 수 있다.
 
 ### Known Traps

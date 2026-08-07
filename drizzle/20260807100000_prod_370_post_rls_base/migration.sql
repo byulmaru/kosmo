@@ -8,10 +8,9 @@ PARALLEL SAFE
 SECURITY INVOKER
 AS $function$
   SELECT CASE
-    WHEN pg_catalog.regexp_like(
+    WHEN pg_catalog.pg_input_is_valid(
       pg_catalog.current_setting('kosmo.account_id', true),
-      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-      'i'
+      'pg_catalog.uuid'
     )
     THEN pg_catalog.current_setting('kosmo.account_id', true)::pg_catalog.uuid
     ELSE NULL::pg_catalog.uuid
@@ -25,10 +24,9 @@ PARALLEL SAFE
 SECURITY INVOKER
 AS $function$
   SELECT CASE
-    WHEN pg_catalog.regexp_like(
+    WHEN pg_catalog.pg_input_is_valid(
       pg_catalog.current_setting('kosmo.profile_id', true),
-      '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-      'i'
+      'pg_catalog.uuid'
     )
     THEN pg_catalog.current_setting('kosmo.profile_id', true)::pg_catalog.uuid
     ELSE NULL::pg_catalog.uuid
