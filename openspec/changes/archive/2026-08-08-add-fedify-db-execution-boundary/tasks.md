@@ -22,7 +22,7 @@ Fedify downstream이 database 또는 transaction handle을 선택할 수 있고 
 
 - [x] 1.1 database와 transaction을 포괄하는 additive `DatabaseHandle` 및 선택 helper를 구현한다.
 - [x] 1.2 Fedify와 무관한 core service widening을 제거하고 Post의 기존 optional transaction seam만 유지한다.
-- [ ] 1.3 전달 handle, fallback과 transaction 합성 회귀 테스트를 통과시킨다.
+- [x] 1.3 전달 handle, fallback과 transaction 합성 회귀 테스트를 통과시킨다.
 
 ## 2. PROD-706 Fedify execution context와 lifecycle
 
@@ -49,7 +49,7 @@ Web inbound와 후속 Temporal Activity가 재사용할 Fedify 전용 DB handle 
 
 - [x] 2.1 production 타입·helper·파일을 Fedify 전용 명명과 package-internal 경계로 수정한다.
 - [x] 2.2 Web inbound 전용 adapter가 invocation마다 context를 전달하고 package root에는 generic fetch/factory가 없게 한다.
-- [ ] 2.3 context 격리, supplied handle, commit·rollback, nested transaction과 pool cleanup 회귀 테스트를 통과시킨다.
+- [x] 2.3 context 격리, supplied handle, commit·rollback, nested transaction과 pool cleanup 회귀 테스트를 통과시킨다.
 
 ## 3. PROD-706 독립 배포 경계와 검증
 
@@ -74,5 +74,5 @@ Fedify 기반만 배포·rollback해도 기존 owner credential, 미이전 SQL�
 - production diff에서 범용 system 명명, API factory/generic fetch, schema·credential·RLS·Post SQL 이전이 없는지 self-review한다.
 
 - [x] 3.1 architecture와 활성 capability를 Fedify 전용 책임으로 동기화한다.
-- [ ] 3.2 관련 unit·DB-backed·Web 회귀 테스트와 정적 검증을 통과시킨다.
-- [ ] 3.3 strict OpenSpec validation과 범위 self-review를 완료한다.
+- [x] 3.2 관련 unit·DB-backed·Web 회귀 테스트와 정적 검증을 통과시킨다.
+- [x] 3.3 strict OpenSpec validation과 범위 self-review를 완료한다.
