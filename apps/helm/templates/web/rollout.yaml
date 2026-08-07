@@ -58,14 +58,14 @@ spec:
                   key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
-            {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "system") | trim) "true" }}
-            - name: SYSTEM_DATABASE_PASSWORD
+            {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" }}
+            - name: FEDIFY_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ dig "system" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) | quote }}
-                  key: {{ dig "system" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote }}
-            - name: SYSTEM_DATABASE_URL
-              value: {{ dig "system" "databaseUrl" "" (.Values.postgres.credentials | default dict) | quote }}
+                  name: {{ dig "fedify" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) | quote }}
+                  key: {{ dig "fedify" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote }}
+            - name: FEDIFY_DATABASE_URL
+              value: {{ dig "fedify" "databaseUrl" "" (.Values.postgres.credentials | default dict) | quote }}
             {{- end }}
           envFrom:
             - secretRef:

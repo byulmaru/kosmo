@@ -1,34 +1,38 @@
-## 1. PROD-709 역할별 PostgreSQL credential 선택
+## 1. PROD-709 API/Fedify runtime credential selector
 
 **Authority / Provenance**
 
-- `docs/operations/production-migrations.md`
 - `PROD-709`
 - `PROD-369`
-- `PROD-706`
+- `PROD-710`
+- `PROD-715`
+- `PROD-716`
+- `PROD-719`
+- `PROD-448`
+- `docs/operations/production-migrations.md`
+- `memory/database-migrations.md`
 
 **Deliverable**
 
-기존 Helm values와 workload 동작을 유지하면서 API Rollout과 Web BFF가 하나의 API credential source를 공유해 선택할 수 있고, Web 프로세스의 federation/system 전용 DB connection credential source를 별도 입력으로 받을 수 있다. Migration credential은 기존 고정 경계를 유지하며 실제 Secret, role, 두 번째 DB connection/client 또는 credential 전환을 생성하지 않는다.
+기존 Helm values와 workload 동작을 유지하면서 `api`/`fedify` atomic trio를 제공한다. `api` source는 API Rollout과 Web BFF 기본 `DATABASE_URL`/`DATABASE_PASSWORD`가 공유하고, `fedify` source는 Web inbound Fedify의 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD`에만 additive로 렌더한다. Migration은 기존 owner fallback 및 `kosmo_migration` login → `SET ROLE kosmo` 경계를 유지한다.
 
 **Guardrails**
 
-- API와 Web BFF에 서로 다른 DB 인증 source를 만들지 않는다.
-- System source는 Web 전용 별도 환경 입력이며 API Rollout이나 Web 기본 `DATABASE_URL`을 바꾸지 않는다.
-- URL과 password Secret name/key는 역할별 atomic opt-in이며 partial 설정은 render를 실패시킨다.
-- 비활성 기본값의 dev/prod manifest와 runtime 연결을 유지한다.
-- Production/dev migration Job의 기존 credential, role 전환과 실행 순서를 바꾸지 않는다.
-- Secret value, role/grant/RLS, PKI resource/file mount, federation/system 전용 DB connection/client와 downstream transition을 포함하지 않는다.
+- `postgres.credentials.api`와 `postgres.credentials.fedify`는 `databaseUrl`, `passwordSecret.name`, `passwordSecret.key`를 모두 채우거나 모두 비워야 한다. Partial 입력은 render를 실패시킨다.
+- API와 Web BFF에 서로 다른 API source를 만들지 않는다. API Rollout에는 어떤 조합에서도 `FEDIFY_DATABASE_*`를 주입하지 않는다.
+- Fedify source는 Web inbound Fedify env에만 추가하고 Web BFF 기본 `DATABASE_*`를 바꾸지 않는다.
+- Migration env, Secret ref, `DATABASE_MIGRATION_ROLE`과 `SET ROLE kosmo` 실행 경계를 runtime selector에서 파생하지 않는다.
+- `system`, `federation-system` 또는 `web`를 credential source 역할로 만들지 않는다.
+- Secret value, role/membership/grant/RLS(`kosmo_fedify` `BYPASSRLS` 포함), DB client/connection, Temporal Workflow, Worker Activity/Deployment와 API outbound direct-call 전환을 생성·변경하지 않는다.
 
 **Verification**
 
-- Helm lint와 dev/prod default render가 통과하고 변경 전 manifest와 동일함을 확인한다.
-- API source가 API와 Web 기본 env에 동일하게 렌더되고 system source가 Web 전용 별도 env에만 렌더됨을 확인한다.
-- API-only, system-only, 양쪽 활성화, 각 selector rollback과 partial 입력 실패를 검증한다.
-- 모든 조합에서 migration Job env/Secret refs가 baseline과 동일하고 새 Secret/role/PKI/DB client source가 없음을 확인한다.
-- OpenSpec strict validation과 repository formatting/static checks를 통과한다.
+- Pre-selector default render와 empty selector render가 byte-identical인지 확인한다.
+- API-only, Fedify-only, 양쪽 활성화, 각 selector rollback 및 12개 partial API/Fedify 조합 실패를 render로 검증한다.
+- API/Web BFF 기본 `DATABASE_*` shared source, Web-only `FEDIFY_*`, API env 부재와 dev/prod migration document 불변을 확인한다.
+- `helm lint`, focused Helm regression, Prettier, Node syntax, OpenSpec strict validation과 diff check를 실행한다.
 
-- [x] 1.1 역할별 URL과 password Secret reference의 비활성 기본값, atomic validation 및 owner fallback을 제공한다.
-- [x] 1.2 API source를 API Rollout과 Web BFF 기본 DB 환경에 공통 적용하고 system source를 Web 전용 별도 환경으로만 렌더한다.
-- [x] 1.3 Default 동일성, API/system 조합, partial 입력 거부, rollback과 migration 비침범을 실행 가능한 Helm render 회귀로 검증한다.
-- [x] 1.4 관련 정적 검증과 self-review를 통과하고 구현 결과를 OpenSpec task 및 Linear evidence에 반영한다.
+- [x] 1.1 `api`/`fedify` values 기본값, atomic validation과 helper fallback을 구현한다.
+- [x] 1.2 API source를 API/Web 기본 env에 공통 적용하고 Fedify source를 Web inbound Fedify env에만 additive로 렌더한다.
+- [x] 1.3 default byte identity, API/Fedify 조합·rollback, 12개 partial 입력 실패와 migration invariance 회귀를 구현하고 focused/lint/format/syntax/strict 검증을 통과한다.
+- [x] 1.4 구현 self-review와 최신 Linear evidence를 부모가 완료하고, 실제 결과를 PR/Linear에 기록한다.

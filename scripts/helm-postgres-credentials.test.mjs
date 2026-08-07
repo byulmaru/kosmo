@@ -20,10 +20,10 @@ const apiCredential = {
   name: 'kosmo-api',
   key: '123',
 };
-const systemCredential = {
-  databaseUrl: 'postgres://kosmo_system:$(SYSTEM_DATABASE_PASSWORD)@system.example:5432/kosmo',
-  name: 'kosmo-system',
-  key: 'system_password',
+const fedifyCredential = {
+  databaseUrl: 'postgres://kosmo_fedify:$(FEDIFY_DATABASE_PASSWORD)@fedify.example:5432/kosmo',
+  name: 'kosmo-fedify',
+  key: 'fedify_password',
 };
 
 try {
@@ -50,21 +50,21 @@ function runAssertions() {
   assertDefaultRuntime(defaultRender.output);
 
   const apiOnlyRender = render(valuesFile({ api: apiCredential }));
-  const systemOnlyRender = render(valuesFile({ system: systemCredential }));
-  const bothRender = render(valuesFile({ api: apiCredential, system: systemCredential }));
+  const fedifyOnlyRender = render(valuesFile({ fedify: fedifyCredential }));
+  const bothRender = render(valuesFile({ api: apiCredential, fedify: fedifyCredential }));
 
   assertApiSource(apiOnlyRender.output, apiCredential);
-  assert.doesNotMatch(
-    environmentSection(workload(apiOnlyRender.output, 'web')),
-    /SYSTEM_DATABASE_/,
-  );
-  assertApiSource(systemOnlyRender.output, null);
-  assertSystemSource(systemOnlyRender.output, systemCredential);
+  assertFedifySource(apiOnlyRender.output, null);
+  assertApiSource(fedifyOnlyRender.output, null);
+  assertFedifySource(fedifyOnlyRender.output, fedifyCredential);
   assertApiSource(bothRender.output, apiCredential);
-  assertSystemSource(bothRender.output, systemCredential);
+  assertFedifySource(bothRender.output, fedifyCredential);
 
-  for (const role of ['api', 'system']) {
-    for (const partial of partialCredentials()) {
+  for (const [role, credential] of [
+    ['api', apiCredential],
+    ['fedify', fedifyCredential],
+  ]) {
+    for (const partial of partialCredentials(credential)) {
       const result = render(valuesFile({ [role]: partial }), { expectFailure: true });
       assert.match(
         `${result.output}\n${result.error}`,
@@ -87,7 +87,7 @@ function assertDefaultRuntime(output) {
     assert.match(environment, /name: "kosmo-postgres-app"/);
     assert.match(environment, /key: password/);
     assert.match(environment, new RegExp(`value: "${escapeRegExp(defaultUrl)}"`));
-    assert.doesNotMatch(environment, /SYSTEM_DATABASE_/);
+    assert.doesNotMatch(environment, /FEDIFY_DATABASE_/);
   }
 }
 
@@ -112,12 +112,18 @@ function assertApiSource(output, credential) {
   }
 }
 
-function assertSystemSource(output, credential) {
+function assertFedifySource(output, credential) {
   const apiEnvironment = environmentSection(workload(output, 'api'));
   const webEnvironment = environmentSection(workload(output, 'web'));
 
-  assert.doesNotMatch(apiEnvironment, /SYSTEM_DATABASE_/);
-  assert.match(webEnvironment, /name: SYSTEM_DATABASE_PASSWORD/);
+  assert.doesNotMatch(apiEnvironment, /FEDIFY_DATABASE_/);
+
+  if (!credential) {
+    assert.doesNotMatch(webEnvironment, /FEDIFY_DATABASE_/);
+    return;
+  }
+
+  assert.match(webEnvironment, /name: FEDIFY_DATABASE_PASSWORD/);
   assert.match(webEnvironment, new RegExp(`name: "${escapeRegExp(credential.name)}"`));
   assert.match(webEnvironment, new RegExp(`key: "?${escapeRegExp(credential.key)}"?`));
   assert.match(webEnvironment, new RegExp(`value: "${escapeRegExp(credential.databaseUrl)}"`));
@@ -127,8 +133,8 @@ function assertMigrationInvariant(environment) {
   const scenarios = [
     {},
     { api: apiCredential },
-    { system: systemCredential },
-    { api: apiCredential, system: systemCredential },
+    { fedify: fedifyCredential },
+    { api: apiCredential, fedify: fedifyCredential },
   ];
   const baseline = migrationDocument(render(valuesFile({ environment })).output);
 
@@ -140,18 +146,18 @@ function assertMigrationInvariant(environment) {
   }
 }
 
-function partialCredentials() {
+function partialCredentials(credential) {
   return [
-    { databaseUrl: apiCredential.databaseUrl },
-    { name: apiCredential.name },
-    { key: apiCredential.key },
-    { databaseUrl: apiCredential.databaseUrl, name: apiCredential.name },
-    { databaseUrl: apiCredential.databaseUrl, key: apiCredential.key },
-    { name: apiCredential.name, key: apiCredential.key },
+    { databaseUrl: credential.databaseUrl },
+    { name: credential.name },
+    { key: credential.key },
+    { databaseUrl: credential.databaseUrl, name: credential.name },
+    { databaseUrl: credential.databaseUrl, key: credential.key },
+    { name: credential.name, key: credential.key },
   ];
 }
 
-function valuesFile({ environment, api, system } = {}) {
+function valuesFile({ environment, api, fedify } = {}) {
   const lines = [];
 
   if (environment) {
@@ -165,7 +171,7 @@ function valuesFile({ environment, api, system } = {}) {
 
   lines.push('postgres:', '  credentials:');
   appendCredential(lines, 'api', api);
-  appendCredential(lines, 'system', system);
+  appendCredential(lines, 'fedify', fedify);
 
   return `${lines.join('\n')}\n`;
 }
