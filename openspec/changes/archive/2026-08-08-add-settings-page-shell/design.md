@@ -8,8 +8,9 @@ drawer가 같은 navigation 목록을 공유하지만 `설정` 항목은 없고,
 
 PROD-645는 Byulmaru ID가 소유한 Account Settings 외부 진입점을, PROD-667은 Kosmo가 소유한 Profile 기본
 공개 범위 control을 소유한다. PROD-653은 canonical `/settings` 정보 구조를 확정한 완료된 선행 이슈다.
-PROD-685는 production route·navigation·두 child 조립과 page-level 검증을, PROD-684는 최종 Settings 통합과
-change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이 change가 재구현하지 않는다.
+PROD-685는 production route·navigation·두 child 조립과 자동화된 page-level 검증을, PROD-684는 최종 Settings
+통합과 change 완료·archive를 소유한다. 실제 Web 보조기술과 Android·iOS runtime QA는 PROD-727이 비차단
+후속 이슈로 소유한다. Backend 계약은 PROD-648에 남고 이 change가 재구현하지 않는다.
 
 ## Goals / Non-Goals
 
@@ -81,9 +82,9 @@ change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이
    `SidebarNavigation`에 `/settings`를 추가하고 route-specific RightRail visibility를 활성화한다. active 판정,
    `GuardedLink`와 drawer close callback은 기존 navigation 경로를 재사용한다.
 7. presentational state와 shell surface는 React Native Web Storybook 및 가까운 unit/component test로 검증하고,
-   실제 Web forward navigation·history·reflow와 Android·iOS screen reader·font scaling·touch target은 각 runtime
-   증거로 분리한다. 구현이 안정된 뒤 기존 Figma Settings frames는 보존하고 별도 PROD-685 frames를 추가해
-   production 구조와 정렬한다.
+   실제 Web forward navigation·history는 Playwright로 확인한다. Web 보조기술과 Android·iOS screen reader·
+   font scaling·touch target runtime 증거는 PROD-727로 분리한다. 구현이 안정된 뒤 기존 Figma Settings frames는
+   보존하고 별도 PROD-685 frames를 추가해 production 구조와 정렬한다.
 
 ### Allowed Alternatives
 
@@ -142,10 +143,11 @@ change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이
 3. PROD-645 외부 진입점과 PROD-667 내부 Profile detail을 연결하고 같은 commit 범위에서 `/settings` route
    family, sidebar·rail·drawer navigation, route-specific RightRail visibility와 mobile Web header 분류를
    활성화한다.
-4. Relay/typecheck, unit/component, Storybook build·a11y와 Web runtime 검증을 수행하고 Android·iOS runtime
-   확인 결과를 별도로 기록한다.
+4. Relay/typecheck, unit/component, Storybook build·a11y와 Web navigation runtime 검증을 수행한다. 실제 Web
+   보조기술과 Android·iOS runtime QA는 PROD-727에 환경·증거·결함 후속 조치와 함께 기록한다.
 5. 기존 Figma Settings frames를 유지하고 별도 PROD-685 frames를 추가해 구현된 item·상태·breakpoint 구조를
-   정렬한 뒤 PROD-684에 완료 증거를 인계한다.
+   정렬한 뒤 PROD-684에 완료 증거와 PROD-727 QA handoff를 인계한다. PROD-727은 이 change archive를 차단하지
+   않으며 실제 결함은 별도 구현 이슈와 PR로 추적한다.
 6. 회귀 시 settings navigation과 route를 함께 되돌린다. DB·GraphQL schema나 persisted data migration은 없어
    별도 data rollback은 필요하지 않다.
 
