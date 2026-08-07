@@ -27,7 +27,6 @@ let PostMediaGallery: ComponentType<{
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   onMediaOpen?: (index: number) => void;
-  onMediaUnavailable?: () => void;
   sensitive: boolean;
 }>;
 let renderer: ReactTestRenderer | null = null;
@@ -221,27 +220,6 @@ describe('PostMediaGallery', () => {
     assert.equal(typeof rendered('PostMediaImage')[0]!.props.onOpen, 'function');
   });
 
-  it('열린 viewer를 닫을 수 있게 Sensitive 재가림과 새 가림 상태를 알린다', async () => {
-    let unavailable = 0;
-    await render({
-      media: [media(1, '첫 이미지')],
-      onMediaUnavailable: () => unavailable++,
-      sensitive: false,
-    });
-    assert.equal(unavailable, 0);
-
-    await render({
-      media: [media(1, '첫 이미지')],
-      onMediaUnavailable: () => unavailable++,
-      sensitive: true,
-    });
-    assert.equal(unavailable, 1);
-
-    await act(async () => pressable('민감한 이미지 표시').props.onPress());
-    await act(async () => pressable('민감한 이미지 다시 가리기').props.onPress());
-    assert.equal(unavailable, 2);
-  });
-
   it('Sensitive Media를 image mount 없이 시작하고 전체 표시와 다시 가리기를 제공한다', async () => {
     await render({ media: [media(1, null), media(2, '두 번째 이미지')], sensitive: true });
 
@@ -281,7 +259,6 @@ async function render(props: {
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
   onMediaOpen?: (index: number) => void;
-  onMediaUnavailable?: () => void;
   sensitive: boolean;
 }) {
   await act(async () => {

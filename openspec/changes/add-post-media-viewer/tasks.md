@@ -10,24 +10,24 @@
 
 **Deliverable**
 
-일반 목록·상세의 공개된 정상 이미지 tile에서 선택한 위치의 Viewer를 열고, 현재 Post·Profile·Content revision이 유지되는 동안만 같은 Media 목록을 사용한다.
+일반 목록·상세의 공개된 정상 이미지 tile에서 선택한 위치의 Viewer를 열고, 소유 Post의 현재 Relay fragment projection에 있는 Media 목록을 사용한다.
 
 **Guardrails**
 
-- Post surface가 Viewer session과 origin focus target을 소유하고 Gallery는 document index만 전달한다.
-- Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않고, 열린 뒤 Sensitive 재가림·삭제·현재 조회 결과 무효화 시 이전 Media를 유지하지 않는다.
+- Post surface가 Viewer session의 선택 index와 origin focus target만 소유하고 Gallery는 document index만 전달한다.
+- Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않는다. 열린 뒤 identity 변화만으로 자동 종료하지 않고 현재 fragment projection을 반영하며, 선택 Media가 unavailable이면 이전 Media byte·URL 없이 modal chrome과 close control을 유지한다.
 - 별도 Media query·authorization을 추가하거나 다른 Post·Profile·revision의 Media를 섞지 않는다.
 - PROD-626의 gallery geometry·Sensitive·retry 동작을 복제하거나 회귀시키지 않는다.
 
 **Verification**
 
-- Component test로 정상 tile의 선택 index, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계와 identity 변경·Sensitive 재가림·삭제·조회 무효화 close를 검증한다.
+- Component test로 정상 tile의 선택 index, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, identity·actor·Profile·Content 변경 시 Viewer 유지와 현재 projection 반영, Media unavailable 상태, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료를 검증한다.
 - PROD-626 baseline의 1·2·3·4장, Sensitive와 error·retry test를 함께 통과시킨다.
 
-- [x] 1.1 Post surface에서 현재 Post·Content identity와 선택 index를 소유하고 Gallery의 정상 tile 선택을 받을 수 있게 한다.
+- [x] 1.1 Post surface에서 선택 index와 origin focus만 소유하고 Gallery의 정상 tile 선택을 받을 수 있게 한다.
 - [x] 1.2 공개된 정상 tile에 viewer trigger semantics와 접근 가능한 이름을 제공하고 주변 navigation과 기존 gallery control 실행을 격리한다.
-- [x] 1.3 Sensitive 가림·다시 가리기, 열린 session의 Sensitive 재가림·삭제·조회 무효화, Reply 부모 preview와 Post·Profile·revision lifecycle 경계의 자동화 회귀 검증을 추가한다.
-- [x] 1.4 선택된 action Profile 또는 Relay actor/environment generation 변경 시 열린 Viewer를 닫고 이전 Composer·action state를 유지하지 않는 production-surface 회귀 검증을 추가한다.
+- [x] 1.3 Sensitive 진입 경계, Media unavailable 상태의 이전 URL 비보존·modal chrome·close 유지, Reply 부모 preview와 명시적 dismiss·Viewer 삭제 action·surface unmount lifecycle 자동화 회귀 검증을 추가한다.
+- [x] 1.4 Post·Profile·Content identity 또는 Relay actor/environment generation 변경 시 Viewer를 자동 종료하지 않고 현재 fragment·Action·Composer binding을 사용하는 production-surface 회귀 검증을 추가한다.
 
 ## 2. PROD-650 Image surface와 Media 탐색
 

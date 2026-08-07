@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -12,23 +12,15 @@ export function PostMediaGallery({
   interactive = true,
   media,
   onMediaOpen,
-  onMediaUnavailable,
   sensitive,
 }: {
   readonly interactive?: boolean;
   readonly media: ReadonlyArray<PostMediaItem> | null;
   readonly onMediaOpen?: PostMediaOpenHandler;
-  readonly onMediaUnavailable?: () => void;
   readonly sensitive: boolean;
 }) {
   const theme = useTheme();
   const [revealed, setRevealed] = useState(false);
-
-  useEffect(() => {
-    if (interactive && sensitive && !revealed) {
-      onMediaUnavailable?.();
-    }
-  }, [interactive, onMediaUnavailable, revealed, sensitive]);
 
   if (media === null) {
     return (

@@ -87,25 +87,20 @@ describe('PostMediaViewerThread', () => {
     assert.equal(queryFetchKey, '3:post-1:content-1:1');
   });
 
-  it('조회된 Post·Content identity가 Viewer session과 다르면 닫기를 요청한다', async () => {
-    let unavailable = 0;
+  it('조회된 Post·Content identity가 현재 projection과 다르면 thread만 숨긴다', async () => {
     queryData = validQueryData({ contentId: 'content-other' });
 
-    await render(() => {
-      unavailable += 1;
-    });
+    await render();
 
-    assert.equal(unavailable, 1);
     assert.equal(renderer!.root.findAllByProps({ testID: 'viewer-post-detail-thread' }).length, 0);
   });
 });
 
-async function render(onUnavailable = () => undefined) {
+async function render() {
   await act(async () => {
     renderer = create(
       createElement(PostMediaViewerThread, {
         contentId: 'content-1',
-        onUnavailable,
         postId: 'post-1',
       }),
     );

@@ -1,4 +1,4 @@
-import { lazy, useEffect, useState } from 'react';
+import { lazy, useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
@@ -36,7 +36,6 @@ const PostMediaViewerThreadOperation = graphql`
 type Props = Readonly<{
   contentId: string;
   onPostDeleted?: () => void;
-  onUnavailable: () => void;
   postId: string;
 }>;
 
@@ -67,7 +66,6 @@ function PostMediaViewerThreadContent({
   identity,
   onPostDeleted,
   onReplyCreated,
-  onUnavailable,
   postId,
 }: Props & {
   fetchKey: string;
@@ -82,12 +80,6 @@ function PostMediaViewerThreadContent({
   const post = data.node?.__typename === 'Post' ? data.node : null;
   const thread =
     post?.state !== 'DELETED' && post?.content?.id === contentId ? (post.thread ?? null) : null;
-
-  useEffect(() => {
-    if (!thread) {
-      onUnavailable();
-    }
-  }, [onUnavailable, thread]);
 
   return thread ? (
     <PostDetailThread

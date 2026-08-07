@@ -2401,13 +2401,7 @@ function DirectPostMediaViewerStory({
           originControl={originRef}
           post={requireFragment(node.viewer, 'viewer Post')}
           selectedIndex={selectedIndex}
-          wideDetail={
-            <PostMediaViewerThread
-              contentId={content.id}
-              onUnavailable={() => setOpen(false)}
-              postId={storyPost.id}
-            />
-          }
+          wideDetail={<PostMediaViewerThread contentId={content.id} postId={storyPost.id} />}
         />
       ) : null}
     </Catalog>

@@ -58,13 +58,11 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 
 export function PostSourcePresentationView({
   onMediaOpen,
-  onMediaUnavailable,
   post,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
   onMediaOpen?: PostMediaOpenHandler;
-  onMediaUnavailable?: () => void;
   post: PostSourcePresentationData;
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
@@ -111,7 +109,6 @@ export function PostSourcePresentationView({
           content={post.content}
           href={postDetailHref}
           onMediaOpen={onMediaOpen}
-          onMediaUnavailable={onMediaUnavailable}
           testID="post-body"
         />
       </View>
@@ -130,7 +127,6 @@ export function PostSourcePresentationView({
         content={post.content}
         href={postDetailHref}
         onMediaOpen={onMediaOpen}
-        onMediaUnavailable={onMediaUnavailable}
         testID="post-body"
       />
       <PostSourcePreview source={source} style={sourcePreviewStyle} />
@@ -236,14 +232,12 @@ function PostBodyPressTarget({
   content,
   href,
   onMediaOpen,
-  onMediaUnavailable,
   style,
   testID,
 }: {
   content: PresentationContent;
   href: Href;
   onMediaOpen?: PostMediaOpenHandler;
-  onMediaUnavailable?: () => void;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
@@ -264,7 +258,6 @@ function PostBodyPressTarget({
         document={content.document}
         media={content.media}
         onMediaOpen={onMediaOpen}
-        onMediaUnavailable={onMediaUnavailable}
         postId={content.postId}
         size="md"
       />

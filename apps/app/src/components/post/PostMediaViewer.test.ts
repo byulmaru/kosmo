@@ -346,6 +346,79 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-error-media-1'));
   });
 
+  it('현재 Media가 unavailable이면 이전 이미지를 제거하고 modal chrome을 유지한다', async () => {
+    await render({ selectedIndex: 1 });
+    assert.equal(currentImage().props.source.uri, 'https://media.example/2.webp');
+
+    await render({ post: viewerPost({ media: null }), selectedIndex: 1 });
+
+    assert.equal(rendered('Modal').length, 1);
+    assert.ok(byTestId('post-media-viewer-dialog'));
+    assert.ok(byTestId('post-media-viewer-unavailable'));
+    assert.equal(rendered('Image').length, 0);
+    assert.equal(
+      rendered('Text').some((node) => node.props.testID === 'post-media-viewer-position'),
+      false,
+    );
+    assert.equal(textContents().includes('이미지를 더 이상 표시할 수 없습니다.'), true);
+    assert.ok(pressable('이미지 뷰어 닫기'));
+  });
+
+  it('현재 선택 index가 projection에서 사라지면 다른 Media로 이동하지 않는다', async () => {
+    await render({
+      post: viewerPost({ media: [media(0, '첫 번째 이미지'), media(1, '두 번째 이미지')] }),
+      selectedIndex: 1,
+    });
+    assert.equal(currentImage().props.source.uri, 'https://media.example/2.webp');
+
+    await render({ post: viewerPost({ media: [media(0, '첫 번째 이미지')] }), selectedIndex: 1 });
+
+    assert.ok(byTestId('post-media-viewer-unavailable'));
+    assert.equal(rendered('Image').length, 0);
+    assert.equal(
+      rendered('Text').some((node) => node.props.testID === 'post-media-viewer-position'),
+      false,
+    );
+  });
+
+  it('같은 Media ID의 URL이 바뀌면 이전 Image와 load state를 폐기한다', async () => {
+    const original = media(0, '첫 번째 이미지');
+    await render({ post: viewerPost({ media: [original] }) });
+    await act(async () => currentImage().props.onLoad());
+    const previousImage = currentImage();
+    assert.deepEqual(previousImage.props.accessibilityState, { busy: false });
+
+    await render({
+      post: viewerPost({
+        media: [{ ...original, url: 'https://media.example/replacement.webp' }],
+      }),
+    });
+
+    assert.equal(currentImage().props.source.uri, 'https://media.example/replacement.webp');
+    assert.notStrictEqual(currentImage(), previousImage);
+    assert.deepEqual(currentImage().props.accessibilityState, { busy: true });
+  });
+
+  it('content가 unavailable이면 빈 Action Bar와 Wide rail을 렌더하지 않는다', async () => {
+    const props = {
+      actionBar: null,
+      post: viewerPost({ media: null }),
+      wideDetail: null,
+    };
+    await render(props);
+    assert.equal(
+      rendered('View').some((node) => node.props.testID === 'post-media-viewer-action-bar'),
+      false,
+    );
+
+    viewport.width = 768;
+    await render(props);
+    assert.equal(
+      rendered('View').some((node) => node.props.testID === 'post-media-viewer-wide-detail'),
+      false,
+    );
+  });
+
   it('같은 Media의 Image load callback을 state update 뒤에도 재사용한다', async () => {
     await render({ selectedIndex: 0 });
     const onLoadStart = currentImage().props.onLoadStart;
@@ -436,7 +509,7 @@ function viewerPost({
   },
 }: {
   contentId?: string;
-  media?: ReadonlyArray<PostMediaItem>;
+  media?: ReadonlyArray<PostMediaItem> | null;
   profile?: {
     avatar: { url: string } | null;
     displayName: string;

@@ -1,22 +1,17 @@
 import { Link } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatPostDate } from '@/lib/date';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { PostMediaViewer } from './PostMediaViewer';
-import {
-  createPostMediaViewerSession,
-  focusPostMediaViewerTarget,
-  reconcilePostMediaViewerSession,
-} from './postMediaViewerSession';
+import { createPostMediaViewerSession } from './postMediaViewerSession';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -110,7 +105,6 @@ export function PostLayout({
   viewerWideDetail?: ReactNode;
 }) {
   const theme = useTheme();
-  const { revision: actorRevision } = useRelayActor();
   const post = useFragment(PostLayoutFragment, postKey);
   const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
   const replyBinding = usePostReplyBinding(post.id);
@@ -122,31 +116,10 @@ export function PostLayout({
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
   const content = post.content;
-  const viewerIdentity = content
-    ? `${actorRevision}:${post.profile.id}:${post.id}:${content.id}`
-    : '';
-  const activeViewerSession = reconcilePostMediaViewerSession(
-    viewerSession,
-    viewerIdentity,
-    Boolean(content?.media?.length),
-  );
   const closeViewer = useCallback(() => setViewerSession(null), []);
-  const handleMediaUnavailable = useCallback(() => {
-    if (viewerSession) {
-      setViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
-    }
-  }, [viewerSession]);
-  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
-    (selectedIndex, originControl) => {
-      if (viewerIdentity) {
-        setViewerSession(
-          createPostMediaViewerSession(viewerIdentity, selectedIndex, originControl),
-        );
-      }
-    },
-    [viewerIdentity],
-  );
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
+    setViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
+  }, []);
   const handleDeleted = useCallback(() => {
     closeViewer();
     onDeleted?.();
@@ -179,12 +152,6 @@ export function PostLayout({
         },
       }
     : undefined;
-  useEffect(() => {
-    if (viewerSession && !activeViewerSession) {
-      setViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
-    }
-  }, [activeViewerSession, viewerSession]);
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -238,7 +205,6 @@ export function PostLayout({
             contentWarningPresentation={contentWarningPresentation}
             mediaPresentation={mediaPresentation}
             onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
-            onMediaUnavailable={mediaPresentation === 'hidden' ? undefined : handleMediaUnavailable}
             post={post}
             size="lg"
           />
@@ -275,22 +241,24 @@ export function PostLayout({
           ) : null}
         </View>
       </View>
-      {mediaPresentation === 'default' && activeViewerSession && content ? (
+      {mediaPresentation === 'default' && viewerSession ? (
         <PostMediaViewer
           actionBar={
-            <PostActionSurface
-              onDeleted={handleDeleted}
-              reactionSummaryStyle={styles.viewerReactionSummary}
-              reply={viewerReply}
-              socialActionTarget={socialActionTarget!}
-            />
+            content && socialActionTarget ? (
+              <PostActionSurface
+                onDeleted={handleDeleted}
+                reactionSummaryStyle={styles.viewerReactionSummary}
+                reply={viewerReply}
+                socialActionTarget={socialActionTarget}
+              />
+            ) : null
           }
           fallbackFocus={surfaceRef}
           onClose={closeViewer}
-          originControl={activeViewerSession.originControl}
+          originControl={viewerSession.originControl}
           post={post}
-          selectedIndex={activeViewerSession.selectedIndex}
-          wideDetail={viewerWideDetail}
+          selectedIndex={viewerSession.selectedIndex}
+          wideDetail={content ? viewerWideDetail : null}
         />
       ) : null}
     </View>

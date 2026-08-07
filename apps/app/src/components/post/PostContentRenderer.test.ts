@@ -47,7 +47,6 @@ type RendererProps = {
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
   onMediaOpen?: PostMediaOpenHandler;
-  onMediaUnavailable?: () => void;
   postId: string;
 };
 
@@ -69,23 +68,21 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
-  it('Gallery에 viewer open과 unavailable lifecycle callback을 그대로 전달한다', async () => {
+  it('Gallery에는 viewer open callback만 전달한다', async () => {
     const onMediaOpen = () => undefined;
-    const onMediaUnavailable = () => undefined;
     await render({
       bodyText: '',
       contentWarning: null,
       document: null,
       media: [{ altText: null, id: 'media-1', url: 'https://media.example/1.webp' }],
       onMediaOpen,
-      onMediaUnavailable,
       postId: 'post-viewer-callbacks',
     });
 
     const gallery = rendered('PostMediaGallery')[0];
     assert.ok(gallery);
     assert.equal(gallery.props.onMediaOpen, onMediaOpen);
-    assert.equal(gallery.props.onMediaUnavailable, onMediaUnavailable);
+    assert.equal('onMediaUnavailable' in gallery.props, false);
   });
 
   it('Media를 숨기는 상세 표현에서는 unavailable Gallery도 렌더하지 않는다', async () => {

@@ -38,7 +38,6 @@ export function PostContentRenderer({
   mediaPresentation = 'default',
   onBodyPress,
   onMediaOpen,
-  onMediaUnavailable,
   postId,
   size = 'md',
 }: {
@@ -51,7 +50,6 @@ export function PostContentRenderer({
   mediaPresentation?: 'default' | 'hidden';
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
-  onMediaUnavailable?: () => void;
   postId: string;
   size?: 'md' | 'lg';
 }) {
@@ -133,7 +131,6 @@ export function PostContentRenderer({
           interactive={interactive}
           media={media}
           onMediaOpen={onMediaOpen}
-          onMediaUnavailable={onMediaUnavailable}
           sensitive={document?.attrs?.sensitiveMedia ?? false}
         />
       ) : null}

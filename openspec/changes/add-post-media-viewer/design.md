@@ -9,7 +9,7 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 **Goals:**
 
 - Gallery 선택 index를 Post surface가 소유하는 modal viewer로 전달한다.
-- 현재 Post Content revision의 Media 순서와 이미 승인된 표시 URL만 사용한다.
+- 소유 Post의 현재 Relay fragment projection에 있는 Media 순서와 이미 승인된 표시 URL만 사용하고 이전 URL을 snapshot으로 유지하지 않는다.
 - Compact Web·Native의 image/detail layout과 Wide Web의 image/Post 상세 thread 분할을 하나의 공용 Viewer 경계에서 제공한다.
 - Wide Web에서 원문 전체·기존 Action Bar·Reply Composer·reply descendants와 pagination을 기존 Post 상세 계약으로 제공한다.
 - Sensitive·loading·error·retry, modal close·focus 복귀와 Web·Native 탐색 입력을 분리 검증할 수 있게 한다.
@@ -35,7 +35,7 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 Post surface에 viewer coordinator를 두고 `{selectedIndex, originControl}`만 열린 상태로 보관한다. `PostBody`에서 Gallery까지는 `onMediaOpen(index, origin)` callback seam만 전달하고, Gallery는 Sensitive 공개 뒤 정상 image tile에만 이 callback을 연결한다. Reply 부모 preview의 `interactive=false` 경로에는 callback을 전달하지 않는다.
 
-Coordinator는 현재 surface가 가진 Post fragment를 Viewer에 전달하고, Viewer는 colocated fragment에서 Media, Content identity, 작성자와 원문 표시 데이터를 직접 읽는다. 새 Media query를 만들지 않고, Post·작성자 Profile·Content identity, 선택된 action Profile 또는 Relay actor/environment generation이 바뀌면 열린 selection을 폐기한다. 목록과 상세은 같은 viewer presentation을 사용하며 caller는 Viewer session, 기존 Reply·Action binding, thread query와 삭제 lifecycle을 계속 소유한다.
+Coordinator는 현재 surface가 가진 Post fragment를 Viewer에 전달하고, Viewer는 colocated fragment에서 Media, Content identity, 작성자와 원문 표시 데이터를 직접 읽는다. 새 Media query를 만들거나 Post·작성자 Profile·Content identity, 선택된 action Profile 또는 Relay actor/environment generation을 session identity로 합성하지 않는다. 열린 Viewer는 같은 소유 surface의 현재 fragment projection을 반영하고, 선택 Media가 사라지면 이전 URL을 유지하지 않은 채 modal chrome과 close control이 있는 unavailable 상태를 표시한다. 목록과 상세은 같은 viewer presentation을 사용하며 caller는 선택 session, focus, 기존 Reply·Action binding, thread query와 Viewer 안의 삭제 action lifecycle을 계속 소유한다.
 
 Wide Web의 오른쪽은 route component 자체를 중첩하지 않고 `PostDetailThread`의 표시·interaction 조합을 재사용 가능한 thread surface로 추출해 사용한다. Reply ancestors, 현재 Post와 reply descendants를 기존 연결 순서대로 포함한다. 원본 Post는 Viewer session의 같은 Post identity를 사용하며 Media 렌더만 생략한다. Reply Composer는 처음부터 열지 않고 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. Ancestors·descendants와 Quote·Repost 안의 Media 및 viewer interaction, Action Bar·Reply Composer·reply descendants는 기존 표현을 유지한다. 목록처럼 thread data가 아직 없는 caller는 같은 Post node의 기존 visibility 정책을 따르는 Post detail thread operation을 Viewer 경계 안에서 load할 수 있다. 이 operation은 standalone Media authorization을 추가하지 않고 route·browser history를 변경하지 않으며 현재 Viewer Post identity와 결과가 다르면 표시하지 않는다.
 
@@ -49,7 +49,7 @@ Viewer presentation은 하나의 full-screen modal 안에서 다음 영역을 �
 
 폭 분기는 Web에서만 768px을 기준으로 하고 Native는 항상 compact 세로 layout을 사용한다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 폭을 사용하고, 오른쪽 thread rail은 `clamp(320px, 25vw, 350px)`로 계산하며 왼쪽 image surface가 나머지 폭을 차지한다. 320px 최소폭은 기존 Post 상세의 내부 padding과 avatar column을 제외한 content 폭이 228px Action Bar를 수용하도록 보장한다. 기존 Post 상세의 표현·interaction을 재사용하되 route의 `600px` column 폭까지 복제하지 않는다.
 
-Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘을 때만 control을 표시한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. Body 영역은 빈 높이를 채우지 않아 Action Bar가 짧은 원문 바로 아래에 놓이게 하고, 낮은 viewport에서 내용이 상한을 넘으면 body만 줄어들고 scroll한다. 펼친 상태는 현재 Viewer session 안에서 유지하되 새 Post·revision으로 이어지지 않는다. Wide Web은 원문을 접지 않고 오른쪽 thread surface 전체를 왼쪽 image와 독립적으로 scroll한다. Image load generation은 Media identity별로 격리해 현재 index 이동이나 retry가 다른 항목 상태를 초기화하지 않게 한다.
+Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘을 때만 control을 표시한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. Body 영역은 빈 높이를 채우지 않아 Action Bar가 짧은 원문 바로 아래에 놓이게 하고, 낮은 viewport에서 내용이 상한을 넘으면 body만 줄어들고 scroll한다. 펼친 상태와 image load state는 현재 Content projection 또는 Media 목록이 바뀌면 초기화한다. Wide Web은 원문을 접지 않고 오른쪽 thread surface 전체를 왼쪽 image와 독립적으로 scroll한다. Image load generation은 Media identity별로 격리해 현재 index 이동이나 retry가 다른 항목 상태를 초기화하지 않게 한다.
 
 Wide thread loading·error boundary는 오른쪽 surface에만 적용해 왼쪽 선택 image와 modal chrome을 유지한다. Route와 Viewer의 `PostDetailThread`는 각각 scroll surface의 end-reached, same-surface burst 재진입 guard, pending·error·retry UI state와 completion 뒤 saved metrics 재평가를 소유하고 component 간 request token이나 Viewer visibility gate를 공유하지 않는다. 같은 Relay environment에서 query와 variables가 동일한 pagination operation이 두 surface에서 겹치면 in-flight dedupe와 normalized connection merge는 Relay에 맡긴다. 서로 다른 cursor·count·environment의 request가 dedupe된다고 가정하지 않는다. Viewer 뒤의 원래 Post surface는 modal이 열린 동안 focus와 interaction 대상에서 제외한다.
 
@@ -59,7 +59,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 
 ### Allowed Alternatives
 
-- Viewer presentation은 같은 Post surface가 전달한 Post fragment를 직접 읽는다. Session·identity reconciliation·focus, Action/Reply binding, thread query와 삭제 lifecycle은 coordinator와 기존 surface에 유지하고 별도 Media query·action 복제를 만들지 않아야 한다.
+- Viewer presentation은 같은 Post surface가 전달한 Post fragment를 직접 읽고 현재 projection의 Media availability를 표시한다. Session에는 선택 index와 origin focus만 두며 focus, Action/Reply binding, thread query와 Viewer 안의 삭제 lifecycle은 coordinator와 기존 surface에 유지하고 별도 Media query·action 복제를 만들지 않아야 한다.
 - Wide thread data는 caller가 이미 가진 `PostDetailThread` fragment를 전달하거나 Viewer가 같은 Post node에 기존 detail operation을 실행할 수 있다. 두 방식 모두 재사용 가능한 thread presentation을 사용하고 현재 Post identity·visibility, route·history 유지와 독립 loading·error boundary를 지켜야 한다.
 - Image별 load state는 기존 renderer에서 공유 가능한 presentation seam을 추출하거나 Viewer 전용 얇은 `contain` renderer로 둘 수 있다. Gallery의 `cover` geometry와 retry 격리 계약을 바꾸지 않는 방식만 허용한다.
 - Child action overlay가 중첩 modal로 검증되면 Viewer를 유지한 채 열 수 있고, 플랫폼 제약이 확인되면 coordinator가 child overlay 동안 Viewer presentation을 일시 조정할 수 있다. 사용자에게 보이는 action 결과와 dismiss·focus 계약은 같아야 한다.
@@ -69,7 +69,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 - Viewer가 Media ID만 받아 새 query를 실행하면 Post visibility와 Content revision 경계를 우회하거나 stale Media를 섞을 수 있다.
 - 전체 Post row·body navigation Pressable 안에 viewer tile semantics를 중첩하거나 press propagation을 막지 않으면 viewer와 상세 route가 함께 열린다.
 - Sensitive placeholder나 gallery retry control을 viewer trigger로 감싸면 공개·재시도와 viewer open이 동시에 실행된다.
-- 최초 reveal만 확인하고 열린 session에서 Sensitive 재가림·삭제·조회 무효화를 감시하지 않으면 더 이상 표시할 수 없는 이전 image가 modal에 남는다.
+- 현재 fragment projection의 Media가 unavailable인데 이전 URL을 별도 snapshot으로 유지하면 더 이상 승인되지 않은 image가 modal에 남는다. Viewer는 이전 URL을 보존하지 않고 modal 안에 unavailable 상태를 표시해야 한다.
 - Gallery용 `cover` renderer를 그대로 확대하면 원본 확인 목적을 깨뜨리고, Viewer용 `contain` 변경을 공용 frame에 강제하면 compact gallery geometry가 회귀한다.
 - Action Bar 모양만 복제하면 인증·selected Profile·Relay target·pending·failure·count 계약이 분기된다.
 - Detail route component를 Viewer 안에 직접 mount하면 route ownership과 Viewer session이 중첩되고 current Post Media·focus·interaction이 중복될 수 있다.
@@ -87,7 +87,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 - [긴 원문 scroll과 Native 수평 swipe가 gesture를 경쟁할 수 있음] → 수평 의도 threshold를 두고 vertical text scroll을 우선하며 이전·다음 button을 항상 대체 입력으로 유지한다.
 - [768px 부근에서 최소 rail이 image surface를 지나치게 줄일 수 있음] → rail은 기존 228px Action Bar가 잘리지 않는 320px 최소폭을 지키되 modal의 24px inset 안에서 image가 남는지 768px 경계를 직접 확인하고, 넓은 viewport에서는 350px 상한으로 image 비중을 회복한다.
 - [Compact panel의 내용 높이와 expanded scroll 제약이 Action Bar를 밀거나 낮은 viewport에서 고정 chrome을 가릴 수 있음] → `clamp(192px, 32vh, 240px)` 최대 높이와 body-only shrink 경계를 함께 두고 짧은 원문·3줄 초과 원문·expanded 상태를 일반 높이와 390px 높이에서 각각 실측한다.
-- [Post·revision 변경 뒤 이전 Media가 잠시 남을 수 있음] → Post·Profile·Content identity를 Viewer session key로 사용하고 불일치 시 render 전에 닫는다.
+- [Post·revision 변경 뒤 이전 Media가 잠시 남을 수 있음] → Viewer가 소유 Post의 현재 Relay fragment projection만 읽고 이전 Media URL을 session이나 별도 state에 보존하지 않는다. 선택 Media가 사라지면 modal chrome과 close control을 유지한 unavailable 상태로 전환한다.
 - [기기 저장 부재가 Figma와 다르게 보일 수 있음] → 기존 Post Action Bar만 표시하고, 저장은 permission·delivery·failure UX를 가진 별도 후속 계약임을 canonical과 PR에 명시한다.
 
 ## Migration Plan

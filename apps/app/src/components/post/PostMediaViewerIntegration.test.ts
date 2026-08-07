@@ -168,7 +168,7 @@ afterEach(async () => {
 });
 
 describe('Post Media Viewer production surface wiring', () => {
-  it('Relay actor generation이 바뀌면 열린 Viewer를 닫는다', async () => {
+  it('Relay actor generation이 바뀌어도 Viewer session과 현재 Post fragment를 유지한다', async () => {
     const originControl = { current: { focus: () => undefined } };
     const post = storyPost('post-actor', 'profile-author', 'content-actor');
 
@@ -179,10 +179,11 @@ describe('Post Media Viewer production surface wiring', () => {
     actorRevision = 1;
     await update(createElement(PostLayout, { post: asLayoutKey(post) }));
 
-    assert.equal(viewers().length, 0);
+    assert.equal(viewers().length, 1);
+    assertViewerPost(post);
   });
 
-  it('목록과 상세에서 identity·Sensitive unavailable·삭제 lifecycle로 열린 Viewer를 닫는다', async () => {
+  it('목록과 상세에서 Profile·Content 변경은 반영하고 명시적 삭제만 Viewer를 닫는다', async () => {
     const originControl = { current: { focus: () => undefined } };
     const first = storyPost('post-1', 'profile-1', 'content-1');
 
@@ -192,13 +193,10 @@ describe('Post Media Viewer production surface wiring', () => {
 
     const changedProfile = storyPost('post-1', 'profile-2', 'content-1');
     await update(createElement(PostListItem, { post: asListItemKey(changedProfile) }));
-    assert.equal(viewers().length, 0);
+    assert.equal(viewers().length, 1);
+    assertViewerPost(changedProfile);
+    assert.equal('onMediaUnavailable' in currentBody().props, false);
 
-    await openViewerFromBody(originControl);
-    await act(async () => currentBody().props.onMediaUnavailable());
-    assert.equal(viewers().length, 0);
-
-    await openViewerFromBody(originControl);
     const listViewer = currentViewer();
     await act(async () => listViewer.props.actionBar.props.onDeleted());
     assert.equal(renderer?.toJSON(), null);
@@ -220,9 +218,28 @@ describe('Post Media Viewer production surface wiring', () => {
         post: asLayoutKey(changedContent),
       }),
     );
-    assert.equal(viewers().length, 0);
+    assert.equal(viewers().length, 1);
+    assertViewerPost(changedContent);
 
-    await openViewerFromBody(originControl);
+    const unavailableContent = storyPost('post-1', 'profile-1', null);
+    await update(
+      createElement(PostLayout, {
+        onDeleted: () => detailDeleted++,
+        post: asLayoutKey(unavailableContent),
+      }),
+    );
+    assert.equal(viewers().length, 1);
+    assertViewerPost(unavailableContent);
+    assert.equal(currentViewer().props.actionBar === null, true);
+    assert.equal(currentViewer().props.wideDetail, null);
+
+    await update(
+      createElement(PostLayout, {
+        onDeleted: () => detailDeleted++,
+        post: asLayoutKey(changedContent),
+      }),
+    );
+
     await act(async () => currentViewer().props.actionBar.props.onDeleted());
     assert.equal(viewers().length, 0);
     assert.equal(detailDeleted, 1);
@@ -315,7 +332,7 @@ function assertViewerPost(expectedPost: unknown) {
 function assertViewerWideDetail(postId: string, contentId: string) {
   assert.equal(currentViewer().props.wideDetail.props.postId, postId);
   assert.equal(currentViewer().props.wideDetail.props.contentId, contentId);
-  assert.equal(typeof currentViewer().props.wideDetail.props.onUnavailable, 'function');
+  assert.equal('onUnavailable' in currentViewer().props.wideDetail.props, false);
 }
 
 function asListItemKey(value: unknown): PostListItem_post$key {

@@ -1,23 +1,18 @@
 import { Link, useRouter } from 'expo-router';
 import { MessageCircle } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { PostMediaViewer } from './PostMediaViewer';
-import {
-  createPostMediaViewerSession,
-  focusPostMediaViewerTarget,
-  reconcilePostMediaViewerSession,
-} from './postMediaViewerSession';
+import { createPostMediaViewerSession } from './postMediaViewerSession';
 import { PostMediaViewerThread } from './PostMediaViewerThread';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
@@ -134,7 +129,6 @@ export function PostListItem({
   showReplyAttribution?: boolean;
 }) {
   const theme = useTheme();
-  const { revision: actorRevision } = useRelayActor();
   const [deleted, setDeleted] = useState(false);
   const [quoteViewerSession, setQuoteViewerSession] = useState<PostMediaViewerSession | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
@@ -188,37 +182,16 @@ export function PostListItem({
       replySurface
     );
   const quoteContent = post.content;
-  const quoteViewerIdentity = quoteContent
-    ? `${actorRevision}:${post.profile.id}:${post.id}:${quoteContent.id}`
-    : '';
   const quoteMedia =
     quoteContent?.media?.map(({ altText, id, url }) => ({
       altText: altText ?? null,
       id,
       url: url ?? null,
     })) ?? null;
-  const activeQuoteViewerSession = reconcilePostMediaViewerSession(
-    quoteViewerSession,
-    quoteViewerIdentity,
-    Boolean(quoteContent?.media?.length),
-  );
   const closeQuoteViewer = useCallback(() => setQuoteViewerSession(null), []);
-  const handleQuoteMediaUnavailable = useCallback(() => {
-    if (quoteViewerSession) {
-      setQuoteViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(quoteSurfaceRef));
-    }
-  }, [quoteViewerSession]);
-  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
-    (selectedIndex, originControl) => {
-      if (quoteViewerIdentity) {
-        setQuoteViewerSession(
-          createPostMediaViewerSession(quoteViewerIdentity, selectedIndex, originControl),
-        );
-      }
-    },
-    [quoteViewerIdentity],
-  );
+  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
+    setQuoteViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
+  }, []);
   const quoteViewerReply = reply
     ? {
         ...reply,
@@ -229,12 +202,6 @@ export function PostListItem({
         },
       }
     : undefined;
-  useEffect(() => {
-    if (quoteViewerSession && !activeQuoteViewerSession) {
-      setQuoteViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(quoteSurfaceRef));
-    }
-  }, [activeQuoteViewerSession, quoteViewerSession]);
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
@@ -382,7 +349,6 @@ export function PostListItem({
           <View style={styles.sourcePresentation}>
             <PostSourcePresentationView
               onMediaOpen={handleQuoteMediaOpen}
-              onMediaUnavailable={handleQuoteMediaUnavailable}
               post={presentationPost}
               showPostAvatar={false}
               sourcePreviewStyle={styles.quoteSourcePreview}
@@ -396,28 +362,31 @@ export function PostListItem({
             />
           </View>
         </View>
-        {activeQuoteViewerSession && quoteContent ? (
+        {quoteViewerSession ? (
           <PostMediaViewer
             actionBar={
-              <PostActionSurface
-                onDeleted={onDeleted}
-                reactionSummaryStyle={styles.viewerReactionSummary}
-                reply={quoteViewerReply}
-                socialActionTarget={post.actionSurface!}
-              />
+              quoteContent && post.actionSurface ? (
+                <PostActionSurface
+                  onDeleted={onDeleted}
+                  reactionSummaryStyle={styles.viewerReactionSummary}
+                  reply={quoteViewerReply}
+                  socialActionTarget={post.actionSurface}
+                />
+              ) : null
             }
             fallbackFocus={quoteSurfaceRef}
             onClose={closeQuoteViewer}
-            originControl={activeQuoteViewerSession.originControl}
+            originControl={quoteViewerSession.originControl}
             post={post}
-            selectedIndex={activeQuoteViewerSession.selectedIndex}
+            selectedIndex={quoteViewerSession.selectedIndex}
             wideDetail={
-              <PostMediaViewerThread
-                contentId={quoteContent.id}
-                onPostDeleted={onDeleted}
-                onUnavailable={handleQuoteMediaUnavailable}
-                postId={post.id}
-              />
+              quoteContent ? (
+                <PostMediaViewerThread
+                  contentId={quoteContent.id}
+                  onPostDeleted={onDeleted}
+                  postId={post.id}
+                />
+              ) : null
             }
           />
         ) : null}
@@ -447,38 +416,16 @@ function PostListRow({
 }) {
   const router = useRouter();
   const theme = useTheme();
-  const { revision: actorRevision } = useRelayActor();
   const post = useFragment(PostListRowFragment, postKey);
   const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
   const surfaceRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const content = post.content;
-  const viewerIdentity = content
-    ? `${actorRevision}:${post.profile.id}:${post.id}:${content.id}`
-    : '';
-  const activeViewerSession = reconcilePostMediaViewerSession(
-    viewerSession,
-    viewerIdentity,
-    Boolean(content?.media?.length),
-  );
   const closeViewer = useCallback(() => setViewerSession(null), []);
-  const handleMediaUnavailable = useCallback(() => {
-    if (viewerSession) {
-      setViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
-    }
-  }, [viewerSession]);
-  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
-    (selectedIndex, originControl) => {
-      if (viewerIdentity) {
-        setViewerSession(
-          createPostMediaViewerSession(viewerIdentity, selectedIndex, originControl),
-        );
-      }
-    },
-    [viewerIdentity],
-  );
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
+    setViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
+  }, []);
   const handleDeleted = useCallback(() => {
     closeViewer();
     onDeleted();
@@ -493,13 +440,6 @@ function PostListRow({
         },
       }
     : undefined;
-  useEffect(() => {
-    if (viewerSession && !activeViewerSession) {
-      setViewerSession(null);
-      requestAnimationFrame(() => focusPostMediaViewerTarget(surfaceRef));
-    }
-  }, [activeViewerSession, viewerSession]);
-
   return (
     <View ref={surfaceRef} style={styles.standardRow} tabIndex={-1} testID="post-list-standard-row">
       <Link asChild href={profileHref}>
@@ -535,7 +475,6 @@ function PostListRow({
             <PostBody
               onBodyPress={() => router.push(detailHref)}
               onMediaOpen={handleMediaOpen}
-              onMediaUnavailable={handleMediaUnavailable}
               post={post}
             />
           </View>
@@ -548,28 +487,31 @@ function PostListRow({
           socialActionTarget={post.actionSurface!}
         />
       </View>
-      {activeViewerSession && content ? (
+      {viewerSession ? (
         <PostMediaViewer
           actionBar={
-            <PostActionSurface
-              onDeleted={handleDeleted}
-              reactionSummaryStyle={styles.viewerReactionSummary}
-              reply={viewerReply}
-              socialActionTarget={post.actionSurface!}
-            />
+            content && post.actionSurface ? (
+              <PostActionSurface
+                onDeleted={handleDeleted}
+                reactionSummaryStyle={styles.viewerReactionSummary}
+                reply={viewerReply}
+                socialActionTarget={post.actionSurface}
+              />
+            ) : null
           }
           fallbackFocus={surfaceRef}
           onClose={closeViewer}
-          originControl={activeViewerSession.originControl}
+          originControl={viewerSession.originControl}
           post={post}
-          selectedIndex={activeViewerSession.selectedIndex}
+          selectedIndex={viewerSession.selectedIndex}
           wideDetail={
-            <PostMediaViewerThread
-              contentId={content.id}
-              onPostDeleted={handleDeleted}
-              onUnavailable={handleMediaUnavailable}
-              postId={post.id}
-            />
+            content ? (
+              <PostMediaViewerThread
+                contentId={content.id}
+                onPostDeleted={handleDeleted}
+                postId={post.id}
+              />
+            ) : null
           }
         />
       ) : null}

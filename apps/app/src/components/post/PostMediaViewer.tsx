@@ -89,7 +89,7 @@ export function PostMediaViewer({
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
-  const [currentIndex, setCurrentIndex] = useState(() => boundedIndex(selectedIndex, media.length));
+  const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [imageStates, setImageStates] = useState<Record<string, ImageState>>({});
@@ -99,13 +99,19 @@ export function PostMediaViewer({
   const currentMedia = media[currentIndex];
   const currentMediaId = currentMedia?.id;
   const currentMediaUrl = currentMedia?.url;
+  const currentMediaStateKey = currentMedia
+    ? `${currentMedia.id}:${currentMedia.url ?? ''}`
+    : undefined;
 
   useEffect(() => {
-    setCurrentIndex(boundedIndex(selectedIndex, media.length));
+    setCurrentIndex(selectedIndex);
+  }, [contentId, selectedIndex]);
+
+  useEffect(() => {
     setExpanded(false);
     setHasOverflow(false);
     setImageStates({});
-  }, [contentId, media.length, selectedIndex]);
+  }, [contentId, media]);
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
@@ -185,20 +191,20 @@ export function PostMediaViewer({
 
   const setCurrentImageState = useCallback(
     (update: (state: ImageState) => ImageState) => {
-      if (!currentMediaId) {
+      if (!currentMediaId || !currentMediaStateKey) {
         return;
       }
       setImageStates((states) => ({
         ...states,
-        [currentMediaId]: update(
-          states[currentMediaId] ?? {
+        [currentMediaStateKey]: update(
+          states[currentMediaStateKey] ?? {
             generation: 0,
             status: currentMediaUrl ? 'loading' : 'error',
           },
         ),
       }));
     },
-    [currentMediaId, currentMediaUrl],
+    [currentMediaId, currentMediaStateKey, currentMediaUrl],
   );
   const handleImageError = useCallback(
     () => setCurrentImageState((state) => ({ ...state, status: 'error' })),
@@ -216,18 +222,19 @@ export function PostMediaViewer({
     setHasOverflow(event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5);
   }, []);
 
-  if (!currentMedia) {
-    return null;
-  }
-
-  const imageName = currentMedia.altText?.trim() || `${currentIndex + 1}번째 첨부 이미지`;
-  const currentState = imageStates[currentMedia.id] ?? {
-    generation: 0,
-    status: currentMedia.url ? 'loading' : 'error',
-  };
+  const imageName =
+    currentMedia?.altText?.trim() ||
+    (currentMedia ? `${currentIndex + 1}번째 첨부 이미지` : '이미지');
+  const currentState = currentMediaStateKey
+    ? (imageStates[currentMediaStateKey] ?? {
+        generation: 0,
+        status: currentMedia.url ? 'loading' : 'error',
+      })
+    : null;
+  const unavailable = !currentMedia || !currentMediaUrl;
   const multiple = media.length > 1;
-  const previousDisabled = currentIndex === 0;
-  const nextDisabled = currentIndex === media.length - 1;
+  const previousDisabled = currentIndex <= 0;
+  const nextDisabled = currentIndex >= media.length - 1;
 
   return (
     <Modal
@@ -274,7 +281,7 @@ export function PostMediaViewer({
                 ×
               </Text>
             </Pressable>
-            {multiple ? (
+            {multiple && currentMedia ? (
               <Text aria-hidden style={styles.counter} testID="post-media-viewer-counter">
                 {currentIndex + 1} / {media.length}
               </Text>
@@ -293,14 +300,22 @@ export function PostMediaViewer({
               style={[styles.imagePane, wide ? styles.wideImagePane : null]}
               testID="post-media-viewer-image-pane"
             >
-              {currentState.status === 'error' ? (
+              {unavailable ? (
                 <View
                   accessibilityLiveRegion="polite"
                   style={styles.imageFallback}
-                  testID={`post-media-viewer-error-${currentMedia.id}`}
+                  testID="post-media-viewer-unavailable"
+                >
+                  <Text style={styles.imageFallbackText}>이미지를 더 이상 표시할 수 없습니다.</Text>
+                </View>
+              ) : currentState?.status === 'error' ? (
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={styles.imageFallback}
+                  testID={`post-media-viewer-error-${currentMedia!.id}`}
                 >
                   <Text style={styles.imageFallbackText}>이미지를 불러오지 못했습니다.</Text>
-                  {currentMedia.url ? (
+                  {currentMedia!.url ? (
                     <Pressable
                       accessibilityLabel={`${imageName} 다시 시도`}
                       accessibilityRole="button"
@@ -319,13 +334,13 @@ export function PostMediaViewer({
               ) : (
                 <Image
                   accessibilityLabel={imageName}
-                  accessibilityState={{ busy: currentState.status === 'loading' }}
-                  key={`${currentMedia.id}:${currentState.generation}`}
+                  accessibilityState={{ busy: currentState?.status === 'loading' }}
+                  key={`${currentMediaStateKey}:${currentState!.generation}`}
                   onError={handleImageError}
                   onLoad={handleImageLoad}
                   onLoadStart={handleImageLoadStart}
                   resizeMode="contain"
-                  source={{ uri: currentMedia.url! }}
+                  source={{ uri: currentMedia!.url! }}
                   style={styles.image}
                   testID="post-media-viewer-image"
                 />
@@ -345,31 +360,35 @@ export function PostMediaViewer({
                   />
                 </>
               ) : null}
-              <Text
-                accessibilityLiveRegion="polite"
-                role="status"
-                style={styles.screenReaderOnly}
-                testID="post-media-viewer-position"
-              >
-                {currentIndex + 1} / {media.length}
-              </Text>
+              {currentMedia ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  role="status"
+                  style={styles.screenReaderOnly}
+                  testID="post-media-viewer-position"
+                >
+                  {`${currentIndex + 1} / ${media.length}`}
+                </Text>
+              ) : null}
             </View>
 
             {wide ? (
-              <View
-                style={[
-                  styles.wideDetail,
-                  {
-                    backgroundColor: theme.background,
-                    flexBasis: wideDetailWidth,
-                    maxWidth: wideDetailWidth,
-                    minWidth: wideDetailWidth,
-                  },
-                ]}
-                testID="post-media-viewer-wide-detail"
-              >
-                {wideDetail}
-              </View>
+              wideDetail != null ? (
+                <View
+                  style={[
+                    styles.wideDetail,
+                    {
+                      backgroundColor: theme.background,
+                      flexBasis: wideDetailWidth,
+                      maxWidth: wideDetailWidth,
+                      minWidth: wideDetailWidth,
+                    },
+                  ]}
+                  testID="post-media-viewer-wide-detail"
+                >
+                  {wideDetail}
+                </View>
+              ) : null
             ) : (
               <View
                 style={[
@@ -433,12 +452,14 @@ export function PostMediaViewer({
                   ) : null}
                 </View>
 
-                <View
-                  style={[styles.actionBar, { borderColor: theme.border }]}
-                  testID="post-media-viewer-action-bar"
-                >
-                  {actionBar}
-                </View>
+                {actionBar != null ? (
+                  <View
+                    style={[styles.actionBar, { borderColor: theme.border }]}
+                    testID="post-media-viewer-action-bar"
+                  >
+                    {actionBar}
+                  </View>
+                ) : null}
               </View>
             )}
           </View>

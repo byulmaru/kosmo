@@ -28,7 +28,6 @@ export function PostBody({
   post: postKey,
   onBodyPress,
   onMediaOpen,
-  onMediaUnavailable,
   size = 'md',
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
@@ -37,7 +36,6 @@ export function PostBody({
   post: PostBody_post$key;
   onBodyPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
-  onMediaUnavailable?: () => void;
   size?: 'md' | 'lg';
 }) {
   const post = useFragment(PostBodyFragment, postKey);
@@ -66,7 +64,6 @@ export function PostBody({
       mediaPresentation={mediaPresentation}
       onBodyPress={onBodyPress}
       onMediaOpen={mediaPresentation === 'hidden' ? undefined : onMediaOpen}
-      onMediaUnavailable={mediaPresentation === 'hidden' ? undefined : onMediaUnavailable}
       postId={post.id}
       size={size}
     />

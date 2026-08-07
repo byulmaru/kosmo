@@ -1,6 +1,6 @@
 # Post Media Viewer
 
-일반 Post의 공개된 이미지 tile을 선택하면 같은 Post Content revision의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·Reply Composer·reply thread를 그대로 사용할 수 있는 surface를 보여준다.
+일반 Post의 공개된 이미지 tile을 선택하면 소유 Post의 현재 Relay fragment projection에 있는 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·Reply Composer·reply thread를 그대로 사용할 수 있는 surface를 보여준다.
 
 ## 디자인 권위와 적용 범위
 
@@ -12,9 +12,9 @@
 
 ## 소유권과 데이터 경계
 
-Post surface가 Viewer session, 현재 Media index, origin focus, action Profile과 Post·Profile·Content·Relay actor identity reconciliation을 소유한다. Gallery는 공개된 정상 tile을 선택했을 때 document index만 전달하며 modal lifecycle이나 Post 데이터를 별도로 소유하지 않는다. `PostMediaViewer`는 같은 surface가 전달한 Post fragment를 직접 읽어 Content body, Media와 작성자 표시 데이터를 소비한다. 기존 `PostActionSurface`와 Wide `PostDetailThread`의 action·reply·query lifecycle은 각 기존 surface가 계속 소유한다.
+Post surface가 Viewer session의 현재 Media index와 origin focus를 소유한다. Gallery는 공개된 정상 tile을 선택했을 때 document index만 전달하며 modal lifecycle이나 Post 데이터를 별도로 소유하지 않는다. `PostMediaViewer`는 같은 surface가 전달한 Post fragment를 직접 읽어 Content body, Media와 작성자 표시 데이터를 소비하고 현재 fragment projection의 변경을 그대로 반영한다. 기존 `PostActionSurface`와 Wide `PostDetailThread`의 action·reply·query lifecycle은 각 기존 surface가 계속 소유한다.
 
-Viewer는 이미 화면의 Post 조회 정책을 통과한 현재 Post Content revision과 그 `media` 목록만 소비한다. 별도 Media 조회나 standalone authorization을 추가하지 않고, modal이 열린 동안 다른 Post·작성자 Profile·revision의 Media를 섞지 않는다. 대상 Post, 작성자 Profile, Content revision, 선택된 action Profile 또는 Relay actor/environment generation이 바뀌거나 surface가 unmount되면 viewer를 닫는다.
+Viewer는 이미 화면의 Post 조회 정책을 통과한 소유 Post의 현재 fragment projection과 그 `media` 목록만 소비한다. 별도 Media 조회나 standalone authorization을 추가하지 않고 이전 Media byte·URL을 별도 snapshot으로 보존하지 않는다. 대상 Post·작성자 Profile·Content revision, 선택된 action Profile 또는 Relay actor/environment generation이 바뀌어도 identity reconciliation으로 자동 종료하지 않고 현재 fragment projection을 표시한다. 현재 선택 Media를 더 이상 표시할 수 없으면 modal chrome과 명시적인 close control을 유지한 unavailable 상태를 표시한다. 명시적 dismiss, Viewer 안의 삭제 action과 소유 Post surface unmount만 Viewer session을 종료한다.
 
 ## 반응형 layout
 
@@ -38,7 +38,7 @@ Wide Web의 오른쪽은 별도의 축약 panel이 아니라 기존 Post 상세�
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.
 - Web은 이전·다음 control과 `ArrowLeft`·`ArrowRight` keyboard 입력을 제공한다.
 - iOS·Android는 이전·다음 control과 수평 swipe를 제공한다. Gesture가 성립하지 않으면 현재 이미지에 머문다.
-- 현재 이미지가 바뀌어도 작성자·원문·Action Bar의 대상은 같은 Post다.
+- 현재 이미지가 바뀌어도 작성자·원문·Action Bar의 대상은 Viewer를 소유한 현재 Post다.
 - Viewer open과 Media 탐색은 route나 browser history를 변경하지 않는다.
 
 ## Post Action Bar
@@ -49,7 +49,7 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 
 - Sensitive Media가 가려진 동안에는 viewer 진입을 제공하지 않는다. Gallery에서 공개한 뒤에만 정상 tile이 viewer trigger가 된다.
 - Viewer는 원래 Post surface에서 Content Warning을 공개한 뒤에만 열 수 있다. 열린 Viewer의 현재 Post는 원문을 공개 상태로 유지하고 Content Warning 안내와 다시 가리기 control을 표시하지 않는다. 이 Viewer 전용 표현은 다른 Post surface의 reveal 저장 상태를 변경하지 않는다.
-- 열린 뒤 Media가 다시 가려지거나 현재 Post 접근 권한·revision이 유효하지 않게 되면 이미지를 계속 표시하지 않고 viewer를 닫는다.
+- Viewer가 열린 뒤 background Gallery의 Sensitive 표시 상태가 바뀌어도 Viewer session을 자동 종료하지 않는다. 현재 Relay fragment projection에서 선택 Media가 사라지거나 표시할 수 없게 되면 이전 이미지 byte·URL을 유지하지 않고 modal 안에 안전한 unavailable 상태를 표시한다.
 - 현재 이미지가 loading 또는 실패해도 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface는 유지한다.
 - 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
 - Wide Web의 reply query가 loading 또는 실패해도 왼쪽의 선택 이미지와 modal chrome을 제거하지 않는다. 오른쪽 thread surface에서 기존 loading·error·retry 표현을 사용한다.
@@ -63,7 +63,7 @@ Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Re
 
 ## 검증 경계
 
-- Component test는 선택 index, 동일 Post·revision 고정, selected action Profile·Relay actor/environment 변경 close, Sensitive 재가림·삭제·조회 무효화 close, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가, lifecycle close를 확인한다.
+- Component test는 선택 index와 origin focus만 가진 session, identity·actor·Profile·Content 변경 시 현재 fragment projection 반영, Media unavailable 상태에서 이전 URL 비보존과 modal chrome·close 유지, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 확인한다.
 - Storybook은 1장과 다중 이미지, 긴 원문, 첫·중간·마지막 위치, loading·error, compact Web·Native와 wide Web thread layout을 확인한다.
 - Web runtime은 backdrop·modal 내부 pointer 격리, keyboard arrow, Escape, 배경 surface 비활성화, focus trap·복귀, route·history 유지와 `<768px`·`>=768px` layout을 관찰한다. Compact에서는 짧은 원문의 content-height panel과 `clamp(192px, 32vh, 240px)` 최대 높이·낮은 viewport에서의 고정 chrome 보존·text-only scroll·Action Bar 인접 배치를, Wide에서는 `24px` inset·`clamp(320px, 25vw, 350px)` rail과 남은 image 폭, Action Bar의 가로 overflow 방지, 오른쪽 독립 scroll, Composer 작성, reply pagination, Action Bar·reply interaction과 child overlay layering을 함께 확인한다.
 - iOS runtime은 touch, swipe, close·back과 VoiceOver를, Android runtime은 touch, swipe, close·back과 TalkBack을 각각 확인한다.
