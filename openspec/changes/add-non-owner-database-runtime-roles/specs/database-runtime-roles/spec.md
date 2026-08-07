@@ -1,24 +1,25 @@
 ## ADDED Requirements
 
-### Requirement: API와 system runtime은 서로 분리된 비소유 database identity를 가진다
+### Requirement: API와 Fedify runtime은 서로 분리된 비소유 database identity를 가진다
 
-**Authority / Provenance:** Linear `PROD-369`. Production database는 API runtime에 `kosmo_api`, federation/system runtime에 `kosmo_system` LOGIN 역할과 credential을 선언적으로 provision해야 한다(MUST). 두 역할은 `kosmo` owner나 `kosmo_migration`, 서로의 역할 또는 다른 privilege escalation 역할의 member가 아니어야 하며(MUST NOT), SUPERUSER, CREATEDB, CREATEROLE, REPLICATION과 BYPASSRLS를 가져서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`. Production database는 API runtime에 `kosmo_api`, Fedify runtime에 `kosmo_fedify` LOGIN 역할과 credential을 선언적으로 provision해야 한다(MUST). `kosmo_api`는 `BYPASSRLS`가 비활성이고 `kosmo_fedify`는 `BYPASSRLS`가 활성이어야 한다(MUST). 두 역할은 `kosmo` owner나 `kosmo_migration`, 서로의 역할 또는 다른 privilege escalation 역할의 member가 아니어야 하며(MUST NOT), SUPERUSER, CREATEDB, CREATEROLE과 REPLICATION은 비활성이어야 한다(MUST NOT).
 
 #### Scenario: 역할과 credential을 새로 provision함
 
 - **WHEN** 기존 owner workload가 실행 중인 production release에 Expand manifest를 적용한다
-- **THEN** API와 system용 LOGIN 역할 및 서로 다른 credential Secret이 추가된다
+- **THEN** API와 Fedify용 LOGIN 역할 및 서로 다른 credential Secret이 추가된다
 - **AND** 기존 `kosmo`와 `kosmo_migration` 역할·credential은 변경되지 않는다
 
-#### Scenario: 역할 간 privilege escalation을 거부함
+#### Scenario: 역할별 RLS attribute와 privilege escalation 경계를 확인함
 
-- **WHEN** API 또는 system credential로 PostgreSQL role 속성과 membership을 확인한다
+- **WHEN** API 또는 Fedify credential로 PostgreSQL role 속성과 membership을 확인한다
 - **THEN** 해당 identity는 owner, migration 또는 상대 runtime 역할을 획득할 수 없다
-- **AND** SUPERUSER, CREATEDB, CREATEROLE, REPLICATION과 BYPASSRLS가 모두 비활성이다
+- **AND** API identity는 `BYPASSRLS=false`, Fedify identity는 `BYPASSRLS=true`이다
+- **AND** SUPERUSER, CREATEDB, CREATEROLE과 REPLICATION은 모두 비활성이다
 
 ### Requirement: runtime 역할은 객체 privilege를 선점하지 않는다
 
-**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-724`, `PROD-713`, `PROD-714`. 이 change는 `kosmo_api`, `kosmo_system`에 schema/table/sequence privilege, default privilege, ownership 또는 grant option을 부여해서는 안 되며(MUST NOT), 공통 객체 권한과 default privilege는 PROD-724가, Post/PostContent role별 grant와 RLS policy는 PROD-713/714가 소유해야 한다(MUST).
+**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-724`, `PROD-713`, `PROD-715`, `PROD-716`, `PROD-709`. 이 change는 `kosmo_api`, `kosmo_fedify`에 schema/table/sequence privilege, default privilege, ownership 또는 grant option을 부여해서는 안 되며(MUST NOT), 공통 객체 권한과 default privilege는 PROD-724가, API RLS policy는 PROD-713이, API/Fedify credential transition은 PROD-715/716이, workload credential selector는 PROD-709가 소유해야 한다(MUST).
 
 #### Scenario: role provisioning 직후 객체 권한을 확인함
 
@@ -33,7 +34,7 @@
 
 ### Requirement: Expand 배포는 기존 workload 선택과 RLS policy를 바꾸지 않는다
 
-**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-709`, `PROD-724`, `PROD-713`, `PROD-714`. 이 change는 새 역할과 credential만 추가해야 한다(MUST). API/Web/federation workload가 참조하는 database Secret, 기존 owner workload의 connection 설정, `kosmo` LOGIN 상태, `kosmo_migration`의 LOGIN→`SET ROLE kosmo` 계약, 객체 privilege와 모든 도메인 RLS policy는 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-709`, `PROD-724`, `PROD-713`, `PROD-715`, `PROD-716`. 이 change는 새 역할과 credential만 추가해야 한다(MUST). API/Web/Fedify workload가 참조하는 database Secret, 기존 owner workload의 connection 설정, `kosmo` LOGIN 상태, `kosmo_migration`의 LOGIN→`SET ROLE kosmo` 계약, 객체 privilege와 모든 도메인 RLS policy는 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: 구버전 workload와 병행 배포함
 
@@ -55,11 +56,11 @@
 #### Scenario: API credential 검증
 
 - **WHEN** provision된 API credential로 검증 세션을 연다
-- **THEN** `current_user`는 `kosmo_api`이고 owner/system 역할 획득과 BYPASSRLS가 불가능하다
+- **THEN** `current_user`는 `kosmo_api`이고 owner/Fedify 역할 획득과 `BYPASSRLS`가 불가능하다
 - **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
 
-#### Scenario: system credential 검증
+#### Scenario: Fedify credential 검증
 
-- **WHEN** provision된 system credential로 검증 세션을 연다
-- **THEN** `current_user`는 `kosmo_system`이고 owner/API 역할 획득과 BYPASSRLS가 불가능하다
+- **WHEN** provision된 Fedify credential로 검증 세션을 연다
+- **THEN** `current_user`는 `kosmo_fedify`이고 owner/API 역할 획득은 불가능하며 `BYPASSRLS`는 활성이다
 - **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
