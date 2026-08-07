@@ -267,6 +267,8 @@ describe('Post Media Viewer production surface wiring', () => {
     assertViewerPost(quote);
     assertViewerTarget('action-quote');
     assertViewerWideDetail('quote', 'quote-content');
+    await act(async () => currentViewer().props.onClose());
+    assert.equal(viewers().length, 0);
 
     const pureRepost = {
       ...storyPost('repost', 'reposter-profile', null),
@@ -278,6 +280,34 @@ describe('Post Media Viewer production surface wiring', () => {
     assertViewerTarget('action-source');
     assertViewerWideDetail('source', 'source-content');
     assert.equal(currentViewer().props.actionBar.props.reply.processing, 'disabled');
+  });
+
+  it('Quote Content가 unavailable이어도 Viewer를 유지하고 복구 projection을 이어서 반영한다', async () => {
+    const originControl = { current: { focus: () => undefined } };
+    const source = storyPost('source', 'source-profile', 'source-content');
+    const quote = {
+      ...storyPost('quote', 'quote-profile', 'quote-content'),
+      repostSource: source,
+    };
+
+    await render(createElement(PostListItem, { post: asListItemKey(quote) }));
+    const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
+    await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
+    assert.equal(viewers().length, 1);
+
+    const unavailableQuote = { ...quote, content: null };
+    await update(createElement(PostListItem, { post: asListItemKey(unavailableQuote) }));
+    assert.equal(viewers().length, 1);
+    assertViewerPost(unavailableQuote);
+    assert.equal(currentViewer().props.actionBar, null);
+    assert.equal(currentViewer().props.wideDetail, null);
+
+    await update(createElement(PostListItem, { post: asListItemKey(quote) }));
+    assert.equal(viewers().length, 1);
+    assertViewerPost(quote);
+
+    await act(async () => currentViewer().props.onClose());
+    assert.equal(viewers().length, 0);
   });
 });
 

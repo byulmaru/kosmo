@@ -207,6 +207,34 @@ export function PostListItem({
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.divider },
   ];
+  const quoteViewer = quoteViewerSession ? (
+    <PostMediaViewer
+      actionBar={
+        quoteContent && post.actionSurface ? (
+          <PostActionSurface
+            onDeleted={onDeleted}
+            reactionSummaryStyle={styles.viewerReactionSummary}
+            reply={quoteViewerReply}
+            socialActionTarget={post.actionSurface}
+          />
+        ) : null
+      }
+      fallbackFocus={quoteSurfaceRef}
+      onClose={closeQuoteViewer}
+      originControl={quoteViewerSession.originControl}
+      post={post}
+      selectedIndex={quoteViewerSession.selectedIndex}
+      wideDetail={
+        quoteContent ? (
+          <PostMediaViewerThread
+            contentId={quoteContent.id}
+            onPostDeleted={onDeleted}
+            postId={post.id}
+          />
+        ) : null
+      }
+    />
+  ) : null;
   const replyAttribution =
     showReplyAttribution && post.replyParent ? (
       <PostAttributionRow
@@ -233,21 +261,22 @@ export function PostListItem({
 
   if (!post.repostSource) {
     if (!post.content) {
-      return null;
+      return quoteViewer;
     }
     return (
       <>
-        <View role="article" style={cardStyle}>
+        <View ref={quoteSurfaceRef} role="article" style={cardStyle} tabIndex={-1}>
           {replyAttribution}
           <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
         </View>
+        {quoteViewer}
         {presentedReplySurface}
       </>
     );
   }
 
   if (!post.content && post.replyParent) {
-    return null;
+    return quoteViewer;
   }
 
   const source = post.repostSource;
@@ -255,7 +284,7 @@ export function PostListItem({
   if (!post.content) {
     return (
       <>
-        <View role="article" style={cardStyle}>
+        <View ref={quoteSurfaceRef} role="article" style={cardStyle} tabIndex={-1}>
           <PostAttributionRow
             icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
           >
@@ -276,6 +305,7 @@ export function PostListItem({
           </PostAttributionRow>
           <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
         </View>
+        {quoteViewer}
         {presentedReplySurface}
       </>
     );
@@ -362,34 +392,7 @@ export function PostListItem({
             />
           </View>
         </View>
-        {quoteViewerSession ? (
-          <PostMediaViewer
-            actionBar={
-              quoteContent && post.actionSurface ? (
-                <PostActionSurface
-                  onDeleted={onDeleted}
-                  reactionSummaryStyle={styles.viewerReactionSummary}
-                  reply={quoteViewerReply}
-                  socialActionTarget={post.actionSurface}
-                />
-              ) : null
-            }
-            fallbackFocus={quoteSurfaceRef}
-            onClose={closeQuoteViewer}
-            originControl={quoteViewerSession.originControl}
-            post={post}
-            selectedIndex={quoteViewerSession.selectedIndex}
-            wideDetail={
-              quoteContent ? (
-                <PostMediaViewerThread
-                  contentId={quoteContent.id}
-                  onPostDeleted={onDeleted}
-                  postId={post.id}
-                />
-              ) : null
-            }
-          />
-        ) : null}
+        {quoteViewer}
       </View>
       {presentedReplySurface}
     </>
