@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
+import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
-import { SettingsRootPage } from '@/components/settings/SettingsPage';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { profile } from './fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -18,7 +18,7 @@ const ownerData = {
 };
 
 const meta = {
-  component: SettingsRootPage,
+  component: SettingsRoute,
   decorators: [
     (Story) => (
       <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
@@ -32,7 +32,7 @@ const meta = {
     router: { pathname: '/settings' },
   },
   title: 'KOSMO/Settings/Page',
-} satisfies Meta<typeof SettingsRootPage>;
+} satisfies Meta<typeof SettingsRoute>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

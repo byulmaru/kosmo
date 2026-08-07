@@ -69,12 +69,14 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   exports: { useTheme: () => ({ border: '#333333', text: '#111111' }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let SettingsDefaultPostVisibilityPage: ComponentType;
-let SettingsRootPage: ComponentType;
+let SettingsDefaultPostVisibilityRoute: ComponentType;
+let SettingsRoute: ComponentType;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ SettingsDefaultPostVisibilityPage, SettingsRootPage } = await import('./SettingsPage'));
+  ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
+  ({ default: SettingsDefaultPostVisibilityRoute } =
+    await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
 });
 
 afterEach(async () => {
@@ -89,9 +91,9 @@ afterEach(async () => {
   }
 });
 
-describe('SettingsPage', () => {
+describe('Settings routes', () => {
   it('full Web root는 320px master와 flexible Profile detail을 함께 표시한다', async () => {
-    await render(SettingsRootPage);
+    await render(SettingsRoute);
 
     const workspace = byTestId('settings-workspace');
     assert.equal(workspace.props.style.flexDirection, 'row');
@@ -107,7 +109,7 @@ describe('SettingsPage', () => {
 
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
     width = 768;
-    await render(SettingsRootPage);
+    await render(SettingsRoute);
 
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
@@ -116,11 +118,11 @@ describe('SettingsPage', () => {
 
   it('mobile Web은 shell header를 중복하지 않고 root와 detail을 한 화면씩 표시한다', async () => {
     width = 390;
-    await render(SettingsRootPage);
+    await render(SettingsRoute);
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 1);
 
-    await rerender(SettingsDefaultPostVisibilityPage);
+    await rerender(SettingsDefaultPostVisibilityRoute);
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
@@ -130,7 +132,7 @@ describe('SettingsPage', () => {
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
     platform = 'android';
     width = 320;
-    await render(SettingsDefaultPostVisibilityPage);
+    await render(SettingsDefaultPostVisibilityRoute);
 
     const scrollView = rendered('ScrollView')[0];
     assert.ok(scrollView);
@@ -143,7 +145,7 @@ describe('SettingsPage', () => {
 
   it('compact Web detail은 unrelated history가 있어도 route-owned back header로 root를 연다', async () => {
     width = 768;
-    await render(SettingsDefaultPostVisibilityPage);
+    await render(SettingsDefaultPostVisibilityRoute);
 
     const header = rendered('PageHeader')[0];
     assert.equal(header.props.title, '게시물 기본 공개 범위');
@@ -157,7 +159,7 @@ describe('SettingsPage', () => {
   it('direct detail entry에 history가 없으면 Settings root로 대체한다', async () => {
     width = 768;
     canGoBack = false;
-    await render(SettingsDefaultPostVisibilityPage);
+    await render(SettingsDefaultPostVisibilityRoute);
 
     const back = rendered('PageHeader')[0].props.leading;
     await act(async () => back.props.onPress());
@@ -168,7 +170,7 @@ describe('SettingsPage', () => {
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
     platform = 'android';
-    await render(SettingsDefaultPostVisibilityPage);
+    await render(SettingsDefaultPostVisibilityRoute);
 
     const back = rendered('Pressable').find(
       (node) => node.props.accessibilityLabel === '설정으로 돌아가기',
@@ -189,7 +191,7 @@ describe('SettingsPage', () => {
   it('Native root는 route-owned 설정 heading을 표시한다', async () => {
     platform = 'ios';
     width = 1_024;
-    await render(SettingsRootPage);
+    await render(SettingsRoute);
 
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList').length, 1);
