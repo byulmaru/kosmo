@@ -16,6 +16,7 @@ import { radii, spacing } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { getSidebarNavigationItemHeight } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -36,20 +37,23 @@ const SidebarNavigationFragment = graphql`
   }
 `;
 
-type RouteNavigationItem = {
-  href: Href;
+type NavigationItemBase = {
   Icon: LucideIcon;
   label: string;
+};
+
+type RouteNavigationItem = NavigationItemBase & {
+  href: Href;
   profile?: false;
 };
 
-type ProfileNavigationItem = {
-  Icon: LucideIcon;
-  label: string;
+type ProfileNavigationItem = NavigationItemBase & {
   profile: true;
 };
 
 type NavigationItem = ProfileNavigationItem | RouteNavigationItem;
+
+const navigationItemHeight = getSidebarNavigationItemHeight(Platform.OS);
 
 const navigation: NavigationItem[] = [
   { href: '/home', Icon: House, label: '홈' },
@@ -311,8 +315,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     flexDirection: 'row',
     gap: spacing.md,
-    height: 45,
-    minHeight: 45,
+    height: navigationItemHeight,
+    minHeight: navigationItemHeight,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     width: '100%',

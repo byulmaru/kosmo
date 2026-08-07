@@ -52,6 +52,9 @@ Profile Tag editor를 한 번만 만들면 Profile 편집과 Tag 저장 change�
 - `PROD-527`은 Profile Tag editor를 재작성하지 않고 연결과 공개 표시를 소유한다.
 - `PROD-492`는 Settings 이전 전까지 Profile 편집 draft/save에서 Follow Approval Policy의 초기값 조회와
   enum 저장을 함께 소유하며, `PROD-531`은 Settings 진입점 제공 뒤 이 경계를 이전한다.
+- `PROD-492`의 production 진입점 책임은 공개 Profile의 Owner 전용 편집 button과 protected route 연결을
+  의미한다. route 준비 뒤 shared responsive navigation에 같은 server-authoritative eligibility를 재사용하는
+  진입점은 `PROD-660`이 별도 전달하며, client-side Owner 추측이나 새 권한 정책을 추가하지 않는다.
 - 향후 modal presentation이 필요하면 form을 재사용할 수 있지만 현재 승인 UX는 shell 안의 전용 route다.
 
 ## 근거
@@ -61,6 +64,7 @@ Profile Tag editor를 한 번만 만들면 Profile 편집과 Tag 저장 change�
 - [PROD-492](https://linear.app/byulmaru/issue/PROD-492/프로필-수정-페이지를-api와-media-관계에-연결한다)
 - [PROD-527](https://linear.app/byulmaru/issue/PROD-527/프로필-수정공개-화면에-프로필-태그를-연결한다)
 - [PROD-531](https://linear.app/byulmaru/issue/PROD-531/local-profile의-팔로우-승인-정책을-설정-화면에서-변경할-수-있게-한다)
+- [PROD-660](https://linear.app/byulmaru/issue/PROD-660/프로필-편집-진입점을-반응형-내비게이션에-복원한다)
 - [ADR 0019](./0019-selected-profile-authorization-boundary.md)
 
 ## 문서 반영

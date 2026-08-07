@@ -2,6 +2,32 @@ import { breakpoints } from '@/theme/tokens';
 
 export const webMobileShellHeaderHeight = 64;
 
+export function getSidebarNavigationItemHeight(platform: string) {
+  return platform === 'android' ? 48 : 45;
+}
+
+export function getProfileEditActionTargetMetrics(platform: string) {
+  if (platform === 'ios') {
+    return { height: 44, top: 152 } as const;
+  }
+  if (platform === 'android') {
+    return { height: 48, top: 150 } as const;
+  }
+
+  return { height: 32, top: 158 } as const;
+}
+
+export function getProfileEditActionCurrentState(pathname: string) {
+  const selected = pathname === '/profile-edit';
+
+  return {
+    accessibilityState: { selected },
+    ariaCurrent: selected ? ('page' as const) : undefined,
+  };
+}
+
+export const profileEditActionLabelColor = '#111111';
+
 export function getShellLayout(web: boolean, width: number) {
   if (!web || width < breakpoints.compact) {
     return 'mobile';

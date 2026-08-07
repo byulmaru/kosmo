@@ -82,6 +82,13 @@
 - 공개 Profile 화면은 nullable top-level `selectedProfileForEdit` 결과의 `id`가 현재 표시 중인 Profile `id`와
   정확히 같을 때만 편집 button을 렌더한다. guest, selected Profile이 없는 session과 편집 부적격 Account에는
   이 field가 GraphQL authorization error 없이 `null`을 반환하며 disabled placeholder를 표시하지 않는다.
+- sidebar ProfileSwitcher는 같은 nullable `selectedProfileForEdit` 결과가 있을 때만 selected Profile 요약의
+  작은 노란 `편집` action을 표시하고 canonical `/profile-edit` route를 연다. full Web sidebar와 mobile
+  drawer의 위치·geometry·current semantics·close 동작, compact icon rail과 bottom tab 제외는
+  [레이아웃 브레이크포인트](./breakpoints.md)가 소유한다. 공개 Profile의 기존 편집 button은 유지하며, shell은
+  별도의 client-side 권한 조건이나 fallback route를 만들지 않는다. Figma의 future multi-profile cluster는
+  위치 provenance일 뿐이며, 현재 production에 없는 thumbnail visual·data·전환 interaction은 이 진입점
+  복원 범위에서 추가하지 않는다.
 - 실제 `/profile-edit` protected route는 `selectedProfileForEdit`이 반환한 selected Active/Normal Local
   Profile과 Owner Membership을 server-authoritative하게 확인한 뒤에만 화면을 제공한다. 직접 URL이나 stale
   link로 진입했지만 편집할 수 없으면 form 대신 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을
@@ -210,7 +217,12 @@
 - `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 추가·제거 UI, 이미지 controlled
   state와 Storybook 상태 카탈로그.
 - `PROD-492`: `PROD-581` 위에서 Profile Media 관계, guest-safe selected Local Owner query, protected route와
-  entrypoint, 초기값, submit/Relay, Media picker·upload, 공개 ProfileHero 이미지와 성공 navigation을 연결한다.
+  공개 Profile의 initial entrypoint, 초기값, submit/Relay, Media picker·upload, 공개 ProfileHero 이미지와 성공
+  navigation을 연결한다.
+- `PROD-660`: 기존 selected Owner 권한과 `/profile-edit` route를 재사용해 full Web sidebar와 mobile drawer의
+  ProfileSwitcher 요약에 작은 노란 `편집` action을 연결한다. compact Web icon rail, mobile bottom tab과 주요
+  navigation row에는 추가하지 않는다. 자체 Shell Storybook·component·Web E2E 검증과 별도 OpenSpec 생명주기를
+  소유하며 `add-local-profile-edit`의 통합·archive 책임은 이전하지 않는다.
 - `PROD-527`: `PROD-491`의 Profile Tag editor를 재사용한 저장·서버 오류·Relay 연결과 공개 Profile 표시.
 - `PROD-531`: Settings 진입점이 제공된 뒤 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복
   저장 소유권을 제거한다.
