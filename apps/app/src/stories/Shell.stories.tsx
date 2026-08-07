@@ -4,6 +4,7 @@ import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import TabsLayout from '@/app/(tabs)/_layout';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -15,7 +16,6 @@ import {
 import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail, RightRailPrivacyLink } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
-import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
@@ -1250,7 +1250,7 @@ const universalParameters = {
 function UniversalShellStory() {
   return (
     <SessionProvider>
-      <UniversalShell />
+      <TabsLayout />
     </SessionProvider>
   );
 }
@@ -1827,11 +1827,12 @@ export const UnreadBadgeRestoresWarmCacheAfterShellRemount: Story = {
   render: () => <RemountableUniversalShellStory />,
 };
 
-export const UnreadBadgeClearsSameProfileCountAcrossActorReset: Story = {
+export const UnreadBadgePreservesSameProfileCountAfterActorResetFailure: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   parameters: {
     ...universalParameters,
     relay: {
+      actorBoundary: false,
       data: query,
       operationResponses: {
         UnreadNotificationBadgeControllerQuery: [
@@ -1849,8 +1850,9 @@ export const UnreadBadgeClearsSameProfileCountAcrossActorReset: Story = {
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
     ).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '현재 Profile actor 재설정' }));
-    await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
-    expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
+    await expect(
+      page.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
+    ).resolves.toBeVisible();
     expect(page.queryByRole('button', { name: /알림.*다시/ })).toBeNull();
     expect(page.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
     await userEvent.click(page.getByRole('button', { name: '현재 Profile actor 재설정' }));

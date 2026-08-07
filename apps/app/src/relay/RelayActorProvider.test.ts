@@ -3,6 +3,11 @@ import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, Environment, Network, RecordSource, Store } from 'relay-runtime';
+import {
+  ShellRefreshCoordinatorProvider,
+  useShellRefresh,
+  useShellRefreshListener,
+} from '../components/shell/ShellRefreshCoordinator';
 import type { ComponentType, PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 
@@ -12,15 +17,17 @@ type RelayActorSnapshot = {
   clearNativeSession: () => Promise<void>;
   environment: Environment;
   nativeToken: string | null;
+  refreshShell: () => void;
   resetActor: (profileId?: string | null) => void;
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'environment'>;
+type RelayActorSnapshotValue = Omit<RelayActorSnapshot, 'environment' | 'refreshShell'>;
 
 let deleteFailure = false;
 let deleteItemCallCount = 0;
 let actorSubtreeMountCount = 0;
+let shellRefreshCallCount = 0;
 let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
@@ -76,6 +83,7 @@ beforeEach(() => {
   deleteFailure = false;
   deleteItemCallCount = 0;
   actorSubtreeMountCount = 0;
+  shellRefreshCallCount = 0;
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
@@ -97,6 +105,10 @@ function createEnvironment(token: string | null): Environment {
 
 function Probe() {
   const actor = useRelayActor();
+  const refreshShell = useShellRefresh();
+  useShellRefreshListener(() => {
+    shellRefreshCallCount += 1;
+  });
   useEffect(() => {
     actorSubtreeMountCount += 1;
   }, []);
@@ -104,6 +116,7 @@ function Probe() {
     clearNativeSession: actor.clearNativeSession,
     environment: useRelayEnvironment(),
     nativeToken: actor.nativeToken,
+    refreshShell,
     resetActor: actor.resetActor,
     setNativeSession: actor.setNativeSession,
   };
@@ -121,13 +134,42 @@ function StableProbe() {
 async function renderProvider() {
   await act(async () => {
     renderer = create(
-      createElement(RelayActorProvider, { createEnvironment }, createElement(StableProbe)),
+      createElement(
+        RelayActorProvider,
+        { createEnvironment },
+        createElement(ShellRefreshCoordinatorProvider, null, createElement(StableProbe)),
+      ),
     );
   });
   assert.ok(snapshot);
 }
 
 describe('RelayActorProvider session cleanup', () => {
+  it('same-actor Shell refresh는 Environment와 Store 및 actor subtree를 유지한다', async () => {
+    await renderProvider();
+
+    assert.ok(snapshot);
+    const previousEnvironment = snapshot.environment;
+    const previousStore = previousEnvironment.getStore();
+    const previousActorMountCount = actorSubtreeMountCount;
+    commitLocalUpdate(previousEnvironment, (store) => {
+      store.create('warm-viewer', 'Profile').setValue('warm cache', 'displayName');
+    });
+
+    await act(async () => snapshot?.refreshShell());
+
+    assert.ok(snapshot);
+    assert.equal(shellRefreshCallCount, 1);
+    assert.equal(snapshot.environment, previousEnvironment);
+    assert.equal(snapshot.environment.getStore(), previousStore);
+    assert.equal(
+      snapshot.environment.getStore().getSource().get('warm-viewer')?.displayName,
+      'warm cache',
+    );
+    assert.equal(actorSubtreeMountCount, previousActorMountCount);
+    assert.equal(stableSubtreeMountCount, 1);
+  });
+
   it('actor reset은 같은 app lifecycle에서 이전 Store를 새 Store로 교체한다', async () => {
     await renderProvider();
 
