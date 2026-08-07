@@ -2,7 +2,12 @@ import { createContext, Suspense, useCallback, useContext, useState } from 'reac
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
+import { useRelayActorLifecycleKey } from '@/relay/RelayActorProvider';
 import type { ReactNode } from 'react';
+
+type RouteBoundaryResetDetails =
+  | { reason: 'imperative-api'; args: unknown[] }
+  | { reason: 'keys'; prev: unknown[] | undefined; next: unknown[] | undefined };
 
 type RouteBoundaryProps = {
   children: ReactNode;
@@ -10,6 +15,7 @@ type RouteBoundaryProps = {
   error?: (retry: () => void) => ReactNode;
   loading: ReactNode;
   onRetry?: () => void;
+  remountOnActorChange?: boolean;
   title: string;
 };
 
@@ -25,8 +31,8 @@ const RouteBoundaryContext = createContext<RouteBoundaryContextValue | null>(nul
  * Returns the opaque query lifecycle owned by the nearest RouteBoundary.
  *
  * Route components should not maintain their own retry counters or compose actor and retry
- * lifecycle state. The boundary remounts the query subtree and changes this key when retry is
- * invoked.
+ * lifecycle state. The boundary remounts the query subtree when retry is invoked or its actor
+ * lifecycle changes.
  */
 export function useRouteBoundary(): RouteBoundaryContextValue {
   const value = useContext(RouteBoundaryContext);
@@ -42,9 +48,11 @@ export function RouteBoundary({
   error: renderError,
   loading,
   onRetry,
+  remountOnActorChange = true,
   title,
 }: RouteBoundaryProps) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
+  const actorLifecycleKey = useRelayActorLifecycleKey();
   const [fetchKey, setFetchKey] = useState(0);
   const [subtreeKey, setSubtreeKey] = useState(0);
   const refetch = useCallback(() => setFetchKey((key) => key + 1), []);
@@ -52,10 +60,20 @@ export function RouteBoundary({
     refetch();
     setSubtreeKey((key) => key + 1);
   }, [refetch]);
-  const reset = useCallback(() => {
-    retry();
-    onRetry?.();
-  }, [onRetry, retry]);
+  const reset = useCallback(
+    (details: RouteBoundaryResetDetails) => {
+      if (details.reason === 'keys') {
+        return;
+      }
+
+      retry();
+      onRetry?.();
+    },
+    [onRetry, retry],
+  );
+  const querySubtreeKey = remountOnActorChange
+    ? `${actorLifecycleKey}:${subtreeKey}`
+    : String(subtreeKey);
 
   return (
     <RouteBoundaryContext.Provider value={{ fetchKey, refetch, retry }}>
@@ -78,9 +96,10 @@ export function RouteBoundary({
           console.error('Route error', error, info.componentStack);
         }}
         onReset={reset}
+        resetKeys={[actorLifecycleKey]}
       >
         <Suspense fallback={loading}>
-          <RouteBoundaryQuerySubtree key={subtreeKey}>{children}</RouteBoundaryQuerySubtree>
+          <RouteBoundaryQuerySubtree key={querySubtreeKey}>{children}</RouteBoundaryQuerySubtree>
         </Suspense>
       </ErrorBoundary>
     </RouteBoundaryContext.Provider>

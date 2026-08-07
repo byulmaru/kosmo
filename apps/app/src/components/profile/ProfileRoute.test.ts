@@ -139,6 +139,7 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
+  useRelayActorLifecycleKey: () => 'actor-a',
   useRelayActor: () => ({ resetActor: () => undefined }),
 });
 

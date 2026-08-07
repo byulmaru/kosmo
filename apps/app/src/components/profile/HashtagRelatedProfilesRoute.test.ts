@@ -69,6 +69,9 @@ mockModule(new URL('./HashtagRelatedProfileList.tsx', import.meta.url), {
 mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
   useUnexpectedErrorReporter: () => undefined,
 });
+mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
+  useRelayActorLifecycleKey: () => 'actor-a',
+});
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
