@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { expect, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
+import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
 import { profile } from './fixtures';
@@ -18,7 +19,7 @@ const ownerData = {
 };
 
 const meta = {
-  component: SettingsRoute,
+  component: SettingsRouteLayout,
   decorators: [
     (Story) => (
       <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
@@ -31,8 +32,13 @@ const meta = {
     relay: { data: ownerData },
     router: { pathname: '/settings' },
   },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsRoute />
+    </SettingsRouteLayout>
+  ),
   title: 'KOSMO/Settings/Page',
-} satisfies Meta<typeof SettingsRoute>;
+} satisfies Meta<typeof SettingsRouteLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;

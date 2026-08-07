@@ -15,9 +15,13 @@ let width = 1_280;
 let backCalls = 0;
 let canGoBack = true;
 let replacedPaths: string[] = [];
+let pathname = '/settings';
+let SlotRoute: ComponentType = () => null;
 
 mock.module('expo-router', {
   exports: {
+    Slot: () => createElement(SlotRoute),
+    usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
       canGoBack: () => canGoBack,
@@ -70,10 +74,12 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsDefaultPostVisibilityRoute: ComponentType;
+let SettingsLayout: ComponentType;
 let SettingsRoute: ComponentType;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
+  ({ default: SettingsLayout } = await import('../../app/(tabs)/(protected)/settings/_layout'));
   ({ default: SettingsRoute } = await import('../../app/(tabs)/(protected)/settings/index'));
   ({ default: SettingsDefaultPostVisibilityRoute } =
     await import('../../app/(tabs)/(protected)/settings/default-post-visibility'));
@@ -85,6 +91,8 @@ afterEach(async () => {
   backCalls = 0;
   canGoBack = true;
   replacedPaths = [];
+  pathname = '/settings';
+  SlotRoute = () => null;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -93,7 +101,7 @@ afterEach(async () => {
 
 describe('Settings routes', () => {
   it('full Web root는 320px master와 flexible Profile detail을 함께 표시한다', async () => {
-    await render(SettingsRoute);
+    await renderRoute('/settings', SettingsRoute);
 
     const workspace = byTestId('settings-workspace');
     assert.equal(workspace.props.style.flexDirection, 'row');
@@ -107,9 +115,22 @@ describe('Settings routes', () => {
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
+  it('full Web detail은 공통 master와 back action 없는 detail heading을 표시한다', async () => {
+    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
+
+    assert.ok(byTestId('settings-workspace'));
+    assert.deepEqual(
+      rendered('PageHeader').map((node) => node.props.title),
+      ['설정', '게시물 기본 공개 범위'],
+    );
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'default-post-visibility');
+    assert.equal(rendered('Pressable').length, 0);
+    assert.equal(rendered('SettingsProfileDetail').length, 1);
+  });
+
   it('compact Web root는 선택 없는 root 목록부터 표시한다', async () => {
     width = 768;
-    await render(SettingsRoute);
+    await renderRoute('/settings', SettingsRoute);
 
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
@@ -118,11 +139,11 @@ describe('Settings routes', () => {
 
   it('mobile Web은 shell header를 중복하지 않고 root와 detail을 한 화면씩 표시한다', async () => {
     width = 390;
-    await render(SettingsRoute);
+    await renderRoute('/settings', SettingsRoute);
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 1);
 
-    await rerender(SettingsDefaultPostVisibilityRoute);
+    await rerenderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
     assert.equal(rendered('PageHeader').length, 0);
     assert.equal(rendered('SettingsNavigationList').length, 0);
     assert.equal(rendered('SettingsProfileDetail').length, 1);
@@ -132,7 +153,7 @@ describe('Settings routes', () => {
   it('Native detail은 header부터 content까지 하나의 vertical ScrollView가 소유한다', async () => {
     platform = 'android';
     width = 320;
-    await render(SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const scrollView = rendered('ScrollView')[0];
     assert.ok(scrollView);
@@ -145,7 +166,7 @@ describe('Settings routes', () => {
 
   it('compact Web detail은 unrelated history가 있어도 route-owned back header로 root를 연다', async () => {
     width = 768;
-    await render(SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const header = rendered('PageHeader')[0];
     assert.equal(header.props.title, '게시물 기본 공개 범위');
@@ -159,7 +180,7 @@ describe('Settings routes', () => {
   it('direct detail entry에 history가 없으면 Settings root로 대체한다', async () => {
     width = 768;
     canGoBack = false;
-    await render(SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const back = rendered('PageHeader')[0].props.leading;
     await act(async () => back.props.onPress());
@@ -170,7 +191,7 @@ describe('Settings routes', () => {
 
   it('Android detail back action은 44dp layout과 hit slop으로 48dp target을 제공한다', async () => {
     platform = 'android';
-    await render(SettingsDefaultPostVisibilityRoute);
+    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
     const back = rendered('Pressable').find(
       (node) => node.props.accessibilityLabel === '설정으로 돌아가기',
@@ -191,23 +212,27 @@ describe('Settings routes', () => {
   it('Native root는 route-owned 설정 heading을 표시한다', async () => {
     platform = 'ios';
     width = 1_024;
-    await render(SettingsRoute);
+    await renderRoute('/settings', SettingsRoute);
 
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList').length, 1);
   });
 });
 
-async function render(Component: ComponentType) {
+async function renderRoute(nextPathname: string, Route: ComponentType) {
+  pathname = nextPathname;
+  SlotRoute = Route;
   await act(async () => {
-    renderer = create(createElement(Component));
+    renderer = create(createElement(SettingsLayout));
   });
   assert.ok(renderer);
 }
 
-async function rerender(Component: ComponentType) {
+async function rerenderRoute(nextPathname: string, Route: ComponentType) {
   assert.ok(renderer);
-  await act(async () => renderer?.update(createElement(Component)));
+  pathname = nextPathname;
+  SlotRoute = Route;
+  await act(async () => renderer?.update(createElement(SettingsLayout)));
 }
 
 function rendered(type: string): ReactTestInstance[] {
