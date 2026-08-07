@@ -21,7 +21,7 @@
 
 - [x] 1.1 database와 transaction을 포괄하는 additive handle 및 선택 계약을 구현한다.
 - [x] 1.2 `getDatabaseConnection`을 사용하는 기존 optional transaction core service의 compatibility seam만 명시적 database handle로 넓히고 production SQL callsite는 이전하지 않는다.
-- [ ] 1.3 전달 handle, fallback과 transaction 합성 회귀 테스트를 통과시킨다.
+- [x] 1.3 전달 handle, fallback과 transaction 합성 회귀 테스트를 통과시킨다.
 
 ## 2. PROD-706 System execution context와 lifecycle
 
@@ -47,7 +47,7 @@ system 작업이 요청·작업별 DB handle context를 받고 action 단위 tra
 
 - [x] 2.1 system execution context 생성과 action-owned transaction lifecycle을 구현한다.
 - [x] 2.2 trusted federation runtime adapter가 매 invocation 명시적 system context를 전달하고 web은 factory 없이 adapter를 사용하게 한다.
-- [ ] 2.3 context 격리, commit·rollback, nested transaction과 pool cleanup 회귀 테스트를 통과시킨다.
+- [x] 2.3 context 격리, commit·rollback, nested transaction과 pool cleanup 회귀 테스트를 통과시킨다.
 
 ## 3. PROD-706 독립 배포 경계와 검증
 
@@ -72,5 +72,5 @@ system 작업이 요청·작업별 DB handle context를 받고 action 단위 tra
 - diff에서 schema·credential·RLS·Post SQL 이전이 없고 API import surface에 system factory가 없는지 self-review한다.
 
 - [x] 3.1 core service와 system execution 책임을 architecture 문서에 좁게 동기화한다.
-- [ ] 3.2 관련 unit·DB-backed·web 회귀 테스트와 정적 검증을 통과시킨다.
-- [ ] 3.3 strict OpenSpec validation과 범위 self-review를 완료한다.
+- [x] 3.2 관련 unit·DB-backed·web 회귀 테스트와 정적 검증을 통과시킨다.
+- [x] 3.3 strict OpenSpec validation과 범위 self-review를 완료한다.
