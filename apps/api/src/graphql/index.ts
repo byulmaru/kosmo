@@ -3,7 +3,6 @@ import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
 import { createOperationContext } from '../context';
 import { useError } from './plugins/error';
-import { useOperationContext } from './plugins/operation-context';
 import { schema } from './schema';
 import type { Env, ServerContext, UserContext } from '../context';
 
@@ -24,7 +23,8 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   },
   maskedErrors: false,
   landingPage: false,
-  plugins: [useExecutionCancellation(), useOperationContext(), useError()],
+  // PROD-726 owns enabling the operation transaction plugin after every DB consumer uses ctx.db.
+  plugins: [useExecutionCancellation(), useError()],
 });
 
 yoga.on(['GET', 'POST', 'OPTIONS'], '/', async (c) => {

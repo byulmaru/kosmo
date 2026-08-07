@@ -21,12 +21,24 @@
 - Decision Date: 2026-08-07
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/architecture/core-services.md`, PROD-708
-- Status: Active
+- Status: Superseded
 - Context / Problem: RLS actor setting은 실제 SQL과 같은 transaction에 있어야 하지만 subscription stream 전체에 connection을 고정할 수 없다.
 - Decision Outcome: validation 이후 Query는 read-only, Mutation은 read-write primary transaction으로 감싸고 `ctx.db`에 같은 handle을 둔다. Subscription은 독립 context를 사용하되 primary transaction을 열지 않는다.
 - Alternatives Considered: 모든 operation을 read-write로 열면 Query 의도를 DB에 강제하지 못하고, subscription을 감싸면 장기 connection 점유가 발생한다.
 - Consequences: 모든 Query/Mutation에 transaction 비용이 추가되지만 schema/credential/기존 resolver SQL은 변하지 않는다.
-- Confirmation / Follow-up: transaction access mode, parse/validation no-transaction과 subscription no-transaction을 검증한다.
+- Confirmation / Follow-up: transaction access mode, parse/validation no-transaction과 subscription no-transaction을 seam 테스트로 검증했다. Production 활성화 시점은 아래 결정과 PROD-726으로 대체한다.
+
+### 전역 DB consumer가 남은 동안 production transaction wrapper를 활성화하지 않는다
+
+- Decision Date: 2026-08-07
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-708, PROD-726
+- Status: Active
+- Context / Problem: pool 최대 20개 connection을 operation transaction이 먼저 점유한 뒤 resolver가 같은 pool의 전역 `db`에서 추가 connection을 기다리면, 동시 20 operation이 서로 callback 완료와 connection 반환을 기다리는 교착이 발생한다.
+- Decision Outcome: PROD-708은 operation context와 transaction/actor/lifecycle seam을 제공하지만 production Yoga에는 wrapper를 등록하지 않는다. PROD-726이 모든 GraphQL root, field, loader와 core service DB consumer를 정렬하고 pool 크기 이상의 동시성 검증을 통과한 뒤 wrapper를 활성화한다.
+- Alternatives Considered: 별도 dedicated pool은 actor setting과 resolver SQL을 같은 transaction에 묶지 못하고 connection 예산을 늘린다. lazy/selective 활성화는 전역 import를 런타임에 안전하게 판별하거나 차단할 metadata가 없다. PROD-708에서 전체 SQL을 이전하면 downstream 이슈를 흡수해 독립 배포 경계를 깨뜨린다.
+- Consequences: production은 추가 connection을 선점하지 않으며 기존 resolver 동작을 보존한다. `ctx.db`와 lifecycle helper는 후속 이전과 활성화에서 재사용한다.
+- Confirmation / Follow-up: production plugin 구성이 wrapper를 제외함을 확인하고, PROD-726이 전체 consumer 인벤토리와 실제 PostgreSQL pool stress를 소유한다.
 
 ### actor setting 이름과 operation-start snapshot을 고정한다
 
@@ -38,7 +50,7 @@
 - Decision Outcome: transaction 시작 시 검증된 초기 identity를 `kosmo.account_id`, `kosmo.profile_id` transaction-local setting에 각각 설정한다. 값이 없으면 빈 문자열을 설정하며 operation 중 context 변경으로 다시 설정하지 않는다.
 - Alternatives Considered: setting 자체를 후속 policy 이슈까지 미루면 PROD-708의 actor context 완료 기준을 충족하지 못한다. nullable/missing setting을 섞으면 pooled connection 누출과 익명 상태를 구분하기 어렵다.
 - Consequences: 후속 RLS helper는 이 이름과 빈 값의 fail-closed 해석을 사용해야 한다. `selectProfile` 같은 mutation의 새 선택값은 다음 operation부터 actor snapshot에 반영된다.
-- Confirmation / Follow-up: actor별 순차 operation과 transaction 밖 `current_setting(..., true)` 검증으로 누출이 없음을 확인한다.
+- Confirmation / Follow-up: dormant seam을 직접 호출하는 actor별 순차 operation과 transaction 밖 `current_setting(..., true)` 검증으로 누출이 없음을 확인한다. Production 활성화는 PROD-726이 소유한다.
 
 ### AsyncIterable은 deferred transaction bridge로 소비 수명까지 유지한다
 
@@ -50,7 +62,7 @@
 - Decision Outcome: execute 결과 종류를 먼저 전달하는 deferred signal과 source iterator proxy를 사용한다. 일반 결과는 transaction 완료 뒤 반환하고, AsyncIterable callback은 proxy의 정상 종료까지 대기해 commit하며 오류·취소·abort에서는 reject해 rollback한다.
 - Alternatives Considered: 전체 buffering은 incremental 수명과 backpressure를 깨뜨리고, iterator 즉시 반환은 transaction-local actor context를 보장하지 못한다.
 - Consequences: iterator protocol의 `next`, `return`, `throw`와 abort cleanup을 모두 구현하고 독립 검증해야 한다.
-- Confirmation / Follow-up: 정상 완료, source throw, consumer return/throw와 abort 각각에서 commit/rollback 및 connection 반환을 검증한다.
+- Confirmation / Follow-up: dormant seam의 정상 완료, source throw, consumer return/throw와 abort 각각에서 commit/rollback 및 connection 반환을 검증한다.
 
 ### GraphQL field error는 새 operation atomicity 신호로 해석하지 않는다
 
@@ -70,4 +82,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `Query와 Mutation만 primary transaction으로 감싼다`: 모든 resolver가 전역 DB를 계속 쓰는 additive 배포에서도 production wrapper를 즉시 등록할 수 있다는 전제가 pool 교착 근거로 폐기되었다. Transaction 형태와 lifecycle seam은 유지하며 활성화는 PROD-726으로 이전한다.
