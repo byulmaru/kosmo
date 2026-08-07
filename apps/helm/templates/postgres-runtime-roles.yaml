@@ -1,0 +1,32 @@
+{{- if eq .Values.env "prod" }}
+{{- range $runtime := list "api" "system" }}
+{{- $resourceName := printf "%s-postgres-%s" $.Release.Name $runtime | trunc 63 | trimSuffix "-" }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ $resourceName }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" $ }}
+    app.kubernetes.io/name: {{ printf "postgres-%s" $runtime }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  cluster:
+    name: {{ include "kosmo.postgresName" $ }}
+  name: {{ printf "kosmo_%s" $runtime }}
+  login: true
+  inherit: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: false
+  inRoles: []
+  passwordSecret:
+    name: {{ $resourceName }}
+  databaseRoleReclaimPolicy: retain
+{{- end }}
+{{- end }}
