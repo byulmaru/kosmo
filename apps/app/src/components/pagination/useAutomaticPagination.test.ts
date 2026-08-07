@@ -200,6 +200,37 @@ describe('useAutomaticPagination', () => {
     assert.equal(loadRequests.length, 3, '마지막 page에서는 추가 요청하지 않는다');
   });
 
+  it('Web itemCount RAF가 먼저 실행돼도 성공 page 뒤 다시 측정한다', async () => {
+    await renderHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+
+    await updateHook(options({ isLoadingNext: true, itemCount: 20 }));
+    const request = loadRequests[0];
+    assert.ok(request);
+    const scheduledTimers: Array<() => void> = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((callback: () => void) => {
+      scheduledTimers.push(callback);
+      return 1;
+    }) as typeof setTimeout;
+
+    try {
+      await act(async () => request.onComplete(null));
+      await updateHook(options({ isLoadingNext: false, itemCount: 40 }));
+      await runAnimationFrame();
+      assert.equal(loadRequests.length, 1, 'guard 해제 전 itemCount RAF는 요청하지 않는다');
+
+      const completeSuccess = scheduledTimers.shift();
+      assert.ok(completeSuccess);
+      await act(async () => completeSuccess());
+      await runAnimationFrame();
+      assert.equal(loadRequests.length, 2, 'guard 해제 뒤 성공 lifecycle이 다시 측정한다');
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   it('Web page 실패는 자동 재시도를 막고 수동 재시도만 허용한다', async () => {
     await renderHook(options());
     await runAnimationFrame();

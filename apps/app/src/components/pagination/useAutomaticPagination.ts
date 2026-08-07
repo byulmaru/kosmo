@@ -38,6 +38,7 @@ export function useAutomaticPagination({
   const handledNativePageRevisionRef = useRef(0);
   const requestInFlightRef = useRef(false);
   const pageErrorRef = useRef(false);
+  const webNearEndCheckRef = useRef<(() => void) | null>(null);
   const nativeMetricsRef = useRef<ScrollMetrics>({
     contentLength: 0,
     offset: 0,
@@ -62,7 +63,10 @@ export function useAutomaticPagination({
         }
         setTimeout(() => {
           if (Platform.OS === 'web') {
-            requestInFlightRef.current = false;
+            window.requestAnimationFrame(() => {
+              requestInFlightRef.current = false;
+              webNearEndCheckRef.current?.();
+            });
           } else {
             setNativePageRevision((revision) => revision + 1);
           }
@@ -108,10 +112,14 @@ export function useAutomaticPagination({
         offset: window.scrollY,
         viewportLength: window.innerHeight,
       });
+    webNearEndCheckRef.current = check;
     const frame = window.requestAnimationFrame(check);
     window.addEventListener('scroll', check, { passive: true });
     window.addEventListener('resize', check);
     return () => {
+      if (webNearEndCheckRef.current === check) {
+        webNearEndCheckRef.current = null;
+      }
       window.cancelAnimationFrame(frame);
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
