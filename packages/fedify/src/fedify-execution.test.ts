@@ -3,16 +3,16 @@ import { after, test } from 'node:test';
 import { db, firstOrThrow, Instances, pg } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
-import { createSystemExecutionContext, withSystemAction } from './system-execution';
+import { createFedifyExecutionContext, withFedifyAction } from './fedify-execution';
 
 after(async () => {
   await pg.end();
 });
 
-test('system actions commit and rollback on their own transaction boundary', async () => {
-  const context = createSystemExecutionContext();
+test('Fedify actions commit and rollback on their own transaction boundary', async () => {
+  const context = createFedifyExecutionContext();
   const domain = `${crypto.randomUUID()}.example`;
-  const inserted = await withSystemAction(context, ({ db: transaction }) =>
+  const inserted = await withFedifyAction(context, ({ db: transaction }) =>
     transaction
       .insert(Instances)
       .values({ domain, kind: InstanceKind.LOCAL })
@@ -25,14 +25,14 @@ test('system actions commit and rollback on their own transaction boundary', asy
 
   const rollbackDomain = `${crypto.randomUUID()}.example`;
   await assert.rejects(
-    withSystemAction(context, async ({ db: transaction }) => {
+    withFedifyAction(context, async ({ db: transaction }) => {
       await transaction.insert(Instances).values({
         domain: rollbackDomain,
         kind: InstanceKind.LOCAL,
       });
-      throw new Error('system action rollback');
+      throw new Error('Fedify action rollback');
     }),
-    /system action rollback/,
+    /Fedify action rollback/,
   );
   assert.equal(
     (await db.select().from(Instances).where(eq(Instances.domain, rollbackDomain))).length,
@@ -40,14 +40,14 @@ test('system actions commit and rollback on their own transaction boundary', asy
   );
 });
 
-test('system action joins a caller transaction through a savepoint', async () => {
-  const contextIdentity = createSystemExecutionContext();
+test('Fedify action joins a caller transaction through a savepoint', async () => {
+  const contextIdentity = createFedifyExecutionContext();
   const domain = `${crypto.randomUUID()}.example`;
 
   await assert.rejects(
     db.transaction(async (outerTransaction) => {
-      await withSystemAction(
-        createSystemExecutionContext(outerTransaction),
+      await withFedifyAction(
+        createFedifyExecutionContext(outerTransaction),
         ({ db: transaction }) =>
           transaction.insert(Instances).values({ domain, kind: InstanceKind.LOCAL }),
       );
@@ -60,23 +60,23 @@ test('system action joins a caller transaction through a savepoint', async () =>
 
   // Exceed the configured pool size so leaked action transactions would exhaust it.
   for (let index = 0; index < 25; index += 1) {
-    const actionContext = createSystemExecutionContext();
+    const actionContext = createFedifyExecutionContext();
     assert.notEqual(actionContext, contextIdentity);
     if (index % 2 === 0) {
-      await withSystemAction(actionContext, ({ db: transaction }) =>
+      await withFedifyAction(actionContext, ({ db: transaction }) =>
         transaction
           .insert(Instances)
           .values({ domain: `${crypto.randomUUID()}.example`, kind: InstanceKind.LOCAL }),
       );
     } else {
       await assert.rejects(
-        withSystemAction(actionContext, () => Promise.reject(new Error('repeated rollback'))),
+        withFedifyAction(actionContext, () => Promise.reject(new Error('repeated rollback'))),
         /repeated rollback/,
       );
     }
   }
 
-  await withSystemAction(createSystemExecutionContext(), ({ db: transaction }) =>
+  await withFedifyAction(createFedifyExecutionContext(), ({ db: transaction }) =>
     transaction.select({ id: Instances.id }).from(Instances).limit(1),
   );
 });

@@ -7,7 +7,7 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import type { DatabaseHandle } from '../db';
+import type { Transaction } from '../db';
 
 type ProfileFollowPair = {
   readonly followeeProfileId: string;
@@ -23,8 +23,8 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-export const ensureProfileFollow = async (pair: ProfileFollowPair, handle?: DatabaseHandle) =>
-  getDatabaseConnection(handle).transaction(async (tx) => {
+export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
     const existing = await tx
       .select()
       .from(ProfileFollows)

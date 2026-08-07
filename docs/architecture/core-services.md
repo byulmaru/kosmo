@@ -74,10 +74,12 @@ Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 
   `Transaction`)을 선택적으로 받아 `getDatabaseConnection(handle)`로 connection을 정한다. handle이
   없으면 기존 owner DB fallback을 유지하고, caller transaction이 있으면 기존 savepoint 합성 동작을
   유지한다. 이 seam은 credential, role 또는 RLS policy를 선택하는 API가 아니다.
-- federation과 background 같은 system 진입점은 API viewer context와 분리된 system execution context를
-  작업마다 생성한다. context는 DB handle만 보유하며, 원자적 system action이 그 handle에서 transaction을
-  열고 성공 commit·오류 rollback·connection 반환까지 소유한다. federation 전체 fetch를 transaction으로
-  감싸지 않으며, transaction commit 뒤 기존 post-commit effect를 실행한다.
+- Web inbound와 후속 Temporal Worker Activity의 Fedify 진입점은 API viewer context와 분리된
+  package-internal Fedify execution context를 작업마다 생성한다. context는 DB handle만 보유하며, 원자적
+  Fedify action이 그 handle에서 transaction을 열고 성공 commit·오류 rollback·connection 반환까지 소유한다.
+  federation 전체 fetch를 transaction으로 감싸지 않으며, transaction commit 뒤 기존 post-commit effect를
+  실행한다. 이 경계를 notification/background를 포함하는 범용 system abstraction이나 API가 outbound
+  Fedify를 직접 실행하는 공개 seam으로 확장하지 않는다.
 - 새로운 Post origin이나 lifecycle 계약을 transaction 인자의 존재 여부에서 추론하지 않는다.
   `createPost`처럼 origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side
   effect까지 보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제
