@@ -87,7 +87,7 @@ delta와 구현 handoff로 옮긴다. 기존 ADR 0021의 selected Owner 경계�
 - Confirmation / Follow-up: 기존 성공·non-Owner·상태 부적격과 eligibility 변경 후 후속 요청 거부 회귀 test를
   유지한다.
 
-### consumer 전환과 호환성 확인 뒤 selectedProfileForEdit를 제거한다
+### consumer 전환 뒤 selectedProfileForEdit을 deprecated transition으로 유지한다
 
 - Decision Date: 2026-08-07
 - Decision Class: Derived Contract
@@ -96,17 +96,19 @@ delta와 구현 handoff로 옮긴다. 기존 ADR 0021의 selected Owner 경계�
 - Status: Active
 - Context / Problem: public GraphQL field를 consumer보다 먼저 제거하면 main app과 알려지지 않은 operation이
   실패하고, 반대로 field를 계속 확장하면 route 전용 capability가 새 production 계약으로 굳어진다.
-- Decision Outcome: Membership field를 additive하게 제공하고 main의 공개 Profile route와 `ProfileEditRoute`를
-  먼저 전환한다. repository 및 외부 호환성 확인 뒤 같은 선행 migration에서 `Query.selectedProfileForEdit`
-  schema/resolver, Relay operation과 generated artifact를 제거한다. public/runtime schema를 함께 동기화한다.
-- Alternatives Considered: query를 영구 alias로 유지하는 방식은 제거 결정을 지연해 제외한다. consumer 전환 전
-  즉시 제거는 deploy/compile 호환성을 깨뜨려 제외한다.
-- Consequences: schema removal은 breaking change로 명시하고, rollback 시 schema/resolver와 consumer operation을
-  한 계약 단위로 복원한다. archived `add-local-profile-edit`은 수정하지 않는다.
+- Decision Outcome: Membership field를 additive하게 제공하고 main의 first-party consumer를 먼저 전환한다.
+  `Query.selectedProfileForEdit`은 배포 consumer retirement 증거가 생길 때까지 deprecated compatibility alias로
+  유지하고 새 first-party consumer 사용을 금지한다. 증거 확인 뒤 schema/resolver와 관련 artifact를 제거하며
+  public/runtime schema를 함께 동기화한다.
+- Alternatives Considered: query를 영구 alias로 유지하는 방식은 관계 중심 계약 전환을 끝내지 못해 제외한다.
+  배포 consumer 확인 전 즉시 제거는 deploy/compile 호환성을 깨뜨려 제외한다.
+- Consequences: alias 제거 전 additive migration PR을 Ready로 전환할 수 있지만 OpenSpec은 active로 유지한다.
+  후속 schema removal은 breaking change로 명시하고 rollback 시 schema/resolver와 필요한 consumer operation을 한
+  계약 단위로 복원한다. archived `add-local-profile-edit`은 수정하지 않는다.
 - Confirmation / Follow-up: repository 전체 consumer/generated artifact 검색, schema diff와 Relay compile을
   확인한다.
 
-### PROD-705가 선행 migration과 archive를 소유하고 ProfileSwitcher는 PROD-660에 남긴다
+### PROD-705가 migration lifecycle과 archive를 소유하고 ProfileSwitcher는 PROD-660에 남긴다
 
 - Decision Date: 2026-08-07
 - Decision Class: Derived Contract
@@ -115,15 +117,15 @@ delta와 구현 handoff로 옮긴다. 기존 ADR 0021의 selected Owner 경계�
 - Status: Active
 - Context / Problem: PR #529의 sidebar action과 선행 cross-layer migration을 한 change에 섞으면 서로 다른
   review/merge lifecycle과 시각 범위가 결합된다.
-- Decision Outcome: PROD-705 선행 PR은 schema/resolver/loader, main의 두 route consumer, tests, canonical 및
-  OpenSpec 정합성, 통합 검증과 이 change archive를 소유한다. PR #529의 ProfileSwitcher consumer와 노란 action
-  동작은 선행 merge 뒤 PROD-660이 전환한다.
+- Decision Outcome: PROD-705는 schema/resolver/loader, main의 first-party consumer, tests, canonical 및
+  OpenSpec 정합성, 통합 검증, deprecated alias의 후속 제거와 이 change archive를 소유한다. PR #529의
+  ProfileSwitcher consumer와 노란 action 동작은 선행 merge 뒤 PROD-660이 전환한다.
 - Alternatives Considered: PR #529 안에서 migration을 함께 수행하는 방식은 합의된 선행 순서와 blocker를
   위반해 제외한다. 별도 archive-only 이슈/PR은 실제 독립 결과가 없어 만들지 않는다.
 - Consequences: 이 change는 `web-app-shell` delta와 PROD-660 구현 task를 포함하지 않는다. PROD-705 merge가
   후행 PR 갱신의 전제다.
-- Confirmation / Follow-up: PROD-705 완료 전 main consumer·schema·tests·spec 전체를 검증하고, merge 후
-  PROD-660이 PR #529를 새 계약 위에 stack/rebase한다.
+- Confirmation / Follow-up: 각 PROD-705 implementation slice의 consumer·schema·tests·spec을 검증하고, 선행
+  merge 후 PROD-660이 PR #529를 새 계약 위에 stack/rebase한다. alias 제거와 archive는 남은 task 완료 뒤 수행한다.
 
 ## Remaining Decisions
 
@@ -133,4 +135,4 @@ delta와 구현 handoff로 옮긴다. 기존 ADR 0021의 selected Owner 경계�
 
 - archived `openspec/changes/archive/2026-08-06-add-local-profile-edit/decisions.md`의 guest-safe nullable selected
   Profile query 결정은 당시 구현 이력으로 보존한다. 현재 계약에서는 이 change의 viewer Membership projection
-  및 consumer-first `selectedProfileForEdit` 제거 Active 결정이 query source를 대체한다.
+  및 consumer-first deprecated transition 뒤 `selectedProfileForEdit` 제거 결정이 query source를 대체한다.

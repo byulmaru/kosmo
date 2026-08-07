@@ -19,8 +19,9 @@ Account-Profile Membership보다 특정 route capability가 공개 Profile과 �
   않는다.
 - `updateProfile`이 projection과 독립적으로 현재 Account, selected Profile, Instance와 Owner Membership을
   mutation 실행 시점에 재검증하는 경계를 유지한다.
-- **BREAKING** 기존 production consumer와 외부 호환성 확인 뒤 `Query.selectedProfileForEdit` schema/resolver와
-  관련 Relay operation/generated artifact를 제거한다.
+- 현재 migration에서는 `Query.selectedProfileForEdit`을 deprecated compatibility alias로 유지하고 새 first-party
+  consumer를 추가하지 않는다. 배포 consumer retirement 증거를 확인한 뒤 schema/resolver와 관련 artifact를
+  제거하는 **BREAKING** 단계를 수행한다.
 - `Profile.viewerState.isSelf`, `follow`, `followRequest`와 FollowButton 동작은 변경하지 않는다.
 - PR #529의 ProfileSwitcher consumer와 노란 편집 action은 이 change에 포함하지 않고, 선행 migration merge 뒤
   `PROD-660`에서 새 계약으로 전환한다.
@@ -42,15 +43,15 @@ Account-Profile Membership보다 특정 route capability가 공개 Profile과 �
 ### Modified Capabilities
 
 - `profile`: viewer-relative Account-Profile Membership projection을 추가하고 top-level
-  `selectedProfileForEdit` capability를 제거한다.
+  `selectedProfileForEdit` capability를 deprecated transition 뒤 제거한다.
 - `profile-edit-ui`: 공개 Profile과 protected `/profile-edit` route의 eligibility source를 Membership
   projection으로 전환한다.
 
 ## Impact
 
-- GraphQL: `ProfileViewerState`, 기존 `AccountProfile` Node/role, account-scoped loader,
-  `Query.selectedProfileForEdit` 제거, runtime/public schema 동기화.
-- App/Relay: 공개 Profile route와 `ProfileEditRoute` operation·generated artifact·component test 전환.
+- GraphQL: `ProfileViewerState`, 기존 `AccountProfile` Node/role, account-scoped loader, deprecated
+  `Query.selectedProfileForEdit` transition과 후속 제거, runtime/public schema 동기화.
+- App/Relay: 기존 first-party consumer operation·generated artifact·component test 전환.
 - Tests: guest/no-viewer/null, Owner/Member/무관 Account, selected mismatch, Remote/inactive/suspended,
   cross-account 비노출, batching/query-count, FollowButton 불변과 mutation 독립 재검증 회귀.
 - OpenSpec: `profile`과 `profile-edit-ui` delta만 소유한다. active `add-profile-tags`는 query source를 고정하지 않아

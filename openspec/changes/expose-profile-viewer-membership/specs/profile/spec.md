@@ -48,9 +48,10 @@ Projection은 현재 session Account로 scope되어야 하고(MUST), 다른 Acco
 **Reason**: top-level `selectedProfileForEdit`이 실제 Account-Profile 관계 대신 route 전용 capability를 GraphQL
 root에 고정한다. ADR 0023과 PROD-705는 이 query source를 viewer-relative Membership projection으로 대체한다.
 
-**Migration**: 공개 Profile과 protected `ProfileEditRoute`를 `Profile.viewerState.membership` 계약으로 먼저
-전환하고 first-party 및 외부 consumer 호환성을 확인한 뒤 `Query.selectedProfileForEdit` schema/resolver와 관련
-Relay operation/generated artifact를 제거한다. archived `add-local-profile-edit` 기록은 당시 이력으로 보존한다.
+**Migration**: first-party consumer를 `Profile.viewerState.membership` 계약으로 먼저 전환한다.
+`Query.selectedProfileForEdit`은 배포 consumer retirement 증거를 확인할 때까지 deprecated compatibility alias로
+유지하고 새 first-party consumer 사용을 금지한다. 증거 확인 뒤 schema/resolver와 관련 Relay
+operation/generated artifact를 제거한다. archived `add-local-profile-edit` 기록은 당시 이력으로 보존한다.
 
 #### Scenario: Return the selected editable Profile
 

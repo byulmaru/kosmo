@@ -17,11 +17,13 @@ const SettingsProfileQuery = graphql`
         instance {
           kind
         }
+        viewerState {
+          membership {
+            role
+          }
+        }
         ...ProfileDefaultPostVisibilityControl_profile
       }
-    }
-    selectedProfileForEdit {
-      id
     }
   }
 `;
@@ -62,7 +64,7 @@ function SettingsProfileDetailContents({ fetchKey }: { fetchKey: string }) {
     );
   }
 
-  const editable = data.selectedProfileForEdit?.id === profile.id;
+  const editable = profile.viewerState?.membership?.role === 'OWNER';
 
   return (
     <View style={styles.root}>
