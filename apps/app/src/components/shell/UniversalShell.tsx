@@ -91,6 +91,7 @@ export function UniversalShell() {
         <RouteBoundary
           loading={<Splash label="앱을 불러오는 중입니다." />}
           onRetry={recoverSession}
+          remountOnActorChange={false}
           title="앱을 불러오지 못했어요"
         >
           <UniversalShellContent />
