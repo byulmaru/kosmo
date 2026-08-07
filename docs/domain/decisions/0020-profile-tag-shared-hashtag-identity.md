@@ -32,10 +32,12 @@ Local/Remote와 생명주기 경계를 먼저 확정해야 한다.
 - Profile Tag는 Profile이 공개 조회 가능한 동안에만 함께 공개한다. Profile 비활성화·정지·Deleted 전이는
   관계를 보존하지만 공개 결과에서 숨긴다. 관계 cleanup이 필요하다면 lifecycle 전이와 분리된 canonical
   보존·파기 정책에서 대상과 시점을 결정하며, 다른 Post나 Profile의 Hashtag 관계에는 영향을 주지 않는다.
-- 이번 전달에서는 Remote Profile의 Profile Tag 수집·표시와 ActivityPub 표현을 제외한다.
-- 후속 탐색 계약에는 TagChip에서 이미 확인한 정규화된 Hashtag identity와 공개 조회 가능한 Local Profile 관계를
-  입력으로 제공한다. 임의 검색창 입력의 Hashtag 해석이나 Hashtag/Hashtag Name 검색은 이 결정과 별도 계약에서
-  다루며, 구체 route/API 이름은 각 구현 이슈가 소유한다.
+- 이번 전달에서는 Remote Profile의 Profile Tag 수집·표시와 ActivityPub 표현을 제외한다. 이는 원격 metadata를
+  새로 수집하거나 Remote Profile 화면에 Tag를 표시하지 않는 경계이며, 후속 탐색 계약이 이미 저장된 Remote
+  Profile Tag 관계를 공용 Profile visibility 아래에서 읽는 동작은 제외하지 않는다.
+- 후속 탐색 계약에는 TagChip에서 이미 확인한 정규화된 Hashtag identity와 공개 조회 가능한 이미 저장된
+  Local·Remote Profile 관계를 입력으로 제공한다. 임의 검색창 입력의 Hashtag 해석이나 Hashtag/Hashtag Name
+  검색은 이 결정과 별도 계약에서 다루며, 구체 route/API 이름은 각 구현 이슈가 소유한다.
 
 ## 이유
 
@@ -52,7 +54,9 @@ Local 편집·공개 표시만 먼저 전달하면 원격 서버의 Profile meta
 - Profile Tag 저장은 Profile 소유권과 Hashtag identity 참조를 표현하는 관계가 필요하다.
 - Profile 편집은 표현 속성과 Profile Tag 관계를 함께 바꿀 때 원자성을 보장해야 한다.
 - 공개 Profile 조회는 Profile visibility를 우회하지 않고 Profile과 함께 관계를 노출해야 한다.
-- Remote Profile과 ActivityPub 확장은 별도 canonical 결정과 계약 없이는 추가할 수 없다.
+- Remote Profile Tag 수집·표시와 ActivityPub 표현 확장은 별도 canonical 결정과 계약 없이는 추가할 수 없다. 이
+  경계는 [ADR 0021](./0021-hashtag-related-profile-navigation.md)과 PROD-525가 이미 저장된 Remote 관계를 공용
+  Profile visibility 아래에서 읽는 동작은 제외하지 않는다.
 - Hashtag 관련 Profile 목록 탐색은 이 결정만으로 활성화되지 않으며
   [ADR 0021](./0021-hashtag-related-profile-navigation.md)의 탐색 Domain Gate와 이후 PROD-525의 OpenSpec을 거친다.
 

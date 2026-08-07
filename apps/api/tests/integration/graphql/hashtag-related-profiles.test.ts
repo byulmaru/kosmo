@@ -5,6 +5,7 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
+  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   ProfileFollowPolicy,
@@ -25,6 +26,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
+let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
@@ -78,6 +80,7 @@ describe('GraphQL Hashtag related Profiles', () => {
     ({
       AccountProfiles,
       Accounts,
+      ActivityPubActors,
       db,
       firstOrThrow,
       Hashtags,
@@ -140,6 +143,42 @@ describe('GraphQL Hashtag related Profiles', () => {
       result.data?.node?.relatedProfiles.edges.map(({ node }) => node.id),
       [globalId('Profile', related.id)],
     );
+  });
+
+  test('includes a stored ActivityPub Profile without remote lookup', async (t) => {
+    let fetchCalls = 0;
+    t.mock.method(globalThis, 'fetch', async () => {
+      fetchCalls += 1;
+      throw new Error('relatedProfiles must not fetch remote data');
+    });
+
+    const hashtag = await createHashtag('remote-stored');
+    const instance = await createRemoteInstance('remote.example');
+    const related = await createProfile({
+      handle: 'remote-related',
+      id: profileId(27),
+      instanceId: instance.id,
+    });
+    await db.insert(ActivityPubActors).values({
+      profileId: related.id,
+      type: ActivityPubActorType.PERSON,
+      uri: 'https://remote.example/users/remote-related',
+    });
+    await addTag(related.id, hashtag.id);
+
+    const auth = await createAuthenticatedSession();
+    const result = await requestGraphQL<RelatedProfilesData>(
+      relatedProfilesQuery,
+      { id: globalId('Hashtag', hashtag.id) },
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.node?.relatedProfiles.edges.map(({ node }) => node.id),
+      [globalId('Profile', related.id)],
+    );
+    assert.equal(fetchCalls, 0);
   });
 
   test('uses exact relation and fills the page after applying public visibility', async () => {
@@ -344,6 +383,18 @@ const createLocalInstance = async ({
     .returning()
     .then(firstOrThrow);
 
+const createRemoteInstance = (domain: string) =>
+  db
+    .insert(Instances)
+    .values({
+      canonicalOrigin: `https://${domain}`,
+      domain,
+      kind: InstanceKind.ACTIVITYPUB,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
 const createProfile = async ({
   handle,
   id,
@@ -408,6 +459,7 @@ const resetFixtures = async () => {
   await db.delete(AccountProfiles);
   await db.delete(Accounts);
   await db.delete(Profiles);
+  await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
   await db
     .delete(Instances)
     .where(and(eq(Instances.kind, InstanceKind.LOCAL), ne(Instances.id, localInstanceId)));
