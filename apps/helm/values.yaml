@@ -11,6 +11,17 @@ autoscaling:
 migration:
   enabled: false
 postgres:
+  credentials:
+    api:
+      databaseUrl: ''
+      passwordSecret:
+        name: ''
+        key: ''
+    fedify:
+      databaseUrl: ''
+      passwordSecret:
+        name: ''
+        key: ''
   resources:
     requests:
       cpu: 250m
