@@ -394,9 +394,9 @@ Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 sel
 
 - 취소 결과의 Source 상태, 같은 actor Store의 중복 surface 일치, actor 간 격리와 API·Relay cache 동기화를 자동 테스트로 검증한다.
 
-- [ ] 12.1 취소 성공 결과가 Source Post ID, 최신 `repostCount`와 selected Profile별 `viewerRepost`를 제공하게 한다.
-- [ ] 12.2 취소 mutation 결과로 같은 actor Store의 normalized Source Post record를 갱신한다.
-- [ ] 12.3 API payload와 client cache 동기화·actor 격리 회귀 테스트를 추가하고 관련 check를 통과시킨다.
+- [x] 12.1 취소 성공 결과가 Source Post ID, 최신 `repostCount`와 selected Profile별 `viewerRepost`를 제공하게 한다.
+- [x] 12.2 취소 mutation 결과로 같은 actor Store의 normalized Source Post record를 갱신한다.
+- [x] 12.3 API payload와 client cache 동기화·actor 격리 회귀 테스트를 추가하고 관련 check를 통과시킨다.
 
 ## 13. PROD-389 Repost 통합 검증·정합성 확인·archive
 

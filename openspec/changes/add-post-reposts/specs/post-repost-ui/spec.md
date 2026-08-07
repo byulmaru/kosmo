@@ -166,7 +166,8 @@
 #### Scenario: PROD-471 Repost 취소 cache 동기화
 
 - **WHEN** PROD-471의 서버 결과 기반 취소 계약이 완료된 뒤 Repost 취소 mutation이 성공한다
-- **THEN** 앱은 서버가 확정한 Source Post ID, `repostCount`와 `viewerRepost` 결과로 normalized cache를 갱신한다
+- **THEN** `DeletePostPayload.repostSource`는 nullable Source Post의 ID, 서버 확정 `repostCount`와 selected Profile별 `viewerRepost`를 반환한다
+- **AND** 앱은 이 `repostSource` 결과로 normalized Source Post cache를 갱신한다
 - **AND** 관련 없는 전체 refetch 없이 같은 actor Store의 중복 action 상태를 일치시키고 다른 actor Store에는 전파하지 않는다
 
 #### Scenario: mutation 실패
