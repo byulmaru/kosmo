@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   getShellLayout,
+  getShellRoutePresentation,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
+  isSettingsRoute,
   isWebMobileRouteOwnedHeader,
 } from './shellLayout';
 
@@ -43,15 +45,14 @@ describe('getShellLayout', () => {
       leading: 'back',
       title: '게시글',
     });
-    assert.equal(
-      getWebMobileShellHeader(true, 390, '/settings/account', [
-        '(tabs)',
-        '(protected)',
-        'settings',
-        'account',
-      ]),
-      null,
-    );
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings', []), {
+      leading: 'menu',
+      title: '설정',
+    });
+    assert.deepEqual(getWebMobileShellHeader(true, 390, '/settings/default-post-visibility', []), {
+      leading: 'back',
+      title: '게시물 기본 공개 범위',
+    });
     assert.equal(getWebMobileShellHeader(true, 390, '/bookmarks', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/search', []), null);
     assert.equal(getWebMobileShellHeader(true, 390, '/@writer/followers', []), null);
@@ -60,6 +61,36 @@ describe('getShellLayout', () => {
     assert.equal(getWebMobileShellHeader(true, 768, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(true, 1_280, '/notifications', []), null);
     assert.equal(getWebMobileShellHeader(false, 390, '/notifications', []), null);
+  });
+
+  it('treats only the canonical Settings route family as Settings', () => {
+    assert.equal(isSettingsRoute('/settings'), true);
+    assert.equal(isSettingsRoute('/settings/default-post-visibility'), true);
+    assert.equal(isSettingsRoute('/settings-legacy'), false);
+    assert.equal(isSettingsRoute('/profile/settings'), false);
+  });
+
+  it('replaces only the full Web RightRail with the Settings workspace', () => {
+    assert.deepEqual(getShellRoutePresentation(true, 1_280, '/settings'), {
+      layout: 'full',
+      settingsWorkspace: true,
+      showRightRail: false,
+    });
+    assert.deepEqual(getShellRoutePresentation(true, 1_280, '/home'), {
+      layout: 'full',
+      settingsWorkspace: false,
+      showRightRail: true,
+    });
+    assert.deepEqual(getShellRoutePresentation(true, 768, '/settings/default-post-visibility'), {
+      layout: 'compact',
+      settingsWorkspace: false,
+      showRightRail: false,
+    });
+    assert.deepEqual(getShellRoutePresentation(false, 1_280, '/settings'), {
+      layout: 'mobile',
+      settingsWorkspace: false,
+      showRightRail: false,
+    });
   });
 
   it('assigns only mobile Web search to a route-owned header', () => {
