@@ -17,6 +17,9 @@
   `main` checkout. If that checkout has `.codegraph/codegraph.db`, pass its absolute path as
   CodeGraph's `projectPath` and use its graph only as a read-only structural baseline. Do not
   hard-code a machine-specific checkout path in repository files.
+- Before using the shared baseline, run `codegraph status <main-checkout-path>` to verify that the
+  index is up to date. If freshness cannot be verified or CodeGraph reports a pending or stale
+  state, treat the entire baseline as stale and use current-worktree reads and targeted searches.
 - Before relying on the baseline graph, collect paths that differ between the baseline checkout
   and the current worktree, plus staged, unstaged, and untracked paths in both checkouts. Treat
   CodeGraph results for those paths, and relationships that cross them, as hints only; verify the
