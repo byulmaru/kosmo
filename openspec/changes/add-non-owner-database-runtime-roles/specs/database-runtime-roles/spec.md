@@ -1,0 +1,65 @@
+## ADDED Requirements
+
+### Requirement: API와 system runtime은 서로 분리된 비소유 database identity를 가진다
+
+**Authority / Provenance:** Linear `PROD-369`. Production database는 API runtime에 `kosmo_api`, federation/system runtime에 `kosmo_system` LOGIN 역할과 credential을 선언적으로 provision해야 한다(MUST). 두 역할은 `kosmo` owner나 `kosmo_migration`, 서로의 역할 또는 다른 privilege escalation 역할의 member가 아니어야 하며(MUST NOT), SUPERUSER, CREATEDB, CREATEROLE, REPLICATION과 BYPASSRLS를 가져서는 안 된다(MUST NOT).
+
+#### Scenario: 역할과 credential을 새로 provision함
+
+- **WHEN** 기존 owner workload가 실행 중인 production release에 Expand manifest를 적용한다
+- **THEN** API와 system용 LOGIN 역할 및 서로 다른 credential Secret이 추가된다
+- **AND** 기존 `kosmo`와 `kosmo_migration` 역할·credential은 변경되지 않는다
+
+#### Scenario: 역할 간 privilege escalation을 거부함
+
+- **WHEN** API 또는 system credential로 PostgreSQL role 속성과 membership을 확인한다
+- **THEN** 해당 identity는 owner, migration 또는 상대 runtime 역할을 획득할 수 없다
+- **AND** SUPERUSER, CREATEDB, CREATEROLE, REPLICATION과 BYPASSRLS가 모두 비활성이다
+
+### Requirement: runtime 역할은 객체 privilege를 선점하지 않는다
+
+**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-724`, `PROD-713`, `PROD-714`. 이 change는 `kosmo_api`, `kosmo_system`에 schema/table/sequence privilege, default privilege, ownership 또는 grant option을 부여해서는 안 되며(MUST NOT), 공통 객체 권한과 default privilege는 PROD-724가, Post/PostContent role별 grant와 RLS policy는 PROD-713/714가 소유해야 한다(MUST).
+
+#### Scenario: role provisioning 직후 객체 권한을 확인함
+
+- **WHEN** role과 credential만 provision한 직후 catalog privilege를 확인한다
+- **THEN** 두 runtime 역할에는 이 change가 부여한 schema/table/sequence privilege나 default privilege가 없다
+- **AND** 기존 application 객체 owner는 변경되지 않는다
+
+#### Scenario: schema 변경과 권한 상승을 거부함
+
+- **WHEN** 각 runtime credential로 persistent schema/table 생성·변경, ownership 변경 또는 owner 역할 획득을 시도한다
+- **THEN** PostgreSQL이 권한 부족으로 작업을 거부한다
+
+### Requirement: Expand 배포는 기존 workload 선택과 RLS policy를 바꾸지 않는다
+
+**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-709`, `PROD-724`, `PROD-713`, `PROD-714`. 이 change는 새 역할과 credential만 추가해야 한다(MUST). API/Web/federation workload가 참조하는 database Secret, 기존 owner workload의 connection 설정, `kosmo` LOGIN 상태, `kosmo_migration`의 LOGIN→`SET ROLE kosmo` 계약, 객체 privilege와 모든 도메인 RLS policy는 변경해서는 안 된다(MUST NOT).
+
+#### Scenario: 구버전 workload와 병행 배포함
+
+- **WHEN** Expand role/credential manifest를 배포한다
+- **THEN** 실행 중인 owner workload는 기존 Secret과 owner identity로 재시작 없이 계속 동작한다
+- **AND** 새 credential은 어떤 workload에도 선택되지 않는다
+- **AND** 도메인 RLS policy는 추가되거나 변경되지 않는다
+
+#### Scenario: Expand 선언을 되돌림
+
+- **WHEN** 후속 workload가 새 credential을 사용하기 전에 Expand 배포 선언을 이전 revision으로 되돌린다
+- **THEN** 기존 owner workload와 migration 경계는 영향 없이 유지된다
+- **AND** retained database role이나 ACL이 남는 경우에도 workload 선택이나 행 접근 의미는 바뀌지 않으며 재적용 가능한 상태로 남는다
+
+### Requirement: 실제 credential로 권한 경계를 검증한다
+
+**Authority / Provenance:** Linear `PROD-369`. 배포 검증은 두 runtime의 실제 credential로 `current_user`, role 속성, membership과 object ownership 부재를 확인해야 하며(MUST), Credential 원문이나 connection string은 로그, PR, Linear 또는 test artifact에 노출해서는 안 된다(MUST NOT).
+
+#### Scenario: API credential 검증
+
+- **WHEN** provision된 API credential로 검증 세션을 연다
+- **THEN** `current_user`는 `kosmo_api`이고 owner/system 역할 획득과 BYPASSRLS가 불가능하다
+- **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
+
+#### Scenario: system credential 검증
+
+- **WHEN** provision된 system credential로 검증 세션을 연다
+- **THEN** `current_user`는 `kosmo_system`이고 owner/API 역할 획득과 BYPASSRLS가 불가능하다
+- **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
