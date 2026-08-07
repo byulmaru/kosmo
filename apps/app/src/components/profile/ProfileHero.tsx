@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
@@ -108,7 +108,7 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         {data.tags.length ? (
           <View style={styles.tags} testID="profile-tag-list">
             {data.tags.map((tag) => (
-              <ProfileTagChip key={tag.id} name={tag.name} removable={false} />
+              <ProfileTagLink id={tag.id} key={tag.id} name={tag.name} />
             ))}
           </View>
         ) : null}
@@ -135,6 +135,29 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
   );
 }
 
+function ProfileTagLink({ id, name }: { id: string; name: string }) {
+  const targetSize = Platform.select({ android: 48, default: 48, ios: 44, web: 32 });
+  const href = {
+    params: { hashtagId: id },
+    pathname: '/hashtags/[hashtagId]/profiles',
+  } as const;
+
+  return (
+    <Link asChild href={href}>
+      <Pressable
+        accessibilityLabel={`#${name} 관련 프로필 보기`}
+        accessibilityRole="link"
+        style={StyleSheet.flatten([
+          styles.tagTarget,
+          { minHeight: targetSize, minWidth: targetSize },
+        ])}
+      >
+        <ProfileTagChip name={name} removable={false} />
+      </Pressable>
+    </Link>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { marginBottom: spacing.xl },
   cover: { aspectRatio: 3, width: '100%' },
@@ -154,6 +177,11 @@ const styles = StyleSheet.create({
   handle: { fontFamily: 'SUIT', ...typography.sm },
   bio: { fontFamily: 'SUIT', marginTop: spacing.md, ...typography.md },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  tagTarget: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: '100%',
+  },
   counts: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.md },
   countLink: { flexDirection: 'row', gap: spacing.xs },
   count: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
