@@ -120,6 +120,160 @@ describe('GraphQL profile follow graph', () => {
     });
   });
 
+  test('returns the current Account membership role for the queried Profile', async () => {
+    const auth = await createAuthenticatedSession();
+    const memberProfile = await createProfile({
+      handle: 'viewer-membership-member',
+      instanceId: localInstanceId,
+    });
+    const memberMembership = await db
+      .insert(AccountProfiles)
+      .values({
+        accountId: auth.account.id,
+        profileId: memberProfile.id,
+        role: AccountProfileRole.MEMBER,
+      })
+      .returning()
+      .then(firstOrThrow);
+
+    const owner = await requestViewerMembership(auth.profile.handle, auth.token);
+    const member = await requestViewerMembership(memberProfile.handle, auth.token);
+
+    assertNoGraphQLErrors(owner);
+    assertNoGraphQLErrors(member);
+    assert.deepEqual(owner.data?.profileByHandle?.viewerState?.membership, {
+      id: globalId('AccountProfile', auth.membership.id),
+      role: 'OWNER',
+    });
+    assert.deepEqual(member.data?.profileByHandle?.viewerState?.membership, {
+      id: globalId('AccountProfile', memberMembership.id),
+      role: 'MEMBER',
+    });
+  });
+
+  test('batches current Account memberships for multiple Profiles in one query', async () => {
+    const auth = await createAuthenticatedSession();
+    const [memberProfile, ownerProfile] = await Promise.all([
+      createProfile({ handle: 'viewer-membership-batch-member', instanceId: localInstanceId }),
+      createProfile({ handle: 'viewer-membership-batch-owner', instanceId: localInstanceId }),
+    ]);
+    const memberships = await db
+      .insert(AccountProfiles)
+      .values([
+        {
+          accountId: auth.account.id,
+          profileId: memberProfile.id,
+          role: AccountProfileRole.MEMBER,
+        },
+        {
+          accountId: auth.account.id,
+          profileId: ownerProfile.id,
+          role: AccountProfileRole.OWNER,
+        },
+      ])
+      .returning();
+    const membershipQueries: Array<{ parameters: unknown[]; query: string }> = [];
+    const previousDebug = pg.options.debug;
+    pg.options.debug = (_connection, query, parameters) => {
+      if (query.includes('from "account_profile"')) {
+        membershipQueries.push({ parameters: [...parameters], query });
+      }
+    };
+
+    let result: GraphQLResult<{
+      me: {
+        profiles: Array<{
+          id: string;
+          viewerState: { membership: { id: string; role: string } | null } | null;
+        }>;
+      } | null;
+    }>;
+    try {
+      result = await requestGraphQL(
+        `query BatchedViewerMemberships {
+          me {
+            profiles {
+              id
+              viewerState { membership { id role } }
+            }
+          }
+        }`,
+        {},
+        auth.token,
+      );
+    } finally {
+      pg.options.debug = previousDebug;
+    }
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(
+      result.data?.me?.profiles.toSorted((left, right) => left.id.localeCompare(right.id)),
+      [
+        {
+          id: globalId('Profile', auth.profile.id),
+          viewerState: {
+            membership: { id: globalId('AccountProfile', auth.membership.id), role: 'OWNER' },
+          },
+        },
+        {
+          id: globalId('Profile', memberProfile.id),
+          viewerState: {
+            membership: { id: globalId('AccountProfile', memberships[0]!.id), role: 'MEMBER' },
+          },
+        },
+        {
+          id: globalId('Profile', ownerProfile.id),
+          viewerState: {
+            membership: { id: globalId('AccountProfile', memberships[1]!.id), role: 'OWNER' },
+          },
+        },
+      ].toSorted((left, right) => left.id.localeCompare(right.id)),
+    );
+    assert.equal(membershipQueries.length, 1);
+    assert.match(
+      membershipQueries[0]!.query,
+      /"account_profile"\."account_id" = \$1.*"account_profile"\."profile_id" in/s,
+    );
+    assert.deepEqual(
+      new Set(membershipQueries[0]!.parameters),
+      new Set([auth.account.id, auth.profile.id, memberProfile.id, ownerProfile.id]),
+    );
+  });
+
+  test('does not expose another Account membership for the queried Profile', async () => {
+    const viewer = await createAuthenticatedSession();
+    const otherAccount = await createAuthenticatedSession();
+    const target = await createProfile({
+      handle: 'viewer-membership-other-account',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: otherAccount.account.id,
+      profileId: target.id,
+      role: AccountProfileRole.OWNER,
+    });
+
+    const result = await requestViewerMembership(target.handle, viewer.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.profileByHandle?.viewerState?.membership, null);
+  });
+
+  test('keeps viewer state nullable for guests and sessions without an active Profile', async () => {
+    const withoutViewer = await createAuthenticatedSession({ activeProfile: false });
+
+    const guest = await requestViewerMembership(withoutViewer.profile.handle);
+    const noActiveProfile = await requestViewerMembership(
+      withoutViewer.profile.handle,
+      withoutViewer.token,
+    );
+
+    assertNoGraphQLErrors(guest);
+    assertNoGraphQLErrors(noActiveProfile);
+    assert.equal(guest.data?.profileByHandle?.viewerState, null);
+    assert.equal(noActiveProfile.data?.profileByHandle?.viewerState, null);
+  });
+
   test('does not expose pending requests as local follow relationships', async () => {
     const auth = await createAuthenticatedSession();
     const otherLocalInstance = await createLocalInstance({ domain: 'pending-local.example' });
@@ -601,6 +755,14 @@ type ProfileFollowNode = {
 
 type FollowGraph = { profileByHandle: FollowGraphProfile | null };
 
+type ViewerMembershipResult = {
+  profileByHandle: {
+    viewerState: {
+      membership: { id: string; role: 'MEMBER' | 'OWNER' } | null;
+    } | null;
+  } | null;
+};
+
 type NodeFollowGraph = {
   node: Omit<FollowGraphProfile, 'followersCount' | 'followingCount'> | null;
 };
@@ -629,6 +791,19 @@ const requestFollowGraph = (handle: string, token?: string) =>
         ${followGraphFields}
         followersCount
         followingCount
+      }
+    }`,
+    { handle },
+    token,
+  );
+
+const requestViewerMembership = (handle: string, token?: string) =>
+  requestGraphQL<ViewerMembershipResult>(
+    `query ViewerMembership($handle: String!) {
+      profileByHandle(handle: $handle) {
+        viewerState {
+          membership { id role }
+        }
       }
     }`,
     { handle },
@@ -816,11 +991,15 @@ const createAuthenticatedSession = async ({
     handle: `viewer-${crypto.randomUUID().slice(0, 8)}`,
     instanceId: localInstanceId,
   });
-  await db.insert(AccountProfiles).values({
-    accountId: account.id,
-    profileId: profile.id,
-    role: AccountProfileRole.OWNER,
-  });
+  const membership = await db
+    .insert(AccountProfiles)
+    .values({
+      accountId: account.id,
+      profileId: profile.id,
+      role: AccountProfileRole.OWNER,
+    })
+    .returning()
+    .then(firstOrThrow);
   const token = `token-${crypto.randomUUID()}`;
   const session = await db
     .insert(Sessions)
@@ -833,7 +1012,7 @@ const createAuthenticatedSession = async ({
     .returning()
     .then(firstOrThrow);
 
-  return { account, profile, session, token };
+  return { account, membership, profile, session, token };
 };
 
 const resetFixtures = async () => {

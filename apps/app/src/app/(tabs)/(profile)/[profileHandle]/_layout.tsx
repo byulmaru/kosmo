@@ -17,11 +17,17 @@ const ProfileLayoutQuery = graphql`
   query ProfileLayoutQuery($handle: String!) {
     profileByHandle(handle: $handle) {
       id
+      instance {
+        kind
+      }
+      viewerState {
+        isSelf
+        membership {
+          role
+        }
+      }
       ...ProfileHero_profile
       ...FollowButton_profile
-    }
-    selectedProfileForEdit {
-      id
     }
   }
 `;
@@ -67,16 +73,19 @@ function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: 
     );
   }
 
-  const action =
-    data.selectedProfileForEdit?.id === profile.id ? (
-      <Link asChild href={'/profile-edit' as Href}>
-        <Button accessibilityLabel="프로필 편집" tone="secondary">
-          편집
-        </Button>
-      </Link>
-    ) : (
-      <FollowButton profile={profile} />
-    );
+  const canEdit =
+    profile.instance.kind === 'LOCAL' &&
+    profile.viewerState?.isSelf === true &&
+    profile.viewerState.membership?.role === 'OWNER';
+  const action = canEdit ? (
+    <Link asChild href={'/profile-edit' as Href}>
+      <Button accessibilityLabel="프로필 편집" tone="secondary">
+        편집
+      </Button>
+    </Link>
+  ) : (
+    <FollowButton profile={profile} />
+  );
 
   return (
     <ProfileRouteContainer>
