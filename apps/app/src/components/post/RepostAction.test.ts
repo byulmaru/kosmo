@@ -14,14 +14,20 @@ import repostPostMutation from './__generated__/RepostActionRepostPostMutation.g
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
 
-function createEnvironment() {
+function createEnvironment({
+  repostCount = 3,
+  viewerRepost = null,
+}: {
+  repostCount?: number;
+  viewerRepost?: { __ref: string } | null;
+} = {}) {
   const source = new RecordSource();
   source.set(sourcePostId, {
     __id: sourcePostId,
     __typename: 'Post',
     id: sourcePostId,
-    repostCount: 3,
-    viewerRepost: null,
+    repostCount,
+    viewerRepost,
   });
 
   return new Environment({
@@ -62,25 +68,34 @@ describe('RepostAction Relay cache contract', () => {
     assert.deepEqual(sourceRecord(environment).viewerRepost, { __ref: activeRepostId });
   });
 
-  it('keeps the source cache unchanged after the delete payload', () => {
+  it('normalizes the server-confirmed source state after the delete payload', () => {
     const environment = createEnvironment();
-    const before = sourceRecord(environment);
     const operation = createOperationDescriptor(getRequest(deletePostMutation), {
       id: activeRepostId,
     });
 
     environment.commitPayload(operation, {
-      deletePost: { postId: activeRepostId },
+      deletePost: {
+        postId: activeRepostId,
+        repostSource: {
+          __typename: 'Post',
+          id: sourcePostId,
+          repostCount: 2,
+          viewerRepost: null,
+        },
+      },
     });
 
-    assert.equal(sourceRecord(environment), before);
-    assert.equal(sourceRecord(environment).repostCount, 3);
+    assert.equal(sourceRecord(environment).repostCount, 2);
     assert.equal(sourceRecord(environment).viewerRepost, null);
   });
 
   it('keeps normalized source state isolated per Relay actor Store', () => {
     const actorA = createEnvironment();
-    const actorB = createEnvironment();
+    const actorB = createEnvironment({
+      repostCount: 4,
+      viewerRepost: { __ref: 'post-repost-other' },
+    });
     const operation = createOperationDescriptor(getRequest(repostPostMutation), {
       sourceId: sourcePostId,
     });
@@ -101,7 +116,35 @@ describe('RepostAction Relay cache contract', () => {
     });
 
     assert.equal(sourceRecord(actorA).repostCount, 4);
-    assert.equal(sourceRecord(actorB).repostCount, 3);
-    assert.equal(sourceRecord(actorB).viewerRepost, null);
+    assert.equal(sourceRecord(actorB).repostCount, 4);
+    assert.deepEqual(sourceRecord(actorB).viewerRepost, { __ref: 'post-repost-other' });
+  });
+
+  it('normalizes cancellation only in the actor Store receiving the payload', () => {
+    const actorA = createEnvironment();
+    const actorB = createEnvironment({
+      repostCount: 4,
+      viewerRepost: { __ref: 'post-repost-other' },
+    });
+    const operation = createOperationDescriptor(getRequest(deletePostMutation), {
+      id: activeRepostId,
+    });
+
+    actorA.commitPayload(operation, {
+      deletePost: {
+        postId: activeRepostId,
+        repostSource: {
+          __typename: 'Post',
+          id: sourcePostId,
+          repostCount: 2,
+          viewerRepost: null,
+        },
+      },
+    });
+
+    assert.equal(sourceRecord(actorA).repostCount, 2);
+    assert.equal(sourceRecord(actorA).viewerRepost, null);
+    assert.equal(sourceRecord(actorB).repostCount, 4);
+    assert.deepEqual(sourceRecord(actorB).viewerRepost, { __ref: 'post-repost-other' });
   });
 });

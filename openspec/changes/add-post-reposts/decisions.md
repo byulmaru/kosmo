@@ -52,9 +52,9 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-401`, `PROD-402`, `PROD-403`, `PROD-411`, `PROD-414`, `PROD-471`
 - Status: Active
 - Context / Problem: Repost가 별도 durable object가 아니므로 GraphQL identity와 client normalized cache가 같은 Post Node를 사용해야 한다.
-- Decision Outcome: 기존 `Post`에 nullable `repostSource`, non-null `repostCount`, nullable `viewerRepost`를 추가한다. 생성 mutation은 `repostPost(input: { sourceId })`와 `RepostPostPayload.repost`, 삭제는 일반 `deletePost(input: { id })`와 Tombstone Node 대신 `DeletePostPayload.postId`를 사용한다. `viewerRepost`는 현재 selected Profile의 Active Repost Post identity를 반환한다.
+- Decision Outcome: 기존 `Post`에 nullable `repostSource`, non-null `repostCount`, nullable `viewerRepost`를 추가한다. 생성 mutation은 `repostPost(input: { sourceId })`와 `RepostPostPayload.repost`, 삭제는 일반 `deletePost(input: { id })`와 Tombstone Node 대신 `DeletePostPayload.postId`를 유지한다. PROD-471은 같은 canonical 관계 이름을 재사용하는 nullable `DeletePostPayload.repostSource`로 취소된 순수 Repost의 Source Post를 반환한다. `viewerRepost`는 현재 selected Profile의 Active Repost Post identity를 반환한다.
 - Alternatives Considered: Repost concrete type, `viewerHasReposted` boolean, 확장 가능한 viewer state wrapper, `cancelRepost` 전용 mutation. concrete type은 canonical과 충돌하고 boolean은 취소할 identity를 잃는다. wrapper는 현재 단일 관계에 비해 과도하며 전용 cancel은 일반 Post 삭제 계약을 중복한다.
-- Consequences: API와 Relay fragments는 concrete Post global ID를 유지한다. 생성 payload는 Repost의 Source Post 관계로 count/viewer 상태를 정규화할 수 있지만, 현재 삭제 payload의 `postId`만으로는 Source 상태를 정규화할 수 없다.
+- Consequences: API와 Relay fragments는 concrete Post global ID를 유지한다. 생성 payload의 Repost Source와 삭제 payload의 nullable `repostSource`가 같은 Post identity를 사용하므로 Relay는 별도 updater 없이 서버 확정 count/viewer 상태를 정규화한다. 일반 Post 삭제와 Tombstone identity는 기존 `postId` 계약을 유지한다.
 - Confirmation / Follow-up: GraphQL schema snapshot, Node/field/mutation integration을 확인하고, PROD-414는 생성 cache와 취소 실행을, PROD-471은 서버 결과 기반 취소 cache 동기화를 검증한다.
 
 ### Repost 취소 실행과 Source cache 동기화를 단계화한다
@@ -64,9 +64,9 @@
 - Authority / Provenance: `PROD-389`, `PROD-414`, `PROD-471`
 - Status: Active
 - Context / Problem: 현재 `DeletePostPayload`는 삭제된 Repost의 `postId`만 반환하므로 PROD-414가 Source Post의 최신 `repostCount`와 selected Profile별 `viewerRepost`를 서버 결과로 정규화할 수 없다.
-- Decision Outcome: PROD-414는 조회된 Active Repost ID로 `deletePost`를 호출해 취소를 실제 수행하되 취소 성공 뒤 Source cache를 직접 변경하지 않는다. PROD-471은 취소 결과에서 Source 상태를 전달하는 서버 계약과 같은 actor Store의 normalized cache 동기화를 후속 구현한다.
+- Decision Outcome: PROD-414는 조회된 Active Repost ID로 `deletePost`를 호출해 취소를 실제 수행하되 취소 성공 뒤 Source cache를 직접 변경하지 않는다. PROD-471은 nullable `DeletePostPayload.repostSource`에서 Source Post의 `id`, 서버 확정 `repostCount`와 selected Profile별 `viewerRepost`를 반환하고, Repost child mutation이 이를 선택해 같은 actor Store의 normalized Source record를 갱신한다.
 - Alternatives Considered: PROD-414에서 count를 직접 감소, 광범위한 cache invalidation 또는 임시 refetch, PROD-414 안에서 API payload까지 확장. 직접 산술은 viewer-independent 서버 집계와 어긋날 수 있고, 광범위한 invalidation/refetch는 현재 client 경계를 넓히며, API 확장은 프론트엔드 이슈 범위를 넘으므로 사용하지 않는다.
-- Consequences: PROD-414 완료 직후에는 취소된 Repost의 현재 화면 상태가 다음 서버 기반 재조회 또는 actor 환경 재생성 전까지 오래될 수 있다. PROD-471이 완료되기 전에는 전체 Repost change를 archive하지 않는다.
+- Consequences: client count 산술, 광범위한 invalidation, refetch나 connection updater 없이 같은 Source를 표시하는 현재 actor Store의 surface가 서버 결과로 일치한다. 다른 selected Profile의 actor Store에는 이 payload가 전파되지 않는다.
 - Confirmation / Follow-up: PROD-414는 정확한 취소 identity와 cache 비변경을 검증하고, PROD-471은 서버 결과, 같은 actor Store 일치, actor 간 격리와 client Relay cache 테스트를 검증한다.
 
 ### Repost mutation adapter와 PostActionBar 공개 UI를 분리한다

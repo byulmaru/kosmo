@@ -2,6 +2,11 @@ import { deletePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
 
+type DeletePostPayload = {
+  readonly postId: string;
+  readonly repostSource: string | null;
+};
+
 builder.mutationField('deletePost', (t) =>
   t.withAuth({ usingProfile: true }).fieldWithInput({
     type: builder.simpleObject('DeletePostPayload', {
@@ -11,6 +16,10 @@ builder.mutationField('deletePost', (t) =>
             id: (payload as { postId: string }).postId,
             type: Post,
           }),
+        }),
+        repostSource: field.field({
+          nullable: true,
+          type: Post,
         }),
       }),
     }),
@@ -28,7 +37,10 @@ builder.mutationField('deletePost', (t) =>
       );
       await result.postCommit(ctx.db);
 
-      return { postId: result.postId };
+      return {
+        postId: result.postId,
+        repostSource: result.sourcePostId,
+      } satisfies DeletePostPayload;
     },
   }),
 );
