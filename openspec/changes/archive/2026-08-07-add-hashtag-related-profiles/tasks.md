@@ -124,6 +124,16 @@
 - 공개 Profile TagChip에서 exact Hashtag Node·관련 Profile connection·Profile route까지 종단간 identity와 상태 흐름을 확인한다.
 - 최신 canonical·Linear·OpenSpec·API/client 구현과 검증 증거의 정합성을 확인한다.
 - archive 전·후 strict OpenSpec validation을 통과한다.
+- 2026-08-07 PROD-525 통합 검증에서 PR #418 merge `ef74c5d2`와 PR #526 merge `bfc82dfa`가 현재
+  `main`에 포함되고 hosted checks가 모두 성공했으며 unresolved review thread가 없음을 재확인했다. 저장된
+  ActivityPub Profile과 원격 fetch 미수행을 포함한 API focused integration 5/5, exact identity·route·목록·TagChip
+  App unit 13/13, Relay `--noWatchman`, TypeScript, TagChip→관련 Profile→Profile route Web E2E 1/1과 strict
+  OpenSpec validation이 통과했다. 실제 iOS·Android focus·touch·screen-reader runtime QA는 수행하지 않았으며
+  Web 자동화와 source mapping 완료 증거로 일반화하지 않는다.
+- delta spec을 `openspec/specs/hashtag-related-profile-api/spec.md`와
+  `openspec/specs/hashtag-related-profile-navigation/spec.md`에 동기화하고 change를
+  `openspec/changes/archive/2026-08-07-add-hashtag-related-profiles`로 이동했다. archive 후
+  `openspec validate --all --strict` 84/84와 `git diff --check`가 통과했다.
 
-- [ ] 3.1 PROD-528·529 완료 증거를 연결해 exact identity, Account auth, visibility-before-limit, 20개 cursor와 TagChip→관련 Profile→Profile route의 cross-slice 흐름을 검증한다.
-- [ ] 3.2 canonical·Linear·delta spec·tasks 정합성을 확인하고 shared change를 archive한 뒤 strict validation을 완료한다.
+- [x] 3.1 PROD-528·529 완료 증거를 연결해 exact identity, Account auth, visibility-before-limit, 20개 cursor와 TagChip→관련 Profile→Profile route의 cross-slice 흐름을 검증한다.
+- [x] 3.2 canonical·Linear·delta spec·tasks 정합성을 확인하고 shared change를 archive한 뒤 strict validation을 완료한다.
