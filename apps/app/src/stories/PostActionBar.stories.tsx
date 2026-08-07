@@ -16,9 +16,9 @@ import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
-import { ShellRefreshCoordinatorProvider } from '@/components/shell/ShellRefreshCoordinator';
 import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
+import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import { colors, spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
@@ -186,7 +186,7 @@ function PostActionBarFixture({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <ShellRefreshCoordinatorProvider>
+      <SessionRecoveryProvider>
         <RelayActorBoundary>
           <Suspense fallback={<View />}>
             <SessionProvider>
@@ -194,7 +194,7 @@ function PostActionBarFixture({
             </SessionProvider>
           </Suspense>
         </RelayActorBoundary>
-      </ShellRefreshCoordinatorProvider>
+      </SessionRecoveryProvider>
     </RelayActorProvider>
   );
 }
@@ -424,7 +424,7 @@ function ReactionContractHarness() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <ShellRefreshCoordinatorProvider>
+      <SessionRecoveryProvider>
         <RelayActorBoundary>
           <ReactionContractControls
             mounted={mounted}
@@ -433,7 +433,7 @@ function ReactionContractHarness() {
             requests={requests}
           />
         </RelayActorBoundary>
-      </ShellRefreshCoordinatorProvider>
+      </SessionRecoveryProvider>
     </RelayActorProvider>
   );
 }

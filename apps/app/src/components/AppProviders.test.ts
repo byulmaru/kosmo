@@ -18,11 +18,9 @@ const queryHistory: Array<{ fetchKey: unknown; query: QueryName }> = [];
 const unreadFetches: string[] = [];
 let currentEnvironment: FakeEnvironment;
 let unreadFailure = false;
-let unreadRefreshCount = 0;
 let useSession: () => { selectedProfileId: string | null; status: string };
-let useShellRefreshListener: (listener: () => void) => void;
 let useUnreadNotificationCount: () => number | null;
-let useShellRefresh: () => () => void;
+let useSessionRecovery: () => () => void;
 let RouteBoundary: ComponentType<{
   children: ReactNode;
   error?: (retry: () => void) => ReactNode;
@@ -127,7 +125,7 @@ mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
 before(async () => {
   ({ AppProviders } = await import('./AppProviders'));
   ({ RouteBoundary, useRouteBoundary } = await import('./RouteBoundary'));
-  ({ useShellRefresh, useShellRefreshListener } = await import('./shell/ShellRefreshCoordinator'));
+  ({ useSessionRecovery } = await import('../session/SessionRecoveryCoordinator'));
   ({ useSession } = await import('../session/SessionProvider'));
   ({ UnreadNotificationBadgeController, useUnreadNotificationCount } =
     await import('./shell/UnreadNotificationBadgeController'));
@@ -139,7 +137,6 @@ beforeEach(() => {
   queryHistory.length = 0;
   unreadFetches.length = 0;
   unreadFailure = false;
-  unreadRefreshCount = 0;
   currentEnvironment = createEnvironment({ id: 'profile-a', unreadNotificationCount: 7 });
 });
 
@@ -157,13 +154,6 @@ function createEnvironment(node: FakeSnapshot['data']['node']): FakeEnvironment 
     retain: () => ({ dispose: () => undefined }),
     subscribe: () => ({ dispose: () => undefined }),
   };
-}
-
-function UnreadRefreshProbe() {
-  useShellRefreshListener(() => {
-    unreadRefreshCount += 1;
-  });
-  return null;
 }
 
 function ShellRecoveryContent() {
@@ -191,30 +181,20 @@ function lazyLoadQuery(
 }
 
 function ShellRecoveryRoute() {
-  const refresh = useShellRefresh();
+  const recoverSession = useSessionRecovery();
   return createElement(RouteBoundary, {
     children: createElement(ShellRecoveryContent),
     error: (retry) => createElement('Retry', { onPress: retry }),
     loading: createElement('Loading'),
-    onRetry: refresh,
+    onRetry: recoverSession,
     title: 'Shell failed',
   });
-}
-
-function RecoveryFixture() {
-  return createElement(
-    'Root',
-    null,
-    createElement(UnreadRefreshProbe),
-    createElement(ShellRecoveryRoute),
-  );
 }
 
 function ShellUnreadRecoveryFixture() {
   return createElement(
     UnreadNotificationBadgeController,
     null,
-    createElement(UnreadRefreshProbe),
     createElement(ShellRecoveryRoute),
     createElement(BadgeValue),
   );
@@ -240,13 +220,13 @@ function findTag(tag: string) {
   return node;
 }
 
-describe('AppProviders Shell recovery composition', () => {
-  it('one Shell retry recovers SessionProvider and shell actions after simultaneous failures', async () => {
+describe('AppProviders Session recovery composition', () => {
+  it('one Shell retry initiates Session recovery and recovers shell actions after simultaneous failures', async () => {
     queryModes.SessionProviderQuery = 'error';
     queryModes.ShellRecoveryQuery = 'error';
 
     await act(async () => {
-      renderer = create(createElement(AppProviders, null, createElement(RecoveryFixture)));
+      renderer = create(createElement(AppProviders, null, createElement(ShellRecoveryRoute)));
     });
 
     assert.ok(renderer);
@@ -259,12 +239,13 @@ describe('AppProviders Shell recovery composition', () => {
 
     const ready = findTag('Ready');
     assert.deepEqual(ready.props, { action: 'ready', status: 'valid' });
-    assert.equal(unreadRefreshCount, 1);
-    assert.ok(queryHistory.filter(({ query }) => query === 'SessionProviderQuery').length > 1);
+    const sessionQueries = queryHistory.filter(({ query }) => query === 'SessionProviderQuery');
+    assert.ok(sessionQueries.length > 1);
+    assert.equal(sessionQueries.at(-1)?.fetchKey, 1);
     assert.ok(queryHistory.filter(({ query }) => query === 'ShellRecoveryQuery').length > 1);
   });
 
-  it('Shell retry re-runs the unread controller after its first count fetch fails', async () => {
+  it('Session recovery initiated by Shell retry re-runs the unread controller after its first count fetch fails', async () => {
     queryModes.ShellRecoveryQuery = 'error';
     currentEnvironment = createEnvironment(null);
     unreadFailure = true;

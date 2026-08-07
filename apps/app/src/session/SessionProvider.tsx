@@ -1,10 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { useShellRefreshListener } from '@/components/shell/ShellRefreshCoordinator';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor } from '@/relay/RelayActorProvider';
+import { useSessionRecoveryGeneration } from './SessionRecoveryCoordinator';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
@@ -41,11 +41,11 @@ const SessionProviderQuery = graphql`
 
 export function SessionProvider({ children }: PropsWithChildren) {
   const { clearNativeSession, nativeToken } = useRelayActor();
-  const refreshKey = useRefreshGeneration();
+  const recoveryGeneration = useSessionRecoveryGeneration();
   const data = useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQuery,
     {},
-    { fetchKey: refreshKey, fetchPolicy: 'store-and-network' },
+    { fetchKey: recoveryGeneration, fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
 
@@ -95,18 +95,15 @@ export function SessionFailOpenBoundary({
   fallback,
 }: PropsWithChildren<{ fallback: ReactNode }>) {
   const reportUnexpectedError = useUnexpectedErrorReporter();
-  const refreshKey = useRefreshGeneration();
+  const recoveryGeneration = useSessionRecoveryGeneration();
 
   return (
-    <ErrorBoundary fallback={fallback} onError={reportUnexpectedError} resetKeys={[refreshKey]}>
+    <ErrorBoundary
+      fallback={fallback}
+      onError={reportUnexpectedError}
+      resetKeys={[recoveryGeneration]}
+    >
       {children}
     </ErrorBoundary>
   );
-}
-
-function useRefreshGeneration(): number {
-  const [generation, setGeneration] = useState(0);
-  const increment = useCallback(() => setGeneration((current) => current + 1), []);
-  useShellRefreshListener(increment);
-  return generation;
 }
