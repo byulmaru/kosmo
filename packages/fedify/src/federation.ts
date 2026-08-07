@@ -17,6 +17,7 @@ import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq } from 'drizzle-orm';
+import { createFedifyExecutionContext } from './fedify-execution';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
@@ -41,10 +42,9 @@ import {
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
-import { createSystemExecutionContext } from './system-execution';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation, FederationFetchOptions } from '@fedify/fedify';
-import type { SystemExecutionContext } from './system-execution';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
@@ -56,11 +56,11 @@ export const federation: Federation<void> = createFederation<void>({
 
 export const fetchFederation = (
   request: Request,
-  options: Omit<FederationFetchOptions<SystemExecutionContext>, 'contextData'>,
+  options: Omit<FederationFetchOptions<FedifyExecutionContext>, 'contextData'>,
 ): Promise<Response> =>
-  (federation as unknown as Federation<SystemExecutionContext>).fetch(request, {
+  (federation as unknown as Federation<FedifyExecutionContext>).fetch(request, {
     ...options,
-    contextData: createSystemExecutionContext(),
+    contextData: createFedifyExecutionContext(),
   });
 
 federation

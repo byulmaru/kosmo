@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { Bookmarks, first, getDatabaseConnection } from '../db';
-import type { DatabaseHandle } from '../db';
+import type { Transaction } from '../db';
 
 export const createBookmark = async (
   {
@@ -10,9 +10,9 @@ export const createBookmark = async (
     readonly postId: string;
     readonly profileId: string;
   },
-  handle?: DatabaseHandle,
+  tx?: Transaction,
 ): Promise<typeof Bookmarks.$inferSelect> => {
-  const connection = getDatabaseConnection(handle);
+  const connection = getDatabaseConnection(tx);
   const inserted = await connection
     .insert(Bookmarks)
     .values({ postId, profileId })
@@ -43,9 +43,9 @@ export const deleteBookmark = async (
     readonly bookmarkId: string;
     readonly profileId: string;
   },
-  handle?: DatabaseHandle,
+  tx?: Transaction,
 ): Promise<typeof Bookmarks.$inferSelect | null> => {
-  const connection = getDatabaseConnection(handle);
+  const connection = getDatabaseConnection(tx);
   return connection
     .delete(Bookmarks)
     .where(and(eq(Bookmarks.id, bookmarkId), eq(Bookmarks.profileId, profileId)))

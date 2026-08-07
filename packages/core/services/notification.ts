@@ -283,11 +283,8 @@ const selectReplyVisibleToProfile = async (
     .limit(1)
     .then((rows) => rows.length > 0);
 
-export const createReplyNotification = async (
-  sourceId: string,
-  handle?: DatabaseHandle,
-): Promise<void> =>
-  getDatabaseConnection(handle).transaction(async (tx) => {
+export const createReplyNotification = async (sourceId: string, tx?: Transaction): Promise<void> =>
+  getDatabaseConnection(tx).transaction(async (tx) => {
     const source = await tx
       .select({
         actorProfileId: Posts.profileId,
