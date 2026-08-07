@@ -120,7 +120,7 @@ projection, 두 main consumer, legacy query 제거와 독립 mutation authorizat
       재사용하지 않았음을 code/test evidence로 확인한다.
 - [x] 3.2 schema→Relay→공개 Profile→protected route→mutation의 cross-layer 시나리오와 필수 API/app 검증을
       통과시킨다.
-- [ ] 3.3 canonical·Linear·OpenSpec·runtime/public schema 정합성, 제외 범위와 PROD-660 handoff를 독립 리뷰하고
+- [x] 3.3 canonical·Linear·OpenSpec·runtime/public schema 정합성, 제외 범위와 PROD-660 handoff를 독립 리뷰하고
       prerequisite PR에 검증 증거를 기록한다.
-- [ ] 3.4 모든 PROD-705 task와 통합 gate가 완료된 뒤 delta specs를 canonical specs에 동기화해 이 change를
+- [x] 3.4 모든 PROD-705 task와 통합 gate가 완료된 뒤 delta specs를 canonical specs에 동기화해 이 change를
       archive하고 archive 후 validation을 확인한다.
