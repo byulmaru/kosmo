@@ -111,7 +111,8 @@ route family를 열고, full master-detail 또는 one-pane drill-in으로 설정
 - [x] 3.2 full sidebar, compact icon rail과 mobile drawer에 `/settings` 진입점·route-family page-current·drawer close를 연결하되 bottom tab에 중복하지 않는다.
 - [x] 3.3 full Web에서 일반 RightRail을 숨기고 center+right에 약 320px master+flex detail workspace와 Profile 기본 선택을 제공하며, 다른 route의 center/right rail 계약을 유지한다.
 - [x] 3.4 compact/mobile/native에서 root 목록부터 시작하고 Profile detail의 back navigation과 root/detail heading을 중복 없이 제공한다.
-- [ ] 3.5 route parity·보호 guard·deep link/back, pane visibility, surface navigation·header와 Web forward/history 회귀 테스트를 추가한다.
+- [x] 3.5 route parity·보호 guard·deep link/back, pane visibility, surface navigation·header와 Web forward/history 회귀 테스트를 추가한다.
+  - 2026-08-08: Android·iOS 공용 route와 `index` anchor, 보호 guard, pane/header/navigation 계약은 unit·Storybook으로 고정하고 Web deep link/back/forward는 Playwright로 검증했다. 실제 Native route stack 실행은 4.3에 남긴다.
 
 ## 4. PROD-685 페이지 수준 접근성·플랫폼 검증과 완료 증거
 
@@ -147,5 +148,7 @@ Web·Android·iOS와 keyboard·screen reader·작은 화면에서 Settings route
 
 - [x] 4.1 Relay compiler, TypeScript, 관련 unit/component test와 Storybook test·static build·a11y를 통과시킨다.
 - [ ] 4.2 mobile·compact·full Web에서 master/detail 또는 root/detail의 keyboard 순서, screen reader heading·selected state, zoom·reflow, forward/history와 외부 Account/내부 Profile 통합 흐름을 확인하고, 기존 frames를 보존한 새 PROD-685 Figma frames와 구현을 정렬한다.
+  - 2026-08-08: mobile·compact·full Web의 heading·selected state·reflow와 Settings deep link/back/forward history를 Storybook·Playwright에서 확인했고, 기존 frames를 보존한 PROD-685 Figma frames 5개를 추가했다. 실제 keyboard traversal·screen reader·browser zoom과 외부 Account destination 이동은 미실행이므로 task는 열어 둔다.
 - [ ] 4.3 Android와 iOS에서 drawer 진입, heading·focus, font scaling, screen reader와 platform touch target을 확인하고 증거를 기록한다.
+  - 2026-08-08: Android AVD/연결 기기가 없고 iOS simulator는 boot되지 않은 상태라 실제 runtime 검증을 수행하지 않았다. source/unit의 route parity·44pt/48dp 계약만 확인했다.
 - [ ] 4.4 최신 canonical·Linear authority와 구현·delta spec 정합성을 다시 확인하고 `openspec validate add-settings-page-shell --strict`를 통과시켜 PROD-684에 완료·archive 증거를 인계한다.

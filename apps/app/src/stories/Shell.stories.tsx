@@ -1434,6 +1434,13 @@ export const UniversalMobile: Story = {
     });
 
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
+    const settingsDrawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    await userEvent.click(within(settingsDrawer).getByRole('link', { name: '설정' }));
+    await waitFor(() => {
+      expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull();
+    });
+
+    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const feedbackButton = page.getByRole('button', { name: '피드백 보내기' });
     await userEvent.click(feedbackButton);
     await waitFor(() => expect(ownerDocument.getElementById('mobile-sidebar')).toBeNull());
