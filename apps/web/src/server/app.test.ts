@@ -6,7 +6,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { federation } from '@kosmo/fedify';
+import type { fetchFederation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
   authorizationCodeGrant as oidcAuthorizationCodeGrant,
@@ -30,7 +30,7 @@ const {
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
-  federationFetch: vi.fn<typeof federation.fetch>(),
+  federationFetch: vi.fn<typeof fetchFederation>(),
   revokeSession:
     vi.fn<
       (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
@@ -52,7 +52,7 @@ vi.mock('@kosmo/core/services', () => ({
 }));
 
 vi.mock('@kosmo/fedify', () => ({
-  federation: { fetch: federationFetch },
+  fetchFederation: federationFetch,
   setInboundObservabilityReporter,
 }));
 

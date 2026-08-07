@@ -10,7 +10,7 @@ import {
 } from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
-import type { Transaction } from '../db';
+import type { DatabaseHandle, Transaction } from '../db';
 
 type VerifiedOidcIdentity = {
   displayName: string;
@@ -56,13 +56,13 @@ const loadCurrentSession = async (token: string, tx: Transaction) =>
  */
 export const revokeCurrentSession = async (
   { token }: { readonly token?: string },
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<RevokeCurrentSessionResult> => {
   if (!token) {
     return { status: 'ALREADY_UNAUTHENTICATED' };
   }
 
-  return getDatabaseConnection(tx).transaction(async (transaction) => {
+  return getDatabaseConnection(handle).transaction(async (transaction) => {
     const current = await loadCurrentSession(token, transaction);
     if (
       !current ||
@@ -102,9 +102,9 @@ export const revokeCurrentSession = async (
  */
 export const createOidcSession = async (
   { displayName, oidcSubject }: VerifiedOidcIdentity,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ) => {
-  return getDatabaseConnection(tx).transaction(async (tx) => {
+  return getDatabaseConnection(handle).transaction(async (tx) => {
     const account = await tx
       .insert(Accounts)
       .values({
