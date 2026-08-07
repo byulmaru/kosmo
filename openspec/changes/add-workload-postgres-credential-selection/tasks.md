@@ -35,4 +35,4 @@
 - [x] 1.1 `api`/`fedify` values 기본값, atomic validation과 helper fallback을 구현한다.
 - [x] 1.2 API source를 API/Web 기본 env에 공통 적용하고 Fedify source를 Web inbound Fedify env에만 additive로 렌더한다.
 - [x] 1.3 구현 시 일회성 수동 Helm template 검증으로 default byte identity, 대표 API/Fedify 조합·rollback, 대표 partial 입력 실패와 migration invariance를 확인하고 `helm lint`/format/strict/diff 검증을 통과한다.
-- [ ] 1.4 구현 self-review와 최신 Linear evidence를 부모가 완료하고, 실제 결과를 PR/Linear에 기록한다.
+- [x] 1.4 구현 self-review와 최신 Linear evidence를 부모가 완료하고, 실제 결과를 PR/Linear에 기록한다.
