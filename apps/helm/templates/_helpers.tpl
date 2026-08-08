@@ -6,6 +6,10 @@
 {{- printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "kosmo.postgresPoolerName" -}}
+{{- printf "%s-pooler-rw" (include "kosmo.postgresName" . | trunc 53 | trimSuffix "-") -}}
+{{- end -}}
+
 {{- define "kosmo.postgresTailscaleName" -}}
 {{- printf "%s-postgres-ts" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
