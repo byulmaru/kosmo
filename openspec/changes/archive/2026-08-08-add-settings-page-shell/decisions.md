@@ -324,6 +324,28 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
 - Confirmation / Follow-up: 최신 Linear relation, PROD-645/667 결과, page-level runtime, Figma 후속 정렬,
   delta spec 정합성을 archive 전에 확인한다.
 
+### Settings detail 복귀는 Web document replace와 Native Settings stack pop을 사용한다
+
+- Decision Date: 2026-08-08
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/settings.md`, `PROD-684`; Expo Router 56.2.13 route tree와 Web E2E;
+  Native runtime QA `PROD-727`
+- Status: Active
+- Context / Problem: Settings detail의 back은 이전 unrelated 화면이 아니라 `/settings` root를 열어야 한다.
+  그러나 nested Settings layout에서 `router.replace`·`navigate`·`dismissTo`를 사용한 Web 후보는 root에서
+  detail로 이동한 history에서 `/undefined/undefined` 또는 무동작을 재현했다.
+- Decision Outcome: Settings layout은 `unstable_settings.initialRouteName = 'index'`로 root anchor를 둔다.
+  Web은 `location.replace('/settings')`로 현재 detail document를 root로 교체하고, Android·iOS는 Settings
+  layout의 `Slot`이 생성하는 `StackRouter`에서 `router.back()`으로 detail을 pop한다.
+- Alternatives Considered: 모든 platform에서 `router.replace`, `navigate`, `dismissTo`, 조건부 `dismiss` 또는
+  `back`을 사용하는 방식. Web 실제 history에서 root destination과 stale detail 제거를 함께 만족하지 못해
+  채택하지 않았다.
+- Consequences: Web은 SPA state를 보존하지 않는 전체 document navigation을 수행하지만 stale detail을 forward
+  history에 남기지 않는다. Native stack destination은 source/unit으로 고정하고 실제 Android·iOS deep-link·
+  back 결과는 PROD-727이 후속 검증한다.
+- Confirmation / Follow-up: Web direct/fresh detail과 forward history를 Playwright로 확인하고, Native에서는
+  index anchor·StackRouter·back 호출을 source/unit으로 확인한다. 실제 runtime 결과는 PROD-727에 기록한다.
+
 ### PROD-684는 자동화된 통합 증거로 archive하고 실제 runtime QA는 PROD-727이 후속 소유한다
 
 - Decision Date: 2026-08-08
