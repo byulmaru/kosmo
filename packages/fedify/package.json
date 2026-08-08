@@ -2,7 +2,8 @@
   "name": "@kosmo/fedify",
   "type": "module",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./web-inbound": "./src/web-inbound.ts"
   },
   "scripts": {
     "lint:tsc": "tsc --noEmit",

@@ -1,5 +1,6 @@
 import { setNotificationEffectErrorReporter } from '@kosmo/core/services';
-import { federation, setInboundObservabilityReporter } from '@kosmo/fedify';
+import { setInboundObservabilityReporter } from '@kosmo/fedify';
+import { fetchFederation } from '@kosmo/fedify/web-inbound';
 import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
@@ -33,8 +34,7 @@ app.use('*', async (c, next) => {
     });
   };
 
-  const response = await federation.fetch(c.req.raw, {
-    contextData: undefined,
+  const response = await fetchFederation(c.req.raw, {
     onNotAcceptable: fallThroughNotAcceptable,
     onNotFound: fallThrough,
     onUnauthorized: fallThrough,
