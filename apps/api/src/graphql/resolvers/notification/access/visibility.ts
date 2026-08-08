@@ -1,6 +1,5 @@
 import {
   AccountProfiles,
-  db,
   Instances,
   Notifications,
   Posts,
@@ -49,9 +48,9 @@ const NotificationReplyRecipientInstances = alias(
 const NotificationReplyAuthors = alias(Profiles, 'notification_reply_author');
 const NotificationReplyAuthorInstances = alias(Instances, 'notification_reply_author_instance');
 
-export const notificationMembershipWhere = (accountId: string) =>
+export const notificationMembershipWhere = (accountId: string, database: UserContext['db']) =>
   exists(
-    db
+    database
       .select({ id: AccountProfiles.id })
       .from(AccountProfiles)
       .where(
@@ -62,10 +61,10 @@ export const notificationMembershipWhere = (accountId: string) =>
       ),
   );
 
-const visibleNotificationSourceWhere = () =>
+const visibleNotificationSourceWhere = (database: UserContext['db']) =>
   exists(
     unionAll(
-      db
+      database
         .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
         .innerJoin(
@@ -92,7 +91,7 @@ const visibleNotificationSourceWhere = () =>
             }),
           ),
         ),
-      db
+      database
         .select({ id: ProfileFollowRequests.id })
         .from(ProfileFollowRequests)
         .innerJoin(
@@ -128,7 +127,7 @@ const visibleNotificationSourceWhere = () =>
             }),
           ),
         ),
-      db
+      database
         .select({ id: Reactions.id })
         .from(Reactions)
         .innerJoin(Posts, eq(Posts.id, Reactions.postId))
@@ -163,7 +162,7 @@ const visibleNotificationSourceWhere = () =>
             }),
           ),
         ),
-      db
+      database
         .select({ id: NotificationSourceReposts.id })
         .from(NotificationSourceReposts)
         .where(
@@ -174,7 +173,7 @@ const visibleNotificationSourceWhere = () =>
             isNull(NotificationSourceReposts.currentContentId),
             isNull(NotificationSourceReposts.replyParentId),
             exists(
-              db
+              database
                 .select({ id: NotificationRelatedProfiles.id })
                 .from(NotificationRelatedProfiles)
                 .innerJoin(
@@ -192,7 +191,7 @@ const visibleNotificationSourceWhere = () =>
                 ),
             ),
             exists(
-              db
+              database
                 .select({ id: NotificationRepostRelatedPosts.id })
                 .from(NotificationRepostRelatedPosts)
                 .innerJoin(
@@ -224,13 +223,14 @@ const visibleNotificationSourceWhere = () =>
                         })}`,
                       },
                       viewerProfileId: Notifications.recipientProfileId,
+                      db: database,
                     }),
                   ),
                 ),
             ),
           ),
         ),
-      db
+      database
         .select({ id: NotificationReplyPosts.id })
         .from(NotificationReplyPosts)
         .where(
@@ -238,7 +238,7 @@ const visibleNotificationSourceWhere = () =>
             eq(Notifications.kind, NotificationKind.REPLY),
             eq(NotificationReplyPosts.id, Notifications.sourceId),
             exists(
-              db
+              database
                 .select({ id: NotificationReplyParents.id })
                 .from(NotificationReplyParents)
                 .innerJoin(
@@ -263,7 +263,7 @@ const visibleNotificationSourceWhere = () =>
                 ),
             ),
             exists(
-              db
+              database
                 .select({ id: NotificationReplyAuthors.id })
                 .from(NotificationReplyAuthors)
                 .innerJoin(
@@ -284,6 +284,7 @@ const visibleNotificationSourceWhere = () =>
                         })}`,
                       },
                       viewerProfileId: Notifications.recipientProfileId,
+                      db: database,
                     }),
                   ),
                 ),
@@ -297,7 +298,7 @@ export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
   const accountId = ctx.session?.accountId;
 
   return and(
-    accountId ? notificationMembershipWhere(accountId) : sql`1=0`,
-    visibleNotificationSourceWhere(),
+    accountId ? notificationMembershipWhere(accountId, ctx.db) : sql`1=0`,
+    visibleNotificationSourceWhere(ctx.db),
   )!;
 };

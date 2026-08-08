@@ -1,4 +1,4 @@
-import { AccountProfiles, db, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
+import { AccountProfiles, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
@@ -12,10 +12,15 @@ import {
   notificationRowFromSelection,
   notificationRowSelection,
 } from '../ref';
+import type { UserContext } from '@/context';
 import type { NotificationRow } from '../ref';
 
-const requireProfileNotificationMembership = async (accountId: string, profileId: string) => {
-  const membership = await db
+const requireProfileNotificationMembership = async (
+  accountId: string,
+  profileId: string,
+  database: UserContext['db'],
+) => {
+  const membership = await database
     .select({ id: AccountProfiles.id })
     .from(AccountProfiles)
     .where(and(eq(AccountProfiles.accountId, accountId), eq(AccountProfiles.profileId, profileId)))
@@ -31,7 +36,7 @@ builder.objectField(Profile, 'notifications', (t) =>
     {
       type: Notification,
       resolve: async (profile, args, ctx) => {
-        await requireProfileNotificationMembership(ctx.session.accountId, profile.id);
+        await requireProfileNotificationMembership(ctx.session.accountId, profile.id, ctx.db);
 
         return resolveCursorConnection<Promise<NotificationRow[]>>(
           {
@@ -39,7 +44,7 @@ builder.objectField(Profile, 'notifications', (t) =>
             toCursor: (notification) => notification.id,
           },
           ({ before, after, limit, inverted }) =>
-            db
+            ctx.db
               .select(notificationRowSelection)
               .from(Notifications)
               .leftJoin(
@@ -71,9 +76,9 @@ builder.objectField(Profile, 'unreadNotificationCount', (t) =>
   t.withAuth({ login: true }).field({
     type: 'Int',
     resolve: async (profile, _, ctx) => {
-      await requireProfileNotificationMembership(ctx.session.accountId, profile.id);
+      await requireProfileNotificationMembership(ctx.session.accountId, profile.id, ctx.db);
 
-      const [result] = await db
+      const [result] = await ctx.db
         .select({ count: count() })
         .from(Notifications)
         .where(

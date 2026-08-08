@@ -1,4 +1,4 @@
-import { db, Instances, Profiles, Reactions } from '@kosmo/core/db';
+import { Instances, Profiles, Reactions } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
@@ -86,14 +86,14 @@ builder.objectFields(Post, (t) => ({
       args: {
         type: t.arg.string({ required: true, validate: reactionTypeSchema }),
       },
-      resolve: (post, args) =>
+      resolve: (post, args, ctx) =>
         resolveCursorConnection<Promise<ReactionProfileRow[]>>(
           {
             args,
             toCursor: encodeReactionProfileCursor,
           },
           ({ before, after, limit, inverted }) =>
-            db
+            ctx.db
               .select({
                 ...getColumns(Profiles),
                 reactionCreatedAt: Reactions.createdAt,

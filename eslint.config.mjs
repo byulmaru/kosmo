@@ -64,6 +64,50 @@ const config = ts.config(
     },
   },
   {
+    files: [
+      'apps/api/src/graphql/resolvers/post/**/*.ts',
+      'apps/api/src/graphql/resolvers/bookmark/**/*.ts',
+      'apps/api/src/graphql/resolvers/reaction/**/*.ts',
+      'apps/api/src/graphql/resolvers/notification/access/visibility.ts',
+      'apps/api/src/graphql/resolvers/notification/field/profile.ts',
+      'apps/api/src/graphql/resolvers/notification/mutation/mark-read.ts',
+      'apps/api/src/graphql/resolvers/notification/ref.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@kosmo/core/db',
+              importNames: ['db'],
+              message: 'Use the GraphQL operation database handle from ctx.db.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...[
+          'addReaction',
+          'createBookmark',
+          'createPost',
+          'deleteBookmark',
+          'deletePost',
+          'deleteReaction',
+          'repostPost',
+        ].map((name) => ({
+          selector: `CallExpression[callee.name='${name}'][arguments.length=1]`,
+          message: `${name} must receive the GraphQL operation database handle.`,
+        })),
+        {
+          selector: "CallExpression[callee.property.name='postCommit'][arguments.length=0]",
+          message: 'PostCommit must receive the GraphQL operation database handle.',
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',

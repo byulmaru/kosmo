@@ -1,4 +1,4 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { Instances, Posts, Profiles } from '@kosmo/core/db';
 import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -22,6 +22,7 @@ export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<
       })}`,
     },
     viewerProfileId: ctx.session?.profileId,
+    db: ctx.db,
   });
 
   return sql<boolean>`${or(
@@ -31,7 +32,7 @@ export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<
       isNull(Posts.currentContentId),
       isNull(Posts.replyParentId),
       exists(
-        db
+        ctx.db
           .select({ id: DirectRepostSources.id })
           .from(DirectRepostSources)
           .innerJoin(

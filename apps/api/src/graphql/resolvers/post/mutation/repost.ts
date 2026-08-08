@@ -13,12 +13,15 @@ builder.mutationField('repostPost', (t) =>
       sourceId: t.input.globalID({ for: Post }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await repostPost({
-        actorProfileId: ctx.session.profileId,
-        origin: 'LOCAL',
-        sourcePostId: input.sourceId.id,
-      });
-      await result.postCommit();
+      const result = await repostPost(
+        {
+          actorProfileId: ctx.session.profileId,
+          origin: 'LOCAL',
+          sourcePostId: input.sourceId.id,
+        },
+        ctx.db,
+      );
+      await result.postCommit(ctx.db);
 
       return { repost: result.repost };
     },

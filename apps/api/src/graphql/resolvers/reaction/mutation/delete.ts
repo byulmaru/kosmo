@@ -31,13 +31,16 @@ builder.mutationField('deleteReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx): Promise<DeleteReactionPayload> => {
-      const result = await deleteReaction({
-        actorProfileId: ctx.session.profileId,
-        origin: 'LOCAL',
-        postId: input.postId.id,
-        type: input.type,
-      });
-      await result.postCommit();
+      const result = await deleteReaction(
+        {
+          actorProfileId: ctx.session.profileId,
+          origin: 'LOCAL',
+          postId: input.postId.id,
+          type: input.type,
+        },
+        ctx.db,
+      );
+      await result.postCommit(ctx.db);
 
       return { post: result.postId, reactionId: result.reaction?.id ?? null };
     },
