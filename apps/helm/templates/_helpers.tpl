@@ -86,3 +86,26 @@ password
 {{- printf "%s:%s" .Values.image .Values.version -}}
 {{- end -}}
 {{- end -}}
+
+{{- define "kosmo.temporalAdminToolsImageRef" -}}
+{{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.temporal.adminTools.digest) -}}
+{{- fail "temporal.adminTools.digest must be a sha256 digest" -}}
+{{- end -}}
+{{- printf "%s@%s" .Values.temporal.adminTools.image .Values.temporal.adminTools.digest -}}
+{{- end -}}
+
+{{- define "kosmo.temporalNamespaceName" -}}
+{{- $name := get .Values.temporal.namespace.names .Values.env | default "" -}}
+{{- if not $name -}}
+{{- fail (printf "temporal.namespace.names.%s is required" .Values.env) -}}
+{{- end -}}
+{{- $name -}}
+{{- end -}}
+
+{{- define "kosmo.temporalNamespaceRetention" -}}
+{{- $retention := get .Values.temporal.namespace.retentions .Values.env | default "" -}}
+{{- if not $retention -}}
+{{- fail (printf "temporal.namespace.retentions.%s is required" .Values.env) -}}
+{{- end -}}
+{{- $retention -}}
+{{- end -}}
