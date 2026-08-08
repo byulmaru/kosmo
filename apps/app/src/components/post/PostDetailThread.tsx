@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
-import {
-  createNativeScrollHandlers,
-  isScrollNearEnd,
-} from '@/components/pagination/nativeScrollPagination';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
@@ -16,7 +12,6 @@ import { getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
-import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailThreadNextPageQuery.graphql';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
@@ -141,95 +136,14 @@ function PostDetailThreadContent({
     PostDetailThreadNextPageQuery,
     PostDetailThread_post$key
   >(PostDetailThreadFragment, postKey);
-  const [loadError, setLoadError] = useState(false);
-  const [scrollPageRevision, setScrollPageRevision] = useState(0);
-  const handledScrollPageRevisionRef = useRef(0);
-  const loadInFlightRef = useRef(false);
-  const pageErrorRef = useRef(false);
-  const loadNextPage = useCallback(() => {
-    if (!hasNext || isLoadingNext || loadInFlightRef.current) {
-      return;
-    }
-    loadInFlightRef.current = true;
-    pageErrorRef.current = false;
-    setLoadError(false);
-    loadNext(20, {
-      onComplete: (error) => {
-        pageErrorRef.current = Boolean(error);
-        setLoadError(Boolean(error));
-        if (error) {
-          loadInFlightRef.current = false;
-          return;
-        }
-        setTimeout(() => {
-          if (!loadInFlightRef.current) {
-            return;
-          }
-          loadInFlightRef.current = false;
-          if (!(Platform.OS === 'web' && presentation === 'route')) {
-            setScrollPageRevision((revision) => revision + 1);
-          }
-        }, 0);
-      },
-    });
-  }, [hasNext, isLoadingNext, loadNext, presentation]);
-
-  useEffect(
-    () => () => {
-      loadInFlightRef.current = false;
-    },
-    [],
-  );
-  const maybeLoadNextPage = useCallback(
-    (metrics: ScrollMetrics) => {
-      if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
-        loadNextPage();
-      }
-    },
-    [loadError, loadNextPage],
-  );
-  const nativeMetricsRef = useRef<ScrollMetrics>({
-    contentLength: 0,
-    offset: 0,
-    viewportLength: 0,
+  const { loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext,
+    isLoadingNext,
+    itemCount: data.replyDescendants.edges.length,
+    loadNext,
+    pageSize: 20,
+    webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
-  const nativeScrollProps = useMemo(
-    () => createNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
-    [maybeLoadNextPage],
-  );
-
-  useEffect(() => {
-    if (
-      (Platform.OS === 'web' && presentation === 'route') ||
-      scrollPageRevision === 0 ||
-      isLoadingNext ||
-      handledScrollPageRevisionRef.current === scrollPageRevision
-    ) {
-      return;
-    }
-    handledScrollPageRevisionRef.current = scrollPageRevision;
-    maybeLoadNextPage(nativeMetricsRef.current);
-  }, [isLoadingNext, maybeLoadNextPage, scrollPageRevision, presentation]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || presentation !== 'route') {
-      return;
-    }
-    const check = () =>
-      maybeLoadNextPage({
-        contentLength: document.documentElement.scrollHeight,
-        offset: window.scrollY,
-        viewportLength: window.innerHeight,
-      });
-    const frame = window.requestAnimationFrame(check);
-    window.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('resize', check);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', check);
-      window.removeEventListener('resize', check);
-    };
-  }, [data.replyDescendants.edges.length, maybeLoadNextPage, presentation]);
   const ancestors = data.replyAncestors
     .filter((post) => post != null)
     .reverse()

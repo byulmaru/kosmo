@@ -6,6 +6,7 @@ import {
   Mail,
   PenLine,
   Search,
+  Settings as SettingsIcon,
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
@@ -16,6 +17,7 @@ import { radii, spacing } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
 import { LogoutControl } from './LogoutControl';
 import { ProfileSwitcher } from './ProfileSwitcher';
+import { isSettingsRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -58,6 +60,7 @@ const navigation: NavigationItem[] = [
   { Icon: UserRound, label: '프로필', profile: true },
   { href: '/follow-requests', Icon: UserRoundPlus, label: '팔로워 요청' },
   { href: '/bookmarks', Icon: Bookmark, label: '북마크' },
+  { href: '/settings', Icon: SettingsIcon, label: '설정' },
 ];
 
 type Props = {
@@ -93,7 +96,10 @@ export function SidebarNavigation({
       return { active: Boolean(href && pathname === href), href };
     }
 
-    return { active: pathname === item.href, href: item.href };
+    return {
+      active: item.href === '/settings' ? isSettingsRoute(pathname) : pathname === item.href,
+      href: item.href,
+    };
   };
 
   const switcherSurface = compact ? 'compact' : surface === 'desktop' ? 'full' : 'drawer';

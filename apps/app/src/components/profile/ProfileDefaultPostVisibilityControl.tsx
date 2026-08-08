@@ -53,11 +53,13 @@ type SaveState = 'idle' | 'saving' | 'success' | 'error';
 export type ProfileDefaultPostVisibilityControlProps = {
   editable: boolean;
   profile: ProfileDefaultPostVisibilityControl_profile$key;
+  showTitle?: boolean;
 };
 
 export function ProfileDefaultPostVisibilityControl({
   editable,
   profile: profileKey,
+  showTitle = true,
 }: ProfileDefaultPostVisibilityControlProps) {
   const profile = useFragment(ProfileFragment, profileKey);
   const environment = useRelayEnvironment();
@@ -74,6 +76,7 @@ export function ProfileDefaultPostVisibilityControl({
       editable={editable}
       key={`${profile.id}:${contextGenerationRef.current}:${environmentGenerationRef?.current ?? 0}`}
       profile={profile}
+      showTitle={showTitle}
     />
   );
 }
@@ -81,9 +84,11 @@ export function ProfileDefaultPostVisibilityControl({
 function ProfileDefaultPostVisibilityControlContents({
   editable,
   profile,
+  showTitle,
 }: {
   editable: boolean;
   profile: ProfileDefaultPostVisibilityControl_profile$data;
+  showTitle: boolean;
 }) {
   const theme = useTheme();
   const environmentGenerationRef = useRelayEnvironmentGeneration();
@@ -154,9 +159,11 @@ function ProfileDefaultPostVisibilityControlContents({
       style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}
       testID="profile-default-post-visibility-control"
     >
-      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
-        기본 게시 공개 범위
-      </Text>
+      {showTitle ? (
+        <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          기본 게시 공개 범위
+        </Text>
+      ) : null}
       <View accessibilityLabel={`현재 Profile ${profile.displayName} ${profile.relativeHandle}`}>
         <Text style={[styles.target, { color: theme.text }]}>{profile.displayName}</Text>
         <Text style={[styles.targetHandle, { color: theme.textSecondary }]}>

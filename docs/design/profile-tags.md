@@ -26,7 +26,7 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 - 태그가 없으면 빈 섹션이나 안내 문구를 표시하지 않는다.
 - TagChip 목록은 chip 사이에서 여러 줄로 감쌀 수 있으며, 긴 허용값과 좁은 화면에서도 Profile 본문을 가로로
   넘치게 하지 않는다.
-- PROD-525가 전체 탐색을 전달하기 전에는 TagChip을 비대화형으로 표시한다. PROD-529가 소유한 navigation 구현은 PROD-525가 전체 탐색을 전달한 후 TagChip을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크 또는 버튼으로 활성화한다.
+- PROD-529는 표시 전용 TagChip visual과 편집 책임을 유지하면서 공개 Profile의 진입점을 [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)으로 이동하는 링크로 활성화한다. PROD-525는 완료된 API·client slice의 종단간 정합성 검증과 shared OpenSpec archive를 소유한다.
 - Profile이 공개 조회 조건을 통과하지 않으면 Profile Tag만 별도로 표시하지 않는다.
 
 ## 플랫폼과 접근성
@@ -54,7 +54,8 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)에 정의된 TagChip navigation 자체
 - 자동완성, 추천, trend와 관련도 표시
-- Remote Profile Tag 편집·표시와 ActivityPub 표현
+- Remote Profile Tag 편집·표시와 ActivityPub 표현. 이 제외는 별도 관련 Profile 탐색에서 이미 저장된 Remote
+  관계를 공용 Profile visibility 아래에서 읽는 동작은 제외하지 않는다.
 - Hashtag Post List 또는 검색 결과 화면 변경
 
 ## 전달 경계
@@ -65,3 +66,5 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
   Profile 표시를 제공한다.
 - `PROD-526`은 저장·정규화·권한·GraphQL 기반을 제공하고 `PROD-522`는 세 결과의 통합 검증과 OpenSpec
   archive를 소유한다.
+- `PROD-529`는 공개 TagChip의 exact Hashtag identity link와 관련 Profile client route·목록 상태를 제공하고,
+  `PROD-525`는 PROD-528 API와의 통합 검증 및 shared OpenSpec archive를 소유한다.

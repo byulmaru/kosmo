@@ -33,6 +33,7 @@ const preview: Preview = {
                   mutationResponse={relay.mutationResponse}
                   paginationError={relay.paginationError}
                   paginationLoading={relay.paginationLoading}
+                  paginationRequestObserver={relay.paginationRequestObserver}
                   paginationResponse={relay.paginationResponse}
                   paginationResponses={relay.paginationResponses}
                   operationResponses={relay.operationResponses}

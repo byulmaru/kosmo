@@ -1049,7 +1049,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 ### Requirement: 준비되지 않은 sidebar 진입점 비노출
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566`, `PROD-654` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST). 받은 팔로우 요청 관리 화면이 제공되면 full Web sidebar, compact Web rail과 mobile Web drawer는 같은 canonical route 진입점을 제공해야 한다(MUST).
 
 #### Scenario: responsive sidebar에서 프로필 설정 비노출
 
@@ -1063,10 +1063,18 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **THEN** 시스템은 `팔로워 요청` link나 같은 의미의 진입 control을 시각적으로 표시하지 않는다
 - **AND** 해당 control을 접근성 트리에 link, button이나 다른 interactive element로 노출하지 않는다
 
+#### Scenario: 관리 화면 준비 후 responsive navigation 진입점
+
+- **WHEN** `/follow-requests` 받은 팔로우 요청 관리 화면이 제공된 상태에서 인증된 사용자가 full Web sidebar, compact Web rail 또는 mobile Web drawer를 연다
+- **THEN** 시스템은 `팔로워 요청` label과 Lucide `UserRoundPlus` glyph를 사용하는 진입점을 표시한다
+- **AND** 세 shell surface의 진입점은 모두 `/follow-requests`로 이동한다
+- **AND** mobile bottom tab에는 팔로워 요청 진입점을 추가하지 않는다
+- **AND** mobile Web drawer에서 진입하면 기존 route navigation과 drawer close 동작을 유지한다
+
 #### Scenario: 실제 동작하는 navigation 유지
 
 - **WHEN** sidebar navigation이 준비되지 않은 진입점 없이 렌더링된다
-- **THEN** PROD-487과 PR #390의 `피드백 보내기` link와 `/feedback` destination을 유지한다
+- **THEN** 시스템은 PROD-487과 PR #390의 `피드백 보내기` link와 `/feedback` destination을 유지한다
 - **AND** 기존 `프로필`·`북마크` link, 로그아웃 control과 responsive navigation 동작을 유지한다
 
 #### Scenario: 피드백과 준비되지 않은 설정 구분
@@ -1246,3 +1254,48 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **WHEN** Web viewport가 `compact` 이상 `full` 미만이고 권한 있는 사용자가 Profile edit route에 진입한다
 - **THEN** shell은 icon rail 다음 중앙 최대 600px surface에 Profile edit를 표시한다
 - **AND** right rail이나 Profile edit 전용 breakpoint를 추가하지 않는다
+
+### Requirement: Web 검색 상단바 geometry와 소유권
+
+**Authority / Provenance:** `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-590`, PROD-590 owner confirmation on 2026-08-06 — Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 route 소유 검색 도구막대를 표시해야 한다(MUST). 그 안의 검색 입력은 모든 Web breakpoint에서 높이 `48px`를 사용하고 수직 중앙에 배치해 위·아래 `8px` 여백을 만들어야 한다(MUST). 도구막대 위의 `32px` 상단 여백과 도구막대 바깥 가로 여백은 제거하되, 최근 검색·검색 결과·empty 상태 등 도구막대 아래 콘텐츠의 기존 본문 여백은 유지해야 한다(MUST). `compact` 미만 모바일 Web에서는 셸의 메뉴 전용 헤더와 route 검색 도구막대를 중복 렌더링해서는 안 된다(MUST NOT). 최초 검색 상태에는 `44×44px` leading 영역의 햄버거 메뉴를 표시하고, 입력 중·검색 후 상태에는 같은 영역을 현재 `tab`의 최초 검색 상태로 돌아가는 검색 초기화 뒤로가기로 교체해야 한다(MUST). 이 전환은 도구막대 높이, 검색 입력의 시작점과 본문 시작 위치를 바꾸지 않아야 한다(MUST NOT). 검색 초기화 뒤로가기는 실제 browser history를 이동하지 않고 검색 입력과 URL `q`를 비우며 포커스를 해제해야 한다(MUST). 입력 내부 지우기는 검색 입력과 URL `q`를 비우되 포커스를 유지해야 한다(MUST). 기존 `q`·`tab` deep link, browser back/forward, query-only navigation 위치·포커스 보존과 모바일 왼쪽 edge swipe drawer 동작은 유지해야 한다(MUST). Android/iOS 검색 헤더는 변경해서는 안 된다(MUST NOT).
+
+#### Scenario: 모든 Web breakpoint에서 검색 도구막대 정렬
+
+- **WHEN** 사용자가 `390px`, `900px` 또는 `1400px` Web viewport에서 `/search`를 연다
+- **THEN** 중앙 컬럼 최상단의 검색 도구막대 높이는 `64px`다
+- **AND** 검색 입력 높이는 세 viewport에서 모두 `48px`다
+- **AND** 검색 입력은 도구막대 안에서 수직 중앙에 놓여 위·아래 여백이 각각 `8px`다
+- **AND** 도구막대 위와 바깥에는 별도 route 여백이 없다
+- **AND** 도구막대 아래 콘텐츠는 기존 본문 여백을 유지한다
+
+#### Scenario: 모바일 최초 검색 상태에서 단일 상단바 표시
+
+- **WHEN** 사용자가 `compact` 미만 모바일 Web에서 포커스되지 않고 `q`가 없는 `/search`를 본다
+- **THEN** 시스템은 route 검색 도구막대 하나만 표시하고 셸의 메뉴 전용 헤더를 별도로 표시하지 않는다
+- **AND** `44×44px` leading 영역에 접근 가능한 햄버거 메뉴를 표시한다
+- **AND** 사용자가 햄버거 메뉴를 실행하면 셸이 소유한 모바일 drawer를 연다
+
+#### Scenario: 모바일 입력·결과 상태에서 검색 초기화
+
+- **WHEN** 사용자가 `compact` 미만 모바일 Web에서 검색 입력에 포커스하거나 `q`가 있는 검색 결과를 본다
+- **THEN** 햄버거 메뉴와 같은 `44×44px` leading 영역에 검색 초기화 뒤로가기를 표시한다
+- **AND** 도구막대 높이, 검색 입력 시작점과 본문 시작 위치는 최초 상태와 같다
+- **AND** 사용자가 뒤로가기를 실행하면 현재 `tab`을 유지하고 검색 입력과 `q`를 비운 뒤 입력 포커스를 해제한다
+- **AND** browser history stack을 직접 뒤로 이동하지 않는다
+
+#### Scenario: 입력 내부 지우기와 URL 상태 보존
+
+- **WHEN** 사용자가 검색 입력 내부 지우기를 실행한다
+- **THEN** 시스템은 검색 입력과 URL `q`를 비우고 현재 `tab`을 유지한다
+- **AND** 검색 입력 포커스를 유지한다
+
+#### Scenario: 기존 검색 navigation과 drawer gesture 보존
+
+- **WHEN** 사용자가 `q`·`tab` deep link, 검색어·탭 query-only navigation, browser back/forward 또는 모바일 왼쪽 edge swipe를 사용한다
+- **THEN** 기존 URL, document 위치, 입력 포커스와 history 복원 계약이 유지된다
+- **AND** 모바일 왼쪽 edge swipe는 검색 상태와 관계없이 drawer를 연다
+
+#### Scenario: Native 검색 헤더 유지
+
+- **WHEN** 사용자가 Android 또는 iOS에서 `/search`를 연다
+- **THEN** 시스템은 기존 Native 검색 헤더 구조와 동작을 유지한다

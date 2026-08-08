@@ -26,6 +26,7 @@ type TestElementProps = {
   accessibilityElementsHidden?: boolean;
   accessibilityRole?: string;
   children?: ReactNode;
+  numberOfLines?: number;
   style?: unknown;
   variant?: string;
   width?: number;
@@ -69,6 +70,20 @@ test('text variant exposes one visible heading in a 64px page bar', () => {
   assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
   assert.equal(headings.length, 1);
   assert.equal(headings[0]?.props.children, '알림');
+});
+
+test('text title shrinks and wraps within the available width beside a leading action', () => {
+  const leading = createElement('Pressable', { accessibilityLabel: '뒤로 가기' });
+  const header = renderHeader({ leading, title: '게시물 기본 공개 범위' });
+  const heading = findElements(header, 'Text').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+
+  assert.ok(heading);
+  const titleStyle = (heading.props.style as Array<Record<string, unknown>>)[0];
+  assert.equal(titleStyle?.flexShrink, 1);
+  assert.equal(titleStyle?.minWidth, 0);
+  assert.equal(heading.props.numberOfLines, undefined);
 });
 
 test('brand variant exposes one Home heading and hides the approved mark from accessibility', () => {

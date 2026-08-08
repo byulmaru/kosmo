@@ -20,6 +20,7 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
+import { returnToSettingsRoot } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -28,7 +29,13 @@ import {
 } from './PrimaryNavigationScrollContext';
 import { RightRail, RightRailPrivacyLink } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import { getShellLayout, getWebMobileShellHeader, webMobileShellHeaderHeight } from './shellLayout';
+import {
+  getShellRoutePresentation,
+  getWebMobileShellHeader,
+  isSettingsRoute,
+  isWebMobileRouteOwnedHeader,
+  webMobileShellHeaderHeight,
+} from './shellLayout';
 import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { View as NativeView, ViewStyle } from 'react-native';
@@ -62,7 +69,7 @@ const webRightRailOverflow = {
 } as unknown as ViewStyle;
 
 const webStickyHeader = {
-  height: webMobileShellHeaderHeight,
+  minHeight: webMobileShellHeaderHeight,
   position: 'sticky',
   top: 0,
   zIndex: 20,
@@ -116,12 +123,17 @@ function UniversalShellContent({ revision }: { revision: number }) {
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
-  const layout = getShellLayout(web, width);
+  const { layout, settingsWorkspace, showRightRail } = getShellRoutePresentation(
+    web,
+    width,
+    pathname,
+  );
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
+  const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
@@ -183,6 +195,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
     }
     setSwitcherOpen(true);
   };
+  const openNavigationDrawer = () => {
+    setDrawerOpen(true);
+  };
   const openFeedbackOverlay = () => {
     setDrawerOpen(false);
     setSwitcherOpen(false);
@@ -195,7 +210,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
       accessibilityState={{ expanded: drawerOpen }}
       controlRef={menuButtonRef}
       feedback="opacity"
-      onPress={() => setDrawerOpen(true)}
+      onPress={openNavigationDrawer}
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}
@@ -206,7 +221,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const backButton = (
     <IconButton
       accessibilityLabel="뒤로 가기"
-      onPress={() => router.back()}
+      onPress={() => (isSettingsRoute(pathname) ? returnToSettingsRoot(router) : router.back())}
       style={styles.menuButton}
       targetSize={44}
       visualSize={44}
@@ -216,7 +231,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
   );
 
   return (
-    <ShellChromeProvider openProfileSwitcher={openProfileSwitcher}>
+    <ShellChromeProvider
+      navigationDrawerOpen={drawerOpen}
+      navigationDrawerTriggerRef={menuButtonRef}
+      openNavigationDrawer={openNavigationDrawer}
+      openProfileSwitcher={openProfileSwitcher}
+    >
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
         {...swipeToOpenDrawer.panHandlers}
@@ -254,11 +274,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
           style={[
             styles.center,
             web && webDocumentColumn,
-            full && styles.centerWithRightRail,
+            settingsWorkspace && styles.settingsCenter,
+            showRightRail && styles.centerWithRightRail,
             { borderColor: theme.border },
           ]}
         >
-          {mobile ? (
+          {mobile && !routeOwnsMobileHeader ? (
             <View
               style={[
                 styles.mobileChrome,
@@ -299,7 +320,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           ) : null}
         </View>
 
-        {full ? (
+        {showRightRail ? (
           <View
             style={[
               styles.rightRail,
@@ -361,6 +382,7 @@ const styles = StyleSheet.create({
   sidebar: { borderRightWidth: 1, minHeight: '100%' },
   sidebarWithOverlay: { zIndex: 30 },
   center: { flex: 1, maxWidth: 600, minHeight: '100%', minWidth: 0 },
+  settingsCenter: { maxWidth: 950 },
   centerWithRightRail: { borderRightWidth: 1 },
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },

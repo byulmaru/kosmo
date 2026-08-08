@@ -1756,6 +1756,8 @@ function ProductionPostActionSessionBoundaryStory({
 
   return (
     <ShellChromeProvider
+      navigationDrawerOpen={false}
+      openNavigationDrawer={() => undefined}
       openProfileSwitcher={() => setProfileResolutionCount((count) => count + 1)}
     >
       {state === 'error' ? <SessionErrorProvider>{contents}</SessionErrorProvider> : contents}

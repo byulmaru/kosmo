@@ -21,6 +21,7 @@ type ProfileData = {
 };
 
 let fragmentData: ProfileData;
+const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -29,16 +30,23 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
-  Link: ({ children, href }: { children: ReturnType<typeof createElement>; href: string }) =>
+  Link: ({ children, href }: { children: ReturnType<typeof createElement>; href: unknown }) =>
     createElement('Link', { href }, children),
 });
 mockModule('react-native', {
   Image: 'Image',
-  Platform: { OS: 'web' },
+  Platform: {
+    OS: 'web',
+    select: (options: Record<string, number>) => {
+      platformSelections.push(options);
+      return options.web;
+    },
+  },
   Pressable: 'Pressable',
   StyleSheet: {
     absoluteFillObject: {},
     create: <T>(styles: T) => styles,
+    flatten: (styles: ReadonlyArray<Record<string, unknown>>) => Object.assign({}, ...styles),
   },
   Text: 'Text',
   View: 'View',
@@ -77,6 +85,7 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
+  platformSelections.length = 0;
 });
 
 const renderProfile = async (data: ProfileData) => {
@@ -158,7 +167,7 @@ describe('ProfileHero Profile Tag presentation', () => {
     assert.equal(renderer!.root.findAllByProps({ testID: 'profile-tag-list' }).length, 0);
   });
 
-  it('Profile Tag를 bio 다음과 통계 전에 비대화형 wrapping chip으로 표시한다', async () => {
+  it('Profile Tag를 bio 다음과 통계 전에 exact Hashtag link로 표시한다', async () => {
     await renderProfile({
       ...baseProfile,
       tags: [
@@ -170,8 +179,47 @@ describe('ProfileHero Profile Tag presentation', () => {
     const tagList = renderer!.root.findByProps({ testID: 'profile-tag-list' });
     assert.equal(tagList.props.style.flexDirection, 'row');
     assert.equal(tagList.props.style.flexWrap, 'wrap');
-    assert.equal(tagList.findAll((node) => (node.type as unknown) === 'Pressable').length, 0);
-    assert.equal(tagList.findAll((node) => (node.type as unknown) === 'Link').length, 0);
+    const links = tagList.findAll((node) => (node.type as unknown) === 'Link');
+    const targets = tagList.findAll((node) => (node.type as unknown) === 'Pressable');
+    assert.deepEqual(
+      links.map((node) => node.props.href),
+      [
+        {
+          params: { hashtagId: 'hashtag-fediverse' },
+          pathname: '/hashtags/[hashtagId]/profiles',
+        },
+        {
+          params: { hashtagId: 'hashtag-development' },
+          pathname: '/hashtags/[hashtagId]/profiles',
+        },
+      ],
+    );
+    assert.deepEqual(
+      targets.map((node) => ({
+        label: node.props.accessibilityLabel,
+        role: node.props.accessibilityRole,
+        target: {
+          height: node.props.style.minHeight,
+          width: node.props.style.minWidth,
+        },
+      })),
+      [
+        {
+          label: '#Fediverse 관련 프로필 보기',
+          role: 'link',
+          target: { height: 32, width: 32 },
+        },
+        {
+          label: '#개발 관련 프로필 보기',
+          role: 'link',
+          target: { height: 32, width: 32 },
+        },
+      ],
+    );
+    assert.deepEqual(platformSelections, [
+      { android: 48, default: 48, ios: 44, web: 32 },
+      { android: 48, default: 48, ios: 44, web: 32 },
+    ]);
 
     const text = renderer!.root
       .findAll((node) => (node.type as unknown) === 'Text')

@@ -1,19 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
-import {
-  createNativeScrollHandlers,
-  isScrollNearEnd,
-  resumeNativePagination,
-} from '@/components/pagination/nativeScrollPagination';
+import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { FollowRequestListItem } from './FollowRequestListItem';
-import type { ScrollMetrics } from '@/components/pagination/nativeScrollPagination';
 import type { FollowRequestList_profile$key } from './__generated__/FollowRequestList_profile.graphql';
 import type { FollowRequestListNextPageQuery } from './__generated__/FollowRequestListNextPageQuery.graphql';
 
@@ -51,90 +45,13 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
     pagination.data.id,
     'FollowRequestList_incomingProfileFollowRequests',
   );
-  const [loadError, setLoadError] = useState(false);
-  const [nativePageRevision, setNativePageRevision] = useState(0);
-  const handledNativePageRevisionRef = useRef(0);
-  const requestInFlightRef = useRef(false);
-  const pageErrorRef = useRef(false);
-  const loadNextPage = useCallback(() => {
-    if (!pagination.hasNext || pagination.isLoadingNext || requestInFlightRef.current) {
-      return;
-    }
-
-    requestInFlightRef.current = true;
-    pageErrorRef.current = false;
-    setLoadError(false);
-    pagination.loadNext(20, {
-      onComplete: (error) => {
-        pageErrorRef.current = Boolean(error);
-        setLoadError(Boolean(error));
-        if (error) {
-          requestInFlightRef.current = false;
-          return;
-        }
-
-        setTimeout(() => {
-          if (Platform.OS === 'web') {
-            requestInFlightRef.current = false;
-          } else {
-            setNativePageRevision((revision) => revision + 1);
-          }
-        }, 0);
-      },
-    });
-  }, [pagination.hasNext, pagination.isLoadingNext, pagination.loadNext]);
-  const maybeLoadNextPage = useCallback(
-    (metrics: ScrollMetrics) => {
-      if (!pageErrorRef.current && !loadError && isScrollNearEnd(metrics)) {
-        loadNextPage();
-      }
-    },
-    [loadError, loadNextPage],
-  );
-  const nativeMetricsRef = useRef<ScrollMetrics>({
-    contentLength: 0,
-    offset: 0,
-    viewportLength: 0,
+  const { loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
+    hasNext: pagination.hasNext,
+    isLoadingNext: pagination.isLoadingNext,
+    itemCount: edges.length,
+    loadNext: pagination.loadNext,
+    pageSize: 20,
   });
-  const nativeScrollProps = useMemo(
-    () => createNativeScrollHandlers(nativeMetricsRef, maybeLoadNextPage),
-    [maybeLoadNextPage],
-  );
-
-  useEffect(() => {
-    if (
-      Platform.OS === 'web' ||
-      nativePageRevision === 0 ||
-      pagination.isLoadingNext ||
-      handledNativePageRevisionRef.current === nativePageRevision
-    ) {
-      return;
-    }
-
-    handledNativePageRevisionRef.current = nativePageRevision;
-    resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
-  }, [maybeLoadNextPage, nativePageRevision, pagination.isLoadingNext]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web') {
-      return;
-    }
-
-    const check = () =>
-      maybeLoadNextPage({
-        contentLength: document.documentElement.scrollHeight,
-        offset: window.scrollY,
-        viewportLength: window.innerHeight,
-      });
-    const frame = window.requestAnimationFrame(check);
-    window.addEventListener('scroll', check, { passive: true });
-    window.addEventListener('resize', check);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', check);
-      window.removeEventListener('resize', check);
-    };
-  }, [edges.length, maybeLoadNextPage]);
 
   if (!connection) {
     throw new Error('Selected Profile incoming follow request connection is unavailable.');

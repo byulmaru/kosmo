@@ -19,11 +19,31 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
+`/settings` route family는 full Web의 예외 workspace를 사용한다. 전역 풀 사이드바 `320px`는 유지하되 일반
+우측 레일을 숨기고, 중앙 column과 우측 레일이 사용하던 나머지 폭을 Settings master-detail에 제공한다.
+Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 이 예외는 `full=1280` breakpoint나
+다른 route의 중앙 `600px`·우측 레일 계약을 바꾸지 않는다.
+
 ## 글쓰기 진입
 
 - `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
 - `compact`~`full`: 우측 레일이 없으므로 아이콘 레일의 글쓰기 버튼.
 - `≥ full`: 우측 레일 컴포저가 담당하며, 사이드바 글쓰기 버튼은 표시하지 않는다. mobile drawer에도 중복 글쓰기 버튼을 표시하지 않는다.
+
+## Web 검색 상단바
+
+- Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px`의 검색 도구막대를 표시한다. 그 안의
+  검색 입력은 모든 Web breakpoint에서 높이 `48px`와 위·아래 `8px` 여백을 사용한다. route의 기존 `32px`
+  상단 여백과 도구막대 바깥쪽 가로 여백은 제거하며, 도구막대 아래 콘텐츠만 기존 본문 여백을 사용한다.
+- `< compact`에서는 셸의 메뉴 전용 상단바와 route의 검색 도구막대를 세로로 함께 표시하지 않는다. 최초 검색
+  상태에서는 햄버거 메뉴, 입력 중과 결과 상태에서는 검색 초기화 뒤로가기를 같은 `44×44px` leading 영역에
+  표시한다. 상태가 바뀌어도 상단바 높이, 검색 입력의 시작점과 본문 시작 위치를 유지한다.
+- `compact`와 `full`은 현재 중앙 컬럼의 검색 상태와 leading action 동작을 유지하면서 `64px` 도구막대 안의
+  `48px` 입력을 수직 중앙에 배치한다.
+- 검색 초기화 뒤로가기는 현재 `tab`을 유지하면서 검색어와 `q`를 비우고 포커스를 해제한다. 입력 내부 지우기는
+  포커스를 유지하며, browser history 뒤로가기와 `q`·`tab` deep link는 기존 동작을 유지한다.
+- 모바일 검색 상태에서도 왼쪽 가장자리 스와이프로 drawer를 열 수 있어야 한다.
+- Android/iOS에는 이 검색 상단바 통합을 적용하지 않는다.
 
 ## 개인정보 처리방침 진입
 
@@ -48,6 +68,10 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
   중복 진입점을 두지 않는다.
 - route와 page shell이 같은 구현 slice에서 준비된 뒤 진입점을 노출하며, 준비되지 않은 placeholder route를
   먼저 만들지 않는다.
+- `full` Web settings route family에서는 전역 sidebar 다음 공간을 Settings 전용 master-detail workspace로
+  사용하고 일반 `RightRail`을 표시하지 않는다.
+- `compact` Web, `< compact` mobile Web과 Android·iOS에서는 root 목록과 detail을 한 화면씩 표시하며 내부
+  detail에서 back navigation으로 root 목록에 돌아간다.
 
 ## 프로필 피커
 
