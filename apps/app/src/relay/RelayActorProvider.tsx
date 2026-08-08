@@ -20,13 +20,12 @@ import type { Environment } from 'relay-runtime';
 type RelayActorValue = {
   clearNativeSession: () => Promise<void>;
   nativeToken: string | null;
-  revision: number;
   resetActor: (profileId?: string | null) => void;
-  retry: () => void;
   setNativeSession: (token: string) => Promise<void>;
 };
 
 const RelayActorContext = createContext<RelayActorValue | null>(null);
+const RelayActorBoundaryContext = createContext<string | null>(null);
 
 export function RelayActorProvider({
   children,
@@ -48,12 +47,17 @@ export function RelayActorProvider({
     void readSessionToken().then(setNativeToken, () => setNativeToken(null));
   }, []);
 
-  const setNativeSession = useCallback(async (token: string) => {
-    await writeSessionToken(token);
-    environmentGenerationRef.current += 1;
-    setNativeToken(token);
-    dispatchActor({ type: 'retry' });
-  }, []);
+  const setNativeSession = useCallback(
+    async (token: string) => {
+      await writeSessionToken(token);
+      environmentGenerationRef.current += 1;
+      setNativeToken(token);
+      // Keep the active actor ID while still creating a fresh actor state object. This preserves the
+      // auth lifecycle reset even when the token value is unchanged and React bails out of setState.
+      dispatchActor({ type: 'profile-selected', profileId: actor.id });
+    },
+    [actor.id],
+  );
 
   const clearNativeSession = useCallback(async () => {
     await deleteSessionToken();
@@ -67,39 +71,77 @@ export function RelayActorProvider({
     dispatchActor({ type: 'profile-selected', profileId });
   }, []);
 
-  const retry = useCallback(() => {
-    environmentGenerationRef.current += 1;
-    dispatchActor({ type: 'retry' });
-  }, []);
-
   const environment = useMemo(
     () => createEnvironment(nativeToken ?? null),
-    // actorId intentionally invalidates selected-profile-scoped cached fields.
-    [actor.id, actor.revision, createEnvironment, nativeToken],
+    // Every actor lifecycle action receives a fresh state object, even when the selected ID is
+    // unchanged. That keeps resetActor an explicit Store reset without exposing a public counter.
+    [actor, createEnvironment, nativeToken],
   );
   const value = useMemo(
     () => ({
       clearNativeSession,
       nativeToken: nativeToken ?? null,
       resetActor,
-      retry,
-      revision: actor.revision,
       setNativeSession,
     }),
-    [actor.revision, clearNativeSession, nativeToken, resetActor, retry, setNativeSession],
+    [clearNativeSession, nativeToken, resetActor, setNativeSession],
   );
 
   if (nativeToken === undefined) {
     return <Splash label="세션을 복원하는 중입니다." />;
   }
 
+  const actorBoundaryKey = `${actor.id}:${environmentGenerationRef.current}`;
+
   return (
     <RelayActorContext.Provider value={value}>
-      <RelayEnvironmentBoundary environment={environment} generationRef={environmentGenerationRef}>
-        {children}
-      </RelayEnvironmentBoundary>
+      <RelayActorBoundaryContext.Provider value={actorBoundaryKey}>
+        <RelayEnvironmentBoundary
+          environment={environment}
+          generationRef={environmentGenerationRef}
+        >
+          {children}
+        </RelayEnvironmentBoundary>
+      </RelayActorBoundaryContext.Provider>
     </RelayActorContext.Provider>
   );
+}
+
+/**
+ * Remounts an actor-dependent subtree without remounting the app's navigation state.
+ *
+ * The root Relay environment provider remains stable while its environment changes; consumers
+ * place this boundary below navigators (for example around the tabs Slot) when local actor state
+ * must be recreated for a new Store.
+ */
+export function RelayActorBoundary({ children }: PropsWithChildren) {
+  const actorBoundaryKey = useContext(RelayActorBoundaryContext);
+
+  if (!actorBoundaryKey) {
+    throw new Error('RelayActorBoundary must be used inside RelayActorProvider.');
+  }
+
+  return <RelayActorBoundaryContent key={actorBoundaryKey}>{children}</RelayActorBoundaryContent>;
+}
+
+/**
+ * Returns the opaque actor lifecycle identity for infrastructure boundaries.
+ *
+ * Routes and general UI should use their nearest route boundary instead of constructing lifecycle
+ * keys. RelayActorBoundary and session infrastructure are the intended consumers.
+ */
+export function useRelayActorLifecycleKey(): string {
+  const actorLifecycleKey = useContext(RelayActorBoundaryContext);
+
+  if (!actorLifecycleKey) {
+    throw new Error('useRelayActorLifecycleKey must be used inside RelayActorProvider.');
+  }
+
+  return actorLifecycleKey;
+}
+
+function RelayActorBoundaryContent({ children }: PropsWithChildren) {
+  return children;
 }
 
 export function useRelayActor(): RelayActorValue {

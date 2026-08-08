@@ -1,11 +1,9 @@
-import { useState } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   NotificationList,
   NotificationListState,
 } from '@/components/notification/NotificationList';
-import { RouteBoundary } from '@/components/RouteBoundary';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import type { NotificationsPageQuery } from './__generated__/NotificationsPageQuery.graphql';
 
 const NotificationsQuery = graphql`
@@ -21,23 +19,19 @@ const NotificationsQuery = graphql`
 `;
 
 export default function NotificationsScreen() {
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-
   return (
     <RouteBoundary
       error={(retry) => <NotificationListState onRetry={retry} state="error" />}
-      key={revision}
       loading={<NotificationListState state="loading" />}
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="알림을 불러오지 못했어요"
     >
-      <NotificationsContent fetchKey={`${revision}:${fetchKey}`} />
+      <NotificationsContent />
     </RouteBoundary>
   );
 }
 
-function NotificationsContent({ fetchKey }: { fetchKey: string }) {
+function NotificationsContent() {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<NotificationsPageQuery>(
     NotificationsQuery,
     {},
