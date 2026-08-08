@@ -29,4 +29,4 @@
 - [x] 1.1 session mode, reset, capacity, replica와 resource 경계를 가진 additive read-write Pooler를 Helm에 구현한다.
 - [x] 1.2 readiness, session affinity/reset, exporter metrics와 Pooler-only rollback 검증 절차를 운영 문서에 추가한다.
 - [x] 1.3 dev/prod lint·render와 OpenSpec strict validation을 통과하고 기존 workload endpoint/credential 불변을 정적으로 검증한다.
-- [ ] 1.4 배포된 환경에서 admission/readiness, session affinity/reset와 exporter metrics를 검증하고 PROD-728에 비민감 근거를 기록한다.
+- [x] 1.4 배포된 환경에서 admission/readiness, session affinity/reset와 exporter metrics를 검증하고 PROD-728에 비민감 근거를 기록한다.
