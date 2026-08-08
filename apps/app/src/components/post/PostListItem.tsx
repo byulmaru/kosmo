@@ -11,6 +11,7 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -19,6 +20,7 @@ import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
@@ -26,7 +28,13 @@ const PostListRowFragment = graphql`
     id
     createdAt
     content {
+      id
       bodyText
+      media {
+        id
+        altText
+        url
+      }
       contentWarning
     }
     profile {
@@ -34,6 +42,7 @@ const PostListRowFragment = graphql`
         id
         url
       }
+      id
       handle
       relativeHandle
       displayName
@@ -49,6 +58,7 @@ const PostListItemFragment = graphql`
     id
     createdAt
     content {
+      id
       bodyText
       contentWarning
       document
@@ -116,6 +126,7 @@ export function PostListItem({
   const theme = useTheme();
   const [deleted, setDeleted] = useState(false);
   const post = useFragment(PostListItemFragment, postKey);
+  const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(post.id);
   const onDeleted = useCallback(() => setDeleted(true), []);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
@@ -161,6 +172,19 @@ export function PostListItem({
     ) : (
       replySurface
     );
+  const quoteContent = post.content;
+  const quoteMedia =
+    quoteContent?.media?.map(({ altText, id, url }) => ({
+      altText: altText ?? null,
+      id,
+      url: url ?? null,
+    })) ?? null;
+  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [onDeleted, openViewer, post.id],
+  );
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
@@ -190,53 +214,54 @@ export function PostListItem({
     return null;
   }
 
+  const renderWithReplySurface = (presentation: ReactNode) => (
+    <>
+      {presentation}
+      {presentedReplySurface}
+    </>
+  );
+
   if (!post.repostSource) {
     if (!post.content) {
-      return null;
+      return renderWithReplySurface(null);
     }
-    return (
-      <>
-        <View role="article" style={cardStyle}>
-          {replyAttribution}
-          <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
-        </View>
-        {presentedReplySurface}
-      </>
+    return renderWithReplySurface(
+      <View role="article" style={cardStyle}>
+        {replyAttribution}
+        <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
+      </View>,
     );
   }
 
   if (!post.content && post.replyParent) {
-    return null;
+    return renderWithReplySurface(null);
   }
 
   const source = post.repostSource;
 
   if (!post.content) {
-    return (
-      <>
-        <View role="article" style={cardStyle}>
-          <PostAttributionRow
-            icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
-          >
-            <Link asChild href={profileHref}>
-              <Pressable
-                accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
-                accessibilityRole="link"
-                style={styles.repostLabelTarget}
+    return renderWithReplySurface(
+      <View role="article" style={cardStyle}>
+        <PostAttributionRow
+          icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
+        >
+          <Link asChild href={profileHref}>
+            <Pressable
+              accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+              accessibilityRole="link"
+              style={styles.repostLabelTarget}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.attributionLabel, { color: theme.textSecondary }]}
               >
-                <Text
-                  numberOfLines={1}
-                  style={[styles.attributionLabel, { color: theme.textSecondary }]}
-                >
-                  {post.profile.displayName}님이 재게시함
-                </Text>
-              </Pressable>
-            </Link>
-          </PostAttributionRow>
-          <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
-        </View>
-        {presentedReplySurface}
-      </>
+                {post.profile.displayName}님이 재게시함
+              </Text>
+            </Pressable>
+          </Link>
+        </PostAttributionRow>
+        <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
+      </View>,
     );
   }
 
@@ -245,12 +270,7 @@ export function PostListItem({
       bodyText: post.content.bodyText,
       contentWarning: post.content.contentWarning,
       document: post.content.document,
-      media:
-        post.content.media?.map(({ altText, id, url }) => ({
-          altText: altText ?? null,
-          id,
-          url: url ?? null,
-        })) ?? null,
+      media: quoteMedia,
       postId: post.id,
     },
     createdAt: post.createdAt,
@@ -288,46 +308,44 @@ export function PostListItem({
     },
   };
 
-  return (
-    <>
-      <View style={cardStyle}>
-        {replyAttribution}
-        <View style={styles.quoteRow}>
-          <Link asChild href={profileHref}>
-            <Pressable
-              aria-hidden
-              accessibilityElementsHidden
-              accessible={false}
-              focusable={false}
-              importantForAccessibility="no-hide-descendants"
-              style={styles.avatar}
-              tabIndex={-1}
-            >
-              <Avatar
-                imageUri={post.profile.avatar?.url}
-                label={post.profile.displayName || post.profile.handle}
-                size={48}
-              />
-            </Pressable>
-          </Link>
-          <View style={styles.sourcePresentation}>
-            <PostSourcePresentationView
-              post={presentationPost}
-              showPostAvatar={false}
-              sourcePreviewStyle={styles.quoteSourcePreview}
+  return renderWithReplySurface(
+    <View style={cardStyle}>
+      {replyAttribution}
+      <View style={styles.quoteRow}>
+        <Link asChild href={profileHref}>
+          <Pressable
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no-hide-descendants"
+            style={styles.avatar}
+            tabIndex={-1}
+          >
+            <Avatar
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.handle}
+              size={48}
             />
-            <PostActionSurface
-              actionBarStyle={styles.actionBarSlot}
-              onDeleted={onDeleted}
-              reactionSummaryStyle={styles.quoteReactionSummary}
-              reply={reply}
-              socialActionTarget={post.actionSurface!}
-            />
-          </View>
+          </Pressable>
+        </Link>
+        <View style={styles.sourcePresentation}>
+          <PostSourcePresentationView
+            onMediaOpen={handleQuoteMediaOpen}
+            post={presentationPost}
+            showPostAvatar={false}
+            sourcePreviewStyle={styles.quoteSourcePreview}
+          />
+          <PostActionSurface
+            actionBarStyle={styles.actionBarSlot}
+            onDeleted={onDeleted}
+            reactionSummaryStyle={styles.quoteReactionSummary}
+            reply={reply}
+            socialActionTarget={post.actionSurface!}
+          />
         </View>
       </View>
-      {presentedReplySurface}
-    </>
+    </View>,
   );
 }
 
@@ -352,9 +370,15 @@ function PostListRow({
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
+  const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
-
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [onDeleted, openViewer, post.id],
+  );
   return (
     <View style={styles.standardRow} testID="post-list-standard-row">
       <Link asChild href={profileHref}>
@@ -387,7 +411,11 @@ function PostListRow({
         </View>
         {post.content ? (
           <View style={styles.bodyLink}>
-            <PostBody onBodyPress={() => router.push(detailHref)} post={post} />
+            <PostBody
+              onBodyPress={() => router.push(detailHref)}
+              onMediaOpen={handleMediaOpen}
+              post={post}
+            />
           </View>
         ) : null}
         <PostActionSurface

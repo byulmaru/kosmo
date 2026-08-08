@@ -13,6 +13,7 @@ type HookOptions = {
   itemCount: number;
   loadNext: (count: number, options: { onComplete: (error: Error | null) => void }) => void;
   pageSize: number;
+  webScrollTarget?: 'container' | 'document';
 };
 
 type HookResult = {
@@ -245,6 +246,27 @@ describe('useAutomaticPagination', () => {
     await act(async () => currentResult().loadNextPage());
     assert.equal(loadRequests.length, 2, '수동 재시도는 같은 page를 다시 요청한다');
     assert.equal(currentResult().loadError, false);
+  });
+
+  it('Web container는 document listener 없이 저장된 metric으로 다음 page를 측정한다', async () => {
+    await renderHook(options({ webScrollTarget: 'container' }));
+    assert.equal(listeners.get('scroll')?.size ?? 0, 0);
+    assert.equal(listeners.get('resize')?.size ?? 0, 0);
+
+    await act(async () => {
+      currentResult().nativeScrollProps.onLayout({
+        nativeEvent: { layout: { height: 800 } },
+      });
+      currentResult().nativeScrollProps.onContentSizeChange(0, 1200);
+    });
+    assert.equal(loadRequests.length, 1);
+
+    await updateHook(options({ isLoadingNext: true, webScrollTarget: 'container' }));
+    await completeRequest(0, null);
+    await updateHook(
+      options({ isLoadingNext: false, itemCount: 40, webScrollTarget: 'container' }),
+    );
+    assert.equal(loadRequests.length, 2);
   });
 
   it('Native metric으로 요청하고 Relay loading 뒤 저장된 metric을 다시 측정한다', async () => {

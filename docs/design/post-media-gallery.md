@@ -24,7 +24,7 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 ## 상호작과 접근성
 
-정상 이미지 tile 자체는 PROD-650 viewer가 소유할 선택·navigation을 미리 구현하지 않으며 button·link role이나 press action을 갖지 않는다. Alt Text가 없으면 document 순서 기반의 `N번째 첨부 이미지`를 사용한다.
+일반 목록·상세의 공개된 정상 이미지 tile은 [Post Media Viewer](./post-media-viewer.md)를 여는 독립된 control이다. 선택한 tile의 document 순서가 viewer의 최초 위치가 되며, tile은 이미지 맥락과 viewer가 열린다는 목적을 함께 전달한다. Alt Text가 없으면 document 순서 기반의 `N번째 첨부 이미지`를 사용한다. `interactive=false`인 Reply Composer 부모 preview는 같은 geometry만 사용하고 viewer를 열지 않는다.
 
 일반 목록·상세의 Sensitive 공개·다시 가리기와 실패 이미지 재시도는 독립된 control이다. 기존 role, accessible name, state, keyboard·touch 입력을 유지하고 실행할 때 주변 Post navigation을 함께 실행하지 않는다. 비대화형 부모 preview의 error fallback은 같은 tile에 남지만 재시도 control을 제공하지 않는다.
 
@@ -38,4 +38,4 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 
 ## 제외 범위
 
-이미지 viewer, zoom·pan·gesture, tile navigation, 다운로드·공유, Composer 업로드·선택, Reply·Quote 전용 layout, Media URL·authorization·metadata와 서버·DB 계약은 이 gallery의 소유가 아니다.
+Viewer 내부 탐색·원문 panel·Action Bar·modal lifecycle은 [Post Media Viewer](./post-media-viewer.md)가 소유한다. zoom·pan, Media 파일 다운로드·공유, Composer 업로드·선택, Reply·Quote 전용 layout, Media URL·authorization·metadata와 서버·DB 계약은 gallery의 소유가 아니다.

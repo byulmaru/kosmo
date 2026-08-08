@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,11 +10,15 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
+import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
+import type { PostActionBarProps } from './PostActionBar';
+import type { PostContentWarningPresentation } from './PostContentRenderer';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
@@ -23,7 +27,13 @@ const PostLayoutFragment = graphql`
     createdAt
     visibility
     content {
+      id
       bodyText
+      media {
+        id
+        altText
+        url
+      }
       contentWarning
     }
     profile {
@@ -78,14 +88,19 @@ const visibilityLabels: Record<string, string> = {
 };
 
 export function PostLayout({
+  contentWarningPresentation = 'default',
+  mediaPresentation = 'default',
   onDeleted,
   post: postKey,
 }: {
+  contentWarningPresentation?: PostContentWarningPresentation;
+  mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
   post: PostLayout_post$key;
 }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
+  const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(post.id);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
@@ -93,6 +108,31 @@ export function PostLayout({
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
+  const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted: handleDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [handleDeleted, openViewer, post.id],
+  );
+  const reply: PostActionBarProps['reply'] = replyBinding
+    ? {
+        accessibilityLabel: '답글',
+        controlRef: replyTriggerRef,
+        expanded: replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
+        onPress: () => {
+          if (replyAuthentication.execution.kind === 'resolution-required') {
+            replyAuthentication.resolve(replyAuthentication.execution.reason);
+          } else if (replyAuthentication.execution.kind === 'enabled') {
+            replyBinding.onPress();
+          }
+        },
+        processing: getReplyProcessingState(
+          replyAuthentication.execution,
+          Boolean(replyBinding.profile),
+        ),
+      }
+    : undefined;
   const presentationSource: SourcePostPresentationData | null = source
     ? {
         content: source.content
@@ -142,7 +182,13 @@ export function PostLayout({
       <View style={styles.content}>
         <ProfileNameBlock href={profileHref} profile={post.profile} />
         <View style={styles.body}>
-          <PostBody post={post} size="lg" />
+          <PostBody
+            contentWarningPresentation={contentWarningPresentation}
+            mediaPresentation={mediaPresentation}
+            onMediaOpen={mediaPresentation === 'hidden' ? undefined : handleMediaOpen}
+            post={post}
+            size="lg"
+          />
           {presentationSource ? (
             <PostSourcePreview source={presentationSource} style={styles.source} />
           ) : null}
@@ -151,29 +197,9 @@ export function PostLayout({
             {visibilityLabels[post.visibility] ?? post.visibility}
           </Text>
           <PostActionSurface
-            onDeleted={onDeleted}
+            onDeleted={handleDeleted}
             reactionSummaryStyle={styles.reactionSummary}
-            reply={
-              replyBinding
-                ? {
-                    accessibilityLabel: '답글',
-                    controlRef: replyTriggerRef,
-                    expanded:
-                      replyAuthentication.execution.kind === 'enabled' && replyBinding.expanded,
-                    onPress: () => {
-                      if (replyAuthentication.execution.kind === 'resolution-required') {
-                        replyAuthentication.resolve(replyAuthentication.execution.reason);
-                      } else if (replyAuthentication.execution.kind === 'enabled') {
-                        replyBinding.onPress();
-                      }
-                    },
-                    processing: getReplyProcessingState(
-                      replyAuthentication.execution,
-                      Boolean(replyBinding.profile),
-                    ),
-                  }
-                : undefined
-            }
+            reply={reply}
             socialActionTarget={socialActionTarget!}
           />
           {replyBinding?.expanded &&
