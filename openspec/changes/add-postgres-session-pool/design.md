@@ -34,7 +34,7 @@ CloudNativePG `Pooler` CRD는 같은 namespace의 하나의 Cluster와 `rw` 또�
 
 ### Recommended Approach
 
-`postgres.pooler` values 아래에 replica 수, `maxClientConnections`, `defaultPoolSize`와 resources를 둔다. production은 Cluster HA와 맞춰 3 replicas, dev는 1 replica를 렌더링하고, PgBouncer 기본 예시와 현재 예상 부하를 보수적으로 시작하기 위해 replica당 `max_client_conn=1000`, user/database pair당 `default_pool_size=10`을 사용한다. resources는 경량 proxy의 초기 경계로 request `100m/128Mi`, limit `500m/512Mi`를 명시한다.
+`postgres.pooler` values 아래에 replica 수, `maxClientConnections`, `defaultPoolSize`와 resources를 둔다. production은 Cluster HA와 맞춰 3 replicas, dev는 1 replica를 렌더링하고, PgBouncer 기본 예시와 현재 예상 부하를 보수적으로 시작하기 위해 replica당 `max_client_conn=1000`, user/database pair당 `default_pool_size=10`을 사용한다. resources는 경량 proxy와 내장 exporter의 초기 경계로 request `25m/64Mi`, limit `250m/128Mi`를 명시한다. CNPG의 resource override 예시는 sizing 권위로 사용하지 않으며, 실제 traffic을 활성화하는 PROD-726 전에 dev working set과 CPU throttling/OOM을 관찰해 별도 조정한다.
 
 별도 Pooler template은 기존 Cluster 이름을 참조하고 `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`을 선언한다. Pod template에는 PgBouncer container resource만 override하며 CloudNativePG가 Service, readiness와 metrics exporter 구성을 소유하게 둔다. 이름 helper는 `<release>-postgres-pooler-rw`처럼 direct `-rw`와 명확히 구분한다.
 

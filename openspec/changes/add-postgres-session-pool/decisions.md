@@ -35,7 +35,7 @@
 - Authority / Provenance: Linear `PROD-728`
 - Status: Active
 - Context / Problem: 이슈는 replica, client/server limit와 resource 기본값을 요구하지만 구체 수치를 고정하지 않는다. 현재 production Cluster는 3 instances이고 dev는 1 instance다.
-- Decision Outcome: dev는 Pooler 1 replica, prod는 3 replicas를 사용한다. 각 replica는 `max_client_conn=1000`, user/database pair별 `default_pool_size=10`을 사용한다. PgBouncer container는 request `100m/128Mi`, limit `500m/512Mi`를 기본값으로 두고 모두 Helm values에서 조정 가능하게 한다.
+- Decision Outcome: dev는 Pooler 1 replica, prod는 3 replicas를 사용한다. 각 replica는 `max_client_conn=1000`, user/database pair별 `default_pool_size=10`을 사용한다. PgBouncer container는 경량 proxy와 exporter의 초기 경계로 request `25m/64Mi`, limit `250m/128Mi`를 기본값으로 두고 모두 Helm values에서 조정 가능하게 한다. CNPG 문서의 더 큰 resource 수치는 구성 방법을 보여 주는 예시이지 workload sizing 권위가 아니므로 그대로 채택하지 않는다. 실제 traffic 활성화 전 dev 사용량과 throttling/OOM을 관찰하고 후속 PROD-726에서 필요할 때 조정한다.
 - Alternatives Considered: 모든 환경 3 replicas는 dev 비용이 불필요해 제외했다. PgBouncer 기본 `default_pool_size=20`은 production 3 replicas에서 pair당 최대 60 backend connection을 만들 수 있어 초기값으로 제외했다. limit 미지정은 이슈의 명시적 capacity 경계를 충족하지 못한다.
 - Consequences: production은 user/database pair마다 최대 30 backend connection을 사용할 수 있고 replica당 최대 1000 client가 연결될 수 있다. 다수 DB user가 생기면 전체 server connection budget을 다시 계산해야 한다.
 - Confirmation / Follow-up: render된 값을 확인하고 live metrics의 active/idle/waiting/max-wait 및 PostgreSQL connection budget으로 후속 values 조정을 판단한다.
