@@ -29,3 +29,16 @@ postgres:
     limits:
       cpu: 250m
       memory: 1Gi
+  pooler:
+    replicas:
+      dev: 1
+      prod: 3
+    maxClientConnections: 1000
+    defaultPoolSize: 10
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
