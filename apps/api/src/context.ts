@@ -26,12 +26,6 @@ type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extend
   load: (keys: Key[]) => Promise<Result[]>;
 };
 
-const loaderRegistry = Symbol('kosmo.loaderRegistry');
-
-type LoaderParamsWithRegistry = LoaderParams<unknown, unknown, unknown, boolean, boolean> & {
-  [loaderRegistry]?: Map<string, DataLoader<unknown, unknown>>;
-};
-
 type DefaultContext = {
   ip?: string;
   db: Database;
@@ -139,10 +133,7 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
  * Create the execution context for one GraphQL operation.
  *
  * Authentication is deliberately derived once in `deriveContext`; this helper
- * only snapshots the identity and creates operation-owned caches. The loader
- * registry marker lets wrappers installed on the request context (for example,
- * test instrumentation) continue to decorate the operation loader without
- * sharing the request registry.
+ * only snapshots the identity and creates operation-owned caches.
  */
 export const createOperationContext = (base: Context): Context => {
   const ctx = createContext(base);
@@ -150,13 +141,6 @@ export const createOperationContext = (base: Context): Context => {
   if (base.session) {
     ctx.session = { ...base.session };
   }
-
-  const requestLoader = base.loader ?? ctx.loader;
-  ctx.loader = (params) =>
-    requestLoader({
-      ...params,
-      [loaderRegistry]: ctx.$loaders,
-    } as never) as never;
 
   return ctx;
 };
@@ -169,10 +153,8 @@ const createContext = (base?: Partial<Context>): Context => {
   } as Context;
 
   ctx.loader = (params) => {
-    const scopedParams = params as LoaderParamsWithRegistry;
-    const registry = scopedParams[loaderRegistry] ?? ctx.$loaders;
     const { name, nullable, many, load, key } = params;
-    const cached = registry.get(name);
+    const cached = ctx.$loaders.get(name);
     if (cached) {
       return cached as never;
     }
@@ -202,7 +184,7 @@ const createContext = (base?: Partial<Context>): Context => {
       { cache: false },
     );
 
-    registry.set(name, loader);
+    ctx.$loaders.set(name, loader);
 
     return loader as never;
   };

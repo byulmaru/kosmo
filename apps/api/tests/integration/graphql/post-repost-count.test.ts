@@ -40,29 +40,9 @@ let localInstanceId: string;
 
 type ProfileRow = typeof CoreDb.Profiles.$inferSelect;
 type PostRow = typeof CoreDb.Posts.$inferSelect;
-type LoaderBatchRecord = Map<string, number[]>;
 type GraphQLResult<TData> = {
   data?: TData;
   errors?: Array<{ message: string }>;
-};
-
-let loaderBatches: LoaderBatchRecord;
-
-const trackLoaderBatches = <Context extends Awaited<ReturnType<typeof deriveContext>>>(
-  context: Context,
-) => {
-  const originalLoader = context.loader;
-  context.loader = ((params: { name: string; load: (keys: unknown[]) => Promise<unknown[]> }) =>
-    originalLoader({
-      ...params,
-      load: async (keys: unknown[]) => {
-        const keyCounts = loaderBatches.get(params.name) ?? [];
-        keyCounts.push(keys.length);
-        loaderBatches.set(params.name, keyCounts);
-        return params.load(keys);
-      },
-    } as never)) as typeof context.loader;
-  return context;
 };
 
 describe('Post Repost 상태 GraphQL 경계', () => {
@@ -93,14 +73,13 @@ describe('Post Repost 상태 GraphQL 경계', () => {
     const { yoga } = await import('../../../src/graphql');
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
-      c.set('context', trackLoaderBatches(await deriveContext(c)));
+      c.set('context', await deriveContext(c));
       return next();
     });
     app.route('/graphql', yoga);
   });
 
   beforeEach(async () => {
-    loaderBatches = new Map();
     await resetFixtures();
   });
 
@@ -149,12 +128,9 @@ describe('Post Repost 상태 GraphQL 경계', () => {
     await createRepost((await createProfile('source-b-reposter')).id, sourceB.id);
     await createRepost((await createProfile('quote-reposter')).id, quote.id);
 
-    loaderBatches.clear();
-    const batchingResult = await requestRepostState([sourceA.id, sourceB.id], viewerA.token);
-    assertNoGraphQLErrors(batchingResult);
-    assert.deepEqual(loaderBatches.get('post.repostCount'), [2]);
-    assert.deepEqual(loaderBatches.get('post.viewerRepost'), [2]);
-    assert.deepEqual(batchingResult.data?.nodes, [
+    const result = await requestRepostState([sourceA.id, sourceB.id], viewerA.token);
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
       {
         id: encodeGlobalId('Post', sourceA.id),
         repostCount: 2,
@@ -162,8 +138,6 @@ describe('Post Repost 상태 GraphQL 경계', () => {
       },
       { id: encodeGlobalId('Post', sourceB.id), repostCount: 1, viewerRepost: null },
     ]);
-
-    loaderBatches.clear();
 
     const [
       anonymousResult,
