@@ -238,3 +238,26 @@ API는 request 승인·거절·취소 결과가 Relay cache에서 삭제된 requ
 - **WHEN** follow request 거절 또는 취소가 성공한다
 - **THEN** payload의 actor Profile은 갱신할 incoming 또는 outgoing request connection의 소유자를 식별한다
 - **AND** payload의 삭제된 `ProfileFollowRequest` global ID는 해당 connection edge를 제거할 수 있게 한다
+
+### Requirement: GraphQL operation별 실행 context 격리
+
+**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-708. API는 다음 계약을 MUST 준수한다. 인증에서 파생한 session identity와 operation 실행 context를 분리한다. 실행 가능한 각 GraphQL operation은 다른 operation과 공유하지 않는 Pothos context cache, DataLoader registry, session snapshot과 명시적 `ctx.db` handle을 가지며, 같은 HTTP batch의 operation끼리도 이 실행 상태를 공유하지 않는다. PROD-708에서 `ctx.db`는 기존 global DB handle을 가리키는 additive seam이며 새 connection이나 transaction을 열지 않는다.
+
+#### Scenario: HTTP batch의 operation 격리
+
+- **WHEN** 하나의 HTTP batch가 둘 이상의 GraphQL operation을 실행한다
+- **THEN** 각 operation은 독립된 session snapshot, Pothos context cache와 DataLoader registry를 사용한다
+- **AND** 한 operation에서 적재하거나 변경한 실행 상태를 다른 operation이 관찰하지 않는다
+
+#### Scenario: 기존 인증 identity 전달
+
+- **WHEN** 인증된 request에서 GraphQL operation을 실행한다
+- **THEN** operation context는 request에서 한 번 검증한 session ID, account ID와 선택적 profile ID를 유지한다
+- **AND** 인증 SQL을 operation마다 재실행하지 않는다
+
+#### Scenario: Additive DB handle
+
+- **WHEN** PROD-708의 production GraphQL operation context를 만든다
+- **THEN** `ctx.db`는 기존 global DB handle을 기본값으로 사용한다
+- **AND** operation 전용 connection이나 operation-wide transaction을 열지 않는다
+- **AND** 기존 resolver SQL과 GraphQL 응답은 변경 전과 동일하게 동작한다
