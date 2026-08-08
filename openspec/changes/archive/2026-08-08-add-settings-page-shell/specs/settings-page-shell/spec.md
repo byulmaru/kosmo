@@ -170,7 +170,7 @@
 
 ### Requirement: Account 외부 진입점과 Profile 내부 기능의 페이지 수준 통합
 
-**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace, 외부/내부 소유 경계와 Web·Android·iOS 통합을 확인해 PROD-684에 인계해야 한다(MUST).
+**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, runtime QA `PROD-727`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace와 외부/내부 소유 경계를 자동화로 확인해 PROD-684에 인계해야 한다(MUST). 실제 Web 보조기술과 Android·iOS runtime QA는 PROD-727에서 후속 검증해야 하며(MUST), 해당 후속 QA는 이 capability의 canonical sync·archive를 다시 열거나 차단해서는 안 된다(MUST NOT).
 
 #### Scenario: 두 자식 결과를 root/detail에 배치한다
 
@@ -182,7 +182,14 @@
 #### Scenario: 페이지 수준 통합을 검증한다
 
 - **WHEN** PROD-685 완료 검증을 수행한다
-- **THEN** full·compact·mobile Web과 Android·iOS에서 Settings 진입, root/detail navigation과 외부 Account/내부 Profile 소유 경계를 확인한다
-- **AND** keyboard·screen reader·reflow에서 master/detail 또는 one-pane heading, selected state, 현재 대상과 back 흐름을 확인한다
+- **THEN** full·compact·mobile Web의 Settings 진입, root/detail navigation과 외부 Account/내부 Profile 소유 경계를 자동화로 확인한다
+- **AND** 공용 Android·iOS route와 layout 계약을 source/unit 수준에서 확인한다
 - **AND** PROD-645의 외부 링크와 PROD-667·PROD-648의 GraphQL·DB·Composer 세부 테스트를 PROD-685 테스트로 복제하지 않는다
-- **AND** 검증 결과와 남은 platform runtime gate를 PROD-684에 인계한다
+- **AND** 검증 결과와 실제 runtime QA handoff를 PROD-684에 인계한다
+
+#### Scenario: 실제 runtime QA를 후속 추적한다
+
+- **WHEN** Web 보조기술 또는 Android·iOS runtime에서 Settings 계약을 검증한다
+- **THEN** PROD-727은 플랫폼·환경·실행 증거와 발견한 결함을 기록한다
+- **AND** 미실행 또는 실패한 runtime QA를 완료된 증거로 일반화하지 않는다
+- **AND** 발견한 결함은 완료된 change를 다시 여는 대신 별도 구현 이슈와 PR로 추적한다

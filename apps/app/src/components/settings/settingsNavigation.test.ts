@@ -1,41 +1,58 @@
 import assert from 'node:assert/strict';
-import { before, describe, it } from 'node:test';
+import { afterEach, before, describe, it, mock } from 'node:test';
 import type { ImperativeRouter } from 'expo-router';
 
-type SettingsNavigationRouter = Pick<ImperativeRouter, 'back' | 'canGoBack' | 'replace'>;
+type SettingsNavigationRouter = Pick<ImperativeRouter, 'back'>;
 
 let returnToSettingsRoot: (router: SettingsNavigationRouter) => void;
+let platform: 'ios' | 'web' = 'web';
+const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location');
+
+mock.module('react-native', {
+  exports: {
+    Platform: {
+      get OS() {
+        return platform;
+      },
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
   ({ returnToSettingsRoot } = await import('./settingsNavigation'));
 });
 
+afterEach(() => {
+  platform = 'web';
+  if (originalLocation) {
+    Object.defineProperty(globalThis, 'location', originalLocation);
+  } else {
+    Reflect.deleteProperty(globalThis, 'location');
+  }
+});
+
 describe('Settings detail back navigation', () => {
-  it('unrelated history가 있어도 Settings root를 명시적으로 연다', () => {
+  it('Web은 document location을 Settings root로 replace한다', () => {
     let backCalls = 0;
     const replaced: string[] = [];
 
-    returnToSettingsRoot({
-      back: () => (backCalls += 1),
-      canGoBack: () => true,
-      replace: (href) => replaced.push(String(href)),
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { replace: (href: string) => replaced.push(href) },
     });
+
+    returnToSettingsRoot({ back: () => (backCalls += 1) });
 
     assert.equal(backCalls, 0);
     assert.deepEqual(replaced, ['/settings']);
   });
 
-  it('direct detail entry에 이전 history가 없으면 Settings root로 대체한다', () => {
+  it('Native는 router back으로 route-owned stack을 닫는다', () => {
+    platform = 'ios';
     let backCalls = 0;
-    const replaced: string[] = [];
 
-    returnToSettingsRoot({
-      back: () => (backCalls += 1),
-      canGoBack: () => false,
-      replace: (href) => replaced.push(String(href)),
-    });
+    returnToSettingsRoot({ back: () => (backCalls += 1) });
 
-    assert.equal(backCalls, 0);
-    assert.deepEqual(replaced, ['/settings']);
+    assert.equal(backCalls, 1);
   });
 });
