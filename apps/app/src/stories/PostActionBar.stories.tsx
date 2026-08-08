@@ -157,7 +157,17 @@ function PostActionBarFixture({
                   request.name === 'PostDeletionActionDeletePostMutation'
                     ? { deletePost: { postId: sourcePostId } }
                     : request.name === 'RepostActionDeletePostMutation'
-                      ? { deletePost: { postId: activeRepostId } }
+                      ? {
+                          deletePost: {
+                            postId: activeRepostId,
+                            repostSource: {
+                              __typename: 'Post',
+                              id: sourcePostId,
+                              repostCount: unselectedSource.repostCount,
+                              viewerRepost: null,
+                            },
+                          },
+                        }
                       : {
                           repostPost: {
                             repost: {

@@ -339,12 +339,26 @@ describe('GraphQL Repost', () => {
 
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
-    assert.deepEqual(first.data?.deletePost, { postId: globalId('Post', repost.id) });
+    assert.deepEqual(first.data?.deletePost, {
+      postId: globalId('Post', repost.id),
+      repostSource: {
+        id: globalId('Post', source.id),
+        repostCount: 0,
+        viewerRepost: null,
+      },
+    });
     assert.equal(await db.$count(Notifications), 0);
 
     const repeated = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(repeated);
-    assert.deepEqual(repeated.data?.deletePost, { postId: globalId('Post', repost.id) });
+    assert.deepEqual(repeated.data?.deletePost, {
+      postId: globalId('Post', repost.id),
+      repostSource: {
+        id: globalId('Post', source.id),
+        repostCount: 0,
+        viewerRepost: null,
+      },
+    });
     assert.equal(await db.$count(Notifications), 0);
 
     const deleted = await db
@@ -408,7 +422,14 @@ describe('GraphQL Repost', () => {
     try {
       const result = await requestDelete(repost.id, auth.token);
       assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.deletePost, { postId: globalId('Post', repost.id) });
+      assert.deepEqual(result.data?.deletePost, {
+        postId: globalId('Post', repost.id),
+        repostSource: {
+          id: globalId('Post', source.id),
+          repostCount: 0,
+          viewerRepost: null,
+        },
+      });
 
       const deleted = await db
         .select({ state: Posts.state })
@@ -430,6 +451,60 @@ describe('GraphQL Repost', () => {
       `);
       errorLog.mock.restore();
     }
+  });
+
+  test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {
+    const actorA = await createAuthenticatedSession();
+    const actorB = await createAuthenticatedSession();
+    const recipient = await createProfile('delete-source-state-recipient');
+    const source = await createContentPost(recipient.id);
+
+    await requestRepost(source.id, actorA.token);
+    await requestRepost(source.id, actorB.token);
+    const actorARepost = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, actorA.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+    const actorBRepost = await db
+      .select()
+      .from(Posts)
+      .where(and(eq(Posts.profileId, actorB.profile.id), eq(Posts.repostSourceId, source.id)))
+      .then(firstOrThrow);
+
+    const cancelled = await requestDelete(actorARepost.id, actorA.token);
+    assertNoGraphQLErrors(cancelled);
+    assert.deepEqual(cancelled.data?.deletePost.repostSource, {
+      id: globalId('Post', source.id),
+      repostCount: 1,
+      viewerRepost: null,
+    });
+
+    const actorBSource = await requestGraphQL<{
+      nodes: Array<{
+        id: string;
+        repostCount: number;
+        viewerRepost: { id: string } | null;
+      } | null>;
+    }>(
+      `query RepostState($ids: [ID!]!) {
+        nodes(ids: $ids) {
+          ... on Post {
+            id
+            repostCount
+            viewerRepost { id }
+          }
+        }
+      }`,
+      { ids: [globalId('Post', source.id)] },
+      actorB.token,
+    );
+    assertNoGraphQLErrors(actorBSource);
+    assert.deepEqual(actorBSource.data?.nodes[0], {
+      id: globalId('Post', source.id),
+      repostCount: 1,
+      viewerRepost: { id: globalId('Post', actorBRepost.id) },
+    });
   });
 
   test('deletePost는 비Author와 비로그인 요청을 거부한다', async () => {
@@ -497,9 +572,25 @@ const requestRepost = (sourceId: string, token?: string) =>
   );
 
 const requestDelete = (postId: string, token?: string) =>
-  requestGraphQL<{ deletePost: { postId: string } }>(
+  requestGraphQL<{
+    deletePost: {
+      postId: string;
+      repostSource: {
+        id: string;
+        repostCount: number;
+        viewerRepost: { id: string } | null;
+      } | null;
+    };
+  }>(
     `mutation DeletePost($input: DeletePostInput!) {
-      deletePost(input: $input) { postId }
+      deletePost(input: $input) {
+        postId
+        repostSource {
+          id
+          repostCount
+          viewerRepost { id }
+        }
+      }
     }`,
     { input: { id: globalId('Post', postId) } },
     token,

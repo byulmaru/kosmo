@@ -153,7 +153,21 @@ function CapturedRepostActionStory({
           });
         }
 
-        return Promise.resolve({ data: { deletePost: { postId: activeRepostId } } });
+        return Promise.resolve({
+          data: {
+            deletePost: {
+              postId: activeRepostId,
+              repostSource: {
+                __typename: 'Post',
+                id: sourcePostId,
+                repostCount: initialSource.viewerRepost
+                  ? initialSource.repostCount - 1
+                  : initialSource.repostCount,
+                viewerRepost: null,
+              },
+            },
+          },
+        });
       }),
       store: new Store(new RecordSource()),
     });
@@ -162,7 +176,7 @@ function CapturedRepostActionStory({
       { node: initialSource },
     );
     return result;
-  }, [failure]);
+  }, [failure, initialSource]);
 
   return (
     <RelayEnvironmentProvider environment={environment}>
@@ -301,22 +315,17 @@ export const CreatesRepost: Story = {
 };
 
 export const CancelsWithActiveRepost: Story = {
-  parameters: {
-    relay: {
-      data: { node: selectedSource },
-      mutationResponse: { deletePost: { postId: activeRepostId } },
-    },
-  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = await canvas.findByRole('button', { name: '재게시 취소' });
     await userEvent.click(trigger);
     const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
     await userEvent.click(within(menu).getByRole('menuitem', { name: '재게시 취소' }));
-    await expect(canvas.findByRole('button', { name: '재게시 취소' })).resolves.toHaveAttribute(
+    await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toHaveAttribute(
       'aria-pressed',
-      'true',
+      'false',
     );
+    expect(canvas.getByRole('button', { name: '재게시' })).toHaveTextContent('3');
     expect(canvas.getByTestId('repost-request-log')).toHaveTextContent('"id":"post-repost-active"');
   },
   render: () => <CapturedRepostActionStory initialSource={selectedSource} />,
@@ -461,7 +470,7 @@ export const RequestVariablesAndDuplicateGuard: Story = {
     await expect(canvas.findByTestId('repost-request-log')).resolves.toHaveTextContent(
       '"id":"post-repost-active"',
     );
-    expect(canvas.getByRole('button', { name: '재게시 취소' })).toHaveTextContent('4');
+    await expect(canvas.findByRole('button', { name: '재게시' })).resolves.toHaveTextContent('3');
   },
   render: () => <CapturedRepostActionStory />,
 };
