@@ -1,4 +1,4 @@
-import { db, firstOrThrowWith, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
+import { firstOrThrowWith, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq, getColumns, sql } from 'drizzle-orm';
@@ -32,7 +32,7 @@ builder.mutationField('markNotificationRead', (t) =>
       const notification =
         kind === NotificationKind.FOLLOW_REQUEST
           ? await (async () => {
-              const visible = await db
+              const visible = await ctx.db
                 .select(notificationRowSelection)
                 .from(Notifications)
                 .leftJoin(
@@ -52,7 +52,7 @@ builder.mutationField('markNotificationRead', (t) =>
                 .then(firstOrThrowWith(() => new NotFoundError('Notification not found')))
                 .then(notificationRowFromSelection);
 
-              const updated = await db
+              const updated = await ctx.db
                 .update(Notifications)
                 .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
                 .where(
@@ -67,7 +67,7 @@ builder.mutationField('markNotificationRead', (t) =>
 
               return { ...updated, followRequestSource: visible.followRequestSource };
             })()
-          : await db
+          : await ctx.db
               .update(Notifications)
               .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
               .where(

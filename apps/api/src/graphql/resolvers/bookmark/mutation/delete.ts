@@ -29,10 +29,13 @@ builder.mutationField('deleteBookmark', (t) =>
       id: t.input.globalID({ for: Bookmark }),
     },
     resolve: async (_, { input }, ctx): Promise<DeleteBookmarkPayload> => {
-      const deleted = await deleteBookmark({
-        bookmarkId: input.id.id,
-        profileId: ctx.session.profileId,
-      });
+      const deleted = await deleteBookmark(
+        {
+          bookmarkId: input.id.id,
+          profileId: ctx.session.profileId,
+        },
+        ctx.db,
+      );
 
       return {
         bookmarkId: deleted?.id ?? null,

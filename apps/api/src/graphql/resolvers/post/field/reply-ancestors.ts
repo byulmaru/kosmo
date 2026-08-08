@@ -1,4 +1,4 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { Instances, Posts, Profiles } from '@kosmo/core/db';
 import { eq, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { postVisibilityAccessWhere } from '../access/visibility';
@@ -18,7 +18,7 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
   }
 
   const visibilityWhere = postVisibilityAccessWhere({ ctx });
-  const ancestors = await db.execute<RawReplyAncestorRow>(sql`
+  const ancestors = await ctx.db.execute<RawReplyAncestorRow>(sql`
     WITH RECURSIVE reply_ancestor AS (
       SELECT
         ${Posts.id},

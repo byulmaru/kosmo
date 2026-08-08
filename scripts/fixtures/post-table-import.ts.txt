@@ -1,0 +1,3 @@
+import { Posts } from '@kosmo/core/db';
+
+export const postTable = Posts;

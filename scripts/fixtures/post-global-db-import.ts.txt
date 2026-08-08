@@ -1,0 +1,3 @@
+import { db, Posts } from '@kosmo/core/db';
+
+export const loadPosts = () => db.select().from(Posts);
