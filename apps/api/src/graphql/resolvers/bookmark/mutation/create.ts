@@ -1,4 +1,4 @@
-import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
 import { createBookmark } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
@@ -18,7 +18,7 @@ builder.mutationField('createBookmark', (t) =>
       postId: t.input.globalID({ for: Post }),
     },
     resolve: async (_, { input }, ctx) =>
-      db.transaction(async (tx) => {
+      ctx.db.transaction(async (tx) => {
         const post = await tx
           .select({ id: Posts.id })
           .from(Posts)

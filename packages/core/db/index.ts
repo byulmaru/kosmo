@@ -23,7 +23,8 @@ export const db = drizzle({
 
 export type Database = typeof db;
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+export type DatabaseHandle = Database | Transaction;
 
-export const getDatabaseConnection = (tx?: Transaction) => {
-  return tx ?? db;
+export const getDatabaseConnection = (handle?: DatabaseHandle) => {
+  return handle ?? db;
 };

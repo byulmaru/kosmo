@@ -1,4 +1,4 @@
-import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
 import { addReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
@@ -21,7 +21,7 @@ builder.mutationField('addReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx) => {
-      const post = await db
+      const post = await ctx.db
         .select({ id: Posts.id })
         .from(Posts)
         .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
@@ -33,13 +33,16 @@ builder.mutationField('addReaction', (t) =>
         throw new NotFoundError('Post not found');
       }
 
-      const result = await addReaction({
-        actorProfileId: ctx.session.profileId,
-        origin: 'LOCAL',
-        postId: post.id,
-        type: input.type,
-      });
-      await result.postCommit();
+      const result = await addReaction(
+        {
+          actorProfileId: ctx.session.profileId,
+          origin: 'LOCAL',
+          postId: post.id,
+          type: input.type,
+        },
+        ctx.db,
+      );
+      await result.postCommit(ctx.db);
 
       return { post: post.id, reaction: result.reaction };
     },

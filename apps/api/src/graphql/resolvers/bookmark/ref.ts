@@ -1,4 +1,4 @@
-import { Bookmarks, db } from '@kosmo/core/db';
+import { Bookmarks } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
@@ -10,7 +10,7 @@ export const Bookmark = createObjectRef<BookmarkRow>('Bookmark', (ids, ctx) => {
     return Promise.resolve([]);
   }
 
-  return db
+  return ctx.db
     .select(getColumns(Bookmarks))
     .from(Bookmarks)
     .where(and(inArray(Bookmarks.id, ids), eq(Bookmarks.profileId, ctx.session.profileId)));

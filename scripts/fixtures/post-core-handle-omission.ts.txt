@@ -1,0 +1,2 @@
+const result = await createPost(input);
+await result.postCommit();

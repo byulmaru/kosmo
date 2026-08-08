@@ -1,4 +1,4 @@
-import { db, Reactions } from '@kosmo/core/db';
+import { Reactions } from '@kosmo/core/db';
 import { and, asc, eq, getColumns, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -13,7 +13,7 @@ export const viewerReactionLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return db
+      return ctx.db
         .select(getColumns(Reactions))
         .from(Reactions)
         .where(
