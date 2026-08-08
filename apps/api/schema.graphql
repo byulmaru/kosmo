@@ -450,6 +450,7 @@ type ProfileViewerState {
   follow: ProfileFollow
   followRequest: ProfileFollowRequest
   isSelf: Boolean!
+  membership: AccountProfile
 }
 
 type Query {
@@ -460,7 +461,6 @@ type Query {
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
   searchProfiles(after: String, before: String, first: Int, last: Int, query: String!): ProfileConnection!
-  selectedProfileForEdit: Profile
 }
 
 type Reaction implements Node {

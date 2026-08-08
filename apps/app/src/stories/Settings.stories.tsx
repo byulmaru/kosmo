@@ -11,11 +11,15 @@ const selectedProfile = profile({
   displayName: '현재 Profile',
   id: 'settings-profile-owner',
   relativeHandle: '@settings-owner',
-  viewerState: { follow: null, followRequest: null, isSelf: true },
+  viewerState: {
+    follow: null,
+    followRequest: null,
+    isSelf: true,
+    membership: { role: 'OWNER' },
+  },
 });
 const ownerData = {
   currentSession: { id: 'settings-session', selectedProfile },
-  selectedProfileForEdit: selectedProfile,
 };
 
 const meta = {
@@ -107,7 +111,6 @@ export const NoSelectedProfile: Story = {
     relay: {
       data: {
         currentSession: { id: 'settings-session-without-profile', selectedProfile: null },
-        selectedProfileForEdit: null,
       },
     },
   },

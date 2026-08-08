@@ -36,6 +36,7 @@ export type StoryProfile = {
     follow: { follower?: { followingCount: number; id: string } | null; id: string } | null;
     followRequest: { id: string } | null;
     isSelf: boolean;
+    membership?: { role: 'MEMBER' | 'OWNER' } | null;
   } | null;
 };
 

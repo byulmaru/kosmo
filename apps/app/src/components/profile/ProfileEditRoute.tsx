@@ -74,26 +74,31 @@ const query = graphql`
   query ProfileEditRouteQuery {
     currentSession {
       selectedProfile {
+        id
         relativeHandle
-      }
-    }
-    selectedProfileForEdit {
-      id
-      relativeHandle
-      displayName
-      bio
-      followPolicy
-      tags {
-        id
-        name
-      }
-      avatar {
-        id
-        url
-      }
-      header {
-        id
-        url
+        displayName
+        bio
+        followPolicy
+        instance {
+          kind
+        }
+        viewerState {
+          membership {
+            role
+          }
+        }
+        tags {
+          id
+          name
+        }
+        avatar {
+          id
+          url
+        }
+        header {
+          id
+          url
+        }
       }
     }
   }
@@ -154,10 +159,15 @@ export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
     {},
     { fetchKey, fetchPolicy: 'network-only' },
   );
-  const profile = data.selectedProfileForEdit;
+  const selectedProfile = data.currentSession?.selectedProfile;
+  const profile =
+    selectedProfile?.instance.kind === 'LOCAL' &&
+    selectedProfile.viewerState?.membership?.role === 'OWNER'
+      ? selectedProfile
+      : null;
 
   if (!profile) {
-    const returnHandle = data.currentSession?.selectedProfile?.relativeHandle;
+    const returnHandle = selectedProfile?.relativeHandle;
     return (
       <StateView
         actionLabel="프로필로 돌아가기"
@@ -173,7 +183,9 @@ export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
 function EditableProfileRoute({
   profile,
 }: {
-  profile: NonNullable<ProfileEditRouteQuery['response']['selectedProfileForEdit']>;
+  profile: NonNullable<
+    NonNullable<ProfileEditRouteQuery['response']['currentSession']>['selectedProfile']
+  >;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
