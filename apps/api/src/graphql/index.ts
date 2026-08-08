@@ -8,13 +8,15 @@ import type { Env, ServerContext, UserContext } from '../context';
 
 export const yoga = new Hono<Env>();
 
+export const createGraphQLContext = ({ c }: { c: ServerContext }) => ({
+  ...initContextCache(),
+  c,
+  ...createOperationContext(c.get('context')),
+});
+
 const app = createYoga<{ c: ServerContext }, UserContext>({
   schema,
-  context: ({ c }) => ({
-    ...initContextCache(),
-    c,
-    ...createOperationContext(c.get('context')),
-  }),
+  context: createGraphQLContext,
   graphqlEndpoint: '/graphql',
   batching: true,
   cors: {
@@ -23,7 +25,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
   },
   maskedErrors: false,
   landingPage: false,
-  // PROD-726 owns enabling the operation transaction plugin after every DB consumer uses ctx.db.
+  // PROD-726 owns activating operation DB sessions after every consumer uses ctx.db.
   plugins: [useExecutionCancellation(), useError()],
 });
 
