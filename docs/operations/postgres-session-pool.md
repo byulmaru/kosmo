@@ -141,7 +141,7 @@ SQL
 
 ## Pooler-only rollback
 
-이 Pooler는 Cluster와 workload에서 독립된 리소스다. API/Web가 Pooler Service를 참조하지 않는 것을 먼저 확인한 뒤, 이 변경을 되돌려 Pooler manifest만 빠진 별도 Git commit/release를 배포하고 Argo CD sync가 Pooler를 prune하게 한다. `kubectl delete`로 Helm/Argo CD 소유 리소스를 out-of-band 삭제하지 않는다. Cluster, `<cluster>-rw` Service, 기존 Secret과 API/Web Rollout은 삭제하거나 수정하지 않는다.
+이 Pooler는 Cluster와 workload에서 독립된 리소스다. API/Web가 Pooler Service를 참조하지 않는 것을 먼저 확인한 뒤, 이 변경을 되돌려 Pooler manifest만 빠진 별도 Git commit/release를 배포하고 Argo CD가 Pooler를 prune하게 한다. Dev `kosmo-dev` Application은 automated prune을 사용한다. Production `kosmo-prod` Application은 automated prune을 사용하지 않으므로 revert commit이 `main`에 반영된 뒤 승인된 Argo CD identity로 prune을 명시한 sync를 실행한다. `kubectl delete`로 Helm/Argo CD 소유 리소스를 out-of-band 삭제하지 않는다. Cluster, `<cluster>-rw` Service, 기존 Secret과 API/Web Rollout은 삭제하거나 수정하지 않는다.
 
 ```sh
 NAMESPACE=kosmo-prod
@@ -154,7 +154,15 @@ kubectl get cluster "$CLUSTER" -n "$NAMESPACE"
 kubectl get service "${CLUSTER}-rw" -n "$NAMESPACE"
 ```
 
-Rollback release를 sync한 뒤 Pooler와 그 Service가 제거되고 기존 direct Service와 workload readiness가 그대로 유지되는지 확인한다.
+Production rollback은 Git의 revert commit을 source로 다음과 같이 sync한다. `ROLLBACK_REVISION`은 Pooler manifest가 제거된 `main` commit SHA로 고정한다.
+
+```sh
+ROLLBACK_REVISION=REVERT_COMMIT_SHA
+argocd app sync kosmo-prod --revision "$ROLLBACK_REVISION" --prune
+argocd app wait kosmo-prod --sync --health --timeout 600
+```
+
+Dev는 revert commit이 `main`에 반영되면 automated sync/prune 완료를 기다린다. Rollback sync 뒤 Pooler와 그 Service가 제거되고 기존 direct Service와 workload readiness가 그대로 유지되는지 확인한다.
 
 ```sh
 kubectl get pooler "$POOLER" -n "$NAMESPACE"

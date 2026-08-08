@@ -7,7 +7,7 @@
 {{- end -}}
 
 {{- define "kosmo.postgresPoolerName" -}}
-{{- printf "%s-pooler-rw" (include "kosmo.postgresName" .) | trunc 63 | trimSuffix "-" -}}
+{{- printf "%s-pooler-rw" (include "kosmo.postgresName" . | trunc 53 | trimSuffix "-") -}}
 {{- end -}}
 
 {{- define "kosmo.postgresTailscaleName" -}}
