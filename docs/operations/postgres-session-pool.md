@@ -128,7 +128,7 @@ printf '%s\n' "$FIRST_STATUS"
 psql -qXAt --set first_backend_pid="$FIRST_BACKEND_PID" <<'SQL'
 SELECT CASE
   WHEN pg_backend_pid() = :'first_backend_pid'::integer
-    AND current_setting('kosmo.prod_728_probe', true) IS NULL
+    AND NULLIF(current_setting('kosmo.prod_728_probe', true), '') IS NULL
   THEN 'reset-ok'
   WHEN pg_backend_pid() <> :'first_backend_pid'::integer
   THEN 'reset-not-proven-different-backend'
