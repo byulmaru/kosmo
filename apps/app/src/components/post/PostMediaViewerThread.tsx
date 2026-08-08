@@ -13,9 +13,7 @@ const PostDetailThread = lazy(async () => {
 const PostMediaViewerThreadOperation = graphql`
   query PostMediaViewerThreadQuery($postId: ID!) {
     currentSession {
-      id
       selectedProfile {
-        id
         ...ReplyComposerSurface_profile
       }
     }
@@ -46,14 +44,14 @@ export function PostMediaViewerThread(props: Props) {
 
   return (
     <RouteBoundary
-      loading={<StateView loading title="답글을 불러오는 중입니다." />}
+      error={(retry) => <ThreadState onRetry={retry} />}
+      loading={<ThreadState loading />}
       onRetry={() => setFetchRevision((revision) => revision + 1)}
       title="답글을 불러오지 못했어요"
     >
       <PostMediaViewerThreadContent
         {...props}
         fetchKey={fetchKey}
-        identity={fetchKey}
         onReplyCreated={() => setFetchRevision((revision) => revision + 1)}
       />
     </RouteBoundary>
@@ -63,13 +61,11 @@ export function PostMediaViewerThread(props: Props) {
 function PostMediaViewerThreadContent({
   contentId,
   fetchKey,
-  identity,
   onPostDeleted,
   onReplyCreated,
   postId,
 }: Props & {
   fetchKey: string;
-  identity: string;
   onReplyCreated: () => void;
 }) {
   const data = useLazyLoadQuery<PostMediaViewerThreadQuery>(
@@ -84,7 +80,7 @@ function PostMediaViewerThreadContent({
   return thread ? (
     <PostDetailThread
       header={null}
-      identity={identity}
+      identity={fetchKey}
       onPostDeleted={onPostDeleted}
       onReplyCreated={onReplyCreated}
       post={thread}
@@ -92,4 +88,16 @@ function PostMediaViewerThreadContent({
       replyProfile={data.currentSession?.selectedProfile ?? null}
     />
   ) : null;
+}
+
+function ThreadState({ loading = false, onRetry }: { loading?: boolean; onRetry?: () => void }) {
+  return (
+    <StateView
+      actionLabel={onRetry ? '답글 다시 불러오기' : undefined}
+      alert={!loading}
+      loading={loading}
+      onAction={onRetry}
+      title={loading ? '답글을 불러오는 중입니다.' : '답글을 불러오지 못했어요'}
+    />
+  );
 }

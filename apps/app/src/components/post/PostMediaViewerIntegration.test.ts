@@ -8,27 +8,23 @@ import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphq
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { PostLayout as PostLayoutComponent } from './PostLayout';
 import type { PostListItem as PostListItemComponent } from './PostListItem';
-import type { PostMediaViewer as PostMediaViewerComponent } from './PostMediaViewer';
+import type { PostMediaViewerHostProvider as HostProviderComponent } from './PostMediaViewerHost';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-let animationFrames: FrameRequestCallback[] = [];
-(
-  globalThis as unknown as { requestAnimationFrame: (callback: FrameRequestCallback) => number }
-).requestAnimationFrame = (callback) => {
-  animationFrames.push(callback);
-  return animationFrames.length;
-};
 
-const replyBinding = {
-  expanded: false,
-  onPostCreated: () => undefined,
-  onPress: () => undefined,
-  onRequestClose: () => undefined,
-  owner: 'list',
-  profile: null,
-  surfaceRef: { current: null },
-};
 let actorRevision = 0;
+let animationFrames: FrameRequestCallback[] = [];
+let queriedPostId: string | null = null;
+let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
+let renderer: ReactTestRenderer | null = null;
+
+Object.assign(globalThis, {
+  cancelAnimationFrame: () => undefined,
+  requestAnimationFrame: (callback: FrameRequestCallback) => {
+    animationFrames.push(callback);
+    return animationFrames.length;
+  },
+});
 
 mock.module('expo-router', {
   exports: {
@@ -56,11 +52,19 @@ mock.module('react-relay', {
   exports: {
     graphql: () => ({}),
     useFragment: (_fragment: unknown, key: unknown) => key,
+    useLazyLoadQuery: (_query: unknown, variables: { postId: string }) => {
+      queriedPostId = variables.postId;
+      return queryPosts.get(variables.postId) ?? { currentSession: null, node: null };
+    },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module(require.resolve('lucide-react-native'), {
   exports: { MessageCircle: 'MessageCircle' },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('@/components/RouteBoundary', {
+  exports: { RouteBoundary: ({ children }: { children?: unknown }) => children },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/profile/ProfileNameBlock', {
@@ -78,10 +82,7 @@ mock.module('@/components/ui/Avatar', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/lib/date', {
-  exports: {
-    formatPostDate: () => '2026. 8. 4.',
-    formatTimelineTimestamp: () => '방금',
-  },
+  exports: { formatPostDate: () => '2026. 8. 4.', formatTimelineTimestamp: () => '방금' },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/relay/RelayActorProvider', {
@@ -137,6 +138,16 @@ mock.module('./PostBody', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+const replyBinding = {
+  expanded: false,
+  onPostCreated: () => undefined,
+  onPress: () => undefined,
+  onRequestClose: () => undefined,
+  owner: 'list',
+  profile: null,
+  surfaceRef: { current: null },
+};
+
 mock.module('./PostReplyCoordinator', {
   exports: { usePostReplyBinding: () => replyBinding },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -164,14 +175,12 @@ mock.module('./replySurface', {
   exports: { getReplyProcessingState: (execution: { kind: string }) => execution.kind },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+let HostProvider: typeof HostProviderComponent;
 let PostLayout: typeof PostLayoutComponent;
 let PostListItem: typeof PostListItemComponent;
-let PostMediaViewer: typeof PostMediaViewerComponent;
-let renderer: ReactTestRenderer | null = null;
-let nodeMockFactory: (element: ReactElement) => unknown = () => ({ focus: () => undefined });
 
 before(async () => {
-  ({ PostMediaViewer } = await import('./PostMediaViewer'));
+  ({ PostMediaViewerHostProvider: HostProvider } = await import('./PostMediaViewerHost'));
   ({ PostLayout } = await import('./PostLayout'));
   ({ PostListItem } = await import('./PostListItem'));
 });
@@ -183,253 +192,91 @@ afterEach(async () => {
   }
   actorRevision = 0;
   animationFrames = [];
-  nodeMockFactory = () => ({ focus: () => undefined });
+  queriedPostId = null;
+  queryPosts = new Map();
 });
 
-describe('Post Media Viewer production surface wiring', () => {
-  it('Relay actor generation이 바뀌어도 Viewer session과 현재 Post fragment를 유지한다', async () => {
+describe('Post Media Viewer Host production wiring', () => {
+  it('ordinary·Quote·pure Repost launcher가 실제 Media 소유 Post ID만 Host에 전달한다', async () => {
     const originControl = { current: { focus: () => undefined } };
-    const post = storyPost('post-actor', 'profile-author', 'content-actor');
+    const ordinary = storyPost('ordinary', 'ordinary-content');
+    queryPosts.set(ordinary.id, hostPost(ordinary));
 
-    await render(createElement(PostLayout, { post: asLayoutKey(post) }));
-    await openViewerFromBody(originControl);
-    assert.equal(viewers().length, 1);
+    await renderHost(createElement(PostListItem, { post: asListItemKey(ordinary) }));
+    await openFromBody(originControl, 1);
+    assert.equal(queriedPostId, 'ordinary');
+    assert.equal(currentImage().props.source.uri, 'https://media.example/ordinary-content-2.webp');
+    await closeViewer();
+
+    const source = storyPost('source', 'source-content');
+    const quote = { ...storyPost('quote', 'quote-content'), repostSource: source };
+    queryPosts.set(quote.id, hostPost(storyPost('quote', 'quote-content')));
+    await updateHost(createElement(PostListItem, { post: asListItemKey(quote) }));
+    await act(async () => byTestId('post-source-presentation').props.onMediaOpen(0, originControl));
+    assert.equal(queriedPostId, 'quote');
+    await closeViewer();
+
+    const pureRepost = { ...storyPost('repost', null), repostSource: source };
+    queryPosts.set(source.id, hostPost(source));
+    await updateHost(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
+    await openFromBody(originControl);
+    assert.equal(queriedPostId, 'source');
+  });
+
+  it('Relay actor generation이 바뀌면 열린 Viewer와 이전 query projection을 닫는다', async () => {
+    const post = storyPost('actor-post', 'actor-content');
+    queryPosts.set(post.id, hostPost(post));
+    await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    await openFromBody({ current: { focus: () => undefined } });
+    assert.ok(byTestId('post-media-viewer-dialog'));
 
     actorRevision = 1;
-    await update(createElement(PostLayout, { post: asLayoutKey(post) }));
-
-    assert.equal(viewers().length, 1);
-    assertViewerPost(post);
+    await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
   });
 
-  it('목록과 상세에서 Profile·Content 변경은 반영하고 명시적 삭제만 Viewer를 닫는다', async () => {
-    const originControl = { current: { focus: () => undefined } };
-    const first = storyPost('post-1', 'profile-1', 'content-1');
-
-    await render(createElement(PostListItem, { post: asListItemKey(first) }));
-    await openViewerFromBody(originControl);
-    assert.equal(viewers().length, 1);
-
-    const changedProfile = storyPost('post-1', 'profile-2', 'content-1');
-    await update(createElement(PostListItem, { post: asListItemKey(changedProfile) }));
-    assert.equal(viewers().length, 1);
-    assertViewerPost(changedProfile);
-    assert.equal('onMediaUnavailable' in currentBody().props, false);
-
-    const listViewer = currentViewer();
-    await act(async () => listViewer.props.actionBar.props.onDeleted());
-    assert.equal(renderer?.toJSON(), null);
-
-    let detailDeleted = 0;
-    await render(
-      createElement(PostLayout, {
-        onDeleted: () => detailDeleted++,
-        post: asLayoutKey(first),
-      }),
-    );
-    await openViewerFromBody(originControl);
-    assert.equal(viewers().length, 1);
-
-    const changedContent = storyPost('post-1', 'profile-1', 'content-2');
-    await update(
-      createElement(PostLayout, {
-        onDeleted: () => detailDeleted++,
-        post: asLayoutKey(changedContent),
-      }),
-    );
-    assert.equal(viewers().length, 1);
-    assertViewerPost(changedContent);
-
-    const unavailableContent = storyPost('post-1', 'profile-1', null);
-    await update(
-      createElement(PostLayout, {
-        onDeleted: () => detailDeleted++,
-        post: asLayoutKey(unavailableContent),
-      }),
-    );
-    assert.equal(viewers().length, 1);
-    assertViewerPost(unavailableContent);
-    assert.equal(currentViewer().props.actionBar === null, true);
-    assert.equal(currentViewer().props.wideDetail, null);
-
-    await update(
-      createElement(PostLayout, {
-        onDeleted: () => detailDeleted++,
-        post: asLayoutKey(changedContent),
-      }),
-    );
-
-    await act(async () => currentViewer().props.actionBar.props.onDeleted());
-    assert.equal(viewers().length, 0);
-    assert.equal(detailDeleted, 1);
-  });
-
-  it('일반·Quote·pure Repost Viewer가 각 production surface의 기존 action target을 유지한다', async () => {
-    const originControl = { current: { focus: () => undefined } };
-    const ordinary = storyPost('ordinary', 'ordinary-profile', 'ordinary-content');
-
-    await render(createElement(PostListItem, { post: asListItemKey(ordinary) }));
-    await openViewerFromBody(originControl, 1);
-    assertViewerPost(ordinary);
-    assertViewerTarget('action-ordinary');
-    assertViewerWideDetail('ordinary', 'ordinary-content');
-    assert.equal(currentViewer().props.selectedIndex, 1);
-
-    const source = storyPost('source', 'source-profile', 'source-content');
-    const quote = {
-      ...storyPost('quote', 'quote-profile', 'quote-content'),
-      repostSource: source,
-    };
-    await update(createElement(PostListItem, { post: asListItemKey(quote) }));
-    const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
-    await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
-    assertViewerPost(quote);
-    assertViewerTarget('action-quote');
-    assertViewerWideDetail('quote', 'quote-content');
-    await act(async () => currentViewer().props.onClose());
-    assert.equal(viewers().length, 0);
-
-    const pureRepost = {
-      ...storyPost('repost', 'reposter-profile', null),
-      repostSource: source,
-    };
-    await update(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
-    await openViewerFromBody(originControl);
-    assertViewerPost(source);
-    assertViewerTarget('action-source');
-    assertViewerWideDetail('source', 'source-content');
-    assert.equal(currentViewer().props.actionBar.props.reply.processing, 'disabled');
-  });
-
-  it('Quote Content가 unavailable이어도 실제 Viewer의 탐색·오류·원문 펼침 state를 유지한다', async () => {
-    const originControl = { current: { focus: () => undefined, isConnected: true } };
-    const source = storyPost('source', 'source-profile', 'source-content');
-    const baseQuote = storyPost('quote', 'quote-profile', 'quote-content');
-    const quote = {
-      ...baseQuote,
-      content: {
-        ...baseQuote.content!,
-        bodyText: '네 줄 이상으로 펼침 상태를 검증하는 Quote 본문입니다.',
-        media: [
-          media('quote-content-1', '첫 번째 Quote 이미지'),
-          media('quote-content-2', '두 번째 Quote 이미지'),
-          media('quote-content-3', '세 번째 Quote 이미지'),
-        ],
-      },
-      replyParent: { id: 'reply-parent', profile: { displayName: '답글 대상' } },
-      repostSource: source,
-    };
-
-    await render(createElement(PostListItem, { post: asListItemKey(quote) }));
-    const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
-    await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
-    assert.equal(viewers().length, 1);
-    const initialViewer = currentViewer();
-
+  it('같은 Content unavailable 복구는 state를 유지하고 다른 revision은 original index로 reset한다', async () => {
+    const post = storyPost('revision-post', 'content-1');
+    queryPosts.set(post.id, hostPost(post));
+    await renderHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    await openFromBody({ current: { focus: () => undefined } });
     await act(async () => pressable('다음 이미지').props.onPress());
-    assert.equal(currentImage().props.source.uri, 'https://media.example/quote-content-2.webp');
-    await act(async () =>
-      byTestId('post-media-viewer-body-measure').props.onLayout({
-        nativeEvent: { layout: { height: 96 } },
-      }),
-    );
-    await act(async () => pressable('원문 더 보기').props.onPress());
     await act(async () => currentImage().props.onError());
-    assert.ok(byTestId('post-media-viewer-error-media-quote-content-2'));
+    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
 
-    const unavailableQuote = { ...quote, content: null };
-    await update(createElement(PostListItem, { post: asListItemKey(unavailableQuote) }));
-    assert.equal(viewers().length, 1);
-    assert.strictEqual(currentViewer(), initialViewer);
-    assertViewerPost(unavailableQuote);
-    assert.equal(currentViewer().props.actionBar, null);
-    assert.equal(currentViewer().props.wideDetail, null);
+    queryPosts.set(post.id, hostPost({ ...post, content: null }));
+    await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
     assert.ok(byTestId('post-media-viewer-unavailable'));
 
-    await update(createElement(PostListItem, { post: asListItemKey(quote) }));
-    assert.equal(viewers().length, 1);
-    assert.strictEqual(currentViewer(), initialViewer);
-    assertViewerPost(quote);
-    assert.ok(byTestId('post-media-viewer-error-media-quote-content-2'));
-    assert.ok(pressable('원문 접기'));
+    queryPosts.set(post.id, hostPost(post));
+    await updateHost(createElement(PostLayout, { post: asLayoutKey(post) }));
+    assert.ok(byTestId('post-media-viewer-error-media-content-1-2'));
 
-    await act(async () => currentViewer().props.onClose());
-    assert.equal(viewers().length, 0);
-  });
-
-  it('Quote origin tile이 사라지면 unavailable projection의 fallback surface로 focus를 복귀한다', async () => {
-    let fallbackFocused = 0;
-    nodeMockFactory = (element) => {
-      const elementProps = element.props as Record<string, unknown>;
-      return element.type === 'View' && elementProps.tabIndex === -1
-        ? {
-            focus: () => {
-              fallbackFocused += 1;
-            },
-            isConnected: true,
-          }
-        : { focus: () => undefined, isConnected: true };
-    };
-    const originControl = {
-      current: { focus: () => undefined, isConnected: true },
-    };
-    const source = storyPost('source', 'source-profile', 'source-content');
-    const quote = {
-      ...storyPost('quote', 'quote-profile', 'quote-content'),
-      replyParent: { id: 'reply-parent', profile: { displayName: '답글 대상' } },
-      repostSource: source,
-    };
-
-    await render(createElement(PostListItem, { post: asListItemKey(quote) }));
-    const quotePresentation = renderer!.root.findByProps({ testID: 'post-source-presentation' });
-    await act(async () => quotePresentation.props.onMediaOpen(0, originControl));
-    const initialViewer = currentViewer();
-
-    await update(createElement(PostListItem, { post: asListItemKey({ ...quote, content: null }) }));
-    assert.strictEqual(currentViewer(), initialViewer);
-    originControl.current.isConnected = false;
-    await act(async () => pressable('이미지 뷰어 닫기').props.onPress());
-    await act(async () => flushAnimationFrames());
-
-    assert.equal(viewers().length, 0);
-    assert.equal(fallbackFocused, 1);
+    const nextRevision = storyPost('revision-post', 'content-2');
+    queryPosts.set(post.id, hostPost(nextRevision));
+    await updateHost(createElement(PostLayout, { post: asLayoutKey(nextRevision) }));
+    assert.equal(currentImage().props.source.uri, 'https://media.example/content-2-1.webp');
+    assert.equal(findByTestId('post-media-viewer-error-media-content-1-2').length, 0);
   });
 });
 
-async function render(element: ReturnType<typeof createElement>) {
+async function renderHost(child: ReactElement) {
   await act(async () => {
-    renderer?.unmount();
-    renderer = create(element, { createNodeMock: nodeMockFactory });
+    renderer = create(createElement(HostProvider, null, child));
   });
+}
+
+async function updateHost(child: ReactElement) {
   assert.ok(renderer);
+  await act(async () => renderer?.update(createElement(HostProvider, null, child)));
 }
 
-async function update(element: ReturnType<typeof createElement>) {
-  assert.ok(renderer);
-  await act(async () => renderer?.update(element));
+async function openFromBody(originControl: { current: { focus: () => void } }, selectedIndex = 0) {
+  await act(async () => byTestId('post-body').props.onMediaOpen(selectedIndex, originControl));
 }
 
-async function openViewerFromBody(
-  originControl: { current: { focus: () => void } },
-  selectedIndex = 0,
-) {
-  await act(async () => currentBody().props.onMediaOpen(selectedIndex, originControl));
-}
-
-function currentBody() {
-  assert.ok(renderer);
-  return renderer.root.findByProps({ testID: 'post-body' });
-}
-
-function viewers() {
-  assert.ok(renderer);
-  return renderer.root.findAllByType(PostMediaViewer);
-}
-
-function currentViewer() {
-  const matches = viewers();
-  assert.equal(matches.length, 1);
-  return matches[0]!;
+async function closeViewer() {
+  await act(async () => pressable('이미지 뷰어 닫기').props.onPress());
 }
 
 function byTestId(testID: string) {
@@ -437,41 +284,18 @@ function byTestId(testID: string) {
   return renderer.root.findByProps({ testID });
 }
 
+function findByTestId(testID: string) {
+  assert.ok(renderer);
+  return renderer.root.findAllByProps({ testID });
+}
+
 function pressable(accessibilityLabel: string) {
   assert.ok(renderer);
-  const matches = renderer.root.findAll(
-    (node) => node.props.accessibilityLabel === accessibilityLabel,
-  );
-  assert.equal(matches.length, 1);
-  return matches[0]!;
+  return renderer.root.find((node) => node.props.accessibilityLabel === accessibilityLabel);
 }
 
 function currentImage() {
   return byTestId('post-media-viewer-image');
-}
-
-function flushAnimationFrames() {
-  for (const callback of animationFrames.splice(0)) {
-    callback(0);
-  }
-}
-
-function assertViewerTarget(expectedId: string) {
-  assert.equal(currentViewer().props.actionBar.props.socialActionTarget.id, expectedId);
-}
-
-function assertViewerPost(expectedPost: unknown) {
-  assert.equal(currentViewer().props.post, expectedPost);
-  assert.equal('bodyText' in currentViewer().props, false);
-  assert.equal('contentId' in currentViewer().props, false);
-  assert.equal('media' in currentViewer().props, false);
-  assert.equal('profile' in currentViewer().props, false);
-}
-
-function assertViewerWideDetail(postId: string, contentId: string) {
-  assert.equal(currentViewer().props.wideDetail.props.postId, postId);
-  assert.equal(currentViewer().props.wideDetail.props.contentId, contentId);
-  assert.equal('onUnavailable' in currentViewer().props.wideDetail.props, false);
 }
 
 function asListItemKey(value: unknown): PostListItem_post$key {
@@ -482,43 +306,49 @@ function asLayoutKey(value: unknown): PostLayout_post$key {
   return value as PostLayout_post$key;
 }
 
-function storyPost(postId: string, profileId: string, contentId: string | null) {
+function hostPost(post: ReturnType<typeof storyPost>) {
+  return {
+    currentSession: null,
+    node: {
+      __typename: 'Post',
+      actionSurface: post.actionSurface,
+      content: post.content ? { id: post.content.id } : null,
+      id: post.id,
+      state: 'ACTIVE',
+      thread: null,
+      viewer: post,
+    },
+  };
+}
+
+function storyPost(postId: string, contentId: string | null) {
   return {
     actionSurface: { id: `action-${postId}` },
     content: contentId
       ? {
           bodyText: `${postId} 본문`,
+          contentWarning: null,
           document: { body: { attrs: { sensitiveMedia: false }, content: [], type: 'doc' } },
           id: contentId,
-          media: [
-            {
-              altText: `${postId} 이미지`,
-              id: `media-${contentId}`,
-              url: `https://media.example/${contentId}.webp`,
-            },
-          ],
+          media: [1, 2, 3].map((index) => ({
+            altText: `${index}번째 이미지`,
+            id: `media-${contentId}-${index}`,
+            url: `https://media.example/${contentId}-${index}.webp`,
+          })),
         }
       : null,
     createdAt: '2026-08-04T00:00:00.000Z',
     id: postId,
     profile: {
       avatar: null,
-      displayName: profileId,
-      handle: profileId,
-      id: profileId,
-      relativeHandle: `@${profileId}`,
+      displayName: postId,
+      handle: postId,
+      id: `profile-${postId}`,
+      relativeHandle: `@${postId}`,
     },
     replyParent: null,
     replySurface: null,
     repostSource: null,
     visibility: 'PUBLIC',
-  };
-}
-
-function media(id: string, altText: string) {
-  return {
-    altText,
-    id: `media-${id}`,
-    url: `https://media.example/${id}.webp`,
   };
 }

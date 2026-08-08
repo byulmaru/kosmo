@@ -2,13 +2,13 @@
 
 ### Requirement: 현재 Post Content Media viewer 진입과 경계
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 — 일반 Post surface는 공개된 정상 gallery tile의 선택을 받아 현재 조회가 승인된 소유 Post의 Relay fragment projection과 `media` 목록만 사용하는 modal Media Viewer를 선택한 document index에서 SHALL 열어야 한다. Viewer는 standalone Media 조회나 별도 authorization을 MUST 추가하지 않으며, session에는 선택 index와 origin focus만 MUST 저장해야 한다. 대상 Post·작성자 Profile·Content revision, 선택된 action Profile 또는 Relay actor/environment generation 변화만으로 Viewer를 자동 종료하지 MUST NOT 하며 현재 fragment projection을 반영해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action과 소유 surface unmount만 Viewer session을 MUST 종료해야 한다.
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 — 일반 Post surface는 공개된 정상 gallery tile의 `{postId, selectedIndex, originControl}`을 안정적인 surface-level Host에 전달해 modal Media Viewer를 SHALL 열어야 한다. Host는 현재 Relay actor environment에서 기존 Post `node(id)` visibility·authorization 경계를 사용하는 query를 MUST 소유하고, standalone Media 조회나 별도 authorization을 MUST 추가하지 않아야 한다. Modal shell·close·focus fallback은 query의 Suspense·error boundary 밖에 MUST 유지해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action, Relay actor/environment 전환과 Host surface unmount는 Viewer session을 MUST 종료해야 한다.
 
 #### Scenario: 선택한 tile에서 viewer 열기
 
 - **WHEN** 사용자가 현재 Post의 공개된 정상 Media tile을 선택한다
-- **THEN** modal Viewer는 같은 Post Content revision의 Media 목록을 선택한 document index에서 연다
-- **AND** 별도 Media 조회 없이 현재 Post surface가 이미 가진 승인된 표시 정보만 사용한다
+- **THEN** modal Viewer는 실제 Media를 소유한 Post ID와 선택한 document index로 Host session을 연다
+- **AND** Host query는 기존 Post Node visibility·authorization 경계가 승인한 현재 projection만 사용한다
 
 #### Scenario: Sensitive Media가 가려진 상태
 
@@ -23,27 +23,33 @@
 - **AND** Content Warning 안내와 다시 가리기 control을 표시하지 않는다
 - **AND** 다른 Post surface의 reveal 저장 상태를 변경하지 않는다
 
-#### Scenario: viewer 대상 projection 변경
+#### Scenario: 같은 Content projection의 일시 unavailable과 복구
 
-- **WHEN** 열린 Viewer를 소유한 surface의 Post·Profile·Content projection이 바뀐다
-- **THEN** Viewer는 자동 종료하지 않고 같은 소유 surface의 현재 fragment projection을 표시한다
-- **AND** 이전 Media byte·URL 또는 표시 데이터를 별도 snapshot으로 유지하지 않는다
+- **WHEN** 열린 Viewer의 현재 Content ID가 query loading·error 또는 null projection 뒤 같은 ID로 복구된다
+- **THEN** Viewer는 같은 instance와 current index·expanded·Media loading/error/retry state를 유지한다
+- **AND** unavailable 동안 이전 Media byte·URL은 표시하지 않는다
+
+#### Scenario: 다른 Content revision
+
+- **WHEN** 열린 Viewer의 Post query가 다른 non-null Content ID를 반환한다
+- **THEN** Viewer는 expanded·overflow·Media loading/error/retry state를 초기화하고 session을 연 document index를 다시 사용한다
+- **AND** 새 revision에 그 index가 없으면 다른 Media로 이동하지 않고 unavailable을 표시한다
 
 #### Scenario: selected Profile 또는 Relay actor 변경
 
-- **WHEN** Viewer가 열린 동안 action에 사용하는 selected Profile 또는 Relay actor/environment generation이 바뀐다
-- **THEN** Viewer session은 자동 종료하지 않고 현재 surface의 Action·Composer binding을 사용한다
-- **AND** 이전 Profile의 state를 Viewer session에 snapshot으로 유지하지 않는다
+- **WHEN** Viewer가 열린 동안 selected Profile 또는 Relay actor/environment generation이 바뀐다
+- **THEN** Viewer session을 닫고 이전 actor environment의 query를 폐기한다
+- **AND** 이전 Profile의 Post·Action·Composer state를 새 environment에 유지하지 않는다
 
 #### Scenario: 열린 뒤 표시 권한 무효화
 
-- **WHEN** 열린 Viewer의 현재 선택 Media가 Relay fragment projection에서 사라지거나 더 이상 표시할 수 없게 된다
+- **WHEN** 열린 Viewer의 current Post query에서 Post·Content·Media 또는 현재 선택 Media가 null이거나 표시할 수 없게 된다
 - **THEN** Viewer는 이전 Media byte·URL을 계속 표시하지 않는다
 - **AND** modal chrome과 명시적 close control을 유지한 unavailable 상태를 표시한다
 
 #### Scenario: Viewer session 종료 경계
 
-- **WHEN** 사용자가 명시적으로 dismiss하거나 Viewer 안의 삭제 action을 완료하거나 소유 Post surface가 unmount된다
+- **WHEN** 사용자가 명시적으로 dismiss하거나 Viewer 안의 삭제 action을 완료하거나 Relay actor/environment가 전환되거나 Host surface가 unmount된다
 - **THEN** Viewer session을 종료한다
 
 ### Requirement: 반응형 modal image와 Post detail layout
@@ -189,7 +195,13 @@
 
 ### Requirement: Viewer 상태·오류와 재시도
 
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — 현재 Media가 loading이거나 표시 URL load에 실패해도 Viewer는 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface를 SHALL 유지해야 한다. 실패한 Media에는 raw storage URL·내부 오류·authorization 세부 정보를 노출하지 않는 접근 가능한 재시도 control을 MUST 제공하고, 재시도는 현재 index나 다른 Media 상태를 변경하지 MUST NOT 한다.
+**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — Host Post query가 cache hit·loading·error·retry 또는 null Post·Content·Media 상태여도 Viewer는 modal chrome과 close control을 SHALL 유지해야 한다. 현재 Media가 loading이거나 표시 URL load에 실패해도 현재 index와 현재 breakpoint의 Post detail surface를 SHALL 유지해야 한다. 실패한 query·Media에는 raw storage URL·내부 오류·authorization 세부 정보를 노출하지 않는 접근 가능한 재시도 control을 MUST 제공하고, Media 재시도는 현재 index나 다른 Media 상태를 변경하지 MUST NOT 한다.
+
+#### Scenario: Host Post query loading 또는 실패
+
+- **WHEN** Host Post query가 loading이거나 실패한다
+- **THEN** 같은 modal shell과 close control을 유지하고 content 영역에 안전한 loading 또는 error·retry 상태를 표시한다
+- **AND** raw 오류·authorization 세부 정보나 이전 Media byte·URL을 표시하지 않는다
 
 #### Scenario: 현재 Media loading
 
@@ -211,13 +223,13 @@
 
 #### Scenario: 현재 Media unavailable
 
-- **WHEN** 현재 선택 index에 대응하는 Media가 현재 fragment projection에 없다
+- **WHEN** 현재 query projection의 Post·Content·Media 또는 선택 index에 대응하는 Media가 없다
 - **THEN** Viewer는 modal chrome과 명시적 close control을 유지한 안전한 unavailable 상태를 표시한다
 - **AND** 이전 Media byte·URL, raw storage URL, 내부 오류 또는 authorization 세부 정보를 표시하지 않는다
 
 ### Requirement: Modal dismiss와 focus 복귀
 
-**Authority / Provenance:** `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — Viewer는 modal role과 명시적인 close control을 SHALL 제공하고 open 시 배경 Post surface를 focus와 interaction 대상에서 MUST 제외하며 초기 focus를 close control로 MUST 이동해야 한다. Web `Escape`·close control·backdrop press와 Native back으로 dismiss할 수 있어야 하며, Web image·detail surface·modal 내부 control의 press는 backdrop dismiss로 전파되지 MUST NOT 한다. Viewer open·Media navigation·close는 route와 browser history를 변경하지 MUST NOT 한다. 닫을 때 원래 선택한 tile이 존재하면 그 tile로 focus를 MUST 복귀해야 한다. 원래 tile이 사라졌다면 남아 있는 Post surface의 안전한 focus target으로 MUST 복귀해야 한다.
+**Authority / Provenance:** `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — Viewer는 modal role과 명시적인 close control을 SHALL 제공하고 open 시 배경 Post surface를 focus와 interaction 대상에서 MUST 제외하며 초기 focus를 close control로 MUST 이동해야 한다. Web `Escape`·close control·backdrop press와 Native back으로 dismiss할 수 있어야 하며, Web image·detail surface·modal 내부 control의 press는 backdrop dismiss로 전파되지 MUST NOT 한다. Viewer open·Media navigation·close는 route와 browser history를 변경하지 MUST NOT 한다. 닫을 때 원래 선택한 tile이 존재하면 그 tile로 focus를 MUST 복귀해야 한다. 원래 tile이 사라졌다면 Host가 속한 목록 또는 상세 screen의 안전한 focus target으로 MUST 복귀해야 한다. Query loading·error·unavailable 동안에도 close target과 fallback focus surface를 MUST 유지해야 한다.
 
 #### Scenario: Web keyboard modal lifecycle
 

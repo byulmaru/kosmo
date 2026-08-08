@@ -10,24 +10,27 @@
 
 **Deliverable**
 
-일반 목록·상세의 공개된 정상 이미지 tile에서 선택한 위치의 Viewer를 열고, 소유 Post의 현재 Relay fragment projection에 있는 Media 목록을 사용한다.
+일반 목록·상세의 공개된 정상 이미지 tile에서 실제 Media를 소유한 Post ID와 선택한 위치를 안정적인 Host에 전달하고, 기존 Post Node visibility·authorization 경계로 조회한 현재 Media 목록을 사용한다.
 
 **Guardrails**
 
-- Post surface가 Viewer session의 선택 index와 origin focus target만 소유하고 Gallery는 document index만 전달한다.
-- Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않는다. 열린 뒤 identity 변화만으로 자동 종료하지 않고 현재 fragment projection을 반영하며, 선택 Media가 unavailable이면 이전 Media byte·URL 없이 modal chrome과 close control을 유지한다.
-- 별도 Media query·authorization을 추가하거나 다른 Post·Profile·revision의 Media를 섞지 않는다.
+- Stable surface-level Host가 `{postId, selectedIndex, originControl}` session과 기존 `node(postId)` query·Action/Reply/thread composition을 소유하고 Gallery는 document index와 origin만 전달한다.
+- Modal shell·close·origin 또는 screen fallback focus는 query의 Suspense·error boundary 밖에 유지한다. Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않는다.
+- 같은 Content의 일시 unavailable·복구 상태는 유지하고 다른 revision은 original selected index에서 초기화하며, 해당 index가 없으면 unavailable을 표시한다. Actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
+- 별도 Media query·authorization을 추가하거나 이전 byte·URL 또는 다른 Post·Profile·revision의 Media를 섞지 않는다.
 - PROD-626의 gallery geometry·Sensitive·retry 동작을 복제하거나 회귀시키지 않는다.
 
 **Verification**
 
-- Component test로 정상 tile의 선택 index, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, identity·actor·Profile·Content 변경 시 Viewer 유지와 현재 projection 반영, Media unavailable 상태, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료를 검증한다.
+- Component test로 정상 tile의 Post ID·선택 index, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, query cache hit·loading·error·retry·null Post·Content·Media의 shell 유지, 같은 Content 복구 상태 보존, 다른 revision reset·original index unavailable, URL·actor 전환, 명시적 dismiss·Viewer 삭제 action·surface unmount와 focus 복귀를 검증한다.
 - PROD-626 baseline의 1·2·3·4장, Sensitive와 error·retry test를 함께 통과시킨다.
 
-- [x] 1.1 Post surface에서 선택 index와 origin focus만 소유하고 Gallery의 정상 tile 선택을 받을 수 있게 한다.
+- [x] 1.1 목록·상세의 기존 provider 아래 stable `PostMediaViewerHost`와 `{postId, selectedIndex, originControl}` session을 두고 기존 `node(postId)` visibility·authorization query를 연결한다.
 - [x] 1.2 공개된 정상 tile에 viewer trigger semantics와 접근 가능한 이름을 제공하고 주변 navigation과 기존 gallery control 실행을 격리한다.
-- [x] 1.3 Sensitive 진입 경계, Media unavailable 상태의 이전 URL 비보존·modal chrome·close 유지, Reply 부모 preview와 명시적 dismiss·Viewer 삭제 action·surface unmount lifecycle 자동화 회귀 검증을 추가한다.
-- [x] 1.4 Post·Profile·Content identity 또는 Relay actor/environment generation 변경 시 Viewer를 자동 종료하지 않고 현재 fragment·Action·Composer binding을 사용하는 production-surface 회귀 검증을 추가한다.
+- [x] 1.3 Modal shell·close·origin 또는 screen fallback focus를 Host query boundary 밖에 유지하고 cache hit·loading·error·retry·null Post·Content·Media의 안전한 presentation을 구현한다.
+- [x] 1.4 같은 Content unavailable→복구 state 보존, 다른 Content revision의 original index reset·부재 unavailable, Media URL 변경의 이전 byte 비보존과 actor/environment 전환 close·query 폐기를 구현한다.
+- [x] 1.5 PostListItem·PostLayout은 실제 Media를 소유한 Post ID로 launch만 요청하고 parent fragment·Action Bar·Wide detail 조립과 Viewer lifecycle reconciliation을 제거한다. Quote outer Post와 목록 pure Repost source target을 유지하고 상세 pure Repost에는 새 launcher를 추가하지 않는다.
+- [x] 1.6 목록·Quote·Repost·상세 projection 전환, nested Viewer stack, query lifecycle·revision·URL·actor·focus 복귀를 Relay mock 기반 component test로 회귀 검증한다.
 
 ## 2. PROD-650 Image surface와 Media 탐색
 
@@ -130,6 +133,8 @@ Viewer를 keyboard·touch·VoiceOver·TalkBack으로 열고 탐색하고 닫을 
 - [ ] 4.3 Web `<768px`·`>=768px`에서 backdrop·내부 pointer, keyboard·focus·배경 비활성화·route/history·Screen Reader와 wide thread interaction runtime을 확인하고 결과를 기록한다.
 - [ ] 4.4 iOS에서 touch·button·swipe·back·VoiceOver runtime을 확인하고 결과를 기록한다.
 - [ ] 4.5 Android에서 touch·button·swipe·back·TalkBack runtime을 확인하고 결과를 기록한다.
+- [x] 4.6 Host query loading·error·retry·unavailable에서도 같은 modal shell·close·focus fallback이 유지되는지 자동화한다.
+- [x] 4.7 Host query loading·error·retry·unavailable와 같은 Content 복구·다른 revision reset 상태를 Storybook fixture로 확인한다.
 
 ## 5. PROD-650 통합 검증·전달·archive
 
@@ -156,7 +161,7 @@ Viewer를 keyboard·touch·VoiceOver·TalkBack으로 열고 탐색하고 닫을 
 - Focused unit·Storybook 뒤 `pnpm --filter @kosmo/app test`, 관련 lint·Prettier, `git diff --check`, scoped와 전체 OpenSpec strict validation을 통과시킨다.
 - Exact `main` parent SHA, branch-only diff, CI와 미실행 runtime 항목을 PR에 분리해 기록한다.
 
-- [x] 5.1 Focused test와 전체 App test, lint·Prettier, diff check와 `add-post-media-viewer` strict validation을 통과시킨다.
-- [x] 5.2 exact `main` parent SHA와 branch-only diff를 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
-- [x] 5.3 PROD-650 자체 구현과 필수 검증이 완료되면 PR readiness를 판단하되 OpenSpec을 조기 archive하지 않는다.
+- [x] 5.1 Host/query refactor 뒤 focused test와 전체 App test, lint·Prettier, diff check와 `add-post-media-viewer` strict validation을 통과시킨다.
+- [ ] 5.2 exact `main` parent SHA와 branch-only diff를 다시 확인하고 구현·자동화·Web·iOS·Android 증거 및 제외 범위를 PR에 기록한다.
+- [ ] 5.3 PROD-650 자체 구현과 필수 검증이 완료되면 PR readiness를 다시 판단하되 OpenSpec을 조기 archive하지 않는다.
 - [ ] 5.4 PROD-626 archive 뒤 canonical `post-media-display`와 이 delta를 동기화하고 모든 PROD-650 task·runtime·CI가 완료된 경우 PROD-650 소유로 change를 archive한 뒤 strict validation을 통과시킨다.

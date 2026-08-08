@@ -1,6 +1,6 @@
 ## Context
 
-PROD-626은 공용 `PostMediaGallery`·`PostMediaImage`에 최대 4장 gallery geometry, Sensitive 공개 상태와 image별 loading·retry를 제공한다. 현재 `PostBody` fragment는 Content와 Media만 읽고, 목록과 상세의 `PostLayout`이 작성자·Post action target·Reply binding과 Viewer session을 소유한다. 상세 route의 `PostDetailThread`는 현재 Post와 ancestors·reply descendants, Reply Composer와 reply pagination을 조합하지만 현재 Viewer API에는 이 thread 입력이 없다. Viewer가 gallery 안에서 자체 Post·thread 표현을 복제하면 동일 Post·revision·action target 경계가 갈라지므로, PROD-650은 기존 Post 상세 thread surface를 재사용 가능한 경계로 분리해야 한다.
+PROD-626은 공용 `PostMediaGallery`·`PostMediaImage`에 최대 4장 gallery geometry, Sensitive 공개 상태와 image별 loading·retry를 제공한다. `PostBody`는 Viewer를 열 Post ID·document index·origin control만 전달한다. 목록과 상세의 안정적인 surface 경계에 있는 `PostMediaViewerHost`가 기존 `node(postId)` visibility·authorization 정책으로 현재 Post를 조회하고 Viewer session·Action/Reply binding·thread 조합을 소유한다. 상세 route의 `PostDetailThread`는 현재 Post와 ancestors·reply descendants, Reply Composer와 reply pagination을 계속 조합하며 Host는 그 표시 경계를 재사용한다.
 
 React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`를 사용하는 선행 UI가 있으나 Media Viewer 공용 primitive는 없다. 기존 `PostActionSurface`는 Relay fragment와 인증·Profile 선택·Reply callback을 결합하고 Reaction·Repost·More도 각 overlay를 열 수 있으므로, Viewer 안에서 중복 action row를 만들거나 중첩 modal을 무검증으로 추가하면 플랫폼별 overlay·focus가 달라질 수 있다.
 
@@ -8,8 +8,10 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 **Goals:**
 
-- Gallery 선택 index를 Post surface가 소유하는 modal viewer로 전달한다.
-- 소유 Post의 현재 Relay fragment projection에 있는 Media 순서와 이미 승인된 표시 URL만 사용하고 이전 URL을 snapshot으로 유지하지 않는다.
+- Gallery가 `{postId, selectedIndex, originControl}`을 안정적인 surface-level Viewer Host에 전달한다.
+- Host가 기존 Post Node visibility·authorization 경계로 조회한 현재 projection의 Media 순서와 승인된 표시 URL만 사용하고 이전 URL을 snapshot으로 유지하지 않는다.
+- Modal shell·close·focus fallback을 Post query의 Suspense·error boundary 밖에 유지한다.
+- 같은 Content의 일시 unavailable·복구 상태는 보존하고 다른 revision은 원래 선택 index에서 초기화하며, actor/environment 전환은 Viewer를 닫고 query를 폐기한다.
 - Compact Web·Native의 image/detail layout과 Wide Web의 image/Post 상세 thread 분할을 하나의 공용 Viewer 경계에서 제공한다.
 - Wide Web에서 원문 전체·기존 Action Bar·Reply Composer·reply descendants와 pagination을 기존 Post 상세 계약으로 제공한다.
 - Sensitive·loading·error·retry, modal close·focus 복귀와 Web·Native 탐색 입력을 분리 검증할 수 있게 한다.
@@ -17,7 +19,7 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 **Non-Goals:**
 
-- 새 GraphQL field·Media query·authorization·dependency를 추가하지 않는다.
+- 새 GraphQL field·Media query·authorization·dependency를 추가하지 않는다. Host의 Post query는 기존 `node(id)` 정책을 재사용한다.
 - Gallery geometry, Post action 도메인 동작과 Relay cache update를 재구현하지 않는다.
 - Zoom·pan, route·deep link, Media 편집·metadata와 파일 공유·다운로드·기기 저장을 구현하지 않는다.
 
@@ -33,9 +35,11 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 ### Recommended Approach
 
-Post surface에 viewer coordinator를 두고 `{selectedIndex, originControl}`만 열린 상태로 보관한다. `PostBody`에서 Gallery까지는 `onMediaOpen(index, origin)` callback seam만 전달하고, Gallery는 Sensitive 공개 뒤 정상 image tile에만 이 callback을 연결한다. Reply 부모 preview의 `interactive=false` 경로에는 callback을 전달하지 않는다.
+목록과 상세의 기존 Action authentication·Reply coordinator provider 아래 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. `PostBody`에서 Gallery까지는 `onMediaOpen(index, origin)` callback seam만 전달하고 launcher는 실제 Media를 소유한 Post의 `{postId, selectedIndex, originControl}`을 Host에 연다. Gallery는 Sensitive 공개 뒤 정상 image tile에만 이 callback을 연결하고 Reply 부모 preview의 `interactive=false` 경로에는 전달하지 않는다. Quote는 outer Post를, 목록의 pure Repost는 Media를 실제 표시한 source Post를 target으로 사용하며 상세의 기존 non-interactive pure Repost preview에는 새 launcher를 추가하지 않는다.
 
-Coordinator는 현재 surface가 가진 Post fragment를 Viewer에 전달하고, Viewer는 colocated fragment에서 Media, Content identity, 작성자와 원문 표시 데이터를 직접 읽는다. 새 Media query를 만들거나 Post·작성자 Profile·Content identity, 선택된 action Profile 또는 Relay actor/environment generation을 session identity로 합성하지 않는다. 열린 Viewer는 같은 소유 surface의 현재 fragment projection을 반영하고, 선택 Media가 사라지면 이전 URL을 유지하지 않은 채 modal chrome과 close control이 있는 unavailable 상태를 표시한다. 목록과 상세은 같은 viewer presentation을 사용하며 caller는 선택 session, focus, 기존 Reply·Action binding, thread query와 Viewer 안의 삭제 action lifecycle을 계속 소유한다.
+Host는 열린 session, `node(postId)` Post query, 기존 Action/Reply binding과 Wide thread composition을 소유한다. Modal shell·close·origin 또는 screen fallback focus는 query 경계 밖에 유지하고 Content·Media·Profile presentation만 `Suspense`·error boundary 안에서 교체한다. Query는 현재 Relay actor environment를 사용하고 기존 Post Node visibility·authorization을 그대로 적용하므로 별도 Media authorization을 만들지 않는다. Relay actor/environment generation이 바뀌면 session을 닫고 이전 query를 폐기한다.
+
+같은 Content ID가 null projection을 거쳐 복구되면 current index·expanded·overflow·Media loading/error/retry state를 유지한다. 다른 non-null Content ID가 도착하면 그 상태를 초기화하고 session을 연 original selected index를 다시 사용한다. 새 revision에 해당 document index가 없으면 index를 clamp하거나 다른 Media로 이동하지 않고 unavailable을 표시한다. Media ID가 같아도 URL이 바뀌면 image instance와 load state를 새 URL 기준으로 교체해 이전 pixel·byte를 유지하지 않는다.
 
 Wide Web의 오른쪽은 route component 자체를 중첩하지 않고 `PostDetailThread`의 표시·interaction 조합을 재사용 가능한 thread surface로 추출해 사용한다. Reply ancestors, 현재 Post와 reply descendants를 기존 연결 순서대로 포함한다. 원본 Post는 Viewer session의 같은 Post identity를 사용하며 Media 렌더만 생략한다. Reply Composer는 처음부터 열지 않고 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. Ancestors·descendants와 Quote·Repost 안의 Media 및 viewer interaction, Action Bar·Reply Composer·reply descendants는 기존 표현을 유지한다. 목록처럼 thread data가 아직 없는 caller는 같은 Post node의 기존 visibility 정책을 따르는 Post detail thread operation을 Viewer 경계 안에서 load할 수 있다. 이 operation은 standalone Media authorization을 추가하지 않고 route·browser history를 변경하지 않으며 현재 Viewer Post identity와 결과가 다르면 표시하지 않는다.
 
@@ -49,9 +53,9 @@ Viewer presentation은 하나의 full-screen modal 안에서 다음 영역을 �
 
 폭 분기는 Web에서만 768px을 기준으로 하고 Native는 항상 compact 세로 layout을 사용한다. Wide Web modal은 viewport 사방의 `24px` backdrop inset을 제외한 폭을 사용하고, 오른쪽 thread rail은 `clamp(320px, 25vw, 350px)`로 계산하며 왼쪽 image surface가 나머지 폭을 차지한다. 320px 최소폭은 기존 Post 상세의 내부 padding과 avatar column을 제외한 content 폭이 228px Action Bar를 수용하도록 보장한다. 기존 Post 상세의 표현·interaction을 재사용하되 route의 `600px` column 폭까지 복제하지 않는다.
 
-Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘을 때만 control을 표시한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. Body 영역은 빈 높이를 채우지 않아 Action Bar가 짧은 원문 바로 아래에 놓이게 하고, 낮은 viewport에서 내용이 상한을 넘으면 body만 줄어들고 scroll한다. 펼친 상태와 image load state는 현재 Content projection 또는 Media 목록이 바뀌면 초기화한다. Wide Web은 원문을 접지 않고 오른쪽 thread surface 전체를 왼쪽 image와 독립적으로 scroll한다. Image load generation은 Media identity별로 격리해 현재 index 이동이나 retry가 다른 항목 상태를 초기화하지 않게 한다.
+Compact 원문 overflow 여부는 실제 text layout에서 확인해 3줄을 넘을 때만 control을 표시한다. Detail panel은 내용 높이를 따르되 최대 높이를 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. Body 영역은 빈 높이를 채우지 않아 Action Bar가 짧은 원문 바로 아래에 놓이게 하고, 낮은 viewport에서 내용이 상한을 넘으면 body만 줄어들고 scroll한다. 다른 non-null Content revision이 도착하면 펼침·overflow·image load state를 초기화한다. 같은 Content에서 Media URL identity만 바뀌면 해당 Image instance와 load state만 교체한다. Wide Web은 원문을 접지 않고 오른쪽 thread surface 전체를 왼쪽 image와 독립적으로 scroll한다. Image load generation은 Media identity별로 격리해 현재 index 이동이나 retry가 다른 항목 상태를 초기화하지 않게 한다.
 
-Wide thread loading·error boundary는 오른쪽 surface에만 적용해 왼쪽 선택 image와 modal chrome을 유지한다. Route와 Viewer의 `PostDetailThread`는 각각 scroll surface의 end-reached, same-surface burst 재진입 guard, pending·error·retry UI state와 completion 뒤 saved metrics 재평가를 소유하고 component 간 request token이나 Viewer visibility gate를 공유하지 않는다. 같은 Relay environment에서 query와 variables가 동일한 pagination operation이 두 surface에서 겹치면 in-flight dedupe와 normalized connection merge는 Relay에 맡긴다. 서로 다른 cursor·count·environment의 request가 dedupe된다고 가정하지 않는다. Viewer 뒤의 원래 Post surface는 modal이 열린 동안 focus와 interaction 대상에서 제외한다.
+Host Post query의 loading·error boundary는 Content presentation에만 적용해 modal shell과 close·focus를 유지한다. Wide thread loading·error boundary는 오른쪽 surface에만 적용해 왼쪽 선택 image와 modal chrome을 유지한다. Route와 Viewer의 `PostDetailThread`는 각각 scroll surface의 end-reached, same-surface burst 재진입 guard, pending·error·retry UI state와 completion 뒤 saved metrics 재평가를 소유하고 component 간 request token이나 Viewer visibility gate를 공유하지 않는다. 같은 Relay environment에서 query와 variables가 동일한 pagination operation이 두 surface에서 겹치면 in-flight dedupe와 normalized connection merge는 Relay에 맡긴다. 서로 다른 cursor·count·environment의 request가 dedupe된다고 가정하지 않는다. Viewer 뒤의 원래 Post surface는 modal이 열린 동안 focus와 interaction 대상에서 제외한다.
 
 Web key handler는 Viewer가 최상위 active modal일 때만 arrow·Escape를 처리하고 form·button 입력과 충돌하지 않게 한다. Web backdrop은 직접 press만 close로 처리하고 image·detail·내부 control press의 전파로 닫지 않는다. Native swipe는 수평 의도가 수직 scroll보다 분명할 때만 인식하며 첫·마지막 경계를 넘기지 않는다. Close ref를 초기 focus target으로 사용하고, dismiss 시 보관한 origin control이 유효하면 그곳으로 복귀한다.
 
@@ -59,14 +63,16 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 
 ### Allowed Alternatives
 
-- Viewer presentation은 같은 Post surface가 전달한 Post fragment를 직접 읽고 현재 projection의 Media availability를 표시한다. Session에는 선택 index와 origin focus만 두며 focus, Action/Reply binding, thread query와 Viewer 안의 삭제 lifecycle은 coordinator와 기존 surface에 유지하고 별도 Media query·action 복제를 만들지 않아야 한다.
-- Wide thread data는 caller가 이미 가진 `PostDetailThread` fragment를 전달하거나 Viewer가 같은 Post node에 기존 detail operation을 실행할 수 있다. 두 방식 모두 재사용 가능한 thread presentation을 사용하고 현재 Post identity·visibility, route·history 유지와 독립 loading·error boundary를 지켜야 한다.
+- Host는 기존 `node(postId)` Post query와 colocated fragment로 Viewer Content·Action·thread 입력을 소유한다. Caller가 parent Post fragment, 조립한 `actionBar` 또는 `wideDetail`을 넘겨 Host query lifecycle과 다시 reconcile하는 구조는 허용하지 않는다.
+- Host는 목록과 상세의 기존 provider 아래 surface마다 하나씩 둘 수 있다. 앱 전체 단일 modal coordinator나 새 route는 필요하지 않으며, Wide thread 안에서 여는 Viewer는 해당 nested surface Host가 별도 stack entry로 소유한다.
 - Image별 load state는 기존 renderer에서 공유 가능한 presentation seam을 추출하거나 Viewer 전용 얇은 `contain` renderer로 둘 수 있다. Gallery의 `cover` geometry와 retry 격리 계약을 바꾸지 않는 방식만 허용한다.
 - Child action overlay가 중첩 modal로 검증되면 Viewer를 유지한 채 열 수 있고, 플랫폼 제약이 확인되면 coordinator가 child overlay 동안 Viewer presentation을 일시 조정할 수 있다. 사용자에게 보이는 action 결과와 dismiss·focus 계약은 같아야 한다.
 
 ### Known Traps
 
-- Viewer가 Media ID만 받아 새 query를 실행하면 Post visibility와 Content revision 경계를 우회하거나 stale Media를 섞을 수 있다.
+- Viewer가 Media ID만 받아 query를 실행하거나 기존 `node(postId)` 대신 별도 authorization을 만들면 Post visibility와 Content revision 경계를 우회하거나 stale Media를 섞을 수 있다.
+- Modal shell을 Host Post query boundary 안에 두면 loading·error·retry 때 close·focus lifecycle까지 unmount된다.
+- Parent fragment와 Host query를 동시에 표시 lifecycle source로 사용하면 Quote·Repost projection 변화와 query completion이 Viewer instance·state를 서로 재설정한다.
 - 전체 Post row·body navigation Pressable 안에 viewer tile semantics를 중첩하거나 press propagation을 막지 않으면 viewer와 상세 route가 함께 열린다.
 - Sensitive placeholder나 gallery retry control을 viewer trigger로 감싸면 공개·재시도와 viewer open이 동시에 실행된다.
 - 현재 fragment projection의 Media가 unavailable인데 이전 URL을 별도 snapshot으로 유지하면 더 이상 승인되지 않은 image가 modal에 남는다. Viewer는 이전 URL을 보존하지 않고 modal 안에 unavailable 상태를 표시해야 한다.
@@ -80,7 +86,8 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 
 ## Risks / Trade-offs
 
-- [목록과 상세의 상위 Post surface 조합이 달라 coordinator seam이 커질 수 있음] → Gallery에는 index callback만 추가하고 Post 데이터·Action Bar binding은 두 상위 caller가 같은 Viewer API로 공급한다.
+- [목록과 상세의 상위 Post surface 조합이 달라 Host seam이 커질 수 있음] → 기존 list/detail Action·Reply provider 아래 같은 surface-level Host를 두고 launcher는 Post ID·index·origin만 전달한다.
+- [Host Post query가 parent surface query와 같은 Post를 다시 읽음] → 기존 `node(id)`와 Relay normalized cache를 사용하고 별도 authorization·Media query·수동 dedupe를 추가하지 않는다.
 - [목록에서 Wide thread를 위해 추가 Post detail operation이 필요할 수 있음] → 같은 Post node·visibility를 사용하고 thread boundary에만 loading·error를 두며 Media authorization과 route/history는 변경하지 않는다.
 - [Viewer 오른쪽 scroller와 기존 document pagination이 가까운 시점에 같은 connection을 load할 수 있음] → 각 surface가 synchronous burst 재진입을 local guard로 막고 loading·error·retry 상태를 분리한다. 두 surface에서 겹친 같은 Relay environment의 동일 operation·variables는 Relay 21의 in-flight dedupe와 connection merge에 맡긴다. Viewer completion 뒤 saved metrics 재평가는 유지하되 서로 다른 surface를 조정하는 앱 token이나 실제 network 횟수를 별도 앱 계약으로 고정하지 않는다.
 - [Viewer와 Reaction·Repost·More overlay의 native stacking이 불안정할 수 있음] → 구현 초기에 각 child action을 세 플랫폼에서 확인하고, 실패하면 action 의미를 바꾸지 않는 coordinator-level layer 전환으로 제한한다.
@@ -93,11 +100,11 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 ## Migration Plan
 
 1. PROD-626에서 병합된 gallery 계약과 현재 Viewer component test를 baseline으로 고정한다.
-2. 기존 `PostDetailThread`의 current Post·Reply Composer·reply descendants·pagination 표시 경계를 route와 Viewer가 재사용할 수 있게 추출한다.
-3. Wide Viewer 오른쪽에 thread surface와 독립 loading·error·scroll·pagination boundary를 연결하고 원본 Media 중복·nested Viewer를 막는다.
-4. Wide Web의 bounded rail과 Compact Web·Native의 내용 높이 panel·3줄 원문·고정 Action Bar가 기존 Media 탐색을 회귀시키지 않는지 Storybook·component test로 확인한다.
-5. Web pointer·keyboard·focus·URL/history와 wide Composer·pagination·child overlay, iOS·Android touch·swipe·back·Screen Reader를 별도 runtime 증거로 확인한다.
-6. 이상이 있으면 Wide thread 연결만 이전 compact detail panel로 rollback할 수 있다. 서버·DB migration이나 저장 데이터 rollback은 없다.
+2. 목록·상세 provider 아래 stable Host와 `node(postId)` query를 두고 modal shell을 query content boundary 밖으로 분리한다.
+3. Caller가 전달하던 Post fragment·Action Bar·Wide detail 조립을 Host의 기존 fragment·binding·thread composition으로 이동한다.
+4. Cache hit·loading·error·retry·unavailable, 같은 Content 복구·다른 revision reset, URL·actor 전환과 focus 복귀를 component test와 Storybook으로 확인한다.
+5. Wide Web의 bounded rail과 Compact Web·Native의 내용 높이 panel·3줄 원문·고정 Action Bar가 기존 Media 탐색을 회귀시키지 않는지 확인한다.
+6. Web pointer·keyboard·focus·URL/history와 wide Composer·pagination·nested child overlay, iOS·Android touch·swipe·back·Screen Reader를 별도 runtime 증거로 확인한다. 서버·DB migration이나 저장 데이터 rollback은 없다.
 
 ## Open Questions
 

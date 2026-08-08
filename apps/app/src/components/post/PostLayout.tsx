@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -10,18 +10,15 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { PostMediaViewer } from './PostMediaViewer';
-import { createPostMediaViewerSession } from './postMediaViewerSession';
+import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
 import { getReplyProcessingState } from './replySurface';
-import type { ReactNode } from 'react';
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
 import type { PostMediaOpenHandler } from './PostMediaImage';
-import type { PostMediaViewerSession } from './postMediaViewerSession';
 import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
@@ -55,7 +52,6 @@ const PostLayoutFragment = graphql`
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
-    ...PostMediaViewer_post
     repostSource {
       id
       createdAt
@@ -96,34 +92,29 @@ export function PostLayout({
   mediaPresentation = 'default',
   onDeleted,
   post: postKey,
-  viewerWideDetail,
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
   post: PostLayout_post$key;
-  viewerWideDetail?: ReactNode;
 }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
-  const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
+  const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(post.id);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
-  const surfaceRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
   const pureRepost = !post.content && !post.replyParent && post.repostSource;
   const socialActionTarget = pureRepost ? post.repostSource?.actionSurface : post.actionSurface;
-  const content = post.content;
-  const closeViewer = useCallback(() => setViewerSession(null), []);
-  const handleMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
-    setViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
-  }, []);
-  const handleDeleted = useCallback(() => {
-    closeViewer();
-    onDeleted?.();
-  }, [closeViewer, onDeleted]);
+  const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted: handleDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [handleDeleted, openViewer, post.id],
+  );
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -140,16 +131,6 @@ export function PostLayout({
           replyAuthentication.execution,
           Boolean(replyBinding.profile),
         ),
-      }
-    : undefined;
-  const viewerReply = reply
-    ? {
-        ...reply,
-        controlRef: undefined,
-        onPress: () => {
-          closeViewer();
-          requestAnimationFrame(() => reply.onPress());
-        },
       }
     : undefined;
   const presentationSource: SourcePostPresentationData | null = source
@@ -180,7 +161,7 @@ export function PostLayout({
     : null;
 
   return (
-    <View ref={surfaceRef} style={styles.root} tabIndex={-1}>
+    <View style={styles.root}>
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -241,26 +222,6 @@ export function PostLayout({
           ) : null}
         </View>
       </View>
-      {mediaPresentation === 'default' && viewerSession ? (
-        <PostMediaViewer
-          actionBar={
-            content && socialActionTarget ? (
-              <PostActionSurface
-                onDeleted={handleDeleted}
-                reactionSummaryStyle={styles.viewerReactionSummary}
-                reply={viewerReply}
-                socialActionTarget={socialActionTarget}
-              />
-            ) : null
-          }
-          fallbackFocus={surfaceRef}
-          onClose={closeViewer}
-          originControl={viewerSession.originControl}
-          post={post}
-          selectedIndex={viewerSession.selectedIndex}
-          wideDetail={content ? viewerWideDetail : null}
-        />
-      ) : null}
     </View>
   );
 }
@@ -274,5 +235,4 @@ const styles = StyleSheet.create({
   reactionSummary: { marginBottom: spacing.xs, marginTop: spacing.lg },
   source: { marginTop: spacing.sm },
   replySurface: { marginTop: spacing.lg },
-  viewerReactionSummary: { display: 'none' },
 });

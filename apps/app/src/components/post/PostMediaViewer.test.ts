@@ -101,7 +101,22 @@ let PostMediaViewer: ComponentType<ViewerProps>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ PostMediaViewer } = await import('./PostMediaViewer'));
+  const module = await import('./PostMediaViewer');
+  PostMediaViewer = (props) =>
+    createElement(
+      module.PostMediaViewer,
+      {
+        fallbackFocus: props.fallbackFocus,
+        onClose: props.onClose,
+        originControl: props.originControl,
+        selectedIndex: props.selectedIndex,
+      },
+      createElement(module.PostMediaViewerContent, {
+        actionBar: props.actionBar,
+        post: props.post,
+        wideDetail: props.wideDetail,
+      }),
+    );
 });
 
 afterEach(async () => {
@@ -191,7 +206,7 @@ describe('PostMediaViewer', () => {
 
     platform.OS = 'ios';
     await render({ post: viewerPost({ contentId: 'content-2' }), selectedIndex: 1 });
-    assert.equal(currentImage().props.accessibilityLabel, '첫 번째 이미지');
+    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
     assert.ok(panResponderConfig);
     assert.equal(
       panResponderConfig.onMoveShouldSetPanResponder?.(
@@ -206,7 +221,7 @@ describe('PostMediaViewer', () => {
     await act(async () => {
       panResponderConfig?.onPanResponderRelease?.(null as never, { dx: -80, dy: 4 } as never);
     });
-    assert.equal(currentImage().props.accessibilityLabel, '두 번째 이미지');
+    assert.equal(currentImage().props.accessibilityLabel, '3번째 첨부 이미지');
   });
 
   it('767px Web과 Native는 세로, 768px Web은 좌우 layout을 사용한다', async () => {
@@ -380,6 +395,36 @@ describe('PostMediaViewer', () => {
       rendered('Text').some((node) => node.props.testID === 'post-media-viewer-position'),
       false,
     );
+
+    await act(async () =>
+      keydownListener?.({
+        altKey: false,
+        ctrlKey: false,
+        defaultPrevented: false,
+        key: 'ArrowLeft',
+        metaKey: false,
+        preventDefault: () => undefined,
+        target: viewerKeyTarget,
+      } as unknown as KeyboardEvent),
+    );
+    assert.ok(byTestId('post-media-viewer-unavailable'));
+
+    platform.OS = 'ios';
+    await render({ post: viewerPost({ media: [media(0, '첫 번째 이미지')] }), selectedIndex: 1 });
+    assert.equal(
+      panResponderConfig?.onMoveShouldSetPanResponder?.(null as never, { dx: -80, dy: 4 } as never),
+      false,
+    );
+    await act(async () => {
+      await panResponderConfig?.onPanResponderRelease?.(
+        null as never,
+        {
+          dx: -80,
+          dy: 4,
+        } as never,
+      );
+    });
+    assert.ok(byTestId('post-media-viewer-unavailable'));
   });
 
   it('같은 Media ID의 URL이 바뀌면 이전 Image와 load state를 폐기한다', async () => {
@@ -447,6 +492,7 @@ describe('PostMediaViewer', () => {
     };
     await render({ onClose: () => closed++, originControl });
     assert.equal(closeFocused, 1);
+    assert.equal(byTestId('post-media-viewer-backdrop-dismiss').props.tabIndex, -1);
     assert.equal(
       byTestId('post-media-viewer-dialog').parent,
       byTestId('post-media-viewer-backdrop-dismiss').parent,

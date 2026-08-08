@@ -110,6 +110,10 @@ mock.module('@/components/post/PostListItem', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/components/post/PostMediaViewerHost', {
+  exports: { PostMediaViewerHostProvider: ({ children }: PropsWithChildren) => children },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('@/components/post/PostReplyCoordinator', {
   exports: { PostReplyCoordinatorProvider: ({ children }: PropsWithChildren) => children },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -164,7 +168,7 @@ describe('PostDetailThread Viewer presentation', () => {
 
     assert.equal(current.props.contentWarningPresentation, 'revealed');
     assert.equal(current.props.mediaPresentation, 'hidden');
-    assert.equal(current.props.viewerWideDetail, null);
+    assert.equal('viewerWideDetail' in current.props, false);
     assert.equal(surrounding.length, 2);
     assert.ok(renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' }));
   });

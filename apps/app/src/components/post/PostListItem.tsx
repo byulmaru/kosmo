@@ -11,9 +11,7 @@ import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
-import { PostMediaViewer } from './PostMediaViewer';
-import { createPostMediaViewerSession } from './postMediaViewerSession';
-import { PostMediaViewerThread } from './PostMediaViewerThread';
+import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplyBinding } from './PostReplyCoordinator';
 import { PostSourcePresentationView } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';
@@ -23,7 +21,6 @@ import type { PostListItem_post$key } from './__generated__/PostListItem_post.gr
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostMediaOpenHandler } from './PostMediaImage';
-import type { PostMediaViewerSession } from './postMediaViewerSession';
 import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
@@ -53,7 +50,6 @@ const PostListRowFragment = graphql`
     }
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostBody_post
-    ...PostMediaViewer_post
   }
 `;
 
@@ -90,7 +86,6 @@ const PostListItemFragment = graphql`
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
-    ...PostMediaViewer_post
     repostSource {
       id
       createdAt
@@ -130,17 +125,13 @@ export function PostListItem({
 }) {
   const theme = useTheme();
   const [deleted, setDeleted] = useState(false);
-  const [quoteViewerSession, setQuoteViewerSession] = useState<PostMediaViewerSession | null>(null);
   const post = useFragment(PostListItemFragment, postKey);
+  const openViewer = usePostMediaViewerHost();
   const replyBinding = usePostReplyBinding(post.id);
-  const onDeleted = useCallback(() => {
-    setQuoteViewerSession(null);
-    setDeleted(true);
-  }, []);
+  const onDeleted = useCallback(() => setDeleted(true), []);
   const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const replyTriggerRef = useRef<View>(null);
-  const quoteSurfaceRef = useRef<View>(null);
   const reply = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -188,53 +179,17 @@ export function PostListItem({
       id,
       url: url ?? null,
     })) ?? null;
-  const closeQuoteViewer = useCallback(() => setQuoteViewerSession(null), []);
-  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
-    setQuoteViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
-  }, []);
-  const quoteViewerReply = reply
-    ? {
-        ...reply,
-        controlRef: undefined,
-        onPress: () => {
-          closeQuoteViewer();
-          requestAnimationFrame(() => reply.onPress());
-        },
-      }
-    : undefined;
+  const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [onDeleted, openViewer, post.id],
+  );
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
     showDivider && { borderColor: theme.divider },
   ];
-  const quoteViewer = quoteViewerSession ? (
-    <PostMediaViewer
-      actionBar={
-        quoteContent && post.actionSurface ? (
-          <PostActionSurface
-            onDeleted={onDeleted}
-            reactionSummaryStyle={styles.viewerReactionSummary}
-            reply={quoteViewerReply}
-            socialActionTarget={post.actionSurface}
-          />
-        ) : null
-      }
-      fallbackFocus={quoteSurfaceRef}
-      onClose={closeQuoteViewer}
-      originControl={quoteViewerSession.originControl}
-      post={post}
-      selectedIndex={quoteViewerSession.selectedIndex}
-      wideDetail={
-        quoteContent ? (
-          <PostMediaViewerThread
-            contentId={quoteContent.id}
-            onPostDeleted={onDeleted}
-            postId={post.id}
-          />
-        ) : null
-      }
-    />
-  ) : null;
   const replyAttribution =
     showReplyAttribution && post.replyParent ? (
       <PostAttributionRow
@@ -259,21 +214,18 @@ export function PostListItem({
     return null;
   }
 
-  const renderWithQuoteViewer = (presentation: ReactNode) => (
+  const renderWithReplySurface = (presentation: ReactNode) => (
     <>
-      <View ref={quoteSurfaceRef} tabIndex={-1}>
-        {presentation}
-      </View>
-      {quoteViewer}
+      {presentation}
       {presentedReplySurface}
     </>
   );
 
   if (!post.repostSource) {
     if (!post.content) {
-      return renderWithQuoteViewer(null);
+      return renderWithReplySurface(null);
     }
-    return renderWithQuoteViewer(
+    return renderWithReplySurface(
       <View role="article" style={cardStyle}>
         {replyAttribution}
         <PostListRow onDeleted={onDeleted} post={post} reply={reply} />
@@ -282,13 +234,13 @@ export function PostListItem({
   }
 
   if (!post.content && post.replyParent) {
-    return renderWithQuoteViewer(null);
+    return renderWithReplySurface(null);
   }
 
   const source = post.repostSource;
 
   if (!post.content) {
-    return renderWithQuoteViewer(
+    return renderWithReplySurface(
       <View role="article" style={cardStyle}>
         <PostAttributionRow
           icon={<Text style={[styles.repeat, { color: theme.textSecondary }]}>↻</Text>}
@@ -356,7 +308,7 @@ export function PostListItem({
     },
   };
 
-  return renderWithQuoteViewer(
+  return renderWithReplySurface(
     <View style={cardStyle}>
       {replyAttribution}
       <View style={styles.quoteRow}>
@@ -418,31 +370,17 @@ function PostListRow({
   const router = useRouter();
   const theme = useTheme();
   const post = useFragment(PostListRowFragment, postKey);
-  const [viewerSession, setViewerSession] = useState<PostMediaViewerSession | null>(null);
-  const surfaceRef = useRef<View>(null);
+  const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
-  const content = post.content;
-  const closeViewer = useCallback(() => setViewerSession(null), []);
-  const handleMediaOpen = useCallback<PostMediaOpenHandler>((selectedIndex, originControl) => {
-    setViewerSession(createPostMediaViewerSession(selectedIndex, originControl));
-  }, []);
-  const handleDeleted = useCallback(() => {
-    closeViewer();
-    onDeleted();
-  }, [closeViewer, onDeleted]);
-  const viewerReply = reply
-    ? {
-        ...reply,
-        controlRef: undefined,
-        onPress: () => {
-          closeViewer();
-          requestAnimationFrame(() => reply.onPress());
-        },
-      }
-    : undefined;
+  const handleMediaOpen = useCallback<PostMediaOpenHandler>(
+    (selectedIndex, originControl) => {
+      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+    },
+    [onDeleted, openViewer, post.id],
+  );
   return (
-    <View ref={surfaceRef} style={styles.standardRow} tabIndex={-1} testID="post-list-standard-row">
+    <View style={styles.standardRow} testID="post-list-standard-row">
       <Link asChild href={profileHref}>
         <Pressable
           aria-hidden
@@ -482,40 +420,12 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={styles.actionBarSlot}
-          onDeleted={handleDeleted}
+          onDeleted={onDeleted}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
           socialActionTarget={post.actionSurface!}
         />
       </View>
-      {viewerSession ? (
-        <PostMediaViewer
-          actionBar={
-            content && post.actionSurface ? (
-              <PostActionSurface
-                onDeleted={handleDeleted}
-                reactionSummaryStyle={styles.viewerReactionSummary}
-                reply={viewerReply}
-                socialActionTarget={post.actionSurface}
-              />
-            ) : null
-          }
-          fallbackFocus={surfaceRef}
-          onClose={closeViewer}
-          originControl={viewerSession.originControl}
-          post={post}
-          selectedIndex={viewerSession.selectedIndex}
-          wideDetail={
-            content ? (
-              <PostMediaViewerThread
-                contentId={content.id}
-                onPostDeleted={handleDeleted}
-                postId={post.id}
-              />
-            ) : null
-          }
-        />
-      ) : null}
     </View>
   );
 }
@@ -562,7 +472,6 @@ const styles = StyleSheet.create({
     ...typography.sm,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
-  viewerReactionSummary: { display: 'none' },
   sourcePresentation: { flex: 1, minWidth: 0 },
   attributionRow: {
     alignItems: 'center',

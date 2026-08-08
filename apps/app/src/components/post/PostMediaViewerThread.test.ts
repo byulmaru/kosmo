@@ -110,7 +110,7 @@ async function render() {
 
 function validQueryData({ contentId = 'content-1' }: { contentId?: string } = {}) {
   return {
-    currentSession: { id: 'session-1', selectedProfile: { id: 'profile-selected' } },
+    currentSession: { selectedProfile: { id: 'profile-selected' } },
     node: {
       __typename: 'Post' as const,
       content: { id: contentId },

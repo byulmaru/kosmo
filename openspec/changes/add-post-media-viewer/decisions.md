@@ -4,12 +4,36 @@
 
 ## Decision Records
 
+### 안정적인 surface-level Host가 Viewer session과 Post query를 소유한다
+
+- Decision Date: 2026-08-08
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650
+- Status: Active
+- Context / Problem: Parent Post fragment projection과 Viewer lifecycle을 함께 묶으면 목록·Quote·Repost presentation branch가 바뀌거나 fragment가 unavailable일 때 Viewer instance·modal focus·내부 탐색 상태가 parent tree에 따라 remount된다.
+- Decision Outcome: 목록과 상세의 기존 Action authentication·Reply coordinator provider 아래 안정적인 surface-level `PostMediaViewerHost`를 둔다. Gallery launcher는 실제 Media를 소유한 Post의 `{postId, selectedIndex, originControl}`만 전달한다. Host는 현재 Relay actor environment에서 기존 `node(postId)` visibility·authorization 경계를 사용하는 Post query, Viewer session, 기존 Action/Reply binding과 Wide thread composition을 소유한다. Modal shell·close·origin 또는 screen fallback focus는 query의 Suspense·error boundary 밖에 유지한다.
+- Alternatives Considered: Parent fragment를 Viewer에 직접 전달, Gallery 내부 modal, 앱 전체 단일 modal coordinator, Media ID 기반 query, route 기반 Viewer. Parent fragment 방식은 lifecycle을 presentation branch에 결합하고, Gallery 방식은 Post 맥락을 복제하며, app-global coordinator는 nested Viewer stack과 focus/delete callback registry를 새로 요구한다. Media ID와 route 방식은 기존 visibility·revision·URL/history 경계를 바꾼다.
+- Consequences: PostListItem·PostLayout은 fragment·Action Bar·Wide detail을 Viewer에 조립하지 않고 launch 요청만 보낸다. Quote는 outer Post를, 목록 pure Repost는 실제 Media를 표시한 source Post를 target으로 사용한다. Wide thread 안의 다른 Media는 해당 nested surface Host가 별도 Viewer stack entry로 연다. Relay actor/environment generation이 바뀌면 열린 Viewer를 닫고 이전 query를 폐기한다.
+- Confirmation / Follow-up: Cache hit·loading·error·retry·null Post·Content·Media에서 같은 modal shell·close·focus fallback이 유지되는지, 목록·Quote·Repost·상세 projection 전환과 actor 전환·nested Viewer stack을 component·Storybook·runtime에서 확인한다.
+
+### Content revision이 Viewer presentation state의 identity를 결정한다
+
+- Decision Date: 2026-08-08
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650
+- Status: Active
+- Context / Problem: Query unavailable을 곧바로 session 종료나 state reset으로 취급하면 같은 Content의 일시적인 loading·error·null projection 뒤 사용자의 탐색·원문·retry 상태를 잃는다. 반대로 다른 immutable Content revision까지 같은 상태를 유지하면 새 Media document에 이전 state를 적용한다.
+- Decision Outcome: 같은 Content ID가 일시 unavailable이었다 복구되면 current index·expanded·overflow·Media loading/error/retry state를 유지한다. 다른 non-null Content ID로 바뀌면 해당 state를 초기화하고 session을 연 original selected index를 다시 사용한다. 새 revision에 해당 document index가 없으면 다른 Media로 이동하거나 clamp하지 않고 unavailable을 표시한다. Media ID가 같아도 URL이 바뀌면 image instance와 load state를 URL 기준으로 교체하며 이전 pixel·byte·URL을 유지하지 않는다.
+- Alternatives Considered: Unavailable마다 Viewer close, 모든 projection 변화에서 reset, 모든 revision에서 state 유지, index clamp. 각각 query lifecycle과 modal lifecycle을 다시 결합하거나 동일 Content 복구 상태를 잃고, immutable revision 경계를 흐리거나 사용자가 선택하지 않은 Media로 이동한다.
+- Consequences: Session은 original selected index를 유지하고 presentation은 마지막 non-null Content ID를 구분해야 한다. Null Post·Content·Media와 query loading·error는 modal chrome·close를 유지한 unavailable/loading/error projection으로 표시한다. 다른 revision reset과 같은 revision 복구를 별도 회귀 검증한다.
+- Confirmation / Follow-up: Image 이동·원문 펼침·error/retry 뒤 null projection→같은 Content 복구 보존, 다른 revision reset·선택 index 부재 unavailable, 동일 Media ID URL 변경의 이전 byte 비보존을 자동화와 runtime에서 확인한다.
+
 ### Post surface는 Viewer selection session을, Viewer는 현재 Post projection을 소유한다
 
 - Decision Date: 2026-08-07
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-gallery.md`, `docs/design/post-media-viewer.md`, PROD-650
-- Status: Active
+- Status: Superseded
 - Context / Problem: Gallery는 Media geometry·Sensitive·retry만 알고 작성자·원문·Post action target은 알지 못한다. Gallery가 Viewer와 데이터를 직접 소유하면 현재 Content revision과 상위 Post action 경계가 분리된다.
 - Decision Outcome: 목록·상세의 Post surface가 open 상태, 선택 index와 origin focus target만 소유한다. Gallery는 Sensitive 공개 뒤 정상 tile의 document index만 전달한다. Viewer는 같은 surface가 전달한 Post fragment에서 현재 projection을 직접 소비하며 별도 Media query, standalone authorization 또는 actor·Profile·Post·Content identity reconciliation을 추가하지 않는다.
 - Alternatives Considered: Gallery 내부 modal state, Media ID 기반 별도 query, route 기반 viewer. 각각 Post 맥락 공급을 중복하거나 authorization·revision 경계를 갈라놓고, route는 승인된 제외 범위를 확장한다.
@@ -21,7 +45,7 @@
 - Decision Date: 2026-08-07
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/post-media-viewer.md`, PROD-650
-- Status: Active
+- Status: Superseded
 - Context / Problem: Viewer에 body, Media, Profile scalar를 각각 projection하거나 caller가 같은 fragment 데이터의 identity·availability를 다시 합성하면 fragment colocation이 깨지고 caller와 Viewer의 표시 lifecycle이 중복된다. 반대로 Viewer가 Action·thread query까지 소유하면 기존 Post surface와 또 하나의 Post orchestrator가 된다.
 - Decision Outcome: `PostMediaViewer`는 Post fragment에서 Content body, Media와 Profile 표시 데이터 및 Media unavailable presentation을 직접 소유한다. Post surface는 선택 index·origin focus session과 Action/Reply binding을 계속 소유하고, Wide thread query와 pagination UI state는 `PostDetailThread`가 소유한다.
 - Alternatives Considered: Caller가 scalar presentation data를 계속 조립, Viewer가 session·Action·thread query까지 모두 소유. 전자는 Relay fragment colocation을 깨뜨리고 후자는 기존 `PostLayout`·`PostListItem` 책임을 중복한다.
@@ -59,7 +83,7 @@
 - Authority / Provenance: `docs/design/post-media-viewer.md`, `docs/design/post-action-bar.md`, PROD-650
 - Status: Active
 - Context / Problem: 현재 detail route가 `PostDetailThread` query와 document scroll을 소유하고 Viewer API에는 thread 입력이 없다. Route를 Viewer 안에 중첩하거나 `PostListItem`을 복제하면 route·focus·Media가 중복되고 Composer·reply pagination이 누락된다.
-- Decision Outcome: Detail route와 Viewer가 reply ancestors·현재 Post·reply descendants 표시를 공유할 수 있도록 Post 상세 thread surface를 추출한다. Reply Composer는 기존 상세처럼 초기에는 닫혀 있고 Reply action으로 현재 Post 아래에서 펼친다. Viewer는 소유 Post의 현재 fragment projection을 사용하고 원본 Post Media와 nested Viewer trigger를 오른쪽에서 생략하되 thread 안의 다른 Media와 viewer interaction은 유지한다. 목록 caller에서 필요한 thread data는 같은 Post node와 기존 visibility 정책으로 load하되 route·browser history를 변경하지 않는다. Loading·error·identity mismatch는 오른쪽에만 반영해 Viewer session과 modal chrome을 유지한다.
+- Decision Outcome: Detail route와 Viewer가 reply ancestors·현재 Post·reply descendants 표시를 공유할 수 있도록 Post 상세 thread surface를 추출한다. Reply Composer는 기존 상세처럼 초기에는 닫혀 있고 Reply action으로 현재 Post 아래에서 펼친다. Viewer는 Host가 조회한 현재 Post query projection을 사용하고 원본 Post Media를 오른쪽에서 생략하되 thread 안의 다른 Media와 viewer interaction은 유지한다. Thread의 다른 Media는 해당 nested surface Host가 별도 Viewer stack entry로 연다. Thread data는 같은 Post node와 기존 visibility 정책으로 load하되 route·browser history를 변경하지 않는다. Loading·error·identity mismatch는 오른쪽에만 반영해 Viewer session과 modal chrome을 유지한다.
 - Alternatives Considered: Detail route component 직접 mount, Viewer 전용 thread 구현, `PostListItem` 하나만 표시, open 시 detail route로 navigation. 각각 ownership 중첩·계약 복제·Composer와 descendants 누락·승인된 URL/history 유지 위반을 만든다.
 - Consequences: 기존 reply connection pagination을 오른쪽 scroller에 연결하는 seam과 원본 Media 생략 입력이 필요하다. Route와 Viewer의 pagination coordination은 아래 Relay ownership 결정에 따르며 Viewer 뒤 원래 Post surface는 focus와 interaction 대상에서 제외해야 한다.
 - Confirmation / Follow-up: 목록·상세 양쪽에서 같은 원본 Post identity, Media 비중복, Composer 작성, route와 Viewer의 독립 pagination UI state, loading·error와 route/history 유지·focus 복귀를 확인한다.
@@ -118,6 +142,7 @@
 
 ## Superseded Decisions
 
-- 2026-08-04의 “대상 identity, selected Profile 또는 Relay actor/environment generation 변경 시 Viewer를 닫는다” session consequence는 2026-08-07의 현재 fragment projection·명시적 종료 결정으로 대체한다.
+- 2026-08-07의 “Post surface는 Viewer selection session을, Viewer는 현재 Post projection을 소유한다” 결정과 “Viewer는 표시용 Post fragment를 읽고 orchestration은 Post surface에 유지한다” 구현 선택은 2026-08-08의 stable surface-level Host·Post query와 Content revision state identity 결정으로 대체한다.
+- 2026-08-04의 identity reconciliation 기반 자동 close와 2026-08-07의 모든 actor 변화에서 session을 유지하는 consequence는 2026-08-08의 “Post·Content query lifecycle은 shell을 유지하되 Relay actor/environment 전환은 close·query 폐기한다” 결정으로 대체한다.
 - 2026-08-06의 “Post surface가 identity reconciliation과 availability close를 계속 소유한다” implementation choice는 2026-08-07의 Viewer fragment·unavailable presentation ownership 결정으로 대체한다.
 - `Wide Viewer는 route가 아닌 재사용 가능한 Post 상세 thread surface를 사용한다` 기록의 “Viewer open 동안 배경 document pagination을 중지해 단일 owner로 둔다” pagination consequence와 그 검증 항목은 2026-08-06의 `Relay가 동일 reply pagination operation을 조정한다` 결정으로 대체한다. 나머지 thread surface 재사용 결정은 Active다.

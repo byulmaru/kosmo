@@ -8,6 +8,7 @@ import {
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
@@ -111,7 +112,6 @@ export function PostDetailThread({
   return (
     <PostDetailThreadContent
       header={header}
-      identity={identity}
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
@@ -124,7 +124,6 @@ export function PostDetailThread({
 
 function PostDetailThreadContent({
   header,
-  identity,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -132,7 +131,6 @@ function PostDetailThreadContent({
   replyProfile,
 }: {
   header: ReactNode;
-  identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -279,19 +277,6 @@ function PostDetailThreadContent({
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
-                viewerWideDetail={
-                  presentation === 'route' ? (
-                    <PostDetailThread
-                      header={null}
-                      identity={`${identity}:viewer`}
-                      onPostDeleted={onPostDeleted}
-                      onReplyCreated={onReplyCreated}
-                      post={postKey}
-                      presentation="viewer"
-                      replyProfile={replyProfile}
-                    />
-                  ) : null
-                }
               />
             ) : (
               <PostListItem
@@ -324,19 +309,21 @@ function PostDetailThreadContent({
         owner="detail"
         profile={replyProfile ?? null}
       >
-        {presentation === 'viewer' ? (
-          <ScrollView
-            {...nativeScrollProps}
-            contentContainerStyle={styles.frame}
-            testID="post-media-viewer-thread-scroll"
-          >
-            {thread}
-          </ScrollView>
-        ) : (
-          <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
-            {thread}
-          </PostDetailFrame>
-        )}
+        <PostMediaViewerHostProvider>
+          {presentation === 'viewer' ? (
+            <ScrollView
+              {...nativeScrollProps}
+              contentContainerStyle={styles.frame}
+              testID="post-media-viewer-thread-scroll"
+            >
+              {thread}
+            </ScrollView>
+          ) : (
+            <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+              {thread}
+            </PostDetailFrame>
+          )}
+        </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

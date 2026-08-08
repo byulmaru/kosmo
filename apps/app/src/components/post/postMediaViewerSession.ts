@@ -1,18 +1,6 @@
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 
-export type PostMediaViewerSession = Readonly<{
-  originControl: RefObject<NativeView | null>;
-  selectedIndex: number;
-}>;
-
-export function createPostMediaViewerSession(
-  selectedIndex: number,
-  originControl: RefObject<NativeView | null>,
-): PostMediaViewerSession {
-  return { originControl, selectedIndex };
-}
-
 export function focusPostMediaViewerTarget(
   primary: RefObject<NativeView | null>,
   fallback?: RefObject<NativeView | null>,

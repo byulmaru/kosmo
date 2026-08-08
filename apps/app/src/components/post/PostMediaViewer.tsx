@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Image,
   Modal,
@@ -47,87 +55,101 @@ type ImageState = Readonly<{
   status: 'loading' | 'ready' | 'error';
 }>;
 
-type Props = Readonly<{
+type ContentProps = Readonly<{
   actionBar: ReactNode;
-  fallbackFocus?: RefObject<NativeView | null>;
-  onClose: () => void;
-  originControl: RefObject<NativeView | null>;
   post: PostMediaViewer_post$key;
-  selectedIndex: number;
   wideDetail: ReactNode;
 }>;
 
+type ViewerState = Readonly<{
+  currentIndex: number;
+  expanded: boolean;
+  hasOverflow: boolean;
+  imageStates: Record<string, ImageState>;
+  lastContentId: string | null;
+  moveByRef: RefObject<((delta: number) => void) | null>;
+  selectedIndex: number;
+  setCurrentIndex: React.Dispatch<React.SetStateAction<number>>;
+  setExpanded: React.Dispatch<React.SetStateAction<boolean>>;
+  setHasOverflow: React.Dispatch<React.SetStateAction<boolean>>;
+  setImageStates: React.Dispatch<React.SetStateAction<Record<string, ImageState>>>;
+  setPosition: React.Dispatch<
+    React.SetStateAction<Readonly<{ current: number; total: number }> | null>
+  >;
+  syncContentId: (contentId: string | null) => void;
+}>;
+
+const PostMediaViewerStateContext = createContext<ViewerState | null>(null);
+
 export function PostMediaViewer({
-  actionBar,
+  children,
   fallbackFocus,
   onClose,
   originControl,
-  post: postKey,
   selectedIndex,
-  wideDetail,
-}: Props) {
-  const post = useFragment(PostMediaViewerFragment, postKey);
-  const content = post.content;
-  const media = useMemo(
-    () =>
-      content?.media?.map(({ altText, id, url }) => ({
-        altText: altText ?? null,
-        id,
-        url: url ?? null,
-      })) ?? [],
-    [content?.media],
-  );
-  const bodyText = content?.bodyText ?? '';
-  const profile = {
-    avatarUrl: post.profile.avatar?.url ?? null,
-    displayName: post.profile.displayName,
-    relativeHandle: post.profile.relativeHandle,
-  };
-  const theme = useTheme();
-  const { height, width } = useWindowDimensions();
+}: Readonly<{
+  children?: ReactNode;
+  fallbackFocus?: RefObject<NativeView | null>;
+  onClose: () => void;
+  originControl: RefObject<NativeView | null>;
+  selectedIndex: number;
+}>) {
+  const { width } = useWindowDimensions();
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
+  const moveByRef = useRef<((delta: number) => void) | null>(null);
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [imageStates, setImageStates] = useState<Record<string, ImageState>>({});
+  const [lastContentId, setLastContentId] = useState<string | null>(null);
+  const [position, setPosition] = useState<Readonly<{ current: number; total: number }> | null>(
+    null,
+  );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
-  const wideDetailWidth = Math.min(350, Math.max(320, width / 4));
-  const compactDetailMaxHeight = Math.min(240, Math.max(192, height * 0.32));
-  const currentMedia = media[currentIndex];
-  const currentMediaId = currentMedia?.id;
-  const currentMediaUrl = currentMedia?.url;
-  const currentMediaStateKey = currentMedia
-    ? `${currentMedia.id}:${currentMedia.url ?? ''}`
-    : undefined;
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);
   }, [selectedIndex]);
 
-  useEffect(() => {
-    if (media.length === 0) {
-      return;
-    }
-    const currentMediaStateKeys = new Set(media.map((item) => `${item.id}:${item.url ?? ''}`));
-    setImageStates((states) => {
-      const retainedStates: Record<string, ImageState> = {};
-      let removed = false;
-      for (const [key, state] of Object.entries(states)) {
-        if (currentMediaStateKeys.has(key)) {
-          retainedStates[key] = state;
-        } else {
-          removed = true;
-        }
+  const syncContentId = useCallback(
+    (contentId: string | null) => {
+      if (contentId === null || contentId === lastContentId) {
+        return;
       }
-      return removed ? retainedStates : states;
-    });
-  }, [media]);
+      if (lastContentId !== null) {
+        setCurrentIndex(selectedIndex);
+        setExpanded(false);
+        setHasOverflow(false);
+        setImageStates({});
+      }
+      setLastContentId(contentId);
+    },
+    [lastContentId, selectedIndex],
+  );
+  const viewerState = useMemo<ViewerState>(
+    () => ({
+      currentIndex,
+      expanded,
+      hasOverflow,
+      imageStates,
+      lastContentId,
+      moveByRef,
+      selectedIndex,
+      setCurrentIndex,
+      setExpanded,
+      setHasOverflow,
+      setImageStates,
+      setPosition,
+      syncContentId,
+    }),
+    [currentIndex, expanded, hasOverflow, imageStates, lastContentId, selectedIndex, syncContentId],
+  );
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
-    return () => globalThis.cancelAnimationFrame?.(frame);
+    const focusFrame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
+    return () => globalThis.cancelAnimationFrame?.(focusFrame);
   }, []);
 
   const requestClose = useCallback(() => {
@@ -141,13 +163,6 @@ export function PostMediaViewer({
     }
     requestClose();
   }, [requestClose]);
-
-  const moveBy = useCallback(
-    (delta: number) => {
-      setCurrentIndex((index) => boundedIndex(index + delta, media.length));
-    },
-    [media.length],
-  );
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -172,81 +187,16 @@ export function PostMediaViewer({
       }
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        moveBy(-1);
+        moveByRef.current?.(-1);
       } else if (event.key === 'ArrowRight') {
         event.preventDefault();
-        moveBy(1);
+        moveByRef.current?.(1);
       }
     };
 
     globalThis.addEventListener?.('keydown', handleKeyDown);
     return () => globalThis.removeEventListener?.('keydown', handleKeyDown);
-  }, [moveBy]);
-
-  const swipeResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_event, gesture) =>
-          Platform.OS !== 'web' &&
-          Math.abs(gesture.dx) > 12 &&
-          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
-        onPanResponderRelease: (_event, gesture) => {
-          if (gesture.dx <= -48) {
-            moveBy(1);
-          } else if (gesture.dx >= 48) {
-            moveBy(-1);
-          }
-        },
-      }),
-    [moveBy],
-  );
-
-  const setCurrentImageState = useCallback(
-    (update: (state: ImageState) => ImageState) => {
-      if (!currentMediaId || !currentMediaStateKey) {
-        return;
-      }
-      setImageStates((states) => ({
-        ...states,
-        [currentMediaStateKey]: update(
-          states[currentMediaStateKey] ?? {
-            generation: 0,
-            status: currentMediaUrl ? 'loading' : 'error',
-          },
-        ),
-      }));
-    },
-    [currentMediaId, currentMediaStateKey, currentMediaUrl],
-  );
-  const handleImageError = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'error' })),
-    [setCurrentImageState],
-  );
-  const handleImageLoad = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'ready' })),
-    [setCurrentImageState],
-  );
-  const handleImageLoadStart = useCallback(
-    () => setCurrentImageState((state) => ({ ...state, status: 'loading' })),
-    [setCurrentImageState],
-  );
-  const handleBodyLayout = useCallback((event: LayoutChangeEvent) => {
-    setHasOverflow(event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5);
   }, []);
-
-  const imageName =
-    currentMedia?.altText?.trim() ||
-    (currentMedia ? `${currentIndex + 1}번째 첨부 이미지` : '이미지');
-  const currentState = currentMediaStateKey
-    ? (imageStates[currentMediaStateKey] ?? {
-        generation: 0,
-        status: currentMedia.url ? 'loading' : 'error',
-      })
-    : null;
-  const unavailable = !currentMedia || !currentMediaUrl;
-  const multiple = media.length > 1;
-  const previousDisabled = currentIndex <= 0;
-  const nextDisabled = currentIndex >= media.length - 1;
 
   return (
     <Modal
@@ -270,8 +220,10 @@ export function PostMediaViewer({
       >
         <Pressable
           accessible={false}
+          focusable={false}
           onPress={requestClose}
           style={styles.backdropDismissTarget}
+          tabIndex={-1}
           testID="post-media-viewer-backdrop-dismiss"
         />
         <View
@@ -293,192 +245,411 @@ export function PostMediaViewer({
                 ×
               </Text>
             </Pressable>
-            {multiple && currentMedia ? (
+            {position && position.total > 1 ? (
               <Text aria-hidden style={styles.counter} testID="post-media-viewer-counter">
-                {currentIndex + 1} / {media.length}
+                {position.current} / {position.total}
               </Text>
             ) : (
               <View />
             )}
             <View style={styles.chromeSpacer} />
           </View>
-
-          <View
-            style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
-            testID="post-media-viewer-layout"
-          >
-            <View
-              {...swipeResponder.panHandlers}
-              style={[styles.imagePane, wide ? styles.wideImagePane : null]}
-              testID="post-media-viewer-image-pane"
-            >
-              {unavailable ? (
-                <View
-                  accessibilityLiveRegion="polite"
-                  style={styles.imageFallback}
-                  testID="post-media-viewer-unavailable"
-                >
-                  <Text style={styles.imageFallbackText}>이미지를 더 이상 표시할 수 없습니다.</Text>
-                </View>
-              ) : currentState?.status === 'error' ? (
-                <View
-                  accessibilityLiveRegion="polite"
-                  style={styles.imageFallback}
-                  testID={`post-media-viewer-error-${currentMedia!.id}`}
-                >
-                  <Text style={styles.imageFallbackText}>이미지를 불러오지 못했습니다.</Text>
-                  {currentMedia!.url ? (
-                    <Pressable
-                      accessibilityLabel={`${imageName} 다시 시도`}
-                      accessibilityRole="button"
-                      onPress={() =>
-                        setCurrentImageState((state) => ({
-                          generation: state.generation + 1,
-                          status: 'loading',
-                        }))
-                      }
-                      style={styles.retryButton}
-                    >
-                      <Text style={styles.retryText}>다시 시도</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : (
-                <Image
-                  accessibilityLabel={imageName}
-                  accessibilityState={{ busy: currentState?.status === 'loading' }}
-                  key={`${currentMediaStateKey}:${currentState!.generation}`}
-                  onError={handleImageError}
-                  onLoad={handleImageLoad}
-                  onLoadStart={handleImageLoadStart}
-                  resizeMode="contain"
-                  source={{ uri: currentMedia!.url! }}
-                  style={styles.image}
-                  testID="post-media-viewer-image"
-                />
-              )}
-
-              {multiple ? (
-                <>
-                  <NavigationButton
-                    disabled={previousDisabled}
-                    direction="previous"
-                    onPress={() => moveBy(-1)}
-                  />
-                  <NavigationButton
-                    disabled={nextDisabled}
-                    direction="next"
-                    onPress={() => moveBy(1)}
-                  />
-                </>
-              ) : null}
-              {currentMedia ? (
-                <Text
-                  accessibilityLiveRegion="polite"
-                  role="status"
-                  style={styles.screenReaderOnly}
-                  testID="post-media-viewer-position"
-                >
-                  {`${currentIndex + 1} / ${media.length}`}
-                </Text>
-              ) : null}
-            </View>
-
-            {wide ? (
-              wideDetail != null ? (
-                <View
-                  style={[
-                    styles.wideDetail,
-                    {
-                      backgroundColor: theme.background,
-                      flexBasis: wideDetailWidth,
-                      maxWidth: wideDetailWidth,
-                      minWidth: wideDetailWidth,
-                    },
-                  ]}
-                  testID="post-media-viewer-wide-detail"
-                >
-                  {wideDetail}
-                </View>
-              ) : null
-            ) : (
-              <View
-                style={[
-                  styles.detailPanel,
-                  { backgroundColor: theme.card, maxHeight: compactDetailMaxHeight },
-                ]}
-                testID="post-media-viewer-detail"
-              >
-                <View style={styles.author}>
-                  <Avatar
-                    imageUri={profile.avatarUrl}
-                    label={profile.displayName || profile.relativeHandle}
-                    size={40}
-                  />
-                  <View style={styles.authorText}>
-                    <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
-                      {profile.displayName}
-                    </Text>
-                    <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                      {profile.relativeHandle}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
-                  <Text
-                    accessible={false}
-                    onLayout={handleBodyLayout}
-                    style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
-                    testID="post-media-viewer-body-measure"
-                  >
-                    {bodyText}
-                  </Text>
-                  {expanded ? (
-                    <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
-                      <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
-                    </ScrollView>
-                  ) : (
-                    <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
-                      <Text
-                        numberOfLines={3}
-                        style={[styles.bodyText, { color: theme.text }]}
-                        testID="post-media-viewer-body"
-                      >
-                        {bodyText}
-                      </Text>
-                    </View>
-                  )}
-                  {hasOverflow ? (
-                    <Pressable
-                      accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
-                      accessibilityRole="button"
-                      accessibilityState={{ expanded }}
-                      onPress={() => setExpanded((value) => !value)}
-                      style={styles.moreButton}
-                    >
-                      <Text style={[styles.moreText, { color: theme.textSecondary }]}>
-                        {expanded ? '접기' : '더 보기'}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                {actionBar != null ? (
-                  <View
-                    style={[styles.actionBar, { borderColor: theme.border }]}
-                    testID="post-media-viewer-action-bar"
-                  >
-                    {actionBar}
-                  </View>
-                ) : null}
-              </View>
-            )}
-          </View>
+          <PostMediaViewerStateContext.Provider value={viewerState}>
+            {children}
+          </PostMediaViewerStateContext.Provider>
         </View>
       </View>
     </Modal>
   );
+}
+
+export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }: ContentProps) {
+  const viewerState = usePostMediaViewerState();
+  const post = useFragment(PostMediaViewerFragment, postKey);
+  const content = post.content;
+  const media = useMemo(
+    () =>
+      content?.media?.map(({ altText, id, url }) => ({
+        altText: altText ?? null,
+        id,
+        url: url ?? null,
+      })) ?? [],
+    [content?.media],
+  );
+  const revisionChanged =
+    content?.id != null &&
+    viewerState.lastContentId != null &&
+    content.id !== viewerState.lastContentId;
+  const currentIndex = revisionChanged ? viewerState.selectedIndex : viewerState.currentIndex;
+  const expanded = revisionChanged ? false : viewerState.expanded;
+  const hasOverflow = revisionChanged ? false : viewerState.hasOverflow;
+  const currentMedia = media[currentIndex];
+  const currentMediaUrl = currentMedia?.url;
+  const currentMediaStateKey = currentMedia
+    ? `${currentMedia.id}:${currentMedia.url ?? ''}`
+    : undefined;
+  const bodyText = content?.bodyText ?? '';
+  const profile = {
+    avatarUrl: post.profile.avatar?.url ?? null,
+    displayName: post.profile.displayName,
+    relativeHandle: post.profile.relativeHandle,
+  };
+  const theme = useTheme();
+  const { height, width } = useWindowDimensions();
+  const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const wideDetailWidth = Math.min(350, Math.max(320, width / 4));
+  const compactDetailMaxHeight = Math.min(240, Math.max(192, height * 0.32));
+
+  useEffect(
+    () => viewerState.syncContentId(content?.id ?? null),
+    [content?.id, viewerState.syncContentId],
+  );
+
+  useEffect(() => {
+    viewerState.setPosition(
+      currentMedia ? { current: currentIndex + 1, total: media.length } : null,
+    );
+    return () => viewerState.setPosition(null);
+  }, [currentIndex, currentMedia, media.length, viewerState.setPosition]);
+
+  useEffect(() => {
+    if (media.length === 0 || revisionChanged) {
+      return;
+    }
+    const currentMediaStateKeys = new Set(media.map((item) => `${item.id}:${item.url ?? ''}`));
+    viewerState.setImageStates((states) => {
+      const retainedStates: Record<string, ImageState> = {};
+      let removed = false;
+      for (const [key, state] of Object.entries(states)) {
+        if (currentMediaStateKeys.has(key)) {
+          retainedStates[key] = state;
+        } else {
+          removed = true;
+        }
+      }
+      return removed ? retainedStates : states;
+    });
+  }, [media, revisionChanged, viewerState.setImageStates]);
+
+  const moveBy = useCallback(
+    (delta: number) => {
+      if (!currentMedia) {
+        return;
+      }
+      viewerState.setCurrentIndex((index) => boundedIndex(index + delta, media.length));
+    },
+    [currentMedia, media.length, viewerState.setCurrentIndex],
+  );
+
+  useEffect(() => {
+    viewerState.moveByRef.current = moveBy;
+    return () => {
+      viewerState.moveByRef.current = null;
+    };
+  }, [moveBy, viewerState.moveByRef]);
+
+  const swipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          Boolean(currentMedia) &&
+          Platform.OS !== 'web' &&
+          Math.abs(gesture.dx) > 12 &&
+          Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dx <= -48) {
+            moveBy(1);
+          } else if (gesture.dx >= 48) {
+            moveBy(-1);
+          }
+        },
+      }),
+    [currentMedia, moveBy],
+  );
+
+  const setCurrentImageState = useCallback(
+    (update: (state: ImageState) => ImageState) => {
+      if (!currentMediaStateKey) {
+        return;
+      }
+      viewerState.setImageStates((states) => ({
+        ...states,
+        [currentMediaStateKey]: update(
+          states[currentMediaStateKey] ?? {
+            generation: 0,
+            status: currentMediaUrl ? 'loading' : 'error',
+          },
+        ),
+      }));
+    },
+    [currentMediaStateKey, currentMediaUrl, viewerState.setImageStates],
+  );
+  const handleImageError = useCallback(
+    () => setCurrentImageState((state) => ({ ...state, status: 'error' })),
+    [setCurrentImageState],
+  );
+  const handleImageLoad = useCallback(
+    () => setCurrentImageState((state) => ({ ...state, status: 'ready' })),
+    [setCurrentImageState],
+  );
+  const handleImageLoadStart = useCallback(
+    () => setCurrentImageState((state) => ({ ...state, status: 'loading' })),
+    [setCurrentImageState],
+  );
+  const handleBodyLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      viewerState.setHasOverflow(
+        event.nativeEvent.layout.height > typography.md.lineHeight * 3 + 0.5,
+      );
+    },
+    [viewerState.setHasOverflow],
+  );
+
+  const imageName =
+    currentMedia?.altText?.trim() ||
+    (currentMedia ? `${currentIndex + 1}번째 첨부 이미지` : '이미지');
+  const currentState = currentMediaStateKey
+    ? (viewerState.imageStates[currentMediaStateKey] ?? {
+        generation: 0,
+        status: currentMedia.url ? 'loading' : 'error',
+      })
+    : null;
+  const unavailable = !currentMedia || !currentMediaUrl;
+  const multiple = media.length > 1 && currentMedia != null;
+  const previousDisabled = currentIndex <= 0;
+  const nextDisabled = currentIndex >= media.length - 1;
+
+  return (
+    <View
+      style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
+      testID="post-media-viewer-layout"
+    >
+      <View
+        {...swipeResponder.panHandlers}
+        style={[styles.imagePane, wide ? styles.wideImagePane : null]}
+        testID="post-media-viewer-image-pane"
+      >
+        {unavailable ? (
+          <View
+            accessibilityLiveRegion="polite"
+            style={styles.imageFallback}
+            testID="post-media-viewer-unavailable"
+          >
+            <Text style={styles.imageFallbackText}>이미지를 더 이상 표시할 수 없습니다.</Text>
+          </View>
+        ) : currentState?.status === 'error' ? (
+          <View
+            accessibilityLiveRegion="polite"
+            style={styles.imageFallback}
+            testID={`post-media-viewer-error-${currentMedia!.id}`}
+          >
+            <Text style={styles.imageFallbackText}>이미지를 불러오지 못했습니다.</Text>
+            {currentMedia!.url ? (
+              <Pressable
+                accessibilityLabel={`${imageName} 다시 시도`}
+                accessibilityRole="button"
+                onPress={() =>
+                  setCurrentImageState((state) => ({
+                    generation: state.generation + 1,
+                    status: 'loading',
+                  }))
+                }
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryText}>다시 시도</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <Image
+            accessibilityLabel={imageName}
+            accessibilityState={{ busy: currentState?.status === 'loading' }}
+            key={`${currentMediaStateKey}:${currentState!.generation}`}
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+            onLoadStart={handleImageLoadStart}
+            resizeMode="contain"
+            source={{ uri: currentMedia!.url! }}
+            style={styles.image}
+            testID="post-media-viewer-image"
+          />
+        )}
+
+        {multiple ? (
+          <>
+            <NavigationButton
+              disabled={previousDisabled}
+              direction="previous"
+              onPress={() => moveBy(-1)}
+            />
+            <NavigationButton disabled={nextDisabled} direction="next" onPress={() => moveBy(1)} />
+          </>
+        ) : null}
+        {currentMedia ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            role="status"
+            style={styles.screenReaderOnly}
+            testID="post-media-viewer-position"
+          >
+            {`${currentIndex + 1} / ${media.length}`}
+          </Text>
+        ) : null}
+      </View>
+
+      {wide ? (
+        wideDetail != null ? (
+          <View
+            style={[
+              styles.wideDetail,
+              {
+                backgroundColor: theme.background,
+                flexBasis: wideDetailWidth,
+                maxWidth: wideDetailWidth,
+                minWidth: wideDetailWidth,
+              },
+            ]}
+            testID="post-media-viewer-wide-detail"
+          >
+            {wideDetail}
+          </View>
+        ) : null
+      ) : (
+        <View
+          style={[
+            styles.detailPanel,
+            { backgroundColor: theme.card, maxHeight: compactDetailMaxHeight },
+          ]}
+          testID="post-media-viewer-detail"
+        >
+          <View style={styles.author}>
+            <Avatar
+              imageUri={profile.avatarUrl}
+              label={profile.displayName || profile.relativeHandle}
+              size={40}
+            />
+            <View style={styles.authorText}>
+              <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
+                {profile.displayName}
+              </Text>
+              <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+                {profile.relativeHandle}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
+            <Text
+              accessible={false}
+              onLayout={handleBodyLayout}
+              style={[styles.bodyText, styles.bodyMeasure, { color: theme.text }]}
+              testID="post-media-viewer-body-measure"
+            >
+              {bodyText}
+            </Text>
+            {expanded ? (
+              <ScrollView style={styles.bodyScroll} testID="post-media-viewer-body-scroll">
+                <Text style={[styles.bodyText, { color: theme.text }]}>{bodyText}</Text>
+              </ScrollView>
+            ) : (
+              <View style={styles.collapsedBody} testID="post-media-viewer-collapsed-body">
+                <Text
+                  numberOfLines={3}
+                  style={[styles.bodyText, { color: theme.text }]}
+                  testID="post-media-viewer-body"
+                >
+                  {bodyText}
+                </Text>
+              </View>
+            )}
+            {hasOverflow ? (
+              <Pressable
+                accessibilityLabel={expanded ? '원문 접기' : '원문 더 보기'}
+                accessibilityRole="button"
+                accessibilityState={{ expanded }}
+                onPress={() => viewerState.setExpanded((value) => !value)}
+                style={styles.moreButton}
+              >
+                <Text style={[styles.moreText, { color: theme.textSecondary }]}>
+                  {expanded ? '접기' : '더 보기'}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {actionBar != null ? (
+            <View
+              style={[styles.actionBar, { borderColor: theme.border }]}
+              testID="post-media-viewer-action-bar"
+            >
+              {actionBar}
+            </View>
+          ) : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
+export function PostMediaViewerQueryState({
+  loading = false,
+  onRetry,
+  unavailable = false,
+}: Readonly<{ loading?: boolean; onRetry?: () => void; unavailable?: boolean }>) {
+  const { width } = useWindowDimensions();
+  const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const viewerState = usePostMediaViewerState();
+
+  useEffect(() => {
+    viewerState.setPosition(null);
+  }, [viewerState.setPosition]);
+
+  return (
+    <View
+      style={[styles.layout, wide ? styles.wideLayout : styles.mobileLayout]}
+      testID="post-media-viewer-layout"
+    >
+      <View
+        accessibilityLiveRegion="polite"
+        style={[styles.imagePane, wide ? styles.wideImagePane : null]}
+        testID={
+          unavailable
+            ? 'post-media-viewer-unavailable'
+            : loading
+              ? 'post-media-viewer-query-loading'
+              : 'post-media-viewer-query-error'
+        }
+      >
+        <View style={styles.imageFallback}>
+          <Text style={styles.imageFallbackText}>
+            {unavailable
+              ? '이미지를 더 이상 표시할 수 없습니다.'
+              : loading
+                ? '게시글을 불러오는 중입니다.'
+                : '게시글을 불러오지 못했습니다.'}
+          </Text>
+          {onRetry ? (
+            <Pressable
+              accessibilityLabel="게시글 다시 불러오기"
+              accessibilityRole="button"
+              onPress={onRetry}
+              style={styles.retryButton}
+            >
+              <Text style={styles.retryText}>다시 시도</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function usePostMediaViewerState(): ViewerState {
+  const value = useContext(PostMediaViewerStateContext);
+  if (!value) {
+    throw new Error('PostMediaViewerContent에는 PostMediaViewer가 필요합니다.');
+  }
+  return value;
 }
 
 function NavigationButton({
