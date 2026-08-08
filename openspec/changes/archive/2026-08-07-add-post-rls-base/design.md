@@ -35,14 +35,14 @@
 
 - 하나의 수동 Drizzle migration에서 `post`와 `post_content`에 `ENABLE ROW LEVEL SECURITY`만 적용한다. `FORCE`, policy와 grant는 넣지 않는다.
 - `public` schema에 Account/Profile 전용 STABLE SQL function을 각각 두고 `kosmo.account_id`, `kosmo.profile_id` setting을 `missing_ok=true`로 읽는다. PostgreSQL의 input validation을 먼저 통과한 값만 UUID cast하고 나머지는 `NULL`로 만든다. 호출하는 built-in은 `pg_catalog`로 한정해 `search_path` 영향을 피한다.
-- 별도 migration integration test가 disposable database에 migration을 적용하고 fixture를 만든 뒤 owner CRUD, 임시 non-owner role의 SELECT/DML 차단, helper 입력 행렬, `relrowsecurity=true`와 `relforcerowsecurity=false`, policy 부재를 확인한다.
+- 배포 전 일회성 disposable PostgreSQL 검증에서 migration과 fixture를 적용한 뒤 owner CRUD, 임시 non-owner role의 SELECT/DML 차단, helper 입력 행렬, `relrowsecurity=true`와 `relforcerowsecurity=false`, policy 부재를 확인한다.
 - plan 검증은 각 join의 index catalog를 먼저 확인하고, test transaction에서 sequential scan을 비활성화한 `EXPLAIN (FORMAT JSON)`으로 구체 index가 lookup 후보가 되는지 확인한다. 실제 index가 부족하다는 증거가 있을 때만 schema와 migration에 추가한다.
-- migration smoke의 representative object 검증에 RLS/helper 존재를 추가해 빈 database replay에서도 base가 최종 schema에 포함되는지 확인한다.
+- 기존 일반 migration smoke로 빈 database 전체 replay가 성공하는지 확인한다. 후속 policy가 의도적으로 바꾸는 policy 수, helper 구현 속성, 특정 index 목록은 장기 smoke assertion으로 고정하지 않는다.
 
 ### Allowed Alternatives
 
 - UUID 입력 검증은 누락·빈 값·잘못된 PostgreSQL UUID를 모두 `NULL`로 만들고 PostgreSQL이 허용하는 모든 UUID 표기를 보존하도록 native UUID input validation과 guarded cast로 구현할 수 있다.
-- execution plan 검증은 index catalog와 representative `EXPLAIN`을 같은 수준으로 증명한다면 별도 test file 또는 기존 migration smoke에 둘 수 있다.
+- execution plan 검증은 배포 전 일회성 검증으로 보존하고, 실제 policy predicate의 장기 plan 책임은 PROD-713/714가 소유한다.
 
 ### Known Traps
 

@@ -14,7 +14,7 @@
 - Decision Outcome: `post`와 `post_content`에 `ENABLE ROW LEVEL SECURITY`만 적용한다. `FORCE ROW LEVEL SECURITY`, policy와 grant는 추가하지 않아 owner는 기존 bypass를 유지하고 policy 없는 non-owner만 fail-closed 된다.
 - Alternatives Considered: `FORCE`와 임시 allow-all policy를 함께 추가하는 방식은 후속 policy ownership을 선점하고 base rollback을 결합한다. RLS 활성화를 PROD-713/714에 미루는 방식은 공통 base와 policy의 독립 배포를 막는다.
 - Consequences: non-owner credential transition은 후속 policy 전에는 실행할 수 없다. owner 폐기는 PROD-712가 모든 slice gate 뒤 소유한다.
-- Confirmation / Follow-up: owner CRUD 무회귀, `relrowsecurity=true`, `relforcerowsecurity=false`, policy 0개와 non-owner SELECT/DML fail-closed를 PostgreSQL migration test로 확인한다.
+- Confirmation / Follow-up: owner CRUD 무회귀, `relrowsecurity=true`, `relforcerowsecurity=false`, policy 0개와 non-owner SELECT/DML fail-closed를 배포 전 일회성 disposable PostgreSQL 검증으로 확인한다. 후속 policy가 의도적으로 바꾸는 stage-specific 상태를 영구 회귀 테스트로 고정하지 않는다.
 
 ### actor setting과 public helper 이름을 Post RLS slice 전체에서 고정한다
 
