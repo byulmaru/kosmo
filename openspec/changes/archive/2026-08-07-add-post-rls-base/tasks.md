@@ -82,10 +82,10 @@
 **Verification**
 
 - index catalog와 representative `EXPLAIN (FORMAT JSON)`으로 각 join key의 lookup 경로를 확인한다.
-- OpenSpec strict validation, migration test, migration smoke, 관련 core database regression과 formatting/static check를 통과시킨다.
+- OpenSpec strict validation, 일회성 disposable PostgreSQL 검증, 일반 migration replay smoke, 관련 core database regression과 formatting/static check를 통과시킨다.
 - PR에 독립 배포·forward rollback 경계와 PROD-713/714 downstream blocker를 기록한다.
 
 - [x] 3.1 각 policy join 경로의 existing index 사용 가능성을 검증하고 증명된 gap에만 migration/schema index를 추가한다.
-- [x] 3.2 빈 database migration replay와 representative final schema smoke에 RLS/helper 결과를 포함한다.
+- [x] 3.2 빈 database 전체 migration replay를 확인하고 stage-specific RLS/helper 세부는 일회성 PostgreSQL 검증 근거로 남긴다.
 - [x] 3.3 관련 PostgreSQL·core 회귀와 정적 검증을 통과시키고 scope 침범 여부를 self-review한다.
 - [x] 3.4 PROD-370에 검증 근거를 갱신하고 독립 배포·rollback 경계와 downstream blocker가 명시된 Ready PR을 게시한다.
