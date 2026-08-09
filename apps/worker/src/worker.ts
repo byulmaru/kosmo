@@ -22,9 +22,8 @@ export async function runWorker(
   const hasHandler =
     registration?.workflowsPath ||
     registration?.workflowBundle ||
-    Object.keys(registration?.activities ?? {}).length > 0 ||
-    registration?.nexusServices?.length;
-  if (!registration || !hasHandler) {
+    Object.keys(registration?.activities ?? {}).length > 0;
+  if (!registration?.taskQueue?.trim() || !hasHandler) {
     throw new Error('No business Worker registration is configured');
   }
 
@@ -48,12 +47,21 @@ export async function runWorker(
   server.listen(port, environment.HOST?.trim() || '0.0.0.0');
   await once(server, 'listening');
 
+  const terminateDuringStartup = () => {
+    process.off('SIGTERM', terminateDuringStartup);
+    queueMicrotask(() => process.kill(process.pid, 'SIGTERM'));
+  };
+  process.once('SIGTERM', terminateDuringStartup);
+
   let connection: NativeConnection | undefined;
   try {
     connection = await NativeConnection.connect({ address });
     worker = await Worker.create({ ...registration, connection, namespace });
-    await worker.run();
+    const running = worker.run();
+    process.off('SIGTERM', terminateDuringStartup);
+    await running;
   } finally {
+    process.off('SIGTERM', terminateDuringStartup);
     try {
       await connection?.close();
     } finally {

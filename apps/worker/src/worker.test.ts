@@ -5,6 +5,10 @@ import { healthStatus, runWorker } from './worker';
 test('business handler가 없으면 외부 연결 전에 실패한다', async () => {
   await assert.rejects(runWorker(undefined, {}), /No business Worker/);
   await assert.rejects(runWorker({ taskQueue: 'reserved-but-empty' }, {}), /No business Worker/);
+  await assert.rejects(
+    runWorker({ activities: { example: () => undefined }, taskQueue: ' ' }, {}),
+    /No business Worker/,
+  );
 });
 
 test('Temporal environment를 검증한다', async () => {

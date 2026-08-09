@@ -85,13 +85,13 @@ spec:
                 name: env
           livenessProbe:
             httpGet:
-              path: {{ .Values.worker.health.livenessPath | quote }}
+              path: /health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: {{ .Values.worker.health.readinessPath | quote }}
+              path: /ready
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5

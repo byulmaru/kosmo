@@ -11,8 +11,6 @@ worker:
     prod: 2
   health:
     port: 8080
-    livenessPath: /health
-    readinessPath: /ready
   resources:
     requests:
       cpu: 100m

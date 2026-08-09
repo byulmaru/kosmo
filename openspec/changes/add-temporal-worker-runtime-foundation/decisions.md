@@ -81,12 +81,24 @@
 - Decision Date: 2026-08-09
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, PROD-730
-- Status: Active
+- Status: Superseded
 - Context / Problem: 후속 capability가 Worker를 등록할 seam은 필요하지만 현재 production caller 없이 plugin system이나 범용 port를 설계하면 과도한 public contract가 된다.
 - Decision Outcome: repository build에 포함되는 정적 business registration과 최소 lifecycle module을 사용한다. health는 Node 표준 HTTP 기능과 Temporal SDK의 Worker 상태를 직접 사용하고, SDK가 이미 제공하는 signal 처리를 감싸지 않는다. dynamic plugin loader를 만들지 않는다.
 - Alternatives Considered: runtime plugin discovery; generic dependency-injection container; 별도 health framework. 현재 caller와 요구보다 큰 추상화라 제외했다.
 - Consequences: 첫 capability가 구체 registration 형태를 완성할 수 있도록 내부 구현은 좁게 유지하며, 별도 lifecycle interface·상태 복제·여러 queue 지원을 이번 변경에서 선제 일반화하지 않는다.
-- Confirmation / Follow-up: 구현 diff에서 동적 loader, smoke registration과 새 HTTP framework dependency가 없는지 검토한다.
+- Confirmation / Follow-up: connect/create 중에는 Worker shutdown callback이 없어 SDK가 SIGTERM을 소비한 뒤 process가 남는 경로가 확인되어 아래 결정으로 대체했다.
+
+### connect/create 단계의 SIGTERM만 OS 종료로 다시 전달한다
+
+- Decision Date: 2026-08-09
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-730
+- Status: Active
+- Context / Problem: Temporal SDK Runtime은 connect 단계부터 SIGTERM을 수신하지만 Worker shutdown callback은 `Worker.run()` 안에서 등록한다. connect/create 중 SIGTERM을 받으면 SDK가 신호를 소비하고 process와 health server가 종료되지 않는다.
+- Decision Outcome: 정적 composition과 SDK Worker 상태 기반 health는 유지한다. connect/create 단계에만 SIGTERM listener를 두어 SDK handler 실행 뒤 같은 signal을 OS 기본 처리로 다시 전달하고, `Worker.run()`이 callback을 등록하면 listener를 제거한다. 실행 중 drain은 SDK가 소유한다.
+- Alternatives Considered: lifecycle dependency container와 custom Worker wrapper 복원; connect promise 취소. 전자는 현재 caller보다 큰 추상화이고, Temporal SDK는 connect `AbortSignal`을 지원하지 않아 후자는 사용할 수 없다.
+- Consequences: startup에는 drain할 task가 없으므로 OS 종료를 사용한다. 별도 상태 복제나 signal lifecycle abstraction은 추가하지 않는다.
+- Confirmation / Follow-up: 응답하지 않는 Temporal endpoint로 connect 중 SIGTERM을 보내 process가 종료되는지 검증한다.
 
 ### Temporal SDK transitive build script 권한을 최소화한다
 

@@ -37,11 +37,11 @@ PROD-730은 첫 business Workflow가 들어오기 전의 runtime 기반만 준�
 
 `apps/worker`는 process entrypoint와 하나의 Worker lifecycle module만 둔다. entrypoint는 build-time에 정적으로 구성된 business Worker registration을 확인하고, 하나도 없으면 Temporal connection이나 health server를 만들기 전에 설명 가능한 구성 오류로 종료한다. 후속 capability는 이 정적 composition 지점에 자신의 task queue와 Workflow/Activity를 등록한다. runtime plugin loader나 동적 evaluator는 만들지 않는다.
 
-등록이 있을 때 Node 표준 HTTP server가 liveness/readiness endpoint를 제공한다. readiness는 별도 상태나 polling timer를 만들지 않고 Temporal SDK의 `Worker.getState()`를 직접 반영한다. SIGTERM 처리와 Worker drain은 SDK Runtime의 기본 signal 처리에 맡기고, `Worker.run()`이 끝나면 connection과 HTTP server를 정리한다. package test는 foundation이 직접 소유하는 fail-fast·환경 검증·SDK 상태의 health 매핑만 검증한다.
+등록이 있을 때 Node 표준 HTTP server가 고정된 `/health`와 `/ready` endpoint를 제공한다. readiness는 별도 상태나 polling timer를 만들지 않고 Temporal SDK의 `Worker.getState()`를 직접 반영한다. Worker가 실행된 뒤의 SIGTERM 처리와 drain은 SDK Runtime에 맡긴다. connect/create 중에는 SDK Worker shutdown callback이 아직 없으므로 SIGTERM을 OS 기본 종료로 다시 전달하고, `Worker.run()`이 끝나면 connection과 HTTP server를 정리한다. package test는 foundation이 직접 소유하는 fail-fast·환경 검증·SDK 상태의 health 매핑만 검증한다.
 
 공통 image는 Worker package manifest를 workspace install에 포함하고 production dependency/source를 runtime stage에 복사한다. 기존 entrypoint에 `worker` command를 추가하며 root에는 명시적인 opt-in command만 제공한다.
 
-Helm에는 `worker.enabled: false`, 환경별 replica 기본값, health port/path, resources와 Temporal frontend/namespace 입력을 둔다. enabled일 때만 전용 ServiceAccount와 Deployment를 render한다. Pod는 Worker command를 사용하고 service account token 자동 mount를 끄며 기존 `env` Secret을 공유한다. API 역할의 `DATABASE_URL`/`DATABASE_PASSWORD`와 완전하게 구성된 경우의 Fedify 역할 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD`를 기존 helper 계약대로 주입하지만, foundation process는 이를 읽어 connection을 열지 않는다.
+Helm에는 `worker.enabled: false`, 환경별 replica 기본값, health port, resources와 Temporal frontend/namespace 입력을 둔다. enabled일 때만 전용 ServiceAccount와 Deployment를 render한다. Probe path는 runtime endpoint와 같은 `/health`와 `/ready`로 고정한다. Pod는 Worker command를 사용하고 service account token 자동 mount를 끄며 기존 `env` Secret을 공유한다. API 역할의 `DATABASE_URL`/`DATABASE_PASSWORD`와 완전하게 구성된 경우의 Fedify 역할 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD`를 기존 helper 계약대로 주입하지만, foundation process는 이를 읽어 connection을 열지 않는다.
 
 ### Allowed Alternatives
 

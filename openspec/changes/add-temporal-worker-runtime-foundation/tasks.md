@@ -80,7 +80,7 @@ Helm chart가 기본적으로 Worker resource를 만들지 않으며, 명시적�
 - dev/prod enabled render에서 replica, image command, probes, Temporal endpoint·namespace와 DB Secret/env를 확인한다.
 - incomplete DB credential render 실패와 Helm lint를 검증한다.
 
-- [x] 3.1 기본 비활성 Worker values와 환경별 replica·health·resource inputs를 추가한다.
+- [x] 3.1 기본 비활성 Worker values와 환경별 replica·health port·resource inputs를 추가한다.
 - [x] 3.2 enabled Worker Deployment와 전용 ServiceAccount manifest를 추가한다.
 - [x] 3.3 기존 API/Fedify 역할별 DB credential과 Temporal endpoint·namespace를 Worker environment에 투영한다.
 - [x] 3.4 dev/prod disabled/enabled와 incomplete credential Helm render 검증을 추가·실행한다.
