@@ -98,7 +98,19 @@
 - Decision Outcome: 정적 composition과 SDK Worker 상태 기반 health는 유지한다. connect/create 단계에만 SIGTERM listener를 두어 SDK handler 실행 뒤 같은 signal을 OS 기본 처리로 다시 전달하고, `Worker.run()`이 callback을 등록하면 listener를 제거한다. 실행 중 drain은 SDK가 소유한다.
 - Alternatives Considered: lifecycle dependency container와 custom Worker wrapper 복원; connect promise 취소. 전자는 현재 caller보다 큰 추상화이고, Temporal SDK는 connect `AbortSignal`을 지원하지 않아 후자는 사용할 수 없다.
 - Consequences: startup에는 drain할 task가 없으므로 OS 종료를 사용한다. 별도 상태 복제나 signal lifecycle abstraction은 추가하지 않는다.
-- Confirmation / Follow-up: 응답하지 않는 Temporal endpoint로 connect 중 SIGTERM을 보내 process가 종료되는지 검증한다.
+- Confirmation / Follow-up: 응답하지 않는 Temporal endpoint를 제공하는 local socket과 child process를 사용해 connect 중 SIGTERM 종료를 package test로 검증한다.
+
+### 실행 중 lifecycle 통합 검증은 첫 capability가 소유한다
+
+- Decision Date: 2026-08-09
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-730
+- Status: Active
+- Context / Problem: 실제 RUNNING→STOPPING readiness 전이와 task drain을 foundation package에서 검증하려면 Temporal test server 또는 SDK fake·주입 seam이 필요하다. Foundation에는 실제 Workflow/Activity와 task queue가 없고, fake seam은 production lifecycle abstraction을 다시 늘린다.
+- Decision Outcome: PROD-730은 실제 SDK connection이 대기 중인 child process로 startup SIGTERM 종료를 검증한다. 실제 RUNNING 이후 readiness 전이와 Temporal task drain은 business Workflow/Activity·task queue와 Worker 활성화를 소유한 첫 capability가 통합 검증한다.
+- Alternatives Considered: foundation에서 Temporal test server 실행; SDK factory/fake 주입. 전자는 현재 consumer 없이 무거운 integration runtime을 추가하고 후자는 production에 test-only seam을 만든다.
+- Consequences: foundation package test는 실제 SDK의 startup signal 경계를 검증하지만 실행 중 task drain까지 증명하지 않는다. 첫 capability는 activation 완료 조건에 실제 lifecycle 통합 검증을 포함해야 한다.
+- Confirmation / Follow-up: Worker package child-process test와 첫 capability의 OpenSpec·rollout gate에서 각각 확인한다.
 
 ### Temporal SDK transitive build script 권한을 최소화한다
 

@@ -8,7 +8,7 @@ Kosmo에는 후속 Temporal capability가 재사용할 독립 Worker 애플리�
 - Kosmo runtime image에 Worker package와 명시적 Worker entrypoint를 포함한다.
 - 실제 task queue와 handler가 생기기 전까지 기본 비활성인 Worker Deployment·ServiceAccount Helm component를 추가한다.
 - 활성화 시 사용할 환경별 Temporal endpoint·namespace, Worker DB Secret/env 입력, dev 1/prod 2 replica와 HTTP health probe 계약을 추가한다.
-- Worker lifecycle의 readiness 전이와 SIGTERM graceful shutdown을 package-level test로 검증한다.
+- connect/create 중 SIGTERM이 process에 흡수되지 않는 startup 경계를 child-process package test로 검증한다. 실제 RUNNING 이후 readiness 전이와 task drain은 Worker를 활성화하는 첫 business capability가 통합 검증한다.
 - smoke Workflow/Activity, 검증 전용 task queue와 실제 dev/prod Worker 활성화는 추가하지 않는다.
 
 ## Authority / Provenance

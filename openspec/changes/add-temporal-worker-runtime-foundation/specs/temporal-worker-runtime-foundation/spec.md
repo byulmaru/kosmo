@@ -26,7 +26,12 @@
 
 ### Requirement: 등록된 Worker의 health와 종료 lifecycle
 
-**Authority / Provenance:** PROD-730. 시스템은 후속 business capability가 실제 Worker registration을 제공할 때 재사용할 HTTP liveness/readiness와 SIGTERM graceful shutdown 경계를 제공해야 한다(MUST). Liveness는 process가 동작 중인지 나타내고, readiness는 Temporal Worker가 task polling을 받을 준비가 된 뒤에만 성공하며 종료가 시작되면 실패로 전환해야 한다(MUST).
+**Authority / Provenance:** PROD-730. 시스템은 후속 business capability가 실제 Worker registration을 제공할 때 재사용할 HTTP liveness/readiness와 SIGTERM graceful shutdown 경계를 제공해야 한다(MUST). Liveness는 process가 동작 중인지 나타내고, readiness는 Temporal Worker가 task polling을 받을 준비가 된 뒤에만 성공하며 종료가 시작되면 실패로 전환해야 한다(MUST). Foundation은 connect/create 중 SIGTERM이 process에 흡수되지 않는 경계를 package-level child-process test로 검증해야 하며(MUST), 실제 RUNNING 이후 readiness 전이와 Temporal task drain 통합 검증은 Worker를 활성화하는 첫 business capability가 수행해야 한다(MUST).
+
+#### Scenario: Worker startup 중 SIGTERM 수신
+
+- **WHEN** Temporal connection 또는 Worker 생성이 완료되기 전에 process가 SIGTERM을 수신한다
+- **THEN** process는 signal을 흡수해 health-only 상태로 남지 않고 SIGTERM으로 종료한다
 
 #### Scenario: Worker가 준비되기 전 health
 
@@ -38,7 +43,7 @@
 - **WHEN** 등록된 Temporal Worker가 polling 준비를 마친다
 - **THEN** liveness와 readiness가 모두 성공한다
 
-#### Scenario: SIGTERM 수신
+#### Scenario: 실행 중 SIGTERM 수신
 
 - **WHEN** 준비된 Worker process가 SIGTERM을 수신한다
 - **THEN** readiness는 즉시 실패로 전환된다

@@ -37,7 +37,7 @@ PROD-730은 첫 business Workflow가 들어오기 전의 runtime 기반만 준�
 
 `apps/worker`는 process entrypoint와 하나의 Worker lifecycle module만 둔다. entrypoint는 build-time에 정적으로 구성된 business Worker registration을 확인하고, 하나도 없으면 Temporal connection이나 health server를 만들기 전에 설명 가능한 구성 오류로 종료한다. 후속 capability는 이 정적 composition 지점에 자신의 task queue와 Workflow/Activity를 등록한다. runtime plugin loader나 동적 evaluator는 만들지 않는다.
 
-등록이 있을 때 Node 표준 HTTP server가 고정된 `/health`와 `/ready` endpoint를 제공한다. readiness는 별도 상태나 polling timer를 만들지 않고 Temporal SDK의 `Worker.getState()`를 직접 반영한다. Worker가 실행된 뒤의 SIGTERM 처리와 drain은 SDK Runtime에 맡긴다. connect/create 중에는 SDK Worker shutdown callback이 아직 없으므로 SIGTERM을 OS 기본 종료로 다시 전달하고, `Worker.run()`이 끝나면 connection과 HTTP server를 정리한다. package test는 foundation이 직접 소유하는 fail-fast·환경 검증·SDK 상태의 health 매핑만 검증한다.
+등록이 있을 때 Node 표준 HTTP server가 고정된 `/health`와 `/ready` endpoint를 제공한다. readiness는 별도 상태나 polling timer를 만들지 않고 Temporal SDK의 `Worker.getState()`를 직접 반영한다. Worker가 실행된 뒤의 SIGTERM 처리와 drain은 SDK Runtime에 맡긴다. connect/create 중에는 SDK Worker shutdown callback이 아직 없으므로 SIGTERM을 OS 기본 종료로 다시 전달하고, `Worker.run()`이 끝나면 connection과 HTTP server를 정리한다. package test는 fail-fast·환경·SDK 상태 매핑과, 실제 SDK connection이 대기 중인 child process가 SIGTERM으로 종료되는 startup 경계를 검증한다. 실제 RUNNING 이후 readiness 전이와 task drain은 Worker를 활성화하는 첫 business capability가 Temporal 통합 환경에서 검증한다.
 
 공통 image는 Worker package manifest를 workspace install에 포함하고 production dependency/source를 runtime stage에 복사한다. 기존 entrypoint에 `worker` command를 추가하며 root에는 명시적인 opt-in command만 제공한다.
 
@@ -63,7 +63,7 @@ Helm에는 `worker.enabled: false`, 환경별 replica 기본값, health port, re
 - [Temporal SDK native artifact가 current Node/ARM64 image와 호환되지 않을 수 있음] → frozen production install, package test와 실제 runtime image build/start 검증을 완료 조건에 포함한다.
 - [후속 capability가 lifecycle composition seam과 맞지 않을 수 있음] → dynamic plugin API 대신 최소한의 정적 registration 경계만 두고 첫 consumer가 필요로 하는 형태 이상을 일반화하지 않는다.
 - [DB credential env가 현재 미사용임] → chart rendering만 검증하고 process가 connection을 열지 않게 한다. 실제 DB client와 권한 전환은 PROD-715 또는 해당 capability에서 검증한다.
-- [default-disabled manifest는 live health를 증명하지 못함] → 이번 변경은 package-level lifecycle과 Helm render까지만 증명하며 실제 cluster readiness는 첫 activation issue의 gate로 남긴다.
+- [default-disabled manifest는 실행 중 drain과 live health를 증명하지 못함] → 이번 변경은 startup SIGTERM child-process 경계와 Helm render까지만 증명하며 실제 RUNNING 이후 readiness 전이·task drain·cluster readiness는 첫 activation issue의 gate로 남긴다.
 
 ## Migration Plan
 
