@@ -47,7 +47,7 @@
 
 ### Requirement: PreSync 실패 경계
 
-**Authority / Provenance:** `PROD-719`. Frontend 연결, namespace describe/create/update 또는 CLI 실행이 실패하면 Job은 실패해야 하고(MUST), Argo CD는 후속 workload sync를 진행해서는 안 된다(MUST NOT). Job은 bounded timeout과 retry 경계를 가져야 한다(MUST).
+**Authority / Provenance:** `PROD-719`. Frontend 연결이 실패하거나 namespace create와 fallback update가 모두 실패해 최종 수렴하지 못하면 Job은 실패해야 하고(MUST), Argo CD는 후속 workload sync를 진행해서는 안 된다(MUST NOT). Job은 bounded timeout과 retry 경계를 가져야 한다(MUST).
 
 #### Scenario: Frontend 연결 실패
 
@@ -55,9 +55,9 @@
 - **THEN** Job은 제한된 시간 안에 실패한다
 - **AND** 후속 workload sync는 진행되지 않는다
 
-#### Scenario: Namespace 명령 실패
+#### Scenario: Namespace 최종 수렴 실패
 
-- **WHEN** namespace create 또는 update 명령이 성공하지 못한다
+- **WHEN** namespace create가 성공하지 못하고 fallback update도 성공하지 못한다
 - **THEN** Job은 성공으로 가장하지 않고 실패한다
 - **AND** 실패 원인을 Job log에서 확인할 수 있다
 
