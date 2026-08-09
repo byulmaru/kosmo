@@ -13,10 +13,11 @@ Post와 결합된 core action이 caller의 명시적 database handle에서 기�
 
 - 기존 domain transaction·savepoint·post-commit 순서와 public domain 결과를 유지한다.
 - operation-wide transaction이나 새 connection을 만들지 않는다.
+- Core action 입력은 `DatabaseHandle = Database | Transaction`을 유지하되 `PostCommit` invocation에는 `Database`만 전달한다. caller-owned transaction을 사용하는 Fedify는 outer commit 후 no-arg fallback을 호출한다.
 
 **Verification**
 
-- core typecheck와 Post/bookmark/reaction/notification service 회귀 테스트로 handle 전달과 rollback 의미를 검증한다.
+- core typecheck와 Post/bookmark/reaction/notification service 회귀 테스트로 action handle 전달, rollback 의미와 Database-only post-commit invocation을 검증한다.
 
 - [x] 1.1 Database와 Transaction을 포괄하는 명시적 handle 경계를 제공한다.
 - [x] 1.2 Post/bookmark/reaction core action과 Post notification projection이 caller handle을 사용하도록 정렬한다.
@@ -42,7 +43,7 @@ production GraphQL의 모든 Post/PostContent 조회·변경 SQL과 결합 proje
 
 **Verification**
 
-- Post call graph 검토에서 전역 DB fallback이 없음을 확인한다.
+- Post call graph 검토에서 operation SQL의 전역 DB fallback이 없음을 확인하고, GraphQL post-commit은 operation `Database`, Fedify caller-owned transaction은 outer commit 뒤 no-arg fallback을 사용하는지 확인한다.
 - Post, repost, reply, bookmark, reaction과 notification integration test로 기존 결과를 검증한다.
 
 - [x] 2.1 Post/PostContent Node, list, reply/repost field와 loader SQL을 `ctx.db`로 이전한다.

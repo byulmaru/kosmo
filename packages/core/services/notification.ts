@@ -21,7 +21,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
-import type { DatabaseHandle, Transaction } from '../db';
+import type { Database, DatabaseHandle, Transaction } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -329,7 +329,7 @@ export const createReplyNotification = async (
 
 export const createRepostNotification = async (
   sourceId: string,
-  handle?: DatabaseHandle,
+  handle?: Database,
 ): Promise<void> => {
   const connection = getDatabaseConnection(handle);
   const source = await connection
@@ -398,7 +398,7 @@ export const createRepostNotification = async (
 export const deleteNotificationBySource = async (
   kind: NotificationKind,
   sourceId: string,
-  handle?: DatabaseHandle,
+  handle?: Database,
 ): Promise<void> => {
   await getDatabaseConnection(handle)
     .delete(Notifications)

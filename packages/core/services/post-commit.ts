@@ -1,6 +1,6 @@
-import type { DatabaseHandle } from '../db';
+import type { Database } from '../db';
 
-export type PostCommit = (handle?: DatabaseHandle) => Promise<void>;
+export type PostCommit = (handle?: Database) => Promise<void>;
 
 export const noPostCommit: PostCommit = async () => {};
 

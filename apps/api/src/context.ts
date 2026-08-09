@@ -13,7 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
 import { visibleProfileWhere } from './profile/visibility';
-import type { DatabaseHandle } from '@kosmo/core/db';
+import type { Database } from '@kosmo/core/db';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {
@@ -28,7 +28,7 @@ type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extend
 
 type DefaultContext = {
   ip?: string;
-  db: DatabaseHandle;
+  db: Database;
   loader: <
     Key = string,
     Result = unknown,

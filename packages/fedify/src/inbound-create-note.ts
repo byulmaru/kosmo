@@ -265,7 +265,7 @@ export const handleInboundCreateNote = async ({
     });
 
   try {
-    const result = await createPost(replyParentId ? { ...input, replyParentId } : input, db);
+    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
     if (!result.created) {
       observeDuplicateCreate();
     }
@@ -299,7 +299,7 @@ export const handleInboundCreateNote = async ({
       phase: 'projection',
       reasonCode: 'reply_parent_missing_fallback',
     });
-    const result = await createPost(input, db);
+    const result = await createPost(input);
     if (!result.created) {
       observeDuplicateCreate();
     }
