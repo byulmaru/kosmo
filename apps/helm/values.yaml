@@ -10,6 +10,19 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 migration:
   enabled: false
+temporal:
+  frontendAddress: temporal-frontend.temporal.svc.cluster.local:7233
+  adminTools:
+    image: temporalio/admin-tools
+    digest: sha256:dbc5fcd6ee8f0f4d808bf765af9a87dea9d8a283abfdcfbd2fc148496ba66107
+  namespace:
+    ownerEmail: dev@byulmaru.co
+    names:
+      dev: kosmo-dev
+      prod: kosmo-prod
+    retentions:
+      dev: 3d
+      prod: 30d
 postgres:
   credentials:
     api:
