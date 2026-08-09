@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "28e8f365-d37e-4564-8c81-2d4d70874ea4",
+  "id": "e7584891-29c1-4963-843a-39155b7a6625",
   "prevIds": ["7c8d0e59-0d76-4817-8f7b-2f5e33be4d68", "c3f53ec5-1c7e-4ac4-b761-ac7061c2ed79"],
   "ddl": [
     {
@@ -203,13 +203,13 @@
       "schema": "public"
     },
     {
-      "isRlsEnabled": true,
+      "isRlsEnabled": false,
       "name": "post_content",
       "entityType": "tables",
       "schema": "public"
     },
     {
-      "isRlsEnabled": true,
+      "isRlsEnabled": false,
       "name": "post",
       "entityType": "tables",
       "schema": "public"

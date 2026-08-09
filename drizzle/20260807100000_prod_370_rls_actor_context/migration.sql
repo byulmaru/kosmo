@@ -1,5 +1,3 @@
-ALTER TABLE "post" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "post_content" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE FUNCTION "public"."kosmo_current_account_id"()
 RETURNS pg_catalog.uuid
 LANGUAGE sql
