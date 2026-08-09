@@ -49,8 +49,8 @@
 - Context / Problem: 배열 입력을 UUID-only 조건으로 단순화하면 global ID typename과 저장 kind 불일치가 처리될 수 있고, 별도 recipient filter는 목록·count·Node와 Read visibility를 분기시킬 수 있다.
 - Decision Outcome: 입력 global ID를 concrete Notification typename과 kind pair로 제한하고 기존 목록·count·Node가 사용하는 membership·source visibility 경계를 재사용한다. row를 갱신할 때 최초 `readAt`을 보존하고 명시적 pessimistic lock은 추가하지 않는다.
 - Alternatives Considered: UUID-only match와 새 resolver 전용 visibility 조건은 보안·count 정합성 위험 때문에 제외했다. 명시적 row/advisory lock은 정상 DML과 멱등적 update로 충분한 social interaction에 불필요하다.
-- Consequences: batch predicate 또는 transaction-scoped kind별 update가 kind pair를 보존해야 한다. Follow Request를 포함한 concrete payload hydration도 기존 source selection을 잃지 않아야 한다.
-- Confirmation / Follow-up: wrong typename, unavailable source, membership 없음, 동시 호출과 Follow Request payload 통합 테스트로 확인한다.
+- Consequences: batch predicate 또는 transaction-scoped kind별 update가 kind pair를 보존해야 한다. Concrete payload field는 기존 kind별 source loader를 사용하며 batch resolver에 Follow Request 전용 snapshot 경계를 추가하지 않는다.
+- Confirmation / Follow-up: wrong typename, unavailable source, membership 없음, 동시 호출과 정상 Follow Request payload hydration 통합 테스트로 확인한다.
 
 ## Remaining Decisions
 
