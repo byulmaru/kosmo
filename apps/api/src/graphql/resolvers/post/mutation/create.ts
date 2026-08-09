@@ -64,25 +64,28 @@ builder.mutationField('createPost', (t) =>
       const media = input.media ?? [];
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
 
-      const { post } = await createPost({
-        accountId: ctx.session.accountId,
-        document: postContentDocumentFromTextAndMedia(
-          input.bodyText,
-          media.map(({ mediaId }) => ({
+      const { post } = await createPost(
+        {
+          accountId: ctx.session.accountId,
+          document: postContentDocumentFromTextAndMedia(
+            input.bodyText,
+            media.map(({ mediaId }) => ({
+              mediaId: mediaId.id,
+            })),
+            input.sensitiveMedia ?? false,
+            contentWarning || null,
+          ),
+          media: media.map(({ altText, mediaId }) => ({
+            altText: altText ?? null,
             mediaId: mediaId.id,
           })),
-          input.sensitiveMedia ?? false,
-          contentWarning || null,
-        ),
-        media: media.map(({ altText, mediaId }) => ({
-          altText: altText ?? null,
-          mediaId: mediaId.id,
-        })),
-        origin: 'LOCAL',
-        profileId: ctx.session.profileId,
-        replyParentId: input.replyParentId?.id,
-        visibility: input.visibility,
-      });
+          origin: 'LOCAL',
+          profileId: ctx.session.profileId,
+          replyParentId: input.replyParentId?.id,
+          visibility: input.visibility,
+        },
+        ctx.db,
+      );
 
       return { post };
     },
