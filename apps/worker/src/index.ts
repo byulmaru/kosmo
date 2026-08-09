@@ -1,13 +1,12 @@
-import { NO_WORKER_REGISTRATION_MESSAGE, runWorkerApplication } from './application';
-import { workerRegistration } from './registration';
+import { runWorker } from './worker';
+import type { WorkerRegistration } from './worker';
+
+// The first business capability will replace this empty registration.
+const registration: WorkerRegistration | undefined = undefined;
 
 try {
-  await runWorkerApplication(workerRegistration);
+  await runWorker(registration);
 } catch (error) {
-  if (error instanceof Error && error.message === NO_WORKER_REGISTRATION_MESSAGE) {
-    console.error(error.message);
-  } else {
-    console.error('Temporal Worker failed', error);
-  }
+  console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 }

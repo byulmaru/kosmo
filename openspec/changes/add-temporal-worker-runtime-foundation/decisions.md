@@ -83,9 +83,9 @@
 - Authority / Provenance: `docs/architecture/core-services.md`, PROD-730
 - Status: Active
 - Context / Problem: 후속 capability가 Worker를 등록할 seam은 필요하지만 현재 production caller 없이 plugin system이나 범용 port를 설계하면 과도한 public contract가 된다.
-- Decision Outcome: repository build에 포함되는 정적 business registration과 최소 lifecycle host를 사용한다. health는 Node 표준 HTTP 기능을 우선하고 dynamic plugin loader를 만들지 않는다.
+- Decision Outcome: repository build에 포함되는 정적 business registration과 최소 lifecycle module을 사용한다. health는 Node 표준 HTTP 기능과 Temporal SDK의 Worker 상태를 직접 사용하고, SDK가 이미 제공하는 signal 처리를 감싸지 않는다. dynamic plugin loader를 만들지 않는다.
 - Alternatives Considered: runtime plugin discovery; generic dependency-injection container; 별도 health framework. 현재 caller와 요구보다 큰 추상화라 제외했다.
-- Consequences: 첫 capability가 구체 registration 형태를 완성할 수 있도록 내부 구현은 좁게 유지하며, 여러 queue 지원을 이번 변경에서 선제 일반화하지 않는다.
+- Consequences: 첫 capability가 구체 registration 형태를 완성할 수 있도록 내부 구현은 좁게 유지하며, 별도 lifecycle interface·상태 복제·여러 queue 지원을 이번 변경에서 선제 일반화하지 않는다.
 - Confirmation / Follow-up: 구현 diff에서 동적 loader, smoke registration과 새 HTTP framework dependency가 없는지 검토한다.
 
 ### Temporal SDK transitive build script 권한을 최소화한다

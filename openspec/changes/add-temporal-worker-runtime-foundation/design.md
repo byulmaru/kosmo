@@ -35,9 +35,9 @@ PROD-730은 첫 business Workflow가 들어오기 전의 runtime 기반만 준�
 
 ### Recommended Approach
 
-`apps/worker` 안에서 process entrypoint와 lifecycle host를 분리한다. entrypoint는 build-time에 정적으로 구성된 business Worker registration을 확인하고, 하나도 없으면 Temporal connection이나 health server를 만들기 전에 설명 가능한 구성 오류로 종료한다. 후속 capability는 이 정적 composition 지점에 자신의 task queue와 Workflow/Activity를 등록한다. runtime plugin loader나 동적 evaluator는 만들지 않는다.
+`apps/worker`는 process entrypoint와 하나의 Worker lifecycle module만 둔다. entrypoint는 build-time에 정적으로 구성된 business Worker registration을 확인하고, 하나도 없으면 Temporal connection이나 health server를 만들기 전에 설명 가능한 구성 오류로 종료한다. 후속 capability는 이 정적 composition 지점에 자신의 task queue와 Workflow/Activity를 등록한다. runtime plugin loader나 동적 evaluator는 만들지 않는다.
 
-등록이 있을 때 lifecycle host는 Node 표준 HTTP server로 liveness/readiness endpoint를 제공한다. 시작 중에는 liveness만 성공하고, Temporal Worker가 polling 가능한 상태가 된 뒤 readiness를 성공시킨다. SIGTERM을 받으면 먼저 readiness를 내린 다음 Worker shutdown을 요청하고 진행 중인 run loop와 HTTP server를 정리한다. package test는 실제 Temporal Server 대신 process/lifecycle 경계의 작은 fake를 사용하되 production에 테스트 전용 우회 entrypoint를 노출하지 않는다.
+등록이 있을 때 Node 표준 HTTP server가 liveness/readiness endpoint를 제공한다. readiness는 별도 상태나 polling timer를 만들지 않고 Temporal SDK의 `Worker.getState()`를 직접 반영한다. SIGTERM 처리와 Worker drain은 SDK Runtime의 기본 signal 처리에 맡기고, `Worker.run()`이 끝나면 connection과 HTTP server를 정리한다. package test는 foundation이 직접 소유하는 fail-fast·환경 검증·SDK 상태의 health 매핑만 검증한다.
 
 공통 image는 Worker package manifest를 workspace install에 포함하고 production dependency/source를 runtime stage에 복사한다. 기존 entrypoint에 `worker` command를 추가하며 root에는 명시적인 opt-in command만 제공한다.
 

@@ -19,13 +19,13 @@ API/Web와 독립적으로 build·test할 수 있는 Worker 애플리케이션�
 **Verification**
 
 - Worker package build/typecheck와 unit test를 실행한다.
-- registration 미등록, startup 전, polling 준비, SIGTERM 종료 상태를 검증한다.
+- registration 미등록, 환경 입력과 SDK Worker 상태별 health 응답을 검증한다.
 - 외부 connection 없이 fail-fast하는지 확인한다.
 
 - [x] 1.1 Worker workspace package와 Temporal Worker production dependency를 추가한다.
 - [x] 1.2 business registration을 검증하고 미등록 상태를 외부 connection 전에 거부하는 production entrypoint 경계를 구현한다.
 - [x] 1.3 등록된 Worker가 사용할 HTTP liveness/readiness와 SIGTERM graceful shutdown lifecycle을 구현한다.
-- [x] 1.4 fail-fast, readiness 전이와 graceful shutdown package-level test를 추가하고 Worker build/test를 통과시킨다.
+- [x] 1.4 fail-fast, 환경 검증과 SDK Worker 상태별 readiness package-level test를 추가하고 Worker build/test를 통과시킨다.
 - [x] 1.5 root 기본 dev와 분리된 명시적 Worker local command를 추가하고 자동 실행되지 않는지 확인한다.
 
 ## 2. PROD-730 Runtime image packaging
