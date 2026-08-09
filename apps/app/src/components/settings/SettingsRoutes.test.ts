@@ -14,12 +14,11 @@ const originalLocation = Object.getOwnPropertyDescriptor(globalThis, 'location')
 let platform: 'android' | 'ios' | 'web' = 'web';
 let width = 1_280;
 let backCalls = 0;
-let canGoBack = true;
 let replacedPaths: string[] = [];
 let locationReplacements: string[] = [];
 let pathname = '/settings';
 let SlotRoute: ComponentType = () => null;
-let sessionStatus: 'error' | 'guest' | 'loading' | 'valid' = 'guest';
+let sessionStatus: 'error' | 'guest' | 'valid' = 'guest';
 
 mock.module('expo-router', {
   exports: {
@@ -27,7 +26,6 @@ mock.module('expo-router', {
     usePathname: () => pathname,
     useRouter: () => ({
       back: () => (backCalls += 1),
-      canGoBack: () => canGoBack,
       replace: (href: string) => replacedPaths.push(href),
     }),
   },
@@ -106,7 +104,6 @@ afterEach(async () => {
   platform = 'web';
   width = 1_280;
   backCalls = 0;
-  canGoBack = true;
   replacedPaths = [];
   locationReplacements = [];
   pathname = '/settings';
@@ -222,7 +219,7 @@ describe('Settings routes', () => {
     assert.equal(backCalls, 1);
   });
 
-  it('compact Web detail은 unrelated history가 있어도 route-owned back header로 root를 연다', async () => {
+  it('compact Web detail은 route-owned back header로 Settings root를 연다', async () => {
     width = 768;
     await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
 
@@ -235,22 +232,6 @@ describe('Settings routes', () => {
       value: { replace: (href: string) => locationReplacements.push(href) },
     });
     await act(async () => back.props.onPress());
-    assert.equal(backCalls, 0);
-    assert.deepEqual(locationReplacements, ['/settings']);
-  });
-
-  it('direct detail entry에 history가 없으면 Settings root로 대체한다', async () => {
-    width = 768;
-    canGoBack = false;
-    await renderRoute('/settings/default-post-visibility', SettingsDefaultPostVisibilityRoute);
-
-    const back = rendered('PageHeader')[0].props.leading;
-    Object.defineProperty(globalThis, 'location', {
-      configurable: true,
-      value: { replace: (href: string) => locationReplacements.push(href) },
-    });
-    await act(async () => back.props.onPress());
-
     assert.equal(backCalls, 0);
     assert.deepEqual(locationReplacements, ['/settings']);
   });
@@ -303,8 +284,8 @@ describe('Protected layout session guard', () => {
     assert.equal(rendered('ProtectedSlot').length, 0);
   });
 
-  it('valid·loading·error 상태는 redirect하지 않고 Slot을 유지한다', async () => {
-    for (const nextStatus of ['valid', 'loading', 'error'] as const) {
+  it('valid·error 상태는 redirect하지 않고 Slot을 유지한다', async () => {
+    for (const nextStatus of ['valid', 'error'] as const) {
       sessionStatus = nextStatus;
       replacedPaths = [];
       SlotRoute = () => createElement('ProtectedSlot');

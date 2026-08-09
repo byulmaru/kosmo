@@ -137,9 +137,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
-- PROD-727은 실제 Web keyboard·screen reader·zoom과 Android·iOS runtime 접근성·navigation QA를 후속
-  소유한다. 이 QA는 완료된 `add-settings-page-shell` archive를 다시 열거나 차단하지 않으며, 발견한 결함은
-  별도 구현 이슈와 PR로 추적한다.
+- 자동화·source/unit 결과는 실제 Web keyboard·screen reader·zoom 또는 Android·iOS runtime 접근성·
+  navigation 통과 증거로 일반화하지 않는다.
 
 ## 제외 범위
 

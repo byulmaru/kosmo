@@ -107,7 +107,7 @@ route family를 열고, full master-detail 또는 one-pane drill-in으로 설정
   back·heading 소유권을 검증한다.
 - mobile Web forward navigation과 browser back/forward scroll restoration을 실제 browser에서 확인한다.
 
-- [x] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고 guest·session loading/error guard 동작을 유지한다.
+- [x] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고, session loading은 `AppProviders`의 Suspense에 맡기며 guest redirect와 valid/error 보호 guard 동작을 유지한다.
 - [x] 3.2 full sidebar, compact icon rail과 mobile drawer에 `/settings` 진입점·route-family page-current·drawer close를 연결하되 bottom tab에 중복하지 않는다.
 - [x] 3.3 full Web에서 일반 RightRail을 숨기고 center+right에 약 320px master+flex detail workspace와 Profile 기본 선택을 제공하며, 다른 route의 center/right rail 계약을 유지한다.
 - [x] 3.4 compact/mobile/native에서 root 목록부터 시작하고 Profile detail의 back navigation과 root/detail heading을 중복 없이 제공한다.
