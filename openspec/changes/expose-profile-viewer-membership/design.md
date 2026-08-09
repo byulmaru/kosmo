@@ -43,8 +43,8 @@ Account, selected Profile, Instance와 Membership role을 재검증한다. 이 c
   한다. `membership.role === OWNER` 하나만으로 Remote Profile 운영 권한을 만들 수 없다.
 - `currentSession.selectedProfile`은 session의 selected identity를 제공하므로 protected route가 별도 top-level
   capability 없이 같은 Profile의 초기값과 viewer Membership을 조회할 수 있다.
-- Relay operation과 checked-in generated artifact, `apps/api/schema.graphql` public schema와 runtime schema가 함께
-  바뀌어야 한다.
+- Relay operation을 갱신하고 generated artifact를 재생성·검증하며, `apps/api/schema.graphql` public schema와
+  runtime schema를 함께 바꿔야 한다.
 
 ### Recommended Approach
 
