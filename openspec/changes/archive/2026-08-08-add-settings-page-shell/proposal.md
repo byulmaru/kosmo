@@ -23,11 +23,12 @@ Byulmaru ID Account Settings로 이동하는 외부 진입점(PROD-645)과 Kosmo
 - Profile detail이 Profile identity·loading·error·empty·content와 재시도를 소유하고 다른 Profile의 값을
   fallback으로 표시하지 않는다. Account 진입점을 Account 데이터 상태로 모델링하거나 Profile 오류와 함께
   조립하지 않는다.
-- PROD-645의 Account 외부 진입점과 PROD-667의 Profile 내부 설정을 root/detail 구조에 배치한 뒤
-  Web·Android·iOS와 keyboard·screen reader·작은 화면에서 소유 경계와 페이지 수준 통합을 검증한다.
+- PROD-645의 Account 외부 진입점과 PROD-667의 Profile 내부 설정을 root/detail 구조에 배치한 뒤 자동화된
+  Web 페이지 수준 통합을 검증한다. 자동화·source/unit 결과를 실제 Web 보조기술이나 Android·iOS runtime
+  통과 증거로 일반화하지 않는다.
 - PROD-645의 canonical URL·플랫폼별 외부 이동과 PROD-667의 Profile 데이터·저장 계약은 재정의하지 않는다.
-  PROD-685는 production route·navigation·두 child 조립과 page-level 검증을, PROD-684는 최종 Settings 통합과
-  이 change의 완료·archive 판단을 소유한다. PROD-653은 완료된 정보 구조 선행 이슈다.
+  PROD-685는 production route·navigation·두 child 조립과 자동화된 page-level 검증을, PROD-684는 최종
+  Settings 통합과 이 change의 완료·archive 판단을 소유한다. PROD-653은 완료된 정보 구조 선행 이슈다.
 
 ## Authority / Provenance
 

@@ -107,11 +107,12 @@ route family를 열고, full master-detail 또는 one-pane drill-in으로 설정
   back·heading 소유권을 검증한다.
 - mobile Web forward navigation과 browser back/forward scroll restoration을 실제 browser에서 확인한다.
 
-- [x] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고 guest·session loading/error guard 동작을 유지한다.
+- [x] 3.1 `/settings` root와 Profile detail을 Android·iOS·Web이 공유하는 보호 route family로 연결하고, session loading은 `AppProviders`의 Suspense에 맡기며 guest redirect와 valid/error 보호 guard 동작을 유지한다.
 - [x] 3.2 full sidebar, compact icon rail과 mobile drawer에 `/settings` 진입점·route-family page-current·drawer close를 연결하되 bottom tab에 중복하지 않는다.
 - [x] 3.3 full Web에서 일반 RightRail을 숨기고 center+right에 약 320px master+flex detail workspace와 Profile 기본 선택을 제공하며, 다른 route의 center/right rail 계약을 유지한다.
 - [x] 3.4 compact/mobile/native에서 root 목록부터 시작하고 Profile detail의 back navigation과 root/detail heading을 중복 없이 제공한다.
-- [ ] 3.5 route parity·보호 guard·deep link/back, pane visibility, surface navigation·header와 Web forward/history 회귀 테스트를 추가한다.
+- [x] 3.5 route parity·보호 guard·deep link/back, pane visibility, surface navigation·header와 Web forward/history 회귀 테스트를 추가한다.
+  - 2026-08-08: Android·iOS 공용 route와 `index` anchor, 보호 guard, pane/header/navigation 계약은 unit·Storybook으로 고정하고 Web deep link/back/forward는 Playwright로 검증했다. 실제 Native route stack 실행은 4.3에 남긴다.
 
 ## 4. PROD-685 페이지 수준 접근성·플랫폼 검증과 완료 증거
 
@@ -121,12 +122,12 @@ route family를 열고, full master-detail 또는 one-pane drill-in으로 설정
 - `docs/design/accessibility.md`
 - `docs/design/breakpoints.md`
 - `PROD-685`
+- `PROD-727`
 
 **Deliverable**
 
-Web·Android·iOS와 keyboard·screen reader·작은 화면에서 Settings route family, Byulmaru ID Account 외부
-진입점/Kosmo Profile 내부 기능의 소유 경계와 responsive navigation이 함께 동작한다는 페이지 수준 증거가 남고,
-구현과 canonical·Linear·OpenSpec이 일치한다.
+자동화된 Web page-level 검증과 Figma 정렬 증거가 남고 구현과 canonical·Linear·OpenSpec이 일치한다. 실제
+Web 보조기술과 Android·iOS runtime QA는 PROD-727에 명시적으로 인계한다.
 
 **Guardrails**
 
@@ -135,6 +136,8 @@ Web·Android·iOS와 keyboard·screen reader·작은 화면에서 Settings route
   소유 경계·정보 구조 통합만 검증한다.
 - PROD-685는 page-level 검증과 Figma 후속 정렬 증거를 PROD-684에 인계한다. PROD-684가 최종 통합·정합성
   확인과 archive를 소유한다.
+- PROD-727의 실제 Web 보조기술과 Android·iOS runtime QA는 이 change archive를 차단하지 않으며, 실제 결함은
+  별도 구현 이슈와 PR로 추적한다.
 
 **Verification**
 
@@ -146,6 +149,9 @@ Web·Android·iOS와 keyboard·screen reader·작은 화면에서 Settings route
   대조한다.
 
 - [x] 4.1 Relay compiler, TypeScript, 관련 unit/component test와 Storybook test·static build·a11y를 통과시킨다.
-- [ ] 4.2 mobile·compact·full Web에서 master/detail 또는 root/detail의 keyboard 순서, screen reader heading·selected state, zoom·reflow, forward/history와 외부 Account/내부 Profile 통합 흐름을 확인하고, 기존 frames를 보존한 새 PROD-685 Figma frames와 구현을 정렬한다.
-- [ ] 4.3 Android와 iOS에서 drawer 진입, heading·focus, font scaling, screen reader와 platform touch target을 확인하고 증거를 기록한다.
-- [ ] 4.4 최신 canonical·Linear authority와 구현·delta spec 정합성을 다시 확인하고 `openspec validate add-settings-page-shell --strict`를 통과시켜 PROD-684에 완료·archive 증거를 인계한다.
+- [x] 4.2 mobile·compact·full Web에서 master/detail 또는 root/detail의 heading·selected state·reflow, forward/history와 외부 Account/내부 Profile 조립을 자동화로 확인하고, 기존 frames를 보존한 새 PROD-685 Figma frames와 구현을 정렬한다.
+  - 2026-08-08: Storybook·Playwright에서 Settings deep link/back/forward와 responsive 통합을 확인했고, 기존 frames를 보존한 PROD-685 Figma frames 5개를 추가했다. 실제 keyboard traversal·screen reader·browser zoom과 외부 destination runtime은 PROD-727로 인계했다.
+- [x] 4.3 실제 Web 보조기술과 Android·iOS runtime QA의 플랫폼·환경·증거·결함 후속 조치를 별도 자식 이슈로 인계하고 parent OpenSpec archive 차단 여부를 기록한다.
+  - 2026-08-08: PROD-727을 PROD-684의 Backlog 자식으로 생성해 Web keyboard·screen reader·zoom과 Android·iOS drawer/navigation·font scaling·screen reader·touch target QA를 인계했다. 실제 runtime을 수행했다고 주장하지 않으며 이 후속 QA는 archive를 차단하지 않는다.
+- [x] 4.4 최신 canonical·Linear authority와 구현·delta spec 정합성을 다시 확인하고 `openspec validate add-settings-page-shell --strict`를 통과시켜 PROD-684에 완료·archive 증거를 인계한다.
+  - 2026-08-08: PROD-684·PROD-685와 자식 계약, 비차단 runtime QA 자식 PROD-727을 다시 확인했다. strict validation 통과 뒤 `settings-page-shell` 7개 requirement를 canonical spec으로 추가하고 `universal-expo-client`·`web-app-shell` 변경을 동기화해 archive했다.

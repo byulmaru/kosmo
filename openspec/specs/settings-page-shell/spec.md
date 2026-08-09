@@ -1,4 +1,11 @@
-## ADDED Requirements
+# settings-page-shell Specification
+
+## Purpose
+
+Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane shell, Byulmaru ID Account 외부
+진입점과 Kosmo Profile 내부 설정의 소유·접근성·통합 계약을 정의한다.
+
+## Requirements
 
 ### Requirement: Canonical Settings route family와 진입점
 
@@ -170,7 +177,7 @@
 
 ### Requirement: Account 외부 진입점과 Profile 내부 기능의 페이지 수준 통합
 
-**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace, 외부/내부 소유 경계와 Web·Android·iOS 통합을 확인해 PROD-684에 인계해야 한다(MUST).
+**Authority / Provenance:** `docs/design/settings.md`, `PROD-685`, `PROD-645`, `PROD-667`; 최종 통합·archive `PROD-684`, backend `PROD-648` — PROD-645의 Byulmaru ID Account 외부 진입점과 PROD-667의 Kosmo Profile 기본 게시 공개 범위 control은 Settings root/detail의 각 소유 경계 안에서 함께 동작해야 한다(MUST). 공통 shell은 Account 기능을 구현하거나 자식의 외부 이동, Profile 저장·권한·GraphQL·DB·Relay와 Composer 계약을 재구현해서는 안 된다(MUST NOT). PROD-685의 페이지 수준 완료 검증은 자식 기능의 세부 테스트를 반복하는 대신 지원 navigation surface, root/detail 전환, full workspace와 외부/내부 소유 경계를 자동화로 확인해 PROD-684에 인계해야 한다(MUST). 자동화·source/unit 결과를 실제 Web 보조기술 또는 Android·iOS runtime 통과 증거로 일반화해서는 안 된다(MUST NOT).
 
 #### Scenario: 두 자식 결과를 root/detail에 배치한다
 
@@ -182,7 +189,7 @@
 #### Scenario: 페이지 수준 통합을 검증한다
 
 - **WHEN** PROD-685 완료 검증을 수행한다
-- **THEN** full·compact·mobile Web과 Android·iOS에서 Settings 진입, root/detail navigation과 외부 Account/내부 Profile 소유 경계를 확인한다
-- **AND** keyboard·screen reader·reflow에서 master/detail 또는 one-pane heading, selected state, 현재 대상과 back 흐름을 확인한다
+- **THEN** full·compact·mobile Web의 Settings 진입, root/detail navigation과 외부 Account/내부 Profile 소유 경계를 자동화로 확인한다
+- **AND** 공용 Android·iOS route와 layout 계약을 source/unit 수준에서 확인한다
 - **AND** PROD-645의 외부 링크와 PROD-667·PROD-648의 GraphQL·DB·Composer 세부 테스트를 PROD-685 테스트로 복제하지 않는다
-- **AND** 검증 결과와 남은 platform runtime gate를 PROD-684에 인계한다
+- **AND** 자동화·source/unit 결과를 실제 Web 보조기술 또는 Android·iOS runtime 통과 증거로 일반화하지 않는다

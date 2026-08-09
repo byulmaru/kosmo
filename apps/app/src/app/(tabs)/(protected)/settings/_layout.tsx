@@ -8,6 +8,10 @@ import { useTheme } from '@/theme/ThemeProvider';
 import type { ReactNode } from 'react';
 import type { SettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
 
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 export default function SettingsLayout() {
   return (
     <SettingsRouteLayout>
