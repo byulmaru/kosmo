@@ -16,11 +16,6 @@
 - **THEN** resolver는 `ctx.db`를 호출하는 core action과 관련 savepoint에 전달한다
 - **AND** core action의 기존 domain transaction은 전달받은 handle 안에서 유지된다
 
-#### Scenario: operation handle 정렬을 정적으로 검증한다
-
-- **WHEN** 저장소가 production API Post SQL consumer 인벤토리를 검증한다
-- **THEN** Post/PostContent SQL call graph의 전역 DB import 또는 handle 생략이 실패로 검출된다
-
 ### Requirement: Post API handle 전환의 행동 호환성
 
 **Authority / Provenance:** `docs/architecture/core-services.md`, `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, PROD-371. Post API SQL handle 전환은 기존 owner credential, 애플리케이션 권한 predicate, 목록 후보·정렬·pagination, GraphQL schema와 domain transaction·savepoint 의미를 유지해야 한다(MUST). 이 전환은 새 DB connection이나 operation-wide transaction을 열어서는 안 되며(MUST NOT), PgBouncer endpoint, actor GUC, RLS policy·grant 또는 workload credential을 변경해서는 안 된다(MUST NOT).

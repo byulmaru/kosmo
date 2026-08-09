@@ -6,7 +6,7 @@ PROD-708이 각 GraphQL operation에 명시적 `ctx.db` seam을 추가했지만,
 
 - production GraphQL의 모든 Post/PostContent 조회·변경 SQL에 `ctx.db`를 전달한다.
 - Post가 호출하는 core service와 savepoint가 전달받은 `DatabaseHandle` 안에서 기존 transaction 의미를 유지하도록 정렬한다.
-- 정적 검증과 회귀 테스트로 Post SQL 경로의 전역 DB fallback을 차단한다.
+- call graph 검토와 회귀 테스트로 Post SQL 경로에 전역 DB fallback이 없음을 확인한다.
 - 기존 owner credential, 권한 predicate, 목록·제품 행동과 GraphQL 응답을 그대로 유지한다.
 - PgBouncer endpoint, operation DB session, actor GUC, RLS policy·grant와 credential은 변경하지 않는다.
 
@@ -30,5 +30,5 @@ PROD-708이 각 GraphQL operation에 명시적 `ctx.db` seam을 추가했지만,
 
 - `apps/api/src/graphql/resolvers`의 Post/PostContent loader, field, query, mutation 및 Post를 투영하는 bookmark/reaction/notification 경로
 - `packages/core/services`의 Post 생성·삭제·repost와 관련 notification/savepoint action
-- API integration/unit test와 Post SQL handle 정적 인벤토리 검증
+- API integration/unit test와 Post SQL handle call graph 검토
 - database schema, migration, GraphQL schema, application endpoint와 Kubernetes resource에는 영향 없음

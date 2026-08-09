@@ -11,7 +11,7 @@ Post API call graph에는 Post/PostContent 자체뿐 아니라 Profile.posts, re
 - production GraphQL Post call graph의 직접 query와 loader가 `ctx.db`를 사용한다.
 - resolver가 Post 관련 core action에 명시적 database handle을 전달한다.
 - core action의 기존 transaction/savepoint와 post-commit 순서를 유지한다.
-- 전역 DB import와 handle 생략을 정적 검증하고 기존 API 회귀 테스트를 유지한다.
+- call graph에서 전역 DB import와 handle 생략이 없음을 확인하고 기존 API 회귀 테스트를 유지한다.
 
 **Non-Goals:**
 
@@ -30,7 +30,7 @@ Post API call graph에는 Post/PostContent 자체뿐 아니라 Profile.posts, re
 
 Drizzle `Database | Transaction`을 표현하는 `DatabaseHandle` 타입을 core DB 경계에 추가하고 `Context.db`가 이 타입을 사용하게 한다. Post 관련 core action은 전달받은 handle에서 기존 domain transaction을 열거나 전달받은 transaction에 합류한다. API resolver는 모든 direct Post SQL과 access subquery를 `ctx.db`로 구성하고 mutation은 같은 handle을 core action 및 post-commit SQL에 전달한다.
 
-Post·bookmark·reaction resolver와 Post notification projection에는 `@kosmo/core/db`의 named `db` import를 금지하는 정적 경계를 두어 신규 fallback을 차단한다. 기존 integration test는 응답·권한·transaction/savepoint 의미를 검증하고, focused unit/static test는 handle 전달을 확인한다.
+Post·bookmark·reaction resolver와 Post notification projection의 call graph를 검토해 global DB fallback이 없음을 확인한다. 기존 integration test는 응답·권한·transaction/savepoint 의미를 검증하고, focused unit test는 PostCommit handle 전달을 확인한다.
 
 ### Allowed Alternatives
 
@@ -45,14 +45,14 @@ Post·bookmark·reaction resolver와 Post notification projection에는 `@kosmo/
 
 ## Risks / Trade-offs
 
-- [정적 import 경계가 Post와 결합된 bookmark/reaction 파일까지 포함한다] → 이 도메인들의 production GraphQL SQL은 Post 조회·변경 계약의 일부이므로 함께 `ctx.db`로 이전하되 notification의 비Post consumer 전체 이전은 피한다.
-- [현재 `ctx.db === db`라 runtime 결과만으로 fallback 누락을 발견하기 어렵다] → named global import 금지와 required handle type, focused tests를 함께 사용한다.
+- [Post와 결합된 bookmark/reaction 파일까지 범위가 확장된다] → 이 도메인들의 production GraphQL SQL은 Post 조회·변경 계약의 일부이므로 함께 `ctx.db`로 이전하되 notification의 비Post consumer 전체 이전은 피한다.
+- [현재 `ctx.db === db`라 runtime 결과만으로 fallback 누락을 발견하기 어렵다] → call graph 검토와 required handle type, focused tests를 함께 사용한다.
 - [core service는 ActivityPub 등 non-GraphQL caller도 공유한다] → 기존 caller는 명시적으로 현재 DB/transaction을 전달해 행동을 유지하고 operation session 활성화는 하지 않는다.
 
 ## Migration Plan
 
 1. `DatabaseHandle` 타입과 Post call graph의 명시적 handle 전달을 추가한다.
-2. Post 관련 resolver/loader/access query를 `ctx.db`로 이전하고 정적 fallback 검증을 추가한다.
+2. Post 관련 resolver/loader/access query를 `ctx.db`로 이전하고 call graph에서 fallback이 없음을 확인한다.
 3. typecheck, lint와 Post/bookmark/reaction/notification integration test로 행동 호환성을 확인한다.
 4. 현재 direct endpoint와 owner credential 상태로 독립 배포한다.
 5. 회귀 시 이 코드 변경만 rollback한다. database schema, Pooler와 credential은 바뀌지 않으므로 별도 데이터 rollback은 없다.

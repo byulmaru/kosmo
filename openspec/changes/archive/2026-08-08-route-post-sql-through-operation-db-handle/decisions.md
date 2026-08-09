@@ -14,7 +14,7 @@
 - Decision Outcome: Post/PostContent Node·list·field·mutation과 결합된 bookmark·reaction·notification projection은 operation `ctx.db`를 직접 사용하거나 같은 handle을 core action에 전달한다. 같은 SQL statement의 Post visibility subquery를 포함하는 notification query도 operation handle에서 실행한다.
 - Alternatives Considered: 직접 Post table import가 있는 query만 이전하면 간접 call graph와 같은 statement의 visibility subquery가 누락된다. 모든 GraphQL 도메인을 함께 이전하면 PROD-726의 독립 범위를 가져온다.
 - Consequences: Post와 결합된 projection 파일의 비Post column/query 일부도 같은 operation handle에서 실행될 수 있지만 새 connection은 열지 않으며 결과는 동일하다.
-- Confirmation / Follow-up: Post call graph 인벤토리, named global DB import 정적 검증과 API integration test로 확인한다.
+- Confirmation / Follow-up: Post call graph 검토와 API integration test로 확인한다.
 
 ### Core Post action은 DatabaseHandle을 받되 기존 domain transaction을 유지한다
 

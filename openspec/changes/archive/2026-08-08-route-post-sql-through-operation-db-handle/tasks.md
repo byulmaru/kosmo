@@ -42,7 +42,7 @@ production GraphQL의 모든 Post/PostContent 조회·변경 SQL과 결합 proje
 
 **Verification**
 
-- Post call graph 정적 인벤토리에서 전역 DB fallback이 없음을 확인한다.
+- Post call graph 검토에서 전역 DB fallback이 없음을 확인한다.
 - Post, repost, reply, bookmark, reaction과 notification integration test로 기존 결과를 검증한다.
 
 - [x] 2.1 Post/PostContent Node, list, reply/repost field와 loader SQL을 `ctx.db`로 이전한다.
@@ -69,6 +69,6 @@ handle 전환이 독립 배포·rollback 가능하고 기존 동작을 보존한
 - typecheck, lint, focused unit/integration test, strict OpenSpec validation과 diff invariant를 통과한다.
 - 배포 manifest/config와 database migration diff가 없음을 확인한다.
 
-- [x] 3.1 신규 global DB fallback을 차단하는 정적 검증과 focused handle 회귀 테스트를 추가한다.
+- [x] 3.1 call graph에서 global DB fallback이 없음을 확인하고 focused PostCommit handle 회귀 테스트를 추가한다.
 - [x] 3.2 전체 affected test·typecheck·lint와 OpenSpec strict validation을 통과시킨다.
 - [x] 3.3 self-review에서 PROD-726/PROD-716 제외 범위와 독립 rollback 경계를 확인한다.

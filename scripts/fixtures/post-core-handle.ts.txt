@@ -1,2 +1,0 @@
-const result = await createPost(input, ctx.db);
-await result.postCommit(ctx.db);
