@@ -14,9 +14,11 @@ import type { PostMediaViewerHostProvider as HostProviderComponent } from './Pos
 
 let actorRevision = 0;
 let animationFrames: FrameRequestCallback[] = [];
-let queriedPostId: string | null = null;
+let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
+let replyPostIds: string[] = [];
 let renderer: ReactTestRenderer | null = null;
+let viewportWidth = 767;
 
 Object.assign(globalThis, {
   cancelAnimationFrame: () => undefined,
@@ -44,7 +46,7 @@ mock.module('react-native', {
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
-    useWindowDimensions: () => ({ height: 800, width: 767 }),
+    useWindowDimensions: () => ({ height: 800, width: viewportWidth }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -52,9 +54,9 @@ mock.module('react-relay', {
   exports: {
     graphql: () => ({}),
     useFragment: (_fragment: unknown, key: unknown) => key,
-    useLazyLoadQuery: (_query: unknown, variables: { postId: string }) => {
-      queriedPostId = variables.postId;
-      return queryPosts.get(variables.postId) ?? { currentSession: null, node: null };
+    useLazyLoadQuery: (_query: unknown, variables: { surfacePostId: string }) => {
+      queriedSurfacePostId = variables.surfacePostId;
+      return queryPosts.get(variables.surfacePostId) ?? { surface: null };
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -149,7 +151,22 @@ const replyBinding = {
 };
 
 mock.module('./PostReplyCoordinator', {
-  exports: { usePostReplyBinding: () => replyBinding },
+  exports: {
+    usePostReplyBinding: (postId: string) => {
+      replyPostIds.push(postId);
+      return replyBinding;
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('./PostMediaViewerThread', {
+  exports: {
+    PostMediaViewerThread: (props: Record<string, unknown>) =>
+      createElement('PostMediaViewerThread', {
+        ...props,
+        testID: 'post-media-viewer-thread',
+      }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostSourcePresentationView', {
@@ -192,19 +209,21 @@ afterEach(async () => {
   }
   actorRevision = 0;
   animationFrames = [];
-  queriedPostId = null;
+  queriedSurfacePostId = null;
   queryPosts = new Map();
+  replyPostIds = [];
+  viewportWidth = 767;
 });
 
 describe('Post Media Viewer Host production wiring', () => {
-  it('ordinary·Quote·pure Repost launcher가 실제 Media 소유 Post ID만 Host에 전달한다', async () => {
+  it('ordinary·Quote·pure Repost launcher가 surface와 Media owner identity를 보존한다', async () => {
     const originControl = { current: { focus: () => undefined } };
     const ordinary = storyPost('ordinary', 'ordinary-content');
     queryPosts.set(ordinary.id, hostPost(ordinary));
 
     await renderHost(createElement(PostListItem, { post: asListItemKey(ordinary) }));
     await openFromBody(originControl, 1);
-    assert.equal(queriedPostId, 'ordinary');
+    assert.equal(queriedSurfacePostId, 'ordinary');
     assert.equal(currentImage().props.source.uri, 'https://media.example/ordinary-content-2.webp');
     await closeViewer();
 
@@ -213,14 +232,29 @@ describe('Post Media Viewer Host production wiring', () => {
     queryPosts.set(quote.id, hostPost(storyPost('quote', 'quote-content')));
     await updateHost(createElement(PostListItem, { post: asListItemKey(quote) }));
     await act(async () => byTestId('post-source-presentation').props.onMediaOpen(0, originControl));
-    assert.equal(queriedPostId, 'quote');
+    assert.equal(queriedSurfacePostId, 'quote');
     await closeViewer();
 
     const pureRepost = { ...storyPost('repost', null), repostSource: source };
+    queryPosts.set(pureRepost.id, hostPost(pureRepost));
     queryPosts.set(source.id, hostPost(source));
     await updateHost(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
     await openFromBody(originControl);
-    assert.equal(queriedPostId, 'source');
+    assert.equal(queriedSurfacePostId, 'repost');
+    assert.equal(currentImage().props.source.uri, 'https://media.example/source-content-1.webp');
+    const viewerActionSurface = byTestId('post-media-viewer-dialog').findByProps({
+      testID: 'post-action-surface',
+    });
+    assert.equal(viewerActionSurface.props.reply.processing, 'disabled');
+    assert.equal(viewerActionSurface.props.socialActionTarget.id, 'action-source');
+    assert.equal(replyPostIds.at(-1), 'repost');
+
+    viewportWidth = 1024;
+    await updateHost(createElement(PostListItem, { post: asListItemKey(pureRepost) }));
+    const viewerThread = byTestId('post-media-viewer-thread');
+    assert.equal(viewerThread.props.mediaOwnerPostId, 'source');
+    assert.equal(viewerThread.props.replyAvailable, false);
+    assert.equal(viewerThread.props.replySurfacePostId, 'repost');
   });
 
   it('Relay actor generation이 바뀌면 열린 Viewer와 이전 query projection을 닫는다', async () => {
@@ -306,18 +340,23 @@ function asLayoutKey(value: unknown): PostLayout_post$key {
   return value as PostLayout_post$key;
 }
 
-function hostPost(post: ReturnType<typeof storyPost>) {
+type StoryPostFixture = Omit<ReturnType<typeof storyPost>, 'repostSource'> & {
+  repostSource: StoryPostFixture | null;
+};
+
+function hostPost(post: StoryPostFixture): { surface: Record<string, unknown> } {
+  return { surface: hostPostNode(post) };
+}
+
+function hostPostNode(post: StoryPostFixture): Record<string, unknown> {
   return {
-    currentSession: null,
-    node: {
-      __typename: 'Post',
-      actionSurface: post.actionSurface,
-      content: post.content ? { id: post.content.id } : null,
-      id: post.id,
-      state: 'ACTIVE',
-      thread: null,
-      viewer: post,
-    },
+    __typename: 'Post',
+    actionSurface: post.actionSurface,
+    content: post.content ? { id: post.content.id } : null,
+    id: post.id,
+    repostSource: post.repostSource ? hostPostNode(post.repostSource) : null,
+    state: 'ACTIVE',
+    viewer: post,
   };
 }
 

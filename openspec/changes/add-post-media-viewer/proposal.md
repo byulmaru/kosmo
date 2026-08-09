@@ -5,7 +5,7 @@ Post의 이미지가 gallery 안에서 crop되어 보이지만 원본 비율로 
 ## What Changes
 
 - 일반 목록·상세의 공개된 정상 이미지 tile에서 modal Post Media Viewer를 연다.
-- 안정적인 `PostMediaViewerHost`가 기존 Post `node(id)` visibility·authorization 경계로 현재 Post를 조회하고, 그 query projection의 Media를 document 순서대로 표시한다. Gallery는 `{postId, selectedIndex, originControl}`만 전달한다.
+- 안정적인 `PostMediaViewerHost`가 Gallery의 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`로 기존 Post `node(id)` visibility·authorization 경계의 surface Post를 조회하고 Media owner가 그 surface 또는 direct Source인지 확인한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media owner다. Reply는 surface 기준으로 disabled이고 나머지 social action은 Source를 대상으로 한다.
 - Web `<768px`와 Native는 image 위·compact detail panel 아래, Web `>=768px`는 image 왼쪽·기존 Post 상세 thread surface 오른쪽 layout을 사용한다. Wide Web은 `24px` viewport inset 안에서 오른쪽 rail을 `clamp(320px, 25vw, 350px)`로 제한하고 나머지 폭을 image에 배정한다.
 - Compact detail은 작성자와 3줄로 접힌 원문을 표시하고, 내용 높이를 따르되 최대 높이를 `clamp(192px, 32vh, 240px)`로 계산한다. `192px`은 낮은 viewport에서 고정 chrome을 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니다. 펼친 text 영역만 줄어들고 scroll하며 기존 Post Action Bar를 원문 바로 아래의 고정 영역에 둔다.
 - Wide Web detail은 원본 Post의 전체 원문·기존 Action Bar, Reply Composer와 reply descendants를 기존 Post 상세 표현과 interaction으로 제공하고, 원본 Media는 왼쪽 image surface에만 표시한다.

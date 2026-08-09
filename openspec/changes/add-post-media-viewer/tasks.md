@@ -10,11 +10,12 @@
 
 **Deliverable**
 
-일반 목록·상세의 공개된 정상 이미지 tile에서 실제 Media를 소유한 Post ID와 선택한 위치를 안정적인 Host에 전달하고, 기존 Post Node visibility·authorization 경계로 조회한 현재 Media 목록을 사용한다.
+일반 목록·상세의 공개된 정상 이미지 tile에서 surface Post ID·Media owner Post ID와 선택한 위치를 안정적인 Host에 전달하고, 기존 Post Node visibility·authorization 경계로 조회한 surface에서 두 identity의 관계를 검증해 현재 Media 목록을 사용한다.
 
 **Guardrails**
 
-- Stable surface-level Host가 `{postId, selectedIndex, originControl}` session과 기존 `node(postId)` query·Action/Reply/thread composition을 소유하고 Gallery는 document index와 origin만 전달한다.
+- Stable surface-level Host가 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}` session과 기존 `node(surfacePostId)` query·Action/Reply/thread composition을 소유하고 Media owner가 surface 또는 direct Source인지 검증한다.
+- 일반·Quote는 surface Post를 Media owner로 사용한다. Pure Repost는 direct Source를 Media·본문·Profile과 Repost·Reaction·Bookmark·More의 owner로 사용하되 Reply는 바깥 contentless Repost 기준으로 disabled이며 Wide Source Composer를 열지 않는다.
 - Modal shell·close·origin 또는 screen fallback focus는 query의 Suspense·error boundary 밖에 유지한다. Sensitive 가림 상태와 `interactive=false` Reply 부모 preview에는 Viewer 진입을 제공하지 않는다.
 - 같은 Content의 일시 unavailable·복구 상태는 유지하고 다른 revision은 original selected index에서 초기화하며, 해당 index가 없으면 unavailable을 표시한다. Actor/environment가 바뀌면 Viewer를 닫고 이전 query를 폐기한다.
 - 별도 Media query·authorization을 추가하거나 이전 byte·URL 또는 다른 Post·Profile·revision의 Media를 섞지 않는다.
@@ -22,15 +23,15 @@
 
 **Verification**
 
-- Component test로 정상 tile의 Post ID·선택 index, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, query cache hit·loading·error·retry·null Post·Content·Media의 shell 유지, 같은 Content 복구 상태 보존, 다른 revision reset·original index unavailable, URL·actor 전환, 명시적 dismiss·Viewer 삭제 action·surface unmount와 focus 복귀를 검증한다.
+- Component test로 정상 tile의 surface Post ID·선택 index, pure Repost의 direct Source Media owner·disabled Reply·Source social target, 주변 Post navigation 전파 차단, Sensitive·retry control 격리, Reply preview 비대화형 경계, query cache hit·loading·error·retry·null Post·Content·Media의 shell 유지, 같은 Content 복구 상태 보존, 다른 revision reset·original index unavailable, URL·actor 전환, 명시적 dismiss·Viewer 삭제 action·surface unmount와 focus 복귀를 검증한다.
 - PROD-626 baseline의 1·2·3·4장, Sensitive와 error·retry test를 함께 통과시킨다.
 
-- [x] 1.1 목록·상세의 기존 provider 아래 stable `PostMediaViewerHost`와 `{postId, selectedIndex, originControl}` session을 두고 기존 `node(postId)` visibility·authorization query를 연결한다.
+- [x] 1.1 목록·상세의 기존 provider 아래 stable `PostMediaViewerHost`와 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}` session을 두고 기존 `node(surfacePostId)` visibility·authorization query를 연결한다.
 - [x] 1.2 공개된 정상 tile에 viewer trigger semantics와 접근 가능한 이름을 제공하고 주변 navigation과 기존 gallery control 실행을 격리한다.
 - [x] 1.3 Modal shell·close·origin 또는 screen fallback focus를 Host query boundary 밖에 유지하고 cache hit·loading·error·retry·null Post·Content·Media의 안전한 presentation을 구현한다.
 - [x] 1.4 같은 Content unavailable→복구 state 보존, 다른 Content revision의 original index reset·부재 unavailable, Media URL 변경의 이전 byte 비보존과 actor/environment 전환 close·query 폐기를 구현한다.
-- [x] 1.5 PostListItem·PostLayout은 실제 Media를 소유한 Post ID로 launch만 요청하고 parent fragment·Action Bar·Wide detail 조립과 Viewer lifecycle reconciliation을 제거한다. Quote outer Post와 목록 pure Repost source target을 유지하고 상세 pure Repost에는 새 launcher를 추가하지 않는다.
-- [x] 1.6 목록·Quote·Repost·상세 projection 전환, nested Viewer stack, query lifecycle·revision·URL·actor·focus 복귀를 Relay mock 기반 component test로 회귀 검증한다.
+- [x] 1.5 PostListItem·PostLayout은 surface Post ID와 Media owner Post ID로 launch만 요청하고 parent fragment·Action Bar·Wide detail 조립과 Viewer lifecycle reconciliation을 제거한다. Quote는 두 ID 모두 outer Post를 사용하고 목록 pure Repost는 outer surface와 direct Source Media owner를 각각 전달하며 상세 pure Repost에는 새 launcher를 추가하지 않는다.
+- [x] 1.6 목록·Quote·Repost·상세 projection 전환, pure Repost의 disabled surface Reply·Source social target, nested Viewer stack, query lifecycle·revision·URL·actor·focus 복귀를 Relay mock 기반 component test로 회귀 검증한다.
 
 ## 2. PROD-650 Image surface와 Media 탐색
 
@@ -96,7 +97,7 @@ Viewer가 Compact Web·Native에서는 작성자, 3줄 원문과 고정된 기�
 
 - [x] 3.1 작성자와 실제 overflow 기반 3줄 원문·더 보기·접기·text scroller를 detail panel에 제공한다.
 - [x] 3.2 Web 768px 경계와 Native 고정 Mobile layout에서 image·detail·고정 Action Bar 영역을 조합한다.
-- [x] 3.3 기존 Post Action Bar fragment·binding을 같은 Post target으로 연결하고 Viewer 전용 Media action이 없음을 회귀 검증한다.
+- [x] 3.3 기존 Post Action Bar fragment·binding의 surface routing을 연결하고 pure Repost의 바깥 disabled Reply·direct Source social target과 Viewer 전용 Media action 부재를 회귀 검증한다.
 - [ ] 3.4 Reaction·Repost·More·Reply overlay를 세 플랫폼에서 확인하고 기존 동작을 보존하는 layer 처리만 적용한다.
 - [x] 3.5 기존 `PostDetailThread`의 reply ancestors·현재 Post·reply descendants 표시를 route와 Viewer가 재사용할 수 있는 surface로 추출하고, 현재 Post의 원본 Media·nested Viewer만 생략하며 Reply action으로 Composer를 펼치는 기존 상세 동작을 유지한다.
 - [x] 3.6 Wide Viewer와 route의 `PostDetailThread`가 component 간 pagination token·Viewer visibility gate 없이 각 scroll surface의 burst 재진입 guard와 local UI state를 유지하고, 두 surface에서 겹친 같은 Relay environment의 동일 operation·variables에 대한 in-flight dedupe·connection merge를 Relay에 맡기며 Viewer completion 뒤 near-end saved metrics 재평가를 유지한다.

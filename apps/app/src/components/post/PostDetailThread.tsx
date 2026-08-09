@@ -88,6 +88,8 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 }
 
 export function PostDetailThread({
+  currentPostReplyAvailable,
+  currentPostReplySurfaceId,
   header,
   identity,
   onReplyCreated,
@@ -96,6 +98,8 @@ export function PostDetailThread({
   presentation = 'route',
   replyProfile,
 }: {
+  currentPostReplyAvailable?: boolean;
+  currentPostReplySurfaceId?: string;
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
@@ -106,6 +110,8 @@ export function PostDetailThread({
 }) {
   return (
     <PostDetailThreadContent
+      currentPostReplyAvailable={currentPostReplyAvailable}
+      currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
       onReplyCreated={onReplyCreated}
@@ -118,6 +124,8 @@ export function PostDetailThread({
 }
 
 function PostDetailThreadContent({
+  currentPostReplyAvailable,
+  currentPostReplySurfaceId,
   header,
   onReplyCreated,
   onPostDeleted,
@@ -125,6 +133,8 @@ function PostDetailThreadContent({
   presentation,
   replyProfile,
 }: {
+  currentPostReplyAvailable?: boolean;
+  currentPostReplySurfaceId?: string;
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
@@ -191,6 +201,8 @@ function PostDetailThreadContent({
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
+                replyAvailable={currentPostReplyAvailable}
+                replySurfacePostId={currentPostReplySurfaceId}
               />
             ) : (
               <PostListItem

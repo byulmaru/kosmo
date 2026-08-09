@@ -2,13 +2,13 @@
 
 ### Requirement: 현재 Post Content Media viewer 진입과 경계
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 — 일반 Post surface는 공개된 정상 gallery tile의 `{postId, selectedIndex, originControl}`을 안정적인 surface-level Host에 전달해 modal Media Viewer를 SHALL 열어야 한다. Host는 현재 Relay actor environment에서 기존 Post `node(id)` visibility·authorization 경계를 사용하는 query를 MUST 소유하고, standalone Media 조회나 별도 authorization을 MUST 추가하지 않아야 한다. Modal shell·close·focus fallback은 query의 Suspense·error boundary 밖에 MUST 유지해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action, Relay actor/environment 전환과 Host surface unmount는 Viewer session을 MUST 종료해야 한다.
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 — 일반 Post surface는 공개된 정상 gallery tile의 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`을 안정적인 surface-level Host에 전달해 modal Media Viewer를 SHALL 열어야 한다. Host는 현재 Relay actor environment에서 기존 Post `node(id)` visibility·authorization 경계로 surface Post를 조회하고 Media owner가 그 surface 또는 direct Source인지 MUST 검증해야 한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media owner여야 한다. Standalone Media 조회나 별도 authorization을 MUST 추가하지 않아야 한다. Modal shell·close·focus fallback은 query의 Suspense·error boundary 밖에 MUST 유지해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action, Relay actor/environment 전환과 Host surface unmount는 Viewer session을 MUST 종료해야 한다.
 
 #### Scenario: 선택한 tile에서 viewer 열기
 
 - **WHEN** 사용자가 현재 Post의 공개된 정상 Media tile을 선택한다
-- **THEN** modal Viewer는 실제 Media를 소유한 Post ID와 선택한 document index로 Host session을 연다
-- **AND** Host query는 기존 Post Node visibility·authorization 경계가 승인한 현재 projection만 사용한다
+- **THEN** modal Viewer는 surface Post ID·Media owner Post ID와 선택한 document index로 Host session을 연다
+- **AND** Host query는 기존 Post Node visibility·authorization 경계가 승인한 surface와, session의 Media owner ID가 그 surface 또는 direct Source와 일치하는 projection만 사용한다
 
 #### Scenario: Sensitive Media가 가려진 상태
 
@@ -151,6 +151,13 @@
 - **WHEN** Viewer가 일반 Post가 아닌 Repost 또는 Quote Post surface에서 열린다
 - **THEN** 기존 Post Action Bar의 해당 surface target routing과 action availability를 그대로 사용한다
 - **AND** Quote를 새 Action Bar action으로 추가하지 않는다
+
+#### Scenario: Pure Repost의 surface와 Media owner
+
+- **WHEN** 사용자가 Content 없는 pure Repost의 direct Source Media를 Viewer로 연다
+- **THEN** Viewer의 Media·본문·Profile과 Repost·Reaction·Bookmark·More는 direct Source Post를 대상으로 한다
+- **AND** Reply는 바깥 contentless Repost identity와 availability를 유지해 disabled다
+- **AND** Wide Viewer는 Source Post의 Reply Composer를 열지 않는다
 
 ### Requirement: Wide Web Post 상세 thread surface
 

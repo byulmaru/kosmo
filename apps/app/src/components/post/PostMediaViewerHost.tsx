@@ -20,8 +20,8 @@ import type { PostMediaViewerHostQuery } from './__generated__/PostMediaViewerHo
 import type { PostActionBarProps } from './PostActionBar';
 
 const PostMediaViewerHostOperation = graphql`
-  query PostMediaViewerHostQuery($postId: ID!) {
-    node(id: $postId) {
+  query PostMediaViewerHostQuery($surfacePostId: ID!) {
+    surface: node(id: $surfacePostId) {
       __typename
       ... on Post {
         id
@@ -31,16 +31,26 @@ const PostMediaViewerHostOperation = graphql`
         }
         ...PostMediaViewer_post @alias(as: "viewer")
         ...PostActionSurface_post @alias(as: "actionSurface")
+        repostSource {
+          id
+          state
+          content {
+            id
+          }
+          ...PostMediaViewer_post @alias(as: "viewer")
+          ...PostActionSurface_post @alias(as: "actionSurface")
+        }
       }
     }
   }
 `;
 
 type ViewerSession = Readonly<{
+  mediaOwnerPostId: string;
   onDeleted?: () => void;
   originControl: RefObject<NativeView | null>;
-  postId: string;
   selectedIndex: number;
+  surfacePostId: string;
 }>;
 
 type OpenViewer = (session: ViewerSession) => void;
@@ -128,15 +138,23 @@ function PostMediaViewerHostContent({
 }>) {
   const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
     PostMediaViewerHostOperation,
-    { postId: session.postId },
+    { surfacePostId: session.surfacePostId },
     {
-      fetchKey: `${actorRevision}:${session.postId}:${fetchRevision}`,
+      fetchKey: `${actorRevision}:${session.surfacePostId}:${fetchRevision}`,
       fetchPolicy: 'store-and-network',
     },
   );
-  const post = data.node?.__typename === 'Post' && data.node.state !== 'DELETED' ? data.node : null;
-  const replyBinding = usePostReplyBinding(session.postId);
-  const replyAuthentication = usePostActionAuthentication(Boolean(post?.content));
+  const surface =
+    data.surface?.__typename === 'Post' && data.surface.state !== 'DELETED' ? data.surface : null;
+  const mediaOwner =
+    surface?.id === session.mediaOwnerPostId
+      ? surface
+      : surface?.repostSource?.id === session.mediaOwnerPostId &&
+          surface.repostSource.state !== 'DELETED'
+        ? surface.repostSource
+        : null;
+  const replyBinding = usePostReplyBinding(session.surfacePostId);
+  const replyAuthentication = usePostActionAuthentication(Boolean(surface?.content));
   const reply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
@@ -164,30 +182,36 @@ function PostMediaViewerHostContent({
       }
     : undefined;
 
-  if (!post?.viewer) {
+  if (!mediaOwner?.viewer) {
     return <PostMediaViewerQueryState unavailable />;
   }
 
-  const contentId = post.content?.id ?? null;
+  const contentId = mediaOwner.content?.id ?? null;
   const actionBar =
-    contentId && post.actionSurface ? (
+    contentId && mediaOwner.actionSurface ? (
       <PostActionSurface
         onDeleted={onDeleted}
         reactionSummaryStyle={styles.hiddenReactionSummary}
         reply={viewerReply}
-        socialActionTarget={post.actionSurface}
+        socialActionTarget={mediaOwner.actionSurface}
       />
     ) : null;
   const wideDetail = contentId ? (
     <PostMediaViewerThread
       contentId={contentId}
+      mediaOwnerPostId={mediaOwner.id}
       onPostDeleted={onDeleted}
-      postId={session.postId}
+      replyAvailable={Boolean(surface?.content)}
+      replySurfacePostId={session.surfacePostId}
     />
   ) : null;
 
   return (
-    <PostMediaViewerContent actionBar={actionBar} post={post.viewer} wideDetail={wideDetail} />
+    <PostMediaViewerContent
+      actionBar={actionBar}
+      post={mediaOwner.viewer}
+      wideDetail={wideDetail}
+    />
   );
 }
 

@@ -2633,6 +2633,9 @@ const postMediaViewerThreadResponseData = {
     },
   },
 };
+const postMediaViewerHostResponseData = {
+  surface: mediaViewerThreadCurrentPost,
+};
 const postMediaViewerThreadNextPageData = {
   node: {
     ...mediaViewerThreadCurrentPost,
@@ -2643,9 +2646,8 @@ const postMediaViewerThreadNextPageData = {
     },
   },
 };
-const postMediaViewerSingleResponseData = {
-  currentSession: defaultSession.currentSession,
-  node: withReactionViewerState(requireStoryPostById(storyPosts, 'media-text')),
+const postMediaViewerSingleHostResponseData = {
+  surface: withReactionViewerState(requireStoryPostById(storyPosts, 'media-text')),
 };
 const postsStoryRelayData = {
   alternateComposerProfile,
@@ -3907,7 +3909,7 @@ export const PostMediaViewerCompact: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerThreadResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
       },
     },
   },
@@ -3957,7 +3959,7 @@ export const PostMediaViewerWide: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerThreadResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
         PostMediaViewerThreadQuery: { data: postMediaViewerThreadResponseData },
       },
       paginationResponses: [{ data: postMediaViewerThreadNextPageData }],
@@ -4057,7 +4059,7 @@ export const PostMediaViewerWideThreadLoading: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerThreadResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
         PostMediaViewerThreadQuery: {
           data: postMediaViewerThreadResponseData,
           delayMs: 60_000,
@@ -4084,7 +4086,7 @@ export const PostMediaViewerWideThreadErrorRetry: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerThreadResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
         PostMediaViewerThreadQuery: {
           sequence: [
             { error: 'Viewer thread fixture failure' },
@@ -4116,7 +4118,7 @@ export const PostMediaViewerHostLoading: Story = {
     relay: {
       operationResponses: {
         PostMediaViewerHostQuery: {
-          data: postMediaViewerThreadResponseData,
+          data: postMediaViewerHostResponseData,
           delayMs: 60_000,
         },
       },
@@ -4142,7 +4144,7 @@ export const PostMediaViewerHostErrorRetry: Story = {
         PostMediaViewerHostQuery: {
           sequence: [
             { error: 'Viewer Host fixture failure' },
-            { data: postMediaViewerThreadResponseData },
+            { data: postMediaViewerHostResponseData },
           ],
         },
       },
@@ -4166,7 +4168,7 @@ export const PostMediaViewerHostUnavailable: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: { node: null } },
+        PostMediaViewerHostQuery: { data: { surface: null } },
       },
     },
   },
@@ -4187,7 +4189,7 @@ export const PostMediaViewerHostContentRevision: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerThreadResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
       },
     },
   },
@@ -4224,7 +4226,7 @@ export const PostMediaViewerSingle: Story = {
   parameters: {
     relay: {
       operationResponses: {
-        PostMediaViewerHostQuery: { data: postMediaViewerSingleResponseData },
+        PostMediaViewerHostQuery: { data: postMediaViewerSingleHostResponseData },
       },
     },
   },

@@ -11,13 +11,13 @@ const PostDetailThread = lazy(async () => {
 });
 
 const PostMediaViewerThreadOperation = graphql`
-  query PostMediaViewerThreadQuery($postId: ID!) {
+  query PostMediaViewerThreadQuery($mediaOwnerPostId: ID!) {
     currentSession {
       selectedProfile {
         ...ReplyComposerSurface_profile
       }
     }
-    node(id: $postId) {
+    node(id: $mediaOwnerPostId) {
       __typename
       ... on Post {
         id
@@ -33,14 +33,16 @@ const PostMediaViewerThreadOperation = graphql`
 
 type Props = Readonly<{
   contentId: string;
+  mediaOwnerPostId: string;
   onPostDeleted?: () => void;
-  postId: string;
+  replyAvailable: boolean;
+  replySurfacePostId: string;
 }>;
 
 export function PostMediaViewerThread(props: Props) {
   const { revision: actorRevision } = useRelayActor();
   const [fetchRevision, setFetchRevision] = useState(0);
-  const fetchKey = `${actorRevision}:${props.postId}:${props.contentId}:${fetchRevision}`;
+  const fetchKey = `${actorRevision}:${props.mediaOwnerPostId}:${props.contentId}:${fetchRevision}`;
 
   return (
     <RouteBoundary
@@ -61,16 +63,18 @@ export function PostMediaViewerThread(props: Props) {
 function PostMediaViewerThreadContent({
   contentId,
   fetchKey,
+  mediaOwnerPostId,
   onPostDeleted,
   onReplyCreated,
-  postId,
+  replyAvailable,
+  replySurfacePostId,
 }: Props & {
   fetchKey: string;
   onReplyCreated: () => void;
 }) {
   const data = useLazyLoadQuery<PostMediaViewerThreadQuery>(
     PostMediaViewerThreadOperation,
-    { postId },
+    { mediaOwnerPostId },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const post = data.node?.__typename === 'Post' ? data.node : null;
@@ -81,6 +85,8 @@ function PostMediaViewerThreadContent({
     <PostDetailThread
       header={null}
       identity={fetchKey}
+      currentPostReplyAvailable={replyAvailable}
+      currentPostReplySurfaceId={replySurfacePostId}
       onPostDeleted={onPostDeleted}
       onReplyCreated={onReplyCreated}
       post={thread}

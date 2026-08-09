@@ -206,7 +206,7 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await renderHost(relay.environment);
     await openViewer();
 
-    await respond(relay.requests[0], { node: null });
+    await respond(relay.requests[0], { surface: null });
 
     assert.ok(byTestId('post-media-viewer-dialog'));
     assert.ok(byTestId('post-media-viewer-unavailable'));
@@ -225,7 +225,7 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
     await respond(previous.requests[0], hostPayload());
     if (next.requests[0]) {
-      await respond(next.requests[0], { node: null });
+      await respond(next.requests[0], { surface: null });
     }
     assert.equal(next.environment.getStore().getSource().get('post-1'), undefined);
     assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
@@ -237,9 +237,10 @@ function Launcher() {
   return createElement('Pressable', {
     onPress: () =>
       openViewer({
+        mediaOwnerPostId: 'post-1',
         originControl: { current: { focus: () => undefined } } as never,
-        postId: 'post-1',
         selectedIndex: 0,
+        surfacePostId: 'post-1',
       }),
     testID: 'launcher',
   });
@@ -260,7 +261,9 @@ function createEnvironment(seed?: ReturnType<typeof hostPayload>) {
   });
   if (seed) {
     relayEnvironment.commitPayload(
-      createOperationDescriptor(getRequest(PostMediaViewerHostQueryNode), { postId: 'post-1' }),
+      createOperationDescriptor(getRequest(PostMediaViewerHostQueryNode), {
+        surfacePostId: 'post-1',
+      }),
       seed,
     );
   }
@@ -313,7 +316,7 @@ function optionalByTestId(testID: string): ReactTestInstance | null {
 
 function hostPayload() {
   return {
-    node: {
+    surface: {
       __typename: 'Post',
       content: {
         bodyText: '본문',
@@ -337,6 +340,7 @@ function hostPayload() {
       },
       reactionCounts: [],
       repostCount: 0,
+      repostSource: null,
       state: 'ACTIVE',
       viewerBookmark: null,
       viewerReactions: [],

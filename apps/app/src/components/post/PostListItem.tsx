@@ -181,7 +181,13 @@ export function PostListItem({
     })) ?? null;
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
-      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+      openViewer({
+        mediaOwnerPostId: post.id,
+        onDeleted,
+        originControl,
+        selectedIndex,
+        surfacePostId: post.id,
+      });
     },
     [onDeleted, openViewer, post.id],
   );
@@ -260,7 +266,7 @@ export function PostListItem({
             </Pressable>
           </Link>
         </PostAttributionRow>
-        <PostListRow onDeleted={onDeleted} post={source} reply={reply} />
+        <PostListRow onDeleted={onDeleted} post={source} reply={reply} surfacePostId={post.id} />
       </View>,
     );
   }
@@ -362,10 +368,12 @@ function PostListRow({
   onDeleted,
   post: postKey,
   reply,
+  surfacePostId,
 }: {
   onDeleted: () => void;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
+  surfacePostId?: string;
 }) {
   const router = useRouter();
   const theme = useTheme();
@@ -375,9 +383,15 @@ function PostListRow({
   const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
-      openViewer({ onDeleted, originControl, postId: post.id, selectedIndex });
+      openViewer({
+        mediaOwnerPostId: post.id,
+        onDeleted,
+        originControl,
+        selectedIndex,
+        surfacePostId: surfacePostId ?? post.id,
+      });
     },
-    [onDeleted, openViewer, post.id],
+    [onDeleted, openViewer, post.id, surfacePostId],
   );
   return (
     <View style={styles.standardRow} testID="post-list-standard-row">

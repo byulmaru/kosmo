@@ -12,7 +12,7 @@
 
 ## 소유권과 데이터 경계
 
-목록과 상세의 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. Gallery는 공개된 정상 tile을 선택했을 때 `{postId, selectedIndex, originControl}`만 Host에 전달하고 modal lifecycle이나 Post 데이터를 소유하지 않는다. Host는 기존 GraphQL `node(postId)` 경로와 현재 Relay actor environment로 Post를 조회한다. 이 경로가 이미 사용하는 Post visibility·authorization을 그대로 적용하며 별도 Media 조회나 standalone authorization을 추가하지 않는다.
+목록과 상세의 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. Gallery는 공개된 정상 tile을 선택했을 때 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`만 Host에 전달하고 modal lifecycle이나 Post 데이터를 소유하지 않는다. Host는 기존 GraphQL `node(surfacePostId)` 경로와 현재 Relay actor environment로 surface Post를 조회하고, `mediaOwnerPostId`가 그 surface 또는 direct `repostSource`인지 확인한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media·본문·Profile과 Repost·Reaction·Bookmark·More의 owner다. Reply는 surface Post identity를 유지하므로 pure Repost에서는 disabled다. Content availability로 owner를 재추론하지 않으므로 Quote Content가 일시 unavailable이어도 Source로 전환하지 않는다. 이 경로가 이미 사용하는 Post visibility·authorization을 그대로 적용하며 별도 Media 조회나 standalone authorization을 추가하지 않는다.
 
 Host는 Viewer session, Post query, 기존 `PostActionSurface`·Reply binding과 Wide `PostDetailThread` 조합을 소유한다. Modal shell·close·focus fallback은 Post query의 Suspense·error boundary 밖에 유지하고, query가 제공하는 Content·Media·Profile과 detail presentation만 경계 안에서 교체한다. 목록·Quote·Repost·상세의 표시 branch가 바뀌어도 Host 위치와 열린 Viewer instance는 유지한다. Wide thread 안의 다른 Post Media는 기존 surface대로 별도 Viewer를 열 수 있으며 nested Viewer stack의 dismiss·focus 순서를 유지한다.
 
@@ -40,12 +40,12 @@ Wide Web의 오른쪽은 별도의 축약 panel이 아니라 기존 Post 상세�
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.
 - Web은 이전·다음 control과 `ArrowLeft`·`ArrowRight` keyboard 입력을 제공한다.
 - iOS·Android는 이전·다음 control과 수평 swipe를 제공한다. Gesture가 성립하지 않으면 현재 이미지에 머문다.
-- 현재 이미지가 바뀌어도 작성자·원문·Action Bar의 대상은 Viewer를 소유한 현재 Post다.
+- 현재 이미지가 바뀌어도 작성자·원문과 Action Bar의 surface routing은 바뀌지 않는다. Pure Repost에서는 Reply만 바깥 contentless Repost identity를 유지하고 나머지 표시·social action은 direct Source를 대상으로 한다.
 - Viewer open과 Media 탐색은 route나 browser history를 변경하지 않는다.
 
 ## Post Action Bar
 
-Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 Reply, Repost, Reaction, Bookmark, More와 각 count·상태·target 계약을 그대로 재사용한다. 일반·Repost·Quote Post surface에서 기존 target routing을 유지하되 Quote를 새 Action Bar action으로 추가하지 않는다. Wide Web에서는 오른쪽 Post 상세 thread surface 안에서 이 action과 Reply Composer·reply interaction을 바로 수행할 수 있다. Viewer 전용 action row를 만들거나 Media를 action 대상으로 바꾸지 않는다. 기존 Post 링크 복사는 유지하지만 Media 파일 URL 복사·공유·다운로드·기기 저장은 제공하지 않는다.
+Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 Reply, Repost, Reaction, Bookmark, More와 각 count·상태·target 계약을 그대로 재사용한다. 일반·Repost·Quote Post surface에서 기존 target routing을 유지하되 Quote를 새 Action Bar action으로 추가하지 않는다. Pure Repost의 Reply는 바깥 contentless Repost 기준으로 disabled이고, Repost·Reaction·Bookmark·More는 direct Source를 대상으로 한다. Wide Web에서도 같은 Reply availability를 사용하므로 pure Repost에는 Source Composer를 열지 않는다. Viewer 전용 action row를 만들거나 Media를 action 대상으로 바꾸지 않는다. 기존 Post 링크 복사는 유지하지만 Media 파일 URL 복사·공유·다운로드·기기 저장은 제공하지 않는다.
 
 ## Sensitive, loading과 오류
 
@@ -66,7 +66,7 @@ Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Re
 
 ## 검증 경계
 
-- Component test는 Host session의 `postId`·선택 index·origin focus, 기존 `node(postId)` visibility 경계, query cache hit·loading·error·retry와 null Post·Content·Media에서도 modal shell·close 유지, 같은 Content 복구 상태 보존, 다른 revision reset·원래 document index unavailable, URL 변경 시 이전 byte 비보존, actor/environment 전환 close·query 폐기, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료와 origin·screen fallback focus 복귀를 확인한다. 목록·Quote·Repost·상세 projection 전환과 nested Viewer stack, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 함께 확인한다.
+- Component test는 Host session의 `surfacePostId`·`mediaOwnerPostId`·선택 index·origin focus, 기존 `node(surfacePostId)` visibility 경계와 owner 검증, query cache hit·loading·error·retry와 null Post·Content·Media에서도 modal shell·close 유지, 같은 Content 복구 상태 보존, 다른 revision reset·원래 document index unavailable, URL 변경 시 이전 byte 비보존, actor/environment 전환 close·query 폐기, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료와 origin·screen fallback focus 복귀를 확인한다. Pure Repost Viewer의 Reply가 바깥 contentless Repost 기준으로 disabled이고 Repost·Reaction·Bookmark·More와 Media는 Source를 대상으로 하는지 검증한다. 목록·Quote·Repost·상세 projection 전환과 nested Viewer stack, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, wide bounded rail·원문 전체·Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 함께 확인한다.
 - Storybook은 1장과 다중 이미지, 긴 원문, 첫·중간·마지막 위치, image loading·error와 Host query loading·error·retry·unavailable, compact Web·Native와 wide Web thread layout을 확인한다.
 - Web runtime은 backdrop·modal 내부 pointer 격리, keyboard arrow, Escape, 배경 surface 비활성화, focus trap·복귀, route·history 유지와 `<768px`·`>=768px` layout을 관찰한다. Compact에서는 짧은 원문의 content-height panel과 `clamp(192px, 32vh, 240px)` 최대 높이·낮은 viewport에서의 고정 chrome 보존·text-only scroll·Action Bar 인접 배치를, Wide에서는 `24px` inset·`clamp(320px, 25vw, 350px)` rail과 남은 image 폭, Action Bar의 가로 overflow 방지, 오른쪽 독립 scroll, Composer 작성, reply pagination, Action Bar·reply interaction과 child overlay layering을 함께 확인한다.
 - iOS runtime은 touch, swipe, close·back과 VoiceOver를, Android runtime은 touch, swipe, close·back과 TalkBack을 각각 확인한다.

@@ -92,17 +92,21 @@ export function PostLayout({
   mediaPresentation = 'default',
   onDeleted,
   post: postKey,
+  replyAvailable,
+  replySurfacePostId,
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
   post: PostLayout_post$key;
+  replyAvailable?: boolean;
+  replySurfacePostId?: string;
 }) {
   const theme = useTheme();
   const post = useFragment(PostLayoutFragment, postKey);
   const openViewer = usePostMediaViewerHost();
-  const replyBinding = usePostReplyBinding(post.id);
-  const replyAuthentication = usePostActionAuthentication(Boolean(post.content));
+  const replyBinding = usePostReplyBinding(replySurfacePostId ?? post.id);
+  const replyAuthentication = usePostActionAuthentication(replyAvailable ?? Boolean(post.content));
   const replyTriggerRef = useRef<View>(null);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const source = post.repostSource;
@@ -111,7 +115,13 @@ export function PostLayout({
   const handleDeleted = useCallback(() => onDeleted?.(), [onDeleted]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
-      openViewer({ onDeleted: handleDeleted, originControl, postId: post.id, selectedIndex });
+      openViewer({
+        mediaOwnerPostId: post.id,
+        onDeleted: handleDeleted,
+        originControl,
+        selectedIndex,
+        surfacePostId: post.id,
+      });
     },
     [handleDeleted, openViewer, post.id],
   );

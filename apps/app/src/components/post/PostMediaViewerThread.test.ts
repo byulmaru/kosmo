@@ -11,6 +11,7 @@ import type { PostMediaViewerThread as PostMediaViewerThreadComponent } from './
 let actorRevision = 3;
 let queryData = validQueryData();
 let queryFetchKey: string | number | undefined;
+let queryVariables: Record<string, unknown> | undefined;
 let renderer: ReactTestRenderer | null = null;
 
 mock.module('react-relay', {
@@ -18,9 +19,10 @@ mock.module('react-relay', {
     graphql: () => ({}),
     useLazyLoadQuery: (
       _query: unknown,
-      _variables: unknown,
+      variables: Record<string, unknown>,
       options?: { fetchKey?: string | number },
     ) => {
+      queryVariables = variables;
       queryFetchKey = options?.fetchKey;
       return queryData;
     },
@@ -65,6 +67,7 @@ afterEach(async () => {
   actorRevision = 3;
   queryData = validQueryData();
   queryFetchKey = undefined;
+  queryVariables = undefined;
 });
 
 describe('PostMediaViewerThread', () => {
@@ -75,7 +78,10 @@ describe('PostMediaViewerThread', () => {
     assert.equal(thread.props.presentation, 'viewer');
     assert.equal(thread.props.post, queryData.node.thread);
     assert.equal(thread.props.replyProfile, queryData.currentSession.selectedProfile);
+    assert.equal(thread.props.currentPostReplyAvailable, false);
+    assert.equal(thread.props.currentPostReplySurfaceId, 'surface-post');
     assert.equal(queryFetchKey, '3:post-1:content-1:0');
+    assert.deepEqual(queryVariables, { mediaOwnerPostId: 'post-1' });
   });
 
   it('Reply 작성 뒤 같은 Post detail operation을 새 fetch key로 갱신한다', async () => {
@@ -101,7 +107,9 @@ async function render() {
     renderer = create(
       createElement(PostMediaViewerThread, {
         contentId: 'content-1',
-        postId: 'post-1',
+        mediaOwnerPostId: 'post-1',
+        replyAvailable: false,
+        replySurfacePostId: 'surface-post',
       }),
     );
   });

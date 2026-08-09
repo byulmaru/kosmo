@@ -1,6 +1,6 @@
 ## Context
 
-PROD-626은 공용 `PostMediaGallery`·`PostMediaImage`에 최대 4장 gallery geometry, Sensitive 공개 상태와 image별 loading·retry를 제공한다. `PostBody`는 Viewer를 열 Post ID·document index·origin control만 전달한다. 목록과 상세의 안정적인 surface 경계에 있는 `PostMediaViewerHost`가 기존 `node(postId)` visibility·authorization 정책으로 현재 Post를 조회하고 Viewer session·Action/Reply binding·thread 조합을 소유한다. 상세 route의 `PostDetailThread`는 현재 Post와 ancestors·reply descendants, Reply Composer와 reply pagination을 계속 조합하며 Host는 그 표시 경계를 재사용한다.
+PROD-626은 공용 `PostMediaGallery`·`PostMediaImage`에 최대 4장 gallery geometry, Sensitive 공개 상태와 image별 loading·retry를 제공한다. `PostBody`는 Viewer를 연 document index·origin control을 launcher에 전달한다. 목록과 상세의 안정적인 surface 경계에 있는 `PostMediaViewerHost`가 명시적인 surface Post ID와 Media owner Post ID를 session에 저장하고, 기존 `node(surfacePostId)` visibility·authorization 정책으로 surface Post를 조회해 owner가 그 surface 또는 direct Source인지 확인한다. 일반·Quote는 두 ID가 같고 pure Repost는 direct Source가 Media owner지만 Reply identity는 바깥 surface Post에 남는다. 상세 route의 `PostDetailThread`는 현재 Media owner와 ancestors·reply descendants, Reply Composer와 reply pagination을 계속 조합하며 Host는 그 표시 경계를 재사용한다.
 
 React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`를 사용하는 선행 UI가 있으나 Media Viewer 공용 primitive는 없다. 기존 `PostActionSurface`는 Relay fragment와 인증·Profile 선택·Reply callback을 결합하고 Reaction·Repost·More도 각 overlay를 열 수 있으므로, Viewer 안에서 중복 action row를 만들거나 중첩 modal을 무검증으로 추가하면 플랫폼별 overlay·focus가 달라질 수 있다.
 
@@ -8,7 +8,7 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 **Goals:**
 
-- Gallery가 `{postId, selectedIndex, originControl}`을 안정적인 surface-level Viewer Host에 전달한다.
+- Gallery launcher가 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`을 안정적인 surface-level Viewer Host에 전달하고, Host가 두 identity를 검증한다.
 - Host가 기존 Post Node visibility·authorization 경계로 조회한 현재 projection의 Media 순서와 승인된 표시 URL만 사용하고 이전 URL을 snapshot으로 유지하지 않는다.
 - Modal shell·close·focus fallback을 Post query의 Suspense·error boundary 밖에 유지한다.
 - 같은 Content의 일시 unavailable·복구 상태는 보존하고 다른 revision은 원래 선택 index에서 초기화하며, actor/environment 전환은 Viewer를 닫고 query를 폐기한다.
@@ -35,13 +35,13 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 
 ### Recommended Approach
 
-목록과 상세의 기존 Action authentication·Reply coordinator provider 아래 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. `PostBody`에서 Gallery까지는 `onMediaOpen(index, origin)` callback seam만 전달하고 launcher는 실제 Media를 소유한 Post의 `{postId, selectedIndex, originControl}`을 Host에 연다. Gallery는 Sensitive 공개 뒤 정상 image tile에만 이 callback을 연결하고 Reply 부모 preview의 `interactive=false` 경로에는 전달하지 않는다. Quote는 outer Post를, 목록의 pure Repost는 Media를 실제 표시한 source Post를 target으로 사용하며 상세의 기존 non-interactive pure Repost preview에는 새 launcher를 추가하지 않는다.
+목록과 상세의 기존 Action authentication·Reply coordinator provider 아래 안정적인 surface 경계에 `PostMediaViewerHost`를 둔다. `PostBody`에서 Gallery까지는 `onMediaOpen(index, origin)` callback seam만 전달하고 launcher는 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`을 Host에 연다. Gallery는 Sensitive 공개 뒤 정상 image tile에만 이 callback을 연결하고 Reply 부모 preview의 `interactive=false` 경로에는 전달하지 않는다. 일반·Quote는 두 ID를 같은 Post로 전달하고, 목록 pure Repost는 바깥 contentless Repost를 surface identity로, direct Source를 Media owner identity로 전달한다. 상세의 기존 non-interactive pure Repost preview에는 새 launcher를 추가하지 않는다.
 
-Host는 열린 session, `node(postId)` Post query, 기존 Action/Reply binding과 Wide thread composition을 소유한다. Modal shell·close·origin 또는 screen fallback focus는 query 경계 밖에 유지하고 Content·Media·Profile presentation만 `Suspense`·error boundary 안에서 교체한다. Query는 현재 Relay actor environment를 사용하고 기존 Post Node visibility·authorization을 그대로 적용하므로 별도 Media authorization을 만들지 않는다. Relay actor/environment generation이 바뀌면 session을 닫고 이전 query를 폐기한다.
+Host는 열린 session, `node(surfacePostId)` Post query, 기존 Action/Reply binding과 Wide thread composition을 소유한다. Query 결과에서 `mediaOwnerPostId`가 surface 또는 direct Source인지 검증하며 Content availability로 owner를 재추론하지 않는다. Pure Repost의 Media·본문·Profile과 Repost·Reaction·Bookmark·More는 direct Source를 사용하되 Reply binding·availability는 바깥 contentless surface Post를 사용해 disabled로 유지한다. Wide thread도 Media owner를 표시하면서 같은 surface Reply identity를 전달해 Source Composer를 열지 않는다. Modal shell·close·origin 또는 screen fallback focus는 query 경계 밖에 유지하고 Content·Media·Profile presentation만 `Suspense`·error boundary 안에서 교체한다. Query는 현재 Relay actor environment를 사용하고 기존 Post Node visibility·authorization을 그대로 적용하므로 별도 Media authorization을 만들지 않는다. Relay actor/environment generation이 바뀌면 session을 닫고 이전 query를 폐기한다.
 
 같은 Content ID가 null projection을 거쳐 복구되면 current index·expanded·overflow·Media loading/error/retry state를 유지한다. 다른 non-null Content ID가 도착하면 그 상태를 초기화하고 session을 연 original selected index를 다시 사용한다. 새 revision에 해당 document index가 없으면 index를 clamp하거나 다른 Media로 이동하지 않고 unavailable을 표시한다. Media ID가 같아도 URL이 바뀌면 image instance와 load state를 새 URL 기준으로 교체해 이전 pixel·byte를 유지하지 않는다.
 
-Wide Web의 오른쪽은 route component 자체를 중첩하지 않고 `PostDetailThread`의 표시·interaction 조합을 재사용 가능한 thread surface로 추출해 사용한다. Reply ancestors, 현재 Post와 reply descendants를 기존 연결 순서대로 포함한다. 원본 Post는 Viewer session의 같은 Post identity를 사용하며 Media 렌더만 생략한다. Reply Composer는 처음부터 열지 않고 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. Ancestors·descendants와 Quote·Repost 안의 Media 및 viewer interaction, Action Bar·Reply Composer·reply descendants는 기존 표현을 유지한다. 목록처럼 thread data가 아직 없는 caller는 같은 Post node의 기존 visibility 정책을 따르는 Post detail thread operation을 Viewer 경계 안에서 load할 수 있다. 이 operation은 standalone Media authorization을 추가하지 않고 route·browser history를 변경하지 않으며 현재 Viewer Post identity와 결과가 다르면 표시하지 않는다.
+Wide Web의 오른쪽은 route component 자체를 중첩하지 않고 `PostDetailThread`의 표시·interaction 조합을 재사용 가능한 thread surface로 추출해 사용한다. Reply ancestors, Media owner Post와 reply descendants를 기존 연결 순서대로 포함한다. 원본 Media는 생략하고 Reply Composer는 처음부터 열지 않으며 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. 다만 pure Repost는 surface Reply availability가 disabled이므로 Source Composer를 열지 않는다. Ancestors·descendants와 Quote·Repost 안의 Media 및 viewer interaction, Action Bar·Reply Composer·reply descendants는 기존 표현을 유지한다. 목록처럼 thread data가 아직 없는 caller는 Media owner Post node의 기존 visibility 정책을 따르는 Post detail thread operation을 Viewer 경계 안에서 load할 수 있다. 이 operation은 standalone Media authorization을 추가하지 않고 route·browser history를 변경하지 않으며 현재 Viewer Media owner identity와 결과가 다르면 표시하지 않는다.
 
 Viewer presentation은 하나의 full-screen modal 안에서 다음 영역을 조합한다.
 
@@ -63,14 +63,15 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 
 ### Allowed Alternatives
 
-- Host는 기존 `node(postId)` Post query와 colocated fragment로 Viewer Content·Action·thread 입력을 소유한다. Caller가 parent Post fragment, 조립한 `actionBar` 또는 `wideDetail`을 넘겨 Host query lifecycle과 다시 reconcile하는 구조는 허용하지 않는다.
+- Host는 기존 `node(surfacePostId)` Post query와 colocated fragment로 Viewer Content·Action·thread 입력을 소유하고 pure Repost의 direct Source projection을 그 query에서 파생한다. Caller가 parent Post fragment, 조립한 `actionBar` 또는 `wideDetail`을 넘겨 Host query lifecycle과 다시 reconcile하는 구조는 허용하지 않는다.
 - Host는 목록과 상세의 기존 provider 아래 surface마다 하나씩 둘 수 있다. 앱 전체 단일 modal coordinator나 새 route는 필요하지 않으며, Wide thread 안에서 여는 Viewer는 해당 nested surface Host가 별도 stack entry로 소유한다.
 - Image별 load state는 기존 renderer에서 공유 가능한 presentation seam을 추출하거나 Viewer 전용 얇은 `contain` renderer로 둘 수 있다. Gallery의 `cover` geometry와 retry 격리 계약을 바꾸지 않는 방식만 허용한다.
 - Child action overlay가 중첩 modal로 검증되면 Viewer를 유지한 채 열 수 있고, 플랫폼 제약이 확인되면 coordinator가 child overlay 동안 Viewer presentation을 일시 조정할 수 있다. 사용자에게 보이는 action 결과와 dismiss·focus 계약은 같아야 한다.
 
 ### Known Traps
 
-- Viewer가 Media ID만 받아 query를 실행하거나 기존 `node(postId)` 대신 별도 authorization을 만들면 Post visibility와 Content revision 경계를 우회하거나 stale Media를 섞을 수 있다.
+- Viewer가 Media ID만 받아 query를 실행하거나 기존 `node(surfacePostId)` 대신 별도 authorization을 만들면 Post visibility와 Content revision 경계를 우회하거나 stale Media를 섞을 수 있다.
+- Pure Repost의 surface identity와 direct Source Media owner를 하나의 Post ID로 합치면 Viewer에서만 Reply가 Source 기준으로 활성화되고 Wide Source Composer가 열리는 회귀가 생긴다.
 - Modal shell을 Host Post query boundary 안에 두면 loading·error·retry 때 close·focus lifecycle까지 unmount된다.
 - Parent fragment와 Host query를 동시에 표시 lifecycle source로 사용하면 Quote·Repost projection 변화와 query completion이 Viewer instance·state를 서로 재설정한다.
 - 전체 Post row·body navigation Pressable 안에 viewer tile semantics를 중첩하거나 press propagation을 막지 않으면 viewer와 상세 route가 함께 열린다.
@@ -86,7 +87,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 
 ## Risks / Trade-offs
 
-- [목록과 상세의 상위 Post surface 조합이 달라 Host seam이 커질 수 있음] → 기존 list/detail Action·Reply provider 아래 같은 surface-level Host를 두고 launcher는 Post ID·index·origin만 전달한다.
+- [목록과 상세의 상위 Post surface 조합이 달라 Host seam이 커질 수 있음] → 기존 list/detail Action·Reply provider 아래 같은 surface-level Host를 두고 launcher는 surface Post ID·Media owner Post ID·index·origin만 전달하며 Host는 query 결과에서 두 identity의 관계를 검증한다.
 - [Host Post query가 parent surface query와 같은 Post를 다시 읽음] → 기존 `node(id)`와 Relay normalized cache를 사용하고 별도 authorization·Media query·수동 dedupe를 추가하지 않는다.
 - [목록에서 Wide thread를 위해 추가 Post detail operation이 필요할 수 있음] → 같은 Post node·visibility를 사용하고 thread boundary에만 loading·error를 두며 Media authorization과 route/history는 변경하지 않는다.
 - [Viewer 오른쪽 scroller와 기존 document pagination이 가까운 시점에 같은 connection을 load할 수 있음] → 각 surface가 synchronous burst 재진입을 local guard로 막고 loading·error·retry 상태를 분리한다. 두 surface에서 겹친 같은 Relay environment의 동일 operation·variables는 Relay 21의 in-flight dedupe와 connection merge에 맡긴다. Viewer completion 뒤 saved metrics 재평가는 유지하되 서로 다른 surface를 조정하는 앱 token이나 실제 network 횟수를 별도 앱 계약으로 고정하지 않는다.
@@ -100,7 +101,7 @@ Post Action Bar와 thread child overlay는 기존 surface를 재사용하되 Vie
 ## Migration Plan
 
 1. PROD-626에서 병합된 gallery 계약과 현재 Viewer component test를 baseline으로 고정한다.
-2. 목록·상세 provider 아래 stable Host와 `node(postId)` query를 두고 modal shell을 query content boundary 밖으로 분리한다.
+2. 목록·상세 provider 아래 stable Host와 `node(surfacePostId)` query를 두고 명시된 Media owner가 surface 또는 direct Source인지 검증하며 modal shell을 query content boundary 밖으로 분리한다.
 3. Caller가 전달하던 Post fragment·Action Bar·Wide detail 조립을 Host의 기존 fragment·binding·thread composition으로 이동한다.
 4. Cache hit·loading·error·retry·unavailable, 같은 Content 복구·다른 revision reset, URL·actor 전환과 focus 복귀를 component test와 Storybook으로 확인한다.
 5. Wide Web의 bounded rail과 Compact Web·Native의 내용 높이 panel·3줄 원문·고정 Action Bar가 기존 Media 탐색을 회귀시키지 않는지 확인한다.
