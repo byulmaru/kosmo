@@ -30,7 +30,12 @@ let layoutLocalParams: RouteParams = {};
 let screenLocalParams: RouteParams = {};
 let renderer: ReactTestRenderer | null = null;
 let SlotContent: ComponentType | null = null;
-let selectedProfileForEditId: string | null = null;
+let profileAvailable = true;
+let profileInstanceKind: 'ACTIVITYPUB' | 'LOCAL' = 'LOCAL';
+let profileViewerState: {
+  isSelf: boolean;
+  membership: { role: 'MEMBER' | 'OWNER' } | null;
+} | null = null;
 
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, {
@@ -80,11 +85,14 @@ mockModule('react-relay', {
     }
 
     return {
-      profileByHandle: {
-        handle: variables.handle,
-        id: `profile:${variables.handle}`,
-      },
-      selectedProfileForEdit: selectedProfileForEditId ? { id: selectedProfileForEditId } : null,
+      profileByHandle: profileAvailable
+        ? {
+            handle: variables.handle,
+            id: `profile:${variables.handle}`,
+            instance: { kind: profileInstanceKind },
+            viewerState: profileViewerState,
+          }
+        : null,
     };
   },
 });
@@ -155,7 +163,9 @@ afterEach(async () => {
   queryModes.ProfileLayoutQuery = 'success';
   queryModes.ProfilePostListPageQuery = 'success';
   queryHistory.length = 0;
-  selectedProfileForEditId = null;
+  profileAvailable = true;
+  profileInstanceKind = 'LOCAL';
+  profileViewerState = null;
 });
 
 async function renderRoute(profileHandle: string) {
@@ -202,8 +212,8 @@ function requireRendered(type: string) {
 }
 
 describe('profile route parameter lifecycle', () => {
-  it('표시 중인 selected Owner Profile에만 편집 Link를 노출한다', async () => {
-    selectedProfileForEditId = 'profile:local';
+  it('표시 중인 selected Local Owner Profile에만 편집 Link를 노출한다', async () => {
+    profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     await renderRoute('@local');
 
     assert.deepEqual(
@@ -212,15 +222,33 @@ describe('profile route parameter lifecycle', () => {
     );
     assert.deepEqual(identities('FollowButton'), []);
 
-    selectedProfileForEditId = null;
+    profileViewerState = { isSelf: true, membership: { role: 'MEMBER' } };
     await renderRoute('@local');
     assert.deepEqual(rendered('Link'), []);
     assert.deepEqual(identities('FollowButton'), ['local']);
 
-    selectedProfileForEditId = 'profile:other';
+    profileViewerState = { isSelf: false, membership: { role: 'OWNER' } };
     await renderRoute('@local');
     assert.deepEqual(rendered('Link'), []);
     assert.deepEqual(identities('FollowButton'), ['local']);
+
+    profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
+    profileInstanceKind = 'ACTIVITYPUB';
+    await renderRoute('@remote@activitypub.example');
+    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(identities('FollowButton'), ['remote@activitypub.example']);
+
+    profileViewerState = null;
+    profileInstanceKind = 'LOCAL';
+    await renderRoute('@local');
+    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(identities('FollowButton'), ['local']);
+
+    profileAvailable = false;
+    await renderRoute('@inactive');
+    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(identities('FollowButton'), []);
+    assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
   });
 
   it('local → remote → local 뒤로 가기에서 header, action, nested list를 같은 identity로 전환한다', async () => {

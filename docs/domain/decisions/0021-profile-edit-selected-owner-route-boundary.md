@@ -8,6 +8,13 @@ Accepted
 
 2026-07-29
 
+## 후속 결정
+
+Account-Profile Membership을 viewer-relative GraphQL 관계로 투영하고 Profile 편집 eligibility가 이를 사용하는
+계약은 [ADR 0023](./0023-profile-viewer-membership-edit-eligibility.md)이 정의한다. 이 ADR의 selected
+Owner를 server-authoritative하게 확인하는 경계, presentation과 production route의 분리, Profile Tag와
+Follow Approval Policy의 생명주기 결정은 계속 적용된다.
+
 ## 맥락
 
 Profile 편집 UI는 selected Profile을 대상으로 하지만, 현재 client session은 selected Profile id만 제공하고

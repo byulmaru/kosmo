@@ -69,18 +69,20 @@ let deferBeforeRemoveOnReplace = false;
 let pendingReplaceCompletion: (() => void) | null = null;
 let noOpReplace = false;
 let throwOnReplace = false;
+type EditableQueryProfile = {
+  avatar: { id: string; url: string | null } | null;
+  bio: string | null;
+  displayName: string;
+  followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
+  header: { id: string; url: string | null } | null;
+  id: string;
+  instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+  relativeHandle: string;
+  tags: ReadonlyArray<{ id: string; name: string }>;
+  viewerState: { membership: { role: 'MEMBER' | 'OWNER' } | null } | null;
+};
 let queryData: {
-  currentSession: { selectedProfile: { relativeHandle: string } | null } | null;
-  selectedProfileForEdit: {
-    avatar: { id: string; url: string | null } | null;
-    bio: string | null;
-    displayName: string;
-    followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
-    header: { id: string; url: string | null } | null;
-    id: string;
-    relativeHandle: string;
-    tags: ReadonlyArray<{ id: string; name: string }>;
-  } | null;
+  currentSession: { selectedProfile: EditableQueryProfile | null } | null;
 };
 let renderer: ReactTestRenderer | null = null;
 let screenProps: ScreenProps | null = null;
@@ -214,19 +216,22 @@ afterEach(async () => {
 });
 
 const editableQueryData = () => ({
-  currentSession: { selectedProfile: { relativeHandle: '@owner' } },
-  selectedProfileForEdit: {
-    avatar: { id: 'media-avatar-current', url: 'https://media.example/avatar-current' },
-    bio: '기존 소개',
-    displayName: '기존 이름',
-    followPolicy: 'OPEN' as const,
-    header: { id: 'media-header-current', url: 'https://media.example/header-current' },
-    id: 'profile-owner',
-    relativeHandle: '@owner',
-    tags: [
-      { id: 'hashtag-fediverse', name: 'Fediverse' },
-      { id: 'hashtag-development', name: '개발' },
-    ],
+  currentSession: {
+    selectedProfile: {
+      avatar: { id: 'media-avatar-current', url: 'https://media.example/avatar-current' },
+      bio: '기존 소개',
+      displayName: '기존 이름',
+      followPolicy: 'OPEN' as const,
+      header: { id: 'media-header-current', url: 'https://media.example/header-current' },
+      id: 'profile-owner',
+      instance: { kind: 'LOCAL' as const },
+      relativeHandle: '@owner',
+      tags: [
+        { id: 'hashtag-fediverse', name: 'Fediverse' },
+        { id: 'hashtag-development', name: '개발' },
+      ],
+      viewerState: { membership: { role: 'OWNER' as const } },
+    },
   },
 });
 
@@ -287,17 +292,47 @@ const completeDeferredReplace = async () => {
 };
 
 describe('ProfileEditRoute', () => {
-  it('편집 capability가 없으면 form 대신 Profile 복귀 상태를 표시한다', async () => {
-    queryData = { ...editableQueryData(), selectedProfileForEdit: null };
-    await renderRoute();
+  it('selected Profile이 Member, 무관, Remote 또는 unavailable이면 복귀 상태를 표시한다', async () => {
+    const data = editableQueryData();
+    const owner = data.currentSession.selectedProfile;
+    const scenarios: Array<{
+      expectedReturn: string;
+      selectedProfile: EditableQueryProfile | null;
+    }> = [
+      {
+        expectedReturn: '/@owner',
+        selectedProfile: {
+          ...owner,
+          viewerState: { membership: { role: 'MEMBER' } },
+        },
+      },
+      {
+        expectedReturn: '/@owner',
+        selectedProfile: { ...owner, viewerState: { membership: null } },
+      },
+      {
+        expectedReturn: '/@owner',
+        selectedProfile: { ...owner, instance: { kind: 'ACTIVITYPUB' } },
+      },
+      { expectedReturn: '/', selectedProfile: null },
+    ];
 
-    const state = renderer!.root.findAll((node) => (node.type as unknown) === 'StateView')[0];
-    assert.ok(state);
-    assert.equal(state.props.title, '이 프로필을 수정할 수 없어요');
-    assert.equal(state.props.actionLabel, '프로필로 돌아가기');
-    await act(async () => state.props.onAction());
-    assert.deepEqual(routerReplacements, ['/@owner']);
-    assert.equal(screenProps, null);
+    for (const scenario of scenarios) {
+      queryData = { currentSession: { selectedProfile: scenario.selectedProfile } };
+      await renderRoute();
+
+      const state = renderer!.root.findAll((node) => (node.type as unknown) === 'StateView')[0];
+      assert.ok(state);
+      assert.equal(state.props.title, '이 프로필을 수정할 수 없어요');
+      assert.equal(state.props.actionLabel, '프로필로 돌아가기');
+      await act(async () => state.props.onAction());
+      assert.deepEqual(routerReplacements, [scenario.expectedReturn]);
+      assert.equal(screenProps, null);
+
+      await act(async () => renderer?.unmount());
+      renderer = null;
+      routerReplacements.length = 0;
+    }
   });
 
   it('server Profile Tag를 production form에 hydrate하고 editor를 보인다', async () => {

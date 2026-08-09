@@ -12,9 +12,11 @@ type QueryData = {
     selectedProfile: {
       id: string;
       instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+      viewerState: {
+        membership: { role: 'MEMBER' | 'OWNER' } | null;
+      } | null;
     } | null;
   } | null;
-  selectedProfileForEdit: { id: string } | null;
 };
 
 let queryData: QueryData;
@@ -78,7 +80,7 @@ before(async () => {
 });
 
 afterEach(async () => {
-  queryData = { currentSession: { selectedProfile: null }, selectedProfileForEdit: null };
+  queryData = { currentSession: { selectedProfile: null } };
   queryFetchKeys = [];
   routeBoundaryProps = null;
   openProfileSwitcherCalls = 0;
@@ -91,10 +93,13 @@ afterEach(async () => {
 
 describe('SettingsProfileDetail', () => {
   it('selected Owner Profile을 편집 가능한 기존 control에 연결한다', async () => {
-    const profile = { id: 'profile:owner', instance: { kind: 'LOCAL' as const } };
+    const profile = {
+      id: 'profile:owner',
+      instance: { kind: 'LOCAL' as const },
+      viewerState: { membership: { role: 'OWNER' as const } },
+    };
     queryData = {
       currentSession: { selectedProfile: profile },
-      selectedProfileForEdit: { id: 'profile:owner' },
     };
     await render();
 
@@ -106,8 +111,12 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('selected Member Profile에는 같은 control을 읽기 전용으로 연결한다', async () => {
-    const profile = { id: 'profile:member', instance: { kind: 'LOCAL' as const } };
-    queryData = { currentSession: { selectedProfile: profile }, selectedProfileForEdit: null };
+    const profile = {
+      id: 'profile:member',
+      instance: { kind: 'LOCAL' as const },
+      viewerState: { membership: { role: 'MEMBER' as const } },
+    };
+    queryData = { currentSession: { selectedProfile: profile } };
     await render();
 
     assert.equal(rendered('ProfileDefaultPostVisibilityControl')[0].props.editable, false);
@@ -119,9 +128,9 @@ describe('SettingsProfileDetail', () => {
         selectedProfile: {
           id: 'profile:remote',
           instance: { kind: 'ACTIVITYPUB' },
+          viewerState: null,
         },
       },
-      selectedProfileForEdit: null,
     };
     await render();
 
@@ -130,7 +139,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('selected Profile이 없으면 기존 Profile 선택 흐름을 연다', async () => {
-    queryData = { currentSession: { selectedProfile: null }, selectedProfileForEdit: null };
+    queryData = { currentSession: { selectedProfile: null } };
     await render();
 
     const state = rendered('StateView')[0];
@@ -141,7 +150,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('Profile query loading/error/retry와 actor fetch identity를 detail 경계가 소유한다', async () => {
-    queryData = { currentSession: { selectedProfile: null }, selectedProfileForEdit: null };
+    queryData = { currentSession: { selectedProfile: null } };
     await render();
 
     assert.ok(routeBoundaryProps);
@@ -152,7 +161,7 @@ describe('SettingsProfileDetail', () => {
   });
 
   it('Relay actor가 바뀌면 새 actor identity로 Profile query를 다시 읽는다', async () => {
-    queryData = { currentSession: { selectedProfile: null }, selectedProfileForEdit: null };
+    queryData = { currentSession: { selectedProfile: null } };
     await render();
 
     relayActorRevision = 8;
