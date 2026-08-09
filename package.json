@@ -12,6 +12,7 @@
     "db:test:up": "node scripts/test-db.mjs up",
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
     "dev": "node scripts/vault-run.mjs -- pnpm --recursive --parallel --if-present dev",
+    "dev:worker": "node scripts/vault-run.mjs -- pnpm --filter @kosmo/worker start",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",

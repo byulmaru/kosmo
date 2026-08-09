@@ -48,6 +48,11 @@ jobs:
             database: true
             id: web
             playwright: true
+          - name: Worker
+            command: pnpm --filter @kosmo/worker test
+            database: false
+            id: worker
+            playwright: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

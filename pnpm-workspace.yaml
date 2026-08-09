@@ -14,9 +14,11 @@ minimumReleaseAge: 10080
 allowBuilds:
   '@fission-ai/openspec': true
   '@sentry/cli': true
+  '@swc/core': true
   '@tailwindcss/oxide': true
   core-js: true
   esbuild: true
+  protobufjs: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
   # Security fixes GHSA-rgw5-rvv9-x895 for brace-expansion were published
