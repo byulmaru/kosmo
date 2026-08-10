@@ -198,7 +198,7 @@ export const createFollowRequestNotificationPostCommit = async (
 
 export const createReactionNotification = async (
   sourceId: string,
-  handle?: DatabaseHandle,
+  handle?: Database,
 ): Promise<void> => {
   await getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
