@@ -88,10 +88,12 @@ Light의 넓은 UI surface에는 순백색을 사용하지 않는다. `fixed/whi
 
 | 역할    | Base / on-base        | Light subtle / on-subtle | Dark subtle / on-subtle | Border Light / Dark   |
 | ------- | --------------------- | ------------------------ | ----------------------- | --------------------- |
-| Info    | `#8B7DEA` / `#1A1A1A` | `#F1EEFF` / `#4C3AAE`    | `#2F2858` / `#CFC8FF`   | `#8B7DEA` / `#CFC8FF` |
+| Info    | `#8B7DEA` / `#1A1A1A` | `#F1EEFF` / `#4C3AAE`    | `#2F2858` / `#CFC8FF`   | `#8477DE` / `#CFC8FF` |
 | Success | `#16794A` / `#FFFFFF` | `#DCFCE7` / `#14532D`    | `#123D26` / `#A6F4C5`   | `#16794A` / `#A6F4C5` |
-| Warning | `#E97B35` / `#1A1A1A` | `#FFF2E8` / `#743405`    | `#4A280D` / `#FFD0A3`   | `#E97B35` / `#FFD0A3` |
+| Warning | `#E97B35` / `#1A1A1A` | `#FFF2E8` / `#743405`    | `#4A280D` / `#FFD0A3`   | `#CF6D2F` / `#FFD0A3` |
 | Danger  | `#B42318` / `#FFFFFF` | `#FEE4E2` / `#7A271A`    | `#4A1714` / `#FECDCA`   | `#B42318` / `#FECDCA` |
+
+Light Info와 Warning border는 base 색을 그대로 재사용하지 않는다. 각각 `purple/600`과 `tangerine/600`을 사용해 paired subtle 및 기본 surface와 `3:1` 이상 대비를 유지한다.
 
 ## Interaction state와 overlay
 
@@ -100,7 +102,7 @@ Light의 넓은 UI surface에는 순백색을 사용하지 않는다. `fixed/whi
 | `color/state/hover`               | black 4%  | white 8%  | 중립 surface hover layer                |
 | `color/state/pressed`             | black 8%  | white 12% | 중립 surface pressed layer              |
 | `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                 |
-| `color/state/selected-border`     | `#DFAA17` | `#FFE597` | 선택 상태 경계                          |
+| `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                          |
 | `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                     |
 | `color/state/disabled-surface`    | `#F4F4F5` | `#2B2B31` | 공용 disabled surface                   |
 | `color/state/disabled-foreground` | `#A5A5AF` | `#64646F` | 공용 disabled foreground                |
@@ -115,19 +117,23 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 - `border/default`와 `border/subtle`은 장식적 구분선이며 상태나 클릭 가능성을 단독으로 전달하지 않는다.
 - Disabled는 색상만으로 상태를 전달하지 않는다.
 
-| 조합                         |      대비 |
-| ---------------------------- | --------: |
-| Primary Yellow / Ink         | `14.01:1` |
-| Info Purple / Ink            |  `5.15:1` |
-| Success Green / White        |  `5.43:1` |
-| Warning Tangerine / Ink      |  `6.09:1` |
-| Danger Red / White           |  `6.57:1` |
-| Link Light / Surface         |  `5.93:1` |
-| Link Dark / Canvas           |  `8.89:1` |
-| Light Muted / Canvas         |  `4.51:1` |
-| Dark Muted / Elevated        |  `4.92:1` |
-| Dark Focus / Elevated        |  `7.06:1` |
-| Dark Strong Border / Surface |  `3.28:1` |
+| 조합                            |      대비 |
+| ------------------------------- | --------: |
+| Primary Yellow / Ink            | `14.01:1` |
+| Info Purple / Ink               |  `5.15:1` |
+| Success Green / White           |  `5.43:1` |
+| Warning Tangerine / Ink         |  `6.09:1` |
+| Danger Red / White              |  `6.57:1` |
+| Link Light / Surface            |  `5.93:1` |
+| Link Dark / Canvas              |  `8.89:1` |
+| Light Muted / Canvas            |  `4.51:1` |
+| Dark Muted / Elevated           |  `4.92:1` |
+| Dark Focus / Elevated           |  `7.06:1` |
+| Dark Strong Border / Surface    |  `3.28:1` |
+| Light Selected Border / Surface |  `3.24:1` |
+| Light Info Border / Subtle      |  `3.24:1` |
+| Light Warning Border / Subtle   |  `3.25:1` |
+| Light Warning Border / Surface  |  `3.37:1` |
 
 ## Component usage mapping
 
