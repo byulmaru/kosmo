@@ -142,9 +142,12 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 - Button은 `action/primary/*`, feedback `base/on-base`, disabled pair를 사용한다.
 - TextField는 `background/surface`, foreground hierarchy, `border/default/focus`와 feedback border를 사용한다.
+- route body와 loading·empty state host는 `background/canvas` 하나의 기본 평면으로 본다. `PageHeader` 같은 공통 header chrome도 같은 canvas를 사용하고 `border/subtle`, sticky 위치와 필요할 때의 elevation effect로만 구조를 구분한다. Header가 있다는 이유로 아래 본문이나 state를 `background/surface`로 올리지 않는다.
+- 연속 피드와 목록도 같은 canvas 평면을 이어 쓴다. 목록 container가 canvas를 소유하고 `PostListItem`·`PostLayout` 같은 post row root는 별도 fill 없이 상속하며 `border/subtle`로 구분한다. 각 row에 `background/surface`나 `background/elevated`를 반복 적용하지 않는다.
+- post 내부의 인용·링크 preview처럼 경계가 필요한 영역은 `background/surface`, modal·menu·독립 floating card는 `background/elevated`를 사용한다. Hover/pressed는 fill 교체가 아니라 state overlay를 사용한다.
 - Modal, Sheet와 Menu는 `background/elevated`, `border/default`, `overlay/scrim`을 사용한다. Fullscreen media는 이 표준 scrim에서 제외한다.
 - Toast와 inline feedback은 Info/Success/Warning/Danger pair 중 실제 의미를 선택한다.
-- StateView는 canvas 또는 surface, foreground hierarchy, action과 feedback pair를 조합한다.
+- StateView root는 fill을 갖지 않고 host 평면을 상속한다. Route loading·empty·retry는 canvas 위에 두고, alert만 feedback subtle block을 사용할 수 있다. 이미 경계가 있는 component 내부 StateView는 그 component의 surface를 상속하되 스스로 surface를 선택하지 않는다.
 - Loading은 별도 의미색을 만들지 않고 현재 surface의 foreground 또는 action의 `on-base`를 사용한다. 진행 상태는 색상 외 접근성 정보로 함께 제공한다.
 
 ## Legacy와 개발 token 이관
@@ -153,9 +156,9 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 | Legacy Figma / 현재 코드             | Production semantic                                                      | 이관 규칙                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `bg` / `background`                  | `color/background/canvas`                                                | 앱 최하단 배경                                                         |
-| `surface`                            | `color/background/surface`                                               | 기본 product surface                                                   |
-| `card`                               | `color/background/surface` 또는 `color/background/elevated`              | 입력 내부와 독립 카드를 문맥별로 분리                                  |
+| `bg` / `background`                  | `color/background/canvas`                                                | 앱·route·header·state·feed의 기본 평면                                 |
+| `surface`                            | `color/background/surface`                                               | 입력·preview 등 명시적 경계 내부                                       |
+| `card`                               | `color/background/surface` 또는 `color/background/elevated`              | 연속 post row 제외; surface/elevated 문맥 분리                         |
 | `textPrimary` / `text`               | `color/foreground/primary`                                               | 핵심 텍스트와 아이콘                                                   |
 | `textSecondary`                      | `color/foreground/secondary` 또는 `color/foreground/muted`               | 설명과 비핵심 정보를 분리                                              |
 | `border`                             | `color/border/default`, `color/border/subtle` 또는 `color/border/strong` | 역할별 강도를 분리                                                     |
@@ -181,6 +184,8 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 ### 현재 raw·legacy consumer inventory
 
 아래 목록은 `apps/app/src`의 활성 코드에서 확인한 migration 입력이다. 테스트 fixture와 Storybook assertion의 예시 색상값은 구현 결과에 맞춰 해당 이슈에서 갱신하며 이 표의 별도 consumer로 세지 않는다.
+
+- **DSN-21 feed plane slice:** `shell/UniversalShell.tsx` root·center plane, `PageHeader.tsx`, `bookmark/BookmarkList.tsx`, `post/PostList.tsx`, `post/PostListItem.tsx`, `post/PostLayout.tsx`, `post/PostThreadLayout.tsx`, `post/PostSourcePresentationView.tsx`의 legacy background·card·border·divider를 분리한다. Route·header·loading·empty host와 연속 feed는 canvas, post·thread row는 no fill/inherit + `border/subtle`, 내부 preview는 `background/surface` + `border/default`를 사용하며 feed·row에는 elevated를 사용하지 않는다.
 
 | Consumer                                                                                                                                                          | 현재 표현                                                               | 판정                 | 목표 token·규칙                                                                      | 후속 소유                                   |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------- |
