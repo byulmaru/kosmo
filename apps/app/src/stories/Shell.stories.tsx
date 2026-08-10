@@ -4,6 +4,7 @@ import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import { getBuildVersionLabel } from '@/buildVersion';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -2274,6 +2275,9 @@ export const UniversalFull: Story = {
 };
 
 export const RightRailFooterLongReleaseTag: Story = {
+  beforeEach: () => {
+    mocked(getBuildVersionLabel).mockReturnValue(longReleaseTag);
+  },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const surface = canvas.getByTestId('long-tag-footer-surface');
@@ -2301,7 +2305,7 @@ export const RightRailFooterLongReleaseTag: Story = {
       }
       testID="long-tag-footer-surface"
     >
-      <RightRailFooter versionLabel={longReleaseTag} />
+      <RightRailFooter />
     </View>
   ),
 };

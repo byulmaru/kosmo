@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { buildVersionLabel } from '@/buildVersion';
+import { getBuildVersionLabel } from '@/buildVersion';
 import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -19,9 +19,7 @@ export function RightRail({ profile: profileKey }: { profile: RightRail_profile$
   return <PostComposer profile={profile} />;
 }
 
-export function RightRailFooter({
-  versionLabel = buildVersionLabel,
-}: { versionLabel?: string } = {}) {
+export function RightRailFooter() {
   const theme = useTheme();
 
   return (
@@ -39,7 +37,7 @@ export function RightRailFooter({
         ·
       </Text>
       <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}>
-        버전: {versionLabel}
+        버전: {getBuildVersionLabel(process.env.EXPO_PUBLIC_RELEASE_TAG)}
       </Text>
     </View>
   );

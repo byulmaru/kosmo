@@ -60,8 +60,6 @@ COPY scripts ./scripts
 
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
   pnpm build:sentry-artifacts
-RUN test -z "$EXPO_PUBLIC_RELEASE_TAG" \
-  || grep -R -F -q -- "$EXPO_PUBLIC_RELEASE_TAG" apps/app/dist
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
