@@ -9,7 +9,7 @@
     "test": "pnpm build && node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
-    "@temporalio/worker": "^1.21.1",
+    "@temporalio/worker": "^1.22.0",
     "tsx": "^4.22.4"
   }
 }
