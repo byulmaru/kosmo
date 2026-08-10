@@ -21,11 +21,6 @@ allowBuilds:
   protobufjs: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
-  # Security fixes GHSA-rgw5-rvv9-x895 for brace-expansion were published
-  # 2026-07-30; exempt only the patched versions while the seven-day gate matures.
-  - brace-expansion@1.1.18
-  - brace-expansion@5.0.9
-  - hono@4.12.34
   # Temporal 1.22.0 clears GHSA-4w2j-m93h-cj5j from the bundled Rust lockfile.
   - '@temporalio/activity@1.22.0'
   - '@temporalio/client@1.22.0'
