@@ -2,6 +2,7 @@ import { PostVisibility } from '@kosmo/core/enums';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Button } from '@/components/ui/Button';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -29,6 +30,7 @@ const ProfileFragment = graphql`
     id
     displayName
     relativeHandle
+    ...ProfileNameBlock_profile
     private {
       defaultPostVisibility
     }
@@ -165,10 +167,7 @@ function ProfileDefaultPostVisibilityControlContents({
         </Text>
       ) : null}
       <View accessibilityLabel={`현재 Profile ${profile.displayName} ${profile.relativeHandle}`}>
-        <Text style={[styles.target, { color: theme.text }]}>{profile.displayName}</Text>
-        <Text style={[styles.targetHandle, { color: theme.textSecondary }]}>
-          {profile.relativeHandle}
-        </Text>
+        <ProfileNameBlock profile={profile} />
       </View>
       <View accessibilityLabel={label} accessibilityRole="radiogroup" style={styles.options}>
         {options.map((option) => {
@@ -252,8 +251,6 @@ function ProfileDefaultPostVisibilityControlContents({
 const styles = StyleSheet.create({
   root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
-  target: { fontFamily: 'SUIT', ...typography.sm },
-  targetHandle: { fontFamily: 'SUIT', ...typography.xsm },
   options: { gap: spacing.sm },
   option: {
     alignItems: 'center',

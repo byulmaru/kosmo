@@ -83,6 +83,18 @@ mock.module('lucide-react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('@/components/profile/ProfileNameBlock', {
+  exports: {
+    ProfileNameBlock: ({ profile }: { profile: { displayName: string; relativeHandle: string } }) =>
+      createElement(
+        'ProfileNameBlock',
+        null,
+        createElement('Text', null, profile.displayName),
+        createElement('Text', null, profile.relativeHandle),
+      ),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('@/components/ui/Avatar', {
   exports: { Avatar: (props: Record<string, unknown>) => createElement('Avatar', props) },
 } as unknown as Parameters<typeof mock.module>[1]);

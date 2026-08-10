@@ -13,6 +13,12 @@ type ProfileNameBlockProps = {
   style?: StyleProp<ViewStyle>;
 };
 
+type ProfileNameBlockViewProps = {
+  displayName: string;
+  relativeHandle: string;
+  style?: StyleProp<ViewStyle>;
+};
+
 const profileNameBlockFragment = graphql`
   fragment ProfileNameBlock_profile on Profile {
     displayName
@@ -21,30 +27,47 @@ const profileNameBlockFragment = graphql`
 `;
 
 export function ProfileNameBlock({ href, profile, style }: ProfileNameBlockProps) {
-  const theme = useTheme();
   const data = useFragment(profileNameBlockFragment, profile);
-  const content = (
-    <>
-      <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
-        {data.displayName}
-      </Text>
-      <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-        {data.relativeHandle}
-      </Text>
-    </>
-  );
 
   if (href) {
     return (
       <NavigationLink href={href}>
         <Pressable accessibilityRole="link" style={StyleSheet.flatten([styles.root, style])}>
-          {content}
+          <ProfileNameBlockView
+            displayName={data.displayName}
+            relativeHandle={data.relativeHandle}
+          />
         </Pressable>
       </NavigationLink>
     );
   }
 
-  return <View style={[styles.root, style]}>{content}</View>;
+  return (
+    <ProfileNameBlockView
+      displayName={data.displayName}
+      relativeHandle={data.relativeHandle}
+      style={style}
+    />
+  );
+}
+
+export function ProfileNameBlockView({
+  displayName,
+  relativeHandle,
+  style,
+}: ProfileNameBlockViewProps) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.root, style]}>
+      <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
+        {displayName}
+      </Text>
+      <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+        {relativeHandle}
+      </Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

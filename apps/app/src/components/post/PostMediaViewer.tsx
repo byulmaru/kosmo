@@ -20,6 +20,7 @@ import {
   View,
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -47,6 +48,7 @@ const PostMediaViewerFragment = graphql`
       }
       displayName
       relativeHandle
+      ...ProfileNameBlock_profile
     }
   }
 `;
@@ -291,11 +293,6 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
     ? `${currentMedia.id}:${currentMedia.url ?? ''}`
     : undefined;
   const bodyText = content?.bodyText ?? '';
-  const profile = {
-    avatarUrl: post.profile.avatar?.url ?? null,
-    displayName: post.profile.displayName,
-    relativeHandle: post.profile.relativeHandle,
-  };
   const theme = useTheme();
   const { height, width } = useWindowDimensions();
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
@@ -526,18 +523,11 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
         >
           <View style={styles.author}>
             <Avatar
-              imageUri={profile.avatarUrl}
-              label={profile.displayName || profile.relativeHandle}
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.relativeHandle}
               size={40}
             />
-            <View style={styles.authorText}>
-              <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
-                {profile.displayName}
-              </Text>
-              <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                {profile.relativeHandle}
-              </Text>
-            </View>
+            <ProfileNameBlock profile={post.profile} />
           </View>
 
           <View style={styles.bodyRegion} testID="post-media-viewer-body-region">
@@ -796,9 +786,6 @@ const styles = StyleSheet.create({
   },
   wideDetail: { flex: 0, minHeight: 0 },
   author: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  authorText: { flex: 1, minWidth: 0 },
-  displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  handle: { fontFamily: 'SUIT', ...typography.sm },
   bodyRegion: { flexShrink: 1, minHeight: 0, position: 'relative' },
   bodyMeasure: { left: 0, opacity: 0, position: 'absolute', right: 0, top: 0 },
   bodyText: { fontFamily: 'Pretendard', ...typography.md },

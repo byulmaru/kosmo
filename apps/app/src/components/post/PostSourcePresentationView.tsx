@@ -1,5 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ProfileNameBlockView } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -273,8 +274,6 @@ function PostBodyPressTarget({
 }
 
 function Author({ profile, showAvatar }: { profile: PresentationProfile; showAvatar: boolean }) {
-  const theme = useTheme();
-
   return (
     <View style={styles.author}>
       {showAvatar ? (
@@ -284,14 +283,11 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
           size={40}
         />
       ) : null}
-      <View style={styles.authorText}>
-        <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
-          {profile.displayName}
-        </Text>
-        <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
-          {profile.relativeHandle}
-        </Text>
-      </View>
+      <ProfileNameBlockView
+        displayName={profile.displayName}
+        relativeHandle={profile.relativeHandle}
+        style={styles.authorText}
+      />
     </View>
   );
 }
@@ -306,8 +302,6 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   authorText: { flex: 1, minWidth: 0 },
-  displayName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  handle: { flexShrink: 1, fontFamily: 'SUIT', ...typography.xsm },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { flex: 1, minWidth: 0 },
   timestamp: { fontFamily: 'SUIT', minHeight: 44, minWidth: 44, paddingTop: 12, ...typography.xsm },

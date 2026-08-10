@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -32,6 +33,7 @@ const followRequestListItemFragment = graphql`
       displayName
       handle
       relativeHandle
+      ...ProfileNameBlock_profile
     }
   }
 `;
@@ -150,14 +152,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
               style={styles.profile}
             >
               <Avatar imageUri={follower.avatar?.url} label={name} size={40} />
-              <View style={styles.copy}>
-                <Text numberOfLines={1} style={[styles.name, { color: theme.text }]}>
-                  {name}
-                </Text>
-                <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-                  {follower.relativeHandle}
-                </Text>
-              </View>
+              <ProfileNameBlock profile={follower} style={styles.copy} />
             </Pressable>
           </NavigationLink>
         ) : (
@@ -253,7 +248,6 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, minWidth: 0 },
   name: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  handle: { fontFamily: 'SUIT', ...typography.xsm },
   actions: { flexDirection: 'row', flexShrink: 0, gap: spacing.sm },
   action: {
     minHeight: actionMinHeight,
