@@ -12,6 +12,10 @@ builder.mutationField('deletePost', (t) =>
             type: Post,
           }),
         }),
+        repostSource: field.field({
+          nullable: true,
+          type: Post,
+        }),
       }),
     }),
     input: {
@@ -28,7 +32,10 @@ builder.mutationField('deletePost', (t) =>
       );
       await result.postCommit(ctx.db);
 
-      return { postId: result.postId };
+      return {
+        postId: result.postId,
+        repostSource: result.sourcePostId,
+      };
     },
   }),
 );

@@ -166,7 +166,8 @@
 #### Scenario: PROD-471 Repost 취소 cache 동기화
 
 - **WHEN** PROD-471의 서버 결과 기반 취소 계약이 완료된 뒤 Repost 취소 mutation이 성공한다
-- **THEN** 앱은 서버가 확정한 Source Post ID, `repostCount`와 `viewerRepost` 결과로 normalized cache를 갱신한다
+- **THEN** `DeletePostPayload.repostSource`는 nullable Source Post의 ID, 서버 확정 `repostCount`와 selected Profile별 `viewerRepost`를 반환한다
+- **AND** 앱은 이 `repostSource` 결과로 normalized Source Post cache를 갱신한다
 - **AND** 관련 없는 전체 refetch 없이 같은 actor Store의 중복 action 상태를 일치시키고 다른 actor Store에는 전파하지 않는다
 
 #### Scenario: mutation 실패
@@ -200,5 +201,5 @@
 
 - **WHEN** Storybook에서 Repost action을 검증한다
 - **THEN** Storybook의 실제 Relay operation이 Post fragment ref를 `PostActionBar_post`에서 `RepostAction_post`까지 전달하고 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
-- **AND** `play` interaction은 menu open·dismiss·항목 선택, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID와 cache 비변경, action별 toast·오류 뒤 재시도, actor reset과 접근성 상태를 확인한다
+- **AND** `play` interaction은 menu open·dismiss·항목 선택, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID, `repostSource` 기반 cache 갱신과 actor Store 격리, action별 toast·오류 뒤 재시도, actor reset과 접근성 상태를 확인한다
 - **AND** 목록·상세 integration은 Action Bar final sibling·link 비중첩과 순수 Repost Source target을 확인한다

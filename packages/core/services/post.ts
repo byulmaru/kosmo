@@ -174,11 +174,18 @@ export const deletePost = async (
     readonly postId: string;
   },
   handle?: DatabaseHandle,
-): Promise<{ readonly postCommit: PostCommit; readonly postId: string }> => {
+): Promise<{
+  readonly postCommit: PostCommit;
+  readonly postId: string;
+  readonly sourcePostId: string | null;
+}> => {
   const { deleted, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
     const post = await tx
       .select({
+        currentContentId: Posts.currentContentId,
         profileId: Posts.profileId,
+        replyParentId: Posts.replyParentId,
+        repostSourceId: Posts.repostSourceId,
       })
       .from(Posts)
       .where(eq(Posts.id, postId))
@@ -210,7 +217,10 @@ export const deletePost = async (
       })
       .then(first);
 
-    return { deleted, result: { postId } };
+    const sourcePostId =
+      post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
+
+    return { deleted, result: { postId, sourcePostId } };
   });
 
   const pureRepost =
