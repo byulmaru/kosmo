@@ -28,7 +28,7 @@
 
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
-{{- range $role := list "api" "fedify" -}}
+{{- range $role := list "api" "worker" -}}
 {{- $config := get $credentials $role | default dict -}}
 {{- $databaseUrl := get $config "databaseUrl" | default "" -}}
 {{- $passwordSecret := get $config "passwordSecret" | default dict -}}

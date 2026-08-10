@@ -71,14 +71,15 @@ spec:
                   key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
-            {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" }}
-            - name: FEDIFY_DATABASE_PASSWORD
+            {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
+            {{- if $workerDatabase.databaseUrl }}
+            - name: WORKER_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ dig "fedify" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) | quote }}
-                  key: {{ dig "fedify" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote }}
-            - name: FEDIFY_DATABASE_URL
-              value: {{ dig "fedify" "databaseUrl" "" (.Values.postgres.credentials | default dict) | quote }}
+                  name: {{ $workerDatabase.passwordSecret.name | quote }}
+                  key: {{ $workerDatabase.passwordSecret.key | quote }}
+            - name: WORKER_DATABASE_URL
+              value: {{ $workerDatabase.databaseUrl | quote }}
             {{- end }}
           envFrom:
             - secretRef:
