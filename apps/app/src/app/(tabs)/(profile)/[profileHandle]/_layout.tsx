@@ -1,7 +1,8 @@
 import { Link, Slot, useGlobalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
@@ -99,7 +100,7 @@ function ProfileRouteContainer({ children }: { children: ReactNode }) {
   return Platform.OS === 'web' ? (
     <View style={styles.webRoot}>{children}</View>
   ) : (
-    <ScrollView style={styles.nativeRoot}>{children}</ScrollView>
+    <PaginationScrollView style={styles.nativeRoot}>{children}</PaginationScrollView>
   );
 }
 

@@ -870,6 +870,58 @@ const homeTimeline = timeline(
     linkedSourceQuote,
   ].map(withReactionViewerState),
 );
+const paginationHomeInitialPost = withReactionViewerState(
+  post({ bodyText: 'Home 첫 page 게시글', id: 'post-pagination-home-initial' }),
+);
+const paginationHomeNextPost = withReactionViewerState(
+  post({ bodyText: 'Home 다음 page 게시글', id: 'post-pagination-home-next' }),
+);
+const paginationHomeCreatedPost = withReactionViewerState(
+  post({ bodyText: 'Home에 새로 작성한 게시글', id: 'post-pagination-home-created' }),
+);
+const paginationProfileInitialPost = withReactionViewerState(
+  post({ bodyText: 'Profile 첫 page 게시글', id: 'post-pagination-profile-initial' }),
+);
+const paginationProfileNextPost = withReactionViewerState(
+  post({ bodyText: 'Profile 다음 page 게시글', id: 'post-pagination-profile-next' }),
+);
+
+function paginatedTimeline(storyPost: StoryPost, hasNextPage: boolean) {
+  const connection = timeline(storyPost);
+  return {
+    ...connection,
+    pageInfo: {
+      ...connection.pageInfo,
+      endCursor: hasNextPage ? storyPost.id : null,
+      hasNextPage,
+      startCursor: storyPost.id,
+    },
+  };
+}
+
+const paginationHomeTimeline = paginatedTimeline(paginationHomeInitialPost, true);
+const paginationProfile = {
+  ...profileWithPosts([paginationProfileInitialPost], { id: 'profile-posts-content' }),
+  posts: paginatedTimeline(paginationProfileInitialPost, true),
+};
+const paginationHomeNextPageResponse = {
+  data: { homeTimeline: paginatedTimeline(paginationHomeNextPost, false) },
+};
+const paginationProfileNextPageResponse = {
+  data: {
+    node: {
+      __typename: 'Profile',
+      id: paginationProfile.id,
+      posts: paginatedTimeline(paginationProfileNextPost, false),
+    },
+  },
+};
+const homeAppendPaginationRequestObserver = fn();
+const profileAppendPaginationRequestObserver = fn();
+const homeRetryPaginationRequestObserver = fn();
+const homeLoadingPaginationRequestObserver = fn();
+const homeIdentityPaginationRequestObserver = fn();
+const homePrependPaginationRequestObserver = fn();
 const deletionHomeTimeline = timeline(withReactionViewerState(shortPost));
 
 const PostsStoriesQuery = graphql`
@@ -919,30 +971,19 @@ const PostsStoriesQuery = graphql`
         ...PostList_profile @alias(as: "postList")
       }
     }
-    homeTimeline(first: 20) @connection(key: "PostList_homeTimeline") {
-      edges {
-        cursor
-        node {
-          id
-          ...PostListItem_post
-        }
-      }
-      ...PostList_homeTimeline
-    }
+    ...PostList_home @arguments(count: 20) @alias(as: "home")
   }
 `;
 
 const PostDeletionListEdgeSafetyQuery = graphql`
   query PostDeletionListEdgeSafetyQuery {
+    ...PostList_home @arguments(count: 1) @alias(as: "home")
     deletionProfile: node(id: "profile-posts-deletion") {
       __typename
       ... on Profile {
         id
         ...PostList_profile @alias(as: "postList")
       }
-    }
-    deletionHomeTimeline: homeTimeline(first: 1) {
-      ...PostList_homeTimeline
     }
   }
 `;
@@ -983,7 +1024,7 @@ function usePostsStoryData() {
     data.composerProfile?.__typename !== 'Profile' ||
     data.contentPostsProfile?.__typename !== 'Profile' ||
     data.emptyPostsProfile?.__typename !== 'Profile' ||
-    !data.homeTimeline
+    !data.home
   ) {
     throw new Error('PostsStoriesQuery must return a home timeline fixture.');
   }
@@ -1000,7 +1041,7 @@ function usePostsStoryData() {
     ),
     contentPostsProfile: requireFragment(data.contentPostsProfile.postList, 'content post list'),
     emptyPostsProfile: requireFragment(data.emptyPostsProfile.postList, 'empty post list'),
-    homeTimeline: data.homeTimeline,
+    home: requireFragment(data.home, 'home post list'),
     posts,
   };
 }
@@ -1281,7 +1322,7 @@ function PostListCatalog({ onRetry }: PostsStoryArgs) {
         <PostList profile={data.contentPostsProfile} />
       </Section>
       <Section title="Home timeline content">
-        <PostList homeTimeline={data.homeTimeline} />
+        <PostList home={data.home} />
       </Section>
     </Catalog>
   );
@@ -1294,7 +1335,7 @@ function ProductionRepostQuoteLists() {
     <Catalog>
       <StoryPathname testID="current-story-pathname" />
       <View testID="production-home-reposts">
-        <PostList homeTimeline={data.homeTimeline} />
+        <PostList home={data.home} />
       </View>
       <View testID="production-profile-reposts">
         <PostList profile={data.contentPostsProfile} />
@@ -1303,12 +1344,56 @@ function ProductionRepostQuoteLists() {
   );
 }
 
+function HomePostListPaginationStory() {
+  return <PostList home={usePostsStoryData().home} />;
+}
+
+function ProfilePostListPaginationStory() {
+  return <PostList profile={usePostsStoryData().contentPostsProfile} />;
+}
+
+function HomePostComposerPaginationStory() {
+  const data = usePostsStoryData();
+
+  return (
+    <>
+      <PostComposer profile={data.composerProfile} />
+      <PostList home={data.home} />
+    </>
+  );
+}
+
+function HomePostListPaginationIdentityStory() {
+  const [identity, setIdentity] = useState<'actor-a' | 'actor-b'>('actor-a');
+  const data = usePostsStoryData();
+
+  return (
+    <>
+      <Pressable accessibilityRole="button" onPress={() => setIdentity('actor-b')}>
+        <Text>다른 actor로 전환</Text>
+      </Pressable>
+      {identity === 'actor-a' ? (
+        <PostList home={data.home} key={identity} />
+      ) : (
+        <PostList key={identity} loading />
+      )}
+    </>
+  );
+}
+
+function scrollStoryToEnd(canvasElement: HTMLElement) {
+  const storyWindow = canvasElement.ownerDocument.defaultView!;
+  storyWindow.scrollTo(0, storyWindow.document.documentElement.scrollHeight);
+  storyWindow.dispatchEvent(new Event('scroll'));
+  return storyWindow;
+}
+
 function PostDeletionListEdgeSafety() {
   const data = useLazyLoadQuery<PostDeletionListEdgeSafetyQueryType>(
     PostDeletionListEdgeSafetyQuery,
     {},
   );
-  if (data.deletionProfile?.__typename !== 'Profile' || !data.deletionHomeTimeline) {
+  if (data.deletionProfile?.__typename !== 'Profile' || !data.home) {
     throw new Error('PostDeletionListEdgeSafetyQuery must return both list fixtures.');
   }
 
@@ -1316,7 +1401,7 @@ function PostDeletionListEdgeSafety() {
     <SessionProvider>
       <Catalog>
         <View testID="post-deletion-home-list">
-          <PostList homeTimeline={data.deletionHomeTimeline} />
+          <PostList home={requireFragment(data.home, 'deletion home list')} />
         </View>
         <View testID="post-deletion-profile-list">
           <PostList
@@ -1439,7 +1524,7 @@ function ProductionReactionMutationSurfaces() {
   return (
     <Catalog>
       <View testID="production-home-reposts">
-        <PostList homeTimeline={data.homeTimeline} />
+        <PostList home={data.home} />
       </View>
       <View testID="production-profile-reposts">
         <PostList profile={data.contentPostsProfile} />
@@ -1951,7 +2036,7 @@ function ReplyListSurfaceStory() {
   return (
     <Catalog>
       <StoryPathname testID="reply-success-pathname" />
-      <PostList homeTimeline={data.homeTimeline} replyProfile={data.replyComposerProfile} />
+      <PostList home={data.home} replyProfile={data.replyComposerProfile} />
     </Catalog>
   );
 }
@@ -2676,7 +2761,13 @@ const deletionOwnerSession = shellQuery();
 const deletionOwnerRelayData = {
   ...postsStoryRelayData,
   currentSession: deletionOwnerSession.currentSession,
+  homeTimeline: deletionHomeTimeline,
   me: deletionOwnerSession.me,
+};
+const postListPaginationRelayData = {
+  ...postsStoryRelayData,
+  contentPostsProfile: paginationProfile,
+  homeTimeline: paginationHomeTimeline,
 };
 
 const meta = {
@@ -2961,6 +3052,165 @@ export const ListLoadingErrorEmptyAndContent: Story = {
     await expect(args.onRetry).toHaveBeenCalledTimes(1);
   },
   render: (args) => <PostListCatalog onRetry={args.onRetry} />,
+};
+
+export const HomePostListAutomaticallyLoadsNextPageOnce: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      paginationRequestObserver: homeAppendPaginationRequestObserver,
+      paginationResponses: [paginationHomeNextPageResponse],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = scrollStoryToEnd(canvasElement);
+
+    await expect(canvas.findByText('Home 다음 page 게시글')).resolves.toBeVisible();
+    expect(canvas.getByText('Home 첫 page 게시글')).toBeVisible();
+    expect(homeAppendPaginationRequestObserver).toHaveBeenCalledOnce();
+    expect(homeAppendPaginationRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'PostListHomeNextPageQuery' }),
+      expect.objectContaining({ count: 20, cursor: paginationHomeInitialPost.id }),
+    );
+
+    storyWindow.dispatchEvent(new Event('scroll'));
+    storyWindow.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(homeAppendPaginationRequestObserver).toHaveBeenCalledOnce());
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <HomePostListPaginationStory />,
+};
+
+export const ProfilePostListAutomaticallyLoadsNextPage: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      paginationRequestObserver: profileAppendPaginationRequestObserver,
+      paginationResponses: [paginationProfileNextPageResponse],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = scrollStoryToEnd(canvasElement);
+
+    await expect(canvas.findByText('Profile 다음 page 게시글')).resolves.toBeVisible();
+    expect(canvas.getByText('Profile 첫 page 게시글')).toBeVisible();
+    expect(profileAppendPaginationRequestObserver).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'PostListProfileNextPageQuery' }),
+      expect.objectContaining({ count: 20, cursor: paginationProfileInitialPost.id }),
+    );
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <ProfilePostListPaginationStory />,
+};
+
+export const HomePostListPageFailureRequiresManualRetry: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      paginationRequestObserver: homeRetryPaginationRequestObserver,
+      paginationResponses: [{ error: 'Home 다음 page 실패' }, paginationHomeNextPageResponse],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = scrollStoryToEnd(canvasElement);
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 더 불러오지 못했어요.',
+    );
+    expect(canvas.getByText('Home 첫 page 게시글')).toBeVisible();
+    storyWindow.dispatchEvent(new Event('scroll'));
+    expect(homeRetryPaginationRequestObserver).toHaveBeenCalledOnce();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(canvas.findByText('Home 다음 page 게시글')).resolves.toBeVisible();
+    expect(homeRetryPaginationRequestObserver).toHaveBeenCalledTimes(2);
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <HomePostListPaginationStory />,
+};
+
+export const HomePostListPageLoadingPreservesRows: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      paginationLoading: true,
+      paginationRequestObserver: homeLoadingPaginationRequestObserver,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = scrollStoryToEnd(canvasElement);
+
+    const loadingText = await canvas.findByText('게시글을 더 불러오는 중입니다.');
+    expect(loadingText).toHaveAttribute('aria-live', 'polite');
+    expect(canvas.getByText('Home 첫 page 게시글')).toBeVisible();
+    expect(homeLoadingPaginationRequestObserver).toHaveBeenCalledOnce();
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <HomePostListPaginationStory />,
+};
+
+export const HomePostListPageFailureClearsOnIdentityChange: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      paginationRequestObserver: homeIdentityPaginationRequestObserver,
+      paginationResponses: [{ error: '이전 actor Home 다음 page 실패' }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const storyWindow = scrollStoryToEnd(canvasElement);
+
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '게시글을 더 불러오지 못했어요.',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '다른 actor로 전환' }));
+    await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument());
+    expect(homeIdentityPaginationRequestObserver).toHaveBeenCalledOnce();
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <HomePostListPaginationIdentityStory />,
+};
+
+export const HomePostPrependAndPaginationShareConnection: Story = {
+  parameters: {
+    relay: {
+      data: postListPaginationRelayData,
+      mutationResponse: { createPost: { post: paginationHomeCreatedPost } },
+      paginationRequestObserver: homePrependPaginationRequestObserver,
+      paginationResponses: [paginationHomeNextPageResponse],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(
+      canvas.getByRole('textbox', { name: '게시글 본문' }),
+      'Home에 새로 작성한 게시글',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+    await expect(canvas.findByText('Home에 새로 작성한 게시글')).resolves.toBeVisible();
+
+    const storyWindow = scrollStoryToEnd(canvasElement);
+    await expect(canvas.findByText('Home 다음 page 게시글')).resolves.toBeVisible();
+
+    expect(canvas.getAllByText('Home에 새로 작성한 게시글')).toHaveLength(1);
+    expect(canvas.getAllByText('Home 첫 page 게시글')).toHaveLength(1);
+    expect(canvas.getAllByText('Home 다음 page 게시글')).toHaveLength(1);
+    const rows = canvas.getAllByRole('article').map((row) => row.textContent ?? '');
+    expect(rows.findIndex((row) => row.includes('Home에 새로 작성한 게시글'))).toBeLessThan(
+      rows.findIndex((row) => row.includes('Home 첫 page 게시글')),
+    );
+    expect(rows.findIndex((row) => row.includes('Home 첫 page 게시글'))).toBeLessThan(
+      rows.findIndex((row) => row.includes('Home 다음 page 게시글')),
+    );
+    expect(homePrependPaginationRequestObserver).toHaveBeenCalledOnce();
+    storyWindow.scrollTo(0, 0);
+  },
+  render: () => <HomePostComposerPaginationStory />,
 };
 
 export const ProductionRepostQuoteListIntegration: Story = {
