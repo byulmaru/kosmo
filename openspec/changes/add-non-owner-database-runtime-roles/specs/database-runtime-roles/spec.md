@@ -65,3 +65,19 @@
 - **WHEN** provision된 Fedify credential로 검증 세션을 연다
 - **THEN** `current_user`는 `kosmo_fedify`이고 owner/API 역할 획득은 불가능하며 `BYPASSRLS`는 활성이다
 - **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
+
+### Requirement: production apply는 별도 수동 승인을 요구한다
+
+**Authority / Provenance:** Linear `PROD-369`; 2026-08-10 사용자 결정. PR merge, manifest 준비 또는 CI 통과는 production sync/apply를 승인하지 않으며(MUST NOT), 운영자는 Vault source 준비와 rollback·검증 절차를 확인한 뒤 사용자의 별도 명시적 승인을 받아야 한다(MUST).
+
+#### Scenario: 승인 없이 manifest가 준비됨
+
+- **WHEN** PR과 Helm manifest가 검증됐지만 production apply에 대한 별도 명시적 승인이 없다
+- **THEN** 운영자는 production에 DatabaseRole이나 VaultStaticSecret을 생성·동기화하지 않는다
+- **AND** 기존 production owner workload와 migration 경계만 유지한다
+
+#### Scenario: 승인 뒤 production에 적용함
+
+- **WHEN** Vault source와 rollback·검증 절차가 준비되고 사용자가 production apply를 명시적으로 승인한다
+- **THEN** 승인된 release와 범위에 한해 두 runtime role과 credential source를 적용한다
+- **AND** 적용 직후 destination Secret, DatabaseRole readiness와 실제 credential 경계를 검증한다

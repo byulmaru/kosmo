@@ -64,6 +64,18 @@
 - Consequences: rollback 뒤 PostgreSQL에 unused role이 남을 수 있으나 workload와 객체 privilege에는 연결되지 않는다. 완전 제거는 별도 확인·cleanup 절차가 필요하다.
 - Confirmation / Follow-up: Render annotation/reclaim policy와 rollback 시 기존 workload Secret 무변경을 확인한다.
 
+### PR merge와 production apply 승인을 분리한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: Linear `PROD-369`; 2026-08-10 사용자 결정
+- Status: Active
+- Context / Problem: role·credential manifest는 additive하지만 production Vault와 PostgreSQL identity를 생성·조정한다. PR merge나 CI 통과만으로 자동 반영하면 Vault 준비, rollback 및 실제 credential 검증 gate를 건너뛸 수 있다.
+- Decision Outcome: PR merge, manifest 준비 또는 CI 통과를 production apply 승인으로 간주하지 않는다. Vault source와 rollback·검증 절차를 확인하고 사용자가 별도로 명시적으로 승인한 뒤에만 production sync/apply를 수행한다.
+- Alternatives Considered: merge 뒤 자동 sync는 전달 속도는 높지만 운영 준비와 승인 경계를 결합하므로 선택하지 않았다. PR을 계속 Draft로 두는 방식은 코드 리뷰 준비 상태와 production 승인 상태를 혼동하므로 선택하지 않았다.
+- Consequences: PR은 Ready/Mergeable 상태여도 production에는 반영되지 않을 수 있다. live 검증 task는 승인·apply 이후까지 미완료로 남는다.
+- Confirmation / Follow-up: Production 변경 전에 승인 기록과 대상 release를 확인하고, 적용 직후 VSO destination·DatabaseRole readiness·실제 credential 경계를 검증한다.
+
 ## Remaining Decisions
 
 - 없음.

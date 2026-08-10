@@ -18,6 +18,7 @@ Production database에 기존 owner workload와 migration 경계를 바꾸지 �
 - 두 credential은 각각 `kubernetes/kosmo/prod/api-database`, `kubernetes/kosmo/prod/fedify-database` Vault path와 `<release-prefix>-postgres-api`, `<release-prefix>-postgres-fedify` basic-auth Secret을 사용하고 기존 API/Web/Worker workload나 migration Job에 주입하지 않는다. API Rollout에는 Fedify credential을 주입하지 않는다. `<release-prefix>`는 runtime 접미사를 보존하도록 먼저 제한한다.
 - schema/table/sequence GRANT, default privilege, 도메인 RLS policy와 workload credential 선택은 포함하지 않는다.
 - DatabaseRole은 retain하고 삭제·prune는 수동 확인을 요구한다.
+- PR merge, manifest 준비 또는 CI 통과는 production apply 승인이 아니다. Vault source와 rollback·검증 절차를 확인하고 사용자의 별도 명시적 승인을 받은 뒤에만 production sync/apply를 수행한다.
 
 **Verification**
 
@@ -29,5 +30,5 @@ Production database에 기존 owner workload와 migration 경계를 바꾸지 �
 - [x] 1.2 `kosmo_api`, `kosmo_fedify` DatabaseRole을 비소유·비상승 속성, API `BYPASSRLS=false`·Fedify `BYPASSRLS=true`, 빈 membership과 retain lifecycle로 선언한다.
 - [x] 1.3 Dev/prod/bootstrap 및 기본 비활성 Worker render 회귀 검증을 수행하고 API/Fedify bypass attribute 및 긴 release-name suffix 보존·noncollision assertion을 포함한 Helm lint/render, formatting, strict OpenSpec validation을 통과시킨다.
 - [x] 1.4 Diff와 render에 객체 GRANT/default privilege, 도메인 RLS policy, migration SQL 또는 workload credential 선택 변경이 없는지 self-review한다. 기존 API/Web/Worker owner fallback과 migration credential은 unchanged다.
-- [ ] 1.5 동명 role의 선행 존재 여부와 Production Vault source를 확인하고, sync 뒤 두 destination Secret·DatabaseRole readiness 및 실제 credential role 경계를 검증한다.
+- [ ] 1.5 동명 role의 선행 존재 여부와 Production Vault source·rollback·검증 절차를 확인하고, 사용자의 별도 명시적 production apply 승인을 받은 뒤 sync하여 두 destination Secret·DatabaseRole readiness 및 실제 credential role 경계를 검증한다.
 - [ ] 1.6 최신 canonical·Linear와 구현·OpenSpec 정합성을 재확인하고 전체 완료 증거가 준비되면 change를 archive한다.

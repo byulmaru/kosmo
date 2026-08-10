@@ -30,6 +30,7 @@ PROD-369은 이 경계를 바꾸지 않고 아직 workload가 사용하지 않�
 - `DatabaseRole`의 `inRoles`는 실제 membership을 reconcile한다. 기본값에만 의존하지 않고 빈 목록을 명시해 owner/migration/상대 role membership이 없음을 review 가능하게 한다.
 - Role CR을 삭제해도 production DB identity를 자동 삭제하지 않는 것이 선택된 rollback 정책이다.
 - CloudNativePG는 같은 이름의 기존 role도 DatabaseRole 선언에 맞춰 조정할 수 있으므로 live 적용 전에 `kosmo_api`, `kosmo_fedify`의 선행 존재 여부와 현재 속성·membership을 민감 정보 없이 확인해야 한다.
+- PR merge, manifest 준비와 CI 성공은 production apply 승인이 아니다. Vault source와 rollback·검증 절차를 확인하고 사용자의 별도 명시적 승인을 받기 전에는 Argo sync나 직접 apply를 수행하지 않는다.
 
 ### Recommended Approach
 
@@ -62,7 +63,7 @@ PROD-369은 이 경계를 바꾸지 않고 아직 workload가 사용하지 않�
 
 1. Dev render에 두 runtime DatabaseRole/VaultStaticSecret이 없고 기존 dev workload가 동일함을 확인한다.
 2. Prod render에 두 별도 Vault path/basic-auth Secret/DatabaseRole이 있고 기존 API/Web와 기본 비활성 Worker의 `-app` owner fallback 및 migration role/Secret이 동일함을 확인한다.
-3. Production Vault에 두 path의 `username`, `password`를 준비하고 동명 PostgreSQL role의 선행 존재 여부·속성·membership을 확인한 뒤 Helm 선언을 적용한다.
+3. Production Vault에 두 path의 `username`, `password`를 준비하고 동명 PostgreSQL role의 선행 존재 여부·속성·membership 및 rollback·검증 절차를 확인한다. 사용자의 별도 명시적 production apply 승인을 받은 뒤에만 Helm 선언을 적용한다.
 4. VSO destination Secret과 DatabaseRole applied 상태를 확인하고 실제 credential로 role identity·attribute·membership을 민감 정보 없이 검증한다.
 5. Rollback은 Helm 선언을 이전 revision으로 되돌리되 Prune 확인을 거치고 PostgreSQL role은 retain한다. 기존 workload와 migration은 전 과정에서 기존 credential을 유지한다.
 
