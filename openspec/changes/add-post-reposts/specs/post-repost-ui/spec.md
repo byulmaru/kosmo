@@ -201,5 +201,5 @@
 
 - **WHEN** Storybook에서 Repost action을 검증한다
 - **THEN** Storybook의 실제 Relay operation이 Post fragment ref를 `PostActionBar_post`에서 `RepostAction_post`까지 전달하고 선택·미선택, pending, 성공, 오류와 selected Profile 변경 상태를 포함한다
-- **AND** `play` interaction은 menu open·dismiss·항목 선택, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID와 cache 비변경, action별 toast·오류 뒤 재시도, actor reset과 접근성 상태를 확인한다
+- **AND** `play` interaction은 menu open·dismiss·항목 선택, pending 중복 호출 방지, 생성 성공, 정확한 취소 ID, `repostSource` 기반 cache 갱신과 actor Store 격리, action별 toast·오류 뒤 재시도, actor reset과 접근성 상태를 확인한다
 - **AND** 목록·상세 integration은 Action Bar final sibling·link 비중첩과 순수 Repost Source target을 확인한다
