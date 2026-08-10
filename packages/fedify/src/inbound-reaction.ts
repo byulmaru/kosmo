@@ -11,7 +11,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { EmojiReact } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const fallbackReactionType = '❤️';
 

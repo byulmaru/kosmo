@@ -29,7 +29,7 @@ import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 type LocalPostNote = {
   readonly authorHandle: string;

@@ -12,7 +12,7 @@ import { findStoredRemoteProfileActorByUri } from './remote-actor-materializatio
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const isExpectedRepostRejection = (error: unknown): boolean =>
   error instanceof NotFoundError ||

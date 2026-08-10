@@ -28,7 +28,7 @@ import { and, eq } from 'drizzle-orm';
 import { handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import type { InboxContext } from '@fedify/fedify';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 after(async () => {
   await pg.end();

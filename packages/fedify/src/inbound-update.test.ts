@@ -16,7 +16,7 @@ import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 import type { handleInboundAccept as HandleInboundAccept } from './inbound-accept';
 import type { handleInboundUpdate as HandleInboundUpdate } from './inbound-update';
 

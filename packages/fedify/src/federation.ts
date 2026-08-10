@@ -17,7 +17,6 @@ import { db, first, Profiles } from '@kosmo/core/db';
 import { ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq } from 'drizzle-orm';
-import { createFedifyExecutionContext } from './fedify-execution';
 import { handleInboundAccept } from './inbound-accept';
 import { handleInboundAnnounce } from './inbound-announce';
 import { handleInboundCreate } from './inbound-create';
@@ -44,9 +43,17 @@ import { dispatchLocalProfileFollow } from './local-profile-follow';
 import { createLocalProfilePerson } from './local-profile-person';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation, FederationFetchOptions } from '@fedify/fedify';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { DatabaseHandle } from '@kosmo/core/db';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
+
+export type FedifyExecutionContext = {
+  readonly db: DatabaseHandle;
+};
+
+export const createFedifyExecutionContext = (
+  handle: DatabaseHandle = db,
+): FedifyExecutionContext => ({ db: handle });
 
 export const federation: Federation<FedifyExecutionContext> =
   createFederation<FedifyExecutionContext>({

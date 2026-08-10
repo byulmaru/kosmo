@@ -35,7 +35,7 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const getNow = () => Temporal.Now.instant();
 

@@ -12,7 +12,6 @@ import {
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
-import { createFedifyExecutionContext } from './fedify-execution';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -115,7 +114,7 @@ describe('WebFinger local profile handle mapping', () => {
           'acct:alice@127.0.0.1:4173',
         )}`,
       ),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
 
     assert.equal(response.status, 200);
@@ -150,7 +149,7 @@ describe('WebFinger local profile handle mapping', () => {
 
     const response = await federation.fetch(
       new Request(`${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(actorUri)}`),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
 
     assert.equal(response.status, 200);
@@ -176,7 +175,7 @@ describe('WebFinger local profile handle mapping', () => {
     for (const query of ['', '?resource=not-a-url']) {
       const response = await federation.fetch(
         new Request(`${publicOrigin}/.well-known/webfinger${query}`),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
 
       assert.equal(response.status, 400);
@@ -189,7 +188,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(
           `${publicOrigin}/.well-known/webfinger?resource=${encodeURIComponent(resource)}`,
         ),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
 
       assert.equal(response.status, 404);
@@ -207,7 +206,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(
           `http://preview.example/.well-known/webfinger?resource=${encodeURIComponent(resource)}`,
         ),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
 
       assert.equal(response.status, 404);
@@ -239,7 +238,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
           headers: { accept: 'application/activity+json' },
         }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
     const response = await requestActor();
     const actor = (await response.json()) as {
@@ -313,7 +312,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(`${publicOrigin}/ap/actor/${profile.id}`, {
           headers: { accept: 'application/activity+json' },
         }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
 
       assert.equal(response.status, 200);
@@ -396,7 +395,7 @@ describe('WebFinger local profile handle mapping', () => {
       const collectionUri = `${publicOrigin}/ap/actor/${profile.id}/${collection}`;
       const response = await federation.fetch(
         new Request(collectionUri, { headers: { accept: 'application/activity+json' } }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
       const json = (await response.json()) as {
         first?: string;
@@ -420,7 +419,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(`${collectionUri}?cursor=arbitrary`, {
           headers: { accept: 'application/activity+json' },
         }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
       assert.equal(pageResponse.status, 404);
 
@@ -428,7 +427,7 @@ describe('WebFinger local profile handle mapping', () => {
         new Request(collectionUri.replace(publicOrigin, 'https://alternate.example'), {
           headers: { accept: 'application/activity+json' },
         }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
       assert.equal(alternateHostResponse.status, 404);
     }
@@ -462,7 +461,7 @@ describe('WebFinger local profile handle mapping', () => {
           new Request(`${publicOrigin}/ap/actor/${profileId}/${collection}`, {
             headers: { accept: 'application/activity+json' },
           }),
-          { contextData: createFedifyExecutionContext() },
+          { contextData: { db } },
         );
 
         assert.equal(response.status, 404);
@@ -478,7 +477,7 @@ describe('WebFinger local profile handle mapping', () => {
       new Request(`${publicOrigin}/ap/actor/019f6f67-1111-7777-8888-123456789abc`, {
         headers: { accept: 'application/activity+json' },
       }),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
 
     assert.equal(response.status, 404);
@@ -494,7 +493,7 @@ describe('WebFinger local profile handle mapping', () => {
       new Request(`${publicOrigin}/ap/actor/${profile.id.toUpperCase()}`, {
         headers: { accept: 'application/activity+json' },
       }),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
 
     assert.equal(response.status, 404);

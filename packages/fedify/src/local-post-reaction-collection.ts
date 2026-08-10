@@ -17,7 +17,7 @@ import { isCanonicalPostId } from './activitypub-post-uri';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
 import type { SQLWrapper } from 'drizzle-orm';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';

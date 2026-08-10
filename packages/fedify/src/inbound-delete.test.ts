@@ -29,13 +29,12 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { eq, ne } from 'drizzle-orm';
-import { createFedifyExecutionContext } from './fedify-execution';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type { handleInboundDelete as handleInboundDeleteType } from './inbound-delete';
 
@@ -464,11 +463,11 @@ describe('inbound Delete dispatch', () => {
 
     const personalResponse = await fixture.federation.fetch(
       await fixture.createSignedDeleteRequest('/ap/actor/local/inbox', personalUri),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
     const sharedResponse = await fixture.federation.fetch(
       await fixture.createSignedDeleteRequest('/inbox', sharedUri),
-      { contextData: createFedifyExecutionContext() },
+      { contextData: { db } },
     );
 
     assert.equal(personalResponse.status, 202, await personalResponse.text());

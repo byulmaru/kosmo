@@ -10,7 +10,7 @@ import {
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 export const handleInboundAccept = async (
   context: InboxContext<FedifyExecutionContext>,

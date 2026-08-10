@@ -21,11 +21,10 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { resolveActivityPubPostUri } from './activitypub-post-uri';
-import { federation } from './federation';
-import { createFedifyExecutionContext } from './fedify-execution';
+import { createFedifyExecutionContext, federation } from './federation';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const FollowerProfiles = alias(Profiles, 'repost_delivery_follower_profile');
 const FollowerInstances = alias(Instances, 'repost_delivery_follower_instance');

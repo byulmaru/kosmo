@@ -32,12 +32,11 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
-import { createFedifyExecutionContext } from './fedify-execution';
 import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 import type * as LocalPostNoteModule from './local-post-note';
 import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
 
@@ -382,7 +381,7 @@ describe('ActivityPub Local Post Note', () => {
     });
     const allowedRequest = await signedFixture.createRequest(followersPost.id);
     const allowed = await signedFixture.federation.fetch(allowedRequest, {
-      contextData: createFedifyExecutionContext(),
+      contextData: { db },
       onUnauthorized: () => new Response('Not found', { status: 404 }),
     });
     assert.equal(allowed.status, 200);
@@ -406,7 +405,7 @@ describe('ActivityPub Local Post Note', () => {
         headers: { accept: 'application/activity+json' },
       }),
       {
-        contextData: createFedifyExecutionContext(),
+        contextData: { db },
         onUnauthorized: () => new Response('Not found', { status: 404 }),
       },
     );
@@ -749,7 +748,7 @@ describe('ActivityPub Local Post Note', () => {
           headers: { accept: 'application/activity+json' },
         }),
         {
-          contextData: createFedifyExecutionContext(),
+          contextData: { db },
           onNotFound: () => new Response('Not found', { status: 404 }),
           onUnauthorized: () => new Response('Not found', { status: 404 }),
         },
@@ -815,7 +814,7 @@ const createContext = (): RequestContext<FedifyExecutionContext> => {
   );
   return federation.createContext(
     new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
-    createFedifyExecutionContext(),
+    { db },
   );
 };
 
@@ -894,7 +893,7 @@ const createSignedFederation = async () => {
   const fetch = async (postId: string) => {
     const request = await createRequest(postId);
     return federation.fetch(request, {
-      contextData: createFedifyExecutionContext(),
+      contextData: { db },
       onUnauthorized: () => new Response('Not found', { status: 404 }),
     });
   };
@@ -907,7 +906,7 @@ const createSignedFederation = async () => {
       remoteKeyUri,
     );
     return federation.fetch(request, {
-      contextData: createFedifyExecutionContext(),
+      contextData: { db },
       onUnauthorized: () => new Response('Not found', { status: 404 }),
       onNotFound: () => new Response('Not found', { status: 404 }),
     });

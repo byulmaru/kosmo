@@ -1,5 +1,4 @@
-import { federation } from './federation';
-import { createFedifyExecutionContext } from './fedify-execution';
+import { createFedifyExecutionContext, federation } from './federation';
 import { findOrMaterializeRemoteProfileActor } from './remote-actor-materialization';
 
 export const findOrMaterializeRemoteProfileActorForProfileSearch = async ({

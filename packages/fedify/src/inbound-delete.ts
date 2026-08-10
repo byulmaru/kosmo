@@ -21,7 +21,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Delete: ${url}`);

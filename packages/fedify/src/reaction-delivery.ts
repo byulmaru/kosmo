@@ -19,8 +19,7 @@ import {
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { federation } from './federation';
-import { createFedifyExecutionContext } from './fedify-execution';
+import { createFedifyExecutionContext, federation } from './federation';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import type { SenderKeyPair } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';

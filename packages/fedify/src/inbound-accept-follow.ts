@@ -7,7 +7,7 @@ import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 export const handleInboundAcceptFollow = async ({
   context,

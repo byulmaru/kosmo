@@ -18,7 +18,7 @@ import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';

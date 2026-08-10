@@ -17,7 +17,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<

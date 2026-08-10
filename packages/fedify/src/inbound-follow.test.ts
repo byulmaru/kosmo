@@ -12,14 +12,12 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne, sql } from 'drizzle-orm';
-import { createFedifyExecutionContext } from './fedify-execution';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
 import type * as FederationModule from './federation';
-import type { FedifyExecutionContext } from './fedify-execution';
 import type * as InboundFollow from './inbound-follow';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -186,7 +184,7 @@ describe('inbound Follow and Undo', () => {
         object: localActorUri,
       });
       const followResponse = await federation.fetch(await createSignedRequest(follow), {
-        contextData: createFedifyExecutionContext(),
+        contextData: { db },
       });
       assert.equal(followResponse.status, 202, await followResponse.text());
 
@@ -210,7 +208,7 @@ describe('inbound Follow and Undo', () => {
             object: new Follow({ actor: remoteActorUri, object: localActorUri }),
           }),
         ),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
       assert.equal(undoResponse.status, 202, await undoResponse.text());
       assert.equal((await db.select().from(ProfileFollows)).length, 0);
@@ -242,7 +240,7 @@ describe('inbound Follow and Undo', () => {
           headers: { 'content-type': 'application/activity+json' },
           method: 'POST',
         }),
-        { contextData: createFedifyExecutionContext() },
+        { contextData: { db } },
       );
 
       assert.equal(response.status, 400, await response.text());
@@ -917,7 +915,7 @@ const createContext = ({
   lookupWebFinger?: ReturnType<typeof mock.fn>;
   recipient: string | null;
   sendActivity?: ReturnType<typeof mock.fn>;
-}): InboxContext<FedifyExecutionContext> =>
+}): InboxContext<FederationModule.FedifyExecutionContext> =>
   ({
     canonicalOrigin: publicOrigin,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
@@ -925,4 +923,4 @@ const createContext = ({
     lookupWebFinger,
     recipient,
     sendActivity,
-  }) as unknown as InboxContext<FedifyExecutionContext>;
+  }) as unknown as InboxContext<FederationModule.FedifyExecutionContext>;

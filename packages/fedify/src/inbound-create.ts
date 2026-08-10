@@ -12,7 +12,7 @@ import {
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 export const handleInboundCreate = async (
   context: InboxContext<FedifyExecutionContext>,

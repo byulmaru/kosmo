@@ -1,7 +1,7 @@
 import { Accept } from '@fedify/vocab';
 import type { Context } from '@fedify/fedify';
 import type { Follow, Recipient } from '@fedify/vocab';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 type FollowDeliveryContext = Pick<
   Context<FedifyExecutionContext>,

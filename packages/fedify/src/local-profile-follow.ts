@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { isHttpUri } from './activitypub-uri';
 import { getFollowActivityUri } from './follow-delivery';
 import type { RequestContext } from '@fedify/fedify';
-import type { FedifyExecutionContext } from './fedify-execution';
+import type { FedifyExecutionContext } from './federation';
 
 const FollowerProfiles = alias(Profiles, 'outbound_follow_follower_profile');
 const FollowerInstances = alias(Instances, 'outbound_follow_follower_instance');
