@@ -41,7 +41,7 @@ PROD-703은 이 기존 mutation을 지정 ID 배열 계약으로 교체한다. P
 4. concrete payload field는 기존 kind별 source loader로 resolve한다. Batch resolver는 Follow Request만을 위한 payload reselect·source join·snapshot Map을 만들지 않는다.
 5. 반환 row의 `recipientProfileId`를 중복 제거해 `recipientProfiles`를 구성한다. Profile field resolver가 처리 후 visible `unreadNotificationCount`를 계산하도록 하며 client-side count 산술을 만들지 않는다.
 6. 기존 item activation operation은 같은 `markNotificationRead` field에 `[id]`를 전달하고 배열 payload를 선택하도록 바꾼다. Relay compiler로 artifact를 재생성하고 fixture·테스트 operation을 정렬한다.
-7. PROD-679 slice는 current Relay connection edge 중 `readAt = null`인 ID snapshot을 클릭 시 한 번 만들고 mutation 하나를 호출한다. 성공 payload만 cache에 정규화하고, pending/실패 중 optimistic 보정이나 추가 page fetch를 하지 않는다.
+7. PROD-679 slice는 current Relay connection edge 중 `readAt = null`인 ID snapshot을 클릭 시 한 번 만들고 mutation 하나를 호출한다. 성공 payload만 cache에 정규화하고, pending/실패 중 optimistic 보정이나 추가 page fetch를 하지 않는다. 실패하면 기존 앱 toast에 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공하고, 재시도 실행 시 current loaded unread ID를 다시 snapshot한다.
 
 이 접근은 기존 visibility SQL과 Relay Node 정규화를 재사용하고, 새 service·저장 counter·범용 batch framework 없이 승인된 계약만 추가한다.
 
@@ -65,7 +65,7 @@ PROD-703은 이 기존 mutation을 지정 ID 배열 계약으로 교체한다. P
 - [Breaking GraphQL input/payload가 독립 배포된 이전 client를 깨뜨릴 수 있음] → repository 내부 소비자를 한 change에서 모두 갱신하고 schema 배포 전 실제 배포 client·외부 consumer가 없는지 release gate에서 재확인한다. 확인되면 additive transition 계약을 별도 upstream 결정 없이 임의 도입하지 않고 배포를 중단한다.
 - [큰 loaded ID 목록이 query parameter 수와 statement 비용을 늘릴 수 있음] → current connection의 실제 loaded ID만 전송하고 새 hard limit나 batch framework를 선제 도입하지 않는다. 운영상 한계가 확인되면 별도 계약으로 다룬다.
 - [update 뒤 payload source가 변할 수 있음] → 현재 production Read operation은 공통 `id`·`readAt`만 사용하고, concrete source field는 다른 kind와 같은 loader 경계를 적용한다. connection·Node의 기존 parent snapshot은 유지한다.
-- [Web 사용자는 `모두 읽음` 뒤 badge가 남는 것을 예상하지 못할 수 있음] → action은 loaded unread 기준으로 disabled 상태를 결정하고 badge는 서버 count를 그대로 유지한다. 추가 설명 UI는 승인 범위에 없으므로 만들지 않는다.
+- [Web 사용자는 `모두 읽음` 뒤 badge가 남는 것을 예상하지 못할 수 있음] → action은 loaded unread 기준으로 disabled 상태를 결정하고 badge는 서버 count를 그대로 유지한다. 성공 설명 UI는 추가하지 않으며, 실패만 기존 앱 toast로 알린다.
 
 ## Migration Plan
 

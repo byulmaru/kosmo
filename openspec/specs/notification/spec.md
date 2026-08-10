@@ -235,37 +235,61 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: Idempotent Notification Read와 visible Unread count
 
-API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read로 전환하고 같은 Profile 범위의 visible Unread count를 일관되게 갱신해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-703` — API는 로그인 Account가 지정한 0개 이상의 Notification ID 중 권한이 있는 Recipient Profile의 visible Notification만 멱등적으로 Read로 전환하고, 성공 payload에서 처리 대상 Notification과 영향받은 Recipient Profile의 visible Unread count를 일관되게 반환해야 한다(MUST).
 
-#### Scenario: 최초 Read
+#### Scenario: 지정한 여러 Notification 최초 Read
 
-- **WHEN** membership이 있는 Account가 `markNotificationRead(input: { id })`로 `readAt = null`인 visible item을 읽는다
-- **THEN** API는 `readAt`에 최초 Read 시각을 한 번 기록한다
-- **AND** Recipient Profile의 visible `unreadNotificationCount`는 한 번 감소한다
-- **AND** `MarkNotificationReadPayload`는 갱신된 `notification`과 `recipientProfile`을 반환한다
+- **WHEN** membership이 있는 Account가 `markNotificationRead(input: { ids })`로 `readAt = null`인 visible item A와 B의 ID를 전달한다
+- **THEN** API는 A와 B의 `readAt`에 최초 Read 시각을 한 번 기록한다
+- **AND** 각 Recipient Profile의 visible `unreadNotificationCount`는 실제 전이 결과와 일치한다
+- **AND** `MarkNotificationReadPayload.notifications`는 처리 대상 A와 B를, `recipientProfiles`는 영향받은 Profile을 중복 없이 반환한다
 
-#### Scenario: 반복 Read
+#### Scenario: 반복 Read와 중복 입력
 
-- **WHEN** 같은 Account가 이미 Read인 같은 visible item ID로 `markNotificationRead`를 다시 호출한다
-- **THEN** API는 성공한 idempotent 결과를 반환한다
+- **WHEN** 같은 Account가 같은 visible item ID를 한 입력에 중복해 전달하거나 이미 Read인 visible item ID로 `markNotificationRead`를 다시 호출한다
+- **THEN** API는 각 visible item을 결과에 한 번만 포함한 성공한 idempotent 결과를 반환한다
 - **AND** 최초 `readAt`과 Unread count를 변경하지 않는다
 
 #### Scenario: 동시 Read
 
-- **WHEN** 같은 Unread item에 둘 이상의 Read 요청이 동시에 도착한다
+- **WHEN** 같은 Unread item ID를 포함한 둘 이상의 Read 요청이 동시에 도착한다
 - **THEN** 시스템은 하나의 Unread-to-Read 전이만 반영한다
 - **AND** 모든 성공 응답은 보존된 최초 `readAt`과 일관된 visible Unread count를 관찰한다
 
-#### Scenario: membership이 없는 item Read
+#### Scenario: 처리할 수 없는 입력 ID 제외
 
-- **WHEN** 로그인 Account가 Recipient Profile membership이 없는 item ID를 읽으려 한다
-- **THEN** API는 존재하지 않는 ID와 구별되지 않는 `NOT_FOUND` GraphQL 오류를 반환한다
-- **AND** item과 count는 변경되지 않는다
+- **WHEN** 로그인 Account가 존재하지 않거나 Notification이 아니거나 Recipient Profile membership이 없거나 현재 hidden인 ID를 visible Notification ID와 함께 전달한다
+- **THEN** API는 처리할 수 없는 ID를 조용히 제외하고 visible Notification만 Read 처리한다
+- **AND** payload와 GraphQL error는 제외한 ID의 존재 여부나 제외 이유를 노출하지 않는다
+- **AND** 제외한 Notification의 `readAt`과 count는 변경되지 않는다
+
+#### Scenario: 빈 입력과 모든 ID 제외
+
+- **WHEN** 로그인 Account가 빈 `ids`를 전달하거나 모든 입력 ID가 처리 대상에서 제외된다
+- **THEN** API는 성공한 no-op으로 빈 `notifications`와 빈 `recipientProfiles`를 반환한다
+- **AND** Notification과 Unread count를 변경하지 않는다
+
+#### Scenario: 입력하지 않은 Notification 보존
+
+- **WHEN** 요청에 포함되지 않은 unread Notification이 이미 존재하거나 요청 처리 중 새로 생성된다
+- **THEN** API는 해당 Notification을 Read 처리하지 않는다
+- **AND** 서버는 입력 ID를 요청 시점의 전체 visible unread 집합으로 확장하지 않는다
+
+#### Scenario: 여러 Recipient Profile 결과
+
+- **WHEN** Account가 membership을 가진 둘 이상의 Recipient Profile에 속한 visible Notification ID를 한 요청에 명시적으로 전달한다
+- **THEN** API는 각 visible Notification을 처리하고 영향받은 `recipientProfiles`를 Profile별 한 번씩 반환한다
+- **AND** 각 Profile의 `unreadNotificationCount`는 그 Profile의 서버 상태와 일치한다
 
 #### Scenario: 인증되지 않은 Read
 
 - **WHEN** 인증되지 않은 요청이 `markNotificationRead`를 호출한다
 - **THEN** API는 `PERMISSION_DENIED` GraphQL 오류를 반환한다
+
+#### Scenario: Read 처리 실패의 원자성
+
+- **WHEN** 지정 Notification을 Read로 전환하는 database 처리가 실패한다
+- **THEN** API는 오류를 반환하고 입력 목록의 일부 Notification만 변경된 상태를 남기지 않는다
 
 #### Scenario: visible count 계산
 
@@ -275,7 +299,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 ### Requirement: Unavailable Notification 숨김
 
-시스템은 Recipient Profile 자체가 API에 노출되지 않거나 kind별 source가 없거나 source에서 파생한 Recipient가 저장 Recipient와 일치하지 않거나, 해당 kind에 필요한 Related Profile 또는 Related Post를 Recipient Profile 기준으로 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-703` — 시스템은 Recipient Profile 자체가 API에 노출되지 않거나 kind별 source가 없거나 source에서 파생한 Recipient가 저장 Recipient와 일치하지 않거나, 해당 kind에 필요한 Related Profile 또는 Related Post를 Recipient Profile 기준으로 조회할 수 없는 Notification을 모든 API 표면에서 존재하지 않는 것으로 취급해야 한다(MUST).
 
 #### Scenario: unavailable item connection과 count
 
@@ -285,9 +309,9 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 #### Scenario: unavailable item Node와 Read
 
-- **WHEN** 요청이 unavailable item ID를 Node 또는 `markNotificationRead`에 전달한다
-- **THEN** Node는 `null`을 반환하고 Read는 `NOT_FOUND`를 반환한다
-- **AND** 저장된 `readAt`은 변경되지 않는다
+- **WHEN** 요청이 unavailable item ID를 Node 또는 `markNotificationRead(input: { ids })`에 전달한다
+- **THEN** Node는 `null`을 반환하고 Read mutation은 해당 ID를 결과에서 조용히 제외한다
+- **AND** 저장된 `readAt`은 변경되지 않으며 Read 응답은 item의 존재나 제외 이유를 노출하지 않는다
 
 #### Scenario: cleanup 전 저장 상태
 
@@ -310,7 +334,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 ### Requirement: Selected Profile Follow Notification 목록 UI
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/colors.md`, `PROD-277`, `PROD-372`, `PROD-541`, `PROD-680`, `PROD-703` — 클라이언트는 selected Profile의 visible Follow Notification을 모바일과 Web에서 같은 단일 목록으로 제공하고 Relay connection과 actor cache를 Profile별로 격리해야 한다(MUST).
 
 #### Scenario: 단일 Follow item 표시와 Profile link
 
@@ -344,7 +368,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 #### Scenario: 성공 payload 기반 item과 Recipient count 동기화
 
-- **WHEN** Avatar 또는 본문 link activation에서 시작한 Read mutation이 `notification`과 `recipientProfile` payload로 성공한다
+- **WHEN** Avatar 또는 본문 link activation에서 `{ ids: [id] }`로 시작한 Read mutation이 `notifications`와 `recipientProfiles` payload로 성공한다
 - **THEN** 클라이언트는 payload가 반환한 ID를 기준으로 item의 `readAt`과 정확한 Recipient Profile의 `unreadNotificationCount`를 Relay cache에 정규화한다
 - **AND** 성공한 `readAt` 정규화로 item의 Unread 시각·접근성 상태를 제거하고 count가 0이면 기존 전역 알림 인디케이터도 제거한다
 - **AND** 현재 selected Profile을 cache target으로 다시 추론하거나 client-side count 산술, optimistic update와 성공 뒤 추가 refetch를 수행하지 않는다
@@ -516,7 +540,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 ### Requirement: Selected Profile Web Notification Unread 시각 상태
 
-**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680` — 클라이언트는 selected Profile의 Web 알림 목록에서 visible Notification item의 Read와 Unread 상태를 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
+**Authority / Provenance:** `docs/design/colors.md`, `docs/design/accessibility.md`, `PROD-680`, `PROD-703` — 클라이언트는 selected Profile의 Web 알림 목록에서 visible Notification item의 Read와 Unread 상태를 시각·접근성 정보로 일관되게 구분해야 한다(MUST).
 
 #### Scenario: Web Unread 기본 표시
 
@@ -540,7 +564,7 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 
 #### Scenario: activation Read 성공과 전역 인디케이터 수렴
 
-- **WHEN** 사용자가 Unread item의 link를 활성화하고 Read mutation이 갱신된 `notification`과 `recipientProfile` payload로 성공한다
+- **WHEN** 사용자가 Unread item의 link를 활성화하고 `{ ids: [id] }` Read mutation이 갱신된 `notifications`와 `recipientProfiles` payload로 성공한다
 - **THEN** link navigation은 Read 응답과 독립적으로 즉시 진행된다
 - **AND** Relay는 payload ID를 기준으로 item의 `readAt`과 Recipient Profile의 `unreadNotificationCount`를 정규화한다
 - **AND** item의 Unread 시각·접근성 상태가 제거되고 count가 0이면 기존 전역 알림 인디케이터도 사라진다
@@ -642,3 +666,48 @@ API는 권한이 있는 Recipient Profile의 visible Notification 하나를 Read
 - **WHEN** source Reply가 없거나 Recipient·Parent·Author 관계가 저장계약과 다르거나 Recipient 기준 Related Post 또는 Related Profile을 조회할 수 없다
 - **THEN** API는 item을 page limit 전 connection과 Unread count에서 제외한다
 - **AND** Node는 `null`, Read는 `NOT_FOUND`로 처리하며 generic Notification으로 대신 노출하지 않는다
+
+### Requirement: 현재 로드된 Web Notification 일괄 Read action
+
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/design/page-header.md`, `docs/design/colors.md`, `docs/design/breakpoints.md`, `PROD-703`, `PROD-679` — Web `/notifications`는 현재 Relay connection에 로드된 unread Notification만 지정 ID 일괄 Read로 처리하는 `모두 읽음` action을 제공하고, 서버 payload로 목록과 전역 인디케이터를 수렴시켜야 한다(MUST).
+
+#### Scenario: Web header action 소유권
+
+- **WHEN** 사용자가 Web `/notifications`를 연다
+- **THEN** `<768px` 모바일 Web에서는 `UniversalShell` app bar가, compact/full Web에서는 route의 `PageHeader`가 `모두 읽음` trailing text action을 렌더링한다
+- **AND** Android/iOS 화면에는 이 action을 렌더링하지 않는다
+
+#### Scenario: action enabled와 pending 상태
+
+- **WHEN** 현재 Relay connection에 loaded unread Notification이 하나 이상 있고 Read 요청이 pending이 아니다
+- **THEN** `모두 읽음` action은 활성화된다
+- **AND** loaded unread가 없거나 요청 중이면 disabled와 접근성 disabled 상태를 함께 제공하고 중복 요청을 시작하지 않는다
+
+#### Scenario: 현재 로드된 unread ID만 처리
+
+- **WHEN** 사용자가 `모두 읽음`을 활성화한다
+- **THEN** 클라이언트는 클릭 시점의 current Relay connection에서 `readAt = null`인 loaded Notification ID만 수집해 `markNotificationRead(input: { ids })`를 한 번 호출한다
+- **AND** 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 입력에 포함하지 않는다
+- **AND** 처리 범위를 넓히기 위한 추가 page fetch나 client의 단건 Read 반복 호출을 수행하지 않는다
+
+#### Scenario: 일괄 Read 성공과 서버 count 수렴
+
+- **WHEN** `모두 읽음` 요청이 `notifications`와 `recipientProfiles` payload로 성공한다
+- **THEN** Relay는 반환된 Node ID를 기준으로 처리된 item의 `readAt`과 Recipient Profile의 `unreadNotificationCount`를 정규화한다
+- **AND** 처리된 item은 목록에 남고 Unread 시각·접근성 강조만 제거된다
+- **AND** 아직 처리하지 않은 unread Notification이 있으면 전역 인디케이터는 0이 아닌 서버 count를 계속 표시할 수 있다
+- **AND** 현재 loaded unread가 모두 처리됐으면 전역 인디케이터가 남아 있어도 action은 disabled 상태가 될 수 있다
+
+#### Scenario: 일괄 Read pending 또는 실패
+
+- **WHEN** `모두 읽음` 요청이 pending이거나 실패한다
+- **THEN** 클라이언트는 item과 count cache를 낙관적으로 보정하지 않는다
+- **AND** 실패한 요청 전의 Unread 강조와 전역 인디케이터를 유지하고 사용자가 다시 시도할 수 있게 한다
+- **AND** 실패하면 기존 앱 toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공한다
+- **AND** toast의 재시도는 실행 시점의 current Relay connection에서 loaded unread ID를 다시 수집한다
+
+#### Scenario: Web 상태와 수직 검증
+
+- **WHEN** Web 구현을 독립적으로 검증한다
+- **THEN** Storybook은 loaded-unread, loaded-zero, loading과 failure 상태를 구분한다
+- **AND** Web E2E는 현재 로드된 복수 unread의 일괄 Read, 목록 유지, 강조 제거, 입력에 없는 Notification 보존과 전역 인디케이터의 서버 count 수렴을 검증한다

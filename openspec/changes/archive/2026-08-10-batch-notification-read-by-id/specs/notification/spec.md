@@ -244,6 +244,8 @@
 - **WHEN** `모두 읽음` 요청이 pending이거나 실패한다
 - **THEN** 클라이언트는 item과 count cache를 낙관적으로 보정하지 않는다
 - **AND** 실패한 요청 전의 Unread 강조와 전역 인디케이터를 유지하고 사용자가 다시 시도할 수 있게 한다
+- **AND** 실패하면 기존 앱 toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공한다
+- **AND** toast의 재시도는 실행 시점의 current Relay connection에서 loaded unread ID를 다시 수집한다
 
 #### Scenario: Web 상태와 수직 검증
 

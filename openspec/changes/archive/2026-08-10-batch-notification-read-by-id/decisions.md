@@ -40,6 +40,18 @@
 - Consequences: loaded unread가 모두 처리되면 action은 disabled지만 아직 처리하지 않은 unread가 있어 badge는 남을 수 있다. 이 상태를 오류로 보거나 count를 0으로 덮어쓰면 안 된다.
 - Confirmation / Follow-up: Storybook 상태와 Web E2E에서 loaded item 처리, 입력 밖 item 보존과 non-zero 서버 count 수렴을 확인한다.
 
+### Web 모두 읽음 실패는 기존 앱 toast로 재시도를 제공한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/design/page-header.md`, `PROD-679`
+- Status: Active
+- Context / Problem: 명시적인 `모두 읽음` 요청이 실패했을 때 action만 다시 활성화하면 사용자가 실패 여부를 알 수 없고, 별도 inline error는 알림 목록의 layout을 변경한다.
+- Decision Outcome: 실패 전의 Unread item 강조와 전역 인디케이터를 유지하고 기존 앱 toast에 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공한다. 재시도는 실행 시점의 current Relay connection에서 loaded unread ID를 다시 수집한다.
+- Alternatives Considered: 별도 inline alert는 목록 layout을 변경하고 같은 오류를 위한 두 번째 surface를 만든다. 안내 없이 action만 다시 활성화하는 방식은 명시적 사용자 동작의 실패를 전달하지 못한다.
+- Consequences: 새 toast infrastructure나 dependency는 추가하지 않는다. pending guard와 action disabled 상태는 header action owner가 유지하며, toast action은 실패한 이전 ID 배열을 재사용하지 않는다.
+- Confirmation / Follow-up: Storybook failure 상태와 Web E2E 실패·재시도에서 cache 보존, toast와 새 ID snapshot을 확인한다.
+
 ### concrete Notification type과 공통 visibility 경계를 함께 적용한다
 
 - Decision Date: 2026-08-07
