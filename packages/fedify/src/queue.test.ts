@@ -42,7 +42,7 @@ describe('Fedify PostgreSQL message queue', { skip: !databaseUrl }, () => {
   });
 
   test('starts and stops the standalone consumer', async () => {
-    const port = 18_080 + Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0);
+    const port = 18_080 + (Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0) % 40_000);
     const child = spawn(process.execPath, ['--import', 'tsx', 'src/consumer.ts'], {
       cwd: new URL('..', import.meta.url),
       env: {
