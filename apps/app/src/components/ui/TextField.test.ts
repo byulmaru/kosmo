@@ -27,14 +27,16 @@ mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
     backgroundSurface: 'surface',
     borderDefault: 'border',
-    feedbackDangerBase: 'danger',
+    borderFocus: 'focus-border',
     feedbackDangerBorder: 'danger-border',
+    feedbackDangerOnSubtle: 'danger-on-subtle',
     foregroundPrimary: 'foreground',
-    foregroundSecondary: 'secondary',
+    foregroundMuted: 'muted',
+    stateFocusRing: 'focus-ring',
   }),
 });
 mockModule('@/theme/tokens', {
-  borderWidths: { 1: 1 },
+  borderWidths: { 1: 1, 2: 2 },
   radius: { 12: 12 },
   space: { 4: 4, 8: 8, 12: 12 },
   textStyles: {
@@ -70,7 +72,29 @@ test('error TextField exposes and associates its validation message', async () =
     .find((node) => node.props.children === '표시 이름을 확인해 주세요.');
   assert.equal(input?.props['aria-invalid'], true);
   assert.equal(input?.props['aria-describedby'], error?.props.nativeID);
-  assert.equal(input?.props.accessibilityHint, '표시 이름을 확인해 주세요.');
+  assert.equal(input?.props.accessibilityHint, undefined);
+  assert.equal(input?.props.placeholderTextColor, 'muted');
   assert.equal(error?.props.accessibilityLiveRegion, 'polite');
+  assert.equal(error?.props.style[1].color, 'danger-on-subtle');
+  await act(async () => renderer?.unmount());
+});
+
+test('focused web TextField exposes the semantic focus border and ring', async () => {
+  assert.ok(textFieldModule);
+  const { TextField } = textFieldModule;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(TextField, { label: '표시 이름' }));
+  });
+
+  const input = renderer?.root.findByType(TextInputHost);
+  await act(async () => input?.props.onFocus({}));
+  const focusedInput = renderer?.root.findByType(TextInputHost);
+  assert.ok(focusedInput);
+  const style = Object.assign({}, ...focusedInput.props.style.flat().filter(Boolean));
+  assert.equal(style.borderColor, 'focus-border');
+  assert.equal(style.borderWidth, 2);
+  assert.equal(style.outlineColor, 'focus-ring');
+  assert.equal(style.outlineWidth, 2);
   await act(async () => renderer?.unmount());
 });

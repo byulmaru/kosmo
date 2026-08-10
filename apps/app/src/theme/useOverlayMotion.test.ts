@@ -74,6 +74,7 @@ test('overlay motion uses approved enter and exit timing', async () => {
 
   await act(async () => renderer?.update(createElement(Harness, { visible: true })));
   assert.equal(result?.mounted, true);
+  assert.equal(result?.entered, true);
   assert.deepEqual(timingCalls.at(-1), {
     duration: 360,
     easing: '0.16,1,0.3,1',
@@ -108,6 +109,7 @@ test('reduced motion presents and dismisses overlays without timing', async () =
     renderer = create(createElement(Harness, { visible: true }));
   });
   assert.equal(result?.mounted, true);
+  assert.equal(result?.entered, true);
   assert.equal(timingCalls.length, 0);
 
   await act(async () => renderer?.update(createElement(Harness, { visible: false })));
@@ -135,6 +137,7 @@ test('toast motion uses standard enter and fast exit timing', async () => {
 
   await act(async () => renderer?.update(createElement(Harness, { visible: true })));
   assert.equal(result?.mounted, true);
+  assert.equal(result?.entered, true);
   assert.equal(timingCalls.at(-1)?.duration, 200);
 
   await act(async () => renderer?.update(createElement(Harness, { visible: false })));

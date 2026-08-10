@@ -24,7 +24,15 @@ export function StateView({
   const reducedMotion = useReducedMotion();
 
   return (
-    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.root}>
+    <View
+      accessibilityRole={alert ? 'alert' : undefined}
+      style={[
+        styles.root,
+        alert
+          ? { backgroundColor: theme.feedbackDangerSubtle, borderRadius: radius[12] }
+          : undefined,
+      ]}
+    >
       {loading ? (
         reducedMotion ? (
           <Text
@@ -38,17 +46,25 @@ export function StateView({
           <ActivityIndicator accessibilityLabel={title} color={theme.foregroundPrimary} />
         )
       ) : null}
-      <Text style={[styles.title, { color: theme.foregroundPrimary }]}>{title}</Text>
+      <Text
+        style={[
+          styles.title,
+          { color: alert ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary },
+        ]}
+      >
+        {title}
+      </Text>
       {description ? (
-        <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+        <Text
+          style={[
+            styles.description,
+            { color: alert ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary },
+          ]}
+        >
           {description}
         </Text>
       ) : null}
-      {actionLabel && onAction ? (
-        <Button onPress={onAction} tone="secondary">
-          {actionLabel}
-        </Button>
-      ) : null}
+      {actionLabel && onAction ? <Button onPress={onAction}>{actionLabel}</Button> : null}
     </View>
   );
 }

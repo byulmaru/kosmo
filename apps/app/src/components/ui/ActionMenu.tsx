@@ -62,6 +62,7 @@ export function ActionMenu({
   const insets = useSafeAreaInsets();
   const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
+  const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -134,11 +135,32 @@ export function ActionMenu({
   }, [disabled, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
-      item.onSelect();
-      dismiss();
+      if (web) {
+        item.onSelect();
+        dismiss();
+        return;
+      }
+
+      pendingSelectionRef.current = item.onSelect;
+      dismiss(false);
     },
-    [dismiss],
+    [dismiss, web],
   );
+
+  useEffect(() => {
+    if (web || open || overlayMotion.mounted) {
+      return;
+    }
+
+    const onSelect = pendingSelectionRef.current;
+    if (!onSelect) {
+      return;
+    }
+
+    pendingSelectionRef.current = null;
+    focusTrigger();
+    onSelect();
+  }, [focusTrigger, open, overlayMotion.mounted, web]);
 
   const sheetDismissResponder = useMemo(
     () =>
@@ -290,7 +312,7 @@ export function ActionMenu({
                 {items.map((item, index) => {
                   const Icon = item.icon;
                   const itemColor =
-                    item.tone === 'danger' ? theme.feedbackDangerBase : theme.foregroundPrimary;
+                    item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
                   return (
                     <Pressable
                       accessibilityLabel={item.accessibilityLabel ?? item.label}
@@ -399,6 +421,8 @@ export function ActionMenu({
             </View>
             {items.map((item) => {
               const Icon = item.icon;
+              const itemColor =
+                item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
               return (
                 <Pressable
                   accessibilityLabel={item.accessibilityLabel ?? item.label}
@@ -407,23 +431,12 @@ export function ActionMenu({
                   onPress={() => select(item)}
                   style={[styles.item, styles.nativeItem]}
                 >
-                  {Icon ? (
-                    <Icon
-                      color={
-                        item.tone === 'danger' ? theme.feedbackDangerBase : theme.foregroundPrimary
-                      }
-                      size={iconSizes[20]}
-                      strokeWidth={2}
-                    />
-                  ) : null}
+                  {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
                   <Text
                     style={[
                       styles.label,
                       {
-                        color:
-                          item.tone === 'danger'
-                            ? theme.feedbackDangerBase
-                            : theme.foregroundPrimary,
+                        color: itemColor,
                       },
                     ]}
                   >

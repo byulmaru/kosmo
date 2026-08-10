@@ -54,7 +54,9 @@ export function Button({
       disabled={disabled || loading}
       ref={controlRef}
       style={(state) => {
-        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+        const webState = state as { focused?: boolean; hovered?: boolean };
+        const focused = Platform.OS === 'web' && Boolean(webState.focused);
+        const hovered = Platform.OS === 'web' && Boolean(webState.hovered);
         return [
           styles.root,
           Platform.OS === 'web'
@@ -79,10 +81,18 @@ export function Button({
                     ? theme.statePressed
                     : hovered
                       ? theme.stateHover
-                      : theme.backgroundElevated,
+                      : theme.backgroundSurface,
             borderColor,
             borderWidth,
             opacity: tone === 'danger' && (state.pressed || hovered) ? 0.9 : 1,
+            ...(focused
+              ? ({
+                  outlineColor: theme.stateFocusRing,
+                  outlineOffset: 2,
+                  outlineStyle: 'solid',
+                  outlineWidth: borderWidths[2],
+                } as unknown as ViewStyle)
+              : undefined),
           },
           typeof style === 'function' ? style(state) : style,
         ];

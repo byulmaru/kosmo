@@ -12,13 +12,14 @@ const theme = {
   actionPrimaryHover: 'primary-hover',
   actionPrimaryOnBase: 'primary-on-base',
   actionPrimaryPressed: 'primary-pressed',
-  backgroundElevated: 'elevated',
+  backgroundSurface: 'surface',
   borderDefault: 'border-default',
   feedbackDangerBase: 'danger-base',
   feedbackDangerOnBase: 'danger-on-base',
   foregroundPrimary: 'foreground-primary',
   stateDisabledForeground: 'disabled-foreground',
   stateDisabledSurface: 'disabled-surface',
+  stateFocusRing: 'focus-ring',
   stateHover: 'state-hover',
   statePressed: 'state-pressed',
 };
@@ -33,7 +34,7 @@ mockModule('react-native', {
 });
 mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => theme });
 mockModule('@/theme/tokens', {
-  borderWidths: { 0: 0, 1: 1 },
+  borderWidths: { 0: 0, 1: 1, 2: 2 },
   motion: {
     duration: { fast: 120, instant: 0 },
     easing: { standard: 'standard-easing' },
@@ -75,6 +76,7 @@ function render(tone: 'danger' | 'primary' | 'secondary' = 'primary', disabled =
   assert.ok(Button);
   const button = Button({ children: tone, disabled, tone });
   const rootStyle = button.props.style as (state: {
+    focused?: boolean;
     hovered?: boolean;
     pressed: boolean;
   }) => unknown;
@@ -83,6 +85,7 @@ function render(tone: 'danger' | 'primary' | 'secondary' = 'primary', disabled =
     label: flattenStyle(label.props.style),
     props: button.props,
     hovered: flattenStyle(rootStyle({ hovered: true, pressed: false })),
+    focused: flattenStyle(rootStyle({ focused: true, pressed: false })),
     resting: flattenStyle(rootStyle({ pressed: false })),
     pressed: flattenStyle(rootStyle({ pressed: true })),
   };
@@ -96,7 +99,7 @@ test('Button consumes semantic foreground pairs and state tokens', () => {
   assert.equal(primary.label.color, 'primary-on-base');
 
   const secondary = render('secondary');
-  assert.equal(secondary.resting.backgroundColor, 'elevated');
+  assert.equal(secondary.resting.backgroundColor, 'surface');
   assert.equal(secondary.resting.borderColor, 'border-default');
   assert.equal(secondary.hovered.backgroundColor, 'state-hover');
   assert.equal(secondary.pressed.backgroundColor, 'state-pressed');
@@ -118,4 +121,10 @@ test('disabled Button uses the semantic disabled pair instead of opacity alone',
   assert.equal(disabled.resting.backgroundColor, 'disabled-surface');
   assert.equal(disabled.label.color, 'disabled-foreground');
   assert.equal(disabled.resting.opacity, 1);
+});
+
+test('web Button exposes the semantic focus ring', () => {
+  const button = render();
+  assert.equal(button.focused.outlineColor, 'focus-ring');
+  assert.equal(button.focused.outlineWidth, 2);
 });

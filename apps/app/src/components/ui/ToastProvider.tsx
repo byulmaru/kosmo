@@ -74,20 +74,25 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       activeToastId.current = id;
       setToast({ action: options?.action, id, message: nextMessage, tone: options?.tone });
       setToastVisible(true);
-      timer.current = setTimeout(() => dismissToast(id), toastDurationMs);
       return () => dismissToast(id);
     },
     [dismissToast],
   );
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (!toast || !toastVisible || !toastMotion.entered) {
+      return;
+    }
+
+    const id = toast.id;
+    timer.current = setTimeout(() => dismissToast(id), toastDurationMs);
+    return () => {
       if (timer.current) {
         clearTimeout(timer.current);
+        timer.current = null;
       }
-    },
-    [],
-  );
+    };
+  }, [dismissToast, toast, toastMotion.entered, toastVisible]);
 
   useEffect(() => {
     if (!toastVisible && !toastMotion.mounted) {

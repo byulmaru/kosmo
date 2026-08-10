@@ -14,16 +14,19 @@ function usePresenceMotion(
   { enabled = true, enterDuration, exitDuration }: PresenceMotionOptions,
 ) {
   const reducedMotion = useReducedMotion();
+  const [entered, setEntered] = useState(false);
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!enabled || reducedMotion) {
       progress.setValue(visible ? 1 : 0);
+      setEntered(enabled && visible);
       setMounted(enabled && visible);
       return;
     }
 
+    setEntered(false);
     if (visible) {
       setMounted(true);
     }
@@ -36,14 +39,22 @@ function usePresenceMotion(
       useNativeDriver: true,
     });
     animation.start(({ finished }) => {
-      if (finished && !entering) {
-        setMounted(false);
+      if (finished) {
+        if (entering) {
+          setEntered(true);
+        } else {
+          setMounted(false);
+        }
       }
     });
     return () => animation.stop();
   }, [enabled, enterDuration, exitDuration, progress, reducedMotion, visible]);
 
-  return { mounted: enabled && (visible || mounted), progress };
+  return {
+    entered: enabled && visible && entered,
+    mounted: enabled && (visible || mounted),
+    progress,
+  };
 }
 
 export function useOverlayMotion(visible: boolean, enabled = true) {

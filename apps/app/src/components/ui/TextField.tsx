@@ -2,7 +2,7 @@ import { forwardRef, useId, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { TextInputProps } from 'react-native';
+import type { TextInputProps, ViewStyle } from 'react-native';
 
 type TextFieldProps = TextInputProps & {
   error?: string;
@@ -38,7 +38,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
       ) : null}
       <TextInput
         ref={ref}
-        accessibilityHint={error ?? accessibilityHint}
+        accessibilityHint={accessibilityHint}
         accessibilityLabel={props.accessibilityLabel ?? label}
         editable={editable}
         multiline={multiline}
@@ -50,7 +50,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           setFocused(true);
           onFocus?.(event);
         }}
-        placeholderTextColor={editable ? theme.foregroundSecondary : theme.stateDisabledForeground}
+        placeholderTextColor={editable ? theme.foregroundMuted : theme.stateDisabledForeground}
         style={[
           styles.input,
           multiline && styles.multiline,
@@ -63,7 +63,16 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
                 : editable
                   ? theme.borderDefault
                   : theme.borderDisabled,
+            borderWidth: focused ? borderWidths[2] : borderWidths[1],
             color: editable ? theme.foregroundPrimary : theme.stateDisabledForeground,
+            ...(Platform.OS === 'web' && focused
+              ? ({
+                  outlineColor: theme.stateFocusRing,
+                  outlineOffset: 2,
+                  outlineStyle: 'solid',
+                  outlineWidth: borderWidths[2],
+                } as unknown as ViewStyle)
+              : undefined),
           },
           style,
         ]}
@@ -74,7 +83,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         <Text
           accessibilityLiveRegion="polite"
           nativeID={errorId}
-          style={[styles.error, { color: theme.feedbackDangerBase }]}
+          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
         >
           {error}
         </Text>

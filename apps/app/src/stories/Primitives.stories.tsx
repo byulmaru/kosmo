@@ -58,6 +58,7 @@ function PrimitivesCatalog() {
         <StateView description="첫 항목이 생기면 여기에 표시돼요." title="아직 항목이 없어요" />
         <StateView
           actionLabel="다시 시도"
+          alert
           description="잠시 후 다시 시도해 주세요."
           onAction={() => undefined}
           title="불러오지 못했어요"
