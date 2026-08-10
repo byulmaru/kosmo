@@ -167,7 +167,7 @@ function ProfileDefaultPostVisibilityControlContents({
         </Text>
       ) : null}
       <View accessibilityLabel={`현재 Profile ${profile.displayName} ${profile.relativeHandle}`}>
-        <ProfileNameBlock profile={profile} />
+        <ProfileNameBlock profile={profile} style={styles.target} />
       </View>
       <View accessibilityLabel={label} accessibilityRole="radiogroup" style={styles.options}>
         {options.map((option) => {
@@ -251,6 +251,7 @@ function ProfileDefaultPostVisibilityControlContents({
 const styles = StyleSheet.create({
   root: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
+  target: { paddingVertical: spacing.xs },
   options: { gap: spacing.sm },
   option: {
     alignItems: 'center',
