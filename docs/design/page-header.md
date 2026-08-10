@@ -13,11 +13,11 @@
 
 - `leading` prop은 모바일 홈의 메뉴 버튼과 게시글 상세의 뒤로가기처럼 제목 왼쪽의 화면별 action을 받는다. touch target은 각 action이 소유한다. 모바일 홈 메뉴는 테두리나 텍스트 라벨 없이 햄버거 아이콘만 표시하되 `44×44px` touch target과 접근 가능한 이름을 유지하고, 게시글 상세 뒤로가기도 `44×44px`를 유지한다.
 - `text` variant에서 leading action과 제목 사이에는 `spacing.lg`(`16px`)를 두어 `24px` 아이콘과 제목의 시각 간격을 약 `26px`로 유지한다. `brand` variant의 대칭 action slot에는 이 간격을 적용하지 않는다.
-- `trailing` prop은 `text` variant 제목 오른쪽의 화면별 action을 받는다. trailing action은 자기 touch target, 접근 가능한 이름과 disabled 상태를 소유하며, action 유무에 따라 제목 heading이나 헤더 높이를 바꾸지 않는다.
+- `trailing` prop은 `text` variant 제목과 분리되어 헤더 오른쪽 끝에 정렬되는 화면별 action을 받는다. trailing action은 자기 touch target, 접근 가능한 이름과 disabled 상태를 소유하며, action 유무에 따라 제목 heading이나 헤더 높이를 바꾸지 않는다.
 
 ### Web 알림 모두 읽음
 
-- Web `/notifications`의 trailing action은 `모두 읽음` 텍스트를 사용한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web에서는 알림 route가 소유한 `PageHeader`가 렌더링한다. Android/iOS에는 이 action을 표시하지 않는다.
+- Web `/notifications`의 trailing action은 기존 공용 `Button`의 secondary 표현(흰 배경과 `border` 색상 테두리)으로 `모두 읽음` 텍스트를 표시한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web에서는 알림 route가 소유한 `PageHeader`가 렌더링한다. Android/iOS에는 이 action을 표시하지 않는다.
 - action은 클릭 시점에 현재 Relay connection에 로드된 unread Notification ID만 처리하며, 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 처리하기 위해 추가 page를 먼저 가져오지 않는다.
 - 현재 로드된 unread item이 없거나 요청 중이면 action을 disabled 처리하고 접근성 상태에도 반영한다.
 - 성공 뒤 처리된 item은 목록에 남고 Unread 강조만 제거된다. 전역 인디케이터는 서버 count로 수렴하므로 아직 처리하지 않은 unread item이 있으면 `모두 읽음` 성공 뒤에도 남을 수 있다.

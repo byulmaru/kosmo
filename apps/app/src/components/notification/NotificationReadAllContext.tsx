@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { Platform } from 'react-native';
+import { Button } from '@/components/ui/Button';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 export type NotificationReadAllAction = Readonly<{
@@ -70,36 +69,21 @@ export function useNotificationReadAll() {
 
 export function NotificationReadAllAction() {
   const { action } = useNotificationReadAll();
-  const theme = useTheme();
 
   if (Platform.OS !== 'web') {
     return null;
   }
 
   return (
-    <Pressable
+    <Button
       accessibilityLabel="모두 읽음"
-      accessibilityRole="button"
       accessibilityState={{ busy: action.busy, disabled: action.disabled }}
       aria-busy={action.busy || undefined}
       disabled={action.disabled}
       onPress={action.onPress}
-      style={({ pressed }) => [
-        styles.action,
-        { opacity: action.disabled ? 0.45 : pressed ? 0.7 : 1 },
-      ]}
+      tone="secondary"
     >
-      <Text style={[styles.label, { color: theme.text }]}>모두 읽음</Text>
-    </Pressable>
+      모두 읽음
+    </Button>
   );
 }
-
-const styles = StyleSheet.create({
-  action: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
-  },
-  label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-});

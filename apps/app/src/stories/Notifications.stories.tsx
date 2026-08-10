@@ -384,9 +384,17 @@ export const HeaderAndWebRefreshPolicy: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const heading = canvas.getByRole('heading', { name: '알림' });
+    const action = canvas.getByRole('button', { name: '모두 읽음' });
+    const headerRect = heading.parentElement!.getBoundingClientRect();
+    const actionRect = action.getBoundingClientRect();
+    const actionStyle = getComputedStyle(action);
 
     expect(heading).toBeVisible();
-    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(headerRect.height).toBe(64);
+    expect(headerRect.right - actionRect.right).toBe(16);
+    expect(actionStyle.backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(actionStyle.borderColor).toBe('rgb(234, 234, 234)');
+    expect(actionStyle.borderWidth).toBe('1px');
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
     expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
     expect(canvas.queryByRole('heading', { name: '모두' })).not.toBeInTheDocument();

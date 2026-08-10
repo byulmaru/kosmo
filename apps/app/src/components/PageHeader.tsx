@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   trailing: {
     alignItems: 'center',
     flexShrink: 0,
-    marginLeft: spacing.md,
+    marginLeft: 'auto',
     zIndex: 1,
   },
   srOnly: { height: 1, overflow: 'hidden', position: 'absolute', width: 1 },
