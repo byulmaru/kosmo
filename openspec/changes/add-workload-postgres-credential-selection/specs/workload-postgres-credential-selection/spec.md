@@ -28,19 +28,25 @@
 - **WHEN** API trio를 세 값 모두 제거하고 image와 Fedify 설정을 유지한다
 - **THEN** API Rollout과 Web BFF 기본 연결만 기존 owner source로 함께 돌아가며 Web inbound Fedify `FEDIFY_DATABASE_*` 선택은 바뀌지 않는다
 
-### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
+### Requirement: Fedify source는 Web inbound와 활성화된 Worker 입력 seam에만 추가한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719` — 시스템은 Web 프로세스의 현재 inbound Fedify consumer에 별도 PostgreSQL URL과 password Secret source를 제공할 수 있어야 한다(MUST). 이 requirement의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_fedify` role/Secret 계약이 아니다. 최신 identity는 PROD-369의 `kosmo_worker`/`worker-database`이고 selector/env 명칭 migration과 cutover는 PROD-715가 소유한다. 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719`, `PROD-730` — 시스템은 Web 프로세스의 inbound Fedify consumer와 명시적으로 활성화된 Worker Deployment에 별도 PostgreSQL URL과 password Secret source를 입력 seam으로 제공할 수 있어야 한다(MUST). 이 requirement의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_fedify` role/Secret 계약이 아니다. 최신 identity는 PROD-369의 `kosmo_worker`/`worker-database`이고 selector/env 명칭 migration과 실제 connection cutover는 PROD-715가 소유한다. 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
 
 #### Scenario: Web inbound Fedify source 선택
 
 - **WHEN** `postgres.credentials.fedify`의 URL과 password Secret trio를 모두 채운다
-- **THEN** Web Rollout에만 `FEDIFY_DATABASE_PASSWORD` SecretKeyRef와 `FEDIFY_DATABASE_URL`이 추가되고 API Rollout에는 `FEDIFY_DATABASE_*`가 없으며 Web BFF 기본 `DATABASE_*`는 API source를 유지한다
+- **THEN** Web Rollout과 명시적으로 활성화된 Worker Deployment에 `FEDIFY_DATABASE_PASSWORD` SecretKeyRef와 `FEDIFY_DATABASE_URL`이 추가되고 API Rollout에는 `FEDIFY_DATABASE_*`가 없으며 Web BFF와 Worker의 기본 `DATABASE_*`는 API source를 유지한다
+
+#### Scenario: Worker foundation의 기존 입력 seam
+
+- **WHEN** Worker component를 활성화하고 Fedify trio를 완전하게 구성한다
+- **THEN** Worker Deployment는 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD`를 입력으로 가진다
+- **AND** foundation 자체는 이 입력으로 DB connection을 열지 않으며 실제 `kosmo_worker` connection 전환은 PROD-715에 남는다
 
 #### Scenario: Fedify source rollback
 
 - **WHEN** Fedify trio를 세 값 모두 제거하고 API 설정을 유지한다
-- **THEN** Web의 `FEDIFY_DATABASE_*` 입력만 제거되고 API Rollout과 API/Web BFF 기본 연결은 바뀌지 않는다
+- **THEN** Web과 활성화된 Worker의 `FEDIFY_DATABASE_*` 입력만 제거되고 API Rollout과 API/Web BFF/Worker 기본 연결은 바뀌지 않는다
 
 #### Scenario: API Fedify env 금지
 

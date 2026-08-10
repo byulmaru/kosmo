@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-709가 구현한 PostgreSQL selector 경계를 `api`/`fedify`/`migration`으로 설명한다. 여기서 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시 Web inbound 전용 legacy selector seam이며 실제 role/Secret 이름 계약이 아니다. 최신 role identity는 PROD-369의 `kosmo_worker`/`worker-database`이고, selector/env 명칭 migration과 Web trusted federation ingress·Temporal Worker DB Activity 전환은 PROD-715가 소유한다. `migration`은 기존 `kosmo_migration` login에서 `SET ROLE kosmo`로 전환하는 경계를 유지한다.
+이 기록은 PROD-709가 구현한 PostgreSQL selector 경계를 `api`/`fedify`/`migration`으로 설명한다. 여기서 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시 Web inbound용으로 추가되고 후속 Worker foundation에도 연결된 legacy selector seam이며 실제 role/Secret 이름 계약이 아니다. 최신 role identity는 PROD-369의 `kosmo_worker`/`worker-database`이고, selector/env 명칭 migration과 Web trusted federation ingress·Temporal Worker DB Activity의 실제 connection 전환은 PROD-715가 소유한다. `migration`은 기존 `kosmo_migration` login에서 `SET ROLE kosmo`로 전환하는 경계를 유지한다.
 
 ## Decision Records
 
@@ -14,7 +14,7 @@
 - Decision Outcome: `api` source는 API Rollout과 Web BFF 기본 DB 연결이 공유한다. `fedify` source는 Web Rollout의 현재 inbound Fedify 전용 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD` 환경에만 제공한다. `web` 또는 `system` credential source는 만들지 않는다. `migration`은 selector가 없는 기존 역할로 남긴다.
 - Alternatives Considered: API와 Web에 각각 credential source를 두는 방식은 같은 BFF 권한 경계를 drift시키므로 제외했다. Web 기본 `DATABASE_URL`을 Fedify source로 바꾸는 방식은 BFF 경계를 침범하므로 제외했다. API Rollout에 Fedify env를 주입하는 방식은 현재 Fedify consumer와 일치하지 않으므로 제외했다.
 - Consequences: API와 Web BFF는 하나의 API source를 계속 공유하고, Web만 inbound Fedify source를 추가로 받을 수 있다. 이 change는 source를 환경으로 선택할 뿐 실제 Fedify DB client/connection 생명주기를 생성하거나 전환하지 않는다.
-- Confirmation / Follow-up: Helm render에서 API source가 API와 Web 기본 env에 동일하게 나타나고 `FEDIFY_*`가 Web에만 나타나는지 검증한다.
+- Confirmation / Follow-up: Helm render에서 API source가 API와 Web 및 활성화된 Worker 기본 env에 동일하게 나타나고 `FEDIFY_*`가 Web과 Worker에만 나타나는지 검증한다.
 
 ### 역할별 URL과 password Secret reference를 additive atomic trio로 받는다
 
@@ -34,11 +34,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-709`, `PROD-719`, `PROD-448`
 - Status: Active
-- Context / Problem: API outbound Fedify 경로와 Worker credential 소비는 selector 지원과 별도 생명주기를 갖는다. API에 Fedify env를 미리 주입하거나 Worker credential 계약을 이 change에 끌어오면 소비자와 소유권이 뒤섞인다.
-- Decision Outcome: `fedify` trio가 활성화되면 Web Rollout에만 `FEDIFY_DATABASE_PASSWORD` SecretKeyRef와 `FEDIFY_DATABASE_URL`을 추가한다. API Rollout에는 `FEDIFY_DATABASE_*`를 절대 주입하지 않는다. 이 legacy seam의 `worker`/`WORKER_DATABASE_*` migration과 Worker credential 소비는 PROD-715, API outbound direct Fedify 호출 제거와 Temporal Workflow + Worker Activity 활성화는 PROD-448이 소유한다.
-- Alternatives Considered: API와 Web 양쪽에 Fedify env를 주입하는 방식은 현재 inbound consumer 범위를 넘어가므로 제외했다. Worker Deployment와 Temporal env를 이 chart에 미리 추가하는 방식은 downstream rollout과 credential 소유권을 침범하므로 제외했다.
-- Consequences: 이 change 배포 후에도 API의 outbound direct Fedify 호출이나 Worker가 자동으로 전환되지 않는다. Web inbound Fedify만 후속 consumer가 읽을 수 있는 환경 경계를 얻는다.
-- Confirmation / Follow-up: API Rollout manifest에 `FEDIFY_DATABASE_*`가 없고, Web Rollout에만 두 환경이 additive로 나타나는지 검증한다.
+- Context / Problem: API outbound Fedify 경로와 Worker의 실제 DB connection 전환은 selector 입력 seam과 별도 생명주기를 갖는다. API에 Worker credential을 주입하거나 기존 Worker 입력 seam을 실제 credential cutover로 간주하면 소비자와 소유권이 뒤섞인다.
+- Decision Outcome: `fedify` trio가 활성화되면 Web Rollout과 명시적으로 활성화된 Worker Deployment에 `FEDIFY_DATABASE_PASSWORD` SecretKeyRef와 `FEDIFY_DATABASE_URL`을 제공한다. API Rollout에는 `FEDIFY_DATABASE_*`를 절대 주입하지 않는다. 이 legacy seam의 `worker`/`WORKER_DATABASE_*` 명칭 migration과 실제 `kosmo_worker` connection cutover는 PROD-715, API outbound direct Fedify 호출 제거와 Temporal Workflow + Worker Activity 활성화는 PROD-448이 소유한다.
+- Alternatives Considered: API에 Fedify env를 주입하는 방식은 consumer 범위를 넘어가므로 제외했다. Worker foundation이 이미 제공하는 입력 seam을 다시 구현하는 방식도 중복이므로 제외했다.
+- Consequences: Worker Deployment에는 선택된 값을 전달할 seam이 이미 있지만 foundation은 DB connection을 열지 않는다. 이 change 배포만으로 API outbound direct Fedify 호출이나 Web/Worker의 실제 credential이 전환되지는 않는다.
+- Confirmation / Follow-up: API Rollout manifest에 `FEDIFY_DATABASE_*`가 없고, Web Rollout과 활성화된 Worker Deployment에 두 환경이 additive로 나타나는지 검증한다.
 
 ### `kosmo_worker` BYPASSRLS와 권한 provisioning은 downstream이다
 
