@@ -22,8 +22,7 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 ### `01 Foundations` 프로덕션 구조
 
 - [`01 Color System · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1661-254) — primitive, semantic Light/Dark, feedback, state, contrast와 migration 계약
-- `02 Typography · Production` — 공용 typography scale과 사용 예시
-- `02 Typography · MCP Font Mapping` — Figma와 자동화 환경의 font family 대응
+- [`02 Typography & Layout · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1659-255) — typography, font mode, spacing, radius, border, elevation, icon과 density/rhythm 계약. 상세 사용 규칙은 [foundations.md](./foundations.md)를 따른다.
 - `03 Brand & Logo · Production` — 로고 규칙, 플랫폼 자산과 Default Avatar
 - [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1684-254) — 실제 화면과 공용 컴포넌트의 Legacy → Production color 적용표
 
