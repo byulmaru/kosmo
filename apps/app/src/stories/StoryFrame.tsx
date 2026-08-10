@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { space, textStyles } from '@/theme/tokens';
 import type { PropsWithChildren, ReactNode } from 'react';
 
 export function Catalog({ children, width = 600 }: PropsWithChildren<{ width?: number }>) {
@@ -11,7 +11,7 @@ export function Section({ children, title }: { children: ReactNode; title: strin
   const theme = useTheme();
   return (
     <View style={styles.section}>
-      <Text style={[styles.heading, { color: theme.textSecondary }]}>{title}</Text>
+      <Text style={[styles.heading, { color: theme.foregroundSecondary }]}>{title}</Text>
       {children}
     </View>
   );
@@ -22,14 +22,12 @@ export function Row({ children }: PropsWithChildren) {
 }
 
 const styles = StyleSheet.create({
-  catalog: { alignSelf: 'center', gap: spacing.xxl, width: '100%' },
-  section: { gap: spacing.md },
+  catalog: { alignSelf: 'center', gap: space[32], width: '100%' },
+  section: { gap: space[12] },
   heading: {
-    fontFamily: 'SUIT',
-    fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
-    ...typography.xsm,
+    ...textStyles.uiLabelS,
   },
-  row: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  row: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: space[12] },
 });

@@ -7,10 +7,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { sb } from 'storybook/test';
 import { PostContentWarningRevealProvider } from '@/components/post/PostContentWarningRevealContext';
 import { ToastProvider } from '@/components/ui/ToastProvider';
-import { ThemeProvider } from '@/theme/ThemeProvider';
+import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { RouterMockProvider } from './mocks/expo-router';
 import { RelayStoryProvider } from './mocks/react-relay';
 import type { Preview } from '@storybook/react-vite';
+import type { PropsWithChildren } from 'react';
 
 sb.mock(import('../src/analytics/client.web.ts'), { spy: true });
 sb.mock(import('../src/auth/webLogin.ts'), { spy: true });
@@ -22,9 +23,12 @@ const preview: Preview = {
       const router = context.parameters.router ?? {};
       const relay = context.parameters.relay ?? {};
 
+      const theme = context.globals.theme === 'dark' ? 'dark' : 'light';
+      const reduceMotion = context.globals.reduceMotion === true;
+
       return (
         <SafeAreaProvider>
-          <ThemeProvider>
+          <ThemeProvider mode={theme} reduceMotion={reduceMotion}>
             <ToastProvider>
               <PostContentWarningRevealProvider key={context.id}>
                 <RelayStoryProvider
@@ -53,9 +57,9 @@ const preview: Preview = {
                         </View>
                       }
                     >
-                      <View style={{ flex: 1, minHeight: '100%', width: '100%' }}>
+                      <ThemedStory>
                         <Story />
-                      </View>
+                      </ThemedStory>
                     </Suspense>
                   </RouterMockProvider>
                 </RelayStoryProvider>
@@ -66,7 +70,31 @@ const preview: Preview = {
       );
     },
   ],
-  initialGlobals: { backgrounds: { value: 'kosmoLight' } },
+  globalTypes: {
+    reduceMotion: {
+      description: 'OS reduced-motion 상태를 시뮬레이션합니다.',
+      name: 'Reduced motion',
+      toolbar: {
+        icon: 'accessibility',
+        items: [
+          { title: 'Motion', value: false },
+          { title: 'Reduced motion', value: true },
+        ],
+      },
+    },
+    theme: {
+      description: '공용 primitive의 runtime theme를 선택합니다.',
+      name: 'Theme',
+      toolbar: {
+        icon: 'paintbrush',
+        items: [
+          { title: 'Light', value: 'light' },
+          { title: 'Dark', value: 'dark' },
+        ],
+      },
+    },
+  },
+  initialGlobals: { backgrounds: { value: 'kosmoLight' }, reduceMotion: false, theme: 'light' },
   parameters: {
     a11y: {
       // Preserve the existing Svelte/Figma #777 secondary-text token in this migration.
@@ -76,9 +104,9 @@ const preview: Preview = {
     },
     backgrounds: {
       options: {
-        kosmoDark: { name: 'KOSMO Dark', value: '#111111' },
-        kosmoLight: { name: 'KOSMO Light', value: '#ffffff' },
-        kosmoSurface: { name: 'KOSMO Surface', value: '#f6f6f6' },
+        kosmoDark: { name: 'KOSMO Dark', value: '#18181B' },
+        kosmoLight: { name: 'KOSMO Light', value: '#F7F7F8' },
+        kosmoSurface: { name: 'KOSMO Surface', value: '#F8F8FA' },
       },
     },
     controls: {
@@ -126,5 +154,16 @@ const preview: Preview = {
     },
   },
 };
+
+function ThemedStory({ children }: PropsWithChildren) {
+  const theme = useTheme();
+  return (
+    <View
+      style={{ backgroundColor: theme.backgroundCanvas, flex: 1, minHeight: '100%', width: '100%' }}
+    >
+      {children}
+    </View>
+  );
+}
 
 export default preview;

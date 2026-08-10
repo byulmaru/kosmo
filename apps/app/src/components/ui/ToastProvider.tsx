@@ -1,8 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, shadow, spacing, typography } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { breakpoints, radius, space, textStyles } from '@/theme/tokens';
+import { useToastMotion } from '@/theme/useOverlayMotion';
 import type { PropsWithChildren, ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -19,24 +28,30 @@ type ToastOptions = Readonly<{
     label: string;
     onPress: () => void;
   }>;
+  tone?: 'danger' | 'info' | 'success' | 'warning';
 }>;
 
 type Toast = Readonly<{
   action?: ToastOptions['action'];
   id: number;
   message: string;
+  tone?: ToastOptions['tone'];
 }>;
 
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const [toast, setToast] = useState<Toast | null>(null);
+  const [toastVisible, setToastVisible] = useState(false);
   const activeToastId = useRef<number | null>(null);
   const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const theme = useTheme();
+  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
-  const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + spacing.sm;
+  const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + space[8];
+  const toastColors = toast ? getToastColors(theme, toast.tone) : undefined;
+  const toastMotion = useToastMotion(toastVisible);
 
   const dismissToast = useCallback((id?: number) => {
     if (id !== undefined && activeToastId.current !== id) {
@@ -47,7 +62,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       timer.current = null;
     }
     activeToastId.current = null;
-    setToast(null);
+    setToastVisible(false);
   }, []);
 
   const showToast = useCallback(
@@ -57,15 +72,9 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
       }
       const id = nextToastId.current++;
       activeToastId.current = id;
-      setToast({ action: options?.action, id, message: nextMessage });
-      timer.current = setTimeout(() => {
-        if (activeToastId.current !== id) {
-          return;
-        }
-        activeToastId.current = null;
-        setToast(null);
-        timer.current = null;
-      }, toastDurationMs);
+      setToast({ action: options?.action, id, message: nextMessage, tone: options?.tone });
+      setToastVisible(true);
+      timer.current = setTimeout(() => dismissToast(id), toastDurationMs);
       return () => dismissToast(id);
     },
     [dismissToast],
@@ -80,22 +89,46 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
     [],
   );
 
+  useEffect(() => {
+    if (!toastVisible && !toastMotion.mounted) {
+      setToast(null);
+    }
+  }, [toastMotion.mounted, toastVisible]);
+
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {toast ? (
-        <View
+      {toast && toastMotion.mounted ? (
+        <Animated.View
           key={toast.id}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
-          style={[Platform.OS === 'web' ? webHost : styles.nativeHost, { paddingBottom: bottom }]}
+          style={[
+            Platform.OS === 'web' ? webHost : styles.nativeHost,
+            {
+              opacity: toastMotion.progress,
+              paddingBottom: bottom,
+              transform: [
+                {
+                  translateY: toastMotion.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [space[8], 0],
+                  }),
+                },
+              ],
+            },
+          ]}
         >
-          <View style={[styles.toast, { backgroundColor: theme.accent }]}>
-            <Text style={[styles.message, { color: theme.background }]}>{toast.message}</Text>
+          <View
+            style={[styles.toast, elevation.floating, { backgroundColor: toastColors?.background }]}
+          >
+            <Text style={[styles.message, { color: toastColors?.foreground }]}>
+              {toast.message}
+            </Text>
             {toast.action ? (
               <Pressable
                 accessibilityRole="button"
-                hitSlop={spacing.sm}
+                hitSlop={space[8]}
                 onPress={() => {
                   const action = toast.action;
                   dismissToast(toast.id);
@@ -103,16 +136,33 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
                 }}
                 style={styles.action}
               >
-                <Text style={[styles.actionLabel, { color: theme.background }]}>
+                <Text style={[styles.actionLabel, { color: toastColors?.foreground }]}>
                   {toast.action.label}
                 </Text>
               </Pressable>
             ) : null}
           </View>
-        </View>
+        </Animated.View>
       ) : null}
     </ToastContext.Provider>
   );
+}
+
+function getToastColors(theme: ReturnType<typeof useTheme>, tone: ToastOptions['tone']) {
+  if (tone === 'danger') {
+    return { background: theme.feedbackDangerBase, foreground: theme.feedbackDangerOnBase };
+  }
+  if (tone === 'success') {
+    return { background: theme.feedbackSuccessBase, foreground: theme.feedbackSuccessOnBase };
+  }
+  if (tone === 'warning') {
+    return { background: theme.feedbackWarningBase, foreground: theme.feedbackWarningOnBase };
+  }
+  if (tone === 'info') {
+    return { background: theme.feedbackInfoBase, foreground: theme.feedbackInfoOnBase };
+  }
+
+  return { background: theme.accent, foreground: theme.background };
 }
 
 export function useToast(): ToastContextValue {
@@ -134,18 +184,15 @@ const webHost = {
 } as unknown as ViewStyle;
 
 const styles = StyleSheet.create({
-  action: { paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
+  action: { paddingHorizontal: space[4], paddingVertical: space[4] },
   actionLabel: {
-    fontFamily: 'SUIT',
-    fontWeight: '800',
     textDecorationLine: 'underline',
-    ...typography.sm,
+    ...textStyles.uiLabelM,
   },
   message: {
     flexShrink: 1,
-    fontFamily: 'SUIT',
     transform: [{ translateY: 2 }],
-    ...typography.sm,
+    ...textStyles.uiCopyM,
   },
   nativeHost: {
     ...StyleSheet.absoluteFill,
@@ -156,13 +203,12 @@ const styles = StyleSheet.create({
   },
   toast: {
     alignItems: 'center',
-    borderRadius: radii.md,
+    borderRadius: radius[12],
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: space[12],
     maxWidth: 480,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
     pointerEvents: 'auto',
-    ...shadow,
   },
 });

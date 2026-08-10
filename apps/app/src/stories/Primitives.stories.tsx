@@ -3,7 +3,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { TextArea, TextField } from '@/components/ui/TextField';
-import { colors, radii, spacing } from '@/theme/tokens';
+import { radius, semanticColors, space } from '@/theme/tokens';
 import { Catalog, Row, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -11,10 +11,14 @@ function PrimitivesCatalog() {
   return (
     <Catalog>
       <Section title="Avatar fallback across sizes and backgrounds">
-        <View style={[styles.avatarPreview, { backgroundColor: colors.light.background }]}>
+        <View
+          style={[styles.avatarPreview, { backgroundColor: semanticColors.light.backgroundCanvas }]}
+        >
           <AvatarSizes />
         </View>
-        <View style={[styles.avatarPreview, { backgroundColor: colors.dark.background }]}>
+        <View
+          style={[styles.avatarPreview, { backgroundColor: semanticColors.dark.backgroundCanvas }]}
+        >
           <AvatarSizes />
         </View>
       </Section>
@@ -37,11 +41,12 @@ function PrimitivesCatalog() {
         <TextField label="기본 입력" placeholder="Placeholder..." />
         <TextField defaultValue="입력된 값" label="입력 완료" />
         <TextField error="입력값을 확인해 주세요." label="오류" value="잘못된 값" />
+        <TextField editable={false} label="비활성" value="수정할 수 없는 값" />
         <TextArea label="여러 줄 입력" multiline placeholder="본문을 입력하세요." />
       </Section>
 
       <Section title="Loading placeholders">
-        <View style={{ gap: spacing.sm }}>
+        <View style={{ gap: space[8] }}>
           <Skeleton height={80} />
           <Skeleton width="70%" />
           <Skeleton width="45%" />
@@ -74,8 +79,8 @@ function AvatarSizes() {
 
 const styles = StyleSheet.create({
   avatarPreview: {
-    borderRadius: radii.md,
-    padding: spacing.lg,
+    borderRadius: radius[12],
+    padding: space[16],
   },
 });
 
@@ -87,4 +92,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const AllStates: Story = {};
+export const Light: Story = {};
+export const Dark: Story = {
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+};
+export const ReducedMotion: Story = {
+  globals: { reduceMotion: true },
+};

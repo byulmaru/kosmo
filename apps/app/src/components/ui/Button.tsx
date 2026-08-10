@@ -1,8 +1,8 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, motion, radius, space, textStyles } from '@/theme/tokens';
 import type { PropsWithChildren, Ref } from 'react';
-import type { PressableProps } from 'react-native';
+import type { PressableProps, ViewStyle } from 'react-native';
 
 type ButtonProps = PropsWithChildren<
   PressableProps & {
@@ -15,6 +15,7 @@ type ButtonProps = PropsWithChildren<
 
 export function Button({
   accessibilityLabel,
+  accessibilityState,
   children,
   controlRef,
   disabled,
@@ -25,29 +26,67 @@ export function Button({
   ...props
 }: ButtonProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const label = accessibilityLabel ?? (typeof children === 'string' ? children : undefined);
-  const backgroundColor =
-    tone === 'primary' ? theme.primary : tone === 'danger' ? theme.danger : theme.card;
-  const color = tone === 'danger' ? '#ffffff' : theme.text;
-  const borderColor = tone === 'secondary' ? theme.border : 'transparent';
-  const borderWidth = tone === 'secondary' ? 1 : 0;
+  const color = disabled
+    ? theme.stateDisabledForeground
+    : tone === 'primary'
+      ? theme.actionPrimaryOnBase
+      : tone === 'danger'
+        ? theme.feedbackDangerOnBase
+        : theme.foregroundPrimary;
+  const borderColor = disabled
+    ? theme.borderDisabled
+    : tone === 'secondary'
+      ? theme.borderDefault
+      : 'transparent';
+  const borderWidth = tone === 'secondary' ? borderWidths[1] : borderWidths[0];
 
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      accessibilityState={{
+        ...accessibilityState,
+        busy: loading ? true : accessibilityState?.busy,
+        disabled: disabled || loading ? true : accessibilityState?.disabled,
+      }}
       disabled={disabled || loading}
       ref={controlRef}
-      style={(state) => [
-        styles.root,
-        {
-          backgroundColor,
-          borderColor,
-          borderWidth,
-          opacity: disabled || loading ? 0.45 : state.pressed ? 0.95 : 1,
-        },
-        typeof style === 'function' ? style(state) : style,
-      ]}
+      style={(state) => {
+        const hovered = Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered);
+        return [
+          styles.root,
+          Platform.OS === 'web'
+            ? ({
+                transitionDuration: `${reducedMotion ? motion.duration.instant : motion.duration.fast}ms`,
+                transitionProperty: 'background-color, border-color, opacity',
+                transitionTimingFunction: motion.easing.standard,
+              } as unknown as ViewStyle)
+            : undefined,
+          {
+            backgroundColor: disabled
+              ? theme.stateDisabledSurface
+              : tone === 'primary'
+                ? state.pressed
+                  ? theme.actionPrimaryPressed
+                  : hovered
+                    ? theme.actionPrimaryHover
+                    : theme.actionPrimaryBase
+                : tone === 'danger'
+                  ? theme.feedbackDangerBase
+                  : state.pressed
+                    ? theme.statePressed
+                    : hovered
+                      ? theme.stateHover
+                      : theme.backgroundElevated,
+            borderColor,
+            borderWidth,
+            opacity: tone === 'danger' && (state.pressed || hovered) ? 0.9 : 1,
+          },
+          typeof style === 'function' ? style(state) : style,
+        ];
+      }}
       {...props}
     >
       {loading ? (
@@ -65,17 +104,13 @@ export function Button({
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    borderRadius: radii.sm,
+    borderRadius: radius[8],
     minHeight: 40,
     minWidth: 120,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: space[16],
+    paddingVertical: space[8],
   },
-  label: {
-    fontFamily: 'SUIT',
-    fontWeight: '700',
-    ...typography.sm,
-  },
-  loadingContent: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  label: textStyles.uiLabelM,
+  loadingContent: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
 });

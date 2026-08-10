@@ -1,6 +1,6 @@
 import { Image, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii } from '@/theme/tokens';
+import { borderWidths, radius } from '@/theme/tokens';
 import defaultAvatar from '../../../assets/avatar/default-avatar.png';
 import type { ImageSourcePropType, StyleProp, ViewStyle } from 'react-native';
 
@@ -20,7 +20,12 @@ export function Avatar({ imageUri = null, label, size = 40, style }: AvatarProps
       accessibilityRole="image"
       style={[
         styles.root,
-        { backgroundColor: theme.surface, borderColor: theme.border, height: size, width: size },
+        {
+          backgroundColor: theme.backgroundSurface,
+          borderColor: theme.borderDefault,
+          height: size,
+          width: size,
+        },
         style,
       ]}
     >
@@ -44,8 +49,8 @@ function resolveAvatarSource(imageUri: string | null): ImageSourcePropType {
 const styles = StyleSheet.create({
   root: {
     alignItems: 'center',
-    borderRadius: radii.full,
-    borderWidth: 1,
+    borderRadius: radius.full,
+    borderWidth: borderWidths[1],
     justifyContent: 'center',
     overflow: 'hidden',
   },

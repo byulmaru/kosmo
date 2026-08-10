@@ -286,15 +286,15 @@ export const InteractionContract: Story = {
     expect(getComputedStyle(copyLabel).textAlign).toBe('left');
     expect(getComputedStyle(copyItem).borderTopWidth).toBe('0px');
     expect(getComputedStyle(deleteItem).borderTopWidth).toBe('1px');
-    expect(getComputedStyle(deleteItem).borderTopColor).toBe('rgb(242, 242, 242)');
+    expect(getComputedStyle(deleteItem).borderTopColor).toBe('rgb(236, 236, 240)');
     fireEvent.keyDown(copyItem, { key: 'Enter' });
-    expect(getComputedStyle(copyItem).backgroundColor).toBe('rgb(246, 246, 246)');
+    expect(getComputedStyle(copyItem).backgroundColor).toBe('rgba(0, 0, 0, 0.08)');
     fireEvent.keyUp(copyItem, { key: 'Enter' });
     await userEvent.keyboard('{Enter}');
     const hoveredStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
     const hoveredCopyItem = within(hoveredStyleMenu).getByRole('menuitem', { name: '링크 복사' });
     await userEvent.hover(hoveredCopyItem);
-    expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe('rgb(246, 246, 246)');
+    expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
     await userEvent.keyboard('{Escape}');
     await userEvent.keyboard('{Enter}');
     const reopenedStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
