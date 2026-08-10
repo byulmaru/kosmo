@@ -130,6 +130,7 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 | Dark Muted / Elevated           |  `4.92:1` |
 | Dark Focus / Elevated           |  `7.06:1` |
 | Dark Strong Border / Surface    |  `3.28:1` |
+| Dark Primary / Canvas           | `14.26:1` |
 | Light Selected Border / Surface |  `3.24:1` |
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
@@ -148,7 +149,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 ## Legacy와 개발 token 이관
 
-기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정하고, 실제 Figma 재바인딩은 DSN-13, 코드 consumer 이관은 DSN-19가 소유한다.
+기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정한다. 실제 Figma 재바인딩은 DSN-13, `tokens.ts`·`ThemeProvider`·공용 primitive는 DSN-19, route·shell·domain consumer는 DSN-21 또는 이미 연결된 Product 이슈가 소유한다.
 
 | Legacy Figma / 현재 코드             | Production semantic                                                      | 이관 규칙                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -171,13 +172,40 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 `like`, Repost, Bookmark, Medal과 profile gradient는 제품 의미가 승인될 때까지 기존 표현을 유지하고 component contract 후보로 기록한다.
 
+### 이관 소유권
+
+- **DSN-19:** production semantic token 코드, runtime theme selector와 Button·TextField·ModalSheet·ActionMenu·ToastProvider·StateView 등 공용 primitive를 이관한다.
+- **DSN-21 / 연결된 Product 이슈:** route·shell·domain call-site가 공용 token과 primitive를 소비하도록 이관하고, 화면별 예외를 닫는다. 별도 제품 의미 결정이 필요한 consumer는 연결된 Product 이슈로 분리하되, 이슈가 연결되기 전까지 DSN-21 inventory에 남긴다.
+- **DSN-13:** DSN-19와 DSN-21/Product 구현이 확정된 뒤 Figma Components/Screens를 Production Semantic Color로 재바인딩하고 최종 mapping evidence를 갱신한다.
+
+### 현재 raw·legacy consumer inventory
+
+아래 목록은 `apps/app/src`의 활성 코드에서 확인한 migration 입력이다. 테스트 fixture와 Storybook assertion의 예시 색상값은 구현 결과에 맞춰 해당 이슈에서 갱신하며 이 표의 별도 consumer로 세지 않는다.
+
+| Consumer                                                                                                                                                          | 현재 표현                                                 | 판정 | 목표 token·규칙                                                                            | 후속 소유                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `theme/tokens.ts`, `ThemeProvider.tsx`                                                                                                                            | flat Light/Dark 값, runtime은 Light 고정                  | 교체 | Production semantic token과 runtime selector API                                           | DSN-19                                      |
+| `ui/Button.tsx`                                                                                                                                                   | Danger foreground `#ffffff`                               | 교체 | `color/feedback/danger/on-base`                                                            | DSN-19                                      |
+| `ui/ModalSheet.tsx`, `ui/ActionMenu.tsx`                                                                                                                          | black 40% backdrop                                        | 교체 | `color/overlay/scrim`                                                                      | DSN-19                                      |
+| `shell/UniversalShell.tsx`                                                                                                                                        | black 35% drawer backdrop                                 | 교체 | `color/overlay/scrim`                                                                      | DSN-21                                      |
+| `feedback/FeedbackOverlay.tsx`, `post/ReplyComposerSurface.tsx`                                                                                                   | black 48% backdrop                                        | 교체 | `color/overlay/scrim`                                                                      | DSN-21                                      |
+| `post/PostComposer.tsx`, `post/PostDeletionAction.tsx`, `profile/ProfileEditDiscardDialog.tsx`, `reaction/ReactionProfilesModal.tsx`, `shell/ProfileSwitcher.tsx` | black 40% modal backdrop                                  | 교체 | `color/overlay/scrim`                                                                      | DSN-21                                      |
+| `shell/SidebarNavigation.tsx`                                                                                                                                     | Primary icon foreground `#111111`                         | 교체 | `color/action/primary/on-base`                                                             | DSN-21                                      |
+| `post/PostMediaViewer.tsx`                                                                                                                                        | fixed black/white, black 55%·92% media overlay            | 예외 | Fullscreen media 고정색과 `0.55–0.92` overlay 유지                                         | DSN-21 예외 검증                            |
+| `post/PostComposerMediaControls.tsx`, `profile/ProfileEditImageFields.tsx`                                                                                        | `colors.light/dark` 직접 참조로 media mask 전경·배경 구성 | 예외 | theme 전환과 무관한 fixed black/white를 유지하고 직접 Light/Dark theme 참조는 제거         | DSN-21                                      |
+| `shell/ProfileSwitcher.tsx`                                                                                                                                       | raw neutral profile gradient                              | 후속 | 제품 의미 승인 전 유지, profile component token 후보                                       | DSN-21 또는 연결된 Product 이슈             |
+| `post/PostComposer.tsx`, `shell/ProfileSwitcher.tsx`, `shell/UniversalShell.tsx`, `ui/ActionMenu.tsx`                                                             | raw rgba box shadow                                       | 유지 | DSN-14 elevation 계약을 적용하며 shared primitive는 DSN-19, shell/domain은 DSN-21에서 이관 | DSN-14 → DSN-19/21                          |
+| `ui/ToastProvider.tsx`                                                                                                                                            | `accent` background와 일반 background foreground          | 교체 | Toast API는 feedback `base/on-base`; 실제 호출부가 Info/Success/Warning/Danger 의미를 선택 | DSN-19 API, DSN-21/Product 호출부           |
+| `shell/UnreadDot.tsx`, `notification/NotificationListItem.tsx`                                                                                                    | `accent`, Primary와 Primary Subtle을 unread 의미로 재사용 | 후속 | unread 전용 semantic 역할 승인 전 legacy 표현 유지                                         | DSN-21; 제품 의미 결정 시 Product 이슈 연결 |
+| `post/PostActionBar.tsx`                                                                                                                                          | `like` 등 제품 action 의미색                              | 예외 | Like/Repost/Bookmark 의미 승인 전 유지, component token 후보                               | DSN-21 또는 연결된 Product 이슈             |
+
 ## Runtime theme 전략
 
-Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. DSN-4는 runtime selector를 활성화하지 않는다. 현재 앱은 Light만 공급하므로 DSN-19에서 다음 조건을 충족한 뒤 runtime theme 선택과 지속성을 활성화한다.
+Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. DSN-4는 runtime selector를 활성화하지 않는다. 현재 앱은 Light만 공급한다. DSN-19는 selector API와 공용 theme·primitive의 Light/Dark 소비를 구현하고, 프로덕션 전체 Dark 활성화 gate는 DSN-21 또는 연결된 Product 이슈의 route·shell·domain consumer 이관까지 완료된 뒤 닫는다.
 
 - 공용 primitive가 semantic foreground pair와 interaction state를 소비한다.
-- raw white, scrim과 직접 `colors.light/dark`를 참조하는 consumer가 이관되거나 예외로 분류된다.
-- Storybook에서 Light/Dark와 핵심 component state를 검증한다.
+- DSN-19의 공용 primitive raw 값과 DSN-21/Product의 route·shell·domain raw 값이 각각 이관되거나 위 inventory의 예외로 남는다.
+- DSN-19 Storybook에서 공용 primitive의 Light/Dark와 핵심 state를 검증하고, DSN-21/Product가 대표 route·shell consumer의 theme 전환을 검증한다.
 - Web 자동 대비와 실제 Android/iOS runtime QA를 서로 다른 증거로 기록한다.
 
 ## 예외와 금지
