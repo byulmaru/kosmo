@@ -84,6 +84,12 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
     assert.equal(childOnPressBeforeLink, undefined);
+    const item = rendered('View').find(
+      (node) => node.props.testID === 'byulmaru-id-account-settings-item',
+    );
+    assert.ok(item);
+    assert.equal(item.props.style.minHeight, 64);
+    assert.equal(item.props.style.width, '100%');
   });
 
   it('focus-visible style과 link target geometry를 유지한다', async () => {

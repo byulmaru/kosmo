@@ -21,7 +21,7 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError } from '../error';
-import type { Transaction } from '../db';
+import type { Database, DatabaseHandle, Transaction } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -190,8 +190,11 @@ export const createFollowRequestNotificationPostCommit = async (
     onError,
   );
 
-export const createReactionNotification = async (sourceId: string): Promise<void> => {
-  await db.transaction(async (tx) => {
+export const createReactionNotification = async (
+  sourceId: string,
+  handle?: DatabaseHandle,
+): Promise<void> => {
+  await getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
         actorProfileId: Reactions.profileId,
@@ -280,8 +283,11 @@ const selectReplyVisibleToProfile = async (
     .limit(1)
     .then((rows) => rows.length > 0);
 
-export const createReplyNotification = async (sourceId: string, tx?: Transaction): Promise<void> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+export const createReplyNotification = async (
+  sourceId: string,
+  handle?: DatabaseHandle,
+): Promise<void> =>
+  getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
         actorProfileId: Posts.profileId,
@@ -321,8 +327,12 @@ export const createReplyNotification = async (sourceId: string, tx?: Transaction
       });
   });
 
-export const createRepostNotification = async (sourceId: string): Promise<void> => {
-  const source = await db
+export const createRepostNotification = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> => {
+  const connection = getDatabaseConnection(handle);
+  const source = await connection
     .select({
       actorProfileId: Posts.profileId,
       id: Posts.id,
@@ -372,7 +382,7 @@ export const createRepostNotification = async (sourceId: string): Promise<void> 
     return;
   }
 
-  await db
+  await connection
     .insert(Notifications)
     .values({
       data: {},
@@ -388,8 +398,9 @@ export const createRepostNotification = async (sourceId: string): Promise<void> 
 export const deleteNotificationBySource = async (
   kind: NotificationKind,
   sourceId: string,
+  handle?: Database,
 ): Promise<void> => {
-  await db
+  await getDatabaseConnection(handle)
     .delete(Notifications)
     .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
 };

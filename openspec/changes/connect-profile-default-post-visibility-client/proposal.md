@@ -8,8 +8,9 @@ Backend가 Local Profile별 기본 Post Visibility를 제공해도 유니버설 
 
 - Relay Profile fragment와 기존 `updateProfile` mutation으로 기본 Post Visibility를 읽고 저장된 Profile
   record에 수렴한다.
-- 현재 Local Profile을 식별하는 설정 control에 Owner 편집, Member 비편집, dirty·pending·success·error·retry와
-  늦은 completion 격리를 제공하고 canonical `/settings`의 Profile 영역에 연결한다.
+- 현재 Local Profile을 식별하는 설정 control에 Owner 편집, Member 비편집, 변경 요청 상태와 늦은 completion
+  격리를 제공하고 canonical Settings route family의 Profile detail에 연결한다. 구체적인 선택·저장 상호작용은 고정하지
+  않는다.
 - 새 일반 Post·Reply Composer가 selected Profile의 기본값으로 시작하고 unavailable 상태에서는 다른 Profile
   값을 재사용하지 않고 `UNLISTED`로 fallback한다.
 - 열린 draft와 Profile 설정 변경을 독립시키고 selected Profile·Reply Parent·Relay Environment가 바뀔 때만
@@ -22,8 +23,8 @@ Backend가 Local Profile별 기본 Post Visibility를 제공해도 유니버설 
 - Canonical: `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`,
   `docs/design/reply-composer.md`, `docs/design/settings.md`, `docs/design/accessibility.md`
 - Linear Contract: `PROD-667`
-- Linear Implementations: `PROD-667`; Backend API 계약은 `PROD-648`, generic `/settings` route·page shell과
-  페이지 수준 정보 구조는 `PROD-653`, Byulmaru ID Account entry는 `PROD-645`
+- Linear Implementations: `PROD-667`; Backend API 계약은 `PROD-648`, production `/settings` route·page shell과
+  page-level 조립은 `PROD-685`, Byulmaru ID Account entry는 `PROD-645`, 최종 Settings 통합·archive는 `PROD-684`
 
 ## Capabilities
 
@@ -42,5 +43,5 @@ Backend가 Local Profile별 기본 Post Visibility를 제공해도 유니버설 
 - `apps/app`: Relay Profile fragment와 mutation, Profile 설정 control, Post/Reply Composer 초기화·reset·문맥
   격리, canonical `/settings` Profile 연결 및 Storybook·component 검증
 - `docs/design/reply-composer.md`: 기존 Profile 기본값 소비 계약의 구현 이슈 provenance 정렬
-- `PROD-653`: generic settings host는 Profile child를 재구현하지 않고 PROD-667 결과를 조립한다.
+- `PROD-685`: production settings host는 Profile child를 재구현하지 않고 PROD-667 결과를 조립한다.
 - `packages/core`, `apps/api`, DB migration, ActivityPub actor와 federation payload 변경 없음

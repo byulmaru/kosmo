@@ -1,7 +1,7 @@
 ## Context
 
-`/profile-edit` route와 nullable `selectedProfileForEdit` 권한 query는 이미 production에 존재한다. 공개 Profile의
-Owner 전용 편집 button도 같은 field의 id 일치로 노출한다. PROD-660의 최초 구현은 이를 shared navigation
+`/profile-edit` route와 `Profile.viewerState.membership` 기반 편집 eligibility는 이미 production에 존재한다.
+공개 Profile의 Owner 전용 편집 button도 같은 projection으로 노출한다. PROD-660의 최초 구현은 이를 shared navigation
 항목으로 추가했지만, 제품 owner가 확인한 Figma 의도는 `WebSidebar`의 selected Profile 요약 안에서 향후
 멀티프로필 전환 cluster 아래에 예약된 좌표에 작은 노란 `편집` action을 배치하는 것이다. 현재 production에는
 그 thumbnail visual이 없으므로 PROD-660은 action만 복원하고 cluster visual·data·interaction은 추가하지 않는다.
@@ -14,8 +14,8 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
 
 **Goals:**
 
-- `selectedProfileForEdit`이 있는 인증 사용자의 full Web sidebar와 mobile drawer Profile 요약에 `/profile-edit`
-  action을 제공한다.
+- Local selected Profile에 대한 Owner Membership이 있는 인증 사용자의 full Web sidebar와 mobile drawer
+  Profile 요약에 `/profile-edit` action을 제공한다.
 - Figma가 정한 위치와 `72x32` primary/sm 시각 geometry를 보존하고 platform별 최소 input target을 충족한다.
 - 기존 guarded navigation, page-current semantics와 drawer close를 재사용한다.
 - 권한 없는 상태의 미노출, compact rail·bottom tab·주요 navigation row 비노출을 자동화로 직접 검증한다.
@@ -33,10 +33,10 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
 
 ### Current Constraints
 
-- `ProfileSwitcher`는 Query fragment로 selected Profile 요약을 이미 소유하지만 `selectedProfileForEdit`을 선택하지
-  않는다. 최초 구현은 이 field를 `SidebarNavigation`에서 읽어 navigation row eligibility에 사용했다.
-- `selectedProfileForEdit`은 top-level nullable Query field다. selected Profile id 또는 Local instance만으로는
-  Owner Membership을 증명할 수 없다.
+- `ProfileSwitcher`는 Query fragment로 selected Profile 요약을 이미 소유하며 PROD-705가 추가한
+  `viewerState.membership`을 같은 selected Profile에서 선택할 수 있다. 최초 구현은 제거된 top-level query를
+  `SidebarNavigation`에서 읽어 navigation row eligibility에 사용했다.
+- selected Profile id, Local instance 또는 Membership role 하나만으로는 전체 편집 eligibility를 증명할 수 없다.
 - full sidebar와 mobile drawer는 같은 non-compact `ProfileSwitcher` rendering 경계를 사용한다. compact surface는
   별도 avatar-only trigger이므로 편집 action을 조건부로 렌더링하지 않아야 한다.
 - Figma `UserInfo` Profile 요약은 320px 폭, large selected avatar와 오른쪽 mini-profile 이미지 묶음을 갖는다.
@@ -49,8 +49,9 @@ navigation row를 소유하되 이 편집 action을 소유하지 않는다.
 
 ### Recommended Approach
 
-`selectedProfileForEdit { id }` 선택을 `SidebarNavigation`에서 제거하고 기존 `ProfileSwitcher_query` fragment로
-옮긴다. non-compact Profile summary에서 이 field가 존재할 때만 action slot을 렌더한다. slot은 Figma
+기존 `ProfileSwitcher_query` fragment에서 selected Profile의 `instance.kind`와
+`viewerState.membership.role`을 선택한다. non-compact Profile summary에서 Local·Owner 조건을 함께 충족할 때만
+action slot을 렌더한다. slot은 Figma
 `UserInfo`의 future cluster 아래 좌표인 `top: 158`, `right: 20`에 정렬하고, name·handle 영역이 침범하지 않도록
 Profile copy의 사용 가능 폭을 제한한다. production에 없는 cluster target 자체는 만들지 않는다.
 
@@ -67,8 +68,8 @@ form E2E가 소유한 저장 계약은 중복하지 않는다.
 
 ### Allowed Alternatives
 
-Relay fragment composition상 필요하면 parent shell query가 nullable field를 선택해 명시적인 eligibility 값으로
-전달할 수 있다. 다만 같은 server-authoritative field를 사용하고 full sidebar와 drawer가 하나의 ProfileSwitcher
+Relay fragment composition상 필요하면 parent shell query가 같은 selected Profile의 viewer-relative 관계를
+선택해 명시적인 eligibility 값으로 전달할 수 있다. 다만 full sidebar와 drawer가 하나의 ProfileSwitcher
 rendering 경계를 공유해야 하며, 새 client 권한 helper·추가 network query·store lifecycle을 만들지 않아야 한다.
 
 ### Known Traps
@@ -87,8 +88,8 @@ rendering 경계를 공유해야 하며, 새 client 권한 helper·추가 networ
   copy 폭을 Storybook geometry assertion 및 320px summary visual review로 확인한다.
 - [32px 시각 button을 그대로 Native input target으로 사용해 최소 target을 어길 수 있음] → 시각 영역과 입력
   slot을 분리하고 Web 32px, iOS 44pt, Android 48dp 계약을 platform별 style assertion으로 검증한다.
-- [Relay mock에 새 nullable field가 빠져 권한 상태를 증명하지 못할 수 있음] → eligible/ineligible fixture 모두에
-  값을 명시하고 rendered accessibility tree assertion을 둔다.
+- [Relay mock에 nullable Membership이 빠져 권한 상태를 증명하지 못할 수 있음] → eligible/ineligible fixture
+  모두에 값을 명시하고 rendered accessibility tree assertion을 둔다.
 - [공용 drawer source가 Native에도 적용되지만 실제 기기 QA는 실행하지 못할 수 있음] → 공용 source와 platform
   target 계약, Web runtime, Native runtime 증거를 최종 보고에서 분리한다.
 

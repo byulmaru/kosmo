@@ -15,6 +15,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [breakpoints.md](./breakpoints.md) — 레이아웃 브레이크포인트 단계와 컨벤션
 - [post-action-bar.md](./post-action-bar.md) — Post Action Bar의 28px geometry, 배치, Repost 메뉴와 오류 toast 계약
 - [post-media-gallery.md](./post-media-gallery.md) — Post 첨부 이미지 1~4장의 surface, Sensitive·오류·상호작 경계
+- [post-media-viewer.md](./post-media-viewer.md) — 선택한 Post 이미지의 modal 탐색, 원문 panel과 Action Bar 배치 계약
 - [reply-composer.md](./reply-composer.md) — 목록 modal·좁은 화면 전체 작성기·상세 inline Reply Composer 계약
 - [post-thread.md](./post-thread.md) — Post 상세 thread의 renderer·connector·row boundary 소유권과 geometry
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내

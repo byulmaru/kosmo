@@ -15,6 +15,7 @@ import type {
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextStyle, ViewProps } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
 
@@ -25,22 +26,30 @@ interface RenderContext {
 
 const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as ViewProps;
 
+export type PostContentWarningPresentation = 'default' | 'revealed';
+
 export function PostContentRenderer({
   bodyText,
   contentWarning,
+  contentWarningPresentation = 'default',
   document: value,
   interactive = true,
   media,
+  mediaPresentation = 'default',
   onBodyPress,
+  onMediaOpen,
   postId,
   size = 'md',
 }: {
   bodyText: string;
   contentWarning: string | null | undefined;
+  contentWarningPresentation?: PostContentWarningPresentation;
   document: unknown;
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
+  mediaPresentation?: 'default' | 'hidden';
   onBodyPress?: () => void;
+  onMediaOpen?: PostMediaOpenHandler;
   postId: string;
   size?: 'md' | 'lg';
 }) {
@@ -48,7 +57,9 @@ export function PostContentRenderer({
   const document = isPostContentDocumentV1(value) ? value.body : null;
   const isProtected = Boolean(contentWarning);
   const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
-  const contentVisible = !isProtected || revealed;
+  const forcedRevealed = contentWarningPresentation === 'revealed';
+  const contentVisible = forcedRevealed || !isProtected || revealed;
+  const showContentWarning = Boolean(contentWarning) && !forcedRevealed;
   const bodyStyle = [
     styles.body,
     size === 'lg' ? typography.lg : typography.md,
@@ -75,12 +86,17 @@ export function PostContentRenderer({
       body
     );
 
-  if (!contentWarning && !bodyContent && media !== null && media.length === 0) {
+  const showMedia = mediaPresentation === 'default';
+  if (
+    !showContentWarning &&
+    !bodyContent &&
+    (!showMedia || (media !== null && media.length === 0))
+  ) {
     return null;
   }
   return (
     <View {...replayBlockProps} style={styles.root} testID="post-content-renderer">
-      {contentWarning ? (
+      {showContentWarning ? (
         <View
           accessibilityLiveRegion="polite"
           style={[styles.warning, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -110,10 +126,11 @@ export function PostContentRenderer({
         </View>
       ) : null}
       {bodyContent}
-      {contentVisible ? (
+      {contentVisible && showMedia ? (
         <PostMediaGallery
           interactive={interactive}
           media={media}
+          onMediaOpen={onMediaOpen}
           sensitive={document?.attrs?.sensitiveMedia ?? false}
         />
       ) : null}

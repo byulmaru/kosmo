@@ -6,7 +6,8 @@ import { builder } from '@/graphql/builder';
 import { profileFollowAccessWhere } from '../access/follow';
 import { viewerFollowLoader } from '../loader/follow';
 import { viewerFollowRequestLoader } from '../loader/follow-request';
-import { Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
+import { viewerAccountProfileLoader } from '../loader/membership';
+import { AccountProfile, Profile, ProfileFollow, ProfileFollowRequest } from '../ref';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 
@@ -19,6 +20,7 @@ const ProfileViewerState = builder.simpleObject('ProfileViewerState', {
     isSelf: field.boolean(),
     follow: field.field({ type: ProfileFollow, nullable: true }),
     followRequest: field.field({ type: ProfileFollowRequest, nullable: true }),
+    membership: field.field({ type: AccountProfile, nullable: true }),
   }),
 });
 
@@ -116,15 +118,17 @@ builder.objectFields(Profile, (t) => ({
     unauthorizedResolver: () => null,
     resolve: async (profile, _, ctx) => {
       const viewerProfileId = ctx.session.profileId;
-      const [follow, followRequest] = await Promise.all([
+      const [follow, followRequest, membership] = await Promise.all([
         viewerFollowLoader(ctx).load(profile.id),
         viewerFollowRequestLoader(ctx).load(profile.id),
+        viewerAccountProfileLoader(ctx).load(profile.id),
       ]);
 
       return {
         isSelf: viewerProfileId === profile.id,
         follow,
         followRequest: follow ? null : followRequest,
+        membership,
       };
     },
   }),

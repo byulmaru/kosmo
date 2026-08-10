@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
@@ -102,10 +103,12 @@ export function BookmarkList({
   return (
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
-        <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
-          <PageHeader title="북마크" />
-          {content}
-        </ScrollView>
+        <PostMediaViewerHostProvider>
+          <ScrollView contentContainerStyle={styles.root} testID="bookmark-list-scroll">
+            <PageHeader title="북마크" />
+            {content}
+          </ScrollView>
+        </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

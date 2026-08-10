@@ -1,5 +1,4 @@
 import {
-  db,
   Notifications,
   Posts,
   ProfileFollowRequests,
@@ -119,10 +118,26 @@ const followNotificationSourceLoader = (ctx: UserContext) =>
     name: 'notification.followSource',
     nullable: true,
     load: (ids) =>
-      db
+      ctx.db
         .select({ id: ProfileFollows.id, profileId: ProfileFollows.followerProfileId })
         .from(ProfileFollows)
         .where(inArray(ProfileFollows.id, ids)),
+    key: (source) => source?.id ?? null,
+  });
+
+const followRequestNotificationSourceLoader = (ctx: UserContext) =>
+  ctx.loader<string, FollowRequestNotificationSourceRow, string, true>({
+    name: 'notification.followRequestSource',
+    nullable: true,
+    load: (ids) =>
+      ctx.db
+        .select({
+          followRequest: getColumns(ProfileFollowRequests),
+          id: ProfileFollowRequests.id,
+          profileId: ProfileFollowRequests.followerProfileId,
+        })
+        .from(ProfileFollowRequests)
+        .where(inArray(ProfileFollowRequests.id, ids)),
     key: (source) => source?.id ?? null,
   });
 
@@ -131,7 +146,7 @@ const reactionNotificationSourceLoader = (ctx: UserContext) =>
     name: 'notification.reactionSource',
     nullable: true,
     load: (ids) =>
-      db
+      ctx.db
         .select({
           id: Reactions.id,
           post: getColumns(Posts),
@@ -149,7 +164,7 @@ const repostNotificationSourceLoader = (ctx: UserContext) =>
     name: 'notification.repostSource',
     nullable: true,
     load: (ids) =>
-      db
+      ctx.db
         .select({
           id: NotificationSourceReposts.id,
           post: getColumns(NotificationRepostRelatedPosts),
@@ -169,7 +184,7 @@ const replyNotificationSourceLoader = (ctx: UserContext) =>
     name: 'notification.replySource',
     nullable: true,
     load: (ids) =>
-      db
+      ctx.db
         .select({
           id: Posts.id,
           post: getColumns(Posts),
@@ -197,7 +212,9 @@ export const getNotificationSource = async (
     notification.kind === NotificationKind.FOLLOW
       ? await followNotificationSourceLoader(ctx).load(notification.sourceId)
       : notification.kind === NotificationKind.FOLLOW_REQUEST
-        ? notification.followRequestSource
+        ? 'followRequestSource' in notification
+          ? notification.followRequestSource
+          : await followRequestNotificationSourceLoader(ctx).load(notification.sourceId)
         : notification.kind === NotificationKind.REACTION
           ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
           : notification.kind === NotificationKind.REPLY
@@ -262,7 +279,7 @@ export const NotificationConnection = builder.connectionObject(
 export const FollowNotification = createObjectRef<FollowNotificationRow>(
   'FollowNotification',
   (ids, ctx) =>
-    db
+    ctx.db
       .select(getColumns(Notifications))
       .from(Notifications)
       .where(
@@ -285,7 +302,7 @@ FollowNotification.implement({
 export const FollowRequestNotification = createObjectRef<FollowRequestNotificationRow>(
   'FollowRequestNotification',
   (ids, ctx) =>
-    db
+    ctx.db
       .select(notificationRowSelection)
       .from(Notifications)
       .leftJoin(
@@ -316,7 +333,7 @@ FollowRequestNotification.implement({
 export const ReactionNotification = createObjectRef<ReactionNotificationRow>(
   'ReactionNotification',
   (ids, ctx) =>
-    db
+    ctx.db
       .select(getColumns(Notifications))
       .from(Notifications)
       .where(
@@ -343,7 +360,7 @@ ReactionNotification.implement({
 export const RepostNotification = createObjectRef<RepostNotificationRow>(
   'RepostNotification',
   (ids, ctx) =>
-    db
+    ctx.db
       .select(getColumns(Notifications))
       .from(Notifications)
       .where(
@@ -366,7 +383,7 @@ RepostNotification.implement({
 export const ReplyNotification = createObjectRef<ReplyNotificationRow>(
   'ReplyNotification',
   (ids, ctx) =>
-    db
+    ctx.db
       .select(getColumns(Notifications))
       .from(Notifications)
       .where(

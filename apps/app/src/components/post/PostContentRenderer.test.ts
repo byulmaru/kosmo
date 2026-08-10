@@ -5,6 +5,7 @@ import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostMediaItem } from './PostMediaGallery';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,13 +39,18 @@ mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
   PostMediaGallery: (props: Record<string, unknown>) => createElement('PostMediaGallery', props),
 });
 
-let PostContentRenderer: ComponentType<{
+type RendererProps = {
   bodyText: string;
+  contentWarningPresentation?: 'default' | 'revealed';
   contentWarning: string | null | undefined;
   document: unknown;
   media: ReadonlyArray<PostMediaItem> | null;
+  mediaPresentation?: 'default' | 'hidden';
+  onMediaOpen?: PostMediaOpenHandler;
   postId: string;
-}>;
+};
+
+let PostContentRenderer: ComponentType<RendererProps>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
 let renderer: ReactTestRenderer | null = null;
 
@@ -62,6 +68,36 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
+  it('Gallery에는 viewer open callback만 전달한다', async () => {
+    const onMediaOpen = () => undefined;
+    await render({
+      bodyText: '',
+      contentWarning: null,
+      document: null,
+      media: [{ altText: null, id: 'media-1', url: 'https://media.example/1.webp' }],
+      onMediaOpen,
+      postId: 'post-viewer-callbacks',
+    });
+
+    const gallery = rendered('PostMediaGallery')[0];
+    assert.ok(gallery);
+    assert.equal(gallery.props.onMediaOpen, onMediaOpen);
+    assert.equal('onMediaUnavailable' in gallery.props, false);
+  });
+
+  it('Media를 숨기는 상세 표현에서는 unavailable Gallery도 렌더하지 않는다', async () => {
+    await render({
+      bodyText: '',
+      contentWarning: null,
+      document: null,
+      media: null,
+      mediaPresentation: 'hidden',
+      postId: 'post-viewer-hidden',
+    });
+
+    assert.equal(rendered('PostMediaGallery').length, 0);
+  });
+
   it('does not mount media while a Content Warning is hidden, then passes media after reveal', async () => {
     const media: PostMediaItem[] = [
       { altText: '설명', id: 'media-1', url: 'https://media.example/1.webp' },
@@ -105,6 +141,28 @@ describe('PostContentRenderer', () => {
     );
   });
 
+  it('Viewer 공개 표현은 warning control 없이 원문을 표시하고 Media는 숨긴다', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentWarning: '민감한 내용',
+      contentWarningPresentation: 'revealed',
+      document: null,
+      media: [],
+      mediaPresentation: 'hidden',
+      postId: 'post-viewer-warning',
+    });
+
+    assert.equal(
+      rendered('Pressable').some((node) => node.props.testID === 'post-content-warning-toggle'),
+      false,
+    );
+    assert.equal(
+      rendered('Text').some((node) => node.props.children === '원문 본문'),
+      true,
+    );
+    assert.equal(rendered('PostMediaGallery').length, 0);
+  });
+
   it('keeps the canonical content root around warning and revealed body content', async () => {
     await render({
       bodyText: '원문 본문',
@@ -142,13 +200,7 @@ describe('PostContentRenderer', () => {
   });
 });
 
-async function render(props: {
-  bodyText: string;
-  contentWarning: string | null | undefined;
-  document: unknown;
-  media: ReadonlyArray<PostMediaItem> | null;
-  postId: string;
-}) {
+async function render(props: RendererProps) {
   await act(async () => {
     if (renderer) {
       renderer.update(

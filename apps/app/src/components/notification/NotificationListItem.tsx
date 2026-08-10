@@ -49,13 +49,13 @@ const notificationFragment = graphql`
 `;
 
 const notificationListItemMarkReadMutation = graphql`
-  mutation NotificationListItemMarkReadMutation($id: ID!) {
-    markNotificationRead(input: { id: $id }) {
-      notification {
+  mutation NotificationListItemMarkReadMutation($ids: [ID!]!) {
+    markNotificationRead(input: { ids: $ids }) {
+      notifications {
         id
         readAt
       }
-      recipientProfile {
+      recipientProfiles {
         id
         unreadNotificationCount
       }
@@ -279,7 +279,7 @@ function NotificationRow({
   const markRead = () => {
     commitMarkRead({
       onError: () => undefined,
-      variables: { id },
+      variables: { ids: [id] },
     });
   };
 

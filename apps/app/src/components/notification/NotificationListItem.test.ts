@@ -53,16 +53,18 @@ function commitReadPayload(
   typename: NotificationTypename = 'FollowNotification',
 ) {
   const operation = createOperationDescriptor(getRequest(MarkReadMutation), {
-    id: notificationId,
+    ids: [notificationId],
   });
   environment.commitPayload(operation, {
     markNotificationRead: {
-      notification: { __typename: typename, id: notificationId, readAt },
-      recipientProfile: {
-        __typename: 'Profile',
-        id: recipientId,
-        unreadNotificationCount: 1,
-      },
+      notifications: [{ __typename: typename, id: notificationId, readAt }],
+      recipientProfiles: [
+        {
+          __typename: 'Profile',
+          id: recipientId,
+          unreadNotificationCount: 1,
+        },
+      ],
     },
   });
 }
@@ -128,7 +130,7 @@ describe('NotificationListItem Read cache', () => {
     await new Promise<void>((resolve, reject) => {
       commitMutation<NotificationListItemMarkReadMutation>(environment, {
         mutation: MarkReadMutation,
-        variables: { id: notificationId },
+        variables: { ids: [notificationId] },
         onCompleted: () => reject(new Error('network failure must not complete')),
         onError: () => resolve(),
       });

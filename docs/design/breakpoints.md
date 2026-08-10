@@ -19,6 +19,11 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
 
 각 컬럼 폭(풀 사이드바 `320px` / 아이콘 레일 `80px`, 중앙 최대 `600px`, 우측 `290~350px`)을 더하면 `full`(1280px) 경계에서 풀 3분할(`320`+`600`+`350` ≈ `1270px`)이 눌리지 않고 중앙 피드를 `600px`로 확보한 채 들어맞는다. 풀 3분할 등장을 1024px가 아닌 1280px로 둬, 1024~1279px 구간에서는 중앙 피드를 비좁게 누르는 대신 아이콘 레일 단계로 폭을 확보한다.
 
+`/settings` route family는 full Web의 예외 workspace를 사용한다. 전역 풀 사이드바 `320px`는 유지하되 일반
+우측 레일을 숨기고, 중앙 column과 우측 레일이 사용하던 나머지 폭을 Settings master-detail에 제공한다.
+Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 이 예외는 `full=1280` breakpoint나
+다른 route의 중앙 `600px`·우측 레일 계약을 바꾸지 않는다.
+
 ## 글쓰기 진입
 
 - `< compact`: 하단 탭 바의 글쓰기가 유일한 shell-level 진입점이다. mobile drawer에는 중복 글쓰기 버튼을 표시하지 않는다.
@@ -63,6 +68,10 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
   중복 진입점을 두지 않는다.
 - route와 page shell이 같은 구현 slice에서 준비된 뒤 진입점을 노출하며, 준비되지 않은 placeholder route를
   먼저 만들지 않는다.
+- `full` Web settings route family에서는 전역 sidebar 다음 공간을 Settings 전용 master-detail workspace로
+  사용하고 일반 `RightRail`을 표시하지 않는다.
+- `compact` Web, `< compact` mobile Web과 Android·iOS에서는 root 목록과 detail을 한 화면씩 표시하며 내부
+  detail에서 back navigation으로 root 목록에 돌아간다.
 
 ## 프로필 편집 진입
 
@@ -86,9 +95,10 @@ KOSMO 웹의 메인 3분할 레이아웃은 트위터/X처럼 화면 폭에 따�
   현재 route이면 page-current semantics를 노출하되 노란 button의 시각 geometry는 바꾸지 않는다.
 - mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나 주요
   navigation row를 만들지 않는다.
-- 노출 여부는 nullable `selectedProfileForEdit` 결과를 사용한다. client는 selected Profile id,
-  `Profile.instance.kind` 또는 route 존재만으로 Owner 권한을 추측하지 않으며, 결과가 `null`이면 disabled
-  placeholder 없이 action 자체를 숨긴다.
+- 노출 여부는 `currentSession.selectedProfile`의 Local Instance와
+  `viewerState.membership.role === OWNER`를 함께 확인한다. client는 selected Profile id,
+  `Profile.instance.kind`, Membership role 또는 route 존재 하나만으로 권한을 추측하지 않으며, 조건을
+  충족하지 않으면 disabled placeholder 없이 action 자체를 숨긴다.
 - PROD-541에서 제거한 generic `/menu`의 `프로필 설정` placeholder는 복원하지 않는다. PROD-660은 준비된
   `/profile-edit` route에 연결되는 실제 Profile 편집 진입점만 복원한다.
 - 현재 제품 runtime 검증 범위는 Web이다. 공용 mobile drawer와 자동화는 platform별 target·semantics를

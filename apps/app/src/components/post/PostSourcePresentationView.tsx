@@ -8,7 +8,7 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { PostMediaItem } from './PostMediaGallery';
+import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 export type PresentationProfile = {
   readonly avatar:
@@ -57,10 +57,12 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 }
 
 export function PostSourcePresentationView({
+  onMediaOpen,
   post,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
+  onMediaOpen?: PostMediaOpenHandler;
   post: PostSourcePresentationData;
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
@@ -103,7 +105,12 @@ export function PostSourcePresentationView({
     return (
       <View role="article" style={styles.root} testID="post-source-presentation">
         {postHeader}
-        <PostBodyPressTarget content={post.content} href={postDetailHref} testID="post-body" />
+        <PostBodyPressTarget
+          content={post.content}
+          href={postDetailHref}
+          onMediaOpen={onMediaOpen}
+          testID="post-body"
+        />
       </View>
     );
   }
@@ -116,7 +123,12 @@ export function PostSourcePresentationView({
   return (
     <View role="article" style={styles.root} testID="post-source-presentation">
       {postHeader}
-      <PostBodyPressTarget content={post.content} href={postDetailHref} testID="post-body" />
+      <PostBodyPressTarget
+        content={post.content}
+        href={postDetailHref}
+        onMediaOpen={onMediaOpen}
+        testID="post-body"
+      />
       <PostSourcePreview source={source} style={sourcePreviewStyle} />
     </View>
   );
@@ -219,11 +231,13 @@ function PresentationLink({
 function PostBodyPressTarget({
   content,
   href,
+  onMediaOpen,
   style,
   testID,
 }: {
   content: PresentationContent;
   href: Href;
+  onMediaOpen?: PostMediaOpenHandler;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
@@ -242,7 +256,8 @@ function PostBodyPressTarget({
         bodyText={content.bodyText}
         contentWarning={content.contentWarning}
         document={content.document}
-        media={content.media ?? null}
+        media={content.media}
+        onMediaOpen={onMediaOpen}
         postId={content.postId}
         size="md"
       />

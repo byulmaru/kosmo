@@ -28,17 +28,17 @@
 - Consequences: 일시적으로 누락되거나 orphan인 row가 남을 수 있으므로 기존 visible predicate가 source 존재와 pair를 매번 검증해야 한다. backfill/reconciliation 책임은 추가하지 않는다.
 - Confirmation / Follow-up: Local core, request transition, inbound Follow/Undo integration에서 create/delete failure isolation과 duplicate/concurrent no-op을 DB-backed test로 확인한다.
 
-### API visibility와 source field는 같은 snapshot을 사용한다
+### Connection과 Node visibility는 source field와 같은 snapshot을 사용한다
 
-- Decision Date: 2026-08-04
-- Decision Class: Derived Contract
+- Decision Date: 2026-08-08
+- Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/notification.md`, `PROD-321`
 - Status: Active
-- Context / Problem: PR #500 review thread `PRRT_kwDOR_2JU86WN7qn`에서 Notification connection/Node가 source request를 visible로 확인한 뒤 별도 source loader가 실행되기 전에 request가 삭제되면 non-null Follow Request field가 GraphQL 오류를 낼 수 있음이 발견되었다. Read mutation payload도 같은 경합을 가질 수 있다.
-- Decision Outcome: Follow Request Notification의 connection·concrete Node·Read payload는 visibility 조회와 함께 source row를 같은 SQL statement 또는 parent payload snapshot으로 운반하고, concrete fields는 그 snapshot을 재사용한다. Snapshot을 얻지 못한 source-less item은 기존 계약대로 모든 API 표면에서 숨긴다.
-- Alternatives Considered: concrete field에서 source를 다시 조회하면 visibility와 source가 서로 다른 DB snapshot을 보게 되고, non-null field 오류 또는 stale item 노출이 발생한다. source row lock이나 retry/outbox는 benign social race와 이번 change 범위를 불필요하게 확장한다.
-- Consequences: 한 GraphQL operation은 source 삭제 전의 일관된 row를 반환할 수 있으며, 후속 operation은 source/pair visibility predicate로 item을 숨긴다. Snapshot 없는 generic fallback과 source ID/name snapshot 저장은 추가하지 않는다.
-- Confirmation / Follow-up: API integration regression에서 Node·connection source fields와 Read payload를 source deletion overlap으로 검증한다.
+- Context / Problem: PR #500 review thread `PRRT_kwDOR_2JU86WN7qn`에서 Notification connection/Node가 source request를 visible로 확인한 뒤 별도 source loader가 실행되기 전에 request가 삭제되면 non-null Follow Request field가 GraphQL 오류를 낼 수 있음이 발견되었다. PR #546 review thread `PRRT_kwDOR_2JU86XRz0X`에서는 production Read operation이 공통 `id`·`readAt`만 사용하고 다른 kind도 같은 source 삭제 경합을 허용하므로, batch Read에만 Follow Request snapshot 특례를 유지하지 않기로 결정했다.
+- Decision Outcome: Follow Request Notification의 connection·concrete Node는 visibility 조회와 함께 source row를 같은 SQL statement 또는 parent payload snapshot으로 운반하고, concrete fields는 그 snapshot을 재사용한다. Read mutation payload는 다른 Notification kind와 같은 source loader 경계를 사용하고 Follow Request 전용 snapshot을 운반하지 않는다. Visibility 조회에서 source-less인 item은 기존 계약대로 모든 API 표면에서 숨긴다.
+- Alternatives Considered: connection·Node concrete field에서 source를 다시 조회하면 visibility와 source가 서로 다른 DB snapshot을 보게 되고, non-null field 오류 또는 stale item 노출이 발생한다. Read payload까지 별도 snapshot을 운반하면 batch resolver에 Follow Request 전용 join·Map이 필요하다. source row lock이나 retry/outbox는 benign social race와 이번 change 범위를 불필요하게 확장한다.
+- Consequences: connection·Node operation은 source 삭제 전의 일관된 row를 반환할 수 있으며, 후속 operation은 source/pair visibility predicate로 item을 숨긴다. Read payload의 source field는 source 삭제 경합을 다른 kind와 같이 관찰할 수 있다. Snapshot 없는 generic fallback과 source ID/name snapshot 저장은 추가하지 않는다.
+- Confirmation / Follow-up: API integration regression에서 Node·connection source fields의 source deletion overlap과 정상 Read payload의 kind별 source hydration을 검증한다.
 
 ### Post-commit effect 오류는 Sentry 최소 context로 관찰한다
 

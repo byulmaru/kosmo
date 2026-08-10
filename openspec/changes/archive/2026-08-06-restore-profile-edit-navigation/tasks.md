@@ -18,8 +18,8 @@ navigation row는 제거되고 compact Web icon rail에는 대체 action이 없�
 
 **Guardrails**
 
-- nullable `selectedProfileForEdit`을 eligibility source로 재사용하고 client-side Owner 판정이나 새 권한 정책을
-  만들지 않는다.
+- PROD-705가 제공한 selected Profile의 Local Instance와 viewer-relative Owner Membership을 eligibility source로
+  재사용하고 새 권한 helper·정책이나 API를 만들지 않는다.
 - Figma `UserInfo`의 future mini-profile cluster 아래 예약 좌표에 우측 정렬한 `72x32` primary/sm visual을
   사용하고 name·handle과 겹치지 않는다. production에 없는 thumbnail visual은 추가하지 않는다.
 - Web `72x32`, iOS 최소 `44pt`, Android 최소 `48dp` input target과 accessible name `프로필 편집`을 제공한다.

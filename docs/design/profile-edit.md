@@ -79,27 +79,35 @@
 
 ### Production route와 저장
 
-- 공개 Profile 화면은 nullable top-level `selectedProfileForEdit` 결과의 `id`가 현재 표시 중인 Profile `id`와
-  정확히 같을 때만 편집 button을 렌더한다. guest, selected Profile이 없는 session과 편집 부적격 Account에는
-  이 field가 GraphQL authorization error 없이 `null`을 반환하며 disabled placeholder를 표시하지 않는다.
-- sidebar ProfileSwitcher는 같은 nullable `selectedProfileForEdit` 결과가 있을 때만 selected Profile 요약의
-  작은 노란 `편집` action을 표시하고 canonical `/profile-edit` route를 연다. full Web sidebar와 mobile
-  drawer의 위치·geometry·current semantics·close 동작, compact icon rail과 bottom tab 제외는
-  [레이아웃 브레이크포인트](./breakpoints.md)가 소유한다. 공개 Profile의 기존 편집 button은 유지하며, shell은
-  별도의 client-side 권한 조건이나 fallback route를 만들지 않는다. Figma의 future multi-profile cluster는
-  위치 provenance일 뿐이며, 현재 production에 없는 thumbnail visual·data·전환 interaction은 이 진입점
-  복원 범위에서 추가하지 않는다.
-- 실제 `/profile-edit` protected route는 `selectedProfileForEdit`이 반환한 selected Active/Normal Local
-  Profile과 Owner Membership을 server-authoritative하게 확인한 뒤에만 화면을 제공한다. 직접 URL이나 stale
-  link로 진입했지만 편집할 수 없으면 form 대신 `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을
-  가진 StateView를 표시한다.
-- selected Profile id나 `Profile.instance.kind`만으로 Owner 또는 편집 권한을 추측하지 않는다.
-- mutation은 route query 결과를 권한 증거로 재사용하지 않는다. action 시작 시 selected Profile, Owner
-  Membership과 Account의 현재 eligibility를 server-authoritative하게 다시 확인하되 명시적인 `FOR UPDATE`,
-  shared lock 또는 atomic guard로 해당 상태를 commit까지 고정하지 않는다. 확인 뒤 동시에 eligibility가
-  바뀌더라도 이미 승인된 실행 중 요청은 완료될 수 있고, 이후 요청부터 거부한다.
-- route가 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile avatar/header·Tag 표시, 성공
-  navigation과 production 진입점을 연결한다.
+- 공개 Profile 화면은 `viewerState.isSelf`이고 `viewerState.membership.role`이 `OWNER`이며 현재 Account와
+  Profile이 Active, Profile의 Instance가 Local·non-Suspended일 때만 편집 button을 렌더한다. guest, 유효한
+  viewer Profile이 없는 session과 Membership이 없는 Account에는 viewer state 또는 membership이 GraphQL
+  authorization error 없이 nullable 결과를 반환하며 disabled placeholder를 표시하지 않는다.
+- sidebar ProfileSwitcher는 `currentSession.selectedProfile`의 Instance가 Local이고
+  `viewerState.membership.role`이 `OWNER`일 때만 selected Profile 요약의 작은 노란 `편집` action을 표시하고
+  canonical `/profile-edit` route를 연다. full Web sidebar와 mobile drawer의 위치·geometry·current
+  semantics·close 동작, compact icon rail과 bottom tab 제외는 [레이아웃 브레이크포인트](./breakpoints.md)가
+  소유한다. 공개 Profile의 기존 편집 button은 유지하며, shell은 별도의 fallback route를 만들지 않는다.
+  Figma의 future multi-profile cluster는 위치 provenance일 뿐이며, 현재 production에 없는 thumbnail
+  visual·data·전환 interaction은 이 진입점 복원 범위에서 추가하지 않는다.
+- 실제 `/profile-edit` protected route는 `currentSession.selectedProfile.viewerState.membership`을 사용해
+  현재 Account가 Active이고 selected Profile이 Active이며 Profile의 Instance가 Local·non-Suspended이고
+  Membership role이 `OWNER`인지 server-authoritative하게 확인한 뒤에만 화면을 제공한다. 직접 URL이나 stale
+  link로 진입했지만 편집할 수 없으면 form 대신
+  `이 프로필을 수정할 수 없어요`와 `프로필로 돌아가기` action을 가진 StateView를 표시한다.
+- `Profile.viewerState.membership`은 현재 session Account와 조회 중인 Profile 사이의 실제 nullable
+  `AccountProfile` 관계만 제공한다. 다른 Account의 Membership이나 role을 노출하지 않으며 Profile 목록에서도
+  현재 Account로 scope된 batch 경계를 유지한다.
+- selected Profile id, `Profile.instance.kind` 또는 Membership role 하나만으로 Owner 또는 편집 권한을
+  추측하지 않는다.
+- mutation은 `Profile.viewerState.membership`을 권한 증거로 재사용하지 않는다. action 시작 시 selected
+  Profile, Owner Membership과 Account의 현재 eligibility를 server-authoritative하게 다시 확인하되 명시적인
+  `FOR UPDATE`, shared lock 또는 atomic guard로 해당 상태를 commit까지 고정하지 않는다. 확인 뒤 동시에
+  eligibility가 바뀌더라도 이미 승인된 실행 중 요청은 완료될 수 있고, 이후 요청부터 거부한다.
+- route가 selected Profile의 초기값 조회, 제출 callback, Media 선택·업로드, Relay 갱신, 공개 Profile
+  avatar/header·Tag 표시, 성공 navigation과 production 진입점을 연결한다.
+- `Profile.viewerState.isSelf`, `follow`, `followRequest`와 FollowButton의 self·follow·pending 동작은 변경하지
+  않는다.
 - route는 현재 `followPolicy`를 초기 draft로 조회하고 표시 이름·소개·Media 관계와 같은 저장 동작으로
   제출한다. Settings 이전 전까지 이 Profile 편집 경계를 우회하는 별도 정책 저장을 만들지 않는다.
 - production route는 현재 Profile Tag를 초기 draft로 조회해 기존 editor를 렌더하고 다른 Profile 값과 전체 Tag
@@ -216,14 +224,14 @@
 
 - `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 추가·제거 UI, 이미지 controlled
   state와 Storybook 상태 카탈로그.
-- `PROD-492`: `PROD-581` 위에서 Profile Media 관계, guest-safe selected Local Owner query, protected route와
-  공개 Profile의 initial entrypoint, 초기값, submit/Relay, Media picker·upload, 공개 ProfileHero 이미지와 성공
-  navigation을 연결한다.
-- `PROD-660`: 기존 selected Owner 권한과 `/profile-edit` route를 재사용해 full Web sidebar와 mobile drawer의
-  ProfileSwitcher 요약에 작은 노란 `편집` action을 연결한다. compact Web icon rail, mobile bottom tab과 주요
-  navigation row에는 추가하지 않는다. 자체 Shell Storybook·component·Web E2E 검증과 별도 OpenSpec 생명주기를
-  소유하며 `add-local-profile-edit`의 통합·archive 책임은 이전하지 않는다.
+- `PROD-492`: `PROD-581` 위에서 Profile Media 관계, protected route와 entrypoint, 초기값, submit/Relay,
+  Media picker·upload, 공개 ProfileHero 이미지와 성공 navigation을 연결한 기존 결과를 소유한다.
 - `PROD-527`: `PROD-491`의 Profile Tag editor를 재사용한 저장·서버 오류·Relay 연결과 공개 Profile 표시.
 - `PROD-531`: Settings 진입점이 제공된 뒤 Follow Approval Policy 제어를 이전하고 Profile 편집과의 중복
   저장 소유권을 제거한다.
 - `PROD-490`: 두 Profile 편집 slice의 통합 검증, OpenSpec 정합성 확인과 archive.
+- `PROD-705`: `Profile.viewerState.membership`의 account-scoped 관계 projection, 기존 공개 Profile route와
+  protected `ProfileEditRoute` 전환, `selectedProfileForEdit` 제거와 관련 schema·Relay·테스트·문서 정합성을
+  소유한다.
+- `PROD-660`: PROD-705 선행 migration 뒤 PR #529의 ProfileSwitcher sidebar consumer를 새 projection에 맞춘다.
+  노란 편집 action의 geometry·배치·접근성·navigation은 PROD-660 범위로 유지한다.

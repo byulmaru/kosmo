@@ -43,6 +43,14 @@ const ProfileSwitcherFragment = graphql`
         displayName
         followingCount
         followersCount
+        instance {
+          kind
+        }
+        viewerState {
+          membership {
+            role
+          }
+        }
         avatar {
           id
           url
@@ -52,9 +60,6 @@ const ProfileSwitcherFragment = graphql`
           url
         }
       }
-    }
-    selectedProfileForEdit {
-      id
     }
     me {
       id
@@ -170,6 +175,8 @@ export function ProfileSwitcher({
   const [commitCreate, creatingProfile] =
     useMutation<ProfileSwitcherCreateProfileMutation>(CreateProfileMutation);
   const active = data.currentSession?.selectedProfile ?? null;
+  const canEditSelectedProfile =
+    active?.instance.kind === 'LOCAL' && active.viewerState?.membership?.role === 'OWNER';
   const profiles = data.me?.profiles ?? [];
   const busy = selecting || creatingProfile;
   const compact = surface === 'compact';
@@ -614,14 +621,14 @@ export function ProfileSwitcher({
       <View
         style={[
           styles.profileCopy,
-          data.selectedProfileForEdit ? styles.profileCopyWithEditAction : undefined,
+          canEditSelectedProfile ? styles.profileCopyWithEditAction : undefined,
         ]}
       >
         {trigger}
         {fullWebPicker}
         {profileDetails}
       </View>
-      {data.selectedProfileForEdit ? (
+      {canEditSelectedProfile ? (
         <GuardedLink href="/profile-edit" onNavigate={profileSummaryOnNavigate} primary>
           <Pressable
             aria-current={profileEditCurrentState.ariaCurrent}

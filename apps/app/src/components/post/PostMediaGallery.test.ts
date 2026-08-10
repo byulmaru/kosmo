@@ -26,6 +26,7 @@ mock.module('./PostMediaImage', {
 let PostMediaGallery: ComponentType<{
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
+  onMediaOpen?: (index: number) => void;
   sensitive: boolean;
 }>;
 let renderer: ReactTestRenderer | null = null;
@@ -185,6 +186,40 @@ describe('PostMediaGallery', () => {
     );
   });
 
+  it('interactive gallery의 정상 tile에만 선택 index callback을 전달한다', async () => {
+    const opened: number[] = [];
+    await render({
+      media: [media(1, '첫 이미지'), media(2, '두 번째 이미지')],
+      onMediaOpen: (index) => opened.push(index),
+      sensitive: false,
+    });
+
+    const tiles = rendered('PostMediaImage');
+    assert.equal(typeof tiles[1]!.props.onOpen, 'function');
+    await act(async () => tiles[1]!.props.onOpen(1));
+    assert.deepEqual(opened, [1]);
+
+    await render({
+      interactive: false,
+      media: [media(1, '첫 이미지')],
+      onMediaOpen: (index) => opened.push(index),
+      sensitive: false,
+    });
+    assert.equal(rendered('PostMediaImage')[0]!.props.onOpen, undefined);
+  });
+
+  it('Sensitive gallery는 공개 뒤에만 정상 tile 선택 callback을 연결한다', async () => {
+    await render({
+      media: [media(1, '첫 이미지')],
+      onMediaOpen: () => undefined,
+      sensitive: true,
+    });
+
+    assert.equal(rendered('PostMediaImage').length, 0);
+    await act(async () => pressable('민감한 이미지 표시').props.onPress());
+    assert.equal(typeof rendered('PostMediaImage')[0]!.props.onOpen, 'function');
+  });
+
   it('Sensitive Media를 image mount 없이 시작하고 전체 표시와 다시 가리기를 제공한다', async () => {
     await render({ media: [media(1, null), media(2, '두 번째 이미지')], sensitive: true });
 
@@ -223,6 +258,7 @@ function media(index: number, altText: string | null): PostMediaItem {
 async function render(props: {
   interactive?: boolean;
   media: ReadonlyArray<PostMediaItem> | null;
+  onMediaOpen?: (index: number) => void;
   sensitive: boolean;
 }) {
   await act(async () => {

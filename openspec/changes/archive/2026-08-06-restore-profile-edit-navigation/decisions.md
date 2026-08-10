@@ -11,17 +11,18 @@ PROD-660과 canonical Profile edit·breakpoint 디자인, 제품 owner가 확인
 - Decision Date: 2026-08-06
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`,
-  `docs/design/profile-edit.md`, PROD-660
+  `docs/domain/decisions/0023-profile-viewer-membership-edit-eligibility.md`, `docs/design/profile-edit.md`, PROD-660
 - Status: Active
 - Context / Problem: shell은 selected Profile identity를 알고 있지만 그 정보만으로 Account가 Owner인지 또는
   Profile이 편집 가능한 상태인지 판정할 수 없다.
-- Decision Outcome: nullable top-level `selectedProfileForEdit`이 반환될 때만 action을 표시하고, `null`이면
-  disabled placeholder 없이 시각 화면과 접근성 트리에서 모두 숨긴다.
-- Alternatives Considered: selected Profile 존재·id·Local instance로 client 판정하는 방식은 Owner 권한을
-  증명하지 못한다. action을 항상 표시하고 route fallback에 맡기는 방식은 권한 없는 상태에 잘못된 진입점을
-  노출한다.
-- Consequences: ProfileSwitcher query는 기존 eligibility field를 소비해야 하며 별도 권한 helper나 새 API·schema를
-  만들지 않는다. stale direct URL의 StateView는 route가 계속 소유한다.
+- Decision Outcome: `currentSession.selectedProfile`의 Instance가 Local이고 현재 Account에 대한
+  `viewerState.membership.role`이 `OWNER`일 때만 action을 표시하며, 조건을 충족하지 않으면 disabled placeholder
+  없이 시각 화면과 접근성 트리에서 모두 숨긴다.
+- Alternatives Considered: selected Profile 존재·id·Local instance 또는 Membership role 하나만으로 client
+  판정하는 방식은 전체 편집 eligibility를 증명하지 못한다. action을 항상 표시하고 route fallback에 맡기는
+  방식은 권한 없는 상태에 잘못된 진입점을 노출한다.
+- Consequences: ProfileSwitcher query는 PROD-705가 제공한 viewer-relative Membership projection을 소비하며
+  별도 권한 helper나 새 API·schema를 만들지 않는다. stale direct URL의 StateView는 route가 계속 소유한다.
 - Confirmation / Follow-up: eligible/ineligible Relay fixture와 rendered accessibility tree assertion으로 직접
   검증한다.
 

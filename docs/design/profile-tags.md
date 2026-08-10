@@ -54,7 +54,8 @@ Profile 화면이 같은 태그를 Web·Android·iOS에서 일관되게 표시�
 
 - [Hashtag 관련 Profile 목록 탐색](./hashtag-related-profiles.md)에 정의된 TagChip navigation 자체
 - 자동완성, 추천, trend와 관련도 표시
-- Remote Profile Tag 편집·표시와 ActivityPub 표현
+- Remote Profile Tag 편집·표시와 ActivityPub 표현. 이 제외는 별도 관련 Profile 탐색에서 이미 저장된 Remote
+  관계를 공용 Profile visibility 아래에서 읽는 동작은 제외하지 않는다.
 - Hashtag Post List 또는 검색 결과 화면 변경
 
 ## 전달 경계

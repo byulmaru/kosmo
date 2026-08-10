@@ -14,9 +14,9 @@ shared navigation row로 해석해 full·compact·drawer에 별도 항목을 추
   편집 button과 primary/sm primitive를 따라 `72x32`, primary 배경, `radius.sm`, `편집` label을 사용한다.
 - Web에서는 시각 영역과 같은 `72x32 CSS px` target을 사용하고, iOS·Android에서는 시각 영역을 유지한 채
   각각 최소 `44pt`·`48dp` 높이의 투명 입력 slot을 제공한다.
-- nullable `selectedProfileForEdit`을 노출 기준으로 재사용하고, 결과가 없으면 disabled placeholder 없이
-  action을 숨긴다. action은 accessible name `프로필 편집`, exact route page-current semantics와 mobile drawer
-  navigation 후 close 동작을 제공한다.
+- `currentSession.selectedProfile`의 Local Instance와 `viewerState.membership.role === OWNER`를 노출 기준으로
+  재사용하고, 조건을 충족하지 않으면 disabled placeholder 없이 action을 숨긴다. action은 accessible name
+  `프로필 편집`, exact route page-current semantics와 mobile drawer navigation 후 close 동작을 제공한다.
 - 잘못 추가된 `UserRoundPen` 주요 navigation row와 그 full·compact·drawer 테스트·문서를 제거한다. compact Web
   icon rail, mobile bottom tab과 우측 레일에는 대체 진입점을 추가하지 않는다.
 - `/profile-edit` form·API·DB·Media, 공개 ProfileHero 편집 button, generic `/menu`, production에 없는

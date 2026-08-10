@@ -192,31 +192,39 @@ function ReadNavigationList() {
 
 const readMutationResponse = {
   markNotificationRead: {
-    notification: {
-      __typename: 'FollowNotification',
-      id: 'notification-unread',
-      readAt: '2026-07-21T12:00:00Z',
-    },
-    recipientProfile: {
-      __typename: 'Profile',
-      id: 'notification-profile-content',
-      unreadNotificationCount: 2,
-    },
+    notifications: [
+      {
+        __typename: 'FollowNotification',
+        id: 'notification-unread',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-content',
+        unreadNotificationCount: 2,
+      },
+    ],
   },
 };
 
 const repostReadMutationResponse = {
   markNotificationRead: {
-    notification: {
-      __typename: 'RepostNotification',
-      id: 'notification-repost',
-      readAt: '2026-07-21T12:00:00Z',
-    },
-    recipientProfile: {
-      __typename: 'Profile',
-      id: 'notification-profile-content',
-      unreadNotificationCount: 2,
-    },
+    notifications: [
+      {
+        __typename: 'RepostNotification',
+        id: 'notification-repost',
+        readAt: '2026-07-21T12:00:00Z',
+      },
+    ],
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-content',
+        unreadNotificationCount: 2,
+      },
+    ],
   },
 };
 

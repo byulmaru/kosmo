@@ -4,13 +4,51 @@ imageDigest: ''
 version: main
 workloads:
   enabled: true
+worker:
+  enabled: false
+  replicas:
+    dev: 1
+    prod: 2
+  health:
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 autoscaling:
   minReplicas: 2
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
 migration:
   enabled: false
+temporal:
+  frontendAddress: temporal-frontend.temporal.svc.cluster.local:7233
+  adminTools:
+    image: temporalio/admin-tools
+    digest: sha256:dbc5fcd6ee8f0f4d808bf765af9a87dea9d8a283abfdcfbd2fc148496ba66107
+  namespace:
+    ownerEmail: dev@byulmaru.co
+    names:
+      dev: kosmo-dev
+      prod: kosmo-prod
+    retentions:
+      dev: 3d
+      prod: 30d
 postgres:
+  credentials:
+    api:
+      databaseUrl: ''
+      passwordSecret:
+        name: ''
+        key: ''
+    fedify:
+      databaseUrl: ''
+      passwordSecret:
+        name: ''
+        key: ''
   resources:
     requests:
       cpu: 250m
@@ -18,3 +56,16 @@ postgres:
     limits:
       cpu: 250m
       memory: 1Gi
+  pooler:
+    replicas:
+      dev: 1
+      prod: 3
+    maxClientConnections: 1000
+    defaultPoolSize: 10
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        cpu: 250m
+        memory: 128Mi

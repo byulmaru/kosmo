@@ -234,32 +234,37 @@ Android, iOS, Web에서 공유하는 kosmo 앱 shell과 canonical route 계약�
 
 ### Requirement: Protected app routes require a valid session
 
-**Authority / Provenance:** `PROD-148`, `PROD-161`, `PROD-541` — `(tabs)` 앱 셸 아래의 내부 화면(`/home`·`/compose`·`/search`·`/notifications`)은 유효한 세션(로그인)을 전제로 한다(MUST). 유효한 세션이 없는 사용자가 이 라우트에 접근하면 루트 온보딩(`/`)으로 이동해야 한다(MUST). 세션 유효성은 클라이언트가 `currentSession` GraphQL 쿼리로 확인하며(만료·폐기된 세션은 `null`로 반환됨), 쿠키 존재만으로 판정하지 않는다. 공개 프로필 라우트(`/${relativeHandle}` 및 그 하위 게시글 상세)는 비로그인 조회를 유지해야 하며 이 가드에서 제외된다(MUST). 세션 확인이 진행 중이거나 조회가 실패한 동안에는 리다이렉트하지 않는다(MUST NOT).
+**Authority / Provenance:** `PROD-148`, `PROD-161`, `PROD-541`; `docs/design/settings.md`, `PROD-685`; 선행 정보 구조 `PROD-653` — `(tabs)` 앱 셸 아래의 내부 화면(`/home`·`/compose`·`/search`·`/notifications`·`/settings`와 지원되는 Settings 내부 detail)은 유효한 세션(로그인)을 전제로 해야 한다(MUST). 유효한 세션이 없는 사용자가 이 route에 접근하면 루트 온보딩(`/`)으로 이동해야 한다(MUST). 세션 유효성은 클라이언트가 `currentSession` GraphQL query로 확인해야 하며(MUST), 만료·폐기된 세션은 `null`로 반환되어야 하고(MUST), 쿠키 존재만으로 판정해서는 안 된다(MUST NOT). 공개 Profile route(`/${relativeHandle}` 및 그 하위 Post 상세)는 비로그인 조회를 유지해야 하며 이 guard에서 제외되어야 한다(MUST). 세션 확인이 진행 중이거나 조회가 실패한 동안에는 redirect해서는 안 된다(MUST NOT).
 
 #### Scenario: Redirect guest from protected route to onboarding
 
-- **WHEN** 유효한 세션이 없는 사용자가 `/home`·`/compose`·`/search`·`/notifications` 중 하나에 접근한다
+- **WHEN** 유효한 세션이 없는 사용자가 `/home`·`/compose`·`/search`·`/notifications`·`/settings` 중 하나에 접근한다
 - **THEN** 시스템은 `currentSession`이 `null`임을 확인하고 루트 온보딩(`/`)으로 이동한다
 
 #### Scenario: Invalid or expired session is treated as guest
 
-- **WHEN** 만료·폐기된 세션 쿠키를 가진 사용자가 보호 라우트에 접근한다
+- **WHEN** 만료·폐기된 세션 쿠키를 가진 사용자가 보호 route에 접근한다
 - **THEN** `currentSession`이 `null`이므로 시스템은 비로그인과 동일하게 루트 온보딩(`/`)으로 이동한다
 
 #### Scenario: Public profile remains accessible without login
 
 - **WHEN** 비로그인 사용자가 `/${relativeHandle}` 또는 `/${relativeHandle}/{postId}`에 접근한다
-- **THEN** 시스템은 리다이렉트하지 않고 공개 프로필·게시글을 표시한다
+- **THEN** 시스템은 redirect하지 않고 공개 Profile·Post를 표시한다
 
 #### Scenario: Signed-in user reaches protected route
 
-- **WHEN** 유효한 세션을 가진 사용자가 보호 라우트에 접근한다
-- **THEN** 시스템은 리다이렉트 없이 해당 화면을 표시한다
+- **WHEN** 유효한 세션을 가진 사용자가 보호 route에 접근한다
+- **THEN** 시스템은 redirect 없이 해당 화면을 표시한다
+
+#### Scenario: Redirect guest from Settings detail
+
+- **WHEN** 유효한 세션이 없는 사용자가 지원되는 Settings 내부 detail route에 접근한다
+- **THEN** 시스템은 `currentSession`이 `null`임을 확인하고 루트 온보딩(`/`)으로 이동한다
 
 #### Scenario: Hold redirect while session is loading
 
 - **WHEN** `currentSession` 확인이 진행 중이거나 조회가 오류로 실패했다
-- **THEN** 시스템은 판단을 보류하고 리다이렉트하지 않는다
+- **THEN** 시스템은 판단을 보류하고 redirect하지 않는다
 
 ### Requirement: Desktop three-column shell layout
 
@@ -1049,7 +1054,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 ### Requirement: 준비되지 않은 sidebar 진입점 비노출
 
-**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `PROD-541`, `PROD-487`, `PROD-566`, `PROD-654` — 유니버설 애플리케이션은 준비되지 않은 sidebar navigation 진입점을 노출하지 않고 현재 제공하는 feedback과 실제 동작하는 진입점을 유지해야 한다(MUST). 받은 팔로우 요청 관리 화면이 제공되면 full Web sidebar, compact Web rail과 mobile Web drawer는 같은 canonical route 진입점을 제공해야 한다(MUST).
 
 #### Scenario: responsive sidebar에서 프로필 설정 비노출
 
@@ -1063,10 +1068,18 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **THEN** 시스템은 `팔로워 요청` link나 같은 의미의 진입 control을 시각적으로 표시하지 않는다
 - **AND** 해당 control을 접근성 트리에 link, button이나 다른 interactive element로 노출하지 않는다
 
+#### Scenario: 관리 화면 준비 후 responsive navigation 진입점
+
+- **WHEN** `/follow-requests` 받은 팔로우 요청 관리 화면이 제공된 상태에서 인증된 사용자가 full Web sidebar, compact Web rail 또는 mobile Web drawer를 연다
+- **THEN** 시스템은 `팔로워 요청` label과 Lucide `UserRoundPlus` glyph를 사용하는 진입점을 표시한다
+- **AND** 세 shell surface의 진입점은 모두 `/follow-requests`로 이동한다
+- **AND** mobile bottom tab에는 팔로워 요청 진입점을 추가하지 않는다
+- **AND** mobile Web drawer에서 진입하면 기존 route navigation과 drawer close 동작을 유지한다
+
 #### Scenario: 실제 동작하는 navigation 유지
 
 - **WHEN** sidebar navigation이 준비되지 않은 진입점 없이 렌더링된다
-- **THEN** PROD-487과 PR #390의 `피드백 보내기` link와 `/feedback` destination을 유지한다
+- **THEN** 시스템은 PROD-487과 PR #390의 `피드백 보내기` link와 `/feedback` destination을 유지한다
 - **AND** 기존 `프로필`·`북마크` link, 로그아웃 control과 responsive navigation 동작을 유지한다
 
 #### Scenario: 피드백과 준비되지 않은 설정 구분
@@ -1233,11 +1246,11 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 ### Requirement: 편집 가능한 selected Profile의 sidebar Profile 요약 진입점
 
-**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, Figma `WebSidebar` node `901:610`, `UserInfo` node `148:852`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660 — 유니버설 애플리케이션은 nullable `selectedProfileForEdit`이 반환되는 인증 사용자에게 full Web sidebar와 shared mobile drawer의 expanded Profile 요약에서 canonical `/profile-edit` action을 제공해야 한다(MUST). 이 action은 Figma의 오른쪽 mini-profile cluster 아래 좌표를 예약한 위치에 우측 정렬한 작은 노란 `편집` button으로 표시되어야 하며(MUST), `selectedProfileForEdit`이 `null`이면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에는 중복 진입점을 제공하지 않아야 한다(MUST NOT). 이 change는 production에 없는 mini-profile thumbnail visual이나 switching data·interaction을 추가하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/domain/decisions/0023-profile-viewer-membership-edit-eligibility.md`, `docs/design/profile-edit.md`, `docs/design/breakpoints.md`, `docs/design/accessibility.md`, Figma `WebSidebar` node `901:610`, `UserInfo` node `148:852`, `ProfileHero` edit button node `560:453`, `Button` primary/sm node `271:3`, PROD-660 — 유니버설 애플리케이션은 `currentSession.selectedProfile`의 Instance가 Local이고 `viewerState.membership.role`이 `OWNER`인 인증 사용자에게 full Web sidebar와 shared mobile drawer의 expanded Profile 요약에서 canonical `/profile-edit` action을 제공해야 한다(MUST). 이 action은 Figma의 오른쪽 mini-profile cluster 아래 좌표를 예약한 위치에 우측 정렬한 작은 노란 `편집` button으로 표시되어야 하며(MUST), 조건을 충족하지 않으면 시각 화면과 접근성 트리에서 모두 숨겨야 한다(MUST). compact Web icon rail, mobile bottom tab, 우측 레일과 주요 navigation에는 중복 진입점을 제공하지 않아야 한다(MUST NOT). 이 change는 production에 없는 mini-profile thumbnail visual이나 switching data·interaction을 추가하지 않아야 한다(MUST NOT).
 
 #### Scenario: full Web sidebar의 Profile 요약에서 편집 진입
 
-- **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 full Web sidebar가 렌더링된다
+- **WHEN** 인증 사용자의 selected Profile이 Local이고 현재 Account의 Membership role이 `OWNER`인 상태로 full Web sidebar가 렌더링된다
 - **THEN** 시스템은 selected Profile 요약에서 Figma `UserInfo`의 오른쪽 mini-profile cluster 아래 좌표에 맞춘
   우측 정렬 `편집` action을 표시한다
 - **AND** 시각 button은 `72x32 CSS px`, primary 배경, `radius.sm`, SUIT 14px bold label을 사용한다
@@ -1245,7 +1258,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 #### Scenario: shared mobile drawer의 Profile 요약에서 편집 진입
 
-- **WHEN** 인증 사용자의 `selectedProfileForEdit`이 반환되고 mobile Web, Android 또는 iOS의 drawer가 열린다
+- **WHEN** 인증 사용자의 selected Profile이 Local이고 현재 Account의 Membership role이 `OWNER`인 상태로 mobile Web, Android 또는 iOS의 drawer가 열린다
 - **THEN** 시스템은 full sidebar와 같은 Profile 요약 위치와 `72x32` 시각 geometry로 `편집` action을 표시한다
 - **AND** Web의 pointer target은 `72x32 CSS px`, iOS와 Android의 input target은 시각 geometry를 바꾸지 않은
   각각 최소 `44pt`와 `48dp` 높이의 투명 slot이다
@@ -1259,7 +1272,7 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 
 #### Scenario: 편집할 수 없는 selected Profile의 action 비노출
 
-- **WHEN** 세션이 없거나 `selectedProfileForEdit`이 `null`이다
+- **WHEN** 세션 또는 selected Profile이 없거나 selected Profile이 Remote이거나 Membership이 없거나 role이 `OWNER`가 아니다
 - **THEN** 시스템은 full sidebar와 mobile drawer의 Profile 요약에 `편집` action을 시각적으로 표시하지 않는다
 - **AND** 해당 action을 disabled link, button 또는 다른 interactive element로 접근성 트리에 노출하지 않는다
 

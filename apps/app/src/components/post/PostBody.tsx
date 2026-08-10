@@ -1,6 +1,8 @@
 import { graphql, useFragment } from 'react-relay';
 import { PostContentRenderer } from './PostContentRenderer';
 import type { PostBody_post$key } from './__generated__/PostBody_post.graphql';
+import type { PostContentWarningPresentation } from './PostContentRenderer';
+import type { PostMediaOpenHandler } from './PostMediaImage';
 
 const PostBodyFragment = graphql`
   fragment PostBody_post on Post {
@@ -20,14 +22,20 @@ const PostBodyFragment = graphql`
 `;
 
 export function PostBody({
+  contentWarningPresentation = 'default',
   interactive = true,
+  mediaPresentation = 'default',
   post: postKey,
   onBodyPress,
+  onMediaOpen,
   size = 'md',
 }: {
+  contentWarningPresentation?: PostContentWarningPresentation;
   interactive?: boolean;
+  mediaPresentation?: 'default' | 'hidden';
   post: PostBody_post$key;
   onBodyPress?: () => void;
+  onMediaOpen?: PostMediaOpenHandler;
   size?: 'md' | 'lg';
 }) {
   const post = useFragment(PostBodyFragment, postKey);
@@ -41,16 +49,21 @@ export function PostBody({
     <PostContentRenderer
       bodyText={content.bodyText}
       contentWarning={content.contentWarning}
+      contentWarningPresentation={contentWarningPresentation}
       document={content.document}
       interactive={interactive}
       media={
-        content.media?.map(({ altText, id, url }) => ({
-          altText: altText ?? null,
-          id,
-          url: url ?? null,
-        })) ?? null
+        mediaPresentation === 'hidden'
+          ? null
+          : (content.media?.map(({ altText, id, url }) => ({
+              altText: altText ?? null,
+              id,
+              url: url ?? null,
+            })) ?? null)
       }
+      mediaPresentation={mediaPresentation}
       onBodyPress={onBodyPress}
+      onMediaOpen={mediaPresentation === 'hidden' ? undefined : onMediaOpen}
       postId={post.id}
       size={size}
     />

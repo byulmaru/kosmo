@@ -172,15 +172,22 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
 
     const readResult = await mutateGraphQL(
       page,
-      `mutation E2EMarkDeletedNotificationRead($id: ID!) {
-        markNotificationRead(input: { id: $id }) {
-          notification { id }
+      `mutation E2EMarkDeletedNotificationRead($ids: [ID!]!) {
+        markNotificationRead(input: { ids: $ids }) {
+          notifications { id }
+          recipientProfiles { id }
         }
       }`,
-      { id: notificationId },
+      { ids: [notificationId] },
     );
-    expect(readResult.errors?.[0]?.extensions?.code).toBe('NOT_FOUND');
-    expect(readResult.data?.markNotificationRead ?? null).toBeNull();
+    expect(readResult.errors).toBeUndefined();
+    const payload = readResult.data?.markNotificationRead;
+    expect(payload).toBeDefined();
+    if (payload == null) {
+      throw new Error('markNotificationRead payload is missing');
+    }
+    expect(payload.notifications).toEqual([]);
+    expect(payload.recipientProfiles).toEqual([]);
   } finally {
     await followerContext.close();
   }
@@ -207,11 +214,15 @@ async function notificationReadAt(id: string) {
     .then(([row]) => row?.readAt ?? null);
 }
 
-async function mutateGraphQL(page: Page, query: string, variables: Record<string, string>) {
+type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+async function mutateGraphQL(page: Page, query: string, variables: Record<string, JsonValue>) {
+  const body = JSON.stringify({ query, variables });
+
   return await page.evaluate(
-    async ({ query, variables }) => {
+    async ({ body }) => {
       const response = await fetch('/graphql', {
-        body: JSON.stringify({ query, variables }),
+        body,
         headers: { 'content-type': 'application/json' },
         method: 'POST',
       });
@@ -221,6 +232,6 @@ async function mutateGraphQL(page: Page, query: string, variables: Record<string
         errors?: Array<{ extensions?: { code?: string } }>;
       };
     },
-    { query, variables },
+    { body },
   );
 }

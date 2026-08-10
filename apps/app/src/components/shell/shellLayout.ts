@@ -2,10 +2,6 @@ import { breakpoints } from '@/theme/tokens';
 
 export const webMobileShellHeaderHeight = 64;
 
-export function getSidebarNavigationItemHeight(platform: string) {
-  return platform === 'android' ? 48 : 45;
-}
-
 export function getProfileEditActionTargetMetrics(platform: string) {
   if (platform === 'ios') {
     return { height: 44, top: 152 } as const;
@@ -38,8 +34,23 @@ export function getShellLayout(web: boolean, width: number) {
 
 export type WebMobileShellHeader = Readonly<{
   leading: 'back' | 'menu';
-  title: '게시글' | '글쓰기' | '알림';
+  title: '게시글' | '게시물 기본 공개 범위' | '글쓰기' | '설정' | '알림';
 }>;
+
+export function isSettingsRoute(pathname: string) {
+  return pathname === '/settings' || pathname.startsWith('/settings/');
+}
+
+export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
+  const layout = getShellLayout(web, width);
+  const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);
+
+  return {
+    layout,
+    settingsWorkspace,
+    showRightRail: layout === 'full' && !settingsWorkspace,
+  } as const;
+}
 
 export function getWebMobileShellHeader(
   web: boolean,
@@ -56,6 +67,12 @@ export function getWebMobileShellHeader(
   }
   if (pathname === '/notifications') {
     return { leading: 'menu', title: '알림' };
+  }
+  if (pathname === '/settings') {
+    return { leading: 'menu', title: '설정' };
+  }
+  if (pathname === '/settings/default-post-visibility') {
+    return { leading: 'back', title: '게시물 기본 공개 범위' };
   }
 
   if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {

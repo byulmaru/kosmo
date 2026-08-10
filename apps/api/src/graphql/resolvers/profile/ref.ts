@@ -1,7 +1,13 @@
 import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
-import { AccountProfileRole, ProfileFollowPolicy, ProfileMediaKind } from '@kosmo/core/enums';
+import {
+  AccountProfileRole,
+  InstanceKind,
+  ProfileFollowPolicy,
+  ProfileMediaKind,
+} from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { and, eq, getColumns, inArray } from 'drizzle-orm';
+import { and, eq, exists, getColumns, inArray, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
@@ -11,6 +17,10 @@ import { profileFollowByIdLoader } from './loader/follow';
 import { profileFollowRequestByIdLoader } from './loader/follow-request';
 import { profileInstanceByIdLoader } from './loader/instance';
 import { profileMediaLoader } from './loader/media';
+
+const ViewerOwnerAccountProfiles = alias(AccountProfiles, 'viewer_owner_account_profile');
+const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
+const ViewerOwnerInstances = alias(Instances, 'viewer_owner_instance');
 
 export const Profile = createObjectRef('Profile', (ids) =>
   db
@@ -81,9 +91,45 @@ export const ProfileConnection = builder.connectionObject(
   },
 );
 
-export const AccountProfile = createObjectRef('AccountProfile', (ids) =>
-  db.select().from(AccountProfiles).where(inArray(AccountProfiles.id, ids)),
-);
+export const AccountProfile = createObjectRef('AccountProfile', (ids, ctx) => {
+  const accountId = ctx.session?.accountId;
+  if (!accountId) {
+    return Promise.resolve([]);
+  }
+
+  return db
+    .select(getColumns(AccountProfiles))
+    .from(AccountProfiles)
+    .where(
+      and(
+        inArray(AccountProfiles.id, ids),
+        or(
+          eq(AccountProfiles.accountId, accountId),
+          exists(
+            db
+              .select({ id: ViewerOwnerAccountProfiles.id })
+              .from(ViewerOwnerAccountProfiles)
+              .innerJoin(
+                ViewerOwnerProfiles,
+                eq(ViewerOwnerProfiles.id, ViewerOwnerAccountProfiles.profileId),
+              )
+              .innerJoin(
+                ViewerOwnerInstances,
+                eq(ViewerOwnerInstances.id, ViewerOwnerProfiles.instanceId),
+              )
+              .where(
+                and(
+                  eq(ViewerOwnerAccountProfiles.accountId, accountId),
+                  eq(ViewerOwnerAccountProfiles.profileId, AccountProfiles.profileId),
+                  eq(ViewerOwnerAccountProfiles.role, AccountProfileRole.OWNER),
+                  eq(ViewerOwnerInstances.kind, InstanceKind.LOCAL),
+                ),
+              ),
+          ),
+        ),
+      ),
+    );
+});
 
 AccountProfile.implement({
   fields: (t) => ({

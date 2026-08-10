@@ -19,6 +19,7 @@ FROM base AS workspace
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/app/package.json ./apps/app/package.json
+COPY apps/worker/package.json ./apps/worker/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/core/package.json ./packages/core/package.json
 COPY packages/fedify/package.json ./packages/fedify/package.json
@@ -77,10 +78,11 @@ RUN groupadd --system --gid 10001 app \
   && chown app:app /app
 
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  pnpm install --filter @kosmo/api... --filter @kosmo/web... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
+  pnpm install --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
+COPY --chown=app:app apps/worker ./apps/worker
 COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
