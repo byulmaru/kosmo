@@ -1,7 +1,8 @@
-import { Link, Slot, useGlobalSearchParams } from 'expo-router';
+import { Link, Slot, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
@@ -37,26 +38,40 @@ export default function ProfileLayout() {
     profileHandle?: string | string[];
   }>();
   const handle = normalizeProfileHandle(profileHandle);
+  const pathname = usePathname();
   const { revision } = useRelayActor();
   const [fetchKey, setFetchKey] = useState(0);
+  const paginationOwnerKey = `${revision}:${pathname}`;
 
   return (
     <RouteBoundary
       key={handle}
       loading={
-        <ProfileRouteContainer>
+        <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
       onRetry={() => setFetchKey((key) => key + 1)}
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
+      <ProfileLayoutContent
+        fetchKey={`${revision}:${fetchKey}`}
+        handle={handle}
+        paginationOwnerKey={paginationOwnerKey}
+      />
     </RouteBoundary>
   );
 }
 
-function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
+function ProfileLayoutContent({
+  fetchKey,
+  handle,
+  paginationOwnerKey,
+}: {
+  fetchKey: string;
+  handle: string;
+  paginationOwnerKey: string;
+}) {
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },
@@ -88,18 +103,26 @@ function ProfileLayoutContent({ fetchKey, handle }: { fetchKey: string; handle: 
   );
 
   return (
-    <ProfileRouteContainer>
+    <ProfileRouteContainer paginationOwnerKey={paginationOwnerKey}>
       <ProfileHero action={action} profile={profile} />
       <Slot />
     </ProfileRouteContainer>
   );
 }
 
-function ProfileRouteContainer({ children }: { children: ReactNode }) {
+function ProfileRouteContainer({
+  children,
+  paginationOwnerKey,
+}: {
+  children: ReactNode;
+  paginationOwnerKey: string;
+}) {
   return Platform.OS === 'web' ? (
     <View style={styles.webRoot}>{children}</View>
   ) : (
-    <ScrollView style={styles.nativeRoot}>{children}</ScrollView>
+    <PaginationScrollView paginationOwnerKey={paginationOwnerKey} style={styles.nativeRoot}>
+      {children}
+    </PaginationScrollView>
   );
 }
 

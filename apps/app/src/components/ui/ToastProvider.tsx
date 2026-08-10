@@ -9,7 +9,7 @@ import type { ViewStyle } from 'react-native';
 const toastDurationMs = 3000;
 
 type ToastContextValue = Readonly<{
-  showToast: (message: string, options?: ToastOptions) => void;
+  showToast: (message: string, options?: ToastOptions) => () => void;
 }>;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -29,6 +29,7 @@ type Toast = Readonly<{
 
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const [toast, setToast] = useState<Toast | null>(null);
+  const activeToastId = useRef<number | null>(null);
   const nextToastId = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const theme = useTheme();
@@ -37,24 +38,38 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   const hasBottomTabBar = Platform.OS !== 'web' || width < breakpoints.compact;
   const bottom = insets.bottom + (hasBottomTabBar ? 56 : 0) + spacing.sm;
 
-  const dismissToast = useCallback(() => {
+  const dismissToast = useCallback((id?: number) => {
+    if (id !== undefined && activeToastId.current !== id) {
+      return;
+    }
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
+    activeToastId.current = null;
     setToast(null);
   }, []);
 
-  const showToast = useCallback((nextMessage: string, options?: ToastOptions) => {
-    if (timer.current) {
-      clearTimeout(timer.current);
-    }
-    setToast({ action: options?.action, id: nextToastId.current++, message: nextMessage });
-    timer.current = setTimeout(() => {
-      setToast(null);
-      timer.current = null;
-    }, toastDurationMs);
-  }, []);
+  const showToast = useCallback(
+    (nextMessage: string, options?: ToastOptions) => {
+      if (timer.current) {
+        clearTimeout(timer.current);
+      }
+      const id = nextToastId.current++;
+      activeToastId.current = id;
+      setToast({ action: options?.action, id, message: nextMessage });
+      timer.current = setTimeout(() => {
+        if (activeToastId.current !== id) {
+          return;
+        }
+        activeToastId.current = null;
+        setToast(null);
+        timer.current = null;
+      }, toastDurationMs);
+      return () => dismissToast(id);
+    },
+    [dismissToast],
+  );
 
   useEffect(
     () => () => {
@@ -83,7 +98,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
                 hitSlop={spacing.sm}
                 onPress={() => {
                   const action = toast.action;
-                  dismissToast();
+                  dismissToast(toast.id);
                   action?.onPress();
                 }}
                 style={styles.action}

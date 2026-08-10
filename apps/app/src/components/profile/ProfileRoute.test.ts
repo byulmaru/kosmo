@@ -55,6 +55,7 @@ mockModule('expo-router', {
       : null,
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
+  usePathname: () => `/profile/${String(globalParams.profileHandle ?? '')}`,
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },

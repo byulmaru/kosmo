@@ -1,5 +1,6 @@
+import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -24,6 +25,34 @@ function ToastFixture() {
         style={styles.button}
       >
         <Text>취소 실패 표시</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const scopedRetry = fn();
+
+function ScopedToastFixture() {
+  const { showToast } = useToast();
+  const cleanup = useRef<() => void>(() => undefined);
+
+  return (
+    <View style={styles.fixture}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          cleanup.current = showToast('이전 목록 오류', {
+            action: { label: '다시 시도', onPress: scopedRetry },
+          });
+        }}
+      >
+        <Text>목록 오류 표시</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={() => showToast('최신 알림')}>
+        <Text>최신 알림 표시</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" onPress={() => cleanup.current()}>
+        <Text>이전 목록 정리</Text>
       </Pressable>
     </View>
   );
@@ -108,6 +137,30 @@ export const RepeatedMessageRestartsAutoDismiss: Story = {
       timeout: 1500,
     });
     expect(Date.now() - secondShownAt).toBeGreaterThanOrEqual(toastDurationMs - 100);
+  },
+};
+
+export const ScopedCleanupDoesNotDismissNewerToast: Story = {
+  render: () => (
+    <ToastProvider>
+      <ScopedToastFixture />
+    </ToastProvider>
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    scopedRetry.mockClear();
+
+    await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('이전 목록 오류');
+    await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
+    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
+    await userEvent.click(canvas.getByRole('button', { name: '최신 알림 표시' }));
+    expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
+    await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
+    expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
+    expect(scopedRetry).not.toHaveBeenCalled();
   },
 };
 

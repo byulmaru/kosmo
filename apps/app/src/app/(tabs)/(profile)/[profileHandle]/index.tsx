@@ -18,7 +18,7 @@ const ProfilePostListPageQuery = graphql`
     }
     profileByHandle(handle: $handle) {
       id
-      ...PostList_profile
+      ...PostList_profile @arguments(count: 20)
     }
   }
 `;
@@ -39,7 +39,11 @@ export default function ProfilePostListPage() {
       onRetry={() => setFetchKey((key) => key + 1)}
       title="게시글 목록을 불러오지 못했어요"
     >
-      <ProfilePostListPageContent fetchKey={`${revision}:${fetchKey}`} handle={handle} />
+      <ProfilePostListPageContent
+        fetchKey={`${revision}:${fetchKey}`}
+        handle={handle}
+        key={`${revision}:${handle}`}
+      />
     </RouteBoundary>
   );
 }

@@ -1,8 +1,9 @@
 import { UserRoundPlus } from 'lucide-react-native';
 import { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
+import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -31,16 +32,7 @@ const HomeQuery = graphql`
         id
       }
     }
-    homeTimeline(first: 20) @connection(key: "PostList_homeTimeline") {
-      edges {
-        cursor
-        node {
-          id
-          ...PostListItem_post
-        }
-      }
-      ...PostList_homeTimeline
-    }
+    ...PostList_home @arguments(count: 20)
   }
 `;
 
@@ -49,27 +41,33 @@ export default function HomeScreen() {
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
-    <HomeFrame>
+    <HomeFrame paginationOwnerKey={`home:${revision}`}>
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         onRetry={() => setFetchKey((key) => key + 1)}
         title="홈을 불러오지 못했어요"
       >
-        <HomeContent fetchKey={`${revision}:${fetchKey}`} />
+        <HomeContent fetchKey={`${revision}:${fetchKey}`} key={revision} />
       </RouteBoundary>
     </HomeFrame>
   );
 }
 
-function HomeFrame({ children }: PropsWithChildren) {
+function HomeFrame({
+  children,
+  paginationOwnerKey,
+}: PropsWithChildren<{ paginationOwnerKey: string }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
+    <PaginationScrollView
+      contentContainerStyle={styles.root}
+      paginationOwnerKey={paginationOwnerKey}
+    >
       {routeOwnsHeader ? <PageHeader accessibilityLabel="홈" variant="brand" /> : null}
       <View style={styles.body}>{children}</View>
-    </ScrollView>
+    </PaginationScrollView>
   );
 }
 
@@ -107,7 +105,7 @@ function HomeContent({ fetchKey }: { fetchKey: string }) {
 
   return (
     <View style={styles.timeline}>
-      <PostList homeTimeline={data.homeTimeline} replyProfile={selectedProfile} />
+      <PostList home={data} replyProfile={selectedProfile} />
     </View>
   );
 }

@@ -2,9 +2,13 @@ import { expect, spyOn, within } from 'storybook/test';
 import HomeScreen from '@/app/(tabs)/(protected)/home';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+const emptyHomeTimeline = {
+  edges: [],
+  pageInfo: { endCursor: null, hasNextPage: false },
+};
 const selectedProfileData = {
   currentSession: { id: 'home-session', selectedProfile: { id: 'home-profile' } },
-  homeTimeline: { edges: [] },
+  homeTimeline: emptyHomeTimeline,
   me: { id: 'home-account', name: 'home-account', profiles: [{ id: 'home-profile' }] },
 };
 
@@ -53,7 +57,7 @@ export const OnboardingCompact: Story = {
         HomePageQuery: {
           data: {
             currentSession: { id: 'home-session', selectedProfile: null },
-            homeTimeline: { edges: [] },
+            homeTimeline: emptyHomeTimeline,
             me: { id: 'home-account', name: 'home-account', profiles: [] },
           },
         },
