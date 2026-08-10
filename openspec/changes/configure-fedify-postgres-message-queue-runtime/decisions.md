@@ -49,7 +49,7 @@
 - Context / Problem: queue 도입 뒤 application caller가 remote HTTP 결과까지 기다리면 request isolation이 사라지고, enqueue 성공을 final delivery 성공으로 오해하면 상태 보고가 부정확해진다.
 - Decision Outcome: outbound caller의 성공은 Activity, actor identity와 audience가 Fedify queue에 영속 수락된 시점이다. 기존 capability가 이미 정의한 Fedify ordering option은 그대로 전달한다. inbound sender 응답도 검증된 message의 queue 수락을 경계로 하며 실제 listener와 remote HTTP 결과는 별도 consumer 관측이다.
 - Alternatives Considered: remote HTTP 2xx까지 기다리는 direct delivery, fire-and-forget Promise, domain transaction과 queue enqueue의 원자 결합.
-- Consequences: enqueue failure는 호출 경계에서 관측하지만 remote retry/final failure는 Fedify metric/error boundary에서 관측한다. 이 결정은 domain commit과 queue enqueue 사이를 transactional하게 만들지 않는다.
+- Consequences: enqueue failure는 호출 경계에서 관측하지만 remote retry/final failure 처리는 Fedify consumer 경계에 남는다. 이 결정은 domain commit과 queue enqueue 사이를 transactional하게 만들지 않는다.
 - Confirmation / Follow-up: slow/unresponsive remote inbox 통합 테스트가 producer 응답을 지연시키지 않는지, enqueue 실패가 성공으로 보고되지 않는지 검증한다.
 
 ### Web producer와 Fedify consumer를 별도 runtime으로 분리한다
@@ -99,6 +99,18 @@
 - Alternatives Considered: domain database 안에 custom schema bootstrap 추가, adapter initialization과 별도 DDL command 중복, dev 검증을 production 완료로 일반화.
 - Consequences: PR Ready 상태가 dev live 또는 production 활성화를 뜻하지 않는다. rollback에서도 queue purge/table drop은 별도 파괴적 승인 없이는 실행하지 않는다.
 - Confirmation / Follow-up: PR 본문과 완료 보고에서 local/CI, dev live, production apply/cutover 증거를 분리한다.
+
+### 운영 backlog metric과 exporter는 PROD-448 완료 범위에서 제외한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-448 사용자 review 결정과 갱신된 Linear 본문
+- Status: Active
+- Context / Problem: official adapter startup/restart 검증과 production backlog·처리 지연·retry/permanent-failure 관측 backend는 별도 운영 lifecycle과 배포 책임을 가진다.
+- Decision Outcome: PROD-448은 `getDepth()`를 adapter startup과 격리 PostgreSQL 검증에만 사용한다. production metric, exporter, dashboard 또는 주기적 polling endpoint는 완료 조건에 포함하지 않는다.
+- Alternatives Considered: consumer private endpoint, 주기적 depth logger, OpenTelemetry exporter를 이 PR에 추가하는 방식.
+- Consequences: queue runtime은 별도 관측 backend 없이도 PR completion 가능하며, 운영 observability가 필요하면 독립 capability가 소유한다.
+- Confirmation / Follow-up: spec/task/PR 설명이 startup 검증을 runtime backlog 관측으로 과장하지 않는지 확인한다.
 
 ## Remaining Decisions
 

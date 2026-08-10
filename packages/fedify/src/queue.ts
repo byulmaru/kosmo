@@ -45,6 +45,10 @@ if (mode !== 'direct') {
 
 export const fedifyQueue = queueSql ? new PostgresMessageQueue(queueSql) : undefined;
 
+// Queue mode must fail before API/Web/consumer readiness when the connection,
+// credential, or adapter-owned schema initialization is invalid.
+await fedifyQueue?.getDepth();
+
 export const closeFedifyQueue = async (): Promise<void> => {
   await queueSql?.end({ timeout: 5 });
 };

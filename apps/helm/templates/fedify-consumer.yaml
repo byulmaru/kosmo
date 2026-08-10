@@ -73,7 +73,7 @@ spec:
                   key: {{ required "postgres.credentials.fedifyQueue.passwordSecret.key is required when the Fedify consumer is enabled" $queue.passwordSecret.key | quote }}
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ required "postgres.credentials.fedifyQueue.databaseUrl is required when the Fedify consumer is enabled" $queue.databaseUrl | quote }}
-            - name: DATABASE_PASSWORD
+            - name: FEDIFY_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ required "postgres.credentials.fedify.passwordSecret.name is required when the Fedify consumer is enabled" $trusted.passwordSecret.name | quote }}

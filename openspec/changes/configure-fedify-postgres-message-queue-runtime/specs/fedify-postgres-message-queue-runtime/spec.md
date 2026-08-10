@@ -120,23 +120,16 @@
 - **THEN** Web/API와 Temporal Worker replica 또는 배포 상태를 함께 바꿀 필요가 없다
 - **AND** 같은 PostgreSQL queue의 ordering과 다중 worker 안전성은 Fedify adapter가 유지한다
 
-### Requirement: Queue backlog와 실패 관측 및 복구 검증
+### Requirement: Queue adapter startup과 restart 검증
 
-**Authority / Provenance:** PROD-448. 시스템은 Fedify가 제공하는 queue depth와 task/delivery 관측 경계로 enqueue 실패, ready/delayed backlog, 처리 지연, retry, permanent failure와 listener 오류를 구분해 관측해야 한다(MUST). restart, duplicate와 반복 실패 message를 검증할 수 있어야 하며(MUST), 로그나 metric에 Activity payload, credential 또는 서명 key를 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-448. 시스템은 producer와 consumer가 readiness를 제공하기 전에 공식 adapter의 connection과 initialization을 검증해야 하며(MUST), 격리 PostgreSQL에서 accepted message의 restart 뒤 재소비 가능성을 검증해야 한다(MUST). production backlog·처리 지연·retry/permanent-failure metric, exporter와 dashboard는 이 capability의 완료 조건이 아니다(MUST NOT).
 
-#### Scenario: backlog 관측
+#### Scenario: 잘못된 queue 구성으로 producer 시작
 
-- **WHEN** PostgreSQL queue에 ready 또는 delayed message가 남아 있다
-- **THEN** 운영자는 같은 shared queue를 역할별로 중복 집계하지 않은 queue depth와 consumer 처리 지표를 구분해 관측할 수 있다
-- **AND** queue depth만으로 in-flight 처리 완료나 domain 결과를 추론하지 않는다
+- **WHEN** producer mode의 queue connection, credential 또는 adapter initialization이 실패한다
+- **THEN** API/Web runtime은 readiness를 제공하거나 direct delivery로 fallback하지 않고 시작에 실패한다
 
-#### Scenario: 반복 실패 message
-
-- **WHEN** handler 또는 remote delivery가 retry policy 한계까지 반복 실패하거나 영구 실패로 분류된다
-- **THEN** 운영자는 안전한 message identity, queue 역할, 시도 결과와 오류 분류로 실패를 식별할 수 있다
-- **AND** raw Activity body, database credential 또는 signing material을 로그에 남기지 않는다
-
-#### Scenario: restart와 duplicate 복구 검증
+#### Scenario: restart 복구 검증
 
 - **WHEN** 수락된 inbox/outbox message가 남은 상태에서 consumer를 중단·재시작하고 동일 message 실행을 재현한다
 - **THEN** 수락된 작업의 재소비 가능성과 기존 domain idempotency 수렴을 검증할 수 있다

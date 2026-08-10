@@ -13,7 +13,7 @@ Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue
 - inbound inbox와 outbound outbox/fan-out을 공식 `@fedify/postgres` adapter에 영속 handoff한다.
 - Web producer와 별도 Fedify consumer를 같은 federation contract 위에서 분리한다.
 - queue handoff 수락을 application-facing 성공 경계로 만들고 remote retry, 기존 ordering option 실행과 shared inbox recipient 병합을 Fedify 한 곳에 둔다.
-- 독립 Deployment, health/readiness, graceful shutdown, depth/처리/실패 관측과 restart/duplicate 검증을 제공한다.
+- 독립 Deployment, health/readiness, graceful shutdown과 adapter startup/restart 검증을 제공한다.
 - production queue database·credential 준비, 최초 adapter initialization, rollout과 live traffic 전환을 별도 승인 가능한 단계로 유지한다.
 - queue 활성화 전 Temporal Activity의 delivery request retry와 활성화 후 Fedify의 remote delivery retry를 단계적으로 전환하고, domain Workflow 구현을 이 change의 prerequisite로 만들지 않는다.
 
@@ -48,12 +48,11 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 5. 공통 image에 별도 `fedify-queue` command를 추가하고 Helm에 Web/Temporal Worker와 독립된 기본 비활성 Fedify consumer Deployment를 둔다. Service/Ingress는 만들지 않고 replica/resource/probe/Fedify credential을 별도로 render한다.
 6. exact adapter의 implicit `initialize()`가 queue connection 대상 database 안의 기본 table/index를 소유하게 하고 Drizzle domain migration, custom DDL 또는 transport ledger를 만들지 않는다. dev/test에서는 격리 DB에서 초기화를 검증한다. production isolation이 필요하면 custom schema보다 별도 queue database/credential을 우선하고, 그 database 준비와 최초 producer/consumer 활성화는 별도 승인한다.
 7. 기존 activity별 delivery 테스트는 identity/audience와 이미 존재하는 Fedify ordering option을 보존하는지만 검증한다. 새 integration test는 실제 PostgreSQL queue로 inbound/outbound handoff, restart 후 소비와 Fedify-owned remote retry 경계를 검증한다. protocol-level idempotency나 새로운 ordering contract를 이 change의 검증 대상으로 확장하지 않는다.
-8. `getDepth()`와 Fedify OpenTelemetry queue/delivery/inbox metric을 기존 관측 경계에 연결하되 shared queue를 역할별로 중복 집계하지 않는다. 안전한 queue role/attempt/error classification만 기록하고 payload와 key material은 제외한다.
-9. queue mode는 producer와 consumer 모두 명시적 default-off flag로 제어한다. disabled일 때만 기존 direct mode를 유지하고, enabled일 때 transport credential이 빠지거나 adapter initialization이 실패하면 direct/owner fallback 없이 fail closed한다. credential 존재만으로 활성화하지 않지만 명시적 activation 뒤에는 adapter implicit DDL을 허용한다.
+8. queue mode는 producer와 consumer 모두 명시적 default-off flag로 제어한다. disabled일 때만 기존 direct mode를 유지하고, enabled일 때 transport credential이 빠지거나 adapter initialization이 실패하면 direct/owner fallback 없이 fail closed한다. credential 존재만으로 활성화하지 않지만 명시적 activation 뒤에는 adapter implicit DDL을 허용한다.
 
 ### Allowed Alternatives
 
-- 하나의 shared `PostgresMessageQueue` instance/table 또는 inbox/outbox/fan-out별 instance/table을 사용할 수 있다. 어느 쪽이든 Web과 consumer의 구성이 일치하고, 기존 ordering option·recipient 병합·retry owner가 Fedify이며, depth를 중복 집계하지 않고 독립 복구 가능해야 한다.
+- 하나의 shared `PostgresMessageQueue` instance/table 또는 inbox/outbox/fan-out별 instance/table을 사용할 수 있다. 어느 쪽이든 Web과 consumer의 구성이 일치하고, 기존 ordering option·recipient 병합·retry owner가 Fedify이며 독립 복구 가능해야 한다.
 - 새 workspace app 대신 `packages/fedify`의 executable entrypoint를 공통 image command로 직접 실행할 수 있다. package ownership, health lifecycle과 testability가 같은 수준이면 허용한다.
 - probe server 대신 배포 platform이 process readiness와 Fedify queue startup을 정확히 구분할 수 있는 native mechanism을 제공하면 사용할 수 있다. worker를 public Service/Ingress에 연결해서는 안 된다.
 
@@ -75,7 +74,7 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 - [분리 consumer 도입 시 Web과 worker registration drift] → 같은 production registration factory와 동일한 configuration contract를 사용하고 producer/consumer compatibility test를 둔다.
 - [PostgreSQL connection starvation] → queue 전용 pool과 보수적 concurrency를 기본으로 하고, parallelism을 늘릴 때 pool headroom과 backlog drain을 함께 검증한다.
 - [implicit adapter DDL이 의도하지 않은 database를 변경] → queue transport URL을 domain database와 분리하고 production queue database/credential 준비 및 최초 activation을 하나의 명시적 승인 대상으로 제시한다.
-- [비동기 handoff로 기존 테스트와 운영자가 remote delivery 성공을 과대 해석] → queue handoff, dequeued attempt, final/permanent failure metric과 보고 문구를 분리한다.
+- [비동기 handoff로 기존 테스트와 운영자가 remote delivery 성공을 과대 해석] → queue handoff 성공과 remote delivery 성공을 테스트와 보고 문구에서 분리한다.
 - [기존 domain idempotency가 모든 duplicate timing을 견디지 못할 수 있음] → activity별 integration test로 검증하고 transport change가 domain transition을 새로 소유하지 않게 한다.
 - [Fedify MessageQueue 전환이 기존 ordering option 또는 shared inbox recipient 병합을 손실할 수 있음] → 기존 callsite option과 fan-out 결과를 검증하되, PROD-448에서 KV/custom dedupe나 신규 ordering key를 추가하지 않는다.
 - [default-off 전환 중 direct와 queue producer가 동시에 활성화될 수 있음] → 하나의 명시적 producer mode와 atomic configuration validation으로 이중 발송을 막는다.
@@ -83,7 +82,7 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 ## Migration Plan
 
 1. PROD-706 취소와 PR #543 unmerged close를 기록하고 최신 main에서 queue runtime baseline을 다시 조사한다.
-2. dependency, queue construction, producer/consumer 분리, entrypoint, probes, observability와 격리 PostgreSQL 통합 테스트를 구현한다.
+2. dependency, queue construction, producer/consumer 분리, entrypoint, probes와 격리 PostgreSQL 통합 테스트를 구현한다.
 3. local/CI에서 adapter implicit initialization, handoff, restart, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 Helm default/opt-in render를 검증한다.
 4. 구현 PR은 production mutation이나 domain Workflow 완료 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다. 이 시점에도 direct mode를 사용하는 Activity는 기존 delivery request 실패를 Temporal retry 경계에 남길 수 있다.
 5. 별도 승인을 받은 경우에만 dev queue mode를 활성화해 adapter initialization, consumer rollout과 live enqueue/consume/restart를 검증한다.

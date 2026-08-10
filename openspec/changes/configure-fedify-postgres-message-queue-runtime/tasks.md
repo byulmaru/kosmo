@@ -124,7 +124,7 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 - [x] 4.3 공통 image에 독립 consumer command를 포함하고 기본 비활성 Helm component를 추가한다.
 - [x] 4.4 dev/prod opt-in Helm lint/render, 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증한다.
 
-## 5. PROD-448 queue 관측과 안전한 복구 evidence
+## 5. PROD-448 queue startup과 안전한 복구 evidence
 
 **Authority / Provenance**
 
@@ -132,22 +132,21 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 
 **Deliverable**
 
-운영자가 Fedify `getDepth()`와 제공되는 reporter 경계 안에서 enqueue failure, backlog, 처리 지연, retry/permanent failure와 listener 오류를 payload/credential 노출 없이 구분하고 restart·duplicate·반복 실패를 검증할 수 있다.
+producer/consumer가 readiness 전에 official adapter connection과 initialization을 확인하고, 격리 queue에서 restart 뒤 accepted message 재소비와 안전한 connection cleanup을 검증할 수 있다.
 
 **Guardrails**
 
-- shared queue depth를 inbox/outbox/fan-out 역할별로 중복 집계하지 않는다.
-- queue depth를 in-flight 또는 domain delivery 완료로 표현하지 않는다.
-- raw Activity payload, database credential와 signing key material을 log/metric에 포함하지 않는다.
+- production backlog·처리 지연·retry/permanent-failure metric, exporter와 dashboard를 이 change에 추가하지 않는다.
+- raw Activity payload, database credential와 signing key material을 startup error에 포함하지 않는다.
 
 **Verification**
 
-- queue depth와 exact Fedify version이 제공하는 queue/delivery/inbox signal이 의미별로 분리되고 secret/payload가 없는지 관측 테스트로 확인한다. 새 exporter backend는 PROD-448 완료에 필수로 추가하지 않는다.
-- 반복 실패, consumer restart와 duplicate 시나리오에서 operator-visible identity/classification과 안전한 복구 evidence를 확인한다.
+- producer/consumer module startup이 잘못된 connection·credential·adapter initialization에서 readiness 전에 실패하는지 확인한다.
+- consumer restart와 accepted message 재소비, queue/domain PostgreSQL connection cleanup을 확인한다.
 
-- [x] 5.1 `getDepth()`를 consumer startup/readiness와 격리 adapter 검증에 사용하고 exact Fedify version의 queue signal 경계를 보존한다.
-- [x] 5.2 configuration, startup/listener failure를 process 실패로 유지하고 payload·credential을 별도 log/metric에 추가하지 않는다.
-- [x] 5.3 격리 queue에서 backlog depth, consume와 abort/restart 가능한 connection cleanup을 검증하고 production purge/replay를 추가하지 않는다.
+- [x] 5.1 official adapter의 normal lazy initialization을 producer/consumer 공통 module startup에서 완료하고 실패를 process startup 실패로 유지한다.
+- [x] 5.2 configuration/startup failure에 payload·credential을 추가하지 않고 direct/owner fallback을 금지한다.
+- [x] 5.3 격리 queue에서 depth, consume와 abort/restart 가능한 queue/domain connection cleanup을 검증하고 production purge/replay를 추가하지 않는다.
 
 ## 6. PROD-448 PR completion 검증과 publication
 

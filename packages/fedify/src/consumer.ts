@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { pg } from '@kosmo/core/db';
 import { federation } from './federation';
 import { closeFedifyQueue, fedifyQueue } from './queue';
 import type { Server } from 'node:http';
@@ -21,7 +22,6 @@ type ConsumerOptions = {
   readonly mode?: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly startQueue?: (signal: AbortSignal) => Promise<void>;
-  readonly getDepth?: () => Promise<unknown>;
   readonly closeQueue?: () => Promise<void>;
   readonly createServer?: typeof createServer;
 };
@@ -56,13 +56,12 @@ export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<
       `Fedify queue consumer requires FEDIFY_RUNTIME_MODE=consumer (received ${mode}).`,
     );
   }
-  if (!fedifyQueue && (!options.startQueue || !options.getDepth)) {
+  if (!fedifyQueue && !options.startQueue) {
     throw new Error('Fedify queue consumer requires a PostgreSQL queue.');
   }
 
   const startQueue =
     options.startQueue ?? ((signal: AbortSignal) => federation.startQueue(undefined, { signal }));
-  const getDepth = options.getDepth ?? (() => fedifyQueue!.getDepth());
   const closeQueue = options.closeQueue ?? closeFedifyQueue;
   const port = parsePort(environment);
   const host = environment.HOST?.trim() || '127.0.0.1';
@@ -92,10 +91,6 @@ export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<
       return;
     }
 
-    // getDepth() uses the adapter's normal lazy initialization path.  This
-    // verifies the configured database and adapter-owned table/index before
-    // readiness without introducing a separate DDL command.
-    await getDepth();
     const queueRun = startQueue(abortController.signal);
     state = 'ready';
     await queueRun;
@@ -114,7 +109,11 @@ export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<
     try {
       await closeQueue();
     } finally {
-      await closeHttpServer(server, listening);
+      try {
+        await pg.end({ timeout: 5 });
+      } finally {
+        await closeHttpServer(server, listening);
+      }
     }
   }
 }

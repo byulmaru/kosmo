@@ -60,15 +60,14 @@ describe('Fedify queue configuration', () => {
     assert.match(ownerFallback.stderr, /FEDIFY_QUEUE_DATABASE_PASSWORD/);
   });
 
-  test('constructs the official adapter with an explicit queue credential', () => {
+  test('fails startup when the configured queue cannot be initialized', () => {
     const result = importQueue({
       FEDIFY_RUNTIME_MODE: 'producer',
       FEDIFY_QUEUE_DATABASE_PASSWORD: 'queue password',
-      FEDIFY_QUEUE_DATABASE_URL: 'postgres://queue.example/fedify',
+      FEDIFY_QUEUE_DATABASE_URL: 'postgres://127.0.0.1:1/fedify',
     });
 
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), 'true');
+    assert.notEqual(result.status, 0);
   });
 });
 
@@ -93,16 +92,12 @@ describe('Fedify queue consumer lifecycle', () => {
     }) as Server['close'];
 
     let closed = 0;
-    let checkedDepth = false;
     let queueSignal: AbortSignal | undefined;
     const running = runFedifyConsumer({
       closeQueue: async () => {
         closed += 1;
       },
       createServer: (() => server) as never,
-      getDepth: async () => {
-        checkedDepth = true;
-      },
       mode: 'consumer',
       startQueue: async (signal) => {
         queueSignal = signal;
@@ -114,7 +109,6 @@ describe('Fedify queue consumer lifecycle', () => {
     });
 
     await new Promise<void>((resolve) => setImmediate(resolve));
-    assert.equal(checkedDepth, true);
     assert.equal(queueSignal?.aborted, false);
 
     process.emit('SIGTERM');
@@ -139,6 +133,17 @@ const hasQueueCredential = (() => {
 })();
 
 describe('Fedify PostgreSQL message queue adapter', { skip: !hasQueueCredential }, () => {
+  test('initializes a producer before the queue module finishes loading', () => {
+    const result = importQueue({
+      FEDIFY_RUNTIME_MODE: 'producer',
+      FEDIFY_QUEUE_DATABASE_PASSWORD: queueDatabasePassword ?? '',
+      FEDIFY_QUEUE_DATABASE_URL: queueDatabaseUrl!,
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /(?:^|\n)true\s*$/);
+  });
+
   test('implicitly initializes, reports depth, consumes, and closes', async () => {
     const sql = postgres(
       queueDatabaseUrl!,
