@@ -7,21 +7,24 @@
 
 - 공식 브랜드 폰트로 지정된 것은 아니며 실사용 컨벤션이다.
 - 새 컴포넌트/화면을 디자인하거나 구현할 때 텍스트 용도에 따라 위 규칙대로 폰트를 선택한다.
-- Foundation 변수 컬렉션에 폰트 패밀리 변수가 없으므로 Figma에서는 폰트를 직접 지정한다.
-- Figma에서는 SUIT/Pretendard 미설치로 각각 Inter / Noto Sans KR로 대치 표기한다. 구현 시에는 Inter→SUIT, Noto Sans KR→Pretendard로 매핑한다.
+- `KOSMO Typography` 컬렉션의 `Production` mode는 SUIT/Pretendard, `MCP Preview` mode는 IBM Plex Sans KR/Noto Sans KR 대응을 사용한다.
+- 역할별 size, weight, line-height와 12px 사용 경계는 [foundations.md](./foundations.md)를 따른다.
 
-## Figma 작업 환경에서의 폰트 대치
+## Figma MCP 작업 환경에서의 폰트 대치
 
-브랜드 폰트인 **SUIT**(UI)와 **Pretendard Variable**(본문)은 현재 Figma 작업 환경에 설치되어 있지 않다. 해당 패밀리로 지정된 텍스트는 편집 시 "폰트를 불러올 수 없음" 오류가 난다. 그래서 Figma 디자인 작업에서는 다음 폰트로 대치한다.
+**SUIT**(UI)와 **Pretendard Variable**(본문)은 현재 MCP 자동 편집 환경에서 직접 로드할 수 없다. MCP로 텍스트를 생성·수정하거나 스크린샷을 확인할 때는 한글 글리프와 폭을 우선해 다음 Preview 폰트로 대치한다.
 
-| 용도 | 브랜드 폰트(스펙)   | Figma 작업 대치 폰트 |
+| 용도 | Production 폰트     | MCP Preview 폰트     |
 | ---- | ------------------- | -------------------- |
-| UI   | SUIT                | **Inter**            |
+| UI   | SUIT                | **IBM Plex Sans KR** |
 | 본문 | Pretendard Variable | **Noto Sans KR**     |
 
-- 새 Figma 화면/컴포넌트는 위 대치 폰트로 만든다. 기존 화면도 대부분 Inter / Noto Sans KR로 작업돼 있다.
-- 이는 **Figma 작업 환경 한정 대치**다. 코드·실서비스는 그대로 SUIT·Pretendard Variable을 사용하며 브랜드 결정은 바뀌지 않는다.
-- 로고처럼 SUIT로 지정하려던 요소도 Figma에서는 Inter로 표기한다(로고 에셋 확정 전까지는 대문자 "K").
+- MCP가 만든 새 화면/컴포넌트와 MCP 편집 중인 텍스트는 위 Preview 폰트를 사용한다.
+- UI의 IBM Plex Sans KR은 100~600을 가능한 동일 weight로 대응하고, SUIT 700 이상은 IBM Plex Sans KR Bold로 축소한다.
+- 본문의 Noto Sans KR은 Thin, Light, DemiLight, Regular, Medium, Bold, Black 중 가장 가까운 weight로 대응한다.
+- 대치 과정에서는 font size, line-height, letter spacing token을 바꾸지 않는다.
+- 이는 **MCP 작업 환경 한정 대치**다. 코드·실서비스와 Production 검수는 그대로 SUIT·Pretendard Variable을 사용한다.
+- 로고처럼 SUIT로 지정하려던 임시 text node도 MCP에서는 IBM Plex Sans KR로 표기한다(로고 에셋 확정 전까지는 대문자 "K").
 
 ## Expo/React Native 구현 (`apps/app`)
 
