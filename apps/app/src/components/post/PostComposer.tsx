@@ -9,6 +9,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Form } from '@/components/ui/Form';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -572,15 +573,8 @@ function PostComposerContents({
     </>
   );
 
-  return (
-    <View
-      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
-      style={[
-        surface ? styles.surfaceRoot : styles.root,
-        !surface && replyMode ? styles.replyRoot : null,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
+  const composerContent = (
+    <>
       {scrollable ? (
         <ScrollView
           contentContainerStyle={styles.surfaceEditor}
@@ -624,7 +618,22 @@ function PostComposerContents({
           </Pressable>
         </Modal>
       ) : null}
-    </View>
+    </>
+  );
+
+  return (
+    <Form
+      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
+      onSubmit={submit}
+      style={[
+        surface ? styles.surfaceRoot : styles.root,
+        !surface && replyMode ? styles.replyRoot : null,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
+      submitOnModEnter
+    >
+      {composerContent}
+    </Form>
   );
 }
 
