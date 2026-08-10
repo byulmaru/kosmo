@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-709가 구현한 PostgreSQL selector 경계를 `api`/`fedify`/`migration`으로 설명한다. 여기서 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시 Web inbound용으로 추가되고 후속 Worker foundation에도 연결된 legacy selector seam이며 실제 role/Secret 이름 계약이 아니다. 최신 role identity는 PROD-369의 `kosmo_worker`/`worker-database`이고, selector/env 명칭 migration과 Web trusted federation ingress·Temporal Worker DB Activity의 실제 connection 전환은 PROD-715가 소유한다. `migration`은 기존 `kosmo_migration` login에서 `SET ROLE kosmo`로 전환하는 경계를 유지한다.
+이 기록은 PROD-709가 구현한 PostgreSQL selector 경계를 `api`/`fedify`/`migration`으로 설명한다. 여기서 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시 Web inbound용으로 추가되고 후속 Worker foundation에도 연결된 legacy password selector seam이며 실제 role/certificate 이름 계약이 아니다. 최신 role identity와 generated certificate는 PROD-369의 `kosmo_worker` DatabaseRole이 provision하고, certificate selector 소비는 PROD-470, selector/env 명칭 migration과 실제 Worker principal cutover는 PROD-715가 소유한다. `migration`은 기존 `kosmo_migration` login에서 `SET ROLE kosmo`로 전환하는 경계를 유지한다.
 
 ## Decision Records
 
@@ -47,9 +47,9 @@
 - Authority / Provenance: Linear `PROD-709`, `PROD-369`, `PROD-715`; 2026-08-10 사용자 결정
 - Status: Active
 - Context / Problem: Legacy `fedify` source가 후속에 가리킬 DB login은 최신 계약의 `kosmo_worker` 역할과 RLS 경계를 전제로 하지만, role 생성·membership·grant·policy provisioning은 별도 운영 계약이다.
-- Decision Outcome: PROD-369은 `kosmo_worker`에 `BYPASSRLS`를 부여하고 `worker-database` Secret source를 provision한다. 이 selector change는 그 role, `BYPASSRLS`, policy, grant 또는 Secret을 생성·변경하지 않는다. `fedify` selector를 해당 Secret에 연결하거나 `worker`로 이름을 옮기는 일도 PROD-715까지 수행하지 않는다.
+- Decision Outcome: PROD-369은 `kosmo_worker`에 `BYPASSRLS`를 부여하고 CNPG generated client certificate를 provision한다. 이 selector change는 그 role, certificate, policy, grant 또는 certificate connection을 생성·변경하지 않는다. Certificate selector 소비는 PROD-470, `fedify` seam을 `worker`로 옮기고 실제 principal을 전환하는 일은 PROD-715가 소유한다.
 - Alternatives Considered: Helm selector에서 role이나 RLS policy를 생성하는 방식은 database ownership과 운영 provisioning 경계를 chart에 끌어오므로 제외했다. `kosmo_worker` 권한을 API source와 공유하는 방식은 RLS 격리를 잃으므로 제외했다.
-- Consequences: selector render가 성공해도 role/Secret provisioning과 RLS 동작은 별도 downstream 검증이 필요하다.
+- Consequences: selector render가 성공해도 role/certificate provisioning과 실제 인증/RLS 동작은 별도 downstream 검증이 필요하다.
 - Confirmation / Follow-up: manifest/source diff에 `DatabaseRole`, Secret value, grant, policy 또는 `BYPASSRLS` SQL이 없음을 확인한다.
 
 ### Migration credential은 기존 `kosmo_migration` → `SET ROLE kosmo` 경계를 유지한다
@@ -71,4 +71,4 @@
 ## Superseded Decisions
 
 - 초기 초안의 `api`/`web` workload별 source와 `system`/`federation-system` 경계 표현은 사용자 정정으로 폐기했다. `api`/`fedify`/`migration` 실행 역할과 Web inbound Fedify 전용 env 결정이 이를 대체한다.
-- `fedify` selector가 `kosmo_fedify` role/Secret을 전제로 한다는 2026-08-07 설명은 폐기됐다. `fedify`/`FEDIFY_DATABASE_*`는 PROD-709의 legacy compatibility seam으로만 유지하며 실제 identity는 PROD-369의 `kosmo_worker`/`worker-database`, selector/env 명칭 migration과 cutover는 PROD-715가 소유한다.
+- `fedify` selector가 `kosmo_fedify` role/Secret을 전제로 한다는 2026-08-07 설명은 폐기됐다. `fedify`/`FEDIFY_DATABASE_*`는 PROD-709의 legacy password compatibility seam으로만 유지한다. 실제 identity/certificate는 PROD-369의 `kosmo_worker`, certificate selector 소비는 PROD-470, selector/env 명칭 migration과 principal cutover는 PROD-715가 소유한다.

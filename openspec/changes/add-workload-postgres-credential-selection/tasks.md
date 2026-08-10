@@ -23,7 +23,7 @@
 - Fedify source는 Web inbound Fedify와 활성화된 Worker의 기존 env seam에만 추가하고 Web BFF 기본 `DATABASE_*`를 바꾸지 않는다.
 - Migration env, Secret ref, `DATABASE_MIGRATION_ROLE`과 `SET ROLE kosmo` 실행 경계를 runtime selector에서 파생하지 않는다.
 - `system`, `federation-system` 또는 `web`를 credential source 역할로 만들지 않는다.
-- `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_worker` role/`worker-database` Secret 이름 계약이 아니다. Worker Deployment의 입력 seam은 이미 존재하지만 Secret value, role/membership/grant/RLS(`kosmo_worker` `BYPASSRLS` 포함), DB client/connection, Temporal Workflow, Worker Activity와 API outbound direct-call 전환을 생성·변경하지 않는다.
+- `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy password selector seam이며 `kosmo_worker` role/generated certificate 이름 계약이 아니다. Worker Deployment의 입력 seam은 이미 존재하지만 role/certificate/membership/grant/RLS(`kosmo_worker` `BYPASSRLS` 포함), certificate DB client/connection, Temporal Workflow, Worker Activity와 API outbound direct-call 전환을 생성·변경하지 않는다. Certificate selector 소비는 PROD-470, 실제 Worker principal cutover는 PROD-715가 소유한다.
 
 **Verification**
 

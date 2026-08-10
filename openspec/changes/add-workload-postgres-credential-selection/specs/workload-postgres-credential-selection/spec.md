@@ -30,7 +30,7 @@
 
 ### Requirement: Fedify source는 Web inbound와 활성화된 Worker 입력 seam에만 추가한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719`, `PROD-730` — 시스템은 Web 프로세스의 inbound Fedify consumer와 명시적으로 활성화된 Worker Deployment에 별도 PostgreSQL URL과 password Secret source를 입력 seam으로 제공할 수 있어야 한다(MUST). 이 requirement의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_fedify` role/Secret 계약이 아니다. 최신 identity는 PROD-369의 `kosmo_worker`/`worker-database`이고 selector/env 명칭 migration과 실제 connection cutover는 PROD-715가 소유한다. 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-470`, `PROD-715`, `PROD-719`, `PROD-730` — 시스템은 Web 프로세스의 inbound Fedify consumer와 명시적으로 활성화된 Worker Deployment에 별도 PostgreSQL URL과 password Secret source를 legacy 입력 seam으로 제공할 수 있어야 한다(MUST). 이 requirement의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 password selector seam이며 `kosmo_fedify` role/Secret 계약이 아니다. 최신 identity와 generated certificate는 PROD-369의 `kosmo_worker` DatabaseRole이 provision하고, certificate selector 소비는 PROD-470, selector/env 명칭 migration과 실제 Worker principal cutover는 PROD-715가 소유한다. 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
 
 #### Scenario: Web inbound Fedify source 선택
 

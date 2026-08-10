@@ -4,7 +4,7 @@
 
 이 change가 다루는 runtime 역할은 `api`, `fedify`, `migration` 세 가지다. `api` source는 API Rollout과 Web BFF 및 활성화된 Worker의 기본 DB 입력이 공유하고, `fedify` source는 Web inbound Fedify와 활성화된 Worker 입력 seam에 노출한다. `migration`은 별도 `<release>-postgres-migration` credential로 인증한 뒤 `kosmo_migration`에서 `SET ROLE kosmo`로 전환하는 기존 production 경계와 dev owner fallback을 유지한다.
 
-API outbound Fedify 직접 호출을 Temporal durable intent/workflow와 Worker Fedify Activity로 바꾸는 일은 PROD-448이 소유한다. 후속 Worker foundation은 기존 `api`/`fedify` selector 값을 Worker env에 전달하는 seam까지 준비했지만 foundation은 DB connection을 열지 않는다. 실제 BYPASSRLS identity는 PROD-369의 `kosmo_worker`이며 이 change의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam일 뿐 role/Secret 이름 계약이 아니다. Selector/env 명칭 migration과 Web/Worker의 실제 DB connection 전환은 PROD-715가 소유한다.
+API outbound Fedify 직접 호출을 Temporal durable intent/workflow와 Worker Fedify Activity로 바꾸는 일은 PROD-448이 소유한다. 후속 Worker foundation은 기존 `api`/`fedify` selector 값을 Worker env에 전달하는 seam까지 준비했지만 foundation은 DB connection을 열지 않는다. 실제 BYPASSRLS identity와 generated certificate는 PROD-369의 `kosmo_worker` DatabaseRole이 provision하며 이 change의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy password selector seam일 뿐 role/certificate 이름 계약이 아니다. Certificate selector 소비는 PROD-470, selector/env 명칭 migration과 실제 Worker principal 전환은 PROD-715가 소유한다.
 
 ## Goals / Non-Goals
 
@@ -60,7 +60,7 @@ Migration template은 runtime helper를 호출하지 않고 기존 PG environmen
 - API와 Web에 별도 API credential values를 만들어 기본 BFF source가 drift하게 하지 않는다.
 - Fedify source로 Web의 기본 `DATABASE_URL`을 바꾸거나 API Rollout에 `FEDIFY_DATABASE_*`를 주입하지 않는다.
 - Runtime selector를 migration owner fallback, production migration Secret 또는 `SET ROLE kosmo` 실행에 전달하지 않는다.
-- `kosmo_worker` role, `BYPASSRLS`, policy/grant, actual Secret, Postgres client/connection, Temporal 또는 Worker resource를 이 selector change에 복사·생성하지 않는다.
+- `kosmo_worker` role, `BYPASSRLS`, generated certificate, policy/grant, certificate Postgres connection, Temporal 또는 Worker resource를 이 selector change에 복사·생성하지 않는다.
 
 ## Risks / Trade-offs
 
@@ -73,7 +73,7 @@ Migration template은 runtime helper를 호출하지 않고 기존 PG environmen
 ## Migration Plan
 
 1. 빈 `api`/`fedify` selector 기본값을 포함한 chart를 수동 렌더하고 pre-selector manifest가 byte-identical인지 확인한다. 비교 hash나 fixture는 저장하지 않는다.
-2. PROD-369이 `kosmo_api` 및 `kosmo_worker` Secret/role attribute(`BYPASSRLS` 포함)를 provision하고, PROD-724/713이 권한·API RLS를 소유한다. 이 change는 resource를 만들지 않는다.
+2. PROD-369이 `kosmo_api` 및 `kosmo_worker` role attribute와 generated certificate를 provision하고, PROD-470이 certificate selector 소비, PROD-724/713이 권한·API RLS를 소유한다. 이 change는 해당 resource를 만들지 않는다.
 3. `fedify` trio를 Web inbound Fedify와 활성화된 Worker 입력 seam에 opt-in하고 API/Web BFF 기본 API 연결과 API의 Fedify env 부재를 검증한다.
 4. `api` trio를 API Rollout과 Web BFF 및 활성화된 Worker 기본 입력에 opt-in한다. Worker selector/env 명칭과 실제 credential connection 전환은 PROD-715, API outbound Fedify와 Worker/Temporal capability 활성화는 PROD-448/719에서 별도 진행한다.
 5. Rollback은 해당 역할의 세 값을 함께 제거해 기존 owner 경계로 돌아간다. 다른 역할 selector, image와 migration boundary는 유지한다.

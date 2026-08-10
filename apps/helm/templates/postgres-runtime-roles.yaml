@@ -23,8 +23,9 @@ spec:
   replication: false
   bypassrls: false
   inRoles: []
-  passwordSecret:
-    name: {{ printf "%s-postgres-api" $releaseName }}
+  disablePassword: true
+  clientCertificate:
+    enabled: true
   databaseRoleReclaimPolicy: retain
 ---
 apiVersion: postgresql.cnpg.io/v1
@@ -50,6 +51,7 @@ spec:
   replication: false
   bypassrls: true
   inRoles: []
-  passwordSecret:
-    name: {{ printf "%s-postgres-worker" $releaseName }}
+  disablePassword: true
+  clientCertificate:
+    enabled: true
   databaseRoleReclaimPolicy: retain
