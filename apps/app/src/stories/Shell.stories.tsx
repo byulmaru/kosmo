@@ -22,6 +22,7 @@ import { spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ViewStyle } from 'react-native';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -1365,6 +1366,9 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
+const longReleaseTag =
+  'v20260810releaseaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
 function UniversalShellStory() {
   return (
     <SessionProvider>
@@ -2247,6 +2251,7 @@ export const UniversalFull: Story = {
     const versionLabel = canvas.getByText('버전: 개발 빌드');
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
+    const versionLabelRect = versionLabel.getBoundingClientRect();
 
     expect(leftRail).not.toBeNull();
     expect(leftRail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
@@ -2257,11 +2262,46 @@ export const UniversalFull: Story = {
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
     expect(privacyLink).toHaveAttribute('href', '/privacy');
     expect(versionLabel).toBeVisible();
+    expect(versionLabelRect.top).toBeGreaterThanOrEqual(privacyLinkRect.top);
+    expect(versionLabelRect.bottom).toBeLessThanOrEqual(privacyLinkRect.bottom);
     expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
     <View style={{ height: 1800 }}>
       <UniversalShellStory />
+    </View>
+  ),
+};
+
+export const RightRailFooterLongReleaseTag: Story = {
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const surface = canvas.getByTestId('long-tag-footer-surface');
+    const footer = surface.firstElementChild;
+    const label = canvas.getByText(`버전: ${longReleaseTag}`, { exact: true });
+    const surfaceRect = surface.getBoundingClientRect();
+    const footerRect = footer?.getBoundingClientRect();
+    const labelRect = label.getBoundingClientRect();
+
+    expect(footer).not.toBeNull();
+    expect(label).toBeVisible();
+    expect(surface.scrollWidth).toBe(surface.clientWidth);
+    expect(labelRect.right).toBeLessThanOrEqual(footerRect?.right ?? 0);
+    expect(labelRect.bottom).toBeLessThanOrEqual(surfaceRect.bottom);
+  },
+  render: () => (
+    <View
+      style={
+        {
+          height: 160,
+          overflowX: 'hidden',
+          paddingLeft: spacing.xl,
+          width: 350,
+        } as ViewStyle
+      }
+      testID="long-tag-footer-surface"
+    >
+      <RightRailFooter versionLabel={longReleaseTag} />
     </View>
   ),
 };

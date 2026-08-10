@@ -54,7 +54,7 @@ Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 
   개인정보 처리방침만 링크이고 버전은 정적 텍스트다. production Web build는 build를 시작한 Git tag를
   정규화하거나 접두어를 추가하지 않고 그대로 표시하며, tag가 없는 로컬·브랜치 build는 `버전: 개발 빌드`를
   표시한다. 선택한 Profile이 없어 컴포저가 표시되지 않아도 footer는 유지하며, 기존 위치보다 viewport 하단에
-  가깝게 배치한다.
+  가깝게 배치한다. 긴 공백 없는 Git tag도 footer 폭 안에서 줄바꿈해 전체 표시한다.
 - `compact`~`full`: 좁은 아이콘 레일의 공간과 navigation 위계를 보존하기 위해 개인정보 처리방침 진입점을
   포함한 footer를 표시하지 않는다.
 - `< compact` mobile Web과 Android/iOS: mobile drawer에 개인정보 처리방침 진입점을 표시하지 않는다.

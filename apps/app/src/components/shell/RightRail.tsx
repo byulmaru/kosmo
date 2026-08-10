@@ -5,6 +5,7 @@ import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { GuardedLink } from './GuardedLink';
+import type { TextStyle } from 'react-native';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 const RightRailFragment = graphql`
@@ -18,7 +19,9 @@ export function RightRail({ profile: profileKey }: { profile: RightRail_profile$
   return <PostComposer profile={profile} />;
 }
 
-export function RightRailFooter() {
+export function RightRailFooter({
+  versionLabel = buildVersionLabel,
+}: { versionLabel?: string } = {}) {
   const theme = useTheme();
 
   return (
@@ -35,8 +38,8 @@ export function RightRailFooter() {
       <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}>
         ·
       </Text>
-      <Text style={[styles.footerText, { color: theme.textSecondary }]}>
-        버전: {buildVersionLabel}
+      <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}>
+        버전: {versionLabel}
       </Text>
     </View>
   );
@@ -46,6 +49,7 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.xs,
     marginBottom: spacing.sm,
     marginTop: 'auto',
@@ -56,4 +60,10 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   footerText: { fontFamily: 'SUIT', ...typography.xsm },
+  versionText: {
+    flexShrink: 1,
+    maxWidth: '100%',
+    minWidth: 0,
+    wordBreak: 'break-all',
+  } as TextStyle & { wordBreak: 'break-all' },
 });
