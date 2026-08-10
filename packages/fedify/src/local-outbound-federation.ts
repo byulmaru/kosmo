@@ -1,5 +1,6 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import { fedifyQueue } from './queue';
 
 export type LocalOutboundContextData = {
   readonly localInstanceId: string;
@@ -8,6 +9,14 @@ export type LocalOutboundContextData = {
 export const localOutboundFederation = createFederation<LocalOutboundContextData>({
   allowPrivateAddress: false,
   kv: new MemoryKvStore(),
+  ...(fedifyQueue
+    ? {
+        // Use the same inbox/outbox/fan-out transport as the main federation.
+        // Existing delivery helpers remain the sole owners of ordering keys.
+        queue: fedifyQueue,
+        manuallyStartQueue: true,
+      }
+    : {}),
 });
 
 localOutboundFederation

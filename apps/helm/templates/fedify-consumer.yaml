@@ -1,38 +1,45 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
 {{- include "kosmo.validateFedifyQueueCredentials" . -}}
-{{- if .Values.workloads.enabled }}
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
+{{- if .Values.fedify.consumer.enabled }}
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
-    app.kubernetes.io/name: web
+    app.kubernetes.io/name: fedify-consumer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: fedify-consumer
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/version: {{ .Values.version | quote }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  {{- if ne .Values.env "prod" }}
-  replicas: 1
-  {{- end }}
-  strategy:
-    blueGreen:
-      activeService: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
-      previewService: {{ printf "%s-web-preview" .Release.Name | trunc 63 | trimSuffix "-" }}
-      previewReplicaCount: 1
+  replicas: {{ get .Values.fedify.consumer.replicas .Values.env }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: web
+      app.kubernetes.io/name: fedify-consumer
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: web
+        app.kubernetes.io/name: fedify-consumer
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/version: {{ .Values.version | quote }}
     spec:
+      serviceAccountName: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
+      automountServiceAccountToken: false
       containers:
-        - name: web
+        - name: fedify-consumer
           image: {{ include "kosmo.imageRef" . | quote }}
           imagePullPolicy: Always
           securityContext:
@@ -45,23 +52,19 @@ spec:
                 - ALL
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.fedify.consumer.health.port }}
               protocol: TCP
           args:
-            - web
+            - fedify-queue
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
-            - name: DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
-            - name: DATABASE_URL
-              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
-            {{- if .Values.fedify.producer.enabled }}
+            - name: PORT
+              value: {{ .Values.fedify.consumer.health.port | quote }}
+            - name: HOST
+              value: "0.0.0.0"
             - name: FEDIFY_RUNTIME_MODE
-              value: producer
+              value: consumer
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -69,17 +72,13 @@ spec:
                   key: {{ include "kosmo.fedifyQueueDatabasePasswordSecretKey" . }}
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ include "kosmo.fedifyQueueDatabaseUrl" . | quote }}
-            {{- end }}
-            {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
-            {{- if $workerDatabase.databaseUrl }}
-            - name: WORKER_DATABASE_PASSWORD
+            - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ $workerDatabase.passwordSecret.name | quote }}
-                  key: {{ $workerDatabase.passwordSecret.key | quote }}
-            - name: WORKER_DATABASE_URL
-              value: {{ $workerDatabase.databaseUrl | quote }}
-            {{- end }}
+                  name: {{ include "kosmo.fedifyDatabasePasswordSecretName" . | quote }}
+                  key: {{ include "kosmo.fedifyDatabasePasswordSecretKey" . }}
+            - name: DATABASE_URL
+              value: {{ include "kosmo.fedifyDatabaseUrl" . | quote }}
           envFrom:
             - secretRef:
                 name: env
@@ -91,15 +90,10 @@ spec:
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /
+              path: /ready
               port: http
             initialDelaySeconds: 3
             periodSeconds: 5
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+{{ toYaml .Values.fedify.consumer.resources | indent 12 }}
 {{- end }}

@@ -421,6 +421,9 @@ importers:
       '@fedify/fedify':
         specifier: ^2.3.0
         version: 2.3.0
+      '@fedify/postgres':
+        specifier: 2.3.0
+        version: 2.3.0(@fedify/fedify@2.3.0)(postgres@3.4.9)
       '@fedify/vocab':
         specifier: 2.3.0
         version: 2.3.0
@@ -433,6 +436,12 @@ importers:
       entities:
         specifier: ^8.0.0
         version: 8.0.0
+      postgres:
+        specifier: 3.4.9
+        version: 3.4.9
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -440,9 +449,6 @@ importers:
       '@fedify/vocab-runtime':
         specifier: 2.3.0
         version: 2.3.0
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
 
 packages:
 
@@ -1391,6 +1397,12 @@ packages:
   '@fedify/fedify@2.3.0':
     resolution: {integrity: sha512-lVSuHbp5xYco8FOZnR6dZaFo2w4FMn2+cba+OiAGjxPoWsdn5+gKrMXXuwGD37qWBILEuDGGqCy987WaytbI/A==}
     engines: {bun: '>=1.1.0', deno: '>=2.0.0', node: '>=22.0.0'}
+
+  '@fedify/postgres@2.3.0':
+    resolution: {integrity: sha512-b5SvWzClvoHE+XtnO2vLaZ4AqbE7DZlQfWrKSd4h68beMPEBkyk9XntVnKH6el+M9q4ueCb3r4kdkrwyfSo42g==}
+    peerDependencies:
+      '@fedify/fedify': ^2.3.0
+      postgres: ^3.4.7
 
   '@fedify/uri-template@2.3.0':
     resolution: {integrity: sha512-zrz545OoolziHb4Hhld8xEZuiG8Aij8I+1I12RARs1Pdz3wguzQwkmhi5A2jqYiz5W5XPzz3XDYEZUm7Ayzsyg==}
@@ -8628,6 +8640,13 @@ snapshots:
       jsonld: 9.0.0
       structured-field-values: 2.0.4
       urlpattern-polyfill: 10.1.0
+
+  '@fedify/postgres@2.3.0(@fedify/fedify@2.3.0)(postgres@3.4.9)':
+    dependencies:
+      '@fedify/fedify': 2.3.0
+      '@js-temporal/polyfill': 0.5.1
+      '@logtape/logtape': 2.2.1
+      postgres: 3.4.9
 
   '@fedify/uri-template@2.3.0': {}
 

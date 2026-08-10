@@ -1,4 +1,5 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
+{{- include "kosmo.validateFedifyQueueCredentials" . -}}
 {{- if .Values.workloads.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -60,6 +61,17 @@ spec:
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
             - name: OPERATION_DATABASE_URL
               value: {{ include "kosmo.apiPoolerDatabaseUrl" . | quote }}
+            {{- if .Values.fedify.producer.enabled }}
+            - name: FEDIFY_RUNTIME_MODE
+              value: producer
+            - name: FEDIFY_QUEUE_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kosmo.fedifyQueueDatabasePasswordSecretName" . | quote }}
+                  key: {{ include "kosmo.fedifyQueueDatabasePasswordSecretKey" . }}
+            - name: FEDIFY_QUEUE_DATABASE_URL
+              value: {{ include "kosmo.fedifyQueueDatabaseUrl" . | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: env

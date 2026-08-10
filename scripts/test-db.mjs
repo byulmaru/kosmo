@@ -5,11 +5,14 @@ import { readFileSync } from 'node:fs';
 const composeFile = 'docker-compose.test.yml';
 const serviceName = 'postgres';
 const command = process.argv[2];
-const args = process.argv.slice(3);
+const commandArgs = process.argv.slice(3);
 const providedDatabaseUrl = process.env.DATABASE_URL;
+const fedifyQueueOptIn = process.env.FEDIFY_QUEUE_DATABASE_URL !== undefined;
 
 if (!command || !['down', 'drop', 'reset', 'run', 'up'].includes(command)) {
-  console.error('Usage: node scripts/test-db.mjs <down|drop|reset|run|up> [-- command...]');
+  console.error(
+    'Usage: node scripts/test-db.mjs <down|drop|reset|run|up> [--fedify-queue] [-- command...]',
+  );
   process.exit(1);
 }
 
@@ -25,7 +28,7 @@ try {
 
 function main() {
   if (command === 'down') {
-    runCompose(['down', ...args]);
+    runCompose(['down', ...commandArgs]);
     return 0;
   }
 
@@ -53,8 +56,7 @@ function main() {
     return 0;
   }
 
-  const delimiter = args.indexOf('--');
-  const childCommand = delimiter === -1 ? [] : args.slice(delimiter + 1);
+  const { childCommand, useFedifyQueueDatabase } = getRunOptions();
 
   if (childCommand.length === 0) {
     throw new Error('`run` requires a command after `--`.');
@@ -67,7 +69,7 @@ function main() {
   let cleanupError;
 
   try {
-    childStatus = runChild(childCommand, databaseUrl);
+    childStatus = runChild(childCommand, databaseUrl, { useFedifyQueueDatabase });
   } finally {
     try {
       dropDatabase(getDatabaseName(databaseUrl));
@@ -85,6 +87,22 @@ function main() {
   }
 
   return childStatus;
+}
+
+function getRunOptions() {
+  const delimiter = commandArgs.indexOf('--');
+  const options = delimiter === -1 ? commandArgs : commandArgs.slice(0, delimiter);
+  const childCommand = delimiter === -1 ? [] : commandArgs.slice(delimiter + 1);
+  const unsupportedOption = options.find((option) => option !== '--fedify-queue');
+
+  if (unsupportedOption) {
+    throw new Error(`Unknown run option: ${unsupportedOption}`);
+  }
+
+  return {
+    childCommand,
+    useFedifyQueueDatabase: fedifyQueueOptIn || options.includes('--fedify-queue'),
+  };
 }
 
 function loadEnvFile(path) {
@@ -230,14 +248,20 @@ function run(command, args, options = {}) {
   }
 }
 
-function runChild([childCommand, ...childArgs], databaseUrl) {
+function runChild([childCommand, ...childArgs], databaseUrl, { useFedifyQueueDatabase }) {
   const databaseName = getDatabaseName(databaseUrl);
+  const childEnvironment = {
+    ...process.env,
+    DATABASE_URL: databaseUrl.toString(),
+    KOSMO_TEST_PORT_OFFSET: String(getPortOffset(databaseName)),
+  };
+
+  if (useFedifyQueueDatabase) {
+    childEnvironment.FEDIFY_QUEUE_DATABASE_URL = databaseUrl.toString();
+  }
+
   const result = spawnSync(childCommand, childArgs, {
-    env: {
-      ...process.env,
-      DATABASE_URL: databaseUrl.toString(),
-      KOSMO_TEST_PORT_OFFSET: String(getPortOffset(databaseName)),
-    },
+    env: childEnvironment,
     stdio: 'inherit',
   });
 

@@ -42,6 +42,33 @@
 {{- end -}}
 {{- end -}}
 
+{{- define "kosmo.validateFedifyQueueCredentials" -}}
+{{- $fedify := .Values.fedify | default dict -}}
+{{- $producer := get $fedify "producer" | default dict -}}
+{{- $consumer := get $fedify "consumer" | default dict -}}
+{{- $producerEnabled := get $producer "enabled" | default false -}}
+{{- $consumerEnabled := get $consumer "enabled" | default false -}}
+{{- $credentials := .Values.postgres.credentials | default dict -}}
+{{- $config := get $credentials "fedifyQueue" | default dict -}}
+{{- $databaseUrl := get $config "databaseUrl" | default "" | toString -}}
+{{- $passwordSecret := get $config "passwordSecret" | default dict -}}
+{{- $name := get $passwordSecret "name" | default "" | toString -}}
+{{- $key := get $passwordSecret "key" | default "" | toString -}}
+{{- $complete := and (ne $databaseUrl "") (ne $name "") (ne $key "") -}}
+{{- if and (or $producerEnabled $consumerEnabled) (not $complete) -}}
+{{- fail "postgres.credentials.fedifyQueue requires databaseUrl, passwordSecret.name, and passwordSecret.key when Fedify producer or consumer is enabled" -}}
+{{- end -}}
+{{- $trustedConfig := get $credentials "fedify" | default dict -}}
+{{- $trustedDatabaseUrl := get $trustedConfig "databaseUrl" | default "" | toString -}}
+{{- $trustedPasswordSecret := get $trustedConfig "passwordSecret" | default dict -}}
+{{- $trustedName := get $trustedPasswordSecret "name" | default "" | toString -}}
+{{- $trustedKey := get $trustedPasswordSecret "key" | default "" | toString -}}
+{{- $trustedComplete := and (ne $trustedDatabaseUrl "") (ne $trustedName "") (ne $trustedKey "") -}}
+{{- if and $consumerEnabled (not $trustedComplete) -}}
+{{- fail "postgres.credentials.fedify requires databaseUrl, passwordSecret.name, and passwordSecret.key when the Fedify consumer is enabled" -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "kosmo.postgresCredentialIsConfigured" -}}
 {{- $root := index . 0 -}}
 {{- $role := index . 1 -}}
@@ -103,6 +130,42 @@
 {{- else -}}
 password
 {{- end -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyDatabaseUrl" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" -}}
+{{- dig "fedify" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- else -}}
+{{- fail "postgres.credentials.fedify must be complete when the Fedify consumer is enabled" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyDatabasePasswordSecretName" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" -}}
+{{- dig "fedify" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) -}}
+{{- else -}}
+{{- fail "postgres.credentials.fedify must be complete when the Fedify consumer is enabled" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyDatabasePasswordSecretKey" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" -}}
+{{- dig "fedify" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote -}}
+{{- else -}}
+{{- fail "postgres.credentials.fedify must be complete when the Fedify consumer is enabled" -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyQueueDatabaseUrl" -}}
+{{- dig "fedifyQueue" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyQueueDatabasePasswordSecretName" -}}
+{{- dig "fedifyQueue" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) -}}
+{{- end -}}
+
+{{- define "kosmo.fedifyQueueDatabasePasswordSecretKey" -}}
+{{- dig "fedifyQueue" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote -}}
 {{- end -}}
 
 {{- define "kosmo.imageRef" -}}
