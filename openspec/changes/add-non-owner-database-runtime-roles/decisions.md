@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 최신 Linear PROD-369/470/724와 PROD-709/713/715/716의 경계, 기존 production owner·migration identity, CloudNativePG 1.30 DatabaseRole/VaultStaticSecret 제약과 2026-08-07 사용자 선택을 반영한다.
+이 기록은 최신 Linear PROD-369/470/724와 PROD-709/713/715/716, 기본 비활성 Worker foundation인 PROD-730의 경계, 기존 production owner·migration identity, CloudNativePG 1.30 DatabaseRole/VaultStaticSecret 제약과 2026-08-07 사용자 선택을 반영한다.
 
 ## Decision Records
 
@@ -13,7 +13,7 @@
 - Context / Problem: 이전 PROD-470은 API와 web/Fedify가 하나의 `kosmo_runtime` LOGIN을 공유하도록 했지만, 최신 RLS 전환은 API viewer와 Fedify policy·credential을 서로 독립적으로 배포하고 가장을 방지해야 한다.
 - Decision Outcome: API LOGIN은 `kosmo_api`, Fedify LOGIN은 `kosmo_fedify`, migration LOGIN은 기존 `kosmo_migration`으로 고정한다.
 - Alternatives Considered: shared `kosmo_runtime`은 credential과 policy rollout 경계를 결합하므로 supersede했다. 더 긴 `kosmo_api_runtime`/`kosmo_fedify_runtime`은 명시적이지만 downstream SQL·운영 식별자가 불필요하게 길어 선택하지 않았다.
-- Consequences: PROD-724, PROD-713, PROD-709와 PROD-715/716은 두 이름을 안정적인 role identifier로 사용한다. PROD-470의 미병합 branch/OpenSpec은 재개할 때 shared-login 결정을 정렬해야 한다.
+- Consequences: PROD-724, PROD-713, PROD-709와 PROD-715/716은 두 이름을 안정적인 role identifier로 사용한다.
 - Confirmation / Follow-up: Helm render와 실제 `current_user`, `pg_roles`, `pg_auth_members`로 두 LOGIN의 분리와 상호 membership 부재를 확인한다.
 
 ### Fedify만 BYPASSRLS를 사용한다
@@ -70,4 +70,4 @@
 
 ## Superseded Decisions
 
-- Linear `PROD-470`의 2026-07-24 shared `kosmo_runtime` 결정은 2026-08-07 `API와 Fedify database LOGIN을 분리한다` 결정으로 대체됐다. PROD-470 본문·관계·댓글은 새 역할 경계로 정렬했으며 미병합 PR #353/OpenSpec은 재개 시 별도로 갱신해야 한다.
+- Linear `PROD-470`의 2026-07-24 shared `kosmo_runtime` 결정은 2026-08-07 `API와 Fedify database LOGIN을 분리한다` 결정으로 대체됐다.

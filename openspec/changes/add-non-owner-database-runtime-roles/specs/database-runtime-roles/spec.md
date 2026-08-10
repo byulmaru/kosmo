@@ -34,13 +34,14 @@
 
 ### Requirement: Expand 배포는 기존 workload 선택과 RLS policy를 바꾸지 않는다
 
-**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-709`, `PROD-724`, `PROD-713`, `PROD-715`, `PROD-716`. 이 change는 새 역할과 credential만 추가해야 한다(MUST). API/Web/Fedify workload가 참조하는 database Secret, 기존 owner workload의 connection 설정, `kosmo` LOGIN 상태, `kosmo_migration`의 LOGIN→`SET ROLE kosmo` 계약, 객체 privilege와 모든 도메인 RLS policy는 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`; downstream Linear `PROD-709`, `PROD-724`, `PROD-713`, `PROD-715`, `PROD-716`; Worker foundation Linear `PROD-730`. 이 change는 새 역할과 credential만 추가해야 한다(MUST). API/Web/Worker workload의 기본 database Secret과 Web/Worker Fedify connection의 Secret 선택, 기존 owner workload의 connection 설정, `kosmo` LOGIN 상태, `kosmo_migration`의 LOGIN→`SET ROLE kosmo` 계약, 객체 privilege와 모든 도메인 RLS policy는 변경해서는 안 된다(MUST NOT). API Rollout에는 Fedify credential을 주입해서는 안 된다(MUST NOT).
 
 #### Scenario: 구버전 workload와 병행 배포함
 
 - **WHEN** Expand role/credential manifest를 배포한다
-- **THEN** 실행 중인 owner workload는 기존 Secret과 owner identity로 재시작 없이 계속 동작한다
+- **THEN** 실행 중인 owner workload는 기존 Secret과 owner identity로 재시작 없이 계속 동작하고 기본 비활성 Worker의 credential seam도 owner fallback을 유지한다
 - **AND** 새 credential은 어떤 workload에도 선택되지 않는다
+- **AND** API Rollout에는 Fedify credential이 주입되지 않는다
 - **AND** 도메인 RLS policy는 추가되거나 변경되지 않는다
 
 #### Scenario: Expand 선언을 되돌림
