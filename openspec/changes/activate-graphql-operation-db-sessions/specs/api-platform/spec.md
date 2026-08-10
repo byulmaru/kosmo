@@ -72,7 +72,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 이들이 
 
 **Authority / Provenance**: `docs/operations/postgres-session-pool.md`, Linear PROD-726, PROD-728, PROD-716.
 
-API는 request authentication과 startup/bootstrap에 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 API와 operation URL은 같은 username, database와 password Secret source를 재사용해야 하며(MUST), operation URL의 host만 in-chart Pooler Service에서 파생해야 한다(MUST). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 기존 direct Service를 유지해야 한다(MUST).
+API는 request authentication과 startup/bootstrap에 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 API와 operation URL은 같은 username, database와 password Secret source, scheme, path와 query를 재사용해야 하며(MUST), operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체해야 한다(MUST). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 기존 direct Service를 유지해야 한다(MUST).
 
 #### Scenario: API operation만 Pooler를 사용한다
 

@@ -83,8 +83,7 @@
 {{- fail "postgres.credentials.api.databaseUrl must have a parseable authority" -}}
 {{- end -}}
 {{- $suffix := trimPrefix $authority $authorityAndSuffix -}}
-{{- $port := regexFind ":[0-9]+$" $rawHost | default "" -}}
-{{- printf "%s%s%s%s%s" $schemePrefix $userinfo (include "kosmo.postgresPoolerName" .) $port $suffix -}}
+{{- printf "%s%s%s:5432%s" $schemePrefix $userinfo (include "kosmo.postgresPoolerName" .) $suffix -}}
 {{- else -}}
 {{- include "kosmo.postgresPoolerDatabaseUrl" . -}}
 {{- end -}}

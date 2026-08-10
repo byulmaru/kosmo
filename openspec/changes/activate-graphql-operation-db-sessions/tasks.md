@@ -81,7 +81,7 @@ GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사�
 **Guardrails**
 
 - PostgreSQL Secret, role 또는 credential selector를 변경하지 않는다.
-- configured `postgres.credentials.api` trio의 username, database와 password Secret source는 유지하고 `OPERATION_DATABASE_URL` host만 in-chart Pooler Service로 파생한다. 새 credential selector는 만들지 않는다.
+- configured `postgres.credentials.api` trio의 username, database와 password Secret source, scheme, path와 query는 유지하고 `OPERATION_DATABASE_URL`의 host와 port를 포함한 authority만 in-chart Pooler Service `<release>-postgres-pooler-rw:5432`로 교체한다. 새 credential selector는 만들지 않는다.
 - Pooler CR, replica, resource와 capacity 설정을 변경하지 않는다.
 - 실패 시 전체 activation merge/squash revision을 Git revert해 pre-activation tree로 되돌릴 수 있어야 한다. 이 revision은 API `DATABASE_URL` direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거해야 하며, PROD-728 Pooler와 API/Web/worker/migration은 유지한다.
 
@@ -89,7 +89,7 @@ GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사�
 
 - dev/prod Helm render에서 API `DATABASE_URL`은 `<release>-postgres-rw`, API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`, Web/worker/migration host는 `<release>-postgres-rw`인지 확인한다.
 - 모든 workload의 Secret name/key가 전환 전과 동일한지 값 노출 없이 확인한다.
-- configured API trio 대표 조합에서 API direct URL의 username/database/Secret source와 operation URL의 동일 값 및 Pooler host 파생을 값 노출 없이 확인한다.
+- configured API trio 대표 조합에서 API direct URL의 authority와 operation URL의 username/database/password Secret source, scheme, path/query 보존 및 Pooler authority `<release>-postgres-pooler-rw:5432` 교체를 값 노출 없이 확인한다.
 - Helm lint, server-side dry-run과 pre-activation revision render를 통과시킨다. Render는 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재, operation plugin/code 부재를 assertion한다.
 
 - [x] 3.1 API `DATABASE_URL` direct endpoint와 operation 전용 `OPERATION_DATABASE_URL` Pooler endpoint를 분리하고 shared API-role credential 선택은 유지한다.

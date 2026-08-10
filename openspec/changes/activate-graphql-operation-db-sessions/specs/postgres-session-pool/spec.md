@@ -4,7 +4,7 @@
 
 **Authority / Provenance**: Linear `PROD-728`, 병렬 경계 `PROD-708`, 활성화 `PROD-726`, 제외 범위 `PROD-716`.
 
-Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 독립적으로 유지된다. PROD-726 활성화에서 API `DATABASE_URL`은 MUST 기존 direct read-write Service를 사용하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 MUST Pooler Service를 사용한다. `postgres.credentials.api` trio가 구성된 경우 API와 operation URL은 MUST 같은 username, database와 password Secret source를 유지하고, operation URL의 host만 MUST in-chart Pooler Service에서 파생한다. 새 credential selector를 만들거나 PostgreSQL credential, role, RLS policy·grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 MUST 기존 direct read-write Service와 credential을 유지한다. 실패 시 운영자는 MUST 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포해야 하며, 그 tree에서 API `DATABASE_URL`은 direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 없어야 한다. PROD-728 Pooler 리소스와 Cluster, Web/worker/migration traffic은 MUST 유지한다.
+Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 독립적으로 유지된다. PROD-726 활성화에서 API `DATABASE_URL`은 MUST 기존 direct read-write Service를 사용하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 MUST Pooler Service `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우 API와 operation URL은 MUST 같은 username, database와 password Secret source, scheme, path와 query를 유지하고, operation URL의 host와 port를 포함한 authority만 MUST in-chart Pooler Service `<release>-postgres-pooler-rw:5432`로 교체한다. 새 credential selector를 만들거나 PostgreSQL credential, role, RLS policy·grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 MUST 기존 direct read-write Service와 credential을 유지한다. 실패 시 운영자는 MUST 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포해야 하며, 그 tree에서 API `DATABASE_URL`은 direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 없어야 한다. PROD-728 Pooler 리소스와 Cluster, Web/worker/migration traffic은 MUST 유지한다.
 
 #### Scenario: API operation만 Pooler로 전환한다
 
@@ -24,8 +24,8 @@ Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 
 #### Scenario: configured API trio를 operation endpoint에서 재사용한다
 
 - **WHEN** `postgres.credentials.api`의 URL과 password Secret trio가 구성된 상태에서 API activation을 렌더한다
-- **THEN** API `DATABASE_URL`은 제공된 direct URL의 username, database, host와 Secret source를 유지한다
-- **AND** `OPERATION_DATABASE_URL`은 같은 username, database와 Secret source를 사용하고 host만 `<release>-postgres-pooler-rw`로 파생한다
+- **THEN** API `DATABASE_URL`은 제공된 direct URL의 username, database, authority와 Secret source를 유지한다
+- **AND** `OPERATION_DATABASE_URL`은 같은 username, database와 Secret source, scheme, path와 query를 사용하고 host와 port를 포함한 authority만 `<release>-postgres-pooler-rw:5432`로 교체한다
 - **AND** 새 credential selector나 role 전환은 렌더되지 않는다
 
 #### Scenario: Pooler resource lifecycle을 별도로 관리한다

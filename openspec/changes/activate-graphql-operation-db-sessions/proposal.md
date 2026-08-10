@@ -9,7 +9,7 @@ GraphQL operation context와 Post SQL handle seam, CloudNativePG PgBouncer sessi
 - request authentication과 startup/bootstrap SQL은 direct `DATABASE_URL` 경계를 유지하고, 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization trusted side effect만 direct DB 예외로 둔다. materialization 뒤 최종 GraphQL query는 `ctx.db`에서 실행한다.
 - HTTP batch sibling은 connection, DataLoader와 실행 cache를 공유하지 않는다.
 - 정상 완료, GraphQL 오류, execution throw와 request abort에서 connection 종료를 await하고 다음 client에 session state가 유출되지 않게 한다.
-- API `DATABASE_URL`은 direct `kosmo-postgres-rw`를 유지하고 operation 전용 `OPERATION_DATABASE_URL`만 `kosmo-postgres-pooler-rw`를 사용한다. 기존 `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret은 그대로 재사용하고 operation URL의 host만 chart 내 Pooler Service로 파생한다. 새 credential selector는 만들지 않으며 Web BFF, worker와 migration workload도 direct endpoint를 유지한다.
+- API `DATABASE_URL`은 direct `kosmo-postgres-rw`를 유지하고 operation 전용 `OPERATION_DATABASE_URL`만 `kosmo-postgres-pooler-rw:5432`를 사용한다. 기존 `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret source, scheme, path와 query는 그대로 재사용하고 operation URL의 host와 port를 포함한 authority만 chart 내 Pooler Service `:5432`로 교체한다. 새 credential selector는 만들지 않으며 Web BFF, worker와 migration workload도 direct endpoint를 유지한다.
 - 기존 domain transaction·savepoint·post-commit 의미는 유지하고 operation-wide transaction, RLS policy·grant와 credential 전환은 추가하지 않는다. Fedify, Temporal Workflow/Activity와 worker는 GraphQL RLS 범위에서 제외한다.
 
 ## Authority / Provenance

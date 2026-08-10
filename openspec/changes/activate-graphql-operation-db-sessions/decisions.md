@@ -11,9 +11,9 @@
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728, Linear PROD-716
 - Status: Active
 - Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web/worker/migration은 같은 direct URL 경계를 사용한다. operation session만 Pooler로 보내야 request authentication과 다른 workload traffic이 결합되지 않고 rollback 단위가 작다.
-- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret은 동일하게 재사용하고 operation URL의 host만 in-chart Pooler Service로 파생한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
+- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret source, scheme, path와 query는 동일하게 재사용하고 operation URL의 host와 port를 포함한 authority만 in-chart Pooler Service `:5432`로 교체한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
 - Alternatives Considered: API `DATABASE_URL` 자체를 Pooler로 바꾸면 request authentication·startup까지 operation endpoint와 결합된다. API/Web 전체를 동시에 전환하면 Web에 operation lifecycle이 없고 rollback이 결합된다.
-- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 host만 파생해야 한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
+- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 보존해야 한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
 - Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
 
 ### GraphQL user-data SQL은 operation `ctx.db`를 사용하고 trusted materialization만 direct 예외로 둔다

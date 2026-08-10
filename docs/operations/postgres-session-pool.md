@@ -7,19 +7,20 @@
 - Pooler 이름은 `<release>-postgres-pooler-rw`이고 Cluster 이름은 `<release>-postgres`이다.
 - Pooler Service의 기본 client port는 `5432`이며, 기존 `<release>-postgres-rw` Service와 별개다.
 - API Rollout의 `DATABASE_URL`은 기존 `<release>-postgres-rw` direct Service를 유지하고, operation session 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. Web BFF, worker와 migration workload도 계속 direct Service와 기존 Secret을 사용한다. 이 문서의 검증 명령은 workload의 credential을 변경하지 않는다.
-- 기존 `postgres.credentials.api` atomic trio가 이미 구성된 환경에서는 direct `DATABASE_URL`과 `OPERATION_DATABASE_URL`이 같은 API-role Secret selector를 재사용한다. Trio가 제공하는 username, database와 password Secret은 그대로 유지하고, API `DATABASE_URL`의 제공된 direct host도 유지한다. Chart는 `OPERATION_DATABASE_URL`에서 host만 in-chart `<release>-postgres-pooler-rw` Service로 파생한다. 이 change는 새 credential selector를 만들거나 trio를 설정·교체하지 않으며, non-owner credential·role·grant 전환은 PROD-716의 별도 경계다.
+- 기존 `postgres.credentials.api` atomic trio가 이미 구성된 환경에서는 direct `DATABASE_URL`과 `OPERATION_DATABASE_URL`이 같은 API-role Secret selector를 재사용한다. Trio가 제공하는 username, database와 password Secret source는 그대로 유지하고, API `DATABASE_URL`의 제공된 direct authority도 유지한다. Chart는 operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체하며, scheme, username, database, password Secret source, path와 query는 보존한다. 이 change는 새 credential selector를 만들거나 trio를 설정·교체하지 않으며, non-owner credential·role·grant 전환은 PROD-716의 별도 경계다.
 - CloudNativePG operator와 `Pooler` CRD가 대상 namespace에 먼저 설치되어 있어야 한다.
 - 명령 출력에는 Secret 값, connection string, database row를 남기지 않는다. 검증 결과는 readiness, metric 이름과 비민감한 성공/실패만 기록한다.
 
 ## Render, endpoint assertion과 admission 확인
 
-지원되는 환경별로 Pooler가 기존 Cluster를 참조하고, API의 operation endpoint만 Pooler를 사용하며 API request/auth endpoint와 나머지 workload의 direct endpoint가 유지되는지 확인한다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 host와 Secret ref가 기대값인지 exit status로만 확인한다.
+지원되는 환경별로 Pooler가 기존 Cluster를 참조하고, API의 operation endpoint만 Pooler를 사용하며 API request/auth endpoint와 나머지 workload의 direct endpoint가 유지되는지 확인한다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 endpoint authority(host와 port)와 Secret ref가 기대값인지 exit status로만 확인한다.
 
 ```sh
 HELM="${HELM:-helm}"
 DEV_RENDER="$(mktemp)"
 PROD_RENDER="$(mktemp)"
-trap 'rm -f "$DEV_RENDER" "$PROD_RENDER"' EXIT
+CONFIGURED_RENDER="$(mktemp)"
+trap 'rm -f "$DEV_RENDER" "$PROD_RENDER" "$CONFIGURED_RENDER"' EXIT
 
 "$HELM" lint apps/helm --set env=dev
 "$HELM" lint apps/helm \
@@ -39,6 +40,16 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER"' EXIT
   --set workloads.enabled=true \
   --set worker.enabled=true \
   --set migration.enabled=true >"$PROD_RENDER"
+
+# A configured API trio keeps the credential/path/query source while replacing
+# the operation endpoint authority with the in-chart Pooler Service on port 5432.
+"$HELM" template kosmo apps/helm \
+  --namespace kosmo-dev \
+  --set env=dev \
+  --set worker.enabled=true \
+  --set-string 'postgres.credentials.api.databaseUrl=postgres://api:$(DATABASE_PASSWORD)@example.invalid:6543/kosmo?sslmode=prefer' \
+  --set-string 'postgres.credentials.api.passwordSecret.name=kosmo-api-custom' \
+  --set-string 'postgres.credentials.api.passwordSecret.key=password' >"$CONFIGURED_RENDER"
 
 assert_database_host() {
   local render="$1" source="$2" env_name="$3" expected="$4"
@@ -98,7 +109,7 @@ assert_migration_host() {
 
 for render in "$DEV_RENDER" "$PROD_RENDER"; do
   assert_database_host "$render" api/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
-  assert_database_host "$render" api/rollout.yaml OPERATION_DATABASE_URL 'kosmo-postgres-pooler-rw'
+  assert_database_host "$render" api/rollout.yaml OPERATION_DATABASE_URL 'kosmo-postgres-pooler-rw:5432'
   assert_database_host "$render" web/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
   assert_database_host "$render" worker.yaml DATABASE_URL 'kosmo-postgres-rw'
 
@@ -107,6 +118,14 @@ for render in "$DEV_RENDER" "$PROD_RENDER"; do
   assert_secret_ref "$render" web/rollout.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
   assert_secret_ref "$render" worker.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
 done
+
+# Configured trio: direct API authority and Secret source remain unchanged;
+# operation authority is replaced with the Pooler Service and port 5432 while
+# the database path/query stays intact.
+assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml DATABASE_URL '@example.invalid:6543'
+assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml OPERATION_DATABASE_URL '@kosmo-postgres-pooler-rw:5432'
+assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml OPERATION_DATABASE_URL '/kosmo?sslmode=prefer'
+assert_secret_ref "$CONFIGURED_RENDER" api/rollout.yaml DATABASE_PASSWORD 'kosmo-api-custom' 'password'
 
 assert_secret_ref "$DEV_RENDER" database-migration-job.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
 assert_database_host "$DEV_RENDER" database-migration-job.yaml DATABASE_URL 'kosmo-postgres-rw'
@@ -118,7 +137,7 @@ rg -n 'kind: (Cluster|Pooler)|name: kosmo-postgres(-pooler-rw)?|poolMode:|server
   "$DEV_RENDER" "$PROD_RENDER"
 ```
 
-정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 Pooler host를, API `DATABASE_URL`과 Web/worker/migration은 direct host를 사용해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
+정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 Pooler authority `<release>-postgres-pooler-rw:5432`를, API `DATABASE_URL`과 Web/worker/migration은 direct endpoint를 사용해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. Configured trio에서는 API direct URL의 authority와 operation URL의 scheme, username, database, password Secret source, path/query가 보존되고 operation authority만 Pooler `:5432`로 교체되는지 확인한다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
 
 CRD가 설치된 대상 cluster에서는 실제 변경 없이 server-side admission도 확인한다.
 
@@ -133,7 +152,7 @@ helm template kosmo apps/helm \
 
 ## Application activation과 operation session gate
 
-Pooler admission과 readiness가 먼저 통과한 뒤 API Rollout의 `OPERATION_DATABASE_URL`만 새 endpoint를 소비하도록 application release를 동기화한다. API request authentication·startup은 기존 `DATABASE_URL` direct Service를 계속 사용하고, Web BFF·worker·migration도 같은 revision에서 direct Service와 기존 Secret ref를 계속 사용해야 한다. 실제 환경의 env를 확인할 때는 host만 shell 변수로 비교하고 URL, Secret 값, actor UUID를 출력하거나 기록하지 않는다.
+Pooler admission과 readiness가 먼저 통과한 뒤 API Rollout의 `OPERATION_DATABASE_URL`만 새 endpoint를 소비하도록 application release를 동기화한다. API request authentication·startup은 기존 `DATABASE_URL` direct Service를 계속 사용하고, Web BFF·worker·migration도 같은 revision에서 direct Service와 기존 Secret ref를 계속 사용해야 한다. 실제 환경의 env를 확인할 때는 endpoint authority의 host와 port만 shell 변수로 비교하고 URL, Secret 값, actor UUID를 출력하거나 기록하지 않는다.
 
 ```sh
 NAMESPACE=kosmo-dev
