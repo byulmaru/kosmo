@@ -41,7 +41,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 
 **Deliverable**
 
-각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context와 user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
+각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context와 user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. `selectProfile`이 active Profile을 전환하면 자신이 소유하는 새 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`와 `ctx.session.profileId`를 갱신해 다음 top-level Mutation field가 새 actor를 사용하게 하며, `kosmo.account_id`와 operation-wide transaction 경계는 유지한다. 범위는 serial sibling 사이 stale GUC 전환이며 authorization concurrency, locking 또는 TOCTOU safety는 포함하지 않는다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
 
 **Guardrails**
 
@@ -57,6 +57,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 
 - fake operation client로 정상 result, GraphQL error, execution throw, cancellation/abort와 초기화 실패에서 close가 정확히 한 번 완료되는지 확인한다.
 - 익명, Account-only, Account+Profile matrix에서 두 GUC 설정을 확인하고 helper 의미는 integration/live probe에서 일회성으로 확인한다.
+- `selectProfile` 뒤 다음 top-level Mutation field가 같은 operation Database에서 새 `ctx.session.profileId`와 `kosmo.profile_id`를 관찰하고, `kosmo.account_id`가 변하지 않으며 selectProfile-owned action-local narrow transaction만 사용함을 확인한다. 이 검증은 authorization concurrency, locking 또는 TOCTOU safety를 다루지 않는다.
 - HTTP batch sibling의 Database identity, actor setting, DataLoader와 Pothos cache가 분리되는지 확인한다.
 - capacity 초과에서 bounded timeout 후 connection/actor state가 남지 않는지 확인한다.
 

@@ -6,6 +6,7 @@ GraphQL operation context와 Post SQL handle seam, CloudNativePG PgBouncer sessi
 
 - production GraphQL user-data query, result projection과 domain action의 모든 root·field·loader와 이들이 호출하는 core service SQL을 operation별 `ctx.db`로 정렬한다. Mutation nested result resolver도 같은 operation handle을 사용한다.
 - 각 일반 Query/Mutation operation마다 실제 PgBouncer client connection을 하나 만들고 Account/Profile actor GUC를 session-level로 설정한다.
+- `selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 바꾸면 `selectProfile`이 소유하는 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`를 갱신하고 이후 top-level Mutation field가 새 actor를 사용하게 한다. `kosmo.account_id`는 유지하고 operation-wide transaction을 만들지 않는다. 이 계약은 serial sibling 사이 stale GUC 전환만 다루며 authorization concurrency, locking 또는 TOCTOU safety를 보장하지 않는다.
 - request authentication과 startup/bootstrap SQL은 direct `DATABASE_URL` 경계를 유지하고, 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization trusted side effect만 direct DB 예외로 둔다. materialization 뒤 최종 GraphQL query는 `ctx.db`에서 실행한다.
 - HTTP batch sibling은 connection, DataLoader와 실행 cache를 공유하지 않는다.
 - 정상 완료, GraphQL 오류, execution throw와 request abort에서 connection 종료를 await하고 다음 client에 session state가 유출되지 않게 한다.

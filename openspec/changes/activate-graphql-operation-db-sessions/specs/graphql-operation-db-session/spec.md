@@ -24,6 +24,14 @@ Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다
 - **THEN** root action, nested resolver와 loader의 user-data SQL은 같은 operation `ctx.db`를 사용한다
 - **AND** nested result는 operation session 밖의 global 또는 raw DB handle을 사용하지 않는다
 
+#### Scenario: selectProfile이 같은 operation session actor를 전환한다
+
+- **WHEN** 같은 serial Mutation operation이 `selectProfile`을 실행해 `Sessions.activeProfileId`와 `ctx.session.profileId`를 selected Profile로 갱신하고 뒤이어 다음 top-level Mutation field를 실행한다
+- **THEN** `selectProfile`이 소유하는 새 action-local narrow transaction에서 Session update와 session-level `kosmo.profile_id` 갱신이 같은 operation `ctx.db`에 완료된다
+- **AND** transaction 성공 뒤 다음 top-level Mutation field는 같은 operation Database에서 새 `ctx.session.profileId`와 `kosmo.profile_id`를 관찰한다
+- **AND** `kosmo.account_id`는 변경하지 않고 operation-wide transaction을 추가하지 않는다
+- **AND** 이 계약은 serial sibling 사이 stale GUC 전환만 다루며 authorization concurrency, locking 또는 TOCTOU safety를 보장하지 않는다
+
 #### Scenario: remote materialization 뒤 최종 query가 operation session을 사용한다
 
 - **WHEN** 인증된 `searchProfiles`가 Fedify-owned remote actor materialization을 direct DB에서 완료한다

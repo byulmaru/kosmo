@@ -64,6 +64,14 @@ Mutation도 root domain action뿐 아니라 반환 payload의 nested result reso
 `ctx.db`를 사용한다. 이 경계에는 GraphQL resolver, loader와 그 resolver가 호출하는 core action의 모든
 operation SQL이 포함되며, global 또는 raw DB fallback을 추가하지 않는다.
 
+`selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 selected Profile로
+전환하면, 같은 operation Database에서 `selectProfile`이 소유하는 action-local narrow transaction 안에서 session-level
+`kosmo.profile_id`도 새 Profile UUID로 갱신해야 한다. 이 설정은 transaction 완료 뒤 이어지는
+top-level Mutation field가 같은 operation session에서 관찰할 수 있어야 하며, `kosmo.account_id`는
+그대로 유지한다. 이는 operation-wide transaction이 아니라 새로 추가하는 `selectProfile`-owned
+narrow transaction 경계다. 이 경계는 같은 operation의 serial sibling 사이 stale GUC를 막는 범위이며,
+authorization concurrency, locking 또는 TOCTOU safety를 보장하는 계약이 아니다.
+
 다음 두 종류의 SQL은 operation session 밖의 direct `DATABASE_URL` 경계를 유지한다.
 
 - request authentication과 process startup/bootstrap에서 실행하는 identity 또는 초기화 SQL

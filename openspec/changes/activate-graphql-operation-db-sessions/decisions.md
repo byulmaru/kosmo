@@ -52,6 +52,18 @@
 - Consequences: 익명, Account-only, Account+Profile operation이 동일한 설정 경로를 사용하고 정상 operation에는 추가 read-back SQL이 없다.
 - Confirmation / Follow-up: 세 identity matrix와 helper 의미를 PostgreSQL integration 및 live probe로 확인하고 runtime query inventory에 read-back SQL이 없음을 확인한다.
 
+### selectProfile actor 전환은 같은 operation session에서 반영한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726
+- Status: Active
+- Context / Problem: `selectProfile` Mutation은 `Sessions.activeProfileId`와 in-memory `ctx.session.profileId`를 바꾸므로, 같은 operation에서 뒤따르는 top-level Mutation field가 이전 session-level `kosmo.profile_id`를 보면 serial sibling의 actor GUC와 RLS visibility가 stale 상태가 된다.
+- Decision Outcome: `selectProfile`은 자신이 소유하는 새 action-local narrow transaction을 같은 operation `ctx.db`에서 열어 `Sessions.activeProfileId`를 저장하고 session-level `kosmo.profile_id`를 selected Profile UUID로 갱신한다. transaction이 성공한 뒤 `ctx.session.profileId`도 갱신해 다음 top-level Mutation field가 같은 operation Database와 새 Profile actor를 사용하게 한다. `kosmo.account_id`는 변경하지 않으며 operation-wide transaction은 추가하지 않는다. 이 결정은 serial sibling의 stale GUC 전환만 다루고 authorization concurrency, locking 또는 TOCTOU safety를 보장하지 않는다.
+- Alternatives Considered: `ctx.session.profileId`만 갱신하면 SQL의 actor setting이 stale 상태로 남는다. 별도 connection에서 setting을 바꾸면 operation session affinity를 깨뜨리고, operation-wide transaction은 sibling Mutation field의 기존 serial 경계를 불필요하게 결합한다. authorization concurrency나 TOCTOU를 해결하는 별도 locking은 이 change 범위가 아니다.
+- Consequences: selectProfile 이후 같은 operation에서 실행되는 Mutation field는 새 Profile actor를 즉시 관찰할 수 있고, 새 action-local narrow transaction과 operation session lifecycle은 유지된다. 동시 authorization 판단이나 lock 경계는 기존 계약에 남는다.
+- Confirmation / Follow-up: selectProfile 뒤 다음 top-level Mutation field가 `ctx.session.profileId`와 `public.kosmo_current_profile_id()`에서 새 Profile을 관찰하고, Account GUC가 unchanged이며 action-local transaction만 사용되는 regression test를 확인한다. 이 검증은 authorization concurrency/TOCTOU 증거가 아니다.
+
 ### 현재 일반 Query/Mutation 결과만 session lifecycle로 소유한다
 
 - Decision Date: 2026-08-10

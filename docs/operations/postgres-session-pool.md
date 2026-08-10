@@ -180,6 +180,7 @@ API activation 후 일반 GraphQL Query/Mutation을 익명, Account-only, Accoun
 - 각 operation이 `OPERATION_DATABASE_URL`의 실제 Pooler frontend connection 하나를 만들고 같은 operation의 resolver·loader·core SQL이 같은 session을 사용한다.
 - request authentication과 startup SQL은 API `DATABASE_URL` direct connection을 사용하며, `searchProfiles` materialization이 끝난 뒤의 최종 Profile query·result projection은 다시 operation `ctx.db`를 사용한다.
 - `kosmo.account_id`와 `kosmo.profile_id`를 매 operation UUID 또는 빈 문자열로 설정하며, 설정 SQL이 실패하면 resolver SQL을 실행하지 않는다. `public.kosmo_current_account_id()`와 `public.kosmo_current_profile_id()`의 UUID/`NULL` 의미는 integration/live gate에서 한 번 read-back해 확인하고, 정상 operation마다 helper read-back을 반복하지 않는다.
+- `selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 갱신하면 `selectProfile`이 소유하는 action-local narrow transaction을 같은 operation `ctx.db`에서 열어 session-level `kosmo.profile_id`도 갱신하고, `kosmo.account_id`는 유지한 채 다음 top-level Mutation field가 새 Profile actor를 관찰하는지 확인한다. 이 transaction은 operation-wide transaction이 아니며 authorization concurrency, locking 또는 TOCTOU safety를 검증하지 않는다.
 - 정상 결과와 GraphQL 오류, execution throw, timeout/abort 뒤 connection close가 정확히 한 번 완료되고 PgBouncer client baseline으로 복귀한다.
 - HTTP batch sibling은 client connection, actor setting, DataLoader와 execution cache를 공유하지 않는다.
 - `@defer`·`@stream` incremental execution과 Subscription은 현재 lifecycle 범위에서 제외한다. 이 기능을 위해 AsyncIterable connection bridge를 추가하거나 장기 Subscription session을 할당하지 않는다.

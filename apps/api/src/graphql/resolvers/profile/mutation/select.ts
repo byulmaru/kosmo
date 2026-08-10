@@ -7,7 +7,7 @@ import {
   Sessions,
 } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
-import { and, eq, getColumns } from 'drizzle-orm';
+import { and, eq, getColumns, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -25,27 +25,35 @@ builder.mutationField('selectProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const profile = await ctx.db
-        .select(getColumns(Profiles))
-        .from(Profiles)
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .leftJoin(AccountProfiles, and(eq(AccountProfiles.profileId, Profiles.id)))
-        .where(
-          and(
-            eq(Profiles.id, input.id.id),
-            eq(AccountProfiles.accountId, ctx.session.accountId),
-            visibleProfileWhere({ profile: Profiles, instance: Instances }),
-          ),
-        )
-        .limit(1)
-        .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
+      const profile = await ctx.db.transaction(async (tx) => {
+        const profile = await tx
+          .select(getColumns(Profiles))
+          .from(Profiles)
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .leftJoin(AccountProfiles, and(eq(AccountProfiles.profileId, Profiles.id)))
+          .where(
+            and(
+              eq(Profiles.id, input.id.id),
+              eq(AccountProfiles.accountId, ctx.session.accountId),
+              visibleProfileWhere({ profile: Profiles, instance: Instances }),
+            ),
+          )
+          .limit(1)
+          .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-      await ctx.db
-        .update(Sessions)
-        .set({ activeProfileId: profile.id })
-        .where(eq(Sessions.id, ctx.session.id))
-        .returning()
-        .then(firstOrThrow);
+        await tx
+          .update(Sessions)
+          .set({ activeProfileId: profile.id })
+          .where(eq(Sessions.id, ctx.session.id))
+          .returning()
+          .then(firstOrThrow);
+
+        await tx.execute(sql`
+          select set_config('kosmo.profile_id', ${profile.id}, false)
+        `);
+
+        return profile;
+      });
 
       ctx.session.profileId = profile.id;
 
