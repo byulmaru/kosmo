@@ -10,6 +10,10 @@ case "${1:-web}" in
     cd /app/apps/api
     exec node --import tsx src/index.ts
     ;;
+  worker)
+    cd /app/apps/worker
+    exec node --import tsx src/index.ts
+    ;;
   migrate)
     cd /app/packages/core
     exec node --import tsx db/migrate.ts

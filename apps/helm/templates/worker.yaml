@@ -1,0 +1,100 @@
+{{- include "kosmo.validatePostgresCredentials" . -}}
+{{- if and .Values.workloads.enabled .Values.worker.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ get .Values.worker.replicas .Values.env }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/version: {{ .Values.version | quote }}
+    spec:
+      serviceAccountName: {{ printf "%s-worker" .Release.Name | trunc 63 | trimSuffix "-" }}
+      automountServiceAccountToken: false
+      containers:
+        - name: worker
+          image: {{ include "kosmo.imageRef" . | quote }}
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: {{ .Values.worker.health.port }}
+              protocol: TCP
+          args:
+            - worker
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.env | quote }}
+            - name: PORT
+              value: {{ .Values.worker.health.port | quote }}
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.frontendAddress | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
+                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
+            - name: DATABASE_URL
+              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
+            {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" }}
+            - name: FEDIFY_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ dig "fedify" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) | quote }}
+                  key: {{ dig "fedify" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote }}
+            - name: FEDIFY_DATABASE_URL
+              value: {{ dig "fedify" "databaseUrl" "" (.Values.postgres.credentials | default dict) | quote }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: env
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+{{ toYaml .Values.worker.resources | indent 12 }}
+{{- end }}

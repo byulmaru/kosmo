@@ -4,6 +4,20 @@ imageDigest: ''
 version: main
 workloads:
   enabled: true
+worker:
+  enabled: false
+  replicas:
+    dev: 1
+    prod: 2
+  health:
+    port: 8080
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 autoscaling:
   minReplicas: 2
   maxReplicas: 10
