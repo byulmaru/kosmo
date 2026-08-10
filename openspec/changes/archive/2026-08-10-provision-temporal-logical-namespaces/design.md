@@ -64,8 +64,8 @@ Hook은 database migration과 구분되는 name/label을 사용하고 PreSync �
 
 1. 환경별 values와 PreSync Job을 추가하고 dev/prod Helm render를 검증한다.
 2. 고정 CLI image에서 namespace create, existing, drift와 connection-failure 동작을 검증한다.
-3. dev sync로 `kosmo-dev`를 생성하고 재동기화와 retention drift 수렴을 확인한다.
-4. dev 증거 뒤 prod sync로 `kosmo-prod`를 생성하고 재동기화와 retention drift 수렴을 확인한다.
+3. dev sync로 `kosmo-dev`를 생성하고 재동기화가 성공하는지 확인한다.
+4. prod chart는 render로 desired state를 검증하고, 실제 sync와 namespace 생성은 별도 배포 승인을 받아 수행한다.
 5. 문제가 생기면 Job template/values를 되돌리되 생성된 Temporal namespace는 삭제하지 않는다.
 
 ## Open Questions
