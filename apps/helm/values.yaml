@@ -44,7 +44,7 @@ postgres:
       passwordSecret:
         name: ''
         key: ''
-    fedify:
+    worker:
       databaseUrl: ''
       passwordSecret:
         name: ''

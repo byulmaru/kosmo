@@ -24,13 +24,15 @@ Helm runtime 설정이 Web trusted federation ingress와 Temporal Worker에 하�
 
 - Default/API-only/Worker-only/양쪽 selector render, Worker rollback source와 Web+Worker의 동일 Secret/URL 투영을 검증한다.
 - 대표 partial API/Worker trio와 legacy `fedify` input이 식별 가능한 render 오류로 실패하는지 검증한다.
-- API manifest의 `WORKER_DATABASE_*`/`FEDIFY_DATABASE_*` 부재, Web/Worker의 legacy env 부재, API/Web BFF 기본 env와 dev/prod migration document 불변을 확인한다.
+- API manifest의 explicit `WORKER_DATABASE_*`/`FEDIFY_DATABASE_*` 부재, Web/Worker의 explicit legacy env 부재, API/Web BFF 기본 env와 dev/prod migration document 불변을 확인한다.
 - Helm lint, 관련 test, Prettier, OpenSpec strict validation과 diff check를 통과한다.
 
-- [ ] 1.1 PROD-709 active capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
-- [ ] 1.2 `worker` atomic trio와 legacy `fedify` input fail-fast 계약을 구현한다.
-- [ ] 1.3 Web trusted ingress와 기본 비활성 Worker component에만 `WORKER_DATABASE_*` source를 투영하고 legacy env를 제거한다.
-- [ ] 1.4 selector 조합·rollback·partial/legacy failure·API/migration 음성 경계를 검증하고 관련 정적 check를 통과한다.
+- [x] 1.1 PROD-709 active capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
+- [x] 1.2 `worker` atomic trio와 legacy `fedify` input fail-fast 계약을 구현한다.
+- [x] 1.3 Web trusted ingress와 기본 비활성 Worker component에만 `WORKER_DATABASE_*` source를 투영하고 legacy env를 제거한다.
+- [x] 1.4 selector 조합·rollback·partial/legacy failure·API/migration 음성 경계를 검증하고 관련 정적 check를 통과한다.
+
+Evidence (2026-08-10): PROD-709 delta를 active `workload-postgres-credential-selection` spec에 sync한 뒤 archive했고 전체 OpenSpec strict validation 93/93이 통과했다. Helm 4.2.2 dev/prod lint, default render byte identity, API-only/Worker-only/양쪽 selector와 rollback, partial API/Worker 및 legacy `fedify` failure, Web+Worker explicit `WORKER_DATABASE_*` 투영, API explicit env 음성 경계와 dev migration document byte identity를 확인했다. 관련 Markdown/values Prettier와 `git diff --check`도 통과했다.
 
 ## 2. PROD-715 Web trusted ingress Worker credential wiring
 
@@ -108,15 +110,16 @@ Web의 trusted federation ingress가 PROD-710이 제공한 명시적 Worker conn
 - PR merge, CI, manifest 준비를 production sync/apply 승인으로 간주하지 않는다. 사용자의 별도 명시적 승인 없이는 Argo sync, 직접 apply, Secret sync나 workload cutover를 수행하지 않는다.
 - API Rollout에 Worker credential/trusted execution을 추가하지 않고 API/Web BFF 기본 connection과 migration을 변경하지 않는다.
 - Rollback은 Worker source만 승인된 owner source로 되돌리며 API selector, image와 migration을 함께 변경하지 않는다.
+- 공용 `envFrom` Vault source/Secret에 legacy `FEDIFY_DATABASE_*`가 남아 있으면 API를 포함한 workload에 credential이 노출될 수 있으므로, 부재를 확인하거나 별도 승인된 source 정리·sync를 완료하기 전에는 cutover하지 않는다.
 
 **Verification**
 
-- 적용 전 role collision, Vault source/Secret readiness, object ACL과 rollback 입력을 검증한다.
+- 적용 전 role collision, Vault source/Secret readiness, 공용 `envFrom` source의 legacy `FEDIFY_DATABASE_*` 부재, object ACL과 rollback 입력을 검증한다.
 - 적용 뒤 Web trusted ingress와 실제 Worker DB Activity connection 각각에서 `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 최소권한 query를 검증한다.
 - API Rollout의 Worker env/credential/trusted execution 부재, API/Web BFF 기본 principal과 migration 불변을 검증한다.
 - Worker source rollback 뒤 두 explicit connection이 승인된 owner source로 돌아가고 API/migration이 바뀌지 않는지 검증한다.
 
-- [ ] 4.1 PROD-369/724/710 completion evidence와 production preflight·rollback 계획을 재확인한다.
+- [ ] 4.1 PROD-369/724/710 completion evidence, 공용 `envFrom` source의 legacy key 부재와 production preflight·rollback 계획을 재확인한다.
 - [ ] 4.2 사용자에게 exact production diff, Secret source, 검증 query와 rollback을 제시하고 별도 sync/apply 승인을 받는다.
 - [ ] 4.3 승인된 범위에서만 production Worker source cutover를 수행하고 Web/Worker live role·ACL과 API 음성 경계를 검증한다.
 - [ ] 4.4 Worker source-only rollback을 실행·검증하거나, 실행 승인이 없다면 검토된 절차와 독립 rollback 가능 evidence를 기록한다.

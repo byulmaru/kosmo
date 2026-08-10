@@ -51,6 +51,7 @@ PROD-715의 최신 계약은 역할 이름을 프로토콜인 Fedify가 아니�
 - Worker env를 API Rollout에 주입하거나 API source를 Worker fallback으로 재사용하면 credential 격리가 깨진다.
 - PROD-369 role/Secret만 준비됐거나 CI가 통과했다는 이유로 PROD-724 GRANT, PROD-710 connection 경계 또는 production 승인을 생략할 수 없다.
 - legacy `fedify` key를 조용히 무시하면 운영자가 Worker source가 적용됐다고 오인한 채 owner fallback으로 실행할 수 있다.
+- API/Web/Worker가 공유하는 `envFrom` Secret에 legacy `FEDIFY_DATABASE_*`가 남아 있으면 chart의 explicit env를 제거해도 Pod에 계속 유입될 수 있다. Production preflight에서 Vault source/동기화된 Secret key를 확인하고 legacy key가 있으면 별도 승인된 source 정리 뒤 cutover한다.
 
 ## Risks / Trade-offs
 
@@ -59,6 +60,7 @@ PROD-715의 최신 계약은 역할 이름을 프로토콜인 Fedify가 아니�
 - [BYPASSRLS가 객체 ACL을 우회하지 않음] → PROD-724의 최소 GRANT와 실제 Worker query smoke가 준비되기 전에는 credential을 전환하지 않는다.
 - [기본 비활성 Worker로 live Activity를 증명할 수 없음] → 현재 등록된 DB Activity가 있는 배포에서만 Worker live evidence를 요구하고, excluded business capability를 검증용으로 만들지 않는다.
 - [production rollback 오판] → API image/selector와 migration을 고정하고 Worker selector source만 owner로 되돌린 뒤 두 명시적 connection과 API 음성 경계를 다시 검증한다.
+- [공용 `envFrom`을 통한 legacy credential 노출] → production apply 전에 Vault source와 동기화된 `env` Secret에 `FEDIFY_DATABASE_*`가 없는지 read-only로 확인하고, 존재하면 source 변경과 sync 범위를 사용자에게 별도로 제시해 승인받는다.
 
 ## Migration Plan
 
@@ -66,7 +68,7 @@ PROD-715의 최신 계약은 역할 이름을 프로토콜인 Fedify가 아니�
 2. PROD-709 baseline spec sync/archive와 Helm `worker` selector/env migration을 구현·검증한다. 이 단계에서는 production values를 활성화하지 않는다.
 3. PROD-369가 `kosmo_worker` role/Secret을 provision하고 live readiness를 검증하며, PROD-724가 최소 객체 GRANT를 완료하고, PROD-710이 명시적 Worker connection과 SQL 이전을 완료한다.
 4. Web trusted ingress와 실제 Worker DB Activity의 connection bootstrap을 `WORKER_DATABASE_*` source에 wiring하고 local/integration regression을 통과한다.
-5. 사용자에게 production 변경 목록, Secret source, rollback과 live query 계획을 제시하고 별도 명시적 승인을 받는다.
+5. 공용 `envFrom` Vault source와 동기화된 Secret에 legacy `FEDIFY_DATABASE_*`가 없는지 read-only로 확인한다. 남아 있으면 source 정리와 sync를 production 변경 목록에 포함해 사용자에게 Secret source, rollback과 live query 계획을 제시하고 별도 명시적 승인을 받는다.
 6. 승인 뒤에만 production sync/apply와 rollout을 수행하고 `current_user = 'kosmo_worker'`, `rolbypassrls = true`, API 비주입과 기본 connection 불변을 검증한다.
 7. 실패하면 Worker selector source만 승인된 owner source로 되돌리고 Web/Worker connection과 API/migration 불변을 재검증한다.
 

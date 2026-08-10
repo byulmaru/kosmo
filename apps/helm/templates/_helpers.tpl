@@ -28,7 +28,10 @@
 
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
-{{- range $role := list "api" "fedify" -}}
+{{- if hasKey $credentials "fedify" -}}
+{{- fail "postgres.credentials.fedify is no longer supported; use postgres.credentials.worker" -}}
+{{- end -}}
+{{- range $role := list "api" "worker" -}}
 {{- $config := get $credentials $role | default dict -}}
 {{- $databaseUrl := get $config "databaseUrl" | default "" -}}
 {{- $passwordSecret := get $config "passwordSecret" | default dict -}}
