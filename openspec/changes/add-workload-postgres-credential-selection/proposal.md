@@ -9,7 +9,7 @@
 - API Rollout에는 Fedify env를 주입하지 않고, Web BFF 기본 `DATABASE_*`를 Fedify source로 덮어쓰지 않는다.
 - 기존 values를 사용하고 selector를 비활성화한 rendered manifest는 byte-identical하게 유지한다. Partial trio는 Helm render를 실패시킨다.
 - `migration` runtime 역할은 기존 `kosmo_migration` login → `SET ROLE kosmo` production 경계와 dev owner fallback을 그대로 유지하며 runtime selector와 분리한다.
-- `kosmo_fedify`의 `BYPASSRLS`, role/policy/Secret provisioning은 downstream으로 남긴다. API outbound Fedify direct-call 제거, Temporal Workflow + Worker Fedify Activity, 아직 없는 Worker Deployment와 credential 소비는 PROD-448/719가 소유한다.
+- 이 change가 구현한 `fedify`/`FEDIFY_DATABASE_*` 이름은 legacy selector seam으로만 유지한다. 실제 BYPASSRLS identity와 Secret은 PROD-369의 `kosmo_worker`/`worker-database`이며, selector/env를 `worker`/`WORKER_DATABASE_*`로 옮기고 Web trusted federation ingress·Temporal Worker DB Activity를 전환하는 일은 PROD-715가 소유한다.
 - 실제 Secret 값, role/권한, DB client/connection, migration 전환, Temporal/Worker resource를 생성하거나 전환하지 않는다.
 
 ## Authority / Provenance
@@ -36,4 +36,4 @@
 - `apps/helm/templates/api/rollout.yaml`, `apps/helm/templates/web/rollout.yaml`: API shared `DATABASE_*`와 Web-only `FEDIFY_DATABASE_*` 환경 주입.
 - 구현 시 일회성 수동 Helm template 검증 evidence: default byte identity, API/Fedify 조합·rollback, partial failure, API Fedify env 부재와 migration document 불변.
 - 이 change는 재사용 가능한 regression script, CI/package hook 또는 committed golden hash fixture를 소유하지 않는다.
-- Downstream follow-up: `PROD-369`의 role/Secret/RLS provisioning, `PROD-715/716`의 runtime transition, `PROD-448/719`의 API outbound Fedify 및 Worker/Temporal 전환. 이 change는 해당 결과를 구현하지 않는다.
+- Downstream follow-up: `PROD-369`의 `kosmo_api`/`kosmo_worker` role·Secret provisioning, `PROD-715/716`의 selector 명칭 migration과 runtime transition, `PROD-448/719`의 API outbound Fedify 및 Worker/Temporal 활성화. 이 change는 해당 결과를 구현하지 않는다.

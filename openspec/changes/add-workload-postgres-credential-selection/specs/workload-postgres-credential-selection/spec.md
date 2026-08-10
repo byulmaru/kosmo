@@ -30,7 +30,7 @@
 
 ### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719` — 시스템은 Web 프로세스의 현재 inbound Fedify consumer에 별도 PostgreSQL URL과 password Secret source를 제공할 수 있어야 한다(MUST). 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719` — 시스템은 Web 프로세스의 현재 inbound Fedify consumer에 별도 PostgreSQL URL과 password Secret source를 제공할 수 있어야 한다(MUST). 이 requirement의 `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_fedify` role/Secret 계약이 아니다. 최신 identity는 PROD-369의 `kosmo_worker`/`worker-database`이고 selector/env 명칭 migration과 cutover는 PROD-715가 소유한다. 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
 
 #### Scenario: Web inbound Fedify source 선택
 

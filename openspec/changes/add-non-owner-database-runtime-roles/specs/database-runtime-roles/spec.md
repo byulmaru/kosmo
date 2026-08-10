@@ -2,11 +2,11 @@
 
 ### Requirement: API와 Worker runtime은 서로 분리된 비소유 database identity를 가진다
 
-**Authority / Provenance:** Linear `PROD-369`. Production database는 API runtime에 `kosmo_api`, Web trusted federation ingress와 Temporal Worker DB Activity에 `kosmo_worker` LOGIN 역할과 credential을 선언적으로 provision해야 한다(MUST). `kosmo_api`는 `BYPASSRLS`가 비활성이고 `kosmo_worker`는 `BYPASSRLS`가 활성이어야 한다(MUST). 두 역할은 `kosmo` owner나 `kosmo_migration`, 서로의 역할 또는 다른 privilege escalation 역할의 member가 아니어야 하며(MUST NOT), SUPERUSER, CREATEDB, CREATEROLE과 REPLICATION은 비활성이어야 한다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`. Dev와 production database는 API runtime에 `kosmo_api`, Web trusted federation ingress와 Temporal Worker DB Activity에 `kosmo_worker` LOGIN 역할과 환경별 credential을 선언적으로 provision해야 한다(MUST). `kosmo_api`는 `BYPASSRLS`가 비활성이고 `kosmo_worker`는 `BYPASSRLS`가 활성이어야 한다(MUST). 두 역할은 `kosmo` owner나 `kosmo_migration`, 서로의 역할 또는 다른 privilege escalation 역할의 member가 아니어야 하며(MUST NOT), SUPERUSER, CREATEDB, CREATEROLE과 REPLICATION은 비활성이어야 한다(MUST NOT).
 
 #### Scenario: 역할과 credential을 새로 provision함
 
-- **WHEN** 기존 owner workload가 실행 중인 production release에 Expand manifest를 적용한다
+- **WHEN** 기존 owner workload가 실행 중인 dev 또는 production release에 Expand manifest를 적용한다
 - **THEN** API와 Worker용 LOGIN 역할 및 서로 다른 credential Secret이 추가된다
 - **AND** 기존 `kosmo`와 `kosmo_migration` 역할·credential은 변경되지 않는다
 
@@ -59,6 +59,12 @@
 - **WHEN** provision된 API credential로 검증 세션을 연다
 - **THEN** `current_user`는 `kosmo_api`이고 owner/Worker 역할 획득과 `BYPASSRLS`가 불가능하다
 - **AND** 이 change에서 객체 privilege나 ownership을 받지 않는다
+
+#### Scenario: Dev에서 production 전 역할 경계를 검증함
+
+- **WHEN** 환경별 dev credential과 DatabaseRole이 준비된다
+- **THEN** API와 Worker credential로 `current_user`, role 속성, membership과 object ownership 부재를 production apply 전에 검증한다
+- **AND** 이 dev 검증은 production sync/apply 승인을 의미하지 않는다
 
 #### Scenario: Worker credential 검증
 

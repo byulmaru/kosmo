@@ -23,7 +23,7 @@
 - Fedify source는 Web inbound Fedify env에만 추가하고 Web BFF 기본 `DATABASE_*`를 바꾸지 않는다.
 - Migration env, Secret ref, `DATABASE_MIGRATION_ROLE`과 `SET ROLE kosmo` 실행 경계를 runtime selector에서 파생하지 않는다.
 - `system`, `federation-system` 또는 `web`를 credential source 역할로 만들지 않는다.
-- Secret value, role/membership/grant/RLS(`kosmo_fedify` `BYPASSRLS` 포함), DB client/connection, Temporal Workflow, Worker Activity/Deployment와 API outbound direct-call 전환을 생성·변경하지 않는다.
+- `fedify`/`FEDIFY_DATABASE_*`는 구현 당시의 legacy selector seam이며 `kosmo_worker` role/`worker-database` Secret 이름 계약이 아니다. Secret value, role/membership/grant/RLS(`kosmo_worker` `BYPASSRLS` 포함), DB client/connection, Temporal Workflow, Worker Activity/Deployment와 API outbound direct-call 전환을 생성·변경하지 않는다.
 
 **Verification**
 
