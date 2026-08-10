@@ -1,0 +1,57 @@
+{{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ printf "%s-postgres-api" $releaseName }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  cluster:
+    name: {{ include "kosmo.postgresName" . }}
+  name: kosmo_api
+  login: true
+  inherit: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: false
+  inRoles: []
+  disablePassword: true
+  clientCertificate:
+    enabled: true
+  databaseRoleReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ printf "%s-postgres-worker" $releaseName }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  cluster:
+    name: {{ include "kosmo.postgresName" . }}
+  name: kosmo_worker
+  login: true
+  inherit: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: true
+  inRoles: []
+  disablePassword: true
+  clientCertificate:
+    enabled: true
+  databaseRoleReclaimPolicy: retain
