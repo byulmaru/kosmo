@@ -17,6 +17,20 @@ if (process.env.WORKER_STARTUP_SIGNAL_TEST === '1') {
       runWorker({ activities: { example: () => undefined }, taskQueue: ' ' }, {}),
       /No business Worker/,
     );
+    await assert.rejects(
+      runWorker({ taskQueue: 'test', workflowsPath: ' ' }, {}),
+      /No business Worker/,
+    );
+    await assert.rejects(
+      runWorker(
+        {
+          activities: { example: undefined as never },
+          taskQueue: 'test',
+        },
+        {},
+      ),
+      /No business Worker/,
+    );
   });
 
   test('Temporal environment를 검증한다', async () => {

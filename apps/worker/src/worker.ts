@@ -19,10 +19,13 @@ export async function runWorker(
   registration: WorkerRegistration | undefined,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  const hasHandler =
-    registration?.workflowsPath ||
+  const hasHandler = Boolean(
+    registration?.workflowsPath?.trim() ||
     registration?.workflowBundle ||
-    Object.keys(registration?.activities ?? {}).length > 0;
+    Object.values(registration?.activities ?? {}).some(
+      (activity) => typeof activity === 'function',
+    ),
+  );
   if (!registration?.taskQueue?.trim() || !hasHandler) {
     throw new Error('No business Worker registration is configured');
   }
