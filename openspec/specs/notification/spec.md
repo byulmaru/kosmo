@@ -147,7 +147,7 @@ Profile-scoped in-app Notification의 생성과 정리, GraphQL 조회와 Read, 
 
 ### Requirement: Membership 기반 Profile Notification GraphQL 계약
 
-API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Notification connection과 Unread count를 Profile object에 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, [PROD-703](https://linear.app/byulmaru/issue/PROD-703/%EA%B8%B0%EC%A1%B4-notification-read-mutation%EC%9D%B4-%EC%A7%80%EC%A0%95%ED%95%9C-%EC%95%8C%EB%A6%BC-%EC%97%AC%EB%9F%AC-%EA%B0%9C%EB%A5%BC-%EC%B2%98%EB%A6%AC%ED%95%98%EB%8F%84%EB%A1%9D-%ED%99%95%EC%9E%A5%ED%95%9C%EB%8B%A4) — PROD-703은 inactive Recipient 지정 ID Read의 조용한 제외 계약을 소유한다. API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Notification connection과 Unread count를 Profile object에 제공해야 한다(MUST).
 
 #### Scenario: Notification GraphQL shape
 
@@ -197,7 +197,7 @@ API는 로그인 Account가 Account-Profile membership을 가진 Profile의 Noti
 
 - **WHEN** Notification의 Recipient Profile이 비활성 등으로 GraphQL Profile object에 노출되지 않는다
 - **THEN** Notification Node loader는 해당 item을 `null`로 반환한다
-- **AND** `markNotificationRead`는 같은 item ID에 `NOT_FOUND`를 반환한다
+- **AND** `markNotificationRead(input: { ids })`는 같은 item ID를 조용히 제외하며 그 ID의 존재나 제외 이유를 노출하지 않는다
 
 ### Requirement: Visible ID-ordered Notification pagination
 
@@ -501,13 +501,13 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: unavailable Reaction Notification 숨김
 
-**Authority / Provenance:** [Notification canonical 객체](../../../docs/domain/objects/notification.md), [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4) 시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, [PROD-413](https://linear.app/byulmaru/issue/PROD-413/reaction-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-703](https://linear.app/byulmaru/issue/PROD-703/%EA%B8%B0%EC%A1%B4-notification-read-mutation%EC%9D%B4-%EC%A7%80%EC%A0%95%ED%95%9C-%EC%95%8C%EB%A6%BC-%EC%97%AC%EB%9F%AC-%EA%B0%9C%EB%A5%BC-%EC%B2%98%EB%A6%AC%ED%95%98%EB%8F%84%EB%A1%9D-%ED%99%95%EC%9E%A5%ED%95%9C%EB%8B%A4) — PROD-413은 Reaction Notification 숨김을, PROD-703은 지정 ID Read의 조용한 제외 계약을 소유한다. 시스템은 Reaction source가 없거나 source의 Post·Author·Recipient 관계가 저장 Recipient와 일치하지 않거나 Recipient 기준 Related Profile 또는 Target Post를 조회할 수 없는 Reaction Notification을 모든 API 표면에서 숨겨야 한다(MUST).
 
 #### Scenario: source가 없는 item
 
 - **WHEN** Reaction source가 제거됐지만 Notification row가 남아 있다
 - **THEN** API는 item을 connection과 Unread count에서 제외한다
-- **AND** Node는 `null`, Read는 `NOT_FOUND`를 반환한다
+- **AND** Node는 `null`을 반환하고 `markNotificationRead(input: { ids })`는 해당 ID를 조용히 제외한다
 
 #### Scenario: source 관계가 일치하지 않는 item
 
@@ -633,7 +633,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 ### Requirement: Reply Notification GraphQL과 inbox 통합
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-426` API와 클라이언트는 visible Reply Notification을 기존 Notification interface·connection·Unread count·Read·badge/cache·inbox 계약에 통합해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, [PROD-426](https://linear.app/byulmaru/issue/PROD-426/reply-notification%EC%9D%84-%EC%83%9D%EC%84%B1%ED%95%98%EA%B3%A0-inbox%EC%97%90-%ED%91%9C%EC%8B%9C%ED%95%9C%EB%8B%A4), [PROD-703](https://linear.app/byulmaru/issue/PROD-703/%EA%B8%B0%EC%A1%B4-notification-read-mutation%EC%9D%B4-%EC%A7%80%EC%A0%95%ED%95%9C-%EC%95%8C%EB%A6%BC-%EC%97%AC%EB%9F%AC-%EA%B0%9C%EB%A5%BC-%EC%B2%98%EB%A6%AC%ED%95%98%EB%8F%84%EB%A1%9D-%ED%99%95%EC%9E%A5%ED%95%9C%EB%8B%A4) — PROD-426은 Reply inbox 통합을, PROD-703은 지정 ID Read의 조용한 제외 계약을 소유한다. API와 클라이언트는 visible Reply Notification을 기존 Notification interface·connection·Unread count·Read·badge/cache·inbox 계약에 통합해야 한다(MUST).
 
 #### Scenario: Reply Notification concrete object·Node
 
@@ -665,7 +665,7 @@ API는 kind별 source가 존재하고 source에서 파생한 Recipient가 저장
 
 - **WHEN** source Reply가 없거나 Recipient·Parent·Author 관계가 저장계약과 다르거나 Recipient 기준 Related Post 또는 Related Profile을 조회할 수 없다
 - **THEN** API는 item을 page limit 전 connection과 Unread count에서 제외한다
-- **AND** Node는 `null`, Read는 `NOT_FOUND`로 처리하며 generic Notification으로 대신 노출하지 않는다
+- **AND** Node는 `null`을 반환하고 `markNotificationRead(input: { ids })`는 해당 ID를 조용히 제외하며 generic Notification으로 대신 노출하지 않는다
 
 ### Requirement: 현재 로드된 Web Notification 일괄 Read action
 
