@@ -31,7 +31,7 @@ import {
   PrimaryNavigationScrollProvider,
   PrimaryNavigationScrollReset,
 } from './PrimaryNavigationScrollContext';
-import { RightRail, RightRailPrivacyLink } from './RightRail';
+import { RightRail, RightRailFooter } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
 import {
   getShellRoutePresentation,
@@ -339,7 +339,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             ]}
           >
             {profile ? <RightRail profile={profile} /> : null}
-            <RightRailPrivacyLink />
+            <RightRailFooter />
           </View>
         ) : null}
 
