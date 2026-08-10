@@ -16,8 +16,9 @@ import { PostActionBar } from '@/components/post/PostActionBar';
 import { formatPostActionCount } from '@/components/post/postActionCount';
 import { usePostReactionController } from '@/components/post/PostReactionController';
 import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
-import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
+import { SessionRecoveryProvider } from '@/session/SessionRecoveryCoordinator';
 import { colors, spacing, typography } from '@/theme/tokens';
 import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from './StoryFrame';
@@ -185,11 +186,15 @@ function PostActionBarFixture({
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <Suspense fallback={<View />}>
-        <SessionProvider>
-          <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
-        </SessionProvider>
-      </Suspense>
+      <SessionRecoveryProvider>
+        <RelayActorBoundary>
+          <Suspense fallback={<View />}>
+            <SessionProvider>
+              <PostActionBarFixtureContents {...props} showReactionSummary={showReactionSummary} />
+            </SessionProvider>
+          </Suspense>
+        </RelayActorBoundary>
+      </SessionRecoveryProvider>
     </RelayActorProvider>
   );
 }
@@ -419,12 +424,16 @@ function ReactionContractHarness() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <ReactionContractControls
-        mounted={mounted}
-        onMountedChange={setMounted}
-        onSettleRequest={settleRequest}
-        requests={requests}
-      />
+      <SessionRecoveryProvider>
+        <RelayActorBoundary>
+          <ReactionContractControls
+            mounted={mounted}
+            onMountedChange={setMounted}
+            onSettleRequest={settleRequest}
+            requests={requests}
+          />
+        </RelayActorBoundary>
+      </SessionRecoveryProvider>
     </RelayActorProvider>
   );
 }
@@ -440,14 +449,14 @@ function ReactionContractControls({
   onSettleRequest: (id: number, outcome: ReactionRequestOutcome) => void;
   requests: ReadonlyArray<ReactionRequestSummary>;
 }) {
-  const { resetActor, revision } = useRelayActor();
+  const { resetActor } = useRelayActor();
 
   return (
     <View>
       <Text
         accessibilityLabel="Reaction actor 전환"
         accessibilityRole="button"
-        onPress={() => resetActor(`profile-${revision + 2}`)}
+        onPress={() => resetActor('profile-reaction-next')}
       >
         Reaction actor 전환
       </Text>
@@ -458,7 +467,7 @@ function ReactionContractControls({
       >
         {mounted ? 'Reaction surface unmount' : 'Reaction surface remount'}
       </Text>
-      <Text testID="reaction-actor-revision">{revision}</Text>
+      <Text testID="reaction-actor">현재 Profile</Text>
       <Text testID="reaction-request-log">{JSON.stringify(requests)}</Text>
       {requests.map((request) => (
         <View key={request.id}>
@@ -1260,7 +1269,7 @@ export const ReactionFailureRetryActorSwitchAndUnmount: Story = {
     const oldActorRequests = readReactionRequests(canvas).slice(2, 4);
     canvas.getByRole('button', { name: 'Reaction actor 전환' }).click();
     await waitFor(() =>
-      expect(canvas.getByTestId('reaction-actor-revision')).toHaveTextContent('1'),
+      expect(canvas.getByTestId('reaction-actor')).toHaveTextContent('현재 Profile'),
     );
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull());
 

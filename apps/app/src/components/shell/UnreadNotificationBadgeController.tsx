@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { graphql, useRelayEnvironment } from 'react-relay';
 import { createOperationDescriptor, fetchQuery, getRequest } from 'relay-runtime';
 import { useSession } from '@/session/SessionProvider';
+import { useSessionRecoveryGeneration } from '@/session/SessionRecoveryCoordinator';
 import {
   getUnreadNotificationCountForProfile,
   getVisibleUnreadNotificationCount,
@@ -25,6 +26,7 @@ const UnreadNotificationCountContext = createContext<number | null>(null);
 
 export function UnreadNotificationBadgeController({ children }: PropsWithChildren) {
   const environment = useRelayEnvironment();
+  const recoveryGeneration = useSessionRecoveryGeneration();
   const { selectedProfileId } = useSession();
   const selectedProfileRef = useRef(selectedProfileId);
   const [lastSuccess, setLastSuccess] = useState<UnreadNotificationBadgeLastSuccess | null>(null);
@@ -67,7 +69,7 @@ export function UnreadNotificationBadgeController({ children }: PropsWithChildre
       subscription.dispose();
       retain.dispose();
     };
-  }, [environment, selectedProfileId]);
+  }, [environment, recoveryGeneration, selectedProfileId]);
 
   const count = getVisibleUnreadNotificationCount(lastSuccess, selectedProfileId);
 

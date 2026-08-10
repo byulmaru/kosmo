@@ -174,6 +174,9 @@ mockModule(new URL('./ProfileEditDiscardDialog.tsx', import.meta.url), {
     return createElement('ProfileEditDiscardDialog');
   },
 });
+mockModule(new URL('../RouteBoundary.tsx', import.meta.url), {
+  useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined, retry: () => undefined }),
+});
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });

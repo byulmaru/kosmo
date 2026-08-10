@@ -27,6 +27,7 @@ const preview: Preview = {
             <ToastProvider>
               <PostContentWarningRevealProvider key={context.id}>
                 <RelayStoryProvider
+                  actorBoundary={relay.actorBoundary}
                   mutationError={relay.mutationError}
                   mutationGraphQLErrors={relay.mutationGraphQLErrors}
                   mutationLoading={relay.mutationLoading}

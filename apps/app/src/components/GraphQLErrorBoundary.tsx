@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import {
@@ -10,12 +11,17 @@ import type { UnexpectedErrorReporter } from '@/observability/UnexpectedErrorCon
 
 export type GraphQLErrorBoundaryProps = PropsWithChildren<{
   onError?: UnexpectedErrorReporter;
-  onRetry: () => void;
+  onRetry?: () => void;
 }>;
 
 export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErrorBoundaryProps) {
   const inheritedErrorReporter = useUnexpectedErrorReporter();
   const reportError = onError ?? inheritedErrorReporter;
+  const [retryKey, setRetryKey] = useState(0);
+  const reset = useCallback(() => {
+    setRetryKey((key) => key + 1);
+    onRetry?.();
+  }, [onRetry]);
 
   return (
     <UnexpectedErrorContext.Provider value={reportError}>
@@ -33,10 +39,14 @@ export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErro
           reportError?.(error, info);
           console.error('Relay render error', error, info.componentStack);
         }}
-        onReset={onRetry}
+        onReset={reset}
       >
-        {children}
+        <GraphQLErrorSubtree key={retryKey}>{children}</GraphQLErrorSubtree>
       </ErrorBoundary>
     </UnexpectedErrorContext.Provider>
   );
+}
+
+function GraphQLErrorSubtree({ children }: PropsWithChildren) {
+  return children;
 }
