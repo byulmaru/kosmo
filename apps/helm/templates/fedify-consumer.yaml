@@ -1,5 +1,6 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
-{{- include "kosmo.validateFedifyQueueCredentials" . -}}
+{{- $queue := .Values.postgres.credentials.fedifyQueue -}}
+{{- $trusted := .Values.postgres.credentials.fedify -}}
 {{- if .Values.fedify.consumer.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -68,17 +69,17 @@ spec:
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kosmo.fedifyQueueDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.fedifyQueueDatabasePasswordSecretKey" . }}
+                  name: {{ required "postgres.credentials.fedifyQueue.passwordSecret.name is required when the Fedify consumer is enabled" $queue.passwordSecret.name | quote }}
+                  key: {{ required "postgres.credentials.fedifyQueue.passwordSecret.key is required when the Fedify consumer is enabled" $queue.passwordSecret.key | quote }}
             - name: FEDIFY_QUEUE_DATABASE_URL
-              value: {{ include "kosmo.fedifyQueueDatabaseUrl" . | quote }}
+              value: {{ required "postgres.credentials.fedifyQueue.databaseUrl is required when the Fedify consumer is enabled" $queue.databaseUrl | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kosmo.fedifyDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.fedifyDatabasePasswordSecretKey" . }}
+                  name: {{ required "postgres.credentials.fedify.passwordSecret.name is required when the Fedify consumer is enabled" $trusted.passwordSecret.name | quote }}
+                  key: {{ required "postgres.credentials.fedify.passwordSecret.key is required when the Fedify consumer is enabled" $trusted.passwordSecret.key | quote }}
             - name: DATABASE_URL
-              value: {{ include "kosmo.fedifyDatabaseUrl" . | quote }}
+              value: {{ required "postgres.credentials.fedify.databaseUrl is required when the Fedify consumer is enabled" $trusted.databaseUrl | quote }}
           envFrom:
             - secretRef:
                 name: env
