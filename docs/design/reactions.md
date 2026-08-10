@@ -30,7 +30,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 - 투명한 overlay가 option의 네 방향을 0으로 채워 option 전체를 덮는다.
 - Web overlay 가운데에는 배경 track이 없는 16×16px spinner를 표시한다. spinner는 2px 두께의 연결된 180° 호이며, `textSecondary` 색의 짙은 head에서 완전히 투명한 tail까지 자연스럽게 흐려진다.
 - Native spinner와 target geometry는 이번 Web 우선 변경에서 수정하지 않는다.
-- spinner 호는 약 820ms마다 시계 방향으로 한 바퀴를 linear하게 회전한다. 점이나 분리된 spoke를 사용하지 않는다.
+- spinner 호는 `motion/duration/loading-cycle` 800ms마다 시계 방향으로 한 바퀴를 linear하게 회전한다. 점이나 분리된 spoke를 사용하지 않는다.
 - overlay는 emoji 뒤에 렌더되는 sibling의 paint order를 사용하며 별도 `zIndex`를 두지 않는다.
 - pending option만 입력을 막고 다른 Type은 계속 선택할 수 있다.
 - Picker 전체가 disabled이면 비활성 UI를 표시하지 않고 Picker를 렌더링하지 않는다.
