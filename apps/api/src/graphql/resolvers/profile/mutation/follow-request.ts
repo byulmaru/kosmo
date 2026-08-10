@@ -25,10 +25,13 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      approveProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
-        profileFollowRequestId: input.id.id,
-      }),
+      approveProfileFollowRequest(
+        {
+          actorProfileId: ctx.session.profileId,
+          profileFollowRequestId: input.id.id,
+        },
+        ctx.db,
+      ),
   }),
 );
 
@@ -49,10 +52,13 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      rejectProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
-        profileFollowRequestId: input.id.id,
-      }),
+      rejectProfileFollowRequest(
+        {
+          actorProfileId: ctx.session.profileId,
+          profileFollowRequestId: input.id.id,
+        },
+        ctx.db,
+      ),
   }),
 );
 
@@ -73,9 +79,12 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
       id: t.input.globalID({ for: ProfileFollowRequest }),
     },
     resolve: (_, { input }, ctx) =>
-      cancelProfileFollowRequest({
-        actorProfileId: ctx.session.profileId,
-        profileFollowRequestId: input.id.id,
-      }),
+      cancelProfileFollowRequest(
+        {
+          actorProfileId: ctx.session.profileId,
+          profileFollowRequestId: input.id.id,
+        },
+        ctx.db,
+      ),
   }),
 );

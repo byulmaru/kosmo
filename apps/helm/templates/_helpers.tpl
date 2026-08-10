@@ -22,6 +22,10 @@
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
 {{- end -}}
 
+{{- define "kosmo.postgresPoolerDatabaseUrl" -}}
+{{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
+{{- end -}}
+
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
 {{- range $role := list "api" "fedify" -}}
@@ -55,6 +59,14 @@
 {{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
 {{- else -}}
 {{- include "kosmo.databaseUrl" . -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.apiPoolerDatabaseUrl" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- else -}}
+{{- include "kosmo.postgresPoolerDatabaseUrl" . -}}
 {{- end -}}
 {{- end -}}
 

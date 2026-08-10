@@ -1,6 +1,5 @@
 import {
   AccountProfiles,
-  db,
   firstOrThrow,
   firstOrThrowWith,
   Instances,
@@ -26,7 +25,7 @@ builder.mutationField('selectProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const profile = await db
+      const profile = await ctx.db
         .select(getColumns(Profiles))
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -41,7 +40,7 @@ builder.mutationField('selectProfile', (t) =>
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-      await db
+      await ctx.db
         .update(Sessions)
         .set({ activeProfileId: profile.id })
         .where(eq(Sessions.id, ctx.session.id))

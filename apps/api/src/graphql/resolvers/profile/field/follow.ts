@@ -1,4 +1,4 @@
-import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -47,7 +47,7 @@ builder.objectFields(Profile, (t) => ({
           toCursor: (profileFollow) => profileFollow.id,
         },
         async ({ before, after, limit, inverted }) => {
-          return await db
+          return await ctx.db
             .select(getColumns(ProfileFollows))
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
@@ -83,7 +83,7 @@ builder.objectFields(Profile, (t) => ({
           toCursor: (profileFollow) => profileFollow.id,
         },
         async ({ before, after, limit, inverted }) => {
-          return await db
+          return await ctx.db
             .select(getColumns(ProfileFollows))
             .from(ProfileFollows)
             .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))

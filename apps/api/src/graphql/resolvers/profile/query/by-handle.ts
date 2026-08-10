@@ -1,4 +1,4 @@
-import { db, first, Instances, Profiles } from '@kosmo/core/db';
+import { first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
@@ -50,7 +50,7 @@ builder.queryField('profileByHandle', (t) =>
     args: {
       handle: t.arg.string({ required: true }),
     },
-    resolve: async (_, args) => {
+    resolve: async (_, args, ctx) => {
       const localInstance = await resolveConfiguredLocalInstance();
       const parsed = parseProfileHandle(args.handle, {
         configuredLocalDomain: localInstance.domain,
@@ -61,7 +61,7 @@ builder.queryField('profileByHandle', (t) =>
       }
 
       if (parsed.kind === 'remote') {
-        return db
+        return ctx.db
           .select(getColumns(Profiles))
           .from(Profiles)
           .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -77,7 +77,7 @@ builder.queryField('profileByHandle', (t) =>
           .then(first);
       }
 
-      return db
+      return ctx.db
         .select(getColumns(Profiles))
         .from(Profiles)
         .where(
@@ -100,7 +100,7 @@ builder.queryField('searchProfiles', (t) =>
       args: {
         query: t.arg.string({ required: true }),
       },
-      resolve: async (_, args) => {
+      resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
         const parsed = parseProfileHandle(args.query, {
           configuredLocalDomain: localInstance.domain,
@@ -149,7 +149,7 @@ builder.queryField('searchProfiles', (t) =>
             );
 
             if (materializedProfileId) {
-              return db
+              return ctx.db
                 .select(getColumns(Profiles))
                 .from(Profiles)
                 .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -165,7 +165,7 @@ builder.queryField('searchProfiles', (t) =>
             }
 
             if (parsed.kind === 'remote') {
-              return db
+              return ctx.db
                 .select(getColumns(Profiles))
                 .from(Profiles)
                 .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -182,7 +182,7 @@ builder.queryField('searchProfiles', (t) =>
                 .limit(limit);
             }
 
-            return db
+            return ctx.db
               .select(getColumns(Profiles))
               .from(Profiles)
               .where(

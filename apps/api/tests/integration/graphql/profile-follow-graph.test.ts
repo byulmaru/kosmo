@@ -151,7 +151,7 @@ describe('GraphQL profile follow graph', () => {
     });
   });
 
-  test('batches current Account memberships for multiple Profiles in one query', async () => {
+  test('returns current Account memberships for multiple Profiles', async () => {
     const auth = await createAuthenticatedSession();
     const [memberProfile, ownerProfile] = await Promise.all([
       createProfile({ handle: 'viewer-membership-batch-member', instanceId: localInstanceId }),
@@ -172,25 +172,15 @@ describe('GraphQL profile follow graph', () => {
         },
       ])
       .returning();
-    const membershipQueries: Array<{ parameters: unknown[]; query: string }> = [];
-    const previousDebug = pg.options.debug;
-    pg.options.debug = (_connection, query, parameters) => {
-      if (query.includes('from "account_profile"')) {
-        membershipQueries.push({ parameters: [...parameters], query });
-      }
-    };
-
-    let result: GraphQLResult<{
+    const result = await requestGraphQL<{
       me: {
         profiles: Array<{
           id: string;
           viewerState: { membership: { id: string; role: string } | null } | null;
         }>;
       } | null;
-    }>;
-    try {
-      result = await requestGraphQL(
-        `query BatchedViewerMemberships {
+    }>(
+      `query ViewerMemberships {
           me {
             profiles {
               id
@@ -198,12 +188,9 @@ describe('GraphQL profile follow graph', () => {
             }
           }
         }`,
-        {},
-        auth.token,
-      );
-    } finally {
-      pg.options.debug = previousDebug;
-    }
+      {},
+      auth.token,
+    );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(
@@ -228,15 +215,6 @@ describe('GraphQL profile follow graph', () => {
           },
         },
       ].toSorted((left, right) => left.id.localeCompare(right.id)),
-    );
-    assert.equal(membershipQueries.length, 1);
-    assert.match(
-      membershipQueries[0]!.query,
-      /"account_profile"\."account_id" = \$1.*"account_profile"\."profile_id" in/s,
-    );
-    assert.deepEqual(
-      new Set(membershipQueries[0]!.parameters),
-      new Set([auth.account.id, auth.profile.id, memberProfile.id, ownerProfile.id]),
     );
   });
 

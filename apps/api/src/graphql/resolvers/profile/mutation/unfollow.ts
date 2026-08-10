@@ -21,9 +21,12 @@ builder.mutationField('unfollowProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: (_, { input }, ctx) =>
-      unfollowProfile({
-        followerProfileId: ctx.session.profileId,
-        followeeProfileId: input.id.id,
-      }),
+      unfollowProfile(
+        {
+          followerProfileId: ctx.session.profileId,
+          followeeProfileId: input.id.id,
+        },
+        ctx.db,
+      ),
   }),
 );

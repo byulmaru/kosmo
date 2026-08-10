@@ -1,7 +1,6 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
-  db,
   firstOrThrowWith,
   getDatabaseConnection,
   Instances,
@@ -102,8 +101,11 @@ const runPostCommitNotificationEffect = async (
   }
 };
 
-export const createFollowNotification = async (sourceId: string): Promise<void> => {
-  await db.transaction(async (tx) => {
+export const createFollowNotification = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> => {
+  await getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({ id: ProfileFollows.id, recipientProfileId: ProfileFollows.followeeProfileId })
       .from(ProfileFollows)
@@ -134,8 +136,11 @@ export const createFollowNotification = async (sourceId: string): Promise<void> 
   });
 };
 
-export const createFollowRequestNotification = async (sourceId: string): Promise<void> => {
-  await db.transaction(async (tx) => {
+export const createFollowRequestNotification = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> => {
+  await getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
       .select({
         id: ProfileFollowRequests.id,
@@ -178,6 +183,7 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
 
 export const createFollowRequestNotificationPostCommit = async (
   sourceId: string,
+  handle?: Database,
   onError?: NotificationEffectErrorHandler,
 ): Promise<void> =>
   runPostCommitNotificationEffect(
@@ -186,7 +192,7 @@ export const createFollowRequestNotificationPostCommit = async (
       operation: 'create',
       sourceId,
     },
-    () => createFollowRequestNotification(sourceId),
+    () => createFollowRequestNotification(sourceId, handle),
     onError,
   );
 
@@ -405,12 +411,15 @@ export const deleteNotificationBySource = async (
     .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
 };
 
-export const deleteFollowRequestNotificationPostCommit = async (sourceId: string): Promise<void> =>
+export const deleteFollowRequestNotificationPostCommit = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> =>
   runPostCommitNotificationEffect(
     {
       notificationKind: NotificationKind.FOLLOW_REQUEST,
       operation: 'delete',
       sourceId,
     },
-    () => deleteNotificationBySource(NotificationKind.FOLLOW_REQUEST, sourceId),
+    () => deleteNotificationBySource(NotificationKind.FOLLOW_REQUEST, sourceId, handle),
   );

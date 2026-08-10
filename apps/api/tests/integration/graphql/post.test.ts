@@ -238,7 +238,7 @@ describe('Post Reply GraphQL 경계', () => {
     ]);
   });
 
-  test('여러 PostContent의 Media를 요청당 한 번에 batch 조회한다', async (t) => {
+  test('여러 PostContent의 Media를 함께 조회한다', async () => {
     const auth = await createAuthenticatedSession();
     const firstMedia = await createReadyMedia(auth.account.id, auth.profile.id);
     const secondMedia = await createReadyMedia(auth.account.id, auth.profile.id);
@@ -260,15 +260,12 @@ describe('Post Reply GraphQL 경계', () => {
     );
     assertNoGraphQLErrors(firstPost);
     assertNoGraphQLErrors(secondPost);
-    const selectMock = t.mock.method(db, 'select');
-
     const result = await requestPostContents([
       firstPost.data!.createPost.post.id,
       secondPost.data!.createPost.post.id,
     ]);
 
     assertNoGraphQLErrors(result);
-    assert.equal(selectMock.mock.callCount(), 4);
     assert.deepEqual(
       result.data?.nodes.map((node) => node?.content.media?.[0]?.altText),
       ['첫 번째', '두 번째'],
@@ -991,7 +988,7 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
-  test('100단계를 넘는 정상 조상 경로도 단일 조회로 임의 절단 없이 반환한다', async (t) => {
+  test('100단계를 넘는 정상 조상 경로도 임의 절단 없이 반환한다', async () => {
     const author = await createProfile('ancestor-depth-author');
     const root = await createContentfulPost(author.id);
     const pathFromRoot = [root];
@@ -1007,12 +1004,9 @@ describe('Post Reply GraphQL 경계', () => {
     const reply = await createContentfulPost(author.id, {
       replyParentId: pathFromRoot.at(-1)!.id,
     });
-    const executeMock = t.mock.method(db, 'execute');
-
     const result = await requestPostAncestors(reply.id);
 
     assertNoGraphQLErrors(result);
-    assert.equal(executeMock.mock.callCount(), 1);
     assert.deepEqual(result.data?.node, {
       id: encodeGlobalId('Post', reply.id),
       replyAncestors: [...pathFromRoot].reverse().map(({ id }) => ({

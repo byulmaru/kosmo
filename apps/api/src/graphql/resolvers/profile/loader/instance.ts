@@ -1,4 +1,4 @@
-import { db, Instances } from '@kosmo/core/db';
+import { Instances } from '@kosmo/core/db';
 import { inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -9,7 +9,7 @@ export const profileInstanceByIdLoader = (ctx: UserContext) =>
     name: 'profileInstance.byId',
     nullable: true,
     load: (ids) =>
-      db
+      ctx.db
         .select({ domain: Instances.domain, id: Instances.id, kind: Instances.kind })
         .from(Instances)
         .where(inArray(Instances.id, ids)),

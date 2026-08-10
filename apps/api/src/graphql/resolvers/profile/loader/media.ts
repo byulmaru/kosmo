@@ -1,4 +1,4 @@
-import { db, Media, ProfileMedia } from '@kosmo/core/db';
+import { Media, ProfileMedia } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray, isNotNull } from 'drizzle-orm';
 import type { UserContext } from '@/context';
@@ -13,7 +13,7 @@ export const profileMediaLoader = (ctx: UserContext) =>
     name: 'profile.media',
     many: true,
     load: (profileIds) =>
-      db
+      ctx.db
         .select({
           ...getColumns(Media),
           kind: ProfileMedia.kind,
