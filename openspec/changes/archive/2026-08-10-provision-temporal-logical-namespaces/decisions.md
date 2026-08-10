@@ -38,7 +38,7 @@
 - Decision Outcome: `kosmo-dev` retention은 3일, `kosmo-prod`는 30일로 두고 두 namespace의 owner email은 `dev@byulmaru.co`로 통일한다.
 - Alternatives Considered: `platform@byulmaru.co`와 환경별 owner 분리는 선택하지 않았다. retention을 Temporal CLI 기본값에 맡기는 방식은 drift 검토가 불가능해 제외했다.
 - Consequences: retention과 owner 변경은 Helm values와 rendered Job diff에서 환경별로 명시되며 reviewed change가 된다.
-- Confirmation / Follow-up: Argo CD sync 뒤 live namespace describe 결과와 선언을 비교한다.
+- Confirmation / Follow-up: Dev Argo CD sync 뒤 live namespace describe 결과와 선언을 비교한다. Prod 실제 적용은 별도 배포 승인을 받는다.
 
 ### Provisioning 접속과 runtime 인가를 분리한다 (Superseded)
 
@@ -74,7 +74,7 @@
 - Decision Outcome: Terraform 관리를 포기하고 각 Kosmo 환경 내부의 Argo CD PreSync Job이 자신의 logical namespace를 생성·갱신한다.
 - Alternatives Considered: Tailnet-only frontend는 낮은 사용 빈도에 비해 영구 endpoint가 과도해 제외했다. EKS API port-forward는 별도 access/RBAC와 tunnel lifecycle이 필요해 제외했다. 전용 in-cluster runner는 가장 큰 새 기반이라 제외했다. 수동 1회 생성과 Worker startup bootstrap은 각각 drift와 책임 결합 때문에 제외했다.
 - Consequences: Namespace 준비는 application sync의 선행 조건이 되고 Temporal 장애 시 해당 sync가 실패한다. Application Terraform과 외부 접속 경계는 변경하지 않는다.
-- Confirmation / Follow-up: dev/prod Helm render와 live PreSync create/re-run/drift/failure cases로 확인한다.
+- Confirmation / Follow-up: dev/prod Helm render, dev live PreSync create/re-run, 고정 CLI의 create/update/failure cases로 확인한다. Prod live sync는 별도 배포 승인을 받는다.
 
 ### Platform과 같은 admin-tools image digest를 사용한다
 
