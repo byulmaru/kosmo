@@ -83,6 +83,13 @@
   Profile이 Active, Profile의 Instance가 Local·non-Suspended일 때만 편집 button을 렌더한다. guest, 유효한
   viewer Profile이 없는 session과 Membership이 없는 Account에는 viewer state 또는 membership이 GraphQL
   authorization error 없이 nullable 결과를 반환하며 disabled placeholder를 표시하지 않는다.
+- sidebar ProfileSwitcher는 `currentSession.selectedProfile`의 Instance가 Local이고
+  `viewerState.membership.role`이 `OWNER`일 때만 selected Profile 요약의 작은 노란 `편집` action을 표시하고
+  canonical `/profile-edit` route를 연다. full Web sidebar와 mobile drawer의 위치·geometry·current
+  semantics·close 동작, compact icon rail과 bottom tab 제외는 [레이아웃 브레이크포인트](./breakpoints.md)가
+  소유한다. 공개 Profile의 기존 편집 button은 유지하며, shell은 별도의 fallback route를 만들지 않는다.
+  Figma의 future multi-profile cluster는 위치 provenance일 뿐이며, 현재 production에 없는 thumbnail
+  visual·data·전환 interaction은 이 진입점 복원 범위에서 추가하지 않는다.
 - 실제 `/profile-edit` protected route는 `currentSession.selectedProfile.viewerState.membership`을 사용해
   현재 Account가 Active이고 selected Profile이 Active이며 Profile의 Instance가 Local·non-Suspended이고
   Membership role이 `OWNER`인지 server-authoritative하게 확인한 뒤에만 화면을 제공한다. 직접 URL이나 stale

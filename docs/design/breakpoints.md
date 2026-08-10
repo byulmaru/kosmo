@@ -73,6 +73,37 @@ Settings master pane은 약 `320px`, detail pane은 남은 폭을 사용한다. 
 - `compact` Web, `< compact` mobile Web과 Android·iOS에서는 root 목록과 detail을 한 화면씩 표시하며 내부
   detail에서 back navigation으로 root 목록에 돌아간다.
 
+## 프로필 편집 진입
+
+인증된 사용자의 selected Profile이 서버 권한 계약상 편집 가능할 때만 sidebar의 selected Profile 요약에
+`편집` 진입점을 표시한다.
+
+- `>= full` Web sidebar와 `< compact` mobile Web·Android·iOS drawer의 expanded Profile 요약에 표시한다.
+  compact Web icon rail에는 expanded Profile 요약이 없으므로 별도 icon이나 navigation 항목을 추가하지 않는다.
+  하단 탭 바와 우측 레일에도 중복 진입점을 두지 않는다.
+- 기준 geometry는 Figma `KOSMO` 파일의 [`WebSidebar` node 901:610](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=901-610),
+  [`UserInfo` node 148:852](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=148-852),
+  [`ProfileHero`의 `편집` button node 560:453](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=560-453)과
+  [`Button` primary/sm node 271:3](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=271-3)이다.
+  320px Profile 요약에서 Figma의 오른쪽 멀티프로필 cluster 바로 아래 좌표(`top: 158`, `right: 20`)에 정렬하고,
+  시각 영역은 `72x32`, `primary` 배경, `radius.sm`, SUIT 14px bold의 `편집` label을 사용한다. 현재 production
+  Profile 요약에는 그 thumbnail visual이 없으므로 PROD-660은 action만 예약 좌표에 복원하며 thumbnail
+  visual·data·전환 interaction은 추가하지 않는다.
+- Web pointer target은 시각 영역과 같은 `72x32 CSS px`로 유지한다. iOS와 Android에서는 시각 영역을 키우지
+  않고 각각 최소 `44pt`, `48dp` 높이의 투명 입력 slot 중앙에 배치한다.
+- action은 canonical `/profile-edit` route를 열고 accessible name `프로필 편집`을 제공한다. `/profile-edit`가
+  현재 route이면 page-current semantics를 노출하되 노란 button의 시각 geometry는 바꾸지 않는다.
+- mobile drawer에서 실행하면 기존 guarded forward navigation을 거쳐 drawer를 닫는다. 별도 modal이나 주요
+  navigation row를 만들지 않는다.
+- 노출 여부는 `currentSession.selectedProfile`의 Local Instance와
+  `viewerState.membership.role === OWNER`를 함께 확인한다. client는 selected Profile id,
+  `Profile.instance.kind`, Membership role 또는 route 존재 하나만으로 권한을 추측하지 않으며, 조건을
+  충족하지 않으면 disabled placeholder 없이 action 자체를 숨긴다.
+- PROD-541에서 제거한 generic `/menu`의 `프로필 설정` placeholder는 복원하지 않는다. PROD-660은 준비된
+  `/profile-edit` route에 연결되는 실제 Profile 편집 진입점만 복원한다.
+- 현재 제품 runtime 검증 범위는 Web이다. 공용 mobile drawer와 자동화는 platform별 target·semantics를
+  유지하되 Android·iOS 실제 기기·simulator 검증 완료로 일반화하지 않는다.
+
 ## 프로필 피커
 
 Web profile picker는 breakpoint별 사이드바 구조에 맞는 surface를 사용한다. 아래 surface·overlay·close

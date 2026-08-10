@@ -42,7 +42,12 @@ const selectedProfile = profile({
   handle: 'selected',
   id: 'profile-selected',
   relativeHandle: '@selected',
-  viewerState: { follow: null, followRequest: null, isSelf: true },
+  viewerState: {
+    follow: null,
+    followRequest: null,
+    isSelf: true,
+    membership: { role: 'OWNER' },
+  },
 });
 const followedProfile = profile({
   followersCount: 17,
@@ -62,6 +67,28 @@ const followedProfile = profile({
 const query = {
   ...shellQuery({ profiles: [selectedProfile, secondProfile], selectedProfile }),
   node: followedProfile,
+};
+const ineligibleSelectedProfile = {
+  ...selectedProfile,
+  viewerState: { follow: null, followRequest: null, isSelf: true, membership: null },
+};
+const ineligibleProfileEditQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [ineligibleSelectedProfile, secondProfile],
+    selectedProfile: ineligibleSelectedProfile,
+  }),
+};
+const selectedProfileWithLongDisplayName = {
+  ...selectedProfile,
+  displayName: '아주 긴 이름을 사용하는 코스모 프로필',
+};
+const longProfileEditCopyQuery = {
+  ...query,
+  ...shellQuery({
+    profiles: [selectedProfileWithLongDisplayName, secondProfile],
+    selectedProfile: selectedProfileWithLongDisplayName,
+  }),
 };
 const selectedProfileWithUnread = { ...selectedProfile, unreadNotificationCount: 1 };
 const secondProfileWithLargeUnread = { ...secondProfile, unreadNotificationCount: 127 };
@@ -284,10 +311,30 @@ type Story = StoryObj<typeof meta>;
 export const SharedNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const bookmarks = canvas.getByRole('link', { name: '북마크' });
-    expect(bookmarks).toHaveAttribute('href', '/bookmarks');
-    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    const profile = canvas.getByRole('link', { name: '프로필' });
+    const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
+    const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    const activeProfileRect = activeProfile.getBoundingClientRect();
+    const profileEditRect = profileEdit.getBoundingClientRect();
+    expect(bookmarks).toHaveAttribute('href', '/bookmarks');
+    expect(profile).toHaveAttribute('href', '/@selected');
+    expect(profileEdit).toHaveAttribute('href', '/profile-edit');
+    expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
+    expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
+    expect(profileEditRect.width).toBe(72);
+    expect(profileEditRect.height).toBe(32);
+    expect(profileEditRect.top - activeProfileRect.top).toBe(158);
+    expect(activeProfileRect.right - profileEditRect.right).toBe(20);
+    expect(profileEditVisual).toHaveStyle({
+      backgroundColor: 'rgb(252, 231, 154)',
+      borderRadius: '8px',
+      height: '32px',
+      width: '72px',
+    });
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
     const settings = canvas.getByRole('link', { name: '설정' });
     expect(settings).toHaveAttribute('href', '/settings');
@@ -318,6 +365,7 @@ export const BottomNavigation: Story = {
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
     expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '설정' })).not.toBeInTheDocument();
   },
   render: () => <BottomNavigationStory />,
@@ -326,9 +374,11 @@ export const BottomNavigation: Story = {
 export const CompactSidebar: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
-    expect(canvas.getByRole('link', { name: '프로필' })).toHaveAttribute('href', '/@selected');
+    const profile = canvas.getByRole('link', { name: '프로필' });
     const followRequests = canvas.getByRole('link', { name: '팔로워 요청' });
+    expect(canvas.getByRole('link', { name: '북마크' })).toHaveAttribute('href', '/bookmarks');
+    expect(profile).toHaveAttribute('href', '/@selected');
+    expect(canvas.queryByRole('link', { name: '프로필 편집' })).toBeNull();
     expect(followRequests).toHaveAttribute('href', '/follow-requests');
     expect(canvas.getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
     const logout = canvas.getByRole('button', { name: '로그아웃' });
@@ -401,6 +451,36 @@ export const FeedbackNavigationCurrentState: Story = {
   render: () => <FeedbackNavigationFullStory />,
 };
 
+export const ProfileEditNavigationCurrentState: Story = {
+  parameters: { router: { pathname: '/profile-edit' } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const link = within(activeProfile).getByRole('link', { name: '프로필 편집' });
+    expect(link).toHaveAttribute('href', '/profile-edit');
+    expect(link).toHaveAttribute('aria-current', 'page');
+    expect(within(link).getByTestId('profile-edit-action-visual')).toHaveStyle({
+      backgroundColor: 'rgb(252, 231, 154)',
+    });
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const ProfileEditActionKeepsProfileCopyClear: Story = {
+  parameters: { relay: { data: longProfileEditCopyQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const trigger = within(activeProfile).getByRole('button', { name: '프로필 목록' });
+    const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
+
+    expect(trigger.getBoundingClientRect().right).toBeLessThanOrEqual(
+      profileEdit.getBoundingClientRect().left - 8,
+    );
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
 export const FollowRequestsNavigationCurrentState: Story = {
   parameters: { router: { pathname: '/follow-requests' } },
   play: ({ canvasElement }) => {
@@ -432,6 +512,9 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
   parameters: { router: { pathname: '/feedback' } },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const activeProfile = canvas.getByLabelText('활성 프로필');
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
+    const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const link = canvas.getByRole('link', { name: '피드백 보내기' });
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
@@ -442,6 +525,44 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
     expect(canvas.queryByRole('link', { name: '개인정보 처리방침' })).not.toBeInTheDocument();
     expect(logout.querySelector('svg')).toHaveAttribute('stroke-width', '2');
+    expect(profileEdit).toHaveAttribute('href', '/profile-edit');
+    expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
+    expect(within(navigation).queryByRole('link', { name: '프로필 편집' })).toBeNull();
+    expect(profileEdit.getBoundingClientRect().height).toBe(32);
+    expect(profileEdit.getBoundingClientRect().width).toBe(72);
+  },
+  render: () => <FeedbackNavigationDrawerStory />,
+};
+
+export const ProfileEditNavigationIneligibleFull: Story = {
+  parameters: { relay: { data: ineligibleProfileEditQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
+  },
+  render: () => <FeedbackNavigationFullStory />,
+};
+
+export const ProfileEditNavigationIneligibleCompact: Story = {
+  parameters: { relay: { data: ineligibleProfileEditQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
+  },
+  render: () => <CompactSidebarStory />,
+};
+
+export const ProfileEditNavigationIneligibleDrawer: Story = {
+  parameters: { relay: { data: ineligibleProfileEditQuery } },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('link', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByRole('button', { name: '프로필 편집' })).not.toBeInTheDocument();
+    expect(canvas.queryByText('편집', { exact: true })).not.toBeInTheDocument();
   },
   render: () => <FeedbackNavigationDrawerStory />,
 };

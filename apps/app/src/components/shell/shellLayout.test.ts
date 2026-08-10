@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  getProfileEditActionCurrentState,
+  getProfileEditActionTargetMetrics,
   getShellLayout,
   getShellRoutePresentation,
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
   isSettingsRoute,
   isWebMobileRouteOwnedHeader,
+  profileEditActionLabelColor,
 } from './shellLayout';
 
 describe('getShellLayout', () => {
@@ -14,6 +17,27 @@ describe('getShellLayout', () => {
 
   it('keeps native tablets on the mobile shell', () => {
     assert.equal(getShellLayout(false, 1_024), 'mobile');
+  });
+
+  it('maps the Profile summary edit action to each platform input target', () => {
+    assert.deepEqual(getProfileEditActionTargetMetrics('web'), { height: 32, top: 158 });
+    assert.deepEqual(getProfileEditActionTargetMetrics('ios'), { height: 44, top: 152 });
+    assert.deepEqual(getProfileEditActionTargetMetrics('android'), { height: 48, top: 150 });
+  });
+
+  it('maps the exact Profile edit route to Web and Native current state', () => {
+    assert.deepEqual(getProfileEditActionCurrentState('/profile-edit'), {
+      accessibilityState: { selected: true },
+      ariaCurrent: 'page',
+    });
+    assert.deepEqual(getProfileEditActionCurrentState('/profile-edit/avatar'), {
+      accessibilityState: { selected: false },
+      ariaCurrent: undefined,
+    });
+  });
+
+  it('keeps the yellow edit action label dark in every color scheme', () => {
+    assert.equal(profileEditActionLabelColor, '#111111');
   });
 
   it('applies compact and full breakpoints only on web', () => {
