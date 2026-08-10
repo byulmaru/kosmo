@@ -88,6 +88,18 @@
 - Consequences: 각 환경 Vault에 별도 `api-database`, `worker-database` source를 준비해야 하며 source가 없으면 role provisioning readiness만 실패한다. 기존 owner workload는 새 Secret을 사용하지 않는다.
 - Confirmation / Follow-up: 임의의 비운영 환경 render와 실제 credential로 role identity·attribute·membership·객체 ownership 부재를 확인한 뒤 production preflight와 별도 승인을 진행한다.
 
+### API와 Worker manifest를 명시적으로 분리한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: 2026-08-10 사용자 결정
+- Status: Active
+- Context / Problem: API와 Worker는 이미 `BYPASSRLS`가 다르고 이후 attribute, lifecycle 또는 credential source가 독립적으로 바뀔 수 있다. 하나의 `range`로 생성하면 차이가 늘 때 조건 분기와 간접 참조가 누적된다.
+- Decision Outcome: API와 Worker의 `DatabaseRole` 및 `VaultStaticSecret`을 각각 명시적인 YAML document로 선언한다. 공통 release-name prefix 계산만 공유하고 role별 필드와 source/destination은 각 manifest에 직접 쓴다.
+- Alternatives Considered: 두 runtime을 `range`로 생성하는 방식은 현재 중복을 줄이지만 이후 한쪽만 바뀔 때 반복문 안 조건과 동적 이름을 수정해야 하므로 선택하지 않았다. 별도 helper abstraction도 현재 두 caller만 있어 추가하지 않는다.
+- Consequences: 공통 필드가 일부 중복되지만 각 role의 diff와 향후 변경 범위가 독립적으로 보인다.
+- Confirmation / Follow-up: Render 결과가 분리 전과 동일하고 각 manifest의 이름, attribute, path, destination과 lifecycle이 서로 독립적으로 유지되는지 확인한다.
+
 ## Remaining Decisions
 
 - 없음.
