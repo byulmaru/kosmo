@@ -12,9 +12,10 @@ import { handleInboundRejectFollow } from './inbound-reject-follow';
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Reject } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 export const handleInboundReject = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyExecutionContext>,
   reject: Reject,
 ): Promise<void> => {
   const actorUri = reject.actorId;

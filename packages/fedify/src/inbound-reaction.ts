@@ -11,6 +11,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { EmojiReact } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const fallbackReactionType = '❤️';
 
@@ -22,7 +23,7 @@ const toReactionType = (activity: Like | EmojiReact): string => {
 };
 
 export const handleInboundReaction = async (
-  _context: InboxContext<void>,
+  _context: InboxContext<FedifyExecutionContext>,
   activity: Like | EmojiReact,
 ): Promise<void> => {
   const activityUri = activity.id;

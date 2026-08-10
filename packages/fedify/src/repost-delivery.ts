@@ -22,8 +22,10 @@ import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { resolveActivityPubPostUri } from './activitypub-post-uri';
 import { federation } from './federation';
+import { createFedifyExecutionContext } from './fedify-execution';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const FollowerProfiles = alias(Profiles, 'repost_delivery_follower_profile');
 const FollowerInstances = alias(Instances, 'repost_delivery_follower_instance');
@@ -55,7 +57,7 @@ const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 
 const loadRepostProjection = async (
-  context: Context<void>,
+  context: Context<FedifyExecutionContext>,
   repostId: string,
   kind: RepostDeliveryKind,
 ): Promise<RepostProjection | undefined> => {
@@ -192,7 +194,10 @@ const createAnnounce = (projection: RepostProjection): Announce =>
 
 const sendRepostActivity = async (repostId: string, kind: RepostDeliveryKind): Promise<void> => {
   const localInstance = await resolveConfiguredLocalInstance();
-  const context = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
+  const context = federation.createContext(
+    new URL(localInstance.canonicalOrigin),
+    createFedifyExecutionContext(),
+  );
   const projection = await loadRepostProjection(context, repostId, kind);
   if (!projection) {
     return;

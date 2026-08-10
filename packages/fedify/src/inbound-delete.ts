@@ -21,13 +21,14 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Delete: ${url}`);
 };
 
 export const handleInboundDelete = async (
-  _context: InboxContext<void>,
+  _context: InboxContext<FedifyExecutionContext>,
   activity: Delete,
 ): Promise<void> => {
   const actorHref = uniqueHref(activity.actorIds);

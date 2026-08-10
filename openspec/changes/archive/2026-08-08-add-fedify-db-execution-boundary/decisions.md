@@ -4,17 +4,17 @@
 
 ## Decision Records
 
-### Database와 caller transaction을 하나의 additive handle 계약으로 받는다
+### 기존 DatabaseHandle baseline과 caller transaction identity를 재사용한다
 
 - Decision Date: 2026-08-07
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-706`
 - Status: Active
-- Context / Problem: 기존 optional `Transaction`만으로는 미래 Fedify runtime database handle 선택을 표현할 수 없지만 기존 caller와 owner fallback은 유지해야 한다.
-- Decision Outcome: DB 선택 계약은 top-level database와 caller transaction을 모두 받는 `DatabaseHandle`로 확장한다. 이 PR의 core service 변경은 downstream Post Fedify SQL 이전이 소비할 기존 optional seam으로 제한한다.
+- Context / Problem: origin/main이 이미 top-level database와 caller transaction을 포괄하는 `DatabaseHandle` 및 owner fallback을 제공한다. PROD-706이 이를 다시 widening하면 upstream PROD-371 계약을 되돌릴 수 있다.
+- Decision Outcome: PROD-706은 기존 `DatabaseHandle`/`getDatabaseConnection(handle?)` baseline을 재사용·검증하고, core service SQL 동작과 caller transaction identity를 보존한다. Post Fedify SQL 이전은 PROD-710의 후속 경계로 남긴다.
 - Alternatives Considered: generic repository abstraction은 요구보다 크고, 모든 optional transaction service를 기계적으로 widening하면 Fedify 전용 이슈 경계를 넘는다.
-- Consequences: 기존 positional transaction caller는 유지되고 PROD-710이 Post seam을 점진적으로 사용할 수 있다.
-- Confirmation / Follow-up: typecheck, owner fallback과 caller transaction identity 회귀로 확인한다.
+- Consequences: 기존 positional transaction caller와 owner fallback은 유지되고 PROD-710이 Post seam을 점진적으로 사용할 수 있다.
+- Confirmation / Follow-up: origin/main byte-level 비교, typecheck, owner fallback과 caller transaction identity 회귀로 확인한다.
 
 ### Federation fetch가 아니라 각 Fedify action이 transaction을 소유한다
 
@@ -38,7 +38,7 @@
 - Decision Outcome: 타입과 helper를 `FedifyExecutionContext`, `createFedifyExecutionContext`, `withFedifyAction`으로 한정한다. factory와 action runner는 package root/API surface에 export하지 않는다. Web은 inbound adapter만 호출하고 후속 Temporal Activity는 Fedify package 내부 adapter에서 같은 경계를 재사용한다.
 - Alternatives Considered: 범용 `SystemExecutionContext`와 API가 import할 factory는 정정된 이슈에서 명시적으로 폐기됐다. 지금 Temporal Worker를 만드는 것은 별도 배포 이슈를 가져온다.
 - Consequences: notification/background 작업은 이 capability의 권한이나 재사용 근거를 얻지 않으며 API outbound는 durable intent/Temporal 전환 전까지 별도 기존 경계로 남는다.
-- Confirmation / Follow-up: 정적 검색에서 production `system-execution` 명명과 package root factory export가 없고 API diff가 없는지 확인한다.
+- Confirmation / Follow-up: 정적 검색에서 production `system-execution` 명명, package root federation/context factory export와 API의 raw context 호출이 없고 profile search domain adapter만 남는지 확인한다.
 
 ## Remaining Decisions
 

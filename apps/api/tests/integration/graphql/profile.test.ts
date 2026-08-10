@@ -28,7 +28,7 @@ import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
-import type * as Fedify from '@kosmo/fedify';
+import type * as FederationModule from '../../../../../packages/fedify/src/federation';
 import type { handleInboundCreate as HandleInboundCreate } from '../../../../../packages/fedify/src/inbound-create';
 import type { handleInboundDelete as HandleInboundDelete } from '../../../../../packages/fedify/src/inbound-delete';
 import type { deriveContext as DeriveContext, Env } from '../../../src/context';
@@ -63,7 +63,7 @@ let deriveContext: typeof DeriveContext;
 let yoga: typeof YogaRouter;
 let handleInboundCreate: typeof HandleInboundCreate;
 let handleInboundDelete: typeof HandleInboundDelete;
-let remoteFederation: typeof Fedify.federation;
+let remoteFederation: typeof FederationModule.federation;
 let app: Hono<Env>;
 let localInstanceId: string;
 
@@ -97,7 +97,8 @@ describe('GraphQL remote profile boundary', () => {
     ({ createPost } = await import('@kosmo/core/services'));
     ({ handleInboundCreate } = await import('../../../../../packages/fedify/src/inbound-create'));
     ({ handleInboundDelete } = await import('../../../../../packages/fedify/src/inbound-delete'));
-    ({ federation: remoteFederation } = await import('@kosmo/fedify'));
+    ({ federation: remoteFederation } =
+      await import('../../../../../packages/fedify/src/federation'));
 
     await truncateDatabase();
     const { localInstance } = await seedDatabase({ publicOrigin });

@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
 import { db, pg } from '@kosmo/core/db';
 import { federation, fetchFederation } from './federation';
-import type { Federation, FederationFetchOptions } from '@fedify/fedify';
+import type { FederationFetchOptions } from '@fedify/fedify';
 import type { FedifyExecutionContext } from './fedify-execution';
 
-const typedFederation = federation as unknown as Federation<FedifyExecutionContext>;
+const typedFederation = federation;
 
 after(async () => {
   mock.restoreAll();

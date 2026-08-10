@@ -16,6 +16,7 @@ import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type { handleInboundAccept as HandleInboundAccept } from './inbound-accept';
 import type { handleInboundUpdate as HandleInboundUpdate } from './inbound-update';
 
@@ -362,13 +363,13 @@ const createContext = (
   documentLoader: DocumentLoader = async (url) => {
     throw new Error(`Unexpected document load: ${url}`);
   },
-): InboxContext<void> =>
+): InboxContext<FedifyExecutionContext> =>
   ({
     canonicalOrigin: publicOrigin,
     documentLoader,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
     recipient,
-  }) as unknown as InboxContext<void>;
+  }) as unknown as InboxContext<FedifyExecutionContext>;
 
 const createRemoteActor = async (followPolicy: ProfileFollowPolicy) => {
   const instance = await db

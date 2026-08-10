@@ -317,7 +317,7 @@ test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를
   const recipient = await createConfiguredLocalProfile();
   const source = await createContentPost(recipient.id);
   await createRemoteFollower(actor.id);
-  const { federation } = await import('@kosmo/fedify');
+  const { federation } = await import('../../fedify/src/federation');
   const fixture = createDeliveryContextFixture();
   mock.method(federation, 'createContext', () => fixture.context);
   const input = { actorProfileId: actor.id, sourcePostId: source.id };
@@ -500,7 +500,7 @@ test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를
   const actor = await createConfiguredLocalProfile();
   const source = await createContentPost(actor.id);
   await createRemoteFollower(actor.id);
-  const { federation } = await import('@kosmo/fedify');
+  const { federation } = await import('../../fedify/src/federation');
   const context = {
     canonicalOrigin: publicOrigin,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),

@@ -7,6 +7,7 @@ import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 export const handleInboundAcceptFollow = async ({
   context,
@@ -16,7 +17,7 @@ export const handleInboundAcceptFollow = async ({
   acceptProfileFollowRequest: acceptFollowRequest = acceptProfileFollowRequest,
 }: {
   readonly acceptProfileFollowRequest?: typeof acceptProfileFollowRequest;
-  context: InboxContext<void>;
+  context: InboxContext<FedifyExecutionContext>;
   follow: Follow;
   followeeActorUri: URL;
   followeeProfileId: string;

@@ -18,11 +18,13 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq, ne, sql } from 'drizzle-orm';
+import { createFedifyExecutionContext } from './fedify-execution';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type { handleInboundAnnounce as HandleInboundAnnounce } from './inbound-announce';
 import type { handleInboundUndo as HandleInboundUndo } from './inbound-follow';
 
@@ -352,9 +354,11 @@ describe('inbound Announce materialization', () => {
     try {
       const [personal, shared] = await Promise.all([
         federation.fetch(await createSignedRequest(`/ap/actor/${localProfileId}/inbox`), {
-          contextData: undefined,
+          contextData: createFedifyExecutionContext(),
         }),
-        federation.fetch(await createSignedRequest('/inbox'), { contextData: undefined }),
+        federation.fetch(await createSignedRequest('/inbox'), {
+          contextData: createFedifyExecutionContext(),
+        }),
       ]);
 
       assert.equal(personal.status, 202, await personal.text());
@@ -525,8 +529,8 @@ const context = () =>
       throw new Error(`Unexpected document URL: ${url}`);
     },
     parseUri: (uri: URL | null) =>
-      federation.createContext(new URL(publicOrigin), undefined).parseUri(uri),
-  }) as unknown as InboxContext<void>;
+      federation.createContext(new URL(publicOrigin), createFedifyExecutionContext()).parseUri(uri),
+  }) as unknown as InboxContext<FedifyExecutionContext>;
 
 const announce = (id: string, object: URL) =>
   new Announce({

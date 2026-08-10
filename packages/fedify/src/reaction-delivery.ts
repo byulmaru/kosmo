@@ -20,6 +20,7 @@ import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq, inArray, isNotNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { federation } from './federation';
+import { createFedifyExecutionContext } from './fedify-execution';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import type { SenderKeyPair } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
@@ -183,7 +184,10 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
     return;
   }
 
-  const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
+  const context = federation.createContext(
+    new URL(projection.canonicalOrigin),
+    createFedifyExecutionContext(),
+  );
   const activity = createReactionActivity(projection);
   const orderingKey = getReactionActivityUri(projection.canonicalOrigin, reaction.id).href;
   await context.sendActivity(projection.senderKeys, projection.recipient, activity, {
@@ -198,7 +202,10 @@ export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void
     return;
   }
 
-  const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
+  const context = federation.createContext(
+    new URL(projection.canonicalOrigin),
+    createFedifyExecutionContext(),
+  );
   const originalActivity = createReactionActivity(projection);
   if (!originalActivity.id) {
     throw new TypeError('ActivityPub Reaction must have an ID.');

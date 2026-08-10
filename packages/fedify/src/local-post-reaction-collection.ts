@@ -17,6 +17,7 @@ import { isCanonicalPostId } from './activitypub-post-uri';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
 import type { SQLWrapper } from 'drizzle-orm';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';
@@ -200,7 +201,7 @@ const projectReaction = (
 };
 
 export const dispatchLocalPostEmojiReactions = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyExecutionContext>,
   { id }: { id: string },
   rawCursor: string | null,
 ): Promise<PageItems<Like | EmojiReact> | null> => {
@@ -281,7 +282,7 @@ export const dispatchLocalPostEmojiReactions = async (
 };
 
 export const countLocalPostEmojiReactions = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyExecutionContext>,
   { id }: { id: string },
 ): Promise<number | null> => {
   const note = await loadLocalPostNote(context, id);
@@ -301,6 +302,6 @@ export const countLocalPostEmojiReactions = async (
 };
 
 export const firstLocalPostEmojiReactionsCursor = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyExecutionContext>,
   { id }: { id: string },
 ): Promise<string | null> => ((await loadLocalPostNote(context, id)) ? FIRST_CURSOR : null);

@@ -1,5 +1,4 @@
 export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
-export { federation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
 export type {
   InboundCaptureContext,
@@ -27,4 +26,5 @@ export {
   materializeRemoteProfileActor,
   RemoteActorMaterializationError,
 } from './src/remote-actor-materialization';
+export { findOrMaterializeRemoteProfileActorForProfileSearch } from './src/remote-profile-search';
 export { sendRepostAnnounce, sendRepostUndo } from './src/repost-delivery';

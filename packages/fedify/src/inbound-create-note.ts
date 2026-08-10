@@ -17,6 +17,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
@@ -83,7 +84,7 @@ export const projectRemoteNoteMedia = async (note: Note) => {
 };
 
 const resolveReplyParentId = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyExecutionContext>,
   note: Note,
 ): Promise<string | undefined> => {
   const replyTargetHref = uniqueHref(note.replyTargetIds);
@@ -137,7 +138,7 @@ export const handleInboundCreateNote = async ({
   receivedAt,
 }: {
   actorUri: string;
-  context: InboxContext<void>;
+  context: InboxContext<FedifyExecutionContext>;
   note: Note;
   objectUri: string;
   storedActor: StoredRemoteProfileActor;

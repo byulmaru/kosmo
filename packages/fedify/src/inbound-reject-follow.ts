@@ -13,6 +13,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 export const handleInboundRejectFollow = async ({
   context,
@@ -20,7 +21,7 @@ export const handleInboundRejectFollow = async ({
   followeeActorUri,
   followeeProfileId,
 }: {
-  context: InboxContext<void>;
+  context: InboxContext<FedifyExecutionContext>;
   follow: Follow;
   followeeActorUri: URL;
   followeeProfileId: string;

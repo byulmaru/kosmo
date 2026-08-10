@@ -12,6 +12,7 @@ import { findStoredRemoteProfileActorByUri } from './remote-actor-materializatio
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const isExpectedRepostRejection = (error: unknown): boolean =>
   error instanceof NotFoundError ||
@@ -94,7 +95,7 @@ const saveCurrentAnnounce = async (
 };
 
 export const handleInboundAnnounce = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyExecutionContext>,
   announce: Announce,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {

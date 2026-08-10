@@ -5,8 +5,7 @@ import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { parseProfileHandle } from '@kosmo/core/profile';
 import { profileHandleSchema } from '@kosmo/core/validation';
 import {
-  federation,
-  findOrMaterializeRemoteProfileActor,
+  findOrMaterializeRemoteProfileActorForProfileSearch,
   RemoteActorMaterializationError,
 } from '@kosmo/fedify';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
@@ -117,8 +116,8 @@ builder.queryField('searchProfiles', (t) =>
 
         if (isExplicitRemoteHandle(args.query, parsed)) {
           try {
-            const profile = await findOrMaterializeRemoteProfileActor({
-              context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
+            const profile = await findOrMaterializeRemoteProfileActorForProfileSearch({
+              canonicalOrigin: localInstance.canonicalOrigin,
               handle: `${parsed.handle}@${parsed.domain}`,
               scheduleRefresh: () => undefined,
             });

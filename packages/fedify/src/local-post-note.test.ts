@@ -32,10 +32,12 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
+import { createFedifyExecutionContext } from './fedify-execution';
 import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as PostUriModule from './activitypub-post-uri';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type * as LocalPostNoteModule from './local-post-note';
 import type * as LocalPostReactionCollectionModule from './local-post-reaction-collection';
 
@@ -380,7 +382,7 @@ describe('ActivityPub Local Post Note', () => {
     });
     const allowedRequest = await signedFixture.createRequest(followersPost.id);
     const allowed = await signedFixture.federation.fetch(allowedRequest, {
-      contextData: undefined,
+      contextData: createFedifyExecutionContext(),
       onUnauthorized: () => new Response('Not found', { status: 404 }),
     });
     assert.equal(allowed.status, 200);
@@ -404,7 +406,7 @@ describe('ActivityPub Local Post Note', () => {
         headers: { accept: 'application/activity+json' },
       }),
       {
-        contextData: undefined,
+        contextData: createFedifyExecutionContext(),
         onUnauthorized: () => new Response('Not found', { status: 404 }),
       },
     );
@@ -414,10 +416,13 @@ describe('ActivityPub Local Post Note', () => {
   test('allows the local Author identity without requiring a Follow row', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const followersPost = await createPost(author.id, { visibility: PostVisibility.FOLLOWERS });
-    const context = Object.assign(Object.create(createContext()) as RequestContext<void>, {
-      getSignedKeyOwner: async () =>
-        new Person({ id: new URL(`/ap/actor/${author.id}`, publicOrigin) }),
-    });
+    const context = Object.assign(
+      Object.create(createContext()) as RequestContext<FedifyExecutionContext>,
+      {
+        getSignedKeyOwner: async () =>
+          new Person({ id: new URL(`/ap/actor/${author.id}`, publicOrigin) }),
+      },
+    );
 
     assert.equal(await authorizeLocalPostNote(context, { id: followersPost.id }), true);
   });
@@ -744,7 +749,7 @@ describe('ActivityPub Local Post Note', () => {
           headers: { accept: 'application/activity+json' },
         }),
         {
-          contextData: undefined,
+          contextData: createFedifyExecutionContext(),
           onNotFound: () => new Response('Not found', { status: 404 }),
           onUnauthorized: () => new Response('Not found', { status: 404 }),
         },
@@ -799,20 +804,26 @@ describe('ActivityPub Local Post Note', () => {
   });
 });
 
-const createContext = (): RequestContext<void> => {
-  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+const createContext = (): RequestContext<FedifyExecutionContext> => {
+  const federation = createFederation<FedifyExecutionContext>({
+    kv: new MemoryKvStore(),
+    origin: publicOrigin,
+  });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
   );
   return federation.createContext(
     new Request(`${publicOrigin}/ap/note/00000000-0000-8000-8000-000000000001`),
-    undefined,
+    createFedifyExecutionContext(),
   );
 };
 
 const createUnsignedCollectionFederation = () => {
-  const federation = createFederation<void>({ kv: new MemoryKvStore(), origin: publicOrigin });
+  const federation = createFederation<FedifyExecutionContext>({
+    kv: new MemoryKvStore(),
+    origin: publicOrigin,
+  });
   federation.setActorDispatcher(
     '/ap/actor/{identifier}',
     (context, identifier) => new Person({ id: context.getActorUri(identifier) }),
@@ -847,7 +858,7 @@ const createSignedFederation = async () => {
     document: documents.get(url),
     documentUrl: url,
   });
-  const federation = createFederation<void>({
+  const federation = createFederation<FedifyExecutionContext>({
     authenticatedDocumentLoaderFactory: () => documentLoader,
     contextLoaderFactory: getDocumentLoader,
     documentLoaderFactory: () => documentLoader,
@@ -883,7 +894,7 @@ const createSignedFederation = async () => {
   const fetch = async (postId: string) => {
     const request = await createRequest(postId);
     return federation.fetch(request, {
-      contextData: undefined,
+      contextData: createFedifyExecutionContext(),
       onUnauthorized: () => new Response('Not found', { status: 404 }),
     });
   };
@@ -896,7 +907,7 @@ const createSignedFederation = async () => {
       remoteKeyUri,
     );
     return federation.fetch(request, {
-      contextData: undefined,
+      contextData: createFedifyExecutionContext(),
       onUnauthorized: () => new Response('Not found', { status: 404 }),
       onNotFound: () => new Response('Not found', { status: 404 }),
     });

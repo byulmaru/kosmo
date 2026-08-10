@@ -1,9 +1,11 @@
 import { Follow, Undo } from '@fedify/vocab';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { federation } from './federation';
+import { createFedifyExecutionContext } from './fedify-execution';
 import { getFollowActivityUri, getFollowOrderingKey } from './follow-delivery';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 type RemoteProfileFollowActor = {
   inboxUri: string | null;
@@ -25,9 +27,12 @@ type ProfileFollowRecipient = Recipient & {
   inboxId: URL;
 };
 
-const createFederationContext = async (): Promise<Context<void>> => {
+const createFederationContext = async (): Promise<Context<FedifyExecutionContext>> => {
   const localInstance = await resolveConfiguredLocalInstance();
-  return federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
+  return federation.createContext(
+    new URL(localInstance.canonicalOrigin),
+    createFedifyExecutionContext(),
+  );
 };
 
 const toProfileFollowRecipient = (actor: RemoteProfileFollowActor): ProfileFollowRecipient => {

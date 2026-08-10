@@ -45,7 +45,7 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
+type RemoteActorLookupContext = Pick<Context<unknown>, 'lookupObject'>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;

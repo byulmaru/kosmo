@@ -28,6 +28,7 @@ import { and, eq } from 'drizzle-orm';
 import { handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import type { InboxContext } from '@fedify/fedify';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 after(async () => {
   await pg.end();
@@ -89,8 +90,8 @@ const createLocalTarget = async () => {
   };
 };
 
-const createContext = (recipient: string | null): InboxContext<void> =>
-  ({ recipient }) as unknown as InboxContext<void>;
+const createContext = (recipient: string | null): InboxContext<FedifyExecutionContext> =>
+  ({ recipient }) as unknown as InboxContext<FedifyExecutionContext>;
 
 const readReaction = (profileId: string, postId: string) =>
   db

@@ -48,17 +48,18 @@ import type { FedifyExecutionContext } from './fedify-execution';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
-export const federation: Federation<void> = createFederation<void>({
-  allowPrivateAddress: false,
-  kv: new MemoryKvStore(),
-  ...(federationOrigin ? { origin: federationOrigin } : {}),
-});
+export const federation: Federation<FedifyExecutionContext> =
+  createFederation<FedifyExecutionContext>({
+    allowPrivateAddress: false,
+    kv: new MemoryKvStore(),
+    ...(federationOrigin ? { origin: federationOrigin } : {}),
+  });
 
 export const fetchFederation = (
   request: Request,
   options: Omit<FederationFetchOptions<FedifyExecutionContext>, 'contextData'>,
 ): Promise<Response> =>
-  (federation as unknown as Federation<FedifyExecutionContext>).fetch(request, {
+  federation.fetch(request, {
     ...options,
     contextData: createFedifyExecutionContext(),
   });
@@ -106,7 +107,7 @@ federation
   });
 
 const findActiveLocalProfile = async (
-  context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
+  context: Pick<Context<FedifyExecutionContext>, 'canonicalOrigin' | 'host'>,
   profileId: string,
 ) => {
   // Multiple Local Instances are valid domain state. This runtime currently serves only its

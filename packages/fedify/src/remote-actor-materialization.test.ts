@@ -18,6 +18,7 @@ import type { Context } from '@fedify/fedify';
 import type { Object as ActivityPubObject } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -1284,14 +1285,14 @@ const mockWebFinger = (descriptor: { subject: string }) =>
 const createLookupContext = (
   implementation: (
     identifier: string | URL,
-    options?: NonNullable<Parameters<Context<void>['lookupObject']>[1]>,
+    options?: NonNullable<Parameters<Context<FedifyExecutionContext>['lookupObject']>[1]>,
   ) => Promise<ActivityPubObject | null>,
 ) => {
   const lookupObject = mock.fn(implementation);
 
   return {
     context: {
-      lookupObject: lookupObject as unknown as Context<void>['lookupObject'],
+      lookupObject: lookupObject as unknown as Context<FedifyExecutionContext>['lookupObject'],
     },
     lookupObject,
   };

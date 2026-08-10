@@ -29,6 +29,7 @@ import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
 import type { Context, RequestContext } from '@fedify/fedify';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 type LocalPostNote = {
   readonly authorHandle: string;
@@ -48,7 +49,10 @@ type LocalPostNoteProjection = LocalPostNote & {
   readonly object: Note;
 };
 
-type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
+type LocalPostNoteContext = Pick<
+  Context<FedifyExecutionContext>,
+  'canonicalOrigin' | 'getActorUri'
+>;
 
 const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
   if (!isCanonicalPostId(postId)) {
@@ -200,7 +204,7 @@ const isEstablishedFollower = async (actorUri: URL, authorProfileId: string): Pr
     .then(Boolean);
 
 export const authorizeLocalPostNote = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyExecutionContext>,
   { id }: { id: string },
 ): Promise<boolean> => {
   const row = await loadLocalPostNoteRow(context, id);
@@ -223,7 +227,7 @@ export const authorizeLocalPostNote = async (
 };
 
 export const dispatchLocalPostNote = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyExecutionContext>,
   { id }: { id: string },
 ): Promise<Note | null> => {
   return (await projectLocalPostNote(context, id))?.object ?? null;

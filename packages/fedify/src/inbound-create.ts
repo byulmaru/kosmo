@@ -12,9 +12,10 @@ import {
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Create } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 export const handleInboundCreate = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyExecutionContext>,
   create: Create,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {

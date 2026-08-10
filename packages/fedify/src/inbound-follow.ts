@@ -35,6 +35,7 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
+import type { FedifyExecutionContext } from './fedify-execution';
 
 const getNow = () => Temporal.Now.instant();
 
@@ -56,7 +57,7 @@ const toRecipient = (actor: typeof ActivityPubActors.$inferSelect): Recipient | 
 };
 
 export const handleInboundFollow = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyExecutionContext>,
   follow: Follow,
   now: Temporal.Instant = getNow(),
 ): Promise<void> => {
@@ -250,7 +251,10 @@ const handleInboundUndoAnnounce = async (
   return result?.outcome ?? null;
 };
 
-export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
+export const handleInboundUndo = async (
+  context: InboxContext<FedifyExecutionContext>,
+  undo: Undo,
+): Promise<void> => {
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {

@@ -12,12 +12,14 @@ import {
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
 import { eq, ne } from 'drizzle-orm';
+import { createFedifyExecutionContext } from './fedify-execution';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
 import type { federation as productionFederation } from './federation';
+import type { FedifyExecutionContext } from './fedify-execution';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundAcceptFollow from './inbound-accept-follow';
 import type * as InboundReject from './inbound-reject';
@@ -96,7 +98,7 @@ describe('inbound Accept and Reject', () => {
       loadedUrls.push(url);
       const response = await federation.fetch(
         new Request(url, { headers: { Accept: 'application/activity+json' } }),
-        { contextData: undefined },
+        { contextData: createFedifyExecutionContext() },
       );
       if (!response.ok) {
         throw new Error(`Follow document returned ${response.status}: ${url}`);
@@ -113,7 +115,7 @@ describe('inbound Accept and Reject', () => {
       new Request(`${publicOrigin}/ap/follow/${fixture.projection.id}`, {
         headers: { Accept: 'application/activity+json' },
       }),
-      { contextData: undefined },
+      { contextData: createFedifyExecutionContext() },
     );
     assert.equal(followResponse.status, 200, await followResponse.text());
 
@@ -130,21 +132,21 @@ describe('inbound Accept and Reject', () => {
       new Request(`${publicOrigin}/ap/follow/${established.id}`, {
         headers: { Accept: 'application/activity+json' },
       }),
-      { contextData: undefined },
+      { contextData: createFedifyExecutionContext() },
     );
     assert.equal(establishedFollowResponse.status, 200);
     const consumedRequestResponse = await federation.fetch(
       new Request(`${publicOrigin}/ap/follow/${fixture.projection.id}`, {
         headers: { Accept: 'application/activity+json' },
       }),
-      { contextData: undefined },
+      { contextData: createFedifyExecutionContext() },
     );
     assert.equal(consumedRequestResponse.status, 404);
     const unknownResponse = await federation.fetch(
       new Request(`${publicOrigin}/ap/follow/${crypto.randomUUID()}`, {
         headers: { Accept: 'application/activity+json' },
       }),
-      { contextData: undefined },
+      { contextData: createFedifyExecutionContext() },
     );
     assert.equal(unknownResponse.status, 404);
   });
@@ -156,7 +158,7 @@ describe('inbound Accept and Reject', () => {
         new Request(`${publicOrigin}/ap/follow/${id}`, {
           headers: { Accept: 'application/activity+json' },
         }),
-        { contextData: undefined },
+        { contextData: createFedifyExecutionContext() },
       );
 
     assert.equal((await fetchFollow(fixture.projection.id.toUpperCase())).status, 404);
@@ -920,13 +922,13 @@ const createContext = (
   documentLoader: DocumentLoader = async (url) => {
     throw new Error(`Unexpected document URL: ${url}`);
   },
-): InboxContext<void> =>
+): InboxContext<FedifyExecutionContext> =>
   ({
     canonicalOrigin: publicOrigin,
     documentLoader,
     getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
     recipient,
-  }) as unknown as InboxContext<void>;
+  }) as unknown as InboxContext<FedifyExecutionContext>;
 
 const readCounts = async ({
   localProfile,
