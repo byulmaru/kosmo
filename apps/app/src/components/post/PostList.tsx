@@ -6,6 +6,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostListItem } from './PostListItem';
+import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { PostList_homeTimeline$key } from './__generated__/PostList_homeTimeline.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
@@ -91,11 +92,13 @@ export function PostList({
   return (
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider owner="list" profile={replyProfile ?? null}>
-        <View style={styles.root}>
-          {visibleEdges.map((edge) => (
-            <PostListItem key={edge.node.id} post={edge.node} />
-          ))}
-        </View>
+        <PostMediaViewerHostProvider>
+          <View style={styles.root}>
+            {visibleEdges.map((edge) => (
+              <PostListItem key={edge.node.id} post={edge.node} />
+            ))}
+          </View>
+        </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

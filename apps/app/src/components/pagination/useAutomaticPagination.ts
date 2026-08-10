@@ -18,6 +18,7 @@ export type UseAutomaticPaginationOptions = {
   itemCount: number;
   loadNext: LoadNext;
   pageSize: number;
+  webScrollTarget?: 'container' | 'document';
 };
 
 export type UseAutomaticPaginationResult = {
@@ -32,10 +33,11 @@ export function useAutomaticPagination({
   itemCount,
   loadNext,
   pageSize,
+  webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
   const [loadError, setLoadError] = useState(false);
-  const [nativePageRevision, setNativePageRevision] = useState(0);
-  const handledNativePageRevisionRef = useRef(0);
+  const [containerPageRevision, setContainerPageRevision] = useState(0);
+  const handledContainerPageRevisionRef = useRef(0);
   const requestInFlightRef = useRef(false);
   const pageErrorRef = useRef(false);
   const webNearEndCheckRef = useRef<(() => void) | null>(null);
@@ -62,18 +64,18 @@ export function useAutomaticPagination({
           return;
         }
         setTimeout(() => {
-          if (Platform.OS === 'web') {
+          if (Platform.OS === 'web' && webScrollTarget === 'document') {
             window.requestAnimationFrame(() => {
               requestInFlightRef.current = false;
               webNearEndCheckRef.current?.();
             });
           } else {
-            setNativePageRevision((revision) => revision + 1);
+            setContainerPageRevision((revision) => revision + 1);
           }
         }, 0);
       },
     });
-  }, [hasNext, isLoadingNext, loadNext, pageSize]);
+  }, [hasNext, isLoadingNext, loadNext, pageSize, webScrollTarget]);
 
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
@@ -91,19 +93,19 @@ export function useAutomaticPagination({
 
   useEffect(() => {
     if (
-      Platform.OS === 'web' ||
-      nativePageRevision === 0 ||
+      (Platform.OS === 'web' && webScrollTarget === 'document') ||
+      containerPageRevision === 0 ||
       isLoadingNext ||
-      handledNativePageRevisionRef.current === nativePageRevision
+      handledContainerPageRevisionRef.current === containerPageRevision
     ) {
       return;
     }
-    handledNativePageRevisionRef.current = nativePageRevision;
+    handledContainerPageRevisionRef.current = containerPageRevision;
     resumeNativePagination(requestInFlightRef, nativeMetricsRef, maybeLoadNextPage);
-  }, [isLoadingNext, maybeLoadNextPage, nativePageRevision]);
+  }, [containerPageRevision, isLoadingNext, maybeLoadNextPage, webScrollTarget]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' || webScrollTarget !== 'document') {
       return;
     }
     const check = () =>
@@ -124,7 +126,7 @@ export function useAutomaticPagination({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [itemCount, maybeLoadNextPage]);
+  }, [itemCount, maybeLoadNextPage, webScrollTarget]);
 
   return { loadError, loadNextPage, nativeScrollProps };
 }

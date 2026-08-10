@@ -4,6 +4,7 @@ import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagi
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
@@ -87,43 +88,58 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 }
 
 export function PostDetailThread({
+  currentPostReplyAvailable,
+  currentPostReplySurfaceId,
   header,
   identity,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
+  presentation = 'route',
   replyProfile,
 }: {
+  currentPostReplyAvailable?: boolean;
+  currentPostReplySurfaceId?: string;
   header: ReactNode;
   identity: string;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
+  presentation?: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   return (
     <PostDetailThreadContent
+      currentPostReplyAvailable={currentPostReplyAvailable}
+      currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
+      presentation={presentation}
       replyProfile={replyProfile}
     />
   );
 }
 
 function PostDetailThreadContent({
+  currentPostReplyAvailable,
+  currentPostReplySurfaceId,
   header,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
+  presentation,
   replyProfile,
 }: {
+  currentPostReplyAvailable?: boolean;
+  currentPostReplySurfaceId?: string;
   header: ReactNode;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
+  presentation: 'route' | 'viewer';
   replyProfile?: ReplyComposerSurface_profile$key | null;
 }) {
   const { data, hasNext, isLoadingNext, loadNext } = usePaginationFragment<
@@ -136,6 +152,7 @@ function PostDetailThreadContent({
     itemCount: data.replyDescendants.edges.length,
     loadNext,
     pageSize: 20,
+    webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
   const ancestors = data.replyAncestors
     .filter((post) => post != null)
@@ -170,6 +187,47 @@ function PostDetailThreadContent({
     } satisfies ThreadRenderablePost,
   };
 
+  const thread = (
+    <>
+      <PostThreadLayout<ThreadRenderablePost>
+        ancestors={ancestors}
+        current={current}
+        descendants={descendants}
+        renderPost={({ item, role }) => (
+          <View>
+            {role === 'current' ? (
+              <PostLayout
+                contentWarningPresentation={presentation === 'viewer' ? 'revealed' : 'default'}
+                mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
+                onDeleted={onPostDeleted}
+                post={requireThreadFragment(item.post.detail, 'current detail')}
+                replyAvailable={currentPostReplyAvailable}
+                replySurfacePostId={currentPostReplySurfaceId}
+              />
+            ) : (
+              <PostListItem
+                post={requireThreadFragment(item.post.listItem, `${role} list item`)}
+                showDivider={false}
+                showReplyAttribution={false}
+              />
+            )}
+          </View>
+        )}
+      />
+      {isLoadingNext ? (
+        <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
+      ) : loadError ? (
+        <View accessibilityRole="alert">
+          <Text>답글을 더 불러오지 못했어요</Text>
+          <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
+          <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
+            답글 다시 불러오기
+          </Button>
+        </View>
+      ) : null}
+    </>
+  );
+
   return (
     <PostActionAuthenticationProvider>
       <PostReplyCoordinatorProvider
@@ -177,40 +235,21 @@ function PostDetailThreadContent({
         owner="detail"
         profile={replyProfile ?? null}
       >
-        <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
-          <PostThreadLayout<ThreadRenderablePost>
-            ancestors={ancestors}
-            current={current}
-            descendants={descendants}
-            renderPost={({ item, role }) => (
-              <View>
-                {role === 'current' ? (
-                  <PostLayout
-                    onDeleted={onPostDeleted}
-                    post={requireThreadFragment(item.post.detail, 'current detail')}
-                  />
-                ) : (
-                  <PostListItem
-                    post={requireThreadFragment(item.post.listItem, `${role} list item`)}
-                    showDivider={false}
-                    showReplyAttribution={false}
-                  />
-                )}
-              </View>
-            )}
-          />
-          {isLoadingNext ? (
-            <Text accessibilityLiveRegion="polite">답글을 더 불러오는 중입니다.</Text>
-          ) : loadError ? (
-            <View accessibilityRole="alert">
-              <Text>답글을 더 불러오지 못했어요</Text>
-              <Text>이미 불러온 답글은 그대로 유지돼요.</Text>
-              <Button onPress={loadNextPage} style={styles.retryButton} tone="secondary">
-                답글 다시 불러오기
-              </Button>
-            </View>
-          ) : null}
-        </PostDetailFrame>
+        <PostMediaViewerHostProvider>
+          {presentation === 'viewer' ? (
+            <ScrollView
+              {...nativeScrollProps}
+              contentContainerStyle={styles.frame}
+              testID="post-media-viewer-thread-scroll"
+            >
+              {thread}
+            </ScrollView>
+          ) : (
+            <PostDetailFrame header={header} nativeScrollProps={nativeScrollProps}>
+              {thread}
+            </PostDetailFrame>
+          )}
+        </PostMediaViewerHostProvider>
       </PostReplyCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

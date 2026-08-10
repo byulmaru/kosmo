@@ -1,14 +1,27 @@
 import { usePathname } from 'expo-router';
 import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { graphql, RelayEnvironmentProvider, useLazyLoadQuery } from 'react-relay';
-import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import {
+  graphql,
+  RelayEnvironmentProvider,
+  useLazyLoadQuery,
+  useRelayEnvironment,
+} from 'react-relay';
+import {
+  commitLocalUpdate,
+  Environment,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Temporal } from 'temporal-polyfill';
 import { trackAnalytics } from '@/analytics/client';
 import PostDetailScreen from '@/app/(tabs)/(post)/[profileHandle]/[postId]';
 import { startWebLogin } from '@/auth/webLogin';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
+import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposer } from '@/components/post/PostComposer';
 import { PostComposerMediaItems } from '@/components/post/PostComposerMediaControls';
@@ -17,8 +30,13 @@ import { PostDetailThread } from '@/components/post/PostDetailThread';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostList } from '@/components/post/PostList';
 import { PostListItem } from '@/components/post/PostListItem';
+import { PostMediaViewer, PostMediaViewerContent } from '@/components/post/PostMediaViewer';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
-import { PostSourcePresentationView } from '@/components/post/PostSourcePresentationView';
+import {
+  PostSourcePresentationView,
+  PostSourcePreview,
+} from '@/components/post/PostSourcePresentationView';
 import { PostThreadLayout } from '@/components/post/PostThreadLayout';
 import { ReplyComposerSurface } from '@/components/post/ReplyComposerSurface';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
@@ -431,6 +449,18 @@ const quotePost = {
   repostCount: 3,
   viewerRepost: null,
 };
+const mediaViewerQuotePost = {
+  ...post({
+    bodyText: `${longBody}\n${longBody}`,
+    id: 'post-media-viewer-quote',
+    media: fourMediaPost.content?.media ?? [],
+    profile: repostAuthor,
+    reactionCounts: [{ count: 6, type: '🌌' }],
+    repostSource: sourcePost,
+  }),
+  repostCount: 5,
+  viewerRepost: null,
+};
 const pureRepostOfQuote = post({
   bodyText: null,
   id: 'post-repost-of-quote',
@@ -771,6 +801,7 @@ const storyPosts = [
   pureRepost,
   longPureRepost,
   quotePost,
+  mediaViewerQuotePost,
   replyQuotePost,
   quoteWithoutSource,
   invalidContentlessReplySource,
@@ -851,8 +882,10 @@ const PostsStoriesQuery = graphql`
           id
         }
         ...PostBody_post @alias(as: "body")
+        ...PostActionSurface_post @alias(as: "actionSurface")
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
+        ...PostMediaViewer_post @alias(as: "viewer")
         ...ReplyComposerSurface_parent @alias(as: "replySurface")
       }
     }
@@ -1771,6 +1804,33 @@ function ContentWarningRevealStory() {
   );
 }
 
+function ContentWarningSourcePreviewStory() {
+  return (
+    <Catalog>
+      <PostSourcePreview
+        source={{
+          content: {
+            bodyText: '가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.',
+            contentWarning: '원문 프리뷰 경고',
+            document: null,
+            media: [
+              {
+                altText: '가림 해제 뒤 표시되는 원문 프리뷰 이미지',
+                id: 'content-warning-source-preview-media',
+                url: postMediaImageUri,
+              },
+            ],
+            postId: 'content-warning-source-preview-post',
+          },
+          createdAt: '2026-08-04T00:00:00.000Z',
+          id: 'content-warning-source-preview-post',
+          profile: sourceAuthor,
+        }}
+      />
+    </Catalog>
+  );
+}
+
 function ContentWarningConsumerIntegrationStory() {
   const post = requirePostById(usePostsStoryData().posts, contentWarningPost.id);
 
@@ -2316,6 +2376,110 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
   );
 }
 
+function PostMediaViewerRevisionStory() {
+  const environment = useRelayEnvironment();
+  const phase = useRef(0);
+  const originalContent = mediaViewerThreadCurrentPost.content!;
+
+  return (
+    <>
+      <ProductionPostListItemStory postId={mediaViewerThreadCurrentPost.id} />
+      <Pressable
+        accessibilityLabel="Viewer Content 상태 전환"
+        accessibilityRole="button"
+        onPress={() => {
+          commitLocalUpdate(environment, (store) => {
+            const postRecord = store.get(mediaViewerThreadCurrentPost.id);
+            if (!postRecord) {
+              throw new Error('Viewer Host Post fixture가 필요합니다.');
+            }
+            if (phase.current === 0) {
+              postRecord.setValue(null, 'content');
+            } else if (phase.current === 1) {
+              const contentRecord = store.get(originalContent.id);
+              if (!contentRecord) {
+                throw new Error('Viewer Host Content fixture가 필요합니다.');
+              }
+              postRecord.setLinkedRecord(contentRecord, 'content');
+            } else {
+              const contentRecord = store.create(
+                'content-post-media-viewer-quote-revision',
+                'PostContent',
+              );
+              contentRecord.setValue('content-post-media-viewer-quote-revision', 'id');
+              contentRecord.setValue(longBody, 'bodyText');
+              contentRecord.setLinkedRecords(
+                originalContent.media!.map((media, index) => {
+                  const mediaRecord = store.create(`viewer-revision-media-${index}`, 'Media');
+                  mediaRecord.setValue(`revision ${index + 1}`, 'altText');
+                  mediaRecord.setValue(`viewer-revision-media-${index}`, 'id');
+                  mediaRecord.setValue(postMediaImageUri, 'url');
+                  return mediaRecord;
+                }),
+                'media',
+              );
+              postRecord.setLinkedRecord(contentRecord, 'content');
+            }
+            phase.current += 1;
+          });
+        }}
+        testID="post-media-viewer-content-transition"
+      >
+        <Text>Viewer Content 상태 전환</Text>
+      </Pressable>
+    </>
+  );
+}
+
+function DirectPostMediaViewerStory({
+  postId,
+  selectedIndex,
+}: {
+  postId: string;
+  selectedIndex: number;
+}) {
+  const { posts } = usePostsStoryData();
+  const node = requirePostById(posts, postId);
+  const storyPost = requireStoryPostById(storyPosts, postId);
+  const [open, setOpen] = useState(true);
+  const originRef = useRef<View>(null);
+  const content = storyPost.content;
+  if (!content?.media?.length) {
+    throw new Error(`Direct Post Media Viewer fixture ${postId} needs Media.`);
+  }
+  return (
+    <Catalog>
+      <Pressable
+        accessibilityLabel="이미지 뷰어 다시 열기"
+        accessibilityRole="button"
+        onPress={() => setOpen(true)}
+        ref={originRef}
+      >
+        <Text>이미지 뷰어 다시 열기</Text>
+      </Pressable>
+      {open ? (
+        <PostMediaViewer
+          fallbackFocus={originRef}
+          onClose={() => setOpen(false)}
+          originControl={originRef}
+          selectedIndex={selectedIndex}
+        >
+          <PostMediaViewerContent
+            actionBar={
+              <PostActionSurface
+                reactionSummaryStyle={{ display: 'none' }}
+                socialActionTarget={requireFragment(node.actionSurface, 'viewer action surface')}
+              />
+            }
+            post={requireFragment(node.viewer, 'viewer Post')}
+            wideDetail={null}
+          />
+        </PostMediaViewer>
+      ) : null}
+    </Catalog>
+  );
+}
+
 function StoryPathname({ testID }: { testID: string }) {
   return (
     <Text style={{ display: 'none' }} testID={testID}>
@@ -2415,6 +2579,76 @@ const defaultSession = shellQuery({
   profiles: [defaultStoryProfile],
   selectedProfile: defaultStoryProfile,
 });
+const mediaViewerThreadCurrentPost = {
+  ...withReactionViewerState(mediaViewerQuotePost),
+  replyParent: { __typename: 'Post' as const, id: routeParentPost.id },
+};
+const mediaViewerThreadMediaReply = {
+  ...post({
+    bodyDocument: {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'Media Reply' }] },
+        { type: 'media', attrs: { mediaId: 'media-viewer-thread-reply-asset' } },
+      ],
+    },
+    bodyText: '주변 Reply Media 본문',
+    id: 'media-viewer-thread-reply',
+    media: [
+      {
+        __typename: 'Media',
+        altText: '주변 Reply 이미지',
+        id: 'media-viewer-thread-reply-asset',
+        url: postMediaImageUri,
+      },
+    ],
+    replyParent: {
+      __typename: 'Post',
+      id: mediaViewerThreadCurrentPost.id,
+      profile: mediaViewerThreadCurrentPost.profile,
+    },
+  }),
+  viewerReactions: [],
+};
+const mediaViewerThreadNextReply = {
+  ...post({
+    bodyText: 'Viewer 오른쪽 scroller로 불러온 Reply',
+    id: 'media-viewer-thread-next-reply',
+    replyParent: {
+      __typename: 'Post',
+      id: mediaViewerThreadMediaReply.id,
+      profile: mediaViewerThreadMediaReply.profile,
+    },
+  }),
+  viewerReactions: [],
+};
+const postMediaViewerThreadResponseData = {
+  currentSession: defaultSession.currentSession,
+  node: {
+    ...mediaViewerThreadCurrentPost,
+    replyAncestors: [routeParentPost, routeRootPost],
+    replyDescendants: {
+      edges: [{ cursor: mediaViewerThreadMediaReply.id, node: mediaViewerThreadMediaReply }],
+      pageInfo: { endCursor: mediaViewerThreadMediaReply.id, hasNextPage: true },
+    },
+  },
+};
+const postMediaViewerHostResponseData = {
+  surface: mediaViewerThreadCurrentPost,
+};
+const postMediaViewerThreadNextPageData = {
+  node: {
+    ...mediaViewerThreadCurrentPost,
+    replyAncestors: [routeParentPost, routeRootPost],
+    replyDescendants: {
+      edges: [{ cursor: mediaViewerThreadNextReply.id, node: mediaViewerThreadNextReply }],
+      pageInfo: { endCursor: null, hasNextPage: false },
+    },
+  },
+};
+const postMediaViewerSingleHostResponseData = {
+  surface: withReactionViewerState(requireStoryPostById(storyPosts, 'media-text')),
+};
 const postsStoryRelayData = {
   alternateComposerProfile,
   composerProfile,
@@ -2459,7 +2693,9 @@ const meta = {
       <SessionProvider>
         <PostActionAuthenticationProvider>
           <PostReplyCoordinatorProvider owner="list" profile={null}>
-            <Story />
+            <PostMediaViewerHostProvider>
+              <Story />
+            </PostMediaViewerHostProvider>
           </PostReplyCoordinatorProvider>
         </PostActionAuthenticationProvider>
       </SessionProvider>
@@ -3668,6 +3904,372 @@ export const OrdinaryPost: Story = {
   render: () => <ProductionPostListItemStory postId="short" />,
 };
 
+export const PostMediaViewerCompact: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const origin = canvas.getByRole('button', {
+      name: '2번째 첨부 이미지 크게 보기',
+    });
+    origin.focus();
+    await userEvent.click(origin);
+
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus();
+    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({
+      flexDirection: 'column',
+    });
+    expect(await viewer.findByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
+      'aria-label',
+      '2번째 첨부 이미지',
+    );
+    const actionBar = viewer.getByRole('toolbar', { name: '액션 바' });
+    expect(within(actionBar).getByRole('button', { name: '재게시' })).toHaveTextContent('5');
+    expect(viewer.queryByRole('button', { name: /다운로드|저장/ })).toBeNull();
+
+    await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
+    expect(viewer.getByTestId('post-media-viewer-body-scroll')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
+
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(origin).toHaveFocus();
+
+    await userEvent.click(origin);
+    await screen.findByRole('dialog');
+    await userEvent.click(screen.getByTestId('post-media-viewer-backdrop-dismiss'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(origin).toHaveFocus();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWide: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+        PostMediaViewerThreadQuery: { data: postMediaViewerThreadResponseData },
+      },
+      paginationResponses: [{ data: postMediaViewerThreadNextPageData }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const pathname = canvas.getByTestId('presentation-story-pathname').textContent;
+    const historyLength = canvasElement.ownerDocument.defaultView!.history.length;
+    const origin = canvas.getByRole('button', { name: '1번째 순서 이미지 크게 보기' });
+    await userEvent.click(origin);
+
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
+    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
+    expect(wideDetail.getBoundingClientRect().width).toBe(320);
+    const thread = await within(wideDetail).findByTestId('post-thread');
+    const rows = Array.from(thread.children) as HTMLElement[];
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-route-root',
+      'post-thread-item-route-parent',
+      'post-thread-current-post-media-viewer-quote',
+      'post-thread-item-media-viewer-thread-reply',
+    ]);
+
+    const currentRow = within(
+      within(wideDetail).getByTestId('post-thread-current-post-media-viewer-quote'),
+    );
+    expect(currentRow.queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
+    expect(currentRow.queryByRole('alert')).toBeNull();
+    expect(currentRow.queryByRole('button', { name: '원문 더 보기' })).toBeNull();
+    expect(currentRow.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    expect(
+      within(wideDetail).getByRole('button', { name: '주변 Reply 이미지 크게 보기' }),
+    ).toBeEnabled();
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
+    await userEvent.click(viewer.getByRole('button', { name: '다음 이미지' }));
+    await userEvent.click(viewer.getByRole('button', { name: '다음 이미지' }));
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4');
+    expect(viewer.getByRole('button', { name: '다음 이미지' })).toBeDisabled();
+
+    const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
+    expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
+    expect(currentRow.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
+
+    const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
+    expect(getComputedStyle(threadScroll).overflowY).toBe('auto');
+    expect(threadScroll.scrollHeight).toBeGreaterThan(threadScroll.clientHeight);
+    threadScroll.scrollTop = threadScroll.scrollHeight;
+    expect(threadScroll.scrollTop).toBeGreaterThan(0);
+    threadScroll.dispatchEvent(new Event('scroll', { bubbles: true }));
+    await expect(
+      within(wideDetail).findByText('Viewer 오른쪽 scroller로 불러온 Reply'),
+    ).resolves.toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(pathname ?? '');
+    expect(canvasElement.ownerDocument.defaultView!.history.length).toBe(historyLength);
+
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '재게시' }));
+    expect(await screen.findByRole('menu', { name: '재게시 메뉴' })).toBeVisible();
+    expect(screen.getByRole('dialog')).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).toBeNull());
+    expect(screen.getByRole('dialog')).toBeVisible();
+    origin.focus();
+    await waitFor(() =>
+      expect(dialog).toContainElement(document.activeElement as HTMLElement | null),
+    );
+
+    const nestedOrigin = within(wideDetail).getByRole('button', {
+      name: '주변 Reply 이미지 크게 보기',
+    });
+    await userEvent.click(nestedOrigin);
+    await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(2));
+    const nestedDialog = screen
+      .getAllByTestId('post-media-viewer-dialog')
+      .find((candidate) => !candidate.contains(nestedOrigin));
+    expect(nestedDialog).toBeDefined();
+    const nestedClose = within(nestedDialog!).getByRole('button', {
+      name: '이미지 뷰어 닫기',
+    });
+    await userEvent.click(nestedClose);
+    await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(1));
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(nestedOrigin).toHaveFocus();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWideThreadLoading: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+        PostMediaViewerThreadQuery: {
+          data: postMediaViewerThreadResponseData,
+          delayMs: 60_000,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
+    expect(await within(wideDetail).findByText('답글을 불러오는 중입니다.')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerWideThreadErrorRetry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+        PostMediaViewerThreadQuery: {
+          sequence: [
+            { error: 'Viewer thread fixture failure' },
+            { data: postMediaViewerThreadResponseData },
+          ],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    const wideDetail = await viewer.findByTestId('post-media-viewer-wide-detail');
+    expect(await within(wideDetail).findByText('답글을 불러오지 못했어요')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+    await userEvent.click(viewer.getByRole('button', { name: '답글 다시 불러오기' }));
+    await expect(viewer.findByTestId('post-thread')).resolves.toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerHostLoading: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: {
+          data: postMediaViewerHostResponseData,
+          delayMs: 60_000,
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(await viewer.findByText('게시글을 불러오는 중입니다.')).toBeVisible();
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerHostErrorRetry: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: {
+          sequence: [
+            { error: 'Viewer Host fixture failure' },
+            { data: postMediaViewerHostResponseData },
+          ],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(await viewer.findByText('게시글을 불러오지 못했습니다.')).toBeVisible();
+    await userEvent.click(viewer.getByRole('button', { name: '게시글 다시 불러오기' }));
+    await expect(viewer.findByTestId('post-media-viewer-image')).resolves.toBeVisible();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerHostUnavailable: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: { surface: null } },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      within(canvasElement).getByRole('button', { name: '1번째 순서 이미지 크게 보기' }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(await viewer.findByText('이미지를 더 이상 표시할 수 없습니다.')).toBeVisible();
+    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toBeEnabled();
+  },
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerHostContentRevision: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '2번째 첨부 이미지 크게 보기' }));
+
+    const viewer = within(await screen.findByRole('dialog'));
+    await viewer.findByTestId('post-media-viewer-counter');
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}');
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4');
+    await userEvent.click(await viewer.findByRole('button', { name: '원문 더 보기' }));
+    const transition = canvas.getByTestId('post-media-viewer-content-transition');
+
+    transition.click();
+    await expect(viewer.findByTestId('post-media-viewer-unavailable')).resolves.toBeVisible();
+    transition.click();
+    await waitFor(() =>
+      expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4'),
+    );
+    expect(await viewer.findByRole('button', { name: '원문 접기' })).toBeVisible();
+
+    transition.click();
+    await waitFor(() =>
+      expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4'),
+    );
+    expect(await viewer.findByRole('button', { name: '원문 더 보기' })).toBeVisible();
+  },
+  render: () => <PostMediaViewerRevisionStory />,
+};
+
+export const PostMediaViewerSingle: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerSingleHostResponseData },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: '회색 배경의 첫 번째 첨부 이미지 크게 보기',
+      }),
+    );
+
+    const viewer = within(await screen.findByRole('dialog'));
+    expect(await viewer.findByTestId('post-media-viewer-image')).toBeVisible();
+    expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
+      'aria-label',
+      '회색 배경의 첫 번째 첨부 이미지',
+    );
+    expect(viewer.queryByTestId('post-media-viewer-counter')).toBeNull();
+    expect(viewer.queryByRole('button', { name: '이전 이미지' })).toBeNull();
+    expect(viewer.queryByRole('button', { name: '다음 이미지' })).toBeNull();
+    expect(viewer.getByTestId('post-media-viewer-position')).toHaveTextContent('1 / 1');
+  },
+  render: () => <ProductionPostListItemStory postId="media-text" />,
+};
+
+export const PostMediaViewerLoadingAndError: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 3');
+    expect(viewer.getByTestId('post-media-viewer-action-bar')).toBeVisible();
+    const retry = await viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' });
+    expect(retry).toBeVisible();
+    expect(dialog.textContent).not.toContain('data:image');
+    await userEvent.click(retry);
+    await expect(
+      viewer.findByRole('button', { name: '오른쪽 실패 이미지 다시 시도' }),
+    ).resolves.toBeVisible();
+  },
+  render: () => <DirectPostMediaViewerStory postId="media-load-error-three" selectedIndex={1} />,
+};
+
 export const InvalidContentlessReplySource: Story = {
   play: async ({ canvasElement }) => {
     expect(within(canvasElement).queryByTestId('post-source-presentation')).not.toBeInTheDocument();
@@ -4772,6 +5374,23 @@ export const ContentWarningReveal: Story = {
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
   },
   render: () => <ContentWarningRevealStory />,
+};
+
+export const ContentWarningSourcePreviewReveal: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(
+      canvas.queryByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
+    ).not.toBeInTheDocument();
+    expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole('button', { name: '내용 보기' }));
+
+    expect(canvas.getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.')).toBeVisible();
+    expect(canvas.getByTestId('post-media-gallery')).toBeVisible();
+    expect(canvas.getByLabelText('가림 해제 뒤 표시되는 원문 프리뷰 이미지')).toBeVisible();
+  },
+  render: () => <ContentWarningSourcePreviewStory />,
 };
 
 export const ContentWarningProductionConsumersShareRevealState: Story = {
