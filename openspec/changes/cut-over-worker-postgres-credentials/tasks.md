@@ -1,155 +1,129 @@
-## 1. PROD-715 Worker credential selector/env migration
+# Tasks
 
-**Authority / Provenance**
+## 1. Worker selector/env migration
 
-- `PROD-715`
-- 완료된 `PROD-709`
-- 완료된 `PROD-730`
-- `docs/operations/production-migrations.md`
-- `memory/database-migrations.md`
+### Deliverable
 
-**Deliverable**
+Helm이 `worker` 역할명 URL/password Secret source를 Web trusted ingress와 Worker Deployment에만 `WORKER_DATABASE_*`로 제공하고 legacy Fedify seam을 소비하지 않는다.
 
-Helm runtime 설정이 Web trusted federation ingress와 Temporal Worker에 기존 owner/password fallback을 하나의 `worker` 역할명 source와 `WORKER_DATABASE_*`로 제공하고, 기존 `fedify` selector/env seam을 혼동 없이 제거한다. 이 단계는 password가 없는 `kosmo_worker`의 실제 credential을 전환하지 않는다.
+### Guardrails
 
-**Guardrails**
+- API/Web BFF 기본 `DATABASE_*`, migration과 PgBouncer manifest를 변경하지 않는다.
+- URL/password Secret name/key partial source만 render 실패시킨다.
+- legacy `fedify` key 전용 fail이나 alias를 추가하지 않는다.
+- Secret value를 values나 manifest에 넣지 않는다.
 
-- `worker` URL·Secret name·key는 모두 채우거나 모두 비워야 하며 partial source는 render를 실패시킨다.
-- 이 password trio를 실제 `kosmo_worker` credential로 해석하거나 PROD-470의 certificate selector·mount를 현재 PR에서 중복 구현하지 않는다.
-- 명시된 legacy `fedify` selector는 조용히 owner fallback하지 않고 render를 실패시킨다. `FEDIFY_DATABASE_*`를 Worker alias로 유지하지 않는다.
-- API Rollout에는 Worker env를 주입하지 않고 API Rollout/Web BFF 기본 `DATABASE_*`를 바꾸지 않는다.
-- Dev/production migration credential, `DATABASE_MIGRATION_ROLE`과 `kosmo_migration` login → `SET ROLE kosmo` 경계를 바꾸지 않는다.
-- PROD-709 active change의 historical selector 계약을 직접 다시 쓰지 않는다. 해당 owner가 sync/archive한 active baseline 위에 이 change의 modified delta를 적용한다.
+### Verification
 
-**Verification**
+- default, API-only, Worker-only, 양쪽과 rollback render를 비교한다.
+- Web/Worker에만 Worker env가 있고 API와 migration은 불변인지 확인한다.
+- API/Worker partial trio가 source 이름을 포함해 실패하는지 확인한다.
+- legacy input이 Worker env로 소비되지 않는지 확인한다.
 
-- Default/API-only/Worker-only/양쪽 selector render, Worker rollback source와 Web+Worker의 동일 Secret/URL 투영을 검증한다.
-- 대표 partial API/Worker trio와 legacy `fedify` input이 식별 가능한 render 오류로 실패하는지 검증한다.
-- API manifest의 explicit `WORKER_DATABASE_*`/`FEDIFY_DATABASE_*` 부재, Web/Worker의 explicit legacy env 부재, API/Web BFF 기본 env와 dev/prod migration document 불변을 확인한다.
-- Helm lint, 관련 test, Prettier, OpenSpec strict validation과 diff check를 통과한다.
+- [x] 1.1 PROD-709 capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
+- [x] 1.2 `worker` atomic trio를 구현하고 legacy `fedify` 전용 validation을 제거한다.
+- [x] 1.3 Web trusted ingress와 기본 비활성 Worker component에만 `WORKER_DATABASE_*`를 투영하고 legacy env를 제거한다.
+- [x] 1.4 selector 조합·rollback·partial failure·legacy 비소비·API/migration 음성 경계를 검증한다.
 
-- [x] 1.1 PROD-709 active capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
-- [x] 1.2 `worker` atomic trio와 legacy `fedify` input fail-fast 계약을 구현한다.
-- [x] 1.3 Web trusted ingress와 기본 비활성 Worker component에만 `WORKER_DATABASE_*` source를 투영하고 legacy env를 제거한다.
-- [x] 1.4 selector 조합·rollback·partial/legacy failure·API/migration 음성 경계를 검증하고 관련 정적 check를 통과한다.
+Evidence (2026-08-10): Helm 4.2.2 dev/prod lint, default render identity, selector matrix와 rollback, partial API/Worker failure, legacy 비소비, Web+Worker `WORKER_DATABASE_*`, API env 부재와 migration document 불변을 확인했다. 최신 SCRAM 계약 정렬 뒤 change strict validation과 전체 OpenSpec strict validation 94/94를 통과했다.
 
-Evidence (2026-08-10): PROD-709 delta를 active `workload-postgres-credential-selection` spec에 sync한 뒤 archive했다. PROD-369 client-certificate merge 위로 재배치하고 PROD-470 blocker를 반영한 뒤 관련 change strict validation과 전체 OpenSpec strict validation 94/94가 통과했다. Helm 4.2.2 dev/prod lint, default render byte identity, API-only/Worker-only/양쪽 selector와 rollback, partial API/Worker 및 legacy `fedify` failure, Web+Worker explicit `WORKER_DATABASE_*` owner/password fallback 투영, API explicit env 음성 경계와 dev migration document byte identity를 확인했다. 관련 Markdown/values Prettier와 `git diff --check`도 통과했다.
+## 2. Web trusted ingress Worker connection
 
-## 2. PROD-715 Web trusted ingress Worker credential wiring
-
-**Authority / Provenance**
-
-- `PROD-710`
-- `PROD-470`
-- `PROD-715`
-
-**Deliverable**
-
-Web의 trusted federation ingress가 PROD-710이 제공한 명시적 Worker connection/SQL 경계에서 PROD-470이 선택한 Worker client certificate source를 사용한다.
-
-**Guardrails**
-
-- PROD-470이 Worker certificate selector·mount·connection input을, PROD-710이 명시적 Worker connection과 trusted ingress SQL callsite 이전을 완료하기 전에는 이 group을 시작하거나 완료하지 않는다.
-- `WORKER_DATABASE_PASSWORD`로 password가 없는 `kosmo_worker`에 인증하거나 certificate 실패를 password로 fallback하지 않는다.
-- Web BFF 기본 `DATABASE_URL`이나 전역 owner/API singleton으로 fallback하지 않는다.
-- API outbound Fedify, 직접 delivery, Fedify MessageQueue runtime과 Web BFF query/mutation은 변경하지 않는다.
-- 새로운 평행 database abstraction을 만들지 않고 PROD-710의 public execution seam을 사용한다.
-
-**Verification**
-
-- Inbound federation request의 read/write가 전달된 Worker handle 안에서 실행되고 성공·실패 시 transaction/connection 경계가 보존되는지 검증한다.
-- 같은 Web process의 BFF 기본 DB 작업은 기존 `DATABASE_*` connection을 유지하고 Worker source를 사용하지 않는지 검증한다.
-- Direct outbound/MessageQueue 경로가 현재 동작을 유지하는지 영향 범위를 확인한다.
-
-- [ ] 2.1 PROD-470의 merged Worker certificate input과 PROD-710의 merged explicit Worker connection/trusted ingress SQL callsite evidence를 독립 확인한다.
-- [ ] 2.2 Web trusted federation ingress의 기존 Worker connection seam에 PROD-470 Worker certificate source를 wiring한다.
-- [ ] 2.3 Inbound trusted path의 Worker handle 사용과 BFF/outbound 음성 경계를 검증한다.
-
-## 3. PROD-715 Temporal Worker DB Activity credential wiring
-
-**Authority / Provenance**
-
-- `PROD-710`
-- `PROD-470`
-- `PROD-715`
-- 완료된 `PROD-730`
-
-**Deliverable**
-
-실제 등록된 Temporal Worker DB Activity가 PROD-710의 명시적 Worker connection/SQL 경계와 PROD-470의 Worker client certificate source를 사용한다.
-
-**Guardrails**
-
-- PROD-470이 Worker certificate selector·mount·connection input을, PROD-710이 Worker Activity가 재사용할 explicit connection/SQL seam을 완료하기 전에는 이 group을 시작하거나 완료하지 않는다.
-- 검증을 위해 smoke Workflow/Activity 또는 task queue를 새로 만들지 않는다. 현재 business capability가 등록한 DB Activity에만 wiring한다.
-- Temporal domain Workflow, Post/Reaction/Follow transition과 Fedify MessageQueue runtime(PROD-448)을 변경하지 않는다.
-- Worker process의 기본 `DATABASE_*`를 Worker source로 덮어쓰지 않고 Activity가 explicit handle을 사용하게 한다.
-
-**Verification**
-
-- 등록된 DB Activity의 core/Fedify 작업이 전달된 Worker handle을 사용하고 전역 `DATABASE_URL`로 fallback하지 않는지 검증한다.
-- Worker startup 실패와 정상/graceful shutdown에서 명시적 DB resource lifecycle이 누수 없이 종료되는지 검증한다.
-- 기존 Worker health/readiness/SIGTERM foundation 회귀 검증을 통과한다.
-
-- [ ] 3.1 PROD-470의 merged Worker certificate input, PROD-710의 merged Worker Activity용 explicit connection/SQL seam과 실제 대상 DB Activity를 독립 확인한다.
-- [ ] 3.2 대상 DB Activity bootstrap에 PROD-470 Worker certificate source를 wiring하고 explicit handle을 전달한다.
-- [ ] 3.3 Activity DB handle 사용, resource lifecycle과 Worker foundation 회귀를 검증한다.
-
-## 4. PROD-715 production cutover와 rollback 검증
-
-**Authority / Provenance**
+### Required predecessor
 
 - `PROD-369`
-- `PROD-470`
 - `PROD-724`
 - `PROD-710`
-- `PROD-715`
 
-**Deliverable**
+### Deliverable
 
-승인된 production에서 Web trusted federation ingress와 Temporal Worker DB connection만 password 없는 `kosmo_worker` LOGIN + `BYPASSRLS` client certificate credential을 사용하고 Worker certificate selector만 기존 owner/password source로 독립 rollback할 수 있다.
+Web trusted federation ingress가 `WORKER_DATABASE_*`로 만든 별도 connection과 PROD-710의 explicit handle을 사용한다.
 
-**Guardrails**
+### Guardrails
 
-- PROD-369의 `kosmo_worker` role/generated certificate readiness, PROD-470의 `pg_hba`·certificate selector/mount/connection evidence, PROD-724의 최소 객체 GRANT와 PROD-710의 explicit connection/SQL evidence가 완료되기 전에는 production cutover를 수행하지 않는다.
-- `kosmo_worker` certificate 인증 실패를 password로 fallback하지 않는다.
-- PR merge, CI, manifest 준비를 production sync/apply 승인으로 간주하지 않는다. 사용자의 별도 명시적 승인 없이는 Argo sync, 직접 apply, Secret sync나 workload cutover를 수행하지 않는다.
-- API Rollout에 Worker credential/trusted execution을 추가하지 않고 API/Web BFF 기본 connection과 migration을 변경하지 않는다.
-- Rollback은 Worker certificate selector만 승인된 owner/password source로 되돌리며 API selector, image와 migration을 함께 변경하지 않는다.
-- 공용 `envFrom` Vault source/Secret에 legacy `FEDIFY_DATABASE_*`가 남아 있으면 API를 포함한 workload에 credential이 노출될 수 있으므로, 부재를 확인하거나 별도 승인된 source 정리·sync를 완료하기 전에는 cutover하지 않는다.
+- 선행 issue의 role/passwordSecret, GRANT와 explicit SQL 경계가 완료되기 전에는 시작하거나 완료하지 않는다.
+- Web BFF 기본 connection과 API Rollout을 변경하지 않는다.
+- 인증 실패 중 owner connection으로 자동 fallback하지 않는다.
+- outbound delivery/MessageQueue 경로로 범위를 넓히지 않는다.
 
-**Verification**
+### Verification
 
-- 적용 전 role collision, CNPG generated certificate/expiration, client CA, `pg_hba` first-match, certificate selector/mount readiness, 공용 `envFrom` source의 legacy `FEDIFY_DATABASE_*` 부재, object ACL과 rollback 입력을 검증한다.
-- 적용 뒤 Web trusted ingress와 실제 Worker DB Activity connection 각각에서 client certificate authentication, `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 최소권한 query를 검증한다.
-- API Rollout의 Worker certificate/env/credential/trusted execution 부재, API/Web BFF 기본 principal과 migration 불변을 검증한다.
-- Worker certificate selector rollback 뒤 두 explicit connection이 승인된 owner/password source로 돌아가고 API/migration이 바뀌지 않는지 검증한다.
+- trusted inbound SQL이 Worker handle만 사용하는지 확인한다.
+- URL이 기존 PgBouncer Service이고 password가 Secret input에서만 오는지 확인한다.
+- BFF와 outbound 경로가 기본 connection을 유지하는지 확인한다.
 
-- [ ] 4.1 PROD-369/470/724/710 completion evidence, 공용 `envFrom` source의 legacy key 부재와 production certificate preflight·rollback 계획을 재확인한다.
-- [ ] 4.2 사용자에게 exact production diff, generated certificate/CA source, 검증 query와 rollback을 제시하고 별도 sync/apply 승인을 받는다.
-- [ ] 4.3 승인된 범위에서만 production Worker certificate source cutover를 수행하고 Web/Worker live certificate authentication·role·ACL과 API 음성 경계를 검증한다.
-- [ ] 4.4 Worker certificate selector-only rollback을 실행·검증하거나, 실행 승인이 없다면 검토된 절차와 독립 rollback 가능 evidence를 기록한다.
+- [ ] 2.1 PROD-369/724/710 merged evidence와 exact Worker connection interface를 독립 확인한다.
+- [ ] 2.2 Web trusted ingress bootstrap에 Worker SCRAM source를 wiring한다.
+- [ ] 2.3 inbound handle 사용과 BFF/outbound 음성 경계를 검증한다.
 
-## 5. PROD-715 completion과 archive
+## 3. Temporal Worker DB Activity connection
 
-**Authority / Provenance**
+### Required predecessor
 
-- `PROD-715`
+- `PROD-369`
+- `PROD-724`
+- `PROD-710`
+- 실제 등록된 대상 DB Activity
 
-**Deliverable**
+### Deliverable
 
-PROD-715의 selector/env migration, 두 runtime wiring, 승인된 production cutover·rollback evidence가 모두 최신 계약과 일치하고 change가 active spec에 동기화된다.
+실제 Temporal Worker DB Activity가 같은 Worker source로 만든 explicit handle을 core/Fedify 작업에 전달한다.
 
-**Guardrails**
+### Guardrails
 
-- 일부 Helm seam이나 한 runtime만 완료됐다는 이유로 change를 archive하거나 PROD-715를 Done 처리하지 않는다.
-- 제외된 Temporal Workflow, MessageQueue, API credential transition을 completion evidence로 요구하거나 현재 change에 포함하지 않는다.
+- domain Workflow, command orchestration과 Fedify MessageQueue를 구현하지 않는다.
+- foundation-only Worker는 DB connection을 열지 않는다.
+- process lifecycle에서 connection close를 누락하지 않는다.
 
-**Verification**
+### Verification
 
-- 모든 requirement scenario, task evidence와 최신 Linear 본문·관계·댓글을 독립 대조한다.
-- Delta spec sync, archive 전 change strict validation과 archive 후 전체 strict validation을 통과한다.
+- Activity가 global/default database singleton을 사용하지 않는지 확인한다.
+- Worker startup 실패, shutdown과 handle close를 검증한다.
+- API package/runtime에 Worker credential이 유입되지 않는지 확인한다.
 
-- [ ] 5.1 모든 task와 requirement scenario의 code/render/runtime evidence를 최신 Linear authority와 대조한다.
+- [ ] 3.1 선행 issue와 실제 대상 DB Activity evidence를 독립 확인한다.
+- [ ] 3.2 Activity bootstrap에 Worker SCRAM source를 wiring하고 explicit handle을 전달한다.
+- [ ] 3.3 Activity handle 사용, resource lifecycle과 Worker foundation 회귀를 검증한다.
+
+## 4. Production cutover와 rollback
+
+### Required predecessor
+
+- `PROD-369`
+- `PROD-724`
+- `PROD-710`
+- task groups 2–3
+
+### Deliverable
+
+승인된 production에서 Web trusted ingress와 Temporal Worker DB Activity만 기존 PgBouncer를 통해 `kosmo_worker` SCRAM credential을 사용하고 독립 rollback할 수 있다.
+
+### Guardrails
+
+- 별도 사용자 승인 전에는 Vault source sync, Argo sync/apply 또는 workload cutover를 수행하지 않는다.
+- password value를 출력·로그·diff에 포함하지 않는다.
+- rollback은 Worker selector만 변경하며 API selector, image와 migration을 함께 바꾸지 않는다.
+- Vault Dynamic Secret은 `PROD-744` 후속 범위다.
+
+### Verification
+
+- 적용 전 Vault source metadata, VSO destination/basic-auth shape, CNPG passwordSecret readiness, ACL과 rollback 입력을 확인한다.
+- 적용 뒤 두 Worker connection의 Pooler endpoint, `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 최소권한 query를 검증한다.
+- API Rollout의 Worker env/Secret 부재와 API/Web BFF 기본 connection·migration 불변을 검증한다.
+- rollback 뒤 Worker handle이 승인된 owner source로 돌아가고 API/migration이 바뀌지 않는지 확인한다.
+
+- [ ] 4.1 PROD-369/724/710 completion evidence, legacy env 부재와 production preflight·rollback 계획을 재확인한다.
+- [ ] 4.2 사용자에게 exact production diff, Vault source metadata, 검증 query와 rollback을 제시하고 별도 sync/apply 승인을 받는다.
+- [ ] 4.3 승인된 범위에서만 production Worker source cutover를 수행하고 live Pooler route·role·ACL과 API 음성 경계를 검증한다.
+- [ ] 4.4 Worker selector rollback을 실행·검증하거나, 승인이 없다면 검토된 절차와 독립 rollback 가능 evidence를 기록한다.
+
+## 5. Integration과 completion
+
+### Guardrails
+
+- PR readiness와 OpenSpec 전체 완료를 분리한다.
+- blocker 또는 production evidence가 없으면 change를 archive하거나 PROD-715를 Done으로 바꾸지 않는다.
+
+- [ ] 5.1 모든 task/requirement evidence를 최신 Linear authority와 대조한다.
 - [ ] 5.2 Active specs를 동기화하고 change를 archive한 뒤 전체 OpenSpec strict validation을 통과한다.
-- [ ] 5.3 Ready PR의 merge와 production completion evidence가 모두 확인된 뒤 PROD-715 완료 상태를 갱신한다.
+- [ ] 5.3 Ready PR merge와 production completion evidence를 모두 확인한 뒤 PROD-715 완료 상태를 갱신한다.
