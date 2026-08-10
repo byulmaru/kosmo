@@ -8,15 +8,13 @@ export * from './utils';
 
 const schema = { ...tables, ...enums };
 
-export const postgresSessionTimeouts = {
-  idle_in_transaction_session_timeout: 30 * 1000,
-  lock_timeout: 10 * 1000,
-  statement_timeout: 30 * 1000,
-} as const;
-
 const postgresConnectionOptions = {
   max_lifetime: 3600,
-  connection: postgresSessionTimeouts,
+  connection: {
+    idle_in_transaction_session_timeout: 30 * 1000,
+    lock_timeout: 10 * 1000,
+    statement_timeout: 30 * 1000,
+  },
 } as const;
 
 export const pg = postgres(process.env.DATABASE_URL!, {
@@ -38,11 +36,17 @@ export type OperationDatabaseOwner = {
   close: (options?: { force?: boolean }) => Promise<void>;
 };
 
+const operationSessionTimeoutParameterNames = [
+  'idle_in_transaction_session_timeout',
+  'lock_timeout',
+  'statement_timeout',
+] as const;
+
 const stripOperationSessionTimeouts = (databaseUrl: string) => {
   const url = new URL(databaseUrl);
 
-  for (const setting of Object.keys(postgresSessionTimeouts)) {
-    url.searchParams.delete(setting);
+  for (const parameterName of operationSessionTimeoutParameterNames) {
+    url.searchParams.delete(parameterName);
   }
 
   return url.toString();
@@ -62,11 +66,7 @@ export const createOperationDatabase = (
   databaseUrl = process.env.OPERATION_DATABASE_URL || process.env.DATABASE_URL!,
 ): OperationDatabaseOwner => {
   const client = postgres(stripOperationSessionTimeouts(databaseUrl), {
-    // PgBouncer does not accept the operation timeout settings as startup
-    // parameters. The operation plugin applies them at session scope after
-    // the client connects, together with the actor settings.
     max_lifetime: postgresConnectionOptions.max_lifetime,
-    connect_timeout: 5,
     max: 1,
   });
   const operationDb = drizzle({ client, schema });

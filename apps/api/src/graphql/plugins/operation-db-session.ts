@@ -1,4 +1,4 @@
-import { createOperationDatabase, postgresSessionTimeouts } from '@kosmo/core/db';
+import { createOperationDatabase } from '@kosmo/core/db';
 import { sql } from 'drizzle-orm';
 import { getOperationAST } from 'graphql';
 import type { OperationDatabaseOwner } from '@kosmo/core/db';
@@ -20,14 +20,7 @@ const setActorSession = async (context: UserContext, database: OperationDatabase
   await database.execute(sql`
     select
       set_config('kosmo.account_id', ${accountId}, false),
-      set_config('kosmo.profile_id', ${profileId}, false),
-      set_config(
-        'idle_in_transaction_session_timeout',
-        ${String(postgresSessionTimeouts.idle_in_transaction_session_timeout)},
-        false
-      ),
-      set_config('lock_timeout', ${String(postgresSessionTimeouts.lock_timeout)}, false),
-      set_config('statement_timeout', ${String(postgresSessionTimeouts.statement_timeout)}, false)
+      set_config('kosmo.profile_id', ${profileId}, false)
   `);
 };
 

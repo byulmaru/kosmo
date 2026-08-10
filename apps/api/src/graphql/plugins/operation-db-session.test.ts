@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { postgresSessionTimeouts } from '@kosmo/core/db';
 import { parse } from 'graphql';
 import { useOperationDatabaseSession } from './operation-db-session';
 import type { OperationDatabaseOwner } from '@kosmo/core/db';
@@ -94,13 +93,7 @@ describe('GraphQL operation database session', () => {
     const queryChunks = (owner.queries[0] as { queryChunks: unknown[] }).queryChunks;
     assert.deepEqual(
       queryChunks.filter((chunk): chunk is string => typeof chunk === 'string'),
-      [
-        'account',
-        'profile',
-        String(postgresSessionTimeouts.idle_in_transaction_session_timeout),
-        String(postgresSessionTimeouts.lock_timeout),
-        String(postgresSessionTimeouts.statement_timeout),
-      ],
+      ['account', 'profile'],
     );
     assert.deepEqual(owner.events, ['set-actor', 'execute', 'close']);
     assert.deepEqual(owner.closeOptions, [undefined]);
@@ -119,13 +112,7 @@ describe('GraphQL operation database session', () => {
     const queryChunks = (owner.queries[0] as { queryChunks: unknown[] }).queryChunks;
     assert.deepEqual(
       queryChunks.filter((chunk): chunk is string => typeof chunk === 'string'),
-      [
-        '',
-        '',
-        String(postgresSessionTimeouts.idle_in_transaction_session_timeout),
-        String(postgresSessionTimeouts.lock_timeout),
-        String(postgresSessionTimeouts.statement_timeout),
-      ],
+      ['', ''],
     );
   });
 

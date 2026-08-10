@@ -71,10 +71,10 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 이들이 
 #### Scenario: operation Pooler 초기화가 resolver보다 먼저 완료된다
 
 - **WHEN** production GraphQL Query 또는 Mutation operation이 `OPERATION_DATABASE_URL` Pooler client를 만든다
-- **THEN** PgBouncer가 지원하지 않는 server timeout startup parameter를 전송하지 않는다
-- **AND** actor GUC와 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 하나의 initialization SQL round trip에서 session-level로 설정한다
+- **THEN** PgBouncer가 지원하지 않는 server timeout startup/query parameter를 전송하지 않는다
+- **AND** actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정한다
 - **AND** initialization SQL 성공 전에는 resolver SQL을 실행하지 않는다
-- **AND** API `DATABASE_URL` direct client의 기존 timeout startup 옵션과 request/startup endpoint 경계는 유지한다
+- **AND** API `DATABASE_URL` direct client의 기존 timeout startup 동작과 request/startup endpoint 경계는 변경하지 않으며, 이 change의 범위 밖으로 둔다
 
 ### Requirement: API request와 operation endpoint를 분리한다
 

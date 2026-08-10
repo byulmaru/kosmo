@@ -2,7 +2,6 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { postgresSessionTimeouts } from '@kosmo/core/db';
 import { GraphQLObjectType, GraphQLSchema, GraphQLString } from 'graphql';
 import { createYoga } from 'graphql-yoga';
 import { Hono } from 'hono';
@@ -196,20 +195,8 @@ test('HTTP batch operations use independent database owners and close each once'
       ),
     ),
     [
-      [
-        'account',
-        'profile',
-        String(postgresSessionTimeouts.idle_in_transaction_session_timeout),
-        String(postgresSessionTimeouts.lock_timeout),
-        String(postgresSessionTimeouts.statement_timeout),
-      ],
-      [
-        'account',
-        'profile',
-        String(postgresSessionTimeouts.idle_in_transaction_session_timeout),
-        String(postgresSessionTimeouts.lock_timeout),
-        String(postgresSessionTimeouts.statement_timeout),
-      ],
+      ['account', 'profile'],
+      ['account', 'profile'],
     ],
   );
   assert.deepEqual(

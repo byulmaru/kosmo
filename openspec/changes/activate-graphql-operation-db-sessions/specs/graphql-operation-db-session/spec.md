@@ -4,7 +4,7 @@
 
 **Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726.
 
-Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 `OPERATION_DATABASE_URL` Pooler endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 user-data resolver, result projection, loader와 호출하는 core domain action SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), Mutation nested result resolver도 같은 handle을 사용해야 한다(MUST). application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT). API request authentication과 startup/bootstrap SQL은 `DATABASE_URL` direct 경계를 유지하며, Fedify-owned remote actor materialization trusted side effect는 이 operation session의 direct exception이다. materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`를 사용해야 한다(MUST). Operation client는 PgBouncer가 지원하지 않는 server timeout startup parameter를 보내서는 안 되며(MUST NOT), 세션 초기화 SQL로 timeout을 설정해야 한다.
+Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 `OPERATION_DATABASE_URL` Pooler endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 user-data resolver, result projection, loader와 호출하는 core domain action SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), Mutation nested result resolver도 같은 handle을 사용해야 한다(MUST). application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT). API request authentication과 startup/bootstrap SQL은 `DATABASE_URL` direct 경계를 유지하며, Fedify-owned remote actor materialization trusted side effect는 이 operation session의 direct exception이다. materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`를 사용해야 한다(MUST). Operation client는 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내서는 안 되며(MUST NOT), actor GUC만 session initialization SQL로 설정해야 한다.
 
 #### Scenario: Query가 하나의 client session을 사용한다
 
@@ -38,26 +38,26 @@ Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다
 - **THEN** materialization 뒤 최종 Profile query와 result projection은 같은 GraphQL operation `ctx.db`를 사용한다
 - **AND** Fedify materialization 자체는 이 operation session의 user-data SQL requirement에서 제외된다
 
-#### Scenario: Pooler operation timeout을 resolver 전에 session-level로 설정한다
+#### Scenario: Pooler operation actor를 resolver 전에 session-level로 설정한다
 
 - **WHEN** production GraphQL Query 또는 Mutation operation이 `OPERATION_DATABASE_URL` Pooler endpoint에 연결된다
-- **THEN** operation client는 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 server startup parameter로 보내지 않는다
-- **AND** actor GUC 두 개와 세 timeout을 하나의 initialization SQL round trip에서 session-level로 설정한다
+- **THEN** operation client는 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 server startup/query parameter로 보내지 않는다
+- **AND** actor GUC 두 개만 하나의 initialization SQL round trip에서 session-level로 설정한다
 - **AND** 초기화 SQL이 성공하기 전에는 resolver SQL을 실행하지 않는다
-- **AND** configured operation URL에 세 timeout query key가 있어도 runtime은 그 key만 제거하고 `application_name` 같은 unrelated query parameter를 유지한다
-- **AND** direct `DATABASE_URL` client의 기존 server timeout startup 옵션과 endpoint/credential/Pooler CR 경계는 변경하지 않는다
+- **AND** configured operation URL에 PgBouncer가 지원하지 않는 server-timeout query key가 있어도 runtime은 그 key만 제거하고 `application_name` 같은 unrelated query parameter를 유지한다
+- **AND** direct `DATABASE_URL` client의 기존 server timeout startup 동작과 endpoint/credential/Pooler CR 경계는 변경하지 않으며 이 change의 범위 밖으로 둔다
 
 ### Requirement: Account와 Profile actor setting을 같은 session에 공급한다
 
 **Authority / Provenance**: Linear PROD-370, Linear PROD-726.
 
-각 Query와 Mutation operation은 SQL 실행 전에 같은 client connection에서 `kosmo.account_id`, `kosmo.profile_id`와 세 operation timeout을 모두 session-level setting으로 설정해야 한다(MUST). 인증 identity가 존재하면 대응 UUID를 사용하고 존재하지 않으면 빈 문자열을 사용해야 한다(MUST). actor와 timeout setting을 하나의 initialization SQL round trip에서 적용하고, 그 SQL이 실패한 operation은 resolver SQL을 실행하지 않고 종료해야 한다(MUST). Public helper의 UUID/`NULL` 해석은 integration과 live activation gate에서 검증하며 operation마다 read-back SQL을 반복해서는 안 된다(MUST NOT).
+각 Query와 Mutation operation은 SQL 실행 전에 같은 client connection에서 `kosmo.account_id`, `kosmo.profile_id` 두 actor GUC를 모두 session-level setting으로 설정해야 한다(MUST). 인증 identity가 존재하면 대응 UUID를 사용하고 존재하지 않으면 빈 문자열을 사용해야 한다(MUST). actor setting을 하나의 initialization SQL round trip에서 적용하고, 그 SQL이 실패한 operation은 resolver SQL을 실행하지 않고 종료해야 한다(MUST). Public helper의 UUID/`NULL` 해석은 integration과 live activation gate에서 검증하며 operation마다 read-back SQL을 반복해서는 안 된다(MUST NOT).
 
 #### Scenario: Account와 selected Profile이 있음
 
 - **WHEN** 인증된 request의 operation context에 Account ID와 selected Profile ID가 있다
 - **THEN** 두 UUID를 각각의 session-level setting에 기록한다
-- **AND** 세 operation timeout을 같은 initialization SQL round trip에서 session-level로 기록한다
+- **AND** 두 actor GUC를 같은 initialization SQL round trip에서 session-level로 기록한다
 - **AND** setting SQL이 성공하면 같은 connection에서 operation SQL을 실행한다
 
 #### Scenario: 선택된 Profile이 없음
@@ -101,7 +101,7 @@ API는 현재 runtime이 사용하는 일반 Query/Mutation `ExecutionResult`가
 
 **Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726.
 
-같은 HTTP batch의 sibling operation은 client connection, actor setting, DataLoader registry와 Pothos execution cache를 공유해서는 안 된다(MUST NOT). API는 postgres.js의 bounded connection timeout을 사용해야 하며(MUST), 별도 semaphore 또는 retry queue를 추가해서는 안 된다(MUST NOT). 정의된 capacity 안의 operation은 교착 없이 완료되어야 하고(MUST), connection을 제한 시간 안에 만들지 못한 operation은 실패하고 connection 또는 actor setting을 누출해서는 안 된다(MUST NOT).
+같은 HTTP batch의 sibling operation은 client connection, actor setting, DataLoader registry와 Pothos execution cache를 공유해서는 안 된다(MUST NOT). API는 postgres.js의 기본 bounded connection timeout 동작을 사용해야 하며(MUST), 별도 semaphore 또는 retry queue를 추가해서는 안 된다(MUST NOT). 정의된 capacity 안의 operation은 교착 없이 완료되어야 하고(MUST), 기본 동작의 제한 시간 안에 connection을 만들지 못한 operation은 실패하고 connection 또는 actor setting을 누출해서는 안 된다(MUST NOT).
 
 #### Scenario: HTTP batch sibling 격리
 
@@ -112,7 +112,7 @@ API는 현재 runtime이 사용하는 일반 Query/Mutation `ExecutionResult`가
 #### Scenario: connection capacity 초과
 
 - **WHEN** 동시에 시작된 operation이 사용 가능한 connection capacity를 초과한다
-- **THEN** postgres.js connection timeout 안에 connection을 얻지 못한 operation은 제한된 오류로 종료한다
+- **THEN** postgres.js 기본 bounded connection timeout 동작 안에 connection을 얻지 못한 operation은 제한된 오류로 종료한다
 - **AND** custom retry queue를 만들거나 종료되지 않은 client connection을 남기지 않는다
 
 ### Requirement: client 종료 뒤 backend session state가 유출되지 않는다

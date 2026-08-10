@@ -41,29 +41,29 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 
 **Deliverable**
 
-각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context와 session timeout, user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL` direct client는 기존 server timeout startup 옵션을 유지하고, operation Pooler client는 지원되지 않는 server timeout startup parameter를 보내지 않는다. operation client는 actor GUC와 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 하나의 initialization SQL round trip에서 session-level로 설정하고 성공 전에는 resolver를 실행하지 않는다. `selectProfile`이 active Profile을 전환하면 자신이 소유하는 새 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`와 `ctx.session.profileId`를 갱신해 다음 top-level Mutation field가 새 actor를 사용하게 하며, `kosmo.account_id`와 operation-wide transaction 경계는 유지한다. 범위는 serial sibling 사이 stale GUC 전환이며 authorization concurrency, locking 또는 TOCTOU safety는 포함하지 않는다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
+각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context, user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL` direct client의 기존 server timeout startup 동작은 이 change의 범위 밖으로 두고 변경하지 않는다. Operation Pooler client는 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내지 않으며 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고 성공 전에는 resolver를 실행하지 않는다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다. `selectProfile`이 active Profile을 전환하면 자신이 소유하는 새 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`와 `ctx.session.profileId`를 갱신해 다음 top-level Mutation field가 새 actor를 사용하게 하며, `kosmo.account_id`와 operation-wide transaction 경계는 유지한다. 범위는 serial sibling 사이 stale GUC 전환이며 authorization concurrency, locking 또는 TOCTOU safety는 포함하지 않는다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
 
 **Guardrails**
 
 - application pool lease나 client를 operation 사이에 재사용하지 않는다.
 - `kosmo.account_id`와 `kosmo.profile_id`를 모두 UUID 또는 빈 문자열로 session-level 설정하고 setting SQL 실패 시 resolver 실행을 중단한다. Public helper를 매 operation 다시 읽지 않는다.
-- direct client의 기존 server timeout startup 옵션은 유지하고, operation Pooler client는 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 startup parameter로 보내지 않는다. 세 timeout은 actor GUC와 같은 initialization SQL round trip에서 session-level로 설정한다.
+- direct client의 기존 server timeout startup 동작은 변경하지 않고 이 change의 범위 밖으로 둔다. Operation Pooler client는 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 startup/query parameter로 보내지 않으며 actor GUC만 initialization SQL round trip에서 session-level로 설정한다.
 - 일반 결과, GraphQL 오류, execution throw, cancellation, timeout과 abort에서 async close 완료를 보장한다.
 - 현재 활성화되지 않은 Query/Mutation incremental AsyncIterable bridge를 추가하지 않는다.
 - Subscription에는 Query/Mutation용 장기 DB session을 할당하지 않는다.
 - Fedify-owned remote actor materialization trusted side effect와 Temporal/worker execution은 이 operation session lifecycle에 포함하지 않는다.
-- custom semaphore, retry loop 또는 queue를 만들지 않고 bounded postgres.js connect timeout을 사용한다.
+- custom semaphore, retry loop 또는 queue를 만들지 않고 postgres.js 기본 bounded connection timeout 동작을 사용한다. application-selected timeout 숫자는 추가하지 않는다.
 - endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 이 forward fix에서 변경하지 않는다.
 
 **Verification**
 
 - fake operation client로 정상 result, GraphQL error, execution throw, cancellation/abort와 초기화 실패에서 close가 정확히 한 번 완료되는지 확인한다.
-- 익명, Account-only, Account+Profile matrix에서 actor GUC와 세 session timeout이 한 initialization SQL round trip으로 설정되고 resolver가 그 전에 시작되지 않는지 확인한다. helper 의미는 integration/live probe에서 일회성으로 확인한다.
+- 익명, Account-only, Account+Profile matrix에서 actor GUC만 한 initialization SQL round trip으로 설정되고 resolver가 그 전에 시작되지 않는지 확인한다. helper 의미는 integration/live probe에서 일회성으로 확인한다.
 - `selectProfile` 뒤 다음 top-level Mutation field가 같은 operation Database에서 새 `ctx.session.profileId`와 `kosmo.profile_id`를 관찰하고, `kosmo.account_id`가 변하지 않으며 selectProfile-owned action-local narrow transaction만 사용함을 확인한다. 이 검증은 authorization concurrency, locking 또는 TOCTOU safety를 다루지 않는다.
 - HTTP batch sibling의 Database identity, actor setting, DataLoader와 Pothos cache가 분리되는지 확인한다.
-- capacity 초과에서 bounded timeout 후 connection/actor state가 남지 않는지 확인한다.
+- capacity 초과에서 postgres.js 기본 bounded connection timeout 동작 후 connection/actor state가 남지 않는지 확인한다.
 
-- [x] 2.1 종료 가능한 per-operation postgres.js/Drizzle client owner와 bounded connection timeout 경계를 구현한다.
+- [x] 2.1 종료 가능한 per-operation postgres.js/Drizzle client owner와 postgres.js 기본 bounded connection timeout 경계를 구현한다.
 - [x] 2.2 두 actor GUC의 session-level 초기화와 setting 실패 시 operation 중단을 구현하고 runtime helper read-back을 추가하지 않는다.
 - [x] 2.3 일반 Query/Mutation execute를 `finally` cleanup으로 소유하고 incremental execution과 Subscription을 제외하는 Yoga lifecycle을 구현한다.
 - [ ] 2.4 모든 완료·오류·중단·batch·overload 경계의 lifecycle 회귀를 검증한다.
@@ -92,7 +92,7 @@ GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사�
 
 - dev/prod Helm render에서 API `DATABASE_URL`은 `<release>-postgres-rw`, API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`, Web/worker/migration host는 `<release>-postgres-rw`인지 확인한다.
 - 모든 workload의 Secret name/key가 전환 전과 동일한지 값 노출 없이 확인한다.
-- configured API trio 대표 조합에서 rendered API direct URL의 authority와 operation URL의 username/database/password Secret source, scheme, path/query 보존 및 Pooler authority `<release>-postgres-pooler-rw:5432` 교체를 값 노출 없이 확인한다. Operation client regression은 세 timeout query key 제거와 `application_name` 같은 unrelated query parameter 보존을 확인한다.
+- configured API trio 대표 조합에서 rendered API direct URL의 authority와 operation URL의 username/database/password Secret source, scheme, path/query 보존 및 Pooler authority `<release>-postgres-pooler-rw:5432` 교체를 값 노출 없이 확인한다. Operation client regression은 PgBouncer가 지원하지 않는 server-timeout query key 제거와 `application_name` 같은 unrelated query parameter 보존을 확인한다.
 - Helm lint, server-side dry-run과 pre-activation revision render를 통과시킨다. Render는 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재, operation plugin/code 부재를 assertion한다.
 
 - [x] 3.1 API `DATABASE_URL` direct endpoint와 operation 전용 `OPERATION_DATABASE_URL` Pooler endpoint를 분리하고 shared API-role credential 선택은 유지한다.

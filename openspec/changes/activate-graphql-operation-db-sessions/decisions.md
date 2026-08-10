@@ -16,16 +16,16 @@
 - Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 보존해야 한다. Runtime은 operation client 생성 전에 세 server timeout query key만 제거하고 다른 query parameter는 보존한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
 - Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
 
-### Pooler operation timeout은 startup parameter가 아닌 session SQL로 초기화한다
+### Pooler operation startup parameter 호환성과 actor 초기화를 분리한다
 
 - Decision Date: 2026-08-11
 - Decision Class: Derived Contract / Incident Follow-up
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, dev merge revision `de6034d3`
 - Status: Active
-- Context / Problem: `de6034d3` dev activation에서 operation postgres.js client가 `idle_in_transaction_session_timeout=30000`을 startup parameter로 PgBouncer에 전달했고, PgBouncer가 이를 지원하지 않아 operation 초기화가 거부됐다. Argo/Rollout readiness는 통과했지만 GraphQL Query/Mutation이 초기화 단계에서 HTTP 500으로 실패했다.
-- Decision Outcome: API `DATABASE_URL` direct client는 기존 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout` startup 옵션과 값을 유지한다. Rendered `OPERATION_DATABASE_URL`에 같은 timeout query key가 있어도 Pooler client는 client 생성 전에 정확히 세 key만 제거해 PgBouncer가 지원하지 않는 server timeout startup parameter를 보내지 않는다. 다른 query parameter, endpoint authority와 credential source는 유지한다. 실제 frontend connection을 만든 뒤 actor GUC와 세 timeout을 하나의 initialization SQL round trip에서 session-level로 설정한다. 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다. endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 변경하지 않는다.
-- Alternatives Considered: 전체 activation merge revision을 즉시 revert하는 선택은 사용자 결정으로 보류하고 forward fix를 선택했다. operation client에 startup parameter를 계속 보내는 방식은 PgBouncer 호환성을 깨뜨린다. actor/timeout을 여러 SQL round trip 또는 resolver 이후에 설정하면 초기화 원자성과 resolver 전제 조건을 약화한다.
-- Consequences: direct request/auth/startup workload와 operation Pooler lifecycle의 timeout 경계가 분리된다. operation startup compatibility와 GraphQL smoke가 통과하기 전에는 live gate를 닫을 수 없으며, 실패 시 기존 whole-activation Git revert 절차를 fallback으로 유지한다.
+- Context / Problem: `de6034d3` dev activation에서 operation postgres.js client가 PgBouncer가 지원하지 않는 server timeout startup parameter를 전달했고, PgBouncer가 이를 지원하지 않아 operation 초기화가 거부됐다. Argo/Rollout readiness는 통과했지만 GraphQL Query/Mutation이 초기화 단계에서 HTTP 500으로 실패했다. 어떤 timeout 숫자도 이 change의 계약으로 결정된 적이 없다.
+- Decision Outcome: API `DATABASE_URL` direct client의 기존 timeout startup 동작은 변경하지 않으며 이 change의 범위 밖으로 둔다. Rendered `OPERATION_DATABASE_URL`에 지원되지 않는 timeout query key가 있어도 Pooler client는 client 생성 전에 해당 세 key만 제거해 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내지 않는다. 다른 query parameter, endpoint authority와 credential source는 유지한다. 실제 frontend connection을 만든 뒤 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고, 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다. endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 변경하지 않는다.
+- Alternatives Considered: 전체 activation merge revision을 즉시 revert하는 선택은 사용자 결정으로 보류하고 forward fix를 선택했다. operation client에 지원되지 않는 startup/query parameter를 계속 보내는 방식은 PgBouncer 호환성을 깨뜨린다. actor GUC를 여러 SQL round trip 또는 resolver 이후에 설정하면 초기화 원자성과 resolver 전제 조건을 약화한다.
+- Consequences: direct request/auth/startup workload와 operation Pooler lifecycle의 endpoint와 startup-parameter 경계가 분리된다. operation startup compatibility와 GraphQL smoke가 통과하기 전에는 live gate를 닫을 수 없으며, 실패 시 기존 whole-activation Git revert 절차를 fallback으로 유지한다. application-selected timeout 숫자는 추가하지 않는다.
 - Confirmation / Follow-up: current API Pod 로그에 unsupported startup-parameter 오류가 없고 익명·Account-only·Account+Profile GraphQL smoke가 HTTP 500 없이 통과하는지 비민감한 상태로 기록한다. 이후 affinity, reset, metrics/capacity와 4.3/4.4/4.5 live gate를 별도로 검증한다.
 
 ### GraphQL user-data SQL은 operation `ctx.db`를 사용하고 trusted materialization만 direct 예외로 둔다
@@ -59,9 +59,9 @@
 - Authority / Provenance: Linear PROD-370, Linear PROD-726
 - Status: Active
 - Context / Problem: actor가 없는 setting을 생략하면 missing 상태와 재사용 backend의 이전 session state를 구분하기 어렵다. 반대로 방금 성공한 setting을 public helper로 매번 다시 읽으면 operation마다 추가 round trip이 생긴다.
-- Decision Outcome: Account/Profile setting과 operation timeout(`idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`)을 매 operation 모두 같은 initialization SQL round trip에서 session-level로 설정한다. 값이 있으면 actor UUID, 없으면 빈 문자열을 쓰고 setting SQL 실패 시 operation을 중단한다. Public helper의 UUID/`NULL` 의미는 integration test와 dev live gate에서 일회성 검증하며 runtime read-back은 하지 않는다.
+- Decision Outcome: Account/Profile setting을 매 operation 모두 같은 initialization SQL round trip에서 session-level로 설정한다. 값이 있으면 actor UUID, 없으면 빈 문자열을 쓰고 setting SQL 실패 시 operation을 중단한다. Public helper의 UUID/`NULL` 의미는 integration test와 dev live gate에서 일회성 검증하며 runtime read-back은 하지 않는다.
 - Alternatives Considered: 존재하는 actor만 설정하면 이전 state 방어가 불완전하다. 매 operation helper read-back은 이미 성공한 setting을 중복 확인하고 runtime을 helper 구현에 불필요하게 결합한다.
-- Consequences: 익명, Account-only, Account+Profile operation이 동일한 actor·timeout 설정 경로를 사용하고 정상 operation에는 추가 read-back SQL이 없다. Direct client의 기존 startup timeout 옵션은 이 operation 경계와 분리되어 유지된다.
+- Consequences: 익명, Account-only, Account+Profile operation이 동일한 actor 설정 경로를 사용하고 정상 operation에는 추가 read-back SQL이 없다. Direct client의 기존 startup timeout 동작은 이 operation 경계와 분리되어 유지된다.
 - Confirmation / Follow-up: 세 identity matrix와 helper 의미, Pooler startup compatibility와 GraphQL smoke를 PostgreSQL integration 및 live probe로 확인하고 runtime query inventory에 read-back SQL이 없음을 확인한다.
 
 ### selectProfile actor 전환은 같은 operation session에서 반영한다
@@ -100,16 +100,16 @@
 - Consequences: lifecycle code가 일반 execution 경로로 제한되고 batch operation별 owner가 명확해진다.
 - Confirmation / Follow-up: installed Yoga/Envelop behavior를 대상으로 정상 result, GraphQL 오류, throw, abort와 batch unit/integration test를 유지한다.
 
-### overload는 postgres.js connect timeout으로 제한한다
+### overload는 postgres.js 기본 bounded connection 동작으로 제한한다
 
 - Decision Date: 2026-08-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726
 - Status: Active
 - Context / Problem: operation별 client가 동시에 몰릴 때 별도 semaphore나 retry queue를 추가하면 application 내부에 PgBouncer와 중복되는 대기·공정성·shutdown 상태가 생긴다.
-- Decision Outcome: postgres.js의 bounded connect timeout만 사용한다. 제한 시간 안에 frontend connection을 만들지 못하면 operation을 실패시키고 custom semaphore, retry loop 또는 queue를 추가하지 않는다.
+- Decision Outcome: postgres.js의 기본 bounded connection timeout 동작만 사용한다. 기본 동작의 제한 시간 안에 frontend connection을 만들지 못하면 operation을 실패시키고 custom semaphore, retry loop 또는 queue를 추가하지 않는다. application-selected timeout 숫자는 추가하지 않는다.
 - Alternatives Considered: application semaphore는 PgBouncer capacity와 이중 조정이 필요하다. 무제한 대기는 request와 connection leak을 장기화한다.
-- Consequences: 순간 overload 일부는 오류로 노출되며 timeout 값은 실제 dev 부하와 metrics로 검증해야 한다.
+- Consequences: 순간 overload 일부는 오류로 노출되며 기본 bounded connection 동작은 실제 dev 부하와 metrics로 검증해야 한다.
 - Confirmation / Follow-up: capacity 안의 completion, 초과 부하 timeout, `cl_waiting`/`maxwait`와 종료 뒤 connection baseline 복귀를 확인한다.
 
 ### 전체 activation revision을 Git revert하고 Pooler는 유지한다
