@@ -123,8 +123,8 @@ dev runtime에서 GraphQL user-data query/result projection/domain action operat
 - `cnpg_pgbouncer_*` client/server/max-wait metrics와 capacity 안 completion, 초과 부하 timeout, 종료 뒤 connection baseline 복귀를 확인한다.
 - 전체 activation merge/squash revision Git revert가 API `DATABASE_URL` direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거하며, Web/worker/migration, PROD-728 Pooler와 Cluster에 영향을 주지 않음을 확인한다.
 
-- [ ] 4.1 전체 정적·unit·integration·E2E·Helm·OpenSpec 검증과 correctness/최소화 self-review를 완료한다.
-- [ ] 4.2 구현 근거, PROD-716 제외 범위와 whole activation Git-revert rollback 및 PROD-728 Pooler 유지가 명시된 Ready PR을 게시하고 merge gate를 통과한다.
+- [x] 4.1 전체 정적·unit·integration·E2E·Helm·OpenSpec 검증과 correctness/최소화 self-review를 완료한다.
+- [x] 4.2 구현 근거, PROD-716 제외 범위와 whole activation Git-revert rollback 및 PROD-728 Pooler 유지가 명시된 Ready PR을 게시하고 merge gate를 통과한다.
 - [ ] 4.3 exact merge revision의 dev Argo/readiness와 GraphQL 행동 회귀를 검증한다.
 - [ ] 4.4 actor session affinity, 모든 cleanup 경로, same-backend reset과 PgBouncer metrics/capacity를 live 검증한다.
 - [ ] 4.5 live gate 근거를 Linear에 기록하고 canonical spec sync/archive 및 PROD-726 완료 처리를 수행한다.
