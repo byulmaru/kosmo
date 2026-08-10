@@ -11,9 +11,9 @@
 - Authority / Provenance: Linear `PROD-709`, `PROD-369`, `PROD-715`, `PROD-716`
 - Status: Active
 - Context / Problem: API와 Web은 별도 Kubernetes Rollout이지만 Web은 user-facing BFF 기본 DB 경로와 inbound Fedify 경로를 함께 제공한다. Workload 이름대로 API/Web source를 나누면 Web BFF가 API와 다른 인증을 갖게 되고, 하나의 기본 source를 Fedify에 재사용하면 Fedify 역할 경계가 보이지 않는다.
-- Decision Outcome: `api` source는 API Rollout과 Web BFF 기본 DB 연결이 공유한다. `fedify` source는 Web Rollout의 현재 inbound Fedify 전용 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD` 환경에만 제공한다. `web` 또는 `system` credential source는 만들지 않는다. `migration`은 selector가 없는 기존 역할로 남긴다.
+- Decision Outcome: `api` source는 API Rollout과 Web BFF 및 활성화된 Worker의 기본 DB 입력이 공유한다. `fedify` source는 Web Rollout의 inbound Fedify와 활성화된 Worker에 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD` 입력 seam으로 제공한다. `web` 또는 `system` credential source는 만들지 않는다. `migration`은 selector가 없는 기존 역할로 남긴다.
 - Alternatives Considered: API와 Web에 각각 credential source를 두는 방식은 같은 BFF 권한 경계를 drift시키므로 제외했다. Web 기본 `DATABASE_URL`을 Fedify source로 바꾸는 방식은 BFF 경계를 침범하므로 제외했다. API Rollout에 Fedify env를 주입하는 방식은 현재 Fedify consumer와 일치하지 않으므로 제외했다.
-- Consequences: API와 Web BFF는 하나의 API source를 계속 공유하고, Web만 inbound Fedify source를 추가로 받을 수 있다. 이 change는 source를 환경으로 선택할 뿐 실제 Fedify DB client/connection 생명주기를 생성하거나 전환하지 않는다.
+- Consequences: API, Web BFF와 활성화된 Worker는 하나의 API source를 계속 공유하고, Web과 Worker만 Fedify source 입력 seam을 추가로 받을 수 있다. 이 change는 source를 환경으로 전달할 뿐 실제 Fedify DB client/connection 생명주기를 생성하거나 전환하지 않는다.
 - Confirmation / Follow-up: Helm render에서 API source가 API와 Web 및 활성화된 Worker 기본 env에 동일하게 나타나고 `FEDIFY_*`가 Web과 Worker에만 나타나는지 검증한다.
 
 ### 역할별 URL과 password Secret reference를 additive atomic trio로 받는다
