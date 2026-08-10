@@ -1,3 +1,5 @@
+{{- $apiCertificateEnabled := eq (include "kosmo.postgresCredentialClientCertificateIsConfigured" (list . "api") | trim) "true" -}}
+{{- $workerCertificateEnabled := eq (include "kosmo.postgresCredentialClientCertificateIsConfigured" (list . "worker") | trim) "true" -}}
 {{- include "kosmo.validatePostgresCredentials" . -}}
 {{- if and .Values.workloads.enabled .Values.worker.enabled }}
 apiVersion: v1
@@ -64,6 +66,15 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+            {{- if $apiCertificateEnabled }}
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
+                  key: password
+            - name: DATABASE_URL
+              value: {{ include "kosmo.databaseUrl" . | quote }}
+            {{- else }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -71,6 +82,7 @@ spec:
                   key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
+            {{- end }}
             {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "fedify") | trim) "true" }}
             - name: FEDIFY_DATABASE_PASSWORD
               valueFrom:
@@ -80,9 +92,28 @@ spec:
             - name: FEDIFY_DATABASE_URL
               value: {{ dig "fedify" "databaseUrl" "" (.Values.postgres.credentials | default dict) | quote }}
             {{- end }}
+            {{- if $workerCertificateEnabled }}
+            - name: WORKER_DATABASE_URL
+              value: {{ include "kosmo.workerDatabaseUrl" . | quote }}
+            - name: WORKER_PGSSLCERT
+              value: /var/run/secrets/postgres/worker/tls.crt
+            - name: WORKER_PGSSLKEY
+              value: /var/run/secrets/postgres/worker/tls.key
+            - name: WORKER_PGSSLROOTCERT
+              value: /var/run/secrets/postgres/ca/ca.crt
+            {{- end }}
           envFrom:
             - secretRef:
                 name: env
+          {{- if $workerCertificateEnabled }}
+          volumeMounts:
+            - name: postgres-worker-client-cert
+              mountPath: /var/run/secrets/postgres/worker
+              readOnly: true
+            - name: postgres-cluster-ca
+              mountPath: /var/run/secrets/postgres/ca
+              readOnly: true
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -97,4 +128,16 @@ spec:
             periodSeconds: 5
           resources:
 {{ toYaml .Values.worker.resources | indent 12 }}
+      {{- if $workerCertificateEnabled }}
+      volumes:
+        - name: postgres-worker-client-cert
+          secret:
+            secretName: {{ include "kosmo.postgresRuntimeClientCertificateSecretName" (list . "worker") | quote }}
+        - name: postgres-cluster-ca
+          secret:
+            secretName: {{ include "kosmo.postgresClusterCaSecretName" . | quote }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+      {{- end }}
 {{- end }}

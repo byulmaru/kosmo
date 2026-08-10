@@ -44,11 +44,17 @@ postgres:
       passwordSecret:
         name: ''
         key: ''
+      clientCertificate:
+        enabled: false
     fedify:
       databaseUrl: ''
       passwordSecret:
         name: ''
         key: ''
+    worker:
+      databaseUrl: ''
+      clientCertificate:
+        enabled: false
   resources:
     requests:
       cpu: 250m

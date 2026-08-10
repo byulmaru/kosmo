@@ -9,7 +9,7 @@ CloudNativePG 1.30은 standalone `DatabaseRole`마다 client certificate를 자�
 - PROD-369은 모든 Helm 배포 환경에 `kosmo_api`와 `kosmo_worker` DatabaseRole을 추가한다. 두 역할은 password를 비활성화하고 CNPG 역할별 client certificate 발급을 사용한다.
 - CNPG는 `<DatabaseRole metadata.name>-client-cert` Secret의 `tls.crt`/`tls.key`와 `status.clientCertificate.expiration`을 관리한다. VaultStaticSecret, Vault password source와 `passwordSecret`은 만들지 않는다.
 - API는 `BYPASSRLS=false`, Worker는 `BYPASSRLS=true`이며 두 역할 모두 owner/migration/상대 역할 membership과 상승 권한을 갖지 않는다.
-- PROD-470은 같은 change 안에서 역할별 `pg_hba` 규칙, generated Secret과 Cluster CA mount, connection parameter와 회전 restart를 선택적으로 연결한다. 이 작업은 PROD-369 PR에서 구현하지 않는다.
+- PROD-470은 같은 change 안에서 역할별 `pg_hba` 규칙, generated Secret과 Cluster CA mount, connection parameter와 계획 restart 경계를 선택적으로 연결한다. 이 작업은 PROD-369 PR에서 구현하지 않는다.
 - 기존 owner `kosmo`, `kosmo_migration` LOGIN→`SET ROLE kosmo`, CNPG replication, local/legacy password·SCRAM, 객체 ACL/RLS와 workload selector는 변경하지 않는다.
 - PR merge와 CI 성공은 production apply 승인이 아니다. Production sync/apply는 사용자의 별도 명시적 승인 전에는 수행하지 않는다.
 
@@ -38,3 +38,4 @@ CloudNativePG 1.30은 standalone `DatabaseRole`마다 client certificate를 자�
 - PostgreSQL authorization: `kosmo_api`, `kosmo_worker` role attribute와 password 부재. 객체 GRANT/RLS는 포함하지 않는다.
 - Kubernetes Secret: CNPG가 역할별 client certificate Secret을 생성·갱신·삭제한다. Helm이나 VSO가 해당 Secret data를 소유하지 않는다.
 - Rollout: PROD-369은 기존 workload를 재시작하거나 인증 방식을 바꾸지 않는다. PROD-470까지 완료돼야 generated certificate가 실제 연결에 사용된다.
+- Rotation: CNPG가 certificate를 갱신해도 application pool은 자동 hot reload하지 않는다. 운영자는 expiration과 Secret 갱신을 관측하고 만료 전에 해당 consumer만 계획 재시작한다.

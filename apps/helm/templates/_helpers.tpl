@@ -22,17 +22,47 @@
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
 {{- end -}}
 
+{{- define "kosmo.postgresCredentialClientCertificateIsConfigured" -}}
+{{- $root := index . 0 -}}
+{{- $role := index . 1 -}}
+{{- $credentials := $root.Values.postgres.credentials | default dict -}}
+{{- $config := get $credentials $role | default dict -}}
+{{- $clientCertificate := get $config "clientCertificate" | default dict -}}
+{{- if get $clientCertificate "enabled" | default false }}true{{- else }}false{{- end -}}
+{{- end -}}
+
 {{- define "kosmo.validatePostgresCredentials" -}}
+{{- $root := . -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
-{{- range $role := list "api" "fedify" -}}
+{{- range $role := list "api" "fedify" "worker" -}}
 {{- $config := get $credentials $role | default dict -}}
 {{- $databaseUrl := get $config "databaseUrl" | default "" -}}
 {{- $passwordSecret := get $config "passwordSecret" | default dict -}}
 {{- $name := get $passwordSecret "name" | default "" | toString -}}
 {{- $key := get $passwordSecret "key" | default "" | toString -}}
+{{- $clientCertificate := get $config "clientCertificate" | default dict -}}
+{{- $clientCertificateEnabled := get $clientCertificate "enabled" | default false -}}
 {{- $configured := or (ne $databaseUrl "") (ne $name "") (ne $key "") -}}
 {{- $complete := and (ne $databaseUrl "") (ne $name "") (ne $key "") -}}
-{{- if and $configured (not $complete) -}}
+{{- if $clientCertificateEnabled -}}
+{{- if not (ne $databaseUrl "") -}}
+{{- fail (printf "postgres.credentials.%s.clientCertificate requires databaseUrl" $role) -}}
+{{- end -}}
+{{- if or (ne $name "") (ne $key "") -}}
+{{- fail (printf "postgres.credentials.%s.clientCertificate is mutually exclusive with passwordSecret" $role) -}}
+{{- end -}}
+{{- $certificatePrincipal := get (dict "api" "kosmo_api" "worker" "kosmo_worker") $role | default "" -}}
+{{- if eq $certificatePrincipal "" -}}
+{{- fail (printf "postgres.credentials.%s.clientCertificate is only supported for api or worker" $role) -}}
+{{- end -}}
+{{- $clusterService := printf "%s-rw" (include "kosmo.postgresName" $root) -}}
+{{- $directClusterUrlPattern := printf "^postgres(?:ql)?://%s@%s(?:\\.[^/:@]+)*(?::[0-9]+)?/[^?]+(?:\\?.*)?$" $certificatePrincipal $clusterService -}}
+{{- if not (regexMatch $directClusterUrlPattern $databaseUrl) -}}
+{{- fail (printf "postgres.credentials.%s.clientCertificate.databaseUrl must be a direct cluster-rw PostgreSQL URL" $role) -}}
+{{- end -}}
+{{- else if and (eq $role "worker") $configured -}}
+{{- fail "postgres.credentials.worker password selection is owned by PROD-715; use the existing fedify password selector until that cutover" -}}
+{{- else if and $configured (not $complete) -}}
 {{- fail (printf "postgres.credentials.%s requires databaseUrl, passwordSecret.name, and passwordSecret.key together" $role) -}}
 {{- end -}}
 {{- end -}}
@@ -51,11 +81,33 @@
 {{- end -}}
 
 {{- define "kosmo.apiDatabaseUrl" -}}
-{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- if eq (include "kosmo.postgresCredentialClientCertificateIsConfigured" (list . "api") | trim) "true" -}}
+{{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- else if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
 {{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
 {{- else -}}
 {{- include "kosmo.databaseUrl" . -}}
 {{- end -}}
+{{- end -}}
+
+{{- define "kosmo.workerDatabaseUrl" -}}
+{{- dig "worker" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- end -}}
+
+{{- define "kosmo.postgresRuntimeRoleName" -}}
+{{- $root := index . 0 -}}
+{{- $role := index . 1 -}}
+{{- printf "%s-postgres-%s" ($root.Release.Name | trunc 47 | trimSuffix "-") $role -}}
+{{- end -}}
+
+{{- define "kosmo.postgresRuntimeClientCertificateSecretName" -}}
+{{- $root := index . 0 -}}
+{{- $role := index . 1 -}}
+{{- printf "%s-client-cert" (include "kosmo.postgresRuntimeRoleName" (list $root $role)) -}}
+{{- end -}}
+
+{{- define "kosmo.postgresClusterCaSecretName" -}}
+{{- printf "%s-ca" (include "kosmo.postgresName" .) -}}
 {{- end -}}
 
 {{- define "kosmo.apiDatabasePasswordSecretName" -}}

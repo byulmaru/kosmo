@@ -18,9 +18,27 @@ spec:
 {{- end }}
   resources:
 {{ toYaml .Values.postgres.resources | indent 4 }}
+{{- $apiCertificateEnabled := eq (include "kosmo.postgresCredentialClientCertificateIsConfigured" (list . "api") | trim) "true" -}}
+{{- $workerCertificateEnabled := eq (include "kosmo.postgresCredentialClientCertificateIsConfigured" (list . "worker") | trim) "true" -}}
 {{- if eq .Values.env "prod" }}
   serviceAccountName: kosmo-postgres-backup
+{{- end }}
+{{- if or $apiCertificateEnabled $workerCertificateEnabled (eq .Values.env "prod") }}
   postgresql:
+{{- if $apiCertificateEnabled }}
+    pg_hba:
+      - "hostssl kosmo kosmo_api all cert"
+      - "hostnossl kosmo kosmo_api all reject"
+{{- if $workerCertificateEnabled }}
+      - "hostssl kosmo kosmo_worker all cert"
+      - "hostnossl kosmo kosmo_worker all reject"
+{{- end }}
+{{- else if $workerCertificateEnabled }}
+    pg_hba:
+      - "hostssl kosmo kosmo_worker all cert"
+      - "hostnossl kosmo kosmo_worker all reject"
+{{- end }}
+{{- if eq .Values.env "prod" }}
     parameters:
       archive_timeout: 4min
   plugins:
@@ -28,6 +46,7 @@ spec:
       isWALArchiver: true
       parameters:
         barmanObjectName: kosmo-postgres-backup
+{{- end }}
 {{- end }}
   bootstrap:
     initdb:

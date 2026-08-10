@@ -76,6 +76,18 @@
 - Consequences: DatabaseRole 삭제 시 role은 남고 certificate Secret은 삭제된다. 소비 뒤 rollback은 workload를 먼저 이전 인증으로 되돌려야 한다.
 - Confirmation / Follow-up: Render lifecycle과 live deletion 절차를 검증한다.
 
+### Certificate 갱신은 대상 workload의 계획 재시작으로 소비한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Implementation Choice
+- Authority / Provenance: Linear `PROD-470`; 2026-08-10 사용자 승인
+- Status: Active
+- Context / Problem: CNPG는 역할별 certificate Secret을 자동 갱신하지만 기존 Postgres.js process와 connection pool을 재시작하거나 key를 다시 읽게 하지 않는다. 현재 cluster에는 Secret 갱신 전용 restart controller도 없다.
+- Decision Outcome: DatabaseRole status expiration과 generated Secret 갱신을 관측하고 만료 전에 해당 certificate를 소비하는 API/Web/Worker workload만 계획 재시작한다. Application hot reload, pool hot swap과 새 restart controller는 구현하지 않는다.
+- Alternatives Considered: Application hot reload는 pool drain과 동시성 실패 계약을 크게 만들고, restart controller는 별도 cluster-wide 운영·권한 범위를 추가하므로 선택하지 않았다.
+- Consequences: 인증서 발급·갱신은 CNPG가, 갱신된 key의 process 반영은 운영 runbook이 소유한다. API와 Worker selector는 독립적이므로 한 역할의 재시작이 다른 workload로 불필요하게 확장되지 않아야 한다.
+- Confirmation / Follow-up: 비운영에서 Secret 갱신 뒤 대상 workload만 재시작해 새 connection의 CN과 `current_user`를 재검증한다.
+
 ### PR merge와 production apply 승인을 분리한다
 
 - Decision Date: 2026-08-10

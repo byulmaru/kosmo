@@ -42,21 +42,25 @@ PROD-369과 PROD-470은 역할별 certificate identity와 lifecycle을 함께 �
 2. PROD-369에서 runtime용 VaultStaticSecret 두 개를 제거하되 기존 공용 env와 production migration VaultStaticSecret은 그대로 둔다.
 3. Helm lint/render에서 모든 environment에 두 DatabaseRole만 추가되고 Vault password source, `pg_hba`, workload mount/restart와 selector가 추가되지 않는지 확인한다.
 4. 비운영 적용 뒤 DatabaseRole `status.applied`, generated Secret의 `tls.crt`/`tls.key`, certificate expiration, role attribute·membership·password 부재와 object ownership 부재를 민감 정보 없이 검증한다.
-5. PROD-470은 별도 PR에서 두 역할 전용 `hostssl ... cert`/non-SSL reject 순서, certificate/Cluster CA mount, atomic selector와 rotation restart를 구현한다. Owner/migration/replication/local 연결은 기존 방식으로 남긴다.
+5. PROD-470은 별도 PR에서 두 역할 전용 `hostssl ... cert`/non-SSL reject 순서, certificate/Cluster CA mount와 atomic selector를 구현한다. CNPG 갱신 뒤에는 status expiration과 Secret 갱신을 관측해 해당 consumer만 계획 재시작하며, application hot reload나 restart controller를 추가하지 않는다. Owner/migration/replication/local 연결은 기존 방식으로 남긴다.
 6. shared integration verification이 끝난 뒤에만 change를 archive한다.
 
 ### Allowed Alternatives
 
-없음. 사용자 결정으로 Vault password credential과 전체 연결의 일괄 TLS 전환은 선택하지 않았다.
+- Application hot reload는 기존 singleton pool을 무중단으로 교체하는 동시성·drain 계약이 필요해 선택하지 않았다.
+- Secret restart controller는 새 cluster-wide 운영 구성요소와 권한을 추가하므로 선택하지 않았다.
+- 사용자 결정으로 Vault password credential과 전체 연결의 일괄 TLS 전환도 선택하지 않았다.
 
 ### Known Traps
 
 - PROD-369에서 `pg_hba`, certificate volume/env, rollout restart target 또는 workload selector를 추가하지 않는다.
 - generated Secret 이름을 `kosmo_api-client-cert`처럼 PostgreSQL role name에서 추론하지 않는다.
 - generated Secret에 `ca.crt`가 있다고 가정하지 않는다.
+- Cluster CA Secret 전체를 workload에 mount하지 않는다. Application에는 공개 `ca.crt` key만 projection하고 자동 서명용 `ca.key`는 노출하지 않는다.
 - `passwordSecret`을 남긴 채 `disablePassword`를 추가하지 않는다.
 - `databaseRoleReclaimPolicy: retain`이 generated Secret까지 retain한다고 설명하지 않는다.
 - API Rollout에 Worker certificate를 주입하지 않는다.
+- CNPG가 Secret을 갱신한다는 사실을 application pool의 자동 reload로 해석하지 않는다.
 - migration SQL, GRANT/default privilege 또는 domain RLS policy를 이 change의 provisioning PR에 넣지 않는다.
 
 ## Risks / Trade-offs
@@ -65,6 +69,7 @@ PROD-369과 PROD-470은 역할별 certificate identity와 lifecycle을 함께 �
 - [Cluster client CA에 signing key가 없을 수 있다] → apply 전 CA Secret metadata/keys를 민감 정보 없이 확인하고, 비운영 status에서 issuance를 검증한다.
 - [기존 동명 role이 adopt되며 attribute/password/membership이 바뀐다] → 환경별 preflight로 기존 role과 소비자를 확인한다. 자동으로 덮어써도 된다는 근거가 없으면 적용하지 않는다.
 - [Certificate가 발급돼도 접속할 수 없다] → 의도된 Expand 경계다. PROD-470이 `pg_hba`와 workload 소비를 별도 배포한다.
+- [갱신된 key를 기존 process가 계속 사용하지 못한다] → DatabaseRole status expiration과 Secret resource version을 관측하고 인증서 만료 전에 해당 API/Web/Worker workload만 계획 재시작한다. 자동 controller와 pool hot swap은 이 change에 넣지 않는다.
 
 ## Migration Plan
 

@@ -1,12 +1,14 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as enums from './enums';
+import { getPostgresTlsOptions } from './postgres-tls';
 import * as tables from './tables';
 
 export * from './tables';
 export * from './utils';
 
 export const pg = postgres(process.env.DATABASE_URL!, {
+  ...getPostgresTlsOptions(),
   max: 20,
   max_lifetime: 3600,
   connection: {
