@@ -88,13 +88,13 @@
 
 ### Requirement: 독립 Fedify queue consumer runtime
 
-**Authority / Provenance:** PROD-448, PROD-709. 시스템은 Web/API request runtime과 Temporal Worker 없이도 Fedify inbox/outbox/fan-out queue를 소비할 수 있는 별도 runtime을 제공해야 한다(MUST). 이 runtime은 독립적으로 배포·확장·재시작·rollback할 수 있고(MUST), 시작 상태와 queue 처리 가능 상태를 구분하는 health/readiness와 graceful shutdown을 제공해야 한다(MUST).
+**Authority / Provenance:** PROD-448, PROD-709. 시스템은 Web/API request runtime과 Temporal Worker 없이도 Fedify inbox/outbox/fan-out queue를 소비할 수 있는 별도 runtime을 제공해야 한다(MUST). 이 runtime은 독립적으로 배포·확장·재시작·rollback할 수 있고(MUST), process 생존과 queue listen 실행 상태를 구분하는 health/readiness와 graceful shutdown을 제공해야 한다(MUST).
 
 #### Scenario: consumer 단독 시작
 
 - **WHEN** Fedify PostgreSQL credential과 queue 구성이 유효한 상태에서 queue consumer runtime만 시작한다
 - **THEN** runtime은 Web listener나 Temporal task queue를 시작하지 않고 Fedify inbox/outbox/fan-out consumer를 시작한다
-- **AND** liveness는 process 생존을, readiness는 새 queue 작업 처리 가능 여부를 나타낸다
+- **AND** liveness는 process 생존을, readiness는 consumer가 종료 중이 아니고 Fedify queue listen을 실행 중임을 나타낸다
 
 #### Scenario: 잘못된 consumer 구성
 
@@ -120,20 +120,27 @@
 - **THEN** Web/API와 Temporal Worker replica 또는 배포 상태를 함께 바꿀 필요가 없다
 - **AND** 같은 PostgreSQL queue의 ordering과 다중 worker 안전성은 Fedify adapter가 유지한다
 
-### Requirement: Queue adapter startup과 restart 검증
+### Requirement: Queue adapter integration과 queued persistence 검증
 
-**Authority / Provenance:** PROD-448. 시스템은 producer와 consumer가 readiness를 제공하기 전에 공식 adapter의 connection과 initialization을 검증해야 하며(MUST), 격리 PostgreSQL에서 accepted message의 restart 뒤 재소비 가능성을 검증해야 한다(MUST). production backlog·처리 지연·retry/permanent-failure metric, exporter와 dashboard는 이 capability의 완료 조건이 아니다(MUST NOT).
+**Authority / Provenance:** PROD-448. 시스템은 official adapter의 enqueue/listen이 connection과 implicit initialization을 소유하게 해야 하며(MUST), 격리 PostgreSQL에서 accepted-but-not-dequeued message가 producer connection 종료와 consumer 재연결 뒤 소비되는지 검증해야 한다(MUST). production backlog metric과 dequeue 뒤 handler process crash redelivery 보강은 이 capability의 완료 조건이 아니다(MUST NOT).
 
-#### Scenario: 잘못된 queue 구성으로 producer 시작
+#### Scenario: adapter 오류 전파
 
-- **WHEN** producer mode의 queue connection, credential 또는 adapter initialization이 실패한다
-- **THEN** API/Web runtime은 readiness를 제공하거나 direct delivery로 fallback하지 않고 시작에 실패한다
+- **WHEN** queue가 구성된 runtime의 enqueue 또는 listen에서 URL·credential·connection·implicit initialization이 실패한다
+- **THEN** official adapter 오류는 호출자 또는 consumer process 실패로 전달된다
+- **AND** package는 custom parser, owner connection 또는 direct delivery로 오류를 우회하지 않는다
 
-#### Scenario: restart 복구 검증
+#### Scenario: dequeue 전 queued persistence 검증
 
-- **WHEN** 수락된 inbox/outbox message가 남은 상태에서 consumer를 중단·재시작하고 동일 message 실행을 재현한다
-- **THEN** 수락된 작업의 재소비 가능성과 기존 domain idempotency 수렴을 검증할 수 있다
+- **WHEN** queue가 message를 수락한 뒤 consumer가 dequeue하기 전에 producer connection을 닫고 새 consumer connection을 시작한다
+- **THEN** 새 consumer는 같은 queued message를 소비할 수 있다
 - **AND** 검증을 위해 production queue를 purge하거나 production message를 수동 재실행하지 않는다
+
+#### Scenario: dequeue 뒤 process crash
+
+- **WHEN** official adapter가 message를 dequeue한 뒤 handler 완료 전에 consumer process가 종료된다
+- **THEN** PROD-448은 해당 message의 재전달을 보장하지 않는다
+- **AND** Kosmo는 이를 보강하는 custom ack, lease, requeue, ledger 또는 relay를 구현하지 않는다
 
 ### Requirement: Production 활성화 승인 경계
 
@@ -148,8 +155,8 @@
 #### Scenario: producer mode의 atomic configuration
 
 - **WHEN** Web 또는 API에서 queue producer mode를 활성화한다
-- **THEN** 해당 producer는 완전한 Fedify queue credential로 공식 adapter를 시작하고 adapter가 connection 대상 database의 queue table/index를 idempotent하게 초기화하게 한다
-- **AND** enabled 상태의 누락·부분 credential 또는 initialization 실패는 direct delivery나 owner/API DB fallback 없이 실패한다
+- **THEN** Helm은 완전한 Fedify queue credential을 runtime에 주입하고 official adapter가 첫 enqueue에서 connection 대상 database의 queue table/index를 idempotent하게 초기화하게 한다
+- **AND** enabled Helm 상태의 누락·부분 selector는 render에 실패하며 adapter 오류는 direct delivery나 owner/API DB fallback으로 우회하지 않는다
 
 #### Scenario: 구현 PR 완료
 

@@ -62,8 +62,6 @@ spec:
             - name: OPERATION_DATABASE_URL
               value: {{ include "kosmo.apiPoolerDatabaseUrl" . | quote }}
             {{- if .Values.fedify.producer.enabled }}
-            - name: FEDIFY_RUNTIME_MODE
-              value: producer
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

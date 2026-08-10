@@ -9,6 +9,7 @@
 - outbound 호출자는 activity와 명시적 actor identity, audience를 Fedify에 넘기고 queue handoff 수락까지만 기다린다. 기존 callsite가 이미 정의한 ordering option은 그대로 전달하며, remote HTTP delivery, retry, 기존 ordering option 실행과 shared inbox recipient 병합 정책은 Fedify가 소유한다.
 - Web/API 요청 처리와 독립적으로 배포·확장·재시작할 수 있는 Fedify queue consumer runtime, health/readiness와 graceful shutdown 경계를 제공한다.
 - queue runtime은 명시적으로 활성화될 때 공식 adapter가 connection 대상 database 안의 queue table/index를 implicit하게 초기화하게 한다. queue connection은 domain/API DB 및 Worker execution credential과 분리하고, 실제 production queue database·credential 준비와 최초 활성화는 별도 승인·변경에 남긴다.
+- queue가 수락하고 아직 dequeue하지 않은 message의 process restart 영속성만 보장한다. dequeue 뒤 handler 완료 전 process crash 재전달을 보강하는 custom ack, lease, requeue 또는 relay는 추가하지 않는다.
 - Temporal task queue, domain state transition, Notification, domain Workflow/Workflow ID, transactional Workflow intent/outbox/relay는 추가하거나 변경하지 않는다.
 - 전환 전에는 domain effects Workflow가 기존 Fedify delivery Activity를 호출하고 Temporal Activity가 delivery request 실패를 재시도할 수 있다. PROD-448 queue producer를 활성화한 뒤에는 queue handoff 수락이 그 Activity의 성공 경계가 되며, 이후 remote HTTP retry와 기존 ordering option 실행은 Fedify만 소유한다. 이 전환은 domain Workflow 구현을 선행 조건으로 만들지 않는다.
 

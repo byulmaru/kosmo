@@ -64,8 +64,6 @@ spec:
               value: {{ .Values.fedify.consumer.health.port | quote }}
             - name: HOST
               value: "0.0.0.0"
-            - name: FEDIFY_RUNTIME_MODE
-              value: consumer
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

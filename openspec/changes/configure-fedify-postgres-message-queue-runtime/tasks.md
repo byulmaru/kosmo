@@ -60,9 +60,9 @@ Fedify producer와 consumer가 같은 durable PostgreSQL inbox/outbox/fan-out tr
 
 - [x] 2.1 Fedify version에 맞는 공식 PostgreSQL MessageQueue dependency를 package manager CLI로 추가한다.
 - [x] 2.2 API/Web/consumer의 queue transport connection을 domain/API DB와 Worker execution DB에서 분리하고 명시적 종료 lifecycle을 구현한다.
-- [x] 2.3 명시적 default-off queue mode와 atomic validation을 추가하고, enabled mode의 direct/owner fallback과 이중 발송을 금지한다.
+- [x] 2.3 Helm의 명시적 default-off producer/consumer flag로 atomic credential 주입을 제어하고 package-level runtime mode 없이 direct/owner fallback과 이중 발송을 금지한다.
 - [x] 2.4 inbox/outbox/fan-out queue 구성을 production federation registration에 연결한다.
-- [x] 2.5 test DB wrapper가 격리 transport URL을 명시하도록 하고 exact adapter implicit initialization, 완전/부분 구성과 connection cleanup 회귀 검증을 추가한다.
+- [x] 2.5 기존 test DB wrapper의 격리 `DATABASE_URL`로 exact adapter implicit initialization, reconnect consume와 connection cleanup 회귀 검증을 추가한다.
 
 ## 3. PROD-448 inbound/outbound transport ownership 전환
 
@@ -88,7 +88,7 @@ inbound sender와 outbound domain effect가 Fedify queue handoff까지만 기다
 
 **Verification**
 
-- 실제 PostgreSQL queue로 personal/shared inbox 수락과 listener 지연 실행, enqueue 실패 응답, restart 뒤 재소비를 검증한다.
+- 실제 PostgreSQL queue로 personal/shared inbox 수락과 listener 지연 실행, enqueue 실패 응답, dequeue 전 reconnect consume을 검증한다.
 - 느린/무응답 remote inbox에서도 outbound producer가 queue handoff 뒤 반환하고, Fedify가 retry, 기존 ordering option과 shared inbox fan-out recipient 병합을 소유하는지 검증한다.
 
 - [x] 3.1 Web ingress를 enqueue-only producer로 전환하고 personal/shared inbox가 같은 official inbox queue를 사용하게 한다.
@@ -124,7 +124,7 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 - [x] 4.3 공통 image에 독립 consumer command를 포함하고 기본 비활성 Helm component를 추가한다.
 - [x] 4.4 dev/prod opt-in Helm lint/render, 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증한다.
 
-## 5. PROD-448 queue startup과 안전한 복구 evidence
+## 5. PROD-448 adapter integration과 queued persistence evidence
 
 **Authority / Provenance**
 
@@ -132,21 +132,22 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 
 **Deliverable**
 
-producer/consumer가 readiness 전에 official adapter connection과 initialization을 확인하고, 격리 queue에서 restart 뒤 accepted message 재소비와 안전한 connection cleanup을 검증할 수 있다.
+official adapter가 connection과 implicit initialization을 소유하고, 격리 queue에서 dequeue 전 accepted message의 reconnect consume와 안전한 connection cleanup을 검증할 수 있다.
 
 **Guardrails**
 
 - production backlog·처리 지연·retry/permanent-failure metric, exporter와 dashboard를 이 change에 추가하지 않는다.
 - raw Activity payload, database credential와 signing key material을 startup error에 포함하지 않는다.
+- dequeue 뒤 handler process crash redelivery를 보강하는 custom ack, lease, requeue, ledger 또는 relay를 추가하지 않는다.
 
 **Verification**
 
-- producer/consumer module startup이 잘못된 connection·credential·adapter initialization에서 readiness 전에 실패하는지 확인한다.
-- consumer restart와 accepted message 재소비, queue/domain PostgreSQL connection cleanup을 확인한다.
+- adapter enqueue/listen 오류가 custom parser나 fallback 없이 전달되는지 확인한다.
+- producer connection 종료 뒤 새 consumer connection이 dequeue 전 accepted message를 소비하고 queue/domain PostgreSQL connection을 정리하는지 확인한다.
 
-- [x] 5.1 official adapter의 normal lazy initialization을 producer/consumer 공통 module startup에서 완료하고 실패를 process startup 실패로 유지한다.
-- [x] 5.2 configuration/startup failure에 payload·credential을 추가하지 않고 direct/owner fallback을 금지한다.
-- [x] 5.3 격리 queue에서 depth, consume와 abort/restart 가능한 queue/domain connection cleanup을 검증하고 production purge/replay를 추가하지 않는다.
+- [x] 5.1 official adapter의 enqueue/listen lazy initialization을 그대로 사용하고 package-level startup probe를 추가하지 않는다.
+- [x] 5.2 adapter configuration/connection failure에 payload·credential을 추가하지 않고 direct/owner fallback을 금지한다.
+- [x] 5.3 격리 queue에서 dequeue 전 reconnect consume와 queue/domain connection cleanup을 검증하고 in-flight crash replay나 production purge/replay를 추가하지 않는다.
 
 ## 6. PROD-448 PR completion 검증과 publication
 
@@ -196,5 +197,5 @@ PR completion과 별도로 dev 환경에서 실제 Fedify queue producer/consume
 - dev 미실행이면 미실행 사유와 PR completion evidence만 명확히 보고한다.
 
 - [ ] 7.1 dev 현재 상태와 안전한 canary/rollback 대상을 확인하고 live verification 범위를 기록한다.
-- [ ] 7.2 dev에서 producer handoff, consumer 처리, queue depth와 restart 복구를 검증한다.
+- [ ] 7.2 dev에서 producer handoff, consumer 처리, queue depth와 dequeue 전 queued-message persistence를 검증한다.
 - [ ] 7.3 dev live 결과와 남은 production apply/cutover gate를 Linear와 PR에 구분해 기록한다.

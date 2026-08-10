@@ -83,10 +83,10 @@
 - Authority / Provenance: PROD-448
 - Status: Active
 - Context / Problem: credential 존재를 activation으로 사용하면 production DDL/cutover 승인을 우회하고, queue를 항상 필수로 만들면 기존 deployment와 rollback이 기동 불가해진다.
-- Decision Outcome: producer와 consumer queue mode를 명시적 default-off 설정으로 제어한다. disabled producer만 기존 direct mode를 유지하고, enabled mode는 완전한 transport credential이 없거나 official adapter initialization이 실패하면 direct/owner fallback 없이 fail closed한다. 명시적 activation 뒤의 adapter implicit DDL은 허용한다.
-- Alternatives Considered: credential-presence activation, 항상 queue-only startup, enabled 상태의 silent direct fallback.
-- Consequences: Web/API/consumer와 Helm default/opt-in render가 같은 mode contract를 공유해야 하며 direct와 queue가 동시에 발송해서는 안 된다.
-- Confirmation / Follow-up: disabled, enabled-complete, enabled-partial configuration과 Helm render test로 activation과 rollback을 검증한다.
+- Decision Outcome: Helm의 default-off producer/consumer flag가 queue credential 환경변수 주입과 consumer Deployment 생성을 제어한다. package는 별도 `direct|producer|consumer` 상태 머신을 만들지 않고 queue URL이 주입된 federation에만 official adapter를 연결하며, consumer command는 queue URL이 없으면 실패한다. adapter가 URL·credential·connection·implicit initialization 오류를 직접 반환한다.
+- Alternatives Considered: package-level 3-state runtime mode와 수동 URL/password parser, credential-presence만으로 Helm workload를 활성화, 항상 queue-only startup.
+- Consequences: credential values가 존재해도 Helm flag가 꺼져 있으면 runtime에 주입되지 않아 기존 direct mode를 유지한다. enabled Helm render는 완전한 Secret selector를 요구하고, queue가 구성된 runtime은 실패를 direct/owner connection으로 우회하지 않는다.
+- Confirmation / Follow-up: default, producer, consumer와 incomplete credential Helm render 및 실제 adapter enqueue/listen smoke test로 activation과 rollback을 검증한다.
 
 ### Production queue database 준비와 runtime 활성화는 별도 승인한다
 
@@ -107,10 +107,22 @@
 - Authority / Provenance: PROD-448 사용자 review 결정과 갱신된 Linear 본문
 - Status: Active
 - Context / Problem: official adapter startup/restart 검증과 production backlog·처리 지연·retry/permanent-failure 관측 backend는 별도 운영 lifecycle과 배포 책임을 가진다.
-- Decision Outcome: PROD-448은 `getDepth()`를 adapter startup과 격리 PostgreSQL 검증에만 사용한다. production metric, exporter, dashboard 또는 주기적 polling endpoint는 완료 조건에 포함하지 않는다.
+- Decision Outcome: PROD-448은 production metric, exporter, dashboard 또는 주기적 polling endpoint를 완료 조건에 포함하지 않는다. startup/readiness를 위해 `getDepth()`를 중복 호출하지 않고 enqueue/listen의 official lazy initialization을 사용한다.
 - Alternatives Considered: consumer private endpoint, 주기적 depth logger, OpenTelemetry exporter를 이 PR에 추가하는 방식.
 - Consequences: queue runtime은 별도 관측 backend 없이도 PR completion 가능하며, 운영 observability가 필요하면 독립 capability가 소유한다.
 - Confirmation / Follow-up: spec/task/PR 설명이 startup 검증을 runtime backlog 관측으로 과장하지 않는지 확인한다.
+
+### dequeue 뒤 handler process crash 누락을 adapter 밖에서 보강하지 않는다
+
+- Decision Date: 2026-08-11
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-448 본문과 2026-08-05 contract correction 댓글
+- Status: Active
+- Context / Problem: `PostgresMessageQueue` 2.3은 message row를 dequeue한 뒤 handler를 호출하므로 handler 완료 전 process crash에 대한 ack/redelivery 보장을 제공하지 않는다.
+- Decision Outcome: PROD-448은 queue가 수락하고 아직 dequeue하지 않은 message가 producer/ingress 종료와 consumer 재연결 뒤 소비되는 영속성만 검증한다. dequeue→handler crash window는 수용하고 이를 보강하는 custom ack, lease, requeue, ledger 또는 relay를 구현하지 않는다.
+- Alternatives Considered: Kosmo-owned ack table/lease worker, transactional relay, adapter 내부 semantics를 복제하는 wrapper.
+- Consequences: ordinary handler/remote failure retry는 살아 있는 Fedify consumer가 소유하지만 process crash 중 in-flight message의 at-least-once delivery는 주장하지 않는다.
+- Confirmation / Follow-up: 통합 테스트와 PR 설명이 queued persistence를 in-flight crash redelivery로 확장하지 않는지 확인한다.
 
 ## Remaining Decisions
 

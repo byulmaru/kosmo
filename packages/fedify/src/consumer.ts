@@ -5,7 +5,7 @@ import { federation } from './federation';
 import { closeFedifyQueue, fedifyQueue } from './queue';
 import type { Server } from 'node:http';
 
-export const healthStatus = (
+const healthStatus = (
   path: string | undefined,
   state: 'starting' | 'ready' | 'stopping',
 ): number => {
@@ -16,14 +16,6 @@ export const healthStatus = (
     return state === 'ready' ? 200 : 503;
   }
   return 404;
-};
-
-type ConsumerOptions = {
-  readonly mode?: string;
-  readonly environment?: NodeJS.ProcessEnv;
-  readonly startQueue?: (signal: AbortSignal) => Promise<void>;
-  readonly closeQueue?: () => Promise<void>;
-  readonly createServer?: typeof createServer;
 };
 
 const parsePort = (environment: NodeJS.ProcessEnv): number => {
@@ -48,28 +40,18 @@ const closeHttpServer = async (server: Server, listening: boolean): Promise<void
  * Temporal worker is started here; the only long-running task is
  * Federation.startQueue() over the shared PostgreSQL message queue.
  */
-export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<void> {
-  const environment = options.environment ?? process.env;
-  const mode = options.mode ?? (environment.FEDIFY_RUNTIME_MODE?.trim() || 'direct');
-  if (mode !== 'consumer') {
-    throw new Error(
-      `Fedify queue consumer requires FEDIFY_RUNTIME_MODE=consumer (received ${mode}).`,
-    );
-  }
-  if (!fedifyQueue && !options.startQueue) {
-    throw new Error('Fedify queue consumer requires a PostgreSQL queue.');
+async function runFedifyConsumer(): Promise<void> {
+  if (!fedifyQueue) {
+    throw new Error('FEDIFY_QUEUE_DATABASE_URL is required.');
   }
 
-  const startQueue =
-    options.startQueue ?? ((signal: AbortSignal) => federation.startQueue(undefined, { signal }));
-  const closeQueue = options.closeQueue ?? closeFedifyQueue;
-  const port = parsePort(environment);
-  const host = environment.HOST?.trim() || '127.0.0.1';
+  const port = parsePort(process.env);
+  const host = process.env.HOST?.trim() || '127.0.0.1';
   let state: 'starting' | 'ready' | 'stopping' = 'starting';
   let listening = false;
   let signalReceived = false;
   const abortController = new AbortController();
-  const server = (options.createServer ?? createServer)((request, response) => {
+  const server = createServer((request, response) => {
     const path = request.url?.split('?', 1)[0];
     response.writeHead(healthStatus(path, state)).end();
   });
@@ -91,7 +73,7 @@ export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<
       return;
     }
 
-    const queueRun = startQueue(abortController.signal);
+    const queueRun = federation.startQueue(undefined, { signal: abortController.signal });
     state = 'ready';
     await queueRun;
   } catch (error) {
@@ -107,7 +89,7 @@ export async function runFedifyConsumer(options: ConsumerOptions = {}): Promise<
     process.off('SIGINT', stop);
     abortController.abort();
     try {
-      await closeQueue();
+      await closeFedifyQueue();
     } finally {
       try {
         await pg.end({ timeout: 5 });

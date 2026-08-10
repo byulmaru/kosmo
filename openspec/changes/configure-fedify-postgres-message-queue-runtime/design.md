@@ -13,7 +13,7 @@ Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue
 - inbound inbox와 outbound outbox/fan-out을 공식 `@fedify/postgres` adapter에 영속 handoff한다.
 - Web producer와 별도 Fedify consumer를 같은 federation contract 위에서 분리한다.
 - queue handoff 수락을 application-facing 성공 경계로 만들고 remote retry, 기존 ordering option 실행과 shared inbox recipient 병합을 Fedify 한 곳에 둔다.
-- 독립 Deployment, health/readiness, graceful shutdown과 adapter startup/restart 검증을 제공한다.
+- 독립 Deployment, health/readiness, graceful shutdown과 dequeue 전 queued-message persistence 검증을 제공한다.
 - production queue database·credential 준비, 최초 adapter initialization, rollout과 live traffic 전환을 별도 승인 가능한 단계로 유지한다.
 - queue 활성화 전 Temporal Activity의 delivery request retry와 활성화 후 Fedify의 remote delivery retry를 단계적으로 전환하고, domain Workflow 구현을 이 change의 prerequisite로 만들지 않는다.
 
@@ -44,11 +44,11 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 1. 최신 main에서 federation construction을 하나의 production registration factory로 정리한다. Web producer와 Fedify consumer는 같은 actor/object/inbox listener registration을 재사용하고, listener SQL은 현재 trusted ingress DB 동작을 보존한다. generic execution-context seam이나 handler SQL migration은 추가하지 않는다.
 2. exact Fedify 2.3 호환 `@fedify/postgres` dependency, `PostgresMessageQueue`와 전용 PostgreSQL client/pool을 추가하고, inbox/outbox/fan-out에 같은 durable transport contract를 제공한다. 역할을 분리한 queue instance/table을 선택하더라도 enqueue와 consumer 양쪽에서 정확히 같은 구성을 사용한다. PROD-448은 별도 KV adapter를 추가하지 않는다.
 3. producer federation은 `manuallyStartQueue: true`로 구성해 Web/API process가 queue를 소비하지 않게 한다. API/Web producer와 consumer의 queue transport connection은 API domain DB 및 trusted Worker execution DB와 분리하고, API에 Worker credential을 주입하지 않는다. queue consumer entrypoint는 같은 federation의 `startQueue()`만 실행하고 public HTTP listener나 Temporal Worker를 시작하지 않는다.
-4. consumer process는 작은 probe server 또는 동등한 platform-native probe 경계를 두어 process 생존과 실제 queue 시작 완료를 분리한다. SIGTERM/SIGINT에서는 readiness를 내린 뒤 AbortController로 Fedify listener를 중단하고 queue용 PostgreSQL client를 정리한다.
+4. consumer process는 작은 probe server 또는 동등한 platform-native probe 경계를 둔다. SIGTERM/SIGINT에서는 readiness를 내린 뒤 AbortController로 Fedify listener를 중단하고 queue용 PostgreSQL client를 정리한다.
 5. 공통 image에 별도 `fedify-queue` command를 추가하고 Helm에 Web/Temporal Worker와 독립된 기본 비활성 Fedify consumer Deployment를 둔다. Service/Ingress는 만들지 않고 replica/resource/probe/Fedify credential을 별도로 render한다.
 6. exact adapter의 implicit `initialize()`가 queue connection 대상 database 안의 기본 table/index를 소유하게 하고 Drizzle domain migration, custom DDL 또는 transport ledger를 만들지 않는다. dev/test에서는 격리 DB에서 초기화를 검증한다. production isolation이 필요하면 custom schema보다 별도 queue database/credential을 우선하고, 그 database 준비와 최초 producer/consumer 활성화는 별도 승인한다.
-7. 기존 activity별 delivery 테스트는 identity/audience와 이미 존재하는 Fedify ordering option을 보존하는지만 검증한다. 새 integration test는 실제 PostgreSQL queue로 inbound/outbound handoff, restart 후 소비와 Fedify-owned remote retry 경계를 검증한다. protocol-level idempotency나 새로운 ordering contract를 이 change의 검증 대상으로 확장하지 않는다.
-8. queue mode는 producer와 consumer 모두 명시적 default-off flag로 제어한다. disabled일 때만 기존 direct mode를 유지하고, enabled일 때 transport credential이 빠지거나 adapter initialization이 실패하면 direct/owner fallback 없이 fail closed한다. credential 존재만으로 활성화하지 않지만 명시적 activation 뒤에는 adapter implicit DDL을 허용한다.
+7. 기존 activity별 delivery 테스트는 identity/audience와 이미 존재하는 Fedify ordering option을 보존하는지만 검증한다. 새 integration test는 실제 PostgreSQL queue가 수락한 message를 consumer가 연결되기 전에 producer connection을 닫아도 새 connection에서 소비하는지만 검증한다. dequeue 뒤 handler process crash redelivery, protocol-level idempotency나 새로운 ordering contract를 이 change의 검증 대상으로 확장하지 않는다.
+8. Helm producer/consumer flag가 default-off 활성화와 queue credential 주입을 제어한다. package-level runtime mode, custom config parser와 startup `getDepth()` probe를 추가하지 않고 official adapter의 enqueue/listen lazy initialization과 오류를 그대로 사용한다.
 
 ### Allowed Alternatives
 
@@ -70,7 +70,7 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 
 ## Risks / Trade-offs
 
-- [Fedify adapter의 실제 crash/retry 보장이 최신 PROD-448 완료 기준보다 약할 수 있음] → exact version의 실제 PostgreSQL integration test로 dequeue 중 process termination과 restart를 검증하고, 보장이 성립하지 않으면 custom relay를 추가하지 말고 Linear/OpenSpec upstream 계약을 다시 검토한다.
+- [dequeue 뒤 handler 완료 전 process crash에서 message가 유실될 수 있음] → official adapter의 현재 보장 수준으로 명시해 수용하고 custom ack/requeue/relay를 추가하지 않는다. 통합 테스트는 dequeue 전 queued persistence만 증명한다.
 - [분리 consumer 도입 시 Web과 worker registration drift] → 같은 production registration factory와 동일한 configuration contract를 사용하고 producer/consumer compatibility test를 둔다.
 - [PostgreSQL connection starvation] → queue 전용 pool과 보수적 concurrency를 기본으로 하고, parallelism을 늘릴 때 pool headroom과 backlog drain을 함께 검증한다.
 - [implicit adapter DDL이 의도하지 않은 database를 변경] → queue transport URL을 domain database와 분리하고 production queue database/credential 준비 및 최초 activation을 하나의 명시적 승인 대상으로 제시한다.
@@ -83,7 +83,7 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 
 1. PROD-706 취소와 PR #543 unmerged close를 기록하고 최신 main에서 queue runtime baseline을 다시 조사한다.
 2. dependency, queue construction, producer/consumer 분리, entrypoint, probes와 격리 PostgreSQL 통합 테스트를 구현한다.
-3. local/CI에서 adapter implicit initialization, handoff, restart, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 Helm default/opt-in render를 검증한다.
+3. local/CI에서 adapter implicit initialization, dequeue 전 queued persistence, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 Helm default/opt-in render를 검증한다.
 4. 구현 PR은 production mutation이나 domain Workflow 완료 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다. 이 시점에도 direct mode를 사용하는 Activity는 기존 delivery request 실패를 Temporal retry 경계에 남길 수 있다.
 5. 별도 승인을 받은 경우에만 dev queue mode를 활성화해 adapter initialization, consumer rollout과 live enqueue/consume/restart를 검증한다.
 6. production은 다시 queue database/credential과 backlog 상태를 확인하고, 별도 승인된 queue database 준비 → consumer 최초 activation/implicit initialization → producer queue cutover 순서로 진행한다. producer cutover 뒤 Activity 성공은 queue 수락이며 remote HTTP retry/order는 Fedify만 소유한다. 각 단계는 이전 direct path 또는 disabled consumer로 rollback 가능해야 한다.

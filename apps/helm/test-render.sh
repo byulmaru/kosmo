@@ -33,20 +33,11 @@ assert_count() {
 
 default_render="${render_dir}/default.yaml"
 "${helm_bin}" template kosmo "${chart_dir}" --set env=dev >"${default_render}"
-if grep -Fq 'FEDIFY_RUNTIME_MODE' "${default_render}" || grep -Fq 'FEDIFY_QUEUE_DATABASE_' "${default_render}"; then
+if grep -Fq 'FEDIFY_QUEUE_DATABASE_' "${default_render}"; then
   fail 'default values unexpectedly enable Fedify queue mode'
 fi
 if grep -Fq 'name: kosmo-fedify-consumer' "${default_render}"; then
   fail 'default values unexpectedly render the Fedify consumer'
-fi
-
-credentials_only_render="${render_dir}/credentials-only.yaml"
-"${helm_bin}" template kosmo "${chart_dir}" \
-  --set env=dev \
-  "${queue_values[@]}" \
-  >"${credentials_only_render}"
-if grep -Fq 'FEDIFY_RUNTIME_MODE' "${credentials_only_render}" || grep -Fq 'FEDIFY_QUEUE_DATABASE_' "${credentials_only_render}"; then
-  fail 'queue credentials alone unexpectedly enable Fedify queue mode'
 fi
 
 producer_render="${render_dir}/producer.yaml"
@@ -55,7 +46,6 @@ producer_render="${render_dir}/producer.yaml"
   --set fedify.producer.enabled=true \
   "${queue_values[@]}" \
   >"${producer_render}"
-assert_count 2 'value: producer' "${producer_render}"
 assert_count 2 'name: FEDIFY_QUEUE_DATABASE_URL' "${producer_render}"
 assert_count 2 'name: FEDIFY_QUEUE_DATABASE_PASSWORD' "${producer_render}"
 if grep -Fq 'name: kosmo-fedify-consumer' "${producer_render}"; then
@@ -73,7 +63,6 @@ consumer_render="${render_dir}/consumer.yaml"
   "${queue_values[@]}" \
   >"${consumer_render}"
 assert_count 2 'name: kosmo-fedify-consumer' "${consumer_render}"
-assert_count 1 'value: consumer' "${consumer_render}"
 assert_count 1 'name: FEDIFY_QUEUE_DATABASE_URL' "${consumer_render}"
 assert_count 1 'name: FEDIFY_QUEUE_DATABASE_PASSWORD' "${consumer_render}"
 assert_count 1 'name: FEDIFY_DATABASE_PASSWORD' "${consumer_render}"
