@@ -1,6 +1,6 @@
 {{- if eq .Values.env "prod" }}
 {{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
-{{- range $runtime := list "api" "fedify" }}
+{{- range $runtime := list "api" "worker" }}
 {{- $resourceName := printf "%s-postgres-%s" $releaseName $runtime }}
 ---
 apiVersion: postgresql.cnpg.io/v1
@@ -24,7 +24,7 @@ spec:
   createdb: false
   createrole: false
   replication: false
-  bypassrls: {{ eq $runtime "fedify" }}
+  bypassrls: {{ eq $runtime "worker" }}
   inRoles: []
   passwordSecret:
     name: {{ $resourceName }}
