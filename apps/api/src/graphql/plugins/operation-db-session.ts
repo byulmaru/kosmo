@@ -7,6 +7,7 @@ import type { Plugin } from 'graphql-yoga';
 import type { UserContext } from '@/context';
 
 type CreateOperationDatabase = () => OperationDatabaseOwner;
+type CloseOptions = { force?: boolean };
 
 export type OperationDatabaseSessionOptions = {
   createDatabase?: CreateOperationDatabase;
@@ -26,6 +27,36 @@ const setActorSession = async (context: UserContext, database: OperationDatabase
 const getOperationType = (document: DocumentNode, operationName?: string) =>
   getOperationAST(document, operationName)?.operation;
 
+const getAbortReason = (signal: AbortSignal) =>
+  signal.reason ?? new Error('GraphQL operation was aborted.');
+
+const waitForActorSession = async (
+  initialization: Promise<unknown>,
+  signal: AbortSignal | undefined,
+  close: (options?: CloseOptions) => Promise<void>,
+) => {
+  if (!signal) {
+    await initialization;
+    return;
+  }
+
+  const { promise: aborted, reject } = Promise.withResolvers<never>();
+  const onAbort = () => {
+    void close({ force: true }).catch(() => undefined);
+    reject(getAbortReason(signal));
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) {
+    onAbort();
+  }
+
+  try {
+    await Promise.race([initialization, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+};
+
 /**
  * Own one closeable PostgreSQL client for each regular Query or Mutation.
  *
@@ -43,13 +74,23 @@ export const useOperationDatabaseSession = ({
     }
 
     const owner = createDatabase();
+    let closePromise: Promise<void> | undefined;
+    const close = (options?: CloseOptions) => (closePromise ??= owner.close(options));
+    const signal = (args as typeof args & { signal?: AbortSignal }).signal;
 
     return (async () => {
       try {
-        await setActorSession(context, owner.db);
+        await waitForActorSession(setActorSession(context, owner.db), signal, close);
+        if (signal?.aborted) {
+          throw getAbortReason(signal);
+        }
         extendContext({ db: owner.db });
       } catch (error) {
-        await owner.close();
+        try {
+          await close(signal?.aborted ? { force: true } : undefined);
+        } catch {
+          // Preserve the initialization or abort error as the operation result.
+        }
         throw error;
       }
 
@@ -57,7 +98,7 @@ export const useOperationDatabaseSession = ({
         try {
           return await executeFn({ ...executeArgs, contextValue: context });
         } finally {
-          await owner.close();
+          await close(signal?.aborted ? { force: true } : undefined);
         }
       });
     })();

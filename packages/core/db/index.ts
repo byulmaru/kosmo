@@ -33,7 +33,7 @@ export type DatabaseHandle = Database | Transaction;
 
 export type OperationDatabaseOwner = {
   db: Database;
-  close: () => Promise<void>;
+  close: (options?: { force?: boolean }) => Promise<void>;
 };
 
 /**
@@ -55,14 +55,11 @@ export const createOperationDatabase = (
     max: 1,
   });
   const operationDb = drizzle({ client, schema });
-  let closePromise: Promise<void> | undefined;
+  let closeTask: Promise<void> | undefined;
 
   return {
     db: operationDb,
-    close: () => {
-      closePromise ??= client.end();
-      return closePromise;
-    },
+    close: (options) => (closeTask ??= options?.force ? client.end({ timeout: 0 }) : client.end()),
   };
 };
 
