@@ -1,6 +1,6 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
 {{- $queue := .Values.postgres.credentials.fedifyQueue -}}
-{{- $trusted := .Values.postgres.credentials.fedify -}}
+{{- $trusted := .Values.postgres.credentials.worker -}}
 {{- if .Values.fedify.consumer.enabled }}
 apiVersion: v1
 kind: ServiceAccount
@@ -71,13 +71,13 @@ spec:
                   key: {{ required "postgres.credentials.fedifyQueue.passwordSecret.key is required when the Fedify consumer is enabled" $queue.passwordSecret.key | quote }}
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ required "postgres.credentials.fedifyQueue.databaseUrl is required when the Fedify consumer is enabled" $queue.databaseUrl | quote }}
-            - name: FEDIFY_DATABASE_PASSWORD
+            - name: WORKER_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ required "postgres.credentials.fedify.passwordSecret.name is required when the Fedify consumer is enabled" $trusted.passwordSecret.name | quote }}
-                  key: {{ required "postgres.credentials.fedify.passwordSecret.key is required when the Fedify consumer is enabled" $trusted.passwordSecret.key | quote }}
+                  name: {{ required "postgres.credentials.worker.passwordSecret.name is required when the Fedify consumer is enabled" $trusted.passwordSecret.name | quote }}
+                  key: {{ required "postgres.credentials.worker.passwordSecret.key is required when the Fedify consumer is enabled" $trusted.passwordSecret.key | quote }}
             - name: DATABASE_URL
-              value: {{ required "postgres.credentials.fedify.databaseUrl is required when the Fedify consumer is enabled" $trusted.databaseUrl | quote }}
+              value: {{ required "postgres.credentials.worker.databaseUrl is required when the Fedify consumer is enabled" $trusted.databaseUrl | quote }}
           envFrom:
             - secretRef:
                 name: env

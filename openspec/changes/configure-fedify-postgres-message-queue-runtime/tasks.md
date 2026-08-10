@@ -2,7 +2,7 @@
 
 - **Implementation / PR / dev-live evidence owner:** PROD-448
 - **Canceled former dependency:** PROD-706 / PR #543은 취소·unmerged close됐고 PROD-448 blocker가 아니다. 해당 branch나 execution-context seam을 소비하지 않는다.
-- **Consumed completed selector baseline:** PROD-709. Its completion is not queue database, role, Secret, GRANT, adapter initialization, or credential cutover completion.
+- **Selector baseline:** PROD-709에서 시작해 PROD-715 PR #564가 legacy Fedify 이름을 Worker source로 교체했다. 이 source는 trusted domain listener용이며 queue database, role, Secret, GRANT, adapter initialization 또는 MessageQueue credential cutover 완료가 아니다.
 - **Related parallel capabilities:** PROD-722/720/723/725/665. They may use existing Fedify delivery Activities before PROD-448 and are neither blocked by nor prerequisites of this change.
 - **Excluded downstream ownership:** API/Worker runtime role provisioning and production credential/GRANT cutover remain their own issues; production apply/rollout/cutover additionally requires explicit user approval.
 
@@ -12,6 +12,7 @@
 
 - `PROD-448`
 - `PROD-709`
+- `PROD-715` PR #564
 
 **Deliverable**
 
@@ -20,7 +21,7 @@
 **Guardrails**
 
 - 취소된 PROD-706 branch/PR #543을 cherry-pick하거나 generic execution-context seam을 재구현하지 않는다.
-- PROD-709의 selector 완료를 role/Secret provisioning 또는 실제 credential cutover 완료로 해석하지 않는다.
+- PROD-715의 Worker selector를 MessageQueue credential로 재사용하거나 role/Secret provisioning 또는 실제 credential cutover 완료로 해석하지 않는다.
 - Domain Workflow 구현, Temporal Worker/task queue와 transactional Workflow intent/outbox/relay를 prerequisite로 추가하지 않는다.
 
 **Verification**
@@ -28,7 +29,7 @@
 - PROD-706 취소, PR #543 unmerged close와 최신 Linear 관계를 확인하고 fresh main에서 기존 Fedify package version을 기록한다.
 - 공식 adapter의 queue start/stop, ordering, retry ownership, depth와 PostgreSQL schema/connection 요구사항을 installed exact version에서 확인한다.
 
-- [x] 1.1 PROD-706 취소·PR #543 unmerged close, PROD-709 완료와 PROD-448 최신 본문·관계를 다시 확인한다.
+- [x] 1.1 PROD-706 취소·PR #543 unmerged close, PROD-709 baseline, PROD-715 PR #564 merge와 PROD-448 최신 본문·관계를 다시 확인한다.
 - [x] 1.2 최신 main의 Fedify federation/context, credential selector, runtime image와 Helm 경계를 재조사한다.
 - [x] 1.3 현재 Fedify version과 호환되는 공식 PostgreSQL MessageQueue dependency/API 및 schema 권한 요구사항을 검증한다.
 

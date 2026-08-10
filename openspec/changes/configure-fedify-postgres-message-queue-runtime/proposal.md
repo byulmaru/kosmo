@@ -17,7 +17,7 @@
 
 - Canonical: `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`
 - Linear Contract: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4)
-- Linear Implementations: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4). 역할별 credential selector baseline은 완료된 [PROD-709](https://linear.app/byulmaru/issue/PROD-709/apifedify-runtime%EC%9D%B4-%EC%97%AD%ED%95%A0%EB%B3%84-postgresql-credential%EC%9D%84-%EC%84%A0%ED%83%9D%ED%95%A0-%EC%88%98-%EC%9E%88%EA%B2%8C-%ED%95%9C%EB%8B%A4)가 소유한다.
+- Linear Implementations: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4). 역할별 selector baseline은 PROD-709에서 시작해 PROD-715 PR #564가 `worker` 이름으로 교체했지만, MessageQueue transport credential은 PROD-715 범위가 아니며 이 change의 별도 `fedifyQueue` 입력을 사용한다.
 - Historical cancellation: [PROD-706](https://linear.app/byulmaru/issue/PROD-706/fedify-%EC%9E%91%EC%97%85%EC%97%90-%EB%AA%85%EC%8B%9C%EC%A0%81-db-execution-boundary%EB%A5%BC-%EC%B6%94%EA%B0%ED%95%9C%EB%8B%A4)과 unmerged closed PR #543의 generic execution-context seam은 구현 prerequisite가 아니다.
 - Parallel capabilities: PROD-722/720/723/725/665는 PROD-448이 차단하는 downstream이 아니라 기존 Fedify delivery Activity를 사용할 수 있는 관련 병렬 capability다.
 

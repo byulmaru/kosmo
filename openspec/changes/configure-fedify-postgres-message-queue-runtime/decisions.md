@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-448의 2026-08-10 최신 본문, 적용되는 ActivityPub canonical domain 문서, 완료된 PROD-709 selector baseline, 취소된 PROD-706 경계와 Fedify 2.3 공식 PostgreSQL MessageQueue API를 독립 대조해 transport ownership, 성공 경계, runtime 분리와 rollout 제약을 확정한다. 내부 파일 배치와 queue table 분할은 장기 호환성 결정이 아니므로 design의 비규범적 선택으로 남긴다.
+이 기록은 PROD-448의 2026-08-10 최신 본문, 적용되는 ActivityPub canonical domain 문서, PROD-709에서 시작해 PROD-715 PR #564로 `worker` 명칭이 확정된 selector baseline, 취소된 PROD-706 경계와 Fedify 2.3 공식 PostgreSQL MessageQueue API를 독립 대조해 transport ownership, 성공 경계, runtime 분리와 rollout 제약을 확정한다. 내부 파일 배치와 queue table 분할은 장기 호환성 결정이 아니므로 design의 비규범적 선택으로 남긴다.
 
 ## Decision Records
 
@@ -56,7 +56,7 @@
 
 - Decision Date: 2026-08-10
 - Decision Class: Implementation Choice
-- Authority / Provenance: PROD-448, PROD-709
+- Authority / Provenance: PROD-448, PROD-709, PROD-715 PR #564
 - Status: Active
 - Context / Problem: Web process가 queue consumer도 실행하면 federation spike와 backlog가 request event loop, 배포와 scaling을 다시 결합한다.
 - Decision Outcome: 같은 production federation registration과 queue configuration을 재사용하되 producer는 Fedify의 manual-start mode로 enqueue만 수행한다. `packages/fedify`는 library로 유지하고, 별도 non-public `apps/fedify-consumer`만 `Federation.startQueue()`를 실행하며 Web/API와 Temporal Worker와 독립된 Deployment, probe와 shutdown lifecycle을 가진다.
@@ -68,10 +68,10 @@
 
 - Decision Date: 2026-08-10
 - Decision Class: Derived Contract
-- Authority / Provenance: PROD-448, PROD-709
+- Authority / Provenance: PROD-448, PROD-709, PROD-715 PR #564
 - Status: Active
-- Context / Problem: 현재 API도 outbound producer지만 PROD-709 selector는 Web/Worker seam만 준비했다. queue DML과 consumer의 trusted domain listener SQL은 서로 다른 privilege를 요구할 수 있고, API에 Worker execution credential을 주입하면 least privilege를 깨뜨린다.
-- Decision Outcome: Web/API producer와 consumer가 사용하는 Fedify queue transport connection은 API domain DB 및 trusted Worker execution DB와 별도 입력으로 둔다. consumer listener SQL은 현재 main의 trusted ingress DB 동작을 보존한다. 취소된 PROD-706 generic execution-context seam을 재구현하지 않고, PROD-709 selector 완료를 실제 credential 전환 완료로 해석하지 않는다.
+- Context / Problem: 현재 API도 outbound producer지만 최신 main의 Worker selector는 Web trusted ingress와 Temporal Worker DB Activity 전용이며 PROD-715가 MessageQueue를 명시적으로 제외한다. queue DML과 consumer의 trusted domain listener SQL은 서로 다른 connection이고, API에 Worker execution credential을 주입하면 least privilege를 깨뜨린다.
+- Decision Outcome: Web/API producer와 consumer가 사용하는 Fedify queue transport connection은 별도 `fedifyQueue` 입력으로 두고 API domain DB 또는 Worker source로 fallback하지 않는다. consumer listener SQL만 기존 trusted ingress 경계를 위해 `worker` source를 app의 domain `DATABASE_URL`로 사용한다. 취소된 PROD-706 generic execution-context seam을 재구현하지 않고, Worker selector를 queue credential이나 실제 production cutover 완료로 해석하지 않는다.
 - Alternatives Considered: API `DATABASE_URL` 재사용, API에 Worker credential 주입, owner fallback, 범용 system/background execution context.
 - Consequences: runtime role/Secret provisioning, GRANT와 실제 production credential cutover는 별도 owner에 남고, API는 queue transport privilege만 받는다. handler SQL execution-boundary migration은 PROD-448 범위가 아니다.
 - Confirmation / Follow-up: API/Web/consumer configuration failure, Helm env render, handler DB handle lifecycle과 connection cleanup test로 credential fallback 또는 privilege 혼합이 없는지 검증한다.

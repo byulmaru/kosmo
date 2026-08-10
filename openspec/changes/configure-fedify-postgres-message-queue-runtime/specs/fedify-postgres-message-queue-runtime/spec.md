@@ -88,7 +88,7 @@
 
 ### Requirement: 독립 Fedify queue consumer runtime
 
-**Authority / Provenance:** PROD-448, PROD-709. 시스템은 Web/API request runtime과 Temporal Worker 없이도 Fedify inbox/outbox/fan-out queue를 소비할 수 있는 별도 runtime을 제공해야 한다(MUST). 이 runtime은 독립적으로 배포·확장·재시작·rollback할 수 있고(MUST), process 생존과 queue listen 실행 상태를 구분하는 health/readiness와 graceful shutdown을 제공해야 한다(MUST).
+**Authority / Provenance:** PROD-448, PROD-709, PROD-715 PR #564. 시스템은 Web/API request runtime과 Temporal Worker 없이도 Fedify inbox/outbox/fan-out queue를 소비할 수 있는 별도 runtime을 제공해야 한다(MUST). 이 runtime은 독립적으로 배포·확장·재시작·rollback할 수 있고(MUST), process 생존과 queue listen 실행 상태를 구분하는 health/readiness와 graceful shutdown을 제공해야 한다(MUST).
 
 #### Scenario: consumer 단독 시작
 
