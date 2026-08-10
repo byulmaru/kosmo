@@ -5887,6 +5887,30 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
   render: () => <ComposerStory />,
 };
 
+export const ComposerKeyboardSubmitInteraction: Story = {
+  play: async ({ canvasElement }) => {
+    const form = canvasElement.querySelector('form');
+    expect(form).not.toBeNull();
+    if (!form) {
+      return;
+    }
+    const body = within(form).getByRole('textbox', { name: '게시글 본문' });
+
+    await userEvent.type(body, 'modifier 없는 Enter는 줄바꿈으로 남습니다.');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(body).toHaveValue('modifier 없는 Enter는 줄바꿈으로 남습니다.\n'));
+
+    await userEvent.type(body, 'Command+Enter로 제출한 게시글입니다.');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() => expect(body).toHaveValue(''));
+
+    await userEvent.type(body, 'Control+Enter로 제출한 게시글입니다.');
+    await userEvent.keyboard('{Control>}{Enter}{/Control}');
+    await waitFor(() => expect(body).toHaveValue(''));
+  },
+  render: () => <ComposerStory />,
+};
+
 export const ComposerProfileDefaultVisibilitySeed: Story = {
   parameters: {
     relay: {

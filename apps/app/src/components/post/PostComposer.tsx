@@ -13,6 +13,7 @@ import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostComposerForm } from './PostComposerForm';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -572,15 +573,8 @@ function PostComposerContents({
     </>
   );
 
-  return (
-    <View
-      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
-      style={[
-        surface ? styles.surfaceRoot : styles.root,
-        !surface && replyMode ? styles.replyRoot : null,
-        { backgroundColor: theme.card, borderColor: theme.border },
-      ]}
-    >
+  const composerContent = (
+    <>
       {scrollable ? (
         <ScrollView
           contentContainerStyle={styles.surfaceEditor}
@@ -624,7 +618,21 @@ function PostComposerContents({
           </Pressable>
         </Modal>
       ) : null}
-    </View>
+    </>
+  );
+
+  return (
+    <PostComposerForm
+      accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
+      onSubmit={submit}
+      style={[
+        surface ? styles.surfaceRoot : styles.root,
+        !surface && replyMode ? styles.replyRoot : null,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
+    >
+      {composerContent}
+    </PostComposerForm>
   );
 }
 
