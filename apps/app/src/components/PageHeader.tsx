@@ -22,7 +22,12 @@ export function PageHeader(props: PageHeaderProps) {
   const theme = useTheme();
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.background, borderColor: theme.border }]}>
+    <View
+      style={[
+        styles.root,
+        { backgroundColor: theme.backgroundCanvas, borderColor: theme.borderSubtle },
+      ]}
+    >
       {props.variant === 'brand' ? (
         <>
           <View style={styles.brandActionSlot}>{props.leading}</View>
