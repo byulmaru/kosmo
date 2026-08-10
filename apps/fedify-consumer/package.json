@@ -1,0 +1,16 @@
+{
+  "name": "@kosmo/fedify-consumer",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "node --import tsx src/index.ts",
+    "test:unit": "pnpm build && node --import tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@kosmo/core": "workspace:*",
+    "@kosmo/fedify": "workspace:*",
+    "tsx": "^4.22.4"
+  }
+}

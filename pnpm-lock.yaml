@@ -327,6 +327,18 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/browser-playwright@4.1.10)(jsdom@29.1.1)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
+  apps/fedify-consumer:
+    dependencies:
+      '@kosmo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kosmo/fedify':
+        specifier: workspace:*
+        version: link:../../packages/fedify
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+
   apps/web:
     dependencies:
       '@hono/node-server':
@@ -439,9 +451,6 @@ importers:
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -449,6 +458,9 @@ importers:
       '@fedify/vocab-runtime':
         specifier: 2.3.0
         version: 2.3.0
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
 
 packages:
 

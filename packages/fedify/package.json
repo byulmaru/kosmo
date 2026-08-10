@@ -6,7 +6,6 @@
   },
   "scripts": {
     "lint:tsc": "tsc --noEmit",
-    "start:consumer": "node --import tsx src/consumer.ts",
     "test": "pnpm lint:tsc && pnpm --workspace-root test:fedify",
     "test:unit": "tsx --test --test-concurrency=1 src/*.test.ts"
   },
@@ -18,10 +17,10 @@
     "drizzle-orm": "1.0.0-beta.22",
     "entities": "^8.0.0",
     "postgres": "^3.4.9",
-    "tsx": "^4.22.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@fedify/vocab-runtime": "2.3.0"
+    "@fedify/vocab-runtime": "2.3.0",
+    "tsx": "^4.22.4"
   }
 }

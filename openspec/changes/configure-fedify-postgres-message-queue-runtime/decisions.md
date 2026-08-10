@@ -59,7 +59,7 @@
 - Authority / Provenance: PROD-448, PROD-709
 - Status: Active
 - Context / Problem: Web process가 queue consumer도 실행하면 federation spike와 backlog가 request event loop, 배포와 scaling을 다시 결합한다.
-- Decision Outcome: 같은 production federation registration과 queue configuration을 재사용하되 producer는 Fedify의 manual-start mode로 enqueue만 수행하고, 별도 non-public consumer runtime만 `Federation.startQueue()`를 실행한다. consumer는 Web/API와 Temporal Worker와 독립된 Deployment, probe와 shutdown lifecycle을 가진다.
+- Decision Outcome: 같은 production federation registration과 queue configuration을 재사용하되 producer는 Fedify의 manual-start mode로 enqueue만 수행한다. `packages/fedify`는 library로 유지하고, 별도 non-public `apps/fedify-consumer`만 `Federation.startQueue()`를 실행하며 Web/API와 Temporal Worker와 독립된 Deployment, probe와 shutdown lifecycle을 가진다.
 - Alternatives Considered: Web process 안의 자동 consumer, Temporal Worker process에 consumer 합치기, consumer마다 별도 federation listener/dispatcher registration 복제.
 - Consequences: 공통 image에 별도 command와 Helm component가 필요하다. producer/consumer configuration drift를 막아야 하며 consumer에는 Service/Ingress를 만들지 않는다.
 - Confirmation / Follow-up: Helm render, process test와 실제 queue integration에서 Web은 consume하지 않고 consumer는 public HTTP/Temporal polling을 시작하지 않는지 확인한다.
@@ -86,7 +86,7 @@
 - Decision Outcome: Helm의 default-off producer/consumer flag가 queue credential 환경변수 주입과 consumer Deployment 생성을 제어한다. package는 별도 `direct|producer|consumer` 상태 머신을 만들지 않고 queue URL이 주입된 federation에만 official adapter를 연결하며, consumer command는 queue URL이 없으면 실패한다. adapter가 URL·credential·connection·implicit initialization 오류를 직접 반환한다.
 - Alternatives Considered: package-level 3-state runtime mode와 수동 URL/password parser, credential-presence만으로 Helm workload를 활성화, 항상 queue-only startup.
 - Consequences: credential values가 존재해도 Helm flag가 꺼져 있으면 runtime에 주입되지 않아 기존 direct mode를 유지한다. enabled Helm render는 완전한 Secret selector를 요구하고, queue가 구성된 runtime은 실패를 direct/owner connection으로 우회하지 않는다.
-- Confirmation / Follow-up: default, producer, consumer와 incomplete credential Helm render 및 실제 adapter enqueue/listen smoke test로 activation과 rollback을 검증한다.
+- Confirmation / Follow-up: default, producer, consumer와 incomplete credential은 구현 시점의 일회성 Helm lint/template inspection으로 확인하고, 실제 adapter enqueue/listen smoke test로 activation과 rollback을 검증한다. 이 변경만을 위한 상시 render harness는 저장소에 추가하지 않는다.
 
 ### Production queue database 준비와 runtime 활성화는 별도 승인한다
 

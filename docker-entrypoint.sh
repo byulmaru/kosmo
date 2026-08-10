@@ -15,8 +15,8 @@ case "${1:-web}" in
     exec node --import tsx src/index.ts
     ;;
   fedify-queue)
-    cd /app/packages/fedify
-    exec node --import tsx src/consumer.ts
+    cd /app/apps/fedify-consumer
+    exec node --import tsx src/index.ts
     ;;
   migrate)
     cd /app/packages/core

@@ -41,7 +41,7 @@
 ## Impact
 
 - `@fedify/postgres` production dependency와 adapter-managed `fedify_message_v2` table/index가 queue connection 대상 PostgreSQL database에 추가된다.
-- `packages/fedify` federation construction, inbound/outbound context 생성과 queue lifecycle이 영향을 받는다.
-- 공통 runtime image에 Fedify queue consumer entrypoint가 추가되고 Helm에 기본 비활성 또는 별도 opt-in consumer Deployment, probe, resource/replica 설정과 Fedify DB credential 입력이 추가된다.
+- `packages/fedify` federation construction과 inbound/outbound context 생성이 영향을 받고, 장기 실행 queue lifecycle은 `apps/fedify-consumer`가 소유한다.
+- 공통 runtime image에 `apps/fedify-consumer`가 추가되고 Helm에 기본 비활성 또는 별도 opt-in consumer Deployment, probe, resource/replica 설정과 Fedify DB credential 입력이 추가된다.
 - 기존 Web ingress, API/Core의 Fedify 호출 경계와 ActivityPub 통합 테스트는 queue handoff 기준으로 갱신된다. API가 outbound producer인 동안 API runtime에도 API domain DB와 분리된 Fedify queue credential 입력이 필요하다.
 - 취소된 PROD-706/PR #543 코드를 cherry-pick하거나 재구현하지 않는다. queue consumer의 domain listener는 현재 main의 trusted ingress DB 동작을 보존하며, 별도 runtime role·credential cutover는 제외한다. production values 변경, Argo CD sync, Helm apply와 DB production apply는 이 change의 자동 실행 범위가 아니다.

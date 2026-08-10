@@ -53,7 +53,7 @@ export const federation: Federation<void> = createFederation<void>({
   ...(fedifyQueue
     ? {
         // Producer and consumer processes share one durable queue.  Queue
-        // listeners are started only by src/consumer.ts.
+        // listeners are started only by the dedicated Fedify consumer app.
         queue: fedifyQueue,
         manuallyStartQueue: true,
       }

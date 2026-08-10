@@ -1,8 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
-import { federation } from './federation';
-import { closeFedifyQueue, fedifyQueue } from './queue';
+import { closeFedifyQueue, federation } from '@kosmo/fedify';
 import type { Server } from 'node:http';
 
 const healthStatus = (
@@ -35,13 +34,8 @@ const closeHttpServer = async (server: Server, listening: boolean): Promise<void
   });
 };
 
-/**
- * Run the standalone Fedify consumer.  No HTTP federation listener or
- * Temporal worker is started here; the only long-running task is
- * Federation.startQueue() over the shared PostgreSQL message queue.
- */
-async function runFedifyConsumer(): Promise<void> {
-  if (!fedifyQueue) {
+async function run(): Promise<void> {
+  if (!process.env.FEDIFY_QUEUE_DATABASE_URL?.trim()) {
     throw new Error('FEDIFY_QUEUE_DATABASE_URL is required.');
   }
 
@@ -77,9 +71,6 @@ async function runFedifyConsumer(): Promise<void> {
     state = 'ready';
     await queueRun;
   } catch (error) {
-    // Abort is the expected completion path for SIGTERM/SIGINT.  Startup or
-    // queue processing failures remain fatal so readiness never reports a
-    // broken consumer as healthy.
     if (!signalReceived) {
       throw error;
     }
@@ -101,7 +92,7 @@ async function runFedifyConsumer(): Promise<void> {
 }
 
 if (import.meta.main) {
-  await runFedifyConsumer().catch((error: unknown) => {
+  await run().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });

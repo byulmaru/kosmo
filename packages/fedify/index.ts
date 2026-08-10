@@ -21,6 +21,7 @@ export {
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
 export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
+export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
   findOrMaterializeRemoteProfileActor,
