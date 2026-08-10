@@ -116,7 +116,7 @@ dev에서 Workflow-only Reply Notification과 Worker lifecycle의 실제 복구 
 - production workload와 namespace가 이 작업으로 sync되지 않았음을 확인한다.
 - OpenSpec strict validation, 관련 workspace checks와 hosted CI를 통과시킨다.
 
-- [ ] 4.1 구현 diff와 OpenSpec을 strict validation하고 관련 전체 test/lint/render를 통과시킨다.
+- [x] 4.1 구현 diff와 OpenSpec을 strict validation하고 관련 전체 test/lint/render를 통과시킨다.
 - [ ] 4.2 main dev rollout에서 Worker readiness와 실제 Reply Notification Workflow 성공을 검증한다.
 - [ ] 4.3 accepted Workflow의 transient Activity 실패 retry와 Worker restart 복구를 dev에서 검증한다.
 - [ ] 4.4 production 미변경과 보장 경계 증거를 Linear/PR에 기록하고 전체 change가 완료되면 canonical spec을 동기화해 archive한다.
