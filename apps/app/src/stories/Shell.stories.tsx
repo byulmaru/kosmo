@@ -13,7 +13,7 @@ import {
   useNavigationGuard,
 } from '@/components/shell/NavigationGuardContext';
 import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
-import { RightRail, RightRailPrivacyLink } from '@/components/shell/RightRail';
+import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -186,7 +186,7 @@ function NavigationCatalog() {
       <Section title="Right rail">
         <View style={{ height: 560, padding: spacing.lg, width: 320 }}>
           <RightRail profile={data.profile} />
-          <RightRailPrivacyLink />
+          <RightRailFooter />
         </View>
       </Section>
     </Catalog>
@@ -2244,6 +2244,7 @@ export const UniversalFull: Story = {
     const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
+    const versionLabel = canvas.getByText('버전: 개발 빌드');
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
 
@@ -2255,6 +2256,7 @@ export const UniversalFull: Story = {
     expect(rightRailStyle?.overflowY).toBe('auto');
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
     expect(privacyLink).toHaveAttribute('href', '/privacy');
+    expect(versionLabel).toBeVisible();
     expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
