@@ -4,14 +4,15 @@
 
 **Authority / Provenance**: Linear `PROD-728`, 병렬 경계 `PROD-708`, 활성화 `PROD-726`, 제외 범위 `PROD-716`.
 
-Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 독립적으로 유지된다. PROD-726 활성화에서 API `DATABASE_URL`은 MUST 기존 direct read-write Service를 사용하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 MUST Pooler Service `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우 rendered API/operation URL은 MUST 같은 username, database와 password Secret source, scheme, path와 query를 유지하고, operation URL의 host와 port를 포함한 authority만 MUST in-chart Pooler Service `<release>-postgres-pooler-rw:5432`로 교체한다. Runtime operation client는 URL query에서 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout` 세 key만 제거하고 unrelated query parameter는 유지해야 한다(MUST). 새 credential selector를 만들거나 PostgreSQL credential, role, RLS policy·grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 MUST 기존 direct read-write Service와 credential을 유지한다. 실패 시 운영자는 MUST 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포해야 하며, 그 tree에서 API `DATABASE_URL`은 direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 없어야 한다. PROD-728 Pooler 리소스와 Cluster, Web/worker/migration traffic은 MUST 유지한다.
+Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 독립적으로 유지된다. PROD-726 활성화에서 API `DATABASE_URL`은 MUST 현재 owner-compatible fallback인 기존 direct read-write Service를 사용하며 향후 API/Web principal 방향을 결정하지 않고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 MUST Pooler Service `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우 rendered API/operation URL은 MUST 현재 전환에서 같은 username, database와 password Secret source, scheme, path와 query를 유지하고, operation URL의 host와 port를 포함한 authority만 MUST in-chart Pooler Service `<release>-postgres-pooler-rw:5432`로 교체한다. Runtime operation client는 URL query에서 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout` 세 key만 제거하고 unrelated query parameter는 유지해야 한다(MUST). 새 credential selector를 만들거나 PostgreSQL credential, role, RLS policy·grant를 변경해서는 안 된다(MUST NOT). Web BFF baseline과 migration workload는 MUST 이 change에서 기존 direct read-write Service를 유지한다. #564의 CloudNativePG PgBouncer TLS/Vault/VSO static SCRAM 기반 선택적 trusted Worker `WORKER_DATABASE_*` seam은 MUST 이 GraphQL operation 경계에서 사용하지 않고 `OPERATION_DATABASE_URL`에 공급하지 않는다. API/Web principal transition은 MUST PROD-716이 소유하며, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다. 실패 시 운영자는 MUST 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포해야 하며, 그 tree에서 API `DATABASE_URL`은 current fallback direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 없어야 한다. PROD-728 Pooler 리소스와 Cluster, Web BFF baseline, migration traffic은 MUST 유지한다.
 
 #### Scenario: API operation만 Pooler로 전환한다
 
 - **WHEN** PROD-726 application activation을 지원되는 환경에 배포한다
 - **THEN** API `DATABASE_URL`은 `<release>-postgres-rw`를 사용한다
 - **AND** API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`를 사용한다
-- **AND** Web BFF, worker와 migration workload는 `<release>-postgres-rw`를 계속 사용한다
+- **AND** Web BFF baseline과 migration workload는 `<release>-postgres-rw`를 계속 사용한다
+- **AND** #564 `WORKER_DATABASE_*` seam은 `OPERATION_DATABASE_URL`에 공급되지 않는다
 - **AND** workload의 PostgreSQL Secret 참조는 변경되지 않는다
 
 #### Scenario: 전체 activation revision을 direct Service 경계로 rollback한다
@@ -19,7 +20,8 @@ Pooler 리소스는 MUST CloudNativePG Cluster 및 direct read-write Service와 
 - **WHEN** 운영자가 PROD-726 전체 activation merge/squash revision을 Git revert하고 pre-activation revision을 배포한다
 - **THEN** API `DATABASE_URL`은 기존 `<release>-postgres-rw` direct endpoint를 유지한다
 - **AND** API `OPERATION_DATABASE_URL` env와 operation plugin/code는 pre-activation revision에 존재하지 않는다
-- **AND** Web BFF, worker, migration workload, Cluster, direct Service와 PROD-728 Pooler 리소스는 유지된다
+- **AND** Web BFF baseline, migration workload, Cluster, direct Service와 PROD-728 Pooler 리소스는 유지된다
+- **AND** #564 trusted Worker seam과 API/Web principal transition(PROD-716)은 변경되지 않는다
 
 #### Scenario: configured API trio를 operation endpoint에서 재사용한다
 
@@ -51,7 +53,8 @@ API `DATABASE_URL` direct client의 기존 server timeout startup 동작은 변�
 
 - **WHEN** API request authentication 또는 startup/bootstrap이 `DATABASE_URL` direct client를 사용한다
 - **THEN** 기존 server timeout startup 동작은 변경되지 않는다
-- **AND** Web BFF, worker, migration, endpoint/credential Secret ref와 Pooler resource 설정은 변경되지 않는다
+- **AND** Web BFF baseline, migration, endpoint/credential Secret ref와 Pooler resource 설정은 변경되지 않는다
+- **AND** #564 trusted Worker seam은 이 operation 경계에서 사용하지 않는다
 
 #### Scenario: unsupported startup log가 있으면 live gate를 실패시킨다
 

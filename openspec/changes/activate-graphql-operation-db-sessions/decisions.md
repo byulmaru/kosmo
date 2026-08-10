@@ -10,11 +10,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728, Linear PROD-716
 - Status: Active
-- Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web/worker/migration은 같은 direct URL 경계를 사용한다. operation session만 Pooler로 보내야 request authentication과 다른 workload traffic이 결합되지 않고 rollback 단위가 작다.
-- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 rendered env의 username, database와 password Secret source, scheme, path와 query는 동일하게 재사용하고 operation URL의 host와 port를 포함한 authority만 in-chart Pooler Service `:5432`로 교체한다. Runtime operation client는 URL query에서 세 server timeout key만 제거하고 unrelated query parameter는 유지한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
+- Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web BFF/migration은 각자의 기존 owner-compatible direct 경계를 사용한다. PR #564(merge `2c65b6dc`)는 Web trusted federation ingress와 Temporal Worker를 위한 선택적 `WORKER_DATABASE_*` SCRAM seam을 추가했지만, 이 seam은 GraphQL operation에 공급해서는 안 된다. operation session만 Pooler로 보내야 request authentication과 다른 workload traffic이 결합되지 않고 rollback 단위가 작다.
+- Decision Outcome: API `DATABASE_URL`은 현재 owner-compatible fallback인 `<release>-postgres-rw` direct Service를 유지하고 향후 API/Web principal 방향은 결정하지 않으며, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 rendered env의 username, database와 password Secret source, scheme, path와 query는 현재 전환에서 재사용하고 operation URL의 host와 port를 포함한 authority만 in-chart Pooler Service `:5432`로 교체한다. Runtime operation client는 URL query에서 세 server timeout key만 제거하고 unrelated query parameter는 유지한다. Web BFF baseline과 migration direct endpoint는 이 change에서 유지한다. #564의 CloudNativePG PgBouncer TLS/Vault/VSO static SCRAM 기반 `WORKER_DATABASE_*` seam은 별도 실행 경계로 제외하고 `OPERATION_DATABASE_URL`에 공급하지 않는다. API/Web principal transition은 PROD-716이 소유하며, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다.
 - Alternatives Considered: API `DATABASE_URL` 자체를 Pooler로 바꾸면 request authentication·startup까지 operation endpoint와 결합된다. API/Web 전체를 동시에 전환하면 Web에 operation lifecycle이 없고 rollback이 결합된다.
-- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 보존해야 한다. Runtime은 operation client 생성 전에 세 server timeout query key만 제거하고 다른 query parameter는 보존한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
-- Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
+- Consequences: Helm은 API current fallback direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 현재 전환에서 보존해야 한다. Runtime은 operation client 생성 전에 세 server timeout query key만 제거하고 다른 query parameter는 보존한다. Web BFF baseline과 migration direct endpoint는 유지하되 #564 Worker seam은 이 operation lifecycle과 분리한다. API/Web principal transition은 PROD-716이 소유한다.
+- Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API current fallback `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web BFF/migration host와 Secret ref를 비민감하게 확인하고 `WORKER_DATABASE_*`가 operation URL에 공급되지 않음을 정적으로 확인한다.
 
 ### Pooler operation startup parameter 호환성과 actor 초기화를 분리한다
 
@@ -38,7 +38,7 @@
 - Decision Outcome: GraphQL Query/Mutation의 resolver·loader·core domain action SQL은 operation `ctx.db`를 사용하고 Mutation nested result resolver도 같은 handle을 사용한다. request authentication/startup SQL은 API `DATABASE_URL` direct를 유지한다. 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization은 trusted direct side effect 예외로 허용하되, materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`에서 실행한다. Fedify, Temporal Workflow/Activity와 worker는 GraphQL RLS 범위에서 제외한다.
 - Alternatives Considered: Query root만 operation DB로 두면 Mutation payload 결과가 RLS 밖으로 빠진다. Fedify materialization까지 GraphQL operation DB에 넣으면 protocol-owned side effect와 GraphQL RLS lifecycle이 결합된다.
 - Consequences: production GraphQL call graph에 global/raw DB fallback을 남기지 않으며, materialization 예외는 `searchProfiles`의 trusted side effect 단계로 한정한다. RLS policy·grant와 credential 전환은 이 change에서 수행하지 않는다.
-- Confirmation / Follow-up: domain별 static/integration 검증과 dev live gate에서 nested result, materialization 후 최종 query와 operation handle을 확인한다. PROD-716은 credential·role·policy/grant transition을 별도로 소유한다.
+- Confirmation / Follow-up: domain별 static/integration 검증과 dev live gate에서 nested result, materialization 후 최종 query와 operation handle을 확인한다. PROD-716은 API/Web principal credential source/cutover를 소유하고, Role/Secret provisioning, grant와 RLS policy는 각각의 별도 issue 경계로 남긴다.
 
 ### operation마다 실제 PgBouncer frontend connection을 만들고 종료한다
 
@@ -119,10 +119,10 @@
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728
 - Status: Active
 - Context / Problem: activation 실패 시 Pooler, Cluster 또는 Web/migration traffic을 out-of-band 수정하면 GitOps ownership과 독립 배포 경계를 깨뜨린다. endpoint만 되돌리면 operation plugin/code와 env가 남아 pre-activation 경계가 복원되지 않는다.
-- Decision Outcome: 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포한다. 그 revision에서 API `DATABASE_URL`은 direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 부재해야 한다. API `DATABASE_URL`, Pooler, Cluster, Web/worker/migration과 Secret은 유지하며 Pooler manifest를 prune하지 않는다.
+- Decision Outcome: 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포한다. 그 revision에서 API `DATABASE_URL`은 current owner-compatible direct fallback을 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 부재해야 한다. API fallback, Pooler, Cluster, Web BFF baseline, migration과 Secret은 유지하며 #564 Worker seam은 별도 소유 경계로 남기고 Pooler manifest를 prune하지 않는다.
 - Alternatives Considered: `OPERATION_DATABASE_URL`만 direct Service로 바꾸면 operation plugin/code가 남아 lifecycle 경계가 불일치한다. Pooler 삭제는 별도 PROD-728 resource lifecycle이고 application rollback에 포함하지 않는다. credential 변경은 PROD-716 범위다.
 - Consequences: application activation은 하나의 Git revert로 code와 endpoint env를 함께 제거하고 database migration/data rollback은 없다. Pooler는 별도 resource로 계속 Ready 상태를 유지한다.
-- Confirmation / Follow-up: pre-activation revision render에서 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재를 assertion하고 source tree에서 operation plugin/code 부재를 확인한다. sync 후 Pooler·Cluster readiness와 GraphQL health를 확인한다.
+- Confirmation / Follow-up: pre-activation revision render에서 API current fallback direct host와 `OPERATION_DATABASE_URL` env 부재를 assertion하고 source tree에서 operation plugin/code 부재를 확인한다. sync 후 Pooler·Cluster readiness와 GraphQL health를 확인하며 #564 Worker seam은 이 rollback에서 변경하지 않는다.
 
 ## Remaining Decisions
 
