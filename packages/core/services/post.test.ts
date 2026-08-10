@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import {
   Accounts,
   ActivityPubPosts,
@@ -20,7 +20,6 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
-  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -521,7 +520,7 @@ test('createPost는 caller transaction rollback에 Post와 Content를 남기지 
   assert.equal(await db.$count(PostContents), contentCount);
 });
 
-test('caller transaction의 Reply Notification은 outer commit 전에 생성하지 않는다', async () => {
+test('caller transaction의 Reply Workflow effect는 outer commit 뒤에만 실행한다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -531,10 +530,15 @@ test('caller transaction의 Reply Notification은 outer commit 전에 생성하�
     visibility: PostVisibility.PUBLIC,
   });
   let replyId: string | undefined;
+  let observerCalls = 0;
+  let postCommit: (() => Promise<void>) | undefined;
   await db.transaction(async (tx) => {
     const reply = await createPost(
       {
         document: postContentDocumentFromText('reply'),
+        onPostCommitError: () => {
+          observerCalls += 1;
+        },
         origin: 'LOCAL',
         profileId: author.id,
         replyParentId: parent.post.id,
@@ -543,16 +547,21 @@ test('caller transaction의 Reply Notification은 outer commit 전에 생성하�
       tx,
     );
     replyId = reply.post.id;
+    postCommit = reply.postCommit;
 
-    assert.equal(await tx.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 1);
+    assert.equal(await tx.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
     assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
   });
 
   assert.ok(replyId);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 1);
+  assert.ok(postCommit);
+  await postCommit();
+  await postCommit();
+  assert.equal(observerCalls, 1);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 0);
 });
 
-test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 duplicate로 backfill하지 않는다', async () => {
+test('ActivityPub Reply duplicate는 Workflow effect를 새로 만들지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -564,6 +573,7 @@ test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 
   const input = {
     document: postContentDocumentFromText('remote reply'),
     objectUri: `https://remote.example/notes/reply-notification-${author.id}`,
+    onPostCommitError: () => undefined,
     origin: 'ACTIVITYPUB' as const,
     profileId: author.id,
     publishedAt: null,
@@ -577,26 +587,16 @@ test('ActivityPub Reply는 Local Parent Author에게 알림 하나를 만들고 
   assert.ok(created);
   assert.deepEqual(results.map(({ created }) => created).sort(), [false, true]);
   assert.equal(created.created, true);
-  assert.equal(
-    await db.$count(
-      Notifications,
-      and(
-        eq(Notifications.kind, NotificationKind.REPLY),
-        eq(Notifications.recipientProfileId, recipient.id),
-        eq(Notifications.sourceId, created.post.id),
-      ),
-    ),
-    1,
-  );
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 
-  await db.delete(Notifications).where(eq(Notifications.sourceId, created.post.id));
   const duplicate = await createPost(input);
 
   assert.equal(duplicate.created, false);
+  assert.equal('postCommit' in duplicate, false);
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 });
 
-test('ActivityPub Reply의 post-commit observer 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
+test('Reply Workflow start와 observer 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -608,9 +608,10 @@ test('ActivityPub Reply의 post-commit observer 실패가 Post transaction과 �
   const objectUri = `https://remote.example/notes/reply-observer-failure-${crypto.randomUUID()}`;
   let observerCalls = 0;
 
-  await db.execute(
-    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_reply_observer_failure CHECK (false) NOT VALID`,
-  );
+  const previousAddress = process.env.TEMPORAL_ADDRESS;
+  const previousNamespace = process.env.TEMPORAL_NAMESPACE;
+  delete process.env.TEMPORAL_ADDRESS;
+  delete process.env.TEMPORAL_NAMESPACE;
   try {
     const result = await createPost({
       document: postContentDocumentFromText('remote reply'),
@@ -628,13 +629,22 @@ test('ActivityPub Reply의 post-commit observer 실패가 Post transaction과 �
     });
 
     assert.equal(result.created, true);
+    assert.equal(observerCalls, 0);
+    await result.postCommit();
     assert.equal(observerCalls, 1);
     assert.equal(result.post.replyParentId, parent.post.id);
     assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
   } finally {
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_reply_observer_failure`,
-    );
+    if (previousAddress === undefined) {
+      delete process.env.TEMPORAL_ADDRESS;
+    } else {
+      process.env.TEMPORAL_ADDRESS = previousAddress;
+    }
+    if (previousNamespace === undefined) {
+      delete process.env.TEMPORAL_NAMESPACE;
+    } else {
+      process.env.TEMPORAL_NAMESPACE = previousNamespace;
+    }
   }
 });
 

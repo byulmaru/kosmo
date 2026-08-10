@@ -5,7 +5,7 @@ version: main
 workloads:
   enabled: true
 worker:
-  enabled: false
+  enabled: true
   replicas:
     dev: 1
     prod: 2

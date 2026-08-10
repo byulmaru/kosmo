@@ -64,7 +64,7 @@ builder.mutationField('createPost', (t) =>
       const media = input.media ?? [];
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
 
-      const { post } = await createPost(
+      const result = await createPost(
         {
           accountId: ctx.session.accountId,
           document: postContentDocumentFromTextAndMedia(
@@ -86,8 +86,9 @@ builder.mutationField('createPost', (t) =>
         },
         ctx.db,
       );
+      await result.postCommit(ctx.db);
 
-      return { post };
+      return { post: result.post };
     },
   }),
 );

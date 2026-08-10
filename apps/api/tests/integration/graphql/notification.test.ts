@@ -14,7 +14,11 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { cancelProfileFollowRequest, followProfile } from '@kosmo/core/services';
+import {
+  cancelProfileFollowRequest,
+  createReplyNotification,
+  followProfile,
+} from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -638,7 +642,7 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('creates Reply Notifications after commit, suppresses self/invisible sources, and isolates insert failure', async () => {
+  test('keeps Reply Workflow projection post-commit, suppresses self/invisible sources, and isolates insert failure', async () => {
     const author = await createAuthenticatedSession();
     const recipient = await createProfile('reply-create-recipient');
     const parent = await createContentPost(recipient.id);
@@ -649,6 +653,14 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
+    assert.equal(
+      await db.$count(
+        Notifications,
+        and(eq(Notifications.kind, NotificationKind.REPLY), eq(Notifications.sourceId, reply.id)),
+      ),
+      0,
+    );
+    await createReplyNotification(reply.id);
     assert.equal(
       await db.$count(
         Notifications,
@@ -669,6 +681,12 @@ describe('Notification GraphQL Node boundary', () => {
     try {
       const failureParent = await createContentPost(recipient.id);
       assertNoGraphQLErrors(await requestCreateReply(failureParent.id, author.token));
+      const failureReply = await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.replyParentId, failureParent.id))
+        .then(firstOrThrow);
+      await assert.rejects(createReplyNotification(failureReply.id));
       assert.equal(await db.$count(Posts, eq(Posts.replyParentId, failureParent.id)), 1);
     } finally {
       await pg.unsafe(
@@ -686,6 +704,12 @@ describe('Notification GraphQL Node boundary', () => {
     assertNoGraphQLErrors(created);
     const replyId = created.data?.createPost.post.id;
     assert.ok(replyId);
+    const storedReply = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.replyParentId, parent.id))
+      .then(firstOrThrow);
+    await createReplyNotification(storedReply.id);
 
     const thread = await requestReplyDescendants(parent.id, parentAuthor.token);
     assertNoGraphQLErrors(thread);
@@ -730,6 +754,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
+    await createReplyNotification(visible.id);
     const hiddenAuthor = await createAuthenticatedSession();
     assertNoGraphQLErrors(await requestCreateReply(parent.id, hiddenAuthor.token));
     const hidden = await db
@@ -737,6 +762,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(and(eq(Posts.replyParentId, parent.id), ne(Posts.id, visible.id)))
       .then(firstOrThrow);
+    await createReplyNotification(hidden.id);
     const visibleNotification = await db
       .select()
       .from(Notifications)
@@ -785,6 +811,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
+    await createReplyNotification(reply.id);
     const notification = await db
       .select()
       .from(Notifications)
