@@ -90,7 +90,7 @@ GraphQL API workload만 CloudNativePG Pooler Service를 사용하고 Web BFF, wo
 
 - [x] 3.1 API operation endpoint와 shared API-role credential 선택을 분리해 API Rollout만 Pooler URL을 사용하게 한다.
 - [x] 3.2 Web BFF, worker, migration의 direct endpoint와 모든 Secret 참조 불변을 Helm render로 검증한다.
-- [ ] 3.3 API-only direct endpoint rollback render와 Helm/admission 정적 검증을 완료한다.
+- [x] 3.3 API-only direct endpoint rollback render와 Helm/admission 정적 검증을 완료한다.
 - [x] 3.4 application activation, operation session live gate와 API-only rollback 절차를 canonical 운영 문서에 동기화한다.
 
 ## 4. PROD-726 integration, live gate와 closeout

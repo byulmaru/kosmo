@@ -134,6 +134,42 @@ describe('GraphQL operation database session', () => {
     assert.deepEqual(thrownOwner.events, ['set-actor', 'close']);
   });
 
+  it('forwards cancellation and awaits one completed close', async () => {
+    const owner = createOwner();
+    let closeCompleted = false;
+    owner.close = async () => {
+      await Promise.resolve();
+      owner.events.push('close');
+      closeCompleted = true;
+    };
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const { context, replacement } = await createExecution({
+      owner,
+      executeFn: async (args) => {
+        receivedSignal = (args as { signal: AbortSignal }).signal;
+        await new Promise<never>((_resolve, reject) => {
+          if (receivedSignal?.aborted) {
+            reject(new Error('execution aborted'));
+            return;
+          }
+          receivedSignal?.addEventListener('abort', () => reject(new Error('execution aborted')), {
+            once: true,
+          });
+        });
+      },
+    });
+
+    assert.ok(replacement);
+    const execution = replacement({ contextValue: context, signal: controller.signal });
+    controller.abort();
+
+    await assert.rejects(async () => await execution, { message: 'execution aborted' });
+    assert.equal(receivedSignal, controller.signal);
+    assert.equal(closeCompleted, true);
+    assert.deepEqual(owner.events, ['set-actor', 'close']);
+  });
+
   it('does not allocate a session for Subscription operations', async () => {
     let created = false;
     const plugin = useOperationDatabaseSession({
