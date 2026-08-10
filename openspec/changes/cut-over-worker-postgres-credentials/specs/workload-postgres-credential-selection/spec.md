@@ -29,15 +29,16 @@
 - **WHEN** API trio를 세 값 모두 제거하고 image와 Worker 설정을 유지한다
 - **THEN** API Rollout과 Web BFF 기본 연결만 기존 owner source로 함께 돌아가며 Worker `WORKER_DATABASE_*` 선택은 바뀌지 않는다
 
-### Requirement: Worker source는 trusted Web ingress와 Temporal Worker에만 제공한다
+### Requirement: Worker 역할명 password fallback source는 trusted Web ingress와 Temporal Worker에만 제공한다
 
-**Authority / Provenance:** Linear `PROD-715` — 시스템은 Web 프로세스의 trusted federation ingress와 Temporal Worker DB Activity에 하나의 Worker PostgreSQL URL과 password Secret source를 제공할 수 있어야 한다(MUST). 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715` — 시스템은 Web 프로세스의 trusted federation ingress와 Temporal Worker DB Activity에 하나의 Worker 역할명 PostgreSQL URL과 기존 owner/password fallback source를 제공할 수 있어야 한다(MUST). 이 source를 password가 없는 `kosmo_worker`의 실제 credential로 사용하거나 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker source 선택
 
-- **WHEN** `postgres.credentials.worker`의 URL과 password Secret trio를 모두 채운다
+- **WHEN** `postgres.credentials.worker`의 기존 owner URL과 password Secret trio를 모두 채운다
 - **THEN** Web Rollout과 활성화된 Worker Deployment에만 `WORKER_DATABASE_PASSWORD` SecretKeyRef와 `WORKER_DATABASE_URL`이 추가된다
 - **AND** API Rollout에는 `WORKER_DATABASE_*`가 없고 Web BFF 기본 `DATABASE_*`는 API source를 유지한다
+- **AND** 이 입력은 `kosmo_worker` certificate selector가 준비되기 전의 rename-only fallback seam이다
 
 #### Scenario: Worker source rollback
 
