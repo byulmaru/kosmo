@@ -14,7 +14,7 @@
 - Decision Outcome: 이 방향은 더 이상 구현 근거로 사용하지 않는다. 2026-08-10 최신 PROD-448 본문이 Fedify 공식 PostgreSQL MessageQueue adapter와 별도 queue consumer runtime을 transport 단일 owner로 확정했다.
 - Alternatives Considered: Temporal Workflow/Activity와 Fedify queue의 결합, Temporal Activity가 remote HTTP delivery를 직접 수행하는 방식.
 - Consequences: PROD-718/719/721과 Temporal domain task queue는 PROD-448의 transport 구현 prerequisite 또는 task가 아니다.
-- Confirmation / Follow-up: artifacts와 구현에서 Temporal Workflow, Activity, task queue, transactional Workflow intent/outbox/relay 참조가 normative scope에 들어가지 않는지 검증한다.
+- Confirmation / Follow-up: artifacts와 구현에서 domain Workflow/Activity 구현 자체가 normative scope에 들어가지 않는지, 단 전환 전후 retry ownership 계약은 보존되는지 검증한다.
 
 ### Fedify 공식 PostgreSQL MessageQueue가 inbox/outbox transport를 소유한다
 
@@ -27,6 +27,18 @@
 - Alternatives Considered: Temporal Activity direct delivery, NATS/custom queue adapter, Kosmo transactional transport outbox/relay.
 - Consequences: Kosmo는 Fedify queue와 경쟁하는 retry, dedupe ledger, remote HTTP worker 또는 transport message model을 만들지 않는다. domain state와 Notification은 기존 owner에 남는다.
 - Confirmation / Follow-up: dependency, federation queue option, consumer integration과 integration test가 공식 adapter를 직접 사용하고 custom transport queue가 없는지 확인한다.
+
+### Temporal Activity에서 Fedify queue로 retry ownership을 단계적으로 전환한다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: PROD-448 본문과 2026-08-10 `dependency correction` 댓글
+- Status: Active
+- Context / Problem: domain effects Workflow는 PROD-448보다 먼저 기존 Fedify delivery Activity를 사용할 수 있으므로, queue 활성화 전후의 retry 성공 경계를 구분하지 않으면 delivery request 실패를 Temporal과 Fedify가 동시에 재시도할 수 있다.
+- Decision Outcome: PROD-448 활성화 전에는 기존 delivery Activity 호출 실패를 Temporal Activity가 재시도할 수 있다. queue producer 활성화 후에는 Fedify queue handoff 수락을 Activity 성공으로 반환하고, 그 이후 remote HTTP retry와 기존 ordering option 실행은 Fedify만 소유한다. enqueue 자체가 실패하면 Activity 호출은 실패로 남아 Temporal이 delivery request를 다시 시도할 수 있다.
+- Alternatives Considered: domain Workflow 완료를 PROD-448 prerequisite로 만들기, 활성화 전에도 Temporal retry를 금지하기, queue 수락 뒤 Temporal과 Fedify가 같은 remote delivery를 모두 재시도하기.
+- Consequences: PROD-722/720/723/725/665는 PROD-448이 차단하지 않는 관련 병렬 capability다. PROD-448 PR completion은 domain Workflow 구현이나 production producer 활성화를 요구하지 않는다.
+- Confirmation / Follow-up: direct mode와 queue producer mode의 성공 경계 테스트·문서가 각각 delivery request 완료와 queue handoff 수락을 구분하고, queue 수락 뒤 중복 remote retry owner가 없는지 확인한다.
 
 ### Activity 성공 경계는 Fedify queue handoff 수락이다
 

@@ -3,6 +3,7 @@
 - **Implementation / PR / dev-live evidence owner:** PROD-448
 - **Canceled former dependency:** PROD-706 / PR #543은 취소·unmerged close됐고 PROD-448 blocker가 아니다. 해당 branch나 execution-context seam을 소비하지 않는다.
 - **Consumed completed selector baseline:** PROD-709. Its completion is not queue database, role, Secret, GRANT, adapter initialization, or credential cutover completion.
+- **Related parallel capabilities:** PROD-722/720/723/725/665. They may use existing Fedify delivery Activities before PROD-448 and are neither blocked by nor prerequisites of this change.
 - **Excluded downstream ownership:** API/Worker runtime role provisioning and production credential/GRANT cutover remain their own issues; production apply/rollout/cutover additionally requires explicit user approval.
 
 ## 1. PROD-448 선행 경계와 Fedify adapter baseline 확정
@@ -20,7 +21,7 @@
 
 - 취소된 PROD-706 branch/PR #543을 cherry-pick하거나 generic execution-context seam을 재구현하지 않는다.
 - PROD-709의 selector 완료를 role/Secret provisioning 또는 실제 credential cutover 완료로 해석하지 않는다.
-- Temporal Worker, task queue와 transactional Workflow intent/outbox/relay를 prerequisite로 추가하지 않는다.
+- Domain Workflow 구현, Temporal Worker/task queue와 transactional Workflow intent/outbox/relay를 prerequisite로 추가하지 않는다.
 
 **Verification**
 
@@ -83,7 +84,7 @@ inbound sender와 outbound domain effect가 Fedify queue handoff까지만 기다
 
 - 기존 actor/object identity, audience, domain idempotency와 이미 정의된 Fedify ordering option을 유지하며 새 key 또는 dedupe storage를 설계하지 않는다.
 - domain state transition, Notification lifecycle 또는 source transaction을 transport runtime으로 이동하지 않는다.
-- direct remote HTTP, `immediate: true`, fire-and-forget Promise, Temporal retry 또는 별도 relay로 queue를 우회하지 않는다.
+- queue handoff가 수락된 뒤 direct remote HTTP, `immediate: true`, fire-and-forget Promise, Temporal remote-delivery retry 또는 별도 relay로 queue를 우회하지 않는다. queue 활성화 전 delivery request 실패와 활성화 후 enqueue 실패의 Temporal Activity retry는 허용한다.
 
 **Verification**
 

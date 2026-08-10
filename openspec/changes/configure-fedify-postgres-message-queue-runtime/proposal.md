@@ -10,6 +10,7 @@
 - Web/API 요청 처리와 독립적으로 배포·확장·재시작할 수 있는 Fedify queue consumer runtime, health/readiness, graceful shutdown과 backlog 관측 경계를 제공한다.
 - queue runtime은 명시적으로 활성화될 때 공식 adapter가 connection 대상 database 안의 queue table/index를 implicit하게 초기화하게 한다. queue connection은 domain/API DB 및 Worker execution credential과 분리하고, 실제 production queue database·credential 준비와 최초 활성화는 별도 승인·변경에 남긴다.
 - Temporal task queue, domain state transition, Notification, domain Workflow/Workflow ID, transactional Workflow intent/outbox/relay는 추가하거나 변경하지 않는다.
+- 전환 전에는 domain effects Workflow가 기존 Fedify delivery Activity를 호출하고 Temporal Activity가 delivery request 실패를 재시도할 수 있다. PROD-448 queue producer를 활성화한 뒤에는 queue handoff 수락이 그 Activity의 성공 경계가 되며, 이후 remote HTTP retry와 기존 ordering option 실행은 Fedify만 소유한다. 이 전환은 domain Workflow 구현을 선행 조건으로 만들지 않는다.
 
 ## Authority / Provenance
 
@@ -17,6 +18,7 @@
 - Linear Contract: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4)
 - Linear Implementations: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4). 역할별 credential selector baseline은 완료된 [PROD-709](https://linear.app/byulmaru/issue/PROD-709/apifedify-runtime%EC%9D%B4-%EC%97%AD%ED%95%A0%EB%B3%84-postgresql-credential%EC%9D%84-%EC%84%A0%ED%83%9D%ED%95%A0-%EC%88%98-%EC%9E%88%EA%B2%8C-%ED%95%9C%EB%8B%A4)가 소유한다.
 - Historical cancellation: [PROD-706](https://linear.app/byulmaru/issue/PROD-706/fedify-%EC%9E%91%EC%97%85%EC%97%90-%EB%AA%85%EC%8B%9C%EC%A0%81-db-execution-boundary%EB%A5%BC-%EC%B6%94%EA%B0%ED%95%9C%EB%8B%A4)과 unmerged closed PR #543의 generic execution-context seam은 구현 prerequisite가 아니다.
+- Parallel capabilities: PROD-722/720/723/725/665는 PROD-448이 차단하는 downstream이 아니라 기존 Fedify delivery Activity를 사용할 수 있는 관련 병렬 capability다.
 
 ## Capabilities
 

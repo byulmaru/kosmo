@@ -15,6 +15,7 @@ Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue
 - queue handoff 수락을 application-facing 성공 경계로 만들고 remote retry, 기존 ordering option 실행과 shared inbox recipient 병합을 Fedify 한 곳에 둔다.
 - 독립 Deployment, health/readiness, graceful shutdown, depth/처리/실패 관측과 restart/duplicate 검증을 제공한다.
 - production queue database·credential 준비, 최초 adapter initialization, rollout과 live traffic 전환을 별도 승인 가능한 단계로 유지한다.
+- queue 활성화 전 Temporal Activity의 delivery request retry와 활성화 후 Fedify의 remote delivery retry를 단계적으로 전환하고, domain Workflow 구현을 이 change의 prerequisite로 만들지 않는다.
 
 **Non-Goals:**
 
@@ -23,6 +24,8 @@ Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue
 - Activity vocabulary, actor/object identity, audience, 기존 activity별 idempotency와 domain DB schema 재정의
 - API viewer RLS, API/Worker runtime role·Secret·GRANT provisioning 또는 owner credential 제거
 - 사용자용 delivery history/status UI
+
+Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activity를 사용할 수 있다. 이는 Workflow/Activity 구현을 PROD-448 범위에 포함한다는 뜻이 아니라, queue 활성화 전에는 Activity 호출 실패를 Temporal이 재시도하고 활성화 후에는 queue 수락이 Activity 성공이 되어 remote retry/order가 Fedify로 넘어간다는 migration 경계를 뜻한다.
 
 ## Implementation Guidance
 
@@ -82,9 +85,9 @@ Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue
 1. PROD-706 취소와 PR #543 unmerged close를 기록하고 최신 main에서 queue runtime baseline을 다시 조사한다.
 2. dependency, queue construction, producer/consumer 분리, entrypoint, probes, observability와 격리 PostgreSQL 통합 테스트를 구현한다.
 3. local/CI에서 adapter implicit initialization, handoff, restart, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 Helm default/opt-in render를 검증한다.
-4. 구현 PR은 production mutation 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다.
+4. 구현 PR은 production mutation이나 domain Workflow 완료 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다. 이 시점에도 direct mode를 사용하는 Activity는 기존 delivery request 실패를 Temporal retry 경계에 남길 수 있다.
 5. 별도 승인을 받은 경우에만 dev queue mode를 활성화해 adapter initialization, consumer rollout과 live enqueue/consume/restart를 검증한다.
-6. production은 다시 queue database/credential과 backlog 상태를 확인하고, 별도 승인된 queue database 준비 → consumer 최초 activation/implicit initialization → producer queue cutover 순서로 진행한다. 각 단계는 이전 direct path 또는 disabled consumer로 rollback 가능해야 한다.
+6. production은 다시 queue database/credential과 backlog 상태를 확인하고, 별도 승인된 queue database 준비 → consumer 최초 activation/implicit initialization → producer queue cutover 순서로 진행한다. producer cutover 뒤 Activity 성공은 queue 수락이며 remote HTTP retry/order는 Fedify만 소유한다. 각 단계는 이전 direct path 또는 disabled consumer로 rollback 가능해야 한다.
 7. rollback 시 새 producer enqueue를 먼저 중단하고 queue backlog의 처리/보존 결정을 명시한 뒤 consumer를 내린다. queue table 삭제나 purge는 별도 파괴적 승인 없이는 수행하지 않는다.
 
 ## Open Questions

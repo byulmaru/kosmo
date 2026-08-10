@@ -48,6 +48,20 @@
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, PROD-448. 시스템은 recipient fan-out과 shared inbox 선택·중복 recipient 병합, remote retry·backoff·permanent failure 판단 및 기존 ordering option의 실행을 Fedify의 inbox/outbox/fan-out queue 처리에 위임해야 한다(MUST). Kosmo domain service, Temporal Activity 또는 별도 relay가 같은 remote transport 정책을 중복 소유해서는 안 된다(MUST NOT).
 
+이 단일 ownership은 PROD-448 queue producer가 활성화되어 handoff가 수락된 뒤의 remote transport에 적용된다. 활성화 전 기존 Fedify delivery Activity의 request 실패 또는 활성화 후 queue enqueue 자체의 실패는 아직 수락되지 않은 delivery request이므로 Temporal Activity가 재시도할 수 있다.
+
+#### Scenario: queue 활성화 전 domain effects Activity
+
+- **WHEN** domain effects Workflow가 PROD-448 queue producer 활성화 전에 기존 Fedify delivery Activity를 호출하고 delivery request가 실패한다
+- **THEN** Temporal Activity는 그 delivery request 실패를 재시도할 수 있다
+- **AND** 이 Workflow 구현은 PROD-448의 prerequisite 또는 완료 조건이 아니다
+
+#### Scenario: queue 활성화 후 Activity 성공 경계
+
+- **WHEN** domain effects Activity가 Fedify queue에 delivery request를 넘기고 queue가 handoff를 수락한다
+- **THEN** Activity는 queue acceptance를 성공으로 반환한다
+- **AND** 그 이후 remote HTTP retry와 기존 ordering option 실행은 Fedify만 소유한다
+
 #### Scenario: shared inbox를 가진 여러 recipient
 
 - **WHEN** 하나의 Activity audience에 같은 유효한 shared inbox를 사용하는 여러 remote recipient가 포함된다
