@@ -9,11 +9,11 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { Form } from '@/components/ui/Form';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { PostComposerForm } from './PostComposerForm';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -622,7 +622,7 @@ function PostComposerContents({
   );
 
   return (
-    <PostComposerForm
+    <Form
       accessibilityLabel={replyMode ? '답글 작성' : '새 게시글 작성'}
       onSubmit={submit}
       style={[
@@ -630,9 +630,10 @@ function PostComposerContents({
         !surface && replyMode ? styles.replyRoot : null,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
+      submitOnModEnter
     >
       {composerContent}
-    </PostComposerForm>
+    </Form>
   );
 }
 

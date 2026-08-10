@@ -1,13 +1,14 @@
 import { View } from 'react-native';
 import type { FormEvent, KeyboardEvent } from 'react';
-import type { PostComposerFormProps } from './PostComposerForm';
+import type { FormProps } from './Form';
 
-export function PostComposerForm({
+export function Form({
   accessibilityLabel,
   children,
   onSubmit,
+  submitOnModEnter = false,
   style,
-}: PostComposerFormProps) {
+}: FormProps) {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSubmit();
@@ -25,7 +26,7 @@ export function PostComposerForm({
   return (
     <View accessibilityLabel={accessibilityLabel} style={style}>
       <form
-        onKeyDownCapture={handleKeyDown}
+        onKeyDownCapture={submitOnModEnter ? handleKeyDown : undefined}
         onSubmit={handleSubmit}
         style={{ display: 'contents' }}
       >
