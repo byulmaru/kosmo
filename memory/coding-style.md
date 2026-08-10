@@ -61,7 +61,7 @@
   outcome일 때만 core 반환값에 포함한다.
 - core가 Fedify 같은 protocol/delivery package를 호출하는 사실만으로 경계 위반으로 판단하지 않는다.
   core public contract가 protocol 전용 타입에 의존하는지를 기준으로 판단한다.
-- service는 production database implementation이 하나인 현재 구조에서 `getDatabaseConnection(tx)`로 optional transaction 또는 shared `db`를 선택한다. 여러 DB 작업을 원자적으로 수행하는 service는 선택한 connection에서 transaction 경계를 열어, caller transaction이 있으면 savepoint로 합류하고 없으면 shared `db`에서 transaction을 시작한다. test seam이나 복수 implementation 요구 없이 generic `Database`를 전달하는 추상화는 만들지 않는다.
+- production DB composition은 process-wide shared pool `Database`와 GraphQL Query/Mutation이 수명 동안 소유하는 operation `Database`를 포함한다. operation SQL과 post-commit projection을 같은 session에 유지해야 하는 service는 `Database`를 명시적으로 받고, caller-owned transaction에 합류해야 하는 domain action만 `DatabaseHandle`(`Database | Transaction`)을 받아 `getDatabaseConnection(handle)`로 선택한다. 여러 DB 작업을 원자적으로 수행하면 선택한 connection에서 transaction을 열어 caller transaction에는 savepoint로 합류한다. `Transaction`을 post-commit이나 operation context의 수명 경계로 전달하지 않고, 실제 composition 요구 없이 test seam만을 위한 generic DB 추상화를 추가하지 않는다.
 - 명시적 비관적 DB 락은 동시성 위반이 금전 거래처럼 심각하고 되돌리기 어려운 피해를 만드는 use case에만 사용한다. 팔로우 요청처럼 드문 race의 영향이 작고 복구 가능한 social interaction은 락으로 완전 직렬화하지 않으며, 상세 판단과 리뷰 근거는 `memory/database-design.md`의 Runtime Locking Policy를 따른다.
 - `packages/core/db`는 DB client, schema, relation과 DB 전용 utility를 소유하고 account/session 생성 같은 application transaction은 소유하지 않는다.
 - OIDC discovery와 code exchange처럼 transport 또는 protocol-specific 검증은 API/BFF 경계에 남기고, core service에는 검증된 identity와 business input만 전달한다.
