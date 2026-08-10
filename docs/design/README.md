@@ -8,6 +8,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [accessibility.md](./accessibility.md) — Web·Android·iOS 접근성 목표, target과 검증 기준
 - [colors.md](./colors.md) — 컬러 토큰 정책
 - [foundations.md](./foundations.md) — typography, spacing, radius, border, elevation, icon, density와 UI 일관성 Inventory
+- [motion.md](./motion.md) — duration, easing, component motion과 OS reduced-motion 대체 규칙
 - [logo.md](./logo.md) — 확정 로고 자산, clear space와 플랫폼별 소비처
 - [page-header.md](./page-header.md) — 주요 화면 공용 헤더의 variant, 높이와 소유권
 - [settings.md](./settings.md) — 인증 설정 route, Account/Profile 정보 구조와 공통 상태 계약

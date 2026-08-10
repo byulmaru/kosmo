@@ -62,6 +62,8 @@ CSS px, pt, dp는 서로 다른 플랫폼 단위다. 저장소의 공통 목표�
 ### 5. 시간과 motion
 
 - 자동으로 시작되고 5초를 넘으며 다른 content와 병렬로 표시되는 moving·blinking·scrolling information은 Level A인 [SC 2.2.2 Pause, Stop, Hide](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html)에 따라 일시정지·중지·숨김 수단을 제공해야 한다. 자동으로 시작되고 다른 content와 병렬로 표시되는 auto-updating information은 같은 수단이나 갱신 빈도 제어를 제공해야 한다. 해당 움직임·갱신이 essential이면 공식 예외를 적용한다.
+- KOSMO의 duration, easing과 component별 대체 규칙은 [motion.md](./motion.md)를 따른다. 프로덕션 계약은 OS reduced-motion 설정만 입력으로 사용하며, 구현 전환은 DSN-19가 소유한다. slide·scale·ripple·rotation loop를 제거하되 focus, loading, success, error, selected와 announcement 의미는 유지한다.
+- reduced-motion loading은 회전 spinner를 정지 화면으로 남기지 않는다. spinner를 숨기고 정적 `···`와 loading 문구로 대체한다.
 
 ### 6. Visual geometry와 interactive target
 
