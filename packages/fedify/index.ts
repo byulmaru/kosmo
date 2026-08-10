@@ -1,4 +1,5 @@
 export { resolveActivityPubPostUri } from './src/activitypub-post-uri';
+export { fetchFederation } from './src/federation';
 export { sendAcceptFollowActivity } from './src/follow-delivery';
 export type {
   InboundCaptureContext,

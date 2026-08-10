@@ -31,8 +31,8 @@
 ## Impact
 
 - `packages/core/db`, `packages/core/services`: origin/main의 `DatabaseHandle`/owner fallback baseline을 검증하고 PROD-710 경계를 유지한다.
-- `packages/fedify`: package-internal Fedify execution context, action runner와 inbound adapter
-- `apps/web`: context factory를 노출하지 않는 `@kosmo/fedify/web-inbound` adapter 호출
+- `packages/fedify`: package-internal Fedify execution context와 inbound adapter
+- `apps/web`: context factory를 노출하지 않는 root `fetchFederation` adapter 호출
 - `apps/api`: remote profile search가 package-internal context를 숨긴 domain adapter를 사용하도록 호환 호출을 유지한다.
 - 테스트: context 격리, commit·rollback, nested transaction, pool 반환과 owner fallback
 - dependency, schema migration, runtime credential과 공개 GraphQL/ActivityPub 행동 변화 없음(내부 API 호출 seam만 adapter로 교체)

@@ -12,7 +12,7 @@ after(async () => {
   await pg.end();
 });
 
-test('Web inbound adapter creates an isolated owner-handle context per invocation', async () => {
+test('Fedify fetch creates an isolated owner-handle context per invocation', async () => {
   const contexts: FedifyExecutionContext[] = [];
   mock.method(
     typedFederation,

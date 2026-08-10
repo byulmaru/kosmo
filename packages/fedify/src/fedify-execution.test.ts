@@ -3,7 +3,7 @@ import { after, test } from 'node:test';
 import { db, firstOrThrow, Instances, pg } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { eq } from 'drizzle-orm';
-import { createFedifyExecutionContext, withFedifyAction } from './fedify-execution';
+import { createFedifyExecutionContext } from './fedify-execution';
 
 after(async () => {
   await pg.end();
@@ -12,7 +12,7 @@ after(async () => {
 test('Fedify actions commit and rollback on their own transaction boundary', async () => {
   const context = createFedifyExecutionContext();
   const domain = `${crypto.randomUUID()}.example`;
-  const inserted = await withFedifyAction(context, ({ db: transaction }) =>
+  const inserted = await context.db.transaction((transaction) =>
     transaction
       .insert(Instances)
       .values({ domain, kind: InstanceKind.LOCAL })
@@ -25,7 +25,7 @@ test('Fedify actions commit and rollback on their own transaction boundary', asy
 
   const rollbackDomain = `${crypto.randomUUID()}.example`;
   await assert.rejects(
-    withFedifyAction(context, async ({ db: transaction }) => {
+    context.db.transaction(async (transaction) => {
       await transaction.insert(Instances).values({
         domain: rollbackDomain,
         kind: InstanceKind.LOCAL,
@@ -46,10 +46,8 @@ test('Fedify action joins a caller transaction through a savepoint', async () =>
 
   await assert.rejects(
     db.transaction(async (outerTransaction) => {
-      await withFedifyAction(
-        createFedifyExecutionContext(outerTransaction),
-        ({ db: transaction }) =>
-          transaction.insert(Instances).values({ domain, kind: InstanceKind.LOCAL }),
+      await createFedifyExecutionContext(outerTransaction).db.transaction((transaction) =>
+        transaction.insert(Instances).values({ domain, kind: InstanceKind.LOCAL }),
       );
       throw new Error('caller rollback');
     }),
@@ -63,20 +61,20 @@ test('Fedify action joins a caller transaction through a savepoint', async () =>
     const actionContext = createFedifyExecutionContext();
     assert.notEqual(actionContext, contextIdentity);
     if (index % 2 === 0) {
-      await withFedifyAction(actionContext, ({ db: transaction }) =>
+      await actionContext.db.transaction((transaction) =>
         transaction
           .insert(Instances)
           .values({ domain: `${crypto.randomUUID()}.example`, kind: InstanceKind.LOCAL }),
       );
     } else {
       await assert.rejects(
-        withFedifyAction(actionContext, () => Promise.reject(new Error('repeated rollback'))),
+        actionContext.db.transaction(() => Promise.reject(new Error('repeated rollback'))),
         /repeated rollback/,
       );
     }
   }
 
-  await withFedifyAction(createFedifyExecutionContext(), ({ db: transaction }) =>
+  await createFedifyExecutionContext().db.transaction((transaction) =>
     transaction.select({ id: Instances.id }).from(Instances).limit(1),
   );
 });

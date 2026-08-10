@@ -2,8 +2,6 @@ import { federation } from './federation';
 import { createFedifyExecutionContext } from './fedify-execution';
 import { findOrMaterializeRemoteProfileActor } from './remote-actor-materialization';
 
-type ScheduleRefresh = (refresh: () => Promise<void>) => void;
-
 export const findOrMaterializeRemoteProfileActorForProfileSearch = async ({
   canonicalOrigin,
   handle,
@@ -11,7 +9,7 @@ export const findOrMaterializeRemoteProfileActorForProfileSearch = async ({
 }: {
   canonicalOrigin: string;
   handle: string;
-  scheduleRefresh?: ScheduleRefresh;
+  scheduleRefresh?: (refresh: () => Promise<void>) => void;
 }) =>
   findOrMaterializeRemoteProfileActor({
     context: federation.createContext(new URL(canonicalOrigin), createFedifyExecutionContext()),

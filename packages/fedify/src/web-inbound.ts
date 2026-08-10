@@ -1,1 +1,0 @@
-export { fetchFederation } from './federation';

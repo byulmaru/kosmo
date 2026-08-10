@@ -36,15 +36,15 @@ PROD-706은 Web inbound와 후속 Temporal Activity가 공유할 Fedify 전용 �
 
 origin/main의 `packages/core/db`와 공유 core service가 이미 제공하는 `DatabaseHandle` 및 owner fallback을 변경 없이 재사용·검증한다. PROD-710이 Post Fedify SQL을 이전할 수 있도록 이번 change는 core SQL callsite와 service widening을 추가하지 않는다.
 
-Fedify package에는 per-invocation `FedifyExecutionContext`와 factory를 package-internal 구현으로 둔다. context는 `readonly db: DatabaseHandle`만 보유하고 기본값은 현재 owner `db`다. 별도 Fedify action helper는 전달 context의 handle에서 transaction을 열어 callback에 transaction handle을 전달한다. federation fetch 전체에는 transaction을 열지 않는다.
+Fedify package에는 per-invocation `FedifyExecutionContext`와 factory를 package-internal 구현으로 둔다. context는 `readonly db: DatabaseHandle`만 보유하고 기본값은 현재 owner `db`다. 원자적인 Fedify action은 별도 wrapper 없이 전달 context의 `db.transaction()`을 직접 사용한다. federation fetch 전체에는 transaction을 열지 않는다.
 
-Web BFF는 context factory를 직접 import하지 않고 `@kosmo/fedify/web-inbound`의 inbound `fetchFederation` adapter를 호출한다. adapter가 invocation마다 새 Fedify context object를 만든다. API remote profile search는 `findOrMaterializeRemoteProfileActorForProfileSearch` domain adapter를 통해 package-internal context를 사용하며 context factory나 raw federation을 import하지 않는다. factory와 action runner는 package root/API surface에 export하지 않는다. 후속 Temporal Activity는 Fedify package 안의 전용 Activity adapter에서 같은 내부 context 경계를 사용하며, API에는 context 생성이나 직접 delivery seam을 노출하지 않는다.
+Web BFF는 context factory를 직접 import하지 않고 package root의 inbound `fetchFederation` adapter를 호출한다. adapter가 invocation마다 새 Fedify context object를 만든다. API remote profile search는 `findOrMaterializeRemoteProfileActorForProfileSearch` domain adapter를 통해 package-internal context를 사용하며 context factory나 raw federation을 import하지 않는다. factory와 raw federation은 package root/API surface에 export하지 않는다. 후속 Temporal Activity는 Fedify package 안의 전용 Activity adapter에서 같은 내부 context 경계를 사용하며, API에는 context 생성이나 직접 delivery seam을 노출하지 않는다.
 
 이번 change에서 handler SQL은 context handle로 이전하지 않는다. PROD-710이 Post Fedify callsite에서 정확한 transaction과 post-commit 조립 위치를 선택한다. PostgreSQL 테스트는 success commit, error rollback, caller transaction savepoint, 반복 실행 뒤 pool 사용 가능성과 context identity를 검증한다.
 
 ### Allowed Alternatives
 
-- factory와 action runner의 구체 파일 배치는 package-internal 비노출과 Fedify 전용 명명 계약을 유지하면 달라질 수 있다.
+- factory의 구체 파일 배치는 package-internal 비노출과 Fedify 전용 명명 계약을 유지하면 달라질 수 있다.
 - 후속 Temporal Activity adapter의 구체 export는 Activity 구현 이슈가 결정하지만 API viewer/public factory를 추가할 수는 없다.
 
 ### Known Traps
@@ -52,19 +52,19 @@ Web BFF는 context factory를 직접 import하지 않고 `@kosmo/fedify/web-inbo
 - Fedify 경계를 `system`, notification 또는 background abstraction으로 일반화하지 않는다.
 - federation fetch 전체에 long-lived transaction을 열지 않는다.
 - context에 credential, role selector, raw pool client나 BYPASSRLS/owner flag를 추가하지 않는다.
-- context factory와 action runner를 package root 또는 API context에 export하지 않는다.
+- context factory와 raw federation을 package root 또는 API context에 export하지 않는다.
 - PROD-710의 Post Fedify SQL callsite를 이 change에서 이전하지 않는다.
 - API의 현재 direct outbound delivery를 이 change에서 durable intent/Temporal로 전환하지 않는다.
 
 ## Risks / Trade-offs
 
 - [명시적 context가 배포되지만 SQL은 아직 사용하지 않음] → PROD-710을 blocker로 유지하고 이번 PR은 Fedify seam과 수명 검증만 소유한다.
-- [미래 Temporal Activity callsite가 아직 없음] → 가상 worker를 만들지 않고 package-internal context와 action runner의 재사용 가능성만 타입·테스트로 보장한다.
+- [미래 Temporal Activity callsite가 아직 없음] → 가상 worker나 전용 wrapper를 만들지 않고 package-internal context handle의 재사용 가능성만 타입·테스트로 보장한다.
 - [저수준 federation fixture는 void context를 유지할 수 있음] → production dispatcher/listener handler와 Web adapter는 `FedifyExecutionContext`를 사용하고 standalone fixture만 별도 generic을 유지한다.
 
 ## Migration Plan
 
-1. DatabaseHandle, Fedify context/action runner와 Web inbound adapter를 배포한다.
+1. DatabaseHandle, Fedify context와 Web inbound adapter를 배포한다.
 2. Web inbound는 매 invocation context를 전달하지만 기존 owner credential과 미이전 SQL을 유지한다.
 3. 후속 Temporal 이슈가 outbound Activity adapter를 만들고 PROD-710이 Post Fedify SQL을 명시적 handle로 이전한다.
 4. 문제 시 코드만 rollback한다. schema, Secret, role 또는 data rollback은 필요 없다.

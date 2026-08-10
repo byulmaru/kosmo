@@ -6,7 +6,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
-import type { fetchFederation } from '@kosmo/fedify/web-inbound';
+import type { fetchFederation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
   authorizationCodeGrant as oidcAuthorizationCodeGrant,
@@ -52,10 +52,9 @@ vi.mock('@kosmo/core/services', () => ({
 }));
 
 vi.mock('@kosmo/fedify', () => ({
+  fetchFederation: federationFetch,
   setInboundObservabilityReporter,
 }));
-
-vi.mock('@kosmo/fedify/web-inbound', () => ({ fetchFederation: federationFetch }));
 
 vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedError }));
 

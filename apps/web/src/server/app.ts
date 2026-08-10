@@ -1,6 +1,5 @@
 import { setNotificationEffectErrorReporter } from '@kosmo/core/services';
-import { setInboundObservabilityReporter } from '@kosmo/fedify';
-import { fetchFederation } from '@kosmo/fedify/web-inbound';
+import { fetchFederation, setInboundObservabilityReporter } from '@kosmo/fedify';
 import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
