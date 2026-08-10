@@ -8,6 +8,7 @@ type PageHeaderProps =
   | {
       leading?: ReactNode;
       title: string;
+      trailing?: ReactNode;
       variant?: 'text';
     }
   | {
@@ -48,6 +49,7 @@ export function PageHeader(props: PageHeaderProps) {
           <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
             {props.title}
           </Text>
+          {props.trailing ? <View style={styles.trailing}>{props.trailing}</View> : null}
         </>
       )}
     </View>
@@ -90,6 +92,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 0,
     ...typography.xl,
+  },
+  trailing: {
+    alignItems: 'center',
+    flexShrink: 0,
+    marginLeft: spacing.md,
+    zIndex: 1,
   },
   srOnly: { height: 1, overflow: 'hidden', position: 'absolute', width: 1 },
 });

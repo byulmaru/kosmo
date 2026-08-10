@@ -2,6 +2,7 @@ import { db, Notifications } from '@kosmo/core/db';
 import { eq } from 'drizzle-orm';
 import {
   createE2EAccountProfile,
+  createE2EFollow,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
@@ -191,6 +192,216 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
   } finally {
     await followerContext.close();
   }
+});
+
+test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 재시도에서 상태를 보존한다', async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize({ height: 900, width: 767 });
+
+  const recipient = await createE2ESession({
+    displayName: 'E2E Batch Recipient',
+    handle: 'e2e-batch-recipient',
+  });
+  const firstFollower = await createE2ESession({
+    displayName: 'E2E Batch Follower A',
+    handle: 'e2e-batch-follower-a',
+  });
+  const secondFollower = await createE2ESession({
+    displayName: 'E2E Batch Follower B',
+    handle: 'e2e-batch-follower-b',
+  });
+  const outsideFollower = await createE2ESession({
+    displayName: 'E2E Batch Follower C',
+    handle: 'e2e-batch-follower-c',
+  });
+
+  if (!recipient.profile || !firstFollower.profile || !secondFollower.profile) {
+    throw new Error('Batch Read fixtures require local profiles.');
+  }
+
+  await createE2EFollow({
+    followeeProfileId: recipient.profile.id,
+    followerProfileId: firstFollower.profile.id,
+  });
+  await createE2EFollow({
+    followeeProfileId: recipient.profile.id,
+    followerProfileId: secondFollower.profile.id,
+  });
+
+  await setE2ESessionCookie(context, recipient.token);
+  await page.goto('/notifications');
+  await expect(
+    page.getByRole('link', {
+      name: /E2E Batch Follower A님이 팔로우했습니다.*읽지 않은 알림/,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: /E2E Batch Follower B님이 팔로우했습니다.*읽지 않은 알림/,
+    }),
+  ).toBeVisible();
+
+  const initialRows = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.recipientProfileId, recipient.profile.id));
+  expect(initialRows).toHaveLength(2);
+  const initialGlobalIds = initialRows.map(({ id }) => toGlobalId('FollowNotification', id));
+
+  await createE2EFollow({
+    followeeProfileId: recipient.profile.id,
+    followerProfileId: outsideFollower.profile!.id,
+  });
+  const outsideRow = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
+    .then((rows) => rows.find((row) => !initialRows.some(({ id }) => id === row.id)));
+  if (!outsideRow) {
+    throw new Error('Batch Read fixture did not create the outside Notification.');
+  }
+
+  const requestIds: string[][] = [];
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'NotificationListMarkAllReadMutation') {
+      await route.fallback();
+      return;
+    }
+
+    requestIds.push((operation.variables?.ids as string[] | undefined) ?? []);
+    await route.fallback();
+  });
+
+  await page.getByRole('button', { name: '모두 읽음' }).click();
+  await expect(page.getByRole('button', { name: '모두 읽음' })).toBeDisabled();
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower A님이 팔로우했습니다/ }),
+  ).not.toHaveAccessibleName(/읽지 않은 알림/);
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower B님이 팔로우했습니다/ }),
+  ).not.toHaveAccessibleName(/읽지 않은 알림/);
+  expect(requestIds).toHaveLength(1);
+  expect([...requestIds[0]!].sort()).toEqual([...initialGlobalIds].sort());
+  for (const row of initialRows) {
+    expect(await notificationReadAt(row.id)).not.toBeNull();
+  }
+  expect(await notificationReadAt(outsideRow.id)).toBeNull();
+  await expect(
+    page.getByRole('link', { name: '알림, 읽지 않은 알림 1개', exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ height: 720, width: 1280 });
+  await page.unroute('**/graphql');
+
+  const retryFollower = await createE2ESession({
+    displayName: 'E2E Batch Follower D',
+    handle: 'e2e-batch-follower-d',
+  });
+  const freshFollower = await createE2ESession({
+    displayName: 'E2E Batch Follower E',
+    handle: 'e2e-batch-follower-e',
+  });
+  await createE2EFollow({
+    followeeProfileId: recipient.profile.id,
+    followerProfileId: retryFollower.profile!.id,
+  });
+
+  const retryRow = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
+    .then((rows) =>
+      rows.find((row) => row.id !== outsideRow.id && !initialRows.some(({ id }) => id === row.id)),
+    );
+  if (!retryRow) {
+    throw new Error('Batch Read fixture did not create the retry Notification.');
+  }
+
+  await page.getByRole('link', { name: '홈', exact: true }).click();
+  await expect(page).toHaveURL('/home');
+  await page.getByRole('link', { name: /^알림/ }).first().click();
+  await expect(page).toHaveURL('/notifications');
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower C님이 팔로우했습니다.*읽지 않은 알림/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower D님이 팔로우했습니다.*읽지 않은 알림/ }),
+  ).toBeVisible();
+
+  let failNextReadAll = true;
+  const retryRequestIds: string[][] = [];
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'NotificationListMarkAllReadMutation') {
+      await route.fallback();
+      return;
+    }
+
+    retryRequestIds.push((operation.variables?.ids as string[] | undefined) ?? []);
+    if (failNextReadAll) {
+      failNextReadAll = false;
+      await route.abort();
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.getByRole('button', { name: '모두 읽음' }).click();
+  await expect(page.getByRole('alert')).toContainText('알림을 모두 읽지 못했어요.');
+  expect(await notificationReadAt(outsideRow.id)).toBeNull();
+  expect(await notificationReadAt(retryRow.id)).toBeNull();
+
+  await createE2EFollow({
+    followeeProfileId: recipient.profile.id,
+    followerProfileId: freshFollower.profile!.id,
+  });
+  const freshRow = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
+    .then((rows) =>
+      rows.find(
+        (row) =>
+          row.id !== outsideRow.id &&
+          row.id !== retryRow.id &&
+          !initialRows.some(({ id }) => id === row.id),
+      ),
+    );
+  if (!freshRow) {
+    throw new Error('Batch Read fixture did not create the fresh retry Notification.');
+  }
+
+  await page.getByRole('link', { name: '홈', exact: true }).click();
+  await expect(page).toHaveURL('/home');
+  await page.getByRole('link', { name: /^알림/ }).first().click();
+  await expect(page).toHaveURL('/notifications');
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower D님이 팔로우했습니다.*읽지 않은 알림/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /E2E Batch Follower E님이 팔로우했습니다.*읽지 않은 알림/ }),
+  ).toBeVisible();
+
+  const retryResponse = waitForGraphQLOperation(page, 'NotificationListMarkAllReadMutation');
+  await page.getByRole('button', { name: '다시 시도' }).click();
+  await retryResponse;
+  await expect(page.getByRole('button', { name: '모두 읽음' })).toBeDisabled();
+  expect(retryRequestIds).toHaveLength(2);
+  expect([...retryRequestIds[0]!].sort()).toEqual(
+    [
+      toGlobalId('FollowNotification', outsideRow.id),
+      toGlobalId('FollowNotification', retryRow.id),
+    ].sort(),
+  );
+  expect(retryRequestIds[1]).toContain(toGlobalId('FollowNotification', outsideRow.id));
+  expect(retryRequestIds[1]).toContain(toGlobalId('FollowNotification', retryRow.id));
+  expect(retryRequestIds[1]).toContain(toGlobalId('FollowNotification', freshRow.id));
+  expect(await notificationReadAt(outsideRow.id)).not.toBeNull();
+  expect(await notificationReadAt(retryRow.id)).not.toBeNull();
+  expect(await notificationReadAt(freshRow.id)).not.toBeNull();
+  await page.unroute('**/graphql');
 });
 
 async function selectProfile(page: Page, handle: string) {

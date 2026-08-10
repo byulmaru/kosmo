@@ -2,12 +2,13 @@ import { usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Text } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import NotificationsScreen from '@/app/(tabs)/(protected)/notifications';
 import {
   NotificationList,
   NotificationListState,
 } from '@/components/notification/NotificationList';
+import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import {
@@ -228,6 +229,39 @@ const repostReadMutationResponse = {
   },
 };
 
+const readAllMutationResponse = {
+  markNotificationRead: {
+    notifications: [
+      'notification-unread',
+      'notification-follow-request',
+      'notification-long',
+      'notification-reaction',
+      'notification-reply',
+      'notification-repost',
+    ].map((id) => ({
+      __typename:
+        id === 'notification-reaction'
+          ? 'ReactionNotification'
+          : id === 'notification-reply'
+            ? 'ReplyNotification'
+            : id === 'notification-repost'
+              ? 'RepostNotification'
+              : id === 'notification-follow-request'
+                ? 'FollowRequestNotification'
+                : 'FollowNotification',
+      id,
+      readAt: '2026-07-21T12:00:00Z',
+    })),
+    recipientProfiles: [
+      {
+        __typename: 'Profile',
+        id: 'notification-profile-content',
+        unreadNotificationCount: 1,
+      },
+    ],
+  },
+};
+
 function ProfileSwitchList() {
   const profiles = useStoryProfiles();
   const [selected, setSelected] = useState<3 | 4>(3);
@@ -254,6 +288,13 @@ function ActorResetNotificationScreen() {
 
 const meta = {
   component: NotificationCatalog,
+  decorators: [
+    (Story: typeof NotificationCatalog) => (
+      <NotificationReadAllProvider>
+        <Story />
+      </NotificationReadAllProvider>
+    ),
+  ],
   parameters: {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/notifications' },
@@ -358,6 +399,85 @@ export const MobileHeaderOwnedByShell: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: ({ canvasElement }) => {
     expect(within(canvasElement).queryByRole('heading', { name: '알림' })).not.toBeInTheDocument();
+  },
+  render: () => <RefreshList />,
+};
+
+export const ReadAllLoadedUnread: Story = {
+  parameters: { relay: { mutationResponse: readAllMutationResponse } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const action = canvas.getByRole('button', { name: '모두 읽음' });
+    expect(action).not.toBeDisabled();
+
+    await userEvent.click(action);
+
+    await expect(
+      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+    ).resolves.toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다/ }),
+    ).not.toHaveAccessibleName(/읽지 않은 알림/);
+    expect(canvas.getByRole('link', { name: /새 요청자님이 팔로우를 요청했습니다/ })).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole('button', { name: '모두 읽음' })).toBeDisabled());
+  },
+  render: () => <RefreshList />,
+};
+
+export const ReadAllLoadedZero: Story = {
+  play: ({ canvasElement }) => {
+    const action = within(canvasElement).getByRole('button', { name: '모두 읽음' });
+    expect(action).toBeDisabled();
+    expect(action).toHaveAttribute('aria-disabled', 'true');
+  },
+  render: () => {
+    const profiles = useStoryProfiles();
+    return <NotificationList profile={requireProfile(profiles, 0).notificationList!} />;
+  },
+};
+
+export const ReadAllLoading: Story = {
+  parameters: { relay: { mutationLoading: true } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
+    await expect(canvas.findByRole('button', { name: '모두 읽음' })).resolves.toBeDisabled();
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: '모두 읽음' })).toHaveAttribute(
+        'aria-busy',
+        'true',
+      ),
+    );
+  },
+  render: () => <RefreshList />,
+};
+
+export const ReadAllPendingAndFailureRetry: Story = {
+  parameters: {
+    relay: {
+      operationResponses: {
+        NotificationListMarkAllReadMutation: {
+          sequence: [{ error: 'Read all failed' }, { data: readAllMutationResponse }],
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const action = canvas.getByRole('button', { name: '모두 읽음' });
+    await userEvent.click(action);
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '알림을 모두 읽지 못했어요.',
+    );
+    expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible();
+    expect(
+      canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/ }),
+    ).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+    await expect(
+      canvas.findByRole('link', { name: '별빛 여행자 프로필로 이동.' }),
+    ).resolves.toBeVisible();
   },
   render: () => <RefreshList />,
 };

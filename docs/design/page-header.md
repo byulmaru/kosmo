@@ -21,7 +21,9 @@
 - action은 클릭 시점에 현재 Relay connection에 로드된 unread Notification ID만 처리하며, 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 처리하기 위해 추가 page를 먼저 가져오지 않는다.
 - 현재 로드된 unread item이 없거나 요청 중이면 action을 disabled 처리하고 접근성 상태에도 반영한다.
 - 성공 뒤 처리된 item은 목록에 남고 Unread 강조만 제거된다. 전역 인디케이터는 서버 count로 수렴하므로 아직 처리하지 않은 unread item이 있으면 `모두 읽음` 성공 뒤에도 남을 수 있다.
-- pending 또는 실패 중에는 item 강조와 전역 인디케이터를 낙관적으로 제거하지 않는다.
+- pending 또는 실패 중에는 item 강조와 전역 인디케이터를 낙관적으로 제거하지 않는다. 실패하면 기존 앱
+  toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공하고, 재시도 시점의 current Relay
+  connection에 로드된 unread Notification ID를 다시 수집한다.
 
 ## Web 검색 헤더
 

@@ -19,10 +19,11 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
 });
 
 type PageHeaderProps =
-  | { leading?: ReactNode; title: string; variant?: 'text' }
+  | { leading?: ReactNode; title: string; trailing?: ReactNode; variant?: 'text' }
   | { accessibilityLabel: string; leading?: ReactNode; variant: 'brand' };
 type TestElementProps = {
   'aria-hidden'?: boolean;
+  accessibilityLabel?: string;
   accessibilityElementsHidden?: boolean;
   accessibilityRole?: string;
   children?: ReactNode;
@@ -84,6 +85,14 @@ test('text title shrinks and wraps within the available width beside a leading a
   assert.equal(titleStyle?.flexShrink, 1);
   assert.equal(titleStyle?.minWidth, 0);
   assert.equal(heading.props.numberOfLines, undefined);
+});
+
+test('text variant renders its optional trailing action beside the heading', () => {
+  const trailing = createElement('Pressable', { accessibilityLabel: '모두 읽음' });
+  const header = renderHeader({ title: '알림', trailing });
+
+  assert.equal(findElements(header, 'Pressable').length, 1);
+  assert.equal(findElements(header, 'Pressable')[0]?.props.accessibilityLabel, '모두 읽음');
 });
 
 test('brand variant exposes one Home heading and hides the approved mark from accessibility', () => {
