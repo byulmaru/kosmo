@@ -40,6 +40,8 @@ Home root와 Profile 각각에 refetchable pagination fragment를 두고 `usePag
 
 Post 목록 pagination 경계에서 `useAutomaticPagination`에 현재 edge 수, page size 20과 Relay pagination 결과를 전달한다. Web은 현재 document scroll을 사용하고, Native는 좁은 registration boundary를 통해 hook이 반환한 metric handler를 기존 Home frame/Profile layout ScrollView에 전달한다. registration은 해당 목록이 unmount되면 해제하며 다른 route의 scroll 동작을 소유하지 않는다.
 
+Native metric buffer는 actor와 현재 route를 함께 나타내는 pagination owner key 안에서만 재생한다. owner key가 바뀌면 이전 registration과 저장 metric을 폐기해, 새 목록이 자기 scroll metric을 내기 전에 이전 route의 near-end 상태로 다음 page를 요청하지 않게 한다.
+
 다음 page 요청 중에는 목록 아래에 React Native 기본 spinner와 polite live status를 표시한다. 실패 전환 시 기존 `ToastProvider`에 한 번만 오류 문구와 `다시 시도` action을 전달하고, action은 공통 hook의 수동 retry를 호출한다. 초기 query loading/error/empty presentation은 그대로 유지한다.
 
 actor revision과 Profile handle을 목록 subtree identity에 반영해 owner가 바뀌면 hook의 in-flight/error state와 scroll registration을 함께 remount한다. 이전 Relay Environment에서 늦게 끝난 요청은 새 owner state에 연결하지 않는다.

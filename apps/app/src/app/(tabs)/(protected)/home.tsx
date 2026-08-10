@@ -41,7 +41,7 @@ export default function HomeScreen() {
   const [fetchKey, setFetchKey] = useState(0);
 
   return (
-    <HomeFrame>
+    <HomeFrame paginationOwnerKey={`home:${revision}`}>
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         onRetry={() => setFetchKey((key) => key + 1)}
@@ -53,12 +53,18 @@ export default function HomeScreen() {
   );
 }
 
-function HomeFrame({ children }: PropsWithChildren) {
+function HomeFrame({
+  children,
+  paginationOwnerKey,
+}: PropsWithChildren<{ paginationOwnerKey: string }>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
   return (
-    <PaginationScrollView contentContainerStyle={styles.root}>
+    <PaginationScrollView
+      contentContainerStyle={styles.root}
+      paginationOwnerKey={paginationOwnerKey}
+    >
       {routeOwnsHeader ? <PageHeader accessibilityLabel="홈" variant="brand" /> : null}
       <View style={styles.body}>{children}</View>
     </PaginationScrollView>

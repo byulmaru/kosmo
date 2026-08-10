@@ -24,7 +24,7 @@ Home과 Profile 게시글 목록이 서로 독립된 Relay connection에서 게�
 **Verification**
 
 - Home과 Profile의 cursor, 20개 단위 page 누적, 마지막 page 종료와 identity 격리를 검증한다.
-- loading·실패 toast·수동 retry, Native scroll metric 연결과 Home prepend 순서·중복 방지를 검증한다.
+- loading·실패 toast·수동 retry, Native scroll metric 연결·owner 전환 격리와 Home prepend 순서·중복 방지를 검증한다.
 - 자동화 검증과 실제 Web·Android·iOS runtime 증거를 구분하고 OpenSpec strict validation을 통과시킨다.
 
 - [x] 1.1 Home과 Profile이 독립된 Relay connection에서 다음 20개를 누적하고 마지막 page에서 중단한다.

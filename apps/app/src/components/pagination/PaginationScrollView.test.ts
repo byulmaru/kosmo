@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, PropsWithChildren } from 'react';
@@ -46,13 +46,21 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let PaginationScrollView: ComponentType<PropsWithChildren>;
+let PaginationScrollView: ComponentType<PropsWithChildren<{ paginationOwnerKey: string }>>;
 let usePaginationScrollRegistration: (props: NativeScrollProps) => void;
 
 before(async () => {
   const module = await import('./PaginationScrollView');
-  PaginationScrollView = module.PaginationScrollView as ComponentType<PropsWithChildren>;
+  PaginationScrollView = module.PaginationScrollView as ComponentType<
+    PropsWithChildren<{ paginationOwnerKey: string }>
+  >;
   usePaginationScrollRegistration = module.usePaginationScrollRegistration;
+});
+
+beforeEach(() => {
+  contentHeight = 0;
+  layoutHeight = 0;
+  scrollOffset = 0;
 });
 
 afterEach(async () => {
@@ -67,10 +75,10 @@ function RegistrationProbe() {
   return createElement('Content');
 }
 
-function renderOwner(registered: boolean) {
+function renderOwner(registered: boolean, paginationOwnerKey = 'owner-a') {
   return createElement(
     PaginationScrollView,
-    null,
+    { paginationOwnerKey },
     registered ? createElement(RegistrationProbe) : createElement('Content'),
   );
 }
@@ -123,5 +131,56 @@ describe('PaginationScrollView', () => {
       renderer?.update(renderOwner(true));
     });
     assert.equal(contentHeight, 960);
+  });
+
+  it('owner가 바뀌면 이전 metric을 새 registration에 재생하지 않는다', async () => {
+    await act(async () => {
+      renderer = create(renderOwner(false, 'owner-a'));
+    });
+    assert.ok(renderer);
+
+    let scrollViews = renderer.root.findAll((node) => (node.type as unknown) === 'ScrollView');
+    assert.equal(scrollViews.length, 1);
+    let scrollView = scrollViews[0];
+    assert.ok(scrollView);
+    scrollView.props.onScroll({
+      nativeEvent: {
+        contentOffset: { y: 240 },
+        contentSize: { height: 480 },
+        layoutMeasurement: { height: 240 },
+      },
+    });
+
+    await act(async () => {
+      renderer?.update(renderOwner(false, 'owner-b'));
+      renderer?.update(renderOwner(true, 'owner-b'));
+    });
+
+    assert.equal(contentHeight, 0);
+    assert.equal(layoutHeight, 0);
+    assert.equal(scrollOffset, 0);
+
+    await act(async () => {
+      renderer?.update(renderOwner(false, 'owner-b'));
+    });
+    scrollViews = renderer.root.findAll((node) => (node.type as unknown) === 'ScrollView');
+    assert.equal(scrollViews.length, 1);
+    scrollView = scrollViews[0];
+    assert.ok(scrollView);
+    scrollView.props.onScroll({
+      nativeEvent: {
+        contentOffset: { y: 24 },
+        contentSize: { height: 960 },
+        layoutMeasurement: { height: 320 },
+      },
+    });
+
+    await act(async () => {
+      renderer?.update(renderOwner(true, 'owner-b'));
+    });
+
+    assert.equal(contentHeight, 960);
+    assert.equal(layoutHeight, 320);
+    assert.equal(scrollOffset, 24);
   });
 });
