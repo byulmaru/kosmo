@@ -97,7 +97,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 ## 후속 작업 경계
 
 - DSN-14: 이 문서와 Figma Foundation 계약을 정본으로 고정한다.
-- DSN-18: motion, transition, easing, reduced-motion 계약을 별도로 확정한다.
+- DSN-18: [motion.md](./motion.md)의 motion, transition, easing, reduced-motion 계약을 정본으로 고정한다.
 - DSN-19: shared token, theme, elevation/icon foundation과 공용 primitive를 구현한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 상태를 이관·검증한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.
