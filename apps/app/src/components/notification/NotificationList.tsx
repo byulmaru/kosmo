@@ -113,23 +113,28 @@ export function NotificationList({ profile }: NotificationListProps) {
 
     readAllInFlight.current = true;
     setReadAllPending(true);
+    const handleFailure = () => {
+      readAllInFlight.current = false;
+      if (!mounted.current) {
+        return;
+      }
+      setReadAllPending(false);
+      showToast('알림을 모두 읽지 못했어요.', {
+        action: { label: '다시 시도', onPress: invoke },
+      });
+    };
     commitMarkAllRead({
-      onCompleted: () => {
+      onCompleted: (response, errors) => {
+        if (errors?.length || response.markNotificationRead == null) {
+          handleFailure();
+          return;
+        }
         readAllInFlight.current = false;
         if (mounted.current) {
           setReadAllPending(false);
         }
       },
-      onError: () => {
-        readAllInFlight.current = false;
-        if (!mounted.current) {
-          return;
-        }
-        setReadAllPending(false);
-        showToast('알림을 모두 읽지 못했어요.', {
-          action: { label: '다시 시도', onPress: invoke },
-        });
-      },
+      onError: handleFailure,
       variables: { ids: [...ids] },
     });
   }, [commitMarkAllRead, invoke, isMarkAllReadInFlight, readAllPending, showToast]);

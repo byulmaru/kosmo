@@ -305,6 +305,17 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+async function verifyReadAllFailure(canvasElement: HTMLElement) {
+  const canvas = within(canvasElement);
+  await userEvent.click(canvas.getByRole('button', { name: '모두 읽음' }));
+  await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('알림을 모두 읽지 못했어요.');
+  expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible();
+  expect(
+    canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/ }),
+  ).toBeVisible();
+  await waitFor(() => expect(canvas.getByRole('button', { name: '모두 읽음' })).not.toBeDisabled());
+}
+
 export const StatesAndFollowItems: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -457,6 +468,23 @@ export const ReadAllLoading: Story = {
       ),
     );
   },
+  render: () => <RefreshList />,
+};
+
+export const ReadAllGraphQLError: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: ['Read all failed'],
+      mutationResponse: { markNotificationRead: { notifications: [], recipientProfiles: [] } },
+    },
+  },
+  play: ({ canvasElement }) => verifyReadAllFailure(canvasElement),
+  render: () => <RefreshList />,
+};
+
+export const ReadAllNullPayload: Story = {
+  parameters: { relay: { mutationResponse: { markNotificationRead: null } } },
+  play: ({ canvasElement }) => verifyReadAllFailure(canvasElement),
   render: () => <RefreshList />,
 };
 
