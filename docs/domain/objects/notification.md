@@ -58,12 +58,25 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 
 ## 행동
 
-| 행동                           | 행동 주체 | 대상 객체    | 입력값                     | 권한                                       | 조건                                                                                                    | 결과                                                                                             |
-| ------------------------------ | --------- | ------------ | -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Notification 생성              | 시스템    | Notification | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다 | 입력 Notification Type과 Read State=Unread인 Notification 및 원인 관계가 생성된다                |
-| 상호작용 Notification 정리     | 시스템    | Notification | 정리 대상 Notification     | `System.NotificationSource`                | Source Reaction이 제거되었거나 Source Repost가 Tombstone이다                                            | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                           |
-| Profile Notification 읽음 처리 | Account   | Notification | 없음                       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아니다                                                                             | Unread이면 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
-| Account Notification 읽음 처리 | Account   | Notification | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                 | Read State가 Read가 되고 읽음 시각이 기록된다                                                    |
+| 행동                                | 행동 주체 | 대상 객체         | 입력값                     | 권한                                       | 조건                                                                                                    | 결과                                                                                                          |
+| ----------------------------------- | --------- | ----------------- | -------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Notification 생성                   | 시스템    | Notification      | Type, Recipient, 원인 객체 | `System.NotificationSource`                | Type별 필수 관계가 존재하고 Recipient가 원인 객체의 조회 정책을 통과하며 아래 억제 정책에 걸리지 않는다 | 입력 Notification Type과 Read State=Unread인 Notification 및 원인 관계가 생성된다                             |
+| 상호작용 Notification 정리          | 시스템    | Notification      | 정리 대상 Notification     | `System.NotificationSource`                | Source Reaction이 제거되었거나 Source Repost가 Tombstone이다                                            | 시점과 성공을 보장하지 않고 Notification 제거를 Best Effort로 시도한다                                        |
+| Profile Notification 지정 읽음 처리 | Account   | Notification 목록 | Notification ID 목록       | `Account.Active`, `Notification.Recipient` | Type이 Operational이 아닌 입력 항목 중 요청 Account가 현재 조회할 수 있는 Notification이다              | 처리 가능한 입력 항목은 Read가 되고 읽음 시각이 최초 기록된다. 이미 Read이면 상태와 읽음 시각을 바꾸지 않는다 |
+| Account Notification 읽음 처리      | Account   | Notification      | 없음                       | `Notification.Recipient`                   | Type이 Operational이고 Recipient Account State가 Deleted가 아니며 Read State가 Unread다                 | Read State가 Read가 되고 읽음 시각이 기록된다                                                                 |
+
+### Profile Notification 지정 읽음 처리
+
+- Account는 한 요청에 0개 이상의 Notification ID를 지정할 수 있다.
+- 시스템은 입력 ID 중 요청 Account가 Recipient Profile membership을 가지고 있고 현재 조회 정책을 통과하는
+  서로 다른 Profile Notification만 Read 처리한다.
+- 존재하지 않거나 Notification이 아니거나 요청 Account가 Recipient Profile membership을 가지지 않거나 현재 조회할 수 없는 입력 ID는
+  조용히 제외하며, 존재 여부나 제외 이유를 응답으로 노출하지 않는다.
+- 빈 목록이거나 모든 입력 ID가 제외돼도 성공한 no-op이다.
+- 중복 ID와 이미 Read인 Notification은 멱등적으로 처리하며 최초 읽음 시각을 보존한다.
+- 입력에 없는 Notification은 요청 처리 중 새로 생성된 항목을 포함해 변경하지 않는다. 시스템은 입력 목록을
+  요청 시점의 전체 visible unread 집합으로 확장하지 않는다.
+- 처리 실패 시 입력 목록의 일부 Notification만 변경된 상태를 남기지 않는다.
 
 ### Type별 생성 관계
 

@@ -780,7 +780,9 @@ describe('GraphQL Reaction', () => {
       globalId('ReactionNotification', notification.id),
       recipient.token,
     );
-    assert.equal(read.errors?.[0]?.extensions?.code, 'NOT_FOUND');
+    assertNoGraphQLErrors(read);
+    assert.deepEqual(read.data?.markNotificationRead.notifications, []);
+    assert.deepEqual(read.data?.markNotificationRead.recipientProfiles, []);
   });
 
   test('stale Notification cleanup과 Undo delivery 실패를 독립 격리한다', async () => {
@@ -1322,17 +1324,17 @@ const requestNotificationSurfaces = (profileId: string, token: string) =>
 const requestMarkNotificationRead = (notificationId: string, token: string) =>
   requestGraphQL<{
     markNotificationRead: {
-      notification: { __typename: string; id: string };
-      recipientProfile: { id: string };
+      notifications: { __typename: string; id: string }[];
+      recipientProfiles: { id: string }[];
     };
   }>(
     `mutation MarkNotificationRead($input: MarkNotificationReadInput!) {
       markNotificationRead(input: $input) {
-        notification { __typename id }
-        recipientProfile { id }
+        notifications { __typename id }
+        recipientProfiles { id }
       }
     }`,
-    { input: { id: notificationId } },
+    { input: { ids: [notificationId] } },
     token,
   );
 

@@ -13,6 +13,15 @@
 
 - `leading` prop은 모바일 홈의 메뉴 버튼과 게시글 상세의 뒤로가기처럼 제목 왼쪽의 화면별 action을 받는다. touch target은 각 action이 소유한다. 모바일 홈 메뉴는 테두리나 텍스트 라벨 없이 햄버거 아이콘만 표시하되 `44×44px` touch target과 접근 가능한 이름을 유지하고, 게시글 상세 뒤로가기도 `44×44px`를 유지한다.
 - `text` variant에서 leading action과 제목 사이에는 `spacing.lg`(`16px`)를 두어 `24px` 아이콘과 제목의 시각 간격을 약 `26px`로 유지한다. `brand` variant의 대칭 action slot에는 이 간격을 적용하지 않는다.
+- `trailing` prop은 `text` variant 제목 오른쪽의 화면별 action을 받는다. trailing action은 자기 touch target, 접근 가능한 이름과 disabled 상태를 소유하며, action 유무에 따라 제목 heading이나 헤더 높이를 바꾸지 않는다.
+
+### Web 알림 모두 읽음
+
+- Web `/notifications`의 trailing action은 `모두 읽음` 텍스트를 사용한다. `<768px` 모바일 Web에서는 `UniversalShell`이, compact/full Web에서는 알림 route가 소유한 `PageHeader`가 렌더링한다. Android/iOS에는 이 action을 표시하지 않는다.
+- action은 클릭 시점에 현재 Relay connection에 로드된 unread Notification ID만 처리하며, 아직 로드하지 않았거나 요청 이후 새로 도착한 Notification을 처리하기 위해 추가 page를 먼저 가져오지 않는다.
+- 현재 로드된 unread item이 없거나 요청 중이면 action을 disabled 처리하고 접근성 상태에도 반영한다.
+- 성공 뒤 처리된 item은 목록에 남고 Unread 강조만 제거된다. 전역 인디케이터는 서버 count로 수렴하므로 아직 처리하지 않은 unread item이 있으면 `모두 읽음` 성공 뒤에도 남을 수 있다.
+- pending 또는 실패 중에는 item 강조와 전역 인디케이터를 낙관적으로 제거하지 않는다.
 
 ## Web 검색 헤더
 
@@ -41,7 +50,7 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 - 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.
-- `<768px` 모바일 Web `/compose`, `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. Settings 내부 detail에서는 같은 위치에 뒤로가기와 detail 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
+- `<768px` 모바일 Web `/compose`, `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 detail에서는 같은 위치에 뒤로가기와 detail 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
 - Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
 - Android/iOS와 compact Web의 `/settings` root·detail: settings route가 현재 화면의 text header를 scroll content의 첫 heading으로 소유한다. detail header는 뒤로가기를 제공하고 Native safe area는 모바일 셸이 바깥에서 소유한다.

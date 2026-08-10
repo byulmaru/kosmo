@@ -125,6 +125,22 @@ const followNotificationSourceLoader = (ctx: UserContext) =>
     key: (source) => source?.id ?? null,
   });
 
+const followRequestNotificationSourceLoader = (ctx: UserContext) =>
+  ctx.loader<string, FollowRequestNotificationSourceRow, string, true>({
+    name: 'notification.followRequestSource',
+    nullable: true,
+    load: (ids) =>
+      ctx.db
+        .select({
+          followRequest: getColumns(ProfileFollowRequests),
+          id: ProfileFollowRequests.id,
+          profileId: ProfileFollowRequests.followerProfileId,
+        })
+        .from(ProfileFollowRequests)
+        .where(inArray(ProfileFollowRequests.id, ids)),
+    key: (source) => source?.id ?? null,
+  });
+
 const reactionNotificationSourceLoader = (ctx: UserContext) =>
   ctx.loader<string, ReactionNotificationSourceRow, string, true>({
     name: 'notification.reactionSource',
@@ -196,7 +212,9 @@ export const getNotificationSource = async (
     notification.kind === NotificationKind.FOLLOW
       ? await followNotificationSourceLoader(ctx).load(notification.sourceId)
       : notification.kind === NotificationKind.FOLLOW_REQUEST
-        ? notification.followRequestSource
+        ? 'followRequestSource' in notification
+          ? notification.followRequestSource
+          : await followRequestNotificationSourceLoader(ctx).load(notification.sourceId)
         : notification.kind === NotificationKind.REACTION
           ? await reactionNotificationSourceLoader(ctx).load(notification.sourceId)
           : notification.kind === NotificationKind.REPLY
