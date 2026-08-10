@@ -1,4 +1,3 @@
-{{- if or (eq .Values.env "dev") (eq .Values.env "prod") }}
 {{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
 {{- range $runtime := list "api" "worker" }}
 {{- $resourceName := printf "%s-postgres-%s" $releaseName $runtime }}
@@ -29,5 +28,4 @@ spec:
   passwordSecret:
     name: {{ $resourceName }}
   databaseRoleReclaimPolicy: retain
-{{- end }}
 {{- end }}

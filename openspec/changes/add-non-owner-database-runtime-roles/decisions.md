@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 최신 Linear PROD-369/470/724와 PROD-709/713/715/716, 기본 비활성 Worker foundation인 PROD-730의 경계, 기존 dev/production owner·migration identity, CloudNativePG 1.30 DatabaseRole/VaultStaticSecret 제약과 2026-08-07·10 사용자 선택을 반영한다.
+이 기록은 최신 Linear PROD-369/470/724와 PROD-709/713/715/716, 기본 비활성 Worker foundation인 PROD-730의 경계, 기존 환경별 owner·production migration identity, CloudNativePG 1.30 DatabaseRole/VaultStaticSecret 제약과 2026-08-07·10 사용자 선택을 반영한다.
 
 ## Decision Records
 
@@ -35,7 +35,7 @@
 - Authority / Provenance: Linear `PROD-369`; 2026-08-10 사용자 결정
 - Status: Active
 - Context / Problem: 두 role이 한 Vault 객체나 Kubernetes Secret lifecycle을 공유하면 credential source와 회전 경계가 다시 결합된다.
-- Decision Outcome: API와 Worker는 각각 `kubernetes/kosmo/<env>/api-database`, `kubernetes/kosmo/<env>/worker-database`를 사용하고 `<release-prefix>-postgres-api`, `<release-prefix>-postgres-worker` basic-auth Secret으로 투영한다. Dev와 production path는 credential과 회전 경계를 공유하지 않으며 `<release-prefix>`는 가장 긴 runtime 접미사를 보존하도록 먼저 제한한다.
+- Decision Outcome: API와 Worker는 각각 `kubernetes/kosmo/<env>/api-database`, `kubernetes/kosmo/<env>/worker-database`를 사용하고 `<release-prefix>-postgres-api`, `<release-prefix>-postgres-worker` basic-auth Secret으로 투영한다. 모든 환경의 path는 credential과 회전 경계를 공유하지 않으며 `<release-prefix>`는 가장 긴 runtime 접미사를 보존하도록 먼저 제한한다.
 - Alternatives Considered: 한 Vault path의 여러 credential key는 source object와 회전을 공유해 선택하지 않았다. 기존 공용 `env` 또는 migration path 재사용은 runtime/migration 경계를 위반한다. 전체 release 이름을 접미사 뒤에서 자르는 방식은 긴 release에서 API/Worker suffix가 사라져 resource collision을 만들 수 있어 선택하지 않았다.
 - Consequences: 운영자가 환경마다 두 Vault 객체를 별도로 준비·회전해야 한다. VSO와 DatabaseRole readiness도 환경·role별로 독립 관측할 수 있다. Projection은 현재 공용 `vso-kubernetes-sync` VaultAuth를 사용하므로 이 결정 자체가 path-level Vault ACL을 제공하지는 않는다.
 - Confirmation / Follow-up: Render에서 path, destination type/key filter와 CNPG reload label을 확인하고 Secret value는 출력하지 않는다.
@@ -46,7 +46,7 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-369`, `PROD-724`, `PROD-713`, `PROD-715`, `PROD-716`, `PROD-709`
 - Status: Active
-- Context / Problem: DatabaseRole은 schema/table/sequence GRANT와 default privilege를 관리하지 않으며, dev/production PreSync migration은 Sync 단계의 새 role보다 먼저 실행될 수 있다. Local full migration replay에도 Helm이 관리하는 runtime role이 없다.
+- Context / Problem: DatabaseRole은 schema/table/sequence GRANT와 default privilege를 관리하지 않으며, 환경별 PreSync migration은 Sync 단계의 새 role보다 먼저 실행될 수 있다. Local full migration replay에도 Helm이 관리하는 runtime role이 없다.
 - Decision Outcome: PROD-369은 role과 credential만 선언한다. 공통 비RLS 객체 GRANT/default privilege는 PROD-724, API RLS policy는 PROD-713, API/Worker credential transition은 PROD-715/716, workload credential selector는 PROD-709가 소유한다.
 - Alternatives Considered: 이번 PR에 conditional GRANT migration을 넣으면 role 부재 시 조용히 누락되거나 full replay가 실패한다. same-release role+GRANT Job은 기존 migration ownership 경계를 중복하므로 선택하지 않았다.
 - Consequences: 새 credential은 처음에는 객체 privilege가 없고 어떤 workload도 사용하지 않는다. 후속 authorization·transition 이슈가 준비되기 전 transition할 수 없다.
@@ -76,17 +76,17 @@
 - Consequences: PR은 Ready/Mergeable 상태여도 production에는 반영되지 않을 수 있다. live 검증 task는 승인·apply 이후까지 미완료로 남는다.
 - Confirmation / Follow-up: Production 변경 전에 승인 기록과 대상 release를 확인하고, 적용 직후 VSO destination·DatabaseRole readiness·실제 credential 경계를 검증한다.
 
-### Dev에서 production 역할 경계를 먼저 검증한다
+### 모든 배포 환경에 역할을 선언하고 production 전 비운영 환경에서 먼저 검증한다
 
 - Decision Date: 2026-08-10
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-369`; 2026-08-10 사용자 결정
 - Status: Active
-- Context / Problem: Production apply는 별도 수동 승인을 요구하지만 prod-only manifest로는 실제 LOGIN, BYPASSRLS, membership과 권한 거부를 production 전에 검증할 수 없다.
-- Decision Outcome: Dev에도 같은 `kosmo_api`, `kosmo_worker` DatabaseRole과 환경별 credential Secret을 additive하게 provision한다. Dev 적용은 production 승인이 아니며 workload 선택, migration, GRANT와 RLS policy는 바꾸지 않는다.
-- Alternatives Considered: Production에서만 최초 live 검증하는 방식은 승인 뒤에야 role 계약 오류를 발견한다. Dev에서 owner Secret을 재사용하는 방식은 credential isolation과 실제 role identity 검증을 제공하지 못한다.
-- Consequences: Dev Vault에 별도 `api-database`, `worker-database` source를 준비해야 하며 source가 없으면 role provisioning readiness만 실패한다. 기존 owner workload는 새 Secret을 사용하지 않는다.
-- Confirmation / Follow-up: Dev render와 실제 credential로 role identity·attribute·membership·객체 ownership 부재를 확인한 뒤 production preflight와 별도 승인을 진행한다.
+- Context / Problem: Production apply는 별도 수동 승인을 요구하지만 특정 환경만 허용하는 manifest는 새 배포 환경에서 동일한 role 계약을 재사용할 수 없고 production 전 실제 LOGIN, BYPASSRLS, membership과 권한 거부 검증도 제한한다.
+- Decision Outcome: `.Values.env`로 구분되는 모든 Helm 배포 환경에 같은 `kosmo_api`, `kosmo_worker` DatabaseRole과 환경별 credential Secret을 additive하게 provision한다. 비운영 환경 적용은 production 승인이 아니며 workload 선택, migration, GRANT와 RLS policy는 바꾸지 않는다.
+- Alternatives Considered: Dev와 production만 allowlist하는 방식은 staging 등 다른 배포 환경을 누락한다. Production에서만 최초 live 검증하는 방식은 승인 뒤에야 role 계약 오류를 발견한다.
+- Consequences: 각 환경 Vault에 별도 `api-database`, `worker-database` source를 준비해야 하며 source가 없으면 role provisioning readiness만 실패한다. 기존 owner workload는 새 Secret을 사용하지 않는다.
+- Confirmation / Follow-up: 임의의 비운영 환경 render와 실제 credential로 role identity·attribute·membership·객체 ownership 부재를 확인한 뒤 production preflight와 별도 승인을 진행한다.
 
 ## Remaining Decisions
 
