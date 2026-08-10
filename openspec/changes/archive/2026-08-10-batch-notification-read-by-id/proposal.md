@@ -11,6 +11,7 @@
 - 기존 제품의 단건 활성화 흐름은 같은 mutation에 `{ ids: [id] }`를 전달하도록 갱신한다.
 - Web `모두 읽음`은 클릭 시점에 현재 Relay connection에 로드된 unread ID만 한 번에 전달하고, 반환된 Notification과 Profile count로 목록·전역 인디케이터를 수렴시킨다.
 - 처리하지 않은 unread Notification이 남으면 Web 전역 인디케이터는 0이 아닐 수 있으며, 추가 page를 선행 fetch하거나 서버 전체 집합으로 입력을 확장하지 않는다.
+- Web 일괄 Read가 실패하면 기존 Unread 상태를 유지하고 앱의 기존 toast로 실패와 `다시 시도` action을 알리며, 재시도 시점의 loaded unread ID를 새로 수집한다.
 
 ## Authority / Provenance
 

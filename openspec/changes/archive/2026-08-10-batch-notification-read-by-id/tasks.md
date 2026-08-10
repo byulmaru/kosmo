@@ -53,20 +53,21 @@ Web `/notifications` 사용자는 `모두 읽음` action으로 클릭 시점에 
 - action 문구는 `모두 읽음`을 유지하고, current connection의 loaded unread가 없거나 요청 중이면 disabled 상태와 접근성 상태를 함께 제공한다.
 - 추가 page를 선행 fetch하거나 서버 전체 unread로 범위를 확장하거나 단건 mutation을 반복 호출하지 않는다.
 - 성공 payload의 Notification·Recipient Profile Node를 정규화하고, client-side count 산술·optimistic update·성공 뒤 추가 refetch를 사용하지 않는다.
+- 실패하면 기존 Unread 상태를 유지하고 기존 앱 toast로 `알림을 모두 읽지 못했어요.`와 `다시 시도` action을 제공하며, 재시도 시 current loaded unread ID를 다시 수집한다.
 - 처리한 item은 목록에 남으며, loaded unread가 모두 처리돼도 아직 로드하지 않은 unread가 있으면 서버 count와 전역 인디케이터가 0이 아닐 수 있다.
 - PROD-682의 Android/iOS pull-to-refresh 연결은 이 task group에 포함하지 않는다.
 
 **Verification**
 
-- Storybook에서 loaded-unread, loaded-zero, loading과 failure 상태의 action, pending·disabled·접근성 상태와 레이아웃 소유권을 확인한다.
-- Web E2E에서 현재 로드된 복수 unread의 단일 batch 요청, 목록 유지, 강조 제거, 입력에 없는 Notification 보존, 재시도와 서버 count·전역 인디케이터 수렴을 확인한다.
+- Storybook에서 loaded-unread, loaded-zero, loading과 failure 상태의 action, pending·disabled·접근성 상태, 실패 toast·재시도와 레이아웃 소유권을 확인한다.
+- Web E2E에서 현재 로드된 복수 unread의 단일 batch 요청, 목록 유지, 강조 제거, 입력에 없는 Notification 보존, 실패 toast·새 snapshot 재시도와 서버 count·전역 인디케이터 수렴을 확인한다.
 - PROD-703·PROD-679 두 slice의 완료 뒤 canonical 문서, delta spec, active decision과 구현이 일치하고 전체 OpenSpec strict validation이 통과하는지 확인한다.
 - 테스트 코드 범위: 기존 React Native Web Storybook의 `모두 읽음` 상태 fixture와 `apps/web/e2e/notifications.e2e.ts`의 current-loaded batch Read 사용자 흐름.
 - 테스트 필요성: 페이지에 보이는 현재 unread만 처리한다는 입력 경계, 중복 요청 방지, 실패 시 기존 상태 보존, 목록 유지와 non-zero일 수 있는 서버 count 수렴을 실제 Web 흐름에서 증명해야 한다.
 - 테스트 제외 범위: Android/iOS runtime QA, PROD-682 pull-to-refresh, 추가 pagination 조합, 관련 없는 Notification 종류별 시각 snapshot, 새 E2E harness와 테스트 인프라 변경.
 
-- [ ] 2.1 Web `/notifications`의 shell·header 소유권에 맞춰 current connection의 loaded unread만 처리하는 `모두 읽음` action과 pending·disabled·접근성 상태를 구현한다.
-- [ ] 2.2 성공 payload로 item과 Recipient Profile을 정규화하고 실패 시 기존 상태를 유지해 목록 강조와 전역 인디케이터가 서버 상태로 수렴하게 한다.
-- [ ] 2.3 loaded-unread, loaded-zero, loading과 failure Storybook 상태를 추가하고 Web 레이아웃·접근성 계약을 확인한다.
-- [ ] 2.4 현재 로드된 복수 unread 처리, 입력 밖 Notification 보존, 목록 유지, 실패·재시도와 서버 count 수렴을 Web E2E로 검증한다.
-- [ ] 2.5 두 구현 slice와 canonical·Linear·OpenSpec 정합성 및 전체 검증 결과를 확인하고, 모든 task가 완료된 뒤 PROD-679 책임으로 change를 archive한다.
+- [x] 2.1 Web `/notifications`의 shell·header 소유권에 맞춰 current connection의 loaded unread만 처리하는 `모두 읽음` action과 pending·disabled·접근성 상태를 구현한다.
+- [x] 2.2 성공 payload로 item과 Recipient Profile을 정규화하고 실패 시 기존 상태를 유지해 목록 강조와 전역 인디케이터가 서버 상태로 수렴하게 한다.
+- [x] 2.3 loaded-unread, loaded-zero, loading과 failure Storybook 상태를 추가하고 Web 레이아웃·접근성 계약을 확인한다.
+- [x] 2.4 현재 로드된 복수 unread 처리, 입력 밖 Notification 보존, 목록 유지, 실패·재시도와 서버 count 수렴을 Web E2E로 검증한다.
+- [x] 2.5 두 구현 slice와 canonical·Linear·OpenSpec 정합성 및 전체 검증 결과를 확인하고, 모든 task가 완료된 뒤 PROD-679 책임으로 change를 archive한다.

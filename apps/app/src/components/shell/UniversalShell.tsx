@@ -13,6 +13,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
+import {
+  NotificationReadAllAction,
+  NotificationReadAllProvider,
+} from '@/components/notification/NotificationReadAllContext';
 import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
@@ -97,7 +101,9 @@ export function UniversalShell() {
             onRetry={retry}
             title="앱을 불러오지 못했어요"
           >
-            <UniversalShellContent revision={revision} />
+            <NotificationReadAllProvider>
+              <UniversalShellContent revision={revision} />
+            </NotificationReadAllProvider>
           </RouteBoundary>
         </PrimaryNavigationScrollProvider>
       </NavigationGuardProvider>
@@ -296,6 +302,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 <PageHeader
                   leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
                   title={mobileShellHeader.title}
+                  trailing={
+                    mobileShellHeader.title === '알림' ? <NotificationReadAllAction /> : undefined
+                  }
                 />
               ) : (
                 <View style={[styles.mobileHeader, { borderColor: theme.border }]}>
