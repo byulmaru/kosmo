@@ -170,6 +170,8 @@ helm template kosmo apps/helm \
 Pooler admission과 readiness가 먼저 통과한 뒤 API Rollout의 `OPERATION_DATABASE_URL`만 새 endpoint를 소비하도록 application release를 동기화한다. API request authentication·startup은 기존 `DATABASE_URL` direct Service를 계속 사용하고, Web BFF·worker·migration도 같은 revision에서 direct Service와 기존 Secret ref를 계속 사용해야 한다. 실제 환경의 env를 확인할 때는 endpoint authority의 host와 port만 shell 변수로 비교하고 URL, Secret 값, actor UUID를 출력하거나 기록하지 않는다.
 
 ```sh
+set -eu
+
 NAMESPACE=kosmo-dev
 RELEASE=kosmo
 POOLER="${RELEASE}-postgres-pooler-rw"
@@ -189,16 +191,34 @@ case "$web_url" in *"@${DIRECT}:5432/"*) ;; *) exit 1 ;; esac
 kubectl wait --for=condition=Available "rollout/${RELEASE}-api" -n "$NAMESPACE" --timeout=5m
 kubectl wait --for=condition=Available "rollout/${RELEASE}-web" -n "$NAMESPACE" --timeout=5m
 
-# Current rollout must not emit a PgBouncer-unsupported startup-parameter error.
-API_POD="$(kubectl get pod -n "$NAMESPACE" \
-  -l "app.kubernetes.io/name=api,app.kubernetes.io/instance=${RELEASE}" \
-  -o jsonpath='{.items[0].metadata.name}')"
-if kubectl logs "$API_POD" -n "$NAMESPACE" --since=10m \
-  | rg -i 'unsupported.*startup|startup.*parameter.*(unsupported|not supported)|idle_in_transaction_session_timeout.*(unsupported|not supported)' \
-  >/dev/null; then
-  echo "operation-startup-parameter-unsupported" >&2
+# Every Pod in the current rollout revision must be readable and must not emit
+# a PgBouncer-unsupported startup-parameter error.
+API_POD_HASH="$(kubectl get rollout "${RELEASE}-api" -n "$NAMESPACE" \
+  -o jsonpath='{.status.currentPodHash}')"
+test -n "$API_POD_HASH" || {
+  echo "current-api-pod-hash-missing" >&2
   exit 1
-fi
+}
+API_PODS="$(kubectl get pod -n "$NAMESPACE" \
+  -l "app.kubernetes.io/name=api,app.kubernetes.io/instance=${RELEASE},rollouts-pod-template-hash=${API_POD_HASH}" \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+test -n "$API_PODS" || {
+  echo "current-api-pods-missing" >&2
+  exit 1
+}
+
+printf '%s\n' "$API_PODS" | while IFS= read -r API_POD; do
+  if ! API_LOGS="$(kubectl logs "$API_POD" -n "$NAMESPACE" --since=10m 2>&1)"; then
+    echo "current-api-pod-log-read-failed" >&2
+    exit 1
+  fi
+  if printf '%s\n' "$API_LOGS" \
+    | rg -i 'unsupported.*startup|startup.*parameter.*(unsupported|not supported)|idle_in_transaction_session_timeout.*(unsupported|not supported)' \
+      >/dev/null; then
+    echo "operation-startup-parameter-unsupported" >&2
+    exit 1
+  fi
+done
 ```
 
 API activation 후 일반 GraphQL Query/Mutation을 익명, Account-only, Account+Profile 세 경우로 실행해 다음을 비민감하게 확인한다. user-data query, domain action과 Mutation payload의 nested result projection은 operation `ctx.db`에서 실행되어야 하며, `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization만 trusted direct side effect 예외로 둔다.
