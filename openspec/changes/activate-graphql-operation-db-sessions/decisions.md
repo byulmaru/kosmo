@@ -11,10 +11,22 @@
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728, Linear PROD-716
 - Status: Active
 - Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web/worker/migration은 같은 direct URL 경계를 사용한다. operation session만 Pooler로 보내야 request authentication과 다른 workload traffic이 결합되지 않고 rollback 단위가 작다.
-- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret source, scheme, path와 query는 동일하게 재사용하고 operation URL의 host와 port를 포함한 authority만 in-chart Pooler Service `:5432`로 교체한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
+- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 rendered env의 username, database와 password Secret source, scheme, path와 query는 동일하게 재사용하고 operation URL의 host와 port를 포함한 authority만 in-chart Pooler Service `:5432`로 교체한다. Runtime operation client는 URL query에서 세 server timeout key만 제거하고 unrelated query parameter는 유지한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
 - Alternatives Considered: API `DATABASE_URL` 자체를 Pooler로 바꾸면 request authentication·startup까지 operation endpoint와 결합된다. API/Web 전체를 동시에 전환하면 Web에 operation lifecycle이 없고 rollback이 결합된다.
-- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 보존해야 한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
+- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 authority(host와 port)만 `<release>-postgres-pooler-rw:5432`로 교체하고 username/database/password Secret source와 path/query는 보존해야 한다. Runtime은 operation client 생성 전에 세 server timeout query key만 제거하고 다른 query parameter는 보존한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
 - Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
+
+### Pooler operation timeout은 startup parameter가 아닌 session SQL로 초기화한다
+
+- Decision Date: 2026-08-11
+- Decision Class: Derived Contract / Incident Follow-up
+- Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, dev merge revision `de6034d3`
+- Status: Active
+- Context / Problem: `de6034d3` dev activation에서 operation postgres.js client가 `idle_in_transaction_session_timeout=30000`을 startup parameter로 PgBouncer에 전달했고, PgBouncer가 이를 지원하지 않아 operation 초기화가 거부됐다. Argo/Rollout readiness는 통과했지만 GraphQL Query/Mutation이 초기화 단계에서 HTTP 500으로 실패했다.
+- Decision Outcome: API `DATABASE_URL` direct client는 기존 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout` startup 옵션과 값을 유지한다. Rendered `OPERATION_DATABASE_URL`에 같은 timeout query key가 있어도 Pooler client는 client 생성 전에 정확히 세 key만 제거해 PgBouncer가 지원하지 않는 server timeout startup parameter를 보내지 않는다. 다른 query parameter, endpoint authority와 credential source는 유지한다. 실제 frontend connection을 만든 뒤 actor GUC와 세 timeout을 하나의 initialization SQL round trip에서 session-level로 설정한다. 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다. endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 변경하지 않는다.
+- Alternatives Considered: 전체 activation merge revision을 즉시 revert하는 선택은 사용자 결정으로 보류하고 forward fix를 선택했다. operation client에 startup parameter를 계속 보내는 방식은 PgBouncer 호환성을 깨뜨린다. actor/timeout을 여러 SQL round trip 또는 resolver 이후에 설정하면 초기화 원자성과 resolver 전제 조건을 약화한다.
+- Consequences: direct request/auth/startup workload와 operation Pooler lifecycle의 timeout 경계가 분리된다. operation startup compatibility와 GraphQL smoke가 통과하기 전에는 live gate를 닫을 수 없으며, 실패 시 기존 whole-activation Git revert 절차를 fallback으로 유지한다.
+- Confirmation / Follow-up: current API Pod 로그에 unsupported startup-parameter 오류가 없고 익명·Account-only·Account+Profile GraphQL smoke가 HTTP 500 없이 통과하는지 비민감한 상태로 기록한다. 이후 affinity, reset, metrics/capacity와 4.3/4.4/4.5 live gate를 별도로 검증한다.
 
 ### GraphQL user-data SQL은 operation `ctx.db`를 사용하고 trusted materialization만 direct 예외로 둔다
 
@@ -47,10 +59,10 @@
 - Authority / Provenance: Linear PROD-370, Linear PROD-726
 - Status: Active
 - Context / Problem: actor가 없는 setting을 생략하면 missing 상태와 재사용 backend의 이전 session state를 구분하기 어렵다. 반대로 방금 성공한 setting을 public helper로 매번 다시 읽으면 operation마다 추가 round trip이 생긴다.
-- Decision Outcome: Account/Profile setting을 매 operation 모두 session-level로 설정한다. 값이 있으면 UUID, 없으면 빈 문자열을 쓰고 setting SQL 실패 시 operation을 중단한다. Public helper의 UUID/`NULL` 의미는 integration test와 dev live gate에서 일회성 검증하며 runtime read-back은 하지 않는다.
+- Decision Outcome: Account/Profile setting과 operation timeout(`idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`)을 매 operation 모두 같은 initialization SQL round trip에서 session-level로 설정한다. 값이 있으면 actor UUID, 없으면 빈 문자열을 쓰고 setting SQL 실패 시 operation을 중단한다. Public helper의 UUID/`NULL` 의미는 integration test와 dev live gate에서 일회성 검증하며 runtime read-back은 하지 않는다.
 - Alternatives Considered: 존재하는 actor만 설정하면 이전 state 방어가 불완전하다. 매 operation helper read-back은 이미 성공한 setting을 중복 확인하고 runtime을 helper 구현에 불필요하게 결합한다.
-- Consequences: 익명, Account-only, Account+Profile operation이 동일한 설정 경로를 사용하고 정상 operation에는 추가 read-back SQL이 없다.
-- Confirmation / Follow-up: 세 identity matrix와 helper 의미를 PostgreSQL integration 및 live probe로 확인하고 runtime query inventory에 read-back SQL이 없음을 확인한다.
+- Consequences: 익명, Account-only, Account+Profile operation이 동일한 actor·timeout 설정 경로를 사용하고 정상 operation에는 추가 read-back SQL이 없다. Direct client의 기존 startup timeout 옵션은 이 operation 경계와 분리되어 유지된다.
+- Confirmation / Follow-up: 세 identity matrix와 helper 의미, Pooler startup compatibility와 GraphQL smoke를 PostgreSQL integration 및 live probe로 확인하고 runtime query inventory에 read-back SQL이 없음을 확인한다.
 
 ### selectProfile actor 전환은 같은 operation session에서 반영한다
 

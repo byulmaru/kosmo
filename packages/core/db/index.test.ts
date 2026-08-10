@@ -1,18 +1,22 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { createOperationDatabase, db } from './index';
+import { createOperationDatabase, db, pg, postgresSessionTimeouts } from './index';
 
 type OperationClient = {
   options: {
     host: string[];
     max: number;
     connect_timeout: number;
+    connection: Record<string, unknown>;
   };
   end: (options?: { timeout?: number }) => Promise<void>;
 };
 
 const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
   (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
+
+const getConnection = (client: unknown) =>
+  (client as { options: { connection: Record<string, unknown> } }).options.connection;
 
 test('creates a bounded one-connection operation database with idempotent close', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
@@ -21,6 +25,9 @@ test('creates a bounded one-connection operation database with idempotent close'
   assert.notEqual(owner.db, db);
   assert.equal(getClient(owner).options.max, 1);
   assert.equal(getClient(owner).options.connect_timeout, 5);
+  for (const setting of Object.keys(postgresSessionTimeouts)) {
+    assert.equal(setting in getClient(owner).options.connection, false);
+  }
 
   const firstClose = owner.close();
   assert.equal(owner.close(), firstClose);
@@ -65,5 +72,27 @@ test('prefers the operation endpoint and falls back to the direct endpoint', asy
     } else {
       process.env.DATABASE_URL = previousDatabaseUrl;
     }
+  }
+});
+
+test('strips operation timeout query parameters while preserving other connection parameters', async () => {
+  const owner = createOperationDatabase(
+    'postgres://kosmo@operation-pooler.example:5432/kosmo?idle_in_transaction_session_timeout=30000&lock_timeout=10000&statement_timeout=30000&application_name=graphql-operation',
+  );
+  const { connection } = getClient(owner).options;
+
+  assert.equal(connection.application_name, 'graphql-operation');
+  for (const setting of Object.keys(postgresSessionTimeouts)) {
+    assert.equal(setting in connection, false);
+  }
+
+  await owner.close();
+});
+
+test('keeps the direct client startup timeout settings', () => {
+  const connection = getConnection(pg);
+
+  for (const [setting, value] of Object.entries(postgresSessionTimeouts)) {
+    assert.equal(connection[setting], value);
   }
 });

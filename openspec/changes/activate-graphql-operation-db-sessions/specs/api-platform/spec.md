@@ -68,11 +68,19 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 이들이 
 - **WHEN** API process가 startup 또는 bootstrap용 SQL을 실행한다
 - **THEN** 해당 SQL은 GraphQL operation session 밖의 기존 DB 경계를 사용할 수 있다
 
+#### Scenario: operation Pooler 초기화가 resolver보다 먼저 완료된다
+
+- **WHEN** production GraphQL Query 또는 Mutation operation이 `OPERATION_DATABASE_URL` Pooler client를 만든다
+- **THEN** PgBouncer가 지원하지 않는 server timeout startup parameter를 전송하지 않는다
+- **AND** actor GUC와 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 하나의 initialization SQL round trip에서 session-level로 설정한다
+- **AND** initialization SQL 성공 전에는 resolver SQL을 실행하지 않는다
+- **AND** API `DATABASE_URL` direct client의 기존 timeout startup 옵션과 request/startup endpoint 경계는 유지한다
+
 ### Requirement: API request와 operation endpoint를 분리한다
 
 **Authority / Provenance**: `docs/operations/postgres-session-pool.md`, Linear PROD-726, PROD-728, PROD-716.
 
-API는 request authentication과 startup/bootstrap에 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 API와 operation URL은 같은 username, database와 password Secret source, scheme, path와 query를 재사용해야 하며(MUST), operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체해야 한다(MUST). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 기존 direct Service를 유지해야 한다(MUST).
+API는 request authentication과 startup/bootstrap에 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 rendered API와 operation URL은 같은 username, database와 password Secret source, scheme, path와 query를 재사용해야 하며(MUST), operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체해야 한다(MUST). Runtime operation client는 URL query에서 세 server timeout key만 제거하고 unrelated query parameter는 유지해야 한다(MUST). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF, worker와 migration workload는 기존 direct Service를 유지해야 한다(MUST). Pooler startup compatibility forward fix에서도 endpoint authority, credential/Secret selector, Pooler CR, replica, resource와 capacity를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: API operation만 Pooler를 사용한다
 
@@ -87,3 +95,9 @@ API는 request authentication과 startup/bootstrap에 `DATABASE_URL` direct Post
 - **THEN** API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지한다
 - **AND** API `OPERATION_DATABASE_URL` env와 operation plugin/code는 pre-activation revision에 존재하지 않는다
 - **AND** Web/worker/migration, Pooler와 Cluster는 변경하지 않는다
+
+#### Scenario: forward fix 뒤 GraphQL smoke가 초기화 실패를 드러내지 않는다
+
+- **WHEN** forward fix release가 dev에 배포되고 API Rollout이 Ready가 된다
+- **THEN** current API Pod 로그에 PgBouncer unsupported startup-parameter 오류가 없어야 한다
+- **AND** 익명·Account-only·Account+Profile 기존 GraphQL smoke는 HTTP 500 없이 기대한 결과를 반환해야 한다
