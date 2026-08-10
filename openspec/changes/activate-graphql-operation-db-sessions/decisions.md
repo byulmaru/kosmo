@@ -10,11 +10,23 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728, Linear PROD-716
 - Status: Active
-- Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web/worker/migration은 같은 direct URL 경계를 사용한다. operation session을 활성화하면서 credential transition이나 다른 workload traffic까지 결합하면 rollback 단위가 커진다.
-- Decision Outcome: GraphQL API workload만 `<release>-postgres-pooler-rw`를 사용한다. Web BFF, worker와 migration은 `<release>-postgres-rw`를 유지하고 모든 Secret 참조는 그대로 둔다.
-- Alternatives Considered: API/Web 전체를 동시에 전환하면 Web에 operation lifecycle이 없고 rollback이 결합된다. Pooler 준비만 유지하면 PROD-726 runtime을 활성화할 수 없다.
-- Consequences: Helm은 API endpoint와 API-role credential selector를 구분해 렌더해야 한다. PROD-716은 후속 non-owner credential 전환 시 workload별 endpoint/credential 조합을 이어서 소유한다.
-- Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API host, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
+- Context / Problem: 기존 Pooler는 direct Service와 독립적으로 배포됐고 API/Web/worker/migration은 같은 direct URL 경계를 사용한다. operation session만 Pooler로 보내야 request authentication과 다른 workload traffic이 결합되지 않고 rollback 단위가 작다.
+- Decision Outcome: API `DATABASE_URL`은 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. `postgres.credentials.api` trio가 구성된 경우에도 username, database와 password Secret은 동일하게 재사용하고 operation URL의 host만 in-chart Pooler Service로 파생한다. Web BFF, worker와 migration은 direct Service를 유지하고 모든 Secret 참조는 그대로 둔다.
+- Alternatives Considered: API `DATABASE_URL` 자체를 Pooler로 바꾸면 request authentication·startup까지 operation endpoint와 결합된다. API/Web 전체를 동시에 전환하면 Web에 operation lifecycle이 없고 rollback이 결합된다.
+- Consequences: Helm은 API direct endpoint와 operation Pooler endpoint를 별도 env로 렌더해야 하며, configured trio에서도 새 credential selector 없이 host만 파생해야 한다. PROD-716은 후속 non-owner credential·role·grant transition 시 workload별 endpoint/credential 조합을 이어서 소유한다.
+- Confirmation / Follow-up: dev/prod Helm render와 live Rollout env에서 API `DATABASE_URL`, `OPERATION_DATABASE_URL`, Web/worker/migration host와 Secret ref를 비민감하게 확인한다.
+
+### GraphQL user-data SQL은 operation `ctx.db`를 사용하고 trusted materialization만 direct 예외로 둔다
+
+- Decision Date: 2026-08-10
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726
+- Status: Active
+- Context / Problem: RLS 적용 대상은 GraphQL user-data query와 그 결과 projection 및 domain action이다. Mutation nested result가 global DB를 사용하거나 원격 actor materialization을 operation session으로 억지로 감싸면 각각 결과 visibility와 Fedify 소유 lifecycle이 깨진다.
+- Decision Outcome: GraphQL Query/Mutation의 resolver·loader·core domain action SQL은 operation `ctx.db`를 사용하고 Mutation nested result resolver도 같은 handle을 사용한다. request authentication/startup SQL은 API `DATABASE_URL` direct를 유지한다. 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization은 trusted direct side effect 예외로 허용하되, materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`에서 실행한다. Fedify, Temporal Workflow/Activity와 worker는 GraphQL RLS 범위에서 제외한다.
+- Alternatives Considered: Query root만 operation DB로 두면 Mutation payload 결과가 RLS 밖으로 빠진다. Fedify materialization까지 GraphQL operation DB에 넣으면 protocol-owned side effect와 GraphQL RLS lifecycle이 결합된다.
+- Consequences: production GraphQL call graph에 global/raw DB fallback을 남기지 않으며, materialization 예외는 `searchProfiles`의 trusted side effect 단계로 한정한다. RLS policy·grant와 credential 전환은 이 change에서 수행하지 않는다.
+- Confirmation / Follow-up: domain별 static/integration 검증과 dev live gate에서 nested result, materialization 후 최종 query와 operation handle을 확인한다. PROD-716은 credential·role·policy/grant transition을 별도로 소유한다.
 
 ### operation마다 실제 PgBouncer frontend connection을 만들고 종료한다
 
@@ -76,17 +88,17 @@
 - Consequences: 순간 overload 일부는 오류로 노출되며 timeout 값은 실제 dev 부하와 metrics로 검증해야 한다.
 - Confirmation / Follow-up: capacity 안의 completion, 초과 부하 timeout, `cl_waiting`/`maxwait`와 종료 뒤 connection baseline 복귀를 확인한다.
 
-### API endpoint rollback만으로 application activation을 되돌린다
+### 전체 activation revision을 Git revert하고 Pooler는 유지한다
 
 - Decision Date: 2026-08-10
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-728
 - Status: Active
-- Context / Problem: activation 실패 시 Pooler, Cluster 또는 Web/migration traffic을 out-of-band 수정하면 GitOps ownership과 독립 배포 경계를 깨뜨린다.
-- Decision Outcome: 실패 시 Git revert로 API endpoint만 direct Service로 되돌린다. operation code가 direct PostgreSQL connection을 열더라도 physical connection 종료가 session state를 폐기하므로 안전한 rollback 경계가 된다. Pooler, Cluster, Web/worker/migration과 Secret은 유지한다.
-- Alternatives Considered: Pooler 삭제는 별도 PROD-728 resource lifecycle이고 다른 검증을 방해한다. credential 변경은 PROD-716 범위다.
-- Consequences: code와 endpoint rollback을 같은 revert로 수행할 수 있고 database migration/data rollback은 없다.
-- Confirmation / Follow-up: rollback render와 dev rollout에서 API direct host, 나머지 workload 불변, GraphQL smoke를 확인한다.
+- Context / Problem: activation 실패 시 Pooler, Cluster 또는 Web/migration traffic을 out-of-band 수정하면 GitOps ownership과 독립 배포 경계를 깨뜨린다. endpoint만 되돌리면 operation plugin/code와 env가 남아 pre-activation 경계가 복원되지 않는다.
+- Decision Outcome: 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포한다. 그 revision에서 API `DATABASE_URL`은 direct Service를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 부재해야 한다. API `DATABASE_URL`, Pooler, Cluster, Web/worker/migration과 Secret은 유지하며 Pooler manifest를 prune하지 않는다.
+- Alternatives Considered: `OPERATION_DATABASE_URL`만 direct Service로 바꾸면 operation plugin/code가 남아 lifecycle 경계가 불일치한다. Pooler 삭제는 별도 PROD-728 resource lifecycle이고 application rollback에 포함하지 않는다. credential 변경은 PROD-716 범위다.
+- Consequences: application activation은 하나의 Git revert로 code와 endpoint env를 함께 제거하고 database migration/data rollback은 없다. Pooler는 별도 resource로 계속 Ready 상태를 유지한다.
+- Confirmation / Follow-up: pre-activation revision render에서 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재를 assertion하고 source tree에서 operation plugin/code 부재를 확인한다. sync 후 Pooler·Cluster readiness와 GraphQL health를 확인한다.
 
 ## Remaining Decisions
 

@@ -64,7 +64,27 @@
 
 {{- define "kosmo.apiPoolerDatabaseUrl" -}}
 {{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
-{{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- $databaseUrl := dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) | toString -}}
+{{- $parsed := urlParse $databaseUrl -}}
+{{- $scheme := get $parsed "scheme" | default "" | toString -}}
+{{- $host := get $parsed "host" | default "" | toString -}}
+{{- if and (ne $scheme "postgres") (ne $scheme "postgresql") -}}
+{{- fail "postgres.credentials.api.databaseUrl must use the postgres or postgresql scheme" -}}
+{{- end -}}
+{{- if eq $host "" -}}
+{{- fail "postgres.credentials.api.databaseUrl must include a host" -}}
+{{- end -}}
+{{- $schemePrefix := regexFind "^[^:]+://" $databaseUrl | default "" -}}
+{{- $authorityAndSuffix := trimPrefix $schemePrefix $databaseUrl -}}
+{{- $authority := regexFind "^[^/?#]*" $authorityAndSuffix | default "" -}}
+{{- $userinfo := regexFind "^.*@" $authority | default "" -}}
+{{- $rawHost := trimPrefix $userinfo $authority -}}
+{{- if or (eq $schemePrefix "") (eq $rawHost "") (ne $rawHost $host) -}}
+{{- fail "postgres.credentials.api.databaseUrl must have a parseable authority" -}}
+{{- end -}}
+{{- $suffix := trimPrefix $authority $authorityAndSuffix -}}
+{{- $port := regexFind ":[0-9]+$" $rawHost | default "" -}}
+{{- printf "%s%s%s%s%s" $schemePrefix $userinfo (include "kosmo.postgresPoolerName" .) $port $suffix -}}
 {{- else -}}
 {{- include "kosmo.postgresPoolerDatabaseUrl" . -}}
 {{- end -}}

@@ -44,7 +44,10 @@ export type OperationDatabaseOwner = {
  * PgBouncer can apply its client-disconnect reset boundary.
  */
 export const createOperationDatabase = (
-  databaseUrl = process.env.DATABASE_URL!,
+  // Helm supplies OPERATION_DATABASE_URL for the API's GraphQL operation
+  // client. Local and test processes intentionally fall back to the direct
+  // process-wide DATABASE_URL when that opt-in endpoint is absent.
+  databaseUrl = process.env.OPERATION_DATABASE_URL || process.env.DATABASE_URL!,
 ): OperationDatabaseOwner => {
   const client = postgres(databaseUrl, {
     ...postgresConnectionOptions,

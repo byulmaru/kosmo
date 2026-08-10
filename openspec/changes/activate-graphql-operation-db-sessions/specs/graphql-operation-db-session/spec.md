@@ -4,7 +4,7 @@
 
 **Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726.
 
-Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 PgBouncer endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 resolver, loader와 호출하는 core service SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT).
+Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 `OPERATION_DATABASE_URL` Pooler endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 user-data resolver, result projection, loader와 호출하는 core domain action SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), Mutation nested result resolver도 같은 handle을 사용해야 한다(MUST). application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT). API request authentication과 startup/bootstrap SQL은 `DATABASE_URL` direct 경계를 유지하며, Fedify-owned remote actor materialization trusted side effect는 이 operation session의 direct exception이다. materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`를 사용해야 한다(MUST).
 
 #### Scenario: Query가 하나의 client session을 사용한다
 
@@ -17,6 +17,18 @@ Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다
 - **WHEN** Mutation이 transaction 또는 savepoint를 소유하는 core action을 호출한다
 - **THEN** core action은 operation connection 안에서 기존 transaction 또는 savepoint를 실행한다
 - **AND** sibling mutation field를 하나의 transaction으로 묶지 않는다
+
+#### Scenario: Mutation nested result가 같은 session을 사용한다
+
+- **WHEN** Mutation domain action이 payload를 반환하고 nested result resolver 또는 loader가 실행된다
+- **THEN** root action, nested resolver와 loader의 user-data SQL은 같은 operation `ctx.db`를 사용한다
+- **AND** nested result는 operation session 밖의 global 또는 raw DB handle을 사용하지 않는다
+
+#### Scenario: remote materialization 뒤 최종 query가 operation session을 사용한다
+
+- **WHEN** 인증된 `searchProfiles`가 Fedify-owned remote actor materialization을 direct DB에서 완료한다
+- **THEN** materialization 뒤 최종 Profile query와 result projection은 같은 GraphQL operation `ctx.db`를 사용한다
+- **AND** Fedify materialization 자체는 이 operation session의 user-data SQL requirement에서 제외된다
 
 ### Requirement: Account와 Profile actor setting을 같은 session에 공급한다
 
@@ -97,8 +109,8 @@ API client connection 종료는 PgBouncer가 반환된 backend connection에 `DI
 - **THEN** 다음 operation을 초기화하기 전 이전 Account/Profile setting이 남아 있지 않는다
 - **AND** helper는 이전 actor UUID를 반환하지 않는다
 
-#### Scenario: live activation gate
+#### Scenario: live operation endpoint activation gate
 
-- **WHEN** dev 환경에서 API workload를 Pooler endpoint로 전환한다
+- **WHEN** dev 환경에서 API `OPERATION_DATABASE_URL`을 Pooler endpoint로 전환한다
 - **THEN** operation별 connection, session affinity와 reset을 비민감한 probe로 확인한다
 - **AND** PgBouncer active/waiting client, active/idle server와 max wait metrics를 관찰한다

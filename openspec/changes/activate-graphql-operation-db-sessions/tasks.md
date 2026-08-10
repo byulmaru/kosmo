@@ -8,14 +8,15 @@
 
 **Deliverable**
 
-Production GraphQL Query/Mutation의 root·field·loader와 호출하는 core service가 operation의 명시적 `ctx.db`로 모든 SQL을 실행한다.
+Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하는 core domain action이 operation의 명시적 `ctx.db`로 모든 SQL을 실행한다. Mutation nested result resolver와 loader도 같은 operation handle을 사용한다.
 
 **Guardrails**
 
-- request 인증에서 한 번 실행하는 identity SQL과 startup/bootstrap SQL은 operation session 밖의 기존 DB 경계를 유지한다.
+- request 인증에서 한 번 실행하는 identity SQL과 startup/bootstrap SQL은 API `DATABASE_URL` direct 경계를 유지한다.
+- 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization trusted side effect는 direct DB 예외로 허용하되, materialization 후 최종 GraphQL query와 result projection은 operation `ctx.db`를 사용한다.
 - 기존 GraphQL schema, 제품 결과, 권한 predicate, 목록·정렬·pagination을 변경하지 않는다.
 - 기존 domain transaction·savepoint·post-commit 의미를 유지하고 operation-wide transaction을 만들지 않는다.
-- ActivityPub/Fedify와 worker의 no-operation caller는 자기 DB handle 또는 기존 commit 이후 fallback 경계를 유지한다.
+- Fedify inbound/delivery, Temporal Workflow/Activity와 worker의 no-operation caller는 자기 direct DB lifecycle을 유지하며 GraphQL RLS 범위에 포함하지 않는다.
 
 **Verification**
 
@@ -40,7 +41,7 @@ Production GraphQL Query/Mutation의 root·field·loader와 호출하는 core se
 
 **Deliverable**
 
-각 일반 Query/Mutation은 하나의 실제 PgBouncer client connection에서 actor context와 모든 operation SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다.
+각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context와 user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
 
 **Guardrails**
 
@@ -49,6 +50,7 @@ Production GraphQL Query/Mutation의 root·field·loader와 호출하는 core se
 - 일반 결과, GraphQL 오류, execution throw, cancellation, timeout과 abort에서 async close 완료를 보장한다.
 - 현재 활성화되지 않은 Query/Mutation incremental AsyncIterable bridge를 추가하지 않는다.
 - Subscription에는 Query/Mutation용 장기 DB session을 할당하지 않는다.
+- Fedify-owned remote actor materialization trusted side effect와 Temporal/worker execution은 이 operation session lifecycle에 포함하지 않는다.
 - custom semaphore, retry loop 또는 queue를 만들지 않고 bounded postgres.js connect timeout을 사용한다.
 
 **Verification**
@@ -63,7 +65,7 @@ Production GraphQL Query/Mutation의 root·field·loader와 호출하는 core se
 - [x] 2.3 일반 Query/Mutation execute를 `finally` cleanup으로 소유하고 incremental execution과 Subscription을 제외하는 Yoga lifecycle을 구현한다.
 - [ ] 2.4 모든 완료·오류·중단·batch·overload 경계의 lifecycle 회귀를 검증한다.
 
-## 3. PROD-726 API-only Pooler endpoint activation
+## 3. PROD-726 Pooler endpoint activation
 
 **Authority / Provenance**
 
@@ -74,24 +76,26 @@ Production GraphQL Query/Mutation의 root·field·loader와 호출하는 core se
 
 **Deliverable**
 
-GraphQL API workload만 CloudNativePG Pooler Service를 사용하고 Web BFF, worker와 migration workload는 direct PostgreSQL Service를 유지한다.
+GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사용하고 API `DATABASE_URL`, Web BFF, worker와 migration workload는 direct PostgreSQL Service를 유지한다.
 
 **Guardrails**
 
 - PostgreSQL Secret, role 또는 credential selector를 변경하지 않는다.
+- configured `postgres.credentials.api` trio의 username, database와 password Secret source는 유지하고 `OPERATION_DATABASE_URL` host만 in-chart Pooler Service로 파생한다. 새 credential selector는 만들지 않는다.
 - Pooler CR, replica, resource와 capacity 설정을 변경하지 않는다.
-- API endpoint 전환은 Web/worker/migration과 독립적으로 Git revert할 수 있어야 한다.
+- 실패 시 전체 activation merge/squash revision을 Git revert해 pre-activation tree로 되돌릴 수 있어야 한다. 이 revision은 API `DATABASE_URL` direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거해야 하며, PROD-728 Pooler와 API/Web/worker/migration은 유지한다.
 
 **Verification**
 
-- dev/prod Helm render에서 API host는 `<release>-postgres-pooler-rw`, Web/worker/migration host는 `<release>-postgres-rw`인지 확인한다.
+- dev/prod Helm render에서 API `DATABASE_URL`은 `<release>-postgres-rw`, API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`, Web/worker/migration host는 `<release>-postgres-rw`인지 확인한다.
 - 모든 workload의 Secret name/key가 전환 전과 동일한지 값 노출 없이 확인한다.
-- Helm lint, server-side dry-run과 direct endpoint rollback render를 통과시킨다.
+- configured API trio 대표 조합에서 API direct URL의 username/database/Secret source와 operation URL의 동일 값 및 Pooler host 파생을 값 노출 없이 확인한다.
+- Helm lint, server-side dry-run과 pre-activation revision render를 통과시킨다. Render는 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재, operation plugin/code 부재를 assertion한다.
 
-- [x] 3.1 API operation endpoint와 shared API-role credential 선택을 분리해 API Rollout만 Pooler URL을 사용하게 한다.
+- [x] 3.1 API `DATABASE_URL` direct endpoint와 operation 전용 `OPERATION_DATABASE_URL` Pooler endpoint를 분리하고 shared API-role credential 선택은 유지한다.
 - [x] 3.2 Web BFF, worker, migration의 direct endpoint와 모든 Secret 참조 불변을 Helm render로 검증한다.
-- [x] 3.3 API-only direct endpoint rollback render와 Helm/admission 정적 검증을 완료한다.
-- [x] 3.4 application activation, operation session live gate와 API-only rollback 절차를 canonical 운영 문서에 동기화한다.
+- [x] 3.3 pre-activation `DATABASE_URL` direct render와 `OPERATION_DATABASE_URL` env 부재, Helm/admission 정적 검증을 완료한다.
+- [x] 3.4 application activation, operation session live gate와 whole activation Git-revert rollback 절차를 canonical 운영 문서에 동기화한다.
 
 ## 4. PROD-726 integration, live gate와 closeout
 
@@ -103,7 +107,7 @@ GraphQL API workload만 CloudNativePG Pooler Service를 사용하고 Web BFF, wo
 
 **Deliverable**
 
-dev runtime에서 operation session의 admission, readiness, actor affinity, cleanup, reset과 capacity가 관찰 가능하게 검증되고 credential 전환 없이 독립 rollback할 수 있다.
+dev runtime에서 GraphQL user-data query/result projection/domain action operation session의 admission, readiness, actor affinity, cleanup, reset과 capacity가 관찰 가능하게 검증되고 credential 전환 없이 whole activation revision을 rollback할 수 있다. Rollback 뒤 PROD-728 Pooler는 유지된다.
 
 **Guardrails**
 
@@ -115,12 +119,12 @@ dev runtime에서 operation session의 admission, readiness, actor affinity, cle
 
 - 전체 TypeScript, ESLint, Prettier, 관련 unit/integration/E2E, Helm lint/render와 OpenSpec strict validation을 통과시킨다.
 - dev Argo sync와 API Rollout/Pod/Service readiness, 기존 GraphQL smoke를 exact merge revision에서 확인한다.
-- Query/Mutation별 frontend connection, same-session backend affinity, 두 actor helper의 일회성 의미, 정상·오류·abort cleanup과 same-backend `DISCARD ALL` reset을 비민감하게 확인한다.
+- Query/Mutation별 frontend connection, same-session backend affinity, Mutation nested result, `searchProfiles` materialization 후 최종 query의 `ctx.db` 사용, 두 actor helper의 일회성 의미, 정상·오류·abort cleanup과 same-backend `DISCARD ALL` reset을 비민감하게 확인한다.
 - `cnpg_pgbouncer_*` client/server/max-wait metrics와 capacity 안 completion, 초과 부하 timeout, 종료 뒤 connection baseline 복귀를 확인한다.
-- API endpoint direct rollback이 Web/worker/migration, Pooler와 Cluster에 영향을 주지 않음을 확인한다.
+- 전체 activation merge/squash revision Git revert가 API `DATABASE_URL` direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거하며, Web/worker/migration, PROD-728 Pooler와 Cluster에 영향을 주지 않음을 확인한다.
 
 - [ ] 4.1 전체 정적·unit·integration·E2E·Helm·OpenSpec 검증과 correctness/최소화 self-review를 완료한다.
-- [ ] 4.2 구현 근거, PROD-716 제외 범위와 독립 rollback이 명시된 Ready PR을 게시하고 merge gate를 통과한다.
+- [ ] 4.2 구현 근거, PROD-716 제외 범위와 whole activation Git-revert rollback 및 PROD-728 Pooler 유지가 명시된 Ready PR을 게시하고 merge gate를 통과한다.
 - [ ] 4.3 exact merge revision의 dev Argo/readiness와 GraphQL 행동 회귀를 검증한다.
 - [ ] 4.4 actor session affinity, 모든 cleanup 경로, same-backend reset과 PgBouncer metrics/capacity를 live 검증한다.
 - [ ] 4.5 live gate 근거를 Linear에 기록하고 canonical spec sync/archive 및 PROD-726 완료 처리를 수행한다.
