@@ -177,7 +177,11 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
       <View
         onResponderRelease={() => requestClose()}
         onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-        style={[styles.backdrop, mobile ? styles.mobileBackdrop : null]}
+        style={[
+          styles.backdrop,
+          Platform.OS === 'web' ? styles.webBackdrop : null,
+          mobile ? styles.mobileBackdrop : null,
+        ]}
       >
         <View
           ref={surfaceRef}
@@ -277,6 +281,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
+  webBackdrop: { width: '100vw' as never },
   surface: {
     borderRadius: radii.lg,
     borderWidth: 1,

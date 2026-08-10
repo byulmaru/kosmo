@@ -118,6 +118,46 @@ test('주요 Web navigation은 mobile bottom tab, drawer, compact rail과 full s
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
 
+test('1280px full shell은 document overflow 전후 컬럼 경계와 600px 중앙 폭을 유지한다', async ({
+  page,
+}) => {
+  await signIn(page, 'e2e-navigation-shell-geometry');
+  await page.setViewportSize({ height: 720, width: 1280 });
+  await page.goto('/notifications');
+  await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter))
+    .toBe('stable');
+
+  const root = page.getByTestId('universal-shell-root');
+  const columns = root.locator(':scope > div');
+  await expect(columns).toHaveCount(3);
+
+  const shortDocumentGeometry = await columns.evaluateAll((elements) =>
+    elements.map((element) => {
+      const { left, right, width } = element.getBoundingClientRect();
+      return { left, right, width };
+    }),
+  );
+  await page.evaluate(() => {
+    const overflow = document.createElement('div');
+    overflow.style.height = '200vh';
+    document.body.append(overflow);
+  });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight))
+    .toBe(true);
+
+  const overflowDocumentGeometry = await columns.evaluateAll((elements) =>
+    elements.map((element) => {
+      const { left, right, width } = element.getBoundingClientRect();
+      return { left, right, width };
+    }),
+  );
+  expect(overflowDocumentGeometry).toEqual(shortDocumentGeometry);
+  expect(shortDocumentGeometry[1]?.width).toBe(600);
+});
+
 test('팔로워 요청 진입점은 full, compact와 mobile drawer에서 canonical route를 연다', async ({
   page,
 }) => {
