@@ -1,4 +1,4 @@
-import { db, Notifications } from '@kosmo/core/db';
+import { Notifications } from '@kosmo/core/db';
 import { and, eq, getColumns, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
@@ -26,7 +26,7 @@ builder.mutationField('markNotificationRead', (t) =>
         return { notifications: [], recipientProfiles: [] };
       }
 
-      const notifications = await db
+      const notifications = await ctx.db
         .update(Notifications)
         .set({ readAt: sql`coalesce(${Notifications.readAt}, now())` })
         .where(

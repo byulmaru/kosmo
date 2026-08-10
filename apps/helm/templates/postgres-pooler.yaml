@@ -1,0 +1,26 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ include "kosmo.postgresPoolerName" . }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-pooler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  cluster:
+    name: {{ include "kosmo.postgresName" . }}
+  instances: {{ ternary .Values.postgres.pooler.replicas.prod .Values.postgres.pooler.replicas.dev (eq .Values.env "prod") }}
+  type: rw
+  pgbouncer:
+    poolMode: session
+    parameters:
+      max_client_conn: {{ .Values.postgres.pooler.maxClientConnections | quote }}
+      default_pool_size: {{ .Values.postgres.pooler.defaultPoolSize | quote }}
+      server_reset_query: "DISCARD ALL"
+  template:
+    spec:
+      containers:
+        - name: pgbouncer
+          resources:
+{{ toYaml .Values.postgres.pooler.resources | indent 12 }}

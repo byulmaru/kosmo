@@ -5,11 +5,11 @@ Backend PROD-648은 Local Profile Member가 `defaultPostVisibility`를 조회하
 selected Profile·Reply Parent·Relay Environment를 key와 generation guard로 격리하지만 Visibility 초기값은
 `UNLISTED`로 고정한다.
 
-PROD-648의 기존 monolith branch에는 Relay fragment, 설정 control과 Composer seed 구현이 이미 있으나
-Storybook interaction과 canonical `/settings` 연결은 완료되지 않았다. generic `/settings` route·page shell·
-navigation과 Account/Profile 정보 구조는 PROD-653, Byulmaru ID Account entry는 PROD-645가 소유한다. 현재
-`main`에는 PROD-653이 정의한 production page/route 구현이 없으므로 PROD-667은 generic shell이나 Account
-entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실제 host가 준비될 때까지 명확히 남겨야 한다.
+PROD-667은 Relay fragment, 설정 control과 Composer seed를 구현했지만 canonical `/settings` 연결은 완료되지
+않았다. production `/settings` route·page shell·navigation과 Account/Profile 정보 구조 조립은 PROD-685,
+Byulmaru ID Account entry는 PROD-645가 소유한다. PROD-667은 generic shell이나 Account entry 동작을 복제하지
+않고 자신의 Profile child 연결 task를 PROD-685 host에서 완료한다. 최종 Settings 통합과 archive는 PROD-684가
+소유한다.
 
 ## Goals / Non-Goals
 
@@ -18,7 +18,8 @@ entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실�
 - Profile Owner가 기본 Post Visibility를 확인·변경하고 Relay Profile record가 서버 payload로 수렴한다.
 - 현재 존재하는 새 일반 Post·Reply Composer가 selected Profile 기본값 또는 `UNLISTED` fallback으로 시작한다.
 - 설정 상태와 draft를 Profile·Parent·Environment 문맥별로 격리하고 늦은 completion을 무시한다.
-- Profile control을 canonical `/settings`의 Profile child 경계에 연결하고 Frontend 검증과 archive를 소유한다.
+- Profile control을 canonical Settings route family의 Profile detail에 연결하고 PROD-685 page-level 검증에 증거를
+  제공한 뒤 PROD-684 archive에 handoff한다.
 
 **Non-Goals:**
 
@@ -47,11 +48,12 @@ entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실�
 
 1. 기존 monolith branch의 Frontend 파일만 PROD-667 branch로 옮기고 Backend schema·resolver·migration을
    포함하지 않는다.
-2. 설정 control은 현재 Profile fragment와 Owner 여부를 입력으로 받고 세 옵션, target identity와
-   dirty·pending·success·error·retry를 한 component/state 경계에서 관리한다. 저장 성공은 mutation payload의
-   Profile을 사용해 normalized Relay record에 수렴한다.
+2. 설정 control은 현재 Profile fragment와 Owner 여부를 입력으로 받고 지원 공개 범위, target identity와 변경
+   요청 상태를 Profile 문맥에 맞게 관리한다. 변경 성공은 mutation payload의 Profile을 사용해 normalized Relay
+   record에 수렴한다. PROD-685 host는 Profile 기능의 구체적인 선택·저장 상호작용을 page shell contract로
+   고정하지 않는다.
 3. mutation generation과 Profile/Environment identity를 함께 비교해 이전 문맥의 completion을 무시한다.
-   Member 상태에서는 저장 action을 만들거나 mutation을 호출하지 않는다.
+   Member 상태에서는 변경 action을 만들거나 mutation을 호출하지 않는다.
 4. `PostComposer`의 공유 Profile fragment에서 기본값을 읽고 mount 및 새 문맥의 initial seed로만 사용한다.
    fragment가 `null`이면 `UNLISTED`를 사용하고 mount 뒤 값 변경을 현재 draft에 effect로 복사하지 않는다.
    Visibility-only 변경은 보호할 draft content가 아니므로 Composer의 dirty 상태에 포함하지 않는다.
@@ -59,15 +61,16 @@ entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실�
    사용하며 제출 중 별도 render에서 갱신된 최신값까지 보장하지 않는다. selected Profile·Reply Parent·
    Environment가 바뀌면 기존 key/generation 경계로 새 draft를 만들고 이전 upload/query/mutation completion을
    무시한다.
-6. generic settings host가 준비되면 그 Profile child 경계에 control을 연결한다. PROD-645 Account entry의
-   label·navigation·오류 상태와 PROD-653 shell의 route·navigation을 재구현하지 않고 page-level test에서 두
-   child 상태가 독립적인지만 확인한다.
+6. PROD-685 settings host의 Profile detail에 control을 연결한다. PROD-645 Account entry의
+   label·external Link·focus·accessible name과 PROD-685 shell의 route·navigation을 Profile child에서
+   재구현하지 않고, Profile detail의 selected/no-profile·loading·error·retry와 actor 전환을 page-level test로
+   확인한다.
 7. unit/component test로 seed·fallback·draft·late completion을 검증하고 Storybook interaction·static build·
    접근성 및 실제 지원 플랫폼 검증을 Frontend 완료 gate로 둔다.
 
 ### Allowed Alternatives
 
-- settings host가 Profile child를 직접 render하거나 명시적인 composition input을 제공하는 두 방식 모두
+- settings host가 Profile detail을 직접 render하거나 명시적인 composition input을 제공하는 두 방식 모두
   허용한다. 어느 방식이든 generic route·navigation과 Account entry 동작을 PROD-667이 소유하지 않고 실제
   canonical `/settings`에서 current Profile identity와 control이 함께 검증돼야 한다.
 - Composer fragment가 같은 normalized Profile record를 소비하고 열린 draft 독립성을 유지한다면 fragment
@@ -98,10 +101,11 @@ entry 동작을 복제하지 않고 자신의 Profile child 연결 task를 실�
 
 1. PROD-648 Backend API가 먼저 배포 가능한 상태가 된다. nullable field이므로 기존 client와 호환된다.
 2. PROD-667 Relay fragment, 설정 control과 Post/Reply Composer seed를 배포한다.
-3. generic settings host가 준비된 뒤 Profile child를 canonical `/settings`에 연결하고 navigation을 활성화한다.
-4. rollback은 PROD-667 client 연결을 되돌리되 Backend nullable field와 저장값은 보존한다.
+3. PROD-685 settings host에서 Profile detail을 canonical Settings route family에 연결하고 navigation을 활성화한다.
+4. PROD-685 page-level 검증과 Figma 후속 정렬 증거를 PROD-684에 인계한다.
+5. rollback은 PROD-667 client 연결을 되돌리되 Backend nullable field와 저장값은 보존한다.
 
 ## Open Questions
 
-없음. settings host의 구체 component API는 PROD-653 구현 경계 안의 비규범적 선택이며, PROD-667은 실제 host가
+없음. settings host의 구체 component API는 PROD-685 구현 경계 안의 비규범적 선택이며, PROD-667은 실제 host가
 제공하는 경계에 맞춰 연결하되 제품 행동과 소유권을 변경하지 않는다.

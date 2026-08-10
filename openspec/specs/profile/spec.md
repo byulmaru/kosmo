@@ -688,20 +688,44 @@ API는 현재 active profile이 참여하는 pending follow request를 해당 `P
 - **THEN** 이미 승인된 실행 중 요청은 별도 lock 없이 완료될 수 있다
 - **AND** 상태 변경 뒤 시작한 요청은 현재 eligibility로 거부한다
 
-### Requirement: Guest-safe selected Profile edit capability
+### Requirement: Profile viewer Account membership projection
 
-**Authority / Provenance:** `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0021-profile-edit-selected-owner-route-boundary.md`, `docs/design/profile-edit.md`, `PROD-492` — nullable top-level `selectedProfileForEdit` query는 selected Active/Normal Local Profile의 Owner에게만 Profile을 반환해야 한다(MUST). guest, session 또는 selected Profile 부재와 편집 부적격 Account에는 GraphQL authorization error 대신 `null`을 반환해야 하며(MUST), public role이나 `canEdit` scalar를 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0023-profile-viewer-membership-edit-eligibility.md`, `docs/design/profile-edit.md`, `PROD-705` — `Profile.viewerState.membership`은 현재 session Account와 조회 중인 Profile 사이의 실제 nullable `AccountProfile` 관계를 반환해야 한다(MUST).
 
-#### Scenario: Return the selected editable Profile
+Projection은 현재 session Account로 scope되어야 하고(MUST), 다른 Account의 Membership 또는 role을 노출해서는
+안 된다(MUST NOT). 실제 관계의 role은 `OWNER` 또는 `MEMBER`여야 하며(MUST), 별도 `canEdit` capability로
+변환해서는 안 된다(MUST NOT).
 
-- **WHEN** Active Account의 selected Profile이 Active/Normal Local이고 Account가 Owner다
-- **THEN** `selectedProfileForEdit`은 해당 Profile을 반환한다
+#### Scenario: Return the current Account membership
 
-#### Scenario: Keep public Profile queries usable without edit authority
+- **WHEN** 유효한 viewer Profile이 있는 session의 현재 Account와 조회 중인 Profile 사이에 Membership이 있다
+- **THEN** `Profile.viewerState.membership`은 해당 실제 `AccountProfile`을 반환한다
+- **AND** `membership.role`은 저장된 `OWNER` 또는 `MEMBER` 값을 반환한다
 
-- **WHEN** guest, selected Profile이 없는 session, Member·무관 Account 또는 Remote/inactive/suspended selected Profile이 공개 Profile과 `selectedProfileForEdit`을 함께 조회한다
-- **THEN** 공개 Profile은 기존 조회 정책에 따라 응답한다
-- **AND** `selectedProfileForEdit`은 authorization error 없이 `null`이다
+#### Scenario: Hide another Account membership
+
+- **WHEN** 현재 session Account와 조회 중인 Profile 사이에는 Membership이 없지만 다른 Account의 Membership이 있다
+- **THEN** `Profile.viewerState.membership`은 `null`이다
+- **AND** 다른 Account의 Membership identity 또는 role을 응답에 노출하지 않는다
+
+#### Scenario: Keep the viewer boundary guest-safe
+
+- **WHEN** guest 또는 유효한 viewer Profile이 없는 session이 공개 Profile을 조회한다
+- **THEN** API는 GraphQL authorization error 없이 기존 nullable `Profile.viewerState` 경계를 유지한다
+- **AND** Membership projection을 권한이 있는 것처럼 합성하지 않는다
+
+#### Scenario: Batch Memberships within the current Account
+
+- **WHEN** 한 요청이 여러 Profile의 `viewerState.membership`을 조회한다
+- **THEN** 시스템은 현재 session Account로 scope된 batch 경계에서 Membership을 조회한다
+- **AND** Profile마다 개별 Membership query를 실행하지 않는다
+
+#### Scenario: Preserve existing viewer follow state
+
+- **WHEN** 클라이언트가 Membership과 기존 viewer-relative follow 상태를 함께 조회한다
+- **THEN** `viewerState.isSelf`, `viewerState.follow`과 `viewerState.followRequest`는 기존 viewer Profile 관계를
+  그대로 반환한다
+- **AND** Membership projection은 FollowButton의 self·established follow·pending request 동작을 변경하지 않는다
 
 ### Requirement: Profile edit Follow Approval Policy shares the representation save boundary
 

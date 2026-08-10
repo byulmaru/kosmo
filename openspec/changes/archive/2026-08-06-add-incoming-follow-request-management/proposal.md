@@ -17,6 +17,8 @@ Follow Request의 pending-only 저장·GraphQL 처리 계약은 이미 제공되
 - Canonical: `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `docs/design/page-header.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`
 - Linear Contract: [PROD-272](https://linear.app/byulmaru/issue/PROD-272), [PROD-566](https://linear.app/byulmaru/issue/PROD-566)
 - Linear Implementations: [PROD-566](https://linear.app/byulmaru/issue/PROD-566), [PROD-654](https://linear.app/byulmaru/issue/PROD-654)
+- Linear Completion: [PROD-668](https://linear.app/byulmaru/issue/PROD-668)
+- Deferred Non-blocking Web Screen Reader and Native QA: [PROD-699](https://linear.app/byulmaru/issue/PROD-699)
 
 ## Capabilities
 
@@ -32,5 +34,6 @@ Follow Request의 pending-only 저장·GraphQL 처리 계약은 이미 제공되
 
 - `apps/app`의 Expo Router protected route, Relay pagination fragment와 mutations, 요청 목록·행 UI, 공통 `PageHeader` 소비가 영향받는다.
 - shared shell navigation, Shell Storybook과 관련 component/Web E2E 검증이 영향받는다.
+- PROD-668 completion slice는 기존 두 구현 slice를 연결하는 Web E2E, Web runtime 검증과 OpenSpec 정합·archive만 변경한다.
 - 기존 `Profile.incomingProfileFollowRequests`, `approveProfileFollowRequest`, `rejectProfileFollowRequest` GraphQL 계약을 그대로 사용한다.
 - API schema, core service, DB schema·migration과 새 dependency 변경은 없다.

@@ -1,4 +1,4 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { Instances, Posts, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt, or, sql } from 'drizzle-orm';
@@ -88,7 +88,7 @@ builder.objectFields(Post, (t) => ({
             toCursor: encodeReplyDescendantCursor,
           },
           ({ before, after, limit, inverted }) =>
-            db
+            ctx.db
               .select(getColumns(Posts))
               .from(Posts)
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))

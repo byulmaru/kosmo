@@ -1,4 +1,9 @@
+import { db, Profiles } from '@kosmo/core/db';
+import { ProfileFollowPolicy } from '@kosmo/core/enums';
+import { followProfile } from '@kosmo/core/services';
+import { eq } from 'drizzle-orm';
 import {
+  createE2EAccountProfile,
   createE2EPost,
   createE2EProfile,
   createE2ESession,
@@ -6,7 +11,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation } from './graphql';
+import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
 import type { Locator, Page } from '@playwright/test';
 
 const recentSearchesKey = 'kosmo:recent-searches';
@@ -21,6 +26,19 @@ async function signIn(page: Page, handle = 'e2e-navigation-scroll') {
   const session = await createE2ESession({ handle });
   await setE2ESessionCookie(page.context(), session.token);
   return session;
+}
+
+async function selectProfileFromSwitcher(page: Page, handle: string) {
+  const response = waitForGraphQLOperation(page, 'ProfileSwitcherSelectProfileMutation');
+
+  await page.getByRole('button', { name: '프로필 목록' }).first().click();
+  await page
+    .getByLabel('전환할 프로필 목록')
+    .getByRole('button')
+    .filter({ hasText: `@${handle}` })
+    .click();
+  await response;
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
 }
 
 async function visiblePrimaryNavigation(page: Page): Promise<Locator> {
@@ -147,6 +165,100 @@ test('팔로워 요청 진입점은 full, compact와 mobile drawer에서 canonic
   await expect(page).toHaveURL(/\/follow-requests$/);
   await expect(page.getByRole('heading', { name: '팔로워 요청' })).toBeVisible();
   await expect(drawer).toHaveCount(0);
+});
+
+test('팔로워 요청 route는 navigation 진입 뒤 selected Profile별 승인·거절을 격리한다', async ({
+  context,
+  page,
+}) => {
+  const recipient = await createE2ESession({
+    displayName: 'Recipient A',
+    handle: 'e2e-follow-request-recipient-a',
+  });
+  const recipientB = await createE2EAccountProfile({
+    accountId: recipient.account.id,
+    displayName: 'Recipient B',
+    followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    handle: 'e2e-follow-request-recipient-b',
+  });
+  const followerA = await createE2ESession({
+    displayName: 'Follower A',
+    handle: 'e2e-follow-request-follower-a',
+  });
+  const followerB = await createE2ESession({
+    displayName: 'Follower B',
+    handle: 'e2e-follow-request-follower-b',
+  });
+
+  await db
+    .update(Profiles)
+    .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
+    .where(eq(Profiles.id, recipient.profile!.id));
+
+  const requestA = await followProfile({
+    followeeProfileId: recipient.profile!.id,
+    followerProfileId: followerA.profile!.id,
+  });
+  const requestB = await followProfile({
+    followeeProfileId: recipientB.id,
+    followerProfileId: followerB.profile!.id,
+  });
+  expect(requestA.result.kind).toBe('PENDING');
+  expect(requestB.result.kind).toBe('PENDING');
+
+  await setE2ESessionCookie(context, recipient.token);
+  await page.setViewportSize({ height: 720, width: 1440 });
+  await page.goto('/home');
+  await (await visiblePrimaryNavigation(page))
+    .getByRole('link', { name: '팔로워 요청', exact: true })
+    .click();
+
+  await expect(page).toHaveURL(/\/follow-requests$/);
+  await expect(page.getByRole('heading', { name: '팔로워 요청' })).toBeVisible();
+  const followerALink = page.getByRole('link', { name: 'Follower A 프로필로 이동' });
+  await expect(followerALink).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Follower B 프로필로 이동' })).toHaveCount(0);
+
+  await selectProfileFromSwitcher(page, recipientB.handle);
+  await expect(page.getByRole('heading', { name: '팔로워 요청' })).toBeVisible();
+  const followerBLink = page.getByRole('link', { name: 'Follower B 프로필로 이동' });
+  await expect(followerBLink).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Follower A 프로필로 이동' })).toHaveCount(0);
+
+  const approveButton = page.getByRole('button', {
+    name: 'Follower B 팔로우 요청 승인',
+  });
+  const rejectBButton = page.getByRole('button', {
+    name: 'Follower B 팔로우 요청 거절',
+  });
+  await followerBLink.focus();
+  await page.keyboard.press('Tab');
+  await expect(approveButton).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(rejectBButton).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(approveButton).toBeFocused();
+
+  const approveResponse = waitForGraphQLOperation(page, 'FollowRequestListItemApproveMutation');
+  await page.keyboard.press('Enter');
+  await approveResponse;
+  await expect(approveButton).toHaveCount(0);
+  await expect(followerBLink).toHaveCount(0);
+
+  await selectProfileFromSwitcher(page, recipient.profile!.handle);
+  await expect(followerALink).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Follower B 프로필로 이동' })).toHaveCount(0);
+
+  const rejectButton = page.getByRole('button', {
+    name: 'Follower A 팔로우 요청 거절',
+  });
+  await rejectButton.focus();
+  await expect(rejectButton).toBeFocused();
+  const rejectResponse = waitForGraphQLOperation(page, 'FollowRequestListItemRejectMutation');
+  await page.keyboard.press('Enter');
+  await rejectResponse;
+  await expect(rejectButton).toHaveCount(0);
+  await expect(followerALink).toHaveCount(0);
 });
 
 test('loading target도 pathname commit 직후 이전 document offset을 노출하지 않는다', async ({

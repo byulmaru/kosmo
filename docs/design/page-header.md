@@ -1,10 +1,12 @@
 # 공용 Page Header
 
-주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 시각적 높이는 `64px`이며 Android/iOS safe-area inset은 헤더가 아니라 모바일 셸이 바깥에서 추가한다.
+주요 화면의 상단 chrome은 `PageHeader`를 사용해 높이, 구분선, 제목 위계와 leading action 배치를 통일한다. 공용 헤더의 기본 시각 최소 높이는 `64px`이며 Android/iOS safe-area inset은 헤더가 아니라 모바일 셸이 바깥에서 추가한다.
 
 ## Variant
 
 - `text`: `알림`, `북마크`, `글쓰기`, `게시글`처럼 현재 화면을 설명하는 텍스트 제목을 표시한다. 제목은 하나의 heading으로 노출한다.
+- `text` 제목은 leading action 다음의 가용 폭 안에서 줄어들고 여러 줄로 reflow한다. `64px`은 고정 높이가
+  아니라 최소 높이이므로, 좁은 화면이나 font scaling에서 제목을 한 줄로 자르거나 header 밖으로 넘기지 않는다.
 - `brand`: 홈에서 투명 브랜드 마크를 너비 `38px`로 가로 중앙에 표시한다. 좌우에 같은 `44×44px` action slot을 두는 대칭 Auto Layout을 사용해 한쪽 action만 있어도 마크의 중심이 헤더 전체 중심과 일치하게 한다. 비어 있는 우측 slot은 향후 홈 action 위치로 유지한다. 마크 이미지는 접근성 트리에서 숨기고 `홈` heading 하나만 노출한다.
 
 ## Action slot
@@ -48,10 +50,11 @@ Web `/search`는 모든 breakpoint에서 중앙 컬럼 최상단에 높이 `64px
 - 모바일 Web과 Android/iOS `/home`: `UniversalShell`이 메뉴 버튼, 브랜드 마크와 native safe-area를 소유한다. 홈 route는 헤더를 렌더링하지 않는다.
 - Web `/search`: 검색 route가 모든 breakpoint의 `64px` 검색 도구막대와 검색 상태를 소유한다. 모바일 Web
   `< compact`에서 `UniversalShell`은 기본 메뉴 전용 헤더 대신 drawer action과 가장자리 스와이프만 제공한다.
-- `<768px` 모바일 Web `/compose`, `/notifications`, `/settings`: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
+- `<768px` 모바일 Web `/compose`, `/notifications`와 `/settings` root: `UniversalShell`이 메뉴 버튼과 텍스트 제목을 하나의 app bar로 렌더링한다. `/notifications`에서는 같은 app bar가 `모두 읽음` trailing action도 소유하고, Settings 내부 detail에서는 같은 위치에 뒤로가기와 detail 제목을 렌더링한다. route의 loading, error, empty와 content 상태는 셸 헤더 아래에서 전환하며 자체 PageHeader를 렌더링하지 않는다.
 - `<768px` 모바일 Web 게시글 상세: `UniversalShell`이 기존 `router.back()` 동작을 사용하는 뒤로가기 버튼과 `게시글` 제목을 하나의 app bar로 렌더링한다. route는 별도 sticky PageHeader와 그 offset을 만들지 않는다.
 - Android/iOS의 알림·글쓰기·게시글 상세와 compact/full Web: 모바일 Web 셸 헤더가 없으므로 route 또는 화면의 최상위 scroll content가 기존 텍스트·뒤로가기 헤더를 소유한다. Native 게시글 상세에서는 `PostDetailFrame`이 첫 번째 sticky child를 계속 소유한다.
-- Android/iOS와 compact/full Web의 `/settings`: settings route가 `설정` text header를 scroll content의 첫 heading으로 소유한다. Native safe area는 모바일 셸이 바깥에서 소유한다.
+- Android/iOS와 compact Web의 `/settings` root·detail: settings route가 현재 화면의 text header를 scroll content의 첫 heading으로 소유한다. detail header는 뒤로가기를 제공하고 Native safe area는 모바일 셸이 바깥에서 소유한다.
+- full Web의 settings route family: Settings master pane이 `설정` heading을, detail pane이 현재 설정 heading을 소유한다. 일반 route `PageHeader`와 `RightRail`을 중복하지 않는다.
 - 북마크 등 이 변경에 포함되지 않은 PageHeader 소비 화면은 기존 route 소유권을 유지한다.
 - compact/full Web `/home`: 모바일 셸 헤더가 없으므로 홈 route가 브랜드 헤더를 소유한다.
 

@@ -5,7 +5,8 @@ import { NotFoundError, ValidationError } from '../error';
 import { reactionTypeSchema } from '../validation';
 import { createReactionNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
-import type { Transaction } from '../db';
+import type { DatabaseHandle } from '../db';
+import type { PostCommit } from './post-commit';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
@@ -26,20 +27,20 @@ type DeleteReactionInput = {
 
 type AddReactionResult = {
   readonly created: boolean;
-  readonly postCommit: () => Promise<void>;
+  readonly postCommit: PostCommit;
   readonly reaction: typeof Reactions.$inferSelect;
 };
 
 export const addReaction = async (
   { actorProfileId, onPostCommitError, origin, postId, type }: AddReactionInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
+  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
     const post = await tx
       .select({ id: Posts.id })
       .from(Posts)
@@ -82,22 +83,24 @@ export const addReaction = async (
   return {
     ...result,
     postCommit: result.created
-      ? oncePostCommit(async () => {
-          await createReactionNotification(result.reaction.id).catch(async (error) => {
-            if (!onPostCommitError) {
-              return;
-            }
+      ? oncePostCommit(async (postCommitHandle) => {
+          await createReactionNotification(result.reaction.id, postCommitHandle).catch(
+            async (error) => {
+              if (!onPostCommitError) {
+                return;
+              }
 
-            try {
-              await onPostCommitError(error);
-            } catch (observerError) {
-              console.error('Reaction notification creation observation failed', {
-                error,
-                observerError,
-                reactionId: result.reaction.id,
-              });
-            }
-          });
+              try {
+                await onPostCommitError(error);
+              } catch (observerError) {
+                console.error('Reaction notification creation observation failed', {
+                  error,
+                  observerError,
+                  reactionId: result.reaction.id,
+                });
+              }
+            },
+          );
 
           if (origin === 'LOCAL') {
             try {
@@ -117,10 +120,10 @@ export const addReaction = async (
 
 export const deleteReaction = async (
   input: DeleteReactionInput,
-  tx?: Transaction,
+  handle?: DatabaseHandle,
 ): Promise<{
   readonly postId: string;
-  readonly postCommit: () => Promise<void>;
+  readonly postCommit: PostCommit;
   readonly reaction: typeof Reactions.$inferSelect | null;
 }> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
@@ -128,7 +131,7 @@ export const deleteReaction = async (
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const reaction = await getDatabaseConnection(tx)
+  const reaction = await getDatabaseConnection(handle)
     .transaction((tx) =>
       tx
         .delete(Reactions)
@@ -147,9 +150,13 @@ export const deleteReaction = async (
   return {
     postId: input.postId,
     postCommit: reaction
-      ? oncePostCommit(async () => {
+      ? oncePostCommit(async (postCommitHandle) => {
           try {
-            await deleteNotificationBySource(NotificationKind.REACTION, reaction.id);
+            await deleteNotificationBySource(
+              NotificationKind.REACTION,
+              reaction.id,
+              postCommitHandle,
+            );
           } catch (error) {
             if (!input.onPostCommitError) {
               console.error('Failed to clean up Reaction Notification', {

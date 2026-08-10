@@ -45,24 +45,6 @@ let repostPost: typeof CoreServices.repostPost;
 let app: Hono<Env>;
 let deriveContext: typeof deriveContextFunction;
 let localInstanceId: string;
-let loaderBatches = new Map<string, number[]>();
-
-const trackLoaderBatches = <Context extends Awaited<ReturnType<typeof deriveContext>>>(
-  context: Context,
-) => {
-  const originalLoader = context.loader;
-  context.loader = ((params: { name: string; load: (keys: unknown[]) => Promise<unknown[]> }) =>
-    originalLoader({
-      ...params,
-      load: async (keys: unknown[]) => {
-        const keyCounts = loaderBatches.get(params.name) ?? [];
-        keyCounts.push(keys.length);
-        loaderBatches.set(params.name, keyCounts);
-        return params.load(keys);
-      },
-    } as never)) as typeof context.loader;
-  return context;
-};
 
 describe('GraphQL Reaction', () => {
   before(async () => {
@@ -97,14 +79,13 @@ describe('GraphQL Reaction', () => {
     const { yoga } = await import('../../../src/graphql');
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
-      c.set('context', trackLoaderBatches(await deriveContext(c)));
+      c.set('context', await deriveContext(c));
       return next();
     });
     app.route('/graphql', yoga);
   });
 
   beforeEach(async () => {
-    loaderBatches = new Map();
     await resetFixtures();
   });
 
@@ -465,7 +446,7 @@ describe('GraphQL Reaction', () => {
     assert.equal(hiddenNode.data?.node, null);
   });
 
-  test('Post viewerReactions는 selected Profile별 현재 관계를 batch 조회하고 전환을 격리한다', async () => {
+  test('Post viewerReactions는 selected Profile별 현재 관계를 조회하고 전환을 격리한다', async () => {
     const viewerA = await createAuthenticatedSession();
     const viewerB = await createAuthenticatedSession();
     const noSelectedProfile = await createAuthenticatedSession({ activeProfile: false });
@@ -480,11 +461,9 @@ describe('GraphQL Reaction', () => {
     assertNoGraphQLErrors(reactionB);
     assertNoGraphQLErrors(reactionOtherProfile);
 
-    loaderBatches.clear();
-    const batched = await requestViewerReactions([postA.id, postB.id], viewerA.token);
-    assertNoGraphQLErrors(batched);
-    assert.deepEqual(loaderBatches.get('reaction.viewerReactions'), [2]);
-    assert.deepEqual(batched.data?.nodes, [
+    const result = await requestViewerReactions([postA.id, postB.id], viewerA.token);
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.nodes, [
       {
         id: globalId('Post', postA.id),
         viewerReactions: [

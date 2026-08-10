@@ -18,12 +18,15 @@ builder.mutationField('deletePost', (t) =>
       id: t.input.globalID({ for: Post }),
     },
     resolve: async (_, { input }, ctx) => {
-      const result = await deletePost({
-        actorProfileId: ctx.session.profileId,
-        origin: 'LOCAL',
-        postId: input.id.id,
-      });
-      await result.postCommit();
+      const result = await deletePost(
+        {
+          actorProfileId: ctx.session.profileId,
+          origin: 'LOCAL',
+          postId: input.id.id,
+        },
+        ctx.db,
+      );
+      await result.postCommit(ctx.db);
 
       return { postId: result.postId };
     },

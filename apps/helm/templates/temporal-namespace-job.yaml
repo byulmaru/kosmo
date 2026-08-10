@@ -1,0 +1,89 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-temporal-namespace" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: temporal-namespace
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: temporal-namespace
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: temporal-namespace
+          image: {{ include "kosmo.temporalAdminToolsImageRef" . | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              if temporal operator namespace create \
+                --address "${TEMPORAL_ADDRESS}" \
+                --tls=false \
+                --disable-config-env \
+                --disable-config-file \
+                --client-connect-timeout 10s \
+                --command-timeout 20s \
+                --namespace "${TEMPORAL_NAMESPACE}" \
+                --email "${TEMPORAL_NAMESPACE_OWNER_EMAIL}" \
+                --retention "${TEMPORAL_NAMESPACE_RETENTION}"; then
+                echo "Created Temporal namespace ${TEMPORAL_NAMESPACE}."
+                exit 0
+              fi
+
+              echo "Temporal namespace create did not succeed; reconciling the existing namespace."
+              temporal operator namespace update \
+                --address "${TEMPORAL_ADDRESS}" \
+                --tls=false \
+                --disable-config-env \
+                --disable-config-file \
+                --client-connect-timeout 10s \
+                --command-timeout 20s \
+                --namespace "${TEMPORAL_NAMESPACE}" \
+                --email "${TEMPORAL_NAMESPACE_OWNER_EMAIL}" \
+                --retention "${TEMPORAL_NAMESPACE_RETENTION}"
+              echo "Reconciled Temporal namespace ${TEMPORAL_NAMESPACE}."
+          env:
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.frontendAddress | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+            - name: TEMPORAL_NAMESPACE_OWNER_EMAIL
+              value: {{ .Values.temporal.namespace.ownerEmail | quote }}
+            - name: TEMPORAL_NAMESPACE_RETENTION
+              value: {{ include "kosmo.temporalNamespaceRetention" . | quote }}
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi

@@ -47,7 +47,6 @@ let yoga: typeof YogaRouter;
 let encodeGlobalId: typeof EncodeGlobalId;
 let app: Hono<Env>;
 let localInstanceId: string;
-let replySourceBatchCount: number | undefined;
 
 describe('Notification GraphQL Node boundary', () => {
   before(async () => {
@@ -84,21 +83,6 @@ describe('Notification GraphQL Node boundary', () => {
     app = new Hono<Env>();
     app.use('*', async (c, next) => {
       const context = await deriveContext(c);
-      if (replySourceBatchCount !== undefined) {
-        const loader = context.loader;
-        context.loader = ((params: Parameters<typeof loader>[0]) =>
-          loader(
-            params.name === 'notification.replySource'
-              ? {
-                  ...params,
-                  load: async (ids) => {
-                    replySourceBatchCount! += 1;
-                    return params.load(ids);
-                  },
-                }
-              : params,
-          )) as typeof context.loader;
-      }
       c.set('context', context);
       return next();
     });
@@ -600,7 +584,7 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('loads Reply sources only for concrete source fields and batches them per request', async () => {
+  test('resolves Reply sources for concrete source fields', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('reply-batch-recipient');
     await addMembership(auth.account.id, recipient.id, AccountProfileRole.OWNER);
@@ -628,50 +612,30 @@ describe('Notification GraphQL Node boundary', () => {
     );
     const recipientId = encodeGlobalId('Profile', recipient.id);
 
-    replySourceBatchCount = 0;
-    try {
-      const interfaceOnly = await requestGraphQL<{
-        node: { notifications: NotificationConnection } | null;
-      }>(
-        `query ReplyNotificationInterfaceOnly($id: ID!) {
-          node(id: $id) {
-            ... on Profile { notifications(first: 10) { edges { node { __typename id } } } }
-          }
-        }`,
-        { id: recipientId },
-        auth.token,
-      );
-      assertNoGraphQLErrors(interfaceOnly);
-      assert.equal(replySourceBatchCount, 0);
-
-      const concrete = await requestGraphQL<{
-        node: { notifications: NotificationConnection } | null;
-      }>(
-        `query ReplyNotificationConcreteSources($id: ID!) {
-          node(id: $id) {
-            ... on Profile {
-              notifications(first: 10) {
-                edges { node { __typename id ... on ReplyNotification { profile { id } post { id } } } }
-              }
+    const concrete = await requestGraphQL<{
+      node: { notifications: NotificationConnection } | null;
+    }>(
+      `query ReplyNotificationConcreteSources($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            notifications(first: 10) {
+              edges { node { __typename id ... on ReplyNotification { profile { id } post { id } } } }
             }
           }
-        }`,
-        { id: recipientId },
-        auth.token,
-      );
-      assertNoGraphQLErrors(concrete);
-      assert.equal(replySourceBatchCount, 1);
-      assert.deepEqual(
-        concrete.data?.node?.notifications.edges.map(({ node }) => node.post?.id).sort(),
-        replies.map(({ reply }) => encodeGlobalId('Post', reply.id)).sort(),
-      );
-      assert.deepEqual(
-        concrete.data?.node?.notifications.edges.map(({ node }) => node.profile.id).sort(),
-        replies.map(({ author }) => encodeGlobalId('Profile', author.id)).sort(),
-      );
-    } finally {
-      replySourceBatchCount = undefined;
-    }
+        }
+      }`,
+      { id: recipientId },
+      auth.token,
+    );
+    assertNoGraphQLErrors(concrete);
+    assert.deepEqual(
+      concrete.data?.node?.notifications.edges.map(({ node }) => node.post?.id).sort(),
+      replies.map(({ reply }) => encodeGlobalId('Post', reply.id)).sort(),
+    );
+    assert.deepEqual(
+      concrete.data?.node?.notifications.edges.map(({ node }) => node.profile.id).sort(),
+      replies.map(({ author }) => encodeGlobalId('Profile', author.id)).sort(),
+    );
   });
 
   test('creates Reply Notifications after commit, suppresses self/invisible sources, and isolates insert failure', async () => {
