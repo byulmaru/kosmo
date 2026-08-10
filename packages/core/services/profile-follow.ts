@@ -1,8 +1,8 @@
 import { and, eq, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
-  db,
   first,
+  getDatabaseConnection,
   Instances,
   ProfileFollowRequests,
   ProfileFollows,
@@ -24,7 +24,7 @@ import {
 } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
 import { ensureProfileFollowRequest } from './profile-follow-request';
-import type { Transaction } from '../db';
+import type { Database, Transaction } from '../db';
 import type { ProfileFollowRequestRow } from './profile-follow-request';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -87,17 +87,18 @@ const loadProfileFollowParticipants = async (
   return { isActivityPubInbound, isRemoteTarget, target };
 };
 
-export const followProfile = async ({
-  followerProfileId,
-  followeeProfileId,
-  onPostCommitError,
-}: ProfileFollowInput): Promise<{
+export const followProfile = async (
+  { followerProfileId, followeeProfileId, onPostCommitError }: ProfileFollowInput,
+  handle?: Database,
+): Promise<{
   created: boolean;
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   result: FollowProfileResult;
 }> => {
-  const { command, pendingNotificationSourceId, result } = await db.transaction(async (tx) => {
+  const { command, pendingNotificationSourceId, result } = await getDatabaseConnection(
+    handle,
+  ).transaction(async (tx) => {
     if (followerProfileId === followeeProfileId) {
       throw new ConflictError({ message: 'Profile cannot follow itself' });
     }
@@ -179,7 +180,7 @@ export const followProfile = async ({
 
   if (result.created && result.result.kind === 'ESTABLISHED') {
     // Notification delivery is best-effort and must not change the committed Follow result.
-    await createFollowNotification(result.result.profileFollow.id).catch(async (error) => {
+    await createFollowNotification(result.result.profileFollow.id, handle).catch(async (error) => {
       if (!onPostCommitError) {
         return;
       }
@@ -200,12 +201,13 @@ export const followProfile = async ({
   if (result.created && result.result.kind === 'PENDING') {
     await createFollowRequestNotificationPostCommit(
       result.result.profileFollowRequest.id,
+      handle,
       onPostCommitError,
     );
   }
 
   if (pendingNotificationSourceId) {
-    await deleteFollowRequestNotificationPostCommit(pendingNotificationSourceId);
+    await deleteFollowRequestNotificationPostCommit(pendingNotificationSourceId, handle);
   }
 
   if (command) {
@@ -223,17 +225,16 @@ export const followProfile = async ({
   return result;
 };
 
-export const unfollowProfile = async ({
-  followerProfileId,
-  followeeProfileId,
-  onPostCommitError,
-}: ProfileFollowInput): Promise<{
+export const unfollowProfile = async (
+  { followerProfileId, followeeProfileId, onPostCommitError }: ProfileFollowInput,
+  handle?: Database,
+): Promise<{
   changed: boolean;
   followeeProfile: ProfileRow;
   followerProfile: ProfileRow;
   profileFollowId: string | null;
 }> => {
-  const { command, result } = await db.transaction(async (tx) => {
+  const { command, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
     const { isActivityPubInbound, isRemoteTarget, target } = await loadProfileFollowParticipants(
       tx,
       {
@@ -290,7 +291,7 @@ export const unfollowProfile = async ({
 
   if (result.profileFollowId) {
     // Notification cleanup is best-effort and must not change the committed Unfollow result.
-    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId).catch(
+    await deleteNotificationBySource(NotificationKind.FOLLOW, result.profileFollowId, handle).catch(
       async (error) => {
         if (!onPostCommitError) {
           return;
@@ -311,7 +312,7 @@ export const unfollowProfile = async ({
   }
 
   if (result.profileFollowRequestId) {
-    await deleteFollowRequestNotificationPostCommit(result.profileFollowRequestId);
+    await deleteFollowRequestNotificationPostCommit(result.profileFollowRequestId, handle);
   }
 
   if (command) {
@@ -430,36 +431,43 @@ const removeProfileFollowProjection = async (
   return { profileFollow: undefined, profileFollowRequest: deleted };
 };
 
-export const removeInboundFollow = async (input: {
-  readonly expectedRowId?: string;
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
-}): Promise<boolean> => {
-  const deleted = await db.transaction((tx) => removeProfileFollowProjection(input, tx));
+export const removeInboundFollow = async (
+  input: {
+    readonly expectedRowId?: string;
+    readonly followeeProfileId: string;
+    readonly followerProfileId: string;
+    readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
+  },
+  handle?: Database,
+): Promise<boolean> => {
+  const deleted = await getDatabaseConnection(handle).transaction((tx) =>
+    removeProfileFollowProjection(input, tx),
+  );
 
   if (deleted.profileFollow) {
-    await deleteNotificationBySource(NotificationKind.FOLLOW, deleted.profileFollow.id).catch(
-      async (error) => {
-        if (!input.onPostCommitError) {
-          return;
-        }
+    await deleteNotificationBySource(
+      NotificationKind.FOLLOW,
+      deleted.profileFollow.id,
+      handle,
+    ).catch(async (error) => {
+      if (!input.onPostCommitError) {
+        return;
+      }
 
-        try {
-          await input.onPostCommitError(error);
-        } catch (observerError) {
-          console.error('Follow notification cleanup observation failed', {
-            error,
-            observerError,
-            followeeProfileId: input.followeeProfileId,
-            followerProfileId: input.followerProfileId,
-          });
-        }
-      },
-    );
+      try {
+        await input.onPostCommitError(error);
+      } catch (observerError) {
+        console.error('Follow notification cleanup observation failed', {
+          error,
+          observerError,
+          followeeProfileId: input.followeeProfileId,
+          followerProfileId: input.followerProfileId,
+        });
+      }
+    });
   }
   if (deleted.profileFollowRequest) {
-    await deleteFollowRequestNotificationPostCommit(deleted.profileFollowRequest.id);
+    await deleteFollowRequestNotificationPostCommit(deleted.profileFollowRequest.id, handle);
   }
 
   return deleted.profileFollow !== undefined || deleted.profileFollowRequest !== undefined;

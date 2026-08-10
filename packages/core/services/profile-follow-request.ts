@@ -1,7 +1,6 @@
 import { and, eq, inArray, ne, notExists, or } from 'drizzle-orm';
 import {
   ActivityPubActors,
-  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -18,7 +17,7 @@ import {
   deleteFollowRequestNotificationPostCommit,
 } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
-import type { Transaction } from '../db';
+import type { Database, Transaction } from '../db';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -97,79 +96,89 @@ export const ensureProfileFollowRequest = async (
     };
   });
 
-export const acceptProfileFollowRequest = async ({
-  expectedRowId,
-  followeeProfileId,
-  followerProfileId,
-}: ProfileFollowPair & {
-  readonly expectedRowId: string;
-}): Promise<AcceptProfileFollowRequestResult> => {
-  const result = await db.transaction(async (tx): Promise<AcceptProfileFollowRequestResult> => {
-    const pair = { followeeProfileId, followerProfileId };
-    const established = await tx
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(pairCondition(ProfileFollows, pair))
-      .limit(1)
-      .then(first);
-
-    if (established) {
-      return established.id === expectedRowId ? { kind: 'ALREADY_ESTABLISHED' } : { kind: 'NOOP' };
-    }
-
-    const pendingRequest = await tx
-      .select({ id: ProfileFollowRequests.id })
-      .from(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.id, expectedRowId),
-          pairCondition(ProfileFollowRequests, pair),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    const unavailableParticipants = tx
-      .select({ id: Profiles.id })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-          or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
-        ),
-      );
-    const deleted = await tx
-      .delete(ProfileFollowRequests)
-      .where(
-        and(
-          eq(ProfileFollowRequests.id, expectedRowId),
-          pairCondition(ProfileFollowRequests, pair),
-          notExists(unavailableParticipants),
-        ),
-      )
-      .returning({ id: ProfileFollowRequests.id })
-      .then(first);
-
-    if (!deleted) {
-      const establishedAfterDelete = await tx
+export const acceptProfileFollowRequest = async (
+  {
+    expectedRowId,
+    followeeProfileId,
+    followerProfileId,
+  }: ProfileFollowPair & {
+    readonly expectedRowId: string;
+  },
+  handle?: Database,
+): Promise<AcceptProfileFollowRequestResult> => {
+  const result = await getDatabaseConnection(handle).transaction(
+    async (tx): Promise<AcceptProfileFollowRequestResult> => {
+      const pair = { followeeProfileId, followerProfileId };
+      const established = await tx
         .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
         .where(pairCondition(ProfileFollows, pair))
         .limit(1)
         .then(first);
 
-      return pendingRequest && establishedAfterDelete
-        ? { kind: 'ALREADY_ESTABLISHED' }
-        : { kind: 'NOOP' };
-    }
+      if (established) {
+        return established.id === expectedRowId
+          ? { kind: 'ALREADY_ESTABLISHED' }
+          : { kind: 'NOOP' };
+      }
 
-    const ensured = await ensureProfileFollow(pair, tx);
-    return ensured.created ? { kind: 'ACCEPTED' } : { kind: 'ALREADY_ESTABLISHED' };
-  });
+      const pendingRequest = await tx
+        .select({ id: ProfileFollowRequests.id })
+        .from(ProfileFollowRequests)
+        .where(
+          and(
+            eq(ProfileFollowRequests.id, expectedRowId),
+            pairCondition(ProfileFollowRequests, pair),
+          ),
+        )
+        .limit(1)
+        .then(first);
+
+      const unavailableParticipants = tx
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(
+          and(
+            inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+            or(
+              ne(Profiles.state, ProfileState.ACTIVE),
+              eq(Instances.state, InstanceState.SUSPENDED),
+            ),
+          ),
+        );
+      const deleted = await tx
+        .delete(ProfileFollowRequests)
+        .where(
+          and(
+            eq(ProfileFollowRequests.id, expectedRowId),
+            pairCondition(ProfileFollowRequests, pair),
+            notExists(unavailableParticipants),
+          ),
+        )
+        .returning({ id: ProfileFollowRequests.id })
+        .then(first);
+
+      if (!deleted) {
+        const establishedAfterDelete = await tx
+          .select({ id: ProfileFollows.id })
+          .from(ProfileFollows)
+          .where(pairCondition(ProfileFollows, pair))
+          .limit(1)
+          .then(first);
+
+        return pendingRequest && establishedAfterDelete
+          ? { kind: 'ALREADY_ESTABLISHED' }
+          : { kind: 'NOOP' };
+      }
+
+      const ensured = await ensureProfileFollow(pair, tx);
+      return ensured.created ? { kind: 'ACCEPTED' } : { kind: 'ALREADY_ESTABLISHED' };
+    },
+  );
 
   if (result.kind !== 'NOOP') {
-    await deleteFollowRequestNotificationPostCommit(expectedRowId);
+    await deleteFollowRequestNotificationPostCommit(expectedRowId, handle);
   }
 
   return result;
@@ -247,22 +256,25 @@ const approveProfileFollowRequestInTransaction = async (
   };
 };
 
-export const approveProfileFollowRequest = async ({
-  actorProfileId,
-  profileFollowRequestId,
-}: {
-  readonly actorProfileId: string;
-  readonly profileFollowRequestId: string;
-}): Promise<ApproveProfileFollowRequestResult> => {
-  const { created, ...approved } = await db.transaction((tx) =>
+export const approveProfileFollowRequest = async (
+  {
+    actorProfileId,
+    profileFollowRequestId,
+  }: {
+    readonly actorProfileId: string;
+    readonly profileFollowRequestId: string;
+  },
+  handle?: Database,
+): Promise<ApproveProfileFollowRequestResult> => {
+  const { created, ...approved } = await getDatabaseConnection(handle).transaction((tx) =>
     approveProfileFollowRequestInTransaction({ actorProfileId, profileFollowRequestId }, tx),
   );
 
-  await deleteFollowRequestNotificationPostCommit(approved.profileFollowRequestId);
+  await deleteFollowRequestNotificationPostCommit(approved.profileFollowRequestId, handle);
 
   if (created) {
     // Notification delivery is best-effort and must not change the committed approval result.
-    await createFollowNotification(approved.profileFollow.id).catch(() => undefined);
+    await createFollowNotification(approved.profileFollow.id, handle).catch(() => undefined);
   }
 
   return approved;
@@ -279,8 +291,9 @@ const deleteProfileFollowRequestAsActor = async (
     readonly profileFollowRequestId: string;
   },
   tx?: Transaction,
+  handle?: Database,
 ) =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
+  getDatabaseConnection(tx ?? handle).transaction(async (tx) => {
     const request = await tx
       .select()
       .from(ProfileFollowRequests)
@@ -316,29 +329,39 @@ const deleteProfileFollowRequestAsActor = async (
     return { actorProfile: actorProfile.profile, request };
   });
 
-export const rejectProfileFollowRequest = async (input: {
-  readonly actorProfileId: string;
-  readonly profileFollowRequestId: string;
-}): Promise<{
+export const rejectProfileFollowRequest = async (
+  input: {
+    readonly actorProfileId: string;
+    readonly profileFollowRequestId: string;
+  },
+  handle?: Database,
+): Promise<{
   readonly followeeProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const result = await deleteProfileFollowRequestAsActor({ ...input, actorRole: 'FOLLOWEE' });
-  await deleteFollowRequestNotificationPostCommit(result.request.id);
+  const result = await deleteProfileFollowRequestAsActor(
+    { ...input, actorRole: 'FOLLOWEE' },
+    undefined,
+    handle,
+  );
+  await deleteFollowRequestNotificationPostCommit(result.request.id, handle);
   return {
     followeeProfile: result.actorProfile,
     profileFollowRequestId: result.request.id,
   };
 };
 
-export const cancelProfileFollowRequest = async (input: {
-  readonly actorProfileId: string;
-  readonly profileFollowRequestId: string;
-}): Promise<{
+export const cancelProfileFollowRequest = async (
+  input: {
+    readonly actorProfileId: string;
+    readonly profileFollowRequestId: string;
+  },
+  handle?: Database,
+): Promise<{
   readonly followerProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const { command, result } = await db.transaction(async (tx) => {
+  const { command, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
     const deleted = await deleteProfileFollowRequestAsActor(
       { ...input, actorRole: 'FOLLOWER' },
       tx,
@@ -381,7 +404,7 @@ export const cancelProfileFollowRequest = async (input: {
     };
   });
 
-  await deleteFollowRequestNotificationPostCommit(result.profileFollowRequestId);
+  await deleteFollowRequestNotificationPostCommit(result.profileFollowRequestId, handle);
 
   if (command) {
     try {

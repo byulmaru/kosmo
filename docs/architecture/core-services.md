@@ -57,6 +57,32 @@ core는 검증된 Profile identity를 받아 action에 고유한 상태, 관계,
 `actorProfileId`와 `sourcePostId`를 전달한다. 향후 ActivityPub Repost ingress가 생기면 signature와
 Remote actor 검증 뒤 같은 action을 재사용할 수 있지만, ingress와 delivery는 현재 Repost 범위가 아니다.
 
+## GraphQL operation DB 경계
+
+GraphQL user-data query, result projection과 domain action은 실행 중인 operation의 `ctx.db`를 사용한다.
+Mutation도 root domain action뿐 아니라 반환 payload의 nested result resolver와 loader까지 같은 operation
+`ctx.db`를 사용한다. 이 경계에는 GraphQL resolver, loader와 그 resolver가 호출하는 core action의 모든
+operation SQL이 포함되며, global 또는 raw DB fallback을 추가하지 않는다.
+
+`selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 selected Profile로
+전환하면, 같은 operation Database에서 `selectProfile`이 소유하는 action-local narrow transaction 안에서 session-level
+`kosmo.profile_id`도 새 Profile UUID로 갱신해야 한다. 이 설정은 transaction 완료 뒤 이어지는
+top-level Mutation field가 같은 operation session에서 관찰할 수 있어야 하며, `kosmo.account_id`는
+그대로 유지한다. 이는 operation-wide transaction이 아니라 새로 추가하는 `selectProfile`-owned
+narrow transaction 경계다. 이 경계는 같은 operation의 serial sibling 사이 stale GUC를 막는 범위이며,
+authorization concurrency, locking 또는 TOCTOU safety를 보장하는 계약이 아니다.
+
+다음 두 종류의 SQL은 operation session 밖의 direct `DATABASE_URL` 경계를 유지한다.
+
+- request authentication과 process startup/bootstrap에서 실행하는 identity 또는 초기화 SQL
+- 인증된 `searchProfiles`가 명시적인 remote handle을 처음 materialize할 때 Fedify가 소유한 remote actor
+  materialization trusted side effect
+
+`searchProfiles`의 예외는 materialization 단계에만 적용한다. materialization이 끝난 뒤 최종 Profile 검색과
+result projection은 해당 GraphQL operation의 `ctx.db`에서 실행한다. Fedify inbound/delivery, Temporal
+Workflow/Activity와 worker entry는 이 GraphQL RLS DB 경계에 포함하지 않으며, 각자의 direct DB lifecycle을
+유지한다. 이 change는 RLS policy·grant나 credential을 바꾸지 않는다.
+
 ## Public contract
 
 - input은 검증된 DB identity와 domain input으로 구성한다. caller별 인증 결과를 boolean, callback 또는

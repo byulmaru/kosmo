@@ -19,7 +19,7 @@ builder.mutationField('submitFeedback', (t) =>
     },
     resolve: async (_, { input }, ctx) =>
       deliverFeedback(
-        await resolveFeedbackIdentity(ctx.session.accountId, ctx.session.profileId),
+        await resolveFeedbackIdentity(ctx.session.accountId, ctx.session.profileId, ctx.db),
         input,
       ),
   }),

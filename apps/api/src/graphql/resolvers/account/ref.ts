@@ -1,9 +1,9 @@
-import { Accounts, db } from '@kosmo/core/db';
+import { Accounts } from '@kosmo/core/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
 export const Account = createObjectRef('Account', (ids, ctx) =>
-  db
+  ctx.db
     .select()
     .from(Accounts)
     .where(

@@ -26,9 +26,12 @@ builder.mutationField('revokeCurrentSession', (t) =>
       ctx.c.header('Cache-Control', 'no-store');
       ctx.c.header('Pragma', 'no-cache');
 
-      const result = await revokeCurrentSession({
-        token: getBearerToken(ctx.c.req.header('Authorization')),
-      });
+      const result = await revokeCurrentSession(
+        {
+          token: getBearerToken(ctx.c.req.header('Authorization')),
+        },
+        ctx.db,
+      );
 
       return {
         completed: result.status === 'REVOKED' || result.status === 'ALREADY_UNAUTHENTICATED',

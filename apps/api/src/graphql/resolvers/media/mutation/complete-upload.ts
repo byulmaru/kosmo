@@ -1,4 +1,4 @@
-import { db, first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
+import { first, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { and, eq } from 'drizzle-orm';
@@ -24,7 +24,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       id: t.input.globalID({ for: Media }),
     },
     resolve: async (_, { input }, ctx) => {
-      const media = await db
+      const media = await ctx.db
         .select()
         .from(MediaTable)
         .where(
@@ -76,7 +76,7 @@ builder.mutationField('completeMediaUpload', (t) =>
         throw new Error('Media Storage Service returned an invalid representation');
       }
 
-      const completed = await db
+      const completed = await ctx.db
         .update(MediaTable)
         .set({
           mediaType: representation.data.mediaType,
@@ -99,7 +99,7 @@ builder.mutationField('completeMediaUpload', (t) =>
       }
 
       return {
-        media: await db
+        media: await ctx.db
           .select()
           .from(MediaTable)
           .where(

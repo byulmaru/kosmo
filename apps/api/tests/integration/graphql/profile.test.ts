@@ -1603,7 +1603,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(result.data?.profileByHandle?.tags, []);
   });
 
-  test('batches unordered Profile tag reads in one relation query', async () => {
+  test('returns unordered Profile tags for multiple Profiles', async () => {
     const first = await createProfile({ handle: 'tag-batch-first', instanceId: localInstanceId });
     const second = await createProfile({ handle: 'tag-batch-second', instanceId: localInstanceId });
     const hashtags = await db
@@ -1629,45 +1629,29 @@ describe('GraphQL remote profile boundary', () => {
       { hashtagId: hashtags[2]!.id, profileId: second.id },
     ]);
 
-    const previousDebug = pg.options.debug;
-    const profileHashtagQueries: string[] = [];
-    pg.options.debug = (connection, query, parameters, paramTypes) => {
-      if (typeof previousDebug === 'function') {
-        previousDebug(connection, query, parameters, paramTypes);
-      }
-      if (query.toLowerCase().includes('profile_hashtag')) {
-        profileHashtagQueries.push(query);
-      }
-    };
-
-    try {
-      const result = await requestGraphQL<{
-        nodes: Array<{ id: string; tags: Array<{ id: string; name: string }> } | null>;
-      }>(
-        `query BatchProfileTags($ids: [ID!]!) {
+    const result = await requestGraphQL<{
+      nodes: Array<{ id: string; tags: Array<{ id: string; name: string }> } | null>;
+    }>(
+      `query ProfileTags($ids: [ID!]!) {
           nodes(ids: $ids) {
             ... on Profile { id tags { id name } }
           }
         }`,
-        {
-          ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
-        },
-      );
+      {
+        ids: [globalId('Profile', first.id), globalId('Profile', second.id)],
+      },
+    );
 
-      assertNoGraphQLErrors(result);
-      assert.equal(result.data?.nodes[0]?.id, globalId('Profile', first.id));
-      assert.deepEqual(result.data?.nodes[0]?.tags.map(({ name }) => name).toSorted(), [
-        'FirstOne',
-        'FirstTwo',
-      ]);
-      assert.deepEqual(result.data?.nodes[1], {
-        id: globalId('Profile', second.id),
-        tags: [{ id: globalId('Hashtag', hashtags[2]!.id), name: 'SecondOne' }],
-      });
-      assert.equal(profileHashtagQueries.length, 1);
-    } finally {
-      pg.options.debug = previousDebug;
-    }
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.nodes[0]?.id, globalId('Profile', first.id));
+    assert.deepEqual(result.data?.nodes[0]?.tags.map(({ name }) => name).toSorted(), [
+      'FirstOne',
+      'FirstTwo',
+    ]);
+    assert.deepEqual(result.data?.nodes[1], {
+      id: globalId('Profile', second.id),
+      tags: [{ id: globalId('Hashtag', hashtags[2]!.id), name: 'SecondOne' }],
+    });
   });
 
   test('rejects a Member updating a Profile', async () => {

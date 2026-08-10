@@ -58,6 +58,8 @@ spec:
                   key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
+            - name: OPERATION_DATABASE_URL
+              value: {{ include "kosmo.apiPoolerDatabaseUrl" . | quote }}
           envFrom:
             - secretRef:
                 name: env

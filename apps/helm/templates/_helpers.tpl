@@ -22,6 +22,10 @@
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
 {{- end -}}
 
+{{- define "kosmo.postgresPoolerDatabaseUrl" -}}
+{{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
+{{- end -}}
+
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
 {{- range $role := list "api" "fedify" -}}
@@ -55,6 +59,33 @@
 {{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
 {{- else -}}
 {{- include "kosmo.databaseUrl" . -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.apiPoolerDatabaseUrl" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- $databaseUrl := dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) | toString -}}
+{{- $parsed := urlParse $databaseUrl -}}
+{{- $scheme := get $parsed "scheme" | default "" | toString -}}
+{{- $host := get $parsed "host" | default "" | toString -}}
+{{- if and (ne $scheme "postgres") (ne $scheme "postgresql") -}}
+{{- fail "postgres.credentials.api.databaseUrl must use the postgres or postgresql scheme" -}}
+{{- end -}}
+{{- if eq $host "" -}}
+{{- fail "postgres.credentials.api.databaseUrl must include a host" -}}
+{{- end -}}
+{{- $schemePrefix := regexFind "^[^:]+://" $databaseUrl | default "" -}}
+{{- $authorityAndSuffix := trimPrefix $schemePrefix $databaseUrl -}}
+{{- $authority := regexFind "^[^/?#]*" $authorityAndSuffix | default "" -}}
+{{- $userinfo := regexFind "^.*@" $authority | default "" -}}
+{{- $rawHost := trimPrefix $userinfo $authority -}}
+{{- if or (eq $schemePrefix "") (eq $rawHost "") (ne $rawHost $host) -}}
+{{- fail "postgres.credentials.api.databaseUrl must have a parseable authority" -}}
+{{- end -}}
+{{- $suffix := trimPrefix $authority $authorityAndSuffix -}}
+{{- printf "%s%s%s:5432%s" $schemePrefix $userinfo (include "kosmo.postgresPoolerName" .) $suffix -}}
+{{- else -}}
+{{- include "kosmo.postgresPoolerDatabaseUrl" . -}}
 {{- end -}}
 {{- end -}}
 

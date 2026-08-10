@@ -1,4 +1,4 @@
-import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, Instances, Profiles } from '@kosmo/core/db';
 import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Account } from '@/graphql/resolvers/account';
@@ -8,8 +8,8 @@ import { Profile } from '../ref';
 builder.objectField(Account, 'profiles', (t) =>
   t.field({
     type: [Profile],
-    resolve: async (account) => {
-      return db
+    resolve: async (account, _, ctx) => {
+      return ctx.db
         .select(getColumns(Profiles))
         .from(Profiles)
         .innerJoin(

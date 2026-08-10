@@ -1,4 +1,4 @@
-import { AccountProfiles, db } from '@kosmo/core/db';
+import { AccountProfiles } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -14,7 +14,7 @@ export const viewerAccountProfileLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return db
+      return ctx.db
         .select(getColumns(AccountProfiles))
         .from(AccountProfiles)
         .where(

@@ -1,18 +1,20 @@
-import { db, first, Instances, Profiles } from '@kosmo/core/db';
+import { first, getDatabaseConnection, Instances, Profiles } from '@kosmo/core/db';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { eq } from 'drizzle-orm';
 import { formatRelativeHandle } from '@/profile/identity';
+import type { DatabaseHandle } from '@kosmo/core/db';
 import type { FeedbackIdentity } from './delivery';
 
 export const resolveFeedbackIdentity = async (
   accountId: string,
   profileId: string | null,
+  handle?: DatabaseHandle,
 ): Promise<FeedbackIdentity> => {
   if (!profileId) {
     return { accountId, profile: null };
   }
 
-  const profile = await db
+  const profile = await getDatabaseConnection(handle)
     .select({
       displayName: Profiles.displayName,
       handle: Profiles.handle,

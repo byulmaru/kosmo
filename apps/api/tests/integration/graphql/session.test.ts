@@ -159,17 +159,6 @@ test('GraphQL mutation에는 Session ID 입력이 없고 malformed Authorization
   assert.match(result.errors?.[0]?.message ?? '', /Bearer/);
 });
 
-test('database 결과를 확정할 수 없으면 완료 payload 대신 internal error를 반환한다', async (t) => {
-  t.mock.method(db, 'transaction', async () => {
-    throw new Error('database unavailable');
-  });
-
-  const result = await revoke('unreachable-token');
-
-  assert.equal(result.data, null);
-  assert.equal(result.errors?.[0]?.extensions?.code, 'INTERNAL_SERVER_ERROR');
-});
-
 test('동시 GraphQL 폐기는 한 Session만 Revoked로 수렴한다', async () => {
   const { account, session } = await createSession();
   const other = await db

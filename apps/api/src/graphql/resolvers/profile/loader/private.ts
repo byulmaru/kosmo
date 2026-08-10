@@ -1,4 +1,4 @@
-import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
@@ -17,7 +17,7 @@ export const profilePrivateAccessLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return db
+      return ctx.db
         .select({
           profileId: Profiles.id,
         })

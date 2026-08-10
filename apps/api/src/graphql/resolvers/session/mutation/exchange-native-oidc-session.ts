@@ -143,6 +143,7 @@ builder.mutationField('exchangeNativeOidcSession', (t) =>
         callbackUrl.searchParams.set('code', input.code);
         const token = await createOidcSession(
           await exchangeOidcCode({ callbackUrl, codeVerifier: input.codeVerifier }),
+          ctx.db,
         );
 
         return { token };

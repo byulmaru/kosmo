@@ -1,8 +1,9 @@
-import { db, ProfileFollowRequests } from '@kosmo/core/db';
+import { ProfileFollowRequests } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollowRequest } from '../ref';
+import type { UserContext } from '@/context';
 import type { ProfileFollowRequestRow } from '../loader/follow-request';
 
 builder.objectFields(ProfileFollowRequest, (t) => ({
@@ -19,6 +20,7 @@ builder.objectFields(ProfileFollowRequest, (t) => ({
 }));
 
 const resolveRequestConnection = async (
+  ctx: UserContext,
   profileId: string,
   participantColumn:
     | typeof ProfileFollowRequests.followerProfileId
@@ -31,7 +33,7 @@ const resolveRequestConnection = async (
       toCursor: (request) => request.id,
     },
     async ({ before, after, limit, inverted }) =>
-      db
+      ctx.db
         .select(getColumns(ProfileFollowRequests))
         .from(ProfileFollowRequests)
         .where(
@@ -51,7 +53,7 @@ builder.objectFields(Profile, (t) => ({
     nullable: true,
     resolve: (profile, args, ctx) =>
       ctx.session?.profileId === profile.id
-        ? resolveRequestConnection(profile.id, ProfileFollowRequests.followeeProfileId, args)
+        ? resolveRequestConnection(ctx, profile.id, ProfileFollowRequests.followeeProfileId, args)
         : null,
   }),
   outgoingProfileFollowRequests: t.connection({
@@ -59,7 +61,7 @@ builder.objectFields(Profile, (t) => ({
     nullable: true,
     resolve: (profile, args, ctx) =>
       ctx.session?.profileId === profile.id
-        ? resolveRequestConnection(profile.id, ProfileFollowRequests.followerProfileId, args)
+        ? resolveRequestConnection(ctx, profile.id, ProfileFollowRequests.followerProfileId, args)
         : null,
   }),
 }));
