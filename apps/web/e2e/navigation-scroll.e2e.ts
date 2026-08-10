@@ -127,7 +127,7 @@ test('1280px full shell은 document overflow 전후 컬럼 경계와 600px 중�
   await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).scrollbarGutter))
-    .toBe('stable both-edges');
+    .toBe('stable');
 
   const root = page.getByTestId('universal-shell-root');
   const columns = root.locator(':scope > div');
