@@ -12,7 +12,7 @@ Role별 Secret은 Vault KV static source를 Vault Secrets Operator(VSO)가 Kuber
 - API BYPASSRLS=false, Worker BYPASSRLS=true, 비상승 attributes와 빈 membership을 유지한다.
 - role별 VaultStaticSecret이 환경별 정적 KV path에서 username/password만 destination으로 동기화하게 한다.
 - 기존 PgBouncer, owner/migration/replication/local/legacy SCRAM과 workload connection 경계를 보존한다.
-- static render/lint와 strict OpenSpec 검증, non-prod live 및 production 승인 gate를 분리해 기록한다.
+- static render/lint와 strict OpenSpec 검증에 더해 non-prod live verification을 completion evidence로 기록한다. Production preflight/sync/apply/live는 OpenSpec completion과 분리된 외부 운영 authorization boundary로 둔다.
 
 **Non-Goals:**
 
@@ -21,7 +21,7 @@ Role별 Secret은 Vault KV static source를 Vault Secrets Operator(VSO)가 Kuber
 - schema/table/sequence GRANT, default privilege, ownership, RLS policy (PROD-724).
 - explicit DB handle 또는 SQL boundary (PROD-710).
 - Vault Dynamic Secret (PROD-744) 또는 password value rotation 정책의 신규 설계.
-- 이 pass에서 non-prod cluster apply, 실제 Vault/role 상태 확인, production sync/apply/live 검증.
+- Production preflight/sync/apply/live와 production access는 이 pass의 범위가 아니다. Dev cluster apply와 실제 Vault/CNPG/role 상태는 이 change의 completion evidence로만 확인한다.
 
 ## Implementation Guidance
 
@@ -33,15 +33,15 @@ Role별 Secret은 Vault KV static source를 Vault Secrets Operator(VSO)가 Kuber
 - DatabaseRole은 login: true, inherit: true, superuser/createdb/createrole/replication: false, role별 bypassrls, inRoles: [], databaseRoleReclaimPolicy: retain을 명시한다.
 - API/Worker 문서는 독립된 YAML document로 유지한다. 두 role의 BYPASSRLS와 후속 lifecycle이 다르므로 범용 range helper로 속성을 합치지 않는다.
 - Role provisioning은 workload selector와 연결되지 않는다. 기존 PgBouncer/direct endpoint, owner/migration Secret 및 existing rollout env는 이 change에서 변경하지 않는다.
-- Production sync/apply와 실제 secret/role data 확인은 명시적 사용자 승인과 별도 live gate 없이는 수행하지 않는다.
+- Production sync/apply와 production secret/role data 확인은 명시적 사용자 승인 없이는 수행하지 않는다. Dev live secret/role evidence는 이 change의 completion evidence로 기록한다.
 
 ### Recommended Approach
 
 1. postgres-runtime-roles.yaml에서 두 DatabaseRole에 role별 static passwordSecret을 연결한다.
 2. vaultstaticsecret.yaml에 API/Worker용 VaultStaticSecret 두 개를 추가해 환경별 static KV path와 basic-auth destination을 선언한다.
 3. Helm lint/render에서 dev/prod의 role 이름·attributes·Secret path/name/shape와 owner/migration/PgBouncer 음성 경계를 확인한다.
-4. 정적 검증 결과를 기록하되 non-prod apply와 실제 Vault/role checks는 별도 unchecked task로 남긴다.
-5. 사용자가 별도 승인한 뒤에만 production preflight/sync/live 단계로 이동한다. 이 change pass에서는 수행하지 않는다.
+4. Dev live에서 API/Worker VSO가 Ready이고 basic-auth destination의 type·username/password shape·`cnpg.io/reload: "true"` label, 적용된 DatabaseRole의 attributes 및 membership/ownership 부재, PgBouncer SCRAM `current_user = session_user`, 기존 client-cert Secret 부재와 Rollout/Pooler Healthy를 확인해 completion evidence로 기록한다.
+5. Production preflight/sync/apply/live는 별도 운영 authorization이 있을 때만 수행할 수 있는 외부 경계로 남긴다. 이 change의 task·completion·archive는 production 실행을 요구하거나 승인하지 않는다.
 
 ### Allowed Alternatives
 
@@ -59,7 +59,7 @@ Role별 VaultStaticSecret을 명시적인 두 YAML document로 쓰거나, 동일
 
 ## Risks / Trade-offs
 
-- [정적 Secret sync 지연 또는 password mismatch] → destination metadata/shape와 CNPG reload 상태를 non-prod live gate에서 확인하되, 이 pass에서는 실제 확인을 완료했다고 주장하지 않는다.
+- [정적 Secret sync 지연 또는 password mismatch] → destination metadata/shape와 CNPG reload 상태를 dev live evidence에서 확인하고, 후속 rotation이나 환경 변경에서는 같은 검증을 반복한다.
 - [동명 role adoption이 기존 attribute/membership에 영향을 줌] → 적용 전 preflight로 role identity와 ownership을 확인하고, 별도 승인 없이는 apply하지 않는다.
 - [role provisioning과 workload cutover가 분리되어 일시적으로 새 role이 소비되지 않음] → 의도한 additive 경계다. 후속 cutover issue가 selector와 rollback을 독립적으로 소유한다.
 - [static credential을 dynamic으로 오해함] → PROD-744를 후속 범위로 명시하고, 이번 change에서는 KV static source와 VSO basic-auth destination만 다룬다.
@@ -67,10 +67,10 @@ Role별 VaultStaticSecret을 명시적인 두 YAML document로 쓰거나, 동일
 ## Migration Plan
 
 1. Static DatabaseRole/VSO manifest와 render/lint/strict validation을 완료한다.
-2. Non-prod apply, VaultStaticSecret destination, CNPG password readiness와 실제 role attributes는 별도 unchecked live gate로 남긴다.
+2. Dev에 적용된 API/Worker VSO Ready, basic-auth Secret shape와 reload label, DatabaseRole attributes 및 membership/ownership 부재, PgBouncer SCRAM `current_user = session_user`, 이전 client-cert Secret 부재, 기존 Rollout/Pooler Healthy를 non-prod completion evidence로 기록한다.
 3. 후속 PROD-724, PROD-710, PROD-715, PROD-716이 각자의 GRANT/handle/cutover를 독립적으로 구현한다.
-4. Production은 사용자의 명시적 승인 뒤 승인된 단계만 preflight/sync/apply/live 검증한다.
-5. 전체 completion evidence와 live gate가 확보되기 전에는 이 change를 archive하지 않는다.
+4. Production preflight/sync/apply/live는 별도 운영 authorization에 따른 외부 절차이며 이 change의 task·completion·archive 단계가 아니다. Completion·merge·archive는 production 실행을 승인하지 않는다.
+5. Static validation과 dev live completion evidence를 기준으로 change completion을 판단하고, archive 후 전체 strict validation은 OpenSpec completion policy에 따라 수행한다.
 
 ## Open Questions
 

@@ -11,15 +11,15 @@ RLS 전환의 첫 단계인 `PROD-369`은 API와 trusted federation/Temporal Wor
 - 기존 CloudNativePG PgBouncer와 direct/owner·migration·replication·local/legacy SCRAM 경계, 기존 workload URL/selector는 변경하지 않는다. 이 change는 새 역할을 workload에 주입하거나 cutover하지 않는다.
 - `PROD-724` 객체 GRANT, `PROD-710` handle/SQL, `PROD-715` Worker cutover, `PROD-716` API cutover와 `PROD-744` dynamic secret은 이 change의 구현·검증 범위가 아니다.
 - 취소된 `PROD-470` client-certificate/direct PostgreSQL 설계는 active contract가 아니며, 관련 결정은 `decisions.md`의 Superseded 기록에만 보존한다.
-- PR merge·CI·manifest 준비는 production apply 승인이 아니다. Production sync/apply는 사용자의 별도 명시적 승인 없이 수행하지 않는다.
+- PR merge·CI·manifest 준비는 production preflight/sync/apply/live 승인이 아니다. Production 실행은 사용자의 별도 명시적 운영 authorization 없이 수행하지 않는다.
 
 ## Authority / Provenance
 
 - Canonical: 적용되는 제품 도메인 문서는 없다. PostgreSQL migration identity와 rollout 규칙은 `docs/operations/production-migrations.md`, `memory/database-migrations.md`를 따른다.
 - Linear Contract / Implementation: `PROD-369` (runtime role와 static SCRAM credential provisioning).
 - Superseded alternative: 취소된 `PROD-470` (client certificate/direct PostgreSQL authentication).
-- Implementation ownership: `PROD-369`이 DatabaseRole, role attribute, role별 VaultStaticSecret/passwordSecret과 정적 검증을 소유한다. 실제 non-prod live 검증과 production preflight/apply는 이 pass에서 수행하지 않는다.
-- Archive ownership: PROD-369의 구현·검증 책임자가 non-prod/live gate와 전체 completion evidence를 확보한 뒤 archive를 담당한다. 현재는 live gate가 남아 있어 archive하지 않는다.
+- Implementation ownership: `PROD-369`이 DatabaseRole, role attribute, role별 VaultStaticSecret/passwordSecret과 정적 검증 및 non-prod live completion evidence를 소유한다. Production preflight/sync/apply/live는 별도의 운영 authorization boundary이며 이 change의 task나 completion evidence가 아니다.
+- Archive ownership: PROD-369의 구현·검증 책임자가 static validation과 non-prod live completion evidence를 확보한 뒤 archive를 담당한다. Production authorization은 archive의 선행 조건이 아니며, completion·merge·archive 어느 것도 production 실행을 승인하지 않는다.
 
 ## Capabilities
 
@@ -36,4 +36,4 @@ RLS 전환의 첫 단계인 `PROD-369`은 API와 trusted federation/Temporal Wor
 - `apps/helm`: 두 standalone DatabaseRole에 static `passwordSecret`을 연결하고 role별 VaultStaticSecret/basic-auth destination을 추가한다. 기존 공용 env·production migration Secret과 workload template은 유지한다.
 - PostgreSQL authorization: `kosmo_api`와 `kosmo_worker`의 LOGIN/attribute/inRoles 선언만 준비한다. 객체 GRANT, default privilege, ownership, RLS policy와 SQL은 포함하지 않는다.
 - Kubernetes Secret: VSO가 role별 `username`/`password`를 정적 KV source에서 destination Secret으로 동기화하고 CNPG DatabaseRole이 그 Secret을 사용한다. 비밀번호 값은 OpenSpec·manifest·로그에 기록하지 않는다.
-- Rollout: 이 change는 workload restart, URL/selector 변경, PgBouncer 우회 또는 direct client-certificate 설정을 하지 않는다. non-prod live와 production approval/apply는 미완료 gate로 남는다.
+- Rollout: 이 change는 workload restart, URL/selector 변경, PgBouncer 우회 또는 direct client-certificate 설정을 하지 않는다. Non-prod live verification은 completion evidence로 기록한다. Production preflight/sync/apply/live는 외부 운영 authorization boundary이며 OpenSpec task·completion·archive criterion이 아니다. Completion·merge·archive 어느 것도 production 실행을 승인하지 않는다.
