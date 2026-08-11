@@ -51,11 +51,7 @@ export function ProfileNameBlock({ href, profile, style }: ProfileNameBlockProps
   );
 }
 
-export function ProfileNameBlockView({
-  displayName,
-  relativeHandle,
-  style,
-}: ProfileNameBlockViewProps) {
+function ProfileNameBlockView({ displayName, relativeHandle, style }: ProfileNameBlockViewProps) {
   const theme = useTheme();
 
   return (

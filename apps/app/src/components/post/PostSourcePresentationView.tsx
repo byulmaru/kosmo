@@ -1,6 +1,7 @@
 import { Link, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ProfileNameBlockView } from '@/components/profile/ProfileNameBlock';
+import { graphql, useFragment } from 'react-relay';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -9,9 +10,12 @@ import { PostContentRenderer } from './PostContentRenderer';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { ProfileNameBlock_profile$key } from '@/components/profile/__generated__/ProfileNameBlock_profile.graphql';
+import type { PostSourcePresentationView_post$key } from './__generated__/PostSourcePresentationView_post.graphql';
+import type { PostSourcePreview_source$key } from './__generated__/PostSourcePreview_source.graphql';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
-export type PresentationProfile = {
+type AuthorProfile = ProfileNameBlock_profile$key & {
   readonly avatar:
     | {
         readonly id: string;
@@ -21,36 +25,85 @@ export type PresentationProfile = {
     | undefined;
   readonly displayName: string;
   readonly handle: string;
-  readonly relativeHandle: string;
 };
 
-export type PresentationContent = {
+type PresentationContent = {
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
-  readonly media: ReadonlyArray<PostMediaItem> | null;
-  readonly postId: string;
+  readonly media:
+    | ReadonlyArray<{
+        readonly altText: string | null | undefined;
+        readonly id: string;
+        readonly url: string | null | undefined;
+      }>
+    | null
+    | undefined;
 };
 
-export type SourcePostPresentationData = {
-  readonly content: PresentationContent | null;
-  readonly createdAt: string;
-  readonly id: string;
-  readonly profile: PresentationProfile;
-};
+const PostSourcePreviewFragment = graphql`
+  fragment PostSourcePreview_source on Post {
+    id
+    createdAt
+    content {
+      bodyText
+      contentWarning
+      document
+      media {
+        id
+        altText
+        url
+      }
+    }
+    profile {
+      avatar {
+        id
+        url
+      }
+      displayName
+      handle
+      relativeHandle
+      ...ProfileNameBlock_profile
+    }
+  }
+`;
 
-export type PostSourcePresentationData = {
-  readonly content: PresentationContent | null;
-  readonly createdAt: string;
-  readonly id: string;
-  readonly profile: PresentationProfile;
-  readonly replyParent: { readonly id: string } | null;
-  readonly repostSource: SourcePostPresentationData | null;
-};
+const PostSourcePresentationViewFragment = graphql`
+  fragment PostSourcePresentationView_post on Post {
+    id
+    createdAt
+    content {
+      bodyText
+      contentWarning
+      document
+      media {
+        id
+        altText
+        url
+      }
+    }
+    profile {
+      avatar {
+        id
+        url
+      }
+      displayName
+      handle
+      relativeHandle
+      ...ProfileNameBlock_profile
+    }
+    repostSource {
+      ...PostSourcePreview_source
+    }
+  }
+`;
 
 type PresentationKind = 'invalid' | 'ordinary' | 'quote';
 
-function presentationKind(post: PostSourcePresentationData): PresentationKind {
+function presentationKind(post: {
+  readonly content: PresentationContent | null | undefined;
+  readonly repostSource: PostSourcePreview_source$key | null | undefined;
+}): PresentationKind {
   if (!post.repostSource) {
     return post.content ? 'ordinary' : 'invalid';
   }
@@ -59,16 +112,17 @@ function presentationKind(post: PostSourcePresentationData): PresentationKind {
 
 export function PostSourcePresentationView({
   onMediaOpen,
-  post,
+  post: postKey,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
   onMediaOpen?: PostMediaOpenHandler;
-  post: PostSourcePresentationData;
+  post: PostSourcePresentationView_post$key;
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const post = useFragment(PostSourcePresentationViewFragment, postKey);
   const kind = presentationKind(post);
 
   if (kind === 'invalid') {
@@ -113,6 +167,7 @@ export function PostSourcePresentationView({
           content={post.content}
           href={postDetailHref}
           onMediaOpen={onMediaOpen}
+          postId={post.id}
           testID="post-body"
         />
       </View>
@@ -131,6 +186,7 @@ export function PostSourcePresentationView({
         content={post.content}
         href={postDetailHref}
         onMediaOpen={onMediaOpen}
+        postId={post.id}
         testID="post-body"
       />
       <PostSourcePreview source={source} style={sourcePreviewStyle} />
@@ -140,14 +196,15 @@ export function PostSourcePresentationView({
 
 export function PostSourcePreview({
   interactive = true,
-  source,
+  source: sourceKey,
   style,
 }: {
   interactive?: boolean;
-  source: SourcePostPresentationData;
+  source: PostSourcePreview_source$key;
   style?: StyleProp<ViewStyle>;
 }): ReactNode {
   const theme = useTheme();
+  const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const content = (
@@ -181,6 +238,7 @@ export function PostSourcePreview({
         <PostBodyPressTarget
           content={source.content}
           href={sourcePostHref}
+          postId={source.id}
           style={styles.sourceBody}
           testID="source-post-body"
         />
@@ -191,8 +249,8 @@ export function PostSourcePreview({
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
-            media={source.content.media ?? null}
-            postId={source.content.postId}
+            media={presentationMedia(source.content.media)}
+            postId={source.id}
             size="md"
           />
         </View>
@@ -240,12 +298,14 @@ function PostBodyPressTarget({
   content,
   href,
   onMediaOpen,
+  postId,
   style,
   testID,
 }: {
   content: PresentationContent;
   href: Href;
   onMediaOpen?: PostMediaOpenHandler;
+  postId: string;
   style?: StyleProp<ViewStyle>;
   testID: string;
 }) {
@@ -264,16 +324,28 @@ function PostBodyPressTarget({
         bodyText={content.bodyText}
         contentWarning={content.contentWarning}
         document={content.document}
-        media={content.media}
+        media={presentationMedia(content.media)}
         onMediaOpen={onMediaOpen}
-        postId={content.postId}
+        postId={postId}
         size="md"
       />
     </Pressable>
   );
 }
 
-function Author({ profile, showAvatar }: { profile: PresentationProfile; showAvatar: boolean }) {
+function presentationMedia(
+  media: PresentationContent['media'],
+): ReadonlyArray<PostMediaItem> | null {
+  return (
+    media?.map(({ altText, id, url }) => ({
+      altText: altText ?? null,
+      id,
+      url: url ?? null,
+    })) ?? null
+  );
+}
+
+function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: boolean }) {
   return (
     <View style={styles.author}>
       {showAvatar ? (
@@ -283,11 +355,7 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
           size={40}
         />
       ) : null}
-      <ProfileNameBlockView
-        displayName={profile.displayName}
-        relativeHandle={profile.relativeHandle}
-        style={styles.authorText}
-      />
+      <ProfileNameBlock profile={profile} style={styles.authorText} />
     </View>
   );
 }

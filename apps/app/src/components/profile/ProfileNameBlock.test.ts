@@ -3,7 +3,7 @@ import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { ProfileNameBlockView as ProfileNameBlockViewExport } from './ProfileNameBlock';
+import type { ProfileNameBlock as ProfileNameBlockExport } from './ProfileNameBlock';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +19,13 @@ mockModule('react-native', {
   Text: 'Text',
   View: 'View',
 });
-mockModule('react-relay', { graphql: () => ({}), useFragment: () => undefined });
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: () => ({
+    displayName: '아주 긴 표시 이름이 한 줄을 넘을 수 있습니다',
+    relativeHandle: '@very-long-relative-handle-that-must-stay-on-one-line',
+  }),
+});
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ text: '#111111', textSecondary: '#666666' }),
 });
@@ -28,11 +34,11 @@ mockModule('@/theme/tokens', {
   typography: { md: { fontSize: 16, lineHeight: 24 }, sm: { fontSize: 14, lineHeight: 20 } },
 });
 
-let ProfileNameBlockView: typeof ProfileNameBlockViewExport;
+let ProfileNameBlock: typeof ProfileNameBlockExport;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ ProfileNameBlockView } = await import('./ProfileNameBlock'));
+  ({ ProfileNameBlock } = await import('./ProfileNameBlock'));
 });
 
 afterEach(async () => {
@@ -43,15 +49,10 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-test('ProfileNameBlockView truncates long display names and handles to one line', async () => {
-  assert.ok(ProfileNameBlockView);
+test('ProfileNameBlock truncates long display names and handles to one line', async () => {
+  assert.ok(ProfileNameBlock);
   await act(async () => {
-    renderer = create(
-      createElement(ProfileNameBlockView, {
-        displayName: '아주 긴 표시 이름이 한 줄을 넘을 수 있습니다',
-        relativeHandle: '@very-long-relative-handle-that-must-stay-on-one-line',
-      }),
-    );
+    renderer = create(createElement(ProfileNameBlock, { profile: {} as never }));
   });
 
   assert.ok(renderer);
