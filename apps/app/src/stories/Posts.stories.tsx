@@ -3318,7 +3318,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       expect(actionBarSlotStyle.paddingTop).toBe('0px');
       expect(actionBarSlotStyle.paddingBottom).toBe('4px');
       expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
-      expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
+      expect(getComputedStyle(card).borderBottomColor).toBe('rgb(236, 236, 240)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
       expect(

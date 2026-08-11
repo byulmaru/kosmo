@@ -194,7 +194,7 @@ export function PostListItem({
   const cardStyle = [
     styles.card,
     showDivider && styles.cardDivider,
-    showDivider && { borderColor: theme.divider },
+    showDivider && { borderColor: theme.borderSubtle },
   ];
   const replyAttribution =
     showReplyAttribution && post.replyParent ? (
