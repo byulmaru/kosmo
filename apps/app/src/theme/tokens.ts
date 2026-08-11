@@ -18,7 +18,7 @@ export const semanticColors = {
     backgroundCanvas: '#FFFFFF',
     backgroundElevated: '#FFFFFF',
     backgroundInverse: '#1A1A1A',
-    backgroundSurface: '#F8F8FA',
+    backgroundSurface: '#FAFAFB',
     borderDefault: '#DFDFE5',
     borderDisabled: '#F4F4F5',
     borderFocus: '#4F46E5',

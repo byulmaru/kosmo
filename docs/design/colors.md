@@ -41,7 +41,7 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | Semantic token               | Light     | Dark      | 용도                        |
 | ---------------------------- | --------- | --------- | --------------------------- |
 | `color/background/canvas`    | `#FFFFFF` | `#18181B` | 앱의 최하단 배경            |
-| `color/background/surface`   | `#F8F8FA` | `#222226` | 기본 제품 surface           |
+| `color/background/surface`   | `#FAFAFB` | `#222226` | 기본 제품 surface           |
 | `color/background/elevated`  | `#FFFFFF` | `#2B2B31` | modal, card 등 상승 표면    |
 | `color/background/inverse`   | `#1A1A1A` | `#FAFAFB` | tooltip, badge 등 역상 표면 |
 | `color/foreground/primary`   | `#1A1A1A` | `#F4F4F5` | 본문과 핵심 아이콘          |
@@ -55,7 +55,7 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
 | `color/border/disabled`      | `#F4F4F5` | `#2B2B31` | 비활성 경계                 |
 
-Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
+Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `neutral/0`을 참조하는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
 
 ## Action tokens
 
