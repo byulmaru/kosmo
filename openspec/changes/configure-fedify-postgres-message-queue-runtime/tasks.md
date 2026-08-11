@@ -175,7 +175,7 @@ PROD-448의 코드·adapter-managed initialization·chart와 nonproduction 검�
 - [x] 6.2 `openspec validate configure-fedify-postgres-message-queue-runtime --strict`와 repository 전체 관련 검증을 통과시킨다.
 - [x] 6.3 self-review로 domain/Notification/Temporal/production 범위 침범과 secret 노출을 점검하고 finding을 해결한다.
 - [x] 6.4 commit, push, Ready PR 생성과 hosted CI 확인 후 Linear에 PR completion evidence를 동기화한다.
-- [ ] 6.5 production `kosmo_fedify_queue` Database/DatabaseRole과 환경별 VSO Secret 선언을 default-off로 추가하고 dev/prod lint·template inspection에서 전용 role·session PgBouncer·database·release-derived Secret 외 target을 fail-close하는지 검증한 뒤 Ready PR과 hosted CI evidence를 기록한다.
+- [x] 6.5 production `kosmo_fedify_queue` Database/DatabaseRole과 환경별 VSO Secret 선언을 default-off로 추가하고 dev/prod lint·template inspection에서 전용 role·session PgBouncer·database·release-derived Secret 외 target을 fail-close하는지 검증한 뒤 Ready PR과 hosted CI evidence를 기록한다.
 
 ## 7. PROD-448 dev live verification
 
