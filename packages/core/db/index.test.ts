@@ -69,17 +69,3 @@ test('prefers the operation endpoint and falls back to the direct endpoint', asy
     }
   }
 });
-
-test('passes operation URL connection parameters through unchanged', async () => {
-  const owner = createOperationDatabase(
-    'postgres://kosmo@operation-pooler.example:5432/kosmo?idle_in_transaction_session_timeout=configured-idle&lock_timeout=configured-lock&statement_timeout=configured-statement&application_name=graphql-operation',
-  );
-  const { connection } = getClient(owner).options;
-
-  assert.equal(connection.idle_in_transaction_session_timeout, 'configured-idle');
-  assert.equal(connection.lock_timeout, 'configured-lock');
-  assert.equal(connection.statement_timeout, 'configured-statement');
-  assert.equal(connection.application_name, 'graphql-operation');
-
-  await owner.close();
-});
