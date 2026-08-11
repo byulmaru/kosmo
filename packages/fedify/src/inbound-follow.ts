@@ -19,7 +19,6 @@ import {
 } from '@kosmo/core/services';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { getFedifyDatabase } from './fedify-context';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
@@ -193,7 +192,7 @@ const handleInboundUndoAnnounce = async (
   activityUri: URL,
   actorUri: URL,
 ): Promise<UndoAnnounceResult> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const result = await database.transaction(async (tx) => {
     const row = await tx
       .select({
@@ -257,7 +256,7 @@ export const handleInboundUndo = async (
   context: InboxContext<FedifyContextData>,
   undo: Undo,
 ): Promise<void> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {

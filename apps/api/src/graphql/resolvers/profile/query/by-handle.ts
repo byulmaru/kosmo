@@ -1,4 +1,4 @@
-import { first, Instances, Profiles } from '@kosmo/core/db';
+import { db, first, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
@@ -118,7 +118,7 @@ builder.queryField('searchProfiles', (t) =>
         if (isExplicitRemoteHandle(args.query, parsed)) {
           try {
             const profile = await findOrMaterializeRemoteProfileActor({
-              context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
+              context: federation.createContext(new URL(localInstance.canonicalOrigin), { db }),
               handle: `${parsed.handle}@${parsed.domain}`,
               scheduleRefresh: () => undefined,
             });

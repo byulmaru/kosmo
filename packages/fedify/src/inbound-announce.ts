@@ -7,7 +7,6 @@ import { repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { getFedifyDatabase } from './fedify-context';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
@@ -100,7 +99,7 @@ export const handleInboundAnnounce = async (
   announce: Announce,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const activityUri = announce.id;
   const actorHref = uniqueHref(announce.actorIds);
   const objectHref = uniqueHref(announce.objectIds);

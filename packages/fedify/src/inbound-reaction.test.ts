@@ -92,7 +92,7 @@ const createLocalTarget = async () => {
 };
 
 const createContext = (recipient: string | null): InboxContext<FedifyContextData> =>
-  ({ data: createFedifyContextData(), recipient }) as unknown as InboxContext<FedifyContextData>;
+  ({ data: createFedifyContextData(db), recipient }) as unknown as InboxContext<FedifyContextData>;
 
 const readReaction = (profileId: string, postId: string) =>
   db

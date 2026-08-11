@@ -1,6 +1,6 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
-import { pg } from '@kosmo/core/db';
+import { db, pg } from '@kosmo/core/db';
 import { closeFedifyQueue, federation } from '@kosmo/fedify';
 import type { Server } from 'node:http';
 
@@ -67,7 +67,7 @@ async function run(): Promise<void> {
       return;
     }
 
-    const queueRun = federation.startQueue(undefined, { signal: abortController.signal });
+    const queueRun = federation.startQueue({ db }, { signal: abortController.signal });
     state = 'ready';
     await queueRun;
   } catch (error) {

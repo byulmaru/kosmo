@@ -18,7 +18,7 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq, ne, sql } from 'drizzle-orm';
-import { createFedifyContextData } from './fedify-context';
+import { createFedifyContextData as createFedifyContextDataWithDatabase } from './fedify-context';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -40,6 +40,8 @@ let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let createDatabaseOwner: typeof CoreDb.createDatabaseOwner;
 let db: typeof CoreDb.db;
+const createFedifyContextData = (database: typeof CoreDb.db = db) =>
+  createFedifyContextDataWithDatabase(database);
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
@@ -111,7 +113,7 @@ describe('inbound Announce materialization', () => {
   test('uses the database owner supplied by the trusted ingress context', async () => {
     await createRemoteActor(actorUri);
     await createRemoteSource();
-    const owner = createDatabaseOwner(databaseUrl);
+    const owner = createDatabaseOwner();
     const transaction = mock.method(owner.db, 'transaction');
 
     try {

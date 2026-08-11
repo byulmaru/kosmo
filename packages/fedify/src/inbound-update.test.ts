@@ -11,7 +11,7 @@ import {
   ProfileMediaKind,
 } from '@kosmo/core/enums';
 import { and, eq, inArray } from 'drizzle-orm';
-import { createFedifyContextData } from './fedify-context';
+import { createFedifyContextData as createFedifyContextDataWithDatabase } from './fedify-context';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -29,6 +29,7 @@ const secondLocalProfileId = '019f7abc-2222-7777-8888-123456789abc';
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let db: typeof CoreDb.db;
+const createFedifyContextData = () => createFedifyContextDataWithDatabase(db);
 let first: typeof CoreDb.first;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;

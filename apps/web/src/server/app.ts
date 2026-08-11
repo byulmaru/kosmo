@@ -18,7 +18,7 @@ const app = new Hono();
 setNotificationEffectErrorReporter(captureNotificationEffectError);
 
 app.use('*', async (c, next) => {
-  const database = createDatabaseOwner(process.env.DATABASE_URL!);
+  const database = createDatabaseOwner();
   const fallThrough = async () => {
     await next();
     return new Response(c.res.body, c.res);

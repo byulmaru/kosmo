@@ -24,30 +24,30 @@ PROD-710은 실제 Web trusted ingress callsite와 함께 최소 실행 경계�
 
 ### Current Constraints
 
-- 하나의 production federation instance가 Web inbound, process 내부 outbound context 생성과 PROD-448 queue consumer에 함께 쓰인다. Web은 명시적인 data를 제공하되 이 change에서 제외된 queue consumer의 기존 `undefined` context는 전역 owner fallback으로 유지해야 한다.
+- 하나의 production federation instance가 Web inbound, process 내부 outbound context 생성과 PROD-448 queue consumer에 함께 쓰인다. 공유 federation의 context는 항상 database를 명시적으로 받아야 하므로 Web은 request owner를, 제외된 outbound/API/queue caller는 기존 전역 owner `db`를 명시한다. 이 adapter plumbing은 해당 caller의 credential, SQL 또는 lifetime을 바꾸지 않는다.
 - `createPost`, `deletePost`, `repostPost`는 transaction을 내부에서 열 수 있고 일부 action은 post-commit callback을 반환한다. caller transaction을 전달하면 callback은 outer commit 뒤 실행해야 하며 transaction을 post-commit lifetime으로 넘겨서는 안 된다.
 - `activitypub-post-uri.ts`와 inbound handler의 direct Post mapping SQL이 전역 `db`를 사용하면 core action만 handle로 바꿔도 요청 경계 밖 SQL이 남는다.
 - Web middleware는 federation 응답뿐 아니라 onNotFound/onUnauthorized fallthrough까지 await한 뒤 Hono 응답을 확정하므로, database close는 전체 `federation.fetch()` 호출을 감싸야 한다.
 
 ### Recommended Approach
 
-- core DB module에 URL로 단일-client `Database`와 idempotent `close()`를 소유하는 일반 request-lifetime factory를 두고 GraphQL operation factory도 같은 primitive를 조합한다.
-- Fedify package 내부 context data에 선택적인 `db: Database`를 두고 production federation listener/dispatcher는 단일 adapter로 database를 선택한다. Web은 항상 명시적 request database를 전달하고, PROD-448 queue consumer처럼 이 change에서 제외된 caller만 기존 전역 owner fallback을 유지한다.
-- Post/PostContent 관련 helper와 URI lookup은 `DatabaseHandle`을 명시적으로 받고 `getDatabaseConnection(handle)`을 사용한다. core action에는 같은 handle을 전달한다.
+- core DB module의 private primitive가 URL로 단일-client `Database`와 idempotent `close()`를 만들고, 공개 request-lifetime factory가 기존 owner `DATABASE_URL` source 선택까지 소유한다. GraphQL operation factory는 별도 `OPERATION_DATABASE_URL` 선택을 유지하면서 같은 private primitive를 조합한다.
+- Fedify package 내부 context data에 필수 `db: Database`를 두고 production federation listener/dispatcher는 `context.data.db`를 직접 사용한다. Web은 request database를 전달하고 제외된 outbound/API/queue caller도 기존 전역 owner `db`를 명시해 누락 fallback을 만들지 않는다.
+- Post/PostContent 관련 helper와 URI lookup은 필수 `DatabaseHandle`을 받고 전달된 handle을 직접 사용한다. core action에는 같은 handle을 전달한다.
 - inbound handler가 outer transaction을 소유하는 경우 lookup, direct mapping SQL과 core action을 같은 transaction에 합류시키고, 반환된 post-commit callback은 transaction 성공 뒤 request `Database`로 실행한다.
 - Web test는 injected factory 또는 adapter seam으로 success/error 모두 close를 검증하고 Fedify DB-backed tests는 explicit transaction composition과 rollback을 검증한다.
 
 ### Allowed Alternatives
 
 - public Web adapter 대신 `federation.fetch()`에 context data를 직접 전달할 수 있다. 단, Web만 context shape를 만들고 모든 성공·오류·fallthrough 경로의 close를 소유하며 package-internal 타입이 불필요하게 공개되지 않아야 한다.
-- 별도 request factory 없이 기존 single-client factory를 일반화해 재사용할 수 있다. 단, GraphQL의 `OPERATION_DATABASE_URL` 선택과 Web의 owner `DATABASE_URL` 선택은 각각 호출 경계에서 명시되어야 한다.
+- 별도 request factory 없이 기존 single-client primitive를 내부에서 재사용할 수 있다. 단, GraphQL의 `OPERATION_DATABASE_URL`과 trusted ingress의 owner `DATABASE_URL` 선택은 각각의 공개 DB factory가 소유해야 하며 Web 호출부가 raw URL을 전달해서는 안 된다.
 
 ### Known Traps
 
 - `WORKER_DATABASE_*`를 지금 읽거나 fallback source로 추가하면 PROD-715 credential 전환을 선점한다.
 - core action에만 handle을 전달하고 URI lookup/direct mapping SQL을 전역 `db`에 남기면 transaction과 principal이 갈라진다.
 - transaction 자체를 post-commit callback에 전달하면 commit 이후 lifetime과 충돌한다.
-- Web trusted ingress가 `undefined` context로 돌아가면 명시적 request lifetime을 우회하므로 허용하지 않는다. 다만 PROD-448 queue consumer의 기존 `undefined` context는 독립 scope를 유지하기 위해 adapter의 legacy fallback을 사용한다.
+- production federation이 `undefined` context를 허용하거나 누락 handle을 전역 `db`로 대체하면 명시적 request lifetime을 우회하므로 허용하지 않는다. 제외된 caller도 기존 전역 owner를 사용한다는 선택을 context에 명시한다.
 
 ## Risks / Trade-offs
 

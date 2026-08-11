@@ -30,3 +30,5 @@ Web trusted federation ingress의 Post/PostContent SQL이 요청에서 전달된
 - [x] 1.3 Fedify context와 inbound Post/PostContent helper·direct SQL·core action이 같은 명시적 handle을 사용하게 한다.
 - [x] 1.4 transaction composition, rollback, post-commit ordering과 success/error cleanup 회귀 테스트를 추가한다.
 - [x] 1.5 관련 Core/Fedify/Web 검증과 repository formatting/OpenSpec strict validation을 완료한다.
+- [x] 1.6 request database factory가 `DATABASE_URL` source 선택을 소유하고 Web 호출부는 raw URL을 전달하지 않도록 경계를 수정한다.
+- [x] 1.7 Fedify context와 이전된 Post helper에서 누락 handle의 전역 database fallback을 제거하고 모든 shared federation caller가 database 선택을 명시하게 한다.

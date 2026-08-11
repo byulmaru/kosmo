@@ -14,7 +14,6 @@ import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { reactionTypes, reactionTypeSchema } from '@kosmo/core/validation';
 import { and, count, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import { isCanonicalPostId } from './activitypub-post-uri';
-import { getFedifyDatabase } from './fedify-context';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
 import type { SQLWrapper } from 'drizzle-orm';
@@ -206,7 +205,7 @@ export const dispatchLocalPostEmojiReactions = async (
   { id }: { id: string },
   rawCursor: string | null,
 ): Promise<PageItems<Like | EmojiReact> | null> => {
-  const note = await loadLocalPostNote(context, id, getFedifyDatabase(context.data));
+  const note = await loadLocalPostNote(context, id, context.data.db);
   const cursor = parseCursor(rawCursor);
   if (!note || !cursor) {
     return null;
@@ -286,7 +285,7 @@ export const countLocalPostEmojiReactions = async (
   context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<number | null> => {
-  const note = await loadLocalPostNote(context, id, getFedifyDatabase(context.data));
+  const note = await loadLocalPostNote(context, id, context.data.db);
   if (!note) {
     return null;
   }
@@ -306,4 +305,4 @@ export const firstLocalPostEmojiReactionsCursor = async (
   context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<string | null> =>
-  (await loadLocalPostNote(context, id, getFedifyDatabase(context.data))) ? FIRST_CURSOR : null;
+  (await loadLocalPostNote(context, id, context.data.db)) ? FIRST_CURSOR : null;

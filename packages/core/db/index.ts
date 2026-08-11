@@ -38,7 +38,7 @@ export type DatabaseOwner = {
 
 export type OperationDatabaseOwner = DatabaseOwner;
 
-export const createDatabaseOwner = (databaseUrl = process.env.DATABASE_URL!): DatabaseOwner => {
+const createOwnedDatabase = (databaseUrl: string): DatabaseOwner => {
   const client = postgres(databaseUrl, {
     ...postgresConnectionOptions,
     connect_timeout: 5,
@@ -52,6 +52,9 @@ export const createDatabaseOwner = (databaseUrl = process.env.DATABASE_URL!): Da
     close: (options) => (closeTask ??= options?.force ? client.end({ timeout: 0 }) : client.end()),
   };
 };
+
+export const createDatabaseOwner = (): DatabaseOwner =>
+  createOwnedDatabase(process.env.DATABASE_URL!);
 
 /**
  * Create the database handle owned by one GraphQL Query or Mutation.

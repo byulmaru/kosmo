@@ -477,8 +477,8 @@ describe('runtime routing', () => {
     expect(firstResponse.status).toBe(202);
     expect(secondResponse.status).toBe(202);
     expect(createDatabaseOwner).toHaveBeenCalledTimes(2);
-    expect(createDatabaseOwner).toHaveBeenNthCalledWith(1, process.env.DATABASE_URL);
-    expect(createDatabaseOwner).toHaveBeenNthCalledWith(2, process.env.DATABASE_URL);
+    expect(createDatabaseOwner).toHaveBeenNthCalledWith(1);
+    expect(createDatabaseOwner).toHaveBeenNthCalledWith(2);
     expect(firstOwner?.db).not.toBe(secondOwner?.db);
     expect(federationFetch.mock.calls[0]?.[1].contextData).toEqual({ db: firstOwner?.db });
     expect(federationFetch.mock.calls[1]?.[1].contextData).toEqual({ db: secondOwner?.db });

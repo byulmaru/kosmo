@@ -4,7 +4,7 @@
 
 **Authority / Provenance**: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, Linear `PROD-710`
 
-MUST: Web trusted federation ingress가 inbound ActivityPub 요청으로 Post 또는 Post Content를 조회·생성·변경할 때 해당 요청에 명시적으로 전달된 `DatabaseHandle`로 SQL을 실행한다. 이전된 호출부는 전역 database singleton을 직접 선택해서는 안 된다.
+MUST: Web trusted federation ingress가 inbound ActivityPub 요청으로 Post 또는 Post Content를 조회·생성·변경할 때 해당 요청에 명시적으로 전달된 `DatabaseHandle`로 SQL을 실행한다. 이전된 호출부는 전역 database singleton을 직접 선택하거나 handle 누락을 전역 database로 대체해서는 안 된다.
 
 #### Scenario: Remote Note 수신
 

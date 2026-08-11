@@ -32,7 +32,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { eq, inArray } from 'drizzle-orm';
-import { createFedifyContextData } from './fedify-context';
+import { createFedifyContextData as createFedifyContextDataWithDatabase } from './fedify-context';
 import type { RequestContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -52,6 +52,7 @@ let Accounts: typeof CoreDb.Accounts;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let authorizeLocalPostNote: typeof LocalPostNoteModule.authorizeLocalPostNote;
 let db: typeof CoreDb.db;
+const createFedifyContextData = () => createFedifyContextDataWithDatabase(db);
 let dispatchLocalPostNote: typeof LocalPostNoteModule.dispatchLocalPostNote;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let isCanonicalPostId: typeof PostUriModule.isCanonicalPostId;
@@ -139,7 +140,7 @@ describe('ActivityPub Local Post Note', () => {
       .where(eq(Instances.id, localInstanceId));
     try {
       assert.equal(
-        (await resolveActivityPubPostUri(localPost.id))?.href,
+        (await resolveActivityPubPostUri(localPost.id, db))?.href,
         `${storedCanonicalOrigin}/ap/note/${localPost.id}`,
       );
     } finally {
@@ -148,8 +149,8 @@ describe('ActivityPub Local Post Note', () => {
         .set({ canonicalOrigin: publicOrigin })
         .where(eq(Instances.id, localInstanceId));
     }
-    assert.equal((await resolveActivityPubPostUri(remotePost.id))?.href, remoteUri.href);
-    assert.equal(await resolveActivityPubPostUri(unmappedRemotePost.id), undefined);
+    assert.equal((await resolveActivityPubPostUri(remotePost.id, db))?.href, remoteUri.href);
+    assert.equal(await resolveActivityPubPostUri(unmappedRemotePost.id, db), undefined);
     assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
   });
 

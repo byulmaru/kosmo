@@ -12,7 +12,7 @@ import {
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
-import { createFedifyContextData } from './fedify-context';
+import { createFedifyContextData as createFedifyContextDataWithDatabase } from './fedify-context';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -22,6 +22,7 @@ const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
 let db: typeof CoreDb.db;
+const createFedifyContextData = () => createFedifyContextDataWithDatabase(db);
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Accounts: typeof CoreDb.Accounts;
 let ActivityPubActorKeys: typeof CoreDb.ActivityPubActorKeys;

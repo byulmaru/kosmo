@@ -122,7 +122,7 @@ const loadRepostProjection = async (
     }
   }
 
-  const objectUri = await resolveActivityPubPostUri(row.repost.repostSourceId);
+  const objectUri = await resolveActivityPubPostUri(row.repost.repostSourceId, db);
   if (!objectUri) {
     return undefined;
   }

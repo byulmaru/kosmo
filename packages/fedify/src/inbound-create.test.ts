@@ -35,7 +35,7 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { eq, ne, sql } from 'drizzle-orm';
-import { createFedifyContextData } from './fedify-context';
+import { createFedifyContextData as createFedifyContextDataWithDatabase } from './fedify-context';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -59,6 +59,7 @@ const uriContext = uriFederation.createContext(new URL(publicOrigin), undefined)
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
 let db: typeof CoreDb.db;
+const createFedifyContextData = () => createFedifyContextDataWithDatabase(db);
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
@@ -885,6 +886,7 @@ describe('inbound Create dispatch', () => {
       await findPostByActivityPubUri(
         createContext(),
         new URL(`/ap/note/${previousPost.post.id}`, publicOrigin),
+        db,
       ),
       undefined,
     );
@@ -898,6 +900,7 @@ describe('inbound Create dispatch', () => {
               .parseUri(uri),
         },
         new URL(`/ap/note/${previousPost.post.id}`, previousInstance.canonicalOrigin!),
+        db,
       ),
       previousPost.post.id,
     );
@@ -982,7 +985,7 @@ describe('inbound Create dispatch', () => {
       uri: contentlessParentUri.href,
     });
     assert.equal(
-      await findPostByActivityPubUri(createContext(), contentlessParentUri),
+      await findPostByActivityPubUri(createContext(), contentlessParentUri, db),
       contentlessParent.id,
     );
     const existingPostCount = await db.$count(Posts);

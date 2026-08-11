@@ -4,7 +4,6 @@ import { Like } from '@fedify/vocab';
 import { materializeInboundReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { getFedifyDatabase } from './fedify-context';
 import {
   observeInbound,
   observeInboundNoop,
@@ -27,7 +26,7 @@ export const handleInboundReaction = async (
   context: InboxContext<FedifyContextData>,
   activity: Like | EmojiReact,
 ): Promise<void> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const activityUri = activity.id;
   const actorUri = uniqueHref(activity.actorIds);
   const objectUri = uniqueHref(activity.objectIds);

@@ -13,7 +13,6 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { getFedifyDatabase } from './fedify-context';
 import {
   observeInboundExternalFailure,
   observeInboundNoop,
@@ -31,7 +30,7 @@ export const handleInboundDelete = async (
   context: InboxContext<FedifyContextData>,
   activity: Delete,
 ): Promise<void> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const actorHref = uniqueHref(activity.actorIds);
   const objectHref = uniqueHref(activity.objectIds);
   const actorUri = actorHref ? new URL(actorHref) : null;

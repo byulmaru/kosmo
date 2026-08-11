@@ -5,7 +5,6 @@ import {
   ActivityPubActors,
   db,
   first,
-  getDatabaseConnection,
   Instances,
   Media,
   PostContents,
@@ -28,7 +27,6 @@ import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
-import { getFedifyDatabase } from './fedify-context';
 import type { Context, RequestContext } from '@fedify/fedify';
 import type { DatabaseHandle } from '@kosmo/core/db';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
@@ -57,13 +55,13 @@ type LocalPostNoteContext = Pick<Context<unknown>, 'canonicalOrigin' | 'getActor
 const loadLocalPostNoteRow = async (
   context: LocalPostNoteContext,
   postId: string,
-  handle?: DatabaseHandle,
+  handle: DatabaseHandle,
 ) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
 
-  const row = await getDatabaseConnection(handle)
+  const row = await handle
     .select({
       contentDocument: PostContents.document,
       instanceCanonicalOrigin: Instances.canonicalOrigin,
@@ -97,7 +95,7 @@ const loadLocalPostNoteRow = async (
 export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
-  handle?: DatabaseHandle,
+  handle: DatabaseHandle,
 ): Promise<LocalPostNote | null> => {
   const row = await loadLocalPostNoteRow(context, postId, handle);
   if (!row) {
@@ -212,7 +210,7 @@ export const authorizeLocalPostNote = async (
   context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const row = await loadLocalPostNoteRow(context, id, getFedifyDatabase(context.data));
+  const row = await loadLocalPostNoteRow(context, id, context.data.db);
   if (!row) {
     return false;
   }
@@ -235,13 +233,13 @@ export const dispatchLocalPostNote = async (
   context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<Note | null> => {
-  return (await projectLocalPostNote(context, id, getFedifyDatabase(context.data)))?.object ?? null;
+  return (await projectLocalPostNote(context, id, context.data.db))?.object ?? null;
 };
 
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
-  handle?: DatabaseHandle,
+  handle: DatabaseHandle,
 ): Promise<LocalPostNoteProjection | null> => {
   const note = await loadLocalPostNote(context, postId, handle);
   if (!note) {

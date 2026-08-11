@@ -58,7 +58,7 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
-  const projection = await projectLocalPostNote(context, postId);
+  const projection = await projectLocalPostNote(context, postId, db);
   if (!projection) {
     return;
   }

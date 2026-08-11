@@ -513,6 +513,7 @@ describe('Post Reply GraphQL 경계', () => {
         getActorUri: (identifier) => new URL(`/ap/actor/${identifier}`, publicOrigin),
       },
       storedPost.id,
+      db,
     );
     assert.ok(projection);
     assert.equal(projection.object.content?.toString(), '<p>통합 검증 본문</p>');

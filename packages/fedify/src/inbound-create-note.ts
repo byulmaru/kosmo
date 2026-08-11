@@ -10,7 +10,6 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import { getFedifyDatabase } from './fedify-context';
 import {
   observeInbound,
   observeInboundNoop,
@@ -88,7 +87,7 @@ const resolveReplyParentId = async (
   context: InboxContext<FedifyContextData>,
   note: Note,
 ): Promise<string | undefined> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   const replyTargetHref = uniqueHref(note.replyTargetIds);
   if (!replyTargetHref) {
     return undefined;
@@ -146,7 +145,7 @@ export const handleInboundCreateNote = async ({
   storedActor: StoredRemoteProfileActor;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
-  const database = getFedifyDatabase(context.data);
+  const database = context.data.db;
   if (note.id?.href !== objectUri) {
     observeInboundRejected({
       activityType: 'Create',

@@ -14,7 +14,7 @@
 - Decision Outcome: Web trusted federation ingress의 실제 Post/PostContent SQL callsite 이전과 그에 필요한 최소 `DatabaseHandle`/context/lifetime seam을 하나의 change에서 구현한다.
 - Alternatives Considered: 범용 system context를 먼저 추가하는 방안은 실제 consumer 없는 YAGNI이며, credential 전환과 함께 구현하는 방안은 rollback과 principal 변경을 결합하므로 채택하지 않았다.
 - Consequences: Post와 무관한 Fedify SQL, Temporal domain activity와 credential source는 이 seam의 범위가 아니다.
-- Integration Constraint: 공유 federation을 사용하는 PROD-448 queue consumer는 변경하지 않고 기존 전역 owner fallback을 유지한다. Web trusted ingress만 명시적 request database와 cleanup lifetime을 소유한다.
+- Integration Constraint: 공유 federation에는 database context를 항상 명시한다. PROD-448 queue consumer는 기존 전역 owner `db`를 명시적으로 전달할 뿐 queue credential, SQL과 lifetime은 변경하지 않으며 Web trusted ingress만 request database와 cleanup lifetime을 소유한다.
 - Confirmation / Follow-up: production Post/PostContent import/callsite inventory와 explicit handle 회귀 테스트로 확인한다.
 
 ### 최초 handle source는 기존 owner DATABASE_URL을 사용한다

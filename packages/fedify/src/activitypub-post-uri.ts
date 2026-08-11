@@ -1,12 +1,5 @@
 import { Note } from '@fedify/vocab';
-import {
-  ActivityPubPosts,
-  first,
-  getDatabaseConnection,
-  Instances,
-  Posts,
-  Profiles,
-} from '@kosmo/core/db';
+import { ActivityPubPosts, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -19,13 +12,13 @@ export const isCanonicalPostId = (value: string): boolean => postIdSchema.safePa
 
 export const resolveActivityPubPostUri = async (
   postId: string,
-  handle?: DatabaseHandle,
+  handle: DatabaseHandle,
 ): Promise<URL | undefined> => {
   if (!isCanonicalPostId(postId)) {
     return undefined;
   }
 
-  const row = await getDatabaseConnection(handle)
+  const row = await handle
     .select({
       instanceCanonicalOrigin: Instances.canonicalOrigin,
       instanceKind: Instances.kind,
@@ -54,7 +47,7 @@ export const resolveActivityPubPostUri = async (
 export const findPostByActivityPubUri = async (
   context: Pick<Context<unknown>, 'canonicalOrigin' | 'parseUri'>,
   uri: URL,
-  handle?: DatabaseHandle,
+  handle: DatabaseHandle,
 ): Promise<string | undefined> => {
   if (uri.protocol !== 'http:' && uri.protocol !== 'https:') {
     return undefined;
@@ -71,7 +64,7 @@ export const findPostByActivityPubUri = async (
       return undefined;
     }
 
-    return getDatabaseConnection(handle)
+    return handle
       .select({ id: Posts.id })
       .from(Posts)
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
@@ -88,7 +81,7 @@ export const findPostByActivityPubUri = async (
       .then((post) => post?.id);
   }
 
-  const remotePost = await getDatabaseConnection(handle)
+  const remotePost = await handle
     .select({ id: Posts.id })
     .from(ActivityPubPosts)
     .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
