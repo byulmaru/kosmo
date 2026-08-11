@@ -28,11 +28,12 @@ mockModule('@/theme/ThemeProvider', {
     feedbackDangerSubtle: 'danger-subtle',
     foregroundPrimary: 'foreground',
     foregroundSecondary: 'secondary',
+    stateDisabledSurface: 'disabled-surface',
   }),
 });
 mockModule('@/theme/tokens', {
-  radius: { 8: 8, 12: 12 },
-  space: { 8: 8, 32: 32 },
+  radius: { 8: 8, 12: 12, full: 999 },
+  space: { 8: 8, 16: 16, 32: 32 },
   textStyles: { uiCopyM: {}, uiLabelL: {} },
 });
 mockModule('./Button', { Button: ButtonHost });
@@ -65,5 +66,52 @@ test('alert StateView consumes the danger subtle foreground pair', async () => {
   assert.equal(text[0]?.props.style[1].color, 'danger-on-subtle');
   assert.equal(text[1]?.props.style[1].color, 'danger-on-subtle');
   assert.equal(renderer?.root.findByType(ButtonHost).props.tone, undefined);
+  await act(async () => renderer?.unmount());
+});
+
+test('inline StateView applies compact padding before consumer geometry', async () => {
+  assert.ok(stateViewModule);
+  const { StateView } = stateViewModule;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      createElement(StateView, {
+        inline: true,
+        style: { paddingVertical: 48 },
+        title: '비어 있어요',
+      }),
+    );
+  });
+
+  const style = renderer?.root.findByType(ViewHost).props.style;
+  assert.equal(style[1].padding, 16);
+  assert.equal(style[2].paddingVertical, 48);
+  await act(async () => renderer?.unmount());
+});
+
+test('circular Skeleton keeps consumer border and margin before primitive semantics', async () => {
+  assert.ok(stateViewModule);
+  const { Skeleton } = stateViewModule;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(
+      createElement(Skeleton, {
+        circular: true,
+        height: 40,
+        style: { borderWidth: 1, marginTop: -20 },
+        width: 40,
+      }),
+    );
+  });
+
+  const style = renderer?.root.findByType(ViewHost).props.style;
+  assert.equal(style[0].borderWidth, 1);
+  assert.equal(style[0].marginTop, -20);
+  assert.deepEqual(style[1], {
+    backgroundColor: 'disabled-surface',
+    borderRadius: 999,
+    height: 40,
+    width: 40,
+  });
   await act(async () => renderer?.unmount());
 });
