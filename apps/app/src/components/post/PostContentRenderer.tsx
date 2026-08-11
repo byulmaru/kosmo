@@ -2,6 +2,7 @@ import { isPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { match } from 'ts-pattern';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
@@ -104,25 +105,19 @@ export function PostContentRenderer({
         >
           <Text style={[styles.warningLabel, { color: theme.text }]}>내용 경고</Text>
           <Text style={[styles.warningText, { color: theme.textSecondary }]}>{contentWarning}</Text>
-          <Pressable
+          <Button
             accessibilityLabel={revealed ? '내용 다시 가리기' : '내용 보기'}
-            accessibilityRole="button"
             accessibilityState={{ expanded: revealed }}
             aria-expanded={revealed}
             onPress={(event) => {
               event.stopPropagation();
               toggle();
             }}
-            style={({ pressed }) => [
-              styles.warningButton,
-              { backgroundColor: pressed ? theme.primaryHover : theme.primary },
-            ]}
+            style={styles.warningButton}
             testID="post-content-warning-toggle"
           >
-            <Text style={[styles.warningButtonText, { color: theme.text }]}>
-              {revealed ? '다시 가리기' : '내용 보기'}
-            </Text>
-          </Pressable>
+            {revealed ? '다시 가리기' : '내용 보기'}
+          </Button>
         </View>
       ) : null}
       {bodyContent}
@@ -217,12 +212,8 @@ const styles = StyleSheet.create({
   warningLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   warningText: { fontFamily: 'SUIT', ...typography.sm },
   warningButton: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    justifyContent: 'center',
     marginTop: spacing.xs,
     minHeight: Platform.OS === 'android' ? 48 : 44,
-    paddingHorizontal: spacing.lg,
+    minWidth: 0,
   },
-  warningButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
 });

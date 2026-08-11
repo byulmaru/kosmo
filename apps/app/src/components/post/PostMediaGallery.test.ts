@@ -29,10 +29,12 @@ let PostMediaGallery: ComponentType<{
   onMediaOpen?: (index: number) => void;
   sensitive: boolean;
 }>;
+let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ PostMediaGallery } = await import('./PostMediaGallery'));
+  ({ Button } = await import('@/components/ui/Button'));
 });
 
 afterEach(async () => {
@@ -43,6 +45,25 @@ afterEach(async () => {
 });
 
 describe('PostMediaGallery', () => {
+  it('sensitive media reveal uses Button and forwards expanded state', async () => {
+    await render({ media: [media(1, null)], sensitive: true });
+
+    assert.deepEqual(
+      renderer?.root.findAllByType(Button).map(({ props }) => ({
+        accessibilityLabel: props.accessibilityLabel,
+        accessibilityState: props.accessibilityState,
+        ariaExpanded: props['aria-expanded'],
+      })),
+      [
+        {
+          accessibilityLabel: '민감한 이미지 표시',
+          accessibilityState: { expanded: false },
+          ariaExpanded: false,
+        },
+      ],
+    );
+  });
+
   it('개수별 surface와 tile geometry를 document 순서대로 구성한다', async () => {
     for (const count of [1, 2, 3, 4]) {
       await render({
@@ -225,13 +246,13 @@ describe('PostMediaGallery', () => {
 
     assert.equal(rendered('PostMediaImage').length, 0);
     const reveal = pressable('민감한 이미지 표시');
-    assert.deepEqual(reveal.props.accessibilityState, { expanded: false });
+    assert.equal(reveal.props.accessibilityState.expanded, false);
 
     await act(async () => reveal.props.onPress());
     assert.equal(rendered('PostMediaImage').length, 2);
     const hide = pressable('민감한 이미지 다시 가리기');
     assert.equal(hide, reveal);
-    assert.deepEqual(hide.props.accessibilityState, { expanded: true });
+    assert.equal(hide.props.accessibilityState.expanded, true);
 
     await act(async () => hide.props.onPress());
     assert.equal(rendered('PostMediaImage').length, 0);

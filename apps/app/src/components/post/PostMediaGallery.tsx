@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { PostMediaImage } from './PostMediaImage';
@@ -177,24 +178,16 @@ function MediaVisibilityButton({
   readonly expanded: boolean;
   readonly onPress: () => void;
 }) {
-  const theme = useTheme();
-
   return (
-    <Pressable
+    <Button
       aria-expanded={expanded}
       accessibilityLabel={expanded ? '민감한 이미지 다시 가리기' : '민감한 이미지 표시'}
-      accessibilityRole="button"
       accessibilityState={{ expanded }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.visibilityButton,
-        { backgroundColor: pressed ? theme.primaryHover : theme.primary },
-      ]}
+      style={styles.visibilityButton}
     >
-      <Text style={[styles.visibilityButtonText, { color: theme.text }]}>
-        {expanded ? '다시 가리기' : '이미지 표시'}
-      </Text>
-    </Pressable>
+      {expanded ? '다시 가리기' : '이미지 표시'}
+    </Button>
   );
 }
 
@@ -249,13 +242,8 @@ const styles = StyleSheet.create({
   },
   unavailableText: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
   visibilityButton: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    justifyContent: 'center',
     marginTop: spacing.xs,
     minHeight: 48,
     minWidth: 120,
-    paddingHorizontal: spacing.lg,
   },
-  visibilityButtonText: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
 });
