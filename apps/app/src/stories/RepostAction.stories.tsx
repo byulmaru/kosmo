@@ -277,7 +277,7 @@ export const CreatesRepost: Story = {
 
     expect(menuItem).toBeVisible();
     expect(canvasElement.contains(menu)).toBe(false);
-    expect(menuStyle.backgroundColor).toBe('rgb(250, 250, 251)');
+    expect(menuStyle.backgroundColor).toBe('rgb(255, 255, 255)');
     expect(menuStyle.borderWidth).toBe('1px');
     expect(menuStyle.boxShadow).toBe(
       'rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.1) 0px 2px 4px -2px',
