@@ -68,7 +68,7 @@ export function ActionMenu({
   const [open, setOpen] = useState(false);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const web = Platform.OS === 'web';
-  const overlayMotion = useOverlayMotion(open, !web);
+  const overlayMotion = useOverlayMotion(open);
 
   const positionWebMenu = useCallback(() => {
     const trigger = triggerRef.current as unknown as HTMLElement | null;
@@ -141,6 +141,10 @@ export function ActionMenu({
         return;
       }
 
+      if (pendingSelectionRef.current) {
+        return;
+      }
+
       pendingSelectionRef.current = item.onSelect;
       dismiss(false);
     },
@@ -177,7 +181,7 @@ export function ActionMenu({
   );
 
   useLayoutEffect(() => {
-    if (!web || !open) {
+    if (!web || !open || !overlayMotion.mounted) {
       return;
     }
 
@@ -188,10 +192,10 @@ export function ActionMenu({
       window.removeEventListener('resize', positionWebMenu);
       document.removeEventListener('scroll', positionWebMenu, true);
     };
-  }, [open, positionWebMenu, web]);
+  }, [open, overlayMotion.mounted, positionWebMenu, web]);
 
   useEffect(() => {
-    if (!web || !open) {
+    if (!web || !open || !overlayMotion.mounted) {
       return;
     }
 
@@ -282,7 +286,7 @@ export function ActionMenu({
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [dismiss, open, web]);
+  }, [dismiss, open, overlayMotion.mounted, web]);
 
   if (web) {
     return (
@@ -293,19 +297,29 @@ export function ActionMenu({
           onPress: toggle,
           ref: triggerRef,
         })}
-        {open ? (
+        {overlayMotion.mounted ? (
           <ActionMenuPortal>
             <View style={[styles.webPosition, webPosition]}>
-              <View
+              <Animated.View
                 accessibilityLabel={accessibilityLabel}
                 ref={menuRef}
                 role="menu"
+                pointerEvents={open ? 'auto' : 'none'}
                 style={[
                   styles.webMenu,
                   elevation.floating,
                   {
                     backgroundColor: theme.backgroundElevated,
                     borderColor: theme.borderDefault,
+                    opacity: overlayMotion.progress,
+                    transform: [
+                      {
+                        translateY: overlayMotion.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [8, 0],
+                        }),
+                      },
+                    ],
                   },
                 ]}
               >
@@ -353,7 +367,7 @@ export function ActionMenu({
                     </Pressable>
                   );
                 })}
-              </View>
+              </Animated.View>
             </View>
           </ActionMenuPortal>
         ) : null}

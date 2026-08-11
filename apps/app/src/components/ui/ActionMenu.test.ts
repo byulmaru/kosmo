@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { before, mock, test } from 'node:test';
+import { afterEach, before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import { semanticColors } from '../../theme/tokens';
@@ -17,12 +17,17 @@ const mockModule = (specifier: string | URL, exports: object) =>
 const PressableHost = 'Pressable' as unknown as ElementType;
 const TextHost = 'Text' as unknown as ElementType;
 let exitMounted = false;
+let platformOS: 'ios' | 'web' = 'ios';
 
 mockModule('react-native', {
   Animated: { View: 'AnimatedView' },
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
-  Platform: { OS: 'ios' },
+  Platform: {
+    get OS() {
+      return platformOS;
+    },
+  },
   Pressable: PressableHost,
   StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
   Text: TextHost,
@@ -81,8 +86,56 @@ before(async () => {
   actionMenuModule = await import('./ActionMenu');
 });
 
+afterEach(() => {
+  platformOS = 'ios';
+  exitMounted = false;
+  delete (globalThis as { window?: unknown }).window;
+  delete (globalThis as { document?: unknown }).document;
+});
+
 test('Native ActionMenu runs a selected action after its exit finishes', async () => {
   assert.ok(actionMenuModule);
+  const selected: string[] = [];
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [
+      { key: 'open-modal', label: '확인 열기', onSelect: () => selected.push('first') },
+      { key: 'delete', label: '삭제', onSelect: () => selected.push('second') },
+    ],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+  exitMounted = true;
+  const items = renderer?.root
+    .findAllByType(PressableHost)
+    .filter((node) => node.props.accessibilityRole === 'menuitem');
+  await act(async () => items?.[0]?.props.onPress());
+  await act(async () => items?.[1]?.props.onPress());
+  assert.deepEqual(selected, []);
+
+  exitMounted = false;
+  await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
+  assert.deepEqual(selected, ['first']);
+  await act(async () => renderer?.unmount());
+});
+
+test('Web ActionMenu stays mounted through exit motion before unmounting', async () => {
+  assert.ok(actionMenuModule);
+  platformOS = 'web';
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { addEventListener: () => undefined, removeEventListener: () => undefined },
+  });
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: { addEventListener: () => undefined, removeEventListener: () => undefined },
+  });
   const selected: string[] = [];
   const props = {
     accessibilityLabel: '메뉴',
@@ -96,17 +149,19 @@ test('Native ActionMenu runs a selected action after its exit finishes', async (
   });
 
   await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
-  exitMounted = true;
   const item = renderer?.root
     .findAllByType(PressableHost)
-    .find((node) => node.props.accessibilityRole === 'menuitem');
+    .find((node) => node.props.role === 'menuitem');
+  exitMounted = true;
   await act(async () => item?.props.onPress());
-  assert.deepEqual(selected, []);
+  assert.deepEqual(selected, ['selected']);
+  assert.equal(renderer?.root.findAllByProps({ role: 'menu' }).length, 1);
 
   exitMounted = false;
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
-  assert.deepEqual(selected, ['selected']);
+  assert.equal(renderer?.root.findAllByProps({ role: 'menu' }).length, 0);
   await act(async () => renderer?.unmount());
+  platformOS = 'ios';
 });
 
 test('danger menu items use a readable semantic foreground in both themes', async () => {
