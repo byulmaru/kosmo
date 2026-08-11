@@ -1,5 +1,4 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
-{{- $queue := .Values.postgres.credentials.fedifyQueue -}}
 {{- if .Values.workloads.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -59,15 +58,13 @@ spec:
                   key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
               value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
-            {{- if .Values.fedify.producer.enabled }}
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ required "postgres.credentials.fedifyQueue.passwordSecret.name is required when the Fedify producer is enabled" $queue.passwordSecret.name | quote }}
-                  key: {{ required "postgres.credentials.fedifyQueue.passwordSecret.key is required when the Fedify producer is enabled" $queue.passwordSecret.key | quote }}
+                  name: {{ include "kosmo.fedifyQueueResourceName" . | quote }}
+                  key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
-              value: {{ required "postgres.credentials.fedifyQueue.databaseUrl is required when the Fedify producer is enabled" $queue.databaseUrl | quote }}
-            {{- end }}
+              value: {{ printf "postgres://kosmo_fedify_queue:$(FEDIFY_QUEUE_DATABASE_PASSWORD)@%s:5432/kosmo_fedify_queue" (include "kosmo.postgresPoolerName" .) | quote }}
             {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
             {{- if $workerDatabase.databaseUrl }}
             - name: WORKER_DATABASE_PASSWORD

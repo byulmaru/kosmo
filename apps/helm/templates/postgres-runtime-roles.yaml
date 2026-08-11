@@ -1,9 +1,4 @@
 {{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
-{{- $queueResourceName := printf "%s-postgres-fedify-queue" (.Release.Name | trunc 41 | trimSuffix "-") }}
-{{- $queueWorkloadEnabled := or .Values.fedify.producer.enabled .Values.fedify.consumer.enabled }}
-{{- if and $queueWorkloadEnabled (not .Values.fedify.queueDatabase.enabled) }}
-{{- fail "fedify.queueDatabase.enabled must be true when a Fedify queue workload is enabled" }}
-{{- end }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
@@ -31,31 +26,11 @@ spec:
   passwordSecret:
     name: {{ printf "%s-postgres-api" $releaseName }}
   databaseRoleReclaimPolicy: retain
-{{- if .Values.fedify.queueDatabase.enabled }}
-{{- $queue := .Values.postgres.credentials.fedifyQueue | default dict }}
-{{- $passwordSecret := $queue.passwordSecret | default dict }}
-{{- $passwordSecretName := $passwordSecret.name | default "" | toString }}
-{{- $passwordSecretKey := $passwordSecret.key | default "" | toString }}
-{{- $databaseUrl := $queue.databaseUrl | default "" | toString }}
-{{- $expectedPasswordSecretName := $queueResourceName }}
-{{- if ne $passwordSecretName $expectedPasswordSecretName }}
-{{- fail (printf "postgres.credentials.fedifyQueue.passwordSecret.name must be %s when fedify.queueDatabase.enabled is true" $expectedPasswordSecretName) }}
-{{- end }}
-{{- if ne $passwordSecretKey "password" }}
-{{- fail "postgres.credentials.fedifyQueue.passwordSecret.key must be password when fedify.queueDatabase.enabled is true" }}
-{{- end }}
-{{- if not $databaseUrl }}
-{{- fail "postgres.credentials.fedifyQueue.databaseUrl is required when fedify.queueDatabase.enabled is true" }}
-{{- end }}
-{{- $queueUrlPattern := printf "^postgres(ql)?://kosmo_fedify_queue:[^@]+@%s:5432/kosmo_fedify_queue(?:\\?.*)?$" (include "kosmo.postgresPoolerName" .) }}
-{{- if not (regexMatch $queueUrlPattern $databaseUrl) }}
-{{- fail (printf "postgres.credentials.fedifyQueue.databaseUrl must target kosmo_fedify_queue through %s:5432" (include "kosmo.postgresPoolerName" .)) }}
-{{- end }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $queueResourceName }}
+  name: {{ include "kosmo.fedifyQueueResourceName" . }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
     argocd.argoproj.io/sync-wave: "-2"
@@ -77,13 +52,13 @@ spec:
   bypassrls: false
   inRoles: []
   passwordSecret:
-    name: {{ $expectedPasswordSecretName | quote }}
+    name: {{ include "kosmo.fedifyQueueResourceName" . | quote }}
   databaseRoleReclaimPolicy: retain
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: {{ printf "%s-postgres-fedify-queue-database" $releaseName | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "%s-postgres-fedify-queue-database" (.Release.Name | trunc 32 | trimSuffix "-") }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
     argocd.argoproj.io/sync-wave: "-1"
@@ -98,7 +73,6 @@ spec:
   name: kosmo_fedify_queue
   owner: kosmo_fedify_queue
   databaseReclaimPolicy: retain
-{{- end }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole

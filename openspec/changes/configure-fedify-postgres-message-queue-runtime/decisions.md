@@ -71,22 +71,32 @@
 - Authority / Provenance: PROD-448, PROD-709, PROD-715 PR #564
 - Status: Active
 - Context / Problem: 현재 API도 outbound producer지만 최신 main의 Worker selector는 Web trusted ingress와 Temporal Worker DB Activity 전용이며 PROD-715가 MessageQueue를 명시적으로 제외한다. queue DML과 consumer의 trusted domain listener SQL은 서로 다른 connection이고, API에 Worker execution credential을 주입하면 least privilege를 깨뜨린다.
-- Decision Outcome: Web/API producer와 consumer가 사용하는 Fedify queue transport connection은 별도 `fedifyQueue` 입력으로 두고 API domain DB 또는 Worker source로 fallback하지 않는다. consumer listener SQL만 기존 trusted ingress 경계를 위해 `worker` source를 app의 domain `DATABASE_URL`로 사용한다. 취소된 PROD-706 generic execution-context seam을 재구현하지 않고, Worker selector를 queue credential이나 실제 production cutover 완료로 해석하지 않는다.
+- Decision Outcome: Web/API producer와 consumer가 사용하는 Fedify queue transport connection은 release 이름, 전용 role/database와 session PgBouncer에서 chart가 파생하고 API domain DB 또는 Worker connection으로 fallback하지 않는다. consumer listener SQL은 현재 Web trusted ingress와 같은 owner `DATABASE_URL`을 별도 connection으로 유지한다. `kosmo_worker` 객체 권한과 explicit handle 전환은 PROD-724/710/715에 남기고, 취소된 PROD-706 generic execution-context seam을 재구현하지 않는다.
 - Alternatives Considered: API `DATABASE_URL` 재사용, API에 Worker credential 주입, owner fallback, 범용 system/background execution context.
-- Consequences: runtime role/Secret provisioning, GRANT와 실제 production credential cutover는 별도 owner에 남고, API는 queue transport privilege만 받는다. handler SQL execution-boundary migration은 PROD-448 범위가 아니다.
+- Consequences: queue transport는 전용 최소 범위를 유지하지만 consumer listener는 관련 DB 권한 전환이 완료될 때까지 기존 owner privilege를 보존한다. runtime role/Secret provisioning, GRANT와 실제 credential cutover는 별도 owner에 남고 handler SQL execution-boundary migration은 PROD-448 범위가 아니다.
 - Confirmation / Follow-up: API/Web/consumer configuration failure, Helm env render, handler DB handle lifecycle과 connection cleanup test로 credential fallback 또는 privilege 혼합이 없는지 검증한다.
 
-### Queue mode는 명시적 default-off atomic configuration을 사용한다
+### Queue workload의 default-off flag를 사용한다
 
 - Decision Date: 2026-08-10
 - Decision Class: Implementation Choice
 - Authority / Provenance: PROD-448
+- Status: Superseded
+- Previous Outcome: Helm의 default-off producer/consumer flag가 queue credential 환경변수 주입과 consumer Deployment 생성을 제어한다.
+- Superseded By: 2026-08-11 사용자 결정에 따른 environment·database·producer·consumer flag 없는 단일 queue runtime 선언.
+- Reason: 환경과 실행 여부마다 별도 flag를 두면 dev와 production render가 달라지고 이미 검증된 dev 경로를 다시 구성해야 한다.
+
+### Queue runtime은 환경·실행 여부 분기 없이 하나로 선언한다
+
+- Decision Date: 2026-08-11
+- Decision Class: Implementation Choice
+- Authority / Provenance: PROD-448 사용자 결정
 - Status: Active
-- Context / Problem: credential 존재를 activation으로 사용하면 production DDL/cutover 승인을 우회하고, queue를 항상 필수로 만들면 기존 deployment와 rollback이 기동 불가해진다.
-- Decision Outcome: Helm의 default-off producer/consumer flag가 queue credential 환경변수 주입과 consumer Deployment 생성을 제어한다. package는 별도 `direct|producer|consumer` 상태 머신을 만들지 않고 queue URL이 주입된 federation에만 official adapter를 연결하며, consumer command는 queue URL이 없으면 실패한다. adapter가 URL·credential·connection·implicit initialization 오류를 직접 반환한다.
+- Context / Problem: queue database 준비와 producer/consumer 실행을 별도 flag로 제어하면 같은 Fedify runtime을 환경마다 다른 조합으로 만들고, dev에서 검증한 리소스·connection을 production에서 다시 조립하게 된다.
+- Decision Outcome: chart는 queue 전용 flag와 configurable selector 없이 Database/DatabaseRole/VSO, API/Web queue connection과 독립 consumer Deployment를 항상 함께 렌더한다. queue URL·Secret ref는 release 이름, 전용 role/database와 session PgBouncer에서 파생한다. production 실행 경계는 chart 분기가 아니라 기존 수동 Argo sync와 별도 사용자 승인으로 유지한다. package는 별도 `direct|producer|consumer` 상태 머신을 만들지 않으며 adapter가 connection·implicit initialization 오류를 직접 반환한다.
 - Alternatives Considered: package-level 3-state runtime mode와 수동 URL/password parser, credential-presence만으로 Helm workload를 활성화, 항상 queue-only startup.
-- Consequences: credential values가 존재해도 Helm flag가 꺼져 있으면 runtime에 주입되지 않아 기존 direct mode를 유지한다. enabled Helm render는 완전한 Secret selector를 요구하고, queue가 구성된 runtime은 실패를 direct/owner connection으로 우회하지 않는다.
-- Confirmation / Follow-up: default, producer, consumer와 incomplete credential은 구현 시점의 일회성 Helm lint/template inspection으로 확인하고, 실제 adapter enqueue/listen smoke test로 activation과 rollback을 검증한다. 이 변경만을 위한 상시 render harness는 저장소에 추가하지 않는다.
+- Consequences: dev sync는 producer와 consumer를 함께 활성화한다. production에서 chart를 sync하면 queue database apply와 consumer/producer activation이 같은 변경에 포함되므로, production sync 자체를 승인 전 수행하지 않는다. queue가 구성된 runtime은 실패를 direct/owner connection으로 우회하지 않는다.
+- Confirmation / Follow-up: dev/prod render가 namespace와 Vault source path 외에는 같은 queue runtime을 제공하는지 확인하고, dev adapter enqueue/listen smoke test로 handoff와 restart persistence를 검증한다. 이 변경만을 위한 상시 render harness는 저장소에 추가하지 않는다.
 
 ### 각 환경의 queue는 같은 cluster의 별도 database와 전용 credential을 사용한다
 
@@ -107,7 +117,7 @@
 - Authority / Provenance: PROD-448
 - Status: Active
 - Context / Problem: code/PR completion과 실제 database schema mutation, consumer rollout, producer cutover는 위험과 증거가 서로 다르다.
-- Decision Outcome: production queue database·credential의 default-off Git/Helm 선언과 render 검증은 production mutation 없이 제공할 수 있다. 실제 Vault value write/VSO sync, DatabaseRole/Database apply, consumer 최초 activation과 adapter implicit initialization, producer queue 활성화는 각 정확한 대상과 현재 evidence를 제시하고 별도 사용자 승인을 받은 작업만 수행한다. 별도 custom schema migration/one-shot DDL command는 만들지 않는다.
+- Decision Outcome: production queue database·credential의 Git/Helm 선언과 render 검증은 production mutation 없이 제공할 수 있다. 실제 Vault value write/VSO sync, DatabaseRole/Database apply, consumer 최초 activation과 adapter implicit initialization, producer queue 활성화는 각 정확한 대상과 현재 evidence를 제시하고 별도 사용자 승인을 받은 작업만 수행한다. 별도 custom schema migration/one-shot DDL command는 만들지 않는다.
 - Alternatives Considered: domain database 안에 custom schema bootstrap 추가, adapter initialization과 별도 DDL command 중복, dev database 선택을 production apply 승인으로 일반화.
 - Consequences: PR Ready 상태가 dev live 또는 production 활성화를 뜻하지 않는다. rollback에서도 queue purge/table drop은 별도 파괴적 승인 없이는 실행하지 않는다.
 - Confirmation / Follow-up: PR 본문과 완료 보고에서 local/CI, dev live, production apply/cutover 증거를 분리한다.
