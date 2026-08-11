@@ -50,8 +50,7 @@ export const createOperationDatabase = (
   databaseUrl = process.env.OPERATION_DATABASE_URL || process.env.DATABASE_URL!,
 ): OperationDatabaseOwner => {
   const client = postgres(databaseUrl, {
-    ...postgresConnectionOptions,
-    connect_timeout: 5,
+    max_lifetime: postgresConnectionOptions.max_lifetime,
     max: 1,
   });
   const operationDb = drizzle({ client, schema });

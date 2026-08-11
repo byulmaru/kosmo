@@ -6,7 +6,7 @@ type OperationClient = {
   options: {
     host: string[];
     max: number;
-    connect_timeout: number;
+    connection: Record<string, unknown>;
   };
   end: (options?: { timeout?: number }) => Promise<void>;
 };
@@ -14,13 +14,15 @@ type OperationClient = {
 const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
   (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
 
-test('creates a bounded one-connection operation database with idempotent close', async () => {
+test('keeps operation client bounded and isolated from direct startup parameters', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
   const end = mock.method(getClient(owner), 'end', async () => {});
 
   assert.notEqual(owner.db, db);
   assert.equal(getClient(owner).options.max, 1);
-  assert.equal(getClient(owner).options.connect_timeout, 5);
+  assert.equal('idle_in_transaction_session_timeout' in getClient(owner).options.connection, false);
+  assert.equal('lock_timeout' in getClient(owner).options.connection, false);
+  assert.equal('statement_timeout' in getClient(owner).options.connection, false);
 
   const firstClose = owner.close();
   assert.equal(owner.close(), firstClose);
