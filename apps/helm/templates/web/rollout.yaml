@@ -64,7 +64,7 @@ spec:
                   name: {{ include "kosmo.fedifyQueueResourceName" . | quote }}
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
-              value: {{ printf "postgres://kosmo_fedify_queue:$(FEDIFY_QUEUE_DATABASE_PASSWORD)@%s:5432/kosmo_fedify_queue" (include "kosmo.postgresPoolerName" .) | quote }}
+              value: {{ printf "postgres://kosmo_fedify_queue:$(FEDIFY_QUEUE_DATABASE_PASSWORD)@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
             {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
             {{- if $workerDatabase.databaseUrl }}
             - name: WORKER_DATABASE_PASSWORD

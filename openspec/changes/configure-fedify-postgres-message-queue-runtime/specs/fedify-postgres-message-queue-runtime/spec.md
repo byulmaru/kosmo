@@ -155,7 +155,7 @@
 #### Scenario: producer mode의 derived queue connection
 
 - **WHEN** Web 또는 API workload를 배포한다
-- **THEN** Helm은 release에서 파생한 전용 Secret과 session PgBouncer queue URL을 runtime에 주입하고 official adapter가 첫 enqueue에서 connection 대상 database의 queue table/index를 idempotent하게 초기화하게 한다
+- **THEN** Helm은 release에서 파생한 전용 Secret과 기존 CloudNativePG direct read-write Service의 queue URL을 runtime에 주입하고 official adapter가 첫 enqueue에서 connection 대상 database의 queue table/index를 idempotent하게 초기화하게 한다
 - **AND** 별도 queue selector나 environment 분기가 없으며 adapter 오류는 direct delivery나 owner/API DB fallback으로 우회하지 않는다
 
 #### Scenario: dev queue database 격리
@@ -164,13 +164,13 @@
 - **THEN** 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용한다
 - **AND** official adapter가 해당 database 안의 queue table/index implicit DDL을 소유하며 domain database schema, `search_path` helper 또는 custom queue migration을 추가하지 않는다
 - **AND** queue connection은 API/domain DB와 Worker trusted execution credential을 재사용하거나 fallback하지 않는다
-- **AND** chart는 queue database 준비 flag나 configurable queue URL 없이 같은 전용 role·PgBouncer·database connection을 파생한다
+- **AND** chart는 queue database 준비 flag나 configurable queue URL 없이 같은 전용 role·direct read-write Service·database connection을 파생한다
 
 #### Scenario: production queue database 선언
 
 - **WHEN** production Helm을 render한다
 - **THEN** chart는 environment 분기 없이 production namespace의 CloudNativePG cluster 안에 별도 `kosmo_fedify_queue` Database/DatabaseRole과 `kubernetes/kosmo/prod/fedify-queue` source의 release-derived queue 전용 basic-auth Secret 동기화를 선언한다
-- **AND** runtime이 활성화될 때 사용할 queue URL은 production session-mode PgBouncer의 전용 role과 `kosmo_fedify_queue` database에서 파생되며 domain/API/Worker database 또는 다른 Secret selector를 받을 수 없다
+- **AND** runtime이 활성화될 때 사용할 queue URL은 production CloudNativePG direct read-write Service의 전용 role과 `kosmo_fedify_queue` database에서 파생되며 domain/API/Worker database 또는 다른 Secret selector를 받을 수 없다
 - **AND** 이 선언은 resource apply, Vault value write, adapter initialization, consumer rollout 또는 producer cutover를 시작하지 않는다
 
 #### Scenario: 구현 PR 완료

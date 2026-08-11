@@ -122,8 +122,8 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 
 - [x] 4.1 `packages/fedify`는 library로 유지하고, 동일한 production federation registration으로 inbox/outbox/fan-out queue만 소비하는 `apps/fedify-consumer`와 lifecycle을 구현한다.
 - [x] 4.2 liveness/readiness와 SIGINT/SIGTERM graceful shutdown을 구현하고 process lifecycle 검증을 추가한다.
-- [x] 4.3 공통 image에 `apps/fedify-consumer`를 실행하는 독립 command를 포함하고 기본 비활성 Helm component를 추가한다.
-- [x] 4.4 dev/prod opt-in Helm lint/template inspection으로 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증하고, 일회성 검증 스크립트는 저장소에 남기지 않는다.
+- [x] 4.3 공통 image에 `apps/fedify-consumer`를 실행하는 독립 command와 Helm component를 추가한다.
+- [x] 4.4 dev/prod Helm lint/template inspection으로 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증하고, 일회성 검증 스크립트는 저장소에 남기지 않는다.
 
 ## 5. PROD-448 adapter integration과 queued persistence evidence
 
