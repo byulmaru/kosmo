@@ -4537,7 +4537,7 @@ export const LinkedSourceQuote: Story = {
     Linking.openURL = openURL;
 
     try {
-      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgb(248, 248, 250)');
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgb(250, 250, 251)');
       expect(window.getComputedStyle(sourcePreview).borderColor).toBe('rgb(223, 223, 229)');
       expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
       await userEvent.click(
