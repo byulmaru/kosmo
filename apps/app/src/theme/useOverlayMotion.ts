@@ -4,14 +4,13 @@ import { useReducedMotion } from './ThemeProvider';
 import { motion } from './tokens';
 
 type PresenceMotionOptions = Readonly<{
-  enabled?: boolean;
   enterDuration: number;
   exitDuration: number;
 }>;
 
 function usePresenceMotion(
   visible: boolean,
-  { enabled = true, enterDuration, exitDuration }: PresenceMotionOptions,
+  { enterDuration, exitDuration }: PresenceMotionOptions,
 ) {
   const reducedMotion = useReducedMotion();
   const [entered, setEntered] = useState(false);
@@ -19,10 +18,10 @@ function usePresenceMotion(
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!enabled || reducedMotion) {
+    if (reducedMotion) {
       progress.setValue(visible ? 1 : 0);
-      setEntered(enabled && visible);
-      setMounted(enabled && visible);
+      setEntered(visible);
+      setMounted(visible);
       return;
     }
 
@@ -48,18 +47,17 @@ function usePresenceMotion(
       }
     });
     return () => animation.stop();
-  }, [enabled, enterDuration, exitDuration, progress, reducedMotion, visible]);
+  }, [enterDuration, exitDuration, progress, reducedMotion, visible]);
 
   return {
-    entered: enabled && visible && entered,
-    mounted: enabled && (visible || mounted),
+    entered: visible && entered,
+    mounted: visible || mounted,
     progress,
   };
 }
 
-export function useOverlayMotion(visible: boolean, enabled = true) {
+export function useOverlayMotion(visible: boolean) {
   return usePresenceMotion(visible, {
-    enabled,
     enterDuration: motion.duration.emphasized,
     exitDuration: motion.duration.standard,
   });
