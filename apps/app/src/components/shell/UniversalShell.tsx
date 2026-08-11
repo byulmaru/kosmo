@@ -22,7 +22,7 @@ import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsRoot } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
@@ -113,6 +113,7 @@ export function UniversalShell() {
 
 function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
+  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const routeSegments = useSegments();
@@ -221,7 +222,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
       targetSize={44}
       visualSize={44}
     >
-      <Menu color={theme.text} size={24} strokeWidth={2} />
+      <Menu color={theme.foregroundPrimary} size={24} strokeWidth={2} />
     </IconButton>
   );
   const backButton = (
@@ -232,7 +233,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
       targetSize={44}
       visualSize={44}
     >
-      <ChevronLeftIcon color={theme.text} size={20} />
+      <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
     </IconButton>
   );
 
@@ -253,7 +254,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
-          { backgroundColor: theme.background },
+          { backgroundColor: theme.backgroundCanvas },
         ]}
         testID="universal-shell-root"
       >
@@ -263,7 +264,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
               styles.sidebar,
               web && webStickyRail,
               switcherOpen && styles.sidebarWithOverlay,
-              { borderColor: theme.border, width: full ? 320 : 80 },
+              { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
             ]}
           >
             <SidebarNavigation
@@ -282,7 +283,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             web && webDocumentColumn,
             settingsWorkspace && styles.settingsCenter,
             showRightRail && styles.centerWithRightRail,
-            { borderColor: theme.border },
+            { borderColor: theme.borderSubtle },
           ]}
         >
           {mobile && !routeOwnsMobileHeader ? (
@@ -291,7 +292,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 styles.mobileChrome,
                 web && webStickyHeader,
                 {
-                  backgroundColor: theme.background,
+                  backgroundColor: theme.backgroundCanvas,
                   paddingTop: web ? 0 : insets.top,
                 },
               ]}
@@ -307,7 +308,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
                   }
                 />
               ) : (
-                <View style={[styles.mobileHeader, { borderColor: theme.border }]}>
+                <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
                   {menuButton}
                 </View>
               )}
@@ -335,7 +336,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
               styles.rightRail,
               web && webStickyRail,
               web && webRightRailOverflow,
-              { borderColor: theme.border },
+              { borderColor: theme.borderSubtle },
             ]}
           >
             {profile ? <RightRail profile={profile} /> : null}
@@ -351,10 +352,14 @@ function UniversalShellContent({ revision }: { revision: number }) {
           transparent
           visible={drawerOpen}
         >
-          <View style={styles.drawerBackdrop}>
+          <View style={[styles.drawerBackdrop, { backgroundColor: theme.overlayScrim }]}>
             <View
               nativeID="mobile-sidebar"
-              style={[styles.drawer, { backgroundColor: theme.card }]}
+              style={[
+                styles.drawer,
+                elevation.overlay,
+                { backgroundColor: theme.backgroundElevated },
+              ]}
             >
               <SidebarNavigation
                 onFeedbackOpen={openFeedbackOverlay}
@@ -424,7 +429,6 @@ const styles = StyleSheet.create({
     width: 44,
   },
   drawerBackdrop: {
-    backgroundColor: 'rgba(0,0,0,0.35)',
     flex: 1,
     flexDirection: 'row',
     minHeight: 0,
@@ -432,7 +436,6 @@ const styles = StyleSheet.create({
   drawer: {
     borderBottomRightRadius: 16,
     borderTopRightRadius: 16,
-    boxShadow: '4px 0 4px rgba(0, 0, 0, 0.4)',
     height: '100%',
     maxWidth: '85%',
     minHeight: 0,

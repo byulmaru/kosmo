@@ -90,7 +90,10 @@ export function PostSourcePresentationView({
         accessibilityLabel={`${post.profile.displayName}의 게시글 보기`}
         href={postDetailHref}
       >
-        <Text style={[styles.timestamp, { color: theme.textSecondary }]} testID="post-timestamp">
+        <Text
+          style={[styles.timestamp, { color: theme.foregroundSecondary }]}
+          testID="post-timestamp"
+        >
           {formatTimelineTimestamp(post.createdAt)}
         </Text>
       </PresentationLink>
@@ -163,12 +166,12 @@ export function PostSourcePreview({
         </View>
         {interactive ? (
           <PresentationLink accessibilityLabel="원문 게시글 보기" href={sourcePostHref}>
-            <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+            <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
               {formatTimelineTimestamp(source.createdAt)}
             </Text>
           </PresentationLink>
         ) : (
-          <Text style={[styles.timestamp, { color: theme.textSecondary }]}>
+          <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
             {formatTimelineTimestamp(source.createdAt)}
           </Text>
         )}
@@ -198,7 +201,11 @@ export function PostSourcePreview({
 
   return (
     <View
-      style={[styles.preview, style, { borderColor: theme.border }]}
+      style={[
+        styles.preview,
+        style,
+        { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
+      ]}
       testID="source-post-preview"
     >
       {content}
@@ -278,10 +285,10 @@ function Author({ profile, showAvatar }: { profile: PresentationProfile; showAva
         />
       ) : null}
       <View style={styles.authorText}>
-        <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
+        <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
           {profile.displayName}
         </Text>
-        <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
+        <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
           {profile.relativeHandle}
         </Text>
       </View>

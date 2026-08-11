@@ -52,7 +52,15 @@ export const ProfileRequiredCompact: Story = {
       },
     },
   },
-  play: ({ canvasElement }) => expectComposeHeader(canvasElement),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const stateTitle = await canvas.findByText('프로필이 필요해요');
+    const stateCard = stateTitle.parentElement;
+    expect(stateCard).not.toBeNull();
+    expect(window.getComputedStyle(stateCard!).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(window.getComputedStyle(stateCard!).borderTopWidth).toBe('0px');
+    expectComposeHeader(canvasElement);
+  },
 };
 
 export const LoadingFull: Story = {
@@ -68,7 +76,12 @@ export const LoadingFull: Story = {
     },
   },
   play: ({ canvasElement }) => {
-    expect(within(canvasElement).getByRole('status')).toBeInTheDocument();
+    const status = within(canvasElement).getByRole('status');
+    const loadingHost = status.previousElementSibling;
+    expect(status).toBeInTheDocument();
+    expect(loadingHost).not.toBeNull();
+    expect(window.getComputedStyle(loadingHost!).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(window.getComputedStyle(loadingHost!).borderTopWidth).toBe('0px');
     expectComposeHeader(canvasElement);
   },
 };

@@ -62,7 +62,11 @@ export function BottomTabBar({
       role="navigation"
       style={[
         styles.root,
-        { backgroundColor: theme.card, borderColor: theme.border, paddingBottom: insets.bottom },
+        {
+          backgroundColor: theme.backgroundCanvas,
+          borderColor: theme.borderSubtle,
+          paddingBottom: insets.bottom,
+        },
       ]}
     >
       {tabs.map((tab) => {
@@ -81,7 +85,7 @@ export function BottomTabBar({
             style={StyleSheet.flatten([
               styles.item,
               {
-                backgroundColor: active ? theme.primary : 'transparent',
+                backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
                 opacity: tab.href ? 1 : 0.45,
               },
             ])}
@@ -98,7 +102,7 @@ export function BottomTabBar({
                 ) : tab.Icon ? (
                   <View style={styles.iconWithBadge}>
                     <tab.Icon
-                      color={active ? theme.text : theme.textSecondary}
+                      color={active ? theme.foregroundPrimary : theme.foregroundSecondary}
                       size={24}
                       strokeWidth={2}
                       style={pressed && styles.pressedContent}
@@ -112,7 +116,9 @@ export function BottomTabBar({
                   style={[
                     styles.label,
                     pressed && styles.pressedContent,
-                    { color: active ? theme.text : theme.textSecondary },
+                    {
+                      color: active ? theme.foregroundPrimary : theme.foregroundSecondary,
+                    },
                   ]}
                 >
                   {tab.label}

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import type { ComposePageQuery } from './__generated__/ComposePageQuery.graphql';
 
 const ComposeQuery = graphql`
@@ -83,14 +83,9 @@ function ComposeContent({ fetchKey, onGoHome }: { fetchKey: string; onGoHome: ()
 }
 
 function ComposeLoading() {
-  const theme = useTheme();
-
   return (
     <>
-      <View
-        accessibilityElementsHidden
-        style={[styles.loadingCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-      >
+      <View accessibilityElementsHidden style={styles.loadingCard}>
         <Skeleton height={20} width={144} />
         <Skeleton height={160} />
         <View style={styles.loadingAction}>
@@ -118,12 +113,11 @@ function ComposeStateCard({
   const theme = useTheme();
 
   return (
-    <View
-      accessibilityRole={alert ? 'alert' : undefined}
-      style={[styles.stateCard, { backgroundColor: theme.card, borderColor: theme.border }]}
-    >
-      <Text style={[styles.stateTitle, { color: theme.text }]}>{title}</Text>
-      <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>{description}</Text>
+    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.stateCard}>
+      <Text style={[styles.stateTitle, { color: theme.foregroundPrimary }]}>{title}</Text>
+      <Text style={[styles.stateDescription, { color: theme.foregroundSecondary }]}>
+        {description}
+      </Text>
       <View style={styles.stateAction}>
         <Button onPress={onAction} tone="secondary">
           {alert ? '다시 시도' : '홈으로 이동'}
@@ -148,15 +142,11 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   loadingCard: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg,
   },
   loadingAction: { alignItems: 'flex-end' },
   stateCard: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
     padding: 20,
   },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },

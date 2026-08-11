@@ -51,7 +51,10 @@ export function PageHeader(props: PageHeaderProps) {
       ) : (
         <>
           {props.leading ? <View style={styles.leading}>{props.leading}</View> : null}
-          <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
+          <Text
+            accessibilityRole="header"
+            style={[styles.title, { color: theme.foregroundPrimary }]}
+          >
             {props.title}
           </Text>
           {props.trailing ? <View style={styles.trailing}>{props.trailing}</View> : null}

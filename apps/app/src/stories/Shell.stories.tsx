@@ -316,6 +316,7 @@ export const SharedNavigation: Story = {
     const activeProfile = canvas.getByLabelText('활성 프로필');
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const bookmarks = canvas.getByRole('link', { name: '북마크' });
+    const search = canvas.getByRole('link', { name: '검색' });
     const profile = canvas.getByRole('link', { name: '프로필' });
     const profileEdit = within(activeProfile).getByRole('link', { name: '프로필 편집' });
     const profileEditVisual = within(profileEdit).getByTestId('profile-edit-action-visual');
@@ -323,6 +324,7 @@ export const SharedNavigation: Story = {
     const activeProfileRect = activeProfile.getBoundingClientRect();
     const profileEditRect = profileEdit.getBoundingClientRect();
     expect(bookmarks).toHaveAttribute('href', '/bookmarks');
+    expect(window.getComputedStyle(search).backgroundColor).toBe('rgb(255, 249, 230)');
     expect(profile).toHaveAttribute('href', '/@selected');
     expect(profileEdit).toHaveAttribute('href', '/profile-edit');
     expect(within(profileEdit).getByText('편집', { exact: true })).toBeVisible();
@@ -363,7 +365,10 @@ export const SharedNavigation: Story = {
 export const BottomNavigation: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
+    expect(window.getComputedStyle(navigation).backgroundColor).toBe('rgb(247, 247, 248)');
+    expect(window.getComputedStyle(navigation).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
     expect(canvas.queryByRole('link', { name: '팔로워 요청' })).not.toBeInTheDocument();
@@ -436,7 +441,7 @@ export const FeedbackNavigationCurrentState: Story = {
     const logoutLabel = within(logout).getByText('로그아웃');
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
     expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
@@ -490,7 +495,7 @@ export const FollowRequestsNavigationCurrentState: Story = {
     const link = canvas.getByRole('link', { name: '팔로워 요청' });
     expect(link).toHaveAttribute('href', '/follow-requests');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
   },
   render: () => <FeedbackNavigationFullStory />,
 };
@@ -503,7 +508,7 @@ export const FeedbackNavigationCompactCurrentState: Story = {
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
     expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '0px' });
   },
@@ -521,7 +526,7 @@ export const FeedbackNavigationDrawerCurrentState: Story = {
     const logout = canvas.getByRole('button', { name: '로그아웃' });
     expect(link).toHaveAttribute('href', '/feedback');
     expect(link).toHaveAttribute('aria-current', 'page');
-    expect(link).toHaveStyle({ backgroundColor: 'rgb(246, 246, 246)' });
+    expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
     expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
     expect(canvas.queryByRole('link', { name: '글쓰기' })).not.toBeInTheDocument();
@@ -1446,6 +1451,7 @@ export const UniversalMobile: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const shellRoot = canvas.getByTestId('universal-shell-root');
     const homeHeading = canvas.getByRole('heading', { name: '홈' });
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
     const homeHeader = homeHeading.parentElement?.parentElement;
@@ -1455,6 +1461,7 @@ export const UniversalMobile: Story = {
     );
 
     expect(homeHeader).not.toBeNull();
+    expect(window.getComputedStyle(shellRoot).backgroundColor).toBe('rgb(247, 247, 248)');
     expect(homeHeader).toContainElement(menuButton);
     expect(brandMark).not.toBeNull();
     expect(trailingSlot).not.toBeNull();
@@ -1476,6 +1483,9 @@ export const UniversalMobile: Story = {
     const ownerDocument = canvasElement.ownerDocument;
     const page = within(ownerDocument.body);
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
+    const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
+    const drawerBackdrop = drawerSurface?.parentElement;
+    const drawerNavigationSurface = page.getByTestId('mobile-sidebar-scroll').parentElement;
     const profileTrigger = page.getByRole('button', { name: '프로필 목록' });
     const triggerName = within(profileTrigger).getByText('코스모 작가');
     const profileHandle = page.getByLabelText('활성 프로필 핸들');
@@ -1486,6 +1496,15 @@ export const UniversalMobile: Story = {
     const handleRect = profileHandle.getBoundingClientRect();
     const iconRect = triggerIcon.getBoundingClientRect();
 
+    expect(drawerSurface).not.toBeNull();
+    expect(drawerBackdrop).not.toBeNull();
+    expect(drawerNavigationSurface).not.toBeNull();
+    expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe('rgb(250, 250, 251)');
+    expect(window.getComputedStyle(drawerNavigationSurface!).backgroundColor).toBe(
+      'rgb(250, 250, 251)',
+    );
+    expect(window.getComputedStyle(drawerSurface!).boxShadow).toContain('rgba(0, 0, 0, 0.1)');
+    expect(window.getComputedStyle(drawerBackdrop!).backgroundColor).toBe('rgba(0, 0, 0, 0.45)');
     expect(within(drawer).getByRole('link', { name: '북마크' })).toHaveAttribute(
       'href',
       '/bookmarks',
