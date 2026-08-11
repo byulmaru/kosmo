@@ -20,6 +20,7 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
     backgroundCanvas: '#f7f7f8',
     border: '#dddddd',
     borderSubtle: '#ececf0',
+    foregroundPrimary: '#1a1a1a',
     text: '#111111',
   }),
 });
@@ -77,6 +78,7 @@ test('text variant exposes one visible heading in a 64px page bar', () => {
   assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
   assert.equal(headings.length, 1);
   assert.equal(headings[0]?.props.children, '알림');
+  assert.equal((headings[0]?.props.style as Array<Record<string, unknown>>)[1]?.color, '#1a1a1a');
 });
 
 test('page bar stays on the route canvas and uses only a subtle boundary', () => {

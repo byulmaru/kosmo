@@ -3318,7 +3318,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
       expect(actionBarSlotStyle.paddingTop).toBe('0px');
       expect(actionBarSlotStyle.paddingBottom).toBe('4px');
       expect(cardBounds.bottom - borderBottomWidth - actionBarBounds.bottom).toBeCloseTo(4, 0);
-      expect(getComputedStyle(card).borderBottomColor).toBe('rgb(242, 242, 242)');
+      expect(getComputedStyle(card).borderBottomColor).toBe('rgb(236, 236, 240)');
     }
     for (const actionBar of [ordinaryActionBar, quoteActionBar, pureRepostActionBar]) {
       expect(
@@ -4537,6 +4537,8 @@ export const LinkedSourceQuote: Story = {
     Linking.openURL = openURL;
 
     try {
+      expect(window.getComputedStyle(sourcePreview).backgroundColor).toBe('rgb(250, 250, 251)');
+      expect(window.getComputedStyle(sourcePreview).borderColor).toBe('rgb(223, 223, 229)');
       expect(canvasElement.querySelector('[role="link"] [role="link"]')).toBeNull();
       await userEvent.click(
         within(postBody).getByLabelText('안전한 외부 링크, https://example.com/path'),
@@ -4650,9 +4652,10 @@ export const ReplyThreadPresentation: Story = {
       for (const connector of within(row).queryAllByTestId(/^post-thread-connector-/)) {
         expect(connector.getBoundingClientRect().right).toBeLessThan(dividerBounds.left);
       }
-      expect(window.getComputedStyle(divider).backgroundColor).toBe('rgb(242, 242, 242)');
+      expect(window.getComputedStyle(divider).backgroundColor).toBe('rgb(236, 236, 240)');
     });
     const currentRow = canvas.getByTestId('post-thread-current-thread-current');
+    expect(window.getComputedStyle(currentRow).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(window.getComputedStyle(currentRow).borderTopWidth).toBe('0px');
     expect(window.getComputedStyle(currentRow).borderBottomWidth).toBe('0px');
     for (const rowId of [

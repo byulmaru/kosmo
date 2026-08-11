@@ -124,7 +124,7 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 | Success Green / White           |  `5.43:1` |
 | Warning Tangerine / Ink         |  `6.09:1` |
 | Danger Red / White              |  `6.57:1` |
-| Link Light / Surface            |  `5.93:1` |
+| Link Light / Surface            |  `6.03:1` |
 | Link Dark / Canvas              |  `8.89:1` |
 | Light Muted / Canvas            |  `4.83:1` |
 | Dark Muted / Elevated           |  `4.92:1` |
@@ -134,7 +134,7 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 | Light Selected Border / Surface |  `3.24:1` |
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
-| Light Warning Border / Surface  |  `3.37:1` |
+| Light Warning Border / Surface  |  `3.42:1` |
 
 ## Component usage mapping
 

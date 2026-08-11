@@ -109,7 +109,9 @@ export function SidebarNavigation({
       style={[
         styles.root,
         compact ? styles.compactRoot : styles.fullRoot,
-        { backgroundColor: theme.card },
+        {
+          backgroundColor: surface === 'drawer' ? theme.backgroundElevated : theme.backgroundCanvas,
+        },
       ]}
     >
       <ProfileSwitcher
@@ -128,7 +130,7 @@ export function SidebarNavigation({
         style={[
           styles.navigationArea,
           compact && styles.compactNavigationArea,
-          { borderColor: theme.border },
+          { borderColor: theme.borderSubtle },
         ]}
         testID={surface === 'drawer' ? 'mobile-sidebar-scroll' : undefined}
       >
@@ -150,7 +152,7 @@ export function SidebarNavigation({
                   styles.item,
                   compact && styles.compactItem,
                   {
-                    backgroundColor: active ? theme.surface : 'transparent',
+                    backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
                     opacity: href ? 1 : 0.5,
                   },
                 ])}
@@ -159,7 +161,7 @@ export function SidebarNavigation({
                   <>
                     <View style={styles.iconWithBadge}>
                       <item.Icon
-                        color={theme.text}
+                        color={theme.foregroundPrimary}
                         size={20}
                         strokeWidth={2}
                         style={pressed && styles.pressedContent}
@@ -174,7 +176,7 @@ export function SidebarNavigation({
                           styles.itemLabel,
                           active && styles.activeItemLabel,
                           pressed && styles.pressedContent,
-                          { color: theme.text },
+                          { color: theme.foregroundPrimary },
                         ]}
                       >
                         {item.label}
@@ -201,13 +203,13 @@ export function SidebarNavigation({
                 style={StyleSheet.flatten([
                   styles.compose,
                   compact && styles.compactCompose,
-                  { backgroundColor: theme.primary },
+                  { backgroundColor: theme.actionPrimaryBase },
                 ])}
               >
                 {({ pressed }) => (
                   <>
                     <PenLine
-                      color="#111111"
+                      color={theme.actionPrimaryOnBase}
                       size={20}
                       strokeWidth={2}
                       style={pressed && styles.pressedContent}
@@ -220,7 +222,11 @@ export function SidebarNavigation({
         </View>
 
         <View
-          style={[styles.footer, compact && styles.compactFooter, { borderColor: theme.border }]}
+          style={[
+            styles.footer,
+            compact && styles.compactFooter,
+            { borderColor: theme.borderSubtle },
+          ]}
         >
           {data.currentSession ? (
             feedbackUsesOverlay ? (
@@ -234,9 +240,15 @@ export function SidebarNavigation({
                   styles.feedbackFooterItem,
                 ])}
               >
-                <Mail color={theme.textSecondary} size={20} strokeWidth={2} />
+                <Mail color={theme.foregroundSecondary} size={20} strokeWidth={2} />
                 {!compact ? (
-                  <Text style={[styles.footerLabel, styles.footerLabelGrow, { color: theme.text }]}>
+                  <Text
+                    style={[
+                      styles.footerLabel,
+                      styles.footerLabelGrow,
+                      { color: theme.foregroundPrimary },
+                    ]}
+                  >
                     피드백 보내기
                   </Text>
                 ) : null}
@@ -253,12 +265,12 @@ export function SidebarNavigation({
                     compact && styles.compactItem,
                     styles.feedbackFooterItem,
                     {
-                      backgroundColor: feedbackActive ? theme.surface : 'transparent',
+                      backgroundColor: feedbackActive ? theme.stateSelectedSurface : 'transparent',
                     },
                   ])}
                 >
                   <Mail
-                    color={feedbackActive ? theme.text : theme.textSecondary}
+                    color={feedbackActive ? theme.foregroundPrimary : theme.foregroundSecondary}
                     size={20}
                     strokeWidth={2}
                   />
@@ -268,7 +280,7 @@ export function SidebarNavigation({
                         styles.footerLabel,
                         styles.footerLabelGrow,
                         feedbackActive && styles.activeItemLabel,
-                        { color: theme.text },
+                        { color: theme.foregroundPrimary },
                       ]}
                     >
                       피드백 보내기

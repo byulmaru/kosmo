@@ -51,7 +51,7 @@ export function PostThreadLayout<TPost>({
             key={item.id}
             aria-current={role === 'current' ? true : undefined}
             role={role === 'current' ? 'article' : undefined}
-            style={[styles.row, role === 'current' && { backgroundColor: theme.card }]}
+            style={styles.row}
             testID={
               role === 'current' ? `post-thread-current-${item.id}` : `post-thread-item-${item.id}`
             }
@@ -79,7 +79,7 @@ export function PostThreadLayout<TPost>({
             )}
             {index < rows.length - 1 ? (
               <View
-                style={[styles.divider, { backgroundColor: theme.divider }]}
+                style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
                 testID={`post-thread-divider-${item.id}`}
               />
             ) : null}

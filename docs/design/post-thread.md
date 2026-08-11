@@ -6,7 +6,7 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 
 - `PROD-422`: production Reply thread data·route integration
 - `PROD-593`: thread row 구분선 정리
-- `docs/design/colors.md`: 저강도 콘텐츠 행 경계의 `divider` token
+- `docs/design/colors.md`: 저강도 콘텐츠 행 경계의 `border/subtle` semantic token
 - 2026-07-31 Web 수동 시각 확인
 
 ## 렌더링과 소유권
@@ -22,10 +22,10 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 ## Row boundary
 
 - N개 thread row 사이에 N-1개의 구분선을 표시한다. 마지막 행과 단일 행에는 구분선을 표시하지 않는다.
-- 구분선은 `theme.divider` 색상의 1px 선이며 왼쪽 64px, 오른쪽 8px inset을 사용한다.
+- 구분선은 `theme.borderSubtle` 색상의 1px 선이며 왼쪽 64px, 오른쪽 8px inset을 사용한다.
 - 왼쪽 64px은 현재 상세 Post의 본문 열에 맞춘 값이다. 목록형 Post 본문이 시작하는 68px과 완전히 정렬하는 것은 목표가 아니다.
 - thread 안의 `PostListItem`은 자체 row divider를 끄고 `PostThreadLayout`의 구분선만 사용한다. Home·Profile·Bookmark 등 thread 밖 목록의 기본 divider는 유지한다.
-- Home timeline과는 `divider` token과 1px 시각 무게만 공유하며 geometry는 thread 관계 표현에 맞게 독립적으로 유지한다.
+- Home timeline과는 `border/subtle` token과 1px 시각 무게만 공유하며 geometry는 thread 관계 표현에 맞게 독립적으로 유지한다.
 
 ## Connector
 
@@ -35,7 +35,7 @@ Post 상세 thread는 API가 제공한 조상·현재·하위 Post 순서와 직
 
 ## 검증과 rollout
 
-- Storybook에서 N-1 구분선, 마지막·단일 행 예외, 1px `theme.divider`, 64px/8px inset, 현재 상세 본문 열 정렬, connector 비중첩, thread 내부 중복 border 제거와 thread 밖 기본 divider 유지를 검증한다.
+- Storybook에서 N-1 구분선, 마지막·단일 행 예외, 1px `theme.borderSubtle`, 64px/8px inset, 현재 상세 본문 열 정렬, connector 비중첩, thread 내부 중복 border 제거와 thread 밖 기본 divider 유지를 검증한다.
 - Reply 대상 attribution이 일반 목록에서는 유지되지만 상세 thread의 조상·현재·하위 모든 행에서는
   표시되지 않는지 검증한다.
 - Web Light 화면에서 구분선 x=64, connector x=32~34, 오른쪽 inset 8px과 비중첩을 확인했다.
