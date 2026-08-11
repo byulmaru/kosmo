@@ -34,6 +34,7 @@ mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
     text: '#111',
     textSecondary: '#777',
   }),
+  useReducedMotion: () => true,
 });
 mockModule(new URL('./PostMediaGallery.tsx', import.meta.url), {
   PostMediaGallery: (props: Record<string, unknown>) => createElement('PostMediaGallery', props),
@@ -52,11 +53,13 @@ type RendererProps = {
 
 let PostContentRenderer: ComponentType<RendererProps>;
 let PostContentWarningRevealProvider: ComponentType<{ children?: ReactNode }>;
+let Button: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ PostContentRenderer } = await import('./PostContentRenderer'));
   ({ PostContentWarningRevealProvider } = await import('./PostContentWarningRevealContext'));
+  ({ Button } = await import('@/components/ui/Button'));
 });
 
 afterEach(async () => {
@@ -68,6 +71,31 @@ afterEach(async () => {
 });
 
 describe('PostContentRenderer', () => {
+  it('content warning reveal uses Button and forwards expanded state', async () => {
+    await render({
+      bodyText: '원문 본문',
+      contentWarning: '민감한 내용',
+      document: null,
+      media: [],
+      postId: 'post-warning-button',
+    });
+
+    assert.deepEqual(
+      renderer?.root.findAllByType(Button).map(({ props }) => ({
+        accessibilityLabel: props.accessibilityLabel,
+        accessibilityState: props.accessibilityState,
+        ariaExpanded: props['aria-expanded'],
+      })),
+      [
+        {
+          accessibilityLabel: '내용 보기',
+          accessibilityState: { expanded: false },
+          ariaExpanded: false,
+        },
+      ],
+    );
+  });
+
   it('Gallery에는 viewer open callback만 전달한다', async () => {
     const onMediaOpen = () => undefined;
     await render({

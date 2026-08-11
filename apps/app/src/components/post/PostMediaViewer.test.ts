@@ -17,6 +17,19 @@ let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
 const viewerKeyTarget = { tagName: 'DIV' };
 const childOverlayKeyTarget = { tagName: 'DIV' };
+type PressableMockState = { pressed: boolean };
+type PressableMockProps = Record<string, unknown> & {
+  children?: ReactNode | ((state: PressableMockState) => ReactNode);
+  style?: unknown | ((state: PressableMockState) => unknown);
+};
+const Pressable = ({ children, style, ...props }: PressableMockProps) => {
+  const state = { pressed: false };
+  return createElement(
+    'Pressable',
+    { ...props, style: typeof style === 'function' ? style(state) : style },
+    typeof children === 'function' ? children(state) : children,
+  );
+};
 
 Object.assign(globalThis, {
   addEventListener: (type: string, listener: (event: KeyboardEvent) => void) => {
@@ -46,7 +59,7 @@ mock.module('react-native', {
       },
     },
     Platform: platform,
-    Pressable: 'Pressable',
+    Pressable,
     ScrollView: 'ScrollView',
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
@@ -98,10 +111,14 @@ type ViewerProps = {
 };
 
 let PostMediaViewer: ComponentType<ViewerProps>;
+let IconButton: ComponentType<Record<string, unknown>>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  const module = await import('./PostMediaViewer');
+  const [module, iconButtonModule] = await Promise.all([
+    import('./PostMediaViewer'),
+    import('@/components/ui/IconButton'),
+  ]);
   PostMediaViewer = (props) =>
     createElement(
       module.PostMediaViewer,
@@ -117,6 +134,7 @@ before(async () => {
         wideDetail: props.wideDetail,
       }),
     );
+  IconButton = iconButtonModule.IconButton as ComponentType<Record<string, unknown>>;
 });
 
 afterEach(async () => {
@@ -133,6 +151,47 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewer', () => {
+  it('viewer controls use the shared 48px IconButton contract', async () => {
+    await render({ selectedIndex: 0 });
+
+    assert.deepEqual(
+      renderer?.root.findAllByType(IconButton).map(({ props }) => ({
+        accessibilityLabel: props.accessibilityLabel,
+        accessibilityState: props.accessibilityState,
+        controlRef: props.controlRef != null,
+        disabled: props.disabled,
+        targetSize: props.targetSize,
+        visualSize: props.visualSize,
+      })),
+      [
+        {
+          accessibilityLabel: '이미지 뷰어 닫기',
+          accessibilityState: undefined,
+          controlRef: true,
+          disabled: undefined,
+          targetSize: 48,
+          visualSize: 48,
+        },
+        {
+          accessibilityLabel: '이전 이미지',
+          accessibilityState: { disabled: true },
+          controlRef: false,
+          disabled: true,
+          targetSize: 48,
+          visualSize: 48,
+        },
+        {
+          accessibilityLabel: '다음 이미지',
+          accessibilityState: { disabled: false },
+          controlRef: false,
+          disabled: false,
+          targetSize: 48,
+          visualSize: 48,
+        },
+      ],
+    );
+  });
+
   it('같은 Post fragment의 Content·Media·Profile 표시 데이터를 사용한다', async () => {
     await render();
 

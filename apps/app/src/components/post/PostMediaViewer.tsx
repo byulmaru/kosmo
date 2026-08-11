@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
+import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
@@ -233,18 +234,19 @@ export function PostMediaViewer({
           testID="post-media-viewer-dialog"
         >
           <View style={styles.chrome}>
-            <Pressable
+            <IconButton
               accessibilityLabel="이미지 뷰어 닫기"
-              accessibilityRole="button"
               onPress={requestClose}
-              ref={closeRef}
+              controlRef={closeRef}
               style={({ pressed }) => [styles.iconButton, { opacity: pressed ? 0.7 : 1 }]}
+              targetSize={48}
               testID="post-media-viewer-close"
+              visualSize={48}
             >
               <Text aria-hidden style={styles.closeIcon}>
                 ×
               </Text>
-            </Pressable>
+            </IconButton>
             {position && position.total > 1 ? (
               <Text aria-hidden style={styles.counter} testID="post-media-viewer-counter">
                 {position.current} / {position.total}
@@ -663,9 +665,8 @@ function NavigationButton({
 }) {
   const label = direction === 'previous' ? '이전 이미지' : '다음 이미지';
   return (
-    <Pressable
+    <IconButton
       accessibilityLabel={label}
-      accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -674,11 +675,13 @@ function NavigationButton({
         direction === 'previous' ? styles.previousButton : styles.nextButton,
         { opacity: disabled ? 0.3 : pressed ? 0.7 : 1 },
       ]}
+      targetSize={48}
+      visualSize={48}
     >
       <Text aria-hidden style={styles.navigationIcon}>
         {direction === 'previous' ? '‹' : '›'}
       </Text>
-    </Pressable>
+    </IconButton>
   );
 }
 
