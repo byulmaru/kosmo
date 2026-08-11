@@ -367,7 +367,7 @@ export const BottomNavigation: Story = {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '주요 메뉴' });
     const avatar = canvas.getByLabelText(`${selectedProfile.displayName} 프로필 이미지`);
-    expect(window.getComputedStyle(navigation).backgroundColor).toBe('rgb(247, 247, 248)');
+    expect(window.getComputedStyle(navigation).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(window.getComputedStyle(navigation).borderTopColor).toBe('rgb(236, 236, 240)');
     expect(canvas.getByRole('link', { name: '글쓰기' })).toHaveAttribute('href', '/compose');
     expect(avatar.querySelector('img')).toHaveAttribute('src', selectedAvatarUrl);
@@ -1461,7 +1461,7 @@ export const UniversalMobile: Story = {
     );
 
     expect(homeHeader).not.toBeNull();
-    expect(window.getComputedStyle(shellRoot).backgroundColor).toBe('rgb(247, 247, 248)');
+    expect(window.getComputedStyle(shellRoot).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(homeHeader).toContainElement(menuButton);
     expect(brandMark).not.toBeNull();
     expect(trailingSlot).not.toBeNull();
@@ -1499,9 +1499,9 @@ export const UniversalMobile: Story = {
     expect(drawerSurface).not.toBeNull();
     expect(drawerBackdrop).not.toBeNull();
     expect(drawerNavigationSurface).not.toBeNull();
-    expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe('rgb(250, 250, 251)');
+    expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(window.getComputedStyle(drawerNavigationSurface!).backgroundColor).toBe(
-      'rgb(250, 250, 251)',
+      'rgb(255, 255, 255)',
     );
     expect(window.getComputedStyle(drawerSurface!).boxShadow).toContain('rgba(0, 0, 0, 0.1)');
     expect(window.getComputedStyle(drawerBackdrop!).backgroundColor).toBe('rgba(0, 0, 0, 0.45)');
