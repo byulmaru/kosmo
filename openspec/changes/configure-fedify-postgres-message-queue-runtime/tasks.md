@@ -200,5 +200,9 @@ PR completion과 별도로 dev 환경에서 실제 Fedify queue producer/consume
 - dev 미실행이면 미실행 사유와 PR completion evidence만 명확히 보고한다.
 
 - [x] 7.1 dev 현재 상태와 안전한 canary/rollback 대상을 확인하고 live verification 범위를 기록한다.
-- [ ] 7.2 dev에서 producer handoff, consumer 처리, queue depth와 dequeue 전 queued-message persistence를 검증한다.
-- [ ] 7.3 dev live 결과와 남은 production apply/cutover gate를 Linear와 PR에 구분해 기록한다.
+- [x] 7.2 dev에서 producer handoff, consumer 처리, queue depth와 dequeue 전 queued-message persistence를 검증한다.
+  - ActivityPub.Academy의 일회성 Actor가 `@devtest@dev.kos.moe` personal inbox로 signed `Follow`를 전송했다.
+  - consumer replica를 0으로 둔 동안 queue row가 0에서 1로 증가했고, producer 요청이 끝난 뒤에도 유지됐다.
+  - consumer를 1로 복구하자 같은 row가 1에서 0으로 감소하고 remote follower가 materialize됐으며, Academy가 dev Actor의 outbound `Accept`를 수신했다.
+  - Academy의 `Undo(Follow)`로 canary 관계를 정리한 뒤 queue row와 canary follow row가 모두 0이고 consumer가 Ready임을 확인했다.
+- [x] 7.3 dev live 결과와 남은 production apply/cutover gate를 Linear와 PR에 구분해 기록한다.
