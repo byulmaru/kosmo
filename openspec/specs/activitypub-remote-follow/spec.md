@@ -8,19 +8,19 @@ TBD - created by archiving change add-activitypub-remote-follow. Update Purpose 
 
 ### Requirement: Fedify follow protocol boundary
 
-시스템은 ActivityPub follow protocol 처리에서 Fedify가 제공하는 inbox, signature, key와 delivery 경계를 재사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, PROD-235, PROD-241, PROD-448. 시스템은 ActivityPub follow protocol 처리에서 Fedify가 제공하는 inbox, signature, key, PostgreSQL queue와 delivery 경계를 재사용해야 한다(MUST).
 
 #### Scenario: Use Fedify for outbound follow protocol activities
 
 - **WHEN** 시스템이 remote actor로 Follow, Undo(Follow), Accept(Follow), 또는 Reject(Follow)를 발송한다
-- **THEN** 시스템은 Fedify delivery 경계를 사용하고 HTTP signature를 직접 구현하지 않는다
-- **AND** delivery queue/retry 설정과 운영 검증은 후속 capability 범위로 두고, 이번 capability에서는 queue/retry 상태를 저장하거나 직접 구현하지 않는다
+- **THEN** 시스템은 Fedify PostgreSQL outbox queue에 activity를 handoff하고 HTTP signature 또는 remote retry를 직접 구현하지 않는다
+- **AND** 기존 follow capability가 정의한 ordering option은 그대로 전달하며 queue/retry 실행 정책은 Fedify가 소유한다
 
 #### Scenario: Use Fedify for inbound follow activities
 
 - **WHEN** remote actor가 local actor inbox로 Follow, Undo, Accept, Reject activity를 보낸다
-- **THEN** Fedify inbox listener는 verified typed activity를 kosmo follow handler에 전달한다
-- **AND** 시스템은 request parsing, signature verification, remote actor key verification을 직접 구현하지 않는다
+- **THEN** Web ingress는 verified request를 Fedify PostgreSQL inbox queue에 handoff하고 별도 Fedify consumer의 inbox listener가 verified typed activity를 kosmo follow handler에 전달한다
+- **AND** 시스템은 request parsing, signature verification, remote actor key verification 또는 inbox retry를 직접 구현하지 않는다
 
 #### Scenario: Bind inbound delivery to a local target
 
