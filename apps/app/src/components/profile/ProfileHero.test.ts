@@ -57,7 +57,9 @@ mockModule('react-relay', {
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
-    background: '#ffffff',
+    background: '#legacy-background',
+    backgroundCanvas: '#semantic-canvas',
+    backgroundSurface: '#semantic-surface',
     border: '#dddddd',
     primary: '#ffee99',
     surface: '#eeeeee',
@@ -132,6 +134,26 @@ describe('ProfileHero cover geometry', () => {
     assert.ok(renderer);
 
     assert.deepEqual(findCoverStyle(), { aspectRatio: 3, width: '100%' });
+  });
+
+  it('loading branch uses the semantic surface and canvas roles', async () => {
+    await act(async () => {
+      renderer = create(createElement(ProfileHero, { loading: true }));
+    });
+    assert.ok(renderer);
+
+    const cover = renderer.root.find(
+      (node) =>
+        (node.type as unknown) === 'View' &&
+        Array.isArray(node.props.style) &&
+        node.props.style[0]?.width === '100%',
+    );
+    const avatar = renderer.root.find(
+      (node) => (node.type as unknown) === 'Skeleton' && node.props.circular === true,
+    );
+
+    assert.equal(cover.props.style[1].backgroundColor, '#semantic-surface');
+    assert.equal(avatar.props.style[1].borderColor, '#semantic-canvas');
   });
 });
 

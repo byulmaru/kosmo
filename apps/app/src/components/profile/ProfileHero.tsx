@@ -52,12 +52,12 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
     return (
       <View>
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={[styles.cover, { backgroundColor: theme.surface }]} />
+          <View style={[styles.cover, { backgroundColor: theme.backgroundSurface }]} />
           <View style={styles.body}>
             <Skeleton
               circular
               height={80}
-              style={[styles.avatarSkeleton, { borderColor: theme.background }]}
+              style={[styles.avatarSkeleton, { borderColor: theme.backgroundCanvas }]}
               width={80}
             />
             <View style={styles.skeletonCopy}>
