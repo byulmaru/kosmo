@@ -5,7 +5,12 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, readGraphQLOperation, toGlobalId } from './graphql';
+import {
+  isGraphQLOperation,
+  readGraphQLOperation,
+  toGlobalId,
+  waitForGraphQLOperation,
+} from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
@@ -28,6 +33,7 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
       new URL(response.url()).pathname === '/graphql' &&
       isGraphQLOperation(response.request().postData(), 'ProfileEditRouteUpdateProfileMutation'),
   );
+  const profileRoutePromise = waitForProfileRoute(page);
 
   await page.getByRole('button', { name: '저장', exact: true }).click();
   const response = await responsePromise;
@@ -53,6 +59,7 @@ test('text-only 저장은 Ready avatar/header payload를 끝내고 Profile로 re
     relativeHandle: '@prod613-text',
   });
   await expect(page).toHaveURL(/\/@prod613-text$/);
+  await profileRoutePromise;
   await expect(page.getByRole('button', { name: '저장', exact: true })).toHaveCount(0);
 });
 
@@ -123,6 +130,7 @@ test('Ready avatar/header ID 저장도 응답 결과와 최종 Profile route를 
       new URL(response.url()).pathname === '/graphql' &&
       isGraphQLOperation(response.request().postData(), 'ProfileEditRouteUpdateProfileMutation'),
   );
+  const profileRoutePromise = waitForProfileRoute(page);
   await page.getByRole('textbox', { name: '소개' }).fill('PROD-613 Ready Media boundary');
   await page.getByRole('button', { name: '저장', exact: true }).click();
   const responseBody = (await (await responsePromise).json()) as {
@@ -134,6 +142,7 @@ test('Ready avatar/header ID 저장도 응답 결과와 최종 Profile route를 
   expect(updateVariables).toMatchObject({ input: { avatarId, headerId } });
   expect(responseBody.data?.updateProfile?.profile?.relativeHandle).toBe('@prod613-ready-media');
   await expect(page).toHaveURL(/\/@prod613-ready-media$/);
+  await profileRoutePromise;
 });
 
 test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프로필의 관계 목록 link로 표시된다', async ({
@@ -163,6 +172,7 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
       new URL(response.url()).pathname === '/graphql' &&
       isGraphQLOperation(response.request().postData(), 'ProfileEditRouteUpdateProfileMutation'),
   );
+  const profileRoutePromise = waitForProfileRoute(page);
   await page.getByRole('button', { name: '저장', exact: true }).click();
   const body = (await (await responsePromise).json()) as {
     data?: {
@@ -190,9 +200,12 @@ test('프로필 태그는 같은 저장으로 서버에 반영되고 공개 프�
     ]),
   );
   await expect(page).toHaveURL(/\/@prod527-tags$/);
+  await profileRoutePromise;
 
   // Relay cache만이 아니라 저장된 서버 상태를 다시 조회한다.
+  const reloadedProfileRoutePromise = waitForProfileRoute(page);
   await page.reload();
+  await reloadedProfileRoutePromise;
   await expect(page.getByText('#FirstWrite', { exact: true })).toBeVisible();
   await expect(page.getByText('#길게표시되는프로필태그', { exact: true })).toBeVisible();
 
@@ -228,6 +241,19 @@ async function selectReplacement(page: Page, triggerName: string, fileName: stri
     mimeType: 'image/webp',
     name: fileName,
   });
+}
+
+async function waitForProfileRoute(page: Page) {
+  const responses = await Promise.all([
+    waitForGraphQLOperation(page, 'ProfileLayoutQuery'),
+    waitForGraphQLOperation(page, 'ProfilePostListPageQuery'),
+  ]);
+
+  for (const response of responses) {
+    const body = (await response.json()) as { errors?: unknown[] };
+    expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+    expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+  }
 }
 
 async function addProfileTag(page: Page, tag: string) {
