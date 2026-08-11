@@ -144,13 +144,19 @@
 
 ### Requirement: Production 활성화 승인 경계
 
-**Authority / Provenance:** PROD-448. chart는 환경·실행 여부 분기 없이 Fedify queue database, producer connection과 consumer를 하나의 runtime으로 선언해야 한다(MUST). Production Argo sync/apply는 queue database·credential 준비, adapter의 최초 table initialization, consumer rollout과 트래픽 cutover의 현재 검증 증거를 제시한 뒤 별도 사용자 승인을 받아야 한다(MUST).
+**Authority / Provenance:** PROD-448. chart는 queue 전용 환경·실행 여부 분기 없이 Fedify queue database와 credential을 선언하고, 기존 application workload bootstrap 경계 안에서 producer connection과 consumer를 하나의 runtime으로 렌더해야 한다(MUST). Production Argo sync/apply는 queue database·credential 준비, adapter의 최초 table initialization, consumer rollout과 트래픽 cutover의 현재 검증 증거를 제시한 뒤 별도 사용자 승인을 받아야 한다(MUST).
 
 #### Scenario: queue runtime을 단일 구성으로 렌더함
 
-- **WHEN** dev 또는 production Helm runtime을 render한다
+- **WHEN** dev 또는 production에서 기존 application workloads를 활성화해 Helm runtime을 render한다
 - **THEN** chart는 queue 전용 실행 flag 없이 API/Web queue connection과 독립 consumer Deployment를 함께 렌더한다
 - **AND** Database/DatabaseRole/VSO와 runtime은 namespace와 Vault source path 외에 동일한 구조를 사용한다
+
+#### Scenario: production bootstrap render
+
+- **WHEN** production bootstrap이 기존 `workloads.enabled=false`와 빈 image digest로 Helm을 render한다
+- **THEN** chart는 queue Database/DatabaseRole과 VSO Secret 선언을 제공하되 API/Web/consumer workload를 렌더하거나 image reference를 해석하지 않는다
+- **AND** queue 전용 enable flag나 credential selector를 요구하지 않는다
 
 #### Scenario: producer mode의 derived queue connection
 

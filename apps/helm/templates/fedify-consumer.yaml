@@ -1,3 +1,4 @@
+{{- if .Values.workloads.enabled }}
 {{- include "kosmo.validatePostgresCredentials" . -}}
 apiVersion: v1
 kind: ServiceAccount
@@ -92,3 +93,4 @@ spec:
             periodSeconds: 5
           resources:
 {{ toYaml .Values.fedify.consumer.resources | indent 12 }}
+{{- end }}
