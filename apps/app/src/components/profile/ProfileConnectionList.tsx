@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import { ProfileListItem } from './ProfileListItem';
 import type { ProfileConnectionList_followersProfile$key } from './__generated__/ProfileConnectionList_followersProfile.graphql';
 import type { ProfileConnectionList_followingProfile$key } from './__generated__/ProfileConnectionList_followingProfile.graphql';
@@ -104,11 +104,11 @@ export function ProfileConnectionListState({
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {[0, 1, 2].map((item) => (
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-                <View
-                  style={[
-                    styles.avatarSkeleton,
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                  ]}
+                <Skeleton
+                  circular
+                  height={40}
+                  style={[styles.avatarSkeleton, { borderColor: theme.border }]}
+                  width={40}
                 />
                 <View style={styles.skeletonCopy}>
                   <Skeleton height={12} width={160} />
@@ -122,17 +122,15 @@ export function ProfileConnectionListState({
           </Text>
         </>
       ) : (
-        <View accessibilityRole="alert" style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>{text.errorTitle}</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            잠시 후 다시 시도해주세요.
-          </Text>
-          {onRetry ? (
-            <Button onPress={onRetry} style={styles.stateAction} tone="secondary">
-              다시 시도
-            </Button>
-          ) : null}
-        </View>
+        <StateView
+          actionLabel={onRetry ? '다시 시도' : undefined}
+          alert
+          description="잠시 후 다시 시도해주세요."
+          inline
+          onAction={onRetry}
+          style={styles.state}
+          title={text.errorTitle}
+        />
       )}
     </View>
   );
@@ -208,40 +206,42 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
       {profiles.length ? (
         profiles.map((item) => <ProfileListItem key={item.cursor} linked profile={item.profile} />)
       ) : (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>{text.emptyTitle}</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            {text.emptyDescription}
-          </Text>
-        </View>
+        <StateView
+          description={text.emptyDescription}
+          inline
+          style={styles.state}
+          title={text.emptyTitle}
+        />
       )}
       {hasNext || loadError ? (
-        <View style={[styles.pagination, { borderColor: theme.border }]}>
-          {loadError ? (
-            <>
-              <Text accessibilityRole="alert" style={[styles.stateTitle, { color: theme.text }]}>
-                {text.loadError}
+        loadError ? (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            description="잠시 후 다시 시도해주세요."
+            inline
+            onAction={loadMore}
+            style={[styles.pagination, { borderColor: theme.border }]}
+            title={text.loadError}
+          />
+        ) : (
+          <View style={[styles.pagination, { borderColor: theme.border }]}>
+            <Button
+              accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
+              disabled={isLoadingNext}
+              onPress={loadMore}
+              style={styles.paginationAction}
+              tone="secondary"
+            >
+              {isLoadingNext ? '불러오는 중' : '더 불러오기'}
+            </Button>
+            {isLoadingNext ? (
+              <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
+                {text.loadingNextLabel}
               </Text>
-              <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-                잠시 후 다시 시도해주세요.
-              </Text>
-            </>
-          ) : null}
-          <Button
-            accessibilityState={{ busy: isLoadingNext, disabled: isLoadingNext }}
-            disabled={isLoadingNext}
-            onPress={loadMore}
-            style={styles.paginationAction}
-            tone="secondary"
-          >
-            {isLoadingNext ? '불러오는 중' : loadError ? '다시 시도' : '더 불러오기'}
-          </Button>
-          {isLoadingNext ? (
-            <Text accessibilityLiveRegion="polite" style={styles.srOnly}>
-              {text.loadingNextLabel}
-            </Text>
-          ) : null}
-        </View>
+            ) : null}
+          </View>
+        )
       ) : null}
     </View>
   );
@@ -275,14 +275,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
   },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  stateDescription: {
-    fontFamily: 'SUIT',
-    marginTop: spacing.xs,
-    textAlign: 'center',
-    ...typography.sm,
-  },
-  stateAction: { marginTop: spacing.lg },
   pagination: { alignItems: 'center', borderTopWidth: 1, padding: spacing.lg },
   paginationAction: { marginTop: spacing.md },
   skeletonItem: {
@@ -293,7 +285,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  avatarSkeleton: { borderRadius: radii.full, borderWidth: 1, height: 40, width: 40 },
+  avatarSkeleton: { borderWidth: 1 },
   skeletonCopy: { flex: 1, gap: spacing.sm, minWidth: 0 },
   srOnly: {
     height: 1,

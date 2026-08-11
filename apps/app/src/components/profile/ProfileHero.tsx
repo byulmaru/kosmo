@@ -54,11 +54,11 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={[styles.cover, { backgroundColor: theme.surface }]} />
           <View style={styles.body}>
-            <View
-              style={[
-                styles.avatarSkeleton,
-                { backgroundColor: theme.surface, borderColor: theme.background },
-              ]}
+            <Skeleton
+              circular
+              height={80}
+              style={[styles.avatarSkeleton, { borderColor: theme.background }]}
+              width={80}
             />
             <View style={styles.skeletonCopy}>
               <Skeleton height={20} width="50%" />
@@ -166,11 +166,8 @@ const styles = StyleSheet.create({
   avatarRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   avatarBorder: { borderRadius: radii.full, marginTop: -40, padding: spacing.xs },
   avatarSkeleton: {
-    borderRadius: radii.full,
     borderWidth: spacing.xs,
-    height: 80,
     marginTop: -40,
-    width: 80,
   },
   action: { marginTop: spacing.md },
   displayName: { fontFamily: 'SUIT', fontWeight: '700', marginTop: spacing.md, ...typography.xl },

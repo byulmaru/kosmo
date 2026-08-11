@@ -3,11 +3,10 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { usePaginationScrollRegistration } from '@/components/pagination/PaginationScrollView';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { PostActionAuthenticationProvider } from './PostActionAuthentication';
 import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
@@ -174,11 +173,11 @@ function PostListSkeleton() {
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {[0, 1, 2].map((item) => (
           <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-            <View
-              style={[
-                styles.avatarSkeleton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
+            <Skeleton
+              circular
+              height={48}
+              style={[styles.avatarSkeleton, { borderColor: theme.border }]}
+              width={48}
             />
             <View style={styles.skeletonCopy}>
               <View style={styles.skeletonHeader}>
@@ -212,18 +211,16 @@ function PostListState({
   onRetry?: () => void;
   title: string;
 }) {
-  const theme = useTheme();
-
   return (
-    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.state}>
-      <Text style={[styles.stateTitle, { color: theme.text }]}>{title}</Text>
-      <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>{description}</Text>
-      {onRetry ? (
-        <Button onPress={onRetry} style={styles.retry} tone="secondary">
-          다시 시도
-        </Button>
-      ) : null}
-    </View>
+    <StateView
+      actionLabel={onRetry ? '다시 시도' : undefined}
+      alert={alert}
+      description={description}
+      inline
+      onAction={onRetry}
+      style={styles.state}
+      title={title}
+    />
   );
 }
 
@@ -239,19 +236,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
-  avatarSkeleton: { borderRadius: radii.full, borderWidth: 1, height: 48, width: 48 },
+  avatarSkeleton: { borderWidth: 1 },
   skeletonCopy: { flex: 1, minWidth: 0 },
   skeletonHeader: { gap: spacing.sm },
   skeletonBody: { gap: 10, marginTop: spacing.md },
   state: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xxxl },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  stateDescription: {
-    fontFamily: 'SUIT',
-    marginTop: spacing.xs,
-    textAlign: 'center',
-    ...typography.sm,
-  },
-  retry: { marginTop: spacing.lg },
   srOnly: {
     height: 1,
     left: 0,

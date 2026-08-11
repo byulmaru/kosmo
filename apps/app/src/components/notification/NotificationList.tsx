@@ -13,10 +13,10 @@ import { graphql, useMutation, usePaginationFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import {
   FollowRequestNotificationListItem,
   NotificationListItem,
@@ -215,32 +215,38 @@ export function NotificationList({ profile }: NotificationListProps) {
       {notifications.length ? (
         notifications
       ) : (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>아직 알림이 없어요</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요.
-          </Text>
-        </View>
+        <StateView
+          description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
+          inline
+          style={styles.state}
+          title="아직 알림이 없어요"
+        />
       )}
       {pagination.hasNext || loadError ? (
-        <View style={[styles.pagination, { borderColor: theme.border }]}>
-          {loadError ? (
-            <Text accessibilityRole="alert" style={[styles.stateTitle, { color: theme.text }]}>
-              알림을 더 불러오지 못했어요
-            </Text>
-          ) : null}
-          <Button
-            accessibilityState={{
-              busy: pagination.isLoadingNext,
-              disabled: pagination.isLoadingNext,
-            }}
-            disabled={pagination.isLoadingNext}
-            onPress={loadMore}
-            tone="secondary"
-          >
-            {pagination.isLoadingNext ? '불러오는 중' : loadError ? '다시 시도' : '더 불러오기'}
-          </Button>
-        </View>
+        loadError ? (
+          <StateView
+            actionLabel="다시 시도"
+            alert
+            inline
+            onAction={loadMore}
+            style={[styles.pagination, { borderColor: theme.border }]}
+            title="알림을 더 불러오지 못했어요"
+          />
+        ) : (
+          <View style={[styles.pagination, { borderColor: theme.border }]}>
+            <Button
+              accessibilityState={{
+                busy: pagination.isLoadingNext,
+                disabled: pagination.isLoadingNext,
+              }}
+              disabled={pagination.isLoadingNext}
+              onPress={loadMore}
+              tone="secondary"
+            >
+              {pagination.isLoadingNext ? '불러오는 중' : '더 불러오기'}
+            </Button>
+          </View>
+        )
       ) : null}
     </ScrollView>
   );
@@ -263,10 +269,10 @@ export function NotificationListState({
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {[0, 1, 2].map((item) => (
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-                <View style={[styles.kindSkeleton, { backgroundColor: theme.surface }]} />
+                <Skeleton circular height={28} width={28} />
                 <View style={styles.skeletonContent}>
                   <View style={styles.skeletonAvatarRow}>
-                    <View style={[styles.avatarSkeleton, { backgroundColor: theme.surface }]} />
+                    <Skeleton circular height={28} width={28} />
                     <Skeleton height={12} width={48} />
                   </View>
                   <View style={styles.skeletonCopy}>
@@ -281,24 +287,22 @@ export function NotificationListState({
           </Text>
         </>
       ) : state === 'error' ? (
-        <View accessibilityRole="alert" style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>알림을 불러오지 못했어요</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            잠시 후 다시 시도해주세요.
-          </Text>
-          {onRetry ? (
-            <Button onPress={onRetry} tone="secondary">
-              다시 시도
-            </Button>
-          ) : null}
-        </View>
+        <StateView
+          actionLabel={onRetry ? '다시 시도' : undefined}
+          alert
+          description="잠시 후 다시 시도해주세요."
+          inline
+          onAction={onRetry}
+          style={styles.state}
+          title="알림을 불러오지 못했어요"
+        />
       ) : (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>프로필이 필요해요</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            알림을 보려면 사용할 프로필을 먼저 선택해주세요.
-          </Text>
-        </View>
+        <StateView
+          description="알림을 보려면 사용할 프로필을 먼저 선택해주세요."
+          inline
+          style={styles.state}
+          title="프로필이 필요해요"
+        />
       )}
     </ScrollView>
   );
@@ -328,8 +332,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
   },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
   pagination: { alignItems: 'center', borderTopWidth: 1, gap: spacing.md, padding: spacing.lg },
   skeletonItem: {
     alignItems: 'flex-start',
@@ -339,8 +341,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
   },
-  kindSkeleton: { borderRadius: radii.full, height: 28, width: 28 },
-  avatarSkeleton: { borderRadius: radii.full, height: 28, width: 28 },
   skeletonAvatarRow: {
     alignItems: 'center',
     flexDirection: 'row',
