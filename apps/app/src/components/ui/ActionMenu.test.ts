@@ -155,7 +155,9 @@ test('Web ActionMenu stays mounted through exit motion before unmounting', async
   exitMounted = true;
   await act(async () => item?.props.onPress());
   assert.deepEqual(selected, ['selected']);
-  assert.equal(renderer?.root.findAllByProps({ role: 'menu' }).length, 1);
+  const exitingMenu = renderer?.root.findByProps({ role: 'menu' });
+  assert.equal(exitingMenu?.props['aria-hidden'], true);
+  assert.equal(exitingMenu?.props.accessibilityElementsHidden, true);
 
   exitMounted = false;
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));

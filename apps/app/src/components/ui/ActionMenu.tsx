@@ -302,6 +302,8 @@ export function ActionMenu({
             <View style={[styles.webPosition, webPosition]}>
               <Animated.View
                 accessibilityLabel={accessibilityLabel}
+                accessibilityElementsHidden={!open}
+                aria-hidden={!open || undefined}
                 ref={menuRef}
                 role="menu"
                 pointerEvents={open ? 'auto' : 'none'}
