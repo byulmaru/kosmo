@@ -29,9 +29,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
-mockModule('expo-router', {
-  Link: ({ children, href }: { children: ReturnType<typeof createElement>; href: unknown }) =>
-    createElement('Link', { href }, children),
+mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
+  NavigationLink: ({
+    children,
+    href,
+  }: {
+    children: ReturnType<typeof createElement>;
+    href: unknown;
+  }) => createElement('NavigationLink', { href }, children),
 });
 mockModule('react-native', {
   Image: 'Image',
@@ -179,7 +184,7 @@ describe('ProfileHero Profile Tag presentation', () => {
     const tagList = renderer!.root.findByProps({ testID: 'profile-tag-list' });
     assert.equal(tagList.props.style.flexDirection, 'row');
     assert.equal(tagList.props.style.flexWrap, 'wrap');
-    const links = tagList.findAll((node) => (node.type as unknown) === 'Link');
+    const links = tagList.findAll((node) => (node.type as unknown) === 'NavigationLink');
     const targets = tagList.findAll((node) => (node.type as unknown) === 'Pressable');
     assert.deepEqual(
       links.map((node) => node.props.href),

@@ -1,7 +1,7 @@
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { GuardedLink } from '@/components/shell/GuardedLink';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
@@ -16,7 +16,7 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
   return (
     <View accessibilityLabel="설정 목록" role="navigation" style={styles.root}>
       <ByulmaruIdAccountSettingsEntry />
-      <GuardedLink href="/settings/default-post-visibility" primary>
+      <NavigationLink href="/settings/default-post-visibility" primary>
         <Pressable
           aria-current={current ? 'page' : undefined}
           accessibilityLabel="게시물 기본 공개 범위 설정 열기"
@@ -45,7 +45,7 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
             }
           />
         </Pressable>
-      </GuardedLink>
+      </NavigationLink>
     </View>
   );
 }

@@ -1,6 +1,6 @@
-import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -56,11 +56,11 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
   return (
     <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }, style]}>
       {linked ? (
-        <Link asChild href={profileHref}>
+        <NavigationLink href={profileHref}>
           <Pressable accessibilityRole="link" onPress={onPress} style={styles.profile}>
             {content}
           </Pressable>
-        </Link>
+        </NavigationLink>
       ) : (
         <View style={styles.profile}>{content}</View>
       )}

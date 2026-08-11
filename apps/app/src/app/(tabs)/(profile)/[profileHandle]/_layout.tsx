@@ -1,4 +1,4 @@
-import { Link, Slot, useGlobalSearchParams, usePathname } from 'expo-router';
+import { Slot, useGlobalSearchParams, usePathname } from 'expo-router';
 import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -7,6 +7,7 @@ import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -93,11 +94,11 @@ function ProfileLayoutContent({
     profile.viewerState?.isSelf === true &&
     profile.viewerState.membership?.role === 'OWNER';
   const action = canEdit ? (
-    <Link asChild href={'/profile-edit' as Href}>
+    <NavigationLink href={'/profile-edit' as Href}>
       <Button accessibilityLabel="프로필 편집" tone="secondary">
         편집
       </Button>
-    </Link>
+    </NavigationLink>
   ) : (
     <FollowButton profile={profile} />
   );

@@ -14,8 +14,8 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
-import { GuardedLink } from './GuardedLink';
 import { LogoutControl } from './LogoutControl';
+import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
 import { isSettingsRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
@@ -186,15 +186,15 @@ export function SidebarNavigation({
             );
 
             return href ? (
-              <GuardedLink href={href} key={item.label} onNavigate={onNavigate} primary>
+              <NavigationLink href={href} key={item.label} onNavigate={onNavigate} primary>
                 {control}
-              </GuardedLink>
+              </NavigationLink>
             ) : (
               <View key={item.label}>{control}</View>
             );
           })}
           {compact ? (
-            <GuardedLink href="/compose" onNavigate={onNavigate} primary>
+            <NavigationLink href="/compose" onNavigate={onNavigate} primary>
               <Pressable
                 accessibilityLabel="글쓰기"
                 accessibilityRole="link"
@@ -215,7 +215,7 @@ export function SidebarNavigation({
                   </>
                 )}
               </Pressable>
-            </GuardedLink>
+            </NavigationLink>
           ) : null}
         </View>
 
@@ -242,7 +242,7 @@ export function SidebarNavigation({
                 ) : null}
               </Pressable>
             ) : (
-              <GuardedLink href="/feedback" onNavigate={onNavigate}>
+              <NavigationLink href="/feedback" onNavigate={onNavigate}>
                 <Pressable
                   aria-current={feedbackActive ? 'page' : undefined}
                   accessibilityLabel="피드백 보내기"
@@ -275,7 +275,7 @@ export function SidebarNavigation({
                     </Text>
                   ) : null}
                 </Pressable>
-              </GuardedLink>
+              </NavigationLink>
             )
           ) : null}
           {compact ? (

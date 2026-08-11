@@ -12,6 +12,7 @@ import {
 import { graphql, useMutation } from 'react-relay';
 import { startNativeAuthorization, startWebLoginFromPress } from '@/auth/login';
 import { BrandLogo } from '@/components/BrandLogo';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
@@ -152,13 +153,13 @@ export default function IndexScreen() {
               {error}
             </Text>
           ) : null}
-          <Link asChild href={'/privacy' as Href}>
+          <NavigationLink href={'/privacy' as Href}>
             <Pressable accessibilityRole="link">
               <Text style={[styles.privacyLink, { color: theme.textSecondary }]}>
                 개인정보 처리방침
               </Text>
             </Pressable>
-          </Link>
+          </NavigationLink>
         </View>
       </View>
     </ScrollView>

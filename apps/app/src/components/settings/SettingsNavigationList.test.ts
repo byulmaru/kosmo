@@ -31,10 +31,10 @@ mock.module('react-native', {
 mock.module(require.resolve('lucide-react-native'), {
   exports: { ChevronRightIcon: 'ChevronRightIcon' },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../shell/GuardedLink.tsx', import.meta.url), {
+mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
-    GuardedLink: ({ children, href }: { children: ReactElement; href: string }) =>
-      createElement('GuardedLink', { href }, cloneElement(children, { href } as never)),
+    NavigationLink: ({ children, href }: { children: ReactElement; href: string }) =>
+      createElement('NavigationLink', { href }, cloneElement(children, { href } as never)),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
