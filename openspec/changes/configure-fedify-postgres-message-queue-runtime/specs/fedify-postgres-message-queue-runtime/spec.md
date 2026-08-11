@@ -158,6 +158,13 @@
 - **THEN** Helm은 완전한 Fedify queue credential을 runtime에 주입하고 official adapter가 첫 enqueue에서 connection 대상 database의 queue table/index를 idempotent하게 초기화하게 한다
 - **AND** enabled Helm 상태의 누락·부분 selector는 render에 실패하며 adapter 오류는 direct delivery나 owner/API DB fallback으로 우회하지 않는다
 
+#### Scenario: dev queue database 격리
+
+- **WHEN** dev Fedify queue producer와 consumer를 활성화할 준비를 한다
+- **THEN** 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용한다
+- **AND** official adapter가 해당 database 안의 queue table/index implicit DDL을 소유하며 domain database schema, `search_path` helper 또는 custom queue migration을 추가하지 않는다
+- **AND** queue connection은 API/domain DB와 Worker trusted execution credential을 재사용하거나 fallback하지 않는다
+
 #### Scenario: 구현 PR 완료
 
 - **WHEN** 코드, chart, 격리 database의 adapter initialization과 비production 검증이 완료되어 PR이 review-ready 상태가 된다
