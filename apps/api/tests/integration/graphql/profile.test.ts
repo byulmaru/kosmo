@@ -2884,7 +2884,9 @@ describe('GraphQL remote profile boundary', () => {
     });
     try {
       await handleInboundDelete(
-        { documentLoader: fetchMock } as unknown as Parameters<typeof handleInboundDelete>[0],
+        { data: { db }, documentLoader: fetchMock } as unknown as Parameters<
+          typeof handleInboundDelete
+        >[0],
         new Delete({ actor: new URL(author.actorUri), object: new URL(objectUri) }),
       );
 
@@ -3941,7 +3943,7 @@ const materializeRemotePost = async ({
   });
 
   await handleInboundCreate(
-    { documentLoader, parseUri: () => null } as unknown as Parameters<
+    { data: { db }, documentLoader, parseUri: () => null } as unknown as Parameters<
       typeof handleInboundCreate
     >[0],
     new Create({ actor: new URL(actorUri), object: note }),
