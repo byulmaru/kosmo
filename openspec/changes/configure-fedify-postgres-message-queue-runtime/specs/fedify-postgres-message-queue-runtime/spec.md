@@ -166,10 +166,17 @@
 - **AND** queue connection은 API/domain DB와 Worker trusted execution credential을 재사용하거나 fallback하지 않는다
 - **AND** dev producer 또는 consumer를 활성화하면서 queue database 준비 flag를 끄거나 전용 role·PgBouncer·database가 아닌 URL을 지정하면 Helm render에 실패한다
 
+#### Scenario: production queue database 선언
+
+- **WHEN** production queue database 준비 flag를 명시적으로 켜고 producer와 consumer는 비활성 상태로 Helm을 render한다
+- **THEN** chart는 production CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` Database/DatabaseRole과 `kubernetes/kosmo/prod/fedify-queue` source의 release-derived queue 전용 basic-auth Secret 동기화만 선언한다
+- **AND** queue URL은 production session-mode PgBouncer의 전용 role과 `kosmo_fedify_queue` database를 가리켜야 하며 domain/API/Worker database 또는 다른 Secret selector를 사용하면 render에 실패한다
+- **AND** 이 선언은 resource apply, Vault value write, adapter initialization, consumer rollout 또는 producer cutover를 시작하지 않는다
+
 #### Scenario: 구현 PR 완료
 
 - **WHEN** 코드, chart, 격리 database의 adapter initialization과 비production 검증이 완료되어 PR이 review-ready 상태가 된다
-- **THEN** production values, Argo CD sync/apply, database apply와 live traffic cutover는 실행하지 않는다
+- **THEN** production default-off declaration을 제외한 Argo CD sync/apply, Vault value write, database apply와 live traffic cutover는 실행하지 않는다
 - **AND** PR completion evidence와 dev live verification, production activation 상태를 각각 구분해 보고한다
 
 #### Scenario: 별도 production 승인

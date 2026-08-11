@@ -52,7 +52,7 @@ Fedify producer와 consumer가 같은 durable PostgreSQL inbox/outbox/fan-out tr
 
 - 공식 `@fedify/postgres` adapter를 사용하고 custom retry queue나 transport ledger를 만들지 않는다.
 - API domain credential, trusted Worker execution credential 또는 전역 owner connection으로 조용히 fallback하지 않고 API에 Worker credential을 주입하지 않는다.
-- production queue database·credential 준비, 최초 adapter initialization과 queue 활성화는 수행하지 않는다.
+- production queue database·credential의 default-off declaration은 허용하지만 Vault value write, resource sync/apply, 최초 adapter initialization과 queue 활성화는 수행하지 않는다.
 
 **Verification**
 
@@ -162,7 +162,7 @@ PROD-448의 코드·adapter-managed initialization·chart와 nonproduction 검�
 
 **Guardrails**
 
-- production values 변경, database sync/apply, Argo CD sync/apply, credential cutover와 traffic activation을 수행하지 않는다.
+- production default-off queue declaration은 허용하지만 Vault value write, database/Argo CD sync/apply, credential cutover와 traffic activation을 수행하지 않는다.
 - PR readiness를 dev live verification 또는 production completion으로 표현하지 않는다.
 - change archive는 모든 requirement와 task 완료, 필요한 live evidence와 Completion Gate를 별도로 확인한 뒤 수행한다.
 
@@ -175,6 +175,7 @@ PROD-448의 코드·adapter-managed initialization·chart와 nonproduction 검�
 - [x] 6.2 `openspec validate configure-fedify-postgres-message-queue-runtime --strict`와 repository 전체 관련 검증을 통과시킨다.
 - [x] 6.3 self-review로 domain/Notification/Temporal/production 범위 침범과 secret 노출을 점검하고 finding을 해결한다.
 - [x] 6.4 commit, push, Ready PR 생성과 hosted CI 확인 후 Linear에 PR completion evidence를 동기화한다.
+- [ ] 6.5 production `kosmo_fedify_queue` Database/DatabaseRole과 환경별 VSO Secret 선언을 default-off로 추가하고 dev/prod lint·template inspection에서 전용 role·session PgBouncer·database·release-derived Secret 외 target을 fail-close하는지 검증한 뒤 Ready PR과 hosted CI evidence를 기록한다.
 
 ## 7. PROD-448 dev live verification
 

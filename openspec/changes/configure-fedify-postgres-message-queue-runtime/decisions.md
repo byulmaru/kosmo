@@ -88,17 +88,17 @@
 - Consequences: credential values가 존재해도 Helm flag가 꺼져 있으면 runtime에 주입되지 않아 기존 direct mode를 유지한다. enabled Helm render는 완전한 Secret selector를 요구하고, queue가 구성된 runtime은 실패를 direct/owner connection으로 우회하지 않는다.
 - Confirmation / Follow-up: default, producer, consumer와 incomplete credential은 구현 시점의 일회성 Helm lint/template inspection으로 확인하고, 실제 adapter enqueue/listen smoke test로 activation과 rollback을 검증한다. 이 변경만을 위한 상시 render harness는 저장소에 추가하지 않는다.
 
-### Dev queue는 같은 cluster의 별도 database와 전용 credential을 사용한다
+### 각 환경의 queue는 같은 cluster의 별도 database와 전용 credential을 사용한다
 
 - Decision Date: 2026-08-11
 - Decision Class: Implementation Choice
-- Authority / Provenance: PROD-448 사용자 승인과 갱신된 Linear 본문·dev-live 댓글
+- Authority / Provenance: PROD-448 사용자 승인과 갱신된 Linear 본문·dev-live 댓글·2026-08-11 `Production queue declaration 승인` 댓글
 - Status: Active
 - Context / Problem: official `PostgresMessageQueue` adapter는 table name만 받고 schema option을 제공하지 않으며 첫 enqueue/listen에서 unqualified table/index DDL을 실행한다. domain database 안의 별도 schema를 사용하려면 `search_path`와 권한 helper를 추가해야 해 adapter 사용보다 배포 구조가 복잡해진다.
-- Decision Outcome: dev queue transport는 기존 CloudNativePG cluster 안의 별도 PostgreSQL database `kosmo_fedify_queue`와 전용 login/Secret을 사용한다. dev credential은 기존 VSO convention에 따라 `kubernetes/kosmo/dev/fedify-queue` Vault path의 `username`/`password`를 `kubernetes.io/basic-auth` Secret으로 동기화한다. API/Web/consumer의 `FEDIFY_QUEUE_DATABASE_*`만 이 database를 가리키며 `DATABASE_URL`, `OPERATION_DATABASE_URL` 또는 `WORKER_DATABASE_*`로 fallback하지 않는다. adapter가 queue database 안의 table/index implicit DDL을 소유하고 custom schema, `search_path` helper, Drizzle migration 또는 one-shot queue DDL command를 추가하지 않는다.
+- Decision Outcome: dev와 production queue transport는 각 환경의 기존 CloudNativePG cluster 안의 별도 PostgreSQL database `kosmo_fedify_queue`와 전용 login/Secret을 사용한다. credential은 기존 VSO convention에 따라 `kubernetes/kosmo/<env>/fedify-queue` Vault path의 `username`/`password`를 release-derived queue 전용 `kubernetes.io/basic-auth` Secret으로 동기화한다. API/Web/consumer의 `FEDIFY_QUEUE_DATABASE_*`만 이 database를 가리키며 `DATABASE_URL`, `OPERATION_DATABASE_URL` 또는 `WORKER_DATABASE_*`로 fallback하지 않는다. adapter가 queue database 안의 table/index implicit DDL을 소유하고 custom schema, `search_path` helper, Drizzle migration 또는 one-shot queue DDL command를 추가하지 않는다.
 - Alternatives Considered: domain `kosmo` database의 `public` schema 사용, domain database 안의 별도 schema와 role-level/URL `search_path`, 별도 PostgreSQL cluster.
-- Consequences: 같은 cluster이므로 물리 장애 격리는 늘지 않지만 namespace, credential과 DDL 범위가 분리된다. consumer는 queue database connection과 trusted domain listener connection 두 개를 유지한다. queue database/login/Secret 생성은 dev에서만 먼저 수행하고 production 준비·활성화는 별도 승인을 유지한다.
-- Confirmation / Follow-up: Helm/CloudNativePG render에서 database·role·Secret과 queue URL target을 확인하고, dev에서 adapter implicit initialization, producer/consumer handoff와 dequeue 전 restart persistence를 검증한다.
+- Consequences: 같은 cluster이므로 물리 장애 격리는 늘지 않지만 namespace, credential과 DDL 범위가 분리된다. consumer는 queue database connection과 trusted domain listener connection 두 개를 유지한다. production manifest 선언은 review할 수 있지만 실제 Vault value sync, database/login/Secret apply와 활성화는 별도 승인을 유지한다.
+- Confirmation / Follow-up: dev/prod Helm/CloudNativePG render에서 database·role·release-derived Secret과 queue URL target을 확인하고, dev에서 adapter implicit initialization, producer/consumer handoff와 dequeue 전 restart persistence를 검증한다.
 
 ### Production queue database 준비와 runtime 활성화는 별도 승인한다
 
@@ -107,7 +107,7 @@
 - Authority / Provenance: PROD-448
 - Status: Active
 - Context / Problem: code/PR completion과 실제 database schema mutation, consumer rollout, producer cutover는 위험과 증거가 서로 다르다.
-- Decision Outcome: 구현과 nonproduction 검증은 production mutation 없이 완료한다. production queue database·credential 준비, consumer 최초 activation과 adapter implicit initialization, producer queue 활성화는 각 정확한 대상과 현재 evidence를 제시하고 별도 사용자 승인을 받은 작업만 수행한다. 별도 custom schema migration/one-shot DDL command는 만들지 않는다.
+- Decision Outcome: production queue database·credential의 default-off Git/Helm 선언과 render 검증은 production mutation 없이 제공할 수 있다. 실제 Vault value write/VSO sync, DatabaseRole/Database apply, consumer 최초 activation과 adapter implicit initialization, producer queue 활성화는 각 정확한 대상과 현재 evidence를 제시하고 별도 사용자 승인을 받은 작업만 수행한다. 별도 custom schema migration/one-shot DDL command는 만들지 않는다.
 - Alternatives Considered: domain database 안에 custom schema bootstrap 추가, adapter initialization과 별도 DDL command 중복, dev database 선택을 production apply 승인으로 일반화.
 - Consequences: PR Ready 상태가 dev live 또는 production 활성화를 뜻하지 않는다. rollback에서도 queue purge/table drop은 별도 파괴적 승인 없이는 실행하지 않는다.
 - Confirmation / Follow-up: PR 본문과 완료 보고에서 local/CI, dev live, production apply/cutover 증거를 분리한다.
