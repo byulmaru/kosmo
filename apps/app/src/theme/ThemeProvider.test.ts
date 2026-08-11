@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { semanticColors } from './tokens';
 import type * as ThemeModule from './ThemeProvider';
 
 let reduceMotionListener: ((enabled: boolean) => void) | undefined;
@@ -29,6 +30,12 @@ let themeModule: typeof ThemeModule | undefined;
 
 before(async () => {
   themeModule = await import('./ThemeProvider');
+});
+
+test('Light canvas and elevated use white while surface uses neutral 0', () => {
+  assert.equal(semanticColors.light.backgroundCanvas, '#FFFFFF');
+  assert.equal(semanticColors.light.backgroundElevated, '#FFFFFF');
+  assert.equal(semanticColors.light.backgroundSurface, '#FAFAFB');
 });
 
 test('explicit Dark mode selects production semantic colors without activating it app-wide', async () => {

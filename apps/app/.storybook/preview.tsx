@@ -105,8 +105,8 @@ const preview: Preview = {
     backgrounds: {
       options: {
         kosmoDark: { name: 'KOSMO Dark', value: '#18181B' },
-        kosmoLight: { name: 'KOSMO Light', value: '#F7F7F8' },
-        kosmoSurface: { name: 'KOSMO Surface', value: '#F8F8FA' },
+        kosmoLight: { name: 'KOSMO Light', value: '#FFFFFF' },
+        kosmoSurface: { name: 'KOSMO Surface', value: '#FAFAFB' },
       },
     },
     controls: {
