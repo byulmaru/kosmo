@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Modal, PanResponder, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Animated,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, shadow, spacing, typography } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type { ComponentType, ReactNode, Ref } from 'react';
 
 type ActionMenuIcon = ComponentType<{
@@ -36,7 +46,7 @@ type Props = {
   webHorizontalPlacement?: 'start' | 'end';
 };
 
-const webMenuInset = spacing.xs + 1;
+const webMenuInset = space[4] + borderWidths[1];
 const webMenuItemHeight = 36;
 const webMenuMinWidth = 128;
 
@@ -48,14 +58,17 @@ export function ActionMenu({
   webHorizontalPlacement = 'start',
 }: Props): ReactNode {
   const theme = useTheme();
+  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const controlRef = useRef<View>(null);
   const menuRef = useRef<View>(null);
+  const pendingSelectionRef = useRef<(() => void) | null>(null);
   const triggerRef = useRef<View>(null);
   const [hoveredWebItemKey, setHoveredWebItemKey] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [webPosition, setWebPosition] = useState({ left: 0, top: 0 });
   const web = Platform.OS === 'web';
+  const overlayMotion = useOverlayMotion(open);
 
   const positionWebMenu = useCallback(() => {
     const trigger = triggerRef.current as unknown as HTMLElement | null;
@@ -122,11 +135,36 @@ export function ActionMenu({
   }, [disabled, positionWebMenu]);
   const select = useCallback(
     (item: ActionMenuItem) => {
-      item.onSelect();
-      dismiss();
+      if (web) {
+        item.onSelect();
+        dismiss();
+        return;
+      }
+
+      if (pendingSelectionRef.current) {
+        return;
+      }
+
+      pendingSelectionRef.current = item.onSelect;
+      dismiss(false);
     },
-    [dismiss],
+    [dismiss, web],
   );
+
+  useEffect(() => {
+    if (web || open || overlayMotion.mounted) {
+      return;
+    }
+
+    const onSelect = pendingSelectionRef.current;
+    if (!onSelect) {
+      return;
+    }
+
+    pendingSelectionRef.current = null;
+    focusTrigger();
+    onSelect();
+  }, [focusTrigger, open, overlayMotion.mounted, web]);
 
   const sheetDismissResponder = useMemo(
     () =>
@@ -143,7 +181,7 @@ export function ActionMenu({
   );
 
   useLayoutEffect(() => {
-    if (!web || !open) {
+    if (!web || !open || !overlayMotion.mounted) {
       return;
     }
 
@@ -154,10 +192,10 @@ export function ActionMenu({
       window.removeEventListener('resize', positionWebMenu);
       document.removeEventListener('scroll', positionWebMenu, true);
     };
-  }, [open, positionWebMenu, web]);
+  }, [open, overlayMotion.mounted, positionWebMenu, web]);
 
   useEffect(() => {
-    if (!web || !open) {
+    if (!web || !open || !overlayMotion.mounted) {
       return;
     }
 
@@ -248,7 +286,7 @@ export function ActionMenu({
       document.removeEventListener('focusin', onFocusIn);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [dismiss, open, web]);
+  }, [dismiss, open, overlayMotion.mounted, web]);
 
   if (web) {
     return (
@@ -259,18 +297,38 @@ export function ActionMenu({
           onPress: toggle,
           ref: triggerRef,
         })}
-        {open ? (
+        {overlayMotion.mounted ? (
           <ActionMenuPortal>
             <View style={[styles.webPosition, webPosition]}>
-              <View
+              <Animated.View
                 accessibilityLabel={accessibilityLabel}
+                accessibilityElementsHidden={!open}
+                aria-hidden={!open || undefined}
                 ref={menuRef}
                 role="menu"
-                style={[styles.webMenu, { backgroundColor: theme.card, borderColor: theme.border }]}
+                pointerEvents={open ? 'auto' : 'none'}
+                style={[
+                  styles.webMenu,
+                  elevation.floating,
+                  {
+                    backgroundColor: theme.backgroundElevated,
+                    borderColor: theme.borderDefault,
+                    opacity: overlayMotion.progress,
+                    transform: [
+                      {
+                        translateY: overlayMotion.progress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [8, 0],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
               >
                 {items.map((item, index) => {
                   const Icon = item.icon;
-                  const itemColor = item.tone === 'danger' ? theme.danger : theme.text;
+                  const itemColor =
+                    item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
                   return (
                     <Pressable
                       accessibilityLabel={item.accessibilityLabel ?? item.label}
@@ -285,11 +343,16 @@ export function ActionMenu({
                         styles.item,
                         styles.webItem,
                         index > 0
-                          ? { borderTopColor: theme.divider, borderTopWidth: 1 }
+                          ? {
+                              borderTopColor: theme.borderSubtle,
+                              borderTopWidth: borderWidths[1],
+                            }
                           : undefined,
-                        pressed || hoveredWebItemKey === item.key
-                          ? { backgroundColor: theme.surface }
-                          : undefined,
+                        pressed
+                          ? { backgroundColor: theme.statePressed }
+                          : hoveredWebItemKey === item.key
+                            ? { backgroundColor: theme.stateHover }
+                            : undefined,
                       ]}
                     >
                       {index === 0 ? (
@@ -297,7 +360,7 @@ export function ActionMenu({
                       ) : null}
                       {Icon ? (
                         <View accessible={false} aria-hidden style={styles.webIcon}>
-                          <Icon color={itemColor} size={18} strokeWidth={2.4} />
+                          <Icon color={itemColor} size={iconSizes[18]} strokeWidth={2} />
                         </View>
                       ) : null}
                       <Text style={[styles.label, styles.webLabel, { color: itemColor }]}>
@@ -306,7 +369,7 @@ export function ActionMenu({
                     </Pressable>
                   );
                 })}
-              </View>
+              </Animated.View>
             </View>
           </ActionMenuPortal>
         ) : null}
@@ -324,13 +387,20 @@ export function ActionMenu({
       })}
       <Modal
         accessibilityLabel={accessibilityLabel}
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => dismiss()}
         role="dialog"
         transparent
-        visible={open}
+        visible={overlayMotion.mounted}
       >
         <View style={styles.backdrop}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { backgroundColor: theme.overlayScrim, opacity: overlayMotion.progress },
+            ]}
+          />
           <Pressable
             accessible={false}
             aria-hidden
@@ -338,25 +408,37 @@ export function ActionMenu({
             onPress={() => dismiss()}
             style={StyleSheet.absoluteFill}
           />
-          <View
+          <Animated.View
             accessibilityLabel={accessibilityLabel}
             accessibilityRole="menu"
             accessibilityViewIsModal
             onAccessibilityEscape={() => dismiss()}
             style={[
               styles.sheet,
+              elevation.overlay,
               {
-                backgroundColor: theme.card,
-                borderColor: theme.border,
-                paddingBottom: insets.bottom + spacing.sm,
+                backgroundColor: theme.backgroundElevated,
+                borderColor: theme.borderDefault,
+                paddingBottom: insets.bottom + space[8],
+                opacity: overlayMotion.progress,
+                transform: [
+                  {
+                    translateY: overlayMotion.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [16, 0],
+                    }),
+                  },
+                ],
               },
             ]}
           >
             <View {...sheetDismissResponder.panHandlers} style={styles.dragHandleTarget}>
-              <View style={[styles.dragHandle, { backgroundColor: theme.border }]} />
+              <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
             </View>
             {items.map((item) => {
               const Icon = item.icon;
+              const itemColor =
+                item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
               return (
                 <Pressable
                   accessibilityLabel={item.accessibilityLabel ?? item.label}
@@ -365,17 +447,13 @@ export function ActionMenu({
                   onPress={() => select(item)}
                   style={[styles.item, styles.nativeItem]}
                 >
-                  {Icon ? (
-                    <Icon
-                      color={item.tone === 'danger' ? theme.danger : theme.text}
-                      size={20}
-                      strokeWidth={2.4}
-                    />
-                  ) : null}
+                  {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
                   <Text
                     style={[
                       styles.label,
-                      { color: item.tone === 'danger' ? theme.danger : theme.text },
+                      {
+                        color: itemColor,
+                      },
                     ]}
                   >
                     {item.label}
@@ -383,7 +461,7 @@ export function ActionMenu({
                 </Pressable>
               );
             })}
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </>
@@ -391,23 +469,22 @@ export function ActionMenu({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: 'rgba(0,0,0,0.4)', flex: 1, justifyContent: 'flex-end' },
+  backdrop: { flex: 1, justifyContent: 'flex-end' },
   control: { position: 'relative' },
-  dragHandle: { borderRadius: radii.full, height: 4, width: 36 },
+  dragHandle: { borderRadius: radius.full, height: 4, width: 36 },
   dragHandleTarget: { alignItems: 'center', height: 44, justifyContent: 'center' },
   item: {
     justifyContent: 'center',
     minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: space[12],
+    paddingVertical: space[8],
   },
-  nativeItem: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
-  label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
+  nativeItem: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  label: textStyles.uiLabelL,
   sheet: {
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    borderWidth: 1,
-    ...shadow,
+    borderTopLeftRadius: radius[16],
+    borderTopRightRadius: radius[16],
+    borderWidth: borderWidths[1],
   },
   webIcon: { alignItems: 'center', height: 18, justifyContent: 'center', width: 18 },
   webFirstItemHitArea: {
@@ -420,20 +497,19 @@ const styles = StyleSheet.create({
   webItem: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: space[8],
     height: webMenuItemHeight,
     justifyContent: 'flex-start',
     minHeight: webMenuItemHeight,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: space[8],
     position: 'relative',
   },
-  webLabel: { flex: 1, fontWeight: '500', textAlign: 'left', ...typography.sm },
+  webLabel: { flex: 1, textAlign: 'left', ...textStyles.uiCopyM },
   webMenu: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.12)',
+    borderRadius: radius[12],
+    borderWidth: borderWidths[1],
     minWidth: webMenuMinWidth,
-    padding: spacing.xs,
+    padding: space[4],
   },
   webPosition: { position: 'absolute', zIndex: 100 },
 });

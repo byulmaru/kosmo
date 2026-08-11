@@ -1,8 +1,8 @@
-import { forwardRef } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { forwardRef, useId, useState } from 'react';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
-import type { TextInputProps } from 'react-native';
+import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import type { TextInputProps, ViewStyle } from 'react-native';
 
 type TextFieldProps = TextInputProps & {
   error?: string;
@@ -10,54 +10,105 @@ type TextFieldProps = TextInputProps & {
 };
 
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
-  { error, label, multiline = false, style, ...props },
+  {
+    accessibilityHint,
+    editable = true,
+    error,
+    label,
+    multiline = false,
+    onBlur,
+    onFocus,
+    style,
+    ...props
+  },
   ref,
 ) {
   const theme = useTheme();
+  const [focused, setFocused] = useState(false);
+  const errorId = useId();
+  const webValidationProps =
+    Platform.OS === 'web'
+      ? { 'aria-describedby': error ? errorId : undefined, 'aria-invalid': Boolean(error) }
+      : {};
 
   return (
     <View style={styles.wrapper}>
-      {label ? <Text style={[styles.label, { color: theme.text }]}>{label}</Text> : null}
+      {label ? (
+        <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{label}</Text>
+      ) : null}
       <TextInput
         ref={ref}
+        accessibilityHint={accessibilityHint}
         accessibilityLabel={props.accessibilityLabel ?? label}
+        editable={editable}
         multiline={multiline}
-        placeholderTextColor={theme.textSecondary}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        placeholderTextColor={editable ? theme.foregroundMuted : theme.stateDisabledForeground}
         style={[
           styles.input,
           multiline && styles.multiline,
           {
-            backgroundColor: theme.card,
-            borderColor: error ? theme.danger : theme.border,
-            color: theme.text,
+            backgroundColor: editable ? theme.backgroundSurface : theme.stateDisabledSurface,
+            borderColor: error
+              ? theme.feedbackDangerBorder
+              : focused
+                ? theme.borderFocus
+                : editable
+                  ? theme.borderDefault
+                  : theme.borderDisabled,
+            borderWidth: focused ? borderWidths[2] : borderWidths[1],
+            color: editable ? theme.foregroundPrimary : theme.stateDisabledForeground,
+            ...(Platform.OS === 'web' && focused
+              ? ({
+                  outlineColor: theme.stateFocusRing,
+                  outlineOffset: 2,
+                  outlineStyle: 'solid',
+                  outlineWidth: borderWidths[2],
+                } as unknown as ViewStyle)
+              : undefined),
           },
           style,
         ]}
+        {...webValidationProps}
         {...props}
       />
-      {error ? <Text style={[styles.error, { color: theme.danger }]}>{error}</Text> : null}
+      {error ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          nativeID={errorId}
+          style={[styles.error, { color: theme.feedbackDangerOnSubtle }]}
+        >
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  wrapper: { gap: spacing.xs },
-  label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
+  wrapper: { gap: space[4] },
+  label: textStyles.uiLabelM,
   input: {
-    borderRadius: radii.md,
-    borderWidth: 1,
-    fontFamily: 'SUIT',
+    borderRadius: radius[12],
+    borderWidth: borderWidths[1],
     minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.md,
+    paddingHorizontal: space[12],
+    paddingVertical: space[8],
+    ...textStyles.uiCopyL,
   },
   multiline: {
-    fontFamily: 'Pretendard',
     minHeight: 160,
     textAlignVertical: 'top',
+    ...textStyles.contentM,
   },
-  error: { fontFamily: 'SUIT', ...typography.xsm },
+  error: textStyles.uiCopyS,
 });
 
 export const TextArea = forwardRef<TextInput, TextFieldProps>(function TextArea(props, ref) {

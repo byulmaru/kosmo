@@ -15,7 +15,13 @@ mockModule('react-native', {
 });
 mockModule(new URL('./BrandLogo.tsx', import.meta.url), { BrandLogo: 'BrandLogo' });
 mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
-  useTheme: () => ({ background: '#ffffff', border: '#dddddd', text: '#111111' }),
+  useTheme: () => ({
+    background: '#ffffff',
+    backgroundCanvas: '#f7f7f8',
+    border: '#dddddd',
+    borderSubtle: '#ececf0',
+    text: '#111111',
+  }),
 });
 
 type PageHeaderProps =
@@ -71,6 +77,14 @@ test('text variant exposes one visible heading in a 64px page bar', () => {
   assert.equal((header.props.style as Array<{ minHeight?: number }>)[0]?.minHeight, 64);
   assert.equal(headings.length, 1);
   assert.equal(headings[0]?.props.children, '알림');
+});
+
+test('page bar stays on the route canvas and uses only a subtle boundary', () => {
+  const header = renderHeader({ title: '북마크' });
+  const themeStyle = (header.props.style as Array<Record<string, unknown>>)[1];
+
+  assert.equal(themeStyle?.backgroundColor, '#f7f7f8');
+  assert.equal(themeStyle?.borderColor, '#ececf0');
 });
 
 test('text title shrinks and wraps within the available width beside a leading action', () => {

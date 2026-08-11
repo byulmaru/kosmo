@@ -53,7 +53,7 @@ DSN-18은 현재 구현을 그대로 정본으로 승인하지 않는다. 아래
 
 ## Reduced motion
 
-프로덕션 계약은 Web의 `prefers-reduced-motion`과 Android·iOS의 OS reduced-motion 설정만 입력으로 사용한다. 현재 구현에는 공통 adapter가 없으며 DSN-19가 반영한다. 앱 내부 override는 이번 범위에서 제공하지 않고, 장기 후속은 [PROD-745](https://linear.app/byulmaru/issue/PROD-745/kosmo-앱-내-motion-축소-사용자-설정-지원)가 소유한다.
+프로덕션 계약은 Web의 `prefers-reduced-motion`과 Android·iOS의 OS reduced-motion 설정만 입력으로 사용한다. `ThemeProvider`가 React Native `AccessibilityInfo`를 단일 입력 adapter로 제공하며, Storybook의 override는 검증 전용이다. 앱 내부 사용자 설정은 이번 범위에서 제공하지 않고, 장기 후속은 [PROD-745](https://linear.app/byulmaru/issue/PROD-745/kosmo-앱-내-motion-축소-사용자-설정-지원)가 소유한다.
 
 | 일반 표현                | OS reduced-motion에서의 대체                      |
 | ------------------------ | ------------------------------------------------- |
@@ -78,7 +78,7 @@ motion을 제거해도 focus, loading, success, error, selected와 announcement 
 ## Figma와 구현 경계
 
 - DSN-18: 이 문서, `KOSMO Motion` variable과 대표 Figma Motion timeline을 정본으로 고정한다.
-- DSN-19: shared motion token, OS preference adapter와 공용 primitive 표현을 구현한다.
+- DSN-19: shared motion token과 OS preference adapter를 구현하고, Button 상태 전환·ModalSheet·ActionMenu enter/exit·Reaction 800ms spinner·reduced-motion 정적 loading 대체에 적용한다. React Native system indicator는 위 플랫폼 예외를 유지한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 예외를 이관·검증한다.
 - DSN-13: 구현 확정 후 기존 Components/Screens에 같은 계약을 적용하고 최종 Figma evidence를 남긴다.
 

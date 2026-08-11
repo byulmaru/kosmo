@@ -45,7 +45,7 @@ export function AppProviders({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <ThemeProvider>
+    <ThemeProvider mode="light">
       <ToastProvider>
         <RelayActorProvider>
           <RelaySessionBoundary>{children}</RelaySessionBoundary>

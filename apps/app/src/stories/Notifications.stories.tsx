@@ -403,8 +403,8 @@ export const HeaderAndWebRefreshPolicy: Story = {
     expect(heading).toBeVisible();
     expect(headerRect.height).toBe(64);
     expect(headerRect.right - actionRect.right).toBe(16);
-    expect(actionStyle.backgroundColor).toBe('rgb(255, 255, 255)');
-    expect(actionStyle.borderColor).toBe('rgb(234, 234, 234)');
+    expect(actionStyle.backgroundColor).toBe('rgb(248, 248, 250)');
+    expect(actionStyle.borderColor).toBe('rgb(223, 223, 229)');
     expect(actionStyle.borderWidth).toBe('1px');
     expect(canvas.queryByRole('button', { name: '알림 설정 (준비 중)' })).not.toBeInTheDocument();
     expect(canvas.queryByText('KOSMO')).not.toBeInTheDocument();
@@ -505,7 +505,7 @@ export const ReadAllPendingAndFailureRetry: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
       '알림을 모두 읽지 못했어요.',
     );
-    expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible();
+    await waitFor(() => expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible());
     expect(
       canvas.getByRole('link', { name: /별빛 여행자님이 팔로우했습니다.*읽지 않은 알림/ }),
     ).toBeVisible();

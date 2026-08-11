@@ -1,6 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { radius, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
 
 type StateViewProps = {
@@ -21,19 +21,50 @@ export function StateView({
   title,
 }: StateViewProps) {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
 
   return (
-    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.root}>
-      {loading ? <ActivityIndicator accessibilityLabel={title} color={theme.text} /> : null}
-      <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+    <View
+      accessibilityRole={alert ? 'alert' : undefined}
+      style={[
+        styles.root,
+        alert
+          ? { backgroundColor: theme.feedbackDangerSubtle, borderRadius: radius[12] }
+          : undefined,
+      ]}
+    >
+      {loading ? (
+        reducedMotion ? (
+          <Text
+            accessible={false}
+            aria-hidden
+            style={[styles.loaderFallback, { color: theme.foregroundPrimary }]}
+          >
+            ···
+          </Text>
+        ) : (
+          <ActivityIndicator accessibilityLabel={title} color={theme.foregroundPrimary} />
+        )
+      ) : null}
+      <Text
+        style={[
+          styles.title,
+          { color: alert ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary },
+        ]}
+      >
+        {title}
+      </Text>
       {description ? (
-        <Text style={[styles.description, { color: theme.textSecondary }]}>{description}</Text>
+        <Text
+          style={[
+            styles.description,
+            { color: alert ? theme.feedbackDangerOnSubtle : theme.foregroundSecondary },
+          ]}
+        >
+          {description}
+        </Text>
       ) : null}
-      {actionLabel && onAction ? (
-        <Button onPress={onAction} tone="secondary">
-          {actionLabel}
-        </Button>
-      ) : null}
+      {actionLabel && onAction ? <Button onPress={onAction}>{actionLabel}</Button> : null}
     </View>
   );
 }
@@ -49,13 +80,19 @@ export function Skeleton({
   return (
     <View
       accessibilityElementsHidden
-      style={{ backgroundColor: theme.surface, borderRadius: 8, height, width }}
+      style={{
+        backgroundColor: theme.stateDisabledSurface,
+        borderRadius: radius[8],
+        height,
+        width,
+      }}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'center', gap: spacing.sm, padding: spacing.xxl },
-  title: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  description: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
+  root: { alignItems: 'center', gap: space[8], padding: space[32] },
+  title: { textAlign: 'center', ...textStyles.uiLabelL },
+  description: { textAlign: 'center', ...textStyles.uiCopyM },
+  loaderFallback: textStyles.uiLabelL,
 });

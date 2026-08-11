@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
 import { ModalSheet } from './ModalSheet';
 
@@ -46,11 +46,17 @@ export function SelectMenu<Value extends string>({
                 onChange(option.value);
                 setOpen(false);
               }}
-              style={[styles.option, { backgroundColor: active ? theme.surface : 'transparent' }]}
+              style={[
+                styles.option,
+                {
+                  backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
+                  borderColor: active ? theme.stateSelectedBorder : 'transparent',
+                },
+              ]}
             >
-              <Text style={[styles.label, { color: theme.text }]}>{option.label}</Text>
+              <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{option.label}</Text>
               {option.description ? (
-                <Text style={[styles.description, { color: theme.textSecondary }]}>
+                <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
                   {option.description}
                 </Text>
               ) : null}
@@ -63,7 +69,12 @@ export function SelectMenu<Value extends string>({
 }
 
 const styles = StyleSheet.create({
-  option: { borderRadius: radii.md, gap: spacing.xs, padding: spacing.md },
-  label: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  description: { fontFamily: 'SUIT', ...typography.sm },
+  option: {
+    borderRadius: radius[12],
+    borderWidth: borderWidths[1],
+    gap: space[4],
+    padding: space[12],
+  },
+  label: textStyles.uiLabelL,
+  description: textStyles.uiCopyM,
 });

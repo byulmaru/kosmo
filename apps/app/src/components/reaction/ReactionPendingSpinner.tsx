@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Platform, StyleSheet } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text } from 'react-native';
 import { Path, Svg } from 'react-native-svg';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
+import { motion, textStyles } from '@/theme/tokens';
 import type React from 'react';
 
 const SIZE = Platform.OS === 'web' ? 16 : 24;
@@ -12,7 +13,6 @@ const ARC_DEGREES = 180;
 const SEGMENT_COUNT = 18;
 const SEGMENT_DEGREES = ARC_DEGREES / SEGMENT_COUNT;
 const SEGMENT_OVERLAP = 0.5;
-const ROTATION_DURATION_MS = 820;
 
 type Point = Readonly<{ x: number; y: number }>;
 
@@ -43,12 +43,17 @@ const segments = Array.from({ length: SEGMENT_COUNT }, (_, index) => {
 
 export function ReactionPendingSpinner(): React.ReactElement {
   const theme = useTheme();
+  const reducedMotion = useReducedMotion();
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (reducedMotion) {
+      return;
+    }
+
     const animation = Animated.loop(
       Animated.timing(rotation, {
-        duration: ROTATION_DURATION_MS,
+        duration: motion.duration.loadingCycle,
         easing: Easing.linear,
         toValue: 1,
         useNativeDriver: false,
@@ -57,14 +62,22 @@ export function ReactionPendingSpinner(): React.ReactElement {
 
     animation.start();
     return () => animation.stop();
-  }, [rotation]);
+  }, [reducedMotion, rotation]);
 
   const rotate = rotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  return (
+  return reducedMotion ? (
+    <Text
+      accessible={false}
+      aria-hidden
+      style={[styles.fallback, { color: theme.foregroundSecondary }]}
+    >
+      ···
+    </Text>
+  ) : (
     <Animated.View
       style={[styles.spinner, { transform: [{ rotate }] }]}
       testID="reaction-pending-spinner"
@@ -75,7 +88,7 @@ export function ReactionPendingSpinner(): React.ReactElement {
             d={segment.d}
             fill="none"
             key={segment.d}
-            stroke={theme.textSecondary}
+            stroke={theme.foregroundSecondary}
             strokeLinecap={index === 0 || index === SEGMENT_COUNT - 1 ? 'round' : 'butt'}
             strokeOpacity={segment.opacity}
             strokeWidth={STROKE_WIDTH}
@@ -87,6 +100,7 @@ export function ReactionPendingSpinner(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
+  fallback: textStyles.uiLabelS,
   spinner: {
     height: SIZE,
     width: SIZE,
