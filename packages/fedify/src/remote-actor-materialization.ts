@@ -35,6 +35,7 @@ import {
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import type { Context } from '@fedify/fedify';
 import type { Actor, Image, LanguageString, Object as ActivityPubObject } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const remoteActorRefreshTtl = Temporal.Duration.from({ hours: 7 * 24 });
 
@@ -45,7 +46,7 @@ export class RemoteActorMaterializationError extends Error {
   }
 }
 
-type RemoteActorLookupContext = Pick<Context<void>, 'lookupObject'>;
+type RemoteActorLookupContext = Pick<Context<FedifyContextData>, 'lookupObject'>;
 
 type RemoteActorMaterializationOptions = {
   context: RemoteActorLookupContext;

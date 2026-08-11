@@ -25,9 +25,11 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
+import { createFedifyContextData } from './fedify-context';
 import { handleInboundUndo } from './inbound-follow';
 import { handleInboundReaction } from './inbound-reaction';
 import type { InboxContext } from '@fedify/fedify';
+import type { FedifyContextData } from './fedify-context';
 
 after(async () => {
   await pg.end();
@@ -89,8 +91,8 @@ const createLocalTarget = async () => {
   };
 };
 
-const createContext = (recipient: string | null): InboxContext<void> =>
-  ({ recipient }) as unknown as InboxContext<void>;
+const createContext = (recipient: string | null): InboxContext<FedifyContextData> =>
+  ({ data: createFedifyContextData(), recipient }) as unknown as InboxContext<FedifyContextData>;
 
 const readReaction = (profileId: string, postId: string) =>
   db

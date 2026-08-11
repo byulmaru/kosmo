@@ -15,13 +15,14 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Object as ActivityPubObject, Update } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Update: ${url}`);
 };
 
 export const handleInboundUpdate = async (
-  _context: InboxContext<void>,
+  _context: InboxContext<FedifyContextData>,
   update: Update,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {

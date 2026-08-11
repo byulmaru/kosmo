@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { isHttpUri } from './activitypub-uri';
 import { getFollowActivityUri } from './follow-delivery';
 import type { RequestContext } from '@fedify/fedify';
+import type { FedifyContextData } from './fedify-context';
 
 const FollowerProfiles = alias(Profiles, 'outbound_follow_follower_profile');
 const FollowerInstances = alias(Instances, 'outbound_follow_follower_instance');
@@ -29,7 +30,7 @@ const followIdSchema = z.uuid().refine((value) => value === value.toLowerCase())
 type FollowProjectionTable = typeof ProfileFollowRequests | typeof ProfileFollows;
 
 const loadOutboundFollow = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   table: FollowProjectionTable,
   id: string,
 ) =>
@@ -64,7 +65,7 @@ const loadOutboundFollow = async (
     .then(first);
 
 export const dispatchLocalProfileFollow = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<Follow | null> => {
   if (

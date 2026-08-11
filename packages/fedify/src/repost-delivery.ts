@@ -24,6 +24,7 @@ import { resolveActivityPubPostUri } from './activitypub-post-uri';
 import { federation } from './federation';
 import type { Context } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const FollowerProfiles = alias(Profiles, 'repost_delivery_follower_profile');
 const FollowerInstances = alias(Instances, 'repost_delivery_follower_instance');
@@ -55,7 +56,7 @@ const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 
 const loadRepostProjection = async (
-  context: Context<void>,
+  context: Context<FedifyContextData>,
   repostId: string,
   kind: RepostDeliveryKind,
 ): Promise<RepostProjection | undefined> => {
@@ -192,7 +193,7 @@ const createAnnounce = (projection: RepostProjection): Announce =>
 
 const sendRepostActivity = async (repostId: string, kind: RepostDeliveryKind): Promise<void> => {
   const localInstance = await resolveConfiguredLocalInstance();
-  const context = federation.createContext(new URL(localInstance.canonicalOrigin), undefined);
+  const context = federation.createContext(new URL(localInstance.canonicalOrigin), { db });
   const projection = await loadRepostProjection(context, repostId, kind);
   if (!projection) {
     return;

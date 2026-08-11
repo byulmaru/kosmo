@@ -1,9 +1,10 @@
 import { Accept } from '@fedify/vocab';
 import type { Context } from '@fedify/fedify';
 import type { Follow, Recipient } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 type FollowDeliveryContext = Pick<
-  Context<void>,
+  Context<FedifyContextData>,
   'canonicalOrigin' | 'getActorUri' | 'sendActivity'
 >;
 

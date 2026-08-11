@@ -44,10 +44,11 @@ import { createLocalProfilePerson } from './local-profile-person';
 import { fedifyQueue } from './queue';
 import { resolveLocalActorIdentifierByHandle } from './webfinger';
 import type { Context, Federation } from '@fedify/fedify';
+import type { FedifyContextData } from './fedify-context';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 
-export const federation: Federation<void> = createFederation<void>({
+export const federation: Federation<FedifyContextData> = createFederation<FedifyContextData>({
   allowPrivateAddress: false,
   kv: new MemoryKvStore(),
   ...(fedifyQueue
@@ -104,7 +105,7 @@ federation
   });
 
 const findActiveLocalProfile = async (
-  context: Pick<Context<void>, 'canonicalOrigin' | 'host'>,
+  context: Pick<Context<FedifyContextData>, 'canonicalOrigin' | 'host'>,
   profileId: string,
 ) => {
   // Multiple Local Instances are valid domain state. This runtime currently serves only its

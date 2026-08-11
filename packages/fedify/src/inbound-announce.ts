@@ -1,17 +1,19 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubPosts, db, first, isUniqueViolation, Posts } from '@kosmo/core/db';
+import { ActivityPubPosts, first, isUniqueViolation, Posts } from '@kosmo/core/db';
 import { InstanceState, PostState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
 import { repostPost } from '@kosmo/core/services';
 import { eq, or } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { getFedifyDatabase } from './fedify-context';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Announce } from '@fedify/vocab';
 import type { Transaction } from '@kosmo/core/db';
+import type { FedifyContextData } from './fedify-context';
 
 const isExpectedRepostRejection = (error: unknown): boolean =>
   error instanceof NotFoundError ||
@@ -94,10 +96,11 @@ const saveCurrentAnnounce = async (
 };
 
 export const handleInboundAnnounce = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   announce: Announce,
   receivedAt: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
+  const database = getFedifyDatabase(context.data);
   const activityUri = announce.id;
   const actorHref = uniqueHref(announce.actorIds);
   const objectHref = uniqueHref(announce.objectIds);
@@ -143,7 +146,7 @@ export const handleInboundAnnounce = async (
     return;
   }
 
-  const sourcePostId = await findPostByActivityPubUri(context, objectUri);
+  const sourcePostId = await findPostByActivityPubUri(context, objectUri, database);
   if (!sourcePostId) {
     observeInboundNoop({
       activityType: 'Announce',
@@ -158,7 +161,7 @@ export const handleInboundAnnounce = async (
 
   let materialized: Awaited<ReturnType<typeof repostPost>>;
   try {
-    materialized = await db.transaction(async (tx) => {
+    materialized = await database.transaction(async (tx) => {
       let result = await repostPost(
         {
           actorProfileId: storedActor.profile.id,
@@ -209,5 +212,5 @@ export const handleInboundAnnounce = async (
     throw error;
   }
 
-  await materialized.postCommit();
+  await materialized.postCommit(database);
 };

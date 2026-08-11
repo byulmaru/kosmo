@@ -14,9 +14,11 @@ import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { reactionTypes, reactionTypeSchema } from '@kosmo/core/validation';
 import { and, count, desc, eq, inArray, isNotNull, lt, ne, or, sql } from 'drizzle-orm';
 import { isCanonicalPostId } from './activitypub-post-uri';
+import { getFedifyDatabase } from './fedify-context';
 import { loadLocalPostNote } from './local-post-note';
 import type { PageItems, RequestContext } from '@fedify/fedify';
 import type { SQLWrapper } from 'drizzle-orm';
+import type { FedifyContextData } from './fedify-context';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';
@@ -200,11 +202,11 @@ const projectReaction = (
 };
 
 export const dispatchLocalPostEmojiReactions = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
   rawCursor: string | null,
 ): Promise<PageItems<Like | EmojiReact> | null> => {
-  const note = await loadLocalPostNote(context, id);
+  const note = await loadLocalPostNote(context, id, getFedifyDatabase(context.data));
   const cursor = parseCursor(rawCursor);
   if (!note || !cursor) {
     return null;
@@ -281,10 +283,10 @@ export const dispatchLocalPostEmojiReactions = async (
 };
 
 export const countLocalPostEmojiReactions = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<number | null> => {
-  const note = await loadLocalPostNote(context, id);
+  const note = await loadLocalPostNote(context, id, getFedifyDatabase(context.data));
   if (!note) {
     return null;
   }
@@ -301,6 +303,7 @@ export const countLocalPostEmojiReactions = async (
 };
 
 export const firstLocalPostEmojiReactionsCursor = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
-): Promise<string | null> => ((await loadLocalPostNote(context, id)) ? FIRST_CURSOR : null);
+): Promise<string | null> =>
+  (await loadLocalPostNote(context, id, getFedifyDatabase(context.data))) ? FIRST_CURSOR : null;

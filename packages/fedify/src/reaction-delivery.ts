@@ -183,7 +183,7 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
     return;
   }
 
-  const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
+  const context = federation.createContext(new URL(projection.canonicalOrigin), { db });
   const activity = createReactionActivity(projection);
   const orderingKey = getReactionActivityUri(projection.canonicalOrigin, reaction.id).href;
   await context.sendActivity(projection.senderKeys, projection.recipient, activity, {
@@ -198,7 +198,7 @@ export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void
     return;
   }
 
-  const context = federation.createContext(new URL(projection.canonicalOrigin), undefined);
+  const context = federation.createContext(new URL(projection.canonicalOrigin), { db });
   const originalActivity = createReactionActivity(projection);
   if (!originalActivity.id) {
     throw new TypeError('ActivityPub Reaction must have an ID.');

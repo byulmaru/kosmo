@@ -10,9 +10,10 @@ import {
 import { findUsableStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Accept } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 export const handleInboundAccept = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   accept: Accept,
 ): Promise<void> => {
   const actorUri = accept.actorId;

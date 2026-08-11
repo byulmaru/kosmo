@@ -4,7 +4,6 @@ import { EmojiReact, Follow, Like } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
-  db,
   first,
   Instances,
   Posts,
@@ -20,6 +19,7 @@ import {
 } from '@kosmo/core/services';
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { getFedifyDatabase } from './fedify-context';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import {
@@ -35,6 +35,7 @@ import {
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const getNow = () => Temporal.Now.instant();
 
@@ -56,7 +57,7 @@ const toRecipient = (actor: typeof ActivityPubActors.$inferSelect): Recipient | 
 };
 
 export const handleInboundFollow = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   follow: Follow,
   now: Temporal.Instant = getNow(),
 ): Promise<void> => {
@@ -188,10 +189,12 @@ const noNetworkDocumentLoader = async (url: string) => {
 type UndoAnnounceResult = 'deleted' | 'ignored' | null;
 
 const handleInboundUndoAnnounce = async (
+  context: InboxContext<FedifyContextData>,
   activityUri: URL,
   actorUri: URL,
 ): Promise<UndoAnnounceResult> => {
-  const result = await db.transaction(async (tx) => {
+  const database = getFedifyDatabase(context.data);
+  const result = await database.transaction(async (tx) => {
     const row = await tx
       .select({
         actorUri: ActivityPubActors.uri,
@@ -244,13 +247,17 @@ const handleInboundUndoAnnounce = async (
   });
 
   if (result?.outcome === 'deleted') {
-    await result.postCommit();
+    await result.postCommit(database);
   }
 
   return result?.outcome ?? null;
 };
 
-export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {
+export const handleInboundUndo = async (
+  context: InboxContext<FedifyContextData>,
+  undo: Undo,
+): Promise<void> => {
+  const database = getFedifyDatabase(context.data);
   const actorHref = uniqueHref(undo.actorIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
   if (!isHttpUri(actorUri)) {
@@ -287,7 +294,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   if (objectUri) {
-    const announceResult = await handleInboundUndoAnnounce(objectUri, actorUri);
+    const announceResult = await handleInboundUndoAnnounce(context, objectUri, actorUri);
     if (announceResult === 'deleted') {
       return;
     }
@@ -436,21 +443,24 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
     return;
   }
 
-  const result = await undoInboundReaction({
-    activityUri: activityUri.href,
-    actorUri: actorUri.href,
-    onPostCommitError: (error) =>
-      observeInbound({
-        activityType: 'Undo',
-        actorOrigin: actorUri.origin,
-        error,
-        handler: 'undo',
-        objectOrigin: activityUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'reaction_undo_notification_effect_failed',
-      }),
-  });
+  const result = await undoInboundReaction(
+    {
+      activityUri: activityUri.href,
+      actorUri: actorUri.href,
+      onPostCommitError: (error) =>
+        observeInbound({
+          activityType: 'Undo',
+          actorOrigin: actorUri.origin,
+          error,
+          handler: 'undo',
+          objectOrigin: activityUri.origin,
+          outcome: 'internal_failure',
+          phase: 'effect',
+          reasonCode: 'reaction_undo_notification_effect_failed',
+        }),
+    },
+    database,
+  );
   if (result.reactionId === null) {
     observeInboundNoop({
       activityType: 'Undo',

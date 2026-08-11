@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
-import { createOperationDatabase, db } from './index';
+import { createDatabaseOwner, createOperationDatabase, db } from './index';
 
-type OperationClient = {
+type OwnedClient = {
   options: {
     host: string[];
     max: number;
@@ -11,8 +11,8 @@ type OperationClient = {
   end: (options?: { timeout?: number }) => Promise<void>;
 };
 
-const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
-  (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
+const getClient = (owner: ReturnType<typeof createDatabaseOwner>) =>
+  (owner.db as unknown as { _: { session: { client: OwnedClient } } })._.session.client;
 
 test('keeps operation client bounded and isolated from direct startup parameters', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
@@ -37,6 +37,33 @@ test('keeps operation client bounded and isolated from direct startup parameters
   await firstForceClose;
   assert.deepEqual(forceEnd.mock.calls[0]?.arguments, [{ timeout: 0 }]);
   assert.equal(forceEnd.mock.calls.length, 1);
+});
+
+test('creates a bounded owner from the direct database endpoint by default', async () => {
+  const previousOperationUrl = process.env.OPERATION_DATABASE_URL;
+  const previousDatabaseUrl = process.env.DATABASE_URL;
+
+  try {
+    process.env.DATABASE_URL = 'postgres://kosmo@direct.example:5432/kosmo';
+    process.env.OPERATION_DATABASE_URL = 'postgres://kosmo@operation.example:5432/kosmo';
+
+    const owner = createDatabaseOwner();
+    assert.deepEqual(getClient(owner).options.host, ['direct.example']);
+    assert.equal(getClient(owner).options.max, 1);
+    assert.equal(getClient(owner).options.connect_timeout, 5);
+    await owner.close();
+  } finally {
+    if (previousOperationUrl === undefined) {
+      delete process.env.OPERATION_DATABASE_URL;
+    } else {
+      process.env.OPERATION_DATABASE_URL = previousOperationUrl;
+    }
+    if (previousDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+  }
 });
 
 test('prefers the operation endpoint and falls back to the direct endpoint', async () => {

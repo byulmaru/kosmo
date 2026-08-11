@@ -1,3 +1,4 @@
+import { createDatabaseOwner } from '@kosmo/core/db';
 import { setNotificationEffectErrorReporter } from '@kosmo/core/services';
 import { federation, setInboundObservabilityReporter } from '@kosmo/fedify';
 import { Hono } from 'hono';
@@ -17,6 +18,7 @@ const app = new Hono();
 setNotificationEffectErrorReporter(captureNotificationEffectError);
 
 app.use('*', async (c, next) => {
+  const database = createDatabaseOwner(process.env.DATABASE_URL!);
   const fallThrough = async () => {
     await next();
     return new Response(c.res.body, c.res);
@@ -33,12 +35,24 @@ app.use('*', async (c, next) => {
     });
   };
 
-  const response = await federation.fetch(c.req.raw, {
-    contextData: undefined,
-    onNotAcceptable: fallThroughNotAcceptable,
-    onNotFound: fallThrough,
-    onUnauthorized: fallThrough,
-  });
+  let response: Response;
+  try {
+    response = await federation.fetch(c.req.raw, {
+      contextData: { db: database.db },
+      onNotAcceptable: fallThroughNotAcceptable,
+      onNotFound: fallThrough,
+      onUnauthorized: fallThrough,
+    });
+  } catch (error) {
+    try {
+      await database.close({ force: true });
+    } catch {
+      // Preserve the federation or downstream route error as the response cause.
+    }
+    throw error;
+  }
+
+  await database.close();
 
   c.res = response;
   return c.res;

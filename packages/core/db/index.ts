@@ -31,9 +31,26 @@ export type Database = typeof db;
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 export type DatabaseHandle = Database | Transaction;
 
-export type OperationDatabaseOwner = {
+export type DatabaseOwner = {
   db: Database;
   close: (options?: { force?: boolean }) => Promise<void>;
+};
+
+export type OperationDatabaseOwner = DatabaseOwner;
+
+export const createDatabaseOwner = (databaseUrl = process.env.DATABASE_URL!): DatabaseOwner => {
+  const client = postgres(databaseUrl, {
+    ...postgresConnectionOptions,
+    connect_timeout: 5,
+    max: 1,
+  });
+  const ownedDb = drizzle({ client, schema });
+  let closeTask: Promise<void> | undefined;
+
+  return {
+    db: ownedDb,
+    close: (options) => (closeTask ??= options?.force ? client.end({ timeout: 0 }) : client.end()),
+  };
 };
 
 /**

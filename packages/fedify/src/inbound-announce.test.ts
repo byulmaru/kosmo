@@ -18,11 +18,13 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
 import { and, eq, ne, sql } from 'drizzle-orm';
+import { createFedifyContextData } from './fedify-context';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
+import type { FedifyContextData } from './fedify-context';
 import type { handleInboundAnnounce as HandleInboundAnnounce } from './inbound-announce';
 import type { handleInboundUndo as HandleInboundUndo } from './inbound-follow';
 
@@ -36,6 +38,7 @@ const receivedAt = Temporal.Instant.from('2026-07-27T00:00:00Z');
 
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
+let createDatabaseOwner: typeof CoreDb.createDatabaseOwner;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -56,6 +59,7 @@ describe('inbound Announce materialization', () => {
     ({
       ActivityPubActors,
       ActivityPubPosts,
+      createDatabaseOwner,
       db,
       firstOrThrow,
       Instances,
@@ -102,6 +106,24 @@ describe('inbound Announce materialization', () => {
     assert.equal(repost.visibility, PostVisibility.UNLISTED);
     assert.equal(repost.state, PostState.ACTIVE);
     assert.equal(mapping.receivedAt.toString(), receivedAt.toString());
+  });
+
+  test('uses the database owner supplied by the trusted ingress context', async () => {
+    await createRemoteActor(actorUri);
+    await createRemoteSource();
+    const owner = createDatabaseOwner(databaseUrl);
+    const transaction = mock.method(owner.db, 'transaction');
+
+    try {
+      await handleInboundAnnounce(
+        context(owner.db),
+        announce('explicit-owner', sourceUri),
+        receivedAt,
+      );
+      assert.equal(transaction.mock.callCount(), 1);
+    } finally {
+      await owner.close();
+    }
   });
 
   test('accepts an exact canonical local Note URI without an ActivityPub mapping', async () => {
@@ -352,9 +374,11 @@ describe('inbound Announce materialization', () => {
     try {
       const [personal, shared] = await Promise.all([
         federation.fetch(await createSignedRequest(`/ap/actor/${localProfileId}/inbox`), {
-          contextData: undefined,
+          contextData: createFedifyContextData(),
         }),
-        federation.fetch(await createSignedRequest('/inbox'), { contextData: undefined }),
+        federation.fetch(await createSignedRequest('/inbox'), {
+          contextData: createFedifyContextData(),
+        }),
       ]);
 
       assert.equal(personal.status, 202, await personal.text());
@@ -518,15 +542,18 @@ describe('inbound Announce materialization', () => {
   });
 });
 
-const context = () =>
+const context = (database: CoreDb.Database = db) =>
   ({
     canonicalOrigin: publicOrigin,
+    data: createFedifyContextData(database),
     documentLoader: async (url: string) => {
       throw new Error(`Unexpected document URL: ${url}`);
     },
     parseUri: (uri: URL | null) =>
-      federation.createContext(new URL(publicOrigin), undefined).parseUri(uri),
-  }) as unknown as InboxContext<void>;
+      federation
+        .createContext(new URL(publicOrigin), createFedifyContextData(database))
+        .parseUri(uri),
+  }) as unknown as InboxContext<FedifyContextData>;
 
 const announce = (id: string, object: URL) =>
   new Announce({

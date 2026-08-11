@@ -4,7 +4,6 @@ import { Tombstone } from '@fedify/vocab';
 import {
   ActivityPubActors,
   ActivityPubPosts,
-  db,
   first,
   Instances,
   Posts,
@@ -14,6 +13,7 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { deletePost } from '@kosmo/core/services';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { getFedifyDatabase } from './fedify-context';
 import {
   observeInboundExternalFailure,
   observeInboundNoop,
@@ -21,15 +21,17 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Delete } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const noNetworkDocumentLoader = async (url: string) => {
   throw new Error(`Network lookup is disabled for inbound Delete: ${url}`);
 };
 
 export const handleInboundDelete = async (
-  _context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   activity: Delete,
 ): Promise<void> => {
+  const database = getFedifyDatabase(context.data);
   const actorHref = uniqueHref(activity.actorIds);
   const objectHref = uniqueHref(activity.objectIds);
   const actorUri = actorHref ? new URL(actorHref) : null;
@@ -77,7 +79,7 @@ export const handleInboundDelete = async (
     return;
   }
 
-  const result = await db.transaction(async (tx) => {
+  const result = await database.transaction(async (tx) => {
     const row = await tx
       .select({
         actorUri: ActivityPubActors.uri,
@@ -117,5 +119,5 @@ export const handleInboundDelete = async (
     return deleted;
   });
 
-  await result?.postCommit();
+  await result?.postCommit(database);
 };

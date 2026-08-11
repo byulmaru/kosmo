@@ -2,9 +2,10 @@ import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/d
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { and, eq } from 'drizzle-orm';
 import type { InboxContext } from '@fedify/fedify';
+import type { FedifyContextData } from './fedify-context';
 
 export const resolveInboundLocalRecipient = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   actorUri: URL,
 ): Promise<typeof Profiles.$inferSelect | undefined> => {
   if (context.recipient !== null && context.getActorUri(context.recipient).href !== actorUri.href) {

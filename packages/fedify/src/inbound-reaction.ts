@@ -4,6 +4,7 @@ import { Like } from '@fedify/vocab';
 import { materializeInboundReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { getFedifyDatabase } from './fedify-context';
 import {
   observeInbound,
   observeInboundNoop,
@@ -11,6 +12,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { EmojiReact } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const fallbackReactionType = '❤️';
 
@@ -22,9 +24,10 @@ const toReactionType = (activity: Like | EmojiReact): string => {
 };
 
 export const handleInboundReaction = async (
-  _context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   activity: Like | EmojiReact,
 ): Promise<void> => {
+  const database = getFedifyDatabase(context.data);
   const activityUri = activity.id;
   const actorUri = uniqueHref(activity.actorIds);
   const objectUri = uniqueHref(activity.objectIds);
@@ -38,23 +41,26 @@ export const handleInboundReaction = async (
     return;
   }
 
-  const result = await materializeInboundReaction({
-    activityUri: activityUri.href,
-    actorUri,
-    objectUri,
-    onPostCommitError: (error) =>
-      observeInbound({
-        activityType: activity instanceof Like ? 'Like' : 'EmojiReact',
-        actorOrigin: actorUri,
-        error,
-        handler: 'reaction',
-        objectOrigin: objectUri,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'reaction_notification_effect_failed',
-      }),
-    type: toReactionType(activity),
-  });
+  const result = await materializeInboundReaction(
+    {
+      activityUri: activityUri.href,
+      actorUri,
+      objectUri,
+      onPostCommitError: (error) =>
+        observeInbound({
+          activityType: activity instanceof Like ? 'Like' : 'EmojiReact',
+          actorOrigin: actorUri,
+          error,
+          handler: 'reaction',
+          objectOrigin: objectUri,
+          outcome: 'internal_failure',
+          phase: 'effect',
+          reasonCode: 'reaction_notification_effect_failed',
+        }),
+      type: toReactionType(activity),
+    },
+    database,
+  );
   const activityType = activity instanceof Like ? 'Like' : 'EmojiReact';
   if (result.kind === 'REJECTED') {
     observeInboundRejected({

@@ -6,6 +6,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import type { DatabaseOwner } from '@kosmo/core/db';
 import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
@@ -17,6 +18,8 @@ const {
   authorizationCodeGrant,
   captureNotificationEffectError,
   captureUnexpectedError,
+  closeDatabase,
+  createDatabaseOwner,
   createSession,
   discovery,
   federationFetch,
@@ -27,6 +30,8 @@ const {
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
   captureNotificationEffectError: vi.fn(),
   captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+  closeDatabase: vi.fn<DatabaseOwner['close']>(),
+  createDatabaseOwner: vi.fn<() => DatabaseOwner>(),
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
@@ -50,6 +55,8 @@ vi.mock('@kosmo/core/services', () => ({
   revokeCurrentSession: revokeSession,
   setNotificationEffectErrorReporter,
 }));
+
+vi.mock('@kosmo/core/db', () => ({ createDatabaseOwner }));
 
 vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
@@ -111,6 +118,11 @@ beforeEach(() => {
   );
   createSession.mockResolvedValue('kosmo-session-token');
   revokeSession.mockResolvedValue({ status: 'REVOKED' });
+  closeDatabase.mockResolvedValue(undefined);
+  createDatabaseOwner.mockReturnValue({
+    close: closeDatabase,
+    db: { requestDatabase: true } as unknown as DatabaseOwner['db'],
+  });
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -449,6 +461,50 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
+  test('supplies a fresh owner database to federation and closes it after the response', async () => {
+    let requestId = 0;
+    createDatabaseOwner.mockImplementation(() => ({
+      close: closeDatabase,
+      db: { requestId: ++requestId } as unknown as DatabaseOwner['db'],
+    }));
+    federationFetch.mockImplementation(async () => new Response('accepted', { status: 202 }));
+
+    const firstResponse = await app.request('/inbox', { method: 'POST' });
+    const secondResponse = await app.request('/inbox', { method: 'POST' });
+    const firstOwner = createDatabaseOwner.mock.results[0]?.value;
+    const secondOwner = createDatabaseOwner.mock.results[1]?.value;
+
+    expect(firstResponse.status).toBe(202);
+    expect(secondResponse.status).toBe(202);
+    expect(createDatabaseOwner).toHaveBeenCalledTimes(2);
+    expect(createDatabaseOwner).toHaveBeenNthCalledWith(1, process.env.DATABASE_URL);
+    expect(createDatabaseOwner).toHaveBeenNthCalledWith(2, process.env.DATABASE_URL);
+    expect(firstOwner?.db).not.toBe(secondOwner?.db);
+    expect(federationFetch.mock.calls[0]?.[1].contextData).toEqual({ db: firstOwner?.db });
+    expect(federationFetch.mock.calls[1]?.[1].contextData).toEqual({ db: secondOwner?.db });
+    expect(closeDatabase).toHaveBeenCalledTimes(2);
+    expect(closeDatabase).toHaveBeenNthCalledWith(1);
+    expect(closeDatabase).toHaveBeenNthCalledWith(2);
+    expect(federationFetch.mock.invocationCallOrder[0]).toBeLessThan(
+      closeDatabase.mock.invocationCallOrder[0]!,
+    );
+    expect(federationFetch.mock.invocationCallOrder[1]).toBeLessThan(
+      closeDatabase.mock.invocationCallOrder[1]!,
+    );
+  });
+
+  test('force-closes the owner while preserving a federation failure', async () => {
+    const failure = new Error('federation failed');
+    federationFetch.mockRejectedValueOnce(failure);
+
+    const response = await app.request('/inbox', { method: 'POST' });
+
+    expect(response.status).toBe(500);
+    expect(closeDatabase).toHaveBeenCalledOnce();
+    expect(closeDatabase).toHaveBeenCalledWith({ force: true });
+    expect(captureUnexpectedError).toHaveBeenCalledWith(failure);
+  });
+
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },
@@ -608,12 +664,19 @@ describe('runtime routing', () => {
   });
 
   test('falls through when federation declines the requested representation', async () => {
+    const events: string[] = [];
     federationFetch.mockImplementation(async (request, options) => {
       if (!options.onNotAcceptable) {
         throw new Error('Missing federation representation fallback');
       }
 
-      return options.onNotAcceptable(request);
+      events.push('federation:start');
+      const response = await options.onNotAcceptable(request);
+      events.push('federation:end');
+      return response;
+    });
+    closeDatabase.mockImplementation(async () => {
+      events.push('database:close');
     });
 
     const response = await app.request('/@alice/post-id', {
@@ -622,6 +685,9 @@ describe('runtime routing', () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('<html>expo app</html>');
+    expect(events).toEqual(['federation:start', 'federation:end', 'database:close']);
+    expect(closeDatabase).toHaveBeenCalledOnce();
+    expect(closeDatabase).toHaveBeenCalledWith();
   });
 
   test('preserves a federation 406 when no BFF route accepts the request', async () => {

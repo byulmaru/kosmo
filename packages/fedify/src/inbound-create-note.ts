@@ -10,6 +10,7 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
+import { getFedifyDatabase } from './fedify-context';
 import {
   observeInbound,
   observeInboundNoop,
@@ -17,6 +18,7 @@ import {
 } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
 
 type StoredRemoteProfileActor = NonNullable<
@@ -83,9 +85,10 @@ export const projectRemoteNoteMedia = async (note: Note) => {
 };
 
 const resolveReplyParentId = async (
-  context: InboxContext<void>,
+  context: InboxContext<FedifyContextData>,
   note: Note,
 ): Promise<string | undefined> => {
+  const database = getFedifyDatabase(context.data);
   const replyTargetHref = uniqueHref(note.replyTargetIds);
   if (!replyTargetHref) {
     return undefined;
@@ -96,7 +99,7 @@ const resolveReplyParentId = async (
     return undefined;
   }
 
-  return findPostByActivityPubUri(context, replyTarget);
+  return findPostByActivityPubUri(context, replyTarget, database);
 };
 
 const hasEstablishedFollower = async ({
@@ -137,12 +140,13 @@ export const handleInboundCreateNote = async ({
   receivedAt,
 }: {
   actorUri: string;
-  context: InboxContext<void>;
+  context: InboxContext<FedifyContextData>;
   note: Note;
   objectUri: string;
   storedActor: StoredRemoteProfileActor;
   receivedAt: Temporal.Instant;
 }): Promise<void> => {
+  const database = getFedifyDatabase(context.data);
   if (note.id?.href !== objectUri) {
     observeInboundRejected({
       activityType: 'Create',
@@ -265,7 +269,7 @@ export const handleInboundCreateNote = async ({
     });
 
   try {
-    const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
+    const result = await createPost(replyParentId ? { ...input, replyParentId } : input, database);
     if (!result.created) {
       observeDuplicateCreate();
     }
@@ -299,7 +303,7 @@ export const handleInboundCreateNote = async ({
       phase: 'projection',
       reasonCode: 'reply_parent_missing_fallback',
     });
-    const result = await createPost(input);
+    const result = await createPost(input, database);
     if (!result.created) {
       observeDuplicateCreate();
     }

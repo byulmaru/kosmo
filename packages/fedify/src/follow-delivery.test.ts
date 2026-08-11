@@ -4,6 +4,7 @@ import { Accept, Follow, Person } from '@fedify/vocab';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import type { Context } from '@fedify/fedify';
 import type { Activity, Recipient } from '@fedify/vocab';
+import type { FedifyContextData } from './fedify-context';
 
 const canonicalOrigin = 'https://kos.moe';
 const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
@@ -72,7 +73,7 @@ const createContextFixture = () => {
     ) => {
       calls.push({ activity, options, recipient, sender });
     },
-  } as Pick<Context<void>, 'canonicalOrigin' | 'getActorUri' | 'sendActivity'>;
+  } as Pick<Context<FedifyContextData>, 'canonicalOrigin' | 'getActorUri' | 'sendActivity'>;
 
   return { calls, context };
 };

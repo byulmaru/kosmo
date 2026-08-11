@@ -14,7 +14,8 @@ import {
 import { InstanceKind, InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
 import { reactionTypeSchema } from '../validation';
 import { addReaction, deleteReaction } from './reaction';
-import type { Transaction } from '../db';
+import type { Database, Transaction } from '../db';
+import type { PostCommit } from './post-commit';
 
 type MaterializeInboundReactionInput = {
   readonly activityUri: string;
@@ -160,6 +161,7 @@ const isSameReaction = (
 
 export const materializeInboundReaction = async (
   input: MaterializeInboundReactionInput,
+  database: Database = db,
 ): Promise<MaterializeInboundReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(input.type);
   if (
@@ -172,10 +174,10 @@ export const materializeInboundReaction = async (
   }
 
   let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }> & {
-    readonly postCommit: () => Promise<void>;
+    readonly postCommit: PostCommit;
   };
   try {
-    result = await db.transaction(async (tx) => {
+    result = await database.transaction(async (tx) => {
       const actor = await tx
         .select({ profileId: Profiles.id })
         .from(ActivityPubActors)
@@ -255,25 +257,28 @@ export const materializeInboundReaction = async (
     throw error;
   }
 
-  await result.postCommit();
+  await result.postCommit(database);
 
   return { kind: result.kind, reaction: result.reaction };
 };
 
-export const undoInboundReaction = async ({
-  activityUri,
-  actorUri,
-  onPostCommitError,
-}: {
-  readonly activityUri: string;
-  readonly actorUri: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
-}): Promise<{ readonly reactionId: string | null }> => {
+export const undoInboundReaction = async (
+  {
+    activityUri,
+    actorUri,
+    onPostCommitError,
+  }: {
+    readonly activityUri: string;
+    readonly actorUri: string;
+    readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
+  },
+  database: Database = db,
+): Promise<{ readonly reactionId: string | null }> => {
   if (!isHttpUri(activityUri) || !isHttpUri(actorUri)) {
     return { reactionId: null };
   }
 
-  const deleted = await db.transaction(async (tx) => {
+  const deleted = await database.transaction(async (tx) => {
     const mapped = await tx
       .select({ reaction: Reactions })
       .from(ActivityPubReactions)
@@ -311,7 +316,7 @@ export const undoInboundReaction = async ({
     return deleted;
   });
 
-  await deleted?.postCommit();
+  await deleted?.postCommit(database);
 
   return { reactionId: deleted?.reaction?.id ?? null };
 };

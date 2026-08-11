@@ -35,12 +35,14 @@ import {
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
 import { eq, ne, sql } from 'drizzle-orm';
+import { createFedifyContextData } from './fedify-context';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as CoreServices from '@kosmo/core/services';
 import type { findPostByActivityPubUri as findPostByActivityPubUriType } from './activitypub-post-uri';
+import type { FedifyContextData } from './fedify-context';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -1154,7 +1156,7 @@ describe('inbound Create dispatch', () => {
         undefined,
         audience,
       ),
-      { contextData: undefined },
+      { contextData: createFedifyContextData() },
     );
     const sharedResponse = await fixture.federation.fetch(
       await fixture.createSignedCreateRequest(
@@ -1164,7 +1166,7 @@ describe('inbound Create dispatch', () => {
         undefined,
         audience,
       ),
-      { contextData: undefined },
+      { contextData: createFedifyContextData() },
     );
 
     assert.equal(personalResponse.status, 202, await personalResponse.text());
@@ -1193,7 +1195,7 @@ describe('inbound Create dispatch', () => {
           objectUri,
           new URL('https://remote.example/activities/create-concurrent-personal'),
         ),
-        { contextData: undefined },
+        { contextData: createFedifyContextData() },
       ),
       fixture.federation.fetch(
         await fixture.createSignedCreateRequest(
@@ -1201,7 +1203,7 @@ describe('inbound Create dispatch', () => {
           objectUri,
           new URL('https://remote.example/activities/create-concurrent-shared'),
         ),
-        { contextData: undefined },
+        { contextData: createFedifyContextData() },
       ),
     ]);
 
@@ -1232,11 +1234,11 @@ describe('inbound Create dispatch', () => {
           new URL('https://remote.example/activities/create-reply-personal'),
           parentUri,
         ),
-        { contextData: undefined },
+        { contextData: createFedifyContextData() },
       ),
       fixture.federation.fetch(
         await fixture.createSignedCreateRequest('/inbox', replyUri, null, parentUri),
-        { contextData: undefined },
+        { contextData: createFedifyContextData() },
       ),
     ]);
 
@@ -1469,10 +1471,11 @@ const createContext = (
 ) =>
   ({
     canonicalOrigin: publicOrigin,
+    data: createFedifyContextData(),
     documentLoader,
     parseUri: (uri: URL | null) => uriContext.parseUri(uri),
     recipient,
-  }) as unknown as InboxContext<void>;
+  }) as unknown as InboxContext<FedifyContextData>;
 
 const createRemoteCreate = ({ objectUri, replyTarget }: { objectUri: URL; replyTarget?: URL }) =>
   new Create({
@@ -1588,7 +1591,7 @@ const createInboxFixture = async () => {
     return { contextUrl: null, document, documentUrl: url };
   };
   const contextLoader = getDocumentLoader();
-  const federation = createFederation<void>({
+  const federation = createFederation<FedifyContextData>({
     authenticatedDocumentLoaderFactory: () => documentLoader,
     contextLoaderFactory: () => contextLoader,
     documentLoaderFactory: () => documentLoader,

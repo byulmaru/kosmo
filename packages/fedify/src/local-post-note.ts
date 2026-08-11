@@ -5,6 +5,7 @@ import {
   ActivityPubActors,
   db,
   first,
+  getDatabaseConnection,
   Instances,
   Media,
   PostContents,
@@ -27,8 +28,11 @@ import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
+import { getFedifyDatabase } from './fedify-context';
 import type { Context, RequestContext } from '@fedify/fedify';
+import type { DatabaseHandle } from '@kosmo/core/db';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
+import type { FedifyContextData } from './fedify-context';
 
 type LocalPostNote = {
   readonly authorHandle: string;
@@ -48,14 +52,18 @@ type LocalPostNoteProjection = LocalPostNote & {
   readonly object: Note;
 };
 
-type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
+type LocalPostNoteContext = Pick<Context<unknown>, 'canonicalOrigin' | 'getActorUri'>;
 
-const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
+const loadLocalPostNoteRow = async (
+  context: LocalPostNoteContext,
+  postId: string,
+  handle?: DatabaseHandle,
+) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
 
-  const row = await db
+  const row = await getDatabaseConnection(handle)
     .select({
       contentDocument: PostContents.document,
       instanceCanonicalOrigin: Instances.canonicalOrigin,
@@ -89,8 +97,9 @@ const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: strin
 export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  handle?: DatabaseHandle,
 ): Promise<LocalPostNote | null> => {
-  const row = await loadLocalPostNoteRow(context, postId);
+  const row = await loadLocalPostNoteRow(context, postId, handle);
   if (!row) {
     return null;
   }
@@ -200,10 +209,10 @@ const isEstablishedFollower = async (actorUri: URL, authorProfileId: string): Pr
     .then(Boolean);
 
 export const authorizeLocalPostNote = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<boolean> => {
-  const row = await loadLocalPostNoteRow(context, id);
+  const row = await loadLocalPostNoteRow(context, id, getFedifyDatabase(context.data));
   if (!row) {
     return false;
   }
@@ -223,17 +232,18 @@ export const authorizeLocalPostNote = async (
 };
 
 export const dispatchLocalPostNote = async (
-  context: RequestContext<void>,
+  context: RequestContext<FedifyContextData>,
   { id }: { id: string },
 ): Promise<Note | null> => {
-  return (await projectLocalPostNote(context, id))?.object ?? null;
+  return (await projectLocalPostNote(context, id, getFedifyDatabase(context.data)))?.object ?? null;
 };
 
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
+  handle?: DatabaseHandle,
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId);
+  const note = await loadLocalPostNote(context, postId, handle);
   if (!note) {
     return null;
   }
@@ -241,7 +251,7 @@ export const projectLocalPostNote = async (
   const authorUri = context.getActorUri(note.authorProfileId);
   const followersUri = getFollowersUri(context, note.authorProfileId);
   const replyTarget = note.replyParentId
-    ? await resolveActivityPubPostUri(note.replyParentId)
+    ? await resolveActivityPubPostUri(note.replyParentId, handle)
     : undefined;
   const to = note.visibility === PostVisibility.PUBLIC ? PUBLIC_COLLECTION : followersUri;
   const cc =
