@@ -67,7 +67,7 @@ spec:
                   name: {{ include "kosmo.fedifyQueueResourceName" . | quote }}
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
-              value: {{ printf "postgres://kosmo_fedify_queue:$(FEDIFY_QUEUE_DATABASE_PASSWORD)@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
+              value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
