@@ -1,6 +1,6 @@
-import { Link } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -36,11 +36,11 @@ export function ProfileNameBlock({ href, profile, style }: ProfileNameBlockProps
 
   if (href) {
     return (
-      <Link asChild href={href}>
+      <NavigationLink href={href}>
         <Pressable accessibilityRole="link" style={StyleSheet.flatten([styles.root, style])}>
           {content}
         </Pressable>
-      </Link>
+      </NavigationLink>
     );
   }
 

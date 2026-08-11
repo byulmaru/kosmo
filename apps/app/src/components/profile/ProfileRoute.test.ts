@@ -43,8 +43,6 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
-  Link: ({ children, href }: { children: ReturnType<typeof createElement>; href: string }) =>
-    createElement('Link', { href }, children),
   Slot: () =>
     SlotContent
       ? createElement(
@@ -56,6 +54,15 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => globalParams,
   useLocalSearchParams: () => useContext(LocalParamsContext),
   usePathname: () => `/profile/${String(globalParams.profileHandle ?? '')}`,
+});
+mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
+  NavigationLink: ({
+    children,
+    href,
+  }: {
+    children: ReturnType<typeof createElement>;
+    href: string;
+  }) => createElement('NavigationLink', { href }, children),
 });
 mockModule('react-native', {
   Platform: { OS: 'web' },
@@ -218,36 +225,36 @@ describe('profile route parameter lifecycle', () => {
     await renderRoute('@local');
 
     assert.deepEqual(
-      rendered('Link').map((node) => node.props.href),
+      rendered('NavigationLink').map((node) => node.props.href),
       ['/profile-edit'],
     );
     assert.deepEqual(identities('FollowButton'), []);
 
     profileViewerState = { isSelf: true, membership: { role: 'MEMBER' } };
     await renderRoute('@local');
-    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(rendered('NavigationLink'), []);
     assert.deepEqual(identities('FollowButton'), ['local']);
 
     profileViewerState = { isSelf: false, membership: { role: 'OWNER' } };
     await renderRoute('@local');
-    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(rendered('NavigationLink'), []);
     assert.deepEqual(identities('FollowButton'), ['local']);
 
     profileViewerState = { isSelf: true, membership: { role: 'OWNER' } };
     profileInstanceKind = 'ACTIVITYPUB';
     await renderRoute('@remote@activitypub.example');
-    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(rendered('NavigationLink'), []);
     assert.deepEqual(identities('FollowButton'), ['remote@activitypub.example']);
 
     profileViewerState = null;
     profileInstanceKind = 'LOCAL';
     await renderRoute('@local');
-    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(rendered('NavigationLink'), []);
     assert.deepEqual(identities('FollowButton'), ['local']);
 
     profileAvailable = false;
     await renderRoute('@inactive');
-    assert.deepEqual(rendered('Link'), []);
+    assert.deepEqual(rendered('NavigationLink'), []);
     assert.deepEqual(identities('FollowButton'), []);
     assert.equal(requireRendered('StateView').props.title, '프로필을 찾을 수 없어요');
   });

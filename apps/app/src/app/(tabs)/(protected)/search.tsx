@@ -1,5 +1,5 @@
 import { parseSearchTab, SearchTab } from '@kosmo/core/search';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, History, Menu, Search as SearchIcon, X } from 'lucide-react-native';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
@@ -16,6 +16,7 @@ import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } fro
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -483,7 +484,7 @@ export default function SearchScreen() {
               <Menu color={theme.text} size={24} strokeWidth={2} />
             </IconButton>
           ) : phase !== 'before' ? (
-            <Link asChild href={searchHref('', activeTab)}>
+            <NavigationLink href={searchHref('', activeTab)}>
               <Pressable
                 accessibilityLabel="뒤로"
                 accessibilityRole="link"
@@ -497,7 +498,7 @@ export default function SearchScreen() {
               >
                 <ArrowLeft color={theme.textSecondary} size={20} strokeWidth={2} />
               </Pressable>
-            </Link>
+            </NavigationLink>
           ) : null}
           <View
             style={[
@@ -542,7 +543,7 @@ export default function SearchScreen() {
             {recent.length ? (
               recent.map((term) => (
                 <View key={term} style={[styles.recentItem, { borderColor: theme.border }]}>
-                  <Link asChild href={searchHref(term, activeTab)}>
+                  <NavigationLink href={searchHref(term, activeTab)}>
                     <Pressable
                       accessibilityRole="link"
                       onPress={(event) => {
@@ -565,7 +566,7 @@ export default function SearchScreen() {
                         {term}
                       </Text>
                     </Pressable>
-                  </Link>
+                  </NavigationLink>
                   <IconButton
                     accessibilityLabel={`최근 검색 '${term}' 삭제`}
                     onPress={() => {

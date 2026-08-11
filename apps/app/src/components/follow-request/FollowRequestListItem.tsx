@@ -1,7 +1,7 @@
-import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -143,7 +143,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
     <View style={[styles.root, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.row}>
         {follower ? (
-          <Link asChild href={`/${follower.relativeHandle}` as Href}>
+          <NavigationLink href={`/${follower.relativeHandle}` as Href}>
             <Pressable
               accessibilityLabel={`${name} 프로필로 이동`}
               accessibilityRole="link"
@@ -159,7 +159,7 @@ export function FollowRequestListItem({ connectionId, request }: FollowRequestLi
                 </Text>
               </View>
             </Pressable>
-          </Link>
+          </NavigationLink>
         ) : (
           <View style={styles.profile}>
             <Avatar label={name} size={40} />

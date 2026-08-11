@@ -12,9 +12,9 @@ const require = createRequire(import.meta.url);
 let childOnPressBeforeLink: unknown;
 const linkOnPress = () => undefined;
 
-mock.module('expo-router', {
+mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
-    Link: ({
+    NavigationLink: ({
       children,
       href,
     }: {
@@ -24,7 +24,7 @@ mock.module('expo-router', {
       childOnPressBeforeLink = children.props.onPress;
       const mergedStyle = { ...(children.props.style as object) };
       return createElement(
-        'Link',
+        'NavigationLink',
         { href },
         cloneElement(children, { href, onPress: linkOnPress, style: mergedStyle }),
       );
@@ -81,7 +81,7 @@ describe('ByulmaruIdAccountSettingsEntry', () => {
     assert.equal(entry.props.accessibilityLabel, 'Byulmaru ID Account Settings 외부 서비스로 이동');
     assert.equal(entry.props.accessibilityRole, 'link');
     assert.equal(entry.props.href, 'https://id.byulmaru.co');
-    assert.equal(rendered('Link')[0].props.href, 'https://id.byulmaru.co');
+    assert.equal(rendered('NavigationLink')[0].props.href, 'https://id.byulmaru.co');
     assert.equal(rendered('ChevronRightIcon').length, 1);
     assert.equal(childOnPressBeforeLink, undefined);
     const item = rendered('View').find(

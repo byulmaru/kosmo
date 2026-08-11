@@ -1,6 +1,6 @@
-import { Link } from 'expo-router';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -113,22 +113,22 @@ export function ProfileHero({ action, loading = false, profile = null }: Profile
           </View>
         ) : null}
         <View style={styles.counts}>
-          <Link asChild href={followingHref}>
+          <NavigationLink href={followingHref}>
             <Pressable accessibilityRole="link" style={styles.countLink}>
               <Text style={[styles.count, { color: theme.text }]}>
                 {countFormatter.format(data.followingCount).toLowerCase()}
               </Text>
               <Text style={[styles.countLabel, { color: theme.textSecondary }]}>팔로잉</Text>
             </Pressable>
-          </Link>
-          <Link asChild href={followersHref}>
+          </NavigationLink>
+          <NavigationLink href={followersHref}>
             <Pressable accessibilityRole="link" style={styles.countLink}>
               <Text style={[styles.count, { color: theme.text }]}>
                 {countFormatter.format(data.followersCount).toLowerCase()}
               </Text>
               <Text style={[styles.countLabel, { color: theme.textSecondary }]}>팔로워</Text>
             </Pressable>
-          </Link>
+          </NavigationLink>
         </View>
       </View>
     </View>
@@ -143,7 +143,7 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
   } as const;
 
   return (
-    <Link asChild href={href}>
+    <NavigationLink href={href}>
       <Pressable
         accessibilityLabel={`#${name} 관련 프로필 보기`}
         accessibilityRole="link"
@@ -154,7 +154,7 @@ function ProfileTagLink({ id, name }: { id: string; name: string }) {
       >
         <ProfileTagChip name={name} removable={false} />
       </Pressable>
-    </Link>
+    </NavigationLink>
   );
 }
 

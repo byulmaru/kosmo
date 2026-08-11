@@ -1,5 +1,6 @@
-import { Link, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -54,11 +55,11 @@ export default function PrivacyScreen() {
     >
       <Stack.Screen options={{ title: 'Kosmo 개인정보 처리방침' }} />
       <View style={styles.article}>
-        <Link asChild href={'/' as Href}>
+        <NavigationLink href={'/' as Href}>
           <Pressable accessibilityRole="link">
             <Text style={[styles.backLink, { color: theme.textSecondary }]}>KOSMO로 돌아가기</Text>
           </Pressable>
-        </Link>
+        </NavigationLink>
         <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
           Kosmo 개인정보 처리방침
         </Text>
