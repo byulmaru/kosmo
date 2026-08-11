@@ -26,6 +26,10 @@
 {{- printf "postgres://kosmo:$(DATABASE_PASSWORD)@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
 {{- end -}}
 
+{{- define "kosmo.fedifyQueueResourceName" -}}
+{{- printf "%s-postgres-fedify-queue" (.Release.Name | trunc 41 | trimSuffix "-") -}}
+{{- end -}}
+
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
 {{- range $role := list "api" "worker" -}}

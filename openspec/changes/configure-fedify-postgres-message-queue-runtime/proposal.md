@@ -8,7 +8,7 @@
 - Web ingress는 검증 가능한 ActivityPub 요청을 queue가 수락하면 remote sender에게 응답하고, domain materialization은 Fedify queue consumer에서 실행한다.
 - outbound 호출자는 activity와 명시적 actor identity, audience를 Fedify에 넘기고 queue handoff 수락까지만 기다린다. 기존 callsite가 이미 정의한 ordering option은 그대로 전달하며, remote HTTP delivery, retry, 기존 ordering option 실행과 shared inbox recipient 병합 정책은 Fedify가 소유한다.
 - Web/API 요청 처리와 독립적으로 배포·확장·재시작할 수 있는 Fedify queue consumer runtime, health/readiness와 graceful shutdown 경계를 제공한다.
-- queue runtime은 명시적으로 활성화될 때 공식 adapter가 connection 대상 database 안의 queue table/index를 implicit하게 초기화하게 한다. dev는 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용하고, queue connection은 domain/API DB 및 Worker execution credential과 분리한다. 실제 production queue database·credential 준비와 최초 활성화는 별도 승인·변경에 남긴다.
+- queue runtime은 producer가 처음 enqueue하거나 consumer가 listen할 때 공식 adapter가 connection 대상 database 안의 queue table/index를 implicit하게 초기화하게 한다. chart는 queue 전용 database 준비·producer·consumer 분기 없이 각 namespace에 기존 CloudNativePG cluster의 `kosmo_fedify_queue` Database/DatabaseRole과 전용 VSO Secret을 선언하고, 기존 application workload bootstrap 경계 안에서 API/Web queue connection과 consumer Deployment를 함께 렌더한다. queue connection은 release의 기존 CloudNativePG direct read-write Service와 전용 database에서 파생해 domain/API DB 및 Worker execution credential과 분리하며, production sync/apply는 별도 승인에 남긴다.
 - queue가 수락하고 아직 dequeue하지 않은 message의 process restart 영속성만 보장한다. dequeue 뒤 handler 완료 전 process crash 재전달을 보강하는 custom ack, lease, requeue 또는 relay는 추가하지 않는다.
 - Temporal task queue, domain state transition, Notification, domain Workflow/Workflow ID, transactional Workflow intent/outbox/relay는 추가하거나 변경하지 않는다.
 - 전환 전에는 domain effects Workflow가 기존 Fedify delivery Activity를 호출하고 Temporal Activity가 delivery request 실패를 재시도할 수 있다. PROD-448 queue producer를 활성화한 뒤에는 queue handoff 수락이 그 Activity의 성공 경계가 되며, 이후 remote HTTP retry와 기존 ordering option 실행은 Fedify만 소유한다. 이 전환은 domain Workflow 구현을 선행 조건으로 만들지 않는다.
@@ -17,7 +17,7 @@
 
 - Canonical: `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/domain/objects/profile.md`, `docs/domain/objects/instance.md`
 - Linear Contract: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4)
-- Linear Implementations: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4). 역할별 selector baseline은 PROD-709에서 시작해 PROD-715 PR #564가 `worker` 이름으로 교체했지만, MessageQueue transport credential은 PROD-715 범위가 아니며 이 change의 별도 `fedifyQueue` 입력을 사용한다.
+- Linear Implementations: [PROD-448](https://linear.app/byulmaru/issue/PROD-448/fedify-postgresql-messagequeue-runtime%EC%9D%84-%EA%B5%AC%EC%84%B1%ED%95%9C%EB%8B%A4). 역할별 selector baseline은 PROD-709에서 시작해 PROD-715 PR #564가 `worker` 이름으로 교체했지만, MessageQueue transport credential은 PROD-715 범위가 아니며 chart가 파생하는 전용 queue connection을 사용한다.
 - Historical cancellation: [PROD-706](https://linear.app/byulmaru/issue/PROD-706/fedify-%EC%9E%91%EC%97%85%EC%97%90-%EB%AA%85%EC%8B%9C%EC%A0%81-db-execution-boundary%EB%A5%BC-%EC%B6%94%EA%B0%ED%95%9C%EB%8B%A4)과 unmerged closed PR #543의 generic execution-context seam은 구현 prerequisite가 아니다.
 - Parallel capabilities: PROD-722/720/723/725/665는 PROD-448이 차단하는 downstream이 아니라 기존 Fedify delivery Activity를 사용할 수 있는 관련 병렬 capability다.
 
@@ -42,7 +42,7 @@
 
 - `@fedify/postgres` production dependency와 adapter-managed `fedify_message_v2` table/index가 queue connection 대상 PostgreSQL database에 추가된다.
 - `packages/fedify` federation construction과 inbound/outbound context 생성이 영향을 받고, 장기 실행 queue lifecycle은 `apps/fedify-consumer`가 소유한다.
-- 공통 runtime image에 `apps/fedify-consumer`가 추가되고 Helm에 기본 비활성 또는 별도 opt-in consumer Deployment, probe, resource/replica 설정과 Fedify DB credential 입력이 추가된다.
-- dev Helm에는 default-off `kosmo_fedify_queue` Database/DatabaseRole과 VSO basic-auth Secret 동기화가 추가되며 실제 Vault value와 workload activation 전에는 database를 생성하지 않는다.
+- 공통 runtime image에 `apps/fedify-consumer`가 추가되고 Helm에 독립 consumer Deployment, probe와 resource/replica 설정이 추가된다.
+- dev와 production Helm은 queue 전용 실행 분기 없이 각 namespace에 `kosmo_fedify_queue` Database/DatabaseRole과 VSO basic-auth Secret을 선언하고, 기존 `workloads.enabled` application bootstrap 경계 안에서 API/Web producer connection과 consumer Deployment를 함께 렌더한다. dev는 기존 승인된 GitOps 경계로 reconcile하고 production sync/apply는 별도 승인을 유지한다.
 - 기존 Web ingress, API/Core의 Fedify 호출 경계와 ActivityPub 통합 테스트는 queue handoff 기준으로 갱신된다. API가 outbound producer인 동안 API runtime에도 API domain DB와 분리된 Fedify queue credential 입력이 필요하다.
-- 취소된 PROD-706/PR #543 코드를 cherry-pick하거나 재구현하지 않는다. queue consumer의 domain listener는 현재 main의 trusted ingress DB 동작을 보존하며, API/Worker runtime role·credential cutover는 제외한다. production values 변경, Argo CD sync, Helm apply와 DB production apply는 이 change의 자동 실행 범위가 아니다.
+- 취소된 PROD-706/PR #543 코드를 cherry-pick하거나 재구현하지 않는다. queue consumer의 domain listener는 현재 main의 trusted ingress DB 동작을 보존하며, API/Worker runtime role·credential cutover는 제외한다. production 선언은 포함하지만 Argo CD sync, Helm apply, Vault value write와 DB production apply는 이 change의 자동 실행 범위가 아니다.

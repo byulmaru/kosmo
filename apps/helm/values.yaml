@@ -25,12 +25,7 @@ autoscaling:
 migration:
   enabled: false
 fedify:
-  queueDatabase:
-    enabled: false
-  producer:
-    enabled: false
   consumer:
-    enabled: false
     replicas:
       dev: 1
       prod: 2
@@ -64,11 +59,6 @@ postgres:
         name: ''
         key: ''
     worker:
-      databaseUrl: ''
-      passwordSecret:
-        name: ''
-        key: ''
-    fedifyQueue:
       databaseUrl: ''
       passwordSecret:
         name: ''

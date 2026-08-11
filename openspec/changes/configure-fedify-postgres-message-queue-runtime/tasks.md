@@ -2,7 +2,7 @@
 
 - **Implementation / PR / dev-live evidence owner:** PROD-448
 - **Canceled former dependency:** PROD-706 / PR #543은 취소·unmerged close됐고 PROD-448 blocker가 아니다. 해당 branch나 execution-context seam을 소비하지 않는다.
-- **Selector baseline:** PROD-709에서 시작해 PROD-715 PR #564가 legacy Fedify 이름을 Worker source로 교체했다. 이 source는 trusted domain listener용이며 queue database, role, Secret, GRANT, adapter initialization 또는 MessageQueue credential cutover 완료가 아니다.
+- **Selector baseline:** PROD-709에서 시작해 PROD-715 PR #564가 legacy Fedify 이름을 Worker source로 교체했지만, `kosmo_worker` 객체 권한과 explicit handle 전환은 PROD-724/710/715에 남아 있다. PROD-448 consumer listener는 현재 owner connection을 보존하며 Worker source를 queue credential 또는 선행 조건으로 사용하지 않는다.
 - **Related parallel capabilities:** PROD-722/720/723/725/665. They may use existing Fedify delivery Activities before PROD-448 and are neither blocked by nor prerequisites of this change.
 - **Excluded downstream ownership:** API/Worker runtime role provisioning and production credential/GRANT cutover remain their own issues; production apply/rollout/cutover additionally requires explicit user approval.
 
@@ -52,7 +52,7 @@ Fedify producer와 consumer가 같은 durable PostgreSQL inbox/outbox/fan-out tr
 
 - 공식 `@fedify/postgres` adapter를 사용하고 custom retry queue나 transport ledger를 만들지 않는다.
 - API domain credential, trusted Worker execution credential 또는 전역 owner connection으로 조용히 fallback하지 않고 API에 Worker credential을 주입하지 않는다.
-- production queue database·credential 준비, 최초 adapter initialization과 queue 활성화는 수행하지 않는다.
+- production queue database·credential declaration은 허용하지만 Vault value write, resource sync/apply, 최초 adapter initialization과 queue 활성화는 수행하지 않는다.
 
 **Verification**
 
@@ -61,7 +61,7 @@ Fedify producer와 consumer가 같은 durable PostgreSQL inbox/outbox/fan-out tr
 
 - [x] 2.1 Fedify version에 맞는 공식 PostgreSQL MessageQueue dependency를 package manager CLI로 추가한다.
 - [x] 2.2 API/Web/consumer의 queue transport connection을 domain/API DB와 Worker execution DB에서 분리하고 명시적 종료 lifecycle을 구현한다.
-- [x] 2.3 Helm의 명시적 default-off producer/consumer flag로 atomic credential 주입을 제어하고 package-level runtime mode 없이 direct/owner fallback과 이중 발송을 금지한다.
+- [x] 2.3 Helm의 queue 전용 environment/database/producer/consumer flag와 configurable selector를 제거하고 queue 리소스·connection·consumer를 함께 파생해 package-level runtime mode, direct/owner fallback과 이중 발송을 금지한다.
 - [x] 2.4 inbox/outbox/fan-out queue 구성을 production federation registration에 연결한다.
 - [x] 2.5 기존 test DB wrapper의 격리 `DATABASE_URL`로 exact adapter implicit initialization, reconnect consume와 connection cleanup 회귀 검증을 추가한다.
 
@@ -113,17 +113,17 @@ Fedify queue consumer를 Web/API와 Temporal Worker 없이 독립 실행·배포
 
 - consumer는 public Service/Ingress에 노출하지 않는다.
 - Web producer는 queue를 소비하지 않고 consumer는 Temporal task queue 또는 HTTP ingress를 시작하지 않는다.
-- component는 production에서 자동 활성화하지 않는다.
+- production chart sync는 별도 사용자 승인 전 수행하지 않는다.
 
 **Verification**
 
 - child-process 또는 동등한 integration test로 invalid config, startup readiness, SIGTERM readiness-down/abort/connection cleanup을 검증한다.
-- Helm default render가 기존 runtime을 활성화하지 않고 opt-in render가 독립 Deployment, Fedify credential, probes, replicas/resources를 제공하는지 일회성 lint/template inspection으로 확인한다. 이 변경만을 위한 상시 render harness는 추가하지 않는다.
+- Helm dev/prod render가 별도 실행 flag 없이 독립 Deployment, Fedify credential, probes, replicas/resources를 같은 구조로 제공하는지 일회성 lint/template inspection으로 확인한다. 이 변경만을 위한 상시 render harness는 추가하지 않는다.
 
 - [x] 4.1 `packages/fedify`는 library로 유지하고, 동일한 production federation registration으로 inbox/outbox/fan-out queue만 소비하는 `apps/fedify-consumer`와 lifecycle을 구현한다.
 - [x] 4.2 liveness/readiness와 SIGINT/SIGTERM graceful shutdown을 구현하고 process lifecycle 검증을 추가한다.
-- [x] 4.3 공통 image에 `apps/fedify-consumer`를 실행하는 독립 command를 포함하고 기본 비활성 Helm component를 추가한다.
-- [x] 4.4 dev/prod opt-in Helm lint/template inspection으로 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증하고, 일회성 검증 스크립트는 저장소에 남기지 않는다.
+- [x] 4.3 공통 image에 `apps/fedify-consumer`를 실행하는 독립 command와 Helm component를 추가한다.
+- [x] 4.4 dev/prod Helm lint/template inspection으로 독립 replica/resource/credential/probe와 Service/Ingress 부재를 검증하고, 일회성 검증 스크립트는 저장소에 남기지 않는다.
 
 ## 5. PROD-448 adapter integration과 queued persistence evidence
 
@@ -162,7 +162,7 @@ PROD-448의 코드·adapter-managed initialization·chart와 nonproduction 검�
 
 **Guardrails**
 
-- production values 변경, database sync/apply, Argo CD sync/apply, credential cutover와 traffic activation을 수행하지 않는다.
+- production queue declaration은 허용하지만 Vault value write, database/Argo CD sync/apply, credential cutover와 traffic activation을 수행하지 않는다.
 - PR readiness를 dev live verification 또는 production completion으로 표현하지 않는다.
 - change archive는 모든 requirement와 task 완료, 필요한 live evidence와 Completion Gate를 별도로 확인한 뒤 수행한다.
 
@@ -175,6 +175,7 @@ PROD-448의 코드·adapter-managed initialization·chart와 nonproduction 검�
 - [x] 6.2 `openspec validate configure-fedify-postgres-message-queue-runtime --strict`와 repository 전체 관련 검증을 통과시킨다.
 - [x] 6.3 self-review로 domain/Notification/Temporal/production 범위 침범과 secret 노출을 점검하고 finding을 해결한다.
 - [x] 6.4 commit, push, Ready PR 생성과 hosted CI 확인 후 Linear에 PR completion evidence를 동기화한다.
+- [x] 6.5 queue 전용 environment/database/producer/consumer flag 없이 각 namespace에 `kosmo_fedify_queue` Database/DatabaseRole과 VSO Secret을 선언하고, 기존 application workload bootstrap 경계 안에서 API/Web queue connection과 consumer Deployment를 함께 렌더해 dev/prod lint·template inspection으로 검증한다.
 
 ## 7. PROD-448 dev live verification
 

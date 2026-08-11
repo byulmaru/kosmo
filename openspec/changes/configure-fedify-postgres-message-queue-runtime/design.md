@@ -2,7 +2,7 @@
 
 현재 production federation은 `packages/fedify/src/federation.ts`에서 `MemoryKvStore`만 사용해 생성되고 queue가 없으므로 Web의 `federation.fetch()`와 `Context.sendActivity()`가 listener 및 remote HTTP delivery를 같은 process에서 직접 실행한다. outbound에는 production federation 외에도 local instance identity를 context data로 받는 별도 federation이 있고, 여러 delivery helper가 이미 lifecycle별 `orderingKey`와 shared inbox preference를 Fedify에 전달한다.
 
-최신 main의 PROD-715 PR #564는 legacy `postgres.credentials.fedify`와 `FEDIFY_DATABASE_*`를 제거하고 Web trusted ingress 및 Temporal Worker DB Activity 전용 `postgres.credentials.worker`와 `WORKER_DATABASE_*` source로 교체했다. PROD-715는 Fedify MessageQueue를 명시적으로 제외하므로 queue transport는 이 source를 재사용하지 않고 별도 `fedifyQueue` 입력을 사용한다. consumer의 domain listener는 worker source를 app의 `DATABASE_URL`로 명시적으로 투영해 현재 trusted ingress SQL 동작만 보존한다. 현재 GraphQL API process도 outbound core effect를 직접 호출하므로 API producer에는 domain/API DB와 다른 queue transport 입력이 필요하다. PROD-706은 취소됐고 PR #543도 merge 없이 닫혔으므로 generic Fedify DB execution-context seam을 구현 근거로 사용하지 않는다.
+최신 main의 PROD-715 PR #564는 legacy `postgres.credentials.fedify`와 `FEDIFY_DATABASE_*`를 제거하고 Web trusted ingress 및 Temporal Worker DB Activity 전용 `postgres.credentials.worker`와 `WORKER_DATABASE_*` source로 교체했다. PROD-715는 Fedify MessageQueue를 명시적으로 제외하고, dev `kosmo_worker`는 아직 domain table 권한이 없으므로 queue transport는 release의 기존 CloudNativePG direct read-write Service와 전용 database에서 파생한 queue connection을 사용하되 consumer domain listener는 현재 Web trusted ingress와 같은 owner `DATABASE_URL`을 별도로 유지한다. `kosmo_worker` GRANT와 explicit handle 전환은 PROD-724/710/715에 남긴다. 현재 GraphQL API process도 outbound core effect를 직접 호출하므로 API producer에도 같은 전용 queue connection이 필요하다. PROD-706은 취소됐고 PR #543도 merge 없이 닫혔으므로 generic Fedify DB execution-context seam을 구현 근거로 사용하지 않는다.
 
 Fedify 2.3의 공식 권장 분리는 producer process에서 `manuallyStartQueue: true`로 enqueue만 하고, load balancer에 노출하지 않은 별도 process에서 동일한 federation registration을 구성한 뒤 `Federation.startQueue()`를 AbortSignal과 함께 실행하는 방식이다. `PostgresMessageQueue`는 persistent multi-worker backend, ordering key와 `getDepth()`를 제공하며 native retry backend가 아니므로 remote retry policy는 Fedify가 적용한다.
 
@@ -37,7 +37,7 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 - 취소된 PROD-706 branch도 `federation.ts`를 수정했지만 merge 대상이 아니다. 그 branch를 cherry-pick하거나 generic execution-context seam을 PROD-448에서 재구현하면 취소 결정을 우회한다.
 - `PostgresMessageQueue`와 consumer parallelism은 PostgreSQL connection을 사용한다. connection pool을 API/Web 기본 DB pool과 무비판적으로 공유하면 queue backlog 때 connection starvation이 생길 수 있다.
 - `PostgresMessageQueue`는 첫 `enqueue()`/`listen()`에서 `CREATE TABLE`, `ALTER TABLE`, `CREATE INDEX IF NOT EXISTS`를 실행한다. 별도 one-shot schema command를 중복 구현하지 않고, production에서는 queue 전용 database/credential 준비와 최초 mode 활성화를 함께 명시적으로 승인해야 한다.
-- dev queue transport는 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용한다. adapter는 schema option을 제공하지 않으므로 domain database 안의 custom schema, `search_path` helper 또는 adapter table migration을 만들지 않는다.
+- dev와 production queue transport는 각 namespace의 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용한다. chart는 environment 분기나 database 준비 flag 없이 같은 리소스를 선언하고, adapter는 schema option을 제공하지 않으므로 domain database 안의 custom schema, `search_path` helper 또는 adapter table migration을 만들지 않는다. production resource apply와 최초 adapter initialization은 별도 승인 전 시작하지 않는다.
 - 기존 test DB wrapper는 `DATABASE_URL`만 격리 DB로 바꾼다. queue 통합 테스트는 별도 transport URL을 같은 격리 DB로 명시해 owner/API DB fallback 부재를 검증해야 한다.
 
 ### Recommended Approach
@@ -46,10 +46,10 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 2. exact Fedify 2.3 호환 `@fedify/postgres` dependency, `PostgresMessageQueue`와 전용 PostgreSQL client/pool을 추가하고, inbox/outbox/fan-out에 같은 durable transport contract를 제공한다. 역할을 분리한 queue instance/table을 선택하더라도 enqueue와 consumer 양쪽에서 정확히 같은 구성을 사용한다. PROD-448은 별도 KV adapter를 추가하지 않는다.
 3. producer federation은 `manuallyStartQueue: true`로 구성해 Web/API process가 queue를 소비하지 않게 한다. API/Web producer와 consumer의 queue transport connection은 API domain DB 및 trusted Worker execution DB와 분리하고, API에 Worker credential을 주입하지 않는다. `apps/fedify-consumer`는 같은 federation의 `startQueue()`만 실행하고 public HTTP listener나 Temporal Worker를 시작하지 않는다.
 4. consumer process는 작은 probe server 또는 동등한 platform-native probe 경계를 둔다. SIGTERM/SIGINT에서는 readiness를 내린 뒤 AbortController로 Fedify listener를 중단하고 queue용 PostgreSQL client를 정리한다.
-5. 장기 실행 process와 probe/signal lifecycle은 `apps/fedify-consumer`가 소유한다. 공통 image에 이 app을 실행하는 별도 `fedify-queue` command를 추가하고 Helm에 Web/Temporal Worker와 독립된 기본 비활성 Fedify consumer Deployment를 둔다. Service/Ingress는 만들지 않고 replica/resource/probe/Fedify credential을 별도로 render한다.
-6. exact adapter의 implicit `initialize()`가 queue connection 대상 database 안의 기본 table/index를 소유하게 하고 Drizzle domain migration, custom DDL 또는 transport ledger를 만들지 않는다. dev는 기존 CloudNativePG cluster 안에 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 준비하고, test는 격리 DB에서 초기화를 검증한다. production도 custom schema보다 별도 queue database/credential을 사용하되, 그 database 준비와 최초 producer/consumer 활성화는 별도 승인한다.
+5. 장기 실행 process와 probe/signal lifecycle은 `apps/fedify-consumer`가 소유한다. 공통 image에 이 app을 실행하는 별도 `fedify-queue` command를 추가하고 Helm의 기존 application workload bootstrap 경계 안에 Web/Temporal Worker와 독립된 Fedify consumer Deployment를 둔다. Service/Ingress는 만들지 않고 replica/resource/probe를 별도로 render한다.
+6. exact adapter의 implicit `initialize()`가 queue connection 대상 database 안의 기본 table/index를 소유하게 하고 Drizzle domain migration, custom DDL 또는 transport ledger를 만들지 않는다. chart는 각 namespace의 기존 CloudNativePG cluster에 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 항상 선언하고 queue URL·Secret ref를 파생하며, test는 격리 DB에서 초기화를 검증한다. production resource apply와 최초 producer/consumer 활성화는 별도 승인한다.
 7. 기존 activity별 delivery 테스트는 identity/audience와 이미 존재하는 Fedify ordering option을 보존하는지만 검증한다. 새 integration test는 실제 PostgreSQL queue가 수락한 message를 consumer가 연결되기 전에 producer connection을 닫아도 새 connection에서 소비하는지만 검증한다. dequeue 뒤 handler process crash redelivery, protocol-level idempotency나 새로운 ordering contract를 이 change의 검증 대상으로 확장하지 않는다.
-8. Helm producer/consumer flag가 default-off 활성화와 queue credential 주입을 제어한다. package-level runtime mode, custom config parser와 startup `getDepth()` probe를 추가하지 않고 official adapter의 enqueue/listen lazy initialization과 오류를 그대로 사용한다.
+8. Helm은 queue 전용 environment/database/producer/consumer flag 없이 queue resource를 선언하고, 기존 `workloads.enabled` application bootstrap 경계 안에서 API/Web connection과 consumer Deployment를 함께 렌더한다. package-level runtime mode, custom config parser와 startup `getDepth()` probe를 추가하지 않고 official adapter의 enqueue/listen lazy initialization과 오류를 그대로 사용한다.
 
 ### Allowed Alternatives
 
@@ -74,20 +74,20 @@ Domain effects Workflow는 이 change와 병렬로 기존 Fedify delivery Activi
 - [dequeue 뒤 handler 완료 전 process crash에서 message가 유실될 수 있음] → official adapter의 현재 보장 수준으로 명시해 수용하고 custom ack/requeue/relay를 추가하지 않는다. 통합 테스트는 dequeue 전 queued persistence만 증명한다.
 - [분리 consumer 도입 시 Web과 worker registration drift] → 같은 production registration factory와 동일한 configuration contract를 사용하고 producer/consumer compatibility test를 둔다.
 - [PostgreSQL connection starvation] → queue 전용 pool과 보수적 concurrency를 기본으로 하고, parallelism을 늘릴 때 pool headroom과 backlog drain을 함께 검증한다.
-- [implicit adapter DDL이 의도하지 않은 database를 변경] → dev에서는 별도 `kosmo_fedify_queue` database와 전용 login/Secret으로 범위를 격리하고, production queue database/credential 준비 및 최초 activation은 하나의 명시적 승인 대상으로 제시한다.
+- [implicit adapter DDL이 의도하지 않은 database를 변경] → dev와 production 모두 별도 `kosmo_fedify_queue` database와 전용 login/Secret으로 범위를 격리하고, production resource apply와 최초 activation은 하나의 명시적 승인 대상으로 제시한다.
 - [비동기 handoff로 기존 테스트와 운영자가 remote delivery 성공을 과대 해석] → queue handoff 성공과 remote delivery 성공을 테스트와 보고 문구에서 분리한다.
 - [기존 domain idempotency가 모든 duplicate timing을 견디지 못할 수 있음] → activity별 integration test로 검증하고 transport change가 domain transition을 새로 소유하지 않게 한다.
 - [Fedify MessageQueue 전환이 기존 ordering option 또는 shared inbox recipient 병합을 손실할 수 있음] → 기존 callsite option과 fan-out 결과를 검증하되, PROD-448에서 KV/custom dedupe나 신규 ordering key를 추가하지 않는다.
-- [default-off 전환 중 direct와 queue producer가 동시에 활성화될 수 있음] → 하나의 명시적 producer mode와 atomic configuration validation으로 이중 발송을 막는다.
+- [direct와 queue producer가 동시에 활성화될 수 있음] → chart가 API/Web에 queue connection을 항상 하나만 주입하고 direct fallback을 두지 않아 이중 발송을 막는다.
 
 ## Migration Plan
 
 1. PROD-706 취소와 PR #543 unmerged close를 기록하고 최신 main에서 queue runtime baseline을 다시 조사한다.
 2. dependency, queue construction, producer/consumer 분리, entrypoint, probes와 격리 PostgreSQL 통합 테스트를 구현한다.
-3. local/CI에서 adapter implicit initialization, dequeue 전 queued persistence, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 Helm default/opt-in render를 검증한다.
-4. 구현 PR은 production mutation이나 domain Workflow 완료 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다. 이 시점에도 direct mode를 사용하는 Activity는 기존 delivery request 실패를 Temporal retry 경계에 남길 수 있다.
+3. local/CI에서 adapter implicit initialization, dequeue 전 queued persistence, 기존 ordering option 보존, shared inbox recipient 병합, retry/failure, graceful shutdown과 분기 없는 dev/prod Helm render를 검증한다.
+4. 구현 PR은 production mutation이나 domain Workflow 완료 없이 Ready로 만들고 PR completion evidence와 미실행 dev live/production verification을 구분한다. dev sync 전 Activity는 기존 delivery request 실패를 Temporal retry 경계에 남길 수 있다.
 5. 승인된 dev 범위에서 기존 CloudNativePG cluster에 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 준비한 뒤 queue mode를 활성화해 adapter initialization, consumer rollout과 live enqueue/consume/restart를 검증한다.
-6. production은 다시 queue database/credential과 backlog 상태를 확인하고, 별도 승인된 queue database 준비 → consumer 최초 activation/implicit initialization → producer queue cutover 순서로 진행한다. producer cutover 뒤 Activity 성공은 queue 수락이며 remote HTTP retry/order는 Fedify만 소유한다. 각 단계는 이전 direct path 또는 disabled consumer로 rollback 가능해야 한다.
+6. production chart의 queue database/credential과 runtime 선언을 먼저 review 가능한 diff로 제공한다. 실제 production에서는 현재 database/credential과 backlog 상태를 다시 확인하고, 별도 승인된 Vault value 준비 뒤 chart sync로 queue database apply·consumer 최초 listen·producer queue connection을 함께 전환한다. 전환 뒤 Activity 성공은 queue 수락이며 remote HTTP retry/order는 Fedify만 소유한다. rollback은 이전 Git revision으로 chart 전체를 되돌리되 queue table/message를 임의 삭제하지 않는다.
 7. rollback 시 새 producer enqueue를 먼저 중단하고 queue backlog의 처리/보존 결정을 명시한 뒤 consumer를 내린다. queue table 삭제나 purge는 별도 파괴적 승인 없이는 수행하지 않는다.
 
 ## Open Questions
