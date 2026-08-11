@@ -1,7 +1,7 @@
+import { Link } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { SettingsItem } from './SettingsItem';
 
@@ -24,7 +24,7 @@ export function ByulmaruIdAccountSettingsEntry() {
 
   return (
     <View style={styles.root} testID="byulmaru-id-account-settings-entry-container">
-      <NavigationLink href={BYULMARU_ID_ACCOUNT_SETTINGS_URL}>
+      <Link asChild href={BYULMARU_ID_ACCOUNT_SETTINGS_URL}>
         <Pressable
           accessibilityLabel={ENTRY_ACCESSIBILITY_LABEL}
           accessibilityRole="link"
@@ -47,7 +47,7 @@ export function ByulmaruIdAccountSettingsEntry() {
             }
           />
         </Pressable>
-      </NavigationLink>
+      </Link>
     </View>
   );
 }
