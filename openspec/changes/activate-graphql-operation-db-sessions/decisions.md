@@ -23,7 +23,7 @@
 - Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, dev merge revision `de6034d3`
 - Status: Active
 - Context / Problem: `de6034d3` dev activation에서 operation postgres.js client가 API direct DB client의 `connection` startup options를 상속했고, PgBouncer가 지원하지 않는 옵션을 전달해 operation 초기화가 거부됐다. Argo/Rollout readiness는 통과했지만 GraphQL Query/Mutation이 초기화 단계에서 HTTP 500으로 실패했다. 어떤 timeout 숫자도 이 change의 계약으로 결정된 적이 없다.
-- Decision Outcome: API `DATABASE_URL` direct client의 기존 timeout startup 동작은 변경하지 않으며 이 change의 범위 밖으로 둔다. Fix는 operation client 생성 시 direct DB client의 `connection` startup options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 client에 전달하며 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. 실제 frontend connection을 만든 뒤 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고, 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다. endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 변경하지 않는다.
+- Decision Outcome: API `DATABASE_URL` direct client의 기존 timeout startup 동작은 변경하지 않으며 이 change의 범위 밖으로 둔다. Fix는 operation client 생성 시 direct DB client의 `connection` startup options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 client에 전달하며 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. 실제 frontend connection을 만든 뒤 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고, 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다. PgBouncer frontend 연결 뒤 server slot 대기 정책은 PROD-759로 분리한다. endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 변경하지 않는다.
 - Alternatives Considered: 전체 activation merge revision을 즉시 revert하는 선택은 사용자 결정으로 보류하고 forward fix를 선택했다. direct DB client의 `connection` startup options를 operation client에 계속 전달하는 방식은 PgBouncer 호환성을 깨뜨린다. Configured URL을 runtime에서 조용히 정제하는 방식은 명시된 입력을 바꾸고 호환되지 않는 임의의 URL을 지원하는 것처럼 보이므로 채택하지 않는다. Actor GUC를 여러 SQL round trip 또는 resolver 이후에 설정하면 초기화 원자성과 resolver 전제 조건을 약화한다.
 - Consequences: direct request/auth/startup workload와 operation Pooler lifecycle의 endpoint와 startup-parameter 경계가 분리된다. operation startup compatibility와 GraphQL smoke가 통과하기 전에는 live gate를 닫을 수 없으며, 실패 시 기존 whole-activation Git revert 절차를 fallback으로 유지한다. application-selected timeout 숫자는 추가하지 않는다.
 - Confirmation / Follow-up: current API Pod 로그에 unsupported startup-parameter 오류가 없고 익명·Account-only·Account+Profile GraphQL smoke가 HTTP 500 없이 통과하는지 비민감한 상태로 기록한다. 이후 affinity, reset, metrics/capacity와 4.3/4.4/4.5 live gate를 별도로 검증한다.
@@ -100,17 +100,17 @@
 - Consequences: lifecycle code가 일반 execution 경로로 제한되고 batch operation별 owner가 명확해진다.
 - Confirmation / Follow-up: installed Yoga/Envelop behavior를 대상으로 정상 result, GraphQL 오류, throw, abort와 batch unit/integration test를 유지한다.
 
-### overload는 postgres.js 기본 bounded connection 동작으로 제한한다
+### overload server-slot 대기 정책은 PROD-759로 분리한다
 
 - Decision Date: 2026-08-10
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726
+- Authority / Provenance: `docs/operations/postgres-session-pool.md`, Linear PROD-726, Linear PROD-759
 - Status: Active
-- Context / Problem: operation별 client가 동시에 몰릴 때 별도 semaphore나 retry queue를 추가하면 application 내부에 PgBouncer와 중복되는 대기·공정성·shutdown 상태가 생긴다.
-- Decision Outcome: postgres.js의 기본 bounded connection timeout 동작만 사용한다. 기본 동작의 제한 시간 안에 frontend connection을 만들지 못하면 operation을 실패시키고 custom semaphore, retry loop 또는 queue를 추가하지 않는다. application-selected timeout 숫자는 추가하지 않는다.
-- Alternatives Considered: application semaphore는 PgBouncer capacity와 이중 조정이 필요하다. 무제한 대기는 request와 connection leak을 장기화한다.
-- Consequences: 순간 overload 일부는 오류로 노출되며 기본 bounded connection 동작은 실제 dev 부하와 metrics로 검증해야 한다.
-- Confirmation / Follow-up: capacity 안의 completion, 초과 부하 timeout, `cl_waiting`/`maxwait`와 종료 뒤 connection baseline 복귀를 확인한다.
+- Context / Problem: dev에서 Pooler frontend connection이 열린 뒤 server slot을 기다리는 query는 36초 동안 postgres.js connection timeout으로 종료되지 않았다. 기존 bounded-failure 전제는 실제 runtime 경로와 맞지 않는다.
+- Decision Outcome: PROD-726은 capacity 안의 completion, 정상·오류·abort cleanup, reset과 metrics baseline만 완료한다. Capacity 초과 operation의 종료·취소 계층과 timeout budget은 독립 후속 PROD-759가 소유하며 PROD-726 완료·archive 또는 PROD-716 시작을 block하지 않는다. 이 change는 임의 timeout 숫자, custom semaphore 또는 retry queue를 추가하지 않는다.
+- Alternatives Considered: 관찰과 모순되는 postgres.js 기본 timeout 전제를 유지하는 것은 제외했다. PgBouncer query wait 정책, GraphQL request/application budget 또는 bounded-failure 요구 제거 중 선택은 PROD-759에서 승인한다.
+- Consequences: operation session activation과 overload 정책의 생명주기·rollback을 독립적으로 진행할 수 있다. 이 change는 capacity 초과 요청의 종료 시간을 보장하지 않는다.
+- Confirmation / Follow-up: capacity 안 completion과 cleanup/reset/metrics baseline을 확인하고, PROD-759가 선택한 종료·취소 경계를 별도 검증한다.
 
 ### 전체 activation revision을 Git revert하고 Pooler는 유지한다
 

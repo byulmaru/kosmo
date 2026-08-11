@@ -18,7 +18,7 @@ GraphQL Yoga/Envelop의 `onExecute` hook은 execution 직전에 context를 확�
 - 일반 Query/Mutation 결과의 모든 종료 경로에서 connection 종료를 await한다.
 - 기존 domain transaction·savepoint·post-commit 의미와 HTTP batch operation 격리를 보존한다.
 - API `DATABASE_URL`은 현재 owner-compatible direct fallback을 유지하고 `OPERATION_DATABASE_URL`만 Pooler endpoint로 전환하며 Web BFF baseline과 migration direct endpoint는 이 change에서 유지한다. #564의 trusted Worker `WORKER_DATABASE_*` seam은 별도 실행 경계로 제외하고 operation URL에 연결하지 않는다.
-- dev live gate에서 affinity, reset, readiness, metrics와 overload/cleanup을 관찰한다.
+- dev live gate에서 affinity, reset, readiness, metrics, capacity 안 completion과 cleanup을 관찰한다.
 
 **Non-Goals:**
 
@@ -47,7 +47,7 @@ GraphQL Yoga/Envelop의 `onExecute` hook은 execution 직전에 context를 확�
 
 ### Recommended Approach
 
-- core DB 모듈에 Drizzle schema와 operation에 안전한 postgres.js 옵션만 사용하는 좁은 operation client factory를 둔다. Factory는 direct DB client의 `connection` startup options를 상속하지 않고, `max: 1`과 postgres.js 기본 bounded connection timeout 동작을 사용하는 새 client, 그 client의 Drizzle `Database`, idempotent async close를 함께 반환한다. Configured `OPERATION_DATABASE_URL`은 변경 없이 전달하며 application-selected timeout 숫자는 추가하지 않는다.
+- core DB 모듈에 Drizzle schema와 operation에 안전한 postgres.js 옵션만 사용하는 좁은 operation client factory를 둔다. Factory는 direct DB client의 `connection` startup options를 상속하지 않고, `max: 1`인 새 client, 그 client의 Drizzle `Database`, idempotent async close를 함께 반환한다. Configured `OPERATION_DATABASE_URL`은 변경 없이 전달한다.
 - Yoga plugin의 `onExecute`에서 parsed operation이 일반 Query/Mutation인지 확인한다. Subscription은 할당하지 않는다. Query/Mutation은 operation client를 만들고 두 actor GUC를 하나의 initialization SQL round trip에서 설정한 뒤 context의 `db`를 operation Database로 교체한다. 초기화가 성공하기 전 resolver를 실행하지 않으며, helper read-back은 integration/live 검증에만 사용한다.
 - plugin이 현재 execute function을 감싸 일반 result 또는 throw의 `finally`에서 close를 한 번 await한다. 현재 활성화되지 않은 incremental AsyncIterable bridge는 추가하지 않는다.
 - resolver/loader/core call graph를 domain별로 인벤토리하고 global/raw DB import를 `ctx.db` 또는 명시적 `DatabaseHandle`로 바꾼다. core action이 이미 transaction을 소유하면 operation Database에서 transaction을 열고, caller-owned transaction과 savepoint 계약은 유지한다. GraphQL post-commit SQL은 close 전에 같은 operation Database로 await한다. 단, `searchProfiles` remote actor materialization은 Fedify-owned direct side effect로 실행하고 materialization 뒤 조회·result projection은 `ctx.db`로 실행한다.
@@ -57,7 +57,7 @@ GraphQL Yoga/Envelop의 `onExecute` hook은 execution 직전에 context를 확�
 
 ### Allowed Alternatives
 
-- 없다. Operation client에는 direct DB client의 `connection` startup options를 전달하지 않고 actor GUC만 하나의 initialization SQL round trip에서 설정한다. Configured `OPERATION_DATABASE_URL`은 변경 없이 사용하며 호환되지 않는 URL은 runtime이 자동 보정하지 않는다. 연결 대기는 postgres.js 기본 bounded connection timeout 동작에 맡기며 application-selected timeout 숫자는 추가하지 않는다.
+- 없다. Operation client에는 direct DB client의 `connection` startup options를 전달하지 않고 actor GUC만 하나의 initialization SQL round trip에서 설정한다. Configured `OPERATION_DATABASE_URL`은 변경 없이 사용하며 호환되지 않는 URL은 runtime이 자동 보정하지 않는다. 이 activation은 overload 종료 정책이나 application-selected timeout 숫자를 추가하지 않으며, 해당 결정은 PROD-759가 소유한다.
 
 ### Known Traps
 
@@ -74,7 +74,7 @@ GraphQL Yoga/Envelop의 `onExecute` hook은 execution 직전에 context를 확�
 ## Risks / Trade-offs
 
 - [operation마다 frontend connection을 열고 닫아 latency와 PgBouncer client churn이 증가함] → session lifecycle 단순성과 reset 증명을 우선하고 dev load probe에서 connect latency, client waiting과 max wait를 관찰한다.
-- [동시 operation이 PgBouncer 또는 PostgreSQL capacity를 초과함] → postgres.js 기본 bounded connection timeout 동작으로 대기를 제한하고 custom queue 없이 bounded failure를 검증한다.
+- [동시 operation이 PgBouncer 또는 PostgreSQL capacity를 초과함] → frontend 연결 뒤 server slot 대기가 postgres.js connection timeout으로 제한되지 않음을 dev에서 관찰했다. 종료·취소 정책은 PROD-759로 분리하고 이 activation의 완료 조건으로 추측하지 않는다.
 - [execute 오류나 abort에서 connection이 남음] → wrapper `finally`와 close-once unit test, live connection metric baseline 복귀를 완료 gate로 둔다.
 - [대규모 consumer 이전에서 global DB call이 누락됨] → CodeGraph call path와 targeted static search를 함께 사용하고 domain별 integration test에서 주입한 handle identity를 검증한다.
 - [operation endpoint 전환이 request auth pool에도 적용됨] → request auth/startup은 API `DATABASE_URL` direct를 사용하고 operation `OPERATION_DATABASE_URL`만 Pooler를 사용하도록 render와 live env를 검증한다. rollback은 전체 activation merge/squash revision을 Git revert해 API `DATABASE_URL` direct와 `OPERATION_DATABASE_URL` env 부재를 복원한다.
@@ -89,7 +89,7 @@ GraphQL Yoga/Envelop의 `onExecute` hook은 execution 직전에 context를 확�
 4. forward fix release를 dev에 배포하고 Argo sync, API rollout/readiness와 current Pod 로그의 unsupported startup-parameter 부재를 확인한다. direct client의 기존 timeout startup 동작은 범위 밖으로 유지되고, operation client가 actor-only initialization SQL을 사용하는지 정적으로 확인한다.
 5. 기존 GraphQL smoke를 익명·Account-only·Account+Profile matrix로 실행해 초기화 HTTP 500이 없고 기대한 결과가 나오는지 확인한다.
 6. dev에서 operation connection affinity, 두 actor helper의 일회성 의미, 정상·오류·abort cleanup, same-backend `DISCARD ALL` reset과 `cnpg_pgbouncer_*` metrics를 비민감하게 검증한다.
-7. 정의된 capacity와 초과 부하에서 completion, postgres.js 기본 bounded connection timeout 동작, max wait와 connection baseline 복귀를 확인한다.
+7. 정의된 capacity 안의 completion, max wait와 connection baseline 복귀를 확인한다. Capacity 초과 종료 정책은 PROD-759에서 별도로 결정한다.
 8. 실패 시 application credential이나 out-of-band Kubernetes resource를 변경하지 않고 전체 activation merge/squash revision을 Git revert해 pre-activation tree를 배포한다. API `DATABASE_URL`은 current owner-compatible direct fallback을 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code는 제거한다. Web BFF baseline, migration, Pooler와 Cluster는 유지하며 #564 trusted Worker seam은 선점하거나 변경하지 않고 Pooler manifest를 prune하지 않는다.
 9. PROD-716 API/Web principal credential source/cutover와 별도 Role/Secret provisioning, grant, RLS policy issue는 이 change의 live gate나 rollback에 포함하지 않는다.
 

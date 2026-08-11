@@ -97,11 +97,11 @@ API는 현재 runtime이 사용하는 일반 Query/Mutation `ExecutionResult`가
 - **WHEN** 현재 production GraphQL runtime을 구성한다
 - **THEN** API는 `@defer`·`@stream` 또는 custom AsyncIterable connection bridge를 추가하지 않는다
 
-### Requirement: batch sibling과 overload를 격리한다
+### Requirement: batch sibling을 격리하고 capacity 안의 completion을 확인한다
 
-**Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726.
+**Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726. Capacity 초과 종료 정책의 관련 후속은 Linear PROD-759다.
 
-같은 HTTP batch의 sibling operation은 client connection, actor setting, DataLoader registry와 Pothos execution cache를 공유해서는 안 된다(MUST NOT). API는 postgres.js의 기본 bounded connection timeout 동작을 사용해야 하며(MUST), 별도 semaphore 또는 retry queue를 추가해서는 안 된다(MUST NOT). 정의된 capacity 안의 operation은 교착 없이 완료되어야 하고(MUST), 기본 동작의 제한 시간 안에 connection을 만들지 못한 operation은 실패하고 connection 또는 actor setting을 누출해서는 안 된다(MUST NOT).
+같은 HTTP batch의 sibling operation은 client connection, actor setting, DataLoader registry와 Pothos execution cache를 공유해서는 안 된다(MUST NOT). 정의된 capacity 안의 operation은 교착 없이 완료되어야 하고(MUST), 정상·오류·abort 뒤 connection 또는 actor setting을 누출해서는 안 된다(MUST NOT). 이 change는 capacity 초과 operation의 종료·취소 정책, custom semaphore, retry queue 또는 application-selected timeout을 추가해서는 안 된다(MUST NOT). 해당 정책은 PROD-759가 별도로 소유한다.
 
 #### Scenario: HTTP batch sibling 격리
 
@@ -109,11 +109,11 @@ API는 현재 runtime이 사용하는 일반 Query/Mutation `ExecutionResult`가
 - **THEN** 각 operation은 별도 client connection과 actor setting을 사용한다
 - **AND** DataLoader registry와 Pothos execution cache를 공유하지 않는다
 
-#### Scenario: connection capacity 초과
+#### Scenario: 정의된 capacity 안의 동시 operation
 
-- **WHEN** 동시에 시작된 operation이 사용 가능한 connection capacity를 초과한다
-- **THEN** postgres.js 기본 bounded connection timeout 동작 안에 connection을 얻지 못한 operation은 제한된 오류로 종료한다
-- **AND** custom retry queue를 만들거나 종료되지 않은 client connection을 남기지 않는다
+- **WHEN** 동시에 시작된 operation이 정의된 connection capacity 안에 있다
+- **THEN** 각 operation은 완료되고 종료 뒤 client connection 또는 actor setting을 남기지 않는다
+- **AND** capacity 초과 종료 정책을 이 change에서 추측하거나 custom retry queue를 추가하지 않는다
 
 ### Requirement: client 종료 뒤 backend session state가 유출되지 않는다
 

@@ -18,7 +18,7 @@ Merge revision `de6034d3`를 dev에 배포한 뒤 Argo와 Rollout은 `Synced`/`H
 사용자 결정은 전체 activation revert가 아닌 forward fix다. Forward fix는 다음 계약만 변경한다.
 
 - direct `DATABASE_URL` client의 기존 server timeout startup 동작은 이 forward fix에서 변경하지 않는다. 이 legacy 동작과 그 값은 이 change의 범위 밖이다.
-- operation Pooler client는 API direct DB client의 `connection` startup options를 상속하지 않는다. Fix는 operation client 생성 시 해당 options를 전달하지 않는 것이며, configured `OPERATION_DATABASE_URL`은 변경 없이 postgres.js에 전달한다. Runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않으므로, configured URL이 이미 Pooler와 호환되지 않으면 지원 대상이 아니다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다.
+- operation Pooler client는 API direct DB client의 `connection` startup options를 상속하지 않는다. Fix는 operation client 생성 시 해당 options를 전달하지 않는 것이며, configured `OPERATION_DATABASE_URL`은 변경 없이 postgres.js에 전달한다. Runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않으므로, configured URL이 이미 Pooler와 호환되지 않으면 지원 대상이 아니다. PgBouncer frontend 연결 뒤 server slot을 기다리는 overload 종료 정책은 이 activation과 분리된 PROD-759가 소유한다.
 - operation client가 실제 frontend connection을 만든 뒤 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고, 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다.
 - endpoint, 기존 API credential/Secret selector, Pooler CR, replica, resource와 capacity 설정은 변경하지 않는다. 이 forward fix는 #564 trusted Worker seam, PROD-716 API/Web principal credential source/cutover나 PROD-728 Pooler resource lifecycle을 선점하지 않는다. Role/Secret provisioning, grant와 RLS policy는 각각의 별도 선행 issue 경계로 남긴다.
 
@@ -235,7 +235,7 @@ API activation 후 일반 GraphQL Query/Mutation을 익명, Account-only, Accoun
 - `@defer`·`@stream` incremental execution과 Subscription은 현재 lifecycle 범위에서 제외한다. 이 기능을 위해 AsyncIterable connection bridge를 추가하거나 장기 Subscription session을 할당하지 않는다.
 - forward fix release의 current API Pod 로그에 direct DB `connection` startup options 상속으로 인한 PgBouncer unsupported startup-parameter 오류가 없어야 하며, 익명·Account-only·Account+Profile 기존 GraphQL smoke가 HTTP 500 없이 기대한 결과를 반환해야 한다. 근거에는 로그 원문, URL, Secret, actor UUID를 남기지 않고 `startup-compatibility-ok`와 smoke 상태만 기록한다.
 
-Capacity 안의 동시 operation은 완료되어야 하며, capacity를 넘은 operation은 custom semaphore·retry queue 없이 postgres.js의 기본 bounded connection timeout 동작으로 제한된 실패를 반환해야 한다. 별도의 application-selected timeout 숫자는 두지 않는다. `cnpg_pgbouncer_pools_cl_active`, `cnpg_pgbouncer_pools_cl_waiting`, `cnpg_pgbouncer_pools_sv_active`, `cnpg_pgbouncer_pools_sv_idle`, `cnpg_pgbouncer_pools_maxwait`를 부하 전후에 관찰하되 label, URL, credential, row와 backend PID는 근거에 남기지 않는다. 같은 backend가 재사용될 때 이전 actor setting이 남지 않는지는 아래 reset probe로 한 번 확인한다.
+Capacity 안의 동시 operation은 완료되어야 하며, 정상·오류·abort 뒤 client와 actor state가 남지 않고 metrics baseline으로 복귀해야 한다. PgBouncer frontend 연결 뒤 server slot을 기다리는 capacity 초과 operation의 종료·취소 정책과 timeout budget은 PROD-759에서 별도로 결정하며, 이 activation은 임의 timeout 숫자, custom semaphore 또는 retry queue를 추가하지 않는다. `cnpg_pgbouncer_pools_cl_active`, `cnpg_pgbouncer_pools_cl_waiting`, `cnpg_pgbouncer_pools_sv_active`, `cnpg_pgbouncer_pools_sv_idle`, `cnpg_pgbouncer_pools_maxwait`를 부하 전후에 관찰하되 label, URL, credential, row와 backend PID는 근거에 남기지 않는다. 같은 backend가 재사용될 때 이전 actor setting이 남지 않는지는 아래 reset probe로 한 번 확인한다.
 
 이 operation session gate는 GraphQL RLS 대상만 검증한다. Fedify inbound/delivery, Temporal Workflow/Activity와 #564 trusted Worker `WORKER_DATABASE_*` execution lifecycle은 이 gate의 대상이 아니며 `OPERATION_DATABASE_URL`에 공급하지 않는다. PROD-716은 API/Web principal credential source/cutover만 소유하고, Role/Secret provisioning, grant와 RLS policy는 각각의 별도 issue 경계로 남긴다.
 

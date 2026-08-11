@@ -41,7 +41,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 
 **Deliverable**
 
-각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context, user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL` direct client의 기존 server timeout startup 동작은 이 change의 범위 밖으로 두고 변경하지 않는다. Incident의 원인은 operation client가 direct DB client의 `connection` startup options를 상속한 것이며, fix는 operation client에 그 options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 사용하고 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. Actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고 성공 전에는 resolver를 실행하지 않는다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다. `selectProfile`이 active Profile을 전환하면 자신이 소유하는 새 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`와 `ctx.session.profileId`를 갱신해 다음 top-level Mutation field가 새 actor를 사용하게 하며, `kosmo.account_id`와 operation-wide transaction 경계는 유지한다. 범위는 serial sibling 사이 stale GUC 전환이며 authorization concurrency, locking 또는 TOCTOU safety는 포함하지 않는다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
+각 일반 Query/Mutation은 `OPERATION_DATABASE_URL`의 하나의 실제 PgBouncer client connection에서 actor context, user-data query/result projection/domain action SQL을 실행하고 execution이 끝난 뒤 connection 종료를 await한다. API `DATABASE_URL` direct client의 기존 server timeout startup 동작은 이 change의 범위 밖으로 두고 변경하지 않는다. Incident의 원인은 operation client가 direct DB client의 `connection` startup options를 상속한 것이며, fix는 operation client에 그 options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 사용하고 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. Actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고 성공 전에는 resolver를 실행하지 않는다. PgBouncer frontend 연결 뒤 server slot을 기다리는 overload 종료 정책은 독립 후속 PROD-759가 소유한다. `selectProfile`이 active Profile을 전환하면 자신이 소유하는 새 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`와 `ctx.session.profileId`를 갱신해 다음 top-level Mutation field가 새 actor를 사용하게 하며, `kosmo.account_id`와 operation-wide transaction 경계는 유지한다. 범위는 serial sibling 사이 stale GUC 전환이며 authorization concurrency, locking 또는 TOCTOU safety는 포함하지 않는다. API `DATABASE_URL`은 direct request/auth/startup 경계를 유지한다.
 
 **Guardrails**
 
@@ -52,7 +52,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 - 현재 활성화되지 않은 Query/Mutation incremental AsyncIterable bridge를 추가하지 않는다.
 - Subscription에는 Query/Mutation용 장기 DB session을 할당하지 않는다.
 - Fedify-owned remote actor materialization trusted side effect와 Temporal/worker execution은 이 operation session lifecycle에 포함하지 않는다.
-- custom semaphore, retry loop 또는 queue를 만들지 않고 postgres.js 기본 bounded connection timeout 동작을 사용한다. application-selected timeout 숫자는 추가하지 않는다.
+- overload 종료 정책, custom semaphore, retry loop, queue 또는 application-selected timeout 숫자를 추가하지 않는다. 해당 정책은 PROD-759가 소유한다.
 - endpoint, credential/Secret selector, Pooler CR·replica·resource·capacity는 이 forward fix에서 변경하지 않는다.
 
 **Verification**
@@ -61,12 +61,12 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 - 익명, Account-only, Account+Profile matrix에서 actor GUC만 한 initialization SQL round trip으로 설정되고 resolver가 그 전에 시작되지 않는지 확인한다. helper 의미는 integration/live probe에서 일회성으로 확인한다.
 - `selectProfile` 뒤 다음 top-level Mutation field가 같은 operation Database에서 새 `ctx.session.profileId`와 `kosmo.profile_id`를 관찰하고, `kosmo.account_id`가 변하지 않으며 selectProfile-owned action-local narrow transaction만 사용함을 확인한다. 이 검증은 authorization concurrency, locking 또는 TOCTOU safety를 다루지 않는다.
 - HTTP batch sibling의 Database identity, actor setting, DataLoader와 Pothos cache가 분리되는지 확인한다.
-- capacity 초과에서 postgres.js 기본 bounded connection timeout 동작 후 connection/actor state가 남지 않는지 확인한다.
+- 완료·오류·중단·batch 경계에서 connection/actor state가 남지 않는지 확인한다.
 
-- [x] 2.1 종료 가능한 per-operation postgres.js/Drizzle client owner와 postgres.js 기본 bounded connection timeout 경계를 구현한다.
+- [x] 2.1 종료 가능한 per-operation postgres.js/Drizzle client owner를 구현한다.
 - [x] 2.2 두 actor GUC의 session-level 초기화와 setting 실패 시 operation 중단을 구현하고 runtime helper read-back을 추가하지 않는다.
 - [x] 2.3 일반 Query/Mutation execute를 `finally` cleanup으로 소유하고 incremental execution과 Subscription을 제외하는 Yoga lifecycle을 구현한다.
-- [ ] 2.4 모든 완료·오류·중단·batch·overload 경계의 lifecycle 회귀를 검증한다.
+- [x] 2.4 모든 완료·오류·중단·batch 경계의 lifecycle 회귀를 검증한다. Capacity 초과 종료 정책은 PROD-759로 분리한다.
 
 ## 3. PROD-726 Pooler endpoint activation
 
@@ -124,7 +124,7 @@ dev runtime에서 GraphQL user-data query/result projection/domain action operat
 - forward fix release의 dev Argo sync와 API Rollout/Pod/Service readiness를 확인하고 current API Pod 로그에 PgBouncer unsupported startup-parameter 오류가 없는지 확인한다.
 - 익명·Account-only·Account+Profile 기존 GraphQL smoke가 초기화 HTTP 500 없이 기대한 결과를 반환하는지 확인한다. 로그 원문, URL, Secret과 actor UUID는 근거에 남기지 않는다.
 - Query/Mutation별 frontend connection, same-session backend affinity, Mutation nested result, `searchProfiles` materialization 후 최종 query의 `ctx.db` 사용, 두 actor helper의 일회성 의미, 정상·오류·abort cleanup과 same-backend `DISCARD ALL` reset을 비민감하게 확인한다.
-- `cnpg_pgbouncer_*` client/server/max-wait metrics와 capacity 안 completion, 초과 부하 timeout, 종료 뒤 connection baseline 복귀를 확인한다.
+- `cnpg_pgbouncer_*` client/server/max-wait metrics와 capacity 안 completion 및 종료 뒤 connection baseline 복귀를 확인한다. Capacity 초과 종료 정책은 PROD-759로 분리한다.
 - 전체 activation merge/squash revision Git revert가 API `DATABASE_URL` current fallback direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거하며, Web BFF baseline, migration, PROD-728 Pooler와 Cluster에 영향을 주지 않음을 확인한다. #564 Worker seam과 API/Web principal transition(PROD-716)은 이 change에서 건드리지 않는다.
 
 - [x] 4.1 전체 정적·unit·integration·E2E·Helm·OpenSpec 검증과 correctness/최소화 self-review를 완료한다.

@@ -6,7 +6,7 @@ GraphQL operation context와 Post SQL handle seam, CloudNativePG PgBouncer sessi
 
 - production GraphQL user-data query, result projection과 domain action의 모든 root·field·loader와 이들이 호출하는 core service SQL을 operation별 `ctx.db`로 정렬한다. Mutation nested result resolver도 같은 operation handle을 사용한다.
 - 각 일반 Query/Mutation operation마다 실제 PgBouncer client connection을 하나 만들고 Account/Profile actor GUC를 session-level로 설정한다.
-- API `DATABASE_URL` direct client의 기존 PostgreSQL timeout startup 동작은 이 change의 범위 밖으로 두고 변경하지 않는다. Incident의 원인은 operation client가 direct DB client의 `connection` startup options를 상속한 것이며, fix는 operation client에 그 options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 postgres.js에 전달하고 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않으므로, URL은 이미 Pooler와 호환되어야 한다. Actor GUC만 하나의 session-level initialization SQL round trip에서 설정한 뒤 resolver를 시작하며, 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다.
+- API `DATABASE_URL` direct client의 기존 PostgreSQL timeout startup 동작은 이 change의 범위 밖으로 두고 변경하지 않는다. Incident의 원인은 operation client가 direct DB client의 `connection` startup options를 상속한 것이며, fix는 operation client에 그 options를 전달하지 않는 것이다. Configured `OPERATION_DATABASE_URL`은 변경 없이 postgres.js에 전달하고 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않으므로, URL은 이미 Pooler와 호환되어야 한다. Actor GUC만 하나의 session-level initialization SQL round trip에서 설정한 뒤 resolver를 시작한다. PgBouncer frontend 연결 뒤 server slot을 기다리는 overload 종료 정책은 독립 후속 PROD-759가 소유한다.
 - `selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 바꾸면 `selectProfile`이 소유하는 action-local narrow transaction을 같은 operation Database에서 열어 `kosmo.profile_id`를 갱신하고 이후 top-level Mutation field가 새 actor를 사용하게 한다. `kosmo.account_id`는 유지하고 operation-wide transaction을 만들지 않는다. 이 계약은 serial sibling 사이 stale GUC 전환만 다루며 authorization concurrency, locking 또는 TOCTOU safety를 보장하지 않는다.
 - request authentication과 startup/bootstrap SQL은 direct `DATABASE_URL` 경계를 유지하고, 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization trusted side effect만 direct DB 예외로 둔다. materialization 뒤 최종 GraphQL query는 `ctx.db`에서 실행한다.
 - HTTP batch sibling은 connection, DataLoader와 실행 cache를 공유하지 않는다.
@@ -19,6 +19,7 @@ GraphQL operation context와 Post SQL handle seam, CloudNativePG PgBouncer sessi
 
 - Canonical: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`
 - Linear Contract: PROD-726
+- Related Follow-up: PROD-759 (Pooler server-slot 대기 종료 정책; 이 change와 PROD-716을 block하지 않음)
 - Linear Implementations: PROD-708, PROD-371, PROD-728, PROD-370
 - Parallel / Excluded: PROD-706 (Fedify/Temporal execution boundary), PROD-716 (API/Web principal credential source/cutover); Role/Secret provisioning, grant와 RLS policy는 각각의 별도 issue 경계
 
@@ -26,7 +27,7 @@ GraphQL operation context와 Post SQL handle seam, CloudNativePG PgBouncer sessi
 
 ### New Capabilities
 
-- `graphql-operation-db-session`: 일반 Query/Mutation별 PgBouncer client session, actor GUC, cleanup와 과부하 경계를 정의한다.
+- `graphql-operation-db-session`: 일반 Query/Mutation별 PgBouncer client session, actor GUC, cleanup와 capacity 안의 실행 경계를 정의한다. Capacity 초과 종료 정책은 PROD-759로 분리한다.
 
 ### Modified Capabilities
 
