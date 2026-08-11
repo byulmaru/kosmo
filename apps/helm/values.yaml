@@ -25,6 +25,8 @@ autoscaling:
 migration:
   enabled: false
 fedify:
+  queueDatabase:
+    enabled: false
   producer:
     enabled: false
   consumer:

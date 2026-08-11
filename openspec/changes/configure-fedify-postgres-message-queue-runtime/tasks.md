@@ -194,9 +194,10 @@ PR completion과 별도로 dev 환경에서 실제 Fedify queue producer/consume
 
 **Verification**
 
-- dev의 현재 schema/credential/deployment 상태를 먼저 읽고, 실제 inbound/outbound canary handoff, queue depth 변화, consumer restart 뒤 처리와 Web/consumer 독립 rollout을 관측한다.
+- dev의 현재 database/credential/deployment 상태를 먼저 읽고, 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret이 domain/Worker credential fallback 없이 준비됐는지 확인한다.
+- 실제 inbound/outbound canary handoff, queue depth 변화, consumer restart 뒤 처리와 Web/consumer 독립 rollout을 관측한다. adapter implicit DDL 외 custom schema/search-path helper 또는 queue migration을 추가하지 않는다.
 - dev 미실행이면 미실행 사유와 PR completion evidence만 명확히 보고한다.
 
-- [ ] 7.1 dev 현재 상태와 안전한 canary/rollback 대상을 확인하고 live verification 범위를 기록한다.
+- [x] 7.1 dev 현재 상태와 안전한 canary/rollback 대상을 확인하고 live verification 범위를 기록한다.
 - [ ] 7.2 dev에서 producer handoff, consumer 처리, queue depth와 dequeue 전 queued-message persistence를 검증한다.
 - [ ] 7.3 dev live 결과와 남은 production apply/cutover gate를 Linear와 PR에 구분해 기록한다.
