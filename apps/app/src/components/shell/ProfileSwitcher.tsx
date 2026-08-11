@@ -60,7 +60,6 @@ const ProfileSwitcherFragment = graphql`
           id
           url
         }
-        ...ProfileNameBlock_profile
       }
     }
     me {
