@@ -24,6 +24,23 @@ autoscaling:
   targetCPUUtilizationPercentage: 80
 migration:
   enabled: false
+fedify:
+  producer:
+    enabled: false
+  consumer:
+    enabled: false
+    replicas:
+      dev: 1
+      prod: 2
+    health:
+      port: 8080
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
 temporal:
   frontendAddress: temporal-frontend.temporal.svc.cluster.local:7233
   adminTools:
@@ -45,6 +62,11 @@ postgres:
         name: ''
         key: ''
     worker:
+      databaseUrl: ''
+      passwordSecret:
+        name: ''
+        key: ''
+    fedifyQueue:
       databaseUrl: ''
       passwordSecret:
         name: ''

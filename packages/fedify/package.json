@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@fedify/fedify": "^2.3.0",
+    "@fedify/postgres": "2.3.0",
     "@fedify/vocab": "2.3.0",
     "@kosmo/core": "workspace:*",
     "drizzle-orm": "1.0.0-beta.22",
     "entities": "^8.0.0",
+    "postgres": "^3.4.9",
     "zod": "^4.4.3"
   },
   "devDependencies": {

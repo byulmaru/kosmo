@@ -1,0 +1,98 @@
+{{- include "kosmo.validatePostgresCredentials" . -}}
+{{- $queue := .Values.postgres.credentials.fedifyQueue -}}
+{{- $trusted := .Values.postgres.credentials.worker -}}
+{{- if .Values.fedify.consumer.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: fedify-consumer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: fedify-consumer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ get .Values.fedify.consumer.replicas .Values.env }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fedify-consumer
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fedify-consumer
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/version: {{ .Values.version | quote }}
+    spec:
+      serviceAccountName: {{ printf "%s-fedify-consumer" .Release.Name | trunc 63 | trimSuffix "-" }}
+      automountServiceAccountToken: false
+      containers:
+        - name: fedify-consumer
+          image: {{ include "kosmo.imageRef" . | quote }}
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: {{ .Values.fedify.consumer.health.port }}
+              protocol: TCP
+          args:
+            - fedify-queue
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.env | quote }}
+            - name: PORT
+              value: {{ .Values.fedify.consumer.health.port | quote }}
+            - name: HOST
+              value: "0.0.0.0"
+            - name: FEDIFY_QUEUE_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "postgres.credentials.fedifyQueue.passwordSecret.name is required when the Fedify consumer is enabled" $queue.passwordSecret.name | quote }}
+                  key: {{ required "postgres.credentials.fedifyQueue.passwordSecret.key is required when the Fedify consumer is enabled" $queue.passwordSecret.key | quote }}
+            - name: FEDIFY_QUEUE_DATABASE_URL
+              value: {{ required "postgres.credentials.fedifyQueue.databaseUrl is required when the Fedify consumer is enabled" $queue.databaseUrl | quote }}
+            - name: WORKER_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "postgres.credentials.worker.passwordSecret.name is required when the Fedify consumer is enabled" $trusted.passwordSecret.name | quote }}
+                  key: {{ required "postgres.credentials.worker.passwordSecret.key is required when the Fedify consumer is enabled" $trusted.passwordSecret.key | quote }}
+            - name: DATABASE_URL
+              value: {{ required "postgres.credentials.worker.databaseUrl is required when the Fedify consumer is enabled" $trusted.databaseUrl | quote }}
+          envFrom:
+            - secretRef:
+                name: env
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+{{ toYaml .Values.fedify.consumer.resources | indent 12 }}
+{{- end }}
