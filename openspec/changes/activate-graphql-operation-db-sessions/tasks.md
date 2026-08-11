@@ -132,3 +132,7 @@ dev runtime에서 GraphQL user-data query/result projection/domain action operat
 - [ ] 4.3 exact merge revision의 dev Argo/readiness와 GraphQL 행동 회귀를 검증한다.
 - [ ] 4.4 actor session affinity, 모든 cleanup 경로, same-backend reset과 PgBouncer metrics/capacity를 live 검증한다.
 - [ ] 4.5 live gate 근거를 Linear에 기록하고 PROD-726의 완료 전제가 충족됐는지 확인한다.
+
+**Archive handoff (task 아님)**
+
+모든 checkbox가 완료되면 PROD-726 담당자가 별도 Ready PR에서 delta spec을 canonical spec에 동기화하고 이 change를 archive한 뒤 전체 strict validation을 수행한다. 해당 archive PR이 merge된 뒤에만 PROD-726을 Done으로 처리하고 후속 PROD-716의 blocker를 해제한다. Archive 실행은 모든 task 완료 뒤의 workflow이며 이 checklist의 완료 조건에 포함하지 않는다.
