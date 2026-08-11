@@ -162,6 +162,7 @@ function BookmarkListState({
   return (
     <StateView
       actionLabel={onRetry ? '다시 시도' : undefined}
+      actionStyle={styles.actionButton}
       alert={alert}
       description={description}
       inline

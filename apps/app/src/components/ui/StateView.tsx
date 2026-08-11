@@ -6,6 +6,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 
 type StateViewProps = {
   actionLabel?: string;
+  actionStyle?: StyleProp<ViewStyle>;
   alert?: boolean;
   description?: string;
   inline?: boolean;
@@ -17,6 +18,7 @@ type StateViewProps = {
 
 export function StateView({
   actionLabel,
+  actionStyle,
   alert = false,
   description,
   inline = false,
@@ -71,7 +73,11 @@ export function StateView({
           {description}
         </Text>
       ) : null}
-      {actionLabel && onAction ? <Button onPress={onAction}>{actionLabel}</Button> : null}
+      {actionLabel && onAction ? (
+        <Button onPress={onAction} style={actionStyle}>
+          {actionLabel}
+        </Button>
+      ) : null}
     </View>
   );
 }
