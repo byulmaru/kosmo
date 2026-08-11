@@ -140,7 +140,7 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 
 Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1684-254)이 화면과 공용 컴포넌트의 적용 source다.
 
-- Button은 `action/primary/*`, feedback `base/on-base`, disabled pair를 사용한다.
+- Button은 `action/primary/*`, feedback `base/on-base`, disabled pair를 사용한다. Focus는 fill을 교체하지 않고 tone별 현재 fill을 유지한 채 `state/focus-ring`을 추가한다.
 - TextField는 `background/surface`, foreground hierarchy, `border/default/focus`와 feedback border를 사용한다.
 - route body와 loading·empty state host는 `background/canvas` 하나의 기본 평면으로 본다. `PageHeader` 같은 공통 header chrome도 같은 canvas를 사용하고 `border/subtle`, sticky 위치와 필요할 때의 elevation effect로만 구조를 구분한다. Header가 있다는 이유로 아래 본문이나 state를 `background/surface`로 올리지 않는다.
 - 연속 피드와 목록도 같은 canvas 평면을 이어 쓴다. 목록 container가 canvas를 소유하고 `PostListItem`·`PostLayout` 같은 post row root는 별도 fill 없이 상속하며 `border/subtle`로 구분한다. 각 row에 `background/surface`나 `background/elevated`를 반복 적용하지 않는다.
