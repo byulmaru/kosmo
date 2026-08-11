@@ -30,9 +30,8 @@ spec:
   replication: false
   bypassrls: false
   inRoles: []
-  disablePassword: true
-  clientCertificate:
-    enabled: true
+  passwordSecret:
+    name: {{ printf "%s-postgres-api" $releaseName }}
   databaseRoleReclaimPolicy: retain
 {{- if and (eq .Values.env "dev") .Values.fedify.queueDatabase.enabled }}
 {{- $queue := .Values.postgres.credentials.fedifyQueue | default dict }}
@@ -125,7 +124,6 @@ spec:
   replication: false
   bypassrls: true
   inRoles: []
-  disablePassword: true
-  clientCertificate:
-    enabled: true
+  passwordSecret:
+    name: {{ printf "%s-postgres-worker" $releaseName }}
   databaseRoleReclaimPolicy: retain
