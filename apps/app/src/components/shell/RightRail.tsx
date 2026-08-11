@@ -4,7 +4,7 @@ import { getBuildVersionLabel } from '@/buildVersion';
 import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
-import { GuardedLink } from './GuardedLink';
+import { NavigationLink } from './NavigationLink';
 import type { TextStyle } from 'react-native';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
@@ -24,7 +24,7 @@ export function RightRailFooter() {
 
   return (
     <View style={styles.footer}>
-      <GuardedLink href="/privacy">
+      <NavigationLink href="/privacy">
         <Pressable
           accessibilityLabel="개인정보 처리방침"
           accessibilityRole="link"
@@ -32,7 +32,7 @@ export function RightRailFooter() {
         >
           <Text style={[styles.footerText, { color: theme.textSecondary }]}>개인정보 처리방침</Text>
         </Pressable>
-      </GuardedLink>
+      </NavigationLink>
       <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}>
         ·
       </Text>

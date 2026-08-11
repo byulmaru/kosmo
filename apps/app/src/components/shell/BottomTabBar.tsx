@@ -6,7 +6,7 @@ import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
-import { GuardedLink } from './GuardedLink';
+import { NavigationLink } from './NavigationLink';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -123,9 +123,9 @@ export function BottomTabBar({
         );
 
         return tab.href ? (
-          <GuardedLink href={tab.href} key={tab.label} primary>
+          <NavigationLink href={tab.href} key={tab.label} primary>
             {content}
-          </GuardedLink>
+          </NavigationLink>
         ) : (
           <View key={tab.label} style={styles.disabledItem}>
             {content}

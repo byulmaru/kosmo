@@ -20,8 +20,8 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
-import { GuardedLink } from './GuardedLink';
 import { useNavigationGuard } from './NavigationGuardContext';
+import { NavigationLink } from './NavigationLink';
 import {
   getProfileEditActionCurrentState,
   getProfileEditActionTargetMetrics,
@@ -551,7 +551,7 @@ export function ProfileSwitcher({
         {active.relativeHandle}
       </Text>
       <View style={styles.counts}>
-        <GuardedLink
+        <NavigationLink
           href={`/${active.relativeHandle}/following`}
           onNavigate={profileSummaryOnNavigate}
         >
@@ -565,8 +565,8 @@ export function ProfileSwitcher({
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로잉</Text>
           </Pressable>
-        </GuardedLink>
-        <GuardedLink
+        </NavigationLink>
+        <NavigationLink
           href={`/${active.relativeHandle}/followers`}
           onNavigate={profileSummaryOnNavigate}
         >
@@ -580,7 +580,7 @@ export function ProfileSwitcher({
             </Text>
             <Text style={[styles.countLabel, { color: theme.text }]}>팔로워</Text>
           </Pressable>
-        </GuardedLink>
+        </NavigationLink>
       </View>
     </>
   ) : (
@@ -629,7 +629,7 @@ export function ProfileSwitcher({
         {profileDetails}
       </View>
       {canEditSelectedProfile ? (
-        <GuardedLink href="/profile-edit" onNavigate={profileSummaryOnNavigate} primary>
+        <NavigationLink href="/profile-edit" onNavigate={profileSummaryOnNavigate} primary>
           <Pressable
             aria-current={profileEditCurrentState.ariaCurrent}
             accessibilityLabel="프로필 편집"
@@ -655,7 +655,7 @@ export function ProfileSwitcher({
               </View>
             )}
           </Pressable>
-        </GuardedLink>
+        </NavigationLink>
       ) : null}
     </View>
   ) : (

@@ -5,13 +5,13 @@ import { act, create } from 'react-test-renderer';
 import type { Href, LinkProps } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { GuardedLink as GuardedLinkExport } from './GuardedLink';
 import type {
   GuardedNavigationAction,
   NavigationGuardProvider as NavigationGuardProviderExport,
   NavigationRequestHandler,
   useNavigationGuard as useNavigationGuardExport,
 } from './NavigationGuardContext';
+import type { NavigationLink as NavigationLinkExport } from './NavigationLink';
 import type {
   PrimaryNavigationScrollProvider as PrimaryNavigationScrollProviderExport,
   usePrimaryNavigationScroll as usePrimaryNavigationScrollExport,
@@ -74,14 +74,14 @@ mockModule('react-native', {
   Platform: { OS: 'web' },
 });
 
-let GuardedLink: typeof GuardedLinkExport;
+let NavigationLink: typeof NavigationLinkExport;
 let NavigationGuardProvider: typeof NavigationGuardProviderExport;
 let useNavigationGuard: typeof useNavigationGuardExport;
 let PrimaryNavigationScrollProvider: typeof PrimaryNavigationScrollProviderExport;
 let usePrimaryNavigationScroll: typeof usePrimaryNavigationScrollExport;
 
 before(async () => {
-  ({ GuardedLink } = await import('./GuardedLink'));
+  ({ NavigationLink } = await import('./NavigationLink'));
   ({ NavigationGuardProvider, useNavigationGuard } = await import('./NavigationGuardContext'));
   ({ PrimaryNavigationScrollProvider, usePrimaryNavigationScroll } =
     await import('./PrimaryNavigationScrollContext'));
@@ -153,7 +153,7 @@ const renderLink = async (
           null,
           createElement(PrimaryNavigationProbe),
           createElement(GuardRegistrar, { handler }),
-          createElement(GuardedLink, {
+          createElement(NavigationLink, {
             children: createElement(TestPressable),
             href: options.href ?? '/timeline',
             onNavigate,
@@ -168,7 +168,7 @@ const renderLink = async (
   assert.ok(composedLinkPress);
 };
 
-describe('GuardedLink', () => {
+describe('NavigationLink', () => {
   it('guard가 이탈을 보류하면 기본 Link를 막고 승인된 action만 실행한다', async () => {
     let pendingAction: GuardedNavigationAction | null = null;
     const onNavigate = mock.fn();

@@ -17,7 +17,7 @@ type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   primary?: boolean;
 };
 
-export function GuardedLink({ children, href, onNavigate, primary = false, ...props }: Props) {
+export function NavigationLink({ children, href, onNavigate, primary = false, ...props }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const { request } = useNavigationGuard();
