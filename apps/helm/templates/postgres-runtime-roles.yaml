@@ -1,4 +1,8 @@
 {{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
+{{- $queueWorkloadEnabled := or .Values.fedify.producer.enabled .Values.fedify.consumer.enabled }}
+{{- if and (eq .Values.env "dev") $queueWorkloadEnabled (not .Values.fedify.queueDatabase.enabled) }}
+{{- fail "fedify.queueDatabase.enabled must be true when a dev Fedify queue workload is enabled" }}
+{{- end }}
 {{- if and .Values.fedify.queueDatabase.enabled (ne .Values.env "dev") }}
 {{- fail "fedify.queueDatabase.enabled is currently supported only when env=dev" }}
 {{- end }}
@@ -44,6 +48,10 @@ spec:
 {{- end }}
 {{- if not $databaseUrl }}
 {{- fail "postgres.credentials.fedifyQueue.databaseUrl is required when fedify.queueDatabase.enabled is true" }}
+{{- end }}
+{{- $queueUrlPattern := printf "^postgres(ql)?://kosmo_fedify_queue:[^@]+@%s:5432/kosmo_fedify_queue(?:\\?.*)?$" (include "kosmo.postgresPoolerName" .) }}
+{{- if not (regexMatch $queueUrlPattern $databaseUrl) }}
+{{- fail (printf "postgres.credentials.fedifyQueue.databaseUrl must target kosmo_fedify_queue through %s:5432" (include "kosmo.postgresPoolerName" .)) }}
 {{- end }}
 ---
 apiVersion: postgresql.cnpg.io/v1

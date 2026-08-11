@@ -164,6 +164,7 @@
 - **THEN** 기존 CloudNativePG cluster 안의 별도 `kosmo_fedify_queue` database와 전용 login/Secret을 사용한다
 - **AND** official adapter가 해당 database 안의 queue table/index implicit DDL을 소유하며 domain database schema, `search_path` helper 또는 custom queue migration을 추가하지 않는다
 - **AND** queue connection은 API/domain DB와 Worker trusted execution credential을 재사용하거나 fallback하지 않는다
+- **AND** dev producer 또는 consumer를 활성화하면서 queue database 준비 flag를 끄거나 전용 role·PgBouncer·database가 아닌 URL을 지정하면 Helm render에 실패한다
 
 #### Scenario: 구현 PR 완료
 
