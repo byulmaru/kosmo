@@ -7,18 +7,18 @@
 - Pooler 이름은 `<release>-postgres-pooler-rw`이고 Cluster 이름은 `<release>-postgres`이다.
 - Pooler Service의 기본 client port는 `5432`이며, 기존 `<release>-postgres-rw` Service와 별개다.
 - API Rollout의 `DATABASE_URL`은 현재 request/auth/startup 경계로서 기존 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation session 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. 이는 현재 배포 baseline이지 향후 API/Web principal 방향이 아니다. Web BFF의 기본 `DATABASE_URL`과 migration workload의 direct endpoint도 이 change에서 유지한다. PR #564(merge `2c65b6dc`)의 trusted Worker `WORKER_DATABASE_*` seam은 별도 Worker 실행 경계이며 `OPERATION_DATABASE_URL`의 입력이 아니다. API/Web principal 전환은 PROD-716이 소유하고, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다.
-- 기존 `postgres.credentials.api` atomic trio가 구성된 환경에서는 기존 API `DATABASE_URL` source/authority와 API-role Secret selector를 유지하고, operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체한다. Scheme, username, database, password Secret source, path와 query는 보존한다. Runtime operation client는 그 URL query에서 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout` 세 key만 startup parameter 호환성을 위해 제거하고, 다른 query parameter는 보존한다. 이 change는 새 credential selector를 만들거나 trio를 설정·교체하지 않는다.
+- 기존 `postgres.credentials.api` atomic trio가 구성된 환경에서는 기존 API `DATABASE_URL` source/authority와 API-role Secret selector를 유지하고, operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체한다. Scheme, username, database, password Secret source, path와 query는 보존한다. Runtime operation client는 configured `OPERATION_DATABASE_URL`을 변경 없이 postgres.js에 전달하며, query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. 따라서 구성된 URL은 Pooler와 호환되어야 하며 임의의 잘못된 URL은 지원하지 않는다. 이 change는 새 credential selector를 만들거나 trio를 설정·교체하지 않는다.
 - CloudNativePG operator와 `Pooler` CRD가 대상 namespace에 먼저 설치되어 있어야 한다.
 - 명령 출력에는 Secret 값, connection string, database row를 남기지 않는다. 검증 결과는 readiness, metric 이름과 비민감한 성공/실패만 기록한다.
 
 ## 2026-08-11 dev activation incident와 forward fix
 
-Merge revision `de6034d3`를 dev에 배포한 뒤 Argo와 Rollout은 `Synced`/`Healthy`였지만, GraphQL operation client가 PgBouncer가 지원하지 않는 server timeout startup parameter를 전달해 초기화 단계에서 거부됐다. 그 결과 dev의 GraphQL Query/Mutation이 모두 HTTP 500으로 실패했다. API request/startup의 기존 `DATABASE_URL` 경계, Web BFF baseline, migration direct endpoint와 production image에는 이 incident의 영향이 확인되지 않았다.
+Merge revision `de6034d3`를 dev에 배포한 뒤 Argo와 Rollout은 `Synced`/`Healthy`였지만, GraphQL operation client가 API direct DB client의 `connection` startup options(`idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`)을 물려받아 PgBouncer가 지원하지 않는 옵션을 전달했다. 그 결과 operation 초기화가 거부되어 dev의 GraphQL Query/Mutation이 모두 HTTP 500으로 실패했다. API request/startup의 기존 `DATABASE_URL` 경계, Web BFF baseline, migration direct endpoint와 production image에는 이 incident의 영향이 확인되지 않았다.
 
 사용자 결정은 전체 activation revert가 아닌 forward fix다. Forward fix는 다음 계약만 변경한다.
 
 - direct `DATABASE_URL` client의 기존 server timeout startup 동작은 이 forward fix에서 변경하지 않는다. 이 legacy 동작과 그 값은 이 change의 범위 밖이다.
-- operation Pooler client는 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내지 않는다. Configured `OPERATION_DATABASE_URL`에 해당 timeout query key가 있어도 runtime에서 정확히 세 key만 제거하며, endpoint authority와 그 밖의 query parameter는 유지한다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다.
+- operation Pooler client는 API direct DB client의 `connection` startup options를 상속하지 않는다. Fix는 operation client 생성 시 해당 options를 전달하지 않는 것이며, configured `OPERATION_DATABASE_URL`은 변경 없이 postgres.js에 전달한다. Runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않으므로, configured URL이 이미 Pooler와 호환되지 않으면 지원 대상이 아니다. 연결 대기는 별도 숫자를 선택하지 않고 postgres.js의 기본 bounded connection timeout 동작에 맡긴다.
 - operation client가 실제 frontend connection을 만든 뒤 actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정하고, 이 SQL이 성공하기 전에는 resolver를 실행하지 않는다.
 - endpoint, 기존 API credential/Secret selector, Pooler CR, replica, resource와 capacity 설정은 변경하지 않는다. 이 forward fix는 #564 trusted Worker seam, PROD-716 API/Web principal credential source/cutover나 PROD-728 Pooler resource lifecycle을 선점하지 않는다. Role/Secret provisioning, grant와 RLS policy는 각각의 별도 선행 issue 경계로 남긴다.
 
@@ -56,7 +56,8 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER" "$CONFIGURED_RENDER"' EXIT
 
 # A configured API trio keeps the credential/path/query source in rendered env
 # while replacing the operation endpoint authority with the in-chart Pooler
-# Service on port 5432. Runtime strips only the unsupported server-timeout query keys.
+# Service on port 5432. Runtime passes the configured operation URL unchanged;
+# the configured URL must already be compatible with the Pooler.
 "$HELM" template kosmo apps/helm \
   --namespace kosmo-dev \
   --set env=dev \
@@ -135,8 +136,9 @@ done
 
 # Configured trio: direct API authority and Secret source remain unchanged;
 # rendered operation authority is replaced with the Pooler Service and port
-# 5432 while the database path/query stays intact. Runtime strips only the
-# unsupported server-timeout query keys and keeps unrelated query parameters.
+# 5432 while the database path/query stays intact. Runtime passes the
+# configured operation URL unchanged; incompatible URL parameters are not
+# silently corrected.
 assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml DATABASE_URL '@example.invalid:6543'
 assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml OPERATION_DATABASE_URL '@kosmo-postgres-pooler-rw:5432'
 assert_database_host "$CONFIGURED_RENDER" api/rollout.yaml OPERATION_DATABASE_URL '/kosmo?sslmode=prefer'
@@ -152,7 +154,7 @@ rg -n 'kind: (Cluster|Pooler)|name: kosmo-postgres(-pooler-rw)?|poolMode:|server
   "$DEV_RENDER" "$PROD_RENDER"
 ```
 
-정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고, API `DATABASE_URL`, Web BFF와 migration은 이 change의 기존 baseline을 사용해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. Configured trio의 rendered env에서는 API direct URL의 authority와 operation URL의 scheme, username, database, password Secret source, path/query가 보존되고 operation authority만 Pooler `:5432`로 교체되는지 확인한다. Runtime operation client는 PgBouncer가 지원하지 않는 server-timeout query key 세 개만 제거하고 `sslmode` 같은 unrelated query parameter를 유지해야 한다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
+정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고, API `DATABASE_URL`, Web BFF와 migration은 이 change의 기존 baseline을 사용해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. Configured trio의 rendered env에서는 API direct URL의 authority와 operation URL의 scheme, username, database, password Secret source, path/query가 보존되고 operation authority만 Pooler `:5432`로 교체되는지 확인한다. Runtime operation client가 direct DB의 `connection` startup options를 상속하지 않고 configured operation URL을 변경 없이 전달하는지 확인하며, Pooler와 호환되지 않는 임의의 URL은 지원하지 않는다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
 
 CRD가 설치된 대상 cluster에서는 실제 변경 없이 server-side admission도 확인한다.
 
@@ -226,12 +228,12 @@ API activation 후 일반 GraphQL Query/Mutation을 익명, Account-only, Accoun
 - 각 operation이 `OPERATION_DATABASE_URL`의 실제 Pooler frontend connection 하나를 만들고 같은 operation의 resolver·loader·core SQL이 같은 session을 사용한다.
 - request authentication과 startup SQL은 API `DATABASE_URL` direct connection을 사용하며, `searchProfiles` materialization이 끝난 뒤의 최종 Profile query·result projection은 다시 operation `ctx.db`를 사용한다.
 - `kosmo.account_id`와 `kosmo.profile_id`를 매 operation UUID 또는 빈 문자열로 설정하며, 설정 SQL이 실패하면 resolver SQL을 실행하지 않는다. `public.kosmo_current_account_id()`와 `public.kosmo_current_profile_id()`의 UUID/`NULL` 의미는 integration/live gate에서 한 번 read-back해 확인하고, 정상 operation마다 helper read-back을 반복하지 않는다.
-- operation client는 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내지 않아야 하며, actor GUC만 같은 initialization SQL round trip에서 session-level로 설정한 뒤에만 resolver를 시작해야 한다. direct `DATABASE_URL` client의 기존 timeout startup 동작은 변경하지 않으며 이 change의 범위 밖이다.
+- operation client는 direct DB client의 `connection` startup options를 상속하지 않고 configured `OPERATION_DATABASE_URL`을 변경 없이 사용해야 하며, actor GUC만 같은 initialization SQL round trip에서 session-level로 설정한 뒤에만 resolver를 시작해야 한다. URL이 Pooler와 호환되지 않으면 자동 보정하지 않고 operation을 실패시킨다. direct `DATABASE_URL` client의 기존 timeout startup 동작은 변경하지 않으며 이 change의 범위 밖이다.
 - `selectProfile` Mutation이 `Sessions.activeProfileId`와 `ctx.session.profileId`를 갱신하면 `selectProfile`이 소유하는 action-local narrow transaction을 같은 operation `ctx.db`에서 열어 session-level `kosmo.profile_id`도 갱신하고, `kosmo.account_id`는 유지한 채 다음 top-level Mutation field가 새 Profile actor를 관찰하는지 확인한다. 이 transaction은 operation-wide transaction이 아니며 authorization concurrency, locking 또는 TOCTOU safety를 검증하지 않는다.
 - 정상 결과와 GraphQL 오류, execution throw, timeout/abort 뒤 connection close가 정확히 한 번 완료되고 PgBouncer client baseline으로 복귀한다.
 - HTTP batch sibling은 client connection, actor setting, DataLoader와 execution cache를 공유하지 않는다.
 - `@defer`·`@stream` incremental execution과 Subscription은 현재 lifecycle 범위에서 제외한다. 이 기능을 위해 AsyncIterable connection bridge를 추가하거나 장기 Subscription session을 할당하지 않는다.
-- forward fix release의 current API Pod 로그에 PgBouncer unsupported startup-parameter 오류가 없어야 하며, 익명·Account-only·Account+Profile 기존 GraphQL smoke가 HTTP 500 없이 기대한 결과를 반환해야 한다. 근거에는 로그 원문, URL, Secret, actor UUID를 남기지 않고 `startup-compatibility-ok`와 smoke 상태만 기록한다.
+- forward fix release의 current API Pod 로그에 direct DB `connection` startup options 상속으로 인한 PgBouncer unsupported startup-parameter 오류가 없어야 하며, 익명·Account-only·Account+Profile 기존 GraphQL smoke가 HTTP 500 없이 기대한 결과를 반환해야 한다. 근거에는 로그 원문, URL, Secret, actor UUID를 남기지 않고 `startup-compatibility-ok`와 smoke 상태만 기록한다.
 
 Capacity 안의 동시 operation은 완료되어야 하며, capacity를 넘은 operation은 custom semaphore·retry queue 없이 postgres.js의 기본 bounded connection timeout 동작으로 제한된 실패를 반환해야 한다. 별도의 application-selected timeout 숫자는 두지 않는다. `cnpg_pgbouncer_pools_cl_active`, `cnpg_pgbouncer_pools_cl_waiting`, `cnpg_pgbouncer_pools_sv_active`, `cnpg_pgbouncer_pools_sv_idle`, `cnpg_pgbouncer_pools_maxwait`를 부하 전후에 관찰하되 label, URL, credential, row와 backend PID는 근거에 남기지 않는다. 같은 backend가 재사용될 때 이전 actor setting이 남지 않는지는 아래 reset probe로 한 번 확인한다.
 

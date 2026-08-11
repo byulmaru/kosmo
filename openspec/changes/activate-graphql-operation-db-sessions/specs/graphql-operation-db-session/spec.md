@@ -4,7 +4,7 @@
 
 **Authority / Provenance**: `docs/architecture/core-services.md`, `docs/operations/postgres-session-pool.md`, Linear PROD-726.
 
-Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 `OPERATION_DATABASE_URL` Pooler endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 user-data resolver, result projection, loader와 호출하는 core domain action SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), Mutation nested result resolver도 같은 handle을 사용해야 한다(MUST). application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT). API request authentication과 startup/bootstrap SQL은 `DATABASE_URL` direct 경계를 유지하며, Fedify-owned remote actor materialization trusted side effect는 이 operation session의 direct exception이다. materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`를 사용해야 한다(MUST). Operation client는 PgBouncer가 지원하지 않는 server timeout startup/query parameter를 보내서는 안 되며(MUST NOT), actor GUC만 session initialization SQL로 설정해야 한다.
+Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다 `OPERATION_DATABASE_URL` Pooler endpoint에 대한 실제 client connection을 하나 생성해야 한다(MUST). 해당 operation의 user-data resolver, result projection, loader와 호출하는 core domain action SQL은 모두 같은 connection에서 파생한 `ctx.db`를 사용해야 하며(MUST), Mutation nested result resolver도 같은 handle을 사용해야 한다(MUST). application이 operation 사이에 client connection을 재사용해서는 안 된다(MUST NOT). 기존 domain transaction은 이 connection 안에서 유지해야 하지만(MUST), operation 전체를 감싸는 transaction을 열어서는 안 된다(MUST NOT). API request authentication과 startup/bootstrap SQL은 `DATABASE_URL` direct 경계를 유지하며, Fedify-owned remote actor materialization trusted side effect는 이 operation session의 direct exception이다. materialization 뒤 최종 GraphQL query/result projection은 `ctx.db`를 사용해야 한다(MUST). Operation client는 API direct DB client의 `connection` startup options를 상속해서는 안 되며(MUST NOT), configured `OPERATION_DATABASE_URL`은 변경 없이 사용해야 하고 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정해서는 안 된다(MUST NOT). Actor GUC만 session initialization SQL로 설정해야 한다.
 
 #### Scenario: Query가 하나의 client session을 사용한다
 
@@ -41,10 +41,10 @@ Production GraphQL API는 실행 가능한 각 Query와 Mutation operation마다
 #### Scenario: Pooler operation actor를 resolver 전에 session-level로 설정한다
 
 - **WHEN** production GraphQL Query 또는 Mutation operation이 `OPERATION_DATABASE_URL` Pooler endpoint에 연결된다
-- **THEN** operation client는 `idle_in_transaction_session_timeout`, `lock_timeout`, `statement_timeout`을 server startup/query parameter로 보내지 않는다
+- **THEN** operation client는 API direct DB client의 `connection` startup options를 상속하지 않는다
+- **AND** configured `OPERATION_DATABASE_URL`은 변경 없이 사용하며 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다
 - **AND** actor GUC 두 개만 하나의 initialization SQL round trip에서 session-level로 설정한다
 - **AND** 초기화 SQL이 성공하기 전에는 resolver SQL을 실행하지 않는다
-- **AND** configured operation URL에 PgBouncer가 지원하지 않는 server-timeout query key가 있어도 runtime은 그 key만 제거하고 `application_name` 같은 unrelated query parameter를 유지한다
 - **AND** direct `DATABASE_URL` client의 기존 server timeout startup 동작과 endpoint/credential/Pooler CR 경계는 변경하지 않으며 이 change의 범위 밖으로 둔다
 
 ### Requirement: Account와 Profile actor setting을 같은 session에 공급한다

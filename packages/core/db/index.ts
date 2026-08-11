@@ -36,22 +36,6 @@ export type OperationDatabaseOwner = {
   close: (options?: { force?: boolean }) => Promise<void>;
 };
 
-const operationSessionTimeoutParameterNames = [
-  'idle_in_transaction_session_timeout',
-  'lock_timeout',
-  'statement_timeout',
-] as const;
-
-const stripOperationSessionTimeouts = (databaseUrl: string) => {
-  const url = new URL(databaseUrl);
-
-  for (const parameterName of operationSessionTimeoutParameterNames) {
-    url.searchParams.delete(parameterName);
-  }
-
-  return url.toString();
-};
-
 /**
  * Create the database handle owned by one GraphQL Query or Mutation.
  *
@@ -65,7 +49,7 @@ export const createOperationDatabase = (
   // process-wide DATABASE_URL when that opt-in endpoint is absent.
   databaseUrl = process.env.OPERATION_DATABASE_URL || process.env.DATABASE_URL!,
 ): OperationDatabaseOwner => {
-  const client = postgres(stripOperationSessionTimeouts(databaseUrl), {
+  const client = postgres(databaseUrl, {
     max_lifetime: postgresConnectionOptions.max_lifetime,
     max: 1,
   });

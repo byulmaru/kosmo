@@ -14,7 +14,7 @@ type OperationClient = {
 const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
   (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
 
-test('creates a bounded one-connection operation database with idempotent close', async () => {
+test('keeps operation client bounded and isolated from direct startup parameters', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
   const end = mock.method(getClient(owner), 'end', async () => {});
 
@@ -70,16 +70,16 @@ test('prefers the operation endpoint and falls back to the direct endpoint', asy
   }
 });
 
-test('strips operation timeout query parameters while preserving other connection parameters', async () => {
+test('passes operation URL connection parameters through unchanged', async () => {
   const owner = createOperationDatabase(
     'postgres://kosmo@operation-pooler.example:5432/kosmo?idle_in_transaction_session_timeout=configured-idle&lock_timeout=configured-lock&statement_timeout=configured-statement&application_name=graphql-operation',
   );
   const { connection } = getClient(owner).options;
 
+  assert.equal(connection.idle_in_transaction_session_timeout, 'configured-idle');
+  assert.equal(connection.lock_timeout, 'configured-lock');
+  assert.equal(connection.statement_timeout, 'configured-statement');
   assert.equal(connection.application_name, 'graphql-operation');
-  assert.equal('idle_in_transaction_session_timeout' in connection, false);
-  assert.equal('lock_timeout' in connection, false);
-  assert.equal('statement_timeout' in connection, false);
 
   await owner.close();
 });

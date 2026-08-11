@@ -71,7 +71,8 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 이들이 
 #### Scenario: operation Pooler 초기화가 resolver보다 먼저 완료된다
 
 - **WHEN** production GraphQL Query 또는 Mutation operation이 `OPERATION_DATABASE_URL` Pooler client를 만든다
-- **THEN** PgBouncer가 지원하지 않는 server timeout startup/query parameter를 전송하지 않는다
+- **THEN** operation client는 API direct DB client의 `connection` startup options를 상속하지 않는다
+- **AND** configured `OPERATION_DATABASE_URL`은 변경 없이 사용하며 runtime은 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다
 - **AND** actor GUC만 하나의 initialization SQL round trip에서 session-level로 설정한다
 - **AND** initialization SQL 성공 전에는 resolver SQL을 실행하지 않는다
 - **AND** API `DATABASE_URL` direct client의 기존 timeout startup 동작과 request/startup endpoint 경계는 변경하지 않으며, 이 change의 범위 밖으로 둔다
@@ -80,7 +81,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 이들이 
 
 **Authority / Provenance**: `docs/operations/postgres-session-pool.md`, Linear PROD-726, PROD-728, PROD-716.
 
-API는 request authentication과 startup/bootstrap에 현재 owner-compatible fallback인 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 이 경계는 향후 API/Web principal 방향을 결정하지 않는다. 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 rendered API와 operation URL은 현재 전환에서 같은 username, database와 password Secret source, scheme, path와 query를 재사용해야 하며(MUST), operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체해야 한다(MUST). Runtime operation client는 URL query에서 세 server timeout key만 제거하고 unrelated query parameter는 유지해야 한다(MUST). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF baseline과 migration workload는 이 change에서 기존 direct Service를 유지해야 한다(MUST). #564의 optional trusted Worker `WORKER_DATABASE_*` seam은 이 GraphQL operation 경계에서 사용하지 않으며 `OPERATION_DATABASE_URL`에 공급해서는 안 된다(MUST NOT). API/Web principal transition은 PROD-716이 소유하며, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다. Pooler startup compatibility forward fix에서도 endpoint authority, credential/Secret selector, Pooler CR, replica, resource와 capacity를 변경해서는 안 된다(MUST NOT).
+API는 request authentication과 startup/bootstrap에 현재 owner-compatible fallback인 `DATABASE_URL` direct PostgreSQL Service를 사용해야 한다(MUST). 이 경계는 향후 API/Web principal 방향을 결정하지 않는다. 일반 GraphQL Query/Mutation operation client만 `OPERATION_DATABASE_URL` Pooler Service를 사용해야 한다(MUST). `postgres.credentials.api` trio가 구성된 경우 rendered API와 operation URL은 현재 전환에서 같은 username, database와 password Secret source, scheme, path와 query를 재사용해야 하며(MUST), operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체해야 한다(MUST). Runtime operation client는 configured URL을 변경 없이 사용해야 하며 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정해서는 안 된다(MUST NOT). 새 credential selector를 만들거나 credential, role, RLS policy 또는 grant를 변경해서는 안 된다(MUST NOT). Web BFF baseline과 migration workload는 이 change에서 기존 direct Service를 유지해야 한다(MUST). #564의 optional trusted Worker `WORKER_DATABASE_*` seam은 이 GraphQL operation 경계에서 사용하지 않으며 `OPERATION_DATABASE_URL`에 공급해서는 안 된다(MUST NOT). API/Web principal transition은 PROD-716이 소유하며, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다. Pooler startup compatibility forward fix에서도 endpoint authority, credential/Secret selector, Pooler CR, replica, resource와 capacity를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: API operation만 Pooler를 사용한다
 
