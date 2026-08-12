@@ -30,7 +30,7 @@
 
 ### Recommended Approach
 
-작은 compound primitive를 `apps/app/src/components/ui`에 둔다. `RadioGroup`은 group name, controlled value/change callback, ordered enabled option과 ref를 공유하고 Web roving tabIndex·방향키 순환 이동을 처리한다. 현재 값에 해당하는 enabled option이 없으면 첫 enabled option만 tab stop으로 두고 모두 disabled면 tab stop을 두지 않는다. `RadioOption`은 React Native `Pressable`을 사용해 radio role, checked·disabled state, focus 표시와 consumer가 전달한 content/style을 결합한다. Web focus ring은 브라우저 `:focus-visible` 상태를 사용하고 별도 modality helper를 두지 않는다.
+작은 compound primitive를 `apps/app/src/components/ui`에 둔다. `RadioGroup`은 group name, controlled value/change callback, ordered enabled option과 ref를 공유하고 Web roving tabIndex·방향키 순환 이동을 처리한다. 현재 값에 해당하는 enabled option이 없으면 첫 enabled option만 tab stop으로 두고 모두 disabled면 tab stop을 두지 않는다. `RadioOption`은 React Native `Pressable`을 사용해 radio role, checked·disabled state와 consumer가 전달한 content/style을 결합한다. Web에서는 브라우저 `:focus-visible` indicator를 숨기지 않고 별도 focus style이나 modality helper를 두지 않는다.
 
 FeedbackForm에서는 기존 group wrapper, ref와 key handler만 제거하고 `selectKind`를 controlled callback으로 유지한다. ProfileDefaultPostVisibilityControl은 로컬 `selectedVisibility`와 save action을 그대로 두고 option renderer만 이관한다. SelectMenu는 ModalSheet와 선택 후 close callback을 유지하고 option 목록만 공용 group으로 감싼다.
 
@@ -50,7 +50,7 @@ spec과 Active decision을 지키는 한 option 순서·ref를 React context 등
 ## Risks / Trade-offs
 
 - [Controlled callback 뒤 consumer가 값을 갱신하지 않으면 focus와 checked state가 잠시 다를 수 있음] → checked state는 항상 value prop을 따르고 focus 이동만 input event에서 수행한다.
-- [공용 focus style이 기존 option visual과 충돌할 수 있음] → 브라우저 `:focus-visible` 상태에서 theme focus token만 적용하고 geometry·selected surface는 consumer style을 허용한다.
+- [consumer style이 브라우저 focus indicator를 숨길 수 있음] → 공용 option과 이관 style이 outline을 제거하지 않는지 Web runtime에서 확인한다.
 - [Native runtime 증거 부족] → Storybook 렌더와 정적 semantics를 기록하되 실제 iOS·Android assistive technology 미실행 여부를 별도로 보고한다.
 
 ## Migration Plan

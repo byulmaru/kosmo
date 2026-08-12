@@ -23,7 +23,7 @@
 - Authority / Provenance: `docs/design/accessibility.md`, PROD-753
 - Status: Active
 - Context / Problem: FeedbackForm에만 방향키 이동이 있고 나머지 consumer는 keyboard 계약이 없다.
-- Decision Outcome: Web에서는 현재 선택된 enabled option만 tab stop으로 두고 ArrowUp·ArrowLeft는 이전, ArrowDown·ArrowRight는 다음 enabled option으로 순환하며 focus와 change 요청을 함께 이동한다. 방향키는 disabled option을 건너뛴다. 현재 값에 해당하는 enabled option이 없으면 첫 enabled option이 tab stop이고, 모두 disabled면 tab stop이 없다. Web focus ring은 플랫폼 `:focus-visible`을 사용하며 별도 input-modality helper를 만들지 않는다. Native에는 Web key handler를 적용하지 않고 radio role/state를 제공한다.
+- Decision Outcome: Web에서는 현재 선택된 enabled option만 tab stop으로 두고 ArrowUp·ArrowLeft는 이전, ArrowDown·ArrowRight는 다음 enabled option으로 순환하며 focus와 change 요청을 함께 이동한다. 방향키는 disabled option을 건너뛴다. 현재 값에 해당하는 enabled option이 없으면 첫 enabled option이 tab stop이고, 모두 disabled면 tab stop이 없다. Web에서는 플랫폼 `:focus-visible` indicator를 숨기지 않으며 별도 focus style이나 input-modality helper를 만들지 않는다. Native에는 Web key handler를 적용하지 않고 radio role/state를 제공한다.
 - Alternatives Considered: 모든 option을 Tab 순서에 두는 안, Home·End 단축키 확장과 별도 keyboard/pointer modality state는 승인된 범위보다 넓으므로 제외한다. PostComposer의 `menuitemradio` helper 재사용은 semantics가 달라 제외한다.
 - Consequences: checked state와 fallback tab stop은 분리될 수 있다. disabled option은 keyboard 이동에서 제외되며 Web runtime과 Native assistive technology 증거를 별도로 보고해야 한다.
 - Confirmation / Follow-up: component test에서 tabIndex fallback·네 방향키·disabled skip을 확인하고 실제 Web Storybook에서 `:focus-visible` focus 이동을 확인한다.

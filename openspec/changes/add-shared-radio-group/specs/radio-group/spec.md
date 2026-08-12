@@ -65,7 +65,7 @@
 #### Scenario: focus를 식별한다
 
 - **WHEN** Web option이 keyboard focus를 받는다
-- **THEN** 플랫폼 `:focus-visible` 상태에서 현재 theme의 focus indicator가 다른 상태 표현을 가리지 않고 표시된다
+- **THEN** 플랫폼 `:focus-visible` indicator가 다른 상태 표현에 의해 숨겨지지 않는다
 
 #### Scenario: Native option의 상태를 노출한다
 
