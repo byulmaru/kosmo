@@ -1,8 +1,9 @@
 import { feedbackBodySchema } from '@kosmo/core/validation';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation } from 'react-relay';
 import { Button } from '@/components/ui/Button';
+import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { TextArea } from '@/components/ui/TextField';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -42,8 +43,6 @@ export function FeedbackForm({ onStateChange }: Props) {
   const [body, setBody] = useState('');
   const [bodyTouched, setBodyTouched] = useState(false);
   const [status, setStatus] = useState<FeedbackStatus>('idle');
-  const [focusedKind, setFocusedKind] = useState<FeedbackKind | null>(null);
-  const radioRefs = useRef<Array<{ focus?: () => void } | null>>([]);
   const [commit, submitting] =
     useMutation<FeedbackFormSubmitFeedbackMutation>(SubmitFeedbackMutation);
   const dirty = kind !== 'POSITIVE' || body.length > 0;
@@ -121,73 +120,30 @@ export function FeedbackForm({ onStateChange }: Props) {
         </Text>
       </View>
 
-      <View
+      <RadioGroup
         accessibilityLabel="피드백 종류"
-        role="radiogroup"
+        disabled={submitting}
+        onChange={selectKind}
+        options={feedbackOptions}
         style={web ? styles.webOptions : styles.nativeOptions}
+        value={kind}
       >
         {feedbackOptions.map((option, index) => {
           const selected = option.value === kind;
-          const focused = option.value === focusedKind;
-          const webKeyboardProps =
-            Platform.OS === 'web'
-              ? {
-                  onKeyDown: (event: KeyboardEvent) => {
-                    if (!['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp'].includes(event.key)) {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    const direction =
-                      event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
-                    const nextIndex =
-                      (index + direction + feedbackOptions.length) % feedbackOptions.length;
-                    const nextOption = feedbackOptions[nextIndex];
-                    selectKind(nextOption.value);
-                    radioRefs.current[nextIndex]?.focus?.();
-                  },
-                }
-              : {};
           return (
-            <Pressable
-              {...webKeyboardProps}
-              accessibilityLabel={option.label}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled: submitting }}
-              aria-checked={selected}
-              aria-disabled={submitting}
-              disabled={submitting}
+            <RadioOption
               key={option.value}
-              onBlur={() =>
-                setFocusedKind((current) => (current === option.value ? null : current))
-              }
-              onFocus={() => setFocusedKind(option.value)}
-              onPress={() => selectKind(option.value)}
-              ref={(ref) => {
-                radioRefs.current[index] = ref as unknown as {
-                  focus?: () => void;
-                };
-              }}
-              role="radio"
+              option={option}
               style={({ pressed }) => [
                 styles.option,
                 web ? styles.webOption : styles.nativeOption,
                 web && index === feedbackOptions.length - 1 ? styles.webOptionLast : null,
-                web && focused ? styles.webOptionFocused : null,
                 {
                   backgroundColor: selected || pressed ? theme.surface : 'transparent',
                   borderBottomColor: web ? theme.divider : undefined,
-                  borderColor: web
-                    ? undefined
-                    : focused
-                      ? theme.text
-                      : selected
-                        ? theme.primary
-                        : theme.border,
-                  outlineColor: web && focused ? theme.focus : undefined,
+                  borderColor: web ? undefined : selected ? theme.primary : theme.border,
                 },
               ]}
-              tabIndex={Platform.OS === 'web' ? (selected ? 0 : -1) : undefined}
             >
               <View
                 style={[
@@ -200,10 +156,10 @@ export function FeedbackForm({ onStateChange }: Props) {
                 ) : null}
               </View>
               <Text style={[styles.optionLabel, { color: theme.text }]}>{option.label}</Text>
-            </Pressable>
+            </RadioOption>
           );
         })}
-      </View>
+      </RadioGroup>
 
       <TextArea
         accessibilityLabel="피드백 내용"
@@ -282,10 +238,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   webOptionLast: { borderBottomWidth: 0 },
-  webOptionFocused: {
-    outlineStyle: 'solid' as never,
-    outlineWidth: 2,
-  },
   nativeOption: {
     borderRadius: radii.sm,
     borderWidth: 1,
