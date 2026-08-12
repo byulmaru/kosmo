@@ -39,6 +39,7 @@ function main() {
     assertSafeTestDatabaseUrl(databaseUrl);
     ensurePostgres();
     recreateDatabase(getDatabaseName(databaseUrl));
+    ensureRuntimeRoles();
     return 0;
   }
 
@@ -62,6 +63,7 @@ function main() {
 
   ensurePostgres();
   recreateDatabase(getDatabaseName(databaseUrl));
+  ensureRuntimeRoles();
 
   let childStatus = 1;
   let cleanupError;
@@ -192,6 +194,37 @@ function recreateDatabase(databaseName) {
     '--username',
     process.env.POSTGRES_USER ?? 'kosmo',
     databaseName,
+  ]);
+}
+
+function ensureRuntimeRoles() {
+  // Runtime roles are cluster-scoped, so keep this bootstrap idempotent and do
+  // not drop them during database cleanup. The advisory lock makes parallel
+  // test-db invocations safe when they share the disposable Postgres service.
+  runPostgresCommand([
+    'psql',
+    '--username',
+    process.env.POSTGRES_USER ?? 'kosmo',
+    '--dbname',
+    'postgres',
+    '--command',
+    `
+      BEGIN;
+      SELECT pg_advisory_xact_lock(1263489869, 1381256261);
+      DO $bootstrap$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'kosmo_api') THEN
+          CREATE ROLE kosmo_api LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'kosmo_worker') THEN
+          CREATE ROLE kosmo_worker LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;
+        END IF;
+      END
+      $bootstrap$;
+      ALTER ROLE kosmo_api LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      ALTER ROLE kosmo_worker LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS;
+      COMMIT;
+    `,
   ]);
 }
 
