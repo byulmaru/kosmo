@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-753, 승인된 `docs/design/foundations.md` 소유권 경계, 전역 접근성 계약과 현재 세 소비처 구현을 반영한다.
+이 기록은 PROD-753, 승인된 `docs/design/foundations.md` 소유권 경계, 전역 접근성 계약과 현재 두 소비처 구현을 반영한다.
 
 ## Decision Records
 
@@ -10,11 +10,11 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/foundations.md`, `docs/design/feedback.md`, PROD-753
 - Status: Active
-- Context / Problem: 세 소비처가 radio semantics와 keyboard를 중복 구현하지만 mutation, Relay와 modal lifecycle은 서로 다르다.
-- Decision Outcome: `RadioGroup`·`RadioOption`은 controlled value/change, group/option semantics, checked·disabled·focus와 Web keyboard 이동만 소유한다. Feedback validation·dirty/submitting·mutation, 공개 범위 저장·Relay actor, SelectMenu modal lifecycle은 consumer에 남긴다.
+- Context / Problem: 두 소비처가 radio semantics와 keyboard를 중복 구현하지만 mutation과 Relay lifecycle은 서로 다르다.
+- Decision Outcome: `RadioGroup`·`RadioOption`은 controlled value/change, group/option semantics, checked·disabled·focus와 Web keyboard 이동만 소유한다. Feedback validation·dirty/submitting·mutation과 공개 범위 저장·Relay actor lifecycle은 consumer에 남긴다.
 - Alternatives Considered: primitive가 저장·닫기까지 수행하는 통합 control은 기존 lifecycle 소유권을 침범하므로 제외한다. 각 consumer에 keyboard helper만 복제하는 안은 공용 primitive 요구를 충족하지 않아 제외한다.
 - Consequences: consumer callback이 제품 동작을 계속 결정하며 primitive는 GraphQL·Relay·modal API를 알지 않는다.
-- Confirmation / Follow-up: 세 consumer의 기존 validation·saving·modal 검증과 공용 component semantics test를 대조한다.
+- Confirmation / Follow-up: 두 consumer의 기존 validation·saving 검증과 공용 component semantics test를 대조한다.
 
 ### Web은 roving tabIndex와 네 방향키 이동을 사용한다
 
@@ -34,9 +34,9 @@
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/foundations.md`, `docs/design/accessibility.md`, `docs/design/feedback.md`, PROD-753
 - Status: Active
-- Context / Problem: Feedback, profile visibility와 SelectMenu의 indicator, spacing, border와 modal 배치가 서로 다르다.
+- Context / Problem: Feedback과 profile visibility의 indicator, spacing과 border가 서로 다르다.
 - Decision Outcome: RadioOption은 label·optional description과 상태 표현을 제공하되 하나의 고정 높이·padding·indicator geometry를 강제하지 않는다. Web focus indicator는 플랫폼 `:focus-visible`을 숨기지 않고 별도 focus style을 추가하지 않으며 consumer content/style을 허용한다.
-- Alternatives Considered: 세 consumer를 하나의 card/list-row 디자인으로 통일하는 안은 명시된 layout 제외 범위를 위반하므로 제외한다.
+- Alternatives Considered: 두 consumer를 하나의 card/list-row 디자인으로 통일하는 안은 명시된 layout 제외 범위를 위반하므로 제외한다.
 - Consequences: semantics와 keyboard는 공용화되지만 consumer별 시각 style 일부는 의도적으로 남는다.
 - Confirmation / Follow-up: Storybook에서 selected·disabled·long label을 Web과 Native renderer로 확인하고 기존 consumer geometry를 시각 검토한다.
 

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, userEvent, within } from 'storybook/test';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
-import { SelectMenu } from '@/components/ui/SelectMenu';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { RadioOption as RadioOptionConfig } from '@/components/ui/RadioGroup';
 
@@ -16,13 +15,6 @@ const options = [
   { description: longDescription, label: longLabel, value: 'sms' },
   { label: '앱 알림', value: 'inApp' },
 ] satisfies readonly RadioOptionConfig<RadioValue>[];
-
-type SelectValue = 'all' | 'mentions';
-
-const selectOptions = [
-  { label: '모든 알림', value: 'all' },
-  { description: '나를 언급한 알림만 보여줘요.', label: '멘션만', value: 'mentions' },
-] satisfies readonly RadioOptionConfig<SelectValue>[];
 
 function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioValue }) {
   const [value, setValue] = useState<RadioValue>(initialValue);
@@ -46,12 +38,6 @@ function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioVal
       </RadioGroup>
     </View>
   );
-}
-
-function SelectMenuCatalog() {
-  const [value, setValue] = useState<SelectValue>('all');
-
-  return <SelectMenu label="알림 범위" onChange={setValue} options={selectOptions} value={value} />;
 }
 
 const meta = {
@@ -108,25 +94,4 @@ export const InteractionContract: Story = {
 
 export const FallbackTabStop: Story = {
   args: { initialValue: 'push' },
-};
-
-export const SelectMenuInteractionContract: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const page = within(canvasElement.ownerDocument.body);
-    const trigger = canvas.getByRole('button', { name: '모든 알림' });
-
-    await userEvent.click(trigger);
-    const group = await page.findByRole('radiogroup', { name: '알림 범위' });
-    const mentions = within(group).getByRole('radio', { name: /멘션만/ });
-
-    expect(group).toBeVisible();
-    expect(mentions).toBeVisible();
-    await userEvent.click(mentions);
-    expect(canvas.getByRole('button', { name: '멘션만' })).toBeVisible();
-    await waitFor(() =>
-      expect(page.queryAllByRole('dialog', { name: '알림 범위' })).toHaveLength(0),
-    );
-  },
-  render: () => <SelectMenuCatalog />,
 };

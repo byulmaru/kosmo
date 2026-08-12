@@ -99,7 +99,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - DSN-14: 이 문서와 Figma Foundation 계약을 정본으로 고정한다.
 - DSN-18: [motion.md](./motion.md)의 motion, transition, easing, reduced-motion 계약을 정본으로 고정한다.
 - DSN-19: `tokens.ts`에 numeric spacing·radius·border·icon, role typography와 Light/Dark elevation을 구현했다. 기존 `spacing`·`radii`·`typography`·`shadow` export는 DSN-21 consumer 이관 동안만 deprecated compatibility alias로 유지한다.
-- DSN-19: Button·TextField·TextArea·SelectMenu·ModalSheet·ActionMenu·StateView·Skeleton·ToastProvider·Avatar가 승인 foundation과 semantic color를 직접 소비한다.
+- DSN-19: Button·TextField·TextArea·ModalSheet·ActionMenu·StateView·Skeleton·ToastProvider·Avatar가 승인 foundation과 semantic color를 직접 소비한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 상태를 이관·검증한다.
-- PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl·SelectMenu의 radio semantics와 Web keyboard 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor·modal lifecycle과 option layout은 각 consumer에 유지한다.
+- PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl의 radio semantics와 Web keyboard 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor lifecycle과 option layout은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.

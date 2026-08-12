@@ -74,7 +74,7 @@
 
 ### Requirement: Consumer lifecycle ownership
 
-**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/feedback.md`, PROD-753; FeedbackForm, ProfileDefaultPostVisibilityControl과 SelectMenu는 공용 radio semantics와 keyboard 계약을 사용해야 한다(MUST). 이관 후에도 Feedback validation·dirty/submitting·mutation, 공개 범위 저장 mutation·Relay actor lifecycle, SelectMenu modal open·close lifecycle과 각 option layout은 기존 consumer가 소유해야 한다(MUST).
+**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/feedback.md`, PROD-753; FeedbackForm과 ProfileDefaultPostVisibilityControl은 공용 radio semantics와 keyboard 계약을 사용해야 한다(MUST). 이관 후에도 Feedback validation·dirty/submitting·mutation, 공개 범위 저장 mutation·Relay actor lifecycle과 각 option layout은 기존 consumer가 소유해야 한다(MUST).
 
 #### Scenario: Feedback 종류를 변경한다
 
@@ -85,8 +85,3 @@
 
 - **WHEN** 소유자가 기본 게시 공개 범위 option을 선택한다
 - **THEN** 공용 radio 계약으로 로컬 선택 값만 변경되고 기존 저장 action 전에는 mutation이 실행되지 않는다
-
-#### Scenario: SelectMenu option을 선택한다
-
-- **WHEN** 사용자가 열린 SelectMenu에서 enabled option을 선택한다
-- **THEN** 공용 radio 계약으로 change가 요청되고 기존 modal close lifecycle에 따라 메뉴가 닫힌다
