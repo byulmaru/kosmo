@@ -24,8 +24,8 @@ const selectOptions = [
   { description: '나를 언급한 알림만 보여줘요.', label: '멘션만', value: 'mentions' },
 ] satisfies readonly RadioOptionConfig<SelectValue>[];
 
-function RadioGroupCatalog() {
-  const [value, setValue] = useState<RadioValue>('email');
+function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioValue }) {
+  const [value, setValue] = useState<RadioValue>(initialValue);
 
   return (
     <View>
@@ -104,6 +104,10 @@ export const InteractionContract: Story = {
     expect(sms).toBeChecked();
     expect(email).not.toBeChecked();
   },
+};
+
+export const FallbackTabStop: Story = {
+  args: { initialValue: 'push' },
 };
 
 export const SelectMenuInteractionContract: Story = {
