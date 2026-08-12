@@ -30,5 +30,5 @@ FeedbackForm, ProfileDefaultPostVisibilityControl과 SelectMenu가 Web·Native�
 - [x] 1.2 공용 primitive의 핵심 semantics·keyboard 회귀 test와 selected·disabled·long-label Storybook states를 추가한다.
 - [x] 1.3 Feedback 종류 선택을 이관하고 기존 validation·dirty/submitting·mutation 동작을 유지한다.
 - [x] 1.4 기본 게시 공개 범위 선택을 이관하고 기존 저장·Relay lifecycle을 유지한다.
-- [ ] 1.5 SelectMenu option 선택을 이관하고 기존 modal open·close와 consumer layout을 유지한다.
+- [x] 1.5 SelectMenu option 선택을 이관하고 기존 modal open·close와 consumer layout을 유지한다.
 - [ ] 1.6 관련 자동화, Web keyboard·focus 수동 검증과 OpenSpec strict validation을 완료하고 플랫폼별 미검증 범위를 기록한다.
