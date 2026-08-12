@@ -26,7 +26,7 @@ FeedbackForm, ProfileDefaultPostVisibilityControl과 SelectMenu가 Web·Native�
 - 기존 Feedback validation/submission, profile visibility selection/save와 SelectMenu 선택 후 close 동작에 적용되는 관련 test·Storybook을 실행한다.
 - 실제 Web에서 Tab 진입, 방향키 focus·selection과 `:focus-visible` indicator를 확인하고, 실행하지 않은 Native assistive technology 검증은 별도로 기록한다.
 
-- [ ] 1.1 Controlled group/option semantics, checked·disabled·focus와 Web keyboard 계약을 제공한다.
+- [x] 1.1 Controlled group/option semantics, checked·disabled·focus와 Web keyboard 계약을 제공한다.
 - [ ] 1.2 공용 primitive의 핵심 semantics·keyboard 회귀 test와 selected·disabled·long-label Storybook states를 추가한다.
 - [ ] 1.3 Feedback 종류 선택을 이관하고 기존 validation·dirty/submitting·mutation 동작을 유지한다.
 - [ ] 1.4 기본 게시 공개 범위 선택을 이관하고 기존 저장·Relay lifecycle을 유지한다.
