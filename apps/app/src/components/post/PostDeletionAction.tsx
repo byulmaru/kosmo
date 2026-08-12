@@ -7,8 +7,8 @@ import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, shadow, spacing, typography } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import type { ViewStyle } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -46,6 +46,7 @@ const failureMessage = '게시글을 삭제하지 못했습니다. 잠시 후 �
 
 export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Props) {
   const theme = useTheme();
+  const elevation = useElevation();
   const { selectedProfileId } = useSession();
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -213,7 +214,7 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
     <Pressable
       accessible={false}
       onPress={closeConfirmation}
-      style={styles.backdrop}
+      style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
       testID="post-deletion-backdrop"
     >
       <View
@@ -226,7 +227,11 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
       >
         <Pressable
           onPress={(event) => event.stopPropagation()}
-          style={[styles.dialog, { backgroundColor: theme.card, borderColor: theme.border }]}
+          style={[
+            styles.dialog,
+            elevation.overlay,
+            { backgroundColor: theme.card, borderColor: theme.border },
+          ]}
         >
           <Text style={[styles.title, { color: theme.text }]}>게시글을 삭제할까요?</Text>
           <Text style={[styles.description, { color: theme.textSecondary }]}>
@@ -309,7 +314,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,
@@ -322,7 +326,6 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     padding: spacing.lg,
     width: '100%',
-    ...shadow,
   } satisfies ViewStyle,
   webModal: {
     bottom: 0,

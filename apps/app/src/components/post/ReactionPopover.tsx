@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, shadow, spacing } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { radii, spacing } from '@/theme/tokens';
 import type { ReactNode, Ref } from 'react';
 import type { LayoutChangeEvent, LayoutRectangle, View as ViewType } from 'react-native';
 
@@ -38,6 +38,7 @@ export function ReactionPopover({
   renderTrigger,
 }: ReactionPopoverProps): ReactNode {
   const theme = useTheme();
+  const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const triggerRef = useRef<ViewType>(null);
@@ -179,7 +180,11 @@ export function ReactionPopover({
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                style={[styles.shell, { backgroundColor: theme.card, borderColor: theme.border }]}
+                style={[
+                  styles.shell,
+                  web ? elevation.floating : elevation.overlay,
+                  { backgroundColor: theme.card, borderColor: theme.border },
+                ]}
                 testID="reaction-popover-scroll"
               >
                 <View onLayout={onContentLayout} ref={contentRef} style={styles.content}>
@@ -198,6 +203,6 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1 },
   content: { alignSelf: 'flex-start' },
   position: { position: 'absolute' },
-  shell: { borderRadius: radii.lg, borderWidth: 1, ...shadow },
+  shell: { borderRadius: radii.lg, borderWidth: 1 },
   triggerDismiss: { position: 'absolute' },
 });

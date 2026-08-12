@@ -11,8 +11,8 @@ import {
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
-import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, shadow, spacing, typography } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
 import type { RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
@@ -28,6 +28,7 @@ const initialFormState: FeedbackFormState = { dirty: false, submitting: false };
 
 export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: Props) {
   const theme = useTheme();
+  const elevation = useElevation();
   const { width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -181,12 +182,14 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
           styles.backdrop,
           Platform.OS === 'web' ? styles.webBackdrop : null,
           mobile ? styles.mobileBackdrop : null,
+          { backgroundColor: theme.overlayScrim },
         ]}
       >
         <View
           ref={surfaceRef}
           style={[
             styles.surface,
+            elevation.overlay,
             mobile ? styles.mobileSurface : null,
             { backgroundColor: theme.card, borderColor: theme.border },
           ]}
@@ -236,7 +239,7 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
             <View
               onResponderRelease={continueEditing}
               onStartShouldSetResponder={(event) => event.target === event.currentTarget}
-              style={styles.confirmBackdrop}
+              style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}
             >
               <View
                 {...(Platform.OS === 'web' ? { onKeyDown: trapConfirmationFocus } : {})}
@@ -245,7 +248,11 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
                 onStartShouldSetResponder={() => true}
                 ref={confirmRef}
                 role="alertdialog"
-                style={[styles.confirm, { backgroundColor: theme.card, borderColor: theme.border }]}
+                style={[
+                  styles.confirm,
+                  elevation.overlay,
+                  { backgroundColor: theme.card, borderColor: theme.border },
+                ]}
               >
                 <Text
                   accessibilityRole="header"
@@ -276,7 +283,6 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,
@@ -289,7 +295,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     width: 600,
-    ...shadow,
   },
   mobileBackdrop: {
     alignItems: 'stretch',
@@ -327,7 +332,6 @@ const styles = StyleSheet.create({
   body: { padding: spacing.xl },
   confirmBackdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     bottom: 0,
     justifyContent: 'center',
     left: 0,
@@ -344,7 +348,6 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     padding: spacing.xl,
     width: '100%',
-    ...shadow,
   },
   confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
