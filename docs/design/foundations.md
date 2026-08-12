@@ -74,16 +74,16 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 
 ## UI 일관성 Inventory
 
-| 후보                            | 판정      | 재사용·유지 경계                                                                                                    | 후속 소유자                                         |
-| ------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| `LogoutControl`                 | 분리      | compact는 공용 `IconButton`; label·pending·error를 포함한 full shell action은 전용 유지                             | shared primitive는 DSN-19, shell call-site는 DSN-21 |
-| `ProfileSwitcher`               | 전용 유지 | `Avatar`, `Button`은 재사용하되 actor 전환·create·unread·compound trigger·focus/scroll lifecycle은 component가 소유 | route/shell migration은 DSN-21                      |
-| `ProfileEditImageFields`        | 전용 유지 | `ActionMenu`와 upload error semantics는 재사용하고 header/avatar aspect·overlap·camera veil은 component가 소유      | domain migration은 DSN-21/Product                   |
-| `FeedbackForm`                  | 전용 유지 | `Button`, `TextArea`는 재사용하고 radio keyboard·dirty/submitting·mutation lifecycle은 form이 소유                  | domain migration은 DSN-21/Product                   |
-| Modal·sheet·menu overlay        | 분리      | 공용 scrim·elevation·focus primitive는 공유하고 close/restore/scroll lifecycle은 각 surface가 소유                  | primitive는 DSN-19, call-site는 DSN-21/Product      |
-| Fullscreen media                | 예외 유지 | 고정 black/white, 강한 overlay, media control geometry는 제품 전용 evidence를 유지                                  | DSN-21/Product                                      |
-| Route loading·empty·error·retry | 분리      | `StateView`, `Skeleton`, `Button` vocabulary는 공유하고 list skeleton·pagination geometry는 route가 소유            | DSN-21, 최종 Figma evidence는 DSN-13                |
-| Shell·viewport·scroll           | 분리      | `UniversalShell`과 768/1280 단계는 공유하고 picker·drawer·route overlay의 focus/scroll은 해당 surface가 소유        | DSN-21, 최종 Figma evidence는 DSN-13                |
+| 후보                            | 판정      | 재사용·유지 경계                                                                                                              | 후속 소유자                                         |
+| ------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `LogoutControl`                 | 분리      | compact는 공용 `IconButton`; label·pending·error를 포함한 full shell action은 전용 유지                                       | shared primitive는 DSN-19, shell call-site는 DSN-21 |
+| `ProfileSwitcher`               | 전용 유지 | `Avatar`, `Button`은 재사용하되 actor 전환·create·unread·compound trigger·focus/scroll lifecycle은 component가 소유           | route/shell migration은 DSN-21                      |
+| `ProfileEditImageFields`        | 전용 유지 | `ActionMenu`와 upload error semantics는 재사용하고 header/avatar aspect·overlap·camera veil은 component가 소유                | domain migration은 DSN-21/Product                   |
+| `FeedbackForm`                  | 전용 유지 | `Button`, `TextArea`, `RadioGroup`·`RadioOption`은 재사용하고 option layout·dirty/submitting·mutation lifecycle은 form이 소유 | domain migration은 DSN-21/Product                   |
+| Modal·sheet·menu overlay        | 분리      | 공용 scrim·elevation·focus primitive는 공유하고 close/restore/scroll lifecycle은 각 surface가 소유                            | primitive는 DSN-19, call-site는 DSN-21/Product      |
+| Fullscreen media                | 예외 유지 | 고정 black/white, 강한 overlay, media control geometry는 제품 전용 evidence를 유지                                            | DSN-21/Product                                      |
+| Route loading·empty·error·retry | 분리      | `StateView`, `Skeleton`, `Button` vocabulary는 공유하고 list skeleton·pagination geometry는 route가 소유                      | DSN-21, 최종 Figma evidence는 DSN-13                |
+| Shell·viewport·scroll           | 분리      | `UniversalShell`과 768/1280 단계는 공유하고 picker·drawer·route overlay의 focus/scroll은 해당 surface가 소유                  | DSN-21, 최종 Figma evidence는 DSN-13                |
 
 같은 역할의 소비자가 추가로 확인되기 전에는 새 공용 primitive를 선행 생성하지 않는다. 역할이 다른 UI를 형태가 비슷하다는 이유만으로 합치지 않는다.
 
@@ -101,4 +101,5 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - DSN-19: `tokens.ts`에 numeric spacing·radius·border·icon, role typography와 Light/Dark elevation을 구현했다. 기존 `spacing`·`radii`·`typography`·`shadow` export는 DSN-21 consumer 이관 동안만 deprecated compatibility alias로 유지한다.
 - DSN-19: Button·TextField·TextArea·SelectMenu·ModalSheet·ActionMenu·StateView·Skeleton·ToastProvider·Avatar가 승인 foundation과 semantic color를 직접 소비한다.
 - DSN-21 또는 연결된 Product 이슈: route, shell, domain consumer와 상태를 이관·검증한다.
+- PROD-753: FeedbackForm·ProfileDefaultPostVisibilityControl·SelectMenu의 radio semantics와 Web keyboard 동작을 공용 `RadioGroup`·`RadioOption`으로 수렴하고, mutation·dirty/submitting·Relay actor·modal lifecycle과 option layout은 각 consumer에 유지한다.
 - DSN-13: 선행 구현 후 Components/Screens를 최종 재바인딩하고 evidence를 남긴다.
