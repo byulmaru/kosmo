@@ -35,7 +35,7 @@
 - Authority / Provenance: `docs/design/foundations.md`, `docs/design/accessibility.md`, `docs/design/feedback.md`, PROD-753
 - Status: Active
 - Context / Problem: Feedback, profile visibility와 SelectMenu의 indicator, spacing, border와 modal 배치가 서로 다르다.
-- Decision Outcome: RadioOption은 label·optional description과 상태 표현을 제공하되 하나의 고정 높이·padding·indicator geometry를 강제하지 않는다. focus indicator는 공용 theme token을 사용하고 consumer content/style을 허용한다.
+- Decision Outcome: RadioOption은 label·optional description과 상태 표현을 제공하되 하나의 고정 높이·padding·indicator geometry를 강제하지 않는다. Web focus indicator는 플랫폼 `:focus-visible`을 숨기지 않고 별도 focus style을 추가하지 않으며 consumer content/style을 허용한다.
 - Alternatives Considered: 세 consumer를 하나의 card/list-row 디자인으로 통일하는 안은 명시된 layout 제외 범위를 위반하므로 제외한다.
 - Consequences: semantics와 keyboard는 공용화되지만 consumer별 시각 style 일부는 의도적으로 남는다.
 - Confirmation / Follow-up: Storybook에서 selected·disabled·long label을 Web과 Native renderer로 확인하고 기존 consumer geometry를 시각 검토한다.

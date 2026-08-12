@@ -9,7 +9,7 @@
 - 공용 controlled radio semantics와 Web keyboard 이동을 한 primitive로 제공한다.
 - Web과 Native에서 같은 checked·disabled·label·description 계약을 사용한다.
 - 세 소비처가 기존 validation·saving·modal lifecycle과 layout을 유지한 채 primitive를 사용한다.
-- 기존 theme focus·selected·disabled 표현을 재사용한다.
+- Web의 플랫폼 `:focus-visible` indicator와 기존 selected·disabled 표현을 보존한다.
 
 **Non-Goals:**
 
@@ -26,7 +26,7 @@
 - ProfileDefaultPostVisibilityControl은 저장 전 로컬 선택과 저장된 값을 분리하고 Relay environment 교체·늦은 응답을 격리하므로 선택 primitive가 저장 mutation을 실행하면 안 된다.
 - SelectMenu는 option 선택 후 modal을 닫지만 open/close와 focus lifecycle은 ModalSheet가 소유한다.
 - 세 소비처의 option 구조와 spacing이 달라 공용 component가 고정 container·indicator geometry를 강제하면 기존 layout과 긴 label을 깨뜨린다.
-- 현재 focus 표현은 Button·TextField·FeedbackForm에서 theme focus token과 focused state를 사용한다. 별도 input-modality helper나 radio dependency는 없으며 이번 범위에서도 추가하지 않는다.
+- 기존 Button·TextField·FeedbackForm은 theme focus token과 focused state를 사용하지만 keyboard-only input-modality helper는 없다. RadioOption은 플랫폼 `:focus-visible` indicator를 숨기지 않고 별도 focus style·helper·dependency를 추가하지 않는다.
 
 ### Recommended Approach
 
