@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
 import { ModalSheet } from './ModalSheet';
+import { RadioGroup, RadioOption } from './RadioGroup';
 
 type Option<Value extends string> = {
   description?: string;
@@ -34,35 +35,41 @@ export function SelectMenu<Value extends string>({
         {selected?.label ?? label}
       </Button>
       <ModalSheet onClose={() => setOpen(false)} title={label} visible={open}>
-        {options.map((option) => {
-          const active = option.value === value;
-          return (
-            <Pressable
-              aria-checked={active}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: active }}
-              key={option.value}
-              onPress={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              style={[
-                styles.option,
-                {
-                  backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
-                  borderColor: active ? theme.stateSelectedBorder : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{option.label}</Text>
-              {option.description ? (
-                <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
-                  {option.description}
+        <RadioGroup
+          accessibilityLabel={label}
+          onChange={(nextValue) => {
+            onChange(nextValue);
+            setOpen(false);
+          }}
+          options={options}
+          value={value}
+        >
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <RadioOption
+                key={option.value}
+                option={option}
+                style={[
+                  styles.option,
+                  {
+                    backgroundColor: active ? theme.stateSelectedSurface : 'transparent',
+                    borderColor: active ? theme.stateSelectedBorder : 'transparent',
+                  },
+                ]}
+              >
+                <Text style={[styles.label, { color: theme.foregroundPrimary }]}>
+                  {option.label}
                 </Text>
-              ) : null}
-            </Pressable>
-          );
-        })}
+                {option.description ? (
+                  <Text style={[styles.description, { color: theme.foregroundSecondary }]}>
+                    {option.description}
+                  </Text>
+                ) : null}
+              </RadioOption>
+            );
+          })}
+        </RadioGroup>
       </ModalSheet>
     </>
   );
