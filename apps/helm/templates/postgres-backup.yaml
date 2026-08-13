@@ -78,7 +78,7 @@ spec:
         memory: 96Mi
       limits:
         cpu: 50m
-        memory: 96Mi
+        memory: 384Mi
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: ScheduledBackup
