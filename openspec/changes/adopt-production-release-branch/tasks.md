@@ -54,7 +54,7 @@ Production 대상 PR merge로 발생한 push가 version tag 입력 없이 동일
 - [x] 2.2 기존 Web version label 렌더링을 주석 처리하고 사용하지 않는 import/style을 제거하며 표시 tag 공급·재활성화를 후속 범위로 분리한다.
 - [x] 2.3 Production build에 prod Vault/OpenPanel/Sentry 설정을 전달하되 `EXPO_PUBLIC_RELEASE_TAG`에 의존하지 않고 dev build 입력을 보존한다.
 - [x] 2.4 별도 사람 승인 없이 full push SHA와 하나의 image digest를 Argo source, migration, API와 Web에 전달하고 production runs를 직렬화한다.
-- [x] 2.5 Merged production PR, actor, production commit, source revision, digest와 결과를 민감 정보 없이 기록한다.
+- [x] 2.5 GitHub PR/branch history로 승인 이력을 보존하고 workflow에는 actor, production commit, source revision, digest와 결과를 기록하며 PR 연결 관계를 재검증하지 않는다.
 - [x] 2.6 Trigger matrix, version label 비노출, 실행 중 run 보존·latest pending coalescing, 동일 SHA·digest와 migration barrier 검증을 추가하고 관련 check를 통과시킨다.
 
 ## 3. PROD-764 Credential과 Application ownership
@@ -99,11 +99,13 @@ Tag ref는 production build credential을 얻지 못하고 Terraform은 승인�
 
 - 과거 tag 직접 재배포, history rewrite와 DB rollback을 안내하지 않는다.
 - Production-first hotfix는 main 반영까지 추적한다.
+- Production PR·review·check 강제는 branch ruleset이 소유하고 workflow에 두 번째 PR API 승인 gate를 만들지 않는다.
 
 **Verification**
 
 - 정상 자동 release, tag push 무동작, version label 비노출, 연속 run, hotfix와 revert runbook 검토
 - Production migration/OpenPanel/Sentry 문서의 branch 기반 조건 정합성
+- Workflow에 `pull-requests: read` 권한과 commit-associated PR 검증 step이 없는지 확인
 - Strict OpenSpec validation과 main PR checks
 
 - [x] 4.1 `production PR review/checks → merge(승인) → 자동 build·migration·deploy → 검증` 절차를 release runbook에 기록한다.

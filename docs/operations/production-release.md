@@ -6,6 +6,8 @@
 
 Production branch ruleset과 `prod` Environment 설정은 `apps/terraform/scripts/ensure-github.sh`가 소유하지 않는다. 이 값은 첫 전환 때 GitHub에서 직접 설정하고 아래 live 조회로 검증한다. 저장소 bootstrap 스크립트에 reviewer나 branch policy를 복제하지 않는다.
 
+Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 배포 workflow는 보호된 `production` push를 신뢰하며 commit에 연결된 PR을 API로 다시 조회하거나 두 번째 승인 gate로 사용하지 않는다.
+
 ## 첫 전환 준비
 
 1. 마지막 성공 production deployment의 commit, image digest와 live Argo/Kubernetes 상태를 대조한다. 현재 예상 기준은 `0.2.0`의 `337956aa1f55802bc2ebc06a6483d54c2614a962`지만 branch 생성 직전에 다시 확인한다.
@@ -34,7 +36,7 @@ Production branch ruleset과 `prod` Environment 설정은 `apps/terraform/script
 4. Docker build 결과의 commit SHA와 image digest를 workflow summary에서 확인한다. `prod` Environment 단계에서 별도 승인 버튼을 누르지 않는다.
 5. 같은 digest의 migration Job이 성공하고 Argo CD `kosmo-prod`가 해당 production SHA를 source revision으로 사용한 뒤 API와 Web Rollout이 Healthy인지 확인한다. Migration 실패 시 API와 Web 활성화가 진행되지 않는다.
 6. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
-7. Workflow summary와 Linear/incident 기록에는 merged PR, merge actor, production commit, Argo source revision, image digest, migration·Rollout·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
+7. Merged PR과 review·check 이력은 GitHub PR/branch history에서 확인한다. Workflow summary와 Linear/incident 기록에는 actor, production commit, Argo source revision, image digest, migration·Rollout·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
 
 ### Trigger matrix
 

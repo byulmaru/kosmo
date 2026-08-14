@@ -24,49 +24,15 @@ jobs:
       contents: read
       id-token: write
       packages: write
-      pull-requests: read
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
       source_sha: ${{ github.sha }}
-      production_pr_number: ${{ steps.verify_production_pr.outputs.number }}
-      production_pr_url: ${{ steps.verify_production_pr.outputs.url }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ github.sha }}
-
-      - name: Verify merged production pull request
-        id: verify_production_pr
-        if: github.ref == 'refs/heads/production'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const pullRequests = await github.paginate(
-              github.rest.repos.listPullRequestsAssociatedWithCommit,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                commit_sha: context.sha,
-              },
-            );
-            const mergedProductionPullRequests = pullRequests.filter(
-              ({ base, merge_commit_sha, merged_at }) =>
-                base.ref === "production" &&
-                merged_at !== null &&
-                merge_commit_sha === context.sha,
-            );
-
-            if (mergedProductionPullRequests.length !== 1) {
-              throw new Error(
-                `Expected exactly one merged production pull request for ${context.sha}, found ${mergedProductionPullRequests.length}.`,
-              );
-            }
-
-            const [pullRequest] = mergedProductionPullRequests;
-            core.setOutput("number", String(pullRequest.number));
-            core.setOutput("url", pullRequest.html_url);
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -273,8 +239,6 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
           SOURCE_SHA: ${{ needs.docker_build.outputs.source_sha }}
-          PRODUCTION_PR_NUMBER: ${{ needs.docker_build.outputs.production_pr_number }}
-          PRODUCTION_PR_URL: ${{ needs.docker_build.outputs.production_pr_url }}
           RESULT: ${{ job.status }}
         shell: bash
         run: |
@@ -282,8 +246,7 @@ jobs:
             echo "### Production deployment ${GITHUB_REF_NAME}"
             echo
             echo "- Requester: ${GITHUB_ACTOR}"
-            echo "- Approval: production pull request merge"
-            echo "- Merged production PR: #${PRODUCTION_PR_NUMBER} (${PRODUCTION_PR_URL})"
+            echo "- Approval boundary: production branch ruleset"
             echo "- Commit: ${SOURCE_SHA}"
             echo "- Helm source revision: ${SOURCE_SHA}"
             echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"

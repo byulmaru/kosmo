@@ -34,7 +34,7 @@
 
 1. 실제 최신 성공 production commit에서 `production`을 만들고 PR·checks·rewrite 금지 ruleset을 적용한다.
 2. Docker workflow의 tag push trigger를 제거한다. Main push는 dev build를 유지하고 protected production push는 해당 event SHA의 production build·deploy를 자동 시작한다.
-3. Production 대상 PR의 필수 review와 checks를 유일한 사람 승인 gate로 사용하고 `prod` Environment의 required reviewer와 별도 manual dispatch는 제거한다.
+3. Production branch ruleset이 대상 PR의 필수 review와 checks를 유일한 사람 승인 gate로 강제한다. Workflow는 보호된 production push를 신뢰하고 PR 연결 관계를 다시 조회하지 않으며, `prod` Environment의 required reviewer와 별도 manual dispatch는 제거한다.
 4. Production build 조건을 하나의 판정으로 사용해 prod Vault role, OpenPanel Client ID, stable preservation metadata와 deploy job을 선택하고 `EXPO_PUBLIC_RELEASE_TAG` 입력에는 의존하지 않는다.
 5. Deploy job은 event의 full SHA와 build가 만든 하나의 digest를 Argo CD source, migration, API와 Web에 전달한다. 실행 중인 production run은 취소하지 않고, 여러 pending run은 최신 production SHA로 coalesce한다.
 6. Terraform은 release-time target revision과 Helm parameter만 ignore하고 ECR OIDC trust에서 tag ref를 제거한다. Vault production role은 protected production branch workflow identity만 허용한다.
@@ -50,6 +50,7 @@ GitHub production ruleset과 `prod` Environment 설정은 범용 repository boot
 ### Known Traps
 
 - 별도 Environment approval을 남겨 production PR merge 뒤 두 번째 사람 승인을 요구하지 않는다.
+- Branch ruleset의 PR 승인 경계를 workflow의 commit-associated PR API 검증으로 중복 구현하지 않는다.
 - 주석 처리한 version label을 이번 범위에서 임의의 fallback 문자열로 다시 노출하지 않는다.
 - Workflow 조건만 바꾸고 tag ref의 Vault/IAM trust를 남기지 않는다.
 - 범용 bootstrap 스크립트에 production reviewer·ruleset 정책을 복제해 장기 source of truth처럼 만들지 않는다.

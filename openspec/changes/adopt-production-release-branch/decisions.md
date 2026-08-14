@@ -23,10 +23,10 @@
 - Authority / Provenance: `PROD-764`
 - Status: Active
 - Context / Problem: Tag가 trigger와 source selector를 겸하면 version metadata와 배포 제어가 결합된다.
-- Decision Outcome: 필수 review와 checks를 통과한 production 대상 PR merge를 유일한 사람 승인으로 삼고, 그 production push SHA를 자동 build·배포한다.
-- Alternatives Considered: 별도 workflow dispatch와 GitHub Environment reviewer 승인은 PR merge 뒤 중복 승인이라 채택하지 않았다. Tag push 배포도 사용자가 제거하기로 결정했다.
+- Decision Outcome: Production branch ruleset이 필수 review와 checks를 통과한 대상 PR merge를 유일한 사람 승인으로 강제하고, workflow는 보호된 production push SHA를 신뢰해 자동 build·배포한다. Workflow는 commit-associated PR을 API로 다시 검증하지 않는다.
+- Alternatives Considered: 별도 workflow dispatch와 GitHub Environment reviewer 승인은 PR merge 뒤 중복 승인이라 채택하지 않았다. Runtime의 associated-PR 조회도 ruleset과 책임이 겹치고 merge 방식에 불필요하게 결합되므로 채택하지 않았다. Tag push 배포도 사용자가 제거하기로 결정했다.
 - Consequences: Production merge는 곧 배포 의도다. 실행 중인 release는 보존하지만 여러 pending push는 기존 `PROD-563` 계약처럼 latest pending SHA로 합쳐질 수 있고, 대체된 run은 Actions 취소 기록으로 남는다.
-- Confirmation / Follow-up: Production push만 자동 배포를 만들고 tag/main/manual event는 만들지 않으며 별도 사람 승인이 없는지 확인한다.
+- Confirmation / Follow-up: Production ruleset은 live GitHub 설정에서 별도로 검증하고, workflow에는 pull request 조회 권한·API step 없이 production push만 자동 배포를 만드는지 확인한다.
 
 ### Version label은 표시 tag 공급 결정까지 주석 처리한다
 

@@ -41,7 +41,7 @@
 
 ### Requirement: Production push가 production 배포를 시작한다
 
-**Authority / Provenance:** `PROD-764`, `PROD-563` — Protected `production` 브랜치의 push는 그 push SHA의 production build·배포 run을 자동으로 시작해야 한다(MUST). 단, 실행 중인 release는 보존하면서 여러 pending run을 가장 최신 production SHA로 coalesce할 수 있다(MAY). Workflow는 mutable branch 이름이 아니라 event의 immutable full SHA를 build와 배포 source로 사용해야 한다(MUST). Main push, 일반 branch build, tag push와 수동 dispatch는 production 배포를 시작해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-764`, `PROD-563` — Protected `production` 브랜치의 push는 그 push SHA의 production build·배포 run을 자동으로 시작해야 한다(MUST). Production 대상 PR, review와 필수 check는 branch ruleset이 강제해야 하며(MUST), workflow는 commit과 연결된 PR을 API로 다시 조회해 별도 승인 gate로 사용해서는 안 된다(MUST NOT). 단, 실행 중인 release는 보존하면서 여러 pending run을 가장 최신 production SHA로 coalesce할 수 있다(MAY). Workflow는 mutable branch 이름이 아니라 event의 immutable full SHA를 build와 배포 source로 사용해야 한다(MUST). Main push, 일반 branch build, tag push와 수동 dispatch는 production 배포를 시작해서는 안 된다(MUST NOT).
 
 #### Scenario: Production PR merge
 
@@ -88,12 +88,12 @@
 
 ### Requirement: Production 배포 결과를 감사할 수 있다
 
-**Authority / Provenance:** `PROD-764`, `PROD-563` — 시스템은 merge된 production PR, merge actor, production commit, Helm source revision, image digest와 최종 결과를 감사 가능한 기록에 남겨야 한다(MUST). Credential이나 database 내용은 기록해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-764`, `PROD-563` — GitHub PR/branch history는 merge된 production PR과 review·check 이력을 보존해야 한다(MUST). Workflow는 actor, production commit, Helm source revision, image digest와 최종 결과를 감사 가능한 기록에 남겨야 한다(MUST). Credential이나 database 내용은 기록해서는 안 된다(MUST NOT).
 
 #### Scenario: Production 배포 종료
 
 - **WHEN** production 배포가 성공하거나 실패하며 종료된다
-- **THEN** 시스템은 merged PR, actor, commit, source revision, digest와 결과를 workflow 기록에 남긴다
+- **THEN** GitHub PR/branch history에서 merged PR을 확인할 수 있고 workflow는 actor, commit, source revision, digest와 결과를 기록하되 PR 연결 관계를 다시 조회하지 않는다
 
 ### Requirement: 이전 application은 production revert로 새 release를 배포한다
 
