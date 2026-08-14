@@ -27,7 +27,7 @@
 - [x] 1.2 additive migration과 snapshot을 생성하고 기존 helper·ACL migration history를 수정하지 않았는지 확인한다.
 - [x] 1.3 policy role/command/mode, FORCE off, no Worker/queue policy와 table당 `RESTRICTIVE SELECT`·`PERMISSIVE ALL` 조합을 정적 검증한다.
 
-## 2. PROD-713 role-level policy matrix
+## 2. PROD-713 비운영 role-level policy matrix
 
 **Authority / Provenance**
 
@@ -37,7 +37,7 @@
 
 **Deliverable**
 
-isolated PostgreSQL에서 viewer, author DML, PostContent parent, owner/Worker bypass와 fail-closed 결과를 지속적으로 재현한다.
+PR merge 뒤 정확한 비운영 revision에서 viewer, transition DML, PostContent parent, owner/Worker bypass와 fail-closed 결과를 확인한다.
 
 **Guardrails**
 
@@ -48,13 +48,13 @@ isolated PostgreSQL에서 viewer, author DML, PostContent parent, owner/Worker b
 
 **Verification**
 
-- existing isolated test database wrapper에서 실제 `SET ROLE kosmo_api`와 actor setting을 사용한다.
+- 정확한 비운영 revision에서 실제 `SET ROLE kosmo_api`와 actor setting을 사용한다.
 - anonymous/account-only/empty/malformed, author/follower/stranger, DIRECT, DELETED 전체 숨김, suspended author, PostContent direct ID를 검증한다.
 - 두 table의 visible Active row INSERT/UPDATE/DELETE가 actor setting과 무관하게 허용되고 SELECT viewer matrix는 넓어지지 않으며 ACTIVE→DELETED 전이는 거부되는지 실제 SQL로 검증한다.
 
-- [x] 2.1 catalog와 viewer SELECT/PostContent parent/DELETED 전체 숨김 matrix를 자동 검증한다.
-- [x] 2.2 두 table의 permissive `FOR ALL` command matrix, actor context 비의존성과 restrictive SELECT 결합을 자동 검증한다.
-- [x] 2.3 owner와 `kosmo_worker` BYPASSRLS 무회귀, policy plan과 blank replay를 검증한다.
+- [ ] 2.1 catalog와 viewer SELECT/PostContent parent/DELETED 전체 숨김 matrix를 비운영에서 검증한다.
+- [ ] 2.2 두 table의 permissive `FOR ALL` command matrix, actor context 비의존성과 restrictive SELECT 결합을 비운영에서 검증한다.
+- [ ] 2.3 owner와 `kosmo_worker` BYPASSRLS 무회귀와 representative policy plan을 비운영에서 검증한다.
 
 ## 3. PROD-713 integration과 completion handoff
 

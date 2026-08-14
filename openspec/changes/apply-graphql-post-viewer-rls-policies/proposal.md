@@ -37,5 +37,5 @@ GraphQL Post/PostContent 조회 권한은 애플리케이션 predicate만으로 
 - `packages/core/db/tables.ts`의 Post/PostContent RLS metadata
 - 새 Drizzle migration과 snapshot의 RLS enablement 및 policy DDL
 - migration-defined actor helper를 먼저 준비한 뒤 Drizzle schema sync를 수행하는 test database 진입점
-- disposable PostgreSQL의 `kosmo_api`/`kosmo_worker` role-level viewer·DML 검증
+- merge 뒤 정확한 비운영 revision의 `kosmo_api`/`kosmo_worker` role-level viewer·DML 검증
 - GraphQL schema, resolver predicate, credential selector, production sync/apply와 실제 principal cutover에는 변화가 없다.

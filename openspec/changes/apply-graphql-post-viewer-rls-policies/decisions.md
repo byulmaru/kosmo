@@ -86,7 +86,7 @@
 - Decision Outcome: `db:test:push`는 production과 같은 migration chain을 먼저 적용한 뒤 Drizzle schema sync를 수행한다. 별도 test-only helper 복제나 runtime role/credential 생성을 policy migration에 넣지 않는다.
 - Alternatives Considered: helper SQL을 test bootstrap에 복제하면 migration contract와 drift할 수 있다. policy에 actor parsing을 inline하면 canonical helper contract를 중복한다.
 - Consequences: DB-backed test는 custom function·ACL·policy를 포함한 migration ordering을 함께 검증하며, schema sync는 그 뒤 현재 metadata drift를 확인한다.
-- Confirmation / Follow-up: blank isolated database에서 migration tests, core service tests와 API integration tests를 공식 package script로 실행한다.
+- Confirmation / Follow-up: blank isolated database에서 generic migration smoke, core service tests와 API integration tests를 공식 package script로 실행한다.
 
 ## Remaining Decisions
 

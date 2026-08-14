@@ -40,11 +40,11 @@ Drizzle table metadata에 RLS와 `TO kosmo_api` policy를 선언하고, 생성�
 2. 각 table에 `AS PERMISSIVE FOR ALL USING (true) WITH CHECK (true)` transition policy 하나를 둬 INSERT/UPDATE/DELETE command를 함께 허용하고 restrictive SELECT policy가 적용될 permissive 기반도 제공한다.
 3. PostgreSQL은 같은 command의 permissive 결과와 restrictive 결과를 `AND`로 결합한다. 일반 SELECT는 `true AND viewer predicate`로 제한되며, `WHERE`나 `RETURNING` 때문에 SELECT 권한이 필요한 UPDATE/DELETE에도 restrictive SELECT가 함께 적용된다.
 4. PostContent SELECT는 부모 Post를 참조하는 `EXISTS`를 사용하고 부모 Post의 RLS 결과를 소비한다. 이 방식은 visibility SQL을 두 table에 복사하지 않고 Post 정책 변경을 함께 반영한다.
-5. 두 policy는 `TO kosmo_api`에만 적용하고 실제 catalog와 command matrix를 자동 검증한다. PROD-677은 delete 전이를 Temporal로 옮기고, 전체 Temporal 전환 완료 뒤 PROD-765가 두 `FOR ALL` transition policy를 제거한다.
+5. 두 policy는 `TO kosmo_api`에만 적용하고 merge 뒤 정확한 비운영 revision에서 실제 catalog와 command matrix를 검증한다. PROD-677은 delete 전이를 Temporal로 옮기고, 전체 Temporal 전환 완료 뒤 PROD-765가 두 `FOR ALL` transition policy를 제거한다.
 
 Policy DDL은 `post`를 먼저, `post_content`를 다음 순서로 적용해 application create flow와 일치하는 table lock 순서를 유지한다. 기존 Profile/Instance PK, `profile_follow(follower_profile_id, followee_profile_id)` unique index와 `post_content(post_id)` index를 우선 사용하고 실제 plan 근거 없이 index를 추가하지 않는다.
 
-자동 검증은 기존 isolated `scripts/test-db.mjs run` 경로와 `packages/core/db/*.migration.test.mjs` 수집 규약을 사용한다. `db:test:push`는 migration-defined actor helper와 policy DDL을 실제 순서로 준비한 뒤 Drizzle schema sync를 수행한다. catalog 문자열만 비교하지 않고 실제 `SET ROLE kosmo_api`와 transaction-local actor settings로 SELECT/DML을 실행한다.
+별도 migration behavior test는 두지 않는다. PR 검증은 generic blank migration replay, Drizzle schema/snapshot parity와 기존 GraphQL/core regression을 사용한다. 실제 `SET ROLE kosmo_api`와 transaction-local actor settings의 viewer·DML matrix는 merge 뒤 정확한 비운영 revision에서 확인한다. `db:test:push`는 migration-defined actor helper와 policy DDL을 실제 순서로 준비한 뒤 Drizzle schema sync를 수행한다.
 
 ### Allowed Alternatives
 
