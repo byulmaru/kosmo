@@ -3,10 +3,9 @@ import { graphql, usePaginationFragment } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
-import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing, typography } from '@/theme/tokens';
 import { FollowRequestListItem } from './FollowRequestListItem';
 import type { FollowRequestList_profile$key } from './__generated__/FollowRequestList_profile.graphql';
 import type { FollowRequestListNextPageQuery } from './__generated__/FollowRequestListNextPageQuery.graphql';
@@ -68,12 +67,11 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
           <FollowRequestListItem connectionId={connectionId} key={node.id} request={node} />
         ))
       ) : (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>받은 팔로우 요청이 없어요</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            새 요청이 들어오면 여기에 표시돼요.
-          </Text>
-        </View>
+        <StateView
+          description="새 요청이 들어오면 여기에 표시돼요."
+          style={styles.state}
+          title="받은 팔로우 요청이 없어요"
+        />
       )}
       {pagination.isLoadingNext ? (
         <View style={[styles.pagination, { borderColor: theme.border }]}>
@@ -85,17 +83,14 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
           </Text>
         </View>
       ) : loadError ? (
-        <View accessibilityRole="alert" style={[styles.pagination, { borderColor: theme.border }]}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>
-            팔로워 요청을 더 불러오지 못했어요
-          </Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            이미 불러온 요청은 그대로 유지돼요.
-          </Text>
-          <Button onPress={loadNextPage} style={styles.stateAction} tone="secondary">
-            다시 시도
-          </Button>
-        </View>
+        <StateView
+          actionLabel="다시 시도"
+          alert
+          description="이미 불러온 요청은 그대로 유지돼요."
+          onAction={loadNextPage}
+          style={[styles.pagination, { borderColor: theme.border }]}
+          title="팔로워 요청을 더 불러오지 못했어요"
+        />
       ) : null}
     </ScrollView>
   );
@@ -118,11 +113,11 @@ export function FollowRequestListState({
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             {[0, 1, 2].map((item) => (
               <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-                <View
-                  style={[
-                    styles.avatarSkeleton,
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                  ]}
+                <Skeleton
+                  circular
+                  height={40}
+                  style={[styles.avatarSkeleton, { borderColor: theme.border }]}
+                  width={40}
                 />
                 <View style={styles.skeletonCopy}>
                   <Skeleton height={12} width={160} />
@@ -136,26 +131,20 @@ export function FollowRequestListState({
           </Text>
         </>
       ) : state === 'error' ? (
-        <View accessibilityRole="alert" style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>
-            팔로워 요청을 불러오지 못했어요
-          </Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            잠시 후 다시 시도해주세요.
-          </Text>
-          {onRetry ? (
-            <Button onPress={onRetry} style={styles.stateAction} tone="secondary">
-              다시 시도
-            </Button>
-          ) : null}
-        </View>
+        <StateView
+          actionLabel={onRetry ? '다시 시도' : undefined}
+          alert
+          description="잠시 후 다시 시도해주세요."
+          onAction={onRetry}
+          style={styles.state}
+          title="팔로워 요청을 불러오지 못했어요"
+        />
       ) : (
-        <View style={styles.state}>
-          <Text style={[styles.stateTitle, { color: theme.text }]}>프로필이 필요해요</Text>
-          <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>
-            팔로워 요청을 보려면 사용할 프로필을 먼저 선택해주세요.
-          </Text>
-        </View>
+        <StateView
+          description="팔로워 요청을 보려면 사용할 프로필을 먼저 선택해주세요."
+          style={styles.state}
+          title="프로필이 필요해요"
+        />
       )}
     </ScrollView>
   );
@@ -169,9 +158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xxxl,
   },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
   stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
-  stateAction: { marginTop: spacing.md },
   pagination: {
     alignItems: 'center',
     borderTopWidth: 1,
@@ -186,7 +173,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  avatarSkeleton: { borderRadius: radii.full, borderWidth: 1, height: 40, width: 40 },
+  avatarSkeleton: { borderWidth: 1 },
   skeletonCopy: { flex: 1, gap: spacing.sm, minWidth: 0 },
   srOnly: {
     height: 1,

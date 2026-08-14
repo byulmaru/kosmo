@@ -5,9 +5,9 @@ import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from '@/components/post/PostReplyCoordinator';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/StateView';
+import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 import type { PostListItem_post$key } from '@/components/post/__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from '@/components/post/__generated__/ReplyComposerSurface_profile.graphql';
@@ -121,11 +121,11 @@ function BookmarkListSkeleton() {
       <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         {[0, 1, 2].map((item) => (
           <View key={item} style={[styles.skeletonItem, { borderColor: theme.border }]}>
-            <View
-              style={[
-                styles.avatarSkeleton,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
+            <Skeleton
+              circular
+              height={48}
+              style={[styles.avatarSkeleton, { borderColor: theme.border }]}
+              width={48}
             />
             <View style={styles.skeletonCopy}>
               <View style={styles.skeletonHeader}>
@@ -159,17 +159,16 @@ function BookmarkListState({
   onRetry?: () => void;
   title: string;
 }) {
-  const theme = useTheme();
   return (
-    <View accessibilityRole={alert ? 'alert' : undefined} style={styles.state}>
-      <Text style={[styles.stateTitle, { color: theme.text }]}>{title}</Text>
-      <Text style={[styles.stateDescription, { color: theme.textSecondary }]}>{description}</Text>
-      {onRetry ? (
-        <Button onPress={onRetry} style={styles.actionButton} tone="secondary">
-          다시 시도
-        </Button>
-      ) : null}
-    </View>
+    <StateView
+      actionLabel={onRetry ? '다시 시도' : undefined}
+      actionStyle={styles.actionButton}
+      alert={alert}
+      description={description}
+      onAction={onRetry}
+      style={styles.state}
+      title={title}
+    />
   );
 }
 
@@ -184,13 +183,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
   },
-  avatarSkeleton: { borderRadius: radii.full, borderWidth: 1, height: 48, width: 48 },
+  avatarSkeleton: { borderWidth: 1 },
   skeletonCopy: { flex: 1, minWidth: 0 },
   skeletonHeader: { gap: spacing.sm },
   skeletonBody: { gap: 10, marginTop: spacing.md },
   state: { alignItems: 'center', gap: spacing.sm, padding: spacing.xxxl },
-  stateTitle: { fontFamily: 'SUIT', fontWeight: '700', textAlign: 'center', ...typography.md },
-  stateDescription: { fontFamily: 'SUIT', textAlign: 'center', ...typography.sm },
   actionButton: { minHeight: 44 },
   pagination: { alignItems: 'center', padding: spacing.lg },
   srOnly: { height: 1, left: 0, overflow: 'hidden', position: 'absolute', top: 0, width: 1 },
