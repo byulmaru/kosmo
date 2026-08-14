@@ -538,7 +538,7 @@ export const ProfileMedia = pgTable(
   (table) => [unique().on(table.profileId, table.kind), index().on(table.mediaId)],
 );
 
-export const Reactions = pgTable(
+export const Reactions = pgTable.withRLS(
   'reaction',
   {
     id: id(),
@@ -552,6 +552,45 @@ export const Reactions = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
+    pgPolicy('reaction_graphql_target_post_select', {
+      for: 'select',
+      to: 'kosmo_api',
+      using: sql`
+        EXISTS (
+          SELECT 1
+          FROM public.post AS target_post
+          WHERE target_post.id = ${table.postId}
+        )
+      `,
+    }),
+    pgPolicy('reaction_graphql_owner_select', {
+      for: 'select',
+      to: 'kosmo_api',
+      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+    }),
+    pgPolicy('reaction_graphql_owner_insert', {
+      for: 'insert',
+      to: 'kosmo_api',
+      withCheck: sql`
+        ${table.profileId} = public.kosmo_current_profile_id()
+        AND EXISTS (
+          SELECT 1
+          FROM public.post AS target_post
+          WHERE target_post.id = ${table.postId}
+        )
+      `,
+    }),
+    pgPolicy('reaction_graphql_owner_delete', {
+      for: 'delete',
+      to: 'kosmo_api',
+      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+    }),
+    pgPolicy('reaction_graphql_owner_lock', {
+      for: 'update',
+      to: 'kosmo_api',
+      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+      withCheck: sql`false`,
+    }),
     unique().on(table.postId, table.type, table.profileId),
     index().on(table.profileId),
     index().on(table.postId, table.type, table.createdAt.desc(), table.id.desc()),

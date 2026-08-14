@@ -17,7 +17,7 @@ import {
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { eq, ne } from 'drizzle-orm';
+import { eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreServices from '@kosmo/core/services';
@@ -25,11 +25,27 @@ import type { deriveContext as deriveContextFunction, Env } from '../../../src/c
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const withStartupRole = (url: string, role: 'kosmo_api' | 'kosmo_worker') => {
+  const parsed = new URL(url);
+  const option = `options=${encodeURIComponent(`-c role=${role}`)}`;
+  parsed.search = parsed.search ? `${parsed.search.slice(1)}&${option}` : option;
+  return parsed.toString();
+};
+
+const isRowLevelSecurityError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const cause = (error as Error & { cause?: unknown }).cause;
+  return /row-level security policy/i.test(`${error.message}\n${String(cause ?? '')}`);
+};
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let ActivityPubActors: typeof CoreDb.ActivityPubActors;
 let ActivityPubPosts: typeof CoreDb.ActivityPubPosts;
+let createOperationDatabase: typeof CoreDb.createOperationDatabase;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -49,6 +65,7 @@ let localInstanceId: string;
 describe('GraphQL Reaction', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    process.env.OPERATION_DATABASE_URL = withStartupRole(databaseUrl, 'kosmo_api');
     process.env.NODE_ENV = 'production';
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
@@ -58,6 +75,7 @@ describe('GraphQL Reaction', () => {
       Accounts,
       ActivityPubActors,
       ActivityPubPosts,
+      createOperationDatabase,
       db,
       firstOrThrow,
       Instances,
@@ -91,6 +109,193 @@ describe('GraphQL Reaction', () => {
 
   after(async () => {
     await pg.end();
+  });
+
+  test('GraphQL operation connection과 Reaction policy catalog는 kosmo_api 경계를 사용한다', async () => {
+    const operation = createOperationDatabase();
+
+    try {
+      const rows = (await operation.db.execute(sql`
+        SELECT current_user AS "currentUser"
+      `)) as unknown as Array<{ currentUser: string }>;
+      assert.equal(rows[0]?.currentUser, 'kosmo_api');
+
+      const policies = (await operation.db.execute(sql`
+        SELECT
+          policy.polname AS "name",
+          policy.polcmd AS "command",
+          policy.polpermissive AS "permissive",
+          pg_get_expr(policy.polqual, policy.polrelid) AS "using",
+          pg_get_expr(policy.polwithcheck, policy.polrelid) AS "withCheck",
+          relation.relrowsecurity AS "rlsEnabled",
+          relation.relforcerowsecurity AS "rlsForced",
+          ARRAY(
+            SELECT role.rolname
+            FROM pg_roles AS role
+            WHERE role.oid = ANY(policy.polroles)
+            ORDER BY role.rolname
+          ) AS "roles"
+        FROM pg_policy AS policy
+        INNER JOIN pg_class AS relation ON relation.oid = policy.polrelid
+        INNER JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = 'public' AND relation.relname = 'reaction'
+        ORDER BY policy.polname
+      `)) as unknown as Array<{
+        command: string;
+        name: string;
+        permissive: boolean;
+        rlsEnabled: boolean;
+        rlsForced: boolean;
+        roles: string[];
+        using: string | null;
+        withCheck: string | null;
+      }>;
+
+      assert.deepEqual(
+        policies.map(({ command, name, permissive, rlsEnabled, rlsForced, roles }) => ({
+          command,
+          name,
+          permissive,
+          rlsEnabled,
+          rlsForced,
+          roles,
+        })),
+        [
+          {
+            command: 'd',
+            name: 'reaction_graphql_owner_delete',
+            permissive: true,
+            rlsEnabled: true,
+            rlsForced: false,
+            roles: ['kosmo_api'],
+          },
+          {
+            command: 'a',
+            name: 'reaction_graphql_owner_insert',
+            permissive: true,
+            rlsEnabled: true,
+            rlsForced: false,
+            roles: ['kosmo_api'],
+          },
+          {
+            command: 'w',
+            name: 'reaction_graphql_owner_lock',
+            permissive: true,
+            rlsEnabled: true,
+            rlsForced: false,
+            roles: ['kosmo_api'],
+          },
+          {
+            command: 'r',
+            name: 'reaction_graphql_owner_select',
+            permissive: true,
+            rlsEnabled: true,
+            rlsForced: false,
+            roles: ['kosmo_api'],
+          },
+          {
+            command: 'r',
+            name: 'reaction_graphql_target_post_select',
+            permissive: true,
+            rlsEnabled: true,
+            rlsForced: false,
+            roles: ['kosmo_api'],
+          },
+        ],
+      );
+      assert.match(
+        policies.find(({ name }) => name === 'reaction_graphql_owner_lock')?.using ?? '',
+        /kosmo_current_profile_id/,
+      );
+      assert.equal(
+        policies.find(({ name }) => name === 'reaction_graphql_owner_lock')?.withCheck,
+        'false',
+      );
+      assert.match(
+        policies.find(({ name }) => name === 'reaction_graphql_owner_insert')?.withCheck ?? '',
+        /kosmo_current_profile_id.*EXISTS/s,
+      );
+      assert.match(
+        policies.find(({ name }) => name === 'reaction_graphql_target_post_select')?.using ?? '',
+        /EXISTS/,
+      );
+    } finally {
+      await operation.close();
+    }
+  });
+
+  test('missing, empty, malformed Profile actor는 Reaction INSERT와 DELETE 권한을 만들지 않는다', async () => {
+    const actor = await createProfile('invalid-actor');
+    const post = await createPost(actor.id);
+    const [reaction] = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .returning();
+    assert.ok(reaction);
+
+    for (const actorContext of [undefined, '', 'malformed']) {
+      const operation = createOperationDatabase();
+      try {
+        if (actorContext !== undefined) {
+          await operation.db.execute(
+            sql`SELECT set_config('kosmo.profile_id', ${actorContext}, false)`,
+          );
+        }
+        await assert.rejects(
+          operation.db
+            .insert(Reactions)
+            .values({ postId: post.id, profileId: actor.id, type: '🎉' }),
+          isRowLevelSecurityError,
+        );
+        const deleted = await operation.db
+          .delete(Reactions)
+          .where(eq(Reactions.id, reaction.id))
+          .returning({ id: Reactions.id });
+        assert.deepEqual(deleted, []);
+        assert.equal(await db.$count(Reactions), 1);
+      } finally {
+        await operation.close();
+      }
+    }
+  });
+
+  test('owner Notification row lock은 유지하지만 실제 Reaction UPDATE는 거부한다', async () => {
+    const actor = await createProfile('owner-lock-actor');
+    const post = await createPost(actor.id);
+    const [reaction] = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+      .returning();
+    assert.ok(reaction);
+
+    const operation = createOperationDatabase();
+    try {
+      await operation.db.execute(sql`SELECT set_config('kosmo.profile_id', ${actor.id}, false)`);
+      const locked = await operation.db.transaction((tx) =>
+        tx
+          .select({ id: Reactions.id })
+          .from(Reactions)
+          .where(eq(Reactions.id, reaction.id))
+          .for('update'),
+      );
+      assert.deepEqual(locked, [{ id: reaction.id }]);
+
+      await assert.rejects(
+        operation.db.update(Reactions).set({ type: '🎉' }).where(eq(Reactions.id, reaction.id)),
+        isRowLevelSecurityError,
+      );
+      assert.equal(
+        await db
+          .select({ type: Reactions.type })
+          .from(Reactions)
+          .where(eq(Reactions.id, reaction.id))
+          .then(firstOrThrow)
+          .then((row) => row.type),
+        '❤️',
+      );
+    } finally {
+      await operation.close();
+    }
   });
 
   test('반복 add가 같은 Reaction Node를 반환하고 created를 노출하지 않는다', async () => {
@@ -444,6 +649,14 @@ describe('GraphQL Reaction', () => {
     const hiddenNode = await requestNode(reactionId);
     assertNoGraphQLErrors(hiddenNode);
     assert.equal(hiddenNode.data?.node, null);
+
+    await db
+      .update(Posts)
+      .set({ repostSourceId: null, state: PostState.DELETED, visibility: PostVisibility.PUBLIC })
+      .where(eq(Posts.id, post.id));
+    const deletedNode = await requestNode(reactionId);
+    assertNoGraphQLErrors(deletedNode);
+    assert.equal(deletedNode.data?.node, null);
   });
 
   test('Post viewerReactions는 selected Profile별 현재 관계를 조회하고 전환을 격리한다', async () => {
@@ -550,6 +763,64 @@ describe('GraphQL Reaction', () => {
         .then((rows) => rows.length),
       0,
     );
+  });
+
+  test('Owner는 DELETED Post의 Reaction도 반환된 ID로 삭제하고 Notification을 정리한다', async () => {
+    const auth = await createAuthenticatedSession();
+    const recipient = await createAuthenticatedSession();
+    const post = await createPost(recipient.profile.id);
+    const added = await requestAddReaction(post.id, '❤️', auth.token);
+    const reactionId = added.data?.addReaction.reaction.id;
+    assert.ok(reactionId);
+    assert.equal(await db.$count(Notifications), 1);
+
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+
+    const hiddenNode = await requestNode(reactionId, auth.token);
+    assertNoGraphQLErrors(hiddenNode);
+    assert.equal(hiddenNode.data?.node, null);
+
+    const deleted = await requestDeleteReaction(post.id, '❤️', auth.token);
+    const repeated = await requestDeleteReaction(post.id, '❤️', auth.token);
+
+    assertNoGraphQLErrors(deleted);
+    assertNoGraphQLErrors(repeated);
+    assert.equal(deleted.data?.deleteReaction.reactionId, reactionId);
+    assert.equal(deleted.data?.deleteReaction.post, null);
+    assert.equal(repeated.data?.deleteReaction.reactionId, null);
+    assert.equal(await db.$count(Reactions), 0);
+    assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('kosmo_worker는 DELETED Post Reaction에서 BYPASSRLS 결과를 유지한다', async () => {
+    const owner = await createProfile('worker-bypass-owner');
+    const post = await createPost(owner.id);
+    const [reaction] = await db
+      .insert(Reactions)
+      .values({ postId: post.id, profileId: owner.id, type: '🌈' })
+      .returning();
+    assert.ok(reaction);
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, post.id));
+
+    const worker = createOperationDatabase(withStartupRole(databaseUrl, 'kosmo_worker'));
+    try {
+      const principals = (await worker.db.execute(sql`
+        SELECT current_user AS "currentUser", role.rolbypassrls AS "bypassRls"
+        FROM pg_roles AS role
+        WHERE role.rolname = current_user
+      `)) as unknown as Array<{ bypassRls: boolean; currentUser: string }>;
+      assert.equal(principals.length, 1);
+      assert.equal(principals[0]?.currentUser, 'kosmo_worker');
+      assert.equal(principals[0]?.bypassRls, true);
+
+      const rows = await worker.db
+        .select({ id: Reactions.id })
+        .from(Reactions)
+        .where(eq(Reactions.id, reaction.id));
+      assert.deepEqual(rows, [{ id: reaction.id }]);
+    } finally {
+      await worker.close();
+    }
   });
 
   test('Post와 Type 삭제는 다른 Profile의 Reaction과 Notification을 유지한다', async () => {
