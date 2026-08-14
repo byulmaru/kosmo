@@ -33,15 +33,16 @@
 
 ### Requirement: Worker credential source는 Web과 Temporal Worker 기본 DB에만 제공한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-715` — 시스템은 Web과 Temporal Worker workload의 기본 DB에 chart가 생성한 `kosmo_worker` Pooler URL과 release별 `*-postgres-worker` / `password` Secret source를 제공해야 한다(MUST). Worker credential values나 별도 application DB 입력을 추가하거나 API Rollout에 주입해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`, `PROD-715` — 시스템은 Web과 Temporal Worker workload의 기본 DB에 chart가 생성한 `kosmo_worker` direct read-write Service URL과 release별 `*-postgres-worker` / `password` Secret source를 제공해야 한다(MUST). Worker credential values나 별도 application DB 입력을 추가하거나 API Rollout에 주입해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker source 선택
 
 - **WHEN** 별도 Worker credential values 없이 chart를 렌더한다
 - **THEN** Web Rollout과 Worker Deployment의 기본 `DATABASE_PASSWORD` SecretKeyRef와 `DATABASE_URL`이 Worker source를 참조한다
-- **AND** `DATABASE_URL`은 chart가 `kosmo_worker` username, `kosmo` database와 기존 PgBouncer endpoint로 생성한다
+- **AND** `DATABASE_URL`은 chart가 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 생성한다
 - **AND** `DATABASE_PASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
 - **AND** API Rollout에는 Worker Secret/env가 없고 `WORKER_DATABASE_*`도 어느 workload에 렌더되지 않는다
+- **AND** Worker URL compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 
 #### Scenario: Worker-only off 상태 금지
 

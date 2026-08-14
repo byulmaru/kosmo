@@ -16,17 +16,24 @@
 - **THEN** 기존 process 전역 기본 `db`가 `kosmo_worker` principal로 SQL을 실행한다
 - **AND** core/Fedify callsite에 별도 Worker handle을 추가하지 않는다
 
-### Requirement: Worker credential은 기존 PgBouncer를 통해 독립 전환한다
+### Requirement: Worker credential은 기존 direct read-write Service를 통해 독립 전환한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-715` — Web과 Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 CloudNativePG PgBouncer에 연결해야 한다(MUST). PgBouncer를 우회하거나 API GraphQL operation connection을 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`, `PROD-715` — Web과 Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 PostgreSQL direct read-write Service에 연결해야 한다(MUST). GraphQL operation 전용 PgBouncer 경계를 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker credential cutover
 
 - **WHEN** PROD-715 workload wiring을 렌더한다
 - **THEN** Web과 Temporal Worker의 기본 `DATABASE_*`만 Worker source를 사용한다
-- **AND** chart가 `kosmo_worker` username, `kosmo` database와 기존 PgBouncer endpoint로 `DATABASE_URL`을 생성한다
+- **AND** chart가 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 `DATABASE_URL`을 생성한다
 - **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 생성한다
 - **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
+- **AND** Worker URL compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
+
+#### Scenario: Worker Secret rotation restart
+
+- **WHEN** `worker-database` VaultStaticSecret destination이 새 password로 갱신된다
+- **THEN** Web Rollout과 Temporal Worker Deployment가 restart target으로 재시작된다
+- **AND** 새 Pod는 같은 SecretKeyRef에서 새 `DATABASE_PASSWORD`를 읽는다
 
 #### Scenario: API Worker credential 비주입
 
@@ -55,5 +62,5 @@
 #### Scenario: 비운영 principal 검증
 
 - **WHEN** 구현 revision이 비운영 환경에 배포된다
-- **THEN** Web 기본 DB의 Pooler 경로, `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 application SQL을 검증한다
+- **THEN** Web 기본 DB의 direct read-write Service 경로, `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 application SQL을 검증한다
 - **AND** Worker manifest의 같은 기본 source, API 비주입과 queue database 분리를 검증한다

@@ -10,19 +10,19 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: Chart가 생성한 고정 `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
+- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 고정 `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
 - Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 GraphQL 전용 `ctx.db` 경계와 맞지 않고 callsite migration을 불필요하게 만든다.
 - Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL operation은 별도 `kosmo_api` 경계를 유지한다.
 
-### 기존 CloudNativePG PgBouncer와 SCRAM 인증을 유지한다
+### 기존 direct read-write Service와 SCRAM 인증을 사용한다
 
 - Date: 2026-08-14
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-369`, `PROD-715`; canceled `PROD-470`
-- Decision Outcome: workload는 기존 PgBouncer에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다.
-- Alternatives Considered: client certificate 때문에 PostgreSQL direct Service로 연결하거나 전용 Pooler를 만드는 방식은 현재 pooling·운영 경계를 깨거나 불필요하게 확장한다.
-- Consequences: Worker URL은 chart가 고정된 `kosmo_worker`/`kosmo`와 기존 PgBouncer endpoint로 생성하고 Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
+- Decision Outcome: Web과 Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. PgBouncer는 GraphQL operation connection에만 사용한다.
+- Alternatives Considered: Worker에 전용 Pooler나 custom authentication을 만드는 방식은 필요 없는 pooling·운영 경계를 추가한다. direct endpoint에 client certificate 인증을 추가하는 대안은 취소된 PROD-470 계약으로 재개하지 않는다.
+- Consequences: Worker URL은 chart가 고정된 `kosmo_worker`/`kosmo`와 기존 direct read-write Service endpoint로 생성하고 Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
 
 ### API selector와 고정 Worker source의 workload 소유권을 분리한다
 
@@ -53,6 +53,16 @@
 - Decision Outcome: `workloads.enabled`인 application render에서는 Temporal Worker ServiceAccount/Deployment를 항상 생성하고 `worker.enabled` 또는 동등한 Worker-only off 상태를 두지 않는다.
 - Alternatives Considered: foundation을 기본 비활성으로 유지하거나 환경별 Worker toggle을 두는 방식은 정상 운영에서 사용하지 않는 상태와 배포 조합만 늘린다.
 - Consequences: 전체 application workload gate는 유지하지만 Worker만 독립적으로 끄는 rollback은 지원하지 않는다. 등록된 business capability가 없을 때 process는 health/readiness를 제공하는 idle 상태로 유지되며 Temporal/DB connection을 열지 않는다. 부분 또는 잘못된 명시 registration은 계속 실패한다.
+
+### Worker Secret 변경은 Web과 Worker를 재시작한다
+
+- Date: 2026-08-14
+- Decision Class: Derived Contract
+- Status: Active
+- Authority / Provenance: Linear `PROD-715`, user decision
+- Decision Outcome: `worker-database` VaultStaticSecret destination이 변경되면 Web Rollout과 Temporal Worker Deployment를 restart target으로 재시작해 새 `DATABASE_PASSWORD` SecretKeyRef를 적용한다.
+- Alternatives Considered: Pod를 재시작하지 않으면 env로 주입된 기존 password가 남아 Secret rotation 뒤 인증 실패가 발생할 수 있다.
+- Consequences: rotation은 기존 VSO destination과 workload restart lifecycle을 사용하며 별도 runtime credential refresh, URL 감지 또는 compatibility flag를 만들지 않는다.
 
 ### rollback은 workload wiring의 Git revert다
 

@@ -103,7 +103,7 @@ password
 {{- end -}}
 
 {{- define "kosmo.workerDatabaseUrl" -}}
-{{- printf "postgres://kosmo_worker:$(DATABASE_PASSWORD)@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
+{{- printf "postgres://kosmo_worker:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
 {{- end -}}
 
 {{- define "kosmo.workerDatabasePasswordSecretName" -}}
