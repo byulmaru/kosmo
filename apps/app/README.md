@@ -33,12 +33,15 @@ The two manual workflows build from a clean CNG project, not a committed `ios/` 
 
 Enroll the Apple account in the Apple Developer Program, then create or verify the explicit `moe.kos` App ID in Certificates, Identifiers & Profiles for the same team. This only creates the Developer Portal identifier; it does not create an App Store Connect listing. The current CNG configuration does not require any additional App ID capability.
 
-After the Terraform change is applied, run the repository's existing bootstrap script so both protected environments receive the Firebase/WIF variables and the `git@github.com:byulmaru/kosmo-ios-signing.git` match URL.
+After the Terraform change is applied, create the `native-test-distribution` and `ios-device-onboarding` environments in GitHub. Restrict both to `main`, require `robin-maki` approval only for `ios-device-onboarding`, and add these variables to both environments from the corresponding Terraform outputs:
 
-```sh
-cd apps/terraform
-./scripts/ensure-github.sh
-```
+| Variable                         | Value                                                  |
+| -------------------------------- | ------------------------------------------------------ |
+| `FIREBASE_IOS_APP_ID`            | `terraform output -raw firebase_ios_app_id`            |
+| `FIREBASE_TESTER_GROUP`          | `native-testers`                                       |
+| `GCP_SERVICE_ACCOUNT`            | `terraform output -raw gcp_service_account`            |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `terraform output -raw gcp_workload_identity_provider` |
+| `MATCH_GIT_URL`                  | `git@github.com:byulmaru/kosmo-ios-signing.git`        |
 
 Add the following non-secret environment variables to both `native-test-distribution` and `ios-device-onboarding`:
 

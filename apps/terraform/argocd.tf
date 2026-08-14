@@ -73,9 +73,12 @@ resource "argocd_application" "kosmo_prod" {
   wait    = false
 
   lifecycle {
-    # PROD-545 owns release-time digest, workload, and migration parameters.
+    # PROD-764 owns the release-time source revision and parameter overlay.
     # Terraform continues to own the bootstrap values and Application structure.
-    ignore_changes = [spec[0].source[0].helm[0].parameter]
+    ignore_changes = [
+      spec[0].source[0].target_revision,
+      spec[0].source[0].helm[0].parameter,
+    ]
   }
 
   metadata {
@@ -89,7 +92,7 @@ resource "argocd_application" "kosmo_prod" {
 
     source {
       repo_url        = "https://github.com/byulmaru/kosmo.git"
-      target_revision = "main"
+      target_revision = "production"
       path            = "apps/helm"
 
       helm {

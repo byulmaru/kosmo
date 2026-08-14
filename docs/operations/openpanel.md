@@ -7,8 +7,8 @@ Kosmo Web은 공개 build 변수 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`가 있을 때
 1. OpenPanel에서 Kosmo production project와 Web write client를 만든다.
 2. 허용 origin을 Kosmo production Web origin으로 제한한다.
 3. GitHub repository variable `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`에 공개 client ID를 저장한다. client secret이나 root/read credential은 build에 넣지 않는다.
-4. 정식 SemVer tag build만 이 값을 Docker build arg로 전달한다. branch와 local build에는 기본 주입하지 않는다.
-5. Client ID를 회전하면 repository variable을 바꾸고 새 SemVer image를 발행한다.
+4. 보호된 `production` branch push로 실행한 production build에서만 이 값을 Docker build arg로 전달한다. `main`, 기타 branch, tag push와 local build에는 기본 주입하지 않는다.
+5. Client ID를 회전하면 repository variable을 바꾸고 새 production image를 발행한다.
 
 Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청이 모두 없어야 한다. Local에서 명시적으로 값을 주입하면 같은 production OpenPanel project에 전송되므로 실제 테스트 계정과 event를 사용하고 검증 뒤 제거한다.
 
@@ -22,7 +22,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 
 ## 배포 후 acceptance
 
-각 release에서 아래를 production browser와 Dashboard로 확인한다. 실제 Account ID나 사용자 콘텐츠를 증거 문서에 복사하지 않는다.
+각 [Production release](./production-release.md)에서 아래를 production browser와 Dashboard로 확인한다. 실제 Account ID나 사용자 콘텐츠를 증거 문서에 복사하지 않는다.
 
 1. Client ID가 없는 local build의 Network panel에 `/api/track` 요청이 없음을 확인한다.
 2. production landing을 비로그인으로 열어 `screen_view`와 anonymous profile/session을 확인한다.

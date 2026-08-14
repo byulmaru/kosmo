@@ -4,7 +4,6 @@ import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
-import { getBuildVersionLabel } from '@/buildVersion';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileHero } from '@/components/profile/ProfileHero';
@@ -23,7 +22,6 @@ import { colors, spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ViewStyle } from 'react-native';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -1373,9 +1371,6 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
-const longReleaseTag =
-  'v20260810releaseaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-
 function UniversalShellStory() {
   return (
     <SessionProvider>
@@ -2269,10 +2264,8 @@ export const UniversalFull: Story = {
     const rightRail = canvas.getByLabelText('새 게시글 작성').parentElement;
     const rightRailStyle = rightRail ? view?.getComputedStyle(rightRail) : undefined;
     const privacyLink = canvas.getByRole('link', { name: '개인정보 처리방침' });
-    const versionLabel = canvas.getByText('버전: 개발 빌드');
     const rightRailRect = rightRail?.getBoundingClientRect();
     const privacyLinkRect = privacyLink.getBoundingClientRect();
-    const versionLabelRect = versionLabel.getBoundingClientRect();
 
     expect(leftRail).not.toBeNull();
     expect(leftRail?.getBoundingClientRect().height).toBeLessThanOrEqual(view?.innerHeight ?? 0);
@@ -2282,50 +2275,12 @@ export const UniversalFull: Story = {
     expect(rightRailStyle?.overflowY).toBe('auto');
     expect(rightRail?.scrollWidth ?? 1).toBeLessThanOrEqual(rightRail?.clientWidth ?? 0);
     expect(privacyLink).toHaveAttribute('href', '/privacy');
-    expect(versionLabel).toBeVisible();
-    expect(versionLabelRect.top).toBeGreaterThanOrEqual(privacyLinkRect.top);
-    expect(versionLabelRect.bottom).toBeLessThanOrEqual(privacyLinkRect.bottom);
+    expect(canvas.queryByText(/^버전:/)).toBeNull();
     expect((rightRailRect?.bottom ?? 0) - privacyLinkRect.bottom).toBeLessThanOrEqual(spacing.sm);
   },
   render: () => (
     <View style={{ height: 1800 }}>
       <UniversalShellStory />
-    </View>
-  ),
-};
-
-export const RightRailFooterLongReleaseTag: Story = {
-  beforeEach: () => {
-    mocked(getBuildVersionLabel).mockReturnValue(longReleaseTag);
-  },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const surface = canvas.getByTestId('long-tag-footer-surface');
-    const footer = surface.firstElementChild;
-    const label = canvas.getByText(`버전: ${longReleaseTag}`, { exact: true });
-    const surfaceRect = surface.getBoundingClientRect();
-    const footerRect = footer?.getBoundingClientRect();
-    const labelRect = label.getBoundingClientRect();
-
-    expect(footer).not.toBeNull();
-    expect(label).toBeVisible();
-    expect(surface.scrollWidth).toBe(surface.clientWidth);
-    expect(labelRect.right).toBeLessThanOrEqual(footerRect?.right ?? 0);
-    expect(labelRect.bottom).toBeLessThanOrEqual(surfaceRect.bottom);
-  },
-  render: () => (
-    <View
-      style={
-        {
-          height: 160,
-          overflowX: 'hidden',
-          paddingLeft: spacing.xl,
-          width: 350,
-        } as ViewStyle
-      }
-      testID="long-tag-footer-surface"
-    >
-      <RightRailFooter />
     </View>
   ),
 };
