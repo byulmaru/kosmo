@@ -110,7 +110,7 @@ Tag ref는 production build credential을 얻지 못하고 Terraform은 승인�
 - [x] 4.2 Production-first hotfix와 DB-compatible revert PR을 새 release로 배포하는 rollback 절차를 기록한다.
 - [x] 4.3 Production migration, OpenPanel, Sentry와 Terraform 문서에서 tag-triggered 배포 설명을 branch workflow와 version 표시 보류 계약으로 갱신한다.
 - [x] 4.4 OpenSpec과 구현·문서의 정합성 및 strict validation을 확인한다.
-- [ ] 4.5 `PROD-764` main 변경을 commit·push하고 한국어 PR에 결정, 검증, external credential 변경과 live 전환 gate를 기록해 Ready for review로 전환한다.
+- [x] 4.5 `PROD-764` main 변경을 commit·push하고 한국어 PR에 결정, 검증, external credential 변경과 live 전환 gate를 기록해 Ready for review로 전환한다.
 
 ## 5. PROD-764 첫 branch release와 완료
 
