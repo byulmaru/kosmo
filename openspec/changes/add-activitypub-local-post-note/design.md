@@ -77,8 +77,8 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
 7. Followers Only 역참조 권한은 Fedify object dispatcher의 `.authorize()`에서 판정하고 Web은 Fedify가 만든
    응답을 그대로 반환한다. requester 표시나 별도 응답 cache policy를 애플리케이션에 추가하지 않는다.
 8. Reply Parent self-FK를 drop/recreate하는 forward migration으로 delete action을 `SET NULL`로 바꾸되 기존 row를
-   update하지 않는다. physical delete application 경로는 추가하지 않고 catalog와 직접 DB fixture로 constraint만
-   검증한다.
+   update하지 않는다. physical delete application 경로는 추가하지 않고 Drizzle schema·migration snapshot의
+   constraint 선언을 정렬한다.
 
 ### Allowed Alternatives
 
@@ -120,11 +120,11 @@ export는 아직 완성되지 않았다. 현재 `post.reply_parent_id` self-FK�
 
 ## Migration Plan
 
-1. 기존 schema의 Reply Parent FK 이름과 delete action, 기존 Reply/Tombstone row를 검증한다.
+1. 기존 schema의 Reply Parent FK 이름과 delete action을 정적 검토한다.
 2. forward migration으로 기존 FK를 `ON DELETE SET NULL` self-FK로 교체한다. column nullability, self-reference
    check와 index는 유지하고 data update/backfill을 수행하지 않는다.
-3. migration DB에서 기존 관계·Tombstone 보존과 직접 DB fixture 삭제의 FK nullification을 검증하되 physical
-   delete application path는 만들지 않는다.
+3. Drizzle schema·migration snapshot의 FK nullification 선언을 정렬하고, Parent Tombstone 관계 보존은 Local
+   Note·Reply 제품 테스트로 검증한다. physical delete application path나 이를 모사하는 fixture는 만들지 않는다.
 4. Local Note identity/projection과 dispatcher를 배포하고 Public/Unlisted/Follower signed fetch 및 web routing
    회귀를 검증한다.
 5. rollback이 필요하면 dispatcher 노출을 제거하고 FK를 기존 delete action으로 되돌릴 수 있다. 이미 물리 삭제로

@@ -56,7 +56,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 ### Recommended Approach
 
-1. 완료된 PROD-394의 nullable `repost_source_id`, Active contentless Repost partial unique index와 migration 검증을 저장 경계로 재사용한다. 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
+1. 완료된 PROD-394의 nullable `repost_source_id`와 Active contentless Repost partial unique index를 저장 경계로 재사용한다. 저장 선언은 Drizzle schema·snapshot과 정렬하고, 기존 `createPost`의 contentful Local/ActivityPub 계약과 non-null Content 반환은 변경하지 않는다.
 2. PROD-401의 Local GraphQL entry는 공통 `usingProfile` 인증이 검증한 `ctx.session.profileId`를 별도 역할 제한 없이 공통 Repost action에 전달한다. core action은 `actorProfileId`와 `sourcePostId`만 받아 행동 주체 Profile/Instance 상태를 다시 조회하지 않고 Source visibility/eligibility, derived visibility와 duplicate/concurrent idempotency를 소유한다. insert conflict가 발생하지 않게 미리 조회하는 것만으로 동시성을 보장하지 않고, DB conflict 뒤 기존 Active Repost를 다시 조회해 성공 결과로 정규화한다. 이 입력 경계는 검증된 Remote Profile도 재사용할 수 있다. 새로운 ActivityPub ingress·delivery capability와 Quote Source 연결은 각각 후속 작업이 소유한다. PROD-669는 기존 inbound Announce·Undo·Delete와 Local delivery caller를 이 공용 action lifecycle에 연결하는 wiring만 다룬다.
 3. PROD-402·403은 direct `repostSource`와 batched count/selected Profile relation loader를 추가한다. viewer-independent count query와 viewer-relative Node loader를 분리한다.
 4. Post Node와 목록 query는 Content 없는 Repost에만 direct Source visibility/eligibility를 적용하고 hidden
@@ -106,7 +106,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 - [Content 없는 Repost의 Source join 비용] → direct Source index와 실행 계획을 검증하고 Node batch/list
   query에서 page limit 전에 set-based로 평가한다.
-- [nullable self-reference와 partial index의 migration lock] → additive migration으로 분류하고 실제 기존 schema와 migration test에서 catalog, lock 범위와 기존 row 보존을 확인한다.
+- [nullable self-reference와 partial index의 migration lock] → additive migration으로 분류하고 schema·snapshot 정합성을 검토한다. 파일별 migration 재현 테스트로 catalog·lock·기존 row를 반복 검증하지 않는다.
 - [동시 Source Tombstone과 Repost 생성] → 명시적 row lock을 추가하지 않고 transaction 시점의 Source 검증과 Post eligibility를 사용한다. 이후 Source가 Tombstone이면 생성된 Repost는 조회 후보에서 사라지며 관계는 보존된다.
 - [Notification 기반 change와 archive 순서] → `add-in-app-notifications`의 실제 schema/API 기반이 완료된 뒤 PROD-412/416을 구현하고, 그 change를 authority로 사용하지 않으며 canonical·Linear 계약을 독립 대조한다.
 - [여러 PR 사이 schema drift] → 각 child PR에서 공유 OpenSpec task와 선행 issue를 명시하고, 부모 PROD-389가 최종 schema/Relay/E2E 정합성을 검증한다.
@@ -117,7 +117,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 ## Migration Plan
 
-1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration, Drizzle schema·snapshot과 DB migration tests를 배포한다. 기존 workload와 contentful `createPost` 계약은 새 column을 비워 둔 채 계속 동작한다.
+1. PROD-394에서 nullable `repost_source_id`와 partial unique index를 포함한 expand migration과 Drizzle schema·snapshot을 배포한다. 기존 workload와 contentful `createPost` 계약은 새 column을 비워 둔 채 계속 동작하며, 제품 행동은 core service·GraphQL integration test가 검증한다.
 2. PROD-401·402·403에서 생성, direct Source, count와 viewer relation API를 추가하고 PROD-411에서 Tombstone 취소를 연결한다.
 3. PROD-430에서 Home/Profile candidate query를 전환하고 PROD-453·415에서 presentation, canonical Source navigation과 direct Repost URL redirect를 연결한다. #341로 main에 포함된 `PostActionBar`에 PROD-414 composite parent fragment와 private Repost child action을 연결하고, 목록·상세의 최초 production 배치, Repost menu·toast까지 제공한다. PROD-432가 나머지 action과 최종 대상 정책을 연결하고 PROD-471이 취소 성공 뒤 Source cache를 동기화한다.
 4. Notification 기반 선행 이슈가 완료된 뒤 PROD-412에서 enum/API/inbox를 확장하고 PROD-416에서 Tombstone cleanup을 연결한다.
