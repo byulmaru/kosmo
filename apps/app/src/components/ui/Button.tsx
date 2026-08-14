@@ -34,11 +34,11 @@ export function Button({
       ? theme.actionPrimaryOnBase
       : tone === 'danger'
         ? theme.feedbackDangerOnBase
-        : theme.foregroundPrimary;
+        : theme.actionSecondaryOnBase;
   const borderColor = disabled
     ? theme.borderDisabled
     : tone === 'secondary'
-      ? theme.borderDefault
+      ? theme.actionSecondaryBorder
       : 'transparent';
   const borderWidth = tone === 'secondary' ? borderWidths[1] : borderWidths[0];
 
@@ -78,10 +78,10 @@ export function Button({
                 : tone === 'danger'
                   ? theme.feedbackDangerBase
                   : state.pressed
-                    ? theme.statePressed
+                    ? theme.actionSecondaryPressed
                     : hovered
-                      ? theme.stateHover
-                      : theme.backgroundSurface,
+                      ? theme.actionSecondaryHover
+                      : theme.actionSecondaryBase,
             borderColor,
             borderWidth,
             opacity: tone === 'danger' && (state.pressed || hovered) ? 0.9 : 1,
