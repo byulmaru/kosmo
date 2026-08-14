@@ -22,23 +22,7 @@ const processDatabaseOptions = {
   max: 20,
 } as const;
 
-const hasCompleteStandardPgEnvironment = [
-  'PGHOST',
-  'PGPORT',
-  'PGUSER',
-  'PGDATABASE',
-  'PGPASSWORD',
-].every((name) => process.env[name] !== undefined);
-const processDatabaseUrl = hasCompleteStandardPgEnvironment ? undefined : process.env.DATABASE_URL;
-
-export const pg = processDatabaseUrl
-  ? postgres(processDatabaseUrl, {
-      ...processDatabaseOptions,
-      ...(process.env.DATABASE_PASSWORD === undefined
-        ? {}
-        : { password: process.env.DATABASE_PASSWORD }),
-    })
-  : postgres(processDatabaseOptions);
+export const pg = postgres(processDatabaseOptions);
 
 export const db = drizzle({
   client: pg,
@@ -62,15 +46,13 @@ export type OperationDatabaseOwner = {
  * PgBouncer can apply its client-disconnect reset boundary.
  */
 export const createOperationDatabase = (
-  // Helm supplies OPERATION_DATABASE_URL for the API's GraphQL operation
-  // client. Local and test processes intentionally fall back to the direct
-  // process-wide DATABASE_URL when that opt-in endpoint is absent.
-  databaseUrl = process.env.OPERATION_DATABASE_URL || process.env.DATABASE_URL!,
+  databaseUrl = process.env.OPERATION_DATABASE_URL,
 ): OperationDatabaseOwner => {
-  const client = postgres(databaseUrl, {
+  const options = {
     max_lifetime: postgresConnectionOptions.max_lifetime,
     max: 1,
-  });
+  } as const;
+  const client = databaseUrl ? postgres(databaseUrl, options) : postgres(options);
   const operationDb = drizzle({ client, schema });
   let closeTask: Promise<void> | undefined;
 

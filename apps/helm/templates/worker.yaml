@@ -1,4 +1,3 @@
-{{- include "kosmo.validatePostgresCredentials" . -}}
 {{- if and .Values.workloads.enabled .Values.worker.enabled }}
 apiVersion: v1
 kind: ServiceAccount

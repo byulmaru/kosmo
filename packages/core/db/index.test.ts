@@ -15,12 +15,6 @@ type OperationClient = {
 const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
   (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
 
-const processEnvironmentWithoutStandardPg = Object.fromEntries(
-  Object.entries(process.env).filter(
-    ([name]) => !['PGHOST', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGPASSWORD'].includes(name),
-  ),
-);
-
 test('keeps operation client bounded and isolated from direct startup parameters', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
   const end = mock.method(getClient(owner), 'end', async () => {});
@@ -46,7 +40,7 @@ test('keeps operation client bounded and isolated from direct startup parameters
   assert.equal(forceEnd.mock.calls.length, 1);
 });
 
-test('prefers a complete standard PG environment over a process database URL', () => {
+test('uses the standard PG environment for the process database', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -75,37 +69,13 @@ test('prefers a complete standard PG environment over a process database URL', (
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('keeps the separate password option for workloads using a process database URL', () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      '--import',
-      'tsx',
-      '--input-type=module',
-      '-e',
-      "const { pg } = await import('./db/index.ts'); if (pg.options.pass !== process.env.DATABASE_PASSWORD) throw new Error('password option mismatch'); await pg.end({ timeout: 0 });",
-    ],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      env: {
-        ...processEnvironmentWithoutStandardPg,
-        DATABASE_URL: 'postgres://kosmo_worker@127.0.0.1:1/kosmo',
-        DATABASE_PASSWORD: 'slash/at@question?hash#percent%',
-      },
-    },
-  );
-
-  assert.equal(result.status, 0, result.stderr);
-});
-
-test('prefers the operation endpoint and falls back to the direct endpoint', async () => {
+test('uses the operation endpoint and falls back to the standard PG environment', async () => {
   const previousOperationUrl = process.env.OPERATION_DATABASE_URL;
-  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousPgHost = process.env.PGHOST;
 
   try {
     process.env.OPERATION_DATABASE_URL = 'postgres://kosmo@operation-pooler.example:5432/kosmo';
-    process.env.DATABASE_URL = 'postgres://kosmo@direct.example:5432/kosmo';
+    process.env.PGHOST = 'direct.example';
 
     const operationOwner = createOperationDatabase();
     assert.deepEqual(getClient(operationOwner).options.host, ['operation-pooler.example']);
@@ -122,10 +92,10 @@ test('prefers the operation endpoint and falls back to the direct endpoint', asy
       process.env.OPERATION_DATABASE_URL = previousOperationUrl;
     }
 
-    if (previousDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
+    if (previousPgHost === undefined) {
+      delete process.env.PGHOST;
     } else {
-      process.env.DATABASE_URL = previousDatabaseUrl;
+      process.env.PGHOST = previousPgHost;
     }
   }
 });

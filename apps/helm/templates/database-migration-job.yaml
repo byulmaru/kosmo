@@ -66,13 +66,19 @@ spec:
                   name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
                   key: password
             {{- else }}
-            - name: DATABASE_PASSWORD
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: kosmo
+            - name: PGDATABASE
+              value: kosmo
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
                   key: password
-            - name: DATABASE_URL
-              value: {{ include "kosmo.databaseUrl" . | quote }}
             {{- end }}
           resources:
             requests:

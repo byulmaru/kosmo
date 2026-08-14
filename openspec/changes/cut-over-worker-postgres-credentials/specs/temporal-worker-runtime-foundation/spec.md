@@ -11,7 +11,7 @@
 - **AND** Worker template의 기존 activation gate를 유지한다
 - **AND** `PGHOST`는 기존 direct read-write Service, `PGPORT`는 `5432`, `PGUSER`는 `kosmo_worker`, `PGDATABASE`는 `kosmo`를 사용한다
 - **AND** `PGPASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
-- **AND** `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않고 postgres.js의 표준 PG env 해석을 사용한다
+- **AND** `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않고 postgres.js의 표준 PG env 해석을 사용하며, process-wide DB source fallback이나 완전성 flag를 두지 않는다
 - **AND** `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 별도 application 입력으로 투영하지 않는다
 
 #### Scenario: Worker credential values 입력 부재
