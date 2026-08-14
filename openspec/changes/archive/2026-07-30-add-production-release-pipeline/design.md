@@ -9,8 +9,8 @@ PROD-563은 tag build에서 production sync까지의 release 경계만 소유한
 **Goals:**
 
 - 모든 Git tag를 형식 제한 없이 production build trigger로 사용한다.
-- Build output digest를 한 번의 production 승인 뒤 migration, API와 Web에 동일하게 전달한다.
-- PreSync migration 성공 뒤 controller 기본 activation을 사용한다.
+- Build output digest를 한 번의 production 승인 뒤 migration과 모든 활성화 workload에 동일하게 전달한다.
+- 기반 리소스 적용 뒤 Sync wave 1 migration을 성공시키고 wave 2 controller 기본 activation을 사용한다.
 - Tag, commit, digest와 결과를 workflow 및 Argo CD 기록으로 감사한다.
 - 실행 중인 production 배포는 보존하고 최신 pending tag가 이전 pending tag를 대체한다.
 - 이전 application 재배포는 pipeline 도입 이후 실제 production에 배포된 호환 가능한 이전 release commit에 새 tag를 붙이는 같은 경로를 사용한다.
@@ -30,7 +30,7 @@ PROD-563은 tag build에서 production sync까지의 release 경계만 소유한
 - Tag build와 deploy job은 같은 GitHub Actions workflow run에 있으므로 build job의 digest output을 직접 전달할 수 있다.
 - Helm production render는 tag가 아니라 full digest reference를 요구한다.
 - Argo CD ApplicationSet이 release parameter를 보존하는 seam은 PROD-562가 제공한다.
-- PROD-564 PreSync Job이 없으면 migration-before-workload 순서를 완성할 수 없다.
+- PROD-564 migration Job이 없으면 migration-before-workload 순서를 완성할 수 없다.
 
 ### Recommended Approach
 
@@ -42,7 +42,7 @@ Docker Build의 tag trigger를 모든 tag에 적용하고 별도 SemVer validati
 
 Production deploy job의 고정 concurrency group은 실행 중 job을 취소하지 않고 pending job은 하나만 유지한다. 더 최신 tag build가 도달하면 이전 pending job이 취소되고 최신 pending job이 다음 후보가 된다. 모든 중간 tag를 FIFO로 배포하지 않는다.
 
-Rendered manifest에서 migration, API와 Web image가 build digest와 일치하고 PreSync Job이 하나인지 확인한 뒤 `argocd app sync`를 실행한다. PreSync 성공 뒤 각 Rollout은 controller 기본 activation을 사용한다. Pipeline은 preview polling, promotion action, ReplicaSet discovery나 자동 recovery를 수행하지 않는다.
+Rendered manifest에서 migration과 모든 활성화 workload image가 build digest와 일치하고 Sync wave 1 Job이 하나인지 확인한 뒤 `argocd app sync`를 실행한다. Migration 성공 뒤 wave 2의 각 Rollout·HPA·background Deployment는 controller 기본 activation을 사용한다. Pipeline은 preview polling, promotion action, ReplicaSet discovery나 자동 recovery를 수행하지 않는다.
 
 GitHub Release publish/resolve job과 script, 별도 deploy workflow는 삭제한다. 실패 뒤 application을 되돌려야 하면 pipeline 도입 이후 실제 production에 배포됐고 현재 DB와 호환되는 이전 release commit에 새 tag를 붙여 동일한 build·approval·sync 경로를 실행한다. Pipeline 도입 전 임의 commit은 rollback 대상으로 보장하지 않으며 이는 DB rollback이 아니다.
 
@@ -60,7 +60,7 @@ GitHub Release publish/resolve job과 script, 별도 deploy workflow는 삭제�
 - [최신 pending tag가 이전 pending tag를 대체함] → 중간 tag를 모두 배포하지 않고 실행 중 배포와 최신 후보만 보존한다.
 - [이전 production release commit 재배포는 기존 image 재사용이 아니라 새 build임] → 단순한 단일 경로를 우선하며 각 실행이 만든 digest를 그대로 승인·배포·감사한다.
 - [기존 ECR 7일 expiry가 production digest를 삭제할 수 있음] → `stable`을 배포 선택자가 아닌 lifecycle 보존 표식으로 유지하고 나머지 기존 정리 정책을 보존한다.
-- [API와 Web activation은 원자적이지 않음] → PreSync와 동일 desired digest만 pipeline이 보장하고 진행 상태는 Rollout controller에 맡긴다.
+- [API와 Web activation은 원자적이지 않음] → Migration과 동일 desired digest만 pipeline이 보장하고 진행 상태는 Rollout controller에 맡긴다.
 
 ## Migration Plan
 

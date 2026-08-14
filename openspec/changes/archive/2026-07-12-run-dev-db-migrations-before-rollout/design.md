@@ -10,7 +10,7 @@ PROD-280은 production용 무중단 expand/contract 체계를 도입하지 않�
 
 - 동일한 dev runtime image가 `migrate` command로 image 안의 SQL migration을 적용한다.
 - Drizzle history와 단일 PostgreSQL advisory lock을 사용해 재실행과 동시 실행을 안전하게 처리한다.
-- Argo CD `PreSync` Job 실패가 rollout restart를 차단한다.
+- Argo CD `Sync` wave 1 Job 실패가 wave 2 workload 교체와 restart를 차단한다.
 - dev `latest` image 정책과 기존 Argo Rollout resource action을 유지한다.
 - PROD-267 migration을 data reset 없이 적용할 실행 경계를 제공한다.
 
@@ -26,7 +26,7 @@ PROD-280은 production용 무중단 expand/contract 체계를 도입하지 않�
 - [`latest`가 migration과 workload 사이에 바뀔 수 있음] → Deploy Dev를 environment 단위로 직렬화하고 Docker Build 성공 직후 full sync와 restart를 한 workflow에서 수행한다. production의 immutable identity 문제는 PROD-269에 남긴다.
 - [GitHub workflow 취소 후 Argo hook이 남을 수 있음] → `cancel-in-progress`를 끄고 PostgreSQL advisory lock으로 겹친 runner가 SQL을 실행하지 못하게 한다.
 - [Drizzle migrator history만으로 동시 실행을 막지 못함] → connection pool을 1로 제한한 session에서 `pg_try_advisory_lock`을 먼저 획득하고 실패 시 즉시 종료한다.
-- [Migration SQL 실패] → Drizzle의 PostgreSQL transaction과 실패 exit status를 사용하며 Argo `PreSync` 실패가 이후 restart step을 차단한다.
+- [Migration SQL 실패] → Drizzle의 PostgreSQL transaction과 실패 exit status를 사용하며 Argo `Sync` wave 1 실패가 이후 wave 2와 restart step을 차단한다.
 - [파괴적 migration 직후 기존 dev workload가 실패할 수 있음] → dev downtime을 허용하고 migration 성공 직후 새 `latest` workload를 restart한다. production에서는 허용하지 않는다.
 - [Argo selective sync는 hook을 실행하지 않음] → Deploy Dev가 resource 선택 없이 application full sync를 호출한다.
 - [Job 자동 retry가 논리 오류를 반복함] → `backoffLimit: 0`, `restartPolicy: Never`와 제한된 실행 시간을 사용한다.
@@ -35,8 +35,8 @@ PROD-280은 production용 무중단 expand/contract 체계를 도입하지 않�
 
 1. runtime image에 `drizzle/`을 복사하고 `migrate` entrypoint를 추가한다.
 2. runner는 `DATABASE_URL`, image 안 migration directory와 단일 connection을 사용해 advisory lock을 획득한 뒤 Drizzle migrator를 실행한다.
-3. Helm chart에 dev workload와 같은 image/DB secret을 사용하는 `PreSync` Job을 추가한다.
-4. Deploy Dev를 직렬화하고 `argocd app sync kosmo-dev` 성공 후에만 API/web restart action을 실행한다.
+3. Helm chart에 dev workload와 같은 image/DB secret을 사용하는 `Sync` wave 1 Job을 추가하고 workload를 wave 2에 배치한다.
+4. Deploy Dev를 직렬화하고 `argocd app sync kosmo-dev` 성공 후에만 API/web Rollout과 렌더된 background Deployment restart action을 실행한다.
 5. disposable test database에서 최초 적용, no-op 재실행, 실패와 lock contention을 검증하고 Helm render와 workflow 순서를 확인한다.
 6. PROD-280을 PROD-267보다 먼저 머지한다. 이후 PROD-267 merge의 Docker Build가 새 migration runner로 pending Plain Text cutover migration을 적용한다.
 

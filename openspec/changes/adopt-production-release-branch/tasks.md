@@ -40,7 +40,7 @@ Production 대상 PR merge로 발생한 push가 version tag 입력 없이 동일
 - Production push event의 immutable SHA만 production source로 사용한다.
 - Tag는 build input, checkout, source selector 또는 workload identity로 사용하지 않는다.
 - PR merge 뒤 별도 dispatch, `prod` Environment reviewer 또는 migration approval을 요구하지 않는다.
-- Migration/API/Web은 같은 digest를 사용하고 PreSync 실패 시 workload activation을 진행하지 않는다.
+- Migration과 모든 활성화 workload는 같은 digest를 사용하고 Sync wave 1 migration 실패 시 wave 2 workload activation을 진행하지 않는다.
 - Main dev build는 유지한다.
 
 **Verification**
@@ -48,12 +48,12 @@ Production 대상 PR merge로 발생한 push가 version tag 입력 없이 동일
 - Production push, tag push, main push와 manual event trigger matrix
 - 연속 production push에서 실행 중 run 비취소와 latest pending coalescing 검증
 - Prod/dev build input과 Web version label 비노출 검증
-- Argo source SHA와 migration/API/Web digest 대조
+- Argo source SHA와 migration 및 모든 활성화 workload digest 대조
 
 - [x] 2.1 Tag push production trigger를 제거하고 protected production push가 event SHA의 production build·deploy를 자동 시작하게 한다.
 - [x] 2.2 기존 Web version label 렌더링을 주석 처리하고 사용하지 않는 import/style을 제거하며 표시 tag 공급·재활성화를 후속 범위로 분리한다.
 - [x] 2.3 Production build에 prod Vault/OpenPanel/Sentry 설정을 전달하되 `EXPO_PUBLIC_RELEASE_TAG`에 의존하지 않고 dev build 입력을 보존한다.
-- [x] 2.4 별도 사람 승인 없이 full push SHA와 하나의 image digest를 Argo source, migration, API와 Web에 전달하고 production runs를 직렬화한다.
+- [x] 2.4 별도 사람 승인 없이 full push SHA와 하나의 image digest를 Argo source, migration과 모든 활성화 workload에 전달하고 production runs를 직렬화한다.
 - [x] 2.5 GitHub PR/branch history로 승인 이력을 보존하고 workflow에는 actor, production commit, source revision, digest와 결과를 기록하며 PR 연결 관계를 재검증하지 않는다.
 - [x] 2.6 Trigger matrix, version label 비노출, 실행 중 run 보존·latest pending coalescing, 동일 SHA·digest와 migration barrier 검증을 추가하고 관련 check를 통과시킨다.
 
@@ -134,12 +134,12 @@ Release-control 변경만 포함한 production PR이 version tag 입력 없이 m
 **Verification**
 
 - Production PR diff/checks와 migration 무변경
-- Production push 자동 실행, tag push 무동작, commit/source/digest/PreSync/Rollout 결과
+- Production push 자동 실행, tag push 무동작, commit/source/digest/migration-gated Sync/workload 결과
 - Live Argo/workload 상태와 Web version label 비노출
 - Archive 후 active spec strict validation
 
 - [ ] 5.1 Main merge와 infrastructure apply가 완료된 뒤 release-control commit만 production PR로 반영한다.
 - [ ] 5.2 Tag push만으로 배포가 실행되지 않고 production build가 표시 tag 입력을 요구하지 않음을 확인한다.
-- [ ] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 Rollout 결과를 기록한다.
+- [ ] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 모든 활성화 workload 결과를 기록한다.
 - [ ] 5.4 전체 완료 조건을 Linear에 기록하고 delta를 active `production-release` spec에 동기화해 OpenSpec을 archive한다.
 - [ ] 5.5 Archive와 active specs를 strict validation해 main에 전달한 뒤 `PROD-764`을 완료한다.

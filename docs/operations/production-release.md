@@ -24,7 +24,7 @@ Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 
 - 장기 `production` branch는 직접 push와 history rewrite를 금지하고 PR로만 갱신한다.
 - Production PR에는 필요한 review, CI checks와 migration 호환성 검토가 있어야 한다. PR merge가 production 배포 의도를 확정한다.
 - Workflow는 merge 후 push event의 immutable full SHA를 checkout·image source·Argo CD source로 사용한다. Mutable branch 이름이나 Git tag를 workload identity로 사용하지 않는다.
-- Migration Job, API와 Web은 workflow가 생성한 하나의 digest-pinned image를 사용한다. Migration이 성공한 뒤에만 API와 Web을 활성화한다. 상세 경계는 [Production migration 실행 경계](./production-migrations.md)를 따른다.
+- Migration Job과 모든 활성화 workload는 workflow가 생성한 하나의 digest-pinned image를 사용한다. Migration이 성공한 뒤에만 API·Web Rollout·HPA와 background Deployment를 활성화한다. 상세 경계는 [Production migration 실행 경계](./production-migrations.md)를 따른다.
 - Git tag push는 build·source 선택·배포·승인을 시작하지 않는다. 기존 Web의 `버전: <tag>` 표시는 표시 tag 공급 방식을 정할 때까지 비활성화되어 있으며, 이번 release에는 version label 입력을 만들지 않는다.
 - Production 배포는 실행 중인 run을 취소하지 않는다. 여러 production push가 대기하면 GitHub Actions는 기존 `PROD-563` 계약처럼 최신 pending SHA만 다음 release로 유지할 수 있다. 최신 SHA는 앞선 production history를 포함하며, 대체된 pending run은 Actions 취소 기록으로 식별한다.
 
@@ -34,9 +34,9 @@ Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 
 2. 필수 reviewer와 CI checks가 통과했는지 확인한다. Merge 전에는 production build·migration·deploy가 시작되지 않는다.
 3. PR을 merge한다. 이 merge가 유일한 사람의 승인이고, 결과로 생성된 production push가 자동 release를 시작한다.
 4. Docker build 결과의 commit SHA와 image digest를 workflow summary에서 확인한다. `prod` Environment 단계에서 별도 승인 버튼을 누르지 않는다.
-5. 같은 digest의 migration Job이 성공하고 Argo CD `kosmo-prod`가 해당 production SHA를 source revision으로 사용한 뒤 API와 Web Rollout이 Healthy인지 확인한다. Migration 실패 시 API와 Web 활성화가 진행되지 않는다.
+5. 같은 digest의 migration Job이 성공하고 Argo CD `kosmo-prod`가 해당 production SHA를 source revision으로 사용한 뒤 API·Web Rollout·HPA와 background Deployment가 Healthy인지 확인한다. Migration 실패 시 wave 2 workload 활성화가 진행되지 않는다.
 6. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
-7. Merged PR과 review·check 이력은 GitHub PR/branch history에서 확인한다. Workflow summary와 Linear/incident 기록에는 actor, production commit, Argo source revision, image digest, migration·Rollout·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
+7. Merged PR과 review·check 이력은 GitHub PR/branch history에서 확인한다. Workflow summary와 Linear/incident 기록에는 actor, production commit, Argo source revision, image digest, migration·workload·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
 
 ## Production-first hotfix
 
@@ -56,8 +56,8 @@ Rollback은 과거 tag를 다시 배포하거나 branch history를 되돌리는 
 Release는 다음을 모두 확인해야 완료로 기록한다.
 
 - Merged production PR과 merge actor가 확인된다.
-- Build SHA, Argo source revision과 migration/API/Web image digest가 일치한다.
-- Migration Job이 성공하고 API·Web Rollout이 Healthy다.
+- Build SHA, Argo source revision과 migration 및 모든 활성화 workload의 image digest가 일치한다.
+- Migration Job이 성공하고 API·Web Rollout·HPA와 background Deployment가 Healthy다.
 - Production smoke와 OpenPanel/Sentry 배포 후 검증 결과가 기록된다.
 - Version label이 이 변경에서 다시 활성화되지 않았다.
 
