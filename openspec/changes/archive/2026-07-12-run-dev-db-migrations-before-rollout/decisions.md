@@ -24,12 +24,12 @@
 - Consequences: Dockerfile과 entrypoint가 migration runtime도 소유한다. Job은 workload와 같은 image와 DB secret을 사용한다.
 - Confirmation / Follow-up: container command, Helm render와 disposable PostgreSQL 실행으로 검증한다.
 
-### GitHub Actions가 full sync를 시작하고 Argo PreSync가 rollout을 gate한다
+### GitHub Actions가 full sync를 시작하고 Argo Sync wave가 workload를 gate한다
 
 - Decision Date: 2026-07-12
 - Status: Accepted
 - Context / Problem: 현재 Deploy Dev는 Argo Rollout restart action만 실행하므로 hook이 실행될 application sync 경계가 없다.
-- Decision Outcome: Docker Build 완료 workflow가 `argocd app sync kosmo-dev`를 실행하고, `PreSync` migration Job 성공 뒤에만 기존 API/web restart action을 실행한다. migration-aware deploy는 취소하지 않고 직렬화한다.
+- Decision Outcome: Docker Build 완료 workflow가 `argocd app sync kosmo-dev`를 실행하고, 기반 리소스 적용 뒤 `Sync` wave 1 migration Job을 실행한다. 성공한 뒤 wave 2 workload를 적용하고 API/web Rollout과 렌더된 background Deployment를 restart한다. migration-aware deploy는 취소하지 않고 직렬화한다.
 - Alternatives Considered: GitHub Actions가 Kubernetes Job을 직접 생성하면 cluster credential과 imperative manifest 관리가 추가된다. `PostSync` destructive migration은 rollback 대상 workload를 깨뜨린다. selective sync는 hook을 실행하지 않는다.
 - Consequences: Argo sync 실패가 workflow 실패로 전파되고 restart step은 실행되지 않는다. 현재 Argo application이 full sync hook을 실행할 수 있어야 한다.
 - Confirmation / Follow-up: workflow ordering과 실패 short-circuit를 정적 검증하고 dev 최초 배포에서 hook 실행을 확인한다.
@@ -60,4 +60,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- Migration Job을 application resource sync 전 `PreSync`로 실행하고 API/web Rollout만 restart한다. 기반 리소스 → `Sync` wave 1 migration → wave 2 workload 및 전체 렌더된 workload restart 순서가 이를 대체한다.

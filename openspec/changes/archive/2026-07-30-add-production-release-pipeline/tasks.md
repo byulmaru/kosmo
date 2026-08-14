@@ -30,12 +30,12 @@
 
 **Deliverable**
 
-Tag build가 만든 digest를 같은 workflow의 production 승인 job이 PreSync migration과 API·Web에 배포한다.
+Tag build가 만든 digest를 같은 workflow의 production 승인 job이 Sync wave 1 migration과 wave 2 API·Web·background workload에 배포한다.
 
 **Guardrails**
 
 - `prod` Environment 승인 전 Argo CD credential을 얻거나 상태를 변경하지 않는다.
-- Migration, API와 Web은 같은 build digest를 사용한다.
+- Migration과 모든 활성화 workload는 같은 build digest를 사용한다.
 - Pipeline은 Rollout preview·promotion·ReplicaSet recovery를 직접 조정하지 않는다.
 - 실행 중 배포는 취소하지 않고 최신 pending tag가 이전 pending tag를 대체한다.
 - PROD-562 runtime과 PROD-564 migration credential·Job command를 구현하지 않는다.
@@ -43,10 +43,10 @@ Tag build가 만든 digest를 같은 workflow의 production 승인 job이 PreSyn
 **Verification**
 
 - Tag-only deploy 조건, build dependency, Environment, OIDC와 Argo CD sync 순서를 확인한다.
-- 동일 digest render, PreSync Job 하나와 controller 기본 activation을 확인한다.
+- 동일 digest render, Sync wave 1 Job 하나와 wave 2 controller 기본 activation을 확인한다.
 
 - [x] 2.1 Production deploy를 Docker Build workflow의 tag-only `prod` Environment job으로 이동한다.
-- [x] 2.2 Build digest를 Helm parameter로 전달하고 동일-image PreSync manifest 확인 뒤 Argo CD sync를 실행한다.
+- [x] 2.2 Build digest를 Helm parameter로 전달하고 동일-image migration-gated Sync manifest 확인 뒤 Argo CD sync를 실행한다.
 - [x] 2.3 Production Rollout controller 기본 activation과 custom recovery 부재를 검증한다.
 - [x] 2.4 `prod` Environment의 main-only policy를 제거하고 tag-only 조건은 workflow 한 곳에 둔다.
 - [x] 2.5 고정 concurrency group이 실행 중 배포와 최신 pending tag만 유지하는 계약을 검증한다.

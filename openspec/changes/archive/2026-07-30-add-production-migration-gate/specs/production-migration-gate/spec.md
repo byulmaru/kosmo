@@ -2,7 +2,7 @@
 
 ### Requirement: 분리된 production migration 권한
 
-**Authority / Provenance:** `PROD-564`, `PROD-616`, `memory/database-migrations.md`. Production migration Job은 schema migration에 필요한 별도 database identity와 credential을 사용해야 하며(MUST), API와 Web runtime credential을 사용하거나 migration credential이 없을 때 runtime credential로 fallback해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-564`, `PROD-616`, `memory/database-migrations.md`. Production migration Job은 schema migration에 필요한 별도 database identity와 credential을 사용해야 하며(MUST), runtime workload credential을 사용하거나 migration credential이 없을 때 runtime credential로 fallback해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration credential로 실행
 
@@ -10,7 +10,7 @@
 - **THEN** Job은 production migration 전용 Secret과 database identity로 연결한다
 - **AND** 연결 후 명시적인 database owner role로 전환해 새 schema 객체가 runtime owner의 권한 경계에 남게 한다
 - **AND** 접속 대상은 현재 Helm release의 PostgreSQL read-write Service와 `kosmo` database로 고정된다
-- **AND** API와 Web workload는 같은 credential을 mount하거나 참조하지 않는다
+- **AND** Runtime workload는 같은 credential을 mount하거나 참조하지 않는다
 
 #### Scenario: Migration 대상 입력 금지
 
@@ -26,12 +26,12 @@
 
 ### Requirement: 동일한 immutable release identity
 
-**Authority / Provenance:** `PROD-564`, `PROD-269`. Production migration Job, API와 Web workload는 승인된 release의 동일한 immutable image digest를 사용해야 한다(MUST). Mutable tag 또는 서로 다른 digest로 production migration을 실행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-564`, `PROD-269`. Production migration Job과 모든 활성화 workload는 승인된 release의 동일한 immutable image digest를 사용해야 한다(MUST). Mutable tag 또는 서로 다른 digest로 production migration을 실행해서는 안 된다(MUST NOT).
 
 #### Scenario: 동일 digest로 렌더
 
 - **WHEN** production release manifest가 렌더된다
-- **THEN** migration Job, API와 Web image reference는 같은 `repository@sha256:...` 값이다
+- **THEN** migration Job과 모든 활성화 workload image reference는 같은 `repository@sha256:...` 값이다
 
 #### Scenario: Mutable production image 거부
 
@@ -56,12 +56,12 @@
 
 ### Requirement: Production release 단일 승인과 실패 차단
 
-**Authority / Provenance:** `PROD-563`, `PROD-564`. 정식 production release 승인은 선택한 immutable image의 migration과 API/Web workload 전체에 한 번 적용되어야 한다(MUST). Migration이 성공하기 전에 같은 release의 새 workload를 활성화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-563`, `PROD-564`. 정식 production release 승인은 선택한 immutable image의 migration과 모든 활성화 workload 전체에 한 번 적용되어야 한다(MUST). Migration이 성공하기 전에 같은 release의 새 workload를 활성화해서는 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 
 - **WHEN** 승인된 production release의 migration Job이 성공한다
-- **THEN** PROD-563 pipeline은 같은 immutable release의 API와 Web 활성화를 진행할 수 있다
+- **THEN** PROD-563 pipeline은 같은 immutable release의 모든 wave 2 workload 활성화를 진행할 수 있다
 
 #### Scenario: Migration 실패
 
