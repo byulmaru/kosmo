@@ -10,10 +10,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 mockModule('react-native', {
   StyleSheet: { create: <T>(styles: T) => styles },
+  Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
 });
 mockModule(new URL('./BrandLogo.tsx', import.meta.url), { BrandLogo: 'BrandLogo' });
+mockModule(new URL('./shell/NavigationLink.tsx', import.meta.url), {
+  NavigationLink: 'NavigationLink',
+});
 mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({
     background: '#ffffff',
@@ -27,14 +31,23 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
 
 type PageHeaderProps =
   | { leading?: ReactNode; title: string; trailing?: ReactNode; variant?: 'text' }
-  | { accessibilityLabel: string; leading?: ReactNode; variant: 'brand' };
+  | {
+      accessibilityLabel: string;
+      brandHref?: string;
+      leading?: ReactNode;
+      onBrandCurrentNavigate?: () => void;
+      trailing?: ReactNode;
+      variant: 'brand';
+    };
 type TestElementProps = {
   'aria-hidden'?: boolean;
   accessibilityLabel?: string;
   accessibilityElementsHidden?: boolean;
   accessibilityRole?: string;
+  href?: string;
   children?: ReactNode;
   numberOfLines?: number;
+  onCurrentNavigate?: () => void;
   style?: unknown;
   variant?: string;
   width?: number;
@@ -130,4 +143,26 @@ test('brand variant exposes one Home heading and hides the approved mark from ac
   assert.equal(hiddenLogoWrappers.length, 1);
   assert.equal(hiddenLogoWrappers[0]?.props.accessibilityElementsHidden, true);
   assert.equal(findElements(header, 'Pressable').length, 1);
+});
+
+test('brand variant renders the approved mark as a Home navigation link', () => {
+  const onBrandCurrentNavigate = mock.fn();
+  const header = renderHeader({
+    accessibilityLabel: '홈',
+    brandHref: '/home',
+    onBrandCurrentNavigate,
+    variant: 'brand',
+  });
+  const navigationLink = findElements(header, 'NavigationLink')[0];
+  const brandAction = findElements(header, 'Pressable').find(
+    (element) => element.props.accessibilityLabel === '홈',
+  );
+  const logo = findElements(header, 'BrandLogo')[0];
+
+  assert.equal(navigationLink?.props.href, '/home');
+  assert.equal(navigationLink?.props.onCurrentNavigate, onBrandCurrentNavigate);
+  assert.ok(brandAction);
+  assert.equal(brandAction.props.accessibilityRole, 'link');
+  assert.equal(logo?.props.variant, 'mark');
+  assert.equal(logo?.props.width, 38);
 });

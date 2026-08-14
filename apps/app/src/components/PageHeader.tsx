@@ -1,7 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing, typography } from '../theme/tokens';
 import { BrandLogo } from './BrandLogo';
+import { NavigationLink } from './shell/NavigationLink';
+import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 
 type PageHeaderProps =
@@ -13,13 +15,25 @@ type PageHeaderProps =
     }
   | {
       accessibilityLabel: string;
+      brandHref?: Href;
       leading?: ReactNode;
+      onBrandCurrentNavigate?: () => void;
       trailing?: ReactNode;
       variant: 'brand';
     };
 
 export function PageHeader(props: PageHeaderProps) {
   const theme = useTheme();
+  const mark = (
+    <View
+      accessibilityElementsHidden
+      accessible={false}
+      aria-hidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <BrandLogo variant="mark" width={38} />
+    </View>
+  );
 
   return (
     <View
@@ -31,15 +45,23 @@ export function PageHeader(props: PageHeaderProps) {
       {props.variant === 'brand' ? (
         <>
           <View style={styles.brandActionSlot}>{props.leading}</View>
-          <View style={styles.brand}>
-            <View
-              accessibilityElementsHidden
-              accessible={false}
-              aria-hidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              <BrandLogo variant="mark" width={38} />
-            </View>
+          <View style={[styles.brand, props.brandHref ? null : styles.staticBrand]}>
+            {props.brandHref ? (
+              <NavigationLink
+                href={props.brandHref}
+                onCurrentNavigate={props.onBrandCurrentNavigate}
+              >
+                <Pressable
+                  accessibilityLabel={props.accessibilityLabel}
+                  accessibilityRole="link"
+                  style={styles.brandControl}
+                >
+                  {mark}
+                </Pressable>
+              </NavigationLink>
+            ) : (
+              mark
+            )}
             <Text accessibilityRole="header" style={styles.srOnly}>
               {props.accessibilityLabel}
             </Text>
@@ -92,6 +114,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     minWidth: 0,
+  },
+  brandControl: {
+    alignItems: 'center',
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  staticBrand: {
     pointerEvents: 'none',
   },
   title: {

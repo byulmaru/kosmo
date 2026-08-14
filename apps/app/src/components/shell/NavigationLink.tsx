@@ -13,11 +13,19 @@ type ChildProps = {
 type Props = Omit<LinkProps, 'asChild' | 'children' | 'href' | 'onPress'> & {
   children: ReactElement<ChildProps>;
   href: Href;
+  onCurrentNavigate?: () => void;
   onNavigate?: () => void;
   primary?: boolean;
 };
 
-export function NavigationLink({ children, href, onNavigate, primary = false, ...props }: Props) {
+export function NavigationLink({
+  children,
+  href,
+  onCurrentNavigate,
+  onNavigate,
+  primary = false,
+  ...props
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const { request } = useNavigationGuard();
@@ -35,6 +43,13 @@ export function NavigationLink({ children, href, onNavigate, primary = false, ..
   const handlePress: NonNullable<LinkProps['onPress']> = (event) => {
     children.props.onPress?.(event);
     if (!shouldHandleNavigation(event)) {
+      return;
+    }
+    const targetPathname = getHrefPathname(href);
+    if (onCurrentNavigate && targetPathname === pathname) {
+      event.preventDefault();
+      onNavigate?.();
+      onCurrentNavigate();
       return;
     }
     const navigate = () => {
