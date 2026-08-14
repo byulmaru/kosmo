@@ -47,6 +47,16 @@ const mutateFollow = async (
     { id: profileId },
   );
 
+const gotoHome = async (page: Page) => {
+  const homeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+  await page.goto('/home');
+
+  const response = await homeResponse;
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+};
+
 test('UNRESPONSIVE remote profile은 Web에서 follow와 unfollow할 수 있다', async ({
   context,
   page,
@@ -214,7 +224,7 @@ test('post-commit delivery 실패에도 Web GraphQL payload와 DB 상태가 일�
     handle: 'e2e-delivery-approval',
   });
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto('/home');
+  await gotoHome(page);
 
   const follow = await mutateFollow(page, 'followProfile', toGlobalId('Profile', openRemote.id));
   expect(follow.errors).toBeUndefined();
@@ -285,7 +295,7 @@ test('동시 follow와 unfollow는 저장 count를 한 번만 갱신한다', asy
   const viewerId = toGlobalId('Profile', viewer.profile!.id);
 
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto('/home');
+  await gotoHome(page);
 
   const followResponses = await Promise.all([
     mutateFollow(page, 'followProfile', targetId),
@@ -355,7 +365,7 @@ test('unfollow 저장 count는 0 미만으로 감소하지 않는다', async ({ 
   });
 
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto('/home');
+  await gotoHome(page);
   const response = await mutateFollow(page, 'unfollowProfile', toGlobalId('Profile', target.id));
   expect(response.errors).toBeUndefined();
 
