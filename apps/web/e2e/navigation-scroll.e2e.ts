@@ -163,6 +163,7 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
       }
       await route.continue();
     });
+    const homeRefreshResponse = waitForGraphQLOperation(page, 'HomePageQuery');
 
     try {
       const entry = await homeEntry(page, surface.kind);
@@ -179,6 +180,7 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
 
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
       await expect.poll(() => refreshCount).toBe(1);
+      await homeRefreshResponse;
     } finally {
       await page.unroute('**/graphql');
     }
