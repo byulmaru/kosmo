@@ -350,6 +350,7 @@ export const Posts = pgTable.withRLS(
   },
   (table) => [
     pgPolicy('post_graphql_viewer_select', {
+      as: 'restrictive',
       for: 'select',
       to: 'kosmo_api',
       using: sql`
@@ -361,41 +362,28 @@ export const Posts = pgTable.withRLS(
           WHERE author_profile.id = ${table.profileId}
             AND author_profile.state = 'ACTIVE'
             AND author_instance.state <> 'SUSPENDED'
+            AND ${table.state} = 'ACTIVE'
             AND (
-              (
-                ${table.state} = 'ACTIVE'
-                AND (
-                  ${table.visibility} IN ('PUBLIC', 'UNLISTED')
-                  OR ${table.profileId} = public.kosmo_current_profile_id()
-                  OR (
-                    ${table.visibility} = 'FOLLOWERS'
-                    AND EXISTS (
-                      SELECT 1
-                      FROM public.profile_follow AS established_follow
-                      WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()
-                        AND established_follow.followee_profile_id = ${table.profileId}
-                    )
-                  )
-                )
-              )
+              ${table.visibility} IN ('PUBLIC', 'UNLISTED')
+              OR ${table.profileId} = public.kosmo_current_profile_id()
               OR (
-                ${table.state} = 'DELETED'
-                AND ${table.profileId} = public.kosmo_current_profile_id()
+                ${table.visibility} = 'FOLLOWERS'
+                AND EXISTS (
+                  SELECT 1
+                  FROM public.profile_follow AS established_follow
+                  WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()
+                    AND established_follow.followee_profile_id = ${table.profileId}
+                )
               )
             )
         )
       `,
     }),
-    pgPolicy('post_graphql_author_insert', {
-      for: 'insert',
+    pgPolicy('post_graphql_transition_all', {
+      for: 'all',
       to: 'kosmo_api',
-      withCheck: sql`${table.profileId} = public.kosmo_current_profile_id()`,
-    }),
-    pgPolicy('post_graphql_author_update', {
-      for: 'update',
-      to: 'kosmo_api',
-      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
-      withCheck: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
     check(
       'post_reply_parent_not_self',
@@ -425,6 +413,7 @@ export const PostContents = pgTable.withRLS(
   },
   (table) => [
     pgPolicy('post_content_graphql_viewer_select', {
+      as: 'restrictive',
       for: 'select',
       to: 'kosmo_api',
       using: sql`
@@ -435,17 +424,11 @@ export const PostContents = pgTable.withRLS(
         )
       `,
     }),
-    pgPolicy('post_content_graphql_author_insert', {
-      for: 'insert',
+    pgPolicy('post_content_graphql_transition_all', {
+      for: 'all',
       to: 'kosmo_api',
-      withCheck: sql`
-        EXISTS (
-          SELECT 1
-          FROM public.post AS parent_post
-          WHERE parent_post.id = ${table.postId}
-            AND parent_post.profile_id = public.kosmo_current_profile_id()
-        )
-      `,
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
     index().on(table.postId),
   ],

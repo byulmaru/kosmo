@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-713의 GraphQL-only Post/PostContent RLS, 현재 Mutation 호환 DML, DIRECT interim, Tombstone 멱등성 및 Notification 후속 경계를 구현 가능한 선택으로 구체화한다. 역할·ACL·session writer·credential cutover와 production 운영은 각각의 독립 경계에 남는다.
+이 기록은 PROD-713의 GraphQL-only Post/PostContent RLS, 현재 Mutation 호환 DML, DIRECT interim, DELETED 전체 숨김 및 Notification 후속 경계를 구현 가능한 선택으로 구체화한다. 역할·ACL·session writer·credential cutover와 production 운영은 각각의 독립 경계에 남는다.
 
 ## Decision Records
 
@@ -28,29 +28,29 @@
 - Consequences: PROD-713 완료는 DIRECT recipient 지원 완료 증거가 아니다.
 - Confirmation / Follow-up: author와 follower/stranger DIRECT matrix를 role-level로 검증하고 PROD-462 관계를 유지한다.
 
-### 현재 GraphQL SQL에 필요한 최소 DML policy만 transition으로 제공한다
+### Post/PostContent DML command를 permissive transition policy로 함께 연다
 
 - Decision Date: 2026-08-14
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, PROD-713, PROD-722, PROD-725, PROD-677, PROD-765
 - Status: Active
-- Context / Problem: PROD-716 cutover 전에 SELECT policy만 추가하면 현재 GraphQL create/reply/repost/delete가 non-owner principal에서 실패하지만, broad CRUD policy는 불필요한 command를 연다.
-- Decision Outcome: `kosmo_api`에는 author-bound Post INSERT/UPDATE와 PostContent INSERT만 허용한다. Post physical DELETE와 PostContent UPDATE/DELETE policy는 만들지 않는다. 이 policy는 Temporal Post 쓰기 전환이 모두 완료된 뒤 PROD-765가 제거한다.
-- Alternatives Considered: 모든 CRUD를 여는 policy는 현재 callsite보다 넓다. 쓰기 policy를 전혀 만들지 않는 선택은 현재 Mutation 호환성을 깨뜨린다.
-- Consequences: skeleton Post → PostContent → Post link UPDATE와 Tombstone UPDATE가 동작하며 장기적으로 GraphQL read-only 목표를 위해 별도 contract 제거가 필요하다.
-- Confirmation / Follow-up: 실제 core SQL 순서를 `SET ROLE kosmo_api`로 재현하고 불필요한 command가 거부되는지 검증한다.
+- Context / Problem: PROD-716 cutover 전에 SELECT policy만 추가하면 현재 또는 미확인 GraphQL Mutation이 non-owner principal에서 실패할 수 있다. callsite별 actor-bound policy는 전환 중 쉽게 누락되고 곧 Temporal로 제거될 계약에 복잡성을 더한다.
+- Decision Outcome: 각 table에 permissive `FOR ALL USING (true) WITH CHECK (true)` transition policy 하나와 restrictive `FOR SELECT` viewer policy 하나를 둔다. PostgreSQL이 이를 `AND`로 결합해 SELECT 범위를 유지하면서 DML command를 함께 허용하고, Temporal Post 쓰기 전환이 모두 완료된 뒤 PROD-765가 `FOR ALL` policy를 제거한다.
+- Alternatives Considered: 현재 확인된 callsite만 actor-bound로 허용하면 최소 권한이지만 아직 확인되지 않은 Mutation을 막을 수 있다. 쓰기 policy를 전혀 만들지 않으면 현재 Mutation 호환성이 깨진다.
+- Consequences: 전환 기간 `FOR ALL` predicate 자체는 actor를 제한하지 않지만 `WHERE`나 `RETURNING`으로 row를 읽는 UPDATE/DELETE에는 restrictive SELECT가 함께 적용된다. 특히 ACTIVE→DELETED `RETURNING`은 거부되므로 실제 delete lifecycle은 PROD-677 Temporal Workflow가 소유하고 PROD-716의 선행 조건으로 남는다.
+- Confirmation / Follow-up: 실제 `SET ROLE kosmo_api`에서 catalog 조합, 일반 viewer matrix, visible Active row의 DML과 ACTIVE→DELETED 거부를 검증하고 PROD-677/765 경계를 유지한다.
 
-### 작성자 Tombstone SELECT로 반복 삭제 의미를 유지한다
+### DELETED Post와 PostContent는 작성자에게도 숨긴다
 
 - Decision Date: 2026-08-14
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, PROD-713
 - Status: Active
-- Context / Problem: Active-only SELECT는 author가 Tombstone UPDATE 후 `RETURNING`과 반복 삭제 확인에서 같은 row를 볼 수 없게 해 기존 멱등 의미를 바꾼다.
-- Decision Outcome: eligible Author Profile은 자신의 Tombstone Post와 그 PostContent를 조회할 수 있고, 다른 viewer에게 Tombstone은 숨긴다.
-- Alternatives Considered: 모든 Tombstone을 숨기면 구현은 단순하지만 기존 반복 delete가 Not Found로 변한다. 모든 viewer에게 Tombstone을 보이면 조회 범위를 과도하게 넓힌다.
-- Consequences: Post SELECT policy에 author-only Tombstone branch가 필요하며 PostContent는 부모 정책을 그대로 따른다.
-- Confirmation / Follow-up: author 반복 delete, 다른 viewer와 malformed actor의 Tombstone 음성 matrix를 검증한다.
+- Context / Problem: 작성자 Tombstone SELECT를 유지하면 GraphQL RLS가 Temporal이 소유할 실제 삭제 lifecycle의 호환 상태까지 떠안는다.
+- Decision Outcome: DELETED Post와 그 PostContent는 작성자를 포함한 모든 `kosmo_api` viewer에게 숨긴다. 반복 delete가 Not Found로 바뀌는 것을 허용하고 실제 삭제 lifecycle과 물리 정리는 Temporal Workflow/Activity가 소유한다.
+- Alternatives Considered: 작성자에게만 Tombstone SELECT를 허용하면 기존 반복 delete 멱등성을 보존할 수 있지만 GraphQL RLS의 책임이 늘어난다. 모든 viewer에게 허용하면 조회 범위가 과도하게 넓어진다.
+- Consequences: Post SELECT policy는 Active row만 허용하고 author-only DELETED branch를 두지 않는다. PostContent는 부모 정책을 따라 함께 숨겨진다.
+- Confirmation / Follow-up: author/follower/anonymous가 DELETED Post/PostContent를 조회하지 못하고 DML transition policy가 SELECT 범위를 넓히지 않는지 검증한다.
 
 ### account-only context는 공개 viewer이며 Notification recipient context는 분리한다
 
@@ -94,5 +94,7 @@
 
 ## Superseded Decisions
 
-- GraphQL Post/PostContent 쓰기 policy를 이번 change에서 만들지 않고 모든 쓰기를 즉시 Temporal로 넘긴다는 2026-08-14 초안은 현재 direct Mutation 호환성을 깨뜨리므로 superseded되었다. 현재 최소 transition DML policy와 PROD-765 removal 계약이 이를 대체한다.
+- GraphQL Post/PostContent 쓰기 policy를 이번 change에서 만들지 않고 모든 쓰기를 즉시 Temporal로 넘긴다는 2026-08-14 초안은 현재 direct Mutation 호환성을 깨뜨리므로 superseded되었다. 각 table의 permissive `FOR ALL` transition policy와 PROD-765 removal 계약이 이를 대체한다.
+- permissive command별 DML policy 여섯 개는 같은 결과를 더 많은 객체로 표현하므로 superseded되었다. permissive `FOR ALL`과 restrictive SELECT의 table당 두 policy 조합이 이를 대체한다.
+- 확인된 GraphQL callsite만 author-bound로 허용하고 Post physical DELETE와 PostContent UPDATE/DELETE를 막는 초기 구현은 전환 중 미확인 Mutation을 막을 수 있어 superseded되었다.
 - account membership의 모든 Profile을 Post viewer로 인정해 Notification을 유지하는 선택은 일반 Post 권한을 넓히므로 superseded되었다. PROD-766의 recipient-specific execution 경계가 이를 대체한다.

@@ -4038,7 +4038,7 @@
       "table": "post"
     },
     {
-      "as": "PERMISSIVE",
+      "as": "RESTRICTIVE",
       "for": "SELECT",
       "roles": ["kosmo_api"],
       "using": "\n        EXISTS (\n          SELECT 1\n          FROM public.post AS parent_post\n          WHERE parent_post.id = \"post_content\".\"post_id\"\n        )\n      ",
@@ -4050,20 +4050,20 @@
     },
     {
       "as": "PERMISSIVE",
-      "for": "INSERT",
+      "for": "ALL",
       "roles": ["kosmo_api"],
-      "using": null,
-      "withCheck": "\n        EXISTS (\n          SELECT 1\n          FROM public.post AS parent_post\n          WHERE parent_post.id = \"post_content\".\"post_id\"\n            AND parent_post.profile_id = public.kosmo_current_profile_id()\n        )\n      ",
-      "name": "post_content_graphql_author_insert",
+      "using": "true",
+      "withCheck": "true",
+      "name": "post_content_graphql_transition_all",
       "entityType": "policies",
       "schema": "public",
       "table": "post_content"
     },
     {
-      "as": "PERMISSIVE",
+      "as": "RESTRICTIVE",
       "for": "SELECT",
       "roles": ["kosmo_api"],
-      "using": "\n        EXISTS (\n          SELECT 1\n          FROM public.profile AS author_profile\n          INNER JOIN public.instance AS author_instance\n            ON author_instance.id = author_profile.instance_id\n          WHERE author_profile.id = \"post\".\"profile_id\"\n            AND author_profile.state = 'ACTIVE'\n            AND author_instance.state <> 'SUSPENDED'\n            AND (\n              (\n                \"post\".\"state\" = 'ACTIVE'\n                AND (\n                  \"post\".\"visibility\" IN ('PUBLIC', 'UNLISTED')\n                  OR \"post\".\"profile_id\" = public.kosmo_current_profile_id()\n                  OR (\n                    \"post\".\"visibility\" = 'FOLLOWERS'\n                    AND EXISTS (\n                      SELECT 1\n                      FROM public.profile_follow AS established_follow\n                      WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()\n                        AND established_follow.followee_profile_id = \"post\".\"profile_id\"\n                    )\n                  )\n                )\n              )\n              OR (\n                \"post\".\"state\" = 'DELETED'\n                AND \"post\".\"profile_id\" = public.kosmo_current_profile_id()\n              )\n            )\n        )\n      ",
+      "using": "\n        EXISTS (\n          SELECT 1\n          FROM public.profile AS author_profile\n          INNER JOIN public.instance AS author_instance\n            ON author_instance.id = author_profile.instance_id\n          WHERE author_profile.id = \"post\".\"profile_id\"\n            AND author_profile.state = 'ACTIVE'\n            AND author_instance.state <> 'SUSPENDED'\n            AND \"post\".\"state\" = 'ACTIVE'\n            AND (\n              \"post\".\"visibility\" IN ('PUBLIC', 'UNLISTED')\n              OR \"post\".\"profile_id\" = public.kosmo_current_profile_id()\n              OR (\n                \"post\".\"visibility\" = 'FOLLOWERS'\n                AND EXISTS (\n                  SELECT 1\n                  FROM public.profile_follow AS established_follow\n                  WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()\n                    AND established_follow.followee_profile_id = \"post\".\"profile_id\"\n                )\n              )\n            )\n        )\n      ",
       "withCheck": null,
       "name": "post_graphql_viewer_select",
       "entityType": "policies",
@@ -4072,22 +4072,11 @@
     },
     {
       "as": "PERMISSIVE",
-      "for": "INSERT",
+      "for": "ALL",
       "roles": ["kosmo_api"],
-      "using": null,
-      "withCheck": "\"post\".\"profile_id\" = public.kosmo_current_profile_id()",
-      "name": "post_graphql_author_insert",
-      "entityType": "policies",
-      "schema": "public",
-      "table": "post"
-    },
-    {
-      "as": "PERMISSIVE",
-      "for": "UPDATE",
-      "roles": ["kosmo_api"],
-      "using": "\"post\".\"profile_id\" = public.kosmo_current_profile_id()",
-      "withCheck": "\"post\".\"profile_id\" = public.kosmo_current_profile_id()",
-      "name": "post_graphql_author_update",
+      "using": "true",
+      "withCheck": "true",
+      "name": "post_graphql_transition_all",
       "entityType": "policies",
       "schema": "public",
       "table": "post"

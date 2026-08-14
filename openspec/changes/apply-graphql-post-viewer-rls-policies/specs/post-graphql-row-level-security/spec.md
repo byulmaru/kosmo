@@ -25,25 +25,25 @@
 | `FOLLOWERS`          | Author 또는 viewer가 Author를 팔로우하는 established `profile_follow` 관계 |
 | `DIRECT`             | Author만 허용하는 interim contract                                         |
 
-작성자는 MUST 자신의 Tombstone Post를 반복 삭제의 멱등 결과 확인에 필요한 범위에서 조회할 수 있고, 다른 viewer에게 Tombstone을 MUST NOT 보인다. Mentioned Profile recipient에 대한 DIRECT/FOLLOWERS 확장은 PROD-462 전에는 MUST NOT 제공한다.
+DELETED Post는 MUST 작성자를 포함한 모든 `kosmo_api` viewer에게 보이지 않는다. 반복 delete가 Not Found로 바뀌는 것은 허용하며 실제 삭제 lifecycle과 물리 정리는 Temporal Workflow/Activity가 소유한다. Mentioned Profile recipient에 대한 DIRECT/FOLLOWERS 확장은 PROD-462 전에는 MUST NOT 제공한다.
 
 #### Scenario: anonymous와 account-only viewer의 공개 조회
 
 - **WHEN** Profile setting이 없고 Account setting만 있거나 actor setting이 모두 없다
 - **THEN** Active·eligible PUBLIC/UNLISTED Post만 조회된다
-- **AND** FOLLOWERS, DIRECT와 다른 작성자의 Tombstone은 조회되지 않는다
+- **AND** FOLLOWERS, DIRECT와 DELETED Post는 조회되지 않는다
 
 #### Scenario: 작성자 조회
 
 - **WHEN** 유효한 current Profile이 Post Author다
 - **THEN** eligible PUBLIC, UNLISTED, FOLLOWERS와 DIRECT Active Post를 조회할 수 있다
-- **AND** 자신의 Tombstone Post를 조회할 수 있다
+- **AND** 자신의 DELETED Post는 조회할 수 없다
 
 #### Scenario: established follower 조회
 
 - **WHEN** 유효한 current Profile이 Active·eligible Post Author를 established `profile_follow` 관계로 팔로우한다
 - **THEN** Active FOLLOWERS Post를 조회할 수 있다
-- **AND** DIRECT Post와 Tombstone은 조회할 수 없다
+- **AND** DIRECT Post와 DELETED Post는 조회할 수 없다
 
 #### Scenario: malformed Profile setting은 private 권한을 만들지 않음
 
@@ -69,39 +69,40 @@
 - **WHEN** viewer가 부모 Post SELECT policy를 통과하지 못하고 PostContent ID를 알고 있다
 - **THEN** PostContent row는 반환되지 않는다
 
-#### Scenario: 작성자의 Tombstone content 조회
+#### Scenario: 작성자의 DELETED content 직접 조회
 
-- **WHEN** current Profile이 Tombstone 부모 Post의 Author다
-- **THEN** 부모 Post의 작성자 Tombstone 계약에 따라 PostContent를 조회할 수 있다
-- **AND** 다른 viewer는 같은 PostContent를 조회할 수 없다
+- **WHEN** current Profile이 DELETED 부모 Post의 Author이고 PostContent ID를 알고 있다
+- **THEN** 부모 Post가 SELECT policy를 통과하지 못하므로 PostContent를 조회할 수 없다
+- **AND** 다른 viewer도 같은 PostContent를 조회할 수 없다
 
-### Requirement: 현재 GraphQL Post 쓰기를 위한 최소 actor-bound DML을 허용한다
+### Requirement: Temporal 전환 중 Post/PostContent DML command를 permissive하게 허용한다
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, PROD-713. Temporal 전환 전 호환성을 위해 `kosmo_api`는 MUST current Profile을 Author로 하는 Post INSERT와 기존 작성자 Post UPDATE를 수행할 수 있고, current Profile이 Author인 부모 Post에 PostContent INSERT를 수행할 수 있다. INSERT policy는 MUST `WITH CHECK`를 사용하고 UPDATE policy는 MUST `USING`과 `WITH CHECK`를 함께 사용해 Author identity가 다른 Profile로 바뀌거나 없는 actor가 쓰기 권한을 얻는 것을 차단한다.
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, PROD-713, PROD-677, PROD-722, PROD-725, PROD-765. Temporal 전환 전 호환성을 위해 각 table은 MUST `kosmo_api` 대상 `AS PERMISSIVE FOR ALL USING (true) WITH CHECK (true)` transition policy와 `AS RESTRICTIVE FOR SELECT` viewer policy를 함께 사용한다. 일반 SELECT는 MUST permissive `true`와 restrictive viewer predicate의 `AND` 결합을 통과해야 하며, UPDATE/DELETE가 SELECT 권한을 요구할 때도 같은 restrictive policy를 통과해야 한다.
 
-현재 GraphQL ordinary delete는 physical DELETE가 아니라 작성자 Post의 Tombstone UPDATE다. 따라서 `kosmo_api` Post physical DELETE policy와 PostContent UPDATE/DELETE policy는 MUST NOT 만든다. 이 호환 DML policy는 MUST Temporal 전환 후 PROD-765가 제거할 때까지 유지한다.
+이 policy는 행별 actor authorization을 제공하지 않는 의도적 transition 완화다. 실제 삭제 lifecycle과 물리 정리는 MUST Temporal Workflow/Activity가 소유하며, 모든 Post 쓰기 전환 후 PROD-765가 DML policy를 제거할 때까지만 유지한다.
 
-#### Scenario: 작성자가 Post skeleton과 PostContent를 생성함
+#### Scenario: actor context 없이 Post와 PostContent를 생성함
 
-- **WHEN** 유효한 current Profile이 자신의 `profile_id`로 Post를 INSERT하고 그 부모 Post에 PostContent를 INSERT한다
-- **THEN** skeleton Post에 `current_content_id`가 아직 없어도 두 INSERT가 허용된다
-- **AND** 작성자는 같은 transaction에서 Post의 current content와 reply parent를 UPDATE할 수 있다
+- **WHEN** `kosmo_api`가 current Profile setting 없이 Post와 PostContent를 INSERT한다
+- **THEN** 두 INSERT가 transition policy로 허용된다
 
-#### Scenario: 작성자가 자신의 Post를 Tombstone으로 전이함
+#### Scenario: 다른 actor 또는 account-only context가 row를 변경함
 
-- **WHEN** 유효한 current Profile이 자신의 Active Post를 Tombstone 상태로 UPDATE한다
-- **THEN** UPDATE와 `RETURNING` 결과가 허용된다
-- **AND** 이후 반복 삭제 확인을 위한 작성자 SELECT가 유지된다
+- **WHEN** current Profile이 row Author와 다르거나 Profile helper가 `NULL`인 `kosmo_api`가 SELECT policy로 보이는 Post/PostContent를 UPDATE 또는 DELETE한다
+- **THEN** 해당 DML command는 transition policy로 허용된다
+- **AND** 이 결과를 장기 actor authorization 계약으로 사용하지 않는다
 
-#### Scenario: 다른 actor와 account-only 쓰기는 거부됨
+#### Scenario: transition ALL policy가 SELECT 범위를 넓히지 않음
 
-- **WHEN** current Profile이 Post Author와 다르거나 Profile helper가 `NULL`이다
-- **THEN** Post INSERT/UPDATE와 PostContent INSERT는 RLS에 의해 거부된다
+- **WHEN** `kosmo_api`가 일반 SELECT를 실행한다
+- **THEN** permissive ALL의 `true`와 restrictive viewer predicate가 `AND`로 결합된다
+- **AND** DELETED 또는 viewer policy를 통과하지 못한 Post/PostContent는 계속 숨겨진다
 
-#### Scenario: 불필요한 physical mutation은 거부됨
+#### Scenario: ordinary delete는 Temporal 전환 전 GraphQL principal에서 수행하지 않음
 
-- **WHEN** `kosmo_api`가 Post를 physical DELETE하거나 PostContent를 UPDATE/DELETE한다
-- **THEN** 해당 command policy가 없으므로 RLS가 변경을 거부한다
+- **WHEN** `kosmo_api`가 Active Post를 DELETED로 UPDATE하고 새 row를 `RETURNING`하려 한다
+- **THEN** 새 DELETED row가 restrictive SELECT를 통과하지 못해 PostgreSQL이 command를 거부한다
+- **AND** PROD-677 Temporal Workflow/Activity 완료 전 PROD-716 principal cutover를 완료하지 않는다
 
 ### Requirement: RLS expand는 application·runtime 후속 경계를 선점하지 않는다
 

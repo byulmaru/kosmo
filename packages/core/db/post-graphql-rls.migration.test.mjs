@@ -32,8 +32,8 @@ const ids = {
   suspendedInstanceContent: '00000000-0000-8000-8000-000000000028',
   dmlPost: '00000000-0000-8000-8000-000000000031',
   dmlContent: '00000000-0000-8000-8000-000000000032',
-  deniedPost: '00000000-0000-8000-8000-000000000033',
-  deniedContent: '00000000-0000-8000-8000-000000000034',
+  transitionDeletePost: '00000000-0000-8000-8000-000000000033',
+  transitionDeleteContent: '00000000-0000-8000-8000-000000000034',
 };
 
 const visiblePostIds = {
@@ -41,7 +41,7 @@ const visiblePostIds = {
   accountOnly: [ids.publicPost, ids.unlistedPost],
   empty: [ids.publicPost, ids.unlistedPost],
   malformed: [ids.publicPost, ids.unlistedPost],
-  author: [ids.publicPost, ids.unlistedPost, ids.followersPost, ids.directPost, ids.tombstonePost],
+  author: [ids.publicPost, ids.unlistedPost, ids.followersPost, ids.directPost],
   follower: [ids.publicPost, ids.unlistedPost, ids.followersPost],
   stranger: [ids.publicPost, ids.unlistedPost],
 };
@@ -202,7 +202,10 @@ async function verifyCatalog(sql) {
         tablename AS "tableName",
         policyname AS "policyName",
         cmd,
-        roles::text[] AS roles
+        permissive,
+        roles::text[] AS roles,
+        qual,
+        with_check AS "withCheck"
       FROM pg_policies
       WHERE schemaname = 'public'
         AND tablename IN ('post', 'post_content')
@@ -210,7 +213,7 @@ async function verifyCatalog(sql) {
     `),
   ];
 
-  assert.ok(policies.length > 0);
+  assert.equal(policies.length, 4);
   for (const policy of policies) {
     assert.deepEqual(policy.roles, ['kosmo_api'], `${policy.tableName}.${policy.policyName}`);
   }
@@ -224,8 +227,21 @@ async function verifyCatalog(sql) {
       ),
     );
   }
-  assert.deepEqual(policyCommands.get('post'), new Set(['SELECT', 'INSERT', 'UPDATE']));
-  assert.deepEqual(policyCommands.get('post_content'), new Set(['SELECT', 'INSERT']));
+  assert.deepEqual(policyCommands.get('post'), new Set(['SELECT', 'ALL']));
+  assert.deepEqual(policyCommands.get('post_content'), new Set(['SELECT', 'ALL']));
+
+  for (const policy of policies) {
+    if (policy.cmd === 'SELECT') {
+      assert.equal(policy.permissive, 'RESTRICTIVE');
+      assert.match(policy.policyName, /_graphql_viewer_select$/);
+      assert.equal(policy.withCheck, null);
+    } else {
+      assert.equal(policy.permissive, 'PERMISSIVE');
+      assert.match(policy.policyName, /_graphql_transition_all$/);
+      assert.equal(policy.qual, 'true');
+      assert.equal(policy.withCheck, 'true');
+    }
+  }
 }
 
 async function verifyViewerMatrix(sql) {
@@ -271,10 +287,21 @@ async function verifyViewerMatrix(sql) {
     { profileId: ids.follower },
     ids.tombstonePost,
   );
-  assert.deepEqual(followerTombstone, [], 'only the author can see a Post Tombstone');
+  assert.deepEqual(followerTombstone, [], 'DELETED Posts are hidden from followers');
 
   const authorTombstone = await selectRowsById(sql, { profileId: ids.author }, ids.tombstonePost);
-  assert.deepEqual(authorTombstone, [ids.tombstonePost]);
+  assert.deepEqual(authorTombstone, [], 'DELETED Posts are hidden from their author');
+
+  const authorTombstoneContent = await selectRowsById(
+    sql,
+    { profileId: ids.author },
+    ids.tombstoneContent,
+  );
+  assert.deepEqual(
+    authorTombstoneContent,
+    [],
+    'DELETED PostContent is hidden from its author by parent RLS',
+  );
 }
 
 async function selectVisibleRows(sql, context) {
@@ -300,7 +327,7 @@ async function selectRowsById(sql, context, id) {
 
 async function verifyDmlMatrix(sql) {
   await sql.begin(async (tx) => {
-    await setApiRole(tx, { profileId: ids.author });
+    await setApiRole(tx);
 
     const skeleton = [
       ...(await tx`
@@ -319,6 +346,10 @@ async function verifyDmlMatrix(sql) {
     `),
     ];
     assert.deepEqual(content, [{ id: ids.dmlContent }]);
+  });
+
+  await sql.begin(async (tx) => {
+    await setApiRole(tx, { profileId: ids.stranger });
 
     const linked = [
       ...(await tx`
@@ -332,99 +363,74 @@ async function verifyDmlMatrix(sql) {
       { id: ids.dmlPost, currentContentId: ids.dmlContent, state: 'ACTIVE' },
     ]);
 
-    const tombstone = [
+    const updatedContent = [
       ...(await tx`
-      UPDATE post
-      SET state = 'DELETED', deleted_at = now()
-      WHERE id = ${ids.dmlPost}
-        AND profile_id = ${ids.author}
-        AND state = 'ACTIVE'
-      RETURNING id::text AS id, current_content_id AS "currentContentId", state
+      UPDATE post_content
+      SET document = ${sql.json(postDocument('updated without actor ownership'))}
+      WHERE id = ${ids.dmlContent}
+      RETURNING id::text AS id
     `),
     ];
-    assert.deepEqual(tombstone, [
-      { id: ids.dmlPost, currentContentId: ids.dmlContent, state: 'DELETED' },
-    ]);
+    assert.deepEqual(updatedContent, [{ id: ids.dmlContent }]);
   });
 
-  await expectDenied(sql, { profileId: ids.stranger }, async (tx) => {
-    return tx`
+  await assert.rejects(
+    sql.begin(async (tx) => {
+      await setApiRole(tx, { profileId: ids.author });
+      return tx`
+        UPDATE post
+        SET state = 'DELETED', deleted_at = now()
+        WHERE id = ${ids.dmlPost}
+        RETURNING id
+      `;
+    }),
+    (error) => error?.code === '42501',
+    'the restrictive SELECT policy keeps GraphQL tombstone transition behind PROD-677',
+  );
+
+  await sql.begin(async (tx) => {
+    await setApiRole(tx, { profileId: 'not-a-uuid' });
+
+    const insertedPost = [
+      ...(await tx`
       INSERT INTO post (id, profile_id, visibility, state)
-      VALUES (${ids.deniedPost}, ${ids.author}, 'PUBLIC', 'ACTIVE')
-    `;
+      VALUES (${ids.transitionDeletePost}, ${ids.author}, 'PUBLIC', 'ACTIVE')
+      RETURNING id::text AS id
+    `),
+    ];
+    assert.deepEqual(insertedPost, [{ id: ids.transitionDeletePost }]);
+
+    const insertedContent = [
+      ...(await tx`
+      INSERT INTO post_content (id, post_id, document)
+      VALUES (${ids.transitionDeleteContent}, ${ids.transitionDeletePost}, ${sql.json(postDocument('temporary'))})
+      RETURNING id::text AS id
+    `),
+    ];
+    assert.deepEqual(insertedContent, [{ id: ids.transitionDeleteContent }]);
   });
 
-  for (const context of [
-    {},
-    { accountId: ids.account },
-    { profileId: '' },
-    { profileId: 'not-a-uuid' },
-  ]) {
-    await expectDenied(sql, context, async (tx) => {
-      return tx`
-        INSERT INTO post (id, profile_id, visibility, state)
-        VALUES (${ids.deniedPost}, ${ids.author}, 'PUBLIC', 'ACTIVE')
-      `;
-    });
-  }
+  await sql.begin(async (tx) => {
+    await setApiRole(tx, { accountId: ids.account });
 
-  await expectDenied(sql, { profileId: ids.stranger }, async (tx) => {
-    return tx`
-      UPDATE post
-      SET current_content_id = ${ids.publicContent}
-      WHERE id = ${ids.publicPost}
-      RETURNING id
-    `;
+    const deletedContent = [
+      ...(await tx`
+      DELETE FROM post_content
+      WHERE id = ${ids.transitionDeleteContent}
+      RETURNING id::text AS id
+    `),
+    ];
+    assert.deepEqual(deletedContent, [{ id: ids.transitionDeleteContent }]);
+
+    const deletedPost = [
+      ...(await tx`
+      DELETE FROM post
+      WHERE id = ${ids.transitionDeletePost}
+      RETURNING id::text AS id
+    `),
+    ];
+    assert.deepEqual(deletedPost, [{ id: ids.transitionDeletePost }]);
   });
-
-  await expectDenied(sql, { profileId: ids.author }, async (tx) => {
-    return tx`DELETE FROM post WHERE id = ${ids.publicPost} RETURNING id`;
-  });
-
-  for (const context of [
-    {},
-    { accountId: ids.account },
-    { profileId: '' },
-    { profileId: 'not-a-uuid' },
-  ]) {
-    await expectDenied(sql, context, async (tx) => {
-      return tx`
-        INSERT INTO post_content (id, post_id, document)
-        VALUES (${ids.deniedContent}, ${ids.publicPost}, ${sql.json(postDocument('denied'))})
-      `;
-    });
-  }
-
-  await expectDenied(sql, { profileId: ids.author }, async (tx) => {
-    return tx`
-      UPDATE post_content
-      SET document = ${sql.json(postDocument('mutated'))}
-      WHERE id = ${ids.publicContent}
-      RETURNING id
-    `;
-  });
-
-  await expectDenied(sql, { profileId: ids.author }, async (tx) => {
-    return tx`DELETE FROM post_content WHERE id = ${ids.publicContent} RETURNING id`;
-  });
-}
-
-async function expectDenied(sql, context, operation) {
-  try {
-    const rows = await sql.begin(async (tx) => {
-      await setApiRole(tx, context);
-      return operation(tx);
-    });
-    assert.equal(
-      [...rows].length,
-      0,
-      'a denied UPDATE/DELETE must affect no rows; a denied INSERT must fail',
-    );
-  } catch (error) {
-    if (error?.code !== '42501') {
-      throw error;
-    }
-  }
 }
 
 async function verifyBypassRoles(sql) {
