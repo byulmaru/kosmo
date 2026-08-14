@@ -38,13 +38,13 @@ Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계�
 ./scripts/ensure-ci-aws-role.sh
 ```
 
-GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 GitHub environment와 Actions 변수를 bootstrap한다. 이 스크립트는 CI에서 실행하지 않는다.
+GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 native/onboarding/terraform GitHub environment와 Actions 변수를 bootstrap한다. 이 스크립트는 CI에서 실행하지 않으며 `prod` Environment와 production branch ruleset은 소유하지 않는다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 명시적으로 적용하고 live API로 검증한다.
 
 ```sh
 ./scripts/ensure-github.sh
 ```
 
-main 브랜치를 push하면 Docker Build는 `main` 이미지 태그를 갱신한다. 다른 브랜치에서 수동 실행하면 dev 환경의 Vault build role로 shared 설정을 읽고 `branch-<브랜치명>`과 `sha-*` 태그로 ECR에도 이미지를 push한다. 이름과 관계없이 Git tag를 push하면 prod 환경의 Vault build role로 image를 build하고 `sha-*`, `stable` metadata를 발행한 뒤, `prod` Environment 승인 job이 같은 build digest를 Argo CD에 배포한다. Git tag 이름은 workflow 실행과 audit만 식별하며 container tag로 발행하지 않으므로 `main` 같은 운영 tag가 dev용 image tag를 덮어쓰지 않는다. Production workload identity는 tag가 아니라 build digest이며 `stable`은 현재 production 후보 image가 lifecycle로 삭제되지 않게 보존하는 표식일 뿐이다. ECR에서는 `main`, `stable`, `branch-*`, `sha-*`를 갱신할 수 있다. Lifecycle policy는 현재 `main`과 `stable` image를 보호하고, untagged image는 하루 뒤, 그 외 image는 7일 뒤 만료한다.
+`main`을 push하면 Docker Build는 dev 설정으로 `main`과 `sha-*` image tag를 갱신한다. 보호된 `production`을 push하면 prod Vault build role로 같은 push SHA의 image를 build하고 `branch-production`, `sha-*`, `stable` metadata를 발행한 뒤 같은 digest와 source SHA를 Argo CD에 자동 배포한다. Production PR merge가 유일한 사람 승인이고 `prod` Environment는 credential·OIDC·감사 경계일 뿐 별도 reviewer 승인을 요구하지 않는다. Tag push, 일반 branch push와 수동 workflow 실행은 Docker Build나 production 배포를 시작하지 않는다. Production workload identity는 tag가 아니라 build digest이며 `stable`은 현재 production image가 lifecycle로 삭제되지 않게 보존하는 표식일 뿐이다. Lifecycle policy는 현재 `main`과 `stable` image를 보호하고, untagged image는 하루 뒤, 그 외 image는 7일 뒤 만료한다.
 
 ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
 

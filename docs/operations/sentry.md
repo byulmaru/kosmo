@@ -4,7 +4,7 @@ Kosmo는 API, Web BFF와 Web browser의 처리되지 않은 오류만 Sentry에 
 
 ## Project와 자격 증명
 
-Vault의 `secret/kubernetes/kosmo/dev|prod`에는 환경별 공개 `EXPO_PUBLIC_SENTRY_DSN`을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 branch와 release tag GitHub OIDC subject는 각각 dev/prod 환경 객체를 읽고, source map upload metadata와 token은 GitHub repository 설정에서 주입한다.
+Vault의 `secret/kubernetes/kosmo/dev|prod`에는 환경별 공개 `EXPO_PUBLIC_SENTRY_DSN`을 둔다. API, Web BFF와 Web browser는 Sentry의 `kosmo` project 하나를 공유하고 `runtime` tag로 구분한다. `byulmaru/kosmo`의 일반 branch workflow는 dev 환경 객체를, 보호된 `production` branch workflow는 prod 환경 객체를 읽는다. Tag push는 production credential과 release workflow를 선택하지 않는다. Source map upload metadata와 token은 GitHub repository 설정에서 주입한다.
 
 | 이름                     | 저장 위치                  | 용도                                       |
 | ------------------------ | -------------------------- | ------------------------------------------ |
@@ -17,7 +17,7 @@ Workflow는 공식 `hashicorp/vault-action`으로 GitHub OIDC JWT 인증과 환�
 
 GitHub repository secret `SENTRY_AUTH_TOKEN`에는 source map 업로드와 release artifact 생성 권한만 가진 organization token을 둔다. Token은 artifact build의 해당 `RUN`에서 환경 변수 secret mount로만 보이며 layer에 복사하지 않는다. Organization·project slug는 공개 build metadata이지만 token과 함께 runtime image에는 포함하지 않는다.
 
-Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernetes Secret으로 변환하고 API와 Web BFF는 여기서 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. Web build는 branch에서 dev, 모든 Git tag에서 prod 객체의 같은 변수를 사용한다. Event의 dev/prod 구분은 공용 `ENVIRONMENT`와 Web의 `EXPO_PUBLIC_ENVIRONMENT`가 담당한다. `SENTRY_RELEASE`는 Vault 값이 아니라 workflow가 `kosmo@<Git commit SHA>`로 만드는 배포 식별자이며 event와 source map을 연결한다. DSN, environment와 release가 모두 있으면 해당 runtime은 Sentry를 활성화한다. 로컬·테스트에는 이 배포 metadata를 기본 주입하지 않는다.
+Vault Secrets Operator는 환경별 Vault 객체 전체를 기존 `env` Kubernetes Secret으로 변환하고 API와 Web BFF는 여기서 `EXPO_PUBLIC_SENTRY_DSN`을 읽는다. Web build는 일반 branch에서 dev, 보호된 `production` branch에서 prod 객체의 같은 변수를 사용한다. Event의 dev/prod 구분은 공용 `ENVIRONMENT`와 Web의 `EXPO_PUBLIC_ENVIRONMENT`가 담당한다. `SENTRY_RELEASE`는 Vault 값이나 Git tag가 아니라 production push의 immutable SHA를 사용해 workflow가 `kosmo@<Git commit SHA>`로 만드는 배포 식별자이며 event와 source map을 연결한다. DSN, environment와 release가 모두 있으면 해당 runtime은 Sentry를 활성화한다. 로컬·테스트에는 이 배포 metadata를 기본 주입하지 않는다.
 
 ## Event 전달 정책
 
@@ -68,7 +68,7 @@ Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에�
 
 `pnpm build:sentry-artifacts`는 Expo Web bundle과 external source map을 생성한다. 이어서 debug ID를 주입하고 source map의 `sourcesContent`를 정적으로 검증한다. 업로드 설정이 없는 로컬 실행은 외부 전송을 건너뛰지만 검증 뒤 map과 공개 JavaScript의 `sourceMappingURL`을 제거한다. API와 Web BFF는 기존 TypeScript source를 `tsx`로 직접 실행하며, server JavaScript/source map과 원본 TypeScript symbolication은 Backlog PROD-516에서 다룬다.
 
-`Docker Build` workflow는 모든 branch에는 `kosmo-build-dev`, 모든 Git tag에는 `kosmo-build-prod` Vault OIDC role을 사용해 각각 `kubernetes/kosmo/dev`, `kubernetes/kosmo/prod`를 읽는다. 따라서 기능 branch의 수동 build도 dev environment로 Web source map을 업로드할 수 있다. Vault ACL은 필드가 아니라 경로 단위이므로 branch workflow는 dev 객체 전체, tag workflow는 prod 객체 전체를 읽을 수 있다. 이 권한 확대는 환경별 DSN을 기존 env 객체에서 단일 source로 사용하기 위해 명시적으로 수용했다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token도 build 중 사용할 수 있다. Vault Action은 공개 DSN 하나만 output으로 내보내고 upload token은 BuildKit secret mount로만 전달한다. 공개 build arg는 cache key에 반영되지만 secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 설정을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 최종 image에는 upload token이나 organization/project 설정을 남기지 않으며, 업로드가 성공한 뒤 Web static root에는 `.map` 파일이 남지 않는다.
+`Docker Build` workflow는 일반 branch에는 `kosmo-build-dev`, 보호된 `production` branch에는 `kosmo-build-prod` Vault OIDC role을 사용해 각각 `kubernetes/kosmo/dev`, `kubernetes/kosmo/prod`를 읽는다. Production PR merge로 발생한 `production` push만 prod source map과 production image 경계를 사용한다. Main과 기타 branch build는 dev 환경을 사용하며, tag push와 수동 workflow 실행은 production build·배포를 시작하지 않는다. Vault ACL은 필드가 아니라 경로 단위이므로 branch workflow는 dev 객체 전체, production workflow는 prod 객체 전체를 읽을 수 있다. 이 권한 확대는 환경별 DSN을 기존 env 객체에서 단일 source로 사용하기 위해 명시적으로 수용했다. Repository에서 branch workflow를 실행할 수 있는 주체는 repository secret의 source map 업로드 token도 build 중 사용할 수 있다. Vault Action은 공개 DSN 하나만 output으로 내보내고 upload token은 BuildKit secret mount로만 전달한다. 공개 build arg는 cache key에 반영되지만 secret 내용은 cache key가 아니므로 `app-build` stage는 cache를 사용하지 않고 매 build마다 현재 설정을 읽는다. CI에서는 `SENTRY_UPLOAD_REQUIRED=1`이므로 token, DSN, organization, release 또는 project가 누락되면 image build가 실패한다. 최종 image에는 upload token이나 organization/project 설정을 남기지 않으며, 업로드가 성공한 뒤 Web static root에는 `.map` 파일이 남지 않는다.
 
 로컬에서 artifact 보안 경계를 확인한다.
 
@@ -82,7 +82,7 @@ rg 'sourceMappingURL=|SENTRY_AUTH_TOKEN' apps/app/dist
 
 ## 배포 후 검증
 
-새 release마다 실제 서비스에 상시 검증 route나 오류 button을 남기지 않는다. 임시 검증 branch에서 기존 전역 경계까지 도달하는 오류를 만들고 배포한 뒤 확인 즉시 제거한다.
+각 [Production release](./production-release.md) 뒤 실제 서비스에 상시 검증 route나 오류 button을 남기지 않는다. 임시 검증 branch에서 기존 전역 경계까지 도달하는 오류를 만들고 배포한 뒤 확인 즉시 제거한다.
 
 1. API GraphQL resolver에서 예상하지 못한 `Error`를 한 번 발생시키고 `api` event가 기존 `INTERNAL_SERVER_ERROR` 응답과 함께 한 번만 수집되는지 확인한다.
 2. Web BFF route에서 예상하지 못한 `Error`를 발생시키고 `web-bff` event와 기존 500 응답을 확인한다.

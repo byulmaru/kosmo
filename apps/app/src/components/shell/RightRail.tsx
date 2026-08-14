@@ -1,11 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
-import { getBuildVersionLabel } from '@/buildVersion';
 import { PostComposer } from '@/components/post/PostComposer';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
-import type { TextStyle } from 'react-native';
 import type { RightRail_profile$key } from './__generated__/RightRail_profile.graphql';
 
 const RightRailFragment = graphql`
@@ -33,12 +31,13 @@ export function RightRailFooter() {
           <Text style={[styles.footerText, { color: theme.textSecondary }]}>개인정보 처리방침</Text>
         </Pressable>
       </NavigationLink>
-      <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}>
-        ·
-      </Text>
-      <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}>
-        버전: {getBuildVersionLabel(process.env.EXPO_PUBLIC_RELEASE_TAG)}
-      </Text>
+      {/* PROD-764: 표시 tag 공급 방식을 결정할 때 버전 표시를 복원한다. */}
+      {/* <Text aria-hidden style={[styles.footerText, { color: theme.textSecondary }]}> */}
+      {/*   · */}
+      {/* </Text> */}
+      {/* <Text style={[styles.footerText, styles.versionText, { color: theme.textSecondary }]}> */}
+      {/*   버전: {getBuildVersionLabel(process.env.EXPO_PUBLIC_RELEASE_TAG)} */}
+      {/* </Text> */}
     </View>
   );
 }
@@ -58,10 +57,4 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   footerText: { fontFamily: 'SUIT', ...typography.xsm },
-  versionText: {
-    flexShrink: 1,
-    maxWidth: '100%',
-    minWidth: 0,
-    wordBreak: 'break-all',
-  } as TextStyle & { wordBreak: 'break-all' },
 });

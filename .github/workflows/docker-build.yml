@@ -1,23 +1,20 @@
 name: Docker Build
 
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
-    tags:
-      - '**'
+    branches: [main, production]
 
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
-  ENVIRONMENT: ${{ startsWith(github.ref, 'refs/tags/') && 'prod' || 'dev' }}
+  ENVIRONMENT: ${{ github.ref == 'refs/heads/production' && 'prod' || 'dev' }}
   SENTRY_RELEASE: kosmo@${{ github.sha }}
   VAULT_ADDR: https://vault.tail1fdd55.ts.net
   VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/production' }}
 
 jobs:
   docker_build:
@@ -27,12 +24,49 @@ jobs:
       contents: read
       id-token: write
       packages: write
+      pull-requests: read
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
+      source_sha: ${{ github.sha }}
+      production_pr_number: ${{ steps.verify_production_pr.outputs.number }}
+      production_pr_url: ${{ steps.verify_production_pr.outputs.url }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Verify merged production pull request
+        id: verify_production_pr
+        if: github.ref == 'refs/heads/production'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const pullRequests = await github.paginate(
+              github.rest.repos.listPullRequestsAssociatedWithCommit,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: context.sha,
+              },
+            );
+            const mergedProductionPullRequests = pullRequests.filter(
+              ({ base, merge_commit_sha, merged_at }) =>
+                base.ref === "production" &&
+                merged_at !== null &&
+                merge_commit_sha === context.sha,
+            );
+
+            if (mergedProductionPullRequests.length !== 1) {
+              throw new Error(
+                `Expected exactly one merged production pull request for ${context.sha}, found ${mergedProductionPullRequests.length}.`,
+              );
+            }
+
+            const [pullRequest] = mergedProductionPullRequests;
+            core.setOutput("number", String(pullRequest.number));
+            core.setOutput("url", pullRequest.html_url);
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -62,7 +96,7 @@ jobs:
           url: ${{ env.VAULT_ADDR }}
           path: github-actions
           method: jwt
-          role: ${{ startsWith(github.ref, 'refs/tags/') && 'kosmo-build-prod' || 'kosmo-build-dev' }}
+          role: ${{ github.ref == 'refs/heads/production' && 'kosmo-build-prod' || 'kosmo-build-dev' }}
           jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
           exportEnv: false
           secrets: |
@@ -82,7 +116,7 @@ jobs:
             type=sha
             type=ref,event=branch,prefix=branch-,enable=${{ github.ref != 'refs/heads/main' }}
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=stable,enable=${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+            type=raw,value=stable,enable=${{ github.ref == 'refs/heads/production' }}
 
       - name: Build and push Docker image
         id: build
@@ -100,8 +134,7 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ startsWith(github.ref, 'refs/tags/') && vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID || '' }}
-            EXPO_PUBLIC_RELEASE_TAG=${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ github.ref == 'refs/heads/production' && vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID || '' }}
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
@@ -124,8 +157,8 @@ jobs:
           retention-days: 7
 
   deploy_production:
-    name: Approve and Deploy Production
-    if: startsWith(github.ref, 'refs/tags/')
+    name: Deploy Production
+    if: github.ref == 'refs/heads/production'
     needs: docker_build
     runs-on: self-hosted
     environment: prod
@@ -206,24 +239,42 @@ jobs:
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
+          SOURCE_SHA: ${{ needs.docker_build.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
 
-          version="${GITHUB_SHA:0:12}"
+          version="${SOURCE_SHA}"
           argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
+            --revision "${SOURCE_SHA}" \
             -p "version=${version}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
             -p "workloads.enabled=true" \
             -p "migration.enabled=true" \
             --validate
 
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod --prune --timeout 600
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod \
+            --revision "${SOURCE_SHA}" \
+            --prune \
+            --timeout 600
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
+            --sync \
+            --health \
+            --timeout 600
+
+          actual_source_revision="$(argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-prod --output json | jq -r '.status.sync.revision')"
+          if [[ "${actual_source_revision}" != "${SOURCE_SHA}" ]]; then
+            echo "::error::Argo CD synced revision ${actual_source_revision}, expected ${SOURCE_SHA}."
+            exit 1
+          fi
 
       - name: Record production deployment
         if: always()
         env:
           IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
+          SOURCE_SHA: ${{ needs.docker_build.outputs.source_sha }}
+          PRODUCTION_PR_NUMBER: ${{ needs.docker_build.outputs.production_pr_number }}
+          PRODUCTION_PR_URL: ${{ needs.docker_build.outputs.production_pr_url }}
           RESULT: ${{ job.status }}
         shell: bash
         run: |
@@ -231,9 +282,10 @@ jobs:
             echo "### Production deployment ${GITHUB_REF_NAME}"
             echo
             echo "- Requester: ${GITHUB_ACTOR}"
-            echo "- Approval gate: prod environment"
-            echo "- Git tag: ${GITHUB_REF_NAME}"
-            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Approval: production pull request merge"
+            echo "- Merged production PR: #${PRODUCTION_PR_NUMBER} (${PRODUCTION_PR_URL})"
+            echo "- Commit: ${SOURCE_SHA}"
+            echo "- Helm source revision: ${SOURCE_SHA}"
             echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"

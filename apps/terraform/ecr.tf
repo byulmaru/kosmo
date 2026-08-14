@@ -109,8 +109,8 @@ data "aws_iam_policy_document" "ecr_push_assume_role" {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/*",
-        "repo:${local.github_owner}/${local.github_repository}:ref:refs/tags/*",
+        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/main",
+        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/production",
       ]
     }
   }

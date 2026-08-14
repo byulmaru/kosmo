@@ -5,8 +5,6 @@ repository="byulmaru/kosmo"
 native_environment="native-test-distribution"
 onboarding_environment="ios-device-onboarding"
 onboarding_reviewer="robin-maki"
-production_environment="prod"
-production_reviewer="robin-maki"
 terraform_environment="terraform-apply"
 terraform_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -51,28 +49,8 @@ ensure_environment() {
   fi
 }
 
-verify_production_environment() {
-  local reviewer_id
-  reviewer_id="$(gh api "users/${production_reviewer}" --jq '.id')"
-
-  gh api "repos/${repository}/environments/${production_environment}" \
-    | jq -e --argjson reviewer_id "${reviewer_id}" '
-        .can_admins_bypass == false
-        and .deployment_branch_policy == null
-        and any(
-          .protection_rules[];
-          .type == "required_reviewers"
-          and .prevent_self_review == false
-          and any(.reviewers[]; .type == "User" and .reviewer.id == $reviewer_id)
-        )
-      ' >/dev/null
-
-}
-
 ensure_environment "${native_environment}"
 ensure_environment "${onboarding_environment}" "${onboarding_reviewer}"
-ensure_environment "${production_environment}" "${production_reviewer}" false
-verify_production_environment
 ensure_environment "${terraform_environment}"
 
 gh variable set FIREBASE_ANDROID_APP_ID --repo "${repository}" --env "${native_environment}" --body "$(terraform_output firebase_android_app_id)"
