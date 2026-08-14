@@ -62,7 +62,7 @@ export function PageHeader(props: PageHeaderProps) {
             ) : (
               mark
             )}
-            <Text accessibilityRole="header" pointerEvents="none" style={styles.srOnly}>
+            <Text accessibilityRole="header" style={styles.srOnly}>
               {props.accessibilityLabel}
             </Text>
           </View>
@@ -137,5 +137,11 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     zIndex: 1,
   },
-  srOnly: { height: 1, overflow: 'hidden', position: 'absolute', width: 1 },
+  srOnly: {
+    height: 1,
+    overflow: 'hidden',
+    pointerEvents: 'none',
+    position: 'absolute',
+    width: 1,
+  },
 });

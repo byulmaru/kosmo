@@ -44,7 +44,6 @@ type TestElementProps = {
   accessibilityLabel?: string;
   accessibilityElementsHidden?: boolean;
   accessibilityRole?: string;
-  pointerEvents?: string;
   href?: string;
   children?: ReactNode;
   numberOfLines?: number;
@@ -143,7 +142,8 @@ test('brand variant exposes one Home heading and hides the approved mark from ac
   assert.equal(logos[0]?.props.width, 38);
   assert.equal(hiddenLogoWrappers.length, 1);
   assert.equal(hiddenLogoWrappers[0]?.props.accessibilityElementsHidden, true);
-  assert.equal(headings[0]?.props.pointerEvents, 'none');
+  const headingStyle = headings[0]?.props.style as Record<string, unknown>;
+  assert.equal(headingStyle?.pointerEvents, 'none');
   assert.equal(findElements(header, 'Pressable').length, 1);
 });
 
