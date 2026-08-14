@@ -2,7 +2,7 @@
 
 ### Requirement: trusted workload는 process 기본 Worker principal을 사용한다
 
-**Authority / Provenance:** Linear `PROD-715`, `PROD-716` — Web trusted federation ingress와 Temporal Worker DB Activity는 각 workload의 process 기본 `db`를 사용하고 그 기본 `DATABASE_URL`/`DATABASE_PASSWORD` source가 `kosmo_worker` credential을 참조해야 한다(MUST). 별도 Worker application pool/handle, request-owned client 또는 Fedify DB context를 만들어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-716` — Web trusted federation ingress와 Temporal Worker DB Activity는 각 workload의 process 기본 `db`를 사용하고 그 기본 표준 `PG*` env source가 `kosmo_worker` credential을 참조해야 한다(MUST). `DATABASE_URL`/`DATABASE_PASSWORD`, 별도 Worker application pool/handle, request-owned client 또는 Fedify DB context를 만들어서는 안 된다(MUST NOT).
 
 #### Scenario: Web trusted federation ingress 실행
 
@@ -23,17 +23,19 @@
 #### Scenario: Worker credential cutover
 
 - **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 PROD-715 workload wiring을 렌더한다
-- **THEN** Web과 enabled Temporal Worker의 기본 `DATABASE_*`만 Worker source를 사용한다
-- **AND** chart가 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 `DATABASE_URL`을 생성한다
-- **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 생성한다
+- **THEN** Web과 enabled Temporal Worker의 process 기본 DB만 Worker source를 사용한다
+- **AND** chart가 `PGHOST`를 기존 direct read-write Service로, `PGPORT=5432`, `PGUSER=kosmo_worker`, `PGDATABASE=kosmo`로 생성한다
+- **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 `PGPASSWORD`로 생성한다
+- **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않는다
+- **AND** process-wide 기본 DB source에는 `DATABASE_URL` fallback이나 `hasComplete...` source-selection flag가 없다
 - **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
-- **AND** Worker URL compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
+- **AND** Worker PG env compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 
 #### Scenario: Worker Secret rotation restart
 
 - **WHEN** `worker-database` VaultStaticSecret destination이 새 password로 갱신된다
 - **THEN** Web Rollout과 enabled Temporal Worker Deployment가 restart target으로 재시작된다
-- **AND** 새 Web/Worker Pod는 같은 SecretKeyRef에서 새 `DATABASE_PASSWORD`를 읽는다
+- **AND** 새 Web/Worker Pod는 같은 SecretKeyRef에서 새 `PGPASSWORD`를 읽는다
 
 #### Scenario: Worker activation gate 보존
 
@@ -48,12 +50,12 @@
 
 ### Requirement: Worker credential source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-715` — 시스템은 API GraphQL operation connection, application SQL과 migration/queue source를 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715` — 시스템은 application SQL, API/Fedify owner principal과 direct endpoint, GraphQL operation connection, production migration role과 queue database 경계를 추가로 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker workload wiring rollback
 
-- **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API selector와 migration/queue source를 유지한다
-- **THEN** Web의 기본 `DATABASE_*`와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
+- **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API process/operation과 migration/queue source를 유지한다
+- **THEN** Web의 기본 DB env와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
 - **AND** API GraphQL operation connection, migration과 queue database는 바뀌지 않는다
 
 ### Requirement: production 전환은 별도 승인 대상이다

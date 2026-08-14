@@ -1,5 +1,4 @@
 {{- if .Values.workloads.enabled }}
-{{- include "kosmo.validatePostgresCredentials" . -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -71,13 +70,19 @@ spec:
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
-            - name: DATABASE_PASSWORD
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
                   key: password
-            - name: DATABASE_URL
-              value: {{ include "kosmo.databaseUrl" . | quote }}
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: kosmo
+            - name: PGDATABASE
+              value: kosmo
           envFrom:
             - secretRef:
                 name: env

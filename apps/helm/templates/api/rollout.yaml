@@ -1,4 +1,3 @@
-{{- include "kosmo.validatePostgresCredentials" . -}}
 {{- if .Values.workloads.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Rollout
@@ -53,15 +52,21 @@ spec:
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
-            - name: DATABASE_PASSWORD
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
-            - name: DATABASE_URL
-              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
+                  name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
+                  key: password
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: kosmo
+            - name: PGDATABASE
+              value: kosmo
             - name: OPERATION_DATABASE_URL
-              value: {{ include "kosmo.apiPoolerDatabaseUrl" . | quote }}
+              value: {{ include "kosmo.postgresPoolerDatabaseUrl" . | quote }}
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

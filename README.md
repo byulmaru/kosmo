@@ -20,6 +20,11 @@ such as `pnpm dev`. The default secret path is
 or `node scripts/vault-run.mjs --secret-path secret/kubernetes/kosmo/dev -- <command>`
 to point at another path.
 
+Application processes read their default PostgreSQL connection only from
+`PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, and `PGPASSWORD`. Vault environments
+used by `pnpm dev` must provide those keys. Separate connection boundaries such
+as the GraphQL operation pool and Fedify queue keep their dedicated URL inputs.
+
 The API uses `MEDIA_STORAGE_SERVICE_ORIGIN` and `MEDIA_STORAGE_SERVICE_API_KEY`
 to issue browser upload URLs and persist the completed public representation
 reported by Media Storage Service. These are server-only values loaded through

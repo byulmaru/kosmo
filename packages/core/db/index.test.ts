@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mock, test } from 'node:test';
 import { createOperationDatabase, db } from './index';
 
@@ -39,13 +40,42 @@ test('keeps operation client bounded and isolated from direct startup parameters
   assert.equal(forceEnd.mock.calls.length, 1);
 });
 
-test('prefers the operation endpoint and falls back to the direct endpoint', async () => {
+test('uses the standard PG environment for the process database', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '-e',
+      "const { pg } = await import('./db/index.ts'); const expected = { host: ['db.example'], port: [6543], user: 'kosmo_worker', database: 'kosmo', pass: process.env.PGPASSWORD }; for (const [key, value] of Object.entries(expected)) if (JSON.stringify(pg.options[key]) !== JSON.stringify(value)) throw new Error(key + ' option mismatch'); await pg.end({ timeout: 0 });",
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DATABASE_URL: 'postgres://owner@legacy.example:5432/legacy',
+        DATABASE_PASSWORD: 'legacy-password',
+        PGHOST: 'db.example',
+        PGPORT: '6543',
+        PGUSER: 'kosmo_worker',
+        PGDATABASE: 'kosmo',
+        PGPASSWORD: 'slash/at@question?hash#percent%',
+      },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('uses the operation endpoint and falls back to the standard PG environment', async () => {
   const previousOperationUrl = process.env.OPERATION_DATABASE_URL;
-  const previousDatabaseUrl = process.env.DATABASE_URL;
+  const previousPgHost = process.env.PGHOST;
 
   try {
     process.env.OPERATION_DATABASE_URL = 'postgres://kosmo@operation-pooler.example:5432/kosmo';
-    process.env.DATABASE_URL = 'postgres://kosmo@direct.example:5432/kosmo';
+    process.env.PGHOST = 'direct.example';
 
     const operationOwner = createOperationDatabase();
     assert.deepEqual(getClient(operationOwner).options.host, ['operation-pooler.example']);
@@ -62,10 +92,10 @@ test('prefers the operation endpoint and falls back to the direct endpoint', asy
       process.env.OPERATION_DATABASE_URL = previousOperationUrl;
     }
 
-    if (previousDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
+    if (previousPgHost === undefined) {
+      delete process.env.PGHOST;
     } else {
-      process.env.DATABASE_URL = previousDatabaseUrl;
+      process.env.PGHOST = previousPgHost;
     }
   }
 });
