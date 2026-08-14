@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mock, test } from 'node:test';
 import { createOperationDatabase, db } from './index';
 
@@ -37,6 +38,30 @@ test('keeps operation client bounded and isolated from direct startup parameters
   await firstForceClose;
   assert.deepEqual(forceEnd.mock.calls[0]?.arguments, [{ timeout: 0 }]);
   assert.equal(forceEnd.mock.calls.length, 1);
+});
+
+test('passes DATABASE_PASSWORD separately from the process database URL', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '-e',
+      "const { pg } = await import('./db/index.ts'); if (pg.options.pass !== process.env.DATABASE_PASSWORD) throw new Error('password option mismatch'); await pg.end({ timeout: 0 });",
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DATABASE_URL: 'postgres://kosmo_worker@127.0.0.1:1/kosmo',
+        DATABASE_PASSWORD: 'slash/at@question?hash#percent%',
+      },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test('prefers the operation endpoint and falls back to the direct endpoint', async () => {

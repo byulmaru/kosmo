@@ -30,9 +30,9 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 ## Recommended Approach
 
-1. Chart가 `postgres://kosmo_worker:$(DATABASE_PASSWORD)@<release>-postgres-rw:5432/kosmo` URL과 `<release>-postgres-worker` / `password` Secret ref를 생성해 Web과 enabled Worker 기본 `DATABASE_*`로 사용한다. PgBouncer URL은 GraphQL operation connection에서만 사용한다.
+1. Chart가 `postgres://kosmo_worker@<release>-postgres-rw:5432/kosmo` URL과 `<release>-postgres-worker` / `password` Secret ref를 생성해 Web과 enabled Worker 기본 `DATABASE_*`로 사용한다. Runtime은 password를 URL userinfo에 보간하지 않고 `DATABASE_PASSWORD`를 postgres client option으로 전달한다. PgBouncer URL은 GraphQL operation connection에서만 사용한다.
 2. API selector는 Web/Worker source에 사용하지 않는다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
-3. Web/Worker template의 별도 `WORKER_DATABASE_*` env를 제거하고 application code·DB handle은 변경하지 않는다.
+3. Web/Worker template의 별도 `WORKER_DATABASE_*` env를 제거하고 application SQL·callsite·DB handle 구조는 변경하지 않는다. 기존 전역 client는 `DATABASE_PASSWORD`를 별도 password option으로 소비한다.
 4. Worker URL과 Secret ref 모두 values로 받지 않고 release naming에서 생성한다.
 5. 기존 `worker.enabled` activation gate를 유지하고, enabled Worker template에만 Worker source와 conditional restart target을 연결한다.
 6. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.

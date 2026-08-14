@@ -12,6 +12,7 @@
 - **AND** Deployment의 기본 `DATABASE_*`는 Worker source를 참조한다
 - **AND** `DATABASE_URL`은 chart가 고정된 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 생성한다
 - **AND** `DATABASE_PASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
+- **AND** password를 URL userinfo에 보간하지 않고 postgres client password option으로 전달한다
 - **AND** `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 별도 application 입력으로 투영하지 않는다
 
 #### Scenario: Worker credential values 입력 부재

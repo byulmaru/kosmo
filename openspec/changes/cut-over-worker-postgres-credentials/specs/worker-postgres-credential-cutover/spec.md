@@ -26,6 +26,7 @@
 - **THEN** Web과 enabled Temporal Worker의 기본 `DATABASE_*`만 Worker source를 사용한다
 - **AND** chart가 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 `DATABASE_URL`을 생성한다
 - **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 생성한다
+- **AND** runtime은 `DATABASE_PASSWORD`를 URL userinfo에 보간하지 않고 postgres client password option으로 전달한다
 - **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
 - **AND** Worker URL compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 

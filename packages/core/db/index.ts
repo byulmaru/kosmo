@@ -17,8 +17,12 @@ const postgresConnectionOptions = {
   },
 } as const;
 
+const getDatabasePasswordOption = () =>
+  process.env.DATABASE_PASSWORD === undefined ? {} : { password: process.env.DATABASE_PASSWORD };
+
 export const pg = postgres(process.env.DATABASE_URL!, {
   ...postgresConnectionOptions,
+  ...getDatabasePasswordOption(),
   max: 20,
 });
 

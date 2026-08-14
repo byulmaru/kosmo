@@ -10,7 +10,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 고정 `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 enabled Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
+- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 passwordless `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 enabled Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. Runtime은 password를 URL userinfo에 조립하지 않고 postgres client option으로 전달한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
 - Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 GraphQL 전용 `ctx.db` 경계와 맞지 않고 callsite migration을 불필요하게 만든다.
 - Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL operation은 별도 `kosmo_api` 경계를 유지한다.
 

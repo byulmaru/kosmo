@@ -41,6 +41,7 @@
 - **THEN** Web Rollout과 enabled Worker Deployment의 기본 `DATABASE_PASSWORD` SecretKeyRef와 `DATABASE_URL`이 Worker source를 참조한다
 - **AND** `DATABASE_URL`은 chart가 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 생성한다
 - **AND** `DATABASE_PASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
+- **AND** runtime은 `DATABASE_PASSWORD`를 URL userinfo에 보간하지 않고 postgres client password option으로 전달한다
 - **AND** API Rollout에는 Worker Secret/env가 없고 `WORKER_DATABASE_*`도 어느 workload에 렌더되지 않는다
 - **AND** Worker URL compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 
