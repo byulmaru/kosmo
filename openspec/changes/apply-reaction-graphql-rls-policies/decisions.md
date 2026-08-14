@@ -64,6 +64,18 @@
 - Consequences: `kosmo_api` owner Notification 경로의 기존 row lock은 보존되지만, 제품에 없던 Reaction 수정 권한은 생기지 않는다. 임시 policy는 row lock 제거 후 함께 삭제해야 한다.
 - Confirmation / Follow-up: 실제 `kosmo_api` Notification regression으로 `SELECT FOR UPDATE` 성공을 확인하고 direct UPDATE가 RLS로 거부되는지 검증한다. 후속 변경은 lock과 임시 policy를 함께 제거해야 한다.
 
+### Reaction Target Post policy는 순수 Repost source eligibility를 중첩 조회한다
+
+- Decision Date: 2026-08-14
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/reaction.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, PROD-769, PROD-767
+- Status: Active
+- Context / Problem: GraphQL application predicate는 순수 Repost의 직접 source visibility/profile/instance eligibility를 확인하지만, Reaction target policy가 outer Repost만 확인하면 direct `kosmo_api` core/SQL caller가 source가 숨겨진 Repost에 Reaction을 삽입하거나 조회할 수 있다.
+- Decision Outcome: Reaction의 target-post SELECT/INSERT policy는 outer Post RLS 가시성에 더해 순수 Repost의 직접 source를 `public.post`로 중첩 조회하고, source가 `current_content_id IS NOT NULL`이며 현재 Post RLS를 통과하는 경우에만 허용한다. owner SELECT/DELETE cleanup branch는 이 guard와 독립적으로 유지한다. Post RLS, application `postAccessWhere`와 다른 table policy는 변경하지 않는다.
+- Alternatives Considered: GraphQL resolver에만 predicate를 유지하면 DB 경계가 caller 형태에 의존한다. Post RLS에 source eligibility를 추가하면 PROD-769의 Post policy 제외 범위를 침범한다. outer Repost만 검사하면 direct Reaction SQL이 source eligibility를 우회한다.
+- Consequences: Reaction policy는 기존 application source predicate 일부를 database에서 중복 표현하지만, nested `public.post` 조회로 현재 Post RLS visibility/profile/instance policy를 재사용한다. source가 hidden/deleted인 동안 owner는 기존 cleanup을 위해 자기 Reaction을 계속 SELECT/DELETE할 수 있다.
+- Confirmation / Follow-up: 실제 `kosmo_api` role에서 source가 숨겨진 pure Repost의 non-owner SELECT 차단, owner INSERT 차단, owner cleanup 유지와 기존 GraphQL raw Post 비노출을 함께 확인한다.
+
 ### 기존 Reaction GraphQL integration을 실제 kosmo_api operation principal로 실행한다
 
 - Decision Date: 2026-08-14

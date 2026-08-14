@@ -224,6 +224,74 @@ describe('GraphQL Reaction', () => {
     }
   });
 
+  test('숨겨진 순수 Repost source는 Reaction target SELECT와 INSERT에서 제외한다', async () => {
+    const repostAuthor = await createProfile('rls-repost-author');
+    const sourceAuthor = await createProfile('rls-repost-source-author');
+    const reactionProfile = await createProfile('rls-reaction-profile');
+    const otherProfile = await createProfile('rls-reaction-other-profile');
+    const { post: source } = await createCorePost({
+      document: postContentDocumentFromText(crypto.randomUUID()),
+      origin: 'LOCAL',
+      profileId: sourceAuthor.id,
+      visibility: PostVisibility.PUBLIC,
+    });
+    const { repost } = await repostPost({
+      actorProfileId: repostAuthor.id,
+      origin: 'LOCAL',
+      sourcePostId: source.id,
+    });
+
+    const operation = createOperationDatabase();
+    try {
+      await operation.db.execute(
+        sql`SELECT set_config('kosmo.profile_id', ${reactionProfile.id}, false)`,
+      );
+      const [reaction] = await operation.db
+        .insert(Reactions)
+        .values({ postId: repost.id, profileId: reactionProfile.id, type: '❤️' })
+        .returning();
+      assert.ok(reaction);
+
+      await db
+        .update(Posts)
+        .set({ visibility: PostVisibility.DIRECT })
+        .where(eq(Posts.id, source.id));
+
+      const ownerRows = await operation.db
+        .select({ id: Reactions.id })
+        .from(Reactions)
+        .where(eq(Reactions.id, reaction.id));
+      assert.deepEqual(ownerRows, [{ id: reaction.id }]);
+
+      await operation.db.execute(
+        sql`SELECT set_config('kosmo.profile_id', ${otherProfile.id}, false)`,
+      );
+      const hiddenSourceRows = await operation.db
+        .select({ id: Reactions.id })
+        .from(Reactions)
+        .where(eq(Reactions.id, reaction.id));
+      assert.deepEqual(hiddenSourceRows, []);
+
+      await operation.db.execute(
+        sql`SELECT set_config('kosmo.profile_id', ${reactionProfile.id}, false)`,
+      );
+      await assert.rejects(
+        operation.db
+          .insert(Reactions)
+          .values({ postId: repost.id, profileId: reactionProfile.id, type: '🎉' }),
+        isRowLevelSecurityError,
+      );
+
+      const deleted = await operation.db
+        .delete(Reactions)
+        .where(eq(Reactions.id, reaction.id))
+        .returning({ id: Reactions.id });
+      assert.deepEqual(deleted, [{ id: reaction.id }]);
+    } finally {
+      await operation.close();
+    }
+  });
+
   test('missing, empty, malformed Profile actor는 Reaction INSERT와 DELETE 권한을 만들지 않는다', async () => {
     const actor = await createProfile('invalid-actor');
     const post = await createPost(actor.id);
@@ -1402,7 +1470,7 @@ describe('GraphQL Reaction', () => {
     assert.deepEqual(result.data?.second?.reactionCounts, expected);
   });
 
-  test('Reaction count는 숨겨진 Repost source의 raw Post 경로에서 노출되지 않는다', async () => {
+  test('숨겨진 Repost source의 Reaction Notification Node를 숨긴다', async () => {
     const auth = await createAuthenticatedSession();
     const sourceAuthor = await createProfile('hidden-repost-source-author');
     const { post: source } = await createCorePost({
@@ -1437,9 +1505,7 @@ describe('GraphQL Reaction', () => {
       .set({ visibility: PostVisibility.DIRECT })
       .where(eq(Posts.id, source.id));
 
-    const result = await requestGraphQL<{
-      node: { post: { id: string; reactionCounts: Array<{ type: string; count: number }> } } | null;
-    }>(
+    const result = await requestGraphQL<{ node: unknown | null }>(
       `query ReactionNotificationRawPost($id: ID!) {
         node(id: $id) {
           ... on ReactionNotification {
@@ -1452,10 +1518,7 @@ describe('GraphQL Reaction', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.deepEqual(result.data?.node?.post, {
-      id: globalId('Post', repost.id),
-      reactionCounts: [],
-    });
+    assert.equal(result.data?.node, null);
   });
 });
 

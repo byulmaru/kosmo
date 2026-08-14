@@ -560,6 +560,20 @@ export const Reactions = pgTable.withRLS(
           SELECT 1
           FROM public.post AS target_post
           WHERE target_post.id = ${table.postId}
+            AND (
+              target_post.current_content_id IS NOT NULL
+              OR target_post.repost_source_id IS NULL
+              OR (
+                target_post.current_content_id IS NULL
+                AND target_post.reply_parent_id IS NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM public.post AS direct_source
+                  WHERE direct_source.id = target_post.repost_source_id
+                    AND direct_source.current_content_id IS NOT NULL
+                )
+              )
+            )
         )
       `,
     }),
@@ -577,6 +591,20 @@ export const Reactions = pgTable.withRLS(
           SELECT 1
           FROM public.post AS target_post
           WHERE target_post.id = ${table.postId}
+            AND (
+              target_post.current_content_id IS NOT NULL
+              OR target_post.repost_source_id IS NULL
+              OR (
+                target_post.current_content_id IS NULL
+                AND target_post.reply_parent_id IS NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM public.post AS direct_source
+                  WHERE direct_source.id = target_post.repost_source_id
+                    AND direct_source.current_content_id IS NOT NULL
+                )
+              )
+            )
         )
       `,
     }),

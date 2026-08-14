@@ -30,6 +30,7 @@
 - [x] 1.1 Reaction schema metadata에 Target Post 및 owner SELECT, owner INSERT/DELETE와 실제 UPDATE를 막는 임시 owner lock RLS 계약을 반영한다.
 - [x] 1.2 additive migration과 snapshot을 생성하고 기존 migration history, 역할·ACL 및 다른 table policy를 수정하지 않았는지 확인한다.
 - [x] 1.3 policy catalog와 static diff에서 command별 actor/Target Post 경계, FORCE off와 no Worker policy를 확인한다.
+- [x] 1.4 리뷰에서 확인된 순수 Repost source eligibility를 Target Post SELECT/INSERT policy에 nested `public.post` 조회로 반영하고 owner cleanup branch와 Post RLS 범위를 보존한다.
 
 ## 2. PROD-769 GraphQL/core와 비운영 role matrix
 
@@ -61,6 +62,7 @@
 - [x] 2.2 DELETED Target Post owner cleanup과 hidden/deleted GraphQL 비노출, `DELETE ... RETURNING` payload·Notification cleanup 회귀를 보강한다.
 - [x] 2.3 viewer-independent count, Profile 목록, selected Profile viewer relation과 non-owner/invalid actor fail-closed matrix를 통과시킨다.
 - [x] 2.4 core Reaction/Notification regression, owner row lock/실제 UPDATE 거부와 owner 및 `kosmo_worker` BYPASSRLS representative matrix를 통과시킨다.
+- [x] 2.5 source가 숨겨진 순수 Repost의 `kosmo_api` direct SELECT/INSERT 거부와 owner cleanup을 role-level test로 검증한다.
 
 ## 3. PROD-769 검증과 publication handoff
 

@@ -6,6 +6,7 @@ GraphQL Reaction 조회와 Mutation은 대상 Post 조회 가능성 및 selected
 
 - `reaction` table에 RLS를 활성화하고 FORCE RLS는 비활성 상태로 유지한다.
 - `kosmo_api`의 Reaction SELECT, INSERT, DELETE 권한을 command별 policy로 분리한다.
+- Target Post policy branch는 기존 GraphQL의 순수 Repost source eligibility도 중첩된 `public.post` 조회로 확인해 source가 숨겨진 Repost에 대한 직접 Reaction SQL 우회를 막는다. Post RLS 자체는 변경하지 않는다.
 - 조회 가능한 Target Post의 모든 Reaction은 viewer와 무관하게 SELECT 가능하게 해 count를 보존하고, selected Profile owner row는 hidden/deleted Target Post에서도 delete와 `RETURNING`을 완료할 수 있게 한다.
 - INSERT와 DELETE는 현재 selected Profile만 자기 Reaction을 생성·정리하도록 제한한다.
 - 기존 Notification 생성의 owner Reaction `SELECT FOR UPDATE`는 임시 owner lock policy로 유지하되 실제 Reaction UPDATE는 계속 거부한다. Reaction row lock 제거는 후속 범위로 미룬다.
@@ -32,7 +33,7 @@ GraphQL Reaction 조회와 Mutation은 대상 Post 조회 가능성 및 selected
 ## Impact
 
 - `packages/core/db/tables.ts`의 Reaction RLS metadata
-- 새 additive Drizzle migration과 snapshot의 Reaction RLS enablement 및 policy DDL
+- 새 additive Drizzle migration과 snapshot의 Reaction RLS policy DDL 및 순수 Repost source guard
 - Reaction GraphQL/core integration test의 owner/non-owner, hidden/deleted Post, Node/relation/viewer/count와 delete cleanup matrix
 - 정확한 비운영 revision의 `kosmo_api` 및 `kosmo_worker` role-level 검증
 - 기존 Notification row lock 호환을 위한 임시 owner UPDATE policy와 실제 UPDATE 거부 검증
