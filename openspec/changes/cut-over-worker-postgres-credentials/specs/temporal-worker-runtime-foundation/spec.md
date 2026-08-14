@@ -1,21 +1,21 @@
 ## MODIFIED Requirements
 
-### Requirement: Worker 역할별 DB 입력 seam
+### Requirement: Worker workload 기본 DB source
 
-**Authority / Provenance:** `PROD-730`, `PROD-709`, `PROD-715` — 활성화된 Worker Deployment는 API/Web BFF 기본 connection을 기존 `DATABASE_URL`/`DATABASE_PASSWORD`로 유지하고, 완전하게 구성된 trusted Worker credential을 `WORKER_DATABASE_URL`/`WORKER_DATABASE_PASSWORD`로 별도 투영해야 한다(MUST). 부분 credential 설정은 chart render 단계에서 실패해야 한다(MUST). Foundation 자체는 business DB connection을 열거나 credential·권한을 생성·전환하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715` — 기존 `workloads.enabled && worker.enabled` activation gate에서 렌더되는 Worker Deployment는 chart가 생성한 `kosmo_worker` direct read-write Service URL과 PROD-369의 release별 Worker Secret ref를 process 기본 `DATABASE_URL`/`DATABASE_PASSWORD`로 사용해야 한다(MUST). 별도 Worker credential selector, `WORKER_DATABASE_*` application connection을 만들거나 Worker runtime registration/lifecycle을 이 change에서 변경해서는 안 된다(MUST NOT).
 
-#### Scenario: 역할별 credential이 구성됨
+#### Scenario: Worker Deployment가 렌더됨
 
-- **WHEN** Worker component를 활성화하고 API와 Worker 역할의 URL·password Secret name·key를 완전하게 제공한다
-- **THEN** Deployment는 기본 `DATABASE_*`와 별도 `WORKER_DATABASE_*` 입력을 가진다
-- **AND** `FEDIFY_DATABASE_*`를 alias로 투영하지 않는다
+- **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 chart를 렌더한다
+- **THEN** Worker ServiceAccount와 Deployment를 생성한다
+- **AND** Worker template의 기존 activation gate를 유지한다
+- **AND** Deployment의 기본 `DATABASE_*`는 Worker source를 참조한다
+- **AND** `DATABASE_URL`은 chart가 고정된 `kosmo_worker` username, `kosmo` database와 기존 direct read-write Service endpoint로 생성한다
+- **AND** `DATABASE_PASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
+- **AND** `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 별도 application 입력으로 투영하지 않는다
 
-#### Scenario: 역할별 credential이 부분 구성됨
+#### Scenario: Worker credential values 입력 부재
 
-- **WHEN** 역할별 URL·password Secret name·key 중 일부만 제공한다
-- **THEN** chart render가 해당 `api` 또는 `worker` source를 식별하는 incomplete credential 오류로 실패한다
-
-#### Scenario: foundation Worker의 DB 비사용
-
-- **WHEN** 등록된 business capability가 없는 Worker entrypoint를 실행한다
-- **THEN** process는 제공된 DB 입력으로 connection을 열지 않는다
+- **WHEN** 기본 values에서 `workloads.enabled=true`와 `worker.enabled=false`를 사용하거나 `worker.enabled`를 생략한다
+- **THEN** Worker resources를 생성하지 않는다
+- **AND** Worker credential URL과 Secret ref는 enabled Worker template에만 투영된다

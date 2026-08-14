@@ -32,25 +32,18 @@
 
 {{- define "kosmo.validatePostgresCredentials" -}}
 {{- $credentials := .Values.postgres.credentials | default dict -}}
-{{- range $role := list "api" "worker" -}}
-{{- $config := get $credentials $role | default dict -}}
-{{- $databaseUrl := get $config "databaseUrl" | default "" -}}
-{{- $passwordSecret := get $config "passwordSecret" | default dict -}}
-{{- $name := get $passwordSecret "name" | default "" | toString -}}
-{{- $key := get $passwordSecret "key" | default "" | toString -}}
-{{- $configured := or (ne $databaseUrl "") (ne $name "") (ne $key "") -}}
-{{- $complete := and (ne $databaseUrl "") (ne $name "") (ne $key "") -}}
-{{- if and $configured (not $complete) -}}
-{{- fail (printf "postgres.credentials.%s requires databaseUrl, passwordSecret.name, and passwordSecret.key together" $role) -}}
-{{- end -}}
+{{- $api := get $credentials "api" | default dict -}}
+{{- $apiDatabaseUrl := get $api "databaseUrl" | default "" | toString -}}
+{{- $apiPasswordSecret := get $api "passwordSecret" | default dict -}}
+{{- $apiName := get $apiPasswordSecret "name" | default "" | toString -}}
+{{- $apiKey := get $apiPasswordSecret "key" | default "" | toString -}}
+{{- if and (or (ne $apiDatabaseUrl "") (ne $apiName "") (ne $apiKey "")) (or (eq $apiDatabaseUrl "") (eq $apiName "") (eq $apiKey "")) -}}
+{{- fail "postgres.credentials.api requires databaseUrl, passwordSecret.name, and passwordSecret.key together" -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "kosmo.postgresCredentialIsConfigured" -}}
-{{- $root := index . 0 -}}
-{{- $role := index . 1 -}}
-{{- $credentials := $root.Values.postgres.credentials | default dict -}}
-{{- $config := get $credentials $role | default dict -}}
+{{- define "kosmo.apiDatabaseIsConfigured" -}}
+{{- $config := dig "api" dict (.Values.postgres.credentials | default dict) -}}
 {{- $databaseUrl := get $config "databaseUrl" | default "" | toString -}}
 {{- $passwordSecret := get $config "passwordSecret" | default dict -}}
 {{- $name := get $passwordSecret "name" | default "" | toString -}}
@@ -59,7 +52,7 @@
 {{- end -}}
 
 {{- define "kosmo.apiDatabaseUrl" -}}
-{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- if eq (include "kosmo.apiDatabaseIsConfigured" . | trim) "true" -}}
 {{- dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
 {{- else -}}
 {{- include "kosmo.databaseUrl" . -}}
@@ -67,7 +60,7 @@
 {{- end -}}
 
 {{- define "kosmo.apiPoolerDatabaseUrl" -}}
-{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- if eq (include "kosmo.apiDatabaseIsConfigured" . | trim) "true" -}}
 {{- $databaseUrl := dig "api" "databaseUrl" "" (.Values.postgres.credentials | default dict) | toString -}}
 {{- $parsed := urlParse $databaseUrl -}}
 {{- $scheme := get $parsed "scheme" | default "" | toString -}}
@@ -94,7 +87,7 @@
 {{- end -}}
 
 {{- define "kosmo.apiDatabasePasswordSecretName" -}}
-{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- if eq (include "kosmo.apiDatabaseIsConfigured" . | trim) "true" -}}
 {{- dig "api" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) -}}
 {{- else -}}
 {{- printf "%s-app" (include "kosmo.postgresName" .) -}}
@@ -102,11 +95,19 @@
 {{- end -}}
 
 {{- define "kosmo.apiDatabasePasswordSecretKey" -}}
-{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "api") | trim) "true" -}}
+{{- if eq (include "kosmo.apiDatabaseIsConfigured" . | trim) "true" -}}
 {{- dig "api" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote -}}
 {{- else -}}
 password
 {{- end -}}
+{{- end -}}
+
+{{- define "kosmo.workerDatabaseUrl" -}}
+{{- printf "postgres://kosmo_worker:$(DATABASE_PASSWORD)@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
+{{- end -}}
+
+{{- define "kosmo.workerDatabasePasswordSecretName" -}}
+{{- printf "%s-postgres-worker" (.Release.Name | trunc 47 | trimSuffix "-") -}}
 {{- end -}}
 
 {{- define "kosmo.imageRef" -}}

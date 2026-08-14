@@ -56,10 +56,10 @@ spec:
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
+                  name: {{ include "kosmo.workerDatabasePasswordSecretName" . | quote }}
+                  key: password
             - name: DATABASE_URL
-              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
+              value: {{ include "kosmo.workerDatabaseUrl" . | quote }}
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -67,16 +67,6 @@ spec:
                   key: password
             - name: FEDIFY_QUEUE_DATABASE_URL
               value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
-            {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
-            {{- if $workerDatabase.databaseUrl }}
-            - name: WORKER_DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $workerDatabase.passwordSecret.name | quote }}
-                  key: {{ $workerDatabase.passwordSecret.key | quote }}
-            - name: WORKER_DATABASE_URL
-              value: {{ $workerDatabase.databaseUrl | quote }}
-            {{- end }}
           envFrom:
             - secretRef:
                 name: env
