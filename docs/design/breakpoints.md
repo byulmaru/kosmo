@@ -193,8 +193,15 @@ React Native Web의 `(tabs)` 셸은 document/window scroll을 기본 scroll owne
   route의 document scroll offset을 대상 route에 노출하지 않는다.
 - 브라우저 뒤로/앞으로 history traversal은 browser scroll restoration을 유지한다. 검색 화면의 query-only
   `router.push`/`setParams` 이동은 현재 document scroll과 입력 focus를 보존한다.
-- 이미 선택된 홈을 다시 실행하는 최상단 이동과 새로고침은 `PROD-610`이 소유한다. 이 정책은 다른 현재
-  route 재선택에 최상단 이동이나 데이터 새로고침을 추가하지 않는다.
+- Web의 모바일·compact·full 홈 헤더 브랜드 마크와 shell의 홈 navigation 항목은 모두 홈 진입 control이다.
+  다른 route에서 실행하면 기존처럼 홈으로 이동하고, 이미 홈에서 다시 실행하면 document scroll을 매번
+  최상단으로 이동하면서 현재 Home Relay 데이터를 서버에서 다시 요청한다. 브랜드 마크는 기존 시각 geometry를
+  바꾸지 않고 pointer·keyboard·screen reader에서 같은 결과를 제공하는 navigation control이어야 한다.
+- 홈 재선택으로 시작한 새로고침이 진행 중이면 추가 실행도 document scroll은 최상단으로 이동하지만 네트워크
+  요청을 중복 시작하지 않는다. 요청이 성공하거나 실패해 종료된 뒤의 다음 실행은 새 요청을 한 번 시작하며,
+  이전 요청이 실패했어도 현재 timeline 데이터는 유지한다.
+- 이 홈 재선택 정책은 `PROD-610`이 소유한다. 다른 현재 route 재선택, Android/iOS Native 동작, Home 외 Relay
+  데이터 정책에는 최상단 이동이나 데이터 새로고침을 추가하지 않는다.
 - shell chrome에서 중앙 피드로 wheel 이벤트를 인위적으로 전달하지 않는다.
 
 ## 구현 위치
