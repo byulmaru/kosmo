@@ -120,5 +120,5 @@ PROD-770의 독립 구현·검증·OpenSpec completion evidence와 downstream/pr
 
 - [x] 4.1 generic migration replay/smoke와 관련 core/API test 및 repository 정적 검증을 통과시킨다.
 - [x] 4.2 exact non-production `kosmo_api`/`kosmo_worker` catalog·actor·command matrix와 representative index plan을 확인한다.
-- [ ] 4.3 전체 task 완료 뒤 delta spec을 동기화하고 change archive 및 전체 strict validation을 통과시킨다.
-- [ ] 4.4 변경을 의도별로 commit/push하고 production 미실행과 downstream 경계를 명시한 Ready PR을 연다.
+- [x] 4.3 전체 task 완료 뒤 delta spec을 동기화하고 change archive 및 전체 strict validation을 통과시킨다.
+- [x] 4.4 변경을 의도별로 commit/push하고 production 미실행과 downstream 경계를 명시한 Ready PR을 연다.

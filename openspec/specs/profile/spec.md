@@ -557,7 +557,7 @@ API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.i
 
 ### Requirement: Pending follow request lifecycle
 
-시스템은 local 또는 remote profile 사이에 이미 저장된 pending `ProfileFollowRequest`를 같은 core lifecycle로 조회·승인·거절·취소할 수 있어야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/follow-request.md`, `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, PROD-770. 시스템은 local 또는 remote profile 사이에 이미 저장된 pending `ProfileFollowRequest`를 같은 core lifecycle로 조회·승인·거절·취소할 수 있어야 한다(MUST).
 
 #### Scenario: Find pending request by participant pair
 
@@ -587,10 +587,17 @@ API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.i
 - **AND** unavailable일 수 있는 followee Profile은 payload에 포함하지 않는다
 - **AND** relation과 저장 count를 변경하지 않는다
 
-#### Scenario: Reject unauthorized request transition
+#### Scenario: Hide request existence from a nonparticipant transition
 
-- **WHEN** active profile이 request participant가 아니거나 승인·거절 주체인 followee 또는 취소 주체인 follower가 아니다
-- **THEN** 시스템은 permission denied 오류를 반환한다
+- **WHEN** current selected Profile이 request participant가 아니거나 request ID가 존재하지 않는 상태에서 승인·거절·취소를 실행한다
+- **THEN** 시스템은 `NOT_FOUND` 오류를 반환한다
+- **AND** request 존재 여부와 participant 구분을 노출하지 않는다
+- **AND** request, relation과 저장 count를 변경하지 않는다
+
+#### Scenario: Reject a wrong-role participant transition
+
+- **WHEN** current selected Profile이 request participant지만 승인·거절 주체인 followee 또는 취소 주체인 follower가 아니다
+- **THEN** 시스템은 `PERMISSION_DENIED` 오류를 반환한다
 - **AND** request, relation과 저장 count를 변경하지 않는다
 
 #### Scenario: Reject approval with unavailable participant
@@ -602,7 +609,7 @@ API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.i
 #### Scenario: Repeat completed request transition
 
 - **WHEN** 이미 처리되어 존재하지 않는 request ID로 승인·거절·취소를 다시 실행한다
-- **THEN** 시스템은 request not found 오류를 반환한다
+- **THEN** 시스템은 `NOT_FOUND` 오류를 반환한다
 - **AND** relation과 저장 count를 추가로 변경하지 않는다
 
 ### Requirement: Profile-owned follow request connections
