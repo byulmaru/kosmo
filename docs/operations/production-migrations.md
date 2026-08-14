@@ -23,6 +23,8 @@ Production migration Job은 다음 값만 사용한다.
 
 Job, API와 Web은 모두 `image@sha256:...` 형태의 같은 image reference를 렌더한다. Production migration에서 mutable tag나 유효하지 않은 digest를 사용하면 Helm render가 실패한다.
 
+Migration Job은 기반 리소스가 적용되는 기본 Sync wave 뒤의 wave 1에서 실행하고, API/Web과 background workload는 Job 성공 뒤 wave 2에서 교체한다. Migration을 `PreSync`로 실행하거나 workload와 같은 wave에 배치하지 않는다.
+
 첫 release 전 runtime bootstrap은 `workloads.enabled=false`로 API/Web Service·Rollout·HTTPRoute를 렌더하지 않고 PostgreSQL, backup과 Secret 기반만 준비한다. 보호된 `production` push의 자동 배포가 `prod` Environment의 credential·OIDC 범위와 감사 기록을 사용해 digest와 함께 workload와 migration을 활성화한다. `prod` Environment는 사람의 추가 승인 gate가 아니다.
 
 Migration 대상은 Helm release의 PostgreSQL read-write Service, `5432` port와 `kosmo` database로 고정한다. Job은 `<release>-postgres-migration` Secret의 `username`과 `password`만 읽으며 database URL, host, database 또는 Secret 이름/key를 release 입력으로 받지 않는다. Secret이 없거나 key가 누락되면 Kubernetes가 container를 시작할 수 없고 runtime credential로 재시도하지 않는다.
