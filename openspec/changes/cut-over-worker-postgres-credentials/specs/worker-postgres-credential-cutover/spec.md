@@ -22,8 +22,9 @@
 
 #### Scenario: Worker credential cutover
 
-- **WHEN** Worker selector를 `kosmo_worker` Pooler URL과 완전한 password Secret source로 설정한다
+- **WHEN** Worker selector를 완전한 password Secret source와 함께 활성화한다
 - **THEN** Web과 Temporal Worker의 기본 `DATABASE_*`만 Worker source를 사용한다
+- **AND** chart가 `kosmo_worker` username, `kosmo` database와 기존 PgBouncer endpoint로 `DATABASE_URL`을 생성한다
 - **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
 
 #### Scenario: API Worker credential 비주입

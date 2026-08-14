@@ -21,7 +21,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 ## Current Constraints
 
-- Worker selector는 URL/password Secret atomic trio다.
+- Worker selector는 `enabled`와 password Secret name/key만 소유하며 URL은 chart가 고정된 principal/database와 기존 PgBouncer endpoint로 생성한다.
 - Web process의 비GraphQL trusted 경로는 process 기본 `DATABASE_*`/전역 `db`를 공유한다.
 - Worker Deployment는 default-disabled이며 실제 DB Activity가 등록되기 전에는 connection을 열지 않는다.
 - API에는 Worker source가 없어야 한다.
@@ -30,10 +30,10 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 ## Recommended Approach
 
-1. 기존 `worker` atomic trio를 Web/Worker 기본 `DATABASE_URL`/`DATABASE_PASSWORD`로 선택하는 helper를 둔다.
+1. `worker.enabled`가 켜지면 chart가 `postgres://kosmo_worker:$(DATABASE_PASSWORD)@<release>-postgres-pooler-rw:5432/kosmo` URL을 생성하고 완전한 password Secret ref와 함께 Web/Worker 기본 `DATABASE_*`로 선택한다.
 2. selector가 비활성일 때 두 workload만 기존 owner source로 돌아가게 한다. API selector는 Web/Worker fallback에 사용하지 않는다.
 3. Web/Worker template의 별도 `WORKER_DATABASE_*` env를 제거하고 application code·DB handle은 변경하지 않는다.
-4. URL은 기존 PgBouncer Service를 가리키고 password는 SecretKeyRef에서만 읽는다.
+4. Worker 임의 URL은 values로 받지 않고 password만 SecretKeyRef에서 읽는다.
 5. selector matrix에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
 6. merge 뒤 비운영 exact revision에서 Web principal과 대표 SQL, Worker manifest source를 검증한다. production sync/apply는 별도 승인 운영 절차로 남긴다.
 
@@ -49,7 +49,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 ## Risks / Mitigations
 
 - [Worker foundation의 지연 connection] → chart에서는 기본 source와 API 음성 경계를 검증하고 실제 business DB consumer가 활성화될 때 process 기본 `db`를 그대로 사용한다.
-- [부분 selector로 principal 혼합] → atomic trio validation을 유지한다.
+- [부분 selector로 principal 혼합] → password Secret ref의 atomic validation과 enabled gate를 유지한다.
 - [인증 실패의 owner 은폐] → 자동 fallback을 금지하고 selector 변경만 rollback으로 인정한다.
 - [Secret rotation 순서] → PROD-369의 VSO destination과 CNPG reload를 소비하고 workload cutover는 selector source만 바꾼다.
 - [장기 rotation 요구의 범위 확장] → Vault dynamic credential은 PROD-744로 분리한다.

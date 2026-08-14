@@ -59,7 +59,7 @@ postgres:
         name: ''
         key: ''
     worker:
-      databaseUrl: ''
+      enabled: false
       passwordSecret:
         name: ''
         key: ''

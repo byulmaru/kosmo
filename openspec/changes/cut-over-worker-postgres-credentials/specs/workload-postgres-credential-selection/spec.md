@@ -33,17 +33,18 @@
 
 ### Requirement: Worker credential source는 Web과 Temporal Worker 기본 DB에만 제공한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715` — 시스템은 Web과 Temporal Worker workload의 기본 DB에 하나의 `kosmo_worker` Pooler URL과 password Secret source를 제공할 수 있어야 한다(MUST). 별도 application DB 입력을 추가하거나 API Rollout에 주입해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715` — 시스템은 Web과 Temporal Worker workload의 기본 DB에 chart가 생성한 `kosmo_worker` Pooler URL과 password Secret source를 제공할 수 있어야 한다(MUST). Worker 임의 URL을 values로 받거나 별도 application DB 입력을 추가하거나 API Rollout에 주입해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker source 선택
 
-- **WHEN** `postgres.credentials.worker`의 Pooler URL과 password Secret trio를 모두 채운다
+- **WHEN** `postgres.credentials.worker.enabled`를 켜고 password Secret name·key를 모두 채운다
 - **THEN** Web Rollout과 활성화된 Worker Deployment의 기본 `DATABASE_PASSWORD` SecretKeyRef와 `DATABASE_URL`이 Worker source를 참조한다
+- **AND** `DATABASE_URL`은 chart가 `kosmo_worker` username, `kosmo` database와 기존 PgBouncer endpoint로 생성한다
 - **AND** API Rollout에는 Worker Secret/env가 없고 `WORKER_DATABASE_*`도 어느 workload에 렌더되지 않는다
 
 #### Scenario: Worker source rollback
 
-- **WHEN** Worker trio를 모두 제거하고 API 설정을 유지한다
+- **WHEN** Worker selector를 비활성화하고 API 설정과 Worker Secret ref를 유지한다
 - **THEN** Web/Worker 기본 `DATABASE_*`만 승인된 owner source로 돌아간다
 - **AND** API connection은 바뀌지 않는다
 
@@ -58,18 +59,18 @@
 - **THEN** `FEDIFY_QUEUE_DATABASE_*`는 별도 `kosmo_fedify_queue` database/role source를 유지한다
 - **AND** Worker source를 queue credential로 재사용하지 않는다
 
-### Requirement: 각 역할 selector는 atomic trio다
+### Requirement: 역할별 selector는 필요한 credential 입력을 atomic하게 검증한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715` — `api`와 `worker` 각각의 `databaseUrl`, `passwordSecret.name`, `passwordSecret.key`를 하나의 선택 단위로 검증해야 한다(MUST). 일부만 설정된 source는 owner와 custom 값을 섞지 않고 render 오류로 거부해야 한다(MUST).
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715` — API는 기존 `databaseUrl`, `passwordSecret.name`, `passwordSecret.key` trio를 유지하고 Worker는 `enabled`와 `passwordSecret.name`/`key`만 사용해야 한다(MUST). Worker URL은 chart가 생성해야 하며(MUST), 활성 Worker selector의 부분 또는 누락된 Secret ref는 render 오류로 거부해야 한다(MUST). 비활성 selector의 Secret ref는 사용하거나 검증하지 않아야 한다(MUST NOT).
 
-#### Scenario: 완전한 trio 선택
+#### Scenario: 완전한 역할 source 선택
 
-- **WHEN** 하나의 역할에 URL, Secret name과 Secret key를 모두 설정한다
-- **THEN** 해당 역할만 custom source를 참조하고 Secret value는 values나 manifest에 나타나지 않는다
+- **WHEN** API trio를 완성하거나 Worker Secret ref를 완성하고 Worker selector를 활성화한다
+- **THEN** 해당 역할만 선택된 source를 참조하고 Secret value는 values나 manifest에 나타나지 않는다
 
-#### Scenario: 불완전한 trio 거부
+#### Scenario: 불완전한 역할 source 거부
 
-- **WHEN** API 또는 Worker source 일부만 설정한다
+- **WHEN** API trio 일부만 설정하거나 부분 또는 누락된 Worker Secret ref로 Worker selector를 활성화한다
 - **THEN** Helm render는 해당 source를 식별하는 오류로 실패한다
 
 ### Requirement: migration은 runtime selector와 독립된 기존 경계를 사용한다
@@ -78,7 +79,7 @@
 
 #### Scenario: runtime 입력만 변경
 
-- **WHEN** API 또는 Worker trio를 opt-in하고 migration 설정을 변경하지 않는다
+- **WHEN** API trio 또는 Worker selector를 opt-in하고 migration 설정을 변경하지 않는다
 - **THEN** dev migration owner fallback과 production `kosmo_migration` Secret 및 `SET ROLE kosmo` 계약은 그대로 유지된다
 
 #### Scenario: migration render 불변

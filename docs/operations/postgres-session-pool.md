@@ -6,7 +6,7 @@
 
 - Pooler 이름은 `<release>-postgres-pooler-rw`이고 Cluster 이름은 `<release>-postgres`이다.
 - Pooler Service의 기본 client port는 `5432`이며, 기존 `<release>-postgres-rw` Service와 별개다.
-- API Rollout의 `DATABASE_URL`은 현재 request/auth/startup 경계로서 기존 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation session 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. 이는 현재 배포 baseline이지 향후 GraphQL principal 방향이 아니다. PROD-715가 Worker selector를 활성화하면 Web과 Temporal Worker의 기본 `DATABASE_URL`은 같은 Pooler의 `kosmo_worker` source를 사용하며, 별도 `WORKER_DATABASE_*` application connection은 두지 않는다. Migration workload의 direct endpoint와 `kosmo_fedify_queue` database는 유지한다. GraphQL principal 전환은 PROD-716이 소유하고, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다.
+- API Rollout의 `DATABASE_URL`은 현재 request/auth/startup 경계로서 기존 `<release>-postgres-rw` direct Service를 유지하고, GraphQL operation session 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw`를 사용한다. 이는 현재 배포 baseline이지 향후 GraphQL principal 방향이 아니다. PROD-715가 Worker selector를 활성화하면 chart는 Web과 Temporal Worker의 기본 `DATABASE_URL`을 같은 Pooler의 고정된 `kosmo_worker`/`kosmo` source로 생성하며, values에서 임의 Worker URL을 받거나 별도 `WORKER_DATABASE_*` application connection을 두지 않는다. Migration workload의 direct endpoint와 `kosmo_fedify_queue` database는 유지한다. GraphQL principal 전환은 PROD-716이 소유하고, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다.
 - 기존 `postgres.credentials.api` atomic trio가 구성된 환경에서는 기존 API `DATABASE_URL` source/authority와 API-role Secret selector를 유지하고, operation URL의 host와 port를 포함한 authority만 in-chart `<release>-postgres-pooler-rw:5432`로 교체한다. Scheme, username, database, password Secret source, path와 query는 보존한다. Runtime operation client는 configured `OPERATION_DATABASE_URL`을 변경 없이 postgres.js에 전달하며, query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. 따라서 구성된 URL은 Pooler와 호환되어야 하며 임의의 잘못된 URL은 지원하지 않는다. 이 change는 새 credential selector를 만들거나 trio를 설정·교체하지 않는다.
 - CloudNativePG operator와 `Pooler` CRD가 대상 namespace에 먼저 설치되어 있어야 한다.
 - 명령 출력에는 Secret 값, connection string, database row를 남기지 않는다. 검증 결과는 readiness, metric 이름과 비민감한 성공/실패만 기록한다.
@@ -26,7 +26,7 @@ Forward fix release가 dev GraphQL smoke와 아래 startup-compatibility gate를
 
 ## Render, endpoint assertion과 admission 확인
 
-지원되는 환경별로 Pooler가 기존 Cluster를 참조하고, API의 operation endpoint만 GraphQL lifecycle에 사용되며 기존 API `DATABASE_URL` 경계, PROD-715 Web/Worker 기본 source와 migration direct endpoint가 유지되는지 확인한다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 endpoint authority(host와 port)와 Secret ref가 기대값인지 exit status로만 확인한다.
+지원되는 환경별로 Pooler가 기존 Cluster를 참조하고 API의 operation endpoint만 GraphQL lifecycle에 사용되며 기존 API `DATABASE_URL`과 migration direct endpoint가 유지되는지 확인한다. PROD-715 Web/Worker source는 이 gate에서 검사하거나 변경하지 않는다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 endpoint authority(host와 port)와 Secret ref가 기대값인지 exit status로만 확인한다.
 
 ```sh
 HELM="${HELM:-helm}"
@@ -43,15 +43,13 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER" "$CONFIGURED_RENDER"' EXIT
 
 "$HELM" template kosmo apps/helm \
   --namespace kosmo-dev \
-  --set env=dev \
-  --set worker.enabled=true >"$DEV_RENDER"
+  --set env=dev >"$DEV_RENDER"
 
 "$HELM" template kosmo apps/helm \
   --namespace kosmo-prod \
   --set env=prod \
   --set imageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
   --set workloads.enabled=true \
-  --set worker.enabled=true \
   --set migration.enabled=true >"$PROD_RENDER"
 
 # A configured API trio keeps the credential/path/query source in rendered env
@@ -61,7 +59,6 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER" "$CONFIGURED_RENDER"' EXIT
 "$HELM" template kosmo apps/helm \
   --namespace kosmo-dev \
   --set env=dev \
-  --set worker.enabled=true \
   --set-string 'postgres.credentials.api.databaseUrl=postgres://api:$(DATABASE_PASSWORD)@example.invalid:6543/kosmo?sslmode=prefer' \
   --set-string 'postgres.credentials.api.passwordSecret.name=kosmo-api-custom' \
   --set-string 'postgres.credentials.api.passwordSecret.key=password' >"$CONFIGURED_RENDER"
@@ -125,13 +122,9 @@ assert_migration_host() {
 for render in "$DEV_RENDER" "$PROD_RENDER"; do
   assert_database_host "$render" api/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
   assert_database_host "$render" api/rollout.yaml OPERATION_DATABASE_URL 'kosmo-postgres-pooler-rw:5432'
-  assert_database_host "$render" web/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
-  assert_database_host "$render" worker.yaml DATABASE_URL 'kosmo-postgres-rw'
 
   # Default values keep the API-role Secret selector unchanged.
   assert_secret_ref "$render" api/rollout.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
-  assert_secret_ref "$render" web/rollout.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
-  assert_secret_ref "$render" worker.yaml DATABASE_PASSWORD 'kosmo-postgres-app' 'password'
 done
 
 # Configured trio: direct API authority and Secret source remain unchanged;
@@ -154,7 +147,7 @@ rg -n 'kind: (Cluster|Pooler)|name: kosmo-postgres(-pooler-rw)?|poolMode:|server
   "$DEV_RENDER" "$PROD_RENDER"
 ```
 
-정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation lifecycle의 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고, API `DATABASE_URL`, PROD-715 Web/Worker 기본 source와 migration은 각자 소유한 baseline을 사용해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. Configured trio의 rendered env에서는 API direct URL의 authority와 operation URL의 scheme, username, database, password Secret source, path/query가 보존되고 operation authority만 Pooler `:5432`로 교체되는지 확인한다. Runtime operation client가 direct DB의 `connection` startup options를 상속하지 않고 configured operation URL을 변경 없이 전달하는지 확인하며, Pooler와 호환되지 않는 임의의 URL은 지원하지 않는다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
+정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation lifecycle의 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고 API `DATABASE_URL`과 migration은 각자 소유한 baseline을 유지해야 하며, API-role Secret name/key assertion은 activation 전과 동일해야 한다. Configured trio의 rendered env에서는 API direct URL의 authority와 operation URL의 scheme, username, database, password Secret source, path/query가 보존되고 operation authority만 Pooler `:5432`로 교체되는지 확인한다. Runtime operation client가 direct DB의 `connection` startup options를 상속하지 않고 configured operation URL을 변경 없이 전달하는지 확인하며, Pooler와 호환되지 않는 임의의 URL은 지원하지 않는다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
 
 CRD가 설치된 대상 cluster에서는 실제 변경 없이 server-side admission도 확인한다.
 
@@ -183,15 +176,10 @@ api_url="$(kubectl get rollout "${RELEASE}-api" -n "$NAMESPACE" \
   -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].env[?(@.name=="DATABASE_URL")].value}')"
 operation_url="$(kubectl get rollout "${RELEASE}-api" -n "$NAMESPACE" \
   -o jsonpath='{.spec.template.spec.containers[?(@.name=="api")].env[?(@.name=="OPERATION_DATABASE_URL")].value}')"
-web_url="$(kubectl get rollout "${RELEASE}-web" -n "$NAMESPACE" \
-  -o jsonpath='{.spec.template.spec.containers[?(@.name=="web")].env[?(@.name=="DATABASE_URL")].value}')"
-
 case "$api_url" in *"@${DIRECT}:5432/"*) ;; *) exit 1 ;; esac
 case "$operation_url" in *"@${POOLER}:5432/"*) ;; *) exit 1 ;; esac
-case "$web_url" in *"@${DIRECT}:5432/"*) ;; *) exit 1 ;; esac
 
 kubectl wait --for=condition=Available "rollout/${RELEASE}-api" -n "$NAMESPACE" --timeout=5m
-kubectl wait --for=condition=Available "rollout/${RELEASE}-web" -n "$NAMESPACE" --timeout=5m
 
 # Every Pod in the current rollout revision must be readable and must not emit
 # a PgBouncer-unsupported startup-parameter error.
@@ -341,7 +329,7 @@ SQL
 
 Operation lifecycle 또는 API endpoint live gate가 실패하면 전체 activation merge/squash revision을 Git revert한다. Revert 결과인 pre-activation revision에서는 기존 API `DATABASE_URL` 경계를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code가 함께 사라져야 한다. Pooler, Cluster, PROD-715 Web/Worker 경계, migration workload와 Secret은 수정하지 않는다. PROD-728이 소유한 Pooler 리소스는 유지한다. `kubectl patch`, `kubectl delete` 또는 Argo UI의 out-of-band parameter override는 rollback 방법으로 사용하지 않는다.
 
-Revert 전에는 실패한 전체 activation merge/squash revision과 그 revert가 가리키는 pre-activation revision을 고정하고, 임시 worktree에서 pre-activation render를 확인한다. 이 render는 URL 전체를 출력하지 않고 기존 API `DATABASE_URL` host, `OPERATION_DATABASE_URL` 부재와 Web BFF/migration host assertion의 exit status만 확인한다. 같은 revision에 operation plugin/code가 남아 있지 않은지도 source assertion으로 확인한다.
+Revert 전에는 실패한 전체 activation merge/squash revision과 그 revert가 가리키는 pre-activation revision을 고정하고, 임시 worktree에서 pre-activation render를 확인한다. 이 render는 URL 전체를 출력하지 않고 기존 API `DATABASE_URL` host, `OPERATION_DATABASE_URL` 부재와 migration host assertion의 exit status만 확인한다. PROD-715 Web/Worker source는 이 rollback에서 검사하거나 변경하지 않는다. 같은 revision에 operation plugin/code가 남아 있지 않은지도 source assertion으로 확인한다.
 
 ```sh
 set -eu
@@ -359,13 +347,10 @@ ROLLBACK_RENDER="$(mktemp)"
 trap 'rm -f "$ROLLBACK_RENDER"; git worktree remove --force "$ROLLBACK_WORKTREE"' EXIT
 "$HELM" template kosmo "$ROLLBACK_WORKTREE/apps/helm" \
   --namespace kosmo-dev \
-  --set env=dev \
-  --set worker.enabled=true >"$ROLLBACK_RENDER"
+  --set env=dev >"$ROLLBACK_RENDER"
 
 assert_database_host "$ROLLBACK_RENDER" api/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
 assert_env_absent "$ROLLBACK_RENDER" api/rollout.yaml OPERATION_DATABASE_URL
-assert_database_host "$ROLLBACK_RENDER" web/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
-assert_database_host "$ROLLBACK_RENDER" worker.yaml DATABASE_URL 'kosmo-postgres-rw'
 assert_database_host "$ROLLBACK_RENDER" database-migration-job.yaml DATABASE_URL 'kosmo-postgres-rw'
 
 if [ -e "$ROLLBACK_WORKTREE/apps/api/src/graphql/plugins/operation-db-session.ts" ] ||
@@ -376,7 +361,7 @@ if [ -e "$ROLLBACK_WORKTREE/apps/api/src/graphql/plugins/operation-db-session.ts
 fi
 ```
 
-Render와 source assertion이 통과한 뒤에만 전체 activation merge/squash revision의 Git revert commit을 `main`에 반영하고 대상 Application을 그 revision으로 sync한다. API Rollout readiness, 기존 API `DATABASE_URL`, `OPERATION_DATABASE_URL` env 부재, Web BFF/migration readiness와 GraphQL health를 확인한다. Rollback 동안 Pooler와 Cluster는 Ready 상태를 유지해야 하며 Pooler 자체를 제거하는 rollback은 아래의 별도 PROD-728 resource lifecycle 절차로만 수행한다.
+Render와 source assertion이 통과한 뒤에만 전체 activation merge/squash revision의 Git revert commit을 `main`에 반영하고 대상 Application을 그 revision으로 sync한다. API Rollout readiness, 기존 API `DATABASE_URL`, `OPERATION_DATABASE_URL` env 부재, migration readiness와 GraphQL health를 확인한다. Rollback 동안 PROD-715 Web/Worker source, Pooler와 Cluster는 그대로 유지해야 하며 Pooler 자체를 제거하는 rollback은 아래의 별도 PROD-728 resource lifecycle 절차로만 수행한다.
 
 ```sh
 REVERT_REVISION=REVERT_COMMIT_SHA
@@ -387,7 +372,7 @@ kubectl get pooler kosmo-postgres-pooler-rw -n kosmo-dev
 kubectl get service kosmo-postgres-pooler-rw -n kosmo-dev
 ```
 
-Production은 승인된 Argo CD identity로 같은 Git revert revision을 sync한다. 이 whole activation rollback에는 `--prune`가 필요하지 않다. sync 후 기존 API `DATABASE_URL` 경계, `OPERATION_DATABASE_URL` env 부재와 operation plugin/code 제거, API·Web BFF/migration host와 Secret ref 유지, Pooler와 Cluster readiness를 비민감하게 기록한다.
+Production은 승인된 Argo CD identity로 같은 Git revert revision을 sync한다. 이 whole activation rollback에는 `--prune`가 필요하지 않다. sync 후 기존 API `DATABASE_URL` 경계, `OPERATION_DATABASE_URL` env 부재와 operation plugin/code 제거, API/migration host와 Secret ref 유지, Pooler와 Cluster readiness를 비민감하게 기록한다.
 
 ```sh
 argocd app sync kosmo-prod --revision "$REVERT_REVISION"
@@ -420,7 +405,7 @@ argocd app sync kosmo-prod --revision "$POOLER_ROLLBACK_REVISION" --prune
 argocd app wait kosmo-prod --sync --health --timeout 600
 ```
 
-Dev는 revert commit이 `main`에 반영되면 automated sync/prune 완료를 기다린다. Rollback sync 뒤 Pooler와 그 Service가 제거되고 기존 API `DATABASE_URL` 경계, Web BFF baseline과 migration workload readiness가 그대로 유지되는지 확인한다.
+Dev는 revert commit이 `main`에 반영되면 automated sync/prune 완료를 기다린다. Rollback sync 뒤 Pooler와 그 Service가 제거되고 기존 API `DATABASE_URL` 경계와 migration workload readiness가 그대로 유지되는지 확인한다.
 
 ```sh
 kubectl get pooler "$POOLER" -n "$NAMESPACE"

@@ -5,7 +5,7 @@ Web trusted federation ingress와 Temporal Worker는 기존 CloudNativePG PgBoun
 ## What Changes
 
 - `postgres.credentials.fedify` selector와 `FEDIFY_DATABASE_*` env를 제거하고 `postgres.credentials.worker`를 Web/Worker 기본 `DATABASE_*` source로 사용한다.
-- Worker URL·password Secret atomic trio를 Web과 Temporal Worker workload의 기본 `DATABASE_*` source로 선택한다.
+- Worker selector를 `enabled`와 password Secret ref로 줄이고, 활성화되면 chart가 기존 PgBouncer를 가리키는 `kosmo_worker` URL을 생성해 Web과 Temporal Worker workload의 기본 `DATABASE_*` source로 선택한다.
 - Web trusted federation, Fedify listener, Temporal Worker DB Activity와 일반 core service는 기존 process 전역 기본 `db`를 그대로 사용한다.
 - API Rollout의 `DATABASE_*`/`OPERATION_DATABASE_URL`, migration, Fedify MessageQueue database와 기존 PgBouncer/TLS 경계는 변경하지 않는다.
 - Worker selector가 비활성일 때 Web/Worker 기본 `DATABASE_*`는 승인된 기존 owner source를 사용한다. 활성 credential 인증 실패 중에는 owner로 자동 fallback하지 않는다.

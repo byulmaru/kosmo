@@ -1,24 +1,24 @@
 # Tasks
 
-## 1. Worker selector 준비
+## 1. Historical Worker selector 준비
 
 ### Deliverable
 
-Helm이 `worker` 역할명 URL/password Secret source를 atomic하게 받을 수 있고 legacy Fedify selector를 소비하지 않는다.
+PR #564가 당시 `worker` 역할 URL/password trio baseline을 준비하고 legacy Fedify selector를 제거했다. 이 historical seam은 2단계의 최신 최소 selector가 대체한다.
 
 ### Guardrails
 
 - Secret value를 values나 manifest에 넣지 않는다.
-- URL/password Secret name/key partial source만 render 실패시킨다.
+- 이 단계의 URL/password Secret name/key partial validation은 historical evidence이며 최신 Worker 입력 계약이 아니다.
 - legacy `fedify` key 전용 fail이나 alias를 추가하지 않는다.
 
 ### Verification
 
-- Worker selector complete/partial/absent render를 비교한다.
+- 당시 Worker trio의 complete/partial/absent render를 비교한다.
 - legacy input이 Worker source로 소비되지 않는지 확인한다.
 
 - [x] 1.1 PROD-709 capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
-- [x] 1.2 `worker` atomic trio를 구현하고 legacy `fedify` 전용 validation을 제거한다.
+- [x] 1.2 historical `worker` atomic trio를 구현하고 legacy `fedify` 전용 validation을 제거한다.
 - [x] 1.3 Web과 기본 비활성 Worker component에 Worker selector env seam을 준비한다.
 - [x] 1.4 selector 조합·rollback·partial failure·legacy 비소비·API/migration 음성 경계를 검증한다.
 
@@ -33,7 +33,7 @@ Evidence (2026-08-10): PR #564 merge `2c65b6dc`; Helm selector matrix, partial f
 
 ### Deliverable
 
-Web과 활성화된 Temporal Worker workload의 process 기본 `DATABASE_*`가 Worker selector를 사용하고, selector-off에서는 승인된 owner source로 독립 rollback한다.
+Web과 활성화된 Temporal Worker workload의 process 기본 `DATABASE_*`가 최소 Worker selector와 chart-derived URL을 사용하고, selector-off에서는 승인된 owner source로 독립 rollback한다.
 
 ### Guardrails
 
@@ -48,14 +48,14 @@ Web과 활성화된 Temporal Worker workload의 process 기본 `DATABASE_*`가 W
 - default, API-only, Worker-only, 양쪽과 Worker rollback render를 비교한다.
 - Web/Worker 기본 `DATABASE_*`만 Worker source를 사용하고 API/migration/queue documents가 불변인지 확인한다.
 - 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에 Worker Secret ref가 없는지 확인한다.
-- Worker partial trio가 source 이름을 포함해 실패하는지 확인한다.
+- 활성 Worker selector의 partial/missing Secret ref가 source 이름을 포함해 실패하고, 비활성 selector의 남은 Secret ref가 owner rollback을 막지 않는지 확인한다.
 
 - [x] 2.1 최신 Linear에서 PROD-369/724/709 완료와 PROD-710 취소, 역할·ACL·selector 경계를 독립 확인한다.
-- [x] 2.2 Web/Worker 기본 DB URL/password helper와 template wiring을 구현하고 별도 Worker env를 제거한다.
+- [x] 2.2 Web/Worker 기본 DB URL/password helper와 template wiring을 구현하고 별도 Worker env를 제거한다. 사용자 단순화 결정에 따라 Worker 임의 URL을 제거하고 `enabled` + password Secret ref와 chart-derived URL로 줄인다.
 - [x] 2.3 selector matrix·rollback·partial failure·API/migration/queue 음성 경계를 검증한다.
 - [x] 2.4 적용되는 운영 문서와 OpenSpec artifacts를 최신 기본 DB 계약으로 정렬한다.
 
-Evidence (2026-08-14): default/API-only/Worker-only/both selector render에서 Web/Worker 기본 `DATABASE_*` source와 owner rollback을 확인했다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 Worker selector 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. Worker partial trio는 source 이름을 포함해 render 실패했다. dev/prod Helm lint, 관련 change strict와 전체 OpenSpec strict 98/98, Prettier와 diff check를 통과했다.
+Evidence (2026-08-14): default/API-only/Worker-only/both selector render에서 Web/Worker 기본 `DATABASE_*` source와 owner rollback을 확인했다. 최종 단순화에서는 Worker 임의 URL을 제거하고 `enabled` + password Secret ref만 남겼으며, 활성 selector가 chart-derived `kosmo_worker` PgBouncer URL을 사용하고 비활성 selector의 남은 partial Secret ref도 owner rollback을 막지 않는지 확인했다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 Worker selector 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. dev/prod Helm lint, 관련 change strict와 전체 OpenSpec strict 98/98, Prettier와 diff check를 통과했다.
 
 ## 3. 비운영 integration과 completion
 
