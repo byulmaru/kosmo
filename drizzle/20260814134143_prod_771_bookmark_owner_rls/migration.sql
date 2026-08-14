@@ -1,0 +1,4 @@
+ALTER TABLE "bookmark" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "bookmark_graphql_owner_select" ON "bookmark" AS PERMISSIVE FOR SELECT TO "kosmo_api" USING ("bookmark"."profile_id" = public.kosmo_current_profile_id());--> statement-breakpoint
+CREATE POLICY "bookmark_graphql_owner_insert" ON "bookmark" AS PERMISSIVE FOR INSERT TO "kosmo_api" WITH CHECK ("bookmark"."profile_id" = public.kosmo_current_profile_id());--> statement-breakpoint
+CREATE POLICY "bookmark_graphql_owner_delete" ON "bookmark" AS PERMISSIVE FOR DELETE TO "kosmo_api" USING ("bookmark"."profile_id" = public.kosmo_current_profile_id());

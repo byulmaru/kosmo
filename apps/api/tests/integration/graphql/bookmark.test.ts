@@ -14,7 +14,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { eq, ne } from 'drizzle-orm';
+import { eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type * as CoreDb from '@kosmo/core/db';
 import type { encodeGlobalId as EncodeGlobalId } from '@kosmo/core/global-id';
@@ -23,10 +23,14 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const operationDatabaseUrl = new URL(process.env.DATABASE_URL);
+operationDatabaseUrl.searchParams.set('options', '-c role=kosmo_api');
+process.env.OPERATION_DATABASE_URL = operationDatabaseUrl.toString();
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let Bookmarks: typeof CoreDb.Bookmarks;
+let createOperationDatabase: typeof CoreDb.createOperationDatabase;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
@@ -51,6 +55,7 @@ describe('Bookmark GraphQL 경계', () => {
       AccountProfiles,
       Accounts,
       Bookmarks,
+      createOperationDatabase,
       db,
       firstOrThrow,
       Instances,
@@ -61,6 +66,15 @@ describe('Bookmark GraphQL 경계', () => {
       Profiles,
       Sessions,
     } = await import('@kosmo/core/db'));
+    const operationDatabase = createOperationDatabase();
+    try {
+      const roles = await operationDatabase.db.execute(
+        sql<{ currentUser: string }>`SELECT current_user AS "currentUser"`,
+      );
+      assert.equal(roles[0]?.currentUser, 'kosmo_api');
+    } finally {
+      await operationDatabase.close();
+    }
     const { seedDatabase } = await import('@kosmo/core/db/seed');
 
     await truncateDatabase();
