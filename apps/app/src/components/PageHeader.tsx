@@ -62,7 +62,7 @@ export function PageHeader(props: PageHeaderProps) {
             ) : (
               mark
             )}
-            <Text accessibilityRole="header" style={styles.srOnly}>
+            <Text accessibilityRole="header" pointerEvents="none" style={styles.srOnly}>
               {props.accessibilityLabel}
             </Text>
           </View>

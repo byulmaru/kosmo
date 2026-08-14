@@ -41,6 +41,16 @@ async function selectProfileFromSwitcher(page: Page, handle: string) {
   await expect(page.getByRole('progressbar')).toHaveCount(0);
 }
 
+const homeEntrySurfaces = [
+  { name: 'full sidebar', viewport: { height: 360, width: 1440 }, kind: 'navigation' },
+  { name: 'compact rail', viewport: { height: 360, width: 1024 }, kind: 'navigation' },
+  { name: 'mobile bottom tab', viewport: { height: 360, width: 390 }, kind: 'navigation' },
+  { name: 'mobile drawer', viewport: { height: 360, width: 390 }, kind: 'drawer' },
+  { name: 'full Home header', viewport: { height: 360, width: 1440 }, kind: 'header' },
+  { name: 'compact Home header', viewport: { height: 360, width: 1024 }, kind: 'header' },
+  { name: 'mobile Home header', viewport: { height: 360, width: 390 }, kind: 'header' },
+] as const;
+
 async function visiblePrimaryNavigation(page: Page): Promise<Locator> {
   const navigations = page.getByRole('navigation', { name: '주요 메뉴' });
   await expect(navigations.first()).toBeAttached();
@@ -52,6 +62,29 @@ async function visiblePrimaryNavigation(page: Page): Promise<Locator> {
   }
 
   throw new Error('Visible primary navigation was not found.');
+}
+
+async function homeEntry(
+  page: Page,
+  kind: (typeof homeEntrySurfaces)[number]['kind'],
+): Promise<Locator> {
+  if (kind === 'drawer') {
+    await page.getByRole('button', { name: '메뉴 열기' }).click();
+    return page
+      .locator('#mobile-sidebar')
+      .getByRole('navigation', { name: '주요 메뉴' })
+      .getByRole('link', { name: '홈', exact: true });
+  }
+  if (kind === 'header') {
+    return page
+      .getByRole('heading', { name: '홈' })
+      .locator('..')
+      .getByRole('link', { name: '홈', exact: true });
+  }
+  return (await visiblePrimaryNavigation(page)).getByRole('link', {
+    name: '홈',
+    exact: true,
+  });
 }
 
 async function scrollDocument(page: Page) {
@@ -76,47 +109,81 @@ async function waitAnimationFrames(page: Page, count = 4) {
   }, count);
 }
 
-test('주요 Web navigation은 mobile bottom tab, drawer, compact rail과 full sidebar에서 document top으로 이동한다', async ({
+test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 document top을 복원한다', async ({
   page,
 }) => {
-  await signIn(page);
+  const session = await signIn(page, 'e2e-home-reselection-forward');
+  for (let index = 0; index < 16; index += 1) {
+    await createE2EPost({
+      body: `E2E Home reselection post ${index} ${'긴 본문 '.repeat(20)}`,
+      profileId: session.profile!.id,
+    });
+  }
 
-  for (const surface of [
-    { name: 'full sidebar', viewport: { height: 360, width: 1440 }, target: '알림' },
-    { name: 'compact rail', viewport: { height: 360, width: 1024 }, target: '알림' },
-    { name: 'mobile bottom tab', viewport: { height: 360, width: 390 }, target: '알림' },
-  ]) {
+  for (const surface of homeEntrySurfaces.filter(({ kind }) => kind !== 'header')) {
     await page.setViewportSize(surface.viewport);
     await page.goto('/compose');
     await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
     await scrollDocument(page);
 
-    const navigation = await visiblePrimaryNavigation(page);
-    const targetLink = navigation.getByRole('link', { name: surface.target, exact: true });
-    if (surface.name === 'mobile bottom tab') {
-      await targetLink.tap();
+    const entry = await homeEntry(page, surface.kind);
+    await expect(entry).toHaveAttribute('href', '/home');
+    if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+      await entry.tap();
     } else {
-      await targetLink.click();
+      await entry.click();
     }
-
-    await expect(page).toHaveURL(/\/notifications$/);
-    await expect(page.getByText('아직 알림이 없어요')).toBeVisible();
+    await expect(page).toHaveURL(/\/home$/);
+    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   }
-
-  await page.setViewportSize({ height: 360, width: 390 });
-  await page.goto('/compose');
-  await expect(page.getByRole('textbox', { name: '게시글 본문' }).first()).toBeVisible();
-  await scrollDocument(page);
-  await page.getByRole('button', { name: '메뉴 열기' }).click();
-  const drawerNavigation = page
-    .locator('#mobile-sidebar')
-    .getByRole('navigation', { name: '주요 메뉴' });
-  await drawerNavigation.getByRole('link', { name: '홈', exact: true }).tap();
-
-  await expect(page).toHaveURL(/\/home$/);
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 });
+
+for (const [index, surface] of homeEntrySurfaces.entries()) {
+  test(`current Home 재선택은 ${surface.name}에서 scroll top과 단일 refresh를 수행한다`, async ({
+    page,
+  }) => {
+    const session = await signIn(page, `e2e-home-reselection-current-${index}`);
+    for (let postIndex = 0; postIndex < 16; postIndex += 1) {
+      await createE2EPost({
+        body: `E2E Home reselection post ${postIndex} ${'긴 본문 '.repeat(20)}`,
+        profileId: session.profile!.id,
+      });
+    }
+
+    await page.setViewportSize(surface.viewport);
+    await page.goto('/home');
+    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await scrollDocument(page);
+
+    let refreshCount = 0;
+    await page.route('**/graphql', async (route) => {
+      if (isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+        refreshCount += 1;
+      }
+      await route.continue();
+    });
+
+    try {
+      const entry = await homeEntry(page, surface.kind);
+      await expect(entry).toHaveAttribute('href', '/home');
+      if (surface.name === 'mobile Home header') {
+        await entry.focus();
+        await expect(entry).toBeFocused();
+        await page.keyboard.press('Enter');
+      } else if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+        await entry.tap();
+      } else {
+        await entry.click();
+      }
+
+      await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+      await expect.poll(() => refreshCount).toBe(1);
+    } finally {
+      await page.unroute('**/graphql');
+    }
+  });
+}
 
 test('1280px full shell은 document overflow 전후 컬럼 경계와 600px 중앙 폭을 유지한다', async ({
   page,
@@ -439,6 +506,126 @@ test('loading target도 pathname commit 직후 이전 document offset을 노출�
   } finally {
     releaseHomeQuery();
     await homeQueryHandled;
+    await page.unroute('**/graphql');
+  }
+});
+
+test('current Home refresh는 in-flight 중복을 막고 settle 뒤 다음 activation을 허용한다', async ({
+  page,
+}) => {
+  const session = await signIn(page, 'e2e-home-reselection-in-flight');
+  for (let index = 0; index < 16; index += 1) {
+    await createE2EPost({
+      body: `E2E Home reselection post ${index} ${'긴 본문 '.repeat(20)}`,
+      profileId: session.profile!.id,
+    });
+  }
+
+  await page.setViewportSize({ height: 360, width: 1440 });
+  await page.goto('/home');
+  await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+  await scrollDocument(page);
+
+  let releaseFirstHomeRefresh = () => undefined;
+  let resolveHomeQueryStarted!: () => void;
+  let resolveFirstHomeRefreshFulfilled!: () => void;
+  let resolveSecondHomeRefreshFulfilled!: () => void;
+  const homeQueryStarted = new Promise<void>((resolve) => {
+    resolveHomeQueryStarted = resolve;
+  });
+  const firstHomeRefreshFulfilled = new Promise<void>((resolve) => {
+    resolveFirstHomeRefreshFulfilled = resolve;
+  });
+  const secondHomeRefreshFulfilled = new Promise<void>((resolve) => {
+    resolveSecondHomeRefreshFulfilled = resolve;
+  });
+  const homeQueryRelease = new Promise<void>((resolve) => {
+    releaseFirstHomeRefresh = resolve;
+  });
+  let refreshCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+    refreshCount += 1;
+    const requestCount = refreshCount;
+    const response = await route.fetch();
+    if (requestCount === 1) {
+      resolveHomeQueryStarted();
+      await homeQueryRelease;
+    }
+    await route.fulfill({ response });
+    if (requestCount === 1) {
+      resolveFirstHomeRefreshFulfilled();
+    } else if (requestCount === 2) {
+      resolveSecondHomeRefreshFulfilled();
+    }
+  });
+
+  const entry = await homeEntry(page, 'navigation');
+  try {
+    await entry.click();
+    await homeQueryStarted;
+    await entry.click();
+    await expect.poll(() => refreshCount).toBe(1);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+    releaseFirstHomeRefresh();
+    await firstHomeRefreshFulfilled;
+    await expect
+      .poll(async () => {
+        await entry.click();
+        return refreshCount;
+      })
+      .toBe(2);
+    await secondHomeRefreshFulfilled;
+  } finally {
+    releaseFirstHomeRefresh();
+    await page.unroute('**/graphql');
+  }
+});
+
+test('current Home refresh error는 timeline을 유지하고 다음 activation에서 재시도한다', async ({
+  page,
+}) => {
+  const session = await signIn(page, 'e2e-home-reselection-error');
+  for (let index = 0; index < 16; index += 1) {
+    await createE2EPost({
+      body: `E2E Home reselection post ${index} ${'긴 본문 '.repeat(20)}`,
+      profileId: session.profile!.id,
+    });
+  }
+
+  await page.setViewportSize({ height: 360, width: 1440 });
+  await page.goto('/home');
+  await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+  await scrollDocument(page);
+
+  let refreshCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+    refreshCount += 1;
+    await route.abort('failed');
+  });
+
+  const entry = await homeEntry(page, 'navigation');
+  try {
+    await entry.click();
+    await expect.poll(() => refreshCount).toBe(1);
+    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await expect
+      .poll(async () => {
+        await entry.click();
+        return refreshCount;
+      })
+      .toBe(2);
+    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+  } finally {
     await page.unroute('**/graphql');
   }
 });

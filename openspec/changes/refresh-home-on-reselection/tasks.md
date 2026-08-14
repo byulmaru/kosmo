@@ -28,5 +28,5 @@
 - [x] 1.1 모든 Web shell 홈 navigation과 Home header 브랜드 control에 다른 route 이동 및 current-home activation 경계를 연결한다.
 - [x] 1.2 current-home activation마다 document scroll을 최상단으로 이동하고 Home Relay 새로고침의 요청 잠금·완료·실패·actor environment cleanup을 구현한다.
 - [x] 1.3 최소 단위 테스트로 current-home 분기, 단일 요청, 진행 중 중복 억제, 성공·실패 뒤 다음 activation의 새 요청 1회와 접근 가능한 브랜드 control을 검증한다.
-- [ ] 1.4 기존 Web navigation E2E에서 mobile·compact·full의 route 이동, scroll-top과 Home query 요청 1회를 검증한다.
+- [x] 1.4 기존 Web navigation E2E에서 mobile·compact·full의 route 이동, scroll-top과 Home query 요청 1회를 검증한다.
 - [ ] 1.5 app check와 focused Web 검증을 통과시키고 canonical 문서·spec·구현 정합성과 미검증 Native 범위를 기록한 뒤 change를 archive한다.
