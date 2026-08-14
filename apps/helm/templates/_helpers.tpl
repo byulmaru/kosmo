@@ -109,6 +109,30 @@ password
 {{- end -}}
 {{- end -}}
 
+{{- define "kosmo.workerDatabaseUrl" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "worker") | trim) "true" -}}
+{{- dig "worker" "databaseUrl" "" (.Values.postgres.credentials | default dict) -}}
+{{- else -}}
+{{- include "kosmo.databaseUrl" . -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.workerDatabasePasswordSecretName" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "worker") | trim) "true" -}}
+{{- dig "worker" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) -}}
+{{- else -}}
+{{- printf "%s-app" (include "kosmo.postgresName" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "kosmo.workerDatabasePasswordSecretKey" -}}
+{{- if eq (include "kosmo.postgresCredentialIsConfigured" (list . "worker") | trim) "true" -}}
+{{- dig "worker" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote -}}
+{{- else -}}
+password
+{{- end -}}
+{{- end -}}
+
 {{- define "kosmo.imageRef" -}}
 {{- if eq .Values.env "prod" -}}
 {{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.imageDigest) -}}

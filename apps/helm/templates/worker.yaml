@@ -69,20 +69,10 @@ spec:
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "kosmo.apiDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.apiDatabasePasswordSecretKey" . }}
+                  name: {{ include "kosmo.workerDatabasePasswordSecretName" . | quote }}
+                  key: {{ include "kosmo.workerDatabasePasswordSecretKey" . }}
             - name: DATABASE_URL
-              value: {{ include "kosmo.apiDatabaseUrl" . | quote }}
-            {{- $workerDatabase := get (.Values.postgres.credentials | default dict) "worker" | default dict }}
-            {{- if $workerDatabase.databaseUrl }}
-            - name: WORKER_DATABASE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $workerDatabase.passwordSecret.name | quote }}
-                  key: {{ $workerDatabase.passwordSecret.key | quote }}
-            - name: WORKER_DATABASE_URL
-              value: {{ $workerDatabase.databaseUrl | quote }}
-            {{- end }}
+              value: {{ include "kosmo.workerDatabaseUrl" . | quote }}
           envFrom:
             - secretRef:
                 name: env
