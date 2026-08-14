@@ -66,12 +66,12 @@ Git tag build가 만든 하나의 image digest를 명시적 production 승인 �
 
 ### Requirement: Migration 뒤 controller 기본 activation을 사용한다
 
-**Authority / Provenance:** PROD-563 — Argo CD는 기반 리소스를 적용한 뒤 같은 digest의 production migration Job을 Sync wave 1로 성공시키고 API와 Web Rollout을 wave 2에서 적용해야 한다(MUST). Release pipeline은 두 Rollout의 preview를 교차 대기하거나 직접 승격해서는 안 되며(MUST NOT), 이전 ReplicaSet을 찾아 자동 복구해서도 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — Argo CD는 기반 리소스를 적용한 뒤 같은 digest의 production migration Job을 Sync wave 1로 성공시키고 API와 Web Rollout·HPA 및 background Deployment를 wave 2에서 적용해야 한다(MUST). Release pipeline은 두 Rollout의 preview를 교차 대기하거나 직접 승격해서는 안 되며(MUST NOT), 이전 ReplicaSet을 찾아 자동 복구해서도 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 
 - **WHEN** 같은 digest의 Sync wave 1 migration이 성공한다
-- **THEN** Argo CD는 API·Web Rollout과 HPA를 wave 2에서 적용하고 각 controller가 기본 activation을 수행한다
+- **THEN** Argo CD는 API·Web Rollout·HPA와 background Deployment를 wave 2에서 적용하고 각 controller가 기본 activation을 수행한다
 
 #### Scenario: Migration 또는 sync 실패
 

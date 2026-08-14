@@ -83,7 +83,7 @@ Deploy Dev workflow는 Docker Build 성공 후 migration을 포함한 Argo CD fu
 #### Scenario: Migration 성공 후 rollout
 
 - **WHEN** Docker Build가 성공하고 Argo CD full sync와 migration Job이 성공한다
-- **THEN** deployment workflow는 `kosmo-api`와 `kosmo-web` Rollout restart를 실행한다
+- **THEN** deployment workflow는 `kosmo-api`와 `kosmo-web` Rollout 및 렌더된 background Deployment의 restart를 실행한다
 
 #### Scenario: Dev deploy 직렬 실행
 

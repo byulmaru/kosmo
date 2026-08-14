@@ -88,7 +88,7 @@ jobs:
 
           argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev --timeout 600
 
-      - name: Restart dev rollouts
+      - name: Restart dev workloads
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
         shell: bash
@@ -102,3 +102,9 @@ jobs:
               --namespace kosmo-dev \
               --resource-name "${rollout}"
           done
+
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app actions run kosmo-dev restart \
+            --group apps \
+            --kind Deployment \
+            --namespace kosmo-dev \
+            --all

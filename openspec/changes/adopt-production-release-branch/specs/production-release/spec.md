@@ -97,7 +97,7 @@
 
 ### Requirement: 이전 application은 production revert로 새 release를 배포한다
 
-**Authority / Provenance:** `PROD-764` — 운영자는 DB와 호환되는 application 변경을 production PR에서 revert하고 그 PR을 merge해 동일한 자동 build·PreSync·sync 경로로 배포해야 한다(MUST). 과거 tag commit을 직접 재배포하거나 production history를 rewrite해서는 안 되며(MUST NOT), DB 상태나 migration history를 자동으로 되돌려서도 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-764` — 운영자는 DB와 호환되는 application 변경을 production PR에서 revert하고 그 PR을 merge해 동일한 자동 build·migration-gated sync 경로로 배포해야 한다(MUST). 과거 tag commit을 직접 재배포하거나 production history를 rewrite해서는 안 되며(MUST NOT), DB 상태나 migration history를 자동으로 되돌려서도 안 된다(MUST NOT).
 
 #### Scenario: Application rollback
 

@@ -40,7 +40,7 @@ Production 대상 PR merge로 발생한 push가 version tag 입력 없이 동일
 - Production push event의 immutable SHA만 production source로 사용한다.
 - Tag는 build input, checkout, source selector 또는 workload identity로 사용하지 않는다.
 - PR merge 뒤 별도 dispatch, `prod` Environment reviewer 또는 migration approval을 요구하지 않는다.
-- Migration/API/Web은 같은 digest를 사용하고 PreSync 실패 시 workload activation을 진행하지 않는다.
+- Migration/API/Web은 같은 digest를 사용하고 Sync wave 1 migration 실패 시 wave 2 workload activation을 진행하지 않는다.
 - Main dev build는 유지한다.
 
 **Verification**
@@ -134,7 +134,7 @@ Release-control 변경만 포함한 production PR이 version tag 입력 없이 m
 **Verification**
 
 - Production PR diff/checks와 migration 무변경
-- Production push 자동 실행, tag push 무동작, commit/source/digest/PreSync/Rollout 결과
+- Production push 자동 실행, tag push 무동작, commit/source/digest/migration-gated Sync/Rollout 결과
 - Live Argo/workload 상태와 Web version label 비노출
 - Archive 후 active spec strict validation
 
