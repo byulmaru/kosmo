@@ -18,7 +18,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
@@ -159,6 +159,7 @@ export function ProfileSwitcher({
   surface,
 }: Props) {
   const theme = useTheme();
+  const elevation = useElevation();
   const pathname = usePathname();
   const data = useFragment(ProfileSwitcherFragment, query);
   const { resetActor } = useRelayActor();
@@ -392,6 +393,7 @@ export function ProfileSwitcher({
         styles.menu,
         scrollableWebPicker ? styles.redesignedMenu : undefined,
         surfaceBounds,
+        Platform.OS === 'web' ? elevation.floating : elevation.overlay,
         { backgroundColor: theme.card, borderColor: theme.border },
       ]}
     >
@@ -692,7 +694,10 @@ export function ProfileSwitcher({
           transparent
           visible={open}
         >
-          <Pressable onPress={() => setOpen(false)} style={styles.backdrop}>
+          <Pressable
+            onPress={() => setOpen(false)}
+            style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
+          >
             <Pressable
               accessibilityLabel="프로필 전환"
               accessibilityViewIsModal
@@ -771,7 +776,6 @@ const styles = StyleSheet.create({
   menu: {
     borderRadius: 14,
     borderWidth: 1,
-    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.16)',
     padding: 6,
     width: 280,
   },
@@ -785,7 +789,6 @@ const styles = StyleSheet.create({
   handle: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,

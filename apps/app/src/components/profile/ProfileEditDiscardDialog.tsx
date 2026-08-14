@@ -25,7 +25,7 @@ export function ProfileEditDiscardDialog({
       transparent
       visible={visible}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}>
         <View style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={styles.copy}>
             <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>
@@ -52,7 +52,6 @@ export function ProfileEditDiscardDialog({
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,

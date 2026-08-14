@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Form } from '@/components/ui/Form';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
-import { useTheme } from '@/theme/ThemeProvider';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import {
   emptyPostComposerMediaValue,
@@ -141,6 +141,7 @@ function PostComposerContents({
   surface = false,
 }: PostComposerContentsProps) {
   const theme = useTheme();
+  const elevation = useElevation();
   const internalEditorRef = useRef<TextInput>(null);
   const editor = editorRef ?? internalEditorRef;
   const visibilityControl = useRef<View>(null);
@@ -388,7 +389,11 @@ function PostComposerContents({
       accessibilityLabel={replyMode ? '답글 공개 설정' : '게시글 공개 설정'}
       accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
       role={Platform.OS === 'web' ? 'menu' : undefined}
-      style={[styles.visibilityMenu, { backgroundColor: theme.card, borderColor: theme.border }]}
+      style={[
+        styles.visibilityMenu,
+        Platform.OS === 'web' ? elevation.floating : elevation.overlay,
+        { backgroundColor: theme.card, borderColor: theme.border },
+      ]}
     >
       {availableVisibilityOptions.map((option) => {
         const selected = option.value === visibility;
@@ -608,7 +613,10 @@ function PostComposerContents({
           transparent
           visible={visibilityOpen}
         >
-          <Pressable onPress={() => setVisibilityOpen(false)} style={styles.backdrop}>
+          <Pressable
+            onPress={() => setVisibilityOpen(false)}
+            style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
+          >
             <Pressable
               onPress={(event) => event.stopPropagation()}
               style={styles.nativeVisibilityMenu}
@@ -707,7 +715,6 @@ const styles = StyleSheet.create({
   error: { fontFamily: 'SUIT', ...typography.sm },
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,
@@ -716,7 +723,6 @@ const styles = StyleSheet.create({
   visibilityMenu: {
     borderRadius: radii.sm,
     borderWidth: 1,
-    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.12)',
     gap: spacing.xs,
     maxWidth: '100%',
     overflow: 'hidden',
