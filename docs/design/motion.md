@@ -72,6 +72,7 @@ motion을 제거해도 focus, loading, success, error, selected와 announcement 
 - Web과 KOSMO가 직접 소유한 Native primitive는 위 semantic 역할을 사용한다.
 - iOS system sheet와 Android system bottom sheet처럼 OS presentation API가 소유한 timing·curve는 플랫폼 예외로 유지한다. 임의의 ms 값으로 덮어쓰지 않는다.
 - 위 판정표에 없는 route·shell·domain local motion은 DSN-21/Product가 같은 형식으로 소비처, 목표 token, 플랫폼 예외와 검증 evidence를 기록한다. 새 motion 역할을 임의로 만들지 않는다.
+- PROD-750은 기존 route·shell·domain consumer의 scrim·elevation을 공용 foundation으로 이관한다. 기존 React Native `Modal` fade와 `UniversalShell` drawer motion은 exit 동안 mount를 유지하는 consumer lifecycle 변경 없이 `useOverlayMotion`으로 치환할 수 없으므로, focus restore·dirty confirmation·gesture·Android back 계약을 보존하는 현행 예외로 기록한다. 이 예외의 해소는 해당 lifecycle을 함께 검증하는 후속 범위에서 수행한다.
 - 기존 Reaction spinner `820ms`는 `loading-cycle` `800ms`로 수렴한다. 제품 근거 없이 `820ms` 예외를 새로 만들지 않는다.
 - 새 duration·easing을 raw 값으로 추가하지 않는다. spinner는 `motion/easing/linear`를 사용한다. 현재 token으로 표현할 수 없으면 component, platform, reduced-motion 대체와 검증 evidence를 함께 제시해 Design owner 승인을 받는다.
 

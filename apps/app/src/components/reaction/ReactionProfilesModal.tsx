@@ -79,7 +79,11 @@ export function ReactionProfilesModal({
       transparent
       visible
     >
-      <Pressable accessibilityLabel={`${title} 닫기`} onPress={onClose} style={styles.backdrop}>
+      <Pressable
+        accessibilityLabel={`${title} 닫기`}
+        onPress={onClose}
+        style={[styles.backdrop, { backgroundColor: theme.overlayScrim }]}
+      >
         <Pressable
           onPress={(event) => event.stopPropagation()}
           style={[styles.surface, { backgroundColor: theme.card, borderColor: theme.border }]}
@@ -142,7 +146,6 @@ export function ReactionProfilesModal({
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,

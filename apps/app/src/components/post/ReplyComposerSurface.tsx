@@ -21,8 +21,8 @@ import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
-import { useTheme } from '@/theme/ThemeProvider';
-import { radii, shadow, spacing, typography } from '@/theme/tokens';
+import { useElevation, useTheme } from '@/theme/ThemeProvider';
+import { radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposer } from './PostComposer';
 import { PostSourcePreview } from './PostSourcePresentationView';
@@ -159,6 +159,7 @@ function ReplyComposerSurfaceContents({
   triggerRef,
 }: ReplyComposerSurfaceContentsProps) {
   const theme = useTheme();
+  const elevation = useElevation();
   const router = useRouter();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
@@ -322,13 +323,17 @@ function ReplyComposerSurfaceContents({
   }
 
   const discardConfirm = discardConfirmOpen ? (
-    <View style={styles.confirmBackdrop}>
+    <View style={[styles.confirmBackdrop, { backgroundColor: theme.overlayScrim }]}>
       <View
         accessibilityLabel="답글 작성을 취소할까요?"
         accessibilityViewIsModal
         ref={discardConfirmRef}
         role="alertdialog"
-        style={[styles.confirm, { backgroundColor: theme.card, borderColor: theme.border }]}
+        style={[
+          styles.confirm,
+          elevation.overlay,
+          { backgroundColor: theme.card, borderColor: theme.border },
+        ]}
       >
         <Text accessibilityRole="header" style={[styles.confirmTitle, { color: theme.text }]}>
           답글 작성을 취소할까요?
@@ -411,7 +416,11 @@ function ReplyComposerSurfaceContents({
     >
       <Pressable
         onPress={() => requestClose()}
-        style={[styles.backdrop, presentation === 'fullscreen' ? styles.fullscreenBackdrop : null]}
+        style={[
+          styles.backdrop,
+          presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
+          { backgroundColor: theme.overlayScrim },
+        ]}
       >
         <Pressable
           accessibilityViewIsModal
@@ -419,6 +428,7 @@ function ReplyComposerSurfaceContents({
           ref={dialogRef}
           style={[
             styles.dialog,
+            elevation.overlay,
             presentation === 'fullscreen' ? styles.fullscreen : styles.modal,
             {
               backgroundColor: theme.card,
@@ -517,7 +527,6 @@ function ReplyComposerSurfaceContents({
 const styles = StyleSheet.create({
   backdrop: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     flex: 1,
     justifyContent: 'center',
     padding: spacing.lg,
@@ -527,7 +536,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     maxHeight: '85dvh' as never,
     overflow: 'hidden',
-    ...shadow,
   },
   modal: {
     borderRadius: radii.lg,
@@ -583,7 +591,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     justifyContent: 'center',
     padding: spacing.lg,
     zIndex: 100,
@@ -595,7 +602,6 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     padding: spacing.xl,
     width: '100%',
-    ...shadow,
   },
   confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
