@@ -47,6 +47,7 @@ function PrimitivesCatalog() {
 
       <Section title="Loading placeholders">
         <View style={{ gap: space[8] }}>
+          <Skeleton circular height={48} width={48} />
           <Skeleton height={80} />
           <Skeleton width="70%" />
           <Skeleton width="45%" />
