@@ -1,10 +1,4 @@
-# reaction-graphql-row-level-security Specification
-
-## Purpose
-
-TBD - created by archiving change apply-reaction-graphql-rls-policies. Update Purpose after archive.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: GraphQL Reaction RLS 경계
 
@@ -36,19 +30,6 @@ TBD - created by archiving change apply-reaction-graphql-rls-policies. Update Pu
 - **WHEN** viewer가 조회할 수 없는 Post의 Reaction Node, Profile relation, viewer relation 또는 count를 요청한다
 - **THEN** GraphQL은 Reaction 데이터를 노출하지 않는다
 
-#### Scenario: 숨겨진 순수 Repost source의 database 경계
-
-- **WHEN** ACTIVE/PUBLIC 또는 UNLISTED 순수 Repost의 직접 source가 현재 `kosmo_api` viewer에게 보이지 않게 된다
-- **THEN** target-post SELECT policy는 해당 Repost의 Reaction을 `kosmo_api`에 노출하지 않는다
-- **AND** owner INSERT policy는 해당 Repost에 새 Reaction을 허용하지 않는다
-- **AND** hidden/deleted Target Post owner cleanup을 위한 owner SELECT/DELETE branch는 이 조건과 독립적으로 유지된다
-
-#### Scenario: 숨겨진 source의 Reaction Notification
-
-- **WHEN** Reaction Notification의 source Reaction이 가리키는 순수 Repost direct source가 현재 operation actor 기준으로 조회 불가해진다
-- **THEN** Reaction Notification Node는 source loader의 기존 nullable 계약에 따라 숨긴다
-- **AND** 이 숨김은 owner cleanup과 Notification row 삭제를 대신하지 않는다
-
 #### Scenario: Profile 목록과 selected Profile 관계
 
 - **WHEN** viewer가 조회 가능한 Post의 Reaction Profile 목록과 viewer Reaction을 요청한다
@@ -63,7 +44,6 @@ TBD - created by archiving change apply-reaction-graphql-rls-policies. Update Pu
 
 - **WHEN** selected Profile이 조회 가능한 Active Post에 자기 Profile ID로 Reaction을 추가한다
 - **THEN** INSERT와 기존 멱등 add payload가 성공한다
-- **AND** 순수 Repost인 경우 직접 source도 기존 Post visibility/profile/instance eligibility를 통과해야 한다
 
 #### Scenario: 다른 Profile 또는 조회 불가 Post INSERT
 

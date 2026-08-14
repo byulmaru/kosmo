@@ -31,7 +31,7 @@
 
 - `addReaction`은 같은 transaction에서 Target Post를 먼저 조회하고, `INSERT ... RETURNING` 뒤 conflict 시 owner Reaction을 다시 SELECT한다. INSERT 결과를 반환하려면 생성된 행의 SELECT 가시성도 필요하다.
 - `deleteReaction`은 Target Post를 다시 조회하지 않고 actor Profile/Post/Type으로 `DELETE ... RETURNING`을 수행한다. hidden/deleted cleanup을 유지하려면 actor owner row의 SELECT 가시성이 필요하다.
-- Reaction Node는 Target Post와 join하고 application `postAccessWhere`를 유지한다. 순수 Repost source eligibility는 Post RLS가 아직 소유하지 않으므로 application predicate는 유지하되, Reaction의 Target Post SELECT/INSERT policy도 중첩된 `public.post` source 조회로 같은 eligibility를 database 경계에서 재확인해야 한다.
+- Reaction Node는 Target Post와 join하고 application `postAccessWhere`를 유지한다. 순수 Repost surface는 기존 UI 계약대로 source Post를 Reaction target으로 전달하므로 Reaction RLS는 전달받은 Target Post의 가시성만 확인한다.
 - `reactionCounts`는 Reaction Profile visibility와 무관하게 모든 행을 집계해야 한다. SELECT policy를 actor owner로만 제한하면 count 계약이 깨진다.
 - `reactionProfiles`는 Reaction RLS와 별도로 기존 Profile visibility를 계속 적용해야 한다.
 - 기존 `(post_id, type, created_at, id)`와 `profile_id` index가 policy 및 consumer 조건을 지원하며, 비운영 plan 병목 증거 없이 index를 추가하지 않는다.
@@ -41,13 +41,13 @@
 
 `Reactions`를 `pgTable.withRLS`로 전환하고 `kosmo_api`에 다음 최소 policy를 둔다.
 
-- Target Post가 현재 `kosmo_api`에 보이고, 순수 Repost이면 직접 source도 현재 `kosmo_api`에 보이는 경우에 모든 Reaction을 허용하는 permissive SELECT policy
+- Target Post가 현재 `kosmo_api`에 보일 때 모든 Reaction을 허용하는 permissive SELECT policy
 - current Profile actor가 `reaction.profile_id`와 같을 때 owner row를 허용하는 permissive SELECT policy
-- current Profile actor가 자기 `profile_id`로 현재 보이는 Active Target Post에 추가할 때만 허용하는 INSERT policy. 순수 Repost이면 직접 source의 현재 visibility/profile/instance eligibility도 중첩된 `public.post` 조회로 확인한다.
+- current Profile actor가 자기 `profile_id`로 현재 보이는 Active Target Post에 추가할 때만 허용하는 INSERT policy
 - current Profile actor가 자기 Reaction을 제거할 때만 허용하는 DELETE policy
 - current Profile actor의 기존 `SELECT FOR UPDATE`만 허용하고 `WITH CHECK (false)`로 실제 행 변경은 거부하는 임시 UPDATE policy
 
-두 SELECT policy는 PostgreSQL의 permissive OR로 결합한다. Target Post branch가 count와 일반 relation을 제공하고 owner branch가 add conflict/readback 및 hidden/deleted `DELETE ... RETURNING`을 제공한다. owner branch의 내부 SQL 가시성이 GraphQL 노출로 이어지지 않도록 Reaction Node는 기존 Target Post join과 `postAccessWhere`를 유지하고, Post field들은 이미 조회된 Post에서만 실행한다. Target Post branch의 source guard는 owner SELECT/DELETE cleanup branch에는 적용하지 않는다.
+두 SELECT policy는 PostgreSQL의 permissive OR로 결합한다. Target Post branch가 count와 일반 relation을 제공하고 owner branch가 add conflict/readback 및 hidden/deleted `DELETE ... RETURNING`을 제공한다. owner branch의 내부 SQL 가시성이 GraphQL 노출로 이어지지 않도록 Reaction Node는 기존 Target Post join과 `postAccessWhere`를 유지하고, Post field들은 이미 조회된 Post에서만 실행한다.
 
 임시 UPDATE policy는 기존 Notification source query의 Reaction row lock만 보존한다. `USING`은 current Profile owner 행으로 제한하고 `WITH CHECK (false)`를 사용해 실제 Reaction UPDATE를 허용하지 않는다. 이 change는 새로운 advisory lock을 도입하지 않으며, 기존 social interaction row lock을 제거하는 후속 변경도 함께 수행하지 않는다.
 
@@ -65,7 +65,6 @@
 - DELETE policy만 owner로 추가해도 PostgreSQL SELECT 가시성 요구 때문에 RETURNING 문제를 해결하지 못한다.
 - INSERT를 broad `WITH CHECK (true)`로 열거나 Account membership 전체를 actor로 인정하면 다른 Profile 소유권이 열린다.
 - owner SELECT branch를 이유로 Reaction Node의 Post join/predicate를 제거하면 hidden/deleted Reaction이 GraphQL Node로 노출될 수 있다.
-- Target Post branch가 outer Repost만 확인하면 source가 숨겨진 순수 Repost에 대한 direct `kosmo_api` INSERT/SELECT가 application predicate를 우회할 수 있다. source guard는 기존 Post RLS를 통과하는 nested `public.post` query로 구현하고 Post policy 자체는 수정하지 않는다.
 - UPDATE policy를 생략하면 기존 Notification source `SELECT FOR UPDATE`가 RLS에서 행을 잃어 Notification 생성·cleanup regression이 발생한다. 반대로 `WITH CHECK`를 owner 조건으로 열면 제품에 없는 Reaction UPDATE 권한이 생긴다.
 - 기존 row lock을 advisory lock으로 치환하면 Notification 동시성 의미와 locking policy를 함께 재설계하는 별도 범위가 된다.
 - 파일별 migration behavior test를 다시 추가하거나 production DB/role을 검증 대상으로 사용하지 않는다.
@@ -73,7 +72,6 @@
 ## Risks / Trade-offs
 
 - [owner SELECT branch는 `kosmo_api` SQL 수준에서 hidden/deleted Target Post의 자기 Reaction row를 보이게 한다] → GraphQL Node와 relation은 Target Post boundary를 유지하고, role-level 검증에서 direct SQL 가시성과 GraphQL 비노출을 각각 확인한다.
-- [순수 Repost source가 현재 operation actor에게 숨겨지면 Reaction Notification source loader도 RLS에서 Reaction을 얻지 못한다] → 기존 nullable source 계약에 따라 해당 Notification Node를 숨기되 owner Reaction cleanup과 Notification row 정리는 계속 별도로 수행한다. Recipient별 RLS execution은 PROD-766 범위로 유지한다.
 - [Post RLS가 바뀌면 Reaction Target Post branch 결과도 함께 바뀐다] → Reaction이 canonical Target Post 조회 정책을 따르는 의도적 결합으로 기록하고 Post policy 자체는 이 change에서 수정하지 않는다.
 - [GraphQL integration 전체를 실제 `kosmo_api`로 실행하면 미분류 다른 table RLS/ACL 실패가 드러날 수 있다] → 우회하지 않고 PROD-769 경로의 실제 blocker인지 분류하며, 다른 table policy 변경으로 범위를 넓히지 않는다.
 - [기존 Notification source query의 명시적 row lock은 social interaction locking policy와 장기적으로 맞지 않는다] → PROD-769에서는 RLS 전환 전 동작만 임시 owner policy로 보존하고, 실제 UPDATE를 `WITH CHECK (false)`로 차단한다. lock 제거·동시성 재설계는 후속 범위로 분리한다.
