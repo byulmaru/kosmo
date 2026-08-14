@@ -47,7 +47,7 @@
 - Authority / Provenance: `PROD-764`, `PROD-563`, `PROD-564`
 - Status: Active
 - Context / Problem: 연속 push 사이 mutable branch를 다시 읽거나 main chart가 사용되면 image와 manifest가 달라질 수 있다.
-- Decision Outcome: Workflow가 확인한 production full SHA에서 image를 build하고 같은 SHA를 Argo source에, 하나의 digest를 migration/API/Web에 전달한다.
+- Decision Outcome: Workflow가 확인한 production full SHA에서 image를 build하고 같은 SHA를 Argo source에, 하나의 digest를 migration과 모든 활성화 workload에 전달한다.
 - Alternatives Considered: Argo source에 mutable `production` 문자열을 넘기는 방식은 승인 중 branch 이동을 재현하지 못해 채택하지 않았다.
 - Consequences: 배포는 production branch를 따르되 실행 identity는 그 branch의 확인된 immutable commit이다.
 - Confirmation / Follow-up: Workflow 기록과 live Argo/image를 대조한다.

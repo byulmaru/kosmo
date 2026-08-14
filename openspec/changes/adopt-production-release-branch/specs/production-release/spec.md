@@ -60,12 +60,12 @@
 
 ### Requirement: Production branch build와 배포는 같은 digest와 source revision을 사용한다
 
-**Authority / Provenance:** `PROD-764`, `PROD-563`, `PROD-564` — 시스템은 production push SHA에서 생성한 digest-pinned image를 같은 workflow의 deploy job에 직접 전달해야 한다(MUST). Migration Job, API Rollout과 Web Rollout은 그 하나의 digest를 사용해야 하고(MUST), Argo CD Helm source도 같은 production push SHA를 사용해야 한다(MUST). Mutable image tag나 release tag를 workload identity 또는 source selector로 사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-764`, `PROD-563`, `PROD-564` — 시스템은 production push SHA에서 생성한 digest-pinned image를 같은 workflow의 deploy job에 직접 전달해야 한다(MUST). Migration Job과 모든 활성화 workload는 그 하나의 digest를 사용해야 하고(MUST), Argo CD Helm source도 같은 production push SHA를 사용해야 한다(MUST). Mutable image tag나 release tag를 workload identity 또는 source selector로 사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Production build 완료
 
 - **WHEN** production push build가 digest를 만든다
-- **THEN** 시스템은 같은 production SHA의 Helm source와 그 digest를 migration, API와 Web에 설정한다
+- **THEN** 시스템은 같은 production SHA의 Helm source와 그 digest를 migration과 모든 활성화 workload에 설정한다
 
 #### Scenario: Build 실패
 
@@ -74,7 +74,7 @@
 
 ### Requirement: Production PR merge가 배포를 승인한다
 
-**Authority / Provenance:** `PROD-764`, `PROD-563` — 필수 review와 checks를 통과한 production 대상 PR merge는 build, migration과 API·Web 배포 전체에 대한 유일한 사람의 승인이어야 한다(MUST). 시스템은 merge 이후 별도 workflow dispatch, GitHub Environment reviewer 또는 migration approval을 요구해서는 안 된다(MUST NOT). GitHub `prod` Environment는 credential·OIDC 범위와 deployment 감사 기록을 위해 사용할 수 있지만(MAY), 사람의 승인 gate가 되어서는 안 된다(MUST NOT).
+**Authority / Provenance:** `PROD-764`, `PROD-563` — 필수 review와 checks를 통과한 production 대상 PR merge는 build, migration과 모든 활성화 workload 배포 전체에 대한 유일한 사람의 승인이어야 한다(MUST). 시스템은 merge 이후 별도 workflow dispatch, GitHub Environment reviewer 또는 migration approval을 요구해서는 안 된다(MUST NOT). GitHub `prod` Environment는 credential·OIDC 범위와 deployment 감사 기록을 위해 사용할 수 있지만(MAY), 사람의 승인 gate가 되어서는 안 된다(MUST NOT).
 
 #### Scenario: PR merge 전
 

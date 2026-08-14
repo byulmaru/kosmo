@@ -78,8 +78,8 @@ Argo CD `PostSync` 성공만으로 이 gate를 대체하지 않는다. `PostSync
 ### 4. Contract / post-migrate
 
 - gate를 통과한 뒤 별도 PR과 release에서 legacy column/table/constraint를 제거한다.
-- contract는 승인된 별도 Job으로 실행하거나, 나중 release에 처음 포함해 그 release의 PreSync에서 실행할 수
-  있다. 어느 방식이든 구버전이 다시 실행될 가능성이 없어야 한다.
+- contract는 승인된 별도 Job으로 실행하거나, 나중 release에 처음 포함해 그 release의 migration-gated
+  `Sync` wave 1에서 실행할 수 있다. 어느 방식이든 구버전이 다시 실행될 가능성이 없어야 한다.
 - contract 실행 후 schema, application error, mismatch와 rollback 가능 범위를 다시 확인한다.
 - contract와 함께 compatibility code를 제거할 수 있지만, 독립적으로 rollback해야 한다면 cleanup PR을 한 번 더
   분리한다.

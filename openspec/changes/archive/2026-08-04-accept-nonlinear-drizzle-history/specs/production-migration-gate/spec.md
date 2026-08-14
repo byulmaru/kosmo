@@ -31,12 +31,12 @@
 
 ### Requirement: Production release 단일 승인과 실패 차단
 
-**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-269`, `PROD-563`, `PROD-564`, `PROD-656`. 정식 production release 승인은 선택한 immutable image의 migration과 API/Web workload 전체에 한 번 적용되어야 한다(MUST). Migration이 성공하기 전에 같은 release의 새 workload를 활성화해서는 안 되며(MUST NOT), 중간 파일 실패 시 성공한 앞 migration의 schema와 history는 함께 유지하고 실패한 파일의 schema와 history는 함께 rollback해야 한다(MUST).
+**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-269`, `PROD-563`, `PROD-564`, `PROD-656`. 정식 production release 승인은 선택한 immutable image의 migration과 모든 활성화 workload 전체에 한 번 적용되어야 한다(MUST). Migration이 성공하기 전에 같은 release의 새 workload를 활성화해서는 안 되며(MUST NOT), 중간 파일 실패 시 성공한 앞 migration의 schema와 history는 함께 유지하고 실패한 파일의 schema와 history는 함께 rollback해야 한다(MUST).
 
 #### Scenario: Migration 성공
 
 - **WHEN** 승인된 production release의 모든 pending migration 파일이 성공한다
-- **THEN** PROD-563 pipeline은 같은 immutable release의 API와 Web 활성화를 진행할 수 있다
+- **THEN** PROD-563 pipeline은 같은 immutable release의 모든 wave 2 workload 활성화를 진행할 수 있다
 
 #### Scenario: Migration 중간 파일 실패
 

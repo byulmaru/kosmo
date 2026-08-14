@@ -9,7 +9,7 @@
 - Production 대상 PR merge를 승인으로 삼아 그 push SHA를 자동 build·배포한다.
 - Tag push와 production credential·배포의 연결을 제거한다.
 - 기존 Web version label을 주석 처리해 production build의 tag 입력 의존성을 제거한다.
-- Image, migration/API/Web digest와 Helm source를 같은 production SHA로 고정한다.
+- Image, migration 및 모든 활성화 workload digest와 Helm source를 같은 production SHA로 고정한다.
 - Revert PR을 새 release로 배포해 rollback한다.
 - Main dev build와 migration barrier를 유지한다.
 
@@ -36,7 +36,7 @@
 2. Docker workflow의 tag push trigger를 제거한다. Main push는 dev build를 유지하고 protected production push는 해당 event SHA의 production build·deploy를 자동 시작한다.
 3. Production branch ruleset이 대상 PR의 필수 review와 checks를 유일한 사람 승인 gate로 강제한다. Workflow는 보호된 production push를 신뢰하고 PR 연결 관계를 다시 조회하지 않으며, `prod` Environment의 required reviewer와 별도 manual dispatch는 제거한다.
 4. Production build 조건을 하나의 판정으로 사용해 prod Vault role, OpenPanel Client ID, stable preservation metadata와 deploy job을 선택하고 `EXPO_PUBLIC_RELEASE_TAG` 입력에는 의존하지 않는다.
-5. Deploy job은 event의 full SHA와 build가 만든 하나의 digest를 Argo CD source, migration, API와 Web에 전달한다. 실행 중인 production run은 취소하지 않고, 여러 pending run은 최신 production SHA로 coalesce한다.
+5. Deploy job은 event의 full SHA와 build가 만든 하나의 digest를 Argo CD source, migration과 모든 활성화 workload에 전달한다. 실행 중인 production run은 취소하지 않고, 여러 pending run은 최신 production SHA로 coalesce한다.
 6. Terraform은 release-time target revision과 Helm parameter만 ignore하고 ECR OIDC trust에서 tag ref를 제거한다. Vault production role은 protected production branch workflow identity만 허용한다.
 7. Production release runbook에 `production PR review/checks → merge → 자동 build·migration·deploy → 검증`을 기록한다.
 8. Rollback은 production revert PR을 같은 절차로 merge해 배포한다.
@@ -70,7 +70,7 @@ GitHub production ruleset과 `prod` Environment 설정은 범용 repository boot
 2. Main에서 workflow, Terraform/IAM, Vault owner 변경, specs와 runbook을 검증·merge하고 필요한 infrastructure apply를 완료한다.
 3. Initial production에서 시작한 PR에 release-control 변경만 반영한다.
 4. Production 대상 PR을 필수 review와 checks로 승인·merge해 자동 배포를 시작한다.
-5. 별도 사람 승인 없이 commit, source SHA, digest, migration과 Rollout 결과를 확인하고 version label이 숨겨졌는지 확인한다.
+5. 별도 사람 승인 없이 commit, source SHA, digest, migration과 모든 활성화 workload 결과를 확인하고 version label이 숨겨졌는지 확인한다.
 6. 실패하면 production에 수정 또는 revert PR을 merge해 재시도한다. 과거 tag 재배포, history rewrite와 DB rollback은 사용하지 않는다.
 
 ## Open Questions

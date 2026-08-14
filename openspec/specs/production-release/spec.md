@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Git tag build가 만든 하나의 image digest를 명시적 production 승인 뒤 migration, API와 Web에 배포하는 경계를 정의한다.
+Git tag build가 만든 하나의 image digest를 명시적 production 승인 뒤 migration과 모든 활성화 workload에 배포하는 경계를 정의한다.
 
 ## Requirements
 
@@ -22,12 +22,12 @@ Git tag build가 만든 하나의 image digest를 명시적 production 승인 �
 
 ### Requirement: Tag build와 production 배포는 같은 digest를 사용한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 tag build가 생성한 digest-pinned image identity를 같은 workflow의 production 승인 job에 직접 전달해야 한다(MUST). Migration Job, API Rollout과 Web Rollout은 그 하나의 digest를 사용해야 한다(MUST). GitHub Release, Release asset 또는 mutable container tag를 중간 identity source로 요구해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 tag build가 생성한 digest-pinned image identity를 같은 workflow의 production 승인 job에 직접 전달해야 한다(MUST). Migration Job과 모든 활성화 workload는 그 하나의 digest를 사용해야 한다(MUST). GitHub Release, Release asset 또는 mutable container tag를 중간 identity source로 요구해서는 안 된다(MUST NOT).
 
 #### Scenario: 승인된 tag build
 
 - **WHEN** tag build가 image digest를 만들고 `prod` Environment 승인을 받는다
-- **THEN** 시스템은 그 digest를 migration, API와 Web에 동일하게 설정한다
+- **THEN** 시스템은 그 digest를 migration과 모든 활성화 workload에 동일하게 설정한다
 
 #### Scenario: Build 실패
 
@@ -36,7 +36,7 @@ Git tag build가 만든 하나의 image digest를 명시적 production 승인 �
 
 ### Requirement: Production 배포는 한 번의 명시적 승인을 요구한다
 
-**Authority / Provenance:** PROD-563 — 시스템은 GitHub `prod` Environment 승인을 받은 tag build만 Argo CD production credential을 얻고 배포 상태를 변경하게 해야 한다(MUST). 같은 승인은 migration과 API·Web 전체에 적용되어야 하며(MUST), 별도 verification·migration approval job을 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 시스템은 GitHub `prod` Environment 승인을 받은 tag build만 Argo CD production credential을 얻고 배포 상태를 변경하게 해야 한다(MUST). 같은 승인은 migration과 모든 활성화 workload 전체에 적용되어야 하며(MUST), 별도 verification·migration approval job을 추가해서는 안 된다(MUST NOT).
 
 시스템은 실행 중인 production 배포를 새 tag 때문에 취소해서는 안 된다(MUST NOT). 새 tag build가 같은 배포 대기열에 도달하면 아직 실행되지 않은 이전 pending tag build를 최신 pending tag build로 대체할 수 있다(MAY).
 

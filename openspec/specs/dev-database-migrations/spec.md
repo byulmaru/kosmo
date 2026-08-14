@@ -74,11 +74,11 @@ dev Helm release는 API 또는 web container의 startup/initContainer와 분리�
 
 - **WHEN** migration Job이 실패한다
 - **THEN** Argo CD sync는 실패한다
-- **AND** dev deployment workflow는 API와 web Rollout restart를 실행하지 않는다
+- **AND** dev deployment workflow는 API와 web Rollout 및 background Deployment restart를 실행하지 않는다
 
 ### Requirement: Migration-gated dev rollout
 
-Deploy Dev workflow는 Docker Build 성공 후 migration을 포함한 Argo CD full sync를 완료하고, 성공한 경우에만 API와 web Rollout을 restart해야 한다(MUST).
+Deploy Dev workflow는 Docker Build 성공 후 migration을 포함한 Argo CD full sync를 완료하고, 성공한 경우에만 API와 web Rollout 및 렌더된 background Deployment를 restart해야 한다(MUST).
 
 #### Scenario: Migration 성공 후 rollout
 

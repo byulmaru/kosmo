@@ -38,14 +38,15 @@ dev에 배포되는 runtime image는 애플리케이션 server 시작과 분리�
 - **THEN** 새 runner는 lock 해제를 기다리지 않고 migration을 중복 실행하지 않는다
 - **AND** 새 runner는 명시적인 실패 exit status를 반환한다
 
-### Requirement: Dev PreSync migration Job
+### Requirement: Dev Sync migration Job
 
 dev Helm release는 API 또는 web container의 startup/initContainer와 분리된 단일 Kubernetes Job으로 runtime migration command를 실행해야 한다(MUST).
 
-#### Scenario: Argo full sync의 migration 선행 실행
+#### Scenario: Argo full sync의 migration-gated workload 교체
 
 - **WHEN** dev application에 Argo CD full sync가 시작된다
-- **THEN** Argo CD는 application resource sync 전에 migration Job을 `PreSync` hook으로 실행한다
+- **THEN** Argo CD는 기반 리소스를 적용한 뒤 migration Job을 `Sync` wave 1 hook으로 실행한다
+- **AND** dev workload는 migration Job이 성공한 뒤 wave 2에서 교체된다
 - **AND** Job은 dev workload와 같은 `latest` image reference를 사용한다
 - **AND** Job은 단일 Pod에서 재시작 없이 migration command를 실행한다
 
@@ -53,16 +54,16 @@ dev Helm release는 API 또는 web container의 startup/initContainer와 분리�
 
 - **WHEN** migration Job이 실패한다
 - **THEN** Argo CD sync는 실패한다
-- **AND** dev deployment workflow는 API와 web Rollout restart를 실행하지 않는다
+- **AND** dev deployment workflow는 API와 web Rollout 및 background Deployment restart를 실행하지 않는다
 
 ### Requirement: Migration-gated dev rollout
 
-Deploy Dev workflow는 Docker Build 성공 후 migration을 포함한 Argo CD full sync를 완료하고, 성공한 경우에만 API와 web Rollout을 restart해야 한다(MUST).
+Deploy Dev workflow는 Docker Build 성공 후 migration을 포함한 Argo CD full sync를 완료하고, 성공한 경우에만 API와 web Rollout 및 렌더된 background Deployment를 restart해야 한다(MUST).
 
 #### Scenario: Migration 성공 후 rollout
 
 - **WHEN** Docker Build가 성공하고 Argo CD full sync와 migration Job이 성공한다
-- **THEN** deployment workflow는 `kosmo-api`와 `kosmo-web` Rollout restart를 실행한다
+- **THEN** deployment workflow는 `kosmo-api`와 `kosmo-web` Rollout 및 렌더된 background Deployment의 restart를 실행한다
 
 #### Scenario: Dev deploy 직렬 실행
 

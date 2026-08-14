@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   restart_dev:
-    name: Restart Dev Rollouts
+    name: Restart Dev Workloads
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: [self-hosted, macOS]
     env:
