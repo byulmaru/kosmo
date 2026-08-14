@@ -217,7 +217,6 @@ export function NotificationList({ profile }: NotificationListProps) {
       ) : (
         <StateView
           description="새로운 팔로우, 팔로우 요청, 답글, 반응 또는 재게시 알림이 생기면 여기에 표시돼요."
-          inline
           style={styles.state}
           title="아직 알림이 없어요"
         />
@@ -227,7 +226,6 @@ export function NotificationList({ profile }: NotificationListProps) {
           <StateView
             actionLabel="다시 시도"
             alert
-            inline
             onAction={loadMore}
             style={[styles.pagination, { borderColor: theme.border }]}
             title="알림을 더 불러오지 못했어요"
@@ -291,7 +289,6 @@ export function NotificationListState({
           actionLabel={onRetry ? '다시 시도' : undefined}
           alert
           description="잠시 후 다시 시도해주세요."
-          inline
           onAction={onRetry}
           style={styles.state}
           title="알림을 불러오지 못했어요"
@@ -299,7 +296,6 @@ export function NotificationListState({
       ) : (
         <StateView
           description="알림을 보려면 사용할 프로필을 먼저 선택해주세요."
-          inline
           style={styles.state}
           title="프로필이 필요해요"
         />

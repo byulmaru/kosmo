@@ -56,7 +56,6 @@ function PrimitivesCatalog() {
 
       <Section title="Loading, empty, error">
         <StateView loading title="불러오는 중입니다." />
-        <StateView inline title="인라인 상태입니다." />
         <StateView description="첫 항목이 생기면 여기에 표시돼요." title="아직 항목이 없어요" />
         <StateView
           actionLabel="다시 시도"

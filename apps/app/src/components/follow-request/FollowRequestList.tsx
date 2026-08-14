@@ -69,7 +69,6 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
       ) : (
         <StateView
           description="새 요청이 들어오면 여기에 표시돼요."
-          inline
           style={styles.state}
           title="받은 팔로우 요청이 없어요"
         />
@@ -88,7 +87,6 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
           actionLabel="다시 시도"
           alert
           description="이미 불러온 요청은 그대로 유지돼요."
-          inline
           onAction={loadNextPage}
           style={[styles.pagination, { borderColor: theme.border }]}
           title="팔로워 요청을 더 불러오지 못했어요"
@@ -137,7 +135,6 @@ export function FollowRequestListState({
           actionLabel={onRetry ? '다시 시도' : undefined}
           alert
           description="잠시 후 다시 시도해주세요."
-          inline
           onAction={onRetry}
           style={styles.state}
           title="팔로워 요청을 불러오지 못했어요"
@@ -145,7 +142,6 @@ export function FollowRequestListState({
       ) : (
         <StateView
           description="팔로워 요청을 보려면 사용할 프로필을 먼저 선택해주세요."
-          inline
           style={styles.state}
           title="프로필이 필요해요"
         />

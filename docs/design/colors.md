@@ -148,6 +148,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 - Modal, Sheet와 Menu는 `background/elevated`, `border/default`, `overlay/scrim`을 사용한다. Fullscreen media는 이 표준 scrim에서 제외한다.
 - Toast와 inline feedback은 Info/Success/Warning/Danger pair 중 실제 의미를 선택한다.
 - StateView root는 fill을 갖지 않고 host 평면을 상속한다. Route loading·empty·retry는 canvas 위에 두고, alert만 feedback subtle block을 사용할 수 있다. 이미 경계가 있는 component 내부 StateView는 그 component의 surface를 상속하되 스스로 surface를 선택하지 않는다.
+- StateView의 action은 retry·복귀 같은 상태 복구 행동이므로 Button의 secondary tone을 사용한다. 저장·생성 같은 화면의 primary action은 StateView 밖에서 해당 consumer가 소유한다.
 - Loading은 별도 의미색을 만들지 않고 현재 surface의 foreground 또는 action의 `on-base`를 사용한다. 진행 상태는 색상 외 접근성 정보로 함께 제공한다.
 
 ## Legacy와 개발 token 이관

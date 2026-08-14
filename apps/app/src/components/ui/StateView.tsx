@@ -9,7 +9,6 @@ type StateViewProps = {
   actionStyle?: StyleProp<ViewStyle>;
   alert?: boolean;
   description?: string;
-  inline?: boolean;
   loading?: boolean;
   onAction?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -21,7 +20,6 @@ export function StateView({
   actionStyle,
   alert = false,
   description,
-  inline = false,
   loading = false,
   onAction,
   style,
@@ -35,7 +33,6 @@ export function StateView({
       accessibilityRole={alert ? 'alert' : undefined}
       style={[
         styles.root,
-        ...(inline ? [styles.inline] : []),
         ...(style ? [style] : []),
         ...(alert
           ? [{ backgroundColor: theme.feedbackDangerSubtle, borderRadius: radius[12] }]
@@ -74,7 +71,7 @@ export function StateView({
         </Text>
       ) : null}
       {actionLabel && onAction ? (
-        <Button onPress={onAction} style={actionStyle}>
+        <Button onPress={onAction} style={actionStyle} tone="secondary">
           {actionLabel}
         </Button>
       ) : null}
@@ -112,7 +109,6 @@ export function Skeleton({
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: space[8], padding: space[32] },
-  inline: { padding: space[16] },
   title: { textAlign: 'center', ...textStyles.uiLabelL },
   description: { textAlign: 'center', ...textStyles.uiCopyM },
   loaderFallback: textStyles.uiLabelL,

@@ -165,7 +165,6 @@ function BookmarkListState({
       actionStyle={styles.actionButton}
       alert={alert}
       description={description}
-      inline
       onAction={onRetry}
       style={styles.state}
       title={title}

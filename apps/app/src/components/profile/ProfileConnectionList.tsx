@@ -126,7 +126,6 @@ export function ProfileConnectionListState({
           actionLabel={onRetry ? '다시 시도' : undefined}
           alert
           description="잠시 후 다시 시도해주세요."
-          inline
           onAction={onRetry}
           style={styles.state}
           title={text.errorTitle}
@@ -208,7 +207,6 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
       ) : (
         <StateView
           description={text.emptyDescription}
-          inline
           style={styles.state}
           title={text.emptyTitle}
         />
@@ -219,7 +217,6 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
             actionLabel="다시 시도"
             alert
             description="잠시 후 다시 시도해주세요."
-            inline
             onAction={loadMore}
             style={[styles.pagination, { borderColor: theme.border }]}
             title={text.loadError}

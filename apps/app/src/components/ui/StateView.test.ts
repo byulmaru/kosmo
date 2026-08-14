@@ -44,7 +44,7 @@ before(async () => {
   stateViewModule = await import('./StateView');
 });
 
-test('alert StateView consumes the danger subtle foreground pair', async () => {
+test('alert StateView uses the danger subtle pair and secondary recovery action', async () => {
   assert.ok(stateViewModule);
   const { StateView } = stateViewModule;
   let renderer: ReactTestRenderer | undefined;
@@ -65,27 +65,7 @@ test('alert StateView consumes the danger subtle foreground pair', async () => {
   assert.equal(root?.props.style[1].backgroundColor, 'danger-subtle');
   assert.equal(text[0]?.props.style[1].color, 'danger-on-subtle');
   assert.equal(text[1]?.props.style[1].color, 'danger-on-subtle');
-  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, undefined);
-  await act(async () => renderer?.unmount());
-});
-
-test('inline StateView applies compact padding before consumer geometry', async () => {
-  assert.ok(stateViewModule);
-  const { StateView } = stateViewModule;
-  let renderer: ReactTestRenderer | undefined;
-  await act(async () => {
-    renderer = create(
-      createElement(StateView, {
-        inline: true,
-        style: { paddingVertical: 48 },
-        title: '비어 있어요',
-      }),
-    );
-  });
-
-  const style = renderer?.root.findByType(ViewHost).props.style;
-  assert.equal(style[1].padding, 16);
-  assert.equal(style[2].paddingVertical, 48);
+  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, 'secondary');
   await act(async () => renderer?.unmount());
 });
 

@@ -216,7 +216,6 @@ function PostListState({
       actionLabel={onRetry ? '다시 시도' : undefined}
       alert={alert}
       description={description}
-      inline
       onAction={onRetry}
       style={styles.state}
       title={title}
