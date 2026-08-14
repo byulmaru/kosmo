@@ -35,12 +35,12 @@
 
 ### Requirement: Worker credential source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-715` — 시스템은 API GraphQL operation connection, application SQL과 migration/queue source를 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/Worker 기본 DB를 승인된 owner source로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715` — 시스템은 API GraphQL operation connection, application SQL과 migration/queue source를 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker workload wiring rollback
 
 - **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API selector와 migration/queue source를 유지한다
-- **THEN** Web/Worker 기본 `DATABASE_*`만 승인된 owner source로 돌아간다
+- **THEN** Web의 기본 `DATABASE_*`와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
 - **AND** API GraphQL operation connection, migration과 queue database는 바뀌지 않는다
 
 ### Requirement: production 전환은 별도 승인 대상이다

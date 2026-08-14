@@ -44,13 +44,23 @@
 - Alternatives Considered: API와 동일한 임의 URL selector나 `enabled` flag를 Worker에도 두면 고정된 principal/database/endpoint에 도달 불가능하거나 불필요한 상태와 URL/Secret 불일치 가능성을 만든다.
 - Consequences: Secret value는 values/rendered manifest에 나타나지 않고 고정 SecretKeyRef로만 주입한다. DatabaseRole과 workload가 같은 Secret-name helper를 사용한다.
 
+### Temporal Worker는 별도 enable flag 없이 항상 배포한다
+
+- Date: 2026-08-14
+- Decision Class: User Decision
+- Status: Active
+- Authority / Provenance: Linear `PROD-715`, user decision
+- Decision Outcome: `workloads.enabled`인 application render에서는 Temporal Worker ServiceAccount/Deployment를 항상 생성하고 `worker.enabled` 또는 동등한 Worker-only off 상태를 두지 않는다.
+- Alternatives Considered: foundation을 기본 비활성으로 유지하거나 환경별 Worker toggle을 두는 방식은 정상 운영에서 사용하지 않는 상태와 배포 조합만 늘린다.
+- Consequences: 전체 application workload gate는 유지하지만 Worker만 독립적으로 끄는 rollback은 지원하지 않는다. 등록된 business capability가 없을 때 process는 health/readiness를 제공하는 idle 상태로 유지되며 Temporal/DB connection을 열지 않는다. 부분 또는 잘못된 명시 registration은 계속 실패한다.
+
 ### rollback은 workload wiring의 Git revert다
 
 - Date: 2026-08-14
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`
-- Decision Outcome: Cutover 실패 시 전체 PROD-715 merge/squash revision을 Git revert해 Web/Worker 기본 DB를 승인된 owner source로 복구한다. 활성 Worker source의 인증 실패 중에는 owner로 자동 fallback하지 않는다.
+- Decision Outcome: Cutover 실패 시 전체 PROD-715 merge/squash revision을 Git revert해 Web 기본 DB와 Worker resource/source를 pre-PROD-715 manifest로 복구한다. 활성 Worker source의 인증 실패 중에는 owner로 자동 fallback하지 않는다.
 - Alternatives Considered: runtime `enabled` flag나 자동 fallback은 정상 배포에 사용하지 않는 상태를 영구 유지하고 principal 전환 실패를 숨긴다.
 - Consequences: rollback은 명시적 source revision 변경이며 API selector, migration과 queue source는 고정한다.
 

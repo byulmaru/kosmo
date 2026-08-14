@@ -6,6 +6,8 @@ Web trusted federation ingress와 Temporal Worker는 기존 CloudNativePG PgBoun
 
 - `postgres.credentials.fedify`/`worker` selector와 `FEDIFY_DATABASE_*`/`WORKER_DATABASE_*` env seam을 제거한다.
 - Chart가 기존 PgBouncer를 가리키는 `kosmo_worker` URL과 PROD-369의 release별 `*-postgres-worker` / `password` Secret ref를 생성해 Web과 Temporal Worker workload의 기본 `DATABASE_*` source로 사용한다.
+- `workloads.enabled`인 application render에서는 Temporal Worker ServiceAccount/Deployment를 항상 생성하고 별도 `worker.enabled` 입력을 제거한다.
+- Business capability가 아직 등록되지 않은 foundation Worker는 Temporal/DB에 연결하지 않고 health/readiness를 제공하는 idle process로 유지한다. 부분 또는 잘못된 명시 registration은 계속 구성 오류로 거부한다.
 - Web trusted federation, Fedify listener, Temporal Worker DB Activity와 일반 core service는 기존 process 전역 기본 `db`를 그대로 사용한다.
 - API Rollout의 `DATABASE_*`/`OPERATION_DATABASE_URL`, migration, Fedify MessageQueue database와 기존 PgBouncer/TLS 경계는 변경하지 않는다.
 - Cutover rollback은 전체 PROD-715 merge/squash revision을 Git revert해 기존 owner source로 복구한다. 인증 실패 중 owner로 자동 fallback하지 않는다.
@@ -30,11 +32,11 @@ Web trusted federation ingress와 Temporal Worker는 기존 CloudNativePG PgBoun
 ### Modified Capabilities
 
 - `workload-postgres-credential-selection`: Web/Worker 기본 `DATABASE_*`를 고정 Worker source로 전환하고 API/migration/queue 경계에 유입되지 않게 한다.
-- `temporal-worker-runtime-foundation`: 기본 비활성 Worker Deployment가 활성화될 때 process 기본 `DATABASE_*`로 Worker source를 사용한다.
+- `temporal-worker-runtime-foundation`: `workloads.enabled` 전역 gate에서 렌더되는 Worker Deployment가 process 기본 `DATABASE_*`로 Worker source를 사용한다.
 
 ## Impact
 
-- Helm의 고정 Worker URL/Secret helper와 Web/Worker env 투영.
+- Helm의 고정 Worker URL/Secret helper, Web/Worker env 투영, 항상 생성되는 Worker resources와 미등록 foundation의 healthy idle lifecycle.
 - Web/Worker workload 기본 `DATABASE_*` source, API 비주입, migration·queue·PgBouncer 불변, Git revert rollback과 live role 검증.
 - 완료된 PROD-369/724의 역할·ACL을 소비하되 application SQL과 DB handle은 변경하지 않는다.
 - production sync/apply는 사용자의 별도 명시적 승인 없이는 수행하지 않는다.

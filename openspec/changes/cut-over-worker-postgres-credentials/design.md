@@ -23,7 +23,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 - Worker credential에는 values 입력이 없다. URL은 chart가 고정된 principal/database와 기존 PgBouncer endpoint로 생성하고 Secret ref는 PROD-369의 release naming을 재사용한다.
 - Web process의 비GraphQL trusted 경로는 process 기본 `DATABASE_*`/전역 `db`를 공유한다.
-- Worker Deployment는 default-disabled이며 실제 DB Activity가 등록되기 전에는 connection을 열지 않는다.
+- Worker Deployment에는 별도 enabled 토글이 없으며 `workloads.enabled` 전역 workload gate에서만 렌더된다. 등록된 business capability가 없는 foundation entrypoint는 health/readiness를 제공하는 idle process로 유지되며 Temporal/DB connection을 열지 않는다.
 - API에는 Worker source가 없어야 한다.
 - `kosmo_fedify_queue`는 MessageQueue 전용 별도 database/role이며 Worker principal과 무관하다.
 - production sync/apply는 별도 사용자 승인 대상이다.
@@ -34,8 +34,10 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 2. API selector는 Web/Worker source에 사용하지 않는다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
 3. Web/Worker template의 별도 `WORKER_DATABASE_*` env를 제거하고 application code·DB handle은 변경하지 않는다.
 4. Worker URL과 Secret ref 모두 values로 받지 않고 release naming에서 생성한다.
-5. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
-6. merge 뒤 비운영 exact revision에서 Web principal과 대표 SQL, Worker manifest source를 검증한다. production sync/apply는 별도 승인 운영 절차로 남긴다.
+5. `worker.enabled` 값을 제거하고 application workload render에서 Worker resources를 항상 생성한다.
+6. registration이 `undefined`인 foundation Worker는 idle health server로 유지하고 Temporal/DB connection을 열지 않는다. 부분 또는 잘못된 명시 registration은 기존처럼 fail-fast한다.
+7. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
+8. merge 뒤 비운영 exact revision에서 Web principal과 대표 SQL, Worker manifest source를 검증한다. production sync/apply는 별도 승인 운영 절차로 남긴다.
 
 ## Known Traps
 
@@ -48,7 +50,8 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 ## Risks / Mitigations
 
-- [Worker foundation의 지연 connection] → chart에서는 기본 source와 API 음성 경계를 검증하고 실제 business DB consumer가 활성화될 때 process 기본 `db`를 그대로 사용한다.
+- [미등록 Worker의 CrashLoop] → registration이 없으면 healthy idle로 유지하되 Temporal/DB 연결과 가짜 task queue는 만들지 않는다.
+- [불필요한 Worker 중지 상태] → 개별 enable flag를 제거하고 전체 application workload gate만 유지한다.
 - [URL과 Secret naming drift] → DatabaseRole과 workload가 같은 release-derived Secret-name helper를 사용한다.
 - [인증 실패의 owner 은폐] → 자동 fallback을 금지하고 전체 PROD-715 merge/squash revision의 Git revert만 rollback으로 인정한다.
 - [Secret rotation 순서] → PROD-369의 VSO destination과 CNPG reload를 소비하고 workload wiring만 바꾼다.

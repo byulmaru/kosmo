@@ -19,7 +19,7 @@ PR #564가 당시 `worker` 역할 URL/password trio baseline을 준비하고 leg
 
 - [x] 1.1 PROD-709 capability spec이 sync/archive되어 modified delta baseline이 존재하는지 확인한다.
 - [x] 1.2 historical `worker` atomic trio를 구현하고 legacy `fedify` 전용 validation을 제거한다.
-- [x] 1.3 Web과 기본 비활성 Worker component에 Worker selector env seam을 준비한다.
+- [x] 1.3 Web과 당시 기본 비활성 Worker component에 Worker selector env seam을 준비한다.
 - [x] 1.4 selector 조합·rollback·partial failure·legacy 비소비·API/migration 음성 경계를 검증한다.
 
 Evidence (2026-08-10): PR #564 merge `2c65b6dc`; Helm selector matrix, partial failure, legacy 비소비, API env 부재와 migration 불변을 검증했다. 별도 `WORKER_DATABASE_*` seam은 이번 change의 최신 기본 DB 계약에 따라 제거 대상이다.
@@ -33,7 +33,7 @@ Evidence (2026-08-10): PR #564 merge `2c65b6dc`; Helm selector matrix, partial f
 
 ### Deliverable
 
-Web과 활성화된 Temporal Worker workload의 process 기본 `DATABASE_*`가 values selector 없이 chart-derived Worker URL/Secret을 사용하고, Git revert로 승인된 owner source에 rollback한다.
+Web과 Temporal Worker workload의 process 기본 `DATABASE_*`가 values selector 없이 chart-derived Worker URL/Secret을 사용하고, Git revert로 승인된 owner source에 rollback한다. Worker는 별도 enabled 토글 없이 `workloads.enabled` 전역 gate에서 렌더된다.
 
 ### Guardrails
 
@@ -49,13 +49,16 @@ Web과 활성화된 Temporal Worker workload의 process 기본 `DATABASE_*`가 v
 - Web/Worker 기본 `DATABASE_*`만 Worker source를 사용하고 API/migration/queue documents가 불변인지 확인한다.
 - 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에 Worker Secret ref가 없는지 확인한다.
 - Worker credential values가 없고 URL/Secret ref가 PROD-369 release naming에서 함께 생성되는지 확인한다.
+- `workloads.enabled`인 dev/production render에서 별도 `worker.enabled` 입력 없이 Worker ServiceAccount/Deployment가 항상 존재하는지 확인한다.
 
 - [x] 2.1 최신 Linear에서 PROD-369/724/709 완료와 PROD-710 취소, 역할·ACL·selector 경계를 독립 확인한다.
 - [x] 2.2 Web/Worker 기본 DB URL/password helper와 template wiring을 구현하고 별도 Worker env를 제거한다. 사용자 단순화 결정에 따라 Worker values selector 전체를 제거하고 URL/Secret ref를 chart-derived 값으로 고정한다.
 - [x] 2.3 고정 Worker source·Git revert rollback·API/migration/queue 음성 경계를 검증한다.
 - [x] 2.4 적용되는 운영 문서와 OpenSpec artifacts를 최신 기본 DB 계약으로 정렬한다.
+- [x] 2.5 사용자 결정에 따라 `worker.enabled`를 제거하고 application workload render에서 Worker resources를 항상 생성한다.
+- [x] 2.6 미등록 foundation Worker를 Temporal/DB 연결 없는 healthy idle로 유지하고 잘못된 명시 registration의 fail-fast를 보존한다.
 
-Evidence (2026-08-14): Web/Worker 기본 `DATABASE_*`가 별도 Worker values 없이 chart-derived `kosmo_worker` PgBouncer URL과 PROD-369의 release별 Worker Secret ref를 사용하고, DatabaseRole과 workload가 같은 Secret-name helper를 공유하는지 확인했다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 PROD-715 wiring 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. Git revert diff가 Web/Worker wiring만 owner source로 복구하는지 확인했다. dev/prod Helm lint, 관련 change strict와 전체 OpenSpec strict 98/98, Prettier와 diff check를 통과했다.
+Evidence (2026-08-14): Web/Worker 기본 `DATABASE_*`가 별도 Worker values 없이 chart-derived `kosmo_worker` PgBouncer URL과 PROD-369의 release별 Worker Secret ref를 사용하고, DatabaseRole과 workload가 같은 Secret-name helper를 공유하는지 확인했다. `worker.enabled` 없이 `workloads.enabled`인 dev/production render에서 Worker ServiceAccount/Deployment가 항상 존재한다. 미등록 foundation Worker는 Temporal 환경 없이 `/health`·`/ready` 200을 제공하고 SIGTERM으로 정상 종료하며, 잘못된 명시 registration은 외부 연결 전에 실패한다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 PROD-715 wiring 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. Git revert diff가 Web 기본 DB와 Worker resource/source를 pre-PROD-715 manifest로 복구하는지 확인했다. Worker package test, dev/prod Helm lint, 관련 change strict와 전체 OpenSpec strict 98/98, Prettier와 diff check를 통과했다.
 
 ## 3. 비운영 integration과 completion
 
@@ -74,7 +77,7 @@ merge된 exact revision의 비운영 환경에서 Web의 실제 Worker principal
 
 - exact deployed revision, Argo/rollout readiness와 Web `current_user = 'kosmo_worker'`, `rolbypassrls = true`, 대표 CRUD를 확인한다.
 - Worker Deployment의 기본 Secret/URL source, API Worker Secret 부재와 `kosmo_fedify_queue` 분리를 확인한다.
-- Git revert manifest가 Web/Worker만 owner source로 되돌리고 API/migration/queue를 유지하는지 재확인한다.
+- Git revert manifest가 Web 기본 DB와 Worker resource/source를 pre-PROD-715 상태로 되돌리고 API/migration/queue를 유지하는지 재확인한다.
 
 - [ ] 3.1 Ready PR merge 뒤 비운영 exact revision과 workload readiness를 확인한다.
 - [ ] 3.2 Web live principal·대표 SQL과 Worker manifest/API·queue 음성 경계를 검증한다.

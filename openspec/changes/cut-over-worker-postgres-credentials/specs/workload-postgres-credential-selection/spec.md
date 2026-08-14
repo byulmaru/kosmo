@@ -38,20 +38,26 @@
 #### Scenario: Worker source 선택
 
 - **WHEN** 별도 Worker credential values 없이 chart를 렌더한다
-- **THEN** Web Rollout과 활성화된 Worker Deployment의 기본 `DATABASE_PASSWORD` SecretKeyRef와 `DATABASE_URL`이 Worker source를 참조한다
+- **THEN** Web Rollout과 Worker Deployment의 기본 `DATABASE_PASSWORD` SecretKeyRef와 `DATABASE_URL`이 Worker source를 참조한다
 - **AND** `DATABASE_URL`은 chart가 `kosmo_worker` username, `kosmo` database와 기존 PgBouncer endpoint로 생성한다
 - **AND** `DATABASE_PASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
 - **AND** API Rollout에는 Worker Secret/env가 없고 `WORKER_DATABASE_*`도 어느 workload에 렌더되지 않는다
 
+#### Scenario: Worker-only off 상태 금지
+
+- **WHEN** `workloads.enabled=true`로 chart를 렌더한다
+- **THEN** Worker ServiceAccount와 Deployment가 항상 존재한다
+- **AND** `worker.enabled` 또는 동등한 Worker-only enable 입력은 존재하지 않는다
+
 #### Scenario: Worker source rollback
 
 - **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API 설정과 migration/queue source를 유지한다
-- **THEN** Web/Worker 기본 `DATABASE_*`만 승인된 owner source로 돌아간다
+- **THEN** Web의 기본 `DATABASE_*`와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
 - **AND** API connection은 바뀌지 않는다
 
 #### Scenario: API Worker env 금지
 
-- **WHEN** API selector의 활성/비활성 조합에서 PROD-715 workload wiring을 렌더한다
+- **WHEN** API selector의 활성/비활성 조합에서 `workloads.enabled=true`로 PROD-715 workload wiring을 렌더한다
 - **THEN** API Rollout에는 Worker Secret ref나 `WORKER_DATABASE_*`가 렌더되지 않는다
 
 #### Scenario: MessageQueue database 분리

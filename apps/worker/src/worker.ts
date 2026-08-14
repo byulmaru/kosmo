@@ -5,20 +5,51 @@ import type { State, WorkerOptions } from '@temporalio/worker';
 
 export type WorkerRegistration = Omit<WorkerOptions, 'connection' | 'namespace'>;
 
-export function healthStatus(path: string | undefined, state?: State): number {
+export function healthStatus(path: string | undefined, state?: State, idle = false): number {
   if (path === '/health') {
     return 200;
   }
   if (path === '/ready') {
-    return state === 'RUNNING' ? 200 : 503;
+    return idle || state === 'RUNNING' ? 200 : 503;
   }
   return 404;
+}
+
+async function runIdleWorker(environment: NodeJS.ProcessEnv): Promise<void> {
+  const port = Number(environment.PORT ?? '8080');
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('PORT must be an integer between 1 and 65535');
+  }
+
+  const server = createServer((request, response) => {
+    response.writeHead(healthStatus(request.url, undefined, true)).end();
+  });
+  let resolveStop!: () => void;
+  const stopped = new Promise<void>((resolve) => {
+    resolveStop = resolve;
+  });
+  const stop = () => resolveStop();
+
+  process.once('SIGTERM', stop);
+  try {
+    server.listen(port, environment.HOST?.trim() || '0.0.0.0');
+    await once(server, 'listening');
+    await stopped;
+  } finally {
+    process.off('SIGTERM', stop);
+    await server[Symbol.asyncDispose]();
+  }
 }
 
 export async function runWorker(
   registration: WorkerRegistration | undefined,
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
+  if (registration === undefined) {
+    await runIdleWorker(environment);
+    return;
+  }
+
   const hasHandler = Boolean(
     registration?.workflowsPath?.trim() ||
     registration?.workflowBundle ||
