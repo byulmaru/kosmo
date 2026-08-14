@@ -1,5 +1,5 @@
 {{- include "kosmo.validatePostgresCredentials" . -}}
-{{- if .Values.workloads.enabled }}
+{{- if and .Values.workloads.enabled .Values.worker.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

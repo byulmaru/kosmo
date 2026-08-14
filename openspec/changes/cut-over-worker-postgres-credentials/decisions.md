@@ -10,7 +10,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 고정 `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
+- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 고정 `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 enabled Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
 - Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 GraphQL 전용 `ctx.db` 경계와 맞지 않고 callsite migration을 불필요하게 만든다.
 - Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL operation은 별도 `kosmo_api` 경계를 유지한다.
 
@@ -20,7 +20,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-369`, `PROD-715`; canceled `PROD-470`
-- Decision Outcome: Web과 Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. PgBouncer는 GraphQL operation connection에만 사용한다.
+- Decision Outcome: Web과 enabled Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. PgBouncer는 GraphQL operation connection에만 사용한다.
 - Alternatives Considered: Worker에 전용 Pooler나 custom authentication을 만드는 방식은 필요 없는 pooling·운영 경계를 추가한다. direct endpoint에 client certificate 인증을 추가하는 대안은 취소된 PROD-470 계약으로 재개하지 않는다.
 - Consequences: Worker URL은 chart가 고정된 `kosmo_worker`/`kosmo`와 기존 direct read-write Service endpoint로 생성하고 Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
 
@@ -44,15 +44,15 @@
 - Alternatives Considered: API와 동일한 임의 URL selector나 `enabled` flag를 Worker에도 두면 고정된 principal/database/endpoint에 도달 불가능하거나 불필요한 상태와 URL/Secret 불일치 가능성을 만든다.
 - Consequences: Secret value는 values/rendered manifest에 나타나지 않고 고정 SecretKeyRef로만 주입한다. DatabaseRole과 workload가 같은 Secret-name helper를 사용한다.
 
-### Temporal Worker는 별도 enable flag 없이 항상 배포한다
+### PROD-715는 기존 Temporal Worker activation gate를 유지한다
 
 - Date: 2026-08-14
-- Decision Class: User Decision
+- Decision Class: Scope Boundary
 - Status: Active
-- Authority / Provenance: Linear `PROD-715`, user decision
-- Decision Outcome: `workloads.enabled`인 application render에서는 Temporal Worker ServiceAccount/Deployment를 항상 생성하고 `worker.enabled` 또는 동등한 Worker-only off 상태를 두지 않는다.
-- Alternatives Considered: foundation을 기본 비활성으로 유지하거나 환경별 Worker toggle을 두는 방식은 정상 운영에서 사용하지 않는 상태와 배포 조합만 늘린다.
-- Consequences: 전체 application workload gate는 유지하지만 Worker만 독립적으로 끄는 rollback은 지원하지 않는다. 등록된 business capability가 없을 때 process는 health/readiness를 제공하는 idle 상태로 유지되며 Temporal/DB connection을 열지 않는다. 부분 또는 잘못된 명시 registration은 계속 실패한다.
+- Authority / Provenance: Linear `PROD-715`, `PROD-722`
+- Decision Outcome: `workloads.enabled && worker.enabled`인 application render에서만 Temporal Worker ServiceAccount/Deployment에 PROD-715의 chart-derived Worker source를 연결한다. 기존 `worker.enabled` default-disabled 값과 activation gate, `apps/worker`의 registration·startup·shutdown 동작은 이 change에서 변경하지 않는다.
+- Alternatives Considered: `worker.enabled`를 제거하고 항상 배포하는 방식은 Worker business registration과 singleton lifecycle을 소유하는 PROD-722의 후속 계약을 PROD-715 credential wiring에 섞는다.
+- Consequences: Web은 기존 workload gate에서 Worker source를 사용하고, Worker는 명시적으로 enabled된 render에서만 같은 source를 사용한다. Worker runtime readiness, drain과 registration은 PROD-722에서 별도로 결정·검증한다.
 
 ### Worker Secret 변경은 Web과 Worker를 재시작한다
 
@@ -60,7 +60,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, user decision
-- Decision Outcome: `worker-database` VaultStaticSecret destination이 변경되면 Web Rollout과 Temporal Worker Deployment를 restart target으로 재시작해 새 `DATABASE_PASSWORD` SecretKeyRef를 적용한다.
+- Decision Outcome: `worker-database` VaultStaticSecret destination이 변경되면 Web Rollout은 workload gate에서 재시작하고, Temporal Worker Deployment는 `workloads.enabled && worker.enabled`일 때만 restart target으로 재시작해 새 `DATABASE_PASSWORD` SecretKeyRef를 적용한다.
 - Alternatives Considered: Pod를 재시작하지 않으면 env로 주입된 기존 password가 남아 Secret rotation 뒤 인증 실패가 발생할 수 있다.
 - Consequences: rotation은 기존 VSO destination과 workload restart lifecycle을 사용하며 별도 runtime credential refresh, URL 감지 또는 compatibility flag를 만들지 않는다.
 
@@ -70,8 +70,8 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`
-- Decision Outcome: Cutover 실패 시 전체 PROD-715 merge/squash revision을 Git revert해 Web 기본 DB와 Worker resource/source를 pre-PROD-715 manifest로 복구한다. 활성 Worker source의 인증 실패 중에는 owner로 자동 fallback하지 않는다.
-- Alternatives Considered: runtime `enabled` flag나 자동 fallback은 정상 배포에 사용하지 않는 상태를 영구 유지하고 principal 전환 실패를 숨긴다.
+- Decision Outcome: Cutover 실패 시 전체 PROD-715 merge/squash revision을 Git revert해 Web 기본 DB와 enabled Worker resource/source를 pre-PROD-715 manifest로 복구한다. 활성 Worker source의 인증 실패 중에는 owner로 자동 fallback하지 않는다.
+- Alternatives Considered: runtime 자동 fallback은 principal 전환 실패를 숨긴다. Worker activation gate 제거는 별도 PROD-722 runtime 계약으로 남긴다.
 - Consequences: rollback은 명시적 source revision 변경이며 API selector, migration과 queue source는 고정한다.
 
 ### Fedify MessageQueue database는 Worker principal과 분리한다

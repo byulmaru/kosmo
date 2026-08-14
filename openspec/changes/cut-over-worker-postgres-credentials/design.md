@@ -17,27 +17,26 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 - 객체 GRANT(PROD-724), 별도 Worker application pool/handle 또는 explicit SQL handle 이전(PROD-710).
 - 전용 Worker Pooler와 custom authentication.
 - Vault Dynamic Secret/임시 login lease(PROD-744).
-- API cutover, Temporal domain Workflow와 Fedify MessageQueue.
+- API cutover, Worker runtime registration/singleton startup/activation lifecycle(PROD-722), Temporal domain Workflow와 Fedify MessageQueue.
 
 ## Current Constraints
 
 - Worker credential에는 values 입력이 없다. URL은 chart가 고정된 principal/database와 기존 direct read-write Service endpoint로 생성하고 Secret ref는 PROD-369의 release naming을 재사용한다.
 - Web process의 비GraphQL trusted 경로는 process 기본 `DATABASE_*`/전역 `db`를 공유한다.
-- Worker Deployment에는 별도 enabled 토글이 없으며 `workloads.enabled` 전역 workload gate에서만 렌더된다. 등록된 business capability가 없는 foundation entrypoint는 health/readiness를 제공하는 idle process로 유지되며 Temporal/DB connection을 열지 않는다.
+- Worker Deployment는 기존 `workloads.enabled && worker.enabled` activation gate에서만 렌더된다. `worker.enabled`의 기본값과 `apps/worker` registration·startup·shutdown 동작은 이 change에서 변경하지 않는다.
 - API에는 Worker source가 없어야 한다.
 - `kosmo_fedify_queue`는 MessageQueue 전용 별도 database/role이며 Worker principal과 무관하다.
 - production sync/apply는 별도 사용자 승인 대상이다.
 
 ## Recommended Approach
 
-1. Chart가 `postgres://kosmo_worker:$(DATABASE_PASSWORD)@<release>-postgres-rw:5432/kosmo` URL과 `<release>-postgres-worker` / `password` Secret ref를 생성해 Web/Worker 기본 `DATABASE_*`로 사용한다. PgBouncer URL은 GraphQL operation connection에서만 사용한다.
+1. Chart가 `postgres://kosmo_worker:$(DATABASE_PASSWORD)@<release>-postgres-rw:5432/kosmo` URL과 `<release>-postgres-worker` / `password` Secret ref를 생성해 Web과 enabled Worker 기본 `DATABASE_*`로 사용한다. PgBouncer URL은 GraphQL operation connection에서만 사용한다.
 2. API selector는 Web/Worker source에 사용하지 않는다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
 3. Web/Worker template의 별도 `WORKER_DATABASE_*` env를 제거하고 application code·DB handle은 변경하지 않는다.
 4. Worker URL과 Secret ref 모두 values로 받지 않고 release naming에서 생성한다.
-5. `worker.enabled` 값을 제거하고 application workload render에서 Worker resources를 항상 생성한다.
-6. registration이 `undefined`인 foundation Worker는 idle health server로 유지하고 Temporal/DB connection을 열지 않는다. 부분 또는 잘못된 명시 registration은 기존처럼 fail-fast한다.
-7. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
-8. merge 뒤 비운영 exact revision에서 Web direct Service의 principal과 대표 SQL, Worker manifest source와 `worker-database` Secret 변경 시 restart target을 검증한다. production sync/apply는 별도 승인 운영 절차로 남긴다.
+5. 기존 `worker.enabled` activation gate를 유지하고, enabled Worker template에만 Worker source와 conditional restart target을 연결한다.
+6. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
+7. merge 뒤 비운영 exact revision에서 Web direct Service의 principal과 대표 SQL, enabled Worker manifest source와 `worker-database` Secret 변경 시 restart target을 검증한다. Worker runtime registration/lifecycle은 검증하지 않는다. production sync/apply는 별도 승인 운영 절차로 남긴다.
 
 ## Known Traps
 
@@ -50,8 +49,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 ## Risks / Mitigations
 
-- [미등록 Worker의 CrashLoop] → registration이 없으면 healthy idle로 유지하되 Temporal/DB 연결과 가짜 task queue는 만들지 않는다.
-- [불필요한 Worker 중지 상태] → 개별 enable flag를 제거하고 전체 application workload gate만 유지한다.
+- [Worker activation과 credential wiring drift] → 기존 `workloads.enabled && worker.enabled` gate를 정적 render에서 확인하고, Web restart target은 유지하되 Worker target은 enabled render에만 둔다.
 - [URL과 Secret naming drift] → DatabaseRole과 workload가 같은 release-derived Secret-name helper를 사용한다.
 - [인증 실패의 owner 은폐] → 자동 fallback을 금지하고 전체 PROD-715 merge/squash revision의 Git revert만 rollback으로 인정한다.
 - [Secret rotation 순서] → `worker-database` VSO destination 변경의 Web Rollout·Worker Deployment restart target을 소비해 새 SecretKeyRef를 적용하고, CNPG reload는 provisioning 경계로 남긴다.
@@ -61,7 +59,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 1. Selector/env migration과 render 검증.
 2. PROD-369 passwordSecret과 PROD-724 application CRUD ACL 완료.
-3. Web/Worker 기본 DB source wiring과 정적 검증.
-4. merge 뒤 비운영 exact revision에서 기존 direct read-write Service 경로, `current_user = 'kosmo_worker'`, `rolbypassrls = true`, 대표 SQL, API 비주입과 queue/migration 불변, `worker-database` Secret 변경 시 Web/Worker restart를 검증한다. GraphQL operation만 PgBouncer 경로를 사용한다.
+3. Web과 enabled Worker 기본 DB source wiring 및 정적 검증.
+4. merge 뒤 비운영 exact revision에서 기존 direct read-write Service 경로, `current_user = 'kosmo_worker'`, `rolbypassrls = true`, 대표 SQL, API 비주입과 queue/migration 불변, `worker-database` Secret 변경 시 Web restart와 enabled Worker restart target을 검증한다. GraphQL operation만 PgBouncer 경로를 사용한다.
 5. OpenSpec을 sync/archive하고 PROD-715 완료 여부를 판단한다.
 6. production은 별도 사용자 승인과 운영 절차에서 exact diff, Vault source metadata, rollback과 live query를 다시 제시한 뒤에만 sync/apply한다.
