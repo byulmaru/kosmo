@@ -82,4 +82,4 @@ PROD-771의 독립 구현·비운영 검증과 downstream coverage/cutover 경�
 
 - [x] 3.1 repository formatting·lint·type/migration checks와 OpenSpec target/all strict validation을 통과시킨다.
 - [x] 3.2 diff와 검증 증거에서 Bookmark-only scope, downstream PROD-767/716 경계와 production 금지를 확인한다.
-- [ ] 3.3 전체 구현·비운영 검증 완료 뒤 delta spec을 동기화하고 OpenSpec change를 archive한다.
+- [x] 3.3 전체 구현·비운영 검증 완료 뒤 delta spec을 동기화하고 OpenSpec change를 archive한다.
