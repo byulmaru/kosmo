@@ -20,11 +20,11 @@ FK는 향후 actual row 삭제 시 관계만 `null`로 만들도록 정렬된다
 
 **Verification**
 
-- 기존 row가 있는 실제 PostgreSQL migration에서 FK delete action과 schema catalog를 확인한다.
-- Parent Tombstone 뒤 관계 보존과 직접 DB fixture delete의 null FK를 검증한다.
+- FK delete action은 Drizzle schema·migration snapshot 선언으로 확인한다.
+- Parent Tombstone 뒤 관계 보존은 Local Note·Reply 제품 테스트로 검증한다. application에 없는 physical delete를 직접 DB fixture로 모사하지 않는다.
 
 - [x] 1.1 Reply Parent FK의 physical delete 동작을 `SET NULL`로 정렬하는 additive forward migration과 schema 선언을 추가한다.
-- [x] 1.2 기존 관계·Tombstone 보존, FK catalog와 직접 DB fixture 삭제의 nullification을 실제 PostgreSQL에서 검증한다.
+- [x] 1.2 FK nullification 선언을 Drizzle schema·migration snapshot에 정렬하고 기존 Parent Tombstone 관계 보존을 제품 테스트로 검증한다.
 
 ## 2. PROD-502 PostContent ProseMirror HTML serialization
 
@@ -131,7 +131,7 @@ Local Note 역참조가 기존 federation-first BFF 경계에서 제공되고 ac
 
 - ActivityPub Accept header의 Note 200/미제공, HTML navigation fallback과 기존 actor/inbox/WebFinger/BFF test를
   통과시킨다.
-- package typecheck/lint/test, migration 검증, `openspec validate add-activitypub-local-post-note --strict`와 전체
+- package typecheck/lint/test, migration runner·blank full replay smoke, `openspec validate add-activitypub-local-post-note --strict`와 전체
   strict validation 결과를 기록한다.
 
 - [x] 4.1 federation-first web routing에서 Note 응답과 기존 BFF/SPA fallback 회귀를 검증한다.

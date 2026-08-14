@@ -14,7 +14,7 @@
 - Decision Outcome: Profile Tag는 Post와 Profile이 공유하는 canonical Hashtag identity를 Profile이 참조하는 구조화 관계다. bio에서 추출·동기화하지 않으며 관계에 제품상 개수·순서·공개 배열 순서 보장은 없다.
 - Alternatives Considered: bio 파생은 Owner가 명시적으로 편집한 목록을 보존할 수 없어 제외했다. 별도 ProfileTag identity는 같은 이름의 Post Hashtag와 정규화·검색 identity를 분리하므로 제외했다.
 - Consequences: Post와 Profile의 관계 생성 방식은 독립적으로 유지되지만 canonical Hashtag identity를 나타내는 저장 row를 공유할 수 있어야 한다. Hashtag 관련 Profile 목록 탐색과 검색창의 Hashtag·Hashtag Name 검색은 이 관계 존재만으로 활성화되지 않는다.
-- Confirmation / Follow-up: 저장 구조가 추가된 뒤 같은 canonical Hashtag identity가 Profile 관계에서 재사용되는지, bio 비파생과 관계 집합 semantics를 DB·service test에서 확인한다.
+- Confirmation / Follow-up: 저장 구조가 추가된 뒤 같은 canonical Hashtag identity가 Profile 관계에서 재사용되는지, bio 비파생과 관계 집합 semantics를 service·GraphQL integration test에서 확인한다.
 
 ### canonical Hashtag identity와 Profile 관계를 additive tables로 저장한다
 
@@ -26,7 +26,7 @@
 - Decision Outcome: UUID identity, 고유한 canonical `name`, first-write-wins `display_name`을 가진 `hashtag` table과 `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·canonical-name uniqueness와 최초 입력 표기 보존은 Hashtag가 소유한다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
 - Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. position column과 개수 제약은 승인된 계약에 없으므로 추가하지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 identity 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다. 관계 조회나 API 배열의 반환 순서는 계약에 포함되지 않는다.
-- Confirmation / Follow-up: 비활성화·정지·Deleted 상태 전이에서 관계가 보존되는지 service test로 확인한다. 물리 Profile row 삭제의 FK cascade safety와 canonical Hashtag row·다른 Profile 관계 보존은 별도의 DB test로 검증한다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
+- Confirmation / Follow-up: 비활성화·정지·Deleted 상태 전이에서 관계가 보존되는지 service test로 확인한다. 물리 Profile row 삭제의 FK cascade 선언은 Drizzle schema·snapshot으로 정렬하며 application에 없는 물리 삭제를 별도 DB fixture로 모사하지 않는다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
 
 ### Hashtag가 Name syntax와 identity normalization을 소유한다
 

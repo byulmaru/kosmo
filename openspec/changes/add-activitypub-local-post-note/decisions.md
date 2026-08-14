@@ -196,8 +196,7 @@ Linear 계약을 독립적으로 다시 확인해야 한다.
   잃거나 future cleanup이 surviving Reply를 막거나 제거하므로 사용하지 않는다.
 - Consequences: forward migration은 FK metadata만 바꾸고 기존 data를 rewrite하지 않는다. 현재 production 행동은
   Tombstone이므로 새로운 physical delete runtime case가 생기지 않는다.
-- Confirmation / Follow-up: migration catalog, existing relation/Tombstone 보존과 직접 DB fixture delete의 FK
-  동작만 PostgreSQL test로 확인하며 application physical-delete flow는 만들지 않는다.
+- Confirmation / Follow-up: FK delete action은 Drizzle schema·migration snapshot 선언으로 정렬하고 Parent Tombstone 관계 보존은 Local Note·Reply 제품 테스트로 확인한다. application physical-delete flow와 이를 모사하는 직접 DB fixture test는 만들지 않는다.
 
 ### Activity delivery는 Local Note object 경계와 분리한다
 

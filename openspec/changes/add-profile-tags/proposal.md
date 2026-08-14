@@ -39,6 +39,6 @@
 - Core/DB: Hashtag가 소유하는 Name 정규화·저장 경계, Profile-Hashtag identity 관계, migration과 원자적 replacement transaction
 - GraphQL/Core service: Profile Tag 공개 field, Profile update input·payload·권한·validation·원자성
 - Universal client: 기존 Profile 편집 form과 공개 Profile header, Relay fragment·mutation cache, TagChip과 상태 카탈로그
-- Verification: DB 제약·migration, 서비스·GraphQL 통합, React Native Web component·접근성·Relay 자동화와 Web runtime 회귀, 부모 `PROD-522` 종단 간 검증. iOS·Android target mapping은 소스에서 확인하고 실제 기기·simulator의 target·layout·runtime QA는 Native 출시 gate로 이관한다.
+- Verification: Drizzle schema·snapshot 정합성, 서비스·GraphQL 통합, React Native Web component·접근성·Relay 자동화와 Web runtime 회귀, 부모 `PROD-522` 종단 간 검증. iOS·Android target mapping은 소스에서 확인하고 실제 기기·simulator의 target·layout·runtime QA는 Native 출시 gate로 이관한다.
 - Dependency: `PROD-527`은 `PROD-491`의 controlled editor, `PROD-526`의 API 기반과 기존 Profile 수정 흐름 `PROD-492`에 의존한다.
 - Excluded systems: `PROD-525`의 Hashtag 관련 Profile 목록 탐색과 TagChip navigation, 검색창의 Hashtag·Hashtag Name 검색과 그 query·정렬·pagination, Hashtag Post List, Followed Hashtag, Remote Profile Tag와 ActivityPub, 현재 `PROD-527`의 iOS·Android 실제 runtime QA

@@ -24,12 +24,12 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 
 **Verification**
 
-- additive migration의 기존 row 보존, nullable self-FK, Active contentless Repost 유일성, direct 관계, Tombstone 관계 보존과 재Repost를 catalog·DB test로 검증한다.
+- nullable self-FK와 Active contentless Repost partial unique index 선언은 Drizzle schema·snapshot으로 정렬한다. direct 관계, 순차·동시 유일성, Tombstone 관계 보존과 재Repost 제품 행동은 core service·GraphQL integration test로 검증하며 migration catalog·과거 row fixture를 반복 검증하지 않는다.
 - 기존 contentful Local/ActivityPub `createPost` 계약과 non-null Content 반환이 유지되는지 기존 core check로 확인한다.
 
 - [x] 1.1 nullable direct Repost Source와 Active Repost 유일성을 저장하고 기존 Post row·workload를 보존하는 additive migration을 생성한다.
 - [x] 1.2 Drizzle schema와 migration snapshot에 nullable self-reference와 partial unique index를 동기화한다.
-- [x] 1.3 migration catalog, 기존 row, direct FK, 순차·동시 유일성, Repost·Source Tombstone과 재Repost 검증을 추가한다.
+- [x] 1.3 Drizzle schema·snapshot의 direct FK와 partial unique index를 정렬하고, 순차·동시 유일성, Repost·Source Tombstone과 재Repost를 core service test로 검증한다.
 - [x] 1.4 기존 contentful `createPost` 계약을 변경하지 않고 core 관련 check를 통과시킨다.
 
 ## 2. PROD-401 Repost 생성
