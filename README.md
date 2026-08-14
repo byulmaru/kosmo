@@ -35,7 +35,7 @@ contract. Server deployments and tests override these defaults with `PORT`.
 Run a local PostgreSQL instance for tests with Docker Compose:
 
 ```sh
-pnpm db:test:up
+pnpm db:test:reset
 pnpm db:test:push
 ```
 
@@ -45,7 +45,7 @@ The test database connection string is defined in `.env.test`:
 DATABASE_URL=postgres://kosmo:kosmo@localhost:54329/kosmo_test
 ```
 
-Use `pnpm db:test:reset` to recreate only the default `kosmo_test` database while keeping the shared Postgres server running. Use `pnpm db:test:down` to stop the server, or add `-- --volumes --remove-orphans` when the Docker volume must also be removed.
+`db:test:push` applies the migration chain before synchronizing the Drizzle schema, so reset a legacy push-only test database before the first run after this change. `pnpm db:test:reset` recreates only the default `kosmo_test` database while keeping the shared Postgres server running. Use `pnpm db:test:down` to stop the server, or add `-- --volumes --remove-orphans` when the Docker volume must also be removed.
 
 ## Web E2E
 
