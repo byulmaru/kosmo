@@ -268,6 +268,11 @@ function runChild([childCommand, ...childArgs], databaseUrl) {
     env: {
       ...process.env,
       DATABASE_URL: databaseUrl.toString(),
+      PGHOST: databaseUrl.hostname,
+      PGPORT: databaseUrl.port || '5432',
+      PGUSER: decodeURIComponent(databaseUrl.username),
+      PGDATABASE: databaseName,
+      PGPASSWORD: decodeURIComponent(databaseUrl.password),
       KOSMO_TEST_PORT_OFFSET: String(getPortOffset(databaseName)),
     },
     stdio: 'inherit',

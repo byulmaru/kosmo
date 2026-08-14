@@ -72,7 +72,7 @@ top-level Mutation field가 같은 operation session에서 관찰할 수 있어�
 narrow transaction 경계다. 이 경계는 같은 operation의 serial sibling 사이 stale GUC를 막는 범위이며,
 authorization concurrency, locking 또는 TOCTOU safety를 보장하는 계약이 아니다.
 
-다음 두 종류의 SQL은 operation session 밖의 direct `DATABASE_URL` 경계를 유지한다.
+다음 두 종류의 SQL은 operation session 밖에서 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`로 구성한 process 기본 direct DB를 사용한다.
 
 - request authentication과 process startup/bootstrap에서 실행하는 identity 또는 초기화 SQL
 - 인증된 `searchProfiles`가 명시적인 remote handle을 처음 materialize할 때 Fedify가 소유한 remote actor

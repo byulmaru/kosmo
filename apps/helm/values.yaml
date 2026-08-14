@@ -52,12 +52,6 @@ temporal:
       dev: 3d
       prod: 30d
 postgres:
-  credentials:
-    api:
-      databaseUrl: ''
-      passwordSecret:
-        name: ''
-        key: ''
   resources:
     requests:
       cpu: 250m
