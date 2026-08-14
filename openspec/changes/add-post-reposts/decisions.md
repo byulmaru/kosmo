@@ -14,7 +14,7 @@
 - Decision Outcome: 일반 Post, Reply, Repost와 Quote는 Content, Reply Parent와 Repost Source의 존재 조합으로만 판별한다. Reply이면서 Quote를 허용하고 Repost/Quote는 하나의 Repost Source 관계를 공유한다.
 - Alternatives Considered: Post Kind enum, 별도 Repost/Quote table, 별도 Quote Source. 모두 관계와 상태를 중복하고 조합 불일치 가능성을 만든다.
 - Consequences: 모든 DB/core/API/UI/Notification slice는 nullable 관계 조합을 사용해야 하며 `content === null`만으로 Repost를 판별할 수 없다.
-- Confirmation / Follow-up: PROD-394 migration DB test에서 저장 가능한 관계 조합을 검증하고, PROD-401 전용 Repost action과 향후 Quote 작성 action에서 각 caller의 허용·거부 정책을 검증한다. PROD-453은 presentation 상태를 검증한다.
+- Confirmation / Follow-up: 저장 가능한 관계 조합은 Drizzle schema·snapshot 선언으로 정렬하고, PROD-401 전용 Repost action과 향후 Quote 작성 action에서 각 caller의 허용·거부 정책을 검증한다. PROD-453은 presentation 상태를 검증한다.
 
 ### Repost Source는 direct immutable relation으로 보존한다
 
@@ -27,7 +27,7 @@
 - Alternatives Considered: 최상위 Source로 평탄화, Source snapshot 저장, Tombstone cascade/nullification. 모두 direct 관계와 lifecycle 계약을 잃는다.
 - Consequences: 조회 계층은 Content 없는 Repost와 Content 있는 Quote를 구분하고 unavailable Source 관계만
   숨기며, 저장 계층은 관계 보존과 조회 eligibility를 분리한다.
-- Confirmation / Follow-up: PROD-394 migration DB test에서 direct ID와 Tombstone 뒤 관계 보존을 검증하고, 후속 action과 Post Node·목록 integration에서 생성·조회 정책을 검증한다.
+- Confirmation / Follow-up: direct 관계와 Tombstone 뒤 관계 보존은 Repost core service test에서 검증하고, 후속 action과 Post Node·목록 integration에서 생성·조회 정책을 검증한다.
 
 ### Active Repost 유일성은 partial unique index와 멱등 core 경계가 함께 보장한다
 
@@ -43,7 +43,7 @@
   trigger와 명시적 비관적 row lock은 추가하지 않는다.
 - Alternatives Considered: application pre-check만 사용, constraint trigger, `SELECT FOR UPDATE`. pre-check만으로는 동시성을 막지 못하고 trigger/lock은 social interaction에 과도한 결합과 운영 위험을 만든다.
 - Consequences: DB가 최종 동시성 경계가 되고 Tombstone 전이가 index membership을 해제한다. conflict 판정은 기존 DB helper와 constraint identity를 사용해야 한다.
-- Confirmation / Follow-up: PROD-394 migration catalog·concurrent insert 테스트, PROD-401 순차·동시 멱등 테스트와 PROD-411 재Repost 테스트를 수행한다.
+- Confirmation / Follow-up: partial unique index 선언은 Drizzle schema·snapshot으로 정렬하고, PROD-401 순차·동시 멱등 테스트와 PROD-411 재Repost 테스트를 수행한다.
 
 ### 기존 Post Node에 Repost 관계와 viewer 상태를 확장한다
 

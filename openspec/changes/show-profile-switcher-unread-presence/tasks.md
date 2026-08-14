@@ -100,7 +100,7 @@ unit `accent` dot을 표시하며, screen reader는 기존 Profile 이름·handl
 - `@kosmo/app` unit·type/Relay·Storybook tests/build, targeted Web profile-switcher E2E와 기존 API notification
   integration test를 실행한다.
 - 전체 OpenSpec strict validation, formatting/diff check와 독립 누락 검토를 통과한다.
-- 새 API/DB/dependency 동작이 없으므로 별도 API 구현 test, migration test와 dependency audit 확장은 제외한다.
+- 새 API/DB/dependency 동작이 없으므로 별도 API·DB 구현 test와 dependency audit 확장은 제외한다.
 
 - [ ] 3.1 최신 shell query 이후 다른 Profile의 picker dot 확인부터 선택, 새 actor의 기존 셸 badge·알림 목록
       수렴까지 Web E2E로 검증한다.
