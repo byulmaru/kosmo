@@ -39,7 +39,6 @@ function main() {
     assertSafeTestDatabaseUrl(databaseUrl);
     ensurePostgres();
     recreateDatabase(getDatabaseName(databaseUrl));
-    ensureRuntimeRoles();
     return 0;
   }
 
@@ -63,7 +62,6 @@ function main() {
 
   ensurePostgres();
   recreateDatabase(getDatabaseName(databaseUrl));
-  ensureRuntimeRoles();
 
   let childStatus = 1;
   let cleanupError;
@@ -185,6 +183,7 @@ function findCompose() {
 function ensurePostgres() {
   runCompose(['up', '-d']);
   waitForHealthyService();
+  ensureRuntimeRoles();
 }
 
 function recreateDatabase(databaseName) {
