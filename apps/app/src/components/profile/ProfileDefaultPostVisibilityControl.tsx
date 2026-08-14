@@ -1,9 +1,10 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useMutation, useRelayEnvironment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Button } from '@/components/ui/Button';
+import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
@@ -169,22 +170,23 @@ function ProfileDefaultPostVisibilityControlContents({
       <View accessibilityLabel={`현재 Profile ${profile.displayName} ${profile.relativeHandle}`}>
         <ProfileNameBlock profile={profile} style={styles.target} />
       </View>
-      <View accessibilityLabel={label} accessibilityRole="radiogroup" style={styles.options}>
+      <RadioGroup
+        accessibilityLabel={label}
+        disabled={!editable || saving}
+        onChange={(value) => {
+          setSelected(value);
+          setSaveState('idle');
+        }}
+        style={styles.options}
+        value={selected}
+      >
         {options.map((option) => {
           const selectedOption = option.value === selected;
           const Icon = option.icon;
           return (
-            <Pressable
-              aria-checked={selectedOption}
-              accessibilityLabel={`${option.label}: ${option.description}`}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selectedOption, disabled: !editable || saving }}
-              disabled={!editable || saving}
+            <RadioOption
               key={option.value}
-              onPress={() => {
-                setSelected(option.value);
-                setSaveState('idle');
-              }}
+              option={option}
               style={({ pressed }) => [
                 styles.option,
                 {
@@ -205,10 +207,10 @@ function ProfileDefaultPostVisibilityControlContents({
                   {option.description}
                 </Text>
               </View>
-            </Pressable>
+            </RadioOption>
           );
         })}
-      </View>
+      </RadioGroup>
       {saveState === 'error' ? (
         <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
           기본 공개 범위를 저장하지 못했어요.
