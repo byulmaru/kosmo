@@ -5,6 +5,7 @@ import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscar
 import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFields';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
+import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   ProfileEditDraft,
@@ -225,6 +226,7 @@ export const ImageFields: Story = {
     const avatarButton = canvas.getByRole('button', { name: '아바타 이미지 편집' });
 
     expect(headerButton).toBe(canvas.getByTestId('profile-edit-header-preview'));
+    expect(headerButton).toHaveStyle({ backgroundColor: colors.light.primary });
     expect(avatarButton).toBe(canvas.getByTestId('profile-edit-avatar-preview'));
     expect(canvas.queryByText(/현재.*유지/)).not.toBeInTheDocument();
     expect(canvas.queryByRole('button', { name: '교체' })).not.toBeInTheDocument();

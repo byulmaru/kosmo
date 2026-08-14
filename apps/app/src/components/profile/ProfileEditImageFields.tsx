@@ -208,7 +208,7 @@ export function ProfileEditImageFields({
         draft={header}
         onEdit={onHeaderEdit}
         onRemove={onHeaderRemove}
-        style={[styles.headerPreview, { backgroundColor: theme.surface }]}
+        style={[styles.headerPreview, { backgroundColor: theme.primary }]}
         testID="profile-edit-header-preview"
       />
 

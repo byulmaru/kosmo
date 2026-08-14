@@ -19,7 +19,7 @@ import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
-import { spacing } from '@/theme/tokens';
+import { colors, spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -1035,6 +1035,7 @@ export const ProfileSwitcherImagePresentation: Story = {
     const activeSurface = canvas.getByLabelText('활성 프로필');
     const cover = activeSurface.firstElementChild as HTMLElement;
     expect(cover.contains(headerImage)).toBe(true);
+    expect(cover).toHaveStyle({ backgroundColor: colors.light.primary });
     expect(getComputedStyle(cover).filter).toBe('none');
 
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));

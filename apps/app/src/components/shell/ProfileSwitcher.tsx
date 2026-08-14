@@ -597,7 +597,7 @@ export function ProfileSwitcher({
       <View
         style={[
           styles.cover,
-          { backgroundColor: theme.surface },
+          { backgroundColor: theme.primary },
           Platform.OS === 'web' && !active?.header?.url && webCover,
         ]}
       >
