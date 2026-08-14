@@ -19,7 +19,6 @@ import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphq
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostContentWarningPresentation } from './PostContentRenderer';
 import type { PostMediaOpenHandler } from './PostMediaImage';
-import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const PostLayoutFragment = graphql`
   fragment PostLayout_post on Post {
@@ -53,27 +52,7 @@ const PostLayoutFragment = graphql`
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
-      id
-      createdAt
-      content {
-        bodyText
-        contentWarning
-        document
-        media {
-          id
-          altText
-          url
-        }
-      }
-      profile {
-        avatar {
-          id
-          url
-        }
-        displayName
-        handle
-        relativeHandle
-      }
+      ...PostSourcePreview_source
       ...PostActionSurface_post @alias(as: "actionSurface")
     }
     ...PostBody_post
@@ -143,33 +122,6 @@ export function PostLayout({
         ),
       }
     : undefined;
-  const presentationSource: SourcePostPresentationData | null = source
-    ? {
-        content: source.content
-          ? {
-              bodyText: source.content.bodyText,
-              contentWarning: source.content.contentWarning,
-              document: source.content.document,
-              media:
-                source.content.media?.map(({ altText, id, url }) => ({
-                  altText: altText ?? null,
-                  id,
-                  url: url ?? null,
-                })) ?? null,
-              postId: source.id,
-            }
-          : null,
-        createdAt: source.createdAt,
-        id: source.id,
-        profile: {
-          displayName: source.profile.displayName,
-          handle: source.profile.handle,
-          relativeHandle: source.profile.relativeHandle,
-          avatar: source.profile.avatar,
-        },
-      }
-    : null;
-
   return (
     <View style={styles.root}>
       <Link asChild href={profileHref}>
@@ -199,9 +151,7 @@ export function PostLayout({
             post={post}
             size="lg"
           />
-          {presentationSource ? (
-            <PostSourcePreview source={presentationSource} style={styles.source} />
-          ) : null}
+          {source ? <PostSourcePreview source={source} style={styles.source} /> : null}
           <Text style={[styles.meta, { color: theme.textSecondary }]}>
             {formatPostDate(post.createdAt)} ·{' '}
             {visibilityLabels[post.visibility] ?? post.visibility}

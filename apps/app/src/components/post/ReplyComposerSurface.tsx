@@ -34,7 +34,6 @@ import type { TextInput, View as NativeView } from 'react-native';
 import type { ReplyComposerSurface_parent$key } from './__generated__/ReplyComposerSurface_parent.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposer';
-import type { SourcePostPresentationData } from './PostSourcePresentationView';
 
 const ReplyComposerSurfaceParentFragment = graphql`
   fragment ReplyComposerSurface_parent on Post {
@@ -54,27 +53,7 @@ const ReplyComposerSurfaceParentFragment = graphql`
       ...ProfileNameBlock_profile
     }
     repostSource {
-      id
-      createdAt
-      content {
-        bodyText
-        contentWarning
-        document
-        media {
-          id
-          altText
-          url
-        }
-      }
-      profile {
-        displayName
-        handle
-        relativeHandle
-        avatar {
-          id
-          url
-        }
-      }
+      ...PostSourcePreview_source
     }
     ...PostBody_post
   }
@@ -378,27 +357,6 @@ function ReplyComposerSurfaceContents({
     );
   }
 
-  const source: SourcePostPresentationData | null = parent.repostSource
-    ? {
-        content: parent.repostSource.content
-          ? {
-              postId: parent.repostSource.id,
-              bodyText: parent.repostSource.content.bodyText,
-              contentWarning: parent.repostSource.content.contentWarning,
-              document: parent.repostSource.content.document,
-              media:
-                parent.repostSource.content.media?.map(({ altText, id, url }) => ({
-                  altText: altText ?? null,
-                  id,
-                  url: url ?? null,
-                })) ?? null,
-            }
-          : null,
-        createdAt: parent.repostSource.createdAt,
-        id: parent.repostSource.id,
-        profile: parent.repostSource.profile,
-      }
-    : null;
   const closeControlSize = Platform.OS === 'ios' ? 44 : Platform.OS === 'android' ? 48 : 36;
 
   return (
@@ -493,10 +451,10 @@ function ReplyComposerSurfaceContents({
                           </Text>
                         </View>
                         <PostBody interactive={false} post={parent} />
-                        {source ? (
+                        {parent.repostSource ? (
                           <PostSourcePreview
                             interactive={false}
-                            source={source}
+                            source={parent.repostSource}
                             style={styles.source}
                           />
                         ) : null}

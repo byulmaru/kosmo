@@ -21,7 +21,6 @@ import type { PostListItem_post$key } from './__generated__/PostListItem_post.gr
 import type { PostListRow_post$key } from './__generated__/PostListRow_post.graphql';
 import type { PostActionBarProps } from './PostActionBar';
 import type { PostMediaOpenHandler } from './PostMediaImage';
-import type { PostSourcePresentationData } from './PostSourcePresentationView';
 
 const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
@@ -86,28 +85,8 @@ const PostListItemFragment = graphql`
     }
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
+    ...PostSourcePresentationView_post
     repostSource {
-      id
-      createdAt
-      content {
-        bodyText
-        contentWarning
-        document
-        media {
-          id
-          altText
-          url
-        }
-      }
-      profile {
-        avatar {
-          id
-          url
-        }
-        displayName
-        handle
-        relativeHandle
-      }
       ...PostListRow_post
     }
     ...PostListRow_post
@@ -172,13 +151,6 @@ export function PostListItem({
     ) : (
       replySurface
     );
-  const quoteContent = post.content;
-  const quoteMedia =
-    quoteContent?.media?.map(({ altText, id, url }) => ({
-      altText: altText ?? null,
-      id,
-      url: url ?? null,
-    })) ?? null;
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
       openViewer({
@@ -271,49 +243,6 @@ export function PostListItem({
     );
   }
 
-  const presentationPost: PostSourcePresentationData = {
-    content: {
-      bodyText: post.content.bodyText,
-      contentWarning: post.content.contentWarning,
-      document: post.content.document,
-      media: quoteMedia,
-      postId: post.id,
-    },
-    createdAt: post.createdAt,
-    id: post.id,
-    profile: {
-      displayName: post.profile.displayName,
-      handle: post.profile.handle,
-      relativeHandle: post.profile.relativeHandle,
-      avatar: post.profile.avatar,
-    },
-    replyParent: post.replyParent ? { id: post.replyParent.id } : null,
-    repostSource: {
-      content: source.content
-        ? {
-            bodyText: source.content.bodyText,
-            contentWarning: source.content.contentWarning,
-            document: source.content.document,
-            media:
-              source.content.media?.map(({ altText, id, url }) => ({
-                altText: altText ?? null,
-                id,
-                url: url ?? null,
-              })) ?? null,
-            postId: source.id,
-          }
-        : null,
-      createdAt: source.createdAt,
-      id: source.id,
-      profile: {
-        displayName: source.profile.displayName,
-        handle: source.profile.handle,
-        relativeHandle: source.profile.relativeHandle,
-        avatar: source.profile.avatar,
-      },
-    },
-  };
-
   return renderWithReplySurface(
     <View style={cardStyle}>
       {replyAttribution}
@@ -338,7 +267,7 @@ export function PostListItem({
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
             onMediaOpen={handleQuoteMediaOpen}
-            post={presentationPost}
+            post={post}
             showPostAvatar={false}
             sourcePreviewStyle={styles.quoteSourcePreview}
           />

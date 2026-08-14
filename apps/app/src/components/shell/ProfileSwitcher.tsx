@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
+import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
@@ -73,6 +74,7 @@ const ProfileSwitcherFragment = graphql`
           id
           url
         }
+        ...ProfileNameBlock_profile
       }
     }
   }
@@ -358,6 +360,7 @@ export function ProfileSwitcher({
         role={Platform.OS === 'web' && !redesignedWeb ? ('menuitemradio' as 'radio') : undefined}
         style={({ pressed }) => [
           styles.profile,
+          !selected ? styles.unselectedProfile : undefined,
           {
             backgroundColor: selected || pressed ? theme.surface : 'transparent',
             opacity: busy ? 0.5 : 1,
@@ -374,14 +377,7 @@ export function ProfileSwitcher({
             <UnreadDot style={styles.profileUnreadDot} testID="profile-switcher-unread-dot" />
           ) : null}
         </View>
-        <View style={styles.profileLabel}>
-          <Text numberOfLines={1} style={[styles.profileName, { color: theme.text }]}>
-            {profile.displayName}
-          </Text>
-          <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-            {profile.relativeHandle}
-          </Text>
-        </View>
+        <ProfileNameBlock profile={profile} style={styles.profileLabel} />
         {selected ? <CheckIcon color={theme.text} size={16} /> : null}
       </Pressable>
     );
@@ -785,8 +781,6 @@ const styles = StyleSheet.create({
   profileList: { flexShrink: 1, minHeight: 0 },
   profileListContent: { gap: 2 },
   pickerFooter: { flexShrink: 0 },
-  profileName: { fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
-  handle: { fontFamily: 'SUIT', ...typography.xsm },
   backdrop: {
     alignItems: 'center',
     flex: 1,
@@ -801,6 +795,7 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: spacing.sm,
   },
+  unselectedProfile: { paddingVertical: spacing.xs },
   profileAvatar: { position: 'relative' },
   profileUnreadDot: {
     height: 12,

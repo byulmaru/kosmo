@@ -59,7 +59,6 @@ import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
-import type { PostSourcePresentationData } from '@/components/post/PostSourcePresentationView';
 import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
 import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
@@ -365,6 +364,20 @@ const sourceAuthor = profile({
   handle: 'source@remote.example',
   id: 'profile-repost-source',
   relativeHandle: '@source@remote.example',
+});
+const contentWarningSourcePreviewPost = post({
+  bodyText: '가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.',
+  contentWarning: '원문 프리뷰 경고',
+  id: 'content-warning-source-preview-post',
+  media: [
+    {
+      __typename: 'Media',
+      altText: '가림 해제 뒤 표시되는 원문 프리뷰 이미지',
+      id: 'content-warning-source-preview-media',
+      url: postMediaImageUri,
+    },
+  ],
+  profile: sourceAuthor,
 });
 const replyTargetProfile = profile({
   displayName: 'Reply 대상 작성자',
@@ -827,6 +840,7 @@ const storyPosts = [
   mediaTextPost,
   mediaOnlyPost,
   contentWarningPost,
+  contentWarningSourcePreviewPost,
   sensitiveTwoMediaPost,
   threeMediaPost,
   fourMediaPost,
@@ -938,6 +952,8 @@ const PostsStoriesQuery = graphql`
         ...PostLayout_post @alias(as: "layout")
         ...PostListItem_post @alias(as: "listItem")
         ...PostMediaViewer_post @alias(as: "viewer")
+        ...PostSourcePresentationView_post @alias(as: "sourcePresentation")
+        ...PostSourcePreview_source @alias(as: "sourcePreview")
         ...ReplyComposerSurface_parent @alias(as: "replySurface")
       }
     }
@@ -1075,52 +1091,6 @@ function requirePostById(posts: ReadonlyArray<PostNode>, id: string): PostNode {
     throw new Error(`Missing post fixture ${id}.`);
   }
   return result;
-}
-
-function toPostSourcePresentationData(post: StoryPost): PostSourcePresentationData {
-  const repostSource = post.repostSource ?? null;
-
-  return {
-    content: post.content
-      ? {
-          bodyText: post.content.bodyText,
-          contentWarning: post.content.contentWarning,
-          document: post.content.document,
-          media:
-            post.content.media?.map(({ altText, id, url }) => ({
-              altText,
-              id,
-              url,
-            })) ?? null,
-          postId: post.id,
-        }
-      : null,
-    createdAt: post.createdAt,
-    id: post.id,
-    profile: post.profile,
-    replyParent: post.replyParent ?? null,
-    repostSource: repostSource
-      ? {
-          content: repostSource.content
-            ? {
-                bodyText: repostSource.content.bodyText,
-                contentWarning: repostSource.content.contentWarning,
-                document: repostSource.content.document,
-                media:
-                  repostSource.content.media?.map(({ altText, id, url }) => ({
-                    altText,
-                    id,
-                    url,
-                  })) ?? null,
-                postId: repostSource.id,
-              }
-            : null,
-          createdAt: repostSource.createdAt,
-          id: repostSource.id,
-          profile: repostSource.profile,
-        }
-      : null,
-  };
 }
 
 function PostCatalog(_args: PostsStoryArgs) {
@@ -1851,12 +1821,14 @@ function ProductionPostActionSessionBoundaryStory({
 }
 
 function RepostQuotePresentationStory({ postId }: { postId: string }) {
-  const post = requireStoryPostById(storyPosts, postId);
+  const post = requirePostById(usePostsStoryData().posts, postId);
 
   return (
     <Catalog>
       <StoryPathname testID="presentation-story-pathname" />
-      <PostSourcePresentationView post={toPostSourcePresentationData(post)} />
+      <PostSourcePresentationView
+        post={requireFragment(post.sourcePresentation, 'Post Source presentation')}
+      />
     </Catalog>
   );
 }
@@ -1890,27 +1862,12 @@ function ContentWarningRevealStory() {
 }
 
 function ContentWarningSourcePreviewStory() {
+  const source = requirePostById(usePostsStoryData().posts, contentWarningSourcePreviewPost.id);
+
   return (
     <Catalog>
       <PostSourcePreview
-        source={{
-          content: {
-            bodyText: '가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.',
-            contentWarning: '원문 프리뷰 경고',
-            document: null,
-            media: [
-              {
-                altText: '가림 해제 뒤 표시되는 원문 프리뷰 이미지',
-                id: 'content-warning-source-preview-media',
-                url: postMediaImageUri,
-              },
-            ],
-            postId: 'content-warning-source-preview-post',
-          },
-          createdAt: '2026-08-04T00:00:00.000Z',
-          id: 'content-warning-source-preview-post',
-          profile: sourceAuthor,
-        }}
+        source={requireFragment(source.sourcePreview, 'Content Warning Source preview')}
       />
     </Catalog>
   );
