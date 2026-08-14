@@ -3,6 +3,8 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ printf "%s-web" .Release.Name | trunc 63 | trimSuffix "-" }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: web

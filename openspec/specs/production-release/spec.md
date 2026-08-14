@@ -64,23 +64,23 @@ Git tag build가 만든 하나의 image digest를 명시적 production 승인 �
 - **WHEN** production 배포 실행이 성공하거나 실패하며 종료된다
 - **THEN** 시스템은 요청자, tag, commit, digest와 결과를 workflow 기록에 남긴다
 
-### Requirement: PreSync 뒤 controller 기본 activation을 사용한다
+### Requirement: Migration 뒤 controller 기본 activation을 사용한다
 
-**Authority / Provenance:** PROD-563 — Argo CD는 같은 digest의 production migration Job을 PreSync로 성공시킨 뒤 API와 Web Rollout을 적용해야 한다(MUST). Release pipeline은 두 Rollout의 preview를 교차 대기하거나 직접 승격해서는 안 되며(MUST NOT), 이전 ReplicaSet을 찾아 자동 복구해서도 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — Argo CD는 기반 리소스를 적용한 뒤 같은 digest의 production migration Job을 Sync wave 1로 성공시키고 API와 Web Rollout을 wave 2에서 적용해야 한다(MUST). Release pipeline은 두 Rollout의 preview를 교차 대기하거나 직접 승격해서는 안 되며(MUST NOT), 이전 ReplicaSet을 찾아 자동 복구해서도 안 된다(MUST NOT).
 
 #### Scenario: Migration 성공
 
-- **WHEN** 같은 digest의 PreSync migration이 성공한다
-- **THEN** Argo CD는 API·Web Rollout을 적용하고 각 controller가 기본 activation을 수행한다
+- **WHEN** 같은 digest의 Sync wave 1 migration이 성공한다
+- **THEN** Argo CD는 API·Web Rollout과 HPA를 wave 2에서 적용하고 각 controller가 기본 activation을 수행한다
 
 #### Scenario: Migration 또는 sync 실패
 
-- **WHEN** PreSync migration이나 Argo CD sync가 실패한다
+- **WHEN** migration이나 Argo CD sync가 실패한다
 - **THEN** 실행은 실패로 기록되고 pipeline은 Rollout·ReplicaSet을 직접 복구하지 않는다
 
 ### Requirement: 이전 production release는 같은 tag 경로로 다시 배포한다
 
-**Authority / Provenance:** PROD-563 — 운영자는 이 pipeline 도입 이후 실제 production에 배포됐고 현재 DB와 호환되는 이전 release commit에 새 Git tag를 붙여 같은 build·production 승인·PreSync·sync 경로로 application을 다시 배포할 수 있어야 한다(MUST). Pipeline 도입 전의 임의 commit을 현재 workflow로 배포할 것을 보장하지 않으며, DB rollback이나 destructive migration을 자동 실행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** PROD-563 — 운영자는 이 pipeline 도입 이후 실제 production에 배포됐고 현재 DB와 호환되는 이전 release commit에 새 Git tag를 붙여 같은 build·production 승인·migration-gated sync 경로로 application을 다시 배포할 수 있어야 한다(MUST). Pipeline 도입 전의 임의 commit을 현재 workflow로 배포할 것을 보장하지 않으며, DB rollback이나 destructive migration을 자동 실행해서는 안 된다(MUST NOT).
 
 #### Scenario: 이전 production release commit 재배포
 

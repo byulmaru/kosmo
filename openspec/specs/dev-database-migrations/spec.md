@@ -58,14 +58,15 @@ dev 환경에서 Drizzle SQL migration을 애플리케이션 rollout보다 먼�
 - **THEN** 새 runner는 lock 해제를 기다리지 않고 migration을 중복 실행하지 않는다
 - **AND** 새 runner는 명시적인 실패 exit status를 반환한다
 
-### Requirement: Dev PreSync migration Job
+### Requirement: Dev Sync migration Job
 
 dev Helm release는 API 또는 web container의 startup/initContainer와 분리된 단일 Kubernetes Job으로 runtime migration command를 실행해야 한다(MUST).
 
-#### Scenario: Argo full sync의 migration 선행 실행
+#### Scenario: Argo full sync의 migration-gated workload 교체
 
 - **WHEN** dev application에 Argo CD full sync가 시작된다
-- **THEN** Argo CD는 application resource sync 전에 migration Job을 `PreSync` hook으로 실행한다
+- **THEN** Argo CD는 기반 리소스를 적용한 뒤 migration Job을 `Sync` wave 1 hook으로 실행한다
+- **AND** dev workload는 migration Job이 성공한 뒤 wave 2에서 교체된다
 - **AND** Job은 dev workload와 같은 `main` image reference를 사용한다
 - **AND** Job은 단일 Pod에서 재시작 없이 migration command를 실행한다
 
