@@ -7,11 +7,12 @@ import {
   AccountState,
   InstanceKind,
   InstanceState,
+  NotificationKind,
   ProfileFollowPolicy,
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
-import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
+import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, asc, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -22,13 +23,23 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const remoteDomain = 'remote.example';
-process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+process.env.DATABASE_URL = databaseUrl;
+const previousOperationDatabaseUrl = process.env.OPERATION_DATABASE_URL;
+
+// Keep fixture setup on the owner connection while every GraphQL operation is
+// opened under the non-owner runtime principal. PostgreSQL applies this startup
+// option before the operation-session plugin sets the actor context.
+const operationDatabaseUrl = new URL(databaseUrl);
+operationDatabaseUrl.searchParams.set('options', '-c role=kosmo_api');
+process.env.OPERATION_DATABASE_URL = operationDatabaseUrl.toString();
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let db: typeof CoreDb.db;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
@@ -51,6 +62,7 @@ describe('GraphQL profile follow graph', () => {
       db,
       firstOrThrow,
       Instances,
+      Notifications,
       pg,
       ProfileFollows,
       ProfileFollowRequests,
@@ -80,6 +92,11 @@ describe('GraphQL profile follow graph', () => {
 
   after(async () => {
     await pg.end();
+    if (previousOperationDatabaseUrl === undefined) {
+      delete process.env.OPERATION_DATABASE_URL;
+    } else {
+      process.env.OPERATION_DATABASE_URL = previousOperationDatabaseUrl;
+    }
   });
 
   test('reads established relationships for an active profile on another local instance', async () => {
@@ -527,6 +544,388 @@ describe('GraphQL profile follow graph', () => {
     );
   });
 
+  test('isolates a same-account Profile from another selected Profile request', async () => {
+    const auth = await createAuthenticatedSession();
+    const followeeAuth = await createAuthenticatedSession();
+    const otherSelectedProfile = await createProfile({
+      handle: 'same-account-other-selected',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: auth.account.id,
+      profileId: otherSelectedProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const [selectedRequest, otherRequest] = await db
+      .insert(ProfileFollowRequests)
+      .values([
+        {
+          followerProfileId: auth.profile.id,
+          followeeProfileId: followeeAuth.profile.id,
+        },
+        {
+          followerProfileId: otherSelectedProfile.id,
+          followeeProfileId: followeeAuth.profile.id,
+        },
+      ])
+      .returning();
+
+    const selectedNode = await requestProfileFollowRequestNode(selectedRequest!.id, auth.token);
+    assertNoGraphQLErrors(selectedNode);
+    assert.equal(
+      selectedNode.data?.node?.id,
+      globalId('ProfileFollowRequest', selectedRequest!.id),
+    );
+
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: otherSelectedProfile.id })
+      .where(eq(Sessions.id, auth.session.id));
+
+    const isolatedNode = await requestProfileFollowRequestNode(selectedRequest!.id, auth.token);
+    assertNoGraphQLErrors(isolatedNode);
+    assert.equal(isolatedNode.data?.node, null);
+
+    const selectedProfileConnections = await requestGraphQL<{
+      node: {
+        incomingProfileFollowRequests: unknown;
+        outgoingProfileFollowRequests: unknown;
+      } | null;
+    }>(
+      `query OriginalProfileRequestConnections($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            incomingProfileFollowRequests(first: 10) { edges { node { id } } }
+            outgoingProfileFollowRequests(first: 10) { edges { node { id } } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', auth.profile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(selectedProfileConnections);
+    assert.deepEqual(selectedProfileConnections.data?.node, {
+      incomingProfileFollowRequests: null,
+      outgoingProfileFollowRequests: null,
+    });
+
+    const otherProfileConnections = await requestGraphQL<{
+      node: {
+        outgoingProfileFollowRequests: { edges: Array<{ node: { id: string } }> } | null;
+      } | null;
+    }>(
+      `query OtherSelectedProfileRequestConnections($id: ID!) {
+        node(id: $id) {
+          ... on Profile {
+            outgoingProfileFollowRequests(first: 10) { edges { node { id } } }
+          }
+        }
+      }`,
+      { id: globalId('Profile', otherSelectedProfile.id) },
+      auth.token,
+    );
+    assertNoGraphQLErrors(otherProfileConnections);
+    assert.deepEqual(
+      otherProfileConnections.data?.node?.outgoingProfileFollowRequests?.edges.map(
+        ({ node }) => node.id,
+      ),
+      [globalId('ProfileFollowRequest', otherRequest!.id)],
+    );
+  });
+
+  test('fails closed for missing, empty and malformed selected Profile context', async () => {
+    const auth = await createAuthenticatedSession();
+    const followeeAuth = await createAuthenticatedSession();
+    const request = await db
+      .insert(ProfileFollowRequests)
+      .values({
+        followerProfileId: auth.profile.id,
+        followeeProfileId: followeeAuth.profile.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    const id = globalId('ProfileFollowRequest', request.id);
+    const query = `query HiddenProfileFollowRequest($id: ID!) {
+      node(id: $id) {
+        ... on ProfileFollowRequest { id }
+      }
+    }`;
+
+    const guest = await requestGraphQL<{ node: { id: string } | null }>(query, { id });
+    assertNoGraphQLErrors(guest);
+    assert.equal(guest.data?.node, null);
+
+    const withoutSelectedProfile = await requestGraphQLWithSession(
+      query,
+      { id },
+      { ...auth.session, profileId: null },
+    );
+    assertNoGraphQLErrors(withoutSelectedProfile);
+    assert.equal(withoutSelectedProfile.data?.node, null);
+
+    const malformedSelectedProfile = await requestGraphQLWithSession(
+      query,
+      { id },
+      { ...auth.session, profileId: 'not-a-uuid' },
+    );
+    assertNoGraphQLErrors(malformedSelectedProfile);
+    assert.equal(malformedSelectedProfile.data?.node, null);
+  });
+
+  test('preserves follower/followee command direction and approval Notification effects', async () => {
+    const followerAuth = await createAuthenticatedSession();
+    const followeeAuth = await createAuthenticatedSession();
+    const outsiderAuth = await createAuthenticatedSession();
+    await db
+      .update(Profiles)
+      .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
+      .where(eq(Profiles.id, followeeAuth.profile.id));
+
+    const requested = await requestGraphQL<{
+      followProfile: {
+        followeeProfile: { followersCount: number; id: string };
+        followerProfile: { followingCount: number; id: string };
+        result: { __typename: string; id: string };
+      };
+    }>(
+      `mutation CreateApprovalRequiredFollow($id: ID!) {
+        followProfile(input: { id: $id }) {
+          followeeProfile { followersCount id }
+          followerProfile { followingCount id }
+          result { __typename ... on ProfileFollowRequest { id } }
+        }
+      }`,
+      { id: globalId('Profile', followeeAuth.profile.id) },
+      followerAuth.token,
+    );
+    assertNoGraphQLErrors(requested);
+    assert.deepEqual(requested.data?.followProfile, {
+      followeeProfile: {
+        followersCount: 0,
+        id: globalId('Profile', followeeAuth.profile.id),
+      },
+      followerProfile: {
+        followingCount: 0,
+        id: globalId('Profile', followerAuth.profile.id),
+      },
+      result: {
+        __typename: 'ProfileFollowRequest',
+        id: requested.data?.followProfile.result.id,
+      },
+    });
+    const requestId = requested.data!.followProfile.result.id;
+    assert.equal(await db.$count(ProfileFollowRequests), 1);
+    assert.equal(await db.$count(ProfileFollows), 0);
+    assert.equal(
+      await db.$count(
+        Notifications,
+        and(
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+          eq(Notifications.sourceId, decodeGlobalId(requestId).id),
+        ),
+      ),
+      1,
+    );
+    assert.deepEqual(
+      await requestProfileNotificationKinds(followeeAuth.profile.id, followeeAuth.token),
+      [
+        {
+          kind: 'FollowRequestNotification',
+          profileId: globalId('Profile', followerAuth.profile.id),
+        },
+      ],
+    );
+
+    const sameAccountOtherProfile = await createProfile({
+      handle: 'approval-other-selected',
+      instanceId: localInstanceId,
+    });
+    await db.insert(AccountProfiles).values({
+      accountId: followerAuth.account.id,
+      profileId: sameAccountOtherProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: sameAccountOtherProfile.id })
+      .where(eq(Sessions.id, followerAuth.session.id));
+    const otherSelectedApproval = await requestGraphQL(
+      `mutation OtherSelectedApprove($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: requestId },
+      followerAuth.token,
+    );
+    assertGraphQLErrorCode(otherSelectedApproval, 'NOT_FOUND');
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: followerAuth.profile.id })
+      .where(eq(Sessions.id, followerAuth.session.id));
+
+    const wrongRoleApproval = await requestGraphQL(
+      `mutation FollowerApprove($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: requestId },
+      followerAuth.token,
+    );
+    assertGraphQLErrorCode(wrongRoleApproval, 'PERMISSION_DENIED');
+    const wrongRoleCancel = await requestGraphQL(
+      `mutation FolloweeCancel($id: ID!) {
+        cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: requestId },
+      followeeAuth.token,
+    );
+    assertGraphQLErrorCode(wrongRoleCancel, 'PERMISSION_DENIED');
+    assert.equal(await db.$count(ProfileFollowRequests), 1);
+
+    const outsiderApproval = await requestGraphQL(
+      `mutation OutsiderApprove($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: requestId },
+      outsiderAuth.token,
+    );
+    assertGraphQLErrorCode(outsiderApproval, 'NOT_FOUND');
+    const absentApproval = await requestGraphQL(
+      `mutation AbsentApprove($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: globalId('ProfileFollowRequest', crypto.randomUUID()) },
+      followeeAuth.token,
+    );
+    assertGraphQLErrorCode(absentApproval, 'NOT_FOUND');
+
+    const approved = await requestGraphQL<{
+      approveProfileFollowRequest: {
+        followeeProfile: { followersCount: number; id: string };
+        followerProfile: { followingCount: number; id: string };
+        profileFollow: { id: string };
+        profileFollowRequestId: string;
+      };
+    }>(
+      `mutation ApproveFollow($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) {
+          followeeProfile { followersCount id }
+          followerProfile { followingCount id }
+          profileFollow { id }
+          profileFollowRequestId
+        }
+      }`,
+      { id: requestId },
+      followeeAuth.token,
+    );
+    assertNoGraphQLErrors(approved);
+    assert.deepEqual(approved.data?.approveProfileFollowRequest, {
+      followeeProfile: {
+        followersCount: 1,
+        id: globalId('Profile', followeeAuth.profile.id),
+      },
+      followerProfile: {
+        followingCount: 1,
+        id: globalId('Profile', followerAuth.profile.id),
+      },
+      profileFollow: { id: approved.data?.approveProfileFollowRequest.profileFollow.id },
+      profileFollowRequestId: requestId,
+    });
+    assert.equal(await db.$count(ProfileFollowRequests), 0);
+    assert.equal(await db.$count(ProfileFollows), 1);
+    assert.equal(
+      await db.$count(
+        Notifications,
+        and(
+          eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+          eq(Notifications.sourceId, decodeGlobalId(requestId).id),
+        ),
+      ),
+      0,
+    );
+    assert.equal(
+      await db.$count(Notifications, eq(Notifications.kind, NotificationKind.FOLLOW)),
+      1,
+    );
+    assert.deepEqual(
+      await requestProfileNotificationKinds(followeeAuth.profile.id, followeeAuth.token),
+      [{ kind: 'FollowNotification', profileId: globalId('Profile', followerAuth.profile.id) }],
+    );
+
+    const repeatedApproval = await requestGraphQL(
+      `mutation RepeatedApprove($id: ID!) {
+        approveProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: requestId },
+      followeeAuth.token,
+    );
+    assertGraphQLErrorCode(repeatedApproval, 'NOT_FOUND');
+    assert.equal(await db.$count(ProfileFollowRequests), 0);
+    assert.equal(await db.$count(ProfileFollows), 1);
+  });
+
+  test('reject and cancel remove request Notifications without creating relationships', async () => {
+    for (const action of ['reject', 'cancel'] as const) {
+      const followerAuth = await createAuthenticatedSession();
+      const followeeAuth = await createAuthenticatedSession();
+      await db
+        .update(Profiles)
+        .set({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED })
+        .where(eq(Profiles.id, followeeAuth.profile.id));
+
+      const requested = await requestGraphQL<{
+        followProfile: { result: { __typename: string; id: string } };
+      }>(
+        `mutation CreatePendingFollow($id: ID!) {
+          followProfile(input: { id: $id }) {
+            result { __typename ... on ProfileFollowRequest { id } }
+          }
+        }`,
+        { id: globalId('Profile', followeeAuth.profile.id) },
+        followerAuth.token,
+      );
+      assertNoGraphQLErrors(requested);
+      assert.equal(requested.data?.followProfile.result.__typename, 'ProfileFollowRequest');
+      const requestId = requested.data!.followProfile.result.id;
+      assert.deepEqual(
+        await requestProfileNotificationKinds(followeeAuth.profile.id, followeeAuth.token),
+        [
+          {
+            kind: 'FollowRequestNotification',
+            profileId: globalId('Profile', followerAuth.profile.id),
+          },
+        ],
+      );
+
+      const terminal = await requestGraphQL(
+        action === 'reject'
+          ? `mutation RejectPendingFollow($id: ID!) {
+              rejectProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+            }`
+          : `mutation CancelPendingFollow($id: ID!) {
+              cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+            }`,
+        { id: requestId },
+        action === 'reject' ? followeeAuth.token : followerAuth.token,
+      );
+      assertNoGraphQLErrors(terminal);
+      assert.equal(await db.$count(ProfileFollowRequests), 0);
+      assert.equal(await db.$count(ProfileFollows), 0);
+      assert.equal(
+        await db.$count(
+          Notifications,
+          and(
+            eq(Notifications.kind, NotificationKind.FOLLOW_REQUEST),
+            eq(Notifications.sourceId, decodeGlobalId(requestId).id),
+          ),
+        ),
+        0,
+      );
+      assert.deepEqual(
+        await requestProfileNotificationKinds(followeeAuth.profile.id, followeeAuth.token),
+        [],
+      );
+    }
+  });
+
   test('reads visible established relationships and stored counts for a remote profile', async () => {
     const remoteInstance = await createRemoteInstance();
     const counterpartInstance = await createRemoteInstance({
@@ -817,6 +1216,34 @@ type NodeFollowGraph = {
   node: Omit<FollowGraphProfile, 'followersCount' | 'followingCount'> | null;
 };
 
+type ProfileFollowRequestNodeResult = {
+  node: { id: string } | null;
+};
+
+type ProfileNotification = {
+  kind: string;
+  profileId: string;
+};
+
+type ProfileNotificationsResult = {
+  node: {
+    notifications: {
+      edges: Array<{
+        node: {
+          __typename: string;
+          profile?: { id: string };
+        };
+      }>;
+    };
+  } | null;
+};
+
+type SessionOverride = {
+  id: string;
+  accountId: string;
+  profileId: string | null;
+};
+
 const followGraphFields = `
   followers(first: 10) { edges { node { id follower { id } followee { id } } } }
   following(first: 10) { edges { node { id follower { id } followee { id } } } }
@@ -833,6 +1260,49 @@ const requestNodeFollowGraph = (id: string, token: string) =>
     { id: globalId('Profile', id) },
     token,
   );
+
+const requestProfileFollowRequestNode = (id: string, token?: string) =>
+  requestGraphQL<ProfileFollowRequestNodeResult>(
+    `query ProfileFollowRequestNode($id: ID!) {
+      node(id: $id) {
+        ... on ProfileFollowRequest { id }
+      }
+    }`,
+    { id: globalId('ProfileFollowRequest', id) },
+    token,
+  );
+
+const requestProfileNotificationKinds = async (
+  profileId: string,
+  token: string,
+): Promise<ProfileNotification[]> => {
+  const result = await requestGraphQL<ProfileNotificationsResult>(
+    `query ProfileNotifications($id: ID!) {
+      node(id: $id) {
+        ... on Profile {
+          notifications(first: 10) {
+            edges {
+              node {
+                __typename
+                ... on FollowNotification { profile { id } }
+                ... on FollowRequestNotification { profile { id } }
+              }
+            }
+          }
+        }
+      }
+    }`,
+    { id: globalId('Profile', profileId) },
+    token,
+  );
+  assertNoGraphQLErrors(result);
+  return (
+    result.data?.node?.notifications.edges.map(({ node }) => ({
+      kind: node.__typename,
+      profileId: node.profile?.id ?? '',
+    })) ?? []
+  );
+};
 
 const requestFollowGraph = (handle: string, token?: string) =>
   requestGraphQL<FollowGraph>(
@@ -972,8 +1442,36 @@ const requestGraphQL = async <TData = Record<string, unknown>>(
   return (await response.json()) as GraphQLResult<TData>;
 };
 
+const requestGraphQLWithSession = async <TData = Record<string, unknown>>(
+  query: string,
+  variables: Record<string, unknown>,
+  session: SessionOverride,
+): Promise<GraphQLResult<TData>> => {
+  const scopedApp = new Hono<Env>();
+  scopedApp.use('*', async (c, next) => {
+    const context = await deriveContext(c);
+    context.session = session;
+    c.set('context', context);
+    return next();
+  });
+  scopedApp.route('/graphql', yoga);
+
+  const response = await scopedApp.request('/graphql', {
+    body: JSON.stringify({ query, variables }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+
+  assert.equal(response.status, 200);
+  return (await response.json()) as GraphQLResult<TData>;
+};
+
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+};
+
+const assertGraphQLErrorCode = (result: GraphQLResult<unknown>, code: string) => {
+  assert.equal(result.errors?.[0]?.extensions?.code, code, JSON.stringify(result.errors));
 };
 
 const createRemoteInstance = async ({

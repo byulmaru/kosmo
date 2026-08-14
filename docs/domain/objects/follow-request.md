@@ -45,6 +45,14 @@ Follow Request는 Follower Profile이 승인제 Followee Profile에게 보낸 �
 | `FollowRequest.Followee`    | 객체 종속 | 행동/요청 Profile이 Follow Request의 Followee Profile이다 |
 | `FollowRequest.Participant` | 객체 종속 | 요청 Profile이 Follower 또는 Followee Profile이다         |
 
+### Mutation 오류 정책
+
+- 요청 ID가 존재하지 않거나 현재 selected Profile이 요청 participant가 아니면 요청 존재 여부를 구분하지 않고
+  Not Found로 처리한다.
+- 현재 selected Profile이 participant이지만 승인·거절의 Followee 또는 취소의 Follower 역할과 일치하지 않으면
+  Permission Denied로 처리한다.
+- 이미 승인, 거절 또는 취소되어 제거된 요청 ID는 Not Found로 처리한다.
+
 ## 조회 정책
 
 - Follow Request는 Followers Only Post 접근 권한이나 Follow Relationship을 만들지 않는다.

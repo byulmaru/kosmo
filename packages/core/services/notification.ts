@@ -141,7 +141,7 @@ export const createFollowRequestNotification = async (
   handle?: Database,
 ): Promise<void> => {
   await getDatabaseConnection(handle).transaction(async (tx) => {
-    const source = await tx
+    const sourceQuery = tx
       .select({
         id: ProfileFollowRequests.id,
         recipientProfileId: ProfileFollowRequests.followeeProfileId,
@@ -157,9 +157,14 @@ export const createFollowRequestNotification = async (
           eq(Profiles.state, ProfileState.ACTIVE),
         ),
       )
-      .limit(1)
-      .for('update', { of: ProfileFollowRequests })
-      .then((rows) => rows[0]);
+      .limit(1);
+
+    // GraphQL operation handles run as kosmo_api, whose request table intentionally has no
+    // UPDATE policy. The owner/trusted global connection retains the source lock used by
+    // terminal-race protection; the non-owner operation path remains SELECT-only.
+    const source = await (
+      handle ? sourceQuery : sourceQuery.for('update', { of: ProfileFollowRequests })
+    ).then((rows) => rows[0]);
 
     // The source may have reached a terminal state between the source commit and this
     // post-commit effect. In that case there is no Notification to project.

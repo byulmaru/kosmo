@@ -488,7 +488,7 @@ export const ProfileFollows = pgTable(
   ],
 );
 
-export const ProfileFollowRequests = pgTable(
+export const ProfileFollowRequests = pgTable.withRLS(
   'profile_follow_request',
   {
     id: id(),
@@ -501,6 +501,27 @@ export const ProfileFollowRequests = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
+    pgPolicy('profile_follow_request_graphql_participant_select', {
+      for: 'select',
+      to: 'kosmo_api',
+      using: sql`
+        ${table.followerProfileId} = public.kosmo_current_profile_id()
+        OR ${table.followeeProfileId} = public.kosmo_current_profile_id()
+      `,
+    }),
+    pgPolicy('profile_follow_request_graphql_follower_insert', {
+      for: 'insert',
+      to: 'kosmo_api',
+      withCheck: sql`${table.followerProfileId} = public.kosmo_current_profile_id()`,
+    }),
+    pgPolicy('profile_follow_request_graphql_participant_delete', {
+      for: 'delete',
+      to: 'kosmo_api',
+      using: sql`
+        ${table.followerProfileId} = public.kosmo_current_profile_id()
+        OR ${table.followeeProfileId} = public.kosmo_current_profile_id()
+      `,
+    }),
     unique().on(table.followerProfileId, table.followeeProfileId),
     index().on(table.followeeProfileId),
     index().on(table.followerProfileId),
