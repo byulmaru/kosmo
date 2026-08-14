@@ -90,4 +90,4 @@ PROD-769의 독립 구현·비운영 증거를 과장 없이 Ready PR로 전달�
 
 - [x] 3.1 focused migration/API/core 검증과 repository formatting·lint·type/Drizzle checks를 통과시킨다.
 - [x] 3.2 OpenSpec target/all strict validation과 implementation self-review를 통과시키고 tasks를 실제 증거와 동기화한다.
-- [ ] 3.3 의도한 파일만 commit/push하고 한국어 Ready PR을 열어 code/CI, 비운영 role matrix와 production 미수행 상태를 분리해 기록한다.
+- [x] 3.3 의도한 파일만 commit/push하고 한국어 Ready PR을 열어 code/CI, 비운영 role matrix와 production 미수행 상태를 분리해 기록한다.
