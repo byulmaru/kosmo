@@ -36,7 +36,7 @@ Notification GraphQL은 operation selected Profile과 다른 recipient Profile�
 
 Drizzle table metadata에 RLS와 `TO kosmo_api` policy를 선언하고, 생성된 migration에서 다음 구조를 확인한다.
 
-1. Post SELECT policy는 `AS RESTRICTIVE FOR SELECT`로 Author Profile/Instance를 correlated `EXISTS`로 확인하고 Active row에만 PUBLIC/UNLISTED·author·established follower를 허용한다. DIRECT는 author branch로만 통과하고 DELETED row는 모든 `kosmo_api` viewer에게 숨긴다.
+1. Post SELECT policy는 `AS RESTRICTIVE FOR SELECT`로 Author Profile/Instance를 correlated `EXISTS`로 확인하고 Active row에만 PUBLIC/UNLISTED·author·established follower를 허용한다. FOLLOWERS membership은 현재 viewer의 `profile_follow.followee_profile_id` 집합에 대한 `IN` subquery로 표현해 다량 Post 조회에서 set-oriented plan을 허용한다. DIRECT는 author branch로만 통과하고 DELETED row는 모든 `kosmo_api` viewer에게 숨긴다.
 2. 각 table에 `AS PERMISSIVE FOR ALL USING (true) WITH CHECK (true)` transition policy 하나를 둬 INSERT/UPDATE/DELETE command를 함께 허용하고 restrictive SELECT policy가 적용될 permissive 기반도 제공한다.
 3. PostgreSQL은 같은 command의 permissive 결과와 restrictive 결과를 `AND`로 결합한다. 일반 SELECT는 `true AND viewer predicate`로 제한되며, `WHERE`나 `RETURNING` 때문에 SELECT 권한이 필요한 UPDATE/DELETE에도 restrictive SELECT가 함께 적용된다.
 4. PostContent SELECT는 부모 Post를 참조하는 `EXISTS`를 사용하고 부모 Post의 RLS 결과를 소비한다. 이 방식은 visibility SQL을 두 table에 복사하지 않고 Post 정책 변경을 함께 반영한다.

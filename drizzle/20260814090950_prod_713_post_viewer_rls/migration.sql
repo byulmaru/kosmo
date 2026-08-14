@@ -14,11 +14,10 @@ CREATE POLICY "post_graphql_viewer_select" ON "post" AS RESTRICTIVE FOR SELECT T
               OR "post"."profile_id" = public.kosmo_current_profile_id()
               OR (
                 "post"."visibility" = 'FOLLOWERS'
-                AND EXISTS (
-                  SELECT 1
+                AND "post"."profile_id" IN (
+                  SELECT established_follow.followee_profile_id
                   FROM public.profile_follow AS established_follow
                   WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()
-                    AND established_follow.followee_profile_id = "post"."profile_id"
                 )
               )
             )

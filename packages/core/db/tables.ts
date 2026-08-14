@@ -368,11 +368,10 @@ export const Posts = pgTable.withRLS(
               OR ${table.profileId} = public.kosmo_current_profile_id()
               OR (
                 ${table.visibility} = 'FOLLOWERS'
-                AND EXISTS (
-                  SELECT 1
+                AND ${table.profileId} IN (
+                  SELECT established_follow.followee_profile_id
                   FROM public.profile_follow AS established_follow
                   WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()
-                    AND established_follow.followee_profile_id = ${table.profileId}
                 )
               )
             )
