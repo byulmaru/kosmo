@@ -12,16 +12,16 @@ const theme = {
   actionPrimaryHover: 'primary-hover',
   actionPrimaryOnBase: 'primary-on-base',
   actionPrimaryPressed: 'primary-pressed',
-  backgroundSurface: 'surface',
-  borderDefault: 'border-default',
+  actionSecondaryBase: 'secondary-base',
+  actionSecondaryBorder: 'secondary-border',
+  actionSecondaryHover: 'secondary-hover',
+  actionSecondaryOnBase: 'secondary-on-base',
+  actionSecondaryPressed: 'secondary-pressed',
   feedbackDangerBase: 'danger-base',
   feedbackDangerOnBase: 'danger-on-base',
-  foregroundPrimary: 'foreground-primary',
   stateDisabledForeground: 'disabled-foreground',
   stateDisabledSurface: 'disabled-surface',
   stateFocusRing: 'focus-ring',
-  stateHover: 'state-hover',
-  statePressed: 'state-pressed',
 };
 
 mockModule('react-native', {
@@ -99,11 +99,11 @@ test('Button consumes semantic foreground pairs and state tokens', () => {
   assert.equal(primary.label.color, 'primary-on-base');
 
   const secondary = render('secondary');
-  assert.equal(secondary.resting.backgroundColor, 'surface');
-  assert.equal(secondary.resting.borderColor, 'border-default');
-  assert.equal(secondary.hovered.backgroundColor, 'state-hover');
-  assert.equal(secondary.pressed.backgroundColor, 'state-pressed');
-  assert.equal(secondary.label.color, 'foreground-primary');
+  assert.equal(secondary.resting.backgroundColor, 'secondary-base');
+  assert.equal(secondary.resting.borderColor, 'secondary-border');
+  assert.equal(secondary.hovered.backgroundColor, 'secondary-hover');
+  assert.equal(secondary.pressed.backgroundColor, 'secondary-pressed');
+  assert.equal(secondary.label.color, 'secondary-on-base');
 
   const danger = render('danger');
   assert.equal(danger.resting.backgroundColor, 'danger-base');
