@@ -10,7 +10,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 passwordless `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 Web과 enabled Temporal Worker의 기본 `DATABASE_URL`/`DATABASE_PASSWORD`에 사용한다. Runtime은 password를 URL userinfo에 조립하지 않고 postgres client option으로 전달한다. 두 workload는 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
+- Decision Outcome: Chart가 생성한 기존 direct read-write Service의 `PGHOST`/`PGPORT`, 고정 `PGUSER=kosmo_worker`/`PGDATABASE=kosmo`와 PROD-369의 release별 `PGPASSWORD` Secret ref를 Web과 enabled Temporal Worker의 process 기본 DB에 사용한다. 두 workload는 `DATABASE_URL`/`DATABASE_PASSWORD` 없이 postgres.js의 표준 PG env 해석과 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
 - Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 GraphQL 전용 `ctx.db` 경계와 맞지 않고 callsite migration을 불필요하게 만든다.
 - Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL operation은 별도 `kosmo_api` 경계를 유지한다.
 
@@ -22,7 +22,7 @@
 - Authority / Provenance: Linear `PROD-369`, `PROD-715`; canceled `PROD-470`
 - Decision Outcome: Web과 enabled Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. PgBouncer는 GraphQL operation connection에만 사용한다.
 - Alternatives Considered: Worker에 전용 Pooler나 custom authentication을 만드는 방식은 필요 없는 pooling·운영 경계를 추가한다. direct endpoint에 client certificate 인증을 추가하는 대안은 취소된 PROD-470 계약으로 재개하지 않는다.
-- Consequences: Worker URL은 chart가 고정된 `kosmo_worker`/`kosmo`와 기존 direct read-write Service endpoint로 생성하고 Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
+- Consequences: Worker `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`는 chart가 direct endpoint와 고정 principal/database로 생성하고 `PGPASSWORD` Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
 
 ### API selector와 고정 Worker source의 workload 소유권을 분리한다
 
@@ -30,19 +30,19 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: API selector source는 API Rollout의 `DATABASE_*`/`OPERATION_DATABASE_*`에만 사용하고 고정 Worker source는 Web/Worker 기본 `DATABASE_*`에만 사용한다. API Rollout에는 Worker Secret/env를 주입하지 않는다.
+- Decision Outcome: API selector source는 API Rollout의 `DATABASE_*`/`OPERATION_DATABASE_*`에만 사용하고 고정 Worker source는 Web/Worker 기본 표준 `PG*` env에만 사용한다. API Rollout에는 Worker Secret/env를 주입하지 않는다.
 - Alternatives Considered: Web BFF에 API source를 계속 공유하면 비GraphQL trusted Web 경로가 `kosmo_api` RLS principal로 실행된다.
 - Consequences: API selector는 Web/Worker source나 rollback에 관여하지 않는다.
 
-### Worker URL과 Secret ref는 selector 없이 고정 생성한다
+### Worker PG env와 Secret ref는 selector 없이 고정 생성한다
 
 - Date: 2026-08-14
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-709`, `PROD-715`
-- Decision Outcome: API는 기존 URL/password Secret trio를 유지한다. Worker는 values 입력을 전혀 받지 않고 URL과 Secret name/key를 chart의 release naming으로 생성한다.
+- Decision Outcome: API는 기존 URL/password Secret trio를 유지한다. Worker는 values 입력을 전혀 받지 않고 표준 PG env와 Secret name/key를 chart의 release naming과 고정 계약으로 생성한다.
 - Alternatives Considered: API와 동일한 임의 URL selector나 `enabled` flag를 Worker에도 두면 고정된 principal/database/endpoint에 도달 불가능하거나 불필요한 상태와 URL/Secret 불일치 가능성을 만든다.
-- Consequences: Secret value는 values/rendered manifest에 나타나지 않고 고정 SecretKeyRef로만 주입한다. DatabaseRole과 workload가 같은 Secret-name helper를 사용한다.
+- Consequences: Secret value는 values/rendered manifest에 나타나지 않고 `PGPASSWORD` SecretKeyRef로만 주입한다. DatabaseRole과 workload가 같은 Secret-name helper를 사용한다.
 
 ### PROD-715는 기존 Temporal Worker activation gate를 유지한다
 
@@ -60,7 +60,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, user decision
-- Decision Outcome: `worker-database` VaultStaticSecret destination이 변경되면 Web Rollout은 workload gate에서 재시작하고, Temporal Worker Deployment는 `workloads.enabled && worker.enabled`일 때만 restart target으로 재시작해 새 `DATABASE_PASSWORD` SecretKeyRef를 적용한다.
+- Decision Outcome: `worker-database` VaultStaticSecret destination이 변경되면 Web Rollout은 workload gate에서 재시작하고, Temporal Worker Deployment는 `workloads.enabled && worker.enabled`일 때만 restart target으로 재시작해 새 `PGPASSWORD` SecretKeyRef를 적용한다.
 - Alternatives Considered: Pod를 재시작하지 않으면 env로 주입된 기존 password가 남아 Secret rotation 뒤 인증 실패가 발생할 수 있다.
 - Consequences: rotation은 기존 VSO destination과 workload restart lifecycle을 사용하며 별도 runtime credential refresh, URL 감지 또는 compatibility flag를 만들지 않는다.
 

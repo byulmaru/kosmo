@@ -102,10 +102,6 @@ password
 {{- end -}}
 {{- end -}}
 
-{{- define "kosmo.workerDatabaseUrl" -}}
-{{- printf "postgres://kosmo_worker@%s-rw:5432/kosmo" (include "kosmo.postgresName" .) -}}
-{{- end -}}
-
 {{- define "kosmo.workerDatabasePasswordSecretName" -}}
 {{- printf "%s-postgres-worker" (.Release.Name | trunc 47 | trimSuffix "-") -}}
 {{- end -}}

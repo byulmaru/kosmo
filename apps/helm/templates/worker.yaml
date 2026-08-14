@@ -66,13 +66,19 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
-            - name: DATABASE_PASSWORD
+            - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kosmo.workerDatabasePasswordSecretName" . | quote }}
                   key: password
-            - name: DATABASE_URL
-              value: {{ include "kosmo.workerDatabaseUrl" . | quote }}
+            - name: PGHOST
+              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              value: kosmo_worker
+            - name: PGDATABASE
+              value: kosmo
           envFrom:
             - secretRef:
                 name: env

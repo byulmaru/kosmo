@@ -33,7 +33,7 @@ Evidence (2026-08-10): PR #564 merge `2c65b6dc`; Helm selector matrix, partial f
 
 ### Deliverable
 
-Web과 enabled Temporal Worker workload의 process 기본 `DATABASE_*`가 values selector 없이 chart-derived Worker URL/Secret을 사용하고, Git revert로 승인된 owner source에 rollback한다. 기존 `workloads.enabled && worker.enabled` activation gate는 유지한다.
+Web과 enabled Temporal Worker workload의 process 기본 DB가 values selector 없이 chart-derived 표준 PG env Worker source를 사용하고, Git revert로 승인된 owner source에 rollback한다. 기존 `workloads.enabled && worker.enabled` activation gate는 유지한다.
 
 ### Guardrails
 
@@ -46,22 +46,22 @@ Web과 enabled Temporal Worker workload의 process 기본 `DATABASE_*`가 values
 ### Verification
 
 - default와 API selector 활성/비활성, PROD-715 적용 전후와 Git revert render를 비교한다.
-- Web과 enabled Worker 기본 `DATABASE_*`만 Worker source를 사용하고 API/migration/queue documents가 불변인지 확인한다.
-- 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에 Worker Secret ref가 없는지 확인한다.
-- Worker credential values가 없고 URL/Secret ref가 PROD-369 release naming에서 함께 생성되는지 확인한다.
+- Web과 enabled Worker 기본 `PG*` env만 Worker source를 사용하고 API/migration/queue documents가 불변인지 확인한다.
+- Web/Worker 공용 `envFrom`에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*` 또는 충돌하는 `PG*` key가 없고 API에 Worker Secret ref가 없는지 확인한다.
+- Worker credential values가 없고 표준 `PG*` env/Secret ref가 PROD-369 release naming에서 함께 생성되는지 확인한다.
 - default `worker.enabled=false` render에서 Worker ServiceAccount/Deployment와 Worker restart target이 부재하고, 명시적으로 `worker.enabled=true`를 준 render에서만 Worker ServiceAccount/Deployment·direct source·Worker restart target이 존재하는지 확인한다.
 
 - [x] 2.1 최신 Linear에서 PROD-369/724/709 완료와 PROD-710 취소, 역할·ACL·selector 경계를 독립 확인한다.
-- [x] 2.2 Web과 enabled Worker 기본 DB URL/password helper와 template wiring을 구현하고 별도 Worker env를 제거한다. 사용자 단순화 결정에 따라 Worker values selector 전체를 제거하고 URL/Secret ref를 chart-derived 값으로 고정한다.
+- [x] 2.2 Web과 enabled Worker 기본 DB의 표준 `PG*` env와 Secret ref wiring을 구현하고 별도 Worker env를 제거한다. 사용자 단순화 결정에 따라 Worker values selector 전체를 제거하고 source를 chart-derived 값으로 고정한다.
 - [x] 2.3 고정 Worker source·Git revert rollback·API/migration/queue 음성 경계를 검증한다.
 - [x] 2.4 적용되는 운영 문서와 OpenSpec artifacts를 최신 기본 DB 계약으로 정렬한다.
 - [x] 2.5 기존 `worker.enabled` default-disabled activation gate를 유지하고, 명시적으로 enabled된 Worker template에만 direct Worker source와 conditional Secret restart target을 연결한다.
 - 2.6 이전 초안의 always-render/healthy-idle Worker runtime task는 PROD-722가 소유하는 registration·singleton lifecycle 범위로 이동했으며 PROD-715 task와 완료 evidence에서 제거한다.
-- [x] 2.7 Worker SCRAM password를 URL userinfo에 보간하지 않고 `DATABASE_PASSWORD` postgres client option으로 전달하며 URL 특수문자 회귀를 검증한다.
+- [x] 2.7 Web/Worker process 기본 DB를 `DATABASE_URL`/`DATABASE_PASSWORD` 조립 없이 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` env로 전달하고 URL 특수문자 의존을 제거한다.
 
-Evidence (2026-08-14): Web과 enabled Worker template의 기본 `DATABASE_*`가 별도 Worker values 없이 chart-derived direct read-write `kosmo_worker` URL과 PROD-369의 release별 Worker Secret ref를 사용하고, DatabaseRole과 workload가 같은 Secret-name helper를 공유하는지 정적 render로 확인했다. default `worker.enabled=false` render에서는 Worker resource와 Worker restart target이 없고, 명시적 `worker.enabled=true` render에서만 Worker ServiceAccount/Deployment·direct source·Worker restart target이 존재하는지 확인했다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 PROD-715 wiring 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. `worker-database` Secret 변경 시 Web Rollout은 유지되고 enabled Worker Deployment만 restart target을 사용하며, Git revert diff가 Web 기본 DB와 enabled Worker source를 pre-PROD-715 manifest로 복구하는지 확인한다. Worker runtime registration/lifecycle 또는 Worker package runtime test는 이 change의 evidence가 아니다. 관련 change strict, 운영 문서 assertion의 Helm lint/render, Prettier와 diff check를 통과했다.
+Evidence (2026-08-14): Web과 enabled Worker template의 기본 DB가 별도 Worker values 없이 chart-derived direct read-write `PGHOST`/`PGPORT`, 고정 `PGUSER`/`PGDATABASE`와 PROD-369의 release별 Worker `PGPASSWORD` Secret ref를 사용하고, DatabaseRole과 workload가 같은 Secret-name helper를 공유하는지 정적 render로 확인했다. default `worker.enabled=false` render에서는 Worker resource와 Worker restart target이 없고, 명시적 `worker.enabled=true` render에서만 Worker ServiceAccount/Deployment·direct source·Worker restart target이 존재하는지 확인했다. 어떤 workload에도 `WORKER_DATABASE_*`가 없고 API에는 Worker Secret ref가 없으며, migration과 Fedify consumer documents는 PROD-715 wiring 전후 byte-identical하고 `FEDIFY_QUEUE_DATABASE_*`는 `kosmo_fedify_queue` source를 유지한다. `worker-database` Secret 변경 시 Web Rollout은 유지되고 enabled Worker Deployment만 restart target을 사용하며, Git revert diff가 Web 기본 DB와 enabled Worker source를 pre-PROD-715 manifest로 복구하는지 확인한다. Worker runtime registration/lifecycle 또는 Worker package runtime test는 이 change의 evidence가 아니다. 관련 change strict, 운영 문서 assertion의 Helm lint/render, Prettier와 diff check를 통과했다.
 
-Evidence (2026-08-14 follow-up): merge SHA `54ff6880` dev preview에서 raw password URL이 `ERR_INVALID_URL`로 실패함을 확인했다. Worker URL을 passwordless userinfo로 render하고 기존 `DATABASE_PASSWORD` SecretKeyRef를 postgres client `password` option으로 전달하도록 수정했다. URL 문법 특수문자를 포함한 password option 단위 테스트, Worker passwordless URL render, dev/prod Helm lint, change strict, Prettier와 diff check를 통과했다. Live readiness/principal 재검증은 fix 배포 뒤 3단계에서 완료한다.
+Evidence (2026-08-14 follow-up): merge SHA `54ff6880` dev preview에서 raw password URL이 `ERR_INVALID_URL`로 실패함을 확인했다. 사용자 결정에 따라 Web/Worker의 URL/password 조립을 제거하고 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` env로 전환했다. postgres.js가 URL 없이 표준 PG env를 해석하는 subprocess 회귀, Web/Worker render, dev/prod Helm lint, change strict, Prettier와 diff check를 통과했다. Live readiness/principal 재검증은 fix 배포 뒤 3단계에서 완료한다.
 
 ## 3. 비운영 integration과 completion
 

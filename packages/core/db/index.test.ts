@@ -40,7 +40,36 @@ test('keeps operation client bounded and isolated from direct startup parameters
   assert.equal(forceEnd.mock.calls.length, 1);
 });
 
-test('passes DATABASE_PASSWORD separately from the process database URL', () => {
+test('uses standard PG environment variables without a process database URL', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--input-type=module',
+      '-e',
+      "const { pg } = await import('./db/index.ts'); const expected = { host: ['db.example'], port: [6543], user: 'kosmo_worker', database: 'kosmo', pass: process.env.PGPASSWORD }; for (const [key, value] of Object.entries(expected)) if (JSON.stringify(pg.options[key]) !== JSON.stringify(value)) throw new Error(key + ' option mismatch'); await pg.end({ timeout: 0 });",
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        DATABASE_URL: '',
+        DATABASE_PASSWORD: '',
+        PGHOST: 'db.example',
+        PGPORT: '6543',
+        PGUSER: 'kosmo_worker',
+        PGDATABASE: 'kosmo',
+        PGPASSWORD: 'slash/at@question?hash#percent%',
+      },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('keeps the separate password option for workloads using a process database URL', () => {
   const result = spawnSync(
     process.execPath,
     [

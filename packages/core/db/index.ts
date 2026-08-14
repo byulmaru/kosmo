@@ -17,14 +17,19 @@ const postgresConnectionOptions = {
   },
 } as const;
 
-const getDatabasePasswordOption = () =>
-  process.env.DATABASE_PASSWORD === undefined ? {} : { password: process.env.DATABASE_PASSWORD };
-
-export const pg = postgres(process.env.DATABASE_URL!, {
+const processDatabaseOptions = {
   ...postgresConnectionOptions,
-  ...getDatabasePasswordOption(),
   max: 20,
-});
+} as const;
+
+export const pg = process.env.DATABASE_URL
+  ? postgres(process.env.DATABASE_URL, {
+      ...processDatabaseOptions,
+      ...(process.env.DATABASE_PASSWORD === undefined
+        ? {}
+        : { password: process.env.DATABASE_PASSWORD }),
+    })
+  : postgres(processDatabaseOptions);
 
 export const db = drizzle({
   client: pg,
