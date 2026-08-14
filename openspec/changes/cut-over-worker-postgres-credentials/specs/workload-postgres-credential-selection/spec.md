@@ -48,13 +48,16 @@
 
 - **WHEN** `workloads.enabled=true`와 기본 `worker.enabled=false` 또는 생략된 `worker.enabled`로 chart를 렌더한다
 - **THEN** Worker ServiceAccount와 Deployment가 존재하지 않는다
-- **AND** Worker source와 Worker restart target은 Web에 유입되지 않는다
+- **AND** Web은 chart가 생성한 `kosmo_worker` direct source를 계속 사용한다
+- **AND** Web Rollout은 `worker-database` Secret 변경 시 재시작 대상으로 유지된다
+- **AND** Worker Deployment restart target은 렌더되지 않는다
 
 #### Scenario: Worker activation override
 
 - **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 chart를 렌더한다
 - **THEN** Worker ServiceAccount와 Deployment가 존재한다
-- **AND** Worker source와 Worker restart target이 enabled Worker template에만 투영된다
+- **AND** Web과 Worker Deployment가 chart가 생성한 `kosmo_worker` direct source를 사용한다
+- **AND** Web Rollout과 Worker Deployment가 `worker-database` Secret 변경 시 재시작 대상으로 렌더된다
 
 #### Scenario: Worker source rollback
 

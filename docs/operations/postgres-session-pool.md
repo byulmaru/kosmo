@@ -366,60 +366,14 @@ SQL
 
 ## Whole activation application rollback
 
-Operation lifecycle 또는 API endpoint live gate가 실패하면 전체 activation merge/squash revision을 Git revert한다. Revert 결과인 pre-activation revision에서는 기존 API `DATABASE_URL` 경계를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code가 함께 사라져야 한다. GraphQL operation Pooler, Cluster, PROD-715 Web/Worker direct read-write Service 경계, migration workload와 Secret은 수정하지 않는다. PROD-728이 소유한 Pooler 리소스는 유지한다. `kubectl patch`, `kubectl delete` 또는 Argo UI의 out-of-band parameter override는 rollback 방법으로 사용하지 않는다.
+Operation lifecycle 또는 API endpoint live gate가 실패하면 전체 activation 변경을 현재 대상 브랜치에서 Git revert한다. 과거 activation 직전 parent를 별도 검증 기준으로 삼지 않고, 이후 독립 변경을 포함한 현재 target branch에 실제 revert candidate를 만든다. `kubectl patch`, `kubectl delete` 또는 Argo UI의 out-of-band parameter override는 rollback 방법으로 사용하지 않는다.
 
-Revert 전에는 실패한 전체 activation merge/squash revision과 그 revert가 가리키는 pre-activation revision을 고정하고, 임시 worktree에서 pre-activation render를 확인한다. 이 render는 URL 전체를 출력하지 않고 기존 API `DATABASE_URL` host, `OPERATION_DATABASE_URL` 부재, Web/Worker direct host와 migration host assertion의 exit status만 확인한다. PROD-715 Web/Worker direct source는 rollback에서 유지되어야 하며, 같은 revision에 operation plugin/code가 남아 있지 않은지도 source assertion으로 확인한다.
+Rollback candidate와 적용에는 다음 계약을 따른다.
 
-```sh
-set -eu
-ACTIVATION_REVISION=ACTIVATION_MERGE_OR_SQUASH_SHA
-PRE_ACTIVATION_REVISION="${ACTIVATION_REVISION}^1"
-ROLLBACK_WORKTREE=/private/tmp/kosmo-726-rollback
-# 승인된 Git workflow에서 ACTIVATION_REVISION 전체를 revert한다(merge commit은
-# mainline parent를 지정하고, squash commit은 parent 옵션 없이 revert). 결과
-# revert commit SHA는 아래 render가 통과한 뒤 REVERT_REVISION으로 고정하며,
-# 지금은 PRE_ACTIVATION_REVISION tree를 render한다.
-git worktree add --detach "$ROLLBACK_WORKTREE" "$PRE_ACTIVATION_REVISION"
-
-HELM="${HELM:-helm}"
-ROLLBACK_RENDER="$(mktemp)"
-trap 'rm -f "$ROLLBACK_RENDER"; git worktree remove --force "$ROLLBACK_WORKTREE"' EXIT
-"$HELM" template kosmo "$ROLLBACK_WORKTREE/apps/helm" \
-  --namespace kosmo-dev \
-  --set env=dev >"$ROLLBACK_RENDER"
-
-assert_database_host "$ROLLBACK_RENDER" api/rollout.yaml DATABASE_URL 'kosmo-postgres-rw'
-assert_env_absent "$ROLLBACK_RENDER" api/rollout.yaml OPERATION_DATABASE_URL
-assert_database_host "$ROLLBACK_RENDER" database-migration-job.yaml DATABASE_URL 'kosmo-postgres-rw'
-
-if [ -e "$ROLLBACK_WORKTREE/apps/api/src/graphql/plugins/operation-db-session.ts" ] ||
-  rg -q 'useOperationDatabaseSession|OPERATION_DATABASE_URL|createOperationDatabase' \
-    "$ROLLBACK_WORKTREE/apps/api/src/graphql/index.ts" "$ROLLBACK_WORKTREE/packages/core/db/index.ts"; then
-  echo "activation code remains in rollback revision" >&2
-  exit 1
-fi
-```
-
-Render와 source assertion이 통과한 뒤에만 전체 activation merge/squash revision의 Git revert commit을 `main`에 반영하고 대상 Application을 그 revision으로 sync한다. API Rollout readiness, 기존 API `DATABASE_URL`, `OPERATION_DATABASE_URL` env 부재, Web/Worker direct source, migration readiness와 GraphQL health를 확인한다. Rollback 동안 PROD-715 Web/Worker direct source, GraphQL operation Pooler와 Cluster는 그대로 유지해야 하며 Pooler 자체를 제거하는 rollback은 아래의 별도 PROD-728 resource lifecycle 절차로만 수행한다.
-
-```sh
-REVERT_REVISION=REVERT_COMMIT_SHA
-argocd app sync kosmo-dev --revision "$REVERT_REVISION"
-argocd app wait kosmo-dev --revision "$REVERT_REVISION" --sync --health --timeout 600
-
-kubectl get pooler kosmo-postgres-pooler-rw -n kosmo-dev
-kubectl get service kosmo-postgres-pooler-rw -n kosmo-dev
-```
-
-Production은 승인된 Argo CD identity로 같은 Git revert revision을 sync한다. 이 whole activation rollback에는 `--prune`가 필요하지 않다. sync 후 기존 API `DATABASE_URL` 경계, `OPERATION_DATABASE_URL` env 부재와 operation plugin/code 제거, API/migration host와 Secret ref 유지, Pooler와 Cluster readiness를 비민감하게 기록한다.
-
-```sh
-argocd app sync kosmo-prod --revision "$REVERT_REVISION"
-argocd app wait kosmo-prod --revision "$REVERT_REVISION" --sync --health --timeout 600
-
-kubectl get pooler kosmo-postgres-pooler-rw -n kosmo-prod
-kubectl get service kosmo-postgres-pooler-rw -n kosmo-prod
-```
+- 일반 PR/CI와 현재 Helm render·admission 검증으로 실제 revert 결과를 확인한다. Candidate에서 GraphQL operation DB 환경 변수와 operation plugin/code가 사라져야 한다.
+- 기존 API `DATABASE_URL` 경계, migration workload와 Secret, PROD-715 Web/Temporal Worker direct read-write Service 경계는 보존한다. GraphQL operation Pooler와 Cluster 및 이후 독립 변경도 유지한다.
+- 검증된 candidate의 정확한 revert SHA만 승인된 대상에 sync한다. Dev와 production의 sync·live verification은 각각의 승인된 배포 절차를 따르며, production sync는 별도 승인을 요구한다.
+- 이 application rollback은 PROD-728이 소유한 Pooler 리소스 lifecycle을 되돌리지 않는다. Pooler 자체를 제거하는 rollback은 아래의 별도 PROD-728 Pooler-only 절차로만 수행한다.
 
 ## Separate PROD-728 Pooler-only rollback
 
