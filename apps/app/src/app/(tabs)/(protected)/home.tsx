@@ -1,11 +1,13 @@
 import { UserRoundPlus } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { graphql, useLazyLoadQuery } from 'react-relay';
+import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
+import { fetchQuery } from 'relay-runtime';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { PostList } from '@/components/post/PostList';
 import { RouteBoundary } from '@/components/RouteBoundary';
+import { createHomeReselectionRefresh } from '@/components/shell/homeReselectionRefresh';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
@@ -38,10 +40,41 @@ const HomeQuery = graphql`
 
 export default function HomeScreen() {
   const { revision } = useRelayActor();
+  const environment = useRelayEnvironment();
+  const shellChrome = useShellChrome();
+  const registerHomeReselection = shellChrome?.registerHomeReselection;
   const [fetchKey, setFetchKey] = useState(0);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !registerHomeReselection) {
+      return;
+    }
+
+    const refresh = createHomeReselectionRefresh({
+      scrollToTop: () => window.scrollTo({ behavior: 'auto', left: 0, top: 0 }),
+      request: (onSettled) =>
+        fetchQuery<HomePageQuery>(
+          environment,
+          HomeQuery,
+          {},
+          {
+            fetchPolicy: 'network-only',
+          },
+        ).subscribe({ complete: onSettled, error: onSettled }),
+    });
+    const unregister = registerHomeReselection(refresh.activate);
+
+    return () => {
+      unregister();
+      refresh.dispose();
+    };
+  }, [environment, registerHomeReselection]);
+
   return (
-    <HomeFrame paginationOwnerKey={`home:${revision}`}>
+    <HomeFrame
+      onBrandCurrentNavigate={shellChrome?.reselectHome}
+      paginationOwnerKey={`home:${revision}`}
+    >
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         onRetry={() => setFetchKey((key) => key + 1)}
@@ -55,8 +88,12 @@ export default function HomeScreen() {
 
 function HomeFrame({
   children,
+  onBrandCurrentNavigate,
   paginationOwnerKey,
-}: PropsWithChildren<{ paginationOwnerKey: string }>) {
+}: PropsWithChildren<{
+  onBrandCurrentNavigate?: () => void;
+  paginationOwnerKey: string;
+}>) {
   const { width } = useWindowDimensions();
   const routeOwnsHeader = getShellLayout(Platform.OS === 'web', width) !== 'mobile';
 
@@ -65,7 +102,14 @@ function HomeFrame({
       contentContainerStyle={styles.root}
       paginationOwnerKey={paginationOwnerKey}
     >
-      {routeOwnsHeader ? <PageHeader accessibilityLabel="홈" variant="brand" /> : null}
+      {routeOwnsHeader ? (
+        <PageHeader
+          accessibilityLabel="홈"
+          brandHref={Platform.OS === 'web' ? '/home' : undefined}
+          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          variant="brand"
+        />
+      ) : null}
       <View style={styles.body}>{children}</View>
     </PaginationScrollView>
   );
