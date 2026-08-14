@@ -1,6 +1,6 @@
-import { createContext, useContext, useRef } from 'react';
+import { Children, createContext, useContext, useRef } from 'react';
 import { Platform, Pressable, View } from 'react-native';
-import type { PropsWithChildren, RefObject } from 'react';
+import type { PropsWithChildren, ReactElement, RefObject } from 'react';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
 export type RadioOption<Value extends string> = Readonly<{
@@ -10,19 +10,21 @@ export type RadioOption<Value extends string> = Readonly<{
   value: Value;
 }>;
 
-export type RadioGroupProps<Value extends string> = PropsWithChildren<{
-  accessibilityLabel: string;
-  disabled?: boolean;
-  onChange: (value: Value) => void;
-  options: readonly RadioOption<Value>[];
-  style?: StyleProp<ViewStyle>;
-  value: Value;
-}>;
-
 export type RadioOptionProps<Value extends string> = PropsWithChildren<{
   option: RadioOption<Value>;
   style?: PressableProps['style'];
 }>;
+
+export type RadioGroupProps<Value extends string> = {
+  accessibilityLabel: string;
+  children?:
+    | ReactElement<RadioOptionProps<Value>>
+    | readonly ReactElement<RadioOptionProps<Value>>[];
+  disabled?: boolean;
+  onChange: (value: Value) => void;
+  style?: StyleProp<ViewStyle>;
+  value: Value;
+};
 
 type RadioGroupContextValue = Readonly<{
   disabled: boolean;
@@ -48,11 +50,13 @@ export function RadioGroup<Value extends string>({
   children,
   disabled = false,
   onChange,
-  options,
   style,
   value,
 }: RadioGroupProps<Value>) {
   const optionRefs = useRef(new Map<string, RefObject<View | null>>());
+  const options = Children.toArray(children).map(
+    (child) => (child as ReactElement<RadioOptionProps<Value>>).props.option,
+  );
   const web = Platform.OS === 'web';
 
   return (

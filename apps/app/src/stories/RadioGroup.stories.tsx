@@ -21,12 +21,7 @@ function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioVal
 
   return (
     <View>
-      <RadioGroup
-        accessibilityLabel="알림 방식"
-        onChange={setValue}
-        options={options}
-        value={value}
-      >
+      <RadioGroup accessibilityLabel="알림 방식" onChange={setValue} value={value}>
         {options.map((option) => (
           <RadioOption key={option.value} option={option}>
             <View>

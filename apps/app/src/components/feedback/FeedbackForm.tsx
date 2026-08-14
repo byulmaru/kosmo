@@ -124,7 +124,6 @@ export function FeedbackForm({ onStateChange }: Props) {
         accessibilityLabel="피드백 종류"
         disabled={submitting}
         onChange={selectKind}
-        options={feedbackOptions}
         style={web ? styles.webOptions : styles.nativeOptions}
         value={kind}
       >

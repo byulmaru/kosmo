@@ -91,7 +91,6 @@ function renderGroup({
           accessibilityLabel: '알림 방식',
           disabled,
           onChange: onChange as (value: string) => void,
-          options: renderOptions,
           value,
         },
         renderOptions.map((option) =>
@@ -136,6 +135,18 @@ function keyEvent(key: string) {
     wasPrevented: () => prevented,
   };
 }
+
+test('RadioGroup derives keyboard navigation from rendered RadioOption children', () => {
+  const changes: OptionValue[] = [];
+  const renderer = renderGroup({ onChange: (value) => changes.push(value) });
+
+  const event = keyEvent('ArrowRight');
+  act(() => radioByLabel(renderer, '이메일').props.onKeyDown(event.event));
+
+  assert.equal(event.wasPrevented(), true);
+  assert.equal(focusedLabels.at(-1), '문자: 문자 설명');
+  assert.deepEqual(changes, ['sms']);
+});
 
 test('RadioGroup exposes group and option names, states, and disabled activation', () => {
   const changes: OptionValue[] = [];

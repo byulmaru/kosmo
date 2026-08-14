@@ -178,7 +178,6 @@ function ProfileDefaultPostVisibilityControlContents({
           setSelected(value);
           setSaveState('idle');
         }}
-        options={options}
         style={styles.options}
         value={selected}
       >
