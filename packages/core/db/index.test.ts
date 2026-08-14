@@ -15,6 +15,12 @@ type OperationClient = {
 const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
   (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
 
+const processEnvironmentWithoutStandardPg = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([name]) => !['PGHOST', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGPASSWORD'].includes(name),
+  ),
+);
+
 test('keeps operation client bounded and isolated from direct startup parameters', async () => {
   const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
   const end = mock.method(getClient(owner), 'end', async () => {});
@@ -83,7 +89,7 @@ test('keeps the separate password option for workloads using a process database 
       cwd: process.cwd(),
       encoding: 'utf8',
       env: {
-        ...process.env,
+        ...processEnvironmentWithoutStandardPg,
         DATABASE_URL: 'postgres://kosmo_worker@127.0.0.1:1/kosmo',
         DATABASE_PASSWORD: 'slash/at@question?hash#percent%',
       },
