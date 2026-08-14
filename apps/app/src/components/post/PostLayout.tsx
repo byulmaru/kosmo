@@ -52,27 +52,6 @@ const PostLayoutFragment = graphql`
     ...ReplyComposerSurface_parent @alias(as: "replySurface")
     ...PostActionSurface_post @alias(as: "actionSurface")
     repostSource {
-      id
-      createdAt
-      content {
-        bodyText
-        contentWarning
-        document
-        media {
-          id
-          altText
-          url
-        }
-      }
-      profile {
-        avatar {
-          id
-          url
-        }
-        displayName
-        handle
-        relativeHandle
-      }
       ...PostSourcePreview_source
       ...PostActionSurface_post @alias(as: "actionSurface")
     }

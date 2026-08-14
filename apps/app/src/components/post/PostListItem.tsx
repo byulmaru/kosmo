@@ -87,27 +87,6 @@ const PostListItemFragment = graphql`
     ...PostActionSurface_post @alias(as: "actionSurface")
     ...PostSourcePresentationView_post
     repostSource {
-      id
-      createdAt
-      content {
-        bodyText
-        contentWarning
-        document
-        media {
-          id
-          altText
-          url
-        }
-      }
-      profile {
-        avatar {
-          id
-          url
-        }
-        displayName
-        handle
-        relativeHandle
-      }
       ...PostListRow_post
     }
     ...PostListRow_post
