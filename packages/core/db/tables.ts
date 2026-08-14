@@ -4,6 +4,7 @@ import {
   index,
   integer,
   jsonb,
+  pgPolicy,
   pgTable,
   text,
   unique,
@@ -330,7 +331,7 @@ export const OAuthTokens = pgTable(
   ],
 );
 
-export const Posts = pgTable(
+export const Posts = pgTable.withRLS(
   'post',
   {
     id: id(),
@@ -348,6 +349,54 @@ export const Posts = pgTable(
     deletedAt: datetime('deleted_at'),
   },
   (table) => [
+    pgPolicy('post_graphql_viewer_select', {
+      for: 'select',
+      to: 'kosmo_api',
+      using: sql`
+        EXISTS (
+          SELECT 1
+          FROM public.profile AS author_profile
+          INNER JOIN public.instance AS author_instance
+            ON author_instance.id = author_profile.instance_id
+          WHERE author_profile.id = ${table.profileId}
+            AND author_profile.state = 'ACTIVE'
+            AND author_instance.state <> 'SUSPENDED'
+            AND (
+              (
+                ${table.state} = 'ACTIVE'
+                AND (
+                  ${table.visibility} IN ('PUBLIC', 'UNLISTED')
+                  OR ${table.profileId} = public.kosmo_current_profile_id()
+                  OR (
+                    ${table.visibility} = 'FOLLOWERS'
+                    AND EXISTS (
+                      SELECT 1
+                      FROM public.profile_follow AS established_follow
+                      WHERE established_follow.follower_profile_id = public.kosmo_current_profile_id()
+                        AND established_follow.followee_profile_id = ${table.profileId}
+                    )
+                  )
+                )
+              )
+              OR (
+                ${table.state} = 'DELETED'
+                AND ${table.profileId} = public.kosmo_current_profile_id()
+              )
+            )
+        )
+      `,
+    }),
+    pgPolicy('post_graphql_author_insert', {
+      for: 'insert',
+      to: 'kosmo_api',
+      withCheck: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+    }),
+    pgPolicy('post_graphql_author_update', {
+      for: 'update',
+      to: 'kosmo_api',
+      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+      withCheck: sql`${table.profileId} = public.kosmo_current_profile_id()`,
+    }),
     check(
       'post_reply_parent_not_self',
       sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,
@@ -364,7 +413,7 @@ export const Posts = pgTable(
   ],
 );
 
-export const PostContents = pgTable(
+export const PostContents = pgTable.withRLS(
   'post_content',
   {
     id: id(),
@@ -374,7 +423,32 @@ export const PostContents = pgTable(
     document: jsonb('document').$type<PostContentDocumentV1>().notNull(),
     createdAt: createdAt(),
   },
-  (table) => [index().on(table.postId)],
+  (table) => [
+    pgPolicy('post_content_graphql_viewer_select', {
+      for: 'select',
+      to: 'kosmo_api',
+      using: sql`
+        EXISTS (
+          SELECT 1
+          FROM public.post AS parent_post
+          WHERE parent_post.id = ${table.postId}
+        )
+      `,
+    }),
+    pgPolicy('post_content_graphql_author_insert', {
+      for: 'insert',
+      to: 'kosmo_api',
+      withCheck: sql`
+        EXISTS (
+          SELECT 1
+          FROM public.post AS parent_post
+          WHERE parent_post.id = ${table.postId}
+            AND parent_post.profile_id = public.kosmo_current_profile_id()
+        )
+      `,
+    }),
+    index().on(table.postId),
+  ],
 );
 
 export const Profiles = pgTable(
