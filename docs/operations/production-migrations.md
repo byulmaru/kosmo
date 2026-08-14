@@ -57,7 +57,7 @@ history가 함께 commit되고, 실패하면 그 파일의 변경만 함께 roll
 5. Job이 성공한 경우에만 같은 digest의 API/Web workload를 활성화한다.
 6. Job이 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다. 수정 PR 또는 DB와 호환되는 revert PR을 `production`에 merge해 새 push로 재시도한다.
 
-Tag push와 수동 workflow 실행은 production migration을 시작하지 않는다. Tag는 현재 version label을 위한 입력도 아니며, Web의 `버전: <tag>` 표시는 표시 tag 공급 방식을 결정할 때까지 비활성화되어 있다. 배포 전체 절차와 검증 증거는 [Production release 운영 runbook](./production-release.md)을 따른다.
+Tag push와 수동 workflow 실행은 production migration을 시작하지 않는다. 배포 전체 절차와 검증 증거는 [Production release 운영 runbook](./production-release.md)을 따른다.
 
 Migration Job과 workload 사이의 success barrier는 PROD-563 구현을 사용하며 전체 release 완료 판단은 PROD-545가 소유한다.
 

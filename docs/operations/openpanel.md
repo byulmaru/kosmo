@@ -24,8 +24,6 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 
 각 [Production release](./production-release.md)에서 아래를 production browser와 Dashboard로 확인한다. 실제 Account ID나 사용자 콘텐츠를 증거 문서에 복사하지 않는다.
 
-이번 production branch 전환에서 Web의 `버전: <tag>` 표시는 주석 처리되어 있다. Tag push는 OpenPanel 설정, production build와 배포를 시작하지 않으며 표시 tag 공급과 version label 재활성화는 후속 변경에서 결정한다.
-
 1. Client ID가 없는 local build의 Network panel에 `/api/track` 요청이 없음을 확인한다.
 2. production landing을 비로그인으로 열어 `screen_view`와 anonymous profile/session을 확인한다.
 3. 외부 링크를 열어 `link_out`의 `href`와 `text`를 확인한다.

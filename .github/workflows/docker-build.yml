@@ -26,7 +26,6 @@ jobs:
       packages: write
     outputs:
       image_digest: ${{ steps.build.outputs.digest }}
-      source_sha: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -42,7 +41,6 @@ jobs:
           cache-binary: false
 
       - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
@@ -80,7 +78,6 @@ jobs:
             ${{ env.AWS_ECR_REPOSITORY_URL }}
           tags: |
             type=sha
-            type=ref,event=branch,prefix=branch-,enable=${{ github.ref != 'refs/heads/main' }}
             type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value=stable,enable=${{ github.ref == 'refs/heads/production' }}
 
@@ -92,7 +89,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           no-cache-filters: |
@@ -205,22 +202,20 @@ jobs:
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
           IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
-          SOURCE_SHA: ${{ needs.docker_build.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
 
-          version="${SOURCE_SHA}"
           argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
-            --revision "${SOURCE_SHA}" \
-            -p "version=${version}" \
+            --revision "${GITHUB_SHA}" \
+            -p "version=${GITHUB_SHA}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
             -p "workloads.enabled=true" \
             -p "migration.enabled=true" \
             --validate
 
           argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod \
-            --revision "${SOURCE_SHA}" \
+            --revision "${GITHUB_SHA}" \
             --prune \
             --timeout 600
           argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
@@ -229,8 +224,8 @@ jobs:
             --timeout 600
 
           actual_source_revision="$(argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-prod --output json | jq -r '.status.sync.revision')"
-          if [[ "${actual_source_revision}" != "${SOURCE_SHA}" ]]; then
-            echo "::error::Argo CD synced revision ${actual_source_revision}, expected ${SOURCE_SHA}."
+          if [[ "${actual_source_revision}" != "${GITHUB_SHA}" ]]; then
+            echo "::error::Argo CD synced revision ${actual_source_revision}, expected ${GITHUB_SHA}."
             exit 1
           fi
 
@@ -238,7 +233,6 @@ jobs:
         if: always()
         env:
           IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
-          SOURCE_SHA: ${{ needs.docker_build.outputs.source_sha }}
           RESULT: ${{ job.status }}
         shell: bash
         run: |
@@ -247,8 +241,8 @@ jobs:
             echo
             echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Approval boundary: production branch ruleset"
-            echo "- Commit: ${SOURCE_SHA}"
-            echo "- Helm source revision: ${SOURCE_SHA}"
+            echo "- Commit: ${GITHUB_SHA}"
+            echo "- Helm source revision: ${GITHUB_SHA}"
             echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"

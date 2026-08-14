@@ -105,6 +105,7 @@ Tag ref는 production build credential을 얻지 못하고 Terraform은 승인�
 
 - 정상 자동 release, tag push 무동작, version label 비노출, 연속 run, hotfix와 revert runbook 검토
 - Production migration/OpenPanel/Sentry 문서의 branch 기반 조건 정합성
+- Production 대상 PR에서 ruleset의 필수 checks가 모두 실행되는지 확인
 - Workflow에 `pull-requests: read` 권한과 commit-associated PR 검증 step이 없는지 확인
 - Strict OpenSpec validation과 main PR checks
 

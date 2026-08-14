@@ -44,7 +44,7 @@ GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 
 ./scripts/ensure-github.sh
 ```
 
-`main`을 push하면 Docker Build는 dev 설정으로 `main`과 `sha-*` image tag를 갱신한다. 보호된 `production`을 push하면 prod Vault build role로 같은 push SHA의 image를 build하고 `branch-production`, `sha-*`, `stable` metadata를 발행한 뒤 같은 digest와 source SHA를 Argo CD에 자동 배포한다. Production PR merge가 유일한 사람 승인이고 `prod` Environment는 credential·OIDC·감사 경계일 뿐 별도 reviewer 승인을 요구하지 않는다. Tag push, 일반 branch push와 수동 workflow 실행은 Docker Build나 production 배포를 시작하지 않는다. Production workload identity는 tag가 아니라 build digest이며 `stable`은 현재 production image가 lifecycle로 삭제되지 않게 보존하는 표식일 뿐이다. Lifecycle policy는 현재 `main`과 `stable` image를 보호하고, untagged image는 하루 뒤, 그 외 image는 7일 뒤 만료한다.
+`main`을 push하면 Docker Build는 dev 설정으로 `main`과 `sha-*` image tag를 갱신한다. 보호된 `production`을 push하면 prod Vault build role로 같은 push SHA의 image를 build하고 `sha-*`, `stable` metadata를 발행한 뒤 같은 digest와 source SHA를 Argo CD에 자동 배포한다. Production PR merge가 유일한 사람 승인이고 `prod` Environment는 credential·OIDC·감사 경계일 뿐 별도 reviewer 승인을 요구하지 않는다. Tag push, 일반 branch push와 수동 workflow 실행은 Docker Build나 production 배포를 시작하지 않는다. Production workload identity는 tag가 아니라 build digest이며 `stable`은 현재 production image가 lifecycle로 삭제되지 않게 보존하는 표식일 뿐이다. Lifecycle policy는 현재 `main`과 `stable` image를 보호하고, untagged image는 하루 뒤, 그 외 image는 7일 뒤 만료한다.
 
 ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
 

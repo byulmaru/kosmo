@@ -38,16 +38,6 @@ Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 
 6. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
 7. Merged PR과 review·check 이력은 GitHub PR/branch history에서 확인한다. Workflow summary와 Linear/incident 기록에는 actor, production commit, Argo source revision, image digest, migration·Rollout·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
 
-### Trigger matrix
-
-| Event                           | Production build/deploy | 설명                                             |
-| ------------------------------- | ----------------------- | ------------------------------------------------ |
-| 보호된 `production` branch push | 실행                    | PR merge 후 push SHA를 source로 자동 release     |
-| `main` branch push              | 실행하지 않음           | 기존 dev build 경계만 유지                       |
-| 기타 branch build               | 실행하지 않음           | production credential·배포를 사용하지 않음       |
-| Git tag push                    | 실행하지 않음           | version metadata도 현재 production source가 아님 |
-| 수동 `workflow_dispatch`        | 실행하지 않음           | 별도 명시 실행 경로를 제공하지 않음              |
-
 ## Production-first hotfix
 
 긴급한 수정이 main보다 먼저 production에 필요하면 production branch를 대상으로 hotfix PR을 만든다. 필수 review와 checks 후 merge하면 정상 release 절차가 자동으로 실행된다. Hotfix merge 뒤에는 같은 변경을 main에 반영하는 별도 PR을 만들고, main 반영이 완료될 때까지 두 계보의 차이와 후속 PR을 기록한다. Hotfix를 이유로 직접 push하거나 history를 rewrite하지 않는다.
