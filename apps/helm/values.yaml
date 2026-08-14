@@ -58,11 +58,6 @@ postgres:
       passwordSecret:
         name: ''
         key: ''
-    worker:
-      enabled: false
-      passwordSecret:
-        name: ''
-        key: ''
   resources:
     requests:
       cpu: 250m

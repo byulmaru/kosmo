@@ -40,12 +40,6 @@
 {{- if and (or (ne $apiDatabaseUrl "") (ne $apiName "") (ne $apiKey "")) (or (eq $apiDatabaseUrl "") (eq $apiName "") (eq $apiKey "")) -}}
 {{- fail "postgres.credentials.api requires databaseUrl, passwordSecret.name, and passwordSecret.key together" -}}
 {{- end -}}
-{{- $workerPasswordSecret := dig "worker" "passwordSecret" dict $credentials -}}
-{{- $workerName := get $workerPasswordSecret "name" | default "" | toString -}}
-{{- $workerKey := get $workerPasswordSecret "key" | default "" | toString -}}
-{{- if and (dig "worker" "enabled" false $credentials) (or (eq $workerName "") (eq $workerKey "")) -}}
-{{- fail "postgres.credentials.worker.enabled requires passwordSecret.name and passwordSecret.key" -}}
-{{- end -}}
 {{- end -}}
 
 {{- define "kosmo.apiDatabaseIsConfigured" -}}
@@ -109,27 +103,11 @@ password
 {{- end -}}
 
 {{- define "kosmo.workerDatabaseUrl" -}}
-{{- if dig "worker" "enabled" false (.Values.postgres.credentials | default dict) -}}
 {{- printf "postgres://kosmo_worker:$(DATABASE_PASSWORD)@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
-{{- else -}}
-{{- include "kosmo.databaseUrl" . -}}
-{{- end -}}
 {{- end -}}
 
 {{- define "kosmo.workerDatabasePasswordSecretName" -}}
-{{- if dig "worker" "enabled" false (.Values.postgres.credentials | default dict) -}}
-{{- dig "worker" "passwordSecret" "name" "" (.Values.postgres.credentials | default dict) -}}
-{{- else -}}
-{{- printf "%s-app" (include "kosmo.postgresName" .) -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "kosmo.workerDatabasePasswordSecretKey" -}}
-{{- if dig "worker" "enabled" false (.Values.postgres.credentials | default dict) -}}
-{{- dig "worker" "passwordSecret" "key" "" (.Values.postgres.credentials | default dict) | quote -}}
-{{- else -}}
-password
-{{- end -}}
+{{- printf "%s-postgres-worker" (.Release.Name | trunc 47 | trimSuffix "-") -}}
 {{- end -}}
 
 {{- define "kosmo.imageRef" -}}

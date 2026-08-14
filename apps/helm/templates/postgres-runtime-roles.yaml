@@ -77,7 +77,7 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ printf "%s-postgres-worker" $releaseName }}
+  name: {{ include "kosmo.workerDatabasePasswordSecretName" . }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
   labels:
@@ -98,5 +98,5 @@ spec:
   bypassrls: true
   inRoles: []
   passwordSecret:
-    name: {{ printf "%s-postgres-worker" $releaseName }}
+    name: {{ include "kosmo.workerDatabasePasswordSecretName" . }}
   databaseRoleReclaimPolicy: retain

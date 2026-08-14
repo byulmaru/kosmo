@@ -70,7 +70,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "kosmo.workerDatabasePasswordSecretName" . | quote }}
-                  key: {{ include "kosmo.workerDatabasePasswordSecretKey" . }}
+                  key: password
             - name: DATABASE_URL
               value: {{ include "kosmo.workerDatabaseUrl" . | quote }}
           envFrom:
