@@ -16,7 +16,7 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 - 인증된 `searchProfiles`가 촉발하는 Fedify-owned remote actor materialization trusted side effect는 direct DB 예외로 허용하되, materialization 후 최종 GraphQL query와 result projection은 operation `ctx.db`를 사용한다.
 - 기존 GraphQL schema, 제품 결과, 권한 predicate, 목록·정렬·pagination을 변경하지 않는다.
 - 기존 domain transaction·savepoint·post-commit 의미를 유지하고 operation-wide transaction을 만들지 않는다.
-- Fedify inbound/delivery, Temporal Workflow/Activity와 #564 trusted Worker execution은 자기 DB lifecycle을 유지하며 GraphQL RLS 범위에 포함하지 않는다. `WORKER_DATABASE_*`는 `OPERATION_DATABASE_URL`에 공급하지 않는다.
+- Fedify inbound/delivery, Temporal Workflow/Activity와 PROD-715 Web/Worker 기본 principal은 자기 DB lifecycle을 유지하며 GraphQL RLS 범위에 포함하지 않는다. 그 source는 `OPERATION_DATABASE_URL`에 공급하지 않는다.
 
 **Verification**
 
@@ -79,24 +79,24 @@ Production GraphQL user-data Query/Mutation의 root·field·loader와 호출하�
 
 **Deliverable**
 
-GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사용하고 API `DATABASE_URL`은 현재 owner-compatible direct fallback으로 유지한다. Web BFF baseline과 migration은 이 change에서 direct PostgreSQL Service를 유지한다. #564의 선택적 trusted Worker `WORKER_DATABASE_*` seam은 별도 실행 경계로 이 change에서 소비하지 않으며 `OPERATION_DATABASE_URL`에 공급하지 않는다. API/Web principal transition은 PROD-716이 소유한다.
+GraphQL API의 `OPERATION_DATABASE_URL`만 CloudNativePG Pooler Service를 사용하고 API `DATABASE_URL`은 현재 owner-compatible direct fallback으로 유지한다. Migration은 이 change에서 direct PostgreSQL Service를 유지한다. PROD-715 Web/Worker 기본 principal은 별도 실행 경계로 이 change에서 소비하지 않으며 `OPERATION_DATABASE_URL`에 공급하지 않는다. GraphQL principal transition은 PROD-716이 소유한다.
 
 **Guardrails**
 
 - PostgreSQL Secret, role 또는 credential selector를 변경하지 않는다.
 - configured `postgres.credentials.api` trio의 rendered env username, database와 password Secret source, scheme, path와 query는 유지하고 `OPERATION_DATABASE_URL`의 host와 port를 포함한 authority만 in-chart Pooler Service `<release>-postgres-pooler-rw:5432`로 교체한다. Runtime operation client는 configured URL을 변경 없이 전달하고 query parameter를 변경하거나 호환되지 않는 URL을 자동 보정하지 않는다. 새 credential selector는 만들지 않는다.
 - Pooler CR, replica, resource와 capacity 설정을 변경하지 않는다.
-- 실패 시 전체 activation merge/squash revision을 Git revert해 pre-activation tree로 되돌릴 수 있어야 한다. 이 revision은 API `DATABASE_URL` current fallback direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거해야 하며, Web BFF baseline, migration, PROD-728 Pooler와 Cluster는 유지한다. #564 Worker seam은 선점하거나 변경하지 않는다.
+- 실패 시 전체 activation merge/squash revision을 Git revert해 pre-activation tree로 되돌릴 수 있어야 한다. 이 revision은 API `DATABASE_URL` current fallback direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거해야 하며, PROD-715 Web/Worker 경계, migration, PROD-728 Pooler와 Cluster는 유지한다.
 
 **Verification**
 
-- dev/prod Helm render에서 API `DATABASE_URL`은 current owner-compatible fallback인 `<release>-postgres-rw`, API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`, Web BFF와 migration host는 `<release>-postgres-rw`인지 확인한다. #564 `WORKER_DATABASE_*` seam은 이 operation endpoint 검증에서 소비하지 않으며 `OPERATION_DATABASE_URL`에 공급되지 않아야 한다.
+- dev/prod Helm render에서 API `DATABASE_URL`은 current owner-compatible fallback인 `<release>-postgres-rw`, API `OPERATION_DATABASE_URL`은 `<release>-postgres-pooler-rw`, migration host는 `<release>-postgres-rw`인지 확인한다. PROD-715 Web/Worker source는 이 operation endpoint 검증에서 소비하지 않으며 `OPERATION_DATABASE_URL`에 공급되지 않아야 한다.
 - 모든 workload의 Secret name/key가 전환 전과 동일한지 값 노출 없이 확인한다.
 - configured API trio 대표 조합에서 rendered API direct URL의 authority와 operation URL의 username/database/password Secret source, scheme, path/query 보존 및 Pooler authority `<release>-postgres-pooler-rw:5432` 교체를 값 노출 없이 확인한다. Operation client regression은 direct DB client의 `connection` startup options를 상속하지 않고 configured operation URL을 변경 없이 전달하는지 확인하며, 호환되지 않는 임의의 URL을 지원한다고 가정하지 않는다.
 - Helm lint, server-side dry-run과 pre-activation revision render를 통과시킨다. Render는 API `DATABASE_URL` direct host와 `OPERATION_DATABASE_URL` env 부재, operation plugin/code 부재를 assertion한다.
 
 - [x] 3.1 API `DATABASE_URL` direct endpoint와 operation 전용 `OPERATION_DATABASE_URL` Pooler endpoint를 분리하고 shared API-role credential 선택은 유지한다.
-- [x] 3.2 Web BFF baseline과 migration의 direct endpoint 및 이 change에 포함된 API-role Secret 참조 불변을 Helm render로 검증하고, #564 `WORKER_DATABASE_*` seam은 별도 경계로 제외한다.
+- [x] 3.2 migration의 direct endpoint 및 이 change에 포함된 API-role Secret 참조 불변을 Helm render로 검증하고, PROD-715 Web/Worker 기본 principal은 별도 경계로 제외한다.
 - [x] 3.3 pre-activation `DATABASE_URL` direct render와 `OPERATION_DATABASE_URL` env 부재, Helm/admission 정적 검증을 완료한다.
 - [x] 3.4 application activation, operation session live gate와 whole activation Git-revert rollback 절차를 canonical 운영 문서에 동기화한다.
 
@@ -125,7 +125,7 @@ dev runtime에서 GraphQL user-data query/result projection/domain action operat
 - 익명·Account-only·Account+Profile 기존 GraphQL smoke가 초기화 HTTP 500 없이 기대한 결과를 반환하는지 확인한다. 로그 원문, URL, Secret과 actor UUID는 근거에 남기지 않는다.
 - Query/Mutation별 frontend connection, same-session backend affinity, Mutation nested result, `searchProfiles` materialization 후 최종 query의 `ctx.db` 사용, 두 actor helper의 일회성 의미, 정상·오류·abort cleanup과 same-backend `DISCARD ALL` reset을 비민감하게 확인한다.
 - `cnpg_pgbouncer_*` client/server/max-wait metrics와 capacity 안 completion, 초과 부하 timeout, 종료 뒤 connection baseline 복귀를 확인한다.
-- 전체 activation merge/squash revision Git revert가 API `DATABASE_URL` current fallback direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거하며, Web BFF baseline, migration, PROD-728 Pooler와 Cluster에 영향을 주지 않음을 확인한다. #564 Worker seam과 API/Web principal transition(PROD-716)은 이 change에서 건드리지 않는다.
+- 전체 activation merge/squash revision Git revert가 API `DATABASE_URL` current fallback direct를 유지하고 `OPERATION_DATABASE_URL` env와 operation plugin/code를 제거하며, PROD-715 Web/Worker 경계, migration, PROD-728 Pooler와 Cluster에 영향을 주지 않음을 확인한다. GraphQL principal transition(PROD-716)은 이 change에서 건드리지 않는다.
 
 - [x] 4.1 전체 정적·unit·integration·E2E·Helm·OpenSpec 검증과 correctness/최소화 self-review를 완료한다.
 - [x] 4.2 구현 근거, PROD-716 제외 범위와 whole activation Git-revert rollback 및 PROD-728 Pooler 유지가 명시된 Ready PR을 게시하고 merge gate를 통과한다.
