@@ -27,6 +27,7 @@
 - **AND** chart가 `PGHOST`를 기존 direct read-write Service로, `PGPORT=5432`, `PGUSER=kosmo_worker`, `PGDATABASE=kosmo`로 생성한다
 - **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 `PGPASSWORD`로 생성한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않는다
+- **AND** 공용 env source에 incidental `DATABASE_URL`이 존재해도 완전한 표준 `PG*` source를 우선한다
 - **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
 - **AND** Worker PG env compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 

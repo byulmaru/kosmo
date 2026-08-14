@@ -32,7 +32,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 
 1. Chart가 `PGHOST=<release>-postgres-rw`, `PGPORT=5432`, `PGUSER=kosmo_worker`, `PGDATABASE=kosmo`와 `<release>-postgres-worker` / `password` Secret의 `PGPASSWORD`를 Web과 enabled Worker process 기본 DB source로 사용한다. Runtime은 `DATABASE_URL` 없이 postgres.js의 표준 PG env 해석을 사용한다. PgBouncer URL은 GraphQL operation connection에서만 사용한다.
 2. API selector는 Web/Worker source에 사용하지 않는다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
-3. Web/Worker template의 `DATABASE_URL`/`DATABASE_PASSWORD`와 별도 `WORKER_DATABASE_*` env를 제거하고 application SQL·callsite·DB handle 구조는 변경하지 않는다. 공용 전역 client는 API의 기존 `DATABASE_URL`을 지원하되 URL이 없는 Web/Worker에서 postgres.js 표준 PG env를 사용한다.
+3. Web/Worker template의 `DATABASE_URL`/`DATABASE_PASSWORD`와 별도 `WORKER_DATABASE_*` env를 제거하고 application SQL·callsite·DB handle 구조는 변경하지 않는다. 공용 전역 client는 API의 기존 `DATABASE_URL`을 지원하되 다섯 표준 PG env가 완전한 Web/Worker에서는 incidental `DATABASE_URL`보다 그 source를 우선한다.
 4. Worker PG env와 Secret ref는 values로 받지 않고 release naming과 고정 계약에서 생성한다.
 5. 기존 `worker.enabled` activation gate를 유지하고, enabled Worker template에만 Worker source와 conditional restart target을 연결한다.
 6. API selector 활성/비활성 및 PROD-715 적용 전후 render에서 API, migration과 MessageQueue documents가 불변이고 Worker Secret이 API에 유입되지 않는지 검증한다.
@@ -43,7 +43,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 - Helm env source 변경만으로 live SQL principal이 바뀌었다고 판단하면 안 된다. exact deployed revision과 `current_user` evidence가 필요하다.
 - PgBouncer의 `cnpg_pooler_pgbouncer` 인증서는 GraphQL operation용 `kosmo_worker` workload 역할 credential이 아니다.
 - password를 URL, values, rendered manifest나 로그에 넣지 않고 `PGPASSWORD` SecretKeyRef로만 주입한다.
-- 공용 `envFrom`에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*` 또는 충돌하는 `PG*` env가 별도 유입되지 않는지 비운영 검증과 production preflight에서 key 이름만 확인한다.
+- 공용 `envFrom`에 legacy DB key가 남아도 완전한 표준 `PG*` source를 우회하지 않는지 회귀 검증하고, 비운영 검증과 production preflight에서 충돌 key 이름만 확인한다.
 - `BYPASSRLS`는 객체 ACL을 대체하지 않는다.
 - CI green이나 PR merge를 production 승인으로 해석하지 않는다.
 

@@ -22,8 +22,17 @@ const processDatabaseOptions = {
   max: 20,
 } as const;
 
-export const pg = process.env.DATABASE_URL
-  ? postgres(process.env.DATABASE_URL, {
+const hasCompleteStandardPgEnvironment = [
+  'PGHOST',
+  'PGPORT',
+  'PGUSER',
+  'PGDATABASE',
+  'PGPASSWORD',
+].every((name) => process.env[name] !== undefined);
+const processDatabaseUrl = hasCompleteStandardPgEnvironment ? undefined : process.env.DATABASE_URL;
+
+export const pg = processDatabaseUrl
+  ? postgres(processDatabaseUrl, {
       ...processDatabaseOptions,
       ...(process.env.DATABASE_PASSWORD === undefined
         ? {}

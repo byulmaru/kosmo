@@ -40,7 +40,7 @@ test('keeps operation client bounded and isolated from direct startup parameters
   assert.equal(forceEnd.mock.calls.length, 1);
 });
 
-test('uses standard PG environment variables without a process database URL', () => {
+test('prefers a complete standard PG environment over a process database URL', () => {
   const result = spawnSync(
     process.execPath,
     [
@@ -55,8 +55,8 @@ test('uses standard PG environment variables without a process database URL', ()
       encoding: 'utf8',
       env: {
         ...process.env,
-        DATABASE_URL: '',
-        DATABASE_PASSWORD: '',
+        DATABASE_URL: 'postgres://owner@legacy.example:5432/legacy',
+        DATABASE_PASSWORD: 'legacy-password',
         PGHOST: 'db.example',
         PGPORT: '6543',
         PGUSER: 'kosmo_worker',

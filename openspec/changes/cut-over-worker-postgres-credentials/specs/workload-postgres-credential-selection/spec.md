@@ -41,6 +41,7 @@
 - **THEN** Web Rollout과 enabled Worker Deployment가 `PGHOST=<release>-postgres-rw`, `PGPORT=5432`, `PGUSER=kosmo_worker`, `PGDATABASE=kosmo`를 사용한다
 - **AND** `PGPASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않는다
+- **AND** 공용 env source에 incidental `DATABASE_URL`이 존재해도 완전한 표준 `PG*` source를 우선한다
 - **AND** API Rollout에는 Worker Secret/env가 없고 `WORKER_DATABASE_*`도 어느 workload에 렌더되지 않는다
 - **AND** Worker PG env compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 
