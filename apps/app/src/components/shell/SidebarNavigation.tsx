@@ -66,6 +66,7 @@ const navigation: NavigationItem[] = [
 type Props = {
   compact?: boolean;
   onFeedbackOpen?: () => void;
+  onHomeReselect?: () => void;
   onNavigate?: () => void;
   onSwitcherOpenChange?: (open: boolean) => void;
   query: SidebarNavigation_query$key;
@@ -76,6 +77,7 @@ type Props = {
 export function SidebarNavigation({
   compact = false,
   onFeedbackOpen,
+  onHomeReselect,
   onNavigate,
   onSwitcherOpenChange,
   query,
@@ -188,7 +190,13 @@ export function SidebarNavigation({
             );
 
             return href ? (
-              <NavigationLink href={href} key={item.label} onNavigate={onNavigate} primary>
+              <NavigationLink
+                href={href}
+                key={item.label}
+                onCurrentNavigate={href === '/home' ? onHomeReselect : undefined}
+                onNavigate={onNavigate}
+                primary
+              >
                 {control}
               </NavigationLink>
             ) : (
