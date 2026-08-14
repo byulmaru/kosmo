@@ -21,7 +21,7 @@
 - [ ] 1.1 최신 성공 production commit과 live source/image를 확인해 초기 SHA를 기록한다.
 - [ ] 1.2 확인한 SHA에서 원격 `production`을 만들고 branch 생성만으로 배포가 실행되지 않음을 확인한다.
 - [ ] 1.3 PR review와 필수 checks를 유일한 사람 승인 gate로 적용하고 직접 push·history rewrite 금지를 검증한다.
-- [x] 1.4 범용 `ensure-github.sh`에서 `prod` Environment 소유·검증을 제거하고 live GitHub 설정을 cutover checklist로 분리한다.
+- [x] 1.4 `ensure-github.sh`를 제거하고 GitHub 설정을 각 운영 절차와 live 검증으로 분리한다.
 
 ## 2. PROD-764 Branch 기반 production workflow
 

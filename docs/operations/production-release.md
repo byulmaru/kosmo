@@ -4,7 +4,7 @@
 
 `prod` GitHub Environment는 production credential, OIDC 범위와 deployment 감사 기록을 제공할 수 있지만 사람의 추가 승인 gate가 아니다. 별도 `workflow_dispatch`, tag push 승인 또는 Environment reviewer 승인을 사용하지 않는다.
 
-Production branch ruleset과 `prod` Environment 설정은 `apps/terraform/scripts/ensure-github.sh`가 소유하지 않는다. 이 값은 첫 전환 때 GitHub에서 직접 설정하고 아래 live 조회로 검증한다. 저장소 bootstrap 스크립트에 reviewer나 branch policy를 복제하지 않는다.
+Production branch ruleset과 `prod` Environment 설정은 첫 전환 때 GitHub에서 직접 설정하고 아래 live 조회로 검증한다. 저장소에 reviewer나 branch policy를 복제하는 bootstrap 스크립트를 두지 않는다.
 
 Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 배포 workflow는 보호된 `production` push를 신뢰하며 commit에 연결된 PR을 API로 다시 조회하거나 두 번째 승인 gate로 사용하지 않는다.
 

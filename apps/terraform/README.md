@@ -8,7 +8,7 @@
 - Firebase App Distribution 서비스 계정과 최소 IAM 권한
 - `main`의 지정 workflow만 허용하는 GitHub Actions Workload Identity Federation
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
-- 관리자 bootstrap으로 만드는 GitHub environment와 Actions 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`)
+- GitHub에서 직접 관리하는 Actions environment와 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`, `terraform-apply`)
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
 - ECR의 `main`/`stable` 이미지 보호, untagged 1일 만료, 나머지 이미지 7일 만료 정책
@@ -26,8 +26,6 @@ mise install
 gcloud auth login
 ```
 
-GitHub bootstrap은 `gh auth token`을 사용한다. `gh auth status`가 성공해야 한다.
-
 Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계정의 단기 token을 주입한다. Argo CD 리소스를 읽는 plan에는 `ARGOCD_SERVER=argocd-aws.tail1fdd55.ts.net:443`과 SSO로 발급받은 `ARGOCD_AUTH_TOKEN`도 필요하다. CI는 GitHub OIDC token을 Argo CD Dex에서 교환해 장기 token 없이 인증한다.
 
 ## 검증과 적용
@@ -38,11 +36,7 @@ Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계�
 ./scripts/ensure-ci-aws-role.sh
 ```
 
-GCP 리소스를 적용한 뒤 관리 권한이 있는 로컬 `gh` 인증으로 native/onboarding/terraform GitHub environment와 Actions 변수를 bootstrap한다. 이 스크립트는 CI에서 실행하지 않으며 `prod` Environment와 production branch ruleset은 소유하지 않는다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 명시적으로 적용하고 live API로 검증한다.
-
-```sh
-./scripts/ensure-github.sh
-```
+GCP 리소스를 적용한 뒤 native/onboarding Environment와 변수는 [앱의 iOS Ad Hoc 관리자 설정](../app/README.md#one-time-administrator-setup)에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정하고, `AWS_TERRAFORM_ROLE_ARN`은 `ensure-ci-aws-role.sh`의 마지막 출력값으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
 
 `main`을 push하면 Docker Build는 dev 설정으로 `main`과 `sha-*` image tag를 갱신한다. 보호된 `production`을 push하면 prod Vault build role로 같은 push SHA의 image를 build하고 `sha-*`, `stable` metadata를 발행한 뒤 같은 digest와 source SHA를 Argo CD에 자동 배포한다. Production PR merge가 유일한 사람 승인이고 `prod` Environment는 credential·OIDC·감사 경계일 뿐 별도 reviewer 승인을 요구하지 않는다. Tag push, 일반 branch push와 수동 workflow 실행은 Docker Build나 production 배포를 시작하지 않는다. Production workload identity는 tag가 아니라 build digest이며 `stable`은 현재 production image가 lifecycle로 삭제되지 않게 보존하는 표식일 뿐이다. Lifecycle policy는 현재 `main`과 `stable` image를 보호하고, untagged image는 하루 뒤, 그 외 image는 7일 뒤 만료한다.
 
@@ -50,13 +44,13 @@ ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docke
 
 Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 Barman의 bucket 확인을 위한 bucket-level list 권한과 `kosmo-prod/` prefix의 backup/WAL 객체 관리 권한만 가진다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 
-`ios-device-onboarding`은 `robin-maki`의 승인을 요구하며, Firebase WIF 입력과 `MATCH_GIT_URL`을 일반 배포 환경과 별도로 받는다. Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 해당 environment에 수동으로 넣는다.
+`ios-device-onboarding`은 `robin-maki`의 승인을 요구한다. Firebase WIF 입력, `MATCH_GIT_URL`, Apple signing secret과 공개 native test 설정은 `apps/app/README.md`의 iOS Ad Hoc 배포 절차에 따라 각 environment에 직접 넣는다.
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 병합된 PR head와 일치하는 미만료 artifact만 선택한다.
 
 PR이 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존하되 Argo CD Application의 resource version이나 reconcile 시각처럼 실행 사이에 바뀌는 no-op 관측 상태는 제외한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 여러 Terraform PR이 같은 merge queue 배치에 포함되어 plan이 달라지면 즉시 apply하지 않고 실패한다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
 
-외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. 이 정책은 GitHub Actions의 `all_external_contributors` 설정으로 관리하며, 조직 구성원의 PR만 자동 실행한다.
+외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. Repository의 Actions 설정에서 fork pull request 승인 정책을 `all_external_contributors`로 직접 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
 로컬 bootstrap 또는 복구가 필요할 때는 아래 순서로 실행한다.
 
@@ -71,7 +65,6 @@ terraform init
 terraform validate
 terraform plan -input=false -out=terraform.tfplan
 terraform apply -auto-approve terraform.tfplan
-./scripts/ensure-github.sh
 ./scripts/ensure-tester-group.sh
 terraform plan -input=false -detailed-exitcode
 ```

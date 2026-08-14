@@ -64,17 +64,17 @@
 - Consequences: Vault role owner가 다른 repository라면 같은 issue의 별도 PR/apply가 필요하다.
 - Confirmation / Follow-up: OIDC policy와 tag-ref token 거부를 비민감하게 확인한다.
 
-### 범용 repository bootstrap은 production GitHub 정책을 소유하지 않는다
+### GitHub repository 설정 bootstrap 스크립트를 두지 않는다
 
 - Decision Date: 2026-08-14
 - Decision Class: Derived Contract
 - Authority / Provenance: `PROD-764`
 - Status: Active
-- Context / Problem: Repository bootstrap 스크립트에 production reviewer와 Environment 정책을 고정하면 실제 운영 결정과 쉽게 달라지고 재실행 때 폐기된 승인 gate를 복원할 수 있다.
-- Decision Outcome: `apps/terraform/scripts/ensure-github.sh`에서 `prod` Environment 소유와 검증을 제거한다. Production ruleset과 Environment reviewer·deployment branch policy는 첫 전환에서 명시적으로 설정하고 live API로 검증한다.
-- Alternatives Considered: 범용 스크립트를 더 일반화해 production 설정까지 계속 관리하는 방식은 장기적으로 낡은 중복 source of truth를 유지하므로 채택하지 않았다.
-- Consequences: GitHub production 설정은 자동 bootstrap되지 않으며 cutover checklist와 live 검증이 필수다.
-- Confirmation / Follow-up: 스크립트가 `prod`를 변경하지 않는지 정적 확인하고, 전환 시 GitHub ruleset과 Environment API 결과를 기록한다.
+- Context / Problem: Repository bootstrap 스크립트에 Environment 정책과 Actions 변수를 복제하면 실제 GitHub 설정과 쉽게 달라지고 재실행 때 폐기된 값을 복원할 수 있다.
+- Decision Outcome: `apps/terraform/scripts/ensure-github.sh`를 제거한다. GitHub Environment, ruleset과 Actions 변수는 각 운영 절차에서 직접 설정하고 live API로 검증한다.
+- Alternatives Considered: 범용 스크립트를 더 일반화하거나 production 설정만 제외하는 방식은 장기적으로 낡은 중복 source of truth를 유지하므로 채택하지 않았다.
+- Consequences: GitHub 설정은 자동 bootstrap되지 않으며 각 기능의 최초 설정 절차와 live 검증이 필수다.
+- Confirmation / Follow-up: 저장소에 bootstrap 스크립트 참조가 없는지 정적 확인하고, 전환 시 GitHub ruleset과 Environment API 결과를 기록한다.
 
 ### Rollback은 revert를 배포하는 새 release다
 
