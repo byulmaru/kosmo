@@ -56,7 +56,7 @@ Home route handler는 Web에서 activation마다 document scroll을 최상단으
 
 ## Risks / Trade-offs
 
-- [HomePageQuery 전체를 다시 요청해 timeline 외 session·profile field도 갱신한다] → 별도 fragment callback plumbing을 만들지 않는 대가로 받아들이고 request count·normalized update·기존 pagination 유지 여부를 Web 자동화에서 검증한다.
+- [HomePageQuery 전체를 다시 요청해 timeline 외 session·profile field도 갱신한다] → 별도 fragment callback plumbing을 만들지 않는 대가로 받아들인다. Web 자동화는 request count와 오류 시 기존 timeline 유지를 검증하며, 변경된 서버 데이터의 normalized UI 반영과 기존 loaded pagination 유지는 별도 runtime 검증 범위로 남긴다.
 - [actor environment가 바뀐 뒤 이전 요청 completion이 새 Home 잠금을 건드릴 수 있다] → subscription과 lock을 environment lifecycle에 묶고 cleanup한다.
 - [context 값 변경이 shell 전체 재렌더를 만들 수 있다] → handler 등록과 activation API를 stable callback/ref로 유지한다.
 - [PageHeader의 접근성 트리가 중복된 `홈` 이름을 노출할 수 있다] → brand control의 link name과 header 의미를 각각 검증하고 숨겨진 장식 mark는 별도 focus target으로 노출하지 않는다.

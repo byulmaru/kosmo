@@ -50,7 +50,7 @@
 - Decision Outcome: 현재 actor Relay environment에서 기존 Home query를 `network-only`로 실행하고 observable의 완료·실패를 잠금 해제 근거로 사용한다. 기존 normalized store 구독으로 화면을 갱신한다.
 - Alternatives Considered: timeline fragment refetch는 중첩된 PostList까지 callback을 전달하고 pagination 회귀를 추가 검증해야 한다. retry용 key 증가는 완료 신호가 없어 선택하지 않았다. query-loader 방식은 같은 계약을 만족할 수 있지만 현재 단일 query에는 추가 lifecycle이 필요하다.
 - Consequences: timeline 외 Home query field도 함께 요청한다. environment 전환·unmount 시 이전 subscription과 잠금을 정리하고, 같은 activation에서 retry용 key를 함께 변경하지 않는다.
-- Confirmation / Follow-up: Home query 요청 수, normalized timeline 갱신, 기존 loaded connection과 actor 전환 cleanup을 검증한다.
+- Confirmation / Follow-up: Home query 요청 수, 진행 중 중복 억제, 성공·실패 뒤 재활성화와 controller dispose·stale settle cleanup을 자동화로 검증한다. 변경된 서버 데이터의 normalized UI 반영, 기존 loaded connection 유지와 실제 actor 전환 중 네트워크 cleanup timing은 미검증 runtime 범위로 남긴다.
 
 ## Remaining Decisions
 
