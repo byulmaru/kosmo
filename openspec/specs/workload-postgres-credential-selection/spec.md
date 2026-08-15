@@ -2,81 +2,72 @@
 
 ## Purpose
 
-TBD - created by archiving change add-workload-postgres-credential-selection. Update Purpose after archive.
+Application workload의 process 기본 DB를 workload별 표준 PostgreSQL 환경 변수 source로 고정하고, GraphQL operation·production migration·Fedify MessageQueue의 별도 연결 및 권한 경계를 보존하는 계약을 정의한다.
 
 ## Requirements
 
-### Requirement: 기존 runtime 연결과 rendered manifest 보존
+### Requirement: process-wide application DB는 표준 PG source를 사용한다
 
-**Authority / Provenance:** Linear `PROD-709` — 시스템은 `api` 또는 `fedify` credential selector를 활성화하지 않은 기존 Helm values에서 API Rollout, Web BFF/inbound Fedify와 migration의 현재 연결 경계를 그대로 렌더해야 한다(MUST). Selector 지원만 배포한 release는 기존 rendered manifest를 byte-identical하게 유지해야 하며(MUST), database role, Secret, endpoint 또는 런타임 client/connection 동작을 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, user decision — process-wide application DB는 workload별로 chart가 생성한 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` source를 사용해야 한다(MUST). API, Fedify consumer와 dev migration은 owner `kosmo`, Web과 enabled Temporal Worker는 `kosmo_worker`를 사용해야 한다(MUST). process-wide 기본 DB에 `DATABASE_URL`/`DATABASE_PASSWORD`, URL/password selector, 완전성 flag 또는 fallback을 추가해서는 안 된다(MUST NOT).
 
-#### Scenario: 기존 values byte identity
+#### Scenario: API와 Fedify consumer owner source
 
-- **WHEN** `postgres.credentials.api`와 `postgres.credentials.fedify`를 모두 비활성화한 기존 values로 Helm manifest를 렌더한다
-- **THEN** API와 Web BFF는 현재 CloudNativePG owner `-app` Secret과 read-write Service 기반 `DATABASE_URL`/`DATABASE_PASSWORD`를 그대로 사용하고, Web에는 selector가 만든 `FEDIFY_DATABASE_*`가 없으며, 전체 rendered output은 selector 이전 baseline과 byte-identical하다
+- **WHEN** API 또는 Fedify consumer의 process-wide 기본 DB manifest를 렌더한다
+- **THEN** `PGHOST`는 기존 direct read-write Service, `PGPORT`는 `5432`, `PGUSER`는 `kosmo`, `PGDATABASE`는 `kosmo`를 사용한다
+- **AND** `PGPASSWORD`는 기존 owner application Secret의 `password` key를 참조한다
+- **AND** Worker Secret, `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 투영하지 않는다
+- **AND** process-wide 기본 DB source에는 `DATABASE_URL`/`DATABASE_PASSWORD`와 `hasComplete...` 또는 URL fallback branch가 없다
 
-#### Scenario: migration 경계 보존
+#### Scenario: Web과 Temporal Worker Worker source
 
-- **WHEN** API 또는 Fedify selector 없이 dev/prod migration Job을 렌더한다
-- **THEN** dev는 기존 owner fallback을 사용하고 production은 기존 migration Secret과 `kosmo_migration` login → `SET ROLE kosmo` 경계를 유지한다
+- **WHEN** Web 또는 기존 activation gate에서 enabled된 Temporal Worker manifest를 렌더한다
+- **THEN** `PGHOST`는 기존 direct read-write Service, `PGPORT`는 `5432`, `PGUSER`는 `kosmo_worker`, `PGDATABASE`는 `kosmo`를 사용한다
+- **AND** `PGPASSWORD`는 같은 release의 Worker Secret `password` key를 참조한다
+- **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 투영하지 않는다
 
-### Requirement: API credential source는 API Rollout과 Web BFF가 공유한다
+### Requirement: API process source와 GraphQL operation source는 분리한다
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-369` — 시스템은 하나의 API PostgreSQL URL과 password Secret source를 API Rollout과 Web BFF 기본 DB 연결에 공통으로 선택할 수 있어야 한다(MUST). API와 Web에 서로 다른 API 인증 source를 만들거나(MUST NOT), API source를 Fedify source로 재사용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-716` — API process-wide 기본 DB는 owner `kosmo` 표준 PG source를 사용하고 GraphQL Query/Mutation의 operation connection은 별도 `OPERATION_DATABASE_URL`을 사용해야 한다(MUST). GraphQL operation URL을 process-wide 기본 source로 재사용하거나 API에 Worker credential을 노출해서는 안 된다(MUST NOT).
 
-#### Scenario: API source 선택
+#### Scenario: API 기본 및 operation source
 
-- **WHEN** `postgres.credentials.api`의 URL과 password Secret trio를 모두 채운다
-- **THEN** API Rollout과 Web BFF 기본 `DATABASE_URL`/`DATABASE_PASSWORD`가 같은 API source를 참조하고, 두 workload에 별도 Web API source가 렌더되지 않는다
+- **WHEN** API Rollout과 GraphQL operation connection을 함께 렌더한다
+- **THEN** API process-wide env는 owner `PGHOST`/`PGPORT`/`PGUSER=kosmo`/`PGDATABASE=kosmo`/`PGPASSWORD` source를 사용한다
+- **AND** `OPERATION_DATABASE_URL`은 GraphQL operation 전용 Pooler endpoint를 사용한다
+- **AND** operation URL과 process-wide PG env는 서로의 password 또는 selector source를 재사용하지 않는다
 
-#### Scenario: API source rollback
+### Requirement: migration은 process-wide 기본 source와 독립된 role 경계를 유지한다
 
-- **WHEN** API trio를 세 값 모두 제거하고 image와 Fedify 설정을 유지한다
-- **THEN** API Rollout과 Web BFF 기본 연결만 기존 owner source로 함께 돌아가며 Web inbound Fedify `FEDIFY_DATABASE_*` 선택은 바뀌지 않는다
+**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-715` — runtime workload source 변경은 migration credential, role transition 또는 실행 순서를 바꾸어서는 안 된다(MUST).
 
-### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
+#### Scenario: dev migration owner source
 
-**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-719` — 시스템은 Web 프로세스의 현재 inbound Fedify consumer에 별도 PostgreSQL URL과 password Secret source를 제공할 수 있어야 한다(MUST). 이 source는 Web BFF 기본 `DATABASE_URL`을 덮어쓰거나 API Rollout에 주입되어서는 안 된다(MUST NOT).
+- **WHEN** dev migration Job을 렌더한다
+- **THEN** Job은 기존 direct read-write Service의 표준 `PGHOST`/`PGPORT`/`PGUSER=kosmo`/`PGDATABASE=kosmo`/`PGPASSWORD` source를 사용한다
+- **AND** process-wide `DATABASE_URL`/`DATABASE_PASSWORD` fallback을 사용하지 않는다
 
-#### Scenario: Web inbound Fedify source 선택
+#### Scenario: production migration role transition
 
-- **WHEN** `postgres.credentials.fedify`의 URL과 password Secret trio를 모두 채운다
-- **THEN** Web Rollout에만 `FEDIFY_DATABASE_PASSWORD` SecretKeyRef와 `FEDIFY_DATABASE_URL`이 추가되고 API Rollout에는 `FEDIFY_DATABASE_*`가 없으며 Web BFF 기본 `DATABASE_*`는 API source를 유지한다
+- **WHEN** production migration Job을 렌더한다
+- **THEN** `kosmo_migration` login Secret과 direct endpoint를 사용한다
+- **AND** migration command가 `SET ROLE kosmo`로 application schema 권한 경계를 유지한다
 
-#### Scenario: Fedify source rollback
+### Requirement: MessageQueue secondary source를 보존한다
 
-- **WHEN** Fedify trio를 세 값 모두 제거하고 API 설정을 유지한다
-- **THEN** Web의 `FEDIFY_DATABASE_*` 입력만 제거되고 API Rollout과 API/Web BFF 기본 연결은 바뀌지 않는다
+**Authority / Provenance:** Linear `PROD-448`, `PROD-715` — MessageQueue 전용 database/role은 process-wide source 단순화와 독립적으로 유지해야 한다(MUST).
 
-#### Scenario: API Fedify env 금지
+#### Scenario: MessageQueue database 분리
 
-- **WHEN** API-only, Fedify-only 또는 양쪽 selector를 각각 활성화해 manifest를 검토한다
-- **THEN** API Rollout에는 어떤 조합에서도 `FEDIFY_DATABASE_URL` 또는 `FEDIFY_DATABASE_PASSWORD`가 렌더되지 않는다
+- **WHEN** Worker source와 Fedify MessageQueue runtime을 함께 렌더한다
+- **THEN** `FEDIFY_QUEUE_DATABASE_URL`/password는 별도 `kosmo_fedify_queue` database/role source를 유지한다
+- **AND** Worker 또는 owner process-wide `PGPASSWORD`를 queue credential로 재사용하지 않는다
 
-### Requirement: 각 역할 selector는 additive atomic trio다
+### Requirement: Worker source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-709` — 시스템은 `api`와 `fedify` 각각의 `databaseUrl`, `passwordSecret.name`, `passwordSecret.key` 세 값을 하나의 선택 단위로 검증해야 한다(MUST). 일부 값만 설정된 source는 owner fallback과 custom 값을 섞어서는 안 되며(MUST NOT) 명확한 Helm render 오류로 거부해야 한다(MUST).
+**Authority / Provenance:** Linear `PROD-715` — 시스템은 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). API process/operation source, migration과 queue source를 함께 바꾸거나 인증 실패 중 owner로 자동 재시도해서는 안 된다(MUST NOT).
 
-#### Scenario: 완전한 trio 선택
+#### Scenario: Worker source rollback
 
-- **WHEN** 하나의 역할에 URL, Secret name과 Secret key를 모두 설정한다
-- **THEN** 해당 역할만 custom source를 참조하고 Secret value는 values나 rendered manifest에 나타나지 않는다
-
-#### Scenario: 불완전한 trio 거부
-
-- **WHEN** API 또는 Fedify source에 URL 또는 Secret name/key 중 하나 이상만 설정한다
-- **THEN** Helm render는 실패하고 `postgres.credentials.api` 또는 `postgres.credentials.fedify` source를 식별하는 오류를 반환하며 owner fallback과 custom 값의 혼합 manifest를 만들지 않는다
-
-### Requirement: migration은 runtime selector와 독립된 기존 경계를 사용한다
-
-**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-709`, `PROD-564` — 시스템은 `migration` runtime 역할을 API/Fedify selector와 별도 설정 경계로 유지해야 한다(MUST). Runtime selector는 migration credential, role transition 또는 실행 순서를 암묵적으로 바꾸어서는 안 된다(MUST NOT).
-
-#### Scenario: runtime 입력만 변경
-
-- **WHEN** API 또는 Fedify trio를 opt-in하고 migration 설정을 변경하지 않는다
-- **THEN** dev migration owner fallback과 production `kosmo_migration` login/Secret 및 `SET ROLE kosmo` 계약은 그대로 유지된다
-
-#### Scenario: migration render 불변
-
-- **WHEN** API-only, Fedify-only, 양쪽 활성화와 각 selector rollback의 dev/prod migration Job을 비교한다
-- **THEN** 각 migration document의 env, Secret ref, `DATABASE_MIGRATION_ROLE`과 role transition이 baseline과 byte-identical하다
+- **WHEN** 전체 PROD-715 merge/squash revision을 Git revert한다
+- **THEN** Web의 기본 DB env와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
+- **AND** API process/operation connection, migration과 queue database는 바뀌지 않는다

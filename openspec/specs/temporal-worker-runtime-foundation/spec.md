@@ -88,21 +88,22 @@
 - **WHEN** prod chart에서 Worker component를 명시적으로 활성화한다
 - **THEN** 2개 replica, Worker command, HTTP probes와 prod Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 render된다
 
-### Requirement: Worker 역할별 DB 입력 seam
+### Requirement: Worker workload 기본 DB source
 
-**Authority / Provenance:** PROD-730, PROD-709, PROD-715. 활성화된 Worker Deployment는 API 역할과 Fedify 역할의 완전하게 구성된 PostgreSQL credential values를 각각 기존 역할별 Secret과 URL 환경 변수로 투영해야 한다(MUST). 부분 credential 설정은 chart render 단계에서 실패해야 하며(MUST), foundation은 DB connection을 열거나 credential·권한을 생성·전환하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715` — 기존 `workloads.enabled && worker.enabled` activation gate에서 렌더되는 Worker Deployment는 chart가 생성한 direct read-write Service의 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` env로 process 기본 `kosmo_worker` DB source를 사용해야 한다(MUST). `DATABASE_URL`/`DATABASE_PASSWORD`, 별도 Worker credential selector, `WORKER_DATABASE_*` application connection을 만들거나 Worker runtime registration/lifecycle을 이 change에서 변경해서는 안 된다(MUST NOT).
 
-#### Scenario: 역할별 credential이 구성됨
+#### Scenario: Worker Deployment가 렌더됨
 
-- **WHEN** Worker component를 활성화하고 API와 Fedify 역할의 URL·password Secret name·key를 완전하게 제공한다
-- **THEN** Deployment는 `DATABASE_URL`/`DATABASE_PASSWORD`와 `FEDIFY_DATABASE_URL`/`FEDIFY_DATABASE_PASSWORD`를 각 역할의 입력으로 가진다
+- **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 chart를 렌더한다
+- **THEN** Worker ServiceAccount와 Deployment를 생성한다
+- **AND** Worker template의 기존 activation gate를 유지한다
+- **AND** `PGHOST`는 기존 direct read-write Service, `PGPORT`는 `5432`, `PGUSER`는 `kosmo_worker`, `PGDATABASE`는 `kosmo`를 사용한다
+- **AND** `PGPASSWORD`는 같은 release의 `*-postgres-worker` Secret `password` key를 참조한다
+- **AND** `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않고 postgres.js의 표준 PG env 해석을 사용하며, process-wide DB source fallback이나 완전성 flag를 두지 않는다
+- **AND** `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 별도 application 입력으로 투영하지 않는다
 
-#### Scenario: 역할별 credential이 부분 구성됨
+#### Scenario: Worker credential values 입력 부재
 
-- **WHEN** 역할별 URL·password Secret name·key 중 일부만 제공한다
-- **THEN** chart render가 incomplete credential 오류로 실패한다
-
-#### Scenario: foundation Worker의 DB 비사용
-
-- **WHEN** 등록된 business capability가 없는 Worker entrypoint를 실행한다
-- **THEN** process는 제공된 DB 입력으로 connection을 열지 않고 구성 오류로 종료한다
+- **WHEN** 기본 values에서 `workloads.enabled=true`와 `worker.enabled=false`를 사용하거나 `worker.enabled`를 생략한다
+- **THEN** Worker resources를 생성하지 않는다
+- **AND** Worker credential PG env와 Secret ref는 enabled Worker template에만 투영된다

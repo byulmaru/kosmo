@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Worker workload 기본 DB source
 
@@ -19,3 +19,13 @@
 - **WHEN** 기본 values에서 `workloads.enabled=true`와 `worker.enabled=false`를 사용하거나 `worker.enabled`를 생략한다
 - **THEN** Worker resources를 생성하지 않는다
 - **AND** Worker credential PG env와 Secret ref는 enabled Worker template에만 투영된다
+
+## REMOVED Requirements
+
+### Requirement: Worker 역할별 DB 입력 seam
+
+**Authority / Provenance:** Linear `PROD-730`, `PROD-709`, `PROD-715`
+
+**Reason:** API/Fedify URL과 password selector를 Worker에 투영하는 historical seam은 process 기본 DB를 표준 `PG*` source 하나로 통일한 최신 계약과 충돌한다.
+
+**Migration:** enabled Worker Deployment는 chart-derived direct `kosmo_worker` `PG*` source만 사용한다. 별도 `DATABASE_*`/`FEDIFY_DATABASE_*` selector와 partial credential validation은 제거하며 registration이 없는 기본 비활성 lifecycle은 PROD-722 activation까지 유지한다.

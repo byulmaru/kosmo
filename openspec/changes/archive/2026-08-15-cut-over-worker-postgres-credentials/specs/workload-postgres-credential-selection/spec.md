@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: process-wide application DB는 표준 PG source를 사용한다
 
@@ -46,24 +46,9 @@
 - **THEN** `kosmo_migration` login Secret과 direct endpoint를 사용한다
 - **AND** migration command가 `SET ROLE kosmo`로 application schema 권한 경계를 유지한다
 
-### Requirement: Worker activation gate와 queue secondary source를 보존한다
+### Requirement: MessageQueue secondary source를 보존한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-448`, `PROD-715` — 기존 Worker activation gate와 MessageQueue 전용 database/role은 process-wide source 단순화와 독립적으로 유지해야 한다(MUST).
-
-#### Scenario: 기존 Worker activation gate 보존
-
-- **WHEN** `workloads.enabled=true`와 기본 `worker.enabled=false` 또는 생략된 `worker.enabled`로 chart를 렌더한다
-- **THEN** Worker ServiceAccount와 Deployment가 존재하지 않는다
-- **AND** Web은 chart가 생성한 `kosmo_worker` direct source를 계속 사용한다
-- **AND** Web Rollout은 `worker-database` Secret 변경 시 재시작 대상으로 유지된다
-- **AND** Worker Deployment restart target은 렌더되지 않는다
-
-#### Scenario: Worker activation override
-
-- **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 chart를 렌더한다
-- **THEN** Worker ServiceAccount와 Deployment가 존재한다
-- **AND** Web과 Worker Deployment가 chart가 생성한 `kosmo_worker` direct source를 사용한다
-- **AND** Web Rollout과 Worker Deployment가 `worker-database` Secret 변경 시 재시작 대상으로 렌더된다
+**Authority / Provenance:** Linear `PROD-448`, `PROD-715` — MessageQueue 전용 database/role은 process-wide source 단순화와 독립적으로 유지해야 한다(MUST).
 
 #### Scenario: MessageQueue database 분리
 
@@ -83,19 +68,21 @@
 
 ## REMOVED Requirements
 
-### Requirement: API custom credential selector trio
+### Requirement: 기존 runtime 연결과 rendered manifest 보존
 
 **Authority / Provenance:** Linear `PROD-709`, `PROD-715`
 
-**Reason:** process-wide application DB source를 표준 PG 환경변수 하나로 통일했으므로 사용되지 않는 `postgres.credentials.api.databaseUrl`, `passwordSecret.name`, `passwordSecret.key` selector와 partial/complete validation은 불필요한 URL escaping·source precedence 상태를 만든다.
+**Reason:** selector가 비활성일 때 owner URL을 보존하던 과도기 계약은 모든 process-wide workload가 표준 `PG*` source를 사용하는 현재 계약으로 대체됐다.
 
-**Migration:** API process-wide 기본 DB는 chart가 생성한 owner `kosmo` 표준 PG env를 사용한다. GraphQL operation은 별도 `OPERATION_DATABASE_URL`을 유지하고, queue URL/password와 migration role 경계는 변경하지 않는다. 기존 custom trio를 values에 설정해도 해석하거나 fallback하지 않는다.
+**Migration:** API/Fedify consumer/dev migration은 owner `kosmo`, Web/enabled Worker는 `kosmo_worker`의 chart-derived 표준 `PG*` source를 사용한다. byte-identical legacy URL manifest나 owner fallback은 지원하지 않는다.
 
-#### Scenario: custom API trio 비소비
+### Requirement: API credential source는 API Rollout과 Web BFF가 공유한다
 
-- **WHEN** `postgres.credentials.api` custom URL/password trio를 설정한다
-- **THEN** chart와 runtime은 이를 process-wide 기본 DB source로 해석하지 않는다
-- **AND** 지원되는 source는 owner 표준 PG env와 GraphQL operation 전용 `OPERATION_DATABASE_URL`이다
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715`, `PROD-716`
+
+**Reason:** Web BFF의 비GraphQL trusted 경로는 API RLS principal이 아니라 `kosmo_worker`를 사용하며, API process 기본 DB와 GraphQL operation connection도 서로 다른 경계다.
+
+**Migration:** API process 기본 DB는 owner `kosmo` `PG*`, Web은 `kosmo_worker` `PG*`, GraphQL Query/Mutation은 별도 `OPERATION_DATABASE_URL`을 사용한다. API Rollout에 Worker credential을 주입하지 않는다.
 
 ### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
 
@@ -109,3 +96,19 @@
 
 - **WHEN** migration 이후 `postgres.credentials.fedify` 또는 `FEDIFY_DATABASE_*`를 설정한다
 - **THEN** chart/runtime은 이를 Worker 또는 owner process-wide source로 해석하거나 `WORKER_DATABASE_*`로 투영하지 않는다
+
+### Requirement: 각 역할 selector는 additive atomic trio다
+
+**Authority / Provenance:** Linear `PROD-709`, `PROD-715`
+
+**Reason:** URL·Secret name·key의 partial/complete selector 상태는 process 기본 DB를 표준 `PG*` source 하나로 통일한 계약에서 더 이상 존재하지 않는다.
+
+**Migration:** API/Fedify consumer/dev migration과 Web/enabled Worker는 각각 chart가 고정 생성한 `PG*`와 principal별 `PGPASSWORD` SecretKeyRef만 사용한다. legacy custom trio는 해석하거나 fallback하지 않는다.
+
+### Requirement: migration은 runtime selector와 독립된 기존 경계를 사용한다
+
+**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-709`, `PROD-715`
+
+**Reason:** migration의 독립 권한 경계는 유지되지만 URL selector와 owner fallback을 전제로 한 이전 requirement는 표준 `PG*` 입력 계약과 맞지 않는다.
+
+**Migration:** dev migration은 owner `kosmo` 표준 `PG*` source를 사용하고 production은 `kosmo_migration` login에서 `SET ROLE kosmo`로 전환하는 기존 권한 경계를 유지한다.

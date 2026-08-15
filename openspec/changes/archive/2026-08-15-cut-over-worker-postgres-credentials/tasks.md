@@ -87,10 +87,12 @@ merge된 exact revision의 비운영 환경에서 Web의 실제 Worker principal
 - enabled Worker Deployment의 기본 Secret/URL source, API Worker Secret 부재와 `kosmo_fedify_queue` 분리를 확인한다.
 - Git revert manifest가 Web 기본 DB와 enabled Worker resource/source를 pre-PROD-715 상태로 되돌리고 API/migration/queue를 유지하는지 재확인한다.
 
-- [ ] 3.1 Ready PR merge 뒤 비운영 exact revision과 workload readiness를 확인한다.
-- [ ] 3.2 Web live principal·대표 SQL과 Worker manifest/API·queue 음성 경계를 검증한다.
-- [ ] 3.3 이번 delta가 제거하는 기존 API/Fedify/Worker selector와 process-wide URL fallback 요구사항을 Active specs에 동기화하고 change를 archive한 뒤 전체 OpenSpec strict validation을 통과한다.
-- [ ] 3.4 완료 evidence를 Linear에 남기고 PROD-715 상태를 갱신한다.
+- [x] 3.1 Ready PR merge 뒤 비운영 exact revision과 workload readiness를 확인한다.
+- [x] 3.2 Web live principal·대표 SQL과 Worker manifest/API·queue 음성 경계를 검증한다.
+- [x] 3.3 이번 delta가 제거하는 기존 API/Fedify/Worker selector와 process-wide URL fallback 요구사항을 Active specs에 동기화하고 change를 archive한 뒤 전체 OpenSpec strict validation을 통과한다.
+- [x] 3.4 완료 evidence를 Linear에 남기고 PROD-715 상태를 갱신한다.
+
+Evidence (2026-08-15 dev-live): PR #601 merge SHA `a05442201a774ba37bddf0f64ac90249bbbf3880`가 dev deployed revision `e026d95b0058cdff4d59522544bf91db7d81d2ce`의 ancestor이고 두 revision 사이 PROD-715 DB boundary 파일에 drift가 없음을 확인했다. 승인된 dev `worker-database` credential 회전과 VSO sync 뒤 Argo는 `Synced / Healthy / Succeeded`, Web/API/Fedify consumer/PostgreSQL/Pooler는 Ready, 관찰 구간 restart는 0, health endpoint는 HTTP 200이었다. 실제 Web process 기본 DB는 `current_user=session_user=kosmo_worker`, `rolbypassrls=true`, Profile 대표 SELECT와 application table CRUD ACL을 충족했다. 실제 API/Fedify consumer process 기본 DB는 owner `kosmo`, `rolbypassrls=false`를 유지했다. API manifest에는 Worker Secret/env가 없고 `OPERATION_DATABASE_URL`은 별도 GraphQL Pooler source, Fedify MessageQueue는 별도 `kosmo_fedify_queue` database/role source를 유지했다. Worker Deployment는 PROD-722 activation 전이라 존재하지 않으며, 해당 registration·singleton startup·`worker.enabled` 제거·readiness/drain은 이 change의 완료 증거가 아니다. Linear PROD-715는 PR merge로 이미 Done 상태였고 completion evidence comment `5531c84d-4bfb-4a9c-bf76-af9618352e47`를 추가했다. Production 작업은 수행하지 않았다.
 
 ## 4. Production 운영 절차
 
