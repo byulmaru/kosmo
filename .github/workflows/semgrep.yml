@@ -16,7 +16,7 @@ concurrency:
 
 env:
   # Update only after validating the new version in a Semgrep run.
-  SEMGREP_VERSION: '1.171.0'
+  SEMGREP_VERSION: '1.173.0'
   SEMGREP_CONFIGS: >-
     --config=p/default
     --config=p/javascript
