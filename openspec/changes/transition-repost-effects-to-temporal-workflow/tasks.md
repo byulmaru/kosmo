@@ -121,5 +121,5 @@ Workflow와 Worker retry·restart가 실제로 동작한다.
 - [x] 4.1 active `add-post-reposts` artifacts의 PROD-669 `postCommit`·Best Effort lifecycle을 PROD-725 소유 경계로 동기화한다.
 - [x] 4.2 관련 package lint, typecheck, unit/integration test와 OpenSpec strict validation을 통과시킨다.
 - [ ] 4.3 exact revision을 dev에서 검증하고 create/delete effects, duplicate no-start, AP no-echo, Activity 독립 실행·유한 retry와 Worker restart 복구 증거를 수집한다.
-- [ ] 4.4 production 미변경을 확인하고 PR/CI, dev-live, production evidence를 분리해 결과를 기록한다.
+- [x] 4.4 production 미변경을 확인하고 PR/CI, dev-live, production evidence를 분리해 결과를 기록한다.
 - [ ] 4.5 integration owner가 `add-post-reposts`를 먼저 archive한 뒤 canonical Notification spec을 확인하고, 이 change의 Completion Gate 승인 후 별도 archive owner가 최종 archive와 strict validation을 수행한다.
