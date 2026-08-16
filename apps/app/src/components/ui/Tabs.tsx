@@ -42,9 +42,8 @@ type WebTabListProps = { role: 'tablist' };
 type WebTabProps = {
   'aria-disabled': boolean;
   'aria-selected': boolean;
-  onMouseDown: () => void;
-  onMouseUp: () => void;
   onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
+  onPointerCancel: () => void;
   onPointerDown: () => void;
   onPointerUp: () => void;
   role: 'tab';
@@ -113,8 +112,8 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
 
   const theme = useTheme();
   const optionRef = useRef<View>(null);
-  const [pressed, setPressed] = useState(false);
   const [focusVisible, setFocusVisible] = useState(false);
+  const [webPressed, setWebPressed] = useState(false);
   context.optionRefs.set(option.value, optionRef);
 
   const disabled = Boolean(option.disabled);
@@ -189,17 +188,21 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
       onKeyDown={onKeyDown}
-      onPressIn={() => setPressed(true)}
-      onPress={() => {
+      onPress={(event) => {
         if (disabled) {
           return;
+        }
+        if (
+          web &&
+          (event.nativeEvent as unknown as { type?: string } | undefined)?.type === 'click'
+        ) {
+          setFocusVisible(false);
         }
         context.setFocusValue(option.value);
         if (!selected) {
           context.onValueChange(option.value);
         }
       }}
-      onPressOut={() => setPressed(false)}
       ref={optionRef}
       style={(state) => [
         context.variant === 'pill' ? styles.pillTab : styles.underlineTab,
@@ -207,7 +210,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
           backgroundColor:
             context.variant === 'pill' ? (selected ? theme.background : theme.card) : theme.card,
           borderColor: context.variant === 'pill' && selected ? theme.primary : theme.border,
-          opacity: disabled ? 0.45 : pressed || state.pressed ? 0.85 : 1,
+          opacity: disabled ? 0.45 : (web ? webPressed : state.pressed) ? 0.85 : 1,
           ...(focusVisible
             ? {
                 outlineColor: theme.stateFocusRing,
@@ -222,17 +225,13 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         ? ({
             'aria-disabled': disabled,
             'aria-selected': selected,
-            onMouseDown: () => {
-              setFocusVisible(false);
-              setPressed(true);
-            },
-            onMouseUp: () => setPressed(false),
             onKeyDown,
+            onPointerCancel: () => setWebPressed(false),
             onPointerDown: () => {
               setFocusVisible(false);
-              setPressed(true);
+              setWebPressed(true);
             },
-            onPointerUp: () => setPressed(false),
+            onPointerUp: () => setWebPressed(false),
             role: 'tab',
             tabIndex,
           } as WebTabProps)

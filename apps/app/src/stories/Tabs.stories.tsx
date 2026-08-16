@@ -96,6 +96,7 @@ export const InteractionContract: Story = {
 export const PillVariant: Story = {
   args: { variant: 'pill' },
   play: async ({ canvasElement }) => {
+    onValueChange.mockClear();
     const canvas = within(canvasElement);
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
@@ -103,7 +104,23 @@ export const PillVariant: Story = {
 
     expect(popular).toHaveAttribute('aria-selected', 'true');
     expect(popular).toHaveStyle({ borderRadius: '8px', height: '32px' });
+    expect(getComputedStyle(popular).backgroundColor).toBe('rgb(255, 255, 255)');
+    expect(getComputedStyle(popular).borderColor).toBe('rgb(252, 231, 154)');
     expect(latest).toHaveAttribute('aria-disabled', 'true');
     expect(latest).toHaveStyle({ opacity: '0.45' });
+
+    await userEvent.tab();
+    expect(popular).toHaveFocus();
+    expect(getComputedStyle(popular).outlineWidth).toBe('2px');
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: popular });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(getComputedStyle(popular).opacity).toBe('0.85');
+    await userEvent.click(popular);
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    expect(getComputedStyle(latest).pointerEvents).toBe('none');
+    latest.click();
+    expect(onValueChange).not.toHaveBeenCalled();
   },
 };
