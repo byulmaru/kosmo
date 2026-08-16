@@ -210,7 +210,6 @@ jobs:
             --revision "${GITHUB_SHA}" \
             -p "version=${GITHUB_SHA}" \
             -p "imageDigest=${IMAGE_DIGEST}" \
-            -p "workloads.enabled=true" \
             -p "migration.enabled=true" \
             --validate
 

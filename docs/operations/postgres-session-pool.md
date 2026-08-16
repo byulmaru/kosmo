@@ -11,7 +11,7 @@
 
 - Pooler 이름은 `<release>-postgres-pooler-rw`이고 Cluster 이름은 `<release>-postgres`이다.
 - Pooler Service의 기본 client port는 `5432`이며, 기존 `<release>-postgres-rw` Service와 별개다.
-- API, Fedify consumer와 dev migration의 process 기본 DB는 기존 `<release>-postgres-rw` direct Service의 `PGHOST`/`PGPORT=5432`/`PGUSER=kosmo`/`PGDATABASE=kosmo`/`PGPASSWORD`를 사용한다. Web과 기존 `worker.enabled` gate가 켜진 Temporal Worker는 같은 direct Service의 `PGUSER=kosmo_worker`와 release별 Worker Secret `PGPASSWORD`를 사용한다. process-wide 기본 DB에는 `DATABASE_URL`/`DATABASE_PASSWORD`, `postgres.credentials.api` selector trio, URL fallback 또는 `hasComplete...` flag가 없다. API Rollout에는 Worker Secret/env를 주입하지 않는다. Worker 기본값은 disabled이고 명시적으로 enabled된 template에만 Worker source가 투영된다.
+- API, Fedify consumer와 dev migration의 process 기본 DB는 기존 `<release>-postgres-rw` direct Service의 `PGHOST`/`PGPORT=5432`/`PGUSER=kosmo`/`PGDATABASE=kosmo`/`PGPASSWORD`를 사용한다. Web과 Temporal Worker는 같은 direct Service의 `PGUSER=kosmo_worker`와 release별 Worker Secret `PGPASSWORD`를 사용한다. process-wide 기본 DB에는 `DATABASE_URL`/`DATABASE_PASSWORD`, `postgres.credentials.api` selector trio, URL fallback 또는 `hasComplete...` flag가 없다. API Rollout에는 Worker Secret/env를 주입하지 않는다. Worker는 별도 activation flag 없이 항상 렌더된다.
 - GraphQL Query/Mutation의 operation session 전용 `OPERATION_DATABASE_URL`만 `<release>-postgres-pooler-rw:5432`를 사용하며 process-wide `PG*` source와 분리한다. Fedify MessageQueue의 `FEDIFY_QUEUE_DATABASE_URL`/password와 `kosmo_fedify_queue` database/role도 별도 secondary connection으로 유지한다. PgBouncer는 GraphQL operation 전용이고 migration의 direct endpoint와 production `kosmo_migration` → `SET ROLE kosmo` 경계는 유지한다. GraphQL principal 전환은 PROD-716이 소유하고, 취소된 client-certificate/direct-rw 대안 PROD-470은 재개하지 않는다.
 - CloudNativePG operator와 `Pooler` CRD가 대상 namespace에 먼저 설치되어 있어야 한다.
 - 명령 출력에는 Secret 값, connection string, database row를 남기지 않는다. 검증 결과는 readiness, metric 이름과 비민감한 성공/실패만 기록한다.
@@ -31,7 +31,7 @@ Forward fix release가 dev GraphQL smoke와 아래 startup-compatibility gate를
 
 ## Render, endpoint assertion과 admission 확인
 
-지원되는 환경별로 Pooler가 기존 Cluster를 참조하고 API의 operation endpoint만 GraphQL lifecycle에 사용되며 API/Fedify consumer의 owner `PG*`, Web/enabled Worker의 Worker `PG*`, migration direct endpoint가 유지되는지 확인한다. PROD-715 Web/Worker는 Pooler를 사용하지 않으며 이 문서의 GraphQL operation gate와 별도로 direct `kosmo_worker` principal을 검증한다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 endpoint authority(host와 port)와 Secret ref가 기대값인지 exit status로만 확인한다.
+지원되는 환경별로 Pooler가 기존 Cluster를 참조하고 API의 operation endpoint만 GraphQL lifecycle에 사용되며 API/Fedify consumer의 owner `PG*`, Web/Worker의 Worker `PG*`, migration direct endpoint가 유지되는지 확인한다. PROD-715 Web/Worker는 Pooler를 사용하지 않으며 이 문서의 GraphQL operation gate와 별도로 direct `kosmo_worker` principal을 검증한다. Production render에는 실제 release digest를 사용한다. 아래 assertion은 connection string 전체를 출력하지 않고 endpoint authority(host와 port)와 Secret ref가 기대값인지 exit status로만 확인한다.
 
 ```sh
 HELM="${HELM:-helm}"
@@ -42,8 +42,7 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER"' EXIT
 "$HELM" lint apps/helm --set env=dev
 "$HELM" lint apps/helm \
   --set env=prod \
-  --set imageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-  --set workloads.enabled=false
+  --set imageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 "$HELM" template kosmo apps/helm \
   --namespace kosmo-dev \
@@ -53,8 +52,6 @@ trap 'rm -f "$DEV_RENDER" "$PROD_RENDER"' EXIT
   --namespace kosmo-prod \
   --set env=prod \
   --set imageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-  --set workloads.enabled=true \
-  --set worker.enabled=true \
   --set migration.enabled=true >"$PROD_RENDER"
 
 assert_database_host() {
@@ -93,14 +90,6 @@ assert_env_value() {
     }
     END { exit (!found || bad) }
   ' "$render"
-}
-
-assert_source_absent() {
-  local render="$1" source="$2"
-  if rg -q "^# Source: kosmo-web/templates/${source}$" "$render"; then
-    return 1
-  fi
-  return 0
 }
 
 assert_secret_ref() {
@@ -180,10 +169,15 @@ for render in "$DEV_RENDER" "$PROD_RENDER"; do
 
 done
 
-# The default Worker activation gate stays disabled. Its template and restart
-# target appear only when the explicit worker.enabled override is supplied.
-assert_source_absent "$DEV_RENDER" worker.yaml
-assert_worker_restart_targets "$DEV_RENDER" false
+# Worker and its credential restart target are part of every application render.
+assert_env_value "$DEV_RENDER" worker.yaml PGHOST 'kosmo-postgres-rw'
+assert_env_value "$DEV_RENDER" worker.yaml PGPORT '5432'
+assert_env_value "$DEV_RENDER" worker.yaml PGUSER 'kosmo_worker'
+assert_env_value "$DEV_RENDER" worker.yaml PGDATABASE 'kosmo'
+assert_secret_ref "$DEV_RENDER" worker.yaml PGPASSWORD 'kosmo-postgres-worker' 'password'
+assert_env_absent "$DEV_RENDER" worker.yaml DATABASE_URL
+assert_env_absent "$DEV_RENDER" worker.yaml DATABASE_PASSWORD
+assert_worker_restart_targets "$DEV_RENDER" true
 assert_env_value "$PROD_RENDER" worker.yaml PGHOST 'kosmo-postgres-rw'
 assert_env_value "$PROD_RENDER" worker.yaml PGPORT '5432'
 assert_env_value "$PROD_RENDER" worker.yaml PGUSER 'kosmo_worker'
@@ -208,7 +202,7 @@ rg -n 'kind: (Cluster|Pooler)|name: kosmo-postgres(-pooler-rw)?|poolMode:|server
   "$DEV_RENDER" "$PROD_RENDER"
 ```
 
-정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation lifecycle의 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고 API/Fedify consumer/dev migration은 owner `PG*`, Web과 enabled Worker는 Worker `PG*` direct baseline을 유지해야 한다. process-wide workload에는 API custom trio, `DATABASE_URL`/`DATABASE_PASSWORD` 또는 `hasComplete...` fallback이 없어야 하며 API-role과 Worker Secret ref가 각 principal에 맞아야 한다. 기본 `worker.enabled=false` render에서는 Worker resource와 Worker restart target이 없어야 하고, `worker.enabled=true` override render에서만 `kosmo_worker`와 기존 `<release>-postgres-rw` source, Worker Secret ref와 Worker restart target이 나타나야 한다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
+정적 결과에는 dev Pooler `instances: 1`, prod Pooler `instances: 3`, `type: rw`, `poolMode: session`, `server_reset_query: DISCARD ALL`, `max_client_conn: "1000"`, `default_pool_size: "10"`과 `pgbouncer` container의 resource request/limit가 나타나야 한다. API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation lifecycle의 Pooler authority `<release>-postgres-pooler-rw:5432`를 사용하고 API/Fedify consumer/dev migration은 owner `PG*`, Web과 Worker는 Worker `PG*` direct baseline을 유지해야 한다. process-wide workload에는 API custom trio, `DATABASE_URL`/`DATABASE_PASSWORD` 또는 `hasComplete...` fallback이 없어야 하며 API-role과 Worker Secret ref가 각 principal에 맞아야 한다. dev와 prod render 모두 Worker resource, `kosmo_worker` direct source, Worker Secret ref와 Worker restart target을 포함해야 한다. `postgres-pooler.yaml`, `values.yaml`의 Pooler CR, replica, resource와 capacity 설정은 이 전환에서 수정하지 않는다.
 
 CRD가 설치된 대상 cluster에서는 실제 변경 없이 server-side admission도 확인한다.
 
@@ -217,15 +211,14 @@ helm template kosmo apps/helm \
   --namespace kosmo-prod \
   --set env=prod \
   --set imageDigest=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
-  --set workloads.enabled=false \
   | kubectl apply --server-side --dry-run=server -f -
 ```
 
 ## Application activation과 operation session gate
 
-Pooler admission과 readiness가 먼저 통과한 뒤 API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation endpoint로 소비하도록 application release를 동기화한다. API/Fedify consumer의 owner `PG*` source, PROD-715 Web과 enabled Worker의 direct read-write Service 표준 `PG*` source와 migration direct endpoint도 이 change에서 유지한다. Worker activation은 기존 `worker.enabled` gate를 따르며, 이 문서는 Worker runtime registration/lifecycle을 검증하지 않는다. 실제 환경의 env를 확인할 때는 endpoint host와 port만 비교하고 URL, Secret 값, actor UUID를 출력하거나 기록하지 않는다.
+Pooler admission과 readiness가 먼저 통과한 뒤 API Rollout의 `OPERATION_DATABASE_URL`만 GraphQL operation endpoint로 소비하도록 application release를 동기화한다. API/Fedify consumer의 owner `PG*` source, PROD-715 Web과 Worker의 direct read-write Service 표준 `PG*` source와 migration direct endpoint도 이 change에서 유지한다. Worker는 application workload와 항상 함께 렌더되며, 이 문서는 Worker runtime registration/lifecycle을 검증하지 않는다. 실제 환경의 env를 확인할 때는 endpoint host와 port만 비교하고 URL, Secret 값, actor UUID를 출력하거나 기록하지 않는다.
 
-`worker-database` VaultStaticSecret destination이 갱신되면 SecretKeyRef를 env로 소비하는 Web Rollout은 재시작되어야 하며, Temporal Worker Deployment는 기존 `worker.enabled`가 켜진 render에서만 함께 재시작되어야 한다. 이 restart target은 PROD-715 workload wiring의 일부이며 GraphQL operation Pooler gate와 별개다. Runtime credential refresh, URL 감지 또는 compatibility flag를 추가하지 않는다. 정적 render와 비운영 preflight에서는 default render의 `worker-database`가 Web target만 갖고, `worker.enabled=true` override render에서 Web과 Worker target을 갖는지 확인하며, Secret 값은 출력하지 않는다.
+`worker-database` VaultStaticSecret destination이 갱신되면 SecretKeyRef를 env로 소비하는 Web Rollout과 Temporal Worker Deployment가 함께 재시작되어야 한다. 이 restart target은 PROD-715 workload wiring의 일부이며 GraphQL operation Pooler gate와 별개다. Runtime credential refresh, URL 감지 또는 compatibility flag를 추가하지 않는다. 정적 render와 비운영 preflight에서는 `worker-database`가 Web과 Worker target을 모두 갖는지 확인하며, Secret 값은 출력하지 않는다.
 
 ```sh
 set -eu

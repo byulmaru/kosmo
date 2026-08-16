@@ -6,10 +6,16 @@
   "scripts": {
     "build": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",
-    "test": "pnpm build && node --import tsx --test 'src/**/*.test.ts'"
+    "test": "pnpm test:unit && pnpm test:database",
+    "test:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/worker test:database:isolated",
+    "test:database:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/worker exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 src/activities.database.test.ts",
+    "test:unit": "pnpm build && node --import tsx --test src/worker.test.ts"
   },
   "dependencies": {
+    "@kosmo/core": "workspace:*",
+    "@kosmo/fedify": "workspace:*",
     "@temporalio/worker": "^1.22.0",
+    "@temporalio/workflow": "^1.22.0",
     "tsx": "^4.22.4"
   }
 }

@@ -4,13 +4,13 @@
   "scripts": {
     "db:bootstrap-local-instance": "tsx scripts/bootstrap-local-instance.ts",
     "dev": "tsx watch src/index.ts",
-    "lint:schema": "NODE_ENV=production node --import tsx scripts/check-schema.ts",
+    "lint:schema": "NODE_ENV=production TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=test node --import tsx scripts/check-schema.ts",
     "lint:tsc": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",
     "test": "pnpm lint:schema && pnpm lint:tsc && pnpm test:unit && pnpm test:integration",
     "test:integration": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/api test:integration:database",
-    "test:integration:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/api exec node --import tsx --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
-    "test:unit": "NODE_ENV=production node --import tsx --test 'src/**/*.test.ts'"
+    "test:integration:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/api exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
+    "test:unit": "NODE_ENV=production node --import tsx --import ../../packages/core/temporal/test-client.ts --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.10",

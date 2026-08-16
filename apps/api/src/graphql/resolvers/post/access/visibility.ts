@@ -1,6 +1,6 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { PostState, PostVisibility } from '@kosmo/core/enums';
-import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { postVisibilityCondition } from '@kosmo/core/visibility/post';
+import { and, eq, exists, sql } from 'drizzle-orm';
 import { visibleProfileWhere } from '@/profile/visibility';
 import type { Database } from '@kosmo/core/db';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
@@ -22,13 +22,8 @@ export const postVisibilityAccessCondition = ({
   viewerProfileId?: SQLWrapper | string | null;
   db: Database;
 }): SQL<boolean> => {
-  const publicWhere = inArray(columns.postVisibility, [
-    PostVisibility.PUBLIC,
-    PostVisibility.UNLISTED,
-  ]);
-  const followerWhere = viewerProfileId
+  const viewerFollowsAuthor = viewerProfileId
     ? and(
-        eq(columns.postVisibility, PostVisibility.FOLLOWERS),
         exists(
           database
             .select({ id: ProfileFollows.id })
@@ -42,16 +37,18 @@ export const postVisibilityAccessCondition = ({
         ),
       )
     : undefined;
-  const visibleWhere = viewerProfileId
-    ? or(publicWhere, eq(columns.postProfileId, viewerProfileId), followerWhere)!
-    : publicWhere;
 
   // TODO(PROD-121): Extend this helper with DIRECT access once recipient policy exists.
-  return sql<boolean>`${and(
-    eq(columns.postState, PostState.ACTIVE),
-    columns.profileVisible,
-    visibleWhere,
-  )!}`;
+  return postVisibilityCondition({
+    columns: {
+      authorProfileId: columns.postProfileId,
+      authorVisible: columns.profileVisible,
+      postState: columns.postState,
+      postVisibility: columns.postVisibility,
+    },
+    viewerFollowsAuthor,
+    viewerProfileId,
+  });
 };
 
 export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) =>

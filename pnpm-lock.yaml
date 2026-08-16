@@ -381,9 +381,18 @@ importers:
 
   apps/worker:
     dependencies:
+      '@kosmo/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kosmo/fedify':
+        specifier: workspace:*
+        version: link:../../packages/fedify
       '@temporalio/worker':
         specifier: ^1.22.0
         version: 1.22.0(tslib@2.8.1)
+      '@temporalio/workflow':
+        specifier: ^1.22.0
+        version: 1.22.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -393,6 +402,9 @@ importers:
       '@kosmo/fedify':
         specifier: workspace:*
         version: link:../fedify
+      '@temporalio/client':
+        specifier: ^1.22.0
+        version: 1.22.0
       core-js:
         specifier: ^3.49.0
         version: 3.49.0
@@ -4140,7 +4152,6 @@ packages:
 
   drizzle-orm@1.0.0-beta.22:
     resolution: {integrity: sha512-F+DZyVIvH0oVKa/w08Cle1xfoH+pc+htIXHG/frnMLG72aby9NYYr9oc+9XvghnoO4umxFItduz0OMmQJMnenw==}
-    deprecated: The 1.0.0-beta line is superseded by the 1.0 release candidate. Install drizzle-orm@rc instead.
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'

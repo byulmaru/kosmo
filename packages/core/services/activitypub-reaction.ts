@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, ne, or } from 'drizzle-orm';
+import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import {
   ActivityPubActors,
   ActivityPubPosts,
@@ -11,8 +11,9 @@ import {
   Profiles,
   Reactions,
 } from '../db';
-import { InstanceKind, InstanceState, PostState, PostVisibility, ProfileState } from '../enums';
+import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { reactionTypeSchema } from '../validation';
+import { postVisibilityCondition } from '../visibility/post';
 import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 
@@ -47,16 +48,19 @@ const isHttpUri = (value: string): boolean => {
 };
 
 const postAccessWhere = (actorProfileId: string) =>
-  and(
-    eq(Posts.state, PostState.ACTIVE),
-    eq(Profiles.state, ProfileState.ACTIVE),
-    ne(Instances.state, InstanceState.SUSPENDED),
-    or(
-      inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
-      eq(Posts.profileId, actorProfileId),
-      and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
-    ),
-  );
+  postVisibilityCondition({
+    columns: {
+      authorProfileId: Posts.profileId,
+      authorVisible: and(
+        eq(Profiles.state, ProfileState.ACTIVE),
+        ne(Instances.state, InstanceState.SUSPENDED),
+      )!,
+      postState: Posts.state,
+      postVisibility: Posts.visibility,
+    },
+    viewerFollowsAuthor: isNotNull(ProfileFollows.id),
+    viewerProfileId: actorProfileId,
+  });
 
 const parseLocalNoteId = (objectUri: string): string | undefined => {
   const url = new URL(objectUri);

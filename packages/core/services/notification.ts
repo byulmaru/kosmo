@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   firstOrThrowWith,
@@ -11,16 +11,9 @@ import {
   Profiles,
   Reactions,
 } from '../db';
-import {
-  InstanceKind,
-  InstanceState,
-  NotificationKind,
-  PostState,
-  PostVisibility,
-  ProfileState,
-} from '../enums';
+import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { NotFoundError } from '../error';
-import type { Database, DatabaseHandle, Transaction } from '../db';
+import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -30,9 +23,6 @@ const NotificationRepostRecipientInstances = alias(
   Instances,
   'notification_repost_recipient_instance',
 );
-const ReplyParents = alias(Posts, 'reply_notification_parent');
-const ReplyAuthors = alias(Profiles, 'reply_notification_author');
-const ReplyAuthorInstances = alias(Instances, 'reply_notification_author_instance');
 
 export type NotificationEffectOperation = 'create' | 'delete';
 
@@ -243,95 +233,6 @@ export const createReactionNotification = async (
       });
   });
 };
-
-const selectReplyVisibleToProfile = async (
-  tx: Transaction,
-  {
-    profileId,
-    sourceId,
-  }: {
-    profileId: string;
-    sourceId: string;
-  },
-) =>
-  tx
-    .select({ id: Posts.id })
-    .from(Posts)
-    .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
-    .innerJoin(Profiles, eq(Profiles.id, ReplyParents.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .innerJoin(ReplyAuthors, eq(ReplyAuthors.id, Posts.profileId))
-    .innerJoin(ReplyAuthorInstances, eq(ReplyAuthorInstances.id, ReplyAuthors.instanceId))
-    .leftJoin(
-      ProfileFollows,
-      and(
-        eq(ProfileFollows.followerProfileId, profileId),
-        eq(ProfileFollows.followeeProfileId, Posts.profileId),
-      ),
-    )
-    .where(
-      and(
-        eq(Posts.id, sourceId),
-        eq(Posts.state, PostState.ACTIVE),
-        eq(ReplyParents.profileId, profileId),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(ReplyAuthors.state, ProfileState.ACTIVE),
-        ne(ReplyAuthorInstances.state, InstanceState.SUSPENDED),
-        or(
-          inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
-          eq(Posts.profileId, profileId),
-          and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
-        ),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows.length > 0);
-
-export const createReplyNotification = async (
-  sourceId: string,
-  handle?: DatabaseHandle,
-): Promise<void> =>
-  getDatabaseConnection(handle).transaction(async (tx) => {
-    const source = await tx
-      .select({
-        actorProfileId: Posts.profileId,
-        id: Posts.id,
-        recipientInstanceKind: Instances.kind,
-        recipientProfileId: ReplyParents.profileId,
-      })
-      .from(Posts)
-      .innerJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
-      .innerJoin(Profiles, eq(Profiles.id, ReplyParents.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(eq(Posts.id, sourceId))
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Reply not found')));
-
-    if (
-      source.actorProfileId === source.recipientProfileId ||
-      source.recipientInstanceKind !== InstanceKind.LOCAL ||
-      !(await selectReplyVisibleToProfile(tx, {
-        profileId: source.recipientProfileId,
-        sourceId: source.id,
-      }))
-    ) {
-      return;
-    }
-
-    await tx
-      .insert(Notifications)
-      .values({
-        data: {},
-        kind: NotificationKind.REPLY,
-        recipientProfileId: source.recipientProfileId,
-        sourceId: source.id,
-      })
-      .onConflictDoNothing({
-        target: [Notifications.recipientProfileId, Notifications.kind, Notifications.sourceId],
-      });
-  });
 
 export const createRepostNotification = async (
   sourceId: string,

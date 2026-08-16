@@ -24,7 +24,6 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -34,7 +33,8 @@ import {
   postContentDocumentFromText,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
-import { eq, ne, sql } from 'drizzle-orm';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -830,22 +830,12 @@ describe('inbound Create dispatch', () => {
       localParent.post.id,
     );
     assert.equal((await getMaterializedPost(remoteReplyUri)).post.profileId, remoteProfile.id);
-    const localParentReply = await getMaterializedPost(localReplyUri);
-    assert.deepEqual(
+    assert.equal(
       await db
-        .select({
-          kind: Notifications.kind,
-          recipientProfileId: Notifications.recipientProfileId,
-          sourceId: Notifications.sourceId,
-        })
-        .from(Notifications),
-      [
-        {
-          kind: NotificationKind.REPLY,
-          recipientProfileId: localProfile.id,
-          sourceId: localParentReply.post.id,
-        },
-      ],
+        .select()
+        .from(Notifications)
+        .then((rows) => rows.length),
+      0,
     );
   });
 
@@ -901,7 +891,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when Notification creation fails', async () => {
+  test('keeps an inbound Reply committed when effects Workflow start fails', async (t) => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -922,13 +912,9 @@ describe('inbound Create dispatch', () => {
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_reply_create_failure CHECK (false) NOT VALID`,
-    );
-    const captures: { context: { tags: Record<string, string> }; error: unknown }[] = [];
-    const restoreReporter = setInboundObservabilityReporter({
-      captureException: (error, context) => captures.push({ context, error }),
-      log: () => undefined,
+    const errorLog = mock.method(console, 'error', () => undefined);
+    t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
     });
 
     try {
@@ -941,17 +927,11 @@ describe('inbound Create dispatch', () => {
         receivedAt,
       );
     } finally {
-      restoreReporter();
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_reply_create_failure`,
-      );
+      errorLog.mock.restore();
     }
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
     assert.equal((await db.select().from(Notifications)).length, 0);
-    assert.equal(captures.length, 1);
-    assert.equal(captures[0]?.context.tags.reason_code, 'reply_notification_effect_failed');
-    assert.ok(captures[0]?.error instanceof Error);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
@@ -1285,6 +1265,7 @@ describe('inbound Create dispatch', () => {
     });
 
     const logs: unknown[] = [];
+    const errorLog = mock.method(console, 'error', () => undefined);
     const restoreReporter = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
     });
@@ -1310,6 +1291,7 @@ describe('inbound Create dispatch', () => {
         receivedAt.add({ hours: 2 }),
       );
     } finally {
+      errorLog.mock.restore();
       restoreReporter();
     }
 

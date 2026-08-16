@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { Create, Delete, Image } from '@fedify/vocab';
+import { Delete, Image } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -21,6 +21,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -624,30 +625,12 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Create delivery 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const follower = await createRemoteActorProfile('delivery-create-follower');
-    await db.insert(ProfileFollows).values({
-      followeeProfileId: auth.profile.id,
-      followerProfileId: follower.id,
+    const createContext = t.mock.method(localOutboundFederation, 'createContext');
+    t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
     });
-    const deliveredPostIds: string[] = [];
-    t.mock.method(localOutboundFederation, 'createContext', () =>
-      createFailingDeliveryContext(async (activity) => {
-        assert.ok(activity instanceof Create);
-        const postId = activity.objectId?.pathname.split('/').at(-1);
-        assert.ok(postId);
-        const committed = await db
-          .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-          .from(Posts)
-          .where(eq(Posts.id, postId))
-          .then(firstOrThrow);
-        assert.equal(committed.state, PostState.ACTIVE);
-        assert.ok(committed.currentContentId);
-        deliveredPostIds.push(postId);
-      }),
-    );
-    const errorLog = t.mock.method(console, 'error', () => undefined);
 
     const result = await requestCreatePost(
       {
@@ -658,12 +641,14 @@ describe('Post Reply GraphQL 경계', () => {
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(deliveredPostIds.length, 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(
-      errorLog.mock.calls[0]?.arguments[0],
-      'Post-commit ActivityPub Local Post Create delivery failed',
-    );
+
+    const committed = await db
+      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
+      .from(Posts)
+      .then(firstOrThrow);
+    assert.equal(committed.state, PostState.ACTIVE);
+    assert.ok(committed.currentContentId);
+    assert.equal(createContext.mock.callCount(), 0);
   });
 
   test('Root Post Delete delivery 실패는 commit된 Tombstone과 GraphQL 성공을 바꾸지 않는다', async (t) => {
@@ -721,18 +706,18 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.deletedAt, null);
   });
 
-  test('처음 Tombstone 전이만 Delete를 전달하고 반복 삭제는 다시 전달하지 않는다', async (t) => {
+  test('Create가 전달되지 않은 빠른 Tombstone 전이는 Delete만 전달한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const parentAuthor = await createRemoteActorProfile('delivery-repeat-parent');
     const parent = await createContentPost(parentAuthor.id);
     const reply = await createContentPost(auth.profile.id, { replyParentId: parent.id });
     const rootPost = await createContentPost(auth.profile.id);
-    const activityIds: string[] = [];
+    const activities: string[] = [];
     t.mock.method(localOutboundFederation, 'createContext', () =>
       createDeliveryContext(async (activity) => {
         assert.ok(activity instanceof Delete);
         assert.ok(activity.id);
-        activityIds.push(activity.id.href);
+        activities.push(`${activity.constructor.name}:${activity.id.href}`);
       }),
     );
 
@@ -741,7 +726,7 @@ describe('Post Reply GraphQL 경계', () => {
       assertNoGraphQLErrors(result);
     }
 
-    assert.deepEqual(activityIds, [`${publicOrigin}/ap/note/${reply.id}#delete`]);
+    assert.deepEqual(activities, [`Delete:${publicOrigin}/ap/note/${reply.id}#delete`]);
   });
 
   test('Content 없는 Repost Parent는 replyParentId VALIDATION으로 거부하고 rollback한다', async () => {

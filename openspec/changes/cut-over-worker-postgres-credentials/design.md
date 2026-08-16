@@ -23,8 +23,8 @@ PROD-779 이후 GraphQL Query/Mutation도 별도 operation DB session이나 `ctx
 ## Current Constraints
 
 - process-wide 기본 DB에는 URL, password 조합, `hasComplete...` 같은 source 선택 또는 compatibility flag가 없다. 각 template이 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`를 고정하고 해당 principal Secret의 `PGPASSWORD`만 SecretKeyRef로 투영한다.
-- API, Fedify consumer와 dev migration은 기존 owner direct read-write Service의 `PG*` source를 공유한다. Web process의 비GraphQL trusted 경로와 enabled Temporal Worker는 같은 endpoint의 `kosmo_worker` source를 공유한다.
-- Worker Deployment는 기존 `workloads.enabled && worker.enabled` activation gate에서만 렌더된다. `worker.enabled`의 기본값과 `apps/worker` registration·startup·shutdown 동작은 이 change에서 변경하지 않는다.
+- API, Fedify consumer와 dev migration은 기존 owner direct read-write Service의 `PG*` source를 공유한다. Web process의 비GraphQL trusted 경로와 Temporal Worker는 같은 endpoint의 `kosmo_worker` source를 공유한다.
+- Worker Deployment는 유효한 release image가 있는 모든 application render에 함께 렌더된다. workload activation key의 기본값이나 존재 여부로 Worker를 숨기지 않으며, `apps/worker` registration·startup·shutdown 동작은 PROD-722가 소유한다.
 - API에는 Worker source가 없어야 한다. API의 process 기본 DB는 owner `kosmo` source이며 Worker Secret을 참조하지 않는다.
 - `kosmo_fedify_queue`는 MessageQueue 전용 별도 database/role이며 Worker principal과 무관하다.
 - GraphQL은 API process 기본 표준 `PG*` connection을 사용하고 `OPERATION_DATABASE_URL`을 만들지 않는다. `FEDIFY_QUEUE_DATABASE_URL`은 MessageQueue 전용 secondary connection으로 유지한다.
@@ -32,13 +32,13 @@ PROD-779 이후 GraphQL Query/Mutation도 별도 operation DB session이나 `ctx
 
 ## Recommended Approach
 
-1. 각 process-wide template이 기존 direct read-write Service와 고정 principal/database를 표준 `PG*` env로 투영한다. API GraphQL/Fedify consumer/dev migration은 `kosmo`와 app Secret, Web/enabled Worker는 `kosmo_worker`와 Worker Secret을 사용한다. Runtime은 이 process 기본 경계에서 `DATABASE_URL`을 해석하거나 source를 선택하지 않는다. queue URL/password만 secondary client에서 사용한다.
+1. 각 process-wide template이 기존 direct read-write Service와 고정 principal/database를 표준 `PG*` env로 투영한다. API GraphQL/Fedify consumer/dev migration은 `kosmo`와 app Secret, Web/Worker는 `kosmo_worker`와 Worker Secret을 사용한다. Runtime은 이 process 기본 경계에서 `DATABASE_URL`을 해석하거나 source를 선택하지 않는다. queue URL/password만 secondary client에서 사용한다.
 2. 기존 API selector와 URL/password trio를 제거하고, API/Fedify consumer/dev migration의 process 기본 DB를 같은 owner `PG*` source로 고정한다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
 3. 모든 process-wide workload template의 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*`, `FEDIFY_DATABASE_*`를 제거하고 application SQL·callsite·DB handle 구조는 변경하지 않는다.
 4. workload별 `PG*` env와 Secret ref는 values 입력으로 받지 않고 release naming과 고정 principal 계약에서 생성한다.
-5. 기존 `worker.enabled` activation gate를 유지하고, enabled Worker template에만 Worker source와 conditional restart target을 연결한다.
+5. Worker template은 항상 render되는 application workload로 취급하고 Worker source와 restart target을 조건 없이 연결한다. 별도 workload activation key는 사용하지 않는다.
 6. legacy API selector/trio 입력을 제거한 render에서 API, Fedify consumer, migration과 MessageQueue secondary documents가 정합하고 Worker Secret이 API에 유입되지 않는지 검증한다.
-7. merge 뒤 비운영 exact revision에서 Web direct Service의 principal과 대표 SQL, enabled Worker manifest source와 `worker-database` Secret 변경 시 restart target을 검증한다. Worker runtime registration/lifecycle은 검증하지 않는다. production sync/apply는 별도 승인 운영 절차로 남긴다.
+7. merge 뒤 비운영 exact revision에서 Web direct Service의 principal과 대표 SQL, Worker manifest source와 `worker-database` Secret 변경 시 restart target을 검증한다. Worker runtime registration/lifecycle은 검증하지 않는다. production sync/apply는 별도 승인 운영 절차로 남긴다.
 
 ## Known Traps
 
@@ -51,7 +51,7 @@ PROD-779 이후 GraphQL Query/Mutation도 별도 operation DB session이나 `ctx
 
 ## Risks / Mitigations
 
-- [Worker activation과 credential wiring drift] → 기존 `workloads.enabled && worker.enabled` gate를 정적 render에서 확인하고, Web restart target은 유지하되 Worker target은 enabled render에만 둔다.
+- [Worker credential wiring drift] → 유효한 release image의 정적 render에서 Web과 Worker source 및 두 workload의 restart target을 확인한다. activation key로 Worker target을 숨기는 분기를 두지 않는다.
 - [PG env와 Secret naming drift] → DatabaseRole과 workload가 같은 release-derived Secret-name helper를 사용한다.
 - [process-wide source drift] → API, Fedify consumer와 dev migration의 owner `PG*`, Web/Worker의 Worker `PG*`를 정적 render에서 확인하고 URL/password fallback이나 완전성 flag가 없는지 검색한다.
 - [인증 실패의 owner 은폐] → 자동 fallback을 금지하고 전체 PROD-715 merge/squash revision의 Git revert만 rollback으로 인정한다.
@@ -62,7 +62,7 @@ PROD-779 이후 GraphQL Query/Mutation도 별도 operation DB session이나 `ctx
 
 1. Process-wide URL/selector 제거와 workload별 표준 `PG*` env migration 및 render 검증.
 2. PROD-369 passwordSecret과 PROD-724 application CRUD ACL 완료.
-3. API/Fedify consumer/dev migration owner source와 Web/enabled Worker 기본 DB source wiring 및 정적 검증.
+3. API/Fedify consumer/dev migration owner source와 Web/Worker 기본 DB source wiring 및 정적 검증.
 4. merge 뒤 비운영 exact revision에서 각 workload의 direct read-write Service 경로와 principal, 대표 SQL, API Worker Secret 비주입과 queue/migration 불변, `worker-database` Secret 변경 시 restart target을 검증한다. GraphQL은 API process 기본 표준 `PG*` source를 공유한다.
 5. OpenSpec을 sync/archive하고 PROD-715 완료 여부를 판단한다.
 6. production은 별도 사용자 승인과 운영 절차에서 exact diff, Vault source metadata, rollback과 live query를 다시 제시한 뒤에만 sync/apply한다.

@@ -1,0 +1,157 @@
+import '@kosmo/core/polyfill';
+
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, test } from 'node:test';
+import {
+  InstanceKind,
+  InstanceState,
+  NotificationKind,
+  PostState,
+  PostVisibility,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '@kosmo/core/enums';
+import type * as CoreDb from '@kosmo/core/db';
+import type { createReplyNotificationActivity as CreateReplyNotificationActivity } from './activities';
+
+process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+
+let db: typeof CoreDb.db;
+let firstOrThrow: typeof CoreDb.firstOrThrow;
+let Instances: typeof CoreDb.Instances;
+let Notifications: typeof CoreDb.Notifications;
+let pg: typeof CoreDb.pg;
+let Posts: typeof CoreDb.Posts;
+let ProfileFollows: typeof CoreDb.ProfileFollows;
+let Profiles: typeof CoreDb.Profiles;
+let createReplyNotificationActivity: typeof CreateReplyNotificationActivity;
+
+before(async () => {
+  ({ db, firstOrThrow, Instances, Notifications, pg, Posts, ProfileFollows, Profiles } =
+    await import('@kosmo/core/db'));
+  ({ createReplyNotificationActivity } = await import('./activities'));
+});
+
+beforeEach(async () => {
+  await db.delete(Notifications);
+  await db.delete(ProfileFollows);
+  await db.delete(Posts);
+  await db.delete(Profiles);
+  await db.delete(Instances);
+});
+
+after(async () => pg.end());
+
+test('missing Post와 root Post는 Notification을 만들지 않는다', async () => {
+  const author = await createProfile();
+  const root = await createPost(author.id);
+
+  await createReplyNotificationActivity(crypto.randomUUID());
+  await createReplyNotificationActivity(root.id);
+
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+test('visible Reply는 정확한 recipient/source Notification을 한 번만 만든다', async () => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+
+  await createReplyNotificationActivity(reply.id);
+  await createReplyNotificationActivity(reply.id);
+
+  const notifications = await db.select().from(Notifications);
+  assert.equal(notifications.length, 1);
+  assert.deepEqual(
+    notifications.map(({ data, kind, recipientProfileId, sourceId }) => ({
+      data,
+      kind,
+      recipientProfileId,
+      sourceId,
+    })),
+    [
+      {
+        data: {},
+        kind: NotificationKind.REPLY,
+        recipientProfileId: recipient.id,
+        sourceId: reply.id,
+      },
+    ],
+  );
+});
+
+test('Followers Reply는 recipient가 author를 follow할 때만 Notification을 만든다', async () => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, {
+    replyParentId: parent.id,
+    visibility: PostVisibility.FOLLOWERS,
+  });
+
+  await createReplyNotificationActivity(reply.id);
+  assert.equal(await db.$count(Notifications), 0);
+
+  await db.insert(ProfileFollows).values({
+    followeeProfileId: author.id,
+    followerProfileId: recipient.id,
+  });
+  await createReplyNotificationActivity(reply.id);
+
+  assert.equal(await db.$count(Notifications), 1);
+});
+
+test('자기 Reply는 Notification을 만들지 않는다', async () => {
+  const author = await createProfile();
+  const parent = await createPost(author.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+
+  await createReplyNotificationActivity(reply.id);
+
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+const createProfile = async () => {
+  const suffix = crypto.randomUUID();
+  const instance = await db
+    .insert(Instances)
+    .values({
+      domain: `${suffix}.example`,
+      kind: InstanceKind.LOCAL,
+      state: InstanceState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  return db
+    .insert(Profiles)
+    .values({
+      displayName: suffix,
+      followPolicy: ProfileFollowPolicy.OPEN,
+      handle: suffix,
+      instanceId: instance.id,
+      normalizedHandle: suffix,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+};
+
+const createPost = (
+  profileId: string,
+  {
+    replyParentId,
+    visibility = PostVisibility.PUBLIC,
+  }: { replyParentId?: string; visibility?: PostVisibility } = {},
+) =>
+  db
+    .insert(Posts)
+    .values({
+      profileId,
+      replyParentId,
+      state: PostState.ACTIVE,
+      visibility,
+    })
+    .returning()
+    .then(firstOrThrow);

@@ -10,11 +10,7 @@ import { createPost } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
-import {
-  observeInbound,
-  observeInboundNoop,
-  observeInboundRejected,
-} from './inbound-observability';
+import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
 import type { findStoredRemoteProfileActorByUri } from './remote-actor-materialization';
@@ -235,17 +231,6 @@ export const handleInboundCreateNote = async ({
   const input = {
     document,
     media,
-    onPostCommitError: (error: unknown) =>
-      observeInbound({
-        activityType: 'Create',
-        actorOrigin: actorUri,
-        error,
-        handler: 'create',
-        objectOrigin: objectUri,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'reply_notification_effect_failed',
-      }),
     objectUri,
     origin: 'ACTIVITYPUB',
     profileId: storedActor.profile.id,
@@ -268,6 +253,7 @@ export const handleInboundCreateNote = async ({
     const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
     if (!result.created) {
       observeDuplicateCreate();
+      return;
     }
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
@@ -302,6 +288,7 @@ export const handleInboundCreateNote = async ({
     const result = await createPost(input);
     if (!result.created) {
       observeDuplicateCreate();
+      return;
     }
   }
 };

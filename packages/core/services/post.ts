@@ -1,6 +1,7 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
+  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -27,11 +28,13 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
+import { temporalClient } from '../temporal/client';
 import {
-  createReplyNotification,
-  createRepostNotification,
-  deleteNotificationBySource,
-} from './notification';
+  POST_CREATE_EFFECTS_WORKFLOW_TYPE,
+  postCreateEffectsWorkflowStartOptions,
+} from '../temporal/post-create-effects';
+import { postVisibilityCondition } from '../visibility/post';
+import { createRepostNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
 import type { DatabaseHandle, Transaction } from '../db';
@@ -45,7 +48,6 @@ type LocalPostInput = {
     altText: string | null;
     mediaId: string;
   }[];
-  onPostCommitError?: (error: unknown) => void | Promise<void>;
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
@@ -55,7 +57,6 @@ type LocalPostInput = {
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   media?: readonly RemoteMediaCandidate[];
-  onPostCommitError?: (error: unknown) => void | Promise<void>;
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -119,14 +120,19 @@ const findVisiblePost = async (
     .where(
       and(
         eq(Posts.id, postId),
-        eq(Posts.state, PostState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-        or(
-          inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
-          eq(Posts.profileId, actorProfileId),
-          and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
-        ),
+        postVisibilityCondition({
+          columns: {
+            authorProfileId: Posts.profileId,
+            authorVisible: and(
+              eq(Profiles.state, ProfileState.ACTIVE),
+              ne(Instances.state, InstanceState.SUSPENDED),
+            )!,
+            postState: Posts.state,
+            postVisibility: Posts.visibility,
+          },
+          viewerFollowsAuthor: isNotNull(ProfileFollows.id),
+          viewerProfileId: actorProfileId,
+        }),
       ),
     )
     .limit(1)
@@ -380,18 +386,14 @@ export const repostPost = async (
       : noPostCommit,
   };
 };
-export function createPost(input: LocalPostInput, handle?: DatabaseHandle): Promise<CreatedPost>;
-export function createPost(
-  input: ActivityPubPostInput,
-  handle?: DatabaseHandle,
-): Promise<CreatedPost | DuplicatePost>;
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
-  handle?: DatabaseHandle,
 ): Promise<CreatedPost | DuplicatePost> {
   let result: CreatedPost;
   try {
-    result = await getDatabaseConnection(handle).transaction(async (tx) => {
+    result = await db.transaction(async (tx) => {
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
@@ -535,28 +537,6 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch(async (error) => {
-          if (!input.onPostCommitError) {
-            console.error('Reply notification creation failed', {
-              error,
-              postId: linkedPost.id,
-            });
-            return;
-          }
-
-          try {
-            await input.onPostCommitError(error);
-          } catch (observerError) {
-            console.error('Reply notification creation failed', {
-              error,
-              observerError,
-              postId: linkedPost.id,
-            });
-          }
-        });
-      }
-
       return { content, created: true, post: linkedPost };
     });
   } catch (error) {
@@ -567,16 +547,20 @@ export async function createPost(
     return { created: false };
   }
 
-  if (input.origin === 'LOCAL') {
-    try {
-      const { sendLocalPostCreate } = await import('@kosmo/fedify');
-      await sendLocalPostCreate(result.post.id);
-    } catch (error) {
-      console.error('Post-commit ActivityPub Local Post Create delivery failed', {
-        error,
-        postId: result.post.id,
-      });
-    }
+  try {
+    const workflowInput = { postId: result.post.id, origin: input.origin };
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start(
+        POST_CREATE_EFFECTS_WORKFLOW_TYPE,
+        postCreateEffectsWorkflowStartOptions(workflowInput),
+      ),
+    );
+  } catch (error) {
+    console.error('Post Create effects Workflow start failed', {
+      error,
+      origin: input.origin,
+      postId: result.post.id,
+    });
   }
 
   return result;

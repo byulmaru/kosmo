@@ -50,7 +50,7 @@ jobs:
             playwright: true
           - name: Worker
             command: pnpm --filter @kosmo/worker test
-            database: false
+            database: true
             id: worker
             playwright: false
     steps:

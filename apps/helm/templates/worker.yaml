@@ -1,4 +1,3 @@
-{{- if and .Values.workloads.enabled .Values.worker.enabled }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -78,6 +77,13 @@ spec:
               value: kosmo_worker
             - name: PGDATABASE
               value: kosmo
+            - name: FEDIFY_QUEUE_DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kosmo.fedifyQueueResourceName" . | quote }}
+                  key: password
+            - name: FEDIFY_QUEUE_DATABASE_URL
+              value: {{ printf "postgres://kosmo_fedify_queue@%s-rw:5432/kosmo_fedify_queue" (include "kosmo.postgresName" .) | quote }}
           envFrom:
             - secretRef:
                 name: env
@@ -95,4 +101,3 @@ spec:
             periodSeconds: 5
           resources:
 {{ toYaml .Values.worker.resources | indent 12 }}
-{{- end }}

@@ -84,7 +84,7 @@ describe('ActivityPub Local Post delivery', () => {
     await pg.end();
   });
 
-  test('Create(Note)가 기존 projection과 stable identity를 쓰고 remote Parent Author에게 전달된다', async () => {
+  test('Create(Note) retry가 중복 handoff에서도 같은 stable identity를 쓴다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent', sharedInbox: true });
@@ -416,7 +416,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Delete가 tombstone 뒤 같은 Note·activity identity를 반복 사용한다', async () => {
+  test('Create Activity 실행 전에 삭제된 Post는 Create를 보내지 않는다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
@@ -447,22 +447,69 @@ describe('ActivityPub Local Post delivery', () => {
       },
     );
 
-    await sendLocalPostDelete(reply.id);
+    await sendLocalPostCreate(reply.id);
+    assert.equal(createContext.mock.callCount(), 0);
+
     await sendLocalPostDelete(reply.id);
 
-    assert.equal(createContext.mock.callCount(), 2);
-    assert.equal(fixture.calls.length, 2);
-    for (const call of fixture.calls) {
-      assert.ok(call.activity instanceof Delete);
-      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
-      assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
-      assert.equal(call.activity.published?.toString(), deletedAt.toString());
-      assert.deepEqual(call.options, { preferSharedInbox: true });
-      assert.deepEqual(
-        call.recipients.map((recipient) => recipient.id?.href),
-        [parentAuthor.actorUri],
-      );
+    assert.equal(createContext.mock.callCount(), 1);
+    assert.equal(fixture.calls.length, 1);
+    const call = fixture.calls[0];
+    assert.ok(call?.activity instanceof Delete);
+    assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
+    assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
+    assert.equal(call.activity.published?.toString(), deletedAt.toString());
+    assert.deepEqual(call.options, { preferSharedInbox: true });
+    assert.deepEqual(
+      call.recipients.map((recipient) => recipient.id?.href),
+      [parentAuthor.actorUri],
+    );
+  });
+
+  test('Create queue handoff 중 Delete는 row lock이나 보정 handoff 없이 commit한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const follower = await createRemoteActor({ handle: 'concurrent-delete-follower' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const post = await createPost(author.id);
+    const handoffStarted = Promise.withResolvers<void>();
+    const releaseHandoff = Promise.withResolvers<void>();
+    const fixture = createContextFixture(publicOrigin, async (callIndex) => {
+      if (callIndex === 1) {
+        handoffStarted.resolve();
+        await releaseHandoff.promise;
+      }
+    });
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    const createHandoff = sendLocalPostCreate(post.id);
+    await handoffStarted.promise;
+
+    const deletedAt = Temporal.Instant.from('2026-07-28T03:00:00Z');
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        db.update(Posts).set({ deletedAt, state: PostState.DELETED }).where(eq(Posts.id, post.id)),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Delete waited for Create queue handoff')),
+            500,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      releaseHandoff.resolve();
     }
+    await createHandoff;
+    await sendLocalPostDelete(post.id);
+
+    assert.deepEqual(
+      fixture.calls.map((call) => call.activity.constructor),
+      [Create, Delete],
+    );
   });
 });
 
@@ -473,7 +520,10 @@ interface SendActivityCall {
   readonly sender: { readonly identifier: string };
 }
 
-const createContextFixture = (canonicalOrigin = publicOrigin) => {
+const createContextFixture = (
+  canonicalOrigin = publicOrigin,
+  beforeSend?: (callIndex: number) => Promise<void>,
+) => {
   const calls: SendActivityCall[] = [];
   const context = {
     canonicalOrigin,
@@ -490,6 +540,7 @@ const createContextFixture = (canonicalOrigin = publicOrigin) => {
         recipients: Array.isArray(recipients) ? recipients : [recipients],
         sender,
       });
+      await beforeSend?.(calls.length);
     },
   } as Context<void>;
   return { calls, context };

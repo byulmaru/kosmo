@@ -1,4 +1,4 @@
-{{- if and .Values.workloads.enabled (eq .Values.env "prod") }}
+{{- if eq .Values.env "prod" }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

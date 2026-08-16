@@ -18,12 +18,12 @@
 
 ### Requirement: Worker credential은 기존 direct read-write Service를 통해 독립 전환한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-715`, `PROD-779` — Web과 enabled Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 PostgreSQL direct read-write Service에 연결해야 한다(MUST). API GraphQL의 process shared `kosmo` 표준 PG source와 기존 Pooler resource를 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`, `PROD-715`, `PROD-722`, `PROD-779` — Web과 Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 PostgreSQL direct read-write Service에 연결해야 한다(MUST). 유효한 immutable release image에서 두 workload는 항상 render되어야 하며, API GraphQL의 process shared `kosmo` 표준 PG source와 기존 Pooler resource를 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker credential cutover
 
-- **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 PROD-715 workload wiring을 렌더한다
-- **THEN** Web과 enabled Temporal Worker의 process 기본 DB만 Worker source를 사용한다
+- **WHEN** 유효한 immutable release image로 PROD-715 workload wiring을 렌더한다
+- **THEN** Web과 Temporal Worker의 process 기본 DB만 Worker source를 사용한다
 - **AND** chart가 `PGHOST`를 기존 direct read-write Service로, `PGPORT=5432`, `PGUSER=kosmo_worker`, `PGDATABASE=kosmo`로 생성한다
 - **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 `PGPASSWORD`로 생성한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않는다
@@ -34,14 +34,14 @@
 #### Scenario: Worker Secret rotation restart
 
 - **WHEN** `worker-database` VaultStaticSecret destination이 새 password로 갱신된다
-- **THEN** Web Rollout과 enabled Temporal Worker Deployment가 restart target으로 재시작된다
+- **THEN** Web Rollout과 Temporal Worker Deployment가 restart target으로 재시작된다
 - **AND** 새 Web/Worker Pod는 같은 SecretKeyRef에서 새 `PGPASSWORD`를 읽는다
 
-#### Scenario: Worker activation gate 보존
+#### Scenario: 과거 activation 값은 무시됨
 
-- **WHEN** `workloads.enabled=true`와 `worker.enabled=false`로 PROD-715 workload wiring을 렌더한다
+- **WHEN** 과거 workload 또는 Worker activation 값을 추가하거나 생략한 채 유효한 immutable release image로 PROD-715 workload wiring을 렌더한다
 - **THEN** Web Rollout은 Worker Secret restart target을 유지한다
-- **AND** Worker Deployment와 Worker restart target은 생성하지 않는다
+- **AND** Worker Deployment와 Worker restart target은 생성된다
 
 #### Scenario: API Worker credential 비주입
 
@@ -50,7 +50,7 @@
 
 ### Requirement: Worker credential source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-715`, `PROD-779` — 시스템은 application SQL, API GraphQL/Fedify owner principal과 direct endpoint, production migration role과 queue database 경계를 추가로 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-779` — 시스템은 application SQL, API GraphQL/Fedify owner principal과 direct endpoint, production migration role과 queue database 경계를 추가로 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker workload wiring rollback
 
@@ -71,4 +71,4 @@
 
 - **WHEN** 구현 revision이 비운영 환경에 배포된다
 - **THEN** Web 기본 DB의 direct read-write Service 경로, `current_user = 'kosmo_worker'`, `rolbypassrls = true`와 대표 application SQL을 검증한다
-- **AND** enabled Worker manifest의 같은 기본 source, API 비주입과 queue database 분리를 검증한다
+- **AND** Worker manifest의 같은 기본 source, API 비주입과 queue database 분리를 검증한다
