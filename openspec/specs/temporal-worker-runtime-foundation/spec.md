@@ -20,15 +20,21 @@
 - **WHEN** 개발자가 root 기본 dev command를 실행한다
 - **THEN** 시스템은 Temporal Worker process를 자동으로 시작하지 않는다
 
-### Requirement: Business capability 미등록 상태의 실행 거부
+### Requirement: 고정 business registration과 singleton Worker host
 
-**Authority / Provenance:** PROD-730. 시스템은 등록된 business Workflow/Activity와 실제 task queue가 없는 Worker entrypoint를 시작할 때 Temporal Server에 연결하거나 task queue를 poll하지 않고 명확한 구성 오류로 즉시 종료해야 한다(MUST). foundation은 이를 우회하기 위한 smoke Workflow/Activity 또는 검증 전용 task queue를 만들지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. 시스템은 Worker production entrypoint에 compile-time의 실제 business Workflow·Activity registration과 task queue를 정확히 하나 제공해야 한다(MUST). entrypoint 자체는 이 registration으로 process-global Worker host를 정확히 한 번 시작해야 하며(MUST), exported `runWorker`/`startWorker` lifecycle, optional registration, registration 부재를 검사하는 정상 실행 경로, idle Worker 상태 또는 같은 process에서 Worker host를 다시 시작할 수 있는 범용 startup API를 제공해서는 안 된다(MUST NOT).
 
-#### Scenario: 빈 Worker entrypoint 실행
+#### Scenario: Production Worker 시작
 
-- **WHEN** 등록된 business capability가 없는 foundation의 Worker entrypoint를 명시적으로 실행한다
-- **THEN** process는 구성 오류를 출력하고 non-zero status로 종료한다
-- **AND** Temporal connection과 task queue polling을 시작하지 않는다
+- **WHEN** Worker production entrypoint를 실행한다
+- **THEN** 시스템은 compile-time에 구성된 Post Create effects Workflow·Activity registration과 task queue로 Worker host를 정확히 한 번 시작한다
+- **AND** caller가 registration을 전달하거나 두 번째 Worker host를 시작할 수 있는 public startup API를 제공하지 않는다
+
+#### Scenario: 실제 effects registration 없는 build 방지
+
+- **WHEN** Worker package의 production entrypoint와 registration을 정적·자동화 검증한다
+- **THEN** entrypoint에는 optional 또는 empty registration 경로가 존재하지 않는다
+- **AND** smoke Workflow·검증 전용 task queue·health-only idle runtime으로 business registration 부재를 숨기지 않는다
 
 ### Requirement: 등록된 Worker의 health와 종료 lifecycle
 
@@ -69,24 +75,30 @@
 - **WHEN** 공통 runtime image를 지원하지 않는 command로 실행한다
 - **THEN** 기존과 같이 오류를 출력하고 non-zero status로 종료한다
 
-### Requirement: 기본 비활성 Worker Helm component
+### Requirement: Application workload의 상시 Worker component
 
-**Authority / Provenance:** PROD-730. Kosmo Helm chart는 Worker Deployment와 전용 ServiceAccount를 기본 비활성 상태로 제공해야 한다(MUST). component를 명시적으로 활성화하면 dev는 1개, prod는 2개의 replica를 기본값으로 render하고, 공통 runtime image의 Worker command, HTTP liveness/readiness probe, 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). 실제 활성화와 live rollout은 business Workflow/Activity와 task queue를 소유한 첫 capability가 수행해야 한다(MUST).
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. Kosmo Helm chart는 유효한 immutable application image가 지정된 모든 환경에서 API, Web, Fedify consumer와 함께 Worker Deployment 및 전용 ServiceAccount를 항상 생성해야 한다(MUST). Worker 또는 chart-wide workload activation key로 이 component를 숨겨서는 안 된다(MUST NOT). dev는 1개, prod는 2개의 replica를 기본값으로 render하고, 공통 runtime image의 Worker command, HTTP liveness/readiness probe와 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). production 실제 sync·rollout은 별도 사용자 승인 없이는 수행해서는 안 된다(MUST NOT).
 
-#### Scenario: 기본 Helm render
+#### Scenario: dev application workload render
 
-- **WHEN** dev 또는 prod chart를 Worker override 없이 render한다
-- **THEN** Worker Deployment와 ServiceAccount가 생성되지 않는다
+- **WHEN** 유효한 immutable image와 함께 dev chart를 render한다
+- **THEN** API, Web, Fedify consumer와 함께 1개 replica, Worker command, HTTP probes 및 dev Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 activation key 없이 render된다
 
-#### Scenario: dev Worker component render
+#### Scenario: prod application workload render
 
-- **WHEN** dev chart에서 Worker component를 명시적으로 활성화한다
-- **THEN** 1개 replica, Worker command, HTTP probes와 dev Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 render된다
+- **WHEN** 유효한 immutable image와 함께 prod chart를 render한다
+- **THEN** API, Web, Fedify consumer와 함께 2개 replica, Worker command, HTTP probes 및 prod Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 activation key 없이 render된다
 
-#### Scenario: prod Worker component render
+#### Scenario: legacy activation values are inert
 
-- **WHEN** prod chart에서 Worker component를 명시적으로 활성화한다
-- **THEN** 2개 replica, Worker command, HTTP probes와 prod Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 render된다
+- **WHEN** 유효한 immutable image와 함께 과거 workload 또는 Worker activation 값을 추가해 chart를 render한다
+- **THEN** API, Web, Fedify consumer와 Worker가 모두 render되고 과거 값이 workload 존재 여부를 바꾸지 않는다
+
+#### Scenario: Worker lifecycle의 dev 검증
+
+- **WHEN** 첫 Post Create effects registration을 포함한 exact revision을 dev에 적용한다
+- **THEN** Worker가 실제 task queue를 poll하는 RUNNING 상태에서 readiness가 성공한다
+- **AND** restart 뒤 accepted effects Workflow가 복구되고 SIGTERM 시 readiness가 실패한 뒤 진행 중 task의 graceful drain을 시도한다
 
 ### Requirement: Worker 역할별 DB 입력 seam
 

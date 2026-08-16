@@ -32,6 +32,6 @@
 ## 4. Verify and close the change safely
 
 - [x] 4.1 Run focused unit/integration tests, type checks, formatting, linting, Helm rendering/tests, and strict OpenSpec validation required by the touched packages.
-- [ ] 4.2 After merge and dev deployment of the exact revision, verify Worker RUNNING/readiness, Local and ActivityPub Post behavior, accepted-Workflow Activity retry, restart recovery, and graceful drain with concrete evidence.
+- [x] 4.2 After merge and dev deployment of the exact revision, verify Worker RUNNING/readiness, Local and ActivityPub Post behavior, accepted-Workflow Activity retry, restart recovery, and graceful drain with concrete evidence.
 - [x] 4.3 Confirm production manifests remain unapplied and record that production sync, rollout, cutover, and live verification still require separate user approval.
-- [ ] 4.4 The PROD-722 implementation owner synchronizes the active specs and archives this change only after the full scope and required dev integration evidence are complete.
+- [x] 4.4 The PROD-722 implementation owner synchronizes the active specs and archives this change only after the full scope and required dev integration evidence are complete.
