@@ -35,7 +35,7 @@
 
 - **Type:** Derived Contract
 - **Authority:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-722
-- **Decision:** An accepted Workflow runs Reply Notification and Local-origin Fedify queue handoff through separate retryable Activities. A terminal failure of one effect must not prevent the other effect from being attempted. ActivityPub-origin Posts do not emit an outbound Create echo.
+- **Decision:** An accepted Workflow runs Reply Notification and Local-origin Fedify queue handoff through separate retryable Activities. Each Activity has a finite ten-attempt retry boundary. A terminal failure of one effect must not prevent the other effect from being attempted. ActivityPub-origin Posts do not emit an outbound Create echo.
 - **Reason:** The effects have different applicability and retry boundaries, while neither is allowed to alter the already committed Post result.
 
 ### Inline one compile-time Worker registration in one process host

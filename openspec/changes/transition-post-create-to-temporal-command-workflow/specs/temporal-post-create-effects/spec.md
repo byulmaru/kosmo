@@ -156,6 +156,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 - **WHEN** Notification과 Fedify handoff가 모두 적용되고 먼저 완료된 한 Activity가 retry 소진 뒤 terminal failure가 된다
 - **THEN** Workflow는 다른 Activity를 이미 독립적으로 시작했거나 계속 실행해 그 최종 결과도 수집한다
 - **AND** 한 Activity의 terminal failure를 이유로 다른 effect 시도를 생략하지 않는다
+- **AND** 각 Activity의 retry는 유한한 최대 시도 횟수를 가져 영구 오류가 Workflow를 무기한 열린 상태로 남기지 않는다
 
 #### Scenario: Post transaction failure
 

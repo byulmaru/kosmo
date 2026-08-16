@@ -5,6 +5,7 @@ import type * as activities from './activities';
 const { createReplyNotificationActivity, sendLocalPostCreateActivity } = proxyActivities<
   typeof activities
 >({
+  retry: { maximumAttempts: 10 },
   startToCloseTimeout: '1 minute',
 });
 
