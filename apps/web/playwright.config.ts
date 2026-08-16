@@ -29,6 +29,8 @@ process.env.PUBLIC_API_ORIGIN = apiOrigin;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
 process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID = nativeOidcClientId;
 process.env.PUBLIC_ORIGIN = webOrigin;
+process.env.TEMPORAL_ADDRESS = '127.0.0.1:7233';
+process.env.TEMPORAL_NAMESPACE = 'test';
 
 function readEnvFileValue(path: URL, key: string) {
   try {
