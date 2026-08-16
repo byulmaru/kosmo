@@ -23,6 +23,10 @@ Accepted
 - GraphQL operation 전용 DB session, actor GUC, operation-scoped `ctx.db`와
   `OPERATION_DATABASE_URL`은 target architecture에서 제거한다. GraphQL application SQL은 process의
   shared DB access 경계를 사용한다.
+- GraphQL HTTP endpoint는 request마다 하나의 operation만 실행하고 JSON array batching을 지원하지 않는다.
+  request 인증에서 검증한 identity와 request-scoped DataLoader context를 해당 operation이 직접 사용하며,
+  별도의 operation context snapshot을 만들지 않는다. `selectProfile`로 바뀐 selected Profile은 같은
+  Mutation의 이후 직렬 top-level field에 반영하고, 다음 HTTP request에서는 저장된 선택을 다시 인증한다.
 - API, Web과 Worker application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
   `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용한다. migration owner와 Fedify queue의
   별도 database/role 경계는 유지한다.
@@ -44,7 +48,9 @@ Accepted
 
 - 이미 main에 병합된 Post/PostContent와 Bookmark RLS는 새 compensating migration으로 제거한다.
 - 미병합 Reaction 및 Follow Request RLS 변경은 merge하지 않는다.
-- RLS consumer가 제거된 뒤 operation session, actor helper와 전용 PgBouncer Pooler를 제거한다.
+- RLS consumer가 제거된 뒤 operation session과 actor helper를 제거한다. 기존 PgBouncer Pooler 리소스는
+  이 전환에서 제거하지 않되 GraphQL application traffic은 더 이상 사용하지 않는다. 향후 재사용 또는
+  retirement는 별도 결정과 이슈가 소유한다.
 - runtime role 통합은 별도 구현 slice가 소유한다. production role drop, Secret sync/apply, cutover와 live
   verification은 이 결정의 실행 범위가 아니며 별도 승인이 필요하다.
 

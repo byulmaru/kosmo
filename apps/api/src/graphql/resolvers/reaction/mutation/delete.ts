@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { deleteReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
@@ -38,9 +39,9 @@ builder.mutationField('deleteReaction', (t) =>
           postId: input.postId.id,
           type: input.type,
         },
-        ctx.db,
+        db,
       );
-      await result.postCommit(ctx.db);
+      await result.postCommit(db);
 
       return { post: result.postId, reactionId: result.reaction?.id ?? null };
     },

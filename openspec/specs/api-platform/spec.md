@@ -239,57 +239,58 @@ API는 request 승인·거절·취소 결과가 Relay cache에서 삭제된 requ
 - **THEN** payload의 actor Profile은 갱신할 incoming 또는 outgoing request connection의 소유자를 식별한다
 - **AND** payload의 삭제된 `ProfileFollowRequest` global ID는 해당 connection edge를 제거할 수 있게 한다
 
-### Requirement: GraphQL operation별 실행 context 격리
+### Requirement: GraphQL request별 단일 operation 실행 context
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-708. API는 다음 계약을 MUST 준수한다. 인증에서 파생한 session identity와 operation 실행 context를 분리한다. 실행 가능한 각 GraphQL operation은 다른 operation과 공유하지 않는 Pothos context cache, DataLoader registry, session snapshot과 명시적 `ctx.db` handle을 가지며, 같은 HTTP batch의 operation끼리도 이 실행 상태를 공유하지 않는다. PROD-708에서 `ctx.db`는 기존 global DB handle을 가리키는 additive seam이며 새 connection이나 transaction을 열지 않는다.
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, PROD-776, PROD-779 — API는 MUST HTTP request마다 하나의 GraphQL operation만 실행하고, request 인증에서 검증한 session identity와 request-scoped DataLoader context를 해당 operation에 직접 제공한다. API는 JSON array batching 또는 별도의 operation context snapshot을 지원해서는 안 되며(MUST NOT), context는 DB handle을 소유하거나 노출해서도 안 된다(MUST NOT).
 
-#### Scenario: HTTP batch의 operation 격리
+#### Scenario: 인증된 단일 operation request
 
-- **WHEN** 하나의 HTTP batch가 둘 이상의 GraphQL operation을 실행한다
-- **THEN** 각 operation은 독립된 session snapshot, Pothos context cache와 DataLoader registry를 사용한다
-- **AND** 한 operation에서 적재하거나 변경한 실행 상태를 다른 operation이 관찰하지 않는다
+- **WHEN** 인증된 HTTP request가 하나의 GraphQL operation을 실행한다
+- **THEN** operation은 request에서 검증한 session ID, account ID와 선택적 profile ID를 직접 사용한다
+- **AND** request-scoped DataLoader context를 사용한다
+- **AND** operation별 context clone이나 PostgreSQL database owner를 생성하지 않는다
 
-#### Scenario: 기존 인증 identity 전달
+#### Scenario: JSON array batch를 실행하지 않음
 
-- **WHEN** 인증된 request에서 GraphQL operation을 실행한다
-- **THEN** operation context는 request에서 한 번 검증한 session ID, account ID와 선택적 profile ID를 유지한다
-- **AND** 인증 SQL을 operation마다 재실행하지 않는다
+- **WHEN** GraphQL HTTP endpoint가 JSON array request body를 받는다
+- **THEN** API는 이를 여러 operation의 batch로 실행하지 않는다
+- **AND** 어떤 batch sibling 실행 상태도 생성하거나 공유하지 않는다
 
-#### Scenario: Additive DB handle
+#### Scenario: 같은 Mutation의 selected Profile 전환
 
-- **WHEN** PROD-708의 production GraphQL operation context를 만든다
-- **THEN** `ctx.db`는 기존 global DB handle을 기본값으로 사용한다
-- **AND** operation 전용 connection이나 operation-wide transaction을 열지 않는다
-- **AND** 기존 resolver SQL과 GraphQL 응답은 변경 전과 동일하게 동작한다
+- **WHEN** 하나의 Mutation에서 `selectProfile` top-level field가 selected Profile 전환에 성공한다
+- **THEN** request context의 profile ID는 새 selected Profile로 갱신된다
+- **AND** 같은 Mutation에서 이후 직렬 실행되는 top-level field는 새 selected Profile identity를 관찰한다
+- **AND** 다음 HTTP request는 저장된 selected Profile을 인증 경계에서 다시 검증한다
 
-### Requirement: Post API SQL의 operation DB handle 정렬
+### Requirement: GraphQL application SQL의 shared DB access 경계
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, PROD-371. Production GraphQL의 Post/PostContent 조회와 변경 경로는 해당 operation context의 명시적 `ctx.db` handle로 모든 SQL을 실행해야 한다(MUST). Post loader·field·list·mutation과 Post를 조회하거나 변경하는 bookmark·reaction·notification projection이 호출하는 core action은 같은 handle을 전달받아야 하며(MUST), 이 production call graph에는 전역 또는 raw DB fallback이 없어야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, PROD-776, PROD-779 — GraphQL application SQL은 MUST 표준 `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`, `PGPASSWORD`로 구성한 process shared DB access 경계를 사용한다. API는 GraphQL operation별 database client, actor GUC 또는 `OPERATION_DATABASE_URL`에 의존해서는 안 된다(MUST NOT). 이 전환은 기존 application visibility/owner policy, GraphQL schema·payload·목록 후보·정렬·pagination과 domain transaction·savepoint·post-commit 의미를 변경해서는 안 된다(MUST NOT).
 
-#### Scenario: Post 조회가 operation handle을 사용한다
+#### Scenario: GraphQL 조회가 shared DB를 사용한다
 
-- **WHEN** GraphQL operation이 Post/PostContent Node, Post list, reply 관계, repost projection 또는 관련 bookmark·reaction·notification projection을 조회한다
-- **THEN** 해당 경로의 모든 Post/PostContent SQL은 그 operation의 `ctx.db` handle로 실행된다
-- **AND** loader와 중첩 field가 전역 DB handle을 직접 사용하지 않는다
+- **WHEN** GraphQL operation이 Node, list, field 또는 loader 조회를 실행한다
+- **THEN** SQL은 process shared DB access 경계에서 실행된다
+- **AND** operation별 database client나 actor setting을 만들지 않는다
+- **AND** 해당 object의 기존 application visibility 또는 owner predicate를 적용한다
 
-#### Scenario: Post 변경이 operation handle 안에서 실행된다
+#### Scenario: GraphQL 변경이 shared DB를 사용한다
 
-- **WHEN** GraphQL operation이 Post 생성, reply, repost, delete 또는 Post에 결합된 bookmark·reaction 변경을 실행한다
-- **THEN** resolver는 `ctx.db`를 호출하는 core action과 관련 savepoint에 전달한다
-- **AND** core action의 기존 domain transaction은 전달받은 handle 안에서 유지된다
+- **WHEN** GraphQL mutation이 entry-local write 또는 core application action을 실행한다
+- **THEN** resolver는 process shared DB access 경계에서 기존 transaction 또는 savepoint를 시작하거나 action을 호출한다
+- **AND** 기존 payload와 awaited post-commit 결과를 유지한다
+- **AND** operation-wide transaction을 만들지 않는다
 
-### Requirement: Post API handle 전환의 행동 호환성
+#### Scenario: RLS 철회 전환의 관찰 가능한 계약을 보존한다
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, PROD-371. Post API SQL handle 전환은 기존 owner credential, 애플리케이션 권한 predicate, 목록 후보·정렬·pagination, GraphQL schema와 domain transaction·savepoint 의미를 유지해야 한다(MUST). 이 전환은 새 DB connection이나 operation-wide transaction을 열어서는 안 되며(MUST NOT), PgBouncer endpoint, actor GUC, RLS policy·grant 또는 workload credential을 변경해서는 안 된다(MUST NOT).
+- **WHEN** GraphQL operation DB session과 actor GUC/session state를 제거한 revision을 검증한다
+- **THEN** hidden/deleted Post owner cleanup과 기존 mutation payload가 유지된다
+- **AND** Notification cleanup과 viewer-independent Reaction count가 유지된다
+- **AND** Bookmark의 selected Profile owner 조건과 hidden/deleted Target Post projection 계약이 유지된다
 
-#### Scenario: 현재 global handle seam에서 동작이 유지된다
+#### Scenario: 다른 runtime lifecycle을 유지한다
 
-- **WHEN** `ctx.db`가 PROD-708의 기존 global DB handle을 가리키는 상태로 전환된 API를 배포한다
-- **THEN** 기존 Post/PostContent 조회·변경 결과와 권한 predicate 결과가 유지된다
-- **AND** 새 connection이나 operation-wide transaction이 생성되지 않는다
-
-#### Scenario: 후속 활성화 범위가 분리된다
-
-- **WHEN** PROD-371 변경만 배포하거나 rollback한다
-- **THEN** API와 Web의 database endpoint 및 credential은 기존 값을 유지한다
-- **AND** operation DB session, actor GUC와 RLS enforcement 활성화는 후속 이슈가 소유한다
+- **WHEN** API GraphQL shared DB 전환을 렌더하고 검증한다
+- **THEN** Worker, Fedify와 Temporal의 DB lifecycle 및 policy는 변경되지 않는다
+- **AND** migration owner와 Fedify queue의 별도 database/role 경계는 유지된다
+- **AND** 기존 PgBouncer Pooler 리소스는 유지되지만 GraphQL application traffic은 이를 사용하지 않는다

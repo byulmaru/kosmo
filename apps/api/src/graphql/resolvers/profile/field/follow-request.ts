@@ -1,4 +1,4 @@
-import { ProfileFollowRequests } from '@kosmo/core/db';
+import { db, ProfileFollowRequests } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -33,7 +33,7 @@ const resolveRequestConnection = async (
       toCursor: (request) => request.id,
     },
     async ({ before, after, limit, inverted }) =>
-      ctx.db
+      db
         .select(getColumns(ProfileFollowRequests))
         .from(ProfileFollowRequests)
         .where(

@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { unfollowProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Profile, ProfileFollow } from '../ref';
@@ -26,7 +27,7 @@ builder.mutationField('unfollowProfile', (t) =>
           followerProfileId: ctx.session.profileId,
           followeeProfileId: input.id.id,
         },
-        ctx.db,
+        db,
       ),
   }),
 );
