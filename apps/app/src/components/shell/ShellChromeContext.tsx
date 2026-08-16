@@ -13,13 +13,7 @@ type ShellChromeActions = {
   reselectHome: HomeReselectionHandler;
 };
 
-type ShellChromeProviderProps = PropsWithChildren<
-  Omit<ShellChromeActions, 'registerHomeReselection' | 'reselectHome'> &
-    Partial<Pick<ShellChromeActions, 'registerHomeReselection' | 'reselectHome'>>
->;
-
-const noopHomeReselection = () => undefined;
-const noopRegisterHomeReselection = () => noopHomeReselection;
+type ShellChromeProviderProps = PropsWithChildren<ShellChromeActions>;
 
 const ShellChromeContext = createContext<ShellChromeActions | null>(null);
 
@@ -29,8 +23,8 @@ export function ShellChromeProvider({
   navigationDrawerTriggerRef,
   openNavigationDrawer,
   openProfileSwitcher,
-  registerHomeReselection = noopRegisterHomeReselection,
-  reselectHome = noopHomeReselection,
+  registerHomeReselection,
+  reselectHome,
 }: ShellChromeProviderProps) {
   return (
     <ShellChromeContext.Provider
