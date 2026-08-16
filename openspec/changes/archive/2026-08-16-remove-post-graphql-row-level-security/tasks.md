@@ -114,6 +114,6 @@ PROD-777이 obsolete active change/delta의 history 보존, 새 `post` delta의 
 - PR 본문과 Linear PROD-777에 changed scope, 검증 결과, 제외 범위, supersede 관계와 archive owner를 기록한다.
 - canonical `post` spec sync 후 새 change를 정상 archive하고 archive 결과를 확인한다.
 
-- [ ] 3.1 strict OpenSpec validation과 repository checks 결과를 기록하고 구현 PR을 Ready 상태로 handoff한다.
-- [ ] 3.2 구현 완료 후 `post` delta와 canonical `openspec/specs/post/spec.md`의 sync를 확인하고 old change artifact를 수정하지 않는다.
-- [ ] 3.3 PROD-777이 전체 구현·검증·canonical sync 완료를 확인한 뒤 새 change를 정상 archive한다.
+- [x] 3.1 strict OpenSpec validation과 repository checks 결과를 기록하고 구현 PR을 Ready 상태로 handoff한다.
+- [x] 3.2 구현 완료 후 `post` delta와 canonical `openspec/specs/post/spec.md`의 sync를 확인하고 old change artifact를 수정하지 않는다.
+- [x] 3.3 PROD-777이 전체 구현·검증·canonical sync 완료를 확인한 뒤 새 change를 정상 archive한다.
