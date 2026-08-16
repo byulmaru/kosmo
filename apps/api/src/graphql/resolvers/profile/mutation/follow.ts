@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { ConflictError } from '@kosmo/core/error';
 import { followProfile } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
@@ -35,7 +36,7 @@ builder.mutationField('followProfile', (t) =>
           followerProfileId: ctx.session.profileId,
           followeeProfileId: input.id.id,
         },
-        ctx.db,
+        db,
       ).catch((error: unknown) => {
         if (error instanceof ConflictError) {
           throw new ConflictError({ message: error.message, field: 'id' });

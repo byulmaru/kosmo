@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { repostPost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
@@ -19,9 +20,9 @@ builder.mutationField('repostPost', (t) =>
           origin: 'LOCAL',
           sourcePostId: input.sourceId.id,
         },
-        ctx.db,
+        db,
       );
-      await result.postCommit(ctx.db);
+      await result.postCommit(db);
 
       return { repost: result.repost };
     },

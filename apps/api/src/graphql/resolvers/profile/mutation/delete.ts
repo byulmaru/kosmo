@@ -1,4 +1,4 @@
-import { AccountProfiles, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, db, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { disableProfile } from '@kosmo/core/services';
@@ -23,7 +23,7 @@ builder.mutationField('deleteProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const profile = await ctx.db
+      const profile = await db
         .select({ id: Profiles.id, actorRole: AccountProfiles.role })
         .from(Profiles)
         .innerJoin(AccountProfiles, eq(AccountProfiles.profileId, Profiles.id))
@@ -42,7 +42,7 @@ builder.mutationField('deleteProfile', (t) =>
         throw new PermissionDeniedError('Profile owner permission is required');
       }
 
-      await disableProfile(input.id.id, ctx.db);
+      await disableProfile(input.id.id, db);
 
       return { profileId: profile.id };
     },

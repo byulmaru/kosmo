@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { deletePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '../ref';
@@ -28,9 +29,9 @@ builder.mutationField('deletePost', (t) =>
           origin: 'LOCAL',
           postId: input.id.id,
         },
-        ctx.db,
+        db,
       );
-      await result.postCommit(ctx.db);
+      await result.postCommit(db);
 
       return {
         postId: result.postId,

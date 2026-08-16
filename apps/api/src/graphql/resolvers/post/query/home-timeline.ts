@@ -1,4 +1,4 @@
-import { Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, exists, getColumns, gt, isNull, lt, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -18,7 +18,7 @@ builder.queryField('homeTimeline', (t) =>
       unauthorizedResolver: () => null,
       resolve: (_, args, ctx) => {
         const followeeWhere = exists(
-          ctx.db
+          db
             .select({ id: ProfileFollows.id })
             .from(ProfileFollows)
             .where(
@@ -29,7 +29,7 @@ builder.queryField('homeTimeline', (t) =>
             ),
         );
         const replyParentIsViewerPost = exists(
-          ctx.db
+          db
             .select({ id: ReplyParents.id })
             .from(ReplyParents)
             .where(
@@ -40,7 +40,7 @@ builder.queryField('homeTimeline', (t) =>
             ),
         );
         const replyParentAuthorIsFollowee = exists(
-          ctx.db
+          db
             .select({ id: ReplyParents.id })
             .from(ReplyParents)
             .innerJoin(ProfileFollows, eq(ProfileFollows.followeeProfileId, ReplyParents.profileId))
@@ -64,7 +64,7 @@ builder.queryField('homeTimeline', (t) =>
             toCursor: (post) => post.id,
           },
           ({ before, after, limit, inverted }) =>
-            ctx.db
+            db
               .select(getColumns(Posts))
               .from(Posts)
               .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))

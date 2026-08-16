@@ -1,4 +1,4 @@
-import { AccountProfiles, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, db, firstOrThrow, isUniqueViolation, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ConflictError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
@@ -21,7 +21,7 @@ builder.mutationField('createProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       const localInstance = await resolveConfiguredLocalInstance();
-      const profile = await ctx.db.transaction(async (tx) => {
+      const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .insert(Profiles)
           .values({

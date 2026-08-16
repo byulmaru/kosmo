@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { revokeCurrentSession } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
@@ -30,7 +31,7 @@ builder.mutationField('revokeCurrentSession', (t) =>
         {
           token: getBearerToken(ctx.c.req.header('Authorization')),
         },
-        ctx.db,
+        db,
       );
 
       return {

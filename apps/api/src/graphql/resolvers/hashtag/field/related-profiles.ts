@@ -1,4 +1,4 @@
-import { Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
+import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, eq, getColumns, gt } from 'drizzle-orm';
@@ -35,7 +35,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
       first: t.arg.int({ required: false }),
       after: t.arg.string({ required: false }),
     },
-    resolve: (hashtag, args, ctx) =>
+    resolve: (hashtag, args) =>
       resolveCursorConnection<Promise<ProfileRow[]>>(
         {
           args,
@@ -44,7 +44,7 @@ builder.objectField(Hashtag, 'relatedProfiles', (t) =>
           toCursor: encodeRelatedProfileCursor,
         },
         ({ after, limit }) =>
-          ctx.db
+          db
             .select(getColumns(Profiles))
             .from(ProfileHashtags)
             .innerJoin(Profiles, eq(Profiles.id, ProfileHashtags.profileId))

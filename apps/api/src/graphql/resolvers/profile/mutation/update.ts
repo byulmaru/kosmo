@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { updateProfile } from '@kosmo/core/services';
@@ -36,7 +37,7 @@ builder.mutationField('updateProfile', (t) =>
             avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
             headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
           },
-          ctx.db,
+          db,
         );
         await result.postCommit();
 

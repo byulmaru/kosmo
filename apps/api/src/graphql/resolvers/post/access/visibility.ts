@@ -1,7 +1,8 @@
-import { Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { PostState, PostVisibility } from '@kosmo/core/enums';
 import { and, eq, exists, inArray, or, sql } from 'drizzle-orm';
 import { visibleProfileWhere } from '@/profile/visibility';
+import type { Database } from '@kosmo/core/db';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -19,7 +20,7 @@ export const postVisibilityAccessCondition = ({
 }: {
   columns: PostVisibilityAccessColumns;
   viewerProfileId?: SQLWrapper | string | null;
-  db: UserContext['db'];
+  db: Database;
 }): SQL<boolean> => {
   const publicWhere = inArray(columns.postVisibility, [
     PostVisibility.PUBLIC,
@@ -65,5 +66,5 @@ export const postVisibilityAccessWhere = ({ ctx }: { ctx: UserContext }) =>
       })}`,
     },
     viewerProfileId: ctx.session?.profileId,
-    db: ctx.db,
+    db,
   });

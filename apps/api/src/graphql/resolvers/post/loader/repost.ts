@@ -1,4 +1,4 @@
-import { Instances, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
 import { and, count, eq, getColumns, inArray, isNull } from 'drizzle-orm';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -16,7 +16,7 @@ export const repostCountLoader = (ctx: UserContext) =>
     name: 'post.repostCount',
     nullable: true,
     load: async (sourceIds) =>
-      ctx.db
+      db
         .select({
           repostSourceId: Posts.repostSourceId,
           count: count(),
@@ -46,7 +46,7 @@ export const viewerRepostLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return ctx.db
+      return db
         .select(getColumns(Posts))
         .from(Posts)
         .where(
