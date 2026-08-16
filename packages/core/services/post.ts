@@ -31,7 +31,11 @@ import {
 import { createRepostNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
-import { startPostCreateEffectsWorkflow } from './temporal';
+import {
+  POST_CREATE_EFFECTS_WORKFLOW_TYPE,
+  postCreateEffectsWorkflowStartOptions,
+  temporalClient,
+} from './temporal';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 import type { PostCommit } from './post-commit';
@@ -540,10 +544,11 @@ export async function createPost(
   }
 
   try {
-    await startPostCreateEffectsWorkflow({
-      postId: result.post.id,
-      origin: input.origin,
-    });
+    const workflowInput = { postId: result.post.id, origin: input.origin };
+    await temporalClient.workflow.start(
+      POST_CREATE_EFFECTS_WORKFLOW_TYPE,
+      postCreateEffectsWorkflowStartOptions(workflowInput),
+    );
   } catch (error) {
     if (!input.onEffectsWorkflowStartError) {
       console.error('Post Create effects Workflow start failed', {

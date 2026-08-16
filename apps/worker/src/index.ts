@@ -1,9 +1,10 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/services';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
-import { registration } from './registration';
+import { createReplyNotificationActivity, sendLocalPostCreateActivity } from './activities';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
 if (import.meta.main) {
@@ -26,7 +27,13 @@ if (import.meta.main) {
     let connection: NativeConnection | undefined;
     try {
       connection = await NativeConnection.connect({ address });
-      worker = await Worker.create({ ...registration, connection, namespace });
+      worker = await Worker.create({
+        activities: { createReplyNotificationActivity, sendLocalPostCreateActivity },
+        connection,
+        namespace,
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowsPath: new URL('./workflows.ts', import.meta.url).pathname,
+      });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
       await running;

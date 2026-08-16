@@ -479,6 +479,51 @@ describe('ActivityPub Local Post delivery', () => {
     await sendLocalPostCreate(reply.id);
     assert.equal(fixture.calls.length, 4);
   });
+
+  test('Create queue handoff 중 Delete는 row lock 없이 commit하고 마지막 Delete로 수렴한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const follower = await createRemoteActor({ handle: 'concurrent-delete-follower' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const post = await createPost(author.id);
+    const handoffStarted = Promise.withResolvers<void>();
+    const releaseHandoff = Promise.withResolvers<void>();
+    const fixture = createContextFixture(publicOrigin, async (callIndex) => {
+      if (callIndex === 1) {
+        handoffStarted.resolve();
+        await releaseHandoff.promise;
+      }
+    });
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+
+    const createHandoff = sendLocalPostCreate(post.id);
+    await handoffStarted.promise;
+
+    const deletedAt = Temporal.Instant.from('2026-07-28T03:00:00Z');
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        db.update(Posts).set({ deletedAt, state: PostState.DELETED }).where(eq(Posts.id, post.id)),
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error('Delete waited for Create queue handoff')),
+            500,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+      releaseHandoff.resolve();
+    }
+    await createHandoff;
+
+    assert.deepEqual(
+      fixture.calls.map((call) => call.activity.constructor),
+      [Create, Create, Delete],
+    );
+  });
 });
 
 interface SendActivityCall {
@@ -488,7 +533,10 @@ interface SendActivityCall {
   readonly sender: { readonly identifier: string };
 }
 
-const createContextFixture = (canonicalOrigin = publicOrigin) => {
+const createContextFixture = (
+  canonicalOrigin = publicOrigin,
+  beforeSend?: (callIndex: number) => Promise<void>,
+) => {
   const calls: SendActivityCall[] = [];
   const context = {
     canonicalOrigin,
@@ -505,6 +553,7 @@ const createContextFixture = (canonicalOrigin = publicOrigin) => {
         recipients: Array.isArray(recipients) ? recipients : [recipients],
         sender,
       });
+      await beforeSend?.(calls.length);
     },
   } as Context<void>;
   return { calls, context };

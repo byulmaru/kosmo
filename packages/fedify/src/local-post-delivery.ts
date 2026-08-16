@@ -26,76 +26,80 @@ const getFollowersUri = (actorUri: URL): URL =>
 const sendLocalPostCreateInState = async (
   postId: string,
   postState: typeof PostState.ACTIVE | typeof PostState.DELETED,
-): Promise<void> => {
-  await db.transaction(async (tx) => {
-    const source = await tx
-      .select({
-        canonicalOrigin: Instances.canonicalOrigin,
-        localInstanceId: Instances.id,
-        parentInstanceKind: ReplyParentInstances.kind,
-        parentProfileId: ReplyParentProfiles.id,
-      })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .leftJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
-      .leftJoin(ReplyParentProfiles, eq(ReplyParentProfiles.id, ReplyParents.profileId))
-      .leftJoin(ReplyParentInstances, eq(ReplyParentInstances.id, ReplyParentProfiles.instanceId))
-      .where(
-        and(
-          eq(Posts.id, postId),
-          eq(Posts.state, postState),
-          isNotNull(Posts.currentContentId),
-          ne(Posts.visibility, PostVisibility.DIRECT),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Instances.state, InstanceState.ACTIVE),
-          isNotNull(Instances.canonicalOrigin),
-          eq(Profiles.state, ProfileState.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .for('update', { of: Posts })
-      .then(first);
-    if (!source?.canonicalOrigin) {
-      return;
-    }
+): Promise<boolean> => {
+  const source = await db
+    .select({
+      canonicalOrigin: Instances.canonicalOrigin,
+      localInstanceId: Instances.id,
+      parentInstanceKind: ReplyParentInstances.kind,
+      parentProfileId: ReplyParentProfiles.id,
+    })
+    .from(Posts)
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .leftJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
+    .leftJoin(ReplyParentProfiles, eq(ReplyParentProfiles.id, ReplyParents.profileId))
+    .leftJoin(ReplyParentInstances, eq(ReplyParentInstances.id, ReplyParentProfiles.instanceId))
+    .where(
+      and(
+        eq(Posts.id, postId),
+        eq(Posts.state, postState),
+        isNotNull(Posts.currentContentId),
+        ne(Posts.visibility, PostVisibility.DIRECT),
+        eq(Instances.kind, InstanceKind.LOCAL),
+        eq(Instances.state, InstanceState.ACTIVE),
+        isNotNull(Instances.canonicalOrigin),
+        eq(Profiles.state, ProfileState.ACTIVE),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!source?.canonicalOrigin) {
+    return false;
+  }
 
-    const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
-      localInstanceId: source.localInstanceId,
-    });
-    const projection = await projectLocalPostNote(context, postId, postState);
-    if (!projection) {
-      return;
-    }
-
-    const objectUri = noteUri(projection.canonicalOrigin, postId);
-    const activity = new Create({
-      actor: context.getActorUri(projection.authorProfileId),
-      ccs: projection.object.ccIds,
-      id: new URL('#create', objectUri),
-      object: projection.object,
-      published: projection.createdAt,
-      tos: projection.object.toIds,
-    });
-    const directProfileId =
-      projection.replyParentId &&
-      (projection.visibility === PostVisibility.PUBLIC ||
-        projection.visibility === PostVisibility.UNLISTED) &&
-      source.parentInstanceKind === InstanceKind.ACTIVITYPUB
-        ? source.parentProfileId
-        : null;
-    await dispatchActivityPubActivity({
-      activity,
-      actorProfileId: projection.authorProfileId,
-      context,
-      directProfileIds: directProfileId ? [directProfileId] : [],
-      orderingKey: objectUri.href,
-    });
+  const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
+    localInstanceId: source.localInstanceId,
   });
+  const projection = await projectLocalPostNote(context, postId, postState);
+  if (!projection) {
+    return false;
+  }
+
+  const objectUri = noteUri(projection.canonicalOrigin, postId);
+  const activity = new Create({
+    actor: context.getActorUri(projection.authorProfileId),
+    ccs: projection.object.ccIds,
+    id: new URL('#create', objectUri),
+    object: projection.object,
+    published: projection.createdAt,
+    tos: projection.object.toIds,
+  });
+  const directProfileId =
+    projection.replyParentId &&
+    (projection.visibility === PostVisibility.PUBLIC ||
+      projection.visibility === PostVisibility.UNLISTED) &&
+    source.parentInstanceKind === InstanceKind.ACTIVITYPUB
+      ? source.parentProfileId
+      : null;
+  await dispatchActivityPubActivity({
+    activity,
+    actorProfileId: projection.authorProfileId,
+    context,
+    directProfileIds: directProfileId ? [directProfileId] : [],
+    orderingKey: objectUri.href,
+  });
+  return true;
 };
 
-export const sendLocalPostCreate = (postId: string): Promise<void> =>
-  sendLocalPostCreateInState(postId, PostState.ACTIVE);
+export const sendLocalPostCreate = async (postId: string): Promise<void> => {
+  if (await sendLocalPostCreateInState(postId, PostState.ACTIVE)) {
+    // Delete may commit while the queue handoff is in flight. Re-reading after
+    // handoff appends a final Create/Delete pair when needed, without holding a
+    // database lock across external queue I/O.
+    await sendLocalPostDelete(postId);
+  }
+};
 
 export const sendLocalPostDelete = async (postId: string): Promise<void> => {
   const source = await db

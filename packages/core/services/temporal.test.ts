@@ -5,7 +5,7 @@ import {
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowId,
   postCreateEffectsWorkflowStartOptions,
-  startPostCreateEffectsWorkflow,
+  temporalClient,
 } from './temporal';
 
 test('Post Create effects Workflow start는 Post ID와 origin을 포함한 stable start policy를 사용한다', () => {
@@ -26,20 +26,14 @@ test('Post Create effects Workflow start는 Post ID와 origin을 포함한 stabl
   assert.equal(KOSMO_TASK_QUEUE, 'kosmo');
 });
 
-test('Temporal runtime 입력이 없으면 effects Workflow start를 연결 전에 거부한다', async () => {
+test('Temporal runtime 입력이 없으면 global client 접근을 연결 전에 거부한다', () => {
   const previousAddress = process.env.TEMPORAL_ADDRESS;
   const previousNamespace = process.env.TEMPORAL_NAMESPACE;
   delete process.env.TEMPORAL_ADDRESS;
   delete process.env.TEMPORAL_NAMESPACE;
 
   try {
-    await assert.rejects(
-      startPostCreateEffectsWorkflow({
-        postId: '00000000-0000-8000-8000-000000000002',
-        origin: 'LOCAL',
-      }),
-      /TEMPORAL_ADDRESS is required/,
-    );
+    assert.throws(() => temporalClient.workflow, /TEMPORAL_ADDRESS is required/);
   } finally {
     if (previousAddress === undefined) {
       delete process.env.TEMPORAL_ADDRESS;

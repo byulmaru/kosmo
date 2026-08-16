@@ -24,7 +24,7 @@
 - [x] 3.2 Let the production entrypoint directly own the health server, Temporal connection, Worker, signal handlers, drain, and shutdown exactly once per process without exported `runWorker`/`startWorker` lifecycle APIs.
 - [x] 3.3 Remove missing-registration failure paths and both Worker-specific and chart-wide workload activation configuration; all application workloads render with a valid release image.
 - [x] 3.4 Render the Worker Deployment as a normal application workload without injecting Worker credentials into the API Rollout or adding a Worker-specific database pool/handle.
-- [x] 3.5 Add focused runtime and Helm tests for registration, entrypoint startup, readiness, signal drain, standard database configuration, and dev/production rendering.
+- [x] 3.5 Add focused runtime and Helm tests for entrypoint startup, readiness, signal drain, standard database configuration, and dev/production rendering.
 - [x] 3.6 Pass the environment-specific Temporal endpoint and namespace to both Workflow producer workloads: GraphQL API and the ActivityPub queue consumer.
 - [x] 3.7 Remove the chart-wide workload activation gate from Helm templates, Terraform bootstrap values, release workflow overrides, and Secret restart-target branching while retaining immutable image, migration, and production-approval gates.
 - [x] 3.8 Verify dev/prod renders contain API, Web, Fedify consumer, and Worker workloads with a valid immutable digest, and that legacy activation values cannot suppress them.

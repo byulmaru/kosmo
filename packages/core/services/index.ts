@@ -17,4 +17,4 @@ export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';
 export { createOidcSession, revokeCurrentSession } from './session';
 export type { PostCreateEffectsInput } from './temporal';
-export { KOSMO_TASK_QUEUE } from './temporal';
+export { KOSMO_TASK_QUEUE, temporalClient } from './temporal';

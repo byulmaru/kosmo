@@ -30,11 +30,11 @@
 - **Decision:** An accepted Workflow runs Reply Notification and Local-origin Fedify queue handoff through separate retryable Activities. A terminal failure of one effect must not prevent the other effect from being attempted. ActivityPub-origin Posts do not emit an outbound Create echo.
 - **Reason:** The effects have different applicability and retry boundaries, while neither is allowed to alter the already committed Post result.
 
-### Use one compile-time Worker registration and one process host
+### Inline one compile-time Worker registration in one process host
 
 - **Type:** Derived Contract
 - **Authority:** `docs/architecture/core-services.md`, PROD-722, PROD-730
-- **Decision:** The Worker package owns its concrete registration at compile time, and the production entrypoint directly starts and owns one process-global Worker host without an exported `runWorker`/`startWorker` API, injected registration or Worker-specific enabled flag.
+- **Decision:** The production Worker entrypoint owns its concrete Workflow, Activity and task-queue registration inline, and directly starts and owns one process-global Worker host without a separate registration module, exported `runWorker`/`startWorker` API, injected registration or Worker-specific enabled flag.
 - **Reason:** The deployed Worker has one real workload and one process entrypoint. A memoized callable startup layer would expose restart-like surface area without a second valid caller.
 
 ### Render every application workload without an activation gate

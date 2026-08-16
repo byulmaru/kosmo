@@ -3,16 +3,8 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { test } from 'node:test';
-import { registration } from './registration';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 import type { AddressInfo, Socket } from 'node:net';
-
-test('compile-time business registration은 실제 effects를 하나의 task queue에 등록한다', () => {
-  assert.equal(registration.taskQueue, 'kosmo');
-  assert.equal(registration.workflowsPath, new URL('./workflows.ts', import.meta.url).pathname);
-  assert.equal(typeof registration.activities?.createReplyNotificationActivity, 'function');
-  assert.equal(typeof registration.activities?.sendLocalPostCreateActivity, 'function');
-});
 
 test('Temporal environment를 검증한다', async () => {
   assert.throws(() => validateWorkerEnvironment({}), /TEMPORAL_ADDRESS/);

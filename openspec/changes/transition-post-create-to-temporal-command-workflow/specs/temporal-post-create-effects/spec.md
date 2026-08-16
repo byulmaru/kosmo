@@ -121,6 +121,12 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 - **THEN** Delete handoff는 삭제된 Post에 보존된 content projection으로 canonical Create를 먼저 queue에 넣고 같은 Note ordering key의 Delete를 뒤이어 넣는다
 - **AND** 늦게 실행된 Create Activity는 삭제 상태를 보고 성공 no-op으로 끝나 Delete 뒤에 Create를 다시 넣지 않는다
 
+#### Scenario: Create queue handoff 중 Local Delete가 commit됨
+
+- **WHEN** Create Activity가 active projection을 조회한 뒤 queue handoff를 기다리는 동안 같은 Post의 Local Delete가 commit된다
+- **THEN** Delete transaction은 외부 queue I/O를 기다리는 Post row lock에 막히지 않는다
+- **AND** Create handoff 완료 뒤 상태 재확인은 같은 Note ordering key에 canonical Create와 Delete 보정 쌍을 덧붙여 마지막 Activity가 Delete가 되게 한다
+
 ### Requirement: caller의 동기 결과와 effects 실패 격리
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/architecture/core-services.md`, `PROD-722`. Post Create Workflow 전환은 기존 Local GraphQL mutation의 committed Post payload와 ActivityPub inbound acknowledgement 의미를 변경해서는 안 된다(MUST NOT). caller는 Post transaction 결과를 기준으로 성공 또는 기존 오류를 확정해야 하며(MUST), effects Workflow의 start 오류·Notification 저장 결과·Fedify remote delivery 완료를 Post 성공의 조건으로 기다려서는 안 된다(MUST NOT). Notification과 Fedify handoff가 모두 적용되면 Workflow는 두 Activity를 독립적으로 실행하고 각 최종 결과를 수집해 한 Activity의 terminal failure가 다른 Activity의 시도를 막지 않아야 한다(MUST).
