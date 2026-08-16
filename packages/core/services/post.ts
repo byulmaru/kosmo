@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
@@ -28,6 +28,7 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
+import { postVisibilityCondition } from '../post-visibility';
 import { createRepostNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
@@ -121,14 +122,19 @@ const findVisiblePost = async (
     .where(
       and(
         eq(Posts.id, postId),
-        eq(Posts.state, PostState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-        or(
-          inArray(Posts.visibility, [PostVisibility.PUBLIC, PostVisibility.UNLISTED]),
-          eq(Posts.profileId, actorProfileId),
-          and(eq(Posts.visibility, PostVisibility.FOLLOWERS), isNotNull(ProfileFollows.id)),
-        ),
+        postVisibilityCondition({
+          columns: {
+            authorProfileId: Posts.profileId,
+            authorVisible: and(
+              eq(Profiles.state, ProfileState.ACTIVE),
+              ne(Instances.state, InstanceState.SUSPENDED),
+            )!,
+            postState: Posts.state,
+            postVisibility: Posts.visibility,
+          },
+          viewerFollowsAuthor: isNotNull(ProfileFollows.id),
+          viewerProfileId: actorProfileId,
+        }),
       ),
     )
     .limit(1)

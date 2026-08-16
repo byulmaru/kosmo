@@ -10,7 +10,7 @@
 ## 2. Move accepted post-commit effects into Temporal
 
 - [x] 2.1 Implement a deterministic Post Create effects Workflow that uses only serializable input and Activity results.
-- [x] 2.2 Move Reply Notification creation and persistence directly into an idempotent Activity that reloads the committed Post and preserves recipient, self-suppression, visibility, and uniqueness rules without a pass-through core action.
+- [x] 2.2 Move Reply Notification creation and persistence into a transport-neutral Core service function that reloads the committed Post, reuses shared Post visibility policy, and preserves recipient, self-suppression and uniqueness rules; alias and register that same function as the Worker Activity without a wrapper.
 - [x] 2.3 Move Local-origin ActivityPub Create queue handoff into a separate retry-safe Activity that reuses stable canonical Note/Activity identity, audience/target rules, and the existing Fedify queue producer without claiming queue-level exactly-once.
 - [x] 2.4 Suppress outbound Create handoff for `ACTIVITYPUB` origin.
 - [x] 2.5 Ensure Notification and federation handoff are attempted independently so a final failure in one does not prevent the other.

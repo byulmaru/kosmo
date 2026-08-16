@@ -2,7 +2,7 @@
 
 ### Requirement: Reply Notification source correlation
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-426`, `PROD-507`, `PROD-722` — 시스템은 origin과 application entrypoint에 관계없이 다른 Profile의 Post에 새 Reply가 실제 생성되어 기존 Post transaction이 commit되면, Post ID 기반 effects Workflow 시작을 시도해야 한다(MUST). 시작이 수락된 경우 Workflow Activity는 process 기본 `db`로 결과 Reply를 다시 조회하고, 결과 Reply를 source로 하는 Profile-scoped Reply Notification을 기존 Notification 정책에 따라 직접 멱등 생성해야 한다(MUST). Reply Notification을 Post transaction 안의 Best Effort savepoint에서 직접 생성하거나 Activity 전용 pass-through core action에 위임해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-426`, `PROD-507`, `PROD-722` — 시스템은 origin과 application entrypoint에 관계없이 다른 Profile의 Post에 새 Reply가 실제 생성되어 기존 Post transaction이 commit되면, Post ID 기반 effects Workflow 시작을 시도해야 한다(MUST). 시작이 수락된 경우 Worker가 Activity로 직접 등록한 Core service 함수는 process 기본 `db`로 결과 Reply를 다시 조회하고, 결과 Reply를 source로 하는 Profile-scoped Reply Notification을 공통 Post visibility와 기존 Notification 정책에 따라 직접 멱등 생성해야 한다(MUST). Reply Notification을 Post transaction 안의 Best Effort savepoint에서 직접 생성하거나 Worker pass-through wrapper에 위임해서는 안 된다(MUST NOT).
 
 #### Scenario: 다른 Profile의 Post에 Reply
 

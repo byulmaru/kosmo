@@ -1,5 +1,6 @@
 export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
+export { createReplyNotification } from './create-reply-notification';
 export type { NotificationEffectErrorContext } from './notification';
 export { setNotificationEffectErrorReporter } from './notification';
 export { createPost, deletePost, repostPost } from './post';

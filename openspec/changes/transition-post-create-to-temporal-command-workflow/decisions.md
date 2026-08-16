@@ -52,13 +52,13 @@
 - **Decision:** Worker Activities use the process-standard `db` configuration and PostgreSQL environment contract. This change does not add a Worker-specific pool, database handle, credential family, or Fedify request DB context.
 - **Reason:** Database principal and RLS cleanup is owned separately and is not required for the Temporal effects boundary.
 
-### Let the Reply Notification Activity own its persistence
+### Register the Core Reply Notification function directly as an Activity
 
 - **Type:** Implementation Choice
 - **Authority:** `docs/domain/objects/notification.md`, `docs/architecture/core-services.md`, PROD-722
-- **Decision:** The Worker Activity reloads the committed Reply, applies recipient, self-suppression, visibility and uniqueness rules, and writes the Notification directly with the process default `db`. It does not delegate to a pass-through `packages/core/services` action.
-- **Reason:** Reply Notification materialization has one production entrypoint after this transition. A separately exported core action would add a test-driven wrapper without a shared runtime caller.
-- **Rejected:** Keeping `createReplyNotification` in core solely for Activity delegation or test fixture setup.
+- **Decision:** A transport-neutral Core service function reloads the committed Reply, reuses the shared Post visibility policy, applies recipient, self-suppression and uniqueness rules, and writes the Notification with the process default `db`. The Worker aliases that same function as `createReplyNotificationActivity` and registers it directly, without a wrapper or Activity-specific Core layer.
+- **Reason:** The implementation depends only on Core persistence and domain policy, not on Temporal SDK or Worker runtime state. Keeping the SQL in Worker would duplicate Core policy ownership; wrapping the Core function would add no behavior.
+- **Rejected:** Keeping the SQL in `apps/worker`, adding an Activity-specific Core package, or adding a Worker function that only delegates to the Core function.
 
 ## Superseded Decisions
 
