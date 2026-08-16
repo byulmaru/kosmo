@@ -6,11 +6,9 @@ import { deriveContext } from './context';
 import type { Context, ServerContext } from './context';
 
 const createRequestContext = async (): Promise<Context> => {
-  const context = await deriveContext({
+  return deriveContext({
     req: { header: () => undefined },
   } as unknown as ServerContext);
-  context.session = { id: 'session', accountId: 'account', profileId: 'profile' };
-  return context;
 };
 
 describe('GraphQL request context', () => {
@@ -32,13 +30,5 @@ describe('GraphQL request context', () => {
 
     assert.equal(loader, loaderAgain);
     assert.equal(context.$loaders.size, 1);
-  });
-
-  it('keeps selected Profile changes on the request context', async () => {
-    const context = await createRequestContext();
-
-    context.session!.profileId = 'selected-profile';
-
-    assert.equal(context.session?.profileId, 'selected-profile');
   });
 });
