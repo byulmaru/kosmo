@@ -45,6 +45,7 @@ type WebTabProps = {
   onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
   onPointerCancel: () => void;
   onPointerDown: () => void;
+  onPointerLeave: () => void;
   onPointerUp: () => void;
   role: 'tab';
   tabIndex: -1 | 0;
@@ -188,15 +189,9 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
       onKeyDown={onKeyDown}
-      onPress={(event) => {
+      onPress={() => {
         if (disabled) {
           return;
-        }
-        if (
-          web &&
-          (event.nativeEvent as unknown as { type?: string } | undefined)?.type === 'click'
-        ) {
-          setFocusVisible(false);
         }
         context.setFocusValue(option.value);
         if (!selected) {
@@ -231,6 +226,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
               setFocusVisible(false);
               setWebPressed(true);
             },
+            onPointerLeave: () => setWebPressed(false),
             onPointerUp: () => setWebPressed(false),
             role: 'tab',
             tabIndex,

@@ -80,6 +80,7 @@ export const InteractionContract: Story = {
     expect(popular).toHaveAttribute('aria-selected', 'false');
     await userEvent.keyboard('{Enter}');
     expect(popular).toHaveAttribute('aria-selected', 'true');
+    expect(getComputedStyle(popular).outlineWidth).toBe('2px');
     expect(onValueChange).toHaveBeenCalledTimes(2);
 
     await userEvent.pointer({ keys: '[MouseLeft>]', target: media });
