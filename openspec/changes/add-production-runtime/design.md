@@ -11,7 +11,7 @@ PROD-562는 `production-runtime`의 선언형 bootstrap 구현 이력을 소유�
 **Goals:**
 
 - dev와 격리된 `kosmo-prod` Application, namespace와 production Helm 입력을 선언한다.
-- Production automated sync, prune와 self-heal을 유지하되 bootstrap에서는 workload를 비활성화하고 release overlay를 Terraform이 되돌리지 않는다.
+- Production automated sync, prune와 self-heal을 유지하고 유효한 immutable release image가 지정되면 application workloads를 render한다. Release overlay를 Terraform이 되돌리지 않으며 별도 workload activation key를 소유하지 않는다.
 - `kos.moe` Web과 `api.kos.moe` API route를 기존 public Gateway/TLS 경계에 연결한다.
 - Production CloudNativePG를 primary 1개와 standby replica 2개, 총 3 instances로 구성하고 기존 persistent storage와 backup 선언을 연결한다.
 - API/Web database traffic은 기존 read-write Service에 유지한다.
@@ -34,7 +34,7 @@ PROD-562는 `production-runtime`의 선언형 bootstrap 구현 이력을 소유�
 ### Current Constraints
 
 - ApplicationSet의 단일 template은 dev의 automated sync, prune와 self-heal을 모든 element에 동일하게 적용한다. Production도 이 동작을 유지하되 `main` 같은 mutable operational tag가 아니라 명시적으로 고정된 image version을 받아야 한다.
-- 현재 Docker workflow는 branch와 `main` build에 `EXPO_PUBLIC_ENVIRONMENT=dev`와 dev Vault의 browser Sentry DSN을 bake하고, production build는 Git tag에서 만든다. 첫 release 전에는 production-built image가 없는 것이 의도된 상태이므로 Application은 `0.0.0` sentinel과 `workloads.enabled=false`를 bootstrap values로 명시한다. PROD-545가 승인된 build digest와 workload/migration parameter를 설정하기 전까지 public workload를 만들지 않는다.
+- 현재 Docker workflow는 branch와 `main` build에 `EXPO_PUBLIC_ENVIRONMENT=dev`와 dev Vault의 browser Sentry DSN을 bake하고, production build는 Git tag에서 만든다. Production Application은 release workflow가 제공하는 유효한 immutable digest를 workload image 입력으로 사용하며, 별도 activation key로 public workload 존재 여부를 제어하지 않는다. PROD-545가 release 선택·승인과 workload/migration parameter를 소유한다.
 - `apps/helm/values.yaml`은 `env`, `image`, `version`만 제공한다. Production의 public hostname과 고정 image version을 명시적으로 검토할 환경별 값 경계가 없다.
 - 기존 Vault manifest는 `kubernetes/kosmo/<env>` 하나를 `env` Secret으로 투영하고 API/Web 모두에 주입한다. Production runtime은 이 구조를 `kubernetes/kosmo/prod`에 그대로 사용해야 하며 `/prod/runtime`으로 옮기지 않는다.
 - 2026-07-30 live key-only 확인에서 `kubernetes/kosmo/prod`에는 Sentry와 Slack key만 존재하고 API에 필요한 public origin, OIDC와 media runtime key가 없었다. 이 change는 해당 path를 소비하는 선언을 구현하되 값을 복제하거나 임의 생성하지 않으며, 필수 key가 준비되기 전까지 workload readiness를 완료로 기록하지 않는다.
@@ -46,8 +46,8 @@ PROD-562는 `production-runtime`의 선언형 bootstrap 구현 이력을 소유�
 
 ### Recommended Approach
 
-1. Review 가능한 production values에 `env=prod`, Web/API hostname, `0.0.0` bootstrap sentinel과 `workloads.enabled=false`를 둔다. Release 선택과 활성화는 PROD-545에 남긴다.
-2. `apps/terraform/argocd.tf`가 별도 `kosmo-prod` Application과 `kosmo-prod` destination namespace를 선언하게 한다. 기존 dev ApplicationSet lifecycle은 바꾸지 않고 production Application은 `cascade=false`로 제거 시 resource를 보존한다. Automated sync, prune와 self-heal을 유지한다. Terraform은 workload가 비활성화된 bootstrap values를 소유하고 PROD-545 release workflow가 설정한 Helm parameter overlay는 이후 Terraform reconciliation에서도 보존한다.
+1. Review 가능한 production values에 `env=prod`와 Web/API hostname을 둔다. Immutable release 선택·승인과 migration parameter는 PROD-545에 남기고, chart에는 workload activation key를 추가하지 않는다.
+2. `apps/terraform/argocd.tf`가 별도 `kosmo-prod` Application과 `kosmo-prod` destination namespace를 선언하게 한다. 기존 dev ApplicationSet lifecycle은 바꾸지 않고 production Application은 `cascade=false`로 제거 시 resource를 보존한다. Automated sync, prune와 self-heal을 유지한다. Terraform은 Application 구조와 공통 values를 소유하고 PROD-545 release workflow가 설정한 Helm parameter overlay는 이후 Terraform reconciliation에서도 보존한다.
 3. Web은 `kos.moe`, API는 `api.kos.moe`를 사용하고 기존 HTTPRoute가 `gateway/public`을 참조하게 한다. Certificate, ClusterIssuer, Cloudflare credential과 public Gateway는 Kubernetes platform 소유로 유지한다.
 4. 기존 CloudNativePG Cluster template에서 dev는 1 instance, prod는 3 instances를 렌더한다. 기존 10Gi per-instance storage와 prod backup 조건을 재사용하고 API/Web `DATABASE_URL`은 `-rw` Service에 유지한다.
 5. 기존 환경별 Vault projection 구조를 재사용해 production runtime 환경값은 `kubernetes/kosmo/prod`에서 `env` Secret으로 동기화한다. 별도 migration VaultStaticSecret은 `kubernetes/kosmo/prod/migration`에서 database username/password만 `kubernetes.io/basic-auth` Secret으로 투영한다.
@@ -63,7 +63,7 @@ PROD-562는 `production-runtime`의 선언형 bootstrap 구현 이력을 소유�
 
 ### Known Traps
 
-- Production image에 `main`이나 자동 이동하는 `stable` tag를 넣지 않는다. Automated sync와 mutable image tracking을 혼동하지 않는다. `0.0.0`은 첫 release 전 bootstrap sentinel이며 Ready image로 간주하지 않는다.
+- Production image에 `main`이나 자동 이동하는 `stable` tag를 넣지 않는다. Automated sync와 mutable image tracking을 혼동하지 않는다. 유효한 immutable digest가 없으면 workload readiness를 완료로 기록하지 않는다.
 - Release workflow가 설정한 Helm parameter를 Terraform의 빈 선언으로 되돌리지 않는다. Lifecycle ignore 범위는 release overlay인 `helm.parameter`로만 한정하고 bootstrap values나 Application 전체 drift를 숨기지 않는다.
 - `main`에서 만든 `sha-*` image를 tag만 고정됐다는 이유로 production-built artifact로 간주하지 않는다.
 - 필수 runtime key가 없는 production Vault path로 API/Web을 먼저 활성화하지 않는다.
@@ -90,7 +90,7 @@ PROD-562는 `production-runtime`의 선언형 bootstrap 구현 이력을 소유�
 1. Helm dev/prod lint와 render를 통과시키고 기존 dev 동작과 backup 계약이 보존됨을 확인한다.
 2. Platform의 Argo Rollouts, Gateway/TLS, CNPG/Barman, VSO와 Pod Identity 준비 상태 및 runtime/migration production Vault path 존재를 확인한다.
 3. Production manifest를 API server에 server-side dry-run해 CRD, schema와 admission을 검증한다.
-4. `apps/terraform` plan에서 `kosmo-prod` Application 추가 외의 의도하지 않은 변경이 없는지 검토한다. `workloads.enabled=false` bootstrap이 public workload를 만들지 않는지 확인한다.
+4. `apps/terraform` plan에서 `kosmo-prod` Application 추가 외의 의도하지 않은 변경이 없는지 검토한다. Release parameter overlay와 유효한 immutable digest가 workload render의 전제이며, production sync/apply는 별도 승인 없이는 수행하지 않는다.
 5. 적용 시 Application automated sync로 `kosmo-prod`가 조정되는지 확인하고 CNPG 3 instances/PVC, Vault runtime projection과 migration basic-auth Secret/DatabaseRole 상태를 확인한다.
 6. API/Web database endpoint와 credential이 기존 runtime `-rw`/`-app` 경계에 유지되고 migration Secret을 참조하지 않는지 확인한 뒤 PROD-546에 production Cluster 준비 사실을 전달한다.
 

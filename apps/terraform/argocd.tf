@@ -74,7 +74,7 @@ resource "argocd_application" "kosmo_prod" {
 
   lifecycle {
     # PROD-764 owns the release-time source revision and parameter overlay.
-    # Terraform continues to own the bootstrap values and Application structure.
+    # Terraform continues to own the base values and Application structure.
     ignore_changes = [
       spec[0].source[0].target_revision,
       spec[0].source[0].helm[0].parameter,
@@ -103,8 +103,6 @@ resource "argocd_application" "kosmo_prod" {
           apiDomain: 'api.kos.moe'
           image: 'ghcr.io/byulmaru/kosmo'
           version: '0.0.0'
-          workloads:
-            enabled: false
         EOT
       }
     }

@@ -37,6 +37,14 @@
 - **Decision:** The Worker package owns its concrete registration at compile time, and the production entrypoint directly starts and owns one process-global Worker host without an exported `runWorker`/`startWorker` API, injected registration or Worker-specific enabled flag.
 - **Reason:** The deployed Worker has one real workload and one process entrypoint. A memoized callable startup layer would expose restart-like surface area without a second valid caller.
 
+### Render every application workload without an activation gate
+
+- **Type:** Derived Contract
+- **Authority:** `PROD-722`, user decision recorded in Linear
+- **Decision:** Helm always renders API, Web, Fedify consumer, and the singleton Worker when a valid immutable release image is supplied. Neither a chart-wide workload activation key nor a Worker-specific activation key controls resource existence. Terraform and the release workflow retain their existing ownership of release parameters, but neither owns a false/true workload switch.
+- **Reason:** The production runtime has passed its one-time bootstrap boundary, and a second switch can leave a declared release silently without its application workloads. Resource rendering should follow the immutable release input directly.
+- **Consequences:** Missing or invalid image input remains a render/configuration error, not a supported workload-disabled bootstrap state. Secret restart targets and Worker credential wiring apply to the always-rendered workloads. Production sync, apply, rollout, and live verification remain separately approval-gated.
+
 ### Consume the platform-supplied default database handle
 
 - **Type:** Derived Contract

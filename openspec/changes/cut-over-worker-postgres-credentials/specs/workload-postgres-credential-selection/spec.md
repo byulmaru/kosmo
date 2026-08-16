@@ -2,7 +2,7 @@
 
 ### Requirement: process-wide application DB는 표준 PG source를 사용한다
 
-**Authority / Provenance:** Linear `PROD-715`, user decision — process-wide application DB는 workload별로 chart가 생성한 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` source를 사용해야 한다(MUST). API, Fedify consumer와 dev migration은 owner `kosmo`, Web과 enabled Temporal Worker는 `kosmo_worker`를 사용해야 한다(MUST). process-wide 기본 DB에 `DATABASE_URL`/`DATABASE_PASSWORD`, URL/password selector, 완전성 flag 또는 fallback을 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, user decision — process-wide application DB는 workload별로 chart가 생성한 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` source를 사용해야 한다(MUST). API, Fedify consumer와 dev migration은 owner `kosmo`, Web과 Temporal Worker는 `kosmo_worker`를 사용해야 한다(MUST). process-wide 기본 DB에 `DATABASE_URL`/`DATABASE_PASSWORD`, URL/password selector, 완전성 flag 또는 fallback을 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: API와 Fedify consumer owner source
 
@@ -14,7 +14,7 @@
 
 #### Scenario: Web과 Temporal Worker Worker source
 
-- **WHEN** Web 또는 기존 activation gate에서 enabled된 Temporal Worker manifest를 렌더한다
+- **WHEN** Web과 Temporal Worker manifest를 유효한 immutable release image로 렌더한다
 - **THEN** `PGHOST`는 기존 direct read-write Service, `PGPORT`는 `5432`, `PGUSER`는 `kosmo_worker`, `PGDATABASE`는 `kosmo`를 사용한다
 - **AND** `PGPASSWORD`는 같은 release의 Worker Secret `password` key를 참조한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 투영하지 않는다
@@ -47,21 +47,21 @@
 - **THEN** `kosmo_migration` login Secret과 direct endpoint를 사용한다
 - **AND** migration command가 `SET ROLE kosmo`로 application schema 권한 경계를 유지한다
 
-### Requirement: Worker activation gate와 queue secondary source를 보존한다
+### Requirement: 항상 렌더되는 Worker와 queue secondary source를 보존한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-448`, `PROD-715` — 기존 Worker activation gate와 MessageQueue 전용 database/role은 process-wide source 단순화와 독립적으로 유지해야 한다(MUST).
+**Authority / Provenance:** Linear `PROD-369`, `PROD-448`, `PROD-715`, `PROD-722` — Worker credential wiring과 MessageQueue 전용 database/role은 process-wide source 단순화와 독립적으로 유지해야 한다(MUST). Worker resource는 유효한 release image에서 항상 render되어야 하며 activation key가 존재 여부를 제어해서는 안 된다(MUST NOT).
 
-#### Scenario: 기존 Worker activation gate 보존
+#### Scenario: Worker credential wiring 상시 렌더
 
-- **WHEN** `workloads.enabled=true`와 기본 `worker.enabled=false` 또는 생략된 `worker.enabled`로 chart를 렌더한다
-- **THEN** Worker ServiceAccount와 Deployment가 존재하지 않는다
+- **WHEN** 유효한 immutable release image로 chart를 렌더한다
+- **THEN** Worker ServiceAccount와 Deployment가 존재한다
 - **AND** Web은 chart가 생성한 `kosmo_worker` direct source를 계속 사용한다
 - **AND** Web Rollout은 `worker-database` Secret 변경 시 재시작 대상으로 유지된다
-- **AND** Worker Deployment restart target은 렌더되지 않는다
+- **AND** Worker Deployment restart target이 렌더된다
 
-#### Scenario: Worker activation override
+#### Scenario: 과거 activation 값은 무시됨
 
-- **WHEN** `workloads.enabled=true`와 `worker.enabled=true`로 chart를 렌더한다
+- **WHEN** 과거 workload 또는 Worker activation 값을 추가한 채 유효한 immutable release image로 chart를 렌더한다
 - **THEN** Worker ServiceAccount와 Deployment가 존재한다
 - **AND** Web과 Worker Deployment가 chart가 생성한 `kosmo_worker` direct source를 사용한다
 - **AND** Web Rollout과 Worker Deployment가 `worker-database` Secret 변경 시 재시작 대상으로 렌더된다

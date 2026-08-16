@@ -21,7 +21,7 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 - Reply Notification transaction savepoint, Post Create의 process-local direct Fedify effect와 반환형 `postCommit` callback을 제거한다. `createPost(input)`이 자체 transaction commit 뒤 Workflow start까지 소유하고 API/Fedify handler는 database handle이나 후속 효과를 조립하지 않는다. 다른 domain의 `postCommit` lifecycle은 이 change에서 변경하지 않는다.
 - Workflow start 실패를 보완하기 위한 command receipt table, transaction outbox/relay, 별도 delivery history 또는 cross-request exactly-once를 추가하지 않는다.
 - 첫 business Workflow/Activity가 Worker registration을 소유한다. process당 하나의 registration과 Worker host만 두고, 빈 registration·idle polling·중복 startup API를 정상 경로로 허용하지 않는다. readiness, signal과 graceful drain은 Worker host가 한 번만 소유한다.
-- Worker는 별도 `worker.enabled` 선택 없이 application release에 함께 배포되며, 첫 registration이 실제 RUNNING·readiness·restart 복구·drain을 dev에서 검증한다.
+- Worker는 별도 activation 선택 없이 모든 application release에 함께 배포되며, 첫 registration이 실제 RUNNING·readiness·restart 복구·drain을 dev에서 검증한다. chart-wide workload activation gate는 두지 않는다.
 - Effects Activity는 platform이 공급하는 기존 process 기본 `db`와 표준 PG 환경변수 경계를 소비한다. DB principal·Secret·credential source·RLS를 선택하거나 별도 connection을 만들지 않는다.
 
 ## Authority / Provenance
@@ -49,7 +49,7 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 - `packages/core/services`: 기존 Post transaction commit 결과에서 stable Post ID effects Workflow start를 시도하고, Post Create의 Notification savepoint/direct effect와 Worker 전용 pass-through action을 제거한다.
 - `apps/api`, `packages/fedify`: `ctx.db`/database handle이나 `postCommit` callback 없이 core Post action 결과와 기존 acknowledgement를 사용하고, producer workload가 환경별 Temporal endpoint·namespace를 받는다.
 - `apps/worker`: Reply Notification persistence를 직접 소유하는 effects Activity, Fedify producer Activity, Workflow registration, singleton Worker host, health·signal·drain lifecycle
-- `apps/helm`: `worker.enabled` 없는 Worker component, API/Fedify producer와 Worker의 Temporal endpoint·namespace, probe와 dev readiness/restart/drain 검증 wiring
+- `apps/helm`: activation gate 없는 Worker component, API/Fedify producer와 Worker의 Temporal endpoint·namespace, probe와 dev readiness/restart/drain 검증 wiring
 - 외부 GraphQL schema와 기존 Notification read API는 변경하지 않는다. Post transaction 결과와 caller 성공/acknowledgement 의미는 보존한다.
 
 ## Out of Scope

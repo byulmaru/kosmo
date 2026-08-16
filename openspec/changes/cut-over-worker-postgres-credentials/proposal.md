@@ -6,8 +6,8 @@
 
 - `postgres.credentials.api` URL/password trio와 process-wide `DATABASE_URL` fallback을 제거한다. API, Fedify consumer와 dev migration은 기존 owner `kosmo` source를 표준 `PG*` 환경변수로 사용한다.
 - `postgres.credentials.fedify`/`worker` selector와 `FEDIFY_DATABASE_*`/`WORKER_DATABASE_*` env seam을 제거한다.
-- Chart가 기존 direct read-write Service를 가리키는 `PGHOST`/`PGPORT`, workload별 고정 `PGUSER`/`PGDATABASE`와 해당 release Secret의 `PGPASSWORD` ref를 생성한다. API/Fedify consumer/dev migration은 `kosmo`, Web/enabled Temporal Worker는 `kosmo_worker`를 사용한다.
-- 기존 `workloads.enabled && worker.enabled` activation gate를 유지하고, enabled Worker ServiceAccount/Deployment에만 chart-derived Worker source를 연결한다. `worker.enabled`의 기본값과 activation lifecycle은 이 change에서 변경하지 않는다.
+- Chart가 기존 direct read-write Service를 가리키는 `PGHOST`/`PGPORT`, workload별 고정 `PGUSER`/`PGDATABASE`와 해당 release Secret의 `PGPASSWORD` ref를 생성한다. API/Fedify consumer/dev migration은 `kosmo`, Web/Temporal Worker는 `kosmo_worker`를 사용한다.
+- 모든 application release에 Worker ServiceAccount/Deployment와 chart-derived Worker source를 함께 연결한다. Worker runtime registration과 activation lifecycle은 PROD-722가 소유하며, 이 credential change는 별도 workload activation key를 만들거나 유지하지 않는다.
 - Web trusted federation, Fedify listener, Temporal Worker DB Activity와 일반 core service는 기존 process 전역 기본 `db`를 그대로 사용한다. process 기본 DB는 표준 `PG*` 환경변수만 읽는다.
 - GraphQL Query/Mutation은 API process의 표준 `PG*` DB를 공유하고 `OPERATION_DATABASE_URL`을 사용하지 않는다. Fedify MessageQueue 전용 `FEDIFY_QUEUE_DATABASE_URL`/password만 별도 secondary connection으로 유지한다.
 - Cutover rollback은 전체 PROD-715 merge/squash revision을 Git revert해 기존 owner source로 복구한다. 인증 실패 중 owner로 자동 fallback하지 않는다.
@@ -32,11 +32,11 @@
 ### Modified Capabilities
 
 - `workload-postgres-credential-selection`: Web/Worker 기본 DB를 고정 Worker `PG*` source로 전환하고 API/migration/queue 경계에 유입되지 않게 한다.
-- `temporal-worker-runtime-foundation`: 기존 activation gate가 켜진 Worker Deployment가 process 기본 표준 PG env로 Worker source를 사용한다.
+- `temporal-worker-runtime-foundation`: 항상 렌더되는 Worker Deployment가 process 기본 표준 PG env로 Worker source를 사용한다.
 
 ## Impact
 
-- Helm의 workload별 고정 `PG*` env/Secret helper, API/Fedify consumer/dev migration과 Web/enabled Worker template의 env 투영, Worker Secret 변경 시 conditional restart target.
+- Helm의 workload별 고정 `PG*` env/Secret helper, API/Fedify consumer/dev migration과 Web/Worker template의 env 투영, Worker Secret 변경 시 restart target.
 - 모든 process-wide workload 기본 표준 `PG*` source, API Worker Secret 비주입, migration·queue 경계와 기존 Pooler resource 불변, Git revert rollback과 live role 검증. Worker runtime registration과 lifecycle은 변경·검증하지 않는다.
 - 완료된 PROD-369/724의 역할·ACL을 소비하되 application SQL과 DB handle은 변경하지 않는다.
 - production sync/apply는 사용자의 별도 명시적 승인 없이는 수행하지 않는다.

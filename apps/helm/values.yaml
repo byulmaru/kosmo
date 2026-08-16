@@ -2,8 +2,6 @@ env:
 image: ghcr.io/byulmaru/kosmo
 imageDigest: ''
 version: main
-workloads:
-  enabled: true
 worker:
   replicas:
     dev: 1

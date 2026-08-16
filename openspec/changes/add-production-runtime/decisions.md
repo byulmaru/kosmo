@@ -25,7 +25,7 @@
 - Context / Problem: PROD-562/563/564를 서로 독립적인 최종 결과로 완료하면 runtime 적용, restore rehearsal과 첫 release의 통합 완료 책임이 분산된다.
 - Decision Outcome: PROD-562는 이 OpenSpec과 runtime bootstrap 구현 이력을 보존한다. Terraform 적용, database·backup·Secret readiness, PROD-546 restore rehearsal 연계, workload/migration 활성화, public smoke와 첫 release 최종 완료 판단은 PROD-545가 소유한다. PROD-563/564의 완료된 구현 이력은 다시 열거나 삭제하지 않는다.
 - Alternatives Considered: 구현이 시작된 세 change를 뒤늦게 공통 OpenSpec 하나로 재작성하는 방식은 감사 이력을 훼손하므로 제외했다. PROD-565를 별도 최종 통합 owner로 유지하는 방식은 PROD-545와 책임이 중복되어 제외했다.
-- Consequences: 이 change는 workload가 비활성화된 runtime 기반까지만 merge할 수 있다. Live 적용 이후 검증 증거는 PROD-545에 모이며, restore rehearsal이 성공한 뒤에만 첫 release로 진행한다.
+- Consequences: 이 change는 production runtime 기반과 release parameter 소유권 경계까지만 다룬다. 유효한 immutable release image가 주어지면 chart는 application workloads를 render하지만, live 적용 이후 검증 증거와 restore rehearsal 및 첫 release 판단은 PROD-545에 모인다.
 - Confirmation / Follow-up: Terraform plan/apply에서 public workload가 생성되지 않는지 확인하고, readiness와 후속 실행 결과를 PROD-545에 기록한다.
 
 ### Production public hostname
@@ -117,11 +117,11 @@
 - Decision Date: 2026-07-30
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-545`, `PROD-562`; PR review
-- Status: Active
-- Context / Problem: Terraform이 선언한 bootstrap Helm values와 PROD-545 release workflow가 설정하는 digest, workload, migration Helm parameter를 함께 관리하면 이후 Terraform reconciliation이 release parameter를 제거해 배포된 workload를 prune할 수 있다.
-- Decision Outcome: Terraform은 Application 구조와 `workloads.enabled=false`, `version=0.0.0` bootstrap values를 소유한다. PROD-545 release workflow는 Argo CD Helm parameter overlay를 소유한다. Terraform은 `spec.source.helm.parameter` 변경만 무시하고 values와 나머지 Application 구조는 계속 조정한다.
+- Status: Superseded by PROD-722 on 2026-08-16
+- Context / Problem: Terraform이 선언한 Application values와 PROD-545 release workflow가 설정하는 digest, workload, migration Helm parameter를 함께 관리하면 이후 Terraform reconciliation이 release parameter를 제거해 배포된 workload를 prune할 수 있다.
+- Decision Outcome: Terraform은 Application 구조와 공통 production values를 소유한다. PROD-545 release workflow는 Argo CD Helm parameter overlay를 소유한다. Terraform은 `spec.source.helm.parameter` 변경만 무시하고 values와 나머지 Application 구조는 계속 조정한다. chart-wide 또는 Worker별 workload activation key는 소유하지 않는다.
 - Alternatives Considered: Release마다 Terraform 선언을 커밋하는 방식은 승인된 tag deployment를 불필요하게 Git 선언 변경과 결합해 제외했다. Application 전체 변경을 무시하는 방식은 실제 infrastructure drift까지 숨기므로 제외했다.
-- Consequences: 첫 Terraform 적용은 workload 없이 database, backup과 Secret 기반만 준비한다. 이후 release workflow가 설정한 immutable digest와 workload/migration 활성화는 다음 Terraform 적용에도 유지된다.
+- Consequences: Terraform과 release workflow의 ownership이 분리되고, 유효한 immutable digest가 지정된 Application render에는 application workloads가 함께 나타난다. Production sync/apply는 별도 사용자 승인 경계로 남는다.
 - Confirmation / Follow-up: Provider schema와 Terraform plan에서 정확히 Helm `parameter` block만 lifecycle ignore 대상인지 확인하고, release parameter가 values나 다른 Application 구조의 drift를 숨기지 않는지 검토한다.
 
 ### Production Application lifecycle 분리

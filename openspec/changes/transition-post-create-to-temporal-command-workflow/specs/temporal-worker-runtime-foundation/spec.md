@@ -25,17 +25,22 @@
 
 ### Requirement: Application workload의 상시 Worker component
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. Kosmo Helm chart는 정상 application workload가 활성화된 모든 환경에 Worker Deployment와 전용 ServiceAccount를 별도 `worker.enabled` 선택 없이 생성해야 한다(MUST). dev는 1개, prod는 2개의 replica를 기본값으로 render하고, 공통 runtime image의 Worker command, HTTP liveness/readiness probe와 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). production 실제 sync·rollout은 별도 사용자 승인 없이는 수행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. Kosmo Helm chart는 유효한 immutable application image가 지정된 모든 환경에서 API, Web, Fedify consumer와 함께 Worker Deployment 및 전용 ServiceAccount를 항상 생성해야 한다(MUST). Worker 또는 chart-wide workload activation key로 이 component를 숨겨서는 안 된다(MUST NOT). dev는 1개, prod는 2개의 replica를 기본값으로 render하고, 공통 runtime image의 Worker command, HTTP liveness/readiness probe와 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). production 실제 sync·rollout은 별도 사용자 승인 없이는 수행해서는 안 된다(MUST NOT).
 
 #### Scenario: dev application workload render
 
-- **WHEN** dev chart에서 정상 application workload를 render한다
-- **THEN** 1개 replica, Worker command, HTTP probes와 dev Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 별도 Worker activation flag 없이 render된다
+- **WHEN** 유효한 immutable image와 함께 dev chart를 render한다
+- **THEN** API, Web, Fedify consumer와 함께 1개 replica, Worker command, HTTP probes 및 dev Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 activation key 없이 render된다
 
 #### Scenario: prod application workload render
 
-- **WHEN** prod chart에서 정상 application workload를 render한다
-- **THEN** 2개 replica, Worker command, HTTP probes와 prod Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 별도 Worker activation flag 없이 render된다
+- **WHEN** 유효한 immutable image와 함께 prod chart를 render한다
+- **THEN** API, Web, Fedify consumer와 함께 2개 replica, Worker command, HTTP probes 및 prod Temporal endpoint·namespace를 가진 Deployment와 ServiceAccount가 activation key 없이 render된다
+
+#### Scenario: legacy activation values are inert
+
+- **WHEN** 유효한 immutable image와 함께 과거 workload 또는 Worker activation 값을 추가해 chart를 render한다
+- **THEN** API, Web, Fedify consumer와 Worker가 모두 render되고 과거 값이 workload 존재 여부를 바꾸지 않는다
 
 #### Scenario: Worker lifecycle의 dev 검증
 

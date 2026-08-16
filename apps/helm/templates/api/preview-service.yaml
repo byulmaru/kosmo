@@ -1,4 +1,3 @@
-{{- if .Values.workloads.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -19,4 +18,3 @@ spec:
   selector:
     app.kubernetes.io/name: api
     app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
