@@ -371,18 +371,29 @@ describe('inbound Delete dispatch', () => {
     const objectUri = new URL('https://remote.example/notes/uncommitted');
 
     await db.transaction(async (tx) => {
-      await createPost(
-        {
-          document: postContentDocumentFromText('uncommitted'),
-          objectUri: objectUri.href,
-          origin: 'ACTIVITYPUB',
+      const post = await tx
+        .insert(Posts)
+        .values({
           profileId: profile.id,
-          publishedAt: null,
-          receivedAt,
+          state: PostState.ACTIVE,
           visibility: PostVisibility.PUBLIC,
-        },
-        tx,
-      );
+        })
+        .returning()
+        .then(firstOrThrow);
+      const content = await tx
+        .insert(PostContents)
+        .values({
+          document: postContentDocumentFromText('uncommitted'),
+          postId: post.id,
+        })
+        .returning()
+        .then(firstOrThrow);
+      await tx.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, post.id));
+      await tx.insert(ActivityPubPosts).values({
+        postId: post.id,
+        receivedAt,
+        uri: objectUri.href,
+      });
       await handleInboundDelete(
         createContext(),
         new Delete({ actor: actorUri, object: objectUri }),

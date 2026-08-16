@@ -2,10 +2,10 @@
 
 Local GraphQL과 ActivityPub 수신의 Post transaction은 이미 Post·PostContent·ActivityPub mapping과
 동기 응답을 소유하지만, Reply Notification과 Local-origin Fedify 전달은 transaction savepoint 또는
-process-local `postCommit` 호출로 흩어져 있다. 이 효과는 재시작과 일시적 외부 실패에서 재시도할 durable
+process-local `postCommit` 호출로 흩어져 있다. 이 callback을 제거하고 효과를 재시작과 일시적 외부 실패에서 재시도할 durable
 실행 경계가 없고, API와 ActivityPub ingress가 서로 다른 후속 lifecycle을 갖는다.
 
-PROD-722는 기존 core/request Post transaction을 유지하면서 실제 commit 뒤 stable Post ID로 하나의
+PROD-722는 기존 Post 저장 transaction을 core action 안에 유지하면서 실제 commit 뒤 stable Post ID로 하나의
 post-commit effects Workflow를 시작한다. Workflow가 수락되면 Reply Notification과 Local-origin Fedify
 queue handoff를 재시도하고, ActivityPub-origin Post에는 outbound echo를 만들지 않는다. commit과 Workflow
 start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로 남기며, 이미 성공한 caller 응답을 실패로
@@ -14,10 +14,10 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 ## What Changes
 
 - `temporal-post-create-effects`를 추가한다. Local GraphQL과 verified ActivityPub Create의 기존 Post transaction이 실제 commit된 뒤 결과 Post ID에서 stable Workflow ID를 파생해 effects Workflow start를 시도한다.
-- Post·PostContent·Author/Parent 관계·필요한 ActivityPub mapping 저장과 actor/profile/instance/permission/visibility/content/media 검증은 기존 core/request transaction에 남긴다. Temporal transaction Activity나 preallocated Post ID를 추가하지 않는다.
+- Post·PostContent·Author/Parent 관계·필요한 ActivityPub mapping 저장과 actor/profile/instance/permission/visibility/content/media 검증은 core `createPost(input)` transaction에 남긴다. Temporal transaction Activity나 preallocated Post ID를 추가하지 않는다.
 - Post transaction rollback에서는 effects Workflow를 시작하지 않는다. commit 뒤 process 종료, Temporal 연결 오류 또는 Workflow start 실패로 effects가 유실될 수 있지만, committed Post와 기존 GraphQL/ActivityPub 성공·acknowledgement 결과는 유지한다.
 - accepted effects Workflow는 stable Post ID를 사용해 Reply Notification을 기존 recipient/self/visibility/uniqueness 정책으로 멱등 재시도하고, `origin: LOCAL`인 Post만 기존 canonical ActivityPub Create를 Fedify PostgreSQL MessageQueue producer에 handoff한다. `origin: ACTIVITYPUB`인 Post는 outbound echo를 만들지 않는다.
-- Reply Notification transaction savepoint와 Post Create의 process-local direct Fedify effect를 제거하고, API/Fedify handler가 후속 효과를 직접 조립하지 않도록 공통 post-commit start 경계로 통합한다. 다른 domain의 `postCommit` lifecycle은 이 change에서 변경하지 않는다.
+- Reply Notification transaction savepoint, Post Create의 process-local direct Fedify effect와 반환형 `postCommit` callback을 제거한다. `createPost(input)`이 자체 transaction commit 뒤 Workflow start까지 소유하고 API/Fedify handler는 database handle이나 후속 효과를 조립하지 않는다. 다른 domain의 `postCommit` lifecycle은 이 change에서 변경하지 않는다.
 - Workflow start 실패를 보완하기 위한 command receipt table, transaction outbox/relay, 별도 delivery history 또는 cross-request exactly-once를 추가하지 않는다.
 - 첫 business Workflow/Activity가 Worker registration을 소유한다. process당 하나의 registration과 Worker host만 두고, 빈 registration·idle polling·중복 startup API를 정상 경로로 허용하지 않는다. readiness, signal과 graceful drain은 Worker host가 한 번만 소유한다.
 - Worker는 별도 `worker.enabled` 선택 없이 application release에 함께 배포되며, 첫 registration이 실제 RUNNING·readiness·restart 복구·drain을 dev에서 검증한다.
@@ -46,7 +46,7 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 ## Impact
 
 - `packages/core/services`: 기존 Post transaction commit 결과에서 stable Post ID effects Workflow start를 시도하고, Post Create의 Notification savepoint/direct effect를 제거한다.
-- `apps/api`, `packages/fedify`: 기존 Local·ActivityPub transaction과 acknowledgement를 유지하면서 공통 post-commit start 경계를 사용한다.
+- `apps/api`, `packages/fedify`: `ctx.db`/database handle이나 `postCommit` callback 없이 core Post action 결과와 기존 acknowledgement를 사용한다.
 - `apps/worker`: Effects Workflow/Activity registration, singleton Worker host, health·signal·drain lifecycle
 - `apps/helm`: `worker.enabled` 없는 Worker component, Temporal endpoint·probe와 dev readiness/restart/drain 검증 wiring
 - 외부 GraphQL schema와 기존 Notification read API는 변경하지 않는다. Post transaction 결과와 caller 성공/acknowledgement 의미는 보존한다.

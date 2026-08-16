@@ -235,7 +235,7 @@ export const handleInboundCreateNote = async ({
   const input = {
     document,
     media,
-    onPostCommitError: (error: unknown) =>
+    onEffectsWorkflowStartError: (error: unknown) =>
       observeInbound({
         activityType: 'Create',
         actorOrigin: actorUri,
@@ -270,7 +270,6 @@ export const handleInboundCreateNote = async ({
       observeDuplicateCreate();
       return;
     }
-    await result.postCommit();
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
       observeInboundRejected({
@@ -306,6 +305,5 @@ export const handleInboundCreateNote = async ({
       observeDuplicateCreate();
       return;
     }
-    await result.postCommit();
   }
 };

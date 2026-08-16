@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
@@ -65,29 +64,25 @@ builder.mutationField('createPost', (t) =>
       const media = input.media ?? [];
       const contentWarning = normalizePostContentPlainText(input.contentWarning ?? '');
 
-      const result = await createPost(
-        {
-          accountId: ctx.session.accountId,
-          document: postContentDocumentFromTextAndMedia(
-            input.bodyText,
-            media.map(({ mediaId }) => ({
-              mediaId: mediaId.id,
-            })),
-            input.sensitiveMedia ?? false,
-            contentWarning || null,
-          ),
-          media: media.map(({ altText, mediaId }) => ({
-            altText: altText ?? null,
+      const result = await createPost({
+        accountId: ctx.session.accountId,
+        document: postContentDocumentFromTextAndMedia(
+          input.bodyText,
+          media.map(({ mediaId }) => ({
             mediaId: mediaId.id,
           })),
-          origin: 'LOCAL',
-          profileId: ctx.session.profileId,
-          replyParentId: input.replyParentId?.id,
-          visibility: input.visibility,
-        },
-        db,
-      );
-      await result.postCommit(ctx.db);
+          input.sensitiveMedia ?? false,
+          contentWarning || null,
+        ),
+        media: media.map(({ altText, mediaId }) => ({
+          altText: altText ?? null,
+          mediaId: mediaId.id,
+        })),
+        origin: 'LOCAL',
+        profileId: ctx.session.profileId,
+        replyParentId: input.replyParentId?.id,
+        visibility: input.visibility,
+      });
 
       return { post: result.post };
     },

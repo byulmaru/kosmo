@@ -2,7 +2,7 @@
 
 ## Purpose
 
-기존 core/request Post transaction이 실제 commit된 뒤 Reply Notification과 Local-origin ActivityPub
+core `createPost(input)` transaction이 실제 commit된 뒤 Reply Notification과 Local-origin ActivityPub
 Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. Post transaction과 caller 결과는
 동기적으로 유지하고, commit 이후 Workflow start와 외부 효과의 실패는 별도로 격리한다.
 
@@ -10,7 +10,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 ### Requirement: 기존 Post transaction 뒤 effects Workflow 시작
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 기존 core/request transaction이 소유해야 하며(MUST), 실제 transaction commit 뒤에만 committed Post ID를 사용한 post-commit effects Workflow start를 시도해야 한다(MUST). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 후속 효과를 직접 조립해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 `createPost(input)`의 core-owned transaction이 소유해야 하며(MUST), core action은 실제 transaction commit 뒤에만 committed Post ID를 사용한 effects Workflow start를 시도해야 한다(MUST). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 database handle·`postCommit` callback·후속 효과를 직접 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Local root 또는 Reply commit 뒤 start
 
@@ -42,7 +42,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 #### Scenario: 중복 start
 
-- **WHEN** 같은 committed Post에 대해 post-commit start 경계가 중복 호출된다
+- **WHEN** 같은 committed Post에 대한 Workflow start 요청이 네트워크 재시도 등으로 중복된다
 - **THEN** 시스템은 같은 Workflow ID의 기존 실행 또는 동등한 idempotent start 결과를 사용한다
 - **AND** Reply Notification과 Local Fedify effect를 별도 Workflow로 중복 시작하지 않는다
 

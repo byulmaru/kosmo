@@ -1,18 +1,18 @@
 ## Active Decisions
 
-### Keep the Post transaction at the request/core boundary
+### Let the core Post action own its transaction and Workflow start boundary
 
 - **Type:** Derived Contract
 - **Authority:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-722
-- **Decision:** Local GraphQL and ActivityPub Create keep using the existing core transaction for Post, PostContent, and ActivityPub mapping. Temporal owns only effects attempted after the actual outer commit.
-- **Reason:** Moving the transaction into an at-least-once Activity would add ambiguous-commit handling, stable proposed IDs, and request-time Temporal coupling without improving the database transaction's atomicity.
-- **Rejected:** A Temporal command Workflow whose Activity owns the Post transaction.
+- **Decision:** Local GraphQL and ActivityPub Create call `createPost(input)` without a database handle. The core action owns the Post, PostContent, and ActivityPub mapping transaction and attempts the Temporal effects Workflow start after that transaction commits and before returning. It does not return a `postCommit` callback to callers.
+- **Reason:** Moving the transaction into an at-least-once Activity would add ambiguous-commit handling and proposed IDs, while preserving caller-owned transactions would keep the callback composition that this transition removes.
+- **Rejected:** A Temporal command Workflow whose Activity owns the Post transaction; caller-supplied `DatabaseHandle`/`ctx.db`; a returned `postCommit` lifecycle.
 
 ### Accept the commit-to-Workflow-start loss window
 
 - **Type:** Derived Contract
 - **Authority:** `docs/architecture/core-services.md`, PROD-722
-- **Decision:** After commit, the caller attempts to start the effects Workflow. A process crash or start failure in this interval may lose the effects; the failure is observed but does not reverse the Post or fail its response.
+- **Decision:** After its transaction commits, the core Post action attempts to start the effects Workflow before returning. A process crash or start failure in this interval may lose the effects; the failure is observed but does not reverse the Post or fail its response.
 - **Reason:** Closing this window requires a durable intent such as a transactional outbox, which is intentionally outside this change.
 - **Rejected:** Command receipts, transactional outbox/relay, automatic reconciliation, or an exactly-once commit-to-start claim.
 
@@ -20,7 +20,7 @@
 
 - **Type:** Implementation Choice
 - **Authority:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-722
-- **Decision:** The post-commit lifecycle starts a deterministic Workflow identity derived only from the committed Post ID; explicit origin is Workflow input, not part of the identity. A start conflicts with any running execution and rejects reuse after any closed execution. Duplicate/no-op Create results do not start or backfill a Workflow.
+- **Decision:** The core Post action starts a deterministic Workflow identity derived only from the committed Post ID after its transaction commits; explicit origin is Workflow input, not part of the identity. A start conflicts with any running execution and rejects reuse after any closed execution. Duplicate/no-op Create results do not start or backfill a Workflow.
 - **Reason:** A committed Post ID is already the stable identity required to converge repeated start attempts, without introducing a proposed identifier before commit.
 
 ### Run Notification and federation handoff as independent effects
@@ -50,7 +50,7 @@
 
 - **Recorded:** 2026-08-16
 - **Status:** Superseded immediately during PROD-722 design review
-- **Replacement:** Keep the Post transaction at the request/core boundary and start only the post-commit effects Workflow.
+- **Replacement:** Keep the Post transaction inside the core action and start only the post-commit effects Workflow.
 - **Reason:** The Activity did not add transaction atomicity and instead required proposed Post IDs and ambiguous-commit/idempotency machinery.
 
 ### Limit the change to Reply Notification only
@@ -58,6 +58,13 @@
 - **Recorded:** 2026-08-10
 - **Status:** Superseded
 - **Replacement:** Move both Reply Notification and Local-origin Fedify queue handoff into the same post-commit effects Workflow while preserving independent retry boundaries.
+
+### Preserve caller-owned transaction and returned postCommit compatibility
+
+- **Recorded:** 2026-08-16
+- **Status:** Superseded during implementation review
+- **Replacement:** `createPost(input)` owns its transaction and attempts the Workflow start after commit without accepting a database handle or returning a callback.
+- **Reason:** There is no production Post Create caller that needs to compose this action inside an outer transaction, and retaining the injection/callback boundary defeats the simplification sought by the Temporal transition.
 
 ## Remaining Decisions
 

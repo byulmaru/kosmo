@@ -1,11 +1,11 @@
-## 1. Preserve Post creation and add the post-commit start boundary
+## 1. Preserve Post creation and internalize the post-commit start boundary
 
-- [x] 1.1 Keep Local GraphQL and ActivityPub Create on the existing core Post transaction, including caller-owned transaction behavior.
-- [x] 1.2 Return a one-shot post-commit lifecycle only for a newly committed Post, carrying the committed Post ID and explicit `LOCAL` or `ACTIVITYPUB` origin.
-- [x] 1.3 Execute the lifecycle only after the outer transaction commits; do not start it after rollback, duplicate, or no-op results.
+- [x] 1.1 Make `createPost(input)` own its Post transaction without accepting a caller database handle.
+- [x] 1.2 Attempt the effects Workflow inside the core action only after its transaction commits, using the committed Post ID and explicit `LOCAL` or `ACTIVITYPUB` origin.
+- [x] 1.3 Return the normal Post result without a `postCommit` callback; do not start after rollback, duplicate, or no-op results.
 - [x] 1.4 Start the effects Workflow with a deterministic Post-only identity, converge on a running execution, and reject reuse after any closed execution.
 - [x] 1.5 Observe and catch start failures while preserving the committed Post, GraphQL response, and ActivityPub acknowledgement.
-- [x] 1.6 Add focused tests for top-level and caller-owned commit/rollback, Local and ActivityPub root/reply creation, duplicate/no-op handling, duplicate starts, and start failure isolation.
+- [x] 1.6 Add focused tests for core-owned commit/rollback, Local and ActivityPub root/reply creation, duplicate/no-op handling, duplicate starts, and start failure isolation.
 
 ## 2. Move accepted post-commit effects into Temporal
 
@@ -14,7 +14,7 @@
 - [x] 2.3 Move Local-origin ActivityPub Create queue handoff into a separate idempotent Activity that reuses canonical Note identity, audience/target rules, and the existing Fedify queue producer.
 - [x] 2.4 Suppress outbound Create handoff for `ACTIVITYPUB` origin.
 - [x] 2.5 Ensure Notification and federation handoff are attempted independently so a final failure in one does not prevent the other.
-- [x] 2.6 Remove the old in-transaction Notification savepoint path and direct post-commit Fedify dispatch after equivalent coverage exists.
+- [x] 2.6 Remove the old in-transaction Notification savepoint path, returned `postCommit` callback, caller `ctx.db` input, and direct post-commit Fedify dispatch after equivalent coverage exists.
 - [x] 2.7 Add Workflow and Activity tests for applicability, retry/idempotency, independent failure, ActivityPub echo suppression, and Post-result isolation.
 
 ## 3. Activate the singleton Worker runtime

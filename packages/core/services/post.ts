@@ -1,6 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
+  db,
   first,
   firstOrThrow,
   firstOrThrowWith,
@@ -42,7 +43,7 @@ type LocalPostInput = {
     altText: string | null;
     mediaId: string;
   }[];
-  onPostCommitError?: (error: unknown) => void | Promise<void>;
+  onEffectsWorkflowStartError?: (error: unknown) => void | Promise<void>;
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
@@ -52,7 +53,7 @@ type LocalPostInput = {
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   media?: readonly RemoteMediaCandidate[];
-  onPostCommitError?: (error: unknown) => void | Promise<void>;
+  onEffectsWorkflowStartError?: (error: unknown) => void | Promise<void>;
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -73,7 +74,6 @@ type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 type CreatedPost = {
   content: typeof PostContents.$inferSelect;
   created: true;
-  postCommit: PostCommit;
   post: typeof Posts.$inferSelect;
 };
 
@@ -378,18 +378,14 @@ export const repostPost = async (
       : noPostCommit,
   };
 };
-export function createPost(input: LocalPostInput, handle?: DatabaseHandle): Promise<CreatedPost>;
-export function createPost(
-  input: ActivityPubPostInput,
-  handle?: DatabaseHandle,
-): Promise<CreatedPost | DuplicatePost>;
+export function createPost(input: LocalPostInput): Promise<CreatedPost>;
+export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
-  handle?: DatabaseHandle,
 ): Promise<CreatedPost | DuplicatePost> {
-  let result: Omit<CreatedPost, 'postCommit'>;
+  let result: CreatedPost;
   try {
-    result = await getDatabaseConnection(handle).transaction(async (tx) => {
+    result = await db.transaction(async (tx) => {
       let document =
         input.origin === 'LOCAL'
           ? validateLocalPostContentDocument(input.document)
@@ -543,35 +539,31 @@ export async function createPost(
     return { created: false };
   }
 
-  return {
-    ...result,
-    postCommit: oncePostCommit(async () => {
+  try {
+    await startPostCreateEffectsWorkflow({
+      postId: result.post.id,
+      origin: input.origin,
+    });
+  } catch (error) {
+    if (!input.onEffectsWorkflowStartError) {
+      console.error('Post Create effects Workflow start failed', {
+        error,
+        origin: input.origin,
+        postId: result.post.id,
+      });
+    } else {
       try {
-        await startPostCreateEffectsWorkflow({
-          postId: result.post.id,
+        await input.onEffectsWorkflowStartError(error);
+      } catch (observerError) {
+        console.error('Post Create effects Workflow start failed', {
+          error,
+          observerError,
           origin: input.origin,
+          postId: result.post.id,
         });
-      } catch (error) {
-        if (!input.onPostCommitError) {
-          console.error('Post Create effects Workflow start failed', {
-            error,
-            origin: input.origin,
-            postId: result.post.id,
-          });
-          return;
-        }
-
-        try {
-          await input.onPostCommitError(error);
-        } catch (observerError) {
-          console.error('Post Create effects Workflow start failed', {
-            error,
-            observerError,
-            origin: input.origin,
-            postId: result.post.id,
-          });
-        }
       }
-    }),
-  };
+    }
+  }
+
+  return result;
 }

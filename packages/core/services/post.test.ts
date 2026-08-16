@@ -496,84 +496,6 @@ test('createPost는 Local과 ActivityPub Reply Parent를 직접 저장한다', a
   assert.equal(activityPubReply.post.replyParentId, parent.post.id);
 });
 
-test('createPost는 caller transaction rollback에 Post와 Content를 남기지 않는다', async () => {
-  const profile = await createProfile();
-  const contentCount = await db.$count(PostContents);
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await createPost(
-        {
-          document: postContentDocumentFromText('rollback'),
-          origin: 'LOCAL',
-          profileId: profile.id,
-          visibility: PostVisibility.PUBLIC,
-        },
-        tx,
-      );
-      throw new Error('rollback caller transaction');
-    }),
-    /rollback caller transaction/,
-  );
-
-  assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 0);
-  assert.equal(await db.$count(PostContents), contentCount);
-});
-
-test('caller transaction의 Post effects는 outer commit 뒤에만 실행한다', async () => {
-  const author = await createProfile();
-  const recipient = await createProfile();
-  const parent = await createPost({
-    document: postContentDocumentFromText('parent'),
-    origin: 'LOCAL',
-    profileId: recipient.id,
-    visibility: PostVisibility.PUBLIC,
-  });
-  let replyId: string | undefined;
-  let postCommit: (() => Promise<void>) | undefined;
-  await db.transaction(async (tx) => {
-    const reply = await createPost(
-      {
-        document: postContentDocumentFromText('reply'),
-        origin: 'LOCAL',
-        profileId: author.id,
-        replyParentId: parent.post.id,
-        visibility: PostVisibility.PUBLIC,
-      },
-      tx,
-    );
-    replyId = reply.post.id;
-    postCommit = reply.postCommit;
-
-    assert.equal(await tx.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, reply.post.id)), 0);
-  });
-
-  assert.ok(replyId);
-  assert.ok(postCommit);
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 0);
-
-  const previousAddress = process.env.TEMPORAL_ADDRESS;
-  const previousNamespace = process.env.TEMPORAL_NAMESPACE;
-  delete process.env.TEMPORAL_ADDRESS;
-  delete process.env.TEMPORAL_NAMESPACE;
-  try {
-    await postCommit();
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, replyId)), 0);
-  } finally {
-    if (previousAddress === undefined) {
-      delete process.env.TEMPORAL_ADDRESS;
-    } else {
-      process.env.TEMPORAL_ADDRESS = previousAddress;
-    }
-    if (previousNamespace === undefined) {
-      delete process.env.TEMPORAL_NAMESPACE;
-    } else {
-      process.env.TEMPORAL_NAMESPACE = previousNamespace;
-    }
-  }
-});
-
 test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
@@ -599,7 +521,6 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
   assert.ok(created);
   assert.deepEqual(results.map(({ created }) => created).sort(), [false, true]);
   assert.equal(created.created, true);
-  assert.equal(typeof created.postCommit, 'function');
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 
   const duplicate = await createPost(input);
@@ -629,7 +550,7 @@ test('Post effects Workflow start와 observer 실패가 Post transaction과 호�
     const result = await createPost({
       document: postContentDocumentFromText('remote reply'),
       objectUri,
-      onPostCommitError: () => {
+      onEffectsWorkflowStartError: () => {
         observerCalls += 1;
         throw new Error('observer failure');
       },
@@ -642,11 +563,9 @@ test('Post effects Workflow start와 observer 실패가 Post transaction과 호�
     });
 
     assert.equal(result.created, true);
-    assert.equal(observerCalls, 0);
+    assert.equal(observerCalls, 1);
     assert.equal(result.post.replyParentId, parent.post.id);
     assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
-    await result.postCommit();
-    await result.postCommit();
     assert.equal(observerCalls, 1);
     assert.equal(await db.$count(Posts, eq(Posts.id, result.post.id)), 1);
   } finally {

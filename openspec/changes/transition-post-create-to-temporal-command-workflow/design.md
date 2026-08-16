@@ -11,7 +11,7 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 **Goals:**
 
 - Local/AP Post transaction과 기존 동기 응답·acknowledgement 의미를 유지한다.
-- 실제 commit된 Post에만 stable Post ID의 effects Workflow start를 시도한다.
+- core `createPost(input)`이 자체 transaction commit 뒤 stable Post ID의 effects Workflow start를 시도한다.
 - accepted Workflow가 Reply Notification과 Local-origin Create queue handoff를 멱등 재시도하고 AP-origin echo를 억제한다.
 - 실제 registration 하나와 process-global Worker host 하나를 구성하고 `worker.enabled` 없이 application workload에 Worker를 포함한다.
 - dev에서 실제 effects, readiness, restart 복구와 graceful drain을 검증한다.
@@ -29,8 +29,8 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 
 ### Current Constraints
 
-- `createPost`는 `DatabaseHandle`을 받아 자체 transaction을 열거나 caller transaction에 합류할 수 있다. core action 안에서 무조건 Workflow를 시작하면 caller-owned transaction이 아직 commit되지 않았거나 rollback될 수 있다.
-- GraphQL과 ActivityPub caller가 후속 효과를 각자 조립하면 origin, duplicate/no-op과 error isolation이 갈라진다. 기존 core 서비스에는 outer commit 뒤 실행할 수 있는 one-shot post-commit lifecycle 패턴이 있다.
+- `createPost`가 caller의 `DatabaseHandle`을 받거나 `postCommit` callback을 반환하면 API/Fedify가 transaction과 후속 효과의 실행 순서를 계속 조립해야 한다.
+- 이 action의 production caller는 Post Create를 다른 outer transaction에 합성하지 않으므로 core action이 자체 transaction과 commit 이후 Workflow start를 연속해서 소유할 수 있다.
 - ActivityPub duplicate/concurrent Create는 `created=false`로 수렴한다. 이 결과에서 과거 누락 effects를 backfill하면 duplicate 요청의 의미가 바뀐다.
 - Workflow start 요청은 commit 뒤 실행되므로 process가 그 사이 종료되거나 Temporal start가 실패하면 effects가 누락될 수 있다. outbox 없이 이 구간을 복구한다고 주장할 수 없다.
 - 하나의 effects Workflow 안에서 Notification과 Fedify handoff 중 하나의 최종 실패가 다른 효과의 실행을 막지 않아야 한다.
@@ -38,9 +38,9 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 
 ### Recommended Approach
 
-공통 core Post action은 실제 생성 결과에만 한 번 실행 가능한 post-commit lifecycle을 반환한다. lifecycle은 committed Post ID만으로 deterministic effects Workflow ID를 구성하고 explicit `origin`은 input으로 전달해 start를 시도한다. 실행 중인 동일 ID와 충돌하면 기존 execution으로 수렴하고, 종료된 동일 ID는 상태와 관계없이 재사용하지 않는다. top-level caller는 transaction commit 뒤 lifecycle을 await하되 start 실패를 관측하고 catch하여 기존 Post/GraphQL/ActivityPub 성공을 유지한다. caller-owned transaction이 있다면 caller가 outer commit 뒤 같은 lifecycle을 실행한다.
+공통 core `createPost(input)` action은 자체 transaction을 commit한 뒤 실제 생성 결과에만 committed Post ID의 effects Workflow start를 시도하고 최종 Post 결과를 반환한다. explicit `origin`은 Workflow input으로 전달한다. 실행 중인 동일 ID와 충돌하면 기존 execution으로 수렴하고, 종료된 동일 ID는 상태와 관계없이 재사용하지 않는다. start 실패는 action 내부에서 관측하고 격리해 기존 Post/GraphQL/ActivityPub 성공을 유지한다. API resolver와 Fedify handler는 database handle이나 후속 callback을 전달·호출하지 않는다.
 
-Workflow input은 committed Post ID와 origin처럼 다시 조회 가능한 최소 identity만 포함한다. 같은 Post에 대한 반복 start는 Temporal의 Workflow ID conflict policy로 실행 중인 accepted execution에 수렴하고 reuse policy로 종료된 execution의 재시작을 거부한다. duplicate/no-op Post 결과는 lifecycle 자체를 제공하지 않는다. Start가 accepted되기 전의 누락은 복구하지 않는다.
+Workflow input은 committed Post ID와 origin처럼 다시 조회 가능한 최소 identity만 포함한다. 같은 Post에 대한 반복 start는 Temporal의 Workflow ID conflict policy로 실행 중인 accepted execution에 수렴하고 reuse policy로 종료된 execution의 재시작을 거부한다. duplicate/no-op Post 결과에서는 start를 시도하지 않는다. Start가 accepted되기 전의 누락은 복구하지 않는다.
 
 Accepted Workflow는 Reply Notification과 Local-origin Fedify queue handoff를 별도 Activity로 실행한다. 두 효과가 모두 적용될 수 있는 경우 서로 독립적으로 시작하고 각 Activity의 retry/최종 실패가 다른 효과를 선행 차단하지 않게 결과를 함께 수집한다. Notification Activity는 committed Post를 다시 조회해 기존 recipient·self suppression·visibility·uniqueness 정책을 적용한다. Delivery Activity는 기존 canonical Local Note identity, audience/target과 queue producer를 재사용하며 `origin=ACTIVITYPUB`이면 생성하지 않는다.
 
@@ -48,7 +48,7 @@ Worker package는 compile-time registration을 직접 소유하고 production en
 
 ### Allowed Alternatives
 
-- post-commit lifecycle의 내부 표현은 달라질 수 있지만 caller-owned transaction 뒤 실행 가능하고 duplicate/no-op에 제공되지 않으며 한 번만 실행되는 계약을 유지해야 한다.
+- core action 내부의 commit 이후 start 구현은 달라질 수 있지만 API/Fedify caller에 database handle이나 callback 실행 책임을 노출해서는 안 된다.
 - 두 effects Activity를 병렬 또는 독립 child로 구성할 수 있다. 다만 하나의 효과 실패가 다른 효과를 영구히 막지 않고 Post 성공과 분리되는 specs를 만족해야 한다. 현재는 단일 Workflow 안의 독립 Activity가 기본 경로다.
 - Worker host 내부 함수 배치는 달라질 수 있지만 production caller가 registration을 주입하거나 같은 process에서 host를 두 번 시작할 수 있는 public API를 노출해서는 안 된다.
 
@@ -73,7 +73,7 @@ Worker package는 compile-time registration을 직접 소유하고 production en
 
 ## Migration Plan
 
-1. 최신 main에서 post-commit effects lifecycle, Workflow/Activities와 singleton Worker registration을 구현하고 기존 Post transaction 회귀 검증을 통과시킨다.
+1. 최신 main에서 core-owned transaction 이후 Workflow start, Workflow/Activities와 singleton Worker registration을 구현하고 기존 Post transaction 회귀 검증을 통과시킨다.
 2. 같은 revision에서 `worker.enabled`를 제거하고 dev/prod render에 Worker가 존재하는지 정적으로 검증한다. DB credential/RLS cleanup 파일은 흡수하지 않는다.
 3. merge된 exact revision을 dev에 적용한 뒤 Worker RUNNING/readiness, Local/AP effects, accepted Workflow의 Activity retry와 Worker restart를 검증한다.
 4. 실패 시 새 effects start와 Worker revision을 함께 되돌린다. 이미 accepted된 Workflow history는 삭제하지 않고 호환 Worker를 다시 배포해 처리한다.
