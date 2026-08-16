@@ -17,5 +17,3 @@ export { updateProfile } from './profile-update';
 export { addReaction, deleteReaction } from './reaction';
 export type { RevokeCurrentSessionResult } from './session';
 export { createOidcSession, revokeCurrentSession } from './session';
-export type { PostCreateEffectsInput } from './temporal';
-export { KOSMO_TASK_QUEUE, temporalClient } from './temporal';

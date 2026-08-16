@@ -60,6 +60,14 @@
 - **Reason:** The implementation depends only on Core persistence and domain policy, not on Temporal SDK or Worker runtime state. Keeping the SQL in Worker would duplicate Core policy ownership; wrapping the Core function would add no behavior.
 - **Rejected:** Keeping the SQL in `apps/worker`, adding an Activity-specific Core package, or adding a Worker function that only delegates to the Core function.
 
+### Do not synthesize Create delivery for an already deleted Post
+
+- **Type:** Derived Contract
+- **Authority:** PROD-722 user decision
+- **Decision:** Local Post Create delivery reloads only an `ACTIVE` Post. If the Post is already `DELETED` when the Activity runs, Create is a no-op. Existing Delete delivery does not reconstruct a historical Create from the deleted Post, and Create delivery does not re-read the state after queue handoff to append a compensating Create/Delete pair.
+- **Reason:** A recipient that never observed Create does not need a synthetic Create immediately followed by Delete. Preserving that artificial sequence required a deleted-state projection, duplicate queue handoffs and race recovery without a durable delivery receipt.
+- **Rejected:** Projecting a deleted Post as Create, appending compensating Create/Delete pairs, or holding a Post row lock across queue I/O.
+
 ## Superseded Decisions
 
 ### Move the Post transaction into a Temporal Activity

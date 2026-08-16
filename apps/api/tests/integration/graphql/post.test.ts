@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { Create, Delete, Image } from '@fedify/vocab';
+import { Delete, Image } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -719,7 +719,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.deletedAt, null);
   });
 
-  test('빠른 Tombstone 전이는 Create와 Delete를 순서대로 전달하고 반복 삭제는 다시 전달하지 않는다', async (t) => {
+  test('Create가 전달되지 않은 빠른 Tombstone 전이는 Delete만 전달한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const parentAuthor = await createRemoteActorProfile('delivery-repeat-parent');
     const parent = await createContentPost(parentAuthor.id);
@@ -728,7 +728,7 @@ describe('Post Reply GraphQL 경계', () => {
     const activities: string[] = [];
     t.mock.method(localOutboundFederation, 'createContext', () =>
       createDeliveryContext(async (activity) => {
-        assert.ok(activity instanceof Create || activity instanceof Delete);
+        assert.ok(activity instanceof Delete);
         assert.ok(activity.id);
         activities.push(`${activity.constructor.name}:${activity.id.href}`);
       }),
@@ -739,10 +739,7 @@ describe('Post Reply GraphQL 경계', () => {
       assertNoGraphQLErrors(result);
     }
 
-    assert.deepEqual(activities, [
-      `Create:${publicOrigin}/ap/note/${reply.id}#create`,
-      `Delete:${publicOrigin}/ap/note/${reply.id}#delete`,
-    ]);
+    assert.deepEqual(activities, [`Delete:${publicOrigin}/ap/note/${reply.id}#delete`]);
   });
 
   test('Content 없는 Repost Parent는 replyParentId VALIDATION으로 거부하고 rollback한다', async () => {

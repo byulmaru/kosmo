@@ -9,7 +9,7 @@
     "test": "pnpm test:unit && pnpm test:database",
     "test:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/worker test:database:isolated",
     "test:database:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/worker exec node --import tsx --test --test-concurrency=1 src/activities.database.test.ts",
-    "test:unit": "pnpm build && node --experimental-test-module-mocks --import tsx --test src/worker.test.ts src/workflows.test.ts"
+    "test:unit": "pnpm build && node --import tsx --test src/worker.test.ts"
   },
   "dependencies": {
     "@kosmo/core": "workspace:*",

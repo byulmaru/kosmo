@@ -14,10 +14,12 @@
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
     "./polyfill": "./polyfill.ts",
-    "./post-visibility": "./post-visibility.ts",
+    "./visibility/post": "./visibility/post.ts",
     "./profile": "./profile.ts",
     "./search": "./search.ts",
     "./services": "./services/index.ts",
+    "./temporal/client": "./temporal/client.ts",
+    "./temporal/post-create-effects": "./temporal/post-create-effects.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
     "./validation/post-policy": "./validation/post-policy.ts",
@@ -48,7 +50,7 @@
     "test:services": "node --import tsx --test --test-concurrency=1 'services/*.test.ts'",
     "test:services:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core test:services",
-    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts' validation/profile-tag.test.ts db/index.test.ts"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' validation/profile-tag.test.ts db/index.test.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",

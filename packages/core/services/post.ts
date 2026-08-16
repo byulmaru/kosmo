@@ -28,15 +28,15 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
-import { postVisibilityCondition } from '../post-visibility';
-import { createRepostNotification, deleteNotificationBySource } from './notification';
-import { noPostCommit, oncePostCommit } from './post-commit';
-import { validatePostStructure } from './post-structure';
+import { temporalClient } from '../temporal/client';
 import {
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowStartOptions,
-  temporalClient,
-} from './temporal';
+} from '../temporal/post-create-effects';
+import { postVisibilityCondition } from '../visibility/post';
+import { createRepostNotification, deleteNotificationBySource } from './notification';
+import { noPostCommit, oncePostCommit } from './post-commit';
+import { validatePostStructure } from './post-structure';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 import type { PostCommit } from './post-commit';
@@ -48,7 +48,6 @@ type LocalPostInput = {
     altText: string | null;
     mediaId: string;
   }[];
-  onEffectsWorkflowStartError?: (error: unknown) => void | Promise<void>;
   origin: 'LOCAL';
   profileId: string;
   replyParentId?: string;
@@ -58,7 +57,6 @@ type LocalPostInput = {
 type ActivityPubPostInput = {
   document: PostContentDocumentV1;
   media?: readonly RemoteMediaCandidate[];
-  onEffectsWorkflowStartError?: (error: unknown) => void | Promise<void>;
   objectUri: string;
   origin: 'ACTIVITYPUB';
   profileId: string;
@@ -556,24 +554,11 @@ export async function createPost(
       postCreateEffectsWorkflowStartOptions(workflowInput),
     );
   } catch (error) {
-    if (!input.onEffectsWorkflowStartError) {
-      console.error('Post Create effects Workflow start failed', {
-        error,
-        origin: input.origin,
-        postId: result.post.id,
-      });
-    } else {
-      try {
-        await input.onEffectsWorkflowStartError(error);
-      } catch (observerError) {
-        console.error('Post Create effects Workflow start failed', {
-          error,
-          observerError,
-          origin: input.origin,
-          postId: result.post.id,
-        });
-      }
-    }
+    console.error('Post Create effects Workflow start failed', {
+      error,
+      origin: input.origin,
+      postId: result.post.id,
+    });
   }
 
   return result;

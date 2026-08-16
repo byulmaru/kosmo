@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import { eq } from 'drizzle-orm';
 import {
   Accounts,
@@ -530,7 +530,7 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 });
 
-test('Post effects Workflow start와 observer 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
+test('Post effects Workflow start 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -539,8 +539,8 @@ test('Post effects Workflow start와 observer 실패가 Post transaction과 호�
     profileId: recipient.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const objectUri = `https://remote.example/notes/reply-observer-failure-${crypto.randomUUID()}`;
-  let observerCalls = 0;
+  const objectUri = `https://remote.example/notes/reply-workflow-failure-${crypto.randomUUID()}`;
+  const errorLog = mock.method(console, 'error', () => undefined);
 
   const previousAddress = process.env.TEMPORAL_ADDRESS;
   const previousNamespace = process.env.TEMPORAL_NAMESPACE;
@@ -550,10 +550,6 @@ test('Post effects Workflow start와 observer 실패가 Post transaction과 호�
     const result = await createPost({
       document: postContentDocumentFromText('remote reply'),
       objectUri,
-      onEffectsWorkflowStartError: () => {
-        observerCalls += 1;
-        throw new Error('observer failure');
-      },
       origin: 'ACTIVITYPUB',
       profileId: author.id,
       publishedAt: null,
@@ -563,12 +559,13 @@ test('Post effects Workflow start와 observer 실패가 Post transaction과 호�
     });
 
     assert.equal(result.created, true);
-    assert.equal(observerCalls, 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Post Create effects Workflow start failed');
     assert.equal(result.post.replyParentId, parent.post.id);
     assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
-    assert.equal(observerCalls, 1);
     assert.equal(await db.$count(Posts, eq(Posts.id, result.post.id)), 1);
   } finally {
+    errorLog.mock.restore();
     if (previousAddress === undefined) {
       delete process.env.TEMPORAL_ADDRESS;
     } else {

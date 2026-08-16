@@ -118,15 +118,15 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 #### Scenario: Create Activity보다 먼저 Local Delete가 commit됨
 
 - **WHEN** committed Local Post의 Create Activity가 queue handoff하기 전에 같은 Post의 Local Delete가 commit된다
-- **THEN** Delete handoff는 삭제된 Post에 보존된 content projection으로 canonical Create를 먼저 queue에 넣고 같은 Note ordering key의 Delete를 뒤이어 넣는다
-- **AND** 늦게 실행되거나 재시도된 Create Activity도 같은 ordering key에 canonical Create와 Delete 쌍을 append해 마지막 Activity를 Delete로 유지한다
+- **THEN** 늦게 실행되거나 재시도된 Create Activity는 Create queue handoff를 no-op으로 끝낸다
+- **AND** Delete handoff는 삭제된 Post의 보존된 content에서 과거 Create를 합성하지 않는다
 
 #### Scenario: Create queue handoff 중 Local Delete가 commit됨
 
 - **WHEN** Create Activity가 active projection을 조회한 뒤 queue handoff를 기다리는 동안 같은 Post의 Local Delete가 commit된다
 - **THEN** Delete transaction은 외부 queue I/O를 기다리는 Post row lock에 막히지 않는다
-- **AND** Create handoff 완료 뒤 상태 재확인은 같은 Note ordering key에 canonical Create와 Delete 보정 쌍을 덧붙여 마지막 Activity가 Delete가 되게 한다
-- **AND** 상태 재확인 전에 process가 종료되면 Temporal retry가 deleted 상태에서 같은 보정 쌍을 append해 마지막 Activity를 Delete로 복구한다
+- **AND** Create handoff 완료 뒤 상태를 재확인해 보정 Create/Delete 쌍을 추가하지 않는다
+- **AND** 별도 delivery receipt 없이 Create 관측 여부나 마지막 remote Activity 순서를 복구한다고 주장하지 않는다
 
 ### Requirement: caller의 동기 결과와 effects 실패 격리
 

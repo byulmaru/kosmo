@@ -50,11 +50,7 @@ type LocalPostNoteProjection = LocalPostNote & {
 
 type LocalPostNoteContext = Pick<Context<void>, 'canonicalOrigin' | 'getActorUri'>;
 
-const loadLocalPostNoteRow = async (
-  context: LocalPostNoteContext,
-  postId: string,
-  postState: (typeof PostState)[keyof typeof PostState] = PostState.ACTIVE,
-) => {
+const loadLocalPostNoteRow = async (context: LocalPostNoteContext, postId: string) => {
   if (!isCanonicalPostId(postId)) {
     return null;
   }
@@ -73,7 +69,7 @@ const loadLocalPostNoteRow = async (
     .where(
       and(
         eq(Posts.id, postId),
-        eq(Posts.state, postState),
+        eq(Posts.state, PostState.ACTIVE),
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.canonicalOrigin, context.canonicalOrigin),
         eq(Profiles.state, ProfileState.ACTIVE),
@@ -93,9 +89,8 @@ const loadLocalPostNoteRow = async (
 export const loadLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
-  postState: (typeof PostState)[keyof typeof PostState] = PostState.ACTIVE,
 ): Promise<LocalPostNote | null> => {
-  const row = await loadLocalPostNoteRow(context, postId, postState);
+  const row = await loadLocalPostNoteRow(context, postId);
   if (!row) {
     return null;
   }
@@ -237,9 +232,8 @@ export const dispatchLocalPostNote = async (
 export const projectLocalPostNote = async (
   context: LocalPostNoteContext,
   postId: string,
-  postState: (typeof PostState)[keyof typeof PostState] = PostState.ACTIVE,
 ): Promise<LocalPostNoteProjection | null> => {
-  const note = await loadLocalPostNote(context, postId, postState);
+  const note = await loadLocalPostNote(context, postId);
   if (!note) {
     return null;
   }

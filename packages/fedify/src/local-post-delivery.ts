@@ -23,10 +23,7 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
 const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 
-const sendLocalPostCreateInState = async (
-  postId: string,
-  postState: typeof PostState.ACTIVE | typeof PostState.DELETED,
-): Promise<void> => {
+export const sendLocalPostCreate = async (postId: string): Promise<void> => {
   const source = await db
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
@@ -43,7 +40,7 @@ const sendLocalPostCreateInState = async (
     .where(
       and(
         eq(Posts.id, postId),
-        eq(Posts.state, postState),
+        eq(Posts.state, PostState.ACTIVE),
         isNotNull(Posts.currentContentId),
         ne(Posts.visibility, PostVisibility.DIRECT),
         eq(Instances.kind, InstanceKind.LOCAL),
@@ -61,7 +58,7 @@ const sendLocalPostCreateInState = async (
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
-  const projection = await projectLocalPostNote(context, postId, postState);
+  const projection = await projectLocalPostNote(context, postId);
   if (!projection) {
     return;
   }
@@ -89,14 +86,6 @@ const sendLocalPostCreateInState = async (
     directProfileIds: directProfileId ? [directProfileId] : [],
     orderingKey: objectUri.href,
   });
-};
-
-export const sendLocalPostCreate = async (postId: string): Promise<void> => {
-  await sendLocalPostCreateInState(postId, PostState.ACTIVE);
-  // Delete may commit before or while the Create handoff is in flight. Always
-  // re-read the terminal state so a retry after any crash window appends a final
-  // Create/Delete pair without holding a database lock across queue I/O.
-  await sendLocalPostDelete(postId);
 };
 
 export const sendLocalPostDelete = async (postId: string): Promise<void> => {
@@ -135,12 +124,6 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
   if (!source?.canonicalOrigin || !source.deletedAt) {
     return;
   }
-
-  // A fast delete can commit before the Temporal Create Activity runs. Enqueue
-  // the preserved Create projection first so remote servers never see a Delete
-  // without the corresponding Create. A later or retried Create Activity
-  // appends the same pair again, preserving Delete as the final activity.
-  await sendLocalPostCreateInState(postId, PostState.DELETED);
 
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,

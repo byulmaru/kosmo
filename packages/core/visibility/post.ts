@@ -1,5 +1,5 @@
 import { and, eq, inArray, or, sql } from 'drizzle-orm';
-import { PostState, PostVisibility } from './enums';
+import { PostState, PostVisibility } from '../enums';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 
 type PostVisibilityConditionColumns = {

@@ -15,8 +15,8 @@
 - [x] 2.4 Suppress outbound Create handoff for `ACTIVITYPUB` origin.
 - [x] 2.5 Ensure Notification and federation handoff are attempted independently so a final failure in one does not prevent the other.
 - [x] 2.6 Remove the old in-transaction Notification savepoint path, Worker-only Reply Notification core action, returned `postCommit` callback, caller `ctx.db` input, and direct post-commit Fedify dispatch after equivalent coverage exists.
-- [x] 2.7 Add Workflow and Activity tests for applicability, retry/idempotency, independent failure, ActivityPub echo suppression, and Post-result isolation.
-- [x] 2.8 Preserve Create-before-Delete handoff when a Local Delete commits before the Temporal Create Activity, using the deleted Post projection and one Note ordering key without moving Post Delete into Temporal.
+- [x] 2.7 Cover Activity persistence, retry/idempotency, echo suppression and Post-result isolation with database/integration tests; do not retain a module-mocked Workflow unit test or an experimental Node test flag solely for that test.
+- [x] 2.8 Treat an already-deleted Local Post as a Create Activity no-op without a deleted projection, compensating Create/Delete pair, delivery receipt, or row lock around queue I/O.
 
 ## 3. Activate the singleton Worker runtime
 

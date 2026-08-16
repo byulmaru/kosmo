@@ -12,8 +12,8 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
-import { postVisibilityCondition } from '../post-visibility';
 import { reactionTypeSchema } from '../validation';
+import { postVisibilityCondition } from '../visibility/post';
 import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 

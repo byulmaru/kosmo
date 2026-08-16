@@ -419,7 +419,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Delete가 먼저 commit되거나 Create가 재시도돼도 마지막 Delete를 보존한다', async () => {
+  test('Create Activity 실행 전에 삭제된 Post는 Create를 보내지 않는다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
@@ -450,40 +450,29 @@ describe('ActivityPub Local Post delivery', () => {
       },
     );
 
-    await sendLocalPostDelete(reply.id);
-    await sendLocalPostDelete(reply.id);
-
-    assert.equal(createContext.mock.callCount(), 4);
-    assert.equal(fixture.calls.length, 4);
-    assert.deepEqual(
-      fixture.calls.map((call) => call.activity.constructor),
-      [Create, Delete, Create, Delete],
-    );
-    for (const call of fixture.calls) {
-      const suffix = call.activity instanceof Create ? '#create' : '#delete';
-      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}${suffix}`);
-      if (call.activity instanceof Delete) {
-        assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
-        assert.equal(call.activity.published?.toString(), deletedAt.toString());
-      }
-      assert.deepEqual(call.options, {
-        orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
-        preferSharedInbox: true,
-      });
-      assert.deepEqual(
-        call.recipients.map((recipient) => recipient.id?.href),
-        [parentAuthor.actorUri],
-      );
-    }
-
     await sendLocalPostCreate(reply.id);
+    assert.equal(createContext.mock.callCount(), 0);
+
+    await sendLocalPostDelete(reply.id);
+
+    assert.equal(createContext.mock.callCount(), 1);
+    assert.equal(fixture.calls.length, 1);
+    const call = fixture.calls[0];
+    assert.ok(call?.activity instanceof Delete);
+    assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
+    assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
+    assert.equal(call.activity.published?.toString(), deletedAt.toString());
+    assert.deepEqual(call.options, {
+      orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
+      preferSharedInbox: true,
+    });
     assert.deepEqual(
-      fixture.calls.map((call) => call.activity.constructor),
-      [Create, Delete, Create, Delete, Create, Delete],
+      call.recipients.map((recipient) => recipient.id?.href),
+      [parentAuthor.actorUri],
     );
   });
 
-  test('Create queue handoff 중 Delete는 row lock 없이 commit하고 마지막 Delete로 수렴한다', async () => {
+  test('Create queue handoff 중 Delete는 row lock이나 보정 handoff 없이 commit한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActor({ handle: 'concurrent-delete-follower' });
     await db.insert(ProfileFollows).values({
@@ -521,10 +510,11 @@ describe('ActivityPub Local Post delivery', () => {
       releaseHandoff.resolve();
     }
     await createHandoff;
+    await sendLocalPostDelete(post.id);
 
     assert.deepEqual(
       fixture.calls.map((call) => call.activity.constructor),
-      [Create, Create, Delete],
+      [Create, Delete],
     );
   });
 });

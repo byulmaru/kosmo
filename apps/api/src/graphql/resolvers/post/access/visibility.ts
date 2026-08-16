@@ -1,5 +1,5 @@
 import { db, Instances, Posts, ProfileFollows, Profiles } from '@kosmo/core/db';
-import { postVisibilityCondition } from '@kosmo/core/post-visibility';
+import { postVisibilityCondition } from '@kosmo/core/visibility/post';
 import { and, eq, exists, sql } from 'drizzle-orm';
 import { visibleProfileWhere } from '@/profile/visibility';
 import type { Database } from '@kosmo/core/db';

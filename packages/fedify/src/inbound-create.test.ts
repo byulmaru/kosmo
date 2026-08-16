@@ -931,11 +931,7 @@ describe('inbound Create dispatch', () => {
     const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
     delete process.env.TEMPORAL_ADDRESS;
     delete process.env.TEMPORAL_NAMESPACE;
-    const captures: { context: { tags: Record<string, string> }; error: unknown }[] = [];
-    const restoreReporter = setInboundObservabilityReporter({
-      captureException: (error, context) => captures.push({ context, error }),
-      log: () => undefined,
-    });
+    const errorLog = mock.method(console, 'error', () => undefined);
 
     try {
       await handleInboundCreate(
@@ -947,7 +943,7 @@ describe('inbound Create dispatch', () => {
         receivedAt,
       );
     } finally {
-      restoreReporter();
+      errorLog.mock.restore();
       if (previousTemporalAddress === undefined) {
         delete process.env.TEMPORAL_ADDRESS;
       } else {
@@ -962,12 +958,6 @@ describe('inbound Create dispatch', () => {
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
     assert.equal((await db.select().from(Notifications)).length, 0);
-    assert.equal(captures.length, 1);
-    assert.equal(
-      captures[0]?.context.tags.reason_code,
-      'post_create_effects_workflow_start_failed',
-    );
-    assert.ok(captures[0]?.error instanceof Error);
   });
 
   test('stores ambiguous, unsupported, unknown, forged Local, and contentless Parent inputs as top-level Posts', async () => {
@@ -1301,6 +1291,7 @@ describe('inbound Create dispatch', () => {
     });
 
     const logs: unknown[] = [];
+    const errorLog = mock.method(console, 'error', () => undefined);
     const restoreReporter = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
     });
@@ -1326,19 +1317,11 @@ describe('inbound Create dispatch', () => {
         receivedAt.add({ hours: 2 }),
       );
     } finally {
+      errorLog.mock.restore();
       restoreReporter();
     }
 
     assert.deepEqual(logs, [
-      {
-        activityType: 'Create',
-        actorOrigin: remoteActorUri.origin,
-        handler: 'create',
-        objectOrigin: remoteObjectUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'post_create_effects_workflow_start_failed',
-      },
       {
         activityType: 'Create',
         actorOrigin: remoteActorUri.origin,

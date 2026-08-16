@@ -2,7 +2,7 @@ import { and, eq, isNotNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { db, Instances, Notifications, Posts, ProfileFollows, Profiles } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
-import { postVisibilityCondition } from '../post-visibility';
+import { postVisibilityCondition } from '../visibility/post';
 
 const ReplyParents = alias(Posts, 'reply_notification_parent');
 const ReplyAuthors = alias(Profiles, 'reply_notification_author');
