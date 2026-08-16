@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgPolicy,
   pgTable,
   text,
   unique,
@@ -156,7 +155,7 @@ export const ApplicationAuthorizations = pgTable(
   ],
 );
 
-export const Bookmarks = pgTable.withRLS(
+export const Bookmarks = pgTable(
   'bookmark',
   {
     id: id(),
@@ -169,21 +168,6 @@ export const Bookmarks = pgTable.withRLS(
     createdAt: createdAt(),
   },
   (table) => [
-    pgPolicy('bookmark_graphql_owner_select', {
-      for: 'select',
-      to: 'kosmo_api',
-      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
-    }),
-    pgPolicy('bookmark_graphql_owner_insert', {
-      for: 'insert',
-      to: 'kosmo_api',
-      withCheck: sql`${table.profileId} = public.kosmo_current_profile_id()`,
-    }),
-    pgPolicy('bookmark_graphql_owner_delete', {
-      for: 'delete',
-      to: 'kosmo_api',
-      using: sql`${table.profileId} = public.kosmo_current_profile_id()`,
-    }),
     unique().on(table.profileId, table.postId),
     index().on(table.profileId, table.id.desc()),
   ],
