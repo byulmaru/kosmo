@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgPolicy,
   pgTable,
   text,
   unique,
