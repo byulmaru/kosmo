@@ -95,9 +95,24 @@ export function TabList<Value extends string>({
       <View
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="tablist"
-        style={[styles.underlineList, { backgroundColor: theme.card, borderColor: theme.border }]}
+        style={[
+          styles.underlineList,
+          {
+            backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.card,
+            borderColor: theme.border,
+          },
+        ]}
         {...(web ? ({ role: 'tablist' } as WebTabListProps) : undefined)}
       >
+        {Platform.OS === 'android' ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.underlineVisualBackdrop,
+              { backgroundColor: theme.card, borderColor: theme.border },
+            ]}
+          />
+        ) : null}
         {children}
       </View>
     );
@@ -279,7 +294,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
 
 const styles = StyleSheet.create({
   underlineList: {
-    borderBottomWidth: borderWidths[1],
+    borderBottomWidth: Platform.OS === 'android' ? 0 : borderWidths[1],
     flexDirection: 'row',
     height: Platform.OS === 'android' ? 48 : 44,
   },
@@ -288,16 +303,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     minHeight: Platform.OS === 'android' ? 48 : 44,
+    paddingBottom: Platform.OS === 'android' ? space[4] : 0,
     paddingHorizontal: space[8],
   },
   underlineLabel: textStyles.uiLabelS,
   tabIndicator: {
     borderRadius: radius.full,
-    bottom: 0,
+    bottom: Platform.OS === 'android' ? space[4] : 0,
     height: borderWidths[2],
     left: '30%',
     position: 'absolute',
     right: '30%',
+  },
+  underlineVisualBackdrop: {
+    borderBottomWidth: borderWidths[1],
+    height: 44,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   pillScroll: { flexGrow: 0, maxWidth: '100%' },
   pillList: {
