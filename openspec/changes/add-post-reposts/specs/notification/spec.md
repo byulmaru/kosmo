@@ -2,12 +2,12 @@
 
 ### Requirement: Repost Notification source correlation
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-412` 시스템은 다른 Local Profile의 Post에 새 Repost가 생성되면 Source Repost Post를 source로 하는 Profile-scoped Repost Notification을 Best Effort로 생성해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-412`, `PROD-725` 시스템은 다른 Local Profile의 Post에 새 Repost가 생성되고 create effects Workflow가 accepted되면 Source Repost Post를 source로 하는 Profile-scoped Repost Notification을 멱등 Activity로 생성해야 한다(MUST).
 
 #### Scenario: 다른 Profile의 Post Repost
 
-- **WHEN** Local Profile이 다른 Local Profile의 Post에 새 Repost를 생성하고 source transaction이 commit된다
-- **THEN** 시스템은 Source Repost Post ID를 source로 하고 Source Post Author Profile을 Recipient로 하는 Repost Notification 생성을 시도한다
+- **WHEN** Local Profile이 다른 Local Profile의 Post에 새 Repost를 생성하고 create effects Workflow가 accepted된다
+- **THEN** Notification Activity는 Source Repost Post ID를 source로 하고 Source Post Author Profile을 Recipient로 하는 Repost Notification을 생성한다
 - **AND** Related Profile은 Repost Author, Related Post는 Repost Source에서 파생한다
 - **AND** kind별 data에는 Profile, Post 또는 이름·handle snapshot을 저장하지 않는다
 
@@ -31,17 +31,17 @@
 
 ### Requirement: Repost Notification 실패 격리
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-389`, `PROD-412`, `PROD-416` Repost Notification 생성 또는 정리 실패는 Repost 생성·Tombstone transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-389`, `PROD-412`, `PROD-416`, `PROD-725` Repost Notification 생성 또는 정리 실패는 Repost 생성·Tombstone transaction이나 성공 결과를 rollback하거나 실패로 바꾸어서는 안 되며(MUST NOT), accepted effects Workflow는 같은 Repost source의 Notification 효과를 유한하게 재시도해야 한다(MUST).
 
 #### Scenario: Notification 저장 실패
 
-- **WHEN** 새 Repost commit 뒤 Notification 저장이 실패한다
+- **WHEN** accepted create effects Workflow의 Notification 저장이 실패한다
 - **THEN** 시스템은 Repost와 Repost 생성 성공 결과를 유지한다
-- **AND** 이번 capability는 누락 item을 retry, outbox, queue 또는 backfill로 자동 복구하지 않는다
+- **AND** Workflow Activity는 같은 Repost source로 유한하게 재시도하되 outbox, 별도 queue 또는 backfill을 추가하지 않는다
 
 #### Scenario: Notification 정리 실패
 
-- **WHEN** Repost Tombstone commit 뒤 Notification 정리가 실패한다
+- **WHEN** accepted delete effects Workflow의 Notification 정리가 실패한다
 - **THEN** 시스템은 Tombstone과 삭제 성공 결과를 유지한다
 - **AND** 남은 Notification은 visible predicate에 의해 모든 API 표면에서 숨겨진다
 
@@ -103,14 +103,14 @@
 - **THEN** API는 item을 page limit 적용 전에 connection과 count에서 제외한다
 - **AND** Node와 Read에서도 존재하지 않는 item처럼 처리한다
 
-### Requirement: Repost Tombstone 뒤 Best Effort Notification 정리
+### Requirement: Repost Tombstone 뒤 Notification 정리
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-416` 정상 Repost 삭제 action은 Source Repost가 Tombstone으로 commit된 뒤 대응 Repost Notification을 idempotent하게 Best Effort로 정리해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-416`, `PROD-725` 정상 Repost 삭제 action이 Source Repost를 Tombstone으로 commit하고 delete effects Workflow가 accepted되면 Notification Activity는 대응 Repost Notification을 멱등 정리해야 한다(MUST).
 
 #### Scenario: Repost Tombstone cleanup
 
-- **WHEN** Repost Tombstone transaction이 commit된다
-- **THEN** source action은 Repost kind와 Source Repost ID로 대응 Notification 정리를 시도한다
+- **WHEN** Repost Tombstone transaction 뒤 delete effects Workflow가 accepted된다
+- **THEN** Notification Activity는 Repost kind와 Source Repost ID로 대응 Notification을 정리한다
 - **AND** cleanup 성공 뒤 item은 connection, Unread count, Node와 Read에서 사라진다
 
 #### Scenario: 반복 cleanup
@@ -120,7 +120,7 @@
 
 #### Scenario: cleanup 실패와 잔존 행
 
-- **WHEN** Repost Tombstone 뒤 cleanup이 실패하거나 process가 종료된다
+- **WHEN** accepted delete effects Workflow의 cleanup이 실패하거나 Worker가 재시작된다
 - **THEN** Repost Tombstone과 성공 응답은 유지된다
 - **AND** 남은 Notification 행은 Source Repost가 Active가 아니므로 모든 API 표면에서 숨겨진다
-- **AND** retry, cron, queue, backfill 또는 bulk cleanup은 이번 capability에 포함하지 않는다
+- **AND** Workflow Activity는 유한하게 재시도하되 cron, 별도 queue, backfill 또는 bulk cleanup을 추가하지 않는다

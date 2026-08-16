@@ -82,5 +82,5 @@
 #### Scenario: loose source lifecycle
 
 - **WHEN** Source Repost가 Tombstone이 되거나 action 밖의 경로에서 source가 unavailable해진다
-- **THEN** Notification 행과 Read State는 Best Effort 정리 전까지 남을 수 있다
+- **THEN** Notification 행과 Read State는 PROD-725 effects Workflow의 cleanup 완료 전이나 terminal failure 뒤에 남을 수 있다
 - **AND** database cascade 또는 trigger가 source lifecycle을 대신하지 않는다

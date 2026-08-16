@@ -117,5 +117,5 @@ export const handleInboundDelete = async (
     return deleted;
   });
 
-  await result?.postCommit();
+  await result?.postCommit?.();
 };

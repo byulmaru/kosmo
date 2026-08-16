@@ -4,7 +4,14 @@ import { pg } from '@kosmo/core/db';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/post-create-effects';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
-import { createReplyNotificationActivity, sendLocalPostCreateActivity } from './activities';
+import {
+  createReplyNotificationActivity,
+  createRepostNotificationActivity,
+  deleteRepostNotificationActivity,
+  sendLocalPostCreateActivity,
+  sendRepostAnnounceActivity,
+  sendRepostUndoActivity,
+} from './activities';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
 if (import.meta.main) {
@@ -28,7 +35,14 @@ if (import.meta.main) {
     try {
       connection = await NativeConnection.connect({ address });
       worker = await Worker.create({
-        activities: { createReplyNotificationActivity, sendLocalPostCreateActivity },
+        activities: {
+          createReplyNotificationActivity,
+          createRepostNotificationActivity,
+          deleteRepostNotificationActivity,
+          sendLocalPostCreateActivity,
+          sendRepostAnnounceActivity,
+          sendRepostUndoActivity,
+        },
         connection,
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,

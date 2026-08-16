@@ -1,0 +1,99 @@
+## Context
+
+이 기록은 PROD-725와 Post·Notification canonical 문서가 확정한 Repost transaction 및 후속 효과 경계를
+proposal, capability delta와 구현 지침으로 구체화한 결정만 담는다. 기존 `add-post-reposts` change의
+process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 이 change에서 동기화한다.
+
+## Decision Records
+
+### Repost command가 아니라 committed transition의 효과만 Workflow로 실행한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725`
+- Status: Active
+- Context / Problem: Repost transaction까지 Activity로 이동하면 기존 동기 GraphQL·ActivityPub 결과와 Core domain policy를 Temporal retry 의미에 결합한다.
+- Decision Outcome: Core가 Repost create/delete transaction을 동기적으로 commit하고 최초 실제 transition만 effects Workflow start를 시도한다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
+- Alternatives Considered: transaction Activity, proposed Repost ID, command receipt와 outbox는 PROD-725 범위에서 명시적으로 제외됐다.
+- Consequences: commit→start gap에서 효과가 유실될 수 있으나 committed Repost와 caller 성공은 유지한다. caller database handle과 반환형 `postCommit`은 제거한다.
+- Confirmation / Follow-up: Core/API/Fedify test에서 rollback·duplicate·no-op의 no-start와 start failure 격리를 확인한다.
+
+### verified Announce와 Undo의 mapping을 Core Repost transaction이 함께 소유한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-725`
+- Status: Active
+- Context / Problem: Fedify caller가 `repostPost(tx)` 또는 `deletePost(tx)`와 ActivityPub mapping 저장·검증을 조립하면 database handle을 제거할 수 없고 원자성 소유자가 분산된다.
+- Decision Outcome: specialized Core action은 검증된 actor/source/activity identity를 받아 Repost 상태와 current ActivityPub mapping을 같은 transaction에서 저장한다. Fedify ingress는 protocol 검증·관측을 유지한다.
+- Alternatives Considered: mapping을 Workflow Activity에서 저장하거나 caller transaction에 유지하는 방식은 state transaction과 effects 경계를 분리하지 못하므로 채택하지 않았다.
+- Consequences: Core input은 Fedify request context나 vocab 객체가 아니라 serializable identity·timestamp만 받는다. 기존 mapping uniqueness와 current-generation semantics는 유지한다.
+- Confirmation / Follow-up: inbound Announce·Undo duplicate, URI collision, superseded generation과 rollback 통합 검증을 유지한다.
+
+### Repost create와 delete는 transition별 stable Workflow identity를 사용한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-725`
+- Status: Active
+- Context / Problem: Repost는 Active create 뒤 같은 identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 create와 delete가 공유할 수 없다.
+- Decision Outcome: Workflow ID는 committed Repost ID와 create/delete transition kind에서 파생한다. 같은 transition의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. delete input은 Tombstone UPDATE가 반환한 `repostId`, `actorProfileId`, `sourcePostId`, `createdAt`, `visibility`, `origin`과 transition kind만 serializable snapshot으로 보존한다.
+- Alternatives Considered: Repost ID 하나의 Workflow를 장기 실행하거나 종료 ID를 재사용하는 방식은 transition lifecycle과 retry 경계를 불필요하게 결합하므로 채택하지 않았다.
+- Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 create Workflow를 사용한다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
+- Confirmation / Follow-up: start options 단위 검증과 create→delete→재Repost integration에서 identity 분리를 확인한다.
+
+### Notification과 federation handoff는 독립 Activity이며 queue acceptance에서 성공한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-725`
+- Status: Active
+- Context / Problem: 한 효과를 먼저 await하면 terminal failure가 다른 효과 시도를 막고, Temporal Activity가 remote delivery까지 소유하면 Fedify MessageQueue의 retry·ordering 경계와 중복된다.
+- Decision Outcome: accepted Workflow는 적용 가능한 Notification과 Fedify handoff Activity를 독립적으로 실행해 모두의 최종 결과를 수집한다. Fedify Activity 성공은 queue acceptance이고 remote retry·ordering은 Fedify가 소유한다.
+- Alternatives Considered: 직렬 effects, Temporal에서 remote HTTP 직접 delivery, custom relay는 효과 독립성 또는 기존 transport ownership을 깨므로 채택하지 않았다.
+- Consequences: queue acknowledgement가 모호하면 같은 canonical activity의 duplicate enqueue나 remote request가 가능하다. cross-system exactly-once는 보장하지 않는다.
+- Confirmation / Follow-up: 한 Activity terminal failure 뒤 다른 Activity 실행, canonical identity retry와 queue acceptance 경계를 검증한다.
+
+### 하나의 Worker host에 domain별 고정 registration을 조립한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/architecture/core-services.md`, `PROD-722`, `PROD-725`
+- Status: Active
+- Context / Problem: Post Create 전용으로 보이는 현재 registration에 Repost를 추가하면서 workflow별 host·task queue 또는 범용 startup abstraction을 만들 가능성이 있다.
+- Decision Outcome: process-global Worker host와 task queue는 하나를 유지하고, domain별 Workflow·Activity source를 production entrypoint의 compile-time registry에 정적으로 조립한다.
+- Alternatives Considered: workflow별 Worker process와 task queue는 독립 운영 요구가 없고, optional registry builder는 이미 제거한 startup 복잡도를 되살리므로 채택하지 않았다.
+- Consequences: Worker bundle은 여러 business Workflow를 포함하지만 lifecycle·health·shutdown owner는 계속 하나다. 새 domain은 source module만 추가한다.
+- Confirmation / Follow-up: Worker build와 registration test, dev에서 Post Create와 Repost Workflow가 같은 Worker revision에 poll되는지 확인한다.
+
+### Announce mapping 교체와 Undo 경합에 새 잠금을 추가하지 않는다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `PROD-725`
+- Status: Active
+- Context / Problem: current Announce URI 교체와 이전 Undo가 동시에 겹칠 때 완전한 순서를 만들기 위해 row/advisory lock 또는 serializable retry를 추가할 유인이 있다.
+- Decision Outcome: 기존 unique constraint와 멱등 action 수렴을 유지하고 `FOR UPDATE`, advisory lock 또는 serializable retry를 새로 추가하지 않는다.
+- Alternatives Considered: 강제 직렬화는 network·queue 효과와 무관한 domain transaction의 경합 비용과 복잡도를 높이며 PROD-725에서 요구되지 않는다.
+- Consequences: 명확한 선후관계가 없는 교차 경합에서 새 Announce가 Active Repost를 남긴다고 보장하지 않는다. 이후 유효한 delivery는 기존 멱등 경로로 수렴한다.
+- Confirmation / Follow-up: 기존 concurrent Announce·Undo integration 시나리오를 유지하고 새 lock query가 없는지 검토한다.
+
+### Repost Notification base를 제공하는 parent change를 먼저 archive한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/notification.md`, `PROD-389`, `PROD-725`
+- Status: Active
+- Context / Problem: canonical `notification` spec에는 아직 Repost 요구사항이 없고 active `add-post-reposts` delta가 이를 추가한다. PROD-725 change가 존재하지 않는 base requirement를 MODIFIED로 선언하면 archive 순서에 따라 validation과 최종 계약이 달라진다.
+- Decision Outcome: `add-post-reposts`의 Notification delta를 PROD-725 retry 계약으로 먼저 동기화하고, 구현·통합 검증 뒤 `add-post-reposts`를 먼저 archive한다. 그 canonical base 위에서 이 change를 archive한다.
+- Alternatives Considered: 두 active change가 같은 Repost Notification requirement를 각각 ADDED로 소유하면 중복 archive 충돌이 생기므로 채택하지 않았다.
+- Consequences: 구현은 한 PR 또는 순차 PR로 수행할 수 있지만 OpenSpec completion과 archive는 두 단계다. 이 change만 먼저 archive하지 않는다.
+- Confirmation / Follow-up: parent archive 뒤 canonical `notification` spec과 이 change를 strict validation하고 integration/archive owner를 명시한다.
+
+## Remaining Decisions
+
+- 없음.
+
+## Superseded Decisions
+
+- `add-post-reposts`의 PROD-669 process-local `postCommit` 및 Notification Best Effort lifecycle은 2026-08-16 승인된 PROD-725의 effects Workflow 경계로 대체된다.

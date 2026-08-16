@@ -10,7 +10,7 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - Home과 Profile Post List가 Repost와 Source 양쪽의 조회 정책을 적용해 후보를 선정하고, Hashtag Post List에서는 Content 없는 Repost를 제외한다.
 - Repost·Quote 프레젠테이션, 목록·상세 renderer별 direct Source 표시와 canonical Source 이동을 제공한다. 순수 Repost의 body·timestamp와 직접 상세 URL은 Source detail로 이동하고, 그 아래 Action Bar도 화면에 표시한 direct Source를 대상으로 동작한다.
 - 공용 `PostActionBar`의 composite Post fragment가 private Repost action child fragment를 조립한다. PROD-414는 `PostListItem`·`PostLayout`의 content grid 마지막 sibling에 Action Bar를 처음 배치하고, Repost trigger의 cross-platform action menu, 생성·취소와 action별 실패 toast를 연결한다. child action은 selected Profile별 상태·pending·mutation을 소유하며, 최종 disabled 정책과 나머지 action의 production 조립은 PROD-432에 남긴다. 생성 cache 동기화와 취소 실행 뒤 후속 취소 cache 동기화는 분리한다.
-- 자기 Post 알림을 억제하면서 Repost Notification을 기존 inbox·Unread count·Read·Node 계약에 통합하고, Repost가 Tombstone이 된 뒤 Notification을 Best Effort로 정리한다.
+- 자기 Post 알림을 억제하면서 Repost Notification을 기존 inbox·Unread count·Read·Node 계약에 통합한다. 생성·Tombstone 뒤 Notification 실행 경계는 PROD-725의 accepted effects Workflow에서 멱등 재시도한다.
 - 공용 `PostActionBar` UI는 PROD-433을 재사용한다. PROD-414의 최초 production 배치와 Repost menu·toast 뒤, 나머지 action 조립·공통 정책과 최종 통합 검증은 PROD-432의 별도 계약으로 유지한다.
 
 ## Authority / Provenance
@@ -30,7 +30,7 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 
 - `data-model`: Post Repost Source self-reference와 Active Repost 유일성, Repost Notification source 저장 관계 추가
 - `post`: Post 구조 조합, Repost Source·count·현재 Profile 상태와 Home/Profile/Hashtag 목록 후보 계약 확장
-- `notification`: Repost source의 생성·조회·inbox 표시·읽음 처리와 Tombstone 뒤 Best Effort 정리 계약 추가
+- `notification`: Repost source의 생성·조회·inbox 표시·읽음 처리와 PROD-725 effects Workflow의 멱등 생성·정리 계약 추가
 
 ## Impact
 
@@ -39,4 +39,4 @@ Kosmo는 Repost를 별도 Post Kind가 아니라 Content와 Reply Parent 없이 
 - GraphQL/API: Repost 생성·취소 mutation, `Post.repostSource`, count와 selected Profile별 Active Repost, 후속 취소 Source 상태 응답, Repost Notification concrete Node와 visibility
 - Universal client: Repost·Quote presentation, Home/Profile/Bookmark 목록과 Post 상세 canonical navigation, production `PostActionBar` 배치, cross-platform Repost menu·toast, private Repost child action 및 Relay cache, Notification inbox·badge·navigation
 - Dependency: `add-in-app-notifications`가 제공하는 active `notification`·`data-model`·`api-platform` 기반과 PROD-412의 선행 이슈 결과를 재사용한다. PROD-414는 #341로 main에 포함된 PROD-433의 공개 `PostActionBar` 경계를 재사용한다. 최초 production surface 구현은 같은 `PostListItem`·`PostLayout`과 Source presentation을 소유한 PROD-415 결과를 선행 입력으로 사용한다. PR #357이 열려 있으면 검증한 exact head 위에 PROD-414 고유 변경만 stack하고 PR base를 `prod-415`로 두며, 이미 merge됐으면 해당 merge가 포함된 최신 `main` 위에서 이어간다.
-- Excluded systems: Quote 작성 action·전용 composer와 `인용하기` 메뉴 항목, 새로운 ActivityPub federation capability·Repost protocol materialization, Mentioned Profiles Repost, Post Media, 범용 Notification 재설계, retry/outbox/backfill, 공통 `PostActionBar` 구현, Repost 외 action의 production 조립과 최종 공통 정책. 단, PROD-669는 기존 Announce·Undo·Delete와 Local delivery caller를 공용 Repost lifecycle에 연결하는 wiring만 포함한다.
+- Excluded systems: Quote 작성 action·전용 composer와 `인용하기` 메뉴 항목, 새로운 ActivityPub federation capability·Repost protocol materialization, Mentioned Profiles Repost, Post Media, 범용 Notification 재설계, outbox/backfill, 공통 `PostActionBar` 구현, Repost 외 action의 production 조립과 최종 공통 정책. PROD-669의 process-local lifecycle은 PROD-725의 별도 Temporal change가 대체한다.

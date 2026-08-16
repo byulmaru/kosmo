@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, mock, test } from 'node:test';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
-  ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
@@ -28,11 +27,9 @@ import type { Transaction } from '../db';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.PUBLIC_ORIGIN = publicOrigin;
-let configuredLocalInstanceId: string;
-
 before(async () => {
   const { seedDatabase } = await import('../db/seed');
-  configuredLocalInstanceId = (await seedDatabase({ publicOrigin })).localInstance.id;
+  await seedDatabase({ publicOrigin });
 });
 
 afterEach(() => {
@@ -87,54 +84,18 @@ const createContentPost = async (
     visibility,
   }).then(({ post }) => post);
 
-const createConfiguredLocalProfile = async () => {
-  const suffix = crypto.randomUUID();
-  return db
-    .insert(Profiles)
-    .values({
-      displayName: suffix,
-      followPolicy: ProfileFollowPolicy.OPEN,
-      handle: suffix,
-      instanceId: configuredLocalInstanceId,
-      normalizedHandle: suffix,
-      state: ProfileState.ACTIVE,
-    })
-    .returning()
-    .then(firstOrThrow);
-};
-
-const createRemoteFollower = async (followeeProfileId: string) => {
-  const remote = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const actorUri = `https://${remote.instance.domain}/users/${remote.profile.id}`;
-  await db.insert(ActivityPubActors).values({
-    inboxUri: `${actorUri}/inbox`,
-    profileId: remote.profile.id,
-    type: 'PERSON',
-    uri: actorUri,
-  });
-  await db.insert(ProfileFollows).values({
-    followeeProfileId,
-    followerProfileId: remote.profile.id,
-  });
-};
-
-const runRepost = async (
-  input: { actorProfileId: string; origin?: 'LOCAL' | 'ACTIVITYPUB'; sourcePostId: string },
-  tx?: Transaction,
-) => {
-  const result = await repostPostAction({ ...input, origin: input.origin ?? 'LOCAL' }, tx);
-  if (!tx) {
-    await result.postCommit();
-  }
-  return result;
-};
+const runRepost = async (input: {
+  actorProfileId: string;
+  origin?: 'LOCAL' | 'ACTIVITYPUB';
+  sourcePostId: string;
+}) => repostPostAction({ ...input, origin: input.origin ?? 'LOCAL' });
 
 const runDelete = async (
   input: { actorProfileId: string; origin?: 'LOCAL' | 'ACTIVITYPUB'; postId: string },
   tx?: Transaction,
 ) => {
   const result = await deletePostAction({ ...input, origin: input.origin ?? 'LOCAL' }, tx);
-  if (!tx) {
+  if (tx && result.postCommit) {
     await result.postCommit();
   }
   return { postId: result.postId };
@@ -312,263 +273,99 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   );
 });
 
-test('최초 top-level Repost 생성과 취소만 commit 뒤 Announce와 Undo를 전달한다', async () => {
-  const actor = await createConfiguredLocalProfile();
-  const recipient = await createConfiguredLocalProfile();
-  const source = await createContentPost(recipient.id);
-  await createRemoteFollower(actor.id);
-  const { federation } = await import('@kosmo/fedify');
-  const fixture = createDeliveryContextFixture();
-  mock.method(federation, 'createContext', () => fixture.context);
-  const input = { actorProfileId: actor.id, sourcePostId: source.id };
+test('최초 Repost create/delete만 stable effects Workflow를 시작한다', async () => {
+  const actor = await createProfile();
+  const source = await createContentPost(actor.profile.id);
+  const { temporalClient } = await import('../temporal/client');
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const input = { actorProfileId: actor.profile.id, sourcePostId: source.id };
 
-  const concurrent = await Promise.all(Array.from({ length: 4 }, () => runRepost(input)));
-  const repost = concurrent.find(({ created }) => created)?.repost;
-  assert.ok(repost);
-  assert.equal(fixture.calls.length, 1);
-  assert.equal(fixture.calls[0]?.constructor.name, 'Announce');
-  assert.equal(
-    await db
-      .select({ id: Notifications.id })
-      .from(Notifications)
-      .where(
-        and(eq(Notifications.kind, NotificationKind.REPOST), eq(Notifications.sourceId, repost.id)),
-      )
-      .then((rows) => rows.length),
-    1,
+  const first = await runRepost(input);
+  const duplicate = await runRepost(input);
+  assert.equal(first.created, true);
+  assert.equal(duplicate.created, false);
+  assert.equal(start.mock.callCount(), 1);
+  const firstStart = start.mock.calls[0];
+  assert.ok(firstStart);
+  const firstOptions = firstStart.arguments[1];
+  assert.ok(firstOptions);
+  assert.equal(firstOptions.workflowId, `repost-effects:${first.repost.id}:create`);
+
+  await Promise.all(
+    Array.from({ length: 4 }, () =>
+      runDelete({
+        actorProfileId: actor.profile.id,
+        postId: first.repost.id,
+      }),
+    ),
   );
+  assert.equal(start.mock.callCount(), 2);
+  const deleteStart = start.mock.calls[1];
+  assert.ok(deleteStart);
+  const deleteOptions = deleteStart.arguments[1];
+  assert.ok(deleteOptions);
+  assert.equal(deleteOptions.workflowId, `repost-effects:${first.repost.id}:delete`);
+  await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
+  assert.equal(start.mock.callCount(), 2);
+});
 
-  await runRepost(input);
-  assert.equal(fixture.calls.length, 1);
-  assert.equal(
-    await db
-      .select({ id: Notifications.id })
-      .from(Notifications)
-      .where(
-        and(eq(Notifications.kind, NotificationKind.REPOST), eq(Notifications.sourceId, repost.id)),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
+test('ActivityPub origin은 outbound effect 없이 create Workflow만 시작한다', async () => {
+  const sourceAuthor = await createProfile();
+  const source = await createContentPost(sourceAuthor.profile.id);
+  const actor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const { temporalClient } = await import('../temporal/client');
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const notificationCount = await db.$count(Notifications);
 
-  const deleteInput = { actorProfileId: actor.id, postId: repost.id };
-  await Promise.all(Array.from({ length: 4 }, () => runDelete(deleteInput)));
-  assert.equal(fixture.calls.length, 2);
-  assert.equal(fixture.calls[1]?.constructor.name, 'Undo');
-
-  await runDelete(deleteInput);
-  assert.equal(fixture.calls.length, 2);
-
-  const rollbackSource = await createContentPost(actor.id);
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await runRepost({ actorProfileId: actor.id, sourcePostId: rollbackSource.id }, tx);
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
-  assert.equal(fixture.calls.length, 2);
-
-  const remoteActor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
-  await runRepost({
-    actorProfileId: remoteActor.profile.id,
+  const result = await repostPostAction({
+    actorProfileId: actor.profile.id,
     origin: 'ACTIVITYPUB',
     sourcePostId: source.id,
   });
-  assert.equal(fixture.calls.length, 2);
 
-  const ordinaryPost = await createContentPost(actor.id);
-  await runDelete({ actorProfileId: actor.id, postId: ordinaryPost.id });
-  assert.equal(fixture.calls.length, 2);
-});
-
-test('Local·ActivityPub origin과 top-level·caller transaction 모두 같은 Repost lifecycle을 사용한다', async () => {
-  const recipient = await createConfiguredLocalProfile();
-  const source = await createContentPost(recipient.id);
-  const localActor = await createConfiguredLocalProfile();
-  const remoteActor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
-
-  for (const [origin, actorProfileId] of [
-    ['LOCAL', localActor.id],
-    ['ACTIVITYPUB', remoteActor.profile.id],
-  ] as const) {
-    const topLevel = await repostPostAction({ actorProfileId, origin, sourcePostId: source.id });
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 0);
-    const firstPostCommit = topLevel.postCommit();
-    assert.equal(topLevel.postCommit(), firstPostCommit);
-    await firstPostCommit;
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
-
-    const duplicate = await repostPostAction({ actorProfileId, origin, sourcePostId: source.id });
-    assert.equal(duplicate.created, false);
-    await duplicate.postCommit();
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
-
-    const deleted = await deletePostAction({ actorProfileId, origin, postId: topLevel.repost.id });
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 1);
-    const deletePostCommit = deleted.postCommit();
-    assert.equal(deleted.postCommit(), deletePostCommit);
-    await deletePostCommit;
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, topLevel.repost.id)), 0);
-
-    const callerTx = await db.transaction(async (tx) => {
-      const created = await repostPostAction(
-        { actorProfileId, origin, sourcePostId: source.id },
-        tx,
-      );
-      assert.equal(
-        await db.$count(Notifications, eq(Notifications.sourceId, created.repost.id)),
-        0,
-      );
-      return created;
-    });
-    await callerTx.postCommit();
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)), 1);
-
-    const callerTxDelete = await db.transaction(async (tx) => {
-      const deleted = await deletePostAction(
-        { actorProfileId, origin, postId: callerTx.repost.id },
-        tx,
-      );
-      assert.equal(
-        await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)),
-        1,
-      );
-      return deleted;
-    });
-    await callerTxDelete.postCommit();
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, callerTx.repost.id)), 0);
-  }
-});
-
-test('caller transaction rollback 뒤 postCommit을 실행해도 Repost lifecycle이 materialize되지 않는다', async () => {
-  const actor = await createConfiguredLocalProfile();
-  const source = await createContentPost(actor.id);
-  let created: Awaited<ReturnType<typeof repostPostAction>> | undefined;
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      created = await repostPostAction(
-        { actorProfileId: actor.id, origin: 'LOCAL', sourcePostId: source.id },
-        tx,
-      );
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
-
-  assert.ok(created);
-  await assert.doesNotReject(created.postCommit());
-  assert.equal(
-    await db.$count(Posts, and(eq(Posts.profileId, actor.id), eq(Posts.repostSourceId, source.id))),
-    0,
-  );
-  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.repost.id)), 0);
-});
-
-test('Repost Notification 실패가 committed Repost 상태와 postCommit 후속 실행을 격리한다', async () => {
-  const actor = await createConfiguredLocalProfile();
-  const recipient = await createConfiguredLocalProfile();
-  const source = await createContentPost(recipient.id);
-  await db.execute(
-    sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_repost_post_commit_failure CHECK (false) NOT VALID`,
-  );
-  try {
-    const result = await repostPostAction({
-      actorProfileId: actor.id,
-      origin: 'LOCAL',
-      sourcePostId: source.id,
-    });
-    await assert.doesNotReject(result.postCommit());
-    assert.equal(
-      await db
-        .select({ state: Posts.state })
-        .from(Posts)
-        .where(eq(Posts.id, result.repost.id))
-        .then(firstOrThrow)
-        .then(({ state }) => state),
-      PostState.ACTIVE,
-    );
-  } finally {
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_repost_post_commit_failure`,
-    );
-  }
-});
-
-test('post-commit Repost delivery 실패는 committed 생성과 취소 결과를 바꾸지 않는다', async () => {
-  const actor = await createConfiguredLocalProfile();
-  const source = await createContentPost(actor.id);
-  await createRemoteFollower(actor.id);
-  const { federation } = await import('@kosmo/fedify');
-  const context = {
-    canonicalOrigin: publicOrigin,
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
-    sendActivity: async () => {
-      throw new Error('delivery failed');
-    },
-  } as never;
-  mock.method(federation, 'createContext', () => context);
-  const errorLog = mock.method(console, 'error', () => undefined);
-
-  const result = await runRepost({ actorProfileId: actor.id, sourcePostId: source.id });
   assert.equal(result.created, true);
+  assert.equal(start.mock.callCount(), 1);
+  assert.equal(await db.$count(Notifications), notificationCount);
+});
+
+test('effects Workflow start 실패는 committed Repost와 삭제 결과를 바꾸지 않는다', async () => {
+  const actor = await createProfile();
+  const source = await createContentPost(actor.profile.id);
+  const { temporalClient } = await import('../temporal/client');
+  mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Temporal unavailable');
+  });
+
+  const created = await repostPostAction({
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL',
+    sourcePostId: source.id,
+  });
+  assert.equal(created.created, true);
   assert.equal(
     await db
       .select({ state: Posts.state })
       .from(Posts)
-      .where(eq(Posts.id, result.repost.id))
+      .where(eq(Posts.id, created.repost.id))
       .then(firstOrThrow)
       .then(({ state }) => state),
     PostState.ACTIVE,
   );
 
-  assert.deepEqual(await runDelete({ actorProfileId: actor.id, postId: result.repost.id }), {
-    postId: result.repost.id,
+  const deleted = await deletePostAction({
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL',
+    postId: created.repost.id,
   });
+  assert.equal(deleted.postId, created.repost.id);
   assert.equal(
     await db
       .select({ state: Posts.state })
       .from(Posts)
-      .where(eq(Posts.id, result.repost.id))
+      .where(eq(Posts.id, created.repost.id))
       .then(firstOrThrow)
       .then(({ state }) => state),
     PostState.DELETED,
-  );
-  assert.deepEqual(
-    errorLog.mock.calls.map(({ arguments: [message] }) => message),
-    [
-      'Post-commit ActivityPub Repost Announce delivery failed',
-      'Post-commit ActivityPub Repost Undo delivery failed',
-    ],
-  );
-});
-
-test('repostPost는 caller transaction rollback에 합류한다', async () => {
-  const actor = await createProfile();
-  const source = await createContentPost(actor.profile.id);
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await runRepost(
-        {
-          actorProfileId: actor.profile.id,
-          sourcePostId: source.id,
-        },
-        tx,
-      );
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
-
-  assert.equal(
-    await db
-      .select()
-      .from(Posts)
-      .where(and(eq(Posts.profileId, actor.profile.id), eq(Posts.repostSourceId, source.id)))
-      .then((rows) => rows.length),
-    0,
   );
 });
 
@@ -751,19 +548,3 @@ test('deletePost는 caller transaction rollback에 합류한다', async () => {
   assert.equal(stored.state, PostState.ACTIVE);
   assert.equal(stored.deletedAt, null);
 });
-
-const createDeliveryContextFixture = () => {
-  const calls: { readonly constructor: { readonly name: string } }[] = [];
-  const context = {
-    canonicalOrigin: publicOrigin,
-    getActorUri: (identifier: string) => new URL(`/ap/actor/${identifier}`, publicOrigin),
-    sendActivity: async (
-      _sender: { identifier: string },
-      _recipients: unknown,
-      activity: { readonly constructor: { readonly name: string } },
-    ) => {
-      calls.push(activity);
-    },
-  } as never;
-  return { calls, context };
-};

@@ -168,7 +168,7 @@
 - Decision Date: 2026-07-21
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-412`, `PROD-416`
-- Status: Active
+- Status: Superseded
 - Context / Problem: Notification이 Repost 결과를 rollback하면 안 되지만 fire-and-forget은 실패 시점과 테스트 경계를 잃는다.
 - Decision Outcome: Repost 생성 또는 Tombstone transaction이 commit된 뒤 같은 request에서 idempotent Notification create/delete port를 await하고 오류를 catch한다. retry, outbox, queue와 backfill은 추가하지 않는다.
 - Alternatives Considered: source transaction 안에서 저장·삭제, fire-and-forget, worker/outbox. transaction 결합은 source 성공을 바꾸고 fire-and-forget은 관측 불가능하며 worker/outbox는 승인 범위를 넘는다.
@@ -180,13 +180,25 @@
 - Decision Date: 2026-08-05
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-389`, `PROD-412`, `PROD-416`, `PROD-669`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 기존 Repost action은 optional caller transaction의 존재를 Notification과 ActivityPub lifecycle의 provenance처럼 해석해 inbound Announce가 공용 action을 사용해도 post-commit effect를 빠뜨릴 수 있었다. `memory/review-style.md`의 Commit And Side Effects 원칙과 `packages/core/services/reaction.ts`의 명시적 origin·postCommit 구현은 이 저장소의 기존 구현 패턴으로 참고한다.
 - Decision Outcome: `repostPost`와 `deletePost`는 `origin = LOCAL | ACTIVITYPUB`를 명시적으로 받고 transaction 유무와 무관하게 실제 상태 전이 결과를 기준으로 한 번 실행 가능한 `postCommit()`을 반환한다. caller-owned transaction은 mapping/domain mutation을 같은 transaction에 합친 뒤 outer commit 후 반환된 lifecycle을 실행한다. Notification create/cleanup은 실제 새 Repost 또는 실제 삭제된 pure Repost를 기준으로 하고, Fedify Announce/Undo와 Local Post Delete delivery는 `origin = LOCAL`인 경우에만 시도한다. duplicate/no-transition 결과의 lifecycle은 no-op이다.
 - Supersedes: PROD-669의 tx-gated Repost lifecycle 구현 선택
 - Alternatives Considered: transaction 유무에 따른 분기, inbound handler의 Notification 직접 호출, Repost 전용 in-transaction helper 분리. 모두 공용 action의 lifecycle ownership을 caller별로 복제하거나 transaction composition과 provenance를 결합한다.
 - Consequences: GraphQL과 ActivityPub caller는 동일한 core action과 result shape를 사용하고, ActivityPub caller는 commit 경계만 소유한다. Notification/delivery failure는 committed domain transition을 실패시키지 않는다.
 - Confirmation / Follow-up: Local/ActivityPub 및 top-level/caller-tx 조합, rollback-before-postCommit, repeated postCommit, duplicate/no-op, failure isolation과 ActivityPub outbound echo suppression을 core·Fedify·API 테스트로 검증한다.
+
+### Repost 후속 효과는 accepted Temporal Workflow가 재시도한다
+
+- Decision Date: 2026-08-16
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725`
+- Status: Active
+- Context / Problem: PROD-669의 caller-owned transaction과 `postCommit()`은 최신 PROD-725가 제거하기로 한 database handle·process-local effect 경계와 충돌한다.
+- Decision Outcome: specialized Core action이 Repost 상태와 필요한 ActivityPub mapping을 같은 transaction에서 저장하고, 최초 실제 create/delete commit 뒤 stable transition Workflow start를 시도한다. accepted Workflow는 Notification과 Local-origin Announce·Undo queue handoff를 독립적으로 재시도한다.
+- Alternatives Considered: 기존 `postCommit()` 유지, transaction Activity, command receipt와 outbox는 PROD-725에서 제외됐다.
+- Consequences: caller database handle과 `postCommit()`은 제거되며, commit→start gap은 허용된다. ActivityPub origin은 Notification lifecycle만 수행한다.
+- Confirmation / Follow-up: `transition-repost-effects-to-temporal-workflow` change의 구현·strict validation·dev 통합 검증에서 확인한다.
 
 ### Presentation, renderer 연결과 action child를 독립 client slice로 유지한다
 

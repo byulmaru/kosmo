@@ -1,24 +1,14 @@
 import '@kosmo/core/polyfill';
 
 import { EmojiReact, Follow, Like } from '@fedify/vocab';
-import {
-  ActivityPubActors,
-  ActivityPubPosts,
-  db,
-  first,
-  Instances,
-  Posts,
-  Profiles,
-} from '@kosmo/core/db';
-import { InstanceKind, InstanceState, PostState, ProfileState } from '@kosmo/core/enums';
+import { InstanceState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import {
-  deletePost,
   followProfile,
+  undoActivityPubRepost,
   undoInboundReaction,
   unfollowProfile,
 } from '@kosmo/core/services';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -30,11 +20,13 @@ import {
 } from './inbound-observability';
 import {
   findOrMaterializeRemoteProfileActorByUri,
+  findStoredRemoteProfileActorByUri,
   findUsableStoredRemoteProfileActorByUri,
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
 import type { Recipient, Undo } from '@fedify/vocab';
+import type { ActivityPubActors } from '@kosmo/core/db';
 
 const getNow = () => Temporal.Now.instant();
 
@@ -191,62 +183,25 @@ const handleInboundUndoAnnounce = async (
   activityUri: URL,
   actorUri: URL,
 ): Promise<UndoAnnounceResult> => {
-  const result = await db.transaction(async (tx) => {
-    const row = await tx
-      .select({
-        actorUri: ActivityPubActors.uri,
-        instanceKind: Instances.kind,
-        instanceState: Instances.state,
-        postId: Posts.id,
-        postState: Posts.state,
-        profileId: Profiles.id,
-        profileState: Profiles.state,
-      })
-      .from(ActivityPubPosts)
-      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-      .where(
-        and(
-          eq(ActivityPubPosts.uri, activityUri.href),
-          isNull(Posts.currentContentId),
-          isNotNull(Posts.repostSourceId),
-        ),
-      )
-      .limit(1)
-      .then(first);
-
-    if (!row) {
-      return null;
-    }
-    if (
-      activityUri.origin !== actorUri.origin ||
-      row.actorUri !== actorUri.href ||
-      row.instanceKind !== InstanceKind.ACTIVITYPUB ||
-      (row.instanceState !== InstanceState.ACTIVE &&
-        row.instanceState !== InstanceState.UNRESPONSIVE) ||
-      row.profileState !== ProfileState.ACTIVE ||
-      row.postState !== PostState.ACTIVE
-    ) {
-      return { outcome: 'ignored' as const };
-    }
-
-    const deleted = await deletePost(
-      {
-        actorProfileId: row.profileId,
-        origin: 'ACTIVITYPUB',
-        postId: row.postId,
-      },
-      tx,
-    );
-    return { outcome: 'deleted' as const, postCommit: deleted.postCommit };
-  });
-
-  if (result?.outcome === 'deleted') {
-    await result.postCommit();
+  if (activityUri.origin !== actorUri.origin) {
+    return 'ignored';
   }
 
+  const storedActor = await findStoredRemoteProfileActorByUri(actorUri);
+  if (!storedActor) {
+    return null;
+  }
+  if (
+    storedActor.instance.state !== InstanceState.ACTIVE &&
+    storedActor.instance.state !== InstanceState.UNRESPONSIVE
+  ) {
+    return 'ignored';
+  }
+
+  const result = await undoActivityPubRepost({
+    activityUri: activityUri.href,
+    actorProfileId: storedActor.profile.id,
+  });
   return result?.outcome ?? null;
 };
 
