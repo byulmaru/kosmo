@@ -2,7 +2,7 @@
 
 ## Purpose
 
-후속 business capability가 재사용할 독립 Temporal Worker 애플리케이션, runtime image entrypoint, health lifecycle와 기본 비활성 Kubernetes component의 계약을 정의한다.
+후속 business capability가 재사용할 독립 Temporal Worker 애플리케이션, runtime image entrypoint, health lifecycle와 상시 application workload의 계약을 정의한다.
 
 ## Requirements
 
@@ -113,8 +113,3 @@
 
 - **WHEN** 역할별 URL·password Secret name·key 중 일부만 제공한다
 - **THEN** chart render가 incomplete credential 오류로 실패한다
-
-#### Scenario: foundation Worker의 DB 비사용
-
-- **WHEN** 등록된 business capability가 없는 Worker entrypoint를 실행한다
-- **THEN** process는 제공된 DB 입력으로 connection을 열지 않고 구성 오류로 종료한다
