@@ -393,6 +393,9 @@ importers:
       '@temporalio/workflow':
         specifier: ^1.22.0
         version: 1.22.0
+      drizzle-orm:
+        specifier: 1.0.0-beta.22
+        version: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.4.3)
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -4152,7 +4155,6 @@ packages:
 
   drizzle-orm@1.0.0-beta.22:
     resolution: {integrity: sha512-F+DZyVIvH0oVKa/w08Cle1xfoH+pc+htIXHG/frnMLG72aby9NYYr9oc+9XvghnoO4umxFItduz0OMmQJMnenw==}
-    deprecated: The 1.0.0-beta line is superseded by the 1.0 release candidate. Install drizzle-orm@rc instead.
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'

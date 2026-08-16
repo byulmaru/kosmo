@@ -9,7 +9,7 @@
 
 ### Requirement: 고정 business registration과 singleton Worker host
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. 시스템은 Worker production entrypoint에 compile-time의 실제 business Workflow·Activity registration과 task queue를 정확히 하나 제공해야 한다(MUST). entrypoint는 이 registration으로 process-global Worker host를 정확히 한 번 시작해야 하며(MUST), optional registration, registration 부재를 검사하는 정상 실행 경로, idle Worker 상태 또는 같은 process에서 Worker host를 다시 시작할 수 있는 범용 `runWorker(registration)` API를 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`. 시스템은 Worker production entrypoint에 compile-time의 실제 business Workflow·Activity registration과 task queue를 정확히 하나 제공해야 한다(MUST). entrypoint 자체는 이 registration으로 process-global Worker host를 정확히 한 번 시작해야 하며(MUST), exported `runWorker`/`startWorker` lifecycle, optional registration, registration 부재를 검사하는 정상 실행 경로, idle Worker 상태 또는 같은 process에서 Worker host를 다시 시작할 수 있는 범용 startup API를 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Production Worker 시작
 

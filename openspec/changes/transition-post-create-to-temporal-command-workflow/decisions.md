@@ -34,8 +34,8 @@
 
 - **Type:** Derived Contract
 - **Authority:** `docs/architecture/core-services.md`, PROD-722, PROD-730
-- **Decision:** The Worker package owns its concrete registration at compile time, and the production entrypoint starts one process-global Worker host without an injected registration or a Worker-specific enabled flag.
-- **Reason:** The deployed Worker has one real workload and no supported idle or disabled application state.
+- **Decision:** The Worker package owns its concrete registration at compile time, and the production entrypoint directly starts and owns one process-global Worker host without an exported `runWorker`/`startWorker` API, injected registration or Worker-specific enabled flag.
+- **Reason:** The deployed Worker has one real workload and one process entrypoint. A memoized callable startup layer would expose restart-like surface area without a second valid caller.
 
 ### Consume the platform-supplied default database handle
 
@@ -43,6 +43,14 @@
 - **Authority:** `docs/architecture/core-services.md`, PROD-722
 - **Decision:** Worker Activities use the process-standard `db` configuration and PostgreSQL environment contract. This change does not add a Worker-specific pool, database handle, credential family, or Fedify request DB context.
 - **Reason:** Database principal and RLS cleanup is owned separately and is not required for the Temporal effects boundary.
+
+### Let the Reply Notification Activity own its persistence
+
+- **Type:** Implementation Choice
+- **Authority:** `docs/domain/objects/notification.md`, `docs/architecture/core-services.md`, PROD-722
+- **Decision:** The Worker Activity reloads the committed Reply, applies recipient, self-suppression, visibility and uniqueness rules, and writes the Notification directly with the process default `db`. It does not delegate to a pass-through `packages/core/services` action.
+- **Reason:** Reply Notification materialization has one production entrypoint after this transition. A separately exported core action would add a test-driven wrapper without a shared runtime caller.
+- **Rejected:** Keeping `createReplyNotification` in core solely for Activity delegation or test fixture setup.
 
 ## Superseded Decisions
 

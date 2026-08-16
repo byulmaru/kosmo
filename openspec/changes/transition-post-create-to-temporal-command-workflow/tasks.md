@@ -10,20 +10,20 @@
 ## 2. Move accepted post-commit effects into Temporal
 
 - [x] 2.1 Implement a deterministic Post Create effects Workflow that uses only serializable input and Activity results.
-- [x] 2.2 Move Reply Notification creation into an idempotent Activity that reloads the committed Post and preserves recipient, self-suppression, visibility, and uniqueness rules.
+- [x] 2.2 Move Reply Notification creation and persistence directly into an idempotent Activity that reloads the committed Post and preserves recipient, self-suppression, visibility, and uniqueness rules without a pass-through core action.
 - [x] 2.3 Move Local-origin ActivityPub Create queue handoff into a separate idempotent Activity that reuses canonical Note identity, audience/target rules, and the existing Fedify queue producer.
 - [x] 2.4 Suppress outbound Create handoff for `ACTIVITYPUB` origin.
 - [x] 2.5 Ensure Notification and federation handoff are attempted independently so a final failure in one does not prevent the other.
-- [x] 2.6 Remove the old in-transaction Notification savepoint path, returned `postCommit` callback, caller `ctx.db` input, and direct post-commit Fedify dispatch after equivalent coverage exists.
+- [x] 2.6 Remove the old in-transaction Notification savepoint path, Worker-only Reply Notification core action, returned `postCommit` callback, caller `ctx.db` input, and direct post-commit Fedify dispatch after equivalent coverage exists.
 - [x] 2.7 Add Workflow and Activity tests for applicability, retry/idempotency, independent failure, ActivityPub echo suppression, and Post-result isolation.
 
 ## 3. Activate the singleton Worker runtime
 
 - [x] 3.1 Replace optional or caller-supplied registration with the compile-time production Workflow and Activity registration.
-- [x] 3.2 Expose an argument-free singleton startup boundary that owns the health server, Temporal connection, Worker, signal handlers, drain, and shutdown exactly once per process.
+- [x] 3.2 Let the production entrypoint directly own the health server, Temporal connection, Worker, signal handlers, drain, and shutdown exactly once per process without exported `runWorker`/`startWorker` lifecycle APIs.
 - [x] 3.3 Remove missing-registration failure paths and Worker-specific `worker.enabled` configuration while retaining chart-wide `workloads.enabled` bootstrap behavior.
 - [x] 3.4 Render the Worker Deployment as a normal application workload without injecting Worker credentials into the API Rollout or adding a Worker-specific database pool/handle.
-- [x] 3.5 Add focused runtime and Helm tests for registration, singleton startup, readiness, signal drain, standard database configuration, and dev/production rendering.
+- [x] 3.5 Add focused runtime and Helm tests for registration, entrypoint startup, readiness, signal drain, standard database configuration, and dev/production rendering.
 
 ## 4. Verify and close the change safely
 

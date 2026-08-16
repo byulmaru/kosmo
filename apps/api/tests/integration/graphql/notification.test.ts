@@ -14,11 +14,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import {
-  cancelProfileFollowRequest,
-  createReplyNotification,
-  followProfile,
-} from '@kosmo/core/services';
+import { cancelProfileFollowRequest, followProfile } from '@kosmo/core/services';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -642,7 +638,7 @@ describe('Notification GraphQL Node boundary', () => {
     );
   });
 
-  test('Reply Notification Activity는 committed Reply를 투영하고 self/invisible/failure를 격리한다', async () => {
+  test('Reply Notification row를 GraphQL source로 읽는다', async () => {
     const author = await createAuthenticatedSession();
     const recipient = await createProfile('reply-create-recipient');
     const parent = await createContentPost(recipient.id);
@@ -653,7 +649,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
-    await createReplyNotification(reply.id);
+    await createReplyNotificationFixture(recipient.id, reply.id);
     assert.equal(
       await db.$count(
         Notifications,
@@ -661,43 +657,6 @@ describe('Notification GraphQL Node boundary', () => {
       ),
       1,
     );
-    const selfParent = await createContentPost(author.profile.id);
-    assertNoGraphQLErrors(await requestCreateReply(selfParent.id, author.token));
-    const selfReply = await db
-      .select()
-      .from(Posts)
-      .where(eq(Posts.replyParentId, selfParent.id))
-      .then(firstOrThrow);
-    await createReplyNotification(selfReply.id);
-    const invisibleParent = await createContentPost(recipient.id);
-    assertNoGraphQLErrors(
-      await requestCreateReply(invisibleParent.id, author.token, PostVisibility.FOLLOWERS),
-    );
-    const invisibleReply = await db
-      .select()
-      .from(Posts)
-      .where(eq(Posts.replyParentId, invisibleParent.id))
-      .then(firstOrThrow);
-    await createReplyNotification(invisibleReply.id);
-    assert.equal(await db.$count(Notifications, eq(Notifications.kind, NotificationKind.REPLY)), 1);
-    await pg.unsafe(
-      `CREATE FUNCTION fail_reply_notification_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.kind = 'REPLY' THEN RAISE EXCEPTION 'forced'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_reply_notification_insert BEFORE INSERT ON notification FOR EACH ROW EXECUTE FUNCTION fail_reply_notification_insert();`,
-    );
-    try {
-      const failureParent = await createContentPost(recipient.id);
-      assertNoGraphQLErrors(await requestCreateReply(failureParent.id, author.token));
-      const failureReply = await db
-        .select()
-        .from(Posts)
-        .where(eq(Posts.replyParentId, failureParent.id))
-        .then(firstOrThrow);
-      await assert.rejects(createReplyNotification(failureReply.id));
-      assert.equal(await db.$count(Posts, eq(Posts.replyParentId, failureParent.id)), 1);
-    } finally {
-      await pg.unsafe(
-        `DROP TRIGGER IF EXISTS fail_reply_notification_insert ON notification; DROP FUNCTION IF EXISTS fail_reply_notification_insert();`,
-      );
-    }
   });
 
   test('Local Reply 작성부터 thread 반영·inbox·Read·결과 Reply 이동 대상까지 수직 흐름을 유지한다', async () => {
@@ -714,7 +673,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
-    await createReplyNotification(reply.id);
+    await createReplyNotificationFixture(parentAuthor.profile.id, reply.id);
 
     const thread = await requestReplyDescendants(parent.id, parentAuthor.token);
     assertNoGraphQLErrors(thread);
@@ -759,7 +718,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
-    await createReplyNotification(visible.id);
+    await createReplyNotificationFixture(recipient.id, visible.id);
     const hiddenAuthor = await createAuthenticatedSession();
     assertNoGraphQLErrors(await requestCreateReply(parent.id, hiddenAuthor.token));
     const hidden = await db
@@ -767,7 +726,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(and(eq(Posts.replyParentId, parent.id), ne(Posts.id, visible.id)))
       .then(firstOrThrow);
-    await createReplyNotification(hidden.id);
+    await createReplyNotificationFixture(recipient.id, hidden.id);
     const visibleNotification = await db
       .select()
       .from(Notifications)
@@ -816,7 +775,7 @@ describe('Notification GraphQL Node boundary', () => {
       .from(Posts)
       .where(eq(Posts.replyParentId, parent.id))
       .then(firstOrThrow);
-    await createReplyNotification(reply.id);
+    await createReplyNotificationFixture(recipient.id, reply.id);
     const notification = await db
       .select()
       .from(Notifications)
@@ -2083,6 +2042,17 @@ const createFollowNotification = async (
     .returning()
     .then(firstOrThrow);
 };
+
+const createReplyNotificationFixture = async (recipientProfileId: string, sourceId: string) =>
+  db
+    .insert(Notifications)
+    .values({
+      kind: NotificationKind.REPLY,
+      recipientProfileId,
+      sourceId,
+    })
+    .returning()
+    .then(firstOrThrow);
 
 const createReactionNotification = async (
   recipientProfileId: string,

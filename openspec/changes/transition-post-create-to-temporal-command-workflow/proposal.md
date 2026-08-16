@@ -45,9 +45,9 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 
 ## Impact
 
-- `packages/core/services`: 기존 Post transaction commit 결과에서 stable Post ID effects Workflow start를 시도하고, Post Create의 Notification savepoint/direct effect를 제거한다.
+- `packages/core/services`: 기존 Post transaction commit 결과에서 stable Post ID effects Workflow start를 시도하고, Post Create의 Notification savepoint/direct effect와 Worker 전용 pass-through action을 제거한다.
 - `apps/api`, `packages/fedify`: `ctx.db`/database handle이나 `postCommit` callback 없이 core Post action 결과와 기존 acknowledgement를 사용한다.
-- `apps/worker`: Effects Workflow/Activity registration, singleton Worker host, health·signal·drain lifecycle
+- `apps/worker`: Reply Notification persistence를 직접 소유하는 effects Activity, Fedify producer Activity, Workflow registration, singleton Worker host, health·signal·drain lifecycle
 - `apps/helm`: `worker.enabled` 없는 Worker component, Temporal endpoint·probe와 dev readiness/restart/drain 검증 wiring
 - 외부 GraphQL schema와 기존 Notification read API는 변경하지 않는다. Post transaction 결과와 caller 성공/acknowledgement 의미는 보존한다.
 

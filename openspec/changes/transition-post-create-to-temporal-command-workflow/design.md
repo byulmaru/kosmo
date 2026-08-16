@@ -42,9 +42,9 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 
 Workflow input은 committed Post ID와 origin처럼 다시 조회 가능한 최소 identity만 포함한다. 같은 Post에 대한 반복 start는 Temporal의 Workflow ID conflict policy로 실행 중인 accepted execution에 수렴하고 reuse policy로 종료된 execution의 재시작을 거부한다. duplicate/no-op Post 결과에서는 start를 시도하지 않는다. Start가 accepted되기 전의 누락은 복구하지 않는다.
 
-Accepted Workflow는 Reply Notification과 Local-origin Fedify queue handoff를 별도 Activity로 실행한다. 두 효과가 모두 적용될 수 있는 경우 서로 독립적으로 시작하고 각 Activity의 retry/최종 실패가 다른 효과를 선행 차단하지 않게 결과를 함께 수집한다. Notification Activity는 committed Post를 다시 조회해 기존 recipient·self suppression·visibility·uniqueness 정책을 적용한다. Delivery Activity는 기존 canonical Local Note identity, audience/target과 queue producer를 재사용하며 `origin=ACTIVITYPUB`이면 생성하지 않는다.
+Accepted Workflow는 Reply Notification과 Local-origin Fedify queue handoff를 별도 Activity로 실행한다. 두 효과가 모두 적용될 수 있는 경우 서로 독립적으로 시작하고 각 Activity의 retry/최종 실패가 다른 효과를 선행 차단하지 않게 결과를 함께 수집한다. Notification Activity는 process 기본 `db`로 committed Post를 다시 조회해 기존 recipient·self suppression·visibility·uniqueness 정책과 멱등 insert를 직접 소유한다. production caller가 하나뿐인 별도 core service wrapper는 두지 않는다. Delivery Activity는 기존 canonical Local Note identity, audience/target과 queue producer를 재사용하며 `origin=ACTIVITYPUB`이면 생성하지 않는다.
 
-Worker package는 compile-time registration을 직접 소유하고 production entrypoint는 인자 없는 process-global startup 경계를 정확히 한 번 호출한다. health server, Temporal connection, Worker와 signal handler도 같은 host가 단독 소유한다. Helm은 정상 application workload에서 Worker Deployment를 항상 render하고 chart-wide `workloads.enabled` bootstrap 경계만 유지한다. Worker DB principal·Secret wiring은 이 change에서 바꾸지 않고 표준 process `db`를 소비한다.
+Worker package는 compile-time registration을 직접 소유하고 production entrypoint 자체가 process-global host를 한 번 시작한다. 별도 `runWorker`/`startWorker` callable lifecycle은 두지 않는다. health server, Temporal connection, Worker와 signal handler도 같은 entrypoint가 단독 소유한다. Helm은 정상 application workload에서 Worker Deployment를 항상 render하고 chart-wide `workloads.enabled` bootstrap 경계만 유지한다. Worker DB principal·Secret wiring은 이 change에서 바꾸지 않고 표준 process `db`를 소비한다.
 
 ### Allowed Alternatives
 
