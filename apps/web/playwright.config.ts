@@ -80,7 +80,8 @@ export default defineConfig({
       url: `${oidcOrigin}/health`,
     },
     {
-      command: 'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api start',
+      command:
+        'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx --import ../../packages/core/temporal/test-client.ts src/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
@@ -88,6 +89,8 @@ export default defineConfig({
         PUBLIC_OIDC_ISSUER: oidcOrigin,
         PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         PUBLIC_ORIGIN: webOrigin,
+        TEMPORAL_ADDRESS: '127.0.0.1:7233',
+        TEMPORAL_NAMESPACE: 'test',
       },
       reuseExistingServer: false,
       timeout: 60_000,
@@ -109,6 +112,8 @@ export default defineConfig({
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
         PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
+        TEMPORAL_ADDRESS: '127.0.0.1:7233',
+        TEMPORAL_NAMESPACE: 'test',
       },
       reuseExistingServer: false,
       timeout: 120_000,

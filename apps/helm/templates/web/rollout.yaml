@@ -64,6 +64,10 @@ spec:
               value: kosmo_worker
             - name: PGDATABASE
               value: kosmo
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.frontendAddress | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ include "kosmo.temporalNamespaceName" . | quote }}
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

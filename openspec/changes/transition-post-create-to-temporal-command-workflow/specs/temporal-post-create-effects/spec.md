@@ -10,7 +10,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 ### Requirement: 기존 Post transaction 뒤 effects Workflow 시작
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 `createPost(input)`의 core-owned transaction이 소유해야 하며(MUST), core action은 실제 transaction commit 뒤에만 committed Post ID를 사용한 effects Workflow start를 시도해야 한다(MUST). GraphQL API와 ActivityPub Create queue consumer에는 같은 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 database handle·`postCommit` callback·후속 효과를 직접 조립해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 `createPost(input)`의 core-owned transaction이 소유해야 하며(MUST), core action은 실제 transaction commit 뒤에만 committed Post ID를 사용한 effects Workflow start를 시도해야 한다(MUST). GraphQL API와 ActivityPub Create queue consumer에는 같은 환경별 Temporal endpoint·namespace를 전달해야 하고(MUST), producer는 이 설정이 누락되면 traffic을 받기 전 startup에 실패해야 한다(MUST). Shared Fedify listener registration을 정적으로 import하는 Web runtime도 direct Client module의 startup 계약을 위해 같은 설정을 받아야 하지만(MUST), Web request process가 effects Workflow를 직접 시작해서는 안 된다(MUST NOT). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 database handle·`postCommit` callback·후속 효과를 직접 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Local root 또는 Reply commit 뒤 start
 
@@ -28,7 +28,14 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 - **WHEN** Helm chart가 Local GraphQL API와 ActivityPub queue consumer workload를 render한다
 - **THEN** 두 producer workload 모두 Worker와 같은 환경별 Temporal endpoint와 namespace를 받는다
+- **AND** shared Fedify listener registration을 import하는 Web runtime도 direct Client startup을 위해 같은 설정을 받지만 Workflow start owner가 되지 않는다
 - **AND** API에 Worker database credential이나 Worker 전용 database handle을 주입하지 않는다
+
+#### Scenario: Workflow producer Temporal 설정 누락
+
+- **WHEN** GraphQL API, ActivityPub queue consumer 또는 shared Fedify registration을 import하는 Web runtime이 `TEMPORAL_ADDRESS`나 `TEMPORAL_NAMESPACE` 없이 시작된다
+- **THEN** 해당 application runtime은 요청 또는 queue message를 처리하기 전에 startup에 실패한다
+- **AND** 설정 누락을 첫 Post의 격리된 Workflow start failure로 지연하지 않는다
 
 #### Scenario: Post transaction rollback
 
@@ -134,7 +141,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 #### Scenario: GraphQL success와 start failure
 
-- **WHEN** Local GraphQL Post transaction이 commit되지만 post-commit effects Workflow start가 오류를 반환한다
+- **WHEN** Temporal 설정을 검증한 Local GraphQL producer에서 Post transaction이 commit되지만 post-commit effects Workflow의 연결 또는 start 요청이 오류를 반환한다
 - **THEN** GraphQL mutation은 기존 committed Post 성공 payload를 반환한다
 - **AND** start failure는 별도로 관측되며 Post transaction이나 caller 성공을 rollback하지 않는다
 

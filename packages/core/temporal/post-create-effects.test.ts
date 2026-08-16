@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { KOSMO_TASK_QUEUE } from './client';
 import {
+  KOSMO_TASK_QUEUE,
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowId,
   postCreateEffectsWorkflowStartOptions,

@@ -33,6 +33,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -69,17 +70,11 @@ let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
 let localInstanceId: string;
-let temporalAddress: string | undefined;
-let temporalNamespace: string | undefined;
 
 describe('inbound Create dispatch', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
-    temporalAddress = process.env.TEMPORAL_ADDRESS;
-    temporalNamespace = process.env.TEMPORAL_NAMESPACE;
-    delete process.env.TEMPORAL_ADDRESS;
-    delete process.env.TEMPORAL_NAMESPACE;
     ({
       ActivityPubActors,
       ActivityPubPosts,
@@ -119,16 +114,6 @@ describe('inbound Create dispatch', () => {
     await db.delete(Posts);
     await db.delete(Media);
     await pg.end();
-    if (temporalAddress === undefined) {
-      delete process.env.TEMPORAL_ADDRESS;
-    } else {
-      process.env.TEMPORAL_ADDRESS = temporalAddress;
-    }
-    if (temporalNamespace === undefined) {
-      delete process.env.TEMPORAL_NAMESPACE;
-    } else {
-      process.env.TEMPORAL_NAMESPACE = temporalNamespace;
-    }
   });
 
   test('materializes a hydrated Note without persisting the activity id', async () => {
@@ -906,7 +891,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when effects Workflow start fails', async () => {
+  test('keeps an inbound Reply committed when effects Workflow start fails', async (t) => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -927,11 +912,10 @@ describe('inbound Create dispatch', () => {
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    const previousTemporalAddress = process.env.TEMPORAL_ADDRESS;
-    const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
-    delete process.env.TEMPORAL_ADDRESS;
-    delete process.env.TEMPORAL_NAMESPACE;
     const errorLog = mock.method(console, 'error', () => undefined);
+    t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
 
     try {
       await handleInboundCreate(
@@ -944,16 +928,6 @@ describe('inbound Create dispatch', () => {
       );
     } finally {
       errorLog.mock.restore();
-      if (previousTemporalAddress === undefined) {
-        delete process.env.TEMPORAL_ADDRESS;
-      } else {
-        process.env.TEMPORAL_ADDRESS = previousTemporalAddress;
-      }
-      if (previousTemporalNamespace === undefined) {
-        delete process.env.TEMPORAL_NAMESPACE;
-      } else {
-        process.env.TEMPORAL_NAMESPACE = previousTemporalNamespace;
-      }
     }
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);

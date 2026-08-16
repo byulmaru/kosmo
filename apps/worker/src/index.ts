@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/client';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/post-create-effects';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import { createReplyNotificationActivity, sendLocalPostCreateActivity } from './activities';

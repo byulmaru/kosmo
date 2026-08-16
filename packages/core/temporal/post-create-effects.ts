@@ -1,4 +1,4 @@
-import { KOSMO_TASK_QUEUE } from './client';
+export const KOSMO_TASK_QUEUE = 'kosmo';
 
 export const POST_CREATE_EFFECTS_WORKFLOW_TYPE = 'postCreateEffectsWorkflow';
 

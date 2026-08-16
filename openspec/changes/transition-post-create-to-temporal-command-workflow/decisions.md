@@ -23,6 +23,14 @@
 - **Decision:** The core Post action starts a deterministic Workflow identity derived only from the committed Post ID after its transaction commits; explicit origin is Workflow input, not part of the identity. A start conflicts with any running execution and rejects reuse after any closed execution. Duplicate/no-op Create results do not start or backfill a Workflow.
 - **Reason:** A committed Post ID is already the stable identity required to converge repeated start attempts, without introducing a proposed identifier before commit.
 
+### Fail producer startup when Temporal configuration is missing
+
+- **Type:** Implementation Choice
+- **Authority:** PROD-722 user decision
+- **Decision:** Core validates `TEMPORAL_ADDRESS` and `TEMPORAL_NAMESPACE` when its Temporal client module is imported and directly exports one process-global real `Client` backed by `Connection.lazy`. Missing configuration fails any importing application runtime before traffic is accepted. API, the ActivityPub queue consumer, Worker, and the Web runtime that statically imports shared Fedify listener registration receive the same environment-specific configuration. Web does not start the Workflow. After startup, connection or `workflow.start()` failures remain isolated from the already committed Post result.
+- **Reason:** A getter-shaped partial client only delays a deployment configuration error until the first Post and adds an unnecessary client cache and infrastructure wrapper. Supplying the two existing Temporal values to Web is smaller than introducing dynamic listener loading solely to avoid the transitive import.
+- **Rejected:** A `Pick<Client, 'workflow'>` facade with a getter, per-Post environment validation, or treating missing producer configuration as an isolated effects start failure.
+
 ### Run Notification and federation handoff as independent effects
 
 - **Type:** Derived Contract

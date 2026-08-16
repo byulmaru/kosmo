@@ -21,6 +21,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -626,34 +627,20 @@ describe('Post Reply GraphQL 경계', () => {
 
   test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const previousTemporalAddress = process.env.TEMPORAL_ADDRESS;
-    const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
-    delete process.env.TEMPORAL_ADDRESS;
-    delete process.env.TEMPORAL_NAMESPACE;
     const createContext = t.mock.method(localOutboundFederation, 'createContext');
+    t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
 
-    try {
-      const result = await requestCreatePost(
-        {
-          bodyText: 'committed root post',
-          visibility: PostVisibility.PUBLIC,
-        },
-        auth.token,
-      );
+    const result = await requestCreatePost(
+      {
+        bodyText: 'committed root post',
+        visibility: PostVisibility.PUBLIC,
+      },
+      auth.token,
+    );
 
-      assertNoGraphQLErrors(result);
-    } finally {
-      if (previousTemporalAddress === undefined) {
-        delete process.env.TEMPORAL_ADDRESS;
-      } else {
-        process.env.TEMPORAL_ADDRESS = previousTemporalAddress;
-      }
-      if (previousTemporalNamespace === undefined) {
-        delete process.env.TEMPORAL_NAMESPACE;
-      } else {
-        process.env.TEMPORAL_NAMESPACE = previousTemporalNamespace;
-      }
-    }
+    assertNoGraphQLErrors(result);
 
     const committed = await db
       .select({ currentContentId: Posts.currentContentId, state: Posts.state })

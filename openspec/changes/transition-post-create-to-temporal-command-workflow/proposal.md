@@ -19,6 +19,7 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 - accepted effects Workflow는 stable Post ID를 사용해 Reply Notification을 기존 recipient/self/visibility/uniqueness 정책으로 멱등 재시도하고, `origin: LOCAL`인 Post만 stable canonical Activity ID로 기존 ActivityPub Create를 Fedify PostgreSQL MessageQueue producer에 retry-safe하게 handoff한다. Queue acknowledgement가 모호한 경우 duplicate enqueue/HTTP request는 허용하며 수신 측 ActivityPub idempotency로 의미상 수렴한다. `origin: ACTIVITYPUB`인 Post는 outbound echo를 만들지 않는다.
 - Create Activity가 실행될 때 Local Post가 이미 삭제됐으면 Create handoff를 no-op으로 끝낸다. 기존 Delete handoff는 삭제된 Post에서 과거 Create를 합성하지 않고, Create handoff 뒤 상태 재확인·보정 Create/Delete 쌍·외부 queue I/O를 감싸는 row lock을 추가하지 않는다.
 - Reply Notification transaction savepoint, Post Create의 process-local direct Fedify effect와 반환형 `postCommit` callback을 제거한다. `createPost(input)`이 자체 transaction commit 뒤 Workflow start까지 소유하고 API/Fedify handler는 database handle이나 후속 효과를 조립하지 않는다. 다른 domain의 `postCommit` lifecycle은 이 change에서 변경하지 않는다.
+- Workflow producer는 필수 Temporal endpoint·namespace를 startup에 검증하고 process-global 실제 Client를 직접 사용한다. 설정 누락은 traffic 수락 전 startup failure이며, startup 이후 연결·start 실패만 committed Post와 caller 성공에서 격리한다.
 - Workflow start 실패를 보완하기 위한 command receipt table, transaction outbox/relay, 별도 delivery history 또는 cross-request exactly-once를 추가하지 않는다.
 - 첫 business Workflow/Activity가 Worker registration을 소유한다. process당 하나의 registration과 Worker host만 두고, 빈 registration·idle polling·중복 startup API를 정상 경로로 허용하지 않는다. readiness, signal과 graceful drain은 Worker host가 한 번만 소유한다.
 - Worker는 별도 activation 선택 없이 모든 application release에 함께 배포되며, 첫 registration이 실제 RUNNING·readiness·restart 복구·drain을 dev에서 검증한다. chart-wide workload activation gate는 두지 않는다.
@@ -47,9 +48,9 @@ start 사이의 process 종료 또는 start 실패는 허용된 유실 경계로
 ## Impact
 
 - `packages/core/services`: 기존 Post transaction commit 결과에서 stable Post ID effects Workflow start를 시도하고, Post Create의 Notification savepoint/direct effect와 Worker 전용 pass-through action을 제거한다. transport-neutral Reply Notification 함수와 공통 Post visibility policy를 소유한다.
-- `apps/api`, `packages/fedify`: `ctx.db`/database handle이나 `postCommit` callback 없이 core Post action 결과와 기존 acknowledgement를 사용하고, producer workload가 환경별 Temporal endpoint·namespace를 받는다.
+- `apps/api`, `apps/web`, `packages/fedify`: `ctx.db`/database handle이나 `postCommit` callback 없이 core Post action 결과와 기존 acknowledgement를 사용한다. producer workload와 shared Fedify registration을 import하는 Web runtime이 환경별 Temporal endpoint·namespace를 받는다.
 - `apps/worker`: Core Reply Notification 함수와 Fedify producer 함수의 Activity alias registration, Workflow, singleton Worker host, health·signal·drain lifecycle
-- `apps/helm`: activation gate 없는 Worker component, API/Fedify producer와 Worker의 Temporal endpoint·namespace, probe와 dev readiness/restart/drain 검증 wiring
+- `apps/helm`: activation gate 없는 Worker component, API/Web/Fedify consumer/Worker의 Temporal endpoint·namespace, probe와 dev readiness/restart/drain 검증 wiring
 - 외부 GraphQL schema와 기존 Notification read API는 변경하지 않는다. Post transaction 결과와 caller 성공/acknowledgement 의미는 보존한다.
 
 ## Out of Scope

@@ -30,6 +30,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
+import { temporalClient } from '../temporal/client';
 import { createPost } from './post';
 
 after(async () => pg.end());
@@ -530,7 +531,7 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 });
 
-test('Post effects Workflow start 실패가 Post transaction과 호출을 실패시키지 않는다', async () => {
+test('Post effects Workflow start 실패가 Post transaction과 호출을 실패시키지 않는다', async (t) => {
   const author = await createProfile();
   const recipient = await createProfile();
   const parent = await createPost({
@@ -541,11 +542,10 @@ test('Post effects Workflow start 실패가 Post transaction과 호출을 실패
   });
   const objectUri = `https://remote.example/notes/reply-workflow-failure-${crypto.randomUUID()}`;
   const errorLog = mock.method(console, 'error', () => undefined);
+  t.mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Temporal unavailable');
+  });
 
-  const previousAddress = process.env.TEMPORAL_ADDRESS;
-  const previousNamespace = process.env.TEMPORAL_NAMESPACE;
-  delete process.env.TEMPORAL_ADDRESS;
-  delete process.env.TEMPORAL_NAMESPACE;
   try {
     const result = await createPost({
       document: postContentDocumentFromText('remote reply'),
@@ -566,16 +566,6 @@ test('Post effects Workflow start 실패가 Post transaction과 호출을 실패
     assert.equal(await db.$count(Posts, eq(Posts.id, result.post.id)), 1);
   } finally {
     errorLog.mock.restore();
-    if (previousAddress === undefined) {
-      delete process.env.TEMPORAL_ADDRESS;
-    } else {
-      process.env.TEMPORAL_ADDRESS = previousAddress;
-    }
-    if (previousNamespace === undefined) {
-      delete process.env.TEMPORAL_NAMESPACE;
-    } else {
-      process.env.TEMPORAL_NAMESPACE = previousNamespace;
-    }
   }
 });
 
