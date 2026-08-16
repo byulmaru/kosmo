@@ -1,5 +1,10 @@
 # PostgreSQL PgBouncer session pool 운영
 
+> [!IMPORTANT]
+> 이 문서는 GraphQL operation session과 RLS 전환의 과거 운영·incident·rollback 기록이다. 현재 target
+> architecture는 [ADR 0024](../domain/decisions/0024-application-policy-and-runtime-db-boundary.md)로
+> 대체되었다. 이 문서의 production 명령은 새 전환 계획과 별도 승인 없이 실행하지 않는다.
+
 ## 운영 경계
 
 이 문서는 CloudNativePG가 생성한 read-write PgBouncer Pooler를 기존 PostgreSQL Cluster 옆에 배포하고 확인하는 절차를 정의한다.
