@@ -2,20 +2,20 @@
 
 PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 Web/Worker에 별도 `WORKER_DATABASE_*` env를 준비했다. Runtime은 이 env를 소비하지 않으며 process 기본 DB 입력이 URL과 password 조합에 의존했다.
 
-최신 Linear 계약은 GraphQL Query/Mutation에만 operation `ctx.db`/RLS를 적용하고, Web trusted federation ingress와 Temporal Worker를 비GraphQL trusted workload로 분류한다. 모든 process-wide application workload는 별도 application pool/handle 없이 process 기본 `db`를 사용하며 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`만 기본 DB source로 읽는다. API, Fedify consumer와 dev migration은 `kosmo` owner source를, Web과 Temporal Worker는 Vault/VSO-backed `kosmo_worker` SCRAM credential을 사용한다. GraphQL operation PgBouncer URL과 Fedify MessageQueue URL/password는 별도 secondary connection으로 남긴다. PROD-369 역할/Secret과 PROD-724 공통 CRUD ACL은 dev와 production에 적용됐다.
+PROD-779 이후 GraphQL Query/Mutation도 별도 operation DB session이나 `ctx.db` 없이 API process 기본 `db`를 사용한다. 모든 process-wide application workload는 별도 application pool/handle 없이 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`만 기본 DB source로 읽는다. API GraphQL, Fedify consumer와 dev migration은 `kosmo` owner source를, Web과 Temporal Worker는 Vault/VSO-backed `kosmo_worker` SCRAM credential을 사용한다. Fedify MessageQueue URL/password만 별도 secondary connection으로 남기고 기존 Pooler resource는 이 Worker credential change에서 변경하지 않는다. PROD-369 역할/Secret과 PROD-724 공통 CRUD ACL은 dev와 production에 적용됐다.
 
 ## Goals
 
 - API, Fedify consumer와 dev migration을 포함한 process-wide 기본 DB를 chart-derived 표준 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD` source로 통일한다. API/Fedify/dev migration은 `kosmo`, Web/Worker는 `kosmo_worker`를 사용한다.
 - 기존 전역 `db`, Fedify listener와 core service callsite를 보존한다.
-- API GraphQL operation connection의 `OPERATION_DATABASE_URL`, migration과 MessageQueue database/`FEDIFY_QUEUE_DATABASE_URL`을 보존한다.
+- API GraphQL이 process 기본 표준 `PG*` source를 공유하는 경계와 migration 및 MessageQueue database/`FEDIFY_QUEUE_DATABASE_URL`을 보존한다.
 - Git revert rollback과 production 승인 경계를 명확히 한다.
 
 ## Non-goals
 
 - DatabaseRole, VaultStaticSecret과 password 생성·회전 provisioning(PROD-369).
 - 객체 GRANT(PROD-724), 별도 Worker application pool/handle 또는 explicit SQL handle 이전(PROD-710).
-- GraphQL operation 또는 Fedify MessageQueue의 secondary URL/password 경계를 process 기본 DB로 합치지 않는다.
+- Fedify MessageQueue의 secondary URL/password 경계를 process 기본 DB로 합치지 않는다.
 - 전용 Worker Pooler와 custom authentication.
 - Vault Dynamic Secret/임시 login lease(PROD-744).
 - API cutover, Worker runtime registration/singleton startup/activation lifecycle(PROD-722), Temporal domain Workflow와 Fedify MessageQueue.
@@ -27,12 +27,12 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 - Worker Deployment는 기존 `workloads.enabled && worker.enabled` activation gate에서만 렌더된다. `worker.enabled`의 기본값과 `apps/worker` registration·startup·shutdown 동작은 이 change에서 변경하지 않는다.
 - API에는 Worker source가 없어야 한다. API의 process 기본 DB는 owner `kosmo` source이며 Worker Secret을 참조하지 않는다.
 - `kosmo_fedify_queue`는 MessageQueue 전용 별도 database/role이며 Worker principal과 무관하다.
-- `OPERATION_DATABASE_URL`과 `FEDIFY_QUEUE_DATABASE_URL`은 각각 GraphQL operation과 MessageQueue 전용 secondary connection으로 유지한다.
+- GraphQL은 API process 기본 표준 `PG*` connection을 사용하고 `OPERATION_DATABASE_URL`을 만들지 않는다. `FEDIFY_QUEUE_DATABASE_URL`은 MessageQueue 전용 secondary connection으로 유지한다.
 - production sync/apply는 별도 사용자 승인 대상이다.
 
 ## Recommended Approach
 
-1. 각 process-wide template이 기존 direct read-write Service와 고정 principal/database를 표준 `PG*` env로 투영한다. API/Fedify consumer/dev migration은 `kosmo`와 app Secret, Web/enabled Worker는 `kosmo_worker`와 Worker Secret을 사용한다. Runtime은 이 process 기본 경계에서 `DATABASE_URL`을 해석하거나 source를 선택하지 않는다. PgBouncer URL과 queue URL/password는 각 secondary client에서만 사용한다.
+1. 각 process-wide template이 기존 direct read-write Service와 고정 principal/database를 표준 `PG*` env로 투영한다. API GraphQL/Fedify consumer/dev migration은 `kosmo`와 app Secret, Web/enabled Worker는 `kosmo_worker`와 Worker Secret을 사용한다. Runtime은 이 process 기본 경계에서 `DATABASE_URL`을 해석하거나 source를 선택하지 않는다. queue URL/password만 secondary client에서 사용한다.
 2. 기존 API selector와 URL/password trio를 제거하고, API/Fedify consumer/dev migration의 process 기본 DB를 같은 owner `PG*` source로 고정한다. Rollback은 전체 PROD-715 merge/squash revision을 Git revert한다.
 3. 모든 process-wide workload template의 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*`, `FEDIFY_DATABASE_*`를 제거하고 application SQL·callsite·DB handle 구조는 변경하지 않는다.
 4. workload별 `PG*` env와 Secret ref는 values 입력으로 받지 않고 release naming과 고정 principal 계약에서 생성한다.
@@ -43,7 +43,7 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 ## Known Traps
 
 - Helm env source 변경만으로 live SQL principal이 바뀌었다고 판단하면 안 된다. exact deployed revision과 `current_user` evidence가 필요하다.
-- PgBouncer의 `cnpg_pooler_pgbouncer` 인증서는 GraphQL operation용 `kosmo_worker` workload 역할 credential이 아니다.
+- PgBouncer의 `cnpg_pooler_pgbouncer` 인증서는 `kosmo_worker` workload 역할 credential이 아니며, 기존 Pooler resource 보존은 GraphQL consumer 사용을 의미하지 않는다.
 - password를 URL, values, rendered manifest나 로그에 넣지 않고 `PGPASSWORD` SecretKeyRef로만 주입한다.
 - 공용 `envFrom`에 legacy DB key가 남지 않는지 확인하고, process-wide 기본 DB에서 URL/password fallback이나 완전성 flag가 없는지 검색한다. 비운영 검증과 production preflight에는 충돌 key 이름만 기록한다.
 - `BYPASSRLS`는 객체 ACL을 대체하지 않는다.
@@ -63,6 +63,6 @@ PROD-709와 PR #564는 API와 Worker 역할별 password selector를 만들고 We
 1. Process-wide URL/selector 제거와 workload별 표준 `PG*` env migration 및 render 검증.
 2. PROD-369 passwordSecret과 PROD-724 application CRUD ACL 완료.
 3. API/Fedify consumer/dev migration owner source와 Web/enabled Worker 기본 DB source wiring 및 정적 검증.
-4. merge 뒤 비운영 exact revision에서 각 workload의 direct read-write Service 경로와 principal, 대표 SQL, API Worker Secret 비주입과 queue/migration 불변, `worker-database` Secret 변경 시 restart target을 검증한다. GraphQL operation만 PgBouncer 경로를 사용한다.
+4. merge 뒤 비운영 exact revision에서 각 workload의 direct read-write Service 경로와 principal, 대표 SQL, API Worker Secret 비주입과 queue/migration 불변, `worker-database` Secret 변경 시 restart target을 검증한다. GraphQL은 API process 기본 표준 `PG*` source를 공유한다.
 5. OpenSpec을 sync/archive하고 PROD-715 완료 여부를 판단한다.
 6. production은 별도 사용자 승인과 운영 절차에서 exact diff, Vault source metadata, rollback과 live query를 다시 제시한 뒤에만 sync/apply한다.
