@@ -84,7 +84,7 @@ describe('ActivityPub Local Post delivery', () => {
     await pg.end();
   });
 
-  test('Create(Note)가 기존 projection과 stable identity를 쓰고 remote Parent Author에게 전달된다', async () => {
+  test('Create(Note) retry가 중복 handoff에서도 같은 stable identity를 쓴다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent', sharedInbox: true });
@@ -130,7 +130,10 @@ describe('ActivityPub Local Post delivery', () => {
       assert.equal(object.url && new URL(object.url.toString()).origin, publicOrigin);
       assert.equal(object.replyTargetId?.href, parentUri.href);
       assert.deepEqual(call.sender, { identifier: author.id });
-      assert.deepEqual(call.options, { preferSharedInbox: true });
+      assert.deepEqual(call.options, {
+        orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
+        preferSharedInbox: true,
+      });
       assert.deepEqual(
         call.recipients.map((recipient) => recipient.id?.href),
         [parentAuthor.actorUri],
@@ -416,7 +419,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Delete가 tombstone 뒤 같은 Note·activity identity를 반복 사용한다', async () => {
+  test('Delete가 늦은 Create보다 먼저 commit돼도 Create 다음 순서로 handoff한다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
@@ -450,25 +453,37 @@ describe('ActivityPub Local Post delivery', () => {
     await sendLocalPostDelete(reply.id);
     await sendLocalPostDelete(reply.id);
 
-    assert.equal(createContext.mock.callCount(), 2);
-    assert.equal(fixture.calls.length, 2);
+    assert.equal(createContext.mock.callCount(), 4);
+    assert.equal(fixture.calls.length, 4);
+    assert.deepEqual(
+      fixture.calls.map((call) => call.activity.constructor),
+      [Create, Delete, Create, Delete],
+    );
     for (const call of fixture.calls) {
-      assert.ok(call.activity instanceof Delete);
-      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
-      assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
-      assert.equal(call.activity.published?.toString(), deletedAt.toString());
-      assert.deepEqual(call.options, { preferSharedInbox: true });
+      const suffix = call.activity instanceof Create ? '#create' : '#delete';
+      assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}${suffix}`);
+      if (call.activity instanceof Delete) {
+        assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
+        assert.equal(call.activity.published?.toString(), deletedAt.toString());
+      }
+      assert.deepEqual(call.options, {
+        orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
+        preferSharedInbox: true,
+      });
       assert.deepEqual(
         call.recipients.map((recipient) => recipient.id?.href),
         [parentAuthor.actorUri],
       );
     }
+
+    await sendLocalPostCreate(reply.id);
+    assert.equal(fixture.calls.length, 4);
   });
 });
 
 interface SendActivityCall {
   readonly activity: Activity;
-  readonly options: { readonly preferSharedInbox: boolean };
+  readonly options: { readonly orderingKey?: string; readonly preferSharedInbox: boolean };
   readonly recipients: Recipient[];
   readonly sender: { readonly identifier: string };
 }
@@ -482,7 +497,7 @@ const createContextFixture = (canonicalOrigin = publicOrigin) => {
       sender: { identifier: string },
       recipients: Recipient | Recipient[],
       activity: Activity,
-      options: { preferSharedInbox: boolean },
+      options: { orderingKey?: string; preferSharedInbox: boolean },
     ) => {
       calls.push({
         activity,

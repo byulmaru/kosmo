@@ -10,7 +10,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 ### Requirement: 기존 Post transaction 뒤 effects Workflow 시작
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 `createPost(input)`의 core-owned transaction이 소유해야 하며(MUST), core action은 실제 transaction commit 뒤에만 committed Post ID를 사용한 effects Workflow start를 시도해야 한다(MUST). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 database handle·`postCommit` callback·후속 효과를 직접 조립해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-722`. Local GraphQL과 verified ActivityPub Create의 Post·PostContent·Author/Reply Parent 관계·필요한 ActivityPub mapping 저장과 domain 검증은 `createPost(input)`의 core-owned transaction이 소유해야 하며(MUST), core action은 실제 transaction commit 뒤에만 committed Post ID를 사용한 effects Workflow start를 시도해야 한다(MUST). GraphQL API와 ActivityPub Create queue consumer에는 같은 환경별 Temporal endpoint·namespace를 전달해야 한다(MUST). Temporal transaction Activity로 Post source를 새로 만들거나 resolver/Fedify handler가 database handle·`postCommit` callback·후속 효과를 직접 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Local root 또는 Reply commit 뒤 start
 
@@ -23,6 +23,12 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 - **WHEN** verified ActivityPub Create가 기존 Post transaction을 성공적으로 commit한다
 - **THEN** 시스템은 commit된 Post ID와 inbound origin으로 effects Workflow start를 시도한다
 - **AND** ActivityPub handler는 기존 acknowledgement 처리 경계를 유지한다
+
+#### Scenario: Workflow producer runtime wiring
+
+- **WHEN** Helm chart가 Local GraphQL API와 ActivityPub queue consumer workload를 render한다
+- **THEN** 두 producer workload 모두 Worker와 같은 환경별 Temporal endpoint와 namespace를 받는다
+- **AND** API에 Worker database credential이나 Worker 전용 database handle을 주입하지 않는다
 
 #### Scenario: Post transaction rollback
 
@@ -88,7 +94,7 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 ### Requirement: Local Fedify queue 효과와 ActivityPub echo suppression
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `docs/architecture/core-services.md`, `PROD-448`, `PROD-512`, `PROD-722`. accepted effects Workflow는 `origin: LOCAL`인 committed content Post의 root·Reply Create를 기존 canonical Local Note builder와 audience/target 규칙으로 Fedify PostgreSQL MessageQueue producer에 handoff해야 하며(MUST), `origin: ACTIVITYPUB`인 Post에는 outbound Create나 remote HTTP delivery를 만들면 안 된다(MUST NOT). queue acceptance 뒤 remote delivery retry는 기존 Fedify consumer가 소유해야 하며(MUST), 이 capability는 queue internals·consumer·custom relay를 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `docs/architecture/core-services.md`, `PROD-448`, `PROD-512`, `PROD-722`. accepted effects Workflow는 `origin: LOCAL`인 committed content Post의 root·Reply Create를 기존 canonical Local Note builder와 audience/target 규칙으로 Fedify PostgreSQL MessageQueue producer에 handoff해야 하며(MUST), `origin: ACTIVITYPUB`인 Post에는 outbound Create나 remote HTTP delivery를 만들면 안 된다(MUST NOT). Temporal retry는 같은 canonical Create Activity ID로 재시도해야 하며(MUST), queue acceptance acknowledgement가 모호한 경우 중복 queue message나 remote HTTP request가 발생하지 않는 exactly-once를 보장해서는 안 된다(MUST NOT). 같은 Activity ID의 중복 delivery는 ActivityPub 수신 측의 idempotent 처리로 의미상 수렴한다. queue acceptance 뒤 remote delivery retry는 기존 Fedify consumer가 소유해야 하며(MUST), 이 capability는 queue internals·consumer·custom relay를 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: Local root 또는 Reply Create
 
@@ -106,7 +112,14 @@ Create 후속 효과를 Temporal Workflow의 재시도 경계로 이동한다. P
 
 - **WHEN** `origin=LOCAL` effects Workflow가 queue handoff에서 일시적 오류를 만나거나 handoff 전 Worker가 재시작된다
 - **THEN** Workflow는 committed Post를 rollback하지 않고 같은 stable Post/activity identity로 handoff를 재시도할 수 있다
+- **AND** queue acceptance acknowledgement가 모호하면 같은 Activity ID의 중복 enqueue 또는 remote request를 허용한다
 - **AND** custom transactional outbox, domain relay 또는 remote delivery history를 추가하지 않는다
+
+#### Scenario: Create Activity보다 먼저 Local Delete가 commit됨
+
+- **WHEN** committed Local Post의 Create Activity가 queue handoff하기 전에 같은 Post의 Local Delete가 commit된다
+- **THEN** Delete handoff는 삭제된 Post에 보존된 content projection으로 canonical Create를 먼저 queue에 넣고 같은 Note ordering key의 Delete를 뒤이어 넣는다
+- **AND** 늦게 실행된 Create Activity는 삭제 상태를 보고 성공 no-op으로 끝나 Delete 뒤에 Create를 다시 넣지 않는다
 
 ### Requirement: caller의 동기 결과와 effects 실패 격리
 

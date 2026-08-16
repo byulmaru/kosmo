@@ -12,7 +12,7 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 
 - Local/AP Post transaction과 기존 동기 응답·acknowledgement 의미를 유지한다.
 - core `createPost(input)`이 자체 transaction commit 뒤 stable Post ID의 effects Workflow start를 시도한다.
-- accepted Workflow가 Reply Notification과 Local-origin Create queue handoff를 멱등 재시도하고 AP-origin echo를 억제한다.
+- accepted Workflow가 Reply Notification을 멱등 재시도하고 Local-origin Create queue handoff를 stable Activity identity로 retry-safe하게 재시도하며 AP-origin echo를 억제한다.
 - 실제 registration 하나와 process-global Worker host 하나를 구성하고 `worker.enabled` 없이 application workload에 Worker를 포함한다.
 - dev에서 실제 effects, readiness, restart 복구와 graceful drain을 검증한다.
 
@@ -42,9 +42,9 @@ Worker foundation은 health·signal 경계를 제공하지만 production entrypo
 
 Workflow input은 committed Post ID와 origin처럼 다시 조회 가능한 최소 identity만 포함한다. 같은 Post에 대한 반복 start는 Temporal의 Workflow ID conflict policy로 실행 중인 accepted execution에 수렴하고 reuse policy로 종료된 execution의 재시작을 거부한다. duplicate/no-op Post 결과에서는 start를 시도하지 않는다. Start가 accepted되기 전의 누락은 복구하지 않는다.
 
-Accepted Workflow는 Reply Notification과 Local-origin Fedify queue handoff를 별도 Activity로 실행한다. 두 효과가 모두 적용될 수 있는 경우 서로 독립적으로 시작하고 각 Activity의 retry/최종 실패가 다른 효과를 선행 차단하지 않게 결과를 함께 수집한다. Notification Activity는 process 기본 `db`로 committed Post를 다시 조회해 기존 recipient·self suppression·visibility·uniqueness 정책과 멱등 insert를 직접 소유한다. production caller가 하나뿐인 별도 core service wrapper는 두지 않는다. Delivery Activity는 기존 canonical Local Note identity, audience/target과 queue producer를 재사용하며 `origin=ACTIVITYPUB`이면 생성하지 않는다.
+Accepted Workflow는 Reply Notification과 Local-origin Fedify queue handoff를 별도 Activity로 실행한다. 두 효과가 모두 적용될 수 있는 경우 서로 독립적으로 시작하고 각 Activity의 retry/최종 실패가 다른 효과를 선행 차단하지 않게 결과를 함께 수집한다. Notification Activity는 process 기본 `db`로 committed Post를 다시 조회해 기존 recipient·self suppression·visibility·uniqueness 정책과 멱등 insert를 직접 소유한다. production caller가 하나뿐인 별도 core service wrapper는 두지 않는다. Delivery Activity는 기존 canonical Local Note/Activity identity, audience/target과 queue producer를 재사용하며 `origin=ACTIVITYPUB`이면 생성하지 않는다. Local Delete가 먼저 commit되면 기존 Delete handoff가 삭제된 Post의 보존된 content projection으로 Create를 먼저 enqueue하고 같은 Note ordering key로 Delete를 이어서 enqueue한다. 이후 늦은 Create Activity는 삭제 상태에서 no-op이므로 Delete 뒤 재생성하지 않는다. Fedify PostgreSQL MessageQueue는 dedup key를 제공하지 않으므로 Temporal retry가 queue-level exactly-once를 보장하지는 않는다. acknowledgement가 모호하면 같은 Activity ID의 중복 queue message나 HTTP request가 가능하고, 수신 측 ActivityPub idempotency로 의미상 수렴한다. 이를 제거하려면 현재 범위에서 금지한 queue schema 변경이나 별도 delivery history가 필요하다.
 
-Worker package는 compile-time registration을 직접 소유하고 production entrypoint 자체가 process-global host를 한 번 시작한다. 별도 `runWorker`/`startWorker` callable lifecycle은 두지 않는다. health server, Temporal connection, Worker와 signal handler도 같은 entrypoint가 단독 소유한다. Helm은 정상 application workload에서 Worker Deployment를 항상 render하고 chart-wide `workloads.enabled` bootstrap 경계만 유지한다. Worker DB principal·Secret wiring은 이 change에서 바꾸지 않고 표준 process `db`를 소비한다.
+Worker package는 compile-time registration을 직접 소유하고 production entrypoint 자체가 process-global host를 한 번 시작한다. 별도 `runWorker`/`startWorker` callable lifecycle은 두지 않는다. health server, Temporal connection, Worker와 signal handler도 같은 entrypoint가 단독 소유한다. Helm은 정상 application workload에서 Worker Deployment를 항상 render하고 chart-wide `workloads.enabled` bootstrap 경계만 유지하며, Workflow producer인 GraphQL API와 ActivityPub queue consumer에도 같은 환경별 Temporal endpoint·namespace를 전달한다. API에는 Worker database credential을 주입하지 않는다. Worker DB principal·Secret wiring은 이 change에서 바꾸지 않고 표준 process `db`를 소비한다.
 
 ### Allowed Alternatives
 
@@ -69,6 +69,8 @@ Worker package는 compile-time registration을 직접 소유하고 production en
 - [Temporal start가 실패하면 Notification과 federation handoff가 모두 누락될 수 있음] → 실패를 Post ID와 함께 관측하고 committed Post/응답은 유지한다. 이번 change는 자동 reconciliation을 추가하지 않는다.
 - [같은 Post의 start가 중복 호출됨] → deterministic Post-based Workflow ID와 start conflict 처리를 사용해 accepted execution 하나로 수렴한다.
 - [한 effects Activity가 장기간 실패함] → 다른 Activity를 독립 실행하고 각 실패를 관측한다. Post와 caller 성공은 유지한다.
+- [Temporal Activity가 queue acceptance 뒤 acknowledgement를 잃고 재시도함] → 같은 canonical Activity ID를 재사용해 수신 측 의미는 수렴하지만 duplicate queue message/HTTP request는 허용한다. queue-level exactly-once는 별도 queue schema/history 없이는 보장하지 않는다.
+- [Create Activity 전에 Local Delete가 commit됨] → Delete handoff가 보존된 projection으로 Create를 먼저 넣고 같은 Note ordering key로 Delete를 이어 넣는다. 늦은 Create Activity는 deleted 상태에서 no-op한다.
 - [Worker와 ingress를 되돌리면 accepted Workflow가 polling되지 않을 수 있음] → Temporal history는 보존되므로 호환 Worker 재배포로 재개할 수 있다. production 전환에는 별도 drain·rollback 승인이 필요하다.
 
 ## Migration Plan

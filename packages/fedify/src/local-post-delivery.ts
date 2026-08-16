@@ -23,69 +23,79 @@ const noteUri = (canonicalOrigin: string | URL, postId: string): URL =>
 const getFollowersUri = (actorUri: URL): URL =>
   new URL(`${actorUri.pathname.replace(/\/$/, '')}/followers`, actorUri);
 
-export const sendLocalPostCreate = async (postId: string): Promise<void> => {
-  const source = await db
-    .select({
-      canonicalOrigin: Instances.canonicalOrigin,
-      localInstanceId: Instances.id,
-      parentInstanceKind: ReplyParentInstances.kind,
-      parentProfileId: ReplyParentProfiles.id,
-    })
-    .from(Posts)
-    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .leftJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
-    .leftJoin(ReplyParentProfiles, eq(ReplyParentProfiles.id, ReplyParents.profileId))
-    .leftJoin(ReplyParentInstances, eq(ReplyParentInstances.id, ReplyParentProfiles.instanceId))
-    .where(
-      and(
-        eq(Posts.id, postId),
-        eq(Posts.state, PostState.ACTIVE),
-        isNotNull(Posts.currentContentId),
-        ne(Posts.visibility, PostVisibility.DIRECT),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!source?.canonicalOrigin) {
-    return;
-  }
+const sendLocalPostCreateInState = async (
+  postId: string,
+  postState: typeof PostState.ACTIVE | typeof PostState.DELETED,
+): Promise<void> => {
+  await db.transaction(async (tx) => {
+    const source = await tx
+      .select({
+        canonicalOrigin: Instances.canonicalOrigin,
+        localInstanceId: Instances.id,
+        parentInstanceKind: ReplyParentInstances.kind,
+        parentProfileId: ReplyParentProfiles.id,
+      })
+      .from(Posts)
+      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .leftJoin(ReplyParents, eq(ReplyParents.id, Posts.replyParentId))
+      .leftJoin(ReplyParentProfiles, eq(ReplyParentProfiles.id, ReplyParents.profileId))
+      .leftJoin(ReplyParentInstances, eq(ReplyParentInstances.id, ReplyParentProfiles.instanceId))
+      .where(
+        and(
+          eq(Posts.id, postId),
+          eq(Posts.state, postState),
+          isNotNull(Posts.currentContentId),
+          ne(Posts.visibility, PostVisibility.DIRECT),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+          isNotNull(Instances.canonicalOrigin),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .limit(1)
+      .for('update', { of: Posts })
+      .then(first);
+    if (!source?.canonicalOrigin) {
+      return;
+    }
 
-  const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
-    localInstanceId: source.localInstanceId,
-  });
-  const projection = await projectLocalPostNote(context, postId);
-  if (!projection) {
-    return;
-  }
+    const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
+      localInstanceId: source.localInstanceId,
+    });
+    const projection = await projectLocalPostNote(context, postId, postState);
+    if (!projection) {
+      return;
+    }
 
-  const objectUri = noteUri(projection.canonicalOrigin, postId);
-  const activity = new Create({
-    actor: context.getActorUri(projection.authorProfileId),
-    ccs: projection.object.ccIds,
-    id: new URL('#create', objectUri),
-    object: projection.object,
-    published: projection.createdAt,
-    tos: projection.object.toIds,
-  });
-  const directProfileId =
-    projection.replyParentId &&
-    (projection.visibility === PostVisibility.PUBLIC ||
-      projection.visibility === PostVisibility.UNLISTED) &&
-    source.parentInstanceKind === InstanceKind.ACTIVITYPUB
-      ? source.parentProfileId
-      : null;
-  await dispatchActivityPubActivity({
-    activity,
-    actorProfileId: projection.authorProfileId,
-    context,
-    directProfileIds: directProfileId ? [directProfileId] : [],
+    const objectUri = noteUri(projection.canonicalOrigin, postId);
+    const activity = new Create({
+      actor: context.getActorUri(projection.authorProfileId),
+      ccs: projection.object.ccIds,
+      id: new URL('#create', objectUri),
+      object: projection.object,
+      published: projection.createdAt,
+      tos: projection.object.toIds,
+    });
+    const directProfileId =
+      projection.replyParentId &&
+      (projection.visibility === PostVisibility.PUBLIC ||
+        projection.visibility === PostVisibility.UNLISTED) &&
+      source.parentInstanceKind === InstanceKind.ACTIVITYPUB
+        ? source.parentProfileId
+        : null;
+    await dispatchActivityPubActivity({
+      activity,
+      actorProfileId: projection.authorProfileId,
+      context,
+      directProfileIds: directProfileId ? [directProfileId] : [],
+      orderingKey: objectUri.href,
+    });
   });
 };
+
+export const sendLocalPostCreate = (postId: string): Promise<void> =>
+  sendLocalPostCreateInState(postId, PostState.ACTIVE);
 
 export const sendLocalPostDelete = async (postId: string): Promise<void> => {
   const source = await db
@@ -124,6 +134,12 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     return;
   }
 
+  // A fast delete can commit before the Temporal Create Activity runs. Enqueue
+  // the preserved Create projection first so remote servers never see a Delete
+  // without the corresponding Create. A later Create Activity sees DELETED and
+  // becomes a no-op.
+  await sendLocalPostCreateInState(postId, PostState.DELETED);
+
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
     localInstanceId: source.localInstanceId,
   });
@@ -155,5 +171,6 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     actorProfileId: source.authorProfileId,
     context,
     directProfileIds: directProfileId ? [directProfileId] : [],
+    orderingKey: objectUri.href,
   });
 };

@@ -59,6 +59,10 @@ spec:
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            - name: TEMPORAL_ADDRESS
+              value: {{ .Values.temporal.frontendAddress | quote }}
+            - name: TEMPORAL_NAMESPACE
+              value: {{ include "kosmo.temporalNamespaceName" . | quote }}
             - name: PORT
               value: {{ .Values.fedify.consumer.health.port | quote }}
             - name: HOST
