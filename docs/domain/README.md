@@ -112,6 +112,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0020: Profile Tag Shared Hashtag Identity](./decisions/0020-profile-tag-shared-hashtag-identity.md)
 - [ADR 0021: Hashtag 관련 Profile 목록 탐색 Contract](./decisions/0021-hashtag-related-profile-navigation.md)
 - [ADR 0022: Post Content Revision Media Nodes](./decisions/0022-post-content-revision-media-nodes.md)
+- [ADR 0023: Profile Viewer Membership Edit Eligibility](./decisions/0023-profile-viewer-membership-edit-eligibility.md)
+- [ADR 0024: Application Policy and Runtime DB Boundary](./decisions/0024-application-policy-and-runtime-db-boundary.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)
