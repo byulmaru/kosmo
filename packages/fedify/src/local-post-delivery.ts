@@ -84,7 +84,6 @@ export const sendLocalPostCreate = async (postId: string): Promise<void> => {
     actorProfileId: projection.authorProfileId,
     context,
     directProfileIds: directProfileId ? [directProfileId] : [],
-    orderingKey: objectUri.href,
   });
 };
 
@@ -156,6 +155,5 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
     actorProfileId: source.authorProfileId,
     context,
     directProfileIds: directProfileId ? [directProfileId] : [],
-    orderingKey: objectUri.href,
   });
 };

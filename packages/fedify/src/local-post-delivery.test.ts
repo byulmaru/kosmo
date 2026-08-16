@@ -130,10 +130,7 @@ describe('ActivityPub Local Post delivery', () => {
       assert.equal(object.url && new URL(object.url.toString()).origin, publicOrigin);
       assert.equal(object.replyTargetId?.href, parentUri.href);
       assert.deepEqual(call.sender, { identifier: author.id });
-      assert.deepEqual(call.options, {
-        orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
-        preferSharedInbox: true,
-      });
+      assert.deepEqual(call.options, { preferSharedInbox: true });
       assert.deepEqual(
         call.recipients.map((recipient) => recipient.id?.href),
         [parentAuthor.actorUri],
@@ -462,10 +459,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(call.activity.id?.href, `${authorOrigin}/ap/note/${reply.id}#delete`);
     assert.equal(call.activity.objectId?.href, `${authorOrigin}/ap/note/${reply.id}`);
     assert.equal(call.activity.published?.toString(), deletedAt.toString());
-    assert.deepEqual(call.options, {
-      orderingKey: `${authorOrigin}/ap/note/${reply.id}`,
-      preferSharedInbox: true,
-    });
+    assert.deepEqual(call.options, { preferSharedInbox: true });
     assert.deepEqual(
       call.recipients.map((recipient) => recipient.id?.href),
       [parentAuthor.actorUri],
@@ -521,7 +515,7 @@ describe('ActivityPub Local Post delivery', () => {
 
 interface SendActivityCall {
   readonly activity: Activity;
-  readonly options: { readonly orderingKey?: string; readonly preferSharedInbox: boolean };
+  readonly options: { readonly preferSharedInbox: boolean };
   readonly recipients: Recipient[];
   readonly sender: { readonly identifier: string };
 }
@@ -538,7 +532,7 @@ const createContextFixture = (
       sender: { identifier: string },
       recipients: Recipient | Recipient[],
       activity: Activity,
-      options: { orderingKey?: string; preferSharedInbox: boolean },
+      options: { preferSharedInbox: boolean },
     ) => {
       calls.push({
         activity,

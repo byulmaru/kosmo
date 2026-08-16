@@ -49,13 +49,11 @@ export const dispatchActivityPubActivity = async ({
   actorProfileId,
   context,
   directProfileIds,
-  orderingKey,
 }: {
   readonly activity: Activity;
   readonly actorProfileId: string;
   readonly context: Context<LocalOutboundContextData>;
   readonly directProfileIds: readonly string[];
-  readonly orderingKey?: string;
 }): Promise<void> => {
   const directActors =
     directProfileIds.length === 0
@@ -111,7 +109,6 @@ export const dispatchActivityPubActivity = async ({
   }
 
   await context.sendActivity({ identifier: actorProfileId }, recipients, activity, {
-    ...(orderingKey ? { orderingKey } : {}),
     preferSharedInbox: true,
   });
 };
