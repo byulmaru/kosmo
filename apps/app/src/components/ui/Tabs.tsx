@@ -223,7 +223,9 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                   ? theme.background
                   : theme.card
                 : 'transparent'
-              : theme.card,
+              : Platform.OS === 'android'
+                ? 'transparent'
+                : theme.card,
           borderColor:
             context.variant === 'pill'
               ? web
