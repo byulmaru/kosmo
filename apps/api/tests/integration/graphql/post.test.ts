@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import { Create, Delete, Image } from '@fedify/vocab';
+import { Delete, Image } from '@fedify/vocab';
 import {
   AccountProfileRole,
   AccountState,
@@ -624,46 +624,44 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Root Post Create delivery 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
+  test('Root Post Create effects Workflow start 실패는 commit된 Post와 GraphQL 성공을 바꾸지 않는다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const follower = await createRemoteActorProfile('delivery-create-follower');
-    await db.insert(ProfileFollows).values({
-      followeeProfileId: auth.profile.id,
-      followerProfileId: follower.id,
-    });
-    const deliveredPostIds: string[] = [];
-    t.mock.method(localOutboundFederation, 'createContext', () =>
-      createFailingDeliveryContext(async (activity) => {
-        assert.ok(activity instanceof Create);
-        const postId = activity.objectId?.pathname.split('/').at(-1);
-        assert.ok(postId);
-        const committed = await db
-          .select({ currentContentId: Posts.currentContentId, state: Posts.state })
-          .from(Posts)
-          .where(eq(Posts.id, postId))
-          .then(firstOrThrow);
-        assert.equal(committed.state, PostState.ACTIVE);
-        assert.ok(committed.currentContentId);
-        deliveredPostIds.push(postId);
-      }),
-    );
-    const errorLog = t.mock.method(console, 'error', () => undefined);
+    const previousTemporalAddress = process.env.TEMPORAL_ADDRESS;
+    const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
+    delete process.env.TEMPORAL_ADDRESS;
+    delete process.env.TEMPORAL_NAMESPACE;
+    const createContext = t.mock.method(localOutboundFederation, 'createContext');
 
-    const result = await requestCreatePost(
-      {
-        bodyText: 'committed root post',
-        visibility: PostVisibility.PUBLIC,
-      },
-      auth.token,
-    );
+    try {
+      const result = await requestCreatePost(
+        {
+          bodyText: 'committed root post',
+          visibility: PostVisibility.PUBLIC,
+        },
+        auth.token,
+      );
 
-    assertNoGraphQLErrors(result);
-    assert.equal(deliveredPostIds.length, 1);
-    assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(
-      errorLog.mock.calls[0]?.arguments[0],
-      'Post-commit ActivityPub Local Post Create delivery failed',
-    );
+      assertNoGraphQLErrors(result);
+    } finally {
+      if (previousTemporalAddress === undefined) {
+        delete process.env.TEMPORAL_ADDRESS;
+      } else {
+        process.env.TEMPORAL_ADDRESS = previousTemporalAddress;
+      }
+      if (previousTemporalNamespace === undefined) {
+        delete process.env.TEMPORAL_NAMESPACE;
+      } else {
+        process.env.TEMPORAL_NAMESPACE = previousTemporalNamespace;
+      }
+    }
+
+    const committed = await db
+      .select({ currentContentId: Posts.currentContentId, state: Posts.state })
+      .from(Posts)
+      .then(firstOrThrow);
+    assert.equal(committed.state, PostState.ACTIVE);
+    assert.ok(committed.currentContentId);
+    assert.equal(createContext.mock.callCount(), 0);
   });
 
   test('Root Post Delete delivery 실패는 commit된 Tombstone과 GraphQL 성공을 바꾸지 않는다', async (t) => {

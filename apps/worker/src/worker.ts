@@ -1,9 +1,10 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
+import { pg } from '@kosmo/core/db';
+import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
-import type { State, WorkerOptions } from '@temporalio/worker';
-
-export type WorkerRegistration = Omit<WorkerOptions, 'connection' | 'namespace'>;
+import { registration } from './registration';
+import type { State } from '@temporalio/worker';
 
 export function healthStatus(path: string | undefined, state?: State): number {
   if (path === '/health') {
@@ -15,21 +16,12 @@ export function healthStatus(path: string | undefined, state?: State): number {
   return 404;
 }
 
-export async function runWorker(
-  registration: WorkerRegistration | undefined,
-  environment: NodeJS.ProcessEnv = process.env,
-): Promise<void> {
-  const hasHandler = Boolean(
-    registration?.workflowsPath?.trim() ||
-    registration?.workflowBundle ||
-    Object.values(registration?.activities ?? {}).some(
-      (activity) => typeof activity === 'function',
-    ),
-  );
-  if (!registration?.taskQueue?.trim() || !hasHandler) {
-    throw new Error('No business Worker registration is configured');
-  }
-
+export function validateWorkerEnvironment(environment: NodeJS.ProcessEnv): {
+  address: string;
+  namespace: string;
+  port: number;
+  host: string;
+} {
   const address = environment.TEMPORAL_ADDRESS?.trim();
   const namespace = environment.TEMPORAL_NAMESPACE?.trim();
   const port = Number(environment.PORT ?? '8080');
@@ -43,11 +35,35 @@ export async function runWorker(
     throw new Error('PORT must be an integer between 1 and 65535');
   }
 
+  return {
+    address,
+    namespace,
+    port,
+    host: environment.HOST?.trim() || '0.0.0.0',
+  };
+}
+
+let workerRun: Promise<void> | undefined;
+
+/**
+ * Start the process-global Worker host exactly once.
+ *
+ * The business registration is compile-time owned by this package. There is
+ * intentionally no caller-supplied registration or disabled/idle mode.
+ */
+export function runWorker(): Promise<void> {
+  workerRun ??= startWorker();
+  return workerRun;
+}
+
+async function startWorker(): Promise<void> {
+  const { address, namespace, port, host } = validateWorkerEnvironment(process.env);
+
   let worker: Worker | undefined;
   const server = createServer((request, response) => {
     response.writeHead(healthStatus(request.url, worker?.getState())).end();
   });
-  server.listen(port, environment.HOST?.trim() || '0.0.0.0');
+  server.listen(port, host);
   await once(server, 'listening');
 
   const terminateDuringStartup = () => {
@@ -68,7 +84,15 @@ export async function runWorker(
     try {
       await connection?.close();
     } finally {
-      await server[Symbol.asyncDispose]();
+      try {
+        await closeFedifyQueue();
+      } finally {
+        try {
+          await pg.end({ timeout: 5 });
+        } finally {
+          await server[Symbol.asyncDispose]();
+        }
+      }
     }
   }
 }

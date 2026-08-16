@@ -244,7 +244,7 @@ export const handleInboundCreateNote = async ({
         objectOrigin: objectUri,
         outcome: 'internal_failure',
         phase: 'effect',
-        reasonCode: 'reply_notification_effect_failed',
+        reasonCode: 'post_create_effects_workflow_start_failed',
       }),
     objectUri,
     origin: 'ACTIVITYPUB',
@@ -268,7 +268,9 @@ export const handleInboundCreateNote = async ({
     const result = await createPost(replyParentId ? { ...input, replyParentId } : input);
     if (!result.created) {
       observeDuplicateCreate();
+      return;
     }
+    await result.postCommit();
   } catch (error) {
     if (error instanceof ValidationError && error.field === 'media') {
       observeInboundRejected({
@@ -302,6 +304,8 @@ export const handleInboundCreateNote = async ({
     const result = await createPost(input);
     if (!result.created) {
       observeDuplicateCreate();
+      return;
     }
+    await result.postCommit();
   }
 };

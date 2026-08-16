@@ -27,13 +27,10 @@ import {
   canonicalizePostContentDocument,
   validateLocalPostContentDocument,
 } from '../post-content/server';
-import {
-  createReplyNotification,
-  createRepostNotification,
-  deleteNotificationBySource,
-} from './notification';
+import { createRepostNotification, deleteNotificationBySource } from './notification';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
+import { startPostCreateEffectsWorkflow } from './temporal';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
 import type { PostCommit } from './post-commit';
@@ -76,6 +73,7 @@ type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
 type CreatedPost = {
   content: typeof PostContents.$inferSelect;
   created: true;
+  postCommit: PostCommit;
   post: typeof Posts.$inferSelect;
 };
 
@@ -389,7 +387,7 @@ export async function createPost(
   input: LocalPostInput | ActivityPubPostInput,
   handle?: DatabaseHandle,
 ): Promise<CreatedPost | DuplicatePost> {
-  let result: CreatedPost;
+  let result: Omit<CreatedPost, 'postCommit'>;
   try {
     result = await getDatabaseConnection(handle).transaction(async (tx) => {
       let document =
@@ -535,28 +533,6 @@ export async function createPost(
         .returning()
         .then(firstOrThrow);
 
-      if (input.replyParentId !== undefined) {
-        await createReplyNotification(linkedPost.id, tx).catch(async (error) => {
-          if (!input.onPostCommitError) {
-            console.error('Reply notification creation failed', {
-              error,
-              postId: linkedPost.id,
-            });
-            return;
-          }
-
-          try {
-            await input.onPostCommitError(error);
-          } catch (observerError) {
-            console.error('Reply notification creation failed', {
-              error,
-              observerError,
-              postId: linkedPost.id,
-            });
-          }
-        });
-      }
-
       return { content, created: true, post: linkedPost };
     });
   } catch (error) {
@@ -567,17 +543,35 @@ export async function createPost(
     return { created: false };
   }
 
-  if (input.origin === 'LOCAL') {
-    try {
-      const { sendLocalPostCreate } = await import('@kosmo/fedify');
-      await sendLocalPostCreate(result.post.id);
-    } catch (error) {
-      console.error('Post-commit ActivityPub Local Post Create delivery failed', {
-        error,
-        postId: result.post.id,
-      });
-    }
-  }
+  return {
+    ...result,
+    postCommit: oncePostCommit(async () => {
+      try {
+        await startPostCreateEffectsWorkflow({
+          postId: result.post.id,
+          origin: input.origin,
+        });
+      } catch (error) {
+        if (!input.onPostCommitError) {
+          console.error('Post Create effects Workflow start failed', {
+            error,
+            origin: input.origin,
+            postId: result.post.id,
+          });
+          return;
+        }
 
-  return result;
+        try {
+          await input.onPostCommitError(error);
+        } catch (observerError) {
+          console.error('Post Create effects Workflow start failed', {
+            error,
+            observerError,
+            origin: input.origin,
+            postId: result.post.id,
+          });
+        }
+      }
+    }),
+  };
 }

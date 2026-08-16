@@ -3,53 +3,34 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { test } from 'node:test';
-import { healthStatus, runWorker } from './worker';
+import { registration } from './registration';
+import { healthStatus, runWorker, validateWorkerEnvironment } from './worker';
 import type { AddressInfo, Socket } from 'node:net';
 
 if (process.env.WORKER_STARTUP_SIGNAL_TEST === '1') {
   setTimeout(() => process.exit(99), 3_000);
-  void runWorker({ activities: { example: () => undefined }, taskQueue: 'test' }, process.env);
+  void runWorker();
 } else {
-  test('business handler가 없으면 외부 연결 전에 실패한다', async () => {
-    await assert.rejects(runWorker(undefined, {}), /No business Worker/);
-    await assert.rejects(runWorker({ taskQueue: 'reserved-but-empty' }, {}), /No business Worker/);
-    await assert.rejects(
-      runWorker({ activities: { example: () => undefined }, taskQueue: ' ' }, {}),
-      /No business Worker/,
-    );
-    await assert.rejects(
-      runWorker({ taskQueue: 'test', workflowsPath: ' ' }, {}),
-      /No business Worker/,
-    );
-    await assert.rejects(
-      runWorker(
-        {
-          activities: { example: undefined as never },
-          taskQueue: 'test',
-        },
-        {},
-      ),
-      /No business Worker/,
-    );
+  test('compile-time business registration은 실제 effects를 하나의 task queue에 등록한다', () => {
+    assert.equal(registration.taskQueue, 'kosmo');
+    assert.equal(registration.workflowsPath, new URL('./workflows.ts', import.meta.url).pathname);
+    assert.equal(typeof registration.activities?.createReplyNotificationActivity, 'function');
+    assert.equal(typeof registration.activities?.sendLocalPostCreateActivity, 'function');
   });
 
   test('Temporal environment를 검증한다', async () => {
-    const registration = {
-      activities: { example: () => undefined },
-      taskQueue: 'test',
-    };
-
-    await assert.rejects(runWorker(registration, {}), /TEMPORAL_ADDRESS/);
-    await assert.rejects(
-      runWorker(registration, { TEMPORAL_ADDRESS: 'temporal.test:7233' }),
+    assert.throws(() => validateWorkerEnvironment({}), /TEMPORAL_ADDRESS/);
+    assert.throws(
+      () => validateWorkerEnvironment({ TEMPORAL_ADDRESS: 'temporal.test:7233' }),
       /TEMPORAL_NAMESPACE/,
     );
-    await assert.rejects(
-      runWorker(registration, {
-        PORT: '0',
-        TEMPORAL_ADDRESS: 'temporal.test:7233',
-        TEMPORAL_NAMESPACE: 'kosmo-test',
-      }),
+    assert.throws(
+      () =>
+        validateWorkerEnvironment({
+          PORT: '0',
+          TEMPORAL_ADDRESS: 'temporal.test:7233',
+          TEMPORAL_NAMESPACE: 'kosmo-test',
+        }),
       /PORT must be an integer/,
     );
   });

@@ -24,7 +24,6 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -34,7 +33,7 @@ import {
   postContentDocumentFromText,
   postContentDocumentToText,
 } from '@kosmo/core/post-content/server';
-import { eq, ne, sql } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
@@ -70,11 +69,17 @@ let createPost: typeof CoreServices.createPost;
 let findPostByActivityPubUri: typeof findPostByActivityPubUriType;
 let handleInboundCreate: typeof handleInboundCreateType;
 let localInstanceId: string;
+let temporalAddress: string | undefined;
+let temporalNamespace: string | undefined;
 
 describe('inbound Create dispatch', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
+    temporalAddress = process.env.TEMPORAL_ADDRESS;
+    temporalNamespace = process.env.TEMPORAL_NAMESPACE;
+    delete process.env.TEMPORAL_ADDRESS;
+    delete process.env.TEMPORAL_NAMESPACE;
     ({
       ActivityPubActors,
       ActivityPubPosts,
@@ -114,6 +119,16 @@ describe('inbound Create dispatch', () => {
     await db.delete(Posts);
     await db.delete(Media);
     await pg.end();
+    if (temporalAddress === undefined) {
+      delete process.env.TEMPORAL_ADDRESS;
+    } else {
+      process.env.TEMPORAL_ADDRESS = temporalAddress;
+    }
+    if (temporalNamespace === undefined) {
+      delete process.env.TEMPORAL_NAMESPACE;
+    } else {
+      process.env.TEMPORAL_NAMESPACE = temporalNamespace;
+    }
   });
 
   test('materializes a hydrated Note without persisting the activity id', async () => {
@@ -830,22 +845,12 @@ describe('inbound Create dispatch', () => {
       localParent.post.id,
     );
     assert.equal((await getMaterializedPost(remoteReplyUri)).post.profileId, remoteProfile.id);
-    const localParentReply = await getMaterializedPost(localReplyUri);
-    assert.deepEqual(
+    assert.equal(
       await db
-        .select({
-          kind: Notifications.kind,
-          recipientProfileId: Notifications.recipientProfileId,
-          sourceId: Notifications.sourceId,
-        })
-        .from(Notifications),
-      [
-        {
-          kind: NotificationKind.REPLY,
-          recipientProfileId: localProfile.id,
-          sourceId: localParentReply.post.id,
-        },
-      ],
+        .select()
+        .from(Notifications)
+        .then((rows) => rows.length),
+      0,
     );
   });
 
@@ -901,7 +906,7 @@ describe('inbound Create dispatch', () => {
     );
   });
 
-  test('keeps an inbound Reply committed when Notification creation fails', async () => {
+  test('keeps an inbound Reply committed when effects Workflow start fails', async () => {
     await createStoredRemoteActor();
     const localProfile = await db
       .insert(Profiles)
@@ -922,9 +927,10 @@ describe('inbound Create dispatch', () => {
       visibility: PostVisibility.PUBLIC,
     });
     const replyUri = new URL('https://remote.example/notes/notification-failure-reply');
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_reply_create_failure CHECK (false) NOT VALID`,
-    );
+    const previousTemporalAddress = process.env.TEMPORAL_ADDRESS;
+    const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
+    delete process.env.TEMPORAL_ADDRESS;
+    delete process.env.TEMPORAL_NAMESPACE;
     const captures: { context: { tags: Record<string, string> }; error: unknown }[] = [];
     const restoreReporter = setInboundObservabilityReporter({
       captureException: (error, context) => captures.push({ context, error }),
@@ -942,15 +948,25 @@ describe('inbound Create dispatch', () => {
       );
     } finally {
       restoreReporter();
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_reply_create_failure`,
-      );
+      if (previousTemporalAddress === undefined) {
+        delete process.env.TEMPORAL_ADDRESS;
+      } else {
+        process.env.TEMPORAL_ADDRESS = previousTemporalAddress;
+      }
+      if (previousTemporalNamespace === undefined) {
+        delete process.env.TEMPORAL_NAMESPACE;
+      } else {
+        process.env.TEMPORAL_NAMESPACE = previousTemporalNamespace;
+      }
     }
 
     assert.equal((await getMaterializedPost(replyUri)).post.replyParentId, parent.post.id);
     assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(captures.length, 1);
-    assert.equal(captures[0]?.context.tags.reason_code, 'reply_notification_effect_failed');
+    assert.equal(
+      captures[0]?.context.tags.reason_code,
+      'post_create_effects_workflow_start_failed',
+    );
     assert.ok(captures[0]?.error instanceof Error);
   });
 
@@ -1314,6 +1330,15 @@ describe('inbound Create dispatch', () => {
     }
 
     assert.deepEqual(logs, [
+      {
+        activityType: 'Create',
+        actorOrigin: remoteActorUri.origin,
+        handler: 'create',
+        objectOrigin: remoteObjectUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'post_create_effects_workflow_start_failed',
+      },
       {
         activityType: 'Create',
         actorOrigin: remoteActorUri.origin,
