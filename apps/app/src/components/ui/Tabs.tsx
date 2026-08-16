@@ -177,7 +177,6 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
       accessibilityRole="tab"
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
-      hitSlop={Platform.OS === 'web' ? undefined : space[8]}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
         if (Platform.OS !== 'web') {
@@ -203,13 +202,26 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         context.variant === 'pill' ? styles.pillTab : styles.underlineTab,
         {
           backgroundColor:
-            context.variant === 'pill' ? (selected ? theme.background : theme.card) : theme.card,
-          borderColor: context.variant === 'pill' && selected ? theme.primary : theme.border,
+            context.variant === 'pill'
+              ? web
+                ? selected
+                  ? theme.background
+                  : theme.card
+                : 'transparent'
+              : theme.card,
+          borderColor:
+            context.variant === 'pill'
+              ? web
+                ? selected
+                  ? theme.primary
+                  : theme.border
+                : 'transparent'
+              : theme.border,
           opacity: disabled ? 0.45 : (web ? webPressed : state.pressed) ? 0.85 : 1,
           ...(focusVisible
             ? {
                 outlineColor: theme.stateFocusRing,
-                outlineOffset: 2,
+                outlineOffset: context.variant === 'pill' ? -2 : 2,
                 outlineStyle: 'solid',
                 outlineWidth: borderWidths[2],
               }
@@ -233,16 +245,31 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
           } as WebTabProps)
         : undefined)}
     >
-      <Text
-        style={[
-          context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
-          {
-            color: context.variant === 'underline' && !selected ? theme.textSecondary : theme.text,
-          },
-        ]}
-      >
-        {option.label}
-      </Text>
+      {context.variant === 'pill' && !web ? (
+        <View
+          style={[
+            styles.pillSurface,
+            {
+              backgroundColor: selected ? theme.background : theme.card,
+              borderColor: selected ? theme.primary : theme.border,
+            },
+          ]}
+        >
+          <Text style={[styles.pillLabel, { color: theme.text }]}>{option.label}</Text>
+        </View>
+      ) : (
+        <Text
+          style={[
+            context.variant === 'pill' ? styles.pillLabel : styles.underlineLabel,
+            {
+              color:
+                context.variant === 'underline' && !selected ? theme.textSecondary : theme.text,
+            },
+          ]}
+        >
+          {option.label}
+        </Text>
+      )}
       {context.variant === 'underline' && selected && !disabled ? (
         <View style={[styles.tabIndicator, { backgroundColor: theme.text }]} />
       ) : null}
@@ -254,13 +281,13 @@ const styles = StyleSheet.create({
   underlineList: {
     borderBottomWidth: borderWidths[1],
     flexDirection: 'row',
-    height: 44,
+    height: Platform.OS === 'android' ? 48 : 44,
   },
   underlineTab: {
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
-    minHeight: 44,
+    minHeight: Platform.OS === 'android' ? 48 : 44,
     paddingHorizontal: space[8],
   },
   underlineLabel: textStyles.uiLabelS,
@@ -278,13 +305,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: space[4],
     paddingHorizontal: space[16],
-    paddingTop: space[16],
+    paddingTop:
+      Platform.OS === 'web'
+        ? space[16]
+        : Platform.OS === 'android'
+          ? space[8]
+          : space[8] + borderWidths[2],
   },
   pillTab: {
     alignItems: 'center',
+    borderRadius: Platform.OS === 'web' ? radius[8] : 0,
+    borderWidth: Platform.OS === 'web' ? borderWidths[1] : 0,
+    flexShrink: 0,
+    height: Platform.OS === 'web' ? 32 : Platform.OS === 'android' ? 48 : 44,
+    justifyContent: 'center',
+    minWidth: Platform.OS === 'web' ? undefined : Platform.OS === 'android' ? 48 : 44,
+    paddingHorizontal: Platform.OS === 'web' ? space[8] : 0,
+  },
+  pillSurface: {
+    alignItems: 'center',
     borderRadius: radius[8],
     borderWidth: borderWidths[1],
-    flexShrink: 0,
     height: 32,
     justifyContent: 'center',
     paddingHorizontal: space[8],

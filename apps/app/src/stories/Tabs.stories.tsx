@@ -113,6 +113,7 @@ export const PillVariant: Story = {
     await userEvent.tab();
     expect(popular).toHaveFocus();
     expect(getComputedStyle(popular).outlineWidth).toBe('2px');
+    expect(getComputedStyle(popular).outlineOffset).toBe('-2px');
 
     await userEvent.pointer({ keys: '[MouseLeft>]', target: popular });
     await new Promise((resolve) => setTimeout(resolve, 50));
