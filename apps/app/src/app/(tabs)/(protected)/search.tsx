@@ -23,6 +23,7 @@ import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
+import { Tab, TabList } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -595,38 +596,20 @@ export default function SearchScreen() {
 
       {phase === 'results' ? (
         <View style={web && styles.webContent}>
-          <View
+          <TabList
             accessibilityLabel="검색 결과 유형"
-            accessibilityRole="tablist"
-            style={[styles.tabs, { backgroundColor: theme.card, borderColor: theme.border }]}
+            onValueChange={(tab) => {
+              if (tab !== activeTab) {
+                navigate(query, tab, 'tab');
+              }
+            }}
+            value={activeTab}
+            variant="underline"
           >
             {tabs.map((tab) => (
-              <Pressable
-                aria-selected={activeTab === tab.value}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: activeTab === tab.value }}
-                key={tab.value}
-                onPress={() => {
-                  if (tab.value !== activeTab) {
-                    navigate(query, tab.value, 'tab');
-                  }
-                }}
-                style={styles.tab}
-              >
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    { color: activeTab === tab.value ? theme.text : theme.textSecondary },
-                  ]}
-                >
-                  {tab.label}
-                </Text>
-                {activeTab === tab.value ? (
-                  <View style={[styles.tabIndicator, { backgroundColor: theme.text }]} />
-                ) : null}
-              </Pressable>
+              <Tab key={tab.value} option={tab} />
             ))}
-          </View>
+          </TabList>
           {activeTab === SearchTab.PEOPLE ? (
             <PeopleResults handle={query} />
           ) : (
@@ -723,7 +706,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     ...typography.sm,
   },
-  tabs: { borderBottomWidth: 1, flexDirection: 'row', height: 44 },
   pagination: {
     alignItems: 'center',
     gap: spacing.sm,
@@ -734,20 +716,5 @@ const styles = StyleSheet.create({
     fontFamily: 'SUIT',
     textAlign: 'center',
     ...typography.xsm,
-  },
-  tab: {
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-  },
-  tabLabel: { fontFamily: 'SUIT', fontWeight: '600', ...typography.xsm },
-  tabIndicator: {
-    borderRadius: radii.full,
-    bottom: 0,
-    height: 2,
-    left: '30%',
-    position: 'absolute',
-    right: '30%',
   },
 });
