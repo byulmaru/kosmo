@@ -120,6 +120,6 @@ API Helm과 문서는 GraphQL operation URL을 소비하지 않는 shared `PG*` 
 - Ready PR의 head/check/review 상태를 확인하고 production 작업 미수행 경계를 PR/Linear에 기록한다.
 
 - [x] 4.1 API operation URL wiring과 current documentation reference를 제거하고 기존 Pooler 및 다른 workload render를 보존한다.
-- [ ] 4.2 `api-platform` delta를 canonical spec에 sync하고 retired `rls-actor-context` canonical 파일을 빈 stub 없이 제거한 뒤 새 change를 archive한다.
+- [x] 4.2 `api-platform` delta를 canonical spec에 sync하고 retired `rls-actor-context` canonical 파일을 빈 stub 없이 제거한 뒤 새 change를 archive한다.
 - [x] 4.3 전체 정적·GraphQL/Core·migration·Helm·OpenSpec 검증과 correctness/minimality self-review를 완료한다.
 - [ ] 4.4 구현·검증·결정·제외 범위와 production 미수행 경계를 기록한 Ready PR을 게시하고 리뷰 thread를 정리한다.
