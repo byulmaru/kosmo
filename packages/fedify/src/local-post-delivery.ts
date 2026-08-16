@@ -26,7 +26,7 @@ const getFollowersUri = (actorUri: URL): URL =>
 const sendLocalPostCreateInState = async (
   postId: string,
   postState: typeof PostState.ACTIVE | typeof PostState.DELETED,
-): Promise<boolean> => {
+): Promise<void> => {
   const source = await db
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
@@ -55,7 +55,7 @@ const sendLocalPostCreateInState = async (
     .limit(1)
     .then(first);
   if (!source?.canonicalOrigin) {
-    return false;
+    return;
   }
 
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {
@@ -63,7 +63,7 @@ const sendLocalPostCreateInState = async (
   });
   const projection = await projectLocalPostNote(context, postId, postState);
   if (!projection) {
-    return false;
+    return;
   }
 
   const objectUri = noteUri(projection.canonicalOrigin, postId);
@@ -89,16 +89,14 @@ const sendLocalPostCreateInState = async (
     directProfileIds: directProfileId ? [directProfileId] : [],
     orderingKey: objectUri.href,
   });
-  return true;
 };
 
 export const sendLocalPostCreate = async (postId: string): Promise<void> => {
-  if (await sendLocalPostCreateInState(postId, PostState.ACTIVE)) {
-    // Delete may commit while the queue handoff is in flight. Re-reading after
-    // handoff appends a final Create/Delete pair when needed, without holding a
-    // database lock across external queue I/O.
-    await sendLocalPostDelete(postId);
-  }
+  await sendLocalPostCreateInState(postId, PostState.ACTIVE);
+  // Delete may commit before or while the Create handoff is in flight. Always
+  // re-read the terminal state so a retry after any crash window appends a final
+  // Create/Delete pair without holding a database lock across queue I/O.
+  await sendLocalPostDelete(postId);
 };
 
 export const sendLocalPostDelete = async (postId: string): Promise<void> => {
@@ -140,8 +138,8 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
 
   // A fast delete can commit before the Temporal Create Activity runs. Enqueue
   // the preserved Create projection first so remote servers never see a Delete
-  // without the corresponding Create. A later Create Activity sees DELETED and
-  // becomes a no-op.
+  // without the corresponding Create. A later or retried Create Activity
+  // appends the same pair again, preserving Delete as the final activity.
   await sendLocalPostCreateInState(postId, PostState.DELETED);
 
   const context = localOutboundFederation.createContext(new URL(source.canonicalOrigin), {

@@ -419,7 +419,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.equal(createContext.mock.callCount(), 0);
   });
 
-  test('Delete가 늦은 Create보다 먼저 commit돼도 Create 다음 순서로 handoff한다', async () => {
+  test('Delete가 먼저 commit되거나 Create가 재시도돼도 마지막 Delete를 보존한다', async () => {
     const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
     const author = await createProfile({ instanceId: authorInstanceId });
     const parentAuthor = await createRemoteActor({ handle: 'parent' });
@@ -477,7 +477,10 @@ describe('ActivityPub Local Post delivery', () => {
     }
 
     await sendLocalPostCreate(reply.id);
-    assert.equal(fixture.calls.length, 4);
+    assert.deepEqual(
+      fixture.calls.map((call) => call.activity.constructor),
+      [Create, Delete, Create, Delete, Create, Delete],
+    );
   });
 
   test('Create queue handoff 중 Delete는 row lock 없이 commit하고 마지막 Delete로 수렴한다', async () => {
