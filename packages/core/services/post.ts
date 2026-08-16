@@ -549,9 +549,11 @@ export async function createPost(
 
   try {
     const workflowInput = { postId: result.post.id, origin: input.origin };
-    await temporalClient.workflow.start(
-      POST_CREATE_EFFECTS_WORKFLOW_TYPE,
-      postCreateEffectsWorkflowStartOptions(workflowInput),
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start(
+        POST_CREATE_EFFECTS_WORKFLOW_TYPE,
+        postCreateEffectsWorkflowStartOptions(workflowInput),
+      ),
     );
   } catch (error) {
     console.error('Post Create effects Workflow start failed', {
