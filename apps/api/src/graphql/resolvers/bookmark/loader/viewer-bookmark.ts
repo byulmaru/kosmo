@@ -1,4 +1,4 @@
-import { Bookmarks } from '@kosmo/core/db';
+import { Bookmarks, db } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 import type { BookmarkRow } from '../ref';
@@ -12,7 +12,7 @@ export const viewerBookmarkLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return ctx.db
+      return db
         .select(getColumns(Bookmarks))
         .from(Bookmarks)
         .where(

@@ -1,5 +1,6 @@
 import {
   AccountProfiles,
+  db,
   Instances,
   Notifications,
   Posts,
@@ -19,6 +20,7 @@ import { and, eq, exists, isNotNull, isNull, sql } from 'drizzle-orm';
 import { alias, unionAll } from 'drizzle-orm/pg-core';
 import { postVisibilityAccessCondition } from '@/graphql/resolvers/post/access/visibility';
 import { visibleProfileWhere } from '@/profile/visibility';
+import type { Database } from '@kosmo/core/db';
 import type { UserContext } from '@/context';
 
 export const NotificationRecipientProfiles = alias(Profiles, 'notification_recipient_profile');
@@ -48,7 +50,7 @@ const NotificationReplyRecipientInstances = alias(
 const NotificationReplyAuthors = alias(Profiles, 'notification_reply_author');
 const NotificationReplyAuthorInstances = alias(Instances, 'notification_reply_author_instance');
 
-export const notificationMembershipWhere = (accountId: string, database: UserContext['db']) =>
+export const notificationMembershipWhere = (accountId: string, database: Database) =>
   exists(
     database
       .select({ id: AccountProfiles.id })
@@ -61,7 +63,7 @@ export const notificationMembershipWhere = (accountId: string, database: UserCon
       ),
   );
 
-const visibleNotificationSourceWhere = (database: UserContext['db']) =>
+const visibleNotificationSourceWhere = (database: Database) =>
   exists(
     unionAll(
       database
@@ -298,7 +300,7 @@ export const visibleNotificationWhere = ({ ctx }: { ctx: UserContext }) => {
   const accountId = ctx.session?.accountId;
 
   return and(
-    accountId ? notificationMembershipWhere(accountId, ctx.db) : sql`1=0`,
-    visibleNotificationSourceWhere(ctx.db),
+    accountId ? notificationMembershipWhere(accountId, db) : sql`1=0`,
+    visibleNotificationSourceWhere(db),
   )!;
 };

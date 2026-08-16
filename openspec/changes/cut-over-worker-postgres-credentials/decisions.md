@@ -12,7 +12,7 @@
 - Authority / Provenance: Linear `PROD-715`, user decision
 - Decision Outcome: process-wide application DB client는 `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`/`PGPASSWORD`만 기본 source로 사용한다. API, Fedify consumer와 dev migration은 기존 owner `kosmo` source를, Web과 enabled Temporal Worker는 `kosmo_worker` source를 사용한다. `DATABASE_URL` fallback, `hasComplete...` source-selection flag와 URL/password 조합은 사용하지 않는다.
 - Alternatives Considered: 표준 PG env가 완전할 때만 URL source를 우선하거나 불완전한 trio를 검증하는 compatibility branch는 URL escaping과 source precedence를 다시 만들고 workload 간 계약을 갈라 놓는다.
-- Consequences: process-wide source를 공급하는 Helm template과 local/integration harness가 표준 PG env를 채워야 한다. `OPERATION_DATABASE_URL`과 `FEDIFY_QUEUE_DATABASE_URL`/password는 GraphQL operation과 MessageQueue 전용 secondary connection으로 남긴다.
+- Consequences: process-wide source를 공급하는 Helm template과 local/integration harness가 표준 PG env를 채워야 한다. PROD-779 이후 GraphQL은 API process source를 공유하고, `FEDIFY_QUEUE_DATABASE_URL`/password만 MessageQueue 전용 secondary connection으로 남긴다.
 
 ### API custom URL/password selector trio는 제거한다
 
@@ -22,7 +22,7 @@
 - Authority / Provenance: Linear `PROD-715`, user decision
 - Decision Outcome: 사용되지 않는 `postgres.credentials.api.databaseUrl` 및 `passwordSecret.name/key` trio와 그 partial/complete validation contract를 제거한다. API process 기본 DB는 chart가 생성한 owner `kosmo` 표준 PG env를 사용하고, API에 Worker Secret을 주입하지 않는다.
 - Alternatives Considered: 임의 API URL authority와 Secret selector를 유지하면 process-wide 표준 PG source에 불필요한 override와 URL/password 불일치 상태를 다시 도입한다.
-- Consequences: API custom URL을 values로 설정하는 구성은 지원하지 않는다. GraphQL operation은 별도 `OPERATION_DATABASE_URL`을 계속 사용하며 queue URL/password와 migration role 경계는 영향을 받지 않는다.
+- Consequences: API custom URL을 values로 설정하는 구성은 지원하지 않는다. GraphQL은 API process의 표준 `PG*` source를 공유하며 queue URL/password와 migration role 경계는 영향을 받지 않는다.
 
 ### Web/Worker process 기본 DB는 고정 Worker source를 사용한다
 
@@ -31,8 +31,8 @@
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
 - Decision Outcome: Chart가 생성한 기존 direct read-write Service의 `PGHOST`/`PGPORT`, 고정 `PGUSER=kosmo_worker`/`PGDATABASE=kosmo`와 PROD-369의 release별 `PGPASSWORD` Secret ref를 Web과 enabled Temporal Worker의 process 기본 DB에 사용한다. 두 workload는 `DATABASE_URL`/`DATABASE_PASSWORD` 없이 postgres.js의 표준 PG env 해석과 기존 전역 `db`를 유지하며 별도 selector, `WORKER_DATABASE_*` application connection, request client 또는 Fedify context DB handle을 만들지 않는다.
-- Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 GraphQL 전용 `ctx.db` 경계와 맞지 않고 callsite migration을 불필요하게 만든다.
-- Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL operation은 별도 operation connection을 유지하며 `kosmo_api` principal 전환은 PROD-716이 소유한다.
+- Alternatives Considered: 취소된 `PROD-710`의 explicit Worker connection은 별도 callsite migration과 connection lifecycle을 불필요하게 만든다.
+- Consequences: Web의 비GraphQL trusted 경로와 Worker DB Activity는 workload 기본 principal을 공유한다. API GraphQL은 PROD-779에 따라 API process 기본 source를 공유하며 API 역할 변경은 이 Worker cutover의 범위가 아니다.
 
 ### 기존 direct read-write Service와 SCRAM 인증을 사용한다
 
@@ -40,7 +40,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-369`, `PROD-715`; canceled `PROD-470`
-- Decision Outcome: Web과 enabled Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. PgBouncer는 GraphQL operation connection에만 사용한다.
+- Decision Outcome: Web과 enabled Temporal Worker는 기존 PostgreSQL direct read-write Service에 TLS로 연결하고 Vault/VSO가 공급해 CNPG DatabaseRole이 조정한 `kosmo_worker` password로 인증한다. 기존 PgBouncer Pooler resource는 유지하지만 GraphQL consumer는 PROD-779에서 제거됐다.
 - Alternatives Considered: Worker에 전용 Pooler나 custom authentication을 만드는 방식은 필요 없는 pooling·운영 경계를 추가한다. direct endpoint에 client certificate 인증을 추가하는 대안은 취소된 PROD-470 계약으로 재개하지 않는다.
 - Consequences: Worker `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE`는 chart가 direct endpoint와 고정 principal/database로 생성하고 `PGPASSWORD` Secret ref는 release별 `*-postgres-worker` / `password`로 고정한다. cert mount, `pg_hba`와 custom pool은 구현하지 않는다.
 
@@ -50,7 +50,7 @@
 - Decision Class: Derived Contract
 - Status: Active
 - Authority / Provenance: Linear `PROD-715`, `PROD-716`
-- Decision Outcome: API process 기본 source는 chart가 생성한 `kosmo` 표준 `PG*` env이고, 고정 Worker source는 Web/Worker 기본 표준 `PG*` env에만 사용한다. GraphQL operation의 `OPERATION_DATABASE_URL`은 별도 connection으로 유지하며 API Rollout에는 Worker Secret/env를 주입하지 않는다.
+- Decision Outcome: API process와 GraphQL의 기본 source는 chart가 생성한 `kosmo` 표준 `PG*` env이고, 고정 Worker source는 Web/Worker 기본 표준 `PG*` env에만 사용한다. API Rollout에는 Worker Secret/env를 주입하지 않는다.
 - Alternatives Considered: Web BFF에 API source를 공유하거나 API에 임의 URL selector를 남기면 비GraphQL trusted Web 경로가 잘못된 principal로 실행되거나 process-wide source precedence가 다시 생긴다.
 - Consequences: API selector는 제거되며 API/Fedify consumer/dev migration의 owner source와 Web/Worker Worker source는 각 template에서 고정 생성된다.
 
@@ -92,7 +92,7 @@
 - Authority / Provenance: Linear `PROD-715`
 - Decision Outcome: Cutover 실패 시 전체 PROD-715 merge/squash revision을 Git revert해 Web 기본 DB와 enabled Worker resource/source를 pre-PROD-715 manifest로 복구한다. 활성 Worker source의 인증 실패 중에는 owner로 자동 fallback하지 않는다.
 - Alternatives Considered: runtime 자동 fallback은 principal 전환 실패를 숨긴다. Worker activation gate 제거는 별도 PROD-722 runtime 계약으로 남긴다.
-- Consequences: rollback은 명시적 source revision 변경이며 API process/operation source, migration과 queue source는 고정한다.
+- Consequences: rollback은 명시적 source revision 변경이며 API process/GraphQL source, migration과 queue source는 고정한다.
 
 ### Fedify MessageQueue database는 Worker principal과 분리한다
 

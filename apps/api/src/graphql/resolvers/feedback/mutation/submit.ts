@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { FeedbackKind } from '@kosmo/core/enums';
 import { feedbackBodySchema } from '@kosmo/core/validation';
 import { deliverFeedback } from '@/feedback/delivery';
@@ -19,7 +20,7 @@ builder.mutationField('submitFeedback', (t) =>
     },
     resolve: async (_, { input }, ctx) =>
       deliverFeedback(
-        await resolveFeedbackIdentity(ctx.session.accountId, ctx.session.profileId, ctx.db),
+        await resolveFeedbackIdentity(ctx.session.accountId, ctx.session.profileId, db),
         input,
       ),
   }),

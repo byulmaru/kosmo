@@ -120,6 +120,19 @@ try {
     'Representative final schema tables must exist.',
   );
 
+  const actorHelpers = await sql<{ functionName: string | null }[]>`
+    SELECT to_regprocedure(function_name)::text AS "functionName"
+    FROM unnest(${sql.array([
+      'public.kosmo_current_account_id()',
+      'public.kosmo_current_profile_id()',
+    ])}::text[]) AS function_name
+  `;
+  assert.deepEqual(
+    actorHelpers.map(({ functionName }) => functionName),
+    [null, null],
+    'RLS actor helper functions must not exist after the final migration.',
+  );
+
   const columns = Array.from(
     await sql<{ tableName: string; columnName: string }[]>`
       SELECT table_name AS "tableName", column_name AS "columnName"

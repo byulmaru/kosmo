@@ -1,4 +1,4 @@
-import { Media as MediaTable } from '@kosmo/core/db';
+import { db, Media as MediaTable } from '@kosmo/core/db';
 import { getColumns, inArray } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -9,6 +9,6 @@ export const mediaByIdLoader = (ctx: UserContext) =>
     name: 'media.byId',
     nullable: true,
     load: (ids) =>
-      ctx.db.select(getColumns(MediaTable)).from(MediaTable).where(inArray(MediaTable.id, ids)),
+      db.select(getColumns(MediaTable)).from(MediaTable).where(inArray(MediaTable.id, ids)),
     key: (media) => media?.id ?? null,
   });

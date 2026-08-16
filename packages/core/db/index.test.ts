@@ -1,44 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mock, test } from 'node:test';
-import { createOperationDatabase, db } from './index';
-
-type OperationClient = {
-  options: {
-    host: string[];
-    max: number;
-    connection: Record<string, unknown>;
-  };
-  end: (options?: { timeout?: number }) => Promise<void>;
-};
-
-const getClient = (owner: ReturnType<typeof createOperationDatabase>) =>
-  (owner.db as unknown as { _: { session: { client: OperationClient } } })._.session.client;
-
-test('keeps operation client bounded and isolated from direct startup parameters', async () => {
-  const owner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
-  const end = mock.method(getClient(owner), 'end', async () => {});
-
-  assert.notEqual(owner.db, db);
-  assert.equal(getClient(owner).options.max, 1);
-  assert.equal('idle_in_transaction_session_timeout' in getClient(owner).options.connection, false);
-  assert.equal('lock_timeout' in getClient(owner).options.connection, false);
-  assert.equal('statement_timeout' in getClient(owner).options.connection, false);
-
-  const firstClose = owner.close();
-  assert.equal(owner.close(), firstClose);
-  await firstClose;
-  assert.deepEqual(end.mock.calls[0]?.arguments, []);
-  assert.equal(end.mock.calls.length, 1);
-
-  const forceOwner = createOperationDatabase('postgres://127.0.0.1:1/kosmo_test');
-  const forceEnd = mock.method(getClient(forceOwner), 'end', async () => {});
-  const firstForceClose = forceOwner.close({ force: true });
-  assert.equal(forceOwner.close(), firstForceClose);
-  await firstForceClose;
-  assert.deepEqual(forceEnd.mock.calls[0]?.arguments, [{ timeout: 0 }]);
-  assert.equal(forceEnd.mock.calls.length, 1);
-});
+import test from 'node:test';
 
 test('uses the standard PG environment for the process database', () => {
   const result = spawnSync(
@@ -67,35 +29,4 @@ test('uses the standard PG environment for the process database', () => {
   );
 
   assert.equal(result.status, 0, result.stderr);
-});
-
-test('uses the operation endpoint and falls back to the standard PG environment', async () => {
-  const previousOperationUrl = process.env.OPERATION_DATABASE_URL;
-  const previousPgHost = process.env.PGHOST;
-
-  try {
-    process.env.OPERATION_DATABASE_URL = 'postgres://kosmo@operation-pooler.example:5432/kosmo';
-    process.env.PGHOST = 'direct.example';
-
-    const operationOwner = createOperationDatabase();
-    assert.deepEqual(getClient(operationOwner).options.host, ['operation-pooler.example']);
-    await operationOwner.close();
-
-    delete process.env.OPERATION_DATABASE_URL;
-    const fallbackOwner = createOperationDatabase();
-    assert.deepEqual(getClient(fallbackOwner).options.host, ['direct.example']);
-    await fallbackOwner.close();
-  } finally {
-    if (previousOperationUrl === undefined) {
-      delete process.env.OPERATION_DATABASE_URL;
-    } else {
-      process.env.OPERATION_DATABASE_URL = previousOperationUrl;
-    }
-
-    if (previousPgHost === undefined) {
-      delete process.env.PGHOST;
-    } else {
-      process.env.PGHOST = previousPgHost;
-    }
-  }
 });

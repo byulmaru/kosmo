@@ -1,4 +1,4 @@
-import { AccountProfiles, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
+import { AccountProfiles, db, Notifications, ProfileFollowRequests } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
@@ -12,13 +12,13 @@ import {
   notificationRowFromSelection,
   notificationRowSelection,
 } from '../ref';
-import type { UserContext } from '@/context';
+import type { Database } from '@kosmo/core/db';
 import type { NotificationRow } from '../ref';
 
 const requireProfileNotificationMembership = async (
   accountId: string,
   profileId: string,
-  database: UserContext['db'],
+  database: Database,
 ) => {
   const membership = await database
     .select({ id: AccountProfiles.id })
@@ -36,7 +36,7 @@ builder.objectField(Profile, 'notifications', (t) =>
     {
       type: Notification,
       resolve: async (profile, args, ctx) => {
-        await requireProfileNotificationMembership(ctx.session.accountId, profile.id, ctx.db);
+        await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
         return resolveCursorConnection<Promise<NotificationRow[]>>(
           {
@@ -44,7 +44,7 @@ builder.objectField(Profile, 'notifications', (t) =>
             toCursor: (notification) => notification.id,
           },
           ({ before, after, limit, inverted }) =>
-            ctx.db
+            db
               .select(notificationRowSelection)
               .from(Notifications)
               .leftJoin(
@@ -76,9 +76,9 @@ builder.objectField(Profile, 'unreadNotificationCount', (t) =>
   t.withAuth({ login: true }).field({
     type: 'Int',
     resolve: async (profile, _, ctx) => {
-      await requireProfileNotificationMembership(ctx.session.accountId, profile.id, ctx.db);
+      await requireProfileNotificationMembership(ctx.session.accountId, profile.id, db);
 
-      const [result] = await ctx.db
+      const [result] = await db
         .select({ count: count() })
         .from(Notifications)
         .where(

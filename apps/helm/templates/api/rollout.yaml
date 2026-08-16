@@ -65,8 +65,6 @@ spec:
               value: kosmo
             - name: PGDATABASE
               value: kosmo
-            - name: OPERATION_DATABASE_URL
-              value: {{ include "kosmo.postgresPoolerDatabaseUrl" . | quote }}
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:

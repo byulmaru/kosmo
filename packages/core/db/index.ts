@@ -33,35 +33,6 @@ export type Database = typeof db;
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 export type DatabaseHandle = Database | Transaction;
 
-export type OperationDatabaseOwner = {
-  db: Database;
-  close: (options?: { force?: boolean }) => Promise<void>;
-};
-
-/**
- * Create the database handle owned by one GraphQL Query or Mutation.
- *
- * The client is deliberately not leased from the process-wide pool. A single
- * postgres.js connection is created for the operation and closed afterwards so
- * PgBouncer can apply its client-disconnect reset boundary.
- */
-export const createOperationDatabase = (
-  databaseUrl = process.env.OPERATION_DATABASE_URL,
-): OperationDatabaseOwner => {
-  const options = {
-    max_lifetime: postgresConnectionOptions.max_lifetime,
-    max: 1,
-  } as const;
-  const client = databaseUrl ? postgres(databaseUrl, options) : postgres(options);
-  const operationDb = drizzle({ client, schema });
-  let closeTask: Promise<void> | undefined;
-
-  return {
-    db: operationDb,
-    close: (options) => (closeTask ??= options?.force ? client.end({ timeout: 0 }) : client.end()),
-  };
-};
-
 export const getDatabaseConnection = (handle?: DatabaseHandle) => {
   return handle ?? db;
 };

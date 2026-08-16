@@ -1,4 +1,4 @@
-import { ProfileFollowRequests } from '@kosmo/core/db';
+import { db, ProfileFollowRequests } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { profileFollowRequestAccessWhere } from '../access/follow-request';
 import type { UserContext } from '@/context';
@@ -14,7 +14,7 @@ export const viewerFollowRequestLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return ctx.db
+      return db
         .select(getColumns(ProfileFollowRequests))
         .from(ProfileFollowRequests)
         .where(
@@ -37,7 +37,7 @@ export const profileFollowRequestByIdLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return ctx.db
+      return db
         .select(getColumns(ProfileFollowRequests))
         .from(ProfileFollowRequests)
         .where(and(inArray(ProfileFollowRequests.id, ids), accessWhere));

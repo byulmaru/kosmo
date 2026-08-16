@@ -1,10 +1,10 @@
-import { Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
+import { db, Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 import { postAccessWhere } from '../post/access';
 
 export const Reaction = createObjectRef('Reaction', (ids, ctx) =>
-  ctx.db
+  db
     .select(getColumns(Reactions))
     .from(Reactions)
     .innerJoin(Posts, eq(Posts.id, Reactions.postId))

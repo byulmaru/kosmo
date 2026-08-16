@@ -13,7 +13,6 @@ import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
 import { visibleProfileWhere } from './profile/visibility';
-import type { Database } from '@kosmo/core/db';
 import type { Context as HonoContext } from 'hono';
 
 type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extends boolean> = {
@@ -28,7 +27,6 @@ type LoaderParams<Key, Result, SortKey, Nullability extends boolean, Many extend
 
 type DefaultContext = {
   ip?: string;
-  db: Database;
   loader: <
     Key = string,
     Result = unknown,
@@ -129,26 +127,8 @@ export const deriveContext = async (c: ServerContext): Promise<Context> => {
   return ctx;
 };
 
-/**
- * Create the execution context for one GraphQL operation.
- *
- * Authentication is deliberately derived once in `deriveContext`; this helper
- * only snapshots the identity and creates operation-owned caches.
- */
-export const createOperationContext = (base: Context): Context => {
-  const ctx = createContext(base);
-
-  if (base.session) {
-    ctx.session = { ...base.session };
-  }
-
-  return ctx;
-};
-
-const createContext = (base?: Partial<Context>): Context => {
+const createContext = (): Context => {
   const ctx = {
-    ...base,
-    db: base?.db ?? db,
     $loaders: new Map<string, DataLoader<unknown, unknown>>(),
   } as Context;
 

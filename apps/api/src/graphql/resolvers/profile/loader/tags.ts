@@ -1,4 +1,4 @@
-import { Hashtags, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
+import { db, Hashtags, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { and, eq, getColumns, inArray, ne } from 'drizzle-orm';
 import type { UserContext } from '@/context';
@@ -10,7 +10,7 @@ export const profileTagsLoader = (ctx: UserContext) =>
     name: 'profile.tags',
     many: true,
     load: (profileIds) =>
-      ctx.db
+      db
         .select({ profileId: ProfileHashtags.profileId, ...getColumns(Hashtags) })
         .from(ProfileHashtags)
         .innerJoin(Hashtags, eq(Hashtags.id, ProfileHashtags.hashtagId))

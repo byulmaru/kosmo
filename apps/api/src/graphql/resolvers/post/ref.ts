@@ -1,4 +1,4 @@
-import { Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
@@ -11,7 +11,7 @@ import { postAccessWhere } from './access';
 import { postVisibilityAccessWhere } from './access/visibility';
 
 export const Post = createObjectRef('Post', (ids, ctx) =>
-  ctx.db
+  db
     .select(getColumns(Posts))
     .from(Posts)
     .innerJoin(Profiles, eq(Posts.profileId, Profiles.id))
@@ -38,7 +38,7 @@ export const PostConnection = builder.connectionObject(
 );
 
 export const PostContent = createObjectRef('PostContent', (ids, ctx) =>
-  ctx.db
+  db
     .select(getColumns(PostContents))
     .from(PostContents)
     .innerJoin(Posts, eq(Posts.id, PostContents.postId))

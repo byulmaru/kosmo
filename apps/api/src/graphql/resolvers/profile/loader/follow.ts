@@ -1,4 +1,4 @@
-import { Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
+import { db, Instances, ProfileFollows, Profiles } from '@kosmo/core/db';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { profileFollowAccessWhere } from '../access/follow';
@@ -20,7 +20,7 @@ export const viewerFollowLoader = (ctx: UserContext) =>
         return [];
       }
 
-      return await ctx.db
+      return await db
         .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
         .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
@@ -49,7 +49,7 @@ export const profileFollowByIdLoader = (ctx: UserContext) =>
     name: 'profileFollow.byId',
     nullable: true,
     load: async (ids) => {
-      return ctx.db
+      return db
         .select(getColumns(ProfileFollows))
         .from(ProfileFollows)
         .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))

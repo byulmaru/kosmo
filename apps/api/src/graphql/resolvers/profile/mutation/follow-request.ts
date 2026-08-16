@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import {
   approveProfileFollowRequest,
   cancelProfileFollowRequest,
@@ -30,7 +31,7 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
           actorProfileId: ctx.session.profileId,
           profileFollowRequestId: input.id.id,
         },
-        ctx.db,
+        db,
       ),
   }),
 );
@@ -57,7 +58,7 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
           actorProfileId: ctx.session.profileId,
           profileFollowRequestId: input.id.id,
         },
-        ctx.db,
+        db,
       ),
   }),
 );
@@ -84,7 +85,7 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
           actorProfileId: ctx.session.profileId,
           profileFollowRequestId: input.id.id,
         },
-        ctx.db,
+        db,
       ),
   }),
 );

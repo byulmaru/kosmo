@@ -1,4 +1,4 @@
-import { AccountProfiles, Instances, Profiles } from '@kosmo/core/db';
+import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
 import {
   AccountProfileRole,
   InstanceKind,
@@ -22,8 +22,8 @@ const ViewerOwnerAccountProfiles = alias(AccountProfiles, 'viewer_owner_account_
 const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
 const ViewerOwnerInstances = alias(Instances, 'viewer_owner_instance');
 
-export const Profile = createObjectRef('Profile', (ids, ctx) =>
-  ctx.db
+export const Profile = createObjectRef('Profile', (ids) =>
+  db
     .select(getColumns(Profiles))
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -97,7 +97,7 @@ export const AccountProfile = createObjectRef('AccountProfile', (ids, ctx) => {
     return Promise.resolve([]);
   }
 
-  return ctx.db
+  return db
     .select(getColumns(AccountProfiles))
     .from(AccountProfiles)
     .where(
@@ -106,7 +106,7 @@ export const AccountProfile = createObjectRef('AccountProfile', (ids, ctx) => {
         or(
           eq(AccountProfiles.accountId, accountId),
           exists(
-            ctx.db
+            db
               .select({ id: ViewerOwnerAccountProfiles.id })
               .from(ViewerOwnerAccountProfiles)
               .innerJoin(

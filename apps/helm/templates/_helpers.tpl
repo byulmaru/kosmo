@@ -18,10 +18,6 @@
 {{- printf "%s-%s-postgres" .Release.Name .Values.env | lower | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "kosmo.postgresPoolerDatabaseUrl" -}}
-{{- printf "postgres://kosmo@%s:5432/kosmo" (include "kosmo.postgresPoolerName" .) -}}
-{{- end -}}
-
 {{- define "kosmo.fedifyQueueResourceName" -}}
 {{- printf "%s-postgres-fedify-queue" (.Release.Name | trunc 41 | trimSuffix "-") -}}
 {{- end -}}

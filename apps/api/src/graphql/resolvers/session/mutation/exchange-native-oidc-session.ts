@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
 import { createOidcSession } from '@kosmo/core/services';
 import {
@@ -143,7 +144,7 @@ builder.mutationField('exchangeNativeOidcSession', (t) =>
         callbackUrl.searchParams.set('code', input.code);
         const token = await createOidcSession(
           await exchangeOidcCode({ callbackUrl, codeVerifier: input.codeVerifier }),
-          ctx.db,
+          db,
         );
 
         return { token };
