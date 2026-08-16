@@ -1,4 +1,4 @@
-import { Bookmarks, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { Bookmarks, db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
@@ -23,7 +23,7 @@ builder.objectField(Profile, 'bookmarks', (t) =>
             toCursor: (bookmark) => bookmark.id,
           },
           ({ before, after, limit, inverted }) =>
-            ctx.db
+            db
               .select(getColumns(Bookmarks))
               .from(Bookmarks)
               .innerJoin(Posts, eq(Posts.id, Bookmarks.postId))

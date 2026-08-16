@@ -19,16 +19,17 @@
 - **AND** `PGPASSWORD`는 같은 release의 Worker Secret `password` key를 참조한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*` 또는 `FEDIFY_DATABASE_*`를 투영하지 않는다
 
-### Requirement: API process source와 GraphQL operation source는 분리한다
+### Requirement: API process와 GraphQL은 같은 표준 PG source를 사용한다
 
-**Authority / Provenance:** Linear `PROD-715`, `PROD-716` — API process-wide 기본 DB는 owner `kosmo` 표준 PG source를 사용하고 GraphQL Query/Mutation의 operation connection은 별도 `OPERATION_DATABASE_URL`을 사용해야 한다(MUST). GraphQL operation URL을 process-wide 기본 source로 재사용하거나 API에 Worker credential을 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-779` — API process-wide 기본 DB와 GraphQL Query/Mutation은 owner `kosmo` 표준 PG source를 공유해야 한다(MUST). GraphQL operation별 database client나 `OPERATION_DATABASE_URL`을 만들거나 API에 Worker credential을 노출해서는 안 된다(MUST NOT).
 
-#### Scenario: API 기본 및 operation source
+#### Scenario: API와 GraphQL shared source
 
-- **WHEN** API Rollout과 GraphQL operation connection을 함께 렌더한다
+- **WHEN** API Rollout과 GraphQL application SQL source를 함께 렌더한다
 - **THEN** API process-wide env는 owner `PGHOST`/`PGPORT`/`PGUSER=kosmo`/`PGDATABASE=kosmo`/`PGPASSWORD` source를 사용한다
-- **AND** `OPERATION_DATABASE_URL`은 GraphQL operation 전용 Pooler endpoint를 사용한다
-- **AND** operation URL과 process-wide PG env는 서로의 password 또는 selector source를 재사용하지 않는다
+- **AND** GraphQL Query/Mutation은 같은 process shared DB source를 사용한다
+- **AND** `OPERATION_DATABASE_URL`이나 operation별 database client를 만들지 않는다
+- **AND** 기존 Pooler resource와 API Worker Secret 비주입 경계는 유지한다
 
 ### Requirement: migration은 process-wide 기본 source와 독립된 role 경계를 유지한다
 
@@ -73,13 +74,13 @@
 
 ### Requirement: Worker source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-715` — 시스템은 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). API process/operation source, migration과 queue source를 함께 바꾸거나 인증 실패 중 owner로 자동 재시도해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-779` — 시스템은 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). API process/GraphQL source, migration과 queue source를 함께 바꾸거나 인증 실패 중 owner로 자동 재시도해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker source rollback
 
 - **WHEN** 전체 PROD-715 merge/squash revision을 Git revert한다
 - **THEN** Web의 기본 DB env와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
-- **AND** API process/operation connection, migration과 queue database는 바뀌지 않는다
+- **AND** API process/GraphQL connection, migration과 queue database는 바뀌지 않는다
 
 ## REMOVED Requirements
 
@@ -89,13 +90,13 @@
 
 **Reason:** process-wide application DB source를 표준 PG 환경변수 하나로 통일했으므로 사용되지 않는 `postgres.credentials.api.databaseUrl`, `passwordSecret.name`, `passwordSecret.key` selector와 partial/complete validation은 불필요한 URL escaping·source precedence 상태를 만든다.
 
-**Migration:** API process-wide 기본 DB는 chart가 생성한 owner `kosmo` 표준 PG env를 사용한다. GraphQL operation은 별도 `OPERATION_DATABASE_URL`을 유지하고, queue URL/password와 migration role 경계는 변경하지 않는다. 기존 custom trio를 values에 설정해도 해석하거나 fallback하지 않는다.
+**Migration:** API process-wide 기본 DB와 GraphQL은 chart가 생성한 owner `kosmo` 표준 PG env를 공유한다. `OPERATION_DATABASE_URL`은 PROD-779에서 제거됐고, queue URL/password와 migration role 경계는 변경하지 않는다. 기존 custom trio를 values에 설정해도 해석하거나 fallback하지 않는다.
 
 #### Scenario: custom API trio 비소비
 
 - **WHEN** `postgres.credentials.api` custom URL/password trio를 설정한다
 - **THEN** chart와 runtime은 이를 process-wide 기본 DB source로 해석하지 않는다
-- **AND** 지원되는 source는 owner 표준 PG env와 GraphQL operation 전용 `OPERATION_DATABASE_URL`이다
+- **AND** 지원되는 application source는 owner 표준 PG env뿐이며 MessageQueue secondary source는 별도 경계로 남는다
 
 ### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
 

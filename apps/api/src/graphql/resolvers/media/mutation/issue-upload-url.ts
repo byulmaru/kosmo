@@ -1,4 +1,4 @@
-import { firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
+import { db, firstOrThrowWith, Media as MediaTable } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { z } from 'zod';
 import { builder } from '@/graphql/builder';
@@ -50,7 +50,7 @@ builder.mutationField('issueMediaUploadUrl', (t) =>
       }
       const expiresAt = Temporal.Instant.from(upload.data.expiresAt);
 
-      const media = await ctx.db
+      const media = await db
         .insert(MediaTable)
         .values({
           source: MediaSource.LOCAL,

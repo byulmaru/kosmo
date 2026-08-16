@@ -1,9 +1,9 @@
-import { Hashtags } from '@kosmo/core/db';
+import { db, Hashtags } from '@kosmo/core/db';
 import { inArray } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
-export const Hashtag = createObjectRef('Hashtag', (ids, ctx) =>
-  ctx.db.select().from(Hashtags).where(inArray(Hashtags.id, ids)),
+export const Hashtag = createObjectRef('Hashtag', (ids) =>
+  db.select().from(Hashtags).where(inArray(Hashtags.id, ids)),
 );
 
 Hashtag.implement({

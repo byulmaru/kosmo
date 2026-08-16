@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { deleteBookmark } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
 import { Post } from '@/graphql/resolvers/post';
@@ -34,7 +35,7 @@ builder.mutationField('deleteBookmark', (t) =>
           bookmarkId: input.id.id,
           profileId: ctx.session.profileId,
         },
-        ctx.db,
+        db,
       );
 
       return {

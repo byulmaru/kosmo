@@ -18,7 +18,7 @@
 
 ### Requirement: Worker credential은 기존 direct read-write Service를 통해 독립 전환한다
 
-**Authority / Provenance:** Linear `PROD-369`, `PROD-715` — Web과 enabled Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 PostgreSQL direct read-write Service에 연결해야 한다(MUST). GraphQL operation 전용 PgBouncer 경계를 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-369`, `PROD-715`, `PROD-779` — Web과 enabled Temporal Worker workload의 기본 connection만 Vault/VSO가 공급한 `kosmo_worker` LOGIN + `BYPASSRLS` SCRAM credential로 기존 PostgreSQL direct read-write Service에 연결해야 한다(MUST). API GraphQL의 process shared `kosmo` 표준 PG source와 기존 Pooler resource를 바꾸거나 API Rollout에 Worker credential을 노출해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker credential cutover
 
@@ -28,7 +28,7 @@
 - **AND** chart가 PROD-369과 같은 release별 Worker Secret ref를 `PGPASSWORD`로 생성한다
 - **AND** Web/Worker에 `DATABASE_URL`/`DATABASE_PASSWORD`를 투영하지 않는다
 - **AND** process-wide 기본 DB source에는 `DATABASE_URL` fallback이나 `hasComplete...` source-selection flag가 없다
-- **AND** API `DATABASE_*`/`OPERATION_DATABASE_*`, migration과 Fedify MessageQueue database는 기존 source를 유지한다
+- **AND** API GraphQL의 표준 `PG*` source, migration과 Fedify MessageQueue database는 기존 경계를 유지한다
 - **AND** Worker PG env compatibility flag, URL 감지 또는 owner fallback을 만들지 않는다
 
 #### Scenario: Worker Secret rotation restart
@@ -50,13 +50,13 @@
 
 ### Requirement: Worker credential source는 독립적으로 rollback한다
 
-**Authority / Provenance:** Linear `PROD-715` — 시스템은 application SQL, API/Fedify owner principal과 direct endpoint, GraphQL operation connection, production migration role과 queue database 경계를 추가로 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-715`, `PROD-779` — 시스템은 application SQL, API GraphQL/Fedify owner principal과 direct endpoint, production migration role과 queue database 경계를 추가로 변경하지 않고 전체 PROD-715 merge/squash revision을 Git revert해 Web/enabled Worker manifest와 기본 DB source를 pre-PROD-715 상태로 되돌릴 수 있어야 한다(MUST). 활성 Worker credential 인증 실패 중 owner credential로 자동 재시도해서는 안 된다(MUST NOT).
 
 #### Scenario: Worker workload wiring rollback
 
-- **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API process/operation과 migration/queue source를 유지한다
+- **WHEN** 전체 PROD-715 merge/squash revision을 Git revert하고 API process/GraphQL과 migration/queue source를 유지한다
 - **THEN** Web의 기본 DB env와 Worker resource/source는 pre-PROD-715 manifest로 돌아간다
-- **AND** API GraphQL operation connection, migration과 queue database는 바뀌지 않는다
+- **AND** API process/GraphQL shared connection, migration과 queue database는 바뀌지 않는다
 
 ### Requirement: production 전환은 별도 승인 대상이다
 

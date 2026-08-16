@@ -1,3 +1,4 @@
+import { db } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
@@ -84,7 +85,7 @@ builder.mutationField('createPost', (t) =>
           replyParentId: input.replyParentId?.id,
           visibility: input.visibility,
         },
-        ctx.db,
+        db,
       );
 
       return { post };

@@ -1,5 +1,6 @@
 import {
   AccountProfiles,
+  db,
   firstOrThrow,
   firstOrThrowWith,
   Instances,
@@ -7,7 +8,8 @@ import {
   Sessions,
 } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
-import { and, eq, getColumns, sql } from 'drizzle-orm';
+import { RequestCache } from '@pothos/plugin-scope-auth';
+import { and, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
 import { visibleProfileWhere } from '@/profile/visibility';
@@ -25,7 +27,7 @@ builder.mutationField('selectProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const profile = await ctx.db.transaction(async (tx) => {
+      const profile = await db.transaction(async (tx) => {
         const profile = await tx
           .select(getColumns(Profiles))
           .from(Profiles)
@@ -48,14 +50,11 @@ builder.mutationField('selectProfile', (t) =>
           .returning()
           .then(firstOrThrow);
 
-        await tx.execute(sql`
-          select set_config('kosmo.profile_id', ${profile.id}, false)
-        `);
-
         return profile;
       });
 
       ctx.session.profileId = profile.id;
+      RequestCache.clearForContext(ctx);
 
       return { profile, session: ctx.session.id };
     },

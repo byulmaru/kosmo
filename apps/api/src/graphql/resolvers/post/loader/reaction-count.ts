@@ -1,4 +1,4 @@
-import { Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
+import { db, Instances, Posts, Profiles, Reactions } from '@kosmo/core/db';
 import { and, asc, count, eq, inArray, min } from 'drizzle-orm';
 import { postAccessWhere } from '../access';
 import type { UserContext } from '@/context';
@@ -16,7 +16,7 @@ export const reactionCountLoader = (ctx: UserContext) =>
     load: async (postIds) => {
       const reactionCount = count();
 
-      return ctx.db
+      return db
         .select({
           postId: Reactions.postId,
           type: Reactions.type,

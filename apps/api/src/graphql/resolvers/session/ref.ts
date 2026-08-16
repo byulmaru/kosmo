@@ -1,9 +1,9 @@
-import { Sessions } from '@kosmo/core/db';
+import { db, Sessions } from '@kosmo/core/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createObjectRef } from '@/graphql/utils';
 
 export const Session = createObjectRef('Session', (ids, ctx) =>
-  ctx.db
+  db
     .select()
     .from(Sessions)
     .where(
