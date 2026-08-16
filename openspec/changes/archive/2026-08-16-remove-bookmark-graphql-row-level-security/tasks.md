@@ -102,6 +102,6 @@ sync된 뒤 PROD-778이 전체 완료 증거와 OpenSpec archive를 소유한다
 - diff가 Bookmark metadata/migration/snapshot 및 필요한 기존 GraphQL 회귀 검증으로 한정됐는지 확인한다.
 - 전체 task와 비운영 완료 증거가 존재한 뒤 두 capability delta spec sync와 archive 결과를 확인한다.
 
-- [ ] 3.1 관련 formatting·lint·type·migration 및 GraphQL regression checks를 실행하고 결과를 기록한다.
-- [ ] 3.2 diff와 검증 증거에서 Bookmark-only scope, 후속 PROD-779/780 handoff와 production 금지를 확인한다.
-- [ ] 3.3 모든 구현·비운영 검증 task 완료 후 두 capability delta를 동기화하고 OpenSpec change를 archive하며, requirement가 모두 제거된 빈 `bookmark-graphql-row-level-security` active spec shell을 삭제한다.
+- [x] 3.1 관련 formatting·lint·type·migration 및 GraphQL regression checks를 실행하고 결과를 기록한다.
+- [x] 3.2 diff와 검증 증거에서 Bookmark-only scope, 후속 PROD-779/780 handoff와 production 금지를 확인한다.
+- [x] 3.3 모든 구현·비운영 검증 task 완료 후 두 capability delta를 동기화하고 OpenSpec change를 archive하며, requirement가 모두 제거된 빈 `bookmark-graphql-row-level-security` active spec shell을 삭제한다.
