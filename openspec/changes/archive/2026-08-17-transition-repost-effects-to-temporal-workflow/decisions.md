@@ -74,9 +74,9 @@ transaction·후속 효과 경계를 proposal, capability delta와 구현 지침
 - Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-725`
 - Status: Active
 - Context / Problem: 한 효과를 먼저 await하면 terminal failure가 다른 효과 시도를 막고, Temporal Activity가 remote delivery까지 소유하면 Fedify MessageQueue의 retry·ordering 경계와 중복된다.
-- Decision Outcome: accepted Workflow는 적용 가능한 Notification과 Fedify handoff Activity를 독립적으로 실행해 모두의 최종 결과를 수집한다. Fedify Activity 성공은 queue acceptance이고 remote retry·ordering은 Fedify가 소유한다. Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 경합을 직렬화하기 위한 `FOR UPDATE` 또는 row lock을 추가하지 않는다.
+- Decision Outcome: accepted Workflow는 적용 가능한 Notification과 Fedify handoff Activity를 독립적으로 실행해 모두의 최종 결과를 수집한다. Fedify Activity 성공은 queue acceptance이고 remote retry·ordering은 Fedify가 소유한다. Delete(Note)·Undo는 author Profile 비활성화와 독립적으로 보존된 actor identity와 기존 signing key를 사용한다. Announce acceptance와 Tombstone이 경합하면 Announce Activity가 같은 ordering key의 canonical Undo를 추가 handoff해 삭제 상태로 수렴한다. Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 경합을 직렬화하기 위한 `FOR UPDATE` 또는 row lock을 추가하지 않는다.
 - Alternatives Considered: 직렬 effects, Temporal에서 remote HTTP 직접 delivery, custom relay와 Notification create/delete의 `FOR UPDATE`·row lock 직렬화는 효과 독립성·기존 transport ownership 또는 Best Effort 성능 경계를 깨므로 채택하지 않았다.
-- Consequences: queue acknowledgement가 모호하면 같은 canonical activity의 duplicate enqueue나 remote request가 가능하다. Notification create/delete 경합에서는 stale row가 남을 수 있지만 unavailable predicate가 모든 API surface에서 숨긴다. cross-system exactly-once는 보장하지 않는다.
+- Consequences: queue acknowledgement가 모호하면 같은 canonical activity의 duplicate enqueue나 remote request가 가능하다. Tombstone과 경합한 Announce Activity는 이미 Delete Workflow가 보낸 Undo를 같은 identity로 다시 handoff할 수 있다. Notification create/delete 경합에서는 stale row가 남을 수 있지만 unavailable predicate가 모든 API surface에서 숨긴다. cross-system exactly-once는 보장하지 않는다.
 - Confirmation / Follow-up: 한 Activity terminal failure 뒤 다른 Activity 실행, canonical identity retry와 queue acceptance 경계, stale Notification의 hidden unavailable 결과와 lock 없는 create/delete 경합을 검증한다.
 
 ### 하나의 Worker host에 domain별 고정 registration을 조립한다

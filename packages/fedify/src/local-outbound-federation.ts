@@ -1,5 +1,8 @@
 import { createFederation, MemoryKvStore } from '@fedify/fedify';
-import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import {
+  ensureDrizzleLocalProfileActor,
+  loadDrizzleLocalProfileActorKeyPairs,
+} from './local-actor-store';
 import { fedifyQueue } from './queue';
 
 export type LocalOutboundContextData = {
@@ -28,7 +31,12 @@ localOutboundFederation
       profileId: identifier,
     });
 
-    return result ? [...result.keyPairs] : [];
+    return result
+      ? [...result.keyPairs]
+      : loadDrizzleLocalProfileActorKeyPairs({
+          localInstanceId: context.data.localInstanceId,
+          profileId: identifier,
+        });
   });
 
 localOutboundFederation.setFollowersDispatcher('/ap/actor/{identifier}/followers', () => null);

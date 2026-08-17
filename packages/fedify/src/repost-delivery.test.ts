@@ -213,6 +213,8 @@ describe('ActivityPub Local Repost delivery', () => {
       followeeProfileId: author.id,
       followerProfileId: follower.id,
     });
+    const actualContext = federation.createContext(new URL(publicOrigin), undefined);
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
     const fixture = createContextFixture();
     mock.method(federation, 'createContext', () => fixture.context);
 
@@ -222,6 +224,7 @@ describe('ActivityPub Local Repost delivery', () => {
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, author.id));
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
 
     await sendRepostUndo(repost.id);
 
@@ -233,6 +236,32 @@ describe('ActivityPub Local Repost delivery', () => {
     assert.ok(embedded instanceof Announce);
     assert.equal(embedded.id?.href, `${publicOrigin}/ap/announce/${repost.id}`);
     assert.equal(fixture.calls[1]!.options.orderingKey, `activitypub-repost:${repost.id}`);
+  });
+
+  test('Announce acceptance와 Tombstone이 경합하면 같은 ordering key의 Undo로 수렴한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const source = await createContentPost(author.id);
+    const repost = await createRepost(author.id, source.id);
+    const follower = await createRemoteActorProfile();
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.id,
+    });
+    const fixture = createContextFixture(async (callIndex) => {
+      if (callIndex === 1) {
+        await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, repost.id));
+      }
+    });
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendRepostAnnounce(repost.id);
+
+    assert.deepEqual(
+      fixture.calls.map(({ activity }) => activity.constructor),
+      [Announce, Undo],
+    );
+    assert.equal(fixture.calls[0]!.options.orderingKey, `activitypub-repost:${repost.id}`);
+    assert.equal(fixture.calls[1]!.options.orderingKey, fixture.calls[0]!.options.orderingKey);
   });
 
   test('unsupported 또는 unavailable projection과 recipient 부재는 전송하지 않는다', async () => {
@@ -294,7 +323,7 @@ interface SendActivityCall {
   readonly sender: { readonly identifier: string };
 }
 
-const createContextFixture = () => {
+const createContextFixture = (afterSend?: (callIndex: number) => Promise<void>) => {
   const calls: SendActivityCall[] = [];
   const context = {
     canonicalOrigin: publicOrigin,
@@ -306,6 +335,7 @@ const createContextFixture = () => {
       options: { orderingKey: string; preferSharedInbox: boolean },
     ) => {
       calls.push({ activity, options, recipients, sender });
+      await afterSend?.(calls.length);
     },
   } as unknown as Context<void>;
   return { calls, context };

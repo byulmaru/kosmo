@@ -105,6 +105,7 @@
 - **WHEN** Local Delete Workflow가 `effectKind=CONTENT`로 accepted된다
 - **THEN** Delete Activity는 Tombstone row에 보존된 Content Post identity로 canonical Delete(Note)를 같은 ordering domain에 handoff한다
 - **AND** Repost Notification cleanup이나 Undo를 실행하지 않는다
+- **AND** Author Profile이 더 이상 `ACTIVE`가 아니어도 보존된 actor identity와 기존 signing key로 handoff한다
 
 #### Scenario: Local Repost delete Undo handoff
 
@@ -112,6 +113,12 @@
 - **THEN** Activity는 Tombstone row에 보존된 Repost와 Source identity로 원본 Announce를 가리키는 Undo를 같은 ordering domain에 handoff한다
 - **AND** Author Profile이 더 이상 `ACTIVE`가 되어 있지 않다는 이유만으로 committed Undo를 no-op하지 않는다
 - **AND** Source의 현재 lifecycle 때문에 과거 Announce identity를 새로 만들거나 변경하지 않는다
+
+#### Scenario: Announce acceptance와 Tombstone 경합
+
+- **WHEN** Repost Announce Activity가 Active projection을 읽은 뒤 queue acceptance 전후에 같은 Repost가 Tombstone으로 commit된다
+- **THEN** Activity는 late accepted Announce 뒤 같은 canonical identity와 ordering key의 Undo를 handoff해 삭제 상태로 수렴한다
+- **AND** 이 순서를 위해 Post transaction에 row lock이나 queue I/O를 추가하지 않는다
 
 #### Scenario: ActivityPub origin echo suppression
 

@@ -466,6 +466,42 @@ describe('ActivityPub Local Post delivery', () => {
     );
   });
 
+  test('disabled Profile의 Content Tombstone도 보존된 actor key로 Delete를 handoff한다', async () => {
+    const { canonicalOrigin: authorOrigin, id: authorInstanceId } = await createLocalInstance();
+    const author = await createProfile({ instanceId: authorInstanceId });
+    const follower = await createRemoteActor({ handle: 'disabled-author-follower' });
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.profile.id,
+    });
+    const post = await createPost(author.id);
+    const actualContext = localOutboundFederation.createContext(new URL(authorOrigin), {
+      localInstanceId: authorInstanceId,
+    });
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
+
+    const deletedAt = Temporal.Instant.from('2026-07-28T02:30:00Z');
+    await db
+      .update(Posts)
+      .set({ deletedAt, state: PostState.DELETED })
+      .where(eq(Posts.id, post.id));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, author.id));
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
+
+    const fixture = createContextFixture(authorOrigin);
+    mock.method(localOutboundFederation, 'createContext', () => fixture.context);
+    await sendLocalPostDelete(post.id);
+
+    assert.equal(fixture.calls.length, 1);
+    const activity = fixture.calls[0]?.activity;
+    assert.ok(activity instanceof Delete);
+    assert.equal(activity.id?.href, `${authorOrigin}/ap/note/${post.id}#delete`);
+    assert.equal(activity.published?.toString(), deletedAt.toString());
+  });
+
   test('Create queue handoff 중 Delete는 row lock이나 보정 handoff 없이 commit한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActor({ handle: 'concurrent-delete-follower' });

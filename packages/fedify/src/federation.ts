@@ -31,7 +31,10 @@ import {
 import { handleInboundReaction } from './inbound-reaction';
 import { handleInboundReject } from './inbound-reject';
 import { handleInboundUpdate } from './inbound-update';
-import { ensureDrizzleLocalProfileActor } from './local-actor-store';
+import {
+  ensureDrizzleLocalProfileActor,
+  loadDrizzleLocalProfileActorKeyPairs,
+} from './local-actor-store';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import {
   countLocalPostEmojiReactions,
@@ -100,7 +103,12 @@ federation
       profileId: identifier,
     });
 
-    return result ? [...result.keyPairs] : [];
+    return result
+      ? [...result.keyPairs]
+      : loadDrizzleLocalProfileActorKeyPairs({
+          localInstanceId: localInstance.id,
+          profileId: identifier,
+        });
   });
 
 const findActiveLocalProfile = async (

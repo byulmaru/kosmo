@@ -1,5 +1,6 @@
 import '@kosmo/core/polyfill';
 
+import { importJwk } from '@fedify/fedify';
 import {
   ActivityPubActorKeys,
   ActivityPubActors,
@@ -10,6 +11,7 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import {
+  ActivityPubActorKeyKind,
   ActivityPubActorType,
   MediaSource,
   MediaState,
@@ -38,6 +40,10 @@ const AvatarProfileMedia = alias(ProfileMedia, 'avatar_profile_media');
 const AvatarMedia = alias(Media, 'avatar_media');
 const HeaderProfileMedia = alias(ProfileMedia, 'header_profile_media');
 const HeaderMedia = alias(Media, 'header_media');
+const actorKeyKinds = [
+  ActivityPubActorKeyKind.RSA_PKCS1_V1_5,
+  ActivityPubActorKeyKind.ED25519,
+] as const;
 
 const toLocalProfileActorMedia = (
   media: { mediaType: string | null; url: string | null } | null,
@@ -235,3 +241,50 @@ export const ensureDrizzleLocalProfileActor = async (
       store: createDrizzleLocalActorStore(tx),
     }),
   );
+
+export const loadDrizzleLocalProfileActorKeyPairs = async ({
+  localInstanceId,
+  profileId,
+}: {
+  readonly localInstanceId: string;
+  readonly profileId: string;
+}): Promise<CryptoKeyPair[]> => {
+  const profile = await db
+    .select({ id: Profiles.id })
+    .from(Profiles)
+    .where(and(eq(Profiles.id, profileId), eq(Profiles.instanceId, localInstanceId)))
+    .limit(1)
+    .then(first);
+  if (!profile) {
+    return [];
+  }
+
+  const actor = await findActorByProfileId(db, profileId);
+  if (!actor) {
+    return [];
+  }
+
+  const keys = await db
+    .select()
+    .from(ActivityPubActorKeys)
+    .where(eq(ActivityPubActorKeys.activityPubActorId, actor.id));
+  const keysByKind = new Map(keys.map((key) => [key.kind, key]));
+
+  return Promise.all(
+    actorKeyKinds.flatMap((kind) => {
+      const key = keysByKind.get(kind);
+      if (!key) {
+        return [];
+      }
+      if (!key.privateKeyJwk) {
+        throw new Error(`Local ActivityPub actor key ${key.id} is missing a private key.`);
+      }
+      return [
+        Promise.all([
+          importJwk(key.privateKeyJwk as JsonWebKey, 'private'),
+          importJwk(key.publicKeyJwk as JsonWebKey, 'public'),
+        ]).then(([privateKey, publicKey]) => ({ privateKey, publicKey })),
+      ];
+    }),
+  );
+};
