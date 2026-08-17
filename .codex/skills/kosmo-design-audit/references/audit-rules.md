@@ -91,7 +91,7 @@ raw 값 자체만으로 대체 token을 추측하지 않는다. 기존 semantic 
 
 ## 8. Responsive, platform, motion
 
-- Web compact `<768`, 기본 `>=768`, full canvas `>=1280` 계약과 Native mobile shell을 섞지 않는다.
+- mobile Web `<768`, compact Web `768–1279`, full Web `>=1280` 계약과 Native mobile shell을 섞지 않는다.
 - fixed width/height, min/max, wrap, safe area, keyboard avoidance, zoom·reflow 위험을 확인한다.
 - 같은 디자인이라도 Web과 iOS·Android target, focus, hover, system inset 증거를 분리한다.
 - motion이 있으면 enter/exit, spatial relation, interruption, reduced-motion 대체를 확인한다. motion이 없는데 state 이름만으로 animation을 요구하지 않는다.
