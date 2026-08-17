@@ -1,22 +1,35 @@
 ## Context
 
-이 기록은 PROD-725와 Post·Notification canonical 문서가 확정한 Repost transaction 및 후속 효과 경계를
-proposal, capability delta와 구현 지침으로 구체화한 결정만 담는다. 기존 `add-post-reposts` change의
-process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 이 change에서 동기화한다.
+이 기록은 PROD-725·PROD-677과 Post·Notification canonical 문서가 확정한 Repost 및 공통 Post Delete
+transaction·후속 효과 경계를 proposal, capability delta와 구현 지침으로 구체화한 결정만 담는다. 기존
+`add-post-reposts` change의 process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 이 change에서
+동기화한다.
 
 ## Decision Records
 
-### Repost command가 아니라 committed transition의 효과만 Workflow로 실행한다
+### command가 아니라 committed transition의 효과만 Workflow로 실행한다
 
 - Decision Date: 2026-08-16
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725`
 - Status: Active
-- Context / Problem: Repost transaction까지 Activity로 이동하면 기존 동기 GraphQL·ActivityPub 결과와 Core domain policy를 Temporal retry 의미에 결합한다.
-- Decision Outcome: Core가 Repost create/delete transaction을 동기적으로 commit하고 최초 Repost 생성에는 Repost Workflow를, pure Repost 삭제에는 Delete Workflow를 시작한다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
+- Context / Problem: Repost 또는 Post Delete transaction까지 Activity로 이동하면 기존 동기 GraphQL·ActivityPub 결과와 Core domain policy를 Temporal retry 의미에 결합한다.
+- Decision Outcome: Core가 Repost create와 `deletePost` transaction을 동기적으로 commit한다. 최초 Repost 생성에는 Repost Workflow를, `deletePost`의 모든 최초 Tombstone에는 공통 Delete Workflow를 시작한다. Delete input의 `effectKind`는 commit된 관계 조합에서 `CONTENT`(Current Content가 있는 일반 Post·Reply·Quote) 또는 `REPOST`(Content 없이 Repost Source만 있는 순수 Repost)로 도출한다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
 - Alternatives Considered: transaction Activity, proposed Repost ID, command receipt와 outbox는 PROD-725 범위에서 명시적으로 제외됐다.
 - Consequences: commit→start gap에서 효과가 유실될 수 있으나 committed Repost와 caller 성공은 유지한다. caller database handle과 반환형 `postCommit`은 제거한다.
-- Confirmation / Follow-up: Core/API/Fedify test에서 rollback·duplicate·no-op의 no-start와 start failure 격리를 확인한다.
+- Confirmation / Follow-up: Core/API/Fedify test에서 ordinary Content와 Repost를 포함한 rollback·duplicate·no-op의 no-start와 start failure 격리를 확인한다.
+
+### 공통 `postDeleteWorkflow`가 관계 기반 Delete 효과를 선택한다
+
+- Decision Date: 2026-08-17
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-677`, `PROD-725`
+- Status: Active
+- Context / Problem: `deletePost`는 ordinary Post·Reply·Quote와 pure Repost를 모두 Tombstone으로 전이하는 공통 domain 진입점인데, pure Repost만 별도 Delete Workflow로 보내면 Workflow 이름과 실제 삭제 사건 경계가 어긋난다.
+- Decision Outcome: 모든 최초 Tombstone commit은 type `postDeleteWorkflow`, ID `post-delete:{postId}`의 공통 Delete Workflow를 시작한다. Input은 `{ postId, origin, effectKind }`이며 `effectKind`는 committed relation shape에서 산출한다. `CONTENT`와 `origin=LOCAL`은 canonical Delete(Note) handoff를, `REPOST`는 Repost Notification cleanup을 수행하고 `origin=LOCAL`이면 canonical Undo(Announce) handoff를 추가한다. `origin=ACTIVITYPUB`에서는 어떤 outbound echo도 수행하지 않는다.
+- Alternatives Considered: ordinary Delete와 Repost Delete를 별도 Workflow로 유지하는 방식은 공통 `deletePost` 사건을 구조별 runtime 경계로 다시 나누므로 채택하지 않았다. Workflow Activity에서 관계를 추론하거나 Tombstone을 다시 분류하는 방식 대신 committed transition 결과가 `effectKind`를 전달한다.
+- Consequences: Delete Workflow는 Content와 Repost 효과를 하나의 stable identity로 수렴시키며, Repost Tombstone에만 필요한 actor/source/createdAt/visibility projection으로 Undo를 만든다. ordinary delete 적용과 검증 증거는 PROD-677이, 공통 구현·통합은 PROD-725가 소유한다.
+- Confirmation / Follow-up: Content·Reply·Quote·pure Repost의 Local 삭제, ActivityPub-origin no-echo, duplicate/no-op 및 Workflow input effectKind를 통합 검증한다.
 
 ### 배포된 Post Create Workflow 외부 identity를 유지한다
 
@@ -42,17 +55,17 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Consequences: Core input은 Fedify request context나 vocab 객체가 아니라 serializable identity·timestamp만 받는다. 기존 mapping uniqueness와 current-generation semantics는 유지한다.
 - Confirmation / Follow-up: inbound Announce·Undo duplicate, URI collision, superseded generation과 rollback 통합 검증을 유지한다.
 
-### Repost 생성과 pure Repost 삭제는 event-specific stable Workflow identity를 사용한다
+### Repost 생성과 공통 Post Delete는 event-specific stable Workflow identity를 사용한다
 
 - Decision Date: 2026-08-16
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `PROD-725`
 - Status: Active
-- Context / Problem: Repost 생성 뒤 같은 Post identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 Repost와 Delete event가 공유할 수 없다.
-- Decision Outcome: Repost 생성은 Repost Workflow, pure Repost 삭제는 Delete Workflow로 분리하고 각 Workflow ID를 committed Post ID와 event 경계에서 파생한다. 같은 event의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. 두 Workflow input은 `{ postId, origin }`만 보존하며, Delete Activity는 Tombstone row에 남은 actor/source/createdAt/visibility projection을 다시 읽어 효과 identity를 만든다.
+- Context / Problem: Repost 생성 뒤 같은 Post identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 Repost와 Delete event가 공유할 수 없다. 반면 Delete 사건 자체는 ordinary Post·Reply·Quote와 pure Repost 모두의 공통 `deletePost` transition이다.
+- Decision Outcome: Repost 생성은 Repost Workflow, 모든 Post 삭제는 공통 Delete Workflow로 분리하고 각 Workflow ID를 committed Post ID와 event 경계에서 파생한다. 같은 event의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. Repost Workflow input은 `{ postId, origin }`, Delete Workflow input은 `{ postId, origin, effectKind }`를 보존하며, Delete Activity는 Tombstone row에 남은 relation projection을 다시 읽어 Content Delete 또는 Repost Undo identity를 만든다.
 - Alternatives Considered: Repost ID 하나의 Workflow를 장기 실행하거나 하나의 discriminated transition input으로 두 event를 합치는 방식은 event lifecycle과 retry 경계를 불필요하게 결합하므로 채택하지 않았다.
 - Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 Repost Workflow를 사용한다. Tombstone Repost의 보존 projection은 author Profile state와 독립적으로 local Undo identity를 제공하므로 Profile 비활성화만으로 Undo를 no-op하지 않는다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
-- Confirmation / Follow-up: event별 start options 검증과 Repost→Delete→재Repost integration에서 identity 분리를 확인한다.
+- Confirmation / Follow-up: event별 start options 검증과 Repost→Content/Delete 또는 Repost/Delete→재Repost integration에서 identity 분리를 확인한다.
 
 ### Notification과 federation handoff는 독립 Activity이며 queue acceptance에서 성공한다
 

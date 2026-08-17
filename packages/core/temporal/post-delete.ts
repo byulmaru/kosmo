@@ -5,6 +5,7 @@ export const POST_DELETE_WORKFLOW_TYPE = 'postDeleteWorkflow';
 export type PostDeleteInput = {
   readonly postId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly effectKind: 'CONTENT' | 'REPOST';
 };
 
 export const postDeleteWorkflowId = (postId: string): string => `post-delete:${postId}`;

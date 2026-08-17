@@ -2,7 +2,7 @@
 
 ### Requirement: Core-owned Repost 생성·삭제 뒤 event-specific Workflow 시작
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-722`, `PROD-725` — Local GraphQL Repost는 Repost 상태를 specialized Core action transaction에 저장해야 하고(MUST), verified ActivityPub Announce·Undo는 Repost 상태와 필요한 current ActivityPub mapping을 specialized Core action의 같은 transaction에서 저장해야 한다(MUST). 최초 실제 Repost 생성 commit 뒤에는 type `postRepostWorkflow`·ID `post-repost:{postId}`인 Repost Workflow를, pure Repost 삭제 commit 뒤에는 type `postDeleteWorkflow`·ID `post-delete:{postId}`인 Delete Workflow를 각각 committed Post ID와 explicit `origin: LOCAL | ACTIVITYPUB`으로 시작해야 한다(MUST). 각 신규 Workflow input은 `{ postId, origin }`만 가져야 하며(MUST), PROD-722에서 배포한 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 변경하지 않아야 한다(MUST). pure Repost 경로의 caller가 database handle, 반환형 `postCommit` 또는 후속 효과를 조립해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-677`, `PROD-722`, `PROD-725` — Local GraphQL Repost는 Repost 상태를 specialized Core action transaction에 저장해야 하고(MUST), verified ActivityPub Announce·Undo는 Repost 상태와 필요한 current ActivityPub mapping을 specialized Core action의 같은 transaction에서 저장해야 한다(MUST). 최초 실제 Repost 생성 commit 뒤에는 type `postRepostWorkflow`·ID `post-repost:{postId}`인 Repost Workflow를, `deletePost`의 모든 최초 Tombstone commit 뒤에는 type `postDeleteWorkflow`·ID `post-delete:{postId}`인 공통 Delete Workflow를 시작해야 한다(MUST). Repost Workflow input은 `{ postId, origin: LOCAL | ACTIVITYPUB }`, Delete Workflow input은 `{ postId, origin: LOCAL | ACTIVITYPUB, effectKind: CONTENT | REPOST }`여야 한다(MUST). `effectKind`는 committed Content·Reply Parent·Repost Source 관계 조합에서 도출한다. PROD-722에서 배포한 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 변경하지 않아야 한다(MUST). Delete caller가 database handle, 반환형 `postCommit` 또는 후속 효과를 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: Local Repost 최초 생성 commit
 
@@ -22,21 +22,22 @@
 - **THEN** Core action은 `origin=ACTIVITYPUB`인 Repost Workflow start를 시도한다
 - **AND** inbound handler는 기존 acknowledgement 경계를 유지한다
 
-#### Scenario: 최초 Repost 취소 commit
+#### Scenario: 최초 Post Delete commit
 
-- **WHEN** Local GraphQL 또는 verified ActivityPub Undo가 Active pure Repost를 Tombstone으로 처음 전이해 commit한다
-- **THEN** Core action은 `origin=LOCAL | ACTIVITYPUB`인 Delete Workflow start를 시도한다
-- **AND** Delete input은 `{ postId, origin }`만 보존하고, Delete Activity는 Tombstone row에 보존된 actor/source/createdAt/visibility projection을 다시 읽는다
+- **WHEN** Local GraphQL 또는 verified ActivityPub Delete/Undo가 Active Content Post·Reply·Quote 또는 pure Repost를 Tombstone으로 처음 전이해 commit한다
+- **THEN** Core action은 committed relation shape에서 `effectKind=CONTENT | REPOST`를 도출해 `origin=LOCAL | ACTIVITYPUB`인 공통 Delete Workflow start를 시도한다
+- **AND** Delete input은 `{ postId, origin, effectKind }`를 보존하고, Delete Activity는 Tombstone row에 보존된 관계 projection을 다시 읽는다
+- **AND** `effectKind=CONTENT`는 Local-origin canonical Delete(Note)를, `effectKind=REPOST`는 Repost Notification cleanup과 Local-origin Undo를 적용한다
 
 #### Scenario: duplicate, no-op 또는 rollback
 
-- **WHEN** Repost create가 기존 Active identity로 수렴하거나 delete가 이미 Tombstone인 결과로 수렴하거나 transaction이 rollback된다
+- **WHEN** Repost create가 기존 Active identity로 수렴하거나 Content/Repost delete가 이미 Tombstone인 결과로 수렴하거나 transaction이 rollback된다
 - **THEN** 시스템은 새 Repost 또는 Delete Workflow를 시작하지 않는다
 - **AND** Notification이나 Fedify queue 효과를 직접 실행하지 않는다
 
 ### Requirement: Repost/Delete별 stable Workflow identity와 start gap 격리
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-725` — Repost Workflow와 Delete Workflow ID는 committed Post ID와 각 event 경계에서 안정적으로 파생되어야 하며(MUST), 한 Repost의 생성과 삭제가 종료된 같은 Workflow ID를 공유해서는 안 된다(MUST NOT). 같은 event의 중복 start는 기존 execution으로 수렴하고 종료된 같은 event ID는 재사용하지 않아야 한다(MUST NOT). commit 뒤 process 종료, Temporal 연결 오류 또는 start 실패는 허용된 효과 유실 경계로 관측하되 committed domain 결과와 caller 성공을 실패로 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-677`, `PROD-725` — Repost Workflow와 공통 Delete Workflow ID는 committed Post ID와 각 event 경계에서 안정적으로 파생되어야 하며(MUST), 한 Repost의 생성과 삭제가 종료된 같은 Workflow ID를 공유해서는 안 된다(MUST NOT). 같은 event의 중복 start는 기존 execution으로 수렴하고 종료된 같은 event ID는 재사용하지 않아야 한다(MUST NOT). commit 뒤 process 종료, Temporal 연결 오류 또는 start 실패는 허용된 효과 유실 경계로 관측하되 committed domain 결과와 caller 성공을 실패로 바꾸어서는 안 된다(MUST NOT).
 
 #### Scenario: stable Repost와 Delete identity
 
@@ -58,7 +59,7 @@
 
 ### Requirement: Repost Notification lifecycle의 멱등 Activity
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-725` — accepted Repost Workflow는 기존 Recipient·self suppression·visibility·uniqueness 정책으로 Repost Notification을 멱등 생성해야 하며(MUST), accepted Delete Workflow는 Repost ID를 source로 하는 Notification을 멱등 정리해야 한다(MUST). 이는 canonical Best Effort projection이며 unavailable source의 잔여 row는 모든 API surface에서 숨겨야 한다(MUST). create/delete를 직렬화하는 `FOR UPDATE` 또는 row lock을 추가하지 않아야 한다(MUST NOT). 두 효과는 Core transaction이나 caller에서 직접 실행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-677`, `PROD-725` — accepted Repost Workflow는 기존 Recipient·self suppression·visibility·uniqueness 정책으로 Repost Notification을 멱등 생성해야 하며(MUST), `effectKind=REPOST`인 accepted Delete Workflow는 Repost ID를 source로 하는 Notification을 멱등 정리해야 한다(MUST). `effectKind=CONTENT`인 Delete Workflow는 Repost Notification Activity를 실행하지 않는다. 이는 canonical Best Effort projection이며 unavailable source의 잔여 row는 모든 API surface에서 숨겨야 한다(MUST). create/delete를 직렬화하는 `FOR UPDATE` 또는 row lock을 추가하지 않아야 한다(MUST NOT). 두 효과는 Core transaction이나 caller에서 직접 실행해서는 안 된다(MUST NOT).
 
 #### Scenario: 다른 Local Profile의 Post Repost
 
@@ -77,6 +78,12 @@
 - **THEN** Notification Activity는 Repost kind와 committed Repost ID로 대응 item을 멱등 삭제한다
 - **AND** 이미 없거나 숨겨진 item의 반복 cleanup도 성공한 no-op으로 끝난다
 
+#### Scenario: Content delete has no Repost Notification cleanup
+
+- **WHEN** `effectKind=CONTENT`인 Delete Workflow가 accepted된다
+- **THEN** Workflow는 Repost Notification cleanup을 실행하지 않는다
+- **AND** `origin=LOCAL`이면 canonical Delete(Note) Activity만 적용하고 `origin=ACTIVITYPUB`이면 outbound Activity 없이 완료한다
+
 #### Scenario: Notification create/delete 경합
 
 - **WHEN** accepted create effects의 Notification projection과 delete effects의 cleanup이 서로 다른 시점에 경합한다
@@ -85,7 +92,7 @@
 
 ### Requirement: Local-origin Announce와 Undo queue handoff Activity
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-725` — accepted Repost Workflow는 `origin=LOCAL`일 때 기존 canonical Announce identity·audience·recipient 규칙으로, accepted Delete Workflow는 같은 Announce를 가리키는 canonical Undo로 Fedify PostgreSQL MessageQueue producer에 handoff해야 한다(MUST). `origin=ACTIVITYPUB`인 Repost 또는 Delete Workflow는 outbound echo를 만들면 안 된다(MUST NOT). Activity 성공 경계는 queue acceptance이고, acceptance 뒤 remote retry·ordering은 Fedify가 소유해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-677`, `PROD-725` — accepted Repost Workflow는 `origin=LOCAL`일 때 기존 canonical Announce identity·audience·recipient 규칙으로, accepted Delete Workflow는 `effectKind=CONTENT`이면 canonical Delete(Note)를, `effectKind=REPOST`이면 같은 Announce를 가리키는 canonical Undo를 Fedify PostgreSQL MessageQueue producer에 handoff해야 한다(MUST). `origin=ACTIVITYPUB`인 Repost 또는 Delete Workflow는 outbound echo를 만들면 안 된다(MUST NOT). Activity 성공 경계는 queue acceptance이고, acceptance 뒤 remote retry·ordering은 Fedify가 소유해야 한다(MUST).
 
 #### Scenario: Local create Announce handoff
 
@@ -93,18 +100,24 @@
 - **THEN** Activity는 Repost ID에서 파생한 같은 Announce identity로 Fedify queue handoff를 재시도한다
 - **AND** remote delivery를 직접 수행하지 않는다
 
-#### Scenario: Local delete Undo handoff
+#### Scenario: Local Content delete handoff
 
-- **WHEN** Local Delete Workflow가 accepted된다
+- **WHEN** Local Delete Workflow가 `effectKind=CONTENT`로 accepted된다
+- **THEN** Delete Activity는 Tombstone row에 보존된 Content Post identity로 canonical Delete(Note)를 같은 ordering domain에 handoff한다
+- **AND** Repost Notification cleanup이나 Undo를 실행하지 않는다
+
+#### Scenario: Local Repost delete Undo handoff
+
+- **WHEN** Local Delete Workflow가 `effectKind=REPOST`로 accepted된다
 - **THEN** Activity는 Tombstone row에 보존된 Repost와 Source identity로 원본 Announce를 가리키는 Undo를 같은 ordering domain에 handoff한다
 - **AND** Author Profile이 더 이상 `ACTIVE`가 되어 있지 않다는 이유만으로 committed Undo를 no-op하지 않는다
 - **AND** Source의 현재 lifecycle 때문에 과거 Announce identity를 새로 만들거나 변경하지 않는다
 
 #### Scenario: ActivityPub origin echo suppression
 
-- **WHEN** verified Announce에서 시작한 Repost Workflow 또는 verified Undo에서 시작한 Delete Workflow가 `origin=ACTIVITYPUB`으로 실행된다
+- **WHEN** verified Announce에서 시작한 Repost Workflow 또는 verified Delete/Undo에서 시작한 Delete Workflow가 `origin=ACTIVITYPUB`으로 실행된다
 - **THEN** Workflow는 outbound Announce·Undo Activity를 실행하지 않는다
-- **AND** Notification lifecycle만 적용한다
+- **AND** Repost Delete의 Notification cleanup만 적용하고 Content Delete는 outbound Activity 없이 완료한다
 
 #### Scenario: 모호한 queue acknowledgement
 
@@ -114,13 +127,13 @@
 
 ### Requirement: 독립 effects와 caller 성공 격리
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725` — Notification과 federation handoff가 모두 적용되는 Workflow는 두 Activity를 독립적으로 시작하고 각 최종 결과를 수집해야 하며(MUST), 한 Activity의 terminal failure가 다른 Activity 시도를 막아서는 안 된다(MUST NOT). Activity retry는 유한해야 하며(MUST), effects 실패가 committed Repost나 기존 GraphQL/ActivityPub 성공 의미를 바꾸어서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-677`, `PROD-725` — Notification과 federation handoff가 모두 적용되는 Repost 또는 Repost Delete Workflow는 두 Activity를 독립적으로 시작하고 각 최종 결과를 수집해야 하며(MUST), 한 Activity의 terminal failure가 다른 Activity 시도를 막아서는 안 된다(MUST NOT). Activity retry는 유한해야 하며(MUST), effects 실패가 committed Post나 기존 GraphQL/ActivityPub 성공 의미를 바꾸어서는 안 된다(MUST NOT).
 
 #### Scenario: 한 effect의 terminal failure
 
 - **WHEN** Notification 또는 Fedify handoff Activity 하나가 retry를 소진한다
 - **THEN** Workflow는 다른 적용 가능한 Activity의 실행과 결과 수집을 계속한다
-- **AND** committed Repost와 caller 성공 결과를 유지한다
+- **AND** committed Post와 caller 성공 결과를 유지한다
 
 #### Scenario: 모든 effect 성공
 

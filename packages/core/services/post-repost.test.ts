@@ -23,7 +23,6 @@ import {
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
-import type { Transaction } from '../db';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -90,14 +89,12 @@ const runRepost = async (input: {
   sourcePostId: string;
 }) => repostPostAction({ ...input, origin: input.origin ?? 'LOCAL' });
 
-const runDelete = async (
-  input: { actorProfileId: string; origin?: 'LOCAL' | 'ACTIVITYPUB'; postId: string },
-  tx?: Transaction,
-) => {
-  const result = await deletePostAction({ ...input, origin: input.origin ?? 'LOCAL' }, tx);
-  if (tx && result.postCommit) {
-    await result.postCommit();
-  }
+const runDelete = async (input: {
+  actorProfileId: string;
+  origin?: 'LOCAL' | 'ACTIVITYPUB';
+  postId: string;
+}) => {
+  const result = await deletePostAction({ ...input, origin: input.origin ?? 'LOCAL' });
   return { postId: result.postId };
 };
 
@@ -273,7 +270,7 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   );
 });
 
-test('최초 Repost create/delete만 event-specific Workflow를 시작한다', async () => {
+test('최초 Repost create와 delete가 event-specific Workflow를 시작한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -305,8 +302,25 @@ test('최초 Repost create/delete만 event-specific Workflow를 시작한다', a
   const deleteOptions = deleteStart.arguments[1];
   assert.ok(deleteOptions);
   assert.equal(deleteOptions.workflowId, `post-delete:${first.repost.id}`);
+  assert.deepEqual(deleteOptions.args, [
+    { effectKind: 'REPOST', origin: 'LOCAL', postId: first.repost.id },
+  ]);
   await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
   assert.equal(start.mock.callCount(), 2);
+});
+
+test('Content delete가 공통 Delete Workflow에 CONTENT effectKind를 전달한다', async () => {
+  const actor = await createProfile();
+  const post = await createContentPost(actor.profile.id);
+  const { temporalClient } = await import('../temporal/client');
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  await runDelete({ actorProfileId: actor.profile.id, postId: post.id });
+
+  assert.equal(start.mock.callCount(), 1);
+  const options = start.mock.calls[0]?.arguments[1];
+  assert.ok(options);
+  assert.deepEqual(options.args, [{ effectKind: 'CONTENT', origin: 'LOCAL', postId: post.id }]);
 });
 
 test('ActivityPub origin은 outbound effect 없이 Repost Workflow만 시작한다', async () => {
@@ -528,17 +542,40 @@ test('deletePost는 대상 Quote만 삭제하고 별도 Active Repost는 유지�
   assert.equal(activeRepost.state, PostState.ACTIVE);
 });
 
-test('deletePost는 caller transaction rollback에 합류한다', async () => {
+test('deletePost는 자체 transaction에서 DB 실패를 rollback한다', async () => {
   const actor = await createProfile();
   const post = await createContentPost(actor.profile.id);
 
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await runDelete({ actorProfileId: actor.profile.id, postId: post.id }, tx);
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
+  await pg`
+    create function fail_post_delete() returns trigger
+    language plpgsql as $function$
+    begin
+      raise exception 'intentional post delete failure';
+    end
+    $function$
+  `;
+  await pg`
+    create trigger fail_post_delete
+    before update on post
+    for each row execute function fail_post_delete()
+  `;
+
+  try {
+    await assert.rejects(
+      deletePostAction({
+        actorProfileId: actor.profile.id,
+        origin: 'LOCAL',
+        postId: post.id,
+      }),
+      (error) =>
+        error instanceof Error &&
+        error.cause instanceof Error &&
+        error.cause.message === 'intentional post delete failure',
+    );
+  } finally {
+    await pg`drop trigger fail_post_delete on post`;
+    await pg`drop function fail_post_delete()`;
+  }
 
   const stored = await db
     .select({ deletedAt: Posts.deletedAt, state: Posts.state })

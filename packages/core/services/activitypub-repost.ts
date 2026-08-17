@@ -222,7 +222,11 @@ export const undoActivityPubRepost = async ({
   if (result?.outcome === 'deleted') {
     // The ActivityPub Undo does not produce a new outbound Undo. The Workflow
     // still owns Notification cleanup for the committed remote transition.
-    const workflowInput = { origin: 'ACTIVITYPUB' as const, postId: result.repostId };
+    const workflowInput = {
+      postId: result.repostId,
+      origin: 'ACTIVITYPUB' as const,
+      effectKind: 'REPOST' as const,
+    };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         temporalClient.workflow.start(

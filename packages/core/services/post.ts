@@ -5,7 +5,6 @@ import {
   first,
   firstOrThrow,
   firstOrThrowWith,
-  getDatabaseConnection,
   Instances,
   isUniqueViolation,
   Media,
@@ -35,11 +34,9 @@ import {
 import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
 import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
 import { postVisibilityCondition } from '../visibility/post';
-import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
-import type { DatabaseHandle, Transaction } from '../db';
+import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
-import type { PostCommit } from './post-commit';
 
 type LocalPostInput = {
   accountId?: string;
@@ -242,23 +239,16 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-export const deletePost = async (
-  {
-    actorProfileId,
-    origin,
-    postId,
-  }: {
-    readonly actorProfileId: string;
-    readonly origin: PostOrigin;
-    readonly postId: string;
-  },
-  handle?: DatabaseHandle,
-): Promise<{
-  readonly postCommit?: PostCommit;
+export const deletePost = async ({
+  actorProfileId,
+  origin,
+  postId,
+}: {
+  readonly actorProfileId: string;
+  readonly origin: PostOrigin;
   readonly postId: string;
-  readonly sourcePostId: string | null;
-}> => {
-  const { deleted, post, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
+}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+  const { deleted, result } = await db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -289,10 +279,7 @@ export const deletePost = async (
         ),
       )
       .returning({
-        currentContentId: Posts.currentContentId,
         id: Posts.id,
-        replyParentId: Posts.replyParentId,
-        repostSourceId: Posts.repostSourceId,
       })
       .then(first);
 
@@ -302,26 +289,9 @@ export const deletePost = async (
     return { deleted, post, result: { postId, sourcePostId } };
   });
 
-  const pureRepost =
-    post.currentContentId === null && post.replyParentId === null && post.repostSourceId !== null;
-  const localPostId = deleted?.currentContentId ? deleted.id : undefined;
-  const ordinaryPostCommit =
-    deleted && origin === 'LOCAL' && localPostId
-      ? oncePostCommit(async () => {
-          try {
-            const { sendLocalPostDelete } = await import('@kosmo/fedify');
-            await sendLocalPostDelete(localPostId);
-          } catch (error) {
-            console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
-              error,
-              postId: localPostId,
-            });
-          }
-        })
-      : noPostCommit;
-
-  if (deleted && pureRepost && deleted.repostSourceId !== null && !handle) {
-    const workflowInput = { origin, postId: deleted.id };
+  if (deleted) {
+    const effectKind = result.sourcePostId === null ? ('CONTENT' as const) : ('REPOST' as const);
+    const workflowInput = { postId: deleted.id, origin, effectKind };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         temporalClient.workflow.start(
@@ -332,18 +302,14 @@ export const deletePost = async (
     } catch (error) {
       console.error('Post Delete Workflow start failed', {
         error,
+        effectKind,
         origin,
         postId: deleted.id,
       });
     }
-  } else if (!handle) {
-    await ordinaryPostCommit();
   }
 
-  return {
-    ...result,
-    ...(handle && !pureRepost ? { postCommit: ordinaryPostCommit } : {}),
-  };
+  return result;
 };
 
 export const repostPost = async ({

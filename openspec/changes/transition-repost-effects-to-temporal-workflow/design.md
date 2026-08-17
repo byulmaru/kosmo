@@ -16,14 +16,14 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 **Goals:**
 
 - Local GraphQL은 Repost 상태 transaction을, verified Announce·Undo는 Repost 상태와 current ActivityPub mapping의 같은 transaction을 specialized Core action이 소유하게 한다.
-- 최초 Repost 생성과 pure Repost 삭제 commit만 각각 event-specific Workflow를 시작하고 caller `postCommit`·database handle을 제거한다.
+- 최초 Repost 생성과 `deletePost`의 모든 최초 Tombstone commit을 각각 Repost와 공통 Delete Workflow로 시작하고 caller `postCommit`·database handle을 제거한다.
 - Repost Notification과 Local Announce·Undo queue handoff를 독립적이고 멱등적인 Activity로 재시도한다.
 - 하나의 Worker host와 task queue 안에서 Post Create, Repost, Delete event registration을 명확히 분리·조립한다.
 - 기존 Repost visibility, duplicate/concurrency, ActivityPub identity, audience, GraphQL payload를 보존한다.
 
 **Non-Goals:**
 
-- Post Create·ordinary Post Delete·Reaction·Follow·Profile의 Temporal 경계 변경
+- Post Create·Reaction·Follow·Profile의 Temporal 경계 변경
 - transaction Activity, proposed Repost ID, command ledger, outbox·relay 또는 reconciliation
 - Fedify MessageQueue consumer, remote HTTP retry·ordering 또는 공통 recipient dispatcher 재설계
 - database role·credential·RLS 변경과 production rollout
@@ -33,8 +33,8 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 ### Current Constraints
 
 - `packages/core/services/post.ts`의 `repostPost`·`deletePost`는 같은 파일과 반환형에서 database handle 및
-  `postCommit`을 공유한다. pure Repost delete만 PROD-725로 옮기고 ordinary Post delete lifecycle은 PROD-677에
-  남겨야 한다.
+  `postCommit`을 공유한다. `deletePost`의 모든 최초 Tombstone commit을 공통 Delete Workflow로 옮기며,
+  ordinary Post·Reply·Quote 적용과 Repost 적용은 PROD-677·PROD-725가 같은 계약을 공동으로 사용한다.
 - `packages/fedify/src/inbound-announce.ts`와 Undo dispatch는 mapping 검사·저장과 Core action을 caller-owned
   transaction으로 조립한다. Core가 mapping을 저장하려면 Fedify vocab 객체나 request context가 아니라 검증된
   serializable identity·timestamp만 입력받아야 한다.
@@ -43,10 +43,13 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 - `sendRepostAnnounce`·`sendRepostUndo`는 process 기본 `db`에서 canonical projection을 다시 읽고 Fedify queue에
   handoff한다. Activity는 이 함수를 직접 등록하거나 얇은 이름 alias로 등록할 수 있지만 remote delivery owner가
   되어서는 안 된다.
-- Tombstone Repost row는 actor Profile identity, Repost Source, immutable `createdAt`과 visibility를 보존한다.
-  Delete Workflow input은 `{ postId, origin }`만 직렬화하고 delete Activity가 이 Tombstone
-  projection을 다시 읽어 Undo identity를 만든다. Local Undo는 author Profile이 더 이상 `ACTIVE`가 아니어도
-  committed Tombstone의 identity를 사용해 no-op이 되지 않아야 한다.
+- Tombstone row는 Content·Reply Parent·Repost Source 관계와 actor Profile identity, immutable `createdAt`과
+  visibility를 보존한다. Delete Workflow input은 `{ postId, origin, effectKind }`를 직렬화한다. `effectKind`는
+  commit된 관계 조합에서 `CONTENT`(Current Content가 있는 일반 Post·Reply·Quote) 또는 `REPOST`(Content 없이
+  Repost Source만 있는 순수 Repost)로 도출한다. `CONTENT` Delete Activity는 Tombstone projection으로
+  canonical Delete(Note)를 만들고, `REPOST` Delete Activity만 Tombstone projection으로 Undo identity를 만든다.
+  Local Undo는 author Profile이 더 이상 `ACTIVE`가 아니어도 committed Tombstone의 identity를 사용해 no-op이
+  되지 않아야 한다.
 - Repost Notification은 canonical Best Effort projection이다. create와 delete가 경합해 stale row가 남아도
   unavailable predicate가 모든 API surface에서 숨기며, 이를 막기 위해 source row에 `FOR UPDATE` 또는 row lock을
   추가하지 않는다.
@@ -58,24 +61,29 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 
 ### Recommended Approach
 
-1. Core의 Repost create/delete transition 결과를 최초 Repost 생성 또는 pure Repost 삭제의 committed Post ID와
-   origin으로 정규화한다. Repost Workflow와 Delete Workflow input은 `{ postId, origin }`만 유지한다. delete Activity는
-   Tombstone UPDATE 뒤에도 보존되는 Repost row의 `actorProfileId`, `repostSourceId`, `createdAt`, `visibility`
-   projection을 다시 읽어 Undo identity를 만들며 별도 serialized snapshot을 전달하지 않는다. author Profile의
-   non-`ACTIVE` state는 committed local Undo를 no-op으로 만드는 조건이 아니다. 자체 transaction이 commit된 직후
-   shared `temporalClient`로 event-specific Repost/Delete Workflow start를 시도하고 오류를 짧은 deadline과
-   구조화 로그로 격리한다.
+1. Core의 Repost create와 `deletePost` transition 결과를 최초 Repost 생성 또는 모든 최초 Tombstone의 committed
+   Post ID와 `origin`으로 정규화한다. Delete 결과는 committed 관계 조합에서 `effectKind`를 함께 산출한다.
+   Current Content가 있는 일반 Post·Reply·Quote는 `CONTENT`, Content 없이 Repost Source만 있는 순수 Repost는
+   `REPOST`다. Repost Workflow input은 `{ postId, origin }`, Delete Workflow input은
+   `{ postId, origin, effectKind }`를 유지한다. Delete Activity는 Tombstone UPDATE 뒤에도 보존되는 관계
+   projection을 다시 읽는다. `CONTENT`는 canonical Delete(Note) identity를 만들고, `REPOST`는
+   `actorProfileId`, `repostSourceId`, `createdAt`, `visibility` projection으로 Undo identity를 만든다.
+   별도 serialized snapshot을 전달하지 않는다. author Profile의 non-`ACTIVE` state는 committed local Undo를
+   no-op으로 만드는 조건이 아니다. 자체 transaction이 commit된 직후 shared `temporalClient`로 event-specific
+   Repost/Delete Workflow start를 시도하고 오류를 짧은 deadline과 구조화 로그로 격리한다.
 2. verified Announce·Undo용 specialized Core entry가 검증된 actor/source/activity identity를 받아 Repost 상태와
    `ActivityPubPosts` current mapping을 같은 transaction에서 저장한다. Fedify handler는 URI·actor·object 검증과
    protocol 관측만 소유하고 database handle이나 callback을 전달하지 않는다.
 3. 기존 Post Create Temporal source와 외부 type·ID는 그대로 두고, Core Temporal source에 Repost와 Delete event별
-   module을 추가해 input, workflow type, event-specific ID와 start options를 둔다. Repost와 Delete input은
-   `{ postId, origin }`이며 공통 client와 task queue는 기존 module을 재사용하고 workflow-specific 상수를 client
-   module에 모으지 않는다.
-4. Worker는 Repost Workflow와 Delete Workflow를 각각 source module로 둔다. Repost Workflow는 Notification
-   create와 Local Announce Activity를, Delete Workflow는 Notification delete와 Local Undo Activity를 적용한다.
-   각 Workflow는 적용 가능한 Activity를 동시에 시작해 `allSettled`와 동등한 방식으로 모두 관찰한 뒤 terminal
-   failure를 Workflow 실패로 남긴다.
+   module을 추가해 input, workflow type, event-specific ID와 start options를 둔다. Repost input은
+   `{ postId, origin }`, Delete input은 `{ postId, origin, effectKind }`이며 공통 client와 task queue는 기존
+   module을 재사용하고 workflow-specific 상수를 client module에 모으지 않는다.
+4. Worker는 Repost Workflow와 공통 Delete Workflow를 각각 source module로 둔다. Repost Workflow는 Notification
+   create와 Local Announce Activity를 적용한다. Delete Workflow는 `effectKind=CONTENT`와 `origin=LOCAL`일 때
+   canonical Delete(Note) Activity를, `effectKind=REPOST`일 때 Notification delete를 적용하고, 후자에서
+   `origin=LOCAL`이면 Local Undo Activity를 추가한다. `origin=ACTIVITYPUB`에서는 outbound Activity를 적용하지
+   않는다. 적용 가능한 Activity는 동시에 시작해 `allSettled`와 동등한 방식으로 모두 관찰한 뒤 terminal failure를
+   Workflow 실패로 남긴다.
 5. Notification Activity는 Repost ID로 기존 멱등 create/delete 저장 경계를 실행한다. Notification은 canonical
    Best Effort projection이므로 create/delete 경합을 `FOR UPDATE`나 row lock으로 직렬화하지 않는다. 남은 stale
    row는 unavailable predicate로 숨긴다. Fedify Activity는 기존 canonical producer를 사용하며 queue acceptance까지만
@@ -90,15 +98,17 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 
 ### Allowed Alternatives
 
-- Repost 생성과 pure Repost 삭제는 각각 Repost Workflow와 Delete Workflow로 분리한다. 두 Workflow의 ID와 input은
-  event 경계를 반영하고, 적용 효과·retry·echo suppression 계약을 유지해야 한다.
+- Repost 생성과 모든 Post 삭제는 각각 Repost Workflow와 공통 Delete Workflow로 분리한다. 두 Workflow의 ID와
+  input은 event 경계를 반영하고 Delete `effectKind`는 committed relation shape를 반영하며, 적용 효과·retry·echo
+  suppression 계약을 유지해야 한다.
 - Activity 이름 alias를 `apps/worker`에서 re-export하거나 domain별 activity module에서 직접 구현할 수 있다.
   business 함수는 Core/Fedify의 기존 경계를 재사용하고 Worker-only pass-through 계층을 불필요하게 늘리지 않아야
   한다.
 
 ### Known Traps
 
-- ordinary Post delete까지 Repost Workflow로 보내거나 PROD-677의 경계를 선점하지 않는다.
+- ordinary Post·Reply·Quote delete를 Repost Workflow로 보내지 않는다. 이들은 공통 Delete Workflow에서
+  `effectKind=CONTENT`로 처리하며 ordinary delete의 적용·검증 책임은 PROD-677에 남긴다.
 - ActivityPub mapping을 Workflow Activity에서 뒤늦게 저장하거나 Repost transaction과 분리하지 않는다.
 - Announce mapping 교체와 Undo 경합을 `FOR UPDATE`, advisory lock 또는 serializable retry로 새로 직렬화하지 않는다.
 - duplicate/no-op을 누락 effects backfill 계기로 사용하지 않는다.

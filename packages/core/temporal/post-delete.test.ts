@@ -9,6 +9,7 @@ import { KOSMO_TASK_QUEUE } from './task-queue';
 
 test('Post Delete Workflow uses the Post ID and origin in a stable start policy', () => {
   const input = {
+    effectKind: 'CONTENT' as const,
     postId: '00000000-0000-8000-8000-000000000001',
     origin: 'LOCAL' as const,
   };

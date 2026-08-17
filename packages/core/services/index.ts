@@ -1,3 +1,4 @@
+export { deleteActivityPubPost } from './activitypub-post-delete';
 export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { materializeActivityPubRepost, undoActivityPubRepost } from './activitypub-repost';
 export { createBookmark, deleteBookmark } from './bookmark';
