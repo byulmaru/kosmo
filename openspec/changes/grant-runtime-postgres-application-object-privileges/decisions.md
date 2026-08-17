@@ -84,4 +84,4 @@
 
 - API/Fedify 또는 역할별 최소 table·sequence·function grant를 하나의 공통 matrix로 설계하던 과거 방향은 2026-08-11 PROD-724·713·368 정렬로 대체되었다. 당시 계약은 GraphQL-only RLS, 비GraphQL `kosmo_worker` `BYPASSRLS`, 두 역할의 동일한 broad application CRUD DML ACL이었으며 runtime 분류는 이후 PROD-780이 다시 대체했다.
 - 취소된 PROD-710의 명시적 Worker/Fedify DB handle을 PROD-724의 권한 설계 선행 조건으로 보던 방향은 대체되었다. PROD-724는 callsite handle이나 principal cutover를 소유하지 않는다.
-- GraphQL-only `kosmo_api` runtime과 비GraphQL `kosmo_worker BYPASSRLS` 분류는 2026-08-16 PROD-780의 shared `kosmo_worker LOGIN NOBYPASSRLS` application runtime 계약으로 대체되었다. 기존 two-role object ACL/default ACL과 금지권한은 PROD-781 contract까지 rollback-compatible하게 유지되며, legacy role·ACL·Secret 제거는 PROD-781이 소유한다.
+- GraphQL-only `kosmo_api` runtime과 비GraphQL `kosmo_worker BYPASSRLS`의 workload 분류는 2026-08-17 PROD-780의 새 `kosmo_runtime LOGIN NOBYPASSRLS` application runtime 계약으로 대체되었다. 기존 `kosmo_api`와 `kosmo_worker BYPASSRLS`의 object ACL/default ACL은 각각 PROD-781/PROD-782까지 rollback-compatible하게 유지된다.

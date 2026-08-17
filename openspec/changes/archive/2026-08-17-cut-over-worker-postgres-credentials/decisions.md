@@ -140,6 +140,6 @@
 - Decision Class: Upstream Contract
 - Status: Active
 - Authority / Provenance: `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, Linear `PROD-780`, `PROD-781`
-- Decision Outcome: 이 change의 API/Fedify owner source, API Worker Secret 비주입과 `kosmo_worker BYPASSRLS` 계약은 PROD-780의 shared `kosmo_worker LOGIN NOBYPASSRLS` 표준 PG\* source로 대체된다. migration owner와 Fedify MessageQueue source 분리는 유지한다.
+- Decision Outcome: 이 change의 API/Fedify owner source와 shared-Worker workload target은 PROD-780의 새 `kosmo_runtime LOGIN NOBYPASSRLS` 표준 PG\* source로 대체된다. Legacy `kosmo_worker BYPASSRLS` provisioning은 PROD-782까지 유지하고 migration owner와 Fedify MessageQueue source 분리는 보존한다.
 - Alternatives Considered: historical delta를 current authority로 계속 두는 방식은 구현 및 Active spec과 모순되어 제외한다.
 - Consequences: 이 change의 기존 구현·검증 evidence는 historical record로 남고, current runtime spec sync/archive는 PROD-780이 소유한다. legacy `kosmo_api` ACL/default ACL/role/Secret 제거는 PROD-781이 소유한다.

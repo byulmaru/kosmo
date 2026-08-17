@@ -95,8 +95,35 @@ spec:
   createdb: false
   createrole: false
   replication: false
-  bypassrls: false
+  bypassrls: true
   inRoles: []
   passwordSecret:
     name: {{ include "kosmo.workerDatabasePasswordSecretName" . }}
+  databaseRoleReclaimPolicy: retain
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: DatabaseRole
+metadata:
+  name: {{ include "kosmo.runtimeDatabasePasswordSecretName" . }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres-runtime
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  cluster:
+    name: {{ include "kosmo.postgresName" . }}
+  name: kosmo_runtime
+  login: true
+  inherit: true
+  superuser: false
+  createdb: false
+  createrole: false
+  replication: false
+  bypassrls: false
+  inRoles: []
+  passwordSecret:
+    name: {{ include "kosmo.runtimeDatabasePasswordSecretName" . }}
   databaseRoleReclaimPolicy: retain

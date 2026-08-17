@@ -1,10 +1,10 @@
-> **Superseded runtime classification (2026-08-16, PROD-780):** 이 delta의 GraphQL-only RLS principal 및 `kosmo_worker BYPASSRLS` 설명은 `unify-application-runtime-postgres-role`이 대체한다. 두 역할의 기존 ACL/default ACL과 non-owner/금지권한 계약은 PROD-781까지 유지되지만, current application workload는 `kosmo_worker LOGIN NOBYPASSRLS` 하나를 사용한다. 아래 내용은 PROD-724 당시 ACL 계약과 검증 이력이다.
+> **Superseded runtime classification (2026-08-17, PROD-780):** 이 delta의 GraphQL-only RLS principal 및 두 legacy role의 workload 분류는 `unify-application-runtime-postgres-role`이 대체한다. Current application workload는 새 `kosmo_runtime LOGIN NOBYPASSRLS`를 사용한다. 기존 `kosmo_api`와 `kosmo_worker BYPASSRLS`의 ACL/default ACL은 각각 PROD-781/PROD-782까지 보존되며, `kosmo_runtime` ACL은 PROD-780의 별도 additive migration이 소유한다. 아래 내용은 PROD-724 당시 두 legacy role의 ACL 계약과 검증 이력이다.
 
 ## ADDED Requirements
 
 ### Requirement: 두 runtime principal은 application schema를 사용할 수 있다
 
-**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-369, PROD-780, PROD-781. 시스템은 rollback window 동안 legacy `kosmo_api`와 shared application runtime `kosmo_worker` 모두에게 `kosmo` database의 `public` schema `USAGE`를 유지해야 한다(MUST). Current application workload는 `kosmo_worker LOGIN NOBYPASSRLS` 하나를 사용하며(MUST), 이 object ACL 계약은 role attribute나 workload credential source를 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-369, PROD-780, PROD-781, PROD-782. 시스템은 rollback window 동안 legacy `kosmo_api`와 `kosmo_worker` 모두에게 `kosmo` database의 `public` schema `USAGE`를 유지해야 한다(MUST). 이 legacy object ACL 계약은 role attribute나 current `kosmo_runtime` workload credential source를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: legacy API principal ACL을 rollback window 동안 유지한다
 
@@ -12,11 +12,11 @@
 - **THEN** schema `USAGE` 부족으로 접근이 거부되지 않아야 한다
 - **AND** 이 ACL의 제거는 PROD-781 contract 전에는 수행하지 않아야 한다
 
-#### Scenario: shared application principal이 application schema를 사용한다
+#### Scenario: legacy Worker principal이 application schema를 사용할 수 있다
 
 - **WHEN** `kosmo_worker`가 `public` application table을 이름으로 참조한다
 - **THEN** schema `USAGE` 부족으로 접근이 거부되지 않아야 한다
-- **AND** 역할의 `NOBYPASSRLS` 속성이 유지되어야 한다
+- **AND** legacy 역할의 기존 `BYPASSRLS` 속성은 PROD-782 전까지 유지되어야 한다
 
 ### Requirement: 현재 application table 전체에 공통 CRUD DML을 부여한다
 

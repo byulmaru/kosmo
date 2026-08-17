@@ -19,7 +19,7 @@ const migrationCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
 const localMigrations = readMigrationFiles({ migrationsFolder: migrationsRoot });
 const migrationNames = localMigrations.map(({ name }) => name);
-const runtimeRoles = ['kosmo_api', 'kosmo_worker'] as const;
+const runtimeRoles = ['kosmo_api', 'kosmo_runtime', 'kosmo_worker'] as const;
 const currentTablePrivileges = ['SELECT', 'INSERT', 'UPDATE', 'DELETE'] as const;
 const forbiddenTablePrivileges = ['TRUNCATE', 'REFERENCES', 'TRIGGER'] as const;
 
@@ -202,7 +202,7 @@ async function assertRuntimeAcl(sql: ReturnType<typeof postgres>) {
         bypassRls: false,
       },
       {
-        roleName: 'kosmo_worker',
+        roleName: 'kosmo_runtime',
         canLogin: true,
         inherit: true,
         superuser: false,
@@ -210,6 +210,16 @@ async function assertRuntimeAcl(sql: ReturnType<typeof postgres>) {
         createrole: false,
         replication: false,
         bypassRls: false,
+      },
+      {
+        roleName: 'kosmo_worker',
+        canLogin: true,
+        inherit: true,
+        superuser: false,
+        createdb: false,
+        createrole: false,
+        replication: false,
+        bypassRls: true,
       },
     ],
     'Disposable runtime role attributes must match the PROD-780 contract.',
@@ -247,6 +257,7 @@ async function assertRuntimeAcl(sql: ReturnType<typeof postgres>) {
     schemaAcl,
     [
       { roleName: 'kosmo_api', privilegeType: 'USAGE', isGrantable: false },
+      { roleName: 'kosmo_runtime', privilegeType: 'USAGE', isGrantable: false },
       { roleName: 'kosmo_worker', privilegeType: 'USAGE', isGrantable: false },
     ],
     'Runtime roles must have only non-delegable public schema USAGE.',

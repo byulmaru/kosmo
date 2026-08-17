@@ -1,4 +1,4 @@
-## 1. PROD-780 shared application runtime source와 consumer 정렬
+## 1. PROD-780 `kosmo_runtime` role·Secret provisioning
 
 **Authority / Provenance**
 
@@ -8,57 +8,53 @@
 
 **Deliverable**
 
-API, Web, Temporal Worker와 Fedify consumer application DB가 같은 release-derived `kosmo_worker` credential과 표준 PG\* source를 사용하고, API 전용 runtime consumer가 제거된다. `PROD-780`이 이 source/consumer 구현과 전체 통합검증, active spec sync/archive를 소유한다.
+각 release가 `kosmo_runtime LOGIN NOBYPASSRLS` DatabaseRole과 release-derived Vault/VSO basic-auth Secret을 제공한다.
 
 **Guardrails**
 
-- `kosmo_worker`는 `LOGIN NOBYPASSRLS` non-owner runtime role로 유지한다.
-- `DATABASE_URL`, `DATABASE_PASSWORD`, URL/password selector, owner `kosmo` 및 `kosmo_api` application workload SecretRef/consumer를 runtime에 남기지 않는다. 기존 `kosmo_api` role·ACL·default ACL·Vault/CNPG Secret provisioning은 PROD-781까지 유지한다.
-- migration owner, Fedify MessageQueue 전용 database/role/credential과 기존 Pooler resource를 변경하지 않는다.
-- GraphQL operation session, actor GUC, `ctx.db`, `OPERATION_DATABASE_URL`, application policy와 Worker/Fedify/Temporal 기능을 다시 도입하거나 변경하지 않는다.
-- `worker-database` Secret rotation restart target에는 API Rollout, Web Rollout, Temporal Worker Deployment와 Fedify consumer Deployment를 포함하고 migration Job·Fedify MessageQueue 전용 consumer는 포함하지 않는다.
+- `kosmo_runtime`는 schema/table/migration/queue owner가 아니며 `superuser`, `createdb`, `createrole`, `replication`, membership와 grant option을 갖지 않는다.
+- 기존 `kosmo_api` role·Secret provisioning과 `kosmo_worker` role·`BYPASSRLS` attribute·Secret provisioning은 각각 PROD-781/PROD-782까지 유지한다.
+- Secret value는 values, rendered manifest, OpenSpec 또는 log에 출력하지 않는다.
 
 **Verification**
 
-- dev/prod static Helm render에서 네 application workload의 PG\* source와 SecretRef를 비교하고 owner/API workload consumer·SecretRef 부재와 기존 API role/Secret provisioning 보존을 확인한다.
-- `worker-database` Secret rotation render에서 API Rollout, Web Rollout, Temporal Worker Deployment와 Fedify consumer Deployment가 restart target으로 연결되는지 확인한다.
-- migration Job과 Fedify MessageQueue manifest가 application source와 분리되고 Pooler resource가 보존되는지 확인한다.
+- dev/prod static Helm render에서 runtime DatabaseRole, Secret source/destination, role attributes와 legacy resource 보존을 확인한다.
+- runtime Secret의 username/password transformation과 release-derived naming을 비민감한 metadata로 확인한다.
 
-- [x] 1.1 API, Web, Worker와 Fedify consumer의 application DB source를 retained `kosmo_worker` 표준 PG\* 계약으로 정렬한다.
-- [x] 1.2 API/Web/Worker/Fedify workload에서 owner/API role SecretRef·consumer와 API 전용 application credential selector를 제거하고, `kosmo_api` DatabaseRole/ACL/Secret provisioning은 PROD-781까지 유지한다.
-- [x] 1.3 `worker-database` Secret rotation restart target에 API Rollout·Web Rollout·Temporal Worker Deployment·Fedify consumer Deployment를 포함하고 migration/queue consumer는 제외한다.
-- [x] 1.4 migration owner·queue source·Pooler와 GraphQL/application/Worker/Fedify/Temporal 보존 경계를 diff로 확인한다.
+- [x] 1.1 `kosmo_runtime` DatabaseRole과 non-owner `LOGIN NOBYPASSRLS` attributes를 provision한다.
+- [x] 1.2 release-derived runtime Vault/VSO Secret과 password SecretRef를 provision하고 legacy API/Worker Secret provisioning을 보존한다.
+- [x] 1.3 role reclaim/lifecycle과 queue/migration resource 분리를 static render에서 검증한다.
 
-## 2. PROD-780 existing ACL·role provisioning과 rollback 경계 보존
+## 2. PROD-780 additive current-table/default-ACL migration
 
 **Authority / Provenance**
 
-- `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`
-- `openspec/changes/grant-runtime-postgres-application-object-privileges/`
-- `PROD-781`
+- `docs/operations/production-migrations.md`
+- `PROD-724`
 - `PROD-780`
 
 **Deliverable**
 
-기존 `kosmo_api`/`kosmo_worker` object ACL, default ACL, role·Secret provisioning과 immutable migration history가 rollback window까지 보존되고, shared `kosmo_worker`의 `NOBYPASSRLS`와 non-owner runtime 경계가 비운영에서 확인된다.
+새 runtime principal이 migration 적용 시점의 `public` application table을 CRUD하고 owner `kosmo`가 이후 만드는 application table에도 같은 CRUD default ACL을 받는다.
 
 **Guardrails**
 
-- 이미 적용된 migration의 directory/name/hash/SQL을 수정·이동·재생성하지 않으며 contract SQL을 선반영하지 않는다.
-- `kosmo_api`/`kosmo_worker` existing ACL·default ACL·role·Secret provisioning을 revoke/drop/remove하지 않는다. 해당 contract removal은 production transition·drain·rollback window 뒤 PROD-781이 소유한다.
-- `kosmo_worker`는 schema/table owner, migration owner 또는 queue owner가 아니며 grant option·DDL·ownership 권한을 얻지 않는다.
-- workload consumer 전환을 이유로 RLS policy, actor helper, GraphQL/application policy를 변경하지 않는다.
+- migration은 기존 `kosmo_migration` → `SET ROLE kosmo` 경계에서 실행되며 role 생성/attribute 변경/credential 값을 포함하지 않는다.
+- migration과 migration Job에 DatabaseRole readiness polling을 추가하지 않으며, role 부재 시 grant가 즉시 실패하도록 둔다.
+- `kosmo_api`·`kosmo_worker` existing ACL/default ACL을 revoke/rewrite하지 않고 sequence·`drizzle` history 권한을 추가하지 않는다.
+- `GRANT ALL PRIVILEGES`, object ownership, DDL, `TRUNCATE`, `REFERENCES`, `TRIGGER`, grant option은 부여하지 않는다.
+- 기존 migration file/name/hash를 수정·삭제·재생성하지 않는다.
 
 **Verification**
 
-- disposable PostgreSQL에서 기존 migration replay와 fixture role을 사용해 `current_user`, `rolcanlogin`, `rolbypassrls`, owner, existing ACL, default ACL과 금지 권한을 검사한다.
-- representative application CRUD와 금지된 DDL/ownership/regrant 거부를 확인하고 migration history hash 및 role/Secret render 보존을 비교한다.
+- disposable role fixture로 full migration replay를 실행한다.
+- runtime current-table ACL, future-table default ACL, owner, representative CRUD와 금지 작업 거부를 catalog/SQL로 확인한다.
 
-- [x] 2.1 retained `kosmo_worker`의 `LOGIN NOBYPASSRLS`와 non-owner lifecycle, 기존 two-role ACL/provisioning 보존을 role/catalog contract에 반영한다.
-- [x] 2.2 ACL revoke/drop, default ACL 변경, role/Secret provisioning 제거 또는 contract SQL이 diff에 없는지 확인하고 PROD-781 dependency를 기록한다.
-- [x] 2.3 disposable existing-migration replay와 role-level catalog/CRUD/금지권한/rollback-compatible provisioning 검증을 통과시킨다.
+- [x] 2.1 additive forward migration으로 runtime schema USAGE와 current `public` table CRUD를 부여한다.
+- [x] 2.2 `FOR ROLE kosmo IN SCHEMA public` future table default CRUD를 부여하고 sequence/history 범위를 제외한다.
+- [x] 2.3 isolated full replay와 catalog/representative DML/negative permission 검증을 통과시킨다.
 
-## 3. PROD-780 workload 회귀와 비운영 완료 증거
+## 3. PROD-780 application workload source·rotation 전환
 
 **Authority / Provenance**
 
@@ -68,27 +64,26 @@ API, Web, Temporal Worker와 Fedify consumer application DB가 같은 release-de
 
 **Deliverable**
 
-shared runtime role 전환이 기존 GraphQL/application policy, Post owner cleanup·`deletePost` Active→Tombstone `UPDATE ... RETURNING` 결과/기존 payload·Bookmark/Reaction 등 physical delete mutation의 `DELETE ... RETURNING`·Notification cleanup·Reaction count와 Worker/Fedify/Temporal 동작을 바꾸지 않음을 증명하는 구현·비운영 검증 evidence가 준비된다.
+API, Web, Temporal Worker와 Fedify consumer의 process-wide application DB consumer가 동일한 `kosmo_runtime` standard PG\* source와 runtime Secret을 사용한다.
 
 **Guardrails**
 
-- GraphQL schema·payload·후보·정렬·pagination과 application visibility/owner policy를 재설계하지 않는다.
-- hidden/deleted Post owner cleanup, `deletePost` Active→Tombstone `UPDATE ... RETURNING` 결과/기존 payload, Bookmark/Reaction 등 physical delete mutation의 `DELETE ... RETURNING`, Notification cleanup과 viewer-independent Reaction count를 제거하거나 viewer-dependent하게 만들지 않는다.
-- production preflight/sync/apply/cutover/live와 Secret/role mutation을 실행하거나 완료 evidence로 주장하지 않는다.
+- `PGUSER=kosmo_runtime`과 동일한 direct read-write Service/DB/port/runtime password ref를 사용한다.
+- owner `kosmo`, `kosmo_api`, `kosmo_worker` application credential consumer·SecretRef와 URL/password selector fallback을 남기지 않는다. role/Secret provisioning의 존속과 workload consumer를 혼동하지 않는다.
+- runtime Secret restart target은 API Rollout, Web Rollout, Worker Deployment, Fedify consumer Deployment만 포함하고 migration Job·Fedify MessageQueue 전용 consumer는 제외한다.
+- legacy API/Worker Secret provisioning은 유지하되 더 이상 이를 소비하지 않는 application workload의 restart target 연결은 제거한다.
+- queue URL/password, migration source, Pooler resource와 Worker/Fedify/Temporal registration·lifecycle은 유지한다.
 
 **Verification**
 
-- 관련 workspace lint/format/typecheck와 core/API/Fedify/Worker 회귀를 실행한다.
-- exact non-production revision에서 각 application workload의 principal과 representative SQL, migration/queue 분리와 workload readiness를 확인한다.
-- 결과를 code/CI, non-production live와 production 미실행 범위로 분리해 PROD-780에 기록할 초안을 준비한다.
+- dev/prod static render에서 네 application workload의 PG\* source/SecretRef와 runtime Secret restart targets를 비교한다.
+- migration/queue manifest 및 Pooler resource가 별도 source로 보존되는지 확인한다.
 
-- [x] 3.1 shared PG\* source와 role 변경 이후 기존 application/GraphQL/core/Worker/Fedify regression을 실행한다.
-- [x] 3.2 non-production workload principal, ACL, migration/queue 분리와 대표 DML evidence를 수집한다.
-- [x] 3.3 `PROD-780`이 implementation PR Ready, 전체 통합검증, active spec sync와 archive를 모두 소유한다고 기록하고, 전체 구현·검증 전에는 active change를 archive하지 않는다.
+- [x] 3.1 API/Web/Worker/Fedify application DB source를 `kosmo_runtime` standard PG\* contract로 전환한다.
+- [x] 3.2 legacy workload consumer/selector를 제거하되 API/Worker role·Secret provisioning을 보존한다.
+- [x] 3.3 runtime Secret rotation restart target을 네 application workload에 연결하고 migration/queue target을 제외한다.
 
-Evidence (2026-08-17): exact revision `301b7278`의 dev/prod static Helm render에서 API/Web/Worker/Fedify application consumer가 같은 `kosmo_worker` Worker Secret source를 사용하고 migration owner·Fedify MessageQueue source·Pooler가 분리된 것을 확인했다. Isolated disposable PostgreSQL에서 `current_user`, `rolbypassrls=false`, existing two-role ACL/default ACL, representative CRUD와 금지된 DDL·ownership·regrant 거부를 검증했다. PR #620은 Ready이며 production preflight/sync/apply/cutover/live는 수행하지 않았다.
-
-## 4. PROD-780 active contract reconciliation
+## 4. PROD-780 application behavior·non-production verification
 
 **Authority / Provenance**
 
@@ -98,20 +93,46 @@ Evidence (2026-08-17): exact revision `301b7278`의 dev/prod static Helm render�
 
 **Deliverable**
 
-구현 결과와 기존 active `cut-over-worker-postgres-credentials`의 차이, 적용되는 runtime delta spec sync와 archive 책임이 사람이 검토 가능한 형태로 정리된다. ACL/role/Secret contract와 `grant-runtime-postgres-application-object-privileges` sync/archive는 PROD-781이 소유하고, runtime 구현·통합검증·적용되는 active spec sync·archive의 owner는 PROD-780이다.
+runtime identity 전환이 기존 GraphQL/application policy, Post cleanup/returning, Notification cleanup, Reaction count와 Worker/Fedify/Temporal behavior를 변경하지 않았음을 code/CI와 비운영 evidence로 증명한다.
 
 **Guardrails**
 
-- OpenSpec Gate에서 기존 active spec/change를 직접 rewrite하거나 구현·merge·production 승인의 증거로 삼지 않는다. 이 change에는 runtime workload consumer removal과 Secret restart artifact만 포함하고 ACL/role/Secret contract migration은 포함하지 않는다.
-- 실제 구현 결과와 최신 canonical/Linear를 독립 대조한 뒤에만 delta spec sync와 archive를 수행한다.
-- `PROD-781`은 production transition·drain·rollback window 뒤 `kosmo_api` ACL/default ACL/role/Secret contract와 관련 spec sync/archive를 소유한다. `PROD-712`는 runtime owner credential 폐기 및 schema owner `kosmo` `NOLOGIN`만 소유하며, PROD-780은 runtime transition·전체 통합검증·적용되는 active runtime spec sync/archive를 소유한다.
+- GraphQL schema/payload, visibility/owner predicate, operation session, actor GUC, RLS policy/helper를 변경하지 않는다.
+- hidden/deleted Post owner cleanup, `UPDATE ... RETURNING`/`DELETE ... RETURNING`, Notification cleanup과 viewer-independent Reaction count를 약화하지 않는다.
+- production preflight/sync/apply/cutover/live와 Secret/role mutation은 실행하지 않는다.
 
 **Verification**
 
-- `openspec validate unify-application-runtime-postgres-role --strict`와 전체 strict validation을 통과시킨다.
-- sync/archive 후 전체 active spec과 canonical/Linear authority의 정합성을 다시 확인한다.
+- 관련 workspace lint/format/typecheck와 Core/API/Fedify/Worker 회귀를 실행한다.
+- exact non-production revision에서 `current_user=kosmo_runtime`, `rolbypassrls=false`, ACL/owner와 queue/migration 분리를 확인한다.
+- code/CI, non-production evidence, production 미실행 범위를 별도로 기록한다.
 
-- [x] 4.1 active change conflict/supersede boundary와 PROD-780/PROD-781/PROD-712의 구현·contract·sync/archive ownership을 evidence에 정리한다.
-- [x] 4.2 전체 구현·비운영 검증과 PR Ready 이후에만 delta spec sync/archive를 수행하고 post-archive strict validation을 실행한다.
+- [x] 4.1 기존 application/GraphQL/core/Worker/Fedify regression을 실행한다.
+- [x] 4.2 non-production role/catalog/CRUD/readiness와 source separation evidence를 수집한다.
+- [x] 4.3 production 미실행 및 PROD-781/PROD-782/PROD-712 후속 ownership을 completion evidence에 기록한다.
 
-Evidence (2026-08-17): PR #620 Ready 이후 네 capability delta를 canonical specs에 sync하고 `2026-08-17-unify-application-runtime-postgres-role`로 archive했다. CLI가 첫 `MODIFIED` block을 누락한 `workload-postgres-credential-selection` API credential requirement는 archived delta와 직접 대조해 동일하게 반영했으며, post-archive 전체 strict validation 98/98과 formatting/diff check를 통과했다.
+## 5. PROD-780 OpenSpec Gate·통합 완료
+
+**Authority / Provenance**
+
+- `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`
+- `PROD-780`
+- `PROD-781`, `PROD-782`, `PROD-712` (후속 ownership)
+
+**Deliverable**
+
+최신 `kosmo_runtime` scope와 구현·검증 결과가 적용되는 active runtime spec에 정합하게 반영되고, 전체 change가 완료된 뒤 archive할 수 있다.
+
+**Guardrails**
+
+- 구현 전에는 task를 완료로 표시하거나 archive하지 않는다.
+- 기존 active ACL/credential change의 historical evidence는 superseded boundary로 보존하되, 최신 authority와 충돌하는 normative 문구를 근거로 사용하지 않는다.
+- spec sync/archive는 구현과 통합 검증 완료 후 수행하며 production 승인으로 해석하지 않는다.
+
+**Verification**
+
+- target change strict validation과 전체 strict validation을 실행한다.
+- final implementation review에서 `kosmo_runtime` role/ACL/source와 legacy ownership boundary를 재확인한다.
+
+- [x] 5.1 구현 전 OpenSpec Gate에서 proposal/design/decisions/spec deltas/tasks의 authority·scope·ownership 정합성을 검토한다.
+- [x] 5.2 구현·통합 검증 완료 후 적용되는 runtime spec sync/archive와 post-archive strict validation을 수행한다.

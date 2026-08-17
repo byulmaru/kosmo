@@ -26,6 +26,10 @@
 {{- printf "%s-postgres-worker" (.Release.Name | trunc 47 | trimSuffix "-") -}}
 {{- end -}}
 
+{{- define "kosmo.runtimeDatabasePasswordSecretName" -}}
+{{- printf "%s-postgres-runtime" (.Release.Name | trunc 46 | trimSuffix "-") -}}
+{{- end -}}
+
 {{- define "kosmo.imageRef" -}}
 {{- if eq .Values.env "prod" -}}
 {{- if not (regexMatch "^sha256:[0-9a-f]{64}$" .Values.imageDigest) -}}
