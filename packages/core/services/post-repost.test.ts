@@ -22,6 +22,8 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
+import { POST_DELETE_WORKFLOW_TYPE } from '../temporal/post-delete';
+import { REPOST_DELETE_WORKFLOW_TYPE } from '../temporal/repost-delete';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -299,17 +301,16 @@ test('최초 Repost create와 delete가 event-specific Workflow를 시작한다'
   assert.equal(start.mock.callCount(), 2);
   const deleteStart = start.mock.calls[1];
   assert.ok(deleteStart);
+  assert.equal(deleteStart.arguments[0], REPOST_DELETE_WORKFLOW_TYPE);
   const deleteOptions = deleteStart.arguments[1];
   assert.ok(deleteOptions);
-  assert.equal(deleteOptions.workflowId, `post-delete:${first.repost.id}`);
-  assert.deepEqual(deleteOptions.args, [
-    { postKind: 'REPOST', origin: 'LOCAL', postId: first.repost.id },
-  ]);
+  assert.equal(deleteOptions.workflowId, `repost-delete:${first.repost.id}`);
+  assert.deepEqual(deleteOptions.args, [{ origin: 'LOCAL', postId: first.repost.id }]);
   await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
   assert.equal(start.mock.callCount(), 2);
 });
 
-test('Post delete가 공통 Delete Workflow에 Post kind를 전달한다', async () => {
+test('Content Post delete가 Post Delete Workflow를 시작한다', async () => {
   const actor = await createProfile();
   const post = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -318,12 +319,15 @@ test('Post delete가 공통 Delete Workflow에 Post kind를 전달한다', async
   await runDelete({ actorProfileId: actor.profile.id, postId: post.id });
 
   assert.equal(start.mock.callCount(), 1);
-  const options = start.mock.calls[0]?.arguments[1];
+  const call = start.mock.calls[0];
+  assert.ok(call);
+  assert.equal(call.arguments[0], POST_DELETE_WORKFLOW_TYPE);
+  const options = call.arguments[1];
   assert.ok(options);
-  assert.deepEqual(options.args, [{ postKind: 'POST', origin: 'LOCAL', postId: post.id }]);
+  assert.deepEqual(options.args, [{ origin: 'LOCAL', postId: post.id }]);
 });
 
-test('Post delete가 Reply·Quote·Reply Quote의 구조별 Post kind를 전달한다', async () => {
+test('Reply·Quote·Reply Quote delete도 Post Delete Workflow를 시작한다', async () => {
   const actor = await createProfile();
   const parent = await createContentPost(actor.profile.id);
   const source = await createContentPost(actor.profile.id);
@@ -361,9 +365,9 @@ test('Post delete가 Reply·Quote·Reply Quote의 구조별 Post kind를 전달�
   }
 
   assert.deepEqual(starts, [
-    { postKind: 'REPLY', origin: 'LOCAL', postId: reply.id },
-    { postKind: 'QUOTE', origin: 'LOCAL', postId: quote.id },
-    { postKind: 'REPLY_QUOTE', origin: 'LOCAL', postId: replyQuote.id },
+    { origin: 'LOCAL', postId: reply.id },
+    { origin: 'LOCAL', postId: quote.id },
+    { origin: 'LOCAL', postId: replyQuote.id },
   ]);
 });
 

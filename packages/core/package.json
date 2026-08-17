@@ -22,6 +22,7 @@
     "./temporal/post-create-effects": "./temporal/post-create-effects.ts",
     "./temporal/post-delete": "./temporal/post-delete.ts",
     "./temporal/post-repost": "./temporal/post-repost.ts",
+    "./temporal/repost-delete": "./temporal/repost-delete.ts",
     "./temporal/task-queue": "./temporal/task-queue.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",

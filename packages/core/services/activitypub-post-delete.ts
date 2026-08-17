@@ -18,8 +18,6 @@ export const deleteActivityPubPost = async ({
         instanceKind: Instances.kind,
         postId: Posts.id,
         profileId: Profiles.id,
-        replyParentId: Posts.replyParentId,
-        repostSourceId: Posts.repostSourceId,
       })
       .from(ActivityPubPosts)
       .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
@@ -48,23 +46,13 @@ export const deleteActivityPubPost = async ({
       .returning({ id: Posts.id })
       .then(first);
 
-    const postKind: 'POST' | 'REPLY' | 'QUOTE' | 'REPLY_QUOTE' =
-      row.replyParentId === null
-        ? row.repostSourceId === null
-          ? 'POST'
-          : 'QUOTE'
-        : row.repostSourceId === null
-          ? 'REPLY'
-          : 'REPLY_QUOTE';
-
-    return { deleted: deleted !== undefined, postId: row.postId, postKind };
+    return { deleted: deleted !== undefined, postId: row.postId };
   });
 
   if (result?.deleted) {
     const workflowInput = {
       postId: result.postId,
       origin: 'ACTIVITYPUB' as const,
-      postKind: result.postKind,
     };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
@@ -76,7 +64,6 @@ export const deleteActivityPubPost = async ({
     } catch (error) {
       console.error('Post Delete Workflow start failed', {
         error,
-        postKind: workflowInput.postKind,
         origin: workflowInput.origin,
         postId: workflowInput.postId,
       });

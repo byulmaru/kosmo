@@ -11,23 +11,25 @@
 **Deliverable**
 
 Local GraphQL과 verified ActivityPub Announce·Undo·Delete가 같은 Core Post domain 규칙을 사용하고, 실제 최초
-create와 모든 최초 Tombstone commit만 committed transition 결과를 만든다. Delete 결과는 relation shape에서
-후속 Workflow가 사용할 `postKind`를 함께 제공한다.
+create와 모든 최초 Tombstone commit만 committed transition 결과를 만든다. Core는 relation shape에 따라 Post Delete
+또는 Repost Delete Workflow를 선택하지만 Workflow input에 discriminator를 넣지 않는다.
 
 **Guardrails**
 
 - Local GraphQL은 Repost 상태만 저장하고, verified Announce·Undo만 Repost 상태와 current ActivityPub mapping을 같은 transaction에서 저장한다. 모든 Post delete는 공통 `deletePost` transaction을 사용한다.
 - duplicate·no-op·rollback은 transition 효과를 만들지 않는다.
 - transaction Activity, proposed ID, command receipt, outbox와 새 row/advisory lock을 추가하지 않는다.
-- Post 구조는 별도 Kind가 아니라 committed Content·Reply Parent·Repost Source 관계 조합으로 판별한다. `POST`, `REPLY`, `QUOTE`, `REPLY_QUOTE`는 Current Content와 Reply Parent·Repost Source의 각 조합이고, `REPOST`는 Content 없이 Repost Source만 있는 순수 Repost다.
-- ordinary Post·Reply·Quote 적용과 검증 책임은 PROD-677에 남기되, PROD-725와 같은 공통 Delete Workflow 계약을 사용한다.
+- Post 구조는 별도 Kind가 아니라 committed Content·Reply Parent·Repost Source 관계 조합으로 판별한다. Content가
+  있는 Post·Reply·Quote는 Post Delete Workflow를, Content 없이 Repost Source만 있는 순수 Repost는 Repost Delete
+  Workflow를 사용한다.
+- ordinary Post·Reply·Quote 적용과 검증 책임은 PROD-677에 남기되, PROD-725의 Post Delete Workflow 계약을 사용한다.
 
 **Verification**
 
-- Local/AP create·delete, Content/Repost `postKind`, duplicate·concurrent·rollback, mapping collision·generation
+- Local/AP create·delete, Content/Repost Workflow 선택, duplicate·concurrent·rollback, mapping collision·generation
   경합과 ordinary Post delete 회귀를 Core/Fedify integration test로 검증한다.
 
-- [x] 1.1 Repost create와 모든 Post delete가 database handle·`postCommit` 없이 자체 transaction과 최초 transition 결과(`postKind` 포함)를 소유하게 한다.
+- [x] 1.1 Repost create와 모든 Post delete가 database handle·`postCommit` 없이 자체 transaction과 최초 transition 결과를 소유하고, Content-bearing Post·Reply·Quote와 pure Repost에 맞는 Workflow를 선택하게 한다.
 - [x] 1.2 verified Announce materialization과 current-generation Undo가 Repost 상태와 ActivityPub mapping을 같은 Core transaction에서 처리하게 한다.
 - [x] 1.3 duplicate·no-op·rollback·교차 경합과 Content/Repost 삭제의 기존 수렴 및 GraphQL payload를 보존하는 focused test를 갱신한다.
 
@@ -46,20 +48,23 @@ create와 모든 최초 Tombstone commit만 committed transition 결과를 만�
 
 **Deliverable**
 
-최초 Repost 생성과 모든 최초 Post Tombstone commit 뒤 각각 accepted Repost Workflow와 공통 Delete Workflow가
+최초 Repost 생성과 모든 최초 Post Tombstone commit 뒤 각각 accepted Repost create, Post Delete 또는 Repost Delete Workflow가
 관계 기반 Notification lifecycle과 Local-origin Delete(Note)·Undo queue handoff를 독립적으로 재시도하며, 하나의
 Worker host가 Post Create, Repost와 Delete registration을 함께 poll한다.
 
 **Guardrails**
 
-- Repost와 Delete Workflow identity를 분리하고 종료된 같은 event ID를 재사용하지 않는다.
-- Repost Workflow input은 `{ postId, origin }`, Delete Workflow input은 `{ postId, origin, postKind }`를 유지한다. `postKind`는 committed relation shape에서 `POST | REPLY | QUOTE | REPLY_QUOTE | REPOST`로 산출하고, Delete Activity는 Tombstone row에 보존된 projection을 재사용한다. author Profile의 non-`ACTIVE` state만으로 local Undo를 no-op하지 않는다.
+- Repost create, Post Delete와 Repost Delete Workflow identity를 분리하고 종료된 같은 event ID를 재사용하지 않는다.
+- Repost create, Post Delete와 Repost Delete Workflow input은 모두 `{ postId, origin }`을 사용한다. Core는 committed
+  relation shape에 따라 Workflow를 선택하고 discriminator를 전달하지 않으며, Delete Activity는 Tombstone row에
+  보존된 projection을 재사용한다. author Profile의 non-`ACTIVE` state만으로 local Undo를 no-op하지 않는다.
 - PROD-722의 기존 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는
   변경하지 않고, 새 event-specific type·ID는 Repost와 Delete에만 추가한다.
-- Repost는 type `postRepostWorkflow`·ID `post-repost:{postId}`, Delete는 type `postDeleteWorkflow`·ID
-  `post-delete:{postId}`를 사용한다.
+- Repost create는 type `postRepostWorkflow`·ID `post-repost:{postId}`, Post Delete는 type `postDeleteWorkflow`·ID
+  `post-delete:{postId}`, Repost Delete는 type `repostDeleteWorkflow`·ID `repost-delete:{postId}`를 사용한다.
 - ActivityPub origin은 outbound echo를 만들지 않는다.
-- `postKind=POST | REPLY | QUOTE | REPLY_QUOTE`는 Local-origin canonical Delete(Note)를, `postKind=REPOST`는 Notification cleanup과 Local-origin Undo를 적용한다.
+- Post Delete는 Local-origin canonical Delete(Note)를, Repost Delete는 Notification cleanup과 Local-origin Undo를
+  적용한다. ActivityPub-origin Post Delete는 outbound effect 없이, Repost Delete는 cleanup만 적용한다.
 - Activity 성공은 Fedify queue acceptance이며 remote retry·ordering은 Fedify가 소유한다.
 - Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 직렬화를 위한
   `FOR UPDATE` 또는 row lock을 추가하지 않는다.
@@ -72,9 +77,9 @@ Worker host가 Post Create, Repost와 Delete registration을 함께 poll한다.
   terminal no-op 및 effects 독립 실행을 unit 및 package-level test로 검증한다. merge된 revision의 실제 Temporal
   retry·Worker restart 관찰은 rollout 검증으로 별도 추적하며 이 change의 구현 완료 task로 두지 않는다.
 
-- [x] 2.1 기존 Post Create type·ID를 유지하면서 committed Repost transition과 모든 Post Tombstone의 Repost/Delete event type·input(`postKind` 포함)·stable start policy를 Core Temporal domain 경계에 추가하고, Delete Activity가 relation별 Tombstone projection을 재사용하게 한다.
+- [x] 2.1 기존 Post Create type·ID를 유지하면서 committed Repost transition과 모든 Post Tombstone의 Repost create/Post Delete/Repost Delete event type·input(`{ postId, origin }`)·stable start policy를 Core Temporal domain 경계에 추가하고, Delete Activity가 relation별 Tombstone projection을 재사용하게 한다.
 - [x] 2.2 Repost Notification create/delete와 canonical Announce·Undo queue handoff Activity를 멱등하게 등록한다.
-- [x] 2.3 `postKind`와 `origin`에 따라 적용 가능한 effects를 독립 실행하는 Repost와 공통 Delete Workflow를 구현하고 Post Create와 함께 singleton Worker registry에 조립한다.
+- [x] 2.3 relation shape와 `origin`에 따라 적용 가능한 effects를 독립 실행하는 Repost create, Post Delete와 Repost Delete Workflow를 구현하고 Post Create와 함께 singleton Worker registry에 조립한다.
 - [x] 2.4 start failure·duplicate start, fixed registration, Content Delete/Repost Notification Activity retry 멱등성과 terminal no-op 검증을 추가한다.
 
 ## 3. PROD-725 API·Fedify caller 단순화와 통합 검증
@@ -105,7 +110,7 @@ Repost·Delete GraphQL caller와 Announce·Undo·Delete Fedify caller는 Core ac
 
 - [x] 3.1 Repost와 모든 Post delete GraphQL resolver에서 database handle 및 `postCommit` 조립을 제거한다.
 - [x] 3.2 inbound Announce·Undo·ActivityPub Delete caller를 검증된 serializable input과 Core 결과만 사용하는 경계로 단순화한다.
-- [x] 3.3 API·Fedify integration test를 Content/Repost Delete Workflow start, `postKind`, committed-result 격리 계약으로 갱신한다.
+- [x] 3.3 API·Fedify integration test를 Content/Repost Delete Workflow start, `{ postId, origin }` input과 committed-result 격리 계약으로 갱신한다.
 
 ## 4. PROD-725 계약 동기화와 구현 검증
 

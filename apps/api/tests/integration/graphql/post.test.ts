@@ -687,7 +687,7 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(stored.deletedAt, null);
   });
 
-  test('모든 최초 Content Tombstone은 공통 Delete Workflow를 한 번만 시작한다', async (t) => {
+  test('모든 최초 Content Tombstone은 Post Delete Workflow를 한 번만 시작한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const replyParent = await createContentPost(auth.profile.id);
     const reply = await createContentPost(auth.profile.id, { replyParentId: replyParent.id });
@@ -710,8 +710,8 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(
       starts.map((options) => (options as { args: unknown[] }).args[0]),
       [
-        { postKind: 'REPLY', origin: 'LOCAL', postId: reply.id },
-        { postKind: 'POST', origin: 'LOCAL', postId: rootPost.id },
+        { origin: 'LOCAL', postId: reply.id },
+        { origin: 'LOCAL', postId: rootPost.id },
       ],
     );
   });

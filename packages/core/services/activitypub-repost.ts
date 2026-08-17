@@ -3,8 +3,11 @@ import { ActivityPubPosts, db, first, Posts } from '../db';
 import { PostState } from '../enums';
 import { ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
-import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
 import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
+import {
+  REPOST_DELETE_WORKFLOW_TYPE,
+  repostDeleteWorkflowStartOptions,
+} from '../temporal/repost-delete';
 import { materializeRepostInTransaction } from './post';
 import type { Transaction } from '../db';
 
@@ -222,20 +225,16 @@ export const undoActivityPubRepost = async ({
   if (result?.outcome === 'deleted') {
     // The ActivityPub Undo does not produce a new outbound Undo. The Workflow
     // still owns Notification cleanup for the committed remote transition.
-    const workflowInput = {
-      postId: result.repostId,
-      origin: 'ACTIVITYPUB' as const,
-      postKind: 'REPOST' as const,
-    };
+    const workflowInput = { postId: result.repostId, origin: 'ACTIVITYPUB' as const };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         temporalClient.workflow.start(
-          POST_DELETE_WORKFLOW_TYPE,
-          postDeleteWorkflowStartOptions(workflowInput),
+          REPOST_DELETE_WORKFLOW_TYPE,
+          repostDeleteWorkflowStartOptions(workflowInput),
         ),
       );
     } catch (error) {
-      console.error('Post Delete Workflow start failed', {
+      console.error('Repost Delete Workflow start failed', {
         error,
         origin: workflowInput.origin,
         postId: workflowInput.postId,
