@@ -153,9 +153,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
     if (event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault();
       context.setFocusValue(option.value);
-      if (!selected) {
-        context.onValueChange(option.value);
-      }
+      context.onValueChange(option.value);
       return;
     }
 
@@ -208,9 +206,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
           return;
         }
         context.setFocusValue(option.value);
-        if (!selected) {
-          context.onValueChange(option.value);
-        }
+        context.onValueChange(option.value);
       }}
       ref={optionRef}
       style={(state) => [

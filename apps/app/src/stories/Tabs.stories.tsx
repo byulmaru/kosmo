@@ -119,10 +119,11 @@ export const PillVariant: Story = {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(getComputedStyle(popular).opacity).toBe('0.85');
     await userEvent.click(popular);
-    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenLastCalledWith('popular');
 
     expect(getComputedStyle(latest).pointerEvents).toBe('none');
     latest.click();
-    expect(onValueChange).not.toHaveBeenCalled();
+    expect(onValueChange).toHaveBeenCalledTimes(1);
   },
 };
