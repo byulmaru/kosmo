@@ -103,18 +103,6 @@ transaction·후속 효과 경계를 proposal, capability delta와 구현 지침
 - Consequences: 명확한 선후관계가 없는 교차 경합에서 새 Announce가 Active Repost를 남긴다고 보장하지 않는다. 이후 유효한 delivery는 기존 멱등 경로로 수렴한다.
 - Confirmation / Follow-up: 기존 concurrent Announce·Undo integration 시나리오를 유지하고 새 lock query가 없는지 검토한다.
 
-### Repost Notification base를 제공하는 parent change를 먼저 archive한다
-
-- Decision Date: 2026-08-16
-- Decision Class: Implementation Choice
-- Authority / Provenance: `docs/domain/objects/notification.md`, `PROD-389`, `PROD-725`
-- Status: Active
-- Context / Problem: canonical `notification` spec에는 아직 Repost 요구사항이 없고 active `add-post-reposts` delta가 이를 추가한다. PROD-725 change가 존재하지 않는 base requirement를 MODIFIED로 선언하면 archive 순서에 따라 validation과 최종 계약이 달라진다.
-- Decision Outcome: `add-post-reposts`의 Notification delta를 PROD-725 retry 계약으로 먼저 동기화하고, 구현·통합 검증 뒤 `add-post-reposts`를 먼저 archive한다. 그 canonical base 위에서 이 change를 archive한다.
-- Alternatives Considered: 두 active change가 같은 Repost Notification requirement를 각각 ADDED로 소유하면 중복 archive 충돌이 생기므로 채택하지 않았다.
-- Consequences: 구현은 한 PR 또는 순차 PR로 수행할 수 있지만 OpenSpec completion과 archive는 두 단계다. 이 change만 먼저 archive하지 않는다.
-- Confirmation / Follow-up: parent archive 뒤 canonical `notification` spec과 이 change를 strict validation하고 integration/archive owner를 명시한다.
-
 ## Remaining Decisions
 
 - 없음.

@@ -139,8 +139,9 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 2. 기존 Post Create transition/start 계약을 유지한 채 Core transition/start 경계와 caller 단순화를 구현하고,
    event-specific Repost/Delete Workflow·Activity registration을 추가한다.
 3. unit/package integration test로 duplicate·rollback·start failure·Activity 멱등성과 terminal no-op을 검증한다.
-4. 구현이 완료되면 Repost Notification base requirement를 제공하는 `add-post-reposts`를 먼저 archive하고, 그
-   canonical spec 위에서 이 change를 archive한다. archive 동작 자체는 구현 task로 두지 않는다.
+4. 구현이 완료되면 active specs에 delta를 동기화하고 이 change를 archive한다. 이 change는 `notification`
+   capability를 수정하지 않으므로 `add-post-reposts` archive를 기다리지 않으며, archive 동작 자체는 구현 task로
+   두지 않는다.
 5. merge된 exact revision을 dev에 배포한 뒤 Repost/Delete Workflow history, Notification, Announce·Undo queue
    handoff, Activity 독립 실행·retry·origin 분기와 Worker restart 복구를 rollout evidence로 별도 확인한다. 이
    관찰은 OpenSpec 구현 완료나 archive의 선행 조건이 아니다.

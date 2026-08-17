@@ -49,9 +49,6 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
 - Linear Contract: `PROD-725`
 - Linear Implementations: `PROD-725`; 기존 Repost 기반과 ActivityPub wiring은 `PROD-401`, `PROD-411`,
   `PROD-412`, `PROD-416`, `PROD-495`, `PROD-496`, `PROD-669`
-- OpenSpec dependency: active `add-post-reposts`가 Repost Notification 요구사항을 canonical spec에 먼저
-  동기화·archive한 뒤 이 change를 archive한다. 두 change의 구현은 PROD-725에서 함께 검증할 수 있지만
-  archive 순서는 `add-post-reposts` → 이 change다.
 
 ## Capabilities
 
@@ -83,7 +80,7 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
   Announce·Undo producer를 Activity에서 재사용
 - `apps/worker`: Repost·Delete Workflow·Activity source와 고정 registry registration, 독립 effects 실행
 - `openspec/changes/add-post-reposts`: 최신 PROD-725가 대체한 PROD-669 post-commit lifecycle 문구 동기화
-- OpenSpec archive: Repost Notification base requirement를 제공하는 `add-post-reposts`를 먼저 archive한 뒤 이
-  change의 delta를 archive
+- OpenSpec archive: 이 change는 `notification` capability를 수정하지 않고 독립된
+  `temporal-repost-effects` capability를 추가하므로 `add-post-reposts`의 archive와 독립적으로 archive
 - 외부 GraphQL schema, Repost·Notification read API, Fedify MessageQueue consumer와 production rollout은
   변경하지 않는다.
