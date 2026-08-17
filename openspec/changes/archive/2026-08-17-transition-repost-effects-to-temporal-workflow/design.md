@@ -40,6 +40,11 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 - `packages/fedify/src/inbound-announce.ts`와 Undo dispatch는 mapping 검사·저장과 Core action을 caller-owned
   transaction으로 조립한다. Core가 mapping을 저장하려면 Fedify vocab 객체나 request context가 아니라 검증된
   serializable identity·timestamp만 입력받아야 한다.
+- `packages/fedify/src/inbound-delete.ts`는 verified actor/object URI와 저장된 ActivityPub mapping·ownership
+  chain을 read-only로 조회해 `actorProfileId`와 `postId`를 해석한다. 이후 공통 `deletePost`가 resolved identity의
+  owner/state 조건부 Tombstone transaction을 소유하고 실제 commit 뒤 `postDeleteWorkflow` start를 시도한다.
+  mapping lookup과 domain transition은 하나의 atomic transaction으로 묶지 않으며 caller database handle,
+  `postCommit` callback 또는 별도 lock을 전달하지 않는다.
 - Repost 생성은 partial unique index와 conflict 뒤 재조회로 동시 요청을 수렴시킨다. Workflow start 여부는
   반환된 `created`나 최초 Tombstone UPDATE 결과에서 결정해야 하며 사전 조회로 대체하면 안 된다.
 - `sendRepostAnnounce`·`sendRepostUndo`는 process 기본 `db`에서 canonical projection을 다시 읽고 Fedify queue에
@@ -111,6 +116,9 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 
 - ordinary Post·Reply·Quote delete를 Repost Workflow로 보내지 않는다. 이들은 Post Delete Workflow에서 처리하며
   pure Repost delete와 별도 retry·effects 경계를 사용한다. ordinary delete의 적용·검증 책임은 PROD-677에 남긴다.
+- ActivityPub Delete ingress의 read-only mapping/ownership resolution을 Tombstone transaction과 결합했다고
+  가정하지 않는다. ingress는 내부 actor/post ID를 공통 `deletePost`에 전달하고, Workflow start는 실제 commit
+  뒤에만 발생한다.
 - ActivityPub mapping을 Workflow Activity에서 뒤늦게 저장하거나 Repost transaction과 분리하지 않는다.
 - Announce mapping 교체와 Undo 경합을 `FOR UPDATE`, advisory lock 또는 serializable retry로 새로 직렬화하지 않는다.
 - duplicate/no-op을 누락 effects backfill 계기로 사용하지 않는다.

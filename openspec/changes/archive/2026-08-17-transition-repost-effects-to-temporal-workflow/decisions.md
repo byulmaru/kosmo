@@ -31,6 +31,18 @@ transaction·후속 효과 경계를 proposal, capability delta와 구현 지침
 - Consequences: `deletePost` transaction은 공통으로 유지하면서 Post Delete와 Repost Delete가 각자의 stable identity와 effect를 소유한다. Repost Tombstone에만 필요한 actor/source/createdAt/visibility projection으로 Undo를 만들며, ordinary delete 적용과 검증 증거는 PROD-677이, 공통 transaction·Workflow 통합은 PROD-725가 소유한다.
 - Confirmation / Follow-up: Content·Reply·Quote·pure Repost의 Local 삭제, ActivityPub-origin effect 분기, duplicate/no-op 및 각 Workflow input이 `{ postId, origin }`만 사용하는지 통합 검증한다.
 
+### ActivityPub Delete ingress는 내부 identity를 해석한 뒤 공통 Post delete action을 호출한다
+
+- Decision Date: 2026-08-17
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, `PROD-579`, `PROD-365`, `PROD-725`
+- Status: Active
+- Context / Problem: verified ActivityPub Delete의 actor/object mapping 검증을 Tombstone 전이와 하나의 transaction으로 묶거나 전용 `deleteActivityPubPost` action이 별도 transaction을 소유하면 read-only ingress lookup과 공통 Post delete lifecycle의 경계가 다시 결합된다.
+- Decision Outcome: ActivityPub ingress는 protocol 검증 뒤 저장된 actor/object mapping과 exact ownership chain을 read-only로 조회해 내부 `actorProfileId`와 `postId`를 해석하고, 공통 `deletePost({ actorProfileId, postId, origin: ACTIVITYPUB })`를 호출한다. `deletePost`가 owner/state 조건부 Tombstone transaction을 소유하고 실제 commit 뒤 Content-bearing Post의 `postDeleteWorkflow` start를 시도한다. mapping lookup과 domain transition은 atomic transaction이라고 주장하지 않는다.
+- Alternatives Considered: caller-owned database transaction, 전용 delete action의 mapping/Tombstone 결합, `postCommit` callback과 별도 lock은 공통 action의 transaction·post-commit 경계를 다시 분산시키므로 채택하지 않는다.
+- Consequences: ingress는 caller database handle이나 `postCommit`을 조립하지 않으며, mapping lookup과 domain delete 사이의 경합은 별도 lock 없이 기존 조건부 state transition·멱등성 계약으로 처리한다.
+- Confirmation / Follow-up: verified actor/object 해석, missing/mismatched mapping no-op, 최초 Tombstone 뒤 `postDeleteWorkflow` start와 duplicate/concurrent Delete의 no-lock 경계를 ActivityPub integration test로 확인한다.
+
 ### 배포된 Post Create Workflow 외부 identity를 유지한다
 
 - Decision Date: 2026-08-17

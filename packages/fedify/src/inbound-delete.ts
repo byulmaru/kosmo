@@ -1,7 +1,18 @@
 import '@kosmo/core/polyfill';
 
 import { Tombstone } from '@fedify/vocab';
-import { deleteActivityPubPost } from '@kosmo/core/services';
+import {
+  ActivityPubActors,
+  ActivityPubPosts,
+  db,
+  first,
+  Instances,
+  Posts,
+  Profiles,
+} from '@kosmo/core/db';
+import { InstanceKind } from '@kosmo/core/enums';
+import { deletePost } from '@kosmo/core/services';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import {
   observeInboundExternalFailure,
@@ -66,11 +77,25 @@ export const handleInboundDelete = async (
     return;
   }
 
-  const result = await deleteActivityPubPost({
-    actorUri: actorUri.href,
-    objectUri: objectUri.href,
-  });
-  if (!result) {
+  const row = await db
+    .select({ postId: Posts.id, profileId: Profiles.id })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        eq(ActivityPubPosts.uri, objectUri.href),
+        eq(ActivityPubActors.uri, actorUri.href),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        isNotNull(Posts.currentContentId),
+      ),
+    )
+    .limit(1)
+    .then(first);
+
+  if (!row) {
     observeInboundNoop({
       activityType: 'Delete',
       actorOrigin: actorUri.origin,
@@ -79,5 +104,12 @@ export const handleInboundDelete = async (
       phase: 'projection',
       reasonCode: 'delete_target_missing_or_mismatched',
     });
+    return;
   }
+
+  await deletePost({
+    actorProfileId: row.profileId,
+    origin: 'ACTIVITYPUB',
+    postId: row.postId,
+  });
 };

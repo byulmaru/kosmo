@@ -17,6 +17,9 @@ create와 모든 최초 Tombstone commit만 committed transition 결과를 만�
 **Guardrails**
 
 - Local GraphQL은 Repost 상태만 저장하고, verified Announce·Undo만 Repost 상태와 current ActivityPub mapping을 같은 transaction에서 저장한다. 모든 Post delete는 공통 `deletePost` transaction을 사용한다.
+- ActivityPub Delete ingress는 verified actor/object URI와 저장된 mapping/ownership chain을 read-only로 내부
+  `actorProfileId`와 `postId`로 해석한 뒤 공통 `deletePost`에 전달한다. mapping lookup과 Tombstone transition은
+  하나의 atomic transaction으로 주장하지 않으며, caller database handle·`postCommit`·별도 lock을 사용하지 않는다.
 - duplicate·no-op·rollback은 transition 효과를 만들지 않는다.
 - transaction Activity, proposed ID, command receipt, outbox와 새 row/advisory lock을 추가하지 않는다.
 - Post 구조는 별도 Kind가 아니라 committed Content·Reply Parent·Repost Source 관계 조합으로 판별한다. Content가
@@ -109,7 +112,9 @@ Repost·Delete GraphQL caller와 Announce·Undo·Delete Fedify caller는 Core ac
   effect 미호출을 integration test로 검증한다.
 
 - [x] 3.1 Repost와 모든 Post delete GraphQL resolver에서 database handle 및 `postCommit` 조립을 제거한다.
-- [x] 3.2 inbound Announce·Undo·ActivityPub Delete caller를 검증된 serializable input과 Core 결과만 사용하는 경계로 단순화한다.
+- [x] 3.2 inbound Announce·Undo caller와 ActivityPub Delete ingress를 검증된 serializable input과 Core 결과만
+      사용하는 경계로 단순화한다. Delete ingress는 내부 actor/post ID를 공통 `deletePost`에 전달하고, 실제
+      Tombstone commit 뒤 `postDeleteWorkflow` start가 발생하는지 확인한다.
 - [x] 3.3 API·Fedify integration test를 Content/Repost Delete Workflow start, `{ postId, origin }` input과 committed-result 격리 계약으로 갱신한다.
 
 ## 4. PROD-725 계약 동기화와 구현 검증

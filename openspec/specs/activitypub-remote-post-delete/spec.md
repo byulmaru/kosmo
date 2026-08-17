@@ -30,7 +30,7 @@ TBD - created by archiving change add-activitypub-remote-post-delete. Update Pur
 
 ### Requirement: Known remote author와 exact object ownership 검증
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-579, PROD-365 — 시스템은 저장된 ActivityPub actor가 자신이 작성한 기존 remote Post object를 삭제하는 경우만 허용해야 한다(MUST). actor, mapping, Post Author와 origin을 하나의 exact ownership chain으로 검증해야 하며(MUST), 검증된 삭제를 Profile 또는 Instance의 현재 가용 상태 때문에 거부하지 않아야 한다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/architecture/core-services.md`, PROD-579, PROD-365 — 시스템은 저장된 ActivityPub actor가 자신이 작성한 기존 remote Post object를 삭제하는 경우만 허용해야 한다(MUST). actor, mapping, Post Author와 origin을 하나의 exact ownership chain으로 검증해야 하며(MUST), verified actor/object URI와 저장된 ownership chain은 read-only lookup으로 내부 `actorProfileId`와 `postId`로 해석해 공통 Post delete action에 전달해야 한다(MUST). 검증된 삭제를 Profile 또는 Instance의 현재 가용 상태 때문에 거부하지 않아야 한다(MUST NOT).
 
 #### Scenario: exact remote author와 mapping 허용
 
@@ -74,8 +74,10 @@ TBD - created by archiving change add-activitypub-remote-post-delete. Update Pur
 #### Scenario: Active remote Post 삭제
 
 - **WHEN** exact ownership 검증을 통과한 mapped remote Post의 Lifecycle State가 Active다
-- **THEN** 시스템은 Post Lifecycle State를 Tombstone으로 전환하고 삭제 시각을 기록한다
-- **AND** 전이와 author 재검증은 하나의 PostgreSQL transaction에서 commit되거나 rollback된다
+- **THEN** ingress는 read-only mapping/ownership lookup으로 해석한 `actorProfileId`와 `postId`를 `deletePost({ actorProfileId, postId, origin: ACTIVITYPUB })`에 전달한다
+- **AND** 공통 `deletePost`는 resolved internal identity의 owner/state 조건부 UPDATE를 자체 transaction에서 수행해 Post Lifecycle State를 Tombstone으로 전환하고 삭제 시각을 기록한다
+- **AND** read-only mapping/actor resolution과 domain Tombstone transition은 하나의 atomic transaction이라고 주장하지 않는다
+- **AND** 실제 Tombstone commit 뒤 `postDeleteWorkflow` start를 시도한다
 
 #### Scenario: identity와 content history 보존
 
@@ -88,7 +90,8 @@ TBD - created by archiving change add-activitypub-remote-post-delete. Update Pur
 
 - **WHEN** inbound remote Delete가 Post를 Tombstone으로 전환한다
 - **THEN** 시스템은 Local outbound `Delete`, Repost `Undo` 또는 Notification cleanup을 실행하지 않는다
-- **AND** remote ingress의 commit 결과를 caller transaction 유무로 Local lifecycle로 오인하지 않는다
+- **AND** remote ingress는 caller database handle 또는 `postCommit` callback을 전달하지 않고 공통 `deletePost`의 committed 결과만 사용한다
+- **AND** mapping/ownership read-only lookup과 `deletePost`의 domain transaction 사이에 별도 lock을 추가하지 않는다
 
 ### Requirement: Remote Delete 멱등성과 순서 경계
 

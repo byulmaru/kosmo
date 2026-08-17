@@ -28,8 +28,11 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
 - Fedify queue acceptance를 Activity 성공 경계로 유지한다. queue acceptance 뒤 remote retry·ordering은
   Fedify가 소유하며, acknowledgement가 모호한 handoff의 cross-system exactly-once는 보장하지 않는다.
 - Core Repost action과 모든 Post delete 경로의 database handle 및 반환형 `postCommit`, API/Fedify caller의
-  후속 효과 조립을 제거한다. Workflow start 실패와 commit→start process gap은 관측하지만 committed Post와
-  기존 GraphQL/ActivityPub 성공 결과를 유지한다.
+  후속 효과 조립을 제거한다. ActivityPub Delete ingress는 verified actor/object URI와 저장된 mapping을
+  read-only로 내부 ID에 해석한 뒤 공통 `deletePost`에 전달하고, `deletePost`가 Tombstone transaction과
+  실제 commit 뒤 `postDeleteWorkflow` start를 소유한다. 이 mapping lookup과 domain transition은 하나의
+  atomic transaction이라고 주장하지 않으며 별도 lock을 추가하지 않는다. Workflow start 실패와 commit→start
+  process gap은 관측하지만 committed Post와 기존 GraphQL/ActivityPub 성공 결과를 유지한다.
 - Worker는 하나의 process-global host와 task queue를 유지하면서 compile-time business registration에 Post
   Create, Repost, Delete Workflow·Activity를 추가한다. event별 Workflow 계약은 Core의 분리된 Temporal module에 둔다.
 - PROD-722에서 이미 배포한 Post Create Workflow의 외부 계약인 type `postCreateEffectsWorkflow`와 ID
