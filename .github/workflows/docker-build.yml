@@ -2,19 +2,19 @@ name: Docker Build
 
 on:
   push:
-    branches: [main, production]
+    branches: [main]
 
 env:
   AWS_REGION: ap-northeast-2
   AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
-  ENVIRONMENT: ${{ github.ref == 'refs/heads/production' && 'prod' || 'dev' }}
+  ENVIRONMENT: dev
   SENTRY_RELEASE: kosmo@${{ github.sha }}
   VAULT_ADDR: https://vault.tail1fdd55.ts.net
   VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/production' }}
+  cancel-in-progress: true
 
 jobs:
   docker_build:
@@ -60,7 +60,7 @@ jobs:
           url: ${{ env.VAULT_ADDR }}
           path: github-actions
           method: jwt
-          role: ${{ github.ref == 'refs/heads/production' && 'kosmo-build-prod' || 'kosmo-build-dev' }}
+          role: kosmo-build-dev
           jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
           exportEnv: false
           secrets: |
@@ -78,8 +78,7 @@ jobs:
             ${{ env.AWS_ECR_REPOSITORY_URL }}
           tags: |
             type=sha
-            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
-            type=raw,value=stable,enable=${{ github.ref == 'refs/heads/production' }}
+            type=raw,value=main
 
       - name: Build and push Docker image
         id: build
@@ -97,7 +96,7 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ github.ref == 'refs/heads/production' && vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID || '' }}
+            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
@@ -118,131 +117,3 @@ jobs:
           name: docker-image-ref
           path: docker-image-ref.txt
           retention-days: 7
-
-  deploy_production:
-    name: Deploy Production
-    if: github.ref == 'refs/heads/production'
-    needs: docker_build
-    runs-on: self-hosted
-    environment: prod
-    concurrency:
-      group: production-release
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-    steps:
-      - name: Get Argo CD token
-        id: argocd-token
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const githubToken = await core.getIDToken();
-            core.setSecret(githubToken);
-
-            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
-              method: "POST",
-              headers: {
-                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
-              },
-              body: new URLSearchParams({
-                connector_id: "github-actions",
-                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-                scope: "openid email profile federated:id",
-                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-                subject_token: githubToken,
-                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
-            }
-
-            const { access_token: dexToken } = await response.json();
-            if (!dexToken) {
-              throw new Error("Dex token response did not include an access token.");
-            }
-
-            core.setSecret(dexToken);
-            core.setOutput("token", dexToken);
-
-      - name: Install Argo CD CLI
-        env:
-          ARGOCD_CLI_VERSION: v3.4.2
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          case "$(uname -s)" in
-            Darwin) argocd_os=darwin ;;
-            Linux) argocd_os=linux ;;
-            *)
-              echo "::error::Unsupported runner OS: $(uname -s)"
-              exit 1
-              ;;
-          esac
-
-          case "$(uname -m)" in
-            x86_64) argocd_arch=amd64 ;;
-            aarch64 | arm64) argocd_arch=arm64 ;;
-            *)
-              echo "::error::Unsupported runner architecture: $(uname -m)"
-              exit 1
-              ;;
-          esac
-
-          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-${argocd_os}-${argocd_arch}"
-          chmod 555 "${RUNNER_TEMP}/argocd"
-          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
-
-      - name: Deploy build digest
-        env:
-          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
-            --revision "${GITHUB_SHA}" \
-            -p "version=${GITHUB_SHA}" \
-            -p "imageDigest=${IMAGE_DIGEST}" \
-            -p "migration.enabled=true" \
-            --validate
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod \
-            --revision "${GITHUB_SHA}" \
-            --prune \
-            --timeout 600
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
-            --sync \
-            --health \
-            --timeout 600
-
-          actual_source_revision="$(argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-prod --output json | jq -r '.status.sync.revision')"
-          if [[ "${actual_source_revision}" != "${GITHUB_SHA}" ]]; then
-            echo "::error::Argo CD synced revision ${actual_source_revision}, expected ${GITHUB_SHA}."
-            exit 1
-          fi
-
-      - name: Record production deployment
-        if: always()
-        env:
-          IMAGE_DIGEST: ${{ needs.docker_build.outputs.image_digest }}
-          RESULT: ${{ job.status }}
-        shell: bash
-        run: |
-          {
-            echo "### Production deployment ${GITHUB_REF_NAME}"
-            echo
-            echo "- Requester: ${GITHUB_ACTOR}"
-            echo "- Approval boundary: production branch ruleset"
-            echo "- Commit: ${GITHUB_SHA}"
-            echo "- Helm source revision: ${GITHUB_SHA}"
-            echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
-            echo "- Result: ${RESULT}"
-            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
-          } >> "${GITHUB_STEP_SUMMARY}"

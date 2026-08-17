@@ -1,8 +1,12 @@
-## Why
+> **Lifecycle: Superseded**
+>
+> `PROD-783`의 `deploy-production-from-main-or-sha` change가 이 change의 production branch source·PR merge approval·tag exclusion 계약을 대체한다. 이 디렉터리는 archive하지 않고 historical provenance로 보존한다. 현재 live release 경로, 남은 전환·검증 task와 최종 archive ownership은 `PROD-783`가 소유하며, 이 change의 delta를 active spec에 다시 적용하지 않는다.
+
+## Historical Why (Superseded)
 
 현재 Git tag는 production 배포 trigger·source selector와 사용자 표시 버전을 함께 소유하고, production image와 `main`의 Helm source가 결합될 수 있다. 실제 production source는 단일 `production` 브랜치로 단순화하고 version 표시 의존성은 이번 전환에서 제거해야 한다.
 
-## What Changes
+## Historical What Changed (Superseded)
 
 - 최신 실제 production release commit에서 장기 `production` 브랜치 하나를 시작하고 PR 기반으로 보호한다.
 - Main의 승인된 변경과 필요한 선행 변경만 production 대상 PR로 반영한다.
@@ -11,6 +15,8 @@
 - Production image와 Argo CD Helm source를 workflow가 확인한 동일 production commit에 고정하고 migration과 모든 활성화 workload에 하나의 digest를 전달한다.
 - Rollback은 과거 tag 재배포가 아니라 production revert PR을 merge해 새 배포로 수행한다.
 - Dev의 main 배포와 기존 migration barrier는 유지한다.
+
+위 목록은 `PROD-764` 시점의 historical proposal이다. 현재는 main push automatic candidate, `prod` Environment approval과 manual full-SHA build·deploy가 source of truth이며, production branch/tag를 release source나 approval boundary로 사용하지 않는다.
 
 ## Authority / Provenance
 
@@ -26,7 +32,7 @@
 
 ### Modified Capabilities
 
-- `production-release`: tag-triggered release를 production PR 승인·push 기반 자동 배포로 바꾸고 version 표시를 이번 전환에서 보류한다.
+- `production-release` (historical delta): tag-triggered release를 production PR 승인·push 기반 자동 배포로 바꾸고 version 표시를 이번 전환에서 보류한다. 이 delta는 `PROD-783`에 의해 superseded되었다.
 
 ## Impact
 
@@ -36,4 +42,11 @@
 - `apps/app/src/components/shell/RightRail.tsx`: 기존 version label 주석 처리
 - `docs/design/breakpoints.md`: full Web footer의 version label 일시 비활성화
 - GitHub repository: `production` 브랜치와 PR 기반 protection/ruleset
-- Production release, migration, OpenPanel과 Sentry 운영 문서
+- Production release, migration, OpenPanel과 Sentry 운영 문서 (현재 계약은 `PROD-783` 기준)
+
+## Supersession and ownership
+
+- Superseded by: `PROD-783` / `openspec/changes/deploy-production-from-main-or-sha`
+- Superseded scope: 장기 `production` branch, production PR merge approval, branch-based automatic build·deploy, tag 제외 정책과 production-first hotfix/revert 경계
+- New owner: `PROD-783`가 main automatic dev/prod 별도 build, `prod` Environment approval, manual full-SHA release, credential/source ownership, 운영 문서 정합성, live cutover와 archive handoff를 소유한다.
+- Archive policy: 이 change는 현재 turn에서 archive하지 않는다. `PROD-783`의 live cutover·active spec sync·strict validation 완료 뒤 obsolete delta를 적용하지 않는 방식으로 archive한다.

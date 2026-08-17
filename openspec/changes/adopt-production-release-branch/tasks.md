@@ -1,4 +1,10 @@
-## 1. PROD-764 Production branch 기준점
+> **Lifecycle: Superseded**
+>
+> `PROD-783`가 이 change의 branch-based release contract와 남은 live verification·cutover·archive 책임을 인계했다. 아래 checkbox는 `PROD-764` historical task의 disposition을 기록하는 것이며, 이 파일에서 production branch를 만들거나 live 배포를 실행하라는 지시가 아니다. 이 change는 archive하지 않고 `PROD-783`의 live gate가 끝날 때까지 historical artifact로 보존한다.
+>
+> Current owner: `openspec/changes/deploy-production-from-main-or-sha` task groups 3~5. Obsolete task는 새 change에서 main automatic candidate, `prod` Environment approval, manual full-SHA release와 live cutover evidence로 재검증한다.
+
+## 1. PROD-764 Production branch 기준점 (Superseded)
 
 **Authority / Provenance**
 
@@ -18,12 +24,12 @@
 - GitHub Actions와 live Argo/image로 초기 SHA 대조
 - Remote branch SHA, ruleset과 직접 push 거부 확인
 
-- [ ] 1.1 최신 성공 production commit과 live source/image를 확인해 초기 SHA를 기록한다.
-- [ ] 1.2 확인한 SHA에서 원격 `production`을 만들고 branch 생성만으로 배포가 실행되지 않음을 확인한다.
-- [ ] 1.3 PR review와 필수 checks를 유일한 사람 승인 gate로 적용하고 직접 push·history rewrite 금지를 검증한다.
+- [x] 1.1 최신 성공 production commit과 live source/image를 확인해 초기 SHA를 기록한다. (Superseded; current cutover source·live comparison은 `PROD-783` task 5.1이 소유한다.)
+- [x] 1.2 확인한 SHA에서 원격 `production`을 만들고 branch 생성만으로 배포가 실행되지 않음을 확인한다. (Obsolete; production branch 생성·유지는 폐기되고 branch retirement는 `PROD-783` task 5.5가 소유한다.)
+- [x] 1.3 PR review와 필수 checks를 유일한 사람 승인 gate로 적용하고 직접 push·history rewrite 금지를 검증한다. (Superseded; `prod` Environment approval·deployment policy는 `PROD-783` task 3.4가 소유한다.)
 - [x] 1.4 `ensure-github.sh`를 제거하고 GitHub 설정을 각 운영 절차와 live 검증으로 분리한다.
 
-## 2. PROD-764 Branch 기반 production workflow
+## 2. PROD-764 Branch 기반 production workflow (Superseded)
 
 **Authority / Provenance**
 
@@ -57,7 +63,7 @@ Production 대상 PR merge로 발생한 push가 version tag 입력 없이 동일
 - [x] 2.5 GitHub PR/branch history로 승인 이력을 보존하고 workflow에는 actor, production commit, source revision, digest와 결과를 기록하며 PR 연결 관계를 재검증하지 않는다.
 - [x] 2.6 Trigger matrix, version label 비노출, 실행 중 run 보존·latest pending coalescing, 동일 SHA·digest와 migration barrier 검증을 추가하고 관련 check를 통과시킨다.
 
-## 3. PROD-764 Credential과 Application ownership
+## 3. PROD-764 Credential과 Application ownership (Superseded)
 
 **Authority / Provenance**
 
@@ -80,10 +86,10 @@ Tag ref는 production build credential을 얻지 못하고 Terraform은 승인�
 
 - [x] 3.1 Terraform이 release-time production target revision과 Helm parameter만 보존하도록 lifecycle 경계를 갱신한다.
 - [x] 3.2 ECR push trust에서 tag ref를 제거하고 branch build의 필요한 최소 범위를 유지한다.
-- [ ] 3.3 Vault production build role owner를 확인해 tag ref trust를 승인된 production workflow identity로 전환하고 별도 repository 변경이면 같은 issue에 연결한다.
-- [ ] 3.4 Provider validation과 reviewed plan을 통과시키고 의도한 ownership·credential 변경만 있는지 확인한다.
+- [x] 3.3 Vault production build role owner를 확인해 tag ref trust를 승인된 production workflow identity로 전환하고 별도 repository 변경이면 같은 issue에 연결한다. (Superseded; main automatic·prod Environment identity와 external owner handoff는 `PROD-783` task 3.2~3.3이 소유한다.)
+- [x] 3.4 Provider validation과 reviewed plan을 통과시키고 의도한 ownership·credential 변경만 있는지 확인한다. (Superseded; current Terraform/OIDC validation은 `PROD-783` task 3.5가 소유한다.)
 
-## 4. PROD-764 Release runbook과 Main 전달
+## 4. PROD-764 Release runbook과 Main 전달 (Superseded)
 
 **Authority / Provenance**
 
@@ -115,7 +121,7 @@ Tag ref는 production build credential을 얻지 못하고 Terraform은 승인�
 - [x] 4.4 OpenSpec과 구현·문서의 정합성 및 strict validation을 확인한다.
 - [x] 4.5 `PROD-764` main 변경을 commit·push하고 한국어 PR에 결정, 검증, external credential 변경과 live 전환 gate를 기록해 Ready for review로 전환한다.
 
-## 5. PROD-764 첫 branch release와 완료
+## 5. PROD-764 첫 branch release와 완료 (Superseded)
 
 **Authority / Provenance**
 
@@ -138,8 +144,16 @@ Release-control 변경만 포함한 production PR이 version tag 입력 없이 m
 - Live Argo/workload 상태와 Web version label 비노출
 - Archive 후 active spec strict validation
 
-- [ ] 5.1 Main merge와 infrastructure apply가 완료된 뒤 release-control commit만 production PR로 반영한다.
-- [ ] 5.2 Tag push만으로 배포가 실행되지 않고 production build가 표시 tag 입력을 요구하지 않음을 확인한다.
-- [ ] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 모든 활성화 workload 결과를 기록한다.
-- [ ] 5.4 전체 완료 조건을 Linear에 기록하고 delta를 active `production-release` spec에 동기화해 OpenSpec을 archive한다.
-- [ ] 5.5 Archive와 active specs를 strict validation해 main에 전달한 뒤 `PROD-764`을 완료한다.
+- [x] 5.1 Main merge와 infrastructure apply가 완료된 뒤 release-control commit만 production PR로 반영한다. (Obsolete; cutover diff와 선행 수렴은 `PROD-783` task 5.1이 소유한다.)
+- [x] 5.2 Tag push만으로 배포가 실행되지 않고 production build가 표시 tag 입력을 요구하지 않음을 확인한다. (Superseded; tag/production branch matrix와 main automatic/manual SHA 경계는 `PROD-783` task 2.4 및 4.3이 소유한다.)
+- [x] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 모든 활성화 workload 결과를 기록한다. (Superseded; first main candidate Environment approval·deploy evidence는 `PROD-783` task 5.3이 소유한다.)
+- [x] 5.4 전체 완료 조건을 Linear에 기록하고 delta를 active `production-release` spec에 동기화해 OpenSpec을 archive한다. (Superseded; active spec sync와 old change archive handoff는 `PROD-783` task 5.6이 소유한다.)
+- [x] 5.5 Archive와 active specs를 strict validation해 main에 전달한 뒤 `PROD-764`을 완료한다. (Superseded; strict validation과 Linear completion evidence는 `PROD-783` task 5.6이 소유한다.)
+
+## Superseded task ownership
+
+- Main automatic dev/prod 별도 build, candidate artifact와 `prod` Environment approval: `PROD-783` task group 1~2
+- Manual full-SHA preflight, 승인 전 target isolation과 승인 후 build·deploy: `PROD-783` task group 2
+- Argo bootstrap source, ECR/Vault OIDC trust와 GitHub Environment policy: `PROD-783` task group 3
+- 운영 문서·old change 정합성 및 strict validation: `PROD-783` task group 4
+- Live cutover, production branch retirement, active spec sync와 이 change archive: `PROD-783` task group 5
