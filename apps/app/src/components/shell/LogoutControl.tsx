@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { IconButton } from '@/components/ui/IconButton';
 import { useLogout } from '@/session/logout';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing, textStyles, typography } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import type { StyleProp, ViewStyle } from 'react-native';
 
@@ -89,6 +89,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     width: 44,
   },
-  label: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 20 },
+  label: textStyles.uiCopyM,
   error: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.xsm },
 });
