@@ -710,8 +710,8 @@ describe('Post Reply GraphQL 경계', () => {
     assert.deepEqual(
       starts.map((options) => (options as { args: unknown[] }).args[0]),
       [
-        { effectKind: 'CONTENT', origin: 'LOCAL', postId: reply.id },
-        { effectKind: 'CONTENT', origin: 'LOCAL', postId: rootPost.id },
+        { postKind: 'REPLY', origin: 'LOCAL', postId: reply.id },
+        { postKind: 'POST', origin: 'LOCAL', postId: rootPost.id },
       ],
     );
   });

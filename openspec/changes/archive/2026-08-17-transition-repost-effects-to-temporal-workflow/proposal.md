@@ -14,15 +14,15 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
   transaction Activity, proposed domain ID, command receipt 또는 outbox를 추가하지 않는다.
 - 최초 실제 Repost 생성 commit과 `deletePost`의 모든 최초 Tombstone commit은 각각 Repost와 공통 Delete
   Workflow를 시작한다. Repost Workflow input은 `{ postId, origin: LOCAL | ACTIVITYPUB }`이고 Delete Workflow
-  input은 `{ postId, origin: LOCAL | ACTIVITYPUB, effectKind: CONTENT | REPOST }`다. `effectKind`는 commit된
-  관계 조합에서 도출한다. Current Content가 있으면 `CONTENT`(일반 Post·Reply·Quote·Reply이면서 Quote),
-  Content가 없고 Repost Source가 있으면 `REPOST`(순수 Repost)다. Workflow ID는 event 경계별로 안정적으로
+  input은 `{ postId, origin: LOCAL | ACTIVITYPUB, postKind: POST | REPLY | QUOTE | REPLY_QUOTE | REPOST }`다. `postKind`는 commit된
+  관계 조합에서 도출한다. Current Content와 Reply Parent·Repost Source의 조합에 따라 `POST`, `REPLY`, `QUOTE`,
+  `REPLY_QUOTE`를 사용하고, Content가 없고 Repost Source가 있으면 `REPOST`(순수 Repost)다. Workflow ID는 event 경계별로 안정적으로
   파생한다. Delete Activity는 Tombstone row에 보존된 관계 projection을 다시 사용하고, Repost Delete에서는
   actor·source·createdAt·visibility로 Undo identity를 만든다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
 - accepted Repost Workflow는 Repost Notification 생성과 Local-origin Announce handoff를, accepted Delete
-  Workflow는 `effectKind=CONTENT`일 때 Local-origin canonical Delete(Note) handoff를, `effectKind=REPOST`일
+  Workflow는 `postKind=POST | REPLY | QUOTE | REPLY_QUOTE`일 때 Local-origin canonical Delete(Note) handoff를, `postKind=REPOST`일
   때 Notification 정리와 Local-origin Undo(Announce) handoff를 독립 Activity로 멱등 재시도한다.
-  ActivityPub-origin event는 모든 outbound echo를 만들지 않으며, `effectKind=REPOST`일 때만 Notification
+  ActivityPub-origin event는 모든 outbound echo를 만들지 않으며, `postKind=REPOST`일 때만 Notification
   lifecycle을 적용한다.
   Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 직렬화를
   위한 `FOR UPDATE` 또는 row lock을 추가하지 않는다.
@@ -60,7 +60,7 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
 
 ### Modified Capabilities
 
-- `post`: 모든 Post의 최초 Tombstone commit 뒤 관계 기반 `effectKind`를 포함한 공통 Delete Workflow start로
+- `post`: 모든 Post의 최초 Tombstone commit 뒤 관계 기반 `postKind`를 포함한 공통 Delete Workflow start로
   후속 효과 경계를 변경한다.
 - `activitypub-local-repost-delivery`: 최초 Local Repost create/delete의 Announce·Undo handoff를 process-local
   post-commit 실행에서 Temporal Activity retry 경계로 이동한다.
@@ -72,7 +72,7 @@ restart와 Activity retry로 복구할 수 없다. PROD-725는 이 callback과 c
 ## Impact
 
 - `packages/core/services/post.ts`와 Repost domain service: transaction ownership, stable event 결과와
-  관계 기반 `effectKind`, database handle·`postCommit` 제거, Workflow start 관측
+  관계 기반 `postKind`, database handle·`postCommit` 제거, Workflow start 관측
 - `packages/core/temporal`: 기존 Post Create Workflow type·ID는 유지하고, Repost·Delete Workflow
   type/input/identity/start 계약만 event별 module로 추가
 - `apps/api`: Repost/create-delete resolver에서 database handle과 `postCommit` 조립 제거

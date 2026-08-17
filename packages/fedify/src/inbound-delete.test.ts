@@ -123,7 +123,7 @@ describe('inbound Delete dispatch', () => {
     assert.ok(firstOptions);
     assert.deepEqual(firstOptions.args, [
       {
-        effectKind: 'CONTENT',
+        postKind: 'POST',
         origin: 'ACTIVITYPUB',
         postId: materialized.post.id,
       },

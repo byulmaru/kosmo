@@ -303,13 +303,13 @@ test('최초 Repost create와 delete가 event-specific Workflow를 시작한다'
   assert.ok(deleteOptions);
   assert.equal(deleteOptions.workflowId, `post-delete:${first.repost.id}`);
   assert.deepEqual(deleteOptions.args, [
-    { effectKind: 'REPOST', origin: 'LOCAL', postId: first.repost.id },
+    { postKind: 'REPOST', origin: 'LOCAL', postId: first.repost.id },
   ]);
   await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
   assert.equal(start.mock.callCount(), 2);
 });
 
-test('Content delete가 공통 Delete Workflow에 CONTENT effectKind를 전달한다', async () => {
+test('Post delete가 공통 Delete Workflow에 Post kind를 전달한다', async () => {
   const actor = await createProfile();
   const post = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -320,7 +320,51 @@ test('Content delete가 공통 Delete Workflow에 CONTENT effectKind를 전달�
   assert.equal(start.mock.callCount(), 1);
   const options = start.mock.calls[0]?.arguments[1];
   assert.ok(options);
-  assert.deepEqual(options.args, [{ effectKind: 'CONTENT', origin: 'LOCAL', postId: post.id }]);
+  assert.deepEqual(options.args, [{ postKind: 'POST', origin: 'LOCAL', postId: post.id }]);
+});
+
+test('Post delete가 Reply·Quote·Reply Quote의 구조별 Post kind를 전달한다', async () => {
+  const actor = await createProfile();
+  const parent = await createContentPost(actor.profile.id);
+  const source = await createContentPost(actor.profile.id);
+  const reply = await createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId: actor.profile.id,
+    replyParentId: parent.id,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
+  const quote = await createContentPost(actor.profile.id);
+  await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, quote.id));
+  const replyQuote = await createPost({
+    document: postContentDocumentFromText(crypto.randomUUID()),
+    origin: 'LOCAL',
+    profileId: actor.profile.id,
+    replyParentId: parent.id,
+    visibility: PostVisibility.PUBLIC,
+  }).then(({ post }) => post);
+  await db.update(Posts).set({ repostSourceId: source.id }).where(eq(Posts.id, replyQuote.id));
+
+  const { temporalClient } = await import('../temporal/client');
+  const starts: unknown[] = [];
+  mock.method(
+    temporalClient.workflow,
+    'start',
+    async (_type: string, options: { args: unknown[] }) => {
+      starts.push(options.args[0]);
+      return undefined as never;
+    },
+  );
+
+  for (const post of [reply, quote, replyQuote]) {
+    await runDelete({ actorProfileId: actor.profile.id, postId: post.id });
+  }
+
+  assert.deepEqual(starts, [
+    { postKind: 'REPLY', origin: 'LOCAL', postId: reply.id },
+    { postKind: 'QUOTE', origin: 'LOCAL', postId: quote.id },
+    { postKind: 'REPLY_QUOTE', origin: 'LOCAL', postId: replyQuote.id },
+  ]);
 });
 
 test('ActivityPub origin은 outbound effect 없이 Repost Workflow만 시작한다', async () => {

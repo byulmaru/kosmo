@@ -2,7 +2,7 @@
 
 ### Requirement: Announce materialization through the existing Repost action
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-495, PROD-677, PROD-725 시스템은 검증된 remote Actor Profile, 해석한 Source Post와 current Announce identity를 specialized Core Repost action에 전달해야 한다(MUST). Core action은 Content와 Reply Parent 없이 direct Repost Source를 가진 기존 Post와 ActivityPub mapping을 같은 transaction에 저장하고, Visibility, source eligibility, Repost count와 조회 결과에 Local Repost와 같은 domain 규칙을 사용해야 한다(MUST). 실제 Repost 생성 commit 뒤에는 `origin=ACTIVITYPUB` Repost Workflow start를, verified current-generation Undo로 pure Repost가 최초 Tombstone commit된 뒤에는 `effectKind=REPOST`, `origin=ACTIVITYPUB` 공통 Delete Workflow start를 시도해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-495, PROD-677, PROD-725 시스템은 검증된 remote Actor Profile, 해석한 Source Post와 current Announce identity를 specialized Core Repost action에 전달해야 한다(MUST). Core action은 Content와 Reply Parent 없이 direct Repost Source를 가진 기존 Post와 ActivityPub mapping을 같은 transaction에 저장하고, Visibility, source eligibility, Repost count와 조회 결과에 Local Repost와 같은 domain 규칙을 사용해야 한다(MUST). 실제 Repost 생성 commit 뒤에는 `origin=ACTIVITYPUB` Repost Workflow start를, verified current-generation Undo로 pure Repost가 최초 Tombstone commit된 뒤에는 `postKind=REPOST`, `origin=ACTIVITYPUB` 공통 Delete Workflow start를 시도해야 한다(MUST).
 
 #### Scenario: 최초 Announce materialization
 
@@ -46,13 +46,13 @@
 
 ### Requirement: exact current-generation Undo
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-495, PROD-677, PROD-725 시스템은 선후관계가 확정된 순차 처리에서 verified `Undo` actor와 Undo가 가리키는 Announce activity URI가 현재 remote Repost mapping과 모두 일치할 때만 specialized Core action으로 해당 Repost를 Tombstone 처리해야 한다(MUST). mapping 검증과 Tombstone transition은 같은 transaction에 있어야 하며(MUST), mapping은 soft-deleted Repost와 함께 유지해 repeated Undo와 같은 activity의 재전송을 멱등 처리해야 한다(MUST). 실제 pure Repost 삭제 commit 뒤에는 `effectKind=REPOST`, `origin=ACTIVITYPUB` 공통 Delete Workflow start를 시도해야 하며(MUST), 다른 actor, superseded activity URI 또는 다른 Repost generation은 삭제하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-495, PROD-677, PROD-725 시스템은 선후관계가 확정된 순차 처리에서 verified `Undo` actor와 Undo가 가리키는 Announce activity URI가 현재 remote Repost mapping과 모두 일치할 때만 specialized Core action으로 해당 Repost를 Tombstone 처리해야 한다(MUST). mapping 검증과 Tombstone transition은 같은 transaction에 있어야 하며(MUST), mapping은 soft-deleted Repost와 함께 유지해 repeated Undo와 같은 activity의 재전송을 멱등 처리해야 한다(MUST). 실제 pure Repost 삭제 commit 뒤에는 `postKind=REPOST`, `origin=ACTIVITYPUB` 공통 Delete Workflow start를 시도해야 하며(MUST), 다른 actor, superseded activity URI 또는 다른 Repost generation은 삭제하지 않아야 한다(MUST).
 
 #### Scenario: 현재 Announce Undo
 
 - **WHEN** verified Undo actor가 Active remote Repost Author와 같고 Undo object URI가 Repost의 current mapping URI와 일치한다
 - **THEN** Core action은 mapping 검증과 그 Repost의 Tombstone transition을 같은 transaction에서 수행한다
-- **AND** commit 뒤 `effectKind=REPOST`, `origin=ACTIVITYPUB`인 공통 Delete Workflow start를 시도한다
+- **AND** commit 뒤 `postKind=REPOST`, `origin=ACTIVITYPUB`인 공통 Delete Workflow start를 시도한다
 
 #### Scenario: superseded Announce Undo
 

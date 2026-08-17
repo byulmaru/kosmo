@@ -26,14 +26,14 @@
 #### Scenario: First Content Post deletion delivery
 
 - **WHEN** 일반 Post, Reply, Quote 또는 Reply이면서 Quote인 Content Post가 처음 Active에서 Tombstone으로 전이되고 commit된다
-- **THEN** 시스템은 `effectKind=CONTENT`를 포함한 공통 Delete Workflow start를 시도하고 accepted Local-origin Workflow는 canonical Delete(Note)를 Fedify queue에 handoff한다
+- **THEN** 시스템은 `postKind=POST | REPLY | QUOTE | REPLY_QUOTE`를 포함한 공통 Delete Workflow start를 시도하고 accepted Local-origin Workflow는 canonical Delete(Note)를 Fedify queue에 handoff한다
 - **AND** Delete Activity는 Tombstone Post projection으로 기존 Delete identity·audience·recipient 규칙을 사용한다
 - **AND** GraphQL public payload는 기존 Post global ID 계약을 유지한다
 
 #### Scenario: Duplicate or concurrent Post deletion
 
 - **WHEN** 반복 또는 동시 delete action이 이미 Tombstone인 같은 Content Post 또는 Repost를 대상으로 한다
-- **THEN** 최초 Tombstone 전이 결과만 관계에 맞는 `effectKind`의 공통 Delete Workflow start를 시도한다
+- **THEN** 최초 Tombstone 전이 결과만 관계에 맞는 `postKind`의 공통 Delete Workflow start를 시도한다
 - **AND** 이미 Tombstone인 결과는 Workflow나 Delete/Undo handoff를 추가하지 않는다
 
 #### Scenario: ActivityPub-origin Post deletion

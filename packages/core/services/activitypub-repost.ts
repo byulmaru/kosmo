@@ -225,7 +225,7 @@ export const undoActivityPubRepost = async ({
     const workflowInput = {
       postId: result.repostId,
       origin: 'ACTIVITYPUB' as const,
-      effectKind: 'REPOST' as const,
+      postKind: 'REPOST' as const,
     };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>

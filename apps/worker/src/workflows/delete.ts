@@ -14,20 +14,26 @@ const { deleteRepostNotificationActivity, sendLocalPostDeleteActivity, sendRepos
   });
 
 export async function postDeleteWorkflow({
-  effectKind,
+  postKind,
   origin,
   postId,
 }: PostDeleteInput): Promise<void> {
   const effects: Promise<void>[] = [];
-  if (effectKind === 'CONTENT') {
-    if (origin === 'LOCAL') {
-      effects.push(sendLocalPostDeleteActivity(postId));
-    }
-  } else {
-    effects.push(deleteRepostNotificationActivity(postId));
-    if (origin === 'LOCAL') {
-      effects.push(sendRepostUndoActivity(postId));
-    }
+  switch (postKind) {
+    case 'POST':
+    case 'REPLY':
+    case 'QUOTE':
+    case 'REPLY_QUOTE':
+      if (origin === 'LOCAL') {
+        effects.push(sendLocalPostDeleteActivity(postId));
+      }
+      break;
+    case 'REPOST':
+      effects.push(deleteRepostNotificationActivity(postId));
+      if (origin === 'LOCAL') {
+        effects.push(sendRepostUndoActivity(postId));
+      }
+      break;
   }
 
   const results = await Promise.allSettled(effects);

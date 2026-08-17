@@ -248,7 +248,7 @@ export const deletePost = async ({
   readonly origin: PostOrigin;
   readonly postId: string;
 }): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
-  const { deleted, result } = await db.transaction(async (tx) => {
+  const { deleted, postKind, result } = await db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -285,13 +285,22 @@ export const deletePost = async ({
 
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
+    const postKind: 'POST' | 'REPLY' | 'QUOTE' | 'REPLY_QUOTE' | 'REPOST' =
+      post.currentContentId === null && post.replyParentId === null
+        ? 'REPOST'
+        : post.replyParentId === null
+          ? post.repostSourceId === null
+            ? 'POST'
+            : 'QUOTE'
+          : post.repostSourceId === null
+            ? 'REPLY'
+            : 'REPLY_QUOTE';
 
-    return { deleted, post, result: { postId, sourcePostId } };
+    return { deleted, post, postKind, result: { postId, sourcePostId } };
   });
 
   if (deleted) {
-    const effectKind = result.sourcePostId === null ? ('CONTENT' as const) : ('REPOST' as const);
-    const workflowInput = { postId: deleted.id, origin, effectKind };
+    const workflowInput = { postId: deleted.id, origin, postKind };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         temporalClient.workflow.start(
@@ -302,7 +311,7 @@ export const deletePost = async ({
     } catch (error) {
       console.error('Post Delete Workflow start failed', {
         error,
-        effectKind,
+        postKind,
         origin,
         postId: deleted.id,
       });
