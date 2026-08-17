@@ -16,6 +16,8 @@
 - **THEN** 이를 application runtime source로 해석하거나 workload에 투영하지 않아야 한다
 - **AND** migration owner와 Fedify MessageQueue 전용 source만 각자의 별도 경계를 유지해야 한다
 
+## ADDED Requirements
+
 ### Requirement: Fedify consumer는 shared application source를 사용하고 queue source와 분리한다
 
 **Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`. Fedify consumer가 domain application DB를 사용하는 경우 API·Web·Worker와 같은 `kosmo_worker` process-wide PG\* source를 사용해야 한다(MUST). Fedify MessageQueue transport의 전용 URL/password와 `kosmo_fedify_queue` database/role은 application source와 분리해야 한다(MUST).
@@ -32,6 +34,8 @@
 - **THEN** runtime은 이를 shared application source나 queue source로 재해석하지 않아야 한다
 - **AND** 명시된 standard PG\* source와 전용 queue source 외의 implicit fallback을 만들지 않아야 한다
 
+## MODIFIED Requirements
+
 ### Requirement: 각 역할 selector는 additive atomic trio다
 
 **Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`. application runtime의 API/Fedify/Worker URL·password selector trio와 partial/complete source validation은 제거해야 한다(MUST NOT). 모든 application workload는 chart-derived shared `kosmo_worker` PG\* source를 사용해야 한다(MUST).
@@ -47,3 +51,21 @@
 - **WHEN** selector 없이 application manifest를 렌더한다
 - **THEN** API, Web, Worker와 Fedify consumer가 같은 release-derived Worker Secret의 `PGPASSWORD` ref를 가져야 한다
 - **AND** queue와 migration credential은 이 source 선택에 영향을 받지 않아야 한다
+
+## REMOVED Requirements
+
+### Requirement: 기존 runtime 연결과 rendered manifest 보존
+
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`
+
+**Reason:** owner `-app` Secret과 `DATABASE_URL`/`DATABASE_PASSWORD` byte-identity baseline은 shared `kosmo_worker` 표준 PG\* source 전환 뒤 current runtime 계약이 아니다.
+
+**Migration:** migration owner 경계만 유지하고 API/Web/Worker/Fedify application workload는 shared Worker source를 사용한다.
+
+### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
+
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`
+
+**Reason:** 별도 `FEDIFY_DATABASE_*` application selector는 제거됐으며 Fedify consumer의 domain DB는 다른 application workload와 같은 shared Worker PG\* source를 사용한다.
+
+**Migration:** Fedify MessageQueue의 `FEDIFY_QUEUE_DATABASE_URL`/password와 `kosmo_fedify_queue` database/role만 별도 secondary source로 유지한다.

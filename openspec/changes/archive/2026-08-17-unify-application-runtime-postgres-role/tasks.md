@@ -83,8 +83,10 @@ shared runtime role 전환이 기존 GraphQL/application policy, Post owner clea
 - 결과를 code/CI, non-production live와 production 미실행 범위로 분리해 PROD-780에 기록할 초안을 준비한다.
 
 - [x] 3.1 shared PG\* source와 role 변경 이후 기존 application/GraphQL/core/Worker/Fedify regression을 실행한다.
-- [ ] 3.2 non-production workload principal, ACL, migration/queue 분리와 대표 DML evidence를 수집한다.
-- [ ] 3.3 `PROD-780`이 implementation PR Ready, 전체 통합검증, active spec sync와 archive를 모두 소유한다고 기록하고, 전체 구현·검증 전에는 active change를 archive하지 않는다.
+- [x] 3.2 non-production workload principal, ACL, migration/queue 분리와 대표 DML evidence를 수집한다.
+- [x] 3.3 `PROD-780`이 implementation PR Ready, 전체 통합검증, active spec sync와 archive를 모두 소유한다고 기록하고, 전체 구현·검증 전에는 active change를 archive하지 않는다.
+
+Evidence (2026-08-17): exact revision `301b7278`의 dev/prod static Helm render에서 API/Web/Worker/Fedify application consumer가 같은 `kosmo_worker` Worker Secret source를 사용하고 migration owner·Fedify MessageQueue source·Pooler가 분리된 것을 확인했다. Isolated disposable PostgreSQL에서 `current_user`, `rolbypassrls=false`, existing two-role ACL/default ACL, representative CRUD와 금지된 DDL·ownership·regrant 거부를 검증했다. PR #620은 Ready이며 production preflight/sync/apply/cutover/live는 수행하지 않았다.
 
 ## 4. PROD-780 active contract reconciliation
 
@@ -110,4 +112,6 @@ shared runtime role 전환이 기존 GraphQL/application policy, Post owner clea
 - sync/archive 후 전체 active spec과 canonical/Linear authority의 정합성을 다시 확인한다.
 
 - [x] 4.1 active change conflict/supersede boundary와 PROD-780/PROD-781/PROD-712의 구현·contract·sync/archive ownership을 evidence에 정리한다.
-- [ ] 4.2 전체 구현·비운영 검증과 PR Ready 이후에만 delta spec sync/archive를 수행하고 post-archive strict validation을 실행한다.
+- [x] 4.2 전체 구현·비운영 검증과 PR Ready 이후에만 delta spec sync/archive를 수행하고 post-archive strict validation을 실행한다.
+
+Evidence (2026-08-17): PR #620 Ready 이후 네 capability delta를 canonical specs에 sync하고 `2026-08-17-unify-application-runtime-postgres-role`로 archive했다. CLI가 첫 `MODIFIED` block을 누락한 `workload-postgres-credential-selection` API credential requirement는 archived delta와 직접 대조해 동일하게 반영했으며, post-archive 전체 strict validation 98/98과 formatting/diff check를 통과했다.
