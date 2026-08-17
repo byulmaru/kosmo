@@ -13,10 +13,22 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725`
 - Status: Active
 - Context / Problem: Repost transaction까지 Activity로 이동하면 기존 동기 GraphQL·ActivityPub 결과와 Core domain policy를 Temporal retry 의미에 결합한다.
-- Decision Outcome: Core가 Repost create/delete transaction을 동기적으로 commit하고 최초 실제 transition만 effects Workflow start를 시도한다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
+- Decision Outcome: Core가 Repost create/delete transaction을 동기적으로 commit하고 최초 Repost 생성에는 Repost Workflow를, pure Repost 삭제에는 Delete Workflow를 시작한다. duplicate·no-op·rollback은 Workflow를 시작하지 않는다.
 - Alternatives Considered: transaction Activity, proposed Repost ID, command receipt와 outbox는 PROD-725 범위에서 명시적으로 제외됐다.
 - Consequences: commit→start gap에서 효과가 유실될 수 있으나 committed Repost와 caller 성공은 유지한다. caller database handle과 반환형 `postCommit`은 제거한다.
 - Confirmation / Follow-up: Core/API/Fedify test에서 rollback·duplicate·no-op의 no-start와 start failure 격리를 확인한다.
+
+### 배포된 Post Create Workflow 외부 identity를 유지한다
+
+- Decision Date: 2026-08-17
+- Decision Class: Derived Contract
+- Authority / Provenance: `PROD-722`, `PROD-725`, `docs/architecture/core-services.md`
+- Status: Active
+- Context / Problem: PROD-725가 Worker business registration을 확장하더라도 이미 배포된 Post Create Workflow의 type과 ID를 바꾸면 기존 caller와 실행 history의 Temporal 호환성이 깨진다.
+- Decision Outcome: 기존 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 그대로 유지한다. Repost에는 type `postRepostWorkflow`·ID `post-repost:{postId}`, Delete에는 type `postDeleteWorkflow`·ID `post-delete:{postId}`를 새로 사용한다.
+- Alternatives Considered: Create Workflow를 새 event naming으로 rename하거나 기존 ID를 event registry 변경에 맞춰 재생성하는 방식은 호환성을 깨므로 채택하지 않았다.
+- Consequences: Worker는 기존 Post Create source와 registry slot을 보존하면서 Repost·Delete source를 추가한다. 세 event는 하나의 host/task queue를 공유하지만 Create 외부 identity는 변하지 않는다.
+- Confirmation / Follow-up: Worker registration과 Post Create start-options test에서 기존 type·ID가 동일하게 유지되는지 확인한다.
 
 ### verified Announce와 Undo의 mapping을 Core Repost transaction이 함께 소유한다
 
@@ -30,17 +42,17 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Consequences: Core input은 Fedify request context나 vocab 객체가 아니라 serializable identity·timestamp만 받는다. 기존 mapping uniqueness와 current-generation semantics는 유지한다.
 - Confirmation / Follow-up: inbound Announce·Undo duplicate, URI collision, superseded generation과 rollback 통합 검증을 유지한다.
 
-### Repost create와 delete는 transition별 stable Workflow identity를 사용한다
+### Repost 생성과 pure Repost 삭제는 event-specific stable Workflow identity를 사용한다
 
 - Decision Date: 2026-08-16
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/domain/objects/post.md`, `PROD-725`
 - Status: Active
-- Context / Problem: Repost는 Active create 뒤 같은 identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 create와 delete가 공유할 수 없다.
-- Decision Outcome: Workflow ID는 committed Repost ID와 create/delete transition kind에서 파생한다. 같은 transition의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. create/delete Workflow input은 `repostId`, `origin`, `transition`만 보존하며, delete Activity는 Tombstone row에 남은 actor/source/createdAt/visibility projection을 다시 읽어 효과 identity를 만든다.
-- Alternatives Considered: Repost ID 하나의 Workflow를 장기 실행하거나 종료 ID를 재사용하는 방식은 transition lifecycle과 retry 경계를 불필요하게 결합하므로 채택하지 않았다.
-- Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 create Workflow를 사용한다. Tombstone Repost의 보존 projection은 author Profile state와 독립적으로 local Undo identity를 제공하므로 Profile 비활성화만으로 Undo를 no-op하지 않는다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
-- Confirmation / Follow-up: start options 단위 검증과 create→delete→재Repost integration에서 identity 분리를 확인한다.
+- Context / Problem: Repost 생성 뒤 같은 Post identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 Repost와 Delete event가 공유할 수 없다.
+- Decision Outcome: Repost 생성은 Repost Workflow, pure Repost 삭제는 Delete Workflow로 분리하고 각 Workflow ID를 committed Post ID와 event 경계에서 파생한다. 같은 event의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. 두 Workflow input은 `{ postId, origin }`만 보존하며, Delete Activity는 Tombstone row에 남은 actor/source/createdAt/visibility projection을 다시 읽어 효과 identity를 만든다.
+- Alternatives Considered: Repost ID 하나의 Workflow를 장기 실행하거나 하나의 discriminated transition input으로 두 event를 합치는 방식은 event lifecycle과 retry 경계를 불필요하게 결합하므로 채택하지 않았다.
+- Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 Repost Workflow를 사용한다. Tombstone Repost의 보존 projection은 author Profile state와 독립적으로 local Undo identity를 제공하므로 Profile 비활성화만으로 Undo를 no-op하지 않는다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
+- Confirmation / Follow-up: event별 start options 검증과 Repost→Delete→재Repost integration에서 identity 분리를 확인한다.
 
 ### Notification과 federation handoff는 독립 Activity이며 queue acceptance에서 성공한다
 
@@ -60,11 +72,11 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/architecture/core-services.md`, `PROD-722`, `PROD-725`
 - Status: Active
-- Context / Problem: Post Create 전용으로 보이는 현재 registration에 Repost를 추가하면서 workflow별 host·task queue 또는 범용 startup abstraction을 만들 가능성이 있다.
-- Decision Outcome: process-global Worker host와 task queue는 하나를 유지하고, domain별 Workflow·Activity source를 production entrypoint의 compile-time registry에 정적으로 조립한다.
-- Alternatives Considered: workflow별 Worker process와 task queue는 독립 운영 요구가 없고, optional registry builder는 이미 제거한 startup 복잡도를 되살리므로 채택하지 않았다.
-- Consequences: Worker bundle은 여러 business Workflow를 포함하지만 lifecycle·health·shutdown owner는 계속 하나다. 새 domain은 source module만 추가한다.
-- Confirmation / Follow-up: Worker build와 registration test, dev에서 Post Create와 Repost Workflow가 같은 Worker revision에 poll되는지 확인한다.
+- Context / Problem: Post Create 전용으로 보이는 현재 registration에 Repost와 Delete를 추가하면서 event별 host·task queue 또는 범용 startup abstraction을 만들 가능성이 있다.
+- Decision Outcome: process-global Worker host와 task queue는 하나를 유지하고, Post Create/Repost/Delete event source의 Workflow·Activity를 production entrypoint의 compile-time registry에 정적으로 조립한다.
+- Alternatives Considered: event별 Worker process와 task queue는 독립 운영 요구가 없고, optional registry builder는 이미 제거한 startup 복잡도를 되살리므로 채택하지 않았다.
+- Consequences: Worker bundle은 여러 business Workflow를 포함하지만 lifecycle·health·shutdown owner는 계속 하나다. 새 event는 source module만 추가한다.
+- Confirmation / Follow-up: Worker build와 registration test, dev에서 Post Create/Repost/Delete Workflow가 같은 Worker revision에 poll되는지 확인한다.
 
 ### Announce mapping 교체와 Undo 경합에 새 잠금을 추가하지 않는다
 
@@ -96,4 +108,4 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 
 ## Superseded Decisions
 
-- `add-post-reposts`의 PROD-669 process-local `postCommit` 실행 경계는 2026-08-16 승인된 PROD-725 effects Workflow 경계로 대체된다. Notification의 canonical Best Effort와 unavailable 결과 숨김 lifecycle은 유지된다.
+- `add-post-reposts`의 PROD-669 process-local `postCommit` 실행 경계는 2026-08-16 승인된 PROD-725 event-specific Repost/Delete Workflow 경계로 대체된다. Notification의 canonical Best Effort와 unavailable 결과 숨김 lifecycle은 유지된다.

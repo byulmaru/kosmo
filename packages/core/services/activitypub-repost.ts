@@ -2,7 +2,10 @@ import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { ActivityPubPosts, db, first, Posts } from '../db';
 import { PostState } from '../enums';
 import { ValidationError } from '../error';
-import { materializeRepostInTransaction, startRepostEffectsWorkflow } from './post';
+import { temporalClient } from '../temporal/client';
+import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
+import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
+import { materializeRepostInTransaction } from './post';
 import type { Transaction } from '../db';
 
 type ActivityPubRepostInput = {
@@ -127,11 +130,21 @@ export const materializeActivityPubRepost = async ({
   });
 
   if (result.created) {
-    await startRepostEffectsWorkflow({
-      origin: 'ACTIVITYPUB',
-      repostId: result.repost.id,
-      transition: 'CREATE',
-    });
+    const workflowInput = { origin: 'ACTIVITYPUB' as const, postId: result.repost.id };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          POST_REPOST_WORKFLOW_TYPE,
+          postRepostWorkflowStartOptions(workflowInput),
+        ),
+      );
+    } catch (error) {
+      console.error('Post Repost Workflow start failed', {
+        error,
+        origin: workflowInput.origin,
+        postId: workflowInput.postId,
+      });
+    }
   }
 
   return result;
@@ -209,11 +222,21 @@ export const undoActivityPubRepost = async ({
   if (result?.outcome === 'deleted') {
     // The ActivityPub Undo does not produce a new outbound Undo. The Workflow
     // still owns Notification cleanup for the committed remote transition.
-    await startRepostEffectsWorkflow({
-      origin: 'ACTIVITYPUB',
-      repostId: result.repostId,
-      transition: 'DELETE',
-    });
+    const workflowInput = { origin: 'ACTIVITYPUB' as const, postId: result.repostId };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          POST_DELETE_WORKFLOW_TYPE,
+          postDeleteWorkflowStartOptions(workflowInput),
+        ),
+      );
+    } catch (error) {
+      console.error('Post Delete Workflow start failed', {
+        error,
+        origin: workflowInput.origin,
+        postId: workflowInput.postId,
+      });
+    }
   }
 
   return result;

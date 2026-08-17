@@ -7,7 +7,7 @@ import {
   postCreateEffectsWorkflowStartOptions,
 } from './post-create-effects';
 
-test('Post Create effects Workflow start는 Post ID와 origin을 포함한 stable start policy를 사용한다', () => {
+test('Post Create effects Workflow keeps its existing stable external contract', () => {
   const input = {
     postId: '00000000-0000-8000-8000-000000000001',
     origin: 'LOCAL' as const,

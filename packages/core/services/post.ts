@@ -32,16 +32,13 @@ import {
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowStartOptions,
 } from '../temporal/post-create-effects';
-import {
-  REPOST_EFFECTS_WORKFLOW_TYPE,
-  repostEffectsWorkflowStartOptions,
-} from '../temporal/repost-effects';
+import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
+import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
 import { postVisibilityCondition } from '../visibility/post';
 import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
-import type { RepostEffectsInput } from '../temporal/repost-effects';
 import type { PostCommit } from './post-commit';
 
 type LocalPostInput = {
@@ -158,24 +155,6 @@ const resolveRepostVisibility = (
     return PostVisibility.FOLLOWERS;
   }
   throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
-};
-
-export const startRepostEffectsWorkflow = async (input: RepostEffectsInput): Promise<void> => {
-  try {
-    await temporalClient.withDeadline(Date.now() + 5_000, () =>
-      temporalClient.workflow.start(
-        REPOST_EFFECTS_WORKFLOW_TYPE,
-        repostEffectsWorkflowStartOptions(input),
-      ),
-    );
-  } catch (error) {
-    console.error('Repost effects Workflow start failed', {
-      error,
-      origin: input.origin,
-      repostId: input.repostId,
-      transition: input.transition,
-    });
-  }
 };
 
 export const materializeRepostInTransaction = async (
@@ -342,11 +321,21 @@ export const deletePost = async (
       : noPostCommit;
 
   if (deleted && pureRepost && deleted.repostSourceId !== null && !handle) {
-    await startRepostEffectsWorkflow({
-      origin,
-      repostId: deleted.id,
-      transition: 'DELETE',
-    });
+    const workflowInput = { origin, postId: deleted.id };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          POST_DELETE_WORKFLOW_TYPE,
+          postDeleteWorkflowStartOptions(workflowInput),
+        ),
+      );
+    } catch (error) {
+      console.error('Post Delete Workflow start failed', {
+        error,
+        origin,
+        postId: deleted.id,
+      });
+    }
   } else if (!handle) {
     await ordinaryPostCommit();
   }
@@ -374,11 +363,21 @@ export const repostPost = async ({
   );
 
   if (result.created) {
-    await startRepostEffectsWorkflow({
-      origin,
-      repostId: result.repost.id,
-      transition: 'CREATE',
-    });
+    const workflowInput = { origin, postId: result.repost.id };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          POST_REPOST_WORKFLOW_TYPE,
+          postRepostWorkflowStartOptions(workflowInput),
+        ),
+      );
+    } catch (error) {
+      console.error('Post Repost Workflow start failed', {
+        error,
+        origin,
+        postId: result.repost.id,
+      });
+    }
   }
 
   return result;

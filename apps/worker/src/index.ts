@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg } from '@kosmo/core/db';
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/post-create-effects';
+import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyQueue } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import {
@@ -46,7 +46,7 @@ if (import.meta.main) {
         connection,
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('./workflows.ts', import.meta.url).pathname,
+        workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);

@@ -2,42 +2,42 @@
 
 ### Requirement: First-transition post-commit delivery
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-447, PROD-448, PROD-496, PROD-725. 시스템은 Repost domain transaction이 성공적으로 commit된 뒤 최초 생성과 최초 취소 상태 전이에만 effects Workflow start를 시도하고, accepted Local-origin Workflow의 Activity에서 Fedify queue handoff를 재시도해야 한다(MUST). 반복·동시 application action은 추가 Workflow나 activity handoff를 시작하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-447, PROD-448, PROD-496, PROD-725. 시스템은 Repost domain transaction이 성공적으로 commit된 뒤 최초 Repost 생성에는 Repost Workflow를, 최초 pure Repost 삭제에는 Delete Workflow를 시작하고, accepted Local-origin Workflow의 Activity에서 Fedify queue handoff를 재시도해야 한다(MUST). 반복·동시 application action은 추가 Workflow나 activity handoff를 시작하지 않아야 한다(MUST).
 
 #### Scenario: First Repost creation delivery
 
 - **WHEN** Repost application action이 새 Active Repost를 생성하고 commit한다
-- **THEN** 시스템은 create transition effects Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Announce를 Fedify queue에 handoff한다
+- **THEN** 시스템은 Repost Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Announce를 Fedify queue에 handoff한다
 - **AND** commit 전에 Workflow start, Fedify delivery 또는 broker enqueue를 수행하지 않는다
 
 #### Scenario: Duplicate or concurrent Repost creation
 
 - **WHEN** 반복 또는 동시 Repost action이 기존 Active Repost identity로 수렴한다
-- **THEN** 최초 생성 결과만 create transition Workflow start를 시도한다
+- **THEN** 최초 생성 결과만 Repost Workflow start를 시도한다
 - **AND** 기존 Repost를 반환한 action은 Workflow나 Announce handoff를 추가하지 않는다
 
 #### Scenario: First Repost cancellation delivery
 
 - **WHEN** delete action이 Repost를 처음 Active에서 Tombstone으로 전이하고 commit한다
-- **THEN** 시스템은 delete transition effects Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Undo를 같은 Repost ordering key로 handoff한다
+- **THEN** 시스템은 Delete Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Undo를 같은 Repost ordering key로 handoff한다
 - **AND** Undo Activity는 Tombstone row에 보존된 Repost identity를 사용하며 author Profile의 non-`ACTIVE` state만으로 handoff를 no-op하지 않는다
 - **AND** GraphQL public payload는 기존 Post global ID 계약을 유지한다
 
 #### Scenario: Duplicate or concurrent Repost cancellation
 
 - **WHEN** 반복 또는 동시 delete action이 이미 Tombstone인 같은 Repost를 대상으로 한다
-- **THEN** 최초 Tombstone 전이 결과만 delete transition Workflow start를 시도한다
+- **THEN** 최초 Tombstone 전이 결과만 Delete Workflow start를 시도한다
 - **AND** 이미 Tombstone인 결과는 Workflow나 Undo handoff를 추가하지 않는다
 
 #### Scenario: Non-Repost Post deletion
 
 - **WHEN** 일반 Post, Reply, Quote 또는 Reply이면서 Quote인 Content Post가 delete action으로 Tombstone 전이된다
-- **THEN** 시스템은 Repost effects Workflow나 Undo handoff를 시작하지 않는다
+- **THEN** 시스템은 Repost 또는 Delete Workflow나 Undo handoff를 시작하지 않는다
 - **AND** 기존 Post 삭제 결과를 유지한다
 
 ### Requirement: Post-commit delivery failure isolation
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, PROD-447, PROD-448, PROD-496, PROD-725. 시스템은 Repost effects Workflow start와 Fedify Announce/Undo queue handoff 실패를 committed Repost application 결과와 분리해 관측해야 하며(MUST), accepted Workflow는 handoff를 유한하게 재시도해야 한다(MUST). handoff 이후 remote delivery 실패는 Fedify retry 경계가 소유하고 GraphQL mutation 실패나 domain state rollback으로 바꾸지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, PROD-447, PROD-448, PROD-496, PROD-725. 시스템은 Repost 또는 Delete Workflow start와 Fedify Announce/Undo queue handoff 실패를 committed Repost application 결과와 분리해 관측해야 하며(MUST), accepted Workflow는 handoff를 유한하게 재시도해야 한다(MUST). handoff 이후 remote delivery 실패는 Fedify retry 경계가 소유하고 GraphQL mutation 실패나 domain state rollback으로 바꾸지 않아야 한다(MUST).
 
 #### Scenario: Announce queue handoff failure after commit
 

@@ -273,7 +273,7 @@ test('repostPost의 순차·동시 요청은 같은 Active Repost identity로 �
   );
 });
 
-test('최초 Repost create/delete만 stable effects Workflow를 시작한다', async () => {
+test('최초 Repost create/delete만 event-specific Workflow를 시작한다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');
@@ -289,7 +289,7 @@ test('최초 Repost create/delete만 stable effects Workflow를 시작한다', a
   assert.ok(firstStart);
   const firstOptions = firstStart.arguments[1];
   assert.ok(firstOptions);
-  assert.equal(firstOptions.workflowId, `repost-effects:${first.repost.id}:create`);
+  assert.equal(firstOptions.workflowId, `post-repost:${first.repost.id}`);
 
   await Promise.all(
     Array.from({ length: 4 }, () =>
@@ -304,12 +304,12 @@ test('최초 Repost create/delete만 stable effects Workflow를 시작한다', a
   assert.ok(deleteStart);
   const deleteOptions = deleteStart.arguments[1];
   assert.ok(deleteOptions);
-  assert.equal(deleteOptions.workflowId, `repost-effects:${first.repost.id}:delete`);
+  assert.equal(deleteOptions.workflowId, `post-delete:${first.repost.id}`);
   await runDelete({ actorProfileId: actor.profile.id, postId: first.repost.id });
   assert.equal(start.mock.callCount(), 2);
 });
 
-test('ActivityPub origin은 outbound effect 없이 create Workflow만 시작한다', async () => {
+test('ActivityPub origin은 outbound effect 없이 Repost Workflow만 시작한다', async () => {
   const sourceAuthor = await createProfile();
   const source = await createContentPost(sourceAuthor.profile.id);
   const actor = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
@@ -328,7 +328,7 @@ test('ActivityPub origin은 outbound effect 없이 create Workflow만 시작한�
   assert.equal(await db.$count(Notifications), notificationCount);
 });
 
-test('effects Workflow start 실패는 committed Repost와 삭제 결과를 바꾸지 않는다', async () => {
+test('event-specific Workflow start 실패는 committed Repost와 삭제 결과를 바꾸지 않는다', async () => {
   const actor = await createProfile();
   const source = await createContentPost(actor.profile.id);
   const { temporalClient } = await import('../temporal/client');

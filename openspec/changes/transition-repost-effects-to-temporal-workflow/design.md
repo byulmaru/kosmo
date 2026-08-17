@@ -16,9 +16,9 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 **Goals:**
 
 - Local GraphQL은 Repost 상태 transaction을, verified Announce·Undo는 Repost 상태와 current ActivityPub mapping의 같은 transaction을 specialized Core action이 소유하게 한다.
-- 최초 create/delete commit만 stable transition Workflow를 시작하고 caller `postCommit`·database handle을 제거한다.
+- 최초 Repost 생성과 pure Repost 삭제 commit만 각각 event-specific Workflow를 시작하고 caller `postCommit`·database handle을 제거한다.
 - Repost Notification과 Local Announce·Undo queue handoff를 독립적이고 멱등적인 Activity로 재시도한다.
-- 하나의 Worker host와 task queue 안에서 Post Create와 Repost domain registration을 명확히 분리·조립한다.
+- 하나의 Worker host와 task queue 안에서 Post Create, Repost, Delete event registration을 명확히 분리·조립한다.
 - 기존 Repost visibility, duplicate/concurrency, ActivityPub identity, audience, GraphQL payload를 보존한다.
 
 **Non-Goals:**
@@ -44,7 +44,7 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
   handoff한다. Activity는 이 함수를 직접 등록하거나 얇은 이름 alias로 등록할 수 있지만 remote delivery owner가
   되어서는 안 된다.
 - Tombstone Repost row는 actor Profile identity, Repost Source, immutable `createdAt`과 visibility를 보존한다.
-  delete Workflow input은 `repostId`, `origin`, `transition`만 직렬화하고 delete Activity가 이 Tombstone
+  Delete Workflow input은 `{ postId, origin }`만 직렬화하고 delete Activity가 이 Tombstone
   projection을 다시 읽어 Undo identity를 만든다. Local Undo는 author Profile이 더 이상 `ACTIVE`가 아니어도
   committed Tombstone의 identity를 사용해 no-op이 되지 않아야 한다.
 - Repost Notification은 canonical Best Effort projection이다. create와 delete가 경합해 stale row가 남아도
@@ -52,40 +52,46 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
   추가하지 않는다.
 - 기존 `temporalClient`는 startup에 환경변수를 검증하는 실제 process-global Client다. Repost용 client wrapper나
   별도 connection lifecycle은 필요하지 않다.
+- PROD-722에서 이미 배포한 Post Create Workflow의 외부 type `postCreateEffectsWorkflow`와 Workflow ID
+  `post-create-effects:{postId}`는 기존 caller와 실행 history가 의존하므로 변경하지 않는다. 새 event-specific
+  type·ID는 Repost `postRepostWorkflow`/`post-repost:{postId}`와 Delete `postDeleteWorkflow`/`post-delete:{postId}`에만 추가한다.
 
 ### Recommended Approach
 
-1. Core의 Repost create/delete transition 결과를 `created/deleted`, committed Repost ID, origin과 transition
-   kind로 정규화한다. Workflow input은 `repostId`, `origin`, `transition`만 유지한다. delete Activity는
+1. Core의 Repost create/delete transition 결과를 최초 Repost 생성 또는 pure Repost 삭제의 committed Post ID와
+   origin으로 정규화한다. Repost Workflow와 Delete Workflow input은 `{ postId, origin }`만 유지한다. delete Activity는
    Tombstone UPDATE 뒤에도 보존되는 Repost row의 `actorProfileId`, `repostSourceId`, `createdAt`, `visibility`
    projection을 다시 읽어 Undo identity를 만들며 별도 serialized snapshot을 전달하지 않는다. author Profile의
    non-`ACTIVE` state는 committed local Undo를 no-op으로 만드는 조건이 아니다. 자체 transaction이 commit된 직후
-   shared `temporalClient`로 stable create/delete Workflow start를 시도하고 오류를 짧은 deadline과 구조화 로그로
-   격리한다.
+   shared `temporalClient`로 event-specific Repost/Delete Workflow start를 시도하고 오류를 짧은 deadline과
+   구조화 로그로 격리한다.
 2. verified Announce·Undo용 specialized Core entry가 검증된 actor/source/activity identity를 받아 Repost 상태와
    `ActivityPubPosts` current mapping을 같은 transaction에서 저장한다. Fedify handler는 URI·actor·object 검증과
    protocol 관측만 소유하고 database handle이나 callback을 전달하지 않는다.
-3. Core Temporal source를 domain별 module로 나눠 Repost input, workflow type, transition별 ID와 start options를
-   둔다. 공통 client와 task queue는 기존 module을 재사용하고 workflow-specific 상수를 client module에 모으지
-   않는다.
-4. Worker Workflow는 create/delete input을 받아 Notification Activity를 항상 적용하고 Local origin일 때만
-   Announce 또는 Undo Activity를 추가한다. 적용 가능한 Activity를 동시에 시작해 `allSettled`와 동등한 방식으로
-   모두 관찰한 뒤 terminal failure를 Workflow 실패로 남긴다.
+3. 기존 Post Create Temporal source와 외부 type·ID는 그대로 두고, Core Temporal source에 Repost와 Delete event별
+   module을 추가해 input, workflow type, event-specific ID와 start options를 둔다. Repost와 Delete input은
+   `{ postId, origin }`이며 공통 client와 task queue는 기존 module을 재사용하고 workflow-specific 상수를 client
+   module에 모으지 않는다.
+4. Worker는 Repost Workflow와 Delete Workflow를 각각 source module로 둔다. Repost Workflow는 Notification
+   create와 Local Announce Activity를, Delete Workflow는 Notification delete와 Local Undo Activity를 적용한다.
+   각 Workflow는 적용 가능한 Activity를 동시에 시작해 `allSettled`와 동등한 방식으로 모두 관찰한 뒤 terminal
+   failure를 Workflow 실패로 남긴다.
 5. Notification Activity는 Repost ID로 기존 멱등 create/delete 저장 경계를 실행한다. Notification은 canonical
    Best Effort projection이므로 create/delete 경합을 `FOR UPDATE`나 row lock으로 직렬화하지 않는다. 남은 stale
    row는 unavailable predicate로 숨긴다. Fedify Activity는 기존 canonical producer를 사용하며 queue acceptance까지만
    기다린다.
 6. API/Fedify caller에서 `db`, `ctx.db`, `postCommit` 조립을 제거하고, integration test는 commit 결과, duplicate
    no-start, AP echo suppression, start failure 격리와 Activity retry identity를 검증한다.
-7. Worker registration은 entrypoint의 하나의 고정 activities object와 workflows path를 유지한다. domain 파일을
-   추가하되 generic registry builder, optional registration 또는 두 번째 Worker host를 만들지 않는다. start policy,
-   registration과 Activity persistence는 unit/package test로 검증하고, Workflow Activity 독립 실행·retry·origin 분기와
-   restart 복구는 module mock이나 별도 testing dependency 대신 실제 dev Temporal history로 검증한다.
+7. Worker registration은 기존 Post Create source와 외부 계약을 유지한 채 entrypoint의 하나의 고정 activities
+   object와 workflows entrypoint를 유지한다. Repost와 Delete event source 파일을 추가하되 generic registry builder,
+   optional registration 또는 두 번째 Worker host를 만들지 않는다. start policy, registration과 Activity persistence는
+   unit/package test로 검증하고, Workflow Activity 독립 실행·retry·origin 분기와 restart 복구는 module mock이나
+   별도 testing dependency 대신 실제 dev Temporal history로 검증한다.
 
 ### Allowed Alternatives
 
-- Repost create와 delete를 한 Workflow 함수의 discriminated input으로 처리하거나 두 Workflow 함수로 분리할 수
-  있다. 어느 쪽이든 create/delete Workflow ID는 분리되고 적용 효과·retry·echo suppression 계약이 같아야 한다.
+- Repost 생성과 pure Repost 삭제는 각각 Repost Workflow와 Delete Workflow로 분리한다. 두 Workflow의 ID와 input은
+  event 경계를 반영하고, 적용 효과·retry·echo suppression 계약을 유지해야 한다.
 - Activity 이름 alias를 `apps/worker`에서 re-export하거나 domain별 activity module에서 직접 구현할 수 있다.
   business 함수는 Core/Fedify의 기존 경계를 재사용하고 Worker-only pass-through 계층을 불필요하게 늘리지 않아야
   한다.
@@ -113,15 +119,16 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 - [Notification create와 delete가 경합해 stale row가 남을 수 있음] → canonical Best Effort semantics를 유지하고
   unavailable predicate로 모든 API surface에서 숨기며, domain transaction에 `FOR UPDATE` 또는 row lock을 추가하지
   않는다.
-- [Post Create와 Repost Workflow를 한 Worker bundle에 추가하면 registration 회귀가 생길 수 있음] → 하나의
+- [Post Create, Repost와 Delete Workflow를 한 Worker bundle에 추가하면 registration 회귀가 생길 수 있음] → 하나의
   compile-time registry와 package build, 실제 dev Workflow 실행으로 함께 검증한다.
 
 ## Migration Plan
 
 1. active OpenSpec drift를 동기화하고 새 change를 strict validation한다.
-2. Core transition/start 경계와 caller 단순화를 구현한 뒤 Worker Workflow·Activity registration을 추가한다.
+2. 기존 Post Create transition/start 계약을 유지한 채 Core transition/start 경계와 caller 단순화를 구현하고,
+   event-specific Repost/Delete Workflow·Activity registration을 추가한다.
 3. unit/package integration test로 duplicate·rollback·start failure·Activity 멱등성과 terminal no-op을 검증한다.
-4. exact revision을 dev에 배포해 create/delete Workflow history, Notification, Announce·Undo queue handoff,
+4. exact revision을 dev에 배포해 Repost/Delete Workflow history, Notification, Announce·Undo queue handoff,
    Activity 독립 실행·retry·origin 분기와 Worker restart 복구를 확인한다.
 5. 구현과 dev 검증이 끝나면 Repost Notification base requirement를 제공하는 `add-post-reposts`를 먼저
    archive하고, 그 canonical spec 위에서 이 change를 archive한다.
