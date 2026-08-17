@@ -218,6 +218,26 @@ export const radius = {
   full: 999,
 } as const;
 
+export const density = {
+  compact: { inset: space[12], stack: space[8], section: space[16] },
+  standard: { inset: space[16], stack: space[12], section: space[24] },
+  spacious: { inset: space[24], stack: space[16], section: space[32] },
+} as const;
+
+export const layoutRecipes = {
+  listStack: {
+    flexDirection: 'column',
+    gap: space[0],
+    padding: space[0],
+  },
+  actionMenuSurface: {
+    flexDirection: 'column',
+    gap: space[0],
+    padding: space[4],
+    borderRadius: radius[12],
+  },
+} satisfies Record<string, ViewStyle>;
+
 /** @deprecated Use numeric `radius` tokens for new work. */
 export const radii = {
   sm: radius[8],
