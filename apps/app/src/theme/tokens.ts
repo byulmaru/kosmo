@@ -183,16 +183,12 @@ export const colors = {
 
 export const space = {
   0: 0,
-  2: 2,
   4: 4,
   8: 8,
   12: 12,
   16: 16,
-  20: 20,
   24: 24,
-  28: 28,
   32: 32,
-  40: 40,
   48: 48,
 } as const;
 
@@ -209,7 +205,6 @@ export const spacing = {
 
 export const radius = {
   0: 0,
-  2: 2,
   4: 4,
   8: 8,
   12: 12,
@@ -236,13 +231,10 @@ export const fontSizes = {
   12: 12,
   14: 14,
   16: 16,
-  18: 18,
   20: 20,
   24: 24,
-  30: 30,
-  38: 38,
 } as const;
-export const fontWeights = { normal: '400', medium: '500', semibold: '600', bold: '700' } as const;
+export const fontWeights = { normal: '400', semibold: '600', bold: '700' } as const;
 export const lineHeights = { tight: 1.15, snug: 1.3, relaxed: 1.5 } as const;
 
 const textStyle = (
@@ -253,20 +245,15 @@ const textStyle = (
 ): TextStyle => ({ fontFamily, fontSize, fontWeight, lineHeight: fontSize * lineHeightRatio });
 
 export const textStyles = {
-  contentL: textStyle(fontFamilies.content, fontSizes[18], lineHeights.relaxed, fontWeights.normal),
   contentM: textStyle(fontFamilies.content, fontSizes[16], lineHeights.relaxed, fontWeights.normal),
-  contentS: textStyle(fontFamilies.content, fontSizes[14], lineHeights.relaxed, fontWeights.normal),
   uiCopyL: textStyle(fontFamilies.ui, fontSizes[16], lineHeights.relaxed, fontWeights.normal),
   uiCopyM: textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.normal),
   uiCopyS: textStyle(fontFamilies.ui, fontSizes[12], lineHeights.snug, fontWeights.normal),
-  uiDisplay: textStyle(fontFamilies.ui, fontSizes[38], lineHeights.tight, fontWeights.bold),
-  uiHeadingL: textStyle(fontFamilies.ui, fontSizes[30], lineHeights.tight, fontWeights.bold),
   uiHeadingM: textStyle(fontFamilies.ui, fontSizes[24], lineHeights.tight, fontWeights.bold),
   uiHeadingS: textStyle(fontFamilies.ui, fontSizes[20], lineHeights.snug, fontWeights.bold),
   uiLabelL: textStyle(fontFamilies.ui, fontSizes[16], lineHeights.relaxed, fontWeights.semibold),
   uiLabelM: textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.semibold),
   uiLabelS: textStyle(fontFamilies.ui, fontSizes[12], lineHeights.snug, fontWeights.semibold),
-  uiTitle: textStyle(fontFamilies.ui, fontSizes[18], lineHeights.snug, fontWeights.semibold),
 } satisfies Record<string, TextStyle>;
 
 /** @deprecated Use role-based `textStyles` for new work. */
@@ -276,7 +263,6 @@ export const typography = {
   md: { fontSize: 16, lineHeight: 24 },
   lg: { fontSize: 20, lineHeight: 30 },
   xl: { fontSize: 24, lineHeight: 32 },
-  display: { fontSize: 44, lineHeight: 48 },
 } satisfies Record<string, TextStyle>;
 
 export const breakpoints = { compact: 768, full: 1280 } as const;

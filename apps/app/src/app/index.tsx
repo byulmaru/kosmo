@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, radii, space, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
 import type { TextStyle } from 'react-native';
 import type { IndexScreenExchangeNativeOidcSessionMutation } from './__generated__/IndexScreenExchangeNativeOidcSessionMutation.graphql';
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   desktopHero: { justifyContent: 'center' },
   heroContent: {
     alignItems: 'flex-start',
-    gap: 20,
+    gap: space[16],
     maxWidth: 620,
   },
   betaNotice: { gap: spacing.xs },

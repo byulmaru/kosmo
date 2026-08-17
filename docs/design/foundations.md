@@ -11,27 +11,24 @@
 
 | 역할           | 크기 | Line height | Weight | 대표 용도                     |
 | -------------- | ---: | ----------: | -----: | ----------------------------- |
-| `UI/Display`   |   38 |        115% |    700 | 제한적으로 사용하는 display   |
-| `UI/Heading/L` |   30 |        115% |    700 | 큰 화면 제목                  |
 | `UI/Heading/M` |   24 |        115% |    700 | 중간 제목                     |
 | `UI/Heading/S` |   20 |        130% |    700 | 모바일 section 제목           |
-| `UI/Title`     |   18 |        130% |    600 | 설정·surface 제목             |
 | `UI/Copy/L`    |   16 |        150% |    400 | 읽고 선택하는 기본 UI 텍스트  |
 | `UI/Copy/M`    |   14 |        150% |    400 | helper·validation·보조 설명   |
 | `UI/Copy/S`    |   12 |        130% |    400 | 시간·핸들·비핵심 metadata     |
 | `UI/Label/L`   |   16 |        150% |    600 | 사용자 이름·강한 action label |
 | `UI/Label/M`   |   14 |        150% |    600 | 버튼·탭·action count          |
 | `UI/Label/S`   |   12 |        130% |    600 | 짧은 비핵심 badge label       |
-| `Content/L`    |   18 |        150% |    400 | 강조 본문                     |
 | `Content/M`    |   16 |        150% |    400 | 기본 포스트 본문              |
-| `Content/S`    |   14 |        150% |    400 | 보조 본문·설명                |
+
+Beta Landing의 hero title `30/36/700`은 정식 Landing 전환 때 폐기하거나 다시 설계할 component-local 예외다. 공용 `UI/Heading/L` 또는 `UI/Display`의 근거로 사용하지 않으며, 다른 화면에서도 같은 역할이 확인될 때만 공용 typography 승격을 검토한다.
 
 MCP Preview font 대응과 Production runtime 로딩 규칙은 [typography.md](./typography.md)를 따른다.
 
 ## Spacing, radius, border width
 
-- spacing은 `0, 2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 48`의 범용 숫자 scale을 사용한다.
-- radius는 `0, 2, 4, 8, 12, 16, 20, 24, full(999)`을 사용한다. `10`, `14` radius는 만들지 않는다.
+- spacing은 `0, 4, 8, 12, 16, 24, 32, 48`의 범용 숫자 scale을 사용한다.
+- radius는 `0, 4, 8, 12, 16, 20, 24, full(999)`을 사용한다. `2`, `10`, `14` radius는 만들지 않는다.
 - border width는 `0, 1, 2`만 사용한다. `1`은 기본 경계, `2`는 focus·강조, `0`은 명시적 경계 제거다.
 - scale 밖 spacing은 component-local optical correction으로만 허용한다. component, platform, 시각적 이유, 비교 evidence와 Design owner 승인을 기록하고 전역 token으로 승격하지 않는다.
 
@@ -47,6 +44,7 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 
 - Figma·component에 명시된 spacing 계약이 있으면 recipe보다 우선한다.
 - Compact·Spacious는 명시적 opt-in만 허용한다. 부모, route, theme에서 자동 상속하지 않는다.
+- ProfileSwitcher처럼 연속된 선택 행은 부모 gap을 `0`으로 둔다. 행 내부 padding은 콘텐츠 높이에 맞춰 retained scale에서 선택하되 interactive target `48px` 이상을 지킨다. 현재 코드와 Figma source의 미선택 option은 vertical padding `8`과 높이 `60px`을 사용하며, divider만 vertical margin `4`를 사용한다.
 - breakpoint는 layout 단계만 결정한다. typography, line-height, interactive target을 함께 축소하지 않는다.
 - PostLayout의 avatar와 body처럼 의도된 도메인 geometry는 해당 component가 계속 소유한다.
 - 기존 화면에 Standard를 소급 적용하거나 Components/Screens binding을 자동 변경하지 않는다.

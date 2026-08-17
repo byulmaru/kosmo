@@ -20,7 +20,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { radii, space, spacing, textStyles, typography } from '@/theme/tokens';
 import { useNavigationGuard } from './NavigationGuardContext';
 import { NavigationLink } from './NavigationLink';
 import {
@@ -776,10 +776,10 @@ const styles = StyleSheet.create({
     width: 280,
   },
   redesignedMenu: { overflow: 'hidden' },
-  menuItems: { gap: 2 },
+  menuItems: { gap: space[0] },
   redesignedMenuRegion: { flexShrink: 1, minHeight: 0 },
   profileList: { flexShrink: 1, minHeight: 0 },
-  profileListContent: { gap: 2 },
+  profileListContent: { gap: space[0] },
   pickerFooter: { flexShrink: 0 },
   backdrop: {
     alignItems: 'center',
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: spacing.sm,
   },
-  unselectedProfile: { paddingVertical: spacing.xs },
+  unselectedProfile: { paddingVertical: space[8] },
   profileAvatar: { position: 'relative' },
   profileUnreadDot: {
     height: 12,
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   profileLabel: { flex: 1, minWidth: 0 },
-  divider: { height: 1, marginVertical: 2, width: '100%' },
+  divider: { height: 1, marginVertical: space[4], width: '100%' },
   createForm: { gap: spacing.xs, padding: spacing.xs },
   createRow: { flexDirection: 'row', gap: spacing.sm },
   input: {
@@ -831,5 +831,5 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   addIcon: { alignItems: 'center', justifyContent: 'center', width: 32 },
-  addLabel: { fontFamily: 'SUIT', fontWeight: '500', ...typography.sm },
+  addLabel: textStyles.uiLabelM,
 });

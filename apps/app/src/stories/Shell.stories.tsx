@@ -1007,7 +1007,7 @@ export const ProfileSwitcherUnreadPresence: Story = {
     expect(unreadDot).toHaveStyle({ height: '12px', width: '12px' });
     expect(selectedOption).not.toHaveAccessibleName(/1/);
     expect(unreadOption).not.toHaveAccessibleName(/127/);
-    expect(unreadOption.getBoundingClientRect().height).toBe(52);
+    expect(unreadOption.getBoundingClientRect().height).toBe(60);
     expect(unreadDot.getBoundingClientRect().right).toBeLessThanOrEqual(
       unreadOption.getBoundingClientRect().right,
     );

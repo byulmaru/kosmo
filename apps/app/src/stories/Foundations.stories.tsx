@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 132,
   },
-  icon: { borderRadius: radius[2], borderWidth: borderWidths[2] },
+  icon: { borderRadius: radius[4], borderWidth: borderWidths[2] },
   measure: { alignItems: 'center', gap: space[4], minWidth: 64 },
   name: textStyles.uiLabelS,
   radius: { alignItems: 'center', height: 72, justifyContent: 'center', width: 96 },
