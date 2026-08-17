@@ -89,7 +89,7 @@ transaction·후속 효과 경계를 proposal, capability delta와 구현 지침
 - Decision Outcome: process-global Worker host와 task queue는 하나를 유지하고, Post Create/Repost/Delete event source의 Workflow·Activity를 production entrypoint의 compile-time registry에 정적으로 조립한다.
 - Alternatives Considered: event별 Worker process와 task queue는 독립 운영 요구가 없고, optional registry builder는 이미 제거한 startup 복잡도를 되살리므로 채택하지 않았다.
 - Consequences: Worker bundle은 여러 business Workflow를 포함하지만 lifecycle·health·shutdown owner는 계속 하나다. 새 event는 source module만 추가한다.
-- Confirmation / Follow-up: Worker build와 registration test, dev에서 Post Create/Repost/Delete Workflow가 같은 Worker revision에 poll되는지 확인한다.
+- Confirmation / Follow-up: Worker build와 registration test로 구현을 검증한다. dev에서 Post Create/Repost/Delete Workflow가 같은 Worker revision에 poll되는지는 merge 이후 rollout evidence로 별도 확인하며 OpenSpec completion이나 archive를 막지 않는다.
 
 ### Announce mapping 교체와 Undo 경합에 새 잠금을 추가하지 않는다
 

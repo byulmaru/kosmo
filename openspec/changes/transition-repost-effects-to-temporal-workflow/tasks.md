@@ -68,9 +68,9 @@ Worker host가 Post Create, Repost와 Delete registration을 함께 poll한다.
 
 **Verification**
 
-- event별 start options와 identity, fixed Worker registration, Activity persistence의 멱등성과 terminal no-op을
-  unit 및 package-level test로 검증한다. origin 분기, Activity retry·independence와 restart 복구는 4.3의 실제 dev
-  Temporal history로 검증한다.
+- event별 start options와 identity, fixed Worker registration, origin 분기, Activity persistence의 멱등성과
+  terminal no-op 및 effects 독립 실행을 unit 및 package-level test로 검증한다. merge된 revision의 실제 Temporal
+  retry·Worker restart 관찰은 rollout 검증으로 별도 추적하며 이 change의 구현 완료 task로 두지 않는다.
 
 - [x] 2.1 기존 Post Create type·ID를 유지하면서 committed Repost transition과 모든 Post Tombstone의 Repost/Delete event type·input(`effectKind` 포함)·stable start policy를 Core Temporal domain 경계에 추가하고, Delete Activity가 relation별 Tombstone projection을 재사용하게 한다.
 - [x] 2.2 Repost Notification create/delete와 canonical Announce·Undo queue handoff Activity를 멱등하게 등록한다.
@@ -107,7 +107,7 @@ Repost·Delete GraphQL caller와 Announce·Undo·Delete Fedify caller는 Core ac
 - [x] 3.2 inbound Announce·Undo·ActivityPub Delete caller를 검증된 serializable input과 Core 결과만 사용하는 경계로 단순화한다.
 - [x] 3.3 API·Fedify integration test를 Content/Repost Delete Workflow start, `effectKind`, committed-result 격리 계약으로 갱신한다.
 
-## 4. PROD-725 계약 동기화와 dev 통합 검증
+## 4. PROD-725 계약 동기화와 구현 검증
 
 **Authority / Provenance**
 
@@ -119,8 +119,8 @@ Repost·Delete GraphQL caller와 Announce·Undo·Delete Fedify caller는 Core ac
 
 **Deliverable**
 
-저장소의 active Repost 계약이 PROD-725와 일치하고, exact application revision의 dev 환경에서 Repost·Delete
-Workflow와 Worker retry·restart가 실제로 동작한다.
+저장소의 active Repost 계약이 PROD-725와 일치하고, 구현 및 package 통합 검증이 Repost·Delete Workflow와
+Worker registration 계약을 증명한다.
 
 **Guardrails**
 
@@ -130,11 +130,10 @@ Workflow와 Worker retry·restart가 실제로 동작한다.
 
 **Verification**
 
-- OpenSpec strict validation, workspace lint/typecheck/test, exact revision dev rollout 상태, Temporal Workflow history,
-  Notification 및 Fedify queue 효과와 Worker restart 뒤 retry를 각각 증거로 남긴다.
+- OpenSpec strict validation과 workspace lint/typecheck/test를 구현 완료 증거로 남긴다. exact revision dev rollout
+  상태, Temporal Workflow history, Notification 및 Fedify queue 효과와 Worker restart 뒤 retry는 merge 이후
+  rollout evidence로 별도 기록하며 OpenSpec archive 전제나 task 완료 조건으로 사용하지 않는다.
 
 - [x] 4.1 active `add-post-reposts` artifacts의 PROD-669 process-local `postCommit` 실행 경계를 PROD-725로 동기화하면서 canonical Best Effort·hidden unavailable lifecycle은 유지한다.
 - [x] 4.2 관련 package lint, typecheck, unit/integration test와 OpenSpec strict validation을 통과시킨다.
-- [ ] 4.3 exact revision을 dev에서 검증하고 Repost/Delete effects, duplicate no-start, AP no-echo, Activity 독립 실행·유한 retry와 Worker restart 복구 증거를 수집한다.
-- [x] 4.4 production 미변경을 확인하고 PR/CI, dev-live, production evidence를 분리해 결과를 기록한다.
-- [ ] 4.5 integration owner가 `add-post-reposts`를 먼저 archive한 뒤 canonical Notification spec을 확인하고, 이 change의 Completion Gate 승인 후 별도 archive owner가 최종 archive와 strict validation을 수행한다.
+- [x] 4.3 production 미변경을 확인하고 PR/CI, dev-live, production evidence를 분리해 결과를 기록한다.

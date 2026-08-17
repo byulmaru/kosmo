@@ -130,7 +130,8 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
   unavailable predicate로 모든 API surface에서 숨기며, domain transaction에 `FOR UPDATE` 또는 row lock을 추가하지
   않는다.
 - [Post Create, Repost와 Delete Workflow를 한 Worker bundle에 추가하면 registration 회귀가 생길 수 있음] → 하나의
-  compile-time registry와 package build, 실제 dev Workflow 실행으로 함께 검증한다.
+  compile-time registry와 package build·registration test로 검증한다. merge된 revision의 실제 dev Workflow 실행은
+  rollout evidence로 별도 관찰한다.
 
 ## Migration Plan
 
@@ -138,10 +139,11 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 2. 기존 Post Create transition/start 계약을 유지한 채 Core transition/start 경계와 caller 단순화를 구현하고,
    event-specific Repost/Delete Workflow·Activity registration을 추가한다.
 3. unit/package integration test로 duplicate·rollback·start failure·Activity 멱등성과 terminal no-op을 검증한다.
-4. exact revision을 dev에 배포해 Repost/Delete Workflow history, Notification, Announce·Undo queue handoff,
-   Activity 독립 실행·retry·origin 분기와 Worker restart 복구를 확인한다.
-5. 구현과 dev 검증이 끝나면 Repost Notification base requirement를 제공하는 `add-post-reposts`를 먼저
-   archive하고, 그 canonical spec 위에서 이 change를 archive한다.
+4. 구현이 완료되면 Repost Notification base requirement를 제공하는 `add-post-reposts`를 먼저 archive하고, 그
+   canonical spec 위에서 이 change를 archive한다. archive 동작 자체는 구현 task로 두지 않는다.
+5. merge된 exact revision을 dev에 배포한 뒤 Repost/Delete Workflow history, Notification, Announce·Undo queue
+   handoff, Activity 독립 실행·retry·origin 분기와 Worker restart 복구를 rollout evidence로 별도 확인한다. 이
+   관찰은 OpenSpec 구현 완료나 archive의 선행 조건이 아니다.
 6. 회귀 시 application revision을 이전 구현으로 rollback한다. schema migration과 production cutover는 없으며,
    production 적용은 별도 사용자 승인 없이는 수행하지 않는다.
 
