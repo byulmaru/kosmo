@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionMenuPortal } from '@/components/ui/ActionMenuPortal';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import type { ComponentType, ReactNode, Ref } from 'react';
 
@@ -308,6 +308,7 @@ export function ActionMenu({
                 role="menu"
                 pointerEvents={open ? 'auto' : 'none'}
                 style={[
+                  layoutRecipes.actionMenuSurface,
                   styles.webMenu,
                   elevation.floating,
                   {
@@ -506,10 +507,8 @@ const styles = StyleSheet.create({
   },
   webLabel: { flex: 1, textAlign: 'left', ...textStyles.uiCopyM },
   webMenu: {
-    borderRadius: radius[12],
     borderWidth: borderWidths[1],
     minWidth: webMenuMinWidth,
-    padding: space[4],
   },
   webPosition: { position: 'absolute', zIndex: 100 },
 });

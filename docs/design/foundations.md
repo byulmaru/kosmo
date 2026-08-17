@@ -49,6 +49,19 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 - PostLayout의 avatar와 body처럼 의도된 도메인 geometry는 해당 component가 계속 소유한다.
 - 기존 화면에 Standard를 소급 적용하거나 Components/Screens binding을 자동 변경하지 않는다.
 
+### 실행 가능한 시맨틱 레이아웃 recipe
+
+프로덕션 코드는 위 density 조합과 반복되는 부모 geometry를 `tokens.ts`의 plain style object로 소비한다. 별도 React wrapper나 Figma `Box`·`Stack`·`Inline` component를 만들지 않는다.
+
+| Recipe              | 소유 geometry                                    | 최초 적용 경계                |
+| ------------------- | ------------------------------------------------ | ----------------------------- |
+| `listStack`         | vertical flow, gap `0`, padding `0`              | `SettingsNavigationList` 부모 |
+| `actionMenuSurface` | vertical flow, gap `0`, padding `4`, radius `12` | Web `ActionMenu` 외곽 surface |
+
+- `listStack`은 행 내부 padding, 높이, divider, 상태, content growth를 소유하지 않는다.
+- `actionMenuSurface`는 범용 menu나 Native bottom sheet 계약이 아니다. border, elevation, positioning, portal, focus와 lifecycle은 `ActionMenu`가 계속 소유한다.
+- 다른 list·menu·form·page·card·overlay는 geometry가 최종 확인되기 전 recipe에 포함하지 않는다.
+
 ## Elevation과 shadow
 
 Shadow pigment는 고정 `#000000`을 사용한다. geometry는 mode와 무관하며 opacity만 Light 10%, Dark 40%로 바뀐다.
