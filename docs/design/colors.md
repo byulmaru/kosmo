@@ -20,6 +20,16 @@ Primitive Color
 - Light와 Dark는 동일한 semantic 이름을 사용하고 primitive alias만 교체한다.
 - 모든 semantic variable은 Light/Dark 값을 모두 가지며 literal 값 없이 primitive를 alias한다.
 
+## Primitive 팔레트 단계 수
+
+Primitive 팔레트는 색상별 단계 수를 기계적으로 맞추지 않는다. 각 hue는 실제 semantic role, interaction state와 Light/Dark 대비 조합에 필요한 단계만 소유한다. 팔레트 열의 길이가 같은지는 품질 기준이 아니며, 사용처가 없는 보간 색상을 다른 hue와 개수를 맞추기 위해 추가하지 않는다.
+
+- 새 단계는 연결할 semantic token과 실제 consumer, 목표 대비 조합이 함께 확인된 경우에만 추가한다.
+- 기존 단계는 semantic alias와 활성 consumer가 없고 대비 검증에도 필요하지 않을 때만 제거한다.
+- 같은 값이 여러 역할에 필요하면 primitive를 중복하지 않고 semantic token이 하나의 primitive를 alias한다.
+- 제품 UI는 팔레트 단계 수와 관계없이 semantic token만 소비한다.
+- Figma `01 Foundations`는 색상별 현재 단계와 용도를 그대로 보여주고, 단계 수 차이를 오류처럼 채우거나 숨기지 않는다.
+
 Figma variable의 code syntax가 개발 target 이름이다.
 
 | 플랫폼  | 형식                   | 예시                             |

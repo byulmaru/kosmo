@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { space, spacing, typography } from '@/theme/tokens';
 import type { ComposePageQuery } from './__generated__/ComposePageQuery.graphql';
 
 const ComposeQuery = graphql`
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   content: {
     alignSelf: 'center',
     flexGrow: 1,
-    gap: 20,
+    gap: space[16],
     maxWidth: 624,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   },
   loadingAction: { alignItems: 'flex-end' },
   stateCard: {
-    padding: 20,
+    padding: space[16],
   },
   stateTitle: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
   stateDescription: { fontFamily: 'SUIT', marginTop: spacing.xs, ...typography.sm },

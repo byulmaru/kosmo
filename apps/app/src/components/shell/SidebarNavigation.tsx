@@ -13,7 +13,7 @@ import {
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing } from '@/theme/tokens';
+import { radii, spacing, textStyles } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
 import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
@@ -379,6 +379,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   feedbackFooterItem: { height: 48, minHeight: 48 },
-  footerLabel: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
+  footerLabel: textStyles.uiCopyM,
   footerLabelGrow: { flex: 1 },
 });

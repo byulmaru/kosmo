@@ -33,7 +33,7 @@
 - React Native `Text`/`TextInput`은 CSS font 상속에 의존하지 않는다. 공용 primitive와 각 text style은 용도에 맞는 `fontFamily`를 명시한다.
   - UI, 버튼, 내비게이션, 라벨, heading: `fontFamily: 'SUIT'`
   - 포스트 본문, 긴 글 입력: `fontFamily: 'Pretendard'`
-- font size/line height는 `apps/app/src/theme/tokens.ts`의 `typography` token을 사용한다. 화면에서 같은 Foundation 값을 raw number로 반복하지 않는다.
+- 새 구현은 `apps/app/src/theme/tokens.ts`의 역할 기반 `textStyles`를 사용한다. 기존 consumer는 DSN-21 이관 완료 전까지 deprecated `typography` 호환 alias를 사용할 수 있으며, 화면에서 같은 Foundation 값을 raw number로 반복하지 않는다.
 - React Native Web Storybook은 전용 `@font-face` 설정으로 같은 npm package의 Variable WOFF2 asset을
   `SUIT`와 `Pretendard` family로 등록한다. Expo runtime의 `useFonts` loader는 사용하지 않지만,
   component의 production family name과 asset은 동일하게 유지한다.
