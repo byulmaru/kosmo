@@ -620,9 +620,13 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
     await entry.click();
     await expect.poll(() => refreshCount).toBe(1);
     await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await page.setViewportSize({ height: 360, width: 1024 });
+    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    const rerenderedEntry = await homeEntry(page, 'navigation');
     await expect
       .poll(async () => {
-        await entry.click();
+        await rerenderedEntry.click();
         return refreshCount;
       })
       .toBe(2);

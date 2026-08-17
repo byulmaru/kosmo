@@ -45,12 +45,26 @@
 - Decision Date: 2026-08-15
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/breakpoints.md`, `PROD-610`
-- Status: Active
+- Status: Superseded
 - Context / Problem: 현재 Home query의 retry용 key 증가는 네트워크 완료·실패 신호가 없어 정확한 in-flight 잠금 해제에 사용할 수 없다.
 - Decision Outcome: 현재 actor Relay environment에서 기존 Home query를 `network-only`로 실행하고 observable의 완료·실패를 잠금 해제 근거로 사용한다. 기존 normalized store 구독으로 화면을 갱신한다.
 - Alternatives Considered: timeline fragment refetch는 중첩된 PostList까지 callback을 전달하고 pagination 회귀를 추가 검증해야 한다. retry용 key 증가는 완료 신호가 없어 선택하지 않았다. query-loader 방식은 같은 계약을 만족할 수 있지만 현재 단일 query에는 추가 lifecycle이 필요하다.
 - Consequences: timeline 외 Home query field도 함께 요청한다. environment 전환·unmount 시 이전 subscription과 잠금을 정리하고, 같은 activation에서 retry용 key를 함께 변경하지 않는다.
 - Confirmation / Follow-up: Home query 요청 수, 진행 중 중복 억제, 성공·실패 뒤 재활성화와 controller dispose·stale settle cleanup을 자동화로 검증한다. 변경된 서버 데이터의 normalized UI 반영, 기존 loaded connection 유지와 실제 actor 전환 중 네트워크 cleanup timing은 미검증 runtime 범위로 남긴다.
+
+- Superseded By: 2026-08-17 `Visible Home fetchKey와 actor-tagged stale fallback을 사용한다`
+
+### Visible Home fetchKey와 actor-tagged stale fallback을 사용한다
+
+- Decision Date: 2026-08-17
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/design/breakpoints.md`, `PROD-610`
+- Status: Active
+- Context / Problem: visible `HomePageQuery`의 `store-and-network` 재검증 실패가 기존 query 오류 경계로 전파되면 stale timeline이 무너질 수 있고, 별도 `fetchQuery` subscription·token lock은 Relay의 동일 operation in-flight dedupe와 중복 lifecycle을 만든다.
+- Decision Outcome: visible Home query는 기존 `fetchKey`와 outer `RouteBoundary`를 유지한다. current-home activation은 매번 document를 최상단으로 이동하고 같은 visible query의 `fetchKey`를 증가시킨다. query reader는 반환된 `HomePageQuery$data`를 actor revision과 함께 parent ref에 동기적으로 기록하고, Home-local inner ErrorBoundary는 같은 actor의 마지막 성공 data를 stale timeline으로 렌더한다. 해당 actor의 stale data가 없으면 오류를 다시 던져 outer `RouteBoundary`가 blocking error를 표시한다. inner boundary는 actor revision이 포함된 fetchKey 변화에서 오류 상태를 reset해 다음 activation과 retry가 새 query를 시도한다. Home screen 동안 현재 environment에서 `createOperationDescriptor(getRequest(HomeQuery), {})`를 retain하고 cleanup하며, 동일 environment·operation·variables의 진행 중 요청 중복은 Relay runtime에 맡긴다.
+- Alternatives Considered: hidden revalidator는 visible query의 stale-if-error 오류 경계를 우회할 뿐 실제 query 오류를 고치지 못하므로 제거했다. 별도 `fetchQuery` subscription·token lock·전용 helper는 실제 요청 완료와 cancellation lifecycle을 명시적으로 관리하지만 Relay dedupe와 중복되고 stale data fallback을 visible query와 분리하므로 제거했다. 공통 `RouteBoundary` 수정은 다른 route 범위까지 넓히므로 선택하지 않았다.
+- Consequences: 재검증 실패는 actor-tagged 기존 timeline을 유지하고 초기/no-data query 실패만 기존 RouteBoundary에서 blocking error로 표시한다. retain은 stale fragment refs를 Home screen/fallback 수명 동안 유지한다. actor environment 교체는 이전 Store와 새 Store를 격리하고 revision mismatch stale ref를 사용하지 않지만 일반 query의 실제 network cancellation은 보장하지 않는다. 다음 activation은 새 visible fetchKey를 만들고, 이전 요청이 아직 진행 중이면 Relay dedupe가 추가 네트워크를 막는다.
+- Confirmation / Follow-up: 진행 중 중복, settle 뒤 다음 요청, visible query 재검증 실패 뒤 Shell/Home 무관 재렌더에서도 stale timeline 유지와 다음 activation retry를 focused Web E2E로 검증한다. 실제 actor 전환 중 network cancellation은 미검증 범위로 남긴다.
 
 ## Remaining Decisions
 
@@ -58,4 +72,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `완료 신호가 있는 network-only Home query를 사용한다` (2026-08-15) → `Visible Home fetchKey와 actor-tagged stale fallback을 사용한다` (2026-08-17)

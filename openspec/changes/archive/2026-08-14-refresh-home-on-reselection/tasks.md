@@ -23,10 +23,10 @@
 - 테스트 코드 범위: 기존 shell navigation·PageHeader·Home Relay 동작을 직접 검증하는 최소 단위 테스트 영역과 기존 Web navigation E2E의 mobile·compact·full 홈 진입 영역.
 - 테스트 필요성: 다른 route의 홈 이동, current-home scroll-top, Home query 요청 정확히 1회, 진행 중 중복 억제, 성공·실패 뒤 다음 activation의 새 요청 1회, 기존 데이터 유지와 keyboard·screen reader control 의미를 증명한다.
 - 테스트 제외 범위: 관련 없는 route 조합·fixture·snapshot·Storybook interaction coverage 확대, Native runtime test, 테스트 helper·harness와 인프라 변경.
-- 관련 app unit/check, focused Web E2E와 `pnpm exec openspec validate refresh-home-on-reselection --strict`를 통과시킨다. Web 자동화 결과를 Android/iOS runtime 증거로 일반화하지 않는다.
+- 관련 app check, focused Web E2E와 `pnpm exec openspec validate --all --strict`를 통과시킨다. Web 자동화 결과를 Android/iOS runtime 증거로 일반화하지 않는다. visible query 재검증 오류 격리는 actor-tagged Home-local boundary와 retain된 기존 timeline 보존으로 확인하고, Native runtime과 일반 query의 실제 network cancellation은 미검증 범위로 남긴다.
 
 - [x] 1.1 모든 Web shell 홈 navigation과 Home header 브랜드 control에 다른 route 이동 및 current-home activation 경계를 연결한다.
-- [x] 1.2 current-home activation마다 document scroll을 최상단으로 이동하고 Home Relay 새로고침의 요청 잠금·완료·실패·actor environment cleanup을 구현한다.
-- [x] 1.3 최소 단위 테스트로 current-home 분기, 단일 요청, 진행 중 중복 억제, 성공·실패 뒤 다음 activation의 새 요청 1회와 접근 가능한 브랜드 control을 검증한다.
+- [x] 1.2 current-home activation마다 document scroll과 기존 visible Home query `fetchKey` 재실행을 수행하고, actor-tagged stale data fallback·Relay retain·in-flight dedupe로 중복 없는 새로고침을 구현한다. stale data가 없는 초기 query 오류는 기존 RouteBoundary에서 blocking error로 유지한다.
+- [x] 1.3 기존 Home 재선택 Web 자동화로 visible query의 current-home 분기, 단일 요청, 진행 중 중복 억제, 성공·실패 뒤 다음 activation의 새 요청 1회와 무관한 Shell/Home 재렌더 뒤 stale timeline 보존을 검증한다. 별도 controller 단위 테스트는 최종 Relay-native 구현에서 제거한다.
 - [x] 1.4 기존 Web navigation E2E에서 mobile·compact·full의 route 이동, scroll-top과 Home query 요청 1회를 검증한다.
 - [x] 1.5 app check와 focused Web 검증을 통과시키고 canonical 문서·spec·구현 정합성과 미검증 Native 범위를 기록한 뒤 change를 archive한다.
