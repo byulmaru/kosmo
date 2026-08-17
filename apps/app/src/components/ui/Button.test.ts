@@ -43,7 +43,7 @@ mockModule('@/theme/tokens', {
   radius: { 8: 8 },
   space: { 8: 8, 16: 16 },
   spacing: { sm: 8, lg: 16 },
-  textStyles: { uiLabelM: { fontSize: 14, lineHeight: 21 } },
+  textStyles: { uiLabelM: { fontSize: 14, lineHeight: 20 } },
   typography: { sm: { fontSize: 14, lineHeight: 20 } },
 });
 

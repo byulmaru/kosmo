@@ -7,17 +7,17 @@
 - UI 텍스트는 SUIT Variable, 본문은 Pretendard Variable을 사용한다.
 - 역할을 먼저 선택하고 size, weight, leading을 임의로 조합하지 않는다.
 - 12px는 시간, 핸들, 비핵심 metadata에만 사용한다. 읽거나 선택해야 하는 정보는 14px 이상이다.
-- line-height는 font size별 고정 px가 아니라 역할별 비율로 유지한다.
+- line-height는 역할별로 정의한다. `UI/Copy/M`과 `UI/Label/M`은 14px 글자에 고정 20px을 공유하고, 나머지는 표의 역할별 비율을 유지한다.
 
 | 역할           | 크기 | Line height | Weight | 대표 용도                     |
 | -------------- | ---: | ----------: | -----: | ----------------------------- |
 | `UI/Heading/M` |   24 |        115% |    700 | 중간 제목                     |
 | `UI/Heading/S` |   20 |        130% |    700 | 모바일 section 제목           |
 | `UI/Copy/L`    |   16 |        150% |    400 | 읽고 선택하는 기본 UI 텍스트  |
-| `UI/Copy/M`    |   14 |        150% |    400 | helper·validation·보조 설명   |
+| `UI/Copy/M`    |   14 |        20px |    400 | helper·validation·보조 설명   |
 | `UI/Copy/S`    |   12 |        130% |    400 | 시간·핸들·비핵심 metadata     |
 | `UI/Label/L`   |   16 |        150% |    600 | 사용자 이름·강한 action label |
-| `UI/Label/M`   |   14 |        150% |    600 | 버튼·탭·action count          |
+| `UI/Label/M`   |   14 |        20px |    600 | 버튼·탭·action count          |
 | `UI/Label/S`   |   12 |        130% |    600 | 짧은 비핵심 badge label       |
 | `Content/M`    |   16 |        150% |    400 | 기본 포스트 본문              |
 

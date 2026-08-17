@@ -442,8 +442,8 @@ export const FeedbackNavigationCurrentState: Story = {
     expect(link).toHaveStyle({ backgroundColor: 'rgb(255, 249, 230)' });
     expect(link.nextElementSibling).toContainElement(logout);
     expect(link.parentElement).toHaveStyle({ borderTopWidth: '1px' });
-    expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
-    expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '21px' });
+    expect(feedbackLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
+    expect(logoutLabel).toHaveStyle({ fontSize: '14px', lineHeight: '20px' });
     expect(link.querySelector('svg')).toHaveAttribute('height', '20');
     expect(link.querySelector('svg')).toHaveAttribute('width', '20');
     expect(logout.querySelector('svg')).toHaveAttribute('height', '20');

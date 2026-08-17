@@ -247,12 +247,18 @@ const textStyle = (
 export const textStyles = {
   contentM: textStyle(fontFamilies.content, fontSizes[16], lineHeights.relaxed, fontWeights.normal),
   uiCopyL: textStyle(fontFamilies.ui, fontSizes[16], lineHeights.relaxed, fontWeights.normal),
-  uiCopyM: textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.normal),
+  uiCopyM: {
+    ...textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.normal),
+    lineHeight: 20,
+  },
   uiCopyS: textStyle(fontFamilies.ui, fontSizes[12], lineHeights.snug, fontWeights.normal),
   uiHeadingM: textStyle(fontFamilies.ui, fontSizes[24], lineHeights.tight, fontWeights.bold),
   uiHeadingS: textStyle(fontFamilies.ui, fontSizes[20], lineHeights.snug, fontWeights.bold),
   uiLabelL: textStyle(fontFamilies.ui, fontSizes[16], lineHeights.relaxed, fontWeights.semibold),
-  uiLabelM: textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.semibold),
+  uiLabelM: {
+    ...textStyle(fontFamilies.ui, fontSizes[14], lineHeights.relaxed, fontWeights.semibold),
+    lineHeight: 20,
+  },
   uiLabelS: textStyle(fontFamilies.ui, fontSizes[12], lineHeights.snug, fontWeights.semibold),
 } satisfies Record<string, TextStyle>;
 

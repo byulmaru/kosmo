@@ -379,6 +379,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   feedbackFooterItem: { height: 48, minHeight: 48 },
-  footerLabel: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 21 },
+  footerLabel: { fontFamily: 'SUIT', fontSize: 14, lineHeight: 20 },
   footerLabelGrow: { flex: 1 },
 });
