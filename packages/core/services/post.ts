@@ -282,12 +282,10 @@ export const deletePost = async (
   const { deleted, post, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
     const post = await tx
       .select({
-        createdAt: Posts.createdAt,
         currentContentId: Posts.currentContentId,
         profileId: Posts.profileId,
         replyParentId: Posts.replyParentId,
         repostSourceId: Posts.repostSourceId,
-        visibility: Posts.visibility,
       })
       .from(Posts)
       .where(eq(Posts.id, postId))
@@ -312,12 +310,10 @@ export const deletePost = async (
         ),
       )
       .returning({
-        createdAt: Posts.createdAt,
         currentContentId: Posts.currentContentId,
         id: Posts.id,
         replyParentId: Posts.replyParentId,
         repostSourceId: Posts.repostSourceId,
-        visibility: Posts.visibility,
       })
       .then(first);
 
@@ -347,13 +343,9 @@ export const deletePost = async (
 
   if (deleted && pureRepost && deleted.repostSourceId !== null && !handle) {
     await startRepostEffectsWorkflow({
-      actorProfileId,
-      createdAt: deleted.createdAt.toString(),
       origin,
       repostId: deleted.id,
-      sourcePostId: deleted.repostSourceId,
       transition: 'DELETE',
-      visibility: deleted.visibility,
     });
   } else if (!handle) {
     await ordinaryPostCommit();

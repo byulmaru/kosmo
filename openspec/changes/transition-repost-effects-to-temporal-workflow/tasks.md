@@ -48,8 +48,13 @@ queue handoff를 독립적으로 재시도하며, 하나의 Worker host가 Post 
 **Guardrails**
 
 - create와 delete Workflow identity를 분리하고 종료된 같은 transition ID를 재사용하지 않는다.
+- Workflow input은 `repostId`, `origin`, `transition`만 유지하고, delete Activity는 Tombstone row에 보존된
+  actor/source/createdAt/visibility projection을 재사용한다. author Profile의 non-`ACTIVE` state만으로 local Undo를
+  no-op하지 않는다.
 - ActivityPub origin은 outbound echo를 만들지 않는다.
 - Activity 성공은 Fedify queue acceptance이며 remote retry·ordering은 Fedify가 소유한다.
+- Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 직렬화를 위한
+  `FOR UPDATE` 또는 row lock을 추가하지 않는다.
 - 한 Activity terminal failure가 다른 적용 가능한 Activity 시도를 막지 않는다.
 - 별도 Worker host·task queue, optional registry, generic startup API와 새 Temporal Client wrapper를 만들지 않는다.
 
@@ -59,7 +64,7 @@ queue handoff를 독립적으로 재시도하며, 하나의 Worker host가 Post 
   unit 및 package-level test로 검증한다. origin 분기, Activity retry·independence와 restart 복구는 4.3의 실제 dev
   Temporal history로 검증한다.
 
-- [x] 2.1 committed Repost transition의 type·input·stable create/delete start policy와 delete 최소 snapshot을 Core Temporal domain 경계에 추가한다.
+- [x] 2.1 committed Repost transition의 type·input·stable create/delete start policy를 Core Temporal domain 경계에 추가하고, delete Activity가 Tombstone projection을 재사용하게 한다.
 - [x] 2.2 Repost Notification create/delete와 canonical Announce·Undo queue handoff Activity를 멱등하게 등록한다.
 - [x] 2.3 적용 가능한 effects를 독립 실행하는 Repost Workflow를 구현하고 Post Create와 함께 singleton Worker registry에 조립한다.
 - [x] 2.4 start failure·duplicate start, fixed registration, Notification Activity retry 멱등성과 terminal no-op 검증을 추가한다.
@@ -109,7 +114,7 @@ Workflow와 Worker retry·restart가 실제로 동작한다.
 
 **Guardrails**
 
-- `add-post-reposts`의 오래된 `postCommit`·retry 없음 문구를 현재 권위로 남기지 않는다.
+- `add-post-reposts`의 오래된 `postCommit`·retry 없음 문구를 현재 권위로 남기지 않으며 canonical Notification Best Effort·hidden unavailable semantics는 유지한다.
 - PR/CI와 OpenSpec validation을 dev-live 또는 production 증거로 표현하지 않는다.
 - production sync/apply/cutover/live verification은 별도 사용자 승인 없이는 수행하지 않는다.
 
@@ -118,7 +123,7 @@ Workflow와 Worker retry·restart가 실제로 동작한다.
 - OpenSpec strict validation, workspace lint/typecheck/test, exact revision dev rollout 상태, Temporal Workflow history,
   Notification 및 Fedify queue 효과와 Worker restart 뒤 retry를 각각 증거로 남긴다.
 
-- [x] 4.1 active `add-post-reposts` artifacts의 PROD-669 `postCommit`·Best Effort lifecycle을 PROD-725 소유 경계로 동기화한다.
+- [x] 4.1 active `add-post-reposts` artifacts의 PROD-669 process-local `postCommit` 실행 경계를 PROD-725로 동기화하면서 canonical Best Effort·hidden unavailable lifecycle은 유지한다.
 - [x] 4.2 관련 package lint, typecheck, unit/integration test와 OpenSpec strict validation을 통과시킨다.
 - [ ] 4.3 exact revision을 dev에서 검증하고 create/delete effects, duplicate no-start, AP no-echo, Activity 독립 실행·유한 retry와 Worker restart 복구 증거를 수집한다.
 - [x] 4.4 production 미변경을 확인하고 PR/CI, dev-live, production evidence를 분리해 결과를 기록한다.

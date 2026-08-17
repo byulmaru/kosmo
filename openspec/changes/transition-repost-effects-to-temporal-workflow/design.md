@@ -43,16 +43,25 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 - `sendRepostAnnounce`·`sendRepostUndo`는 process 기본 `db`에서 canonical projection을 다시 읽고 Fedify queue에
   handoff한다. Activity는 이 함수를 직접 등록하거나 얇은 이름 alias로 등록할 수 있지만 remote delivery owner가
   되어서는 안 된다.
+- Tombstone Repost row는 actor Profile identity, Repost Source, immutable `createdAt`과 visibility를 보존한다.
+  delete Workflow input은 `repostId`, `origin`, `transition`만 직렬화하고 delete Activity가 이 Tombstone
+  projection을 다시 읽어 Undo identity를 만든다. Local Undo는 author Profile이 더 이상 `ACTIVE`가 아니어도
+  committed Tombstone의 identity를 사용해 no-op이 되지 않아야 한다.
+- Repost Notification은 canonical Best Effort projection이다. create와 delete가 경합해 stale row가 남아도
+  unavailable predicate가 모든 API surface에서 숨기며, 이를 막기 위해 source row에 `FOR UPDATE` 또는 row lock을
+  추가하지 않는다.
 - 기존 `temporalClient`는 startup에 환경변수를 검증하는 실제 process-global Client다. Repost용 client wrapper나
   별도 connection lifecycle은 필요하지 않다.
 
 ### Recommended Approach
 
 1. Core의 Repost create/delete transition 결과를 `created/deleted`, committed Repost ID, origin과 transition
-   kind로 정규화한다. delete Workflow input에는 Tombstone UPDATE가 반환한 `repostId`, `actorProfileId`,
-   `sourcePostId`, `createdAt`, `visibility`, `origin`과 `transition=DELETE`의 최소 serializable snapshot을 넣어
-   이후 mutable projection에 의존하지 않게 한다. 자체 transaction이 commit된 직후 shared `temporalClient`로 stable
-   create/delete Workflow start를 시도하고 오류를 짧은 deadline과 구조화 로그로 격리한다.
+   kind로 정규화한다. Workflow input은 `repostId`, `origin`, `transition`만 유지한다. delete Activity는
+   Tombstone UPDATE 뒤에도 보존되는 Repost row의 `actorProfileId`, `repostSourceId`, `createdAt`, `visibility`
+   projection을 다시 읽어 Undo identity를 만들며 별도 serialized snapshot을 전달하지 않는다. author Profile의
+   non-`ACTIVE` state는 committed local Undo를 no-op으로 만드는 조건이 아니다. 자체 transaction이 commit된 직후
+   shared `temporalClient`로 stable create/delete Workflow start를 시도하고 오류를 짧은 deadline과 구조화 로그로
+   격리한다.
 2. verified Announce·Undo용 specialized Core entry가 검증된 actor/source/activity identity를 받아 Repost 상태와
    `ActivityPubPosts` current mapping을 같은 transaction에서 저장한다. Fedify handler는 URI·actor·object 검증과
    protocol 관측만 소유하고 database handle이나 callback을 전달하지 않는다.
@@ -62,8 +71,10 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 4. Worker Workflow는 create/delete input을 받아 Notification Activity를 항상 적용하고 Local origin일 때만
    Announce 또는 Undo Activity를 추가한다. 적용 가능한 Activity를 동시에 시작해 `allSettled`와 동등한 방식으로
    모두 관찰한 뒤 terminal failure를 Workflow 실패로 남긴다.
-5. Notification Activity는 Repost ID로 기존 멱등 create/delete 저장 경계를 실행한다. Fedify Activity는 기존
-   canonical producer를 사용하며 queue acceptance까지만 기다린다.
+5. Notification Activity는 Repost ID로 기존 멱등 create/delete 저장 경계를 실행한다. Notification은 canonical
+   Best Effort projection이므로 create/delete 경합을 `FOR UPDATE`나 row lock으로 직렬화하지 않는다. 남은 stale
+   row는 unavailable predicate로 숨긴다. Fedify Activity는 기존 canonical producer를 사용하며 queue acceptance까지만
+   기다린다.
 6. API/Fedify caller에서 `db`, `ctx.db`, `postCommit` 조립을 제거하고, integration test는 commit 결과, duplicate
    no-start, AP echo suppression, start failure 격리와 Activity retry identity를 검증한다.
 7. Worker registration은 entrypoint의 하나의 고정 activities object와 workflows path를 유지한다. domain 파일을
@@ -85,7 +96,10 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
 - ActivityPub mapping을 Workflow Activity에서 뒤늦게 저장하거나 Repost transaction과 분리하지 않는다.
 - Announce mapping 교체와 Undo 경합을 `FOR UPDATE`, advisory lock 또는 serializable retry로 새로 직렬화하지 않는다.
 - duplicate/no-op을 누락 effects backfill 계기로 사용하지 않는다.
-- delete Activity에서 Tombstone Repost의 현재 Active projection을 요구해 canonical Undo를 no-op으로 만들지 않는다.
+- delete Activity에서 Tombstone Repost의 현재 Active projection이나 author Profile `ACTIVE` state를 요구해 canonical
+  Undo를 no-op으로 만들지 않는다. Tombstone row에 보존된 actor/source/createdAt/visibility projection을 사용한다.
+- Notification create/delete 경합을 막기 위해 `FOR UPDATE` 또는 row lock을 추가하지 않는다. stale Notification은
+  canonical unavailable predicate로 숨겨지는 Best Effort 잔여 projection이다.
 - Notification과 Fedify Activity를 직렬 await해 첫 실패가 다음 효과 시작을 막지 않게 한다.
 
 ## Risks / Trade-offs
@@ -96,6 +110,9 @@ Post Create Workflow source와 두 Activity를 고정 등록한 singleton proces
   유지하고 ActivityPub 수신 측 idempotency에 수렴시킨다.
 - [active `add-post-reposts` change의 Best Effort 문구와 새 delta가 충돌할 수 있음] → 구현 전 해당 active
   artifact의 lifecycle 문구와 남은 task를 PROD-725 소유로 명시해 동기화한다.
+- [Notification create와 delete가 경합해 stale row가 남을 수 있음] → canonical Best Effort semantics를 유지하고
+  unavailable predicate로 모든 API surface에서 숨기며, domain transaction에 `FOR UPDATE` 또는 row lock을 추가하지
+  않는다.
 - [Post Create와 Repost Workflow를 한 Worker bundle에 추가하면 registration 회귀가 생길 수 있음] → 하나의
   compile-time registry와 package build, 실제 dev Workflow 실행으로 함께 검증한다.
 

@@ -37,9 +37,9 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Authority / Provenance: `docs/domain/objects/post.md`, `PROD-725`
 - Status: Active
 - Context / Problem: Repost는 Active create 뒤 같은 identity가 Tombstone으로 전이되므로 Post ID만 사용하는 종료 Workflow ID를 create와 delete가 공유할 수 없다.
-- Decision Outcome: Workflow ID는 committed Repost ID와 create/delete transition kind에서 파생한다. 같은 transition의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. delete input은 Tombstone UPDATE가 반환한 `repostId`, `actorProfileId`, `sourcePostId`, `createdAt`, `visibility`, `origin`과 transition kind만 serializable snapshot으로 보존한다.
+- Decision Outcome: Workflow ID는 committed Repost ID와 create/delete transition kind에서 파생한다. 같은 transition의 중복 start는 기존 execution으로 수렴하고 종료된 ID는 재사용하지 않는다. create/delete Workflow input은 `repostId`, `origin`, `transition`만 보존하며, delete Activity는 Tombstone row에 남은 actor/source/createdAt/visibility projection을 다시 읽어 효과 identity를 만든다.
 - Alternatives Considered: Repost ID 하나의 Workflow를 장기 실행하거나 종료 ID를 재사용하는 방식은 transition lifecycle과 retry 경계를 불필요하게 결합하므로 채택하지 않았다.
-- Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 create Workflow를 사용한다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
+- Consequences: Tombstone 뒤 재Repost는 새 Repost identity와 새 create Workflow를 사용한다. Tombstone Repost의 보존 projection은 author Profile state와 독립적으로 local Undo identity를 제공하므로 Profile 비활성화만으로 Undo를 no-op하지 않는다. duplicate/no-op은 누락 효과 backfill 계기가 아니다.
 - Confirmation / Follow-up: start options 단위 검증과 create→delete→재Repost integration에서 identity 분리를 확인한다.
 
 ### Notification과 federation handoff는 독립 Activity이며 queue acceptance에서 성공한다
@@ -49,10 +49,10 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 - Authority / Provenance: `docs/domain/objects/notification.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-725`
 - Status: Active
 - Context / Problem: 한 효과를 먼저 await하면 terminal failure가 다른 효과 시도를 막고, Temporal Activity가 remote delivery까지 소유하면 Fedify MessageQueue의 retry·ordering 경계와 중복된다.
-- Decision Outcome: accepted Workflow는 적용 가능한 Notification과 Fedify handoff Activity를 독립적으로 실행해 모두의 최종 결과를 수집한다. Fedify Activity 성공은 queue acceptance이고 remote retry·ordering은 Fedify가 소유한다.
-- Alternatives Considered: 직렬 effects, Temporal에서 remote HTTP 직접 delivery, custom relay는 효과 독립성 또는 기존 transport ownership을 깨므로 채택하지 않았다.
-- Consequences: queue acknowledgement가 모호하면 같은 canonical activity의 duplicate enqueue나 remote request가 가능하다. cross-system exactly-once는 보장하지 않는다.
-- Confirmation / Follow-up: 한 Activity terminal failure 뒤 다른 Activity 실행, canonical identity retry와 queue acceptance 경계를 검증한다.
+- Decision Outcome: accepted Workflow는 적용 가능한 Notification과 Fedify handoff Activity를 독립적으로 실행해 모두의 최종 결과를 수집한다. Fedify Activity 성공은 queue acceptance이고 remote retry·ordering은 Fedify가 소유한다. Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며, create/delete 경합을 직렬화하기 위한 `FOR UPDATE` 또는 row lock을 추가하지 않는다.
+- Alternatives Considered: 직렬 effects, Temporal에서 remote HTTP 직접 delivery, custom relay와 Notification create/delete의 `FOR UPDATE`·row lock 직렬화는 효과 독립성·기존 transport ownership 또는 Best Effort 성능 경계를 깨므로 채택하지 않았다.
+- Consequences: queue acknowledgement가 모호하면 같은 canonical activity의 duplicate enqueue나 remote request가 가능하다. Notification create/delete 경합에서는 stale row가 남을 수 있지만 unavailable predicate가 모든 API surface에서 숨긴다. cross-system exactly-once는 보장하지 않는다.
+- Confirmation / Follow-up: 한 Activity terminal failure 뒤 다른 Activity 실행, canonical identity retry와 queue acceptance 경계, stale Notification의 hidden unavailable 결과와 lock 없는 create/delete 경합을 검증한다.
 
 ### 하나의 Worker host에 domain별 고정 registration을 조립한다
 
@@ -96,4 +96,4 @@ process-local `postCommit` 계약은 최신 Linear authority와 충돌하므로 
 
 ## Superseded Decisions
 
-- `add-post-reposts`의 PROD-669 process-local `postCommit` 및 Notification Best Effort lifecycle은 2026-08-16 승인된 PROD-725의 effects Workflow 경계로 대체된다.
+- `add-post-reposts`의 PROD-669 process-local `postCommit` 실행 경계는 2026-08-16 승인된 PROD-725 effects Workflow 경계로 대체된다. Notification의 canonical Best Effort와 unavailable 결과 숨김 lifecycle은 유지된다.

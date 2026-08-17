@@ -41,15 +41,11 @@ test('Repost create start options는 동일 transition을 기존 execution으로
   assert.equal(REPOST_EFFECTS_WORKFLOW_TYPE, 'repostEffectsWorkflow');
 });
 
-test('Repost delete input은 최소 Tombstone snapshot을 serializable하게 보존한다', () => {
+test('Repost delete input은 transition identity와 origin만 보존한다', () => {
   const input = {
-    actorProfileId: '00000000-0000-8000-8000-000000000002',
-    createdAt: '2026-08-16T00:00:00.000Z',
     origin: 'ACTIVITYPUB' as const,
     repostId: '00000000-0000-8000-8000-000000000001',
-    sourcePostId: '00000000-0000-8000-8000-000000000003',
     transition: 'DELETE' as const,
-    visibility: 'UNLISTED' as const,
   };
 
   assert.deepEqual(repostEffectsWorkflowStartOptions(input).args, [input]);

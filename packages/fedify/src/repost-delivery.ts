@@ -86,7 +86,7 @@ const loadRepostProjection = async (
     row.repost.repostSourceId === null ||
     (row.repost.visibility !== PostVisibility.UNLISTED &&
       row.repost.visibility !== PostVisibility.FOLLOWERS) ||
-    row.authorProfileState !== ProfileState.ACTIVE ||
+    (kind === 'ANNOUNCE' && row.authorProfileState !== ProfileState.ACTIVE) ||
     row.authorInstanceId !== localInstance.id ||
     row.authorInstanceKind !== InstanceKind.LOCAL ||
     row.authorInstanceState !== InstanceState.ACTIVE ||

@@ -43,9 +43,8 @@ export async function postCreateEffectsWorkflow({
 /**
  * Run the effects of a committed Repost transition independently.
  *
- * A delete input carries the committed Tombstone snapshot. The current
- * Activity aliases use the stable Repost ID and read the canonical projection;
- * the remaining fields preserve the committed transition in Workflow history.
+ * The workflow contains only the stable Repost identity, transition, and
+ * origin. Database and federation access stays inside Activities.
  */
 export async function repostEffectsWorkflow(input: RepostEffectsInput): Promise<void> {
   const effects =

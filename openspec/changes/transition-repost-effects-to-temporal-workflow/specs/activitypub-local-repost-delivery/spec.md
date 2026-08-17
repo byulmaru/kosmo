@@ -20,6 +20,7 @@
 
 - **WHEN** delete action이 Repost를 처음 Active에서 Tombstone으로 전이하고 commit한다
 - **THEN** 시스템은 delete transition effects Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Undo를 같은 Repost ordering key로 handoff한다
+- **AND** Undo Activity는 Tombstone row에 보존된 Repost identity를 사용하며 author Profile의 non-`ACTIVE` state만으로 handoff를 no-op하지 않는다
 - **AND** GraphQL public payload는 기존 Post global ID 계약을 유지한다
 
 #### Scenario: Duplicate or concurrent Repost cancellation

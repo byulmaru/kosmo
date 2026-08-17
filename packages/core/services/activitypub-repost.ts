@@ -4,7 +4,6 @@ import { PostState } from '../enums';
 import { ValidationError } from '../error';
 import { materializeRepostInTransaction, startRepostEffectsWorkflow } from './post';
 import type { Transaction } from '../db';
-import type { RepostVisibility } from '../temporal/repost-effects';
 
 type ActivityPubRepostInput = {
   readonly activityUri: string;
@@ -141,13 +140,7 @@ export const materializeActivityPubRepost = async ({
 export type UndoActivityPubRepostResult =
   | {
       readonly outcome: 'deleted';
-      readonly repost: {
-        readonly actorProfileId: string;
-        readonly createdAt: Temporal.Instant;
-        readonly id: string;
-        readonly sourcePostId: string | null;
-        readonly visibility: RepostVisibility;
-      };
+      readonly repostId: string;
     }
   | { readonly outcome: 'ignored' }
   | null;
@@ -162,14 +155,12 @@ export const undoActivityPubRepost = async ({
   const result = await db.transaction(async (tx) => {
     const mapping = await tx
       .select({
-        createdAt: Posts.createdAt,
         currentContentId: Posts.currentContentId,
         id: Posts.id,
         profileId: Posts.profileId,
         replyParentId: Posts.replyParentId,
         repostSourceId: Posts.repostSourceId,
         state: Posts.state,
-        visibility: Posts.visibility,
       })
       .from(ActivityPubPosts)
       .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
@@ -205,34 +196,24 @@ export const undoActivityPubRepost = async ({
         ),
       )
       .returning({
-        actorProfileId: Posts.profileId,
-        createdAt: Posts.createdAt,
         id: Posts.id,
-        sourcePostId: Posts.repostSourceId,
-        visibility: Posts.visibility,
       })
       .then(first);
     if (!deleted) {
       return { outcome: 'ignored' as const };
     }
 
-    return { outcome: 'deleted' as const, repost: deleted };
+    return { outcome: 'deleted' as const, repostId: deleted.id };
   });
 
   if (result?.outcome === 'deleted') {
     // The ActivityPub Undo does not produce a new outbound Undo. The Workflow
     // still owns Notification cleanup for the committed remote transition.
-    if (result.repost.sourcePostId) {
-      await startRepostEffectsWorkflow({
-        actorProfileId: result.repost.actorProfileId,
-        createdAt: result.repost.createdAt.toString(),
-        origin: 'ACTIVITYPUB',
-        repostId: result.repost.id,
-        sourcePostId: result.repost.sourcePostId,
-        transition: 'DELETE',
-        visibility: result.repost.visibility,
-      });
-    }
+    await startRepostEffectsWorkflow({
+      origin: 'ACTIVITYPUB',
+      repostId: result.repostId,
+      transition: 'DELETE',
+    });
   }
 
   return result;

@@ -20,7 +20,7 @@
 
 - **WHEN** Local GraphQL 또는 verified ActivityPub Undo가 Active pure Repost를 Tombstone으로 처음 전이해 commit한다
 - **THEN** Core action은 delete transition effects Workflow start를 시도한다
-- **AND** delete input은 Tombstone UPDATE가 반환한 `repostId`, `actorProfileId`, `sourcePostId`, `createdAt`, `visibility`, `origin=LOCAL | ACTIVITYPUB`과 `transition=DELETE`의 최소 serializable snapshot을 보존한다
+- **AND** delete input은 `repostId`, `origin=LOCAL | ACTIVITYPUB`, `transition=DELETE`만 보존하고, delete Activity는 Tombstone row에 보존된 actor/source/createdAt/visibility projection을 다시 읽는다
 
 #### Scenario: duplicate, no-op 또는 rollback
 
@@ -52,7 +52,7 @@
 
 ### Requirement: Repost Notification lifecycle의 멱등 Activity
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-725` — accepted create Workflow는 기존 Recipient·self suppression·visibility·uniqueness 정책으로 Repost Notification을 멱등 생성해야 하며(MUST), accepted delete Workflow는 Repost ID를 source로 하는 Notification을 멱등 정리해야 한다(MUST). 두 효과는 Core transaction이나 caller에서 직접 실행해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `PROD-725` — accepted create Workflow는 기존 Recipient·self suppression·visibility·uniqueness 정책으로 Repost Notification을 멱등 생성해야 하며(MUST), accepted delete Workflow는 Repost ID를 source로 하는 Notification을 멱등 정리해야 한다(MUST). 이는 canonical Best Effort projection이며 unavailable source의 잔여 row는 모든 API surface에서 숨겨야 한다(MUST). create/delete를 직렬화하는 `FOR UPDATE` 또는 row lock을 추가하지 않아야 한다(MUST NOT). 두 효과는 Core transaction이나 caller에서 직접 실행해서는 안 된다(MUST NOT).
 
 #### Scenario: 다른 Local Profile의 Post Repost
 
@@ -71,6 +71,12 @@
 - **THEN** Notification Activity는 Repost kind와 committed Repost ID로 대응 item을 멱등 삭제한다
 - **AND** 이미 없거나 숨겨진 item의 반복 cleanup도 성공한 no-op으로 끝난다
 
+#### Scenario: Notification create/delete 경합
+
+- **WHEN** accepted create effects의 Notification projection과 delete effects의 cleanup이 서로 다른 시점에 경합한다
+- **THEN** 시스템은 canonical Best Effort semantics를 유지하고 stale Notification row가 남아도 Repost가 unavailable한 동안 모든 API surface에서 숨긴다
+- **AND** create/delete를 직렬화하기 위해 `FOR UPDATE` 또는 row lock을 사용하지 않는다
+
 ### Requirement: Local-origin Announce와 Undo queue handoff Activity
 
 **Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-725` — accepted effects Workflow는 `origin=LOCAL`인 create transition을 기존 canonical Announce identity·audience·recipient 규칙으로, delete transition을 같은 Announce를 가리키는 canonical Undo로 Fedify PostgreSQL MessageQueue producer에 handoff해야 한다(MUST). `origin=ACTIVITYPUB`인 transition은 outbound echo를 만들면 안 된다(MUST NOT). Activity 성공 경계는 queue acceptance이고, acceptance 뒤 remote retry·ordering은 Fedify가 소유해야 한다(MUST).
@@ -84,7 +90,8 @@
 #### Scenario: Local delete Undo handoff
 
 - **WHEN** Local Repost delete Workflow가 accepted된다
-- **THEN** Activity는 보존된 Repost와 Source identity로 원본 Announce를 가리키는 Undo를 같은 ordering domain에 handoff한다
+- **THEN** Activity는 Tombstone row에 보존된 Repost와 Source identity로 원본 Announce를 가리키는 Undo를 같은 ordering domain에 handoff한다
+- **AND** Author Profile이 더 이상 `ACTIVE`가 되어 있지 않다는 이유만으로 committed Undo를 no-op하지 않는다
 - **AND** Source의 현재 lifecycle 때문에 과거 Announce identity를 새로 만들거나 변경하지 않는다
 
 #### Scenario: ActivityPub origin echo suppression

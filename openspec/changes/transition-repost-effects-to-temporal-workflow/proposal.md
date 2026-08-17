@@ -11,11 +11,14 @@ commit된 뒤에만 Temporal Workflow가 후속 효과를 재시도하도록 경
   Repost 상태와 필요한 current ActivityPub mapping을 specialized Core action의 같은 transaction에 저장한다.
   transaction Activity, proposed domain ID, command receipt 또는 outbox를 추가하지 않는다.
 - 최초 실제 Repost 생성·Tombstone commit만 create/delete를 구분하는 stable transition identity와
-  `origin: LOCAL | ACTIVITYPUB`으로 Repost effects Workflow start를 시도한다. duplicate·no-op·rollback은
-  Workflow를 시작하지 않는다.
+  `origin: LOCAL | ACTIVITYPUB`으로 Repost effects Workflow start를 시도한다. Workflow input은
+  `repostId`, `origin`, `transition`만 가지며, delete Activity는 Tombstone row에 보존된 Repost projection에서
+  actor·source·createdAt·visibility identity를 다시 사용한다. duplicate·no-op·rollback은 Workflow를 시작하지
+  않는다.
 - accepted Workflow는 Repost Notification 생성·정리와 Local-origin Announce·Undo Fedify queue handoff를
   독립 Activity로 멱등 재시도한다. ActivityPub-origin transition은 Notification lifecycle만 수행하고 outbound
-  echo를 만들지 않는다.
+  echo를 만들지 않는다. Notification은 canonical Best Effort projection과 unavailable 결과 숨김을 유지하며,
+  create/delete 직렬화를 위한 `FOR UPDATE` 또는 row lock을 추가하지 않는다.
 - Fedify queue acceptance를 Activity 성공 경계로 유지한다. queue acceptance 뒤 remote retry·ordering은
   Fedify가 소유하며, acknowledgement가 모호한 handoff의 cross-system exactly-once는 보장하지 않는다.
 - Core Repost action과 pure Repost delete 경로의 database handle 및 반환형 `postCommit`, API/Fedify caller의
@@ -23,8 +26,8 @@ commit된 뒤에만 Temporal Workflow가 후속 효과를 재시도하도록 경
   GraphQL/ActivityPub 성공 결과를 유지한다.
 - Worker는 하나의 process-global host와 task queue를 유지하면서 compile-time business registration에 Repost
   Workflow·Activity를 추가한다. domain별 Workflow 계약은 Core의 분리된 Temporal module에 둔다.
-- 기존 `add-post-reposts` active change에 남은 PROD-669 `postCommit`·Best Effort 효과 계약은 PROD-725의
-  Temporal 경계로 대체됐음을 동기화한다.
+- 기존 `add-post-reposts` active change에 남은 PROD-669 process-local `postCommit` 실행 경계는 PROD-725의
+  Temporal 경계로 동기화하되, canonical Best Effort·hidden unavailable 효과 계약은 유지한다.
 
 ## Authority / Provenance
 
