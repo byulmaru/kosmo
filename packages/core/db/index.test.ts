@@ -10,7 +10,7 @@ test('uses the standard PG environment for the process database', () => {
       'tsx',
       '--input-type=module',
       '-e',
-      "const { pg } = await import('./db/index.ts'); const expected = { host: ['db.example'], port: [6543], user: 'kosmo_worker', database: 'kosmo', pass: process.env.PGPASSWORD }; for (const [key, value] of Object.entries(expected)) if (JSON.stringify(pg.options[key]) !== JSON.stringify(value)) throw new Error(key + ' option mismatch'); await pg.end({ timeout: 0 });",
+      "const { pg } = await import('./db/index.ts'); const expected = { host: ['db.example'], port: [6543], user: 'kosmo_runtime', database: 'kosmo', pass: process.env.PGPASSWORD }; for (const [key, value] of Object.entries(expected)) if (JSON.stringify(pg.options[key]) !== JSON.stringify(value)) throw new Error(key + ' option mismatch'); await pg.end({ timeout: 0 });",
     ],
     {
       cwd: process.cwd(),
@@ -21,7 +21,7 @@ test('uses the standard PG environment for the process database', () => {
         DATABASE_PASSWORD: 'legacy-password',
         PGHOST: 'db.example',
         PGPORT: '6543',
-        PGUSER: 'kosmo_worker',
+        PGUSER: 'kosmo_runtime',
         PGDATABASE: 'kosmo',
         PGPASSWORD: 'slash/at@question?hash#percent%',
       },

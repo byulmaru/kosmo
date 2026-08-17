@@ -1,10 +1,4 @@
-# workload-postgres-credential-selection Specification
-
-## Purpose
-
-API, Web, Worker와 Fedify application workload가 chart-derived `kosmo_runtime` 표준 PG\* source를 선택하고, migration·queue credential과 분리하는 계약을 정의한다. Legacy role·Secret provisioning은 후속 rollback contract까지 보존하며 workload consumer와 혼동하지 않는다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: API·Web·Worker·Fedify application DB source는 `kosmo_runtime`를 공유한다
 
@@ -21,20 +15,6 @@ API, Web, Worker와 Fedify application workload가 chart-derived `kosmo_runtime`
 - **WHEN** 기존 API/Worker DatabaseRole, Secret, ACL/default ACL 설정이 values와 rendered manifest에 남아 있는지 검사한다
 - **THEN** 해당 provisioning은 후속 rollback window까지 보존되어야 하지만 application workload의 runtime source로 해석되거나 투영되지 않아야 한다
 - **AND** migration owner와 Fedify MessageQueue 전용 source만 각자의 별도 경계를 유지해야 한다
-
-### Requirement: migration은 runtime selector와 독립된 기존 경계를 사용한다
-
-**Authority / Provenance:** `docs/operations/production-migrations.md`, `memory/database-migrations.md`, Linear `PROD-709`, `PROD-564` — 시스템은 `migration` runtime 역할을 API/Fedify selector와 별도 설정 경계로 유지해야 한다(MUST). Runtime selector는 migration credential, role transition 또는 실행 순서를 암묵적으로 바꾸어서는 안 된다(MUST NOT).
-
-#### Scenario: runtime 입력만 변경
-
-- **WHEN** API 또는 Fedify trio를 opt-in하고 migration 설정을 변경하지 않는다
-- **THEN** dev migration owner fallback과 production `kosmo_migration` login/Secret 및 `SET ROLE kosmo` 계약은 그대로 유지된다
-
-#### Scenario: migration render 불변
-
-- **WHEN** API-only, Fedify-only, 양쪽 활성화와 각 selector rollback의 dev/prod migration Job을 비교한다
-- **THEN** 각 migration document의 env, Secret ref, `DATABASE_MIGRATION_ROLE`과 role transition이 baseline과 byte-identical하다
 
 ### Requirement: Fedify consumer는 runtime application source와 queue source를 분리한다
 
@@ -67,3 +47,21 @@ API, Web, Worker와 Fedify application workload가 chart-derived `kosmo_runtime`
 - **WHEN** selector 없이 application manifest를 렌더한다
 - **THEN** API, Web, Worker와 Fedify consumer가 같은 release-derived runtime Secret의 `PGPASSWORD` ref를 가져야 한다
 - **AND** queue와 migration credential은 이 source 선택에 영향을 받지 않아야 한다
+
+## REMOVED Requirements
+
+### Requirement: 기존 runtime 연결과 rendered manifest 보존
+
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`
+
+**Reason:** owner `-app` Secret과 `DATABASE_URL`/`DATABASE_PASSWORD` byte-identity baseline은 `kosmo_runtime` 표준 PG\* source 전환 뒤 current runtime 계약이 아니다.
+
+**Migration:** migration owner 경계만 유지하고 API/Web/Worker/Fedify application workload는 runtime source를 사용한다. Legacy API/Worker role·Secret provisioning은 후속 rollback contract까지 보존한다.
+
+### Requirement: Fedify source는 현재 Web inbound Fedify에만 추가한다
+
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/architecture/core-services.md`, `PROD-780`
+
+**Reason:** 별도 `FEDIFY_DATABASE_*` application selector는 제거됐으며 Fedify consumer의 domain DB는 다른 application workload와 같은 runtime PG\* source를 사용한다.
+
+**Migration:** Fedify MessageQueue의 `FEDIFY_QUEUE_DATABASE_URL`/password와 `kosmo_fedify_queue` database/role만 별도 secondary source로 유지한다.

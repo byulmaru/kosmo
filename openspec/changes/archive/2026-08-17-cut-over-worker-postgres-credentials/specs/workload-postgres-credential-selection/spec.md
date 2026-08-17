@@ -1,3 +1,5 @@
+> **Superseded runtime source (2026-08-17, PROD-780):** 이 delta의 API/Fedify owner source와 shared-Worker target은 `unify-application-runtime-postgres-role`이 대체한다. 현재 계약은 API/Web/Temporal Worker/Fedify consumer가 같은 새 `kosmo_runtime LOGIN NOBYPASSRLS` 표준 PG\* source를 사용하며, legacy `kosmo_worker BYPASSRLS` provisioning은 PROD-782까지 유지하고 migration owner와 Fedify MessageQueue source를 분리하는 것이다. 아래 내용은 PROD-715 당시 계약과 검증 이력이다.
+
 ## MODIFIED Requirements
 
 ### Requirement: process-wide application DB는 표준 PG source를 사용한다

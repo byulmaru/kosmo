@@ -1,10 +1,4 @@
-# runtime-postgres-scram-credential-provisioning Specification
-
-## Purpose
-
-API와 Worker legacy role 및 새 `kosmo_runtime` 비소유 PostgreSQL LOGIN과 role별 Vault/VSO static SCRAM credential을 provision하고, application runtime Secret rotation restart target을 연결하는 계약을 정의한다. Legacy role·ACL·Secret provisioning은 후속 contract와 rollback window까지 유지하며 객체 ACL contract 제거와 production 운영 authorization은 별도 승인 범위다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: API·Worker legacy role와 shared runtime role을 static SCRAM credential로 provision한다
 

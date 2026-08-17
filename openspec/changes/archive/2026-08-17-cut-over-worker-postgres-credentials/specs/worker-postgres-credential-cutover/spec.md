@@ -1,3 +1,5 @@
+> **Superseded workload target (2026-08-17, PROD-780):** 이 delta의 API owner source와 shared-Worker workload target은 `unify-application-runtime-postgres-role`이 대체한다. 현재 application runtime role은 새 `kosmo_runtime LOGIN NOBYPASSRLS`이며 API/Web/Temporal Worker/Fedify consumer가 같은 표준 PG\* source를 사용한다. Legacy `kosmo_worker BYPASSRLS` role·ACL·Secret provisioning은 PROD-782까지 유지된다. 아래 내용은 PROD-715 당시 계약과 검증 이력이다.
+
 ## ADDED Requirements
 
 ### Requirement: trusted workload는 process 기본 Worker principal을 사용한다

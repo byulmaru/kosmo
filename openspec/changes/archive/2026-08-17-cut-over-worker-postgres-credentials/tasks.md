@@ -33,21 +33,21 @@ Evidence (2026-08-10): PR #564 merge `2c65b6dc`; Helm selector matrix, partial f
 
 ### Deliverable
 
-Web과 Temporal Worker workload의 process 기본 DB가 values selector 없이 chart-derived 표준 PG env Worker source를 사용하고, Git revert로 승인된 owner source에 rollback한다. 유효한 release image가 있으면 두 workload는 항상 함께 render되며 별도 activation gate는 없다.
+API, Web, Temporal Worker와 Fedify consumer의 process 기본 DB가 values selector 없이 chart-derived 표준 PG env Worker source를 사용하고, Git revert로 pre-PROD-780 source에 rollback한다. 유효한 release image가 있으면 Worker workload는 항상 함께 render되며 별도 activation gate는 없다.
 
 ### Guardrails
 
 - 완료된 PROD-369 role/Secret과 PROD-724 application CRUD ACL을 그대로 소비한다.
 - 별도 `WORKER_DATABASE_*` application pool/handle, request-owned client 또는 Fedify DB context를 만들지 않는다.
 - application SQL과 전역 `db` handle 구조는 변경하지 않는다. process 기본 DB만 표준 `PG*`로 통일하고 GraphQL은 API process source를 공유하며 queue secondary connection과 production migration role 경계는 유지한다.
-- API Rollout에 Worker Secret/env를 주입하지 않는다.
+- API/Web/Worker/Fedify consumer는 같은 Worker Secret/env를 사용하고 migration/queue source는 이를 재사용하지 않는다.
 - 인증 실패 중 owner connection으로 자동 fallback하지 않는다.
 
 ### Verification
 
-- default와 legacy API selector/trio 제거, PROD-715 적용 전후와 Git revert render를 비교한다.
-- API GraphQL/Fedify consumer/dev migration owner `PG*`와 Web/Worker Worker `PG*` env가 각각의 고정 source를 사용하고 queue secondary documents가 정합한지 확인한다.
-- process-wide workload에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*`, `FEDIFY_DATABASE_*`, `hasComplete...` 또는 충돌하는 `PG*` key가 없고 API에 Worker Secret ref가 없는지 확인한다.
+- default와 legacy API selector/trio 제거, PROD-780 적용 전후와 Git revert render를 비교한다.
+- API/Web/Worker/Fedify consumer의 shared Worker `PG*` env, migration owner source와 queue secondary documents가 각각의 경계를 유지하는지 확인한다.
+- process-wide workload에 `DATABASE_URL`/`DATABASE_PASSWORD`, `WORKER_DATABASE_*`, `FEDIFY_DATABASE_*`, `hasComplete...` 또는 충돌하는 `PG*` key가 없고 네 application consumer가 같은 Worker Secret ref를 사용하는지 확인한다.
 - Worker credential values가 없고 표준 `PG*` env/Secret ref가 PROD-369 release naming에서 함께 생성되는지 확인한다.
 - 유효한 release image의 render에서 Worker ServiceAccount/Deployment·direct source·Worker restart target이 항상 존재하고, legacy activation values가 Worker resource와 source를 숨기지 않는지 확인한다.
 
@@ -85,13 +85,12 @@ merge된 exact revision의 비운영 환경에서 Web의 실제 Worker principal
 
 ### Verification
 
-- exact deployed revision, Argo/rollout readiness와 Web `current_user = 'kosmo_worker'`, `rolbypassrls = true`, 대표 CRUD를 확인한다.
-- enabled Worker Deployment의 기본 Secret/URL source, API Worker Secret 부재와 `kosmo_fedify_queue` 분리를 확인한다.
-- Git revert manifest가 Web 기본 DB와 enabled Worker resource/source를 pre-PROD-715 상태로 되돌리고 API/migration/queue를 유지하는지 재확인한다.
+- exact deployed revision, Argo/rollout readiness와 application workload의 `current_user = 'kosmo_worker'`, `rolbypassrls = false`, 대표 CRUD를 확인한다.
+- API/Web/Worker/Fedify consumer의 shared Worker Secret source와 `kosmo_fedify_queue`·migration 분리를 확인한다.
+- Git revert manifest가 application workload source를 pre-PROD-780 상태로 되돌리고 migration/queue를 유지하는지 재확인한다.
 
-- [ ] 3.1 Ready PR merge 뒤 비운영 exact revision과 workload readiness를 확인한다.
-- [ ] 3.2 Web live principal·대표 SQL과 Worker manifest/API·queue 음성 경계를 검증한다.
-- [ ] 3.3 이번 delta가 제거하는 기존 API/Fedify/Worker selector와 process-wide URL fallback 요구사항을 Active specs에 동기화하고 change를 archive한 뒤 전체 OpenSpec strict validation을 통과한다.
+- PROD-715의 runtime principal·source 검증과 Active spec sync/archive 책임은 PROD-780 `unify-application-runtime-postgres-role`로 이동했다.
+- PROD-780은 shared principal·대표 SQL, application manifest와 migration/queue 분리 evidence를 수집하고 해당 runtime delta를 sync/archive한다.
 - [ ] 3.4 완료 evidence를 Linear에 남기고 PROD-715 상태를 갱신한다.
 
 ## 4. Production 운영 절차
