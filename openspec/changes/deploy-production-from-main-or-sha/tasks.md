@@ -138,7 +138,7 @@ Repository 변경이 리뷰 가능한 PR로 전달되고, 승인된 순서로 ma
 - 최종 Linear 완료 기록, old/new change archive와 active spec strict validation을 확인한다.
 
 - [ ] 5.1 Current main/production/live production source·digest와 migration 상태를 대조하고 cutover diff·선행 수렴 작업을 기록한다.
-- [ ] 5.2 Repository 변경을 commit·push하고 한국어 PR에 automatic/manual 경로, 보안 경계, 검증과 외부 live gate를 기록해 Ready for review로 전환한다.
+- [x] 5.2 Repository 변경을 commit·push하고 한국어 PR에 automatic/manual 경로, 보안 경계, 검증과 외부 live gate를 기록해 Ready for review로 전환한다.
 - [ ] 5.3 Repository PR merge와 필요한 ECR/Vault/GitHub 설정 apply 뒤 첫 main candidate를 Environment 승인·배포하고 SHA·digest·migration·workload·smoke 결과를 기록한다.
 - [ ] 5.4 승인된 시점에 manual full-SHA release 경로를 검증하고 승인 전 target code/secret 부재와 승인 후 same-SHA/digest 결과를 기록한다.
 - [ ] 5.5 모든 production branch 참조 제거와 rollback 경로를 확인한 뒤 별도 운영 승인으로 production ruleset/branch를 폐기하고 결과를 기록한다.
