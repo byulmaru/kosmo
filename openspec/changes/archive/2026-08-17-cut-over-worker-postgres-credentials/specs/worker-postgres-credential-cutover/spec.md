@@ -1,3 +1,5 @@
+> **Superseded role attribute (2026-08-16, PROD-780):** 이 delta의 `kosmo_worker BYPASSRLS`와 API owner source 보존 요구는 `unify-application-runtime-postgres-role`이 대체한다. 현재 retained application runtime role은 `kosmo_worker LOGIN NOBYPASSRLS`이며 API/Web/Temporal Worker/Fedify consumer가 같은 표준 PG\* source를 사용한다. 아래 내용은 PROD-715 당시 계약과 검증 이력이다.
+
 ## ADDED Requirements
 
 ### Requirement: trusted workload는 process 기본 Worker principal을 사용한다

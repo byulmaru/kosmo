@@ -95,7 +95,7 @@ spec:
   createdb: false
   createrole: false
   replication: false
-  bypassrls: true
+  bypassrls: false
   inRoles: []
   passwordSecret:
     name: {{ include "kosmo.workerDatabasePasswordSecretName" . }}

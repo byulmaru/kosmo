@@ -1,20 +1,22 @@
+> **Superseded runtime classification (2026-08-16, PROD-780):** 이 delta의 GraphQL-only RLS principal 및 `kosmo_worker BYPASSRLS` 설명은 `unify-application-runtime-postgres-role`이 대체한다. 두 역할의 기존 ACL/default ACL과 non-owner/금지권한 계약은 PROD-781까지 유지되지만, current application workload는 `kosmo_worker LOGIN NOBYPASSRLS` 하나를 사용한다. 아래 내용은 PROD-724 당시 ACL 계약과 검증 이력이다.
+
 ## ADDED Requirements
 
 ### Requirement: 두 runtime principal은 application schema를 사용할 수 있다
 
-**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-369. 시스템은 `kosmo_api`와 `kosmo_worker`에 `kosmo` database의 `public` schema `USAGE`를 부여해야 한다(MUST). `kosmo_api`는 GraphQL Query/Mutation principal이고 `kosmo_worker`는 비GraphQL trusted workload principal이어야 하며(MUST), 이 object ACL 계약은 두 principal의 RLS 속성을 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-369, PROD-780, PROD-781. 시스템은 rollback window 동안 legacy `kosmo_api`와 shared application runtime `kosmo_worker` 모두에게 `kosmo` database의 `public` schema `USAGE`를 유지해야 한다(MUST). Current application workload는 `kosmo_worker LOGIN NOBYPASSRLS` 하나를 사용하며(MUST), 이 object ACL 계약은 role attribute나 workload credential source를 변경해서는 안 된다(MUST NOT).
 
-#### Scenario: GraphQL principal이 application schema를 사용한다
+#### Scenario: legacy API principal ACL을 rollback window 동안 유지한다
 
 - **WHEN** `kosmo_api`가 `public` application table을 이름으로 참조한다
 - **THEN** schema `USAGE` 부족으로 접근이 거부되지 않아야 한다
-- **AND** Post/PostContent의 행 접근은 별도 GraphQL RLS policy가 결정해야 한다
+- **AND** 이 ACL의 제거는 PROD-781 contract 전에는 수행하지 않아야 한다
 
-#### Scenario: Worker principal은 RLS 정책 없이 application schema를 사용한다
+#### Scenario: shared application principal이 application schema를 사용한다
 
 - **WHEN** `kosmo_worker`가 `public` application table을 이름으로 참조한다
 - **THEN** schema `USAGE` 부족으로 접근이 거부되지 않아야 한다
-- **AND** 역할의 기존 `BYPASSRLS` 속성이 유지되어야 한다
+- **AND** 역할의 `NOBYPASSRLS` 속성이 유지되어야 한다
 
 ### Requirement: 현재 application table 전체에 공통 CRUD DML을 부여한다
 
@@ -25,17 +27,17 @@
 - **WHEN** migration이 현재 schema에 적용된다
 - **THEN** 두 runtime 역할은 모든 `public` application table에 `SELECT`, `INSERT`, `UPDATE`, `DELETE`를 가져야 한다
 
-#### Scenario: RLS는 GraphQL 행 범위만 제한한다
-
-- **WHEN** `kosmo_api`가 RLS가 활성화된 application table에서 DML을 실행한다
-- **THEN** object ACL은 DML 실행 자격을 제공해야 한다
-- **AND** 실제 행 허용 여부는 GraphQL RLS policy가 결정해야 한다
-
-#### Scenario: 비GraphQL Worker는 같은 object ACL을 소비한다
+#### Scenario: shared runtime은 기존 object ACL을 소비한다
 
 - **WHEN** `kosmo_worker`가 application table에서 DML을 실행한다
+- **THEN** object ACL은 DML 실행 자격을 제공해야 한다
+- **AND** application visibility와 owner policy는 application 계층이 결정해야 한다
+
+#### Scenario: legacy ACL은 shared runtime ACL과 동일하게 유지된다
+
+- **WHEN** rollback window 동안 `kosmo_api`와 `kosmo_worker`의 table ACL을 비교한다
 - **THEN** `kosmo_api`와 같은 table-level CRUD DML 집합을 사용해야 한다
-- **AND** 별도의 Worker RLS policy가 필요해서는 안 된다
+- **AND** ACL/default ACL removal은 PROD-781 전에는 수행하지 않아야 한다
 
 ### Requirement: owner가 만드는 future table에 공통 default ACL을 적용한다
 

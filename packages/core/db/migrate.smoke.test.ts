@@ -209,10 +209,10 @@ async function assertRuntimeAcl(sql: ReturnType<typeof postgres>) {
         createdb: false,
         createrole: false,
         replication: false,
-        bypassRls: true,
+        bypassRls: false,
       },
     ],
-    'Disposable runtime role attributes must match the PROD-369 contract.',
+    'Disposable runtime role attributes must match the PROD-780 contract.',
   );
 
   const memberships = Array.from(

@@ -9,7 +9,7 @@
 - Decision Date: 2026-08-11
 - Decision Class: Derived Contract
 - Authority / Provenance: PROD-724, PROD-713, PROD-369
-- Status: Active
+- Status: Superseded by PROD-780 on 2026-08-16
 - Context / Problem: 역할 이름과 workload 배포 단위를 기준으로 RLS 대상을 넓히면 원래 목표인 GraphQL 행 권한 전환이 Worker/Fedify/Temporal 경로까지 확장된다.
 - Decision Outcome: RLS는 GraphQL Query/Mutation의 `kosmo_api`에만 적용한다. `kosmo_worker`는 비GraphQL trusted workload의 `BYPASSRLS` 역할이고, 두 역할은 PROD-724의 공통 object ACL을 소비한다.
 - Alternatives Considered: Worker에도 RLS policy를 추가하는 방식, API 배포 단위 전체를 RLS principal로 보는 방식은 현재 Linear 계약과 맞지 않아 제외한다.
@@ -82,5 +82,6 @@
 
 ## Superseded Decisions
 
-- API/Fedify 또는 역할별 최소 table·sequence·function grant를 하나의 공통 matrix로 설계하던 과거 방향은 2026-08-11 PROD-724·713·368 정렬로 대체되었다. 현재 계약은 GraphQL-only RLS, 비GraphQL `kosmo_worker` `BYPASSRLS`, 두 역할의 동일한 broad application CRUD DML ACL이다.
+- API/Fedify 또는 역할별 최소 table·sequence·function grant를 하나의 공통 matrix로 설계하던 과거 방향은 2026-08-11 PROD-724·713·368 정렬로 대체되었다. 당시 계약은 GraphQL-only RLS, 비GraphQL `kosmo_worker` `BYPASSRLS`, 두 역할의 동일한 broad application CRUD DML ACL이었으며 runtime 분류는 이후 PROD-780이 다시 대체했다.
 - 취소된 PROD-710의 명시적 Worker/Fedify DB handle을 PROD-724의 권한 설계 선행 조건으로 보던 방향은 대체되었다. PROD-724는 callsite handle이나 principal cutover를 소유하지 않는다.
+- GraphQL-only `kosmo_api` runtime과 비GraphQL `kosmo_worker BYPASSRLS` 분류는 2026-08-16 PROD-780의 shared `kosmo_worker LOGIN NOBYPASSRLS` application runtime 계약으로 대체되었다. 기존 two-role object ACL/default ACL과 금지권한은 PROD-781 contract까지 rollback-compatible하게 유지되며, legacy role·ACL·Secret 제거는 PROD-781이 소유한다.

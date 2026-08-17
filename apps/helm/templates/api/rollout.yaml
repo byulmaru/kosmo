@@ -58,14 +58,14 @@ spec:
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
+                  name: {{ include "kosmo.workerDatabasePasswordSecretName" . | quote }}
                   key: password
             - name: PGHOST
               value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
             - name: PGPORT
               value: "5432"
             - name: PGUSER
-              value: kosmo
+              value: kosmo_worker
             - name: PGDATABASE
               value: kosmo
             - name: FEDIFY_QUEUE_DATABASE_PASSWORD
