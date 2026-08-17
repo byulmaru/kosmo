@@ -1,0 +1,112 @@
+# Icon
+
+KOSMO 제품 UI에서 같은 의미에 같은 glyph를 사용하기 위한 아이콘 정본이다. 크기·stroke·interactive target의 기본값은 [foundations.md](./foundations.md), 접근성 이름과 상태는 [accessibility.md](./accessibility.md)를 따른다.
+
+## Source of truth
+
+- 제품 UI의 기본 아이콘 세트는 `lucide-react-native`다. `apps/app/package.json`은 `^1.23.0`, lockfile은 `1.23.0`을 고정한다.
+- Lucide 이름이 glyph identity다. `X`와 `XIcon`, `Search`와 local alias `SearchIcon`처럼 같은 Lucide glyph의 export alias는 별도 아이콘으로 보지 않는다.
+- 신규 또는 수정하는 interactive control에 `×`, `‹`, `›`, `↻`, `…` 같은 문자 glyph를 새로 사용하지 않는다. 아직 production에 남아 있는 항목은 Current inventory와 Confirmed migration에서 추적하며 새 소비처로 복사하지 않는다.
+- 기본 viewBox `24×24`, stroke `2`, visual size token과 platform target의 분리는 Foundation 계약을 따른다. scale 밖 optical correction은 이 문서에 근거를 추가한 뒤 사용한다.
+- Shell의 글쓰기 glyph는 Lucide 원본 `SquarePen`을 수정하지 않고 사용한다. path를 수정하면 더 이상 Lucide glyph로 보지 않으며 `Icon/Custom/*`로 분리해 출처·라이선스·optical size와 Design owner 승인을 새로 기록한다.
+- 새 semantic role, 기존 role의 glyph 변경, custom icon 예외, visual size·stroke의 optical correction, active·filled variant를 결정하면 코드·Figma 변경과 같은 변경 단위에서 이 문서를 갱신한다. 최소한 의미, glyph·code export, source·version, visual size·stroke, control·상태, 소비처와 이관·검증 상태를 기록하며 문서 갱신 전에는 해당 이관을 완료로 보지 않는다.
+- 구현 전 확정한 결정은 Confirmed migration에, 현재 production 구현은 Current inventory에, 아직 Design owner 판단이 필요한 항목은 Review queue에 둔다. 코드·Figma 이관과 검증이 끝나면 Current inventory를 갱신하고 해당 migration을 제거한다.
+- 전체 redesign 중에는 semantic role과 glyph identity만 먼저 확정할 수 있다. size·stroke·container와 optical correction은 실제 component geometry, Light/Dark와 platform target을 함께 볼 수 있는 후속 redesign 범위로 남기며 semantic mapping 확정을 막지 않는다.
+- 아이콘 color는 semantic theme color를 사용한다. Fullscreen media의 고정 black/white는 Foundation의 제품 예외다.
+
+Figma에 반영할 때는 사용 중인 glyph만 `Icon/Lucide/<Lucide name>` component로 추가한다. Component description에 Lucide 버전, code export, semantic role, visual size·stroke를 기록한다. 새 semantic role이나 glyph가 생기면 코드 변경에서 아래 inventory를 갱신하고 Figma library sync 대상에도 추가한다.
+
+Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfile이 원본 버전을, Figma component가 승인된 visual copy를, 이 문서가 semantic mapping을 보존한다. Lucide 버전을 올릴 때는 변경된 path를 Figma와 함께 시각 검토한다.
+
+이 문서의 inventory만으로 Figma 반영 완료를 뜻하지 않는다. Figma sync는 component node와 description을 readback한 별도 evidence로 확인한다.
+
+## Confirmed control mappings
+
+| 의미                       | Lucide glyph / code export          | visual                                            | control·상태                                                        | 현재 소비처                                                                |
+| -------------------------- | ----------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 새 글 작성                 | `SquarePen` / `SquarePen`           | 전체 redesign 후속                                | Lucide 원본 path 유지; accessible name `글쓰기`                     | `BottomTabBar`, `SidebarNavigation`; 코드·Figma 이관 대기                  |
+| 재게시 attribution         | `Repeat2` / `Repeat2`               | 전체 redesign 후속                                | 장식 아이콘; 인접한 attribution 문장이 의미를 제공                  | `PostListItem`; 코드·Figma 이관 대기                                       |
+| 반응한 프로필 더보기       | `MoreHorizontal` / `MoreHorizontal` | 전체 redesign 후속                                | `IconButton`; Web `32`, Native `44` target과 accessible name 유지   | `ReactionSummary`; 코드·Figma 이관 대기                                    |
+| 화면·경로 뒤로             | `ArrowLeft` / `ArrowLeft`           | 전체 redesign 후속                                | `44×44` target; route·navigation history를 되돌리는 action에만 사용 | Search, Profile Edit; Post detail·Settings·`UniversalShell` 이관 대기      |
+| modal·viewer 닫기          | `X` / `XIcon`                       | Viewer `24`, 기본 close `20`, stroke `2`          | `IconButton`; surface별 accessible name과 focus restore 유지        | `PostMediaViewer`, `ReplyComposerSurface`, `FeedbackOverlay`, `ModalSheet` |
+| 항목·미디어 제거           | `X` / `XIcon`                       | Profile Tag `18`, Composer media `18`, stroke `2` | 제거 대상을 포함한 accessible name; disabled 상태 유지              | `ProfileTagChip`, `PostComposerMediaControls`                              |
+| 입력 지우기·최근 검색 삭제 | `X` / `X`                           | `18` / `16`, stroke `2`                           | `IconButton`; 입력 focus 유지                                       | Search route                                                               |
+| Viewer 이전 이미지         | `ChevronLeft` / `ChevronLeftIcon`   | `24`, stroke `2`, fixed white                     | `48×48` `IconButton`; 첫 이미지에서 disabled·opacity `0.3`          | `PostMediaViewer`                                                          |
+| Viewer 다음 이미지         | `ChevronRight` / `ChevronRightIcon` | `24`, stroke `2`, fixed white                     | `48×48` `IconButton`; 마지막 이미지에서 disabled·opacity `0.3`      | `PostMediaViewer`                                                          |
+
+`ArrowLeft`는 화면·경로와 navigation history를 되돌리고, `ChevronLeft`·`ChevronRight`는 carousel·단계처럼 같은 surface 안의 순서를 이동하거나 목록의 destination을 나타낸다. route back에 chevron을 사용하지 않는다.
+
+## Current Lucide inventory
+
+| 영역             | semantic role    | Lucide glyph                   | 주요 production 소비처                                                                  |
+| ---------------- | ---------------- | ------------------------------ | --------------------------------------------------------------------------------------- |
+| Shell            | 홈               | `House`                        | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 검색             | `Search`                       | `BottomTabBar`, `SidebarNavigation`, Search input                                       |
+| Shell            | 글쓰기           | `PenLine`                      | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 알림             | `Bell`                         | `BottomTabBar`, `SidebarNavigation`                                                     |
+| Shell            | 프로필           | `UserRound`                    | `SidebarNavigation`                                                                     |
+| Shell            | 팔로우 요청      | `UserRoundPlus`                | Home, `SidebarNavigation`                                                               |
+| Shell            | 북마크           | `Bookmark`                     | `SidebarNavigation`, `PostActionBar`                                                    |
+| Shell            | 설정             | `Settings`                     | `SidebarNavigation`                                                                     |
+| Shell            | 피드백           | `Mail`                         | `SidebarNavigation`                                                                     |
+| Shell            | 메뉴·drawer 열기 | `Menu`                         | Search route, `UniversalShell`                                                          |
+| Shell            | 로그아웃         | `LogOut`                       | `LogoutControl`                                                                         |
+| Profile switcher | 펼치기·접기      | `ChevronDown`, `ChevronUp`     | `ProfileSwitcher`                                                                       |
+| Profile switcher | 프로필 추가      | `Plus`                         | `ProfileSwitcher`                                                                       |
+| Profile switcher | 선택됨           | `Check`                        | `ProfileSwitcher`                                                                       |
+| Navigation       | 뒤로             | `ArrowLeft` 또는 `ChevronLeft` | Search, Profile Edit, Post detail, Settings, `UniversalShell`; Confirmed migration 참고 |
+| Navigation       | 다음 destination | `ChevronRight`                 | Settings rows                                                                           |
+| Post action      | 답글             | `MessageCircle`                | `PostActionBar`, list metadata, reply notification                                      |
+| Post action      | 재게시           | `Repeat2`                      | `RepostAction`, repost notification                                                     |
+| Post action      | 반응             | `Heart`                        | `PostActionBar`                                                                         |
+| Post action      | 더보기           | `MoreHorizontal`               | `PostActionBar`, deletion menu trigger                                                  |
+| Post action      | 삭제             | `Trash2`                       | `PostDeletionAction`                                                                    |
+| Post action      | 링크 복사        | `Link2`                        | `PostMoreMenu`                                                                          |
+| Media            | 이미지 추가      | `ImagePlus`                    | `PostComposerMediaControls`                                                             |
+| Media            | 업로드 다시 시도 | `RefreshCw`                    | `PostComposerMediaControls`                                                             |
+| Profile          | 이미지 편집      | `Camera`                       | `ProfileEditImageFields`                                                                |
+| Visibility       | 공개             | `Globe`                        | `postVisibilityPresentation`                                                            |
+| Visibility       | 조용한 공개      | `Moon`                         | `postVisibilityPresentation`                                                            |
+| Visibility       | 팔로워만         | `Lock`                         | `postVisibilityPresentation`                                                            |
+| Visibility       | 언급한 계정만    | `AtSign`                       | `postVisibilityPresentation`                                                            |
+| Search           | 최근 검색        | `History`                      | Search route                                                                            |
+| Notification     | 팔로우           | `UserPlus`                     | `NotificationListItem`                                                                  |
+| Notification     | 반응             | `Smile`                        | `NotificationListItem`                                                                  |
+
+## Confirmed migration
+
+아래 항목은 Design owner가 mapping을 확정했지만 코드·Figma 이관과 실제 화면 검증은 아직 끝나지 않았다. 완료 전까지 Current inventory에는 production 구현을 그대로 기록한다.
+
+| 현재 구현                              | 승인 정본                                                      | 대상                                    | 남은 검증                                   |
+| -------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | ------------------------------------------- |
+| `PenLine`; compact sidebar radius full | Lucide 원본 `SquarePen`; size·stroke·container는 redesign 후속 | `BottomTabBar`, `SidebarNavigation`     | 전체 redesign optical 결정, 코드·Figma 이관 |
+| 문자 `↻`                               | `Repeat2`; size·stroke는 redesign 후속                         | `PostListItem`                          | 전체 redesign optical 결정, 코드·Figma 이관 |
+| 문자 `…`                               | `MoreHorizontal`; size·stroke는 redesign 후속                  | `ReactionSummary`                       | 전체 redesign optical 결정, 코드·Figma 이관 |
+| route back의 `ChevronLeft`             | `ArrowLeft`; size·stroke는 redesign 후속                       | Post detail, Settings, `UniversalShell` | 전체 redesign optical 결정, 코드·Figma 이관 |
+
+## Review queue
+
+아래 optical 항목은 전체 redesign의 후속 범위이며 자동 치환하지 않는다. semantic mapping을 다시 열지 않고 실제 화면의 component geometry, Light/Dark와 platform target을 함께 비교해 확정한다.
+
+| 현재 표현                           | 역할·소비처                                       | 검토할 후보                            | 상태                                            |
+| ----------------------------------- | ------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| `SquarePen` size·container 미확정   | Shell 글쓰기, `BottomTabBar`, `SidebarNavigation` | redesign의 canonical size·radius scale | glyph 확정; component geometry와 함께 검토 대기 |
+| `Repeat2` size·stroke 미확정        | 재게시 attribution, `PostListItem`                | redesign의 canonical icon scale        | glyph 확정; 실제 attribution row에서 검토 대기  |
+| `MoreHorizontal` size·stroke 미확정 | 반응한 프로필 더보기, `ReactionSummary`           | redesign의 canonical icon scale        | glyph 확정; 실제 summary control에서 검토 대기  |
+| scale 밖 size `22`                  | Profile Edit back `ArrowLeft`                     | redesign의 canonical icon scale        | glyph 확정; header geometry와 함께 검토 대기    |
+| scale 밖 size `22`                  | Profile image edit `Camera`                       | redesign의 canonical icon scale        | glyph 확정; image action geometry와 검토 대기   |
+| stroke `3.5`; repost `2.7`          | `PostActionControl`, `RepostAction`               | 기본 stroke 또는 optical 예외          | action bar 전체 redesign에서 검토 대기          |
+| scale 밖 stroke `2.25`              | Profile switcher add `Plus`                       | 기본 stroke 또는 optical 예외          | switcher 전체 redesign에서 검토 대기            |
+
+## Out of icon-set scope
+
+- Reaction emoji는 사용자가 선택하는 product data이며 Lucide로 치환하지 않는다.
+- `ReactionPendingSpinner`의 custom SVG는 loading feedback 전용이다. reduced-motion의 `···`도 control icon이 아니라 상태 대체 표현이다.
+- Logo, app icon, favicon, default avatar와 OG image는 [logo.md](./logo.md)의 brand asset이다.
+- `ActivityIndicator`와 Storybook placeholder SVG는 제품 아이콘 inventory에 포함하지 않는다.
+
+## Verification surface
+
+- 이 문서는 semantic mapping과 Figma handoff의 정본이다.
+- 기존 Storybook story는 실제 화면의 size, state, focus, keyboard, theme를 확인한다. 별도 icon catalog story는 전체 inventory를 시각 비교할 필요가 생길 때 추가한다.
+- 아이콘 교체 시 해당 component test 또는 기존 story에서 glyph identity와 기존 target·accessible name·disabled/focus 계약을 함께 검증한다.

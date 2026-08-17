@@ -1,7 +1,8 @@
+import { XIcon } from 'lucide-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 import { ICON_BUTTON_TARGET_SIZE, IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { iconSizes, radii, spacing, typography } from '@/theme/tokens';
 
 export const PROFILE_TAG_CHIP_VISUAL_SIZE = 32;
 
@@ -67,7 +68,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
         testID="profile-tag-remove-button"
         visualSize={PROFILE_TAG_CHIP_VISUAL_SIZE}
       >
-        <Text style={[styles.removeLabel, { color: theme.textSecondary }]}>×</Text>
+        <XIcon color={theme.textSecondary} size={iconSizes[18]} strokeWidth={2} />
       </IconButton>
     </View>
   );
@@ -97,10 +98,6 @@ const styles = StyleSheet.create({
   removeTarget: {
     position: 'absolute',
     right: 0,
-  },
-  removeLabel: {
-    fontFamily: 'SUIT',
-    ...typography.lg,
   },
   text: {
     flexShrink: 1,

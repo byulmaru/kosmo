@@ -71,6 +71,7 @@ Fullscreen media와 제품 고유 shadow는 일괄 치환하지 않고 아래 In
 - 기본 stroke는 `2`다. 32px 이상 outline icon이 과도하게 두꺼워 보일 때만 Design·Code owner 승인으로 `1.5`를 허용한다.
 - visual size와 interactive target은 별도다. target은 Web 32px, iOS 44pt, Android 48dp를 확보한다.
 - scale 밖 size·stroke는 optical correction에만 허용하며 component, 이유, platform, canonical target과 evidence를 description 또는 Inventory에 기록한다.
+- glyph identity, semantic mapping과 Figma handoff는 [icons.md](./icons.md)를 따른다.
 
 ## UI 일관성 Inventory
 

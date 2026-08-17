@@ -62,7 +62,12 @@ mock.module('react-relay', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module(require.resolve('lucide-react-native'), {
-  exports: { MessageCircle: 'MessageCircle' },
+  exports: {
+    ChevronLeftIcon: 'ChevronLeftIcon',
+    ChevronRightIcon: 'ChevronRightIcon',
+    MessageCircle: 'MessageCircle',
+    XIcon: 'XIcon',
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/RouteBoundary', {
@@ -108,6 +113,7 @@ mock.module('@/theme/ThemeProvider', {
 mock.module('@/theme/tokens', {
   exports: {
     breakpoints: { compact: 768 },
+    iconSizes: { 24: 24 },
     radii: { full: 999, lg: 16, md: 12, sm: 8 },
     spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },
     typography: {

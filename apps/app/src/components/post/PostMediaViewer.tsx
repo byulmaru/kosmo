@@ -1,3 +1,4 @@
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
 import {
   createContext,
   useCallback,
@@ -24,7 +25,7 @@ import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
-import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
+import { breakpoints, iconSizes, radii, spacing, typography } from '@/theme/tokens';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import type { ReactNode, RefObject } from 'react';
 import type { LayoutChangeEvent, View as NativeView } from 'react-native';
@@ -245,9 +246,7 @@ export function PostMediaViewer({
               testID="post-media-viewer-close"
               visualSize={48}
             >
-              <Text aria-hidden style={styles.closeIcon}>
-                ×
-              </Text>
+              <XIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2} />
             </IconButton>
             {position && position.total > 1 ? (
               <Text aria-hidden style={styles.counter} testID="post-media-viewer-counter">
@@ -654,6 +653,7 @@ function NavigationButton({
   onPress: () => void;
 }) {
   const label = direction === 'previous' ? '이전 이미지' : '다음 이미지';
+  const NavigationIcon = direction === 'previous' ? ChevronLeftIcon : ChevronRightIcon;
   return (
     <IconButton
       accessibilityLabel={label}
@@ -668,9 +668,7 @@ function NavigationButton({
       targetSize={48}
       visualSize={48}
     >
-      <Text aria-hidden style={styles.navigationIcon}>
-        {direction === 'previous' ? '‹' : '›'}
-      </Text>
+      <NavigationIcon color="#ffffff" size={iconSizes[24]} strokeWidth={2} />
     </IconButton>
   );
 }
@@ -732,7 +730,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 48,
   },
-  closeIcon: { color: '#ffffff', fontFamily: 'SUIT', fontSize: 32, lineHeight: 34 },
   counter: { color: '#ffffff', fontFamily: 'SUIT', fontWeight: '700', ...typography.sm },
   layout: { flex: 1, minHeight: 0, minWidth: 0 },
   mobileLayout: { flexDirection: 'column' },
@@ -774,7 +771,6 @@ const styles = StyleSheet.create({
   },
   previousButton: { left: spacing.sm },
   nextButton: { right: spacing.sm },
-  navigationIcon: { color: '#ffffff', fontFamily: 'SUIT', fontSize: 36, lineHeight: 38 },
   screenReaderOnly: { height: 1, opacity: 0, position: 'absolute', width: 1 },
   detailPanel: {
     flexShrink: 1,
