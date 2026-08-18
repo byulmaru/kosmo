@@ -17,7 +17,7 @@
 
 - Canonical: 없음. 이 변경은 제품 도메인·디자인이 아니라 repository와 운영 release 계약을 변경하며, 운영 절차는 `docs/operations/production-release.md`, `docs/operations/production-migrations.md`, `docs/operations/openpanel.md`, `docs/operations/sentry.md`가 설명한다.
 - Linear Contract: `PROD-783`
-- Linear Implementations: `PROD-783`
+- Linear Implementations: `PROD-783`, `PROD-790`
 
 ## Capabilities
 
@@ -32,6 +32,7 @@
 ## Impact
 
 - `.github/workflows/docker-build.yml`, `.github/workflows/deploy-dev.yml`과 production release workflow: trigger, 환경별 build, artifact·digest 전달, Environment 승인, manual SHA preflight와 concurrency
+- `apps/helm/templates/postgres-runtime-roles.yaml`: CNPG가 생략하는 runtime DatabaseRole의 false/empty 기본값과 Argo CD sync 정합성
 - `apps/terraform/argocd.tf`, `apps/terraform/ecr.tf`: production bootstrap source, release overlay ownership, OIDC ref trust와 image lifecycle metadata
 - 외부 Vault GitHub Actions role과 GitHub `prod` Environment: exact `environment:prod` identity, required reviewer와 deployment policy
 - `docs/operations/production-release.md`, `docs/operations/production-migrations.md`, `docs/operations/openpanel.md`, `docs/operations/sentry.md`, `apps/terraform/README.md`

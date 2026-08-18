@@ -118,12 +118,6 @@ spec:
   name: kosmo_runtime
   login: true
   inherit: true
-  superuser: false
-  createdb: false
-  createrole: false
-  replication: false
-  bypassrls: false
-  inRoles: []
   passwordSecret:
     name: {{ include "kosmo.runtimeDatabasePasswordSecretName" . }}
   databaseRoleReclaimPolicy: retain
