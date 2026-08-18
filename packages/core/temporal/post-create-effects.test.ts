@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  KOSMO_TASK_QUEUE,
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowId,
   postCreateEffectsWorkflowStartOptions,
 } from './post-create-effects';
+import { KOSMO_TASK_QUEUE } from './task-queue';
 
 test('Post Create effects Workflow keeps its existing stable external contract', () => {
   const input = {

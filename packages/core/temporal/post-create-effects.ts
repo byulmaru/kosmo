@@ -1,7 +1,5 @@
 import { KOSMO_TASK_QUEUE } from './task-queue';
 
-export { KOSMO_TASK_QUEUE } from './task-queue';
-
 export const POST_CREATE_EFFECTS_WORKFLOW_TYPE = 'postCreateEffectsWorkflow';
 
 export type PostCreateEffectsInput = {

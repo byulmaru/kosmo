@@ -1,6 +1,5 @@
 import '@kosmo/core/polyfill';
 
-import { importJwk } from '@fedify/fedify';
 import {
   ActivityPubActorKeys,
   ActivityPubActors,
@@ -11,7 +10,6 @@ import {
   Profiles,
 } from '@kosmo/core/db';
 import {
-  ActivityPubActorKeyKind,
   ActivityPubActorType,
   MediaSource,
   MediaState,
@@ -20,7 +18,7 @@ import {
 } from '@kosmo/core/enums';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { ensureLocalProfileActor } from './local-profile-actor';
+import { ensureLocalProfileActor, importStoredLocalActorKeyPairs } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
@@ -40,11 +38,6 @@ const AvatarProfileMedia = alias(ProfileMedia, 'avatar_profile_media');
 const AvatarMedia = alias(Media, 'avatar_media');
 const HeaderProfileMedia = alias(ProfileMedia, 'header_profile_media');
 const HeaderMedia = alias(Media, 'header_media');
-const actorKeyKinds = [
-  ActivityPubActorKeyKind.RSA_PKCS1_V1_5,
-  ActivityPubActorKeyKind.ED25519,
-] as const;
-
 const toLocalProfileActorMedia = (
   media: { mediaType: string | null; url: string | null } | null,
 ): LocalProfileActorMedia | null =>
@@ -268,23 +261,5 @@ export const loadDrizzleLocalProfileActorKeyPairs = async ({
     .select()
     .from(ActivityPubActorKeys)
     .where(eq(ActivityPubActorKeys.activityPubActorId, actor.id));
-  const keysByKind = new Map(keys.map((key) => [key.kind, key]));
-
-  return Promise.all(
-    actorKeyKinds.flatMap((kind) => {
-      const key = keysByKind.get(kind);
-      if (!key) {
-        return [];
-      }
-      if (!key.privateKeyJwk) {
-        throw new Error(`Local ActivityPub actor key ${key.id} is missing a private key.`);
-      }
-      return [
-        Promise.all([
-          importJwk(key.privateKeyJwk as JsonWebKey, 'private'),
-          importJwk(key.publicKeyJwk as JsonWebKey, 'public'),
-        ]).then(([privateKey, publicKey]) => ({ privateKey, publicKey })),
-      ];
-    }),
-  );
+  return importStoredLocalActorKeyPairs(keys);
 };
