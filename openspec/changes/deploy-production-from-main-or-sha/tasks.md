@@ -198,4 +198,4 @@ Production build와 workload image source를 GHCR로 단일화하고, 사용하�
 - 운영 문서와 OpenSpec의 ECR/`stable` release 계약이 제거됐는지 검색하고 strict validation을 통과시킨다.
 
 - [x] 7.1 Production workflow를 GHCR-only build로 정리하고 live `ap-northeast-2/822638974464/kosmo` ECR repository를 명시적 CLI 승인으로 삭제해 production Pod의 GHCR digest 유지와 repository 부재를 검증한다.
-- [ ] 7.2 Terraform ECR repository·lifecycle·push IAM 선언과 bootstrap 권한을 제거하고 운영 문서·OpenSpec을 정렬한 뒤 validation과 reviewed plan을 통과시킨다.
+- [x] 7.2 Terraform ECR repository·lifecycle·push IAM 선언과 bootstrap 권한을 제거하고 운영 문서·OpenSpec을 정렬한 뒤 validation과 reviewed plan을 통과시킨다.
