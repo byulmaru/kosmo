@@ -77,6 +77,6 @@ Accepted Profile Update Workflow가 stable update identity로 delivery 시점의
 - OpenSpec strict validation, 관련 package typecheck/lint/test, PR CI, exact revision dev evidence를 각각 구분해 기록한다.
 
 - [x] 3.1 OpenSpec strict validation과 관련 Core/API/Fedify/Worker 정적·통합 검증을 완료한다.
-- [ ] 3.2 구현을 commit·push하고 Ready PR로 handoff하되 production 증거로 과장하지 않는다.
+- [x] 3.2 구현을 commit·push하고 Ready PR로 handoff하되 production 증거로 과장하지 않는다.
 - [ ] 3.3 Exact revision을 dev에서 빠른 연속 Profile update, Activity retry, Worker restart로 검증한다.
 - [ ] 3.4 전체 task와 delta sync 가능성을 재확인한 뒤 이 change를 archive한다.
