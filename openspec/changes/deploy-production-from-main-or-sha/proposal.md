@@ -17,7 +17,7 @@
 
 - Canonical: 없음. 이 변경은 제품 도메인·디자인이 아니라 repository와 운영 release 계약을 변경하며, 운영 절차는 `docs/operations/production-release.md`, `docs/operations/production-migrations.md`, `docs/operations/openpanel.md`, `docs/operations/sentry.md`가 설명한다.
 - Linear Contract: `PROD-783`
-- Linear Implementations: `PROD-783`
+- Linear Implementations: `PROD-783`, `PROD-790`
 
 ## Capabilities
 

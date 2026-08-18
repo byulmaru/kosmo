@@ -37,10 +37,10 @@
 
 1. 기존 Docker Build와 Deploy Dev는 main의 dev build·배포 전용으로 남기고 `production` trigger와 prod 조건을 제거한다. Dev artifact tag는 production release metadata와 충돌하지 않는 suffix를 사용하고 Trivy용 digest artifact는 유지한다.
 2. 별도 Production Release workflow가 `push: main`과 `workflow_dispatch`를 처리한다. Production job에만 `prod` Environment를 걸어 Dev workflow 완료와 보안 scan을 막지 않으면서 production 전체 경계를 승인 뒤로 이동한다.
-3. Main push 경로는 event full SHA와 release metadata만 승인 job에 전달하고 production source를 checkout하거나 Vault/ECR/Sentry credential을 요청하지 않는다. `prod` Environment 승인 뒤 하나의 gated job이 main full SHA를 checkout하고 prod Vault role·ECR login·Sentry upload secret을 얻어 image를 build한다.
+3. Automatic과 manual release는 하나의 production deploy job 정의를 공유한다. Main push 경로는 event full SHA를 target으로 선택하고 production source를 checkout하거나 Vault/ECR/Sentry credential을 요청하기 전에 `prod` Environment 승인을 기다린다. 승인 뒤 shared gated job이 main full SHA를 checkout하고 prod Vault role·ECR login·Sentry upload secret을 얻어 image를 build한다.
 4. Automatic gated job은 build output digest를 같은 job의 migration-gated Argo sync에 전달하고, Argo source를 main full SHA로 고정해 revision을 검증한다. Sync와 post-deploy 검증이 성공한 뒤에만 같은 digest에 `stable` 보존 tag를 이동한다.
 5. Manual dispatch는 workflow ref가 main인지와 입력이 40자리 SHA인지 먼저 확인하고 GitHub commit API로 repository object를 해석한다. Preflight output을 Environment URL과 job 이름에 사용해 reviewer가 실제 target commit을 확인할 수 있게 한다.
-6. Manual gated job은 승인 뒤 target SHA를 checkout하고 prod image를 build한 뒤 같은 job에서 digest-pinned Argo sync·revision 검증과 성공한 digest의 `stable` 이동을 수행한다. `SENTRY_RELEASE`, checkout, Helm version과 Argo revision은 dispatch workflow의 `github.sha`가 아니라 resolved target SHA를 사용한다.
+6. Manual preflight가 성공하면 같은 shared gated job이 resolved target SHA를 선택한다. 승인 뒤 target SHA를 checkout하고 prod image를 build한 뒤 digest-pinned Argo sync·revision 검증과 성공한 digest의 `stable` 이동을 수행한다. `SENTRY_RELEASE`, checkout, Helm version과 Argo revision은 dispatch workflow의 `github.sha`가 아니라 resolved target SHA를 사용한다.
 7. Automatic과 manual deploy는 하나의 production concurrency group을 공유하고 실행 중 job을 취소하지 않는다. Native queue가 이전 pending job을 최신 pending job으로 대체하면 취소 기록을 남기고 필요 시 해당 SHA release를 다시 실행한다.
 8. ECR OIDC trust와 외부 Vault prod build role은 automatic과 manual gated build가 사용하는 exact `repo:byulmaru/kosmo:environment:prod` identity만 허용한다. main ref, `refs/heads/production`, tag와 일반 branch identity는 허용하지 않는다.
 9. Terraform의 `kosmo-prod` bootstrap revision을 main으로 바꾸되 release-time full SHA와 Helm parameter ignore 경계는 유지한다. GitHub `prod` Environment에는 required reviewer를 설정하고 main workflow에서 시작되는 automatic/manual gated job을 허용한다.

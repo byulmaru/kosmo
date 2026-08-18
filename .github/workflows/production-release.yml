@@ -21,13 +21,19 @@ env:
   VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
 
 jobs:
-  automatic_deploy:
-    name: Approve, Build and Deploy Production (main ${{ github.sha }})
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  production_deploy:
+    name: >-
+      Approve, Build and Deploy Production
+      (${{ github.event_name == 'workflow_dispatch' && format('manual {0}', needs.manual_preflight.outputs.target_sha) || format('main {0}', github.sha) }})
+    needs: manual_preflight
+    if: >-
+      always() &&
+      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && needs.manual_preflight.result == 'success'))
     runs-on: [self-hosted, ARM64]
     environment:
       name: prod
-      url: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+      url: ${{ github.event_name == 'workflow_dispatch' && needs.manual_preflight.outputs.target_url || format('{0}/{1}/commit/{2}', github.server_url, github.repository, github.sha) }}
     concurrency:
       group: production-release
       cancel-in-progress: false
@@ -37,13 +43,14 @@ jobs:
       packages: write
     env:
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-      TARGET_SHA: ${{ github.sha }}
+      RELEASE_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'automatic' }}
+      TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && needs.manual_preflight.outputs.target_sha || github.sha }}
 
     steps:
-      - name: Checkout main commit after approval
+      - name: Checkout target commit after approval
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.TARGET_SHA }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -89,7 +96,7 @@ jobs:
             ghcr.io/${{ github.repository }}
             ${{ env.AWS_ECR_REPOSITORY_URL }}
           tags: |
-            type=raw,value=prod-sha-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+            type=raw,value=prod-sha-${{ env.TARGET_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Build and push production image
         id: build
@@ -111,7 +118,7 @@ jobs:
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
-            SENTRY_RELEASE=kosmo@${{ github.sha }}
+            SENTRY_RELEASE=kosmo@${{ env.TARGET_SHA }}
             SENTRY_UPLOAD_REQUIRED=1
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
@@ -255,7 +262,7 @@ jobs:
             --image-manifest "${image_manifest}" \
             --image-digest "${IMAGE_DIGEST}"
 
-      - name: Record automatic production release
+      - name: Record production release
         if: always()
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
@@ -263,16 +270,18 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### Automatic production release"
+            echo "### ${RELEASE_TRIGGER^} production release"
             echo
-            echo "- Trigger: push (main candidate)"
+            echo "- Trigger: ${RELEASE_TRIGGER}"
             echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Workflow definition ref: ${GITHUB_REF}"
             echo "- Target SHA: ${TARGET_SHA}"
-            echo "- Candidate image: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
+            echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- Argo source revision: ${TARGET_SHA}"
             echo "- Approval boundary: prod Environment"
-            echo "- Dev build/deploy: separate Docker Build and Deploy Dev workflows"
+            if [[ "${RELEASE_TRIGGER}" == "automatic" ]]; then
+              echo "- Dev build/deploy: separate Docker Build and Deploy Dev workflows"
+            fi
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -337,261 +346,4 @@ jobs:
             echo "- Target commit: [${TARGET_SHA}](${TARGET_URL})"
             echo "- Target code checkout/build: deferred until prod Environment approval"
             echo "- Production credentials: not requested during preflight"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-  manual_deploy:
-    name: Approve and Deploy Production (manual ${{ needs.manual_preflight.outputs.target_sha }})
-    if: github.event_name == 'workflow_dispatch' && needs.manual_preflight.result == 'success'
-    needs: manual_preflight
-    runs-on: [self-hosted, ARM64]
-    environment:
-      name: prod
-      url: ${{ needs.manual_preflight.outputs.target_url }}
-    concurrency:
-      group: production-release
-      cancel-in-progress: false
-    permissions:
-      contents: read
-      id-token: write
-      packages: write
-    env:
-      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-      TARGET_SHA: ${{ needs.manual_preflight.outputs.target_sha }}
-      SENTRY_RELEASE: kosmo@${{ needs.manual_preflight.outputs.target_sha }}
-
-    steps:
-      - name: Checkout target commit after approval
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          ref: ${{ needs.manual_preflight.outputs.target_sha }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-        with:
-          name: kosmo-production-manual
-          cleanup: false
-          cache-binary: false
-
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Load production Sentry DSN from Vault
-        id: sentry
-        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
-        with:
-          url: ${{ env.VAULT_ADDR }}
-          path: github-actions
-          method: jwt
-          role: kosmo-build-prod
-          jwtGithubAudience: ${{ env.VAULT_GITHUB_ACTIONS_AUDIENCE }}
-          exportEnv: false
-          secrets: |
-            secret/data/kubernetes/kosmo/prod EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
-
-      - name: Log in to ECR
-        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
-
-      - name: Extract manual production metadata
-        id: meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
-        with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            ${{ env.AWS_ECR_REPOSITORY_URL }}
-          tags: |
-            type=raw,value=prod-sha-${{ needs.manual_preflight.outputs.target_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - name: Build and push manual production image
-        id: build
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          no-cache-filters: |
-            app-build
-            runtime
-          build-args: |
-            EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID }}
-            EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
-            SENTRY_ORG=${{ vars.SENTRY_ORG }}
-            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
-            SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
-            SENTRY_UPLOAD_REQUIRED=1
-          secret-envs: |
-            sentry_auth_token=SENTRY_AUTH_TOKEN
-
-      - name: Validate manual production image digest
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::Manual production build did not produce a valid image digest."
-            exit 1
-          fi
-
-      - name: Get Argo CD token
-        id: argocd-token
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const githubToken = await core.getIDToken();
-            core.setSecret(githubToken);
-
-            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
-              method: "POST",
-              headers: {
-                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
-              },
-              body: new URLSearchParams({
-                connector_id: "github-actions",
-                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-                scope: "openid email profile federated:id",
-                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-                subject_token: githubToken,
-                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
-            }
-
-            const { access_token: dexToken } = await response.json();
-            if (!dexToken) {
-              throw new Error("Dex token response did not include an access token.");
-            }
-
-            core.setSecret(dexToken);
-            core.setOutput("token", dexToken);
-
-      - name: Install Argo CD CLI
-        env:
-          ARGOCD_CLI_VERSION: v3.4.2
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          case "$(uname -s)" in
-            Darwin) argocd_os=darwin ;;
-            Linux) argocd_os=linux ;;
-            *)
-              echo "::error::Unsupported runner OS: $(uname -s)"
-              exit 1
-              ;;
-          esac
-
-          case "$(uname -m)" in
-            x86_64) argocd_arch=amd64 ;;
-            aarch64 | arm64) argocd_arch=arm64 ;;
-            *)
-              echo "::error::Unsupported runner architecture: $(uname -m)"
-              exit 1
-              ;;
-          esac
-
-          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_CLI_VERSION}/argocd-${argocd_os}-${argocd_arch}"
-          chmod 555 "${RUNNER_TEMP}/argocd"
-          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
-
-      - name: Sync migration and production workloads
-        env:
-          ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
-            --revision "${TARGET_SHA}" \
-            -p "version=${TARGET_SHA}" \
-            -p "imageDigest=${IMAGE_DIGEST}" \
-            -p "migration.enabled=true" \
-            --validate
-
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-prod \
-            --revision "${TARGET_SHA}" \
-            --prune \
-            --timeout 600
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
-            --sync \
-            --health \
-            --timeout 600
-
-          app_json="$(argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-prod --output json)"
-          actual_source_revision="$(jq -r '.status.sync.revision' <<<"${app_json}")"
-          actual_image_digest="$(jq -r '.spec.source.helm.parameters[] | select(.name == "imageDigest") | .value' <<<"${app_json}")"
-          if [[ "${actual_source_revision}" != "${TARGET_SHA}" ]]; then
-            echo "::error::Argo CD synced revision ${actual_source_revision}, expected ${TARGET_SHA}."
-            exit 1
-          fi
-          if [[ "${actual_image_digest}" != "${IMAGE_DIGEST}" ]]; then
-            echo "::error::Argo CD image digest ${actual_image_digest}, expected ${IMAGE_DIGEST}."
-            exit 1
-          fi
-
-      - name: Configure AWS credentials for stable tag
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Promote approved digest to ECR stable
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_manifest="$(aws ecr batch-get-image \
-            --repository-name kosmo \
-            --image-ids imageDigest="${IMAGE_DIGEST}" \
-            --query 'images[0].imageManifest' \
-            --output text)"
-          if [[ -z "${image_manifest}" || "${image_manifest}" == "None" ]]; then
-            echo "::error::ECR image manifest was not found for ${IMAGE_DIGEST}."
-            exit 1
-          fi
-          aws ecr put-image \
-            --repository-name kosmo \
-            --image-tag stable \
-            --image-manifest "${image_manifest}" \
-            --image-digest "${IMAGE_DIGEST}"
-
-      - name: Record manual production release
-        if: always()
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-          RESULT: ${{ job.status }}
-        shell: bash
-        run: |
-          {
-            echo "### Manual production release"
-            echo
-            echo "- Trigger: workflow_dispatch"
-            echo "- Requester: ${GITHUB_ACTOR}"
-            echo "- Workflow definition ref: ${GITHUB_REF}"
-            echo "- Target commit: ${TARGET_SHA}"
-            echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
-            echo "- Argo source revision: ${TARGET_SHA}"
-            echo "- Approval boundary: prod Environment"
-            echo "- Result: ${RESULT}"
-            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
