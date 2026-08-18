@@ -68,7 +68,7 @@ export function ProfileTagChip(props: ProfileTagChipProps) {
         testID="profile-tag-remove-button"
         visualSize={PROFILE_TAG_CHIP_VISUAL_SIZE}
       >
-        <XIcon color={theme.textSecondary} size={iconSizes[18]} strokeWidth={2} />
+        <XIcon color={theme.textSecondary} size={iconSizes[20]} strokeWidth={2} />
       </IconButton>
     </View>
   );
