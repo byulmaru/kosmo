@@ -241,10 +241,43 @@ test('세션 확인이 실패해도 루트 온보딩과 로그인 진입점을 �
 });
 
 test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유지된다', async ({ page }) => {
+  await page.route('**/graphql', async (route) => {
+    if (isGraphQLOperation(route.request().postData(), 'UniversalShellQuery')) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+
+    await route.continue();
+  });
+  await page.addInitScript(() => {
+    const storageKey = 'kosmo-e2e-history-paths';
+    const record = (method: string) => {
+      const entries = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[];
+      entries.push(`${method}:${location.pathname}${location.search}`);
+      sessionStorage.setItem(storageKey, JSON.stringify(entries));
+    };
+
+    record('document');
+
+    for (const method of ['pushState', 'replaceState'] as const) {
+      const original = history[method];
+      history[method] = function (...args) {
+        const result = original.apply(this, args);
+        record(method);
+        return result;
+      };
+    }
+  });
+
   await page.goto('/');
   await page.getByRole('link', { name: '시작하기' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
+  const historyPaths = await page.evaluate(() =>
+    JSON.parse(sessionStorage.getItem('kosmo-e2e-history-paths') ?? '[]'),
+  );
+  expect(historyPaths).not.toContain('pushState:/undefined/undefined');
+  expect(historyPaths).not.toContain('replaceState:/undefined/undefined');
+  expect(historyPaths).not.toContain('document:/undefined/undefined');
   await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
   await page.getByRole('button', { name: '프로필 만들기' }).click();
   await expect(page.getByLabel('프로필 전환')).toBeVisible();
