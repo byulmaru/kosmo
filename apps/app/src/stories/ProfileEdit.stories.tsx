@@ -515,9 +515,14 @@ export const TagAddDuplicateAndRemove: Story = {
 
     const remove = canvas.getByRole('button', { name: '#Foo 제거' });
     const removeTarget = remove.getBoundingClientRect();
+    const removeIcon = remove.querySelector('svg');
 
     expect(Math.round(removeTarget.width)).toBe(32);
     expect(Math.round(removeTarget.height)).toBe(32);
+    expect(removeIcon).not.toBeNull();
+    expect(
+      Array.from(removeIcon!.querySelectorAll('path'), (path) => path.getAttribute('d')),
+    ).toEqual(['M18 6 6 18', 'm6 6 12 12']);
 
     await userEvent.type(input, '#foo');
     await userEvent.click(add);

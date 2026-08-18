@@ -80,6 +80,7 @@ const require = createRequire(import.meta.url);
 require.extensions['.png'] = (module, filename) => {
   module.exports = filename;
 };
+mockModule(require.resolve('lucide-react-native'), { XIcon: 'XIcon' });
 
 let ProfileHero: typeof ProfileHeroExport;
 

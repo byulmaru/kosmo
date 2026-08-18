@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
@@ -10,6 +11,7 @@ import type { PostMediaItem } from './PostMediaImage';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const require = createRequire(import.meta.url);
 const platform = { OS: 'web' };
 const viewport = { height: 800, width: 767 };
 let panResponderConfig: Record<string, (...args: never[]) => unknown> | null = null;
@@ -75,7 +77,7 @@ mock.module('react-relay', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('lucide-react-native', {
+mock.module(require.resolve('lucide-react-native'), {
   exports: {
     ChevronLeftIcon: 'ChevronLeftIcon',
     ChevronRightIcon: 'ChevronRightIcon',
@@ -199,6 +201,30 @@ describe('PostMediaViewer', () => {
           disabled: false,
           targetSize: 48,
           visualSize: 48,
+        },
+      ],
+    );
+    assert.deepEqual(
+      ['XIcon', 'ChevronLeftIcon', 'ChevronRightIcon'].map((type) => ({
+        count: rendered(type).length,
+        props: rendered(type)[0]?.props,
+        type,
+      })),
+      [
+        {
+          count: 1,
+          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          type: 'XIcon',
+        },
+        {
+          count: 1,
+          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          type: 'ChevronLeftIcon',
+        },
+        {
+          count: 1,
+          props: { color: '#ffffff', size: 24, strokeWidth: 2 },
+          type: 'ChevronRightIcon',
         },
       ],
     );
