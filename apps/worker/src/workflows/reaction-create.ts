@@ -1,25 +1,25 @@
 import { proxyActivities } from '@temporalio/workflow';
 import type * as activities from '../activities';
 
-type PostCreateEffectsInput = {
-  readonly postId: string;
+type ReactionCreateEffectsInput = {
+  readonly reactionId: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createReplyNotificationActivity, sendLocalPostCreateActivity } = proxyActivities<
-  Pick<typeof activities, 'createReplyNotificationActivity' | 'sendLocalPostCreateActivity'>
+const { createReactionNotificationActivity, sendReactionActivity } = proxyActivities<
+  Pick<typeof activities, 'createReactionNotificationActivity' | 'sendReactionActivity'>
 >({
   retry: { maximumAttempts: 10 },
   startToCloseTimeout: '1 minute',
 });
 
-export async function postCreateEffectsWorkflow({
-  postId,
+export async function reactionCreateEffectsWorkflow({
+  reactionId,
   origin,
-}: PostCreateEffectsInput): Promise<void> {
-  const effects = [createReplyNotificationActivity(postId)];
+}: ReactionCreateEffectsInput): Promise<void> {
+  const effects = [createReactionNotificationActivity(reactionId)];
   if (origin === 'LOCAL') {
-    effects.push(sendLocalPostCreateActivity(postId));
+    effects.push(sendReactionActivity(reactionId));
   }
 
   const results = await Promise.allSettled(effects);

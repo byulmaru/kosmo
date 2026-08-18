@@ -130,7 +130,7 @@ describe('GraphQL Reaction', () => {
     );
   });
 
-  test('새 Reaction은 타인 소유 Local Post에 알림을 한 번만 생성한다', async () => {
+  test('새 Reaction은 타인 소유 Local Post에 commit되고 효과는 Workflow로 위임된다', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
     const post = await createPost(recipient.id);
@@ -140,57 +140,25 @@ describe('GraphQL Reaction', () => {
 
     const [reaction] = await db.select().from(Reactions).where(eq(Reactions.postId, post.id));
     assert.ok(reaction);
-    assert.deepEqual(
-      await db
-        .select({
-          kind: Notifications.kind,
-          recipientProfileId: Notifications.recipientProfileId,
-          sourceId: Notifications.sourceId,
-        })
-        .from(Notifications),
-      [
-        {
-          kind: NotificationKind.REACTION,
-          recipientProfileId: recipient.id,
-          sourceId: reaction.id,
-        },
-      ],
-    );
+    assert.equal(await db.$count(Notifications), 0);
   });
 
-  test('Notification 저장 실패는 Reaction 성공을 rollback하지 않는다', async () => {
+  test('Notification은 Reaction commit에 포함되지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
     const post = await createPost(recipient.id);
 
-    await pg.unsafe(`
-      CREATE FUNCTION fail_reaction_notification_insert() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF NEW.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification failure'; END IF;
-        RETURN NEW;
-      END $$;
-      CREATE TRIGGER fail_reaction_notification_insert
-      BEFORE INSERT ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_insert();
-    `);
-
-    try {
-      const result = await requestAddReaction(post.id, '👀', auth.token);
-      assertNoGraphQLErrors(result);
-      assert.equal(await db.$count(Reactions), 1);
-      assert.equal(await db.$count(Notifications), 0);
-    } finally {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_reaction_notification_insert ON notification;
-        DROP FUNCTION IF EXISTS fail_reaction_notification_insert();
-      `);
-    }
+    const result = await requestAddReaction(post.id, '👀', auth.token);
+    assertNoGraphQLErrors(result);
+    assert.equal(await db.$count(Reactions), 1);
+    assert.equal(await db.$count(Notifications), 0);
   });
 
-  test('Active Remote Post의 실제 create/delete만 post-commit delivery를 시도한다', async () => {
+  test('Active Remote Post의 실제 create/delete만 Effects Workflow를 시작한다', async () => {
     const auth = await createAuthenticatedSession();
     const target = await createRemoteReactionTarget({ inboxUri: 'not a valid inbox URI' });
-    const errorLog = mock.method(console, 'error', () => undefined);
+    const { temporalClient } = await import('@kosmo/core/temporal/client');
+    const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
     try {
       const added = await requestAddReaction(target.post.id, '❤️', auth.token);
@@ -198,11 +166,8 @@ describe('GraphQL Reaction', () => {
       assertNoGraphQLErrors(added);
       assertNoGraphQLErrors(duplicate);
       assert.equal(duplicate.data?.addReaction.reaction.id, added.data?.addReaction.reaction.id);
-      assert.equal(errorLog.mock.callCount(), 1);
-      assert.equal(
-        errorLog.mock.calls[0]?.arguments[0],
-        'Post-commit ActivityPub Reaction delivery failed',
-      );
+      assert.equal(start.mock.callCount(), 1);
+      assert.equal(start.mock.calls[0]?.arguments[0], 'reactionCreateEffectsWorkflow');
       assert.equal(await db.$count(Reactions), 1);
       assert.equal(await db.$count(Notifications), 0);
 
@@ -212,15 +177,12 @@ describe('GraphQL Reaction', () => {
       assertNoGraphQLErrors(repeated);
       assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
       assert.equal(repeated.data?.deleteReaction.reactionId, null);
-      assert.equal(errorLog.mock.callCount(), 2);
-      assert.equal(
-        errorLog.mock.calls[1]?.arguments[0],
-        'Post-commit ActivityPub Reaction Undo delivery failed',
-      );
+      assert.equal(start.mock.callCount(), 2);
+      assert.equal(start.mock.calls[1]?.arguments[0], 'reactionDeleteEffectsWorkflow');
       assert.equal(await db.$count(Reactions), 0);
       assert.equal(await db.$count(Notifications), 0);
     } finally {
-      errorLog.mock.restore();
+      start.mock.restore();
     }
   });
 
@@ -236,13 +198,10 @@ describe('GraphQL Reaction', () => {
       BEFORE INSERT ON reaction
       FOR EACH ROW EXECUTE FUNCTION fail_reaction_insert();
     `);
-    const errorLog = mock.method(console, 'error', () => undefined);
-
     let result: Awaited<ReturnType<typeof requestAddReaction>>;
     try {
       result = await requestAddReaction(target.post.id, '🥹', auth.token);
     } finally {
-      errorLog.mock.restore();
       await pg.unsafe(`
         DROP TRIGGER IF EXISTS fail_reaction_insert ON reaction;
         DROP FUNCTION IF EXISTS fail_reaction_insert();
@@ -251,13 +210,6 @@ describe('GraphQL Reaction', () => {
 
     assert.ok(result.errors?.[0]);
     assert.equal(await db.$count(Reactions), 0);
-    assert.equal(
-      errorLog.mock.calls.filter(
-        ({ arguments: [message] }) =>
-          message === 'Post-commit ActivityPub Reaction delivery failed',
-      ).length,
-      0,
-    );
   });
 
   test('Local Post, non-local sender와 UNRESPONSIVE target에는 delivery를 시도하지 않는다', async () => {
@@ -552,7 +504,7 @@ describe('GraphQL Reaction', () => {
     );
   });
 
-  test('Post와 Type 삭제는 다른 Profile의 Reaction과 Notification을 유지한다', async () => {
+  test('Post와 Type 삭제는 다른 Profile의 Reaction을 유지한다', async () => {
     const owner = await createAuthenticatedSession();
     const attacker = await createAuthenticatedSession();
     const recipient = await createProfile(`recipient-${crypto.randomUUID()}`);
@@ -560,29 +512,6 @@ describe('GraphQL Reaction', () => {
     const added = await requestAddReaction(post.id, '🎉', owner.token);
     const reactionId = added.data?.addReaction.reaction.id;
     assert.ok(reactionId);
-    const reaction = await db
-      .select()
-      .from(Reactions)
-      .where(eq(Reactions.postId, post.id))
-      .then(firstOrThrow);
-    assert.deepEqual(
-      await db
-        .select({
-          kind: Notifications.kind,
-          recipientProfileId: Notifications.recipientProfileId,
-          sourceId: Notifications.sourceId,
-        })
-        .from(Notifications)
-        .where(eq(Notifications.sourceId, reaction.id)),
-      [
-        {
-          kind: NotificationKind.REACTION,
-          recipientProfileId: recipient.id,
-          sourceId: reaction.id,
-        },
-      ],
-    );
-
     const result = await requestDeleteReaction(post.id, '🎉', attacker.token);
 
     assertNoGraphQLErrors(result);
@@ -596,23 +525,6 @@ describe('GraphQL Reaction', () => {
         .where(eq(Reactions.postId, post.id))
         .then((rows) => rows.length),
       1,
-    );
-    assert.deepEqual(
-      await db
-        .select({
-          kind: Notifications.kind,
-          recipientProfileId: Notifications.recipientProfileId,
-          sourceId: Notifications.sourceId,
-        })
-        .from(Notifications)
-        .where(eq(Notifications.sourceId, reaction.id)),
-      [
-        {
-          kind: NotificationKind.REACTION,
-          recipientProfileId: recipient.id,
-          sourceId: reaction.id,
-        },
-      ],
     );
   });
 
@@ -675,169 +587,6 @@ describe('GraphQL Reaction', () => {
         .where(eq(Reactions.postId, post.id))
         .then((rows) => rows.length),
       0,
-    );
-  });
-
-  test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const recipient = await createAuthenticatedSession();
-    const post = await createPost(recipient.profile.id);
-    const added = await requestAddReaction(post.id, '🎉', auth.token);
-    const reactionId = added.data?.addReaction.reaction.id;
-    assert.ok(reactionId);
-    const reaction = await db
-      .select()
-      .from(Reactions)
-      .where(eq(Reactions.postId, post.id))
-      .then(firstOrThrow);
-
-    const deleted = await requestDeleteReaction(post.id, '🎉', auth.token);
-    assertNoGraphQLErrors(deleted);
-    assert.equal(await db.$count(Notifications), 0);
-
-    await db.insert(Notifications).values({
-      kind: NotificationKind.REACTION,
-      recipientProfileId: recipient.profile.id,
-      sourceId: reaction.id,
-    });
-    assert.equal(await db.$count(Notifications), 1);
-
-    const repeated = await requestDeleteReaction(post.id, '🎉', auth.token);
-
-    assertNoGraphQLErrors(repeated);
-    assert.equal(repeated.data?.deleteReaction.reactionId, null);
-    assert.equal(await db.$count(Reactions), 0);
-    assert.equal(await db.$count(Notifications), 1);
-  });
-
-  test('Notification cleanup 실패에도 Reaction 삭제 성공과 stale visibility를 유지하고 오류를 기록한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const recipient = await createAuthenticatedSession();
-    const post = await createPost(recipient.profile.id);
-    const added = await requestAddReaction(post.id, '👀', auth.token);
-    const reactionId = added.data?.addReaction.reaction.id;
-    assert.ok(reactionId);
-    const reaction = await db
-      .select()
-      .from(Reactions)
-      .where(eq(Reactions.postId, post.id))
-      .then(firstOrThrow);
-    const notification = await db
-      .select()
-      .from(Notifications)
-      .where(eq(Notifications.sourceId, reaction.id))
-      .then(firstOrThrow);
-
-    await pg.unsafe(`
-      CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
-        RETURN OLD;
-      END $$;
-      CREATE TRIGGER fail_reaction_notification_delete
-      BEFORE DELETE ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
-    `);
-
-    const originalConsoleError = console.error;
-    const errors: unknown[][] = [];
-    console.error = (...args) => {
-      errors.push(args);
-    };
-
-    let deleted: Awaited<ReturnType<typeof requestDeleteReaction>>;
-    try {
-      deleted = await requestDeleteReaction(post.id, '👀', auth.token);
-    } finally {
-      console.error = originalConsoleError;
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
-        DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
-      `);
-    }
-
-    assertNoGraphQLErrors(deleted);
-    assert.equal(await db.$count(Reactions), 0);
-    assert.equal(await db.$count(Notifications), 1);
-    assert.equal(errors.length, 1);
-    assert.equal(errors[0]?.[0], 'Failed to clean up Reaction Notification');
-    assert.equal((errors[0]?.[1] as { reactionId?: string } | undefined)?.reactionId, reaction.id);
-    assert.ok((errors[0]?.[1] as { error?: unknown } | undefined)?.error);
-
-    const surfaces = await requestNotificationSurfaces(recipient.profile.id, recipient.token);
-    assertNoGraphQLErrors(surfaces);
-    assert.deepEqual(surfaces.data?.node?.notifications.edges, []);
-    assert.equal(surfaces.data?.node?.unreadNotificationCount, 0);
-
-    const staleNode = await requestNode(
-      globalId('ReactionNotification', notification.id),
-      recipient.token,
-    );
-    assertNoGraphQLErrors(staleNode);
-    assert.equal(staleNode.data?.node, null);
-
-    const read = await requestMarkNotificationRead(
-      globalId('ReactionNotification', notification.id),
-      recipient.token,
-    );
-    assertNoGraphQLErrors(read);
-    assert.deepEqual(read.data?.markNotificationRead.notifications, []);
-    assert.deepEqual(read.data?.markNotificationRead.recipientProfiles, []);
-  });
-
-  test('stale Notification cleanup과 Undo delivery 실패를 독립 격리한다', async () => {
-    const auth = await createAuthenticatedSession();
-    const target = await createRemoteReactionTarget({
-      inboxUri: 'not a valid inbox URI',
-      state: InstanceState.UNRESPONSIVE,
-    });
-    const added = await requestAddReaction(target.post.id, '☘️', auth.token);
-    assertNoGraphQLErrors(added);
-    const reaction = await db.select().from(Reactions).then(firstOrThrow);
-    await db.insert(Notifications).values({
-      kind: NotificationKind.REACTION,
-      recipientProfileId: target.profile.id,
-      sourceId: reaction.id,
-    });
-    assert.equal(await db.$count(Notifications), 1);
-    await db
-      .update(Instances)
-      .set({ state: InstanceState.ACTIVE })
-      .where(eq(Instances.id, target.instance.id));
-
-    await pg.unsafe(`
-      CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
-        RETURN OLD;
-      END $$;
-      CREATE TRIGGER fail_reaction_notification_delete
-      BEFORE DELETE ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
-    `);
-    const errorLog = mock.method(console, 'error', () => undefined);
-
-    let deleted: Awaited<ReturnType<typeof requestDeleteReaction>>;
-    try {
-      deleted = await requestDeleteReaction(target.post.id, '☘️', auth.token);
-    } finally {
-      errorLog.mock.restore();
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
-        DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
-      `);
-    }
-
-    assertNoGraphQLErrors(deleted);
-    assert.equal(deleted.data?.deleteReaction.reactionId, added.data?.addReaction.reaction.id);
-    assert.equal(await db.$count(Reactions), 0);
-    assert.equal(await db.$count(Notifications), 1);
-    assert.deepEqual(
-      errorLog.mock.calls.map(({ arguments: [message] }) => message),
-      [
-        'Failed to clean up Reaction Notification',
-        'Post-commit ActivityPub Reaction Undo delivery failed',
-      ],
     );
   });
 
@@ -1195,13 +944,6 @@ type ReactionNode = {
   type: string;
 };
 
-type NotificationSurfacesNode = {
-  notifications: {
-    edges: Array<{ node: { __typename: string; id: string } }>;
-  };
-  unreadNotificationCount: number;
-};
-
 type ReactionProfilesNode = {
   reactionProfiles: {
     edges: Array<{ cursor: string; node: { __typename: 'Profile'; handle: string; id: string } }>;
@@ -1304,37 +1046,6 @@ const requestNode = (id: string, token?: string) =>
       node(id: $id) { __typename id ... on Reaction { type } }
     }`,
     { id },
-    token,
-  );
-
-const requestNotificationSurfaces = (profileId: string, token: string) =>
-  requestGraphQL<{ node: NotificationSurfacesNode | null }>(
-    `query NotificationSurfaces($profileId: ID!) {
-      node(id: $profileId) {
-        ... on Profile {
-          notifications(first: 10) { edges { node { __typename id } } }
-          unreadNotificationCount
-        }
-      }
-    }`,
-    { profileId: globalId('Profile', profileId) },
-    token,
-  );
-
-const requestMarkNotificationRead = (notificationId: string, token: string) =>
-  requestGraphQL<{
-    markNotificationRead: {
-      notifications: { __typename: string; id: string }[];
-      recipientProfiles: { id: string }[];
-    };
-  }>(
-    `mutation MarkNotificationRead($input: MarkNotificationReadInput!) {
-      markNotificationRead(input: $input) {
-        notifications { __typename id }
-        recipientProfiles { id }
-      }
-    }`,
-    { input: { ids: [notificationId] } },
     token,
   );
 

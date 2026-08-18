@@ -19,8 +19,10 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type {
+  createReactionNotificationActivity as CreateReactionNotificationActivity,
   createReplyNotificationActivity as CreateReplyNotificationActivity,
   createRepostNotificationActivity as CreateRepostNotificationActivity,
+  deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
 } from './activities';
 
@@ -35,8 +37,11 @@ let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let Reactions: typeof CoreDb.Reactions;
 let createCorePost: typeof CreatePost;
 let deletePost: typeof DeletePost;
+let createReactionNotificationActivity: typeof CreateReactionNotificationActivity;
+let deleteReactionNotificationActivity: typeof DeleteReactionNotificationActivity;
 let createReplyNotificationActivity: typeof CreateReplyNotificationActivity;
 let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
 let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
@@ -53,10 +58,13 @@ before(async () => {
     Posts,
     ProfileFollows,
     Profiles,
+    Reactions,
   } = await import('@kosmo/core/db'));
   ({
+    createReactionNotificationActivity,
     createReplyNotificationActivity,
     createRepostNotificationActivity,
+    deleteReactionNotificationActivity,
     deleteRepostNotificationActivity,
   } = await import('./activities'));
   ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
@@ -141,6 +149,40 @@ test('자기 Reply는 Notification을 만들지 않는다', async () => {
 
   await createReplyNotificationActivity(reply.id);
 
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Reaction Notification Activities는 create와 delete retry에 멱등이다', async () => {
+  const recipient = await createProfile();
+  const actor = await createProfile();
+  const post = await createPost(recipient.id);
+  const reaction = await db
+    .insert(Reactions)
+    .values({ postId: post.id, profileId: actor.id, type: '❤️' })
+    .returning()
+    .then(firstOrThrow);
+
+  await createReactionNotificationActivity(reaction.id);
+  await createReactionNotificationActivity(reaction.id);
+
+  const notifications = await db.select().from(Notifications);
+  assert.deepEqual(
+    notifications.map(({ kind, recipientProfileId, sourceId }) => ({
+      kind,
+      recipientProfileId,
+      sourceId,
+    })),
+    [
+      {
+        kind: NotificationKind.REACTION,
+        recipientProfileId: recipient.id,
+        sourceId: reaction.id,
+      },
+    ],
+  );
+
+  await deleteReactionNotificationActivity(reaction.id);
+  await deleteReactionNotificationActivity(reaction.id);
   assert.equal(await db.$count(Notifications), 0);
 });
 

@@ -202,7 +202,6 @@ export const createReactionNotification = async (
       .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
       .where(eq(Reactions.id, sourceId))
       .limit(1)
-      .for('update', { of: Reactions })
       .then((rows) => rows[0]);
 
     // An inbound Undo may remove the source before notification materialization.
@@ -320,6 +319,11 @@ export const deleteRepostNotification = async (
   sourceId: string,
   handle?: Database,
 ): Promise<void> => deleteNotificationBySource(NotificationKind.REPOST, sourceId, handle);
+
+export const deleteReactionNotification = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> => deleteNotificationBySource(NotificationKind.REACTION, sourceId, handle);
 
 export const deleteFollowRequestNotificationPostCommit = async (
   sourceId: string,

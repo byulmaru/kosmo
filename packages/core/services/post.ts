@@ -27,16 +27,7 @@ import {
   validateLocalPostContentDocument,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import {
-  POST_CREATE_EFFECTS_WORKFLOW_TYPE,
-  postCreateEffectsWorkflowStartOptions,
-} from '../temporal/post-create-effects';
-import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
-import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
-import {
-  REPOST_DELETE_WORKFLOW_TYPE,
-  repostDeleteWorkflowStartOptions,
-} from '../temporal/repost-delete';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { postVisibilityCondition } from '../visibility/post';
 import { validatePostStructure } from './post-structure';
 import type { Transaction } from '../db';
@@ -395,14 +386,20 @@ export const deletePost = async ({
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         isRepostDelete
-          ? temporalClient.workflow.start(
-              REPOST_DELETE_WORKFLOW_TYPE,
-              repostDeleteWorkflowStartOptions(workflowInput),
-            )
-          : temporalClient.workflow.start(
-              POST_DELETE_WORKFLOW_TYPE,
-              postDeleteWorkflowStartOptions(workflowInput),
-            ),
+          ? temporalClient.workflow.start('repostDeleteWorkflow', {
+              args: [workflowInput],
+              taskQueue: KOSMO_TASK_QUEUE,
+              workflowId: `repost-delete:${workflowInput.postId}`,
+              workflowIdConflictPolicy: 'USE_EXISTING',
+              workflowIdReusePolicy: 'REJECT_DUPLICATE',
+            })
+          : temporalClient.workflow.start('postDeleteWorkflow', {
+              args: [workflowInput],
+              taskQueue: KOSMO_TASK_QUEUE,
+              workflowId: `post-delete:${workflowInput.postId}`,
+              workflowIdConflictPolicy: 'USE_EXISTING',
+              workflowIdReusePolicy: 'REJECT_DUPLICATE',
+            }),
       );
     } catch (error) {
       console.error(`${isRepostDelete ? 'Repost Delete' : 'Post Delete'} Workflow start failed`, {
@@ -454,10 +451,13 @@ export async function repostPost(input: RepostInput): Promise<RepostResult> {
     const workflowInput = { origin: input.origin, postId: result.repost.id };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        temporalClient.workflow.start(
-          POST_REPOST_WORKFLOW_TYPE,
-          postRepostWorkflowStartOptions(workflowInput),
-        ),
+        temporalClient.workflow.start('postRepostWorkflow', {
+          args: [workflowInput],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `post-repost:${workflowInput.postId}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
       );
     } catch (error) {
       console.error('Post Repost Workflow start failed', {
@@ -634,10 +634,13 @@ export async function createPost(
   try {
     const workflowInput = { postId: result.post.id, origin: input.origin };
     await temporalClient.withDeadline(Date.now() + 5_000, () =>
-      temporalClient.workflow.start(
-        POST_CREATE_EFFECTS_WORKFLOW_TYPE,
-        postCreateEffectsWorkflowStartOptions(workflowInput),
-      ),
+      temporalClient.workflow.start('postCreateEffectsWorkflow', {
+        args: [workflowInput],
+        taskQueue: KOSMO_TASK_QUEUE,
+        workflowId: `post-create-effects:${workflowInput.postId}`,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'REJECT_DUPLICATE',
+      }),
     );
   } catch (error) {
     console.error('Post Create effects Workflow start failed', {

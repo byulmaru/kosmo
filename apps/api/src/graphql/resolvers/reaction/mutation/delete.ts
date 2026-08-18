@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import { deleteReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
@@ -32,16 +31,12 @@ builder.mutationField('deleteReaction', (t) =>
       type: t.input.string({ validate: reactionTypeSchema }),
     },
     resolve: async (_, { input }, ctx): Promise<DeleteReactionPayload> => {
-      const result = await deleteReaction(
-        {
-          actorProfileId: ctx.session.profileId,
-          origin: 'LOCAL',
-          postId: input.postId.id,
-          type: input.type,
-        },
-        db,
-      );
-      await result.postCommit(db);
+      const result = await deleteReaction({
+        actorProfileId: ctx.session.profileId,
+        origin: 'LOCAL',
+        postId: input.postId.id,
+        type: input.type,
+      });
 
       return { post: result.postId, reactionId: result.reaction?.id ?? null };
     },

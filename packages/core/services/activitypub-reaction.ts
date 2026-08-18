@@ -12,16 +12,16 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
+import { temporalClient } from '../temporal/client';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
 import { postVisibilityCondition } from '../visibility/post';
-import { addReaction, deleteReaction } from './reaction';
 import type { Transaction } from '../db';
 
 type MaterializeInboundReactionInput = {
   readonly activityUri: string;
   readonly actorUri: string;
   readonly objectUri: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly type: string;
 };
 
@@ -175,9 +175,7 @@ export const materializeInboundReaction = async (
     return { kind: 'REJECTED' };
   }
 
-  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }> & {
-    readonly postCommit: () => Promise<void>;
-  };
+  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }>;
   try {
     result = await db.transaction(async (tx) => {
       const actor = await tx
@@ -209,8 +207,6 @@ export const materializeInboundReaction = async (
 
       const identity = {
         actorProfileId: actor.profileId,
-        onPostCommitError: input.onPostCommitError,
-        origin: 'ACTIVITYPUB' as const,
         postId: target.postId,
         type: parsedType.data,
       };
@@ -221,23 +217,50 @@ export const materializeInboundReaction = async (
         }
         return {
           kind: 'DUPLICATE' as const,
-          postCommit: async () => {},
           reaction: existingMapping,
         };
       }
 
-      const reactionResult = await addReaction(identity, tx);
+      const inserted = await tx
+        .insert(Reactions)
+        .values({
+          postId: identity.postId,
+          profileId: identity.actorProfileId,
+          type: identity.type,
+        })
+        .onConflictDoNothing({
+          target: [Reactions.postId, Reactions.type, Reactions.profileId],
+        })
+        .returning()
+        .then(first);
+      const reaction =
+        inserted ??
+        (await tx
+          .select()
+          .from(Reactions)
+          .where(
+            and(
+              eq(Reactions.postId, identity.postId),
+              eq(Reactions.profileId, identity.actorProfileId),
+              eq(Reactions.type, identity.type),
+            ),
+          )
+          .limit(1)
+          .then(first));
+      if (!reaction) {
+        throw new Error('Reaction not found after insert conflict');
+      }
+
       const insertedMapping = await tx
         .insert(ActivityPubReactions)
-        .values({ reactionId: reactionResult.reaction.id, uri: input.activityUri })
+        .values({ reactionId: reaction.id, uri: input.activityUri })
         .onConflictDoNothing()
         .returning({ reactionId: ActivityPubReactions.reactionId })
         .then(first);
       if (insertedMapping) {
         return {
-          kind: reactionResult.created ? ('CREATED' as const) : ('MAPPED' as const),
-          postCommit: reactionResult.postCommit,
-          reaction: reactionResult.reaction,
+          kind: inserted ? ('CREATED' as const) : ('MAPPED' as const),
+          reaction,
         };
       }
 
@@ -248,7 +271,6 @@ export const materializeInboundReaction = async (
 
       return {
         kind: 'DUPLICATE' as const,
-        postCommit: async () => {},
         reaction: concurrentMapping,
       };
     });
@@ -259,7 +281,26 @@ export const materializeInboundReaction = async (
     throw error;
   }
 
-  await result.postCommit();
+  if (result.kind === 'CREATED') {
+    const origin = 'ACTIVITYPUB' as const;
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start('reactionCreateEffectsWorkflow', {
+          args: [{ origin, reactionId: result.reaction.id }],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `reaction-create-effects:${result.reaction.id}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
+    } catch (error) {
+      console.error('Reaction Create effects Workflow start failed', {
+        error,
+        origin,
+        reactionId: result.reaction.id,
+      });
+    }
+  }
 
   return { kind: result.kind, reaction: result.reaction };
 };
@@ -267,11 +308,9 @@ export const materializeInboundReaction = async (
 export const undoInboundReaction = async ({
   activityUri,
   actorUri,
-  onPostCommitError,
 }: {
   readonly activityUri: string;
   readonly actorUri: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
 }): Promise<{ readonly reactionId: string | null }> => {
   if (!isHttpUri(activityUri) || !isHttpUri(actorUri)) {
     return { reactionId: null };
@@ -300,22 +339,49 @@ export const undoInboundReaction = async ({
       return null;
     }
 
-    const deleted = await deleteReaction(
-      {
-        actorProfileId: mapped.reaction.profileId,
-        expectedReactionId: mapped.reaction.id,
-        onPostCommitError,
-        origin: 'ACTIVITYPUB',
-        postId: mapped.reaction.postId,
-        type: mapped.reaction.type,
-      },
-      tx,
-    );
-
-    return deleted;
+    return tx
+      .delete(Reactions)
+      .where(
+        and(
+          eq(Reactions.id, mapped.reaction.id),
+          eq(Reactions.profileId, mapped.reaction.profileId),
+          eq(Reactions.postId, mapped.reaction.postId),
+          eq(Reactions.type, mapped.reaction.type),
+        ),
+      )
+      .returning()
+      .then(first)
+      .then((reaction) => reaction ?? null);
   });
 
-  await deleted?.postCommit();
+  if (deleted) {
+    const origin = 'ACTIVITYPUB' as const;
+    const input = {
+      createdAt: deleted.createdAt.toString(),
+      id: deleted.id,
+      origin,
+      postId: deleted.postId,
+      profileId: deleted.profileId,
+      type: deleted.type,
+    };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start('reactionDeleteEffectsWorkflow', {
+          args: [input],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `reaction-delete-effects:${input.id}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
+      );
+    } catch (error) {
+      console.error('Reaction Delete effects Workflow start failed', {
+        error,
+        origin,
+        reactionId: deleted.id,
+      });
+    }
+  }
 
-  return { reactionId: deleted?.reaction?.id ?? null };
+  return { reactionId: deleted?.id ?? null };
 };
