@@ -6,12 +6,12 @@
 
 - Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
 - Firebase App Distribution 서비스 계정과 최소 IAM 권한
-- `main`에 저장된 지정 workflow와 `prod` Environment의 승인된 release만 허용하는 GitHub Actions Workload Identity Federation
+- `main`에 저장된 지정 workflow와 `prod` Environment 승인 뒤의 exact `repo:byulmaru/kosmo:environment:prod` release만 허용하는 GitHub Actions Workload Identity Federation
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`, `terraform-apply`, 승인형 `prod` release)
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `kosmo` ECR 저장소와 Docker Build 전용 GitHub Actions OIDC push role
-- ECR의 `main`/`stable` 및 환경별 candidate metadata, untagged 1일 만료, 나머지 이미지 7일 만료 정책
+- ECR의 `main`/`stable` 및 production SHA metadata, untagged 1일 만료, 나머지 이미지 7일 만료 정책
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
 - Argo CD `kosmo` ApplicationSet이 생성하는 `kosmo-dev` Application과 별도 `kosmo-prod` Application의 선언
 
@@ -38,11 +38,11 @@ Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계�
 
 GCP 리소스를 적용한 뒤 native/onboarding Environment와 변수는 [앱의 iOS Ad Hoc 관리자 설정](../app/README.md#one-time-administrator-setup)에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정하고, `AWS_TERRAFORM_ROLE_ARN`은 `ensure-ci-aws-role.sh`의 마지막 출력값으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
 
-`main`을 push하면 Docker Build는 같은 full SHA에서 dev image와 prod production candidate image를 환경별 설정으로 각각 build한다. Dev image는 기존 `Deploy Dev` 경로로 자동 배포하고, prod candidate는 `prod` Environment required reviewer의 한 번의 승인 뒤에만 Argo CD migration·workload를 변경한다. 두 image는 환경별 Web 설정을 포함하므로 동일 digest일 필요가 없으며, production migration과 모든 활성화 workload만 해당 release의 하나의 prod digest를 사용한다. Candidate build에서는 `stable`을 이동하지 않고, 승인된 production sync와 post-deploy 검증이 성공한 digest에만 `stable` 보존 metadata를 적용한다.
+`main`을 push하면 Docker Build는 dev image를 build하고 기존 `Deploy Dev` 경로로 자동 배포한다. Production release는 `prod` Environment required reviewer의 한 번의 승인을 먼저 기다리며, 승인 전에는 production source checkout, prod Vault/ECR/Sentry credential 접근과 prod image build를 수행하지 않는다. 승인 뒤 gated job이 같은 full SHA에서 prod 설정 image를 별도로 build하고, 그 digest를 production migration과 모든 활성화 workload에 사용한다. 두 image는 환경별 Web 설정을 포함하므로 동일 digest일 필요가 없으며, 승인 전에는 `stable`을 이동하지 않고 production sync와 post-deploy 검증이 성공한 digest에만 `stable` 보존 metadata를 적용한다.
 
-Main에 저장된 release workflow를 `main` ref에서 수동 실행하면 repository에 존재하는 정확한 40자리 commit SHA를 production target으로 선택할 수 있다. Manual 경로는 `prod` Environment 승인 전에는 target checkout·prod secret 접근·build를 하지 않으며, 승인 뒤 target SHA에서 build한 digest를 같은 migration·workload 경로로 배포한다. Workflow definition ref와 target SHA, automatic/manual trigger를 audit summary에 구분해 남긴다. Git tag, `production` branch와 일반 branch push는 production source·approval·배포를 시작하지 않으며, production workload identity는 tag가 아니라 full SHA와 build digest다. Lifecycle policy는 dev/prod SHA metadata와 `stable` image를 필요한 기간 보호하고, untagged image는 하루 뒤, 그 외 candidate image는 7일 뒤 만료한다.
+Main에 저장된 release workflow를 `main` ref에서 수동 실행하면 repository에 존재하는 정확한 40자리 commit SHA를 production target으로 선택할 수 있다. Manual 경로는 `prod` Environment 승인 전에는 target checkout·prod Vault/ECR/Sentry credential 접근·build를 하지 않으며, 승인 뒤 target SHA에서 build한 digest를 같은 migration·workload 경로로 배포한다. Workflow definition ref와 target SHA, automatic/manual trigger를 audit summary에 구분해 남긴다. Git tag, `production` branch와 일반 branch push는 production source·approval·배포를 시작하지 않으며, production workload identity는 tag가 아니라 full SHA와 build digest다. Lifecycle policy는 dev/prod SHA metadata와 `stable` image를 필요한 기간 보호하고, untagged image는 하루 뒤, 그 외 production image는 7일 뒤 만료한다.
 
-ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 Docker Build workflow에 직접 선언한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap 없이 GHCR과 ECR에 같은 태그를 함께 push한다.
+ECR repository URL과 push role ARN은 공개된 고정 식별자이므로 승인된 production release workflow에 직접 선언한다. Dev build는 GHCR을 사용하고, `prod` Environment 승인 뒤 실행되는 production build만 ECR에 push한다. ECR 리소스가 생성된 뒤에는 별도 GitHub repository variable bootstrap이 필요하지 않다.
 
 Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 Barman의 bucket 확인을 위한 bucket-level list 권한과 `kosmo-prod/` prefix의 backup/WAL 객체 관리 권한만 가진다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 

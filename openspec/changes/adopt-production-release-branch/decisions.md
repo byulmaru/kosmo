@@ -1,6 +1,6 @@
 > **Lifecycle: Superseded**
 >
-> 이 decision 기록은 `PROD-764` 시점의 production branch·PR approval 모델을 보존한 historical provenance다. `PROD-783`가 main automatic candidate와 `prod` Environment approval, manual full-SHA release로 이 결정들을 대체했다. 이 파일의 historical outcome을 현재 active contract로 해석하거나 active spec에 재적용하지 않는다.
+> 이 decision 기록은 `PROD-764` 시점의 production branch·PR approval 모델을 보존한 historical provenance다. `PROD-783`가 main dev build 뒤 `prod` Environment approval을 거쳐 prod checkout·credential·build·deploy를 수행하는 automatic release와 manual full-SHA release로 이 결정들을 대체했다. 이 파일의 historical outcome을 현재 active contract로 해석하거나 active spec에 재적용하지 않는다.
 
 ## Historical Context
 
@@ -98,7 +98,7 @@
 
 ## Superseded Decisions
 
-- `PROD-764`의 모든 production branch source·PR merge approval·branch-triggered release 결정은 `PROD-783`의 main automatic candidate와 `prod` Environment approval 결정으로 대체됐다. 이 change는 archive 전까지 historical record로만 보존한다.
+- `PROD-764`의 모든 production branch source·PR merge approval·branch-triggered release 결정은 `PROD-783`의 main dev build 뒤 `prod` Environment approval을 거치는 automatic release 결정으로 대체됐다. 이 change는 archive 전까지 historical record로만 보존한다.
 - `PROD-563`의 모든 Git tag push production build 결정은 `PROD-764`의 production PR 승인·push 자동 배포 결정으로 대체된다.
 - Tag를 application rollback source selector로 사용하던 결정은 production revert를 새 release로 배포하는 결정으로 대체된다.
 - 이 change 초안의 모든 production release를 tag commit SHA로 선택하던 결정은 폐기됐다. Source는 production push SHA이며 version 표시는 후속 범위다.

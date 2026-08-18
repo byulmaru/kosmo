@@ -16,7 +16,7 @@
 - Rollback은 과거 tag 재배포가 아니라 production revert PR을 merge해 새 배포로 수행한다.
 - Dev의 main 배포와 기존 migration barrier는 유지한다.
 
-위 목록은 `PROD-764` 시점의 historical proposal이다. 현재는 main push automatic candidate, `prod` Environment approval과 manual full-SHA build·deploy가 source of truth이며, production branch/tag를 release source나 approval boundary로 사용하지 않는다.
+위 목록은 `PROD-764` 시점의 historical proposal이다. 현재는 main push의 dev build 뒤 `prod` Environment 승인을 거쳐 prod checkout·credential·build·deploy를 수행하는 automatic release와 manual full-SHA build·deploy가 source of truth이며, production branch/tag를 release source나 approval boundary로 사용하지 않는다.
 
 ## Authority / Provenance
 

@@ -2,7 +2,7 @@
 >
 > `PROD-783`가 이 change의 branch-based release contract와 남은 live verification·cutover·archive 책임을 인계했다. 아래 checkbox는 `PROD-764` historical task의 disposition을 기록하는 것이며, 이 파일에서 production branch를 만들거나 live 배포를 실행하라는 지시가 아니다. 이 change는 archive하지 않고 `PROD-783`의 live gate가 끝날 때까지 historical artifact로 보존한다.
 >
-> Current owner: `openspec/changes/deploy-production-from-main-or-sha` task groups 3~5. Obsolete task는 새 change에서 main automatic candidate, `prod` Environment approval, manual full-SHA release와 live cutover evidence로 재검증한다.
+> Current owner: `openspec/changes/deploy-production-from-main-or-sha` task groups 3~5. Obsolete task는 새 change에서 main dev build 뒤 `prod` Environment approval을 거치는 automatic production build, manual full-SHA release와 live cutover evidence로 재검증한다.
 
 ## 1. PROD-764 Production branch 기준점 (Superseded)
 
@@ -146,13 +146,13 @@ Release-control 변경만 포함한 production PR이 version tag 입력 없이 m
 
 - [x] 5.1 Main merge와 infrastructure apply가 완료된 뒤 release-control commit만 production PR로 반영한다. (Obsolete; cutover diff와 선행 수렴은 `PROD-783` task 5.1이 소유한다.)
 - [x] 5.2 Tag push만으로 배포가 실행되지 않고 production build가 표시 tag 입력을 요구하지 않음을 확인한다. (Superseded; tag/production branch matrix와 main automatic/manual SHA 경계는 `PROD-783` task 2.4 및 4.3이 소유한다.)
-- [x] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 모든 활성화 workload 결과를 기록한다. (Superseded; first main candidate Environment approval·deploy evidence는 `PROD-783` task 5.3이 소유한다.)
+- [x] 5.3 Production PR을 review/checks 후 merge해 자동 배포하고 추가 사람 승인 없이 commit, version label 비노출, Argo source, digest, migration과 모든 활성화 workload 결과를 기록한다. (Superseded; first main production approval·build·deploy evidence는 `PROD-783` task 5.3이 소유한다.)
 - [x] 5.4 전체 완료 조건을 Linear에 기록하고 delta를 active `production-release` spec에 동기화해 OpenSpec을 archive한다. (Superseded; active spec sync와 old change archive handoff는 `PROD-783` task 5.6이 소유한다.)
 - [x] 5.5 Archive와 active specs를 strict validation해 main에 전달한 뒤 `PROD-764`을 완료한다. (Superseded; strict validation과 Linear completion evidence는 `PROD-783` task 5.6이 소유한다.)
 
 ## Superseded task ownership
 
-- Main automatic dev/prod 별도 build, candidate artifact와 `prod` Environment approval: `PROD-783` task group 1~2
+- Main automatic dev/prod 별도 build, production build artifact와 `prod` Environment approval: `PROD-783` task group 1~2
 - Manual full-SHA preflight, 승인 전 target isolation과 승인 후 build·deploy: `PROD-783` task group 2
 - Argo bootstrap source, ECR/Vault OIDC trust와 GitHub Environment policy: `PROD-783` task group 3
 - 운영 문서·old change 정합성 및 strict validation: `PROD-783` task group 4

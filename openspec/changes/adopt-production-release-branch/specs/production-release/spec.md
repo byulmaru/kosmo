@@ -1,6 +1,6 @@
 > **Lifecycle: Superseded**
 >
-> 이 delta는 `PROD-764`의 production branch·PR approval contract를 보존한 historical artifact다. `PROD-783`의 `deploy-production-from-main-or-sha` delta가 main automatic candidate, `prod` Environment approval과 manual full-SHA release로 이를 대체한다. 아래 requirement는 현재 active spec에 적용하지 않으며, `PROD-783`의 live cutover·active spec sync·strict validation 뒤 obsolete delta를 적용하지 않는 방식으로 archive한다.
+> 이 delta는 `PROD-764`의 production branch·PR approval contract를 보존한 historical artifact다. `PROD-783`의 `deploy-production-from-main-or-sha` delta가 main dev build 뒤 `prod` Environment approval을 거치는 automatic release와 manual full-SHA release로 이를 대체한다. 아래 requirement는 현재 active spec에 적용하지 않으며, `PROD-783`의 live cutover·active spec sync·strict validation 뒤 obsolete delta를 적용하지 않는 방식으로 archive한다.
 
 ## Historical ADDED Requirements (Superseded)
 

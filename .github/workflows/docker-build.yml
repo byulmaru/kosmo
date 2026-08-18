@@ -5,8 +5,6 @@ on:
     branches: [main]
 
 env:
-  AWS_REGION: ap-northeast-2
-  AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
   ENVIRONMENT: dev
   SENTRY_RELEASE: kosmo@${{ github.sha }}
   VAULT_ADDR: https://vault.tail1fdd55.ts.net
@@ -47,12 +45,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Load Sentry DSN from Vault
         id: sentry
         uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
@@ -66,16 +58,12 @@ jobs:
           secrets: |
             secret/data/kubernetes/kosmo/${{ env.ENVIRONMENT }} EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
 
-      - name: Log in to ECR
-        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
-
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
           images: |
             ghcr.io/${{ github.repository }}
-            ${{ env.AWS_ECR_REPOSITORY_URL }}
           tags: |
             type=sha
             type=raw,value=main

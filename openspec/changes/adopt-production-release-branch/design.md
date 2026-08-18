@@ -1,6 +1,6 @@
 > **Lifecycle: Superseded**
 >
-> 이 design은 `PROD-764`의 production branch 기반 release를 설명하는 historical artifact다. `PROD-783`가 main automatic candidate, `prod` Environment approval과 manual full-SHA release로 전체 production source·approval 계약을 대체했다. 아래 내용은 현재 구현 지침이나 운영 절차가 아니며, archive 전 provenance 확인에만 사용한다.
+> 이 design은 `PROD-764`의 production branch 기반 release를 설명하는 historical artifact다. `PROD-783`가 main dev build 뒤 `prod` Environment approval을 거쳐 prod checkout·credential·build·deploy를 수행하는 automatic release와 manual full-SHA release로 전체 production source·approval 계약을 대체했다. 아래 내용은 현재 구현 지침이나 운영 절차가 아니며, archive 전 provenance 확인에만 사용한다.
 
 ## Historical Context
 
@@ -83,7 +83,7 @@ GitHub production ruleset과 `prod` Environment 설정은 범용 repository boot
 
 ## Superseded ownership
 
-- Current source of truth: `openspec/changes/deploy-production-from-main-or-sha` (`PROD-783`)
+- Current source of truth: `openspec/changes/deploy-production-from-main-or-sha` (`PROD-783`), where both automatic main and manual SHA production builds begin only after `prod` Environment approval.
 - Obsolete live work: production branch creation/ruleset, branch-triggered release verification, branch-based credential trust와 첫 branch release는 `PROD-783`의 task 3~5가 대체 소유한다.
 - Do not restore: 이 historical design의 `production` branch, production PR approval, tag 기반 source 또는 branch-first hotfix/revert 선택을 active spec·runbook에 다시 적용하지 않는다.
 - Archive: `PROD-783`의 live cutover와 active spec synchronization 이후에만 이 superseded change를 archive한다.

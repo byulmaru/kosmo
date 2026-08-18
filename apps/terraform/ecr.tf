@@ -109,7 +109,6 @@ data "aws_iam_policy_document" "ecr_push_assume_role" {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
       values = [
-        "repo:${local.github_owner}/${local.github_repository}:ref:refs/heads/main",
         "repo:${local.github_owner}/${local.github_repository}:environment:prod",
       ]
     }
