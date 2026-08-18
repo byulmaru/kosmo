@@ -21,6 +21,7 @@ import {
 import { decodeGlobalId, encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import { and, count, eq, ne } from 'drizzle-orm';
@@ -955,20 +956,10 @@ describe('GraphQL remote profile boundary', () => {
     });
   });
 
-  test('Profile Update delivery 실패 뒤에도 committed GraphQL payload를 반환한다', async () => {
+  test('Profile Update Workflow start 실패 뒤에도 committed GraphQL payload를 반환한다', async () => {
     const auth = await createAuthenticatedSession();
-    const remoteInstance = await createRemoteInstance({ domain: 'profile-update.remote.example' });
-    const remote = await createProfile({
-      handle: 'profile-update-follower',
-      instanceId: remoteInstance.id,
-    });
-    await createRemoteActor(remote.id, remoteInstance.domain);
-    await db.insert(ProfileFollows).values({
-      followeeProfileId: auth.profile.id,
-      followerProfileId: remote.id,
-    });
-    const delivery = mock.method(globalThis, 'fetch', async () => {
-      throw new Error('delivery failed');
+    const start = mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
     });
     const errorLog = mock.method(console, 'error', () => undefined);
 
@@ -976,7 +967,7 @@ describe('GraphQL remote profile boundary', () => {
       const result = await requestGraphQL<{
         updateProfile: { profile: { bio: string | null; id: string } };
       }>(
-        `mutation UpdateProfileAfterDeliveryFailure {
+        `mutation UpdateProfileAfterWorkflowStartFailure {
           updateProfile(input: { bio: "Committed bio" }) {
             profile { bio id }
           }
@@ -990,12 +981,14 @@ describe('GraphQL remote profile boundary', () => {
         bio: 'Committed bio',
         id: globalId('Profile', auth.profile.id),
       });
-      assert.ok(delivery.mock.callCount() > 0);
+      assert.equal(start.mock.callCount(), 1);
       assert.equal(errorLog.mock.callCount(), 1);
       assert.equal(
         errorLog.mock.calls[0]?.arguments[0],
-        'Post-commit ActivityPub Local Profile Update delivery failed',
+        'Profile Update effects Workflow start failed',
       );
+      assert.equal(errorLog.mock.calls[0]?.arguments[1]?.profileId, auth.profile.id);
+      assert.equal(typeof errorLog.mock.calls[0]?.arguments[1]?.updateId, 'string');
       assert.equal(
         await db
           .select({ bio: Profiles.bio })
@@ -1006,7 +999,7 @@ describe('GraphQL remote profile boundary', () => {
         'Committed bio',
       );
     } finally {
-      delivery.mock.restore();
+      start.mock.restore();
       errorLog.mock.restore();
     }
   });

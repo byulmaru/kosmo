@@ -1,5 +1,6 @@
 export { postCreateEffectsWorkflow } from './create';
 export { postDeleteWorkflow } from './delete';
+export { profileUpdateEffectsWorkflow } from './profile-update';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { postRepostWorkflow } from './repost';

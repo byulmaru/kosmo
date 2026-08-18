@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
+  db,
   first,
-  getDatabaseConnection,
   Hashtags,
   Instances,
   Media,
@@ -23,9 +24,9 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { temporalClient } from '../temporal/client';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { profileBioSchema, profileTagsSchema } from '../validation';
-import { noPostCommit, oncePostCommit } from './post-commit';
-import type { DatabaseHandle } from '../db';
 import type { ProfileFollowPolicy } from '../enums';
 
 export type UpdateProfileInput = {
@@ -41,7 +42,6 @@ export type UpdateProfileInput = {
 };
 
 export type UpdateProfileResult = {
-  readonly postCommit: () => Promise<void>;
   readonly profile: typeof Profiles.$inferSelect;
 };
 
@@ -115,11 +115,8 @@ const normalizeDefaultPostVisibility = (
   return visibility;
 };
 
-export const updateProfile = async (
-  input: UpdateProfileInput,
-  tx?: DatabaseHandle,
-): Promise<UpdateProfileResult> => {
-  const result = await getDatabaseConnection(tx).transaction(async (tx) => {
+export const updateProfile = async (input: UpdateProfileInput): Promise<UpdateProfileResult> => {
+  const result = await db.transaction(async (tx) => {
     const profile = await tx
       .select({ profile: Profiles, actorRole: AccountProfiles.role })
       .from(Profiles)
@@ -288,23 +285,30 @@ export const updateProfile = async (
         });
     }
 
-    return { actorProjectionChanged: actorProjectionActuallyChanged, profile: updatedProfile };
+    return {
+      profile: updatedProfile,
+      updateId: actorProjectionActuallyChanged ? randomUUID() : undefined,
+    };
   });
 
-  return {
-    profile: result.profile,
-    postCommit: result.actorProjectionChanged
-      ? oncePostCommit(async () => {
-          try {
-            const { sendLocalProfileUpdate } = await import('@kosmo/fedify');
-            await sendLocalProfileUpdate(result.profile.id);
-          } catch (error) {
-            console.error('Post-commit ActivityPub Local Profile Update delivery failed', {
-              error,
-              profileId: result.profile.id,
-            });
-          }
-        })
-      : noPostCommit,
-  };
+  const updateId = result.updateId;
+  if (updateId) {
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start('profileUpdateEffectsWorkflow', {
+          args: [{ profileId: result.profile.id, updateId }],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: updateId,
+        }),
+      );
+    } catch (error) {
+      console.error('Profile Update effects Workflow start failed', {
+        error,
+        profileId: result.profile.id,
+        updateId,
+      });
+    }
+  }
+
+  return { profile: result.profile };
 };
