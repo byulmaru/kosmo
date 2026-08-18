@@ -6,7 +6,8 @@
 - `docs/domain/objects/post.md`
 - `docs/domain/objects/instance.md`
 - `docs/domain/decisions/0015-post-share-reference.md`
-- `PROD-731` 본문과 2026-08-10 현재 관계·댓글
+- `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`
+- `PROD-731` 본문과 2026-08-18 현재 관계·댓글
 
 **Deliverable**
 
@@ -15,7 +16,8 @@ Web origin의 `/sitemap.xml`이 공개 정적 페이지와 eligible Local Profil
 **Guardrails**
 
 - 공개 정적 route는 `/`와 `/privacy`로 제한하고 보호·인증·callback·내부 endpoint를 포함하지 않는다.
-- configured Local Instance의 공개 가능한 Active Profile과 Active·Public·Current Content 보유 Post만 포함하며 Remote·제한 공개·삭제·Content 없는 Repost를 제외한다.
+- configured Local Instance의 공개 가능한 Active Profile과 Active·Public·Current Content 보유 Post만 포함하며 Remote·제한 공개·삭제·Content 없는 Repost를 제외한다. 일반 익명 visibility가 허용하는 Unlisted는 sitemap 검색 후보에서 명시적으로 제외한다.
+- 조회는 공유 runtime DB와 application policy 경계를 사용한다. operation-scoped DB session·actor GUC·GraphQL RLS 경계를 추가하거나 복원하지 않는다.
 - URL은 canonical `PUBLIC_ORIGIN`, relative handle, 기존 `Post` global ID 계약을 사용하고 XML text로 안전하게 escape한다.
 - Post Current Content revision의 실제 시각에만 `lastmod`를 제공하며 정적·Profile에는 추정 시각, `changefreq`, `priority`를 제공하지 않는다.
 - 일부 URL을 잘라 성공시키지 않으며 Sitemap protocol의 URL 수·UTF-8 byte 한도를 지킨다.
@@ -24,10 +26,10 @@ Web origin의 `/sitemap.xml`이 공개 정적 페이지와 eligible Local Profil
 **Verification**
 
 - `/sitemap.xml`의 상태·content type·XML parse 결과와 SPA fallback 비적용을 검증한다.
-- 정적/Profile/Post 포함·제외 matrix, canonical URL, global ID, escaping, `lastmod`와 protocol 한도 경계를 자동화된 테스트로 검증한다.
+- 정적/Profile/Post 포함·제외 matrix, Public 포함·Unlisted 제외, canonical URL, global ID, escaping, `lastmod`와 protocol 한도 경계를 자동화된 테스트로 검증한다.
 
 - [ ] 1.1 구현 직전 eligible URL 수와 예상 byte 크기를 측정할 경로를 마련하고, 단일 urlset 또는 한도에 맞는 sitemap index 형태를 결정 기록의 조건에 따라 선택한다.
-- [ ] 1.2 공개 정적 route와 eligible Local Profile·Post를 canonical sitemap entry로 제공하는 read-only Web 동작을 구현한다.
+- [ ] 1.2 공유 runtime DB의 application policy를 재사용·합성하고 Public-only 조건을 명시해 공개 정적 route와 eligible Local Profile·Post를 canonical sitemap entry로 제공하는 read-only Web 동작을 구현한다.
 - [ ] 1.3 XML response, metadata 생략·escaping·중복 방지와 URL 수·byte 한도 실패 동작을 구현한다.
 - [ ] 1.4 `/sitemap.xml`이 federation-first 동작을 유지하면서 Expo SPA fallback보다 우선하는 전용 XML 표현이 되도록 Web route에 연결한다.
 
@@ -39,6 +41,7 @@ Web origin의 `/sitemap.xml`이 공개 정적 페이지와 eligible Local Profil
 - `docs/domain/objects/post.md`
 - `docs/domain/objects/instance.md`
 - `docs/domain/decisions/0015-post-share-reference.md`
+- `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`
 - `PROD-731`의 포함·제외, URL escaping·canonical origin·`lastmod`, Web 응답 완료 조건
 
 **Deliverable**
@@ -48,6 +51,7 @@ Web origin의 `/sitemap.xml`이 공개 정적 페이지와 eligible Local Profil
 **Guardrails**
 
 - 실제 production과 다른 공개 database abstraction을 테스트만을 위해 추가하지 않는다.
+- operation-scoped DB session·actor GUC·GraphQL RLS 경계를 테스트 편의를 위해 추가하지 않는다.
 - 테스트는 기존 격리 PostgreSQL과 Web runtime 경계를 재사용하고 실제 사용자 데이터나 비밀값에 의존하지 않는다.
 - `robots.txt`와 검색 ranking·개별 URL 색인 여부는 이 그룹의 검증 범위가 아니다.
 
@@ -58,7 +62,7 @@ Web origin의 `/sitemap.xml`이 공개 정적 페이지와 eligible Local Profil
 
 - [ ] 2.1 XML declaration·namespace·escaping·중복 제거·선택적 `lastmod`·금지 metadata와 URL 수·byte 한도 경계 단위 테스트를 추가한다.
 - [ ] 2.2 crawler와 browser navigation 요청 모두 `application/xml`을 받고 Expo `index.html`을 받지 않는 Web route 테스트를 추가한다.
-- [ ] 2.3 Local/Remote Instance·Profile state·Post visibility/state/Current Content 조합을 seed해 실제 포함·제외, canonical origin·handle·Post global ID·revision `lastmod`를 검증한다.
+- [ ] 2.3 Local/Remote Instance·Profile state·Post visibility/state/Current Content 조합을 seed해 실제 포함·제외, 특히 Public 포함과 일반 익명 조회 가능한 Unlisted 제외, canonical origin·handle·Post global ID·revision `lastmod`를 검증한다.
 - [ ] 2.4 변경 범위의 test·typecheck·lint와 OpenSpec strict validation을 실행하고 결과를 기록한다.
 
 ## 3. PROD-731 프로덕션 응답과 검색엔진 등록 검증

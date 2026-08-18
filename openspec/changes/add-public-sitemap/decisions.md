@@ -1,11 +1,11 @@
 ## Context
 
-이 결정 기록은 `PROD-731`의 현재 본문·관계와 계약 변경 댓글이 없다는 사실, 공개 Profile·Post·Instance의 canonical 문서, 그리고 이 change의 proposal·spec·design을 대조해 만든다. OpenSpec 자체는 제품 권위로 사용하지 않으며, 아래 구현 선택은 현재 승인된 sitemap 범위 안에서만 효력을 가진다.
+이 결정 기록은 `PROD-731`의 현재 본문·관계와 계약 변경 댓글이 없다는 사실, 공개 Profile·Post·Instance의 canonical 문서, application policy와 runtime DB 경계 ADR, 그리고 이 change의 proposal·spec·design을 대조해 만든다. OpenSpec 자체는 제품 권위로 사용하지 않으며, 아래 구현 선택은 현재 승인된 sitemap 범위 안에서만 효력을 가진다.
 
 ### Gate Snapshot
 
-- Domain Gate: Pass — `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0015-post-share-reference.md`에서 공개 eligibility와 canonical route 계약을 확인했다.
-- Issue Gate: Pass — `PROD-731` 본문·관계·댓글을 2026-08-10에 다시 읽었고, 사용자가 현재 세션에서 `PROD-731` spec workflow 실행을 명시적으로 요청했다.
+- Domain Gate: Pass — `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`에서 공개 eligibility, canonical route와 runtime query 경계를 확인했다.
+- Issue Gate: Pass — `PROD-731` 본문·관계·댓글과 관련 `PROD-736` 경계를 2026-08-18에 다시 읽었고, 사용자가 현재 대화에서 기존 OpenSpec을 “갱신”하도록 요청했다.
 - OpenSpec Gate: Pending — 이 산출물의 구현 착수 승인은 사용자 확인 전까지 보류한다.
 
 ## Decision Records
@@ -24,12 +24,12 @@
 
 ### Sitemap을 Web BFF의 동적 전용 route로 제공한다
 
-- Decision Date: 2026-08-10
+- Decision Date: 2026-08-18
 - Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-731`의 `/sitemap.xml` XML 응답·공개 DB 객체 포함·프로덕션 검증 범위, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`.
+- Authority / Provenance: `PROD-731`의 `/sitemap.xml` XML 응답·공개 DB 객체 포함·프로덕션 검증 범위, `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`.
 - Status: Active
 - Context / Problem: 빌드 시점 정적 XML은 runtime DB 변화를 반영하지 못하고, 현재 SPA fallback은 `/sitemap.xml` browser navigation에 `index.html`을 반환할 수 있다.
-- Decision Outcome: Web BFF에 read-only 동적 GET `/sitemap.xml` route를 추가하고, 전역 federation middleware 뒤이면서 Expo 정적 파일·SPA fallback 앞에 등록한다. 성공 응답은 `application/xml; charset=utf-8`을 사용한다.
+- Decision Outcome: Web BFF에 read-only 동적 GET `/sitemap.xml` route를 추가하고, 전역 federation middleware 뒤이면서 Expo 정적 파일·SPA fallback 앞에 등록한다. 성공 응답은 `application/xml; charset=utf-8`을 사용한다. 조회는 application query의 공유 runtime DB 경계를 사용하며 operation-scoped DB session·actor GUC·GraphQL RLS 경계를 추가하지 않는다.
 - Alternatives Considered: `apps/app/public` 정적 파일은 데이터 변화를 반영하지 못해 제외했다. GraphQL endpoint로만 제공하면 표준 crawler 진입점이 아니므로 제외했다. federation middleware 앞 등록은 현재 representation 순서를 바꾸므로 제외했다.
 - Consequences: sitemap 정상 응답은 DB와 configured Local Instance 해석에 의존한다. 실패를 부분 sitemap 성공으로 숨기지 않고 기존 Web 오류 관측 경계로 전달해야 한다.
 - Confirmation / Follow-up: crawler와 browser navigation header 양쪽에서 XML이 반환되고 SPA HTML이 반환되지 않는지 runtime test로 확인한다.
@@ -60,15 +60,27 @@
 
 ### Current Post Content revision 시각에만 `lastmod`를 제공한다
 
-- Decision Date: 2026-08-10
-- Decision Class: Derived Contract
-- Authority / Provenance: `docs/domain/objects/post.md`의 Post Content revision·현재 콘텐츠 계약, `PROD-731`의 실제 수정 시각만 `lastmod`로 제공하고 `changefreq`·`priority`·현재 시각 추정을 금지한 범위.
+- Decision Date: 2026-08-18
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`의 Post Content revision·현재 콘텐츠 계약, `PROD-731`의 실제 수정 시각만 `lastmod`로 제공하고 `changefreq`·`priority`·현재 시각 추정을 금지한 범위, Google 공식 sitemap 문서 `<https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap>`의 정확하고 검증 가능한 `lastmod` 지침.
 - Status: Active
 - Context / Problem: Profile과 Post row에는 일반적인 실제 페이지 수정 시각이 없으며, 생성 시각·요청 시각·배포 시각을 복제하면 crawler에 거짓 freshness 신호를 준다.
 - Decision Outcome: 포함 대상 Post의 Current Content가 가리키는 immutable revision 생성 시각만 W3C datetime `lastmod`로 직렬화한다. 정적 route와 Profile은 `lastmod`를 생략하고 모든 entry에서 `changefreq`와 `priority`를 생략한다.
 - Alternatives Considered: Profile/Post 생성 시각, 현재 시각, 배포 시각은 실제 마지막 수정 시각이 아니므로 제외했다. 별도 `updatedAt` schema 추가는 현재 이슈 범위를 벗어나므로 제외했다.
 - Consequences: Post 조회는 Current Content revision을 join해야 한다. schema migration 없이 보수적인 metadata만 제공한다.
 - Confirmation / Follow-up: unit/E2E에서 Post revision 시각의 정확한 출력과 정적·Profile metadata 생략을 검증한다.
+
+### 파생된 Public-only 계약을 application policy에 명시적으로 합성한다
+
+- Decision Date: 2026-08-18
+- Decision Class: Implementation Choice
+- Authority / Provenance: `docs/domain/objects/post.md`의 Public 검색 후보와 Unlisted 검색 제외 계약, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`의 application policy·공유 runtime DB 경계, `PROD-731`의 공개 Post 포함·비공개 콘텐츠 제외 범위.
+- Status: Active
+- Context / Problem: Public만 검색 후보이고 Unlisted는 제외한다는 제품 정책은 위 첫 번째 Derived Contract 결정에 이미 기록되어 있다. 현재 일반 익명 Post visibility helper는 Public과 Unlisted를 모두 조회 가능 대상으로 취급하므로, 이를 그대로 sitemap 후보 조건으로 사용하면 Web에서 읽을 수 있지만 검색 후보가 아닌 Unlisted Post가 노출된다. 반대로 공개 조건을 별도 정책 체계로 복제하면 application policy drift가 발생한다.
+- Decision Outcome: 이 기록은 Public-only 제품 정책을 다시 선택하지 않고 그 파생 계약의 구현 방식을 결정한다. sitemap query는 현재 application visibility·eligibility 조건을 재사용·합성하되 `PostVisibility.PUBLIC`을 독립 조건으로 강제한다. configured Local Instance, Active·공개 가능한 Author, Active Post와 Current Content 조건도 canonical 검색·Eligibility 계약에 맞춰 함께 적용한다. 이를 위해 operation-scoped DB session, actor GUC 또는 GraphQL RLS 경계를 복원하지 않는다.
+- Alternatives Considered: 일반 익명 visibility helper 단독 사용은 Unlisted 노출 때문에 제외했다. sitemap 전용으로 모든 visibility·eligibility 규칙을 복사하는 방식은 정책 drift 위험 때문에 제외했다. 과거 operation-scoped DB/RLS 경계를 다시 도입하는 방식은 ADR-0024와 맞지 않아 제외했다.
+- Consequences: 공개 검색 후보 조건은 공통 application policy와 작은 sitemap 전용 `PUBLIC` 제약의 합성으로 드러나야 한다. helper 계약 변경 시 sitemap 회귀 테스트가 차이를 검출해야 한다.
+- Confirmation / Follow-up: 격리 DB 테스트에서 Public은 포함하고 Unlisted는 일반 익명 조회 가능 여부와 무관하게 제외하며, 현재 공유 runtime DB 구성으로 route가 동작하는지 검증한다.
 
 ### Protocol 한도 안에서는 단일 urlset을 사용하고 초과하면 분할 index로 전환한다
 
@@ -96,9 +108,9 @@
 
 ### `robots.txt` 정책과 Sitemap 지시어는 이 change에서 수정하지 않는다
 
-- Decision Date: 2026-08-10
+- Decision Date: 2026-08-18
 - Decision Class: Derived Contract
-- Authority / Provenance: `PROD-731`의 sitemap 구현 범위, 관련 이슈 `PROD-736`의 crawler·search/AI bot 정책과 `Sitemap` 지시어 소유 범위 및 ActivityPub 영향 댓글.
+- Authority / Provenance: `PROD-731`의 sitemap 구현 범위, 관련 이슈 `PROD-736`의 2026-08-18 본문·승인 스냅샷에 기록된 crawler·Cloudflare edge·ActivityPub 안전 경계와 `Sitemap` 지시어 소유 범위.
 - Status: Active
 - Context / Problem: sitemap 제공과 crawler 허용 정책을 한 변경에 섞으면 `PROD-736`의 보안·ActivityPub 검증 경계를 우회할 수 있다.
 - Decision Outcome: 이 change는 `/sitemap.xml` 생성·응답·제출 증거만 소유한다. `apps/app/public/robots.txt`, crawler 분류, bot 차단과 `Sitemap` 지시어는 수정하지 않는다.
