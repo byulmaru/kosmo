@@ -26,7 +26,7 @@
 - Decision Outcome: Create와 Delete를 별도 Workflow type으로 두고 각각 `reaction-create-effects:{reactionId}`, `reaction-delete-effects:{reactionId}` identity를 사용한다.
 - Alternatives Considered: 하나의 generic Workflow와 transition discriminator는 입력 생존 조건이 다른 두 경계를 다시 결합하므로 사용하지 않는다. 같은 Reaction ID만 공유하는 하나의 Workflow ID는 completed execution 충돌 때문에 사용하지 않는다.
 - Consequences: Worker registry와 Temporal contract가 두 entrypoint를 갖지만 조건 분기와 history identity는 단순해진다.
-- Confirmation / Follow-up: stable ID, conflict/reuse policy와 create/delete 독립 start를 contract test로 검증한다.
+- Confirmation / Follow-up: Core service integration test가 create/delete 독립 start의 type, input, stable ID와 policy를 검증하고, Worker integration test가 실제 Workflow bundle에서 두 entrypoint를 실행한다.
 
 ### Delete Workflow에는 deleted Reaction row만 전달한다
 

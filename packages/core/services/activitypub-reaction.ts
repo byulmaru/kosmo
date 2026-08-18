@@ -13,14 +13,7 @@ import {
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { temporalClient } from '../temporal/client';
-import {
-  REACTION_CREATE_WORKFLOW_TYPE,
-  reactionCreateWorkflowStartOptions,
-} from '../temporal/reaction-create';
-import {
-  REACTION_DELETE_WORKFLOW_TYPE,
-  reactionDeleteWorkflowStartOptions,
-} from '../temporal/reaction-delete';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { reactionTypeSchema } from '../validation';
 import { postVisibilityCondition } from '../visibility/post';
 import type { Transaction } from '../db';
@@ -292,10 +285,13 @@ export const materializeInboundReaction = async (
     const origin = 'ACTIVITYPUB' as const;
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        temporalClient.workflow.start(
-          REACTION_CREATE_WORKFLOW_TYPE,
-          reactionCreateWorkflowStartOptions({ origin, reactionId: result.reaction.id }),
-        ),
+        temporalClient.workflow.start('reactionCreateEffectsWorkflow', {
+          args: [{ origin, reactionId: result.reaction.id }],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `reaction-create-effects:${result.reaction.id}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
       );
     } catch (error) {
       console.error('Reaction Create effects Workflow start failed', {
@@ -370,10 +366,13 @@ export const undoInboundReaction = async ({
     };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
-        temporalClient.workflow.start(
-          REACTION_DELETE_WORKFLOW_TYPE,
-          reactionDeleteWorkflowStartOptions(input),
-        ),
+        temporalClient.workflow.start('reactionDeleteEffectsWorkflow', {
+          args: [input],
+          taskQueue: KOSMO_TASK_QUEUE,
+          workflowId: `reaction-delete-effects:${input.id}`,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        }),
       );
     } catch (error) {
       console.error('Reaction Delete effects Workflow start failed', {

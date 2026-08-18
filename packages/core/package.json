@@ -19,12 +19,6 @@
     "./search": "./search.ts",
     "./services": "./services/index.ts",
     "./temporal/client": "./temporal/client.ts",
-    "./temporal/post-create-effects": "./temporal/post-create-effects.ts",
-    "./temporal/post-delete": "./temporal/post-delete.ts",
-    "./temporal/post-repost": "./temporal/post-repost.ts",
-    "./temporal/reaction-create": "./temporal/reaction-create.ts",
-    "./temporal/reaction-delete": "./temporal/reaction-delete.ts",
-    "./temporal/repost-delete": "./temporal/repost-delete.ts",
     "./temporal/task-queue": "./temporal/task-queue.ts",
     "./utils": "./utils.ts",
     "./validation": "./validation/index.ts",
@@ -56,7 +50,7 @@
     "test:services": "node --import tsx --import ./temporal/test-client.ts --test --test-concurrency=1 'services/*.test.ts'",
     "test:services:database": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/core test:services:isolated",
     "test:services:isolated": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/core test:services",
-    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts' 'temporal/*.test.ts' validation/profile-tag.test.ts db/index.test.ts"
+    "test:unit": "node --import tsx --test activitypub-note-content.test.ts 'post-content/**/*.test.ts' temporal/client.test.ts validation/profile-tag.test.ts db/index.test.ts"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",

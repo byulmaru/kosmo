@@ -1,13 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { REACTION_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/reaction-create';
-import { REACTION_DELETE_WORKFLOW_TYPE } from '@kosmo/core/temporal/reaction-delete';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import type { ReactionCreateEffectsInput } from '@kosmo/core/temporal/reaction-create';
-import type { ReactionDeleteEffectsInput } from '@kosmo/core/temporal/reaction-delete';
+
+type ReactionCreateEffectsInput = {
+  readonly reactionId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
+
+type ReactionDeleteEffectsInput = {
+  readonly id: string;
+  readonly profileId: string;
+  readonly postId: string;
+  readonly type: string;
+  readonly createdAt: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
@@ -66,13 +76,13 @@ test(
     });
 
     const executeCreate = (input: ReactionCreateEffectsInput) =>
-      environment.client.workflow.execute(REACTION_CREATE_WORKFLOW_TYPE, {
+      environment.client.workflow.execute('reactionCreateEffectsWorkflow', {
         args: [input],
         taskQueue,
         workflowId: `reaction-create-effects-test:${input.reactionId}`,
       });
     const executeDelete = (input: ReactionDeleteEffectsInput) =>
-      environment.client.workflow.execute(REACTION_DELETE_WORKFLOW_TYPE, {
+      environment.client.workflow.execute('reactionDeleteEffectsWorkflow', {
         args: [input],
         taskQueue,
         workflowId: `reaction-delete-effects-test:${input.id}`,

@@ -13,8 +13,6 @@ import {
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
 import { temporalClient } from '../temporal/client';
-import { REACTION_CREATE_WORKFLOW_TYPE } from '../temporal/reaction-create';
-import { REACTION_DELETE_WORKFLOW_TYPE } from '../temporal/reaction-delete';
 import { reactionTypes } from '../validation';
 import { addReaction, deleteReaction } from './reaction';
 
@@ -228,7 +226,7 @@ test('실제 Reaction 생성 commit 뒤에만 Create Effects Workflow를 시작�
     assert.equal(created.created, true);
     assert.equal(duplicate.created, false);
     assert.equal(start.mock.callCount(), 1);
-    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_CREATE_WORKFLOW_TYPE);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'reactionCreateEffectsWorkflow');
     assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
       { origin: 'LOCAL', reactionId: created.reaction.id },
     ]);
@@ -316,7 +314,7 @@ test('실제 Reaction 삭제 commit은 삭제 snapshot으로 Delete Effects Work
     assert.equal(deleted.reaction?.id, created.reaction.id);
     assert.equal(repeated.reaction, null);
     assert.equal(start.mock.callCount(), 1);
-    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_DELETE_WORKFLOW_TYPE);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'reactionDeleteEffectsWorkflow');
     assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
       {
         createdAt: created.reaction.createdAt.toString(),

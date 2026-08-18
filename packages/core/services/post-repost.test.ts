@@ -23,8 +23,6 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
-import { POST_DELETE_WORKFLOW_TYPE } from '../temporal/post-delete';
-import { REPOST_DELETE_WORKFLOW_TYPE } from '../temporal/repost-delete';
 import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
 
 const publicOrigin = 'http://127.0.0.1:4173';
@@ -299,7 +297,7 @@ test('최초 Repost create와 delete가 event-specific Workflow를 시작한다'
   assert.equal(start.mock.callCount(), 2);
   const deleteStart = start.mock.calls[1];
   assert.ok(deleteStart);
-  assert.equal(deleteStart.arguments[0], REPOST_DELETE_WORKFLOW_TYPE);
+  assert.equal(deleteStart.arguments[0], 'repostDeleteWorkflow');
   const deleteOptions = deleteStart.arguments[1];
   assert.ok(deleteOptions);
   assert.equal(deleteOptions.workflowId, `repost-delete:${first.repost.id}`);
@@ -319,7 +317,7 @@ test('Content Post delete가 Post Delete Workflow를 시작한다', async () => 
   assert.equal(start.mock.callCount(), 1);
   const call = start.mock.calls[0];
   assert.ok(call);
-  assert.equal(call.arguments[0], POST_DELETE_WORKFLOW_TYPE);
+  assert.equal(call.arguments[0], 'postDeleteWorkflow');
   const options = call.arguments[1];
   assert.ok(options);
   assert.deepEqual(options.args, [{ origin: 'LOCAL', postId: post.id }]);

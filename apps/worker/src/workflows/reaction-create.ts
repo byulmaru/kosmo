@@ -1,6 +1,10 @@
 import { proxyActivities } from '@temporalio/workflow';
-import type { ReactionCreateEffectsInput } from '@kosmo/core/temporal/reaction-create';
 import type * as activities from '../activities';
+
+type ReactionCreateEffectsInput = {
+  readonly reactionId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const { createReactionNotificationActivity, sendReactionActivity } = proxyActivities<
   Pick<typeof activities, 'createReactionNotificationActivity' | 'sendReactionActivity'>

@@ -1,6 +1,10 @@
 import { proxyActivities } from '@temporalio/workflow';
-import type { RepostDeleteInput } from '@kosmo/core/temporal/repost-delete';
 import type * as activities from '../activities';
+
+type RepostDeleteInput = {
+  readonly postId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const { deleteRepostNotificationActivity, sendRepostUndoActivity } = proxyActivities<
   Pick<typeof activities, 'deleteRepostNotificationActivity' | 'sendRepostUndoActivity'>

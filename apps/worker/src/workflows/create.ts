@@ -1,6 +1,10 @@
 import { proxyActivities } from '@temporalio/workflow';
-import type { PostCreateEffectsInput } from '@kosmo/core/temporal/post-create-effects';
 import type * as activities from '../activities';
+
+type PostCreateEffectsInput = {
+  readonly postId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const { createReplyNotificationActivity, sendLocalPostCreateActivity } = proxyActivities<
   Pick<typeof activities, 'createReplyNotificationActivity' | 'sendLocalPostCreateActivity'>

@@ -1,6 +1,14 @@
 import { proxyActivities } from '@temporalio/workflow';
-import type { ReactionDeleteEffectsInput } from '@kosmo/core/temporal/reaction-delete';
 import type * as activities from '../activities';
+
+type ReactionDeleteEffectsInput = {
+  readonly id: string;
+  readonly profileId: string;
+  readonly postId: string;
+  readonly type: string;
+  readonly createdAt: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const { deleteReactionNotificationActivity, sendReactionUndoActivity } = proxyActivities<
   Pick<typeof activities, 'deleteReactionNotificationActivity' | 'sendReactionUndoActivity'>

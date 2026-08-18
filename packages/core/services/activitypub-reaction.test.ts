@@ -21,8 +21,6 @@ import {
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import { REACTION_CREATE_WORKFLOW_TYPE } from '../temporal/reaction-create';
-import { REACTION_DELETE_WORKFLOW_TYPE } from '../temporal/reaction-delete';
 import { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 import { createPost } from './post';
 import { addReaction } from './reaction';
@@ -132,7 +130,7 @@ test('Local Note URI를 새 core Reaction과 mapping으로 원자적으로 mater
       1,
     );
     assert.equal(start.mock.callCount(), 1);
-    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_CREATE_WORKFLOW_TYPE);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'reactionCreateEffectsWorkflow');
     assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
       { origin: 'ACTIVITYPUB', reactionId: result.reaction.id },
     ]);
@@ -331,7 +329,7 @@ test('mapping owner의 Undo만 exact Reaction과 mapping을 제거하고 반복�
       [],
     );
     assert.equal(start.mock.callCount(), 1);
-    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_DELETE_WORKFLOW_TYPE);
+    assert.equal(start.mock.calls[0]?.arguments[0], 'reactionDeleteEffectsWorkflow');
     assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
       {
         createdAt: created.reaction.createdAt.toString(),

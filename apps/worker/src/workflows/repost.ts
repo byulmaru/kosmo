@@ -1,6 +1,10 @@
 import { proxyActivities } from '@temporalio/workflow';
-import type { PostRepostInput } from '@kosmo/core/temporal/post-repost';
 import type * as activities from '../activities';
+
+type PostRepostInput = {
+  readonly postId: string;
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+};
 
 const { createRepostNotificationActivity, sendRepostAnnounceActivity } = proxyActivities<
   Pick<typeof activities, 'createRepostNotificationActivity' | 'sendRepostAnnounceActivity'>
