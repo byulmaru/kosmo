@@ -27,7 +27,7 @@ Main push가 기존 dev build·자동 배포를 유지하면서 production appro
 - [x] 1.2 Main automatic production release가 `prod` Environment 승인 전에는 production checkout·Vault/ECR/Sentry credential·prod build를 실행하지 않고, 승인 뒤 main full SHA를 checkout해 build하도록 구현·검증한다.
 - [x] 1.3 같은 gated job에서 승인 뒤 prod build digest를 생성하고 같은 main SHA·digest로 migration-gated Argo sync·revision 검증·workload 배포를 실행하며 성공 release만 `stable` 보존 표식을 갱신하도록 구현·검증한다.
 - [x] 1.4 Dev workflow와 Trivy가 production 승인 대기와 독립적으로 기존 main build 결과를 소비하는지 확인하고 필요한 정합성 수정을 적용한다.
-- [x] 1.5 Automatic trigger, approval 전후 credential·execution boundary, concurrency, stable 갱신과 same-SHA/digest에 대한 정적·workflow 검증을 추가하고 관련 check를 통과시킨다.
+- [x] 1.5 Automatic trigger, approval 전후 credential·execution boundary, concurrency, stable 갱신과 same-SHA/digest를 actionlint와 workflow review로 검증하고 관련 check를 통과시킨다.
 
 ## 2. PROD-783 Manual immutable-SHA production release
 
