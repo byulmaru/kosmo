@@ -7,7 +7,7 @@ Production migration은 모든 활성화 workload와 같은 immutable release im
 - PROD-562 구현은 production migration 전용 database identity와 Kubernetes Secret을 준비한다.
 - PROD-564의 Helm Job은 그 Secret의 `username`과 `password`만 읽고 기존 `migrate` command를 실행한다.
 - Runtime workload의 Secret을 migration에 복제하거나 migration 장애 시 fallback으로 사용하지 않는다.
-- PROD-563 구현은 production 대상 PR의 merge를 production 배포 승인으로 삼고, merge로 발생한 production push의 migration과 모든 활성화 workload를 별도 승인 없이 배포한다. 같은 build digest의 migration Job 성공 뒤에만 wave 2 workload를 활성화한다.
+- PROD-783 구현은 `main` push의 dev build 뒤 `prod` Environment 승인으로 시작하는 production release 또는 승인된 manual full-SHA release를 production 배포 입력으로 삼는다. Automatic main과 manual target 모두 `prod` Environment 승인 뒤에만 target checkout, prod credential 접근과 prod image build를 수행하고, 그 뒤에만 Argo CD credential, migration과 모든 활성화 workload를 변경한다. 같은 prod build digest의 migration Job 성공 뒤에만 wave 2 workload를 활성화한다.
 - PROD-545는 runtime 준비, restore rehearsal, 첫 production release와 public smoke의 최종 통합을 검증한다.
 
 Migration database identity에는 schema migration에 필요한 권한만 부여한다. Runtime workload database identity에는 DDL 권한을 부여하지 않는다.
@@ -24,7 +24,7 @@ Job과 모든 활성화 workload는 `image@sha256:...` 형태의 같은 image re
 
 Migration Job은 기반 리소스가 적용되는 기본 Sync wave 뒤의 wave 1에서 실행하고, API·Web Rollout·HPA와 background Deployment는 Job 성공 뒤 wave 2에서 교체한다. Migration을 `PreSync`로 실행하거나 workload와 같은 wave에 배치하지 않는다.
 
-Application workload에는 별도 activation flag가 없다. API·Web Service·Rollout·HTTPRoute와 background Deployment는 chart에서 항상 렌더되며, 보호된 `production` push의 자동 배포가 `prod` Environment의 credential·OIDC 범위와 감사 기록을 사용해 immutable digest와 migration 설정을 갱신한다. 따라서 production Application에는 release workflow가 설정한 유효한 `imageDigest` parameter가 존재해야 한다. `prod` Environment는 사람의 추가 승인 gate가 아니다.
+Application workload에는 별도 activation flag가 없다. API·Web Service·Rollout·HTTPRoute와 background Deployment는 chart에서 항상 렌더되며, `prod` Environment 승인 뒤 실행된 automatic main 또는 manual full-SHA release job이 prod credential·OIDC 범위와 감사 기록을 사용해 target full SHA, immutable prod digest와 migration 설정을 갱신한다. 따라서 production Application에는 release workflow가 설정한 유효한 `imageDigest` parameter와 target source revision이 존재해야 한다. Dev image는 별도 환경 build이므로 production migration에서 사용하지 않는다. `prod` Environment 승인은 해당 release의 production 상태 변경 전체를 보호하는 유일한 사람 승인이다.
 
 Migration 대상은 Helm release의 PostgreSQL read-write Service, `5432` port와 `kosmo` database로 고정한다. Job은 `<release>-postgres-migration` Secret의 `username`과 `password`만 읽으며 database URL, host, database 또는 Secret 이름/key를 release 입력으로 받지 않는다. Secret이 없거나 key가 누락되면 Kubernetes가 container를 시작할 수 없고 runtime credential로 재시도하지 않는다.
 
@@ -51,16 +51,25 @@ history가 함께 commit되고, 실패하면 그 파일의 변경만 함께 roll
 
 ## Release 실행 순서
 
-1. Production 대상 PR이 필수 review와 checks를 통과한 뒤 merge된다. 이 merge가 유일한 사람의 production 배포 승인이다.
-2. Merge로 발생한 보호된 `production` push가 production image를 build하고 digest와 immutable source SHA를 확정한다.
-3. 같은 workflow가 `prod` Environment의 credential·OIDC 범위와 감사 기록을 사용해 별도 사람 승인 없이 배포를 진행한다.
-4. 같은 digest와 migration Secret으로 migration Job을 실행하고 완료를 기다린다.
-5. Job이 성공한 경우에만 같은 digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다.
-6. Job이 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다. 수정 PR 또는 DB와 호환되는 revert PR을 `production`에 merge해 새 push로 재시도한다.
+### Main automatic release
 
-Tag push와 수동 workflow 실행은 production migration을 시작하지 않는다. 배포 전체 절차와 검증 증거는 [Production release 운영 runbook](./production-release.md)을 따른다.
+1. `main` push가 full SHA의 dev image를 build하고 기존 `Deploy Dev` 경로로 전달한다. Production release는 같은 SHA를 기록하고 `prod` Environment approval을 요청한다. 두 image는 환경별 build 설정을 사용하므로 동일 digest일 필요가 없다.
+2. Reviewer는 release full SHA, workflow definition ref, Helm/chart diff와 migration compatibility를 확인한 뒤 한 번 승인한다. 승인 전에는 production source checkout, prod credential 접근, prod image build, Argo CD credential 접근과 migration·workload 상태 변경이 없어야 한다.
+3. 승인 job은 release full SHA를 checkout하고 prod credential을 받아 prod image를 build한다. Build가 만든 prod digest를 audit summary에 기록하며 승인 시점의 최신 `main` 또는 mutable image tag를 다시 읽지 않는다.
+4. 승인 job은 build prod digest와 migration Secret으로 migration Job을 실행해 완료를 기다린다.
+5. Job이 성공한 경우에만 같은 prod digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다. 성공한 digest에만 `stable` 보존 tag를 적용한다.
 
-Migration Job과 workload 사이의 success barrier는 PROD-563 구현을 사용하며 전체 release 완료 판단은 PROD-545가 소유한다.
+### Manual full-SHA release
+
+1. `main`에 저장된 release workflow를 `main` ref에서 수동 실행하고 repository에 존재하는 정확한 40자리 target SHA를 입력한다. Preflight는 workflow ref·SHA 형식·commit 존재 여부와 target URL만 확인하며 target code checkout, prod secret/credential 접근과 build를 하지 않는다.
+2. Reviewer가 target SHA와 DB compatibility를 확인해 `prod` Environment를 한 번 승인한 뒤에만 target SHA를 checkout하고 prod image를 build한다. Dispatch의 `github.sha`가 아니라 resolved target SHA를 source, Sentry release와 metadata에 사용한다.
+3. Build가 만든 prod digest와 migration Secret으로 migration Job을 실행하고, 성공 뒤 같은 digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다. 성공한 digest에만 `stable` 보존 tag를 적용한다.
+
+두 경로는 같은 production concurrency, migration success barrier와 감사 필드를 사용한다. 실행 중인 release는 취소하지 않으며, pending release를 대체하는 경우 취소된 SHA와 trigger를 Actions 기록에 남긴다. 승인 후 prod build 또는 migration이 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다. Main DB-compatible revert 또는 호환 가능한 manual full SHA로 새 forward release를 실행한다.
+
+Git tag push, `production` branch push와 일반 branch push는 production migration을 시작하지 않는다. 배포 전체 절차와 검증 증거는 [Production release 운영 runbook](./production-release.md)을 따른다.
+
+Migration Job과 workload 사이의 success barrier는 PROD-564/PROD-783 구현을 사용하며 전체 release 완료 판단은 PROD-545가 소유한다.
 
 ## Destructive migration
 
@@ -79,7 +88,7 @@ Contract SQL은 transition image에 미리 포함하지 않는다. 각 단계는
 ## 실패와 복구
 
 - Credential 또는 Secret 실패: SQL을 실행하지 않는다. Runtime credential로 우회하지 않는다.
-- Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 원인을 수정한 production PR을 merge해 새 production push와 같은 자동 경로로 재시도한다.
+- Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 원인을 수정한 main PR 또는 승인된 manual full-SHA release로 새 production release와 같은 자동 경로를 재시도한다.
 - SQL 또는 timeout 실패: 실패한 migration 파일의 schema와 history를 rollback하고 wave 2 workload 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
 - 부분 적용: 앞서 성공한 파일의 schema와 history는 유지한다. 자동 down migration이나 database rollback을 실행하지 않고, 원인을 수정한 새 production push가 이미 적용된 name/hash를 건너뛰고 아직 적용되지 않은 파일만 재시도하거나 새 forward migration을 사용한다.
 - Destructive migration의 restore 판단: 해당 schema migration runbook과 [Production PostgreSQL backup과 복구](./postgres-backup.md)를 따른다.

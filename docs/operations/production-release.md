@@ -1,64 +1,76 @@
 # Production release 운영
 
-이 문서는 `production` branch를 production 배포의 단일 계보와 source로 사용하는 운영 절차를 정의한다. Production 대상 PR의 필수 review와 checks를 통과한 merge가 유일한 사람의 배포 승인이고, merge로 발생한 `production` push가 자동 build·migration·deploy를 시작한다.
+이 문서는 `main` 기반 production release의 운영 절차를 정의한다. `main`에 merge된 각 commit은 dev image를 먼저 준비하고 dev에 자동 배포한다. Production release는 `prod` GitHub Environment의 required reviewer가 한 번 승인한 뒤에 production source checkout·credential 접근·prod image build·production 상태 변경을 수행한다. Dev와 prod image는 같은 source SHA에서 만들어지지만 환경별 build 설정이 다르므로 같은 digest일 필요는 없다.
 
-`prod` GitHub Environment는 production credential, OIDC 범위와 deployment 감사 기록을 제공할 수 있지만 사람의 추가 승인 gate가 아니다. 별도 `workflow_dispatch`, tag push 승인 또는 Environment reviewer 승인을 사용하지 않는다.
+Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 production source를 checkout하지 않고 prod Vault/ECR/Sentry credential에 접근하거나 prod image를 build하지 않는다. 승인 뒤 gated job이 release full SHA를 checkout하고 prod 설정을 읽어 image를 build한 뒤, build output digest와 같은 full SHA를 migration과 모든 production workload에 전달한다.
 
-Production branch ruleset과 `prod` Environment 설정은 첫 전환 때 GitHub에서 직접 설정하고 아래 live 조회로 검증한다. 저장소에 reviewer나 branch policy를 복제하는 bootstrap 스크립트를 두지 않는다.
+별도 production branch나 Git tag는 production source, approval, rollback selector가 아니다. Main에 저장된 production release workflow를 `main` ref에서 수동 실행하면 repository에 존재하는 정확한 40자리 commit SHA를 선택할 수 있다. Manual 경로는 승인 전에 target의 존재와 identity만 검증하고, `prod` 승인 뒤에 target을 checkout하고 prod image를 build·배포한다. Workflow definition ref(`main`)와 release target SHA를 항상 구분해 기록한다.
 
-Production 대상 PR, review와 필수 check는 branch ruleset이 전담한다. 배포 workflow는 보호된 `production` push를 신뢰하며 commit에 연결된 PR을 API로 다시 조회하거나 두 번째 승인 gate로 사용하지 않는다.
+`prod` Environment 승인은 해당 release의 production credential, migration과 workload 변경 전체를 보호하는 유일한 production 상태 변경 승인이다. 별도의 migration approval, dispatch 승인 또는 직접 Argo sync로 우회하지 않는다. GitHub Environment, OIDC trust와 branch 폐기는 저장소 문서나 green CI가 아니라 live GitHub/Vault/API 결과로 확인한다.
 
 ## 첫 전환 준비
 
-1. 마지막 성공 production deployment의 commit, image digest와 live Argo/Kubernetes 상태를 대조한다. 현재 예상 기준은 `0.2.0`의 `337956aa1f55802bc2ebc06a6483d54c2614a962`지만 branch 생성 직전에 다시 확인한다.
-2. 확인한 commit에서 원격 `production` branch를 만든다. 현재 `main` tip에서 만들지 않는다.
-3. GitHub에서 `production` 전용 ruleset을 적용해 pull request, required checks와 reviewer를 요구하고 direct push, deletion과 history rewrite를 금지한다.
-4. `prod` Environment의 required reviewer를 제거하고 deployment branch policy를 `production`만 허용하도록 설정한다.
-5. Vault의 `kosmo-build-prod` role이 `production` branch OIDC subject만 허용하고 tag subject는 허용하지 않는지 확인한다.
-6. 이 PR이 main에 merge된 뒤 release-control 변경만 초기 production branch 대상 PR로 전달한다. 그 PR merge가 첫 자동 production 배포를 시작한다.
+1. 현재 `main`, 기존 `production` 계보, 마지막 성공 production Argo source·digest와 migration 상태를 read-only로 대조한다. production에만 존재하는 hotfix가 있으면 먼저 `main`에 수렴시킨다.
+2. Main에 workflow, Terraform, OpenSpec과 운영 문서 변경을 PR로 전달하고 repository checks를 통과시킨다.
+3. ECR/Vault OIDC trust에 exact `repo:byulmaru/kosmo:environment:prod` identity만 적용한다. `production` branch와 tag identity는 유효한 release 경로가 준비된 뒤 제거한다.
+4. `prod` Environment에 required reviewer와 main workflow의 deployment policy를 설정한다. Automatic main과 manual SHA release가 같은 production concurrency 경계를 사용하도록 확인한다.
+5. 첫 main release에서 dev build/deploy와 production approval을 분리하고, 승인 전 prod checkout·credential·build 부재와 승인 후 source SHA·digest·migration barrier를 확인한다.
+6. 첫 production release와 rollback path가 검증된 뒤, production branch ruleset/branch 폐기는 별도 명시적 운영 승인을 받아 수행한다. branch 삭제와 OpenSpec archive를 CI 통과만으로 완료 처리하지 않는다.
 
-설정 뒤 GitHub ruleset, Environment protection rules·deployment branch policy와 Vault login 결과를 실제 API/workflow 출력으로 확인한다. 이 live 상태는 저장소 문서나 green CI로 대신 증명하지 않는다.
+설정 뒤 GitHub Environment protection rules·deployment policy, OIDC subject, Vault login과 Argo Application 상태를 실제 API/workflow 출력으로 기록한다. live 전환 evidence는 저장소 문서나 local validation으로 대신 증명하지 않는다.
 
 ## Release 계약
 
-- 장기 `production` branch는 직접 push와 history rewrite를 금지하고 PR로만 갱신한다.
-- Production PR에는 필요한 review, CI checks와 migration 호환성 검토가 있어야 한다. PR merge가 production 배포 의도를 확정한다.
-- Workflow는 merge 후 push event의 immutable full SHA를 checkout·image source·Argo CD source로 사용한다. Mutable branch 이름이나 Git tag를 workload identity로 사용하지 않는다.
-- Migration Job과 모든 활성화 workload는 workflow가 생성한 하나의 digest-pinned image를 사용한다. Migration이 성공한 뒤에만 API·Web Rollout·HPA와 background Deployment를 활성화한다. 상세 경계는 [Production migration 실행 경계](./production-migrations.md)를 따른다.
-- Git tag push는 build·source 선택·배포·승인을 시작하지 않는다. 기존 Web의 `버전: <tag>` 표시는 표시 tag 공급 방식을 정할 때까지 비활성화되어 있으며, 이번 release에는 version label 입력을 만들지 않는다.
-- Production 배포는 실행 중인 run을 취소하지 않는다. 여러 production push가 대기하면 GitHub Actions는 기존 `PROD-563` 계약처럼 최신 pending SHA만 다음 release로 유지할 수 있다. 최신 SHA는 앞선 production history를 포함하며, 대체된 pending run은 Actions 취소 기록으로 식별한다.
+- `main` push의 immutable full SHA는 automatic release의 source다. Dev image는 먼저 build·배포하고, prod image는 `prod` Environment 승인 뒤 같은 SHA에서 별도로 build한다.
+- Automatic production release는 승인 전에는 production source checkout, prod Vault/ECR/Sentry credential 접근과 prod image build를 하지 않는다. 승인 뒤 gated job이 release SHA를 checkout하고 prod image를 build한 digest를 migration·workload에 직접 전달하며 승인 시점의 최신 `main`이나 mutable tag를 다시 해석하지 않는다.
+- Manual release는 `main`에 저장된 workflow를 `main` ref에서 실행해야 한다. 입력은 repository에 존재하는 정확한 40자리 SHA여야 하며, 승인 전에는 target code checkout·실행, prod secret/credential 접근과 build를 하지 않는다. `prod` 승인 뒤에만 target SHA checkout, prod build와 배포를 수행한다.
+- Production migration Job과 모든 활성화 workload는 해당 release의 하나의 immutable prod digest를 사용하고, Argo CD Helm source는 같은 release target full SHA를 사용한다. Dev digest는 prod digest와 달라도 된다.
+- Main Docker Build의 dev image는 GHCR에만 push하며 production ECR push role이나 ECR login을 사용하지 않는다. Production ECR push와 `stable` promotion은 `prod` Environment 승인 뒤 실행되는 automatic/manual gated job에서만 수행한다.
+- Production 배포는 `prod` Environment의 한 번의 required reviewer 승인으로 보호한다. 같은 승인 이후 migration 성공 때만 API·Web Rollout·HPA와 background Deployment를 활성화한다. 상세 경계는 [Production migration 실행 경계](./production-migrations.md)를 따른다.
+- Git tag push, `production` branch push와 일반 branch push는 automatic production release·승인·배포를 시작하지 않는다. Git tag나 mutable image tag를 source selector 또는 workload identity로 사용하지 않는다.
+- 승인 전에는 `stable`을 이동하지 않는다. 승인된 production sync와 post-deploy 검증이 성공한 digest에만 ECR `stable` 보존 tag를 적용한다.
+- Automatic/manual production release는 공용 concurrency group을 사용한다. 실행 중인 release는 취소하지 않으며, 여러 pending release는 최신 pending release로 대체할 수 있다. 대체된 SHA·trigger는 Actions 취소 기록으로 식별하고 필요한 경우 다시 승인한다.
 
-## 정상 release
+## Main automatic release
 
-1. Main의 필요한 변경 또는 production-first hotfix를 현재 `production` branch를 대상으로 하는 PR로 준비한다. PR 설명에 포함 범위와 migration의 expand/transition/contract 호환성을 기록한다.
-2. 필수 reviewer와 CI checks가 통과했는지 확인한다. Merge 전에는 production build·migration·deploy가 시작되지 않는다.
-3. PR을 merge한다. 이 merge가 유일한 사람의 승인이고, 결과로 생성된 production push가 자동 release를 시작한다.
-4. Docker build 결과의 commit SHA와 image digest를 workflow summary에서 확인한다. `prod` Environment 단계에서 별도 승인 버튼을 누르지 않는다.
-5. 같은 digest의 migration Job이 성공하고 Argo CD `kosmo-prod`가 해당 production SHA를 source revision으로 사용한 뒤 API·Web Rollout·HPA와 background Deployment가 Healthy인지 확인한다. Migration 실패 시 wave 2 workload 활성화가 진행되지 않는다.
-6. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
-7. Merged PR과 review·check 이력은 GitHub PR/branch history에서 확인한다. Workflow summary와 Linear/incident 기록에는 actor, production commit, Argo source revision, image digest, migration·workload·smoke 결과만 남긴다. Credential, connection string, database row와 사용자 콘텐츠는 남기지 않는다.
+1. `main` merge 후 Docker workflow가 full SHA의 dev image를 build해 GHCR에만 push하고 기존 `Deploy Dev` 경로로 전달한다. 이 경로는 production ECR push role을 사용하지 않는다. Production release는 같은 SHA를 기록한 뒤 `prod` Environment approval을 요청한다.
+2. Dev 배포의 tag·digest·환경별 build arg가 올바른지 확인한다. 승인 전 production source checkout, prod Vault/ECR/Sentry credential 접근과 prod image build가 없어야 하며, 이 단계에서 문제가 생기면 production build·deploy는 실행되지 않는다.
+3. Reviewer는 workflow summary와 Environment 화면에서 trigger가 automatic main인지, workflow definition ref와 release full SHA·chart diff·migration compatibility가 무엇인지 확인한 뒤 한 번 승인한다.
+4. 승인 job은 release full SHA를 checkout하고 prod credential을 받아 prod image를 build해 GHCR과 ECR에 push한다. 이 job만 production ECR push role을 사용하며, build digest와 SHA를 audit summary에 기록하고 승인 시점의 최신 `main`이나 mutable tag를 다시 해석하지 않는다.
+5. 승인 job은 build digest를 Argo source revision 및 migration-gated sync에 고정한다. Migration 성공 뒤 controller가 API·Web Rollout·HPA와 background Deployment를 기본 activation한다.
+6. Argo source revision, prod digest, migration Job과 모든 활성화 workload가 일치하고 Healthy인지 확인한다. 성공한 digest에만 `stable` 보존 tag를 적용한다.
+7. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
 
-## Production-first hotfix
+## Manual full-SHA release
 
-긴급한 수정이 main보다 먼저 production에 필요하면 production branch를 대상으로 hotfix PR을 만든다. 필수 review와 checks 후 merge하면 정상 release 절차가 자동으로 실행된다. Hotfix merge 뒤에는 같은 변경을 main에 반영하는 별도 PR을 만들고, main 반영이 완료될 때까지 두 계보의 차이와 후속 PR을 기록한다. Hotfix를 이유로 직접 push하거나 history를 rewrite하지 않는다.
+1. Main에 저장된 release workflow를 `main` ref에서 수동 실행하고 repository에 존재하는 정확한 40자리 target SHA를 입력한다. Branch 이름, tag, `github.sha` 또는 mutable image tag를 target으로 입력하지 않는다.
+2. Preflight가 workflow ref, SHA 형식과 repository commit 존재 여부를 확인하고 target commit URL·SHA를 approval summary와 Environment 화면에 표시한다. 이 단계에서는 target code를 checkout·실행하거나 prod secret/credential을 읽지 않는다.
+3. Reviewer는 target SHA의 code diff와 DB compatibility를 확인한 뒤 `prod` Environment를 한 번 승인한다. 승인 전 preflight failure이면 target build·deploy를 시작하지 않는다.
+4. 승인 job은 target SHA를 checkout하고 prod build credential·source map secret으로 image를 build해 GHCR과 ECR에 push한다. 이 job만 production ECR push role을 사용한다. `SENTRY_RELEASE`, image metadata, Argo source와 audit record는 dispatch의 `github.sha`가 아니라 resolved target SHA를 사용한다.
+5. Build digest를 같은 gated release의 migration과 모든 production workload에 전달해 sync하고, 성공 뒤 `stable`을 해당 digest로 이동한다. Automatic release와 동일한 concurrency, migration barrier, smoke와 감사 필드를 사용한다.
+
+## Production-first 변경
+
+Production branch 대상 PR을 별도 release 경로로 만들지 않는다. Main에 아직 반영되지 않은 긴급 수정은 먼저 호환 가능한 immutable commit을 manual full-SHA 경로로 승인·배포할 수 있지만, 같은 변경을 `main` PR로 수렴시키고 두 SHA와 후속 검증을 기록한다. Main merge 뒤에는 dev 자동 배포와 `prod` 승인 후 production build 경로를 사용한다. 직접 push, history rewrite, tag release와 직접 Argo sync는 허용하지 않는다.
 
 ## Rollback
 
-Rollback은 과거 tag를 다시 배포하거나 branch history를 되돌리는 작업이 아니다.
+Rollback은 과거 tag나 production branch를 다시 배포하거나 branch history를 되돌리는 작업이 아니다.
 
 1. 장애 원인과 현재 production migration 상태를 확인하고, application 변경이 현재 DB schema와 호환되는지 판단한다.
-2. DB와 호환되는 application 변경이면 `production`을 대상으로 revert PR을 만든다. 필수 review와 checks 후 merge하는 것이 rollback release의 승인이다.
-3. Revert PR merge로 발생한 새 production push가 정상 build·migration barrier·deploy 경로를 실행한다. Migration history와 이미 적용된 schema를 down migration으로 되돌리지 않는다.
-4. Destructive migration 또는 schema 비호환이 관련되면 application revert를 강행하지 않는다. [Production PostgreSQL backup과 복구](./postgres-backup.md) 및 해당 schema migration runbook의 forward migration·restore 판단을 따른다.
+2. 가장 일반적인 경로는 DB-compatible revert를 `main`에 merge하는 것이다. 새 main SHA가 dev에 자동 배포되고 `prod` Environment 승인 뒤 prod image를 build하는 경로로 production에 전달된다.
+3. Main revert를 기다릴 수 없고 호환 가능한 immutable commit이 repository에 이미 존재하면 그 full SHA를 manual release target으로 선택해 `prod` 승인 뒤 새 image를 build·배포한다.
+4. 어느 경로도 database state나 migration history를 down migration으로 되돌리지 않는다. Destructive migration 또는 schema 비호환이 관련되면 [Production PostgreSQL backup과 복구](./postgres-backup.md) 및 해당 schema migration runbook의 forward migration·restore 판단을 따른다.
 
 ## 완료·실패 판단
 
 Release는 다음을 모두 확인해야 완료로 기록한다.
 
-- Merged production PR과 merge actor가 확인된다.
-- Build SHA, Argo source revision과 migration 및 모든 활성화 workload의 image digest가 일치한다.
+- Trigger 종류, 요청자, workflow definition ref와 target full SHA가 확인된다.
+- Main automatic release에서는 dev build/deploy와 승인 후 prod build·approval·deploy 결과가 구분된다. Manual release에서는 입력 target SHA와 dispatch SHA가 구분된다.
+- Argo source revision이 target full SHA이고, migration과 모든 활성화 production workload가 해당 release의 하나의 prod digest를 사용한다.
 - Migration Job이 성공하고 API·Web Rollout·HPA와 background Deployment가 Healthy다.
-- Production smoke와 OpenPanel/Sentry 배포 후 검증 결과가 기록된다.
-- Version label이 이 변경에서 다시 활성화되지 않았다.
+- 승인된 digest에 `stable` 보존 tag가 적용되고, Production smoke와 OpenPanel/Sentry 배포 후 검증 결과가 기록된다.
+- Git tag와 production branch가 source·approval·rollback 경계로 사용되지 않는다.
 
-Build 또는 migration이 실패하면 기존 workload를 유지하고, 원인을 수정한 production PR 또는 DB-compatible revert PR을 merge해 새 push로 재시도한다. Tag push, 수동 dispatch, 직접 Argo sync와 DB rollback으로 우회하지 않는다.
+승인 후 prod build 또는 migration이 실패하면 production 상태를 변경하지 않거나 기존 workload를 유지한다. 원인을 수정한 main PR, DB-compatible revert PR 또는 승인된 manual SHA release로 새 forward release를 실행한다. Tag push, 임의 branch dispatch, 직접 Argo sync와 DB rollback으로 우회하지 않는다.

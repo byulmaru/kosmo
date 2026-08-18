@@ -1,8 +1,12 @@
-## Context
+> **Lifecycle: Superseded**
+>
+> 이 design은 `PROD-764`의 production branch 기반 release를 설명하는 historical artifact다. `PROD-783`가 main dev build 뒤 `prod` Environment approval을 거쳐 prod checkout·credential·build·deploy를 수행하는 automatic release와 manual full-SHA release로 전체 production source·approval 계약을 대체했다. 아래 내용은 현재 구현 지침이나 운영 절차가 아니며, archive 전 provenance 확인에만 사용한다.
+
+## Historical Context
 
 현재 Docker workflow는 main push와 모든 tag push를 받으며 tag ref를 production 환경·Vault role·OpenPanel·version label·배포 조건으로 사용한다. `kosmo-prod`는 image parameter는 tag workflow에서 받지만 Helm source는 `main`을 추적한다. `PROD-764`은 source와 배포를 `production` 브랜치로 옮기고, `PROD-631`이 제공한 `버전: <tag>` UI는 표시 tag 공급 방식이 정해질 때까지 주석 처리한다.
 
-## Goals / Non-Goals
+## Historical Goals / Non-Goals
 
 **Goals:**
 
@@ -21,7 +25,7 @@
 - Native store·OTA release 변경
 - 표시 tag 생성·공급 방식과 version label 재활성화
 
-## Implementation Guidance
+## Historical Implementation Guidance (Superseded)
 
 ### Current Constraints
 
@@ -76,3 +80,10 @@ GitHub production ruleset과 `prod` Environment 설정은 범용 repository boot
 ## Open Questions
 
 없음. 표시 tag 공급과 version label 재활성화는 이 change의 제외 범위다.
+
+## Superseded ownership
+
+- Current source of truth: `openspec/changes/deploy-production-from-main-or-sha` (`PROD-783`), where both automatic main and manual SHA production builds begin only after `prod` Environment approval.
+- Obsolete live work: production branch creation/ruleset, branch-triggered release verification, branch-based credential trust와 첫 branch release는 `PROD-783`의 task 3~5가 대체 소유한다.
+- Do not restore: 이 historical design의 `production` branch, production PR approval, tag 기반 source 또는 branch-first hotfix/revert 선택을 active spec·runbook에 다시 적용하지 않는다.
+- Archive: `PROD-783`의 live cutover와 active spec synchronization 이후에만 이 superseded change를 archive한다.
