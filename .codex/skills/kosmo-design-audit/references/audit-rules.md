@@ -59,7 +59,9 @@ raw 값 자체만으로 대체 token을 추측하지 않는다. 기존 semantic 
 
 ## 4. Typography와 content resilience
 
-- UI는 SUIT, 본문·읽기 콘텐츠는 Pretendard 역할 계약을 우선한다. Figma MCP preview 대체 폰트는 실제 token geometry를 바꾸는 근거가 아니다.
+- Production 감사 계약은 UI `SUIT`, 본문·읽기 콘텐츠 `Pretendard Variable`이다.
+- Figma MCP로 text를 생성·수정할 때는 `docs/design/typography.md`의 현재 `MCP Preview` 대응인 UI `IBM Plex Sans KR`, 본문 `Noto Sans KR`을 사용한다. 변경 전에 `listAvailableFontsAsync()`로 정확한 family·style을 확인하고 `loadFontAsync()`로 로드한다.
+- 이 MCP Preview 대치는 Production 계약 위반 finding이 아니다. font size, line height, letter spacing token을 바꾸거나 Preview geometry를 Production token 변경 근거로 사용하지 않는다.
 - 12px는 역할 확인 신호다. canonical role이 본문·주요 정보·핵심 action으로 확인될 때만 finding으로 판정한다.
 - line height, weight, truncation, max lines, textAutoResize가 역할과 맞는지 확인한다.
 - 긴 한국어, 영어 확장, 숫자·날짜, 빈 값, 오류 문구에서 overlap·잘림·위계 붕괴를 확인한다.
