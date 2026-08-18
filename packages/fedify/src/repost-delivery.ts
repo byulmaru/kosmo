@@ -223,19 +223,8 @@ const sendRepostActivity = async (repostId: string, kind: RepostDeliveryKind): P
   });
 };
 
-export const sendRepostAnnounce = async (repostId: string): Promise<void> => {
-  await sendRepostActivity(repostId, 'ANNOUNCE');
-
-  const deleted = await db
-    .select({ id: Posts.id })
-    .from(Posts)
-    .where(and(eq(Posts.id, repostId), eq(Posts.state, PostState.DELETED)))
-    .limit(1)
-    .then(first);
-  if (deleted) {
-    await sendRepostActivity(repostId, 'UNDO');
-  }
-};
+export const sendRepostAnnounce = async (repostId: string): Promise<void> =>
+  sendRepostActivity(repostId, 'ANNOUNCE');
 
 export const sendRepostUndo = async (repostId: string): Promise<void> =>
   sendRepostActivity(repostId, 'UNDO');
