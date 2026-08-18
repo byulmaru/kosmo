@@ -22,13 +22,13 @@ Worker가 committed Reaction create/delete transition의 Notification과 Local-o
 **Verification**
 
 - Workflow ID·input 직렬화·conflict/reuse policy contract test를 통과시킨다.
-- Worker compile-time registration과 Notification/Fedify Activity 통합 테스트를 통과시킨다.
-- Local/ActivityPub 분기, sibling Activity failure, retry와 restart는 exact revision의 dev Workflow 실행으로 검증한다.
+- Worker build로 production Activity registry를 검증하고, 실제 production Workflow bundle을 공식 Temporal test environment에서 실행해 Local/ActivityPub 분기와 sibling Activity failure 격리를 검증한다.
+- Activity retry와 Worker restart 후 재개는 exact revision의 dev Workflow 실행으로 검증한다.
 
 - [x] 1.1 Reaction create/delete Temporal input, stable Workflow ID와 start option을 구현하고 contract test를 추가한다.
 - [x] 1.2 Notification과 federation handoff를 독립 실행하는 create/delete Effects Workflow를 구현한다.
 - [x] 1.3 기존 Worker host에 필요한 Activities와 두 Workflow를 compile-time 등록한다.
-- [x] 1.4 Worker registration build와 Notification/Fedify Activity retry 통합 검증을 통과시킨다.
+- [x] 1.4 Worker Activity registry build와 실제 Workflow의 Local/AP 분기·sibling failure 통합 검증을 통과시킨다.
 
 ## 2. PROD-723 Core Reaction transaction과 caller 경계
 

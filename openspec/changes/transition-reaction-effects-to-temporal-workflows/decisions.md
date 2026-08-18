@@ -62,7 +62,7 @@
 - Decision Outcome: Workflow는 적용 가능한 Activity를 독립적으로 시작하고 모든 결과를 수집한다. Local origin만 federation handoff를 포함하고 ActivityPub origin은 outbound echo를 만들지 않는다. Federation Activity 성공 경계는 queue acceptance다.
 - Alternatives Considered: 순차 await와 첫 실패 즉시 반환은 sibling 효과를 차단하므로 사용하지 않는다. Remote delivery 자체를 Temporal에서 소유하는 방식은 Fedify queue 책임과 충돌한다.
 - Consequences: Workflow는 여러 terminal failure를 관측할 수 있고 Fedify는 acceptance 이후 retry를 계속 소유한다.
-- Confirmation / Follow-up: 테스트 전용 Workflow export나 Node module mock을 추가하지 않는다. Notification/Fedify Activity는 PR 통합 테스트로 검증하고, sibling Activity 실패 격리는 exact revision의 dev Workflow 실행에서 검증한다.
+- Confirmation / Follow-up: 테스트 전용 Workflow export나 Node module mock을 추가하지 않는다. 공식 Temporal test environment에서 production Workflow bundle을 실행해 Local/ActivityPub 분기와 sibling Activity 실패 격리를 검증하고, retry와 restart 후 재개는 exact revision의 dev에서 확인한다.
 
 ### Reaction Notification은 source row를 잠그지 않는다
 
