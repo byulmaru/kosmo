@@ -11,8 +11,18 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
+import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import type * as CoreDb from '@kosmo/core/db';
-import type { createReplyNotificationActivity as CreateReplyNotificationActivity } from './activities';
+import type {
+  createPost as CreatePost,
+  deletePost as DeletePost,
+  repostPost as RepostPost,
+} from '@kosmo/core/services';
+import type {
+  createReplyNotificationActivity as CreateReplyNotificationActivity,
+  createRepostNotificationActivity as CreateRepostNotificationActivity,
+  deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
+} from './activities';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 
@@ -21,20 +31,42 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Instances: typeof CoreDb.Instances;
 let Notifications: typeof CoreDb.Notifications;
 let pg: typeof CoreDb.pg;
+let PostContents: typeof CoreDb.PostContents;
 let Posts: typeof CoreDb.Posts;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
+let createCorePost: typeof CreatePost;
+let deletePost: typeof DeletePost;
 let createReplyNotificationActivity: typeof CreateReplyNotificationActivity;
+let createRepostNotificationActivity: typeof CreateRepostNotificationActivity;
+let deleteRepostNotificationActivity: typeof DeleteRepostNotificationActivity;
+let repostPost: typeof RepostPost;
 
 before(async () => {
-  ({ db, firstOrThrow, Instances, Notifications, pg, Posts, ProfileFollows, Profiles } =
-    await import('@kosmo/core/db'));
-  ({ createReplyNotificationActivity } = await import('./activities'));
+  ({
+    db,
+    firstOrThrow,
+    Instances,
+    Notifications,
+    pg,
+    PostContents,
+    Posts,
+    ProfileFollows,
+    Profiles,
+  } = await import('@kosmo/core/db'));
+  ({
+    createReplyNotificationActivity,
+    createRepostNotificationActivity,
+    deleteRepostNotificationActivity,
+  } = await import('./activities'));
+  ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
 });
 
 beforeEach(async () => {
   await db.delete(Notifications);
   await db.delete(ProfileFollows);
+  await db.update(Posts).set({ currentContentId: null });
+  await db.delete(PostContents);
   await db.delete(Posts);
   await db.delete(Profiles);
   await db.delete(Instances);
@@ -109,6 +141,59 @@ test('자기 Reply는 Notification을 만들지 않는다', async () => {
 
   await createReplyNotificationActivity(reply.id);
 
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Repost Notification Activities는 create와 delete retry에 멱등이다', async () => {
+  const recipient = await createProfile();
+  const actor = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Repost source'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { repost } = await repostPost({
+    actorProfileId: actor.id,
+    origin: 'LOCAL',
+    sourcePostId: source.id,
+  });
+
+  await createRepostNotificationActivity(repost.id);
+  await createRepostNotificationActivity(repost.id);
+
+  const notifications = await db.select().from(Notifications);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0]?.kind, NotificationKind.REPOST);
+  assert.equal(notifications[0]?.recipientProfileId, recipient.id);
+  assert.equal(notifications[0]?.sourceId, repost.id);
+
+  await deleteRepostNotificationActivity(repost.id);
+  await deleteRepostNotificationActivity(repost.id);
+  assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', async () => {
+  const recipient = await createProfile();
+  const actor = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Deleted Repost source'),
+    origin: 'LOCAL',
+    profileId: recipient.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { repost } = await repostPost({
+    actorProfileId: actor.id,
+    origin: 'LOCAL',
+    sourcePostId: source.id,
+  });
+  await deletePost({
+    actorProfileId: actor.id,
+    origin: 'LOCAL',
+    postId: repost.id,
+  });
+
+  await assert.doesNotReject(createRepostNotificationActivity(repost.id));
   assert.equal(await db.$count(Notifications), 0);
 });
 

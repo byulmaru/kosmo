@@ -1,13 +1,12 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, before, beforeEach, describe, mock, test } from 'node:test';
+import { after, before, beforeEach, describe, test } from 'node:test';
 import {
   AccountProfileRole,
   AccountState,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   PostState,
   PostVisibility,
   ProfileFollowPolicy,
@@ -16,6 +15,7 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId as globalId } from '@kosmo/core/global-id';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -112,13 +112,16 @@ describe('GraphQL Repost', () => {
       state: 'ACTIVE',
       visibility: 'UNLISTED',
     });
-    assert.equal(await db.$count(Notifications), 0);
   });
 
-  test('새 Repost는 Source Post Author에게 source-only Notification을 한 번 생성한다', async () => {
+  test('새 Repost는 effects Workflow start 실패와 무관하게 commit된다', async (t) => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('notification-recipient');
     const source = await createContentPost(recipient.id);
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = t.mock.method(console, 'error', () => undefined);
 
     const first = await requestRepost(source.id, auth.token);
     const repeated = await requestRepost(source.id, auth.token);
@@ -133,81 +136,17 @@ describe('GraphQL Repost', () => {
     assert.equal(repeated.data?.repostPost.repost.id, repostId);
     assert.ok(repostId);
 
-    const [repost] = await db.select().from(Posts).where(eq(Posts.repostSourceId, source.id));
-    assert.ok(repost);
-    const notifications = await db.select().from(Notifications);
-    assert.equal(notifications.length, 1);
-    assert.deepEqual(
-      {
-        data: notifications[0]?.data,
-        kind: notifications[0]?.kind,
-        recipientProfileId: notifications[0]?.recipientProfileId,
-        sourceId: notifications[0]?.sourceId,
-      },
-      {
-        data: {},
-        kind: NotificationKind.REPOST,
-        recipientProfileId: recipient.id,
-        sourceId: repost.id,
-      },
+    assert.equal(
+      await db
+        .select()
+        .from(Posts)
+        .where(eq(Posts.repostSourceId, source.id))
+        .then((rows) => rows.length),
+      1,
     );
-  });
-
-  test('Remote Source Author에게는 Local inbox Notification을 만들지 않는다', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await db
-      .insert(Instances)
-      .values({
-        domain: `${crypto.randomUUID()}.remote.example`,
-        kind: InstanceKind.ACTIVITYPUB,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const remoteRecipient = await createProfile('remote-notification-recipient', {
-      instanceId: remoteInstance.id,
-    });
-    const source = await createContentPost(remoteRecipient.id);
-
-    const result = await requestRepost(source.id, auth.token);
-
-    assertNoGraphQLErrors(result);
-    assert.equal(await db.$count(Notifications), 0);
-  });
-
-  test('Notification 저장 실패는 Repost 성공을 rollback하지 않는다', async () => {
-    const auth = await createAuthenticatedSession();
-    const recipient = await createProfile('failed-notification-recipient');
-    const source = await createContentPost(recipient.id);
-
-    await pg.unsafe(`
-      CREATE FUNCTION fail_repost_notification_insert() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF NEW.kind = 'REPOST' THEN RAISE EXCEPTION 'forced notification failure'; END IF;
-        RETURN NEW;
-      END $$;
-      CREATE TRIGGER fail_repost_notification_insert
-      BEFORE INSERT ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_repost_notification_insert();
-    `);
-
-    try {
-      const result = await requestRepost(source.id, auth.token);
-      assertNoGraphQLErrors(result);
-      assert.equal(
-        await db
-          .select()
-          .from(Posts)
-          .where(eq(Posts.repostSourceId, source.id))
-          .then((rows) => rows.length),
-        1,
-      );
-      assert.equal(await db.$count(Notifications), 0);
-    } finally {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_repost_notification_insert ON notification;
-        DROP FUNCTION IF EXISTS fail_repost_notification_insert();
-      `);
-    }
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Post Repost Workflow start failed');
   });
 
   test('Owner·Member가 선택한 Local Active Profile로 Repost할 수 있다', async () => {
@@ -335,7 +274,6 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
-    assert.equal(await db.$count(Notifications), 1);
 
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
@@ -347,7 +285,6 @@ describe('GraphQL Repost', () => {
         viewerRepost: null,
       },
     });
-    assert.equal(await db.$count(Notifications), 0);
 
     const repeated = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(repeated);
@@ -359,7 +296,6 @@ describe('GraphQL Repost', () => {
         viewerRepost: null,
       },
     });
-    assert.equal(await db.$count(Notifications), 0);
 
     const deleted = await db
       .select({ deletedAt: Posts.deletedAt, state: Posts.state })
@@ -396,7 +332,7 @@ describe('GraphQL Repost', () => {
     });
   });
 
-  test('Notification 정리 실패는 Tombstone 결과를 유지하고 오류를 기록한다', async () => {
+  test('Repost effects Workflow start 실패는 Tombstone 결과를 유지한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('failed-delete-notification-recipient');
     const source = await createContentPost(recipient.id);
@@ -406,51 +342,30 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
-    const errorLog = mock.method(console, 'error', () => undefined);
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = t.mock.method(console, 'error', () => undefined);
+    const result = await requestDelete(repost.id, auth.token);
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.deletePost, {
+      postId: globalId('Post', repost.id),
+      repostSource: {
+        id: globalId('Post', source.id),
+        repostCount: 0,
+        viewerRepost: null,
+      },
+    });
 
-    await pg.unsafe(`
-      CREATE FUNCTION fail_repost_notification_delete() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF OLD.kind = 'REPOST' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
-        RETURN OLD;
-      END $$;
-      CREATE TRIGGER fail_repost_notification_delete
-      BEFORE DELETE ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_repost_notification_delete();
-    `);
-
-    try {
-      const result = await requestDelete(repost.id, auth.token);
-      assertNoGraphQLErrors(result);
-      assert.deepEqual(result.data?.deletePost, {
-        postId: globalId('Post', repost.id),
-        repostSource: {
-          id: globalId('Post', source.id),
-          repostCount: 0,
-          viewerRepost: null,
-        },
-      });
-
-      const deleted = await db
-        .select({ state: Posts.state })
-        .from(Posts)
-        .where(eq(Posts.id, repost.id))
-        .then(firstOrThrow);
-      assert.equal(deleted.state, PostState.DELETED);
-      assert.equal(await db.$count(Notifications), 1);
-      assert.equal(errorLog.mock.callCount(), 1);
-      assert.equal(
-        errorLog.mock.calls[0]?.arguments[0],
-        'Post-commit Repost notification cleanup failed',
-      );
-      assert.equal((errorLog.mock.calls[0]?.arguments[1] as { postId: string }).postId, repost.id);
-    } finally {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_repost_notification_delete ON notification;
-        DROP FUNCTION IF EXISTS fail_repost_notification_delete();
-      `);
-      errorLog.mock.restore();
-    }
+    const deleted = await db
+      .select({ state: Posts.state })
+      .from(Posts)
+      .where(eq(Posts.id, repost.id))
+      .then(firstOrThrow);
+    assert.equal(deleted.state, PostState.DELETED);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Repost Delete Workflow start failed');
   });
 
   test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {

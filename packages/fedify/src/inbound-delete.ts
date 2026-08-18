@@ -77,45 +77,39 @@ export const handleInboundDelete = async (
     return;
   }
 
-  const result = await db.transaction(async (tx) => {
-    const row = await tx
-      .select({
-        actorUri: ActivityPubActors.uri,
-        instanceKind: Instances.kind,
-        postId: Posts.id,
-        profileId: Profiles.id,
-      })
-      .from(ActivityPubPosts)
-      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-      .where(and(eq(ActivityPubPosts.uri, objectUri.href), isNotNull(Posts.currentContentId)))
-      .limit(1)
-      .then(first);
+  const row = await db
+    .select({ postId: Posts.id, profileId: Profiles.id })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+    .where(
+      and(
+        eq(ActivityPubPosts.uri, objectUri.href),
+        eq(ActivityPubActors.uri, actorUri.href),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        isNotNull(Posts.currentContentId),
+      ),
+    )
+    .limit(1)
+    .then(first);
 
-    if (!row || row.actorUri !== actorUri.href || row.instanceKind !== InstanceKind.ACTIVITYPUB) {
-      observeInboundNoop({
-        activityType: 'Delete',
-        actorOrigin: actorUri.origin,
-        handler: 'delete',
-        objectOrigin: objectUri.origin,
-        phase: 'projection',
-        reasonCode: 'delete_target_missing_or_mismatched',
-      });
-      return;
-    }
+  if (!row) {
+    observeInboundNoop({
+      activityType: 'Delete',
+      actorOrigin: actorUri.origin,
+      handler: 'delete',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'delete_target_missing_or_mismatched',
+    });
+    return;
+  }
 
-    const deleted = await deletePost(
-      {
-        actorProfileId: row.profileId,
-        origin: 'ACTIVITYPUB',
-        postId: row.postId,
-      },
-      tx,
-    );
-    return deleted;
+  await deletePost({
+    actorProfileId: row.profileId,
+    origin: 'ACTIVITYPUB',
+    postId: row.postId,
   });
-
-  await result?.postCommit();
 };

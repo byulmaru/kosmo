@@ -1,21 +1,14 @@
 import { proxyActivities } from '@temporalio/workflow';
 import type { PostCreateEffectsInput } from '@kosmo/core/temporal/post-create-effects';
-import type * as activities from './activities';
+import type * as activities from '../activities';
 
 const { createReplyNotificationActivity, sendLocalPostCreateActivity } = proxyActivities<
-  typeof activities
+  Pick<typeof activities, 'createReplyNotificationActivity' | 'sendLocalPostCreateActivity'>
 >({
   retry: { maximumAttempts: 10 },
   startToCloseTimeout: '1 minute',
 });
 
-/**
- * Run the effects of a committed Post independently.
- *
- * The workflow contains only serializable identity and origin. Database and
- * federation access stays inside Activities. ActivityPub-origin Posts do not
- * enqueue an outbound Create echo.
- */
 export async function postCreateEffectsWorkflow({
   postId,
   origin,

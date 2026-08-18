@@ -28,6 +28,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
@@ -93,7 +94,7 @@ describe('inbound Delete dispatch', () => {
     await pg.end();
   });
 
-  test('deletes the exact mapped remote Post without hydration and preserves its projection', async () => {
+  test('deletes the exact mapped remote Post without hydration and preserves its projection', async (t) => {
     const actorUri = new URL('https://remote.example/users/alice');
     const objectUri = new URL('https://remote.example/notes/1');
     const profile = await createStoredRemoteActor(actorUri);
@@ -101,6 +102,7 @@ describe('inbound Delete dispatch', () => {
     const documentLoader = mock.fn(async () => {
       throw new Error('the inbox context loader must not run');
     });
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
     await handleInboundDelete(
       createContext(documentLoader),
@@ -114,6 +116,17 @@ describe('inbound Delete dispatch', () => {
     assert.equal(firstDelete.mapping.id, materialized.mapping.id);
     assert.equal(firstDelete.content.id, materialized.content.id);
     assert.equal(documentLoader.mock.calls.length, 0);
+    assert.equal(start.mock.callCount(), 1);
+    const firstStart = start.mock.calls[0];
+    assert.ok(firstStart);
+    const firstOptions = firstStart.arguments[1];
+    assert.ok(firstOptions);
+    assert.deepEqual(firstOptions.args, [
+      {
+        origin: 'ACTIVITYPUB',
+        postId: materialized.post.id,
+      },
+    ]);
 
     await handleInboundDelete(
       createContext(documentLoader),
@@ -122,6 +135,7 @@ describe('inbound Delete dispatch', () => {
     const repeated = await storedProjection(objectUri);
     assert.equal(repeated.post.deletedAt?.toString(), firstDelete.post.deletedAt.toString());
     assert.equal(documentLoader.mock.calls.length, 0);
+    assert.equal(start.mock.callCount(), 1);
   });
 
   test('does not delete a mapped Post when an object-less Delete lookup fails', async () => {

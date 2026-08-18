@@ -54,7 +54,7 @@ Repost와 Quote가 같은 nullable direct Repost Source를 저장할 수 있게 
 - Mentioned Profiles, Tombstone, unavailable, Content 없는 Repost Source를 거부한다.
 - 누락·Tombstone·조회 불가 Source는 `NOT_FOUND`, 조회 가능한 허용 불가 Source는 `VALIDATION(sourceId)`, 진입점 권한 실패는 `PERMISSION_DENIED`로 처리한다.
 - duplicate/concurrent 생성은 같은 Active Repost identity로 수렴한다.
-- Quote 작성과 새로운 ActivityPub Repost ingress·delivery capability를 포함하지 않는다. 단, PROD-669는 기존 inbound Announce·Undo·Delete caller를 공용 Repost action lifecycle에 연결하는 wiring만 다룬다.
+- Quote 작성과 새로운 ActivityPub Repost ingress·delivery capability를 포함하지 않는다. PROD-669가 연결했던 process-local lifecycle의 현재 소유자는 PROD-725이며, 이 change는 그 Temporal 구현 완료 전 archive하지 않는다.
 
 **Verification**
 
@@ -323,14 +323,14 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 
 **Deliverable**
 
-다른 Local Profile의 Post를 Repost하면 기존 Profile Notification projection에 Repost source가 Best Effort로 생성되고 concrete Node·connection·Unread·Read·inbox·badge 흐름에 표시된다.
+다른 Local Profile의 Post를 Repost하면 기존 Profile Notification projection에 Repost source가 멱등 생성되고 concrete Node·connection·Unread·Read·inbox·badge 흐름에 표시된다. 실행 retry 경계는 PROD-725가 소유한다.
 
 **Guardrails**
 
 - 기존 Notification 기반을 재사용하고 Repost 전용 table, source FK, snapshot과 generic fallback을 만들지 않는다.
 - Recipient·Related Profile·Related Post는 Source Repost에서 파생하고 자기 Post Repost와 Remote Recipient 알림을 억제한다.
-- source transaction commit 뒤 같은 request에서 create를 await/catch하며 실패가 Repost 결과를 바꾸지 않는다.
-- retry, outbox, queue, backfill과 ActivityPub delivery를 포함하지 않는다.
+- source transaction이나 caller에서 Notification을 직접 실행하지 않으며 실패가 Repost 결과를 바꾸지 않는다.
+- outbox, 별도 queue, backfill과 ActivityPub remote delivery를 포함하지 않는다.
 
 **Verification**
 
@@ -353,13 +353,13 @@ Home, Profile, Bookmark와 Post 상세이 실제 GraphQL fragment와 generated t
 
 **Deliverable**
 
-Repost Tombstone 뒤 대응 Notification cleanup을 Best Effort로 시도하고, 실패하거나 반복해도 Repost 삭제 결과와 모든 Notification API surface의 가시성이 일관된다.
+Repost Tombstone 뒤 accepted PROD-725 effects Workflow가 대응 Notification cleanup을 멱등 재시도하고, 실패하거나 반복해도 Repost 삭제 결과와 모든 Notification API surface의 가시성이 일관된다.
 
 **Guardrails**
 
-- cleanup은 source transaction commit 뒤 같은 request에서 await/catch한다.
+- cleanup은 source transaction이나 caller에서 직접 실행하지 않는다.
 - 반복·없는 item cleanup은 성공한 멱등 no-op이다.
-- retry, queue, cron, backfill, bulk cleanup과 동기 cascade를 포함하지 않는다.
+- 별도 queue, cron, backfill, bulk cleanup과 동기 cascade를 포함하지 않는다.
 - Source Repost가 Active pure Repost가 아닌 잔존 row를 connection/count/Node/Read에서 숨긴다.
 
 **Verification**
@@ -416,7 +416,7 @@ Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 sel
 **Guardrails**
 
 - 모든 구현 자식과 담당 검증이 완료되기 전에 change를 archive하지 않는다.
-- PROD-432의 공통 Action Bar rollout과 Quote 작성·ActivityPub·Notification retry 등 제외 범위를 완료된 것으로 기록하지 않는다.
+- PROD-432의 공통 Action Bar rollout, Quote 작성과 PROD-725 Temporal effects lifecycle을 완료 전 상태에서 완료된 것으로 기록하지 않는다.
 - Blocked 또는 supersede되지 않은 Upstream Change Required decision을 남긴 채 완료하지 않는다.
 
 **Verification**
@@ -428,40 +428,3 @@ Repost 취소 성공 뒤 서버가 확정한 Source Post의 `repostCount`와 sel
 - [ ] 13.2 전체 Repost 사용자·Notification lifecycle과 mixed Post/Notification 회귀 통합 검증을 실행한다.
 - [ ] 13.3 canonical 문서와 OpenSpec delta를 최종 구현에 맞춰 동기화하고 strict validation을 통과시킨다.
 - [ ] 13.4 Completion Gate 승인 뒤 change를 archive하고 archive 후 strict validation을 통과시킨다.
-
-## 14. PROD-669 Repost 공용 action lifecycle 통합
-
-**Authority / Provenance**
-
-- `docs/domain/objects/post.md`
-- `docs/domain/objects/notification.md`
-- `docs/domain/decisions/0010-post-interaction-contracts.md`
-- `PROD-669`
-
-`memory/review-style.md`의 Commit And Side Effects와 `packages/core/services/reaction.ts`는 기존 구현
-패턴으로 참고한다.
-
-**Deliverable**
-
-Repost 생성·삭제 action이 transaction composition과 무관하게 실제 상태 전이에서 파생한 once-only
-`postCommit()`을 반환하고, GraphQL과 ActivityPub caller가 origin을 명시해 동일한 Notification·delivery
-lifecycle을 사용한다.
-
-**Guardrails**
-
-- `tx` 유무나 ActivityPub mapping 존재를 lifecycle provenance로 사용하지 않는다.
-- ActivityPub caller의 mapping/domain state와 core action은 caller transaction에서 원자적으로 저장하고
-  outer commit 뒤 반환된 `postCommit()`을 실행한다.
-- Notification 실패는 Repost 생성·삭제와 독립적으로 격리하고, ActivityPub origin에서는 outbound echo를
-  시도하지 않는다.
-
-**Verification**
-
-- Local/ActivityPub 및 top-level/caller-owned transaction 조합, rollback-before-postCommit, repeated
-  `postCommit()`, duplicate/no-op, Notification failure isolation, inbound Announce/Undo/Delete와 GraphQL
-  payload·delivery regression을 core/Fedify/API check로 검증한다.
-
-- [x] 14.1 `repostPost`·`deletePost`의 명시적 origin과 once-only post-commit result를 구현하고 모든
-      production caller를 연결한다.
-- [x] 14.2 transaction rollback, post-commit failure isolation, idempotent lifecycle과 ActivityPub
-      outbound echo suppression 회귀 검증을 완료한다.

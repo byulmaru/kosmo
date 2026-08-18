@@ -22,7 +22,6 @@ import {
   PostVisibility,
   ProfileFollowPolicy,
 } from '../enums';
-import { NotFoundError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
 import {
   createFollowNotification,
@@ -621,12 +620,14 @@ test('Repost 알림은 자기 Post와 Remote Recipient에서 no-op이다', async
   assert.deepEqual(await readNotifications(remoteRepost.id), []);
 });
 
-test('Repost 알림은 존재하지 않거나 pure Repost가 아닌 source를 거부한다', async () => {
-  await assert.rejects(createRepostNotification(crypto.randomUUID()), NotFoundError);
+test('Repost 알림은 존재하지 않거나 pure Repost가 아닌 source에서 no-op이다', async () => {
+  const notificationCount = await db.$count(Notifications);
+  await assert.doesNotReject(createRepostNotification(crypto.randomUUID()));
 
   const author = await createProfile();
   const contentPost = await createContentPost(author.id);
-  await assert.rejects(createRepostNotification(contentPost.id), NotFoundError);
+  await assert.doesNotReject(createRepostNotification(contentPost.id));
+  assert.equal(await db.$count(Notifications), notificationCount);
 });
 
 test('Repost 알림 정리는 정상·반복·없는 source에 idempotent하다', async () => {

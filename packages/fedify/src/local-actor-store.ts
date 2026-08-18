@@ -18,7 +18,7 @@ import {
 } from '@kosmo/core/enums';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { ensureLocalProfileActor } from './local-profile-actor';
+import { ensureLocalProfileActor, importStoredLocalActorKeyPairs } from './local-profile-actor';
 import type { Database } from '@kosmo/core/db';
 import type {
   CreateLocalActorKeyInput,
@@ -38,7 +38,6 @@ const AvatarProfileMedia = alias(ProfileMedia, 'avatar_profile_media');
 const AvatarMedia = alias(Media, 'avatar_media');
 const HeaderProfileMedia = alias(ProfileMedia, 'header_profile_media');
 const HeaderMedia = alias(Media, 'header_media');
-
 const toLocalProfileActorMedia = (
   media: { mediaType: string | null; url: string | null } | null,
 ): LocalProfileActorMedia | null =>
@@ -235,3 +234,32 @@ export const ensureDrizzleLocalProfileActor = async (
       store: createDrizzleLocalActorStore(tx),
     }),
   );
+
+export const loadDrizzleLocalProfileActorKeyPairs = async ({
+  localInstanceId,
+  profileId,
+}: {
+  readonly localInstanceId: string;
+  readonly profileId: string;
+}): Promise<CryptoKeyPair[]> => {
+  const profile = await db
+    .select({ id: Profiles.id })
+    .from(Profiles)
+    .where(and(eq(Profiles.id, profileId), eq(Profiles.instanceId, localInstanceId)))
+    .limit(1)
+    .then(first);
+  if (!profile) {
+    return [];
+  }
+
+  const actor = await findActorByProfileId(db, profileId);
+  if (!actor) {
+    return [];
+  }
+
+  const keys = await db
+    .select()
+    .from(ActivityPubActorKeys)
+    .where(eq(ActivityPubActorKeys.activityPubActorId, actor.id));
+  return importStoredLocalActorKeyPairs(keys);
+};

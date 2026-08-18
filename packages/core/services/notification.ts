@@ -1,7 +1,6 @@
 import { and, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
-  firstOrThrowWith,
   getDatabaseConnection,
   Instances,
   Notifications,
@@ -12,7 +11,6 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
-import { NotFoundError } from '../error';
 import type { Database } from '../db';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
@@ -280,7 +278,13 @@ export const createRepostNotification = async (
       ),
     )
     .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Repost not found')));
+    .then((rows) => rows[0]);
+
+  // A delete or visibility transition may win before this retried effect runs.
+  // The committed lifecycle is authoritative, so there is no Notification to project.
+  if (!source) {
+    return;
+  }
 
   if (
     source.actorProfileId === source.recipientProfileId ||
@@ -311,6 +315,11 @@ export const deleteNotificationBySource = async (
     .delete(Notifications)
     .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
 };
+
+export const deleteRepostNotification = async (
+  sourceId: string,
+  handle?: Database,
+): Promise<void> => deleteNotificationBySource(NotificationKind.REPOST, sourceId, handle);
 
 export const deleteFollowRequestNotificationPostCommit = async (
   sourceId: string,

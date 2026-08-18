@@ -151,6 +151,19 @@ const importStoredKeyPair = async (storedKey: StoredLocalActorKey): Promise<Cryp
   };
 };
 
+export const importStoredLocalActorKeyPairs = async (
+  storedKeys: readonly StoredLocalActorKey[],
+): Promise<CryptoKeyPair[]> => {
+  const keysByKind = new Map(storedKeys.map((key) => [key.kind, key]));
+
+  return Promise.all(
+    keyKinds.flatMap((kind) => {
+      const key = keysByKind.get(kind);
+      return key ? [importStoredKeyPair(key)] : [];
+    }),
+  );
+};
+
 export const ensureLocalProfileActor = async ({
   actorUri,
   localInstanceId,
@@ -178,7 +191,7 @@ export const ensureLocalProfileActor = async ({
 
   return {
     actor,
-    keyPairs: await Promise.all(storedKeys.map(importStoredKeyPair)),
+    keyPairs: await importStoredLocalActorKeyPairs(storedKeys),
     profile,
   };
 };

@@ -197,6 +197,73 @@ describe('ActivityPub Local Repost delivery', () => {
     assert.equal(fixture.calls[1]!.options.orderingKey, fixture.calls[0]!.options.orderingKey);
   });
 
+  test('disabled Profile의 Tombstone Repost도 Undo를 queue에 handoff한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const sourceAuthor = await createProfile({ kind: InstanceKind.ACTIVITYPUB });
+    const source = await createContentPost(sourceAuthor.id);
+    const remoteObjectUri = `https://${sourceAuthor.instanceDomain}/objects/${source.id}`;
+    await db.insert(ActivityPubPosts).values({
+      postId: source.id,
+      receivedAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
+      uri: remoteObjectUri,
+    });
+    const repost = await createRepost(author.id, source.id);
+    const follower = await createRemoteActorProfile();
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.id,
+    });
+    const actualContext = federation.createContext(new URL(publicOrigin), undefined);
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
+    const fixture = createContextFixture();
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendRepostAnnounce(repost.id);
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, repost.id));
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, author.id));
+    assert.equal((await actualContext.getActorKeyPairs(author.id)).length, 2);
+
+    await sendRepostUndo(repost.id);
+
+    assert.equal(fixture.calls.length, 2);
+    const undo = fixture.calls[1]!.activity;
+    assert.ok(undo instanceof Undo);
+    assert.equal(undo.id?.href, `${publicOrigin}/ap/announce/${repost.id}#undo`);
+    const embedded = await undo.getObject();
+    assert.ok(embedded instanceof Announce);
+    assert.equal(embedded.id?.href, `${publicOrigin}/ap/announce/${repost.id}`);
+    assert.equal(fixture.calls[1]!.options.orderingKey, `activitypub-repost:${repost.id}`);
+  });
+
+  test('Announce acceptance와 Tombstone이 경합하면 같은 ordering key의 Undo로 수렴한다', async () => {
+    const author = await createProfile({ kind: InstanceKind.LOCAL });
+    const source = await createContentPost(author.id);
+    const repost = await createRepost(author.id, source.id);
+    const follower = await createRemoteActorProfile();
+    await db.insert(ProfileFollows).values({
+      followeeProfileId: author.id,
+      followerProfileId: follower.id,
+    });
+    const fixture = createContextFixture(async (callIndex) => {
+      if (callIndex === 1) {
+        await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, repost.id));
+      }
+    });
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendRepostAnnounce(repost.id);
+
+    assert.deepEqual(
+      fixture.calls.map(({ activity }) => activity.constructor),
+      [Announce, Undo],
+    );
+    assert.equal(fixture.calls[0]!.options.orderingKey, `activitypub-repost:${repost.id}`);
+    assert.equal(fixture.calls[1]!.options.orderingKey, fixture.calls[0]!.options.orderingKey);
+  });
+
   test('unsupported 또는 unavailable projection과 recipient 부재는 전송하지 않는다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActorProfile();
@@ -256,7 +323,7 @@ interface SendActivityCall {
   readonly sender: { readonly identifier: string };
 }
 
-const createContextFixture = () => {
+const createContextFixture = (afterSend?: (callIndex: number) => Promise<void>) => {
   const calls: SendActivityCall[] = [];
   const context = {
     canonicalOrigin: publicOrigin,
@@ -268,6 +335,7 @@ const createContextFixture = () => {
       options: { orderingKey: string; preferSharedInbox: boolean },
     ) => {
       calls.push({ activity, options, recipients, sender });
+      await afterSend?.(calls.length);
     },
   } as unknown as Context<void>;
   return { calls, context };

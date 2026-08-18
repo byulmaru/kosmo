@@ -1,11 +1,10 @@
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
   first,
   firstOrThrow,
   firstOrThrowWith,
-  getDatabaseConnection,
   Instances,
   isUniqueViolation,
   Media,
@@ -18,7 +17,6 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
-  NotificationKind,
   PostState,
   PostVisibility,
   ProfileState,
@@ -33,13 +31,16 @@ import {
   POST_CREATE_EFFECTS_WORKFLOW_TYPE,
   postCreateEffectsWorkflowStartOptions,
 } from '../temporal/post-create-effects';
+import { POST_DELETE_WORKFLOW_TYPE, postDeleteWorkflowStartOptions } from '../temporal/post-delete';
+import { POST_REPOST_WORKFLOW_TYPE, postRepostWorkflowStartOptions } from '../temporal/post-repost';
+import {
+  REPOST_DELETE_WORKFLOW_TYPE,
+  repostDeleteWorkflowStartOptions,
+} from '../temporal/repost-delete';
 import { postVisibilityCondition } from '../visibility/post';
-import { createRepostNotification, deleteNotificationBySource } from './notification';
-import { noPostCommit, oncePostCommit } from './post-commit';
 import { validatePostStructure } from './post-structure';
-import type { DatabaseHandle, Transaction } from '../db';
+import type { Transaction } from '../db';
 import type { PostContentDocumentV1 } from '../post-content';
-import type { PostCommit } from './post-commit';
 
 type LocalPostInput = {
   accountId?: string;
@@ -73,6 +74,28 @@ type RemoteMediaCandidate = {
 };
 
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
+
+type LocalRepostInput = {
+  actorProfileId: string;
+  origin: 'LOCAL';
+  sourcePostId: string;
+};
+
+type ActivityPubRepostInput = {
+  activityUri: string;
+  actorProfileId: string;
+  origin: 'ACTIVITYPUB';
+  publishedAt: Temporal.Instant | null;
+  receivedAt: Temporal.Instant;
+  sourcePostId: string;
+};
+
+type RepostInput = LocalRepostInput | ActivityPubRepostInput;
+
+type RepostResult = {
+  readonly created: boolean;
+  readonly repost: typeof Posts.$inferSelect;
+};
 
 type CreatedPost = {
   content: typeof PostContents.$inferSelect;
@@ -138,6 +161,154 @@ const findVisiblePost = async (
     .limit(1)
     .then(first);
 
+const resolveRepostVisibility = (
+  source: {
+    readonly profileId: string;
+    readonly visibility: PostVisibility;
+  },
+  actorProfileId: string,
+): PostVisibility => {
+  if (
+    source.visibility === PostVisibility.PUBLIC ||
+    source.visibility === PostVisibility.UNLISTED
+  ) {
+    return PostVisibility.UNLISTED;
+  }
+  if (source.visibility === PostVisibility.FOLLOWERS && source.profileId === actorProfileId) {
+    return PostVisibility.FOLLOWERS;
+  }
+  throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+};
+
+const createOrFindRepost = async (
+  tx: Transaction,
+  {
+    actorProfileId,
+    sourcePostId,
+  }: {
+    readonly actorProfileId: string;
+    readonly sourcePostId: string;
+  },
+) => {
+  const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
+  if (!source) {
+    throw new NotFoundError('Post not found');
+  }
+  if (source.currentContentId === null) {
+    throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+  }
+
+  const visibility = resolveRepostVisibility(source, actorProfileId);
+  const inserted = await tx
+    .insert(Posts)
+    .values({
+      profileId: actorProfileId,
+      repostSourceId: source.id,
+      state: PostState.ACTIVE,
+      visibility,
+    })
+    .onConflictDoNothing()
+    .returning()
+    .then(first);
+  if (inserted) {
+    return { created: true as const, repost: inserted };
+  }
+
+  const existing = await tx
+    .select()
+    .from(Posts)
+    .where(
+      and(
+        eq(Posts.profileId, actorProfileId),
+        eq(Posts.repostSourceId, source.id),
+        eq(Posts.state, PostState.ACTIVE),
+        isNull(Posts.currentContentId),
+      ),
+    )
+    .limit(1)
+    .then(first);
+  if (!existing) {
+    throw new Error('Repost not found after insert conflict');
+  }
+
+  return { created: false as const, repost: existing };
+};
+
+const saveCurrentAnnounce = async (
+  tx: Transaction,
+  {
+    activityUri,
+    actorProfileId,
+    postId,
+    publishedAt,
+    receivedAt,
+    sourcePostId,
+  }: {
+    readonly activityUri: string;
+    readonly actorProfileId: string;
+    readonly postId: string;
+    readonly publishedAt: Temporal.Instant | null;
+    readonly receivedAt: Temporal.Instant;
+    readonly sourcePostId: string;
+  },
+): Promise<boolean> => {
+  const existing = await tx
+    .select({
+      currentContentId: Posts.currentContentId,
+      mappingId: ActivityPubPosts.id,
+      postId: ActivityPubPosts.postId,
+      postProfileId: Posts.profileId,
+      postRepostSourceId: Posts.repostSourceId,
+      postState: Posts.state,
+      replyParentId: Posts.replyParentId,
+      uri: ActivityPubPosts.uri,
+    })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .where(or(eq(ActivityPubPosts.postId, postId), eq(ActivityPubPosts.uri, activityUri)));
+
+  const current = existing.find((row) => row.postId === postId);
+  const collision = existing.find((row) => row.uri === activityUri && row.postId !== postId);
+  if (collision) {
+    const isPriorDeletedGeneration =
+      collision.postProfileId === actorProfileId &&
+      collision.postRepostSourceId === sourcePostId &&
+      collision.currentContentId === null &&
+      collision.replyParentId === null &&
+      collision.postState === PostState.DELETED;
+    if (!isPriorDeletedGeneration) {
+      throw new ValidationError('Announce id is already assigned', { field: 'id' });
+    }
+
+    await tx.delete(ActivityPubPosts).where(eq(ActivityPubPosts.id, collision.mappingId));
+  }
+
+  if (!current) {
+    await tx.insert(ActivityPubPosts).values({
+      postId,
+      publishedAt,
+      receivedAt,
+      uri: activityUri,
+    });
+    return true;
+  }
+
+  if (
+    current.postState !== PostState.ACTIVE ||
+    current.currentContentId !== null ||
+    current.replyParentId !== null ||
+    current.postRepostSourceId !== sourcePostId
+  ) {
+    return false;
+  }
+
+  await tx
+    .update(ActivityPubPosts)
+    .set({ publishedAt, receivedAt, uri: activityUri })
+    .where(eq(ActivityPubPosts.id, current.mappingId));
+  return true;
+};
+
 const materializeRemoteMedia = async (
   tx: Transaction,
   {
@@ -169,23 +340,16 @@ const materializeRemoteMedia = async (
   return materialized;
 };
 
-export const deletePost = async (
-  {
-    actorProfileId,
-    origin,
-    postId,
-  }: {
-    readonly actorProfileId: string;
-    readonly origin: PostOrigin;
-    readonly postId: string;
-  },
-  handle?: DatabaseHandle,
-): Promise<{
-  readonly postCommit: PostCommit;
+export const deletePost = async ({
+  actorProfileId,
+  origin,
+  postId,
+}: {
+  readonly actorProfileId: string;
+  readonly origin: PostOrigin;
   readonly postId: string;
-  readonly sourcePostId: string | null;
-}> => {
-  const { deleted, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
+}): Promise<{ readonly postId: string; readonly sourcePostId: string | null }> => {
+  const { deleted, result } = await db.transaction(async (tx) => {
     const post = await tx
       .select({
         currentContentId: Posts.currentContentId,
@@ -216,176 +380,96 @@ export const deletePost = async (
         ),
       )
       .returning({
-        currentContentId: Posts.currentContentId,
         id: Posts.id,
-        replyParentId: Posts.replyParentId,
-        repostSourceId: Posts.repostSourceId,
       })
       .then(first);
 
     const sourcePostId =
       post.currentContentId === null && post.replyParentId === null ? post.repostSourceId : null;
-
     return { deleted, result: { postId, sourcePostId } };
   });
 
-  const pureRepost =
-    deleted !== undefined &&
-    deleted.currentContentId === null &&
-    deleted.replyParentId === null &&
-    deleted.repostSourceId !== null;
-  const localPostId = deleted?.currentContentId ? deleted.id : undefined;
+  if (deleted) {
+    const workflowInput = { postId: deleted.id, origin };
+    const isRepostDelete = result.sourcePostId !== null;
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        isRepostDelete
+          ? temporalClient.workflow.start(
+              REPOST_DELETE_WORKFLOW_TYPE,
+              repostDeleteWorkflowStartOptions(workflowInput),
+            )
+          : temporalClient.workflow.start(
+              POST_DELETE_WORKFLOW_TYPE,
+              postDeleteWorkflowStartOptions(workflowInput),
+            ),
+      );
+    } catch (error) {
+      console.error(`${isRepostDelete ? 'Repost Delete' : 'Post Delete'} Workflow start failed`, {
+        error,
+        origin,
+        postId: deleted.id,
+      });
+    }
+  }
 
-  return {
-    ...result,
-    postCommit: deleted
-      ? oncePostCommit(async (postCommitHandle) => {
-          if (pureRepost) {
-            await deleteNotificationBySource(
-              NotificationKind.REPOST,
-              result.postId,
-              postCommitHandle,
-            ).catch((error) => {
-              console.error('Post-commit Repost notification cleanup failed', {
-                error,
-                postId: result.postId,
-              });
-            });
-          }
-
-          if (origin !== 'LOCAL') {
-            return;
-          }
-
-          if (pureRepost) {
-            try {
-              const { sendRepostUndo } = await import('@kosmo/fedify');
-              await sendRepostUndo(result.postId);
-            } catch (error) {
-              console.error('Post-commit ActivityPub Repost Undo delivery failed', {
-                error,
-                repostId: result.postId,
-              });
-            }
-          } else if (localPostId) {
-            try {
-              const { sendLocalPostDelete } = await import('@kosmo/fedify');
-              await sendLocalPostDelete(localPostId);
-            } catch (error) {
-              console.error('Post-commit ActivityPub Local Post Delete delivery failed', {
-                error,
-                postId: localPostId,
-              });
-            }
-          }
-        })
-      : noPostCommit,
-  };
+  return result;
 };
 
-export const repostPost = async (
-  {
-    actorProfileId,
-    origin,
-    sourcePostId,
-  }: {
-    readonly actorProfileId: string;
-    readonly origin: PostOrigin;
-    readonly sourcePostId: string;
-  },
-  handle?: DatabaseHandle,
-): Promise<{
-  readonly created: boolean;
-  readonly postCommit: PostCommit;
-  readonly repost: typeof Posts.$inferSelect;
-}> => {
-  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
-    const source = await findVisiblePost(tx, { actorProfileId, postId: sourcePostId });
-    if (!source) {
-      throw new NotFoundError('Post not found');
-    }
-    if (source.currentContentId === null) {
-      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
+export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
+export function repostPost(input: ActivityPubRepostInput): Promise<RepostResult>;
+export async function repostPost(input: RepostInput): Promise<RepostResult> {
+  const result = await db.transaction(async (tx) => {
+    let materialized = await createOrFindRepost(tx, {
+      actorProfileId: input.actorProfileId,
+      sourcePostId: input.sourcePostId,
+    });
+
+    if (input.origin === 'ACTIVITYPUB') {
+      const save = (postId: string) =>
+        saveCurrentAnnounce(tx, {
+          activityUri: input.activityUri,
+          actorProfileId: input.actorProfileId,
+          postId,
+          publishedAt: input.publishedAt,
+          receivedAt: input.receivedAt,
+          sourcePostId: input.sourcePostId,
+        });
+
+      if (!(await save(materialized.repost.id))) {
+        materialized = await createOrFindRepost(tx, {
+          actorProfileId: input.actorProfileId,
+          sourcePostId: input.sourcePostId,
+        });
+        if (!(await save(materialized.repost.id))) {
+          throw new Error('Active Repost not found after current Announce materialization');
+        }
+      }
     }
 
-    let visibility: PostVisibility;
-    if (
-      source.visibility === PostVisibility.PUBLIC ||
-      source.visibility === PostVisibility.UNLISTED
-    ) {
-      visibility = PostVisibility.UNLISTED;
-    } else if (
-      source.visibility === PostVisibility.FOLLOWERS &&
-      source.profileId === actorProfileId
-    ) {
-      visibility = PostVisibility.FOLLOWERS;
-    } else {
-      throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
-    }
-
-    const inserted = await tx
-      .insert(Posts)
-      .values({
-        profileId: actorProfileId,
-        repostSourceId: source.id,
-        state: PostState.ACTIVE,
-        visibility,
-      })
-      .onConflictDoNothing()
-      .returning()
-      .then(first);
-    if (inserted) {
-      return { created: true, repost: inserted };
-    }
-
-    const existing = await tx
-      .select()
-      .from(Posts)
-      .where(
-        and(
-          eq(Posts.profileId, actorProfileId),
-          eq(Posts.repostSourceId, source.id),
-          eq(Posts.state, PostState.ACTIVE),
-          isNull(Posts.currentContentId),
-        ),
-      )
-      .limit(1)
-      .then(first);
-    if (!existing) {
-      throw new Error('Repost not found after insert conflict');
-    }
-
-    return { created: false, repost: existing };
+    return materialized;
   });
 
-  return {
-    ...result,
-    postCommit: result.created
-      ? oncePostCommit(async (postCommitHandle) => {
-          await createRepostNotification(result.repost.id, postCommitHandle).catch((error) => {
-            console.error('Post-commit Repost notification creation failed', {
-              error,
-              postId: result.repost.id,
-            });
-          });
+  if (result.created) {
+    const workflowInput = { origin: input.origin, postId: result.repost.id };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          POST_REPOST_WORKFLOW_TYPE,
+          postRepostWorkflowStartOptions(workflowInput),
+        ),
+      );
+    } catch (error) {
+      console.error('Post Repost Workflow start failed', {
+        error,
+        origin: input.origin,
+        postId: result.repost.id,
+      });
+    }
+  }
 
-          if (origin !== 'LOCAL') {
-            return;
-          }
-
-          try {
-            const { sendRepostAnnounce } = await import('@kosmo/fedify');
-            await sendRepostAnnounce(result.repost.id);
-          } catch (error) {
-            console.error('Post-commit ActivityPub Repost Announce delivery failed', {
-              error,
-              repostId: result.repost.id,
-            });
-          }
-        })
-      : noPostCommit,
-  };
-};
+  return result;
+}
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(

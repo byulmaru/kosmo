@@ -86,7 +86,7 @@ const loadRepostProjection = async (
     row.repost.repostSourceId === null ||
     (row.repost.visibility !== PostVisibility.UNLISTED &&
       row.repost.visibility !== PostVisibility.FOLLOWERS) ||
-    row.authorProfileState !== ProfileState.ACTIVE ||
+    (kind === 'ANNOUNCE' && row.authorProfileState !== ProfileState.ACTIVE) ||
     row.authorInstanceId !== localInstance.id ||
     row.authorInstanceKind !== InstanceKind.LOCAL ||
     row.authorInstanceState !== InstanceState.ACTIVE ||
@@ -223,8 +223,19 @@ const sendRepostActivity = async (repostId: string, kind: RepostDeliveryKind): P
   });
 };
 
-export const sendRepostAnnounce = async (repostId: string): Promise<void> =>
-  sendRepostActivity(repostId, 'ANNOUNCE');
+export const sendRepostAnnounce = async (repostId: string): Promise<void> => {
+  await sendRepostActivity(repostId, 'ANNOUNCE');
+
+  const deleted = await db
+    .select({ id: Posts.id })
+    .from(Posts)
+    .where(and(eq(Posts.id, repostId), eq(Posts.state, PostState.DELETED)))
+    .limit(1)
+    .then(first);
+  if (deleted) {
+    await sendRepostActivity(repostId, 'UNDO');
+  }
+};
 
 export const sendRepostUndo = async (repostId: string): Promise<void> =>
   sendRepostActivity(repostId, 'UNDO');

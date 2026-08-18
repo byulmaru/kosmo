@@ -115,7 +115,6 @@ export const sendLocalPostDelete = async (postId: string): Promise<void> => {
         eq(Instances.kind, InstanceKind.LOCAL),
         eq(Instances.state, InstanceState.ACTIVE),
         isNotNull(Instances.canonicalOrigin),
-        eq(Profiles.state, ProfileState.ACTIVE),
       ),
     )
     .limit(1)
