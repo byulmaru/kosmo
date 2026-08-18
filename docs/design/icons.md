@@ -26,7 +26,7 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 | -------------------------- | ----------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | 새 글 작성                 | `SquarePen` / `SquarePen`           | 전체 redesign 후속                                | Lucide 원본 path 유지; accessible name `글쓰기`                     | `BottomTabBar`, `SidebarNavigation`; 코드·Figma 이관 대기                  |
 | 재게시 attribution         | `Repeat2` / `Repeat2`               | 전체 redesign 후속                                | 장식 아이콘; 인접한 attribution 문장이 의미를 제공                  | `PostListItem`; 코드·Figma 이관 대기                                       |
-| 반응한 프로필 더보기       | `MoreHorizontal` / `MoreHorizontal` | 전체 redesign 후속                                | `IconButton`; Web `32`, Native `44` target과 accessible name 유지   | `ReactionSummary`; 코드·Figma 이관 대기                                    |
+| 반응한 프로필 더보기       | `Ellipsis` / `MoreHorizontal`       | 전체 redesign 후속                                | `IconButton`; Web `32`, Native `44` target과 accessible name 유지   | `ReactionSummary`; 코드·Figma 이관 대기                                    |
 | 화면·경로 뒤로             | `ArrowLeft` / `ArrowLeft`           | 전체 redesign 후속                                | `44×44` target; route·navigation history를 되돌리는 action에만 사용 | Search, Profile Edit; Post detail·Settings·`UniversalShell` 이관 대기      |
 | modal·viewer 닫기          | `X` / `XIcon`                       | Viewer `24`, 기본 close `20`, stroke `2`          | `IconButton`; surface별 accessible name과 focus restore 유지        | `PostMediaViewer`, `ReplyComposerSurface`, `FeedbackOverlay`, `ModalSheet` |
 | 항목·미디어 제거           | `X` / `XIcon`                       | Profile Tag `18`, Composer media `18`, stroke `2` | 제거 대상을 포함한 accessible name; disabled 상태 유지              | `ProfileTagChip`, `PostComposerMediaControls`                              |
@@ -81,22 +81,27 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 | -------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | ------------------------------------------- |
 | `PenLine`; compact sidebar radius full | Lucide 원본 `SquarePen`; size·stroke·container는 redesign 후속 | `BottomTabBar`, `SidebarNavigation`     | 전체 redesign optical 결정, 코드·Figma 이관 |
 | 문자 `↻`                               | `Repeat2`; size·stroke는 redesign 후속                         | `PostListItem`                          | 전체 redesign optical 결정, 코드·Figma 이관 |
-| 문자 `…`                               | `MoreHorizontal`; size·stroke는 redesign 후속                  | `ReactionSummary`                       | 전체 redesign optical 결정, 코드·Figma 이관 |
+| 문자 `…`; code alias `MoreHorizontal`  | `Ellipsis` / `MoreHorizontal`; size·stroke는 redesign 후속     | `ReactionSummary`, `PostActionBar`      | 문자 소비처·Figma 이관, 실제 화면 검증      |
+| `UserPlus`                             | `UserRoundPlus` / `UserRoundPlus`                              | `NotificationListItem` 팔로우 알림      | 코드·Figma 소비처 이관, 실제 화면 검증      |
+| `History`                              | `RotateCcwClock` / `History`                                   | Search route                            | Figma 소비처 이관, 실제 화면 검증           |
+| `Smile`                                | `FaceSlightlySmiling`; code export 미정                        | `NotificationListItem` 반응 알림        | 의존성·버전 결정, 코드·Figma 이관·화면 검증 |
 | route back의 `ChevronLeft`             | `ArrowLeft`; size·stroke는 redesign 후속                       | Post detail, Settings, `UniversalShell` | 전체 redesign optical 결정, 코드·Figma 이관 |
+
+`RotateCcwClock`은 현재 고정한 `lucide-react-native@1.23.0`에서 동일 path의 `History` export를 사용한다. `FaceSlightlySmiling`은 이 버전에 export가 없고 `Smile`과 path도 다르므로 자동 대체하지 않는다. 코드 이관 전에 Lucide 버전 갱신 또는 승인된 source를 별도로 결정한다.
 
 ## Review queue
 
 아래 optical 항목은 전체 redesign의 후속 범위이며 자동 치환하지 않는다. semantic mapping을 다시 열지 않고 실제 화면의 component geometry, Light/Dark와 platform target을 함께 비교해 확정한다.
 
-| 현재 표현                           | 역할·소비처                                       | 검토할 후보                            | 상태                                            |
-| ----------------------------------- | ------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| `SquarePen` size·container 미확정   | Shell 글쓰기, `BottomTabBar`, `SidebarNavigation` | redesign의 canonical size·radius scale | glyph 확정; component geometry와 함께 검토 대기 |
-| `Repeat2` size·stroke 미확정        | 재게시 attribution, `PostListItem`                | redesign의 canonical icon scale        | glyph 확정; 실제 attribution row에서 검토 대기  |
-| `MoreHorizontal` size·stroke 미확정 | 반응한 프로필 더보기, `ReactionSummary`           | redesign의 canonical icon scale        | glyph 확정; 실제 summary control에서 검토 대기  |
-| scale 밖 size `22`                  | Profile Edit back `ArrowLeft`                     | redesign의 canonical icon scale        | glyph 확정; header geometry와 함께 검토 대기    |
-| scale 밖 size `22`                  | Profile image edit `Camera`                       | redesign의 canonical icon scale        | glyph 확정; image action geometry와 검토 대기   |
-| stroke `3.5`; repost `2.7`          | `PostActionControl`, `RepostAction`               | 기본 stroke 또는 optical 예외          | action bar 전체 redesign에서 검토 대기          |
-| scale 밖 stroke `2.25`              | Profile switcher add `Plus`                       | 기본 stroke 또는 optical 예외          | switcher 전체 redesign에서 검토 대기            |
+| 현재 표현                                                   | 역할·소비처                                       | 검토할 후보                            | 상태                                            |
+| ----------------------------------------------------------- | ------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
+| `SquarePen` size·container 미확정                           | Shell 글쓰기, `BottomTabBar`, `SidebarNavigation` | redesign의 canonical size·radius scale | glyph 확정; component geometry와 함께 검토 대기 |
+| `Repeat2` size·stroke 미확정                                | 재게시 attribution, `PostListItem`                | redesign의 canonical icon scale        | glyph 확정; 실제 attribution row에서 검토 대기  |
+| `Ellipsis` size·stroke 미확정 (`MoreHorizontal` code alias) | 반응한 프로필 더보기, `ReactionSummary`           | redesign의 canonical icon scale        | glyph 확정; 실제 summary control에서 검토 대기  |
+| scale 밖 size `22`                                          | Profile Edit back `ArrowLeft`                     | redesign의 canonical icon scale        | glyph 확정; header geometry와 함께 검토 대기    |
+| scale 밖 size `22`                                          | Profile image edit `Camera`                       | redesign의 canonical icon scale        | glyph 확정; image action geometry와 검토 대기   |
+| stroke `3.5`; repost `2.7`                                  | `PostActionControl`, `RepostAction`               | 기본 stroke 또는 optical 예외          | action bar 전체 redesign에서 검토 대기          |
+| scale 밖 stroke `2.25`                                      | Profile switcher add `Plus`                       | 기본 stroke 또는 optical 예외          | switcher 전체 redesign에서 검토 대기            |
 
 ## Out of icon-set scope
 
