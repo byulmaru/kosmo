@@ -12,6 +12,7 @@ import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
+import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
@@ -45,6 +46,7 @@ export default function HomeScreen() {
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const [fetchKey, setFetchKey] = useState(0);
   const lastSuccessfulHomeRef = useRef<HomeLastSuccessful | null>(null);
+  const retryHome = useCallback(() => setFetchKey((key) => key + 1), []);
   const handleHomeReselection = useCallback(() => {
     if (Platform.OS === 'web') {
       window.scrollTo({ behavior: 'auto', left: 0, top: 0 });
@@ -74,12 +76,14 @@ export default function HomeScreen() {
     >
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
-        onRetry={() => setFetchKey((key) => key + 1)}
+        onRetry={retryHome}
         title="홈을 불러오지 못했어요"
       >
         <HomeContentBoundary
           fetchKey={`${revision}:${fetchKey}`}
+          key={revision}
           lastSuccessfulHomeRef={lastSuccessfulHomeRef}
+          onRetry={retryHome}
           revision={revision}
         />
       </RouteBoundary>
@@ -124,20 +128,44 @@ type HomeLastSuccessful = {
 function HomeContentBoundary({
   fetchKey,
   lastSuccessfulHomeRef,
+  onRetry,
   revision,
 }: {
   fetchKey: string;
   lastSuccessfulHomeRef: MutableRefObject<HomeLastSuccessful | null>;
+  onRetry: () => void;
   revision: number;
 }) {
+  const reportUnexpectedError = useUnexpectedErrorReporter();
+
   return (
     <ErrorBoundary
-      fallbackRender={({ error }) => {
+      fallbackRender={({ resetErrorBoundary }) => {
         const lastSuccessful = lastSuccessfulHomeRef.current;
         if (!lastSuccessful || lastSuccessful.revision !== revision) {
-          throw error;
+          return (
+            <StateView
+              actionLabel="다시 시도"
+              alert
+              description="잠시 후 다시 시도해주세요."
+              onAction={resetErrorBoundary}
+              title="홈을 불러오지 못했어요"
+            />
+          );
         }
         return <HomeContentView data={lastSuccessful.data} />;
+      }}
+      onError={(error, info) => {
+        const lastSuccessful = lastSuccessfulHomeRef.current;
+        if (!lastSuccessful || lastSuccessful.revision !== revision) {
+          reportUnexpectedError?.(error, info);
+          console.error('Route error', error, info.componentStack);
+        }
+      }}
+      onReset={(details) => {
+        if (details.reason === 'imperative-api') {
+          onRetry();
+        }
       }}
       resetKeys={[fetchKey]}
     >

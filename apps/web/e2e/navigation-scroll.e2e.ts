@@ -187,6 +187,93 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
   });
 }
 
+test('no-data Home 오류는 current Home 재선택으로 단일 query를 다시 시작하고 복구한다', async ({
+  page,
+}) => {
+  const session = await signIn(page, 'e2e-home-reselection-no-data');
+  const postBody = 'E2E Home no-data reselection recovery';
+  await createE2EPost({ body: postBody, profileId: session.profile!.id });
+
+  let homeQueryCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+
+    homeQueryCount += 1;
+    if (homeQueryCount === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  try {
+    await page.setViewportSize({ height: 360, width: 1440 });
+    await page.goto('/home');
+    await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
+
+    await (
+      await visiblePrimaryNavigation(page)
+    )
+      .getByRole('link', {
+        name: '홈',
+        exact: true,
+      })
+      .click();
+
+    await expect.poll(() => homeQueryCount).toBe(2);
+    await expect(page.getByText(postBody)).toBeVisible();
+  } finally {
+    await page.unroute('**/graphql');
+  }
+});
+
+test('no-data Home blocking retry는 오류를 한 번 보고하고 HomePageQuery 한 번으로 복구한다', async ({
+  page,
+}) => {
+  const session = await signIn(page, 'e2e-home-reselection-no-data-retry');
+  const postBody = 'E2E Home no-data retry recovery';
+  const reportedRouteErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes('Route error')) {
+      reportedRouteErrors.push(message.text());
+    }
+  });
+  await createE2EPost({ body: postBody, profileId: session.profile!.id });
+
+  let homeQueryCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+
+    homeQueryCount += 1;
+    if (homeQueryCount === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.continue();
+  });
+
+  try {
+    await page.setViewportSize({ height: 360, width: 1440 });
+    await page.goto('/home');
+    await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
+    await expect.poll(() => reportedRouteErrors.length).toBe(1);
+
+    const homeQueryResponse = waitForGraphQLOperation(page, 'HomePageQuery');
+    await page.getByRole('button', { name: '다시 시도' }).click();
+    await homeQueryResponse;
+    await expect.poll(() => homeQueryCount).toBe(2);
+    await expect(page.getByText(postBody)).toBeVisible();
+  } finally {
+    await page.unroute('**/graphql');
+  }
+});
+
 test('1280px full shell은 document overflow 전후 컬럼 경계와 600px 중앙 폭을 유지한다', async ({
   page,
 }) => {

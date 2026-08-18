@@ -31,6 +31,6 @@
 
 - `apps/app/src/components/shell`: 현재 route인 홈 navigation 활성화와 shell-to-route 새로고침 전달
 - `apps/app/src/components/PageHeader.tsx`: 기존 브랜드 geometry를 유지하는 접근 가능한 홈 control
-- `apps/app/src/app/(tabs)/(protected)/home.tsx`: Home Relay 새로고침과 진행 중 요청 잠금
+- `apps/app/src/app/(tabs)/(protected)/home.tsx`: Home Relay 새로고침과 Relay in-flight dedupe
 - `apps/app` 단위 테스트와 `apps/web/e2e`: current-home, 단일 refetch와 mobile·compact·full Web 회귀 검증
 - GraphQL schema, 서버, 새 dependency와 migration 변화 없음
