@@ -9,6 +9,9 @@ KOSMO 제품 UI에서 같은 의미에 같은 glyph를 사용하기 위한 아�
 - 신규 또는 수정하는 interactive control에 `×`, `‹`, `›`, `↻`, `…` 같은 문자 glyph를 새로 사용하지 않는다. 아직 production에 남아 있는 항목은 Current inventory와 Confirmed migration에서 추적하며 새 소비처로 복사하지 않는다.
 - 기본 viewBox `24×24`, stroke `2`, visual size token과 platform target의 분리는 Foundation 계약을 따른다. scale 밖 optical correction은 이 문서에 근거를 추가한 뒤 사용한다.
 - Shell의 글쓰기 glyph는 Lucide 원본 `SquarePen`을 수정하지 않고 사용한다. path를 수정하면 더 이상 Lucide glyph로 보지 않으며 `Icon/Custom/*`로 분리해 출처·라이선스·optical size와 Design owner 승인을 새로 기록한다.
+- `SidebarNavigation`의 Compact 글쓰기 진입점은 원형 Primary CTA 안에 canonical `SquarePen` outline을 사용한다. Rest·Hover·Pressed·FocusVisible 상태는 공용 navigation interaction 계약을 따르며, 실제 runtime interaction과 접근성은 PROD-796에서 검증한다.
+- `BottomTabBar`는 Home·Search·Compose·Notifications의 미선택 상태에 Lucide outline을 유지하고, 선택 상태에는 `Icon/Custom/Filled/{House,Search,SquarePen,Bell}`을 사용한다. 선택 container에는 상시 fill을 두지 않고 filled glyph와 primary label로 선택을 표현하며, hover·pressed·focus 배경과 ring은 일시적인 interaction feedback으로만 사용한다. 네 filled source는 `lucide-react-native@1.23.0` outline에서 파생한 승인된 24×24 custom counterpart이며 Lucide ISC License를 따른다. Design owner 승인은 DSN-41(2026-08-18)에 기록하며, Profile은 선택 여부와 무관하게 Avatar를 유지한다.
+- `SearchToolbar`의 Menu·Back·Clear는 canonical `Menu`·`ArrowLeft`·`X`와 `44×44` target을 사용한다. Rest는 no-fill, Hover·Pressed는 transient state surface, Pressed visual은 98%, FocusVisible은 `2px` focus ring이다. Leading control이 있는 variant는 왼쪽 `space/8`, 오른쪽 `space/16`을 사용하고 입력창 오른쪽 여백은 유지한다. Figma source는 `__SearchToolbarControl`이 소유하며 실제 Web·Native interaction은 Product 구현에서 검증한다.
 - 새 semantic role, 기존 role의 glyph 변경, custom icon 예외, visual size·stroke의 optical correction, active·filled variant를 결정하면 코드·Figma 변경과 같은 변경 단위에서 이 문서를 갱신한다. 최소한 의미, glyph·code export, source·version, visual size·stroke, control·상태, 소비처와 이관·검증 상태를 기록하며 문서 갱신 전에는 해당 이관을 완료로 보지 않는다.
 - 구현 전 확정한 결정은 Confirmed migration에, 현재 production 구현은 Current inventory에, 아직 Design owner 판단이 필요한 항목은 Review queue에 둔다. 코드·Figma 이관과 검증이 끝나면 Current inventory를 갱신하고 해당 migration을 제거한다.
 - 전체 redesign 중에는 semantic role과 glyph identity만 먼저 확정할 수 있다. size·stroke·container와 optical correction은 실제 component geometry, Light/Dark와 platform target을 함께 볼 수 있는 후속 redesign 범위로 남기며 semantic mapping 확정을 막지 않는다.
@@ -24,7 +27,7 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 
 | 의미                       | Lucide glyph / code export          | visual                                            | control·상태                                                        | 현재 소비처                                                                |
 | -------------------------- | ----------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 새 글 작성                 | `SquarePen` / `SquarePen`           | 전체 redesign 후속                                | Lucide 원본 path 유지; accessible name `글쓰기`                     | `BottomTabBar`, `SidebarNavigation`; 코드·Figma 이관 대기                  |
+| 새 글 작성                 | `SquarePen` / `SquarePen`           | canonical source `24×24`, stroke `2`              | Lucide 원본 path 유지; accessible name `글쓰기`                     | Figma 이관 완료; Production 코드·runtime 검증은 PROD-796                   |
 | 재게시 attribution         | `Repeat2` / `Repeat2`               | 전체 redesign 후속                                | 장식 아이콘; 인접한 attribution 문장이 의미를 제공                  | `PostListItem`; 코드·Figma 이관 대기                                       |
 | 반응한 프로필 더보기       | `Ellipsis` / `MoreHorizontal`       | 전체 redesign 후속                                | `IconButton`; Web `32`, Native `44` target과 accessible name 유지   | `ReactionSummary`; 코드·Figma 이관 대기                                    |
 | 화면·경로 뒤로             | `ArrowLeft` / `ArrowLeft`           | 전체 redesign 후속                                | `44×44` target; route·navigation history를 되돌리는 action에만 사용 | Search, Profile Edit; Post detail·Settings·`UniversalShell` 이관 대기      |
@@ -77,15 +80,16 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 
 아래 항목은 Design owner가 mapping을 확정했지만 코드·Figma 이관과 실제 화면 검증은 아직 끝나지 않았다. 완료 전까지 Current inventory에는 production 구현을 그대로 기록한다.
 
-| 현재 구현                              | 승인 정본                                                      | 대상                                    | 남은 검증                                   |
-| -------------------------------------- | -------------------------------------------------------------- | --------------------------------------- | ------------------------------------------- |
-| `PenLine`; compact sidebar radius full | Lucide 원본 `SquarePen`; size·stroke·container는 redesign 후속 | `BottomTabBar`, `SidebarNavigation`     | 전체 redesign optical 결정, 코드·Figma 이관 |
-| 문자 `↻`                               | `Repeat2`; size·stroke는 redesign 후속                         | `PostListItem`                          | 전체 redesign optical 결정, 코드·Figma 이관 |
-| 문자 `…`; code alias `MoreHorizontal`  | `Ellipsis` / `MoreHorizontal`; size·stroke는 redesign 후속     | `ReactionSummary`, `PostActionBar`      | 문자 소비처·Figma 이관, 실제 화면 검증      |
-| `UserPlus`                             | `UserRoundPlus` / `UserRoundPlus`                              | `NotificationListItem` 팔로우 알림      | 코드·Figma 소비처 이관, 실제 화면 검증      |
-| `History`                              | `RotateCcwClock` / `History`                                   | Search route                            | Figma 소비처 이관, 실제 화면 검증           |
-| `Smile`                                | `FaceSlightlySmiling`; code export 미정                        | `NotificationListItem` 반응 알림        | 의존성·버전 결정, 코드·Figma 이관·화면 검증 |
-| route back의 `ChevronLeft`             | `ArrowLeft`; size·stroke는 redesign 후속                       | Post detail, Settings, `UniversalShell` | 전체 redesign optical 결정, 코드·Figma 이관 |
+| 현재 구현                                                 | 승인 정본                                                                                                                                                                         | 대상                                    | 남은 검증                                                |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------- |
+| 모든 상태에서 outline icon, 선택 상태의 상시 surface fill | 미선택=Lucide outline, 선택=`Icon/Custom/Filled/{House,Search,SquarePen,Bell}` + primary label + container no-fill; hover·pressed·focus feedback만 일시 표시; Profile Avatar 유지 | `BottomTabBar`                          | Product 코드 이관과 Web·iOS·Android runtime 검증         |
+| Production 코드의 `PenLine`; Figma의 `SquarePen`          | Lucide 원본 `SquarePen`; Compact Sidebar는 원형 Primary CTA                                                                                                                       | `BottomTabBar`, `SidebarNavigation`     | PROD-796 코드 이관과 runtime interaction·Light/Dark 검증 |
+| 문자 `↻`                                                  | `Repeat2`; size·stroke는 redesign 후속                                                                                                                                            | `PostListItem`                          | 전체 redesign optical 결정, 코드·Figma 이관              |
+| 문자 `…`; code alias `MoreHorizontal`                     | `Ellipsis` / `MoreHorizontal`; size·stroke는 redesign 후속                                                                                                                        | `ReactionSummary`, `PostActionBar`      | 문자 소비처·Figma 이관, 실제 화면 검증                   |
+| `UserPlus`                                                | `UserRoundPlus` / `UserRoundPlus`                                                                                                                                                 | `NotificationListItem` 팔로우 알림      | 코드·Figma 소비처 이관, 실제 화면 검증                   |
+| `History`                                                 | `RotateCcwClock` / `History`                                                                                                                                                      | Search route                            | Figma 소비처 이관, 실제 화면 검증                        |
+| `Smile`                                                   | `FaceSlightlySmiling`; code export 미정                                                                                                                                           | `NotificationListItem` 반응 알림        | 의존성·버전 결정, 코드·Figma 이관·화면 검증              |
+| route back의 `ChevronLeft`                                | `ArrowLeft`; size·stroke는 redesign 후속                                                                                                                                          | Post detail, Settings, `UniversalShell` | 전체 redesign optical 결정, 코드·Figma 이관              |
 
 `RotateCcwClock`은 현재 고정한 `lucide-react-native@1.23.0`에서 동일 path의 `History` export를 사용한다. `FaceSlightlySmiling`은 이 버전에 export가 없고 `Smile`과 path도 다르므로 자동 대체하지 않는다. 코드 이관 전에 Lucide 버전 갱신 또는 승인된 source를 별도로 결정한다.
 
@@ -93,15 +97,14 @@ Lucide path를 별도 SVG 묶음으로 레포에 복제하지 않는다. lockfil
 
 아래 optical 항목은 전체 redesign의 후속 범위이며 자동 치환하지 않는다. semantic mapping을 다시 열지 않고 실제 화면의 component geometry, Light/Dark와 platform target을 함께 비교해 확정한다.
 
-| 현재 표현                                                   | 역할·소비처                                       | 검토할 후보                            | 상태                                            |
-| ----------------------------------------------------------- | ------------------------------------------------- | -------------------------------------- | ----------------------------------------------- |
-| `SquarePen` size·container 미확정                           | Shell 글쓰기, `BottomTabBar`, `SidebarNavigation` | redesign의 canonical size·radius scale | glyph 확정; component geometry와 함께 검토 대기 |
-| `Repeat2` size·stroke 미확정                                | 재게시 attribution, `PostListItem`                | redesign의 canonical icon scale        | glyph 확정; 실제 attribution row에서 검토 대기  |
-| `Ellipsis` size·stroke 미확정 (`MoreHorizontal` code alias) | 반응한 프로필 더보기, `ReactionSummary`           | redesign의 canonical icon scale        | glyph 확정; 실제 summary control에서 검토 대기  |
-| scale 밖 size `22`                                          | Profile Edit back `ArrowLeft`                     | redesign의 canonical icon scale        | glyph 확정; header geometry와 함께 검토 대기    |
-| scale 밖 size `22`                                          | Profile image edit `Camera`                       | redesign의 canonical icon scale        | glyph 확정; image action geometry와 검토 대기   |
-| stroke `3.5`; repost `2.7`                                  | `PostActionControl`, `RepostAction`               | 기본 stroke 또는 optical 예외          | action bar 전체 redesign에서 검토 대기          |
-| scale 밖 stroke `2.25`                                      | Profile switcher add `Plus`                       | 기본 stroke 또는 optical 예외          | switcher 전체 redesign에서 검토 대기            |
+| 현재 표현                                                   | 역할·소비처                             | 검토할 후보                     | 상태                                           |
+| ----------------------------------------------------------- | --------------------------------------- | ------------------------------- | ---------------------------------------------- |
+| `Repeat2` size·stroke 미확정                                | 재게시 attribution, `PostListItem`      | redesign의 canonical icon scale | glyph 확정; 실제 attribution row에서 검토 대기 |
+| `Ellipsis` size·stroke 미확정 (`MoreHorizontal` code alias) | 반응한 프로필 더보기, `ReactionSummary` | redesign의 canonical icon scale | glyph 확정; 실제 summary control에서 검토 대기 |
+| scale 밖 size `22`                                          | Profile Edit back `ArrowLeft`           | redesign의 canonical icon scale | glyph 확정; header geometry와 함께 검토 대기   |
+| scale 밖 size `22`                                          | Profile image edit `Camera`             | redesign의 canonical icon scale | glyph 확정; image action geometry와 검토 대기  |
+| stroke `3.5`; repost `2.7`                                  | `PostActionControl`, `RepostAction`     | 기본 stroke 또는 optical 예외   | action bar 전체 redesign에서 검토 대기         |
+| scale 밖 stroke `2.25`                                      | Profile switcher add `Plus`             | 기본 stroke 또는 optical 예외   | switcher 전체 redesign에서 검토 대기           |
 
 ## Out of icon-set scope
 
