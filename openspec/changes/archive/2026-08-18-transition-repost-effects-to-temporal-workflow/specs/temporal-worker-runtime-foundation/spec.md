@@ -26,4 +26,4 @@
 
 - **WHEN** Worker package의 production entrypoint와 registration을 정적·자동화 검증한다
 - **THEN** entrypoint에는 optional 또는 empty registration 경로가 존재하지 않는다
-- **AND** smoke Workflow·검증 전용 task queue·health-only idle runtime으로 business registration 부재를 숨기지 않는다
+- **AND** smoke Workflow·검증 전용 task queue·health-only idle runtime 또는 test-only business registration으로 business registration 부재를 숨기지 않는다

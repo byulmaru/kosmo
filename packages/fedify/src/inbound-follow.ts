@@ -1,14 +1,16 @@
 import '@kosmo/core/polyfill';
 
 import { EmojiReact, Follow, Like } from '@fedify/vocab';
-import { InstanceState } from '@kosmo/core/enums';
+import { ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
+import { InstanceState, PostState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import {
+  deletePost,
   followProfile,
-  undoActivityPubRepost,
   undoInboundReaction,
   unfollowProfile,
 } from '@kosmo/core/services';
+import { eq } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -198,11 +200,41 @@ const handleInboundUndoAnnounce = async (
     return 'ignored';
   }
 
-  const result = await undoActivityPubRepost({
-    activityUri: activityUri.href,
+  const mapping = await db
+    .select({
+      currentContentId: Posts.currentContentId,
+      id: Posts.id,
+      profileId: Posts.profileId,
+      replyParentId: Posts.replyParentId,
+      repostSourceId: Posts.repostSourceId,
+      state: Posts.state,
+    })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .where(eq(ActivityPubPosts.uri, activityUri.href))
+    .limit(1)
+    .then(first);
+
+  if (!mapping) {
+    return null;
+  }
+
+  if (
+    mapping.profileId !== storedActor.profile.id ||
+    mapping.currentContentId !== null ||
+    mapping.replyParentId !== null ||
+    mapping.repostSourceId === null ||
+    mapping.state !== PostState.ACTIVE
+  ) {
+    return 'ignored';
+  }
+
+  await deletePost({
     actorProfileId: storedActor.profile.id,
+    origin: 'ACTIVITYPUB',
+    postId: mapping.id,
   });
-  return result?.outcome ?? null;
+  return 'deleted';
 };
 
 export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo): Promise<void> => {

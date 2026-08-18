@@ -2,7 +2,7 @@
 
 ### Requirement: Post 삭제는 owner-scoped Tombstone transition과 GraphQL payload를 보존한다
 
-**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-677, PROD-725, PROD-777 — Post 삭제는 row를 물리 삭제하지 않고 owner가 수행하는 `UPDATE post SET state = DELETED, deleted_at = now() ... RETURNING currentContentId, id, replyParentId, repostSourceId` Tombstone transition이어야 한다(MUST). Active Post의 owner 삭제는 viewer visibility와 무관하게 허용되어야 하며(MUST), GraphQL payload는 `postId`와 nullable `repostSource`를 기존대로 제공해야 한다(MUST). Content-bearing Post·Reply·Quote의 최초 Tombstone commit은 `postDeleteWorkflow`를, Content 없는 pure Repost의 최초 Tombstone commit은 `repostDeleteWorkflow`를 각각 stable Post ID identity로 시작해야 한다(MUST). 두 Workflow input은 `{ postId, origin }`이며 discriminator를 포함하지 않는다. Verified ActivityPub Delete ingress는 actor/object URI와 저장된 mapping을 read-only로 내부 identity에 해석한 뒤 공통 `deletePost`에 전달하고, mapping lookup과 domain Tombstone transition을 하나의 atomic transaction이라고 주장하지 않아야 한다(MUST NOT). Delete caller가 database handle·`postCommit` 또는 후속 효과를 직접 조립해서는 안 된다(MUST NOT). ordinary Post·Reply·Quote 삭제의 적용·검증 책임은 PROD-677 범위에 남겨야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-677, PROD-725, PROD-777 — Post 삭제는 row를 물리 삭제하지 않고 owner가 수행하는 `UPDATE post SET state = DELETED, deleted_at = now() ... RETURNING currentContentId, id, replyParentId, repostSourceId` Tombstone transition이어야 한다(MUST). Active Post의 owner 삭제는 viewer visibility와 무관하게 허용되어야 하며(MUST), GraphQL payload는 `postId`와 nullable `repostSource`를 기존대로 제공해야 한다(MUST). Content-bearing Post·Reply·Quote의 최초 Tombstone commit은 `postDeleteWorkflow`를, Content 없는 pure Repost의 최초 Tombstone commit은 `repostDeleteWorkflow`를 각각 stable Post ID identity로 시작해야 한다(MUST). 두 Workflow input은 `{ postId, origin }`이며 discriminator를 포함하지 않는다. Core의 공용 `deletePost` action은 자체 transaction과 commit 뒤 Workflow start 경계를 소유해야 하며(MUST), Delete caller가 database handle·`postCommit` 또는 후속 효과를 직접 조립해서는 안 된다(MUST NOT). ordinary Post·Reply·Quote 삭제의 적용·검증 책임은 PROD-677 범위에 남겨야 한다(MUST).
 
 #### Scenario: owner가 visibility와 무관하게 Active Post를 Tombstone으로 전환함
 
@@ -29,17 +29,15 @@
 - **THEN** 시스템은 Content-bearing Post·Reply·Quote이면 `post-delete:{postId}` identity의 Post Delete Workflow를, pure Repost이면 `repost-delete:{postId}` identity의 Repost Delete Workflow start를 시도한다
 - **AND** start 또는 effects 실패는 Tombstone 전환과 GraphQL 성공 payload를 바꾸지 않는다
 
+#### Scenario: ActivityPub Delete caller resolves identity before common delete
+
+- **WHEN** verified ActivityPub Delete/Undo ingress가 read-only mapping과 actor resolution으로 내부 actor와 Post ID를 얻는다
+- **THEN** ingress는 공용 `deletePost({ actorProfileId, postId, origin: 'ACTIVITYPUB' })`를 호출한다
+- **AND** ingress는 caller transaction, `postCommit` 또는 outbound effect를 전달하지 않는다
+
 #### Scenario: Content Post deletion uses Post Delete Workflow
 
 - **WHEN** Content가 있는 ordinary Post, Quote, Reply 또는 Reply이면서 Quote가 Tombstone으로 전환된다
 - **THEN** 시스템은 `post-delete:{postId}` identity의 Post Delete Workflow를 시작한다
 - **AND** `origin=LOCAL`이면 canonical Delete(Note) queue handoff를, `origin=ACTIVITYPUB`이면 outbound echo 없이 완료한다
 - **AND** 각 Post의 기존 deletion payload와 delivery lifecycle을 유지한다
-
-#### Scenario: verified ActivityPub Delete delegates to common Post delete
-
-- **WHEN** verified ActivityPub ingress가 exact actor/object mapping과 ownership chain을 read-only로 확인해
-  `actorProfileId`와 `postId`를 해석한다
-- **THEN** ingress는 해당 내부 identity와 `origin=ACTIVITYPUB`을 공통 `deletePost`에 전달한다
-- **AND** `deletePost`는 자체 Tombstone transaction을 commit한 뒤 `postDeleteWorkflow` start를 시도한다
-- **AND** ingress lookup과 domain transition 사이에 caller database handle·`postCommit` 또는 별도 lock을 사용하지 않는다

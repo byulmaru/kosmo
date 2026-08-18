@@ -3,7 +3,7 @@ import '@kosmo/core/polyfill';
 import { isUniqueViolation } from '@kosmo/core/db';
 import { InstanceState } from '@kosmo/core/enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '@kosmo/core/error';
-import { materializeActivityPubRepost } from '@kosmo/core/services';
+import { repostPost } from '@kosmo/core/services';
 import { findPostByActivityPubUri } from './activitypub-post-uri';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
@@ -81,7 +81,8 @@ export const handleInboundAnnounce = async (
   }
 
   try {
-    await materializeActivityPubRepost({
+    await repostPost({
+      origin: 'ACTIVITYPUB',
       activityUri: activityUri.href,
       actorProfileId: storedActor.profile.id,
       publishedAt: announce.published,

@@ -195,9 +195,9 @@
 - Authority / Provenance: `docs/domain/objects/post.md`, `docs/domain/objects/notification.md`, `PROD-725`
 - Status: Active
 - Context / Problem: PROD-669의 caller-owned transaction과 `postCommit()`은 최신 PROD-725가 제거하기로 한 database handle·process-local effect 경계와 충돌한다.
-- Decision Outcome: specialized Core action이 Repost 상태와 필요한 ActivityPub mapping을 같은 transaction에서 저장하고, 최초 실제 create/delete commit 뒤 stable transition Workflow start를 시도한다. accepted Workflow는 Notification과 Local-origin Announce·Undo queue handoff를 독립적으로 재시도한다.
-- Alternatives Considered: 기존 `postCommit()` 유지, transaction Activity, command receipt와 outbox는 PROD-725에서 제외됐다.
-- Consequences: caller database handle과 `postCommit()`은 제거되며, commit→start gap은 허용된다. ActivityPub origin은 Notification lifecycle만 수행한다.
+- Decision Outcome: 기존 public `repostPost` action이 `origin = LOCAL | ACTIVITYPUB` 입력을 받고 자체 transaction을 소유한다. ActivityPub 입력에서는 Announce URI와 delivery metadata를 일반 `createPost`와 같은 Repost 저장 경계에서 기록한다. 최초 실제 Repost 생성 또는 Post/Repost 삭제 commit 뒤 event-specific Workflow start를 시도하고, accepted Workflow가 Notification과 Local-origin Announce·Undo queue handoff를 독립적으로 재시도한다.
+- Alternatives Considered: 기존 `postCommit()` 유지, caller-owned transaction, 별도 ActivityPub materialization/Undo action, command receipt와 outbox는 PROD-725에서 제외됐다.
+- Consequences: caller database handle과 `postCommit()`은 제거되며, commit→start gap은 허용된다. ActivityPub origin은 outbound echo 없이 Repost Notification cleanup/create 계약만 수행한다. PROD-495가 정한 ActivityPub identity·generation·no-lock 동작은 변경하지 않는다.
 - Confirmation / Follow-up: `transition-repost-effects-to-temporal-workflow` change의 구현·strict validation·dev 통합 검증에서 확인한다.
 
 ### Presentation, renderer 연결과 action child를 독립 client slice로 유지한다

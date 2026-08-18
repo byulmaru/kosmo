@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, afterEach, before, mock, test } from 'node:test';
 import { and, eq, isNull } from 'drizzle-orm';
 import {
+  ActivityPubPosts,
   db,
   firstOrThrow,
   Instances,
@@ -85,11 +86,8 @@ const createContentPost = async (
     visibility,
   }).then(({ post }) => post);
 
-const runRepost = async (input: {
-  actorProfileId: string;
-  origin?: 'LOCAL' | 'ACTIVITYPUB';
-  sourcePostId: string;
-}) => repostPostAction({ ...input, origin: input.origin ?? 'LOCAL' });
+const runRepost = async (input: { actorProfileId: string; sourcePostId: string }) =>
+  repostPostAction({ ...input, origin: 'LOCAL' });
 
 const runDelete = async (input: {
   actorProfileId: string;
@@ -378,15 +376,38 @@ test('ActivityPub origin은 outbound effect 없이 Repost Workflow만 시작한�
   const { temporalClient } = await import('../temporal/client');
   const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
   const notificationCount = await db.$count(Notifications);
+  const activityUri = `https://remote.example/announces/${crypto.randomUUID()}`;
+  const receivedAt = Temporal.Now.instant();
 
   const result = await repostPostAction({
+    activityUri,
     actorProfileId: actor.profile.id,
     origin: 'ACTIVITYPUB',
+    publishedAt: null,
+    receivedAt,
     sourcePostId: source.id,
   });
 
   assert.equal(result.created, true);
+  const mapping = await db
+    .select()
+    .from(ActivityPubPosts)
+    .where(eq(ActivityPubPosts.uri, activityUri))
+    .then(firstOrThrow);
+  assert.equal(mapping.postId, result.repost.id);
+  assert.equal(mapping.receivedAt.toString(), receivedAt.round('microsecond').toString());
+
+  const duplicate = await repostPostAction({
+    activityUri,
+    actorProfileId: actor.profile.id,
+    origin: 'ACTIVITYPUB',
+    publishedAt: null,
+    receivedAt: receivedAt.add({ minutes: 1 }),
+    sourcePostId: source.id,
+  });
+
   assert.equal(start.mock.callCount(), 1);
+  assert.equal(duplicate.created, false);
   assert.equal(await db.$count(Notifications), notificationCount);
 });
 

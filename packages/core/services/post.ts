@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   ActivityPubPosts,
   db,
@@ -74,6 +74,28 @@ type RemoteMediaCandidate = {
 };
 
 type PostOrigin = 'LOCAL' | 'ACTIVITYPUB';
+
+type LocalRepostInput = {
+  actorProfileId: string;
+  origin: 'LOCAL';
+  sourcePostId: string;
+};
+
+type ActivityPubRepostInput = {
+  activityUri: string;
+  actorProfileId: string;
+  origin: 'ACTIVITYPUB';
+  publishedAt: Temporal.Instant | null;
+  receivedAt: Temporal.Instant;
+  sourcePostId: string;
+};
+
+type RepostInput = LocalRepostInput | ActivityPubRepostInput;
+
+type RepostResult = {
+  readonly created: boolean;
+  readonly repost: typeof Posts.$inferSelect;
+};
 
 type CreatedPost = {
   content: typeof PostContents.$inferSelect;
@@ -158,7 +180,7 @@ const resolveRepostVisibility = (
   throw new ValidationError('Post cannot be reposted', { field: 'sourceId' });
 };
 
-export const materializeRepostInTransaction = async (
+const createOrFindRepost = async (
   tx: Transaction,
   {
     actorProfileId,
@@ -210,6 +232,81 @@ export const materializeRepostInTransaction = async (
   }
 
   return { created: false as const, repost: existing };
+};
+
+const saveCurrentAnnounce = async (
+  tx: Transaction,
+  {
+    activityUri,
+    actorProfileId,
+    postId,
+    publishedAt,
+    receivedAt,
+    sourcePostId,
+  }: {
+    readonly activityUri: string;
+    readonly actorProfileId: string;
+    readonly postId: string;
+    readonly publishedAt: Temporal.Instant | null;
+    readonly receivedAt: Temporal.Instant;
+    readonly sourcePostId: string;
+  },
+): Promise<boolean> => {
+  const existing = await tx
+    .select({
+      currentContentId: Posts.currentContentId,
+      mappingId: ActivityPubPosts.id,
+      postId: ActivityPubPosts.postId,
+      postProfileId: Posts.profileId,
+      postRepostSourceId: Posts.repostSourceId,
+      postState: Posts.state,
+      replyParentId: Posts.replyParentId,
+      uri: ActivityPubPosts.uri,
+    })
+    .from(ActivityPubPosts)
+    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+    .where(or(eq(ActivityPubPosts.postId, postId), eq(ActivityPubPosts.uri, activityUri)));
+
+  const current = existing.find((row) => row.postId === postId);
+  const collision = existing.find((row) => row.uri === activityUri && row.postId !== postId);
+  if (collision) {
+    const isPriorDeletedGeneration =
+      collision.postProfileId === actorProfileId &&
+      collision.postRepostSourceId === sourcePostId &&
+      collision.currentContentId === null &&
+      collision.replyParentId === null &&
+      collision.postState === PostState.DELETED;
+    if (!isPriorDeletedGeneration) {
+      throw new ValidationError('Announce id is already assigned', { field: 'id' });
+    }
+
+    await tx.delete(ActivityPubPosts).where(eq(ActivityPubPosts.id, collision.mappingId));
+  }
+
+  if (!current) {
+    await tx.insert(ActivityPubPosts).values({
+      postId,
+      publishedAt,
+      receivedAt,
+      uri: activityUri,
+    });
+    return true;
+  }
+
+  if (
+    current.postState !== PostState.ACTIVE ||
+    current.currentContentId !== null ||
+    current.replyParentId !== null ||
+    current.postRepostSourceId !== sourcePostId
+  ) {
+    return false;
+  }
+
+  await tx
+    .update(ActivityPubPosts)
+    .set({ publishedAt, receivedAt, uri: activityUri })
+    .where(eq(ActivityPubPosts.id, current.mappingId));
+  return true;
 };
 
 const materializeRemoteMedia = async (
@@ -319,24 +416,42 @@ export const deletePost = async ({
   return result;
 };
 
-export const repostPost = async ({
-  actorProfileId,
-  origin,
-  sourcePostId,
-}: {
-  readonly actorProfileId: string;
-  readonly origin: PostOrigin;
-  readonly sourcePostId: string;
-}): Promise<{
-  readonly created: boolean;
-  readonly repost: typeof Posts.$inferSelect;
-}> => {
-  const result = await db.transaction((tx) =>
-    materializeRepostInTransaction(tx, { actorProfileId, sourcePostId }),
-  );
+export function repostPost(input: LocalRepostInput): Promise<RepostResult>;
+export function repostPost(input: ActivityPubRepostInput): Promise<RepostResult>;
+export async function repostPost(input: RepostInput): Promise<RepostResult> {
+  const result = await db.transaction(async (tx) => {
+    let materialized = await createOrFindRepost(tx, {
+      actorProfileId: input.actorProfileId,
+      sourcePostId: input.sourcePostId,
+    });
+
+    if (input.origin === 'ACTIVITYPUB') {
+      const save = (postId: string) =>
+        saveCurrentAnnounce(tx, {
+          activityUri: input.activityUri,
+          actorProfileId: input.actorProfileId,
+          postId,
+          publishedAt: input.publishedAt,
+          receivedAt: input.receivedAt,
+          sourcePostId: input.sourcePostId,
+        });
+
+      if (!(await save(materialized.repost.id))) {
+        materialized = await createOrFindRepost(tx, {
+          actorProfileId: input.actorProfileId,
+          sourcePostId: input.sourcePostId,
+        });
+        if (!(await save(materialized.repost.id))) {
+          throw new Error('Active Repost not found after current Announce materialization');
+        }
+      }
+    }
+
+    return materialized;
+  });
 
   if (result.created) {
-    const workflowInput = { origin, postId: result.repost.id };
+    const workflowInput = { origin: input.origin, postId: result.repost.id };
     try {
       await temporalClient.withDeadline(Date.now() + 5_000, () =>
         temporalClient.workflow.start(
@@ -347,14 +462,14 @@ export const repostPost = async ({
     } catch (error) {
       console.error('Post Repost Workflow start failed', {
         error,
-        origin,
+        origin: input.origin,
         postId: result.repost.id,
       });
     }
   }
 
   return result;
-};
+}
 export function createPost(input: LocalPostInput): Promise<CreatedPost>;
 export function createPost(input: ActivityPubPostInput): Promise<CreatedPost | DuplicatePost>;
 export async function createPost(

@@ -19,7 +19,6 @@ import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
 import type { Env } from '../../../src/context';
 
@@ -75,13 +74,8 @@ describe('GraphQL Repost', () => {
     app.route('/graphql', yoga);
   });
 
-  beforeEach(async (t) => {
+  beforeEach(async () => {
     await resetFixtures();
-    const testContext = t as TestContext;
-    testContext.mock.method(temporalClient.workflow, 'start', async () => {
-      throw new Error('Temporal unavailable');
-    });
-    testContext.mock.method(console, 'error', () => undefined);
   });
 
   after(async () => {
@@ -118,13 +112,16 @@ describe('GraphQL Repost', () => {
       state: 'ACTIVE',
       visibility: 'UNLISTED',
     });
-    assert.equal(await db.$count(Notifications), 0);
   });
 
-  test('새 Repost는 effects Workflow start 실패와 무관하게 commit되고 직접 Notification을 만들지 않는다', async () => {
+  test('새 Repost는 effects Workflow start 실패와 무관하게 commit된다', async (t) => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('notification-recipient');
     const source = await createContentPost(recipient.id);
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = t.mock.method(console, 'error', () => undefined);
 
     const first = await requestRepost(source.id, auth.token);
     const repeated = await requestRepost(source.id, auth.token);
@@ -147,46 +144,9 @@ describe('GraphQL Repost', () => {
         .then((rows) => rows.length),
       1,
     );
-    assert.equal(await db.$count(Notifications), 0);
-  });
-
-  test('Remote Source Author에게는 Local inbox Notification을 만들지 않는다', async () => {
-    const auth = await createAuthenticatedSession();
-    const remoteInstance = await db
-      .insert(Instances)
-      .values({
-        domain: `${crypto.randomUUID()}.remote.example`,
-        kind: InstanceKind.ACTIVITYPUB,
-      })
-      .returning()
-      .then(firstOrThrow);
-    const remoteRecipient = await createProfile('remote-notification-recipient', {
-      instanceId: remoteInstance.id,
-    });
-    const source = await createContentPost(remoteRecipient.id);
-
-    const result = await requestRepost(source.id, auth.token);
-
-    assertNoGraphQLErrors(result);
-    assert.equal(await db.$count(Notifications), 0);
-  });
-
-  test('effects Workflow start 실패는 Repost 성공을 rollback하지 않는다', async () => {
-    const auth = await createAuthenticatedSession();
-    const recipient = await createProfile('failed-notification-recipient');
-    const source = await createContentPost(recipient.id);
-
-    const result = await requestRepost(source.id, auth.token);
-    assertNoGraphQLErrors(result);
-    assert.equal(
-      await db
-        .select()
-        .from(Posts)
-        .where(eq(Posts.repostSourceId, source.id))
-        .then((rows) => rows.length),
-      1,
-    );
-    assert.equal(await db.$count(Notifications), 0);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Post Repost Workflow start failed');
   });
 
   test('Owner·Member가 선택한 Local Active Profile로 Repost할 수 있다', async () => {
@@ -314,7 +274,6 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
-    assert.equal(await db.$count(Notifications), 0);
 
     const first = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(first);
@@ -326,7 +285,6 @@ describe('GraphQL Repost', () => {
         viewerRepost: null,
       },
     });
-    assert.equal(await db.$count(Notifications), 0);
 
     const repeated = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(repeated);
@@ -338,7 +296,6 @@ describe('GraphQL Repost', () => {
         viewerRepost: null,
       },
     });
-    assert.equal(await db.$count(Notifications), 0);
 
     const deleted = await db
       .select({ deletedAt: Posts.deletedAt, state: Posts.state })
@@ -375,7 +332,7 @@ describe('GraphQL Repost', () => {
     });
   });
 
-  test('Repost effects Workflow start 실패는 Tombstone 결과를 유지한다', async () => {
+  test('Repost effects Workflow start 실패는 Tombstone 결과를 유지한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const recipient = await createProfile('failed-delete-notification-recipient');
     const source = await createContentPost(recipient.id);
@@ -385,6 +342,10 @@ describe('GraphQL Repost', () => {
       .from(Posts)
       .where(and(eq(Posts.profileId, auth.profile.id), eq(Posts.repostSourceId, source.id)))
       .then(firstOrThrow);
+    const start = t.mock.method(temporalClient.workflow, 'start', async () => {
+      throw new Error('Temporal unavailable');
+    });
+    const errorLog = t.mock.method(console, 'error', () => undefined);
     const result = await requestDelete(repost.id, auth.token);
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.deletePost, {
@@ -402,7 +363,9 @@ describe('GraphQL Repost', () => {
       .where(eq(Posts.id, repost.id))
       .then(firstOrThrow);
     assert.equal(deleted.state, PostState.DELETED);
-    assert.equal(await db.$count(Notifications), 0);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(errorLog.mock.callCount(), 1);
+    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Repost Delete Workflow start failed');
   });
 
   test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {

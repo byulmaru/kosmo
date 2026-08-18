@@ -2,7 +2,9 @@
 
 ## Purpose
 
-verified remote ActivityPub Announce/Undo를 기존 Post 관계와 Repost core action에 원자적으로 materialize하고, 현재 Announce identity에 해당하는 Repost lifecycle만 변경하기 위한 요구사항을 정의한다.
+검증된 remote ActivityPub Announce/Undo를 기존 Post 관계와 공용 Repost·Post 삭제 action에 연결한다.
+이 capability는 PROD-495가 확정한 Announce identity·generation·동시 처리 semantics를 유지하고, 후속 효과의
+Temporal 전환 외에 새로운 ActivityPub materialization 경계를 만들지 않는다.
 
 ## Requirements
 
@@ -27,7 +29,7 @@ verified remote ActivityPub Announce/Undo를 기존 Post 관계와 Repost core a
 
 ### Requirement: existing ActivityPub Post identity resolution
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494, PROD-495 시스템은 Announce object URI를 기존 remote ActivityPub Post mapping 또는 configured Local Instance의 canonical `/ap/note/{postId}` URI와 정확히 일치하는 Content Post로만 해석해야 한다(MUST). actor와 object의 origin이 다른 정상 Repost는 허용해야 하며(MUST), 다른 origin이 Kosmo local Note 경로를 주장하거나 대상이 missing, unavailable, unsupported 또는 Content 없는 Repost이면 side effect 없이 거절해야 한다(MUST). 이 처리에서 unknown object를 network fetch하거나 새 remote Post로 materialize하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-494, PROD-495 시스템은 Announce object URI를 기존 remote ActivityPub Post mapping 또는 configured Local Instance의 canonical `/ap/note/{postId}` URI와 정확히 일치하는 Content Post로만 해석해야 한다(MUST). actor와 object의 origin이 다른 정상 Repost는 허용해야 하며(MUST), 다른 origin이 Kosmo local Note 경로를 주장하거나 대상이 missing, unavailable, unsupported 또는 Content 없는 Repost이면 side effect 없이 거절해야 한다(MUST). 이 처리에서 unknown object를 network fetch하거나 새 remote Post를 materialize하지 않아야 한다(MUST).
 
 #### Scenario: 저장된 remote Post Announce
 
@@ -47,39 +49,38 @@ verified remote ActivityPub Announce/Undo를 기존 Post 관계와 Repost core a
 #### Scenario: unavailable 또는 unsupported Source
 
 - **WHEN** 대상 Post가 없거나 Tombstone, 조회 불가, Content 없는 Repost 또는 Repost가 허용되지 않는 Visibility다
-- **THEN** 시스템은 기존 Repost core 정책에 따라 side effect 없이 거절한다
+- **THEN** 시스템은 기존 공용 Repost 정책에 따라 side effect 없이 거절한다
 
-### Requirement: Announce materialization through the existing Repost action
+### Requirement: Announce는 공용 Repost action으로 저장한다
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-495, PROD-677, PROD-725 시스템은 검증된 remote Actor Profile, 해석한 Source Post와 current Announce identity를 specialized Core Repost action에 전달해야 한다(MUST). Core action은 Content와 Reply Parent 없이 direct Repost Source를 가진 기존 Post와 ActivityPub mapping을 같은 transaction에 저장하고, Visibility, source eligibility, Repost count와 조회 결과에 Local Repost와 같은 domain 규칙을 사용해야 한다(MUST). 실제 Repost 생성 commit 뒤에는 `origin=ACTIVITYPUB` Repost Workflow start를, verified current-generation Undo로 pure Repost가 최초 Tombstone commit된 뒤에는 `{ postId, origin: ACTIVITYPUB }` input의 Repost Delete Workflow start를 시도해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-495`, `PROD-725` — verified ActivityPub Announce는 Local GraphQL Repost와 같은 public `repostPost` action을 사용해야 한다(MUST). action은 `origin=ACTIVITYPUB`과 검증된 actor profile, Source Post, Announce URI와 timestamps를 받아 자체 transaction에서 Repost와 기존 `ActivityPubPosts` mapping을 일반 `createPost`와 같은 저장 경계로 처리해야 한다(MUST). 별도 ActivityPub materialization action, caller-owned Repost transaction, transaction handle 또는 Workflow Activity의 mapping 저장을 추가해서는 안 된다(MUST NOT).
 
-#### Scenario: 최초 Announce materialization
+#### Scenario: First remote Announce
 
-- **WHEN** usable remote Actor가 조회 가능하고 Repost 가능한 Content Post를 최초 Announce한다
-- **THEN** Core action은 하나의 Active contentless direct Repost와 current ActivityPub mapping을 같은 transaction에 생성한다
-- **AND** commit 뒤 `origin=ACTIVITYPUB` Notification-only Repost Workflow start를 시도한다
-- **AND** 기존 count와 조회 projection은 이 Repost를 Local Repost와 같은 규칙으로 반영한다
+- **WHEN** usable remote Actor가 Repost 가능한 Content Post를 처음 Announce한다
+- **THEN** 공용 Repost action은 Active contentless direct Repost와 Announce URI mapping을 저장한다
+- **AND** 새 Repost commit 뒤 `origin=ACTIVITYPUB` Repost Workflow start를 시도한다
 
-#### Scenario: core policy rejection
+#### Scenario: duplicate 또는 generation replacement
 
-- **WHEN** Actor가 Source를 조회할 수 없거나 Source Visibility가 기존 Repost 정책에서 허용되지 않는다
-- **THEN** 시스템은 Repost core error를 protocol rejection으로 정규화하고 partial side effect를 남기지 않는다
+- **WHEN** 같은 Announce가 반복되거나 같은 actor/source의 유효한 새 Announce generation이 도착한다
+- **THEN** 기존 PROD-495 identity·mapping generation semantics에 따라 같은 Repost로 수렴하거나 current URI/delivery metadata를 갱신한다
+- **AND** 새 Repost가 생성되지 않은 결과는 Repost Workflow를 시작하지 않는다
+
+#### Scenario: Repost policy rejection
+
+- **WHEN** actor 또는 Source가 existing ActivityPub Repost 정책을 통과하지 못한다
+- **THEN** 공용 Repost action은 Post/Repost mapping을 남기지 않고 protocol rejection으로 정규화된다
 - **AND** Repost Workflow를 시작하지 않는다
 
-### Requirement: current Announce identity mapping
+### Requirement: current Announce identity와 generation semantics 보존
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-495, PROD-725 시스템은 specialized Core Repost action이 materialized remote Repost 자체에 기존 ActivityPub Post mapping을 같은 transaction으로 연결하고 mapping의 unique `uri`를 현재 Announce activity URI, unique `postId`를 Repost Post identity로 사용해야 한다(MUST). 선후관계가 확정된 순차 처리에서 같은 actor/source의 새 Announce generation은 새 Repost를 만들지 않고 같은 Active Repost mapping의 current URI와 delivery metadata를 교체해야 한다(MUST). 별도 Announce table, generation ledger 또는 mapping column을 추가하지 않아야 한다(MUST). 동일 Announce의 duplicate 수렴에는 기존 unique constraint와 멱등 Repost action을 사용하고, Announce identity 교체와 Undo 삭제 사이에 명시적 row/advisory lock 또는 serializable retry를 요구하지 않아야 한다(MUST NOT).
-
-#### Scenario: personal/shared duplicate delivery
-
-- **WHEN** 같은 Announce activity가 personal inbox와 shared inbox를 통해 순차 또는 동시에 전달된다
-- **THEN** Core transaction은 같은 Repost와 같은 ActivityPub Post mapping 하나로 수렴한다
-- **AND** duplicate 결과는 새 Repost Workflow를 시작하지 않는다
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-495, PROD-725 시스템은 기존 `ActivityPubPosts` mapping을 Repost Post identity와 Announce activity URI의 대응으로 사용해야 하며(MUST), 별도 Announce table·generation ledger·mapping column을 추가하지 않아야 한다(MUST NOT). 선후관계가 확정된 순차 처리에서 같은 actor/source의 새 Announce generation은 새 Repost를 만들지 않고 기존 Active Repost의 current URI와 delivery metadata를 갱신해야 한다(MUST). 동일 Announce duplicate와 새 generation은 새 Repost 생성이 아니므로 새 Repost Workflow를 시작하지 않아야 한다(MUST). 이 동작을 위해 새 row/advisory lock 또는 serializable retry를 요구해서는 안 된다(MUST NOT).
 
 #### Scenario: 같은 actor/source의 새 Announce generation
 
-- **WHEN** 같은 actor/source의 Active Repost가 있는 동안 다른 activity URI의 유효한 Announce가 선행 Undo와 겹치지 않고 도착한다
-- **THEN** 시스템은 기존 Repost identity를 유지하고 mapping의 current URI와 delivery metadata를 새 generation으로 교체한다
+- **WHEN** 같은 actor/source의 Active Repost가 있는 동안 다른 activity URI의 유효한 Announce가 도착한다
+- **THEN** 시스템은 기존 Repost identity를 유지하고 기존 mapping의 current URI와 delivery metadata를 새 generation으로 교체한다
 - **AND** Repost 생성 event가 아니므로 새 Repost Workflow를 시작하지 않는다
 
 #### Scenario: activity URI가 다른 Repost에 재사용됨
@@ -90,40 +91,36 @@ verified remote ActivityPub Announce/Undo를 기존 Post 관계와 Repost core a
 #### Scenario: Announce와 Undo의 교차 경합
 
 - **WHEN** 새 Announce의 current identity 교체와 이전 Announce의 Undo 삭제가 명확한 선후관계 없이 동시에 겹친다
-- **THEN** 시스템은 새 Announce가 Active Repost를 남긴다고 보장하지 않으며 명시적 lock 또는 serializable retry로 두 delivery를 직렬화하지 않는다
-- **AND** 이후 같은 actor/source의 유효한 Announce가 다시 전달되면 기존 멱등 생성 경로로 Active Repost에 수렴한다
+- **THEN** 시스템은 명시적 lock 또는 serializable retry로 두 delivery를 새로 직렬화하지 않는다
+- **AND** 이후 같은 actor/source의 유효한 Announce가 다시 전달되면 기존 멱등 Repost 경로로 수렴한다
 
-### Requirement: exact current-generation Undo
+### Requirement: current-generation Undo는 공용 Post 삭제 action을 사용한다
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, PROD-495, PROD-677, PROD-725 시스템은 선후관계가 확정된 순차 처리에서 verified `Undo` actor와 Undo가 가리키는 Announce activity URI가 현재 remote Repost mapping과 모두 일치할 때만 specialized Core action으로 해당 Repost를 Tombstone 처리해야 한다(MUST). mapping 검증과 Tombstone transition은 같은 transaction에 있어야 하며(MUST), mapping은 soft-deleted Repost와 함께 유지해 repeated Undo와 같은 activity의 재전송을 멱등 처리해야 한다(MUST). 실제 pure Repost 삭제 commit 뒤에는 `{ postId, origin: ACTIVITYPUB }` input의 Repost Delete Workflow start를 시도해야 하며(MUST), 다른 actor, superseded activity URI 또는 다른 Repost generation은 삭제하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-495`, `PROD-677`, `PROD-725` — verified ActivityPub Undo는 Fedify가 actor와 Announce URI mapping을 read-only로 확인한 뒤 현재 Active pure Repost의 `postId`를 공용 `deletePost`에 전달해야 한다(MUST). mapping resolution과 Tombstone transition을 같은 caller-owned transaction으로 묶거나 별도 Undo Core action을 추가해서는 안 된다(MUST NOT). 기존 mapping은 Tombstone과 함께 유지하고, 최초 Tombstone commit 뒤 `origin=ACTIVITYPUB` Repost Delete Workflow start를 시도해야 한다(MUST).
 
-#### Scenario: 현재 Announce Undo
+#### Scenario: current Announce Undo
 
-- **WHEN** verified Undo actor가 Active remote Repost Author와 같고 Undo object URI가 Repost의 current mapping URI와 일치한다
-- **THEN** Core action은 mapping 검증과 그 Repost의 Tombstone transition을 같은 transaction에서 수행한다
-- **AND** commit 뒤 `{ postId, origin: ACTIVITYPUB }` input의 Repost Delete Workflow start를 시도한다
+- **WHEN** verified Undo actor와 current Announce mapping이 Repost Author와 일치한다
+- **THEN** Fedify는 resolved `postId`와 actor identity를 공용 `deletePost`에 전달한다
+- **AND** 최초 Tombstone commit 뒤 Repost Delete Workflow가 시작된다
 
-#### Scenario: superseded Announce Undo
+#### Scenario: superseded 또는 stale Undo
 
-- **WHEN** Announce A의 Repost mapping이 Announce B URI로 교체 완료된 뒤 Undo A가 도착한다
-- **THEN** 시스템은 현재 Repost를 삭제하거나 Repost Delete Workflow를 시작하지 않는다
+- **WHEN** Undo URI가 current mapping과 일치하지 않거나 대상 Repost가 이미 Tombstone이다
+- **THEN** system은 현재 Active Repost를 삭제하지 않고 새 Repost Delete Workflow도 시작하지 않는다
 
-#### Scenario: 이전 generation의 늦은 Undo
+#### Scenario: concurrent Announce와 Undo
 
-- **WHEN** Undo B 뒤 새 Announce C가 새 Repost를 만든 후 Undo B가 반복 전달된다
-- **THEN** 시스템은 Tombstone인 이전 Repost mapping에만 수렴하고 새 Repost를 삭제하지 않는다
-- **AND** 새 Repost Delete Workflow를 시작하지 않는다
-
-#### Scenario: 다른 actor의 Undo
-
-- **WHEN** Undo actor가 현재 mapping의 Repost Author와 일치하지 않는다
-- **THEN** 시스템은 어떤 Repost도 삭제하거나 Repost Delete Workflow를 시작하지 않는다
+- **WHEN** Announce mapping generation replacement와 이전 generation Undo가 명확한 선후관계 없이 겹친다
+- **THEN** 기존 PROD-495 no-lock semantics를 유지하고 새 lock 또는 serializable retry를 추가하지 않는다
+- **AND** 후속 valid Announce는 기존 공용 Repost action으로 수렴한다
 
 ### Requirement: federation scope remains inbound-only
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-495 시스템은 이 capability에서 outbound Announce delivery, Quote 또는 nested Repost materialization, Repost 제품 계약, GraphQL schema와 UI를 추가하거나 변경하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-495`, `PROD-725` — ActivityPub-origin Repost/Delete Workflow는 outbound Announce·Undo echo를 생성하지 않아야 한다(MUST NOT). remote actor/object validation, unknown object fetch 금지, GraphQL/API 제품 계약은 기존 상태를 유지해야 한다(MUST).
 
-#### Scenario: excluded federation and product surfaces
+#### Scenario: ActivityPub-origin effects
 
-- **WHEN** inbound Announce/Undo capability가 구현된다
-- **THEN** outbound delivery, Quote·nested Repost, GraphQL과 UI 동작은 기존 상태를 유지한다
+- **WHEN** verified Announce 또는 Undo가 Repost transition을 commit하고 Workflow가 accepted된다
+- **THEN** Repost create는 Notification-only effects를, Repost Delete는 Notification cleanup만 수행한다
+- **AND** Local-origin Announce·Undo queue handoff는 수행하지 않는다

@@ -1,11 +1,4 @@
-# temporal-repost-effects Specification
-
-## Purpose
-
-Repost 생성과 Post/Repost 삭제 transaction을 Core가 동기적으로 commit한 뒤, event별 Temporal Workflow가
-Notification과 ActivityPub queue handoff를 독립적으로 재시도한다.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Core action이 committed transition 뒤 Workflow를 시작한다
 
@@ -47,22 +40,6 @@ Notification과 ActivityPub queue handoff를 독립적으로 재시도한다.
 - **WHEN** transition commit 뒤 process가 종료되거나 Workflow start가 실패한다
 - **THEN** committed Repost/Tombstone과 GraphQL/ActivityPub 성공 결과를 유지한다
 - **AND** 실패를 관측하지만 command receipt, transactional outbox·relay 또는 자동 backfill을 추가하지 않는다
-
-### Requirement: stable Workflow identity와 start gap 격리
-
-**Authority / Provenance:** `docs/domain/objects/post.md`, PROD-677, PROD-725 — Repost 생성, Post Delete와 Repost Delete Workflow ID는 committed Post ID와 각 event 경계에서 안정적으로 파생되어야 한다(MUST). Repost 생성은 `post-repost:{postId}`, Post Delete는 `post-delete:{postId}`, Repost Delete는 `repost-delete:{postId}`를 사용한다. 같은 event의 중복 start는 기존 execution으로 수렴해야 하며(MUST), 종료된 같은 event ID를 다음 event에 재사용해서는 안 된다(MUST NOT). commit 뒤 process 종료, Temporal 연결 오류 또는 start 실패는 committed domain 결과와 caller 성공을 바꾸지 않고 관측해야 한다(MUST NOT).
-
-#### Scenario: stable Repost와 Delete identities
-
-- **WHEN** 같은 Repost의 생성과 이후 삭제 event가 각각 commit된다
-- **THEN** Repost create와 해당 Delete Workflow는 같은 Post ID를 포함하면서 event 경계로 구분된다
-- **AND** 각 event의 retry는 자기 stable Workflow identity를 유지한다
-
-#### Scenario: commit 뒤 start 실패
-
-- **WHEN** transition commit 뒤 process가 종료되거나 Workflow start가 실패한다
-- **THEN** committed Repost/Tombstone과 GraphQL/ActivityPub 성공 결과를 유지한다
-- **AND** transactional outbox, command receipt 또는 자동 backfill을 이 capability에 추가하지 않는다
 
 ### Requirement: Repost Notification lifecycle의 멱등 Activity
 

@@ -2,7 +2,9 @@
 
 ## Purpose
 
-TBD - created by archiving change add-activitypub-local-repost-delivery. Update Purpose after archive.
+Local Repost의 canonical Announce·Undo identity와 audience를 유지하면서, queue handoff를 Temporal effects
+Workflow의 Activity retry 경계에서 수행하기 위한 요구사항을 정의한다. 이 capability는 Repost 저장·삭제
+transaction이나 inbound ActivityPub materialization을 재설계하지 않는다.
 
 ## Requirements
 
@@ -91,12 +93,12 @@ TBD - created by archiving change add-activitypub-local-repost-delivery. Update 
 
 ### Requirement: First-transition post-commit delivery
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, PROD-447, PROD-448, PROD-496, PROD-677, PROD-725. 시스템은 Post domain transaction이 성공적으로 commit된 뒤 최초 Repost 생성에는 Repost Workflow를, Content-bearing Post·Reply·Quote의 최초 Tombstone에는 Post Delete Workflow를, pure Repost의 최초 Tombstone에는 Repost Delete Workflow를 시작하고, accepted Local-origin Workflow의 Activity에서 관계에 맞는 Fedify queue handoff를 재시도해야 한다(MUST). 각 Workflow input은 `{ postId, origin }`이며 discriminator를 포함하지 않는다. 반복·동시 application action은 추가 Workflow나 activity handoff를 시작하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-447`, `PROD-448`, `PROD-496`, `PROD-677`, `PROD-725`. 시스템은 Post domain transaction이 성공적으로 commit된 뒤 최초 Repost 생성에는 Repost Workflow를, Content-bearing Post·Reply·Quote의 최초 Tombstone에는 Post Delete Workflow를, pure Repost의 최초 Tombstone에는 Repost Delete Workflow를 시작하고, accepted Local-origin Workflow의 Activity에서 관계에 맞는 Fedify queue handoff를 재시도해야 한다(MUST). 각 Workflow input은 `{ postId, origin }`이며 discriminator를 포함하지 않는다. 반복·동시 application action은 추가 Workflow나 activity handoff를 시작하지 않아야 한다(MUST). Repost create는 공용 `repostPost` action이, Delete는 공용 `deletePost` action이 자체 transaction과 commit 뒤 start 경계를 소유해야 하며(MUST), caller가 process-local `postCommit`이나 transaction handle을 조립해서는 안 된다(MUST NOT).
 
 #### Scenario: First Repost creation delivery
 
 - **WHEN** Repost application action이 새 Active Repost를 생성하고 commit한다
-- **THEN** 시스템은 Repost Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Announce를 Fedify queue에 handoff한다
+- **THEN** 시스템은 `post-repost:{postId}` Repost Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Announce를 Fedify queue에 handoff한다
 - **AND** commit 전에 Workflow start, Fedify delivery 또는 broker enqueue를 수행하지 않는다
 
 #### Scenario: Duplicate or concurrent Repost creation
@@ -108,14 +110,14 @@ TBD - created by archiving change add-activitypub-local-repost-delivery. Update 
 #### Scenario: First Repost cancellation delivery
 
 - **WHEN** delete action이 Repost를 처음 Active에서 Tombstone으로 전이하고 commit한다
-- **THEN** 시스템은 Repost Delete Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Undo를 같은 Repost ordering key로 handoff한다
+- **THEN** 시스템은 `repost-delete:{postId}` Repost Delete Workflow start를 시도하고 accepted Workflow는 해당 Repost의 Undo를 같은 Repost ordering key로 handoff한다
 - **AND** Undo Activity는 Tombstone row에 보존된 Repost identity를 사용하며 author Profile의 non-`ACTIVE` state만으로 handoff를 no-op하지 않는다
 - **AND** GraphQL public payload는 기존 Post global ID 계약을 유지한다
 
 #### Scenario: First Content Post deletion delivery
 
 - **WHEN** 일반 Post, Reply, Quote 또는 Reply이면서 Quote인 Content Post가 처음 Active에서 Tombstone으로 전이되고 commit된다
-- **THEN** 시스템은 Post Delete Workflow start를 시도하고 accepted Local-origin Workflow는 canonical Delete(Note)를 Fedify queue에 handoff한다
+- **THEN** 시스템은 `post-delete:{postId}` Post Delete Workflow start를 시도하고 accepted Local-origin Workflow는 canonical Delete(Note)를 Fedify queue에 handoff한다
 - **AND** Delete Activity는 Tombstone Post projection으로 기존 Delete identity·audience·recipient 규칙을 사용한다
 - **AND** GraphQL public payload는 기존 Post global ID 계약을 유지한다
 
@@ -134,7 +136,7 @@ TBD - created by archiving change add-activitypub-local-repost-delivery. Update 
 
 ### Requirement: Post-commit delivery failure isolation
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, PROD-447, PROD-448, PROD-496, PROD-677, PROD-725. 시스템은 Repost create, Post Delete 또는 Repost Delete Workflow start와 Fedify Announce/Delete(Note)/Undo queue handoff 실패를 committed Post application 결과와 분리해 관측해야 하며(MUST), accepted Workflow는 handoff를 유한하게 재시도해야 한다(MUST). handoff 이후 remote delivery 실패는 Fedify retry 경계가 소유하고 GraphQL mutation 실패나 domain state rollback으로 바꾸지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `PROD-447`, `PROD-448`, `PROD-496`, `PROD-677`, `PROD-725`. 시스템은 Repost create, Post Delete 또는 Repost Delete Workflow start와 Fedify Announce/Delete(Note)/Undo queue handoff 실패를 committed Post application 결과와 분리해 관측해야 하며(MUST), accepted Workflow는 handoff를 유한하게 재시도해야 한다(MUST). handoff 이후 remote delivery 실패는 Fedify retry 경계가 소유하고 GraphQL mutation 실패나 domain state rollback으로 바꾸지 않아야 한다(MUST).
 
 #### Scenario: Announce or Delete queue handoff failure after commit
 
@@ -164,7 +166,7 @@ TBD - created by archiving change add-activitypub-local-repost-delivery. Update 
 
 ### Requirement: Repost delivery availability and scope boundary
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, PROD-448, PROD-496. 시스템은 canonical Repost와 Source activity를 안전하게 재구성할 수 있는 경우에만 outbound Repost queue handoff를 시도하며, sibling interaction 또는 Kosmo-owned durable transport 범위를 추가하지 않아야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0017-activitypub-local-post-note.md`, `PROD-448`, `PROD-496`. 시스템은 canonical Repost와 Source activity를 안전하게 재구성할 수 있는 경우에만 outbound Repost queue handoff를 시도하며, sibling interaction 또는 Kosmo-owned durable transport 범위를 추가하지 않아야 한다(MUST).
 
 #### Scenario: Unsupported Repost structure
 
