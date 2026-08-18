@@ -2,7 +2,7 @@
 
 현재 `packages/core/services/reaction.ts`의 공개 action은 optional database handle을 받아 Reaction DML을 실행하고 `postCommit`에서 Notification과 Fedify delivery를 직접 호출한다. GraphQL resolver와 `materializeInboundReaction`·`undoInboundReaction`이 이 callback을 조립한다. Reaction은 물리 삭제되며 `activitypub_reaction.reaction_id`가 `ON DELETE CASCADE`이므로 삭제 뒤에는 원본 row와 inbound mapping을 다시 읽을 수 없다.
 
-PROD-722가 확립한 경계처럼 domain transaction은 Core에 남기고 commit 뒤 Effects Workflow start만 시도한다. 다만 inbound Like·EmojiReact·Undo는 mapping과 Reaction mutation의 기존 원자성을 유지해야 하므로 public action에 transaction handle을 남기는 대신 Core 내부 transaction primitive를 공유해야 한다.
+PROD-722가 확립한 경계처럼 domain transaction은 Core에 남기고 commit 뒤 Effects Workflow start만 시도한다. Inbound Like·EmojiReact·Undo는 mapping과 Reaction mutation의 기존 원자성을 유지하되 public action에 transaction handle이나 별도 transaction primitive를 노출하지 않는다.
 
 ## Goals / Non-Goals
 
@@ -35,7 +35,7 @@ PROD-722가 확립한 경계처럼 domain transaction은 Core에 남기고 commi
 
 ### Recommended Approach
 
-Core에 transaction-scoped Reaction add/delete primitive를 두고 Local public action과 기존 ActivityPub materialization action이 이를 재사용한다. Local public action은 기본 `db.transaction`을 직접 열고, ActivityPub action은 actor·target·mapping 검증과 primitive를 기존 outer transaction 안에서 실행한다. 두 경로 모두 outer transaction이 반환된 뒤 실제 transition 결과에만 Workflow start를 시도하며 start failure를 관측하고 domain 결과는 그대로 반환한다.
+Local public action과 ActivityPub materialization action이 각각 transaction을 소유하고 필요한 Reaction DML을 직접 수행한다. Local action은 기본 `db.transaction` 안에서 Reaction을 저장·삭제하고, ActivityPub action은 actor·target·mapping 검증과 Reaction DML을 같은 transaction 안에서 수행한다. 두 경로 모두 transaction이 반환된 뒤 실제 transition 결과에만 Workflow start를 시도하며 start failure를 관측하고 domain 결과는 그대로 반환한다.
 
 Create Workflow input은 `{ reactionId, origin }`으로 제한한다. Notification과 Local outbound Activity는 실행 시점의 committed Reaction을 각각 조회하며, source가 이미 삭제됐으면 멱등 no-op이 된다. Delete Workflow input은 delete `RETURNING` row의 다섯 필드와 origin을 plain value로 직렬화한다. Notification cleanup은 ID만 사용하고 Local Undo Activity는 snapshot의 나머지 필드로 기존 projection을 호출한다.
 
@@ -45,7 +45,7 @@ Worker는 기존 하나의 compile-time registry와 process host에 두 Workflow
 
 ### Allowed Alternatives
 
-Core 내부 transaction primitive의 구체적 모듈 위치와 반환형은 public caller handle을 노출하지 않고 inbound mapping atomicity를 유지하는 한 구현자가 선택할 수 있다. Notification과 federation Activity의 내부 함수 배치도 기존 package dependency 방향과 compile-time registry를 유지하는 한 선택할 수 있다.
+각 action 내부의 DML 배치와 반환형은 public caller handle을 노출하지 않고 inbound mapping atomicity를 유지하는 한 구현자가 선택할 수 있다. Notification과 federation Activity의 내부 함수 배치도 기존 package dependency 방향과 compile-time registry를 유지하는 한 선택할 수 있다.
 
 ### Known Traps
 

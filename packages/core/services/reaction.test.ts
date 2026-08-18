@@ -16,7 +16,7 @@ import { temporalClient } from '../temporal/client';
 import { REACTION_CREATE_WORKFLOW_TYPE } from '../temporal/reaction-create';
 import { REACTION_DELETE_WORKFLOW_TYPE } from '../temporal/reaction-delete';
 import { reactionTypes } from '../validation';
-import { addReaction, deleteReaction, deleteReactionInTransaction } from './reaction';
+import { addReaction, deleteReaction } from './reaction';
 
 after(async () => {
   await pg.end();
@@ -327,39 +327,6 @@ test('실제 Reaction 삭제 commit은 삭제 snapshot으로 Delete Effects Work
         type: created.reaction.type,
       },
     ]);
-  } finally {
-    start.mock.restore();
-  }
-});
-
-test('transaction rollback은 Reaction을 보존하고 Workflow를 시작하지 않는다', async () => {
-  const actor = await createFixture();
-  const recipient = await createFixture();
-  const created = await addReaction({
-    actorProfileId: actor.profile.id,
-    origin: 'LOCAL',
-    postId: recipient.post.id,
-    type: '🌈',
-  });
-  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
-
-  try {
-    await assert.rejects(
-      db.transaction(async (tx) => {
-        const deleted = await deleteReactionInTransaction(tx, {
-          actorProfileId: actor.profile.id,
-          expectedReactionId: created.reaction.id,
-          postId: recipient.post.id,
-          type: created.reaction.type,
-        });
-        assert.equal(deleted?.id, created.reaction.id);
-        throw new Error('rollback');
-      }),
-      /rollback/,
-    );
-
-    assert.equal(await countReactions(recipient.post.id), 1);
-    assert.equal(start.mock.callCount(), 0);
   } finally {
     start.mock.restore();
   }

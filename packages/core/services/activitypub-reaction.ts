@@ -12,14 +12,17 @@ import {
   Reactions,
 } from '../db';
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
+import { temporalClient } from '../temporal/client';
+import {
+  REACTION_CREATE_WORKFLOW_TYPE,
+  reactionCreateWorkflowStartOptions,
+} from '../temporal/reaction-create';
+import {
+  REACTION_DELETE_WORKFLOW_TYPE,
+  reactionDeleteWorkflowStartOptions,
+} from '../temporal/reaction-delete';
 import { reactionTypeSchema } from '../validation';
 import { postVisibilityCondition } from '../visibility/post';
-import {
-  addReactionInTransaction,
-  deleteReactionInTransaction,
-  startReactionCreateEffectsWorkflow,
-  startReactionDeleteEffectsWorkflow,
-} from './reaction';
 import type { Transaction } from '../db';
 
 type MaterializeInboundReactionInput = {
@@ -225,17 +228,46 @@ export const materializeInboundReaction = async (
         };
       }
 
-      const reactionResult = await addReactionInTransaction(tx, identity);
+      const inserted = await tx
+        .insert(Reactions)
+        .values({
+          postId: identity.postId,
+          profileId: identity.actorProfileId,
+          type: identity.type,
+        })
+        .onConflictDoNothing({
+          target: [Reactions.postId, Reactions.type, Reactions.profileId],
+        })
+        .returning()
+        .then(first);
+      const reaction =
+        inserted ??
+        (await tx
+          .select()
+          .from(Reactions)
+          .where(
+            and(
+              eq(Reactions.postId, identity.postId),
+              eq(Reactions.profileId, identity.actorProfileId),
+              eq(Reactions.type, identity.type),
+            ),
+          )
+          .limit(1)
+          .then(first));
+      if (!reaction) {
+        throw new Error('Reaction not found after insert conflict');
+      }
+
       const insertedMapping = await tx
         .insert(ActivityPubReactions)
-        .values({ reactionId: reactionResult.reaction.id, uri: input.activityUri })
+        .values({ reactionId: reaction.id, uri: input.activityUri })
         .onConflictDoNothing()
         .returning({ reactionId: ActivityPubReactions.reactionId })
         .then(first);
       if (insertedMapping) {
         return {
-          kind: reactionResult.created ? ('CREATED' as const) : ('MAPPED' as const),
-          reaction: reactionResult.reaction,
+          kind: inserted ? ('CREATED' as const) : ('MAPPED' as const),
+          reaction,
         };
       }
 
@@ -257,10 +289,21 @@ export const materializeInboundReaction = async (
   }
 
   if (result.kind === 'CREATED') {
-    await startReactionCreateEffectsWorkflow({
-      origin: 'ACTIVITYPUB',
-      reactionId: result.reaction.id,
-    });
+    const origin = 'ACTIVITYPUB' as const;
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          REACTION_CREATE_WORKFLOW_TYPE,
+          reactionCreateWorkflowStartOptions({ origin, reactionId: result.reaction.id }),
+        ),
+      );
+    } catch (error) {
+      console.error('Reaction Create effects Workflow start failed', {
+        error,
+        origin,
+        reactionId: result.reaction.id,
+      });
+    }
   }
 
   return { kind: result.kind, reaction: result.reaction };
@@ -300,16 +343,45 @@ export const undoInboundReaction = async ({
       return null;
     }
 
-    return deleteReactionInTransaction(tx, {
-      actorProfileId: mapped.reaction.profileId,
-      expectedReactionId: mapped.reaction.id,
-      postId: mapped.reaction.postId,
-      type: mapped.reaction.type,
-    });
+    return tx
+      .delete(Reactions)
+      .where(
+        and(
+          eq(Reactions.id, mapped.reaction.id),
+          eq(Reactions.profileId, mapped.reaction.profileId),
+          eq(Reactions.postId, mapped.reaction.postId),
+          eq(Reactions.type, mapped.reaction.type),
+        ),
+      )
+      .returning()
+      .then(first)
+      .then((reaction) => reaction ?? null);
   });
 
   if (deleted) {
-    await startReactionDeleteEffectsWorkflow({ origin: 'ACTIVITYPUB', reaction: deleted });
+    const origin = 'ACTIVITYPUB' as const;
+    const input = {
+      createdAt: deleted.createdAt.toString(),
+      id: deleted.id,
+      origin,
+      postId: deleted.postId,
+      profileId: deleted.profileId,
+      type: deleted.type,
+    };
+    try {
+      await temporalClient.withDeadline(Date.now() + 5_000, () =>
+        temporalClient.workflow.start(
+          REACTION_DELETE_WORKFLOW_TYPE,
+          reactionDeleteWorkflowStartOptions(input),
+        ),
+      );
+    } catch (error) {
+      console.error('Reaction Delete effects Workflow start failed', {
+        error,
+        origin,
+        reactionId: deleted.id,
+      });
+    }
   }
 
   return { reactionId: deleted?.id ?? null };

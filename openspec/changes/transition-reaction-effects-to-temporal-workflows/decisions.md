@@ -47,9 +47,9 @@
 - Authority / Provenance: `docs/domain/objects/reaction.md`, `docs/architecture/core-services.md`, `PROD-723`
 - Status: Active
 - Context / Problem: Public database handle을 제거하면서도 Like·EmojiReact mapping과 Reaction 생성, Undo mapping과 Reaction 삭제는 같은 transaction에 남아야 한다.
-- Decision Outcome: 기존 inbound materialization action이 outer Core transaction을 소유하고 transaction-scoped Reaction primitive를 내부에서 재사용한다. Local public action은 기본 database transaction을 직접 소유한다. Public API/Fedify caller에는 database handle을 노출하지 않는다.
+- Decision Outcome: 기존 inbound materialization action이 outer Core transaction을 소유하고 mapping과 Reaction DML을 그 안에서 직접 수행한다. Local public action도 기본 database transaction을 직접 소유하고 필요한 Reaction DML을 직접 수행한다. Public API/Fedify caller에는 database handle이나 별도 transaction primitive를 노출하지 않는다.
 - Alternatives Considered: Mapping을 Reaction commit 뒤 별도 transaction으로 저장하면 rollback과 first-write atomicity가 깨진다. Public optional handle을 유지하면 caller 조립 책임 제거 목표를 충족하지 못한다.
-- Consequences: Core 내부에는 transaction composition seam이 남지만 public service 계약은 단순해진다. MAPPED와 DUPLICATE는 Workflow를 시작하지 않는다.
+- Consequences: 각 Core 진입점이 transaction composition과 필요한 DML을 함께 보여주므로 public service 계약과 구현 흐름이 단순해진다. MAPPED와 DUPLICATE는 Workflow를 시작하지 않는다.
 - Confirmation / Follow-up: mapping insert rollback, URI conflict, concurrent delivery와 exact Undo integration test를 유지한다.
 
 ### Notification과 federation handoff는 독립 Activity로 실행한다
