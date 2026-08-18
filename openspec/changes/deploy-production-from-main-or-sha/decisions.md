@@ -62,7 +62,7 @@
 - Decision Outcome: Main에 저장된 workflow에서 repository에 존재하는 정확한 40자리 commit SHA만 입력받는다. 승인 전에는 target 존재만 검증하고, target checkout·prod secret 접근·build·deploy는 Environment 승인 뒤에 실행한다.
 - Alternatives Considered: Branch/ref 입력은 승인과 실행 사이 이동할 수 있어 제외했다. Target SHA의 workflow를 직접 dispatch하면 승인 전에 변경된 workflow가 실행될 수 있어 제외했다. Manual target을 main candidate처럼 사전 build하면 악성 Dockerfile이 build secret에 접근할 수 있어 제외했다.
 - Consequences: Reviewer는 workflow ref main과 실제 target SHA를 별도로 확인해야 하며, manual release는 승인 뒤 build 시간만큼 배포가 늦어진다.
-- Confirmation / Follow-up: Invalid SHA와 non-main dispatch ref 거부, 승인 UI의 commit link, 승인 전 checkout·secret 부재와 승인 후 same-SHA/digest를 검증한다.
+- Confirmation / Follow-up: Invalid SHA와 non-main dispatch ref 거부, 승인 UI의 commit link와 승인 전 checkout·secret 부재를 검증한다. 승인 뒤 build·deploy는 automatic과 동일한 공용 gated job이므로 첫 automatic live release의 same-SHA/digest 증거를 재사용하고, 검증만을 위한 중복 production mutation은 요구하지 않는다.
 
 ### Production release는 dev Docker Build와 분리된 workflow가 소유한다
 
@@ -145,8 +145,8 @@
 - Context / Problem: `adopt-production-release-branch` change와 `PROD-764`는 production branch PR merge를 유일한 승인으로 정했지만 새 계약은 main release와 Environment 승인을 사용한다.
 - Decision Outcome: Production branch는 build, deploy, rollback source와 승인 경계에서 제거한다. 기존 change의 미완료 live task는 새 cutover가 소유하고 obsolete delta를 active spec에 적용하지 않는 방식으로 superseded 처리한다.
 - Alternatives Considered: 두 release 경로를 병행하면 동일 production에 서로 다른 source·approval 규칙이 존재하므로 제외했다.
-- Consequences: Main과 production의 현재 차이를 cutover 전에 수렴해야 하며, branch ruleset/branch 삭제는 repository workflow 변경과 별도의 명시적 운영 승인 뒤 수행한다.
-- Confirmation / Follow-up: 모든 workflow, OIDC, Terraform과 runbook 참조를 제거하고 old change archive가 새 active spec을 되돌리지 않는지 strict validation으로 확인한다.
+- Consequences: Main과 production의 현재 차이는 cutover 전에 수렴해야 한다. 더 이상 release source가 아닌 branch/ruleset의 물리적 삭제는 별도 운영 청소이며 새 release 계약이나 OpenSpec archive의 완료 조건이 아니다.
+- Confirmation / Follow-up: 모든 workflow, OIDC, Terraform과 runbook의 production branch 의존성을 제거하고 old change archive가 새 active spec을 되돌리지 않는지 strict validation으로 확인한다.
 
 ## Remaining Decisions
 

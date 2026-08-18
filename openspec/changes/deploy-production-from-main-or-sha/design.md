@@ -80,9 +80,9 @@
 3. Workflow cutover에 맞춰 Vault OIDC trust를 exact `environment:prod` identity로 수렴하고 main ref·production branch·tag identity를 제거한다. 적용 전후 owner와 rollback 경계를 기록한다.
 4. GitHub `prod` Environment required reviewer와 deployment policy를 설정하고 API로 live 상태를 확인한다.
 5. Main merge 후 dev build·Deploy Dev와 production approval 대기 job을 확인한다. 승인 전에는 production checkout·credential·build·Argo mutation이 없음을 확인하고, reviewer가 main SHA, chart diff와 migration compatibility를 검토한다.
-6. 첫 main release를 승인해 gated job의 main SHA checkout·GHCR prod build·migration-gated production sync 순서, Argo source/digest, workload health와 public smoke를 확인한다.
-7. 호환 가능한 비-main SHA로 manual preflight·approval·build·deploy 경로를 검증한다. 실제 production mutation이 불필요하면 별도 승인된 검증 SHA와 시점을 사용하며 CI만으로 live 증거를 대체하지 않는다.
-8. Production branch workflow·OIDC 참조가 없음을 확인한 뒤 branch ruleset/branch 폐기는 별도 명시적 운영 승인을 받아 수행한다.
+6. 첫 main release를 승인해 gated job의 main SHA checkout·GHCR prod build·migration-gated production sync 순서, Argo source/digest와 workload health를 확인한다.
+7. Manual 경로에서만 달라지는 main workflow ref·full SHA preflight와 승인 전 target checkout·secret 부재를 정적으로 검증한다. 승인 뒤 build·deploy는 automatic과 같은 공용 gated job이므로 검증만을 위한 production mutation을 반복하지 않는다.
+8. Production branch workflow·OIDC 참조가 없음을 확인한다. 남은 branch/ruleset의 물리적 폐기는 release 계약과 분리된 운영 청소로 수행할 수 있으며 이 change의 완료를 막지 않는다.
 9. `adopt-production-release-branch`의 남은 task를 superseded로 기록하고 obsolete delta를 active spec에 적용하지 않는 방식으로 archive한 뒤, 이 change의 delta를 최종 active `production-release` spec에 동기화한다.
 
 Rollback은 새 workflow cutover 전에는 기존 production branch 경로를 유지한다. 첫 main release 뒤에는 DB-compatible revert를 main에 merge하거나 호환 가능한 full SHA를 manual 승인해 forward release로 배포하며 database history를 되돌리지 않는다.

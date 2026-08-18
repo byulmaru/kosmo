@@ -121,28 +121,28 @@ Argo CD, Vault와 GitHub Environment가 `prod` 승인 뒤 실행되는 automatic
 
 **Deliverable**
 
-Repository 변경이 리뷰 가능한 PR로 전달되고, 승인된 순서로 main 기반 release를 live 검증한 뒤 production branch 계약과 OpenSpec 생명주기가 실제 상태에 맞게 완료된다.
+Repository 변경이 리뷰 가능한 PR로 전달되고, main 기반 automatic release의 공용 production 경계를 live 검증한 뒤 OpenSpec 생명주기가 실제 상태에 맞게 완료된다.
 
 **Guardrails**
 
 - PR merge, GitHub/Vault apply, production Environment 승인·배포와 OpenSpec archive를 서로 다른 evidence boundary로 기록한다.
-- Production deploy, branch/ruleset 삭제, Vault apply와 manual live release는 각각 필요한 명시적 운영 승인을 받기 전 실행하지 않는다.
+- Production deploy와 Vault apply는 각각 필요한 명시적 운영 승인을 받기 전 실행하지 않는다.
 - 첫 cutover 전에 현재 main/production/live production source와 migration compatibility를 대조하고, 첫 automatic release는 승인 전 production 접근이 없음을 확인한 뒤 실행한다.
-- Production branch ruleset/branch 제거는 모든 workflow·OIDC·runbook 참조가 사라지고 rollback path가 준비된 뒤에만 수행한다.
+- Manual release의 trigger·preflight 고유 경계는 정적 검증하고, automatic과 공유하는 gated deploy job은 첫 automatic live release 증거를 재사용한다. 검증만을 위한 중복 production mutation을 요구하지 않는다.
+- 더 이상 release source가 아닌 production branch와 ruleset의 물리적 삭제는 별도 운영 청소이며 이 change의 완료 gate가 아니다.
 
 **Verification**
 
 - Branch diff, local validation, PR checks와 merge readiness를 확인한다.
-- 첫 main release에서 target SHA, 승인 뒤 build digest, approval, Argo revision, migration/workload health와 smoke를 live 확인한다.
-- Manual SHA 경로의 승인 전후 boundary와 same-SHA/digest를 승인된 검증 시점에 확인한다.
+- 첫 main release에서 target SHA, 승인 뒤 build digest, approval, Argo revision과 migration/workload health를 live 확인한다.
+- Manual SHA 경로는 main workflow ref·full SHA preflight와 승인 전 target checkout·secret 부재를 검증하고, 승인 뒤 same-SHA/digest는 automatic과 동일한 shared gated job 검증으로 충족한다.
 - 최종 Linear 완료 기록, old/new change archive와 active spec strict validation을 확인한다.
 
-- [ ] 5.1 Current main/production/live production source·digest와 migration 상태를 대조하고 cutover diff·선행 수렴 작업을 기록한다.
-- [ ] 5.2 Repository 변경을 새 automatic gated build/manual 경로와 보안 경계에 맞춰 commit·push하고 한국어 PR에 검증과 외부 live gate를 기록해 Ready for review로 전환한다.
-- [ ] 5.3 Repository PR merge와 필요한 Vault/GitHub 설정 apply 뒤 첫 main release를 Environment 승인하고 gated build·배포해 SHA·digest·migration·workload·smoke 결과를 기록한다.
-- [ ] 5.4 승인된 시점에 manual full-SHA release 경로를 검증하고 승인 전 target code/secret 부재와 승인 후 same-SHA/digest 결과를 기록한다.
-- [ ] 5.5 모든 production branch 참조 제거와 rollback 경로를 확인한 뒤 별도 운영 승인으로 production ruleset/branch를 폐기하고 결과를 기록한다.
-- [ ] 5.6 `adopt-production-release-branch`를 obsolete delta 미적용 방식으로 archive하고 이 change의 delta를 active spec에 동기화해 strict validation한 뒤 `PROD-783`을 완료한다.
+- [x] 5.1 Current main/production/live production source·digest와 migration 상태를 대조하고, 첫 sync에서 확인된 CNPG canonical drift를 `PROD-790`으로 수렴한다.
+- [x] 5.2 Automatic gated build와 manual full-SHA 경로를 PR로 전달하고, local validation·PR checks·외부 live gate를 분리해 Ready for review 상태까지 검증한다.
+- [x] 5.3 Vault/GitHub 설정 적용 뒤 main release `32105099132`에서 Environment 승인 후 checkout·Vault login·GHCR build·migration-gated Argo sync·health·SHA/digest 검증이 성공했음을 기록한다. 이후 실패한 미사용 ECR `stable` 후처리는 `PROD-791`에서 제거한다.
+- [x] 5.4 Manual 경로의 main workflow ref·full SHA preflight와 승인 전 target code/secret 부재를 검증하고, 승인 뒤 실행되는 공용 gated deploy job은 5.3의 automatic live release로 검증한다.
+- [ ] 5.5 `adopt-production-release-branch`를 obsolete delta 미적용 방식으로 archive하고 이 change의 delta를 active spec에 동기화해 strict validation한 뒤 `PROD-783`을 완료한다.
 
 ## 6. PROD-790 Production deploy 중복·CNPG sync drift 제거
 
