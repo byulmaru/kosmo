@@ -37,6 +37,16 @@ let Reactions: typeof CoreDb.Reactions;
 let sendReaction: typeof ReactionDelivery.sendReaction;
 let sendReactionUndo: typeof ReactionDelivery.sendReactionUndo;
 
+const toDeliverySnapshot = (
+  reaction: typeof CoreDb.Reactions.$inferSelect,
+): ReactionDelivery.ReactionDeliverySnapshot => ({
+  createdAt: reaction.createdAt.toString(),
+  id: reaction.id,
+  postId: reaction.postId,
+  profileId: reaction.profileId,
+  type: reaction.type,
+});
+
 describe('Reaction delivery', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
@@ -95,7 +105,7 @@ describe('Reaction delivery', () => {
         })
         .returning()
         .then(firstOrThrow);
-      await sendReaction(stored);
+      await sendReaction(stored.id);
     }
 
     assert.equal(context.calls.length, cases.length);
@@ -134,7 +144,7 @@ describe('Reaction delivery', () => {
     }
   });
 
-  test('삭제된 row에서도 create와 exact Undo를 같은 ordering key로 직렬화한다', async () => {
+  test('삭제된 snapshot으로 exact Undo를 같은 ordering key로 직렬화한다', async () => {
     const target = await createDeliveryFixture();
     const context = createContextFixture();
     mock.method(federation, 'createContext', () => context.context);
@@ -150,11 +160,11 @@ describe('Reaction delivery', () => {
       .then(firstOrThrow);
     await db.delete(Reactions).where(eq(Reactions.id, reaction.id));
 
-    await sendReaction(reaction);
-    await sendReactionUndo(reaction);
+    await sendReaction(reaction.id);
+    await sendReactionUndo(toDeliverySnapshot(reaction));
 
-    assert.ok(context.calls[0]?.activity instanceof EmojiReact);
-    const call = context.calls[1];
+    assert.equal(context.calls.length, 1);
+    const call = context.calls[0];
     assert.ok(call?.activity instanceof Undo);
     const original = await call.activity.getObject();
     assert.ok(original instanceof EmojiReact);
@@ -172,7 +182,6 @@ describe('Reaction delivery', () => {
       orderingKey: `${publicOrigin}/ap/reaction/${reaction.id}`,
       preferSharedInbox: true,
     });
-    assert.equal(context.calls[0]?.options?.orderingKey, call.options?.orderingKey);
   });
 
   test('발신 Profile의 LOCAL Instance canonical origin으로 actor·activity·서명 key를 구성한다', async () => {
@@ -197,8 +206,8 @@ describe('Reaction delivery', () => {
     });
     const reaction = await createReaction(target, '❤️');
 
-    await sendReaction(reaction);
-    await sendReactionUndo(reaction);
+    await sendReaction(reaction.id);
+    await sendReactionUndo(toDeliverySnapshot(reaction));
 
     assert.deepEqual(contextOrigins, [senderOrigin, senderOrigin]);
     assert.equal(context.calls.length, 2);
@@ -223,7 +232,7 @@ describe('Reaction delivery', () => {
     mock.method(federation, 'createContext', () => context.context);
     const reaction = await createReaction(target, '❤️');
 
-    await sendReaction(reaction);
+    await sendReaction(reaction.id);
     assert.equal(context.calls.length, 0);
 
     const relation = await db
@@ -234,12 +243,12 @@ describe('Reaction delivery', () => {
       })
       .returning()
       .then(firstOrThrow);
-    await sendReaction(reaction);
+    await sendReaction(reaction.id);
     assert.equal(context.calls.length, 1);
 
     await db.delete(ProfileFollows).where(eq(ProfileFollows.id, relation.id));
-    await sendReaction(reaction);
-    await sendReactionUndo(reaction);
+    await sendReaction(reaction.id);
+    await sendReactionUndo(toDeliverySnapshot(reaction));
 
     assert.equal(context.calls.length, 2);
     assert.ok(context.calls[1]?.activity instanceof Undo);
@@ -252,7 +261,7 @@ describe('Reaction delivery', () => {
     const unsupported = await createDeliveryFixture();
     await assert.rejects(
       sendReactionUndo({
-        createdAt: Temporal.Instant.from('2026-07-28T00:00:00Z'),
+        createdAt: '2026-07-28T00:00:00Z',
         id: crypto.randomUUID(),
         postId: unsupported.postId,
         profileId: unsupported.senderProfileId,
@@ -263,23 +272,23 @@ describe('Reaction delivery', () => {
 
     const missingInbox = await createDeliveryFixture({ inboxUri: null });
     const missingInboxReaction = await createReaction(missingInbox, '❤️');
-    await sendReaction(missingInboxReaction);
+    await sendReaction(missingInboxReaction.id);
 
     const tombstone = await createDeliveryFixture();
     const tombstoneReaction = await createReaction(tombstone, '🎉');
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, tombstone.postId));
-    await sendReaction(tombstoneReaction);
-    await sendReactionUndo(tombstoneReaction);
+    await sendReaction(tombstoneReaction.id);
+    await sendReactionUndo(toDeliverySnapshot(tombstoneReaction));
 
     const malformedObject = await createDeliveryFixture({ objectUri: 'not a URI' });
     const malformedObjectReaction = await createReaction(malformedObject, '❤️');
-    await assert.rejects(sendReaction(malformedObjectReaction), /Invalid URL|must be an HTTP/);
+    await assert.rejects(sendReaction(malformedObjectReaction.id), /Invalid URL|must be an HTTP/);
 
     const malformedInbox = await createDeliveryFixture({
       inboxUri: 'ftp://remote.example/inbox',
     });
     const malformedInboxReaction = await createReaction(malformedInbox, '❤️');
-    await assert.rejects(sendReaction(malformedInboxReaction), /must be an HTTP/);
+    await assert.rejects(sendReaction(malformedInboxReaction.id), /must be an HTTP/);
     assert.equal(context.calls.length, 0);
   });
 });

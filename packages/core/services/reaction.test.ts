@@ -1,18 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, mock, test } from 'node:test';
-import { and, eq, sql } from 'drizzle-orm';
-import {
-  ActivityPubActors,
-  ActivityPubPosts,
-  db,
-  firstOrThrow,
-  Instances,
-  Notifications,
-  pg,
-  Posts,
-  Profiles,
-  Reactions,
-} from '../db';
+import { and, eq } from 'drizzle-orm';
+import { db, firstOrThrow, Instances, Notifications, pg, Posts, Profiles, Reactions } from '../db';
 import {
   InstanceKind,
   InstanceState,
@@ -23,9 +12,11 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
+import { temporalClient } from '../temporal/client';
+import { REACTION_CREATE_WORKFLOW_TYPE } from '../temporal/reaction-create';
+import { REACTION_DELETE_WORKFLOW_TYPE } from '../temporal/reaction-delete';
 import { reactionTypes } from '../validation';
-import { createReactionNotification } from './notification';
-import { addReaction, deleteReaction } from './reaction';
+import { addReaction, deleteReaction, deleteReactionInTransaction } from './reaction';
 
 after(async () => {
   await pg.end();
@@ -215,286 +206,163 @@ test('활성 Post가 아니면 Reaction을 만들지 않는다', async () => {
   );
 });
 
-test('Local과 ActivityPub origin은 caller transaction에 독립적으로 참여한다', async () => {
-  for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
-    const { input } = await createFixture({
-      instanceKind: origin === 'LOCAL' ? InstanceKind.LOCAL : InstanceKind.ACTIVITYPUB,
-    });
-    let reactionId: string | undefined;
-
-    await assert.rejects(
-      db.transaction(async (tx) => {
-        reactionId = (await addReaction({ ...input, origin, type: '🌈' }, tx)).reaction.id;
-        throw new Error('rollback');
-      }),
-      /rollback/,
-    );
-
-    assert.ok(reactionId);
-    assert.equal(await countReactions(input.postId), 0);
-    assert.equal(await countReactionNotifications(reactionId), 0);
-  }
-});
-
-test('caller transaction은 postCommit lifecycle을 억제하지 않는다', async () => {
-  for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
-    const actor = await createFixture({
-      instanceKind: origin === 'LOCAL' ? InstanceKind.LOCAL : InstanceKind.ACTIVITYPUB,
-    });
-    const recipient = await createFixture();
-    let created: Awaited<ReturnType<typeof addReaction>> | undefined;
-
-    await db.transaction(async (tx) => {
-      created = await addReaction(
-        {
-          actorProfileId: actor.profile.id,
-          origin,
-          postId: recipient.post.id,
-          type: '❤️',
-        },
-        tx,
-      );
-      assert.equal(await countReactionNotifications(created.reaction.id), 0);
-    });
-
-    assert.ok(created);
-    await created.postCommit();
-    assert.equal(await countReactionNotifications(created.reaction.id), 1);
-
-    let deleted: Awaited<ReturnType<typeof deleteReaction>> | undefined;
-    await db.transaction(async (tx) => {
-      deleted = await deleteReaction(
-        {
-          actorProfileId: actor.profile.id,
-          origin,
-          postId: recipient.post.id,
-          type: created!.reaction.type,
-        },
-        tx,
-      );
-      assert.equal(await countReactionNotifications(created!.reaction.id), 1);
-    });
-
-    assert.ok(deleted);
-    await deleted.postCommit();
-    assert.equal(await countReactionNotifications(created.reaction.id), 0);
-  }
-});
-
-test('ActivityPub origin의 postCommit은 Notification만 생성한다', async () => {
-  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+test('실제 Reaction 생성 commit 뒤에만 Create Effects Workflow를 시작한다', async () => {
+  const actor = await createFixture();
   const recipient = await createFixture();
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
-  const result = await addReaction({
-    actorProfileId: actor.profile.id,
-    origin: 'ACTIVITYPUB',
-    postId: recipient.post.id,
-    type: '🥹',
-  });
-  const firstPostCommit = result.postCommit();
-  const repeatedPostCommit = result.postCommit();
-  assert.equal(repeatedPostCommit, firstPostCommit);
-  await firstPostCommit;
-
-  assert.equal(await countReactionNotifications(result.reaction.id), 1);
-});
-
-test('Notification materialization 전에 Reaction source가 삭제된 terminal race는 내부 오류로 관측하지 않는다', async () => {
-  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const recipient = await createFixture();
-  let observerCalls = 0;
-  const result = await addReaction({
-    actorProfileId: actor.profile.id,
-    onPostCommitError: () => {
-      observerCalls += 1;
-    },
-    origin: 'ACTIVITYPUB',
-    postId: recipient.post.id,
-    type: '🎉',
-  });
-
-  await db.delete(Reactions).where(eq(Reactions.id, result.reaction.id));
-  await assert.doesNotReject(result.postCommit());
-
-  assert.equal(observerCalls, 0);
-  assert.equal(await countReactionNotifications(result.reaction.id), 0);
-});
-
-test('postCommit observer 실패에도 Reaction 상태와 후속 delivery를 유지한다', async () => {
-  let deliveryCalls = 0;
-  let observerCalls = 0;
-
-  const originalConsoleError = console.error;
-  console.error = () => undefined;
-  const fetchMock = mock.method(globalThis, 'fetch', async () => {
-    deliveryCalls += 1;
-    throw new Error('forced reaction delivery failure');
-  });
   try {
-    const actor = await createFixture({
-      canonicalOrigin: `https://${crypto.randomUUID()}.local.test`,
+    const created = await addReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'LOCAL',
+      postId: recipient.post.id,
+      type: '🥹',
     });
-    const localRecipient = await createFixture();
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_reaction_observer_failure CHECK (false) NOT VALID`,
-    );
-
-    let created: Awaited<ReturnType<typeof addReaction>> | undefined;
-    try {
-      created = await addReaction({
-        ...actor.input,
-        onPostCommitError: () => {
-          observerCalls += 1;
-          return Promise.resolve().then(() => {
-            throw new Error('observer failure');
-          });
-        },
-        postId: localRecipient.post.id,
-        type: '👀',
-      });
-      await assert.doesNotReject(created.postCommit());
-    } finally {
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_reaction_observer_failure`,
-      );
-    }
-
-    if (!created) {
-      assert.fail('Expected a created Reaction');
-    }
-
-    assert.equal(await countReactions(localRecipient.post.id), 1);
-    assert.equal(observerCalls, 1);
-
-    const remoteRecipient = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-    const recipientActorUri = `https://${remoteRecipient.profile.displayName}.example/users/${remoteRecipient.profile.id}`;
-    await db.insert(ActivityPubActors).values({
-      inboxUri: `${recipientActorUri}/inbox`,
-      profileId: remoteRecipient.profile.id,
-      sharedInboxUri: `https://${remoteRecipient.profile.displayName}.example/inbox`,
-      type: 'PERSON',
-      uri: recipientActorUri,
-    });
-    await db.insert(ActivityPubPosts).values({
-      postId: remoteRecipient.post.id,
-      receivedAt: Temporal.Now.instant(),
-      uri: `https://${remoteRecipient.profile.displayName}.example/notes/${remoteRecipient.post.id}`,
-    });
-    const remoteCreated = await addReaction({
-      ...actor.input,
-      postId: remoteRecipient.post.id,
-      type: '🎉',
+    const duplicate = await addReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'LOCAL',
+      postId: recipient.post.id,
+      type: '🥹',
     });
 
-    await db.insert(Notifications).values({
-      kind: NotificationKind.REACTION,
-      recipientProfileId: remoteRecipient.profile.id,
-      sourceId: remoteCreated.reaction.id,
-    });
-    await pg.unsafe(`
-      CREATE FUNCTION fail_reaction_notification_observer() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN
-        IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced reaction notification cleanup failure'; END IF;
-        RETURN OLD;
-      END $$;
-      CREATE TRIGGER fail_reaction_notification_observer
-      BEFORE DELETE ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_observer();
-    `);
-
-    try {
-      const deleted = await deleteReaction({
-        actorProfileId: actor.profile.id,
-        onPostCommitError: () => {
-          observerCalls += 1;
-          return Promise.resolve().then(() => {
-            throw new Error('observer failure');
-          });
-        },
-        origin: 'LOCAL',
-        postId: remoteRecipient.post.id,
-        type: remoteCreated.reaction.type,
-      });
-      await assert.doesNotReject(deleted.postCommit());
-
-      assert.equal(await countReactions(remoteRecipient.post.id), 0);
-      assert.equal(observerCalls, 2);
-      assert.ok(deliveryCalls > 0);
-    } finally {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS fail_reaction_notification_observer ON notification;
-        DROP FUNCTION IF EXISTS fail_reaction_notification_observer();
-      `);
-    }
+    assert.equal(created.created, true);
+    assert.equal(duplicate.created, false);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_CREATE_WORKFLOW_TYPE);
+    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
+      { origin: 'LOCAL', reactionId: created.reaction.id },
+    ]);
   } finally {
-    fetchMock.mock.restore();
-    console.error = originalConsoleError;
+    start.mock.restore();
   }
 });
 
-test('Local과 ActivityPub 삭제는 caller transaction에 독립적으로 참여한다', async () => {
-  for (const origin of ['LOCAL', 'ACTIVITYPUB'] as const) {
-    const actor = await createFixture({
-      instanceKind: origin === 'LOCAL' ? InstanceKind.LOCAL : InstanceKind.ACTIVITYPUB,
-    });
-    const recipient = await createFixture();
-    const created = await addReaction({
+test('ActivityPub origin의 실제 Reaction 생성은 outbound echo 없이 Workflow만 시작한다', async () => {
+  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
+  const recipient = await createFixture();
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  try {
+    const result = await addReaction({
       actorProfileId: actor.profile.id,
       origin: 'ACTIVITYPUB',
       postId: recipient.post.id,
-      type: '☘️',
+      type: '🥹',
     });
-    await created.postCommit();
-    const { reaction } = created;
-    assert.equal(await countReactionNotifications(reaction.id), 1);
 
+    assert.equal(start.mock.callCount(), 1);
+    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
+      { origin: 'ACTIVITYPUB', reactionId: result.reaction.id },
+    ]);
+    assert.equal(await countReactionNotifications(result.reaction.id), 0);
+  } finally {
+    start.mock.restore();
+  }
+});
+
+test('commit 뒤 Workflow start 실패는 committed Reaction과 caller 성공을 바꾸지 않는다', async () => {
+  const actor = await createFixture();
+  const recipient = await createFixture();
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Temporal unavailable');
+  });
+  const errorLog = mock.method(console, 'error', () => undefined);
+
+  try {
+    const result = await addReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'LOCAL',
+      postId: recipient.post.id,
+      type: '🎉',
+    });
+
+    assert.equal(result.created, true);
+    assert.equal(await countReactions(recipient.post.id), 1);
+    assert.equal(
+      errorLog.mock.calls[0]?.arguments[0],
+      'Reaction Create effects Workflow start failed',
+    );
+  } finally {
+    start.mock.restore();
+    errorLog.mock.restore();
+  }
+});
+
+test('실제 Reaction 삭제 commit은 삭제 snapshot으로 Delete Effects Workflow를 시작하고 no-op은 시작하지 않는다', async () => {
+  const actor = await createFixture();
+  const recipient = await createFixture();
+  const created = await addReaction({
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL',
+    postId: recipient.post.id,
+    type: '☘️',
+  });
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  try {
+    const deleted = await deleteReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'LOCAL',
+      postId: recipient.post.id,
+      type: created.reaction.type,
+    });
+    const repeated = await deleteReaction({
+      actorProfileId: actor.profile.id,
+      origin: 'LOCAL',
+      postId: recipient.post.id,
+      type: created.reaction.type,
+    });
+
+    assert.equal(deleted.reaction?.id, created.reaction.id);
+    assert.equal(repeated.reaction, null);
+    assert.equal(start.mock.callCount(), 1);
+    assert.equal(start.mock.calls[0]?.arguments[0], REACTION_DELETE_WORKFLOW_TYPE);
+    assert.deepEqual(start.mock.calls[0]?.arguments[1]?.args, [
+      {
+        createdAt: created.reaction.createdAt.toString(),
+        id: created.reaction.id,
+        origin: 'LOCAL',
+        postId: created.reaction.postId,
+        profileId: created.reaction.profileId,
+        type: created.reaction.type,
+      },
+    ]);
+  } finally {
+    start.mock.restore();
+  }
+});
+
+test('transaction rollback은 Reaction을 보존하고 Workflow를 시작하지 않는다', async () => {
+  const actor = await createFixture();
+  const recipient = await createFixture();
+  const created = await addReaction({
+    actorProfileId: actor.profile.id,
+    origin: 'LOCAL',
+    postId: recipient.post.id,
+    type: '🌈',
+  });
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+
+  try {
     await assert.rejects(
       db.transaction(async (tx) => {
-        const deleted = await deleteReaction(
-          {
-            actorProfileId: actor.profile.id,
-            origin,
-            postId: recipient.post.id,
-            type: reaction.type,
-          },
-          tx,
-        );
-        assert.equal(deleted.reaction?.id, reaction.id);
+        const deleted = await deleteReactionInTransaction(tx, {
+          actorProfileId: actor.profile.id,
+          expectedReactionId: created.reaction.id,
+          postId: recipient.post.id,
+          type: created.reaction.type,
+        });
+        assert.equal(deleted?.id, created.reaction.id);
         throw new Error('rollback');
       }),
       /rollback/,
     );
 
     assert.equal(await countReactions(recipient.post.id), 1);
-    assert.equal(await countReactionNotifications(reaction.id), 1);
+    assert.equal(start.mock.callCount(), 0);
+  } finally {
+    start.mock.restore();
   }
-});
-
-test('ActivityPub origin 삭제 postCommit은 Notification만 정리한다', async () => {
-  const actor = await createFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const recipient = await createFixture();
-  const created = await addReaction({
-    actorProfileId: actor.profile.id,
-    origin: 'ACTIVITYPUB',
-    postId: recipient.post.id,
-    type: '🥹',
-  });
-  await created.postCommit();
-  const { reaction } = created;
-
-  const deleted = await deleteReaction({
-    actorProfileId: actor.profile.id,
-    origin: 'ACTIVITYPUB',
-    postId: recipient.post.id,
-    type: reaction.type,
-  });
-  const firstPostCommit = deleted.postCommit();
-  const repeatedPostCommit = deleted.postCommit();
-  assert.equal(repeatedPostCommit, firstPostCommit);
-  await firstPostCommit;
-
-  assert.equal(deleted.reaction?.id, reaction.id);
-  assert.equal(await countReactionNotifications(reaction.id), 0);
 });
 
 test('expected Reaction ID가 다르면 교체된 같은 Type을 삭제하지 않는다', async () => {
@@ -527,99 +395,6 @@ test('Owner는 Post가 unavailable해져도 Post와 Type으로 Reaction을 삭�
 
   assertDeleteResult(result, { postId: fixture.post.id, reaction });
   assert.equal(await countReactions(fixture.post.id), 0);
-});
-
-test('Reaction 삭제는 실제 삭제된 ID의 Notification만 정리한다', async () => {
-  const author = await createFixture();
-  const recipient = await createFixture();
-  const { reaction } = await addReaction({
-    actorProfileId: author.profile.id,
-    origin: 'LOCAL',
-    postId: recipient.post.id,
-    type: '🎉',
-  });
-  await createReactionNotification(reaction.id);
-
-  assert.equal(await countReactionNotifications(reaction.id), 1);
-  const deleted = await deleteReaction({
-    actorProfileId: author.profile.id,
-    origin: 'LOCAL',
-    postId: recipient.post.id,
-    type: reaction.type,
-  });
-  await deleted.postCommit();
-  assertDeleteResult(deleted, { postId: recipient.post.id, reaction });
-  assert.equal(await countReactionNotifications(reaction.id), 0);
-
-  await db.insert(Notifications).values({
-    kind: NotificationKind.REACTION,
-    recipientProfileId: recipient.profile.id,
-    sourceId: reaction.id,
-  });
-  assert.equal(await countReactionNotifications(reaction.id), 1);
-
-  const repeated = await deleteReaction({
-    actorProfileId: author.profile.id,
-    origin: 'LOCAL',
-    postId: recipient.post.id,
-    type: reaction.type,
-  });
-  await repeated.postCommit();
-  assertDeleteResult(repeated, { postId: recipient.post.id, reaction: null });
-  assert.equal(await countReactionNotifications(reaction.id), 1);
-});
-
-test('Notification cleanup 실패에도 Reaction 삭제 성공과 오류 관측을 유지한다', async () => {
-  const author = await createFixture();
-  const recipient = await createFixture();
-  const { reaction } = await addReaction({
-    actorProfileId: author.profile.id,
-    origin: 'LOCAL',
-    postId: recipient.post.id,
-    type: '👀',
-  });
-  await createReactionNotification(reaction.id);
-
-  await pg.unsafe(`
-    CREATE FUNCTION fail_reaction_notification_delete() RETURNS trigger
-    LANGUAGE plpgsql AS $$ BEGIN
-      IF OLD.kind = 'REACTION' THEN RAISE EXCEPTION 'forced notification cleanup failure'; END IF;
-      RETURN OLD;
-    END $$;
-    CREATE TRIGGER fail_reaction_notification_delete
-    BEFORE DELETE ON notification
-    FOR EACH ROW EXECUTE FUNCTION fail_reaction_notification_delete();
-  `);
-
-  const originalConsoleError = console.error;
-  const errors: unknown[][] = [];
-  console.error = (...args) => {
-    errors.push(args);
-  };
-
-  try {
-    const result = await deleteReaction({
-      actorProfileId: author.profile.id,
-      origin: 'LOCAL',
-      postId: recipient.post.id,
-      type: reaction.type,
-    });
-    await result.postCommit();
-
-    assertDeleteResult(result, { postId: recipient.post.id, reaction });
-    assert.equal(await countReactions(recipient.post.id), 0);
-    assert.equal(await countReactionNotifications(reaction.id), 1);
-    assert.equal(errors.length, 1);
-    assert.equal(errors[0]?.[0], 'Failed to clean up Reaction Notification');
-    assert.equal((errors[0]?.[1] as { reactionId?: string } | undefined)?.reactionId, reaction.id);
-    assert.ok((errors[0]?.[1] as { error?: unknown } | undefined)?.error);
-  } finally {
-    console.error = originalConsoleError;
-    await pg.unsafe(`
-      DROP TRIGGER IF EXISTS fail_reaction_notification_delete ON notification;
-      DROP FUNCTION IF EXISTS fail_reaction_notification_delete();
-    `);
-  }
 });
 
 test('반복·동시 삭제는 하나만 삭제 ID를 반환하고 나머지는 no-op으로 끝난다', async () => {

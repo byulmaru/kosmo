@@ -14,14 +14,18 @@ import {
 import { InstanceKind, InstanceState, ProfileState } from '../enums';
 import { reactionTypeSchema } from '../validation';
 import { postVisibilityCondition } from '../visibility/post';
-import { addReaction, deleteReaction } from './reaction';
+import {
+  addReactionInTransaction,
+  deleteReactionInTransaction,
+  startReactionCreateEffectsWorkflow,
+  startReactionDeleteEffectsWorkflow,
+} from './reaction';
 import type { Transaction } from '../db';
 
 type MaterializeInboundReactionInput = {
   readonly activityUri: string;
   readonly actorUri: string;
   readonly objectUri: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly type: string;
 };
 
@@ -175,9 +179,7 @@ export const materializeInboundReaction = async (
     return { kind: 'REJECTED' };
   }
 
-  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }> & {
-    readonly postCommit: () => Promise<void>;
-  };
+  let result: Exclude<MaterializeInboundReactionResult, { kind: 'REJECTED' }>;
   try {
     result = await db.transaction(async (tx) => {
       const actor = await tx
@@ -209,8 +211,6 @@ export const materializeInboundReaction = async (
 
       const identity = {
         actorProfileId: actor.profileId,
-        onPostCommitError: input.onPostCommitError,
-        origin: 'ACTIVITYPUB' as const,
         postId: target.postId,
         type: parsedType.data,
       };
@@ -221,12 +221,11 @@ export const materializeInboundReaction = async (
         }
         return {
           kind: 'DUPLICATE' as const,
-          postCommit: async () => {},
           reaction: existingMapping,
         };
       }
 
-      const reactionResult = await addReaction(identity, tx);
+      const reactionResult = await addReactionInTransaction(tx, identity);
       const insertedMapping = await tx
         .insert(ActivityPubReactions)
         .values({ reactionId: reactionResult.reaction.id, uri: input.activityUri })
@@ -236,7 +235,6 @@ export const materializeInboundReaction = async (
       if (insertedMapping) {
         return {
           kind: reactionResult.created ? ('CREATED' as const) : ('MAPPED' as const),
-          postCommit: reactionResult.postCommit,
           reaction: reactionResult.reaction,
         };
       }
@@ -248,7 +246,6 @@ export const materializeInboundReaction = async (
 
       return {
         kind: 'DUPLICATE' as const,
-        postCommit: async () => {},
         reaction: concurrentMapping,
       };
     });
@@ -259,7 +256,12 @@ export const materializeInboundReaction = async (
     throw error;
   }
 
-  await result.postCommit();
+  if (result.kind === 'CREATED') {
+    await startReactionCreateEffectsWorkflow({
+      origin: 'ACTIVITYPUB',
+      reactionId: result.reaction.id,
+    });
+  }
 
   return { kind: result.kind, reaction: result.reaction };
 };
@@ -267,11 +269,9 @@ export const materializeInboundReaction = async (
 export const undoInboundReaction = async ({
   activityUri,
   actorUri,
-  onPostCommitError,
 }: {
   readonly activityUri: string;
   readonly actorUri: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
 }): Promise<{ readonly reactionId: string | null }> => {
   if (!isHttpUri(activityUri) || !isHttpUri(actorUri)) {
     return { reactionId: null };
@@ -300,22 +300,17 @@ export const undoInboundReaction = async ({
       return null;
     }
 
-    const deleted = await deleteReaction(
-      {
-        actorProfileId: mapped.reaction.profileId,
-        expectedReactionId: mapped.reaction.id,
-        onPostCommitError,
-        origin: 'ACTIVITYPUB',
-        postId: mapped.reaction.postId,
-        type: mapped.reaction.type,
-      },
-      tx,
-    );
-
-    return deleted;
+    return deleteReactionInTransaction(tx, {
+      actorProfileId: mapped.reaction.profileId,
+      expectedReactionId: mapped.reaction.id,
+      postId: mapped.reaction.postId,
+      type: mapped.reaction.type,
+    });
   });
 
-  await deleted?.postCommit();
+  if (deleted) {
+    await startReactionDeleteEffectsWorkflow({ origin: 'ACTIVITYPUB', reaction: deleted });
+  }
 
-  return { reactionId: deleted?.reaction?.id ?? null };
+  return { reactionId: deleted?.id ?? null };
 };

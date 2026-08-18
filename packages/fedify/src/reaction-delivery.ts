@@ -8,6 +8,7 @@ import {
   Posts,
   ProfileFollows,
   Profiles,
+  Reactions,
 } from '@kosmo/core/db';
 import {
   InstanceKind,
@@ -23,13 +24,23 @@ import { federation } from './federation';
 import { ensureDrizzleLocalProfileActor } from './local-actor-store';
 import type { SenderKeyPair } from '@fedify/fedify';
 import type { Recipient } from '@fedify/vocab';
-import type { Reactions } from '@kosmo/core/db';
 
 const SenderProfiles = alias(Profiles, 'outbound_reaction_sender_profile');
 const SenderInstances = alias(Instances, 'outbound_reaction_sender_instance');
 const TargetActors = alias(ActivityPubActors, 'outbound_reaction_target_actor');
 
 type OutboundReaction = typeof Reactions.$inferSelect;
+
+/**
+ * The immutable values returned by the Reaction delete transaction. This is
+ * intentionally plain data so it can cross a Temporal Activity boundary.
+ */
+export type ReactionDeliverySnapshot = Pick<
+  OutboundReaction,
+  'id' | 'profileId' | 'postId' | 'type'
+> & {
+  readonly createdAt: string;
+};
 
 type ReactionRecipient = Recipient & {
   readonly id: URL;
@@ -177,7 +188,17 @@ const createReactionActivity = (projection: ReactionProjection) => {
   return parsedType.data === '❤️' ? new Like(activityOptions) : new EmojiReact(activityOptions);
 };
 
-export const sendReaction = async (reaction: OutboundReaction): Promise<void> => {
+export const sendReaction = async (reactionId: string): Promise<void> => {
+  const reaction = await db
+    .select()
+    .from(Reactions)
+    .where(eq(Reactions.id, reactionId))
+    .limit(1)
+    .then(first);
+  if (!reaction) {
+    return;
+  }
+
   const projection = await loadReactionProjection(reaction, 'REACTION');
   if (!projection) {
     return;
@@ -192,7 +213,14 @@ export const sendReaction = async (reaction: OutboundReaction): Promise<void> =>
   });
 };
 
-export const sendReactionUndo = async (reaction: OutboundReaction): Promise<void> => {
+export const sendReactionUndo = async (snapshot: ReactionDeliverySnapshot): Promise<void> => {
+  const reaction: OutboundReaction = {
+    createdAt: Temporal.Instant.from(snapshot.createdAt),
+    id: snapshot.id,
+    postId: snapshot.postId,
+    profileId: snapshot.profileId,
+    type: snapshot.type,
+  };
   const projection = await loadReactionProjection(reaction, 'UNDO');
   if (!projection) {
     return;

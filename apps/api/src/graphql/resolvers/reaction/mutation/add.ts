@@ -33,16 +33,12 @@ builder.mutationField('addReaction', (t) =>
         throw new NotFoundError('Post not found');
       }
 
-      const result = await addReaction(
-        {
-          actorProfileId: ctx.session.profileId,
-          origin: 'LOCAL',
-          postId: post.id,
-          type: input.type,
-        },
-        db,
-      );
-      await result.postCommit(db);
+      const result = await addReaction({
+        actorProfileId: ctx.session.profileId,
+        origin: 'LOCAL',
+        postId: post.id,
+        type: input.type,
+      });
 
       return { post: post.id, reaction: result.reaction };
     },

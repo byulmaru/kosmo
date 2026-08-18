@@ -9,7 +9,6 @@ import {
   db,
   firstOrThrow,
   Instances,
-  Notifications,
   pg,
   Profiles,
   Reactions,
@@ -18,7 +17,6 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   PostVisibility,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
@@ -291,7 +289,7 @@ test('Undo URI와 embedded activity는 mapping만 사용하고 actor mismatch를
   );
 });
 
-test('Mastodon embedded Undo(Like)가 fragment activity mapping과 Notification을 제거한다', async () => {
+test('Mastodon embedded Undo(Like)가 fragment activity mapping과 Reaction을 제거한다', async () => {
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
   const target = await createLocalTarget();
   const activityUri = `${actor.actorUri}#likes/${crypto.randomUUID()}`;
@@ -306,19 +304,6 @@ test('Mastodon embedded Undo(Like)가 fragment activity mapping과 Notification�
   await handleInboundReaction(createContext(null), like);
   const reaction = await readReaction(actor.profile.id, target.post.id);
   assert.ok(reaction);
-  assert.equal(
-    await db
-      .select()
-      .from(Notifications)
-      .where(
-        and(
-          eq(Notifications.kind, NotificationKind.REACTION),
-          eq(Notifications.sourceId, reaction.id),
-        ),
-      )
-      .then((rows) => rows.length),
-    1,
-  );
 
   const undo = await Undo.fromJsonLd({
     '@context': 'https://www.w3.org/ns/activitystreams',
@@ -340,19 +325,6 @@ test('Mastodon embedded Undo(Like)가 fragment activity mapping과 Notification�
       .select()
       .from(ActivityPubReactions)
       .where(eq(ActivityPubReactions.uri, activityUri))
-      .then((rows) => rows.length),
-    0,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(Notifications)
-      .where(
-        and(
-          eq(Notifications.kind, NotificationKind.REACTION),
-          eq(Notifications.sourceId, reaction.id),
-        ),
-      )
       .then((rows) => rows.length),
     0,
   );

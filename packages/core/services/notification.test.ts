@@ -35,7 +35,6 @@ import {
 } from './notification';
 import { createPost, repostPost } from './post';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';
-import { deleteReaction } from './reaction';
 
 const instanceIds: string[] = [];
 const profileIds: string[] = [];
@@ -134,7 +133,7 @@ const waitForNotificationInsertBlock = async (): Promise<void> =>
     'Notification insert did not reach the advisory lock barrier',
   );
 
-type NotificationSourceTable = 'profile_follow' | 'profile_follow_request' | 'reaction';
+type NotificationSourceTable = 'profile_follow' | 'profile_follow_request';
 
 const waitForSourceDeleteBlock = async (table: NotificationSourceTable): Promise<void> => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -196,6 +195,61 @@ const runNotificationDeleteRace = async (
     }
     if (notification && deletion) {
       await Promise.allSettled([notification, deletion]);
+    }
+    if (notificationTriggerInstalled) {
+      await pg.unsafe(`
+        DROP TRIGGER IF EXISTS block_notification_insert ON notification;
+        DROP FUNCTION IF EXISTS block_notification_insert();
+      `);
+    }
+    lockSession.release();
+  }
+};
+
+const runReactionNotificationDeleteRace = async (sourceId: string): Promise<void> => {
+  const lockSession = await pg.reserve();
+  let lockHeld = false;
+  let notificationTriggerInstalled = false;
+  let notification: Promise<void> | undefined;
+
+  try {
+    await lockSession`SELECT pg_advisory_lock(${notificationInsertLock.classId}, ${notificationInsertLock.objectId})`;
+    lockHeld = true;
+    await pg.unsafe(`
+      CREATE FUNCTION block_notification_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        PERFORM pg_advisory_xact_lock(${notificationInsertLock.classId}, ${notificationInsertLock.objectId});
+        RETURN NEW;
+      END
+      $function$;
+      CREATE TRIGGER block_notification_insert
+      BEFORE INSERT ON notification
+      FOR EACH ROW EXECUTE FUNCTION block_notification_insert();
+    `);
+    notificationTriggerInstalled = true;
+
+    notification = createReactionNotification(sourceId);
+    await waitForNotificationInsertBlock();
+
+    // A plain source read must not hold the Reaction tuple while the
+    // post-commit projection is waiting on its Notification insert.
+    await db.delete(Reactions).where(eq(Reactions.id, sourceId));
+    assert.equal(
+      (await db.select({ id: Reactions.id }).from(Reactions).where(eq(Reactions.id, sourceId)))
+        .length,
+      0,
+    );
+
+    await lockSession`SELECT pg_advisory_unlock(${notificationInsertLock.classId}, ${notificationInsertLock.objectId})`;
+    lockHeld = false;
+    await notification;
+  } finally {
+    if (lockHeld) {
+      await lockSession`SELECT pg_advisory_unlock(${notificationInsertLock.classId}, ${notificationInsertLock.objectId})`;
+    }
+    if (notification) {
+      await Promise.allSettled([notification]);
     }
     if (notificationTriggerInstalled) {
       await pg.unsafe(`
@@ -367,7 +421,7 @@ test('Follow Request 알림은 Remote Recipient에 투영하지 않는다', asyn
   assert.deepEqual(await readNotifications(request.id), []);
 });
 
-test('Notification source lock prevents orphan rows across terminal source deletion', async () => {
+test('Follow Notification source lock prevents orphan rows across terminal source deletion', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const profileFollow = getEstablishedFollow(
@@ -401,23 +455,23 @@ test('Notification source lock prevents orphan rows across terminal source delet
       }),
   );
   assert.deepEqual(await readNotifications(request.id), []);
+});
 
+test('Reaction Notification source row lock 없이 source 삭제와 경합한다', async () => {
   const author = await createProfile();
-  const reaction = await createReaction(author.id, followee.id);
-  await runNotificationDeleteRace(
-    'reaction',
-    () => createReactionNotification(reaction.id),
-    async () => {
-      const deleted = await deleteReaction({
-        actorProfileId: reaction.profileId,
-        origin: 'ACTIVITYPUB',
-        postId: reaction.postId,
-        type: reaction.type,
-      });
-      await deleted.postCommit();
-    },
+  const recipient = await createProfile();
+  const reaction = await createReaction(author.id, recipient.id);
+
+  await runReactionNotificationDeleteRace(reaction.id);
+
+  // The source row is gone. Depending on the exact interleaving the
+  // best-effort insert may have committed after the source delete; the API
+  // source visibility predicate hides such an unavailable Notification.
+  assert.equal(
+    (await db.select({ id: Reactions.id }).from(Reactions).where(eq(Reactions.id, reaction.id)))
+      .length,
+    0,
   );
-  assert.deepEqual(await readNotifications(reaction.id), []);
 });
 
 test('Follow Request 알림 create 실패는 source lifecycle과 최소 context 보고를 분리한다', async () => {

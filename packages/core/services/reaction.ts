@@ -1,16 +1,22 @@
 import { and, eq } from 'drizzle-orm';
-import { first, getDatabaseConnection, Posts, Reactions } from '../db';
-import { NotificationKind, PostState } from '../enums';
+import { db, first, Posts, Reactions } from '../db';
+import { PostState } from '../enums';
 import { NotFoundError, ValidationError } from '../error';
+import { temporalClient } from '../temporal/client';
+import {
+  REACTION_CREATE_WORKFLOW_TYPE,
+  reactionCreateWorkflowStartOptions,
+} from '../temporal/reaction-create';
+import {
+  REACTION_DELETE_WORKFLOW_TYPE,
+  reactionDeleteWorkflowStartOptions,
+} from '../temporal/reaction-delete';
 import { reactionTypeSchema } from '../validation';
-import { createReactionNotification, deleteNotificationBySource } from './notification';
-import { noPostCommit, oncePostCommit } from './post-commit';
-import type { DatabaseHandle } from '../db';
-import type { PostCommit } from './post-commit';
+import type { Transaction } from '../db';
+import type { ReactionDeleteEffectsInput } from '../temporal/reaction-delete';
 
 type AddReactionInput = {
   readonly actorProfileId: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
   readonly type: string;
@@ -19,7 +25,6 @@ type AddReactionInput = {
 type DeleteReactionInput = {
   readonly actorProfileId: string;
   readonly expectedReactionId?: string;
-  readonly onPostCommitError?: (error: unknown) => void | Promise<void>;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
   readonly postId: string;
   readonly type: string;
@@ -27,168 +32,193 @@ type DeleteReactionInput = {
 
 type AddReactionResult = {
   readonly created: boolean;
-  readonly postCommit: PostCommit;
   readonly reaction: typeof Reactions.$inferSelect;
 };
 
-export const addReaction = async (
-  { actorProfileId, onPostCommitError, origin, postId, type }: AddReactionInput,
-  handle?: DatabaseHandle,
+type AddReactionTransactionInput = {
+  readonly actorProfileId: string;
+  readonly postId: string;
+  readonly type: string;
+};
+
+type DeleteReactionTransactionInput = {
+  readonly actorProfileId: string;
+  readonly expectedReactionId?: string;
+  readonly postId: string;
+  readonly type: string;
+};
+
+export const addReactionInTransaction = async (
+  tx: Transaction,
+  { actorProfileId, postId, type }: AddReactionTransactionInput,
 ): Promise<AddReactionResult> => {
+  const post = await tx
+    .select({ id: Posts.id })
+    .from(Posts)
+    .where(and(eq(Posts.id, postId), eq(Posts.state, PostState.ACTIVE)))
+    .limit(1)
+    .then(first);
+  if (!post) {
+    throw new NotFoundError('Post not found');
+  }
+
+  const inserted = await tx
+    .insert(Reactions)
+    .values({ postId, profileId: actorProfileId, type })
+    .onConflictDoNothing({
+      target: [Reactions.postId, Reactions.type, Reactions.profileId],
+    })
+    .returning()
+    .then(first);
+  const reaction =
+    inserted ??
+    (await tx
+      .select()
+      .from(Reactions)
+      .where(
+        and(
+          eq(Reactions.postId, postId),
+          eq(Reactions.profileId, actorProfileId),
+          eq(Reactions.type, type),
+        ),
+      )
+      .limit(1)
+      .then(first));
+  if (!reaction) {
+    throw new Error('Reaction not found after insert conflict');
+  }
+
+  return { created: inserted !== undefined, reaction };
+};
+
+export const deleteReactionInTransaction = async (
+  tx: Transaction,
+  { actorProfileId, expectedReactionId, postId, type }: DeleteReactionTransactionInput,
+): Promise<typeof Reactions.$inferSelect | null> =>
+  tx
+    .delete(Reactions)
+    .where(
+      and(
+        expectedReactionId ? eq(Reactions.id, expectedReactionId) : undefined,
+        eq(Reactions.profileId, actorProfileId),
+        eq(Reactions.postId, postId),
+        eq(Reactions.type, type),
+      ),
+    )
+    .returning()
+    .then(first)
+    .then((deleted) => deleted ?? null);
+
+const reactionDeleteSnapshot = (
+  reaction: typeof Reactions.$inferSelect,
+): Omit<ReactionDeleteEffectsInput, 'origin'> => ({
+  createdAt: reaction.createdAt.toString(),
+  id: reaction.id,
+  postId: reaction.postId,
+  profileId: reaction.profileId,
+  type: reaction.type,
+});
+
+export const startReactionCreateEffectsWorkflow = async ({
+  origin,
+  reactionId,
+}: {
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly reactionId: string;
+}): Promise<void> => {
+  try {
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start(
+        REACTION_CREATE_WORKFLOW_TYPE,
+        reactionCreateWorkflowStartOptions({ origin, reactionId }),
+      ),
+    );
+  } catch (error) {
+    console.error('Reaction Create effects Workflow start failed', {
+      error,
+      origin,
+      reactionId,
+    });
+  }
+};
+
+export const startReactionDeleteEffectsWorkflow = async ({
+  origin,
+  reaction,
+}: {
+  readonly origin: 'LOCAL' | 'ACTIVITYPUB';
+  readonly reaction: typeof Reactions.$inferSelect;
+}): Promise<void> => {
+  const input = { ...reactionDeleteSnapshot(reaction), origin };
+  try {
+    await temporalClient.withDeadline(Date.now() + 5_000, () =>
+      temporalClient.workflow.start(
+        REACTION_DELETE_WORKFLOW_TYPE,
+        reactionDeleteWorkflowStartOptions(input),
+      ),
+    );
+  } catch (error) {
+    console.error('Reaction Delete effects Workflow start failed', {
+      error,
+      origin,
+      reactionId: reaction.id,
+    });
+  }
+};
+
+export const addReaction = async ({
+  actorProfileId,
+  origin,
+  postId,
+  type,
+}: AddReactionInput): Promise<AddReactionResult> => {
   const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const result = await getDatabaseConnection(handle).transaction(async (tx) => {
-    const post = await tx
-      .select({ id: Posts.id })
-      .from(Posts)
-      .where(and(eq(Posts.id, postId), eq(Posts.state, PostState.ACTIVE)))
-      .limit(1)
-      .then(first);
-    if (!post) {
-      throw new NotFoundError('Post not found');
-    }
+  const result = await db.transaction((tx) =>
+    addReactionInTransaction(tx, {
+      actorProfileId,
+      postId,
+      type: parsedType.data,
+    }),
+  );
 
-    const inserted = await tx
-      .insert(Reactions)
-      .values({ postId, profileId: actorProfileId, type: parsedType.data })
-      .onConflictDoNothing({
-        target: [Reactions.postId, Reactions.type, Reactions.profileId],
-      })
-      .returning()
-      .then(first);
-    const reaction =
-      inserted ??
-      (await tx
-        .select()
-        .from(Reactions)
-        .where(
-          and(
-            eq(Reactions.postId, postId),
-            eq(Reactions.profileId, actorProfileId),
-            eq(Reactions.type, parsedType.data),
-          ),
-        )
-        .limit(1)
-        .then(first));
-    if (!reaction) {
-      throw new Error('Reaction not found after insert conflict');
-    }
+  if (result.created) {
+    await startReactionCreateEffectsWorkflow({ origin, reactionId: result.reaction.id });
+  }
 
-    return { created: inserted !== undefined, reaction };
-  });
-
-  return {
-    ...result,
-    postCommit: result.created
-      ? oncePostCommit(async (postCommitHandle) => {
-          await createReactionNotification(result.reaction.id, postCommitHandle).catch(
-            async (error) => {
-              if (!onPostCommitError) {
-                return;
-              }
-
-              try {
-                await onPostCommitError(error);
-              } catch (observerError) {
-                console.error('Reaction notification creation observation failed', {
-                  error,
-                  observerError,
-                  reactionId: result.reaction.id,
-                });
-              }
-            },
-          );
-
-          if (origin === 'LOCAL') {
-            try {
-              const { sendReaction } = await import('@kosmo/fedify');
-              await sendReaction(result.reaction);
-            } catch (error) {
-              console.error('Post-commit ActivityPub Reaction delivery failed', {
-                error,
-                reactionId: result.reaction.id,
-              });
-            }
-          }
-        })
-      : noPostCommit,
-  };
+  return result;
 };
 
-export const deleteReaction = async (
-  input: DeleteReactionInput,
-  handle?: DatabaseHandle,
-): Promise<{
+export const deleteReaction = async ({
+  actorProfileId,
+  expectedReactionId,
+  origin,
+  postId,
+  type,
+}: DeleteReactionInput): Promise<{
   readonly postId: string;
-  readonly postCommit: PostCommit;
   readonly reaction: typeof Reactions.$inferSelect | null;
 }> => {
-  const parsedType = reactionTypeSchema.safeParse(input.type);
+  const parsedType = reactionTypeSchema.safeParse(type);
   if (!parsedType.success) {
     throw new ValidationError(parsedType.error.issues[0]?.message, { field: 'type' });
   }
 
-  const reaction = await getDatabaseConnection(handle)
-    .transaction((tx) =>
-      tx
-        .delete(Reactions)
-        .where(
-          and(
-            input.expectedReactionId ? eq(Reactions.id, input.expectedReactionId) : undefined,
-            eq(Reactions.profileId, input.actorProfileId),
-            eq(Reactions.postId, input.postId),
-            eq(Reactions.type, parsedType.data),
-          ),
-        )
-        .returning()
-        .then(first),
-    )
-    .then((deleted) => deleted ?? null);
-  return {
-    postId: input.postId,
-    postCommit: reaction
-      ? oncePostCommit(async (postCommitHandle) => {
-          try {
-            await deleteNotificationBySource(
-              NotificationKind.REACTION,
-              reaction.id,
-              postCommitHandle,
-            );
-          } catch (error) {
-            if (!input.onPostCommitError) {
-              console.error('Failed to clean up Reaction Notification', {
-                error,
-                reactionId: reaction.id,
-              });
-            } else {
-              try {
-                await input.onPostCommitError(error);
-              } catch (observerError) {
-                console.error('Reaction notification cleanup observation failed', {
-                  error,
-                  observerError,
-                  reactionId: reaction.id,
-                });
-              }
-            }
-          }
+  const reaction = await db.transaction((tx) =>
+    deleteReactionInTransaction(tx, {
+      actorProfileId,
+      expectedReactionId,
+      postId,
+      type: parsedType.data,
+    }),
+  );
 
-          if (input.origin === 'LOCAL') {
-            try {
-              const { sendReactionUndo } = await import('@kosmo/fedify');
-              await sendReactionUndo(reaction);
-            } catch (error) {
-              console.error('Post-commit ActivityPub Reaction Undo delivery failed', {
-                error,
-                reactionId: reaction.id,
-              });
-            }
-          }
-        })
-      : noPostCommit,
-    reaction,
-  };
+  if (reaction) {
+    await startReactionDeleteEffectsWorkflow({ origin, reaction });
+  }
+
+  return { postId, reaction };
 };
