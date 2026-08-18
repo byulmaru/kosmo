@@ -32,6 +32,7 @@
 - Environment를 참조하는 job의 GitHub OIDC subject는 branch ref가 아니라 `environment:prod`가 된다. Automatic과 manual production build는 모두 이 exact subject를 공유한다.
 - `kosmo-prod`의 Terraform bootstrap source는 `production`이지만 release workflow는 full SHA와 Helm parameter를 imperative overlay로 소유한다. 좁은 `ignore_changes`는 유지하면서 bootstrap ref만 바꿔야 한다.
 - Active `adopt-production-release-branch` change가 같은 capability의 obsolete production branch delta와 미완료 live task를 가진다. 새 delta를 적용한 뒤 과거 delta가 다시 sync되지 않도록 superseded 생명주기를 명시해야 한다.
+- 첫 main release에서 새 `kosmo_runtime` DatabaseRole의 명시적 false/empty 기본값을 CNPG가 live spec에서 생략해 workload와 migration이 성공한 뒤에도 Argo CD가 OutOfSync로 남았다. Runtime role manifest는 privilege 의미를 바꾸거나 broad ignore rule을 추가하지 않고 CNPG의 현재 canonical default 표현과 일치해야 한다.
 
 ### Recommended Approach
 
@@ -45,6 +46,7 @@
 8. ECR OIDC trust와 외부 Vault prod build role은 automatic과 manual gated build가 사용하는 exact `repo:byulmaru/kosmo:environment:prod` identity만 허용한다. main ref, `refs/heads/production`, tag와 일반 branch identity는 허용하지 않는다.
 9. Terraform의 `kosmo-prod` bootstrap revision을 main으로 바꾸되 release-time full SHA와 Helm parameter ignore 경계는 유지한다. GitHub `prod` Environment에는 required reviewer를 설정하고 main workflow에서 시작되는 automatic/manual gated job을 허용한다.
 10. Runbook과 audit summary는 automatic main과 manual target을 구분하고 target SHA, build digest, Argo revision, migration/workload와 smoke 결과를 기록한다.
+11. `kosmo_runtime` DatabaseRole은 CNPG가 생략하는 `false` privilege 기본값과 빈 `inRoles`를 manifest에서도 생략한다. `login`, `inherit`, password Secret과 reclaim policy는 유지하고 다른 role 또는 Argo diff ignore 범위는 넓히지 않는다.
 
 ### Allowed Alternatives
 

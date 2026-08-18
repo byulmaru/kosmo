@@ -144,7 +144,7 @@ Repository 변경이 리뷰 가능한 PR로 전달되고, 승인된 순서로 ma
 - [ ] 5.5 모든 production branch 참조 제거와 rollback 경로를 확인한 뒤 별도 운영 승인으로 production ruleset/branch를 폐기하고 결과를 기록한다.
 - [ ] 5.6 `adopt-production-release-branch`를 obsolete delta 미적용 방식으로 archive하고 이 change의 delta를 active spec에 동기화해 strict validation한 뒤 `PROD-783`을 완료한다.
 
-## 6. PROD-790 Automatic·manual production deploy job 통합
+## 6. PROD-790 Production deploy 중복·CNPG sync drift 제거
 
 **Authority / Provenance**
 
@@ -152,7 +152,7 @@ Repository 변경이 리뷰 가능한 PR로 전달되고, 승인된 순서로 ma
 
 **Deliverable**
 
-Automatic main과 manual full-SHA release가 하나의 Environment-gated production deploy job 구현을 공유한다.
+Automatic main과 manual full-SHA release가 하나의 Environment-gated production deploy job 구현을 공유하고, runtime DatabaseRole의 CNPG 기본값 정규화가 production sync 완료를 막지 않는다.
 
 **Guardrails**
 
@@ -160,11 +160,15 @@ Automatic main과 manual full-SHA release가 하나의 Environment-gated product
 - Push에서는 skipped manual preflight 때문에 production deploy가 skip되지 않고, manual dispatch에서는 성공한 preflight output만 target으로 사용한다.
 - 두 trigger 모두 `prod` 승인 뒤 checkout·credential·build·Argo sync·stable 승격 순서와 공용 concurrency를 유지한다.
 - 이번 구현은 self-hosted runner에 새 도구나 상태를 사전 설치하지 않으며 GitHub-hosted runner 전환은 별도 범위로 남긴다.
+- Runtime DatabaseRole은 `login`, `inherit`, password Secret과 retain reclaim policy를 유지하고 CNPG가 생략하는 false/empty privilege 기본값만 생략한다.
+- Dangerous privilege drift를 숨길 수 있는 broad Argo ignore rule을 추가하거나 기존 role 선언을 일괄 변경하지 않는다.
 
 **Verification**
 
 - Actionlint로 push/manual job 조건, skipped dependency와 expression 문법을 검증한다.
 - Workflow diff에서 target SHA, Environment URL, Sentry release, image metadata, Argo revision과 audit trigger가 event별로 올바른지 검토한다.
+- Helm render와 live read-only spec 비교로 runtime DatabaseRole의 privilege 의미와 CNPG canonical 형태가 일치하는지 확인한다.
 - OpenSpec strict validation과 PR CI를 통과시킨다.
 
 - [x] 6.1 Automatic/manual 중복 deploy job을 단일 shared gated job으로 통합하고 event별 target·audit identity와 기존 승인·배포 경계를 검증한다.
+- [x] 6.2 Runtime DatabaseRole에서 CNPG가 생략하는 false/empty 기본값을 제거하고 Helm render·live spec 비교로 Argo sync drift 원인을 해소한다.
