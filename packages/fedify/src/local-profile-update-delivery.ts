@@ -7,7 +7,13 @@ import { localOutboundFederation } from './local-outbound-federation';
 import { createLocalProfilePerson } from './local-profile-person';
 import { dispatchActivityPubActivity } from './outbound-recipient-dispatch';
 
-export const sendLocalProfileUpdate = async (profileId: string): Promise<void> => {
+export const sendLocalProfileUpdate = async ({
+  profileId,
+  updateId,
+}: {
+  readonly profileId: string;
+  readonly updateId: string;
+}): Promise<void> => {
   const source = await db
     .select({
       canonicalOrigin: Instances.canonicalOrigin,
@@ -51,7 +57,7 @@ export const sendLocalProfileUpdate = async (profileId: string): Promise<void> =
   const actorPathname = actorUri.pathname.replace(/\/$/, '');
   const activity = new Update({
     actor: actorUri,
-    id: new URL(`${actorPathname}/updates/${crypto.randomUUID()}`, actorUri),
+    id: new URL(`${actorPathname}/updates/${updateId}`, actorUri),
     object,
     tos: [context.getFollowersUri(profileId)],
   });
