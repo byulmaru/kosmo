@@ -1,22 +1,28 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import {
   createE2EPost,
-  createE2EProfile,
+  createE2ERemoteProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import {
-  isGraphQLOperation,
-  readGraphQLOperation,
-  toGlobalId,
-  waitForGraphQLOperation,
-} from './graphql';
+import { readGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
+import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
 });
+
+const gotoPostDetail = async (page: Page, path: string) => {
+  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
+  await page.goto(path);
+
+  const response = await detailResponse;
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+};
 
 test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link handle을 정규화한다', async ({
   context,
@@ -68,46 +74,25 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
 test('연합 프로필 게시글은 relativeHandle URL을 유지하고 정규화한다', async ({ context, page }) => {
   const body = 'E2E federated post detail body';
   const viewer = await createE2ESession({ handle: 'e2e-federated-detail-viewer' });
-  const author = await createE2EProfile({ handle: 'e2e-federated-author' });
+  const domain = 'remote.example';
+  const author = await createE2ERemoteProfile({ domain, handle: 'e2e-federated-author' });
   const post = await createE2EPost({
     body,
     profileId: author.id,
     visibility: PostVisibility.PUBLIC,
   });
   const postId = toGlobalId('Post', post.id);
-  const relativeHandle = `@${author.handle}@remote.example`;
+  const relativeHandle = `@${author.handle}@${domain}`;
 
   await setE2ESessionCookie(context, viewer.token);
-  await page.route('**/graphql', async (route) => {
-    if (!isGraphQLOperation(route.request().postData(), 'PostDetailQuery')) {
-      await route.continue();
-      return;
-    }
-
-    const response = await route.fetch();
-    const responseBody = (await response.json()) as {
-      data?: { node?: { profile?: { relativeHandle: string } | null } | null };
-    };
-    const profile = responseBody.data?.node?.profile;
-
-    if (profile) {
-      profile.relativeHandle = relativeHandle;
-    }
-
-    await route.fulfill({
-      body: JSON.stringify(responseBody),
-      contentType: 'application/json',
-      status: response.status(),
-    });
-  });
 
   const canonicalPath = `/${relativeHandle}/${postId}`;
 
-  await page.goto(canonicalPath);
+  await gotoPostDetail(page, canonicalPath);
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 
-  await page.goto(`/wrong-handle/${postId}`);
+  await gotoPostDetail(page, `/wrong-handle/${postId}`);
   await expect.poll(() => decodeURIComponent(new URL(page.url()).pathname)).toBe(canonicalPath);
   await expect(page.getByText(body)).toBeVisible();
 });
