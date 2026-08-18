@@ -17,7 +17,7 @@ Reaction Quick Picker는 현재 제공된 Reaction option을 빠르게 선택하
 ### 형태
 
 - Web option은 Figma Post Action Bar의 28px 밀도와 함께 사용할 수 있도록 32×32 CSS px의 둥근 사각형으로 정규화하며 radius는 12px이다. emoji는 20px, option 사이 gap과 panel padding은 각각 4px이다. border를 포함한 panel의 전체 높이는 약 42px이다.
-- 이번 Web 우선 변경은 Native selector와 icon+count summary token의 interaction geometry를 변경하지 않는다. 이 control들은 iOS·Android 모두 44 logical unit을 사용하고 Profile tab은 32 minimum을 사용하므로 Android 48×48dp baseline을 아직 충족하지 않는다. 공통 `IconButton` 대상인 summary More는 아래 별도 계약을 사용한다. Native 출시 전 나머지 control도 iOS 44pt·Android 48dp target으로 복구하고 assistive technology·touch runtime에서 검증한다.
+- 이번 Web 우선 변경은 Native selector와 icon+count summary token의 interaction geometry를 변경하지 않는다. 이 control들은 iOS·Android 모두 44 logical unit을 유지하므로 Android 48×48dp baseline을 아직 충족하지 않는다. Profile tab은 PROD-752에서 공용 `Tab`으로 이관해 iOS 44pt·Android 48dp의 실제 layout box를 사용하며, 그 결과 ReactionProfilesModal의 다음 콘텐츠가 iOS 6pt·Android 8dp 아래로 이동하는 전환기 geometry를 허용한다. 이 Profile tab geometry는 DSN-13 리디자인·최종 재바인딩에서 다시 확정한다. 공통 `IconButton` 대상인 summary More는 아래 별도 계약을 사용한다. Native 출시 전 나머지 control도 iOS 44pt·Android 48dp target으로 복구하고 assistive technology·touch runtime에서 검증한다.
 - 바깥 컨테이너는 border가 있는 둥근 직사각형이며 radius는 16px이다.
 - option 자체에는 border를 표시하지 않는다.
 - 선택 여부는 border가 아니라 option 아래에 분리한 배경 layer로만 구분한다.

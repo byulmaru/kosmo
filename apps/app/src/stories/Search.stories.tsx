@@ -163,6 +163,20 @@ export const PreparedNonPeopleTabs: Story = {
   parameters: {
     router: { params: { q: '별마루', tab: 'popular' }, pathname: '/search' },
   },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const tablist = canvas.getByRole('tablist', { name: '검색 결과 유형' });
+    const popular = within(tablist).getByRole('tab', { name: '인기' });
+    const latest = within(tablist).getByRole('tab', { name: '최신' });
+    const media = within(tablist).getByRole('tab', { name: '미디어' });
+    const people = within(tablist).getByRole('tab', { name: '사람' });
+    expect(popular).toHaveAttribute('aria-selected', 'true');
+    expect(popular).toHaveAttribute('tabindex', '0');
+    [latest, media, people].forEach((tab) => {
+      expect(tab).toHaveAttribute('aria-selected', 'false');
+      expect(tab).toHaveAttribute('tabindex', '-1');
+    });
+  },
 };
 
 export const RecentSearchInteraction: Story = {

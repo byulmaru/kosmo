@@ -812,11 +812,17 @@ export const SwitchingReactionTypeDoesNotReuseProfileRows: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: '반응한 프로필 보기' }));
     await expect(screen.findByText('Heart Type Profile')).resolves.toBeVisible();
-    await userEvent.click(screen.getByRole('tab', { name: '🎉 반응 7개' }));
+    const heartTab = screen.getByRole('tab', { name: '❤️ 반응 12개' });
+    const partyTab = screen.getByRole('tab', { name: '🎉 반응 7개' });
+    heartTab.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(partyTab).toHaveFocus();
+    expect(partyTab).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByText('Heart Type Profile')).toBeVisible();
+    await userEvent.keyboard('{Enter}');
     expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
     await expect(screen.findByText('Party Type Profile')).resolves.toBeVisible();
-    expect(screen.queryByText('Heart Type Profile')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('🎉 반응')).toBeVisible();
+    expect(partyTab).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(screen.getByLabelText('반응한 프로필 닫기'));
   },
 };
