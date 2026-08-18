@@ -14,8 +14,6 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ap-northeast-2
-  AWS_ECR_REPOSITORY_URL: 822638974464.dkr.ecr.ap-northeast-2.amazonaws.com/kosmo
   ENVIRONMENT: prod
   VAULT_ADDR: https://vault.tail1fdd55.ts.net
   VAULT_GITHUB_ACTIONS_AUDIENCE: https://vault.tail1fdd55.ts.net
@@ -66,12 +64,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Load production Sentry DSN from Vault
         id: sentry
         uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
@@ -85,16 +77,11 @@ jobs:
           secrets: |
             secret/data/kubernetes/kosmo/prod EXPO_PUBLIC_SENTRY_DSN | EXPO_PUBLIC_SENTRY_DSN
 
-      - name: Log in to ECR
-        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
-
       - name: Extract production release metadata
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
         with:
-          images: |
-            ghcr.io/${{ github.repository }}
-            ${{ env.AWS_ECR_REPOSITORY_URL }}
+          images: ghcr.io/${{ github.repository }}
           tags: |
             type=raw,value=prod-sha-${{ env.TARGET_SHA }}-${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -233,34 +220,6 @@ jobs:
             echo "::error::Argo CD image digest ${actual_image_digest}, expected ${IMAGE_DIGEST}."
             exit 1
           fi
-
-      - name: Configure AWS credentials for stable tag
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: arn:aws:iam::822638974464:role/github-actions-kosmo-ecr-push
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Promote approved digest to ECR stable
-        env:
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_manifest="$(aws ecr batch-get-image \
-            --repository-name kosmo \
-            --image-ids imageDigest="${IMAGE_DIGEST}" \
-            --query 'images[0].imageManifest' \
-            --output text)"
-          if [[ -z "${image_manifest}" || "${image_manifest}" == "None" ]]; then
-            echo "::error::ECR image manifest was not found for ${IMAGE_DIGEST}."
-            exit 1
-          fi
-          aws ecr put-image \
-            --repository-name kosmo \
-            --image-tag stable \
-            --image-manifest "${image_manifest}" \
-            --image-digest "${IMAGE_DIGEST}"
 
       - name: Record production release
         if: always()

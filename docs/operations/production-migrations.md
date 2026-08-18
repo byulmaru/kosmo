@@ -57,13 +57,13 @@ history가 함께 commit되고, 실패하면 그 파일의 변경만 함께 roll
 2. Reviewer는 release full SHA, workflow definition ref, Helm/chart diff와 migration compatibility를 확인한 뒤 한 번 승인한다. 승인 전에는 production source checkout, prod credential 접근, prod image build, Argo CD credential 접근과 migration·workload 상태 변경이 없어야 한다.
 3. 승인 job은 release full SHA를 checkout하고 prod credential을 받아 prod image를 build한다. Build가 만든 prod digest를 audit summary에 기록하며 승인 시점의 최신 `main` 또는 mutable image tag를 다시 읽지 않는다.
 4. 승인 job은 build prod digest와 migration Secret으로 migration Job을 실행해 완료를 기다린다.
-5. Job이 성공한 경우에만 같은 prod digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다. 성공한 digest에만 `stable` 보존 tag를 적용한다.
+5. Job이 성공한 경우에만 같은 GHCR prod digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다.
 
 ### Manual full-SHA release
 
 1. `main`에 저장된 release workflow를 `main` ref에서 수동 실행하고 repository에 존재하는 정확한 40자리 target SHA를 입력한다. Preflight는 workflow ref·SHA 형식·commit 존재 여부와 target URL만 확인하며 target code checkout, prod secret/credential 접근과 build를 하지 않는다.
 2. Reviewer가 target SHA와 DB compatibility를 확인해 `prod` Environment를 한 번 승인한 뒤에만 target SHA를 checkout하고 prod image를 build한다. Dispatch의 `github.sha`가 아니라 resolved target SHA를 source, Sentry release와 metadata에 사용한다.
-3. Build가 만든 prod digest와 migration Secret으로 migration Job을 실행하고, 성공 뒤 같은 digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다. 성공한 digest에만 `stable` 보존 tag를 적용한다.
+3. Build가 만든 GHCR prod digest와 migration Secret으로 migration Job을 실행하고, 성공 뒤 같은 digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다.
 
 두 경로는 같은 production concurrency, migration success barrier와 감사 필드를 사용한다. 실행 중인 release는 취소하지 않으며, pending release를 대체하는 경우 취소된 SHA와 trigger를 Actions 기록에 남긴다. 승인 후 prod build 또는 migration이 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다. Main DB-compatible revert 또는 호환 가능한 manual full SHA로 새 forward release를 실행한다.
 

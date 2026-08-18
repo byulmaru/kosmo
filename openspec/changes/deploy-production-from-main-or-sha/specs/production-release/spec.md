@@ -2,7 +2,7 @@
 
 ### Requirement: Main push는 dev와 production release 승인을 준비한다
 
-**Authority / Provenance:** `PROD-783` (2026-08-18 contract update) — 시스템은 `main` push의 immutable full SHA에서 dev 설정 image를 build하고 기존 dev 자동 배포 경로로 전달해야 한다 (MUST). Production 경로는 `prod` Environment approval 대기를 준비해야 하지만 (MUST), production source checkout, Vault/ECR/Sentry credential 접근과 prod image build는 승인 뒤에만 실행해야 한다 (MUST). Dev와 prod image는 source SHA를 공유하지만 환경별 공개 build 설정을 유지하며 동일 digest일 필요가 없다.
+**Authority / Provenance:** `PROD-783` (2026-08-18 contract update), `PROD-791` — 시스템은 `main` push의 immutable full SHA에서 dev 설정 image를 build하고 기존 dev 자동 배포 경로로 전달해야 한다 (MUST). Production 경로는 `prod` Environment approval 대기를 준비해야 하지만 (MUST), production source checkout, Vault/Sentry credential 접근과 prod image build는 승인 뒤에만 실행해야 한다 (MUST). Dev와 prod image는 source SHA를 공유하지만 환경별 공개 build 설정을 유지하며 동일 digest일 필요가 없다. 두 image는 실제 workload source인 GHCR에만 push해야 한다 (MUST).
 
 Git tag, `production` 브랜치 push와 일반 branch push는 이 automatic production release 경로를 시작해서는 안 된다 (MUST NOT).
 
@@ -23,12 +23,12 @@ Git tag, `production` 브랜치 push와 일반 branch push는 이 automatic prod
 
 ### Requirement: Main production release는 Environment 승인 뒤 같은 SHA와 digest로 build·배포한다
 
-**Authority / Provenance:** `PROD-783` (2026-08-18 contract update), `PROD-564` — 시스템은 main push의 production release가 `prod` Environment 승인 전에는 main SHA를 production job에서 checkout하거나 Vault/ECR/Sentry credential을 요청하거나 prod image를 build하거나 Argo CD production 상태를 변경하지 않도록 해야 한다 (MUST). 승인 뒤 하나의 gated job이 event의 immutable main full SHA를 checkout하고 prod image를 build한 뒤, 그 build output digest와 같은 SHA를 migration Job과 모든 활성화 production workload에 전달해야 한다 (MUST). GitHub Release, Release asset, mutable container tag 또는 승인 시점의 최신 main ref를 중간 identity source로 사용해서는 안 된다 (MUST NOT).
+**Authority / Provenance:** `PROD-783` (2026-08-18 contract update), `PROD-564`, `PROD-791` — 시스템은 main push의 production release가 `prod` Environment 승인 전에는 main SHA를 production job에서 checkout하거나 Vault/Sentry credential을 요청하거나 prod image를 build하거나 Argo CD production 상태를 변경하지 않도록 해야 한다 (MUST). 승인 뒤 하나의 gated job이 event의 immutable main full SHA를 checkout하고 prod image를 GHCR에 build한 뒤, 그 build output digest와 같은 SHA를 migration Job과 모든 활성화 production workload에 전달해야 한다 (MUST). GitHub Release, Release asset, mutable container tag 또는 승인 시점의 최신 main ref를 중간 identity source로 사용해서는 안 된다 (MUST NOT).
 
 #### Scenario: 승인 대기 중인 main release
 
 - **WHEN** main production release가 `prod` Environment 승인을 기다린다
-- **THEN** 시스템은 production source checkout, Vault/ECR/Sentry credential 접근, prod image build, Argo CD production credential 획득과 production 상태 변경을 실행하지 않는다
+- **THEN** 시스템은 production source checkout, Vault/Sentry credential 접근, prod image build, Argo CD production credential 획득과 production 상태 변경을 실행하지 않는다
 
 #### Scenario: 승인된 main release
 
@@ -40,19 +40,19 @@ Git tag, `production` 브랜치 push와 일반 branch push는 이 automatic prod
 - **WHEN** release approval이 대기 중인 동안 더 새로운 commit이 main에 merge된다
 - **THEN** 기존 release의 source와 image identity는 승인 시점의 최신 main이 아니라 event의 기존 full SHA와 승인 뒤 생성된 해당 release digest로 유지된다
 
-### Requirement: Production build credential은 exact prod Environment identity만 사용한다
+### Requirement: Production build secret credential은 exact prod Environment identity만 사용한다
 
-**Authority / Provenance:** `PROD-783` (2026-08-18 contract update) — Automatic main과 manual full-SHA production build는 모두 `prod` Environment 승인 뒤 실행되므로 ECR과 Vault production build trust는 exact `repo:byulmaru/kosmo:environment:prod` OIDC subject만 허용해야 한다 (MUST). `ref:refs/heads/main`, `ref:refs/heads/production`, Git tag와 일반 branch subject는 production build credential을 얻을 수 없어야 한다 (MUST NOT).
+**Authority / Provenance:** `PROD-783` (2026-08-18 contract update), `PROD-791` — Automatic main과 manual full-SHA production build는 모두 `prod` Environment 승인 뒤 실행되므로 Vault production build trust는 exact `repo:byulmaru/kosmo:environment:prod` OIDC subject만 허용해야 한다 (MUST). `ref:refs/heads/main`, `ref:refs/heads/production`, Git tag와 일반 branch subject는 production build secret credential을 얻을 수 없어야 한다 (MUST NOT). Production image push는 GitHub Packages permission으로 GHCR만 사용하고 AWS/ECR credential을 요청해서는 안 된다 (MUST NOT).
 
 #### Scenario: 승인된 automatic 또는 manual build
 
 - **WHEN** automatic main 또는 manual full-SHA release가 `prod` Environment 승인을 받고 gated build job을 실행한다
-- **THEN** ECR과 Vault는 exact `repo:byulmaru/kosmo:environment:prod` subject로만 production build credential을 발급한다
+- **THEN** Vault는 exact `repo:byulmaru/kosmo:environment:prod` subject로만 production build secret credential을 발급하고 image는 GHCR에만 push된다
 
 #### Scenario: branch 또는 tag identity
 
 - **WHEN** main ref, `production` branch, Git tag 또는 일반 branch identity로 production build credential을 요청한다
-- **THEN** ECR과 Vault는 credential 발급을 거부한다
+- **THEN** Vault는 production build secret credential 발급을 거부한다
 
 ### Requirement: 임의 repository commit을 수동 production release로 선택할 수 있다
 
