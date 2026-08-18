@@ -125,6 +125,6 @@ Worker Activities가 기존 Reaction Notification과 Like·EmojiReact·Undo proj
 
 - [x] 4.1 `openspec validate transition-reaction-effects-to-temporal-workflows --strict`와 repository 정적 검증을 통과시킨다.
 - [x] 4.2 관련 Core/API/Fedify/Worker unit·integration test를 통과시키고 환경 blocker를 정확히 기록한다.
-- [ ] 4.3 저장소 정책에 따라 scope review, commit, push와 Ready PR을 준비한다.
+- [x] 4.3 저장소 정책에 따라 scope review, commit, push와 Ready PR을 준비한다.
 - [ ] 4.4 Exact revision의 dev Effects Workflow, retry와 restart를 검증하고 Linear에 증거를 남긴다.
 - [ ] 4.5 전체 task와 spec sync가 완료된 뒤 이 작업의 주 작업자가 OpenSpec archive를 수행한다.
