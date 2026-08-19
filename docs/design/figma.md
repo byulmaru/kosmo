@@ -10,7 +10,7 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `01 Foundations`                               | 프로덕션 Foundations — Color System, Typography, Brand & Logo, Motion과 Component Usage Mapping                         |
 | `02 Components`                                | 컴포넌트 라이브러리. 도메인별 섹션으로 구성 (아래 참고)                                                                 |
-| `03 Patterns`                                  | (예약, 비어 있음)                                                                                                       |
+| `03 Patterns`                                  | 여러 Production component를 조합한 비교·검토용 snapshot. source와 제품 동작의 정본은 아니다                             |
 | `04 Screens - Mobile`                          | 모바일 화면 디자인. Screen Inventory 프레임에서 화면별 상태(완료 / 마이그레이션 필요 / 신규 필요)를 추적한다            |
 | `05 Screens - Web`                             | 웹 화면 디자인. 화면마다 1440 / 1024 두 breakpoint 프레임으로 구성하고, Web Screen Inventory 프레임에서 상태를 추적한다 |
 | `06 Prototypes / Flows`                        | 승인된 interaction·motion의 재생 가능한 대표 timeline과 제품 flow                                                       |
@@ -36,22 +36,45 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 
 `[Legacy] Color`, `[Legacy] Foundation`, `[Legacy] Brand`, `[Legacy] 컬렉션 1`은 기존 binding 보존용이다. 새 binding을 추가하지 않으며 DSN-13에서 Components/Screens를 active collection으로 이관한다. 자세한 색상 값과 역할은 [colors.md](./colors.md)를 따른다.
 
-### `02 Components` 섹션 구성 (2026-06 기준)
+### `02 Components` 섹션 구성 (2026-08 기준)
 
-- `Mobile` — 모바일 셸 컴포넌트 (BottomTab, Header, Dropdown-Menu 등)
-- `POST` — 포스트 카드와 부속 컴포넌트 (PostCard, UserInfo, Reaction, CWPostCard 등)
-- `🪄 Compose` — 작성(Edit) 화면 컴포넌트
-- `🆕 Primitives` — 기본 요소 (Button, TextField, TextArea, Avatar, Switch, Checkbox, TagChip, placeholder류 등)
-- `🔔 Notice` — 알림/프로필 목록 항목/프로필 컴포넌트
-- `🔍 Search` — 검색 컴포넌트
-- `🧵 Post Detail` — 스레드 상세 컴포넌트
-- `⚙️ Settings` — 설정 행 컴포넌트
-- `💻 Web` — 웹 전용 컴포넌트 (WebSidebar, NavItem, ComposeWidget 등)
-- `⚠️ POST_LEGACY (Deprecated)` — 사용 금지. 현행 `POST` 섹션 컴포넌트로 대체됐다
+- `00 Page Guide` — 페이지 목적과 Production 상태를 설명하는 guide frame
+- `01 Primitives · Current production` — Button, input, selection, feedback처럼 여러 도메인이 소비하는 독립 source
+- `02 Shared domain · Production` — profile, navigation, composer처럼 제품 문맥을 가진 공용 source
+- `03 Component Usage Mapping` — source와 실제 consumer의 사용 관계
+- `04 Settings · Production` — SettingsItem, SettingsNavigationList와 설정 전용 field composition source
+
+개별 DSN 작업의 검토용 section이 페이지에 함께 있을 수 있지만 위 번호 체계의 정본 source section으로 간주하지
+않는다. 독립 source는 `02 Components`에 두고, 여러 source를 조합하지만 navigation·상태·저장 lifecycle을 소유하지
+않는 예시는 `03 Patterns`에 둔다.
+
+### `03 Patterns` 섹션 구성
+
+- `01 Overlay ownership snapshot`
+- `02 Mobile overlay patterns`
+- `03 Web overlay patterns`
+- `04 Composer presentation patterns · DSN-43`
+- `05 Settings control patterns · DSN-44`
+- `06 Exploration · Settings detail grouping · DSN-44` — 기존 SettingsItem 조합만 검토하는 비제품 탐색 예시
+
+`01`–`05`는 승인된 component 조합을 비교·검토하는 snapshot이며 해당 제품 화면에 채택됐다는 evidence는 아니다.
+`06`은 제품 IA·route·저장 계약을 승인하지 않는 exploration이다. 어느 쪽도 Foundation, component source,
+`docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
+
+#### DSN-44 설정 control 계약
+
+- [`RadioOption`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2792-4951) — `Selected=True/False`와 `Default`, `Hover`, `Pressed`, `FocusVisible`, `Disabled`를 독립 축으로 조합한다.
+- [`Slider`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3474-25448) — 대표 값 `0/25/50/75/100` 각각에 `Default`, `Hover`, `FocusVisible`, `Dragging`, `Disabled`를 제공한다.
+- [`ListboxOption`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3597-7772) — `Selected=True/False`와 `Default`, `Hover`, `Pressed`, `FocusVisible`, `Disabled`, `Active`를 독립 축으로 조합한다. `Active`는 키보드 탐색 등 현재 활성 option, `Selected`는 확정된 값을 뜻한다.
+- MultiSelect combobox는 검색 결과가 없는 상태와 현재 입력으로 새 태그를 만드는 action을 [`Create` specimen](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4025-10133)으로 검증한다.
+- [`ColorPickerPanel`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3819-8600)은 Light/Dark semantic preview와 비차단 대비 경고를 함께 제공한다.
+
+SearchField, Switch와 Tabs는 기존 공용 source를 재사용한다. 이 계약은 설정용 control의 조합 가능성까지만 다루며
+설정 IA, route, 저장 방식, frontend lifecycle은 포함하지 않는다.
 
 ## 디자인 원칙
 
-- **재사용성보다 UX를 우선한다.** 과거에는 모바일/웹 화면에서 같은 컴포넌트를 재사용하는 것을 최우선으로 했지만, 메뉴 등 일부 컴포넌트를 양쪽에서 재사용하려다 디자인 문제가 발생해 방향을 바꿨다 (2026-06 결정). 재사용이 UX를 해치면 플랫폼 전용 컴포넌트(예: `💻 Web` 섹션)를 따로 만든다.
+- **재사용성보다 UX를 우선한다.** 과거에는 모바일/웹 화면에서 같은 컴포넌트를 재사용하는 것을 최우선으로 했지만, 메뉴 등 일부 컴포넌트를 양쪽에서 재사용하려다 디자인 문제가 발생해 방향을 바꿨다 (2026-06 결정). 재사용이 UX를 해치면 같은 source로 억지 통합하지 않고 플랫폼 전용 컴포넌트로 분리한다.
 
 ## Default Avatar
 
