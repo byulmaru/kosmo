@@ -61,6 +61,20 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 `06`은 제품 IA·route·저장 계약을 승인하지 않는 exploration이다. 어느 쪽도 Foundation, component source,
 `docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
 
+#### DSN-43 PostComposer source 계약
+
+- `Rail`·`Overlay`의 모든 public `PostComposer` variant는 하나의 공용
+  [`__ComposerFooter`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4096-2528) source를
+  instance로 소비하며 footer action row를 consumer마다 복제하지 않는다.
+- Footer action availability는 `Show media action`·`Show CW action`·`Show poll action`·`Show emoji action`
+  Boolean property로 독립 노출한다. 현재 Product에 있는 Media·CW는 기본 `true`, 아직 없는
+  Poll·Emoji는 기본 `false`다.
+- `CW active`·`Poll active`는 action 노출 여부와 별개인 modifier state다. `03 Patterns` specimen이
+  Poll·Emoji action을 켜두어도 Product 기능이 준비됐다는 의미가 아니며, runtime capability·feature flag·interaction
+  lifecycle은 Product가 소유한다.
+- `Rail`은 현재 기본 Media+CW 2-action 조합을 정본으로 한다. 3개 이상의 action을 동시 노출할 때의
+  우선순위·wrap·overflow 계약은 해당 Product capability를 연결할 때 따로 확정한다.
+
 #### DSN-44 설정 control 계약
 
 - [`RadioOption`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2792-4951) — `Selected=True/False`와 `Default`, `Hover`, `Pressed`, `FocusVisible`, `Disabled`를 독립 축으로 조합한다.
