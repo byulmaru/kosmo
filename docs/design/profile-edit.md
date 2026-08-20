@@ -19,7 +19,7 @@
 
 ## 정보 구조와 필드
 
-화면은 다음 순서로 구성한다.
+현재 production 화면은 다음 순서로 구성한다.
 
 1. 상단 제목과 저장 action
 2. header 이미지와 겹쳐 보이는 avatar 이미지 편집 영역
@@ -27,6 +27,10 @@
 4. 소개(bio)
 5. 팔로우 요청 자동 승인
 6. 프로필 태그
+
+DSN-45 Figma Candidate는 `팔로우 요청 자동 승인`을 제외하고 프로필 태그 다음에 `프로필 추가 정보`를 둔다.
+Follow Approval 제어는 Settings 이관 전 production에만 남아 있으며, Figma의 Switch source는 후속 Settings
+화면에서 재사용한다.
 
 - 표시 이름은 새로 입력하거나 변경할 때 Unicode code point 기준 1~40이다. 서버 구현 정렬 전의 호환 경계로,
   40 code point를 초과하는
@@ -54,9 +58,12 @@
   왜곡하지 않는다.
 - 원본 이미지 비율이 다르면 header 변경 영역의 `3:1` 경계 안에서 중앙 기준 cover crop으로 미리 보이고,
   선택·업로드 과정에서도 container 비율은 바뀌지 않는다.
-- Profile Link, handle, location, website, gender, pronouns, contacts와 고정 게시물은 이 화면에 포함하지 않는다.
-- Settings 진입점이 제공되기 전까지 Follow Approval Policy 조회·변경은 Profile 편집이 소유한다. 이후
-  `PROD-531`이 Settings로 제어를 이전하고 Profile 편집에서 중복 제어를 제거한다.
+- handle, location, gender, pronouns, contacts와 고정 게시물은 전용 field로 추가하지 않는다. DSN-45 Figma
+  Candidate의 `프로필 추가 정보`는 website를 포함한 임의의 label과 value 쌍을 표현할 수 있지만, production
+  저장·검증·공개 표시 계약은 `PROD-514`가 소유한다.
+- Settings 진입점이 제공되기 전까지 production의 Follow Approval Policy 조회·변경은 Profile 편집이 소유한다.
+  DSN-45 Figma에서는 이미 이 field를 제거하며, `PROD-531`이 Settings로 제어를 이전한 뒤 production
+  Profile 편집에서도 중복 저장 소유권을 제거한다.
 
 ## 화면과 연결 경계
 
@@ -172,17 +179,39 @@
 - 저장과 서버 validation, Relay 동기화는 production route가 같은 presentation component를 재사용해 제공한다.
   별도의 태그 편집기를 다시 만들지 않는다.
 
+## Profile 추가 정보 Figma Candidate
+
+- 프로필 태그 아래에 임의의 `label:value` 쌍을 추가·수정·삭제·재정렬하는 편집기를 둔다. 현재 최대 4개는
+  `PROD-514`의 제품 정책 후보이며 영구 Design token이나 component 구조로 고정하지 않는다.
+- `ProfileCustomFields`, `ProfileCustomFieldEditor`, `ProfileCustomFieldsReorder`를 독립 source로 유지하고
+  `ProfileEditSurface`의 `Show custom fields` boolean으로 production 도입 전 조합을 끌 수 있게 한다.
+- 섹션 제목, modal 제목과 외부 field label은 `KOSMO/UI/Label/L`을 사용한다. 실제 입력 control은 외부 label을
+  중복 표시하지 않는 기존 `TextField`의 `Show label=false` 인스턴스를 재사용하며, 수동 input surface를 따로
+  복제하지 않는다. MCP Preview에서는 [typography.md](./typography.md)의 IBM Plex Sans KR 대치를 유지한다.
+- 이 Candidate는 편집 UI만 정의한다. 저장·검증 상한과 API는 `PROD-514`, 공개 Profile 표시는 `DSN-48`이
+  각각 소유한다.
+
+## 이미지 편집 Figma Candidate
+
+- avatar와 header에 crop 영역, pan/zoom과 선택적 alt text 입력을 제공하는 초안을 둔다. 두 이미지와
+  Center/Mobile을 조합한 Crop·Description 대표 상태만 유지한다.
+- 현재 production의 교체·삭제·업로드 대기·오류 계약은 그대로 유효하다. Candidate UI만으로 Media·GraphQL·DB
+  계약이나 출시 상태를 주장하지 않으며 제품 동작은 `PROD-794`가 소유한다.
+
 ## 반응형 레이아웃
 
 - Web은 기존 KOSMO shell 안의 중앙 route로 제공하며 modal이나 별도 desktop-only route를 만들지 않는다.
 - 중앙 편집 surface는 최대 `600px`를 유지한다.
-- 상단 navigation header는 shell이 소유하는 safe-area inset을 제외한 content 높이를 정확히 `48px`로 유지한다.
-  뒤로가기 action은 이 행의 `48×48` 전체를 입력 target으로 사용하고 제목·저장 action은 같은 행 안에서 정렬한다.
+- DSN-45 Figma Candidate의 상단 navigation header는 shell이 소유하는 safe-area inset을 제외한 content 높이를
+  정확히 `64px`로 유지한다. 뒤로가기 action은 `44×44` target 안의 canonical `ArrowLeft` `24px`를 사용하고
+  제목·저장 action은 같은 행 안에서 정렬한다. Product 이관 전 production은 기존 `48px` header, `48×48`
+  target과 `22px` icon geometry를 유지한다.
 - header 이미지 변경 영역은 surface 폭을 기준으로 `aspect-ratio: 3 / 1`을 적용한다. 따라서 `600px`
   중앙 surface에서는 `600×200`, `390px` mobile에서는 `390×130`이며 임의 폭 `W`에서는 높이가
   `W / 3`이 된다.
-- `1440px`에서는 full sidebar와 우측 rail 사이 중앙 컬럼에, `1024px`에서는 icon rail 다음 중앙 컬럼에
-  배치한다. 일반 shell breakpoint는 [breakpoints.md](./breakpoints.md)를 따른다.
+- `1440px`에서는 full sidebar와 우측 rail 사이 중앙 컬럼에, `1024px`에서는 icon rail 다음 중앙 컬럼에,
+  `390px`에서는 mobile shell 안에 배치한다. 일반 shell breakpoint는 [breakpoints.md](./breakpoints.md)를
+  따른다.
 - desktop 상단 제목·저장 영역은 중앙 컬럼 안에서 sticky하게 유지할 수 있지만 document scroll 소유권을
   바꾸지 않는다.
 - Web `< compact`와 Android/iOS는 mobile header·safe area·하단 tab chrome을 유지하며 form은 전체 너비를
@@ -208,20 +237,30 @@
 
 ## Figma 대응
 
-- `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관한 뒤 현재 범위로 정리한다.
-- `05 Screens - Web`의 Profile 영역에 1440/1024 두 프레임을 추가한다.
-- Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `48px`로 고정하고 뒤로가기 action에
-  `48×48` 영역을 배정한다.
+- `04 Screens - Mobile`의 기존 Profile Edit 원본은 `07 Archive`에 보관하고 `390px` Mobile 대표 프레임을
+  현재 범위로 유지한다.
+- `05 Screens - Web`의 Profile 영역에는 `1440px` Full과 `1024px` Compact 대표 프레임을 유지한다.
+- Mobile/Web 모두 상단 navigation header의 safe area 제외 높이를 `64px`로 고정하고 뒤로가기 action에
+  `44×44` target과 `24px` `ArrowLeft`를 사용한다.
 - 실제 `Header image preview` layer에 `3:1` ratio lock을 적용하고, avatar overlap을 배치하는 hero wrapper와
   preview layer를 분리한다. header preview 전체와 avatar preview 전체를 각각 단일 button으로 사용하며 중앙
   camera affordance와 pressed veil을 표현한다.
 - 별도의 연필 button이나 두 이미지를 함께 다루는 `유지`·`교체`·`제거` action row는 두지 않는다.
 - 기존 모바일 시안의 `분류 태그 4/8`, AI 자동 추천과 현재 범위 밖 필드는 사용하지 않는다.
+- `ProfileCustomFields`의 Filled·Empty·Capacity, 별도 Add/Edit editor와 reorder source를 유지한다. editor의
+  제목·외부 label은 `KOSMO/UI/Label/L`, 입력 control은 기존 hidden-label `TextField`를 사용한다.
+- 대표 consumer는 Mobile·Compact의 Light clean/Save disabled와 Full의 Dark dirty/Save active를 포함한다.
+  이미지 replacement·deletion·uploading·error를 별도 Figma 상태 카탈로그로 추가하지 않는다.
 - Figma 작업 환경에서는 [typography.md](./typography.md)의 대치 폰트와 Foundation variable, `02 Components`의
   현행 primitive를 사용한다.
 
 ## 전달 경계
 
+- `DSN-45`: Profile Edit Figma source, responsive consumer, custom field·image editor Candidate와
+  Light/Dark·dirty 대표 상태.
+- `DSN-48`: `프로필 추가 정보`의 공개 Profile 표시 UI.
+- `PROD-514`: 임의 label:value 저장·검증·상한과 API 제품 계약.
+- `PROD-794`: avatar/header crop·pan/zoom·alt text의 제품 동작 계약.
 - `PROD-491`: route 없는 presentation component, 로컬 입력·validation·태그 추가·제거 UI, 이미지 controlled
   state와 Storybook 상태 카탈로그.
 - `PROD-492`: `PROD-581` 위에서 Profile Media 관계, protected route와 entrypoint, 초기값, submit/Relay,
