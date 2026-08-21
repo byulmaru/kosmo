@@ -69,6 +69,9 @@ function contrastRatio(foreground: string, background: string): number {
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
   iconSizes: { 18: 18, 20: 20 },
+  layoutRecipes: {
+    actionMenuSurface: { flexDirection: 'column', gap: 0, padding: 4, borderRadius: 12 },
+  },
   radius: { 16: 16, full: 999 },
   space: { 4: 4, 8: 8, 12: 12 },
   textStyles: { uiLabelL: {} },

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useTheme } from '@/theme/ThemeProvider';
+import { layoutRecipes } from '@/theme/tokens';
 import { ByulmaruIdAccountSettingsEntry } from './ByulmaruIdAccountSettingsEntry';
 import { SettingsItem } from './SettingsItem';
 
@@ -14,7 +15,11 @@ export function SettingsNavigationList({ selected }: { selected?: SettingsDestin
   const current = selected === 'default-post-visibility';
 
   return (
-    <View accessibilityLabel="설정 목록" role="navigation" style={styles.root}>
+    <View
+      accessibilityLabel="설정 목록"
+      role="navigation"
+      style={[layoutRecipes.listStack, styles.root]}
+    >
       <ByulmaruIdAccountSettingsEntry />
       <NavigationLink href="/settings/default-post-visibility" primary>
         <Pressable
