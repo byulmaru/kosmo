@@ -61,6 +61,46 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 `06`은 제품 IA·route·저장 계약을 승인하지 않는 exploration이다. 어느 쪽도 Foundation, component source,
 `docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
 
+#### DSN-43 PostComposer source 계약
+
+- `Rail`·`Overlay`의 모든 public `PostComposer` variant는 하나의 공용
+  [`__ComposerFooter`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4096-2528) source를
+  instance로 소비하며 footer action row를 consumer마다 복제하지 않는다.
+- Footer action availability는 `__ComposerFooter`의 `Show media action`·`Show poll action`·
+  `Show CW action`·`Show emoji action` Boolean property로 독립 노출한다. Figma source와 완성형 specimen은
+  네 action을 모두 기본 `true`로 두며, Product는 아직 구현하지 않은 action을 같은 property·capability flag로
+  숨긴다.
+- `CW active`·`Poll active`는 action 노출 여부와 별개인 modifier state다. `03 Patterns` specimen이
+  Poll·Emoji action을 켜두어도 Product 기능이 준비됐다는 의미가 아니며, runtime capability·feature flag·interaction
+  lifecycle은 Product가 소유한다.
+- [`__ComposerCWField`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4049-27766)는
+  `Lines=1|2`가 하나의 exposed `Value`를 공유한다. 두 줄 상태도 별도 문구 layer를 덧붙이지 않고 같은 값을 최대 두 줄로
+  wrap한다.
+- [`__ComposerPollEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3705-8002)의
+  선택지 입력은 canonical `TextField`, 복수 선택은 canonical `Checkbox`, 선택지 추가·제거는 canonical `Plus`·`X`를
+  소비한다. 단일 선택 표시는 공용 Radio source가 생기기 전까지 Poll 내부의 semantic-token-bound control로 유지한다.
+- [`__SensitiveMediaRow`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4175)는
+  canonical `Switch`를 소비하며 로컬 track·thumb 조합을 만들지 않는다.
+- Web footer는 Media → Poll → CW → Emoji 순서로 공용 `IconButton`의 `32×32` target과 `20×20` icon,
+  action 사이 `4px` 간격을 사용한다. 글자 수 counter는 `32px`, 제출은 기존 `Button/Compact` `72×32`를 사용해
+  `Rail`의 실제 footer 폭 `270px` 안에서 한 줄로 배치한다. 이 규칙은 Web 전용이며 iOS `44pt`·Android `48dp`
+  target 계약은 유지한다.
+- Overlay 전용 미디어 설명 편집은
+  [`ComposerMediaEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4193-11169)
+  source가 `02 Shared domain · Production`에서 소유한다. `PostComposer Surface=Overlay, State=Media`와 같은
+  `600×624` 경계 안에서 body를 교체하며, 별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail`
+  variant로 추가하지 않는다.
+- editor header는 `44×44` hit target 안에 기존 Web `IconButton` `32×32`와 canonical `ArrowLeft`·`X`를 사용한다. Back은 draft와
+  media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. preview 안의 X는 해당
+  attachment만 제거하며, 하단 `완료`는 ALT 편집을 draft에 반영하고 Composer로 돌아간다. Rail에서 ALT 편집을
+  시작해도 같은 Overlay의 editor view로 직접 전환한다.
+- scrim, focus trap·restore, Escape, discard confirmation, viewport와 mobile fullscreen lifecycle은 Product의
+  상위 Overlay 구현이 소유한다.
+- 현재 Typography line-height FLOAT 변수는 `115`·`130`·`150` 같은 백분율 값이지만 Plugin API binding에서는 px로
+  해석된다. 이 경로로 편집한 Composer 텍스트는 검증된 CW `16/24`, Poll `14/20`, editor title `20/26`, footer
+  counter `130%` line-height를 유지하고 family·size·weight만 variable에 bind한다. 백분율을 안전하게 표현하는 token
+  계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다.
+
 #### DSN-44 설정 control 계약
 
 - [`RadioOption`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2792-4951) — `Selected=True/False`와 `Default`, `Hover`, `Pressed`, `FocusVisible`, `Disabled`를 독립 축으로 조합한다.
