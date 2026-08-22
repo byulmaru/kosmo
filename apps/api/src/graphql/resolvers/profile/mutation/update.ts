@@ -1,4 +1,3 @@
-import { db } from '@kosmo/core/db';
 import { PostVisibility, ProfileFollowPolicy } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { updateProfile } from '@kosmo/core/services';
@@ -25,21 +24,17 @@ builder.mutationField('updateProfile', (t) =>
     },
     resolve: async (_, { input }, ctx) => {
       try {
-        const result = await updateProfile(
-          {
-            accountId: ctx.session.accountId,
-            profileId: ctx.session.profileId,
-            displayName: input.displayName ?? undefined,
-            bio: input.bio,
-            followPolicy: input.followPolicy ?? undefined,
-            defaultPostVisibility: input.defaultPostVisibility,
-            tags: input.tags,
-            avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
-            headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
-          },
-          db,
-        );
-        await result.postCommit();
+        const result = await updateProfile({
+          accountId: ctx.session.accountId,
+          profileId: ctx.session.profileId,
+          displayName: input.displayName ?? undefined,
+          bio: input.bio,
+          followPolicy: input.followPolicy ?? undefined,
+          defaultPostVisibility: input.defaultPostVisibility,
+          tags: input.tags,
+          avatarMediaId: input.avatarId === undefined ? undefined : (input.avatarId?.id ?? null),
+          headerMediaId: input.headerId === undefined ? undefined : (input.headerId?.id ?? null),
+        });
 
         return {
           profile: result.profile,

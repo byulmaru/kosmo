@@ -38,7 +38,7 @@ afterEach(() => {
 
 after(async () => pg.end());
 
-test('Update(Person)는 canonical actor 표현·followers audience·unique activity identity를 쓴다', async () => {
+test('Update(Person)는 canonical actor 표현과 안정적인 activity identity를 쓴다', async () => {
   const local = await createLocalProfile();
   const avatar = await createMedia(local.accountId, local.profile.id, 'avatar');
   const header = await createMedia(local.accountId, local.profile.id, 'header');
@@ -55,14 +55,24 @@ test('Update(Person)는 canonical actor 표현·followers audience·unique activ
   const fixture = await createContextFixture(local);
   mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-  await sendLocalProfileUpdate(local.profile.id);
-  await sendLocalProfileUpdate(local.profile.id);
+  await sendLocalProfileUpdate({
+    profileId: local.profile.id,
+    updateId: '00000000-0000-8000-8000-000000000001',
+  });
+  await sendLocalProfileUpdate({
+    profileId: local.profile.id,
+    updateId: '00000000-0000-8000-8000-000000000001',
+  });
 
   assert.equal(fixture.calls.length, 2);
   const [first, second] = fixture.calls;
   assert.ok(first?.activity instanceof Update);
   assert.ok(second?.activity instanceof Update);
-  assert.notEqual(first.activity.id?.href, second.activity.id?.href);
+  assert.equal(
+    first.activity.id?.href,
+    `${fixture.actorUri.href}/updates/00000000-0000-8000-8000-000000000001`,
+  );
+  assert.equal(first.activity.id?.href, second.activity.id?.href);
   assert.equal(first.activity.actorId?.href, fixture.actorUri.href);
   assert.deepEqual(
     first.activity.toIds.map((uri) => uri.href),
@@ -94,7 +104,10 @@ test('remote follower가 없으면 HTTP delivery를 시작하지 않는다', asy
   const fixture = await createContextFixture(local);
   mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-  await sendLocalProfileUpdate(local.profile.id);
+  await sendLocalProfileUpdate({
+    profileId: local.profile.id,
+    updateId: '00000000-0000-8000-8000-000000000002',
+  });
 
   assert.equal(fixture.calls.length, 0);
 });
@@ -109,7 +122,13 @@ test('recipient delivery 실패는 caller가 격리할 수 있도록 reject한�
   const fixture = await createContextFixture(local, true);
   mock.method(localOutboundFederation, 'createContext', () => fixture.context);
 
-  await assert.rejects(sendLocalProfileUpdate(local.profile.id), /delivery failed/);
+  await assert.rejects(
+    sendLocalProfileUpdate({
+      profileId: local.profile.id,
+      updateId: '00000000-0000-8000-8000-000000000003',
+    }),
+    /delivery failed/,
+  );
 });
 
 type LocalFixture = Awaited<ReturnType<typeof createLocalProfile>>;
