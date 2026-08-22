@@ -12,6 +12,8 @@ apps/app/dist/
 apps/app/storybook-static/
 apps/app/android/
 apps/app/ios/
+apps/app/fastlane/report.xml
+gha-creds-*.json
 
 # Terraform local working files and environment-specific inputs.
 **/.terraform/

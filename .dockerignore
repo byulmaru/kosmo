@@ -6,3 +6,5 @@ node_modules
 dist
 apps/app/android
 apps/app/ios
+apps/app/fastlane/report.xml
+gha-creds-*.json
