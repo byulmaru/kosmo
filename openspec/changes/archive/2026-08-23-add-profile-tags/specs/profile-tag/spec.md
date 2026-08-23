@@ -76,7 +76,7 @@
 
 ### Requirement: Profile Tag visibility and lifecycle
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거해서는 안 된다(MUST NOT). 물리 Profile row 삭제 시 FK cascade는 별도의 DB safety invariant다. Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Read visible Local Profile Tags
 

@@ -36,12 +36,12 @@
 
 ### Recommended Approach
 
-1. Core DB에 Hashtag가 소유하는 고유 canonical `name`과 first-write-wins `display_name`의 Hashtag table, Profile ID·Hashtag ID identity 조합을 가진 관계 table을 additive하게 추가한다. `(profile_id, hashtag_id)`를 유일하게 만들고 position column·순서 제약·제품 max count는 두지 않는다. Lifecycle State가 Deleted로 전이돼도 관계를 보존한다. Profile row 물리 삭제의 FK cascade는 Drizzle schema·snapshot 선언으로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
+1. Core DB에 Hashtag가 소유하는 고유 canonical `name`과 first-write-wins `display_name`의 Hashtag table, Profile ID·Hashtag ID identity 조합을 가진 관계 table을 additive하게 추가한다. `(profile_id, hashtag_id)`를 유일하게 만들고 position column·순서 제약·제품 max count는 두지 않는다. Lifecycle State가 Deleted로 전이돼도 관계를 보존하고 관계 해제 때 canonical Hashtag identity row는 자동 삭제하지 않는다.
 2. Hashtag가 소유하는 순수 normalization boundary 한 곳에서 trim, 선택적 앞 `#` 제거, NFKC, locale 비종속 `toLowerCase()`, code point 개수와 `Letter | Number | _` 검증을 수행한다. NFKC까지 적용한 최초 입력 표기는 `display_name`으로 insert하고 name conflict에서는 기존 값을 유지한다. Profile 관계는 이 boundary의 규칙을 복제하지 않고 입력을 Hashtag identity로 resolve/create하며, API와 DB service가 같은 Hashtag 함수를 호출한다.
 3. GraphQL `usingProfile` 경계가 검증한 selected Profile identity를 전달하고, Core에서 Active Account의 Owner이며 Origin이 Local, Lifecycle State가 `Active`, Suspension State가 `Normal`인지 재확인한다. 대상 Profile ID는 update input으로 받지 않는다. 하나의 DB transaction에서 실제 제공된 Profile scalar field만 dynamic `UPDATE`하고 Hashtag resolve/create, 기존 관계 삭제와 새 관계 insert를 수행한다. scalar 입력이 없으면 Profile `UPDATE`를 생략하며 explicit row lock은 사용하지 않는다. `tags`가 undefined 또는 null이면 관계 작업을 생략하고 빈 목록이면 전부 제거한다. 같은 Hashtag identity가 목록에 두 번 나타나는지 identity 기준으로 검증하며 resolve/create 경합은 deterministic insert 순서, unique constraint와 conflict 처리·재조회로 수렴시킨다.
 4. GraphQL Profile에 global `id`와 Display Hashtag Name `name`을 가진 non-null Hashtag Node 목록 `tags`를 추가하고, profile IDs를 묶어 관계를 읽는 request-scoped loader를 사용한다. loader와 resolver는 배열 위치나 API 반환 순서를 의미 있는 계약으로 정렬·보장하지 않는다. Profile Origin과 연결된 Instance Kind가 Local인 모든 Profile은 configured instance ID와 무관하게 유효한 관계를 반환하고, Remote Profile은 빈 목록을 반환한다. update payload는 갱신된 Profile에서 `tags { id name }`을 다시 읽을 수 있게 한다.
 5. `PROD-491`의 controlled Tag editor를 `PROD-492`의 edit route·저장 action에 연결한다. `PROD-491`이 제공한 client validation을 재사용하고, 서버 결과를 권위로 유지하며 공통 parity fixture로 Hashtag normalization·경계·canonical identity duplicate 사례의 회귀와 server parity를 검증한다.
-6. 공개 화면은 기존 `ProfileHero` fragment에서 `tags`를 읽고 bio 다음·follow count 전에 wrapping TagChip 목록을 렌더한다. 목록은 chip 사이에서 감싸되 편집기와 공개 Profile이 공유하는 개별 TagChip은 시각 높이 `32`와 한 줄을 유지하고 넘치는 표시 text를 tail ellipsis로 생략하며 접근성 이름에는 전체 `#<Display Hashtag Name>`을 제공한다. chip은 Pressable/Link가 아닌 비대화형 표현으로 유지하고 배열 순서에 의존하는 UI 계약을 만들지 않는다. mutation fragment에도 `tags`를 선택해 같은 Relay Profile record를 갱신한다.
+6. 공개 화면은 기존 `ProfileHero` fragment에서 `tags`를 읽고 bio 다음·follow count 전에 wrapping TagChip 목록을 렌더한다. 목록은 chip 사이에서 감싸되 편집기와 공개 Profile이 공유하는 개별 TagChip은 시각 높이 `32`와 한 줄을 유지하고 넘치는 표시 text를 tail ellipsis로 생략하며 접근성 이름에는 전체 Display Hashtag Name을 제공한다. 최초 `PROD-527` 전달은 비대화형 표현이었지만 후속 `PROD-525`의 API·client slice `PROD-528`·`PROD-529`가 exact Hashtag ID navigation을 독립 전달했으므로, archive sync는 `ProfileTagLink`의 link semantics와 `#<Display Hashtag Name> 관련 프로필 보기` 접근성 이름을 보존한다. 배열 순서에 의존하는 UI 계약을 만들지 않으며 mutation fragment에도 `tags`를 선택해 같은 Relay Profile record를 갱신한다.
 7. Storybook 또는 동등한 공용 상태 카탈로그에서 빈 목록, 임의 개수의 긴 값, validation, 저장 중, 실패 상태를 검증하고 Web E2E에서 Owner 저장부터 공개 Profile 표시까지 연결한다. `240px` Web fixture에서는 공용 TagChip의 높이 `32`, 한 줄·실제 ellipsis, 가로·세로 overflow 부재와 전체 접근성 이름을 확인한다. iOS·Android 실제 runtime QA는 Native 출시 gate로 이관한다.
 
 ### Allowed Alternatives
@@ -57,7 +57,7 @@
 - API 소비자가 배열 순서를 의미로 해석하거나, delete/insert 사이에 부분 상태가 보이게 하지 않는다.
 - relation identity 유일성을 application validation에만 맡기고 DB의 `(profile_id, hashtag_id)` 제약을 생략하지 않는다.
 - Remote Profile에 저장된 actor metadata를 tag로 해석하거나 actor fetch를 시작하지 않는다.
-- 검색용 endpoint, reverse lookup pagination, TagChip link 또는 검색 전용 index를 이번 change에 추가하지 않는다.
+- 검색용 endpoint, reverse lookup pagination, TagChip link 또는 검색 전용 index를 이 change의 구현으로 추가하지 않는다. 이후 별도 archive된 `hashtag-related-profile-navigation` capability의 exact Hashtag ID link는 현재 구현·canonical에서 되돌리지 않는다.
 - client validation 성공을 서버 validation 대체로 사용하지 않는다.
 
 ## Risks / Trade-offs

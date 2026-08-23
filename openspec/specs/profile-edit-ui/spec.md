@@ -161,16 +161,6 @@ Client는 selected Profile id, Local origin 또는 Membership role 하나만으�
 - **AND** selected Profile id, Local origin 또는 Membership role 하나만으로 접근을 허용하지 않는다
 - **AND** 공개 Profile 화면에 disabled placeholder를 포함한 편집 button을 렌더하지 않는다
 
-### Requirement: Production route excludes Profile Tag persistence until its owning change
-
-**Authority / Provenance:** `docs/design/profile-edit.md`, `docs/design/profile-tags.md`, `PROD-492`, `PROD-527` — PROD-492 production route는 Profile Tag section을 렌더링하거나 update input에 Tag 값을 포함해서는 안 된다(MUST NOT). PROD-491 presentation과 Storybook의 Tag state는 PROD-527 재사용을 위해 유지해야 한다(MUST).
-
-#### Scenario: Submit a production Profile draft without Tags
-
-- **WHEN** PROD-492 route에서 사용자가 text, policy 또는 image draft를 저장한다
-- **THEN** production form은 Profile Tag section을 표시하지 않는다
-- **AND** GraphQL update variables에 Tag field나 presentation Tag draft를 포함하지 않는다
-
 ### Requirement: Field-scoped Media upload and retry
 
 **Authority / Provenance:** `docs/design/profile-edit.md`, `PROD-492`, `PROD-581` — production route는 avatar/header별 local asset, preview, upload generation과 Ready Media ID를 독립적으로 보존해야 한다(MUST). 선택 즉시 preview를 표시하고 issue-upload URL, byte PUT, complete 순서로 Ready Media를 확보해야 하며(MUST), stale completion이나 실패한 field 때문에 다른 Ready field를 다시 업로드해서는 안 된다(MUST NOT).
