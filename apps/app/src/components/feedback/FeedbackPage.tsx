@@ -1,6 +1,6 @@
 import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
-import { spacing } from '@/theme/tokens';
+import { layoutRecipes, spacing } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
 
 export function FeedbackPage() {
@@ -26,9 +26,9 @@ export function FeedbackPage() {
 const styles = StyleSheet.create({
   webRoot: { flexGrow: 1, width: '100%' },
   webContent: {
+    ...layoutRecipes.formPageInset,
     alignSelf: 'center',
     maxWidth: 600,
-    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.xxl,
     width: '100%',
   },

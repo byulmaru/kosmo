@@ -225,10 +225,26 @@ export const density = {
 } as const;
 
 export const layoutRecipes = {
+  formStack: {
+    flexDirection: 'column',
+    gap: space[16],
+  },
+  formPageInset: {
+    paddingHorizontal: space[16],
+  },
   listStack: {
     flexDirection: 'column',
     gap: space[0],
     padding: space[0],
+  },
+  listRow: {
+    alignItems: 'center',
+    borderRadius: radius[0],
+    flexDirection: 'row',
+    gap: space[12],
+    minHeight: 64,
+    paddingHorizontal: space[16],
+    paddingVertical: space[12],
   },
   actionMenuSurface: {
     flexDirection: 'column',

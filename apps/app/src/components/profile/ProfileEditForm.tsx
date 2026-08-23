@@ -1,6 +1,6 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { TextArea, TextField } from '../ui/TextField';
 import { ProfileEditImageFields } from './ProfileEditImageFields';
 import { validateProfileEditDraft } from './profileEditState';
@@ -152,9 +152,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   fields: {
-    gap: spacing.xl,
+    ...layoutRecipes.formStack,
+    ...layoutRecipes.formPageInset,
     paddingBottom: spacing.xxxl,
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
   },
   field: {

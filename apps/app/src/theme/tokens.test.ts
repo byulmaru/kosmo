@@ -10,9 +10,20 @@ test('density는 기존 spacing scale을 시맨틱 preset으로 제공한다', (
   });
 });
 
-test('layout recipe는 list parent와 Web ActionMenu geometry만 소유한다', () => {
+test('layout recipe는 승인된 form, list, Web ActionMenu geometry를 제공한다', () => {
   assert.deepEqual((tokens as Record<string, unknown>).layoutRecipes, {
+    formStack: { flexDirection: 'column', gap: 16 },
+    formPageInset: { paddingHorizontal: 16 },
     listStack: { flexDirection: 'column', gap: 0, padding: 0 },
+    listRow: {
+      alignItems: 'center',
+      borderRadius: 0,
+      flexDirection: 'row',
+      gap: 12,
+      minHeight: 64,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
     actionMenuSurface: {
       flexDirection: 'column',
       gap: 0,

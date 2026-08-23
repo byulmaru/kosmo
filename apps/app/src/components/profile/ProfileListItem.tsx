@@ -3,7 +3,7 @@ import { graphql, useFragment } from 'react-relay';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
-import { spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, spacing, typography } from '@/theme/tokens';
 import { FollowButton } from './FollowButton';
 import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -71,12 +71,8 @@ export function ProfileListItem({ linked = false, onPress, profile, style }: Pro
 
 const styles = StyleSheet.create({
   root: {
-    alignItems: 'center',
+    ...layoutRecipes.listRow,
     borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 64,
-    paddingHorizontal: spacing.lg,
   },
   profile: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md, minWidth: 0 },
   copy: { flex: 1, minWidth: 0 },
