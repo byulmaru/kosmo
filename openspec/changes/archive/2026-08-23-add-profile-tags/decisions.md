@@ -23,10 +23,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 현재 DB에는 Hashtag 구현이 없고, `PROD-526`이 canonical Hashtag identity와 Profile 관계의 유일성·Profile 생명주기를 저장해야 한다.
-- Decision Outcome: UUID identity, 고유한 canonical `name`, first-write-wins `display_name`을 가진 `hashtag` table과 `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·canonical-name uniqueness와 최초 입력 표기 보존은 Hashtag가 소유한다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
+- Decision Outcome: UUID identity, 고유한 canonical `name`, first-write-wins `display_name`을 가진 `hashtag` table과 `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·canonical-name uniqueness와 최초 입력 표기 보존은 Hashtag가 소유한다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
 - Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. position column과 개수 제약은 승인된 계약에 없으므로 추가하지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 identity 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다. 관계 조회나 API 배열의 반환 순서는 계약에 포함되지 않는다.
-- Confirmation / Follow-up: 현재 runtime이 표현하는 비활성화·정지 상태에서 관계가 보존되는지 service test로 확인한다. `PROD-532` 취소 뒤 runtime에 없는 Deleted lifecycle 전이는 현재 통합 테스트 통과로 주장하지 않고, 상태 기반 cleanup을 추가하지 않았다는 코드 검토와 canonical 미래 invariant로 유지한다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
+- Confirmation / Follow-up: 현재 runtime이 표현하는 비활성화·정지 상태에서 관계가 보존되는지 service test로 확인한다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
 
 ### Hashtag가 Name syntax와 identity normalization을 소유한다
 

@@ -7,7 +7,7 @@
 - Post와 Profile이 공유할 canonical Hashtag identity를 정의하고, `PROD-526`에서 그 저장 구조와 Profile이 Hashtag를 참조하는 Profile Tag 관계를 추가한다. 관계와 API 배열에는 제품상 순서 보장을 두지 않는다.
 - Hashtag가 선택적 앞 `#`와 바깥 공백 제거, Unicode NFKC, locale 비종속 `toLowerCase()`, 1~20 code point 문자·숫자·밑줄 검증과 canonical-name uniqueness를 소유한다. 최초 유효 입력의 NFKC 표기는 first-write-wins Display Hashtag Name으로 보존한다. Profile 관계는 입력을 canonical Hashtag identity로 resolve한 뒤 같은 identity가 중복되면 전체 변경을 거부한다.
 - Active Account가 현재 선택한 Active Local Profile의 Owner일 때만 기존 Profile 편집 action으로 다른 표현 값과 Profile Tag 전체 목록을 원자적으로 교체하게 한다. Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용한다.
-- 공개 조회 가능한 Local Profile에만 Profile Tag를 노출하고 비활성화·정지 때 관계를 보존한 채 숨긴다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않으며, 별도 canonical 보존·파기 정책이 없는 cleanup은 이번 범위에서 제외한다.
+- 공개 조회 가능한 Local Profile에만 Profile Tag를 노출하고 비활성화·정지 때 관계를 보존한 채 숨긴다. 별도 canonical 보존·파기 정책이 없는 cleanup은 이번 범위에서 제외한다.
 - `PROD-491`의 controlled Profile Tag editor와 client validation을 재사용해 저장·Relay·재시도 상태에 연결하고, 공개 Profile의 bio 다음에 TagChip 목록을 Web·Android·iOS에서 표시한다. 이 연결이 소유하는 change에서 `add-local-profile-edit`의 임시 production Tag 미연결 요구사항을 제거한다. 최초 전달의 비대화형 chip은 후속 `PROD-525`의 API·client slice `PROD-528`·`PROD-529`에서 exact Hashtag ID link로 독립 확장됐으며 archive sync는 현재 계약을 보존한다.
 - Hashtag 관련 Profile 목록 탐색과 TagChip navigation, 검색창의 Hashtag·Hashtag Name 검색, 자동완성·추천·trend, Remote Profile Tag와 ActivityPub 표현은 별도 계약으로 남긴다.
 

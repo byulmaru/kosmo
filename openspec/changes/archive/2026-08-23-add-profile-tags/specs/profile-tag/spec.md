@@ -70,13 +70,13 @@
 
 #### Scenario: Reject a non-owner or inaccessible profile
 
-- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 selected Profile이 없거나 Account가 inactive이거나 대상 Profile이 Deactivated·Deleted·Suspended 상태이거나 Remote다
+- **WHEN** Member 또는 관계없는 Account가 Profile Tag 변경을 요청하거나 selected Profile이 없거나 Account가 inactive이거나 대상 Profile이 Deactivated·Suspended 상태이거나 Remote다
 - **THEN** 시스템은 기존 Profile 수정의 permission 또는 not-found 경계로 요청을 거부한다
 - **AND** Profile과 Profile Tag 관계를 변경하지 않는다
 
 ### Requirement: Profile Tag visibility and lifecycle
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 하며(MUST), Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거해서는 안 된다(MUST NOT). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — 시스템은 공개 조회 조건인 Lifecycle State `Active`와 Suspension State `Normal`을 통과한 Local Profile의 Profile Tag만 해당 Profile과 함께 공개해야 한다(MUST). Profile이 비활성화되거나 정지되면 관계는 보존하되 공개 결과에서 숨겨야 한다(MUST). Remote Profile Tag 수집·표시와 ActivityPub 표현을 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Read visible Local Profile Tags
 
@@ -90,12 +90,6 @@
 - **WHEN** Profile이 비활성화되거나 정지되어 공개 조회 조건을 통과하지 않는다
 - **THEN** 시스템은 Profile Tag를 별도로 공개하지 않는다
 - **AND** Profile Tag 관계는 재활성화 또는 정지 해제를 위해 보존한다
-
-#### Scenario: Retain hidden relations on Deleted lifecycle transition
-
-- **WHEN** Profile Lifecycle State가 `Deleted`로 전이하고 Profile row가 유지된다
-- **THEN** 시스템은 해당 Profile의 Profile Tag 관계를 상태 전이만으로 제거하지 않는다
-- **AND** Deleted Profile과 그 Profile Tag는 공개 결과에 노출하지 않는다
 
 #### Scenario: Do not expose Remote Profile Tags
 

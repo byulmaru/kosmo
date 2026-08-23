@@ -67,7 +67,7 @@
 
 #### Scenario: Reject update without a usable selected Profile
 
-- **WHEN** selected Profile이 없거나 Deactivated·Deleted·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
+- **WHEN** selected Profile이 없거나 Deactivated·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
 - **THEN** 시스템은 selected Profile authorization 오류로 요청을 거부한다
 - **AND** Profile Tag 관계를 변경하지 않는다
 
