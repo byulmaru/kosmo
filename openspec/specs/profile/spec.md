@@ -289,12 +289,6 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 - **THEN** 시스템은 selected Profile authorization 오류로 요청을 거부한다
 - **AND** Profile Tag 관계를 변경하지 않는다
 
-#### Scenario: Update missing or inaccessible profile
-
-- **WHEN** 수정 대상 프로필이 없거나 활성 상태가 아니거나 현재 계정과 연결되어 있지 않다
-- **THEN** 시스템은 profile not found 오류를 반환한다
-- **AND** Profile Tag 관계를 변경하지 않는다
-
 #### Scenario: Reject a selected Remote Profile update
 
 - **WHEN** Active Account가 현재 선택한 Remote Profile의 수정을 요청한다
