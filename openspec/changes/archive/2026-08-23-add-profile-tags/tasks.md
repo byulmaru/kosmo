@@ -60,7 +60,7 @@ Active Account가 현재 선택한 Active Local Owner Profile의 승인된 Profi
 **Guardrails**
 
 - `PROD-491`의 controlled editor·client validation과 `PROD-492`의 route·저장 action을 재사용하며 editor, route나 저장 흐름을 중복 구현하지 않는다. 순서 변경 control은 추가하지 않는다.
-- chip은 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시하고, 추가·제거를 지원한다. canonical lowercase 이름은 identity·중복 판정에만 사용하며 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
+- 저장된 chip은 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시하고, 새로 추가한 저장 전 draft chip은 로컬 정규화한 입력 표기 후보를 표시하며 추가·제거를 지원한다. 저장 성공 뒤에는 payload의 first-write-wins Display Hashtag Name으로 동기화한다. canonical lowercase 이름은 identity·중복 판정에만 사용하며 개수·관계 position·저장/표시 순서를 UI 계약으로 만들지 않는다.
 - `PROD-491`이 제공한 Hashtag Name syntax·문자·길이·canonical identity duplicate client validation을 재사용하고 server Hashtag validation을 권위로 유지한다. 제품 max count validation은 추가하지 않는다.
 - Profile 저장 중 중복 제출을 막고 실패 뒤 현재 Tag draft와 다른 draft를 보존하며, 성공 뒤 payload의 tags로 Relay Profile record를 동기화한다. 배열 순서는 계약으로 해석하지 않는다.
 - 제거 action은 compact `32×32` 시각 크기를 유지하되 실제 target은 Web `32×32 CSS px`, iOS `44×44 pt`, Android `48×48 dp`로 제공하고 명확한 accessibility label/state를 유지한다. Web에서는 Tab으로 focus하고 focus-visible 표시를 유지하며 Enter/Space로 pointer·touch와 동일한 Tag 제거 결과를 실행해야 한다. iOS `44×44 pt`와 Android `48×48 dp`로 시각 크기보다 확장된 실제 target은 인접한 다른 TagChip 제거 action target과 겹치지 않아야 하며, 여러 줄 wrapping에서도 이 비중첩 조건을 유지한다. 순서 변경 action이나 drag gesture는 제공하지 않는다.

@@ -8,12 +8,13 @@ TBD - created by archiving change add-profile-tags. Update Purpose after archive
 
 ### Requirement: Profile Tag editor
 
-**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). chip에는 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시해야 하며(MUST). canonical lowercase 이름은 identity·중복 판정에만 사용해야 한다(MUST). Profile Tag 개수와 저장·노출 순서는 제품 계약이 아니다.
+**Authority / Provenance:** `docs/design/profile-tags.md`, `docs/domain/objects/profile.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-491`, `PROD-527` — 기존 Profile 편집 화면은 Local Profile Owner가 현재 Profile Tag를 확인하고 추가·제거할 수 있는 `프로필 태그` 섹션을 제공해야 한다(MUST). 저장된 chip에는 Hashtag가 보존한 Display Hashtag Name 앞에 `#`를 한 번만 표시해야 하며(MUST), 새로 추가한 저장 전 draft chip에는 로컬 정규화한 입력 표기 후보를 표시해야 한다(MUST). 저장 성공 뒤에는 서버 payload의 first-write-wins Display Hashtag Name으로 동기화해야 한다(MUST). canonical lowercase 이름은 identity·중복 판정에만 사용해야 한다(MUST). Profile Tag 개수와 저장·노출 순서는 제품 계약이 아니다.
 
 #### Scenario: Add and remove Profile Tags
 
 - **WHEN** Owner가 유효한 Profile Tag를 추가한다
-- **THEN** 편집기는 Hashtag가 보존한 Display Hashtag Name에 `#`를 한 번 붙인 chip을 현재 draft 목록에 추가한다
+- **THEN** 편집기는 로컬 정규화한 입력 표기 후보에 `#`를 한 번 붙인 chip을 현재 draft 목록에 추가한다
+- **AND** 저장 성공 전에는 기존 Hashtag identity의 first-write-wins Display Hashtag Name을 조회했다고 가정하지 않는다
 - **AND** Owner가 chip을 제거하면 해당 Profile Tag 관계를 draft에서 제거한다
 
 ### Requirement: Profile Tag editor validation and save states
