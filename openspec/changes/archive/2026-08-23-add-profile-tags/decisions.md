@@ -23,10 +23,10 @@
 - Authority / Provenance: `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`
 - Status: Active
 - Context / Problem: 현재 DB에는 Hashtag 구현이 없고, `PROD-526`이 canonical Hashtag identity와 Profile 관계의 유일성·Profile 생명주기를 저장해야 한다.
-- Decision Outcome: UUID identity, 고유한 canonical `name`, first-write-wins `display_name`을 가진 `hashtag` table과 `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·canonical-name uniqueness와 최초 입력 표기 보존은 Hashtag가 소유한다. Lifecycle State가 Deleted로 전이됐다는 사실만으로 관계를 제거하지 않는다. Profile row 물리 삭제의 FK cascade는 별도 DB safety 경로로 유지하며 canonical Hashtag row와 다른 Profile/Post 관계를 삭제하지 않는다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
+- Decision Outcome: UUID identity, 고유한 canonical `name`, first-write-wins `display_name`을 가진 `hashtag` table과 `profile_id`·`hashtag_id`를 가진 `profile_hashtag` relation table을 additive하게 추가한다. 관계 table은 `(profile_id, hashtag_id)` identity 조합만 유일하게 보장하며 position column·순서 제약·제품 max count를 두지 않는다. Hashtag Name의 syntax·normalization·length·canonical-name uniqueness와 최초 입력 표기 보존은 Hashtag가 소유한다. 관계가 없어져도 Hashtag row를 자동 삭제하지 않으며 기존 bio·Post data를 backfill하지 않는다.
 - Alternatives Considered: Profile row의 JSON/string array는 canonical Hashtag identity와 관계 유일성을 잃으므로 제외했다. 이름을 중복 저장하는 별도 `profile_tag` table은 Post와 공유 identity라는 canonical 계약에 맞지 않는다. position column과 개수 제약은 승인된 계약에 없으므로 추가하지 않는다. 기존 bio backfill은 명시적 Owner 선택이 아니므로 제외했다.
 - Consequences: migration은 새 table과 identity 제약만 추가하고 기존 binary가 이를 무시할 수 있다. 미래 Post Hashtag 구현은 같은 `hashtag` identity를 재사용할 수 있지만 Post relation과 검색 index는 이번 change에 포함되지 않는다. 관계 조회나 API 배열의 반환 순서는 계약에 포함되지 않는다.
-- Confirmation / Follow-up: 비활성화·정지·Deleted 상태 전이에서 관계가 보존되는지 service test로 확인한다. 물리 Profile row 삭제의 FK cascade 선언은 Drizzle schema·snapshot으로 정렬하며 application에 없는 물리 삭제를 별도 DB fixture로 모사하지 않는다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
+- Confirmation / Follow-up: 현재 runtime이 표현하는 비활성화·정지 상태에서 관계가 보존되는지 service test로 확인한다. 관계 cleanup이 필요해지면 별도 canonical 보존·파기 정책을 먼저 확정한다.
 
 ### Hashtag가 Name syntax와 identity normalization을 소유한다
 
@@ -92,7 +92,7 @@
 
 - Decision Date: 2026-08-04
 - Decision Class: Derived Contract
-- Authority / Provenance: `docs/design/profile-tags.md`, `PROD-527` 긴 Profile Tag 표시 결정 (2026-08-04), PR #484 review thread
+- Authority / Provenance: `docs/design/profile-tags.md`, `PROD-527` 긴 Profile Tag 표시 결정 (2026-08-04)
 - Status: Active
 - Context / Problem: 좁은 너비에서 허용되는 긴 Display Hashtag Name이 여러 줄로 감싸지면 고정 높이 `32`인 공용 TagChip 밖으로 text가 넘치거나 인접 UI와 겹칠 수 있다. 반대로 목록 wrapping과 개별 chip text wrapping을 같은 동작으로 해석하면 compact geometry를 보장할 수 없다.
 - Decision Outcome: 편집기와 공개 Profile이 공유하는 TagChip은 시각 높이 `32`와 한 줄을 유지하고, 너비를 넘는 표시 text를 tail ellipsis로 생략한다. 목록은 chip 사이에서 여러 줄로 감싸 모든 TagChip 관계를 유지한다. 접근성 이름은 시각적 생략과 무관하게 전체 `#<Display Hashtag Name>`을 제공하며 저장된 Display Hashtag Name은 변경하지 않는다.

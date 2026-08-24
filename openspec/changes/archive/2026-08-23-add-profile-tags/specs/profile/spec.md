@@ -35,15 +35,17 @@
 
 ### Requirement: Profile updates
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책과 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-648` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책, 기본 Post Visibility와 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST). 기본 Post Visibility는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 허용해야 한다(MUST).
 
 #### Scenario: Update profile as owner
 
 - **WHEN** Active Account가 현재 선택한 Lifecycle State `Active`, Suspension State `Normal`의 Local Profile `OWNER`로 수정을 요청한다
-- **THEN** 시스템은 제공된 displayName, bio, followPolicy 값을 갱신한다
+- **THEN** 시스템은 제공된 displayName, bio, followPolicy, defaultPostVisibility 값을 갱신한다
+- **AND** 생략된 displayName, bio, followPolicy, defaultPostVisibility 값은 변경하지 않는다
 - **AND** tags가 제공되면 Hashtag identity로 검증·resolve한 전체 목록과 관계를 같은 transaction에서 교체한다
 - **AND** tags가 생략되거나 `null`이면 기존 Profile Tag 관계를 유지한다
 - **AND** mutation은 `UpdateProfilePayload.profile`로 갱신된 `Profile`과 tags를 반환하며 배열 순서는 계약하지 않는다
+- **AND** 기본값은 nullable `private` projection의 non-null `defaultPostVisibility`로 조회할 수 있다
 
 #### Scenario: Clear Profile Tags as owner
 
@@ -55,11 +57,17 @@
 
 - **WHEN** Profile update의 tags가 Hashtag Name syntax·정규화·문자·길이 또는 canonical identity 중복 검증을 통과하지 않는다
 - **THEN** 시스템은 tags field와 연결된 validation 오류를 반환한다
-- **AND** 같은 요청의 displayName, bio, followPolicy와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
+- **AND** 같은 요청의 displayName, bio, followPolicy, defaultPostVisibility와 기존 Profile Tag 관계를 어느 것도 변경하지 않는다
+
+#### Scenario: Reject unsupported default visibility
+
+- **WHEN** Owner가 기본 Post Visibility로 `DIRECT` 또는 지원하지 않는 값을 제출한다
+- **THEN** 시스템은 field validation 오류로 거부한다
+- **AND** 기존 Profile 기본값, 다른 Profile 속성과 Profile Tag 관계를 변경하지 않는다
 
 #### Scenario: Reject update without a usable selected Profile
 
-- **WHEN** selected Profile이 없거나 Deactivated·Deleted·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
+- **WHEN** selected Profile이 없거나 Deactivated·Suspended 상태이거나 현재 Account가 inactive이거나 selected Profile membership이 유효하지 않다
 - **THEN** 시스템은 selected Profile authorization 오류로 요청을 거부한다
 - **AND** Profile Tag 관계를 변경하지 않는다
 
@@ -68,6 +76,7 @@
 - **WHEN** Active Account가 현재 선택한 Remote Profile의 수정을 요청한다
 - **THEN** 시스템은 profile not found 오류를 반환한다
 - **AND** Profile Tag 관계를 변경하지 않는다
+- **AND** Remote Profile의 기본 Post Visibility 설정을 만들거나 변경하지 않는다
 
 #### Scenario: Reject profile update without owner role
 

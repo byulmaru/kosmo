@@ -29,19 +29,3 @@
 
 - **WHEN** Profile이 비활성화되거나 정지된다
 - **THEN** 시스템은 저장된 Profile Tag 관계를 삭제하거나 변경하지 않는다
-
-### Requirement: Profile Tag 관계 보존과 물리 삭제 safety
-
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-522`, `PROD-526` — Profile Lifecycle State가 `Deleted`로 전이됐다는 사실만으로 `profile_hashtag` 관계를 제거해서는 안 된다(MUST NOT). Profile row가 물리 삭제되면 FK cascade로 해당 Profile 관계만 제거해야 하며(MUST), canonical Hashtag row와 다른 Post 또는 Profile의 관계를 삭제해서는 안 된다(MUST NOT).
-
-#### Scenario: Retain relations on Deleted lifecycle transition
-
-- **WHEN** Profile Lifecycle State가 `Deleted`로 전이하고 Profile row가 유지된다
-- **THEN** 시스템은 해당 Profile의 `profile_hashtag` 관계를 상태 전이만으로 제거하지 않는다
-- **AND** 공개 조회 정책은 Deleted Profile과 그 Tag를 노출하지 않는다
-
-#### Scenario: Cascade only the deleted Profile relations on physical row deletion
-
-- **WHEN** Profile row가 물리 삭제된다
-- **THEN** 데이터베이스는 해당 Profile의 Profile Tag 관계를 함께 삭제한다
-- **AND** Hashtag row와 다른 Post 또는 Profile의 Hashtag 관계는 유지한다
