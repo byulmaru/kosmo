@@ -6,6 +6,9 @@ const portOffset = Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0);
 const webPort = 4173 + portOffset;
 const apiPort = 3001 + portOffset;
 const oidcPort = 4300 + portOffset;
+const temporalPort = 4401 + portOffset;
+const temporalHealthPort = 4402 + portOffset;
+const workerPort = 4403 + portOffset;
 
 if (!Number.isInteger(portOffset) || portOffset < 0 || portOffset > 60_000) {
   throw new Error('KOSMO_TEST_PORT_OFFSET must be an integer from 0 to 60000.');
@@ -29,7 +32,7 @@ process.env.PUBLIC_API_ORIGIN = apiOrigin;
 process.env.PUBLIC_OIDC_ISSUER = oidcOrigin;
 process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID = nativeOidcClientId;
 process.env.PUBLIC_ORIGIN = webOrigin;
-process.env.TEMPORAL_ADDRESS = '127.0.0.1:7233';
+process.env.TEMPORAL_ADDRESS = `${host}:${temporalPort}`;
 process.env.TEMPORAL_NAMESPACE = 'test';
 
 function readEnvFileValue(path: URL, key: string) {
@@ -82,8 +85,36 @@ export default defineConfig({
       url: `${oidcOrigin}/health`,
     },
     {
+      command: 'pnpm --dir ../worker exec node --import tsx src/temporal-test-server.ts',
+      env: {
+        HOST: host,
+        PORT: String(temporalHealthPort),
+        TEMPORAL_NAMESPACE: 'test',
+        TEMPORAL_PORT: String(temporalPort),
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: `http://${host}:${temporalHealthPort}/health`,
+    },
+    {
+      command: 'pnpm --dir ../worker start',
+      env: {
+        DATABASE_URL: databaseUrl,
+        FEDIFY_QUEUE_DATABASE_URL: databaseUrl,
+        HOST: host,
+        NODE_ENV: 'production',
+        PORT: String(workerPort),
+        PUBLIC_ORIGIN: webOrigin,
+        TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
+        TEMPORAL_NAMESPACE: 'test',
+      },
+      reuseExistingServer: false,
+      timeout: 60_000,
+      url: `http://${host}:${workerPort}/ready`,
+    },
+    {
       command:
-        'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx --import ../../packages/core/temporal/test-client.ts src/index.ts',
+        'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx src/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',
@@ -91,7 +122,7 @@ export default defineConfig({
         PUBLIC_OIDC_ISSUER: oidcOrigin,
         PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         PUBLIC_ORIGIN: webOrigin,
-        TEMPORAL_ADDRESS: '127.0.0.1:7233',
+        TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
       },
       reuseExistingServer: false,
@@ -114,7 +145,7 @@ export default defineConfig({
         PUBLIC_OIDC_CLIENT_ID: oidcClientId,
         PUBLIC_OIDC_ISSUER: oidcOrigin,
         PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        TEMPORAL_ADDRESS: '127.0.0.1:7233',
+        TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
         TEMPORAL_NAMESPACE: 'test',
       },
       reuseExistingServer: false,

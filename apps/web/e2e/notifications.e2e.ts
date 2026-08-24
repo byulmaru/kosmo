@@ -53,12 +53,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await followResponse;
     await expect(followerPage.getByRole('button', { name: '팔로잉' })).toBeVisible();
 
-    const notification = await db
-      .select()
-      .from(Notifications)
-      .where(eq(Notifications.recipientProfileId, recipient.profile!.id))
-      .then(([row]) => row);
-    expect(notification).toBeDefined();
+    const [notification] = await waitForNotifications(recipient.profile!.id, 1);
 
     await selectProfile(page, recipient.profile!.handle);
     const unreadNotificationLink = page.getByRole('link', {
@@ -151,6 +146,7 @@ test('Local Follow 알림은 Recipient Profile별로 격리되고 Read와 Unfoll
     await followerPage.getByRole('button', { name: '팔로잉' }).click();
     await unfollowResponse;
     await expect(followerPage.getByRole('button', { name: '팔로우' })).toBeVisible();
+    await waitForNotifications(recipient.profile!.id, 0);
 
     await page.getByRole('link', { name: '알림', exact: true }).click();
     await expect(page).toHaveURL('/notifications');
@@ -229,6 +225,7 @@ test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 
     followeeProfileId: recipient.profile.id,
     followerProfileId: secondFollower.profile.id,
   });
+  const initialRows = await waitForNotifications(recipient.profile.id, 2);
 
   await setE2ESessionCookie(context, recipient.token);
   await page.goto('/notifications');
@@ -243,22 +240,15 @@ test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 
     }),
   ).toBeVisible();
 
-  const initialRows = await db
-    .select()
-    .from(Notifications)
-    .where(eq(Notifications.recipientProfileId, recipient.profile.id));
-  expect(initialRows).toHaveLength(2);
   const initialGlobalIds = initialRows.map(({ id }) => toGlobalId('FollowNotification', id));
 
   await createE2EFollow({
     followeeProfileId: recipient.profile.id,
     followerProfileId: outsideFollower.profile!.id,
   });
-  const outsideRow = await db
-    .select()
-    .from(Notifications)
-    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
-    .then((rows) => rows.find((row) => !initialRows.some(({ id }) => id === row.id)));
+  const outsideRow = (await waitForNotifications(recipient.profile.id, 3)).find(
+    (row) => !initialRows.some(({ id }) => id === row.id),
+  );
   if (!outsideRow) {
     throw new Error('Batch Read fixture did not create the outside Notification.');
   }
@@ -308,13 +298,9 @@ test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 
     followerProfileId: retryFollower.profile!.id,
   });
 
-  const retryRow = await db
-    .select()
-    .from(Notifications)
-    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
-    .then((rows) =>
-      rows.find((row) => row.id !== outsideRow.id && !initialRows.some(({ id }) => id === row.id)),
-    );
+  const retryRow = (await waitForNotifications(recipient.profile.id, 4)).find(
+    (row) => row.id !== outsideRow.id && !initialRows.some(({ id }) => id === row.id),
+  );
   if (!retryRow) {
     throw new Error('Batch Read fixture did not create the retry Notification.');
   }
@@ -357,18 +343,12 @@ test('Web 모두 읽음은 current loaded unread만 한 번 요청하고 실패 
     followeeProfileId: recipient.profile.id,
     followerProfileId: freshFollower.profile!.id,
   });
-  const freshRow = await db
-    .select()
-    .from(Notifications)
-    .where(eq(Notifications.recipientProfileId, recipient.profile.id))
-    .then((rows) =>
-      rows.find(
-        (row) =>
-          row.id !== outsideRow.id &&
-          row.id !== retryRow.id &&
-          !initialRows.some(({ id }) => id === row.id),
-      ),
-    );
+  const freshRow = (await waitForNotifications(recipient.profile.id, 5)).find(
+    (row) =>
+      row.id !== outsideRow.id &&
+      row.id !== retryRow.id &&
+      !initialRows.some(({ id }) => id === row.id),
+  );
   if (!freshRow) {
     throw new Error('Batch Read fixture did not create the fresh retry Notification.');
   }
@@ -423,6 +403,14 @@ async function notificationReadAt(id: string) {
     .from(Notifications)
     .where(eq(Notifications.id, id))
     .then(([row]) => row?.readAt ?? null);
+}
+
+async function waitForNotifications(recipientProfileId: string, count: number) {
+  const selectNotifications = () =>
+    db.select().from(Notifications).where(eq(Notifications.recipientProfileId, recipientProfileId));
+
+  await expect.poll(async () => (await selectNotifications()).length).toBe(count);
+  return await selectNotifications();
 }
 
 type JsonValue = boolean | null | number | string | JsonValue[] | { [key: string]: JsonValue };

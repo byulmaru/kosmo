@@ -35,6 +35,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { followProfile } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
@@ -91,6 +92,7 @@ async function waitForNextPostSeedTimestamp() {
 }
 
 export async function resetE2EDatabase() {
+  await waitForE2ETemporalWorkflows();
   lastPostSeedTimestamp = 0;
   assertTestDatabaseUrl();
 
@@ -113,6 +115,18 @@ export async function resetE2EDatabase() {
   await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
 
   await seedDatabase({ publicOrigin: webOrigin });
+}
+
+async function waitForE2ETemporalWorkflows() {
+  const runningWorkflows: Promise<unknown>[] = [];
+
+  for await (const { runId, workflowId } of temporalClient.workflow.list({
+    query: 'ExecutionStatus="Running"',
+  })) {
+    runningWorkflows.push(temporalClient.workflow.getHandle(workflowId, runId).result());
+  }
+
+  await Promise.all(runningWorkflows);
 }
 
 export async function closeE2EDatabase() {
@@ -317,14 +331,17 @@ export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOpti
   return profile;
 }
 
-export const createE2EFollow = (options: CreateE2EFollowOptions) =>
-  followProfile(options).then(({ result }) => {
+export const createE2EFollow = (options: CreateE2EFollowOptions) => {
+  const input = { ...options, origin: 'LOCAL' as const };
+
+  return followProfile(input).then(({ result }) => {
     if (result.kind !== 'ESTABLISHED') {
       throw new Error('E2E follow fixture requires an established relationship');
     }
 
     return result.profileFollow;
   });
+};
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();
