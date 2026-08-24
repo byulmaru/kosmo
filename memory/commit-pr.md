@@ -14,8 +14,8 @@
 - 하나의 브랜치는 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
 - 새 PR은 단일 PR도 1-layer GitHub Stack으로 추적하고 `gh stack submit`으로 생성한다.
 - 후속 PR은 현재 Stack top에서 `gh stack add <Linear issue ID>`로 추가한다.
-- `gh stack`을 사용할 수 없거나 실패하면 `gh pr create`나 extension이 제안하는 일반 unstacked
-  PR로 우회하지 않고 blocker와 변경되지 않은 상태를 보고한다.
+- `gh stack`을 사용할 수 없거나 실패하면 `gh pr create`나 일반 unstacked PR로 우회하지 않고
+  blocker와 관찰한 local/remote 상태를 보고한다.
 - 커밋은 되돌릴 수 있는 작업 체크포인트로 자주 남기되, 의도하지 않은 사용자 변경은 staging하지 않는다.
 - PR은 리뷰어가 독립적으로 이해하고 검증할 수 있는 하나의 기능적 변화만 담는다.
 - stacked PR의 리뷰 순서는 GitHub PR의 `baseRefName`/`headRefName`과 로컬 Git ancestry가 함께 결정한다.

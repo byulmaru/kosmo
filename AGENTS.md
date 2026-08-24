@@ -19,9 +19,9 @@
 - Push tracked layers with `gh stack push` and create or update pull requests with `gh stack submit`.
   For two or more pull requests, submit must also create or update the remote GitHub Stack object.
   A one-layer Stack remains locally tracked and its standalone pull request has a null REST `stack`
-  field until another layer is submitted. Do not silently fall back to `gh pr create` when
-  `gh stack` is unavailable or fails, and do not accept an ordinary unstacked pull request fallback
-  offered by the extension; report the blocker and the unchanged state.
+  field until another layer is submitted. If `gh stack` is unavailable or fails, do not fall back
+  to `gh pr create` or an ordinary unstacked pull request; report the blocker and observed
+  local/remote state, including partial branch, pull request, Stack, auto-merge, or Draft changes.
 - Do not use `gh stack submit --auto` by default. Use the interactive editor, or a narrower explicit
   command whose title, body, Draft/Ready transitions, and affected existing pull requests have been
   reviewed.
