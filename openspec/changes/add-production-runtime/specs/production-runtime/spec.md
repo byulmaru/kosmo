@@ -92,29 +92,26 @@
 - **WHEN** dev와 production manifest의 VaultAuth, VaultStaticSecret과 destination을 비교한다
 - **THEN** production은 dev path나 destination을 참조하지 않고 어느 manifest에도 secret value가 포함되지 않는다
 
-### Requirement: Migration DB identity와 credential 경계
+### Requirement: Migration owner credential과 runtime credential 경계
 
-**Authority / Provenance:** Linear `PROD-562`. 시스템은 API/Web의 runtime DB identity와 다른 production migration 전용 PostgreSQL login identity 및 credential Secret을 선언형으로 프로비저닝해야 한다(MUST). Migration credential은 database 인증에 필요한 username/password만 포함해야 하며(MUST), API/Web runtime 환경값 전체를 복제하거나 API/Web workload에 주입해서는 안 된다(MUST NOT). 이 change는 migration Secret을 실제 migration Job에 연결해서는 안 된다(MUST NOT).
+**Authority / Provenance:** Linear `PROD-562`, `PROD-712`, `PROD-780`. Production migration은 CloudNativePG가 owner `kosmo`에 생성·관리하는 application-user credential을 직접 사용해야 한다(MUST). 별도 migration login, VaultStaticSecret 또는 role transition을 provision해서는 안 되며(MUST NOT), API/Web/Worker/Fedify active workload는 owner credential을 참조해서는 안 된다(MUST NOT).
 
-#### Scenario: Migration DB identity 프로비저닝
+#### Scenario: Migration owner credential 프로비저닝
 
 - **WHEN** production PostgreSQL과 credential resource를 조정한다
-- **THEN** runtime DB identity와 다른 migration login identity가 별도 basic-auth Secret의 credential로 인증할 수 있다
+- **THEN** migration Job은 같은 Cluster의 generated `<cluster>-app` Secret password로 owner `kosmo`에 직접 연결할 수 있다
+- **AND** 별도 `kosmo_migration` DatabaseRole 또는 migration basic-auth Secret은 나타나지 않는다
 
-#### Scenario: Migration credential 최소 projection
+#### Scenario: Active workload credential 격리
 
-- **WHEN** migration DB credential Vault projection을 렌더한다
-- **THEN** `kubernetes/kosmo/prod/migration`에서 database username/password만 별도 basic-auth Secret으로 동기화하고 runtime 환경값을 복제하지 않는다
+- **WHEN** production API, Web, Worker와 Fedify consumer를 렌더한다
+- **THEN** active workload는 `kosmo_runtime` credential을 사용하고 generated owner Secret을 secretKeyRef나 envFrom으로 참조하지 않는다
 
-#### Scenario: API와 Web의 credential 격리
+#### Scenario: Migration consumer 소유
 
-- **WHEN** production API와 Web Rollout을 렌더한다
-- **THEN** 두 workload는 기존 runtime DB credential을 사용하고 migration DB Secret을 secretKeyRef나 envFrom으로 참조하지 않는다
-
-#### Scenario: Migration consumer 비소유
-
-- **WHEN** production manifest를 렌더한다
-- **THEN** migration DB identity와 Secret은 존재하지만 이를 소비하는 production migration Job은 생성되지 않는다
+- **WHEN** 유효한 immutable release digest로 production manifest를 렌더한다
+- **THEN** owner credential consumer는 migration Job으로 제한된다
+- **AND** owner 연결 실패 시 runtime 또는 queue credential로 fallback하지 않는다
 
 ### Requirement: Production runtime dependency와 readiness 검증
 
@@ -142,7 +139,7 @@
 #### Scenario: Production runtime 변경 범위 검토
 
 - **WHEN** 이 capability의 manifest, workflow와 검증 task를 검토한다
-- **THEN** production Application, runtime 기반과 migration DB identity/Secret만 포함되고 release workflow, migration Secret consumer·Job/gate, application read-routing과 public 사용자 journey smoke는 포함되지 않는다
+- **THEN** production Application, runtime 기반과 CNPG-managed owner credential 경계만 포함되고 release workflow, 별도 migration identity/Secret, application read-routing과 public 사용자 journey smoke는 포함되지 않는다
 
 #### Scenario: Production migration 리소스 렌더
 

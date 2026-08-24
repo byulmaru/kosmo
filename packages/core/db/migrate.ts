@@ -341,11 +341,9 @@ async function applyMigrationFile(sql: MigrationClient, migration: MigrationMeta
 
 export async function runDatabaseMigrations({
   databaseUrl = process.env.DATABASE_URL,
-  migrationRole = process.env.DATABASE_MIGRATION_ROLE,
   migrationsFolder = drizzleConfig.out,
 }: {
   databaseUrl?: string;
-  migrationRole?: string;
   migrationsFolder?: string;
 } = {}): Promise<void> {
   if (!databaseUrl) {
@@ -385,10 +383,6 @@ export async function runDatabaseMigrations({
     }
 
     lockAcquired = true;
-
-    if (migrationRole) {
-      await session`SET ROLE ${session(migrationRole)}`;
-    }
 
     const migrations = readMigrationFiles({ migrationsFolder });
     await ensureMigrationHistory(session, migrations);

@@ -46,26 +46,6 @@ spec:
           args:
             - migrate
           env:
-            {{- if $isProductionMigration }}
-            - name: PGHOST
-              value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
-            - name: PGPORT
-              value: "5432"
-            - name: PGDATABASE
-              value: "kosmo"
-            - name: DATABASE_MIGRATION_ROLE
-              value: "kosmo"
-            - name: PGUSER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
-                  key: username
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ printf "%s-postgres-migration" .Release.Name | trunc 63 | trimSuffix "-" | quote }}
-                  key: password
-            {{- else }}
             - name: PGHOST
               value: {{ printf "%s-rw" (include "kosmo.postgresName" .) | quote }}
             - name: PGPORT
@@ -79,7 +59,6 @@ spec:
                 secretKeyRef:
                   name: {{ printf "%s-app" (include "kosmo.postgresName" .) | quote }}
                   key: password
-            {{- end }}
           resources:
             requests:
               cpu: 50m

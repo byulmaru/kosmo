@@ -7,9 +7,9 @@
 ## Context
 
 PROD-369은 `kosmo_api`와 `kosmo_worker`를 비소유 LOGIN 역할로 provision했고, PROD-724는 이
-legacy role의 application object ACL을 additive하게 추가했다. 현재 migration runner는
-`kosmo_migration`으로 연결한 뒤 `SET ROLE kosmo`를 수행하므로 schema object와 default privilege의
-owner 기준은 `kosmo`다. PROD-780 이후 실제 application workload는 새 `kosmo_runtime` principal을
+legacy role의 application object ACL을 additive하게 추가했다. 이 historical migration은 owner
+`kosmo` 경계에서 실행되며, PROD-712 이후 migration runner는 CNPG-generated owner credential로
+직접 연결하므로 schema object와 default privilege의 owner 기준은 계속 `kosmo`다. PROD-780 이후 실제 application workload는 새 `kosmo_runtime` principal을
 사용하며, 이 change는 그 principal의 migration·workload 전환을 소유하지 않는다.
 
 PROD-724 당시에는 RLS를 GraphQL Query/Mutation의 `kosmo_api`에만 적용하고 비GraphQL trusted
@@ -55,7 +55,7 @@ PROD-780으로 superseded되었다. Historical contract에서 두 legacy role의
 2. `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO kosmo_api, kosmo_worker`
 3. `ALTER DEFAULT PRIVILEGES FOR ROLE kosmo IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO kosmo_api, kosmo_worker`
 
-이 historical migration은 기존 runner가 `SET ROLE kosmo`를 완료한 뒤 실행된다. schema-wide
+이 historical migration은 owner `kosmo` 경계에서 실행된다. schema-wide
 current-table grant는 승인된 “legacy role별 최소 table matrix 없음” 계약을 직접 표현하고,
 `public` 밖의 `drizzle` history를 자연스럽게 제외한다. 현재 `kosmo_runtime` ACL은 PROD-780이
 별도로 소유한다.

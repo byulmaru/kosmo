@@ -1066,9 +1066,10 @@ test('PostgreSQL 환경 변수로 마이그레이션 database에 연결한다', 
   }
 });
 
-test('별도 로그인으로 연결해도 지정한 database owner role로 객체를 생성한다', async () => {
+test('database owner 로그인으로 연결해 session_user와 current_user가 모두 owner다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
-  const ownerRole = `migration_owner_${process.pid}`;
+  const ownerRole = decodeURIComponent(new URL(databaseUrl).username);
+  assert.equal(ownerRole, 'kosmo');
   const validMigrations = await migrationFolder([
     {
       name: '20260712000000_owner_first',
@@ -1076,49 +1077,53 @@ test('별도 로그인으로 연결해도 지정한 database owner role로 객�
         CREATE TABLE migration_owner_sessions (
           migration_name text PRIMARY KEY,
           backend_pid integer NOT NULL,
+          session_user_name name NOT NULL,
           current_user_name name NOT NULL
         );
-        INSERT INTO migration_owner_sessions (migration_name, backend_pid, current_user_name)
-        VALUES ('first', pg_backend_pid(), current_user);
+        INSERT INTO migration_owner_sessions (
+          migration_name,
+          backend_pid,
+          session_user_name,
+          current_user_name
+        )
+        VALUES ('first', pg_backend_pid(), session_user, current_user);
       `,
     },
     {
       name: '20260712000001_owner_second',
       sql: `
         CREATE TABLE migration_owner_probe (id integer PRIMARY KEY);
-        INSERT INTO migration_owner_sessions (migration_name, backend_pid, current_user_name)
-        VALUES ('second', pg_backend_pid(), current_user);
+        INSERT INTO migration_owner_sessions (
+          migration_name,
+          backend_pid,
+          session_user_name,
+          current_user_name
+        )
+        VALUES ('second', pg_backend_pid(), session_user, current_user);
       `,
     },
   ]);
-  const [{ currentUser }] = await control<
-    { currentUser: string }[]
-  >`SELECT current_user AS "currentUser"`;
-  const [{ databaseName }] = await control<
-    { databaseName: string }[]
-  >`SELECT current_database() AS "databaseName"`;
-  let roleCreated = false;
 
   try {
-    await control`CREATE ROLE ${control(ownerRole)}`;
-    roleCreated = true;
-    await control`GRANT ${control(ownerRole)} TO ${control(currentUser)}`;
-    await control`GRANT CREATE ON DATABASE ${control(databaseName)} TO ${control(ownerRole)}`;
     await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
     await control.unsafe('CREATE SCHEMA public;');
-    await control`GRANT ALL ON SCHEMA public TO ${control(ownerRole)}`;
 
     await runDatabaseMigrations({
       databaseUrl,
-      migrationRole: ownerRole,
       migrationsFolder: validMigrations,
     });
 
     const sessions = await control<
-      { migrationName: string; backendPid: number; currentUser: string }[]
+      {
+        migrationName: string;
+        backendPid: number;
+        sessionUser: string;
+        currentUser: string;
+      }[]
     >`
       SELECT migration_name AS "migrationName",
         backend_pid AS "backendPid",
+        session_user_name AS "sessionUser",
         current_user_name AS "currentUser"
       FROM migration_owner_sessions
       ORDER BY migration_name
@@ -1128,6 +1133,10 @@ test('별도 로그인으로 연결해도 지정한 database owner role로 객�
       ['first', 'second'],
     );
     assert.equal(new Set(sessions.map(({ backendPid }) => backendPid)).size, 1);
+    assert.deepEqual(
+      sessions.map(({ sessionUser }) => sessionUser),
+      [ownerRole, ownerRole],
+    );
     assert.deepEqual(
       sessions.map(({ currentUser }) => currentUser),
       [ownerRole, ownerRole],
@@ -1150,12 +1159,6 @@ test('별도 로그인으로 연결해도 지정한 database owner role로 객�
   } finally {
     await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
     await control.unsafe('CREATE SCHEMA public;');
-
-    if (roleCreated) {
-      await control`REVOKE CREATE ON DATABASE ${control(databaseName)} FROM ${control(ownerRole)}`;
-      await control`REVOKE ${control(ownerRole)} FROM ${control(currentUser)}`;
-      await control`DROP ROLE ${control(ownerRole)}`;
-    }
 
     await control.end({ timeout: 5 });
     await rm(validMigrations, { force: true, recursive: true });
