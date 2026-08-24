@@ -137,7 +137,7 @@ jobs:
         run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
 
       - name: Run Web E2E shard
-        run: pnpm test:e2e -- --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: node scripts/test-db.mjs run -- pnpm test:e2e:database --shard=${{ matrix.shard }}/${{ matrix.total }}
 
       - name: Upload Playwright artifacts
         if: failure()
