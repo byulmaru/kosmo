@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-profile-tags. Update Purpose after archive.
+Profile Tag 편집기의 draft validation·저장 상태와 편집·공개 화면이 공유하는 TagChip의 표시 및 Web·Android·iOS 접근성 계약을 정의한다.
 
 ## Requirements
 

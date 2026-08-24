@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-profile-tags. Update Purpose after archive.
+Profile과 Post가 공유하는 canonical Hashtag identity를 기반으로 Local Profile Owner의 Profile Tag 정규화, 원자적 목록 교체, 공개 가시성과 lifecycle 관계 계약을 정의한다.
 
 ## Requirements
 
