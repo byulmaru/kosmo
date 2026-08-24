@@ -39,17 +39,17 @@
 
 ### Requirement: Source Post 이동과 목록·상세 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-415`, `PROD-422`, `PROD-430`, `PROD-453` 유니버설 앱은 Home, Profile, Bookmark와 Post 상세에서 Repost·Quote Source를 표시하고 구조별 canonical Post route로 이동할 수 있어야 한다(MUST). direct Source가 Quote가 아닌 순수 Repost는 자체 detail을 제공하지 않고(MUST NOT) body·생성 시각과 직접 Repost ID 접근을 Source canonical detail로 연결해야 하며(MUST), Quote는 자체 canonical detail을 유지해야 한다(MUST). direct Source가 Quote인 순수 Repost의 canonical 이동은 PROD-828에서 별도로 결정하며 이 요구사항의 순수 Repost 이동 시나리오에 포함하지 않는다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-415`, `PROD-422`, `PROD-430`, `PROD-453` 유니버설 앱은 Home, Profile, Bookmark와 Post 상세에서 Repost·Quote Source를 표시하고 구조별 canonical Post route로 이동할 수 있어야 한다(MUST). 모든 순수 Repost는 direct Source의 구조와 관계없이 자체 detail을 제공하지 않고(MUST NOT) body·생성 시각과 직접 Repost ID 접근을 Source canonical detail로 연결해야 하며(MUST), Quote는 자체 canonical detail을 유지해야 한다(MUST).
 
 #### Scenario: 순수 Repost의 Source Post 이동
 
-- **WHEN** 사용자가 direct Source가 Quote가 아닌 순수 Repost의 body 또는 생성 시각 affordance를 활성화한다
+- **WHEN** 사용자가 순수 Repost의 body 또는 생성 시각 affordance를 활성화한다
 - **THEN** 앱은 Source Author의 `relativeHandle`과 Source Post global ID를 사용하는 canonical Post route로 이동한다
 - **AND** Repost Author 또는 Repost 자체의 상세 route로 잘못 이동하지 않는다
 
 #### Scenario: 순수 Repost ID 직접 접근
 
-- **WHEN** 사용자가 direct Source가 Quote가 아닌 순수 Repost Post ID의 상세 URL을 직접 연다
+- **WHEN** 사용자가 순수 Repost Post ID의 상세 URL을 직접 연다
 - **THEN** 앱은 Source Author의 `relativeHandle`과 Source Post global ID를 사용하는 canonical Post route로 replace redirect한다
 - **AND** Repost 자체 detail이나 redirect loop를 표시하지 않는다
 
@@ -99,7 +99,7 @@
 
 #### Scenario: Content 없는 Repost 상세 canonical 이동
 
-- **WHEN** 사용자가 Content와 Reply Parent 없이 Quote가 아닌 Repost Source만 가진 Post의 상세 경로에 진입한다
+- **WHEN** 사용자가 Content와 Reply Parent 없이 Repost Source만 가진 Post의 상세 경로에 진입한다
 - **THEN** 앱은 조회 가능한 direct Source의 canonical Post route로 현재 경로를 대체한다
 - **AND** Content 없는 Repost 자체의 상세 surface, navigation history entry와 공유 참조를 남기지 않는다
 - **AND** Source가 unavailable해 Content 없는 Repost 자체가 조회되지 않으면 숨겨진 Source 경로를 추론하지 않고 기존 not-found 경계를 유지한다

@@ -128,4 +128,4 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 ## Open Questions
 
 - 현재 change 범위 안에는 없다.
-- 순수 Repost의 direct Source가 Quote일 때 표시 깊이와 canonical 이동 정책은 PROD-828 Domain Gate가 소유한다.
+- 순수 Repost의 direct Source가 Quote일 때 표시 깊이는 PROD-828 Domain Gate가 소유한다. canonical 이동과 Action Bar target은 기존 확정 계약대로 direct Source를 사용한다.
