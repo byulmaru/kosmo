@@ -39,8 +39,10 @@ const baseTabs: Tab[] = [
 ];
 
 export function BottomTabBar({
+  onHomeReselect,
   profile: profileKey,
 }: {
+  onHomeReselect?: () => void;
   profile?: BottomTabBar_profile$key | null;
 }) {
   const theme = useTheme();
@@ -129,7 +131,12 @@ export function BottomTabBar({
         );
 
         return tab.href ? (
-          <NavigationLink href={tab.href} key={tab.label} primary>
+          <NavigationLink
+            href={tab.href}
+            key={tab.label}
+            onCurrentNavigate={tab.href === '/home' ? onHomeReselect : undefined}
+            primary
+          >
             {content}
           </NavigationLink>
         ) : (

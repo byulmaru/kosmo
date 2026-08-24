@@ -177,6 +177,52 @@ test('home route active profile query refetches after switching profiles', async
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
 });
 
+test('Home no-data 오류는 actor revision 변경으로 새 actor query와 timeline을 복구한다', async ({
+  page,
+}) => {
+  const betaPostBody = 'actor revision recovery timeline post';
+  await page.goto('/login');
+  await page.waitForURL('**/home');
+
+  await createProfileFromSwitcher(page, 'revisionalpha');
+  await createProfileFromSwitcher(page, 'revisionbeta');
+  await createPost(page, betaPostBody);
+  await page.goto('/home');
+  await expect(page.getByText(betaPostBody)).toBeVisible();
+
+  await selectProfileFromSwitcher(page, 'revisionalpha');
+  await page.goto('/home');
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+
+  let homeQueryCount = 0;
+  await page.route('**/graphql', async (route) => {
+    const operation = readGraphQLOperation(route.request().postData());
+    if (operation?.operationName !== 'HomePageQuery') {
+      await route.fallback();
+      return;
+    }
+
+    homeQueryCount += 1;
+    if (homeQueryCount === 1) {
+      await route.abort('failed');
+      return;
+    }
+    await route.fallback();
+  });
+
+  try {
+    await page.reload();
+    await expect(page.getByRole('alert')).toContainText('홈을 불러오지 못했어요');
+
+    await selectProfileFromSwitcher(page, 'revisionbeta');
+
+    await expect.poll(() => homeQueryCount).toBe(2);
+    await expect(page.getByText(betaPostBody)).toBeVisible();
+  } finally {
+    await page.unroute('**/graphql');
+  }
+});
+
 test('home onboarding stays hidden while the home active profile query errors', async ({
   page,
 }) => {

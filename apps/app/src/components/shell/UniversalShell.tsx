@@ -1,6 +1,6 @@
 import { Slot, usePathname, useRouter, useSegments } from 'expo-router';
 import { ChevronLeftIcon, Menu } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   PanResponder,
@@ -44,6 +44,7 @@ import { SidebarNavigation } from './SidebarNavigation';
 import { UnreadNotificationBadgeController } from './UnreadNotificationBadgeController';
 import type { View as NativeView, ViewStyle } from 'react-native';
 import type { UniversalShellQuery } from './__generated__/UniversalShellQuery.graphql';
+import type { HomeReselectionHandler } from './ShellChromeContext';
 
 const ShellQuery = graphql`
   query UniversalShellQuery {
@@ -123,6 +124,22 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const menuButtonRef = useRef<NativeView>(null);
+  const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
+  const pendingDrawerHomeReselectionRef = useRef(false);
+  const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
+    homeReselectionHandlerRef.current = handler;
+    return () => {
+      if (homeReselectionHandlerRef.current === handler) {
+        homeReselectionHandlerRef.current = null;
+      }
+    };
+  }, []);
+  const reselectHome = useCallback(() => {
+    homeReselectionHandlerRef.current?.();
+  }, []);
+  const queueDrawerHomeReselection = useCallback(() => {
+    pendingDrawerHomeReselectionRef.current = true;
+  }, []);
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
@@ -173,6 +190,15 @@ function UniversalShellContent({ revision }: { revision: number }) {
       window.scrollTo(scrollX, scrollY);
     };
   }, [drawerOpen]);
+
+  useEffect(() => {
+    if (drawerOpen || !pendingDrawerHomeReselectionRef.current) {
+      return;
+    }
+
+    pendingDrawerHomeReselectionRef.current = false;
+    reselectHome();
+  }, [drawerOpen, reselectHome]);
 
   const swipeToOpenDrawer = useMemo(
     () =>
@@ -243,6 +269,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
       navigationDrawerTriggerRef={menuButtonRef}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
+      registerHomeReselection={registerHomeReselection}
+      reselectHome={reselectHome}
     >
       <PrimaryNavigationScrollReset pathname={pathname} />
       <View
@@ -270,6 +298,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             <SidebarNavigation
               compact={compact}
               onFeedbackOpen={openFeedbackOverlay}
+              onHomeReselect={web ? reselectHome : undefined}
               onSwitcherOpenChange={setSwitcherOpen}
               query={data}
               switcherOpen={switcherOpen}
@@ -298,7 +327,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
               ]}
             >
               {home ? (
-                <PageHeader accessibilityLabel="홈" leading={menuButton} variant="brand" />
+                <PageHeader
+                  accessibilityLabel="홈"
+                  leading={menuButton}
+                  variant="brand"
+                  {...(web ? { brandHref: '/home', onBrandCurrentNavigate: reselectHome } : {})}
+                />
               ) : mobileShellHeader ? (
                 <PageHeader
                   leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
@@ -325,7 +359,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           </View>
           {mobile ? (
             <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-              <BottomTabBar profile={profile} />
+              <BottomTabBar onHomeReselect={web ? reselectHome : undefined} profile={profile} />
             </View>
           ) : null}
         </View>
@@ -363,6 +397,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             >
               <SidebarNavigation
                 onFeedbackOpen={openFeedbackOverlay}
+                onHomeReselect={web ? queueDrawerHomeReselection : undefined}
                 onNavigate={closeDrawer}
                 onSwitcherOpenChange={setSwitcherOpen}
                 query={data}
