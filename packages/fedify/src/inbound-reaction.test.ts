@@ -1,7 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import { Create, EmojiReact, Like, Note, Undo } from '@fedify/vocab';
 import {
   ActivityPubActors,
@@ -22,10 +22,13 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { createPost } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { and, eq } from 'drizzle-orm';
 import { handleInboundUndo } from './inbound-follow';
+import { setInboundObservabilityReporter } from './inbound-observability';
 import { handleInboundReaction } from './inbound-reaction';
 import type { InboxContext } from '@fedify/fedify';
+import type { InboundCaptureContext } from './inbound-observability';
 
 after(async () => {
   await pg.end();
@@ -118,6 +121,84 @@ test('Like와 EmojiReact의 supported·missing·unsupported content를 공통 �
 
     await handleInboundReaction(createContext(null), activity);
     assert.equal((await readReaction(actor.profile.id, target.post.id))?.type, expected);
+  }
+});
+
+test('inbound Reaction Create와 Undo의 Workflow start 실패를 기존 reporter로 1회 capture하고 결과를 유지한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const likeTarget = await createLocalTarget();
+  const emojiTarget = await createLocalTarget();
+  const like = new Like({
+    actor: new URL(actor.actorUri),
+    id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+    object: likeTarget.objectUri,
+  });
+  const emojiReact = new EmojiReact({
+    actor: new URL(actor.actorUri),
+    content: '🎉',
+    id: new URL(`/activities/${crypto.randomUUID()}`, actor.actorUri),
+    object: emojiTarget.objectUri,
+  });
+  const failure = new Error('Temporal unavailable');
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw failure;
+  });
+  const captures: Array<{ error: unknown; context: InboundCaptureContext }> = [];
+  const restoreReporter = setInboundObservabilityReporter({
+    captureException: (error, context) => captures.push({ context, error }),
+    log: () => undefined,
+  });
+
+  try {
+    await handleInboundReaction(createContext(null), like);
+    await handleInboundReaction(createContext(null), emojiReact);
+    assert.ok(await readReaction(actor.profile.id, likeTarget.post.id));
+    assert.ok(await readReaction(actor.profile.id, emojiTarget.post.id));
+
+    await handleInboundUndo(
+      createContext(null),
+      new Undo({
+        actor: new URL(actor.actorUri),
+        object: like,
+      }),
+    );
+
+    assert.equal(await readReaction(actor.profile.id, likeTarget.post.id), undefined);
+    assert.ok(await readReaction(actor.profile.id, emojiTarget.post.id));
+    assert.equal(start.mock.callCount(), 3);
+    assert.deepEqual(
+      captures.map(({ error }) => error),
+      [failure, failure, failure],
+    );
+    assert.deepEqual(
+      captures.map(({ context }) => context.tags),
+      [
+        {
+          activity_type: 'Like',
+          handler: 'reaction',
+          outcome: 'internal_failure',
+          phase: 'effect',
+          reason_code: 'reaction_notification_effect_failed',
+        },
+        {
+          activity_type: 'EmojiReact',
+          handler: 'reaction',
+          outcome: 'internal_failure',
+          phase: 'effect',
+          reason_code: 'reaction_notification_effect_failed',
+        },
+        {
+          activity_type: 'Undo',
+          handler: 'undo',
+          outcome: 'internal_failure',
+          phase: 'effect',
+          reason_code: 'reaction_undo_notification_effect_failed',
+        },
+      ],
+    );
+  } finally {
+    restoreReporter();
+    start.mock.restore();
   }
 });
 

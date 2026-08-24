@@ -79,4 +79,13 @@ Accepted Profile Update Workflow가 stable update identity로 delivery 시점의
 - [x] 3.1 OpenSpec strict validation과 관련 Core/API/Fedify/Worker 정적·통합 검증을 완료한다.
 - [x] 3.2 구현을 commit·push하고 Ready PR로 handoff하되 production 증거로 과장하지 않는다.
 - [ ] 3.3 Exact revision을 dev에서 빠른 연속 Profile update, Activity retry, Worker restart로 검증한다.
-- [ ] 3.4 전체 task와 delta sync 가능성을 재확인한 뒤 이 change를 archive한다.
+  - 2026-08-24 dev `f72e6818fdbdfb2fa7f495f5261b8cb7582befca`에서 `@test` bio를 빠르게
+    두 번 갱신하고 원래 빈 값으로 복구했다. 각 update의 `profileUpdateEffectsWorkflow`는
+    `8d45ef92-ea9e-427f-bda2-d3df2dd7bfeb`, `3ccbe53d-5b42-4501-b8b3-ceb6c896ee1a`,
+    `6c43330b-88a2-4afd-94b1-1eb895cf4a4b` identity로 완료됐고
+    `sendLocalProfileUpdateActivity`는 모두 attempt 1로 완료됐다.
+  - 후속 dev revision에서 Worker 재시작 뒤 시작한 marker update와 원복도 완료됐지만, accepted Workflow의
+    in-flight 재개나 Activity retry가 아니므로 retry·restart 검증 증거로 계산하지 않는다. 2026-08-24 사용자
+    결정에 따라 shared dev Worker 장애 주입·restart drill은 archive 필수조건이 아닌 별도 운영 신뢰도
+    검증으로 분리하며, 이번 archive를 위해 추가 failure injection과 Worker restart를 수행하지 않는다.
+- [x] 3.4 전체 task와 delta sync 가능성을 재확인한 뒤 이 change를 archive한다.

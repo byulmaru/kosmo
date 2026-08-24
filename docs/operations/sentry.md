@@ -42,12 +42,12 @@ Production Web BFF의 Fedify inbox listener가 처리한 inbound ActivityPub 실
 projection 및 post-commit delivery 경계를 inventory로 유지한다. Listener 등록은
 `packages/fedify/src/federation.ts`에서 같은 경계를 통과한다.
 
-| 분류                 | 구체적인 예시·reason code                                                                                                                                                                                                   | 구조화 로그 | Sentry                              |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
-| 보안·정책 거절       | malformed/foreign/mismatched activity, `invalid_*`, `*_projection_rejected`                                                                                                                                                 | 1회 기록    | 기록하지 않음                       |
-| 멱등·현재 상태 no-op | 없는 대상, 이미 처리된 관계, `duplicate_pending_follow_noop`, `duplicate_established_follow_noop`, `duplicate_accept_noop`, `accept_follow_state_changed_noop`, `reject_follow_state_changed_noop`, `announce_undo_ignored` | 1회 기록    | 기록하지 않음                       |
-| 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `delete_object_lookup_failed`, `*_object_lookup_failed`, `external_listener_error`                                                              | 1회 기록    | 기록하지 않음                       |
-| Kosmo 내부 오류      | DB projection, post-commit effect, `follow_notification_effect_failed`, `reaction_notification_effect_failed`, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error`                                          | 1회 기록    | 기존 runtime reporter로 1회 capture |
+| 분류                 | 구체적인 예시·reason code                                                                                                                                                                                                                                               | 구조화 로그 | Sentry                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
+| 보안·정책 거절       | malformed/foreign/mismatched activity, `invalid_*`, `*_projection_rejected`                                                                                                                                                                                             | 1회 기록    | 기록하지 않음                       |
+| 멱등·현재 상태 no-op | 없는 대상, 이미 처리된 관계, `duplicate_pending_follow_noop`, `duplicate_established_follow_noop`, `duplicate_accept_noop`, `accept_follow_state_changed_noop`, `reject_follow_state_changed_noop`, `announce_undo_ignored`                                             | 1회 기록    | 기록하지 않음                       |
+| 명시된 외부 실패     | remote 5xx/timeout/DNS, document·actor lookup, protocol 해석·delivery 실패, `delete_object_lookup_failed`, `*_object_lookup_failed`, `external_listener_error`                                                                                                          | 1회 기록    | 기록하지 않음                       |
+| Kosmo 내부 오류      | DB projection, post-commit effect, inbound Reaction Effects Workflow start(`reaction_notification_effect_failed`, `reaction_undo_notification_effect_failed`), `follow_notification_effect_failed`, typed listener의 예상하지 못한 `Error`, `unexpected_listener_error` | 1회 기록    | 기존 runtime reporter로 1회 capture |
 
 오류 분류의 경계는 다음과 같다.
 
@@ -61,6 +61,13 @@ projection 및 post-commit delivery 경계를 inventory로 유지한다. Listene
   발생한 `SyntaxError`는 이 예외에 해당하지 않고 내부 오류로 capture한다.
 - raw Activity JSON, signature/key material, credential과 불필요한 개인정보를 로그·context에 넣지 않는다.
   URI는 필요한 경우 origin 수준 context로만 남기며 tag/fingerprint에는 넣지 않는다.
+
+Inbound Reaction transaction 뒤 Effects Workflow start 실패는 Create의
+`reaction_notification_effect_failed` 또는 Undo의 `reaction_undo_notification_effect_failed` reason으로
+Web BFF inbound reporter가 기존과 같이 1회 capture하고, committed Reaction과 inbox 처리 성공을 바꾸지
+않는다. 반면 accepted Reaction Effects Workflow의 terminal Activity 실패와 retry/restart 이력은 Temporal
+history와 Worker runtime 경계가 소유한다. 이 Worker 경계는 Web BFF inbound reporter의 중복 Sentry capture
+대상이 아니다.
 
 Sentry의 기본 개인정보 전송은 활성화하지 않지만, SDK event에는 오류 진단을 위해 request metadata, exception message, mechanism data, source context, frame local variable와 애플리케이션이 추가한 context가 포함될 수 있다. 애플리케이션 오류나 명시적 Sentry context에 인증 정보 또는 불필요한 사용자 콘텐츠를 넣지 않아야 한다.
 

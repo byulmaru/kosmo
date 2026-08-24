@@ -139,6 +139,42 @@ test('Local Note URI를 새 core Reaction과 mapping으로 원자적으로 mater
   }
 });
 
+test('inbound Reaction Create start 실패는 commit과 caller 결과를 유지하면서 callback으로 관측한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const author = await createProfile(InstanceKind.LOCAL);
+  const post = await createLocalPost(author.profile.id);
+  const activityUri = `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`;
+  const objectUri = new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href;
+  const failure = new Error('Temporal unavailable');
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw failure;
+  });
+  const reports: unknown[] = [];
+
+  try {
+    const result = await materializeInboundReaction({
+      activityUri,
+      actorUri: actor.actorUri,
+      objectUri,
+      onWorkflowStartError: (error) => reports.push(error),
+      type: '🎉',
+    });
+
+    assert.equal(result.kind, 'CREATED');
+    if (result.kind !== 'CREATED') {
+      assert.fail('Expected a created Reaction');
+    }
+    assert.equal((await readMappings(activityUri))[0]?.reactionId, result.reaction.id);
+    assert.equal(
+      (await db.select().from(Reactions).where(eq(Reactions.id, result.reaction.id))).length,
+      1,
+    );
+    assert.deepEqual(reports, [failure]);
+  } finally {
+    start.mock.restore();
+  }
+});
+
 test('저장된 Remote Post URI와 서로 다른 Type을 같은 actor에 materialize한다', async () => {
   const actor = await createProfile(InstanceKind.ACTIVITYPUB);
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
@@ -344,6 +380,52 @@ test('mapping owner의 Undo만 exact Reaction과 mapping을 제거하고 반복�
       reactionId: null,
     });
     assert.equal(start.mock.callCount(), 1);
+  } finally {
+    start.mock.restore();
+  }
+});
+
+test('inbound Reaction Undo start 실패는 삭제 commit과 caller 결과를 유지하면서 callback으로 관측한다', async () => {
+  const actor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const author = await createProfile(InstanceKind.LOCAL);
+  const post = await createLocalPost(author.profile.id);
+  const activityUri = `https://${actor.instance.domain}/activities/${crypto.randomUUID()}`;
+  const objectUri = new URL(`/ap/note/${post.id}`, author.canonicalOrigin!).href;
+  let failStart = false;
+  const failure = new Error('Temporal unavailable');
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    if (failStart) {
+      throw failure;
+    }
+    return undefined as never;
+  });
+  const reports: unknown[] = [];
+
+  try {
+    const created = await materializeInboundReaction({
+      activityUri,
+      actorUri: actor.actorUri,
+      objectUri,
+      type: '🥹',
+    });
+    if (created.kind !== 'CREATED') {
+      assert.fail('Expected a created Reaction');
+    }
+    failStart = true;
+
+    const deleted = await undoInboundReaction({
+      activityUri,
+      actorUri: actor.actorUri,
+      onWorkflowStartError: (error) => reports.push(error),
+    });
+
+    assert.equal(deleted.reactionId, created.reaction.id);
+    assert.equal((await readMappings(activityUri)).length, 0);
+    assert.deepEqual(
+      await db.select().from(Reactions).where(eq(Reactions.id, created.reaction.id)),
+      [],
+    );
+    assert.deepEqual(reports, [failure]);
   } finally {
     start.mock.restore();
   }

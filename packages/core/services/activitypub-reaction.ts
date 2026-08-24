@@ -23,6 +23,7 @@ type MaterializeInboundReactionInput = {
   readonly actorUri: string;
   readonly objectUri: string;
   readonly type: string;
+  readonly onWorkflowStartError?: (error: unknown) => void | Promise<void>;
 };
 
 type MaterializeInboundReactionResult =
@@ -294,11 +295,19 @@ export const materializeInboundReaction = async (
         }),
       );
     } catch (error) {
-      console.error('Reaction Create effects Workflow start failed', {
-        error,
-        origin,
-        reactionId: result.reaction.id,
-      });
+      if (input.onWorkflowStartError) {
+        try {
+          await input.onWorkflowStartError(error);
+        } catch {
+          // Workflow-start observability must not alter the committed Reaction result.
+        }
+      } else {
+        console.error('Reaction Create effects Workflow start failed', {
+          error,
+          origin,
+          reactionId: result.reaction.id,
+        });
+      }
     }
   }
 
@@ -308,9 +317,11 @@ export const materializeInboundReaction = async (
 export const undoInboundReaction = async ({
   activityUri,
   actorUri,
+  onWorkflowStartError,
 }: {
   readonly activityUri: string;
   readonly actorUri: string;
+  readonly onWorkflowStartError?: (error: unknown) => void | Promise<void>;
 }): Promise<{ readonly reactionId: string | null }> => {
   if (!isHttpUri(activityUri) || !isHttpUri(actorUri)) {
     return { reactionId: null };
@@ -375,11 +386,19 @@ export const undoInboundReaction = async ({
         }),
       );
     } catch (error) {
-      console.error('Reaction Delete effects Workflow start failed', {
-        error,
-        origin,
-        reactionId: deleted.id,
-      });
+      if (onWorkflowStartError) {
+        try {
+          await onWorkflowStartError(error);
+        } catch {
+          // Workflow-start observability must not alter the committed Reaction result.
+        }
+      } else {
+        console.error('Reaction Delete effects Workflow start failed', {
+          error,
+          origin,
+          reactionId: deleted.id,
+        });
+      }
     }
   }
 

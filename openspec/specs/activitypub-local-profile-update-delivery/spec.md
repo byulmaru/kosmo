@@ -37,50 +37,37 @@ Update lifecycle을 만드는 것을 MUST 보장한다.
 
 ### Requirement: Commit 이후 Profile Update lifecycle
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-629`; 이 요구사항을 MUST 준수한다.
-
-시스템은 Profile 변경 transaction이 성공적으로 commit된 뒤에만 outbound ActivityPub Profile Update를 실행하고,
-caller-owned transaction에서도 lifecycle을 생략하거나 outer commit 전에 원격 I/O를 수행하지 않는 것을 MUST
-보장한다.
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-629`, `PROD-665` 시스템은 Profile 변경 transaction이 성공적으로 commit된 뒤에만 outbound ActivityPub Profile Update Effects Workflow를 시작해야 하고(MUST), Core action이 transaction과 Workflow start 시도를 소유해야 한다(MUST). Caller-owned database handle과 반환형 post-commit lifecycle을 사용해서는 안 된다(MUST NOT).
 
 #### Scenario: Top-level Profile update commit
 
-- **WHEN** application이 별도 caller transaction 없이 federation-visible Local Profile 변경을 commit한다
-- **THEN** action은 commit된 결과와 실행 가능한 post-commit lifecycle을 반환한다
-- **AND** GraphQL entry는 mutation 결과를 반환하기 전에 그 lifecycle을 실행한다
-
-#### Scenario: Caller-owned transaction commit
-
-- **WHEN** application이 caller-owned transaction 안에서 federation-visible Local Profile 변경을 수행한다
-- **THEN** action은 transaction 존재 여부와 무관하게 같은 post-commit lifecycle을 반환한다
-- **AND** transaction owner는 outer commit이 성공한 뒤 lifecycle을 실행한다
-- **AND** outer commit 전에는 Fedify delivery 또는 remote HTTP I/O를 수행하지 않는다
+- **WHEN** application이 federation-visible Local Profile 변경을 commit한다
+- **THEN** Core action은 commit된 Profile 결과를 반환한다
+- **AND** 실제 actor-visible 변경이면 commit 뒤 Profile Update Effects Workflow start를 시도한다
 
 #### Scenario: Validation failure 또는 rollback
 
-- **WHEN** Profile update가 validation·authorization 실패로 거부되거나 포함된 transaction이 rollback된다
-- **THEN** 시스템은 해당 미반영 변경을 위한 ActivityPub Update를 만들거나 전달하지 않는다
+- **WHEN** Profile update가 validation·authorization 실패로 거부되거나 transaction이 rollback된다
+- **THEN** 시스템은 해당 미반영 변경을 위한 ActivityPub Update Workflow를 시작하지 않는다
 
-#### Scenario: Repeated lifecycle invocation
+#### Scenario: Caller-side lifecycle 제거
 
-- **WHEN** 같은 action 결과의 post-commit lifecycle을 반복 또는 동시에 호출한다
-- **THEN** 시스템은 같은 실행 Promise를 재사용한다
-- **AND** 그 action 결과를 위한 direct delivery를 둘 이상 시작하지 않는다
+- **WHEN** GraphQL entry가 Profile update action을 호출한다
+- **THEN** caller는 database handle을 전달하지 않는다
+- **AND** caller는 별도 post-commit lifecycle을 받거나 실행하지 않는다
 
 ### Requirement: Canonical Update Person projection
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `PROD-628`, `PROD-629`; 이 요구사항을 MUST 준수한다.
-
-시스템은 committed Local Profile의 stable actor identity와 canonical `Person` projection을 재사용한
-ActivityPub `Update(Person)`을 구성하는 것을 MUST 보장한다.
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `PROD-628`, `PROD-629`, `PROD-665` 시스템은 committed Local Profile의 stable actor identity와 canonical `Person` projection을 재사용한 ActivityPub `Update(Person)`을 구성해야 한다(MUST). 각 committed actor-visible 변경의 update identity는 해당 Workflow와 Activity retry에서 stable해야 한다(MUST).
 
 #### Scenario: Construct Local Profile Update
 
-- **WHEN** federation-visible Local Profile 변경의 post-commit lifecycle이 실행된다
+- **WHEN** Profile Update Activity가 실행된다
 - **THEN** `Update.actor`는 변경된 Profile의 canonical local actor URI다
 - **AND** embedded `Update.object`는 PROD-628의 canonical `Person` projection이다
 - **AND** embedded `Person.id`는 `Update.actor`와 같다
 - **AND** Update는 해당 actor의 followers collection을 audience로 표현한다
+- **AND** Update IRI는 Workflow input의 stable update identity를 사용한다
 
 #### Scenario: Preserve latest committed representation
 
@@ -91,7 +78,7 @@ ActivityPub `Update(Person)`을 구성하는 것을 MUST 보장한다.
 
 ### Requirement: Remote follower direct delivery
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/architecture/core-services.md`, `PROD-448`, `PROD-512`, `PROD-629`; MUST 준수한다. 시스템은 Local Profile Update를 공통 outbound recipient dispatcher를 통해 usable established ActivityPub remote followers 대상으로 Fedify PostgreSQL outbox/fan-out queue에 handoff하고, follower 부재와 handoff·remote delivery 실패를 committed Profile 결과에서 격리하는 것을 MUST 보장한다.
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/architecture/core-services.md`, `PROD-448`, `PROD-512`, `PROD-629`, `PROD-665` 시스템은 Local Profile Update를 공통 outbound recipient dispatcher를 통해 usable established ActivityPub remote followers 대상으로 Fedify PostgreSQL outbox/fan-out queue에 handoff해야 한다(MUST). Queue handoff 전 실패는 Temporal Activity retry가 소유하고(MUST), follower 부재와 Workflow start·Activity 실패는 committed Profile 결과에서 격리해야 한다(MUST).
 
 #### Scenario: Deliver to active remote followers
 
@@ -108,15 +95,16 @@ ActivityPub `Update(Person)`을 구성하는 것을 MUST 보장한다.
 
 #### Scenario: Delivery failure isolation
 
-- **WHEN** commit 이후 Update projection 또는 queue handoff가 실패한다
-- **THEN** 시스템은 Profile ID와 오류를 post-commit 관측 경계에 기록한다
+- **WHEN** commit 이후 Workflow start, Update projection 또는 queue handoff가 실패한다
+- **THEN** 시스템은 Profile ID와 update identity와 함께 해당 경계의 오류를 관측한다
 - **AND** committed Profile과 GraphQL mutation 성공 결과를 rollback하거나 실패로 바꾸지 않는다
+- **AND** start가 수락된 Workflow의 projection 또는 queue handoff 실패는 Temporal Activity가 재시도한다
 - **AND** handoff 수락 뒤 remote delivery retry와 최종 실패는 Fedify consumer가 관측한다
 
-#### Scenario: Commit과 queue handoff 사이 loss window
+#### Scenario: Commit과 Workflow start 사이 loss window
 
-- **WHEN** application process가 Profile commit 이후 queue handoff 수락 전에 종료된다
-- **THEN** 이 capability는 transactional domain intent, relay 또는 delivery history를 보장하지 않는다
+- **WHEN** application process가 Profile commit 이후 Workflow start 수락 전에 종료된다
+- **THEN** 이 capability는 transactional domain intent, relay, reconciliation 또는 delivery history를 보장하지 않는다
 - **AND** committed Profile 결과는 유지된다
 
 #### Scenario: Queue handoff 이후 producer 종료
