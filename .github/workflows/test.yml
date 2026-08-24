@@ -78,9 +78,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium
+      - name: Get Playwright version
+        id: playwright-version
         if: matrix.playwright
-        run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
+        shell: bash
+        run: echo "version=$(pnpm --filter @kosmo/app exec playwright --version | sed 's/^Version //')" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        if: matrix.playwright
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright OS dependencies
+        if: matrix.playwright
+        run: pnpm --filter @kosmo/app exec playwright install-deps chromium
+
+      - name: Install Playwright Chromium
+        if: matrix.playwright && steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @kosmo/app exec playwright install chromium
 
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}
@@ -133,8 +151,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Get Playwright version
+        id: playwright-version
+        shell: bash
+        run: echo "version=$(pnpm --filter @kosmo/app exec playwright --version | sed 's/^Version //')" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright-version.outputs.version }}
+
+      - name: Install Playwright OS dependencies
+        run: pnpm --filter @kosmo/app exec playwright install-deps chromium
+
       - name: Install Playwright Chromium
-        run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm --filter @kosmo/app exec playwright install chromium
 
       - name: Run Web E2E shard
         run: node scripts/test-db.mjs run -- pnpm test:e2e:database --shard=${{ matrix.shard }}/${{ matrix.total }}
