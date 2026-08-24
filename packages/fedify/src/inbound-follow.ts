@@ -426,6 +426,17 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   const result = await undoInboundReaction({
     activityUri: activityUri.href,
     actorUri: actorUri.href,
+    onWorkflowStartError: (error) =>
+      observeInbound({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        error,
+        handler: 'undo',
+        objectOrigin: activityUri.origin,
+        outcome: 'internal_failure',
+        phase: 'effect',
+        reasonCode: 'reaction_undo_notification_effect_failed',
+      }),
   });
   if (result.reactionId === null) {
     observeInboundNoop({
