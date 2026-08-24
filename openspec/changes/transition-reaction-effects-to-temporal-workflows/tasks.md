@@ -127,4 +127,12 @@ Worker Activities가 기존 Reaction Notification과 Like·EmojiReact·Undo proj
 - [x] 4.2 관련 Core/API/Fedify/Worker unit·integration test를 통과시키고 환경 blocker를 정확히 기록한다.
 - [x] 4.3 저장소 정책에 따라 scope review, commit, push와 Ready PR을 준비한다.
 - [ ] 4.4 Exact revision의 dev Effects Workflow, retry와 restart를 검증하고 Linear에 증거를 남긴다.
+  - 2026-08-24 dev에서 remote ActivityPub Post에 Local-origin `🎉` Reaction을 생성·삭제했다.
+    `reaction-create-effects:01a032d9-2188-7846-9b8f-34a481d02d28`은
+    `createReactionNotificationActivity`와 `sendReactionActivity`를 완료했고,
+    같은 Reaction identity의 delete Workflow는 `deleteReactionNotificationActivity`와
+    `sendReactionUndoActivity`를 완료했다.
+  - create는 `f72e6818fdbdfb2fa7f495f5261b8cb7582befca`, delete는 후속 dev revision
+    `832c9ef2`에서 실행됐고 모든 Activity가 attempt 1로 끝났다. 따라서 단일 exact revision의 retry·restart
+    검증이 아니며 사용자 요청에 따라 추가 failure injection과 Worker restart는 수행하지 않는다.
 - [ ] 4.5 전체 task와 spec sync가 완료된 뒤 이 작업의 주 작업자가 OpenSpec archive를 수행한다.
