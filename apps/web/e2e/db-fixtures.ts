@@ -1,5 +1,3 @@
-import './temporal-test-client';
-
 import { randomUUID } from 'node:crypto';
 import { sessionName } from '@kosmo/core';
 import {
@@ -37,6 +35,7 @@ import {
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { followProfile } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { BrowserContext } from '@playwright/test';
@@ -93,6 +92,7 @@ async function waitForNextPostSeedTimestamp() {
 }
 
 export async function resetE2EDatabase() {
+  await waitForE2ETemporalWorkflows();
   lastPostSeedTimestamp = 0;
   assertTestDatabaseUrl();
 
@@ -115,6 +115,18 @@ export async function resetE2EDatabase() {
   await db.delete(Instances).where(eq(Instances.kind, InstanceKind.ACTIVITYPUB));
 
   await seedDatabase({ publicOrigin: webOrigin });
+}
+
+async function waitForE2ETemporalWorkflows() {
+  const runningWorkflows: Promise<unknown>[] = [];
+
+  for await (const { runId, workflowId } of temporalClient.workflow.list({
+    query: 'ExecutionStatus="Running"',
+  })) {
+    runningWorkflows.push(temporalClient.workflow.getHandle(workflowId, runId).result());
+  }
+
+  await Promise.all(runningWorkflows);
 }
 
 export async function closeE2EDatabase() {
