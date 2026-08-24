@@ -1,12 +1,18 @@
-## ADDED Requirements
+# post-repost-ui Specification
+
+## Purpose
+
+Repost와 Quote의 유니버설 앱 프레젠테이션, Source navigation, Repost action과 Notification 표시 계약을 정의한다.
+
+## Requirements
 
 ### Requirement: Repost와 Quote 프레젠테이션
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-453`, `PROD-415` 유니버설 앱은 기존 단일 `Post` fragment를 사용해 일반 Post, Repost와 Quote를 관계 조합에 맞는 React Native UI로 표시해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-453`, `PROD-415` 유니버설 앱은 기존 단일 `Post` fragment를 사용해 일반 Post, Repost와 Quote를 관계 조합에 맞는 React Native UI로 표시해야 한다(MUST). direct Source가 Quote인 순수 Repost의 표시 깊이는 PROD-828에서 별도로 결정하며 이 요구사항의 순수 Repost 표시 시나리오에 포함하지 않는다(MUST NOT).
 
 #### Scenario: Repost 표시
 
-- **WHEN** `content = null`이고 `repostSource`가 non-null인 Post를 표시한다
+- **WHEN** `content = null`, `replyParent = null`이고 Quote가 아닌 non-null `repostSource`를 가진 Post를 표시한다
 - **THEN** 앱은 Repost Author의 `{displayName}님이 재게시함` attribution을 canonical Profile Link로 정확히 한 번 표시한다
 - **AND** 바로 아래의 direct Source는 일반 목록 Post와 동일한 표준 avatar·Author·Content·spacing·navigation 행으로 표시한다
 - **AND** Source의 Author와 Content를 Repost 자신의 Content처럼 복제하지 않는다
@@ -39,7 +45,7 @@
 
 ### Requirement: Source Post 이동과 목록·상세 연결
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-415`, `PROD-422`, `PROD-430`, `PROD-453` 유니버설 앱은 Home, Profile, Bookmark와 Post 상세에서 Repost·Quote Source를 표시하고 구조별 canonical Post route로 이동할 수 있어야 한다(MUST). 순수 Repost는 자체 detail을 제공하지 않고(MUST NOT) body·생성 시각과 직접 Repost ID 접근을 Source canonical detail로 연결해야 하며(MUST), Quote는 자체 canonical detail을 유지해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/policies/post-list.md`, `PROD-389`, `PROD-402`, `PROD-415`, `PROD-422`, `PROD-430`, `PROD-453` 유니버설 앱은 Home, Profile, Bookmark와 Post 상세에서 Repost·Quote Source를 표시하고 구조별 canonical Post route로 이동할 수 있어야 한다(MUST). 모든 순수 Repost는 direct Source의 구조와 관계없이 자체 detail을 제공하지 않고(MUST NOT) body·생성 시각과 직접 Repost ID 접근을 Source canonical detail로 연결해야 하며(MUST), Quote는 자체 canonical detail을 유지해야 한다(MUST).
 
 #### Scenario: 순수 Repost의 Source Post 이동
 
@@ -73,7 +79,7 @@
 
 #### Scenario: 목록 표준 행의 Post 이동 경계
 
-- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`이 일반 Post나 순수 Repost의 direct Source를 표준 목록 행으로 표시한다
+- **WHEN** Home, Profile, Bookmark 또는 상세 thread의 조상·하위 Reply `PostListItem`이 일반 Post나 direct Source가 Quote가 아닌 순수 Repost의 Source를 표준 목록 행으로 표시한다
 - **THEN** 생성 시각은 keyboard, screen reader, pointer가 사용하는 최소 44px canonical Post Link다
 - **AND** 본문 행은 별도 accessibility element 또는 keyboard focus target이 아닌 pointer·touch shortcut으로 같은 Post에 이동한다
 - **AND** 본문 내부 외부 Link는 Post 이동을 함께 실행하지 않고 자신의 URL로 이동한다

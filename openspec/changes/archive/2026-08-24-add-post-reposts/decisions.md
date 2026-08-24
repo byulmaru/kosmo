@@ -198,7 +198,7 @@
 - Decision Outcome: 기존 public `repostPost` action이 `origin = LOCAL | ACTIVITYPUB` 입력을 받고 자체 transaction을 소유한다. ActivityPub 입력에서는 Announce URI와 delivery metadata를 일반 `createPost`와 같은 Repost 저장 경계에서 기록한다. 최초 실제 Repost 생성 또는 Post/Repost 삭제 commit 뒤 event-specific Workflow start를 시도하고, accepted Workflow가 Notification과 Local-origin Announce·Undo queue handoff를 독립적으로 재시도한다.
 - Alternatives Considered: 기존 `postCommit()` 유지, caller-owned transaction, 별도 ActivityPub materialization/Undo action, command receipt와 outbox는 PROD-725에서 제외됐다.
 - Consequences: caller database handle과 `postCommit()`은 제거되며, commit→start gap은 허용된다. ActivityPub origin은 outbound echo 없이 Repost Notification cleanup/create 계약만 수행한다. PROD-495가 정한 ActivityPub identity·generation·no-lock 동작은 변경하지 않는다.
-- Confirmation / Follow-up: `transition-repost-effects-to-temporal-workflow` change의 구현·strict validation·dev 통합 검증에서 확인한다.
+- Confirmation / Follow-up: PROD-725 PR #618·#626과 archive된 `temporal-repost-effects` spec, strict validation 및 worker Activity 검증으로 확인했다.
 
 ### Presentation, renderer 연결과 action child를 독립 client slice로 유지한다
 
@@ -234,7 +234,7 @@
 - Decision Outcome: direct Source의 Author·Content·생성 시각은 첫 번째 full presentation으로 표시한다. Source Author는 canonical Profile route로 이동하고 direct Source의 생성 시각과 본문 영역은 direct Source의 canonical Post route로 이동한다. 두 번째 Source의 Author·Content·생성 시각과 별도 placeholder·CTA는 표시하지 않고 presentation component를 재귀 호출하지 않는다.
 - Alternatives Considered: 두 번째 Source route를 별도 `인용한 게시글 보기` placeholder로 제공하는 방식, 다음 Source를 최상위 Source로 평탄화하는 방식, 모든 Source를 full presentation으로 재귀 표시하는 방식. 별도 placeholder는 이미 표시된 direct Source 이동과 중복되는 CTA를 만들고, 평탄화는 저장된 direct relation을 잃으며, 재귀 표시는 목록 깊이와 fragment shape를 무제한으로 확장한다.
 - Consequences: production fragment는 direct Source presentation field까지만 읽는 유한한 shape를 사용하며 두 번째 Source를 위한 client field나 이동 UI를 만들지 않는다.
-- Confirmation / Follow-up: Home/Profile/Bookmark와 Post 상세 Relay 경로, Storybook에서 Quote-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. 순수 Repost의 direct Source가 Quote인 조합은 후속에서 별도 결정한다.
+- Confirmation / Follow-up: Home/Profile/Bookmark와 Post 상세 Relay 경로, Storybook에서 Quote-of-Quote cutoff, direct Source 생성 시각·본문의 정확한 canonical route 이동, 두 번째 Source Content와 CTA 미노출, 외부 body Link와의 비중첩을 검증한다. 순수 Repost의 direct Source가 Quote인 조합의 표시 깊이는 PROD-828 Domain Gate에서 별도 결정하되, canonical 이동은 모든 순수 Repost에 동일하게 적용한다.
 
 ### 각 Post renderer가 direct Source를 소유하고 순수 Repost 상세은 Source로 대체한다
 
@@ -322,7 +322,7 @@
 
 ## Remaining Decisions
 
-- 없음.
+- PROD-828: 순수 Repost의 direct Source가 Quote일 때 표시 깊이. canonical 이동과 Action Bar target은 기존 확정 계약대로 direct Source를 사용하며, 표시 깊이의 Domain Gate 결과에 따라 별도 downstream 구현·검증을 소유한다.
 
 ## Superseded Decisions
 

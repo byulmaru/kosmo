@@ -51,7 +51,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 - 공용 action UI는 #341로 main에 포함된 PROD-433의 단일 공개 `PostActionBar` 경계를 재사용해야 한다. `PostActionBar`의 composite Post fragment는 private Repost child fragment를 조립하고, child action은 fragment·mutation·pending·파생 상태를 소유한다. PROD-414는 main의 공개 UI를 직접 사용해 `PostListItem`·`PostLayout`에 최초 production Action Bar를 배치하고 Repost menu·실패 toast를 연결한다. branch 코드를 복사하거나 독립 공개 action leaf를 만들지 않으며, 나머지 action 조립·최종 disabled 정책과 공통 통합 검증은 PROD-432에 남긴다.
 - Notification connection/count/read와 client row는 Follow source에 하드코딩되어 있다. Repost를 join 하나만 덧붙이면 kind discriminator와 limit-before-filter가 어긋날 수 있다.
 - Home/Profile/Bookmark와 상세 thread의 조상·하위 Reply는 공용 Post list item fragment를 쓰고 현재 상세 Post는 별도 Post layout fragment를 쓴다. 각 renderer가 자신의 direct Source를 소유해야 하며 thread 조립 경계가 Source를 다시 붙이면 중복된다.
-- Content 없는 Repost 목록은 attribution 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행의 실제 표시 대상으로 사용해야 한다. 바깥 list item만 article·row border·padding을 한 번 소유하고 Source용 full presentation·article·border·renderer를 별도로 만들지 않는다. direct Source 자체가 Quote인 조합의 preview 정책은 이번 slice의 완료 조건에서 제외한다.
+- Content 없는 Repost 목록은 attribution 뒤 direct Source를 일반 Post와 같은 비재귀 표준 목록 행의 실제 표시 대상으로 사용해야 한다. 바깥 list item만 article·row border·padding을 한 번 소유하고 Source용 full presentation·article·border·renderer를 별도로 만들지 않는다. direct Source 자체가 Quote인 조합의 preview 정책은 PROD-828 Domain Gate로 분리한다.
 - Home/Profile은 공용 Post list item fragment를 쓰지만 Post detail은 별도 fragment다. PROD-415는 목록 연결과 순수 Repost ID 직접 접근의 Source replace redirect를 소유한다. 순수 Repost의 body·timestamp와 Action Bar는 direct Source를 target으로 사용하고 Quote는 자체 detail을 유지한다.
 
 ### Recommended Approach
@@ -75,7 +75,7 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
   동등한 set-based query로 캡슐화할 수 있다.
 - PROD-401의 duplicate 정규화는 `ON CONFLICT DO NOTHING` 뒤 기존 identity를 조회하거나, partial unique index 위반만 식별해 savepoint 밖에서 기존 identity를 다시 조회하는 방식 중 transaction을 실패 상태로 남기지 않는 쪽을 사용할 수 있다.
 - Notification mixed-kind projection은 kind별 `UNION ALL` 또는 nullable join과 discriminator별 predicate로 구성할 수 있다. 어느 방식이든 filter-before-limit, concrete typename route와 Recipient 기준 visibility를 만족해야 한다.
-- Quote·Reply+Quote Source preview는 공용 leaf component로 분리하거나 renderer 안에 유지할 수 있다. Content 없는 Repost의 direct Source는 일반 Post와 같은 비재귀 표준 목록 행 leaf를 반드시 재사용한다. Source Quote의 preview 유지 여부는 후속 결정으로 남긴다.
+- Quote·Reply+Quote Source preview는 공용 leaf component로 분리하거나 renderer 안에 유지할 수 있다. Content 없는 Repost의 direct Source는 일반 Post와 같은 비재귀 표준 목록 행 leaf를 반드시 재사용한다. Source Quote의 preview 유지 여부는 PROD-828에서 후속 결정한다.
 - PROD-401의 Repost 정책 검증은 전용 action의 transaction 경계에 둔다. caller 없는 저수준 Repost insert helper나 기존 `createPost`의 nullable overload를 미리 추가하지 않는다.
 - Web anchored menu와 Android·iOS bottom action sheet는 platform file로 나눌 수 있다. 공용 경계는 항목·open·dismiss·선택 결과와 접근성 의미만 공유하고 platform-specific positioning을 억지로 하나의 구현에 합치지 않는다.
 
@@ -127,4 +127,5 @@ API의 Post visibility predicate, Node, Home/Profile connection은 Repost Source
 
 ## Open Questions
 
-없음.
+- 현재 change 범위 안에는 없다.
+- 순수 Repost의 direct Source가 Quote일 때 표시 깊이는 PROD-828 Domain Gate가 소유한다. canonical 이동과 Action Bar target은 기존 확정 계약대로 direct Source를 사용한다.
