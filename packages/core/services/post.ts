@@ -402,7 +402,7 @@ export const deletePost = async ({
             }),
       );
     } catch (error) {
-      console.error(`${isRepostDelete ? 'Repost Delete' : 'Post Delete'} Workflow start failed`, {
+      console.error('%s Workflow start failed', isRepostDelete ? 'Repost Delete' : 'Post Delete', {
         error,
         origin,
         postId: deleted.id,

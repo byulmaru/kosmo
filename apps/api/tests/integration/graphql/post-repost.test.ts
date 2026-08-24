@@ -365,7 +365,15 @@ describe('GraphQL Repost', () => {
     assert.equal(deleted.state, PostState.DELETED);
     assert.equal(start.mock.callCount(), 1);
     assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Repost Delete Workflow start failed');
+    const errorLogCall = errorLog.mock.calls[0];
+    assert.ok(errorLogCall);
+    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
+    assert.equal(errorLogCall.arguments[1], 'Repost Delete');
+    assert.deepEqual(errorLogCall.arguments[2], {
+      error: new Error('Temporal unavailable'),
+      origin: 'LOCAL',
+      postId: repost.id,
+    });
   });
 
   test('deletePost payload는 선택된 Profile의 viewerRepost와 최신 Source count만 반환한다', async () => {

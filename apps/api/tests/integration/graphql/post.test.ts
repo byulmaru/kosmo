@@ -662,7 +662,15 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(result.data?.deletePost.postId, encodeGlobalId('Post', post.id));
     assert.equal(start.mock.callCount(), 1);
     assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Post Delete Workflow start failed');
+    const errorLogCall = errorLog.mock.calls[0];
+    assert.ok(errorLogCall);
+    assert.equal(errorLogCall.arguments[0], '%s Workflow start failed');
+    assert.equal(errorLogCall.arguments[1], 'Post Delete');
+    assert.deepEqual(errorLogCall.arguments[2], {
+      error: new Error('Temporal unavailable'),
+      origin: 'LOCAL',
+      postId: post.id,
+    });
   });
 
   test('Reply 삭제 transaction 실패는 ActivityPub delivery를 호출하지 않는다', async (t) => {
