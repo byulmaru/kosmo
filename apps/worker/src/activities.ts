@@ -19,3 +19,4 @@ export {
   sendReaction as sendReactionActivity,
   sendReactionUndo as sendReactionUndoActivity,
 } from '@kosmo/fedify';
+export { sendLocalProfileUpdate as sendLocalProfileUpdateActivity } from '@kosmo/fedify';

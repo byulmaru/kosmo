@@ -158,3 +158,49 @@ test(
     });
   },
 );
+
+test(
+  'Profile Update Effects Workflow는 production registry에서 stable input으로 Activity를 재시도한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-profile-update-test-${process.pid}`;
+    const profileId = '00000000-0000-8000-8000-000000000201';
+    const updateId = '00000000-0000-8000-8000-000000000202';
+    const calls: Array<{ readonly profileId: string; readonly updateId: string }> = [];
+    let attempts = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        sendLocalProfileUpdateActivity: async (input: { profileId: string; updateId: string }) => {
+          attempts += 1;
+          calls.push(input);
+          if (attempts === 1) {
+            throw ApplicationFailure.retryable('queue handoff failed');
+          }
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('profileUpdateEffectsWorkflow', {
+        args: [{ profileId, updateId }],
+        taskQueue,
+        workflowId: updateId,
+      });
+    });
+
+    assert.equal(attempts, 2);
+    assert.deepEqual(calls, [
+      { profileId, updateId },
+      { profileId, updateId },
+    ]);
+  },
+);

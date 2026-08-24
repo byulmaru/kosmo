@@ -4,7 +4,6 @@ import { and, eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
   Accounts,
-  ActivityPubActors,
   db,
   firstOrThrow,
   Hashtags,
@@ -12,7 +11,6 @@ import {
   Media,
   pg,
   ProfileFollowRequests,
-  ProfileFollows,
   ProfileHashtags,
   ProfileMedia,
   Profiles,
@@ -20,7 +18,6 @@ import {
 import {
   AccountProfileRole,
   AccountState,
-  ActivityPubActorType,
   InstanceKind,
   InstanceState,
   MediaSource,
@@ -31,6 +28,8 @@ import {
   ProfileState,
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
+import { temporalClient } from '../temporal/client';
+import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { updateProfile } from './profile-update';
 
 after(async () => pg.end());
@@ -43,20 +42,17 @@ const createProfileFixture = async ({
   instanceKind = InstanceKind.LOCAL,
   profileState = ProfileState.ACTIVE,
   accountState = AccountState.ACTIVE,
-  canonicalOrigin,
   role = AccountProfileRole.OWNER,
 }: {
   instanceKind?: InstanceKind;
   profileState?: ProfileState;
   accountState?: AccountState;
-  canonicalOrigin?: string;
   role?: AccountProfileRole;
 } = {}) => {
   const suffix = crypto.randomUUID();
   const instance = await db
     .insert(Instances)
     .values({
-      canonicalOrigin,
       domain: `${suffix}.example`,
       kind: instanceKind,
       state: InstanceState.ACTIVE,
@@ -134,22 +130,6 @@ const readProfileMedia = (profileId: string) =>
     .from(ProfileMedia)
     .where(eq(ProfileMedia.profileId, profileId))
     .then((rows) => rows.toSorted((a, b) => a.kind.localeCompare(b.kind)));
-
-const createRemoteFollower = async (followeeProfileId: string) => {
-  const remote = await createProfileFixture({ instanceKind: InstanceKind.ACTIVITYPUB });
-  const actorUri = `https://${remote.instance.domain}/users/${remote.profile.id}`;
-  await db.insert(ActivityPubActors).values({
-    inboxUri: `${actorUri}/inbox`,
-    profileId: remote.profile.id,
-    sharedInboxUri: `https://${remote.instance.domain}/inbox`,
-    type: ActivityPubActorType.PERSON,
-    uri: actorUri,
-  });
-  await db.insert(ProfileFollows).values({
-    followeeProfileId,
-    followerProfileId: remote.profile.id,
-  });
-};
 
 test('Profile Media 관계는 kind별 하나만 허용하고 관계 삭제 시 Media를 보존한다', async () => {
   const { account, profile } = await createProfileFixture();
@@ -632,29 +612,6 @@ test('Member와 inactive Account는 거부되고 관계없는 Account와 Remote/
   );
 });
 
-test('호출 transaction이 rollback되면 scalar와 relation이 모두 복구된다', async () => {
-  const { account, profile } = await createProfileFixture();
-  await updateProfile({ accountId: account.id, profileId: profile.id, tags: ['before'] });
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await updateProfile(
-        { accountId: account.id, profileId: profile.id, displayName: 'Rollback', tags: ['after'] },
-        tx,
-      );
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
-  const persisted = await db
-    .select()
-    .from(Profiles)
-    .where(eq(Profiles.id, profile.id))
-    .then(firstOrThrow);
-  assert.equal(persisted.displayName, profile.displayName);
-  assert.deepEqual(await readTags(profile.id), ['before']);
-});
-
 test('서로 다른 Profile의 같은 tags 역순 동시 update가 모두 성공한다', async () => {
   const first = await createProfileFixture();
   const second = await createProfileFixture();
@@ -703,10 +660,8 @@ test('동시 partial scalar update는 서로 다른 필드를 모두 보존한�
   assert.deepEqual(persisted, { displayName: 'Display name', bio: 'Bio' });
 });
 
-test('실제 actor 표현 변경만 one-shot postCommit delivery lifecycle을 만든다', async () => {
-  const fixture = await createProfileFixture({
-    canonicalOrigin: `https://${crypto.randomUUID()}.local.example`,
-  });
+test('실제 actor 표현 변경만 Profile Update effects Workflow를 시작한다', async () => {
+  const fixture = await createProfileFixture();
   const avatar = await createMedia({
     accountId: fixture.account.id,
     profileId: fixture.profile.id,
@@ -715,22 +670,20 @@ test('실제 actor 표현 변경만 one-shot postCommit delivery lifecycle을 �
     accountId: fixture.account.id,
     profileId: fixture.profile.id,
   });
-  await createRemoteFollower(fixture.profile.id);
-  const delivery = mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(null, { status: 202 }),
-  );
+  const start = mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
   const first = await updateProfile({
     accountId: fixture.account.id,
     displayName: 'Changed',
     profileId: fixture.profile.id,
   });
-  const firstPostCommit = first.postCommit();
-  assert.equal(first.postCommit(), firstPostCommit);
-  await firstPostCommit;
-  assert.equal(delivery.mock.callCount(), 1);
+  assert.equal(start.mock.callCount(), 1);
+  const firstStart = start.mock.calls[0]?.arguments[1];
+  const firstArgs = firstStart?.args?.[0];
+  assert.equal(start.mock.calls[0]?.arguments[0], 'profileUpdateEffectsWorkflow');
+  assert.equal(firstStart?.taskQueue, KOSMO_TASK_QUEUE);
+  assert.equal(firstStart?.workflowId, firstArgs?.updateId);
+  assert.equal(firstArgs?.profileId, first.profile.id);
 
   for (const input of [
     { bio: 'Changed bio' },
@@ -745,9 +698,9 @@ test('실제 actor 표현 변경만 one-shot postCommit delivery lifecycle을 �
       profileId: fixture.profile.id,
       ...input,
     });
-    await result.postCommit();
+    assert.equal(result.profile.id, fixture.profile.id);
   }
-  assert.equal(delivery.mock.callCount(), 7);
+  assert.equal(start.mock.callCount(), 7);
 
   const noOp = await updateProfile({
     accountId: fixture.account.id,
@@ -755,78 +708,29 @@ test('실제 actor 표현 변경만 one-shot postCommit delivery lifecycle을 �
     bio: '  Changed bio  ',
     displayName: 'Changed',
     followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED,
+    defaultPostVisibility: PostVisibility.UNLISTED,
     headerMediaId: null,
     profileId: fixture.profile.id,
     tags: ['tag_only'],
   });
-  await noOp.postCommit();
-  assert.equal(delivery.mock.callCount(), 7);
+  assert.equal(noOp.profile.id, fixture.profile.id);
+  assert.equal(start.mock.callCount(), 7);
 });
 
-test('caller-owned transaction은 outer commit 뒤 실행할 postCommit lifecycle을 반환한다', async () => {
-  const fixture = await createProfileFixture({
-    canonicalOrigin: `https://${crypto.randomUUID()}.local.example`,
-  });
-  await createRemoteFollower(fixture.profile.id);
-  const delivery = mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(null, { status: 202 }),
-  );
-  let result: Awaited<ReturnType<typeof updateProfile>> | undefined;
-
-  await db.transaction(async (tx) => {
-    result = await updateProfile(
-      {
-        accountId: fixture.account.id,
-        displayName: 'Committed',
-        profileId: fixture.profile.id,
-      },
-      tx,
-    );
-    assert.equal(delivery.mock.callCount(), 0);
-  });
-
-  assert.ok(result);
-  await result.postCommit();
-  assert.equal(delivery.mock.callCount(), 1);
-
-  await assert.rejects(
-    db.transaction(async (tx) => {
-      await updateProfile(
-        {
-          accountId: fixture.account.id,
-          displayName: 'Rolled back',
-          profileId: fixture.profile.id,
-        },
-        tx,
-      );
-      throw new Error('rollback');
-    }),
-    /rollback/,
-  );
-  assert.equal(delivery.mock.callCount(), 1);
-});
-
-test('postCommit delivery 실패는 committed Profile 결과를 유지하고 관측한다', async () => {
-  const fixture = await createProfileFixture({
-    canonicalOrigin: `https://${crypto.randomUUID()}.local.example`,
-  });
-  await createRemoteFollower(fixture.profile.id);
-  const delivery = mock.method(globalThis, 'fetch', async () => {
-    throw new Error('delivery failed');
+test('Workflow start 실패는 committed Profile 결과를 유지하고 관측한다', async () => {
+  const fixture = await createProfileFixture();
+  const start = mock.method(temporalClient.workflow, 'start', async () => {
+    throw new Error('Temporal unavailable');
   });
   const errorLog = mock.method(console, 'error', () => undefined);
 
   const result = await updateProfile({
     accountId: fixture.account.id,
-    bio: 'Committed despite delivery failure',
+    bio: 'Committed despite Workflow start failure',
     profileId: fixture.profile.id,
   });
-  await result.postCommit();
-
-  assert.ok(delivery.mock.callCount() > 0);
-  assert.equal(result.profile.bio, 'Committed despite delivery failure');
+  assert.equal(start.mock.callCount(), 1);
+  assert.equal(result.profile.bio, 'Committed despite Workflow start failure');
   assert.equal(
     await db
       .select({ bio: Profiles.bio })
@@ -834,12 +738,13 @@ test('postCommit delivery 실패는 committed Profile 결과를 유지하고 관
       .where(eq(Profiles.id, fixture.profile.id))
       .then(firstOrThrow)
       .then(({ bio }) => bio),
-    'Committed despite delivery failure',
+    'Committed despite Workflow start failure',
   );
   assert.equal(errorLog.mock.callCount(), 1);
   assert.equal(
     errorLog.mock.calls[0]?.arguments[0],
-    'Post-commit ActivityPub Local Profile Update delivery failed',
+    'Profile Update effects Workflow start failed',
   );
   assert.equal(errorLog.mock.calls[0]?.arguments[1]?.profileId, fixture.profile.id);
+  assert.equal(typeof errorLog.mock.calls[0]?.arguments[1]?.updateId, 'string');
 });
