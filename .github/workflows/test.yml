@@ -44,10 +44,10 @@ jobs:
             id: app
             playwright: true
           - name: Web
-            command: pnpm --filter @kosmo/web test
-            database: true
+            command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit
+            database: false
             id: web
-            playwright: true
+            playwright: false
           - name: Worker
             command: pnpm --filter @kosmo/worker test
             database: true
@@ -85,11 +85,65 @@ jobs:
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}
 
+      - name: Clean up test database
+        if: always() && matrix.database
+        run: pnpm db:test:drop
+
+  web_e2e:
+    name: Web E2E (shard ${{ matrix.shard }}/${{ matrix.total }})
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            total: 2
+            database_name: kosmo_test_web_e2e_shard_1
+            port_offset: 10000
+          - shard: 2
+            total: 2
+            database_name: kosmo_test_web_e2e_shard_2
+            port_offset: 20000
+    env:
+      DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/${{ matrix.database_name }}
+      KOSMO_TEST_PORT_OFFSET: ${{ matrix.port_offset }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: true
+
+      - name: Get pnpm store directory
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "${GITHUB_OUTPUT}"
+
+      - name: Cache pnpm store
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @kosmo/app exec playwright install --with-deps chromium
+
+      - name: Run Web E2E shard
+        run: pnpm test:e2e -- --shard=${{ matrix.shard }}/${{ matrix.total }}
+
       - name: Upload Playwright artifacts
-        if: failure() && matrix.id == 'web'
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-artifacts-${{ matrix.id }}
+          name: playwright-artifacts-web-shard-${{ matrix.shard }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
@@ -97,17 +151,22 @@ jobs:
           retention-days: 7
 
       - name: Clean up test database
-        if: always() && matrix.database
+        if: always()
         run: pnpm db:test:drop
 
   test:
     name: Test
     if: always()
-    needs: test-suites
+    needs:
+      - test-suites
+      - web_e2e
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Require every test suite
         env:
           TEST_SUITES_RESULT: ${{ needs.test-suites.result }}
-        run: test "${TEST_SUITES_RESULT}" = success
+          WEB_E2E_RESULT: ${{ needs.web_e2e.result }}
+        run: |
+          test "${TEST_SUITES_RESULT}" = success
+          test "${WEB_E2E_RESULT}" = success
