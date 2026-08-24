@@ -1,3 +1,5 @@
+import './temporal-test-client';
+
 import { randomUUID } from 'node:crypto';
 import { sessionName } from '@kosmo/core';
 import {
@@ -317,14 +319,17 @@ export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOpti
   return profile;
 }
 
-export const createE2EFollow = (options: CreateE2EFollowOptions) =>
-  followProfile(options).then(({ result }) => {
+export const createE2EFollow = (options: CreateE2EFollowOptions) => {
+  const input = { ...options, origin: 'LOCAL' as const };
+
+  return followProfile(input).then(({ result }) => {
     if (result.kind !== 'ESTABLISHED') {
       throw new Error('E2E follow fixture requires an established relationship');
     }
 
     return result.profileFollow;
   });
+};
 
 export async function createE2EPost(options: CreateE2EPostOptions) {
   const bodyText = (options.body ?? '').trim();

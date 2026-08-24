@@ -83,7 +83,7 @@ export default defineConfig({
     },
     {
       command:
-        'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx --import ../../packages/core/temporal/test-client.ts src/index.ts',
+        'pnpm --dir ../api db:bootstrap-local-instance && pnpm --dir ../api exec node --import tsx --import ../web/e2e/temporal-test-client.ts src/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
         NODE_ENV: 'production',

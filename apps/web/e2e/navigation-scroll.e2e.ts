@@ -483,10 +483,12 @@ test('팔로워 요청 route는 navigation 진입 뒤 selected Profile별 승인
   const requestA = await followProfile({
     followeeProfileId: recipient.profile!.id,
     followerProfileId: followerA.profile!.id,
+    ...({ origin: 'LOCAL' } as const),
   });
   const requestB = await followProfile({
     followeeProfileId: recipientB.id,
     followerProfileId: followerB.profile!.id,
+    ...({ origin: 'LOCAL' } as const),
   });
   expect(requestA.result.kind).toBe('PENDING');
   expect(requestB.result.kind).toBe('PENDING');
