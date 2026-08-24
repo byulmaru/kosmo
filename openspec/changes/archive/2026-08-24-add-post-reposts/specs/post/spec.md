@@ -2,7 +2,9 @@
 
 ### Requirement: Post GraphQL object
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-402`, `PROD-403` API는 조회 가능한 활성 게시글을 기존 GraphQL `Post` Node로 노출해야 하며 작성자 프로필, nullable 현재 콘텐츠, nullable 직접 Repost Source, viewer-independent Repost count, 현재 selected Profile의 nullable Active Repost identity, 공개 범위, 상태와 생성 시각을 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-402`, `PROD-403`, `PROD-777` GraphQL Post authorization과 visibility는 중앙 application policy가 집행해야 하며(MUST), PostgreSQL RLS 또는 actor GUC에 의존해서는 안 된다(MUST NOT). API는 조회 가능한 활성 게시글을 기존 GraphQL `Post` Node로 노출해야 하며 작성자 프로필, nullable 현재 콘텐츠, nullable 직접 Repost Source, viewer-independent Repost count, 현재 selected Profile의 nullable Active Repost identity, 공개 범위, 상태와 생성 시각을 제공해야 한다(MUST).
+
+이 spec의 GraphQL enum `DIRECT`는 canonical 문서의 Mentioned Profiles visibility를 나타내는 API 표현이다.
 
 #### Scenario: 활성 게시글 object 조회
 
@@ -45,6 +47,12 @@
 
 - **WHEN** 게시글 상태가 `ACTIVE`가 아니다
 - **THEN** 시스템은 해당 게시글을 GraphQL `Post` object로 노출하지 않는다
+
+#### Scenario: application policy가 유일한 GraphQL 권한 집행 경계임
+
+- **WHEN** GraphQL Post Node를 조회하고 application visibility/eligibility policy가 결과를 결정한다
+- **THEN** 기존 Post authorization과 visibility 결과를 반환한다
+- **AND** PostgreSQL RLS policy나 actor GUC가 없어도 같은 application policy 결과를 반환한다
 
 #### Scenario: unavailable Repost Source를 가진 Content 없는 Repost 조회
 
@@ -143,20 +151,3 @@
 - **WHEN** 인증되지 않았거나 active profile이 없는 클라이언트가 `homeTimeline` connection을 조회한다
 - **THEN** 시스템은 요청을 거부하지 않고 `homeTimeline` 필드로 `null`을 반환한다
 - **AND** GraphQL 인증 오류를 발생시키지 않는다
-
-## ADDED Requirements
-
-### Requirement: Hashtag Post List의 Repost 제외
-
-**Authority / Provenance:** `docs/domain/policies/post-list.md`, `docs/domain/objects/post.md`, `PROD-389`, `PROD-430` Hashtag Post List는 Public이고 Content가 있으며 Reply Parent가 없는 eligible Post만 후보로 사용해야 한다(MUST).
-
-#### Scenario: Content 없는 Repost 제외
-
-- **WHEN** Content 없이 Repost Source만 가진 Repost가 Target Hashtag와 관계된 Source를 참조한다
-- **THEN** 시스템은 Repost 자체를 Hashtag Post List 후보에 포함하지 않는다
-- **AND** Source의 Hashtag를 Repost에 복제하거나 상속하지 않는다
-
-#### Scenario: Quote 후보
-
-- **WHEN** Public Quote가 Content와 Target Hashtag를 직접 가지며 Reply Parent가 없고 Quote 자체가 eligible하다
-- **THEN** 시스템은 Quote 자체를 Hashtag Post List 후보로 포함할 수 있다

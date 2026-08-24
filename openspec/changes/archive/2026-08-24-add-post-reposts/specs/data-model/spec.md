@@ -2,7 +2,7 @@
 
 ### Requirement: 게시물과 콘텐츠 저장
 
-**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `PROD-389`, `PROD-394` 시스템은 게시물 메타데이터와 게시물 콘텐츠 revision을 분리하여 저장하고, version, nullable Plain Text summary와 canonical ProseMirror body를 포함한 PostContent document JSON을 revision의 canonical 표현으로 사용해야 한다(MUST). Repost와 Quote는 같은 nullable Repost Source self-reference를 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/post.md`, `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0010-post-interaction-contracts.md`, `docs/domain/decisions/0014-post-structure-relations.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `PROD-389`, `PROD-394`, `PROD-461`, `PROD-554` 시스템은 게시물 메타데이터와 게시물 콘텐츠 revision을 분리하여 저장하고, version, nullable Plain Text summary와 canonical ProseMirror body를 포함한 PostContent document JSON을 revision의 canonical 표현으로 사용해야 한다(MUST). Repost와 Quote는 같은 nullable Repost Source self-reference를 사용해야 한다(MUST).
 
 #### Scenario: 게시물 저장
 
@@ -21,6 +21,31 @@
 - **AND** 시스템은 summary, 파생 Plain Text나 실행 가능한 HTML 본문을 별도 canonical 값으로 저장하지 않는다
 - **AND** JSON 안의 entity reference는 DB foreign key를 대체하지 않으며 owning canonical contract가 별도 relation projection을 요구할 때 그 projection은 같은 transaction에서 저장되고 canonical document로부터 재구축 가능해야 한다
 - **AND** PostContent Media node는 canonical document가 소유하는 예외이므로 별도 relation projection을 중복 저장하지 않는다
+
+#### Scenario: V1 Media node 저장
+
+- **WHEN** 새 PostContent가 하나 이상의 Media와 함께 생성된다
+- **THEN** V1 body는 최대 4개의 block Media node를 포함할 수 있다
+- **AND** 각 Media node attrs는 Media identity만 가진다
+- **AND** body 안의 Media node 위치가 표시 순서를 결정한다
+- **AND** document root의 optional Sensitive Media attr는 모든 Media node에 적용되며 생략하면 `false`다
+- **AND** Media identity와 순서는 PostContent document에, nullable Alt Text는 Media column에, Sensitive Media는 document root에 각각 한 번만 저장한다
+- **AND** 별도 Post-Media relation, Media ID 배열 또는 Post Sensitive Media column을 만들지 않는다
+
+#### Scenario: 기존 V1 document 호환
+
+- **WHEN** Media node와 Sensitive Media attr가 없는 기존 V1 document를 읽거나 canonicalize한다
+- **THEN** document는 계속 유효하다
+- **AND** Sensitive Media는 `false`로 해석한다
+- **AND** 기존 paragraph, text, hard break와 link 의미를 바꾸지 않는다
+- **AND** Media node 추가만으로 document schema version을 올리지 않는다
+
+#### Scenario: Media 참조 검증 경계
+
+- **WHEN** PostContent를 생성할 때 body가 Media identity를 참조한다
+- **THEN** application은 저장 전에 참조 Media의 존재와 현재 작성 권한을 검증한다
+- **AND** PostContent Media 참조를 위한 별도 database foreign key projection을 만들지 않는다
+- **AND** 과거 revision 참조를 깨뜨리는 Media 물리 삭제는 별도 lifecycle 계약 없이 제공하지 않는다
 
 #### Scenario: Repost와 Quote의 공용 Source 저장
 
