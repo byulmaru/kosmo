@@ -33,5 +33,9 @@ spec:
     initdb:
       database: kosmo
       owner: kosmo
+  managed:
+    roles:
+      - name: kosmo_migration
+        ensure: absent
   storage:
     size: 10Gi

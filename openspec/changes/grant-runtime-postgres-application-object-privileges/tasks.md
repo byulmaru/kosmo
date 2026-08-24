@@ -22,7 +22,7 @@ legacy `kosmo_api`와 `kosmo_worker`가 owner `kosmo`의 현재와 future `publi
 - object owner는 `kosmo`로 유지한다.
 - DDL, ownership, grant option, schema `CREATE`, `TRUNCATE`, `REFERENCES`, `TRIGGER`를 부여하지 않는다.
 - application sequence와 `drizzle` migration history에 권한을 부여하지 않는다.
-- 기존 migration runner의 `kosmo_migration` 연결과 `SET ROLE kosmo` 경계를 유지한다.
+- PROD-712 이후 migration runner의 CNPG-generated owner 직접 연결 경계를 유지한다.
 - application migration에서 legacy role 또는 현재 `kosmo_runtime`를 생성·변경하거나 credential을 다루지 않는다.
 
 **Verification**

@@ -16,6 +16,18 @@ Production CloudNativePG Cluster는 Barman Cloud CNPG-I plugin으로 다음 경�
 
 Backup 내용, database credential과 row 값은 command output, workflow log 또는 Linear에 남기지 않는다. Prometheus/Slack 자동 알림은 `PROD-552` 범위이며, 그 전에는 아래 상태를 수동 확인한다.
 
+## Migration 전환 backup gate
+
+PROD-712 production migration 전환 전에는 최신 completed `Backup`, 연속 WAL archive, PostgreSQL Cluster Ready 상태와
+active owner connection drain을 확인한다. 이 preflight evidence와 `prod` Environment required reviewer 승인은
+서로 대체하지 않는 별도 gate다. Migration은 Cluster가 생성한 `<cluster>-app` Secret으로 owner `kosmo`에 직접 연결하며,
+backup/restore 확인에서 runtime `kosmo_runtime` credential을 owner 대체 경로로 사용하지 않는다.
+
+전환 후 postflight에는 CNPG reconciliation, owner/catalog 상태, migration history 식별 정보와 active workload readiness를
+기록한다. Secret 값, password hash와 row 값은 기록하지 않는다. replicas=0인 historical owner ReplicaSet은 backup 복구
+경계를 위해 삭제하거나 revision history를 축소하지 않으며, 재활성화 시 owner credential을 다시 소비할 수 있는
+지원 외 rollback 위험으로 기록한다.
+
 ## 상태 확인
 
 ```sh
@@ -194,7 +206,7 @@ kubectl get cluster,pod -n kosmo-prod-restore
 
 ### 4. 데이터와 목표 검증
 
-CNPG가 생성한 `kosmo-postgres-restore-app` Secret을 `kosmo` owner와 `kosmo` database의 application credential로 사용해 읽기 전용 연결을 만든 뒤 다음을 비교한다. Secret 값은 terminal history, command output이나 Linear에 출력하지 않는다.
+CNPG가 생성한 `kosmo-postgres-restore-app` Secret을 `kosmo` owner와 `kosmo` database의 application credential로 사용해 읽기 전용 연결을 만든 뒤 다음을 비교한다. 이 restore owner Secret은 rehearsal 검증용이며 active runtime workload에는 연결하지 않는다. Secret 값은 terminal history, command output이나 Linear에 출력하지 않는다.
 
 - `pg_dump --schema-only` 결과의 구조적 차이
 - restore point 직전 snapshot에 기록한 `drizzle.__drizzle_migrations` count와 마지막 migration hash

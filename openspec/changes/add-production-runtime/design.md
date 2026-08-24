@@ -1,3 +1,7 @@
+> **Reconciliation (2026-08-24, PROD-712):** 아래 별도 `kosmo_migration` DatabaseRole,
+> migration VaultStaticSecret과 `SET ROLE kosmo` 설계는 historical/superseded context다. 현재 계약은
+> CNPG-generated owner credential 직접 연결이며 PROD-712가 obsolete identity/credential을 제거한다.
+
 ## Context
 
 현재 `apps/terraform/argocd.tf`의 `kosmo` ApplicationSet은 `kosmo-dev`만 생성하며 dev namespace, `dev.kos.moe`/`dev-api.kos.moe`와 `main` image version을 inline Helm 값으로 전달하고 automated sync, prune와 self-heal을 사용한다. Helm chart는 API/Web Rollout·Service·HTTPRoute, CloudNativePG Cluster와 하나의 환경별 Vault Secrets Operator projection을 렌더하고, database migration Job만 dev에서 렌더한다. API와 Web 및 dev migration Job의 `DATABASE_URL`은 모두 CloudNativePG가 bootstrap owner용으로 생성한 같은 `-app` Secret과 read-write Service를 사용한다.

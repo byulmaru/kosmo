@@ -6,7 +6,7 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 
 별도 production branch나 Git tag는 production source, approval, rollback selector가 아니다. Main에 저장된 production release workflow를 `main` ref에서 수동 실행하면 repository에 존재하는 정확한 40자리 commit SHA를 선택할 수 있다. Manual 경로는 승인 전에 target의 존재와 identity만 검증하고, `prod` 승인 뒤에 target을 checkout하고 prod image를 build·배포한다. Workflow definition ref(`main`)와 release target SHA를 항상 구분해 기록한다.
 
-`prod` Environment 승인은 해당 release의 production credential, migration과 workload 변경 전체를 보호하는 유일한 production 상태 변경 승인이다. 별도의 migration approval, dispatch 승인 또는 직접 Argo sync로 우회하지 않는다. GitHub Environment, OIDC trust와 branch 폐기는 저장소 문서나 green CI가 아니라 live GitHub/Vault/API 결과로 확인한다.
+`prod` Environment 승인은 해당 release를 시작하도록 허가하는 유일한 production 상태 변경 승인이다. 별도의 migration approval, dispatch 승인 또는 직접 Argo sync로 우회하지 않는다. `Prune=confirm` 리소스의 삭제 대상 확인은 이 release 승인을 대체하거나 새로운 release 권한을 부여하는 두 번째 승인이 아니라, 이미 승인된 release 안에서 보호 리소스의 정확한 삭제 범위를 확인하는 scoped confirmation이다. GitHub Environment, OIDC trust와 branch 폐기는 저장소 문서나 green CI가 아니라 live GitHub/Vault/API 결과로 확인한다.
 
 ## 첫 전환 준비
 
@@ -27,6 +27,8 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 - Production migration Job과 모든 활성화 workload는 해당 release의 하나의 immutable prod digest를 사용하고, Argo CD Helm source는 같은 release target full SHA를 사용한다. Dev digest는 prod digest와 달라도 된다.
 - Dev와 production image는 모두 GHCR에만 push한다. Production release는 build output의 immutable GHCR digest를 Argo CD에 직접 전달한다.
 - Production 배포는 `prod` Environment의 한 번의 required reviewer 승인으로 보호한다. 같은 승인 이후 migration 성공 때만 API·Web Rollout·HPA와 background Deployment를 활성화한다. 상세 경계는 [Production migration 실행 경계](./production-migrations.md)를 따른다.
+- Migration은 현재 PostgreSQL Cluster의 generated `<cluster>-app` Secret으로 owner `kosmo`에 직접 로그인하고, active API·Web·Worker·Fedify workload는 `kosmo_runtime`를 사용한다. `kosmo_migration` role, migration Vault/VSO source, `DATABASE_MIGRATION_ROLE`과 `SET ROLE` 경계는 production release에 포함하지 않는다.
+- Production migration preflight·postflight는 backup/WAL, active principal, CNPG/catalog와 workload readiness를 확인하는 별도 evidence gate다. 둘 중 어느 것도 `prod` Environment required reviewer의 별도 승인을 대체하지 않는다.
 - Git tag push, `production` branch push와 일반 branch push는 automatic production release·승인·배포를 시작하지 않는다. Git tag나 mutable image tag를 source selector 또는 workload identity로 사용하지 않는다.
 - Automatic/manual production release는 공용 concurrency group을 사용한다. 실행 중인 release는 취소하지 않으며, 여러 pending release는 최신 pending release로 대체할 수 있다. 대체된 SHA·trigger는 Actions 취소 기록으로 식별하고 필요한 경우 다시 승인한다.
 
@@ -38,7 +40,7 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 4. 승인 job은 release full SHA를 checkout하고 prod credential을 받아 prod image를 build해 GHCR에 push한다. Build digest와 SHA를 audit summary에 기록하고 승인 시점의 최신 `main`이나 mutable tag를 다시 해석하지 않는다.
 5. 승인 job은 build digest를 Argo source revision 및 migration-gated sync에 고정한다. Migration 성공 뒤 controller가 API·Web Rollout·HPA와 background Deployment를 기본 activation한다.
 6. Argo source revision, GHCR prod digest, migration Job과 모든 활성화 workload가 일치하고 Healthy인지 확인한다.
-7. [Production migration 실행 경계](./production-migrations.md), [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
+7. [Production migration 실행 경계](./production-migrations.md)의 migration postflight와 [OpenPanel 제품 분석 운영](./openpanel.md), [Sentry 오류 수집 운영](./sentry.md)의 배포 후 검증과 public smoke를 실행한다.
 
 ## Manual full-SHA release
 
@@ -46,7 +48,7 @@ Production build는 Environment 승인 뒤에만 시작한다. 승인 전에는 
 2. Preflight가 workflow ref, SHA 형식과 repository commit 존재 여부를 확인하고 target commit URL·SHA를 approval summary와 Environment 화면에 표시한다. 이 단계에서는 target code를 checkout·실행하거나 prod secret/credential을 읽지 않는다.
 3. Reviewer는 target SHA의 code diff와 DB compatibility를 확인한 뒤 `prod` Environment를 한 번 승인한다. 승인 전 preflight failure이면 target build·deploy를 시작하지 않는다.
 4. 승인 job은 target SHA를 checkout하고 prod build credential·source map secret으로 image를 build해 GHCR에 push한다. `SENTRY_RELEASE`, image metadata, Argo source와 audit record는 dispatch의 `github.sha`가 아니라 resolved target SHA를 사용한다.
-5. Build digest를 같은 gated release의 migration과 모든 production workload에 전달해 sync한다. Automatic release와 동일한 concurrency, migration barrier, smoke와 감사 필드를 사용한다.
+5. 승인된 뒤 production migration preflight를 완료하고, generated `<cluster>-app` Secret으로 owner `kosmo`에 직접 연결하는 migration Job을 실행한다. Job 성공 뒤 build digest를 같은 gated release의 모든 production workload에 전달해 sync한다. Automatic release와 동일한 concurrency, migration barrier, postflight, smoke와 감사 필드를 사용한다.
 
 ## Production-first 변경
 
@@ -61,6 +63,8 @@ Rollback은 과거 tag나 production branch를 다시 배포하거나 branch his
 3. Main revert를 기다릴 수 없고 호환 가능한 immutable commit이 repository에 이미 존재하면 그 full SHA를 manual release target으로 선택해 `prod` 승인 뒤 새 image를 build·배포한다.
 4. 어느 경로도 database state나 migration history를 down migration으로 되돌리지 않는다. Destructive migration 또는 schema 비호환이 관련되면 [Production PostgreSQL backup과 복구](./postgres-backup.md) 및 해당 schema migration runbook의 forward migration·restore 판단을 따른다.
 
+replicas=0인 controller-retained historical owner ReplicaSet은 수동 삭제하거나 revision history를 축소하지 않는다. 해당 revision은 지원되는 rollback 대상이 아니며, 재활성화하면 owner credential을 다시 소비할 수 있다는 잔여 위험을 기록한다.
+
 ## 완료·실패 판단
 
 Release는 다음을 모두 확인해야 완료로 기록한다.
@@ -69,6 +73,7 @@ Release는 다음을 모두 확인해야 완료로 기록한다.
 - Main automatic release에서는 dev build/deploy와 승인 후 prod build·approval·deploy 결과가 구분된다. Manual release에서는 입력 target SHA와 dispatch SHA가 구분된다.
 - Argo source revision이 target full SHA이고, migration과 모든 활성화 production workload가 해당 release의 하나의 prod digest를 사용한다.
 - Migration Job이 성공하고 API·Web Rollout·HPA와 background Deployment가 Healthy다.
+- Migration preflight와 postflight가 각각 backup/WAL, owner 직접 연결, obsolete migration identity 부재와 active runtime principal을 확인한다.
 - Production smoke와 OpenPanel/Sentry 배포 후 검증 결과가 기록된다.
 - Git tag와 production branch가 source·approval·rollback 경계로 사용되지 않는다.
 

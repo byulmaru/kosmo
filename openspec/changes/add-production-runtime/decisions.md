@@ -40,12 +40,12 @@
 - Consequences: DNS와 wildcard/apex certificate가 먼저 준비되어야 한다. Kosmo repository는 hostname과 Route만 소유하고 Gateway, Certificate, ClusterIssuer와 DNS credential은 소유하지 않는다.
 - Confirmation / Follow-up: Render에서 두 hostname과 parentRef를 확인하고 live HTTPRoute Accepted/ResolvedRefs 및 TLS certificate를 확인한다.
 
-### Production runtime 환경값과 migration DB credential의 분리
+### Production runtime 환경값과 historical migration DB credential의 분리
 
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-562`
-- Status: Active
+- Status: Partially Superseded by PROD-712
 - Context / Problem: Production runtime 환경값은 dev와 격리해야 하고 migration은 API/Web runtime과 다른 DB credential 경계가 필요하지만, migration용으로 API/Web의 전체 runtime 환경값을 복제해서는 안 된다.
 - Decision Outcome: 기존 환경별 projection 구조를 재사용해 production runtime 환경값은 `kubernetes/kosmo/prod` Vault KV path에서 `env` Kubernetes Secret으로 동기화하고 API/Web과 rollout restart target이 이를 소비한다. 별도 migration projection은 `kubernetes/kosmo/prod/migration`에서 database username/password만 `kubernetes.io/basic-auth` Secret으로 동기화한다. `/prod/runtime` path는 만들지 않으며 API/Web은 migration Secret을 소비하지 않는다.
 - Alternatives Considered: Runtime 환경값을 `kubernetes/kosmo/prod/runtime`으로 옮기는 방식은 기존 환경별 path 계약과 맞지 않아 제외했다. Migration Secret에 API/Web runtime 환경값 전체를 복제하는 방식은 credential 경계를 불필요하게 넓혀 제외했다. Secret value를 Helm/Terraform 입력으로 전달하는 방식은 manifest/state 노출 위험 때문에 제외했다.
@@ -57,7 +57,7 @@
 - Decision Date: 2026-07-30
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-562`
-- Status: Active
+- Status: Superseded by PROD-712
 - Context / Problem: Secret만 분리하고 PostgreSQL login을 공유하면 credential rotation과 소비 경계가 실제 database identity에서 분리되지 않는다. 반면 이번 change는 migration privilege 자체를 재설계하지 않는다.
 - Decision Outcome: CloudNativePG `DatabaseRole`로 `kosmo_migration` login role을 선언하고 migration basic-auth Secret을 `passwordSecret`으로 참조한다. Role은 login 가능, superuser 불가로 두고 기존 `kosmo` database owner role membership을 상속해 현재 migration 권한을 유지한다. API/Web은 기존 bootstrap owner의 `-app` Secret과 `-rw` Service를 계속 사용한다. DatabaseRole reclaim은 `retain`으로 두며 DatabaseRole과 migration VaultStaticSecret prune에는 명시적 확인을 요구한다.
 - Alternatives Considered: Runtime과 migration이 같은 login/Secret을 공유하는 방식은 확정된 credential 경계를 충족하지 못해 제외했다. 이 change에서 별도 least-privilege migration grant 체계를 설계하는 방식은 migration 실행·contract 정책까지 범위를 넓혀 제외했다.
@@ -69,7 +69,7 @@
 - Decision Date: 2026-07-31
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-562`, `PROD-564`, `PROD-616`; production incident evidence
-- Status: Active
+- Status: Superseded by PROD-712
 - Context / Problem: 첫 production migration에서 `kosmo_migration`은 `kosmo`의 member였지만 role을 전환하지 않은 채 schema 객체를 생성했다. PostgreSQL membership은 member가 owner의 기존 객체 권한을 상속하게 할 뿐 owner에게 member 소유 객체 권한을 역으로 부여하지 않아 API가 `permission denied for table instance`로 시작하지 못했다.
 - Decision Outcome: Production migration은 별도 `kosmo_migration` login/Secret으로 인증한 뒤 runner 내부에서 `SET ROLE kosmo`를 실행하고 Drizzle migration을 적용한다. API/Web credential 경계와 단일 `migrate` command는 유지한다.
 - Alternatives Considered: Runtime credential로 migration을 실행하는 방식은 credential 분리를 없애므로 제외했다. `kosmo_migration` 소유 객체에 table/sequence별 grant와 default privilege를 추가하는 방식은 현재 runtime이 bootstrap owner인 계약에 불필요한 두 번째 ownership 체계를 만들므로 제외했다.
@@ -131,7 +131,7 @@
 - Authority / Provenance: Linear `PROD-562`의 production database 보존 계약
 - Status: Active
 - Context / Problem: Shared ApplicationSet의 resource preservation을 켜면 dev Application 삭제 lifecycle도 바뀌고, 켜지 않으면 production Application 제거가 Cluster/PVC 삭제로 이어질 수 있다.
-- Decision Outcome: 기존 dev ApplicationSet은 변경하지 않고 production을 별도 Terraform `argocd_application` resource로 선언한다. Production Application은 `cascade=false`를 사용하며 Cluster, ObjectStore, migration DatabaseRole과 migration VaultStaticSecret의 prune에는 명시적 확인을 요구한다.
+- Decision Outcome: 기존 dev ApplicationSet은 변경하지 않고 production을 별도 Terraform `argocd_application` resource로 선언한다. Production Application은 `cascade=false`를 사용하며 Cluster와 ObjectStore prune에는 명시적 확인을 요구한다. Historical migration DatabaseRole과 VaultStaticSecret의 `Prune=confirm`은 PROD-712의 scoped cleanup confirmation 뒤 제거한다.
 - Alternatives Considered: Shared ApplicationSet에 `preserveResourcesOnDeletion`을 설정하는 방식은 dev scope를 불필요하게 변경해 제외했다. 데이터 resource에 아무 보호도 두지 않는 방식은 자동 prune과 실수 삭제 위험 때문에 제외했다.
 - Consequences: Production Application lifecycle과 dev lifecycle이 분리되고 Application 제거만으로 production resource가 연쇄 삭제되지 않는다. 실제 데이터 resource 제거에는 별도의 명시적 확인 및 운영 절차가 필요하다.
 - Confirmation / Follow-up: Terraform schema/plan에서 `cascade=false`를 확인하고 production manifest 검토에서 보호 대상 resource의 `Prune=confirm` annotation을 확인한다.

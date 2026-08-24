@@ -84,7 +84,7 @@
 
 ### Requirement: 권한 migration은 독립적으로 검증하고 production 작업과 분리한다
 
-**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-616, PROD-369, PROD-780. 권한 변경은 기존 `kosmo_migration` credential로 연결하고 `SET ROLE kosmo`를 수행하는 migration 경계를 사용해야 한다(MUST). Application migration은 legacy `kosmo_api` 또는 `kosmo_worker` 역할이나 현재 `kosmo_runtime`를 생성하거나 속성을 변경해서는 안 되며(MUST NOT), disposable 검증 환경은 PROD-369과 동등한 비소유 legacy fixture 역할을 migration 전에 준비해야 한다(MUST). local/disposable full replay와 비운영 catalog·legacy role 대표 DML 검증이 완료 조건이어야 한다(MUST). Production preflight, sync/apply, cutover와 post-apply live 검증은 별도 명시 승인 대상이며 이 capability의 구현·OpenSpec 완료 또는 archive 조건이어서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/operations/production-migrations.md`, PROD-724, PROD-616, PROD-369, PROD-780, PROD-712. 권한 변경은 CNPG-generated owner credential로 `kosmo`에 직접 연결하는 migration 경계를 사용해야 한다(MUST). Application migration은 legacy `kosmo_api` 또는 `kosmo_worker` 역할이나 현재 `kosmo_runtime`를 생성하거나 속성을 변경해서는 안 되며(MUST NOT), disposable 검증 환경은 PROD-369과 동등한 비소유 legacy fixture 역할을 migration 전에 준비해야 한다(MUST). local/disposable full replay와 비운영 catalog·legacy role 대표 DML 검증이 완료 조건이어야 한다(MUST). Production preflight, sync/apply, cutover와 post-apply live 검증은 별도 명시 승인 대상이며 이 capability의 구현·OpenSpec 완료 또는 archive 조건이어서는 안 된다(MUST NOT).
 
 #### Scenario: 빈 database에서 전체 migration을 replay한다
 
