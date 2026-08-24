@@ -253,7 +253,7 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 
 ### Requirement: Profile updates
 
-**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-648` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책, 기본 Post Visibility와 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST). 기본 Post Visibility는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 허용해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/profile.md`, `docs/domain/objects/hashtag.md`, `docs/domain/objects/account-profile-membership.md`, `docs/domain/decisions/0008-relationship-report-state-exclusions.md`, `docs/domain/decisions/0019-selected-profile-authorization-boundary.md`, `docs/domain/decisions/0020-profile-tag-shared-hashtag-identity.md`, `docs/architecture/core-services.md`, `PROD-489` 확정 결정 기록, `PROD-490`, `PROD-523` (PR #394), `PROD-522`, `PROD-526`, `PROD-648`, `PROD-665` — Active Account가 현재 선택한 Profile의 Owner이고 대상 Origin이 Local이며 Lifecycle State가 `Active`, Suspension State가 `Normal`일 때만 표시 이름, bio, 팔로우 정책, 기본 Post Visibility와 전체 Profile Tag 목록을 수정할 수 있어야 한다(MUST). Profile update input은 대상 Profile ID를 받지 않고 검증된 세션의 selected Profile identity를 사용해야 한다(MUST). Member, selected Profile 없음, Deactivated Profile과 Remote Profile은 수정할 수 없어야 한다(MUST NOT). 선택적 `tags: [String!]` input에 목록이 제공되면 기존 Profile Tag 전체 목록을 같은 Profile update transaction에서 교체해야 하며(MUST), input을 생략하거나 `null`로 보내면 기존 목록을 유지해야 한다(MUST). 기본 Post Visibility는 `PUBLIC`, `UNLISTED`, `FOLLOWERS`만 허용해야 한다(MUST). Core Profile action은 수정 transaction을 직접 소유하고 실제 actor-visible 변경 commit 뒤의 Effects Workflow start를 직접 시도해야 하며(MUST), caller database handle이나 caller-side post-commit lifecycle을 공개해서는 안 된다(MUST NOT).
 
 #### Scenario: Update profile as owner
 
@@ -301,6 +301,12 @@ API는 프로필 표시용 handle 문자열을 configured local instance 기준 
 - **WHEN** 현재 계정이 대상 프로필의 `OWNER`가 아니다
 - **THEN** 시스템은 owner permission required 오류를 반환한다
 - **AND** Profile Tag 관계를 변경하지 않는다
+
+#### Scenario: Core-owned Profile update transaction
+
+- **WHEN** GraphQL caller가 Profile 수정을 요청한다
+- **THEN** Core action은 기본 database로 transaction을 완료한 뒤 Profile 결과를 반환한다
+- **AND** caller는 database handle이나 post-commit callback을 전달하거나 실행하지 않는다
 
 ### Requirement: Profile disabling
 

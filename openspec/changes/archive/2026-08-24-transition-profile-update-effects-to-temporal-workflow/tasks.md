@@ -85,6 +85,7 @@ Accepted Profile Update Workflow가 stable update identity로 delivery 시점의
     `6c43330b-88a2-4afd-94b1-1eb895cf4a4b` identity로 완료됐고
     `sendLocalProfileUpdateActivity`는 모두 attempt 1로 완료됐다.
   - 후속 dev revision에서 Worker 재시작 뒤 시작한 marker update와 원복도 완료됐지만, accepted Workflow의
-    in-flight 재개나 Activity retry가 아니므로 retry·restart 검증 증거로 계산하지 않는다. 사용자 요청에 따라
-    추가 failure injection과 Worker restart는 수행하지 않는다.
-- [ ] 3.4 전체 task와 delta sync 가능성을 재확인한 뒤 이 change를 archive한다.
+    in-flight 재개나 Activity retry가 아니므로 retry·restart 검증 증거로 계산하지 않는다. 2026-08-24 사용자
+    결정에 따라 shared dev Worker 장애 주입·restart drill은 archive 필수조건이 아닌 별도 운영 신뢰도
+    검증으로 분리하며, 이번 archive를 위해 추가 failure injection과 Worker restart를 수행하지 않는다.
+- [x] 3.4 전체 task와 delta sync 가능성을 재확인한 뒤 이 change를 archive한다.

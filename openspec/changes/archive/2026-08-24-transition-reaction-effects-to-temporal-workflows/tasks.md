@@ -134,5 +134,7 @@ Worker Activities가 기존 Reaction Notification과 Like·EmojiReact·Undo proj
     `sendReactionUndoActivity`를 완료했다.
   - create는 `f72e6818fdbdfb2fa7f495f5261b8cb7582befca`, delete는 후속 dev revision
     `832c9ef2`에서 실행됐고 모든 Activity가 attempt 1로 끝났다. 따라서 단일 exact revision의 retry·restart
-    검증이 아니며 사용자 요청에 따라 추가 failure injection과 Worker restart는 수행하지 않는다.
-- [ ] 4.5 전체 task와 spec sync가 완료된 뒤 이 작업의 주 작업자가 OpenSpec archive를 수행한다.
+    증거로 계산하지 않는다. 2026-08-24 사용자 결정에 따라 shared dev Worker 장애 주입·restart drill은
+    archive 필수조건이 아닌 별도 운영 신뢰도 검증으로 분리하며, 이번 archive를 위해 추가 failure injection과
+    Worker restart를 수행하지 않는다.
+- [x] 4.5 전체 task와 spec sync가 완료된 뒤 이 작업의 주 작업자가 OpenSpec archive를 수행한다.

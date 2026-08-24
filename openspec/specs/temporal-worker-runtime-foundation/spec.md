@@ -22,25 +22,32 @@
 
 ### Requirement: 고정 business registration과 singleton Worker host
 
-**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`, `PROD-725`. 시스템은 Worker production entrypoint에 compile-time의 실제 business Workflow·Activity registry와 task queue를 정확히 하나 제공해야 한다(MUST). registry는 기존 Post Create Workflow와 새 Repost create, Post Delete, Repost Delete Workflow·Activity를 함께 등록하고 event별 Workflow source를 정적으로 조립해야 한다(MUST). 기존 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 유지해야 하며(MUST), Repost create는 type `postRepostWorkflow`·ID `post-repost:{postId}`, Post Delete는 type `postDeleteWorkflow`·ID `post-delete:{postId}`, Repost Delete는 type `repostDeleteWorkflow`·ID `repost-delete:{postId}`를 사용해야 한다(MUST). entrypoint 자체는 이 registry로 process-global Worker host를 정확히 한 번 시작해야 하며(MUST), exported `runWorker`/`startWorker` lifecycle, optional registration, registration 부재를 검사하는 정상 실행 경로, idle Worker 상태 또는 같은 process에서 Worker host를 다시 시작할 수 있는 범용 startup API를 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`, `PROD-725`, `PROD-665`, `PROD-723`. 시스템은 Worker production entrypoint에 compile-time의 실제 business Workflow·Activity registry와 task queue를 정확히 하나 제공해야 한다(MUST). Registry는 Post Create, Repost create, Post Delete, Repost Delete, Profile Update Effects, Reaction Create Effects와 Reaction Delete Effects Workflow·Activity를 함께 등록하고 event별 Workflow source를 정적으로 조립해야 한다(MUST). 기존 Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 유지해야 하며(MUST), Repost create는 type `postRepostWorkflow`·ID `post-repost:{postId}`, Post Delete는 type `postDeleteWorkflow`·ID `post-delete:{postId}`, Repost Delete는 type `repostDeleteWorkflow`·ID `repost-delete:{postId}`를 사용해야 한다(MUST). Profile Update Workflow type은 `profileUpdateEffectsWorkflow`를 사용하고 Temporal이 요구하는 Workflow ID에는 자동 생성한 update identity를 그대로 전달해야 한다(MUST). Reaction create/delete Workflow는 각각 `reactionCreateEffectsWorkflow`와 `reactionDeleteEffectsWorkflow` type을 사용해야 한다(MUST). Entrypoint 자체는 이 registry로 process-global Worker host를 정확히 한 번 시작해야 하며(MUST), exported `runWorker`/`startWorker` lifecycle, optional registration, registration 부재를 검사하는 정상 실행 경로, idle Worker 상태 또는 같은 process에서 Worker host를 다시 시작할 수 있는 범용 startup API를 제공해서는 안 된다(MUST NOT).
 
 #### Scenario: Production Worker 시작
 
 - **WHEN** Worker production entrypoint를 실행한다
-- **THEN** 시스템은 compile-time에 구성된 기존 Post Create와 새 Repost create/Post Delete/Repost Delete Workflow·Activity registry 및 하나의 task queue로 Worker host를 정확히 한 번 시작한다
+- **THEN** 시스템은 compile-time에 구성된 Post Create, Repost create, Post Delete, Repost Delete, Profile Update Effects, Reaction Create Effects와 Reaction Delete Effects Workflow·Activity registry 및 하나의 task queue로 Worker host를 정확히 한 번 시작한다
 - **AND** caller가 registration을 전달하거나 두 번째 Worker host를 시작할 수 있는 public startup API를 제공하지 않는다
 
 #### Scenario: 기존 Post Create 외부 identity 보존
 
-- **WHEN** 새 Repost create, Post Delete와 Repost Delete Workflow source를 기존 Worker registry에 추가한다
+- **WHEN** Profile Update 또는 Reaction Effects Workflow source를 기존 Worker registry에 추가한다
 - **THEN** Post Create Workflow type `postCreateEffectsWorkflow`와 ID `post-create-effects:{postId}`는 변경하지 않는다
-- **AND** Repost create는 `postRepostWorkflow`/`post-repost:{postId}`, Post Delete는 `postDeleteWorkflow`/`post-delete:{postId}`, Repost Delete는 `repostDeleteWorkflow`/`repost-delete:{postId}`를 사용한다
+- **AND** Repost create는 `postRepostWorkflow`/`post-repost:{postId}`, Post Delete는 `postDeleteWorkflow`/`post-delete:{postId}`, Repost Delete는 `repostDeleteWorkflow`/`repost-delete:{postId}`를 유지한다
+
+#### Scenario: Profile Update 외부 identity
+
+- **WHEN** actor-visible Profile 변경이 commit되어 Effects Workflow를 시작한다
+- **THEN** Workflow type은 `profileUpdateEffectsWorkflow`다
+- **AND** Workflow ID는 자동 생성된 update identity 자체다
+- **AND** Activity는 같은 update identity를 canonical `Update(Person)` IRI에 재사용한다
 
 #### Scenario: domain별 registration 조립
 
-- **WHEN** Repost create, Post Delete 또는 Repost Delete Workflow와 Activity를 Worker registry에 추가한다
+- **WHEN** Repost create, Post Delete, Repost Delete, Profile Update 또는 Reaction create/delete Workflow와 Activity를 Worker registry에 추가한다
 - **THEN** event별 Workflow 구현과 type·identity 계약은 분리된 source module에 남고 production entrypoint가 고정 registry로 조립한다
-- **AND** workflow마다 Worker host, task queue 또는 범용 runtime abstraction을 새로 만들지 않는다
+- **AND** Workflow마다 Worker host, task queue, Core contract file 또는 범용 runtime abstraction을 새로 만들지 않는다
 
 #### Scenario: 실제 effects registration 없는 build 방지
 
@@ -127,3 +134,28 @@
 - **WHEN** historical API, Worker 또는 Fedify URL·password selector를 일부만 제공하거나 activation 값을 추가·생략한 채 chart를 렌더한다
 - **THEN** Worker는 역할별 selector를 조합하거나 owner fallback을 사용하지 않고 chart-derived `kosmo_runtime` PG\* source를 사용해야 한다
 - **AND** Worker registration, startup, readiness, shutdown과 Temporal task behavior는 이 role 전환으로 변경되지 않아야 한다
+
+### Requirement: Reaction Effects Worker 등록과 lifecycle
+
+**Authority / Provenance:** `docs/architecture/core-services.md`, `PROD-722`, `PROD-723` — Worker의 단일 production entrypoint는 Reaction Create Effects Workflow, Reaction Delete Effects Workflow와 필요한 Notification·ActivityPub Activities를 기존 task queue에 compile-time 등록해야 한다(MUST). 이 등록은 runtime enable flag나 테스트 전용 export에 의존해서는 안 된다(MUST NOT).
+
+#### Scenario: Worker 시작
+
+- **WHEN** Worker process가 유효한 Temporal과 database 환경으로 시작한다
+- **THEN** 기존 하나의 Worker instance가 Reaction create/delete Workflow와 Activities를 함께 poll한다
+
+#### Scenario: Activity retry
+
+- **WHEN** accepted Reaction Workflow의 Activity가 재시도 가능한 오류를 반환한다
+- **THEN** Worker는 기존 bounded Activity retry 정책으로 같은 입력을 다시 실행한다
+
+#### Scenario: Worker 재시작
+
+- **WHEN** Reaction Workflow 실행 중 Worker process가 종료되고 다시 시작한다
+- **THEN** Temporal은 완료되지 않은 Activity를 재개할 수 있다
+- **AND** Workflow는 application process-local callback에 의존하지 않는다
+
+#### Scenario: 정상 종료
+
+- **WHEN** Worker가 종료 신호를 받는다
+- **THEN** 기존 drain과 connection close 순서가 Reaction Workflow 등록에도 동일하게 적용된다
