@@ -19,9 +19,11 @@ export async function postCreateEffectsWorkflow({
   postId,
   origin,
 }: PostCreateEffectsInput): Promise<void> {
-  const notification = createReplyNotificationActivity(postId);
-  await match(origin)
-    .with('LOCAL', () => settleEffects([notification, sendLocalPostCreateActivity(postId)]))
-    .with('ACTIVITYPUB', () => notification)
-    .exhaustive();
+  await settleEffects([
+    createReplyNotificationActivity(postId),
+    ...match(origin)
+      .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

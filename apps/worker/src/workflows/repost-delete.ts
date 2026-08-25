@@ -16,9 +16,11 @@ const { deleteRepostNotificationActivity, sendRepostUndoActivity } = proxyActivi
 });
 
 export async function repostDeleteWorkflow({ postId, origin }: RepostDeleteInput): Promise<void> {
-  const notification = deleteRepostNotificationActivity(postId);
-  await match(origin)
-    .with('LOCAL', () => settleEffects([notification, sendRepostUndoActivity(postId)]))
-    .with('ACTIVITYPUB', () => notification)
-    .exhaustive();
+  await settleEffects([
+    deleteRepostNotificationActivity(postId),
+    ...match(origin)
+      .with('LOCAL', () => [sendRepostUndoActivity(postId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

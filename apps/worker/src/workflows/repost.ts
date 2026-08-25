@@ -16,9 +16,11 @@ const { createRepostNotificationActivity, sendRepostAnnounceActivity } = proxyAc
 });
 
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
-  const notification = createRepostNotificationActivity(postId);
-  await match(origin)
-    .with('LOCAL', () => settleEffects([notification, sendRepostAnnounceActivity(postId)]))
-    .with('ACTIVITYPUB', () => notification)
-    .exhaustive();
+  await settleEffects([
+    createRepostNotificationActivity(postId),
+    ...match(origin)
+      .with('LOCAL', () => [sendRepostAnnounceActivity(postId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

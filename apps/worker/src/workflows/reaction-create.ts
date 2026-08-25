@@ -19,9 +19,11 @@ export async function reactionCreateEffectsWorkflow({
   reactionId,
   origin,
 }: ReactionCreateEffectsInput): Promise<void> {
-  const notification = createReactionNotificationActivity(reactionId);
-  await match(origin)
-    .with('LOCAL', () => settleEffects([notification, sendReactionActivity(reactionId)]))
-    .with('ACTIVITYPUB', () => notification)
-    .exhaustive();
+  await settleEffects([
+    createReactionNotificationActivity(reactionId),
+    ...match(origin)
+      .with('LOCAL', () => [sendReactionActivity(reactionId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

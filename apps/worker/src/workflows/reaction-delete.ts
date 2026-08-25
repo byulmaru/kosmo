@@ -27,14 +27,11 @@ export async function reactionDeleteEffectsWorkflow({
   createdAt,
   origin,
 }: ReactionDeleteEffectsInput): Promise<void> {
-  const notification = deleteReactionNotificationActivity(id);
-  await match(origin)
-    .with('LOCAL', () =>
-      settleEffects([
-        notification,
-        sendReactionUndoActivity({ id, profileId, postId, type, createdAt }),
-      ]),
-    )
-    .with('ACTIVITYPUB', () => notification)
-    .exhaustive();
+  await settleEffects([
+    deleteReactionNotificationActivity(id),
+    ...match(origin)
+      .with('LOCAL', () => [sendReactionUndoActivity({ id, profileId, postId, type, createdAt })])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }
