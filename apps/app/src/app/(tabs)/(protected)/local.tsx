@@ -68,7 +68,7 @@ function LocalFrame({
       paginationOwnerKey={paginationOwnerKey}
       stickyHeaderIndices={[routeOwnsHeader ? 1 : 0]}
     >
-      {routeOwnsHeader ? <PageHeader accessibilityLabel="홈" variant="brand" /> : null}
+      {routeOwnsHeader ? <PageHeader accessibilityLabel="로컬" variant="brand" /> : null}
       <TimelineTabs onReselect={onReselect} value="local" />
       <View style={styles.body}>{children}</View>
     </PaginationScrollView>

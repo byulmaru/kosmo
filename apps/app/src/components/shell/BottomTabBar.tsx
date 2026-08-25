@@ -78,7 +78,7 @@ export function BottomTabBar({
         );
         const content = (
           <Pressable
-            aria-current={active ? 'page' : undefined}
+            aria-current={tab.href && pathname === tab.href ? 'page' : undefined}
             accessibilityLabel={
               tab.label === '알림'
                 ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)

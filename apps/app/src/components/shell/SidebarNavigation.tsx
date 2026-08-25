@@ -144,9 +144,10 @@ export function SidebarNavigation({
         <View accessibilityLabel="주요 메뉴" role="navigation" style={styles.navigation}>
           {navigation.map((item) => {
             const { active, href } = resolveItem(item);
+            const current = href === '/home' ? pathname === href : active;
             const control = (
               <Pressable
-                aria-current={active ? 'page' : undefined}
+                aria-current={current ? 'page' : undefined}
                 accessibilityLabel={
                   item.label === '알림'
                     ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)

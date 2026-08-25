@@ -339,11 +339,15 @@ function UniversalShellContent({ revision }: { revision: number }) {
             >
               {timeline ? (
                 <PageHeader
-                  accessibilityLabel="홈"
+                  accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
                   leading={menuButton}
                   variant="brand"
                   {...(web
-                    ? { brandHref: '/home' as const, onBrandCurrentNavigate: reselectHome }
+                    ? {
+                        brandAccessibilityLabel: '홈',
+                        brandHref: '/home' as const,
+                        onBrandCurrentNavigate: reselectHome,
+                      }
                     : {})}
                 />
               ) : mobileShellHeader ? (

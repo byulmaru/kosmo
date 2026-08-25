@@ -33,6 +33,7 @@ type PageHeaderProps =
   | { leading?: ReactNode; title: string; trailing?: ReactNode; variant?: 'text' }
   | {
       accessibilityLabel: string;
+      brandAccessibilityLabel?: string;
       brandHref?: string;
       leading?: ReactNode;
       onBrandCurrentNavigate?: () => void;
@@ -167,4 +168,23 @@ test('brand variant renders the approved mark as a Home navigation link', () => 
   assert.equal(brandAction.props.accessibilityRole, 'link');
   assert.equal(logo?.props.variant, 'mark');
   assert.equal(logo?.props.width, 38);
+});
+
+test('brand variant keeps the route heading while naming its Home navigation link', () => {
+  const header = renderHeader({
+    accessibilityLabel: '로컬',
+    brandAccessibilityLabel: '홈',
+    brandHref: '/home',
+    variant: 'brand',
+  });
+  const heading = findElements(header, 'Text').find(
+    (element) => element.props.accessibilityRole === 'header',
+  );
+  const brandAction = findElements(header, 'Pressable').find(
+    (element) => element.props.accessibilityLabel === '홈',
+  );
+
+  assert.equal(heading?.props.children, '로컬');
+  assert.ok(brandAction);
+  assert.equal(brandAction.props.accessibilityRole, 'link');
 });

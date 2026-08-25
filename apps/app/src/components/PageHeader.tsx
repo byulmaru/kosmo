@@ -15,6 +15,7 @@ type PageHeaderProps =
     }
   | {
       accessibilityLabel: string;
+      brandAccessibilityLabel?: string;
       brandHref?: Href;
       leading?: ReactNode;
       onBrandCurrentNavigate?: () => void;
@@ -52,7 +53,7 @@ export function PageHeader(props: PageHeaderProps) {
                 onCurrentNavigate={props.onBrandCurrentNavigate}
               >
                 <Pressable
-                  accessibilityLabel={props.accessibilityLabel}
+                  accessibilityLabel={props.brandAccessibilityLabel ?? props.accessibilityLabel}
                   accessibilityRole="link"
                   style={styles.brandControl}
                 >
