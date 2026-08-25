@@ -86,6 +86,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   상태에 유지하며 기존 `Toast`로 실패만 알린다. 다음 실행은 마지막으로 성공 저장된 preference를 사용하고,
   성공 저장값이 없으면 `시스템`으로 시작한다.
 - 앱 시작 시 로컬 선택값 확인이 끝나기 전에는 기존 Splash를 유지해 잘못된 테마가 잠깐 노출되지 않게 한다.
+  저장소 read가 예외로 실패하면 preference를 `시스템`으로 fallback해 hydration을 완료하고 Splash를 해제하며,
+  기존 `Toast`로 실패를 알린다. 이 실패 경로에서는 저장소 재쓰기를 시도하지 않는다.
 - preference를 실제 Light/Dark `resolved theme`로 해석해 앱 화면, Native `StatusBar` foreground style과 Web
   `theme-color`가 같은 mode를 사용하게 한다. `시스템`은 OS mode 변경을 함께 따르고, 명시적 `라이트`·`다크`는
   OS mode와 무관하게 system chrome에도 동일하게 반영한다.
@@ -174,7 +176,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
 - DSN-54는 Settings root/master의 테마 현재값 행, `/settings/theme`의 System·Light·Dark 선택 화면,
   Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 preference 초기값·정규화, 선택값 상태,
-  기기 로컬 persistence와 실패 semantics, 초기 hydration, app-wide ThemeProvider·Native StatusBar·Web
+  기기 로컬 persistence와 read/write 실패 semantics, 초기 hydration, app-wide ThemeProvider·Native StatusBar·Web
   `theme-color` 적용, 남은 route·shell·domain consumer의 semantic token 이관·예외 정리와 지원 플랫폼의 대표
   Light/Dark 화면·주요 interaction state·system chrome 검증을 소유한다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
