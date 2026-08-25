@@ -107,8 +107,8 @@ Repository 문서와 database migration memory가 owner 직접 로그인, runtim
 - CNPG reconciliation error와 관련 application error가 없는지 확인한다.
 
 - [x] 4.1 Dev 적용 전 principal·role dependency·migration history와 workload baseline을 수집한다.
-- [ ] 4.2 Dev owner migration 전환을 적용하고 정확한 `Prune=confirm` 대상만 승인해 obsolete role cleanup과 migration 실행을 검증한다.
-- [ ] 4.3 Dev CNPG/catalog state, active runtime principal과 workload readiness를 기록한다.
+- [x] 4.2 Dev owner migration 전환을 적용하고 정확한 `Prune=confirm` 대상만 승인해 obsolete role cleanup과 migration 실행을 검증한다.
+- [x] 4.3 Dev CNPG/catalog state, active runtime principal과 workload readiness를 기록한다.
 
 ## 5. PROD-712 Production 승인 전환과 최종 evidence
 
@@ -134,7 +134,7 @@ Repository 문서와 database migration memory가 owner 직접 로그인, runtim
 - 전환 전후 migration 성공, principal/role catalog, CNPG status, active connection과 workload readiness를 확인한다.
 - Backup/WAL 상태, historical revision 목록, 지원 가능한 rollback 범위와 Vault source cleanup 시점을 기록한다.
 
-- [ ] 5.1 Production preflight evidence를 갱신하고 credential/role 변경에 대한 명시 승인을 받는다.
-- [ ] 5.2 승인된 owner migration 전환을 적용하고 migration 성공 및 active runtime 경계를 검증한다.
-- [ ] 5.3 정확한 `Prune=confirm` 대상을 별도 확인·승인해 obsolete `kosmo_migration` role/VSO 경로를 제거하고 CNPG/catalog postflight를 완료한다.
-- [ ] 5.4 Production postflight 뒤 다음 scheduled backup과 후속 WAL archive 정상을 확인한 다음 external Vault migration source를 제거하고 rollback 경계와 최종 evidence를 기록한다.
+- [x] 5.1 Production preflight evidence를 갱신하고 credential/role 변경에 대한 명시 승인을 받는다.
+- [x] 5.2 승인된 owner migration 전환을 적용하고 migration 성공 및 active runtime 경계를 검증한다.
+- [x] 5.3 정확한 `Prune=confirm` 대상을 별도 확인·승인해 obsolete `kosmo_migration` role/VSO 경로를 제거하고 CNPG/catalog postflight를 완료한다.
+- [x] 5.4 Production postflight 뒤 다음 scheduled backup과 후속 WAL archive 정상을 확인한 다음 external Vault migration source를 제거하고 rollback 경계와 최종 evidence를 기록한다.
