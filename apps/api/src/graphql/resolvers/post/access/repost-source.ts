@@ -1,8 +1,8 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { visiblePostWhere } from '@kosmo/core/visibility';
 import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { visibleProfileWhere } from '@/profile/visibility';
-import { postVisibilityAccessCondition } from './visibility';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 
@@ -11,16 +11,12 @@ const DirectRepostSourceProfiles = alias(Profiles, 'direct_repost_source_profile
 const DirectRepostSourceInstances = alias(Instances, 'direct_repost_source_instance');
 
 export const postRepostSourceAccessWhere = ({ ctx }: { ctx: UserContext }): SQL<boolean> => {
-  const directSourceVisible = postVisibilityAccessCondition({
-    columns: {
-      postProfileId: DirectRepostSources.profileId,
-      postState: DirectRepostSources.state,
-      postVisibility: DirectRepostSources.visibility,
-      profileVisible: sql<boolean>`${visibleProfileWhere({
-        profile: DirectRepostSourceProfiles,
-        instance: DirectRepostSourceInstances,
-      })}`,
-    },
+  const directSourceVisible = visiblePostWhere({
+    post: DirectRepostSources,
+    profileVisible: sql<boolean>`${visibleProfileWhere({
+      profile: DirectRepostSourceProfiles,
+      instance: DirectRepostSourceInstances,
+    })}`,
     viewerProfileId: ctx.session?.profileId,
     db,
   });

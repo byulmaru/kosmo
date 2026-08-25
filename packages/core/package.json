@@ -14,7 +14,7 @@
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
     "./polyfill": "./polyfill.ts",
-    "./visibility/post": "./visibility/post.ts",
+    "./visibility": "./visibility/index.ts",
     "./profile": "./profile.ts",
     "./search": "./search.ts",
     "./services": "./services/index.ts",
