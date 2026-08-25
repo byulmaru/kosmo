@@ -50,6 +50,10 @@ mock.module('react-native', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('react-relay', {
   exports: {
     graphql: () => ({}),
