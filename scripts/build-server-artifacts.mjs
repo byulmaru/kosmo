@@ -37,7 +37,6 @@ export const SERVER_ARTIFACTS = [
 ];
 
 const artifactFileName = 'index.mjs';
-const runtimePackageFileName = 'runtime-package.json';
 const nodeBuiltins = new Set([
   ...builtinModules,
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
@@ -48,6 +47,10 @@ function packageNameFromSpecifier(specifier) {
     return specifier.split('/').slice(0, 2).join('/');
   }
   return specifier.split('/')[0];
+}
+
+function isPackageSpecifier(specifier) {
+  return !nodeBuiltins.has(specifier) && !specifier.startsWith('<');
 }
 
 async function findPackageVersion(resolvedPath, expectedName) {
@@ -68,12 +71,101 @@ async function findPackageVersion(resolvedPath, expectedName) {
   throw new Error(`Could not locate ${expectedName} package metadata from ${resolvedPath}`);
 }
 
-function bundleWorkspacePackagesPlugin() {
+function bundleWorkspacePackagesPlugin({ externalTemporal = false } = {}) {
+  const optionalCanvasNamespace = 'kosmo-optional-canvas';
+  const coreRequire = createRequire(join(workspaceRoot, 'packages/core/package.json'));
+  const jsdomRoot = dirname(coreRequire.resolve('jsdom/package.json'));
+  const jsdomRequire = createRequire(join(jsdomRoot, 'lib/api.js'));
+  const cssTreeRoot = dirname(jsdomRequire.resolve('css-tree/package.json'));
+  const cssTreeDataPatchPath = join(cssTreeRoot, 'lib/data-patch.js');
+  const cssTreeDataPath = join(cssTreeRoot, 'lib/data.js');
+  const cssTreeVersionPath = join(cssTreeRoot, 'lib/version.js');
+  const jsdomComputedStylePath = join(jsdomRoot, 'lib/jsdom/living/css/helpers/computed-style.js');
+  const jsdomXmlHttpRequestPath = join(jsdomRoot, 'lib/jsdom/living/xhr/XMLHttpRequest-impl.js');
   return {
     name: 'bundle-workspace-packages',
     setup(buildContext) {
       buildContext.onResolve({ filter: /^@kosmo\// }, (arguments_) => {
         return { path: createRequire(arguments_.importer).resolve(arguments_.path) };
+      });
+      buildContext.onResolve({ filter: /^@temporalio\// }, () => {
+        if (externalTemporal) {
+          return { external: true };
+        }
+        return undefined;
+      });
+      buildContext.onResolve({ filter: /^canvas$/ }, () => ({
+        namespace: optionalCanvasNamespace,
+        path: 'canvas',
+      }));
+      buildContext.onLoad({ filter: /^canvas$/, namespace: optionalCanvasNamespace }, () => ({
+        contents:
+          'throw Object.assign(new Error("Cannot find module \\\'canvas\\\'"), { code: "MODULE_NOT_FOUND" });',
+        loader: 'js',
+      }));
+      buildContext.onLoad({ filter: /computed-style\.js$/ }, async (arguments_) => {
+        if (arguments_.path !== jsdomComputedStylePath) {
+          return undefined;
+        }
+        const [source, stylesheet] = await Promise.all([
+          readFile(arguments_.path, 'utf8'),
+          readFile(join(jsdomRoot, 'lib/jsdom/browser/default-stylesheet.css'), 'utf8'),
+        ]);
+        return {
+          contents: source.replace(
+            /const defaultStyleSheet = fs\.readFileSync\([\s\S]*?\n\);/u,
+            `const defaultStyleSheet = ${JSON.stringify(stylesheet)};`,
+          ),
+          loader: 'js',
+        };
+      });
+      buildContext.onLoad({ filter: /XMLHttpRequest-impl\.js$/ }, async (arguments_) => {
+        if (arguments_.path !== jsdomXmlHttpRequestPath) {
+          return undefined;
+        }
+        const source = await readFile(arguments_.path, 'utf8');
+        return {
+          // Kosmo uses JSDOM for server-side DOM parsing and serialization, not synchronous XHR.
+          // Avoid retaining jsdom's separate worker-thread file in an otherwise single-file artifact.
+          contents: source.replace(
+            'const syncWorkerFile = require.resolve("./xhr-sync-worker.js");',
+            'const syncWorkerFile = undefined;',
+          ),
+          loader: 'js',
+        };
+      });
+      buildContext.onLoad({ filter: /(?:data|version)(?:-patch)?\.js$/ }, async (arguments_) => {
+        if (
+          ![cssTreeDataPatchPath, cssTreeDataPath, cssTreeVersionPath].includes(arguments_.path)
+        ) {
+          return undefined;
+        }
+        const source = await readFile(arguments_.path, 'utf8');
+        if (arguments_.path === cssTreeDataPatchPath) {
+          return {
+            contents: source.replace(
+              /import \{ createRequire \} from 'module';[\s\S]*?const patch = require\('\.\.\/data\/patch\.json'\);/u,
+              "import patch from '../data/patch.json';",
+            ),
+            loader: 'js',
+          };
+        }
+        if (arguments_.path === cssTreeDataPath) {
+          return {
+            contents: source.replace(
+              /import \{ createRequire \} from 'module';[\s\S]*?const mdnSyntaxes = require\('mdn-data\/css\/syntaxes\.json'\);/u,
+              "import patch from './data-patch.js';\nimport mdnAtrules from 'mdn-data/css/at-rules.json';\nimport mdnProperties from 'mdn-data/css/properties.json';\nimport mdnSyntaxes from 'mdn-data/css/syntaxes.json';",
+            ),
+            loader: 'js',
+          };
+        }
+        return {
+          contents: source.replace(
+            /import \{ createRequire \} from 'module';[\s\S]*?export const \{ version \} = require\('\.\.\/package\.json'\);/u,
+            "import packageJson from '../package.json';\nexport const { version } = packageJson;",
+          ),
+          loader: 'js',
+        };
       });
     },
   };
@@ -85,7 +177,7 @@ async function runtimeDependenciesFromMetafile(metafile) {
     const importerRequire = createRequire(join(workspaceRoot, input));
     for (const dependency of metadata.imports.filter(({ external }) => external)) {
       const specifier = dependency.path;
-      if (nodeBuiltins.has(specifier)) {
+      if (!isPackageSpecifier(specifier)) {
         continue;
       }
       const packageName = packageNameFromSpecifier(specifier);
@@ -102,6 +194,17 @@ async function runtimeDependenciesFromMetafile(metafile) {
   return Object.fromEntries(
     [...runtimeDependencies.entries()].sort(([left], [right]) => left.localeCompare(right)),
   );
+}
+
+function externalNonBuiltinImportsFromMetafile(metafile) {
+  return [
+    ...new Set(
+      Object.values(metafile.inputs)
+        .flatMap(({ imports }) => imports)
+        .map(({ path, external }) => (external && isPackageSpecifier(path) ? path : undefined))
+        .filter(Boolean),
+    ),
+  ].sort();
 }
 
 function assertArtifactSource(entryPoint) {
@@ -132,8 +235,7 @@ async function buildArtifact({ name, entryPoint }, artifactRoot) {
       metafile: true,
       outfile: outputFile,
       platform: 'node',
-      plugins: [bundleWorkspacePackagesPlugin()],
-      packages: 'external',
+      plugins: [bundleWorkspacePackagesPlugin({ externalTemporal: name === 'worker' })],
       sourcemap: 'external',
       sourcesContent: true,
       target: SERVER_ARTIFACT_TARGET,
@@ -151,28 +253,43 @@ async function buildArtifact({ name, entryPoint }, artifactRoot) {
     throw new Error(`esbuild did not return dependency metadata for ${name}.`);
   }
 
-  const dependencies = await runtimeDependenciesFromMetafile(buildResult.metafile);
-  const runtimePackage = {
-    name: `@kosmo/runtime-${name}`,
-    private: true,
-    type: 'module',
-    dependencies,
-  };
-  await writeFile(
-    join(outputDirectory, runtimePackageFileName),
-    `${JSON.stringify(runtimePackage, null, 2)}\n`,
-  );
+  const externalImports = externalNonBuiltinImportsFromMetafile(buildResult.metafile);
+  const isWorker = name === 'worker';
+  if (!isWorker && externalImports.length > 0) {
+    throw new Error(
+      `${name} server artifact has non-builtin external imports: ${externalImports.join(', ')}`,
+    );
+  }
+
+  const dependencies = isWorker ? await runtimeDependenciesFromMetafile(buildResult.metafile) : {};
+  if (isWorker) {
+    const runtimePackage = {
+      name: `@kosmo/runtime-${name}`,
+      private: true,
+      type: 'module',
+      dependencies,
+    };
+    await writeFile(
+      join(outputDirectory, 'runtime-package.json'),
+      `${JSON.stringify(runtimePackage, null, 2)}\n`,
+    );
+  }
 
   const metadata = {
     artifact: name,
     entryPoint,
     format: 'esm',
     nodeTarget: SERVER_ARTIFACT_TARGET,
+    externalImports,
     runtimeDependencies: dependencies,
-    files: [artifactFileName, `${artifactFileName}.map`, runtimePackageFileName],
+    files: [artifactFileName, `${artifactFileName}.map`, 'meta.json'],
     inputs: buildResult.metafile.inputs,
     outputs: buildResult.metafile.outputs,
   };
+
+  if (isWorker) {
+    metadata.files.splice(2, 0, 'runtime-package.json');
+  }
 
   await writeFile(join(outputDirectory, 'meta.json'), `${JSON.stringify(metadata, null, 2)}\n`);
 
@@ -181,6 +298,7 @@ async function buildArtifact({ name, entryPoint }, artifactRoot) {
     entryPoint,
     directory: relativeOutputDirectory(name),
     files: metadata.files,
+    externalImports,
     runtimeDependencies: dependencies,
     bytes: (await readFile(outputFile)).byteLength,
   };

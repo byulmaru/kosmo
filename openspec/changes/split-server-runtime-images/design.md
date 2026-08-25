@@ -36,34 +36,36 @@ Temporal Worker는 일반 server bundle과 다르다. `@temporalio/worker`는 No
 - Worker host를 일반 server와 함께 완전 bundle하면 Temporal native `.node` resolution과 SDK 내부 bundler dependency가 깨질 수 있다. 반대로 `workflowsPath`를 유지하면 final image에서 TypeScript source와 runtime Webpack을 제거할 수 없다.
 - `@temporalio/core-bridge` package는 여러 OS/architecture binary를 포함한다. Worker image는 target Linux/ARM64 artifact를 보존하면서 다른 platform artifact를 제거했을 때 SDK resolution이 실제 container에서 성공하는지 확인해야 한다.
 - Migration artifact는 `drizzle/` SQL directory를 별도 asset으로 가져야 한다. Runtime-configurable database/schema authority를 새로 만들지 않고 artifact layout에서 deterministic하게 경로를 계산해야 한다.
+- Core의 JSDOM 사용은 HTML parsing/serialization으로 한정되지만 JSDOM은 stylesheet·JSON과 사용하지 않는 synchronous XHR worker file을 package-relative 경로로 참조한다. Single-file build는 실제 사용하는 data asset을 inline하고 synchronous XHR worker resolution을 제거한 뒤 현재 parsing/serialization 경로를 실행해 검증해야 한다.
 - Production Argo parameter update가 다섯 digest 중 일부만 적용되면 migration과 workload가 서로 다른 release가 된다. 생성, validation과 parameter mutation은 완전한 set 단위여야 한다.
 - Current Temporal SDK의 공식 지원 Node 범위와 repository의 Node 26 target이 다를 수 있으므로, Linux/ARM64 Node 26.5.1 container boot와 Worker lifecycle 증거 없이 host build 성공만으로 호환성을 주장하지 않는다.
 
 ### Recommended Approach
 
-1. 명시적인 server build dependency로 esbuild를 추가하고 공통 build script에서 Web, API, Fedify Consumer, migration 및 Worker host entry의 workspace application code를 ESM JavaScript로 생성한다. Third-party bare import는 일관되게 external로 두고 esbuild build graph에서 package 이름과 설치 version을 자동 도출한 artifact별 runtime manifest를 함께 생성한다. Dockerfile이나 검사 코드에 package 이름 allowlist를 중복하지 않는다.
-2. 각 final image는 생성된 runtime manifest를 package manager로 설치해 transitive dependency, package-relative asset과 native module 구조를 보존한다. Worker Workflow는 같은 lockfile의 `@temporalio/worker`가 제공하는 `bundleWorkflowCode`로 별도 생성하고 production host는 `workflowsPath` 대신 image 안의 prebuilt `workflowBundle.codePath`를 사용한다. Worker image에서만 target Linux/ARM64 native binary를 보존한다.
+1. 명시적인 server build dependency로 esbuild를 추가하고 공통 build script에서 Web, API, Fedify Consumer와 migration의 workspace application code 및 third-party runtime dependency를 각각 하나의 ESM JavaScript artifact로 생성한다. API의 `@temporalio/client` 호출도 같은 artifact에 포함한다. Worker application/Activity host code는 bundle하되 `@temporalio/worker`와 그 SDK runtime dependency는 external로 두고 esbuild build graph에서 설치 version을 자동 도출한 Worker runtime manifest를 생성한다.
+2. Web/API/Fedify/Migration final image는 단일 JavaScript artifact와 필요한 static/SQL asset만 복사하고 runtime package install을 하지 않는다. Worker final image만 생성된 runtime manifest를 package manager로 설치해 native module 구조를 보존한다. Worker Workflow는 같은 lockfile의 `@temporalio/worker`가 제공하는 `bundleWorkflowCode`로 별도 생성하고 production host는 `workflowsPath` 대신 image 안의 prebuilt `workflowBundle.codePath`를 사용한다. Worker image에서만 target Linux/ARM64 native binary를 보존한다.
 3. Migration entry는 final artifact 위치에서 함께 복사된 `drizzle/` directory를 deterministic하게 resolve해 `runDatabaseMigrations({ migrationsFolder })`에 전달한다. Database target·credential 입력 계약은 바꾸지 않는다.
-4. Dockerfile은 공통 dependency/build stage와 `web`, `api`, `worker`, `fedify-consumer`, `migration` final target을 둔다. 각 target은 자신의 generated runtime manifest만 설치하고 고정된 Node entrypoint를 사용하며 다중 runtime source/command dispatcher를 복사하지 않는다. Web target만 Expo asset을 받는다.
+4. Dockerfile은 공통 dependency/build stage와 `web`, `api`, `worker`, `fedify-consumer`, `migration` final target을 둔다. 네 non-Worker target은 단일 artifact를 고정 Node entrypoint로 실행하고 Worker target만 generated runtime manifest를 설치한다. 어느 target도 다중 runtime source/command dispatcher를 복사하지 않으며 Web target만 Expo asset을 받는다.
 5. 같은 repository에 runtime별 immutable build tag를 push하고 build output의 다섯 digest를 하나의 manifest/structured output으로 조립한다. Digest는 정규식뿐 아니라 runtime key 완전성, source full SHA와 build run identity를 검증한다.
 6. Helm values는 공통 repository와 runtime별 digest/version map을 받고 helper가 workload 이름에 대응하는 image reference를 만든다. Production은 모든 runtime에 digest를 요구하고, dev는 같은 build가 발행한 runtime별 tag 또는 digest를 사용한다.
 7. Argo CD parameter mutation은 한 command/job에서 다섯 값을 함께 설정한 뒤 source revision과 실제 parameter set을 다시 읽어 검증한다. Migration Job은 `migration` image로 wave 1, 네 workload는 대응 image로 wave 2를 유지한다.
 8. Sentry upload stage는 API/Web server external source map을 기존 browser artifact와 함께 inject/upload/validate하고, final image 복사 전에 map과 sourceMappingURL을 제거한다. Secret mount를 사용하고 token을 build argument나 layer로 전달하지 않는다.
-9. Artifact gate는 동일 Linux/ARM64 platform에서 generated manifest 정합성, filesystem 경계, container boot/health, image size와 layer 비교를 수행한다. 정확한 package allowlist나 pnpm 내부 경로는 테스트 계약으로 고정하지 않는다. 이 gate와 OpenSpec/issue review가 끝난 뒤에만 Helm·workflow 전환 slice를 시작한다.
+9. Artifact gate는 동일 Linux/ARM64 platform에서 네 non-Worker artifact의 single-file import closure와 runtime `node_modules` 부재, Worker generated manifest 정합성, filesystem 경계, container boot/health, image size와 layer 비교를 수행한다. 정확한 Worker package allowlist나 pnpm 내부 경로는 테스트 계약으로 고정하지 않는다. 이 gate와 OpenSpec/issue review가 끝난 뒤에만 Helm·workflow 전환 slice를 시작한다.
 
 ### Allowed Alternatives
 
 - esbuild 대신 ESM, static dynamic import, `import.meta` 의미, source map과 metafile-equivalent dependency 검증을 만족하는 다른 bundler를 사용할 수 있다.
 - Runtime별 image는 같은 OCI repository의 runtime tag를 공유하거나 별도 repository를 사용할 수 있다. Helm에는 최종 `repository@digest`가 runtime별로 명확하고 release set이 원자적으로 검증되어야 한다.
-- Third-party dependency를 모두 bundle하는 대안은 package-relative asset과 native/dynamic resolution을 artifact마다 별도 처리하지 않고도 동등한 자동 추적과 boot 증거를 제공할 때만 사용할 수 있다. 어느 경우에도 package 이름의 수동 allowlist를 runtime 계약으로 두지 않는다.
+- Worker SDK까지 단일 bundle하는 대안은 Temporal native module과 Workflow sandbox의 package-relative resolution을 별도 처리하지 않고도 동등한 ABI·lifecycle 증거를 제공할 때만 사용할 수 있다. 현재는 공식 Node/native runtime 경계를 보존한다.
 
 ### Known Traps
 
 - Transitive esbuild 설치에 의존해 build script를 추가하지 않는다. 사용 도구는 workspace의 명시적 dependency여야 한다.
-- External package 이름을 Dockerfile, build script와 검사 코드에 각각 수동으로 나열하지 않는다. Import graph가 바뀌면 generated runtime manifest가 함께 바뀌고 package manager가 transitive tree를 소유해야 한다.
+- Non-Worker runtime에 package install stage나 dependency manifest를 남기지 않는다. Worker external package 이름을 Dockerfile과 검사 코드에 중복 나열하지 않고 build graph가 runtime manifest를 소유하게 한다.
 - Worker `workflowsPath`를 `.js`로만 바꾸고 startup bundling을 유지하지 않는다. 이는 Webpack/SWC와 Workflow source를 runtime에 다시 넣는다.
 - Native package directory를 임의로 평탄화하거나 `.node` 파일 하나만 위치를 바꿔 copy하지 않는다. SDK의 platform resolution 경로를 보존하고 container에서 load한다.
 - Migration bundle의 새 `import.meta.url`에서 기존 `drizzle.config.ts` 상대 경로가 우연히 맞는다고 가정하지 않는다.
+- Bundled JSDOM을 synchronous XHR 용도로 확장하지 않는다. 그런 요구가 생기면 별도 worker asset을 포함하는 artifact 계약이나 DOM 구현 변경을 먼저 결정한다.
 - 한 digest가 실패했을 때 이전 release의 해당 runtime digest로 채워 완전한 set처럼 만들지 않는다.
 - Dev의 mutable `main` tag 하나를 다섯 runtime에 다시 사용하거나 production digest 검증을 tag 존재로 대체하지 않는다.
 - Source map upload 실패를 성공으로 삼키거나 source map/token을 final layer에 복사하지 않는다.
@@ -73,7 +75,7 @@ Temporal Worker는 일반 server bundle과 다르다. `@temporalio/worker`는 No
 
 - [다섯 image build로 CI job과 registry artifact 수가 증가한다] → 공통 BuildKit stage/cache를 공유하고 release manifest 하나로 digest를 조립하되 각 runtime 결과와 scanner 상태를 별도로 보존한다.
 - [Worker image는 native bridge 때문에 다른 image보다 계속 클 수 있다] → 다른 runtime에서 완전히 격리하고 target binary만 남기며, Worker 크기는 현재 단일 image와 별도로 비교한다.
-- [Bundling이 application의 dynamic loading을 누락하거나 external package manifest가 실제 import와 어긋날 수 있다] → workspace code의 metafile, generated manifest 정합성과 실제 container boot/health 및 주요 dynamic path test를 gate로 둔다.
+- [Bundling이 application의 dynamic loading이나 package-relative asset을 누락할 수 있다] → 네 non-Worker artifact의 import closure와 실제 container boot/health 및 주요 dynamic path test를 gate로 두고, Worker는 generated manifest 정합성과 native load를 별도로 검증한다.
 - [Server source map upload가 build credential 범위를 넓힌다] → 기존 Sentry secret mount와 승인 경계를 재사용하고 final image 및 로그의 부재를 검사한다.
 - [Runtime별 digest를 부분 적용하면 migration/workload compatibility가 깨진다] → 완전한 set validation, 단일 Argo mutation과 post-write verification 후에만 sync한다.
 - [Active production-release change와 archive 순서가 충돌할 수 있다] → `deploy-production-from-main-or-sha`의 current contract를 먼저 canonical에 동기화·archive하고 이 change의 release delta를 적용한다. Artifact slice는 이 integration gate와 독립적으로 검증할 수 있다.

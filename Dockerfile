@@ -86,44 +86,15 @@ FROM app-build AS server-artifacts
 RUN set -eux; \
   for artifact in web api fedify-consumer migration; do \
     test -s "/app/server-dist/${artifact}/index.mjs"; \
-    test -s "/app/server-dist/${artifact}/runtime-package.json"; \
+    test ! -e "/app/server-dist/${artifact}/runtime-package.json"; \
   done; \
   test -s /app/server-dist/worker/index.mjs; \
   test -s /app/server-dist/worker/workflow-bundle.js; \
   test -s /app/server-dist/worker/runtime-package.json
 
-# Install each build-graph-derived runtime manifest independently. Package
-# names live only in the generated artifact; Docker preserves the package
-# manager's transitive dependency, asset, peer, and native module layout.
-FROM deps AS split-runtime-deps-base
-
-COPY pnpm-workspace.yaml /runtime-deploy/pnpm-workspace.yaml
-
-FROM split-runtime-deps-base AS web-runtime-deps
-
-COPY --from=server-artifacts /app/server-dist/web/runtime-package.json /runtime-deploy/package.json
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  cd /runtime-deploy && pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
-
-FROM split-runtime-deps-base AS api-runtime-deps
-
-COPY --from=server-artifacts /app/server-dist/api/runtime-package.json /runtime-deploy/package.json
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  cd /runtime-deploy && pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
-
-FROM split-runtime-deps-base AS fedify-consumer-runtime-deps
-
-COPY --from=server-artifacts /app/server-dist/fedify-consumer/runtime-package.json /runtime-deploy/package.json
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  cd /runtime-deploy && pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
-
-FROM split-runtime-deps-base AS migration-runtime-deps
-
-COPY --from=server-artifacts /app/server-dist/migration/runtime-package.json /runtime-deploy/package.json
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  cd /runtime-deploy && pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
-
-FROM split-runtime-deps-base AS worker-runtime-deps
+# The Worker host keeps Temporal's native/runtime packages external. All other
+# server runtimes are self-contained ESM artifacts and need no install stage.
+FROM base AS worker-runtime-deps
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -134,7 +105,8 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store set -eux
   test "${TARGETOS}" = linux; \
   test "${TARGETARCH}" = arm64; \
   cd /runtime-deploy; \
-  pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
+  pnpm install --prod --no-frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store; \
+  pnpm rebuild --pending
 
 RUN set -eux; \
   bridge_entrypoint="$(cd /runtime-deploy && node -e "const { createRequire } = require('node:module'); const workerRequire = createRequire(require.resolve('@temporalio/worker/package.json')); process.stdout.write(workerRequire.resolve('@temporalio/core-bridge'))")"; \
@@ -167,9 +139,7 @@ ENV EXPO_WEB_ROOT=/app/apps/app/dist
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/web/index.mjs /app/server-dist/web/index.mjs
 COPY --from=server-artifacts --chown=app:app /app/server-dist/web/meta.json /app/server-dist/web/meta.json
-COPY --from=server-artifacts --chown=app:app /app/server-dist/web/runtime-package.json /app/server-dist/web/runtime-package.json
 COPY --from=app-build --chown=app:app /app/apps/app/dist /app/apps/app/dist
-COPY --from=web-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
 
@@ -181,8 +151,6 @@ FROM split-runtime-base AS api-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/api/index.mjs /app/server-dist/api/index.mjs
 COPY --from=server-artifacts --chown=app:app /app/server-dist/api/meta.json /app/server-dist/api/meta.json
-COPY --from=server-artifacts --chown=app:app /app/server-dist/api/runtime-package.json /app/server-dist/api/runtime-package.json
-COPY --from=api-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
 
@@ -210,8 +178,6 @@ FROM split-runtime-base AS fedify-consumer-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/index.mjs /app/server-dist/fedify-consumer/index.mjs
 COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/meta.json /app/server-dist/fedify-consumer/meta.json
-COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/runtime-package.json /app/server-dist/fedify-consumer/runtime-package.json
-COPY --from=fedify-consumer-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
 
@@ -223,8 +189,6 @@ FROM split-runtime-base AS migration-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/index.mjs /app/server-dist/migration/index.mjs
 COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/meta.json /app/server-dist/migration/meta.json
-COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/runtime-package.json /app/server-dist/migration/runtime-package.json
-COPY --from=migration-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 COPY --chown=app:app drizzle /app/drizzle
 
 USER app

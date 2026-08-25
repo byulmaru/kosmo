@@ -63,6 +63,7 @@ const manifest = existsSync(manifestPath)
   ? JSON.parse(readFileSync(manifestPath, 'utf8'))
   : undefined;
 const dependencies = Object.keys(manifest?.dependencies ?? {}).sort();
+const nodeModules = existsSync('/app/node_modules');
 let workerPackage;
 try {
   workerPackage = createRequire(entrypoint).resolve('@temporalio/worker/package.json');
@@ -97,7 +98,8 @@ process.stdout.write(JSON.stringify({
   sourceMapReference: artifactFiles
     .filter((path) => /\.(?:c|m)?js$/u.test(path))
     .some((path) => readFileSync(path, 'utf8').includes('sourceMappingURL=')),
-  manifest: manifest !== undefined,
+  runtimePackage: manifest !== undefined,
+  nodeModules,
   dependencies,
   missingDependencies: dependencies.filter(
     (dependency) => !existsSync(join('/app/node_modules', dependency)),
@@ -212,7 +214,11 @@ export async function checkRuntimeImage({
     runtime,
     entrypoint: contract.entrypoint,
   });
-  const requiredFiles = ['index.mjs', 'meta.json', 'runtime-package.json'].map((file) =>
+  const requiredFiles = ['index.mjs', 'meta.json'];
+  if (contract.worker) {
+    requiredFiles.push('runtime-package.json');
+  }
+  const requiredArtifactFiles = requiredFiles.map((file) =>
     artifactPath(contract.artifactDirectory, file),
   );
 
@@ -229,15 +235,20 @@ export async function checkRuntimeImage({
     `unexpected artifact directories: ${probe.artifactDirectories.join(', ')}`,
   );
   assert(
-    requiredFiles.every((file) => probe.artifactFiles.includes(file)),
-    'artifact, metadata, or generated runtime manifest is missing',
+    requiredArtifactFiles.every((file) => probe.artifactFiles.includes(file)),
+    'artifact, metadata, or Worker runtime manifest is missing',
   );
   assert(probe.sourceFiles.length === 0, `TypeScript source remains: ${probe.sourceFiles[0]}`);
   assert(probe.mapFiles.length === 0 && !probe.sourceMapReference, 'source map remains');
-  assert(
-    probe.manifest && probe.missingDependencies.length === 0,
-    'runtime manifest is incomplete',
-  );
+  if (contract.worker) {
+    assert(probe.runtimePackage && probe.nodeModules, 'Worker runtime dependencies are missing');
+    assert(probe.missingDependencies.length === 0, 'Worker runtime manifest is incomplete');
+  } else {
+    assert(
+      !probe.runtimePackage && !probe.nodeModules,
+      'non-Worker image contains runtime dependencies',
+    );
+  }
   assert(!probe.tsx, 'runtime manifest contains tsx');
   assert(probe.expo === Boolean(contract.expo), 'Expo assets are in the wrong image');
   assert(

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { access, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -45,9 +45,6 @@ test('builds every server artifact with ESM metadata and external source maps', 
       const directory = join(workspaceRoot, artifact.directory);
       const sourceMap = JSON.parse(await readFile(join(directory, 'index.mjs.map'), 'utf8'));
       const metadata = JSON.parse(await readFile(join(directory, 'meta.json'), 'utf8'));
-      const runtimePackage = JSON.parse(
-        await readFile(join(directory, 'runtime-package.json'), 'utf8'),
-      );
       const source = await readFile(join(directory, 'index.mjs'), 'utf8');
 
       assert.match(source, /\bimport\b/);
@@ -55,17 +52,28 @@ test('builds every server artifact with ESM metadata and external source maps', 
       assert.equal(metadata.nodeTarget, SERVER_ARTIFACT_TARGET);
       assert.ok(Object.keys(metadata.inputs).length > 0);
       assert.ok(sourceMap.sourcesContent?.length > 0);
-      assert.deepEqual(runtimePackage.dependencies, metadata.runtimeDependencies);
-      assert.deepEqual(runtimePackage.dependencies, artifact.runtimeDependencies);
-      assert.equal(runtimePackage.dependencies.tsx, undefined);
-      assert.equal(
-        Object.keys(runtimePackage.dependencies).some((dependency) =>
-          dependency.startsWith('@kosmo/'),
-        ),
-        false,
-      );
+      assert.deepEqual(metadata.externalImports, artifact.externalImports);
+      if (artifact.name === 'worker') {
+        const runtimePackage = JSON.parse(
+          await readFile(join(directory, 'runtime-package.json'), 'utf8'),
+        );
+        assert.deepEqual(runtimePackage.dependencies, metadata.runtimeDependencies);
+        assert.deepEqual(runtimePackage.dependencies, artifact.runtimeDependencies);
+        assert.equal(runtimePackage.dependencies.tsx, undefined);
+        assert.equal(
+          Object.keys(runtimePackage.dependencies).some((dependency) =>
+            dependency.startsWith('@kosmo/'),
+          ),
+          false,
+        );
+      } else {
+        assert.equal(await exists(join(directory, 'runtime-package.json')), false);
+        assert.deepEqual(artifact.externalImports, []);
+        assert.deepEqual(artifact.runtimeDependencies, {});
+      }
     }
 
+    assert.equal(worker.externalImports.includes('@temporalio/worker'), true);
     assert.equal(worker.runtimeDependencies['@temporalio/worker'], '1.22.0');
     for (const artifact of manifest.artifacts.filter(({ name }) => name !== 'worker')) {
       assert.equal(artifact.runtimeDependencies['@temporalio/worker'], undefined);
@@ -101,14 +109,6 @@ test('cleans output when an entrypoint is missing', async () => {
 test('migration artifact resolves its adjacent drizzle asset directory', async () => {
   try {
     await buildServerArtifacts({ artifacts: [migrationArtifact] });
-    const runtimePackage = JSON.parse(
-      await readFile(join(SERVER_ARTIFACT_OUTPUT_ROOT, 'migration/runtime-package.json'), 'utf8'),
-    );
-    for (const dependency of Object.keys(runtimePackage.dependencies)) {
-      const target = join(SERVER_ARTIFACT_OUTPUT_ROOT, 'node_modules', dependency);
-      await mkdir(dirname(target), { recursive: true });
-      await symlink(join(workspaceRoot, 'packages/core/node_modules', dependency), target, 'dir');
-    }
     const migrationArtifactPath = pathToFileURL(
       join(SERVER_ARTIFACT_OUTPUT_ROOT, 'migration', 'index.mjs'),
     ).href;
@@ -138,7 +138,7 @@ test('migration source entry resolves the repository drizzle directory', async (
   assert.equal(stdout, join(workspaceRoot, 'drizzle'));
 });
 
-test('derives an external runtime package from the build graph', async () => {
+test('bundles a third-party package into a non-Worker artifact', async () => {
   const fixtureDirectory = join(workspaceRoot, 'packages/core/db/.server-artifact-test');
   const fixturePath = join(fixtureDirectory, 'runtime-dependency.ts');
   await mkdir(fixtureDirectory, { recursive: true });
@@ -154,16 +154,70 @@ test('derives an external runtime package from the build graph', async () => {
       ],
     });
     const [artifact] = manifest.artifacts;
-    assert.match(artifact.runtimeDependencies.zod, /^4\./u);
-    const runtimePackage = JSON.parse(
-      await readFile(
+    assert.deepEqual(artifact.externalImports, []);
+    assert.deepEqual(artifact.runtimeDependencies, {});
+    assert.equal(
+      await exists(
         join(SERVER_ARTIFACT_OUTPUT_ROOT, 'runtime-dependency-fixture/runtime-package.json'),
-        'utf8',
       ),
+      false,
     );
-    assert.deepEqual(runtimePackage.dependencies, artifact.runtimeDependencies);
   } finally {
     await rm(fixtureDirectory, { force: true, recursive: true });
+    await rm(SERVER_ARTIFACT_OUTPUT_ROOT, { force: true, recursive: true });
+  }
+});
+
+test('bundles JSDOM package assets into an executable non-Worker artifact', async () => {
+  const fixtureDirectory = join(workspaceRoot, 'packages/core/db/.server-artifact-test');
+  const fixturePath = join(fixtureDirectory, 'jsdom-assets.ts');
+  await mkdir(fixtureDirectory, { recursive: true });
+  await writeFile(
+    fixturePath,
+    "import { JSDOM } from 'jsdom'; export const text = JSDOM.fragment('<p>ready</p>').textContent;\n",
+  );
+
+  try {
+    await buildServerArtifacts({
+      artifacts: [
+        {
+          name: 'jsdom-assets-fixture',
+          entryPoint: 'packages/core/db/.server-artifact-test/jsdom-assets.ts',
+        },
+      ],
+    });
+    const artifactUrl = pathToFileURL(
+      join(SERVER_ARTIFACT_OUTPUT_ROOT, 'jsdom-assets-fixture/index.mjs'),
+    ).href;
+    const artifact = await import(`${artifactUrl}?test=${Date.now()}`);
+
+    assert.equal(artifact.text, 'ready');
+    assert.equal(
+      await exists(join(SERVER_ARTIFACT_OUTPUT_ROOT, 'jsdom-assets-fixture/runtime-package.json')),
+      false,
+    );
+  } finally {
+    await rm(fixtureDirectory, { force: true, recursive: true });
+    await rm(SERVER_ARTIFACT_OUTPUT_ROOT, { force: true, recursive: true });
+  }
+});
+
+test('bundles the Temporal Client into the API artifact', async () => {
+  try {
+    const manifest = await buildServerArtifacts({
+      artifacts: [SERVER_ARTIFACTS.find(({ name }) => name === 'api')],
+    });
+    const [api] = manifest.artifacts;
+    const source = await readFile(join(SERVER_ARTIFACT_OUTPUT_ROOT, 'api/index.mjs'), 'utf8');
+
+    assert.deepEqual(api.externalImports, []);
+    assert.match(source, /node_modules\/\.pnpm\/@temporalio\+client@/u);
+    assert.doesNotMatch(source, /(?:from|import|require)\s*\(?\s*["']@temporalio\/client/u);
+    assert.equal(
+      await exists(join(SERVER_ARTIFACT_OUTPUT_ROOT, 'api/runtime-package.json')),
+      false,
+    );
+  } finally {
     await rm(SERVER_ARTIFACT_OUTPUT_ROOT, { force: true, recursive: true });
   }
 });

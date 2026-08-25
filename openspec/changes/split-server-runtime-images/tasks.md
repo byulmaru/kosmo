@@ -22,8 +22,8 @@
 
 - [x] 1.1 현재 single image의 Linux/ARM64 build, 다섯 command, filesystem/dependency, compressed/uncompressed size와 layer baseline을 기록한다.
 - [x] 1.2 선택한 JavaScript bundler를 pnpm CLI로 명시적 workspace build dependency에 추가하고 lockfile 정합성을 확인한다.
-- [x] 1.3 Server artifact build의 입력·출력·target Node/ESM·source map·build-graph 기반 runtime manifest와 clean/stale output 처리를 구현한다.
-- [x] 1.4 Build script의 성공, compile 오류, 누락 entry, runtime manifest 정합성과 stale artifact 제거를 검증하고 관련 package/type check를 통과시킨다.
+- [x] 1.3 Server artifact build의 입력·출력·target Node/ESM·source map, non-Worker single-file closure, Worker build-graph 기반 runtime manifest와 clean/stale output 처리를 구현한다.
+- [x] 1.4 Build script의 성공, compile 오류, 누락 entry, non-Worker external import 부재, Worker runtime manifest 정합성과 stale artifact 제거를 검증하고 관련 package/type check를 통과시킨다.
 
 ## 2. PROD-831 Web·API·Fedify·Migration JavaScript artifact
 
@@ -48,10 +48,10 @@ Web BFF, GraphQL API, Fedify Consumer와 migration이 TypeScript source/`tsx` �
 - 네 artifact를 Node에서 직접 실행하고 dynamic import, `import.meta.main`, health/static route, queue shutdown과 migration asset path의 focused test/smoke를 수행한다.
 - API/Web external source map의 sourcesContent/debug identity, upload-required 실패와 final artifact map/reference 제거를 검증한다.
 
-- [x] 2.1 Web/API/Fedify Consumer production entry graph와 자동 생성 third-party runtime manifest를 만들고 기존 runtime 행동을 보존한다.
+- [x] 2.1 Web/API/Fedify Consumer production entry graph와 third-party dependency를 각각 단일 JavaScript artifact로 만들고 기존 runtime 행동을 보존한다.
 - [x] 2.2 Migration JavaScript entry와 `drizzle/` asset의 deterministic path를 구현하고 기존 migration history·lock·transaction tests를 통과시킨다.
 - [x] 2.3 API/Web server source map을 기존 Sentry release build에 inject·upload·validate하고 final runtime artifact에서 map/reference를 제거한다.
-- [x] 2.4 네 artifact가 generated manifest로 설치된 dependency와 함께 `tsx`·TypeScript source 없이 시작되는 package/focused smoke를 추가하고 dynamic loading·shutdown 회귀를 검증한다.
+- [x] 2.4 네 artifact가 runtime `node_modules`, `tsx`·TypeScript source 없이 시작되는 package/focused smoke를 추가하고 Temporal Client, dynamic loading·shutdown 회귀를 검증한다.
 
 ## 3. PROD-831 Temporal Worker prebuilt artifact와 native runtime
 
@@ -78,8 +78,8 @@ Temporal Worker가 고정 business registry를 가진 사전 생성 host JavaScr
 
 - [x] 3.1 Production Workflow registry를 exact `@temporalio/worker` version으로 build-time bundle하고 누락/추가 Workflow export를 검증한다.
 - [x] 3.2 Worker host가 production에서 prebuilt `workflowBundle`을 사용하고 기존 fixed Activity registry와 task queue를 보존하게 한다.
-- [x] 3.3 Worker host의 build-graph 기반 runtime manifest와 Linux/ARM64 Temporal native/runtime production dependency tree를 조립한다.
-- [x] 3.4 Worker package tests와 Linux/ARM64 container smoke로 generated manifest, native load, Workflow bundle, health/readiness 및 graceful shutdown을 검증한다.
+- [x] 3.3 Worker application/Activity host를 bundle하고 Temporal SDK external import의 build-graph 기반 runtime manifest와 Linux/ARM64 native/runtime production dependency tree를 조립한다.
+- [x] 3.4 Worker package tests와 Linux/ARM64 container smoke로 generated manifest, native load, Workflow bundle, health/readiness 및 graceful shutdown을 다시 검증한다.
 
 ## 4. PROD-831 다섯 final image와 artifact gate
 
@@ -104,11 +104,11 @@ Web, API, Worker, Fedify Consumer와 Migration final image가 고정 entrypoint�
 - 다섯 Docker target을 Linux/ARM64로 build하고 고정 command, non-root 실행, filesystem, package tree, asset과 health/exit를 검사한다.
 - 각 target의 compressed/uncompressed size와 history를 baseline과 비교하고 dependency/layer 감소 원인을 기록한다.
 
-- [x] 4.1 공통 build cache와 generated runtime manifest를 재사용하면서 Web/API/Worker/Fedify Consumer/Migration을 분리하는 다섯 final Docker target을 구현한다.
+- [x] 4.1 공통 build cache를 재사용하면서 네 single-file runtime과 generated Worker runtime manifest로 Web/API/Worker/Fedify Consumer/Migration을 분리하는 다섯 final Docker target을 구현한다.
 - [x] 4.2 각 final image를 고정 Node entrypoint와 non-root runtime으로 실행하고 기존 다중 command dispatcher 의존을 제거한다.
-- [x] 4.3 Runtime별 manifest/filesystem 경계, static/migration/Workflow asset과 `tsx`·TypeScript source 부재를 검증하되 exact package allowlist나 package-manager 내부 경로를 고정하지 않는다.
-- [x] 4.4 다섯 image의 Linux/ARM64 boot/health/exit smoke와 baseline 대비 compressed/uncompressed size/layer gate를 통과시키고 결과를 PROD-831에 기록한다.
-- [x] 4.5 Artifact gate 결과를 리뷰해 모두 통과하지 않으면 후속 Helm/CI/CD task를 시작하지 않고 실패 원인과 남은 증거를 보고한다.
+- [x] 4.3 Non-Worker single-file/filesystem 경계, Worker manifest, static/migration/Workflow asset과 `tsx`·TypeScript source 부재를 검증하되 exact Worker package allowlist나 package-manager 내부 경로를 고정하지 않는다.
+- [x] 4.4 다섯 image의 Linux/ARM64 boot/health/exit smoke와 baseline 대비 compressed/uncompressed size/layer gate를 다시 통과시키고 결과를 PROD-831에 기록한다.
+- [x] 4.5 Artifact gate 결과를 다시 리뷰해 모두 통과하지 않으면 후속 Helm/CI/CD task를 시작하지 않고 실패 원인과 남은 증거를 보고한다.
 
 ## 5. PROD-831 OpenSpec integration과 Helm runtime image set
 
