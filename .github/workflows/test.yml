@@ -116,21 +116,17 @@ jobs:
       matrix:
         include:
           - shard: 1
-            total: 4
+            total: 3
             database_name: kosmo_test_web_e2e_shard_1
             port_offset: 10000
           - shard: 2
-            total: 4
+            total: 3
             database_name: kosmo_test_web_e2e_shard_2
             port_offset: 20000
           - shard: 3
-            total: 4
+            total: 3
             database_name: kosmo_test_web_e2e_shard_3
             port_offset: 30000
-          - shard: 4
-            total: 4
-            database_name: kosmo_test_web_e2e_shard_4
-            port_offset: 40000
     env:
       DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/${{ matrix.database_name }}
       KOSMO_TEST_PORT_OFFSET: ${{ matrix.port_offset }}
