@@ -107,6 +107,25 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 왼쪽 viewport 가장자리와 충돌하면 menu를 화면 안으로 보정한다. 이 방향 선택은 More에만 적용하며
   Repost menu의 기존 시작 정렬과 Native bottom action sheet는 바꾸지 않는다.
 
+## Profile 고정 More menu와 attribution
+
+- Profile 목록 최상단의 고정 Post는 `Pin`과 `고정됨`을 표시한다. `Pin`은 인접한 문장이 의미를 제공하는
+  장식 아이콘이며 보조 기술에 중복 announce하지 않는다.
+- owner의 More `ActionMenu`는 기존 첫 행 `링크 복사`를 유지하고, 다음 행을 상태에 따라
+  `프로필에 고정` 또는 `프로필 고정 해제`로 전환한다. `삭제`는 마지막에 두며 기존 eligibility가 있을 때만 표시한다.
+- 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
+  Web menu는 `18`/`primary`, Native menu는 `24`/`primary`를 사용하며 삭제의 `danger` 색은 유지한다.
+- 고정 Post는 Profile 목록에만 우선 표시하고 Home timeline 순서는 변경하지 않는다.
+- PROD-809에서 확정한 정책에 따라 새 Post를 고정하면 기존 고정 Post가 해제되는 경우
+  `고정 게시물을 변경할까요?` 제목과 `새 게시물을 고정하면 현재 고정된 게시물의 고정이 해제됩니다.` 설명을
+  표시한다. action은 `취소`와 Primary `변경하기`이며 취소·닫기는 상태를 바꾸지 않는다. 단순
+  `프로필 고정 해제`는 확인 없이 수행한다.
+- 교체 확인은 별도 confirmation component나 OS alert가 아니라 canonical `ModalSheet` pattern을 재사용한다.
+  Web에서는 제목으로 이름 붙은 modal `dialog`, Android·iOS에서는 제목으로 이름 붙은 modal 접근성 surface를
+  제공하며 backdrop과 platform back은 취소와 동일하게 처리한다.
+- empty·removed·unavailable는 representative UI일 뿐이다. 최대 수·대상 자격·권한·lifecycle·pagination·
+  persistence/API·ActivityPub과 교체 mutation·동시성·실패 처리 정책은 PROD-809가 소유한다.
+
 ## Repost 실패 toast
 
 - 앱은 하나의 공용 transient toast host를 provider에서 제공하고 실제 `PostListItem`·`PostLayout` surface가
@@ -159,6 +178,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-471`은 Repost 취소 뒤 서버 확정 Source 상태를 같은 actor Store에 정규화하는 cache 갱신을 소유한다.
 - `PROD-598`은 기존 Post 삭제 domain과 GraphQL resolver를 재사용해 More의 작성자 삭제 항목, 확인 dialog,
   Relay cache 동기화와 실패 복구를 소유한다.
+- `PROD-809`는 Profile 고정의 최대 수·대상 자격·권한·lifecycle·pagination·persistence/API·ActivityPub과
+  교체 mutation·동시성·실패 처리 정책, 실제 Production·runtime 검증을 소유한다.
 - `PROD-425`는 pure Repost Reply의 바깥 contentless Post binding과 disabled 상태를 소유한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
@@ -209,3 +230,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   단일 mutation, pending 중 중복·dismiss 차단과 busy 상태를 검증한다.
 - 성공 뒤 Home·Profile 목록 제거와 상세의 삭제됨·접근 불가 상태, selected Profile별 actor Store 격리, 실패
   뒤 cache 유지·dialog 재시도와 접근 가능한 한국어 toast를 검증한다.
+- Profile 고정의 Mobile `390`, Web `1024`·`1440` Light/Dark 화면, ProfileHero·PostListItem·PostAttributionRow
+  source 상속, 메뉴 label·순서·color, 장식 Pin의 중복 announce 방지를 검증한다. 실제 runtime 접근성은 PROD-809에서
+  검증한다.
+- 새 고정으로 기존 고정 Post가 해제되는 경우에만 교체 확인을 표시하고 제목·설명·`취소`·Primary `변경하기`가
+  정확한지, canonical `ModalSheet`와 플랫폼별 modal 의미를 재사용하는지, backdrop·platform back을 포함한
+  취소·닫기는 상태를 유지하며 단순 `프로필 고정 해제`에는 확인을 표시하지 않는지 검증한다. 교체 mutation의
+  성공·실패·동시성은 PROD-809에서 검증한다.
