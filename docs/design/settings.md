@@ -5,14 +5,17 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 다양한 설정 category와 detail이 추가될 수 있지만, 승인되지 않은 category·placeholder·범용 registry를
 미리 노출하거나 구현하지 않는다.
 
-현재 hub에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**과 Kosmo가 소유한 Local Profile의
-`게시물 기본 공개 범위`, `뮤트 및 차단` **내부 진입점**을 제공한다. 실제 행의 label·이동 동작과 접근성
-이름에서 두 서비스와 소유 단위를 명확히 구분한다.
+현재 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, 클라이언트 로컬의 `테마`
+**내부 진입점**, Kosmo가 소유한 Local Profile의 `게시물 기본 공개 범위`, `뮤트 및 차단` **내부 진입점**을
+직접 배치한다. 실제 행의 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
+DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 
 ## Route와 진입점
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
+- 테마 detail의 canonical 내부 route는 `/settings/theme`다. 홈이나 다른 주요 route에 임시 테마 toggle을
+  중복 배치하지 않는다.
 - full Web sidebar와 compact Web icon rail에는 `설정` 진입점을 주요 navigation 항목으로 표시한다.
 - `< compact` mobile Web과 Android·iOS에서는 mobile drawer에 `설정` 진입점을 표시한다. 하단 탭 바와
   우측 레일에는 같은 진입점을 중복하지 않는다.
@@ -26,9 +29,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- 현재 root 목록에는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점, `게시물 기본 공개 범위`,
-  `뮤트 및 차단` 내부 진입점을 이 순서로 직접 표시한다. 항목 하나만 가진 `계정`·`프로필` 대분류를 만들지
-  않는다.
+- root 목록에는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점, 현재 선택값을 함께 보여 주는 `테마`,
+  `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 표시한다. 항목 하나만 가진
+  `계정`·`화면 설정`·`프로필` 대분류를 만들지 않는다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
@@ -64,6 +67,24 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 - chevron이나 현재 값 같은 trailing content는 실제 동작과 정보에 맞을 때만 사용한다. 내부 detail과 외부
   destination은 이동을 전달할 수 있지만, 현재 화면에서 값을 바꾸는 control에는 장식용 chevron을 붙이지
   않는다.
+
+## 테마 설정
+
+- `/settings` root와 full Web master의 `테마` 행은 현재 선택값 `시스템`·`라이트`·`다크` 중 하나를 함께
+  보여 주고 `/settings/theme` detail로 이동한다.
+- detail 본문은 `테마 설정` section label로 시작하고, 그 아래 기존 `RadioOption` 문법으로 `시스템`,
+  `라이트`, `다크` 세 항목을 제공한다. `시스템`은 기기 색상 모드 변경을 따르고, `라이트`와 `다크`는 기기
+  설정과 무관하게 해당 모드를 사용한다.
+- 세 항목 아래에는 `테마 설정은 이 기기에만 적용되며 다른 기기와 동기화되지 않아요.` 안내를 보조 텍스트로
+  한 번만 표시한다.
+- 선택은 별도 `저장` action 없이 즉시 화면에 반영하고 같은 기기의 클라이언트 로컬 저장소에 유지한다.
+  server·DB에 저장하거나 계정 및 다른 기기로 동기화하지 않으며 성공 feedback도 표시하지 않는다.
+- 앱 시작 시 로컬 선택값 확인이 끝나기 전에는 기존 Splash를 유지해 잘못된 테마가 잠깐 노출되지 않게 한다.
+  로컬 유지 실패는 별도 완료 화면을 만들지 않고 기존 `Toast` 오류 feedback을 사용한다.
+- 이 detail은 Primary Color를 변경하지 않는다. Primary Color가 별도 범위로 승인되면 root의 독립 항목으로
+  추가하고, 실제 display 관련 항목이 충분히 늘어나기 전에는 중간 category를 만들지 않는다.
+- Legacy `ThemePresetCard`와 `Profile / Theme` source는 재사용하지 않는다. 별도 preview card·Primary
+  Color·저장 성공 UI를 포함하지 않으며, 현재 Settings 화면 전체가 선택 즉시 반영되는 preview다.
 
 ## Full Web Settings workspace
 
@@ -104,6 +125,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
   한국어 설명과 재시도 action을 제공한다.
 - Profile 전환 중에는 새 대상의 identity와 데이터가 일치할 때까지 이전 Profile 설정 control을 새 대상의
   값처럼 표시하지 않는다. 세부 request 상태와 늦은 응답 격리는 PROD-667 Profile 기능이 소유한다.
+- 테마 선택에는 저장 버튼·dirty·saving·success 화면을 만들지 않는다. 초기 local hydration은 기존 Splash가,
+  local persistence 실패 feedback은 기존 `Toast`가 소유한다.
 - 기본 게시 공개 범위의 inline option·dropdown·sheet·즉시 저장·명시적 저장 여부는 page shell 계약으로
   고정하지 않는다.
 
@@ -111,9 +134,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 
 - root 화면과 master pane은 `설정` heading을, detail 화면과 detail pane은 현재 설정 이름 heading을
   programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로 반복하지 않는다.
-- root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `게시물 기본 공개 범위` → `뮤트 및 차단`이다. full Web에서는 이어서 detail heading과 현재 선택된 content를
-  읽는다.
+- root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 → `테마`와 현재
+  선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이다. full Web에서는 이어서 detail heading과 현재
+  선택된 content를 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -141,6 +164,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 - `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
+- DSN-54는 Settings root/master의 테마 현재값 행, `/settings/theme`의 System·Light·Dark 선택 화면,
+  Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 선택값 상태, 기기 로컬 persistence,
+  초기 hydration과 app-wide ThemeProvider 적용을 소유한다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
@@ -154,6 +180,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 - 브라우저·OS가 소유하는 외부 navigation 결과와 URL 지원 확인·loading·error·retry·lock 상태
 - Profile 기본 게시 공개 범위의 DB, GraphQL, Relay와 Composer 계약
 - 공개 범위 control의 구체적인 선택·저장 UI
+- 홈 또는 다른 주요 route의 테마 toggle과 임시 진입점
+- 테마 선택값의 server·DB 저장, 계정 동기화와 기기 간 동기화
+- Primary Color 변경과 아직 필요하지 않은 `화면 설정`·`테마 설정` 중간 category
 - 알림 설정, Follow Approval Policy와 아직 승인되지 않은 설정 category·placeholder
 - 미래 category 전체를 위한 범용 registry나 현재 승인되지 않은 destination route
 - settings 밖 기존 route의 전역 shell·RightRail 동작 변경
