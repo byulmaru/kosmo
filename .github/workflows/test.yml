@@ -20,39 +20,23 @@ jobs:
         include:
           - name: Root
             command: pnpm test:eslint
-            database: false
-            id: root
-            playwright: false
           - name: Core
             command: pnpm --filter @kosmo/core test
             database: true
-            id: core
-            playwright: false
           - name: Fedify
             command: pnpm --filter @kosmo/fedify test
             database: true
-            id: fedify
-            playwright: false
           - name: API
             command: pnpm --filter @kosmo/api test
             database: true
-            id: api
-            playwright: false
           - name: App
             command: pnpm --filter @kosmo/app test
-            database: false
-            id: app
             playwright: true
           - name: Web
             command: pnpm --filter @kosmo/web check && pnpm --filter @kosmo/web test:unit
-            database: false
-            id: web
-            playwright: false
           - name: Worker
             command: pnpm --filter @kosmo/worker test
             database: true
-            id: worker
-            playwright: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -108,7 +92,7 @@ jobs:
         run: pnpm db:test:drop
 
   web_e2e:
-    name: Web E2E (shard ${{ matrix.shard }}/${{ matrix.total }})
+    name: Web E2E (shard ${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     strategy:
@@ -116,19 +100,13 @@ jobs:
       matrix:
         include:
           - shard: 1
-            total: 3
-            database_name: kosmo_test_web_e2e_shard_1
             port_offset: 10000
           - shard: 2
-            total: 3
-            database_name: kosmo_test_web_e2e_shard_2
             port_offset: 20000
           - shard: 3
-            total: 3
-            database_name: kosmo_test_web_e2e_shard_3
             port_offset: 30000
     env:
-      DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/${{ matrix.database_name }}
+      DATABASE_URL: postgres://kosmo:kosmo@localhost:54329/kosmo_test_web_e2e_shard_${{ matrix.shard }}
       KOSMO_TEST_PORT_OFFSET: ${{ matrix.port_offset }}
     steps:
       - name: Checkout repository
@@ -175,7 +153,7 @@ jobs:
         run: pnpm --filter @kosmo/app exec playwright install chromium
 
       - name: Run Web E2E shard
-        run: node scripts/test-db.mjs run -- pnpm test:e2e:database --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: node scripts/test-db.mjs run -- pnpm test:e2e:database --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       - name: Upload Playwright artifacts
         if: failure()
@@ -202,9 +180,6 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Require every test suite
-        env:
-          TEST_SUITES_RESULT: ${{ needs.test-suites.result }}
-          WEB_E2E_RESULT: ${{ needs.web_e2e.result }}
         run: |
-          test "${TEST_SUITES_RESULT}" = success
-          test "${WEB_E2E_RESULT}" = success
+          test "${{ needs.test-suites.result }}" = success
+          test "${{ needs.web_e2e.result }}" = success
