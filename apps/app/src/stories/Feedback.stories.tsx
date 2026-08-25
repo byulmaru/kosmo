@@ -279,7 +279,12 @@ export const OverlayMobileSheetNonZeroSafeArea: Story = {
 
 export const OverlayFullDialogGeometry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  render: () => <FeedbackOverlayFixture initiallyVisible />,
+  render: () => (
+    <FeedbackOverlayFixture
+      initiallyVisible
+      safeAreaInsets={{ bottom: 20, left: 62, right: 62, top: 0 }}
+    />
+  ),
   play: async ({ canvasElement }) => {
     const ownerDocument = canvasElement.ownerDocument;
     const view = ownerDocument.defaultView;
@@ -290,6 +295,9 @@ export const OverlayFullDialogGeometry: Story = {
     expect(bounds.width).toBe(600);
     expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
     expect(bounds.left + bounds.width / 2).toBeCloseTo((view?.innerWidth ?? 0) / 2, 0);
+    expect(bounds.left).toBeGreaterThanOrEqual(62);
+    expect(bounds.right).toBeLessThanOrEqual((view?.innerWidth ?? 0) - 62);
+    expect(bounds.bottom).toBeLessThanOrEqual((view?.innerHeight ?? 0) - 20);
   },
 };
 

@@ -20,11 +20,11 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { useWebSafeAreaPadding } from '@/components/ui/useWebSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, iconSizes, radii, spacing, typography } from '@/theme/tokens';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
@@ -100,7 +100,6 @@ export function PostMediaViewer({
   selectedIndex: number;
 }>) {
   const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
@@ -115,15 +114,7 @@ export function PostMediaViewer({
   );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
   const webBackdropPadding = wide ? spacing.xl : spacing.xs;
-  const webSafeAreaStyle =
-    Platform.OS === 'web'
-      ? {
-          paddingBottom: webBackdropPadding + insets.bottom,
-          paddingLeft: webBackdropPadding + insets.left,
-          paddingRight: webBackdropPadding + insets.right,
-          paddingTop: webBackdropPadding + insets.top,
-        }
-      : null;
+  const webSafeAreaStyle = useWebSafeAreaPadding(webBackdropPadding);
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);

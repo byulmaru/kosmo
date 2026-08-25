@@ -6887,6 +6887,24 @@ export const ReplyModalPresentation: Story = {
   render: () => <ReplyModalPresentationStory />,
 };
 
+export const ReplyModalNonZeroSafeArea: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async ({ canvasElement }) => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const view = canvasElement.ownerDocument.defaultView;
+    const bounds = surface.getBoundingClientRect();
+
+    expect(bounds.left).toBeGreaterThanOrEqual(62);
+    expect(bounds.top).toBeGreaterThanOrEqual(0);
+    expect(bounds.right).toBeLessThanOrEqual((view?.innerWidth ?? 0) - 62);
+    expect(bounds.bottom).toBeLessThanOrEqual((view?.innerHeight ?? 0) - 20);
+  },
+  render: () => (
+    <ReplyModalPresentationStory safeAreaInsets={{ bottom: 20, left: 62, right: 62, top: 0 }} />
+  ),
+};
+
 export const ReplyModalResponsiveFocusLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async ({ canvasElement }) => {

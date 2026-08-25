@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -19,6 +19,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
+import { useWebSafeAreaPadding } from '@/components/ui/useWebSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -142,7 +143,6 @@ function ReplyComposerSurfaceContents({
   const router = useRouter();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
   const [submitting, setSubmitting] = useState(false);
@@ -155,15 +155,7 @@ function ReplyComposerSurfaceContents({
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
   const webOverlayOpen = open && presentation !== 'inline' && Platform.OS === 'web';
-  const webFullscreenSafeAreaStyle =
-    Platform.OS === 'web' && presentation === 'fullscreen'
-      ? {
-          paddingBottom: insets.bottom,
-          paddingLeft: insets.left,
-          paddingRight: insets.right,
-          paddingTop: insets.top,
-        }
-      : null;
+  const webSafeAreaStyle = useWebSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
 
   useEffect(() => {
     if (open) {
@@ -387,7 +379,7 @@ function ReplyComposerSurfaceContents({
         style={[
           styles.backdrop,
           presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
-          webFullscreenSafeAreaStyle,
+          webSafeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
         testID="reply-composer-dialog-backdrop"

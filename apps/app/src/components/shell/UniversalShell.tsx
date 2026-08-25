@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
+import { useWebSafeAreaPadding } from '@/components/ui/useWebSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -90,6 +91,14 @@ const webFixedBottomBar = {
   zIndex: 20,
 } as unknown as ViewStyle;
 
+const webFixedDrawerBackdrop = {
+  bottom: 0,
+  left: 0,
+  position: 'fixed',
+  right: 0,
+  top: 0,
+} as unknown as ViewStyle;
+
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
@@ -118,6 +127,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
+  const webDrawerSafeAreaStyle = useWebSafeAreaPadding();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
@@ -407,18 +417,8 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.drawerBackdrop,
-              web &&
-                ({
-                  bottom: 0,
-                  left: 0,
-                  paddingBottom: insets.bottom,
-                  paddingLeft: insets.left,
-                  paddingRight: insets.right,
-                  paddingTop: insets.top,
-                  position: 'fixed',
-                  right: 0,
-                  top: 0,
-                } as unknown as ViewStyle),
+              web && webFixedDrawerBackdrop,
+              webDrawerSafeAreaStyle,
               { backgroundColor: theme.overlayScrim },
             ]}
           >
