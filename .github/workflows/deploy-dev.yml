@@ -1,8 +1,6 @@
 name: Deploy Dev
 
 on:
-  push:
-    branches: [PROD-834]
   workflow_run:
     workflows: [Docker Build]
     branches: [main]
@@ -19,7 +17,7 @@ concurrency:
 jobs:
   restart_dev:
     name: Restart Dev Workloads
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04-arm
     env:
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
