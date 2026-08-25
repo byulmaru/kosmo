@@ -341,7 +341,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
                   accessibilityLabel="홈"
                   leading={menuButton}
                   variant="brand"
-                  {...(web ? { brandHref: '/home', onBrandCurrentNavigate: reselectHome } : {})}
+                  {...(web
+                    ? { brandHref: '/home' as const, onBrandCurrentNavigate: reselectHome }
+                    : {})}
                 />
               ) : mobileShellHeader ? (
                 <PageHeader
