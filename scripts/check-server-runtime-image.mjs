@@ -59,10 +59,17 @@ const artifactRoot = '/app/server-dist';
 const artifactDirectory = join(artifactRoot, runtime);
 const artifactFiles = walk(artifactRoot);
 const manifestPath = join(artifactDirectory, 'runtime-package.json');
-const manifest = existsSync(manifestPath)
-  ? JSON.parse(readFileSync(manifestPath, 'utf8'))
-  : undefined;
-const dependencies = Object.keys(manifest?.dependencies ?? {}).sort();
+const metadata = JSON.parse(readFileSync(join(artifactDirectory, 'meta.json'), 'utf8'));
+const externalImports = metadata.externalImports ?? [];
+const runtimeRequire = createRequire(entrypoint);
+const missingExternalImports = externalImports.filter((specifier) => {
+  try {
+    runtimeRequire.resolve(specifier);
+    return false;
+  } catch {
+    return true;
+  }
+});
 const nodeModules = existsSync('/app/node_modules');
 let workerPackage;
 try {
@@ -98,13 +105,11 @@ process.stdout.write(JSON.stringify({
   sourceMapReference: artifactFiles
     .filter((path) => /\.(?:c|m)?js$/u.test(path))
     .some((path) => readFileSync(path, 'utf8').includes('sourceMappingURL=')),
-  runtimePackage: manifest !== undefined,
+  runtimePackage: existsSync(manifestPath),
   nodeModules,
-  dependencies,
-  missingDependencies: dependencies.filter(
-    (dependency) => !existsSync(join('/app/node_modules', dependency)),
-  ),
-  tsx: dependencies.includes('tsx') || existsSync('/app/node_modules/tsx'),
+  externalImports,
+  missingExternalImports,
+  tsx: existsSync('/app/node_modules/tsx'),
   workerPackage: workerPackage !== undefined,
   bridgeReleases,
   expo: existsSync('/app/apps/app/dist'),
@@ -215,9 +220,6 @@ export async function checkRuntimeImage({
     entrypoint: contract.entrypoint,
   });
   const requiredFiles = ['index.mjs', 'meta.json'];
-  if (contract.worker) {
-    requiredFiles.push('runtime-package.json');
-  }
   const requiredArtifactFiles = requiredFiles.map((file) =>
     artifactPath(contract.artifactDirectory, file),
   );
@@ -236,20 +238,17 @@ export async function checkRuntimeImage({
   );
   assert(
     requiredArtifactFiles.every((file) => probe.artifactFiles.includes(file)),
-    'artifact, metadata, or Worker runtime manifest is missing',
+    'artifact or metadata is missing',
   );
   assert(probe.sourceFiles.length === 0, `TypeScript source remains: ${probe.sourceFiles[0]}`);
   assert(probe.mapFiles.length === 0 && !probe.sourceMapReference, 'source map remains');
-  if (contract.worker) {
-    assert(probe.runtimePackage && probe.nodeModules, 'Worker runtime dependencies are missing');
-    assert(probe.missingDependencies.length === 0, 'Worker runtime manifest is incomplete');
-  } else {
-    assert(
-      !probe.runtimePackage && !probe.nodeModules,
-      'non-Worker image contains runtime dependencies',
-    );
-  }
-  assert(!probe.tsx, 'runtime manifest contains tsx');
+  assert(!probe.runtimePackage, 'generated runtime manifest remains');
+  assert(probe.nodeModules, 'production dependency tree is missing');
+  assert(
+    probe.missingExternalImports.length === 0,
+    `external import is missing: ${probe.missingExternalImports[0]}`,
+  );
+  assert(!probe.tsx, 'production dependency tree contains tsx');
   assert(probe.expo === Boolean(contract.expo), 'Expo assets are in the wrong image');
   assert(
     probe.migrations === Boolean(contract.migrations),
@@ -275,7 +274,7 @@ export async function checkRuntimeImage({
     sizeBytes: imageRecord.Size,
     baselineSizeBytes: baselineRecord?.Size ?? null,
     layers: imageRecord.RootFS?.Layers?.length ?? null,
-    dependencies: probe.dependencies,
+    externalImports: probe.externalImports,
   };
 }
 

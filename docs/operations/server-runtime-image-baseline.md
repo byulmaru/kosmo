@@ -52,43 +52,16 @@ configuration guard까지 도달한다는 baseline이다.
 
 ## Split image artifact gate
 
-같은 Node 26.5.1 base와 Linux/ARM64 platform에서 2026-08-25에 non-Worker single-file과
-Worker 전용 runtime manifest 설계로 다섯 final target을 다시 빌드했다. Inspect size와
-`docker save | gzip -1 -n`을 위 baseline과 같은 방식으로 측정했다. 앞선 수동
-allowlist와 모든 runtime에 generated manifest를 설치하던 구현의 측정치는 설계 재검토로
-폐기했으며 아래 결과가 현재 artifact gate 증거다.
+Literal single-file과 generated runtime manifest 설계의 기존 측정치는 package별 bundler
+patch와 중복 dependency contract에 의존해 폐기했다. 현재 설계는 다섯 runtime의
+workspace-owned code만 JavaScript artifact로 bundle하고, third-party package는 각
+workspace manifest와 root lockfile에서 생성한 production dependency tree로 제공한다.
+`runtime-package.json`은 생성하지 않으며 모든 final image에서 TypeScript source와 `tsx`를
+제외한다. Worker는 추가로 prebuilt Workflow bundle과 target Linux/ARM64 native bridge를
+사용한다.
 
-| Runtime         |  Inspect size | Baseline 대비 | Compressed size | Baseline 대비 | Layers |
-| --------------- | ------------: | ------------: | --------------: | ------------: | -----: |
-| Web             | 229,558,639 B |        -62.0% |   228,109,170 B |        -62.0% |     10 |
-| API             | 219,219,236 B |        -63.7% |   217,825,248 B |        -63.7% |      9 |
-| Worker          | 254,047,801 B |        -58.0% |   252,371,743 B |        -57.9% |     12 |
-| Fedify Consumer | 218,605,921 B |        -63.8% |   217,214,688 B |        -63.8% |      9 |
-| Migration       | 216,006,671 B |        -64.3% |   214,590,379 B |        -64.2% |     10 |
-
-모든 image는 UID/GID 10001의 고정 `node /app/server-dist/<runtime>/index.mjs`
-entrypoint를 사용한다. Web만 Expo static/precompressed asset을, Migration만
-version-controlled `drizzle/` SQL을 포함한다. Web/API/Fedify Consumer/Migration은
-workspace code와 third-party dependency를 각 `index.mjs`에 bundle하며
-`runtime-package.json`과 `/app/node_modules`가 없다. API가 현재 사용하는
-`@temporalio/client`도 API artifact에 포함된다. 모든 image에서 workspace TypeScript
-source, `tsx`, server source map과 source-map reference가 제거됐다.
-
-기존 runtime stage와 동일하게 final image 공통 base에서 Debian package update/upgrade를
-수행한 뒤 측정했다.
-
-Worker는 prebuilt Workflow bundle을 사용하며 build graph가
-`@temporalio/client`와 `@temporalio/worker` 1.22.0을 Worker 전용 runtime manifest에
-자동 포함한다. `core-bridge`는
-`aarch64-unknown-linux-gnu/index.node` 하나만 보존했으며 container에서 SDK와 bridge를
-실제로 load했다.
-
-재설계 후 Web container 내부에서 `/health` 200을 확인했고 JSDOM의 package-relative
-stylesheet/JSON 경계를 호출하는 bundle 회귀 테스트를 통과했다. Worker container에서는
-Temporal SDK와 ARM64 bridge를 실제로 load했다. Worker manifest의 direct dependency가
-모두 설치됐고 non-Worker image에서는 Worker SDK/native bridge가 resolve되지 않았다.
-
-다섯 고정 JavaScript entrypoint는 빈 환경에서 실행해 Web/API/Worker/Fedify가
-`TEMPORAL_ADDRESS is required`, Migration이 database configuration guard까지 도달함을
-확인했다. 이는 artifact/container gate이며 dev rollout이나 production release 증거가
-아니다. Helm과 CI/CD consumer는 아직 기존 single image를 유지한다.
+현재 pull request CI는 Docker target을 build하지 않으며 main 전용 Docker workflow도 아직
+기존 single image contract를 사용한다. 따라서 새 설계의 다섯 Linux/ARM64 image에 대한
+compressed/uncompressed size, layer, external import resolution, boot/health와 asset 검증은
+완료 증거가 아니다. 이 표와 결과는 artifact gate를 실제 CI 또는 승인된 build runner에서
+다시 수행한 뒤에만 기록한다. 그 전에는 Helm·CI/CD consumer 전환을 시작하지 않는다.

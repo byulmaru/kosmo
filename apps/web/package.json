@@ -15,6 +15,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "temporal-polyfill": "^0.3.2",
+    "tsx": "^4.22.4",
     "uuid": "^14.0.1",
     "vitest": "^4.1.10"
   },
@@ -25,7 +26,6 @@
     "@sentry/node": "^10.66.0",
     "drizzle-orm": "1.0.0-beta.22",
     "hono": "^4.12.34",
-    "openid-client": "6.8.4",
-    "tsx": "^4.22.4"
+    "openid-client": "6.8.4"
   }
 }

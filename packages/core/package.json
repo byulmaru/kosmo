@@ -36,7 +36,6 @@
     "postgres": "^3.4.9",
     "prosemirror-model": "^1.25.10",
     "temporal-polyfill": "^0.3.2",
-    "tsx": "^4.22.4",
     "uuid": "^14.0.1",
     "zod": "^4.4.3"
   },
@@ -55,6 +54,7 @@
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.3",
-    "drizzle-kit": "1.0.0-beta.22"
+    "drizzle-kit": "1.0.0-beta.22",
+    "tsx": "^4.22.4"
   }
 }

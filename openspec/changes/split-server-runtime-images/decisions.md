@@ -11,9 +11,9 @@
 - Authority / Provenance: `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, Linear `PROD-831`
 - Status: Active
 - Context / Problem: 공통 runtime image가 Web, API, Worker, Fedify Consumer와 migration의 source와 dependency를 모두 포함하고 `tsx`로 실행해 각 workload의 pull/runtime surface가 불필요하게 크다.
-- Decision Outcome: Web, API, Temporal Worker, Fedify Consumer와 migration을 build 단계의 JavaScript artifact와 서로 다른 다섯 final image로 제공한다. Web/API/Fedify/Migration은 workspace application code와 third-party runtime dependency를 단일 JavaScript artifact로 bundle하고 runtime `node_modules`를 두지 않는다. Worker만 Temporal SDK/native runtime을 build graph 기반 manifest로 설치한다. 모든 image에서 TypeScript source, `tsx`, 범용 workspace `node_modules`와 개발 dependency를 제거하고 Web image만 Expo static artifact를 포함한다.
-- Alternatives Considered: 하나의 image에서 JavaScript만 사전 compile하는 방식은 Worker와 Web asset/dependency를 모든 workload에 계속 배포하므로 제외했다. Runtime별 source tree와 production `node_modules`만 prune하는 방식은 `tsx` 직접 실행과 불필요한 package surface를 유지하므로 제외했다.
-- Consequences: Docker build와 registry output은 다섯 개로 늘지만 각 workload는 자신의 runtime layer만 pull한다. Non-Worker runtime import는 단일 bundle graph가 자동으로 따라가고 Worker external import만 generated manifest에 반영된다. Helm, scanner와 release workflow도 runtime별 identity를 처리해야 한다.
+- Decision Outcome: Web, API, Temporal Worker, Fedify Consumer와 migration을 build 단계의 JavaScript artifact와 서로 다른 다섯 final image로 제공한다. Workspace-owned code는 artifact로 bundle하고 third-party package는 각 workspace의 root lockfile 기반 production dependency tree로 배치한다. 모든 image에서 TypeScript source, `tsx`, 범용 workspace dependency와 개발 dependency를 제거하고 Web image만 Expo static artifact를 포함한다.
+- Alternatives Considered: 하나의 image에서 JavaScript만 사전 compile하는 방식은 Worker와 Web asset/dependency를 모든 workload에 계속 배포하므로 제외했다. Literal single-file bundle은 package-relative asset과 native resolution을 위해 package별 patch가 필요해 제외했다.
+- Consequences: Docker build와 registry output은 다섯 개로 늘지만 각 workload는 자신의 runtime layer만 pull한다. Runtime package 변경은 workspace manifest와 lockfile이 소유하고 별도 runtime manifest를 동기화하지 않는다. Helm, scanner와 release workflow도 runtime별 identity를 처리해야 한다.
 - Confirmation / Follow-up: 같은 Linux/ARM64 build에서 artifact, filesystem, dependency graph, boot/health와 compressed/uncompressed image size를 runtime별로 기록한다.
 
 ### Artifact gate 통과 뒤 release 계약을 전환한다
@@ -28,17 +28,17 @@
 - Consequences: 하나의 Linear/OpenSpec 안에 두 implementation slice가 생긴다. 첫 slice의 성공은 두 번째 slice나 dev/production 적용 성공을 증명하지 않는다.
 - Confirmation / Follow-up: Tasks와 PR evidence에서 artifact/CI, dev rollout, production 적용을 별도 proof tier로 보고한다.
 
-### Non-Worker dependency는 bundle하고 Worker SDK만 build graph에서 external 설치한다
+### Third-party dependency는 runtime별 production tree로 배치한다
 
 - Decision Date: 2026-08-25
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-831`, 2026-08-25 사용자 재검토
 - Status: Active
 - Context / Problem: 최초 artifact 구현은 일부 external package 이름을 build script와 Dockerfile에 수동으로 나열하고 검사 코드가 정확한 root dependency 집합을 고정했다. API가 Temporal client를 사용하거나 package asset·dynamic import 경계가 바뀌면 여러 파일을 동시에 수정해야 해 runtime 분리가 미래의 정상적인 의존성 변경을 깨뜨릴 수 있었다.
-- Decision Outcome: Web/API/Fedify/Migration은 workspace-owned code와 third-party runtime dependency를 각각 하나의 JavaScript artifact로 완전 bundle한다. API의 `@temporalio/client`도 bundle하며 runtime package install을 하지 않는다. Worker application/Activity host code는 bundle하지만 `@temporalio/worker`와 그 SDK/native dependency는 build graph 기반 manifest로 external 설치한다. 정확한 Worker package 이름 집합이나 package-manager 내부 경로는 Dockerfile과 테스트 계약에 수동으로 고정하지 않는다.
-- Alternatives Considered: 모든 runtime을 generated manifest로 설치하는 방식은 네 non-Worker image에도 `node_modules`와 synthetic install 재현성 문제를 남겨 제외했다. Worker SDK까지 완전 bundle하는 방식은 Temporal의 Node-API native module, worker thread, VM sandbox와 SDK 내부 build-time bundler resolution을 깨뜨려 제외했다. `pnpm deploy --legacy` 전체 tree는 workspace source, `tsx`와 사용하지 않는 dependency까지 포함해 제외했다.
-- Consequences: Web/API/Fedify/Migration final image는 단일 server JavaScript와 필요한 static/SQL asset만 가지며 dependency manifest와 runtime `node_modules`가 없다. Worker만 작은 production `node_modules`와 target native binary pruning을 유지한다. API가 새 Temporal Client API를 호출해도 `@temporalio/client`는 같은 bundle graph에 자동 포함된다. 현재 HTML parsing/serialization 전용 JSDOM bundle은 package data를 inline하고 사용하지 않는 synchronous XHR worker 경로를 제외한다.
-- Confirmation / Follow-up: 네 non-Worker artifact의 external non-builtin import 부재와 runtime `node_modules` 부재, Worker metafile external import와 generated manifest 일치, 다섯 container boot/health 및 Worker native load를 검증한다.
+- Decision Outcome: 다섯 runtime의 workspace-owned code는 각각 하나의 JavaScript artifact로 bundle하고 third-party package는 external로 둔다. 각 final image는 해당 workspace를 root lockfile에서 production deploy한 dependency tree를 사용한다. 생성 runtime manifest, package별 bundler patch와 정확한 package allowlist를 두지 않는다.
+- Alternatives Considered: Literal single-file bundle은 JSDOM 등 package-relative asset을 위해 custom transform이 필요하고 dependency 변경에 취약해 제외했다. Build graph에서 synthetic runtime manifest를 생성하는 방식은 package manager가 이미 소유하는 manifest/lockfile 계약을 중복해 제외했다. Workspace 전체 hoisted install은 Expo·TypeScript 등 다른 runtime과 개발 dependency까지 포함해 제외했다.
+- Consequences: Literal single-file보다 image가 크지만 package 호환성과 의존성 변경 경계가 단순해진다. API가 `@temporalio/client`를 사용하면 API workspace dependency와 lockfile만으로 image에 반영된다. 각 final image에는 작은 production `node_modules`가 있으며 TypeScript source와 `tsx`는 없다.
+- Confirmation / Follow-up: artifact metadata의 external import가 각 final image에서 모두 resolve되는지, 다섯 container boot/health와 Worker native load를 검증한다.
 
 ### Temporal Workflow는 production image 시작 전에 bundle한다
 
@@ -47,7 +47,7 @@
 - Authority / Provenance: Linear `PROD-730`, `PROD-831`
 - Status: Active
 - Context / Problem: 현재 Worker는 `workflowsPath`의 TypeScript source를 startup 때 Webpack으로 bundle한다. 일반 server처럼 완전 bundle하면 Temporal native `.node` resolution이 깨질 수 있고, 기존 경로를 유지하면 TypeScript source와 Webpack/SWC를 runtime artifact 경계에 계속 요구한다.
-- Decision Outcome: Build와 runtime에서 exact same `@temporalio/worker` version을 사용해 Workflow code를 `bundleWorkflowCode`로 사전 생성하고, production Worker는 `workflowBundle`을 전달한다. Worker application/Activity host code는 bundle하되 Temporal Worker SDK와 그 runtime package는 build-graph manifest 경계를 따르며 final image에는 target Linux/ARM64에서 SDK resolution에 필요한 production dependency와 native artifact만 둔다.
+- Decision Outcome: Build와 runtime에서 exact same `@temporalio/worker` version을 사용해 Workflow code를 `bundleWorkflowCode`로 사전 생성하고, production Worker는 `workflowBundle`을 전달한다. Worker application/Activity host code는 bundle하되 Temporal Worker SDK는 Worker workspace의 production dependency tree에서 설치하며 final image에는 target Linux/ARM64에서 SDK resolution에 필요한 dependency와 native artifact만 둔다.
 - Alternatives Considered: Production `workflowsPath` 유지 방식은 runtime bundling과 TypeScript source 제거 목표를 위반해 제외했다. Native package를 single-file bundle 안에 강제로 넣는 방식은 ABI와 dynamic resolution 위험 때문에 제외했다. Temporal Worker 전체 dependency tree를 다른 runtime에도 공유하는 방식은 image 분리 목적을 위반해 제외했다.
 - Consequences: Worker image는 다른 image보다 크고 external package tree를 가질 수 있다. Workflow bundle 생성과 Worker runtime package version은 lockfile과 build에서 일치해야 한다.
 - Confirmation / Follow-up: Linux/ARM64 Node 26.5.1 container에서 native load, Worker create, health/readiness와 SIGTERM lifecycle을 검증하고 다른 runtime image에 Temporal Worker dependency가 없는지 확인한다.

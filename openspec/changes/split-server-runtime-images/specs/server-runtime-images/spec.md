@@ -20,7 +20,7 @@
 
 **Authority / Provenance:** `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`, `PROD-831`. 시스템은 Web, API, Temporal Worker, Fedify consumer와 migration을 서로 분리된 다섯 final image로 제공해야 한다(MUST). 각 image는 해당 runtime의 사전 생성 artifact와 production 실행에 필요한 dependency만 포함해야 하며(MUST), 다른 runtime의 source, 범용 workspace `node_modules` 또는 development dependency를 포함해서는 안 된다(MUST NOT).
 
-Web, API, Fedify consumer와 migration artifact의 third-party runtime dependency는 단일 JavaScript artifact에 포함되어야 하며(MUST), 해당 final image는 runtime `node_modules`를 포함해서는 안 된다(MUST NOT). Worker application/Activity host code는 bundle하되 Temporal Worker SDK와 native/runtime dependency는 build graph의 external import에서 자동 도출한 Worker manifest로 설치해야 한다(MUST). Dockerfile이나 검증 코드가 현재 Worker package 이름의 수동 allowlist를 runtime 계약으로 가져서는 안 된다(MUST NOT).
+다섯 runtime의 workspace-owned code는 JavaScript artifact에 포함되어야 하며(MUST), third-party package는 각 workspace manifest와 root lockfile에서 생성한 production dependency tree로 제공해야 한다(MUST). 생성 runtime manifest, package별 bundler patch 또는 수동 package allowlist를 runtime 계약으로 가져서는 안 된다(MUST NOT).
 
 #### Scenario: runtime image 선택
 
@@ -34,12 +34,12 @@ Web, API, Fedify consumer와 migration artifact의 third-party runtime dependenc
 - **THEN** image에는 해당 runtime artifact, 필요한 production dependency와 target runtime 파일만 남는다
 - **AND** TypeScript source, `tsx`, workspace 전체 `node_modules`와 development dependency는 final image에 존재하지 않는다
 
-#### Scenario: runtime import 변경이 artifact 또는 Worker manifest에 반영된다
+#### Scenario: runtime import 변경이 artifact와 production dependency tree에 반영된다
 
 - **WHEN** API를 포함한 어느 runtime의 workspace code가 새로운 third-party package를 production 경로에서 import하거나 기존 import를 제거한다
-- **THEN** Web/API/Fedify/Migration artifact build는 해당 import를 같은 단일 JavaScript artifact에 자동으로 포함한다
-- **AND** Worker SDK/runtime external import만 generated Worker manifest에 자동 반영된다
-- **AND** Dockerfile package 목록 또는 exact dependency allowlist test를 수동으로 동기화할 필요가 없다
+- **THEN** workspace-owned import는 해당 JavaScript artifact에 포함되고 third-party import는 artifact metadata에 기록된다
+- **AND** workspace manifest와 root lockfile에서 생성한 해당 runtime의 production dependency tree가 third-party package를 제공한다
+- **AND** generated runtime manifest, Dockerfile package 목록 또는 exact dependency allowlist test를 수동으로 동기화할 필요가 없다
 
 ### Requirement: Worker target platform과 최소 native/runtime dependency
 
