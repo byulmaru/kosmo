@@ -40,9 +40,10 @@
 
 ## Branch Policy
 
-- 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
+- 기능·계약 변경 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
 - 별도 접두어나 설명어를 붙이기보다 이슈 추적성과 연결성을 우선한다.
-- 하나의 브랜치는 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
+- 행동을 보존하는 단순 리팩터링은 PR을 만들기 위해 Linear 이슈를 생성하지 않고 설명적인 브랜치 이름을 사용할 수 있다.
+- 이슈가 있는 작업은 하나의 브랜치가 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
 - PR 설명과 커밋 맥락도 같은 이슈를 중심으로 정렬한다.
 
 ## Create A Branch
@@ -51,12 +52,11 @@
   - `git fetch origin`
   - `git switch main`
   - `git pull --ff-only`
-  - `gh stack init --base main <Linear issue ID>`
+  - `gh stack init --base main <branch>`
 - 후속 PR 브랜치는 current top에서만 Stack에 추가한다.
   - `gh stack top`
-  - `gh stack add <Linear issue ID>`
-- `gh stack add`는 현재 HEAD에서 새 branch를 만들고 Stack top으로 checkout한다. branch 자동 생성
-  이름 대신 Linear issue ID를 명시한다.
+  - `gh stack add <branch>`
+- `gh stack add`는 현재 HEAD에서 새 branch를 만들고 Stack top으로 checkout한다. 기능·계약 변경은 Linear issue ID를, 행동 보존 단순 리팩터링은 설명적인 branch 이름을 명시한다.
 
 ## Adopt Existing Branches Or Pull Requests
 

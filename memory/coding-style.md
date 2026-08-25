@@ -6,6 +6,7 @@
 - 이 메모는 PR 본문이 아니라 다른 사람 PR에 `robin-maki`가 직접 남긴 리뷰에서 반복된 기준을 일반화한 것이다.
 - 세부 영역은 기존 메모를 우선한다.
   - GraphQL resolver/API 세부 구조: `memory/graphql-style.md`
+  - Temporal Workflow/Activity와 post-commit start 구조: `memory/temporal-workflows.md`
   - Expo Router/React Native Web/React Relay/Storybook: `memory/frontend-react-native.md`
   - DB/Drizzle schema: `memory/database-design.md`
   - 스크립트/CI/명령 실행: `memory/script.md`
