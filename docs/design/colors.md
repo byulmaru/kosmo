@@ -177,7 +177,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 ## Legacy와 개발 token 이관
 
-기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정한다. 실제 Figma 재바인딩은 DSN-13, `tokens.ts`·`ThemeProvider`·공용 primitive는 DSN-19, route·shell·domain consumer는 DSN-21 또는 이미 연결된 Product 이슈가 소유한다.
+기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정한다. 실제 Figma 재바인딩은 DSN-13, `tokens.ts`·`ThemeProvider`·공용 primitive는 DSN-19, route·shell·domain consumer의 개별 이관 slice는 DSN-21 또는 이미 연결된 Product 이슈가 소유한다. PROD-812는 이 결과와 남은 inventory를 인수해 프로덕션 전체 Dark 활성화 gate와 통합 검증을 닫는다.
 
 | Legacy Figma / 현재 코드             | Production semantic                                                      | 이관 규칙                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -204,6 +204,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 - **DSN-19:** production semantic token 코드, runtime theme selector와 Button·TextField·ModalSheet·ActionMenu·ToastProvider·StateView 등 공용 primitive를 이관한다.
 - **DSN-21 / 연결된 Product 이슈:** route·shell·domain call-site가 공용 token과 primitive를 소비하도록 이관하고, 화면별 예외를 닫는다. 별도 제품 의미 결정이 필요한 consumer는 연결된 Product 이슈로 분리하되, 이슈가 연결되기 전까지 DSN-21 inventory에 남긴다.
+- **PROD-812:** DSN-19와 DSN-21/연결 Product 이슈의 완료 결과를 재사용하고, 남은 consumer 이관·예외 종결과 지원 플랫폼의 대표 Light/Dark 화면·주요 interaction state 통합 검증을 소유한다. 이 범위가 완료되기 전에는 System/Dark 사용자 선택을 활성화하지 않는다.
 - **DSN-13:** DSN-19와 DSN-21/Product 구현이 확정된 뒤 Figma Components/Screens를 Production Semantic Color로 재바인딩하고 최종 mapping evidence를 갱신한다.
 
 ### 현재 raw·legacy consumer inventory
@@ -237,11 +238,11 @@ PROD-750 scrim migration 대상은 `theme.overlayScrim`을 공통 backdrop으로
 
 ## Runtime theme 전략
 
-Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱의 `AppProviders`는 아직 Light를 명시적으로 공급한다. 프로덕션 전체 Dark 활성화 gate는 DSN-21 또는 연결된 Product 이슈의 route·shell·domain consumer 이관까지 완료된 뒤 닫는다.
+Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱의 `AppProviders`는 아직 Light를 명시적으로 공급한다. 프로덕션 전체 Dark 활성화 gate는 PROD-812가 DSN-21 또는 연결된 Product 이슈의 남은 route·shell·domain consumer를 semantic token으로 이관하거나 위 inventory의 예외로 닫고, 지원 플랫폼의 대표 화면과 주요 interaction state 검증까지 완료한 뒤 닫는다.
 
 - 공용 primitive가 semantic foreground pair와 interaction state를 소비한다.
 - DSN-19의 공용 primitive raw 값과 DSN-21/Product의 route·shell·domain raw 값이 각각 이관되거나 위 inventory의 예외로 남는다.
-- DSN-19 Storybook에서 공용 primitive의 Light/Dark와 핵심 state를 검증하고, DSN-21/Product가 대표 route·shell consumer의 theme 전환을 검증한다.
+- DSN-19 Storybook의 공용 primitive Light/Dark·핵심 state와 DSN-21/Product의 기존 route·shell consumer 이관 증거를 재사용하고, PROD-812가 남은 inventory 종결과 지원 플랫폼의 대표 theme 전환을 통합 검증한다.
 - Web 자동 대비와 실제 Android/iOS runtime QA를 서로 다른 증거로 기록한다.
 
 ## 예외와 금지
