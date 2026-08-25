@@ -91,6 +91,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - preference를 실제 Light/Dark `resolved theme`로 해석해 앱 화면, Native `StatusBar` foreground style과 Web
   `theme-color`가 같은 mode를 사용하게 한다. `시스템`은 OS mode 변경을 함께 따르고, 명시적 `라이트`·`다크`는
   OS mode와 무관하게 system chrome에도 동일하게 반영한다.
+- Native의 `시스템`은 `apps/app/app.config.ts`의 Expo `userInterfaceStyle`을 `automatic`으로 이관한 build에서
+  활성화한다. PROD-812는 Native rebuild 후 Android/iOS 각각에서 OS Light/Dark 전환이 resolved theme에
+  반영되는지 검증한다.
 - 이 detail은 Primary Color를 변경하지 않는다. Primary Color가 별도 범위로 승인되면 root의 독립 항목으로
   추가하고, 실제 display 관련 항목이 충분히 늘어나기 전에는 중간 category를 만들지 않는다.
 - Legacy `ThemePresetCard`와 `Profile / Theme` source는 재사용하지 않는다. 별도 preview card·Primary
@@ -176,9 +179,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
 - DSN-54는 Settings root/master의 테마 현재값 행, `/settings/theme`의 System·Light·Dark 선택 화면,
   Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 preference 초기값·정규화, 선택값 상태,
-  기기 로컬 persistence와 read/write 실패 semantics, 초기 hydration, app-wide ThemeProvider·Native StatusBar·Web
-  `theme-color` 적용, 남은 route·shell·domain consumer의 semantic token 이관·예외 정리와 지원 플랫폼의 대표
-  Light/Dark 화면·주요 interaction state·system chrome 검증을 소유한다.
+  기기 로컬 persistence와 read/write 실패 semantics, 초기 hydration, app-wide ThemeProvider 적용, Native Expo
+  `userInterfaceStyle` build config·`StatusBar`, Web `theme-color` 적용, 남은 route·shell·domain consumer의
+  semantic token 이관·예외 정리와 지원 플랫폼의 대표 Light/Dark 화면·주요 interaction state·system chrome
+  검증을 소유한다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
