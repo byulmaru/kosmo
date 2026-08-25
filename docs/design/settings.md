@@ -112,9 +112,12 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 ## Compact·mobile·Native layout과 header
 
-- compact Web, mobile Web, Android와 iOS에서는 Settings root 목록과 detail을 동시에 나누어 표시하지 않고
-  한 화면씩 보여 준다. 내부 detail의 back action은 이전 navigation stack의 화면과 무관하게 `/settings`
-  root 목록을 명시적으로 연다.
+- compact Web, mobile Web, Android와 iOS에서는 Settings root 목록과 선택한 category·detail destination을
+  동시에 나누어 표시하지 않고 한 화면씩 보여 준다.
+- 모든 내부 category·detail destination은 명시적인 parent를 가진다. back action은 이전 navigation stack의
+  화면과 무관하게 해당 parent를 명시적으로 연다. root의 직접 진입점이 여는 1단계 destination의 parent는
+  `/settings` root이고, 중첩 destination의 parent는 바로 위 category다. direct·deep link로 연 경우에도 같은
+  parent를 사용한다.
 - `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
   [PageHeader](./page-header.md)를 렌더링한다. 내부 detail에서는 shell이 back action과 detail heading을
   렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
