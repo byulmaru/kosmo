@@ -2,14 +2,58 @@ import posthogClient from 'posthog-js';
 import type { PostHog, PostHogConfig } from 'posthog-js';
 import type { TrackProperties } from './client';
 
+const POST_VISIBILITIES = new Set(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']);
+const SEARCH_TABS = new Set(['popular', 'latest', 'media', 'people']);
+const SEARCH_SOURCES = new Set(['keyboard', 'tab', 'recent']);
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const isStableRouteTemplate = (value: unknown): value is string => {
+  if (value === '/') {
+    return true;
+  }
+
+  if (
+    typeof value !== 'string' ||
+    !value.startsWith('/') ||
+    value.includes('?') ||
+    value.includes('#')
+  ) {
+    return false;
+  }
+
+  const routeSegment =
+    /^(?:[A-Za-z0-9+_-]+|\[[A-Za-z0-9_-]+\]|\[\.\.\.[A-Za-z0-9_-]+\]|\[\[\.\.\.[A-Za-z0-9_-]+\]\])$/u;
+  return value
+    .slice(1)
+    .split('/')
+    .every((segment) => routeSegment.test(segment));
+};
+
 const EVENT_PROPERTIES = {
-  profile_created: ['selected_profile_id'],
-  profile_selected: ['selected_profile_id'],
-  post_created: ['selected_profile_id', 'visibility'],
-  follow_succeeded: ['selected_profile_id', 'result'],
-  search_submitted: ['tab', 'source'],
-  search_results_loaded: ['tab', 'has_results'],
-  search_result_selected: ['tab'],
+  $pageview: { route_template: isStableRouteTemplate },
+  profile_created: { selected_profile_id: isNonEmptyString },
+  profile_selected: { selected_profile_id: isNonEmptyString },
+  post_created: {
+    selected_profile_id: isNonEmptyString,
+    visibility: (value: unknown) => typeof value === 'string' && POST_VISIBILITIES.has(value),
+  },
+  follow_succeeded: {
+    selected_profile_id: isNonEmptyString,
+    result: (value: unknown) => value === 'follow' || value === 'request',
+  },
+  search_submitted: {
+    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
+    source: (value: unknown) => typeof value === 'string' && SEARCH_SOURCES.has(value),
+  },
+  search_results_loaded: {
+    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
+    has_results: (value: unknown) => typeof value === 'boolean',
+  },
+  search_result_selected: {
+    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
+  },
 } as const;
 
 type AnalyticsEventName = keyof typeof EVENT_PROPERTIES;
@@ -24,14 +68,14 @@ function sanitizeAnalyticsProperties(
   }
 
   const sanitizedProperties: Record<string, unknown> = {};
-  for (const property of allowedProperties) {
+  for (const [property, isValid] of Object.entries(allowedProperties)) {
     const value = properties?.[property];
-    if (value !== undefined) {
+    if (isValid(value)) {
       sanitizedProperties[property] = value;
     }
   }
 
-  return sanitizedProperties;
+  return Object.keys(sanitizedProperties).length > 0 ? sanitizedProperties : null;
 }
 
 const POSTHOG_CONFIG = {
@@ -50,6 +94,7 @@ const POSTHOG_CONFIG = {
   disable_session_recording: true,
   enable_heatmaps: false,
   enable_recording_console_log: false,
+  persistence: 'memory',
   person_profiles: 'identified_only',
   property_denylist: [
     '$current_url',
@@ -65,6 +110,37 @@ const POSTHOG_CONFIG = {
     '$referrer',
     '$referring_domain',
     '$search_engine',
+    '$session_entry_host',
+    '$session_entry_pathname',
+    '$session_entry_referrer',
+    '$session_entry_referring_domain',
+    '$session_entry_url',
+    '$session_entry_utm_source',
+    '$session_entry_utm_medium',
+    '$session_entry_utm_campaign',
+    '$session_entry_utm_content',
+    '$session_entry_utm_term',
+    '$session_entry_gad_source',
+    '$session_entry_mc_cid',
+    '$session_entry_gclid',
+    '$session_entry_gclsrc',
+    '$session_entry_dclid',
+    '$session_entry_gbraid',
+    '$session_entry_wbraid',
+    '$session_entry_fbclid',
+    '$session_entry_msclkid',
+    '$session_entry_twclid',
+    '$session_entry_li_fat_id',
+    '$session_entry_igshid',
+    '$session_entry_ttclid',
+    '$session_entry_rdt_cid',
+    '$session_entry_epik',
+    '$session_entry_qclid',
+    '$session_entry_sccid',
+    '$session_entry_irclid',
+    '$session_entry__kx',
+    '$session_entry_search_engine',
+    '$session_entry_ph_keyword',
     'ph_keyword',
     'title',
     'utm_campaign',
@@ -164,11 +240,11 @@ export function clearAnalytics(): void {
 
   try {
     const analyticsClient = getAnalyticsClient();
-    if (analyticsClient) {
-      resetPostHogIdentity(analyticsClient);
+    if (analyticsClient && resetPostHogIdentity(analyticsClient)) {
+      identifiedAccountId = null;
     }
-  } finally {
-    identifiedAccountId = null;
+  } catch {
+    // Analytics is best-effort and must not affect the product flow.
   }
 }
 

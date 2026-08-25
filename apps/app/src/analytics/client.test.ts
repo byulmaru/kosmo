@@ -9,12 +9,14 @@ class FakePostHog {
   readonly calls: Call[] = [];
   readonly identities: string[] = [];
   readonly actions: string[] = [];
+  captureAttempts = 0;
   resets = 0;
   captureFails = false;
   identifyFails = false;
   resetFails = false;
 
   capture(event: string, properties?: Record<string, unknown>) {
+    this.captureAttempts += 1;
     if (this.captureFails) {
       throw new Error('capture failure');
     }
@@ -113,6 +115,7 @@ describe('PostHog Web client', () => {
         disable_session_recording: true,
         enable_heatmaps: false,
         enable_recording_console_log: false,
+        persistence: 'memory',
         person_profiles: 'identified_only',
         property_denylist: [
           '$current_url',
@@ -128,6 +131,37 @@ describe('PostHog Web client', () => {
           '$referrer',
           '$referring_domain',
           '$search_engine',
+          '$session_entry_host',
+          '$session_entry_pathname',
+          '$session_entry_referrer',
+          '$session_entry_referring_domain',
+          '$session_entry_url',
+          '$session_entry_utm_source',
+          '$session_entry_utm_medium',
+          '$session_entry_utm_campaign',
+          '$session_entry_utm_content',
+          '$session_entry_utm_term',
+          '$session_entry_gad_source',
+          '$session_entry_mc_cid',
+          '$session_entry_gclid',
+          '$session_entry_gclsrc',
+          '$session_entry_dclid',
+          '$session_entry_gbraid',
+          '$session_entry_wbraid',
+          '$session_entry_fbclid',
+          '$session_entry_msclkid',
+          '$session_entry_twclid',
+          '$session_entry_li_fat_id',
+          '$session_entry_igshid',
+          '$session_entry_ttclid',
+          '$session_entry_rdt_cid',
+          '$session_entry_epik',
+          '$session_entry_qclid',
+          '$session_entry_sccid',
+          '$session_entry_irclid',
+          '$session_entry__kx',
+          '$session_entry_search_engine',
+          '$session_entry_ph_keyword',
           'ph_keyword',
           'title',
           'utm_campaign',
@@ -198,6 +232,46 @@ describe('PostHog Web client', () => {
     ]);
   });
 
+  it('event별 value shape가 맞지 않거나 nested면 해당 값을 전송하지 않는다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.trackAnalytics('profile_created', {
+      selected_profile_id: { id: 'nested-profile-id' },
+    });
+    analytics.trackAnalytics('post_created', {
+      selected_profile_id: 'profile-id',
+      visibility: { value: 'PUBLIC' },
+    });
+    analytics.trackAnalytics('follow_succeeded', {
+      selected_profile_id: 'profile-id',
+      result: 'redirect',
+    });
+    analytics.trackAnalytics('search_submitted', {
+      tab: 'unknown',
+      source: { value: 'keyboard' },
+    });
+    analytics.trackAnalytics('search_results_loaded', {
+      tab: 'people',
+      has_results: 'true',
+    });
+    analytics.trackAnalytics('$pageview', {
+      route_template: '/[profileHandle]?query=private',
+    });
+    analytics.trackAnalytics('$pageview', {
+      route_template: '/[profileHandle]',
+      extra: { query: 'private' },
+    });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'post_created', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'follow_succeeded', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'search_results_loaded', properties: { tab: 'people' } },
+      { event: '$pageview', properties: { route_template: '/[profileHandle]' } },
+    ]);
+  });
+
   it('Account identity를 dedupe하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
@@ -242,6 +316,30 @@ describe('PostHog Web client', () => {
     ]);
   });
 
+  it('clear reset이 실패하면 identity를 유지하고 다음 전환에서 reset을 재시도한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.resetFails = true;
+    analytics.clearAnalytics();
+
+    assert.deepEqual(instance.identities, ['account-a']);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
+
+    instance.resetFails = false;
+    analytics.identifyAnalytics('account-b');
+
+    assert.deepEqual(instance.identities, ['account-a', 'account-b']);
+    assert.deepEqual(instance.actions, [
+      'identify:account-a',
+      'reset',
+      'reset',
+      'identify:account-b',
+    ]);
+  });
+
   it('초기화·capture·identity 실패를 제품 흐름으로 전파하지 않는다', () => {
     constructorFails = true;
     assert.doesNotThrow(() => analytics.initializeAnalytics('project-key', 'https://host.example'));
@@ -255,8 +353,11 @@ describe('PostHog Web client', () => {
     instance.identifyFails = true;
     instance.resetFails = true;
 
-    assert.doesNotThrow(() => analytics.trackAnalytics('profile_created'));
+    assert.doesNotThrow(() =>
+      analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' }),
+    );
     assert.doesNotThrow(() => analytics.identifyAnalytics('account-id'));
     assert.doesNotThrow(() => analytics.clearAnalytics());
+    assert.equal(instance.captureAttempts, 1);
   });
 });
