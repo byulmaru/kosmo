@@ -30,6 +30,10 @@ Account-Profile Membership은 Account와 Profile의 역할 기반 관계다. Loc
 같은 Account와 Profile 조합에는 Membership이 하나만 존재한다. Local Profile에는 Owner Role Membership이
 항상 하나 이상 존재한다.
 
+Admin Console의 Membership 조회는 [Admin Console Read Policy](../policies/admin-console-read.md)가 정한
+두 capability action의 조합으로만 제공한다. 이는 `Profile.Owner`, `Profile.Member`,
+`Membership.Account`라는 기존 관계 사실이나 해당 관계를 변경하는 행동 권한을 바꾸지 않는다.
+
 ## 행동
 
 | 행동                   | 행동 주체 Account | 대상 객체  | 입력값          | 권한                                   | 조건                                                                                                                  | 결과                                                 |
