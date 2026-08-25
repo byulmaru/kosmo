@@ -1,13 +1,12 @@
 name: Production Release
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       target_sha:
-        description: Full 40-character commit SHA to build and deploy after approval
-        required: true
+        description: Optional full 40-character commit SHA to build and deploy after approval (defaults to the latest main commit)
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -22,16 +21,13 @@ jobs:
   production_deploy:
     name: >-
       Approve, Build and Deploy Production
-      (${{ github.event_name == 'workflow_dispatch' && format('manual {0}', needs.manual_preflight.outputs.target_sha) || format('main {0}', github.sha) }})
+      (manual ${{ needs.manual_preflight.outputs.target_sha }})
     needs: manual_preflight
-    if: >-
-      always() &&
-      ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'workflow_dispatch' && needs.manual_preflight.result == 'success'))
+    if: needs.manual_preflight.result == 'success'
     runs-on: [self-hosted, ARM64]
     environment:
       name: prod
-      url: ${{ github.event_name == 'workflow_dispatch' && needs.manual_preflight.outputs.target_url || format('{0}/{1}/commit/{2}', github.server_url, github.repository, github.sha) }}
+      url: ${{ needs.manual_preflight.outputs.target_url }}
     concurrency:
       group: production-release
       cancel-in-progress: false
@@ -41,8 +37,7 @@ jobs:
       packages: write
     env:
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
-      RELEASE_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'manual' || 'automatic' }}
-      TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && needs.manual_preflight.outputs.target_sha || github.sha }}
+      TARGET_SHA: ${{ needs.manual_preflight.outputs.target_sha }}
 
     steps:
       - name: Checkout target commit after approval
@@ -229,25 +224,21 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### ${RELEASE_TRIGGER^} production release"
+            echo "### Manual production release"
             echo
-            echo "- Trigger: ${RELEASE_TRIGGER}"
+            echo "- Trigger: manual"
             echo "- Requester: ${GITHUB_ACTOR}"
             echo "- Workflow definition ref: ${GITHUB_REF}"
             echo "- Target SHA: ${TARGET_SHA}"
             echo "- Image identity: ghcr.io/${GITHUB_REPOSITORY}@${IMAGE_DIGEST}"
             echo "- Argo source revision: ${TARGET_SHA}"
             echo "- Approval boundary: prod Environment"
-            if [[ "${RELEASE_TRIGGER}" == "automatic" ]]; then
-              echo "- Dev build/deploy: separate Docker Build and Deploy Dev workflows"
-            fi
             echo "- Result: ${RESULT}"
             echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} (attempt ${GITHUB_RUN_ATTEMPT})"
           } >> "${GITHUB_STEP_SUMMARY}"
 
   manual_preflight:
     name: Validate Manual Production Target
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -263,13 +254,33 @@ jobs:
           TARGET_SHA_INPUT: ${{ inputs.target_sha }}
         with:
           script: |
-            const targetSha = process.env.TARGET_SHA_INPUT.trim().toLowerCase();
+            const requestedSha = process.env.TARGET_SHA_INPUT.trim().toLowerCase();
 
             if (context.ref !== "refs/heads/main") {
               throw new Error(`Manual production release must run from main, got ${context.ref}.`);
             }
-            if (!/^[0-9a-f]{40}$/.test(targetSha)) {
-              throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
+
+            let targetSha = requestedSha;
+            if (targetSha) {
+              if (!/^[0-9a-f]{40}$/.test(requestedSha)) {
+                throw new Error("target_sha must be an exact 40-character hexadecimal commit SHA.");
+              }
+            } else {
+              let branch;
+              try {
+                ({ data: branch } = await github.rest.repos.getBranch({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  branch: "main",
+                }));
+              } catch (error) {
+                throw new Error("Could not resolve the latest main commit in this repository.");
+              }
+
+              targetSha = branch.commit.sha.toLowerCase();
+              if (!/^[0-9a-f]{40}$/.test(targetSha)) {
+                throw new Error(`GitHub returned an invalid latest main commit SHA: ${targetSha}.`);
+              }
             }
 
             let commit;
