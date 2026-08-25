@@ -5,6 +5,7 @@ import type { TrackProperties } from './client';
 const POST_VISIBILITIES = new Set(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']);
 const SEARCH_TABS = new Set(['popular', 'latest', 'media', 'people']);
 const SEARCH_SOURCES = new Set(['keyboard', 'tab', 'recent']);
+const POSTHOG_E2E_HOST = 'https://posthog.e2e.invalid';
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
@@ -94,6 +95,7 @@ const POSTHOG_CONFIG = {
   disable_session_recording: true,
   enable_heatmaps: false,
   enable_recording_console_log: false,
+  opt_out_useragent_filter: false,
   persistence: 'memory',
   person_profiles: 'identified_only',
   property_denylist: [
@@ -174,6 +176,8 @@ export function initializeAnalytics(
     client = posthogClient.init(apiKey, {
       api_host: apiHost,
       ...POSTHOG_CONFIG,
+      opt_out_useragent_filter:
+        apiHost === POSTHOG_E2E_HOST && process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS === 'true',
     });
   } catch {
     client = null;

@@ -69,6 +69,7 @@ before(async () => {
 });
 
 beforeEach(() => {
+  delete process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS;
   analytics.resetAnalyticsForTests();
   instances.length = 0;
   initCalls.length = 0;
@@ -115,6 +116,7 @@ describe('PostHog Web client', () => {
         disable_session_recording: true,
         enable_heatmaps: false,
         enable_recording_console_log: false,
+        opt_out_useragent_filter: false,
         persistence: 'memory',
         person_profiles: 'identified_only',
         property_denylist: [
@@ -175,6 +177,23 @@ describe('PostHog Web client', () => {
         save_referrer: false,
       },
     });
+  });
+
+  it('E2E fake host와 명시적 flag에서만 PostHog user-agent filter를 해제한다', () => {
+    process.env.EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS = 'true';
+
+    analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
+    assert.equal(initCalls[0]?.config.opt_out_useragent_filter, true);
+
+    analytics.resetAnalyticsForTests();
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    assert.equal(initCalls[1]?.config.opt_out_useragent_filter, false);
+  });
+
+  it('E2E fake host도 명시적 flag가 없으면 user-agent filter를 유지한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
+
+    assert.equal(initCalls[0]?.config.opt_out_useragent_filter, false);
   });
 
   it('event별 allowlist만 전송하고 unknown event를 drop한다', () => {

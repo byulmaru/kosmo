@@ -3,9 +3,6 @@ import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
 const posthogOrigin = 'https://posthog.e2e.invalid';
-const browserUserAgent =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-  '(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
 type PostHogPayload = {
   event?: unknown;
@@ -42,24 +39,9 @@ function readPostHogPayloads(body: string | null): PostHogPayload[] {
   }
 }
 
-test.beforeEach(async ({ context }) => {
-  await context.addInitScript(() => {
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    Object.defineProperty(navigator, 'userAgentData', {
-      get: () => ({
-        brands: [
-          { brand: 'Chromium', version: '140' },
-          { brand: 'Google Chrome', version: '140' },
-        ],
-        mobile: false,
-        platform: 'macOS',
-      }),
-    });
-  });
+test.beforeEach(async () => {
   await resetE2EDatabase();
 });
-
-test.use({ userAgent: browserUserAgent });
 
 test('Web runtime은 route template pageview만 전송하고 automatic telemetry와 민감 URL을 보내지 않는다', async ({
   page,

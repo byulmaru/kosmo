@@ -140,6 +140,7 @@ export default defineConfig({
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
+        EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS: 'true',
         EXPO_PUBLIC_POSTHOG_HOST: posthogE2EHost,
         EXPO_PUBLIC_POSTHOG_KEY: posthogE2EKey,
         EXPO_PUBLIC_WEB_ORIGIN: configuredWebOrigin,
