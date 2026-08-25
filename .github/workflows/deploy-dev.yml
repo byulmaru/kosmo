@@ -20,8 +20,16 @@ jobs:
     if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04-arm
     env:
+      ARGOCD_CLI_VERSION: 3.4.2
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
     steps:
+      - name: Install Argo CD CLI
+        uses: clowdhaus/argo-cd-action@946f488cf2607049c2e6ca86902ac50783927ec1 # v4.2.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          version: ${{ env.ARGOCD_CLI_VERSION }}
+
       - name: Connect to Tailscale
         uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
         with:
@@ -63,28 +71,6 @@ jobs:
 
             core.setSecret(dexToken);
             core.setOutput("token", dexToken);
-
-      - name: Install Argo CD CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if command -v argocd >/dev/null 2>&1; then
-            exit 0
-          fi
-
-          case "$(uname -m)" in
-            x86_64) argocd_arch=amd64 ;;
-            aarch64 | arm64) argocd_arch=arm64 ;;
-            *)
-              echo "::error::Unsupported runner architecture: $(uname -m)"
-              exit 1
-              ;;
-          esac
-
-          curl -sSfL -o "${RUNNER_TEMP}/argocd" "https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-${argocd_arch}"
-          chmod 555 "${RUNNER_TEMP}/argocd"
-          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
 
       - name: Sync dev application
         env:
