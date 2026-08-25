@@ -2408,17 +2408,15 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
   const { posts } = usePostsStoryData();
 
   return (
-    <PostMediaViewerHostProvider>
-      <Catalog>
-        <StoryPathname testID="presentation-story-pathname" />
-        <PostListItem
-          post={requireFragment(
-            requirePostById(posts, postId).listItem,
-            `production post list item ${postId}`,
-          )}
-        />
-      </Catalog>
-    </PostMediaViewerHostProvider>
+    <Catalog>
+      <StoryPathname testID="presentation-story-pathname" />
+      <PostListItem
+        post={requireFragment(
+          requirePostById(posts, postId).listItem,
+          `production post list item ${postId}`,
+        )}
+      />
+    </Catalog>
   );
 }
 
