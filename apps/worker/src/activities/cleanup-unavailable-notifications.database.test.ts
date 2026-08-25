@@ -326,6 +326,16 @@ test('concurrent independent page retries converge to one delete', async () => {
   assert.equal(retry.done, true);
 });
 
+test('null/undefined cleanup input is rejected as non-retryable Activity failure', async () => {
+  for (const input of [null, undefined]) {
+    await assert.rejects(
+      runPage(input as never),
+      (error: unknown) =>
+        error instanceof ApplicationFailure && error.type === 'CleanupInvalidInputError',
+    );
+  }
+});
+
 test('invalid cleanup input is rejected as non-retryable Activity failure', async () => {
   await assert.rejects(
     runPage({ cursor: null, upperBound: null, pageSize: 10 } as never),

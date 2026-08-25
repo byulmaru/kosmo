@@ -71,30 +71,27 @@ export async function cleanupUnavailableNotificationPageActivity(
 ): Promise<CleanupUnavailableNotificationPageResult> {
   const { attempt } = activityInfo();
   const startedAt = Date.now();
-  heartbeat({
-    phase: 'started',
-    cursor: input.cursor,
-    upperBound: input.upperBound,
-    attempt,
-  });
-  log.info('Notification cleanup page started', {
-    resource: 'notification_cleanup',
-    schedule: 'daily',
-    cursor: input.cursor,
-    upperBound: input.upperBound,
-    pageSize: input.pageSize,
-    attempt,
-  });
+  const validation = cleanupUnavailableNotificationPageInputSchema.safeParse(input);
 
   try {
-    const parsedInput = cleanupUnavailableNotificationPageInputSchema.safeParse(input);
-    if (!parsedInput.success) {
+    if (!validation.success) {
+      const issue = validation.error.issues[0];
+      const message = issue?.path.length === 0 ? 'Invalid cleanup input' : issue?.message;
       throw ApplicationFailure.nonRetryable(
-        parsedInput.error.issues[0]?.message ?? 'Invalid cleanup input',
+        message ?? 'Invalid cleanup input',
         'CleanupInvalidInputError',
       );
     }
-    const { cursor, upperBound, pageSize } = parsedInput.data;
+    const { cursor, upperBound, pageSize } = validation.data;
+    heartbeat({ phase: 'started', cursor, upperBound, attempt });
+    log.info('Notification cleanup page started', {
+      resource: 'notification_cleanup',
+      schedule: 'daily',
+      cursor,
+      upperBound,
+      pageSize,
+      attempt,
+    });
     const page = await getDatabaseConnection().transaction(async (database) => {
       const rows = await database
         .select({ id: Notifications.id, createdAt: Notifications.createdAt })
@@ -164,7 +161,7 @@ export async function cleanupUnavailableNotificationPageActivity(
     const durationMs = Date.now() - startedAt;
     heartbeat({
       phase: 'completed',
-      cursor: input.cursor,
+      cursor,
       upperBound: page.upperBound,
       nextCursor: page.nextCursor,
       attempt,
@@ -175,7 +172,7 @@ export async function cleanupUnavailableNotificationPageActivity(
     log.info('Notification cleanup page completed', {
       resource: 'notification_cleanup',
       schedule: 'daily',
-      cursor: input.cursor,
+      cursor,
       upperBound: page.upperBound,
       nextCursor: page.nextCursor,
       done: page.done,
@@ -204,8 +201,9 @@ export async function cleanupUnavailableNotificationPageActivity(
     log.error('Notification cleanup page failed', {
       resource: 'notification_cleanup',
       schedule: 'daily',
-      cursor: input.cursor,
-      upperBound: input.upperBound,
+      ...(validation.success
+        ? { cursor: validation.data.cursor, upperBound: validation.data.upperBound }
+        : {}),
       durationMs,
       attempt,
       error,
