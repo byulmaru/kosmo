@@ -86,8 +86,10 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   반환값에 포함한다.
 - read-only query, lookup, list와 loader는 진입점의 query 계층에서 DB와 공유 조회 policy를 사용한다.
   계층을 맞추기 위한 pass-through core service를 만들지 않는다.
-- 여러 DB 변경이 원자적이어야 하면 core action이 transaction 경계를 소유한다. 실제 caller
-  transaction과 합류해야 할 때만 optional transaction을 받는다.
+- 여러 DB 변경이 원자적이어야 하면 기본적으로 core action이 transaction 경계를 소유한다. 다만 capability가
+  Temporal command의 durable admission과 DB commit을 하나의 실행으로 연결하도록 명시하면 같은 core domain
+  policy와 transaction 구현을 Worker Activity가 호출할 수 있다. 이때 caller는 DB handle이나 callback을 넘기지
+  않고 serializable command와 검증된 actor identity만 전달한다.
 - 새로운 Post origin이나 lifecycle 계약을 transaction 인자의 존재 여부에서 추론하지 않는다.
   `createPost`처럼 origin별 lifecycle을 소유하는 action이 caller transaction과 합류하면서 commit 이후 side
   effect까지 보장해야 한다면 `tx` 유무만으로 side effect를 생략하거나 commit 전에 실행하지 말고, 실제
@@ -97,6 +99,30 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
 - 외부 delivery나 notification처럼 DB transaction에 포함되지 않는 side effect는 domain write가 commit된
   뒤 실행한다. side effect 실패가 이미 commit된 domain 결과를 되돌려서는 안 되는 계약이면 실패를 호출
   경계에서 격리하고 commit된 상태를 유지한다.
+- Follow의 durable admission은 방향성을 가진 Profile pair Workflow가 소유한다. Workflow ID는
+  `profile-follow-pair:{followerProfileId}:{followeeProfileId}`로 결정하며, caller는 인증·actor/object 검증 뒤
+  `FOLLOW`를 Update-with-Start한다. Open policy면 transaction commit 결과를 Update handler가 즉시 반환하고,
+  Workflow는 FIFO effects를 drain한 뒤 종료한다. Approval Required면 Follow Request를 commit하고 Pending으로
+  남으며, `APPROVE`, remote `ACCEPT`, `REJECT`, `CANCEL`은 같은 pair Workflow의 Update로 처리한다.
+- Pair Workflow는 한 번에 하나의 lifecycle command만 admission한다. in-flight guard와 DB uniqueness/exact-row
+  조건으로 동시 명령을 제한하며, 승인·거절·취소와 관련된 protocol validation은 각각의 caller 경계에 남긴다.
+  inbound Follow의 직접 Accept delivery와 Follow effect의 ActivityPub no-echo 조건도 core Workflow가 가져오지
+  않는다.
+- Update handler는 transaction Activity의 commit 결과를 effects보다 먼저 반환한다. Pending 중 Request effect가
+  terminal failure가 되어도 실패를 Workflow state에 기록하고 terminal command 대기를 계속한다. terminal command가
+  commit되면 queued effects를 선언된 FIFO 순서로 drain하고, drain 뒤 terminal failure를 기록한 상태로 Workflow를
+  complete/fail한다. 이미 commit된 domain 결과는 side effect failure로 rollback하지 않는다.
+- Pair command에는 random `operationId`나 operation receipt를 두지 않는다. create transition은 Activity 전에
+  candidate Follow/Request domain row ID를 Workflow history에 배정하고 그 exact ID를 insert한다. transaction Activity
+  retry는 mutation 전 pair snapshot, candidate/expected row 및 Workflow가 보존한 serializable snapshot으로 이미
+  commit된 결과를 재구성한다. candidate ID는 실제 domain entity identity이며 command identity가 아니다.
+  Temporal Update ID는 RPC deduplication metadata이며 domain ledger가 아니다. 실행 중인 pair에는 `USE_EXISTING`을,
+  완료된 lifecycle의 새 Follow에는 `ALLOW_DUPLICATE` reuse policy를 사용한다.
+- 이 예외가 다른 capability의 retry 계약을 없애지는 않는다. 삭제 snapshot이나 effect plan을 DB 상태만으로
+  재구성할 수 없는 별도 Temporal capability는 그 capability가 소유하는 최소 receipt를 같은 transaction에 기록할
+  수 있지만, 이를 Follow pair Workflow의 공용 command ledger로 일반화하지 않는다.
+- Unfollow는 Follow Relationship의 별도 짧은 Workflow가 소유한다. Profile pair Workflow가 다음 command를
+  영구히 기다리거나 Unfollow까지 유지하는 entity/mutex로 확장하지 않는다.
 - source와 함께 commit되어야 하는 Best Effort DB projection은 같은 transaction의 격리된 savepoint에서
   실행할 수 있다. projection 실패는 savepoint에서 rollback하고 source transaction은 유지하며, caller
   transaction의 commit 전에는 외부에 보이지 않고 outer rollback 뒤에는 함께 사라진다. transaction 인자의

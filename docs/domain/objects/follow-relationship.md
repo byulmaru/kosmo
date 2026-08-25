@@ -3,7 +3,8 @@
 ## 정의
 
 Follow Relationship은 Profile 간 성립된 follower/followee 방향 관계다. 승인 대기는
-[Follow Request](./follow-request.md)가 소유하고, 승인·거절 처리 결과는 Follow Request에 보존하지 않는다.
+[Follow Request](./follow-request.md)가 소유하고, 승인·거절 처리 결과는 Follow Request에 보존하지 않는다. Follow
+생성과 승인 대기의 orchestration은 방향성을 가진 Follower/Followee pair Workflow가 소유한다.
 
 ## 상태
 
@@ -27,14 +28,37 @@ Follow Relationship은 Profile 간 성립된 follower/followee 방향 관계다.
 
 ## 행동
 
-| 행동                         | 행동 주체 Profile | 대상 객체           | 입력값           | 권한                                | 조건                                                                                                                                      | 결과                                                                                                                                   |
-| ---------------------------- | ----------------- | ------------------- | ---------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Follow Relationship 생성     | Follower Profile  | Follow Relationship | Followee Profile | `Account.Active`, `Profile.Member`  | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Open이다. 양방향 Profile Block, Profile Domain Block, 기존 관계가 없다 | 새 Post 알림 Preference=false인 Follow Relationship이 생성된다. 같은 조합의 Pending Follow Request와 그 Notification이 있으면 제거된다 |
-| Unfollow                     | Follower Profile  | Follow Relationship | 없음             | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Follow Relationship과 이 관계를 원인으로 가진 Notification이 제거된다                                                                  |
-| 새 Post 알림 Preference 변경 | Follower Profile  | Follow Relationship | boolean          | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Preference가 바뀐다                                                                                                                    |
+| 행동                         | 행동 주체 Profile | 대상 객체           | 입력값           | 권한                                | 조건                                                                                                                                      | 결과                                                                                                                                                                                         |
+| ---------------------------- | ----------------- | ------------------- | ---------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Follow Relationship 생성     | Follower Profile  | Follow Relationship | Followee Profile | `Account.Active`, `Profile.Member`  | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Open이다. 양방향 Profile Block, Profile Domain Block, 기존 관계가 없다 | 새 Post 알림 Preference=false인 Follow Relationship이 생성된다. 같은 조합의 Pending Follow Request가 있으면 제거되고, 대응 Notification 생성·정리는 commit 뒤 비동기 projection으로 수렴한다 |
+| Unfollow                     | Follower Profile  | Follow Relationship | 없음             | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Follow Relationship이 제거되고 이 관계를 원인으로 가진 Notification은 commit 뒤 비동기 projection으로 정리된다                                                                               |
+| 새 Post 알림 Preference 변경 | Follower Profile  | Follow Relationship | boolean          | `Account.Active`, `Follow.Follower` | 관계가 존재한다                                                                                                                           | Preference가 바뀐다                                                                                                                                                                          |
 
 Approval Policy가 Approval Required인 Followee에는 Follow Relationship을 직접 생성하지 않고 Follow Request를 생성한다.
 Approval Policy 변경만으로 기존 Pending Follow Request를 승인하거나 제거하지 않는다.
+
+Follow 생성은 caller 검증 뒤 `profile-follow-pair:{followerProfileId}:{followeeProfileId}` Workflow에 `FOLLOW`
+Update-with-Start된다. transaction Activity가 Open policy면 Follow Relationship을 commit하고, Update handler가
+commit 결과를 즉시 반환한 뒤 Notification과 적용 가능한 ActivityPub effects를 FIFO로 drain하고 Workflow를 종료한다.
+Approval Required면 Request를 commit하고 동일 Workflow가 Pending으로 남는다. `APPROVE` 또는 remote `ACCEPT`가
+Request를 제거하고 Follow Relationship을 원자적으로 생성하면 commit 결과를 먼저 반환하고 queued effects를 drain한
+뒤 Workflow가 종료된다.
+
+Follow pair Workflow는 한 번에 하나의 lifecycle command만 처리하며 in-flight guard와 DB uniqueness/exact-row
+조건을 함께 사용한다. Pending 중 Request effect의 terminal failure는 Workflow state에 기록하지만 Pending 대기를
+끝내지 않는다. `APPROVE`, `ACCEPT`, `REJECT`, `CANCEL`의 terminal command가 commit된 뒤에는 queued effects를
+선언된 FIFO 순서로 drain하고, drain 뒤 terminal failure를 반영해 Workflow 성공/실패를 확정한다. effect failure는
+이미 commit된 Follow Relationship을 rollback하지 않는다.
+
+거절·취소 뒤 새 Follow를 시도하면 이전 pair Workflow가 terminal이 된 뒤 같은 결정적 Workflow ID로 새 Run을 시작하며
+`ALLOW_DUPLICATE` reuse policy를 사용한다. 실행 중인 lifecycle에는 `USE_EXISTING`을 사용한다. Pair command에는
+random `operationId`나 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate domain row ID를
+transaction 전에 Workflow history에 배정하고 exact ID로 저장하며, Activity retry는 mutation 전 pair snapshot,
+candidate/expected row와 Workflow snapshot으로 결과를 재구성한다. Unfollow는 이 Workflow가 다음 command를 기다리지 않고 별도 짧은 Workflow에서
+처리한다.
+
+ActivityPub inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery는 Fedify handler가 계속 소유한다.
+Follow effects는 ActivityPub-origin event를 outbound Follow로 echo하지 않는다.
 
 ## 권한
 

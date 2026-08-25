@@ -3,7 +3,8 @@
 ## 정의
 
 Follow Request는 Follower Profile이 승인제 Followee Profile에게 보낸 팔로우 요청이다. 성립된 관계는
-[Follow Relationship](./follow-relationship.md)이 소유한다.
+[Follow Relationship](./follow-relationship.md)이 소유한다. Request는 방향성을 가진 Follower/Followee pair의
+Pending 상태를 저장하며, 그 pair의 lifecycle orchestration은 하나의 Follow pair Workflow가 소유한다.
 
 ## 상태
 
@@ -27,15 +28,37 @@ Follow Request는 Follower Profile이 승인제 Followee Profile에게 보낸 �
 
 ## 행동
 
-| 행동                | 행동 주체 Profile | 대상 객체      | 입력값           | 권한                                       | 조건                                                                                                                                              | 결과                                                                                                                                  |
-| ------------------- | ----------------- | -------------- | ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Follow Request 생성 | Follower Profile  | Follow Request | Followee Profile | `Account.Active`, `Profile.Member`         | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Approval Required다. 양방향 Block, Domain Block, 기존 관계/Pending 요청이 없다 | Pending Follow Request가 생성되고 대응하는 Follow Request Notification 생성 경계를 호출한다                                           |
-| Follow Request 승인 | Followee Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Followee` | Follow Request가 존재하고 두 Profile이 Active/Normal이며 차단 관계와 기존 Follow Relationship이 없다                                              | Follow Request를 제거하고 새 Post 알림 Preference=false인 Follow Relationship을 원자적으로 생성하며 Notification 제거 경계를 호출한다 |
-| Follow Request 거절 | Followee Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Followee` | Follow Request가 존재한다                                                                                                                         | Follow Request를 제거하고 Notification 제거 경계를 호출한다                                                                           |
-| Follow Request 취소 | Follower Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Follower` | Follow Request가 존재한다                                                                                                                         | Follow Request를 제거하고 Notification 제거 경계를 호출한다                                                                           |
+| 행동                | 행동 주체 Profile | 대상 객체      | 입력값           | 권한                                       | 조건                                                                                                                                              | 결과                                                                                                                                                                |
+| ------------------- | ----------------- | -------------- | ---------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Follow Request 생성 | Follower Profile  | Follow Request | Followee Profile | `Account.Active`, `Profile.Member`         | 두 Profile이 다르고 Active/Normal이며 Followee의 Approval Policy가 Approval Required다. 양방향 Block, Domain Block, 기존 관계/Pending 요청이 없다 | Pending Follow Request가 생성되고 대응 Notification은 commit 뒤 비동기 projection으로 생성된다                                                                      |
+| Follow Request 승인 | Followee Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Followee` | Follow Request가 존재하고 두 Profile이 Active/Normal이며 차단 관계와 기존 Follow Relationship이 없다                                              | Follow Request를 제거하고 새 Post 알림 Preference=false인 Follow Relationship을 원자적으로 생성하며 request Notification은 commit 뒤 비동기 projection으로 정리된다 |
+| Follow Request 거절 | Followee Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Followee` | Follow Request가 존재한다                                                                                                                         | Follow Request를 제거하고 Notification은 commit 뒤 비동기 projection으로 정리된다                                                                                   |
+| Follow Request 취소 | Follower Profile  | Follow Request | 없음             | `Account.Active`, `FollowRequest.Follower` | Follow Request가 존재한다                                                                                                                         | Follow Request를 제거하고 Notification은 commit 뒤 비동기 projection으로 정리된다                                                                                   |
 
 승인과 거절 결과는 Follow Request 상태로 보존하지 않는다. 거절 또는 취소 뒤 다시 요청하려면 새 Follow Request를
-생성한다. 원격 요청의 승인과 거절은 같은 저장 생명주기를 적용한 뒤 ActivityPub Follow 경계에 delivery를 위임한다.
+생성하고, 이전 pair Workflow가 terminal이 된 뒤 같은 결정적 Workflow ID로 새 Run을 시작한다. 원격 요청의 승인과
+거절은 같은 저장 생명주기를 적용한 뒤 ActivityPub Follow 경계에 delivery를 위임한다.
+
+Follow Request 생성은 caller 검증 뒤 `profile-follow-pair:{followerProfileId}:{followeeProfileId}` Workflow에
+`FOLLOW` Update-with-Start로 admission한다. transaction Activity가 Approval Required policy와 원자적 저장을
+적용하며, Update handler는 Request commit 결과를 effects보다 먼저 반환한다. Request Notification과 적용 가능한
+effects는 선언된 FIFO 순서로 drain하고 retry한다. 이 Workflow는 Request가 승인·remote Accept·거절·취소될 때까지
+Pending으로 유지된다.
+
+`APPROVE`, remote `ACCEPT`, `REJECT`, `CANCEL`은 모두 같은 pair Workflow의 Update다. terminal command의 DB
+commit은 즉시 결과로 반환되며, Request 정리와 Follow 생성 또는 Notification 정리 effects를 FIFO로 drain한 뒤
+Workflow가 종료된다. Pending 중 Request effect가 terminal failure가 되어도 실패를 기록한 채 Pending을 유지하고,
+나중의 terminal command를 계속 처리한다. terminal effects를 모두 drain한 뒤에야 Workflow 성공/실패를 확정하며,
+commit된 Request/Relationship을 effect failure로 되돌리지 않는다.
+
+Pair command에는 random `operationId`나 별도 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate
+domain row ID는 transaction 전에 Workflow history에 배정하고 exact ID로 저장한다. Activity retry는 mutation 전
+pair snapshot, 현재 Request/Follow candidate/expected row와 serializable transition snapshot으로 이미 commit된
+결과를 재구성한다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
+실행 중 lifecycle에는 `USE_EXISTING`, terminal lifecycle 뒤 새 요청에는 `ALLOW_DUPLICATE`를 사용한다.
+
+ActivityPub inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery는 Fedify handler에 남긴다. pair
+Workflow effects는 ActivityPub-origin event를 다시 outbound Follow로 echo하지 않는다.
 
 ## 권한
 
@@ -57,3 +80,6 @@ Follow Request는 Follower Profile이 승인제 Followee Profile에게 보낸 �
 ## 제외/보류
 
 - 원격 follow delivery 실패, 재시도, 동기화 상태는 구현/연합 스펙으로 분리한다.
+- Profile의 application 삭제 경로는 이 객체를 직접 삭제하는 production lifecycle로 정의하지 않는다. 운영자가
+  DB를 직접 삭제해 Workflow와 row가 어긋나는 경우는 알려진 운영 위험이며, 도메인 계약에 일반적인 orphan
+  reconciliation을 추가하지 않는다.
