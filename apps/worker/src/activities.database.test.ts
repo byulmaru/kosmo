@@ -12,6 +12,7 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import { MockActivityEnvironment } from '@temporalio/testing';
 import type * as CoreDb from '@kosmo/core/db';
 import type {
   createPost as CreatePost,
@@ -19,11 +20,13 @@ import type {
   repostPost as RepostPost,
 } from '@kosmo/core/services';
 import type {
+  cleanupUnavailableNotificationPageActivity as CleanupUnavailableNotificationPageActivity,
   createReactionNotificationActivity as CreateReactionNotificationActivity,
   createReplyNotificationActivity as CreateReplyNotificationActivity,
   createRepostNotificationActivity as CreateRepostNotificationActivity,
   deleteReactionNotificationActivity as DeleteReactionNotificationActivity,
   deleteRepostNotificationActivity as DeleteRepostNotificationActivity,
+  getNotificationCleanupUpperBoundActivity as GetNotificationCleanupUpperBoundActivity,
 } from './activities';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -39,6 +42,8 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let Profiles: typeof CoreDb.Profiles;
 let Reactions: typeof CoreDb.Reactions;
 let createCorePost: typeof CreatePost;
+let cleanupUnavailableNotificationPageActivity: typeof CleanupUnavailableNotificationPageActivity;
+let getNotificationCleanupUpperBoundActivity: typeof GetNotificationCleanupUpperBoundActivity;
 let deletePost: typeof DeletePost;
 let createReactionNotificationActivity: typeof CreateReactionNotificationActivity;
 let deleteReactionNotificationActivity: typeof DeleteReactionNotificationActivity;
@@ -61,6 +66,8 @@ before(async () => {
     Reactions,
   } = await import('@kosmo/core/db'));
   ({
+    cleanupUnavailableNotificationPageActivity,
+    getNotificationCleanupUpperBoundActivity,
     createReactionNotificationActivity,
     createReplyNotificationActivity,
     createRepostNotificationActivity,
@@ -237,6 +244,58 @@ test('Create Activity 전에 Repost가 Tombstone이면 성공한 no-op이다', a
 
   await assert.doesNotReject(createRepostNotificationActivity(repost.id));
   assert.equal(await db.$count(Notifications), 0);
+});
+
+test('Notification cleanup Activity는 bounded 결과와 시작·완료 heartbeat를 남긴다', async () => {
+  const recipient = await createProfile();
+  await db.insert(Notifications).values({
+    data: {},
+    kind: NotificationKind.FOLLOW,
+    recipientProfileId: recipient.id,
+    sourceId: crypto.randomUUID(),
+  });
+  const boundEnvironment = new MockActivityEnvironment({ attempt: 2 });
+  const upperBound = (await boundEnvironment.run(getNotificationCleanupUpperBoundActivity)) as
+    | string
+    | null;
+  assert.ok(upperBound);
+  const environment = new MockActivityEnvironment({ attempt: 2 });
+  const heartbeats: unknown[] = [];
+  environment.on('heartbeat', (details) => heartbeats.push(details));
+
+  const result = (await environment.run(cleanupUnavailableNotificationPageActivity, {
+    cursor: null,
+    upperBound,
+    pageSize: 10,
+  })) as Awaited<ReturnType<typeof cleanupUnavailableNotificationPageActivity>>;
+
+  assert.equal(result.done, true);
+  assert.equal(result.scanned, 1);
+  assert.equal(result.deleted, 1);
+  assert.equal(result.skipped, 0);
+  assert.ok(result.upperBound);
+  assert.deepEqual(
+    heartbeats.map((details) => (details as { phase: string }).phase),
+    ['started', 'completed'],
+  );
+  assert.equal((heartbeats[0] as { attempt: number }).attempt, 2);
+  assert.equal((heartbeats[1] as { upperBound: string }).upperBound, result.upperBound);
+});
+
+test('Notification cleanup upper-bound Activity는 null bound와 heartbeat를 반환한다', async () => {
+  const environment = new MockActivityEnvironment({ attempt: 2 });
+  const heartbeats: unknown[] = [];
+  environment.on('heartbeat', (details) => heartbeats.push(details));
+
+  const result = await environment.run(getNotificationCleanupUpperBoundActivity);
+
+  assert.equal(result, null);
+  assert.deepEqual(
+    heartbeats.map((details) => (details as { phase: string }).phase),
+    ['started', 'completed'],
+  );
+  assert.equal((heartbeats[0] as { attempt: number }).attempt, 2);
+  assert.equal((heartbeats[1] as { upperBound: string | null }).upperBound, null);
 });
 
 const createProfile = async () => {

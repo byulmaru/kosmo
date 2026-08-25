@@ -119,8 +119,8 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 - 필수 원인 관계가 없거나 Recipient와 일치하지 않거나 Related Post/Profile을 Recipient 기준으로 조회할 수 없게
   된 Notification은 비동기적으로 제거한다. 제거 전까지 저장 행과 Read State가 남을 수 있으며, 현재
   delivery는 모든 API 표면에서 숨기는 것으로 이 간격을 격리한다.
-- Recipient Profile 자체가 일시적으로 조회 불가인 경우에도 item은 숨기되, 이 상태만으로 비동기 제거할지는 후속
-  cleanup capability에서 결정한다.
+- Recipient Profile 자체가 일시적으로 조회 불가인 경우에도 item은 숨기되, 복구 가능한 Recipient Profile의
+  일시 비활성화·정지만으로는 Notification을 비동기 제거하지 않는다.
 - Mute가 나중에 생성되어도 기존 Notification의 존재와 Read State는 바꾸지 않는다. Profile Block은 제거된
   Follow 객체를 직접 원인으로 가진 Notification을 제거하고, 그 밖에 조회 불가가 된 item은 위 숨김·비동기
   제거 정책을 따른다.
@@ -136,4 +136,4 @@ Repost Notification의 Source Repost는 알림을 만든 원인 Repost Post다. 
 
 - 조회 불가 Notification의 비동기 제거를 위한 event, queue/scan, retry와 대량 처리 방식은 후속
   capability에서 결정한다.
-- Recipient Profile의 일시 비활성화·정지가 물리 제거 원인인지 여부는 후속 cleanup capability에서 결정한다.
+- Recipient Profile의 일시 비활성화·정지는 비동기 물리 제거 원인에서 제외한다.

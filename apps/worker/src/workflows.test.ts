@@ -1394,3 +1394,234 @@ test(
     });
   },
 );
+
+test(
+  'Schedule-facing Notification Cleanup Workflow는 no-arg 실행과 stable sweep result를 제공한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-test-${process.pid}`;
+    const calls: Array<{ type: 'bound' | 'page'; input?: unknown }> = [];
+    const worker = await Worker.create({
+      activities: {
+        getNotificationCleanupUpperBoundActivity: async () => {
+          calls.push({ type: 'bound' });
+          return '00000000-0000-8000-8000-000000000010';
+        },
+        cleanupUnavailableNotificationPageActivity: async (input: unknown) => {
+          calls.push({ type: 'page', input });
+          return {
+            upperBound: '00000000-0000-8000-8000-000000000010',
+            nextCursor: null,
+            done: true,
+            scanned: 0,
+            deleted: 0,
+            skipped: 0,
+            oldestUnavailableAgeMs: null,
+          };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('notificationCleanupWorkflow', {
+        args: [],
+        taskQueue,
+        workflowId: `notification-cleanup-no-arg:${process.pid}`,
+      });
+
+      assert.equal(result.done, true);
+      assert.equal(result.pages, 1);
+      assert.equal(result.scanned, 0);
+      assert.equal(result.deleted, 0);
+      assert.equal(result.skipped, 0);
+      assert.equal(result.upperBound, '00000000-0000-8000-8000-000000000010');
+      assert.match(
+        result.sweepId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+      assert.deepEqual(calls, [
+        { type: 'bound' },
+        {
+          type: 'page',
+          input: {
+            cursor: null,
+            upperBound: '00000000-0000-8000-8000-000000000010',
+            pageSize: 100,
+          },
+        },
+      ]);
+    });
+  },
+);
+
+test(
+  'Notification Cleanup Workflow는 null upper bound에서 page Activity 없이 empty sweep으로 완료한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-empty-test-${process.pid}`;
+    let boundCalls = 0;
+    let pageCalls = 0;
+    const worker = await Worker.create({
+      activities: {
+        getNotificationCleanupUpperBoundActivity: async () => {
+          boundCalls += 1;
+          return null;
+        },
+        cleanupUnavailableNotificationPageActivity: async () => {
+          pageCalls += 1;
+          throw new Error('page Activity must not run for a null upper bound');
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute('notificationCleanupWorkflow', {
+        args: [],
+        taskQueue,
+        workflowId: `notification-cleanup-empty:${process.pid}`,
+      });
+
+      const { sweepId, ...summary } = result;
+      assert.deepEqual(summary, {
+        cursor: null,
+        upperBound: null,
+        done: true,
+        pages: 0,
+        scanned: 0,
+        deleted: 0,
+        skipped: 0,
+        oldestUnavailableAgeMs: null,
+      });
+      assert.match(sweepId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      assert.equal(boundCalls, 1);
+      assert.equal(pageCalls, 0);
+    });
+  },
+);
+
+test(
+  'Notification Cleanup Workflow는 Activity retry 뒤에도 cursor를 Continue-As-New으로 전달한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-retry-test-${process.pid}`;
+    const calls: Array<{
+      cursor: string | null;
+      upperBound: string;
+      pageSize: number;
+    }> = [];
+    let attempts = 0;
+    let boundCalls = 0;
+    const worker = await Worker.create({
+      activities: {
+        getNotificationCleanupUpperBoundActivity: async () => {
+          boundCalls += 1;
+          return '00000000-0000-8000-8000-000000000020';
+        },
+        cleanupUnavailableNotificationPageActivity: async (input: {
+          cursor: string | null;
+          upperBound: string;
+          pageSize: number;
+        }) => {
+          attempts += 1;
+          calls.push(input);
+          if (attempts === 1) {
+            throw ApplicationFailure.retryable('temporary database outage');
+          }
+          if (input.cursor === null) {
+            return {
+              upperBound: input.upperBound,
+              nextCursor: '00000000-0000-8000-8000-000000000010',
+              done: false,
+              scanned: 2,
+              deleted: 1,
+              skipped: 1,
+              oldestUnavailableAgeMs: 100,
+            };
+          }
+          return {
+            upperBound: input.upperBound,
+            nextCursor: null,
+            done: true,
+            scanned: 1,
+            deleted: 0,
+            skipped: 1,
+            oldestUnavailableAgeMs: 200,
+          };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const result = await environment.client.workflow.execute(
+        'cleanupUnavailableNotificationsWorkflow',
+        {
+          args: [
+            {
+              sweepId: 'notification-cleanup-retry-sweep',
+              pageSize: 2,
+              rateLimitMs: 0,
+              maxPagesPerRun: 1,
+            },
+          ],
+          taskQueue,
+          workflowId: `notification-cleanup-retry:${process.pid}`,
+        },
+      );
+
+      assert.deepEqual(result, {
+        sweepId: 'notification-cleanup-retry-sweep',
+        cursor: null,
+        upperBound: '00000000-0000-8000-8000-000000000020',
+        done: true,
+        pages: 2,
+        scanned: 3,
+        deleted: 1,
+        skipped: 2,
+        oldestUnavailableAgeMs: 200,
+      });
+      assert.equal(attempts, 3);
+      assert.equal(boundCalls, 1);
+      assert.deepEqual(calls, [
+        {
+          cursor: null,
+          upperBound: '00000000-0000-8000-8000-000000000020',
+          pageSize: 2,
+        },
+        {
+          cursor: null,
+          upperBound: '00000000-0000-8000-8000-000000000020',
+          pageSize: 2,
+        },
+        {
+          cursor: '00000000-0000-8000-8000-000000000010',
+          upperBound: '00000000-0000-8000-8000-000000000020',
+          pageSize: 2,
+        },
+      ]);
+    });
+  },
+);

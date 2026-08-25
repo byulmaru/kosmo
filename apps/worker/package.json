@@ -15,6 +15,7 @@
   "dependencies": {
     "@kosmo/core": "workspace:*",
     "@kosmo/fedify": "workspace:*",
+    "@temporalio/activity": "^1.22.0",
     "@temporalio/worker": "^1.22.0",
     "@temporalio/workflow": "^1.22.0",
     "drizzle-orm": "1.0.0-beta.22",
