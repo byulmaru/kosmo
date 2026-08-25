@@ -46,17 +46,23 @@
 
 **Authority / Provenance:** `docs/design/local-timeline.md`, `docs/design/accessibility.md`, `PROD-649` — The app SHALL 선택된 Profile이 있는 인증 사용자가 `/local`을 열면 `localTimeline` 첫 20개를 기존
 `PostListItem`으로 렌더한다. 목록 항목의 작성자와 카드 선택은 기존 Profile·Post detail route를 사용해야 하며(MUST),
-선택 Profile·Relay actor가 바뀌면 이전 목록 상태를 재사용해서는 안 된다(MUST NOT).
+선택 Profile·Relay actor가 바뀌면 이전 actor/store의 Local connection data·edge·cursor를 재사용해서는 안 된다
+(MUST NOT).
 
 #### Scenario: Render Local posts
 
 - **WHEN** `/local`의 connection이 Post edge를 반환한다
 - **THEN** 시스템은 각 node를 기존 `PostListItem`으로 렌더하고 기존 Profile·Post detail 이동을 유지한다
 
+#### Scenario: Converge a PUBLIC default-created Post
+
+- **WHEN** Local Profile의 기본 공개 범위를 `PUBLIC`으로 저장한 사용자가 새 Composer로 Post를 작성한다
+- **THEN** 시스템은 `createPost`에 `PUBLIC`을 전달하고 새로 조회한 `/local` connection에 생성된 Post를 표시한다
+
 #### Scenario: Isolate selected Profile state
 
 - **WHEN** 사용자가 selected Profile을 바꾼다
-- **THEN** 시스템은 새 Relay actor/store의 Local connection을 사용하고 이전 edge·cursor·오류 상태를 표시하지 않는다
+- **THEN** 시스템은 새 Relay actor/store의 Local connection을 사용하고 이전 connection data·edge·cursor를 표시하지 않는다
 
 #### Scenario: No selected Profile
 

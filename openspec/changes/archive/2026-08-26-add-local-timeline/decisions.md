@@ -51,7 +51,8 @@
 - Decision Outcome: `/home`과 `/local` route 및 Relay owner를 유지하고 기존 `Tabs`, `PostListItem`, pagination lifecycle만 재사용한다.
 - Alternatives Considered: 하나의 mode-driven timeline route는 canonical URL과 owner 격리를 흐리고, 범용 timeline framework는 두 화면에 비해 과도하다.
 - Consequences: 작은 route markup 중복을 허용하고 공용 컴포넌트는 탭과 기존 목록 경계에 한정한다.
-- Confirmation / Follow-up: route/tab unit 및 Web E2E에서 전환, selected Local refresh, actor 격리를 확인한다.
+- Confirmation / Follow-up: `RelayActorProvider` unit에서 Store 교체와 이전 Local connection·edge·cursor record 제거를
+  확인하고, Web E2E에서 전환·selected Local refresh·Profile 전환 뒤 Local 재조회와 새 응답 수렴을 확인한다.
 
 ### Underline 인디케이터와 TabList 하단 boundary를 겹쳐 표시한다
 

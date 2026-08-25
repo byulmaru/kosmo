@@ -16,6 +16,9 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - 목록의 색상, 간격과 typography는 기존 semantic token을 사용한다. 현재 앱 설정과 전역 Provider가 Light로
   고정되어 있으므로 Local은 별도 theme 전환을 추가하지 않으며, Dark 실화면 검증은 앱 전역 theme 활성화 뒤
   수행한다.
+- 현재 완료 검증은 배포·실행 가능한 Web Light를 대상으로 한다. Android/iOS 공용 route와 component는 유지하되
+  인증된 Native runtime 증거가 없는 상태를 미검증으로 기록하고 이 change의 완료 blocker로 사용하지 않는다.
+  Native 전달·QA가 재개되면 해당 시점의 지원 범위와 runtime 검증 책임을 다시 정한다.
 - Local route에서 게시글 작성자와 카드를 선택하면 기존 Profile 및 Post detail route로 이동한다.
 
 ## 상호작용
@@ -23,7 +26,7 @@ Home과 Local은 같은 타임라인 화면군이며 각각 `/home`, `/local` ca
 - 비활성 탭을 선택하면 해당 canonical route로 전환한다.
 - 이미 선택된 Local 탭을 다시 선택하면 현재 목록의 최신 데이터를 다시 요청한다.
 - 키보드에서는 기존 `TabList`의 방향키, `Home`, `End`, `Enter`, `Space` 동작과 focus-visible 표현을 유지한다.
-- 선택된 Profile이 바뀌면 Local 목록은 이전 Relay actor/store의 edge, cursor, loading, error 상태를 재사용하지
+- 선택된 Profile이 바뀌면 Local 목록은 이전 Relay actor/store의 connection data, edge와 cursor를 재사용하지
   않는다.
 
 ## 상태

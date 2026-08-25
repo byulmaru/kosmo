@@ -93,17 +93,22 @@ Relay connection으로 조회한다.
 **Guardrails**
 
 - 자동화와 실제 Web·Android·iOS runtime 증거를 구분한다.
+- 현재 완료 기준은 배포·실행 가능한 Web Light이며, 인증된 Native runtime 미검증은 기록하되 완료·archive
+  blocker로 사용하지 않는다.
 - 전체 scope와 required validation 전에는 OpenSpec을 archive하지 않는다.
 
 **Verification**
 
 - 실제 DB fixture를 사용하는 targeted Web E2E와 390/1024/1440 browser QA를 수행한다. 현재 app-wide runtime이
   지원하는 Light를 검증하고, Dark가 전역에서 활성화되지 않은 경우 그 경계를 별도로 기록한다.
-- 실행 가능한 Android/iOS runtime을 확인하고 불가하면 정확한 미검증 범위를 남긴다.
+- Android/iOS 공용 route와 component를 유지하고, 인증된 Native runtime 증거가 없는 범위와 후속 검증 책임을
+  기록한다.
 
 - [x] 4.1 `/local` 후보·순서·탭·상태·Profile/Post 이동을 실제 Web E2E로 검증한다.
-- [ ] 4.2 지원 viewport와 Light/Dark 및 키보드·스크린리더 상태를 browser에서 검증한다.
+- [x] 4.2 지원 viewport와 현재 지원하는 Web Light 및 키보드·스크린리더 상태를 browser에서 검증한다.
 - [x] 4.3 전체 검증 결과와 Native 미검증 위험을 정리하고 archive 준비 여부를 판정한다.
+- [x] 4.4 Profile `PUBLIC` 기본값 저장부터 Composer·`createPost`·Local 재선택까지 production wiring을 실제
+      Web E2E로 검증한다.
 
 ### 2026-08-25 검증 기록
 
@@ -112,6 +117,12 @@ Relay connection으로 조회한다.
 - Browser Light QA: 390px 모바일 header/bottom tabs, 1024px compact sidebar, 1440px full sidebar/right rail에서
   `/local`, selected `로컬` tab, Home primary active와 공용 상태의 접근성 tree를 확인했다.
 - Dark: `app.config.ts`의 `userInterfaceStyle`과 `AppProviders`의 `ThemeProvider`가 Light로 고정되어 실제 Local Dark
-  surface는 검증하지 못했다. Local 범위에서 전역 theme 기능을 추가하지 않는다.
-- Native: iOS 26.5 simulator와 Android AVD 설치는 확인했지만 실제 인증된 `/local` 화면은 실행하지 못했다.
-- Archive readiness: **No**. Dark app-wide runtime과 실제 iOS/Android `/local` QA 증거가 남아 있다.
+  surface는 검증하지 못했다. Local 범위에서 전역 theme 기능을 추가하지 않으며 완료 blocker로 사용하지 않는다.
+- Native: iOS 26.5 simulator와 Android AVD 설치는 확인했지만 실제 인증된 `/local` 화면은 실행하지 못했다. 공용
+  route와 component는 유지하고, Native 전달·QA 재개 시점에 지원 범위와 후속 검증 책임을 다시 정한다.
+- Production wiring: Settings에서 Profile 기본값을 `PUBLIC`으로 저장하고 Composer 초기값·`createPost` 입력·새
+  `/local` Post 노출과 selected Local 재선택 뒤 재조회를 실제 DB Web E2E로 검증했다.
+- Actor isolation: selected Profile 전환 뒤 새 `LocalPageQuery`가 새 Post와 cursor에 수렴함을 Web E2E로 확인했고,
+  Relay actor 단위 검증에서 이전 Local connection·edge·cursor record가 새 Store에 없음을 확인했다.
+- Archive readiness: **Yes**. 현재 지원하는 Web Light 검증과 production wiring·actor 격리 증거가 완료됐고,
+  Dark·Native runtime 미검증은 위 경계대로 기록했으며 완료 blocker가 아니다.
