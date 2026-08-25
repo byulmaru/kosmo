@@ -243,6 +243,7 @@ Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공�
 - 공용 primitive가 semantic foreground pair와 interaction state를 소비한다.
 - DSN-19의 공용 primitive raw 값과 DSN-21/Product의 route·shell·domain raw 값이 각각 이관되거나 위 inventory의 예외로 남는다.
 - DSN-19 Storybook의 공용 primitive Light/Dark·핵심 state와 DSN-21/Product의 기존 route·shell consumer 이관 증거를 재사용하고, PROD-812가 남은 inventory 종결과 지원 플랫폼의 대표 theme 전환을 통합 검증한다.
+- PROD-812는 resolved theme를 Native `StatusBar` foreground style과 Web `theme-color`에도 반영하고, Light OS에서 명시적 Dark, Dark OS에서 명시적 Light, `시스템` 선택 중 OS mode 전환을 지원 플랫폼별로 검증한다.
 - Web 자동 대비와 실제 Android/iOS runtime QA를 서로 다른 증거로 기록한다.
 
 ## 예외와 금지

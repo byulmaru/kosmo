@@ -75,12 +75,20 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - detail 본문은 `테마 설정` section label로 시작하고, 그 아래 기존 `RadioOption` 문법으로 `시스템`,
   `라이트`, `다크` 세 항목을 제공한다. `시스템`은 기기 색상 모드 변경을 따르고, `라이트`와 `다크`는 기기
   설정과 무관하게 해당 모드를 사용한다.
+- preference 초기값은 `시스템`이다. 저장값이 없거나 `시스템`·`라이트`·`다크` 외의 값으로 유효하지 않으면
+  `시스템`으로 정규화한다. `/settings` root의 현재값과 detail radio 선택 상태는 정규화된 preference를
+  동일하게 표시한다.
 - 세 항목 아래에는 `테마 설정은 이 기기에만 적용되며 다른 기기와 동기화되지 않아요.` 안내를 보조 텍스트로
   한 번만 표시한다.
 - 선택은 별도 `저장` action 없이 즉시 화면에 반영하고 같은 기기의 클라이언트 로컬 저장소에 유지한다.
   server·DB에 저장하거나 계정 및 다른 기기로 동기화하지 않으며 성공 feedback도 표시하지 않는다.
+- 로컬 저장에 실패해도 이미 적용한 선택을 rollback하지 않고 현재 세션의 화면, root 현재값과 radio 선택
+  상태에 유지하며 기존 `Toast`로 실패만 알린다. 다음 실행은 마지막으로 성공 저장된 preference를 사용하고,
+  성공 저장값이 없으면 `시스템`으로 시작한다.
 - 앱 시작 시 로컬 선택값 확인이 끝나기 전에는 기존 Splash를 유지해 잘못된 테마가 잠깐 노출되지 않게 한다.
-  로컬 유지 실패는 별도 완료 화면을 만들지 않고 기존 `Toast` 오류 feedback을 사용한다.
+- preference를 실제 Light/Dark `resolved theme`로 해석해 앱 화면, Native `StatusBar` foreground style과 Web
+  `theme-color`가 같은 mode를 사용하게 한다. `시스템`은 OS mode 변경을 함께 따르고, 명시적 `라이트`·`다크`는
+  OS mode와 무관하게 system chrome에도 동일하게 반영한다.
 - 이 detail은 Primary Color를 변경하지 않는다. Primary Color가 별도 범위로 승인되면 root의 독립 항목으로
   추가하고, 실제 display 관련 항목이 충분히 늘어나기 전에는 중간 category를 만들지 않는다.
 - Legacy `ThemePresetCard`와 `Profile / Theme` source는 재사용하지 않는다. 별도 preview card·Primary
@@ -165,9 +173,10 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
   소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
 - DSN-54는 Settings root/master의 테마 현재값 행, `/settings/theme`의 System·Light·Dark 선택 화면,
-  Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 선택값 상태, 기기 로컬 persistence,
-  초기 hydration, app-wide ThemeProvider 적용, 남은 route·shell·domain consumer의 semantic token 이관·예외
-  정리와 지원 플랫폼의 대표 Light/Dark 화면·주요 interaction state 검증을 소유한다.
+  Light/Dark 시각 상태와 client-local handoff를 소유한다. PROD-812는 preference 초기값·정규화, 선택값 상태,
+  기기 로컬 persistence와 실패 semantics, 초기 hydration, app-wide ThemeProvider·Native StatusBar·Web
+  `theme-color` 적용, 남은 route·shell·domain consumer의 semantic token 이관·예외 정리와 지원 플랫폼의 대표
+  Light/Dark 화면·주요 interaction state·system chrome 검증을 소유한다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
