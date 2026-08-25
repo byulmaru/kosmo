@@ -38,7 +38,7 @@ jobs:
   plan:
     name: Terraform Plan
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -59,6 +59,13 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
           cleanup_credentials: true
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TAILSCALE_AUDIENCE }}
+          tags: tag:github-actions
 
       - name: Authenticate to Argo CD
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -214,7 +221,7 @@ jobs:
   apply:
     name: Terraform Apply
     if: ${{ github.event_name == 'push' }}
-    runs-on: self-hosted
+    runs-on: ubuntu-24.04-arm
     environment: terraform-apply
 
     steps:
@@ -236,6 +243,13 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
           cleanup_credentials: true
+
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
+        with:
+          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TAILSCALE_AUDIENCE }}
+          tags: tag:github-actions
 
       - name: Authenticate to Argo CD
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
