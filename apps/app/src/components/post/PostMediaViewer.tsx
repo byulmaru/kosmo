@@ -113,8 +113,7 @@ export function PostMediaViewer({
     null,
   );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
-  const backdropPadding = Platform.OS === 'web' ? (wide ? spacing.xl : spacing.xs) : 0;
-  const safeAreaStyle = useSafeAreaPadding(backdropPadding);
+  const safeAreaStyle = useSafeAreaPadding(wide ? spacing.xl : spacing.xs);
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);

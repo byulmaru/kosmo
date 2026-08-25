@@ -85,18 +85,10 @@ const webStickyHeader = {
 
 const webFixedBottomBar = {
   bottom: 0,
-  left: 0,
+  left: 'env(safe-area-inset-left)',
   position: 'fixed',
-  right: 0,
+  right: 'env(safe-area-inset-right)',
   zIndex: 20,
-} as unknown as ViewStyle;
-
-const webFixedDrawerBackdrop = {
-  bottom: 0,
-  left: 0,
-  position: 'fixed',
-  right: 0,
-  top: 0,
 } as unknown as ViewStyle;
 
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
@@ -347,10 +339,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
               {home ? (
                 <PageHeader
                   accessibilityLabel="홈"
-                  brandHref={web ? '/home' : undefined}
                   leading={menuButton}
-                  onBrandCurrentNavigate={web ? reselectHome : undefined}
                   variant="brand"
+                  {...(web ? { brandHref: '/home', onBrandCurrentNavigate: reselectHome } : {})}
                 />
               ) : mobileShellHeader ? (
                 <PageHeader
@@ -415,7 +406,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.drawerBackdrop,
-              web && webFixedDrawerBackdrop,
               drawerSafeAreaStyle,
               { backgroundColor: theme.overlayScrim },
             ]}

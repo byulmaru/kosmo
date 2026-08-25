@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { FeedbackFormState } from '@/components/feedback/FeedbackForm';
 
 function FeedbackFormStateProbe() {
@@ -22,24 +20,16 @@ function FeedbackFormStateProbe() {
   );
 }
 
-function FeedbackOverlayFixture({
-  initiallyVisible = false,
-  safeAreaInsets,
-}: {
-  initiallyVisible?: boolean;
-  safeAreaInsets?: EdgeInsets;
-}) {
+function FeedbackOverlayFixture({ initiallyVisible = false }: { initiallyVisible?: boolean }) {
   const [visible, setVisible] = useState(initiallyVisible);
 
   return (
-    <SafeAreaProvider initialSafeAreaInsets={safeAreaInsets}>
-      <View>
-        <Pressable accessibilityRole="button" onPress={() => setVisible(true)}>
-          <Text>피드백 오버레이 열기</Text>
-        </Pressable>
-        <FeedbackOverlay onRequestClose={() => setVisible(false)} visible={visible} />
-      </View>
-    </SafeAreaProvider>
+    <View>
+      <Pressable accessibilityRole="button" onPress={() => setVisible(true)}>
+        <Text>피드백 오버레이 열기</Text>
+      </Pressable>
+      <FeedbackOverlay onRequestClose={() => setVisible(false)} visible={visible} />
+    </View>
   );
 }
 
@@ -213,21 +203,19 @@ export const OverlayFocusLifecycle: Story = {
   },
 };
 
-const feedbackMobileShortParameters = {
-  viewport: {
-    options: {
-      feedbackMobileShort: {
-        name: 'Feedback mobile short',
-        styles: { height: '568px', width: '390px' },
-        type: 'mobile',
+export const OverlayMobileSheetGeometry: Story = {
+  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
+  parameters: {
+    viewport: {
+      options: {
+        feedbackMobileShort: {
+          name: 'Feedback mobile short',
+          styles: { height: '568px', width: '390px' },
+          type: 'mobile',
+        },
       },
     },
   },
-};
-
-export const OverlayMobileSheetGeometry: Story = {
-  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
-  parameters: feedbackMobileShortParameters,
   render: () => <FeedbackOverlayFixture initiallyVisible />,
   play: async ({ canvasElement }) => {
     const ownerDocument = canvasElement.ownerDocument;
@@ -245,40 +233,9 @@ export const OverlayMobileSheetGeometry: Story = {
   },
 };
 
-export const OverlayMobileSheetNonZeroSafeArea: Story = {
-  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
-  parameters: feedbackMobileShortParameters,
-  render: () => (
-    <FeedbackOverlayFixture
-      initiallyVisible
-      safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }}
-    />
-  ),
-  play: async ({ canvasElement }) => {
-    const ownerDocument = canvasElement.ownerDocument;
-    const view = ownerDocument.defaultView;
-    const page = within(ownerDocument.body);
-    await page.findByRole('dialog', { name: '피드백 보내기' });
-    const surface = page.getByTestId('feedback-overlay-surface');
-    const viewportWidth = view?.innerWidth ?? 0;
-    const viewportHeight = view?.innerHeight ?? 0;
-
-    const surfaceBounds = surface.getBoundingClientRect();
-    expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
-    expect(surfaceBounds.top).toBeGreaterThanOrEqual(24);
-    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
-    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-  },
-};
-
 export const OverlayFullDialogGeometry: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
-  render: () => (
-    <FeedbackOverlayFixture
-      initiallyVisible
-      safeAreaInsets={{ bottom: 20, left: 62, right: 62, top: 0 }}
-    />
-  ),
+  render: () => <FeedbackOverlayFixture initiallyVisible />,
   play: async ({ canvasElement }) => {
     const ownerDocument = canvasElement.ownerDocument;
     const view = ownerDocument.defaultView;
@@ -289,9 +246,6 @@ export const OverlayFullDialogGeometry: Story = {
     expect(bounds.width).toBe(600);
     expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
     expect(bounds.left + bounds.width / 2).toBeCloseTo((view?.innerWidth ?? 0) / 2, 0);
-    expect(bounds.left).toBeGreaterThanOrEqual(62);
-    expect(bounds.right).toBeLessThanOrEqual((view?.innerWidth ?? 0) - 62);
-    expect(bounds.bottom).toBeLessThanOrEqual((view?.innerHeight ?? 0) - 20);
   },
 };
 

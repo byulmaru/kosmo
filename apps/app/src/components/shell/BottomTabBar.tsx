@@ -1,6 +1,6 @@
 import { usePathname } from 'expo-router';
 import { Bell, House, PenLine, Search } from 'lucide-react-native';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { Avatar } from '@/components/ui/Avatar';
@@ -68,8 +68,6 @@ export function BottomTabBar({
           backgroundColor: theme.backgroundCanvas,
           borderColor: theme.borderSubtle,
           paddingBottom: insets.bottom,
-          paddingLeft: Platform.OS === 'web' ? insets.left : 0,
-          paddingRight: Platform.OS === 'web' ? insets.right : 0,
         },
       ]}
     >

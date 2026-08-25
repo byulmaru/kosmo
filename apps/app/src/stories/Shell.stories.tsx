@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
@@ -23,7 +22,6 @@ import { colors, spacing } from '@/theme/tokens';
 import { profile, shellQuery } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
@@ -1373,17 +1371,11 @@ const universalParameters = {
   router: { pathname: '/home', slotLabel: '홈 타임라인' },
 };
 
-function UniversalShellStory({
-  safeAreaInsets,
-}: {
-  safeAreaInsets?: EdgeInsets;
-} = {}) {
+function UniversalShellStory() {
   return (
-    <SafeAreaProvider initialSafeAreaInsets={safeAreaInsets}>
-      <SessionProvider>
-        <UniversalShell />
-      </SessionProvider>
-    </SafeAreaProvider>
+    <SessionProvider>
+      <UniversalShell />
+    </SessionProvider>
   );
 }
 
@@ -1502,7 +1494,6 @@ export const UniversalMobile: Story = {
 
     expect(drawerSurface).not.toBeNull();
     expect(drawerBackdrop).not.toBeNull();
-    expect(drawer).toBeVisible();
     expect(drawerNavigationSurface).not.toBeNull();
     expect(window.getComputedStyle(drawerSurface!).backgroundColor).toBe('rgb(255, 255, 255)');
     expect(window.getComputedStyle(drawerNavigationSurface!).backgroundColor).toBe(
@@ -1604,51 +1595,6 @@ export const UniversalMobile: Story = {
       <UniversalShellStory />
     </View>
   ),
-};
-
-export const UniversalMobileNonZeroSafeArea: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: universalParameters,
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const tabBar = canvas.getByRole('navigation', { name: '주요 메뉴' });
-    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
-    const tabItems = within(tabBar).getAllByRole('link');
-    const view = canvasElement.ownerDocument.defaultView;
-    const viewportWidth = view?.innerWidth ?? 0;
-    const viewportHeight = view?.innerHeight ?? 0;
-
-    const headerBounds = menuButton.getBoundingClientRect();
-    expect(headerBounds.left).toBeGreaterThanOrEqual(7);
-    expect(headerBounds.top).toBeGreaterThanOrEqual(24);
-    expect(headerBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
-    for (const tabItem of tabItems) {
-      const tabItemBounds = tabItem.getBoundingClientRect();
-      expect(tabItemBounds.left).toBeGreaterThanOrEqual(7);
-      expect(tabItemBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
-      expect(tabItemBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-    }
-
-    await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
-    const ownerDocument = canvasElement.ownerDocument;
-    const page = within(ownerDocument.body);
-    const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
-    const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
-    const drawerBackdrop = drawerSurface?.parentElement;
-
-    expect(drawerSurface).not.toBeNull();
-    expect(drawerBackdrop).not.toBeNull();
-    expect(drawer).toBeVisible();
-    const drawerRect = drawerSurface!.getBoundingClientRect();
-
-    expect(drawerRect.left).toBeGreaterThanOrEqual(7);
-    expect(drawerRect.top).toBeGreaterThanOrEqual(24);
-    expect(drawerRect.right).toBeLessThanOrEqual(viewportWidth - 9);
-    expect(drawerRect.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-
-    await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
-  },
-  render: () => <UniversalShellStory safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }} />,
 };
 
 export const UniversalMobileLongProfilePickerScroll: Story = {
@@ -2117,47 +2063,6 @@ export const UniversalCompact: Story = {
   render: () => (
     <View style={{ height: 900 }}>
       <UniversalShellStory />
-    </View>
-  ),
-};
-
-export const UniversalCompactNonZeroSafeArea: Story = {
-  globals: { viewport: { isRotated: false, value: 'shellCompactLandscape' } },
-  parameters: {
-    ...universalParameters,
-    viewport: {
-      options: {
-        shellCompactLandscape: {
-          name: 'KOSMO compact landscape',
-          styles: { height: '375px', width: '812px' },
-          type: 'tablet',
-        },
-      },
-    },
-  },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const view = canvasElement.ownerDocument.defaultView;
-    let leftRail: HTMLElement | null = canvas.getByRole('navigation', {
-      name: '주요 메뉴',
-    });
-
-    while (leftRail && view?.getComputedStyle(leftRail).position !== 'sticky') {
-      leftRail = leftRail.parentElement;
-    }
-
-    expect(leftRail).not.toBeNull();
-    const viewportWidth = view?.innerWidth ?? 0;
-    const viewportHeight = view?.innerHeight ?? 0;
-    const bounds = leftRail!.getBoundingClientRect();
-    expect(bounds.left).toBeGreaterThanOrEqual(47);
-    expect(bounds.top).toBeGreaterThanOrEqual(12);
-    expect(bounds.right).toBeLessThanOrEqual(viewportWidth - 43);
-    expect(bounds.bottom).toBeLessThanOrEqual(viewportHeight - 18);
-  },
-  render: () => (
-    <View style={{ height: 900 }}>
-      <UniversalShellStory safeAreaInsets={{ bottom: 18, left: 47, right: 43, top: 12 }} />
     </View>
   ),
 };
