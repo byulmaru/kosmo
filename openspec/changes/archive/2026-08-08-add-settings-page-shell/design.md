@@ -11,6 +11,10 @@ PROD-645는 Byulmaru ID가 소유한 Account Settings 외부 진입점을, PROD-
 PROD-685는 production route·navigation·두 child 조립과 자동화된 page-level 검증을, PROD-684는 최종 Settings
 통합과 change 완료·archive를 소유한다. Backend 계약은 PROD-648에 남고 이 change가 재구현하지 않는다.
 
+> **Reconciliation (2026-08-25):** 아래의 root-only back 서술은 2026-08-08 당시 1단계 Profile detail의 구현
+> 증거다. 현재 모든 Settings 내부 destination의 generic parent/back 계약은 `PROD-838`이 정의하며, 1단계
+> destination은 `/settings`, 중첩 destination은 바로 위 category를 parent로 사용한다.
+
 ## Goals / Non-Goals
 
 **Goals:**

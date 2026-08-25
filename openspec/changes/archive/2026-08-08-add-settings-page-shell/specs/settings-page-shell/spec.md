@@ -22,9 +22,9 @@
 - **THEN** 시스템은 `/settings` root 목록을 열고 drawer를 닫는다
 - **AND** 하단 탭 바와 일반 우측 레일에는 별도 `설정` 항목을 표시하지 않는다
 
-#### Scenario: 내부 detail에서도 설정 current 상태를 유지한다
+#### Scenario: 내부 category와 detail에서도 설정 current 상태를 유지한다
 
-- **WHEN** 사용자가 지원되는 Settings 내부 detail route를 연다
+- **WHEN** 사용자가 지원되는 Settings 내부 category 또는 detail route를 연다
 - **THEN** shell의 `설정` navigation은 현재 route family를 page-current로 노출한다
 
 #### Scenario: 준비되지 않은 진입점을 노출하지 않는다
@@ -77,7 +77,7 @@
 
 ### Requirement: Full Web workspace와 one-pane responsive navigation
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-685` — full Web의 Settings route family는 전역 sidebar를 유지하고 일반 `RightRail`을 숨긴 뒤 기존 center+right 영역을 Settings wide workspace로 사용해야 한다(MUST). workspace는 약 320px master pane과 남은 폭을 채우는 detail pane을 제공해야 하며(MUST), `/settings` hub는 `게시물 기본 공개 범위` entry를 기본 selected 상태로 두고 Profile detail을 표시해야 한다(MUST). compact Web, mobile Web, Android와 iOS의 `/settings`는 root 목록부터 표시하고 내부 entry를 선택했을 때 한 화면짜리 detail로 이동해야 하며(MUST), detail은 back navigation으로 root에 돌아갈 수 있어야 한다(MUST). 다른 route의 center 600px·RightRail visibility와 기존 `compact=768`, `full=1280` breakpoint를 변경해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/page-header.md`, `docs/design/breakpoints.md`, `PROD-685`, `PROD-838` — full Web의 Settings route family는 전역 sidebar를 유지하고 일반 `RightRail`을 숨긴 뒤 기존 center+right 영역을 Settings wide workspace로 사용해야 한다(MUST). workspace는 약 320px master pane과 남은 폭을 채우는 detail pane을 제공해야 하며(MUST), `/settings` hub는 `게시물 기본 공개 범위` entry를 기본 selected 상태로 두고 Profile detail을 표시해야 한다(MUST). compact Web, mobile Web, Android와 iOS의 `/settings`는 root 목록부터 표시하고 내부 entry를 선택했을 때 한 화면짜리 category 또는 detail destination으로 이동해야 한다(MUST). 모든 내부 destination은 명시적인 parent를 가져야 하고(MUST), back navigation은 이전 history·navigation stack과 무관하게 해당 parent를 열어야 한다(MUST). root의 직접 entry가 여는 1단계 destination의 parent는 `/settings` root여야 하며(MUST), 중첩 destination의 parent는 바로 위 category여야 한다(MUST). 다른 route의 center 600px·RightRail visibility와 기존 `compact=768`, `full=1280` breakpoint를 변경해서는 안 된다(MUST NOT).
 
 #### Scenario: full Web에서 Settings master-detail을 표시한다
 
@@ -91,31 +91,37 @@
 - **WHEN** 사용자가 Settings route family 밖의 기존 full Web route를 연다
 - **THEN** shell은 기존 중앙 최대 600px와 일반 RightRail visibility를 유지한다
 
-#### Scenario: compact와 mobile에서 root부터 detail로 이동한다
+#### Scenario: compact와 mobile에서 root부터 1단계 destination으로 이동한다
 
 - **WHEN** compact Web, mobile Web, Android 또는 iOS 사용자가 `/settings`를 연다
-- **THEN** 화면은 두 entry가 있는 root 목록부터 표시한다
-- **AND** `게시물 기본 공개 범위`를 선택하면 Profile detail 한 화면으로 이동한다
-- **AND** back action은 Settings root 목록으로 돌아간다
+- **THEN** 화면은 승인된 entry가 있는 root 목록부터 표시한다
+- **AND** root의 직접 entry를 선택하면 해당 1단계 destination 한 화면으로 이동한다
+- **AND** back action은 명시적인 parent인 Settings root 목록으로 돌아간다
 
-#### Scenario: 이전 navigation stack과 무관하게 Settings root로 돌아간다
+#### Scenario: 중첩 destination에서 바로 위 category로 돌아간다
 
-- **WHEN** compact Web, mobile Web, Android 또는 iOS 사용자가 unrelated 화면이 이전 history 또는 navigation stack에 남아 있는 상태에서 direct/deep link로 내부 Settings detail을 연다
-- **AND** 사용자가 detail의 back action을 실행한다
-- **THEN** 시스템은 이전 unrelated 화면을 열지 않고 `/settings` root 목록을 연다
+- **WHEN** compact Web, mobile Web, Android 또는 iOS 사용자가 Settings category에서 중첩 destination을 연다
+- **AND** 사용자가 중첩 destination의 back action을 실행한다
+- **THEN** 시스템은 `/settings` root로 건너뛰지 않고 바로 위 category를 연다
+
+#### Scenario: 이전 navigation stack과 무관하게 명시적인 parent로 돌아간다
+
+- **WHEN** compact Web, mobile Web, Android 또는 iOS 사용자가 unrelated 화면이 이전 history 또는 navigation stack에 남아 있는 상태에서 direct/deep link로 내부 Settings category 또는 detail destination을 연다
+- **AND** 사용자가 destination의 back action을 실행한다
+- **THEN** 시스템은 이전 unrelated 화면을 열지 않고 해당 destination의 명시적인 parent를 연다
 
 #### Scenario: mobile Web heading을 중복하지 않는다
 
-- **WHEN** mobile Web 사용자가 Settings root 또는 detail을 연다
-- **THEN** `UniversalShell`은 root에서 menu+`설정`, detail에서 back+detail heading을 표시한다
+- **WHEN** mobile Web 사용자가 Settings root 또는 category·detail destination을 연다
+- **THEN** `UniversalShell`은 root에서 menu+`설정`, category·detail destination에서 back+현재 destination heading을 표시한다
 - **AND** route content는 같은 heading을 복제하지 않는다
 
 #### Scenario: compact와 Native heading을 중복하지 않는다
 
-- **WHEN** Android·iOS 또는 compact Web 사용자가 Settings root 또는 detail을 연다
-- **THEN** route는 root 또는 detail의 text header를 첫 heading으로 표시하고 detail에 back action을 제공한다
-- **AND** Android·iOS에서는 하나의 vertical `ScrollView`가 route header와 root 또는 detail content 전체를 포함한다
-- **AND** 긴 detail title은 leading action 다음의 가용 폭 안에서 여러 줄로 reflow한다
+- **WHEN** Android·iOS 또는 compact Web 사용자가 Settings root 또는 category·detail destination을 연다
+- **THEN** route는 현재 destination의 text header를 첫 heading으로 표시하고 category·detail destination에 back action을 제공한다
+- **AND** Android·iOS에서는 하나의 vertical `ScrollView`가 route header와 root·category·detail content 전체를 포함한다
+- **AND** 긴 destination title은 leading action 다음의 가용 폭 안에서 여러 줄로 reflow한다
 
 ### Requirement: Profile detail 상태 소유
 
@@ -147,7 +153,7 @@
 
 ### Requirement: Settings 접근성 계약
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-685` — root 화면과 full master pane은 `설정` heading을, Profile detail 화면과 pane은 현재 설정 이름 heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `게시물 기본 공개 범위`여야 하며(MUST), full Web에서는 이어서 detail heading과 Profile content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/accessibility.md`, `PROD-685` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `게시물 기본 공개 범위`여야 하며(MUST), full Web에서는 이어서 detail heading과 Profile content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
 
 #### Scenario: screen reader가 master와 detail을 구분한다
 
@@ -164,7 +170,7 @@
 
 #### Scenario: 작은 화면과 font scaling에서 정보를 유지한다
 
-- **WHEN** 사용자가 Web reflow 또는 Android·iOS font scaling으로 Settings root나 detail을 확대한다
+- **WHEN** 사용자가 Web reflow 또는 Android·iOS font scaling으로 Settings root나 category·detail destination을 확대한다
 - **THEN** label·description·현재 Profile identity와 action을 계속 사용할 수 있다
 - **AND** 핵심 기능이 불필요한 가로 scroll이나 잘린 text에 의존하지 않는다
 

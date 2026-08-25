@@ -32,22 +32,24 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
 - Decision Date: 2026-08-06
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/settings.md`, `docs/design/breakpoints.md`,
-  `docs/design/page-header.md`, `PROD-685`
+  `docs/design/page-header.md`, `PROD-685`, `PROD-838`
 - Status: Active
 - Context / Problem: 장기적으로 다양한 설정을 제공하려면 하나의 긴 form이나 600px 중앙 평면 목록보다
   Settings 내부 navigation과 detail을 단계적으로 탐색할 수 있어야 한다. 동시에 기존 global sidebar와 다른
   route의 feed/right rail 계약을 바꾸면 안 된다.
-- Decision Outcome: `/settings`는 canonical hub이고 지원되는 내부 detail은 같은 route family에 속한다. full
+- Decision Outcome: `/settings`는 canonical hub이고 지원되는 내부 destination은 같은 route family에 속한다. full
   Web은 global sidebar를 유지하고 일반 RightRail을 숨긴 뒤 center+right 폭을 약 320px master와 flexible
-  detail workspace로 사용한다. compact/mobile/native는 root 목록과 detail을 한 화면씩 보여 주며 detail의
-  back action은 이전 navigation stack과 무관하게 `/settings` root를 명시적으로 연다. Settings navigation은
-  root와 내부 detail에서 current 상태를 유지한다.
+  detail workspace로 사용한다. compact/mobile/native는 root 목록과 category·detail destination을 한 화면씩
+  보여 주며 모든 내부 destination은 명시적인 parent를 가진다. root의 직접 entry가 여는 1단계 destination의
+  parent는 `/settings` root이고, 중첩 destination의 parent는 바로 위 category이며, direct/deep link에서도
+  back action은 이전 navigation stack과 무관하게 이 parent를 명시적으로 연다. Settings navigation은 root와
+  내부 destination에서 current 상태를 유지한다.
 - Alternatives Considered: 모든 platform의 600px 중앙 column에 master+detail을 동시에 압축하는 방식,
   Mastodon처럼 영구 tree와 긴 form을 한 화면에 표시하는 방식, 모든 platform에서 root/detail을 동시에
   표시하는 방식. 각각 가독성, 가용 폭 또는 작은 화면 navigation과 충돌해 채택하지 않았다.
 - Consequences: `UniversalShell`은 full settings route에서만 일반 RightRail visibility와 content max width를
-  달리해야 한다. route family는 mobile Web root/detail header와 compact/native route-owned back header를
-  구분해야 하며 Web document scroll을 유지해야 한다.
+  달리해야 한다. route family는 mobile Web root/category/detail header와 compact/native route-owned back
+  header를 구분해야 하며 Web document scroll을 유지해야 한다.
 - Confirmation / Follow-up: full workspace 폭·pane 경계·RightRail 부재와 다른 route rail 유지, compact/mobile/
   native root-first·deep link·unrelated-history back·heading 중복 부재를 검증한다.
 
@@ -324,19 +326,23 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
 - Confirmation / Follow-up: 최신 Linear relation, PROD-645/667 결과, page-level runtime, Figma 후속 정렬,
   delta spec 정합성을 archive 전에 확인한다.
 
-### Settings detail 복귀는 Web document replace와 Native Settings stack pop을 사용한다
+### 1단계 Profile detail 복귀는 Web document replace와 Native Settings stack pop을 사용한다
 
 - Decision Date: 2026-08-08
 - Decision Class: Implementation Choice
 - Authority / Provenance: `docs/design/settings.md`, `PROD-684`; Expo Router 56.2.13 route tree와 Web E2E;
-  Native runtime QA `PROD-727`
+  Native runtime QA `PROD-727`; generic parent contract `PROD-838`
 - Status: Active
-- Context / Problem: Settings detail의 back은 이전 unrelated 화면이 아니라 `/settings` root를 열어야 한다.
-  그러나 nested Settings layout에서 `router.replace`·`navigate`·`dismissTo`를 사용한 Web 후보는 root에서
-  detail로 이동한 history에서 `/undefined/undefined` 또는 무동작을 재현했다.
+- Context / Problem: 2026-08-08 당시 root의 직접 entry가 여는 Profile detail의 back은 이전 unrelated 화면이
+  아니라 `/settings` root를 열어야 했다. 그러나 nested Settings layout에서 `router.replace`·`navigate`·
+  `dismissTo`를 사용한 Web 후보는 root에서 detail로 이동한 history에서 `/undefined/undefined` 또는 무동작을
+  재현했다.
 - Decision Outcome: Settings layout은 `unstable_settings.initialRouteName = 'index'`로 root anchor를 둔다.
-  Web은 `location.replace('/settings')`로 현재 detail document를 root로 교체하고, Android·iOS는 Settings
-  layout의 `Slot`이 생성하는 `StackRouter`에서 `router.back()`으로 detail을 pop한다.
+  Web은 `location.replace('/settings')`로 당시 root의 직접 Profile detail document를 root로 교체하고,
+  Android·iOS는 Settings layout의 `Slot`이 생성하는 `StackRouter`에서 `router.back()`으로 해당 1단계 detail을
+  pop한다. 이 기록은 2026-08-08 당시 1단계 Profile detail의 구현 증거이며, 모든 detail이 root로 돌아간다는
+  일반화는 `PROD-838`에서 대체됐다. 현재 destination별 parent와 back 계약은 위 Derived Contract 및 `PROD-838`
+  active spec을 따른다.
 - Alternatives Considered: 모든 platform에서 `router.replace`, `navigate`, `dismissTo`, 조건부 `dismiss` 또는
   `back`을 사용하는 방식. Web 실제 history에서 root destination과 stale detail 제거를 함께 만족하지 못해
   채택하지 않았다.
@@ -391,3 +397,6 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
   `PROD-685가 구현 증거를 만들고 PROD-684가 최종 archive를 소유한다`로 대체됐다.
 - `PROD-685가 구현 증거를 만들고 PROD-684가 최종 archive를 소유한다` — 2026-08-08
   자동화된 통합 증거와 실제 runtime QA를 분리하는 PROD-684/PROD-727 책임으로 대체됐다.
+- 모든 Settings detail의 back destination을 `/settings` root로 일반화한 2026-08-06·08 결정은 2026-08-25
+  `PROD-838`의 명시적인 destination별 parent 계약으로 대체됐다. 당시 구현된 root 직접 1단계 Profile detail의
+  root parent와 구현 증거는 유지한다.
