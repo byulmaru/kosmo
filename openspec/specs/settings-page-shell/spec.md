@@ -41,14 +41,15 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: 현재 Settings root와 공통 item 정보 구조
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `PROD-685`, `DSN-53`; 기능 경계 `PROD-645`, `PROD-667`, Mute·Block runtime `PROD-814`, `PROD-823`, `PROD-813` — Settings root는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 제공해야 한다(MUST). `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 하며(MUST), 두 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 세 entry를 위해 한 항목짜리 `계정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `PROD-685`, `DSN-53`, `DSN-54`; 기능 경계 `PROD-645`, `PROD-667`, 테마 runtime `PROD-812`, Mute·Block runtime `PROD-814`, `PROD-823`, `PROD-813` — Settings root는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 현재 선택값을 함께 보여 주는 `테마`, `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 제공해야 한다(MUST). `테마`는 `/settings/theme` detail을 열어야 하며(MUST), `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 한다(MUST). 두 Mute·Block 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 네 entry를 위해 한 항목짜리 `계정`·`화면 설정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
 
-#### Scenario: 현재 승인된 세 entry를 직접 표시한다
+#### Scenario: 현재 승인된 네 entry를 직접 표시한다
 
 - **WHEN** 인증 사용자가 `/settings` root를 연다
-- **THEN** root는 첫 번째 시각 label `계정 설정`의 Byulmaru ID 외부 entry, 두 번째 `게시물 기본 공개 범위`, 세 번째 `뮤트 및 차단` 내부 entry를 표시한다
+- **THEN** root는 첫 번째 시각 label `계정 설정`의 Byulmaru ID 외부 entry, 두 번째 현재 선택값을 함께 보여 주는 `테마`, 세 번째 `게시물 기본 공개 범위`, 네 번째 `뮤트 및 차단` 내부 entry를 표시한다
+- **AND** `테마`를 선택하면 `/settings/theme` detail을 연다
 - **AND** `뮤트 및 차단`을 선택하면 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공한다
-- **AND** `계정` 또는 `프로필` 한 항목짜리 category를 중간 단계로 표시하지 않는다
+- **AND** `계정`, `화면 설정` 또는 `프로필` 한 항목짜리 category를 중간 단계로 표시하지 않는다
 
 #### Scenario: 같은 item 문법을 다른 폭에서 사용한다
 
@@ -161,18 +162,19 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Settings 접근성 계약
 
-**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `PROD-685`, `DSN-53` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `게시물 기본 공개 범위` → `뮤트 및 차단`이어야 하며(MUST), full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
+**Authority / Provenance:** `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `PROD-685`, `DSN-53`, `DSN-54` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `테마`와 현재 선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이어야 하며(MUST), full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
 
 #### Scenario: screen reader가 master와 detail을 구분한다
 
 - **WHEN** screen reader 사용자가 full Web `/settings`를 heading과 control 단위로 탐색한다
-- **THEN** `설정` heading과 세 root entry 다음에 `게시물 기본 공개 범위` detail heading과 현재 Profile content가 노출된다
+- **THEN** `설정` heading과 네 root entry 다음에 `게시물 기본 공개 범위` detail heading과 현재 Profile content가 노출된다
+- **AND** `테마` entry의 현재 선택값을 accessible name과 state로 구분할 수 있다
 - **AND** Account 외부 destination, selected 내부 entry와 현재 Profile control을 accessible name과 state로 구분할 수 있다
 
 #### Scenario: keyboard로 full workspace를 탐색한다
 
 - **WHEN** Web keyboard 사용자가 full Settings workspace의 interactive control을 순서대로 이동한다
-- **THEN** Tab focus는 master의 `계정 설정`·`게시물 기본 공개 범위`·`뮤트 및 차단` entry 다음 detail의 interactive control로 이동한다
+- **THEN** Tab focus는 master의 `계정 설정`·`테마`·`게시물 기본 공개 범위`·`뮤트 및 차단` entry 다음 detail의 interactive control로 이동한다
 - **AND** heading과 비상호작용 Profile identity는 tab stop이 아니다
 - **AND** focus-visible, selected, disabled와 busy 상태를 색상만으로 전달하지 않는다
 
@@ -190,7 +192,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 - **WHEN** PROD-645와 PROD-667의 통합 가능한 구현 결과가 준비됐다
 - **THEN** PROD-645의 Byulmaru ID 외부 진입점은 Settings root의 첫 entry로 표시된다
-- **AND** PROD-667의 Kosmo Profile 기능은 두 번째 entry가 여는 detail에 현재 대상과 함께 표시된다
+- **AND** PROD-667의 Kosmo Profile 기능은 세 번째 entry가 여는 detail에 현재 대상과 함께 표시된다
 - **AND** Account 외부 이동과 Profile 조회·저장은 각각 자기 자식 기능 경계가 처리한다
 
 #### Scenario: 페이지 수준 통합을 검증한다
