@@ -1,4 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
+import { match } from 'ts-pattern';
+import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
 type PostCreateEffectsInput = {
@@ -17,16 +19,11 @@ export async function postCreateEffectsWorkflow({
   postId,
   origin,
 }: PostCreateEffectsInput): Promise<void> {
-  const effects = [createReplyNotificationActivity(postId)];
-  if (origin === 'LOCAL') {
-    effects.push(sendLocalPostCreateActivity(postId));
-  }
-
-  const results = await Promise.allSettled(effects);
-  const failure = results.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected',
-  );
-  if (failure) {
-    throw failure.reason;
-  }
+  await settleEffects([
+    createReplyNotificationActivity(postId),
+    ...match(origin)
+      .with('LOCAL', () => [sendLocalPostCreateActivity(postId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

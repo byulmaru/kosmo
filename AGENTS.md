@@ -14,8 +14,9 @@
 - Before branch or pull request work, verify the extension with `gh extension list` and
   `gh stack --version`. If it is missing, install it for the current user with
   `gh extension install github/gh-stack`; it is a local CLI extension, not a repository dependency.
-- Start the first layer from the latest trunk with `gh stack init --base main <Linear issue ID>`.
-  Add each later layer only from the current top with `gh stack add <Linear issue ID>`.
+- Start the first layer from the latest trunk with `gh stack init --base main <branch>`.
+  Add each later layer only from the current top with `gh stack add <branch>`.
+- Feature and contract branches use their Linear issue ID. A behavior-preserving simple refactor may use a descriptive branch without creating a Linear issue solely for the pull request.
 - Push tracked layers with `gh stack push` and create or update pull requests with `gh stack submit`.
   For two or more pull requests, submit must also create or update the remote GitHub Stack object.
   A one-layer Stack remains locally tracked and its standalone pull request has a null REST `stack`
@@ -111,6 +112,7 @@
 - `memory/database-migrations.md`: additive와 breaking DB 변경 분류, expand/transition/contract
   이슈·PR·배포 순서, backfill과 contract gate.
 - `memory/graphql-style.md`: GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
+- `memory/temporal-workflows.md`: Temporal Workflow file structure, shared effect settlement, Activity aliases, and post-commit start conventions.
 
 ## Design Docs
 

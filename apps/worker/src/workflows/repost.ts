@@ -1,4 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
+import { match } from 'ts-pattern';
+import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
 type PostRepostInput = {
@@ -14,16 +16,11 @@ const { createRepostNotificationActivity, sendRepostAnnounceActivity } = proxyAc
 });
 
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
-  const effects = [createRepostNotificationActivity(postId)];
-  if (origin === 'LOCAL') {
-    effects.push(sendRepostAnnounceActivity(postId));
-  }
-
-  const results = await Promise.allSettled(effects);
-  const failure = results.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected',
-  );
-  if (failure) {
-    throw failure.reason;
-  }
+  await settleEffects([
+    createRepostNotificationActivity(postId),
+    ...match(origin)
+      .with('LOCAL', () => [sendRepostAnnounceActivity(postId)])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }

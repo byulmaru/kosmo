@@ -17,6 +17,7 @@
     "@kosmo/fedify": "workspace:*",
     "@temporalio/worker": "^1.22.0",
     "@temporalio/workflow": "^1.22.0",
+    "ts-pattern": "^5.9.0",
     "tsx": "^4.22.4"
   },
   "devDependencies": {

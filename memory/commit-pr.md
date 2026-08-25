@@ -10,10 +10,11 @@
 
 - AI로 작업을 시작할 때는 사용자의 의도를 먼저 물어보고, 이미 대화에 명확히 드러난 의도가 있으면 그 의도를 작업 맥락으로 기록한다.
 - 커밋/브랜치/PR 작업 전 `git status --short --branch`로 현재 위치와 변경 범위를 확인한다.
-- 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
-- 하나의 브랜치는 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
+- 기능·계약 변경 브랜치 이름은 관련 Linear 이슈 ID를 그대로 사용한다.
+- 행동을 보존하는 단순 리팩터링은 PR을 만들기 위해 Linear 이슈를 별도로 생성하지 않고 설명적인 브랜치 이름을 사용할 수 있다.
+- 이슈가 있는 작업은 하나의 브랜치가 하나의 Linear 이슈에 대응시키는 것을 기본으로 한다.
 - 새 PR은 단일 PR도 1-layer GitHub Stack으로 추적하고 `gh stack submit`으로 생성한다.
-- 후속 PR은 현재 Stack top에서 `gh stack add <Linear issue ID>`로 추가한다.
+- 후속 PR은 현재 Stack top에서 `gh stack add <branch>`로 추가한다.
 - `gh stack`을 사용할 수 없거나 실패하면 `gh pr create`나 일반 unstacked PR로 우회하지 않고
   blocker와 관찰한 local/remote 상태를 보고한다.
 - 커밋은 되돌릴 수 있는 작업 체크포인트로 자주 남기되, 의도하지 않은 사용자 변경은 staging하지 않는다.
@@ -42,7 +43,7 @@
 
 - 현재 브랜치가 `main`이 아닌 적절한 작업 브랜치인가.
 - `github/gh-stack` extension이 설치되어 있고 `gh stack --version`이 성공하는가.
-- 브랜치 이름이 대응되는 Linear 이슈 ID와 일치하는가.
+- 기능·계약 변경 브랜치는 대응되는 Linear 이슈 ID와 일치하는가. 이슈 없는 브랜치라면 행동 보존 단순 리팩터링인가.
 - 단일 PR을 포함해 현재 브랜치가 의도한 Stack에 추적되고 있는가.
 - PR이 하나의 기능적 변화로 설명되는가.
 - 독립적으로 테스트하거나 수동 검증할 수 있는가.

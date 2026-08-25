@@ -1,4 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
+import { match } from 'ts-pattern';
+import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
 type ReactionDeleteEffectsInput = {
@@ -25,24 +27,11 @@ export async function reactionDeleteEffectsWorkflow({
   createdAt,
   origin,
 }: ReactionDeleteEffectsInput): Promise<void> {
-  const effects = [deleteReactionNotificationActivity(id)];
-  if (origin === 'LOCAL') {
-    effects.push(
-      sendReactionUndoActivity({
-        id,
-        profileId,
-        postId,
-        type,
-        createdAt,
-      }),
-    );
-  }
-
-  const results = await Promise.allSettled(effects);
-  const failure = results.find(
-    (result): result is PromiseRejectedResult => result.status === 'rejected',
-  );
-  if (failure) {
-    throw failure.reason;
-  }
+  await settleEffects([
+    deleteReactionNotificationActivity(id),
+    ...match(origin)
+      .with('LOCAL', () => [sendReactionUndoActivity({ id, profileId, postId, type, createdAt })])
+      .with('ACTIVITYPUB', () => [])
+      .exhaustive(),
+  ]);
 }
