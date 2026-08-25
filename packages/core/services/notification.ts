@@ -315,6 +315,12 @@ export const deleteNotificationBySource = async (
     .where(and(eq(Notifications.kind, kind), eq(Notifications.sourceId, sourceId)));
 };
 
+export const deleteFollowNotification = (sourceId: string): Promise<void> =>
+  deleteNotificationBySource(NotificationKind.FOLLOW, sourceId);
+
+export const deleteFollowRequestNotification = (sourceId: string): Promise<void> =>
+  deleteNotificationBySource(NotificationKind.FOLLOW_REQUEST, sourceId);
+
 export const deleteRepostNotification = async (
   sourceId: string,
   handle?: Database,

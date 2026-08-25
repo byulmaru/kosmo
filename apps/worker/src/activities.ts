@@ -1,3 +1,11 @@
+import '@kosmo/core/polyfill';
+
+export {
+  createFollowNotification as createFollowNotificationActivity,
+  createFollowRequestNotification as createFollowRequestNotificationActivity,
+  deleteFollowNotification as deleteFollowNotificationActivity,
+  deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
+} from '@kosmo/core/services';
 export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
 export {
   createReactionNotification as createReactionNotificationActivity,
@@ -7,6 +15,10 @@ export {
   createRepostNotification as createRepostNotificationActivity,
   deleteRepostNotification as deleteRepostNotificationActivity,
 } from '@kosmo/core/services';
+export {
+  sendProfileFollowBySource as sendProfileFollowActivity,
+  sendProfileUnfollowBySnapshot as sendProfileUnfollowActivity,
+} from '@kosmo/fedify';
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,

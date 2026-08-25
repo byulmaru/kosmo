@@ -3,8 +3,12 @@ export { createBookmark, deleteBookmark } from './bookmark';
 export { createReplyNotification } from './create-reply-notification';
 export type { NotificationEffectErrorContext } from './notification';
 export {
+  createFollowNotification,
+  createFollowRequestNotification,
   createReactionNotification,
   createRepostNotification,
+  deleteFollowNotification,
+  deleteFollowRequestNotification,
   deleteReactionNotification,
   deleteRepostNotification,
   setNotificationEffectErrorReporter,
