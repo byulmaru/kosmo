@@ -95,9 +95,9 @@ GraphQL과 verified ActivityPub ingress가 방향성 pair ID와 expected row ide
 - stale expected row 및 refollow ABA guard
 
 - [x] 3.1 공용 Temporal client 경계가 결정적 pair Workflow ID와 UWS `USE_EXISTING`/`ALLOW_DUPLICATE` 정책을 소유하게 한다.
-- [ ] 3.2 GraphQL Follow·Follow Request caller를 pair lifecycle Update 경계로 전환하고 Unfollow short command를 분리한다.
-- [ ] 3.3 verified ActivityPub Follow/Accept/Reject/Undo caller를 같은 pair lifecycle로 전환하고 direct Accept/no-echo를 보존한다.
-- [ ] 3.4 API/Fedify 통합 검증과 existing pending bootstrap fixture를 갱신한다.
+- [x] 3.2 GraphQL Follow·Follow Request caller를 pair lifecycle Update 경계로 전환하고 Unfollow short command를 분리한다.
+- [x] 3.3 verified ActivityPub Follow/Accept/Reject/Undo caller를 같은 pair lifecycle로 전환하고 direct Accept/no-echo를 보존한다.
+- [x] 3.4 API/Fedify 통합 검증과 existing pending bootstrap fixture를 갱신한다.
 
 ## 4. PROD-720 전체 통합·문서·PR 검증
 

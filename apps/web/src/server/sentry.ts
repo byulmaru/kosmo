@@ -1,5 +1,4 @@
 import * as Sentry from '@sentry/node';
-import type { NotificationEffectErrorContext } from '@kosmo/core/services';
 import type { InboundCaptureContext } from '@kosmo/fedify';
 
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -36,18 +35,4 @@ export const captureUnexpectedError = (cause: unknown, context?: InboundCaptureC
     }
     Sentry.captureException(cause);
   });
-};
-
-export const captureNotificationEffectError = (
-  cause: unknown,
-  context: NotificationEffectErrorContext,
-): void => {
-  if (enabled) {
-    Sentry.withScope((scope) => {
-      scope.setTag('operation', context.operation);
-      scope.setTag('notificationKind', context.notificationKind);
-      scope.setExtra('sourceId', context.sourceId);
-      Sentry.captureException(cause);
-    });
-  }
 };

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "start": "node --import tsx src/index.ts",
-    "test:unit": "pnpm build && node --import tsx --import ../../packages/core/temporal/test-client.ts --test 'src/**/*.test.ts'"
+    "test:unit": "pnpm build && TEMPORAL_ADDRESS=127.0.0.1:7233 TEMPORAL_NAMESPACE=test node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@kosmo/core": "workspace:*",

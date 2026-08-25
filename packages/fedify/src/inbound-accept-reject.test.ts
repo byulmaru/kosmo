@@ -8,15 +8,16 @@ import {
   ActivityPubActorType,
   InstanceKind,
   InstanceState,
-  NotificationKind,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
+import { executeProfileFollowPairTransition } from '@kosmo/core/services';
+import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as CoreServices from '@kosmo/core/services';
+import type { AcceptProfileFollowRequestResult } from '@kosmo/core/services';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundAcceptFollow from './inbound-accept-follow';
@@ -41,7 +42,29 @@ let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
-let acceptProfileFollowRequest: typeof CoreServices.acceptProfileFollowRequest;
+type AcceptProfileFollowRequest = (input: {
+  readonly expectedRowId: string;
+  readonly followeeProfileId: string;
+  readonly followerProfileId: string;
+  readonly origin: 'ACTIVITYPUB';
+}) => Promise<AcceptProfileFollowRequestResult>;
+
+const acceptProfileFollowRequest: AcceptProfileFollowRequest = async (input) => {
+  const transition = await executeProfileFollowPairTransition({
+    pair: {
+      followeeProfileId: input.followeeProfileId,
+      followerProfileId: input.followerProfileId,
+    },
+    command: { kind: 'ACCEPT', ...input },
+  });
+  if (!transition.ok) {
+    throw new Error(transition.error.message);
+  }
+  if (transition.result.commandKind !== 'ACCEPT') {
+    throw new Error('Unexpected inbound Accept transition result');
+  }
+  return { kind: transition.result.kind };
+};
 let localInstanceId: string;
 let federation: typeof productionFederation;
 
@@ -64,13 +87,13 @@ describe('inbound Accept and Reject', () => {
     ({ handleInboundAccept } = await import('./inbound-accept'));
     ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
-    ({ acceptProfileFollowRequest } = await import('@kosmo/core/services'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
 
   beforeEach(async () => {
+    await waitForProfileFollowEffects({ terminatePending: true });
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -78,6 +101,72 @@ describe('inbound Accept and Reject', () => {
   after(async () => {
     await pg.end();
   });
+
+  async function waitForProfileFollowEffects({ terminatePending = false } = {}) {
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      let waiting = false;
+      const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
+
+      for await (const execution of temporalClient.workflow.list({
+        query:
+          '(WorkflowType = "profileFollowPairWorkflow" OR WorkflowType = "profileFollowRemovalWorkflow") AND ExecutionStatus = "Running"',
+      })) {
+        const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
+        if (execution.type === 'profileFollowPairWorkflow') {
+          let status: {
+            readonly state: string;
+            readonly inFlight: boolean;
+            readonly pendingEffectCount: number;
+            readonly effectFailureCount: number;
+          };
+          try {
+            status = (await handle.query('profileFollowPairStatus')) as typeof status;
+          } catch {
+            waiting = true;
+            continue;
+          }
+          if (status.effectFailureCount > 0 && !terminatePending) {
+            throw new Error('Follow Workflow recorded a terminal effect failure');
+          }
+          if (status.state === 'INITIAL' && terminatePending) {
+            pendingHandles.push(handle);
+            continue;
+          }
+          if (status.state === 'PENDING') {
+            if (status.inFlight || status.pendingEffectCount > 0) {
+              waiting = true;
+            } else if (terminatePending) {
+              pendingHandles.push(handle);
+            }
+            continue;
+          }
+        }
+
+        try {
+          await handle.result();
+        } catch (error) {
+          if (!terminatePending) {
+            throw error;
+          }
+          // Fixture cleanup may terminate a workflow after recording a failure.
+        }
+      }
+
+      if (pendingHandles.length > 0) {
+        await Promise.all(
+          pendingHandles.map((handle) =>
+            handle.terminate('test fixture cleanup').catch(() => undefined),
+          ),
+        );
+      }
+      if (!waiting && pendingHandles.length === 0) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('Timed out waiting for Follow Workflow effects');
+  }
 
   test('routes a Mastodon 4.1.18 Accept through the production Follow document boundary', async () => {
     const fixture = await createFixture({
@@ -696,50 +785,18 @@ describe('inbound Accept and Reject', () => {
     assert.equal(captures.length, 0);
   });
 
-  test('observes Reject Follow notification cleanup failure once after committed removal', async () => {
+  test('removes a rejected Follow while cleanup is deferred', async () => {
     const fixture = await createFixture({ projection: 'ESTABLISHED' });
-    await db.insert(Notifications).values({
-      data: {},
-      kind: NotificationKind.FOLLOW,
-      recipientProfileId: fixture.remoteProfile.id,
-      sourceId: fixture.projection.id,
-    });
-    await pg.unsafe(`
-      CREATE FUNCTION fail_reject_follow_notification_cleanup() RETURNS trigger
-      LANGUAGE plpgsql AS $$
-      BEGIN
-        RAISE EXCEPTION 'reject Follow notification cleanup failed';
-      END;
-      $$;
-      CREATE TRIGGER reject_follow_notification_cleanup_failure
-      BEFORE DELETE ON notification
-      FOR EACH ROW EXECUTE FUNCTION fail_reject_follow_notification_cleanup();
-    `);
+    await handleInboundReject(
+      createContext(localProfileId),
+      new Reject({
+        actor: remoteActorUri,
+        object: createOutboundFollow(fixture.projection),
+        published: fixture.projection.createdAt,
+      }),
+    );
 
-    const logs: unknown[] = [];
-    const captures: unknown[] = [];
-    const restoreReporter = setInboundObservabilityReporter({
-      captureException: (error, context) => captures.push({ error, context }),
-      log: (observation) => logs.push(observation),
-    });
-
-    try {
-      await handleInboundReject(
-        createContext(localProfileId),
-        new Reject({
-          actor: remoteActorUri,
-          object: createOutboundFollow(fixture.projection),
-          published: fixture.projection.createdAt,
-        }),
-      );
-    } finally {
-      await pg.unsafe(`
-        DROP TRIGGER IF EXISTS reject_follow_notification_cleanup_failure ON notification;
-        DROP FUNCTION IF EXISTS fail_reject_follow_notification_cleanup();
-      `);
-      restoreReporter();
-    }
-
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 0, remoteFollowers: 0 });
     assert.equal(
@@ -748,45 +805,8 @@ describe('inbound Accept and Reject', () => {
         .from(Notifications)
         .where(eq(Notifications.sourceId, fixture.projection.id))
         .then((rows) => rows.length),
-      1,
+      0,
     );
-    assert.deepEqual(logs, [
-      {
-        activityType: 'Reject',
-        actorOrigin: localActorUri.origin,
-        handler: 'reject',
-        objectOrigin: remoteActorUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'follow_notification_effect_failed',
-      },
-    ]);
-    assert.equal(captures.length, 1);
-    const capture = captures[0] as {
-      context: {
-        extra?: Record<string, string>;
-        fingerprint: string[];
-        tags: Record<string, string>;
-      };
-    };
-    assert.deepEqual(capture.context.tags, {
-      activity_type: 'Reject',
-      handler: 'reject',
-      outcome: 'internal_failure',
-      phase: 'effect',
-      reason_code: 'follow_notification_effect_failed',
-    });
-    assert.deepEqual(capture.context.fingerprint, [
-      'activitypub-inbound',
-      'Reject',
-      'reject',
-      'effect',
-      'follow_notification_effect_failed',
-    ]);
-    assert.deepEqual(capture.context.extra, {
-      actor_origin: localActorUri.origin,
-      object_origin: remoteActorUri.origin,
-    });
   });
 });
 

@@ -1,16 +1,22 @@
 import '@kosmo/core/polyfill';
 
 import { EmojiReact, Follow, Like } from '@fedify/vocab';
-import { ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
+import {
+  ActivityPubPosts,
+  db,
+  first,
+  Posts,
+  ProfileFollowRequests,
+  ProfileFollows,
+} from '@kosmo/core/db';
 import { InstanceState, PostState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
+import { deletePost, undoInboundReaction } from '@kosmo/core/services';
 import {
-  deletePost,
-  followProfile,
-  undoInboundReaction,
-  unfollowProfile,
-} from '@kosmo/core/services';
-import { eq } from 'drizzle-orm';
+  executeProfileFollowPairTransition,
+  executeProfileFollowRemoval,
+} from '@kosmo/core/temporal/follow-command';
+import { and, eq } from 'drizzle-orm';
 import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { sendAcceptFollowActivity } from './follow-delivery';
 import { resolveInboundLocalRecipient } from './inbound-local-recipient';
@@ -101,24 +107,24 @@ export const handleInboundFollow = async (
     throw error;
   }
 
-  const result = await followProfile({
+  const pair = {
     followeeProfileId: localRecipient.id,
     followerProfileId: remoteActor.profile.id,
-    onPostCommitError: (error) =>
-      observeInbound({
-        activityType: 'Follow',
-        actorOrigin: actorUri.origin,
-        error,
-        handler: 'follow',
-        objectOrigin: objectUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'follow_notification_effect_failed',
-      }),
+  };
+  const result = await executeProfileFollowPairTransition({
+    pair,
+    command: {
+      kind: 'FOLLOW',
+      ...pair,
+      origin: 'ACTIVITYPUB',
+    },
   });
+  if (result.result.commandKind !== 'FOLLOW') {
+    throw new Error('Unexpected inbound Follow transition result');
+  }
 
   if (result.result.kind !== 'ESTABLISHED') {
-    if (!result.created) {
+    if (!result.result.created) {
       observeInboundNoop({
         activityType: 'Follow',
         actorOrigin: actorUri.origin,
@@ -131,7 +137,7 @@ export const handleInboundFollow = async (
     return;
   }
 
-  if (!result.created) {
+  if (!result.result.created) {
     observeInboundNoop({
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
@@ -366,22 +372,91 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       return;
     }
 
-    const result = await unfollowProfile({
+    const pair = {
       followeeProfileId: localRecipient.id,
       followerProfileId: remoteActor.profile.id,
-      onPostCommitError: (error) =>
-        observeInbound({
+    };
+    const profileFollow = await db
+      .select({
+        createdAt: ProfileFollows.createdAt,
+        id: ProfileFollows.id,
+      })
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, pair.followerProfileId),
+          eq(ProfileFollows.followeeProfileId, pair.followeeProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (profileFollow) {
+      const result = await executeProfileFollowRemoval({
+        ...pair,
+        expectedRowId: profileFollow.id,
+        origin: 'ACTIVITYPUB',
+        transition: 'INBOUND_UNDO',
+        snapshot: {
+          createdAt: profileFollow.createdAt.toString(),
+          followerProfileId: pair.followerProfileId,
+          followeeProfileId: pair.followeeProfileId,
+          id: profileFollow.id,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error.message);
+      }
+      if (!result.changed) {
+        observeInboundNoop({
           activityType: 'Undo',
           actorOrigin: actorUri.origin,
-          error,
           handler: 'undo',
           objectOrigin: objectUri.origin,
-          outcome: 'internal_failure',
-          phase: 'effect',
-          reasonCode: 'follow_undo_notification_effect_failed',
-        }),
+          phase: 'projection',
+          reasonCode: 'follow_undo_missing_or_repeated',
+        });
+      }
+      return;
+    }
+
+    const pendingRequest = await db
+      .select({ id: ProfileFollowRequests.id })
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          eq(ProfileFollowRequests.followerProfileId, pair.followerProfileId),
+          eq(ProfileFollowRequests.followeeProfileId, pair.followeeProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+
+    if (!pendingRequest) {
+      observeInboundNoop({
+        activityType: 'Undo',
+        actorOrigin: actorUri.origin,
+        handler: 'undo',
+        objectOrigin: objectUri.origin,
+        phase: 'projection',
+        reasonCode: 'follow_undo_missing_or_repeated',
+      });
+      return;
+    }
+
+    const result = await executeProfileFollowPairTransition({
+      pair,
+      command: {
+        kind: 'CANCEL',
+        ...pair,
+        expectedRowId: pendingRequest.id,
+        origin: 'ACTIVITYPUB',
+      },
     });
-    if (!result.changed) {
+    if (result.result.commandKind !== 'CANCEL') {
+      throw new Error('Unexpected inbound Undo transition result');
+    }
+    if (!result.result.changed) {
       observeInboundNoop({
         activityType: 'Undo',
         actorOrigin: actorUri.origin,

@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sentryScope = vi.hoisted(() => ({
-  setExtra: vi.fn(),
   setExtras: vi.fn(),
   setFingerprint: vi.fn(),
-  setTag: vi.fn(),
   setTags: vi.fn(),
 }));
 const sentry = vi.hoisted(() => ({
@@ -20,10 +18,8 @@ beforeEach(() => {
   sentry.init.mockReset();
   sentry.captureException.mockReset();
   sentry.withScope.mockReset();
-  sentryScope.setExtra.mockReset();
   sentryScope.setExtras.mockReset();
   sentryScope.setFingerprint.mockReset();
-  sentryScope.setTag.mockReset();
   sentryScope.setTags.mockReset();
   sentry.withScope.mockImplementation((callback) => callback(sentryScope));
 });
@@ -58,30 +54,6 @@ describe('Web BFF Sentry configuration', () => {
       }),
     );
     expect(sentry.init.mock.calls[0]?.[0].beforeSend).toBeUndefined();
-  });
-
-  it('reports notification effect failures with the minimal context', async () => {
-    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
-    vi.stubEnv('ENVIRONMENT', 'production');
-    vi.stubEnv('SENTRY_RELEASE', 'kosmo@abc123');
-
-    const { captureNotificationEffectError } = await import('./sentry');
-    const cause = new Error('notification delete failed');
-
-    captureNotificationEffectError(cause, {
-      operation: 'delete',
-      notificationKind: 'FOLLOW_REQUEST',
-      sourceId: 'request-123',
-    });
-
-    expect(sentry.withScope).toHaveBeenCalledOnce();
-    expect(sentryScope.setTag).toHaveBeenCalledTimes(2);
-    expect(sentryScope.setTag).toHaveBeenNthCalledWith(1, 'operation', 'delete');
-    expect(sentryScope.setTag).toHaveBeenNthCalledWith(2, 'notificationKind', 'FOLLOW_REQUEST');
-    expect(sentryScope.setExtra).toHaveBeenCalledTimes(1);
-    expect(sentryScope.setExtra).toHaveBeenCalledWith('sourceId', 'request-123');
-    expect(sentry.captureException).toHaveBeenCalledOnce();
-    expect(sentry.captureException).toHaveBeenCalledWith(cause);
   });
 
   it('adds bounded inbound grouping metadata to internal captures', async () => {

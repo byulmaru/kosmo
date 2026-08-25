@@ -1,14 +1,12 @@
 import { serve } from '@hono/node-server';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { setNotificationEffectErrorReporter } from '@kosmo/core/services';
 import { Hono } from 'hono';
 import { deriveContext } from './context';
 import { yoga } from './graphql';
-import { captureNotificationEffectError, captureUnexpectedError } from './sentry';
+import { captureUnexpectedError } from './sentry';
 import type { Env } from './context';
 
 await resolveConfiguredLocalInstance();
-setNotificationEffectErrorReporter(captureNotificationEffectError);
 
 const app = new Hono<Env>();
 

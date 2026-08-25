@@ -11,12 +11,12 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
-import { eq, ne, sql } from 'drizzle-orm';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type * as CoreServices from '@kosmo/core/services';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
 
@@ -38,7 +38,6 @@ let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
-let setNotificationEffectErrorReporter: typeof CoreServices.setNotificationEffectErrorReporter;
 let localInstanceId: string;
 
 describe('inbound Follow and Undo', () => {
@@ -57,8 +56,6 @@ describe('inbound Follow and Undo', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
-    ({ setNotificationEffectErrorReporter } =
-      (await import('@kosmo/core/services')) as typeof CoreServices);
     ({ handleInboundFollow, handleInboundUndo } = await import('./inbound-follow'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
@@ -66,6 +63,7 @@ describe('inbound Follow and Undo', () => {
   });
 
   beforeEach(async () => {
+    await waitForProfileFollowEffects({ terminatePending: true });
     await db.delete(Profiles);
     await db.delete(Instances).where(ne(Instances.id, localInstanceId));
   });
@@ -73,6 +71,101 @@ describe('inbound Follow and Undo', () => {
   after(async () => {
     await pg.end();
   });
+
+  async function waitForProfileFollowEffects({
+    pair,
+    startedAt,
+    terminatePending = false,
+  }: {
+    readonly pair?: {
+      readonly followerProfileId: string;
+      readonly followeeProfileId: string;
+    };
+    readonly startedAt?: Date;
+    readonly terminatePending?: boolean;
+  } = {}) {
+    const deadline = Date.now() + 30_000;
+    const pairWorkflowId = pair
+      ? `profile-follow-pair:${pair.followerProfileId}:${pair.followeeProfileId}`
+      : undefined;
+    while (Date.now() < deadline) {
+      let waiting = false;
+      let foundExpectedWorkflow = false;
+      const pendingHandles: Array<ReturnType<typeof temporalClient.workflow.getHandle>> = [];
+
+      for await (const execution of temporalClient.workflow.list({
+        query: pairWorkflowId
+          ? `WorkflowId = "${pairWorkflowId}"`
+          : '(WorkflowType = "profileFollowPairWorkflow" OR WorkflowType = "profileFollowRemovalWorkflow") AND ExecutionStatus = "Running"',
+      })) {
+        if (
+          pairWorkflowId &&
+          startedAt &&
+          execution.startTime.getTime() < startedAt.getTime() - 1_000
+        ) {
+          continue;
+        }
+        if (pairWorkflowId) {
+          foundExpectedWorkflow = true;
+        }
+        const handle = temporalClient.workflow.getHandle(execution.workflowId, execution.runId);
+        if (execution.type === 'profileFollowPairWorkflow') {
+          let status: {
+            readonly state: string;
+            readonly inFlight: boolean;
+            readonly pendingEffectCount: number;
+            readonly effectFailureCount: number;
+          };
+          try {
+            status = (await handle.query('profileFollowPairStatus')) as typeof status;
+          } catch {
+            waiting = true;
+            continue;
+          }
+          if (status.effectFailureCount > 0 && !terminatePending) {
+            throw new Error('Follow Workflow recorded a terminal effect failure');
+          }
+          if (status.state === 'INITIAL' && terminatePending) {
+            pendingHandles.push(handle);
+            continue;
+          }
+          if (status.state === 'PENDING') {
+            if (status.inFlight || status.pendingEffectCount > 0) {
+              waiting = true;
+            } else if (terminatePending) {
+              pendingHandles.push(handle);
+            }
+            continue;
+          }
+        }
+
+        try {
+          await handle.result();
+        } catch (error) {
+          if (!terminatePending) {
+            throw error;
+          }
+          // Fixture cleanup may terminate a workflow after recording a failure.
+        }
+      }
+
+      if (pendingHandles.length > 0) {
+        await Promise.all(
+          pendingHandles.map((handle) =>
+            handle.terminate('test fixture cleanup').catch(() => undefined),
+          ),
+        );
+      }
+      if (pairWorkflowId && !foundExpectedWorkflow) {
+        waiting = true;
+      }
+      if (!waiting && pendingHandles.length === 0) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error('Timed out waiting for Follow Workflow effects');
+  }
 
   test('routes personal Follow, sends Accept, and removes by actor pair despite a different Follow id', async () => {
     const fixture = await createFixture();
@@ -86,6 +179,7 @@ describe('inbound Follow and Undo', () => {
     });
 
     await handleInboundFollow(context, follow);
+    await waitForProfileFollowEffects();
 
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
@@ -116,6 +210,7 @@ describe('inbound Follow and Undo', () => {
         published: Temporal.Instant.from('2026-07-15T00:00:01Z'),
       }),
     );
+    await waitForProfileFollowEffects();
 
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
@@ -183,10 +278,18 @@ describe('inbound Follow and Undo', () => {
         id: new URL('https://remote.example/activities/production-follow'),
         object: localActorUri,
       });
+      const followStartedAt = new Date();
       const followResponse = await federation.fetch(await createSignedRequest(follow), {
         contextData: undefined,
       });
       assert.equal(followResponse.status, 202, await followResponse.text());
+      await waitForProfileFollowEffects({
+        pair: {
+          followerProfileId: fixture.remoteProfile.id,
+          followeeProfileId: fixture.localProfile.id,
+        },
+        startedAt: followStartedAt,
+      });
 
       const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
       assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
@@ -211,6 +314,7 @@ describe('inbound Follow and Undo', () => {
         { contextData: undefined },
       );
       assert.equal(undoResponse.status, 202, await undoResponse.text());
+      await waitForProfileFollowEffects();
       assert.equal((await db.select().from(ProfileFollows)).length, 0);
       assert.equal(
         await db
@@ -309,6 +413,7 @@ describe('inbound Follow and Undo', () => {
       restoreReporter();
     }
 
+    await waitForProfileFollowEffects();
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.equal(
@@ -339,17 +444,9 @@ describe('inbound Follow and Undo', () => {
       ).followingCount,
       1,
     );
-    assert.deepEqual(logs, [
-      {
-        activityType: 'Follow',
-        actorOrigin: remoteActorUri.origin,
-        handler: 'follow',
-        objectOrigin: localActorUri.origin,
-        outcome: 'noop',
-        phase: 'projection',
-        reasonCode: 'duplicate_established_follow_noop',
-      },
-    ]);
+    // Both calls share the deterministic Update ID `follow`; Temporal
+    // deduplicates the second admission before the handler can emit a noop.
+    assert.deepEqual(logs, []);
   });
 
   test('routes shared-inbox approval-required Follow without Accept', async () => {
@@ -362,6 +459,7 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
 
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 1);
@@ -374,6 +472,7 @@ describe('inbound Follow and Undo', () => {
         object: new Follow({ actor: remoteActorUri, object: localActorUri }),
       }),
     );
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(Notifications)).length, 0);
   });
@@ -440,16 +539,9 @@ describe('inbound Follow and Undo', () => {
       await handleInboundFollow(createContext({ recipient: null }), follow);
       await handleInboundFollow(createContext({ recipient: null }), follow);
 
-      assert.equal(logs.length, 1);
-      assert.deepEqual(logs[0], {
-        activityType: 'Follow',
-        actorOrigin: remoteActorUri.origin,
-        handler: 'follow',
-        objectOrigin: localActorUri.origin,
-        outcome: 'noop',
-        phase: 'projection',
-        reasonCode: 'duplicate_pending_follow_noop',
-      });
+      // The same pair and Follow Update ID are deduplicated by Temporal, so
+      // the second request does not enter the handler to emit a noop.
+      assert.deepEqual(logs, []);
     } finally {
       restore();
     }
@@ -487,25 +579,16 @@ describe('inbound Follow and Undo', () => {
     }
   });
 
-  test('keeps inbound Follow successful when Notification creation fails', async () => {
+  test('keeps inbound Follow successful while effects are deferred', async () => {
     const fixture = await createFixture();
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_handler_create_failure CHECK (false) NOT VALID`,
+    await handleInboundFollow(
+      createContext({ recipient: localProfileId }),
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
 
-    try {
-      await handleInboundFollow(
-        createContext({ recipient: localProfileId }),
-        new Follow({ actor: remoteActorUri, object: localActorUri }),
-      );
-    } finally {
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_handler_create_failure`,
-      );
-    }
-
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
-    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
     assert.equal(
       (
         await db
@@ -522,35 +605,20 @@ describe('inbound Follow and Undo', () => {
     const fixture = await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const logs: unknown[] = [];
     const captures: unknown[] = [];
-    const effectReports: unknown[] = [];
     const restoreInboundReporter = setInboundObservabilityReporter({
       captureException: (error, context) => captures.push({ error, context }),
       log: (observation) => logs.push(observation),
     });
-    const restoreEffectReporter = setNotificationEffectErrorReporter((error, context) =>
-      effectReports.push({ error, context }),
+    await handleInboundFollow(
+      createContext({ recipient: localProfileId }),
+      new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
+    restoreInboundReporter();
 
-    await db.execute(
-      sql`ALTER TABLE ${Notifications} ADD CONSTRAINT notification_inbound_pending_create_failure CHECK (false) NOT VALID`,
-    );
-
-    try {
-      await handleInboundFollow(
-        createContext({ recipient: localProfileId }),
-        new Follow({ actor: remoteActorUri, object: localActorUri }),
-      );
-    } finally {
-      await db.execute(
-        sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_inbound_pending_create_failure`,
-      );
-      restoreEffectReporter();
-      restoreInboundReporter();
-    }
-
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 1);
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
-    assert.equal((await db.select().from(Notifications)).length, 0);
+    assert.equal((await db.select().from(Notifications)).length, 1);
     assert.deepEqual(
       await db
         .select({
@@ -562,47 +630,11 @@ describe('inbound Follow and Undo', () => {
         .then(firstOrThrow),
       { followersCount: 0, followingCount: 0 },
     );
-    assert.equal(effectReports.length, 0);
-    assert.deepEqual(logs, [
-      {
-        activityType: 'Follow',
-        actorOrigin: remoteActorUri.origin,
-        handler: 'follow',
-        objectOrigin: localActorUri.origin,
-        outcome: 'internal_failure',
-        phase: 'effect',
-        reasonCode: 'follow_notification_effect_failed',
-      },
-    ]);
-    assert.equal(captures.length, 1);
-    const capture = captures[0] as {
-      context: {
-        extra?: Record<string, string>;
-        fingerprint: string[];
-        tags: Record<string, string>;
-      };
-    };
-    assert.deepEqual(capture.context.tags, {
-      activity_type: 'Follow',
-      handler: 'follow',
-      outcome: 'internal_failure',
-      phase: 'effect',
-      reason_code: 'follow_notification_effect_failed',
-    });
-    assert.deepEqual(capture.context.fingerprint, [
-      'activitypub-inbound',
-      'Follow',
-      'follow',
-      'effect',
-      'follow_notification_effect_failed',
-    ]);
-    assert.deepEqual(capture.context.extra, {
-      actor_origin: remoteActorUri.origin,
-      object_origin: localActorUri.origin,
-    });
+    assert.deepEqual(logs, []);
+    assert.deepEqual(captures, []);
   });
 
-  test('keeps inbound Undo successful when Notification cleanup fails', async () => {
+  test('keeps inbound Undo successful while cleanup is deferred', async () => {
     await createFixture();
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(
@@ -610,35 +642,15 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
     const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
-    await db.execute(sql`
-      CREATE FUNCTION fail_inbound_notification_delete() RETURNS trigger
-      LANGUAGE plpgsql AS $$
-      BEGIN
-        RAISE EXCEPTION 'notification delete failed';
-      END;
-      $$
-    `);
-    await db.execute(sql`
-      CREATE TRIGGER notification_inbound_handler_delete_failure
-      BEFORE DELETE ON ${Notifications}
-      FOR EACH ROW EXECUTE FUNCTION fail_inbound_notification_delete()
-    `);
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+      }),
+    );
 
-    try {
-      await handleInboundUndo(
-        context,
-        new Undo({
-          actor: remoteActorUri,
-          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
-        }),
-      );
-    } finally {
-      await db.execute(
-        sql`DROP TRIGGER notification_inbound_handler_delete_failure ON ${Notifications}`,
-      );
-      await db.execute(sql`DROP FUNCTION fail_inbound_notification_delete()`);
-    }
-
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
     assert.equal(
       await db
@@ -646,11 +658,11 @@ describe('inbound Follow and Undo', () => {
         .from(Notifications)
         .where(eq(Notifications.sourceId, relation.id))
         .then((rows) => rows.length),
-      1,
+      0,
     );
   });
 
-  test('keeps approval-required inbound Undo successful when request Notification cleanup fails', async () => {
+  test('keeps approval-required inbound Undo successful while cleanup is deferred', async () => {
     await createFixture({ followPolicy: ProfileFollowPolicy.APPROVAL_REQUIRED });
     const context = createContext({ recipient: localProfileId });
     await handleInboundFollow(
@@ -658,44 +670,24 @@ describe('inbound Follow and Undo', () => {
       new Follow({ actor: remoteActorUri, object: localActorUri }),
     );
     const request = await db.select().from(ProfileFollowRequests).then(firstOrThrow);
-    await db.execute(sql`
-      CREATE FUNCTION fail_inbound_pending_notification_delete() RETURNS trigger
-      LANGUAGE plpgsql AS $$
-      BEGIN
-        RAISE EXCEPTION 'pending notification delete failed';
-      END;
-      $$
-    `);
-    await db.execute(sql`
-      CREATE TRIGGER notification_inbound_pending_delete_failure
-      BEFORE DELETE ON ${Notifications}
-      FOR EACH ROW EXECUTE FUNCTION fail_inbound_pending_notification_delete()
-    `);
+    await handleInboundUndo(
+      context,
+      new Undo({
+        actor: remoteActorUri,
+        object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+      }),
+    );
 
-    try {
-      await handleInboundUndo(
-        context,
-        new Undo({
-          actor: remoteActorUri,
-          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
-        }),
-      );
-    } finally {
-      await db.execute(
-        sql`DROP TRIGGER notification_inbound_pending_delete_failure ON ${Notifications}`,
-      );
-      await db.execute(sql`DROP FUNCTION fail_inbound_pending_notification_delete()`);
-    }
-
+    await waitForProfileFollowEffects();
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
-    assert.equal((await db.select().from(Notifications)).length, 1);
+    assert.equal((await db.select().from(Notifications)).length, 0);
     assert.equal(
       await db
         .select()
         .from(Notifications)
         .where(eq(Notifications.sourceId, request.id))
         .then((rows) => rows.length),
-      1,
+      0,
     );
   });
 

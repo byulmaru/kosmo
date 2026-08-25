@@ -1,5 +1,5 @@
 import { db, first, ProfileFollowRequests, ProfileFollows } from '@kosmo/core/db';
-import { acceptProfileFollowRequest } from '@kosmo/core/services';
+import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
 import { and, eq } from 'drizzle-orm';
 import { isHttpUri } from './activitypub-uri';
 import { isCompatibleOutboundFollowActivity } from './follow-delivery';
@@ -7,15 +7,27 @@ import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
+import type { AcceptProfileFollowRequestResult } from '@kosmo/core/services';
+
+type AcceptFollowRequestInput = {
+  readonly expectedRowId: string;
+  readonly followeeProfileId: string;
+  readonly followerProfileId: string;
+  readonly origin: 'ACTIVITYPUB';
+};
+
+type AcceptFollowRequest = (
+  input: AcceptFollowRequestInput,
+) => Promise<AcceptProfileFollowRequestResult>;
 
 export const handleInboundAcceptFollow = async ({
   context,
   follow,
   followeeActorUri,
   followeeProfileId,
-  acceptProfileFollowRequest: acceptFollowRequest = acceptProfileFollowRequest,
+  acceptProfileFollowRequest,
 }: {
-  readonly acceptProfileFollowRequest?: typeof acceptProfileFollowRequest;
+  readonly acceptProfileFollowRequest?: AcceptFollowRequest;
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
@@ -97,11 +109,43 @@ export const handleInboundAcceptFollow = async ({
     return;
   }
 
-  const result = await acceptFollowRequest({
+  // An established projection has no Pending lifecycle to bootstrap. The
+  // generation check above remains authoritative; once it matches, a
+  // repeated Accept is an idempotent protocol noop.
+  if (profileFollow) {
+    observeInboundNoop({
+      activityType: 'Accept',
+      actorOrigin: followerActorUri.origin,
+      handler: 'accept',
+      objectOrigin: objectUri.origin,
+      phase: 'projection',
+      reasonCode: 'duplicate_accept_noop',
+    });
+    return;
+  }
+
+  const input = {
     expectedRowId: projection.id,
     followeeProfileId,
     followerProfileId: followerProfile.id,
-  });
+    origin: 'ACTIVITYPUB' as const,
+  };
+  let result: AcceptProfileFollowRequestResult;
+  if (acceptProfileFollowRequest) {
+    result = await acceptProfileFollowRequest(input);
+  } else {
+    const transition = await executeProfileFollowPairTransition({
+      pair: {
+        followeeProfileId: input.followeeProfileId,
+        followerProfileId: input.followerProfileId,
+      },
+      command: { kind: 'ACCEPT', ...input },
+    });
+    if (transition.result.commandKind !== 'ACCEPT') {
+      throw new Error('Unexpected inbound Accept transition result');
+    }
+    result = { kind: transition.result.kind };
+  }
   if (result.kind === 'ALREADY_ESTABLISHED') {
     observeInboundNoop({
       activityType: 'Accept',
