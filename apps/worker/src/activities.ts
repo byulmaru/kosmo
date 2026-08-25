@@ -1,6 +1,10 @@
 import '@kosmo/core/polyfill';
 
 export {
+  sendProfileFollowActivity,
+  sendProfileUnfollowActivity,
+} from './profile-follow-activities';
+export {
   createFollowNotification as createFollowNotificationActivity,
   createFollowRequestNotification as createFollowRequestNotificationActivity,
   deleteFollowNotification as deleteFollowNotificationActivity,
@@ -15,10 +19,6 @@ export {
   createRepostNotification as createRepostNotificationActivity,
   deleteRepostNotification as deleteRepostNotificationActivity,
 } from '@kosmo/core/services';
-export {
-  sendProfileFollowBySource as sendProfileFollowActivity,
-  sendProfileUnfollowBySnapshot as sendProfileUnfollowActivity,
-} from '@kosmo/fedify';
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,
   sendLocalPostDelete as sendLocalPostDeleteActivity,

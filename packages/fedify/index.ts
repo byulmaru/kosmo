@@ -20,12 +20,7 @@ export {
 } from './src/inbound-observability';
 export { sendLocalPostCreate, sendLocalPostDelete } from './src/local-post-delivery';
 export { sendLocalProfileUpdate } from './src/local-profile-update-delivery';
-export {
-  sendProfileFollow,
-  sendProfileFollowBySource,
-  sendProfileUnfollow,
-  sendProfileUnfollowBySnapshot,
-} from './src/profile-follow-delivery';
+export { sendProfileFollow, sendProfileUnfollow } from './src/profile-follow-delivery';
 export { closeFedifyQueue } from './src/queue';
 export { sendReaction, sendReactionUndo } from './src/reaction-delivery';
 export {
