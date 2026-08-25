@@ -7,8 +7,8 @@ Kosmo Web은 공개 build 변수 `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`가 있을 때
 1. OpenPanel에서 Kosmo production project와 Web write client를 만든다.
 2. 허용 origin을 Kosmo production Web origin으로 제한한다.
 3. GitHub repository variable `EXPO_PUBLIC_OPENPANEL_CLIENT_ID`에 공개 client ID를 저장한다. client secret이나 root/read credential은 build에 넣지 않는다.
-4. `prod` Environment 승인 뒤 실행되는 automatic main production build와 manual full-SHA build에서만 이 값을 Docker build arg로 전달한다. 승인 전 main dev build, 일반 branch, `production` branch, tag push와 local build에는 production client ID를 주입하지 않는다.
-5. Client ID를 회전하면 repository variable을 바꾸고 새 main production release 또는 승인된 manual target image를 발행한다. Production build와 배포 승인은 같은 gated release 경계로 기록한다.
+4. `main` dev build에는 이 값을 주입하지 않는다. `main` ref에서 `workflow_dispatch`로 실행하고 `prod` Environment 승인을 받은 production build에서만 Docker build arg로 전달한다. `target_sha`를 입력하면 해당 target을, 비워 두면 preflight가 확정한 최신 `main` target을 사용한다. 일반 branch, `production` branch, tag push와 local build에도 production client ID를 주입하지 않는다.
+5. Client ID를 회전하면 repository variable을 바꾸고 새 `workflow_dispatch` production release를 실행한다. `target_sha`를 명시하거나 최신 `main`을 선택한 뒤 production build와 배포 승인을 같은 gated release 경계로 기록한다.
 
 Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청이 모두 없어야 한다. Local에서 명시적으로 값을 주입하면 같은 production OpenPanel project에 전송되므로 실제 테스트 계정과 event를 사용하고 검증 뒤 제거한다.
 
@@ -22,7 +22,7 @@ Client ID가 없는 build에서는 SDK client, browser listener와 분석 요청
 
 ## 배포 후 acceptance
 
-각 [Production release](./production-release.md)의 automatic main production release 또는 manual full-SHA target이 승인·배포된 뒤 아래를 production browser와 Dashboard로 확인한다. 실제 Account ID나 사용자 콘텐츠를 증거 문서에 복사하지 않는다.
+각 [Production release](./production-release.md)의 `workflow_dispatch` target(입력 SHA 또는 preflight가 확정한 최신 `main`)이 승인·배포된 뒤 아래를 production browser와 Dashboard로 확인한다. 실제 Account ID나 사용자 콘텐츠를 증거 문서에 복사하지 않는다.
 
 1. Client ID가 없는 local build의 Network panel에 `/api/track` 요청이 없음을 확인한다.
 2. production landing을 비로그인으로 열어 `screen_view`와 anonymous profile/session을 확인한다.
@@ -157,4 +157,4 @@ WHERE project_id = {project_id:String} AND id = {account_id:String};
 
 ## 비활성화와 rollback
 
-긴급 중단은 GitHub repository variable을 제거한 뒤 `prod` 승인 후 새 main production image 또는 승인된 manual full-SHA image를 발행한다. 이미 배포된 정적 bundle의 Client ID는 runtime 환경 변수 변경만으로 제거되지 않는다. OpenPanel 장애 시 Kosmo 기능은 계속 동작해야 하며, client secret 또는 관리자 credential을 browser에 넣어 우회하지 않는다.
+긴급 중단은 GitHub repository variable을 제거한 뒤 `workflow_dispatch`로 target을 선택하고 `prod` 승인 후 새 production image를 발행한다. 이미 배포된 정적 bundle의 Client ID는 runtime 환경 변수 변경만으로 제거되지 않는다. OpenPanel 장애 시 Kosmo 기능은 계속 동작해야 하며, client secret 또는 관리자 credential을 browser에 넣어 우회하지 않는다.
