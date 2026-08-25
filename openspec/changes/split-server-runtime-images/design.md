@@ -42,7 +42,7 @@ Temporal Worker는 일반 server bundle과 다르다. `@temporalio/worker`는 No
 
 ### Recommended Approach
 
-1. 명시적인 server build dependency로 esbuild를 추가하고 공통 build script에서 다섯 runtime의 workspace-owned code를 각각 하나의 ESM JavaScript artifact로 생성한다. Third-party package는 external import로 유지하며 artifact metadata에 기록한다.
+1. 명시적인 server build dependency로 esbuild를 추가하고 한 번의 build에서 다섯 runtime의 workspace-owned code를 각각 하나의 ESM JavaScript artifact로 생성한다. Third-party package는 external import로 유지하고 workspace manifest와 lockfile의 production dependency tree가 제공한다. 별도 artifact metadata나 build manifest는 생성하지 않는다.
 2. 각 final image는 해당 workspace를 root lockfile에서 `pnpm deploy --legacy --prod`한 production dependency tree와 JavaScript artifact를 조립한다. 생성 `runtime-package.json`이나 수동 package allowlist는 두지 않는다. Worker Workflow는 같은 lockfile의 `@temporalio/worker`가 제공하는 `bundleWorkflowCode`로 별도 생성하고 production host는 `workflowsPath` 대신 image 안의 prebuilt `workflowBundle.codePath`를 사용한다. Worker image에서만 target Linux/ARM64 native binary를 보존한다.
 3. Migration entry는 final artifact 위치에서 함께 복사된 `drizzle/` directory를 deterministic하게 resolve해 `runDatabaseMigrations({ migrationsFolder })`에 전달한다. Database target·credential 입력 계약은 바꾸지 않는다.
 4. Dockerfile은 공통 dependency/build stage와 `web`, `api`, `worker`, `fedify-consumer`, `migration` final target을 둔다. 각 target은 자신의 artifact와 production dependency tree를 고정 Node entrypoint로 실행한다. 어느 target도 다중 runtime source/command dispatcher를 복사하지 않으며 Web target만 Expo asset을 받는다.
@@ -54,7 +54,7 @@ Temporal Worker는 일반 server bundle과 다르다. `@temporalio/worker`는 No
 
 ### Allowed Alternatives
 
-- esbuild 대신 ESM, static dynamic import, `import.meta` 의미, source map과 metafile-equivalent dependency 검증을 만족하는 다른 bundler를 사용할 수 있다.
+- esbuild 대신 ESM, static dynamic import, `import.meta` 의미와 source map 생성을 만족하는 다른 bundler를 사용할 수 있다.
 - Runtime별 image는 같은 OCI repository의 runtime tag를 공유하거나 별도 repository를 사용할 수 있다. Helm에는 최종 `repository@digest`가 runtime별로 명확하고 release set이 원자적으로 검증되어야 한다.
 - Worker SDK까지 단일 bundle하는 대안은 Temporal native module과 Workflow sandbox의 package-relative resolution을 별도 처리하지 않고도 동등한 ABI·lifecycle 증거를 제공할 때만 사용할 수 있다. 현재는 공식 Node/native runtime 경계를 보존한다.
 

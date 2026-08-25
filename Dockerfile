@@ -160,7 +160,6 @@ FROM split-runtime-base AS web-runtime
 ENV EXPO_WEB_ROOT=/app/apps/app/dist
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/web/index.mjs /app/server-dist/web/index.mjs
-COPY --from=server-artifacts --chown=app:app /app/server-dist/web/meta.json /app/server-dist/web/meta.json
 COPY --from=app-build --chown=app:app /app/apps/app/dist /app/apps/app/dist
 COPY --from=web-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
@@ -173,7 +172,6 @@ ENTRYPOINT ["node", "/app/server-dist/web/index.mjs"]
 FROM split-runtime-base AS api-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/api/index.mjs /app/server-dist/api/index.mjs
-COPY --from=server-artifacts --chown=app:app /app/server-dist/api/meta.json /app/server-dist/api/meta.json
 COPY --from=api-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
@@ -188,7 +186,6 @@ ENV TEMPORAL_WORKFLOW_BUNDLE_PATH=/app/server-dist/worker/workflow-bundle.js
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/index.mjs /app/server-dist/worker/index.mjs
 COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/workflow-bundle.js /app/server-dist/worker/workflow-bundle.js
-COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/meta.json /app/server-dist/worker/meta.json
 COPY --from=worker-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
@@ -200,7 +197,6 @@ ENTRYPOINT ["node", "/app/server-dist/worker/index.mjs"]
 FROM split-runtime-base AS fedify-consumer-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/index.mjs /app/server-dist/fedify-consumer/index.mjs
-COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/meta.json /app/server-dist/fedify-consumer/meta.json
 COPY --from=fedify-consumer-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 
 USER app
@@ -212,7 +208,6 @@ ENTRYPOINT ["node", "/app/server-dist/fedify-consumer/index.mjs"]
 FROM split-runtime-base AS migration-runtime
 
 COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/index.mjs /app/server-dist/migration/index.mjs
-COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/meta.json /app/server-dist/migration/meta.json
 COPY --from=migration-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
 COPY --chown=app:app drizzle /app/drizzle
 

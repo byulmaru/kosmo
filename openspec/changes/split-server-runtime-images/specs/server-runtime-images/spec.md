@@ -37,7 +37,7 @@
 #### Scenario: runtime import 변경이 artifact와 production dependency tree에 반영된다
 
 - **WHEN** API를 포함한 어느 runtime의 workspace code가 새로운 third-party package를 production 경로에서 import하거나 기존 import를 제거한다
-- **THEN** workspace-owned import는 해당 JavaScript artifact에 포함되고 third-party import는 artifact metadata에 기록된다
+- **THEN** workspace-owned import는 해당 JavaScript artifact에 포함되고 third-party import는 workspace manifest와 root lockfile의 production dependency tree에서 해석된다
 - **AND** workspace manifest와 root lockfile에서 생성한 해당 runtime의 production dependency tree가 third-party package를 제공한다
 - **AND** generated runtime manifest, Dockerfile package 목록 또는 exact dependency allowlist test를 수동으로 동기화할 필요가 없다
 

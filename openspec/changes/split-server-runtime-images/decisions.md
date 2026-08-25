@@ -38,7 +38,7 @@
 - Decision Outcome: 다섯 runtime의 workspace-owned code는 각각 하나의 JavaScript artifact로 bundle하고 third-party package는 external로 둔다. 각 final image는 해당 workspace를 root lockfile에서 production deploy한 dependency tree를 사용한다. 생성 runtime manifest, package별 bundler patch와 정확한 package allowlist를 두지 않는다.
 - Alternatives Considered: Literal single-file bundle은 JSDOM 등 package-relative asset을 위해 custom transform이 필요하고 dependency 변경에 취약해 제외했다. Build graph에서 synthetic runtime manifest를 생성하는 방식은 package manager가 이미 소유하는 manifest/lockfile 계약을 중복해 제외했다. Workspace 전체 hoisted install은 Expo·TypeScript 등 다른 runtime과 개발 dependency까지 포함해 제외했다.
 - Consequences: Literal single-file보다 image가 크지만 package 호환성과 의존성 변경 경계가 단순해진다. API가 `@temporalio/client`를 사용하면 API workspace dependency와 lockfile만으로 image에 반영된다. 각 final image에는 작은 production `node_modules`가 있으며 TypeScript source와 `tsx`는 없다.
-- Confirmation / Follow-up: artifact metadata의 external import가 각 final image에서 모두 resolve되는지, 다섯 container boot/health와 Worker native load를 검증한다.
+- Confirmation / Follow-up: 각 workspace production dependency tree와 다섯 container boot/health, Worker native load를 검증한다.
 
 ### Temporal Workflow는 production image 시작 전에 bundle한다
 

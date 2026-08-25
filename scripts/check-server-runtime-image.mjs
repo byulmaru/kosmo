@@ -58,18 +58,6 @@ function walk(root) {
 const artifactRoot = '/app/server-dist';
 const artifactDirectory = join(artifactRoot, runtime);
 const artifactFiles = walk(artifactRoot);
-const manifestPath = join(artifactDirectory, 'runtime-package.json');
-const metadata = JSON.parse(readFileSync(join(artifactDirectory, 'meta.json'), 'utf8'));
-const externalImports = metadata.externalImports ?? [];
-const runtimeRequire = createRequire(entrypoint);
-const missingExternalImports = externalImports.filter((specifier) => {
-  try {
-    runtimeRequire.resolve(specifier);
-    return false;
-  } catch {
-    return true;
-  }
-});
 const nodeModules = existsSync('/app/node_modules');
 let workerPackage;
 try {
@@ -105,10 +93,8 @@ process.stdout.write(JSON.stringify({
   sourceMapReference: artifactFiles
     .filter((path) => /\.(?:c|m)?js$/u.test(path))
     .some((path) => readFileSync(path, 'utf8').includes('sourceMappingURL=')),
-  runtimePackage: existsSync(manifestPath),
+  runtimePackage: existsSync(join(artifactDirectory, 'runtime-package.json')),
   nodeModules,
-  externalImports,
-  missingExternalImports,
   tsx: existsSync('/app/node_modules/tsx'),
   workerPackage: workerPackage !== undefined,
   bridgeReleases,
@@ -219,7 +205,7 @@ export async function checkRuntimeImage({
     runtime,
     entrypoint: contract.entrypoint,
   });
-  const requiredFiles = ['index.mjs', 'meta.json'];
+  const requiredFiles = ['index.mjs'];
   const requiredArtifactFiles = requiredFiles.map((file) =>
     artifactPath(contract.artifactDirectory, file),
   );
@@ -238,16 +224,12 @@ export async function checkRuntimeImage({
   );
   assert(
     requiredArtifactFiles.every((file) => probe.artifactFiles.includes(file)),
-    'artifact or metadata is missing',
+    'artifact is missing',
   );
   assert(probe.sourceFiles.length === 0, `TypeScript source remains: ${probe.sourceFiles[0]}`);
   assert(probe.mapFiles.length === 0 && !probe.sourceMapReference, 'source map remains');
   assert(!probe.runtimePackage, 'generated runtime manifest remains');
   assert(probe.nodeModules, 'production dependency tree is missing');
-  assert(
-    probe.missingExternalImports.length === 0,
-    `external import is missing: ${probe.missingExternalImports[0]}`,
-  );
   assert(!probe.tsx, 'production dependency tree contains tsx');
   assert(probe.expo === Boolean(contract.expo), 'Expo assets are in the wrong image');
   assert(
@@ -274,7 +256,6 @@ export async function checkRuntimeImage({
     sizeBytes: imageRecord.Size,
     baselineSizeBytes: baselineRecord?.Size ?? null,
     layers: imageRecord.RootFS?.Layers?.length ?? null,
-    externalImports: probe.externalImports,
   };
 }
 

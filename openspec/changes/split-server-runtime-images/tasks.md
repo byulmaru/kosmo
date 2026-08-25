@@ -22,8 +22,8 @@
 
 - [x] 1.1 현재 single image의 Linux/ARM64 build, 다섯 command, filesystem/dependency, compressed/uncompressed size와 layer baseline을 기록한다.
 - [x] 1.2 선택한 JavaScript bundler를 pnpm CLI로 명시적 workspace build dependency에 추가하고 lockfile 정합성을 확인한다.
-- [ ] 1.3 Server artifact build의 입력·출력·target Node/ESM·source map, workspace code bundle, external import metadata와 clean/stale output 처리를 구현한다.
-- [ ] 1.4 Build script의 성공, compile 오류, 누락 entry, workspace package bundle, third-party external import와 stale artifact 제거를 검증하고 관련 package/type check를 통과시킨다.
+- [ ] 1.3 Server artifact build의 입력·출력·target Node/ESM·source map, workspace code bundle과 clean/stale output 처리를 구현한다.
+- [ ] 1.4 실제 다섯 entry의 build, workspace package bundle, third-party external import, source map과 stale artifact 제거를 검증하고 관련 package/type check를 통과시킨다.
 
 ## 2. PROD-831 Web·API·Fedify·Migration JavaScript artifact
 
