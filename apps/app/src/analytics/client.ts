@@ -9,10 +9,6 @@ export function trackAnalytics(name: string, properties?: TrackProperties): void
   void properties;
 }
 
-export function capturePageview(routeTemplate: string): void {
-  void routeTemplate;
-}
-
 export function identifyAnalytics(accountId: string): void {
   void accountId;
 }

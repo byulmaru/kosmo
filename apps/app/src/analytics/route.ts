@@ -5,10 +5,3 @@ export function normalizeRouteTemplate(segments: readonly string[]): string {
 
   return visibleSegments.length > 0 ? `/${visibleSegments.join('/')}` : '/';
 }
-
-export function isNewRouteTemplate(
-  previousRouteTemplate: string | null,
-  routeTemplate: string,
-): boolean {
-  return previousRouteTemplate !== routeTemplate;
-}

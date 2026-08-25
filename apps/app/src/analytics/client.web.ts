@@ -1,7 +1,39 @@
 import posthogClient from 'posthog-js';
-import { sanitizeAnalyticsEvent } from './events';
 import type { PostHog, PostHogConfig } from 'posthog-js';
 import type { TrackProperties } from './client';
+
+const EVENT_PROPERTIES = {
+  $pageview: ['route_template'],
+  profile_created: ['selected_profile_id'],
+  profile_selected: ['selected_profile_id'],
+  post_created: ['selected_profile_id', 'visibility'],
+  follow_succeeded: ['selected_profile_id', 'result'],
+  search_submitted: ['tab', 'source'],
+  search_results_loaded: ['tab', 'has_results'],
+  search_result_selected: ['tab'],
+} as const;
+
+type AnalyticsEventName = keyof typeof EVENT_PROPERTIES;
+
+function sanitizeAnalyticsProperties(
+  event: string,
+  properties?: TrackProperties,
+): Record<string, unknown> | null {
+  const allowedProperties = EVENT_PROPERTIES[event as AnalyticsEventName];
+  if (!allowedProperties) {
+    return null;
+  }
+
+  const sanitizedProperties: Record<string, unknown> = {};
+  for (const property of allowedProperties) {
+    const value = properties?.[property];
+    if (value !== undefined) {
+      sanitizedProperties[property] = value;
+    }
+  }
+
+  return sanitizedProperties;
+}
 
 const POSTHOG_CONFIG = {
   advanced_disable_flags: true,
@@ -79,37 +111,25 @@ export function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
-function ignoreAnalyticsFailure(result: unknown): void {
-  if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-    void Promise.resolve(result).catch(() => undefined);
-  }
-}
-
 export function trackAnalytics(name: string, properties?: TrackProperties): void {
-  const event = sanitizeAnalyticsEvent(name, properties);
-  if (!event) {
+  const sanitizedProperties = sanitizeAnalyticsProperties(name, properties);
+  if (!sanitizedProperties) {
     return;
   }
 
   try {
-    ignoreAnalyticsFailure(
-      getAnalyticsClient()?.capture(
-        event.event,
-        event.properties as Parameters<PostHog['capture']>[1],
-      ),
+    getAnalyticsClient()?.capture(
+      name as AnalyticsEventName,
+      sanitizedProperties as Parameters<PostHog['capture']>[1],
     );
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
 }
 
-export function capturePageview(routeTemplate: string): void {
-  trackAnalytics('$pageview', { route_template: routeTemplate });
-}
-
 function resetPostHogIdentity(analyticsClient: PostHog): boolean {
   try {
-    ignoreAnalyticsFailure(analyticsClient.reset());
+    analyticsClient.reset();
     return true;
   } catch {
     return false;

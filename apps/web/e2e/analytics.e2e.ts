@@ -9,26 +9,9 @@ type PostHogPayload = {
 };
 
 function readPostHogPayloads(body: string | null): PostHogPayload[] {
-  if (!body) {
-    return [];
-  }
-
   try {
-    const payload = JSON.parse(body) as unknown;
-    if (Array.isArray(payload)) {
-      return payload.filter((entry): entry is PostHogPayload => typeof entry === 'object');
-    }
-
-    if (
-      payload &&
-      typeof payload === 'object' &&
-      'batch' in payload &&
-      Array.isArray(payload.batch)
-    ) {
-      return payload.batch.filter((entry): entry is PostHogPayload => typeof entry === 'object');
-    }
-
-    return payload && typeof payload === 'object' ? [payload] : [];
+    const payload = JSON.parse(body ?? '') as unknown;
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? [payload] : [];
   } catch {
     return [];
   }
