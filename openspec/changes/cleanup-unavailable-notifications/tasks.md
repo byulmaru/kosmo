@@ -17,7 +17,7 @@ API와 cleanup이 같은 kind별 source·Recipient·Related Post/Profile availab
 **Verification**
 
 - 기존 Notification connection, count, Node와 Read integration suite가 kind별 source missing, mismatch와 hidden 관계에서 같은 결과를 유지한다.
-- core 수준에서 API와 cleanup이 viewer-independent availability predicate를 공유함을 검증한다.
+- core visibility 수준에서 API와 Worker cleanup이 viewer-independent availability predicate를 공유함을 검증한다.
 
 - [x] 1.1 현재 kind별 source·Related availability SQL을 API session/membership과 분리 가능한 core 경계로 정리한다.
 - [x] 1.2 API connection, count, Node와 Read가 공통 availability 계약과 기존 membership을 조합하게 한다.
@@ -43,7 +43,7 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 
 **Verification**
 
-- source missing, Recipient mismatch, Related Post/Profile unavailable, available row, Recipient inactive row를 한 page와 복수 page에서 검증한다.
+- source missing, Recipient mismatch, Related Post/Profile unavailable, available row, Recipient inactive row를 Worker Activity의 한 page와 복수 page에서 검증한다.
 - concurrent source deletion/recreation, concurrent Notification insert/delete, 삭제된 cursor row와 반복 호출이 대상 외 row를 삭제하지 않음을 독립 connection으로 검증한다.
 
 - [x] 2.1 sweep upper bound와 exclusive cursor를 만들고 검증하는 bounded cleanup 입력·결과 계약을 구현한다.

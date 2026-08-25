@@ -34,7 +34,7 @@
 
 ### Recommended Approach
 
-viewer-independent Notification source availability SQL을 core visibility/service 경계로 추출한다. API는 이 predicate에 membership을 더하고, cleanup은 Recipient 자체 state/instance availability를 삭제 원인에서 제외한 같은 predicate를 사용한다. Post/Profile visibility의 공통 하위 helper도 core로 이동해 API와 Worker가 역방향 의존 없이 공유한다.
+viewer-independent Notification source availability SQL을 core visibility 경계로 추출한다. API는 이 predicate에 membership을 더하고, cleanup은 Recipient 자체 state/instance availability를 삭제 원인에서 제외한 같은 predicate를 사용한다. Post/Profile visibility의 공통 하위 helper도 core로 이동해 API와 Worker가 역방향 의존 없이 공유한다. Cleanup의 cursor 검증, upper-bound 조회, bounded scan/transaction/delete와 Activity 관측 경계는 유일한 실행 owner인 Worker Activity가 소유하며, core에는 이 persistence 구현을 두지 않는다.
 
 Workflow는 page 삭제 전에 별도 Activity로 현재 최대 Notification ID를 캡처하고, 그 결과를 durable state로 받은 시점을 sweep 시작으로 고정한다. page Activity는 explicit non-null upper bound와 `cursor < id <= upperBound`를 UUIDv7 ascending 순서로 제한해 읽고, 같은 transaction의 삭제 statement에서 Notification ID와 unavailable predicate를 다시 확인한다. 결과는 `nextCursor`, scanned/deleted/skipped, oldest unavailable age와 done을 반환한다. Workflow는 page 사이에 rate-limit timer를 두고 cursor를 전달하며, history 임계치 또는 SDK 권고에 도달하면 cursor·upper bound·누적 관측 상태를 입력으로 continue-as-new 한다. 캡처보다 큰 ID는 다음 sweep으로 미루되, UUIDv7의 같은-millisecond random ordering 때문에 이 경계를 생성·commit 시각 snapshot으로 해석하지 않는다.
 
@@ -67,7 +67,7 @@ Temporal client를 사용하는 one-shot Schedule reconciler를 application runt
 
 ## Migration Plan
 
-1. shared source availability predicate와 bounded cleanup DB service를 추가하고 기존 API visibility 및 core DB regression을 통과시킨다.
+1. shared source availability predicate를 core visibility 경계에 두고 Worker Activity에 bounded cleanup 저장 경계를 추가한 뒤 기존 API visibility 및 Worker DB regression을 통과시킨다.
 2. cleanup Activity/Workflow, continue-as-new, heartbeat, structured log와 SDK metrics를 Worker registry에 추가한다.
 3. Worker metrics endpoint와 Schedule reconciler/Helm values·PreSync Job을 추가하되 처음에는 Schedule을 paused 상태로 배포해 render와 idempotent reconcile을 검증한다.
 4. dev에서 수동 trigger로 source missing, invalid Recipient, Related Profile/Post unavailable, retry·restart·partial failure와 large page 수렴을 확인한다.

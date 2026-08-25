@@ -1,14 +1,17 @@
+import { getDatabaseConnection, Notifications } from '@kosmo/core/db';
 import {
-  cleanupUnavailableNotificationsPage,
-  getNotificationCleanupUpperBound,
-} from '@kosmo/core/services';
+  notificationSourceAvailabilityKinds,
+  notificationSourceAvailabilityWhere,
+} from '@kosmo/core/visibility';
 import { activityInfo, heartbeat, log, metricMeter } from '@temporalio/activity';
 import { ApplicationFailure } from '@temporalio/client';
+import { and, asc, desc, gt, inArray, lte, not } from 'drizzle-orm';
+import { validate as validateUuid } from 'uuid';
 
 /**
- * The page boundary is intentionally transport-neutral. The implementation lives in core so
- * GraphQL visibility and cleanup share the same source/related-object predicate; this module
- * only supplies Temporal lifecycle and observability behavior.
+ * The page boundary is intentionally transport-neutral. The Worker owns the
+ * cleanup persistence boundary and consumes the shared viewer-independent
+ * source/related-object predicate from core visibility.
  */
 export type CleanupUnavailableNotificationPageInput = Readonly<{
   /** Exclusive UUIDv7 cursor. `null` starts at the beginning of the keyspace. */
@@ -29,75 +32,63 @@ export type CleanupUnavailableNotificationPageResult = Readonly<{
   oldestUnavailableAgeMs: number | null;
 }>;
 
+const MAX_NOTIFICATION_CLEANUP_PAGE_SIZE = 1_000;
+
+class NotificationCleanupInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NotificationCleanupInputError';
+  }
+}
+
+const validateUuidInput = (value: string | null | undefined, name: string): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (!validateUuid(value)) {
+    throw new NotificationCleanupInputError(`${name} must be a UUID`);
+  }
+
+  return value;
+};
+
+const validateRequiredUuidInput = (value: string | null | undefined, name: string): string => {
+  if (value === undefined || value === null) {
+    throw new NotificationCleanupInputError(`${name} is required`);
+  }
+
+  if (!validateUuid(value)) {
+    throw new NotificationCleanupInputError(`${name} must be a UUID`);
+  }
+
+  return value;
+};
+
+const validatePageSize = (pageSize: number): number => {
+  if (
+    !Number.isInteger(pageSize) ||
+    pageSize < 1 ||
+    pageSize > MAX_NOTIFICATION_CLEANUP_PAGE_SIZE
+  ) {
+    throw new NotificationCleanupInputError(
+      `pageSize must be an integer between 1 and ${MAX_NOTIFICATION_CLEANUP_PAGE_SIZE}`,
+    );
+  }
+
+  return pageSize;
+};
+
 const metricTags = {
   resource: 'notification_cleanup',
   schedule: 'daily',
 } as const;
 
-const nonNegativeInteger = (value: unknown, name: string): number => {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`CleanupInvalidResultError: ${name} must be a non-negative integer`);
-  }
-  return value;
-};
-
-const optionalNonNegativeNumber = (value: unknown): number | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    throw new Error(
-      'CleanupInvalidResultError: oldestUnavailableAgeMs must be a non-negative number or null',
-    );
-  }
-  return value;
-};
-
-const normalizePageResult = (
-  input: CleanupUnavailableNotificationPageInput,
-  raw: unknown,
-): CleanupUnavailableNotificationPageResult => {
-  if (!raw || typeof raw !== 'object') {
-    throw new Error('CleanupInvalidResultError: core returned an invalid page result');
-  }
-  const result = raw as Record<string, unknown>;
-  const upperBound = result.upperBound;
-  const nextCursor = result.nextCursor ?? null;
-  if (typeof upperBound !== 'string') {
-    throw new Error('CleanupInvalidResultError: upperBound must be a string');
-  }
-  if (upperBound !== input.upperBound) {
-    throw new Error('CleanupInvalidResultError: upperBound changed during a bounded sweep');
-  }
-  if (nextCursor !== null && typeof nextCursor !== 'string') {
-    throw new Error('CleanupInvalidResultError: nextCursor must be a string or null');
-  }
-  if (typeof result.done !== 'boolean') {
-    throw new Error('CleanupInvalidResultError: done must be boolean');
-  }
-  const page = {
-    upperBound,
-    nextCursor,
-    done: result.done,
-    scanned: nonNegativeInteger(result.scanned, 'scanned'),
-    deleted: nonNegativeInteger(result.deleted, 'deleted'),
-    skipped: nonNegativeInteger(result.skipped, 'skipped'),
-    oldestUnavailableAgeMs: optionalNonNegativeNumber(result.oldestUnavailableAgeMs),
-  } satisfies CleanupUnavailableNotificationPageResult;
-  if (page.done !== (page.nextCursor === null)) {
-    throw new Error('CleanupInvalidResultError: done must match the presence of nextCursor');
-  }
-  if (!page.done && page.nextCursor === input.cursor) {
-    throw new Error('CleanupInvalidResultError: non-final page did not advance cursor');
-  }
-  return page;
-};
-
 /**
  * Scan and conditionally delete one bounded Notification page.
  *
- * Core owns the transaction, source/recipient/related availability predicate and delete
- * revalidation. This wrapper owns retry-visible progress and structured observability only.
+ * This Activity owns the database transaction and delete revalidation. The
+ * shared core visibility module owns only the viewer-independent predicate.
  */
 export async function cleanupUnavailableNotificationPageActivity(
   input: CleanupUnavailableNotificationPageInput,
@@ -120,7 +111,75 @@ export async function cleanupUnavailableNotificationPageActivity(
   });
 
   try {
-    const page = normalizePageResult(input, await cleanupUnavailableNotificationsPage(input));
+    const cursor = validateUuidInput(input.cursor, 'cursor');
+    const upperBound = validateRequiredUuidInput(input.upperBound, 'upperBound');
+    const pageSize = validatePageSize(input.pageSize);
+    const page = await getDatabaseConnection().transaction(async (database) => {
+      const rows = await database
+        .select({ id: Notifications.id, createdAt: Notifications.createdAt })
+        .from(Notifications)
+        .where(
+          and(cursor ? gt(Notifications.id, cursor) : undefined, lte(Notifications.id, upperBound)),
+        )
+        .orderBy(asc(Notifications.id))
+        .limit(pageSize);
+
+      if (rows.length === 0) {
+        return {
+          upperBound,
+          nextCursor: null,
+          done: true,
+          scanned: 0,
+          deleted: 0,
+          skipped: 0,
+          oldestUnavailableAgeMs: null,
+        } satisfies CleanupUnavailableNotificationPageResult;
+      }
+
+      const deleted = await database
+        .delete(Notifications)
+        .where(
+          and(
+            inArray(
+              Notifications.id,
+              rows.map(({ id }) => id),
+            ),
+            inArray(Notifications.kind, notificationSourceAvailabilityKinds),
+            not(
+              notificationSourceAvailabilityWhere(database, {
+                includeRecipientAvailability: false,
+              }),
+            ),
+          ),
+        )
+        .returning({ id: Notifications.id, createdAt: Notifications.createdAt });
+
+      const lastId = rows[rows.length - 1]!.id;
+      const hasMore =
+        (
+          await database
+            .select({ id: Notifications.id })
+            .from(Notifications)
+            .where(and(gt(Notifications.id, lastId), lte(Notifications.id, upperBound)))
+            .limit(1)
+        ).length > 0;
+      const done = !hasMore;
+      const oldestUnavailableAt = deleted.reduce<number | null>((oldest, row) => {
+        const epochMilliseconds = Number(row.createdAt.epochMilliseconds);
+        return oldest === null || epochMilliseconds < oldest ? epochMilliseconds : oldest;
+      }, null);
+
+      return {
+        upperBound,
+        nextCursor: done ? null : lastId,
+        done,
+        scanned: rows.length,
+        deleted: deleted.length,
+        skipped: rows.length - deleted.length,
+        oldestUnavailableAgeMs:
+          oldestUnavailableAt === null ? null : Math.max(0, Date.now() - oldestUnavailableAt),
+      } satisfies CleanupUnavailableNotificationPageResult;
+    });
     const durationMs = Date.now() - startedAt;
     heartbeat({
       phase: 'completed',
@@ -164,9 +223,7 @@ export async function cleanupUnavailableNotificationPageActivity(
     const normalizedError =
       error instanceof Error && error.name === 'NotificationCleanupInputError'
         ? ApplicationFailure.nonRetryable(error.message, 'CleanupInvalidInputError')
-        : error instanceof Error && error.message.startsWith('CleanupInvalid')
-          ? ApplicationFailure.nonRetryable(error.message, 'CleanupInvalidResultError')
-          : error;
+        : error;
     log.error('Notification cleanup page failed', {
       resource: 'notification_cleanup',
       schedule: 'daily',
@@ -199,7 +256,12 @@ export async function getNotificationCleanupUpperBoundActivity(): Promise<string
   });
 
   try {
-    const upperBound = await getNotificationCleanupUpperBound();
+    const [row] = await getDatabaseConnection()
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .orderBy(desc(Notifications.id))
+      .limit(1);
+    const upperBound = row?.id ?? null;
     heartbeat({ phase: 'completed', upperBound, attempt });
     log.info('Notification cleanup upper bound completed', {
       resource: 'notification_cleanup',

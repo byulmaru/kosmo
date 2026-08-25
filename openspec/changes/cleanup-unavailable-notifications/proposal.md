@@ -30,8 +30,8 @@
 
 ## Impact
 
-- `packages/core`: Notification cleanup candidate 판정, bounded page와 조건부 멱등 삭제 저장 경계
-- `apps/worker`: cleanup Workflow/Activity 등록, retry·timeout·heartbeat·관측
+- `packages/core`: API와 Worker가 공유하는 viewer-independent Notification source/related availability predicate
+- `apps/worker`: Notification cleanup candidate 판정, bounded page와 조건부 멱등 삭제 저장 경계 및 cleanup Workflow/Activity 등록, retry·timeout·heartbeat·관측
 - `apps/helm`: 환경별 Temporal Schedule provisioning과 Worker cleanup 설정
-- 테스트: core DB integration, Temporal Workflow integration, Worker 재시작·부분 실패·대량 backlog·Helm render/dev 검증
+- 테스트: Worker DB integration, Temporal Workflow integration, Worker 재시작·부분 실패·대량 backlog·Helm render/dev 검증
 - 외부 GraphQL schema와 앱 UI에는 변경이 없다.

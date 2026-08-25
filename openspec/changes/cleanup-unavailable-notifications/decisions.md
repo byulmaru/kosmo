@@ -100,6 +100,18 @@
 - Consequences: Worker port·telemetry 설정과 Helm scrape wiring이 추가되며 endpoint 존재와 실제 scrape를 구분해 검증해야 한다. Activity commit과 결과 전달 사이 장애로 수치는 회계 정확도를 보장하지 않으며 attempt/result와 backlog gauge를 함께 해석한다.
 - Confirmation / Follow-up: unit/integration에서 metric 이름·tag cardinality와 replay 중복 억제를 확인하고 dev endpoint·collector target·sample 변화를 검증한다.
 
+### Cleanup persistence는 유일한 실행 owner인 Worker Activity가 소유한다
+
+- Decision Date: 2026-08-26
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, `PROD-328`
+- Status: Active
+- Context / Problem: Notification cleanup을 호출하는 실행 경계는 Worker Activity뿐인데 cursor 검증, upper-bound 조회와 DB transaction/delete를 core service에 두면 호출 owner와 persistence owner가 분리되고 Activity adapter가 중복된다.
+- Decision Outcome: Worker Activity가 cleanup 입력 검증, upper-bound 조회, bounded scan/transaction/delete, retry-visible error mapping과 observability를 함께 소유한다. core에는 API와 Worker가 공유하는 viewer-independent source/related availability predicate만 남긴다.
+- Alternatives Considered: core DB service를 유지하고 Worker Activity가 얇은 adapter로 남는 구조는 유일 caller인 Worker의 책임 경계를 흐리고 cleanup 구현을 두 곳으로 나눌 수 있으므로 사용하지 않는다.
+- Consequences: Worker DB integration이 cleanup persistence의 직접 회귀 경계가 되며, core services export와 core cleanup DB test는 제거한다. Workflow는 Activity barrel의 type-only 경계를 통해 DB-bearing 모듈을 runtime import하지 않는다.
+- Confirmation / Follow-up: Worker Activity build와 isolated DB suite에서 bounded, revalidation, idempotency, concurrency를 검증하고 OpenSpec 진행 checkbox는 기존 상태를 유지한다.
+
 ## Remaining Decisions
 
 - 없음.

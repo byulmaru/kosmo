@@ -13,17 +13,6 @@ export {
   deleteReactionNotification,
   deleteRepostNotification,
 } from './notification';
-export type {
-  NotificationCleanupPageInput,
-  NotificationCleanupPageResult,
-} from './notification-cleanup';
-export {
-  cleanupUnavailableNotificationsPage,
-  DEFAULT_NOTIFICATION_CLEANUP_PAGE_SIZE,
-  getNotificationCleanupUpperBound,
-  MAX_NOTIFICATION_CLEANUP_PAGE_SIZE,
-  NotificationCleanupInputError,
-} from './notification-cleanup';
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
 export { followProfile, unfollowProfile } from './profile-follow';
