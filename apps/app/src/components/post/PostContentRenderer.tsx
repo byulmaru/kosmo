@@ -14,7 +14,7 @@ import type {
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
-import type { StyleProp, TextStyle, ViewProps } from 'react-native';
+import type { StyleProp, TextStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -24,8 +24,6 @@ interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
   readonly interactive: boolean;
 }
-
-const replayBlockProps = { dataSet: { openpanelReplayBlock: '' } } as unknown as ViewProps;
 
 export type PostContentWarningPresentation = 'default' | 'revealed';
 
@@ -96,7 +94,7 @@ export function PostContentRenderer({
     return null;
   }
   return (
-    <View {...replayBlockProps} style={styles.root} testID="post-content-renderer">
+    <View style={styles.root} testID="post-content-renderer">
       {showContentWarning ? (
         <View
           accessibilityLiveRegion="polite"

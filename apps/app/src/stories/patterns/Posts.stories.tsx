@@ -2809,14 +2809,6 @@ export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    expect(
-      canvas.getByText('짧은 본문 한 줄.').closest('[data-openpanel-replay-block]'),
-    ).not.toBeNull();
-    expect(
-      canvas
-        .getByText('미지원 문서는 안전한 Plain Text로 표시합니다.')
-        .closest('[data-openpanel-replay-block]'),
-    ).not.toBeNull();
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
       canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
@@ -2825,7 +2817,6 @@ export const BodyTimeAndLayoutStates: Story = {
       name: /안전한 외부 링크, https:\/\/example\.com\/path/,
     });
     expect(contentLink).toBeVisible();
-    expect(contentLink.closest('[data-openpanel-replay-block]')).not.toBeNull();
     expect(canvasElement.textContent).toContain('강제 개행을 함께 표시합니다.');
     expect(canvasElement.textContent).toContain(
       '강제 개행을 함께 표시합니다.\n\n두 번째 문단입니다.',
@@ -5596,8 +5587,6 @@ export const ComposerDefault: Story = {
 export const ContentWarningReveal: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const root = canvas.getByTestId('post-content-renderer');
-    expect(root).toHaveAttribute('data-openpanel-replay-block', '');
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();
     expect(canvas.queryByTestId('post-media-gallery')).not.toBeInTheDocument();
 
@@ -5617,7 +5606,6 @@ export const ContentWarningReveal: Story = {
     expect(canvas.getByText('가림 해제 뒤 표시되는 원문 본문입니다.')).toBeVisible();
     const gallery = canvas.getByTestId('post-media-gallery');
     expect(gallery).toBeVisible();
-    expect(gallery.closest('[data-openpanel-replay-block]')).toBe(root);
 
     await userEvent.keyboard('{Enter}');
     expect(canvas.queryByText('가림 해제 뒤 표시되는 원문 본문입니다.')).not.toBeInTheDocument();

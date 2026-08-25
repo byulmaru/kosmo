@@ -1,4 +1,4 @@
-type TrackProperties = Record<string, unknown>;
+export type TrackProperties = Record<string, unknown>;
 
 export function initializeAnalytics(): null {
   return null;
@@ -7,6 +7,10 @@ export function initializeAnalytics(): null {
 export function trackAnalytics(name: string, properties?: TrackProperties): void {
   void name;
   void properties;
+}
+
+export function capturePageview(routeTemplate: string): void {
+  void routeTemplate;
 }
 
 export function identifyAnalytics(accountId: string): void {

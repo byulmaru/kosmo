@@ -1,39 +1,72 @@
-import { OpenPanel } from '@openpanel/web';
-import type { TrackProperties } from '@openpanel/web';
+import posthogClient from 'posthog-js';
+import { sanitizeAnalyticsEvent } from './events';
+import type { PostHog, PostHogConfig } from 'posthog-js';
+import type { TrackProperties } from './client';
 
-const OPENPANEL_API_URL = 'https://openpanel.byulmaru.co/api';
+const POSTHOG_CONFIG = {
+  advanced_disable_flags: true,
+  advanced_disable_decide: true,
+  advanced_disable_feature_flags: true,
+  autocapture: false,
+  capture_exceptions: false,
+  capture_pageleave: false,
+  capture_pageview: false,
+  capture_performance: false,
+  disable_capture_url_hashes: true,
+  disable_compression: true,
+  disable_external_dependency_loading: true,
+  disable_scroll_properties: true,
+  disable_session_recording: true,
+  enable_heatmaps: false,
+  enable_recording_console_log: false,
+  person_profiles: 'identified_only',
+  property_denylist: [
+    '$current_url',
+    '$host',
+    '$initial_current_url',
+    '$initial_host',
+    '$initial_pathname',
+    '$initial_referrer',
+    '$initial_referring_domain',
+    '$pathname',
+    '$prev_pageview_pathname',
+    '$raw_user_agent',
+    '$referrer',
+    '$referring_domain',
+    '$search_engine',
+    'ph_keyword',
+    'title',
+    'utm_campaign',
+    'utm_content',
+    'utm_medium',
+    'utm_source',
+    'utm_term',
+  ],
+  request_batching: false,
+  save_campaign_params: false,
+  save_referrer: false,
+} satisfies Partial<PostHogConfig>;
 
-let client: OpenPanel | null | undefined;
+let client: PostHog | null | undefined;
 let identifiedAccountId: string | null = null;
 
-type OpenPanelConstructor = new (options: ConstructorParameters<typeof OpenPanel>[0]) => OpenPanel;
-
 export function initializeAnalytics(
-  clientId: string | undefined = process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID,
-  Client: OpenPanelConstructor = OpenPanel,
-): OpenPanel | null {
+  apiKey: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_KEY,
+  apiHost: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_HOST,
+): PostHog | null {
   if (client !== undefined) {
     return client;
   }
 
-  if (!clientId) {
+  if (!apiKey || !apiHost) {
     client = null;
     return client;
   }
 
   try {
-    client = new Client({
-      apiUrl: OPENPANEL_API_URL,
-      clientId,
-      sessionReplay: {
-        enabled: true,
-        maskAllInputs: true,
-        maskAllText: false,
-        sampleRate: 0.1,
-      },
-      trackAttributes: true,
-      trackOutgoingLinks: true,
-      trackScreenViews: true,
+    client = posthogClient.init(apiKey, {
+      api_host: apiHost,
+      ...POSTHOG_CONFIG,
     });
   } catch {
     client = null;
@@ -42,7 +75,7 @@ export function initializeAnalytics(
   return client;
 }
 
-export function getAnalyticsClient(): OpenPanel | null {
+export function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
@@ -53,15 +86,38 @@ function ignoreAnalyticsFailure(result: unknown): void {
 }
 
 export function trackAnalytics(name: string, properties?: TrackProperties): void {
+  const event = sanitizeAnalyticsEvent(name, properties);
+  if (!event) {
+    return;
+  }
+
   try {
-    ignoreAnalyticsFailure(getAnalyticsClient()?.track(name, properties));
+    ignoreAnalyticsFailure(
+      getAnalyticsClient()?.capture(
+        event.event,
+        event.properties as Parameters<PostHog['capture']>[1],
+      ),
+    );
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
 }
 
+export function capturePageview(routeTemplate: string): void {
+  trackAnalytics('$pageview', { route_template: routeTemplate });
+}
+
+function resetPostHogIdentity(analyticsClient: PostHog): boolean {
+  try {
+    ignoreAnalyticsFailure(analyticsClient.reset());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function identifyAnalytics(accountId: string): void {
-  if (identifiedAccountId === accountId) {
+  if (!accountId || identifiedAccountId === accountId) {
     return;
   }
 
@@ -71,7 +127,11 @@ export function identifyAnalytics(accountId: string): void {
       return;
     }
 
-    ignoreAnalyticsFailure(analyticsClient.identify({ profileId: accountId }));
+    if (identifiedAccountId !== null && !resetPostHogIdentity(analyticsClient)) {
+      return;
+    }
+
+    analyticsClient.identify(accountId);
     identifiedAccountId = accountId;
   } catch {
     // Analytics is best-effort and must not affect the product flow.
@@ -79,10 +139,15 @@ export function identifyAnalytics(accountId: string): void {
 }
 
 export function clearAnalytics(): void {
+  if (identifiedAccountId === null) {
+    return;
+  }
+
   try {
-    getAnalyticsClient()?.clear();
-  } catch {
-    // Analytics is best-effort and must not affect the product flow.
+    const analyticsClient = getAnalyticsClient();
+    if (analyticsClient) {
+      resetPostHogIdentity(analyticsClient);
+    }
   } finally {
     identifiedAccountId = null;
   }
