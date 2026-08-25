@@ -11,6 +11,12 @@ test('local Worker registration keeps the TypeScript workflowsPath fallback', ()
   });
 });
 
+test('source Worker registration keeps the workflowsPath fallback in production-like tests', () => {
+  assert.deepEqual(getWorkflowRegistration({ NODE_ENV: 'production' }), {
+    workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
+  });
+});
+
 test('production Worker registration uses the prebuilt workflow bundle', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'kosmo-worker-bundle-'));
   t.after(() => rm(directory, { force: true, recursive: true }));

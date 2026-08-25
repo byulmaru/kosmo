@@ -19,14 +19,16 @@ export function getWorkflowRegistration(
   environment: NodeJS.ProcessEnv = process.env,
 ): WorkflowRegistration {
   const configuredBundlePath = environment.TEMPORAL_WORKFLOW_BUNDLE_PATH?.trim();
-  const production = environment.NODE_ENV === 'production';
 
-  if (production || configuredBundlePath) {
-    const codePath = configuredBundlePath || defaultWorkflowBundlePath;
-    if (production && !existsSync(codePath)) {
-      throw new Error(`Temporal Workflow bundle is missing: ${codePath}`);
+  if (configuredBundlePath) {
+    if (!existsSync(configuredBundlePath)) {
+      throw new Error(`Temporal Workflow bundle is missing: ${configuredBundlePath}`);
     }
-    return { workflowBundle: { codePath } };
+    return { workflowBundle: { codePath: configuredBundlePath } };
+  }
+
+  if (existsSync(defaultWorkflowBundlePath)) {
+    return { workflowBundle: { codePath: defaultWorkflowBundlePath } };
   }
 
   return { workflowsPath: sourceWorkflowPath };
