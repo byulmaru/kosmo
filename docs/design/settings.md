@@ -6,8 +6,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 미리 노출하거나 구현하지 않는다.
 
 현재 hub에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**과 Kosmo가 소유한 Local Profile의
-`게시물 기본 공개 범위` **내부 진입점**만 제공한다. 실제 행의 label·이동 동작과 접근성 이름에서 두 서비스와
-소유 단위를 명확히 구분한다.
+`게시물 기본 공개 범위`, `뮤트 및 차단` **내부 진입점**을 제공한다. 실제 행의 label·이동 동작과 접근성
+이름에서 두 서비스와 소유 단위를 명확히 구분한다.
 
 ## Route와 진입점
 
@@ -26,8 +26,12 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- 현재 root 목록에는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 `게시물 기본 공개 범위` 내부
-  진입점을 이 순서로 직접 표시한다. 항목 하나만 가진 `계정`·`프로필` 대분류를 만들지 않는다.
+- 현재 root 목록에는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점, `게시물 기본 공개 범위`,
+  `뮤트 및 차단` 내부 진입점을 이 순서로 직접 표시한다. 항목 하나만 가진 `계정`·`프로필` 대분류를 만들지
+  않는다.
+- `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
+  두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
+  [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
 - full Web의 `/settings`는 `게시물 기본 공개 범위`를 기본 선택해 detail에 표시한다. compact Web, mobile Web,
   Android와 iOS의 `/settings`는 root 목록부터 표시하고, 내부 진입점을 선택하면 한 화면짜리 detail로
   이동한다.
@@ -108,7 +112,8 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 - root 화면과 master pane은 `설정` heading을, detail 화면과 detail pane은 현재 설정 이름 heading을
   programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로 반복하지 않는다.
 - root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `게시물 기본 공개 범위`다. full Web에서는 이어서 detail heading과 Profile content를 읽는다.
+  `게시물 기본 공개 범위` → `뮤트 및 차단`이다. full Web에서는 이어서 detail heading과 현재 선택된 content를
+  읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -133,6 +138,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
   loading·error·retry·lock은 소유하지 않는다.
 - PROD-667은 Profile 선택 대상, 기본 게시 공개 범위의 저장·권한·상태와 Composer 연결 및 해당 기능 검증을
   소유한다. PROD-648은 Backend DB·GraphQL 계약을 소유한다.
+- `뮤트 및 차단`의 Figma IA·source·대표 consumer는 DSN-53이 소유한다. runtime의 Mute 진입점·목록·통합
+  검증은 PROD-814, Block 진입점·목록과 Relay 수렴은 PROD-823, Block의 종단 간 검증·archive는 PROD-813이
+  소유한다. 이 범위를 완료된 PROD-685·PROD-684에 소급해 귀속하지 않는다.
 - PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
