@@ -6,7 +6,7 @@ import {
 import { activityInfo, heartbeat, log, metricMeter } from '@temporalio/activity';
 import { ApplicationFailure } from '@temporalio/client';
 import { and, asc, desc, gt, inArray, lte, not } from 'drizzle-orm';
-import { validate as validateUuid } from 'uuid';
+import { z } from 'zod';
 
 /**
  * The page boundary is intentionally transport-neutral. The Worker owns the
@@ -33,51 +33,27 @@ export type CleanupUnavailableNotificationPageResult = Readonly<{
 }>;
 
 const MAX_NOTIFICATION_CLEANUP_PAGE_SIZE = 1_000;
+const PAGE_SIZE_ERROR = `pageSize must be an integer between 1 and ${MAX_NOTIFICATION_CLEANUP_PAGE_SIZE}`;
 
-class NotificationCleanupInputError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NotificationCleanupInputError';
-  }
-}
+const uuidSchema = (name: string, required: boolean) =>
+  z
+    .string({
+      error: (issue) =>
+        required && (issue.input === null || issue.input === undefined)
+          ? `${name} is required`
+          : `${name} must be a UUID`,
+    })
+    .uuid({ error: `${name} must be a UUID` });
 
-const validateUuidInput = (value: string | null | undefined, name: string): string | null => {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (!validateUuid(value)) {
-    throw new NotificationCleanupInputError(`${name} must be a UUID`);
-  }
-
-  return value;
-};
-
-const validateRequiredUuidInput = (value: string | null | undefined, name: string): string => {
-  if (value === undefined || value === null) {
-    throw new NotificationCleanupInputError(`${name} is required`);
-  }
-
-  if (!validateUuid(value)) {
-    throw new NotificationCleanupInputError(`${name} must be a UUID`);
-  }
-
-  return value;
-};
-
-const validatePageSize = (pageSize: number): number => {
-  if (
-    !Number.isInteger(pageSize) ||
-    pageSize < 1 ||
-    pageSize > MAX_NOTIFICATION_CLEANUP_PAGE_SIZE
-  ) {
-    throw new NotificationCleanupInputError(
-      `pageSize must be an integer between 1 and ${MAX_NOTIFICATION_CLEANUP_PAGE_SIZE}`,
-    );
-  }
-
-  return pageSize;
-};
+const cleanupUnavailableNotificationPageInputSchema = z.object({
+  cursor: uuidSchema('cursor', false).nullable().optional().default(null),
+  upperBound: uuidSchema('upperBound', true),
+  pageSize: z
+    .number({ error: PAGE_SIZE_ERROR })
+    .int({ error: PAGE_SIZE_ERROR })
+    .min(1, { error: PAGE_SIZE_ERROR })
+    .max(MAX_NOTIFICATION_CLEANUP_PAGE_SIZE, { error: PAGE_SIZE_ERROR }),
+});
 
 const metricTags = {
   resource: 'notification_cleanup',
@@ -111,9 +87,14 @@ export async function cleanupUnavailableNotificationPageActivity(
   });
 
   try {
-    const cursor = validateUuidInput(input.cursor, 'cursor');
-    const upperBound = validateRequiredUuidInput(input.upperBound, 'upperBound');
-    const pageSize = validatePageSize(input.pageSize);
+    const parsedInput = cleanupUnavailableNotificationPageInputSchema.safeParse(input);
+    if (!parsedInput.success) {
+      throw ApplicationFailure.nonRetryable(
+        parsedInput.error.issues[0]?.message ?? 'Invalid cleanup input',
+        'CleanupInvalidInputError',
+      );
+    }
+    const { cursor, upperBound, pageSize } = parsedInput.data;
     const page = await getDatabaseConnection().transaction(async (database) => {
       const rows = await database
         .select({ id: Notifications.id, createdAt: Notifications.createdAt })
@@ -220,10 +201,6 @@ export async function cleanupUnavailableNotificationPageActivity(
     return page;
   } catch (error) {
     const durationMs = Date.now() - startedAt;
-    const normalizedError =
-      error instanceof Error && error.name === 'NotificationCleanupInputError'
-        ? ApplicationFailure.nonRetryable(error.message, 'CleanupInvalidInputError')
-        : error;
     log.error('Notification cleanup page failed', {
       resource: 'notification_cleanup',
       schedule: 'daily',
@@ -231,7 +208,7 @@ export async function cleanupUnavailableNotificationPageActivity(
       upperBound: input.upperBound,
       durationMs,
       attempt,
-      error: normalizedError,
+      error,
     });
     metricMeter
       .withTags(metricTags)
@@ -241,7 +218,7 @@ export async function cleanupUnavailableNotificationPageActivity(
         'Number of notification cleanup Activity attempts that failed',
       )
       .add(1);
-    throw normalizedError;
+    throw error;
   }
 }
 

@@ -342,11 +342,25 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
       /pageSize must be an integer/.test(error.message),
   );
   await assert.rejects(
+    runPage({ cursor: null, upperBound: crypto.randomUUID(), pageSize: 1_001 }),
+    (error: unknown) =>
+      error instanceof ApplicationFailure &&
+      error.type === 'CleanupInvalidInputError' &&
+      /pageSize must be an integer between 1 and 1000/.test(error.message),
+  );
+  await assert.rejects(
     runPage({ cursor: 'not-a-uuid', upperBound: crypto.randomUUID(), pageSize: 10 }),
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
       /cursor must be a UUID/.test(error.message),
+  );
+  await assert.rejects(
+    runPage({ cursor: null, upperBound: 'not-a-uuid', pageSize: 10 }),
+    (error: unknown) =>
+      error instanceof ApplicationFailure &&
+      error.type === 'CleanupInvalidInputError' &&
+      /upperBound must be a UUID/.test(error.message),
   );
 });
 

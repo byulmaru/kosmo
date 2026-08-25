@@ -4,6 +4,7 @@ import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import { cleanupUnavailableNotificationsWorkflow } from './workflows/cleanup-unavailable-notifications';
 import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
@@ -1625,3 +1626,39 @@ test(
     });
   },
 );
+
+test('Notification Cleanup Workflow는 Zod 설정 검증과 기존 CleanupConfigurationError를 유지한다', async () => {
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({ sweepId: '   ' }),
+    /CleanupConfigurationError: sweepId is required/,
+  );
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-page-size', pageSize: 0 }),
+    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
+  );
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({
+      sweepId: 'invalid-rate-limit',
+      rateLimitMs: 60_001,
+    }),
+    /CleanupConfigurationError: rateLimitMs must be between 0 and 60000/,
+  );
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({
+      sweepId: 'invalid-max-pages',
+      maxPagesPerRun: 10_001,
+    }),
+    /CleanupConfigurationError: maxPagesPerRun must be between 1 and 10000/,
+  );
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-counters', pages: -1 }),
+    /CleanupConfigurationError: cumulative counters must be non-negative integers/,
+  );
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({
+      sweepId: 'invalid-resume',
+      cursor: '00000000-0000-7000-8000-000000000001',
+    }),
+    /CleanupConfigurationError: resumed cleanup state requires upperBound/,
+  );
+});

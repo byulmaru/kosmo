@@ -6,6 +6,7 @@ import {
   sleep,
   workflowInfo,
 } from '@temporalio/workflow';
+import { z } from 'zod';
 import type * as activities from '../activities';
 
 export type CleanupUnavailableNotificationsWorkflowInput = Readonly<{
@@ -74,6 +75,59 @@ const DEFAULT_MAX_PAGES_PER_RUN = 100;
 const MAX_PAGE_SIZE = 1_000;
 const MAX_RATE_LIMIT_MS = 60_000;
 const MAX_PAGES_PER_RUN = 10_000;
+const PAGE_SIZE_ERROR = `pageSize must be between 1 and ${MAX_PAGE_SIZE}`;
+const RATE_LIMIT_ERROR = `rateLimitMs must be between 0 and ${MAX_RATE_LIMIT_MS}`;
+const MAX_PAGES_ERROR = `maxPagesPerRun must be between 1 and ${MAX_PAGES_PER_RUN}`;
+const COUNTERS_ERROR = 'cumulative counters must be non-negative integers';
+
+const defaultNumber = (schema: z.ZodNumber, value: number) =>
+  z.preprocess((input) => input ?? undefined, schema.optional().default(value));
+const integerInRange = (message: string, min: number, max: number) =>
+  z
+    .number({ error: message })
+    .int({ error: message })
+    .min(min, { error: message })
+    .max(max, { error: message });
+const nonNegativeCounterSchema = integerInRange(COUNTERS_ERROR, 0, Number.MAX_SAFE_INTEGER);
+
+const cleanupUnavailableNotificationsWorkflowInputSchema = z
+  .object({
+    sweepId: z
+      .string({ error: 'sweepId is required' })
+      .refine((value) => value.trim().length > 0, { error: 'sweepId is required' }),
+    cursor: z.string().nullable().optional().default(null),
+    upperBound: z.string().nullable().optional().default(null),
+    pageSize: defaultNumber(integerInRange(PAGE_SIZE_ERROR, 1, MAX_PAGE_SIZE), DEFAULT_PAGE_SIZE),
+    rateLimitMs: defaultNumber(
+      integerInRange(RATE_LIMIT_ERROR, 0, MAX_RATE_LIMIT_MS),
+      DEFAULT_RATE_LIMIT_MS,
+    ),
+    maxPagesPerRun: defaultNumber(
+      integerInRange(MAX_PAGES_ERROR, 1, MAX_PAGES_PER_RUN),
+      DEFAULT_MAX_PAGES_PER_RUN,
+    ),
+    pages: defaultNumber(nonNegativeCounterSchema, 0),
+    scanned: defaultNumber(nonNegativeCounterSchema, 0),
+    deleted: defaultNumber(nonNegativeCounterSchema, 0),
+    skipped: defaultNumber(nonNegativeCounterSchema, 0),
+    oldestUnavailableAgeMs: z.number().nullable().optional().default(null),
+  })
+  .superRefine((input, context) => {
+    if (
+      (input.cursor !== null ||
+        input.pages > 0 ||
+        input.scanned > 0 ||
+        input.deleted > 0 ||
+        input.skipped > 0) &&
+      input.upperBound === null
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['upperBound'],
+        message: 'resumed cleanup state requires upperBound',
+      });
+    }
+  });
 
 const metricTags = {
   resource: 'notification_cleanup',
@@ -123,9 +177,6 @@ const createMetrics = () => {
   };
 };
 
-const isIntegerInRange = (value: number, min: number, max: number): boolean =>
-  Number.isInteger(value) && value >= min && value <= max;
-
 const validateInput = (
   input: CleanupUnavailableNotificationsWorkflowInput,
 ): Required<
@@ -144,61 +195,15 @@ const validateInput = (
     | 'skipped'
   >
 > => {
-  if (!input || typeof input.sweepId !== 'string' || input.sweepId.trim().length === 0) {
-    throw new Error('CleanupConfigurationError: sweepId is required');
+  const parsedInput = cleanupUnavailableNotificationsWorkflowInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    const issue = parsedInput.error.issues[0];
+    const message =
+      issue?.path.length === 0 ? 'sweepId is required' : (issue?.message ?? 'invalid input');
+    throw new Error(`CleanupConfigurationError: ${message}`);
   }
 
-  const pageSize = input.pageSize ?? DEFAULT_PAGE_SIZE;
-  const rateLimitMs = input.rateLimitMs ?? DEFAULT_RATE_LIMIT_MS;
-  const maxPagesPerRun = input.maxPagesPerRun ?? DEFAULT_MAX_PAGES_PER_RUN;
-  if (!isIntegerInRange(pageSize, 1, MAX_PAGE_SIZE)) {
-    throw new Error(`CleanupConfigurationError: pageSize must be between 1 and ${MAX_PAGE_SIZE}`);
-  }
-  if (!isIntegerInRange(rateLimitMs, 0, MAX_RATE_LIMIT_MS)) {
-    throw new Error(
-      `CleanupConfigurationError: rateLimitMs must be between 0 and ${MAX_RATE_LIMIT_MS}`,
-    );
-  }
-  if (!isIntegerInRange(maxPagesPerRun, 1, MAX_PAGES_PER_RUN)) {
-    throw new Error(
-      `CleanupConfigurationError: maxPagesPerRun must be between 1 and ${MAX_PAGES_PER_RUN}`,
-    );
-  }
-
-  const pages = input.pages ?? 0;
-  const scanned = input.scanned ?? 0;
-  const deleted = input.deleted ?? 0;
-  const skipped = input.skipped ?? 0;
-  if (
-    ![pages, scanned, deleted, skipped].every((value) =>
-      isIntegerInRange(value, 0, Number.MAX_SAFE_INTEGER),
-    )
-  ) {
-    throw new Error('CleanupConfigurationError: cumulative counters must be non-negative integers');
-  }
-
-  const cursor = input.cursor ?? null;
-  const upperBound = input.upperBound ?? null;
-  if (
-    (cursor !== null || pages > 0 || scanned > 0 || deleted > 0 || skipped > 0) &&
-    upperBound === null
-  ) {
-    throw new Error('CleanupConfigurationError: resumed cleanup state requires upperBound');
-  }
-
-  return {
-    sweepId: input.sweepId,
-    cursor,
-    upperBound,
-    pageSize,
-    rateLimitMs,
-    maxPagesPerRun,
-    pages,
-    scanned,
-    deleted,
-    skipped,
-    oldestUnavailableAgeMs: input.oldestUnavailableAgeMs ?? null,
-  };
+  return parsedInput.data;
 };
 
 export async function cleanupUnavailableNotificationsWorkflow(
