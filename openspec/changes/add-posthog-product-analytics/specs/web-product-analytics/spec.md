@@ -21,17 +21,70 @@
 
 ### Requirement: 최소 수집 Web runtime
 
-**Authority / Provenance:** `PROD-819`, `PROD-575` — Kosmo Web은 app-owned adapter가 명시적으로 보내는 route pageview와 승인된 제품 이벤트만 수집해야 한다(MUST). broad element autocapture, automatic URL pageview·pageleave, session replay, console, Web Vitals, performance와 heatmap 수집은 기본적으로 비활성화해야 하며(MUST), 별도 후속 Linear 계약 없이 활성화하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-819`, `PROD-795` — 초기 PostHog 기반 단계에서 Kosmo Web은 app-owned adapter가 명시적으로 보내는 route pageview와 승인된 제품 이벤트만 수집해야 한다(MUST). broad element autocapture, automatic URL pageview·pageleave, session replay, console, Web Vitals, performance와 heatmap 수집은 이 초기 단계에서 비활성화해야 하며(MUST), 후속 PROD-741 계약·activation gate 없이 활성화하지 않아야 한다(MUST).
 
 #### Scenario: Web client가 초기화된다
 
 - **WHEN** 유효한 공개 PostHog 설정으로 Web client가 생성된다
 - **THEN** 자동 수집 기능은 비활성화되고 app-owned adapter의 명시적 capture만 전송 후보가 된다
 
-#### Scenario: 사용자 입력이나 DOM 상호작용이 발생한다
+#### Scenario: 초기 replay-off 단계에서 사용자 입력이나 DOM 상호작용이 발생한다
 
-- **WHEN** 명시적 analytics caller가 없는 입력, click, form 변화 또는 console 출력이 발생한다
+- **WHEN** PROD-819·PROD-795 초기 단계에서 명시적 analytics caller가 없는 입력, click, form 변화 또는 console 출력이 발생한다
 - **THEN** PostHog 이벤트, replay 또는 성능 payload가 생성되지 않는다
+
+### Requirement: phased Web Session Replay activation and masking
+
+**Authority / Provenance:** `PROD-820`, `PROD-741` — 최신 Linear 사용자 승인 계약에 따라 초기 PostHog 기반 단계와 후속 replay 활성화 단계를 구분해야 한다(MUST). PostHog 공식 Session Replay 문서는 provider behavior reference로만 사용한다.
+
+#### Scenario: 초기 PostHog 기반 단계에서는 replay가 꺼져 있다
+
+- **WHEN** PROD-819·PROD-795 초기 단계의 local, non-production 또는 production-equivalent Web build가 실행된다
+- **THEN** Web Session Replay recording은 생성되지 않고, replay 수집 설정은 비활성화되어야 한다
+
+#### Scenario: 후속 단계의 production canonical origin replay 설정은 10%이다
+
+- **WHEN** PROD-795 gate 이후 PROD-741 activation 설정과 production canonical origin을 확인한다
+- **THEN** Web Session Replay sample 설정값이 10%임을 확인하고, 다른 origin·환경에는 replay를 활성화하지 않는다. observed recording 비율을 작은 표본으로 추정해 설정값을 대신하지 않는다
+
+#### Scenario: 설정된 replay sample을 별도로 재생한다
+
+- **WHEN** 10% 설정이 확인된 production canonical origin에서 sample replay recording을 선택한다
+- **THEN** 선택한 표본 recording을 재생해 실제 replay 동작과 redaction을 확인하며, 표본 관찰 결과를 10% 설정값의 통계적 증명으로 해석하지 않는다
+
+#### Scenario: replay 활성화 전에 canonical 콘텐츠를 마스킹한다
+
+- **WHEN** replay가 활성화된 production canonical origin에서 사용자가 `input`·`textarea`에 값을 입력하거나 canonical Post Content renderer의 본문을 표시한다
+- **THEN** 모든 해당 값과 본문 텍스트는 replay에서 마스킹되고 원문은 recording에 포함되지 않는다
+
+#### Scenario: 추가 custom selector는 현재 masking 완료 조건이 아니다
+
+- **WHEN** PROD-741의 replay activation·masking 검증 결과를 판정한다
+- **THEN** 모든 `input`·`textarea` 값과 canonical Post Content renderer 본문 마스킹만 현재 필수 완료 조건으로 판단하고, 그 밖의 custom selector 정책은 이 change의 완료 조건으로 요구하지 않는다
+
+### Requirement: Session Replay retention policy
+
+**Authority / Provenance:** `PROD-820`, `PROD-741` — 초기 보존 기간과 변경·증거 기록은 최신 Linear 사용자 승인 제품 계약이며 반드시 준수해야 한다(MUST). PostHog 공식 Session Replay retention 문서는 플랜별 지원 범위와 설정 적용 시점에 관한 provider behavior reference로만 사용한다.
+
+#### Scenario: activation 시 초기 보존 기간은 30일이다
+
+- **WHEN** PROD-741 activation gate에서 Session Replay 설정과 증거를 확인한다
+- **THEN** 초기 보존 기간은 30일이고, 실제 설정값·적용 시점·적용 플랜이 기록되어야 한다
+
+#### Scenario: 지원 범위 안에서 보존 기간을 변경한다
+
+- **WHEN** 운영자가 현재 PostHog 플랜이 지원하는 범위 안에서 Session Replay 보존 기간을 변경한다
+- **THEN** 실제 변경 후 보존 기간 값, 적용 시점, 변경 근거와 당시 적용 플랜 또는 지원 범위 근거를 모두 기록하고, 변경 이후 수집되는 replay부터 새 기간을 적용한다
+
+#### Scenario: 더 긴 보존 범위를 지원하는 plan upgrade가 자동 연장하지 않는다
+
+- **WHEN** 더 긴 Session Replay 보존 범위를 지원하는 PostHog plan upgrade가 발생하지만 retention 운영 설정을 별도로 변경하지 않는다
+- **THEN** 제품 보존 기간은 자동으로 연장되지 않고 기존 설정값을 유지하며, 변경하려면 실제 변경값·적용 시점·변경 근거·당시 플랜 또는 지원 범위 근거를 명시적으로 기록해야 한다
+
+#### Scenario: 기존 replay와 새 replay의 적용 범위를 구분한다
+
+- **WHEN** Session Replay 보존 기간을 변경한 뒤 기존 recording과 변경 이후 recording을 각각 확인한다
+- **THEN** 새 기간은 설정 이후 수집된 replay에만 적용되고, 기존 recording의 원래 보존 정책은 자동으로 재작성되지 않는다
 
 ### Requirement: outbound event 허용 목록
 

@@ -78,6 +78,9 @@ jobs:
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         env:
+          # Development images intentionally receive no PostHog configuration.
+          POSTHOG_HOST: ''
+          POSTHOG_KEY: ''
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           context: .
@@ -92,13 +95,15 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             SENTRY_UPLOAD_REQUIRED=1
           secret-envs: |
+            # Secret mounts keep public values out of CI logs and image provenance.
+            posthog_host=POSTHOG_HOST
+            posthog_key=POSTHOG_KEY
             sentry_auth_token=SENTRY_AUTH_TOKEN
 
       - name: Save Docker image reference for Trivy

@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 최신 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-575`가 기존 PROD-469 OpenPanel 구현을 PostHog 계약으로 교체한 결과와, `docs/design/breakpoints.md`의 Web/Native 경계를 반영한다. 현재 artifact는 shared change 중 PROD-819 task slice만 구체화하며 다른 이슈의 구현 task를 대신하지 않는다.
+이 기록은 최신 Linear `PROD-819`, `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`가 기존 PROD-469 OpenPanel 구현을 PostHog 계약으로 교체한 결과와, `docs/design/breakpoints.md`의 Web/Native 경계를 반영한다. 각 이슈의 독립된 구현·운영·검증 책임을 유지하며, provider behavior reference와 제품 authority를 구분한다.
 
 ## Decision Records
 
@@ -11,10 +11,10 @@
 - Authority / Provenance: Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-575`
 - Status: Active
 - Context / Problem: Web runtime, Cloud/build 구성, 개인정보·운영 통합과 production acceptance는 변경·검증 방식과 완료 시점이 다르다.
-- Decision Outcome: `add-posthog-product-analytics`에서 PROD-820은 작업 그룹 1·5, PROD-819는 그룹 2·3·4, PROD-795는 그룹 6과 cross-slice 그룹 7을 소유한다. PROD-575는 실제 production acceptance와 최종 archive를 소유한다. 이번 artifact는 PROD-819 그룹 2·3·4만 tasks로 작성한다.
+- Decision Outcome: `add-posthog-product-analytics`에서 PROD-820은 작업 그룹 1·5, PROD-819는 그룹 2·3·4, PROD-795는 그룹 6·7과 PROD-741을 block하는 cross-slice 검증을 소유한다. PROD-741은 PROD-795 이후의 그룹 8에서 replay activation·masking·초기 retention 검증을 수행하고 PROD-575에 인계한다. PROD-575는 실제 production acceptance와 최종 archive를 소유한다. 이번 artifact는 이 책임 경계를 tasks에 명시하고, 각 이슈의 독립된 검증 증거를 해당 owner에게 인계한다.
 - Alternatives Considered: 모든 작업을 PROD-795 하나에 다시 결합하거나 부모·마지막 PR이라는 이유로 통합·archive 책임을 추론하는 방법은 최신 Linear 책임 경계와 맞지 않아 제외했다.
 - Consequences: PROD-819 구현과 검증은 sibling Cloud 설정이나 production acceptance 없이 독립 완료할 수 있지만, 전체 change 완료와 archive를 의미하지 않는다.
-- Confirmation / Follow-up: tasks heading과 다음 phase handoff가 PROD-819만 소유하고 archive owner를 PROD-575로 명시하는지 확인한다.
+- Confirmation / Follow-up: tasks heading이 PROD-819(2~4)·PROD-820(1·5) → PROD-795(6·7, PROD-741 block) → PROD-741(8) → PROD-575 순서와 각 slice의 handoff를 명시하는지 확인한다.
 
 ### OpenPanel dual-write 없이 PostHog로 교체한다
 
@@ -40,17 +40,41 @@
 - Consequences: PROD-819은 fake 공개 설정으로 독립 검증할 수 있고, PROD-820 설정이 배포되기 전 실제 환경은 안전한 no-op이다.
 - Confirmation / Follow-up: key-only, host-only, 둘 다 없음과 둘 다 존재하는 경우를 unit·browser 검증한다.
 
-### 자동 수집 대신 app-owned 최소 수집만 사용한다
+### 초기 기반 단계에서는 자동 수집 대신 app-owned 최소 수집만 사용한다
 
 - Decision Date: 2026-08-25
 - Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-819`, `PROD-575`
+- Authority / Provenance: Linear `PROD-819`, `PROD-795`
 - Status: Active
 - Context / Problem: PostHog SDK의 broad autocapture, raw URL, replay와 성능 telemetry는 현재 승인된 pageview·명시 이벤트보다 넓은 사용자·환경 데이터를 만들 수 있다.
-- Decision Outcome: automatic pageview·pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집을 비활성화한다. 현재 Web runtime은 정규화된 route pageview와 승인된 명시 event만 capture한다.
-- Alternatives Considered: SDK history-change pageview, broad autocapture 후 blacklist, 기존 OpenPanel 10% replay 유지는 최소 수집과 후속 replay 책임 분리에 맞지 않아 제외했다.
-- Consequences: 더 넓은 분석 신호는 수집하지 않으며 새 event·replay가 필요하면 별도 Linear 계약과 shared spec 변경이 필요하다.
+- Decision Outcome: 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 automatic pageview·pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집을 비활성화한다. 이 초기 replay-off 결정은 후속 PROD-741의 명시적인 production replay activation을 금지하지 않으며, 초기 Web runtime은 정규화된 route pageview와 승인된 명시 event만 capture한다.
+- Alternatives Considered: SDK history-change pageview, broad autocapture 후 blacklist, 초기 단계에서 replay를 함께 켜는 방법은 최소 수집과 단계별 책임 분리에 맞지 않아 제외했다.
+- Consequences: 초기 단계에서는 더 넓은 분석 신호를 수집하지 않으며, 후속 replay는 별도 Linear 계약·shared spec·activation gate를 충족한 뒤에만 허용된다.
 - Confirmation / Follow-up: SDK config test와 intercepted browser payload에서 자동 event가 없음을 확인한다.
+
+### Session Replay는 단계적으로 활성화하고 canonical 콘텐츠를 마스킹한다
+
+- Decision Date: 2026-08-25
+- Decision Class: Derived Contract
+- Authority / Provenance: 최신 Linear `PROD-820`, `PROD-741` 사용자 승인 계약; PostHog 공식 Session Replay 문서는 provider behavior reference
+- Status: Active
+- Context / Problem: 초기 PostHog 기반의 replay-off와 후속 production replay 요구를 하나의 전역 on/off 문구로 표현하면 rollout 순서와 개인정보 보호 완료 조건이 충돌한다.
+- Decision Outcome: 초기 PROD-819·PROD-795 단계에서는 Session Replay를 비활성화하고, 후속 PROD-741 단계에서 production canonical origin의 Web Session Replay만 10% sample로 활성화한다. 활성화 전 모든 `input`·`textarea` 값과 canonical Post Content renderer의 본문 텍스트가 replay에서 마스킹됨을 검증한다. 추가 custom selector는 현재 완료 조건에 포함하지 않는다.
+- Alternatives Considered: 초기부터 replay를 켜는 방법, 모든 DOM selector를 포괄하는 masking 범위, OpenPanel의 기존 구현을 그대로 재사용하는 방법은 승인된 단계·범위·provider 전환 책임과 맞지 않아 제외했다.
+- Consequences: PROD-819는 replay-off 기반만, PROD-741은 실제 activation·masking·초기 retention 검증을, PROD-820은 Cloud·retention 지속 계약과 설정 증거를, PROD-575는 최종 production acceptance/archive를 소유한다.
+- Confirmation / Follow-up: 초기 build의 replay 비활성, production canonical origin의 10% sample, input·textarea·canonical Post Content redaction을 단계별 증거로 확인한다.
+
+### Session Replay 초기 보존 기간은 30일이며 운영 설정으로 변경할 수 있다
+
+- Decision Date: 2026-08-25
+- Decision Class: Derived Contract
+- Authority / Provenance: 최신 Linear `PROD-820`, `PROD-741` 사용자 승인 계약; PostHog 공식 Session Replay retention 문서는 provider behavior reference
+- Status: Active
+- Context / Problem: PostHog 플랜별 보존 한도와 기존·신규 replay에 대한 설정 적용 동작을 제품 retention 계약으로 고정해야 한다.
+- Decision Outcome: Session Replay 초기 보존 기간은 30일로 설정한다. 이후 기간은 현재 PostHog 플랜이 지원하는 범위 안에서 운영 설정으로 변경할 수 있다. 변경 시 실제 변경값·적용 시점·변경 근거·당시 적용 플랜 또는 지원 범위 근거를 기록하고, 더 긴 범위를 지원하는 plan upgrade만으로 자동 연장하지 않는다. 변경된 기간은 설정 이후 수집되는 replay부터 적용되며, 일반 분석 이벤트 retention과는 별도다.
+- Alternatives Considered: PostHog의 고정 default를 제품 정책으로 간주하거나 플랜 변경에 따라 자동 연장하는 방법은 안정적인 제품 authority·감사 증거와 맞지 않아 제외했다.
+- Consequences: PROD-820은 retention 설정·증거와 변경 기록을 지속 관리하고, PROD-741은 activation 시 30일 초기값과 실제 replay 결과를 검증한다. 보존 기간 숫자·플랜·시점이 바뀌면 별도 운영 기록이 필요하다.
+- Confirmation / Follow-up: activation 전 30일 설정, 지원 범위 내 변경, 실제 값·적용 시점·근거 기록, plan 변경 시 자동 연장 부재와 신규 replay 적용을 확인한다.
 
 ### pageview identity는 실제 URL이 아닌 안정적인 route template이다
 
@@ -114,8 +138,8 @@
 
 ## Remaining Decisions
 
-- 없음.
+- 없음. retention provider behavior의 세부 삭제 지연은 PostHog 문서를 참조하되 제품 authority는 최신 Linear 계약으로 유지한다.
 
 ## Superseded Decisions
 
-- PROD-469의 OpenPanel provider, automatic screen/outgoing/attribute 수집과 10% session replay 계약은 최신 Linear `PROD-819`, `PROD-795`, `PROD-575`의 PostHog 교체·최소 수집 계약으로 대체됐다. 기존 OpenSpec 기록 자체를 새 OpenSpec 날짜로 덮지 않으며, PROD-575가 명시한 `--skip-specs` archive 순서로 old change를 보존한다.
+- PROD-469의 OpenPanel provider와 automatic screen/outgoing/attribute 수집 구현은 최신 Linear `PROD-819`, `PROD-795`, `PROD-575`의 PostHog 교체·최소 수집 계약으로 대체됐다. 기존 OpenPanel 10% replay 구현·provider 계약은 대체됐지만, 후속 PROD-741의 PostHog 10% replay 정책으로 단계적으로 재도입한다. 기존 OpenSpec 기록 자체를 새 OpenSpec 날짜로 덮지 않으며, PROD-575가 명시한 `--skip-specs` archive 순서로 old change를 보존한다.

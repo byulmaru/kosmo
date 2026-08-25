@@ -2,7 +2,7 @@
 
 현재 `apps/app`의 analytics 경계는 `client.web.ts`가 `@openpanel/web`을 생성하고, 공용 `client.ts`가 Native no-op을 제공하는 platform file 구조다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 clear한다. Profile 생성·선택, Post 생성, Follow와 검색 caller는 이미 공용 `trackAnalytics`를 사용한다.
 
-PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog Web runtime으로 옮긴다. 공개 project host/key의 build·deployment 주입은 PROD-820, 개인정보 처리방침·runbook과 cross-slice 검증은 PROD-795, production acceptance와 두 OpenSpec change의 archive 순서는 PROD-575가 소유한다. 이번 구현은 설정이 없으면 실제로 비활성화되어야 하므로 PROD-820과 병렬로 개발·검증할 수 있다.
+PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog Web runtime으로 옮긴다. 공개 project host/key와 Session Replay retention 지속 계약은 PROD-820, 개인정보 처리방침·runbook과 cross-slice 검증은 PROD-795가 소유하며 PROD-795가 PROD-741을 block한다. PROD-795 이후의 production replay 활성화·마스킹·초기 30일 검증은 PROD-741, production acceptance와 두 OpenSpec change의 archive 순서는 PROD-575가 소유한다. 초기 기반은 설정이 없으면 실제로 비활성화되어야 하므로 PROD-819와 PROD-820을 먼저 개발·검증하고, PROD-741은 PROD-795 activation gate 이후에만 replay를 켠다.
 
 ## Goals / Non-Goals
 
@@ -13,13 +13,15 @@ PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog
 - Expo Router의 실제 URL 값이 아닌 안정적인 route template으로 pageview를 중복 없이 수집한다.
 - Account identity 전환을 작은 상태 기계로 관리하고 모든 SDK 실패를 제품 흐름에서 격리한다.
 - Web-only SDK가 Android·iOS bundle에 유입되지 않음을 자동화로 확인한다.
+- 초기 replay-off 기반과 후속 production canonical origin 10% replay activation, masking·retention 검증의 경계를 명시한다.
 
-**Non-Goals:**
+**PROD-819 implementation slice Non-Goals:**
 
 - PostHog Cloud project 생성, 실제 key·host 확정, Docker·GitHub Actions 주입
 - 개인정보 처리방침·운영 runbook 갱신과 production-equivalent cross-slice 검증
 - production event acceptance, OpenSpec archive와 OpenPanel 운영 데이터 migration
-- 새 제품 event, opt-out UI, Account 분석 데이터 자동 삭제, session replay와 Native SDK
+- 새 제품 event, opt-out UI, Account 분석 데이터 자동 삭제와 Native SDK
+- PROD-819 implementation에서 Session Replay를 활성화하거나 masking·retention을 운영 설정하는 것. 후속 replay activation·masking·초기 30일 검증은 PROD-741, Cloud·retention 지속 계약과 설정 증거는 PROD-820이 소유한다.
 
 ## Implementation Guidance
 
@@ -35,7 +37,7 @@ PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog
 ### Recommended Approach
 
 1. 현재 platform adapter 구조를 유지하고 Web file만 `posthog-js`를 value-import한다. 공용 Native file은 같은 API의 no-op을 계속 제공한다. 기존 `clearAnalytics` public surface를 유지하더라도 Web 구현은 PostHog `reset()` 의미로 매핑할 수 있다.
-2. Web adapter 초기화는 공개 project key와 ingestion host가 모두 있을 때만 수행한다. automatic pageview·pageleave, element autocapture, session replay와 다른 자동 telemetry를 명시적으로 끄고, `person_profiles`는 identified Account에만 profile을 만드는 경계로 둔다. 실제 option 이름은 구현 시 설치된 `posthog-js` type과 공식 source에 대조한다.
+2. Web adapter 초기화는 공개 project key와 ingestion host가 모두 있을 때만 수행한다. 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 automatic pageview·pageleave, element autocapture, session replay와 다른 자동 telemetry를 명시적으로 끄고, `person_profiles`는 identified Account에만 profile을 만드는 경계로 둔다. 후속 PROD-741 활성화 단계의 10% replay와 masking·retention은 별도 gate에서 검증한다. 실제 option 이름은 구현 시 설치된 `posthog-js` type과 공식 source에 대조한다.
 3. app-owned event sanitizer를 SDK 호출 앞에 둔다. event name별 switch, discriminated union 또는 동등한 registry로 승인된 property만 새 object에 복사하고 unknown event는 drop한다. blacklist 기반 재귀 mutation은 사용하지 않는다. SDK `before_send`를 최종 방어선으로 추가할 수 있지만, project token·distinct ID·session metadata 같은 SDK-required key를 일반적인 이름 pattern으로 제거하지 않아야 한다.
 4. route observer는 Expo Router의 route file pattern을 나타내는 segment 정보를 사용해 group segment를 제거하고 안정적인 template을 만든다. 마지막으로 보낸 template을 기억해 최초 route와 template 변화에만 `$pageview`를 capture한다. 실제 pathname, query와 fragment는 payload source로 사용하지 않는다.
 5. identity bridge는 `anonymous | identified(accountId)` 상태만 관리한다. anonymous→A는 identify, A→A는 no-op, A→B는 reset 후 identify, A→anonymous는 reset으로 처리한다. Profile 선택은 Account identity를 바꾸지 않는다.
@@ -59,6 +61,8 @@ PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog
 - PostHog와 OpenPanel을 dual-write하거나 rollback을 위해 OpenPanel code를 남기면 개인정보·운영 계약이 두 개가 된다.
 - Web 단위 테스트 통과를 Native bundle 비포함 또는 브라우저 request payload 검증으로 일반화하지 않는다.
 
+PostHog provider behavior note (non-normative): Session Replay recording이 retention 만료 시점에 즉시 삭제되지 않을 수 있다. 여기서 30일은 제품 retention 설정값이며, UI에서 정확히 30일에 삭제가 완료된다는 SLA로 해석하지 않는다.
+
 ## Risks / Trade-offs
 
 - [Route template 계산이 Expo Router upgrade에서 달라질 수 있음] → 대표 static·dynamic·group route fixture와 browser navigation test로 template 결과를 고정한다.
@@ -70,10 +74,12 @@ PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog
 
 ## Migration Plan
 
-1. PROD-819에서 PostHog adapter, sanitizer, route·identity bridge와 자동화만 구현한다. 실제 production key가 없어도 unit·browser fixture로 검증한다.
+1. PROD-819에서 PostHog adapter, sanitizer, route·identity bridge와 초기 replay-off 자동화만 구현한다. 실제 production key가 없어도 unit·browser fixture로 검증한다.
 2. 같은 slice에서 `@openpanel/web` dependency, OpenPanel runtime·test 참조를 제거한다. production에 dual-write 기간을 두지 않는다.
-3. PROD-820이 Cloud US project와 build/deployment 공개 config를 제공한 뒤 PROD-795가 production-equivalent build에서 두 결과와 개인정보·운영 문서를 통합 검증한다.
-4. PROD-575가 actual production acceptance를 완료하고, `add-web-openpanel-product-analytics`를 `--skip-specs` archive한 뒤 이 change를 정상 archive한다.
+3. PROD-820이 Cloud US project, build/deployment 공개 config와 Session Replay 초기 30일 retention 설정·증거를 제공한다. retention 변경은 지원 범위 내 운영 설정으로만 허용하고 실제 변경값·적용 시점·변경 근거·당시 적용 플랜 또는 지원 범위 근거를 기록하며, 더 긴 범위를 지원하는 plan upgrade만으로 자동 연장하지 않는다.
+4. PROD-795가 production-equivalent build에서 초기 replay-off, Cloud/build/retention 증거와 개인정보·운영 문서를 cross-slice 검증하고 PROD-741 activation을 block한다.
+5. PROD-741이 PROD-795 gate 이후 masking 검증을 완료한 뒤 production canonical origin에 Web Session Replay를 10% sample로 활성화하고, 초기 30일 retention과 실제 replay redaction을 검증한다. 추가 custom selector는 완료 조건이 아니다.
+6. PROD-575가 actual production acceptance를 완료하고, `add-web-openpanel-product-analytics`를 `--skip-specs` archive한 뒤 이 change를 정상 archive한다.
 
 즉시 비활성화가 필요하면 production build에서 공개 key 또는 host를 제거해 adapter를 no-op으로 만든다. 코드 rollback이 필요하면 마지막 정상 release로 되돌리되 OpenPanel과 PostHog를 동시에 활성화하지 않는다.
 

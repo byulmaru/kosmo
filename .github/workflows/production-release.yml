@@ -98,6 +98,9 @@ jobs:
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         env:
+          # Public client settings are mounted only for the Web asset build.
+          POSTHOG_HOST: ${{ vars.EXPO_PUBLIC_POSTHOG_HOST }}
+          POSTHOG_KEY: ${{ vars.EXPO_PUBLIC_POSTHOG_KEY }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         with:
           context: .
@@ -112,13 +115,15 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
-            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID }}
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=kosmo@${{ env.TARGET_SHA }}
             SENTRY_UPLOAD_REQUIRED=1
           secret-envs: |
+            # Secret mounts keep public values out of CI logs and image provenance.
+            posthog_host=POSTHOG_HOST
+            posthog_key=POSTHOG_KEY
             sentry_auth_token=SENTRY_AUTH_TOKEN
 
       - name: Validate production image digest

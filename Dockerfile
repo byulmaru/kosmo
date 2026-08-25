@@ -39,7 +39,6 @@ RUN test -e apps/app/node_modules/.bin/relay-compiler \
 FROM deps AS app-build
 
 ARG EXPO_PUBLIC_ENVIRONMENT
-ARG EXPO_PUBLIC_OPENPANEL_CLIENT_ID
 ARG EXPO_PUBLIC_RELEASE_TAG
 ARG EXPO_PUBLIC_SENTRY_DSN
 ARG SENTRY_ORG
@@ -48,7 +47,6 @@ ARG SENTRY_RELEASE
 ARG SENTRY_UPLOAD_REQUIRED=0
 
 ENV EXPO_PUBLIC_ENVIRONMENT=$EXPO_PUBLIC_ENVIRONMENT
-ENV EXPO_PUBLIC_OPENPANEL_CLIENT_ID=$EXPO_PUBLIC_OPENPANEL_CLIENT_ID
 ENV EXPO_PUBLIC_RELEASE_TAG=$EXPO_PUBLIC_RELEASE_TAG
 ENV EXPO_PUBLIC_SENTRY_RELEASE=$SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
@@ -59,7 +57,10 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
+# Expo inlines these public values into the Web asset; BuildKit keeps them out of image metadata and layers.
+RUN --mount=type=secret,id=posthog_key,env=EXPO_PUBLIC_POSTHOG_KEY,required=false \
+  --mount=type=secret,id=posthog_host,env=EXPO_PUBLIC_POSTHOG_HOST,required=false \
+  --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
   pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
