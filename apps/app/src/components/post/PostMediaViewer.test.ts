@@ -411,7 +411,7 @@ describe('PostMediaViewer', () => {
     assert.ok(byTestId('post-media-viewer-action-bar'));
   });
 
-  it('Web viewer surface와 close control을 safe area 안에 둔다', async () => {
+  it('Web과 Native viewer surface를 safe area 안에 둔다', async () => {
     Object.assign(safeAreaInsets, { bottom: 34, left: 7, right: 9, top: 62 });
 
     await render();
@@ -438,6 +438,22 @@ describe('PostMediaViewer', () => {
       },
       { paddingBottom: 58, paddingLeft: 31, paddingRight: 33, paddingTop: 86 },
     );
+
+    platform.OS = 'android';
+    Object.assign(safeAreaInsets, { bottom: 24, left: 0, right: 0, top: 32 });
+    await render();
+    const nativeBackdrop = flattenStyle(byTestId('post-media-viewer-backdrop').props.style);
+    assert.deepEqual(
+      {
+        paddingBottom: nativeBackdrop.paddingBottom,
+        paddingLeft: nativeBackdrop.paddingLeft,
+        paddingRight: nativeBackdrop.paddingRight,
+        paddingTop: nativeBackdrop.paddingTop,
+      },
+      { paddingBottom: 24, paddingLeft: 0, paddingRight: 0, paddingTop: 32 },
+    );
+    assert.equal(rendered('Modal')[0]?.props.navigationBarTranslucent, true);
+    assert.equal(rendered('Modal')[0]?.props.statusBarTranslucent, true);
   });
 
   it('Compact 작성자에 원격 Profile의 relative handle을 표시한다', async () => {

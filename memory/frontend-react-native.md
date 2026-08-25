@@ -44,6 +44,7 @@
 ## React Native Components And Styles
 
 - `View`, `Text`, `TextInput`, `Pressable`, `Modal`, `ScrollView` 등 React Native primitive를 기본으로 사용한다. browser-only element나 DOM API는 platform 경계 밖의 공용 컴포넌트에 넣지 않는다.
+- system bar·viewport edge까지 backdrop을 확장하는 Web·iOS·Android overlay는 바깥 backdrop이 네 방향 safe area를 한 번만 소유한다. scrim은 끝까지 칠하고 interactive surface만 inset 안에 두며, fullscreen·centered·drawer 같은 presentation 분기는 기본 여백과 배치만 결정한다. Native `Modal`은 system bar 아래까지 backdrop을 확장한 뒤 같은 경계에서 inset을 소비하고, surface 안에 `SafeAreaView`를 중첩해 다시 소비하지 않는다.
 - 색상, spacing, radius, typography, breakpoint는 `apps/app/src/theme` token을 사용한다. 일회성 raw hex/숫자로 Foundation 값을 복제하지 않는다.
 - UI 텍스트는 `SUIT`, 포스트 본문과 긴 입력은 `Pretendard`를 사용한다. React Native에는 CSS 상속이 없으므로 공용 primitive 또는 각 `Text`/`TextInput` style에서 family를 명시한다.
 - 접근성 목표와 target은 [`docs/design/accessibility.md`](../docs/design/accessibility.md)를 따른다. Web은 적용 가능한 WCAG 2.2 A·AA와 24×24 CSS px 최소 target·공식 예외를 사용하고, iOS는 기본 44×44 pt hit region, Android는 48×48 dp touch target을 사용한다. 기존 component-specific 강화 계약은 전역 기준보다 우선한다. Profile Tag 제거 action은 시각 크기 32×32, 실제 입력 target Web 32×32 CSS px, iOS 44×44pt, Android 48×48dp를 사용한다. `accessibilityRole`, `accessibilityLabel`, `accessibilityState`를 실제 동작과 맞추고 선택 tab, disabled/loading button, modal/drawer 상태를 시각 표현만으로 전달하지 않는다.

@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
-import { useWebSafeAreaPadding } from '@/components/ui/useWebSafeAreaPadding';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -127,7 +127,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
-  const webDrawerSafeAreaStyle = useWebSafeAreaPadding();
+  const drawerSafeAreaStyle = useSafeAreaPadding();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
@@ -409,8 +409,10 @@ function UniversalShellContent({ revision }: { revision: number }) {
         <Modal
           accessibilityLabel="메뉴"
           animationType="none"
+          navigationBarTranslucent
           onRequestClose={closeDrawer}
           role="dialog"
+          statusBarTranslucent
           transparent
           visible={drawerOpen}
         >
@@ -418,7 +420,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
             style={[
               styles.drawerBackdrop,
               web && webFixedDrawerBackdrop,
-              webDrawerSafeAreaStyle,
+              drawerSafeAreaStyle,
               { backgroundColor: theme.overlayScrim },
             ]}
           >

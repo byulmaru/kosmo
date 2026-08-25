@@ -11,7 +11,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -19,7 +18,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useToast } from '@/components/ui/ToastProvider';
-import { useWebSafeAreaPadding } from '@/components/ui/useWebSafeAreaPadding';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -155,7 +154,7 @@ function ReplyComposerSurfaceContents({
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
   const webOverlayOpen = open && presentation !== 'inline' && Platform.OS === 'web';
-  const webSafeAreaStyle = useWebSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
+  const safeAreaStyle = useSafeAreaPadding(presentation === 'fullscreen' ? 0 : spacing.lg);
 
   useEffect(() => {
     if (open) {
@@ -365,12 +364,14 @@ function ReplyComposerSurfaceContents({
     <Modal
       accessibilityLabel="답글 쓰기"
       animationType={Platform.OS === 'web' ? 'none' : 'fade'}
+      navigationBarTranslucent
       onRequestClose={() => {
         if (Platform.OS !== 'web') {
           requestClose();
         }
       }}
       role="dialog"
+      statusBarTranslucent
       transparent
       visible
     >
@@ -379,7 +380,7 @@ function ReplyComposerSurfaceContents({
         style={[
           styles.backdrop,
           presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
-          webSafeAreaStyle,
+          safeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
         testID="reply-composer-dialog-backdrop"
@@ -399,7 +400,7 @@ function ReplyComposerSurfaceContents({
           ]}
           testID="reply-composer-dialog-surface"
         >
-          <SafeAreaView edges={Platform.OS === 'web' ? [] : undefined} style={styles.safeArea}>
+          <View style={styles.contentFrame}>
             <View
               accessibilityElementsHidden={discardConfirmOpen}
               aria-hidden={discardConfirmOpen || undefined}
@@ -479,7 +480,7 @@ function ReplyComposerSurfaceContents({
               </KeyboardAvoidingView>
             </View>
             {discardConfirm}
-          </SafeAreaView>
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -512,7 +513,7 @@ const styles = StyleSheet.create({
     maxHeight: '100%',
     width: '100%',
   },
-  safeArea: { flex: 1, minHeight: 0, width: '100%' },
+  contentFrame: { flex: 1, minHeight: 0, width: '100%' },
   main: { flex: 1, minHeight: 0, width: '100%' },
   mainBlocked: { pointerEvents: 'none' },
   inline: { position: 'relative' },
