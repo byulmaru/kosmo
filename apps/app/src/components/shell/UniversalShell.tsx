@@ -60,13 +60,15 @@ const ShellQuery = graphql`
   }
 `;
 
-const webStickyRail = {
-  alignSelf: 'flex-start',
-  height: '100vh',
-  minHeight: 0,
-  position: 'sticky',
-  top: 0,
-} as unknown as ViewStyle;
+function getWebStickyRailStyle(insets: { bottom: number; top: number }) {
+  return {
+    alignSelf: 'flex-start',
+    height: `calc(100vh - ${insets.top + insets.bottom}px)`,
+    minHeight: 0,
+    position: 'sticky',
+    top: insets.top,
+  } as unknown as ViewStyle;
+}
 
 const webRightRailOverflow = {
   overflowX: 'hidden',
@@ -158,6 +160,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
+  const webRootSafeAreaStyle = web
+    ? { paddingLeft: insets.left, paddingRight: insets.right }
+    : null;
+  const webCenterSafeAreaStyle =
+    web && !mobile ? { paddingBottom: insets.bottom, paddingTop: insets.top } : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
@@ -281,6 +288,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
         style={[
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
+          webRootSafeAreaStyle,
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
@@ -290,7 +298,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.sidebar,
-              web && webStickyRail,
+              web && getWebStickyRailStyle(insets),
               switcherOpen && styles.sidebarWithOverlay,
               { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
             ]}
@@ -310,10 +318,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
           style={[
             styles.center,
             web && webDocumentColumn,
+            webCenterSafeAreaStyle,
             settingsWorkspace && styles.settingsCenter,
             showRightRail && styles.centerWithRightRail,
             { borderColor: theme.borderSubtle },
           ]}
+          testID="universal-shell-center"
         >
           {mobile && !routeOwnsMobileHeader ? (
             <View
@@ -322,16 +332,18 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 web && webStickyHeader,
                 {
                   backgroundColor: theme.backgroundCanvas,
-                  paddingTop: web ? 0 : insets.top,
+                  paddingTop: insets.top,
                 },
               ]}
+              testID="universal-shell-mobile-header"
             >
               {home ? (
                 <PageHeader
                   accessibilityLabel="홈"
+                  brandHref={web ? '/home' : undefined}
                   leading={menuButton}
+                  onBrandCurrentNavigate={web ? reselectHome : undefined}
                   variant="brand"
-                  {...(web ? { brandHref: '/home', onBrandCurrentNavigate: reselectHome } : {})}
                 />
               ) : mobileShellHeader ? (
                 <PageHeader
@@ -352,8 +364,14 @@ function UniversalShellContent({ revision }: { revision: number }) {
             style={[
               styles.route,
               !web && styles.nativeRoute,
-              mobile && web && styles.webMobileRoute,
+              mobile && web
+                ? {
+                    ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
+                    paddingBottom: 56 + insets.bottom,
+                  }
+                : null,
             ]}
+            testID="universal-shell-route"
           >
             <Slot />
           </View>
@@ -368,7 +386,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.rightRail,
-              web && webStickyRail,
+              web && getWebStickyRailStyle(insets),
               web && webRightRailOverflow,
               { borderColor: theme.borderSubtle },
             ]}
@@ -386,7 +404,24 @@ function UniversalShellContent({ revision }: { revision: number }) {
           transparent
           visible={drawerOpen}
         >
-          <View style={[styles.drawerBackdrop, { backgroundColor: theme.overlayScrim }]}>
+          <View
+            style={[
+              styles.drawerBackdrop,
+              web &&
+                ({
+                  bottom: 0,
+                  left: 0,
+                  paddingBottom: insets.bottom,
+                  paddingLeft: insets.left,
+                  paddingRight: insets.right,
+                  paddingTop: insets.top,
+                  position: 'fixed',
+                  right: 0,
+                  top: 0,
+                } as unknown as ViewStyle),
+              { backgroundColor: theme.overlayScrim },
+            ]}
+          >
             <View
               nativeID="mobile-sidebar"
               style={[
@@ -440,7 +475,6 @@ const styles = StyleSheet.create({
   },
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },
-  webMobileRoute: { paddingBottom: 56 },
   rightRail: {
     flexShrink: 1,
     minWidth: 290,

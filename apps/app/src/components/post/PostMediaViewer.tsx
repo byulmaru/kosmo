@@ -20,6 +20,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
@@ -99,6 +100,7 @@ export function PostMediaViewer({
   selectedIndex: number;
 }>) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const closeRef = useRef<NativeView>(null);
   const dialogRef = useRef<NativeView>(null);
   const ignoreNextPlatformClose = useRef(false);
@@ -112,6 +114,16 @@ export function PostMediaViewer({
     null,
   );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const webBackdropPadding = wide ? spacing.xl : spacing.xs;
+  const webSafeAreaStyle =
+    Platform.OS === 'web'
+      ? {
+          paddingBottom: webBackdropPadding + insets.bottom,
+          paddingLeft: webBackdropPadding + insets.left,
+          paddingRight: webBackdropPadding + insets.right,
+          paddingTop: webBackdropPadding + insets.top,
+        }
+      : null;
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);
@@ -219,6 +231,7 @@ export function PostMediaViewer({
               ? styles.wideWebBackdrop
               : styles.compactWebBackdrop
             : null,
+          webSafeAreaStyle,
         ]}
         testID="post-media-viewer-backdrop"
       >

@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
@@ -29,6 +30,7 @@ const initialFormState: FeedbackFormState = { dirty: false, submitting: false };
 export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: Props) {
   const theme = useTheme();
   const elevation = useElevation();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const [formState, setFormState] = useState(initialFormState);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
@@ -41,6 +43,14 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
   const surfaceRef = useRef<NativeView>(null);
   const wasVisibleRef = useRef(visible);
   const mobile = width < breakpoints.compact;
+  const webMobileSafeAreaStyle =
+    Platform.OS === 'web' && mobile
+      ? {
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        }
+      : null;
   formStateRef.current = formState;
 
   const handleFormStateChange = useCallback((nextState: FeedbackFormState) => {
@@ -182,8 +192,10 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
           styles.backdrop,
           Platform.OS === 'web' ? styles.webBackdrop : null,
           mobile ? styles.mobileBackdrop : null,
+          webMobileSafeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
+        testID="feedback-overlay-backdrop"
       >
         <View
           ref={surfaceRef}

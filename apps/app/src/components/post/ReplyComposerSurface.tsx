@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useFragment, useRelayEnvironment } from 'react-relay';
 import { getDataIDsFromFragment, getFragment } from 'relay-runtime';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
@@ -142,6 +142,7 @@ function ReplyComposerSurfaceContents({
   const router = useRouter();
   const { showToast } = useToast();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const parent = useFragment(ReplyComposerSurfaceParentFragment, parentKey);
   const profile = useFragment(ReplyComposerSurfaceProfileFragment, profileKey);
   const [submitting, setSubmitting] = useState(false);
@@ -154,6 +155,15 @@ function ReplyComposerSurfaceContents({
     Platform.OS === 'ios' || Platform.OS === 'android' ? Platform.OS : ('web' as const);
   const presentation = getReplySurfacePresentation(owner, replyPlatform, width);
   const webOverlayOpen = open && presentation !== 'inline' && Platform.OS === 'web';
+  const webFullscreenSafeAreaStyle =
+    Platform.OS === 'web' && presentation === 'fullscreen'
+      ? {
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+          paddingTop: insets.top,
+        }
+      : null;
 
   useEffect(() => {
     if (open) {
@@ -377,8 +387,10 @@ function ReplyComposerSurfaceContents({
         style={[
           styles.backdrop,
           presentation === 'fullscreen' ? styles.fullscreenBackdrop : null,
+          webFullscreenSafeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
+        testID="reply-composer-dialog-backdrop"
       >
         <Pressable
           accessibilityViewIsModal
@@ -395,7 +407,7 @@ function ReplyComposerSurfaceContents({
           ]}
           testID="reply-composer-dialog-surface"
         >
-          <SafeAreaView style={styles.safeArea}>
+          <SafeAreaView edges={Platform.OS === 'web' ? [] : undefined} style={styles.safeArea}>
             <View
               accessibilityElementsHidden={discardConfirmOpen}
               aria-hidden={discardConfirmOpen || undefined}

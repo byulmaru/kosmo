@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 import { FeedbackForm } from '@/components/feedback/FeedbackForm';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
 import { FeedbackPage } from '@/components/feedback/FeedbackPage';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { FeedbackFormState } from '@/components/feedback/FeedbackForm';
 
 function FeedbackFormStateProbe() {
@@ -20,16 +22,24 @@ function FeedbackFormStateProbe() {
   );
 }
 
-function FeedbackOverlayFixture({ initiallyVisible = false }: { initiallyVisible?: boolean }) {
+function FeedbackOverlayFixture({
+  initiallyVisible = false,
+  safeAreaInsets,
+}: {
+  initiallyVisible?: boolean;
+  safeAreaInsets?: EdgeInsets;
+}) {
   const [visible, setVisible] = useState(initiallyVisible);
 
   return (
-    <View>
-      <Pressable accessibilityRole="button" onPress={() => setVisible(true)}>
-        <Text>피드백 오버레이 열기</Text>
-      </Pressable>
-      <FeedbackOverlay onRequestClose={() => setVisible(false)} visible={visible} />
-    </View>
+    <SafeAreaProvider initialSafeAreaInsets={safeAreaInsets}>
+      <View>
+        <Pressable accessibilityRole="button" onPress={() => setVisible(true)}>
+          <Text>피드백 오버레이 열기</Text>
+        </Pressable>
+        <FeedbackOverlay onRequestClose={() => setVisible(false)} visible={visible} />
+      </View>
+    </SafeAreaProvider>
   );
 }
 
@@ -203,19 +213,21 @@ export const OverlayFocusLifecycle: Story = {
   },
 };
 
-export const OverlayMobileSheetGeometry: Story = {
-  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
-  parameters: {
-    viewport: {
-      options: {
-        feedbackMobileShort: {
-          name: 'Feedback mobile short',
-          styles: { height: '568px', width: '390px' },
-          type: 'mobile',
-        },
+const feedbackMobileShortParameters = {
+  viewport: {
+    options: {
+      feedbackMobileShort: {
+        name: 'Feedback mobile short',
+        styles: { height: '568px', width: '390px' },
+        type: 'mobile',
       },
     },
   },
+};
+
+export const OverlayMobileSheetGeometry: Story = {
+  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
+  parameters: feedbackMobileShortParameters,
   render: () => <FeedbackOverlayFixture initiallyVisible />,
   play: async ({ canvasElement }) => {
     const ownerDocument = canvasElement.ownerDocument;
@@ -230,6 +242,38 @@ export const OverlayMobileSheetGeometry: Story = {
     expect(bounds.bottom).toBeCloseTo(view?.innerHeight ?? 0, 0);
     expect(bounds.height).toBeLessThanOrEqual((view?.innerHeight ?? 0) * 0.85 + 1);
     expect(body.scrollHeight).toBeGreaterThan(body.clientHeight);
+  },
+};
+
+export const OverlayMobileSheetNonZeroSafeArea: Story = {
+  globals: { viewport: { isRotated: false, value: 'feedbackMobileShort' } },
+  parameters: feedbackMobileShortParameters,
+  render: () => (
+    <FeedbackOverlayFixture
+      initiallyVisible
+      safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }}
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const ownerDocument = canvasElement.ownerDocument;
+    const view = ownerDocument.defaultView;
+    const page = within(ownerDocument.body);
+    const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
+    const surface = page.getByTestId('feedback-overlay-surface');
+    const close = within(dialog).getByRole('button', { name: '피드백 닫기' });
+    const viewportWidth = view?.innerWidth ?? 0;
+    const viewportHeight = view?.innerHeight ?? 0;
+
+    const surfaceBounds = surface.getBoundingClientRect();
+    const closeBounds = close.getBoundingClientRect();
+    expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
+    expect(surfaceBounds.top).toBeGreaterThanOrEqual(24);
+    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
+    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
+    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
+    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
+    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
+    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
   },
 };
 

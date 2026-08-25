@@ -183,6 +183,7 @@ test('browser, PWA, and share assets expose the expected delivery sizes', async 
 test('web shell opts into iOS standalone mode', async () => {
   const html = await readFile(new URL('index.html', publicDirectory), 'utf8');
 
+  assert.match(html, /<meta\s+name="viewport"\s+content="[^"]*viewport-fit=cover[^"]*"\s*\/>/);
   assert.match(html, /<meta name="apple-mobile-web-app-capable" content="yes" \/>/);
   assert.match(html, /<meta name="apple-mobile-web-app-title" content="KOSMO" \/>/);
   assert.match(html, /<meta name="apple-mobile-web-app-status-bar-style" content="default" \/>/);

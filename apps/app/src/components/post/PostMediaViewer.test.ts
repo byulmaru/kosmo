@@ -14,6 +14,7 @@ import type { PostMediaItem } from './PostMediaImage';
 const require = createRequire(import.meta.url);
 const platform = { OS: 'web' };
 const viewport = { height: 800, width: 767 };
+const safeAreaInsets = { bottom: 0, left: 0, right: 0, top: 0 };
 let panResponderConfig: Record<string, (...args: never[]) => unknown> | null = null;
 let keydownListener: ((event: KeyboardEvent) => void) | null = null;
 let closeFocused = 0;
@@ -75,6 +76,10 @@ mock.module('react-relay', {
     graphql: () => ({}),
     useFragment: (_fragment: unknown, key: unknown) => key,
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => safeAreaInsets },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module(require.resolve('lucide-react-native'), {
@@ -159,6 +164,10 @@ afterEach(async () => {
   platform.OS = 'web';
   viewport.height = 800;
   viewport.width = 767;
+  safeAreaInsets.bottom = 0;
+  safeAreaInsets.left = 0;
+  safeAreaInsets.right = 0;
+  safeAreaInsets.top = 0;
   panResponderConfig = null;
   keydownListener = null;
   closeFocused = 0;
@@ -400,6 +409,35 @@ describe('PostMediaViewer', () => {
     await render();
     assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
     assert.ok(byTestId('post-media-viewer-action-bar'));
+  });
+
+  it('Web viewer surface와 close control을 safe area 안에 둔다', async () => {
+    Object.assign(safeAreaInsets, { bottom: 34, left: 7, right: 9, top: 62 });
+
+    await render();
+    const compactBackdrop = flattenStyle(byTestId('post-media-viewer-backdrop').props.style);
+    assert.deepEqual(
+      {
+        paddingBottom: compactBackdrop.paddingBottom,
+        paddingLeft: compactBackdrop.paddingLeft,
+        paddingRight: compactBackdrop.paddingRight,
+        paddingTop: compactBackdrop.paddingTop,
+      },
+      { paddingBottom: 38, paddingLeft: 11, paddingRight: 13, paddingTop: 66 },
+    );
+
+    viewport.width = 768;
+    await render();
+    const wideBackdrop = flattenStyle(byTestId('post-media-viewer-backdrop').props.style);
+    assert.deepEqual(
+      {
+        paddingBottom: wideBackdrop.paddingBottom,
+        paddingLeft: wideBackdrop.paddingLeft,
+        paddingRight: wideBackdrop.paddingRight,
+        paddingTop: wideBackdrop.paddingTop,
+      },
+      { paddingBottom: 58, paddingLeft: 31, paddingRight: 33, paddingTop: 86 },
+    );
   });
 
   it('Compact 작성자에 원격 Profile의 relative handle을 표시한다', async () => {

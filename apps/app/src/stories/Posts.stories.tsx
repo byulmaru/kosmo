@@ -1,6 +1,7 @@
 import { usePathname } from 'expo-router';
 import { Profiler, Suspense, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   graphql,
   RelayEnvironmentProvider,
@@ -57,6 +58,7 @@ import {
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from './fixtures';
 import { Catalog, Section } from './StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { EdgeInsets } from 'react-native-safe-area-context';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
@@ -1908,7 +1910,13 @@ function ComposerPickerUnmountStory() {
   );
 }
 
-function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: string }) {
+function ReplyModalPresentationStory({
+  parentId = shortPost.id,
+  safeAreaInsets,
+}: {
+  parentId?: string;
+  safeAreaInsets?: EdgeInsets;
+}) {
   const [open, setOpen] = useState(true);
   const triggerRef = useRef<View>(null);
   const data = usePostsStoryData();
@@ -1918,25 +1926,27 @@ function ReplyModalPresentationStory({ parentId = shortPost.id }: { parentId?: s
   );
 
   return (
-    <Catalog>
-      <Pressable
-        accessibilityLabel="Reply modal 다시 열기"
-        accessibilityRole="button"
-        onPress={() => setOpen(true)}
-        ref={triggerRef}
-      >
-        <Text>Reply modal 다시 열기</Text>
-      </Pressable>
-      <ReplyComposerSurface
-        onRequestClose={() => setOpen(false)}
-        open={open}
-        owner="list"
-        parent={parent}
-        profile={data.replyComposerProfile}
-        triggerRef={triggerRef}
-      />
-      <Text testID="reply-modal-open-state">{open ? 'open' : 'closed'}</Text>
-    </Catalog>
+    <SafeAreaProvider initialSafeAreaInsets={safeAreaInsets}>
+      <Catalog>
+        <Pressable
+          accessibilityLabel="Reply modal 다시 열기"
+          accessibilityRole="button"
+          onPress={() => setOpen(true)}
+          ref={triggerRef}
+        >
+          <Text>Reply modal 다시 열기</Text>
+        </Pressable>
+        <ReplyComposerSurface
+          onRequestClose={() => setOpen(false)}
+          open={open}
+          owner="list"
+          parent={parent}
+          profile={data.replyComposerProfile}
+          triggerRef={triggerRef}
+        />
+        <Text testID="reply-modal-open-state">{open ? 'open' : 'closed'}</Text>
+      </Catalog>
+    </SafeAreaProvider>
   );
 }
 
@@ -2404,19 +2414,29 @@ function LongPureRepostListItemStory() {
   );
 }
 
-function ProductionPostListItemStory({ postId }: { postId: string }) {
+function ProductionPostListItemStory({
+  postId,
+  safeAreaInsets,
+}: {
+  postId: string;
+  safeAreaInsets?: EdgeInsets;
+}) {
   const { posts } = usePostsStoryData();
 
   return (
-    <Catalog>
-      <StoryPathname testID="presentation-story-pathname" />
-      <PostListItem
-        post={requireFragment(
-          requirePostById(posts, postId).listItem,
-          `production post list item ${postId}`,
-        )}
-      />
-    </Catalog>
+    <SafeAreaProvider initialSafeAreaInsets={safeAreaInsets}>
+      <PostMediaViewerHostProvider>
+        <Catalog>
+          <StoryPathname testID="presentation-story-pathname" />
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, postId).listItem,
+              `production post list item ${postId}`,
+            )}
+          />
+        </Catalog>
+      </PostMediaViewerHostProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -4161,6 +4181,52 @@ export const PostMediaViewerCompact: Story = {
     expect(origin).toHaveFocus();
   },
   render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
+};
+
+export const PostMediaViewerCompactNonZeroSafeArea: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostMediaViewerHostQuery: { data: postMediaViewerHostResponseData },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const origin = canvas.getByRole('button', {
+      name: '2번째 첨부 이미지 크게 보기',
+    });
+    await userEvent.click(origin);
+
+    const dialog = await screen.findByRole('dialog');
+    const viewer = within(dialog);
+    const surface = viewer.getByTestId('post-media-viewer-dialog');
+    const close = viewer.getByRole('button', { name: '이미지 뷰어 닫기' });
+    const view = canvasElement.ownerDocument.defaultView;
+    const viewportWidth = view?.innerWidth ?? 0;
+    const viewportHeight = view?.innerHeight ?? 0;
+
+    const surfaceBounds = surface.getBoundingClientRect();
+    const closeBounds = close.getBoundingClientRect();
+    expect(surfaceBounds.left).toBeGreaterThanOrEqual(11);
+    expect(surfaceBounds.top).toBeGreaterThanOrEqual(66);
+    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 13);
+    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 38);
+    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
+    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
+    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
+    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
+
+    await userEvent.click(viewer.getByTestId('post-media-viewer-backdrop-dismiss'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  },
+  render: () => (
+    <ProductionPostListItemStory
+      postId="post-media-viewer-quote"
+      safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 62 }}
+    />
+  ),
 };
 
 export const PostMediaViewerWide: Story = {
@@ -7060,6 +7126,32 @@ export const ReplyFullscreenPresentation: Story = {
     expect(getComputedStyle(surface).borderRadius).toBe('0px');
   },
   render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyFullscreenNonZeroSafeArea: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const close = within(dialog).getByRole('button', { name: '닫기' });
+    const view = canvasElement.ownerDocument.defaultView;
+    const viewportWidth = view?.innerWidth ?? 0;
+    const viewportHeight = view?.innerHeight ?? 0;
+
+    const surfaceBounds = surface.getBoundingClientRect();
+    const closeBounds = close.getBoundingClientRect();
+    expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
+    expect(surfaceBounds.top).toBeGreaterThanOrEqual(24);
+    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
+    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
+    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
+    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
+    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
+    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
+  },
+  render: () => (
+    <ReplyModalPresentationStory safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }} />
+  ),
 };
 
 export const ReplyQuoteParentPresentation: Story = {
