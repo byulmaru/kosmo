@@ -177,7 +177,7 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 ## Legacy와 개발 token 이관
 
-기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정한다. 실제 Figma 재바인딩은 DSN-13, `tokens.ts`·`ThemeProvider`·공용 primitive는 DSN-19, route·shell·domain consumer는 DSN-21 또는 이미 연결된 Product 이슈가 소유한다.
+기존 Figma Components/Screens는 `[Legacy] Color`에 바인딩돼 있다. DSN-4에서는 아래 대응과 분기 규칙을 고정한다. 실제 Figma 재바인딩은 DSN-13, `tokens.ts`·`ThemeProvider`·공용 primitive는 DSN-19, route·shell·domain consumer의 개별 이관 slice는 DSN-21 또는 이미 연결된 Product 이슈가 소유한다. PROD-812는 이 결과와 남은 inventory를 인수해 프로덕션 전체 Dark 활성화 gate와 통합 검증을 닫는다.
 
 | Legacy Figma / 현재 코드             | Production semantic                                                      | 이관 규칙                                                              |
 | ------------------------------------ | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
@@ -204,17 +204,19 @@ Figma의 [`08 Component Usage Mapping`](https://www.figma.com/design/Erj975S6vVP
 
 - **DSN-19:** production semantic token 코드, runtime theme selector와 Button·TextField·ModalSheet·ActionMenu·ToastProvider·StateView 등 공용 primitive를 이관한다.
 - **DSN-21 / 연결된 Product 이슈:** route·shell·domain call-site가 공용 token과 primitive를 소비하도록 이관하고, 화면별 예외를 닫는다. 별도 제품 의미 결정이 필요한 consumer는 연결된 Product 이슈로 분리하되, 이슈가 연결되기 전까지 DSN-21 inventory에 남긴다.
+- **PROD-812:** DSN-19와 DSN-21/연결 Product 이슈의 완료 결과를 재사용하고, 남은 consumer 이관·예외 종결과 지원 플랫폼의 대표 Light/Dark 화면·주요 interaction state 통합 검증을 소유한다. 이 범위가 완료되기 전에는 System/Dark 사용자 선택을 활성화하지 않는다.
 - **DSN-13:** DSN-19와 DSN-21/Product 구현이 확정된 뒤 Figma Components/Screens를 Production Semantic Color로 재바인딩하고 최종 mapping evidence를 갱신한다.
 
 ### 현재 raw·legacy consumer inventory
 
-아래 목록은 `apps/app/src`의 활성 코드에서 확인한 migration 입력이다. 테스트 fixture와 Storybook assertion의 예시 색상값은 구현 결과에 맞춰 해당 이슈에서 갱신하며 이 표의 별도 consumer로 세지 않는다.
+아래 목록은 `apps/app/src`의 활성 코드와 Native system theme에 영향을 주는 `apps/app/app.config.ts`에서 확인한 migration 입력이다. 테스트 fixture와 Storybook assertion의 예시 색상값은 구현 결과에 맞춰 해당 이슈에서 갱신하며 이 표의 별도 consumer로 세지 않는다.
 
 - **DSN-21 feed plane slice:** `shell/UniversalShell.tsx` root·center plane, `PageHeader.tsx`, `bookmark/BookmarkList.tsx`, `post/PostList.tsx`, `post/PostListItem.tsx`, `post/PostLayout.tsx`, `post/PostThreadLayout.tsx`, `post/PostSourcePresentationView.tsx`의 legacy background·card·border·divider를 분리한다. Route·header·loading·empty host와 연속 feed는 canvas, post·thread row는 no fill/inherit + `border/subtle`, 내부 preview는 `background/surface` + `border/default`를 사용하며 feed·row에는 elevated를 사용하지 않는다.
 
 | Consumer                                                                                                                                                                         | 현재 표현                                                               | 판정                 | 목표 token·규칙                                                                              | 후속 소유                                   |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `theme/tokens.ts`, `ThemeProvider.tsx`                                                                                                                                           | Production semantic Light/Dark와 명시적 selector API; 앱 기본값은 Light | 완료·호환            | legacy flat key는 DSN-21 consumer 이관 동안만 compatibility alias로 유지                     | DSN-19 완료, alias 제거는 DSN-21 이후       |
+| `apps/app/app.config.ts`                                                                                                                                                         | Expo `userInterfaceStyle: 'light'` 고정                                 | 후속                 | `automatic`으로 이관하고 Native rebuild 후 OS Light/Dark의 `시스템` 전환 검증                | PROD-812                                    |
 | `theme/tokens.ts`의 공용 `shadow`                                                                                                                                                | named Light/Dark elevation과 deprecated raw fallback                    | 완료·호환            | 공용 primitive는 named elevation을 사용하고 기존 route/domain import만 fallback 유지         | DSN-19 완료, fallback 제거는 DSN-21 이후    |
 | `ui/Button.tsx`                                                                                                                                                                  | Danger `base/on-base`와 disabled pair                                   | 완료                 | `color/feedback/danger/*`, `color/state/disabled-*`                                          | DSN-19                                      |
 | `ui/ModalSheet.tsx`, `ui/ActionMenu.tsx`                                                                                                                                         | semantic elevated surface, border와 표준 scrim                          | 완료                 | `color/background/elevated`, `color/border/default`, `color/overlay/scrim`                   | DSN-19                                      |
@@ -237,11 +239,13 @@ PROD-750 scrim migration 대상은 `theme.overlayScrim`을 공통 backdrop으로
 
 ## Runtime theme 전략
 
-Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱의 `AppProviders`는 아직 Light를 명시적으로 공급한다. 프로덕션 전체 Dark 활성화 gate는 DSN-21 또는 연결된 Product 이슈의 route·shell·domain consumer 이관까지 완료된 뒤 닫는다.
+Figma와 semantic contract는 Light/Dark를 모두 production 값으로 제공한다. `ThemeProvider`는 명시적 Light/Dark selector API를 제공하고 공용 primitive는 선택된 semantic mode를 소비한다. 앱의 `AppProviders`는 아직 Light를 명시적으로 공급한다. 프로덕션 전체 Dark 활성화 gate는 PROD-812가 DSN-21 또는 연결된 Product 이슈의 남은 route·shell·domain consumer를 semantic token으로 이관하거나 위 inventory의 예외로 닫고, 지원 플랫폼의 대표 화면과 주요 interaction state 검증까지 완료한 뒤 닫는다.
 
 - 공용 primitive가 semantic foreground pair와 interaction state를 소비한다.
 - DSN-19의 공용 primitive raw 값과 DSN-21/Product의 route·shell·domain raw 값이 각각 이관되거나 위 inventory의 예외로 남는다.
-- DSN-19 Storybook에서 공용 primitive의 Light/Dark와 핵심 state를 검증하고, DSN-21/Product가 대표 route·shell consumer의 theme 전환을 검증한다.
+- DSN-19 Storybook의 공용 primitive Light/Dark·핵심 state와 DSN-21/Product의 기존 route·shell consumer 이관 증거를 재사용하고, PROD-812가 남은 inventory 종결과 지원 플랫폼의 대표 theme 전환을 통합 검증한다.
+- PROD-812는 resolved theme를 Native `StatusBar` foreground style과 Web `theme-color`에도 반영하고, Light OS에서 명시적 Dark, Dark OS에서 명시적 Light, `시스템` 선택 중 OS mode 전환을 지원 플랫폼별로 검증한다.
+- PROD-812는 Expo `userInterfaceStyle`을 `automatic`으로 이관한 Native rebuild에서 Android/iOS OS Light/Dark 전환이 `시스템` resolved theme에 반영되는지 검증한다.
 - Web 자동 대비와 실제 Android/iOS runtime QA를 서로 다른 증거로 기록한다.
 
 ## 예외와 금지
