@@ -38,6 +38,7 @@ import {
   getShellRoutePresentation,
   getWebMobileShellHeader,
   isSettingsRoute,
+  isTimelineRoute,
   isWebMobileRouteOwnedHeader,
   webMobileShellHeaderHeight,
 } from './shellLayout';
@@ -159,7 +160,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
-  const home = pathname === '/home';
+  const timeline = isTimelineRoute(pathname);
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
@@ -336,7 +337,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 },
               ]}
             >
-              {home ? (
+              {timeline ? (
                 <PageHeader
                   accessibilityLabel="홈"
                   leading={menuButton}

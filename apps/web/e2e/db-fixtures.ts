@@ -76,9 +76,11 @@ type CreateE2EFollowOptions = {
 
 type CreateE2EPostOptions = {
   body?: string;
+  content?: boolean;
   createdAt?: string;
   profileId: string;
   replyParentId?: string;
+  repostSourceId?: string;
   state?: PostState;
   visibility?: PostVisibility;
 };
@@ -356,12 +358,17 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       .values({
         profileId: options.profileId,
         ...(options.replyParentId ? { replyParentId: options.replyParentId } : {}),
+        ...(options.repostSourceId ? { repostSourceId: options.repostSourceId } : {}),
         state: options.state ?? PostState.ACTIVE,
         visibility: options.visibility ?? PostVisibility.PUBLIC,
         ...(createdAt ? { createdAt } : {}),
       })
       .returning()
       .then(firstOrThrow);
+
+    if (options.content === false) {
+      return post;
+    }
 
     const content = await tx
       .insert(PostContents)

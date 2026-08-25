@@ -41,6 +41,10 @@ export function isSettingsRoute(pathname: string) {
   return pathname === '/settings' || pathname.startsWith('/settings/');
 }
 
+export function isTimelineRoute(pathname: string) {
+  return pathname === '/home' || pathname === '/local';
+}
+
 export function getShellRoutePresentation(web: boolean, width: number, pathname: string) {
   const layout = getShellLayout(web, width);
   const settingsWorkspace = layout === 'full' && isSettingsRoute(pathname);

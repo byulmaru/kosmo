@@ -8,6 +8,7 @@ import {
   getWebMobileShellHeader,
   getWebMobileShellHeaderStickyOffset,
   isSettingsRoute,
+  isTimelineRoute,
   isWebMobileRouteOwnedHeader,
   profileEditActionLabelColor,
 } from './shellLayout';
@@ -92,6 +93,13 @@ describe('getShellLayout', () => {
     assert.equal(isSettingsRoute('/settings/default-post-visibility'), true);
     assert.equal(isSettingsRoute('/settings-legacy'), false);
     assert.equal(isSettingsRoute('/profile/settings'), false);
+  });
+
+  it('treats Home and Local as one primary timeline route family', () => {
+    assert.equal(isTimelineRoute('/home'), true);
+    assert.equal(isTimelineRoute('/local'), true);
+    assert.equal(isTimelineRoute('/local/post'), false);
+    assert.equal(isTimelineRoute('/search'), false);
   });
 
   it('replaces only the full Web RightRail with the Settings workspace', () => {
