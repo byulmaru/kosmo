@@ -7,7 +7,7 @@ on:
     types: [completed]
 
 permissions:
-  contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -22,6 +22,8 @@ jobs:
     env:
       ARGOCD_CLI_VERSION: 3.4.2
       ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
+      TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+      BUILD_RUN_ID: ${{ github.event.workflow_run.id }}
     steps:
       - name: Install Argo CD CLI
         uses: clowdhaus/argo-cd-action@946f488cf2607049c2e6ca86902ac50783927ec1 # v4.2.0
@@ -36,6 +38,29 @@ jobs:
           oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
           audience: ${{ vars.TAILSCALE_AUDIENCE }}
           tags: tag:github-actions
+
+      - name: Download canonical release manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: canonical-release-manifest
+          path: canonical-release-manifest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Validate canonical release manifest
+        id: manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          manifest_path="canonical-release-manifest/release-manifest.json"
+          image_digest="$(jq -er '.runtimes.runtime | select(test("^sha256:[0-9a-f]{64}$"))' "${manifest_path}")"
+          image_reference="ghcr.io/${GITHUB_REPOSITORY}@${image_digest}"
+
+          {
+            echo "image_digest=${image_digest}"
+            echo "image_reference=${image_reference}"
+          } >> "${GITHUB_OUTPUT}"
 
       - name: Get Argo CD token
         id: argocd-token
@@ -75,11 +100,26 @@ jobs:
       - name: Sync dev application
         env:
           ARGOCD_AUTH_TOKEN: ${{ steps.argocd-token.outputs.token }}
+          IMAGE_DIGEST: ${{ steps.manifest.outputs.image_digest }}
         shell: bash
         run: |
           set -euo pipefail
 
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev --timeout 600
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-dev \
+            --revision "${TARGET_SHA}" \
+            -p "version=${TARGET_SHA}" \
+            -p "imageDigest=${IMAGE_DIGEST}" \
+            -p "runtimeConfig.openPanelClientId=" \
+            -p "migration.enabled=true" \
+            --validate
+
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app sync kosmo-dev \
+            --revision "${TARGET_SHA}" \
+            --timeout 600
+          argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-dev \
+            --sync \
+            --health \
+            --timeout 600
 
       - name: Restart dev workloads
         env:
@@ -101,3 +141,22 @@ jobs:
             --kind Deployment \
             --namespace kosmo-dev \
             --all
+
+      - name: Record dev release
+        if: always()
+        env:
+          IMAGE_DIGEST: ${{ steps.manifest.outputs.image_digest }}
+          IMAGE_REFERENCE: ${{ steps.manifest.outputs.image_reference }}
+          RESULT: ${{ job.status }}
+        shell: bash
+        run: |
+          {
+            echo "### Dev canonical release"
+            echo
+            echo "- Target SHA: ${TARGET_SHA}"
+            echo "- Canonical build run: ${BUILD_RUN_ID}"
+            echo "- Runtime image set: ${IMAGE_REFERENCE}"
+            echo "- Argo source revision: ${TARGET_SHA}"
+            echo "- Migration/workload digest: ${IMAGE_DIGEST}"
+            echo "- Result: ${RESULT}"
+          } >> "${GITHUB_STEP_SUMMARY}"

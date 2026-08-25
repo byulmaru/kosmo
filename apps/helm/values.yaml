@@ -2,6 +2,10 @@ env:
 image: ghcr.io/byulmaru/kosmo
 imageDigest: ''
 version: main
+runtimeConfig:
+  # Browser public telemetry is a deploy-time value. Keep dev empty unless a
+  # separate non-production OpenPanel project is explicitly configured.
+  openPanelClientId: ''
 worker:
   replicas:
     dev: 1

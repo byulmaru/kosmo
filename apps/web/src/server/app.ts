@@ -63,6 +63,19 @@ app.onError((cause, c) => {
 app.get('/health', (c) => c.text('ok'));
 app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
+app.get('/runtime-config.json', (c) => {
+  c.header('Cache-Control', 'no-store');
+  const environment = process.env.ENVIRONMENT;
+  return environment
+    ? c.json({
+        environment,
+        openPanelClientId: process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID || null,
+        sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || null,
+      })
+    : c.json({ error: 'Runtime config is unavailable.' }, 500);
+});
+app.all('/runtime-config.json', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
+
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);

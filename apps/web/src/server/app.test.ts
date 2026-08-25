@@ -86,6 +86,9 @@ beforeEach(() => {
   vi.stubEnv('OIDC_CLIENT_SECRET', 'kosmo-secret');
   vi.stubEnv('PUBLIC_API_ORIGIN', 'https://api.example');
   vi.stubEnv('PUBLIC_ORIGIN', undefined);
+  vi.stubEnv('ENVIRONMENT', 'development');
+  vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', 'https://public@example.invalid/1');
+  vi.stubEnv('EXPO_PUBLIC_OPENPANEL_CLIENT_ID', undefined);
   discovery.mockImplementation(
     async (_issuer, clientId, metadata) =>
       new Configuration(
@@ -449,6 +452,46 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
+  test('serves an allowlisted, no-store browser runtime config', async () => {
+    vi.stubEnv('EXPO_PUBLIC_OPENPANEL_CLIENT_ID', 'openpanel-client');
+    vi.stubEnv('DATABASE_URL', 'must-not-be-public');
+    const response = await app.request('/runtime-config.json');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(await response.json()).toEqual({
+      environment: 'development',
+      openPanelClientId: 'openpanel-client',
+      sentryDsn: 'https://public@example.invalid/1',
+    });
+  });
+
+  test('returns nullable telemetry fields and requires an environment', async () => {
+    vi.stubEnv('EXPO_PUBLIC_SENTRY_DSN', undefined);
+    vi.stubEnv('EXPO_PUBLIC_OPENPANEL_CLIENT_ID', '');
+    const nullable = await app.request('/runtime-config.json');
+    expect(nullable.status).toBe(200);
+    expect(await nullable.json()).toEqual({
+      environment: 'development',
+      openPanelClientId: null,
+      sentryDsn: null,
+    });
+
+    vi.stubEnv('ENVIRONMENT', undefined);
+    const invalid = await app.request('/runtime-config.json');
+    expect(invalid.status).toBe(500);
+    expect(invalid.headers.get('cache-control')).toBe('no-store');
+    expect(await invalid.json()).toEqual({ error: 'Runtime config is unavailable.' });
+  });
+
+  test('rejects unsupported methods without falling through to static assets', async () => {
+    const response = await app.request('/runtime-config.json', { method: 'POST' });
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET');
+  });
+
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },

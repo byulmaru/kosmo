@@ -9,7 +9,7 @@ let identifiedAccountId: string | null = null;
 type OpenPanelConstructor = new (options: ConstructorParameters<typeof OpenPanel>[0]) => OpenPanel;
 
 export function initializeAnalytics(
-  clientId: string | undefined = process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID,
+  clientId?: string | null,
   Client: OpenPanelConstructor = OpenPanel,
 ): OpenPanel | null {
   if (client !== undefined) {
@@ -17,8 +17,7 @@ export function initializeAnalytics(
   }
 
   if (!clientId) {
-    client = null;
-    return client;
+    return (client = null);
   }
 
   try {

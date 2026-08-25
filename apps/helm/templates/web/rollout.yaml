@@ -51,6 +51,8 @@ spec:
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            - name: EXPO_PUBLIC_OPENPANEL_CLIENT_ID
+              value: {{ default "" .Values.runtimeConfig.openPanelClientId | quote }}
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:

@@ -133,6 +133,7 @@ export default defineConfig({
       command: 'pnpm --dir ../app build && node --import tsx src/server/index.ts',
       env: {
         DATABASE_URL: databaseUrl,
+        ENVIRONMENT: 'test',
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,

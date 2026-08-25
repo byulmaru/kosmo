@@ -59,7 +59,6 @@ beforeEach(() => {
   constructorFails = false;
   methodFails = false;
   instances.length = 0;
-  delete process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID;
 });
 
 describe('OpenPanel Web client', () => {
@@ -69,8 +68,6 @@ describe('OpenPanel Web client', () => {
   });
 
   it('Web Client ID로 self-hosted 자동 수집과 10% replay를 설정한다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
-
     analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
 
     assert.equal(instances.length, 1);
@@ -90,8 +87,6 @@ describe('OpenPanel Web client', () => {
   });
 
   it('Account ID만 identify하고 같은 identity를 중복 적용하지 않는다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
-
     analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
     analytics.identifyAnalytics('account-id');
     analytics.identifyAnalytics('account-id');
@@ -100,8 +95,6 @@ describe('OpenPanel Web client', () => {
   });
 
   it('허용된 taxonomy와 속성으로 event를 보내고 clear한다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
-
     analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass);
     analytics.identifyAnalytics('account-id');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
@@ -144,7 +137,6 @@ describe('OpenPanel Web client', () => {
   });
 
   it('초기화와 SDK method 실패를 제품 흐름으로 전파하지 않는다', () => {
-    process.env.EXPO_PUBLIC_OPENPANEL_CLIENT_ID = 'client-id';
     constructorFails = true;
     assert.doesNotThrow(() =>
       analytics.initializeAnalytics('client-id', FakeOpenPanel as unknown as OpenPanelClass),

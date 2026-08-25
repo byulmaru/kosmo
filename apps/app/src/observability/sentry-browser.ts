@@ -1,22 +1,38 @@
 import * as Sentry from '@sentry/react';
 import type { ErrorInfo } from 'react';
+import type { BrowserRuntimeConfig } from '@/runtimeConfig';
 
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-const environment = process.env.EXPO_PUBLIC_ENVIRONMENT;
-const release = process.env.EXPO_PUBLIC_SENTRY_RELEASE;
-const enabled = Boolean(dsn && environment && release);
+let initialized = false;
+let enabled = false;
 
-if (enabled) {
-  Sentry.init({
-    beforeBreadcrumb: () => null,
-    dsn,
-    environment,
-    initialScope: { tags: { runtime: 'web' } },
-    integrations: (integrations) =>
-      integrations.filter((integration) => integration.name !== 'BrowserSession'),
-    release,
-    sendDefaultPii: false,
-  });
+export function initializeBrowserSentry(config: BrowserRuntimeConfig): boolean {
+  if (initialized) {
+    return enabled;
+  }
+
+  initialized = true;
+  const release = process.env.EXPO_PUBLIC_SENTRY_RELEASE;
+  if (!config.sentryDsn || !release) {
+    return false;
+  }
+
+  try {
+    Sentry.init({
+      beforeBreadcrumb: () => null,
+      dsn: config.sentryDsn,
+      environment: config.environment,
+      initialScope: { tags: { runtime: 'web' } },
+      integrations: (integrations) =>
+        integrations.filter((integration) => integration.name !== 'BrowserSession'),
+      release,
+      sendDefaultPii: false,
+    });
+    enabled = true;
+  } catch {
+    // Browser telemetry is best-effort and must not block application startup.
+    enabled = false;
+  }
+  return enabled;
 }
 
 export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
@@ -26,3 +42,8 @@ export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
     });
   }
 };
+
+export function resetBrowserSentryForTests(): void {
+  initialized = false;
+  enabled = false;
+}

@@ -1,41 +1,35 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import * as Sentry from '@sentry/react';
+import {
+  captureReactError,
+  initializeBrowserSentry,
+  resetBrowserSentryForTests,
+} from './sentry-browser';
 
-const metadataKeys = [
-  'EXPO_PUBLIC_ENVIRONMENT',
-  'EXPO_PUBLIC_SENTRY_DSN',
-  'EXPO_PUBLIC_SENTRY_RELEASE',
-] as const;
-const originalMetadata = Object.fromEntries(metadataKeys.map((key) => [key, process.env[key]]));
-const sentryModule = new URL('./sentry-browser.ts', import.meta.url).href;
+const runtimeConfig = {
+  environment: 'production',
+  openPanelClientId: null,
+  sentryDsn: 'https://public@example.invalid/1',
+} as const;
 
-const setMetadata = (metadata: Partial<Record<(typeof metadataKeys)[number], string>>) => {
-  for (const key of metadataKeys) {
-    const value = metadata[key];
-    if (value) {
-      process.env[key] = value;
-    } else {
-      delete process.env[key];
-    }
-  }
-};
+beforeEach(() => {
+  resetBrowserSentryForTests();
+  process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+});
+
+afterEach(async () => {
+  await Sentry.close(0);
+  resetBrowserSentryForTests();
+  delete process.env.EXPO_PUBLIC_SENTRY_RELEASE;
+});
 
 describe('Web app Sentry configuration', () => {
-  it('initializes only with complete public deployment metadata', async (context) => {
-    context.after(() => setMetadata(originalMetadata));
-    setMetadata({});
-    await import(`${sentryModule}?disabled`);
-    assert.equal(Sentry.getClient(), undefined);
-
-    setMetadata({
-      EXPO_PUBLIC_ENVIRONMENT: 'production',
-      EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
-      EXPO_PUBLIC_SENTRY_RELEASE: 'kosmo@abc123',
-    });
-    await import(`${sentryModule}?enabled`);
+  it('initializes from runtime DSN/environment and build release metadata', () => {
+    assert.equal(initializeBrowserSentry(runtimeConfig), true);
 
     const options = Sentry.getClient()?.getOptions();
+    assert.equal(options?.dsn, runtimeConfig.sentryDsn);
     assert.equal(options?.environment, 'production');
     assert.equal(options?.release, 'kosmo@abc123');
     assert.deepEqual(options?.initialScope, { tags: { runtime: 'web' } });
@@ -45,6 +39,13 @@ describe('Web app Sentry configuration', () => {
       options?.integrations?.some((integration) => integration.name === 'BrowserSession'),
       false,
     );
-    await Sentry.close(0);
+  });
+
+  it('is idempotent and keeps React error capture best-effort', () => {
+    assert.equal(initializeBrowserSentry(runtimeConfig), true);
+    assert.equal(initializeBrowserSentry({ ...runtimeConfig, environment: 'development' }), true);
+    assert.doesNotThrow(() =>
+      captureReactError(new Error('render failure'), { componentStack: '\n at App' }),
+    );
   });
 });
