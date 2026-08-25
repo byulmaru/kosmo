@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { AnalyticsPageviewBridge } from '@/analytics/AnalyticsPageviewBridge';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import {
@@ -44,7 +43,6 @@ export function AppProviders({ children }: PropsWithChildren) {
     <ThemeProvider mode="light">
       <ToastProvider>
         <RelayActorProvider>
-          <AnalyticsPageviewBridge />
           <RelaySessionBoundary>{children}</RelaySessionBoundary>
         </RelayActorProvider>
       </ToastProvider>

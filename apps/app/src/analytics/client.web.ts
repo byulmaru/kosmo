@@ -3,7 +3,6 @@ import type { PostHog, PostHogConfig } from 'posthog-js';
 import type { TrackProperties } from './client';
 
 const EVENT_PROPERTIES = {
-  $pageview: ['route_template'],
   profile_created: ['selected_profile_id'],
   profile_selected: ['selected_profile_id'],
   post_created: ['selected_profile_id', 'visibility'],

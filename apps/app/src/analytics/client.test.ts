@@ -174,10 +174,6 @@ describe('PostHog Web client', () => {
       analytics.trackAnalytics(event, properties);
     }
     analytics.trackAnalytics('unknown_event', { selected_profile_id: 'profile-id' });
-    analytics.trackAnalytics('$pageview', {
-      route_template: '/profile/[profileHandle]',
-      pathname: '/@private-handle',
-    });
 
     assert.deepEqual(instance.calls, [
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
@@ -199,7 +195,6 @@ describe('PostHog Web client', () => {
         properties: { tab: 'people', has_results: true },
       },
       { event: 'search_result_selected', properties: { tab: 'people' } },
-      { event: '$pageview', properties: { route_template: '/profile/[profileHandle]' } },
     ]);
   });
 
