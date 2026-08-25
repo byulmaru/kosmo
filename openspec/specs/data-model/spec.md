@@ -530,6 +530,8 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: Notification 단일 projection 저장
 
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `docs/domain/objects/follow-request.md`, `docs/domain/decisions/0009-pending-only-follow-request-lifecycle.md`, `PROD-321` — 시스템은 Profile-scoped Notification을 단일 projection에 저장해야 한다(MUST).
+
 시스템은 Profile-scoped Notification의 identity, Recipient, kind, loose source reference, kind-specific data, 생성 시각과 최초 Read 시각을 하나의 `notification` table에 저장해야 한다(MUST).
 
 #### Scenario: Follow Notification row 저장
@@ -541,11 +543,18 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **AND** `data`는 PostgreSQL `jsonb NOT NULL DEFAULT '{}'::jsonb`이며 애플리케이션이 kind별 shape를 검증한다
 - **AND** 별도 Read State enum, type-specific extension table, 미래 source column이나 mutable `updated_at`을 저장하지 않는다
 
+#### Scenario: Follow Request Notification row 저장
+
+- **WHEN** 새 pending `ProfileFollowRequest`에 대한 Notification을 생성한다
+- **THEN** 시스템은 같은 `notification` table에 `kind = FOLLOW_REQUEST`, `source_id = ProfileFollowRequest.id`, `recipient_profile_id = Followee Profile.id`, `data = {}`, `created_at`과 nullable `read_at`을 저장한다
+- **AND** requester Profile ID·이름·handle snapshot을 `data`에 복제하지 않는다
+- **AND** 배포 전에 존재한 pending request에는 이 row를 소급 생성하지 않는다
+
 #### Scenario: Notification kind enum
 
-- **WHEN** migration이 Notification schema를 생성한다
-- **THEN** 시스템은 `notification_kind` enum에 현재 지원 값 `FOLLOW`, `REACTION`, `REPLY`, `REPOST`를 유지한다
-- **AND** API는 각 kind row를 `FollowNotification`, `ReactionNotification`, `ReplyNotification`, `RepostNotification` concrete object로 해석한다
+- **WHEN** migration이 Notification schema를 생성하거나 기존 enum을 확장한다
+- **THEN** 시스템은 `notification_kind` enum에 현재 지원 값 `FOLLOW`, `FOLLOW_REQUEST`, `REACTION`, `REPLY`, `REPOST`를 유지한다
+- **AND** API는 각 kind row를 `FollowNotification`, Follow Request 전용 concrete object, `ReactionNotification`, `ReplyNotification`, `RepostNotification`으로 해석한다
 - **AND** 아직 구현하지 않는 Notification kind 값을 선제 추가하지 않는다
 
 #### Scenario: 의도적인 loose source reference
@@ -553,7 +562,8 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 - **WHEN** `notification.source_id`를 정의한다
 - **THEN** 시스템은 이를 PostgreSQL `uuid NOT NULL`로 저장하되 source table foreign key를 만들지 않는다
 - **AND** `kind`가 source table과 `data` shape를 결정한다
-- **AND** FOLLOW의 `source_id`는 `profile_follow.id`를 의미하고 `data`에는 Recipient, Related Profile, 이름 또는 handle snapshot을 복제하지 않는다
+- **AND** FOLLOW의 `source_id`는 `profile_follow.id`, FOLLOW_REQUEST의 `source_id`는 `profile_follow_request.id`를 의미한다
+- **AND** 두 kind 모두 `data`에 Recipient, Related Profile, 이름 또는 handle snapshot을 복제하지 않는다
 
 #### Scenario: 동일 Recipient와 kind와 source 직접 중복 insert
 
@@ -581,13 +591,15 @@ kosmo의 현재 PostgreSQL/Drizzle 기반 도메인 저장 모델, ID 생성 규
 
 ### Requirement: Profile-scoped Notification kind 확장 경계
 
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-321` — Profile-scoped Notification kind는 같은 projection에 source mapping과 최소 data shape를 추가해야 한다(MUST).
+
 후속 Profile-scoped Notification kind는 같은 `notification` table에 자신의 source mapping과 최소 data shape를 추가해야 하며(MUST), 별도 extension framework를 선제 요구해서는 안 된다(MUST NOT).
 
-#### Scenario: 후속 Profile-scoped Notification kind 추가
+#### Scenario: FOLLOW_REQUEST kind 추가
 
-- **WHEN** 후속 change가 새 Profile-scoped Notification kind를 구현한다
-- **THEN** 그 change는 `notification_kind` 값, GraphQL concrete object, kind resolution, 해당 kind의 `source_id` 의미와 `data` validation을 함께 정의한다
-- **AND** 새 kind가 실제로 별도 durable table을 필요로 하지 않는 한 type-specific Notification extension table을 만들지 않는다
+- **WHEN** 이번 change가 Follow Request Notification을 구현한다
+- **THEN** `notification_kind`의 `FOLLOW_REQUEST` 값, GraphQL concrete object, kind resolution, `source_id = profile_follow_request.id` 의미와 `data = {}` shape를 함께 정의한다
+- **AND** 별도 type-specific Notification extension table을 만들지 않는다
 
 #### Scenario: Account-scoped Operational Notification
 
@@ -849,3 +861,53 @@ canonical application projection에서 `UNLISTED`로 동작해야 한다(MUST). 
 - **WHEN** Source Repost가 Tombstone이 되거나 action 밖의 경로에서 source가 unavailable해진다
 - **THEN** Notification 행과 Read State는 PROD-725 effects Workflow의 cleanup 완료 전이나 terminal failure 뒤에 남을 수 있다
 - **AND** database cascade 또는 trigger가 source lifecycle을 대신하지 않는다
+
+### Requirement: Directed Follow pair identity
+
+**Authority / Provenance:** `docs/domain/objects/follow-relationship.md`, `docs/domain/objects/follow-request.md`, `docs/architecture/core-services.md`, PROD-720 — The system MUST satisfy this requirement.
+
+The system MUST use the ordered follower and followee Profile IDs as the identity of one directed Follow pair. The pair identity MUST be deterministic and MUST NOT introduce a random operation identity or a new receipt table. Existing Follow and Follow Request rows remain the authoritative domain state; their row IDs remain the exact source identities for protocol and Notification effects.
+
+#### Scenario: Derive a directed pair identity
+
+- **WHEN** a caller starts a Follow lifecycle for follower `A` and followee `B`
+- **THEN** the Workflow ID is `profile-follow-pair:A:B` (with the repository's canonical escaping/encoding for Profile IDs), and `B → A` uses a different ID
+
+#### Scenario: Reuse a pair identity after a terminal lifecycle
+
+- **WHEN** the active pair Workflow is running or the previous pair run has completed
+- **THEN** Update-with-Start uses `USE_EXISTING` for the active run and `ALLOW_DUPLICATE` for a completed run so a new Follow lifecycle can use the same directed pair identity
+
+#### Scenario: Pair rows remain authoritative
+
+- **WHEN** a Follow, Follow Request, approval, rejection, cancellation, or protocol transition is committed
+- **THEN** the existing pair uniqueness and exact-row rules remain the source of truth, and the Workflow identity does not replace the Follow or Follow Request row ID
+
+### Requirement: Retry reconstruction without a command receipt
+
+The system MUST make pair transition Activities safe for at-least-once execution without adding a command receipt, generic ledger, or lifecycle outbox table. A retry MUST re-check the directed pair and the expected source identity before applying DML or producing effects. Before a create transition, the Workflow MUST assign the candidate Follow or Follow Request row ID and preserve it in history; the Activity MUST insert that exact domain row ID. The candidate row ID is the identity of the entity that may be created, not a command operation ID or receipt key.
+
+#### Scenario: Retry after a committed transition loses completion
+
+- **WHEN** a transition Activity commits and its completion is lost before Temporal records it
+- **THEN** a retry compares the current row with the candidate domain row ID preserved in Workflow history, recognizes the already-applied transition without confusing it with a pre-existing row, does not apply it twice, and returns the same Follow or Follow Request source identity
+
+#### Scenario: Retry a deletion transition
+
+- **WHEN** a retry needs an object that was deleted by the committed transition
+- **THEN** the command carries or deterministically reconstructs the minimum immutable deleted-source snapshot required by its effects, including the exact source ID and creation time, rather than reading a later row for the same pair
+
+#### Scenario: Stale source does not mutate a new lifecycle
+
+- **WHEN** a delayed command names a source row that no longer represents the current pair lifecycle
+- **THEN** exact-row validation makes the command a no-op or domain conflict and prevents it from deleting or creating effects for a later Follow or Follow Request
+
+#### Scenario: Transaction rollback
+
+- **WHEN** a pair transition rolls back or is rejected as a known domain error
+- **THEN** no Follow or Follow Request state, source snapshot, or downstream effect is committed for that transition
+
+#### Scenario: Pair concurrency remains database-owned
+
+- **WHEN** concurrent callers attempt a transition for the same directed pair
+- **THEN** existing unique constraints, exact-row predicates, and atomic domain DML decide the committed result; the pair Workflow does not become a separate database mutex

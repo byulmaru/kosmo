@@ -126,9 +126,7 @@ Canonical 계약, delta specs, pair lifecycle implementation과 real Temporal va
 - focused Core/API/Fedify/Worker test
 - full Web E2E with real Temporal server/Worker
 - lint, type, prettier, strict OpenSpec, migration smoke와 diff review
-- PR body/Stack/Ready state는 별도 승인 후 갱신
 
 - [x] 4.1 canonical follow docs, delta specs와 PROD-720 계약을 pair lifecycle로 동기화한다.
-- [ ] 4.2 focused 및 full Web real Temporal lifecycle/effects validation을 통과시킨다.
-- [ ] 4.3 lint, type, prettier, strict OpenSpec, migration과 diff 검증을 통과시킨다.
-- [ ] 4.4 공식 gh-stack으로 구현 PR을 갱신하고 exact head/Stack state를 확인한다.
+- [x] 4.2 focused 및 full Web real Temporal lifecycle/effects validation을 통과시킨다.
+- [x] 4.3 lint, type, prettier, strict OpenSpec, migration과 diff 검증을 통과시킨다.
