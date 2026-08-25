@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- Web, API, Fedify Consumer와 migration은 실제 실행 graph를 JavaScript로 bundle하고, 최종 image에서 TypeScript source, `tsx`, 범용 workspace `node_modules`와 개발 dependency를 제거한다.
+- Web, API, Fedify Consumer와 migration의 workspace application code는 실제 실행 graph를 JavaScript로 bundle한다. Third-party bare import는 build graph에서 자동 도출한 runtime manifest로 package manager가 설치하며, 최종 image에서 TypeScript source, `tsx`, 범용 workspace `node_modules`와 개발 dependency를 제거한다.
 - Temporal Worker host와 Workflow code를 build 단계에서 각각 준비하고, Worker image에는 target Linux/ARM64에서 필요한 Temporal native/runtime artifact만 남긴다.
 - Web, API, Worker, Fedify Consumer와 migration을 서로 다른 final image로 만들고 각 image의 dependency 구성, boot 동작과 크기를 검증한다.
 - **BREAKING** Helm과 dev/production release identity를 단일 application image digest에서 동일 source SHA와 승인된 build run이 생성한 다섯 runtime image digest의 검증된 release set으로 변경한다.
@@ -38,4 +38,4 @@
 - Deployment: Helm image values/helper와 Web/API/Worker/Fedify Consumer/Migration template, Argo CD parameter 전달과 migration wave.
 - Delivery: dev Docker Build/Deploy workflow, automatic·manual production release workflow, runtime별 digest 검증·감사 기록과 Trivy 대상.
 - Observability: API/Web server source map 생성·Sentry upload와 최종 image 제외.
-- Dependencies: JavaScript bundler를 명시적 build dependency로 추가하며, Temporal native package는 Worker final image의 최소 external runtime dependency로 유지한다.
+- Dependencies: JavaScript bundler를 명시적 build dependency로 추가하고 artifact별 third-party runtime manifest를 build graph에서 생성한다. Temporal native package는 Worker final image의 target ABI external runtime dependency로 유지한다.

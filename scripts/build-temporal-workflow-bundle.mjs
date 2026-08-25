@@ -17,15 +17,6 @@ export const productionWorkflowExports = [
   'repostDeleteWorkflow',
 ];
 
-// These packages stay external to the Worker host bundle. Their production
-// dependency tree, including the target @temporalio/core-bridge .node binary,
-// belongs only to the Worker final image.
-export const assetRuntimeExternalPackages = ['@temporalio/client', 'jsdom'];
-export const workerRuntimeExternalPackages = [
-  ...assetRuntimeExternalPackages,
-  '@temporalio/worker',
-];
-
 function parseArguments(arguments_) {
   const options = {
     outputDir: resolve(repositoryRoot, 'server-dist/worker'),
@@ -138,7 +129,6 @@ export async function buildTemporalWorkflowBundle({
     bytes: Buffer.byteLength(runtimeCode),
     package: '@temporalio/worker',
     workerVersion: workerPackage.version,
-    externalRuntimePackages: [...workerRuntimeExternalPackages],
     workflowSource: relative(repositoryRoot, workflowSourcePath),
     workflowExports: [...productionWorkflowExports],
   };

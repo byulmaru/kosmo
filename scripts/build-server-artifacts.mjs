@@ -1,13 +1,10 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { builtinModules, createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import {
-  assetRuntimeExternalPackages,
-  buildTemporalWorkflowBundle,
-  workerRuntimeExternalPackages,
-} from './build-temporal-workflow-bundle.mjs';
+import { buildTemporalWorkflowBundle } from './build-temporal-workflow-bundle.mjs';
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outputRoot = join(workspaceRoot, 'server-dist');
@@ -20,17 +17,14 @@ export const SERVER_ARTIFACTS = [
   {
     name: 'web',
     entryPoint: 'apps/web/src/server/index.ts',
-    external: assetRuntimeExternalPackages,
   },
   {
     name: 'api',
     entryPoint: 'apps/api/src/index.ts',
-    external: assetRuntimeExternalPackages,
   },
   {
     name: 'fedify-consumer',
     entryPoint: 'apps/fedify-consumer/src/index.ts',
-    external: assetRuntimeExternalPackages,
   },
   {
     name: 'migration',
@@ -39,11 +33,76 @@ export const SERVER_ARTIFACTS = [
   {
     name: 'worker',
     entryPoint: 'apps/worker/src/index.ts',
-    external: workerRuntimeExternalPackages,
   },
 ];
 
 const artifactFileName = 'index.mjs';
+const runtimePackageFileName = 'runtime-package.json';
+const nodeBuiltins = new Set([
+  ...builtinModules,
+  ...builtinModules.map((moduleName) => `node:${moduleName}`),
+]);
+
+function packageNameFromSpecifier(specifier) {
+  if (specifier.startsWith('@')) {
+    return specifier.split('/').slice(0, 2).join('/');
+  }
+  return specifier.split('/')[0];
+}
+
+async function findPackageVersion(resolvedPath, expectedName) {
+  let directory = dirname(resolvedPath);
+  while (directory !== dirname(directory)) {
+    try {
+      const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
+      if (manifest.name === expectedName && typeof manifest.version === 'string') {
+        return manifest.version;
+      }
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+    directory = dirname(directory);
+  }
+  throw new Error(`Could not locate ${expectedName} package metadata from ${resolvedPath}`);
+}
+
+function bundleWorkspacePackagesPlugin() {
+  return {
+    name: 'bundle-workspace-packages',
+    setup(buildContext) {
+      buildContext.onResolve({ filter: /^@kosmo\// }, (arguments_) => {
+        return { path: createRequire(arguments_.importer).resolve(arguments_.path) };
+      });
+    },
+  };
+}
+
+async function runtimeDependenciesFromMetafile(metafile) {
+  const runtimeDependencies = new Map();
+  for (const [input, metadata] of Object.entries(metafile.inputs)) {
+    const importerRequire = createRequire(join(workspaceRoot, input));
+    for (const dependency of metadata.imports.filter(({ external }) => external)) {
+      const specifier = dependency.path;
+      if (nodeBuiltins.has(specifier)) {
+        continue;
+      }
+      const packageName = packageNameFromSpecifier(specifier);
+      const version = await findPackageVersion(importerRequire.resolve(specifier), packageName);
+      const existingVersion = runtimeDependencies.get(packageName);
+      if (existingVersion !== undefined && existingVersion !== version) {
+        throw new Error(
+          `Runtime dependency ${packageName} resolved to both ${existingVersion} and ${version}`,
+        );
+      }
+      runtimeDependencies.set(packageName, version);
+    }
+  }
+  return Object.fromEntries(
+    [...runtimeDependencies.entries()].sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
 
 function assertArtifactSource(entryPoint) {
   if (!entryPoint.endsWith('.ts')) {
@@ -51,7 +110,7 @@ function assertArtifactSource(entryPoint) {
   }
 }
 
-async function buildArtifact({ name, entryPoint, external = [] }, artifactRoot) {
+async function buildArtifact({ name, entryPoint }, artifactRoot) {
   assertArtifactSource(entryPoint);
 
   const outputDirectory = join(artifactRoot, name);
@@ -69,12 +128,12 @@ async function buildArtifact({ name, entryPoint, external = [] }, artifactRoot) 
       },
       bundle: true,
       entryPoints: [absoluteEntryPoint],
-      external,
       format: 'esm',
       metafile: true,
       outfile: outputFile,
       platform: 'node',
-      packages: 'bundle',
+      plugins: [bundleWorkspacePackagesPlugin()],
+      packages: 'external',
       sourcemap: 'external',
       sourcesContent: true,
       target: SERVER_ARTIFACT_TARGET,
@@ -92,13 +151,25 @@ async function buildArtifact({ name, entryPoint, external = [] }, artifactRoot) 
     throw new Error(`esbuild did not return dependency metadata for ${name}.`);
   }
 
+  const dependencies = await runtimeDependenciesFromMetafile(buildResult.metafile);
+  const runtimePackage = {
+    name: `@kosmo/runtime-${name}`,
+    private: true,
+    type: 'module',
+    dependencies,
+  };
+  await writeFile(
+    join(outputDirectory, runtimePackageFileName),
+    `${JSON.stringify(runtimePackage, null, 2)}\n`,
+  );
+
   const metadata = {
     artifact: name,
     entryPoint,
     format: 'esm',
     nodeTarget: SERVER_ARTIFACT_TARGET,
-    ...(external.length > 0 && { external }),
-    files: [artifactFileName, `${artifactFileName}.map`],
+    runtimeDependencies: dependencies,
+    files: [artifactFileName, `${artifactFileName}.map`, runtimePackageFileName],
     inputs: buildResult.metafile.inputs,
     outputs: buildResult.metafile.outputs,
   };
@@ -110,6 +181,7 @@ async function buildArtifact({ name, entryPoint, external = [] }, artifactRoot) 
     entryPoint,
     directory: relativeOutputDirectory(name),
     files: metadata.files,
+    runtimeDependencies: dependencies,
     bytes: (await readFile(outputFile)).byteLength,
   };
 }

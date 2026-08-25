@@ -22,12 +22,11 @@ test('runtime image contracts cover exactly the five split targets', () => {
   );
 });
 
-test('asset-backed runtimes carry only their explicit production dependency tree', () => {
-  assert.equal(RUNTIME_IMAGE_CONTRACTS.worker.requiresWorkerRuntime, true);
-  assert.equal(RUNTIME_IMAGE_CONTRACTS.migration.requiresRuntimeDependencies, false);
+test('only the Worker contract requires the Temporal native runtime', () => {
+  assert.equal(RUNTIME_IMAGE_CONTRACTS.worker.worker, true);
   for (const [runtime, contract] of Object.entries(RUNTIME_IMAGE_CONTRACTS)) {
     if (runtime !== 'worker') {
-      assert.equal(contract.requiresWorkerRuntime, false);
+      assert.equal(contract.worker, undefined);
     }
   }
 });

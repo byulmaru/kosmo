@@ -52,37 +52,41 @@ configuration guard까지 도달한다는 baseline이다.
 
 ## Split image artifact gate
 
-같은 Node 26.5.1 base와 Linux/ARM64 platform에서 2026-08-25에 다섯 final target을
-빌드했다. Inspect size와 `docker save | gzip -1 -n`을 위 baseline과 같은 방식으로
-측정했다.
+같은 Node 26.5.1 base와 Linux/ARM64 platform에서 2026-08-25에 build-graph 기반
+runtime manifest 설계로 다섯 final target을 다시 빌드했다. Inspect size와
+`docker save | gzip -1 -n`을 위 baseline과 같은 방식으로 측정했다. 앞선 수동
+`@temporalio/client`/`jsdom` allowlist 구현의 측정치는 설계 재검토로 폐기했으며 아래
+결과가 현재 artifact gate 증거다.
 
 | Runtime         |  Inspect size | Baseline 대비 | Compressed size | Baseline 대비 | Layers |
 | --------------- | ------------: | ------------: | --------------: | ------------: | -----: |
-| Web             | 234,813,490 B |        -61.1% |   233,362,980 B |        -61.1% |     11 |
-| API             | 224,473,255 B |        -62.9% |   223,078,141 B |        -62.8% |     10 |
-| Worker          | 256,556,592 B |        -57.5% |   254,879,238 B |        -57.5% |     11 |
-| Fedify Consumer | 223,862,903 B |        -63.0% |   222,467,261 B |        -62.9% |     10 |
-| Migration       | 216,006,633 B |        -64.3% |   214,590,803 B |        -64.2% |     10 |
+| Web             | 250,780,614 B |        -58.5% |   249,245,153 B |        -58.5% |     12 |
+| API             | 242,258,405 B |        -59.9% |   240,778,158 B |        -59.9% |     11 |
+| Worker          | 267,076,316 B |        -55.8% |   265,305,658 B |        -55.8% |     12 |
+| Fedify Consumer | 234,413,725 B |        -61.2% |   232,940,732 B |        -61.2% |     11 |
+| Migration       | 218,173,208 B |        -63.9% |   216,731,925 B |        -63.9% |     12 |
 
 모든 image는 UID/GID 10001의 고정 `node /app/server-dist/<runtime>/index.mjs`
 entrypoint를 사용한다. Web만 Expo static/precompressed asset을, Migration만
-version-controlled `drizzle/` SQL을 포함한다. Migration은 `node_modules` 없이
-실행되고, Web/API/Fedify는 package-relative CSS/proto를 읽는 `jsdom`과
-`@temporalio/client`만 명시적 runtime tree로 둔다. 모든 image에서 workspace
-TypeScript source, `tsx`, server source map과 source-map reference가 제거됐다.
+version-controlled `drizzle/` SQL을 포함한다. 각 artifact는 workspace application
+code를 bundle하고 third-party bare import와 설치 version을 esbuild graph에서 자동
+생성한 `runtime-package.json`에 기록한다. 각 final image의 작은 production
+`node_modules`는 이 manifest에서 pnpm이 설치하며, Dockerfile과 검사에는 현재 package
+이름 allowlist가 없다. 모든 image에서 workspace TypeScript source, `tsx`, server
+source map과 source-map reference가 제거됐다.
 
 기존 runtime stage와 동일하게 final image 공통 base에서 Debian package update/upgrade를
 수행한 뒤 측정했다.
 
-Worker는 prebuilt Workflow bundle과 공통 asset runtime tree에
-`@temporalio/worker` 1.22.0만 추가한다. `core-bridge`는
+Worker는 prebuilt Workflow bundle을 사용하며 build graph가
+`@temporalio/worker` 1.22.0을 runtime manifest에 자동 포함한다. `core-bridge`는
 `aarch64-unknown-linux-gnu/index.node` 하나만 보존했으며 container에서 SDK와 bridge를
-실제로 load했다. 격리 container smoke는 `/health` 200, Temporal 연결 전 `/ready`
-503, startup SIGTERM exit 0을 확인했다.
+실제로 load했다.
 
-Web container에서는 `/health`와 Expo static root가 모두 200임을 확인했다. API는
-필수 configuration guard 뒤 실제 local-instance database query까지 실행됐고, API
-unit 28개가 통과했다.
+재설계 후 Web container 내부에서 `/health` 200을 확인했고 Worker container에서
+Temporal SDK와 ARM64 bridge를 실제로 load했다. 다섯 image의 generated manifest에
+기록된 direct dependency가 모두 설치됐고 non-Worker image에서는 Worker SDK/native
+bridge가 resolve되지 않았다.
 
 다섯 고정 JavaScript entrypoint는 빈 환경에서 실행해 Web/API/Worker/Fedify가
 `TEMPORAL_ADDRESS is required`, Migration이 database configuration guard까지 도달함을
