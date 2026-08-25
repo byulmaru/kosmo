@@ -59,12 +59,151 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
+# Docker COPY replaces the ignored workspace node_modules entries. Restore the
+# dependency links from the immutable deps stage so build tools resolve from
+# their owning workspace without another install or lifecycle run.
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=deps /app/apps/app/node_modules ./apps/app/node_modules
+COPY --from=deps /app/apps/fedify-consumer/node_modules ./apps/fedify-consumer/node_modules
+COPY --from=deps /app/apps/worker/node_modules ./apps/worker/node_modules
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
+COPY --from=deps /app/packages/fedify/node_modules ./packages/fedify/node_modules
+
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
   pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \
     \) -exec gzip -9 -n -k {} +
+
+# Keep the artifact contract in a named stage so every split image consumes the
+# exact output that passed the Sentry build (including server source-map
+# handling). The final images copy only their entry module, never this stage's
+# workspace or node_modules.
+FROM app-build AS server-artifacts
+
+RUN set -eux; \
+  for artifact in web api fedify-consumer migration; do \
+    test -s "/app/server-dist/${artifact}/index.mjs"; \
+  done; \
+  test -s /app/server-dist/worker/index.mjs; \
+  test -s /app/server-dist/worker/workflow-bundle.js
+
+# Temporal Client and jsdom stay external because they load package-relative
+# proto/CSS assets. Only Web, API, and Fedify Consumer copy this exact runtime
+# tree; Migration remains dependency-free.
+FROM deps AS asset-runtime-deps
+
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store set -eux; \
+  mkdir /runtime-deploy; \
+  cd /runtime-deploy; \
+  node -e "const fs = require('node:fs'); const { createRequire } = require('node:module'); const coreRequire = createRequire('/app/packages/core/package.json'); const clientVersion = coreRequire('@temporalio/client/package.json').version; const jsdomVersion = coreRequire('jsdom/package.json').version; fs.writeFileSync('package.json', JSON.stringify({ private: true, dependencies: { '@temporalio/client': clientVersion, jsdom: jsdomVersion } }, null, 2) + '\n'); fs.writeFileSync('pnpm-workspace.yaml', '')"; \
+  pnpm install --prod --no-frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store
+
+# Worker adds the SDK host and Node-API bridge to the shared asset-backed
+# runtime boundary, then retains only the Linux/ARM64 native release.
+FROM deps AS worker-deps
+
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store set -eux; \
+  test "${TARGETOS}" = linux; \
+  test "${TARGETARCH}" = arm64; \
+  mkdir /worker-deploy; \
+  cd /worker-deploy; \
+  node -e "const fs = require('node:fs'); const { createRequire } = require('node:module'); const workerRequire = createRequire('/app/apps/worker/package.json'); const coreRequire = createRequire('/app/packages/core/package.json'); const workerVersion = workerRequire('@temporalio/worker/package.json').version; const clientVersion = coreRequire('@temporalio/client/package.json').version; const jsdomVersion = coreRequire('jsdom/package.json').version; fs.writeFileSync('package.json', JSON.stringify({ private: true, dependencies: { '@temporalio/client': clientVersion, '@temporalio/worker': workerVersion, jsdom: jsdomVersion } }, null, 2) + '\n'); const allowed = ['@swc/core', 'core-js', 'esbuild', 'protobufjs']; fs.writeFileSync('pnpm-workspace.yaml', 'allowBuilds:\n' + allowed.map((name) => '  ' + JSON.stringify(name) + ': true').join('\n') + '\n')"; \
+  pnpm install --prod --no-frozen-lockfile --store-dir=/var/cache/pnpm/store
+
+RUN set -eux; \
+  bridge_entrypoint="$(cd /worker-deploy && node -e "const { createRequire } = require('node:module'); const workerRequire = createRequire(require.resolve('@temporalio/worker/package.json')); process.stdout.write(workerRequire.resolve('@temporalio/core-bridge'))")"; \
+  bridge_root="$(dirname "${bridge_entrypoint}")"; \
+  test -d "${bridge_root}/releases/aarch64-unknown-linux-gnu"; \
+  find "${bridge_root}/releases" -mindepth 1 -maxdepth 1 \
+    ! -name aarch64-unknown-linux-gnu -exec rm -rf {} +; \
+  test "$(find "${bridge_root}/releases" -mindepth 2 -maxdepth 2 -type f -name index.node | wc -l | tr -d ' ')" = 1
+
+FROM base AS split-runtime-base
+
+ARG SENTRY_RELEASE
+
+ENV NODE_ENV=production \
+  HOST=0.0.0.0 \
+  PORT=8080 \
+  SENTRY_RELEASE=${SENTRY_RELEASE}
+
+RUN groupadd --system --gid 10001 app \
+  && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+  && chown app:app /app
+
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && rm -rf /var/lib/apt/lists/*
+
+FROM split-runtime-base AS web-runtime
+
+ENV EXPO_WEB_ROOT=/app/apps/app/dist
+
+COPY --from=server-artifacts --chown=app:app /app/server-dist/web/index.mjs /app/server-dist/web/index.mjs
+COPY --from=server-artifacts --chown=app:app /app/server-dist/web/meta.json /app/server-dist/web/meta.json
+COPY --from=app-build --chown=app:app /app/apps/app/dist /app/apps/app/dist
+COPY --from=asset-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
+
+USER app
+
+EXPOSE 8080
+
+ENTRYPOINT ["node", "/app/server-dist/web/index.mjs"]
+
+FROM split-runtime-base AS api-runtime
+
+COPY --from=server-artifacts --chown=app:app /app/server-dist/api/index.mjs /app/server-dist/api/index.mjs
+COPY --from=server-artifacts --chown=app:app /app/server-dist/api/meta.json /app/server-dist/api/meta.json
+COPY --from=asset-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
+
+USER app
+
+EXPOSE 8080
+
+ENTRYPOINT ["node", "/app/server-dist/api/index.mjs"]
+
+FROM split-runtime-base AS worker-runtime
+
+ENV TEMPORAL_WORKFLOW_BUNDLE_PATH=/app/server-dist/worker/workflow-bundle.js
+
+COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/index.mjs /app/server-dist/worker/index.mjs
+COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/workflow-bundle.js /app/server-dist/worker/workflow-bundle.js
+COPY --from=server-artifacts --chown=app:app /app/server-dist/worker/meta.json /app/server-dist/worker/meta.json
+COPY --from=worker-deps --chown=app:app /worker-deploy/node_modules /app/node_modules
+
+USER app
+
+EXPOSE 8080
+
+ENTRYPOINT ["node", "/app/server-dist/worker/index.mjs"]
+
+FROM split-runtime-base AS fedify-consumer-runtime
+
+COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/index.mjs /app/server-dist/fedify-consumer/index.mjs
+COPY --from=server-artifacts --chown=app:app /app/server-dist/fedify-consumer/meta.json /app/server-dist/fedify-consumer/meta.json
+COPY --from=asset-runtime-deps --chown=app:app /runtime-deploy/node_modules /app/node_modules
+
+USER app
+
+EXPOSE 8080
+
+ENTRYPOINT ["node", "/app/server-dist/fedify-consumer/index.mjs"]
+
+FROM split-runtime-base AS migration-runtime
+
+COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/index.mjs /app/server-dist/migration/index.mjs
+COPY --from=server-artifacts --chown=app:app /app/server-dist/migration/meta.json /app/server-dist/migration/meta.json
+COPY --chown=app:app drizzle /app/drizzle
+
+USER app
+
+ENTRYPOINT ["node", "/app/server-dist/migration/index.mjs"]
 
 FROM workspace AS runtime-files
 

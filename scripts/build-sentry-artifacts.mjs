@@ -21,6 +21,7 @@ const run = (command, args, options = {}) => {
   }
 };
 
+run('pnpm', ['build:server-artifacts']);
 run('pnpm', ['--filter', '@kosmo/app', 'relay']);
 run('pnpm', [
   '--filter',
@@ -35,9 +36,11 @@ run('pnpm', [
   'external',
 ]);
 
-const artifactPath = 'apps/app/dist';
+const artifactPaths = ['apps/app/dist', 'server-dist/api', 'server-dist/web'];
 
-run(sentryCli, ['sourcemaps', 'inject', artifactPath, '--quiet']);
+for (const artifactPath of artifactPaths) {
+  run(sentryCli, ['sourcemaps', 'inject', artifactPath, '--quiet']);
+}
 
 const walkFiles = async (directory) => {
   const entries = await readdir(directory, { recursive: true, withFileTypes: true });
@@ -46,9 +49,10 @@ const walkFiles = async (directory) => {
     .map((entry) => path.join(entry.parentPath, entry.name));
 };
 
-const mapFiles = (await walkFiles(artifactPath)).filter((file) => file.endsWith('.map'));
+const filesByArtifact = await Promise.all(artifactPaths.map(walkFiles));
+const mapFiles = filesByArtifact.flat().filter((file) => file.endsWith('.map'));
 if (mapFiles.length === 0) {
-  throw new Error(`No source maps were generated under ${artifactPath}`);
+  throw new Error(`No source maps were generated under ${artifactPaths.join(', ')}`);
 }
 
 for (const mapFile of mapFiles) {
@@ -85,7 +89,7 @@ if (missingUploadConfiguration.length === 0) {
     [
       'sourcemaps',
       'upload',
-      artifactPath,
+      ...artifactPaths,
       '--org',
       organization,
       '--project',
@@ -103,7 +107,7 @@ if (missingUploadConfiguration.length === 0) {
   console.log('Sentry upload skipped; generated source maps were validated locally.');
 }
 
-const files = await walkFiles(artifactPath);
+const files = filesByArtifact.flat();
 await Promise.all(files.filter((file) => file.endsWith('.map')).map((file) => rm(file)));
 await Promise.all(
   files

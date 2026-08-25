@@ -1,4 +1,3 @@
-import { pathToFileURL } from 'node:url';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import postgres from 'postgres';
 import drizzleConfig from '../drizzle.config';
@@ -409,10 +408,4 @@ export async function runDatabaseMigrations({
       }
     }
   }
-}
-
-const entrypointUrl = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined;
-
-if (entrypointUrl === import.meta.url) {
-  await runDatabaseMigrations();
 }

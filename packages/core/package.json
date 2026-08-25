@@ -41,7 +41,7 @@
     "zod": "^4.4.3"
   },
   "scripts": {
-    "db:migrate": "node --import tsx db/migrate.ts",
+    "db:migrate": "node --import tsx db/migrate-entry.ts",
     "drizzle:generate": "node ../../scripts/vault-run.mjs -- drizzle-kit generate",
     "drizzle:push": "node ../../scripts/vault-run.mjs -- drizzle-kit push",
     "drizzle:studio": "node ../../scripts/vault-run.mjs -- drizzle-kit studio",
