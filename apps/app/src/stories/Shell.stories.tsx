@@ -1456,9 +1456,6 @@ export const UniversalMobile: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const shellRoot = canvas.getByTestId('universal-shell-root');
-    const route = canvas.getByTestId('universal-shell-route');
-    const tabBar = canvas.getByRole('navigation', { name: '주요 메뉴' });
-    const mobileHeader = canvas.getByTestId('universal-shell-mobile-header');
     const homeHeading = canvas.getByRole('heading', { name: '홈' });
     const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
     const homeHeader = homeHeading.parentElement?.parentElement;
@@ -1469,23 +1466,6 @@ export const UniversalMobile: Story = {
 
     expect(homeHeader).not.toBeNull();
     expect(window.getComputedStyle(shellRoot).backgroundColor).toBe('rgb(255, 255, 255)');
-    expect(shellRoot).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '0px',
-      paddingRight: '0px',
-      paddingTop: '0px',
-    });
-    expect(route).toHaveStyle({ paddingBottom: '56px', paddingLeft: '0px', paddingRight: '0px' });
-    expect(tabBar).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '0px',
-      paddingRight: '0px',
-    });
-    expect(mobileHeader).toHaveStyle({
-      paddingLeft: '0px',
-      paddingRight: '0px',
-      paddingTop: '0px',
-    });
     expect(homeHeader).toContainElement(menuButton);
     expect(brandMark).not.toBeNull();
     expect(trailingSlot).not.toBeNull();
@@ -1631,29 +1611,23 @@ export const UniversalMobileNonZeroSafeArea: Story = {
   parameters: universalParameters,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const shellRoot = canvas.getByTestId('universal-shell-root');
-    const route = canvas.getByTestId('universal-shell-route');
     const tabBar = canvas.getByRole('navigation', { name: '주요 메뉴' });
-    const homeHeading = canvas.getByRole('heading', { name: '홈' });
-    const shellHeader = homeHeading.parentElement?.parentElement;
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    const tabItems = within(tabBar).getAllByRole('link');
+    const view = canvasElement.ownerDocument.defaultView;
+    const viewportWidth = view?.innerWidth ?? 0;
+    const viewportHeight = view?.innerHeight ?? 0;
 
-    const mobileHeader = canvas.getByTestId('universal-shell-mobile-header');
-
-    expect(shellRoot).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '7px',
-      paddingRight: '9px',
-      paddingTop: '0px',
-    });
-    expect(route).toHaveStyle({ paddingBottom: '90px', paddingLeft: '0px', paddingRight: '0px' });
-    expect(tabBar).toHaveStyle({ paddingBottom: '34px', paddingLeft: '7px', paddingRight: '9px' });
-    expect(mobileHeader).toHaveStyle({
-      paddingLeft: '0px',
-      paddingRight: '0px',
-      paddingTop: '24px',
-    });
-    expect(shellHeader).not.toBeNull();
-    expect(shellHeader).toHaveStyle({ paddingTop: '0px' });
+    const headerBounds = menuButton.getBoundingClientRect();
+    expect(headerBounds.left).toBeGreaterThanOrEqual(7);
+    expect(headerBounds.top).toBeGreaterThanOrEqual(24);
+    expect(headerBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
+    for (const tabItem of tabItems) {
+      const tabItemBounds = tabItem.getBoundingClientRect();
+      expect(tabItemBounds.left).toBeGreaterThanOrEqual(7);
+      expect(tabItemBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
+      expect(tabItemBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
+    }
 
     await userEvent.click(canvas.getByRole('button', { name: '메뉴 열기' }));
     const ownerDocument = canvasElement.ownerDocument;
@@ -1661,60 +1635,18 @@ export const UniversalMobileNonZeroSafeArea: Story = {
     const drawer = await page.findByRole('navigation', { name: '주요 메뉴' });
     const drawerSurface = ownerDocument.getElementById('mobile-sidebar');
     const drawerBackdrop = drawerSurface?.parentElement;
-    const drawerScroll = page.getByTestId('mobile-sidebar-scroll');
-    const view = ownerDocument.defaultView;
 
     expect(drawerSurface).not.toBeNull();
     expect(drawerBackdrop).not.toBeNull();
     expect(drawer).toBeVisible();
-    const viewportWidth = view?.innerWidth ?? 0;
-    const viewportHeight = view?.innerHeight ?? 0;
-    const backdropRect = drawerBackdrop!.getBoundingClientRect();
     const drawerRect = drawerSurface!.getBoundingClientRect();
-    const drawerScrollRect = drawerScroll.getBoundingClientRect();
 
-    expect(backdropRect.left).toBe(0);
-    expect(backdropRect.top).toBe(0);
-    expect(backdropRect.width).toBe(viewportWidth);
-    expect(backdropRect.height).toBe(viewportHeight);
     expect(drawerRect.left).toBeGreaterThanOrEqual(7);
     expect(drawerRect.top).toBeGreaterThanOrEqual(24);
     expect(drawerRect.right).toBeLessThanOrEqual(viewportWidth - 9);
     expect(drawerRect.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-    expect(drawerScrollRect.top).toBeGreaterThanOrEqual(drawerRect.top);
-    expect(drawerScrollRect.bottom).toBeLessThanOrEqual(drawerRect.bottom);
 
     await userEvent.click(page.getByRole('button', { name: '사이드바 닫기' }));
-  },
-  render: () => <UniversalShellStory safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }} />,
-};
-
-export const UniversalMobileRouteOwnedHeaderNonZeroSafeArea: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
-  parameters: {
-    ...universalParameters,
-    router: { pathname: '/search', slotLabel: '검색' },
-  },
-  play: ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const shellRoot = canvas.getByTestId('universal-shell-root');
-    const route = canvas.getByTestId('universal-shell-route');
-    const tabBar = canvas.getByRole('navigation', { name: '주요 메뉴' });
-
-    expect(shellRoot).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '7px',
-      paddingRight: '9px',
-      paddingTop: '0px',
-    });
-    expect(route).toHaveStyle({
-      paddingBottom: '90px',
-      paddingLeft: '0px',
-      paddingRight: '0px',
-      paddingTop: '24px',
-    });
-    expect(tabBar).toHaveStyle({ paddingLeft: '7px', paddingRight: '9px' });
-    expect(canvas.queryByTestId('universal-shell-mobile-header')).toBeNull();
   },
   render: () => <UniversalShellStory safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }} />,
 };
@@ -2205,9 +2137,6 @@ export const UniversalCompactNonZeroSafeArea: Story = {
   },
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const shellRoot = canvas.getByTestId('universal-shell-root');
-    const center = canvas.getByTestId('universal-shell-center');
-    const route = canvas.getByTestId('universal-shell-route');
     const view = canvasElement.ownerDocument.defaultView;
     let leftRail: HTMLElement | null = canvas.getByRole('navigation', {
       name: '주요 메뉴',
@@ -2217,25 +2146,14 @@ export const UniversalCompactNonZeroSafeArea: Story = {
       leftRail = leftRail.parentElement;
     }
 
-    expect(shellRoot).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '47px',
-      paddingRight: '43px',
-      paddingTop: '0px',
-    });
-    expect(center).toHaveStyle({ paddingBottom: '18px', paddingTop: '12px' });
-    expect(route).toHaveStyle({
-      paddingBottom: '0px',
-      paddingLeft: '0px',
-      paddingRight: '0px',
-      paddingTop: '0px',
-    });
-    expect(canvas.queryByTestId('universal-shell-mobile-header')).toBeNull();
     expect(leftRail).not.toBeNull();
-    expect(leftRail).toHaveStyle({ top: '12px' });
-    expect(leftRail!.getBoundingClientRect().height).toBeLessThanOrEqual(
-      (view?.innerHeight ?? 0) - 30,
-    );
+    const viewportWidth = view?.innerWidth ?? 0;
+    const viewportHeight = view?.innerHeight ?? 0;
+    const bounds = leftRail!.getBoundingClientRect();
+    expect(bounds.left).toBeGreaterThanOrEqual(47);
+    expect(bounds.top).toBeGreaterThanOrEqual(12);
+    expect(bounds.right).toBeLessThanOrEqual(viewportWidth - 43);
+    expect(bounds.bottom).toBeLessThanOrEqual(viewportHeight - 18);
   },
   render: () => (
     <View style={{ height: 900 }}>

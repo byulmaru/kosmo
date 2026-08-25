@@ -170,11 +170,10 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
-  const webRootSafeAreaStyle = web
-    ? { paddingLeft: insets.left, paddingRight: insets.right }
+  const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
+  const centerSafeAreaStyle = !mobile
+    ? { paddingBottom: insets.bottom, paddingTop: insets.top }
     : null;
-  const webCenterSafeAreaStyle =
-    web && !mobile ? { paddingBottom: insets.bottom, paddingTop: insets.top } : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
@@ -298,7 +297,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
         style={[
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
-          webRootSafeAreaStyle,
+          rootSafeAreaStyle,
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
@@ -328,12 +327,11 @@ function UniversalShellContent({ revision }: { revision: number }) {
           style={[
             styles.center,
             web && webDocumentColumn,
-            webCenterSafeAreaStyle,
+            centerSafeAreaStyle,
             settingsWorkspace && styles.settingsCenter,
             showRightRail && styles.centerWithRightRail,
             { borderColor: theme.borderSubtle },
           ]}
-          testID="universal-shell-center"
         >
           {mobile && !routeOwnsMobileHeader ? (
             <View
@@ -345,7 +343,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
                   paddingTop: insets.top,
                 },
               ]}
-              testID="universal-shell-mobile-header"
             >
               {home ? (
                 <PageHeader
@@ -381,7 +378,6 @@ function UniversalShellContent({ revision }: { revision: number }) {
                   }
                 : null,
             ]}
-            testID="universal-shell-route"
           >
             <Slot />
           </View>

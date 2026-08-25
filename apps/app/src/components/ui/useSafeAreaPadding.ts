@@ -5,9 +5,9 @@ export function useSafeAreaPadding(padding = 0): ViewStyle {
   const insets = useSafeAreaInsets();
 
   return {
-    paddingBottom: padding + insets.bottom,
-    paddingLeft: padding + insets.left,
-    paddingRight: padding + insets.right,
-    paddingTop: padding + insets.top,
+    paddingBottom: padding + insets.bottom || undefined,
+    paddingLeft: padding + insets.left || undefined,
+    paddingRight: padding + insets.right || undefined,
+    paddingTop: padding + insets.top || undefined,
   };
 }

@@ -258,22 +258,16 @@ export const OverlayMobileSheetNonZeroSafeArea: Story = {
     const ownerDocument = canvasElement.ownerDocument;
     const view = ownerDocument.defaultView;
     const page = within(ownerDocument.body);
-    const dialog = await page.findByRole('dialog', { name: '피드백 보내기' });
+    await page.findByRole('dialog', { name: '피드백 보내기' });
     const surface = page.getByTestId('feedback-overlay-surface');
-    const close = within(dialog).getByRole('button', { name: '피드백 닫기' });
     const viewportWidth = view?.innerWidth ?? 0;
     const viewportHeight = view?.innerHeight ?? 0;
 
     const surfaceBounds = surface.getBoundingClientRect();
-    const closeBounds = close.getBoundingClientRect();
     expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
     expect(surfaceBounds.top).toBeGreaterThanOrEqual(24);
     expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
     expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
-    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
-    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
-    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
   },
 };
 

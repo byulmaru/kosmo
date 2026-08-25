@@ -383,7 +383,6 @@ function ReplyComposerSurfaceContents({
           safeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
-        testID="reply-composer-dialog-backdrop"
       >
         <Pressable
           accessibilityViewIsModal

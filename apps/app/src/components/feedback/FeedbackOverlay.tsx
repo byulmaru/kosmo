@@ -189,7 +189,6 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
           safeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
-        testID="feedback-overlay-backdrop"
       >
         <View
           ref={surfaceRef}

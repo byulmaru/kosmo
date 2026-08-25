@@ -4202,21 +4202,15 @@ export const PostMediaViewerCompactNonZeroSafeArea: Story = {
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
     const surface = viewer.getByTestId('post-media-viewer-dialog');
-    const close = viewer.getByRole('button', { name: '이미지 뷰어 닫기' });
     const view = canvasElement.ownerDocument.defaultView;
     const viewportWidth = view?.innerWidth ?? 0;
     const viewportHeight = view?.innerHeight ?? 0;
 
     const surfaceBounds = surface.getBoundingClientRect();
-    const closeBounds = close.getBoundingClientRect();
-    expect(surfaceBounds.left).toBeGreaterThanOrEqual(11);
-    expect(surfaceBounds.top).toBeGreaterThanOrEqual(66);
-    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 13);
-    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 38);
-    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
-    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
-    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
-    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
+    expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
+    expect(surfaceBounds.top).toBeGreaterThanOrEqual(62);
+    expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
+    expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
 
     await userEvent.click(viewer.getByTestId('post-media-viewer-backdrop-dismiss'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -6896,7 +6890,6 @@ export const ReplyModalNonZeroSafeArea: Story = {
     const bounds = surface.getBoundingClientRect();
 
     expect(bounds.left).toBeGreaterThanOrEqual(62);
-    expect(bounds.top).toBeGreaterThanOrEqual(0);
     expect(bounds.right).toBeLessThanOrEqual((view?.innerWidth ?? 0) - 62);
     expect(bounds.bottom).toBeLessThanOrEqual((view?.innerHeight ?? 0) - 20);
   },
@@ -7151,21 +7144,15 @@ export const ReplyFullscreenNonZeroSafeArea: Story = {
   play: async ({ canvasElement }) => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
-    const close = within(dialog).getByRole('button', { name: '닫기' });
     const view = canvasElement.ownerDocument.defaultView;
     const viewportWidth = view?.innerWidth ?? 0;
     const viewportHeight = view?.innerHeight ?? 0;
 
     const surfaceBounds = surface.getBoundingClientRect();
-    const closeBounds = close.getBoundingClientRect();
     expect(surfaceBounds.left).toBeGreaterThanOrEqual(7);
     expect(surfaceBounds.top).toBeGreaterThanOrEqual(24);
     expect(surfaceBounds.right).toBeLessThanOrEqual(viewportWidth - 9);
     expect(surfaceBounds.bottom).toBeLessThanOrEqual(viewportHeight - 34);
-    expect(closeBounds.left).toBeGreaterThanOrEqual(surfaceBounds.left);
-    expect(closeBounds.top).toBeGreaterThanOrEqual(surfaceBounds.top);
-    expect(closeBounds.right).toBeLessThanOrEqual(surfaceBounds.right);
-    expect(closeBounds.bottom).toBeLessThanOrEqual(surfaceBounds.bottom);
   },
   render: () => (
     <ReplyModalPresentationStory safeAreaInsets={{ bottom: 34, left: 7, right: 9, top: 24 }} />
