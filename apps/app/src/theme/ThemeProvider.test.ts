@@ -42,12 +42,38 @@ test('explicit Dark mode selects production semantic colors without activating i
   assert.ok(themeModule);
   const { ThemeProvider, useReducedMotion, useTheme } = themeModule;
   let backgroundCanvas: string | undefined;
+  let backgroundSurface: string | undefined;
+  let backgroundElevated: string | undefined;
+  let foregroundPrimary: string | undefined;
+  let foregroundSecondary: string | undefined;
+  let foregroundMuted: string | undefined;
+  let borderSubtle: string | undefined;
+  let borderDefault: string | undefined;
+  let actionPrimaryDisabled: string | undefined;
+  let actionSecondaryBase: string | undefined;
+  let actionSecondaryBorder: string | undefined;
+  let actionSecondaryOnBase: string | undefined;
+  let borderDisabled: string | undefined;
+  let stateDisabledSurface: string | undefined;
   let legacyBackground: string | undefined;
   let reducedMotion: boolean | undefined;
 
   function CaptureTheme() {
     const theme = useTheme();
     backgroundCanvas = theme?.backgroundCanvas;
+    backgroundSurface = theme?.backgroundSurface;
+    backgroundElevated = theme?.backgroundElevated;
+    foregroundPrimary = theme?.foregroundPrimary;
+    foregroundSecondary = theme?.foregroundSecondary;
+    foregroundMuted = theme?.foregroundMuted;
+    borderSubtle = theme?.borderSubtle;
+    borderDefault = theme?.borderDefault;
+    actionPrimaryDisabled = theme?.actionPrimaryDisabled;
+    actionSecondaryBase = theme?.actionSecondaryBase;
+    actionSecondaryBorder = theme?.actionSecondaryBorder;
+    actionSecondaryOnBase = theme?.actionSecondaryOnBase;
+    borderDisabled = theme?.borderDisabled;
+    stateDisabledSurface = theme?.stateDisabledSurface;
     legacyBackground = theme?.background;
     reducedMotion = useReducedMotion();
     return null;
@@ -64,7 +90,39 @@ test('explicit Dark mode selects production semantic colors without activating i
     );
   });
 
-  assert.equal(backgroundCanvas, '#18181B');
+  assert.equal(backgroundCanvas, '#000000');
+  assert.deepEqual(
+    {
+      backgroundSurface,
+      backgroundElevated,
+      foregroundPrimary,
+      foregroundSecondary,
+      foregroundMuted,
+      borderSubtle,
+      borderDefault,
+      actionPrimaryDisabled,
+      actionSecondaryBase,
+      actionSecondaryBorder,
+      actionSecondaryOnBase,
+      borderDisabled,
+      stateDisabledSurface,
+    },
+    {
+      backgroundSurface: '#141414',
+      backgroundElevated: '#262626',
+      foregroundPrimary: '#E0E0E0',
+      foregroundSecondary: '#A3A3A3',
+      foregroundMuted: '#969696',
+      borderSubtle: '#262626',
+      borderDefault: '#383838',
+      actionPrimaryDisabled: '#262626',
+      actionSecondaryBase: '#141414',
+      actionSecondaryBorder: '#383838',
+      actionSecondaryOnBase: '#E0E0E0',
+      borderDisabled: '#262626',
+      stateDisabledSurface: '#262626',
+    },
+  );
   assert.equal(legacyBackground, '#111111');
   assert.equal(reducedMotion, true);
   await act(async () => renderer?.unmount());
