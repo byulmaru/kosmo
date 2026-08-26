@@ -44,7 +44,7 @@ before(async () => {
   stateViewModule = await import('./StateView');
 });
 
-test('alert StateView keeps the host surface with danger copy and secondary recovery action', async () => {
+test('alert StateView keeps the host surface with danger copy and primary recovery action', async () => {
   assert.ok(stateViewModule);
   const { StateView } = stateViewModule;
   let renderer: ReactTestRenderer | undefined;
@@ -71,7 +71,7 @@ test('alert StateView keeps the host surface with danger copy and secondary reco
   assert.equal(rootStyle.padding, 32);
   assert.equal(text[0]?.props.style[1].color, 'danger-on-subtle');
   assert.equal(text[1]?.props.style[1].color, 'danger-on-subtle');
-  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, 'secondary');
+  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, 'primary');
   await act(async () => renderer?.unmount());
 });
 

@@ -51,6 +51,7 @@ mockModule('react-native', {
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
+    borderDisabled: 'disabled-border',
     foregroundPrimary: 'primary',
     foregroundSecondary: 'secondary',
     stateDisabledForeground: 'disabled-foreground',
@@ -62,7 +63,7 @@ mockModule('@/theme/ThemeProvider', {
   }),
 });
 mockModule('@/theme/tokens', {
-  borderWidths: { 2: 2 },
+  borderWidths: { 0: 0, 1: 1, 2: 2 },
   iconSizes: { 20: 20 },
   radius: { 12: 12, full: 999 },
   space: { 4: 4, 12: 12 },
@@ -252,6 +253,47 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
   assert.equal(
     radioStyle(disabledSelected, '푸시', { hovered: true, pressed: true }).backgroundColor,
     'disabled-surface',
+  );
+});
+
+test('RadioOption uses internal focus and disabled strokes without changing outer geometry', () => {
+  const renderer = renderGroup({ value: 'email' });
+  const focused = radioStyle(renderer, '이메일', { focused: true, pressed: false });
+  assert.equal(focused.borderColor, 'focus-ring');
+  assert.equal(focused.borderWidth, 2);
+  assert.equal(focused.padding, 10);
+  assert.equal(focused.outlineColor, undefined);
+  assert.equal(focused.outlineOffset, undefined);
+  assert.equal(focused.outlineStyle, 'none');
+  assert.equal(focused.outlineWidth, undefined);
+  assert.equal(2 * (Number(focused.padding) + Number(focused.borderWidth)) + 24, 48);
+
+  const focusedDescription = radioStyle(renderer, '문자', { focused: true, pressed: false });
+  assert.equal(
+    2 * (Number(focusedDescription.padding) + Number(focusedDescription.borderWidth)) + 48,
+    72,
+  );
+
+  const disabled = radioStyle(renderer, '푸시', { pressed: false });
+  assert.equal(disabled.backgroundColor, 'disabled-surface');
+  assert.equal(disabled.borderColor, 'disabled-border');
+  assert.equal(disabled.borderWidth, 1);
+  assert.equal(disabled.padding, 11);
+  assert.equal(2 * (Number(disabled.padding) + Number(disabled.borderWidth)) + 24, 48);
+
+  const disabledDescriptionRenderer = renderGroup({
+    options: [
+      { label: '이메일', value: 'email' },
+      { description: '설명', disabled: true, label: '푸시', value: 'push' },
+    ],
+    value: 'push',
+  });
+  const disabledDescription = radioStyle(disabledDescriptionRenderer, '푸시', {
+    pressed: false,
+  });
+  assert.equal(
+    2 * (Number(disabledDescription.padding) + Number(disabledDescription.borderWidth)) + 48,
+    72,
   );
 });
 

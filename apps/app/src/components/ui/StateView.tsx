@@ -65,7 +65,7 @@ export function StateView({
         </Text>
       ) : null}
       {actionLabel && onAction ? (
-        <Button onPress={onAction} style={actionStyle} tone="secondary">
+        <Button onPress={onAction} style={actionStyle} tone="primary">
           {actionLabel}
         </Button>
       ) : null}

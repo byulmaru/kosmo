@@ -162,6 +162,11 @@ export function RadioOption<Value extends string>({
         const webState = state as { focused?: boolean; hovered?: boolean };
         const focused = web && Boolean(webState.focused);
         const hovered = web && Boolean(webState.hovered);
+        const borderWidth = disabled
+          ? borderWidths[1]
+          : focused
+            ? borderWidths[2]
+            : borderWidths[0];
         return [
           styles.root,
           {
@@ -172,14 +177,14 @@ export function RadioOption<Value extends string>({
                 : hovered
                   ? theme.stateHover
                   : undefined,
-            ...(focused
-              ? ({
-                  outlineColor: theme.stateFocusRing,
-                  outlineOffset: 2,
-                  outlineStyle: 'solid',
-                  outlineWidth: borderWidths[2],
-                } as unknown as ViewStyle)
-              : undefined),
+            borderColor: disabled
+              ? theme.borderDisabled
+              : focused
+                ? theme.stateFocusRing
+                : undefined,
+            borderWidth,
+            ...(web ? ({ outlineStyle: 'none' } as unknown as ViewStyle) : undefined),
+            padding: space[12] - borderWidth,
           },
           typeof style === 'function' ? style(state) : style,
         ];

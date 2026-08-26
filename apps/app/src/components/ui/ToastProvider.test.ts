@@ -39,15 +39,19 @@ mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {} }),
   useTheme: () => ({
     backgroundInverse: 'inverse-background',
+    feedbackDangerBase: 'danger-base',
     feedbackDangerBorder: 'danger-border',
     feedbackDangerOnSubtle: 'danger-on-subtle',
     feedbackDangerSubtle: 'danger-subtle',
+    feedbackInfoBase: 'info-base',
     feedbackInfoBorder: 'info-border',
     feedbackInfoOnSubtle: 'info-on-subtle',
     feedbackInfoSubtle: 'info-subtle',
+    feedbackSuccessBase: 'success-base',
     feedbackSuccessBorder: 'success-border',
     feedbackSuccessOnSubtle: 'success-on-subtle',
     feedbackSuccessSubtle: 'success-subtle',
+    feedbackWarningBase: 'warning-base',
     feedbackWarningBorder: 'warning-border',
     feedbackWarningOnSubtle: 'warning-on-subtle',
     feedbackWarningSubtle: 'warning-subtle',
@@ -133,25 +137,25 @@ test('toast maps the inverse default and subtle feedback tone rails', async () =
     },
     {
       background: 'info-subtle',
-      border: 'info-border',
+      border: 'info-base',
       foreground: 'info-on-subtle',
       tone: 'info' as const,
     },
     {
       background: 'success-subtle',
-      border: 'success-border',
+      border: 'success-base',
       foreground: 'success-on-subtle',
       tone: 'success' as const,
     },
     {
       background: 'warning-subtle',
-      border: 'warning-border',
+      border: 'warning-base',
       foreground: 'warning-on-subtle',
       tone: 'warning' as const,
     },
     {
       background: 'danger-subtle',
-      border: 'danger-border',
+      border: 'danger-base',
       foreground: 'danger-on-subtle',
       tone: 'danger' as const,
     },
@@ -174,6 +178,60 @@ test('toast maps the inverse default and subtle feedback tone rails', async () =
     assert.equal(style.borderLeftWidth, sample.tone ? 4 : undefined);
     assert.equal(style.borderLeftColor, sample.border);
   }
+  await act(async () => renderer?.unmount());
+});
+
+test('action toast follows the Figma source auto-layout contract', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+  });
+  await act(async () => {
+    api?.showToast('위험 알림', {
+      action: { label: '다시 시도', onPress: () => undefined },
+      tone: 'danger',
+    });
+  });
+
+  const surface = renderer?.root.findByType(ViewHost);
+  const message = renderer?.root
+    .findAllByType(TextHost)
+    .find((node) => node.children.includes('위험 알림'));
+  const action = renderer?.root
+    .findAllByType(PressableHost)
+    .find((node) => node.props.accessibilityRole === 'button');
+  assert.ok(message);
+  assert.ok(action);
+  const actionLabel = action.findByType(TextHost);
+  const surfaceStyle = flattenStyle(surface?.props.style);
+  const messageStyle = flattenStyle(message.props.style);
+  const actionLabelStyle = flattenStyle(actionLabel.props.style);
+
+  assert.deepEqual(
+    {
+      actionTextDecorationLine: actionLabelStyle.textDecorationLine,
+      messageFlex: messageStyle.flex,
+      messageTransform: messageStyle.transform,
+      surfaceMaxWidth: surfaceStyle.maxWidth,
+      surfaceWidth: surfaceStyle.width,
+    },
+    {
+      actionTextDecorationLine: undefined,
+      messageFlex: 1,
+      messageTransform: undefined,
+      surfaceMaxWidth: 360,
+      surfaceWidth: '100%',
+    },
+  );
+
   await act(async () => renderer?.unmount());
 });
 

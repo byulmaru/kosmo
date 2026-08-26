@@ -129,7 +129,7 @@ export const ReplacementAndAutoDismiss: Story = {
     expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(26, 26, 26)');
     expect(
       toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
-    ).toBeCloseTo(14, 0);
+    ).toBeCloseTo(12, 0);
     await userEvent.click(canvas.getByRole('button', { name: '취소 실패 표시' }));
     expect(canvas.getByRole('alert')).toHaveTextContent(
       '재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',

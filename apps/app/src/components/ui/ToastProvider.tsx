@@ -166,28 +166,28 @@ function getToastColors(theme: ReturnType<typeof useTheme>, tone: ToastOptions['
   if (tone === 'danger') {
     return {
       background: theme.feedbackDangerSubtle,
-      border: theme.feedbackDangerBorder,
+      border: theme.feedbackDangerBase,
       foreground: theme.feedbackDangerOnSubtle,
     };
   }
   if (tone === 'success') {
     return {
       background: theme.feedbackSuccessSubtle,
-      border: theme.feedbackSuccessBorder,
+      border: theme.feedbackSuccessBase,
       foreground: theme.feedbackSuccessOnSubtle,
     };
   }
   if (tone === 'warning') {
     return {
       background: theme.feedbackWarningSubtle,
-      border: theme.feedbackWarningBorder,
+      border: theme.feedbackWarningBase,
       foreground: theme.feedbackWarningOnSubtle,
     };
   }
   if (tone === 'info') {
     return {
       background: theme.feedbackInfoSubtle,
-      border: theme.feedbackInfoBorder,
+      border: theme.feedbackInfoBase,
       foreground: theme.feedbackInfoOnSubtle,
     };
   }
@@ -223,12 +223,10 @@ const styles = StyleSheet.create({
     paddingVertical: space[4],
   },
   actionLabel: {
-    textDecorationLine: 'underline',
     ...textStyles.uiLabelM,
   },
   message: {
-    flexShrink: 1,
-    transform: [{ translateY: 2 }],
+    flex: 1,
     ...textStyles.uiCopyM,
   },
   nativeHost: {
@@ -244,9 +242,10 @@ const styles = StyleSheet.create({
     borderRadius: radius[12],
     flexDirection: 'row',
     gap: space[12],
-    maxWidth: 480,
+    maxWidth: 360,
     paddingHorizontal: space[16],
     paddingVertical: space[12],
     pointerEvents: 'auto',
+    width: '100%',
   },
 });
