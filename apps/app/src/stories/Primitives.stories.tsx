@@ -41,6 +41,12 @@ function PrimitivesCatalog() {
         <TextField label="기본 입력" placeholder="Placeholder..." />
         <TextField defaultValue="입력된 값" label="입력 완료" />
         <TextField error="입력값을 확인해 주세요." label="오류" value="잘못된 값" />
+        <TextField
+          autoFocus
+          error="입력값을 확인해 주세요."
+          label="오류 (포커스)"
+          value="잘못된 값"
+        />
         <TextField editable={false} label="비활성" value="수정할 수 없는 값" />
         <TextArea label="여러 줄 입력" multiline placeholder="본문을 입력하세요." />
       </Section>

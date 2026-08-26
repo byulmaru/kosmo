@@ -31,13 +31,7 @@ export function StateView({
   return (
     <View
       accessibilityRole={alert ? 'alert' : undefined}
-      style={[
-        styles.root,
-        ...(style ? [style] : []),
-        ...(alert
-          ? [{ backgroundColor: theme.feedbackDangerSubtle, borderRadius: radius[12] }]
-          : []),
-      ]}
+      style={[styles.root, ...(style ? [style] : [])]}
     >
       {loading ? (
         reducedMotion ? (
