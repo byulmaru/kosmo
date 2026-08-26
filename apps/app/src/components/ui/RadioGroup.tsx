@@ -1,5 +1,7 @@
 import { Children, createContext, useContext, useRef } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTheme } from '@/theme/ThemeProvider';
+import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { PropsWithChildren, ReactElement, RefObject } from 'react';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
@@ -92,6 +94,7 @@ export function RadioOption<Value extends string>({
     throw new Error('RadioOption은 RadioGroup 안에서 사용해야 합니다.');
   }
 
+  const theme = useTheme();
   const optionRef = useRef<View>(null);
   context.optionRefs.set(option.value, optionRef);
 
@@ -107,6 +110,11 @@ export function RadioOption<Value extends string>({
   const tabStopValue = selectedEnabled ? context.value : enabledOptions[0]?.value;
   const tabIndex = disabled || option.value !== tabStopValue ? -1 : 0;
   const web = Platform.OS === 'web';
+  const indicatorColor = disabled
+    ? theme.stateDisabledForeground
+    : checked
+      ? theme.stateSelectedBorder
+      : theme.foregroundSecondary;
 
   const onKeyDown = (event: { key: string; preventDefault: () => void }) => {
     if (disabled || !web) {
@@ -150,7 +158,32 @@ export function RadioOption<Value extends string>({
         }
       }}
       ref={optionRef}
-      style={style}
+      style={(state) => {
+        const webState = state as { focused?: boolean; hovered?: boolean };
+        const focused = web && Boolean(webState.focused);
+        const hovered = web && Boolean(webState.hovered);
+        return [
+          styles.root,
+          {
+            backgroundColor: disabled
+              ? theme.stateDisabledSurface
+              : state.pressed
+                ? theme.statePressed
+                : hovered
+                  ? theme.stateHover
+                  : undefined,
+            ...(focused
+              ? ({
+                  outlineColor: theme.stateFocusRing,
+                  outlineOffset: 2,
+                  outlineStyle: 'solid',
+                  outlineWidth: borderWidths[2],
+                } as unknown as ViewStyle)
+              : undefined),
+          },
+          typeof style === 'function' ? style(state) : style,
+        ];
+      }}
       {...(web
         ? ({
             'aria-checked': checked,
@@ -161,7 +194,53 @@ export function RadioOption<Value extends string>({
           } as WebRadioProps)
         : undefined)}
     >
-      {children}
+      <View style={[styles.indicator, { borderColor: indicatorColor }]}>
+        {checked ? <View style={[styles.dot, { backgroundColor: indicatorColor }]} /> : null}
+      </View>
+      {children ?? (
+        <View style={styles.content}>
+          <Text
+            style={[
+              styles.label,
+              { color: disabled ? theme.stateDisabledForeground : theme.foregroundPrimary },
+            ]}
+          >
+            {option.label}
+          </Text>
+          {option.description ? (
+            <Text
+              style={[
+                styles.description,
+                { color: disabled ? theme.stateDisabledForeground : theme.foregroundSecondary },
+              ]}
+            >
+              {option.description}
+            </Text>
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    alignItems: 'center',
+    borderRadius: radius[12],
+    flexDirection: 'row',
+    gap: space[12],
+    padding: space[12],
+  },
+  indicator: {
+    alignItems: 'center',
+    borderRadius: radius.full,
+    borderWidth: borderWidths[2],
+    height: iconSizes[20],
+    justifyContent: 'center',
+    width: iconSizes[20],
+  },
+  dot: { borderRadius: radius.full, height: 10, width: 10 },
+  content: { flex: 1, gap: space[4] },
+  label: textStyles.uiLabelL,
+  description: textStyles.uiCopyM,
+});

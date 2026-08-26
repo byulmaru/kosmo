@@ -72,7 +72,7 @@ export const BugReport: Story = {
     const bugReport = canvas.getByRole('radio', { name: '버그를 발견했어요' });
     await userEvent.click(bugReport);
     expect(bugReport).toBeChecked();
-    expect(bugReport).toHaveStyle({ borderRadius: '8px' });
+    expect(bugReport).toHaveStyle({ borderRadius: '12px' });
     expect(canvas.getAllByRole('textbox')).toHaveLength(1);
   },
 };
