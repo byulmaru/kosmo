@@ -1,3 +1,7 @@
+> **Reconciliation (2026-08-25, PROD-838):** 이 archived delta의 requirement와 scenario는 2026-08-08 당시
+> root 직접 1단계 Profile detail의 root-only back 계약을 보존한다. 현재 Settings destination별 parent/back
+> 계약은 canonical `docs/design/settings.md`와 active `openspec/specs/settings-page-shell/spec.md`를 따른다.
+
 ## ADDED Requirements
 
 ### Requirement: Canonical Settings route family와 진입점

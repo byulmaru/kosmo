@@ -5,6 +5,10 @@
 Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고, 여러 구현 slice가 함께 지켜야 할 좁은
 구현 경계만 Implementation Choice로 남긴다.
 
+> **Reconciliation (2026-08-25, PROD-838):** 아래의 dated decision body는 2026-08-08 archive 당시 계약과
+> 구현 증거를 보존한다. 모든 Settings detail을 root로 일반화한 부분만 destination별 parent 계약으로
+> supersede됐으며, 현재 generic contract는 canonical 문서와 active spec을 따른다.
+
 ## Decision Records
 
 ### `/settings` 하나를 canonical 설정 route로 사용한다
@@ -391,3 +395,6 @@ Product behavior는 canonical 문서와 최신 Linear 계약에서 파생하고,
   `PROD-685가 구현 증거를 만들고 PROD-684가 최종 archive를 소유한다`로 대체됐다.
 - `PROD-685가 구현 증거를 만들고 PROD-684가 최종 archive를 소유한다` — 2026-08-08
   자동화된 통합 증거와 실제 runtime QA를 분리하는 PROD-684/PROD-727 책임으로 대체됐다.
+- 모든 Settings detail의 back destination을 `/settings` root로 일반화한 2026-08-06·08 결정은 2026-08-25
+  `PROD-838`의 명시적인 destination별 parent 계약으로 대체됐다. 당시 구현된 root 직접 1단계 Profile detail의
+  root parent와 구현 증거는 유지한다.

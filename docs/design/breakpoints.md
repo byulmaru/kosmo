@@ -75,8 +75,9 @@ PostComposer presentation은 `Rail`과 `Overlay`만 사용한다. 중앙 timelin
   먼저 만들지 않는다.
 - `full` Web settings route family에서는 전역 sidebar 다음 공간을 Settings 전용 master-detail workspace로
   사용하고 일반 `RightRail`을 표시하지 않는다.
-- `compact` Web, `< compact` mobile Web과 Android·iOS에서는 root 목록과 detail을 한 화면씩 표시하며 내부
-  detail에서 back navigation으로 root 목록에 돌아간다.
+- `compact` Web, `< compact` mobile Web과 Android·iOS에서는 root 목록과 선택한 category·detail destination을
+  한 화면씩 표시하며, 내부 destination의 back navigation은 [설정 페이지](./settings.md)에 정의된 명시적인
+  parent를 연다.
 
 ## 프로필 편집 진입
 

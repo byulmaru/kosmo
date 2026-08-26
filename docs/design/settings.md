@@ -21,7 +21,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   우측 레일에는 같은 진입점을 중복하지 않는다.
 - route와 page shell이 함께 동작하는 slice에서만 진입점을 노출한다. 진입점만 먼저 노출해 준비되지 않은
   화면이나 generic placeholder로 이동시키지 않는다.
-- `설정` navigation은 `/settings`와 지원되는 내부 detail route에서 현재 page 상태를 노출한다. 다른
+- `설정` navigation은 `/settings`와 지원되는 내부 category·detail route에서 현재 page 상태를 노출한다. 다른
   shell-level 주요 route에서 `/settings`로 forward navigation하면 [breakpoints.md](./breakpoints.md)의
   scroll 정책에 따라 문서 최상단에서 시작한다.
 
@@ -36,8 +36,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
 - full Web의 `/settings`는 `게시물 기본 공개 범위`를 기본 선택해 detail에 표시한다. compact Web, mobile Web,
-  Android와 iOS의 `/settings`는 root 목록부터 표시하고, 내부 진입점을 선택하면 한 화면짜리 detail로
-  이동한다.
+  Android와 iOS의 `/settings`는 root 목록부터 표시하고, 내부 진입점을 선택하면 한 화면짜리 category 또는
+  detail destination으로 이동한다.
 - 향후 승인된 항목은 direct destination, 하위 목록을 여는 category 또는 기존 독립 화면으로 이동하는
   destination으로 추가할 수 있다. 모든 detail을 Settings workspace 안에 강제로 넣거나 현재 구현에 미래
   category를 위한 disabled item·placeholder를 만들지 않는다.
@@ -112,15 +112,19 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 ## Compact·mobile·Native layout과 header
 
-- compact Web, mobile Web, Android와 iOS에서는 Settings root 목록과 detail을 동시에 나누어 표시하지 않고
-  한 화면씩 보여 준다. 내부 detail의 back action은 이전 navigation stack의 화면과 무관하게 `/settings`
-  root 목록을 명시적으로 연다.
+- compact Web, mobile Web, Android와 iOS에서는 Settings root 목록과 선택한 category·detail destination을
+  동시에 나누어 표시하지 않고 한 화면씩 보여 준다.
+- 모든 내부 category·detail destination은 명시적인 parent를 가진다. back action은 이전 navigation stack의
+  화면과 무관하게 해당 parent를 명시적으로 연다. root의 직접 진입점이 여는 1단계 destination의 parent는
+  `/settings` root이고, 중첩 destination의 parent는 바로 위 category다. direct·deep link로 연 경우에도 같은
+  parent를 사용한다.
 - `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
-  [PageHeader](./page-header.md)를 렌더링한다. 내부 detail에서는 shell이 back action과 detail heading을
-  렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
-- Android·iOS와 compact Web에서는 root 또는 detail route가 자기 text `PageHeader`를 scroll content의 첫
-  heading으로 렌더링한다. detail header는 back action을 제공하고 Native safe area는 mobile shell이 소유한다.
-- Android·iOS one-pane route는 `PageHeader`부터 root/detail content 전체를 하나의 platform vertical
+  [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 shell이 back action과
+  현재 destination heading을 렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
+- Android·iOS와 compact Web에서는 root 또는 category·detail destination route가 자기 text `PageHeader`를
+  scroll content의 첫 heading으로 렌더링한다. category·detail header는 back action을 제공하고 Native safe
+  area는 mobile shell이 소유한다.
+- Android·iOS one-pane route는 `PageHeader`부터 root·category·detail content 전체를 하나의 platform vertical
   `ScrollView`에 둔다. compact·mobile·full Web은 기존 document scroll을 계속 사용한다.
 - full Web에서는 master pane의 `설정` heading과 detail pane의 현재 화면 heading을 각각 노출한다. 같은 pane
   안에 중복 heading을 만들지 않는다.
@@ -145,8 +149,9 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 ## 접근성
 
-- root 화면과 master pane은 `설정` heading을, detail 화면과 detail pane은 현재 설정 이름 heading을
-  programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로 반복하지 않는다.
+- root 화면과 master pane은 `설정` heading을, one-pane category·detail 화면과 full Web detail pane은 현재
+  destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
+  반복하지 않는다.
 - root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 → `테마`와 현재
   선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이다. full Web에서는 이어서 detail heading과 현재
   선택된 content를 읽는다.
@@ -183,7 +188,7 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   `userInterfaceStyle` build config·`StatusBar`, Web `theme-color` 적용, 남은 route·shell·domain consumer의
   semantic token 이관·예외 정리와 지원 플랫폼의 대표 Light/Dark 화면·주요 interaction state·system chrome
   검증을 소유한다.
-- PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/detail
+- PROD-685의 통합 검증은 자식 기능의 세부 테스트를 반복하지 않는다. 지원 navigation surface, root/category/detail
   전환, full workspace, 외부/내부 소유 경계, 반응형 heading·focus·reflow가 함께 동작하는지 확인한다.
 - PROD-685는 구현과 검증 증거를 PROD-684에 인계하고, PROD-684가 최종 Settings 통합·OpenSpec 정합성 확인과
   archive를 소유한다.
