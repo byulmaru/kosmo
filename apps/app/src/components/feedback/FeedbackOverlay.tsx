@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, radii, spacing, typography } from '@/theme/tokens';
 import { FeedbackForm } from './FeedbackForm';
@@ -41,6 +42,7 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
   const surfaceRef = useRef<NativeView>(null);
   const wasVisibleRef = useRef(visible);
   const mobile = width < breakpoints.compact;
+  const safeAreaStyle = useSafeAreaPadding(mobile ? 0 : spacing.lg);
   formStateRef.current = formState;
 
   const handleFormStateChange = useCallback((nextState: FeedbackFormState) => {
@@ -171,7 +173,9 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
       animationType="fade"
       onDismiss={restoreFocus}
       onRequestClose={discardConfirmOpen ? continueEditing : () => requestClose()}
+      navigationBarTranslucent
       role="dialog"
+      statusBarTranslucent
       transparent
       visible={visible}
     >
@@ -182,6 +186,7 @@ export function FeedbackOverlay({ fallbackFocusRef, onRequestClose, visible }: P
           styles.backdrop,
           Platform.OS === 'web' ? styles.webBackdrop : null,
           mobile ? styles.mobileBackdrop : null,
+          safeAreaStyle,
           { backgroundColor: theme.overlayScrim },
         ]}
       >

@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
@@ -60,13 +61,15 @@ const ShellQuery = graphql`
   }
 `;
 
-const webStickyRail = {
-  alignSelf: 'flex-start',
-  height: '100vh',
-  minHeight: 0,
-  position: 'sticky',
-  top: 0,
-} as unknown as ViewStyle;
+function getWebStickyRailStyle(insets: { bottom: number; top: number }) {
+  return {
+    alignSelf: 'flex-start',
+    height: `calc(100vh - ${insets.top + insets.bottom}px)`,
+    minHeight: 0,
+    position: 'sticky',
+    top: insets.top,
+  } as unknown as ViewStyle;
+}
 
 const webRightRailOverflow = {
   overflowX: 'hidden',
@@ -82,9 +85,9 @@ const webStickyHeader = {
 
 const webFixedBottomBar = {
   bottom: 0,
-  left: 0,
+  left: 'env(safe-area-inset-left)',
   position: 'fixed',
-  right: 0,
+  right: 'env(safe-area-inset-right)',
   zIndex: 20,
 } as unknown as ViewStyle;
 
@@ -116,6 +119,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
+  const drawerSafeAreaStyle = useSafeAreaPadding();
   const pathname = usePathname();
   const routeSegments = useSegments();
   const router = useRouter();
@@ -158,6 +162,10 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const home = pathname === '/home';
   const mobileShellHeader = getWebMobileShellHeader(web, width, pathname, routeSegments);
   const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
+  const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
+  const centerSafeAreaStyle = !mobile
+    ? { paddingBottom: insets.bottom, paddingTop: insets.top }
+    : null;
   const feedbackOverlayVisible =
     web && pathname !== '/feedback' && feedbackOpen && data.currentSession != null;
 
@@ -281,6 +289,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
         style={[
           styles.root,
           web ? styles.webRoot : styles.nativeRoot,
+          rootSafeAreaStyle,
           feedbackOverlayVisible ? styles.backgroundBlocked : null,
           { backgroundColor: theme.backgroundCanvas },
         ]}
@@ -290,7 +299,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.sidebar,
-              web && webStickyRail,
+              web && getWebStickyRailStyle(insets),
               switcherOpen && styles.sidebarWithOverlay,
               { borderColor: theme.borderSubtle, width: full ? 320 : 80 },
             ]}
@@ -310,6 +319,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           style={[
             styles.center,
             web && webDocumentColumn,
+            centerSafeAreaStyle,
             settingsWorkspace && styles.settingsCenter,
             showRightRail && styles.centerWithRightRail,
             { borderColor: theme.borderSubtle },
@@ -322,7 +332,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 web && webStickyHeader,
                 {
                   backgroundColor: theme.backgroundCanvas,
-                  paddingTop: web ? 0 : insets.top,
+                  paddingTop: insets.top,
                 },
               ]}
             >
@@ -331,7 +341,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
                   accessibilityLabel="홈"
                   leading={menuButton}
                   variant="brand"
-                  {...(web ? { brandHref: '/home', onBrandCurrentNavigate: reselectHome } : {})}
+                  {...(web
+                    ? { brandHref: '/home' as const, onBrandCurrentNavigate: reselectHome }
+                    : {})}
                 />
               ) : mobileShellHeader ? (
                 <PageHeader
@@ -352,7 +364,12 @@ function UniversalShellContent({ revision }: { revision: number }) {
             style={[
               styles.route,
               !web && styles.nativeRoute,
-              mobile && web && styles.webMobileRoute,
+              mobile && web
+                ? {
+                    ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
+                    paddingBottom: 56 + insets.bottom,
+                  }
+                : null,
             ]}
           >
             <Slot />
@@ -368,7 +385,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
           <View
             style={[
               styles.rightRail,
-              web && webStickyRail,
+              web && getWebStickyRailStyle(insets),
               web && webRightRailOverflow,
               { borderColor: theme.borderSubtle },
             ]}
@@ -381,12 +398,20 @@ function UniversalShellContent({ revision }: { revision: number }) {
         <Modal
           accessibilityLabel="메뉴"
           animationType="none"
+          navigationBarTranslucent
           onRequestClose={closeDrawer}
           role="dialog"
+          statusBarTranslucent
           transparent
           visible={drawerOpen}
         >
-          <View style={[styles.drawerBackdrop, { backgroundColor: theme.overlayScrim }]}>
+          <View
+            style={[
+              styles.drawerBackdrop,
+              drawerSafeAreaStyle,
+              { backgroundColor: theme.overlayScrim },
+            ]}
+          >
             <View
               nativeID="mobile-sidebar"
               style={[
@@ -440,7 +465,6 @@ const styles = StyleSheet.create({
   },
   route: { minHeight: 0 },
   nativeRoute: { flex: 1 },
-  webMobileRoute: { paddingBottom: 56 },
   rightRail: {
     flexShrink: 1,
     minWidth: 290,

@@ -77,6 +77,10 @@ mock.module('react-relay', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module(require.resolve('lucide-react-native'), {
   exports: {
     ChevronLeftIcon: 'ChevronLeftIcon',
@@ -400,6 +404,12 @@ describe('PostMediaViewer', () => {
     await render();
     assert.equal(flattenStyle(byTestId('post-media-viewer-detail').props.style).maxHeight, 192);
     assert.ok(byTestId('post-media-viewer-action-bar'));
+  });
+
+  it('viewer Modal을 system bar 아래까지 확장한다', async () => {
+    await render();
+    assert.equal(rendered('Modal')[0]?.props.navigationBarTranslucent, true);
+    assert.equal(rendered('Modal')[0]?.props.statusBarTranslucent, true);
   });
 
   it('Compact 작성자에 원격 Profile의 relative handle을 표시한다', async () => {

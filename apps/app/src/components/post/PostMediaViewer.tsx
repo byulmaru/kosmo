@@ -24,6 +24,7 @@ import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { IconButton } from '@/components/ui/IconButton';
+import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, iconSizes, radii, spacing, typography } from '@/theme/tokens';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
@@ -112,6 +113,7 @@ export function PostMediaViewer({
     null,
   );
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
+  const safeAreaStyle = useSafeAreaPadding(wide ? spacing.xl : spacing.xs);
 
   useEffect(() => {
     setCurrentIndex(selectedIndex);
@@ -206,8 +208,10 @@ export function PostMediaViewer({
     <Modal
       accessibilityLabel="이미지 뷰어"
       animationType="fade"
+      navigationBarTranslucent
       onRequestClose={handlePlatformRequestClose}
       presentationStyle="overFullScreen"
+      statusBarTranslucent
       transparent
       visible
     >
@@ -219,6 +223,7 @@ export function PostMediaViewer({
               ? styles.wideWebBackdrop
               : styles.compactWebBackdrop
             : null,
+          safeAreaStyle,
         ]}
         testID="post-media-viewer-backdrop"
       >
