@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, typography } from '@/theme/tokens';
 import { NavigationLink } from './NavigationLink';
+import { isTimelineRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -72,10 +73,12 @@ export function BottomTabBar({
       ]}
     >
       {tabs.map((tab) => {
-        const active = Boolean(tab.href && pathname === tab.href);
+        const active = Boolean(
+          tab.href && (tab.href === '/home' ? isTimelineRoute(pathname) : pathname === tab.href),
+        );
         const content = (
           <Pressable
-            aria-current={active ? 'page' : undefined}
+            aria-current={tab.href && pathname === tab.href ? 'page' : undefined}
             accessibilityLabel={
               tab.label === '알림'
                 ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)

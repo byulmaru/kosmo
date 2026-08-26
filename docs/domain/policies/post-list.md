@@ -7,11 +7,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## Post List Type
 
-| 값      | 의미                                   |
-| ------- | -------------------------------------- |
-| Home    | viewer Profile의 기본 Post List        |
-| Profile | Target Profile이 작성한 Post List      |
-| Hashtag | Target Hashtag가 포함된 공개 Post List |
+| 값      | 의미                                       |
+| ------- | ------------------------------------------ |
+| Home    | viewer Profile의 기본 Post List            |
+| Local   | configured Local Instance의 공개 Post List |
+| Profile | Target Profile이 작성한 Post List          |
+| Hashtag | Target Hashtag가 포함된 공개 Post List     |
 
 ## Control Decision
 
@@ -42,6 +43,13 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Target Profile이 작성한 eligible Post 중 Reply Parent가 없는 Content Post와 Repost를 포함한다.
 - Reply Parent가 있는 Post는 Quote이기도 하더라도 포함하지 않는다.
 
+### Local Post List
+
+- configured Local Instance에 속한 Active/Normal Local Profile이 작성한 Public Post 중 Content가 있고 Reply
+  Parent가 없는 eligible Post를 포함한다.
+- Content와 Repost Source를 함께 가진 Quote는 포함한다.
+- Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
+
 ### Hashtag Post List
 
 - Post Visibility가 Public이고 Content가 있으며 Reply Parent가 없고 Target Hashtag가 포함된 eligible Post만
@@ -50,18 +58,18 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## 제어 정책
 
-| Control              | Home                           | Profile                    | Hashtag                    |
-| -------------------- | ------------------------------ | -------------------------- | -------------------------- |
-| Profile Block        | Exclude                        | Exclude                    | Exclude                    |
-| Profile Mute         | Exclude                        | Collapse                   | Exclude                    |
-| Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
-| Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
-| Profile Domain Block | Exclude                        | Exclude                    | Exclude                    |
-| Domain Limit         | Include                        | Include                    | Exclude                    |
-| Sensitive Media      | Collapse                       | Collapse                   | Collapse                   |
-| 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                    |
-| Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | Exclude                    |
-| Content 없는 Repost  | Home 후보 정책 통과 시 Include | Target 작성 시 Include     | Exclude                    |
+| Control              | Home                           | Local                      | Profile                    | Hashtag                    |
+| -------------------- | ------------------------------ | -------------------------- | -------------------------- | -------------------------- |
+| Profile Block        | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
+| Profile Mute         | Exclude                        | Exclude                    | Collapse                   | Exclude                    |
+| Word Mute Rule       | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
+| Hashtag Mute Rule    | Scope와 Mute Decision 적용     | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 | Scope와 Mute Decision 적용 |
+| Profile Domain Block | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
+| Domain Limit         | Include                        | Include                    | Include                    | Exclude                    |
+| Sensitive Media      | Collapse                       | Collapse                   | Collapse                   | Collapse                   |
+| 조회할 수 없는 Media | Exclude                        | Exclude                    | Exclude                    | Exclude                    |
+| Reply Parent 있음    | Home 후보 정책 통과 시 Include | Exclude                    | Exclude                    | Exclude                    |
+| Content 없는 Repost  | Home 후보 정책 통과 시 Include | Exclude                    | Target 작성 시 Include     | Exclude                    |
 
 - 모든 후보는 먼저 Post Visibility와 Post Eligibility를 통과해야 한다.
 - Followers Only 후보는 Author/Mentioned Profile이 아닌 viewer에게 viewer Profile과 Author Profile 사이의
@@ -74,4 +82,4 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 - Cursor는 조회 입력 값이며 durable 객체 속성이 아니다.
 - viewer별 읽기 위치는 독립 생명주기와 제품 요구가 확정될 때 별도 durable 객체로 추가한다.
-- Custom, Local, Federated, List 기반, 키워드 수집형 Post List는 현재 범위에서 제외한다.
+- Custom, Federated, List 기반, 키워드 수집형 Post List는 현재 범위에서 제외한다.

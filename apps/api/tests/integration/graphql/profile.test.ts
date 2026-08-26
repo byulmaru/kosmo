@@ -3257,6 +3257,155 @@ describe('GraphQL remote profile boundary', () => {
     );
   });
 
+  test('returns null Local timeline without an authenticated selected Profile', async () => {
+    const query = `query LocalTimelineWithoutProfile {
+      localTimeline(first: 1) {
+        edges { node { id } }
+      }
+    }`;
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
+
+    for (const token of [undefined, withoutProfile.token]) {
+      const result = await requestGraphQL<{ localTimeline: null }>(query, {}, token);
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.localTimeline, null);
+    }
+  });
+
+  test('filters Local timeline candidates before cursor pagination', async () => {
+    const auth = await createAuthenticatedSession();
+    const localAuthor = await createProfile({
+      handle: 'local-author',
+      instanceId: localInstanceId,
+    });
+    const suspendedLocalAuthor = await createProfile({
+      handle: 'suspended-local-author',
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    const otherLocalInstance = await createLocalInstance({ domain: 'other-local.example' });
+    const otherLocalAuthor = await createProfile({
+      handle: 'other-local-author',
+      instanceId: otherLocalInstance.id,
+    });
+    const remoteAuthor = await createStoredActivityPubAuthor({
+      domain: 'local-timeline-remote.example',
+      handle: 'remote-author',
+    });
+    const source = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000800',
+      profileId: remoteAuthor.profile.id,
+    });
+    const repostSource = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000805',
+      profileId: remoteAuthor.profile.id,
+    });
+    const parent = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000810',
+      profileId: remoteAuthor.profile.id,
+    });
+
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000990',
+      profileId: remoteAuthor.profile.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000980',
+      profileId: otherLocalAuthor.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000970',
+      profileId: localAuthor.id,
+      visibility: PostVisibility.UNLISTED,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000960',
+      profileId: localAuthor.id,
+      replyParentId: parent.id,
+    });
+    await createRepost({
+      id: '019f8ed1-0000-7000-8000-000000000950',
+      profileId: localAuthor.id,
+      repostSourceId: repostSource.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000940',
+      profileId: suspendedLocalAuthor.id,
+    });
+    const deleted = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000930',
+      profileId: localAuthor.id,
+    });
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, deleted.id));
+
+    const ordinary = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000920',
+      profileId: localAuthor.id,
+    });
+    const quote = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000910',
+      profileId: localAuthor.id,
+      repostSourceId: source.id,
+    });
+    const older = await createContentfulPost({
+      id: '019f8ed1-0000-7000-8000-000000000900',
+      profileId: auth.profile.id,
+    });
+
+    const read = (after: string | null = null) =>
+      requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
+        `query LocalTimeline($after: String) {
+          localTimeline(first: 2, after: $after) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage }
+          }
+        }`,
+        { after },
+        auth.token,
+      );
+
+    const firstPage = await read();
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
+      globalId('Post', ordinary.id),
+      globalId('Post', quote.id),
+    ]);
+    assert.equal(firstPage.data?.localTimeline?.pageInfo.hasNextPage, true);
+
+    const secondPage = await read(firstPage.data?.localTimeline?.pageInfo.endCursor ?? null);
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(connectionIds(secondPage.data?.localTimeline), [globalId('Post', older.id)]);
+    assert.equal(secondPage.data?.localTimeline?.pageInfo.hasNextPage, false);
+  });
+
+  test('caps each Local timeline page at 20 Posts', async () => {
+    const auth = await createAuthenticatedSession();
+    const author = await createProfile({
+      handle: 'local-page-author',
+      instanceId: localInstanceId,
+    });
+
+    for (let index = 0; index < 21; index += 1) {
+      await createContentfulPost({ profileId: author.id });
+    }
+
+    const result = await requestGraphQL<{ localTimeline: RemotePostConnection | null }>(
+      `query OversizedLocalTimeline {
+        localTimeline(first: 100) {
+          edges { node { id } }
+          pageInfo { hasNextPage }
+        }
+      }`,
+      {},
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.localTimeline?.edges.length, 20);
+    assert.equal(result.data?.localTimeline?.pageInfo.hasNextPage, true);
+  });
+
   test('applies Reply candidate policy before paginating Home and excludes Replies from Profile', async () => {
     const auth = await createAuthenticatedSession();
     const replyAuthor = await createStoredActivityPubAuthor({

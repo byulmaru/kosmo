@@ -1,7 +1,7 @@
 import { Children, createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
 import type { ReactElement, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 
@@ -99,7 +99,7 @@ export function TabList<Value extends string>({
           styles.underlineList,
           {
             backgroundColor: Platform.OS === 'android' ? 'transparent' : theme.card,
-            borderColor: theme.border,
+            borderColor: theme.borderSubtle,
           },
         ]}
         {...(web ? ({ role: 'tablist' } as WebTabListProps) : undefined)}
@@ -109,7 +109,7 @@ export function TabList<Value extends string>({
             pointerEvents="none"
             style={[
               styles.underlineVisualBackdrop,
-              { backgroundColor: theme.card, borderColor: theme.border },
+              { backgroundColor: theme.card, borderColor: theme.borderSubtle },
             ]}
           />
         ) : null}
@@ -219,9 +219,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
                   ? theme.background
                   : theme.card
                 : 'transparent'
-              : Platform.OS === 'android'
-                ? 'transparent'
-                : theme.card,
+              : 'transparent',
           borderColor:
             context.variant === 'pill'
               ? web
@@ -284,7 +282,7 @@ export function Tab<Value extends string>({ option }: TabProps<Value>) {
         </Text>
       )}
       {context.variant === 'underline' && selected && !disabled ? (
-        <View style={[styles.tabIndicator, { backgroundColor: theme.text }]} />
+        <View style={[styles.tabIndicator, { backgroundColor: theme.actionPrimaryBase }]} />
       ) : null}
     </Pressable>
   );
@@ -304,14 +302,15 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'android' ? space[4] : 0,
     paddingHorizontal: space[8],
   },
-  underlineLabel: textStyles.uiLabelS,
+  underlineLabel: textStyles.uiLabelM,
   tabIndicator: {
     borderRadius: radius.full,
     bottom: Platform.OS === 'android' ? space[4] : 0,
-    height: borderWidths[2],
-    left: '30%',
+    height: space[4],
+    left: '50%',
     position: 'absolute',
-    right: '30%',
+    transform: [{ translateX: -iconSizes[64] / 2 }],
+    width: iconSizes[64],
   },
   underlineVisualBackdrop: {
     borderBottomWidth: borderWidths[1],

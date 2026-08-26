@@ -12,8 +12,10 @@ import { PostListItem } from './PostListItem';
 import { PostMediaViewerHostProvider } from './PostMediaViewerHost';
 import { PostReplyCoordinatorProvider } from './PostReplyCoordinator';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
+import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
 import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNextPageQuery.graphql';
+import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
 import type { PostListProfileNextPageQuery } from './__generated__/PostListProfileNextPageQuery.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 
@@ -50,9 +52,26 @@ const PostListHomeFragment = graphql`
   }
 `;
 
+const PostListLocalFragment = graphql`
+  fragment PostList_local on Query
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
+  @refetchable(queryName: "PostListLocalNextPageQuery") {
+    localTimeline(first: $count, after: $cursor) @connection(key: "PostList_localTimeline") {
+      edges {
+        cursor
+        node {
+          id
+          ...PostListItem_post
+        }
+      }
+    }
+  }
+`;
+
 type Props = {
   error?: boolean;
   home?: PostList_home$key | null;
+  local?: PostList_local$key | null;
   loading?: boolean;
   onRetry?: () => void;
   profile?: PostList_profile$key | null;
@@ -62,6 +81,7 @@ type Props = {
 export function PostList({
   error = false,
   home: homeKey,
+  local: localKey,
   loading = false,
   onRetry,
   profile: profileKey,
@@ -75,19 +95,37 @@ export function PostList({
     PostListProfileNextPageQuery,
     PostList_profile$key
   >(PostListProfileFragment, profileKey ?? null);
+  const localPagination = usePaginationFragment<PostListLocalNextPageQuery, PostList_local$key>(
+    PostListLocalFragment,
+    localKey ?? null,
+  );
   const isHome = homeKey != null;
+  const isLocal = localKey != null;
   const home = homePagination.data;
+  const local = localPagination.data;
   const profile = profilePagination.data;
-  const connection = isHome ? home?.homeTimeline : profile?.posts;
+  const connection = isHome ? home?.homeTimeline : isLocal ? local?.localTimeline : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
   // unhandled connection edge. Treat that stale edge as empty until the next
   // server payload instead of passing a missing fragment ref to PostListItem.
   const visibleEdges = edges.filter((edge) => edge.node != null);
-  const hasData = Boolean(home || profile);
-  const hasNext = isHome ? homePagination.hasNext : profilePagination.hasNext;
-  const isLoadingNext = isHome ? homePagination.isLoadingNext : profilePagination.isLoadingNext;
-  const loadNext = isHome ? homePagination.loadNext : profilePagination.loadNext;
+  const hasData = Boolean(home || local || profile);
+  const hasNext = isHome
+    ? homePagination.hasNext
+    : isLocal
+      ? localPagination.hasNext
+      : profilePagination.hasNext;
+  const isLoadingNext = isHome
+    ? homePagination.isLoadingNext
+    : isLocal
+      ? localPagination.isLoadingNext
+      : profilePagination.isLoadingNext;
+  const loadNext = isHome
+    ? homePagination.loadNext
+    : isLocal
+      ? localPagination.loadNext
+      : profilePagination.loadNext;
   const { loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
     hasNext,
     isLoadingNext,

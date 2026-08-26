@@ -49,9 +49,25 @@ export const InteractionContract: Story = {
     const popular = within(group).getByRole('tab', { name: '인기' });
     const latest = within(group).getByRole('tab', { name: '최신' });
     const media = within(group).getByRole('tab', { name: '미디어' });
+    const popularLabel = within(popular).getByText('인기');
+    const indicator = popular.lastElementChild;
 
+    expect(group).toHaveStyle({
+      borderBottomColor: 'rgb(236, 236, 240)',
+      borderBottomWidth: '1px',
+    });
+    expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
     expect(popular).toHaveAttribute('aria-selected', 'true');
     expect(popular).toHaveAttribute('tabindex', '0');
+    expect(popularLabel).toHaveStyle({
+      fontFamily: 'SUIT',
+      fontSize: '14px',
+      fontWeight: '600',
+      lineHeight: '20px',
+    });
+    expect(indicator).not.toBeNull();
+    expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
+    expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
     expect(latest).toHaveAttribute('aria-disabled', 'true');
     expect(latest).toHaveAttribute('tabindex', '-1');
     expect(latest).toHaveStyle({ opacity: '0.45' });

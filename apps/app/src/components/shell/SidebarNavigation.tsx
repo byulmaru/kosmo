@@ -17,7 +17,7 @@ import { radii, spacing, textStyles } from '@/theme/tokens';
 import { LogoutControl } from './LogoutControl';
 import { NavigationLink } from './NavigationLink';
 import { ProfileSwitcher } from './ProfileSwitcher';
-import { isSettingsRoute } from './shellLayout';
+import { isSettingsRoute, isTimelineRoute } from './shellLayout';
 import { UnreadNotificationBadge } from './UnreadNotificationBadge';
 import { useUnreadNotificationCount } from './UnreadNotificationBadgeController';
 import { getUnreadNotificationAccessibilityLabel } from './unreadNotificationBadgeState';
@@ -99,7 +99,12 @@ export function SidebarNavigation({
     }
 
     return {
-      active: item.href === '/settings' ? isSettingsRoute(pathname) : pathname === item.href,
+      active:
+        item.href === '/home'
+          ? isTimelineRoute(pathname)
+          : item.href === '/settings'
+            ? isSettingsRoute(pathname)
+            : pathname === item.href,
       href: item.href,
     };
   };
@@ -139,9 +144,10 @@ export function SidebarNavigation({
         <View accessibilityLabel="주요 메뉴" role="navigation" style={styles.navigation}>
           {navigation.map((item) => {
             const { active, href } = resolveItem(item);
+            const current = href === '/home' ? pathname === href : active;
             const control = (
               <Pressable
-                aria-current={active ? 'page' : undefined}
+                aria-current={current ? 'page' : undefined}
                 accessibilityLabel={
                   item.label === '알림'
                     ? getUnreadNotificationAccessibilityLabel(unreadNotificationCount)

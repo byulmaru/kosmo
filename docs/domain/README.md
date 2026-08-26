@@ -87,7 +87,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 
 ## 조회 정책
 
-- [Post List Policy](./policies/post-list.md): Home, Profile, Hashtag Post List의 후보와 제어 결정.
+- [Post List Policy](./policies/post-list.md): Home, Local, Profile, Hashtag Post List의 후보와 제어 결정.
 
 ## 결정과 기록
 

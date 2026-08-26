@@ -10,6 +10,7 @@ import { PostList } from '@/components/post/PostList';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { getShellLayout } from '@/components/shell/shellLayout';
+import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
@@ -106,6 +107,7 @@ function HomeFrame({
     <PaginationScrollView
       contentContainerStyle={styles.root}
       paginationOwnerKey={paginationOwnerKey}
+      stickyHeaderIndices={[routeOwnsHeader ? 1 : 0]}
     >
       {routeOwnsHeader ? (
         <PageHeader
@@ -115,6 +117,7 @@ function HomeFrame({
           variant="brand"
         />
       ) : null}
+      <TimelineTabs value="home" />
       <View style={styles.body}>{children}</View>
     </PaginationScrollView>
   );
@@ -236,7 +239,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   body: { flexGrow: 1 },
-  timeline: { paddingHorizontal: spacing.xl },
+  timeline: { width: '100%' },
   onboardingRoot: {
     alignItems: 'center',
     flexGrow: 1,

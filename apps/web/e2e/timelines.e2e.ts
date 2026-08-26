@@ -1,13 +1,15 @@
+import { PostVisibility, ProfileState } from '@kosmo/core/enums';
 import {
   createE2EFollow,
   createE2EPost,
   createE2EProfile,
+  createE2ERemoteProfile,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation } from './graphql';
+import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 const minute = 60_000;
@@ -24,9 +26,7 @@ function formatDateLabel(iso: string) {
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
-  const bodyShortcuts = page.getByTestId('post-list-row-body').filter({
-    hasText: /^E2E timeline/,
-  });
+  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true });
 
   await expect(bodyShortcuts).toHaveCount(bodies.length);
   await expect(bodyShortcuts).toHaveText(bodies);
@@ -105,6 +105,157 @@ test('홈 타임라인은 본인 글과 팔로우한 프로필 글만 최신순�
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
 });
 
+test('Local 탭은 configured Local의 공개 top-level Content Post와 Quote만 보여주고 재선택 시 갱신한다', async ({
+  context,
+  page,
+}) => {
+  let localQueryCount = 0;
+  const viewer = await createE2ESession({
+    displayName: 'E2E Local Viewer',
+    handle: 'e2e-local-viewer',
+  });
+  const localAuthor = await createE2EProfile({
+    displayName: 'E2E Local Writer',
+    handle: 'e2e-local-writer',
+  });
+  const suspendedLocalAuthor = await createE2EProfile({
+    displayName: 'E2E Suspended Local Writer',
+    handle: 'e2e-suspended-local-writer',
+    state: ProfileState.SUSPENDED,
+  });
+  const remoteAuthor = await createE2ERemoteProfile({
+    displayName: 'E2E Remote Writer',
+    domain: 'e2e-local-timeline.remote.example',
+    handle: 'e2e-local-timeline-remote',
+  });
+  const quoteSource = await createE2EPost({
+    profileId: remoteAuthor.id,
+    body: 'Quote source body',
+  });
+  const repostSource = await createE2EPost({
+    profileId: remoteAuthor.id,
+    body: 'E2E timeline contentless repost source',
+  });
+  const replyParent = await createE2EPost({
+    profileId: remoteAuthor.id,
+    body: 'Reply parent body',
+  });
+
+  await createE2EPost({
+    profileId: localAuthor.id,
+    body: 'E2E timeline local ordinary body',
+  });
+  await createE2EPost({
+    profileId: localAuthor.id,
+    body: 'E2E timeline local quote body',
+    repostSourceId: quoteSource.id,
+  });
+  await createE2EPost({
+    profileId: remoteAuthor.id,
+    body: 'E2E timeline remote excluded body',
+  });
+  await createE2EPost({
+    profileId: localAuthor.id,
+    body: 'E2E timeline unlisted excluded body',
+    visibility: PostVisibility.UNLISTED,
+  });
+  await createE2EPost({
+    profileId: localAuthor.id,
+    body: 'E2E timeline reply excluded body',
+    replyParentId: replyParent.id,
+  });
+  await createE2EPost({
+    content: false,
+    profileId: localAuthor.id,
+    repostSourceId: repostSource.id,
+  });
+  await createE2EPost({
+    profileId: suspendedLocalAuthor.id,
+    body: 'E2E timeline suspended excluded body',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.route('**/graphql', async (route) => {
+    if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
+      localQueryCount += 1;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/home');
+  const timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  await expect(timelineTabs.getByRole('tab', { name: '홈' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+
+  await timelineTabs.getByRole('tab', { name: '로컬' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/local$/);
+  await expect(timelineTabs.getByRole('tab', { name: '로컬' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByRole('heading', { name: '로컬' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '홈' })).not.toHaveAttribute('aria-current');
+  await expectPostOrder(page, [
+    'E2E timeline local quote body',
+    'E2E timeline local ordinary body',
+  ]);
+  for (const excludedBody of [
+    'E2E timeline contentless repost source',
+    'E2E timeline remote excluded body',
+    'E2E timeline unlisted excluded body',
+    'E2E timeline reply excluded body',
+    'E2E timeline suspended excluded body',
+  ]) {
+    await expect(page.getByText(excludedBody)).toHaveCount(0);
+  }
+  await page.setViewportSize({ height: 844, width: 390 });
+  await expect(page.getByRole('heading', { name: '로컬' })).toBeVisible();
+  const mobileBrandLink = page
+    .getByRole('link', { name: '홈' })
+    .filter({ has: page.locator('[aria-hidden="true"]') });
+  await expect(mobileBrandLink).toHaveAttribute('href', '/home');
+  await expect(
+    page.getByRole('navigation', { name: '주요 메뉴' }).getByRole('link', { name: '홈' }),
+  ).not.toHaveAttribute('aria-current');
+
+  const previousQueryCount = localQueryCount;
+  await timelineTabs.getByRole('tab', { name: '로컬' }).click();
+  await expect.poll(() => localQueryCount).toBeGreaterThan(previousQueryCount);
+
+  await page.getByRole('link', { name: 'E2E Local Writer 프로필 보기' }).click();
+  await expect(page).toHaveURL(/\/@e2e-local-writer$/);
+  await page.goBack();
+  await expect(page.getByText('E2E timeline local quote body', { exact: true })).toBeVisible();
+
+  await page.getByRole('link', { name: 'E2E Local Writer의 게시글 보기' }).click();
+  await expect(page).toHaveURL(/\/@e2e-local-writer\/.+$/);
+});
+
+test('Local 타임라인은 다음 페이지를 기존 목록에 누적한다', async ({ context, page }) => {
+  const viewer = await createE2ESession({ handle: 'e2e-local-page-viewer' });
+  const localAuthor = await createE2EProfile({ handle: 'e2e-local-page-writer' });
+
+  for (let index = 0; index < 21; index += 1) {
+    await createE2EPost({
+      body: `E2E local page ${index.toString().padStart(2, '0')}`,
+      profileId: localAuthor.id,
+    });
+  }
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.goto('/local');
+
+  const posts = page.getByText(/^E2E local page/, { exact: true });
+  await expect(posts).toHaveCount(20);
+
+  const nextPageResponse = waitForGraphQLOperation(page, 'PostListLocalNextPageQuery');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await nextPageResponse;
+  await expect(posts).toHaveCount(21);
+});
+
 test('프로필 게시글 목록은 해당 프로필이 작성한 글만 보여준다', async ({ context, page }) => {
   const viewer = await createE2ESession({
     displayName: 'E2E Profile Viewer',
@@ -144,7 +295,7 @@ test('프로필 게시글 목록은 해당 프로필이 작성한 글만 보여�
   await expect(page.getByText('E2E timeline other profile body')).toHaveCount(0);
 });
 
-test('게시글이 없는 홈과 프로필 목록은 빈 상태를 보여준다', async ({ context, page }) => {
+test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여준다', async ({ context, page }) => {
   const viewer = await createE2ESession({
     displayName: 'E2E Empty Viewer',
     handle: 'e2e-empty-viewer',
@@ -160,8 +311,42 @@ test('게시글이 없는 홈과 프로필 목록은 빈 상태를 보여준다'
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 
+  await page.goto('/local');
+  await expect(page.getByRole('tab', { name: '로컬' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+
   await page.goto(`/@${emptyProfile.handle}`);
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+});
+
+test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }) => {
+  let localRequestCount = 0;
+  const viewer = await createE2ESession({
+    displayName: 'E2E Local Error Viewer',
+    handle: 'e2e-local-error-viewer',
+  });
+
+  await setE2ESessionCookie(context, viewer.token);
+  await page.route('**/graphql', async (route) => {
+    if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
+      localRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({ errors: [{ message: 'E2E forced Local error' }] }),
+        contentType: 'application/json',
+        status: 500,
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto('/local');
+
+  await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
+  const previousCount = localRequestCount;
+  await page.getByRole('button', { name: '다시 시도' }).click();
+  await expect.poll(() => localRequestCount).toBeGreaterThan(previousCount);
 });
 
 test('빈 본문과 긴 본문 게시글도 목록 항목으로 렌더한다', async ({ context, page }) => {

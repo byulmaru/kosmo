@@ -114,7 +114,10 @@ describe('RelayActorProvider session cleanup', () => {
     assert.ok(snapshot);
     const previousEnvironment = snapshot.environment;
     commitLocalUpdate(previousEnvironment, (store) => {
-      store.create('old-viewer', 'Profile').setValue('이전 사용자', 'displayName');
+      const connection = store.create('local-connection', 'PostConnection');
+      const edge = store.create('local-edge', 'PostEdge');
+      edge.setValue('old-local-cursor', 'cursor');
+      connection.setLinkedRecords([edge], 'edges');
     });
 
     await act(async () => snapshot?.resetActor(null));
@@ -122,7 +125,8 @@ describe('RelayActorProvider session cleanup', () => {
     assert.ok(snapshot);
     assert.notEqual(snapshot.environment, previousEnvironment);
     assert.notEqual(snapshot.environment.getStore(), previousEnvironment.getStore());
-    assert.equal(snapshot.environment.getStore().getSource().get('old-viewer'), undefined);
+    assert.equal(snapshot.environment.getStore().getSource().get('local-connection'), undefined);
+    assert.equal(snapshot.environment.getStore().getSource().get('local-edge'), undefined);
   });
 
   it('SecureStore token을 삭제하고 이전 Store를 새 guest Store와 다음 Session에서 재사용하지 않는다', async () => {

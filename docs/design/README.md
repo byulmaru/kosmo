@@ -28,6 +28,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [profile-mute-block.md](./profile-mute-block.md) — Profile Mute·Block action, 관리 목록, 제한된 Profile과 Toast 계약
 - [profile-tags.md](./profile-tags.md) — Profile Tag 편집·공개 표시의 플랫폼 공통 계약
 - [hashtag-related-profiles.md](./hashtag-related-profiles.md) — Hashtag 관련 Profile 목록 탐색의 결과·상태 계약
+- [local-timeline.md](./local-timeline.md) — Home·Local 타임라인 탭, route, 상태와 재조회 계약
 
 ## 갱신 규칙
 

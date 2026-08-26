@@ -1,11 +1,12 @@
 import {
   createE2EAccountProfile,
+  createE2EPost,
   createE2ESession,
   resetE2EDatabase,
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { readGraphQLOperation } from './graphql';
+import { readGraphQLOperation, toGlobalId } from './graphql';
 import type { Page } from '@playwright/test';
 
 test.beforeEach(async () => {
@@ -175,6 +176,88 @@ test('home route active profile query refetches after switching profiles', async
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
   expect(graphQLRequests.operationNames).toContain('HomePageQuery');
+});
+
+test('Profile 전환 후 Local query가 새 selected Profile 응답에 수렴한다', async ({
+  context,
+  page,
+}) => {
+  const session = await createE2ESession({
+    displayName: 'E2E Local Actor A',
+    handle: 'e2e-local-actor-a',
+  });
+  const secondProfile = await createE2EAccountProfile({
+    accountId: session.account.id,
+    displayName: 'E2E Local Actor B',
+    handle: 'e2e-local-actor-b',
+  });
+  const firstBody = 'E2E local actor A body';
+  const secondBody = 'E2E local actor B body';
+  const firstPost = await createE2EPost({
+    body: firstBody,
+    profileId: session.profile!.id,
+  });
+
+  await setE2ESessionCookie(context, session.token);
+  const firstLocalResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
+  await page.goto('/local');
+  const firstLocalResponse = await firstLocalResponsePromise;
+  const firstLocalBody = (await firstLocalResponse.json()) as {
+    data?: {
+      localTimeline?: {
+        edges?: Array<{
+          cursor?: string | null;
+          node?: { id?: string | null } | null;
+        } | null> | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(firstLocalResponse.ok(), JSON.stringify(firstLocalBody, null, 2)).toBe(true);
+  expect(firstLocalBody.errors, JSON.stringify(firstLocalBody, null, 2)).toBeUndefined();
+  expect(firstLocalBody.data?.localTimeline?.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        cursor: expect.any(String),
+        node: expect.objectContaining({ id: toGlobalId('Post', firstPost.id) }),
+      }),
+    ]),
+  );
+  await expect(page.getByText(firstBody, { exact: true })).toBeVisible();
+
+  const secondPost = await createE2EPost({ body: secondBody, profileId: secondProfile.id });
+  const secondLocalResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
+  const selectedProfileResponse = await selectProfileFromSwitcher(page, secondProfile.handle);
+  const secondLocalResponse = await secondLocalResponsePromise;
+  const secondLocalBody = (await secondLocalResponse.json()) as {
+    data?: {
+      currentSession?: { selectedProfile?: { id?: string | null } | null } | null;
+      localTimeline?: {
+        edges?: Array<{
+          cursor?: string | null;
+          node?: { id?: string | null } | null;
+        } | null> | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(selectedProfileResponse.data?.selectProfile?.profile?.handle).toBe(secondProfile.handle);
+  expect(secondLocalResponse.ok(), JSON.stringify(secondLocalBody, null, 2)).toBe(true);
+  expect(secondLocalBody.errors, JSON.stringify(secondLocalBody, null, 2)).toBeUndefined();
+  expect(secondLocalBody.data?.currentSession?.selectedProfile?.id).toBe(
+    toGlobalId('Profile', secondProfile.id),
+  );
+  expect(secondLocalBody.data?.localTimeline?.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        cursor: expect.any(String),
+        node: expect.objectContaining({ id: toGlobalId('Post', secondPost.id) }),
+      }),
+    ]),
+  );
+  await expect(page.getByText(secondBody, { exact: true })).toBeVisible();
 });
 
 test('Home no-data 오류는 actor revision 변경으로 새 actor query와 timeline을 복구한다', async ({

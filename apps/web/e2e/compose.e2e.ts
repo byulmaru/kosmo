@@ -101,6 +101,115 @@ test('compose에서 공개 범위와 500자 제한을 적용해 createPost를 �
   await expect(page.getByText(body)).toBeVisible();
 });
 
+test('기본 공개 범위 저장부터 Local 재선택까지 production wiring을 유지한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Production Wiring',
+    handle: 'e2e-production-wiring',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+
+  await page.goto('/settings/default-post-visibility');
+  const visibilityControl = page.getByTestId('profile-default-post-visibility-control');
+  const publicOption = visibilityControl.getByRole('radio', {
+    name: '공개: 모두가 볼 수 있어요.',
+  });
+  const saveButton = visibilityControl.getByRole('button', {
+    name: '기본 게시 공개 범위 저장',
+  });
+
+  await publicOption.click();
+  await expect(saveButton).toBeEnabled();
+  const settingsMutationResponse = waitForGraphQLOperation(
+    page,
+    'ProfileDefaultPostVisibilityControlMutation',
+  );
+  await saveButton.click();
+  const settingsResponse = await settingsMutationResponse;
+  const settingsBody = (await settingsResponse.json()) as {
+    data?: {
+      updateProfile?: {
+        profile?: { private?: { defaultPostVisibility?: string | null } | null } | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(settingsResponse.ok(), JSON.stringify(settingsBody, null, 2)).toBe(true);
+  expect(settingsBody.errors, JSON.stringify(settingsBody, null, 2)).toBeUndefined();
+  expect(settingsBody.data?.updateProfile?.profile?.private?.defaultPostVisibility).toBe('PUBLIC');
+  await expect(visibilityControl.getByText('저장했어요.')).toBeVisible();
+
+  const body = 'E2E production wiring local body';
+  await page.goto('/compose');
+  const composer = page.getByLabel('새 게시글 작성').first();
+  const input = composer.getByRole('textbox', { name: '게시글 본문' });
+  const submit = composer.getByRole('button', { name: '게시', exact: true });
+
+  await expect(composer.getByRole('button', { name: '공개', exact: true })).toBeVisible();
+  await input.fill(body);
+  const createPostResponse = waitForGraphQLOperation(page, 'PostComposerCreatePostMutation');
+  await submit.click();
+  const createResponse = await createPostResponse;
+  const createOperation = readGraphQLOperation(createResponse.request().postData());
+  const createBody = (await createResponse.json()) as {
+    data?: { createPost?: { post?: { id?: string | null } | null } | null };
+    errors?: unknown[];
+  };
+
+  expect(createResponse.ok(), JSON.stringify(createBody, null, 2)).toBe(true);
+  expect(createBody.errors, JSON.stringify(createBody, null, 2)).toBeUndefined();
+  expect(createOperation?.variables).toMatchObject({
+    input: { bodyText: body, visibility: 'PUBLIC' },
+  });
+  const createdPostId = createBody.data?.createPost?.post?.id;
+  expect(createdPostId).toEqual(expect.any(String));
+
+  const localResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
+  await page.goto('/local');
+  const localResponse = await localResponsePromise;
+  const localBody = (await localResponse.json()) as {
+    data?: {
+      localTimeline?: {
+        edges?: Array<{ node?: { id?: string | null } | null } | null> | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(localResponse.ok(), JSON.stringify(localBody, null, 2)).toBe(true);
+  expect(localBody.errors, JSON.stringify(localBody, null, 2)).toBeUndefined();
+  expect(localBody.data?.localTimeline?.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ node: expect.objectContaining({ id: createdPostId }) }),
+    ]),
+  );
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+
+  const reselectResponsePromise = waitForGraphQLOperation(page, 'LocalPageQuery');
+  await page.getByRole('tab', { name: '로컬' }).click();
+  const reselectResponse = await reselectResponsePromise;
+  const reselectBody = (await reselectResponse.json()) as {
+    data?: {
+      localTimeline?: {
+        edges?: Array<{ node?: { id?: string | null } | null } | null> | null;
+      } | null;
+    };
+    errors?: unknown[];
+  };
+
+  expect(reselectResponse.ok(), JSON.stringify(reselectBody, null, 2)).toBe(true);
+  expect(reselectBody.errors, JSON.stringify(reselectBody, null, 2)).toBeUndefined();
+  expect(reselectBody.data?.localTimeline?.edges).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ node: expect.objectContaining({ id: createdPostId }) }),
+    ]),
+  );
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+});
+
 test('compose에서 이미지 clipboard paste는 본문을 보존하고 기존 Media 제출 흐름을 사용한다', async ({
   context,
   page,
