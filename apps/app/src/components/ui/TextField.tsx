@@ -2,7 +2,7 @@ import { forwardRef, useId, useState } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
-import type { TextInputProps, ViewStyle } from 'react-native';
+import type { TextInputProps, TextStyle } from 'react-native';
 
 type TextFieldProps = TextInputProps & {
   error?: string;
@@ -74,7 +74,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
                   outlineOffset: 2,
                   outlineStyle: 'solid',
                   outlineWidth: borderWidths[2],
-                } as unknown as ViewStyle)
+                } as unknown as TextStyle)
               : undefined),
           },
           style,
