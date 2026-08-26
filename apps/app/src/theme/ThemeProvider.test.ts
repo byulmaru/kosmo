@@ -52,7 +52,9 @@ test('explicit Dark mode selects production semantic colors without activating i
   let actionPrimaryDisabled: string | undefined;
   let actionSecondaryBase: string | undefined;
   let actionSecondaryBorder: string | undefined;
+  let actionSecondaryHover: string | undefined;
   let actionSecondaryOnBase: string | undefined;
+  let actionSecondaryPressed: string | undefined;
   let borderDisabled: string | undefined;
   let stateDisabledSurface: string | undefined;
   let legacyBackground: string | undefined;
@@ -71,7 +73,9 @@ test('explicit Dark mode selects production semantic colors without activating i
     actionPrimaryDisabled = theme?.actionPrimaryDisabled;
     actionSecondaryBase = theme?.actionSecondaryBase;
     actionSecondaryBorder = theme?.actionSecondaryBorder;
+    actionSecondaryHover = theme?.actionSecondaryHover;
     actionSecondaryOnBase = theme?.actionSecondaryOnBase;
+    actionSecondaryPressed = theme?.actionSecondaryPressed;
     borderDisabled = theme?.borderDisabled;
     stateDisabledSurface = theme?.stateDisabledSurface;
     legacyBackground = theme?.background;
@@ -103,7 +107,9 @@ test('explicit Dark mode selects production semantic colors without activating i
       actionPrimaryDisabled,
       actionSecondaryBase,
       actionSecondaryBorder,
+      actionSecondaryHover,
       actionSecondaryOnBase,
+      actionSecondaryPressed,
       borderDisabled,
       stateDisabledSurface,
     },
@@ -113,12 +119,14 @@ test('explicit Dark mode selects production semantic colors without activating i
       foregroundPrimary: '#E0E0E0',
       foregroundSecondary: '#A3A3A3',
       foregroundMuted: '#969696',
-      borderSubtle: '#262626',
+      borderSubtle: '#303030',
       borderDefault: '#383838',
       actionPrimaryDisabled: '#262626',
       actionSecondaryBase: '#141414',
       actionSecondaryBorder: '#383838',
+      actionSecondaryHover: '#262626',
       actionSecondaryOnBase: '#E0E0E0',
+      actionSecondaryPressed: '#303030',
       borderDisabled: '#262626',
       stateDisabledSurface: '#262626',
     },

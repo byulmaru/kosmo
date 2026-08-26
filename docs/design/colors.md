@@ -59,7 +59,7 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | `color/foreground/muted`     | `#71717A` | `#969696` | 비핵심 보조 정보            |
 | `color/foreground/disabled`  | `#A5A5AF` | `#64646F` | 비활성 전경                 |
 | `color/foreground/inverse`   | `#FAFAFB` | `#1A1A1A` | inverse 표면 위 전경        |
-| `color/border/subtle`        | `#ECECF0` | `#262626` | divider와 약한 구분         |
+| `color/border/subtle`        | `#ECECF0` | `#303030` | divider와 약한 구분         |
 | `color/border/default`       | `#DFDFE5` | `#383838` | 카드와 입력의 기본 경계     |
 | `color/border/strong`        | `#A5A5AF` | `#71717A` | 분명한 구조 경계            |
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
@@ -84,15 +84,15 @@ Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 prev
 
 ### Secondary action
 
-Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 action 역할을 사용한다. 현재 값은 기존 surface·foreground·border·interaction state와 같지만, 역할을 분리해 Button의 색상 소유권을 명확히 한다.
+Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 action 역할을 사용한다. Light의 hover/pressed는 공용 state 값을 재사용하지만, Dark의 hover/pressed는 Button의 fill 교체 구현을 위해 opaque하게 미리 합성한 값을 사용한다. 공용 `color/state/hover`, `color/state/pressed`는 다른 중립 surface 위에 얹는 overlay layer로 유지한다.
 
-| Token                            | 같은 값을 사용하는 기존 역할 | 용도                       |
-| -------------------------------- | ---------------------------- | -------------------------- |
-| `color/action/secondary/base`    | `color/background/surface`   | 기본 Secondary action 표면 |
-| `color/action/secondary/on-base` | `color/foreground/primary`   | label과 icon               |
-| `color/action/secondary/border`  | `color/border/default`       | 기본 경계                  |
-| `color/action/secondary/hover`   | `color/state/hover`          | hover interaction layer    |
-| `color/action/secondary/pressed` | `color/state/pressed`        | pressed interaction layer  |
+| Token                            | 같은 값을 사용하는 기존 역할                           | 용도                       |
+| -------------------------------- | ------------------------------------------------------ | -------------------------- |
+| `color/action/secondary/base`    | `color/background/surface`                             | 기본 Secondary action 표면 |
+| `color/action/secondary/on-base` | `color/foreground/primary`                             | label과 icon               |
+| `color/action/secondary/border`  | `color/border/default`                                 | 기본 경계                  |
+| `color/action/secondary/hover`   | `color/state/hover` (Light); opaque `#262626` (Dark)   | Button hover fill          |
+| `color/action/secondary/pressed` | `color/state/pressed` (Light); opaque `#303030` (Dark) | Button pressed fill        |
 
 Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `color/state/focus-ring`, `color/state/disabled-*`, `color/border/disabled`를 사용한다.
 
@@ -121,18 +121,18 @@ Light Info와 Warning border는 base 색을 그대로 재사용하지 않는다.
 
 ## Interaction state와 overlay
 
-| Token                             | Light     | Dark      | 규칙                                    |
-| --------------------------------- | --------- | --------- | --------------------------------------- |
-| `color/state/hover`               | black 4%  | white 8%  | 중립 surface hover layer                |
-| `color/state/pressed`             | black 8%  | white 12% | 중립 surface pressed layer              |
-| `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                 |
-| `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                          |
-| `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                     |
-| `color/state/disabled-surface`    | `#F4F4F5` | `#262626` | 공용 disabled surface                   |
-| `color/state/disabled-foreground` | `#A5A5AF` | `#64646F` | 공용 disabled foreground                |
-| `color/overlay/scrim`             | black 45% | black 45% | modal, sheet와 action menu의 표준 scrim |
+| Token                             | Light     | Dark      | 규칙                                              |
+| --------------------------------- | --------- | --------- | ------------------------------------------------- |
+| `color/state/hover`               | black 4%  | white 8%  | 중립 surface 위에 얹는 공용 hover overlay layer   |
+| `color/state/pressed`             | black 8%  | white 12% | 중립 surface 위에 얹는 공용 pressed overlay layer |
+| `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                           |
+| `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                                    |
+| `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                               |
+| `color/state/disabled-surface`    | `#F4F4F5` | `#262626` | 공용 disabled surface                             |
+| `color/state/disabled-foreground` | `#A5A5AF` | `#64646F` | 공용 disabled foreground                          |
+| `color/overlay/scrim`             | black 45% | black 45% | modal, sheet와 action menu의 표준 scrim           |
 
-Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존재하면 독립적으로 표현하며 `focused`, `selected`, `disabled` 같은 접근성 state를 색상과 함께 제공한다.
+Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque action token과, 공용 중립 surface 위에 얹는 state overlay를 서로 대체하지 않는다. Focus와 Selected도 서로 대체하지 않는다. 두 상태가 동시에 존재하면 독립적으로 표현하며 `focused`, `selected`, `disabled` 같은 접근성 state를 색상과 함께 제공한다.
 
 ## 대비 계약
 
