@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { before, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { ElementType } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type * as ToastProviderModule from './ToastProvider';
 
@@ -11,11 +12,23 @@ const mockModule = (specifier: string | URL, exports: object) =>
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 let entered = false;
+let platformOS: 'android' | 'ios' | 'web' = 'web';
+const PressableHost = 'Pressable' as unknown as ElementType;
+const TextHost = 'Text' as unknown as ElementType;
+const ViewHost = 'View' as unknown as ElementType;
+
+function flattenStyle(style: unknown) {
+  return Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
+}
 
 mockModule('react-native', {
   Animated: { View: 'AnimatedView' },
-  Platform: { OS: 'web' },
-  Pressable: 'Pressable',
+  Platform: {
+    get OS() {
+      return platformOS;
+    },
+  },
+  Pressable: PressableHost,
   StyleSheet: { absoluteFill: {}, create: <T>(styles: T) => styles },
   Text: 'Text',
   useWindowDimensions: () => ({ width: 1400 }),
@@ -24,7 +37,22 @@ mockModule('react-native', {
 mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ bottom: 0 }) });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {} }),
-  useTheme: () => ({ accent: 'accent', background: 'background' }),
+  useTheme: () => ({
+    backgroundInverse: 'inverse-background',
+    feedbackDangerBorder: 'danger-border',
+    feedbackDangerOnSubtle: 'danger-on-subtle',
+    feedbackDangerSubtle: 'danger-subtle',
+    feedbackInfoBorder: 'info-border',
+    feedbackInfoOnSubtle: 'info-on-subtle',
+    feedbackInfoSubtle: 'info-subtle',
+    feedbackSuccessBorder: 'success-border',
+    feedbackSuccessOnSubtle: 'success-on-subtle',
+    feedbackSuccessSubtle: 'success-subtle',
+    feedbackWarningBorder: 'warning-border',
+    feedbackWarningOnSubtle: 'warning-on-subtle',
+    feedbackWarningSubtle: 'warning-subtle',
+    foregroundInverse: 'inverse-foreground',
+  }),
 });
 mockModule('@/theme/tokens', {
   breakpoints: { compact: 768 },
@@ -85,4 +113,112 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
     globalThis.clearTimeout = originalClearTimeout;
     entered = false;
   }
+});
+
+test('toast maps the inverse default and subtle feedback tone rails', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  const cases = [
+    {
+      background: 'inverse-background',
+      border: undefined,
+      foreground: 'inverse-foreground',
+      tone: undefined,
+    },
+    {
+      background: 'info-subtle',
+      border: 'info-border',
+      foreground: 'info-on-subtle',
+      tone: 'info' as const,
+    },
+    {
+      background: 'success-subtle',
+      border: 'success-border',
+      foreground: 'success-on-subtle',
+      tone: 'success' as const,
+    },
+    {
+      background: 'warning-subtle',
+      border: 'warning-border',
+      foreground: 'warning-on-subtle',
+      tone: 'warning' as const,
+    },
+    {
+      background: 'danger-subtle',
+      border: 'danger-border',
+      foreground: 'danger-on-subtle',
+      tone: 'danger' as const,
+    },
+  ] as const;
+
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+  });
+  for (const sample of cases) {
+    await act(async () => {
+      api?.showToast('알림', sample.tone ? { tone: sample.tone } : undefined);
+    });
+    const surface = renderer?.root.findByType(ViewHost);
+    const style = flattenStyle(surface?.props.style);
+    assert.equal(style.backgroundColor, sample.background);
+    assert.equal(style.paddingVertical, 12);
+    const message = renderer?.root.findByType(TextHost);
+    assert.equal(flattenStyle(message?.props.style).color, sample.foreground);
+    assert.equal(style.borderLeftWidth, sample.tone ? 4 : undefined);
+    assert.equal(style.borderLeftColor, sample.border);
+  }
+  await act(async () => renderer?.unmount());
+});
+
+test('action toast keeps a 44px target and adds only Android 2px hitSlop', async () => {
+  assert.ok(toastProviderModule);
+  const { ToastProvider, useToast } = toastProviderModule;
+  let api: ReturnType<typeof useToast> | undefined;
+  function Harness() {
+    api = useToast();
+    return null;
+  }
+
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(ToastProvider, null, createElement(Harness)));
+  });
+
+  const showActionToast = async () => {
+    await act(async () => {
+      api?.showToast('다시 시도해 주세요.', {
+        action: { label: '다시 시도', onPress: () => undefined },
+      });
+    });
+  };
+
+  for (const [nextPlatform, expectedHitSlop] of [
+    ['web', undefined],
+    ['ios', undefined],
+    ['android', 2],
+  ] as const) {
+    platformOS = nextPlatform;
+    await showActionToast();
+    const surface = renderer?.root.findByType(ViewHost);
+    assert.equal(flattenStyle(surface?.props.style).paddingVertical, 4);
+    const action = renderer?.root
+      .findAllByType(PressableHost)
+      .find((node) => node.props.accessibilityRole === 'button');
+    assert.ok(action);
+    const actionStyle = flattenStyle(action.props.style);
+    assert.equal(actionStyle.alignItems, 'center');
+    assert.equal(actionStyle.justifyContent, 'center');
+    assert.equal(actionStyle.minHeight, 44);
+    assert.equal(actionStyle.minWidth, 44);
+    assert.equal(action.props.hitSlop, expectedHitSlop);
+  }
+  await act(async () => renderer?.unmount());
+  platformOS = 'web';
 });

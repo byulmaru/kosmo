@@ -58,6 +58,46 @@ function ScopedToastFixture() {
   );
 }
 
+const toneSamples = [
+  { label: '기본 · no action', message: '기본 알림', tone: undefined },
+  { label: '정보 · action', message: '정보 알림', tone: 'info' as const },
+  { label: '성공 · action', message: '성공 알림', tone: 'success' as const },
+  { label: '경고 · action', message: '경고 알림', tone: 'warning' as const },
+  { label: '위험 · action', message: '위험 알림', tone: 'danger' as const },
+] as const;
+
+function ToneAndActionToastFixture() {
+  const { showToast } = useToast();
+
+  return (
+    <View style={styles.fixture}>
+      <Text>버튼을 눌러 현재 테마의 Toast 색상과 action target을 확인하세요.</Text>
+      <View style={styles.row}>
+        {toneSamples.map((sample) => (
+          <Pressable
+            accessibilityRole="button"
+            key={sample.label}
+            onPress={() =>
+              showToast(
+                sample.message,
+                sample.tone
+                  ? {
+                      action: { label: '다시 시도', onPress: () => undefined },
+                      tone: sample.tone,
+                    }
+                  : undefined,
+              )
+            }
+            style={styles.button}
+          >
+            <Text>{sample.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 const meta = {
   component: ToastFixture,
   title: 'KOSMO/UI/Toast Provider',
@@ -86,7 +126,7 @@ export const ReplacementAndAutoDismiss: Story = {
     );
     const toastSurface = toastMessage.parentElement!;
     expect(alert).toHaveTextContent('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(38, 38, 38)');
+    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(26, 26, 26)');
     expect(
       toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
     ).toBeCloseTo(14, 0);
@@ -164,7 +204,16 @@ export const ScopedCleanupDoesNotDismissNewerToast: Story = {
   },
 };
 
+export const ToneAndActionMatrix: Story = {
+  render: () => (
+    <ToastProvider>
+      <ToneAndActionToastFixture />
+    </ToastProvider>
+  ),
+};
+
 const styles = StyleSheet.create({
   button: { alignSelf: 'flex-start', minHeight: 44, padding: spacing.md },
   fixture: { gap: spacing.md },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
 });

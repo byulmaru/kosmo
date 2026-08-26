@@ -125,7 +125,16 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
           ]}
         >
           <View
-            style={[styles.toast, elevation.floating, { backgroundColor: toastColors?.background }]}
+            style={[
+              styles.toast,
+              toast.action ? styles.actionToast : undefined,
+              elevation.floating,
+              {
+                backgroundColor: toastColors?.background,
+                borderLeftColor: toastColors?.border,
+                borderLeftWidth: toastColors?.border ? 4 : undefined,
+              },
+            ]}
           >
             <Text style={[styles.message, { color: toastColors?.foreground }]}>
               {toast.message}
@@ -133,7 +142,7 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
             {toast.action ? (
               <Pressable
                 accessibilityRole="button"
-                hitSlop={space[8]}
+                hitSlop={Platform.OS === 'android' ? 2 : undefined}
                 onPress={() => {
                   const action = toast.action;
                   dismissToast(toast.id);
@@ -155,19 +164,35 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
 
 function getToastColors(theme: ReturnType<typeof useTheme>, tone: ToastOptions['tone']) {
   if (tone === 'danger') {
-    return { background: theme.feedbackDangerBase, foreground: theme.feedbackDangerOnBase };
+    return {
+      background: theme.feedbackDangerSubtle,
+      border: theme.feedbackDangerBorder,
+      foreground: theme.feedbackDangerOnSubtle,
+    };
   }
   if (tone === 'success') {
-    return { background: theme.feedbackSuccessBase, foreground: theme.feedbackSuccessOnBase };
+    return {
+      background: theme.feedbackSuccessSubtle,
+      border: theme.feedbackSuccessBorder,
+      foreground: theme.feedbackSuccessOnSubtle,
+    };
   }
   if (tone === 'warning') {
-    return { background: theme.feedbackWarningBase, foreground: theme.feedbackWarningOnBase };
+    return {
+      background: theme.feedbackWarningSubtle,
+      border: theme.feedbackWarningBorder,
+      foreground: theme.feedbackWarningOnSubtle,
+    };
   }
   if (tone === 'info') {
-    return { background: theme.feedbackInfoBase, foreground: theme.feedbackInfoOnBase };
+    return {
+      background: theme.feedbackInfoSubtle,
+      border: theme.feedbackInfoBorder,
+      foreground: theme.feedbackInfoOnSubtle,
+    };
   }
 
-  return { background: theme.accent, foreground: theme.background };
+  return { background: theme.backgroundInverse, foreground: theme.foregroundInverse };
 }
 
 export function useToast(): ToastContextValue {
@@ -189,7 +214,14 @@ const webHost = {
 } as unknown as ViewStyle;
 
 const styles = StyleSheet.create({
-  action: { paddingHorizontal: space[4], paddingVertical: space[4] },
+  action: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: space[4],
+    paddingVertical: space[4],
+  },
   actionLabel: {
     textDecorationLine: 'underline',
     ...textStyles.uiLabelM,
@@ -206,6 +238,7 @@ const styles = StyleSheet.create({
     pointerEvents: 'box-none',
     zIndex: 30,
   },
+  actionToast: { paddingVertical: space[4] },
   toast: {
     alignItems: 'center',
     borderRadius: radius[12],

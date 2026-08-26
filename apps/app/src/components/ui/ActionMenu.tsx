@@ -435,30 +435,34 @@ export function ActionMenu({
             <View {...sheetDismissResponder.panHandlers} style={styles.dragHandleTarget}>
               <View style={[styles.dragHandle, { backgroundColor: theme.borderStrong }]} />
             </View>
-            {items.map((item) => {
+            {items.map((item, index) => {
               const Icon = item.icon;
               const itemColor =
                 item.tone === 'danger' ? theme.feedbackDangerOnSubtle : theme.foregroundPrimary;
               return (
-                <Pressable
-                  accessibilityLabel={item.accessibilityLabel ?? item.label}
-                  accessibilityRole="menuitem"
-                  key={item.key}
-                  onPress={() => select(item)}
-                  style={[styles.item, styles.nativeItem]}
-                >
-                  {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
-                  <Text
-                    style={[
-                      styles.label,
-                      {
-                        color: itemColor,
-                      },
-                    ]}
+                <View key={item.key}>
+                  {index > 0 ? (
+                    <View style={[styles.nativeDivider, { borderTopColor: theme.borderSubtle }]} />
+                  ) : null}
+                  <Pressable
+                    accessibilityLabel={item.accessibilityLabel ?? item.label}
+                    accessibilityRole="menuitem"
+                    onPress={() => select(item)}
+                    style={[styles.item, styles.nativeItem]}
                   >
-                    {item.label}
-                  </Text>
-                </Pressable>
+                    {Icon ? <Icon color={itemColor} size={iconSizes[20]} strokeWidth={2} /> : null}
+                    <Text
+                      style={[
+                        styles.label,
+                        {
+                          color: itemColor,
+                        },
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                </View>
               );
             })}
           </Animated.View>
@@ -479,6 +483,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[12],
     paddingVertical: space[8],
   },
+  nativeDivider: { borderTopWidth: borderWidths[1], marginHorizontal: space[8] },
   nativeItem: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   label: textStyles.uiLabelL,
   sheet: {

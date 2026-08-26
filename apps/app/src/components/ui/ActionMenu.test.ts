@@ -16,8 +16,13 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 const PressableHost = 'Pressable' as unknown as ElementType;
 const TextHost = 'Text' as unknown as ElementType;
+const ViewHost = 'View' as unknown as ElementType;
 let exitMounted = false;
 let platformOS: 'ios' | 'web' = 'ios';
+
+function flattenStyle(style: unknown) {
+  return Object.assign({}, ...(Array.isArray(style) ? style : [style]).filter(Boolean));
+}
 
 mockModule('react-native', {
   Animated: { View: 'AnimatedView' },
@@ -122,6 +127,39 @@ test('Native ActionMenu runs a selected action after its exit finishes', async (
   exitMounted = false;
   await act(async () => renderer?.update(createElement(actionMenuModule!.ActionMenu, props)));
   assert.deepEqual(selected, ['first']);
+  await act(async () => renderer?.unmount());
+});
+
+test('Native ActionMenu uses inset subtle dividers without changing 44px menu rows', async () => {
+  assert.ok(actionMenuModule);
+  const props = {
+    accessibilityLabel: '메뉴',
+    items: [
+      { key: 'first', label: '첫 번째', onSelect: () => undefined },
+      { key: 'second', label: '두 번째', onSelect: () => undefined },
+    ],
+    renderTrigger: ({ onPress }: { onPress: () => void }) =>
+      createElement(PressableHost, { onPress, testID: 'trigger' }),
+  };
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(actionMenuModule!.ActionMenu, props));
+  });
+  await act(async () => renderer?.root.findByProps({ testID: 'trigger' }).props.onPress());
+
+  const rows = renderer?.root
+    .findAllByType(PressableHost)
+    .filter((node) => node.props.accessibilityRole === 'menuitem');
+  assert.equal(rows?.length, 2);
+  rows?.forEach((row) => assert.equal(flattenStyle(row.props.style).minHeight, 44));
+
+  const divider = renderer?.root
+    .findAllByType(ViewHost)
+    .find((node) => flattenStyle(node.props.style).borderTopWidth === 1);
+  assert.ok(divider);
+  const dividerStyle = flattenStyle(divider.props.style);
+  assert.equal(dividerStyle.borderTopColor, 'subtle');
+  assert.equal(dividerStyle.marginHorizontal, 8);
   await act(async () => renderer?.unmount());
 });
 
