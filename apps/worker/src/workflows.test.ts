@@ -746,6 +746,7 @@ test(
           calls.removal += 1;
           throw new Error('malformed removal input must not execute');
         },
+        verifyProfileFollowRemovalActivity: async () => undefined,
         deleteFollowNotificationActivity: async () => {
           calls.deleteNotification += 1;
         },
@@ -809,14 +810,32 @@ test(
         deleteNotification: 0,
         sendUndo: 0,
       });
-      await removalHandle.cancel();
-      await assert.rejects(removalHandle.result());
+      assert.deepEqual(
+        await removalHandle.executeUpdate('profileFollowRemovalUpdate', {
+          args: [
+            {
+              ...pair,
+              expectedRowId: 'follow',
+              origin: 'LOCAL',
+            },
+          ],
+          updateId: 'missing-verification',
+        }),
+        {
+          ok: true,
+          changed: false,
+          profileFollowId: null,
+          followerProfileId: pair.followerProfileId,
+          followeeProfileId: pair.followeeProfileId,
+        },
+      );
+      await removalHandle.result();
     });
   },
 );
 
 test(
-  'Separate removal Workflow는 exact source를 commit한 뒤 delete effects를 drain한다',
+  'Separate removal Workflow는 exact source를 검증하고 commit retry 뒤 effects를 한 번 drain한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -853,6 +872,7 @@ test(
       ],
     };
     const calls: string[] = [];
+    let removalAttempts = 0;
     let releaseEffect!: () => void;
     const effectReleased = new Promise<void>((resolve) => {
       releaseEffect = resolve;
@@ -864,7 +884,21 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        executeProfileFollowRemovalActivity: async () => execution,
+        verifyProfileFollowRemovalActivity: async () => {
+          calls.push('verify:' + followId);
+          return followId;
+        },
+        executeProfileFollowRemovalActivity: async () => {
+          calls.push('remove:' + followId);
+          removalAttempts += 1;
+          if (removalAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'removal completion lost after commit',
+              nextRetryDelay: '1ms',
+            });
+          }
+          return execution;
+        },
         deleteFollowNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
           effectStarted();
@@ -902,22 +936,37 @@ test(
           'profileFollowRemovalUpdate',
           {
             args: [input],
+            updateId: 'removal:' + followId,
             startWorkflowOperation,
           },
         );
         await effectStartedPromise;
-        assert.deepEqual(await updateResultPromise, {
+        const updateResult = {
           ok: true,
           changed: execution.changed,
           profileFollowId: execution.profileFollowId,
           followerProfileId: execution.followerProfileId,
           followeeProfileId: execution.followeeProfileId,
-        });
-        releaseEffect();
+        };
+        assert.deepEqual(await updateResultPromise, updateResult);
         const handle = await startWorkflowOperation.workflowHandle();
-        await handle.result();
         assert.deepEqual(
-          new Set(calls),
+          await handle.executeUpdate('profileFollowRemovalUpdate', {
+            args: [input],
+            updateId: 'removal:' + followId,
+          }),
+          updateResult,
+        );
+        releaseEffect();
+        await handle.result();
+        assert.equal(calls.length, 5);
+        assert.deepEqual(calls.slice(0, 3), [
+          'verify:' + followId,
+          'remove:' + followId,
+          'remove:' + followId,
+        ]);
+        assert.deepEqual(
+          new Set(calls.slice(3)),
           new Set([
             'delete:' + followId,
             'undo:' +

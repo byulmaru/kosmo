@@ -271,6 +271,21 @@ export const loadPendingFollowRequestId = async (input: {
     .then(first)
     .then((row) => row?.id);
 
+/** Verify the exact Follow source before the removal transaction is scheduled. */
+export const verifyProfileFollowRemoval = async (
+  input: Pick<
+    ProfileFollowRemovalInput,
+    'followerProfileId' | 'followeeProfileId' | 'expectedRowId'
+  >,
+): Promise<string | undefined> =>
+  db
+    .select({ id: ProfileFollows.id })
+    .from(ProfileFollows)
+    .where(and(eq(ProfileFollows.id, input.expectedRowId), pairCondition(ProfileFollows, input)))
+    .limit(1)
+    .then(first)
+    .then((row) => row?.id);
+
 const executeFollow = async (
   input: ProfileFollowPairTransitionInput,
   tx: Transaction,

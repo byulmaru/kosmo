@@ -50,6 +50,7 @@ const {
   deleteFollowRequestNotificationActivity,
   executeProfileFollowRemovalActivity,
   sendProfileUnfollowActivity,
+  verifyProfileFollowRemovalActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const parseProfileFollowRemovalInput = (value: unknown): ProfileFollowRemovalInput => {
@@ -91,7 +92,17 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
       inFlight = true;
       updateReceived = true;
       try {
-        execution = await executeProfileFollowRemovalActivity(parsedCommand);
+        execution =
+          (await verifyProfileFollowRemovalActivity(parsedCommand)) === parsedCommand.expectedRowId
+            ? await executeProfileFollowRemovalActivity(parsedCommand)
+            : {
+                ok: true,
+                changed: false,
+                profileFollowId: null,
+                followerProfileId: parsedCommand.followerProfileId,
+                followeeProfileId: parsedCommand.followeeProfileId,
+                effectPlan: [],
+              };
         return execution.ok
           ? {
               ok: true as const,

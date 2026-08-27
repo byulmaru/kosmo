@@ -23,6 +23,7 @@ import {
   executeProfileFollowRemoval,
   hydrateProfileFollowPairTransition,
   loadPendingFollowRequestId,
+  verifyProfileFollowRemoval,
 } from './profile-follow-command';
 import type { ProfileFollowPairTransitionInput } from './profile-follow-command';
 
@@ -434,6 +435,8 @@ test('removal retry uses the expected Follow ID and preserves a refollow generat
     origin: 'LOCAL' as const,
   };
 
+  assert.equal(await verifyProfileFollowRemoval(input), firstFollow.id);
+
   const removed = await executeProfileFollowRemoval(input);
   assert.equal(removed.ok, true);
   if (!removed.ok) {
@@ -474,6 +477,46 @@ test('removal retry uses the expected Follow ID and preserves a refollow generat
   assert.deepEqual(
     await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, secondFollow.id)),
     [secondFollow],
+  );
+});
+
+test('removal verification requires the expected Follow ID and directed pair', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const otherFollowee = await createProfile();
+  const follow = await db
+    .insert(ProfileFollows)
+    .values({
+      id: crypto.randomUUID(),
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+
+  assert.equal(
+    await verifyProfileFollowRemoval({
+      expectedRowId: follow.id,
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
+    follow.id,
+  );
+  assert.equal(
+    await verifyProfileFollowRemoval({
+      expectedRowId: follow.id,
+      followerProfileId: follower.id,
+      followeeProfileId: otherFollowee.id,
+    }),
+    undefined,
+  );
+  assert.equal(
+    await verifyProfileFollowRemoval({
+      expectedRowId: crypto.randomUUID(),
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    }),
+    undefined,
   );
 });
 

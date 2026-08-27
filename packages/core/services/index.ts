@@ -41,6 +41,7 @@ export {
   hydrateProfileFollowPairTransition,
   loadPendingFollowRequestId,
   rehydrateProfileFollowFailure,
+  verifyProfileFollowRemoval,
 } from './profile-follow-command';
 export type { ProfileFollowPair } from './profile-follow-relation';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-request';
