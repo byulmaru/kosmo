@@ -8,7 +8,6 @@ import {
   PermissionDeniedError,
   ValidationError,
 } from '../error';
-import { profileFollowRemovalInputSchema } from '../validation/profile-follow';
 import {
   acceptProfileFollowRequestInTransaction,
   approveProfileFollowRequestInTransaction,
@@ -18,17 +17,41 @@ import {
 } from './profile-follow-transaction';
 import type { Transaction } from '../db';
 import type { ErrorCode } from '../error';
-import type {
-  ProfileFollowEffectOrigin,
-  ProfileFollowPairCommand,
-  ProfileFollowRemovalInput,
-} from '../validation/profile-follow';
 import type { ProfileFollowPair } from './profile-follow-relation';
-
-export type { ProfileFollowEffectOrigin, ProfileFollowPairCommand, ProfileFollowRemovalInput };
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
+
+export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
+
+export type ProfileFollowPairCommand =
+  | {
+      readonly kind: 'FOLLOW';
+      readonly origin: ProfileFollowEffectOrigin;
+    }
+  | {
+      readonly kind: 'APPROVE';
+      readonly actorProfileId: string;
+      readonly expectedRowId: string;
+      readonly origin: 'LOCAL';
+    }
+  | {
+      readonly kind: 'ACCEPT';
+      readonly expectedRowId: string;
+      readonly origin: 'ACTIVITYPUB';
+    }
+  | {
+      readonly kind: 'REJECT';
+      readonly actorProfileId?: string;
+      readonly expectedRowId: string;
+      readonly origin: ProfileFollowEffectOrigin;
+    }
+  | {
+      readonly kind: 'CANCEL';
+      readonly actorProfileId?: string;
+      readonly expectedRowId: string;
+      readonly origin: ProfileFollowEffectOrigin;
+    };
 
 export type ProfileFollowPairLifecycleState =
   | 'INITIAL'
@@ -135,6 +158,12 @@ type ProfileFollowPairTransitionSuccess = Extract<
   ProfileFollowPairTransitionExecution,
   { readonly ok: true }
 >;
+
+/** Separate short command used after an established Follow. */
+export type ProfileFollowRemovalInput = ProfileFollowPair & {
+  readonly expectedRowId: string;
+  readonly origin: ProfileFollowEffectOrigin;
+};
 
 /** Public removal result; effect orchestration stays inside the Worker. */
 export type ProfileFollowRemovalOutcome =
@@ -683,40 +712,32 @@ export const executeProfileFollowRemoval = async (
   input: ProfileFollowRemovalInput,
 ): Promise<ProfileFollowRemovalExecution> => {
   try {
-    const parsedInput = profileFollowRemovalInputSchema.safeParse(input);
-    if (!parsedInput.success) {
-      throw new ValidationError('Invalid profile follow removal input');
-    }
-    const validatedInput = parsedInput.data;
-
     return await db.transaction(async (tx) => {
       const currentFollow = await tx
         .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
-        .where(pairCondition(ProfileFollows, validatedInput))
+        .where(pairCondition(ProfileFollows, input))
         .limit(1)
         .then(first);
       const deleted = await removeProfileFollowProjection(
         {
-          expectedRowId: validatedInput.expectedRowId,
-          followerProfileId: validatedInput.followerProfileId,
-          followeeProfileId: validatedInput.followeeProfileId,
+          expectedRowId: input.expectedRowId,
+          followerProfileId: input.followerProfileId,
+          followeeProfileId: input.followeeProfileId,
           removePendingRequest: false,
         },
         tx,
       );
       const sourceId =
         deleted.profileFollow?.id ??
-        (currentFollow?.id === validatedInput.expectedRowId
-          ? undefined
-          : validatedInput.expectedRowId);
+        (currentFollow?.id === input.expectedRowId ? undefined : input.expectedRowId);
       if (sourceId === undefined) {
         return {
           ok: true,
           changed: false,
           profileFollowId: null,
-          followerProfileId: validatedInput.followerProfileId,
-          followeeProfileId: validatedInput.followeeProfileId,
+          followerProfileId: input.followerProfileId,
+          followeeProfileId: input.followeeProfileId,
           effectPlan: [],
         };
       }
@@ -725,15 +746,15 @@ export const executeProfileFollowRemoval = async (
         ok: true,
         changed: true,
         profileFollowId: deleted.profileFollow?.id ?? null,
-        followerProfileId: validatedInput.followerProfileId,
-        followeeProfileId: validatedInput.followeeProfileId,
+        followerProfileId: input.followerProfileId,
+        followeeProfileId: input.followeeProfileId,
         effectPlan: [
           deleteEffect({
             sourceId,
-            pair: validatedInput,
+            pair: input,
             sourceKind: 'FOLLOW',
-            ...(validatedInput.origin === 'LOCAL'
-              ? { sendActivityPub: await shouldSendActivityPub(tx, validatedInput) }
+            ...(input.origin === 'LOCAL'
+              ? { sendActivityPub: await shouldSendActivityPub(tx, input) }
               : {}),
           }),
         ],

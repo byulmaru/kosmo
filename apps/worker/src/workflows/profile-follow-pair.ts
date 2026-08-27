@@ -1,4 +1,3 @@
-import { profileFollowPairCommandSchema, profileFollowPairSchema } from '@kosmo/core/validation';
 import {
   allHandlersFinished,
   ApplicationFailure,
@@ -10,6 +9,7 @@ import {
   uuid4,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
+import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
@@ -33,6 +33,79 @@ export type ProfileFollowPairWorkflowStatus = {
   readonly pendingEffectCount: number;
   readonly effectFailureCount: number;
 };
+
+const profileIdSchema = z
+  .string({ error: 'Profile Follow pair requires non-empty profile IDs' })
+  .min(1, 'Profile Follow pair requires non-empty profile IDs');
+
+const expectedRowIdSchema = z
+  .string({ error: 'Profile Follow command expectedRowId is required' })
+  .min(1, 'Profile Follow command expectedRowId is required');
+
+const actorProfileIdSchema = z
+  .string({ error: 'Profile Follow command actorProfileId is invalid' })
+  .min(1, 'Profile Follow command actorProfileId is invalid');
+
+const profileFollowEffectOriginSchema = z.enum(['LOCAL', 'ACTIVITYPUB'], {
+  error: 'Profile Follow command origin is invalid',
+});
+
+const profileFollowPairSchema = z.strictObject({
+  followerProfileId: profileIdSchema,
+  followeeProfileId: profileIdSchema,
+}) satisfies z.ZodType<ProfileFollowPair>;
+
+const followCommandSchema = z.strictObject({
+  kind: z.literal('FOLLOW'),
+  origin: profileFollowEffectOriginSchema,
+});
+
+const approveCommandSchema = z.strictObject({
+  kind: z.literal('APPROVE'),
+  actorProfileId: actorProfileIdSchema,
+  expectedRowId: expectedRowIdSchema,
+  origin: z.literal('LOCAL', {
+    error: 'Profile Follow APPROVE command origin is invalid',
+  }),
+});
+
+const acceptCommandSchema = z.strictObject({
+  kind: z.literal('ACCEPT'),
+  expectedRowId: expectedRowIdSchema,
+  origin: z.literal('ACTIVITYPUB', {
+    error: 'Profile Follow ACCEPT command origin is invalid',
+  }),
+});
+
+const terminalCommandSchema = (kind: 'REJECT' | 'CANCEL') =>
+  z.strictObject({
+    kind: z.literal(kind),
+    actorProfileId: actorProfileIdSchema.optional(),
+    expectedRowId: expectedRowIdSchema,
+    origin: profileFollowEffectOriginSchema,
+  });
+
+const profileFollowPairCommandSchema = z
+  .discriminatedUnion('kind', [
+    followCommandSchema,
+    approveCommandSchema,
+    acceptCommandSchema,
+    terminalCommandSchema('REJECT'),
+    terminalCommandSchema('CANCEL'),
+  ])
+  .superRefine((command, context) => {
+    if (
+      (command.kind === 'REJECT' || command.kind === 'CANCEL') &&
+      command.origin === 'LOCAL' &&
+      command.actorProfileId === undefined
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['actorProfileId'],
+        message: 'Profile Follow command actorProfileId is required',
+      });
+    }
+  }) satisfies z.ZodType<ProfileFollowPairCommand>;
 
 const {
   createFollowNotificationActivity,

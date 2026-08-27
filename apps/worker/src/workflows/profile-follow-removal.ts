@@ -1,4 +1,3 @@
-import { profileFollowPairSchema, profileFollowRemovalInputSchema } from '@kosmo/core/validation';
 import {
   allHandlersFinished,
   ApplicationFailure,
@@ -8,6 +7,7 @@ import {
   setHandler,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
+import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
@@ -20,6 +20,30 @@ import type * as activities from '../activities';
 
 export const PROFILE_FOLLOW_REMOVAL_UPDATE_NAME = 'profileFollowRemovalUpdate';
 export const PROFILE_FOLLOW_REMOVAL_ORPHAN_GUARD = '1 minute';
+
+const profileIdSchema = z
+  .string({ error: 'Profile Follow pair requires non-empty profile IDs' })
+  .min(1, 'Profile Follow pair requires non-empty profile IDs');
+
+const expectedRowIdSchema = z
+  .string({ error: 'Profile Follow command expectedRowId is required' })
+  .min(1, 'Profile Follow command expectedRowId is required');
+
+const profileFollowEffectOriginSchema = z.enum(['LOCAL', 'ACTIVITYPUB'], {
+  error: 'Profile Follow command origin is invalid',
+});
+
+const profileFollowPairSchema = z.strictObject({
+  followerProfileId: profileIdSchema,
+  followeeProfileId: profileIdSchema,
+}) satisfies z.ZodType<ProfileFollowPair>;
+
+const profileFollowRemovalInputSchema = z.strictObject({
+  followerProfileId: profileIdSchema,
+  followeeProfileId: profileIdSchema,
+  expectedRowId: expectedRowIdSchema,
+  origin: profileFollowEffectOriginSchema,
+}) satisfies z.ZodType<ProfileFollowRemovalInput>;
 
 const {
   deleteFollowNotificationActivity,

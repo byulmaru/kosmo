@@ -24,10 +24,7 @@ import {
   hydrateProfileFollowPairTransition,
   loadPendingFollowRequestId,
 } from './profile-follow-command';
-import type {
-  ProfileFollowPairTransitionInput,
-  ProfileFollowRemovalInput,
-} from './profile-follow-command';
+import type { ProfileFollowPairTransitionInput } from './profile-follow-command';
 
 const profileIds: string[] = [];
 const instanceIds: string[] = [];
@@ -509,45 +506,6 @@ test('guarded removal does not reconstruct an effect while the expected row rema
   }
   assert.equal(result.changed, false);
   assert.deepEqual(result.effectPlan, []);
-  assert.deepEqual(await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, follow.id)), [
-    follow,
-  ]);
-});
-
-test('removal rejects malformed input without deleting the current Follow', async () => {
-  const follower = await createProfile();
-  const followee = await createProfile();
-  const follow = await db
-    .insert(ProfileFollows)
-    .values({
-      id: crypto.randomUUID(),
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
-    })
-    .returning()
-    .then(firstOrThrow);
-  const validInput: ProfileFollowRemovalInput = {
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-    expectedRowId: follow.id,
-    origin: 'LOCAL',
-  };
-
-  for (const input of [
-    { ...validInput, expectedRowId: undefined },
-    { ...validInput, followerProfileId: undefined },
-    { ...validInput, followeeProfileId: null },
-    { ...validInput, origin: 'UNKNOWN' },
-    { ...validInput, extra: true },
-    null,
-  ] as unknown[]) {
-    const result = await executeProfileFollowRemoval(input as ProfileFollowRemovalInput);
-    assert.equal(result.ok, false);
-    if (!result.ok) {
-      assert.equal(result.error.code, 'VALIDATION');
-    }
-  }
-
   assert.deepEqual(await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, follow.id)), [
     follow,
   ]);
