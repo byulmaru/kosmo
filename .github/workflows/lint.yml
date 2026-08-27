@@ -10,7 +10,6 @@ permissions:
 jobs:
   lint:
     name: Lint
-    # runs-on: [self-hosted]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

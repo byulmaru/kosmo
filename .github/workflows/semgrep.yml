@@ -26,7 +26,6 @@ env:
 jobs:
   semgrep:
     name: Semgrep scan
-    # runs-on: [self-hosted]
     runs-on: ubuntu-latest
     if: github.actor != 'dependabot[bot]'
     env:
