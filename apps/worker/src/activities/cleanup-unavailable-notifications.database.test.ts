@@ -309,6 +309,59 @@ test('exclusive cursor and fixed upper bound leave later rows for the next sweep
   assert.equal(await db.$count(Notifications, eq(Notifications.id, later.id)), 1);
 });
 
+test('cleanup re-evaluates source availability after scanning a notification page', async () => {
+  const follower = await createProfile();
+  const recipient = await createProfile();
+  const sourceId = crypto.randomUUID();
+  const notification = await createNotification({
+    recipientProfileId: recipient.id,
+    sourceId,
+  });
+  const upperBound = await captureUpperBound();
+  assert.equal(await db.$count(ProfileFollows, eq(ProfileFollows.id, sourceId)), 0);
+  const lockSession = await pg.reserve();
+  let lockHeld = false;
+  let cleanup: Promise<CleanupPageResult> | undefined;
+
+  try {
+    await lockSession`BEGIN`;
+    await lockSession`LOCK TABLE "notification" IN SHARE MODE`;
+    lockHeld = true;
+
+    // The page scan only reads Notification IDs, so the source is still
+    // absent when this transaction selects the row. The table lock lets the
+    // source be recreated after that scan but before the conditional DELETE
+    // starts its own statement snapshot.
+    cleanup = runPage({ cursor: null, upperBound, pageSize: 10 });
+    await waitForNotificationDeleteTableLock();
+
+    await db
+      .insert(ProfileFollows)
+      .values({ followerProfileId: follower.id, followeeProfileId: recipient.id, id: sourceId });
+    await lockSession`COMMIT`;
+    lockHeld = false;
+
+    const result = await cleanup;
+    assert.deepEqual(
+      {
+        scanned: result.scanned,
+        deleted: result.deleted,
+        skipped: result.skipped,
+      },
+      { scanned: 1, deleted: 0, skipped: 1 },
+    );
+    assert.equal(await db.$count(Notifications, eq(Notifications.id, notification.id)), 1);
+  } finally {
+    if (lockHeld) {
+      await lockSession`ROLLBACK`;
+    }
+    if (cleanup) {
+      await Promise.allSettled([cleanup]);
+    }
+    lockSession.release();
+  }
+});
+
 test('concurrent independent page retries converge to one delete', async () => {
   const recipient = await createProfile();
   const notification = await createNotification({ recipientProfileId: recipient.id });
@@ -381,6 +434,24 @@ const captureUpperBound = async () => {
     | null;
   assert.ok(upperBound);
   return upperBound;
+};
+
+const waitForNotificationDeleteTableLock = async (): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const [activity] = await pg<{ waiting: number }[]>`
+      SELECT count(*)::integer AS waiting
+      FROM pg_stat_activity
+      WHERE pid <> pg_backend_pid()
+        AND wait_event_type = 'Lock'
+        AND query ILIKE '%delete from "notification"%'
+    `;
+    if ((activity?.waiting ?? 0) > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  assert.fail('Notification cleanup DELETE did not reach the table lock barrier');
 };
 
 const createProfile = async ({

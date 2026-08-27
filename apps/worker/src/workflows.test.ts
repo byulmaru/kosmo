@@ -1757,6 +1757,13 @@ test(
         ),
         JSON.stringify(timers),
       );
+      assert.ok(
+        history.events?.some(
+          ({ workflowExecutionContinuedAsNewEventAttributes }) =>
+            workflowExecutionContinuedAsNewEventAttributes != null,
+        ),
+        `expected the first run to Continue-As-New: ${JSON.stringify(history.events)}`,
+      );
       await result;
     });
 
