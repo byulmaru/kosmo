@@ -9,7 +9,7 @@
 
 - `/feedback` route는 공용 `PageHeader`의 `text` variant로 `피드백 보내기` 제목을 한 번 표시한다.
 - 폼은 제목을 다시 표시하지 않고 설명, 피드백 종류, 피드백 내용, 제출 상태, primary action 순으로 배치한다.
-- 피드백 종류는 outer card 없이 구분선, theme surface와 radio indicator로 선택 상태를 표현한다.
+- 피드백 종류는 공용 `RadioOption`의 20px indicator와 10px inner dot, label 및 semantic state visual을 사용하고, 선택된 row 전체 fill이나 consumer 전용 option divider·card를 추가하지 않는다.
 - 피드백 내용은 공용 `TextField`의 multiline 입력을 사용한다.
 - `피드백 보내기` primary action은 폼의 전체 너비를 사용한다.
 - 색상, 간격, 반경, typography와 breakpoint는 공용 token을 사용한다.
@@ -26,8 +26,9 @@
 
 피드백 form은 입력, 검증, 제출과 결과 상태를 소유하되 자신이 page인지 popup인지 판단하지 않는다.
 
-- form 소유: 종류와 본문 draft, validation, `submitFeedback`, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
+- form 소유: 종류와 본문 draft, radio group 배치, validation, `submitFeedback`, pending 입력 차단, 성공·실패 표시, 성공 시 초기화,
   실패 시 draft 유지
+- 공용 `RadioOption` 소유: 각 option의 indicator·content·내부 spacing과 selected·hover·pressed·disabled·focus visual
 - page 소유: `PageHeader`, page padding, document scroll, 중앙 콘텐츠 폭
 - overlay 소유: dialog/sheet 제목, 닫기 action, 크기와 위치, backdrop, `Escape`, focus trap·복원, 배경 차단
 
@@ -80,7 +81,7 @@ Android와 iOS는 기존 `/feedback` route와 page surface를 유지한다.
 ## 제외 범위
 
 - `submitFeedback` mutation, Slack delivery payload, `/feedback` route 또는 인증 경계 변경
-- Android/iOS 피드백 화면 변경
+- Android/iOS 피드백 route·page surface 재설계
 - browser Back/Forward, reload, 주소 이동과 tab close의 dirty/submitting 이탈 보호
 - URL 기반 overlay 복원 또는 deep link
 - 범용 modal/router/history architecture 재설계

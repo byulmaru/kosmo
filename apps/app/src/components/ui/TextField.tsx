@@ -56,19 +56,16 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
           multiline && styles.multiline,
           {
             backgroundColor: editable ? theme.backgroundSurface : theme.stateDisabledSurface,
-            borderColor:
-              Platform.OS === 'web' && focused
-                ? theme.borderDefault
-                : error
-                  ? theme.feedbackDangerBorder
-                  : focused
-                    ? theme.borderFocus
-                    : editable
-                      ? theme.borderDefault
-                      : theme.borderDisabled,
+            borderColor: focused
+              ? theme.borderDefault
+              : error
+                ? theme.feedbackDangerBorder
+                : editable
+                  ? theme.borderDefault
+                  : theme.borderDisabled,
             borderWidth: focused ? borderWidths[2] : borderWidths[1],
             color: editable ? theme.foregroundPrimary : theme.stateDisabledForeground,
-            ...(Platform.OS === 'web' && focused
+            ...(focused
               ? ({
                   outlineColor: error ? theme.feedbackDangerBorder : theme.stateFocusRing,
                   outlineOffset: 2,

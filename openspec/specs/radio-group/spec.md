@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Web·Native 공용 controlled radio group/option의 semantics와 상태, Web keyboard 동작과 consumer lifecycle 소유권을 정의한다.
+Web·Native 공용 controlled radio group/option의 semantics와 상태, Web keyboard 동작, canonical option presentation과 consumer lifecycle 소유권을 정의한다.
 
 ## Requirements
 
@@ -61,17 +61,22 @@ Web·Native 공용 controlled radio group/option의 semantics와 상태, Web key
 
 ### Requirement: Option content and focus presentation
 
-**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/accessibility.md`, PROD-753; Radio option은 label과 선택적인 description, selected·disabled·focus 상태를 표현해야 한다(MUST). Web의 keyboard focus indicator는 플랫폼의 `:focus-visible` 상태를 사용해야 하며 별도 input-modality state를 요구해서는 안 된다(MUST). Primitive는 하나의 고정 option geometry를 강제하지 않고 긴 label과 consumer별 layout을 보존해야 한다(MUST).
+**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/accessibility.md`, DSN-39, PROD-753, PROD-775; `RadioOption`은 20px indicator와 10px inner dot, 12px corner radius·content gap·outer inset, 공용 label·description typography를 canonical option presentation으로 제공해야 한다(MUST). Selected는 row 전체 fill 없이 indicator로 표현하고 hover·pressed·disabled·focus는 semantic state token으로 표현해야 한다(MUST). Web keyboard focus는 플랫폼의 `:focus-visible` 상태를 사용해 option 내부 2px focus border로 표시하고, border가 outer geometry를 바꾸지 않도록 inset에서 보정해야 한다(MUST). 이 내부 focus indicator가 browser outline을 대체하며 별도 input-modality helper를 요구해서는 안 된다(MUST). Primitive는 고정 높이를 강제하지 않고 긴 label과 description에 맞춰 늘어나야 한다(MUST).
 
 #### Scenario: 설명과 긴 label을 표시한다
 
 - **WHEN** consumer가 description 또는 여러 줄이 필요한 label을 제공한다
-- **THEN** option은 accessible name과 상태를 유지하면서 내용을 잘라내거나 고정 높이에 가두지 않고 표시한다
+- **THEN** option은 canonical inset과 content gap, accessible name과 상태를 유지하면서 내용을 잘라내거나 고정 높이에 가두지 않고 표시한다
+
+#### Scenario: 선택과 상호작용 상태를 표시한다
+
+- **WHEN** option이 selected, hovered, pressed 또는 disabled 상태가 된다
+- **THEN** primitive는 selected indicator와 해당 semantic state surface·border·foreground를 표시하되 selected row 전체에 별도 fill을 추가하지 않는다
 
 #### Scenario: focus를 식별한다
 
 - **WHEN** Web option이 keyboard focus를 받는다
-- **THEN** 플랫폼 `:focus-visible` indicator가 다른 상태 표현에 의해 숨겨지지 않는다
+- **THEN** primitive는 `:focus-visible`을 감지해 semantic focus token의 내부 2px border를 표시하고 inset을 보정해 option의 outer geometry를 유지한다
 
 #### Scenario: Native option의 상태를 노출한다
 
@@ -80,7 +85,7 @@ Web·Native 공용 controlled radio group/option의 semantics와 상태, Web key
 
 ### Requirement: Consumer lifecycle ownership
 
-**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/feedback.md`, PROD-753; FeedbackForm과 ProfileDefaultPostVisibilityControl은 공용 radio semantics와 keyboard 계약을 사용해야 한다(MUST). 이관 후에도 Feedback validation·dirty/submitting·mutation, 공개 범위 저장 mutation·Relay actor lifecycle과 각 option layout은 기존 consumer가 소유해야 한다(MUST).
+**Authority / Provenance:** `docs/design/foundations.md`, `docs/design/feedback.md`, PROD-753, PROD-775; FeedbackForm과 ProfileDefaultPostVisibilityControl은 공용 radio semantics·keyboard와 canonical `RadioOption` presentation을 사용해야 한다(MUST). `RadioOption`이 각 option의 indicator·content·state visual과 내부 spacing을 소유하고, 각 consumer는 group placement와 Feedback validation·dirty/submitting·mutation 또는 공개 범위 저장 mutation·Relay actor lifecycle을 계속 소유해야 한다(MUST).
 
 #### Scenario: Feedback 종류를 변경한다
 
