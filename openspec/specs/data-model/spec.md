@@ -895,7 +895,7 @@ The system MUST make pair transition Activities safe for at-least-once execution
 #### Scenario: Retry a deletion transition
 
 - **WHEN** a retry needs an object that was deleted by the committed transition
-- **THEN** the command carries or deterministically reconstructs the minimum immutable deleted-source snapshot required by its effects, including the exact source ID and creation time, rather than reading a later row for the same pair
+- **THEN** the command preserves the exact deleted source ID and directed pair required by its effects, rather than carrying a deleted row or reading a later row for the same pair
 
 #### Scenario: Stale source does not mutate a new lifecycle
 
@@ -905,7 +905,7 @@ The system MUST make pair transition Activities safe for at-least-once execution
 #### Scenario: Transaction rollback
 
 - **WHEN** a pair transition rolls back or is rejected as a known domain error
-- **THEN** no Follow or Follow Request state, source snapshot, or downstream effect is committed for that transition
+- **THEN** no Follow or Follow Request state or downstream effect is committed for that transition
 
 #### Scenario: Pair concurrency remains database-owned
 
