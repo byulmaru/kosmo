@@ -16,13 +16,13 @@ import { temporalClient } from './client';
 import { KOSMO_TASK_QUEUE } from './task-queue';
 import type {
   HydratedProfileFollowPairTransition,
-  ProfileFollowPair,
   ProfileFollowPairCommand,
-  ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
+  ProfileFollowPairTransitionOutcome,
   ProfileFollowRemovalInput,
   ProfileFollowRemovalOutcome,
 } from '../services/profile-follow-command';
+import type { ProfileFollowPair } from '../services/profile-follow-relation';
 
 /**
  * These names are part of the Temporal wire contract. Keep them beside the
@@ -71,7 +71,7 @@ export const profileFollowPairUpdateId = (command: ProfileFollowPairCommand): st
 export const executeProfileFollowPairTransition = async (
   input: ProfileFollowPairTransitionInput,
 ): Promise<HydratedProfileFollowPairTransition> => {
-  let execution: ProfileFollowPairTransitionExecution;
+  let execution: ProfileFollowPairTransitionOutcome;
   try {
     execution = (await temporalClient.withDeadline(
       Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
@@ -90,7 +90,7 @@ export const executeProfileFollowPairTransition = async (
             },
           ),
         }),
-    )) as ProfileFollowPairTransitionExecution;
+    )) as ProfileFollowPairTransitionOutcome;
   } catch (error) {
     if (
       error instanceof WorkflowUpdateFailedError &&

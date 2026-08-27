@@ -37,8 +37,6 @@ builder.mutationField('followProfile', (t) =>
         },
         command: {
           kind: 'FOLLOW',
-          followerProfileId: ctx.session.profileId,
-          followeeProfileId: input.id.id,
           origin: 'LOCAL',
         },
       }).catch((error: unknown) => {

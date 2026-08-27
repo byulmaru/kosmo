@@ -46,8 +46,6 @@ builder.mutationField('approveProfileFollowRequest', (t) =>
         },
         command: {
           kind: 'APPROVE',
-          followerProfileId: request.followerProfileId,
-          followeeProfileId: request.followeeProfileId,
           actorProfileId: ctx.session.profileId,
           expectedRowId: request.id,
           origin: 'LOCAL',
@@ -102,8 +100,6 @@ builder.mutationField('rejectProfileFollowRequest', (t) =>
         },
         command: {
           kind: 'REJECT',
-          followerProfileId: request.followerProfileId,
-          followeeProfileId: request.followeeProfileId,
           actorProfileId: ctx.session.profileId,
           expectedRowId: request.id,
           origin: 'LOCAL',
@@ -156,8 +152,6 @@ builder.mutationField('cancelProfileFollowRequest', (t) =>
         },
         command: {
           kind: 'CANCEL',
-          followerProfileId: request.followerProfileId,
-          followeeProfileId: request.followeeProfileId,
           actorProfileId: ctx.session.profileId,
           expectedRowId: request.id,
           origin: 'LOCAL',

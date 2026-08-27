@@ -22,7 +22,6 @@ const pair = {
 
 const followCommand = {
   kind: 'FOLLOW' as const,
-  ...pair,
   origin: 'LOCAL' as const,
 };
 
@@ -80,7 +79,6 @@ test('terminal pair transition derives Update ID from the exact row generation',
   const requestId = '00000000-0000-8000-8000-000000000003';
   const command = {
     kind: 'REJECT' as const,
-    ...pair,
     expectedRowId: requestId,
     origin: 'LOCAL' as const,
     actorProfileId: pair.followeeProfileId,

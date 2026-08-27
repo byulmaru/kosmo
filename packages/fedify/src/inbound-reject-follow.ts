@@ -108,7 +108,6 @@ export const handleInboundRejectFollow = async ({
       pair,
       command: {
         kind: 'REJECT',
-        ...pair,
         expectedRowId: pendingRequest.id,
         origin: 'ACTIVITYPUB',
       },

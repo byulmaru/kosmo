@@ -487,8 +487,6 @@ test('팔로워 요청 route는 navigation 진입 뒤 selected Profile별 승인
     },
     command: {
       kind: 'FOLLOW',
-      followeeProfileId: recipient.profile!.id,
-      followerProfileId: followerA.profile!.id,
       origin: 'LOCAL',
     },
   });
@@ -496,8 +494,6 @@ test('팔로워 요청 route는 navigation 진입 뒤 selected Profile별 승인
     pair: { followeeProfileId: recipientB.id, followerProfileId: followerB.profile!.id },
     command: {
       kind: 'FOLLOW',
-      followeeProfileId: recipientB.id,
-      followerProfileId: followerB.profile!.id,
       origin: 'LOCAL',
     },
   });

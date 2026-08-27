@@ -100,7 +100,6 @@ export const handleInboundFollow = async (
     pair,
     command: {
       kind: 'FOLLOW',
-      ...pair,
       origin: 'ACTIVITYPUB',
     },
   });
@@ -425,7 +424,6 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       pair,
       command: {
         kind: 'CANCEL',
-        ...pair,
         expectedRowId: pendingRequest.id,
         origin: 'ACTIVITYPUB',
       },
