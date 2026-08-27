@@ -1,5 +1,13 @@
 import '@kosmo/core/polyfill';
 
+export type {
+  CleanupUnavailableNotificationPageInput,
+  CleanupUnavailableNotificationPageResult,
+} from './activities/cleanup-unavailable-notifications';
+export {
+  cleanupUnavailableNotificationPageActivity,
+  getNotificationCleanupUpperBoundActivity,
+} from './activities/cleanup-unavailable-notifications';
 export {
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
@@ -16,14 +24,6 @@ export {
   deleteFollowNotification as deleteFollowNotificationActivity,
   deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
 } from '@kosmo/core/services';
-export type {
-  CleanupUnavailableNotificationPageInput,
-  CleanupUnavailableNotificationPageResult,
-} from './activities/cleanup-unavailable-notifications';
-export {
-  cleanupUnavailableNotificationPageActivity,
-  getNotificationCleanupUpperBoundActivity,
-} from './activities/cleanup-unavailable-notifications';
 export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
 export {
   createReactionNotification as createReactionNotificationActivity,
