@@ -52,6 +52,9 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
 
 - Button, ActionMenu, ModalSheet, Toast, SettingsItem, SettingsNavigationList와 Profile shell의 기존 production
   source를 재사용한다. 이 흐름만을 위한 새 Toast나 범용 safety component를 만들지 않는다.
+- 확인은 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)를
+  사용한다. Mute는 `Tone=Primary`, Block은 `Tone=Danger`이며 둘 다 `Idle|Pending`에서 같은 제목·설명·action
+  label을 유지한다.
 - Mute 상태·action 행은 `ProfileHero` 내부 sublayer로 유지하고 Profile hashtag 의미를 가진
   `ProfileTagChip`이나 새 범용 Badge로 승격하지 않는다. 팔로잉·팔로워 아래 `space/8`을 두고, canonical
   `VolumeOff` `icon/size/16`, secondary 상태 문구와 `UI/Label/M` text action을 `space/8` 간격으로 배치한다.

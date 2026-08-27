@@ -56,10 +56,15 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - `04 Composer presentation patterns · DSN-43`
 - `05 Settings control patterns · DSN-44`
 - `06 Exploration · Settings detail grouping · DSN-44` — 기존 SettingsItem 조합만 검토하는 비제품 탐색 예시
+- `12 Exploration · Mobile composer fullscreen · DSN-61` — 모바일 전체 화면 Composer의 반응형 상태와 편집기 후보
+- `17 Post deletion confirmation placement · DSN-61` — 기존 More·ActionMenu·ModalSheet 정본을 조합한 삭제 확인 배치 표본
+- `19 DSN-61 · Composer Dark coverage · representative` — 기존 Light pattern을 복제해 정본 `PostComposer` 상속과
+  Dark mode만 검증하는 대표 표본
 
 `01`–`05`는 승인된 component 조합을 비교·검토하는 snapshot이며 해당 제품 화면에 채택됐다는 evidence는 아니다.
-`06`은 제품 IA·route·저장 계약을 승인하지 않는 exploration이다. 어느 쪽도 Foundation, component source,
-`docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
+`06`과 `12`는 제품 IA·route·저장 계약을 승인하지 않는 exploration이고, `17`은 정본 source의 배치·상태 조합,
+`19`는 Dark mode·반응형 배치·source 상속만 검증한다. 어느 쪽도 Foundation, component source, `docs/design`과
+연결된 Product 이슈의 계약을 대체하지 않는다.
 
 #### DSN-43 PostComposer source 계약
 
@@ -67,9 +72,10 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   [`__ComposerFooter`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4096-2528) source를
   instance로 소비하며 footer action row를 consumer마다 복제하지 않는다.
 - Footer action availability는 `__ComposerFooter`의 `Show media action`·`Show poll action`·
-  `Show CW action`·`Show emoji action` Boolean property로 독립 노출한다. Figma source와 완성형 specimen은
-  네 action을 모두 기본 `true`로 두며, Product는 아직 구현하지 않은 action을 같은 property·capability flag로
-  숨긴다.
+  `Show CW action`·`Show emoji action`·`Show submit` Boolean property로 독립 노출한다. Figma source와 완성형
+  specimen은 다섯 action을 모두 기본 `true`로 두며, Product는 아직 구현하지 않은 action을 같은
+  property·capability flag로 숨긴다. 모바일 fullscreen처럼 header가 제출 action을 소유하는 consumer는
+  `Show submit=false`로 footer의 Button만 숨기고 남은 글자 수 counter는 유지한다.
 - `CW active`·`Poll active`는 action 노출 여부와 별개인 modifier state다. `03 Patterns` specimen이
   Poll·Emoji action을 켜두어도 Product 기능이 준비됐다는 의미가 아니며, runtime capability·feature flag·interaction
   lifecycle은 Product가 소유한다.
@@ -79,27 +85,109 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - [`__ComposerPollEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=3705-8002)의
   선택지 입력은 canonical `TextField`, 복수 선택은 canonical `Checkbox`, 선택지 추가·제거는 canonical `Plus`·`X`를
   소비한다. 단일 선택 표시는 공용 Radio source가 생기기 전까지 Poll 내부의 semantic-token-bound control로 유지한다.
-- [`__SensitiveMediaRow`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4175)는
-  canonical `Switch`를 소비하며 로컬 track·thumb 조합을 만들지 않는다.
+- [`PostComposerMediaItems`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4182)는
+  attachment gallery만 소유하며 `__SensitiveMediaRow`를 직접 노출하지 않는다. ALT와 향후 이미지 편집은
+  attachment별 상태지만 민감도는 canonical Post Content의 단일 `sensitiveMedia` 값이다. 어느 Ready attachment에서
+  `ComposerMediaEditor Tool=Sensitive`로 진입해도 같은 값을 편집하며 모든 Ready attachment가 결과를 함께 표시한다.
+  `__SensitiveMediaRow` source는 탐색용 candidate를 위해 보존하지만 production `PostComposerMediaItems` consumer에서는
+  사용하지 않는다. attachment별 민감도는 별도 domain/API 계약이 추가될 때 도입한다.
+- Ready attachment의 우측 상단 편집 action은 canonical `Pen`을 `20×20`으로 사용하고 `Show edit action`으로
+  노출을 제어한다. Rail·Overlay gallery에서는 editor 진입점을 표시하고 `ComposerMediaEditor` 내부 preview에서는
+  `false`로 숨긴다. `Expand`는 Composer Rail을 Overlay로 확장하는 별도 semantic action으로 유지한다.
+- [`__ComposerMediaItem`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4174)의
+  Ready state는 기본 `false`인 `Show ALT status`·`Show sensitive status` Boolean property를 제공한다. ALT가 비어
+  있지 않을 때 해당 attachment에만 `ALT` pill을 표시한다. Post의 `sensitiveMedia=true`이면 모든 Ready attachment가
+  canonical `Flag`와 `민감` pill을 함께 표시하며, 어느 pill에서 진입해도 같은 `Tool=Sensitive` 값을 편집한다.
+  `Show sensitive status`는 attachment별 저장값이 아니라 consumer가 공유 상태를 mirror하기 위한 property다. 두
+  status는 각각 `ComposerMediaEditor Tool=Alt`·`Tool=Sensitive`로 바로 재진입한다. Ready thumbnail body의
+  pointer/touch도 기본 `Tool=Alt`로 editor를 열되 Remove·Pen·status control은 각 action을 유지한다. Pen은
+  keyboard·assistive technology의 명시적 editor 진입점으로 남긴다. pill의 visual height는 `28px`이고 Native는
+  투명 wrapper로 iOS `44pt`·Android `48dp` target을 제공한다. Figma는 이 시각·상태 계약만 보장하며 실제 hit
+  geometry·event propagation·focus·navigation은 Product에서 검증한다.
 - Web footer는 Media → Poll → CW → Emoji 순서로 공용 `IconButton`의 `32×32` target과 `20×20` icon,
   action 사이 `4px` 간격을 사용한다. 글자 수 counter는 `32px`, 제출은 기존 `Button/Compact` `72×32`를 사용해
   `Rail`의 실제 footer 폭 `270px` 안에서 한 줄로 배치한다. 이 규칙은 Web 전용이며 iOS `44pt`·Android `48dp`
   target 계약은 유지한다.
-- Overlay 전용 미디어 설명 편집은
-  [`ComposerMediaEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4193-11169)
-  source가 `02 Shared domain · Production`에서 소유한다. `PostComposer Surface=Overlay, State=Media`와 같은
-  `600×624` 경계 안에서 body를 교체하며, 별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail`
-  variant로 추가하지 않는다.
+- Overlay 전용 attachment 편집은
+  [`ComposerMediaEditor`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5455-38985)
+  component set이 `02 Shared domain · Production`에서 소유한다. Web source master는 `920×678`이고 같은 source의
+  instance를 `720–920px`에서 resize한다. 우측 tool panel은 `280px`로 고정하고 왼쪽 preview만 남은 폭을 채우며,
+  parent Overlay surface는 `min(920px, 100vw - 48px)`를 소유한다. 일반 `PostComposer Surface=Overlay` 자체의
+  `600px` 폭은 유지하고, editor 진입 시 같은 parent surface 안의 내용을 교체하면서 editor 폭으로 확장한다.
+  별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail` variant로 추가하지 않는다.
+- `ComposerMediaEditor`는 `Tool=Alt|Sensitive|Image Edit`를 제공한다. `Alt`가 기존 consumer를 보존하는 기본값이고,
+  `Sensitive`는 어느 attachment에서 진입해도 Post Content의 공유 `sensitiveMedia`를 편집하며, 토글 결과를 모든
+  attachment status pill이 함께 mirror한다. 선택한 이미지는 ALT·향후 이미지 편집을 위한 navigation context이지
+  민감도의 소유 단위가 아니다. `Image Edit`는 향후 crop·회전·초점 기능의 확장 구조만 검증하는 specimen이며 현재
+  Product 저장·편집 기능을 의미하지 않는다. canonical `TabList`·`Tab/Underline`을 사용하고, 편집할 이미지의
+  `48×48` selector는 preview 하단 중앙에서 tool tabs와 분리한다. 이 selector는 Composer 본문의
+  `PostComposerMediaItems` gallery를 대체하는 컴포넌트가 아니라 editor 안의 현재 이미지 navigation이다.
 - editor header는 `44×44` hit target 안에 기존 Web `IconButton` `32×32`와 canonical `ArrowLeft`·`X`를 사용한다. Back은 draft와
   media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. preview 안의 X는 해당
-  attachment만 제거하며, 하단 `완료`는 ALT 편집을 draft에 반영하고 Composer로 돌아간다. Rail에서 ALT 편집을
-  시작해도 같은 Overlay의 editor view로 직접 전환한다.
-- scrim, focus trap·restore, Escape, discard confirmation, viewport와 mobile fullscreen lifecycle은 Product의
-  상위 Overlay 구현이 소유한다.
+  attachment만 제거한다. 하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
+  편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
+  view로 직접 전환한다.
+- `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. scrim, focus trap·restore, Escape,
+  discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
+  Product의 상위 Overlay 구현이 소유한다.
+- `12 Exploration`에 남긴 기존 `600×624`·`SquarePen` PC editor는 `Superseded` decision history다. 새 consumer는
+  만들지 않으며 현재 PC 계약은 `__ComposerMediaItem`의 `Pen`과 `ComposerMediaEditor` `920×678` source만 따른다.
 - 현재 Typography line-height FLOAT 변수는 `115`·`130`·`150` 같은 백분율 값이지만 Plugin API binding에서는 px로
   해석된다. 이 경로로 편집한 Composer 텍스트는 검증된 CW `16/24`, Poll `14/20`, editor title `20/26`, footer
   counter `130%` line-height를 유지하고 family·size·weight만 variable에 bind한다. 백분율을 안전하게 표현하는 token
-  계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다.
+  계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다. `ComposerMediaEditor`가 직접 소유한 text는
+  Typography의 `MCP Preview` mode에서 family·size·weight를 bind하고, 중첩 공용 component의 text는 해당 source의
+  variable binding을 상속해 로컬 override를 만들지 않는다.
+
+#### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
+
+- [`__MobileFullscreenComposerShell`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5284-38074)은
+  public `PostComposer` matrix를 확장하지 않는 private DSN-61 candidate다. 대표 배치로
+  `Viewport=Full|Keyboard × Content=Empty|Media|Poll|CW`의 8개 조합을 제공한다. Full의
+  [`Poll`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-12996)·
+  [`CW`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-13083)는 Keyboard 변형과 같은
+  canonical editor를 소비하고 illustrative keyboard만 제외한다. 본문 `layoutGrow`가 남은 높이를 채우며 footer는
+  화면 하단에 유지된다.
+- 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
+  `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
+  safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
+  Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal, Mobile ReplyComposer
+  fullscreen의 Dark representative를 제공한다. 새 source를 만들지 않고 기존 Light pattern의 instance main-component를
+  그대로 유지하며 nested Light mode override를 제거한 표본이다.
+- [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)는
+  `Tone=Primary|Danger × State=Idle|Pending`의 공용 단순 확인 content다. `Message`, 선택형 native
+  `Supporting content` Slot, 중첩 `Cancel`·`Confirm action` Button을 instance property로 노출한다.
+  `Show supporting content=false`가 기본값이며, 필요할 때만 Message 아래·Actions 위에 체크박스·경고·세부 설명
+  같은 흐름형 content를 넣는다. Slot content의 상태와 Confirm 활성화 조건은 consumer가 소유한다. action은
+  `취소 → 확인` 순서의 `120×40` 두 개를 `space/8` 간격으로 우측 정렬한다. 이 `120×40`은 visual/layout
+  bounds다. Web은 같은 bounds를 실제 interaction target으로 사용한다. Native consumer는 visual geometry를
+  유지하면서 투명 wrapper 또는 `hitSlop`으로 실제 target을 iOS 최소 `44×44pt`, Android 최소 `48×48dp`로
+  확장한다. 서로 다른 action target의 overlap, parent clipping과 VoiceOver·TalkBack focus boundary는
+  Product runtime에서 검증한다. Pending은 Cancel을 Disabled, Confirm을 같은 tone의 Loading으로 바꾼다.
+  제목·scrim·닫기·centered max-width 420 surface는 canonical
+  [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)가 소유한다.
+  `Tone`은 visual/action intent이며 접근성 role을 자동 결정하지 않는다. `ModalSheet`는 visual/layout shell이고,
+  runtime consumer가 이름이 있는 modal semantic surface 하나를 소유한다. Web의 기본·비파괴 확인은 `dialog`,
+  삭제처럼 파괴적이거나 즉각적인 주의가 필요한 확인은 `alertdialog`를 사용하며 둘을 중첩하지 않는다. canonical
+  runtime이 단일 role 선택을 지원하기 전에는 현재 consumer-owned semantic surface를 유지할 수 있다. 이는 별도
+  visual component source를 허용하거나 현재 runtime geometry·token이 이미 canonical source와 일치한다는 뜻이
+  아니다. 정렬은 별도 Product/Frontend migration이 소유한다. role은 비시각 handoff이므로 Figma variant나
+  component property를 추가하지 않는다.
+- [`Post deletion confirmation placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5631-25077)는
+  canonical `PostActionBar`의 More, `ActionMenu`, `ModalSheet`, `ConfirmationContent`를
+  instance·slot·instance-swap으로 조합한다. 삭제·차단은 Danger, 뮤트·고정 교체는 Primary tone을 사용한다.
+  Web은 삭제 Light의 More menu·Idle·Pending과 Dark Idle, Mobile은 삭제 Light의 More menu·Idle과 Dark Idle을
+  확인하며 뮤트·차단·고정 교체 표본도 같은 source를 소비한다.
+- 대상 정보, 영향 목록, acknowledgement와 인증 handoff를 포함하는 Profile lifecycle 삭제는 선택 Slot만으로 단순
+  확인 content에 축약하지 않고 별도 `ProfileLifecycleDeleteConfirmContent`를 유지한다. acknowledgement의
+  Checked·Unchecked와 삭제 action의 Disabled·Default 연결도 해당 consumer 계약이다.
+- 이 section은 `More → 삭제 → Idle confirmation → Pending`의 responsive placement와 theme 상속만 증명한다.
+  Production Screens consumer, focus handoff, dismiss 차단, 접근성 semantics, mutation과 cache 반영은 연결된 Product
+  이슈의 runtime 검증으로 남긴다. canonical runtime이 단일 `alertdialog` surface를 지원하기 전에는 현재
+  consumer-owned semantic surface를 유지한다. 현재 Post 삭제 runtime의 `480px` max-width와 legacy card·border
+  token은 canonical `ModalSheet`의 `420px` 및 `backgroundElevated`·`borderDefault` 계약과 아직 다르며, 이 visual
+  정렬은 별도 Product/Frontend migration으로 남긴다. 임시 semantic surface는 별도 visual component source가 아니다.
 
 #### DSN-44 설정 control 계약
 
