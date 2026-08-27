@@ -232,6 +232,53 @@ describe('useAutomaticPagination', () => {
     }
   });
 
+  it('Web 성공 재측정이 Relay 최신 render 뒤 stale effect로 같은 page를 재요청하지 않는다', async () => {
+    await renderHook(options());
+    await runAnimationFrame();
+    assert.equal(loadRequests.length, 1);
+
+    const request = loadRequests[0];
+    assert.ok(request);
+    const scheduledTimers: Array<() => void> = [];
+    const originalSetTimeout = globalThis.setTimeout;
+    globalThis.setTimeout = ((callback: () => void) => {
+      scheduledTimers.push(callback);
+      return 1;
+    }) as typeof setTimeout;
+
+    try {
+      await act(() => {
+        request.onComplete(null);
+        const flushSyncRenderer = renderer as ReactTestRenderer & {
+          unstable_flushSync(callback: () => void): void;
+        };
+        flushSyncRenderer.unstable_flushSync(() => {
+          renderer?.update(
+            createElement(
+              HookProbe,
+              options({ hasNext: false, isLoadingNext: false, itemCount: 40 }),
+            ),
+          );
+        });
+
+        const completeSuccess = scheduledTimers.shift();
+        assert.ok(completeSuccess);
+        completeSuccess();
+
+        const callbacks = [...animationFrames.values()];
+        animationFrames.clear();
+        callbacks.forEach((callback) => callback(0));
+      });
+      assert.equal(
+        loadRequests.length,
+        1,
+        'Relay hasNext=false가 반영된 page를 stale closure로 재요청하지 않는다',
+      );
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
+  });
+
   it('Web page 실패는 자동 재시도를 막고 수동 재시도만 허용한다', async () => {
     await renderHook(options());
     await runAnimationFrame();
