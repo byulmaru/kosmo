@@ -1,6 +1,6 @@
 ## Context
 
-이 기록은 PROD-432·PROD-433·PROD-434·PROD-632와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31·2026-08-03 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
+이 기록은 PROD-432·PROD-433·PROD-434·PROD-632와 sibling PROD-598의 Linear 경계, `post-action-bar` spec, 현재 React Native 코드 구조와 2026-07-21·2026-07-23·2026-07-24·2026-07-31·2026-08-03·2026-08-27 KST 사용자 논의에서 확정한 선택을 반영한다. Figma Action node는 비규범적 시각 참고 자료다.
 
 ## Decision Records
 
@@ -376,6 +376,19 @@
 - Confirmation / Follow-up: PROD-632에서 실제 Clipboard adapter 실패를 재현하고 같은 환경의 변경 전 실패·변경 후 성공을 확인한다. 목록·상세, guest, canonical origin·direct Source, 성공·실패·menu dismiss·재시도를 Web과 지원 Native 플랫폼에서 검증한 뒤 archive 전후 strict validation을 통과시킨다.
 - Implementation Evidence (2026-08-03): `expo-clipboard@56.0.4` Web adapter는 `navigator.clipboard.writeText` 실패 뒤 legacy `document.execCommand('copy')`를 호출하지만 그 boolean 결과를 확인하지 않고 `true`를 반환하므로, 실제 복사가 실패해도 성공으로 보고할 수 있다. 앱은 `postClipboard` platform boundary를 추가해 base/native에서만 `expo-clipboard.setStringAsync`를 위임하고, Web에서는 `navigator.clipboard.writeText`만 직접 호출해 API 부재 또는 rejection을 `false`로 반환한다. `PostMoreMenu`는 이 경계의 `false` 또는 throw를 기존 한국어 실패 안내와 다음 More 선택 재시도로 연결한다. Storybook은 Expo 모듈이 아니라 이 앱 경계를 alias하고 성공·실패 결과를 재현하며, `postClipboard.web.test.ts`가 성공·API 부재·rejection을 실제 Web boundary에서 검증한다. 이는 실패 감지와 복구 UX의 근거이며, 기존 실패 원인 제거 또는 실패 환경의 복사 성공 근거는 아니다. 실제 Expo Web 앱은 로컬 GraphQL backend `502`로 Post surface 진입이 막혔고, 현재 환경에는 Android device와 booted iOS simulator가 없어 지원 Native runtime 증거는 아직 없다.
 
+### Web browser origin을 우선하고 Native에서만 configured origin으로 fallback한다
+
+- Decision Date: 2026-08-27
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `PROD-632`, 2026-08-27 KST 사용자 결정
+- Status: Active
+- Context / Problem: 이전 More 링크 복사 기록은 Web·Native 모두 configured Local Instance의 `canonical_origin`을 사용하도록 적어 Web preview와 별도 Host에서도 configured origin만 사용하게 했다. 최신 canonical ADR 0015와 Post 객체 및 PROD-632 결정은 Web이 현재 Post를 제공하는 browser origin을 우선하고, browser origin이 없는 Native만 configured origin을 사용하도록 이를 대체한다.
+- Decision Outcome: Content가 있는 Post의 공유 참조는 `/{relativeHandle}/{postId}` canonical path를 사용한다. Web에서는 현재 browser origin을 우선 사용하고, Android·iOS처럼 browser origin이 없거나 실행 환경에 browser origin이 제공되지 않는 경우에만 현재 deployment의 configured Local Instance `canonical_origin`을 client 설정에서 사용한다. Content와 Reply Parent 없이 Repost Source만 있는 Repost는 조회 가능한 direct Source의 path와 origin을 사용한다. 모든 경우 query·hash, API origin과 native 전용 deep link는 제외하고, configured origin은 Native 또는 browser origin 부재 시의 projection일 뿐 독립 authority가 아니다.
+- Alternatives Considered: Web에서도 configured origin만 사용하면 preview·별도 Host가 현재 사용 중인 public origin을 공유하지 못하고 build-time 설정 누락 시 browser가 알고 있는 origin으로도 참조를 만들 수 없으므로 채택하지 않았다. 현재 browser URL 전체를 복사하는 방식은 query·hash가 제품 공유 참조에 섞이므로 기존 ADR 대로 채택하지 않았다.
+- Consequences: Web과 Native가 서로 다른 deployment origin에서 실행되면 절대 URL의 origin은 달라질 수 있지만 canonical path와 direct Source 선택 규칙은 같다. Web에서는 configured origin이 현재 browser origin을 덮어쓰지 않으며, browser origin이 없는 Native는 configured Local Instance origin을 사용한다. 기존 configured-origin-only 문구를 가진 OpenSpec artifact는 이 결정을 기준으로 갱신한다.
+- Confirmation / Follow-up: PROD-632 5.1에서 확인된 production bundle의 `EXPO_PUBLIC_WEB_ORIGIN` literal `undefined` 주입으로 URL 생성이 clipboard 호출 전에 실패한 원인을 기록한다. 원인 재현은 5.1의 완료 근거로 삼되, 변경 후 Web runtime 성공과 지원 Native 실기기 증거가 없는 동안 5.4와 archive task 5.5는 완료하지 않는다.
+- Implementation Evidence (2026-08-27): production bundle에서 origin env가 literal `undefined`로 주입되어 URL 생성이 clipboard 호출보다 먼저 실패하는 경로를 재현했다. 변경 후 Playwright Web E2E는 앱 bundle의 `EXPO_PUBLIC_WEB_ORIGIN`을 실제 접속 origin과 다른 `https://configured-web-origin.invalid`로 주입하고 `/home?source=e2e#ignored`에서 `링크 복사`를 실행해, clipboard가 현재 browser origin과 canonical Post path만 포함한 URL을 받는지 실제 `navigator.clipboard`로 확인했다. 전체 Web E2E 120개가 통과했다. 이는 변경 후 Web runtime 성공 근거지만 production 배포나 지원 Native runtime 증거는 아니므로 5.4와 5.5는 미완료로 유지한다.
+
 ## Remaining Decisions
 
 - 없음.
@@ -389,6 +402,7 @@
 - 2026-07-23 `공개 도메인 상태와 일시적 실패 피드백을 분리`는 2026-07-27 `Repost 실패 피드백은 PROD-414 surface에서 완성한다`로 Repost 소유 범위가 대체됐다. Repost 외 action의 원칙은 유지한다.
 - 2026-07-21 `More 컴포넌트 경계와 링크 복사 통합을 분리`는 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`로 대체했다.
 - 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리`의 링크 복사 단일 항목 결과는 2026-07-31 `More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다`로 대체했다. 독립 UI용 callback-only 경계와 Post Share Reference 계약은 유지한다.
+- 2026-07-23 `More callback 경계와 Post Share Reference 통합을 분리` 및 2026-07-31 `More surface는 PROD-432 링크 복사와 PROD-598 삭제 action을 조합한다`에 남은 configured-origin-only 결과는 2026-08-27 `Web browser origin을 우선하고 Native에서만 configured origin으로 fallback한다`로 대체했다. More callback·item 순서·direct Source·query·hash 제외 결과는 유지한다.
 - 2026-07-21 `count는 K/M 단위 최대 네 글자로 표시`는 2026-07-23 `locale-aware 표준 compact number formatting을 사용`으로 대체했다.
 - 2026-07-23 `액션별 광학 크기와 선 두께를 조정`은 같은 날 `Reply·Repost의 실제 획 높이를 count와 맞춘다`로 대체했다.
 - 2026-07-23 `Reply·Repost의 실제 획 높이를 count와 맞춘다`는 2026-07-29 `Figma 기반 28px geometry로 Action Bar를 정규화한다`로 대체했다.

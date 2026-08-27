@@ -128,8 +128,8 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
 
 ### Post 공유 참조
 
-- Content가 있는 Post의 공유 참조는 현재 deployment가 사용하는 configured Local Instance의 canonical origin과
-  `/{relativeHandle}/{postId}` 경로를 결합한 절대 URL이다.
+- Content가 있는 Post의 공유 참조는 Web에서 현재 browser origin, Android와 iOS에서 configured Local
+  Instance의 canonical origin과 `/{relativeHandle}/{postId}` 경로를 결합한 절대 URL이다.
 - Content 없는 Repost의 공유 참조는 Repost 자신의 식별자가 아니라 조회 가능한 직접 Repost Source의 공유
   참조다. 클라이언트는 Repost 자신의 상세 참조를 노출하지 않고, 그 식별자로 직접 진입해도 Source 공유
   참조로 canonicalize한다.
@@ -137,7 +137,8 @@ Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조
   제공하지 않는다.
 - 공유 참조에는 현재 화면의 query와 hash를 포함하지 않고 API origin이나 플랫폼 전용 native deep link를
   사용하지 않는다.
-- Web, Android와 iOS는 같은 Post에 대해 같은 공유 참조를 제공한다.
+- Web은 현재 접속한 deployment의 origin을 유지하고 Android와 iOS는 configured Web origin을 사용하되, 같은
+  Post 공유 경로 선택 규칙을 적용한다.
 - 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있다.
 - 공유 참조는 Post Visibility와 Post Eligibility가 허용하지 않은 viewer에게 조회 범위를 넓히지 않는다.
 

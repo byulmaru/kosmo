@@ -1,4 +1,4 @@
-import { getApiOrigin } from '@/relay/network';
+import { getApiOrigin } from '@/config/origin';
 import type { NativeSessionConfiguration } from './sessionToken';
 
 export function getNativeSessionConfiguration(): NativeSessionConfiguration {
