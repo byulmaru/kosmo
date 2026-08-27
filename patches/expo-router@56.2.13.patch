@@ -1,0 +1,17 @@
+diff --git a/build/fork/useLinking.js b/build/fork/useLinking.js
+index 6911c31922fd72621bfaa46c47b83274216a4744..3a8efab734b6bbf6d554dc42ac2d6ffa38c13c54 100644
+--- a/build/fork/useLinking.js
++++ b/build/fork/useLinking.js
+@@ -304,6 +304,12 @@ function useLinking(ref, { enabled = true, config, getStateFromPath = native_1.g
+             }
+             const pendingPath = pendingPopStatePathRef.current;
+             const route = (0, native_1.findFocusedRoute)(state);
++            // A focused group route means its nested navigator has not mounted yet.
++            // Resolving a path from this partial state can rewrite the URL to the
++            // group's first screen before the child navigator reports its state.
++            if (route && /^\([^/]+\)$/.test(route.name)) {
++                return;
++            }
+             const path = getPathForRoute(route, state);
+             // START FORK
+             // previousStateRef.current = state;

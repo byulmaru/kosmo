@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { isGraphQLOperation } from './graphql';
-import type { APIRequestContext } from '@playwright/test';
+import type { APIRequestContext, Page } from '@playwright/test';
 
 const loginCodeVerifierCookie = 'kosmo_oidc_code_verifier';
 const loginStateCookie = 'kosmo_oidc_state';
@@ -14,6 +14,7 @@ const oidcOrigin = process.env.PUBLIC_OIDC_ISSUER ?? 'http://127.0.0.1:4300';
 const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
 const nativeSessionEndpoint = new URL('/graphql', apiOrigin).toString();
 const nativeSessionOperationName = 'E2ENativeOidcSessionExchange';
+const historyPathStorageKey = 'kosmo-e2e-history-paths';
 const nativeSessionMutation = `
   mutation E2ENativeOidcSessionExchange($input: ExchangeNativeOidcSessionInput!) {
     exchangeNativeOidcSession(input: $input) {
@@ -111,6 +112,38 @@ async function authorizeNativeCode(
   expect(callbackUrl.searchParams.get('state')).toBe(state);
 
   return callbackUrl;
+}
+
+async function installHistoryPathTracer(page: Page) {
+  await page.addInitScript((storageKey: string) => {
+    const record = (method: string) => {
+      const entries = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[];
+      entries.push(`${method}:${location.pathname}${location.search}`);
+      sessionStorage.setItem(storageKey, JSON.stringify(entries));
+    };
+
+    record('document');
+
+    for (const method of ['pushState', 'replaceState'] as const) {
+      const original = history[method];
+      history[method] = function (...args) {
+        const result = original.apply(this, args);
+        record(method);
+        return result;
+      };
+    }
+  }, historyPathStorageKey);
+}
+
+async function getHistoryPaths(page: Page) {
+  return page.evaluate(
+    (storageKey: string) => JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[],
+    historyPathStorageKey,
+  );
+}
+
+function expectNoUndefinedHistoryPaths(historyPaths: readonly string[]) {
+  expect(historyPaths.filter((path) => path.includes('/undefined/undefined'))).toEqual([]);
 }
 
 test.beforeEach(async () => {
@@ -248,36 +281,13 @@ test('mock OIDC로 로그인하면 보호 홈으로 이동하고 세션이 유�
 
     await route.continue();
   });
-  await page.addInitScript(() => {
-    const storageKey = 'kosmo-e2e-history-paths';
-    const record = (method: string) => {
-      const entries = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[];
-      entries.push(`${method}:${location.pathname}${location.search}`);
-      sessionStorage.setItem(storageKey, JSON.stringify(entries));
-    };
-
-    record('document');
-
-    for (const method of ['pushState', 'replaceState'] as const) {
-      const original = history[method];
-      history[method] = function (...args) {
-        const result = original.apply(this, args);
-        record(method);
-        return result;
-      };
-    }
-  });
+  await installHistoryPathTracer(page);
 
   await page.goto('/');
   await page.getByRole('link', { name: '시작하기' }).click();
 
   await expect(page).toHaveURL(/\/home$/);
-  const historyPaths = await page.evaluate(() =>
-    JSON.parse(sessionStorage.getItem('kosmo-e2e-history-paths') ?? '[]'),
-  );
-  expect(historyPaths).not.toContain('pushState:/undefined/undefined');
-  expect(historyPaths).not.toContain('replaceState:/undefined/undefined');
-  expect(historyPaths).not.toContain('document:/undefined/undefined');
+  expectNoUndefinedHistoryPaths(await getHistoryPaths(page));
   await expect(page.getByRole('heading', { name: '프로필을 만들어 시작하세요' })).toBeVisible();
   await page.getByRole('button', { name: '프로필 만들기' }).click();
   await expect(page.getByLabel('프로필 전환')).toBeVisible();
@@ -569,6 +579,27 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await setE2ESessionCookie(context, token);
   });
+
+  for (const path of ['/', '/home'] as const) {
+    test(`${path}의 인증된 cold load는 undefined/undefined를 history에 기록하지 않는다`, async ({
+      page,
+    }) => {
+      await page.route('**/graphql', async (route) => {
+        if (isGraphQLOperation(route.request().postData(), 'UniversalShellQuery')) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        await route.continue();
+      });
+      await installHistoryPathTracer(page);
+
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/home$/);
+      await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+
+      expectNoUndefinedHistoryPaths(await getHistoryPaths(page));
+    });
+  }
 
   test('Settings route-owned back은 direct/fresh detail을 root로 replace하고 forward에서 detail을 복원하지 않는다', async ({
     page,
