@@ -64,7 +64,7 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
   });
 
   await page.goto(
-    '/?secret_query=should-not-be-captured&utm_source=private-campaign&gclid=private-click-id#secret-fragment',
+    '/?secret_query=should-not-be-captured&utm_source=newsletter&gclid=campaign-click-id#secret-fragment',
   );
   await expect
     .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
@@ -104,15 +104,17 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
   expect(payloads.every((payload) => payload.event === '$pageview')).toBe(true);
   expect(JSON.stringify(payloads)).not.toContain('secret_query');
   expect(JSON.stringify(payloads)).not.toContain('secret-fragment');
-  expect(JSON.stringify(payloads)).not.toContain('private-campaign');
-  expect(JSON.stringify(payloads)).not.toContain('private-click-id');
 
-  for (const payload of pageviews) {
+  for (const [index, payload] of pageviews.entries()) {
     expect(payload.properties).not.toHaveProperty('$current_url');
     expect(payload.properties).not.toHaveProperty('$pathname');
     expect(payload.properties).not.toHaveProperty('$prev_pageview_pathname');
-    expect(payload.properties).not.toHaveProperty('$session_entry_utm_source');
-    expect(payload.properties).not.toHaveProperty('$session_entry_gclid');
+    expect(payload.properties?.$session_entry_utm_source).toBe(
+      index === 0 ? 'newsletter' : undefined,
+    );
+    expect(payload.properties?.$session_entry_gclid).toBe(
+      index === 0 ? 'campaign-click-id' : undefined,
+    );
   }
 });
 
