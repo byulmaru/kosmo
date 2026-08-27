@@ -112,6 +112,7 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=${{ vars.EXPO_PUBLIC_OPENPANEL_CLIENT_ID }}
             EXPO_PUBLIC_POSTHOG_KEY=${{ vars.EXPO_PUBLIC_POSTHOG_KEY }}
             EXPO_PUBLIC_POSTHOG_HOST=${{ vars.EXPO_PUBLIC_POSTHOG_HOST }}
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
