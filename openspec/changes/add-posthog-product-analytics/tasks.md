@@ -14,7 +14,7 @@ PostHog Cloud US project의 region/timezone/수집 설정/Default project 불변
 
 **Guardrails**
 
-- 실제 project key·credential·secret을 repository·spec·test fixture·log에 기록하지 않는다.
+- 환경별 공개 project token·ingestion host는 repository·spec·test fixture에 하드코딩하지 않고 deployment variable에서 관리한다. Personal API Key·Project Secret API Key 같은 조회·관리 권한 credential은 repository·CI log·artifact에 기록하지 않는다.
 - 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 Session Replay를 활성화하지 않는다. 실제 production activation은 PROD-741 gate가 소유한다.
 - 초기 retention은 30일로 설정하고, 플랜 변경만으로 보존 기간을 자동 연장하지 않는다.
 - 변경은 현재 PostHog 플랜 지원 범위 안에서만 허용하며, 설정 이후 수집되는 replay부터 적용한다.
@@ -49,7 +49,7 @@ Kosmo Web이 공개 PostHog key와 host가 모두 있을 때만 PostHog adapter�
 **Guardrails**
 
 - OpenPanel과 PostHog를 dual-write하지 않는다.
-- 실제 project key, credential 또는 secret을 repository·test fixture·log에 기록하지 않는다.
+- 환경별 공개 project token·ingestion host는 repository·test fixture에 하드코딩하지 않고 deployment variable에서 관리한다. Personal API Key·Project Secret API Key 같은 조회·관리 권한 credential은 repository·CI log·artifact에 기록하지 않는다.
 - key와 host 중 하나라도 없으면 analytics network client를 만들지 않는다.
 - PostHog value import는 Web platform 경계에만 두며 Native 분석 지원 완료로 일반화하지 않는다.
 
@@ -147,7 +147,7 @@ Cloud US project의 공개 project key와 ingestion host를 build/deployment에 
 
 **Guardrails**
 
-- 실제 project key·credential·secret을 repository·spec·test fixture·log에 기록하지 않는다.
+- 환경별 공개 project token·ingestion host는 repository·spec·test fixture에 하드코딩하지 않고 GitHub Variables에서 Web build에 주입하며 최종 Web artifact에 포함될 수 있다. Personal API Key·Project Secret API Key 같은 조회·관리 권한 credential은 repository·CI log·build provenance·image artifact에 포함하지 않는다.
 - key 또는 host가 부분적으로만 제공되면 analytics와 replay는 no-op이어야 한다.
 - 초기 PostHog 기반 단계에서 Session Replay를 활성화하지 않으며, 후속 activation은 PROD-795 gate 이후 PROD-741이 소유한다.
 
@@ -156,7 +156,7 @@ Cloud US project의 공개 project key와 ingestion host를 build/deployment에 
 - Cloud US host와 공개 key의 build/deployment 주입, key-only·host-only·둘 다 없음·둘 다 존재하는 네 조합의 설정 증거를 확인한다.
 - PROD-819 consumer contract가 실제 key 값 없이 설정 완전성·초기 replay-off를 확인할 수 있도록 handoff한다.
 
-- [ ] 5.1 Cloud US project의 공개 key·ingestion host build/deployment 주입 경계를 정렬하고 secret 비노출 증거를 기록한다.
+- [ ] 5.1 Cloud US project의 공개 project token·ingestion host build/deployment 주입 경계를 정렬하고 조회·관리 권한 credential이 repository·CI log·build provenance·image artifact에 포함되지 않는다는 증거를 기록한다.
 - [ ] 5.2 네 가지 설정 조합과 초기 Session Replay off 상태를 검증해 PROD-819·PROD-795에 인계한다.
 
 ## 6·7. PROD-795 production-equivalent cross-slice 검증 예약 ownership

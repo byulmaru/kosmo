@@ -57,7 +57,7 @@ COPY apps ./apps
 COPY packages ./packages
 COPY scripts ./scripts
 
-# Expo inlines these public values into the Web asset; BuildKit keeps them out of image metadata and layers.
+# Public PostHog settings use ephemeral BuildKit mounts and are intentionally inlined into the Web asset.
 RUN --mount=type=secret,id=posthog_key,env=EXPO_PUBLIC_POSTHOG_KEY,required=false \
   --mount=type=secret,id=posthog_host,env=EXPO_PUBLIC_POSTHOG_HOST,required=false \
   --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \

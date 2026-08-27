@@ -35,7 +35,7 @@
 - Authority / Provenance: Linear `PROD-819`, `PROD-820`
 - Status: Active
 - Context / Problem: local·development 기본 비활성화와 production 공개 설정 주입을 하나의 조건으로 맞추지 않으면 부분 설정이 unintended 전송을 만들 수 있다.
-- Decision Outcome: 공개 PostHog project key와 Cloud US ingestion host가 모두 존재할 때만 Web client를 초기화한다. exact environment variable 이름과 주입 구현은 두 slice가 shared change에서 정렬하되 실제 key 값은 repository·artifact에 기록하지 않는다.
+- Decision Outcome: 공개 PostHog project token과 Cloud US ingestion host가 모두 존재할 때만 Web client를 초기화한다. exact environment variable 이름과 주입 구현은 두 slice가 shared change에서 정렬한다. 환경별 공개 값은 deployment variable에서 관리하고 최종 Web artifact에 포함될 수 있다. Personal API Key·Project Secret API Key 같은 조회·관리 권한 credential은 repository·CI log·build provenance·image artifact에 포함하지 않는다.
 - Alternatives Considered: environment 이름만 검사, key만으로 SDK default host 사용, 별도 enabled flag 추가는 부분 설정과 이중 상태를 만들어 제외했다.
 - Consequences: PROD-819은 fake 공개 설정으로 독립 검증할 수 있고, PROD-820 설정이 배포되기 전 실제 환경은 안전한 no-op이다.
 - Confirmation / Follow-up: key-only, host-only, 둘 다 없음과 둘 다 존재하는 경우를 unit·browser 검증한다.

@@ -120,8 +120,8 @@ jobs:
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=kosmo@${{ env.TARGET_SHA }}
             SENTRY_UPLOAD_REQUIRED=1
+          # Public client settings use ephemeral BuildKit mounts instead of build args and are intentionally inlined into the Web bundle.
           secret-envs: |
-            # Secret mounts keep public values out of CI logs and image provenance.
             posthog_host=POSTHOG_HOST
             posthog_key=POSTHOG_KEY
             sentry_auth_token=SENTRY_AUTH_TOKEN
