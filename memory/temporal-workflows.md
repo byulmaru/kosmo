@@ -83,7 +83,9 @@
 - pair transaction/bootstrap Activity가 retry를 모두 소진하면 Update 실패를 기록하고 기존 effects를 drain한 뒤 run을
   typed failure로 닫는다. PENDING으로 무기한 대기시키지 않으며 known domain failure DTO는 lifecycle을 계속 유지한다.
 - Update 응답에는 full DB row나 `Temporal.Instant`를 넣지 않고 domain row ID와 pair identity만 보존한다.
-  exact F1 removal retry 시 현재 row가 F2여도 expected F1 ID로 F1 delete effect만 재구성하고 F2는 보존한다.
+  Unfollow/removal Workflow는 mutation 전에 expected F1 ID와 directed pair의 일치를 read-only Activity로 검증해
+  Workflow history에 남긴다. 검증 실패는 mutation/effect 없는 no-op이고, 검증된 F1 removal retry 시 현재 row가
+  F2여도 history의 F1 identity로 F1 delete effect만 재구성하고 F2는 보존한다.
 - 이 Follow 규칙이 다른 capability의 retry 계약을 제거하지는 않는다. 삭제 source identity나 effect plan을 DB 상태만으로
   복원할 수 없는 별도 Temporal capability는 최소 domain-specific receipt를 transition과 같은 transaction에 기록하고,
   해당 결과가 History에 기록된 뒤 정리할 수 있다. 이를 범용 command ledger나 lifecycle exactly-once 보장으로

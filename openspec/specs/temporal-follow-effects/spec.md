@@ -136,7 +136,13 @@ ActivityPub delivery eligibility MUST be decided by the transition transaction a
 #### Scenario: Reconstruct an old removal after refollow
 
 - **WHEN** Follow F1 removal commits, Activity completion is lost, and Follow F2 exists when the removal Activity retries
-- **THEN** the retry preserves F2 and reconstructs only F1's delete effects from F1's exact source ID and directed pair
+- **THEN** the removal Workflow reuses the exact F1 source and directed pair verified by a read-only Activity and recorded in Workflow history before the mutation
+- **AND** the retry preserves F2 and reconstructs only F1's delete effects
+
+#### Scenario: Reject a mismatched removal source
+
+- **WHEN** a removal command's expected Follow ID does not belong to its directed pair when the Workflow verifies it before mutation
+- **THEN** the command reports no change without running the removal transaction or scheduling delete effects
 
 #### Scenario: Bound caller admission latency
 
