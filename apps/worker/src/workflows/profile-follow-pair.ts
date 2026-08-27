@@ -9,6 +9,7 @@ import {
   uuid4,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
+import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
   ProfileFollowPair,
@@ -41,22 +42,7 @@ const {
   loadPendingFollowRequestIdActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
-} = proxyActivities<
-  Pick<
-    typeof activities,
-    | 'createFollowNotificationActivity'
-    | 'createFollowRequestNotificationActivity'
-    | 'deleteFollowNotificationActivity'
-    | 'deleteFollowRequestNotificationActivity'
-    | 'executeProfileFollowPairTransitionActivity'
-    | 'loadPendingFollowRequestIdActivity'
-    | 'sendProfileFollowActivity'
-    | 'sendProfileUnfollowActivity'
-  >
->({
-  retry: { maximumAttempts: 10 },
-  startToCloseTimeout: '1 minute',
-});
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 const isTerminalState = (
   state: ProfileFollowPairLifecycleState,

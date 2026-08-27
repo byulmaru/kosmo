@@ -1,4 +1,5 @@
 import { proxyActivities } from '@temporalio/workflow';
+import { workflowActivityOptions } from './activity-options';
 import type * as activities from '../activities';
 
 type ProfileUpdateEffectsInput = {
@@ -6,12 +7,8 @@ type ProfileUpdateEffectsInput = {
   readonly updateId: string;
 };
 
-const { sendLocalProfileUpdateActivity } = proxyActivities<
-  Pick<typeof activities, 'sendLocalProfileUpdateActivity'>
->({
-  retry: { maximumAttempts: 10 },
-  startToCloseTimeout: '1 minute',
-});
+const { sendLocalProfileUpdateActivity } =
+  proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function profileUpdateEffectsWorkflow({
   profileId,

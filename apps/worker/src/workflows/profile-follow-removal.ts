@@ -7,6 +7,7 @@ import {
   setHandler,
 } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
+import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type {
   ProfileFollowPair,
@@ -24,18 +25,7 @@ const {
   deleteFollowRequestNotificationActivity,
   executeProfileFollowRemovalActivity,
   sendProfileUnfollowActivity,
-} = proxyActivities<
-  Pick<
-    typeof activities,
-    | 'deleteFollowNotificationActivity'
-    | 'deleteFollowRequestNotificationActivity'
-    | 'executeProfileFollowRemovalActivity'
-    | 'sendProfileUnfollowActivity'
-  >
->({
-  retry: { maximumAttempts: 10 },
-  startToCloseTimeout: '1 minute',
-});
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 function assertValidRemovalInput(
   value: unknown,

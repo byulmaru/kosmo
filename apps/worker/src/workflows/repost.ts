@@ -1,5 +1,6 @@
 import { proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
+import { workflowActivityOptions } from './activity-options';
 import { settleEffects } from './settle-effects';
 import type * as activities from '../activities';
 
@@ -8,12 +9,8 @@ type PostRepostInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-const { createRepostNotificationActivity, sendRepostAnnounceActivity } = proxyActivities<
-  Pick<typeof activities, 'createRepostNotificationActivity' | 'sendRepostAnnounceActivity'>
->({
-  retry: { maximumAttempts: 10 },
-  startToCloseTimeout: '1 minute',
-});
+const { createRepostNotificationActivity, sendRepostAnnounceActivity } =
+  proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function postRepostWorkflow({ postId, origin }: PostRepostInput): Promise<void> {
   await settleEffects([
