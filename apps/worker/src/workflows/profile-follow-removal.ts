@@ -40,12 +40,10 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   let inFlight = false;
   let updateReceived = false;
   let execution: ProfileFollowRemovalExecution | undefined;
-  const update = defineUpdate<ProfileFollowRemovalExecution, [ProfileFollowRemovalInput]>(
-    PROFILE_FOLLOW_REMOVAL_UPDATE_NAME,
-  );
-
   setHandler(
-    update,
+    defineUpdate<ProfileFollowRemovalExecution, [ProfileFollowRemovalInput]>(
+      PROFILE_FOLLOW_REMOVAL_UPDATE_NAME,
+    ),
     async (command) => {
       if (inFlight) {
         throw ApplicationFailure.nonRetryable('Profile Follow removal is already in flight');
@@ -81,8 +79,7 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
     },
   );
 
-  const admitted = await condition(() => updateReceived, PROFILE_FOLLOW_REMOVAL_ORPHAN_GUARD);
-  if (!admitted) {
+  if (!(await condition(() => updateReceived, PROFILE_FOLLOW_REMOVAL_ORPHAN_GUARD))) {
     return;
   }
   await condition(allHandlersFinished);

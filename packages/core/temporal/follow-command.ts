@@ -71,10 +71,6 @@ export const profileFollowPairUpdateId = (command: ProfileFollowPairCommand): st
 export const executeProfileFollowPairTransition = async (
   input: ProfileFollowPairTransitionInput,
 ): Promise<HydratedProfileFollowPairTransition> => {
-  const pair = input.pair;
-  const workflowId = profileFollowPairWorkflowId(pair);
-  const updateId = profileFollowPairUpdateId(input.command);
-
   let execution: ProfileFollowPairTransitionExecution;
   try {
     execution = (await temporalClient.withDeadline(
@@ -82,13 +78,13 @@ export const executeProfileFollowPairTransition = async (
       () =>
         temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_PAIR_UPDATE_NAME, {
           args: [{ command: input.command }],
-          updateId,
+          updateId: profileFollowPairUpdateId(input.command),
           startWorkflowOperation: new WithStartWorkflowOperation(
             PROFILE_FOLLOW_PAIR_WORKFLOW_TYPE,
             {
-              args: [pair],
+              args: [input.pair],
               taskQueue: KOSMO_TASK_QUEUE,
-              workflowId,
+              workflowId: profileFollowPairWorkflowId(input.pair),
               workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
               workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
             },
@@ -120,12 +116,7 @@ export const executeProfileFollowPairTransition = async (
 export const executeProfileFollowRemoval = async (
   input: ProfileFollowRemovalInput,
 ): Promise<ProfileFollowRemovalExecution> => {
-  const pair = {
-    followerProfileId: input.followerProfileId,
-    followeeProfileId: input.followeeProfileId,
-  } satisfies ProfileFollowPair;
-
-  const execution = await temporalClient.withDeadline(
+  const result = (await temporalClient.withDeadline(
     Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
     () =>
       temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_REMOVAL_UPDATE_NAME, {
@@ -134,7 +125,12 @@ export const executeProfileFollowRemoval = async (
         startWorkflowOperation: new WithStartWorkflowOperation(
           PROFILE_FOLLOW_REMOVAL_WORKFLOW_TYPE,
           {
-            args: [pair],
+            args: [
+              {
+                followerProfileId: input.followerProfileId,
+                followeeProfileId: input.followeeProfileId,
+              } satisfies ProfileFollowPair,
+            ],
             taskQueue: KOSMO_TASK_QUEUE,
             workflowId: profileFollowRemovalWorkflowId(input),
             workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
@@ -142,9 +138,7 @@ export const executeProfileFollowRemoval = async (
           },
         ),
       }),
-  );
-
-  const result = execution as ProfileFollowRemovalExecution;
+  )) as ProfileFollowRemovalExecution;
   if (!result.ok) {
     throw rehydrateProfileFollowFailure(result.error);
   }

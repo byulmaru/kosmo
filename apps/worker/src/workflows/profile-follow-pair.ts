@@ -90,14 +90,6 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   const effectQueue: ProfileFollowPairEffect[] = [];
   const effectFailures: EffectFailure[] = [];
 
-  const statusQuery = defineQuery<ProfileFollowPairWorkflowStatus>(
-    PROFILE_FOLLOW_PAIR_STATUS_QUERY_NAME,
-  );
-  const pairUpdate = defineUpdate<
-    ProfileFollowPairTransitionExecution,
-    [ProfileFollowPairUpdateInput]
-  >(PROFILE_FOLLOW_PAIR_UPDATE_NAME);
-
   const runTransitionActivity = async <T>(activity: () => Promise<T>): Promise<T> => {
     try {
       return await activity();
@@ -111,15 +103,20 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     }
   };
 
-  setHandler(statusQuery, () => ({
-    state: lifecycleState,
-    inFlight,
-    pendingEffectCount: effectQueue.length,
-    effectFailureCount: effectFailures.length,
-  }));
+  setHandler(
+    defineQuery<ProfileFollowPairWorkflowStatus>(PROFILE_FOLLOW_PAIR_STATUS_QUERY_NAME),
+    () => ({
+      state: lifecycleState,
+      inFlight,
+      pendingEffectCount: effectQueue.length,
+      effectFailureCount: effectFailures.length,
+    }),
+  );
 
   setHandler(
-    pairUpdate,
+    defineUpdate<ProfileFollowPairTransitionExecution, [ProfileFollowPairUpdateInput]>(
+      PROFILE_FOLLOW_PAIR_UPDATE_NAME,
+    ),
     async ({ command }) => {
       if (inFlight) {
         throw pairConflict('Profile Follow pair transition is already in flight');
@@ -152,13 +149,13 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
         }
 
         if (lifecycleState === 'INITIAL' && command.kind !== 'FOLLOW') {
-          const loadedRequestId = await runTransitionActivity(() =>
+          pendingRequestId = await runTransitionActivity(() =>
             loadPendingFollowRequestIdActivity({
               pair: input,
               expectedRowId: command.expectedRowId,
             }),
           );
-          if (loadedRequestId === undefined) {
+          if (pendingRequestId === undefined) {
             return {
               ok: false as const,
               error: {
@@ -167,19 +164,16 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
               },
             };
           }
-          pendingRequestId = loadedRequestId;
           lifecycleState = 'PENDING';
         }
 
-        const candidateRowId = command.kind === 'FOLLOW' ? uuid4() : undefined;
-        const followCandidateId =
-          command.kind === 'APPROVE' || command.kind === 'ACCEPT' ? uuid4() : undefined;
         const execution = await runTransitionActivity(() =>
           executeProfileFollowPairTransitionActivity({
             pair: input,
             command,
-            candidateRowId,
-            followCandidateId,
+            candidateRowId: command.kind === 'FOLLOW' ? uuid4() : undefined,
+            followCandidateId:
+              command.kind === 'APPROVE' || command.kind === 'ACCEPT' ? uuid4() : undefined,
             pendingRequestId,
           }),
         );
@@ -216,8 +210,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     },
   );
 
-  const admitted = await condition(() => updateReceived, PROFILE_FOLLOW_PAIR_ORPHAN_GUARD);
-  if (!admitted) {
+  if (!(await condition(() => updateReceived, PROFILE_FOLLOW_PAIR_ORPHAN_GUARD))) {
     return;
   }
 

@@ -233,10 +233,9 @@ const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) =
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(inArray(Profiles.id, [pair.followerProfileId, pair.followeeProfileId]));
-  const follower = participants.find(({ id }) => id === pair.followerProfileId);
   const followee = participants.find(({ id }) => id === pair.followeeProfileId);
   return (
-    follower?.kind === InstanceKind.LOCAL &&
+    participants.find(({ id }) => id === pair.followerProfileId)?.kind === InstanceKind.LOCAL &&
     followee?.kind === InstanceKind.ACTIVITYPUB &&
     followee.state === InstanceState.ACTIVE
   );
@@ -246,8 +245,8 @@ const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) =
 export const loadPendingFollowRequestId = async (input: {
   readonly pair: ProfileFollowPair;
   readonly expectedRowId?: string;
-}): Promise<string | undefined> => {
-  const row = await db
+}): Promise<string | undefined> =>
+  db
     .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
@@ -259,9 +258,8 @@ export const loadPendingFollowRequestId = async (input: {
       ),
     )
     .limit(1)
-    .then(first);
-  return row?.id;
-};
+    .then(first)
+    .then((row) => row?.id);
 
 const executeFollow = async (
   input: ProfileFollowPairTransitionInput,
@@ -272,12 +270,15 @@ const executeFollow = async (
     throw new Error('Invalid Follow command');
   }
 
-  const beforeRequest = await tx
-    .select({ id: ProfileFollowRequests.id })
-    .from(ProfileFollowRequests)
-    .where(pairCondition(ProfileFollowRequests, input.pair))
-    .limit(1)
-    .then(first);
+  const requestToDeleteId =
+    (
+      await tx
+        .select({ id: ProfileFollowRequests.id })
+        .from(ProfileFollowRequests)
+        .where(pairCondition(ProfileFollowRequests, input.pair))
+        .limit(1)
+        .then(first)
+    )?.id ?? input.pendingRequestId;
   const followed = await followProfileInTransaction(
     {
       ...input.pair,
@@ -296,7 +297,6 @@ const executeFollow = async (
     (input.candidateRowId !== undefined &&
       (profileFollowId === input.candidateRowId ||
         profileFollowRequestId === input.candidateRowId));
-  const requestToDeleteId = beforeRequest?.id ?? input.pendingRequestId;
   const effectPlan: ProfileFollowPairEffect[] = [];
 
   if (followResult.kind === 'ESTABLISHED' && requestToDeleteId !== undefined) {
@@ -365,15 +365,17 @@ const executeApproveOrAccept = async (
     )
     .limit(1)
     .then(first);
-  const pendingRequest =
-    currentRequest ??
-    (await tx
-      .select({ id: ProfileFollowRequests.id })
-      .from(ProfileFollowRequests)
-      .where(pairCondition(ProfileFollowRequests, input.pair))
-      .limit(1)
-      .then(first));
-  const pendingRequestId = pendingRequest?.id ?? input.pendingRequestId;
+  const pendingRequestId =
+    currentRequest?.id ??
+    (
+      await tx
+        .select({ id: ProfileFollowRequests.id })
+        .from(ProfileFollowRequests)
+        .where(pairCondition(ProfileFollowRequests, input.pair))
+        .limit(1)
+        .then(first)
+    )?.id ??
+    input.pendingRequestId;
   const followId = input.followCandidateId;
 
   if (!currentRequest && existingFollow) {
@@ -494,7 +496,6 @@ const executeApproveOrAccept = async (
     }
   }
 
-  const pendingAfter = kind === 'NOOP' ? committedRequestId : undefined;
   return {
     ok: true,
     result: {
@@ -507,7 +508,9 @@ const executeApproveOrAccept = async (
     },
     nextState: kind === 'NOOP' ? 'PENDING' : 'ESTABLISHED',
     effectPlan,
-    ...(pendingAfter === undefined ? {} : { pendingRequestId: pendingAfter }),
+    ...(kind === 'NOOP' && committedRequestId !== undefined
+      ? { pendingRequestId: committedRequestId }
+      : {}),
   };
 };
 
@@ -605,10 +608,6 @@ const executeRejectOrCancel = async (
     };
   }
 
-  const sendActivityPub =
-    command.kind === 'CANCEL' && command.origin === 'LOCAL'
-      ? await shouldSendActivityPub(tx, input.pair)
-      : undefined;
   return {
     ok: true,
     result: {
@@ -624,7 +623,9 @@ const executeRejectOrCancel = async (
         sourceId,
         pair: input.pair,
         sourceKind: 'FOLLOW_REQUEST',
-        ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
+        ...(command.kind === 'CANCEL' && command.origin === 'LOCAL'
+          ? { sendActivityPub: await shouldSendActivityPub(tx, input.pair) }
+          : {}),
       }),
     ],
   };
@@ -731,8 +732,6 @@ export const executeProfileFollowRemoval = async (
         };
       }
 
-      const sendActivityPub =
-        input.origin === 'LOCAL' ? await shouldSendActivityPub(tx, input) : undefined;
       return {
         ok: true,
         changed: true,
@@ -744,7 +743,9 @@ export const executeProfileFollowRemoval = async (
             sourceId,
             pair: input,
             sourceKind: 'FOLLOW',
-            ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
+            ...(input.origin === 'LOCAL'
+              ? { sendActivityPub: await shouldSendActivityPub(tx, input) }
+              : {}),
           }),
         ],
       };

@@ -60,16 +60,15 @@ const loadProfileFollowParticipants = async (
     throw new NotFoundError('Profile not found');
   }
 
-  const isRemoteTarget = target.instanceKind === InstanceKind.ACTIVITYPUB;
-  const isActivityPubInbound =
-    follower.instanceKind === InstanceKind.ACTIVITYPUB &&
-    target.instanceKind === InstanceKind.LOCAL;
-  const validOriginPair = isActivityPubInbound
-    ? follower.instanceState === InstanceState.ACTIVE &&
-      target.instanceState === InstanceState.ACTIVE
-    : follower.instanceKind === InstanceKind.LOCAL &&
-      (target.instanceKind === InstanceKind.LOCAL || (isRemoteTarget && target.actorUri));
-  if (!validOriginPair) {
+  if (
+    !(follower.instanceKind === InstanceKind.ACTIVITYPUB &&
+    target.instanceKind === InstanceKind.LOCAL
+      ? follower.instanceState === InstanceState.ACTIVE &&
+        target.instanceState === InstanceState.ACTIVE
+      : follower.instanceKind === InstanceKind.LOCAL &&
+        (target.instanceKind === InstanceKind.LOCAL ||
+          (target.instanceKind === InstanceKind.ACTIVITYPUB && target.actorUri)))
+  ) {
     throw new NotFoundError('Profile not found');
   }
 
@@ -286,18 +285,17 @@ export const ensureProfileFollowRequest = async (
     })
     .returning()
     .then(first);
-  const profileFollowRequest =
-    inserted ??
-    (await tx
-      .select()
-      .from(ProfileFollowRequests)
-      .where(requestPairCondition(ProfileFollowRequests, pair))
-      .limit(1)
-      .then(firstOrThrowWith(() => new Error('Profile follow request not found'))));
   return {
     created: inserted !== undefined,
     kind: 'PENDING',
-    profileFollowRequest: profileFollowRequest!,
+    profileFollowRequest:
+      inserted ??
+      (await tx
+        .select()
+        .from(ProfileFollowRequests)
+        .where(requestPairCondition(ProfileFollowRequests, pair))
+        .limit(1)
+        .then(firstOrThrowWith(() => new Error('Profile follow request not found')))),
   };
 };
 
@@ -349,39 +347,42 @@ export const acceptProfileFollowRequestInTransaction = async (
     .limit(1)
     .then(first);
 
-  const unavailableParticipants = tx
-    .select({ id: Profiles.id })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-        or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
-      ),
-    );
   const deleted = await tx
     .delete(ProfileFollowRequests)
     .where(
       and(
         eq(ProfileFollowRequests.id, expectedRowId),
         requestPairCondition(ProfileFollowRequests, pair),
-        notExists(unavailableParticipants),
+        notExists(
+          tx
+            .select({ id: Profiles.id })
+            .from(Profiles)
+            .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+            .where(
+              and(
+                inArray(Profiles.id, [followerProfileId, followeeProfileId]),
+                or(
+                  ne(Profiles.state, ProfileState.ACTIVE),
+                  eq(Instances.state, InstanceState.SUSPENDED),
+                ),
+              ),
+            ),
+        ),
       ),
     )
     .returning({ id: ProfileFollowRequests.id })
     .then(first);
 
   if (!deleted) {
-    const establishedAfterDelete = await tx
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(requestPairCondition(ProfileFollows, pair))
-      .limit(1)
-      .then(first);
-
     return {
       result:
-        pendingRequest && establishedAfterDelete
+        pendingRequest &&
+        (await tx
+          .select({ id: ProfileFollows.id })
+          .from(ProfileFollows)
+          .where(requestPairCondition(ProfileFollows, pair))
+          .limit(1)
+          .then(first))
           ? { kind: 'ALREADY_ESTABLISHED' }
           : { kind: 'NOOP' },
       deletedRequestId: undefined,
@@ -429,21 +430,21 @@ export const approveProfileFollowRequestInTransaction = async (
     .limit(1)
     .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-  const participants = await tx
-    .select({
-      id: Profiles.id,
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-      ),
-    )
-    .orderBy(Profiles.id);
-  if (participants.length !== 2) {
+  if (
+    (
+      await tx
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(
+          and(
+            inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]),
+            eq(Profiles.state, ProfileState.ACTIVE),
+            ne(Instances.state, InstanceState.SUSPENDED),
+          ),
+        )
+    ).length !== 2
+  ) {
     throw new NotFoundError('Profile not found');
   }
 
