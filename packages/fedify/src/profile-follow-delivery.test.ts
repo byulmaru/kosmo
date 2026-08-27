@@ -11,7 +11,6 @@ import type { federation as Federation } from './federation';
 import type * as ProfileFollowDelivery from './profile-follow-delivery';
 
 const publicOrigin = 'http://127.0.0.1:4173';
-const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const senderProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const profileFollowId = '019f6f67-2222-7777-8888-123456789abc';
 const profileFollowCreatedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
@@ -30,7 +29,6 @@ let sendProfileUnfollow: typeof ProfileFollowDelivery.sendProfileUnfollow;
 
 describe('profile follow delivery', () => {
   before(async () => {
-    process.env.DATABASE_URL = databaseUrl;
     process.env.PUBLIC_ORIGIN = publicOrigin;
 
     ({ pg } = await import('@kosmo/core/db'));

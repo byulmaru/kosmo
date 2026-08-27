@@ -393,6 +393,9 @@ importers:
       '@temporalio/workflow':
         specifier: ^1.22.0
         version: 1.22.0
+      drizzle-orm:
+        specifier: 1.0.0-beta.22
+        version: 1.0.0-beta.22(@opentelemetry/api@1.9.1)(postgres@3.4.9)(zod@4.4.3)
       ts-pattern:
         specifier: ^5.9.0
         version: 5.9.0
@@ -400,6 +403,12 @@ importers:
         specifier: ^4.22.4
         version: 4.22.4
     devDependencies:
+      '@fedify/fedify':
+        specifier: ^2.3.0
+        version: 2.3.0
+      '@fedify/vocab':
+        specifier: 2.3.0
+        version: 2.3.0
       '@temporalio/client':
         specifier: ^1.22.0
         version: 1.22.0

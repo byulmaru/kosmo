@@ -36,6 +36,9 @@
 ## Activity Registration And Adapters
 
 - `apps/worker/src/activities.ts`는 production Activity registry다.
+- durable source ID나 삭제 snapshot을 DB projection으로 복원하고 retry/no-op을 판정하는 Activity 전용 adapter는
+  `apps/worker`가 소유한다. `packages/core`와 `packages/fedify`에는 각각 domain policy와 protocol delivery primitive만
+  남기며, Temporal input shape를 맞추기 위한 공개 함수를 추가하지 않는다.
 - 기존 core/fedify 함수의 input, return과 오류 의미가 Activity 계약과 같으면 `export { source as activityName }`로 직접 alias한다.
 - 단순히 같은 인자를 다음 함수에 전달하고 같은 Promise를 반환하는 Worker adapter 파일이나 async wrapper를 만들지 않는다.
 - adapter는 input 변환, dependency composition, retry 경계에 필요한 validation 또는 Activity 고유 관찰처럼 실제 책임이 있을 때만 둔다.

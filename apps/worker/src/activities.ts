@@ -1,3 +1,15 @@
+import '@kosmo/core/polyfill';
+
+export {
+  sendProfileFollowActivity,
+  sendProfileUnfollowActivity,
+} from './profile-follow-activities';
+export {
+  createFollowNotification as createFollowNotificationActivity,
+  createFollowRequestNotification as createFollowRequestNotificationActivity,
+  deleteFollowNotification as deleteFollowNotificationActivity,
+  deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
+} from '@kosmo/core/services';
 export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
 export {
   createReactionNotification as createReactionNotificationActivity,
