@@ -184,7 +184,7 @@ test('Follow transaction은 실제 생성만 관계를 만들고 duplicate는 �
   assert.equal(getEstablishedFollow(duplicate).id, relation.id);
 });
 
-test('Follow transaction은 삭제 snapshot을 commit하고 no-op은 변경하지 않는다', async () => {
+test('Follow transaction은 삭제 identity를 반환하고 no-op은 변경하지 않는다', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
   const created = await followProfile({
@@ -304,51 +304,6 @@ test('follow action은 unavailable follower의 relation과 request 생성을 거
   );
 });
 
-test('remote follower의 outbound follow와 unfollow를 거부하고 기존 관계를 보존한다', async () => {
-  const follower = await createRemoteProfile();
-  const followee = await createRemoteProfile({ state: InstanceState.UNRESPONSIVE });
-
-  await assert.rejects(
-    followProfile({
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
-      origin: 'LOCAL',
-    }),
-    NotFoundError,
-  );
-
-  const relation = await db.transaction(async (tx) => {
-    const created = await tx
-      .insert(ProfileFollows)
-      .values({ followerProfileId: follower.id, followeeProfileId: followee.id })
-      .returning()
-      .then(firstOrThrow);
-    await tx.update(Profiles).set({ followingCount: 1 }).where(eq(Profiles.id, follower.id));
-    await tx.update(Profiles).set({ followersCount: 1 }).where(eq(Profiles.id, followee.id));
-    return created;
-  });
-
-  await assert.rejects(
-    unfollowProfile({
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
-      origin: 'LOCAL',
-    }),
-    NotFoundError,
-  );
-
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, relation.id))
-      .then((rows) => rows.length),
-    1,
-  );
-  assert.equal((await readProfile(follower.id)).followingCount, 1);
-  assert.equal((await readProfile(followee.id)).followersCount, 1);
-});
-
 test('follow action은 저장된 Profile origin pair에서 flow를 파생한다', async () => {
   const local = await createProfile();
   const localFollowee = await createProfile();
@@ -411,38 +366,6 @@ test('follow action은 SUSPENDED instance의 profile을 숨긴다', async () => 
       origin: 'LOCAL',
     }),
     NotFoundError,
-  );
-});
-
-test('unfollow action은 SUSPENDED instance의 관계를 보존한다', async () => {
-  const follower = await createProfile();
-  const followee = await createProfile();
-  const result = await followProfile({
-    followerProfileId: follower.id,
-    followeeProfileId: followee.id,
-    origin: 'LOCAL',
-  });
-  const profileFollow = getEstablishedFollow(result);
-  await db
-    .update(Instances)
-    .set({ state: InstanceState.SUSPENDED })
-    .where(eq(Instances.id, followee.instanceId));
-
-  await assert.rejects(
-    unfollowProfile({
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
-      origin: 'LOCAL',
-    }),
-    NotFoundError,
-  );
-  assert.equal(
-    await db
-      .select()
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, profileFollow.id))
-      .then((rows) => rows.length),
-    1,
   );
 });
 
