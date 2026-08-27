@@ -323,7 +323,7 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 
 ### Requirement: More menu 통합
 
-**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-598` — Production surface는 `링크 복사`를 첫 `moreItems` 항목으로 제공해야 하고(MUST), composite Post fragment 아래 private `PostDeletionAction`은 접근 가능한 More menu를 열어 이 항목을 항상 첫 항목으로 유지해야 한다(MUST). selected Profile이 target Post의 Author Profile과 같고 target이 Content를 가진 Active Post일 때만 private child가 완료된 PROD-598의 destructive `삭제`를 마지막 항목으로 추가해야 하며(MUST), guest·다른 Profile·Tombstone·Content 없는 Repost target에는 `삭제`를 표시하지 않아야 한다(MUST NOT). 삭제 확인 dialog·mutation·Relay cache 동기화·실패 복구는 PROD-598의 완료 계약을 재사용해야 하며(MUST), 이 change가 삭제 domain·GraphQL·cache 계약을 다시 정의하지 않아야 한다(MUST NOT). Content가 있는 Post의 링크 복사는 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`과 그 Post의 `/{relativeHandle}/{postId}` 경로를 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 한다(MUST). Content와 Reply Parent 없이 Repost Source만 있는 Repost의 More target은 direct Repost Source여야 하며(MUST), 링크 복사는 Repost 자신의 상세 참조를 노출하지 않고 조회 가능한 direct Source의 Post Share Reference를 복사하고 삭제 자격과 mutation ID도 Source를 기준으로 해야 한다(MUST). Web·Android·iOS는 모두 같은 canonical Web origin과 Post Share Reference 선택 규칙을 사용해야 한다(MUST). 클라이언트 설정은 configured Local Instance의 `canonical_origin`을 전달하는 projection이어야 하며(MUST) 독립적인 공유 링크 authority가 되지 않아야 한다(MUST NOT). Web의 현재 browser origin이 canonical Web origin과 달라도 현재 browser origin을 공유 참조에 사용하지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). Toolbar container는 clipboard나 삭제 mutation payload·cache 계약을 직접 소유하지 않아야 하고(MUST NOT), private `PostDeletionAction`은 menu·확인 dialog·delete mutation 상태를 소유해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/objects/post.md`, `docs/design/post-action-bar.md`, `PROD-432`, `PROD-433`, `PROD-598`, `PROD-632` — Production surface는 `링크 복사`를 첫 `moreItems` 항목으로 제공해야 하고(MUST), composite Post fragment 아래 private `PostDeletionAction`은 접근 가능한 More menu를 열어 이 항목을 항상 첫 항목으로 유지해야 한다(MUST). selected Profile이 target Post의 Author Profile과 같고 target이 Content를 가진 Active Post일 때만 private child가 완료된 PROD-598의 destructive `삭제`를 마지막 항목으로 추가해야 하며(MUST), guest·다른 Profile·Tombstone·Content 없는 Repost target에는 `삭제`를 표시하지 않아야 한다(MUST NOT). 삭제 확인 dialog·mutation·Relay cache 동기화·실패 복구는 PROD-598의 완료 계약을 재사용해야 하며(MUST), 이 change가 삭제 domain·GraphQL·cache 계약을 다시 정의하지 않아야 한다(MUST NOT). Content가 있는 Post의 링크 복사는 Web 또는 browser origin을 제공하는 실행 환경에서는 현재 browser origin을, Android·iOS처럼 browser origin이 없는 클라이언트에서는 현재 deployment가 사용하는 configured Local Instance의 `canonical_origin`을 사용해 그 Post의 `/{relativeHandle}/{postId}` 경로와 결합한 query·hash 없는 절대 Post Share Reference를 clipboard에 복사해야 한다(MUST). Content와 Reply Parent 없이 Repost Source만 있는 Repost의 More target은 direct Repost Source여야 하며(MUST), 링크 복사는 Repost 자신의 상세 참조를 노출하지 않고 조회 가능한 direct Source의 Post Share Reference를 복사하고 삭제 자격과 mutation ID도 Source를 기준으로 해야 한다(MUST). Web은 현재 browser origin을 우선하고 Android·iOS는 configured Local Instance의 `canonical_origin`을 사용하되, 모두 같은 Post Share Reference 경로·direct Source 선택 규칙을 사용해야 한다(MUST). 클라이언트 설정은 Native 또는 browser origin 부재 시 configured Local Instance의 `canonical_origin`을 전달하는 projection이어야 하며(MUST) 독립적인 공유 링크 authority가 되지 않아야 한다(MUST NOT). Web의 configured origin은 현재 browser origin을 덮어쓰지 않아야 한다(MUST NOT). API origin이나 플랫폼 전용 native deep link를 공유 참조로 사용하지 않아야 하며(MUST), 인증하지 않은 guest도 조회할 수 있는 Post의 공유 참조를 복사할 수 있어야 한다(MUST). 링크 복사는 Post Visibility와 Post Eligibility가 허용하지 않은 조회 범위를 넓히지 않아야 한다(MUST). Toolbar container는 clipboard나 삭제 mutation payload·cache 계약을 직접 소유하지 않아야 하고(MUST NOT), private `PostDeletionAction`은 menu·확인 dialog·delete mutation 상태를 소유해야 한다(MUST).
 
 #### Scenario: More 팝업 열기
 
@@ -354,16 +354,22 @@ Reaction Type 선택·해제와 Type별 count·Profile 목록은 PROD-417·PROD-
 - **THEN** surface는 Repost 자신의 상세 참조가 아니라 조회 가능한 직접 Repost Source의 Post Share Reference를 clipboard에 복사한다
 - **AND** 같은 More menu의 삭제 자격과 mutation ID도 direct Source를 기준으로 한다
 
-#### Scenario: Web과 Native의 동일한 공유 URL
+#### Scenario: Web과 Native의 동일한 공유 경로 규칙
 
 - **WHEN** 같은 Post의 링크 복사를 Web과 Android 또는 iOS에서 각각 실행한다
-- **THEN** 두 플랫폼은 같은 canonical web origin과 같은 Post Share Reference 선택 규칙으로 결정한 절대 URL을 복사한다
+- **THEN** Web은 현재 browser origin을, Android·iOS는 configured Local Instance의 canonical origin을 사용해 절대 URL을 결정한다
+- **AND** 두 플랫폼은 같은 Post Share Reference 경로와 direct Source 선택 규칙을 적용한다
 - **AND** 복사된 URL에는 query나 hash가 포함되지 않는다
 
 #### Scenario: Web이 Local Instance canonical origin과 다른 Host에서 실행됨
 
 - **WHEN** Web의 현재 browser origin이 configured Local Instance의 `canonical_origin`과 다른 preview 또는 별도 Host다
-- **THEN** Web은 현재 browser origin이 아니라 Local Instance의 canonical Web origin으로 Post Share Reference를 복사한다
+- **THEN** Web은 configured origin으로 덮어쓰지 않고 현재 browser origin으로 Post Share Reference를 복사한다
+
+#### Scenario: Browser origin이 없는 클라이언트
+
+- **WHEN** Android·iOS 또는 browser origin을 제공하지 않는 실행 환경에서 사용자가 `링크 복사`를 활성화한다
+- **THEN** surface는 configured Local Instance의 `canonical_origin`을 사용해 Post Share Reference를 복사한다
 
 ### Requirement: 상태 카탈로그와 통합 검증
 

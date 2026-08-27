@@ -93,6 +93,8 @@ function getColorContrastRatio(foreground: string, background: string) {
 
 const postMediaImageUri = '/og-default.png';
 
+const storyShareOrigin = () => window.location.origin;
+
 const shortPost = {
   ...post({
     bodyText: '짧은 본문 한 줄.',
@@ -3581,7 +3583,7 @@ export const ProductionBookmarkPendingGuard: Story = {
     );
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
       ]),
     );
     expect(bookmark).toHaveAttribute('aria-busy', 'true');
@@ -3705,7 +3707,7 @@ export const ProductionGuestActionResolution: Story = {
     await waitFor(() => expect(mocked(startWebLogin)).toHaveBeenCalledTimes(4));
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
       ]),
     );
     expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
@@ -3794,15 +3796,15 @@ export const ProductionMoreShareReferences: Story = {
     const targets = [
       {
         actionBar: ordinaryActionBar,
-        reference: `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        reference: `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
       },
       {
         actionBar: quoteActionBar,
-        reference: `https://canonical.story.kosmo.test/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+        reference: `${storyShareOrigin()}/${quotePost.profile.relativeHandle}/${quotePost.id}`,
       },
       {
         actionBar: pureRepostActionBar,
-        reference: `https://canonical.story.kosmo.test/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
+        reference: `${storyShareOrigin()}/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
       },
     ];
 
@@ -3839,7 +3841,7 @@ export const ProductionMoreShareReferences: Story = {
     );
     await waitFor(() => expect(getCopiedStrings()).toHaveLength(4));
     expect(getCopiedStrings()[3]).toBe(
-      `https://canonical.story.kosmo.test/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
     );
   },
   render: () => <ProductionRepostQuoteLists />,
@@ -4784,7 +4786,7 @@ export const PostDetailThreadRoute: Story = {
     );
     await waitFor(() =>
       expect(getCopiedStrings()).toContain(
-        `https://canonical.story.kosmo.test/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+        `${storyShareOrigin()}/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
       ),
     );
     expect(currentMore).toHaveAttribute('aria-expanded', 'false');

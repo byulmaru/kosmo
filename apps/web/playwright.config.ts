@@ -21,6 +21,8 @@ const databaseUrl =
   defaultDatabaseUrl;
 const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
+const configuredWebOrigin =
+  process.env.KOSMO_TEST_CONFIGURED_WEB_ORIGIN ?? 'https://configured-web-origin.invalid';
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
@@ -136,7 +138,7 @@ export default defineConfig({
         EXPO_PUBLIC_API_ORIGIN: apiOrigin,
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
-        EXPO_PUBLIC_WEB_ORIGIN: webOrigin,
+        EXPO_PUBLIC_WEB_ORIGIN: configuredWebOrigin,
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
         PORT: String(webPort),

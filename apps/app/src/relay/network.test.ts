@@ -4,7 +4,6 @@ import {
   executeGraphQLRequest,
   formatGraphQLError,
   getApiOrigin,
-  getConfiguredWebOrigin,
   getWebOrigin,
   normalizeApiOrigin,
   normalizeWebOrigin,
@@ -113,8 +112,8 @@ function stubNavigatorProduct(product: string): () => void {
   };
 }
 
-describe('네이티브 web origin', () => {
-  it('build-time 설정 전에 현재 browser origin을 사용한다', () => {
+describe('Web origin', () => {
+  it('build-time 설정 대신 현재 browser origin을 사용한다', () => {
     const existingWindow = globalThis.window;
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
@@ -129,6 +128,27 @@ describe('네이티브 web origin', () => {
           configurable: true,
           value: existingWindow,
         });
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
+  });
+
+  it('browser origin이 없을 때 설정된 Web origin으로 fallback한다', () => {
+    const existingWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { location: {} },
+    });
+    const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN;
+    process.env.EXPO_PUBLIC_WEB_ORIGIN = 'https://configured.example/';
+
+    try {
+      assert.equal(getWebOrigin(), 'https://configured.example');
+    } finally {
+      process.env.EXPO_PUBLIC_WEB_ORIGIN = configured;
+      if (existingWindow) {
+        Object.defineProperty(globalThis, 'window', existingWindow);
       } else {
         Reflect.deleteProperty(globalThis, 'window');
       }
@@ -152,43 +172,6 @@ describe('네이티브 web origin', () => {
 
     try {
       assert.throws(() => getWebOrigin());
-    } finally {
-      process.env.EXPO_PUBLIC_WEB_ORIGIN = configured;
-    }
-  });
-});
-
-describe('configured canonical web origin', () => {
-  it('browser current Host와 무관하게 설정 projection만 사용한다', () => {
-    const existingWindow = globalThis.window;
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: { location: { origin: 'https://preview.example' } },
-    });
-    const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN;
-    process.env.EXPO_PUBLIC_WEB_ORIGIN = 'https://canonical.example/';
-
-    try {
-      assert.equal(getConfiguredWebOrigin(), 'https://canonical.example');
-    } finally {
-      process.env.EXPO_PUBLIC_WEB_ORIGIN = configured;
-      if (existingWindow) {
-        Object.defineProperty(globalThis, 'window', {
-          configurable: true,
-          value: existingWindow,
-        });
-      } else {
-        Reflect.deleteProperty(globalThis, 'window');
-      }
-    }
-  });
-
-  it('설정 projection이 없으면 공유 origin 생성을 차단한다', () => {
-    const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN;
-    delete process.env.EXPO_PUBLIC_WEB_ORIGIN;
-
-    try {
-      assert.throws(() => getConfiguredWebOrigin(), /Post share references/);
     } finally {
       process.env.EXPO_PUBLIC_WEB_ORIGIN = configured;
     }
