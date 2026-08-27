@@ -25,7 +25,7 @@
 - Context / Problem: Worker·Temporal·DB 장애가 발생할 수 있는 비동기 cleanup에 개별 row의 24시간 삭제 보장을 두면 실제 운영 의미와 맞지 않는다.
 - Decision Outcome: Schedule은 24시간마다 실행하고 newly unavailable row는 다음 성공한 sweep에서 best-effort로 정리한다. API의 즉시 숨김은 cleanup 성공·실패와 독립이다.
 - Alternatives Considered: 1시간, 6시간 또는 12시간 interval과 개별 row 24시간 deadline은 사용자 결정과 다르므로 사용하지 않는다.
-- Consequences: missed/failed run 뒤 cleanup은 다음 성공한 실행까지 지연될 수 있으며 oldest unavailable age와 schedule health가 이 지연을 드러내야 한다.
+- Consequences: missed/failed run 뒤 cleanup은 다음 성공한 실행까지 지연될 수 있으며 Schedule 상태와 Workflow 완료·오류 관측으로 실행 공백을 식별한다.
 - Confirmation / Follow-up: dev Schedule description과 다음 action time, 수동 실패·회복 및 API 비노출 독립성을 확인한다.
 
 ### source availability SQL은 API와 cleanup이 한 경계에서 공유한다
@@ -93,12 +93,24 @@
 - Decision Date: 2026-08-25
 - Decision Class: Implementation Choice
 - Authority / Provenance: `PROD-328`
-- Status: Active
+- Status: Superseded by `저장된 실행 사실만 cleanup 관측값으로 제공한다` (2026-08-27)
 - Context / Problem: metrics만으로 cursor/retry 원인을 설명하기 어렵고 로그만으로 cleanup lag와 backlog 추세를 지속 집계하기 어렵다.
 - Decision Outcome: replay-aware Workflow log와 Activity structured log에 schedule/run/cursor/page/attempt/result를 기록하고, Temporal SDK counter/gauge/histogram으로 scanned/deleted/skipped/error, duration, cleanup lag와 oldest unavailable age를 노출한다. Worker Runtime Prometheus endpoint와 platform scrape metadata를 함께 제공한다.
 - Alternatives Considered: 로그만 또는 metrics만 제공하는 방식은 각각 지속 집계 또는 원인 분석이 부족해 사용하지 않는다.
 - Consequences: Worker port·telemetry 설정과 Helm scrape wiring이 추가되며 endpoint 존재와 실제 scrape를 구분해 검증해야 한다. Activity commit과 결과 전달 사이 장애로 수치는 회계 정확도를 보장하지 않으며 attempt/result와 backlog gauge를 함께 해석한다.
 - Confirmation / Follow-up: unit/integration에서 metric 이름·tag cardinality와 replay 중복 억제를 확인하고 dev endpoint·collector target·sample 변화를 검증한다.
+
+### 저장된 실행 사실만 cleanup 관측값으로 제공한다
+
+- Decision Date: 2026-08-27
+- Decision Class: Implementation Choice
+- Authority / Provenance: 사용자 결정, `PROD-328`
+- Status: Active
+- Context / Problem: Notification에는 unavailable 전이 시각이 없고 availability는 현재 source·Related 객체 관계에서 동적으로 계산된다. 생성 시각을 unavailable 시각으로 사용하면 오래된 Notification이 최근 unavailable이 된 경우 cleanup lag와 oldest unavailable age를 과대 보고한다.
+- Decision Outcome: replay-aware Workflow log와 Activity structured log에 schedule/run/cursor/page/attempt/result를 기록하고, Temporal SDK counter/histogram으로 scanned/deleted/skipped/error와 duration을 노출한다. 저장되지 않은 unavailable 전이 시각을 추정한 age/lag 결과와 gauge는 제공하지 않는다.
+- Alternatives Considered: Notification `unavailableAt`과 모든 관련 객체 전이를 새로 추적하는 방식은 cleanup 정확성에 필요하지 않고 migration·복구 semantics·복수 전이 owner를 추가하므로 이번 범위에 포함하지 않는다. 생성 시각 기반 값을 이름만 바꾸는 방식도 cleanup 지연을 나타내지 않아 사용하지 않는다.
+- Consequences: 운영자는 Schedule 실행, Workflow 완료·실패, page 진행과 처리량으로 cleanup 실행·수렴을 판단한다. 실제 unavailable 체류 시간이 별도 운영 요구가 되면 저장 모델과 전이 소유권을 별도 이슈에서 설계해야 한다.
+- Confirmation / Follow-up: unit/Temporal integration에서 removed age/lag 계약이 남지 않고 counter/histogram 이름·tag cardinality와 replay 중복 억제가 유지되는지 확인하며, dev endpoint·collector target·sample 변화를 검증한다.
 
 ### Cleanup persistence는 유일한 실행 owner인 Worker Activity가 소유한다
 
@@ -118,4 +130,4 @@
 
 ## Superseded Decisions
 
-- 없음.
+- `structured log와 Temporal SDK metrics를 함께 제공한다` (2026-08-25) — unavailable 전이 시각 없이 age/lag를 추정하던 관측 범위를 2026-08-27 사용자 결정으로 축소했다.

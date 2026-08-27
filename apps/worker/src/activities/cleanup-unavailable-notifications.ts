@@ -29,7 +29,6 @@ export type CleanupUnavailableNotificationPageResult = Readonly<{
   scanned: number;
   deleted: number;
   skipped: number;
-  oldestUnavailableAgeMs: number | null;
 }>;
 
 const MAX_NOTIFICATION_CLEANUP_PAGE_SIZE = 1_000;
@@ -94,7 +93,7 @@ export async function cleanupUnavailableNotificationPageActivity(
     });
     const page = await getDatabaseConnection().transaction(async (database) => {
       const rows = await database
-        .select({ id: Notifications.id, createdAt: Notifications.createdAt })
+        .select({ id: Notifications.id })
         .from(Notifications)
         .where(
           and(cursor ? gt(Notifications.id, cursor) : undefined, lte(Notifications.id, upperBound)),
@@ -110,7 +109,6 @@ export async function cleanupUnavailableNotificationPageActivity(
           scanned: 0,
           deleted: 0,
           skipped: 0,
-          oldestUnavailableAgeMs: null,
         } satisfies CleanupUnavailableNotificationPageResult;
       }
 
@@ -130,7 +128,7 @@ export async function cleanupUnavailableNotificationPageActivity(
             ),
           ),
         )
-        .returning({ id: Notifications.id, createdAt: Notifications.createdAt });
+        .returning({ id: Notifications.id });
 
       const lastId = rows[rows.length - 1]!.id;
       const hasMore =
@@ -142,10 +140,6 @@ export async function cleanupUnavailableNotificationPageActivity(
             .limit(1)
         ).length > 0;
       const done = !hasMore;
-      const oldestUnavailableAt = deleted.reduce<number | null>((oldest, row) => {
-        const epochMilliseconds = Number(row.createdAt.epochMilliseconds);
-        return oldest === null || epochMilliseconds < oldest ? epochMilliseconds : oldest;
-      }, null);
 
       return {
         upperBound,
@@ -154,8 +148,6 @@ export async function cleanupUnavailableNotificationPageActivity(
         scanned: rows.length,
         deleted: deleted.length,
         skipped: rows.length - deleted.length,
-        oldestUnavailableAgeMs:
-          oldestUnavailableAt === null ? null : Math.max(0, Date.now() - oldestUnavailableAt),
       } satisfies CleanupUnavailableNotificationPageResult;
     });
     const durationMs = Date.now() - startedAt;
@@ -179,7 +171,6 @@ export async function cleanupUnavailableNotificationPageActivity(
       scanned: page.scanned,
       deleted: page.deleted,
       skipped: page.skipped,
-      oldestUnavailableAgeMs: page.oldestUnavailableAgeMs,
       durationMs,
       attempt,
     });

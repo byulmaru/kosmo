@@ -9,7 +9,7 @@
 - source missing, source/Recipient 불일치와 Related Post/Profile 비가시성을 같은 generic cleanup 대상으로 처리한다.
 - Recipient Profile 자체의 복구 가능한 일시 비활성화·정지만으로는 row를 삭제하지 않는다.
 - retry, timeout, heartbeat, rate limit와 checkpoint를 통해 Worker 종료·DB 일시 장애·부분 page 실패 뒤에도 수렴한다.
-- cleanup lag, scanned/deleted/skipped/error 수와 oldest unavailable age를 관측하고 dev에서 schedule, restart, retry와 대량 page를 검증한다.
+- schedule/run/page 상관관계와 실행 성공·실패, scanned/deleted/skipped/error 수 및 page duration을 관측하고 dev에서 schedule, restart, retry와 대량 page를 검증한다.
 - API connection, Unread count, Node와 Read mutation의 즉시 숨김 계약은 유지한다.
 
 ## Authority / Provenance

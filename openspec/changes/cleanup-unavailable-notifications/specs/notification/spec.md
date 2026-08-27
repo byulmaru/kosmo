@@ -89,7 +89,7 @@
 
 ### Requirement: Unavailable Notification cleanup 관측
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-328` — 시스템은 cleanup의 수렴 여부와 24시간 주기의 best-effort 목표를 판단할 수 있도록 schedule/run/page 상관관계와 cleanup lag, scanned/deleted/skipped/error 수 및 oldest unavailable age를 구조화 로그와 Temporal SDK metrics로 관측 가능하게 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-328` — 시스템은 cleanup의 실행과 수렴 여부를 판단할 수 있도록 schedule/run/page 상관관계와 실행 성공·실패, scanned/deleted/skipped/error 수 및 page duration을 구조화 로그와 Temporal SDK metrics로 관측 가능하게 제공해야 한다(MUST).
 
 #### Scenario: 정상 page 처리 관측
 
@@ -103,8 +103,8 @@
 - **THEN** 관측 결과는 error 수, retry attempt와 마지막 안전한 checkpoint를 연관 지어 제공한다
 - **AND** 영구 실패는 성공한 cleanup이나 completed sweep으로 보고되지 않는다
 
-#### Scenario: cleanup lag와 oldest unavailable age
+#### Scenario: Schedule과 cleanup 실행 상태
 
-- **WHEN** unavailable backlog가 남아 있거나 sweep이 완료된다
-- **THEN** 시스템은 현재 backlog의 cleanup lag와 oldest unavailable age를 판단할 수 있는 값을 제공한다
-- **AND** 24시간 Schedule의 실행·성공 여부와 backlog 지연을 API visibility 상태와 혼동하지 않고 식별할 수 있다
+- **WHEN** 24시간 Schedule이 cleanup Workflow를 시작하거나 sweep이 완료 또는 실패한다
+- **THEN** 시스템은 Schedule 실행 여부와 Workflow run의 완료·실패를 page 처리 결과와 연관 지어 식별할 수 있다
+- **AND** cleanup 실행 상태를 API visibility 상태와 혼동하지 않는다

@@ -1421,7 +1421,6 @@ test(
             scanned: 0,
             deleted: 0,
             skipped: 0,
-            oldestUnavailableAgeMs: null,
           };
         },
       },
@@ -1507,7 +1506,6 @@ test(
         scanned: 0,
         deleted: 0,
         skipped: 0,
-        oldestUnavailableAgeMs: null,
       });
       assert.match(sweepId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       assert.equal(boundCalls, 1);
@@ -1556,7 +1554,6 @@ test(
               scanned: 2,
               deleted: 1,
               skipped: 1,
-              oldestUnavailableAgeMs: 100,
             };
           }
           return {
@@ -1566,7 +1563,6 @@ test(
             scanned: 1,
             deleted: 0,
             skipped: 1,
-            oldestUnavailableAgeMs: 200,
           };
         },
       },
@@ -1602,7 +1598,6 @@ test(
         scanned: 3,
         deleted: 1,
         skipped: 2,
-        oldestUnavailableAgeMs: 200,
       });
       assert.equal(attempts, 3);
       assert.equal(boundCalls, 1);
@@ -1662,3 +1657,102 @@ test('Notification Cleanup Workflow는 Zod 설정 검증과 기존 CleanupConfig
     /CleanupConfigurationError: resumed cleanup state requires upperBound/,
   );
 });
+
+test(
+  'Notification Cleanup Workflow는 Continue-As-New 전에 nonzero rate-limit timer를 생성한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-rate-limit-test-${process.pid}`;
+    const workflowId = `notification-cleanup-rate-limit:${process.pid}`;
+    const firstPageCursor = '00000000-0000-8000-8000-000000000010';
+    const upperBound = '00000000-0000-8000-8000-000000000020';
+    let pageCalls = 0;
+    let resolveSecondPageStarted: (() => void) | undefined;
+    const secondPageStarted = new Promise<void>((resolve) => {
+      resolveSecondPageStarted = resolve;
+    });
+    const worker = await Worker.create({
+      activities: {
+        getNotificationCleanupUpperBoundActivity: async () => upperBound,
+        cleanupUnavailableNotificationPageActivity: async (input: {
+          cursor: string | null;
+          upperBound: string;
+          pageSize: number;
+        }) => {
+          pageCalls += 1;
+          if (pageCalls === 1) {
+            return {
+              upperBound: input.upperBound,
+              nextCursor: firstPageCursor,
+              done: false,
+              scanned: 1,
+              deleted: 1,
+              skipped: 0,
+            };
+          }
+
+          resolveSecondPageStarted?.();
+          return {
+            upperBound: input.upperBound,
+            nextCursor: null,
+            done: true,
+            scanned: 1,
+            deleted: 1,
+            skipped: 0,
+          };
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const handle = await environment.client.workflow.start(
+        'cleanupUnavailableNotificationsWorkflow',
+        {
+          args: [
+            {
+              sweepId: 'notification-cleanup-rate-limit-sweep',
+              rateLimitMs: 100,
+              maxPagesPerRun: 1,
+            },
+          ],
+          taskQueue,
+          workflowId,
+        },
+      );
+
+      const result = handle.result();
+      await Promise.race([
+        secondPageStarted,
+        result.then(() => {
+          throw new Error('Notification cleanup workflow completed before the second page started');
+        }),
+      ]);
+      const firstRun = environment.client.workflow.getHandle(
+        workflowId,
+        handle.firstExecutionRunId,
+      );
+      const history = await firstRun.fetchHistory();
+      const timers = (history.events ?? []).filter(
+        ({ timerStartedEventAttributes }) => timerStartedEventAttributes !== undefined,
+      );
+      assert.ok(
+        timers.some(
+          ({ timerStartedEventAttributes }) =>
+            timerStartedEventAttributes?.startToFireTimeout?.nanos === 100_000_000,
+        ),
+        JSON.stringify(timers),
+      );
+      await result;
+    });
+
+    assert.equal(pageCalls, 2);
+  },
+);

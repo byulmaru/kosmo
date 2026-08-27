@@ -48,7 +48,7 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 
 - [x] 2.1 sweep upper bound와 exclusive cursor를 만들고 검증하는 bounded cleanup 입력·결과 계약을 구현한다.
 - [x] 2.2 page의 scanned row 중 삭제 경계에서도 unavailable인 Notification ID만 조건부 삭제한다.
-- [x] 2.3 page 결과에 next cursor, done, scanned/deleted/skipped와 oldest unavailable age 계산 입력을 제공한다.
+- [x] 2.3 page 결과에 next cursor, done과 scanned/deleted/skipped 수를 제공한다.
 - [x] 2.4 empty table, empty/final page, exact page boundary와 다음 sweep의 새 row 포함을 검증한다.
 - [x] 2.5 source missing·mismatch·Related unavailable 삭제와 available·Recipient inactive 보존을 검증한다.
 - [x] 2.6 retry와 독립 connection 경합에서 idempotency, delete revalidation과 최종 수렴을 검증한다.
@@ -96,7 +96,7 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 
 **Deliverable**
 
-운영자가 schedule/run/page를 상관 지어 scanned/deleted/skipped/error, duration, cleanup lag와 oldest unavailable age를 구조화 로그와 SDK metrics에서 확인할 수 있다.
+운영자가 schedule/run/page를 상관 지어 실행 성공·실패와 scanned/deleted/skipped/error, duration을 구조화 로그와 SDK metrics에서 확인할 수 있다.
 
 **Guardrails**
 
@@ -110,10 +110,10 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 - dev Worker metrics endpoint와 platform target에서 sample 변화를 확인한다.
 
 - [x] 4.1 replay-aware Workflow log와 Activity structured log에 bounded 상관관계·cursor·attempt·result를 기록한다.
-- [x] 4.2 SDK counter/gauge/histogram으로 scanned/deleted/skipped/error, duration, cleanup lag와 oldest unavailable age를 노출한다.
+- [x] 4.2 SDK counter/histogram으로 scanned/deleted/skipped/error와 duration을 노출한다.
 - [ ] 4.3 Worker Runtime metrics endpoint와 low-cardinality resource/schedule tags를 구성한다.
 - [ ] 4.4 Helm에 metrics port와 platform scrape discovery를 렌더하고 dev endpoint 및 collector target을 검증한다.
-- [ ] 4.5 성공, retry, terminal failure, empty backlog와 stale backlog에서 로그·metric 의미가 구분되는지 검증한다.
+- [ ] 4.5 성공, retry, terminal failure와 empty backlog에서 로그·metric 의미가 구분되는지 검증한다.
 
 ## 5. PROD-328 24시간 Schedule reconciliation
 
@@ -172,7 +172,7 @@ dev에서 unavailable Notification cleanup이 API 즉시 숨김과 독립적으�
 - [ ] 6.2 dev fixture로 API 즉시 비노출 뒤 cleanup 삭제, Read State 제거와 available·Recipient inactive row 보존을 검증한다.
 - [ ] 6.3 large backlog에서 bounded page/rate, DB connection/API latency budget과 continue-as-new 수렴을 확인한다.
 - [ ] 6.4 DB·Temporal 일시 장애와 Worker restart 뒤 다음 성공한 실행이 checkpoint에서 수렴함을 확인한다.
-- [ ] 6.5 24시간 Schedule desired state, structured logs, metrics endpoint·scrape와 oldest unavailable age를 dev live evidence로 확인한다.
+- [ ] 6.5 24시간 Schedule desired state, Workflow 완료·실패, structured logs와 metrics endpoint·scrape를 dev live evidence로 확인한다.
 - [ ] 6.6 Schedule을 pause해 cleanup만 중지되고 API 즉시 숨김과 다른 Worker Workflow가 유지되는 rollback을 검증한다.
 - [x] 6.7 구현 중 확인한 canonical/Linear 계약 변경을 먼저 정렬하고 OpenSpec delta·decision·task를 동기화한다.
 - [ ] 6.8 모든 범위와 검증이 완료된 뒤 strict validation을 통과시키고 canonical spec sync를 확인한 후 change archive를 수행한다.

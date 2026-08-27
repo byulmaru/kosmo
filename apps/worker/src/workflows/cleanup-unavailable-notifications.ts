@@ -26,7 +26,6 @@ export type CleanupUnavailableNotificationsWorkflowInput = Readonly<{
   scanned?: number;
   deleted?: number;
   skipped?: number;
-  oldestUnavailableAgeMs?: number | null;
 }>;
 
 export type CleanupUnavailableNotificationsWorkflowResult = Readonly<{
@@ -38,7 +37,6 @@ export type CleanupUnavailableNotificationsWorkflowResult = Readonly<{
   scanned: number;
   deleted: number;
   skipped: number;
-  oldestUnavailableAgeMs: number | null;
 }>;
 
 type CleanupActivities = Pick<
@@ -110,7 +108,6 @@ const cleanupUnavailableNotificationsWorkflowInputSchema = z
     scanned: defaultNumber(nonNegativeCounterSchema, 0),
     deleted: defaultNumber(nonNegativeCounterSchema, 0),
     skipped: defaultNumber(nonNegativeCounterSchema, 0),
-    oldestUnavailableAgeMs: z.number().nullable().optional().default(null),
   })
   .superRefine((input, context) => {
     if (
@@ -162,18 +159,6 @@ const createMetrics = () => {
       'errors',
       'Number of terminal notification cleanup errors',
     ),
-    oldestUnavailableAgeGauge: meter.createGauge(
-      'notification_cleanup_oldest_unavailable_age_ms',
-      'float',
-      'milliseconds',
-      'Age of the oldest unavailable notification observed by cleanup',
-    ),
-    cleanupLagGauge: meter.createGauge(
-      'notification_cleanup_lag_ms',
-      'float',
-      'milliseconds',
-      'Observed notification cleanup lag',
-    ),
   };
 };
 
@@ -188,7 +173,6 @@ const validateInput = (
     | 'pageSize'
     | 'rateLimitMs'
     | 'maxPagesPerRun'
-    | 'oldestUnavailableAgeMs'
     | 'pages'
     | 'scanned'
     | 'deleted'
@@ -212,22 +196,14 @@ export async function cleanupUnavailableNotificationsWorkflow(
   // Schedules intentionally use a no-argument action. A run ID uniquely identifies this
   // scheduled execution; Continue-As-New receives the original sweepId in its explicit input.
   const state = validateInput(input ?? { sweepId: workflowInfo().runId });
-  const {
-    pagesCounter,
-    scannedCounter,
-    deletedCounter,
-    skippedCounter,
-    errorCounter,
-    oldestUnavailableAgeGauge,
-    cleanupLagGauge,
-  } = createMetrics();
+  const { pagesCounter, scannedCounter, deletedCounter, skippedCounter, errorCounter } =
+    createMetrics();
   let cursor = state.cursor;
   let upperBound = state.upperBound;
   let pages = state.pages;
   let scanned = state.scanned;
   let deleted = state.deleted;
   let skipped = state.skipped;
-  let oldestUnavailableAgeMs: number | null = state.oldestUnavailableAgeMs;
 
   log.info('Notification cleanup sweep started', {
     sweepId: state.sweepId,
@@ -244,8 +220,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
       if (upperBound === null) {
         upperBound = await getNotificationCleanupUpperBoundActivity();
         if (upperBound === null) {
-          oldestUnavailableAgeGauge.set(0);
-          cleanupLagGauge.set(0);
           log.info('Notification cleanup sweep completed', {
             sweepId: state.sweepId,
             cursor,
@@ -254,7 +228,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
             scanned,
             deleted,
             skipped,
-            oldestUnavailableAgeMs,
           });
           return {
             sweepId: state.sweepId,
@@ -265,7 +238,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
             scanned,
             deleted,
             skipped,
-            oldestUnavailableAgeMs,
           };
         }
       }
@@ -293,21 +265,11 @@ export async function cleanupUnavailableNotificationsWorkflow(
     skipped += page.skipped;
     cursor = page.nextCursor;
     upperBound = page.upperBound;
-    if (
-      page.oldestUnavailableAgeMs !== null &&
-      (oldestUnavailableAgeMs === null || page.oldestUnavailableAgeMs > oldestUnavailableAgeMs)
-    ) {
-      oldestUnavailableAgeMs = page.oldestUnavailableAgeMs;
-    }
 
     pagesCounter.add(1);
     scannedCounter.add(page.scanned);
     deletedCounter.add(page.deleted);
     skippedCounter.add(page.skipped);
-    if (oldestUnavailableAgeMs !== null) {
-      oldestUnavailableAgeGauge.set(oldestUnavailableAgeMs);
-      cleanupLagGauge.set(oldestUnavailableAgeMs);
-    }
 
     log.info('Notification cleanup page completed', {
       sweepId: state.sweepId,
@@ -318,12 +280,9 @@ export async function cleanupUnavailableNotificationsWorkflow(
       deleted: page.deleted,
       skipped: page.skipped,
       done: page.done,
-      oldestUnavailableAgeMs: page.oldestUnavailableAgeMs,
     });
 
     if (page.done) {
-      oldestUnavailableAgeGauge.set(0);
-      cleanupLagGauge.set(0);
       log.info('Notification cleanup sweep completed', {
         sweepId: state.sweepId,
         cursor,
@@ -332,7 +291,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
         scanned,
         deleted,
         skipped,
-        oldestUnavailableAgeMs,
       });
       return {
         sweepId: state.sweepId,
@@ -343,8 +301,11 @@ export async function cleanupUnavailableNotificationsWorkflow(
         scanned,
         deleted,
         skipped,
-        oldestUnavailableAgeMs,
       };
+    }
+
+    if (state.rateLimitMs > 0) {
+      await sleep(state.rateLimitMs);
     }
 
     if (workflowInfo().continueAsNewSuggested || pages - state.pages >= state.maxPagesPerRun) {
@@ -356,7 +317,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
         scanned,
         deleted,
         skipped,
-        oldestUnavailableAgeMs,
       });
       await continueAsNew<typeof cleanupUnavailableNotificationsWorkflow>({
         sweepId: state.sweepId,
@@ -369,12 +329,7 @@ export async function cleanupUnavailableNotificationsWorkflow(
         scanned,
         deleted,
         skipped,
-        oldestUnavailableAgeMs,
       });
-    }
-
-    if (state.rateLimitMs > 0) {
-      await sleep(state.rateLimitMs);
     }
   }
 }
