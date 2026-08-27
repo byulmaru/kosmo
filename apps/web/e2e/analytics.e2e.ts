@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
 import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
@@ -10,13 +11,19 @@ type PostHogPayload = {
   properties?: Record<string, unknown>;
 };
 
-function readPostHogPayloads(body: string | null): PostHogPayload[] {
+function readPostHogPayloads(body: Buffer | null): PostHogPayload[] {
   if (!body) {
     return [];
   }
 
   try {
-    const payload = JSON.parse(body) as unknown;
+    const decoded =
+      body[0] === 0x1f && body[1] === 0x8b
+        ? gunzipSync(body).toString('utf8')
+        : body.toString('utf8');
+    const formData = new URLSearchParams(decoded).get('data');
+    const json = formData ? Buffer.from(formData, 'base64').toString('utf8') : decoded;
+    const payload = JSON.parse(json) as unknown;
     if (Array.isArray(payload)) {
       return payload.filter(
         (entry): entry is PostHogPayload => Boolean(entry) && typeof entry === 'object',
@@ -59,7 +66,7 @@ test('PostHog 설정이 없는 Web build는 analytics 요청 없이 정상 렌�
   expect(analyticsRequests).toEqual([]);
 });
 
-test('Web runtime은 route template pageview만 전송하고 automatic telemetry와 민감 URL을 보내지 않는다', async ({
+test('Web runtime은 정규화 pathname pageview만 전송하고 automatic telemetry와 민감 URL을 보내지 않는다', async ({
   page,
 }) => {
   const viewer = await createE2ESession({
@@ -69,7 +76,7 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
   const payloads: PostHogPayload[] = [];
   await page.route(`${posthogOrigin}/**`, async (route) => {
     if (route.request().method() === 'POST') {
-      payloads.push(...readPostHogPayloads(route.request().postData()));
+      payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }
 
     await route.fulfill({
@@ -106,11 +113,13 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
     .toBe(4);
 
   await page.goto('/privacy?secret_query=second#secret-fragment');
-  await page.waitForTimeout(200);
+  await expect
+    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
+    .toBe(5);
 
   const pageviews = payloads.filter((payload) => payload.event === '$pageview');
   expect(pageviews).toHaveLength(5);
-  expect(pageviews.map((payload) => payload.properties?.route_template)).toEqual([
+  expect(pageviews.map((payload) => payload.properties?.$pathname)).toEqual([
     '/',
     '/[profileHandle]',
     '/[profileHandle]',
@@ -123,7 +132,6 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
 
   for (const [index, payload] of pageviews.entries()) {
     expect(payload.properties).not.toHaveProperty('$current_url');
-    expect(payload.properties).not.toHaveProperty('$pathname');
     expect(payload.properties).not.toHaveProperty('$prev_pageview_pathname');
     expect(payload.properties?.$session_entry_utm_source).toBe(
       index === 0 ? 'newsletter' : undefined,
@@ -150,7 +158,7 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
 
   await page.route(`${posthogOrigin}/**`, async (route) => {
     if (route.request().method() === 'POST') {
-      payloads.push(...readPostHogPayloads(route.request().postData()));
+      payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }
 
     await route.fulfill({
@@ -176,7 +184,7 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
   await page.unroute(`${posthogOrigin}/**`);
   await page.route(`${posthogOrigin}/**`, async (route) => {
     if (route.request().method() === 'POST') {
-      payloads.push(...readPostHogPayloads(route.request().postData()));
+      payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }
 
     await route.fulfill({ body: '{}', status: 503 });
@@ -191,13 +199,12 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
   await expect
     .poll(() =>
       payloads.find(
-        (payload) =>
-          payload.event === '$pageview' && payload.properties?.route_template === '/privacy',
+        (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
       ),
     )
     .not.toBeUndefined();
   const anonymousPageview = payloads.find(
-    (payload) => payload.event === '$pageview' && payload.properties?.route_template === '/privacy',
+    (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
   );
 
   await setE2ESessionCookie(context, nextViewer.token);

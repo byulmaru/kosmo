@@ -1,95 +1,29 @@
 import posthogClient from 'posthog-js';
-import type { PostHog, PostHogConfig } from 'posthog-js';
-import type { TrackProperties } from './client';
+import { encodeAnalyticsEvent } from './events';
+import type { BeforeSendFn, PostHog, PostHogConfig } from 'posthog-js';
+import type { AnalyticsEventArgs } from './events';
 
-const POST_VISIBILITIES = new Set(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']);
-const SEARCH_TABS = new Set(['popular', 'latest', 'media', 'people']);
-const SEARCH_SOURCES = new Set(['keyboard', 'tab', 'recent']);
 const POSTHOG_E2E_HOST = 'https://posthog.e2e.invalid';
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === 'string' && value.length > 0;
-
-const isStableRouteTemplate = (value: unknown): value is string => {
-  if (value === '/') {
-    return true;
+const removeRawPathnameFromNonPageviews: BeforeSendFn = (event) => {
+  if (!event || event.event === '$pageview' || !event.properties) {
+    return event;
   }
 
-  if (
-    typeof value !== 'string' ||
-    !value.startsWith('/') ||
-    value.includes('?') ||
-    value.includes('#')
-  ) {
-    return false;
-  }
-
-  const routeSegment =
-    /^(?:[A-Za-z0-9+_-]+|\[[A-Za-z0-9_-]+\]|\[\.\.\.[A-Za-z0-9_-]+\]|\[\[\.\.\.[A-Za-z0-9_-]+\]\])$/u;
-  return value
-    .slice(1)
-    .split('/')
-    .every((segment) => routeSegment.test(segment));
+  const properties = { ...event.properties };
+  delete properties.$pathname;
+  return { ...event, properties };
 };
-
-const EVENT_PROPERTIES = {
-  $pageview: { route_template: isStableRouteTemplate },
-  profile_created: { selected_profile_id: isNonEmptyString },
-  profile_selected: { selected_profile_id: isNonEmptyString },
-  post_created: {
-    selected_profile_id: isNonEmptyString,
-    visibility: (value: unknown) => typeof value === 'string' && POST_VISIBILITIES.has(value),
-  },
-  follow_succeeded: {
-    selected_profile_id: isNonEmptyString,
-    result: (value: unknown) => value === 'follow' || value === 'request',
-  },
-  search_submitted: {
-    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
-    source: (value: unknown) => typeof value === 'string' && SEARCH_SOURCES.has(value),
-  },
-  search_results_loaded: {
-    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
-    has_results: (value: unknown) => typeof value === 'boolean',
-  },
-  search_result_selected: {
-    tab: (value: unknown) => typeof value === 'string' && SEARCH_TABS.has(value),
-  },
-} as const;
-
-type AnalyticsEventName = keyof typeof EVENT_PROPERTIES;
-
-function sanitizeAnalyticsProperties(
-  event: string,
-  properties?: TrackProperties,
-): Record<string, unknown> | null {
-  const allowedProperties = EVENT_PROPERTIES[event as AnalyticsEventName];
-  if (!allowedProperties) {
-    return null;
-  }
-
-  const sanitizedProperties: Record<string, unknown> = {};
-  for (const [property, isValid] of Object.entries(allowedProperties)) {
-    const value = properties?.[property];
-    if (isValid(value)) {
-      sanitizedProperties[property] = value;
-    }
-  }
-
-  return Object.keys(sanitizedProperties).length > 0 ? sanitizedProperties : null;
-}
 
 const POSTHOG_CONFIG = {
   advanced_disable_flags: true,
-  advanced_disable_decide: true,
-  advanced_disable_feature_flags: true,
   autocapture: false,
+  before_send: removeRawPathnameFromNonPageviews,
   capture_exceptions: false,
   capture_pageleave: false,
   capture_pageview: false,
   capture_performance: false,
   disable_capture_url_hashes: true,
-  disable_compression: true,
   disable_external_dependency_loading: true,
   disable_scroll_properties: true,
   disable_session_recording: true,
@@ -106,7 +40,6 @@ const POSTHOG_CONFIG = {
     '$initial_pathname',
     '$initial_referrer',
     '$initial_referring_domain',
-    '$pathname',
     '$prev_pageview_pathname',
     '$raw_user_agent',
     '$referrer',
@@ -127,13 +60,13 @@ const POSTHOG_CONFIG = {
     'utm_source',
     'utm_term',
   ],
-  request_batching: false,
   save_campaign_params: false,
   save_referrer: false,
 } satisfies Partial<PostHogConfig>;
 
 let client: PostHog | null | undefined;
 let identifiedAccountId: string | null = null;
+let identitySyncPending = false;
 
 export function initializeAnalytics(
   apiKey: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_KEY,
@@ -166,16 +99,16 @@ export function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
-export function trackAnalytics(name: string, properties?: TrackProperties): void {
-  const sanitizedProperties = sanitizeAnalyticsProperties(name, properties);
-  if (!sanitizedProperties) {
+export function trackAnalytics(...args: AnalyticsEventArgs): void {
+  if (identitySyncPending) {
     return;
   }
 
   try {
+    const event = encodeAnalyticsEvent(...args);
     getAnalyticsClient()?.capture(
-      name as AnalyticsEventName,
-      sanitizedProperties as Parameters<PostHog['capture']>[1],
+      event.name,
+      event.properties as Parameters<PostHog['capture']>[1],
     );
   } catch {
     // Analytics is best-effort and must not affect the product flow.
@@ -191,44 +124,67 @@ function resetPostHogIdentity(analyticsClient: PostHog): boolean {
   }
 }
 
-export function identifyAnalytics(accountId: string): void {
-  if (!accountId || identifiedAccountId === accountId) {
-    return;
+export function identifyAnalytics(accountId: string): boolean {
+  if (!accountId) {
+    return true;
+  }
+
+  if (identifiedAccountId === accountId) {
+    identitySyncPending = false;
+    return true;
   }
 
   try {
     const analyticsClient = getAnalyticsClient();
     if (!analyticsClient) {
-      return;
+      identitySyncPending = false;
+      return true;
     }
 
+    identitySyncPending = true;
     if (identifiedAccountId !== null && !resetPostHogIdentity(analyticsClient)) {
-      return;
+      return false;
     }
 
     analyticsClient.identify(accountId);
     identifiedAccountId = accountId;
+    identitySyncPending = false;
+    return true;
   } catch {
     // Analytics is best-effort and must not affect the product flow.
+    identitySyncPending = true;
+    return false;
   }
 }
 
-export function clearAnalytics(): void {
-  if (identifiedAccountId === null) {
-    return;
+export function clearAnalytics(): boolean {
+  if (identifiedAccountId === null && !identitySyncPending) {
+    return true;
   }
 
   try {
     const analyticsClient = getAnalyticsClient();
-    if (analyticsClient && resetPostHogIdentity(analyticsClient)) {
-      identifiedAccountId = null;
+    if (!analyticsClient) {
+      identitySyncPending = false;
+      return true;
     }
+
+    identitySyncPending = true;
+    if (resetPostHogIdentity(analyticsClient)) {
+      identifiedAccountId = null;
+      identitySyncPending = false;
+      return true;
+    }
+    return false;
   } catch {
     // Analytics is best-effort and must not affect the product flow.
+    identitySyncPending = true;
+    return false;
   }
 }
 
 export function resetAnalyticsForTests(): void {
   client = undefined;
   identifiedAccountId = null;
+  identitySyncPending = false;
 }

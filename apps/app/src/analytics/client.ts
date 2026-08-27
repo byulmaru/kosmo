@@ -1,16 +1,18 @@
-export type TrackProperties = Record<string, unknown>;
+import type { AnalyticsEventArgs } from './events';
 
 export function initializeAnalytics(): null {
   return null;
 }
 
-export function trackAnalytics(name: string, properties?: TrackProperties): void {
-  void name;
-  void properties;
+export function trackAnalytics(...args: AnalyticsEventArgs): void {
+  void args;
 }
 
-export function identifyAnalytics(accountId: string): void {
+export function identifyAnalytics(accountId: string): boolean {
   void accountId;
+  return true;
 }
 
-export function clearAnalytics(): void {}
+export function clearAnalytics(): boolean {
+  return true;
+}

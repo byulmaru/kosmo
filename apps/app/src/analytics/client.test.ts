@@ -102,15 +102,13 @@ describe('PostHog Web client', () => {
       config: {
         advanced_disable_flags: true,
         api_host: 'https://us.i.posthog.com',
-        advanced_disable_decide: true,
-        advanced_disable_feature_flags: true,
         autocapture: false,
+        before_send: initCalls[0]?.config.before_send,
         capture_exceptions: false,
         capture_pageleave: false,
         capture_pageview: false,
         capture_performance: false,
         disable_capture_url_hashes: true,
-        disable_compression: true,
         disable_external_dependency_loading: true,
         disable_scroll_properties: true,
         disable_session_recording: true,
@@ -127,7 +125,6 @@ describe('PostHog Web client', () => {
           '$initial_pathname',
           '$initial_referrer',
           '$initial_referring_domain',
-          '$pathname',
           '$prev_pageview_pathname',
           '$raw_user_agent',
           '$referrer',
@@ -148,11 +145,41 @@ describe('PostHog Web client', () => {
           'utm_source',
           'utm_term',
         ],
-        request_batching: false,
         save_campaign_params: false,
         save_referrer: false,
       },
     });
+
+    const beforeSend = initCalls[0]?.config.before_send;
+    assert.equal(typeof beforeSend, 'function');
+    if (typeof beforeSend !== 'function') {
+      return;
+    }
+
+    assert.deepEqual(
+      beforeSend({
+        event: 'profile_created',
+        properties: { $pathname: '/private-handle', selected_profile_id: 'profile-id' },
+        uuid: '00000000-0000-7000-8000-000000000001',
+      }),
+      {
+        event: 'profile_created',
+        properties: { selected_profile_id: 'profile-id' },
+        uuid: '00000000-0000-7000-8000-000000000001',
+      },
+    );
+    assert.deepEqual(
+      beforeSend({
+        event: '$pageview',
+        properties: { $pathname: '/[profileHandle]' },
+        uuid: '00000000-0000-7000-8000-000000000002',
+      }),
+      {
+        event: '$pageview',
+        properties: { $pathname: '/[profileHandle]' },
+        uuid: '00000000-0000-7000-8000-000000000002',
+      },
+    );
   });
 
   it('E2E fake host와 명시적 flag에서만 PostHog user-agent filter를 해제한다', () => {
@@ -172,37 +199,24 @@ describe('PostHog Web client', () => {
     assert.equal(initCalls[0]?.config.opt_out_useragent_filter, false);
   });
 
-  it('event별 allowlist만 전송하고 unknown event를 drop한다', () => {
+  it('event별 typed payload를 전송한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
-    const events = [
-      ['profile_created', { selected_profile_id: 'profile-id', email: 'drop' }],
-      ['profile_selected', { selected_profile_id: 'profile-id', name: 'drop' }],
-      [
-        'post_created',
-        {
-          selected_profile_id: 'profile-id',
-          visibility: 'DIRECT',
-          email: 'person@example.com',
-          content: 'private post',
-          extra: 'drop me',
-        },
-      ],
-      [
-        'follow_succeeded',
-        { selected_profile_id: 'profile-id', result: 'request', handle: 'drop' },
-      ],
-      ['search_submitted', { tab: 'people', source: 'keyboard', query: 'raw search' }],
-      ['search_results_loaded', { tab: 'people', has_results: true, error: 'drop' }],
-      ['search_result_selected', { tab: 'people', profile_id: 'drop' }],
-    ] as const;
-
-    for (const [event, properties] of events) {
-      analytics.trackAnalytics(event, properties);
-    }
-    analytics.trackAnalytics('unknown_event', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('profile_selected', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalytics('post_created', {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT',
+    });
+    analytics.trackAnalytics('follow_succeeded', {
+      selected_profile_id: 'profile-id',
+      result: 'request',
+    });
+    analytics.trackAnalytics('search_submitted', { tab: 'people', source: 'keyboard' });
+    analytics.trackAnalytics('search_results_loaded', { tab: 'people', has_results: true });
+    analytics.trackAnalytics('search_result_selected', { tab: 'people' });
 
     assert.deepEqual(instance.calls, [
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
@@ -227,43 +241,15 @@ describe('PostHog Web client', () => {
     ]);
   });
 
-  it('event별 value shape가 맞지 않거나 nested면 해당 값을 전송하지 않는다', () => {
+  it('표준 pathname으로 route pageview를 전송한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
-    analytics.trackAnalytics('profile_created', {
-      selected_profile_id: { id: 'nested-profile-id' },
-    });
-    analytics.trackAnalytics('post_created', {
-      selected_profile_id: 'profile-id',
-      visibility: { value: 'PUBLIC' },
-    });
-    analytics.trackAnalytics('follow_succeeded', {
-      selected_profile_id: 'profile-id',
-      result: 'redirect',
-    });
-    analytics.trackAnalytics('search_submitted', {
-      tab: 'unknown',
-      source: { value: 'keyboard' },
-    });
-    analytics.trackAnalytics('search_results_loaded', {
-      tab: 'people',
-      has_results: 'true',
-    });
-    analytics.trackAnalytics('$pageview', {
-      route_template: '/[profileHandle]?query=private',
-    });
-    analytics.trackAnalytics('$pageview', {
-      route_template: '/[profileHandle]',
-      extra: { query: 'private' },
-    });
+    analytics.trackAnalytics('$pageview', { $pathname: '/[profileHandle]' });
 
     assert.deepEqual(instance.calls, [
-      { event: 'post_created', properties: { selected_profile_id: 'profile-id' } },
-      { event: 'follow_succeeded', properties: { selected_profile_id: 'profile-id' } },
-      { event: 'search_results_loaded', properties: { tab: 'people' } },
-      { event: '$pageview', properties: { route_template: '/[profileHandle]' } },
+      { event: '$pageview', properties: { $pathname: '/[profileHandle]' } },
     ]);
   });
 
@@ -288,50 +274,83 @@ describe('PostHog Web client', () => {
     ]);
   });
 
-  it('identity 전환 reset이 실패하면 새 Account ID를 identify하지 않고 재시도 가능하게 둔다', () => {
+  it('A에서 B로 전환하는 reset 실패 중에는 capture를 차단하고 retry 성공 후 새 Account와 capture를 허용한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
     analytics.identifyAnalytics('account-a');
     instance.resetFails = true;
-    analytics.identifyAnalytics('account-b');
+    assert.equal(analytics.identifyAnalytics('account-b'), false);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.identities, ['account-a']);
     assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
+    assert.deepEqual(instance.calls, []);
 
     instance.resetFails = false;
-    analytics.identifyAnalytics('account-b');
+    assert.equal(analytics.identifyAnalytics('account-b'), true);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
     assert.deepEqual(instance.identities, ['account-a', 'account-b']);
     assert.deepEqual(instance.actions, [
       'identify:account-a',
       'reset',
       'reset',
       'identify:account-b',
+      'capture:profile_created',
+    ]);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });
 
-  it('clear reset이 실패하면 identity를 유지하고 다음 전환에서 reset을 재시도한다', () => {
+  it('A에서 guest로 전환하는 reset 실패 중에는 capture를 차단하고 retry 성공 후 anonymous와 capture를 허용한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
     analytics.identifyAnalytics('account-a');
     instance.resetFails = true;
-    analytics.clearAnalytics();
+    assert.equal(analytics.clearAnalytics(), false);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.identities, ['account-a']);
     assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
+    assert.deepEqual(instance.calls, []);
 
     instance.resetFails = false;
-    analytics.identifyAnalytics('account-b');
+    assert.equal(analytics.clearAnalytics(), true);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
-    assert.deepEqual(instance.identities, ['account-a', 'account-b']);
+    assert.deepEqual(instance.identities, ['account-a']);
     assert.deepEqual(instance.actions, [
       'identify:account-a',
       'reset',
       'reset',
-      'identify:account-b',
+      'capture:profile_created',
+    ]);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('identify 자체 throw 중에는 capture를 차단하고 retry 성공 후 허용한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    instance.identifyFails = true;
+    assert.equal(analytics.identifyAnalytics('account-a'), false);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.calls, []);
+
+    instance.identifyFails = false;
+    assert.equal(analytics.identifyAnalytics('account-a'), true);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });
 

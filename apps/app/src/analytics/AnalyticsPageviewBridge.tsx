@@ -14,7 +14,7 @@ export function AnalyticsPageviewBridge(): null {
     }
 
     previousRouteTemplate.current = routeTemplate;
-    trackAnalytics('$pageview', { route_template: routeTemplate });
+    trackAnalytics('$pageview', { $pathname: routeTemplate });
   }, [routeTemplate]);
 
   return null;

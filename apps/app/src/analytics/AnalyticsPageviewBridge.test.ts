@@ -19,9 +19,9 @@ mock.module('expo-router', {
 } as unknown as Parameters<typeof mock.module>[1]);
 const clientMock = {
   exports: {
-    trackAnalytics: (event: string, properties: { route_template?: string }) => {
-      if (event === '$pageview' && properties.route_template) {
-        calls.push(properties.route_template);
+    trackAnalytics: (event: string, properties: { $pathname?: string }) => {
+      if (event === '$pageview' && properties.$pathname) {
+        calls.push(properties.$pathname);
       }
     },
   },
