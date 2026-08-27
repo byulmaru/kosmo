@@ -133,13 +133,6 @@ export const handleInboundRejectFollow = async ({
     ...pair,
     expectedRowId: profileFollow!.id,
     origin: 'ACTIVITYPUB',
-    transition: 'INBOUND_REJECT',
-    snapshot: {
-      createdAt: profileFollow!.createdAt.toString(),
-      followerProfileId: pair.followerProfileId,
-      followeeProfileId: pair.followeeProfileId,
-      id: profileFollow!.id,
-    },
   });
   if (!removed.ok) {
     throw new Error(removed.error.message);

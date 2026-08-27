@@ -377,10 +377,7 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
       followerProfileId: remoteActor.profile.id,
     };
     const profileFollow = await db
-      .select({
-        createdAt: ProfileFollows.createdAt,
-        id: ProfileFollows.id,
-      })
+      .select({ id: ProfileFollows.id })
       .from(ProfileFollows)
       .where(
         and(
@@ -396,13 +393,6 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
         ...pair,
         expectedRowId: profileFollow.id,
         origin: 'ACTIVITYPUB',
-        transition: 'INBOUND_UNDO',
-        snapshot: {
-          createdAt: profileFollow.createdAt.toString(),
-          followerProfileId: pair.followerProfileId,
-          followeeProfileId: pair.followeeProfileId,
-          id: profileFollow.id,
-        },
       });
       if (!result.ok) {
         throw new Error(result.error.message);
