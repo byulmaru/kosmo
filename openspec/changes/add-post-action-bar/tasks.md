@@ -87,7 +87,7 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 **Verification**
 
 - 일반 Post·순수 Repost·Quote의 목록 final slot·상세 final Action Bar, link 비중첩과 순수 Repost Source target을 검증한다.
-- canonical Figma Text·Media source에서 카드 상단 12px·하단 4px, 기존 content gap 4px 뒤 Action Bar slot 상단 4px·하단 0을 readback한다. production의 최종 8px 간격은 후속 Product migration에서 구현과 함께 검증한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
+- production의 일반 Text·Media는 카드 상단 8px과 Action Bar slot 상단 0·하단 4px을 유지한다. 순수 Repost와 Quote는 slot 상단 0·하단 4px, 1px semantic divider color, 순수 Repost attribution line box 20과 Source 표준행까지 gap 0, Quote Source preview 내부 하단 padding 4px과 border 밖에서 Action Bar까지 8px을 유지한다.
 - Web outside/Escape/focus return·keyboard navigation과 Native backdrop/back/dismiss/safe area·modal semantics를 검증한다.
 - menu label·item 선택 뒤 create/delete identity·pending, exact toast·latest-replace·동일 문구 반복 시 새 alert instance와 dismiss timer 재시작·자동 dismiss·alert semantics·light `#262626` accent·message 2px optical shift, 실패 뒤 상태 유지·menu 재시도를 검증한다.
 
@@ -107,9 +107,33 @@ PROD-434의 독립 `actionBar?: ReactNode`·mock surface slice를 실행하지 �
 - [x] 3.14 Quote 목록에서만 Source preview 내부 하단 padding을 `spacing.xs` 4px로 줄이고 border 밖에서 Action Bar까지 `spacing.sm` 8px 간격을 두며, 일반 Post·순수 Repost·상세 Source preview는 변경하지 않는다.
 - [x] 3.15 focused Storybook interaction에서 Quote preview 내부 4px·외부 8px geometry를 검증하고 390px Web runtime에서 시각 결과를 확인한다.
 - [x] 3.16 활성 toast와 동일한 실패 문구가 다시 발생해도 증가하는 identity의 새 alert instance로 교체하고 dismiss timer를 다시 시작하도록 하며, 단일 alert host·반복 알림·두 번째 호출 기준 자동 dismiss를 focused Storybook interaction으로 검증한다.
-- [x] 3.17 일반 Text·Media의 Figma target을 카드 12/4와 Action Bar slot 4/0으로 canonical 문서·OpenSpec decision에 기록하고, production은 현재 spacing과 규범 spec을 유지한다. 코드 적용은 관련 Product 이슈를 확인한 뒤 별도 spec delta·task·runtime 검증으로 분리한다.
-- [x] 3.18 DSN-49 범위의 canonical Figma Center·Mobile Text·Media `PostListItem` source를 같은 target으로 동기화하고 representative consumer의 Light·Dark·responsive 결과를 확인한다.
-- [x] 3.19 OpenSpec scoped·전체 strict validation과 Figma source·consumer readback을 통과시킨다. focused Storybook, app check·lint와 runtime 관찰은 production 코드를 수정하는 별도 Product migration에서 수행한다.
+
+## DSN-49 Figma PostListItem spacing sync
+
+**Authority / Provenance**
+
+- `docs/design/post-action-bar.md`
+- `DSN-49`
+- Figma KOSMO `PostListItem` component set `1924:1992`
+- 2026-08-27~28 KST 사용자 결정
+
+**Deliverable**
+
+canonical Figma Center·Mobile Text·Media `PostListItem` source는 카드 상단 12px·하단 4px, 기존 content gap 4px 뒤 Action Bar slot 상단 4px·하단 0을 사용한다. representative consumer의 Light·Dark·responsive 결과를 같은 target으로 동기화한다.
+
+**Guardrails**
+
+- production `PostListItem`, Storybook과 규범 spec은 현재 카드 상단 8px, slot 상단 0·하단 4px 계약을 유지한다. 같은 target의 코드 적용은 관련 Product 이슈와 별도 OpenSpec spec delta·task·runtime 검증으로 분리한다.
+- Quote와 순수 Repost는 기존 전용 구조와 slot 상단 0·하단 4px을 유지한다. 공용 Action Bar 28px geometry와 action 동작은 변경하지 않는다.
+
+**Verification**
+
+- canonical Center·Mobile Text·Media source에서 카드 12/4와 slot 4/0을 readback하고 representative Light·Dark·responsive consumer가 같은 값을 상속하는지 확인한다.
+- OpenSpec scoped·전체 strict validation을 통과시킨다. focused Storybook, app check·lint와 production runtime 관찰은 별도 Product migration의 완료 증거로 남긴다.
+
+- [x] DSN-49.1 일반 Text·Media의 Figma target을 카드 12/4와 Action Bar slot 4/0으로 canonical 문서·OpenSpec decision에 기록하고, production은 현재 spacing과 규범 spec을 유지한다.
+- [x] DSN-49.2 canonical Figma Center·Mobile Text·Media `PostListItem` source를 같은 target으로 동기화하고 representative consumer의 Light·Dark·responsive 결과를 확인한다.
+- [x] DSN-49.3 OpenSpec scoped·전체 strict validation과 Figma source·consumer readback을 통과시킨다.
 
 ## 4. PROD-432 실제 액션 연결·통합 검증 완료 이력
 
