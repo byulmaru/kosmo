@@ -17,12 +17,13 @@
 
 ### Requirement: 공개 정적 route allowlist
 
-**Authority / Provenance:** `PROD-731`의 검색 노출 가치가 있는 공개 정적 페이지 포함 범위와 SSR·페이지별 metadata 전면 개편 제외 범위. Sitemap은 현재 검색 노출 대상으로 명시한 공개 정적 route allowlist를 포함해야 하며(MUST), 인증 화면, 보호 route, 내부 API, callback과 임시 UI route를 포함해서는 안 된다(MUST NOT). 단순히 Expo Router가 SPA fallback으로 열 수 있다는 사실만으로 route를 sitemap 대상에 추가해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 2026-08-27 갱신한 `PROD-731`의 정확한 공개 정적 route 범위와 SSR·페이지별 metadata 전면 개편 제외 범위. Sitemap의 공개 정적 route allowlist는 정확히 `/`와 `/privacy`여야 하며(MUST), 인증 화면, 보호 route, 내부 API, callback, 임시 UI route와 그 밖의 정적 route를 포함해서는 안 된다(MUST NOT). 단순히 Expo Router가 SPA fallback으로 열 수 있다는 사실만으로 route를 sitemap 대상에 추가해서는 안 된다(MUST NOT).
 
 #### Scenario: allowlist의 공개 정적 route를 생성한다
 
-- **WHEN** sitemap이 현재 명시적 공개 정적 route allowlist를 생성한다
-- **THEN** 각 allowlist route를 canonical Web origin의 절대 URL로 한 번씩 포함한다
+- **WHEN** sitemap이 공개 정적 route entry를 생성한다
+- **THEN** canonical Web origin의 `/`와 `/privacy`를 각각 한 번씩 포함한다
+- **AND** 그 밖의 정적 route는 포함하지 않는다
 
 #### Scenario: 보호 또는 내부 route가 존재한다
 
@@ -62,9 +63,21 @@
 - **WHEN** Post의 Author가 configured Local Instance 밖에 있거나 Post가 Content 없는 Repost다
 - **THEN** sitemap은 중복 Kosmo URL이나 Repost 자체 URL을 만들지 않는다
 
+#### Scenario: 자체 Content가 있는 Reply 또는 Quote가 있다
+
+- **WHEN** Reply 또는 Quote가 자체 Current Content를 가지고 다른 공개 Local Post와 같은 visibility·state·Author·Instance eligibility를 통과한다
+- **THEN** sitemap은 해당 Reply 또는 Quote 자체의 canonical Post URL을 포함한다
+- **AND** Reply Parent나 Repost Source가 Tombstone이거나 조회 불가능하다는 사실만으로 해당 Reply 또는 Quote를 제외하지 않는다
+
 ### Requirement: canonical URL과 보수적인 metadata
 
-**Authority / Provenance:** `docs/domain/objects/instance.md`의 public origin과 configured Local Instance 계약, `docs/domain/objects/post.md`와 `docs/domain/decisions/0015-post-share-reference.md`의 canonical Web URL 계약, `PROD-731`의 `PUBLIC_ORIGIN`·URL escaping·`lastmod` 규칙과 `changefreq`·`priority` 제외 범위. 모든 `<loc>`은 configured Local Instance의 `PUBLIC_ORIGIN`과 canonical route에서 파생한 중복 없는 절대 HTTP(S) URL이어야 하고(MUST), XML text로 안전하게 escape되어야 한다(MUST). 실제 페이지 수정 시각을 신뢰할 수 있는 항목에만 W3C datetime 형식의 `<lastmod>`를 제공해야 하며(MUST), 요청 시각·배포 시각·추정 시각을 대신 사용해서는 안 된다(MUST NOT). `<changefreq>`와 `<priority>`는 제공해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/domain/objects/instance.md`의 public origin과 configured Local Instance 계약, `docs/domain/objects/post.md`와 `docs/domain/decisions/0015-post-share-reference.md`의 canonical Web URL 계약, `PROD-731`의 `PUBLIC_ORIGIN`·URL encoding·XML escaping·`lastmod` 규칙과 `changefreq`·`priority` 제외 범위. 모든 `<loc>`은 configured Local Instance의 `PUBLIC_ORIGIN`과 canonical route에서 파생한 중복 없는 절대 HTTP(S) URL이어야 한다(MUST). URL path segment는 URL 문법에 맞게 percent-encode되어야 하고(MUST), 완성된 URL은 XML text로 안전하게 escape되어야 한다(MUST). 실제 페이지 수정 시각을 신뢰할 수 있는 항목에만 W3C datetime 형식의 `<lastmod>`를 제공해야 하며(MUST), 요청 시각·배포 시각·추정 시각을 대신 사용해서는 안 된다(MUST NOT). `<changefreq>`와 `<priority>`는 제공해서는 안 된다(MUST NOT).
+
+#### Scenario: canonical route 값에 URL 예약 문자가 있다
+
+- **WHEN** relative handle 또는 canonical route segment에 URL에서 인코딩해야 하는 문자가 포함된다
+- **THEN** sitemap은 각 path segment를 percent-encode한 유효한 절대 URL을 생성한다
+- **AND** URL encoding을 XML escaping으로 대신하지 않는다
 
 #### Scenario: URL에 XML 예약 문자가 있다
 
@@ -82,17 +95,38 @@
 - **THEN** sitemap은 해당 URL의 `<lastmod>`를 생략한다
 - **AND** `<changefreq>`와 `<priority>`도 출력하지 않는다
 
-### Requirement: 프로덕션 검색엔진 제출과 증거
+### Requirement: 단일 sitemap의 완전성과 protocol 상한
 
-**Authority / Provenance:** `PROD-731`의 운영 환경 응답 확인·검색엔진 sitemap 제출 포함 범위와 완료 조건. 프로덕션 배포 뒤 운영자는 공개 `/sitemap.xml`을 인증 없이 가져와 protocol·content type·대표 포함·제외 URL을 검증하고, 선정된 검색엔진 관리 도구에 제출해야 한다(MUST). 각 도구의 fetch 또는 처리 결과와 확인 시각을 `PROD-731`에 기록해야 하며(MUST), 제출 성공을 개별 URL의 색인 완료로 일반화해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 2026-08-27 갱신한 `PROD-731`의 단일 sitemap 범위와 Sitemap protocol `<https://www.sitemaps.org/protocol.html>`. 이 change의 `/sitemap.xml`은 하나의 `urlset`이어야 하며(MUST), sitemap index 또는 child sitemap을 제공해서는 안 된다(MUST NOT). 성공 응답은 모든 eligible URL을 포함하면서 50,000 URL 이하이고 압축하지 않은 UTF-8 XML이 52,428,800 bytes 이하여야 한다(MUST). 시스템은 상한을 맞추기 위해 entry를 조용히 누락하거나 잘라낸 성공 응답을 반환해서는 안 된다(MUST NOT).
 
-#### Scenario: 프로덕션 sitemap을 제출한다
+#### Scenario: 단일 sitemap이 protocol 상한 안에 있다
 
-- **WHEN** sitemap 구현이 프로덕션 Web origin에 배포되고 운영자가 선정된 검색엔진 관리 도구에 제출한다
-- **THEN** 도구는 공개 `/sitemap.xml`을 가져갈 수 있다
-- **AND** 운영자는 제출 대상, 확인 시각, 처리 상태와 오류가 있으면 그 내용을 `PROD-731`에 기록한다
+- **WHEN** 모든 eligible entry를 직렬화한 결과가 50,000 URL 이하이고 압축하지 않은 UTF-8 XML이 52,428,800 bytes 이하이다
+- **THEN** 시스템은 모든 eligible entry를 담은 하나의 `urlset`을 성공 응답으로 반환한다
 
-#### Scenario: 제출은 성공했지만 일부 URL이 색인되지 않는다
+#### Scenario: 단일 sitemap이 protocol 상한을 넘는다
 
-- **WHEN** 검색엔진이 sitemap을 성공적으로 처리했지만 개별 URL의 색인 여부가 아직 확인되지 않는다
-- **THEN** 완료 증거는 sitemap fetch·처리 성공으로 제한하고 개별 URL의 검색 노출 완료를 주장하지 않는다
+- **WHEN** 모든 eligible entry의 URL 수 또는 압축하지 않은 UTF-8 XML 크기가 protocol 상한을 넘는다
+- **THEN** 시스템은 일부 entry만 담은 성공 응답을 반환하지 않는다
+- **AND** sitemap index로 자동 전환하지 않는다
+- **AND** 관측 가능한 서버 오류로 요청을 실패시킨다
+
+#### Scenario: sitemap 생성에 필요한 설정 또는 조회가 실패한다
+
+- **WHEN** canonical origin 설정, configured Local Instance 해석, database 조회 또는 XML 직렬화가 실패한다
+- **THEN** 시스템은 부분 sitemap이나 SPA HTML을 성공 응답으로 반환하지 않는다
+- **AND** 기존 Web 오류 관측 경계를 통해 실패를 드러낸다
+
+### Requirement: 프로덕션 무인증 접근
+
+**Authority / Provenance:** 2026-08-27 갱신한 `PROD-731`의 durable production contract. 프로덕션 Web origin의 `/sitemap.xml`은 session cookie, bearer token 또는 그 밖의 인증 자격 증명 없이 가져갈 수 있어야 한다(MUST). 검색엔진 관리 도구 제출과 처리 결과 기록은 이 요구사항의 반복 가능한 capability가 아니라 `PROD-731`의 일회성 운영 task다.
+
+#### Scenario: 인증 정보 없이 프로덕션 sitemap을 요청한다
+
+- **WHEN** 익명 클라이언트가 프로덕션 Web origin의 `/sitemap.xml`을 GET으로 요청한다
+- **THEN** 시스템은 인증 challenge나 login redirect 없이 sitemap XML 응답을 반환한다
+
+#### Scenario: 인증 session이 없는 crawler가 요청한다
+
+- **WHEN** 검색 crawler가 cookie나 authorization header 없이 `/sitemap.xml`을 요청한다
+- **THEN** 인증 session 유무는 sitemap의 공개 표현을 바꾸지 않는다

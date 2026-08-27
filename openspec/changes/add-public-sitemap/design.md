@@ -6,11 +6,11 @@
 
 현재 저장 모델에서 Profile은 `instanceId`, state, handle과 생성 시각을 가지지만 신뢰 가능한 마지막 수정 시각은 없다. Post는 state, visibility, Author Profile, Current Content와 생성 시각을 가지며, Current Content가 가리키는 immutable Post Content revision의 생성 시각은 실제 콘텐츠 수정 시각으로 사용할 수 있다. 공개 Post route의 `postId`는 DB UUID 자체가 아니라 기존 `Post` GraphQL global ID이고, Local Profile route는 `@{handle}`을 사용한다.
 
-Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준 50 MB 이하로 제한한다. Google Search Console과 Bing Webmaster Tools는 XML sitemap 또는 sitemap index 제출·처리 상태를 제공한다. 이 외부 문서는 상위 제품 권위가 아니라 interoperability와 운영 검증 제약으로 사용한다.
+Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준 50 MB(52,428,800 bytes) 이하로 제한한다. Google Search Console과 Naver Search Advisor는 sitemap 제출·처리 상태를 제공하며, Naver의 현재 제출 도구는 sitemap file이 10 MB 이상이거나 URL이 50,000개 이상이면 제출할 수 없다고 안내한다. 외부 문서는 상위 제품 권위가 아니라 interoperability와 일회성 운영 검증 제약으로만 사용한다.
 
 - <https://www.sitemaps.org/protocol.html>
 - <https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap>
-- <https://www.bing.com/webmasters/help/sitemaps-3b5cf6ed>
+- <https://searchadvisor.naver.com/guide/request-feed>
 
 ## Goals / Non-Goals
 
@@ -20,7 +20,7 @@ Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준
 - 공개 정적 route, configured Local Instance의 공개 Profile과 Public Content Post만 일괄 조회한다.
 - 기존 canonical origin·relative handle·Post global ID 계약을 재사용해 URL을 만들고 안전하게 XML 직렬화한다.
 - 실제로 신뢰 가능한 Post Content revision 시각만 `lastmod`로 제공한다.
-- 자동 검증, 프로덕션 HTTP 검증과 검색엔진 제출 결과를 한 이슈의 완료 증거로 연결한다.
+- 자동 검증과 프로덕션 무인증 HTTP 검증을 durable 계약으로 만들고, Google·Naver의 일회성 제출 결과를 이슈 완료 증거로 연결한다.
 
 **Non-Goals:**
 
@@ -28,6 +28,8 @@ Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준
 - `robots.txt`의 crawler·AI bot 정책 또는 `Sitemap` 지시어 변경(`PROD-736` 소유)
 - Remote 원본의 Kosmo mirror URL, 제한 공개 콘텐츠, 보호·내부 route 노출
 - `changefreq`, `priority`, 추정 `lastmod`, IndexNow·URL Submission API 자동화
+- 반복 가능한 검색엔진 제출 capability, 배포별 재제출 자동화
+- sitemap index와 child sitemap 구현
 - GraphQL schema, 데이터베이스 schema·migration, 새 dependency 추가
 
 ## Implementation Guidance
@@ -48,13 +50,13 @@ Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준
 2. Web 진입점의 read-only loader가 공유 runtime DB를 사용해 configured Local Instance를 한 번 해석한 뒤 정적 allowlist, Profile, Post entry를 만든다. 현재 정적 allowlist는 공개 landing `/`와 공개 개인정보 처리방침 `/privacy`로 제한한다.
 3. Profile은 configured Local Instance ID와 `ACTIVE` state로 제한해 handle을 가져오고 `/{@handle}` URL을 만든다. Post는 application policy helper를 가능한 범위에서 재사용·합성하면서 같은 Local Author, `ACTIVE`, 명시적 `PUBLIC`, 공개 가능한 Author·Instance와 non-null Current Content를 보장하고 Current Post Content revision 생성 시각을 함께 가져온다. 일반 익명 visibility helper의 `UNLISTED` 허용만으로 sitemap 후보를 결정하지 않는다. 두 동적 집합은 ID 기반의 안정적인 순서로 조회해 출력과 테스트를 결정적으로 유지한다.
 4. Post URL은 기존 global ID encoder로 DB UUID를 `Post` ID로 바꾼 뒤 `/{@handle}/{postGlobalId}`로 구성한다. 모든 URL은 resolver가 검증한 canonical origin을 기준으로 `URL`을 통해 만들고 query·hash를 추가하지 않는다.
-5. XML 생성은 entry 목록을 받는 순수 직렬화 경계로 두어 XML declaration, sitemap namespace, `<url>`·`<loc>`·선택적 `<lastmod>`를 한 곳에서 생성한다. XML text의 예약 문자를 escape하고 Post revision의 `Temporal.Instant`만 표준 문자열로 출력하며 정적·Profile entry의 `lastmod`는 생략한다.
-6. 생성 전 URL 수와 생성 후 UTF-8 byte 크기를 protocol 한도와 비교한다. 한도를 넘으면 일부 URL만 담은 성공 응답이나 무효 XML을 반환하지 말고 명시적 서버 오류로 실패시킨다. 배포 전 실제 eligible count·예상 크기가 한도 아래인지 확인하고, 한도에 도달했다면 같은 구현에서 sitemap index와 분할 child sitemap으로 전환한다.
+5. XML 생성은 entry 목록을 받는 순수 직렬화 경계로 두어 XML declaration, sitemap namespace, `<url>`·`<loc>`·선택적 `<lastmod>`를 한 곳에서 생성한다. 먼저 route segment를 URL 문법에 맞게 percent-encode한 절대 URL을 만들고, 그 완성된 URL의 XML text 예약 문자를 별도로 escape한다. Post revision의 `Temporal.Instant`만 표준 문자열로 출력하며 정적·Profile entry의 `lastmod`는 생략한다.
+6. 이 change는 하나의 `urlset`만 제공한다. 생성 전 URL 수와 생성 후 압축하지 않은 UTF-8 byte 크기를 각각 50,000개와 52,428,800 bytes 상한과 비교한다. 한도를 넘으면 일부 URL만 담은 성공 응답이나 무효 XML을 반환하지 말고 관측 가능한 서버 오류로 실패시킨다. URL 수가 45,000개 또는 XML 크기가 45 MB(47,185,920 bytes)에 도달하면 sitemap index 지원을 위한 별도 Linear 이슈와 OpenSpec change를 생성하며, 현재 route가 자동으로 index나 child sitemap을 만들지 않는다.
 7. 순수 XML 단위 테스트는 escaping, 중복 제거, metadata 생략과 content type을 검증한다. Web runtime test는 navigation header에서도 SPA가 아닌 XML임을 확인한다. 기존 격리 PostgreSQL·Playwright E2E 경계에서는 Local/Remote, Profile state, Post visibility/state/content 조합을 seed해 실제 포함·제외 URL과 global ID·`lastmod`를 검증한다. 특히 익명 일반 조회에서는 허용되는 Unlisted Post가 sitemap에서는 제외되는 회귀 사례와, sitemap 조회가 operation-scoped DB/RLS 경계를 요구하지 않는 현재 runtime 구성을 검증한다.
 
 ### Allowed Alternatives
 
-- 현재 eligible URL이 단일 문서 한도에 가깝거나 초과한다면 `/sitemap.xml`을 sitemap index로 만들고 정적·Profile·Post child sitemap을 분할할 수 있다. root와 child 전체가 동일한 include/exclude·origin·metadata 계약을 만족하고 제출 검증이 root index에서 시작되어야 한다.
+- sitemap index와 child sitemap은 이 change의 허용 대안이 아니다. 45,000 URL 또는 45 MB(47,185,920 bytes) 전환 기준에 도달하면 별도 이슈와 OpenSpec change에서 분할 기준, child route와 migration을 결정한다.
 - route 내부 모듈 분리와 테스트 seam의 구체적 형태는 달라도 된다. 다만 read-only query를 state-changing core service로 포장하거나 production에 없는 generic database interface·operation-scoped DB session을 테스트만을 위해 공개해서는 안 된다.
 - 짧은 bounded cache나 ETag를 사용할 수 있지만, 삭제·비공개 전환 URL이 장기간 남지 않고 새 공개 URL과 수정 시각이 다음 crawler fetch에서 갱신된다는 점을 검증해야 한다.
 
@@ -74,22 +76,22 @@ Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준
 ## Risks / Trade-offs
 
 - [동적 sitemap이 DB 가용성에 의존] → 설정·조회 실패를 부분 성공으로 숨기지 않고 기존 Web 오류 경계와 Sentry에 전달한다. 정상 응답은 매번 현재 eligibility를 반영한다.
-- [전체 entry materialization의 메모리·응답 크기] → 배포 전 count·byte 크기를 측정하고 protocol 한도를 runtime에서 방어한다. 한도에 가까우면 sitemap index로 전환한다.
-- [공개 콘텐츠 증가로 현재 단일 urlset이 한도를 초과] → URL을 누락한 채 성공하지 않고 실패시킨다. 구현·배포 gate에서 현재 규모를 확인하며, 초과 시 허용 대안인 분할 index를 같은 이슈 범위에서 적용한다.
+- [전체 entry materialization의 메모리·응답 크기] → 배포 전 count·byte 크기를 측정하고 protocol 한도를 runtime에서 방어한다. 45,000 URL 또는 45 MB(47,185,920 bytes)에 도달하면 별도 sitemap index change를 생성한다.
+- [공개 콘텐츠 증가로 현재 단일 urlset이 한도를 초과] → URL을 누락한 채 성공하지 않고 요청을 실패시킨다. 조기 전환 기준의 별도 change가 protocol 상한 전에 배포되도록 운영 gate를 둔다.
 - [두 read query 사이에 콘텐츠 상태가 바뀜] → sitemap은 discovery snapshot이며 다음 fetch에서 수렴한다. 강한 snapshot을 위해 장시간 transaction이나 lock을 추가하지 않는다.
 - [공통 application visibility helper의 계약이 바뀜] → sitemap query는 Public-only 검색 조건을 독립적인 회귀 사례로 고정하고 canonical Post 검색·Eligibility 문서 변경 시 함께 검토한다.
 - [crawler 요청이 DB 읽기 부하를 만든다] → configured Local Instance·Profile과 Post Author join 조건을 명시하고 실제 query plan·응답 시간을 E2E/프로덕션에서 확인한다. 기존 Profile instance-prefix unique index와 Post profile index는 활용 가능성을 검증할 후보일 뿐 planner 사용을 전제하지 않으며, 필요성이 확인되기 전 schema index를 선제 추가하지 않는다.
-- [검색엔진 계정 권한이 없어 완료 검증 지연] → 구현과 별개로 Search Console·Bing Webmaster Tools의 verified property와 제출 권한을 프로덕션 배포 전에 확인하고, 누락 시 `PROD-731` blocker로 기록한다.
+- [검색엔진 계정 권한 또는 Naver 제출 제약으로 일회성 검증 지연] → 구현과 별개로 Google Search Console·Naver Search Advisor의 verified property와 제출 권한을 프로덕션 배포 전에 확인한다. Naver 제출 시점의 파일이 10 MB 미만이고 URL이 50,000개 미만인지 확인하며, 권한 또는 도구 제약은 코드 결함과 구분해 `PROD-731` blocker로 기록한다.
 
 ## Migration Plan
 
 1. sitemap query·직렬화·route와 자동 검증을 추가하고 `openspec validate add-public-sitemap --strict`, Web unit/E2E, typecheck를 통과시킨다.
 2. 데이터 migration 없이 기존 immutable Web image로 배포한다. `PROD-736`의 robots 지시어는 sitemap이 프로덕션에서 성공한 뒤 별도 배포·검증한다.
 3. 프로덕션 `/sitemap.xml`의 상태, `Content-Type`, XML parse, URL 수·byte 크기, 대표 정적/Profile/Post 포함과 제한·Remote·삭제 항목 제외를 확인한다. 실제 사용자 콘텐츠나 내부 식별 값을 증거에 복사하지 않는다.
-4. Google Search Console과 Bing Webmaster Tools에 canonical `/sitemap.xml`을 제출하고 fetch/processing 상태와 확인 시각을 `PROD-731`에 기록한다.
+4. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 fetch/processing 상태와 확인 시각을 `PROD-731`에 기록한다. 이 단계는 반복 가능한 제품 capability나 배포 자동화를 만들지 않는다.
 5. rollback은 sitemap route가 없는 직전 Web image로 되돌린다. DB·GraphQL·정적 자산 migration이 없으므로 데이터 복구는 필요 없으며, 제출 도구에는 일시적인 fetch 실패가 나타날 수 있음을 기록한다.
 
 ## Open Questions
 
-- 프로덕션의 현재 eligible URL 수와 생성 XML byte 크기는 아직 확인하지 못했다. 구현 완료 전 protocol 한도 아래임을 계수하고, 초과하거나 임박하면 sitemap index 대안을 적용해야 한다.
-- Google Search Console과 Bing Webmaster Tools의 production property·제출 권한 보유자는 아직 확인하지 못했다. 배포 전 운영 담당자와 권한을 확인해야 한다.
+- 프로덕션의 현재 eligible URL 수와 생성 XML byte 크기는 아직 확인하지 못했다. 구현 완료 전 protocol 상한과 45,000 URL·45 MB(47,185,920 bytes) 후속 change 기준을 함께 계수해야 한다.
+- Google Search Console과 Naver Search Advisor의 production property·제출 권한 보유자는 아직 확인하지 못했다. 배포 전 운영 담당자와 권한을 확인하고 Naver 제출 시점의 10 MB 미만·50,000 URL 미만 조건도 측정해야 한다.

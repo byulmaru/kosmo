@@ -1,12 +1,12 @@
 ## Context
 
-이 결정 기록은 `PROD-731`의 현재 본문·관계와 계약 변경 댓글이 없다는 사실, 공개 Profile·Post·Instance의 canonical 문서, application policy와 runtime DB 경계 ADR, 그리고 이 change의 proposal·spec·design을 대조해 만든다. OpenSpec 자체는 제품 권위로 사용하지 않으며, 아래 구현 선택은 현재 승인된 sitemap 범위 안에서만 효력을 가진다.
+이 결정 기록은 2026-08-27 갱신한 `PROD-731` 본문, 사용자가 승인한 공개 route·검색엔진 제출·용량 전환 기준, 공개 Profile·Post·Instance의 canonical 문서, application policy와 runtime DB 경계 ADR, 그리고 이 change의 proposal·spec·design을 대조해 만든다. OpenSpec 자체는 제품 권위로 사용하지 않으며, 아래 구현 선택은 현재 승인된 sitemap 범위 안에서만 효력을 가진다.
 
 ### Gate Snapshot
 
 - Domain Gate: Pass — `docs/domain/objects/profile.md`, `docs/domain/objects/post.md`, `docs/domain/objects/instance.md`, `docs/domain/decisions/0015-post-share-reference.md`, `docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`에서 공개 eligibility, canonical route와 runtime query 경계를 확인했다.
-- Issue Gate: Pass — `PROD-731` 본문·관계·댓글과 관련 `PROD-736` 경계를 2026-08-18에 다시 읽었고, 사용자가 현재 대화에서 기존 OpenSpec을 “갱신”하도록 요청했다.
-- OpenSpec Gate: Pending — 이 산출물의 구현 착수 승인은 사용자 확인 전까지 보류한다.
+- Issue Gate: Pass — `PROD-731` 본문·관계와 관련 `PROD-736` 경계를 2026-08-27에 다시 읽고 승인된 세 결정을 Linear 본문에 반영했다.
+- OpenSpec Gate: Pass for document update — 사용자가 2026-08-27에 문서 수정을 승인했다. 이 승인은 구현 착수나 OpenSpec archive 승인을 뜻하지 않는다.
 
 ## Decision Records
 
@@ -37,8 +37,8 @@
 ### 공개 정적 route는 `/`와 `/privacy`로 제한한다
 
 - Decision Date: 2026-08-10
-- Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-731`의 검색 노출 가치가 있는 공개 정적 페이지 포함 범위와 보호·내부 페이지 제외 범위, `docs/design/README.md`에서 sitemap 전용 결정 문서가 없다는 현재 상태.
+- Decision Class: Derived Contract
+- Authority / Provenance: 2026-08-27 갱신한 `PROD-731`의 정확한 공개 정적 route allowlist와 보호·내부 페이지 제외 범위, `docs/design/README.md`에서 sitemap 전용 결정 문서가 없다는 현재 상태.
 - Status: Active
 - Context / Problem: Expo Router 또는 SPA fallback으로 열리는 모든 경로가 검색 노출 대상이라는 뜻은 아니며, 인증·callback·내부 endpoint를 자동 탐색해 포함하면 범위가 과도하게 넓어진다.
 - Decision Outcome: 현재 공개 정적 allowlist를 landing `/`와 개인정보 처리방침 `/privacy`로 고정한다. 이후 추가는 공개성과 검색 가치를 확인한 명시적 변경으로 처리한다.
@@ -82,29 +82,29 @@
 - Consequences: 공개 검색 후보 조건은 공통 application policy와 작은 sitemap 전용 `PUBLIC` 제약의 합성으로 드러나야 한다. helper 계약 변경 시 sitemap 회귀 테스트가 차이를 검출해야 한다.
 - Confirmation / Follow-up: 격리 DB 테스트에서 Public은 포함하고 Unlisted는 일반 익명 조회 가능 여부와 무관하게 제외하며, 현재 공유 runtime DB 구성으로 route가 동작하는지 검증한다.
 
-### Protocol 한도 안에서는 단일 urlset을 사용하고 초과하면 분할 index로 전환한다
+### PROD-731은 단일 urlset만 제공하고 조기 기준에서 별도 index change를 만든다
 
-- Decision Date: 2026-08-10
-- Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-731`의 유효한 sitemap·URL escaping·프로덕션 응답 검증 범위, Sitemap protocol `<https://www.sitemaps.org/protocol.html>`의 interoperability 한도.
+- Decision Date: 2026-08-27
+- Decision Class: Derived Contract
+- Authority / Provenance: 2026-08-27 갱신한 `PROD-731`의 단일 sitemap 범위와 45,000 URL·45 MB(47,185,920 bytes) 후속 전환 기준, Sitemap protocol `<https://www.sitemaps.org/protocol.html>`의 interoperability 한도.
 - Status: Active
-- Context / Problem: 현재 프로덕션 eligible URL 수와 byte 크기는 아직 확인되지 않았고, 일부만 조용히 반환하면 성공처럼 보이는 불완전한 discovery 문서가 된다.
-- Decision Outcome: 배포 전 측정값이 50,000 URL 및 UTF-8 50 MB 미만이면 단일 urlset을 사용한다. 생성 시 URL 수와 byte 크기를 방어하고, 한도를 초과하거나 임박하면 같은 계약을 유지하는 sitemap index와 분할 child sitemap으로 전환한다. 한도를 넘긴 단일 문서는 일부 URL을 잘라 성공시키지 않는다.
-- Alternatives Considered: 무제한 단일 응답은 protocol 위반 위험이 있어 제외했다. 임의 truncation은 포함 계약과 완료 증거를 깨므로 제외했다. 현재 규모를 모른 채 선제 분할하면 route·테스트·운영 복잡도를 늘리므로 기본안에서 제외했다.
-- Consequences: 구현 전·프로덕션 배포 전 eligible count와 생성 byte 크기를 측정해야 한다. 단일 문서가 충분하면 분할 route를 만들지 않는다.
-- Confirmation / Follow-up: 한도 경계 unit test와 프로덕션 count·byte 측정 결과를 `PROD-731`에 기록한다.
+- Context / Problem: 현재 프로덕션 eligible URL 수와 byte 크기는 아직 확인되지 않았고, 일부만 조용히 반환하면 성공처럼 보이는 불완전한 discovery 문서가 된다. 반면 현재 이슈에서 sitemap index까지 구현하면 승인 범위를 넓힌다.
+- Decision Outcome: `PROD-731`의 `/sitemap.xml`은 하나의 `urlset`만 제공한다. 성공 응답은 모든 eligible URL을 포함하면서 50,000 URL 이하, 압축하지 않은 UTF-8 XML 52,428,800 bytes 이하를 지켜야 한다. 어느 상한이든 넘으면 entry를 자르거나 index로 자동 전환하지 않고 관측 가능한 서버 오류로 실패시킨다. URL 수가 45,000개 또는 XML 크기가 45 MB(47,185,920 bytes)에 도달하면, protocol 상한 전에 sitemap index를 배포할 수 있도록 별도 Linear 이슈와 OpenSpec change를 생성한다.
+- Alternatives Considered: 무제한 단일 응답과 임의 truncation은 protocol 및 완전성 계약을 깨므로 제외했다. 같은 change의 조건부 sitemap index는 현재 승인 범위를 넓히므로 제외했다. 선제 index 구현은 현재 규모에서 불필요한 route·테스트·운영 복잡도를 추가하므로 제외했다.
+- Consequences: 구현 전·프로덕션 배포 전 eligible count와 생성 byte 크기를 측정해야 한다. 조기 기준에 닿으면 현재 구현에 child route를 추가하는 대신 별도 change를 시작한다.
+- Confirmation / Follow-up: protocol 상한 경계 unit test와 프로덕션 count·byte 측정 결과를 `PROD-731`에 기록하고, 조기 기준에 닿으면 후속 이슈와 change 링크를 남긴다.
 
-### Google Search Console과 Bing Webmaster Tools에서 제출을 검증한다
+### Google과 Naver 제출은 일회성 운영 task로 수행한다
 
-- Decision Date: 2026-08-10
-- Decision Class: Implementation Choice
-- Authority / Provenance: `PROD-731`의 검색엔진 등록·fetch 결과 기록 범위, Google 공식 sitemap 제출 문서 `<https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap>`, Bing Webmaster Tools sitemap 문서 `<https://www.bing.com/webmasters/help/sitemaps-3b5cf6ed>`.
+- Decision Date: 2026-08-27
+- Decision Class: Derived Contract
+- Authority / Provenance: 2026-08-27 갱신한 `PROD-731`의 Google·Naver 일회성 등록 범위, Google 공식 sitemap 제출 문서 `<https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap>`, Naver Search Advisor 제출 문서 `<https://searchadvisor.naver.com/guide/request-feed>`.
 - Status: Active
-- Context / Problem: 구현 완료만으로 실제 production origin의 접근성이나 주요 검색엔진 도구가 sitemap을 처리하는지 증명할 수 없다.
-- Decision Outcome: 프로덕션 검증 뒤 canonical `/sitemap.xml`을 Google Search Console과 Bing Webmaster Tools에 제출하고, 대상·확인 시각·fetch 또는 처리 상태·오류를 `PROD-731`에 기록한다. 개별 URL 색인 완료는 이 제출 증거에 포함하지 않는다.
-- Alternatives Considered: 한 검색엔진만 확인하면 `PROD-731`의 복수 검색엔진 등록 목적을 좁히므로 제외했다. IndexNow·URL Submission API 자동화는 현재 범위를 넓히므로 제외했다.
-- Consequences: 배포 전에 두 도구의 production property와 제출 권한을 확인해야 하며, 권한 부재는 코드 결함과 구분해 이슈 blocker로 기록한다.
-- Confirmation / Follow-up: 제출 UI/API가 보고한 처리 결과를 비민감한 형태로 이슈에 남기고, 실제 색인 여부를 과장하지 않는다.
+- Context / Problem: 구현 완료만으로 실제 production origin의 접근성이나 선정한 검색엔진 도구가 sitemap을 처리하는지 증명할 수 없다. 그러나 관리 도구 제출은 제품이 계속 제공해야 하는 runtime capability가 아니다.
+- Decision Outcome: 프로덕션 무인증 응답을 검증한 뒤 canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고, 대상·확인 시각·fetch 또는 처리 상태·오류를 `PROD-731`에 기록한다. 이 운영 task를 spec requirement, 반복 제출 자동화 또는 배포별 재제출 capability로 만들지 않는다. 개별 URL 색인 완료는 제출 증거에 포함하지 않는다.
+- Alternatives Considered: Bing 제출은 승인된 대상이 아니므로 제외했다. 한 검색엔진만 제출하면 승인된 Google·Naver 범위를 충족하지 못한다. IndexNow·URL Submission API 및 반복 자동화는 현재 범위를 넓히므로 제외했다.
+- Consequences: 배포 전에 두 도구의 production property와 제출 권한을 확인해야 한다. Naver는 현재 10 MB 이상의 sitemap file과 50,000개 이상의 URL을 제출할 수 없다고 안내하므로 제출 시점의 실제 파일 크기와 URL 수를 별도로 확인한다. 권한 또는 도구 제약은 코드 결함과 구분해 이슈 blocker로 기록한다.
+- Confirmation / Follow-up: 제출 UI가 보고한 처리 결과를 비민감한 형태로 이슈에 남기고, 실제 색인 여부를 과장하지 않는다.
 
 ### `robots.txt` 정책과 Sitemap 지시어는 이 change에서 수정하지 않는다
 
@@ -124,4 +124,5 @@
 
 ## Superseded Decisions
 
-- 없음.
+- 2026-08-27: “Protocol 한도에 임박하거나 초과하면 `PROD-731` 안에서 sitemap index와 child sitemap으로 전환한다”는 선택을 폐기했다. 현재 change는 단일 sitemap만 제공하고 45,000 URL 또는 45 MB(47,185,920 bytes)에서 별도 change를 만든다.
+- 2026-08-27: “Google Search Console과 Bing Webmaster Tools 제출을 sitemap capability로 검증한다”는 선택을 폐기했다. Google·Naver 제출은 `PROD-731`의 일회성 운영 task이고 durable spec에는 프로덕션 무인증 접근만 남긴다.

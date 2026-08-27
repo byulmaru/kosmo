@@ -17,6 +17,7 @@ const {
   authorizationCodeGrant,
   captureNotificationEffectError,
   captureUnexpectedError,
+  createSitemapXml,
   createSession,
   discovery,
   federationFetch,
@@ -27,6 +28,7 @@ const {
   authorizationCodeGrant: vi.fn<typeof oidcAuthorizationCodeGrant>(),
   captureNotificationEffectError: vi.fn(),
   captureUnexpectedError: vi.fn<(cause: unknown) => void>(),
+  createSitemapXml: vi.fn<() => Promise<string>>(),
   createSession:
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
@@ -55,6 +57,8 @@ vi.mock('@kosmo/fedify', () => ({
   federation: { fetch: federationFetch },
   setInboundObservabilityReporter,
 }));
+
+vi.mock('./sitemap', () => ({ createSitemapXml }));
 
 vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedError }));
 
@@ -111,6 +115,7 @@ beforeEach(() => {
   );
   createSession.mockResolvedValue('kosmo-session-token');
   revokeSession.mockResolvedValue({ status: 'REVOKED' });
+  createSitemapXml.mockResolvedValue('<sitemap />');
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -449,6 +454,17 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
+  test('serves sitemap XML before the SPA fallback for browser navigation', async () => {
+    const response = await app.request('/sitemap.xml', {
+      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
+    expect(await response.text()).toBe('<sitemap />');
+    expect(createSitemapXml).toHaveBeenCalledOnce();
+  });
+
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },
