@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { db, first, ProfileFollowRequests, ProfileFollows, Profiles } from '../db';
+import { db, first, Instances, ProfileFollowRequests, ProfileFollows, Profiles } from '../db';
+import { InstanceKind, InstanceState } from '../enums';
 import {
   ConflictError,
   KosmoError,
@@ -100,12 +101,19 @@ export type ProfileFollowCreateEffectInput = {
   | {
       readonly origin: 'LOCAL';
       readonly sourceKind: 'FOLLOW';
-      readonly transition: 'FOLLOW' | 'APPROVE';
+      readonly transition: 'FOLLOW';
+      readonly sendActivityPub: boolean;
+    }
+  | {
+      readonly origin: 'LOCAL';
+      readonly sourceKind: 'FOLLOW';
+      readonly transition: 'APPROVE';
     }
   | {
       readonly origin: 'LOCAL';
       readonly sourceKind: 'FOLLOW_REQUEST';
       readonly transition: 'FOLLOW';
+      readonly sendActivityPub: boolean;
     }
   | {
       readonly origin: 'ACTIVITYPUB';
@@ -129,7 +137,13 @@ export type ProfileFollowDeleteEffectInput = {
   | {
       readonly origin: 'LOCAL';
       readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'APPROVE' | 'REJECT' | 'CANCEL';
+      readonly transition: 'APPROVE' | 'REJECT';
+    }
+  | {
+      readonly origin: 'LOCAL';
+      readonly sourceKind: 'FOLLOW_REQUEST';
+      readonly transition: 'CANCEL';
+      readonly sendActivityPub: boolean;
     }
   | {
       readonly origin: 'ACTIVITYPUB';
@@ -140,6 +154,7 @@ export type ProfileFollowDeleteEffectInput = {
       readonly origin: 'LOCAL';
       readonly sourceKind: 'FOLLOW';
       readonly transition: 'UNFOLLOW';
+      readonly sendActivityPub: boolean;
     }
   | {
       readonly origin: 'ACTIVITYPUB';
@@ -319,6 +334,21 @@ const createEffect = (input: ProfileFollowCreateEffectInput): ProfileFollowPairE
   input,
 });
 
+const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) => {
+  const participants = await tx
+    .select({ id: Profiles.id, kind: Instances.kind, state: Instances.state })
+    .from(Profiles)
+    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+    .where(inArray(Profiles.id, [pair.followerProfileId, pair.followeeProfileId]));
+  const follower = participants.find(({ id }) => id === pair.followerProfileId);
+  const followee = participants.find(({ id }) => id === pair.followeeProfileId);
+  return (
+    follower?.kind === InstanceKind.LOCAL &&
+    followee?.kind === InstanceKind.ACTIVITYPUB &&
+    followee.state === InstanceState.ACTIVE
+  );
+};
+
 const pairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,
   pair: ProfileFollowPair,
@@ -373,7 +403,7 @@ const executeFollow = async (
     .where(pairCondition(ProfileFollowRequests, input.pair))
     .limit(1)
     .then(first);
-  const { result } = await followProfileInTransaction(
+  const { result, sendActivityPub } = await followProfileInTransaction(
     {
       ...input.pair,
       origin: command.origin,
@@ -429,6 +459,7 @@ const executeFollow = async (
               sourceKind: 'FOLLOW',
               origin: 'LOCAL',
               transition: 'FOLLOW',
+              sendActivityPub,
             }),
       );
     } else {
@@ -445,6 +476,7 @@ const executeFollow = async (
               sourceKind: 'FOLLOW_REQUEST',
               origin: 'LOCAL',
               transition: 'FOLLOW',
+              sendActivityPub,
             }),
       );
     }
@@ -779,6 +811,10 @@ const executeRejectOrCancel = async (
     throw new Error('Invalid terminal command');
   }
   const expectedRowId = command.expectedRowId;
+  const sendActivityPub =
+    command.kind === 'CANCEL' && command.origin === 'LOCAL'
+      ? await shouldSendActivityPub(tx, input.pair)
+      : false;
   const currentRequest = await tx
     .select()
     .from(ProfileFollowRequests)
@@ -900,7 +936,9 @@ const executeRejectOrCancel = async (
       : deleteEffect(source, {
           sourceKind: 'FOLLOW_REQUEST',
           origin: 'LOCAL',
-          transition: command.kind === 'REJECT' ? 'REJECT' : 'CANCEL',
+          ...(command.kind === 'REJECT'
+            ? { transition: 'REJECT' as const }
+            : { transition: 'CANCEL' as const, sendActivityPub }),
         });
   return {
     ok: true as const,
@@ -998,6 +1036,8 @@ export const executeProfileFollowRemoval = async (
 ): Promise<ProfileFollowRemovalExecution> => {
   try {
     return await db.transaction(async (tx) => {
+      const sendActivityPub =
+        input.origin === 'LOCAL' ? await shouldSendActivityPub(tx, input) : false;
       const currentFollow = await tx
         .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
@@ -1027,6 +1067,7 @@ export const executeProfileFollowRemoval = async (
               sourceKind: 'FOLLOW',
               origin: 'LOCAL',
               transition: 'UNFOLLOW',
+              sendActivityPub,
             })
           : deleteEffect(source, {
               sourceKind: 'FOLLOW',

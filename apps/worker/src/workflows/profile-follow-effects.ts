@@ -37,8 +37,8 @@ export const runProfileFollowCreateEffect = async (
       .with('FOLLOW', () => createFollowNotificationActivity(input.sourceId))
       .with('FOLLOW_REQUEST', () => createFollowRequestNotificationActivity(input.sourceId))
       .exhaustive(),
-    ...match([input.origin, input.transition] as const)
-      .with(['LOCAL', 'FOLLOW'], () => [
+    ...match(input)
+      .with({ sendActivityPub: true }, () => [
         sendProfileFollowActivity({
           sourceId: input.sourceId,
           sourceKind: input.sourceKind,
@@ -57,11 +57,7 @@ export const runProfileFollowDeleteEffect = async (
       .with('FOLLOW_REQUEST', () => deleteFollowRequestNotificationActivity(input.sourceId))
       .exhaustive(),
     ...match(input)
-      .with(
-        { origin: 'LOCAL', sourceKind: 'FOLLOW', transition: 'UNFOLLOW' },
-        { origin: 'LOCAL', sourceKind: 'FOLLOW_REQUEST', transition: 'CANCEL' },
-        () => [sendProfileUnfollowActivity(input)],
-      )
+      .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(input)])
       .otherwise(() => []),
   ]);
 };

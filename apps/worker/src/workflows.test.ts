@@ -284,6 +284,7 @@ test(
           kind: 'CREATE' as const,
           input: {
             origin: 'LOCAL' as const,
+            sendActivityPub: true,
             sourceId: followId,
             sourceKind: 'FOLLOW' as const,
             transition: 'FOLLOW' as const,
@@ -403,6 +404,7 @@ test(
                   kind: 'CREATE' as const,
                   input: {
                     origin: 'LOCAL' as const,
+                    sendActivityPub: true,
                     sourceId: requestId,
                     sourceKind: 'FOLLOW_REQUEST' as const,
                     transition: 'FOLLOW' as const,
@@ -770,6 +772,7 @@ test(
           input: {
             ...input.snapshot,
             origin: 'LOCAL' as const,
+            sendActivityPub: true,
             sourceId: followId,
             sourceKind: 'FOLLOW' as const,
             transition: 'UNFOLLOW' as const,
@@ -843,6 +846,7 @@ test(
               JSON.stringify({
                 ...input.snapshot,
                 origin: 'LOCAL',
+                sendActivityPub: true,
                 sourceId: followId,
                 sourceKind: 'FOLLOW',
                 transition: 'UNFOLLOW',

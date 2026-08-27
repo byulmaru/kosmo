@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  ActivityPubActors,
   db,
   firstOrThrow,
   Instances,
@@ -10,7 +11,13 @@ import {
   ProfileFollows,
   Profiles,
 } from '../db';
-import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '../enums';
+import {
+  ActivityPubActorType,
+  InstanceKind,
+  InstanceState,
+  ProfileFollowPolicy,
+  ProfileState,
+} from '../enums';
 import {
   executeProfileFollowPairTransition,
   executeProfileFollowRemoval,
@@ -48,6 +55,43 @@ const createProfile = async (followPolicy: ProfileFollowPolicy = ProfileFollowPo
     .returning()
     .then(firstOrThrow);
   profileIds.push(profile.id);
+  return profile;
+};
+
+const createRemoteProfile = async (
+  state: InstanceState,
+  followPolicy: ProfileFollowPolicy = ProfileFollowPolicy.OPEN,
+) => {
+  const suffix = crypto.randomUUID();
+  const instance = await db
+    .insert(Instances)
+    .values({
+      domain: `${suffix}.remote.example`,
+      kind: InstanceKind.ACTIVITYPUB,
+      state,
+    })
+    .returning()
+    .then(firstOrThrow);
+  instanceIds.push(instance.id);
+  const profile = await db
+    .insert(Profiles)
+    .values({
+      displayName: suffix,
+      followPolicy,
+      handle: suffix,
+      instanceId: instance.id,
+      normalizedHandle: suffix,
+      state: ProfileState.ACTIVE,
+    })
+    .returning()
+    .then(firstOrThrow);
+  profileIds.push(profile.id);
+  await db.insert(ActivityPubActors).values({
+    inboxUri: `https://${suffix}.remote.example/inbox`,
+    profileId: profile.id,
+    type: ActivityPubActorType.PERSON,
+    uri: `https://${suffix}.remote.example/users/${suffix}`,
+  });
   return profile;
 };
 
@@ -110,6 +154,7 @@ test('open Follow stores the Workflow candidate entity ID and reconstructs a ret
       kind: 'CREATE',
       input: {
         origin: 'LOCAL',
+        sendActivityPub: false,
         sourceId: candidateProfileFollowId,
         sourceKind: 'FOLLOW',
         transition: 'FOLLOW',
@@ -119,6 +164,101 @@ test('open Follow stores the Workflow candidate entity ID and reconstructs a ret
 
   const retry = await executeProfileFollowPairTransition(input);
   assert.deepEqual(retry, first);
+});
+
+test('ActivityPub delivery eligibility는 transition transaction에서 고정한다', async () => {
+  const follower = await createProfile();
+
+  for (const [state, sendActivityPub] of [
+    [InstanceState.ACTIVE, true],
+    [InstanceState.UNRESPONSIVE, false],
+  ] as const) {
+    const followee = await createRemoteProfile(state);
+    const profileFollowId = crypto.randomUUID();
+    const followed = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
+      command: {
+        kind: 'FOLLOW',
+        followerProfileId: follower.id,
+        followeeProfileId: followee.id,
+        origin: 'LOCAL',
+      },
+      candidateRowId: profileFollowId,
+    });
+    assert.equal(followed.ok, true);
+    if (!followed.ok || followed.result.commandKind !== 'FOLLOW') {
+      continue;
+    }
+    const followEffect = followed.effectPlan[0]?.input;
+    assert.equal(
+      followEffect && 'sendActivityPub' in followEffect ? followEffect.sendActivityPub : undefined,
+      sendActivityPub,
+    );
+
+    const removed = await executeProfileFollowRemoval({
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+      expectedRowId: profileFollowId,
+      origin: 'LOCAL',
+      transition: 'UNFOLLOW',
+      snapshot: followed.result.profileFollowSnapshot,
+    });
+    assert.equal(removed.ok, true);
+    if (removed.ok) {
+      const removalEffect = removed.effectPlan[0]?.input;
+      assert.equal(
+        removalEffect && 'sendActivityPub' in removalEffect
+          ? removalEffect.sendActivityPub
+          : undefined,
+        sendActivityPub,
+      );
+    }
+  }
+});
+
+test('ActivityPub request cancel도 transition 시점 eligibility를 기록한다', async () => {
+  const follower = await createProfile();
+
+  for (const [state, sendActivityPub] of [
+    [InstanceState.ACTIVE, true],
+    [InstanceState.UNRESPONSIVE, false],
+  ] as const) {
+    const followee = await createRemoteProfile(state, ProfileFollowPolicy.APPROVAL_REQUIRED);
+    const pending = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
+      command: {
+        kind: 'FOLLOW',
+        followerProfileId: follower.id,
+        followeeProfileId: followee.id,
+        origin: 'LOCAL',
+      },
+      candidateRowId: crypto.randomUUID(),
+    });
+    assert.equal(pending.ok, true);
+    if (!pending.ok || pending.result.commandKind !== 'FOLLOW') {
+      continue;
+    }
+    const requestId = pending.result.profileFollowRequestId!;
+    const canceled = await executeProfileFollowPairTransition({
+      pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
+      command: {
+        actorProfileId: follower.id,
+        expectedRowId: requestId,
+        followerProfileId: follower.id,
+        followeeProfileId: followee.id,
+        kind: 'CANCEL',
+        origin: 'LOCAL',
+      },
+    });
+    assert.equal(canceled.ok, true);
+    if (canceled.ok) {
+      const effect = canceled.effectPlan[0]?.input;
+      assert.equal(
+        effect && 'sendActivityPub' in effect ? effect.sendActivityPub : undefined,
+        sendActivityPub,
+      );
+    }
+  }
 });
 
 test('hydrate preserves a committed Follow row after a concurrent terminal removal', async () => {
@@ -583,6 +723,7 @@ test('removal retry reconstructs the deleted Follow effect without deleting a re
         followeeProfileId: followee.id,
         id: firstFollow.id,
         origin: 'LOCAL',
+        sendActivityPub: false,
         sourceId: firstFollow.id,
         sourceKind: 'FOLLOW',
         transition: 'UNFOLLOW',

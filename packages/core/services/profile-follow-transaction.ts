@@ -81,7 +81,14 @@ const loadProfileFollowParticipants = async (
     throw new NotFoundError('Profile not found');
   }
 
-  return { isActivityPubInbound, target };
+  return {
+    isActivityPubInbound,
+    sendActivityPub:
+      follower.instanceKind === InstanceKind.LOCAL &&
+      target.instanceKind === InstanceKind.ACTIVITYPUB &&
+      target.instanceState === InstanceState.ACTIVE,
+    target,
+  };
 };
 
 export const followProfileInTransaction = async (
@@ -94,6 +101,7 @@ export const followProfileInTransaction = async (
   tx: Transaction,
 ): Promise<{
   readonly pendingRequest: ProfileFollowRequestRow | undefined;
+  readonly sendActivityPub: boolean;
   readonly result: {
     readonly created: boolean;
     readonly followeeProfile: ProfileRow;
@@ -105,7 +113,7 @@ export const followProfileInTransaction = async (
     throw new ConflictError({ message: 'Profile cannot follow itself' });
   }
 
-  const { target } = await loadProfileFollowParticipants(tx, {
+  const { sendActivityPub, target } = await loadProfileFollowParticipants(tx, {
     followerProfileId,
     followeeProfileId,
   });
@@ -151,7 +159,7 @@ export const followProfileInTransaction = async (
   }
 
   const result = { created, followeeProfile, followerProfile, result: followResult };
-  return { pendingRequest, result };
+  return { pendingRequest, result, sendActivityPub };
 };
 
 export type DeletedProfileFollowProjection = {
