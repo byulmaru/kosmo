@@ -156,8 +156,8 @@ Cloud US project의 공개 project key와 ingestion host를 build/deployment에 
 - Cloud US host와 공개 key의 build/deployment 주입, key-only·host-only·둘 다 없음·둘 다 존재하는 네 조합의 설정 증거를 확인한다.
 - PROD-819 consumer contract가 실제 key 값 없이 설정 완전성·초기 replay-off를 확인할 수 있도록 handoff한다.
 
-- [x] 5.1 Cloud US project의 공개 key·ingestion host build/deployment 주입 경계를 정렬하고 secret 비노출 증거를 기록한다.
-- [x] 5.2 네 가지 설정 조합과 초기 Session Replay off 상태를 검증해 PROD-819·PROD-795에 인계한다.
+- [ ] 5.1 Cloud US project의 공개 key·ingestion host build/deployment 주입 경계를 정렬하고 secret 비노출 증거를 기록한다.
+- [ ] 5.2 네 가지 설정 조합과 초기 Session Replay off 상태를 검증해 PROD-819·PROD-795에 인계한다.
 
 ## 6·7. PROD-795 production-equivalent cross-slice 검증 예약 ownership
 
