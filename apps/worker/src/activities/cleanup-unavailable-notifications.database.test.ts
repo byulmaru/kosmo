@@ -384,7 +384,9 @@ test('null/undefined cleanup input is rejected as non-retryable Activity failure
     await assert.rejects(
       runPage(input as never),
       (error: unknown) =>
-        error instanceof ApplicationFailure && error.type === 'CleanupInvalidInputError',
+        error instanceof ApplicationFailure &&
+        error.type === 'CleanupInvalidInputError' &&
+        error.nonRetryable === true,
     );
   }
 });
@@ -395,6 +397,7 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
+      error.nonRetryable === true &&
       /upperBound is required/.test(error.message),
   );
   await assert.rejects(
@@ -402,6 +405,7 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
+      error.nonRetryable === true &&
       /pageSize must be an integer/.test(error.message),
   );
   await assert.rejects(
@@ -409,6 +413,7 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
+      error.nonRetryable === true &&
       /pageSize must be an integer between 1 and 1000/.test(error.message),
   );
   await assert.rejects(
@@ -416,6 +421,7 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
+      error.nonRetryable === true &&
       /cursor must be a UUID/.test(error.message),
   );
   await assert.rejects(
@@ -423,6 +429,7 @@ test('invalid cleanup input is rejected as non-retryable Activity failure', asyn
     (error: unknown) =>
       error instanceof ApplicationFailure &&
       error.type === 'CleanupInvalidInputError' &&
+      error.nonRetryable === true &&
       /upperBound must be a UUID/.test(error.message),
   );
 });

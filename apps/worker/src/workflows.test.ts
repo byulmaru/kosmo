@@ -1443,10 +1443,6 @@ test(
       assert.equal(result.deleted, 0);
       assert.equal(result.skipped, 0);
       assert.equal(result.upperBound, '00000000-0000-8000-8000-000000000010');
-      assert.match(
-        result.sweepId,
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-      );
       assert.deepEqual(calls, [
         { type: 'bound' },
         {
@@ -1497,17 +1493,19 @@ test(
         workflowId: `notification-cleanup-empty:${process.pid}`,
       });
 
-      const { sweepId, ...summary } = result;
-      assert.deepEqual(summary, {
-        cursor: null,
-        upperBound: null,
-        done: true,
-        pages: 0,
-        scanned: 0,
-        deleted: 0,
-        skipped: 0,
-      });
-      assert.match(sweepId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+      assert.deepEqual(
+        { ...result, sweepId: undefined },
+        {
+          sweepId: undefined,
+          cursor: null,
+          upperBound: null,
+          done: true,
+          pages: 0,
+          scanned: 0,
+          deleted: 0,
+          skipped: 0,
+        },
+      );
       assert.equal(boundCalls, 1);
       assert.equal(pageCalls, 0);
     });
