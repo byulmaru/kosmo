@@ -71,83 +71,6 @@ const ROBOTS_SOURCE = resolve(
   '../../../../apps/app/public/robots.txt',
 );
 
-type RobotsGroup = {
-  allow: string[];
-  disallow: string[];
-  userAgents: string[];
-};
-
-const parseRobots = (body: string) => {
-  const groups: RobotsGroup[] = [];
-  const sitemaps: string[] = [];
-  let group: RobotsGroup | undefined;
-  let groupHasRules = false;
-
-  const finishGroup = () => {
-    if (group?.userAgents.length) {
-      groups.push(group);
-    }
-    group = undefined;
-    groupHasRules = false;
-  };
-
-  for (const rawLine of body.split(/\r?\n/)) {
-    const line = rawLine.replace(/#.*/, '').trim();
-    if (!line) {
-      if (groupHasRules) {
-        finishGroup();
-      }
-      continue;
-    }
-
-    const separator = line.indexOf(':');
-    if (separator === -1) {
-      continue;
-    }
-
-    const directive = line.slice(0, separator).trim().toLowerCase();
-    const value = line.slice(separator + 1).trim();
-
-    if (directive === 'user-agent') {
-      if (!group || groupHasRules) {
-        finishGroup();
-        group = { allow: [], disallow: [], userAgents: [] };
-      }
-      group.userAgents.push(value);
-      continue;
-    }
-
-    if (directive === 'sitemap') {
-      sitemaps.push(value);
-      continue;
-    }
-
-    if (!group) {
-      continue;
-    }
-
-    if (directive === 'allow') {
-      group.allow.push(value);
-      groupHasRules = true;
-    } else if (directive === 'disallow') {
-      group.disallow.push(value);
-      groupHasRules = true;
-    }
-  }
-
-  finishGroup();
-  return { groups, sitemaps };
-};
-
-const robotsPathIsAllowed = (group: RobotsGroup, path: string) => {
-  const longestRule = (rules: string[]) =>
-    rules
-      .filter((rule) => rule.length > 0 && path.startsWith(rule))
-      .reduce((longest, rule) => Math.max(longest, rule.length), 0);
-
-  return longestRule(group.allow) >= longestRule(group.disallow);
-};
-
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
   await writeFile(join(staticRoot, 'index.html'), '<html>expo app</html>');
@@ -556,88 +479,39 @@ describe('runtime routing', () => {
     expect(federationFetch).toHaveBeenCalledTimes(4);
   });
 
-  test('keeps public, static, and ActivityPub paths crawlable while excluding protected prefixes', () => {
-    const robots = parseRobots(repositoryRobots);
-    const wildcardRules = robots.groups.find((group) => group.userAgents.includes('*'));
+  test('keeps repository robots directives limited to protected prefixes and sitemap', () => {
+    const directives = repositoryRobots
+      .split(/\r?\n/)
+      .map((line) => line.replace(/#.*/, '').trim())
+      .filter(Boolean);
 
-    expect(robots.groups).toHaveLength(1);
-    expect(wildcardRules).toBeDefined();
-    if (!wildcardRules) {
-      throw new Error('Missing wildcard robots.txt group');
-    }
-
-    expect(wildcardRules.userAgents).toEqual(['*']);
-    expect(wildcardRules.allow).toEqual([]);
-    expect(wildcardRules.disallow).toEqual([
-      '/bookmarks',
-      '/compose',
-      '/feedback',
-      '/follow-requests',
-      '/hashtags/',
-      '/home',
-      '/notifications',
-      '/profile-edit',
-      '/search',
-      '/settings',
-      '/login',
-      '/logout',
-      '/graphql',
-      '/health',
+    expect(directives).toEqual([
+      'User-agent: *',
+      'Disallow: /bookmarks',
+      'Disallow: /compose',
+      'Disallow: /feedback',
+      'Disallow: /follow-requests',
+      'Disallow: /hashtags/',
+      'Disallow: /local',
+      'Disallow: /home',
+      'Disallow: /notifications',
+      'Disallow: /profile-edit',
+      'Disallow: /search',
+      'Disallow: /settings',
+      'Disallow: /login',
+      'Disallow: /logout',
+      'Disallow: /graphql',
+      'Disallow: /health',
+      'Sitemap: https://kos.moe/sitemap.xml',
     ]);
-    expect(robots.sitemaps).toEqual(['https://kos.moe/sitemap.xml']);
-
-    for (const path of [
-      '/@alice',
-      '/@alice/post-id',
-      '/assets/entry.js',
-      '/.well-known/webfinger',
-      '/ap/actor/local-profile',
-      '/ap/actor/local-profile/followers',
-      '/ap/note/post-id',
-      '/ap/follow/follow-id',
-      '/ap/actor/local-profile/inbox',
-      '/inbox',
-      '/users/alice/inbox',
-    ]) {
-      expect(robotsPathIsAllowed(wildcardRules, path), path).toBe(true);
-    }
-
-    for (const path of [
-      '/bookmarks',
-      '/bookmarks/post-id',
-      '/compose',
-      '/feedback',
-      '/follow-requests',
-      '/hashtags/kosmo',
-      '/home',
-      '/notifications',
-      '/profile-edit',
-      '/search',
-      '/search/results',
-      '/settings',
-      '/login/callback',
-      '/logout',
-      '/graphql',
-      '/health',
-    ]) {
-      expect(robotsPathIsAllowed(wildcardRules, path), path).toBe(false);
-    }
   });
 
   test.each([
-    { accept: undefined, fetchMode: undefined },
-    { accept: 'text/html', fetchMode: 'navigate' },
+    { headers: {} as Record<string, string> },
+    { headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' } },
   ])(
-    'serves exported robots.txt as text/plain for $fetchMode request headers',
-    async ({ accept, fetchMode }) => {
-      const headers = new Headers();
-      if (accept) {
-        headers.set('accept', accept);
-      }
-      if (fetchMode) {
-        headers.set('sec-fetch-mode', fetchMode);
-      }
-
+    'serves repository robots.txt through the BFF as text/plain for request headers $headers',
+    async ({ headers }) => {
       const response = await app.request('/robots.txt', { headers });
       const body = await response.text();
 

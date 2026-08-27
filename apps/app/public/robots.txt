@@ -1,12 +1,13 @@
 # Repository-owned path policy: protected and internal endpoints are not crawl targets.
 # Public profiles/posts, static assets, and ActivityPub paths remain allowed by default.
-# Cloudflare Managed robots.txt owns AI content-signal directives and edge enforcement.
+# Cloudflare Managed robots.txt owns AI content-signal directives; AI Crawl Control/WAF owns edge enforcement.
 User-agent: *
 Disallow: /bookmarks
 Disallow: /compose
 Disallow: /feedback
 Disallow: /follow-requests
 Disallow: /hashtags/
+Disallow: /local
 Disallow: /home
 Disallow: /notifications
 Disallow: /profile-edit
