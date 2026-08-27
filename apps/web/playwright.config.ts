@@ -26,8 +26,6 @@ const configuredWebOrigin =
   process.env.KOSMO_TEST_CONFIGURED_WEB_ORIGIN ?? 'https://configured-web-origin.invalid';
 const noAnalyticsWebOrigin = `http://${host}:${noAnalyticsWebPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
-const posthogE2EKey = 'posthog-e2e-project-key';
-const posthogE2EHost = 'https://posthog.e2e.invalid';
 const oidcClientId = process.env.PUBLIC_OIDC_CLIENT_ID ?? 'kosmo-e2e-client';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? 'kosmo-e2e-secret';
 const nativeOidcClientId = process.env.PUBLIC_OIDC_NATIVE_CLIENT_ID ?? 'kosmo-e2e-native-client';
@@ -143,8 +141,8 @@ export default defineConfig({
         EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
         EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
         EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS: 'true',
-        EXPO_PUBLIC_POSTHOG_HOST: posthogE2EHost,
-        EXPO_PUBLIC_POSTHOG_KEY: posthogE2EKey,
+        EXPO_PUBLIC_POSTHOG_HOST: 'https://posthog.e2e.invalid',
+        EXPO_PUBLIC_POSTHOG_KEY: 'posthog-e2e-project-key',
         EXPO_PUBLIC_WEB_ORIGIN: configuredWebOrigin,
         EXPO_WEB_ROOT: '../app/dist',
         OIDC_CLIENT_SECRET: oidcClientSecret,
