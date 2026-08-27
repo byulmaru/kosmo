@@ -91,10 +91,16 @@ export const InteractionContract: Story = {
 
     await userEvent.tab();
     expect(email).toHaveFocus();
+    expect(getComputedStyle(email).borderWidth).toBe('2px');
+
+    await userEvent.click(email);
+    expect(email).toHaveFocus();
+    expect(getComputedStyle(email).borderWidth).toBe('0px');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(sms).toHaveFocus();
     expect(sms).toBeChecked();
+    expect(getComputedStyle(sms).borderWidth).toBe('2px');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(inApp).toHaveFocus();

@@ -258,7 +258,26 @@ test('RadioOption owns canonical presentation and semantic visual states', () =>
 
 test('RadioOption uses internal focus and disabled strokes without changing outer geometry', () => {
   const renderer = renderGroup({ value: 'email' });
-  const focused = radioStyle(renderer, '이메일', { focused: true, pressed: false });
+  const radio = radioByLabel(renderer, '이메일');
+  let matchesFocusVisible = false;
+  const focusEvent = {
+    currentTarget: {
+      matches: (selector: string) => {
+        assert.equal(selector, ':focus-visible');
+        return matchesFocusVisible;
+      },
+    },
+  };
+
+  act(() => radio.props.onFocus(focusEvent));
+  const pointerFocused = radioStyle(renderer, '이메일', { pressed: false });
+  assert.equal(pointerFocused.borderColor, undefined);
+  assert.equal(pointerFocused.borderWidth, 0);
+  assert.equal(pointerFocused.padding, 12);
+
+  matchesFocusVisible = true;
+  act(() => radio.props.onFocus(focusEvent));
+  const focused = radioStyle(renderer, '이메일', { pressed: false });
   assert.equal(focused.borderColor, 'focus-ring');
   assert.equal(focused.borderWidth, 2);
   assert.equal(focused.padding, 10);
@@ -268,7 +287,17 @@ test('RadioOption uses internal focus and disabled strokes without changing oute
   assert.equal(focused.outlineWidth, undefined);
   assert.equal(2 * (Number(focused.padding) + Number(focused.borderWidth)) + 24, 48);
 
-  const focusedDescription = radioStyle(renderer, '문자', { focused: true, pressed: false });
+  act(() => radio.props.onBlur());
+  const blurred = radioStyle(renderer, '이메일', { pressed: false });
+  assert.equal(blurred.borderColor, undefined);
+  assert.equal(blurred.borderWidth, 0);
+  assert.equal(blurred.padding, 12);
+
+  const descriptionRadio = radioByLabel(renderer, '문자');
+  act(() => descriptionRadio.props.onFocus(focusEvent));
+  const focusedDescription = radioStyle(renderer, '문자', { pressed: false });
+  assert.equal(focusedDescription.borderWidth, 2);
+  assert.equal(focusedDescription.padding, 10);
   assert.equal(
     2 * (Number(focusedDescription.padding) + Number(focusedDescription.borderWidth)) + 48,
     72,

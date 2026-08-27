@@ -1,4 +1,4 @@
-import { Children, createContext, useContext, useRef } from 'react';
+import { Children, createContext, useContext, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
@@ -43,6 +43,7 @@ type WebRadioProps = {
   'aria-checked': boolean;
   'aria-disabled': boolean;
   onKeyDown: (event: { key: string; preventDefault: () => void }) => void;
+  onPointerDown: () => void;
   role: 'radio';
   tabIndex: -1 | 0;
 };
@@ -96,6 +97,7 @@ export function RadioOption<Value extends string>({
 
   const theme = useTheme();
   const optionRef = useRef<View>(null);
+  const [focusVisible, setFocusVisible] = useState(false);
   context.optionRefs.set(option.value, optionRef);
 
   const disabled = context.disabled || Boolean(option.disabled);
@@ -152,6 +154,16 @@ export function RadioOption<Value extends string>({
       accessibilityRole="radio"
       accessibilityState={{ checked, disabled }}
       disabled={disabled}
+      onBlur={() => setFocusVisible(false)}
+      onFocus={(event) => {
+        if (Platform.OS !== 'web') {
+          return;
+        }
+        const target = event.currentTarget as unknown as {
+          matches?: (selector: string) => boolean;
+        };
+        setFocusVisible(Boolean(target.matches?.(':focus-visible')));
+      }}
       onPress={() => {
         if (!disabled) {
           context.onChange(option.value);
@@ -159,8 +171,8 @@ export function RadioOption<Value extends string>({
       }}
       ref={optionRef}
       style={(state) => {
-        const webState = state as { focused?: boolean; hovered?: boolean };
-        const focused = web && Boolean(webState.focused);
+        const webState = state as { hovered?: boolean };
+        const focused = web && focusVisible;
         const hovered = web && Boolean(webState.hovered);
         const borderWidth = disabled
           ? borderWidths[1]
@@ -194,6 +206,7 @@ export function RadioOption<Value extends string>({
             'aria-checked': checked,
             'aria-disabled': disabled,
             onKeyDown,
+            onPointerDown: () => setFocusVisible(false),
             role: 'radio',
             tabIndex,
           } as WebRadioProps)
