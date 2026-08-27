@@ -128,9 +128,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `고정 게시물을 변경할까요?` 제목과 `새 게시물을 고정하면 현재 고정된 게시물의 고정이 해제됩니다.` 설명을
   표시한다. action은 `취소`와 Primary `변경하기`이며 취소·닫기는 상태를 바꾸지 않는다. 단순
   `프로필 고정 해제`는 확인 없이 수행한다.
-- 교체 확인은 별도 confirmation component나 OS alert가 아니라 canonical `ModalSheet` pattern을 재사용한다.
-  Web에서는 제목으로 이름 붙은 modal `dialog`, Android·iOS에서는 제목으로 이름 붙은 modal 접근성 surface를
-  제공하며 backdrop과 platform back은 취소와 동일하게 처리한다.
+- 교체 확인은 도메인 전용 confirmation component나 OS alert를 만들지 않고 canonical `ModalSheet`에 공용
+  `ConfirmationContent`의 `Tone=Primary`, `State=Idle`을 넣는다. Web에서는 제목으로 이름 붙은 modal `dialog`,
+  Android·iOS에서는 제목으로 이름 붙은 modal 접근성 surface를 제공하며 backdrop과 platform back은 취소와
+  동일하게 처리한다.
 - empty·removed·unavailable는 representative UI일 뿐이다. 최대 수·대상 자격·권한·lifecycle·pagination·
   persistence/API·ActivityPub과 교체 mutation·동시성·실패 처리 정책은 PROD-809가 소유한다.
 
@@ -166,11 +167,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   시작하지 않는다. dialog title은 `게시글을 삭제할까요?`, 설명은 `삭제한 게시글은 복구할 수 없습니다.`,
   action은 `취소`와 `삭제`를 사용한다.
 - Figma 배치 근거는 [`Post deletion confirmation placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5631-25077)다.
-  새 confirmation component를 만들지 않고 canonical
-  [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)의 content swap에
-  [`PostDeleteConfirmContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)의
-  `Idle|Pending`을 넣는다. Web·Mobile과 Light·Dark 배치 표본은 source 조합 evidence이며 Production Screens
-  consumer나 runtime 상호작용 완료를 뜻하지 않는다.
+  canonical [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)의
+  content swap에 공용 [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)의
+  `Tone=Danger`, `State=Idle|Pending`을 넣고 제목·설명·action label만 삭제 문맥으로 설정한다. Web·Mobile과
+  Light·Dark 배치 표본은 source 조합 evidence이며 Production Screens consumer나 runtime 상호작용 완료를
+  뜻하지 않는다.
 - 확인 dialog는 Web에서 `alertdialog`, Android·iOS에서 modal 접근성 의미를 제공한다. 처음 열릴 때 안전한
   `취소`에 focus를 두고 pending 전에는 Escape, platform back과 backdrop으로 취소할 수 있으며 닫은 뒤 More
   trigger로 focus를 돌려보낸다.
