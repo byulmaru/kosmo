@@ -88,6 +88,8 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 ## 조회 정책
 
 - [Post List Policy](./policies/post-list.md): Home, Local, Profile, Hashtag Post List의 후보와 제어 결정.
+- [Admin Console Read Policy](./policies/admin-console-read.md): Capability Holder의 Account, Profile,
+  Account-Profile Membership 교차 객체 조회 범위와 필드.
 
 ## 결정과 기록
 
@@ -114,6 +116,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0022: Post Content Revision Media Nodes](./decisions/0022-post-content-revision-media-nodes.md)
 - [ADR 0023: Profile Viewer Membership Edit Eligibility](./decisions/0023-profile-viewer-membership-edit-eligibility.md)
 - [ADR 0024: Application Policy and Runtime DB Boundary](./decisions/0024-application-policy-and-runtime-db-boundary.md)
+- [ADR 0025: Admin Console Capability Holder Boundary](./decisions/0025-admin-console-capability-holder-boundary.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)
