@@ -77,7 +77,7 @@ export const executeProfileFollowPairTransition = async (
       Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
       () =>
         temporalClient.workflow.executeUpdateWithStart(PROFILE_FOLLOW_PAIR_UPDATE_NAME, {
-          args: [{ command: input.command }],
+          args: [input.command],
           updateId: profileFollowPairUpdateId(input.command),
           startWorkflowOperation: new WithStartWorkflowOperation(
             PROFILE_FOLLOW_PAIR_WORKFLOW_TYPE,

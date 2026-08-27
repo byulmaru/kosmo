@@ -55,7 +55,7 @@ test('pair transition caller uses deterministic UWS identity and active-run poli
     assert.ok(options);
     assert.equal(updateName, 'profileFollowPairUpdate');
     assert.equal(options.updateId, 'follow');
-    assert.deepEqual(options.args, [{ command: followCommand }]);
+    assert.deepEqual(options.args, [followCommand]);
 
     const operation = options.startWorkflowOperation;
     assert.equal(operation.options.workflowId, profileFollowPairWorkflowId(pair));
