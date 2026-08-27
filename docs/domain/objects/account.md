@@ -24,7 +24,7 @@ Account가 아니라 Profile이다.
 | 생성 시각    | 시각, 필수       | 생성 결과로 기록하며 변경 불가                                         | 항상      | 대상 Account의 내부 조회 | `Account.Self` 또는 `Account.Operator` |
 
 Admin Console의 Account 목록·상세와 OIDC subject exact 검색은 일반 Account 조회 권한을 확장하지 않고
-[Admin Console Read Policy](../policies/admin-console-read.md)의 `account.read` 조건으로만 제공한다.
+[Admin Console Read Policy](../policies/admin-console-read.md)의 Admin Console Viewer projection으로만 제공한다.
 
 ## 관계
 
