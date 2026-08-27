@@ -46,16 +46,31 @@ export function useAutomaticPagination({
     offset: 0,
     viewportLength: 0,
   });
+  const latestOptionsRef = useRef({
+    hasNext,
+    isLoadingNext,
+    loadNext,
+    pageSize,
+    webScrollTarget,
+  });
+  latestOptionsRef.current = {
+    hasNext,
+    isLoadingNext,
+    loadNext,
+    pageSize,
+    webScrollTarget,
+  };
 
   const loadNextPage = useCallback(() => {
-    if (!hasNext || isLoadingNext || requestInFlightRef.current) {
+    const latestOptions = latestOptionsRef.current;
+    if (!latestOptions.hasNext || latestOptions.isLoadingNext || requestInFlightRef.current) {
       return;
     }
 
     requestInFlightRef.current = true;
     pageErrorRef.current = false;
     setLoadError(false);
-    loadNext(pageSize, {
+    latestOptions.loadNext(latestOptions.pageSize, {
       onComplete: (error) => {
         pageErrorRef.current = Boolean(error);
         setLoadError(Boolean(error));
@@ -64,7 +79,7 @@ export function useAutomaticPagination({
           return;
         }
         setTimeout(() => {
-          if (Platform.OS === 'web' && webScrollTarget === 'document') {
+          if (Platform.OS === 'web' && latestOptionsRef.current.webScrollTarget === 'document') {
             window.requestAnimationFrame(() => {
               requestInFlightRef.current = false;
               webNearEndCheckRef.current?.();
@@ -75,7 +90,7 @@ export function useAutomaticPagination({
         }, 0);
       },
     });
-  }, [hasNext, isLoadingNext, loadNext, pageSize, webScrollTarget]);
+  }, []);
 
   const maybeLoadNextPage = useCallback(
     (metrics: ScrollMetrics) => {
