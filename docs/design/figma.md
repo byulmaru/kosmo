@@ -86,15 +86,19 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   선택지 입력은 canonical `TextField`, 복수 선택은 canonical `Checkbox`, 선택지 추가·제거는 canonical `Plus`·`X`를
   소비한다. 단일 선택 표시는 공용 Radio source가 생기기 전까지 Poll 내부의 semantic-token-bound control로 유지한다.
 - [`PostComposerMediaItems`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4182)는
-  attachment gallery만 소유하며 `__SensitiveMediaRow`를 직접 노출하지 않는다. 이미지별 민감도 설정은
-  `ComposerMediaEditor Tool=Sensitive`에서만 제공한다. `__SensitiveMediaRow` source는 탐색용 candidate를 위해
-  보존하지만 production `PostComposerMediaItems` consumer에서는 사용하지 않는다.
+  attachment gallery만 소유하며 `__SensitiveMediaRow`를 직접 노출하지 않는다. ALT와 향후 이미지 편집은
+  attachment별 상태지만 민감도는 canonical Post Content의 단일 `sensitiveMedia` 값이다. 어느 Ready attachment에서
+  `ComposerMediaEditor Tool=Sensitive`로 진입해도 같은 값을 편집하며 모든 Ready attachment가 결과를 함께 표시한다.
+  `__SensitiveMediaRow` source는 탐색용 candidate를 위해 보존하지만 production `PostComposerMediaItems` consumer에서는
+  사용하지 않는다. attachment별 민감도는 별도 domain/API 계약이 추가될 때 도입한다.
 - Ready attachment의 우측 상단 편집 action은 canonical `Pen`을 `20×20`으로 사용하고 `Show edit action`으로
   노출을 제어한다. Rail·Overlay gallery에서는 editor 진입점을 표시하고 `ComposerMediaEditor` 내부 preview에서는
   `false`로 숨긴다. `Expand`는 Composer Rail을 Overlay로 확장하는 별도 semantic action으로 유지한다.
 - [`__ComposerMediaItem`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=2190-4174)의
   Ready state는 기본 `false`인 `Show ALT status`·`Show sensitive status` Boolean property를 제공한다. ALT가 비어
-  있지 않을 때만 `ALT` pill을, 이미지에 민감 플래그가 있을 때만 canonical `Flag`와 `민감` pill을 표시하며 두
+  있지 않을 때 해당 attachment에만 `ALT` pill을 표시한다. Post의 `sensitiveMedia=true`이면 모든 Ready attachment가
+  canonical `Flag`와 `민감` pill을 함께 표시하며, 어느 pill에서 진입해도 같은 `Tool=Sensitive` 값을 편집한다.
+  `Show sensitive status`는 attachment별 저장값이 아니라 consumer가 공유 상태를 mirror하기 위한 property다. 두
   status는 각각 `ComposerMediaEditor Tool=Alt`·`Tool=Sensitive`로 바로 재진입한다. Ready thumbnail body의
   pointer/touch도 기본 `Tool=Alt`로 editor를 열되 Remove·Pen·status control은 각 action을 유지한다. Pen은
   keyboard·assistive technology의 명시적 editor 진입점으로 남긴다. pill의 visual height는 `28px`이고 Native는
@@ -112,14 +116,17 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   `600px` 폭은 유지하고, editor 진입 시 같은 parent surface 안의 내용을 교체하면서 editor 폭으로 확장한다.
   별도 `ModalSheet`·scrim을 중첩하거나 `PostComposer`의 `State`·`Rail` variant로 추가하지 않는다.
 - `ComposerMediaEditor`는 `Tool=Alt|Sensitive|Image Edit`를 제공한다. `Alt`가 기존 consumer를 보존하는 기본값이고,
-  `Sensitive`는 선택한 이미지의 경고 설정이다. `Image Edit`는 향후 crop·회전·초점 기능의 확장 구조만 검증하는
-  specimen이며 현재 Product 저장·편집 기능을 의미하지 않는다. canonical `TabList`·`Tab/Underline`을 사용하고,
-  편집할 이미지의 `48×48` selector는 preview 하단 중앙에서 tool tabs와 분리한다. 이 selector는 Composer 본문의
+  `Sensitive`는 어느 attachment에서 진입해도 Post Content의 공유 `sensitiveMedia`를 편집하며, 토글 결과를 모든
+  attachment status pill이 함께 mirror한다. 선택한 이미지는 ALT·향후 이미지 편집을 위한 navigation context이지
+  민감도의 소유 단위가 아니다. `Image Edit`는 향후 crop·회전·초점 기능의 확장 구조만 검증하는 specimen이며 현재
+  Product 저장·편집 기능을 의미하지 않는다. canonical `TabList`·`Tab/Underline`을 사용하고, 편집할 이미지의
+  `48×48` selector는 preview 하단 중앙에서 tool tabs와 분리한다. 이 selector는 Composer 본문의
   `PostComposerMediaItems` gallery를 대체하는 컴포넌트가 아니라 editor 안의 현재 이미지 navigation이다.
 - editor header는 `44×44` hit target 안에 기존 Web `IconButton` `32×32`와 canonical `ArrowLeft`·`X`를 사용한다. Back은 draft와
   media를 유지한 채 Composer로 돌아가고, Close는 Composer Overlay 전체를 닫는다. preview 안의 X는 해당
-  attachment만 제거하며, 하단 `완료`는 선택한 이미지의 변경을 draft에 반영하고 Composer로 돌아간다. Rail에서
-  편집을 시작해도 같은 Overlay의 editor view로 직접 전환한다.
+  attachment만 제거한다. 하단 `완료`는 현재 tool의 변경을 draft에 반영하고 Composer로 돌아가며, ALT·향후 이미지
+  편집은 선택 attachment에, Sensitive는 Post 전체에 적용한다. Rail에서 편집을 시작해도 같은 Overlay의 editor
+  view로 직접 전환한다.
 - `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. scrim, focus trap·restore, Escape,
   discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
   Product의 상위 Overlay 구현이 소유한다.
