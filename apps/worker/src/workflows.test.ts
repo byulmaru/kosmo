@@ -5,8 +5,8 @@ import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/clie
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import type {
-  ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
+  ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
 import type { ProfileFollowPairWorkflowStatus } from './workflows/profile-follow-pair';
 
@@ -255,7 +255,13 @@ test(
     const execution = {
       ok: true as const,
       nextState: 'ESTABLISHED' as const,
-      result: { kind: 'ESTABLISHED', profileFollowId: followId },
+      result: {
+        commandKind: 'FOLLOW' as const,
+        created: true,
+        kind: 'ESTABLISHED' as const,
+        ...pair,
+        profileFollowId: followId,
+      },
       effectPlan: [
         {
           kind: 'DELETE' as const,
@@ -318,11 +324,8 @@ test(
           {
             args: [
               {
-                command: {
-                  kind: 'FOLLOW' as const,
-                  ...pair,
-                  origin: 'LOCAL' as const,
-                },
+                kind: 'FOLLOW' as const,
+                origin: 'LOCAL' as const,
               },
             ],
             startWorkflowOperation,
@@ -330,7 +333,7 @@ test(
         );
 
         await effectStartedPromise;
-        assert.deepEqual(await updateResultPromise, execution);
+        assert.deepEqual(await updateResultPromise, { ok: true, result: execution.result });
         assert.equal(calls.includes('notification:' + followId), true);
 
         releaseEffect();
@@ -381,7 +384,13 @@ test(
             return {
               ok: true as const,
               nextState: 'PENDING' as const,
-              result: { kind: 'PENDING', requestId },
+              result: {
+                commandKind: 'FOLLOW' as const,
+                created: true,
+                kind: 'PENDING' as const,
+                ...pair,
+                profileFollowRequestId: requestId,
+              },
               effectPlan: [
                 {
                   kind: 'CREATE' as const,
@@ -399,7 +408,12 @@ test(
           return {
             ok: true as const,
             nextState: 'REJECTED' as const,
-            result: { kind: 'REJECTED', requestId },
+            result: {
+              commandKind: 'REJECT' as const,
+              changed: true,
+              ...pair,
+              profileFollowRequestId: requestId,
+            },
             effectPlan: [
               {
                 kind: 'DELETE' as const,
@@ -448,16 +462,13 @@ test(
         {
           args: [
             {
-              command: {
-                kind: 'FOLLOW' as const,
-                ...pair,
-                origin: 'LOCAL' as const,
-              },
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
             },
           ],
           startWorkflowOperation,
         },
-      )) as ProfileFollowPairTransitionExecution;
+      )) as ProfileFollowPairTransitionOutcome;
       assert.equal(first.ok, true);
       const handle = await handlePromise;
       await effectFailed;
@@ -470,17 +481,15 @@ test(
       const terminal = (await handle.executeUpdate('profileFollowPairUpdate', {
         args: [
           {
-            command: {
-              kind: 'REJECT' as const,
-              ...pair,
-              expectedRowId: requestId,
-              origin: 'LOCAL' as const,
-            },
+            kind: 'REJECT' as const,
+            expectedRowId: requestId,
+            origin: 'LOCAL' as const,
+            actorProfileId: pair.followeeProfileId,
           },
         ],
-      })) as ProfileFollowPairTransitionExecution;
+      })) as ProfileFollowPairTransitionOutcome;
       assert.equal(terminal.ok, true);
-      assert.equal(terminal.nextState, 'REJECTED');
+      assert.equal(terminal.result.commandKind, 'REJECT');
 
       await assert.rejects(() => handle.result());
       assert.deepEqual(calls, ['create:' + requestId, 'delete:' + requestId]);
@@ -547,17 +556,14 @@ test(
         {
           args: [
             {
-              command: {
-                kind: 'FOLLOW' as const,
-                ...pair,
-                origin: 'LOCAL' as const,
-              },
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
             },
           ],
           updateId: 'follow',
           startWorkflowOperation,
         },
-      )) as ProfileFollowPairTransitionExecution;
+      )) as ProfileFollowPairTransitionOutcome;
       assert.equal(first.ok, true);
 
       const handle = await handlePromise;
@@ -565,12 +571,10 @@ test(
         handle.executeUpdate('profileFollowPairUpdate', {
           args: [
             {
-              command: {
-                kind: 'REJECT' as const,
-                ...pair,
-                expectedRowId: requestId,
-                origin: 'LOCAL' as const,
-              },
+              kind: 'REJECT' as const,
+              expectedRowId: requestId,
+              origin: 'LOCAL' as const,
+              actorProfileId: pair.followeeProfileId,
             },
           ],
           updateId: 'REJECT:' + requestId,
@@ -644,17 +648,14 @@ test(
         {
           args: [
             {
-              command: {
-                kind: 'FOLLOW' as const,
-                ...pair,
-                origin: 'LOCAL' as const,
-              },
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
             },
           ],
           updateId: 'follow',
           startWorkflowOperation,
         },
-      )) as ProfileFollowPairTransitionExecution;
+      )) as ProfileFollowPairTransitionOutcome;
       assert.equal(first.ok, true);
 
       const handle = await handlePromise;
@@ -662,12 +663,10 @@ test(
         handle.executeUpdate('profileFollowPairUpdate', {
           args: [
             {
-              command: {
-                kind: 'REJECT' as const,
-                ...pair,
-                expectedRowId: requestId,
-                origin: 'LOCAL' as const,
-              },
+              kind: 'REJECT' as const,
+              expectedRowId: requestId,
+              origin: 'LOCAL' as const,
+              actorProfileId: pair.followeeProfileId,
             },
           ],
           updateId: 'REJECT:' + requestId,
@@ -713,6 +712,100 @@ test(
         workflowId:
           'profile-follow-pair-orphan:' + pair.followerProfileId + ':' + pair.followeeProfileId,
       });
+    });
+  },
+);
+
+test(
+  'Follow Workflow Update validator는 malformed wire input을 Activity 전에 거부한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-validation-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000661',
+      followeeProfileId: '00000000-0000-8000-8000-000000000662',
+    };
+    const calls = {
+      transition: 0,
+      removal: 0,
+      deleteNotification: 0,
+      sendUndo: 0,
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          calls.transition += 1;
+          throw new Error('malformed pair command must not execute');
+        },
+        executeProfileFollowRemovalActivity: async () => {
+          calls.removal += 1;
+          throw new Error('malformed removal input must not execute');
+        },
+        deleteFollowNotificationActivity: async () => {
+          calls.deleteNotification += 1;
+        },
+        sendProfileUnfollowActivity: async () => {
+          calls.sendUndo += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const pairHandle = await environment.client.workflow.start('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair-validation:' + process.pid,
+      });
+      await assert.rejects(
+        pairHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'ACCEPT',
+              origin: 'LOCAL',
+              expectedRowId: '',
+            } as never,
+          ],
+        }),
+      );
+      assert.equal(calls.transition, 0);
+      await pairHandle.cancel();
+      await assert.rejects(pairHandle.result());
+
+      const removalHandle = await environment.client.workflow.start(
+        'profileFollowRemovalWorkflow',
+        {
+          args: [pair],
+          taskQueue,
+          workflowId: 'profile-follow-removal-validation:' + process.pid,
+        },
+      );
+      await assert.rejects(
+        removalHandle.executeUpdate('profileFollowRemovalUpdate', {
+          args: [
+            {
+              ...pair,
+              origin: 'LOCAL',
+            } as never,
+          ],
+        }),
+      );
+      assert.deepEqual(calls, {
+        transition: 0,
+        removal: 0,
+        deleteNotification: 0,
+        sendUndo: 0,
+      });
+      await removalHandle.cancel();
+      await assert.rejects(removalHandle.result());
     });
   },
 );
@@ -808,7 +901,13 @@ test(
           },
         );
         await effectStartedPromise;
-        assert.deepEqual(await updateResultPromise, execution);
+        assert.deepEqual(await updateResultPromise, {
+          ok: true,
+          changed: execution.changed,
+          profileFollowId: execution.profileFollowId,
+          followerProfileId: execution.followerProfileId,
+          followeeProfileId: execution.followeeProfileId,
+        });
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
         await handle.result();

@@ -15,7 +15,7 @@ import type {
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
   ProfileFollowPairLifecycleState,
-  ProfileFollowPairTransitionExecution,
+  ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
@@ -25,9 +25,6 @@ export const PROFILE_FOLLOW_PAIR_ORPHAN_GUARD = '1 minute';
 export const PROFILE_FOLLOW_PAIR_CONFLICT_FAILURE_TYPE = 'ProfileFollowPairConflict';
 export const PROFILE_FOLLOW_PAIR_TRANSITION_FAILURE_TYPE = 'ProfileFollowPairTransitionFailure';
 
-export type ProfileFollowPairUpdateInput = {
-  readonly command: ProfileFollowPairCommand;
-};
 export type ProfileFollowPairWorkflowStatus = {
   readonly state: ProfileFollowPairLifecycleState;
   readonly inFlight: boolean;
@@ -69,9 +66,64 @@ const isTerminalState = (
 const pairConflict = (message: string): ApplicationFailure =>
   ApplicationFailure.nonRetryable(message, PROFILE_FOLLOW_PAIR_CONFLICT_FAILURE_TYPE);
 
-const commandMatchesPair = (command: ProfileFollowPairCommand, pair: ProfileFollowPair): boolean =>
-  command.followerProfileId === pair.followerProfileId &&
-  command.followeeProfileId === pair.followeeProfileId;
+function assertValidCommand(
+  value: unknown,
+  pair: ProfileFollowPair,
+): asserts value is ProfileFollowPairCommand {
+  if (
+    typeof pair !== 'object' ||
+    pair === null ||
+    typeof pair.followerProfileId !== 'string' ||
+    pair.followerProfileId.length === 0 ||
+    typeof pair.followeeProfileId !== 'string' ||
+    pair.followeeProfileId.length === 0
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw ApplicationFailure.nonRetryable('Profile Follow command must be an object');
+  }
+
+  const command = value as Record<string, unknown>;
+  if (
+    command.kind !== 'FOLLOW' &&
+    command.kind !== 'APPROVE' &&
+    command.kind !== 'ACCEPT' &&
+    command.kind !== 'REJECT' &&
+    command.kind !== 'CANCEL'
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile Follow command kind is invalid');
+  }
+  if (command.origin !== 'LOCAL' && command.origin !== 'ACTIVITYPUB') {
+    throw ApplicationFailure.nonRetryable('Profile Follow command origin is invalid');
+  }
+
+  if (command.kind === 'FOLLOW') {
+    return;
+  }
+  if (typeof command.expectedRowId !== 'string' || command.expectedRowId.length === 0) {
+    throw ApplicationFailure.nonRetryable('Profile Follow command expectedRowId is required');
+  }
+  if (command.kind === 'APPROVE' && command.origin !== 'LOCAL') {
+    throw ApplicationFailure.nonRetryable('Profile Follow APPROVE command origin is invalid');
+  }
+  if (command.kind === 'ACCEPT' && command.origin !== 'ACTIVITYPUB') {
+    throw ApplicationFailure.nonRetryable('Profile Follow ACCEPT command origin is invalid');
+  }
+  if (
+    command.actorProfileId !== undefined &&
+    (typeof command.actorProfileId !== 'string' || command.actorProfileId.length === 0)
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile Follow command actorProfileId is invalid');
+  }
+  if (
+    (command.kind === 'APPROVE' ||
+      (command.origin === 'LOCAL' && (command.kind === 'REJECT' || command.kind === 'CANCEL'))) &&
+    (typeof command.actorProfileId !== 'string' || command.actorProfileId.length === 0)
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile Follow command actorProfileId is required');
+  }
+}
 
 type EffectFailure = {
   readonly sourceId: string;
@@ -114,10 +166,10 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   );
 
   setHandler(
-    defineUpdate<ProfileFollowPairTransitionExecution, [ProfileFollowPairUpdateInput]>(
+    defineUpdate<ProfileFollowPairTransitionOutcome, [ProfileFollowPairCommand]>(
       PROFILE_FOLLOW_PAIR_UPDATE_NAME,
     ),
-    async ({ command }) => {
+    async (command) => {
       if (inFlight) {
         throw pairConflict('Profile Follow pair transition is already in flight');
       }
@@ -125,9 +177,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       updateReceived = true;
 
       try {
-        if (!commandMatchesPair(command, input)) {
-          throw ApplicationFailure.nonRetryable('Profile Follow command does not match pair');
-        }
+        assertValidCommand(command, input);
         if (isTerminalState(lifecycleState)) {
           throw pairConflict('Profile Follow pair lifecycle is already terminal');
         }
@@ -187,16 +237,14 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           pendingRequestId = execution.pendingRequestId;
         }
         effectQueue.push(...execution.effectPlan);
-        return execution;
+        return { ok: true as const, result: execution.result };
       } finally {
         inFlight = false;
       }
     },
     {
-      validator: ({ command }) => {
-        if (!commandMatchesPair(command, input)) {
-          throw ApplicationFailure.nonRetryable('Profile Follow command does not match pair');
-        }
+      validator: (command) => {
+        assertValidCommand(command, input);
         if (isTerminalState(lifecycleState)) {
           throw pairConflict('Profile Follow pair lifecycle is already terminal');
         }

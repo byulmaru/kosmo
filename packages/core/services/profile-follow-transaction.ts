@@ -12,6 +12,7 @@ import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '
 import { ConflictError, NotFoundError } from '../error';
 import { ensureProfileFollow } from './profile-follow-relation';
 import type { Transaction } from '../db';
+import type { ProfileFollowPair } from './profile-follow-relation';
 
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
@@ -234,11 +235,6 @@ export type AcceptProfileFollowRequestResult =
   | { readonly kind: 'ACCEPTED' }
   | { readonly kind: 'ALREADY_ESTABLISHED' }
   | { readonly kind: 'NOOP' };
-
-type ProfileFollowPair = {
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-};
 
 const requestPairCondition = (
   table: typeof ProfileFollows | typeof ProfileFollowRequests,

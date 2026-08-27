@@ -9,7 +9,7 @@ import {
 } from '../db';
 import type { Transaction } from '../db';
 
-type ProfileFollowPair = {
+export type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
 };

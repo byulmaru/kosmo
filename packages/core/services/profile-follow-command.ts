@@ -17,16 +17,12 @@ import {
 } from './profile-follow-transaction';
 import type { Transaction } from '../db';
 import type { ErrorCode } from '../error';
+import type { ProfileFollowPair } from './profile-follow-relation';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
 export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
-
-export type ProfileFollowPair = {
-  readonly followerProfileId: string;
-  readonly followeeProfileId: string;
-};
 
 export type ProfileFollowPairLifecycleState =
   | 'INITIAL'
@@ -36,33 +32,33 @@ export type ProfileFollowPairLifecycleState =
   | 'CANCELLED';
 
 export type ProfileFollowPairCommand =
-  | (ProfileFollowPair & {
+  | {
       readonly kind: 'FOLLOW';
       readonly origin: ProfileFollowEffectOrigin;
-    })
-  | (ProfileFollowPair & {
+    }
+  | {
       readonly kind: 'APPROVE';
       readonly actorProfileId: string;
       readonly expectedRowId: string;
       readonly origin: 'LOCAL';
-    })
-  | (ProfileFollowPair & {
+    }
+  | {
       readonly kind: 'ACCEPT';
       readonly expectedRowId: string;
       readonly origin: 'ACTIVITYPUB';
-    })
-  | (ProfileFollowPair & {
+    }
+  | {
       readonly kind: 'REJECT';
       readonly actorProfileId?: string;
       readonly expectedRowId: string;
       readonly origin: ProfileFollowEffectOrigin;
-    })
-  | (ProfileFollowPair & {
+    }
+  | {
       readonly kind: 'CANCEL';
       readonly actorProfileId?: string;
       readonly expectedRowId: string;
       readonly origin: ProfileFollowEffectOrigin;
-    });
+    };
 
 /** Input for the pair transaction Activity. Values are JSON-safe. */
 export type ProfileFollowPairTransitionInput = {
@@ -141,15 +137,22 @@ export type ProfileFollowPairTransitionFailure = {
   readonly field?: string;
 };
 
-export type ProfileFollowPairTransitionExecution =
+/** Public transition result; effect orchestration stays inside the Worker. */
+export type ProfileFollowPairTransitionOutcome =
   | {
       readonly ok: true;
       readonly result: ProfileFollowPairTransitionResult;
+    }
+  | { readonly ok: false; readonly error: ProfileFollowPairTransitionFailure };
+
+/** Activity result with the Worker-only lifecycle and effect plan metadata. */
+export type ProfileFollowPairTransitionExecution =
+  | (Extract<ProfileFollowPairTransitionOutcome, { readonly ok: true }> & {
       readonly nextState: Exclude<ProfileFollowPairLifecycleState, 'INITIAL'>;
       readonly effectPlan: ProfileFollowPairEffectPlan;
       readonly pendingRequestId?: string;
-    }
-  | { readonly ok: false; readonly error: ProfileFollowPairTransitionFailure };
+    })
+  | Extract<ProfileFollowPairTransitionOutcome, { readonly ok: false }>;
 
 type ProfileFollowPairTransitionSuccess = Extract<
   ProfileFollowPairTransitionExecution,
@@ -162,16 +165,23 @@ export type ProfileFollowRemovalInput = ProfileFollowPair & {
   readonly origin: ProfileFollowEffectOrigin;
 };
 
-export type ProfileFollowRemovalExecution =
+/** Public removal result; effect orchestration stays inside the Worker. */
+export type ProfileFollowRemovalOutcome =
   | {
       readonly ok: true;
       readonly changed: boolean;
       readonly profileFollowId: string | null;
       readonly followerProfileId: string;
       readonly followeeProfileId: string;
-      readonly effectPlan: ProfileFollowPairEffectPlan;
     }
   | { readonly ok: false; readonly error: ProfileFollowPairTransitionFailure };
+
+/** Activity result with the Worker-only effect plan metadata. */
+export type ProfileFollowRemovalExecution =
+  | (Extract<ProfileFollowRemovalOutcome, { readonly ok: true }> & {
+      readonly effectPlan: ProfileFollowPairEffectPlan;
+    })
+  | Extract<ProfileFollowRemovalOutcome, { readonly ok: false }>;
 
 const serializeFailure = (error: KosmoError): ProfileFollowPairTransitionFailure => {
   const field = 'field' in error && typeof error.field === 'string' ? error.field : undefined;
@@ -702,6 +712,20 @@ export const executeProfileFollowRemoval = async (
   input: ProfileFollowRemovalInput,
 ): Promise<ProfileFollowRemovalExecution> => {
   try {
+    if (
+      typeof input !== 'object' ||
+      input === null ||
+      typeof input.followerProfileId !== 'string' ||
+      input.followerProfileId.length === 0 ||
+      typeof input.followeeProfileId !== 'string' ||
+      input.followeeProfileId.length === 0 ||
+      typeof input.expectedRowId !== 'string' ||
+      input.expectedRowId.length === 0 ||
+      (input.origin !== 'LOCAL' && input.origin !== 'ACTIVITYPUB')
+    ) {
+      throw new ValidationError('Invalid profile follow removal input');
+    }
+
     return await db.transaction(async (tx) => {
       const currentFollow = await tx
         .select({ id: ProfileFollows.id })

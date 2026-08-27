@@ -12,6 +12,7 @@ import type {
   ProfileFollowPair,
   ProfileFollowRemovalExecution,
   ProfileFollowRemovalInput,
+  ProfileFollowRemovalOutcome,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
@@ -36,18 +37,55 @@ const {
   startToCloseTimeout: '1 minute',
 });
 
+function assertValidRemovalInput(
+  value: unknown,
+  pair: ProfileFollowPair,
+): asserts value is ProfileFollowRemovalInput {
+  if (
+    typeof pair !== 'object' ||
+    pair === null ||
+    typeof pair.followerProfileId !== 'string' ||
+    pair.followerProfileId.length === 0 ||
+    typeof pair.followeeProfileId !== 'string' ||
+    pair.followeeProfileId.length === 0
+  ) {
+    throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw ApplicationFailure.nonRetryable('Profile Follow removal must be an object');
+  }
+
+  const input = value as Record<string, unknown>;
+  if (
+    typeof input.followerProfileId !== 'string' ||
+    input.followerProfileId.length === 0 ||
+    typeof input.followeeProfileId !== 'string' ||
+    input.followeeProfileId.length === 0 ||
+    typeof input.expectedRowId !== 'string' ||
+    input.expectedRowId.length === 0
+  ) {
+    throw ApplicationFailure.nonRetryable(
+      'Profile Follow removal requires non-empty pair and expectedRowId IDs',
+    );
+  }
+  if (input.origin !== 'LOCAL' && input.origin !== 'ACTIVITYPUB') {
+    throw ApplicationFailure.nonRetryable('Profile Follow removal origin is invalid');
+  }
+}
+
 export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Promise<void> {
   let inFlight = false;
   let updateReceived = false;
   let execution: ProfileFollowRemovalExecution | undefined;
   setHandler(
-    defineUpdate<ProfileFollowRemovalExecution, [ProfileFollowRemovalInput]>(
+    defineUpdate<ProfileFollowRemovalOutcome, [ProfileFollowRemovalInput]>(
       PROFILE_FOLLOW_REMOVAL_UPDATE_NAME,
     ),
     async (command) => {
       if (inFlight) {
         throw ApplicationFailure.nonRetryable('Profile Follow removal is already in flight');
       }
+      assertValidRemovalInput(command, input);
       if (
         command.followerProfileId !== input.followerProfileId ||
         command.followeeProfileId !== input.followeeProfileId
@@ -59,13 +97,22 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
       updateReceived = true;
       try {
         execution = await executeProfileFollowRemovalActivity(command);
-        return execution;
+        return execution.ok
+          ? {
+              ok: true as const,
+              changed: execution.changed,
+              profileFollowId: execution.profileFollowId,
+              followerProfileId: execution.followerProfileId,
+              followeeProfileId: execution.followeeProfileId,
+            }
+          : execution;
       } finally {
         inFlight = false;
       }
     },
     {
       validator: (command) => {
+        assertValidRemovalInput(command, input);
         if (
           command.followerProfileId !== input.followerProfileId ||
           command.followeeProfileId !== input.followeeProfileId

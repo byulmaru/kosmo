@@ -24,7 +24,10 @@ import {
   hydrateProfileFollowPairTransition,
   loadPendingFollowRequestId,
 } from './profile-follow-command';
-import type { ProfileFollowPairTransitionInput } from './profile-follow-command';
+import type {
+  ProfileFollowPairTransitionInput,
+  ProfileFollowRemovalInput,
+} from './profile-follow-command';
 
 const profileIds: string[] = [];
 const instanceIds: string[] = [];
@@ -129,8 +132,6 @@ test('open Follow uses the candidate row ID and retries with a minimal effect', 
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId,
@@ -170,8 +171,6 @@ test('local Follow captures remote delivery eligibility without row snapshots', 
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId: profileFollowId,
@@ -196,8 +195,6 @@ test('approval-required Follow carries only the pending request ID', async () =>
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId,
@@ -253,8 +250,6 @@ test('promoting an existing request deletes it by ID and creates the Follow effe
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId: followId,
@@ -292,8 +287,6 @@ test('terminal request removal reconstructs a lost commit from pendingRequestId'
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId: requestId,
@@ -308,8 +301,6 @@ test('terminal request removal reconstructs a lost commit from pendingRequestId'
     pendingRequestId: requestId,
     command: {
       kind: 'REJECT',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       expectedRowId: requestId,
       origin: 'LOCAL',
       actorProfileId: followee.id,
@@ -360,8 +351,6 @@ test('stale terminal request ID does not remove a newer generation', async () =>
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'CANCEL',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       expectedRowId: crypto.randomUUID(),
       origin: 'LOCAL',
       actorProfileId: follower.id,
@@ -394,8 +383,6 @@ test('unavailable inbound Accept stays pending without a Follow effect', async (
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId: requestId,
@@ -414,8 +401,6 @@ test('unavailable inbound Accept stays pending without a Follow effect', async (
     pendingRequestId: requestId,
     command: {
       kind: 'ACCEPT',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       expectedRowId: requestId,
       origin: 'ACTIVITYPUB',
     },
@@ -529,6 +514,44 @@ test('guarded removal does not reconstruct an effect while the expected row rema
   ]);
 });
 
+test('removal rejects malformed input without deleting the current Follow', async () => {
+  const follower = await createProfile();
+  const followee = await createProfile();
+  const follow = await db
+    .insert(ProfileFollows)
+    .values({
+      id: crypto.randomUUID(),
+      followerProfileId: follower.id,
+      followeeProfileId: followee.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const validInput: ProfileFollowRemovalInput = {
+    followerProfileId: follower.id,
+    followeeProfileId: followee.id,
+    expectedRowId: follow.id,
+    origin: 'LOCAL',
+  };
+
+  for (const input of [
+    { ...validInput, expectedRowId: undefined },
+    { ...validInput, followerProfileId: undefined },
+    { ...validInput, followeeProfileId: null },
+    { ...validInput, origin: 'UNKNOWN' },
+    null,
+  ] as unknown[]) {
+    const result = await executeProfileFollowRemoval(input as ProfileFollowRemovalInput);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error.code, 'VALIDATION');
+    }
+  }
+
+  assert.deepEqual(await db.select().from(ProfileFollows).where(eq(ProfileFollows.id, follow.id)), [
+    follow,
+  ]);
+});
+
 test('hydration does not carry a deleted row snapshot across the Temporal boundary', async () => {
   const follower = await createProfile();
   const followee = await createProfile();
@@ -537,8 +560,6 @@ test('hydration does not carry a deleted row snapshot across the Temporal bounda
     pair: { followerProfileId: follower.id, followeeProfileId: followee.id },
     command: {
       kind: 'FOLLOW',
-      followerProfileId: follower.id,
-      followeeProfileId: followee.id,
       origin: 'LOCAL',
     },
     candidateRowId: profileFollowId,
