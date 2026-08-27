@@ -427,7 +427,7 @@ export const createE2EFollow = (options: CreateE2EFollowOptions) => {
 
   return executeProfileFollowPairTransition({
     pair,
-    command: { ...pair, kind: 'FOLLOW', origin: 'LOCAL' },
+    command: { kind: 'FOLLOW', origin: 'LOCAL' },
   }).then(async (transition) => {
     if (transition.result.kind !== 'ESTABLISHED' || transition.profileFollow === undefined) {
       throw new Error('E2E follow fixture requires an established relationship');

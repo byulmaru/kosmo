@@ -55,7 +55,11 @@ const acceptProfileFollowRequest: AcceptProfileFollowRequest = async (input) => 
       followeeProfileId: input.followeeProfileId,
       followerProfileId: input.followerProfileId,
     },
-    command: { kind: 'ACCEPT', ...input },
+    command: {
+      kind: 'ACCEPT',
+      expectedRowId: input.expectedRowId,
+      origin: input.origin,
+    },
   });
   if (!transition.ok) {
     throw new Error(transition.error.message);

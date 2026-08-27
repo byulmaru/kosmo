@@ -139,7 +139,11 @@ export const handleInboundAcceptFollow = async ({
         followeeProfileId: input.followeeProfileId,
         followerProfileId: input.followerProfileId,
       },
-      command: { kind: 'ACCEPT', ...input },
+      command: {
+        kind: 'ACCEPT',
+        expectedRowId: input.expectedRowId,
+        origin: input.origin,
+      },
     });
     if (transition.result.commandKind !== 'ACCEPT') {
       throw new Error('Unexpected inbound Accept transition result');

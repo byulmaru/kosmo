@@ -278,8 +278,6 @@ describe('inbound actor Update', () => {
       pair: { followerProfileId: pendingLocal.id, followeeProfileId: remote.profile.id },
       command: {
         kind: 'FOLLOW',
-        followerProfileId: pendingLocal.id,
-        followeeProfileId: remote.profile.id,
         origin: 'LOCAL',
       },
     });
@@ -336,8 +334,6 @@ describe('inbound actor Update', () => {
       pair: { followerProfileId: local.id, followeeProfileId: remote.profile.id },
       command: {
         kind: 'FOLLOW',
-        followerProfileId: local.id,
-        followeeProfileId: remote.profile.id,
         origin: 'LOCAL',
       },
     });

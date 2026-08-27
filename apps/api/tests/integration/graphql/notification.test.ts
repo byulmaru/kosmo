@@ -335,8 +335,6 @@ describe('Notification GraphQL Node boundary', () => {
       pair: { followerProfileId: requester.id, followeeProfileId: recipient.id },
       command: {
         kind: 'FOLLOW',
-        followerProfileId: requester.id,
-        followeeProfileId: recipient.id,
         origin: 'LOCAL',
       },
     });
@@ -351,8 +349,6 @@ describe('Notification GraphQL Node boundary', () => {
         kind: 'CANCEL',
         actorProfileId: requester.id,
         expectedRowId: request.id,
-        followerProfileId: requester.id,
-        followeeProfileId: recipient.id,
         origin: 'LOCAL',
       },
     });
