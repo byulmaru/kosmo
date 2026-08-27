@@ -769,9 +769,12 @@ test(
         pairHandle.executeUpdate('profileFollowPairUpdate', {
           args: [
             {
-              kind: 'ACCEPT',
+              kind: 'FOLLOW',
               origin: 'LOCAL',
-              expectedRowId: '',
+              command: {
+                kind: 'FOLLOW',
+                origin: 'LOCAL',
+              },
             } as never,
           ],
         }),
@@ -793,7 +796,9 @@ test(
           args: [
             {
               ...pair,
+              expectedRowId: 'follow',
               origin: 'LOCAL',
+              extra: true,
             } as never,
           ],
         }),

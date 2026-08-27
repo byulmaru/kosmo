@@ -538,6 +538,7 @@ test('removal rejects malformed input without deleting the current Follow', asyn
     { ...validInput, followerProfileId: undefined },
     { ...validInput, followeeProfileId: null },
     { ...validInput, origin: 'UNKNOWN' },
+    { ...validInput, extra: true },
     null,
   ] as unknown[]) {
     const result = await executeProfileFollowRemoval(input as ProfileFollowRemovalInput);

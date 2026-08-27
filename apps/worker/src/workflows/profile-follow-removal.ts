@@ -1,3 +1,4 @@
+import { profileFollowPairSchema, profileFollowRemovalInputSchema } from '@kosmo/core/validation';
 import {
   allHandlersFinished,
   ApplicationFailure,
@@ -27,43 +28,23 @@ const {
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
-function assertValidRemovalInput(
-  value: unknown,
-  pair: ProfileFollowPair,
-): asserts value is ProfileFollowRemovalInput {
-  if (
-    typeof pair !== 'object' ||
-    pair === null ||
-    typeof pair.followerProfileId !== 'string' ||
-    pair.followerProfileId.length === 0 ||
-    typeof pair.followeeProfileId !== 'string' ||
-    pair.followeeProfileId.length === 0
-  ) {
-    throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw ApplicationFailure.nonRetryable('Profile Follow removal must be an object');
+const parseProfileFollowRemovalInput = (value: unknown): ProfileFollowRemovalInput => {
+  const result = profileFollowRemovalInputSchema.safeParse(value);
+  if (result.success) {
+    return result.data;
   }
 
-  const input = value as Record<string, unknown>;
-  if (
-    typeof input.followerProfileId !== 'string' ||
-    input.followerProfileId.length === 0 ||
-    typeof input.followeeProfileId !== 'string' ||
-    input.followeeProfileId.length === 0 ||
-    typeof input.expectedRowId !== 'string' ||
-    input.expectedRowId.length === 0
-  ) {
-    throw ApplicationFailure.nonRetryable(
-      'Profile Follow removal requires non-empty pair and expectedRowId IDs',
-    );
-  }
-  if (input.origin !== 'LOCAL' && input.origin !== 'ACTIVITYPUB') {
-    throw ApplicationFailure.nonRetryable('Profile Follow removal origin is invalid');
-  }
-}
+  throw ApplicationFailure.nonRetryable(
+    result.error.issues[0]?.message ?? 'Profile Follow removal is invalid',
+  );
+};
 
 export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Promise<void> {
+  const parsedPair = profileFollowPairSchema.safeParse(input);
+  if (!parsedPair.success) {
+    throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
+  }
+  const pair = parsedPair.data;
   let inFlight = false;
   let updateReceived = false;
   let execution: ProfileFollowRemovalExecution | undefined;
@@ -75,10 +56,10 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
       if (inFlight) {
         throw ApplicationFailure.nonRetryable('Profile Follow removal is already in flight');
       }
-      assertValidRemovalInput(command, input);
+      const parsedCommand = parseProfileFollowRemovalInput(command);
       if (
-        command.followerProfileId !== input.followerProfileId ||
-        command.followeeProfileId !== input.followeeProfileId
+        parsedCommand.followerProfileId !== pair.followerProfileId ||
+        parsedCommand.followeeProfileId !== pair.followeeProfileId
       ) {
         throw ApplicationFailure.nonRetryable('Profile Follow removal does not match pair');
       }
@@ -86,7 +67,7 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
       inFlight = true;
       updateReceived = true;
       try {
-        execution = await executeProfileFollowRemovalActivity(command);
+        execution = await executeProfileFollowRemovalActivity(parsedCommand);
         return execution.ok
           ? {
               ok: true as const,
@@ -102,10 +83,10 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
     },
     {
       validator: (command) => {
-        assertValidRemovalInput(command, input);
+        const parsedCommand = parseProfileFollowRemovalInput(command);
         if (
-          command.followerProfileId !== input.followerProfileId ||
-          command.followeeProfileId !== input.followeeProfileId
+          parsedCommand.followerProfileId !== pair.followerProfileId ||
+          parsedCommand.followeeProfileId !== pair.followeeProfileId
         ) {
           throw ApplicationFailure.nonRetryable('Profile Follow removal does not match pair');
         }

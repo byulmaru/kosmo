@@ -102,6 +102,10 @@
 
 ## Inputs And Identity
 
+- 여러 package가 소비하는 Workflow/Update wire input은 `packages/core/validation`의 strict Zod schema를
+  runtime source of truth로 두고 DTO type도 그 schema에서 추론한다. Workflow validator와 handler replay 경계,
+  같은 input을 받는 Core Activity entrypoint가 공용 schema로 fail-closed하며, `typeof`를 나열한 별도 수동 validator를
+  복제하지 않는다.
 - Workflow input은 JSON-serializable한 immutable source identity여야 한다. 삭제 뒤 필요한 값은 exact source ID와 pair identity로 표현하고, Activity가 삭제된 source row를 다시 읽는 것으로 복원하지 않는다.
 - create effect는 stable source identity를 우선 사용하고 Activity가 현재 projection을 조회하게 한다.
 - input type은 한 Workflow에서만 쓰면 Workflow 파일 가까이에 둔다. Worker, core와 protocol adapter가 실제로 같은 shape를 소비할 때만 neutral contract module로 공유한다. 이름만 같은 type을 package마다 복제하지 않는다.
