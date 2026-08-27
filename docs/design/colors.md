@@ -65,6 +65,8 @@ Figma variable의 code syntax가 개발 target 이름이다.
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
 | `color/border/disabled`      | `#F4F4F5` | `#262626` | 비활성 경계                 |
 
+Dark `color/border/subtle`은 `background/elevated #262626` 위 divider가 표면과 같아지지 않도록 `ink/750 #303030`으로 분리한다.
+
 Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `neutral/0`을 참조하는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
 
 ## Action tokens
