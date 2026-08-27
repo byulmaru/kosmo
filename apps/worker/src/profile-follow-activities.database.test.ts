@@ -126,18 +126,57 @@ describe('profile follow delivery activities', () => {
     );
   });
 
-  test('inactive local 또는 non-ActivityPub projection은 성공한 no-op이다', async () => {
-    const inactiveFollower = await createFollowFixture({
-      followerInstanceState: InstanceState.SUSPENDED,
-    });
-    const inactiveFollow = await db
+  test('커밋된 전송은 이후 participant state 변경으로 취소하지 않는다', async () => {
+    const source = await createFollowFixture();
+    const follow = await db
       .insert(ProfileFollows)
       .values({
-        followerProfileId: inactiveFollower.follower.id,
-        followeeProfileId: inactiveFollower.followee.id,
+        followerProfileId: source.follower.id,
+        followeeProfileId: source.followee.id,
       })
       .returning()
       .then(firstOrThrow);
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, source.follower.id));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED })
+      .where(eq(Instances.id, source.follower.instanceId));
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.UNRESPONSIVE })
+      .where(eq(Instances.id, source.followee.instanceId));
+    const fixture = createContextFixture();
+    mock.method(federation, 'createContext', () => fixture.context);
+
+    await sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: follow.id });
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.id, follow.id));
+    await sendProfileUnfollowActivity({
+      createdAt: follow.createdAt.toString(),
+      followerProfileId: follow.followerProfileId,
+      followeeProfileId: follow.followeeProfileId,
+      id: follow.id,
+      sourceId: follow.id,
+    });
+
+    assert.equal(fixture.calls.length, 2);
+    assert.ok(fixture.calls[0]?.activity instanceof Follow);
+    assert.ok(fixture.calls[1]?.activity instanceof Undo);
+  });
+
+  test('삭제된 create source와 non-ActivityPub projection은 성공한 no-op이다', async () => {
+    const deletedSource = await createFollowFixture();
+    const deletedFollow = await db
+      .insert(ProfileFollows)
+      .values({
+        followerProfileId: deletedSource.follower.id,
+        followeeProfileId: deletedSource.followee.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db.delete(ProfileFollows).where(eq(ProfileFollows.id, deletedFollow.id));
     const localFollowee = await createFollowFixture({ followeeKind: InstanceKind.LOCAL });
     const localFollow = await db
       .insert(ProfileFollows)
@@ -150,10 +189,41 @@ describe('profile follow delivery activities', () => {
     const fixture = createContextFixture();
     mock.method(federation, 'createContext', () => fixture.context);
 
-    await sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: inactiveFollow.id });
+    await sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: deletedFollow.id });
     await sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: localFollow.id });
 
     assert.equal(fixture.calls.length, 0);
+  });
+
+  test('ActivityPub recipient endpoint 결손은 성공으로 숨기지 않는다', async () => {
+    const source = await createFollowFixture();
+    const follow = await db
+      .insert(ProfileFollows)
+      .values({
+        followerProfileId: source.follower.id,
+        followeeProfileId: source.followee.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(ActivityPubActors)
+      .set({ inboxUri: null })
+      .where(eq(ActivityPubActors.profileId, source.followee.id));
+
+    await assert.rejects(
+      sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: follow.id }),
+      /recipient projection is incomplete/,
+    );
+    await assert.rejects(
+      sendProfileUnfollowActivity({
+        createdAt: follow.createdAt.toString(),
+        followerProfileId: follow.followerProfileId,
+        followeeProfileId: follow.followeeProfileId,
+        id: follow.id,
+        sourceId: follow.id,
+      }),
+      /recipient projection is incomplete/,
+    );
   });
 
   test('삭제 snapshot은 삭제된 source를 재조회하지 않고 동일한 Undo identity와 ordering을 쓴다', async () => {
@@ -221,10 +291,8 @@ const createContextFixture = () => {
 };
 
 const createFollowFixture = async ({
-  followerInstanceState = InstanceState.ACTIVE,
   followeeKind = InstanceKind.ACTIVITYPUB,
 }: {
-  readonly followerInstanceState?: InstanceState;
   readonly followeeKind?: InstanceKind;
 } = {}) => {
   const suffix = crypto.randomUUID();
@@ -234,7 +302,7 @@ const createFollowFixture = async ({
       canonicalOrigin: `https://${suffix}.local.example`,
       domain: `${suffix}.local.example`,
       kind: InstanceKind.LOCAL,
-      state: followerInstanceState,
+      state: InstanceState.ACTIVE,
     })
     .returning()
     .then(firstOrThrow);

@@ -7,9 +7,9 @@ import {
   ProfileFollows,
   Profiles,
 } from '@kosmo/core/db';
-import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
+import { InstanceKind } from '@kosmo/core/enums';
 import { sendProfileFollow, sendProfileUnfollow } from '@kosmo/fedify';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 const FollowerProfiles = alias(Profiles, 'worker_follow_follower_profile');
@@ -46,6 +46,8 @@ export const sendProfileFollowActivity = async ({
       actorSharedInboxUri: FolloweeActors.sharedInboxUri,
       actorUri: FolloweeActors.uri,
       createdAt: sourceTable.createdAt,
+      followeeInstanceKind: FolloweeInstances.kind,
+      followerInstanceKind: FollowerInstances.kind,
       id: sourceTable.id,
       senderProfileId: FollowerProfiles.id,
     })
@@ -54,23 +56,21 @@ export const sendProfileFollowActivity = async ({
     .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
     .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, sourceTable.followeeProfileId))
     .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
-    .innerJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
-    .where(
-      and(
-        eq(sourceTable.id, sourceId),
-        eq(FollowerProfiles.state, ProfileState.ACTIVE),
-        eq(FollowerInstances.kind, InstanceKind.LOCAL),
-        eq(FollowerInstances.state, InstanceState.ACTIVE),
-        eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-        eq(FolloweeInstances.kind, InstanceKind.ACTIVITYPUB),
-        eq(FolloweeInstances.state, InstanceState.ACTIVE),
-        isNotNull(FolloweeActors.inboxUri),
-      ),
-    )
+    .leftJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
+    .where(eq(sourceTable.id, sourceId))
     .limit(1)
     .then(first);
   if (!projection) {
     return;
+  }
+  if (
+    projection.followerInstanceKind !== InstanceKind.LOCAL ||
+    projection.followeeInstanceKind !== InstanceKind.ACTIVITYPUB
+  ) {
+    return;
+  }
+  if (!projection.actorUri || !projection.actorInboxUri) {
+    throw new TypeError('ActivityPub Follow recipient projection is incomplete.');
   }
 
   await sendProfileFollow({
@@ -100,29 +100,29 @@ export const sendProfileUnfollowActivity = async (
       actorInboxUri: FolloweeActors.inboxUri,
       actorSharedInboxUri: FolloweeActors.sharedInboxUri,
       actorUri: FolloweeActors.uri,
+      followeeInstanceKind: FolloweeInstances.kind,
+      followerInstanceKind: FollowerInstances.kind,
       senderProfileId: FollowerProfiles.id,
     })
     .from(FollowerProfiles)
     .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
     .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, input.followeeProfileId))
     .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
-    .innerJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
-    .where(
-      and(
-        eq(FollowerProfiles.id, input.followerProfileId),
-        eq(FollowerProfiles.state, ProfileState.ACTIVE),
-        eq(FollowerInstances.kind, InstanceKind.LOCAL),
-        eq(FollowerInstances.state, InstanceState.ACTIVE),
-        eq(FolloweeProfiles.state, ProfileState.ACTIVE),
-        eq(FolloweeInstances.kind, InstanceKind.ACTIVITYPUB),
-        eq(FolloweeInstances.state, InstanceState.ACTIVE),
-        isNotNull(FolloweeActors.inboxUri),
-      ),
-    )
+    .leftJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
+    .where(eq(FollowerProfiles.id, input.followerProfileId))
     .limit(1)
     .then(first);
   if (!projection) {
+    throw new TypeError('ActivityPub Undo participant projection is missing.');
+  }
+  if (
+    projection.followerInstanceKind !== InstanceKind.LOCAL ||
+    projection.followeeInstanceKind !== InstanceKind.ACTIVITYPUB
+  ) {
     return;
+  }
+  if (!projection.actorUri || !projection.actorInboxUri) {
+    throw new TypeError('ActivityPub Undo recipient projection is incomplete.');
   }
 
   await sendProfileUnfollow({
