@@ -1582,10 +1582,12 @@ function SetUnreadNotificationCount({ count }: { count: number }) {
   );
 }
 
-function RetryRelayActor() {
-  const { retry } = useRelayActor();
+function ResetCurrentRelayActor() {
+  const { resetActor } = useRelayActor();
 
-  return <StoryButton label="기존 셸 새로고침" onPress={retry} />;
+  return (
+    <StoryButton label="현재 Profile actor 재설정" onPress={() => resetActor(selectedProfile.id)} />
+  );
 }
 
 function ResetRelayActorToSecondProfile() {
@@ -2150,13 +2152,13 @@ export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {
     await expect(
       canvas.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
     ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '기존 셸 새로고침' }));
+    await userEvent.click(canvas.getByRole('button', { name: '현재 Profile actor 재설정' }));
     await expect(
       page.findByRole('link', { name: '알림, 읽지 않은 알림 7개' }),
     ).resolves.toBeVisible();
     expect(page.queryByRole('button', { name: /알림.*다시/ })).toBeNull();
     expect(page.queryByText('읽지 않은 알림 수를 불러오지 못했습니다.')).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await userEvent.click(page.getByRole('button', { name: '현재 Profile actor 재설정' }));
     await expect(
       page.findByRole('link', { name: '알림, 읽지 않은 알림 9개' }),
     ).resolves.toBeVisible();
@@ -2164,7 +2166,7 @@ export const UnreadBadgeKeepsSameProfileCountAcrossFailedRefresh: Story = {
   render: () => (
     <>
       <UniversalShellStory />
-      <RetryRelayActor />
+      <ResetCurrentRelayActor />
     </>
   ),
 };
@@ -2209,7 +2211,7 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
     await expect(page.findByRole('link', { name: '알림' })).resolves.toBeVisible();
     expect(page.queryByRole('link', { name: '알림, 읽지 않은 알림 7개' })).toBeNull();
-    await userEvent.click(page.getByRole('button', { name: '기존 셸 새로고침' }));
+    await userEvent.click(page.getByRole('button', { name: '현재 Profile actor 재설정' }));
     await expect(
       page.findByRole('link', { name: '알림, 읽지 않은 알림 4개' }),
     ).resolves.toBeVisible();
@@ -2218,7 +2220,7 @@ export const UnreadBadgeHidesPreviousProfileCountUntilNextRetry: Story = {
     <>
       <UniversalShellStory />
       <ResetRelayActorToSecondProfile />
-      <RetryRelayActor />
+      <ResetCurrentRelayActor />
     </>
   ),
 };
@@ -2360,8 +2362,7 @@ export const ResponsiveProfilePickerCompact: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const trigger = canvas.getByRole('button', { name: '프로필 목록' });
-    const route = canvas.getByText('홈 타임라인');
+    let trigger = canvas.getByRole('button', { name: '프로필 목록' });
 
     await userEvent.click(trigger);
     const pickerRegion = await canvas.findByLabelText('프로필 전환');
@@ -2393,8 +2394,9 @@ export const ResponsiveProfilePickerCompact: Story = {
     await userEvent.click(options[1]!);
     await waitFor(() => expect(canvas.queryByLabelText('프로필 전환')).toBeNull());
 
+    trigger = await canvas.findByRole('button', { name: '프로필 목록' });
     await userEvent.click(trigger);
-    await userEvent.click(route);
+    await userEvent.click(await canvas.findByText('홈 타임라인'));
     expect(canvas.queryByLabelText('프로필 전환')).toBeNull();
 
     await userEvent.click(trigger);

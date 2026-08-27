@@ -18,11 +18,12 @@ import {
   NotificationReadAllProvider,
 } from '@/components/notification/NotificationReadAllContext';
 import { PageHeader } from '@/components/PageHeader';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { Splash } from '@/components/Splash';
 import { IconButton } from '@/components/ui/IconButton';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
-import { useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary } from '@/relay/RelayActorProvider';
+import { useSessionRecovery } from '@/session/SessionRecoveryCoordinator';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import { returnToSettingsRoot } from '../settings/settingsNavigation';
@@ -95,7 +96,7 @@ const webFixedBottomBar = {
 const webDocumentColumn = { minHeight: '100vh' } as unknown as ViewStyle;
 
 export function UniversalShell() {
-  const { retry, revision } = useRelayActor();
+  const recoverSession = useSessionRecovery();
 
   return (
     <UnreadNotificationBadgeController>
@@ -103,11 +104,12 @@ export function UniversalShell() {
         <PrimaryNavigationScrollProvider>
           <RouteBoundary
             loading={<Splash label="앱을 불러오는 중입니다." />}
-            onRetry={retry}
+            onRetry={recoverSession}
+            remountOnActorChange={false}
             title="앱을 불러오지 못했어요"
           >
             <NotificationReadAllProvider>
-              <UniversalShellContent revision={revision} />
+              <UniversalShellContent />
             </NotificationReadAllProvider>
           </RouteBoundary>
         </PrimaryNavigationScrollProvider>
@@ -116,7 +118,7 @@ export function UniversalShell() {
   );
 }
 
-function UniversalShellContent({ revision }: { revision: number }) {
+function UniversalShellContent() {
   const theme = useTheme();
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
@@ -131,6 +133,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const menuButtonRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const pendingDrawerHomeReselectionRef = useRef(false);
+  const { fetchKey } = useRouteBoundary();
   const registerHomeReselection = useCallback((handler: HomeReselectionHandler) => {
     homeReselectionHandlerRef.current = handler;
     return () => {
@@ -148,7 +151,7 @@ function UniversalShellContent({ revision }: { revision: number }) {
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
-    { fetchKey: revision, fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
@@ -377,7 +380,9 @@ function UniversalShellContent({ revision }: { revision: number }) {
                 : null,
             ]}
           >
-            <Slot />
+            <RelayActorBoundary>
+              <Slot />
+            </RelayActorBoundary>
           </View>
           {mobile ? (
             <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>

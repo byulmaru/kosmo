@@ -5,11 +5,10 @@ import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -57,8 +56,6 @@ export default function PostDetailScreen() {
   const pathname = usePathname();
   const routeSegments = useSegments();
   const { width } = useWindowDimensions();
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
   const postId = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
   const header = getWebMobileShellHeader(
@@ -88,16 +85,12 @@ export default function PostDetailScreen() {
           <StateView loading title="게시글을 불러오는 중입니다." />
         </PostDetailFrame>
       }
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="게시글을 불러오지 못했어요"
     >
       <PostDetailContent
-        fetchKey={`${revision}:${fetchKey}`}
         header={header}
-        onReplyCreated={() => setFetchKey((key) => key + 1)}
         postId={postId}
         routeRelativeHandle={routeRelativeHandle}
-        threadIdentity={`${revision}:${postId}`}
       />
     </RouteBoundary>
   );
@@ -126,21 +119,16 @@ function PostDetailHeader() {
 }
 
 function PostDetailContent({
-  fetchKey,
   header,
-  onReplyCreated,
   postId,
   routeRelativeHandle,
-  threadIdentity,
 }: {
-  fetchKey: string;
   header: ReactNode;
-  onReplyCreated: () => void;
   postId: string;
   routeRelativeHandle: string;
-  threadIdentity: string;
 }) {
   const router = useRouter();
+  const { fetchKey, refetch } = useRouteBoundary();
   const [locallyDeleted, setLocallyDeleted] = useState(false);
   const data = useLazyLoadQuery<PostDetailQuery>(
     PostQuery,
@@ -190,9 +178,9 @@ function PostDetailContent({
   ) : (
     <PostDetailThread
       header={header}
-      identity={threadIdentity}
+      identity={postId}
       onPostDeleted={() => setLocallyDeleted(true)}
-      onReplyCreated={onReplyCreated}
+      onReplyCreated={refetch}
       post={post.thread}
       replyProfile={data.currentSession?.selectedProfile ?? null}
     />

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Fragment } from 'react';
+import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,9 +21,9 @@ type QueryData = {
 
 let queryData: QueryData;
 let queryFetchKeys: unknown[] = [];
-let routeBoundaryProps: Record<string, unknown> | null = null;
 let openProfileSwitcherCalls = 0;
-let relayActorRevision = 7;
+let queryMode: 'error' | 'success' = 'success';
+let relayActorLifecycleKey = 'actor-a';
 
 mock.module('react-native', {
   exports: {
@@ -36,15 +36,10 @@ mock.module('react-relay', {
     graphql: () => ({}),
     useLazyLoadQuery: (_query: unknown, _variables: unknown, options: { fetchKey?: unknown }) => {
       queryFetchKeys.push(options.fetchKey);
+      if (queryMode === 'error') {
+        throw new Error('profile query failed');
+      }
       return queryData;
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../RouteBoundary.tsx', import.meta.url), {
-  exports: {
-    RouteBoundary: (props: Record<string, unknown> & { children: ReactNode }) => {
-      routeBoundaryProps = props;
-      return createElement(Fragment, null, props.children);
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -68,8 +63,11 @@ mock.module(new URL('../ui/StateView.tsx', import.meta.url), {
     StateView: (props: Record<string, unknown>) => createElement('StateView', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.url), {
+  exports: { useUnexpectedErrorReporter: () => undefined },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  exports: { useRelayActor: () => ({ revision: relayActorRevision }) },
+  exports: { useRelayActorLifecycleKey: () => relayActorLifecycleKey },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsProfileDetail: ComponentType;
@@ -82,9 +80,9 @@ before(async () => {
 afterEach(async () => {
   queryData = { currentSession: { selectedProfile: null } };
   queryFetchKeys = [];
-  routeBoundaryProps = null;
   openProfileSwitcherCalls = 0;
-  relayActorRevision = 7;
+  queryMode = 'success';
+  relayActorLifecycleKey = 'actor-a';
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -107,7 +105,7 @@ describe('SettingsProfileDetail', () => {
     assert.equal(control.props.profile, profile);
     assert.equal(control.props.editable, true);
     assert.equal(control.props.showTitle, false);
-    assert.deepEqual(queryFetchKeys, ['7:0']);
+    assert.deepEqual(queryFetchKeys, [0]);
   });
 
   it('selected Member Profile에는 같은 control을 읽기 전용으로 연결한다', async () => {
@@ -149,26 +147,33 @@ describe('SettingsProfileDetail', () => {
     assert.equal(openProfileSwitcherCalls, 1);
   });
 
-  it('Profile query loading/error/retry와 actor fetch identity를 detail 경계가 소유한다', async () => {
+  it('production RouteBoundary가 manual retry와 actor lifecycle의 fetchKey를 소유한다', async () => {
     queryData = { currentSession: { selectedProfile: null } };
-    await render();
+    queryMode = 'error';
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+    try {
+      await render();
 
-    assert.ok(routeBoundaryProps);
-    assert.equal(routeBoundaryProps.title, 'Profile 설정을 불러오지 못했어요');
-    assert.ok(routeBoundaryProps.loading);
-    await act(async () => (routeBoundaryProps?.onRetry as () => void)());
-    assert.deepEqual(queryFetchKeys, ['7:0', '7:1']);
-  });
+      const error = rendered('StateView')[0];
+      assert.equal(error.props.title, 'Profile 설정을 불러오지 못했어요');
+      assert.equal(error.props.actionLabel, '다시 시도');
 
-  it('Relay actor가 바뀌면 새 actor identity로 Profile query를 다시 읽는다', async () => {
-    queryData = { currentSession: { selectedProfile: null } };
-    await render();
+      queryMode = 'success';
+      await act(async () => error.props.onAction());
+      assert.equal(queryFetchKeys[0], 0);
+      assert.equal(queryFetchKeys.at(-1), 1);
+      const queryCountAfterRetry = queryFetchKeys.length;
 
-    relayActorRevision = 8;
-    assert.ok(renderer);
-    await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
+      relayActorLifecycleKey = 'actor-b';
+      assert.ok(renderer);
+      await act(async () => renderer?.update(createElement(SettingsProfileDetail)));
 
-    assert.deepEqual(queryFetchKeys, ['7:0', '8:0']);
+      assert.equal(queryFetchKeys.length, queryCountAfterRetry + 1);
+      assert.equal(queryFetchKeys.at(-1), 1);
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 });
 
