@@ -1,16 +1,14 @@
 import { Slot, useGlobalSearchParams, usePathname } from 'expo-router';
-import { useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { normalizeProfileHandle } from '@/components/profile/route';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { ProfileLayoutQuery as ProfileLayoutQueryType } from './__generated__/ProfileLayoutQuery.graphql';
@@ -40,9 +38,7 @@ export default function ProfileLayout() {
   }>();
   const handle = normalizeProfileHandle(profileHandle);
   const pathname = usePathname();
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-  const paginationOwnerKey = `${revision}:${pathname}`;
+  const paginationOwnerKey = pathname;
 
   return (
     <RouteBoundary
@@ -52,27 +48,21 @@ export default function ProfileLayout() {
           <ProfileHero loading />
         </ProfileRouteContainer>
       }
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="프로필을 불러오지 못했어요"
     >
-      <ProfileLayoutContent
-        fetchKey={`${revision}:${fetchKey}`}
-        handle={handle}
-        paginationOwnerKey={paginationOwnerKey}
-      />
+      <ProfileLayoutContent handle={handle} paginationOwnerKey={paginationOwnerKey} />
     </RouteBoundary>
   );
 }
 
 function ProfileLayoutContent({
-  fetchKey,
   handle,
   paginationOwnerKey,
 }: {
-  fetchKey: string;
   handle: string;
   paginationOwnerKey: string;
 }) {
+  const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileLayoutQueryType>(
     ProfileLayoutQuery,
     { handle },

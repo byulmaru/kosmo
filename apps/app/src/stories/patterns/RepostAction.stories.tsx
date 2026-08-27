@@ -12,7 +12,7 @@ import {
 } from 'relay-runtime';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
-import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
+import { RelayActorBoundary, RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
@@ -55,7 +55,7 @@ function RepostActionStory({ storeOnly = false }: { storeOnly?: boolean }) {
 }
 
 function ResetActor() {
-  const { resetActor, revision } = useRelayActor();
+  const { resetActor } = useRelayActor();
 
   return (
     <View>
@@ -66,7 +66,7 @@ function ResetActor() {
       >
         두 번째 프로필로 전환
       </Text>
-      <Text testID="actor-revision">{revision}</Text>
+      <Text testID="actor">현재 Profile</Text>
     </View>
   );
 }
@@ -102,16 +102,18 @@ function ActorResetIgnoresStaleCallbacksStory() {
 
   return (
     <RelayActorProvider createEnvironment={createEnvironment}>
-      <RepostActionStory storeOnly />
-      <ResetActor />
-      <Text
-        accessibilityLabel="첫 번째 프로필 요청 실패"
-        accessibilityRole="button"
-        onPress={() => staleActorRequest.current?.(new Error('첫 번째 프로필 요청 실패'))}
-      >
-        첫 번째 프로필 요청 실패
-      </Text>
-      <Text testID="repost-mutation-request-count">{mutationRequests}</Text>
+      <RelayActorBoundary>
+        <RepostActionStory storeOnly />
+        <ResetActor />
+        <Text
+          accessibilityLabel="첫 번째 프로필 요청 실패"
+          accessibilityRole="button"
+          onPress={() => staleActorRequest.current?.(new Error('첫 번째 프로필 요청 실패'))}
+        >
+          첫 번째 프로필 요청 실패
+        </Text>
+        <Text testID="repost-mutation-request-count">{mutationRequests}</Text>
+      </RelayActorBoundary>
     </RelayActorProvider>
   );
 }
@@ -421,7 +423,7 @@ export const ActorResetIgnoresStaleCallbacks: Story = {
     );
 
     await userEvent.click(canvas.getByRole('button', { name: '두 번째 프로필로 전환' }));
-    await waitFor(() => expect(canvas.getByTestId('actor-revision')).toHaveTextContent('1'));
+    await waitFor(() => expect(canvas.getByTestId('actor')).toHaveTextContent('현재 Profile'));
     const secondActorRepost = canvas.getByRole('button', { name: '재게시' });
     await userEvent.click(secondActorRepost);
     await userEvent.click(

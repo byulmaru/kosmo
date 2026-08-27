@@ -75,7 +75,10 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/RouteBoundary', {
-  exports: { RouteBoundary: ({ children }: { children?: unknown }) => children },
+  exports: {
+    RouteBoundary: ({ children }: { children?: unknown }) => children,
+    useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined, retry: () => undefined }),
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/components/profile/ProfileNameBlock', {
@@ -97,7 +100,7 @@ mock.module('@/lib/date', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/relay/RelayActorProvider', {
-  exports: { useRelayActor: () => ({ revision: actorRevision }) },
+  exports: { useRelayActorLifecycleKey: () => String(actorRevision) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/ThemeProvider', {

@@ -15,7 +15,7 @@ import {
 import { graphql, usePaginationFragment, usePreloadedQuery, useQueryLoader } from 'react-relay';
 import { trackAnalytics } from '@/analytics/client';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
-import { RouteBoundary } from '@/components/RouteBoundary';
+import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
@@ -25,7 +25,6 @@ import { IconButton } from '@/components/ui/IconButton';
 import { StateView } from '@/components/ui/StateView';
 import { Tab, TabList } from '@/components/ui/Tabs';
 import { addRecentSearch, readRecentSearches, writeRecentSearches } from '@/lib/recentSearches';
-import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
 import type { Href } from 'expo-router';
@@ -69,26 +68,19 @@ const SearchPeopleResultsFragment = graphql`
 `;
 
 function PeopleResults({ handle }: { handle: string }) {
-  const { revision } = useRelayActor();
-  const [fetchKey, setFetchKey] = useState(0);
-
   return (
     <RouteBoundary
       key={handle}
       loading={<StateView loading title="검색 결과를 불러오는 중입니다." />}
-      onRetry={() => setFetchKey((key) => key + 1)}
       title="검색 결과를 불러오지 못했어요"
     >
-      <PeopleResultsContent
-        key={`${revision}:${fetchKey}`}
-        fetchKey={`${revision}:${fetchKey}`}
-        handle={handle}
-      />
+      <PeopleResultsContent handle={handle} />
     </RouteBoundary>
   );
 }
 
-function PeopleResultsContent({ fetchKey, handle }: { fetchKey: string; handle: string }) {
+function PeopleResultsContent({ handle }: { handle: string }) {
+  const { fetchKey } = useRouteBoundary();
   const [queryReference, loadQuery] =
     useQueryLoader<SearchPeopleByHandlePageQuery>(SearchPeopleQuery);
 

@@ -68,7 +68,7 @@ mock.module('@/observability/UnexpectedErrorContext', {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/relay/RelayActorProvider', {
-  exports: { useRelayActor: () => ({ revision: actorRevision }) },
+  exports: { useRelayActorLifecycleKey: () => String(actorRevision) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('./PostActionAuthentication', {

@@ -1144,10 +1144,10 @@ GraphQL entity data를 표시하는 shell과 화면 component는 Relay fragment 
 - **AND** 실패를 `0`으로 해석하거나 badge를 제거하지 않는다
 - **AND** count 오류 때문에 셸 진입점을 전체 오류 화면으로 교체하지 않는다
 
-#### Scenario: Converge through the existing actor refresh lifecycle
+#### Scenario: Converge through the existing refresh lifecycle
 
 - **GIVEN** selected Profile의 서버 count가 마지막 성공 count와 달라졌다
-- **WHEN** Profile 전환, 셸 초기 로드·재진입 또는 기존 셸 오류 UI의 명시적 retry가 actor revision과 `store-and-network` 재조회를 실행한다
+- **WHEN** Profile 전환, 셸 초기 로드·재진입, Session recovery 또는 기존 셸 오류 UI의 명시적 retry가 actor lifecycle과 `store-and-network` 재조회를 실행한다
 - **THEN** 성공한 서버 응답이 해당 Profile의 badge count를 갱신한다
 - **AND** badge 상태 경계는 같은 Profile의 environment 교체 중 마지막 성공값을 지우지 않고 count 조회 오류를 전체 셸 오류로 전파하지 않는다
 - **AND** count-only 오류를 위한 별도 retry control은 제공하지 않는다

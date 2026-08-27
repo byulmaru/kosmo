@@ -15,7 +15,7 @@ const queryModes: Record<QueryName, QueryMode> = {
   ProfilePostListPageQuery: 'success',
 };
 const queryHistory: Array<{
-  fetchKey: string;
+  fetchKey: number;
   handle: string;
   query: QueryName;
 }> = [];
@@ -81,7 +81,7 @@ mockModule('react-relay', {
   useLazyLoadQuery: (
     query: QueryName,
     variables: { handle: string },
-    options: { fetchKey: string },
+    options: { fetchKey: number },
   ) => {
     queryHistory.push({ fetchKey: options.fetchKey, handle: variables.handle, query });
     const mode = queryModes[query];
@@ -147,7 +147,7 @@ mockModule(new URL('../../observability/UnexpectedErrorContext.ts', import.meta.
   useUnexpectedErrorReporter: () => undefined,
 });
 mockModule(new URL('../../relay/RelayActorProvider.tsx', import.meta.url), {
-  useRelayActor: () => ({ revision: 4 }),
+  useRelayActorLifecycleKey: () => 'actor-a',
 });
 
 let ProfileLayout: ComponentType;
@@ -307,7 +307,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfileLayoutQuery',
       );
       assert.equal(latestLayoutQuery?.handle, 'remote@activitypub.example');
-      assert.equal(latestLayoutQuery?.fetchKey, '4:1');
+      assert.equal(latestLayoutQuery?.fetchKey, 1);
     } finally {
       console.error = originalConsoleError;
     }
@@ -332,7 +332,7 @@ describe('profile route parameter lifecycle', () => {
         ({ query }) => query === 'ProfilePostListPageQuery',
       );
       assert.equal(latestPostQuery?.handle, 'local');
-      assert.equal(latestPostQuery?.fetchKey, '4:1');
+      assert.equal(latestPostQuery?.fetchKey, 1);
     } finally {
       console.error = originalConsoleError;
     }
