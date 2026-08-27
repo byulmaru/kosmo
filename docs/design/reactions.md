@@ -73,14 +73,15 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - 선택된 token은 Quick Picker와 동일하게 이모지·count와 분리한 `primary` 배경 layer를 70% opacity로 표시하고, pressed 상태에서는 `primaryHover`를 사용한다. 이모지와 count는 100% opacity를 유지한다.
 - 이미 다른 사용자가 남겨 둔 token도 선택한 Profile의 Reaction이 없으면 추가하고, 있으면 삭제한다. mutation이 성공하기 전에는 count나 선택 상태를 바꾸지 않는다.
 - selected Profile이 없으면 token은 보이지만 disabled이며 mutation을 시작하지 않는다.
-- overflow가 있으면 ellipsis 대신 같은 item geometry의 `+N` control을 마지막에 표시한다. `N`은 숨겨진 Reaction Type 수이며 숨겨진 Reaction count의 합이 아니다. `+N`은 selected Profile이 없어도 사용할 수 있고 Reaction People route로 이동한다.
-- 모든 Type이 들어가면 `+N`을 표시하지 않는다. 모두 들어가지 않으면 먼저 `+N`의 실제 렌더링 폭을 예약하고 Product 순서의 앞에서부터 완전히 들어가는 token만 표시한다. token이나 `+N`을 축소·클리핑하지 않고 wrap이나 horizontal scroll도 사용하지 않는다.
+- 양수 count Type이 하나라도 있으면 token 뒤에 Reaction People 진입 control을 항상 한 개 표시한다. 모든 Type token과 `Ellipsis`가 한 줄에 완전히 들어가면 canonical `Ellipsis` icon을 사용하고 접근성 이름은 `반응한 프로필 보기`로 제공한다. 이 control은 selected Profile이 없어도 사용할 수 있다.
+- 모든 Type token과 `Ellipsis`가 들어가지 않으면 같은 item geometry의 `+N` control로 trailing control을 교체한다. `N`은 숨겨진 Reaction Type 수이며 숨겨진 Reaction count의 합이 아니다. 접근성 이름은 `숨겨진 반응 유형 N개, 반응한 프로필 보기`로 제공한다.
+- width-fit은 trailing People control의 폭을 항상 먼저 예약한다. 모든 Type과 `Ellipsis`가 들어가면 전체 token을 표시한다. 그렇지 않으면 Product 순서의 마지막 token부터 하나씩 제외하고, 제외할 때마다 새 `N`의 실제 렌더링 폭으로 다시 계산해 표시 token과 `+N`이 모두 완전히 들어갈 때까지 반복한다. token이나 trailing control을 축소·클리핑하지 않고 wrap이나 horizontal scroll도 사용하지 않는다.
 - 한 줄에 표시할 최대 Type 수와 viewer-selected Type의 우선 배치는 Product 정책이다. Figma의 viewer-priority 표본은 선택 반응을 overflow 앞에 보존할 수 있다는 후보만 보여 주며 정렬 규칙을 확정하지 않는다. `16`을 포함한 외부 서비스의 표시 수는 참고값일 뿐 KOSMO 상한이 아니다.
 - 향후 Product가 2~3줄 요약을 명시적으로 확정하면 위 한 줄 계약을 그때 교체한다. multi-line variant는 pill끼리 겹치지 않는 범위에서 세로 간격을 최소화해 조밀하게 배치하고, 큰 row gap이나 카드처럼 분리된 행 표현은 사용하지 않는다. 정확한 줄 수, 세로 gap과 전체 높이 상한은 해당 Product 계약과 함께 확정한다.
 
 ## Reaction People route
 
-- `+N` overflow control은 overlay를 열지 않고 `반응한 사람` 전용 route로 이동한다. 이 surface에는 scrim, X, 바깥 영역 dismiss를 두지 않고 `PageHeader`의 Back action으로 이전 화면에 돌아간다.
+- 요약 row의 trailing People control은 overflow가 없으면 `Ellipsis`, overflow가 있으면 `+N`으로 표시하며 둘 다 overlay를 열지 않고 `반응한 사람` 전용 route로 이동한다. 이 surface에는 scrim, X, 바깥 영역 dismiss를 두지 않고 `PageHeader`의 Back action으로 이전 화면에 돌아간다.
 - 화면 순서는 `PageHeader(반응한 사람) → pill filter → Profile 목록`으로 고정한다. 목록 안에 `반응한 사람` 제목을 다시 표시하지 않는다.
 - Compact·Full Web에서는 기존 shell의 중앙 600px route column만 교체하며 Full Web의 `RightRail`은 유지한다. Mobile은 pushed dedicated screen을 사용하고 현재 shell 계약에 따라 `BottomTabBar`를 유지한다.
 - server가 제공한 양수 count Type과 순서를 그대로 사용한다. 처음 진입할 때 server 순서의 첫 Type을 선택하고, 사용자가 pill을 바꾸면 해당 Type의 Profile 목록을 표시한다.
@@ -114,7 +115,7 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - private `ReactionAction`과 `ReactionPopover`는 Action Bar trigger와 anchored popover를 소유한다.
 - private `PostReactionController`는 한 Post의 toggle 상태와 mutation/cache 동작을 소유한다.
 - private `__ReactionSummaryItem`은 Web 32px·iOS 44pt·Android 48dp의 reaction, selected, `+N` item presentation을 소유한다.
-- `ReactionSummary`는 Product-ordered input을 한 줄 width-fit으로 조합하고 `+N` 진입점을 표시하는 presentation을 소유한다. 표시 상한과 정렬 정책은 소유하지 않는다.
+- `ReactionSummary`는 Product-ordered input을 한 줄 width-fit으로 조합하고 `Ellipsis` 또는 `+N`의 항상 도달 가능한 People 진입점을 표시하는 presentation을 소유한다. 표시 상한과 정렬 정책은 소유하지 않는다.
 - `PostReactionSummary`는 count·controller와 Reaction People route 진입을 연결한다.
 - Reaction People route content는 pill filter, reaction emoji prefix, 기존 `ProfileListItem`·`FollowButton`을 사용한 Profile 목록, pagination과 조회 오류를 소유한다. 별도 범용 modal shell이나 Reaction 전용 Profile identity row는 만들지 않는다.
 - `PostListItem`과 `PostLayout`은 일반·Quote·순수 Repost의 `reactionTarget`을 한 번 결정해 목록과 상세에 전달한다.
@@ -125,11 +126,11 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - Storybook interaction에서 Web option의 exact 32×32px, 20px emoji, 16×16px spinner와 2px stroke, 70% selected 배경, 오류 재시도와 disabled 시 미렌더링을 검증한다.
 - Full Picker는 8 source variants, Web dialog와 Mobile 480·720 sheet geometry, 검색 결과 없음과 spinner-only Loading, reduced-motion 정적 대체를 검증한다. 실제 focus·dismiss·safe area·keyboard·screen reader 동작은 Figma 완료와 분리해 runtime에서 검증한다.
 - Reaction 요약은 Web 32px·iOS 44pt·Android 48dp item geometry, standalone 제목 제거, Quick Picker와 공유하는 selected·pending·error 상태를 검증한다.
-- 타임라인 `PostListItem`의 실제 content column인 Mobile 314px과 Center Web 524px에서 `+N` 폭을 먼저 예약한 뒤 완전히 들어가는 token만 Product 순서로 표시하는지, `N`이 숨겨진 Type 수인지, wrap·horizontal scroll·부분 clipping이 없는지 검증한다. detail `PostLayout`의 390px·600px full-width row는 별도 consumer로 확인한다. viewer-selected 저빈도 Type 표본은 후보 표시일 뿐 정렬 규칙이나 표시 상한으로 해석하지 않는다.
+- 타임라인 `PostListItem`의 실제 content column인 Mobile 314px과 Center Web 524px에서 모든 Type과 `Ellipsis`가 들어가면 전체 token과 `Ellipsis`를 표시하는지, 그렇지 않으면 `+N` 폭을 먼저 예약한 뒤 완전히 들어가는 token만 Product 순서로 표시하는지 검증한다. `N`이 숨겨진 Type 수인지, wrap·horizontal scroll·부분 clipping이 없는지도 함께 확인한다. detail `PostLayout`의 390px·600px full-width row는 별도 consumer로 확인한다. viewer-selected 저빈도 Type 표본은 후보 표시일 뿐 정렬 규칙이나 표시 상한으로 해석하지 않는다.
 - mutation 성공 전 상태 불변, 성공 payload Post의 authoritative 선택·count·순서 정규화, 실패 시 기존 상태 보존, Type별 동시성·재시도, selected Profile별 Environment 격리를 검증한다.
 - 일반·Quote는 own Post ID, 순수 Repost는 source Post ID를 목록과 상세 각각에서 사용하는지 검증한다.
-- Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 `+N`과 Profile 목록 조회는 가능해야 한다.
+- Action Bar trigger는 target이 적격할 때 guest에서 기존 인증 진입, valid 세션의 selected Profile 부재에서 기존 Profile 선택기 진입, session error에서 disabled인지 검증한다. resolution 전에는 popover·mutation이 없고 Profile 선택 뒤 원래 Reaction을 자동 재실행하지 않는다. 요약 token toggle은 selected Profile이 없으면 계속 disabled이며 trailing People control과 Profile 목록 조회는 가능해야 한다.
 - Reaction People route의 Back header, 양수 count pill 순서, 기본 선택, collapsed `앞 6개 + +N`, selected-outside-top-six 보존, expanded 전체 Type, item emoji, `ProfileListItem`의 팔로우·팔로잉·요청됨 상태, Profile 사이 separator, pagination·최초/추가 조회 재시도와 actor별 cache 격리를 검증한다.
 - 390px Mobile, 1024px Compact Web, 1440px Full Web에서 전용 route가 기존 shell 계약을 유지하는지 검증한다. Full Web은 `RightRail`, Mobile은 `BottomTabBar`를 보존하고 route 안에는 modal chrome이 없어야 한다.
-- 320px, 390px, 600px Web viewport에서 Quick Picker가 viewport 안에 머물고 exact 32px target을 유지한 채 feature-local horizontal scroll로 접근 가능한지 실제 관찰한다. 요약 row는 같은 viewport에서 scroll 대신 한 줄 width-fit과 `+N` overflow를 유지해야 한다.
+- 320px, 390px, 600px Web viewport에서 Quick Picker가 viewport 안에 머물고 exact 32px target을 유지한 채 feature-local horizontal scroll로 접근 가능한지 실제 관찰한다. 요약 row는 같은 viewport에서 scroll 대신 한 줄 width-fit과 항상 도달 가능한 trailing People control을 유지하고, overflow가 있을 때만 이를 `+N`으로 표시해야 한다.
 - 자동 검증과 Web runtime 관찰을 분리해 기록한다. iOS·Android runtime은 이번 Web 우선 범위의 완료 증거가 아니며 Native 출시 전 44pt·48dp target과 assistive technology 동작을 별도로 관찰한다.
