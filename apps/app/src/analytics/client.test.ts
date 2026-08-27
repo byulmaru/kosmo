@@ -241,6 +241,21 @@ describe('PostHog Web client', () => {
     ]);
   });
 
+  it('typed event properties를 변형하지 않고 PostHog에 전달한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    const properties = {
+      selected_profile_id: 'profile-id',
+      visibility: 'DIRECT' as const,
+    };
+    analytics.trackAnalytics('post_created', properties);
+
+    assert.equal(instance.calls[0]?.properties, properties);
+    assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
+  });
+
   it('표준 pathname으로 route pageview를 전송한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
@@ -301,6 +316,54 @@ describe('PostHog Web client', () => {
     ]);
     assert.deepEqual(instance.calls, [
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('reset 성공 뒤 다음 identify가 throw하면 원래 Account를 다시 identify한 뒤 capture를 허용한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.identifyFails = true;
+    assert.equal(analytics.identifyAnalytics('account-b'), false);
+
+    instance.identifyFails = false;
+    assert.equal(analytics.identifyAnalytics('account-a'), true);
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.identities, ['account-a', 'account-a']);
+    assert.deepEqual(instance.actions, [
+      'identify:account-a',
+      'reset',
+      'identify:account-a',
+      'capture:profile_created',
+    ]);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
+
+  it('identity 동기화 중에는 최신 pending pageview만 보존하고 성공 직후 한 번 flush한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.resetFails = true;
+    assert.equal(analytics.identifyAnalytics('account-b'), false);
+
+    analytics.trackAnalytics('$pageview', { $pathname: '/old-route' });
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'dropped-profile' });
+    analytics.trackAnalytics('$pageview', { $pathname: '/latest-route' });
+    assert.deepEqual(instance.calls, []);
+
+    instance.resetFails = false;
+    assert.equal(analytics.identifyAnalytics('account-b'), true);
+    assert.equal(analytics.identifyAnalytics('account-b'), true);
+
+    assert.deepEqual(instance.calls, [
+      { event: '$pageview', properties: { $pathname: '/latest-route' } },
     ]);
   });
 
