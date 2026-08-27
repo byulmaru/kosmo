@@ -139,9 +139,12 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
   safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
 - [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)는
-  `Tone=Primary|Danger × State=Idle|Pending`의 공용 단순 확인 content다. `Message`와 중첩 `Cancel`·
-  `Confirm action` Button을 instance property로 노출하고, action은 `취소 → 확인` 순서의 `120×40` 두 개를
-  `space/8` 간격으로 우측 정렬한다. Pending은 Cancel을 Disabled, Confirm을 같은 tone의 Loading으로 바꾼다.
+  `Tone=Primary|Danger × State=Idle|Pending`의 공용 단순 확인 content다. `Message`, 선택형 native
+  `Supporting content` Slot, 중첩 `Cancel`·`Confirm action` Button을 instance property로 노출한다.
+  `Show supporting content=false`가 기본값이며, 필요할 때만 Message 아래·Actions 위에 체크박스·경고·세부 설명
+  같은 흐름형 content를 넣는다. Slot content의 상태와 Confirm 활성화 조건은 consumer가 소유한다. action은
+  `취소 → 확인` 순서의 `120×40` 두 개를 `space/8` 간격으로 우측 정렬한다. Pending은 Cancel을 Disabled,
+  Confirm을 같은 tone의 Loading으로 바꾼다.
   제목·scrim·닫기·centered max-width 420 surface는 canonical
   [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)가 소유한다.
 - [`Post deletion confirmation placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5631-25077)는
@@ -149,8 +152,9 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   instance·slot·instance-swap으로 조합한다. 삭제·차단은 Danger, 뮤트·고정 교체는 Primary tone을 사용한다.
   Web은 삭제 Light의 More menu·Idle·Pending과 Dark Idle, Mobile은 삭제 Light의 More menu·Idle과 Dark Idle을
   확인하며 뮤트·차단·고정 교체 표본도 같은 source를 소비한다.
-- 대상 정보, 영향 목록, acknowledgement와 인증 handoff를 포함하는 Profile lifecycle 삭제는 단순 확인 content로
-  축약하지 않고 별도 `ProfileLifecycleDeleteConfirmContent`를 유지한다.
+- 대상 정보, 영향 목록, acknowledgement와 인증 handoff를 포함하는 Profile lifecycle 삭제는 선택 Slot만으로 단순
+  확인 content에 축약하지 않고 별도 `ProfileLifecycleDeleteConfirmContent`를 유지한다. acknowledgement의
+  Checked·Unchecked와 삭제 action의 Disabled·Default 연결도 해당 consumer 계약이다.
 - 이 section은 `More → 삭제 → Idle confirmation → Pending`의 responsive placement와 theme 상속만 증명한다.
   Production Screens consumer, focus handoff, dismiss 차단, 접근성 semantics, mutation과 cache 반영은 연결된 Product
   이슈의 runtime 검증으로 남긴다.
