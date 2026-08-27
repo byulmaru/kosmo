@@ -4,6 +4,7 @@ import { defineConfig } from '@playwright/test';
 const host = '127.0.0.1';
 const portOffset = Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0);
 const webPort = 4173 + portOffset;
+const noAnalyticsWebPort = 4174 + portOffset;
 const apiPort = 3001 + portOffset;
 const oidcPort = 4300 + portOffset;
 const temporalPort = 4401 + portOffset;
@@ -23,6 +24,7 @@ const apiOrigin = `http://${host}:${apiPort}`;
 const webOrigin = `http://${host}:${webPort}`;
 const configuredWebOrigin =
   process.env.KOSMO_TEST_CONFIGURED_WEB_ORIGIN ?? 'https://configured-web-origin.invalid';
+const noAnalyticsWebOrigin = `http://${host}:${noAnalyticsWebPort}`;
 const oidcOrigin = `http://${host}:${oidcPort}`;
 const posthogE2EKey = 'posthog-e2e-project-key';
 const posthogE2EHost = 'https://posthog.e2e.invalid';
@@ -158,6 +160,33 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 120_000,
       url: `${webOrigin}/health`,
+    },
+    {
+      command:
+        'pnpm --dir ../app relay && pnpm --dir ../app exec expo export --clear --platform web --output-dir dist/no-analytics && node --import tsx src/server/index.ts',
+      env: {
+        DATABASE_URL: databaseUrl,
+        EXPO_PUBLIC_API_ORIGIN: apiOrigin,
+        EXPO_PUBLIC_OIDC_ISSUER: oidcOrigin,
+        EXPO_PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
+        EXPO_PUBLIC_POSTHOG_E2E_CAPTURE_BOTS: 'false',
+        EXPO_PUBLIC_POSTHOG_HOST: '',
+        EXPO_PUBLIC_POSTHOG_KEY: '',
+        EXPO_PUBLIC_WEB_ORIGIN: noAnalyticsWebOrigin,
+        EXPO_WEB_ROOT: '../app/dist/no-analytics',
+        OIDC_CLIENT_SECRET: oidcClientSecret,
+        PORT: String(noAnalyticsWebPort),
+        PUBLIC_API_ORIGIN: apiOrigin,
+        PUBLIC_ORIGIN: noAnalyticsWebOrigin,
+        PUBLIC_OIDC_CLIENT_ID: oidcClientId,
+        PUBLIC_OIDC_ISSUER: oidcOrigin,
+        PUBLIC_OIDC_NATIVE_CLIENT_ID: nativeOidcClientId,
+        TEMPORAL_ADDRESS: `${host}:${temporalPort}`,
+        TEMPORAL_NAMESPACE: 'test',
+      },
+      reuseExistingServer: false,
+      timeout: 120_000,
+      url: `${noAnalyticsWebOrigin}/health`,
     },
   ],
 });

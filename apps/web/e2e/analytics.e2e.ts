@@ -3,6 +3,7 @@ import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
 const posthogOrigin = 'https://posthog.e2e.invalid';
+const noAnalyticsOrigin = `http://127.0.0.1:${4174 + Number(process.env.KOSMO_TEST_PORT_OFFSET ?? 0)}`;
 
 type PostHogPayload = {
   event?: unknown;
@@ -41,6 +42,21 @@ function readPostHogPayloads(body: string | null): PostHogPayload[] {
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
+});
+
+test('PostHog 설정이 없는 Web build는 analytics 요청 없이 정상 렌더링된다', async ({ page }) => {
+  const analyticsRequests: string[] = [];
+  page.on('request', (request) => {
+    if (/posthog|openpanel/u.test(request.url())) {
+      analyticsRequests.push(request.url());
+    }
+  });
+
+  await page.goto(noAnalyticsOrigin);
+
+  await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+  await page.waitForTimeout(200);
+  expect(analyticsRequests).toEqual([]);
 });
 
 test('Web runtime은 route template pageview만 전송하고 automatic telemetry와 민감 URL을 보내지 않는다', async ({
@@ -118,13 +134,17 @@ test('Web runtime은 route template pageview만 전송하고 automatic telemetry
   }
 });
 
-test('Account identity는 opaque Account ID만 보내고 analytics endpoint 실패에도 인증 흐름을 유지한다', async ({
+test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도 인증 흐름을 유지한다', async ({
   context,
   page,
 }) => {
   const viewer = await createE2ESession({
     displayName: 'E2E Analytics Identity',
     handle: 'e2e-analytics-identity',
+  });
+  const nextViewer = await createE2ESession({
+    displayName: 'E2E Analytics Identity Next',
+    handle: 'e2e-analytics-identity-next',
   });
   const payloads: PostHogPayload[] = [];
 
@@ -155,10 +175,47 @@ test('Account identity는 opaque Account ID만 보내고 analytics endpoint 실�
 
   await page.unroute(`${posthogOrigin}/**`);
   await page.route(`${posthogOrigin}/**`, async (route) => {
+    if (route.request().method() === 'POST') {
+      payloads.push(...readPostHogPayloads(route.request().postData()));
+    }
+
     await route.fulfill({ body: '{}', status: 503 });
   });
 
   await page.getByRole('button', { name: '로그아웃' }).click();
   await expect(page).toHaveURL(/\/$/u);
   await expect(page.getByRole('link', { name: '시작하기' })).toBeVisible();
+
+  await page.getByRole('link', { name: '개인정보 처리방침' }).click();
+  await expect(page).toHaveURL(/\/privacy$/u);
+  await expect
+    .poll(() =>
+      payloads.find(
+        (payload) =>
+          payload.event === '$pageview' && payload.properties?.route_template === '/privacy',
+      ),
+    )
+    .not.toBeUndefined();
+  const anonymousPageview = payloads.find(
+    (payload) => payload.event === '$pageview' && payload.properties?.route_template === '/privacy',
+  );
+
+  await setE2ESessionCookie(context, nextViewer.token);
+  await page.goto('/home');
+  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        payloads.filter(
+          (payload) =>
+            payload.event === '$identify' &&
+            payload.properties?.distinct_id === toGlobalId('Account', nextViewer.account.id),
+        ).length,
+    )
+    .toBe(1);
+
+  const anonymousDistinctId = anonymousPageview?.properties?.distinct_id;
+  expect(anonymousDistinctId).toEqual(expect.any(String));
+  expect(anonymousDistinctId).not.toBe(toGlobalId('Account', viewer.account.id));
+  expect(anonymousDistinctId).not.toBe(toGlobalId('Account', nextViewer.account.id));
 });
