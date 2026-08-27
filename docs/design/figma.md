@@ -58,10 +58,13 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - `06 Exploration · Settings detail grouping · DSN-44` — 기존 SettingsItem 조합만 검토하는 비제품 탐색 예시
 - `12 Exploration · Mobile composer fullscreen · DSN-61` — 모바일 전체 화면 Composer의 반응형 상태와 편집기 후보
 - `17 Post deletion confirmation placement · DSN-61` — 기존 More·ActionMenu·ModalSheet 정본을 조합한 삭제 확인 배치 표본
+- `19 DSN-61 · Composer Dark coverage · representative` — 기존 Light pattern을 복제해 정본 `PostComposer` 상속과
+  Dark mode만 검증하는 대표 표본
 
 `01`–`05`는 승인된 component 조합을 비교·검토하는 snapshot이며 해당 제품 화면에 채택됐다는 evidence는 아니다.
-`06`과 `12`는 제품 IA·route·저장 계약을 승인하지 않는 exploration이며, `17`은 정본 source의 배치·상태 조합만
-검증한다. 어느 쪽도 Foundation, component source, `docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
+`06`과 `12`는 제품 IA·route·저장 계약을 승인하지 않는 exploration이고, `17`은 정본 source의 배치·상태 조합,
+`19`는 Dark mode·반응형 배치·source 상속만 검증한다. 어느 쪽도 Foundation, component source, `docs/design`과
+연결된 Product 이슈의 계약을 대체하지 않는다.
 
 #### DSN-43 PostComposer source 계약
 
@@ -120,6 +123,8 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - `< compact` Web과 Android/iOS는 별도 fullscreen editor를 사용한다. scrim, focus trap·restore, Escape,
   discard confirmation, viewport max-height·body scroll, safe area와 mobile keyboard avoidance lifecycle은
   Product의 상위 Overlay 구현이 소유한다.
+- `12 Exploration`에 남긴 기존 `600×624`·`SquarePen` PC editor는 `Superseded` decision history다. 새 consumer는
+  만들지 않으며 현재 PC 계약은 `__ComposerMediaItem`의 `Pen`과 `ComposerMediaEditor` `920×678` source만 따른다.
 - 현재 Typography line-height FLOAT 변수는 `115`·`130`·`150` 같은 백분율 값이지만 Plugin API binding에서는 px로
   해석된다. 이 경로로 편집한 Composer 텍스트는 검증된 CW `16/24`, Poll `14/20`, editor title `20/26`, footer
   counter `130%` line-height를 유지하고 family·size·weight만 variable에 bind한다. 백분율을 안전하게 표현하는 token
@@ -130,6 +135,7 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 #### DSN-61 모바일 Composer·공용 Confirmation 배치 계약
 
 - [`__MobileFullscreenComposerShell`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5284-38074)은
+  public `PostComposer` matrix를 확장하지 않는 private DSN-61 candidate다. 대표 배치로
   `Viewport=Full|Keyboard × Content=Empty|Media|Poll|CW`의 8개 조합을 제공한다. Full의
   [`Poll`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-12996)·
   [`CW`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-13083)는 Keyboard 변형과 같은
@@ -138,6 +144,10 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
   `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
   safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- [`Composer Dark coverage`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5884-14199)는
+  Full Web Composer overlay, Full Web thread rail Reply, Compact Web ReplyComposer modal, Mobile ReplyComposer
+  fullscreen의 Dark representative를 제공한다. 새 source를 만들지 않고 기존 Light pattern의 instance main-component를
+  그대로 유지하며 nested Light mode override를 제거한 표본이다.
 - [`ConfirmationContent`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5103-15173)는
   `Tone=Primary|Danger × State=Idle|Pending`의 공용 단순 확인 content다. `Message`, 선택형 native
   `Supporting content` Slot, 중첩 `Cancel`·`Confirm action` Button을 instance property로 노출한다.
