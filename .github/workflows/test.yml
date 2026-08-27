@@ -19,6 +19,12 @@ jobs:
         include:
           - name: Root
             command: pnpm test:eslint
+          - name: Admin
+            command: pnpm --filter @kosmo/admin test
+          - name: Admin Helm
+            command: mise exec -- ./scripts/test-admin-helm.sh
+          - name: Admin Image
+            command: ./scripts/test-admin-image.sh
           - name: Core
             command: pnpm --filter @kosmo/core test
             database: true

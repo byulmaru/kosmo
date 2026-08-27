@@ -1,0 +1,22 @@
+{
+  "name": "@kosmo/admin",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check": "tsc --noEmit",
+    "dev": "tsx watch src/server/index.ts",
+    "start": "node --import tsx src/server/index.ts",
+    "test": "pnpm check && pnpm test:unit",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.10",
+    "hono": "^4.12.34",
+    "tsx": "^4.22.4"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

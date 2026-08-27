@@ -1,0 +1,33 @@
+{{- if .Values.admin.enabled }}
+{{- if empty .Values.admin.tailscale.proxyPodLabels }}
+{{- fail "admin.tailscale.proxyPodLabels must contain live-verified Operator proxy labels when admin.enabled=true" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ printf "%s-admin" .Release.Name | trunc 63 | trimSuffix "-" }}
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: admin
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Values.version | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: admin
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.admin.tailscale.namespace | quote }}
+          podSelector:
+            matchLabels:
+{{ toYaml .Values.admin.tailscale.proxyPodLabels | indent 14 }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.admin.health.port }}
+{{- end }}

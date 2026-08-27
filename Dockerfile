@@ -17,6 +17,7 @@ RUN pnpm runtime set node ${NODE_VERSION} -g
 FROM base AS workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/app/package.json ./apps/app/package.json
 COPY apps/fedify-consumer/package.json ./apps/fedify-consumer/package.json
@@ -84,9 +85,10 @@ RUN groupadd --system --gid 10001 app \
   && chown app:app /app
 
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  pnpm install --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
+  pnpm install --filter @kosmo/admin... --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
 COPY --chown=app:app tsconfig.json ./
+COPY --chown=app:app apps/admin ./apps/admin
 COPY --chown=app:app apps/api ./apps/api
 COPY --chown=app:app apps/fedify-consumer ./apps/fedify-consumer
 COPY --chown=app:app apps/worker ./apps/worker

@@ -2,6 +2,10 @@
 set -eu
 
 case "${1:-web}" in
+  admin)
+    cd /app/apps/admin
+    exec node --import tsx src/server/index.ts
+    ;;
   web)
     cd /app/apps/web
     exec node --import tsx src/server/index.ts

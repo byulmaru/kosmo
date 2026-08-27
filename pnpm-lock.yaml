@@ -91,6 +91,22 @@ importers:
         specifier: ^8.59.2
         version: 8.59.2(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
 
+  apps/admin:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^2.0.10
+        version: 2.0.10(hono@4.12.34)
+      hono:
+        specifier: ^4.12.34
+        version: 4.12.34
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
+    devDependencies:
+      vitest:
+        specifier: ^4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/browser-playwright@4.1.10)(jsdom@29.1.1)(vite@8.0.16(@types/node@25.6.2)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
+
   apps/api:
     dependencies:
       '@hono/node-server':
