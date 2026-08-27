@@ -2,7 +2,7 @@
 
 ## 상태
 
-Accepted
+Superseded by [ADR 0026](./0026-admin-console-tailscale-access-boundary.md)
 
 ## 날짜
 
