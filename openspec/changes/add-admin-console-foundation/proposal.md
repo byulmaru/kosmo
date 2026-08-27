@@ -9,8 +9,8 @@ Kosmo에는 공개 Web/API와 분리되고 Tailscale 접근 제어로만 진입�
 - 독립 workspace package `apps/admin`에 `/healthz`, 기본 deny와 읽기 전용 빈 Admin Console shell을 추가한다.
 - Tailscale 접근 정책을 통과한 Viewer가 별도 app capability나 객체별 action 없이 shell에 진입하도록 한다.
 - Admin runtime을 기존 application image와 entrypoint에 포함한다.
-- Tailscale Operator Ingress, ClusterIP Service와 NetworkPolicy를 추가해 Operator proxy에서만 Admin workload에
-  도달하도록 한다.
+- Tailscale Operator Ingress, ClusterIP Service와 NetworkPolicy를 추가해 일반 workload에서는 Operator
+  proxy를 통해서만 Admin workload에 도달하도록 한다. node-origin 연결은 차단 범위에서 제외한다.
 - public Gateway/HTTPRoute, Funnel, application LoadBalancer는 추가하지 않는다.
 - 선택적 Tailscale login과 display name은 표시 metadata로만 사용하고 애플리케이션 인가에는 사용하지 않는다.
 - Admin-specific logging, audit, security event와 identity snapshot은 추가하지 않는다.

@@ -25,6 +25,8 @@ projection만 허용하는 애플리케이션 capability 계층은 두지 않는
   `Account.Operator` 사실을 갖지 않는다.
 - Admin Console 진입 권한의 source of truth는 Tailscale 접근 정책이다. 신뢰된 Tailscale proxy와 네트워크
   경계를 우회한 요청은 Admin Console 읽기 경계가 아니다.
+- 일반 workload의 proxy 우회는 차단하지만 Kubernetes node 자체, kubelet과 node 권한을 가진 운영 주체는
+  신뢰된 인프라로 보고 v1 위협 모델의 차단 대상에서 제외한다.
 - v1은 all-or-nothing 접근 모델을 사용한다. 진입이 허용된 Viewer는 Account, Profile,
   Account-Profile Membership 읽기 projection을 모두 사용할 수 있다.
 - 애플리케이션은 Tailscale App Capabilities, `account.read`, `profile.read` 또는 객체별 Admin Console action을

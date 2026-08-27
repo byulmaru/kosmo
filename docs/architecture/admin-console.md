@@ -21,8 +21,10 @@ Capabilities나 객체별 action을 추가로 계산하지 않는다.
 - 진입이 허용된 Viewer는 Account, Profile, Account-Profile Membership projection을 모두 읽을 수 있다.
 - proxy identity header의 login과 display name은 선택적 표시 metadata이며 인가, Account 매핑, 조회 filter
   또는 projection 계산에 사용하지 않는다.
-- client가 직접 주입한 identity header나 신뢰된 proxy를 우회한 ClusterIP·Pod IP 요청은 Admin Console
-  접근 경계가 아니다.
+- client가 직접 주입한 identity header나 일반 workload가 신뢰된 proxy를 우회한 ClusterIP·Pod IP 요청은
+  Admin Console 접근 경계가 아니다.
+- Kubernetes node 자체, kubelet과 node 권한을 가진 운영 주체의 node-origin 연결은 신뢰된 인프라로 보고
+  이번 위협 모델의 차단 대상에서 제외한다.
 - public Gateway, Funnel 또는 외부 LoadBalancer는 Admin Console entry로 사용하지 않는다.
 
 Admin ingress가 제공하는 identity wire header의 인코딩은 transport 구현에서 정규화한다. RFC 2047 decode와
@@ -43,8 +45,9 @@ Tailscale access policy
 
 1. Tailscale 접근 정책은 요청 주체가 Admin Console entry에 연결할 수 있는지 결정한다.
 2. Operator Ingress는 허용된 요청을 ClusterIP Admin Service로 전달하고 선택적 identity metadata를 제공한다.
-3. NetworkPolicy는 Admin workload의 ingress를 해당 proxy 경계와 필요한 health probe로 제한한다. 실제
-   operator-generated proxy label은 배포 대상 버전과 live cluster에서 확인한 뒤 selector로 고정한다.
+3. NetworkPolicy는 일반 workload에서 오는 Admin ingress를 해당 proxy 경계로 제한한다. node-origin probe와
+   연결은 차단 대상으로 삼지 않는다. 실제 operator-generated proxy label은 배포 대상 버전과 live cluster에서
+   확인한 뒤 selector로 고정한다.
 4. query 계층은 [Admin Console Read Policy](../domain/policies/admin-console-read.md)의 projection을 적용한다.
 5. response 조합은 Account, Profile, Membership projection을 구조적으로 분리한다.
 
@@ -72,7 +75,9 @@ OIDC subject, credential, Session token, private key를 포함한 세부 필드 
 ## 실패 경계
 
 - Tailscale 접근 정책에서 허용되지 않은 주체는 Admin Console entry에 연결할 수 없어야 한다.
-- trusted proxy와 NetworkPolicy 경계를 우회한 ClusterIP·Pod IP 요청은 runtime에 도달할 수 없어야 한다.
+- 일반 workload가 trusted proxy와 NetworkPolicy 경계를 우회한 ClusterIP·Pod IP 요청은 runtime에 도달할 수
+  없어야 한다.
+- node-origin 연결과 node 권한을 가진 운영 주체는 이 아키텍처의 차단 보장 범위에 포함하지 않는다.
 - 선택적 identity 정규화 실패는 metadata 누락으로 처리하며 허용된 Viewer의 접근을 바꾸지 않는다.
 - query의 not-found와 내부 실패는 연결 접근 실패와 구분한다.
 - 외부 응답에는 proxy header, 내부 경로와 backend 원문 오류를 포함하지 않는다.

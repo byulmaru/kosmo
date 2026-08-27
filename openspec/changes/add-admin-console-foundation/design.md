@@ -14,7 +14,7 @@ cluster 또는 VPC 경로에서 직접 접근될 수 있으므로 Service type�
 
 - 공개 runtime과 분리된 Admin shell·probe runtime을 만든다.
 - Tailscale 접근 정책에서 허용된 Viewer에게 v1 읽기 전체의 공통 admission을 제공한다.
-- Operator Ingress 뒤의 ClusterIP Service와 NetworkPolicy로 직접 Service·Pod 접근을 차단한다.
+- Operator Ingress 뒤의 ClusterIP Service와 NetworkPolicy로 일반 workload의 직접 Service·Pod 접근을 차단한다.
 - runtime, image, Helm render와 trust-boundary fixture를 자동 검증한다.
 
 **Non-Goals:**
@@ -42,9 +42,10 @@ Helm은 Admin Deployment, ClusterIP Service와 `ingressClassName: tailscale` Ing
 Gateway/HTTPRoute와 application LoadBalancer는 만들지 않는다. Tailscale 접근 정책의 principal, hostname과
 grant 자체는 cluster 외부 운영 설정이므로 repository에 사용자 식별자나 credential 값을 저장하지 않는다.
 
-NetworkPolicy는 Admin workload를 기본 거부하고 Operator가 생성한 해당 Ingress proxy와 필요한 workload
-probe만 application port에 접근하도록 허용한다. selector에 사용할 generated proxy label은 배포 대상 Operator
-버전과 live cluster에서 확인한 뒤 고정한다. label을 확인하기 전 특정 값을 durable 계약으로 가정하지 않는다.
+NetworkPolicy는 일반 workload에서 오는 Admin ingress를 기본 거부하고 Operator가 생성한 해당 Ingress
+proxy만 application port에 접근하도록 허용한다. Kubernetes node 자체와 kubelet probe를 포함한 node-origin
+연결은 차단 범위에서 제외한다. selector에 사용할 generated proxy label은 배포 대상 Operator 버전과 live
+cluster에서 확인한 뒤 고정한다. label을 확인하기 전 특정 값을 durable 계약으로 가정하지 않는다.
 
 ### Known Traps
 
@@ -52,15 +53,18 @@ probe만 application port에 접근하도록 허용한다. selector에 사용할
 - ClusterIP, caller IP, Host, `X-Forwarded-*`, identity header 또는 내부 shared secret을 application admission
   근거로 사용하지 않는다.
 - public Gateway/HTTPRoute, Funnel이나 application LoadBalancer로 별도 entry를 만들지 않는다.
-- NetworkPolicy 없이 ClusterIP만 만들고 직접 접근 차단을 완료로 판단하지 않는다.
+- NetworkPolicy 없이 ClusterIP만 만들고 일반 workload의 직접 접근 차단을 완료로 판단하지 않는다.
 - Admin runtime에 기존 Web/API의 Sentry 또는 request logging middleware를 연결하지 않는다.
 
 ## Risks / Trade-offs
 
 - [Generated proxy label은 Operator 버전과 실제 resource에 의존함] → dev에서 생성된 proxy Pod label을 확인한
   뒤 policy selector를 고정하고 Helm fixture와 live direct-access test를 함께 둔다.
-- [NetworkPolicy가 proxy 또는 probe까지 차단할 수 있음] → proxy와 probe source를 각각 검증하고 readiness와
-  tailnet 응답을 별도 증거로 수집한다.
+- [NetworkPolicy selector가 Operator proxy를 차단할 수 있음] → generated proxy source를 확인하고 workload
+  readiness와 tailnet 응답을 별도 증거로 수집한다.
+- [표준 NetworkPolicy는 node-origin traffic을 차단하지 않음] → node 자체, kubelet과 node 권한을 가진 운영
+  주체는 신뢰된 인프라로 보고 v1 위협 모델에서 제외한다. node로 source NAT된 경로까지 차단했다고 주장하지
+  않고 live direct-access 결과에 source 경계를 함께 기록한다.
 - [Tailscale 접근 정책은 repository 밖에서 관리됨] → 허용·거부 principal의 실제 설정을 repository 검증과
   분리하고, dev tailnet 통합 전제와 관찰 결과를 명시한다.
 
@@ -70,7 +74,8 @@ probe만 application port에 접근하도록 허용한다. selector에 사용할
 2. dev Operator 버전, generated proxy label, hostname과 Tailscale 접근 정책 준비를 확인한다.
 3. dev에 Deployment, Service, Ingress와 NetworkPolicy를 sync하고 workload readiness를 확인한다.
 4. 허용된 Viewer와 허용되지 않은 tailnet 주체의 hostname 접근을 각각 검증한다.
-5. 임의 Pod·VPC 경로의 ClusterIP·Pod IP 접근과 공개 인터넷 노출이 차단됨을 별도로 확인한다.
+5. 일반 Pod와 node 밖 VPC 경로의 ClusterIP·Pod IP 접근 및 공개 인터넷 노출이 차단됨을 별도로 확인하고,
+   node-origin 또는 node로 source NAT된 경로는 차단 증거에서 제외한다.
 6. rollback은 application revision과 Helm resource를 이전 revision으로 되돌린다. tailnet 접근 정책 변경은 별도
    운영 절차를 따른다.
 

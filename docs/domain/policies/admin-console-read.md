@@ -28,14 +28,16 @@ Tailscale proxy가 제공하는 login, display name과 같은 identity header는
 
 Admin Console v1은 객체별 권한을 나누지 않는 all-or-nothing 접근 모델을 사용한다.
 
-| 요청 경계                                  | Account | Profile | Account-Profile Membership |
-| ------------------------------------------ | :-----: | :-----: | :------------------------: |
-| Tailscale 접근 정책과 신뢰 경계를 통과함   |  허용   |  허용   |            허용            |
-| 허용되지 않은 tailnet 주체 또는 proxy 우회 |  금지   |  금지   |            금지            |
+| 요청 경계                                                  | Account | Profile | Account-Profile Membership |
+| ---------------------------------------------------------- | :-----: | :-----: | :------------------------: |
+| Tailscale 접근 정책과 신뢰 경계를 통과함                   |  허용   |  허용   |            허용            |
+| 허용되지 않은 tailnet 주체 또는 일반 workload의 proxy 우회 |  금지   |  금지   |            금지            |
 
 Tailscale 접근 정책은 누가 Admin Console entry에 연결할 수 있는지를 결정한다. 애플리케이션은 그 결정을
 `account.read`, `profile.read` 같은 action으로 다시 나누거나 identity header에서 추론하지 않는다. 신뢰된
-proxy를 우회한 ClusterIP, Pod IP 또는 공개 ingress 경로는 Admin Console 읽기 경계가 아니다.
+proxy를 우회한 일반 workload의 ClusterIP, Pod IP 또는 공개 ingress 경로는 Admin Console 읽기 경계가 아니다.
+Kubernetes node 자체와 kubelet을 포함한 node-origin 연결은 이미 node 권한을 가진 신뢰된 인프라 주체로 보고
+이번 위협 모델의 차단 대상에서 제외한다.
 
 세 projection은 같은 Viewer에게 열리지만 결과 구조에서는 분리한다. 한 projection에 다른 객체나 관계를
 `null`, `0`, 빈 placeholder로 암시하거나 편의상 합치지 않는다.

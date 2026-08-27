@@ -49,21 +49,26 @@
 
 ### Requirement: Trusted Tailscale Operator Ingress와 network isolation
 
-**Authority / Provenance:** `docs/architecture/admin-console.md`, `PROD-689`, `PROD-690`. Admin Console 요청은 Tailscale Operator Ingress에서 ClusterIP Admin Service를 거쳐 Admin workload에 도달해야 한다(MUST). NetworkPolicy는 해당 Operator proxy와 필요한 workload probe만 application port에 허용해야 하며(MUST), ClusterIP·Pod IP·public Gateway·Funnel·application LoadBalancer를 통한 우회 entry를 허용해서는 안 된다(MUST NOT).
+**Authority / Provenance:** `docs/architecture/admin-console.md`, `PROD-689`, `PROD-690`. Admin Console 요청은 Tailscale Operator Ingress에서 ClusterIP Admin Service를 거쳐 Admin workload에 도달해야 한다(MUST). NetworkPolicy는 일반 workload source 중 해당 Operator proxy만 application port에 허용해야 하며(MUST), 일반 workload가 ClusterIP·Pod IP·public Gateway·Funnel·application LoadBalancer를 우회 entry로 사용하게 해서는 안 된다(MUST NOT). Kubernetes node 자체, kubelet과 node 권한을 가진 운영 주체의 node-origin 연결은 이 차단 요구 범위에 포함하지 않는다.
 
 #### Scenario: 허용되지 않은 tailnet 주체 차단
 
 - **WHEN** Tailscale 접근 정책에서 허용되지 않은 주체가 Admin Console hostname을 요청한다
 - **THEN** 요청은 Admin runtime에 도달하지 않는다
 
-#### Scenario: Service 또는 Pod 직접 접근 차단
+#### Scenario: 일반 workload의 Service 또는 Pod 직접 접근 차단
 
-- **WHEN** 임의의 cluster Pod나 VPC 경로에서 ClusterIP 또는 Admin Pod IP에 직접 접근한다
+- **WHEN** 일반 cluster Pod나 node 밖 VPC source에서 ClusterIP 또는 Admin Pod IP에 직접 접근한다
 - **THEN** NetworkPolicy는 application 연결을 허용하지 않는다
+
+#### Scenario: Node-origin 연결은 위협 모델에서 제외
+
+- **WHEN** Kubernetes node 자체, kubelet 또는 node 권한을 가진 운영 주체가 Admin workload에 연결한다
+- **THEN** 시스템은 해당 연결의 차단을 이 requirement의 완료 조건으로 요구하지 않는다
 
 #### Scenario: Caller 주입 header로 우회할 수 없음
 
-- **WHEN** caller가 identity나 proxy 관련 header를 직접 주입해 Service 또는 Pod에 접근한다
+- **WHEN** 일반 workload caller가 identity나 proxy 관련 header를 직접 주입해 Service 또는 Pod에 접근한다
 - **THEN** header 값과 무관하게 network 경계를 우회할 수 없다
 
 #### Scenario: 공개 인터넷 비노출
