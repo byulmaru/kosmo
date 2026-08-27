@@ -56,10 +56,12 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
 - `04 Composer presentation patterns · DSN-43`
 - `05 Settings control patterns · DSN-44`
 - `06 Exploration · Settings detail grouping · DSN-44` — 기존 SettingsItem 조합만 검토하는 비제품 탐색 예시
+- `12 Exploration · Mobile composer fullscreen · DSN-61` — 모바일 전체 화면 Composer의 반응형 상태와 편집기 후보
+- `17 Post deletion confirmation placement · DSN-61` — 기존 More·ActionMenu·ModalSheet 정본을 조합한 삭제 확인 배치 표본
 
 `01`–`05`는 승인된 component 조합을 비교·검토하는 snapshot이며 해당 제품 화면에 채택됐다는 evidence는 아니다.
-`06`은 제품 IA·route·저장 계약을 승인하지 않는 exploration이다. 어느 쪽도 Foundation, component source,
-`docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
+`06`과 `12`는 제품 IA·route·저장 계약을 승인하지 않는 exploration이며, `17`은 정본 source의 배치·상태 조합만
+검증한다. 어느 쪽도 Foundation, component source, `docs/design`과 연결된 Product 이슈의 계약을 대체하지 않는다.
 
 #### DSN-43 PostComposer source 계약
 
@@ -124,6 +126,25 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   계약이 생기기 전까지 line-height를 기계적으로 bind하지 않는다. `ComposerMediaEditor`가 직접 소유한 text는
   Typography의 `MCP Preview` mode에서 family·size·weight를 bind하고, 중첩 공용 component의 text는 해당 source의
   variable binding을 상속해 로컬 override를 만들지 않는다.
+
+#### DSN-61 모바일 Composer·삭제 확인 배치 계약
+
+- [`__MobileFullscreenComposerShell`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5284-38074)은
+  `Viewport=Full|Keyboard × Content=Empty|Media|Poll|CW`의 8개 조합을 제공한다. Full의
+  [`Poll`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-12996)·
+  [`CW`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5627-13083)는 Keyboard 변형과 같은
+  canonical editor를 소비하고 illustrative keyboard만 제외한다. 본문 `layoutGrow`가 남은 높이를 채우며 footer는
+  화면 하단에 유지된다.
+- 모바일 fullscreen header가 제출 action을 소유하므로 8개 조합 모두 공용 `__ComposerFooter`의
+  `Show submit=false`를 유지한다. Poll·CW 표본은 배치와 reflow evidence이며 실제 작성 기능·keyboard avoidance·
+  safe area·focus·제출 lifecycle 완료를 뜻하지 않는다.
+- [`Post deletion confirmation placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5631-25077)는
+  새 confirmation source를 만들지 않고 canonical `PostActionBar`의 More, `ActionMenu`, `ModalSheet`,
+  `PostDeleteConfirmContent`를 instance·slot·instance-swap으로 조합한다. Web은 Light의 More menu·Idle·Pending과
+  Dark Idle, Mobile은 Light의 More menu·Idle과 Dark Idle을 확인한다.
+- 이 section은 `More → 삭제 → Idle confirmation → Pending`의 responsive placement와 theme 상속만 증명한다.
+  Production Screens consumer, focus handoff, dismiss 차단, 접근성 semantics, mutation과 cache 반영은 연결된 Product
+  이슈의 runtime 검증으로 남긴다.
 
 #### DSN-44 설정 control 계약
 
