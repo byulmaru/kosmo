@@ -15,46 +15,8 @@ import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '
 import { NotFoundError } from '../error';
 import * as profileFollowTestHelpers from './profile-follow.test-helpers';
 import { followProfile, removeInboundFollow } from './profile-follow.test-helpers';
-import * as profileFollowRequestLifecycle from './profile-follow-transaction';
-import type { ProfileFollowEffectOrigin } from './profile-follow-transaction';
 
-type ApproveProfileFollowRequest = (input: {
-  actorProfileId: string;
-  profileFollowRequestId: string;
-  origin: ProfileFollowEffectOrigin;
-}) => Promise<{
-  followeeProfile: typeof Profiles.$inferSelect;
-  followerProfile: typeof Profiles.$inferSelect;
-  profileFollow: typeof ProfileFollows.$inferSelect;
-  profileFollowRequestId: string;
-}>;
-
-type RejectProfileFollowRequest = (input: {
-  actorProfileId: string;
-  profileFollowRequestId: string;
-  origin: ProfileFollowEffectOrigin;
-}) => Promise<{
-  followeeProfile: typeof Profiles.$inferSelect;
-  profileFollowRequestId: string;
-}>;
-
-type CancelProfileFollowRequest = (input: {
-  actorProfileId: string;
-  profileFollowRequestId: string;
-  origin: ProfileFollowEffectOrigin;
-}) => Promise<{
-  followerProfile: typeof Profiles.$inferSelect;
-  profileFollowRequestId: string;
-}>;
-
-const lifecycle = {
-  ...profileFollowRequestLifecycle,
-  ...profileFollowTestHelpers,
-} as typeof profileFollowRequestLifecycle & {
-  approveProfileFollowRequest?: ApproveProfileFollowRequest;
-  cancelProfileFollowRequest?: CancelProfileFollowRequest;
-  rejectProfileFollowRequest?: RejectProfileFollowRequest;
-};
+const lifecycle = profileFollowTestHelpers;
 
 after(async () => pg.end());
 
