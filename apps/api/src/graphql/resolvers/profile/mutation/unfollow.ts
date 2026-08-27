@@ -93,11 +93,7 @@ builder.mutationField('unfollowProfile', (t) =>
       if (!followerProfile || !followeeProfile) {
         throw new NotFoundError('Profile not found');
       }
-      return {
-        ...result,
-        followeeProfile,
-        followerProfile,
-      };
+      return { ...result, followeeProfile, followerProfile };
     },
   }),
 );

@@ -33,32 +33,17 @@ import {
   RemoteActorMaterializationError,
 } from './remote-actor-materialization';
 import type { InboxContext } from '@fedify/fedify';
-import type { Recipient, Undo } from '@fedify/vocab';
-import type { ActivityPubActors } from '@kosmo/core/db';
-
-const getNow = () => Temporal.Now.instant();
+import type { Undo } from '@fedify/vocab';
 
 const isExpectedRemoteActorRejection = (error: unknown) =>
   error instanceof RemoteActorMaterializationError ||
   error instanceof NotFoundError ||
   error instanceof ConflictError;
 
-const toRecipient = (actor: typeof ActivityPubActors.$inferSelect): Recipient | undefined => {
-  if (!actor.inboxUri) {
-    return undefined;
-  }
-
-  return {
-    endpoints: actor.sharedInboxUri ? { sharedInbox: new URL(actor.sharedInboxUri) } : null,
-    id: new URL(actor.uri),
-    inboxId: new URL(actor.inboxUri),
-  };
-};
-
 export const handleInboundFollow = async (
   context: InboxContext<void>,
   follow: Follow,
-  now: Temporal.Instant = getNow(),
+  now: Temporal.Instant = Temporal.Now.instant(),
 ): Promise<void> => {
   const actorUri = follow.actorId;
   const objectUri = follow.objectId;
@@ -148,8 +133,7 @@ export const handleInboundFollow = async (
     });
   }
 
-  const recipientActor = toRecipient(remoteActor.actor);
-  if (!recipientActor) {
+  if (!remoteActor.actor.inboxUri) {
     observeInboundNoop({
       activityType: 'Follow',
       actorOrigin: actorUri.origin,
@@ -160,12 +144,17 @@ export const handleInboundFollow = async (
     });
     return;
   }
-
   try {
     await sendAcceptFollowActivity({
       context,
       receivedFollow: follow,
-      recipientActor,
+      recipientActor: {
+        endpoints: remoteActor.actor.sharedInboxUri
+          ? { sharedInbox: new URL(remoteActor.actor.sharedInboxUri) }
+          : null,
+        id: new URL(remoteActor.actor.uri),
+        inboxId: new URL(remoteActor.actor.inboxUri),
+      },
       senderProfileId: localRecipient.id,
     });
   } catch {
@@ -179,10 +168,6 @@ export const handleInboundFollow = async (
       reasonCode: 'accept_delivery_failed',
     });
   }
-};
-
-const noNetworkDocumentLoader = async (url: string) => {
-  throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
 };
 
 type UndoAnnounceResult = 'deleted' | 'ignored' | null;
@@ -331,7 +316,9 @@ export const handleInboundUndo = async (context: InboxContext<void>, undo: Undo)
   }
 
   const embedded = await undo.getObject({
-    documentLoader: noNetworkDocumentLoader,
+    documentLoader: async (url) => {
+      throw new Error(`Network lookup is disabled for inbound Undo: ${url}`);
+    },
     suppressError: true,
   });
   if (embedded === null && !undo.objectId) {
