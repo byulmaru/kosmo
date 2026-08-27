@@ -409,7 +409,7 @@ export async function createE2ERemoteProfile(options: CreateE2ERemoteProfileOpti
     .then(firstOrThrow);
 
   await db.insert(ActivityPubActors).values({
-    inboxUri: null,
+    inboxUri: `https://${domain}/users/${handle}/inbox`,
     profileId: profile.id,
     sharedInboxUri: `https://${domain}/inbox`,
     type: ActivityPubActorType.PERSON,
