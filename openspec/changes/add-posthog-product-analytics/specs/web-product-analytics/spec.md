@@ -21,12 +21,12 @@
 
 ### Requirement: 최소 수집 Web runtime
 
-**Authority / Provenance:** `PROD-819`, `PROD-795` — 초기 PostHog 기반 단계에서 Kosmo Web은 app-owned adapter가 명시적으로 보내는 route pageview와 승인된 제품 이벤트만 수집해야 한다(MUST). broad element autocapture, automatic URL pageview·pageleave, session replay, console, Web Vitals, performance와 heatmap 수집은 이 초기 단계에서 비활성화해야 하며(MUST), 후속 PROD-741 계약·activation gate 없이 활성화하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-819`, `PROD-795` — 초기 PostHog 기반 단계에서 Kosmo Web은 PostHog SDK의 `capture_pageview: 'history_change'` pageview와 app-owned adapter가 명시적으로 보내는 승인된 제품 이벤트만 수집해야 한다(MUST). automatic pageleave, broad element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집은 이 초기 단계에서 비활성화해야 하며(MUST), 후속 PROD-741 계약·activation gate 없이 활성화하지 않아야 한다(MUST).
 
 #### Scenario: Web client가 초기화된다
 
 - **WHEN** 유효한 공개 PostHog 설정으로 Web client가 생성된다
-- **THEN** 자동 수집 기능은 비활성화되고 app-owned adapter의 명시적 capture만 전송 후보가 된다
+- **THEN** SDK history-change pageview는 활성화되고 pageleave·element autocapture·session replay·기타 승인되지 않은 자동 수집은 비활성화되며 app-owned adapter의 명시적 capture도 전송 후보가 된다
 
 #### Scenario: 초기 replay-off 단계에서 사용자 입력이나 DOM 상호작용이 발생한다
 
@@ -86,11 +86,11 @@
 - **WHEN** Session Replay 보존 기간을 변경한 뒤 기존 recording과 변경 이후 recording을 각각 확인한다
 - **THEN** 새 기간은 설정 이후 수집된 replay에만 적용되고, 기존 recording의 원래 보존 정책은 자동으로 재작성되지 않는다
 
-### Requirement: outbound event 허용 목록
+### Requirement: event별 TypeScript 계약과 SDK metadata 경계
 
-**Authority / Provenance:** `PROD-819`, `PROD-469`, `PROD-575` — Kosmo Web은 모든 outbound event를 event별 허용 목록으로 정규화해야 한다(MUST). SDK 전송·익명 session 유지에 필요한 protocol metadata를 제외한 app-owned property는 아래 목록만 허용하고(MUST), 임의 event·추가 property·email·이름·handle·검색 원문·Post Content·오류 원문·URL query·fragment와 credential·token 성격의 값을 전송하지 않아야 한다(MUST).
+**Authority / Provenance:** `PROD-819`, `PROD-469`, `PROD-575` — Kosmo Web 공용 analytics API는 기존 내부 caller의 event별 property를 discriminated TypeScript 계약으로 제한해야 하며(MUST), typed properties는 PostHog capture에 그대로 전달해야 한다(MUST). 별도 runtime allowlist·projection·value validator·unknown-event drop schema를 두지 않아야 하며(MUST), app caller는 email·이름·handle·검색 원문·Post Content·오류 원문·URL query·fragment와 credential·token 성격의 값을 전달하지 않아야 한다(MUST).
 
-- `$pageview`: 정규화된 route template 표현
+- `$pageview`: SDK가 생성하며 표준 `$pathname`은 유지
 - `profile_created`, `profile_selected`: `selected_profile_id`
 - `post_created`: `selected_profile_id`, `visibility`
 - `follow_succeeded`: `selected_profile_id`, `result`
@@ -100,37 +100,42 @@
 
 #### Scenario: 승인된 event와 property가 전달된다
 
-- **WHEN** caller가 승인된 event에 해당 event의 허용 property만 전달한다
-- **THEN** adapter는 허용된 값과 SDK protocol metadata만 포함한 payload를 capture한다
+- **WHEN** caller가 event별 TypeScript 계약에 맞는 property를 전달한다
+- **THEN** adapter는 event name과 typed properties를 변형하지 않고 SDK protocol/session metadata와 함께 capture한다
 
-#### Scenario: 허용 목록 밖의 property가 섞여 있다
+#### Scenario: event 계약에 맞지 않는 호출을 작성한다
 
-- **WHEN** 승인된 event에 자유 형식 property, 민감 정보 또는 다른 event의 property가 전달된다
-- **THEN** 허용 목록 밖의 값은 device를 떠나기 전에 제거되고 허용된 payload만 전송된다
+- **WHEN** caller가 unknown event, 누락된 필수 property 또는 잘못된 value type의 호출을 작성한다
+- **THEN** discriminated TypeScript 계약의 컴파일 검증은 해당 호출을 거부한다
 
-#### Scenario: 승인되지 않은 event가 전달된다
+#### Scenario: typed event properties를 SDK에 전달한다
 
-- **WHEN** caller가 현재 taxonomy에 없는 event name을 전달한다
-- **THEN** adapter는 event를 전송하지 않고 제품 흐름을 그대로 완료한다
+- **WHEN** event별 typed caller가 adapter를 호출한다
+- **THEN** adapter는 event name과 typed properties를 runtime에서 재투영하거나 drop하지 않고 SDK capture에 전달한다
 
-### Requirement: 정규화된 route pageview
+#### Scenario: SDK URL metadata를 최종 필터링한다
 
-**Authority / Provenance:** `PROD-819` — Kosmo Web은 Expo Router의 현재 route가 안정적인 route template 기준으로 달라질 때마다 `$pageview`를 정확히 한 번 capture해야 한다(MUST). route group, query·fragment와 동적 segment의 실제 값은 pageview 식별자에 포함하지 않아야 하며(MUST), 같은 route template 안의 re-render·Session 변화·query 변경은 추가 pageview를 만들지 않아야 한다(MUST).
+- **WHEN** PostHog SDK가 event에 current URL·query·hash·referrer 등 URL metadata를 추가한다
+- **THEN** `before_send`는 불필요한 SDK URL metadata만 제거하고 SDK pageview의 `$pathname`, app-owned typed properties와 SDK protocol/session metadata는 유지한다
 
-#### Scenario: 최초 Web route가 준비된다
+### Requirement: SDK history-change pageview
 
-- **WHEN** 앱 시작 후 현재 Expo Router route template이 확인된다
-- **THEN** 해당 template의 `$pageview`가 한 번 전송된다
+**Authority / Provenance:** `PROD-819`, `PROD-575` — Kosmo Web은 PostHog SDK의 `capture_pageview: 'history_change'`를 사용해 browser history change에 따른 `$pageview`를 자동 수집해야 한다(MUST). SDK pageview의 표준 `$pathname`은 유지해야 하며(MUST), current URL·query·hash·referrer 등 불필요한 URL metadata는 제한해야 한다(MUST).
 
-#### Scenario: 다른 route template으로 이동한다
+#### Scenario: Web client가 history-change pageview를 사용한다
 
-- **WHEN** navigation 결과 현재 route template이 이전 template과 달라진다
-- **THEN** 새 template의 `$pageview`가 한 번만 전송된다
+- **WHEN** 유효한 공개 설정으로 Web client가 초기화된다
+- **THEN** `capture_pageview: 'history_change'`가 설정되고 SDK가 생성한 `$pageview`의 표준 `$pathname`이 유지된다
 
-#### Scenario: 같은 route의 동적 값이나 query만 달라진다
+#### Scenario: browser history가 변경된다
 
-- **WHEN** route file template은 같고 동적 segment의 실제 값, query 또는 fragment만 달라진다
-- **THEN** 실제 값은 payload에 포함되지 않고 중복 `$pageview`도 전송되지 않는다
+- **WHEN** Web navigation이 browser history를 변경한다
+- **THEN** SDK가 history-change pageview를 생성하고 SDK URL metadata 필터를 적용한다
+
+#### Scenario: SDK pageview URL metadata가 함께 생성된다
+
+- **WHEN** SDK pageview에 current URL·query·hash·referrer 등 URL metadata가 함께 생성된다
+- **THEN** `$pathname`은 유지되고 불필요한 URL metadata만 `before_send`에서 제한된다
 
 ### Requirement: Account identity 수명주기
 

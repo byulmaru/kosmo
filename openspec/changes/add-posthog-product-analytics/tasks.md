@@ -66,7 +66,7 @@ Kosmo Web이 공개 PostHog key와 host가 모두 있을 때만 PostHog adapter�
 - [ ] 2.3 설정 조합, singleton 초기화, capture failure와 OpenPanel 부재를 증명하는 adapter 단위 검증을 추가하고 통과시킨다.
 - [ ] 2.4 Native export/dependency graph를 생성해 PostHog runtime 비포함을 확인하고 확인 범위와 미검증 platform을 기록한다.
 
-## 3. PROD-819 route pageview와 outbound 개인정보 최소화
+## 3. PROD-819 SDK pageview와 outbound 개인정보 최소화
 
 **Authority / Provenance**
 
@@ -76,29 +76,29 @@ Kosmo Web이 공개 PostHog key와 host가 모두 있을 때만 PostHog adapter�
 
 **Deliverable**
 
-Web route template 변화가 중복 없는 `$pageview`로 수집되고, 기존 승인 event만 event별 허용 property로 전송된다. 실제 URL 값, 자유 형식 입력·콘텐츠·오류와 승인되지 않은 event/property는 device를 떠나지 않는다.
+PostHog SDK의 `capture_pageview: 'history_change'`가 생성하는 pageview에서 표준 `$pathname`은 유지되고 불필요한 SDK URL metadata가 제한된다. 기존 내부 caller는 event별 discriminated TypeScript 계약으로 제한되며 typed properties는 runtime 변형 없이 SDK에 전달된다.
 
 **Guardrails**
 
-- 초기 PROD-819 runtime에서 automatic pageview·pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집을 활성화하지 않는다. 후속 PROD-741 activation은 이 guardrail의 범위 밖에서 별도 gate로 소유한다.
-- route group, 동적 segment 실제 값, query와 fragment를 pageview identity 또는 payload에 넣지 않는다.
-- unknown event는 drop하고 extra property는 기본 허용하지 않는다.
-- SDK-required transport/session metadata를 app property sanitizer의 generic key pattern으로 손상하지 않는다.
+- `capture_pageview: 'history_change'`를 기본으로 사용하고 automatic pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집은 활성화하지 않는다. 후속 PROD-741 activation은 이 guardrail의 범위 밖에서 별도 gate로 소유한다.
+- SDK pageview의 `$pathname`은 유지하고 current URL·query·hash·referrer 등 불필요한 SDK URL metadata만 제한한다.
+- public API를 event별 discriminated TypeScript 계약으로 제한하고 typed properties는 runtime allowlist·projection·validator 없이 그대로 capture한다.
+- SDK-required transport/session metadata와 app-owned property를 구분하고, `before_send`는 SDK URL metadata의 좁은 필터에만 사용한다.
 - 새 제품 event와 event별 지표는 이번 slice에 추가하지 않는다.
 
 **Verification**
 
-- 승인 event별 정확한 property, extra/sensitive property 제거와 unknown event drop을 단위 검증한다.
-- static·dynamic·group route, 최초 pageview, route 전환, same-template dynamic/query 변화와 re-render dedupe를 단위 검증한다.
-- fake 공개 설정을 사용한 browser 검증에서 route template당 한 건, 실제 handle·ID·query·fragment·자유 형식 값 부재와 automatic event 부재를 network payload로 확인한다.
-- 테스트 코드 범위: analytics sanitizer·route observer unit test와 `apps/web/e2e`의 PostHog browser flow.
-- 테스트 코드 승인 근거: `PROD-819` 포함 범위와 완료 조건의 개인정보 필터·pageview 단위·브라우저 검증.
+- event별 type error, typed property passthrough와 `before_send` URL metadata filter를 단위·type 검증한다.
+- SDK config의 history-change pageview, `$pathname` 보존과 불필요 URL metadata 제한을 단위 검증한다.
+- fake 공개 설정을 사용한 browser 검증에서 history navigation에 따른 SDK pageview, 표준 `$pathname`, 불필요 URL metadata 부재와 비활성화된 automatic event를 network payload로 확인한다.
+- 테스트 코드 범위: typed event contract·`before_send` metadata filter·PostHog config/history-change pageview unit test와 `apps/web/e2e`의 PostHog browser flow.
+- 테스트 코드 승인 근거: `PROD-819` 포함 범위와 완료 조건의 개인정보 필터·SDK pageview·브라우저 검증.
 
-- [ ] 3.1 기존 승인 taxonomy를 event별 허용 property로 정규화하고 unknown event를 drop하는 outbound 경계를 구현한다.
-- [ ] 3.2 PostHog Web 설정에서 승인되지 않은 automatic telemetry를 명시적으로 비활성화하고 현재 SDK version의 option을 공식 type/source와 대조한다.
-- [ ] 3.3 Expo Router의 안정적인 route template을 계산해 최초와 다른 template 전환에만 `$pageview`를 한 번 capture하는 Web 경계를 구현한다.
-- [ ] 3.4 event allowlist, 민감·extra property, unknown event, route normalization과 pageview dedupe 단위 검증을 추가하고 통과시킨다.
-- [ ] 3.5 fake PostHog endpoint를 사용한 browser 검증으로 실제 outbound payload, automatic event 부재와 설정 누락 no-op을 증명한다.
+- [ ] 3.1 기존 내부 taxonomy를 event별 discriminated TypeScript property contract로 제한하고 typed properties를 SDK capture에 그대로 전달한다.
+- [ ] 3.2 PostHog Web 설정에서 `capture_pageview: 'history_change'`를 기본으로 사용하고 pageleave·autocapture·replay·기타 승인되지 않은 automatic telemetry를 명시적으로 비활성화하며 현재 SDK version의 option을 공식 type/source와 대조한다.
+- [ ] 3.3 SDK history-change pageview의 `$pathname` 보존과 불필요 SDK URL metadata 제한 경계를 구현하고 app-owned route observer·template·dedupe를 두지 않는다.
+- [ ] 3.4 event type contract·typed property passthrough와 `before_send` SDK URL metadata filter, history-change pageview config 단위 검증을 추가하고 통과시킨다.
+- [ ] 3.5 fake PostHog endpoint를 사용한 browser 검증으로 실제 outbound payload, `$pathname` 보존, 불필요 URL metadata 제한, 비활성화된 automatic event와 설정 누락 no-op을 증명한다.
 
 ## 4. PROD-819 Account identity 수명주기와 slice 검증
 
@@ -110,7 +110,7 @@ Web route template 변화가 중복 없는 `$pageview`로 수집되고, 기존 �
 
 **Deliverable**
 
-로그인, 같은 Account 유지, Account 전환과 로그아웃이 opaque Account ID의 identify/reset 순서로 수렴하고, analytics 설정·전송 실패에도 인증·navigation·mutation 결과가 유지된다. PROD-819가 소유한 adapter·pageview·sanitizer·identity slice의 자동·브라우저 검증 결과가 후속 통합 owner에게 인계된다.
+로그인, 같은 Account 유지, Account 전환과 로그아웃이 opaque Account ID의 identify/reset 순서로 수렴하고, analytics 설정·전송 실패에도 인증·navigation·mutation 결과가 유지된다. PROD-819가 소유한 adapter·SDK pageview·typed event·identity slice의 자동·브라우저 검증 결과가 후속 통합 owner에게 인계된다.
 
 **Guardrails**
 

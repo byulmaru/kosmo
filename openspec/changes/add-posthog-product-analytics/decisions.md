@@ -40,17 +40,17 @@
 - Consequences: PROD-819은 fake 공개 설정으로 독립 검증할 수 있고, PROD-820 설정이 배포되기 전 실제 환경은 안전한 no-op이다.
 - Confirmation / Follow-up: key-only, host-only, 둘 다 없음과 둘 다 존재하는 경우를 unit·browser 검증한다.
 
-### 초기 기반 단계에서는 자동 수집 대신 app-owned 최소 수집만 사용한다
+### SDK history-change pageview와 app-owned 최소 수집만 사용한다
 
 - Decision Date: 2026-08-25
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-819`, `PROD-795`
 - Status: Active
-- Context / Problem: PostHog SDK의 broad autocapture, raw URL, replay와 성능 telemetry는 현재 승인된 pageview·명시 이벤트보다 넓은 사용자·환경 데이터를 만들 수 있다.
-- Decision Outcome: 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 automatic pageview·pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집을 비활성화한다. 이 초기 replay-off 결정은 후속 PROD-741의 명시적인 production replay activation을 금지하지 않으며, 초기 Web runtime은 정규화된 route pageview와 승인된 명시 event만 capture한다.
-- Alternatives Considered: SDK history-change pageview, broad autocapture 후 blacklist, 초기 단계에서 replay를 함께 켜는 방법은 최소 수집과 단계별 책임 분리에 맞지 않아 제외했다.
-- Consequences: 초기 단계에서는 더 넓은 분석 신호를 수집하지 않으며, 후속 replay는 별도 Linear 계약·shared spec·activation gate를 충족한 뒤에만 허용된다.
-- Confirmation / Follow-up: SDK config test와 intercepted browser payload에서 자동 event가 없음을 확인한다.
+- Context / Problem: PostHog SDK의 broad autocapture, replay와 성능 telemetry는 현재 필요한 pageview·명시 이벤트보다 넓은 사용자·환경 데이터를 만들 수 있다. 반면 history-change pageview는 SDK가 제공하는 표준 pageview 경계이며 이를 배제할 별도 승인 계약이 없다.
+- Decision Outcome: 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 `capture_pageview: 'history_change'`를 기본으로 사용하고 automatic pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집은 비활성화한다. 이 초기 replay-off 결정은 후속 PROD-741의 명시적인 production replay activation을 금지하지 않는다.
+- Alternatives Considered: app-owned route observer·template·dedupe, broad autocapture 후 blacklist, 초기 단계에서 replay를 함께 켜는 방법은 SDK 표준 pageview 경계와 단계별 책임 분리에 맞지 않아 제외했다.
+- Consequences: history-change pageview는 SDK가 관리하고 더 넓은 자동 분석 신호는 수집하지 않는다. 후속 replay는 별도 Linear 계약·shared spec·activation gate를 충족한 뒤에만 허용된다.
+- Confirmation / Follow-up: SDK config test와 intercepted browser payload에서 history-change pageview와 나머지 자동 수집의 비활성화를 확인한다.
 
 ### Session Replay는 단계적으로 활성화하고 canonical 콘텐츠를 마스킹한다
 
@@ -76,17 +76,17 @@
 - Consequences: PROD-820은 retention 설정·증거와 변경 기록을 지속 관리하고, PROD-741은 activation 시 30일 초기값과 실제 replay 결과를 검증한다. 보존 기간 숫자·플랜·시점이 바뀌면 별도 운영 기록이 필요하다.
 - Confirmation / Follow-up: activation 전 30일 설정, 지원 범위 내 변경, 실제 값·적용 시점·근거 기록, plan 변경 시 자동 연장 부재와 신규 replay 적용을 확인한다.
 
-### pageview identity는 실제 URL이 아닌 안정적인 route template이다
+### SDK pageview pathname과 불필요한 URL metadata를 분리한다
 
 - Decision Date: 2026-08-25
-- Decision Class: Derived Contract
+- Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-819`
 - Status: Active
-- Context / Problem: 실제 Expo Router pathname과 search/hash에는 Profile handle, Post ID, 검색어 같은 고유 값이 포함될 수 있고 같은 화면을 고 cardinality URL로 분할한다.
-- Decision Outcome: route group과 동적 segment 실제 값, query·fragment를 제외한 안정적인 route file template만 pageview identity로 사용한다. 최초 template과 다른 template으로 변할 때만 한 번 capture한다.
-- Alternatives Considered: raw pathname, query 제거 pathname, PostHog automatic history capture는 동적 식별 값 또는 중복 event를 남길 수 있어 제외했다.
-- Consequences: 같은 route template 안에서 대상 ID나 query가 바뀌어도 추가 pageview가 생기지 않는다. 대상별 행동은 현재 pageview 계약이 아니라 별도 명시 event가 소유한다.
-- Confirmation / Follow-up: static·dynamic·route group fixture와 same-template query 변화 browser test로 확인한다.
+- Context / Problem: PostHog history-change pageview는 SDK 표준 `$pathname`과 URL metadata를 제공한다. 별도 승인된 route-template 개인정보 계약 없이 SDK 기능을 앱에서 다시 구현하면 pageview 생성과 중복 판단의 소유권이 이중화된다.
+- Decision Outcome: `capture_pageview: 'history_change'`로 SDK가 pageview를 생성하도록 맡기고 SDK pageview의 `$pathname`은 유지한다. `before_send`는 current URL·query·hash·referrer 등 불필요한 SDK URL metadata만 제한하며 SDK protocol/session metadata는 유지한다.
+- Alternatives Considered: Expo Router route observer에서 template을 계산하고 별도 dedupe한 뒤 수동 `$pageview`를 보내는 방법은 상위 계약 없이 SDK 기능을 다시 구현하므로 제외했다.
+- Consequences: SDK가 history-change pageview의 생성과 중복 판단을 소유한다. 대상별 행동은 pageview가 아니라 별도 명시 event가 소유한다.
+- Confirmation / Follow-up: fake endpoint payload에서 `$pathname`은 유지되고 current URL·query·hash·referrer 등 불필요한 metadata가 제거되는지 확인한다.
 
 ### Account만 identify하고 전환 전에 reset한다
 
@@ -100,17 +100,17 @@
 - Consequences: Profile별 분석은 허용된 event property로만 표현하며 서로 다른 Account history는 reset 경계로 분리된다.
 - Confirmation / Follow-up: guest→A, A→A, A→B, A→guest와 logout ordering을 unit·browser 검증한다.
 
-### event 허용 목록은 SDK 호출 전에 app adapter가 소유한다
+### 공용 analytics API는 event별 타입을 사용하고 SDK URL metadata만 좁게 필터한다
 
 - Decision Date: 2026-08-25
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-819`
 - Status: Active
-- Context / Problem: 현재 공용 API는 자유 형식 event/property를 받고, SDK `before_send`에서 generic blacklist만 적용하면 새 key가 기본 허용되거나 PostHog-required metadata까지 제거될 수 있다.
-- Decision Outcome: app adapter가 event별 허용 property를 새 payload로 구성하고 unknown event를 drop한 뒤 SDK를 호출한다. `before_send`는 필요하면 최종 방어선으로만 사용하고 SDK-required protocol/session metadata를 app property와 분리한다.
-- Alternatives Considered: caller별 sanitizer, generic recursive blacklist, SDK hook만으로 filtering하는 방법은 누락과 reserved-key 손상 위험이 있어 제외했다.
-- Consequences: taxonomy 변경은 중앙 allowlist와 tests를 함께 변경해야 하며, 잘못된 새 property는 전송보다 data omission으로 실패한다.
-- Confirmation / Follow-up: 모든 승인 event, extra property, sensitive key와 unknown event를 unit test하고 browser request에 자유 형식 값이 없는지 확인한다.
+- Context / Problem: `string + Record<string, unknown>` public API와 runtime allowlist·validator registry를 함께 두면 event 계약이 중복되고 typed property가 조용히 누락될 수 있다. SDK가 추가하는 URL metadata도 app-owned property와 다른 경계가 필요하다.
+- Decision Outcome: event별 property를 discriminated TypeScript 계약으로 정의하고 typed properties를 PostHog `capture`에 그대로 전달한다. 별도 runtime allowlist, projection, value validator 또는 unknown-event drop schema는 두지 않으며, `before_send`는 SDK URL metadata의 좁은 필터에만 사용한다. SDK pageview의 `$pathname`과 protocol/session metadata는 유지한다.
+- Alternatives Considered: 자유 형식 `trackAnalytics`, event별 runtime 재검사, runtime allowlist 또는 모든 SDK property를 generic `before_send` filter로 지우는 방법은 caller contract와 SDK transport/session metadata를 손상할 수 있어 제외했다.
+- Consequences: 잘못된 event/property는 discriminated TypeScript 계약의 컴파일 단계에서 드러나며 새 event는 타입 계약·caller·test를 함께 변경해야 한다. typed properties는 변형 없이 전달된다.
+- Confirmation / Follow-up: event별 type error와 typed property passthrough를 unit/type 검증하고 `before_send`가 불필요한 SDK URL metadata만 제거하는지 확인한다.
 
 ### analytics 오류는 adapter에서 fail-open으로 격리한다
 
