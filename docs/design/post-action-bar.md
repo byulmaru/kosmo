@@ -97,6 +97,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   28px trigger geometry와 별도이며 최소 44×44를 유지한다.
 - mutation pending 중에는 trigger와 menu action의 반복 입력을 막고 기존 selected·count 표현을 유지한다.
 
+## Post Activity route
+
+- Post Activity는 Repost action menu와 별개인 목록 surface다. modal이나 action sheet로 표시하지 않고 `게시 활동` 전용 route로 이동한다.
+- 화면 순서는 `PageHeader(게시 활동) → underline TabList(재게시 | 인용) → 선택한 목록`으로 고정한다. Reaction People의 pill filter와 합치지 않는다.
+- `재게시` tab은 기존 `ProfileListItem`의 `Bio=False, Action=Follow` 계약을 사용한 Profile 목록을 표시하고 관계에 따라 `팔로우`, `팔로잉`, `요청됨` 상태를 노출한다. `인용` tab은 기존 `PostListItem`의 `Kind=Quote`를 사용한 Quote Post 목록을 표시한다. 두 목록 renderer를 하나의 새 범용 component로 합치지 않는다.
+- Compact·Full Web에서는 기존 shell의 중앙 600px route column만 교체하며 Full Web의 `RightRail`은 유지한다. Mobile은 pushed dedicated screen을 사용하고 현재 shell 계약에 따라 `BottomTabBar`를 유지한다.
+- Figma는 두 tab의 기본·선택 상태와 responsive surface를 확정한다. entry control, URL·Back fallback, 재게시·인용 connection/API, empty·error·pagination과 scroll restoration은 연결된 Production 이슈가 소유하며 이번 디자인 완료 증거에 포함하지 않는다.
+
 ## More 링크 복사 menu
 
 - Web의 More menu는 Repost와 같은 외부 overlay·viewport 보정·dismiss·keyboard 계약을 재사용하되 More

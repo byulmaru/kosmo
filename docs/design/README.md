@@ -22,7 +22,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 - [reply-composer.md](./reply-composer.md) — 목록 modal·좁은 화면 전체 작성기·상세 inline Reply Composer 계약
 - [post-thread.md](./post-thread.md) — Post 상세 thread의 renderer·connector·row boundary 소유권과 geometry
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내
-- [reactions.md](./reactions.md) — Reaction Quick Picker, 요약 token toggle과 Profile 목록의 형태·상태·대상 Post 계약
+- [reactions.md](./reactions.md) — Reaction Quick·Full Picker, 요약 token toggle과 Reaction People route의 형태·상태·대상 Post 계약
 - [profile-edit.md](./profile-edit.md) — Local Profile 편집 화면의 필드, 상태와 route 연결 경계
 - [profile-hero.md](./profile-hero.md) — 공개 Profile Hero의 header 이미지 비율, 상태와 검증 범위
 - [profile-mute-block.md](./profile-mute-block.md) — Profile Mute·Block action, 관리 목록, 제한된 Profile과 Toast 계약
