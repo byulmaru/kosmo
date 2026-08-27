@@ -92,14 +92,15 @@ export async function cleanupUnavailableNotificationPageActivity(
       attempt,
     });
     const page = await getDatabaseConnection().transaction(async (database) => {
-      const rows = await database
+      const lookaheadRows = await database
         .select({ id: Notifications.id })
         .from(Notifications)
         .where(
           and(cursor ? gt(Notifications.id, cursor) : undefined, lte(Notifications.id, upperBound)),
         )
         .orderBy(asc(Notifications.id))
-        .limit(pageSize);
+        .limit(pageSize + 1);
+      const rows = lookaheadRows.slice(0, pageSize);
 
       if (rows.length === 0) {
         return {
@@ -131,15 +132,7 @@ export async function cleanupUnavailableNotificationPageActivity(
         .returning({ id: Notifications.id });
 
       const lastId = rows[rows.length - 1]!.id;
-      const hasMore =
-        (
-          await database
-            .select({ id: Notifications.id })
-            .from(Notifications)
-            .where(and(gt(Notifications.id, lastId), lte(Notifications.id, upperBound)))
-            .limit(1)
-        ).length > 0;
-      const done = !hasMore;
+      const done = lookaheadRows.length <= pageSize;
 
       return {
         upperBound,
