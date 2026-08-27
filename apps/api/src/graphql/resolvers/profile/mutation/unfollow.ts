@@ -36,8 +36,8 @@ builder.mutationField('unfollowProfile', (t) =>
       id: t.input.globalID({ for: Profile }),
     },
     resolve: async (_, { input }, ctx) => {
-      const { follow } = await db
-        .select({ follow: ProfileFollows })
+      const { followId } = await db
+        .select({ followId: ProfileFollows.id })
         .from(Profiles)
         .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
         .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
@@ -76,19 +76,12 @@ builder.mutationField('unfollowProfile', (t) =>
         .limit(1)
         .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
 
-      const result = follow
+      const result = followId
         ? await executeProfileFollowRemoval({
             followerProfileId: ctx.session.profileId,
             followeeProfileId: input.id.id,
-            expectedRowId: follow.id,
+            expectedRowId: followId,
             origin: 'LOCAL',
-            transition: 'UNFOLLOW',
-            snapshot: {
-              id: follow.id,
-              followerProfileId: follow.followerProfileId,
-              followeeProfileId: follow.followeeProfileId,
-              createdAt: follow.createdAt.toString(),
-            },
           })
         : { profileFollowId: null };
       const profiles = await db
