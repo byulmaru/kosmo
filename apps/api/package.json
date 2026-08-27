@@ -10,7 +10,7 @@
     "test": "pnpm lint:schema && pnpm lint:tsc && pnpm test:unit && pnpm test:integration",
     "test:integration": "cd ../.. && node scripts/test-db.mjs run -- pnpm --filter @kosmo/api test:integration:database",
     "test:integration:database": "cd ../.. && pnpm db:test:push && pnpm --filter @kosmo/api exec node --import tsx --import ../../packages/core/temporal/test-client.ts --test --test-concurrency=1 'tests/integration/**/*.test.ts'",
-    "test:unit": "NODE_ENV=production node --import tsx --import ../../packages/core/temporal/test-client.ts --test 'src/**/*.test.ts'"
+    "test:unit": "KOSMO_TEST_TEMPORAL_RUNTIME=0 NODE_ENV=production node --import tsx --import ../../packages/core/temporal/test-client.ts --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.10",
