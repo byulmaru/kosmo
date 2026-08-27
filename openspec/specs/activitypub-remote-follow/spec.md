@@ -42,6 +42,16 @@ The system MUST route verified local-to-remote Follow and pending-request transi
 - **WHEN** remote instance policy is SUSPENDED or otherwise rejects the transition
 - **THEN** the transaction returns a known non-retryable domain failure and relation, count, request, and effects remain unchanged
 
+#### Scenario: Unresponsive remote instance
+
+- **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote Instance is `UNRESPONSIVE`
+- **THEN** the local transition and Notification effects remain applicable, but the transaction records no outbound Follow or Undo and recovery does not replay that omitted delivery
+
+#### Scenario: Committed delivery outlives mutable availability
+
+- **WHEN** the transaction records an outbound Follow or Undo while the remote Instance is `ACTIVE` and participant state changes before Worker execution
+- **THEN** the Worker attempts the committed delivery without using the later mutable state to cancel it
+
 ### Requirement: Verified inbound Follow boundary and no echo
 
 The system MUST preserve the Fedify ingress trust boundary. Protocol validation, remote actor materialization, local recipient binding, and direct inbound Accept(Follow) handoff remain in the ingress; only the verified domain transition enters the pair Workflow. ActivityPub-origin effects MUST NOT create outbound Follow or Undo echoes.

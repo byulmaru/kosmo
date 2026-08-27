@@ -96,6 +96,8 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 
 The system MUST preserve existing source-correlated Notification and ActivityPub queue handoff semantics while moving the transaction admission and Pending lifecycle into the pair Workflow. The Update result is the committed domain result; effect completion is a separate Workflow concern.
 
+ActivityPub delivery eligibility MUST be decided by the transition transaction and recorded in the committed effect input. An effect Activity MUST NOT cancel an already-planned delivery by rechecking mutable Profile or Instance state at execution time.
+
 #### Scenario: Duplicate or rolled-back transition
 
 - **WHEN** a Follow or Pending transition is a duplicate, no-op, known domain failure, or rollback
@@ -105,6 +107,21 @@ The system MUST preserve existing source-correlated Notification and ActivityPub
 
 - **WHEN** a transaction or effect Activity is retried after a Worker failure
 - **THEN** the transition re-checks pair state and exact source identity, and the effect reuses the stable source ID or immutable deleted snapshot without creating a later lifecycle's Notification or protocol activity
+
+#### Scenario: Unresponsive remote target at transition time
+
+- **WHEN** a local Follow, Follow Request, Unfollow, or request Cancel commits while the remote target Instance is `UNRESPONSIVE`
+- **THEN** the transition keeps its applicable local graph and Notification effects, records no ActivityPub delivery for that transition, and does not create a durable redelivery when the Instance later becomes `ACTIVE`
+
+#### Scenario: Target state changes after delivery was planned
+
+- **WHEN** a local transition records an ActivityPub delivery while the remote target is `ACTIVE` and Profile or Instance state changes before the effect Activity runs or retries
+- **THEN** the Activity still attempts the recorded delivery using the stable create source or immutable delete snapshot instead of re-evaluating transition eligibility
+
+#### Scenario: Delivery projection is incomplete
+
+- **WHEN** an already-planned ActivityPub delivery finds its actor or inbox projection missing at execution time
+- **THEN** the Activity fails observably and follows its retry policy; only a missing exact create source is a successful stale-source no-op
 
 #### Scenario: Promote an existing request after transaction completion loss
 

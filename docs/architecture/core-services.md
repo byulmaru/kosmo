@@ -112,6 +112,10 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   terminal failure가 되어도 실패를 Workflow state에 기록하고 terminal command 대기를 계속한다. terminal command가
   commit되면 queued effects를 선언된 FIFO 순서로 drain하고, drain 뒤 terminal failure를 기록한 상태로 Workflow를
   complete/fail한다. 이미 commit된 domain 결과는 side effect failure로 rollback하지 않는다.
+- Follow의 outbound protocol eligibility는 transition transaction이 remote target Instance 상태를 관찰해 effect
+  input에 기록한다. `UNRESPONSIVE`에서 생략한 delivery는 recovery 뒤 재생성하지 않고, `ACTIVE`에서 commit한
+  delivery는 Worker 실행 전에 mutable participant 상태가 바뀌어도 취소하지 않는다. Worker Activity는 stable
+  source 또는 immutable delete snapshot을 실행하며 actor/inbox 결손을 성공한 no-op으로 숨기지 않는다.
 - Pair command에는 random `operationId`나 operation receipt를 두지 않는다. create transition은 Activity 전에
   candidate Follow/Request domain row ID를 Workflow history에 배정하고 그 exact ID를 insert한다. transaction Activity
   retry는 candidate/expected row와 Workflow가 보존한 source identity로 이미 commit된 결과를 재구성한다.
