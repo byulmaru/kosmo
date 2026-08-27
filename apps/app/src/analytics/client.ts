@@ -8,11 +8,8 @@ export function trackAnalytics(...args: AnalyticsEventArgs): void {
   void args;
 }
 
-export function identifyAnalytics(accountId: string): boolean {
+export function identifyAnalytics(accountId: string): void {
   void accountId;
-  return true;
 }
 
-export function clearAnalytics(): boolean {
-  return true;
-}
+export function clearAnalytics(): void {}

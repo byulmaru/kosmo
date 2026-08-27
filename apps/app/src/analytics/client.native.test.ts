@@ -8,7 +8,7 @@ describe('Native analytics client', () => {
     assert.doesNotThrow(() =>
       trackAnalytics('profile_created', { selected_profile_id: 'profile-id' }),
     );
-    assert.equal(identifyAnalytics('account-id'), true);
-    assert.equal(clearAnalytics(), true);
+    assert.doesNotThrow(() => identifyAnalytics('account-id'));
+    assert.doesNotThrow(() => clearAnalytics());
   });
 });

@@ -268,7 +268,7 @@ describe('PostHog Web client', () => {
     ]);
   });
 
-  it('Account identity를 dedupe하고 전환·guest에서 reset 후 분리한다', () => {
+  it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
@@ -279,140 +279,98 @@ describe('PostHog Web client', () => {
     analytics.clearAnalytics();
     analytics.clearAnalytics();
 
-    assert.deepEqual(instance.identities, ['account-a', 'account-b']);
+    assert.deepEqual(instance.identities, ['account-a', 'account-a', 'account-b']);
     assert.equal(instance.resets, 2);
     assert.deepEqual(instance.actions, [
       'identify:account-a',
+      'identify:account-a',
       'reset',
       'identify:account-b',
       'reset',
     ]);
   });
 
-  it('A에서 B로 전환하는 reset 실패 중에는 capture를 차단하고 retry 성공 후 새 Account와 capture를 허용한다', () => {
+  it('A에서 B로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
     analytics.identifyAnalytics('account-a');
     instance.resetFails = true;
-    assert.equal(analytics.identifyAnalytics('account-b'), false);
+    analytics.identifyAnalytics('account-b');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.identities, ['account-a']);
-    assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
-    assert.deepEqual(instance.calls, []);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+  });
 
-    instance.resetFails = false;
-    assert.equal(analytics.identifyAnalytics('account-b'), true);
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+  it('reset 성공 뒤 identify가 throw해도 다음 호출에서 새 Account를 직접 identify한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.identifyAnalytics('account-a');
+    instance.identifyFails = true;
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'before-recovery' });
+
+    instance.identifyFails = false;
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'after-recovery' });
+
     assert.deepEqual(instance.identities, ['account-a', 'account-b']);
     assert.deepEqual(instance.actions, [
       'identify:account-a',
       'reset',
-      'reset',
+      'capture:profile_created',
       'identify:account-b',
       'capture:profile_created',
     ]);
     assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+      { event: 'profile_created', properties: { selected_profile_id: 'before-recovery' } },
+      { event: 'profile_created', properties: { selected_profile_id: 'after-recovery' } },
     ]);
   });
 
-  it('reset 성공 뒤 다음 identify가 throw하면 원래 Account를 다시 identify한 뒤 capture를 허용한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    const instance = instances[0];
-    assert.ok(instance);
-
-    analytics.identifyAnalytics('account-a');
-    instance.identifyFails = true;
-    assert.equal(analytics.identifyAnalytics('account-b'), false);
-
-    instance.identifyFails = false;
-    assert.equal(analytics.identifyAnalytics('account-a'), true);
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-
-    assert.deepEqual(instance.identities, ['account-a', 'account-a']);
-    assert.deepEqual(instance.actions, [
-      'identify:account-a',
-      'reset',
-      'identify:account-a',
-      'capture:profile_created',
-    ]);
-    assert.deepEqual(instance.calls, [
-      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
-    ]);
-  });
-
-  it('identity 동기화 중에는 최신 pending pageview만 보존하고 성공 직후 한 번 flush한다', () => {
+  it('A에서 guest로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
     analytics.identifyAnalytics('account-a');
     instance.resetFails = true;
-    assert.equal(analytics.identifyAnalytics('account-b'), false);
-
-    analytics.trackAnalytics('$pageview', { $pathname: '/old-route' });
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'dropped-profile' });
-    analytics.trackAnalytics('$pageview', { $pathname: '/latest-route' });
-    assert.deepEqual(instance.calls, []);
-
-    instance.resetFails = false;
-    assert.equal(analytics.identifyAnalytics('account-b'), true);
-    assert.equal(analytics.identifyAnalytics('account-b'), true);
-
-    assert.deepEqual(instance.calls, [
-      { event: '$pageview', properties: { $pathname: '/latest-route' } },
-    ]);
-  });
-
-  it('A에서 guest로 전환하는 reset 실패 중에는 capture를 차단하고 retry 성공 후 anonymous와 capture를 허용한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    const instance = instances[0];
-    assert.ok(instance);
-
-    analytics.identifyAnalytics('account-a');
-    instance.resetFails = true;
-    assert.equal(analytics.clearAnalytics(), false);
+    analytics.clearAnalytics();
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.identities, ['account-a']);
-    assert.deepEqual(instance.actions, ['identify:account-a', 'reset']);
-    assert.deepEqual(instance.calls, []);
-
-    instance.resetFails = false;
-    assert.equal(analytics.clearAnalytics(), true);
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-
-    assert.deepEqual(instance.identities, ['account-a']);
-    assert.deepEqual(instance.actions, [
-      'identify:account-a',
-      'reset',
-      'reset',
-      'capture:profile_created',
-    ]);
+    assert.deepEqual(instance.actions, ['identify:account-a', 'reset', 'capture:profile_created']);
     assert.deepEqual(instance.calls, [
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });
 
-  it('identify 자체 throw 중에는 capture를 차단하고 retry 성공 후 허용한다', () => {
+  it('identify 자체 throw에도 직접 capture를 허용한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
     assert.ok(instance);
 
     instance.identifyFails = true;
-    assert.equal(analytics.identifyAnalytics('account-a'), false);
-    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
-
-    assert.deepEqual(instance.calls, []);
-
-    instance.identifyFails = false;
-    assert.equal(analytics.identifyAnalytics('account-a'), true);
+    analytics.identifyAnalytics('account-a');
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
 
     assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
+    ]);
+
+    instance.identifyFails = false;
+    analytics.identifyAnalytics('account-a');
+    analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+
+    assert.deepEqual(instance.calls, [
+      { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
       { event: 'profile_created', properties: { selected_profile_id: 'profile-id' } },
     ]);
   });

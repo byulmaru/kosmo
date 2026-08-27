@@ -65,8 +65,6 @@ const POSTHOG_CONFIG = {
 
 let client: PostHog | null | undefined;
 let identifiedAccountId: string | null = null;
-let identitySyncPending = false;
-let pendingPageviewPathname: string | null = null;
 
 export function initializeAnalytics(
   apiKey: string | undefined = process.env.EXPO_PUBLIC_POSTHOG_KEY,
@@ -99,32 +97,12 @@ export function getAnalyticsClient(): PostHog | null {
   return initializeAnalytics();
 }
 
-function captureAnalytics(...args: AnalyticsEventArgs): void {
+export function trackAnalytics(...args: AnalyticsEventArgs): void {
   try {
     getAnalyticsClient()?.capture(args[0], args[1] as Parameters<PostHog['capture']>[1]);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
-}
-
-function flushPendingPageview(): void {
-  const pathname = pendingPageviewPathname;
-  pendingPageviewPathname = null;
-
-  if (pathname !== null) {
-    captureAnalytics('$pageview', { $pathname: pathname });
-  }
-}
-
-export function trackAnalytics(...args: AnalyticsEventArgs): void {
-  if (identitySyncPending) {
-    if (args[0] === '$pageview') {
-      pendingPageviewPathname = args[1].$pathname;
-    }
-    return;
-  }
-
-  captureAnalytics(...args);
 }
 
 function resetPostHogIdentity(analyticsClient: PostHog): boolean {
@@ -136,74 +114,51 @@ function resetPostHogIdentity(analyticsClient: PostHog): boolean {
   }
 }
 
-export function identifyAnalytics(accountId: string): boolean {
+export function identifyAnalytics(accountId: string): void {
   if (!accountId) {
-    return true;
-  }
-
-  if (identifiedAccountId === accountId) {
-    identitySyncPending = false;
-    flushPendingPageview();
-    return true;
+    return;
   }
 
   try {
     const analyticsClient = getAnalyticsClient();
     if (!analyticsClient) {
-      identitySyncPending = false;
-      return true;
+      return;
     }
 
-    identitySyncPending = true;
-    if (identifiedAccountId !== null) {
+    if (identifiedAccountId !== null && identifiedAccountId !== accountId) {
       if (!resetPostHogIdentity(analyticsClient)) {
-        return false;
+        return;
       }
       identifiedAccountId = null;
     }
 
     analyticsClient.identify(accountId);
     identifiedAccountId = accountId;
-    identitySyncPending = false;
-    flushPendingPageview();
-    return true;
   } catch {
     // Analytics is best-effort and must not affect the product flow.
-    identitySyncPending = true;
-    return false;
   }
 }
 
-export function clearAnalytics(): boolean {
-  if (identifiedAccountId === null && !identitySyncPending) {
-    return true;
+export function clearAnalytics(): void {
+  if (identifiedAccountId === null) {
+    return;
   }
 
   try {
     const analyticsClient = getAnalyticsClient();
     if (!analyticsClient) {
-      identitySyncPending = false;
-      return true;
+      return;
     }
 
-    identitySyncPending = true;
     if (resetPostHogIdentity(analyticsClient)) {
       identifiedAccountId = null;
-      identitySyncPending = false;
-      flushPendingPageview();
-      return true;
     }
-    return false;
   } catch {
     // Analytics is best-effort and must not affect the product flow.
-    identitySyncPending = true;
-    return false;
   }
 }
 
 export function resetAnalyticsForTests(): void {
   client = undefined;
   identifiedAccountId = null;
-  identitySyncPending = false;
-  pendingPageviewPathname = null;
 }
