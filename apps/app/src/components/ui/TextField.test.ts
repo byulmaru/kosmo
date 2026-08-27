@@ -15,9 +15,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
 
 const TextHost = 'Text' as unknown as ElementType;
 const TextInputHost = 'TextInput' as unknown as ElementType;
+let platformOS: 'android' | 'ios' | 'web' = 'web';
 
 mockModule('react-native', {
-  Platform: { OS: 'web' },
+  Platform: {
+    get OS() {
+      return platformOS;
+    },
+  },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: TextHost,
   TextInput: TextInputHost,
@@ -79,22 +84,58 @@ test('error TextField exposes and associates its validation message', async () =
   await act(async () => renderer?.unmount());
 });
 
-test('focused web TextField exposes the semantic focus border and ring', async () => {
+test('focused TextField keeps the default inner border and semantic focus ring on every platform', async () => {
   assert.ok(textFieldModule);
   const { TextField } = textFieldModule;
-  let renderer: ReactTestRenderer | undefined;
-  await act(async () => {
-    renderer = create(createElement(TextField, { label: '표시 이름' }));
-  });
+  for (const platform of ['web', 'ios', 'android'] as const) {
+    platformOS = platform;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(createElement(TextField, { label: '표시 이름' }));
+    });
 
-  const input = renderer?.root.findByType(TextInputHost);
-  await act(async () => input?.props.onFocus({}));
-  const focusedInput = renderer?.root.findByType(TextInputHost);
-  assert.ok(focusedInput);
-  const style = Object.assign({}, ...focusedInput.props.style.flat().filter(Boolean));
-  assert.equal(style.borderColor, 'focus-border');
-  assert.equal(style.borderWidth, 2);
-  assert.equal(style.outlineColor, 'focus-ring');
-  assert.equal(style.outlineWidth, 2);
-  await act(async () => renderer?.unmount());
+    const input = renderer?.root.findByType(TextInputHost);
+    await act(async () => input?.props.onFocus({}));
+    const focusedInput = renderer?.root.findByType(TextInputHost);
+    assert.ok(focusedInput);
+    const style = Object.assign({}, ...focusedInput.props.style.flat().filter(Boolean));
+    assert.equal(style.borderColor, 'border', platform);
+    assert.equal(style.borderWidth, 2, platform);
+    assert.equal(style.outlineColor, 'focus-ring', platform);
+    assert.equal(style.outlineOffset, 2, platform);
+    assert.equal(style.outlineStyle, 'solid', platform);
+    assert.equal(style.outlineWidth, 2, platform);
+    await act(async () => renderer?.unmount());
+  }
+});
+
+test('focused error TextField uses a danger ring without changing the inner border on every platform', async () => {
+  assert.ok(textFieldModule);
+  const { TextField } = textFieldModule;
+  for (const platform of ['web', 'ios', 'android'] as const) {
+    platformOS = platform;
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(
+        createElement(TextField, {
+          error: '표시 이름을 확인해 주세요.',
+          label: '표시 이름',
+        }),
+      );
+    });
+
+    const input = renderer?.root.findByType(TextInputHost);
+    await act(async () => input?.props.onFocus({}));
+    const focusedInput = renderer?.root.findByType(TextInputHost);
+    assert.ok(focusedInput);
+    const style = Object.assign({}, ...focusedInput.props.style.flat().filter(Boolean));
+    assert.equal(style.borderColor, 'border', platform);
+    assert.equal(style.borderWidth, 2, platform);
+    assert.equal(style.outlineColor, 'danger-border', platform);
+    assert.notEqual(style.outlineColor, 'focus-ring', platform);
+    assert.equal(style.outlineOffset, 2, platform);
+    assert.equal(style.outlineStyle, 'solid', platform);
+    assert.equal(style.outlineWidth, 2, platform);
+    await act(async () => renderer?.unmount());
+  }
 });

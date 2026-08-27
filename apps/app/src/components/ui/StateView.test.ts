@@ -44,7 +44,7 @@ before(async () => {
   stateViewModule = await import('./StateView');
 });
 
-test('alert StateView uses the danger subtle pair and secondary recovery action', async () => {
+test('alert StateView keeps the host surface with danger copy and primary recovery action', async () => {
   assert.ok(stateViewModule);
   const { StateView } = stateViewModule;
   let renderer: ReactTestRenderer | undefined;
@@ -61,11 +61,17 @@ test('alert StateView uses the danger subtle pair and secondary recovery action'
   });
 
   const root = renderer?.root.findByType(ViewHost);
+  assert.ok(root);
+  const rootStyle = Object.assign({}, ...root.props.style.flat().filter(Boolean));
   const text = renderer?.root.findAllByType(TextHost) ?? [];
-  assert.equal(root?.props.style[1].backgroundColor, 'danger-subtle');
+  assert.equal(rootStyle.backgroundColor, undefined);
+  assert.equal(rootStyle.borderRadius, undefined);
+  assert.equal(rootStyle.alignItems, 'center');
+  assert.equal(rootStyle.gap, 8);
+  assert.equal(rootStyle.padding, 32);
   assert.equal(text[0]?.props.style[1].color, 'danger-on-subtle');
   assert.equal(text[1]?.props.style[1].color, 'danger-on-subtle');
-  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, 'secondary');
+  assert.equal(renderer?.root.findByType(ButtonHost).props.tone, 'primary');
   await act(async () => renderer?.unmount());
 });
 

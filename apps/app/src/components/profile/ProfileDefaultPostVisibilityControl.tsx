@@ -21,10 +21,10 @@ const profileDefaultVisibilityValues = [
   PostVisibility.UNLISTED,
   PostVisibility.FOLLOWERS,
 ] as const;
-const options = profileDefaultVisibilityValues.map((value) => ({
-  ...postVisibilityPresentation[value],
-  value,
-}));
+const options = profileDefaultVisibilityValues.map((value) => {
+  const { description, label } = postVisibilityPresentation[value];
+  return { description, label, value };
+});
 
 const ProfileFragment = graphql`
   fragment ProfileDefaultPostVisibilityControl_profile on Profile {
@@ -181,34 +181,7 @@ function ProfileDefaultPostVisibilityControlContents({
         value={selected}
       >
         {options.map((option) => {
-          const selectedOption = option.value === selected;
-          const Icon = option.icon;
-          return (
-            <RadioOption
-              key={option.value}
-              option={option}
-              style={({ pressed }) => [
-                styles.option,
-                {
-                  backgroundColor: selectedOption
-                    ? theme.selectedSurface
-                    : pressed
-                      ? theme.surface
-                      : 'transparent',
-                  borderColor: selectedOption ? theme.selectedBorder : theme.border,
-                  opacity: editable ? 1 : 0.6,
-                },
-              ]}
-            >
-              <Icon color={theme.textSecondary} size={18} strokeWidth={2} />
-              <View style={styles.copy}>
-                <Text style={[styles.optionLabel, { color: theme.text }]}>{option.label}</Text>
-                <Text style={[styles.description, { color: theme.textSecondary }]}>
-                  {option.description}
-                </Text>
-              </View>
-            </RadioOption>
-          );
+          return <RadioOption key={option.value} option={option} />;
         })}
       </RadioGroup>
       {saveState === 'error' ? (
@@ -255,17 +228,6 @@ const styles = StyleSheet.create({
   title: { fontFamily: 'SUIT', fontWeight: '700', ...typography.lg },
   target: { paddingVertical: spacing.xs },
   options: { gap: spacing.sm },
-  option: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  copy: { flex: 1, gap: spacing.xs },
-  optionLabel: { fontFamily: 'SUIT', fontWeight: '700', ...typography.md },
-  description: { fontFamily: 'SUIT', ...typography.sm },
   error: { fontFamily: 'SUIT', ...typography.sm },
   success: { fontFamily: 'SUIT', ...typography.sm },
   memberNote: { fontFamily: 'SUIT', ...typography.sm },

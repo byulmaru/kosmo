@@ -205,10 +205,9 @@ export const OwnerOptionsAndSuccess: Story = {
     const option = canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' });
     await userEvent.click(option);
     expect(option).toHaveAttribute('aria-checked', 'true');
-    expect(option).toHaveStyle({
-      backgroundColor: colors.light.selectedSurface,
-      borderColor: colors.light.selectedBorder,
-    });
+    expect(option).toHaveStyle({ borderRadius: '12px' });
+    expect(option).not.toHaveStyle({ backgroundColor: colors.light.stateSelectedSurface });
+    expect(option).not.toHaveStyle({ borderColor: colors.light.stateSelectedBorder });
     await userEvent.click(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },

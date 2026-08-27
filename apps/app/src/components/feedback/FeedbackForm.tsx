@@ -127,36 +127,8 @@ export function FeedbackForm({ onStateChange }: Props) {
         style={web ? styles.webOptions : styles.nativeOptions}
         value={kind}
       >
-        {feedbackOptions.map((option, index) => {
-          const selected = option.value === kind;
-          return (
-            <RadioOption
-              key={option.value}
-              option={option}
-              style={({ pressed }) => [
-                styles.option,
-                web ? styles.webOption : styles.nativeOption,
-                web && index === feedbackOptions.length - 1 ? styles.webOptionLast : null,
-                {
-                  backgroundColor: selected || pressed ? theme.surface : 'transparent',
-                  borderBottomColor: web ? theme.divider : undefined,
-                  borderColor: web ? undefined : selected ? theme.primary : theme.border,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.radio,
-                  { borderColor: selected ? theme.primary : theme.textSecondary },
-                ]}
-              >
-                {selected ? (
-                  <View style={[styles.radioDot, { backgroundColor: theme.primary }]} />
-                ) : null}
-              </View>
-              <Text style={[styles.optionLabel, { color: theme.text }]}>{option.label}</Text>
-            </RadioOption>
-          );
+        {feedbackOptions.map((option) => {
+          return <RadioOption key={option.value} option={option} />;
         })}
       </RadioGroup>
 
@@ -224,34 +196,6 @@ const styles = StyleSheet.create({
   description: { fontFamily: 'SUIT', ...typography.md },
   webOptions: { gap: 0 },
   nativeOptions: { gap: spacing.sm },
-  option: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 48,
-    paddingVertical: spacing.sm,
-  },
-  webOption: {
-    borderRadius: radii.sm,
-    borderBottomWidth: 1,
-    paddingHorizontal: spacing.sm,
-  },
-  webOptionLast: { borderBottomWidth: 0 },
-  nativeOption: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-  },
-  radio: {
-    alignItems: 'center',
-    borderRadius: radii.full,
-    borderWidth: 2,
-    height: 20,
-    justifyContent: 'center',
-    width: 20,
-  },
-  radioDot: { borderRadius: radii.full, height: 10, width: 10 },
-  optionLabel: { fontFamily: 'SUIT', ...typography.md },
   success: { fontFamily: 'SUIT', ...typography.sm },
   error: { fontFamily: 'SUIT', ...typography.sm },
   submitButton: { minHeight: 48 },

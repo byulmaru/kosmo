@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { expect, userEvent, within } from 'storybook/test';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -23,12 +23,35 @@ function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioVal
     <View>
       <RadioGroup accessibilityLabel="알림 방식" onChange={setValue} value={value}>
         {options.map((option) => (
-          <RadioOption key={option.value} option={option}>
-            <View>
-              <Text>{option.label}</Text>
-              {option.description ? <Text>{option.description}</Text> : null}
-            </View>
-          </RadioOption>
+          <RadioOption key={option.value} option={option} />
+        ))}
+      </RadioGroup>
+    </View>
+  );
+}
+
+const visualOptions = [
+  { label: '기본', value: 'default' },
+  { description: '선택 상태 설명', label: '선택됨', value: 'selected' },
+  { disabled: true, label: '비활성', value: 'disabled' },
+] as const;
+
+function RadioGroupVisualStates() {
+  return (
+    <View style={{ gap: 12 }}>
+      <RadioGroup accessibilityLabel="라디오 시각 상태" onChange={() => undefined} value="selected">
+        {visualOptions.map((option) => (
+          <RadioOption key={option.value} option={option} />
+        ))}
+      </RadioGroup>
+      <RadioGroup
+        accessibilityLabel="비활성 라디오 시각 상태"
+        disabled
+        onChange={() => undefined}
+        value="selected"
+      >
+        {visualOptions.map((option) => (
+          <RadioOption key={option.value} option={option} />
         ))}
       </RadioGroup>
     </View>
@@ -68,10 +91,16 @@ export const InteractionContract: Story = {
 
     await userEvent.tab();
     expect(email).toHaveFocus();
+    expect(getComputedStyle(email).borderWidth).toBe('2px');
+
+    await userEvent.click(email);
+    expect(email).toHaveFocus();
+    expect(getComputedStyle(email).borderWidth).toBe('0px');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(sms).toHaveFocus();
     expect(sms).toBeChecked();
+    expect(getComputedStyle(sms).borderWidth).toBe('2px');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(inApp).toHaveFocus();
@@ -89,4 +118,13 @@ export const InteractionContract: Story = {
 
 export const FallbackTabStop: Story = {
   args: { initialValue: 'push' },
+};
+
+export const VisualStates: Story = {
+  render: () => <RadioGroupVisualStates />,
+};
+
+export const VisualStatesDark: Story = {
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+  render: () => <RadioGroupVisualStates />,
 };
