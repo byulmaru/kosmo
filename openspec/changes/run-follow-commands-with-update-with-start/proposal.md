@@ -12,8 +12,8 @@ Follow와 Follow Request는 같은 방향의 팔로우 시도가 `즉시 관계 
 - Update handler는 하나의 transition Activity를 실행하고 DB commit 결과와 다음 상태를 즉시 반환한다. effects를 기다리거나 pending lifetime을 caller latency에 결합하지 않는다.
 - 한 번에 하나의 state-changing Update만 처리한다. transition마다 생성되는 effect batch는 FIFO로 drain하고, batch 내부 sibling effects는 독립적으로 모두 시도한다.
 - Pending 상태의 effect terminal failure는 Workflow state에 기록하되 다음 approve/accept/reject/cancel/undo Update를 막지 않는다. terminal transition 뒤에는 누적 batch를 모두 drain한 다음 성공 또는 실패로 Workflow를 닫는다.
-- operation-scoped domain `operationId`와 Follow command receipt를 제거한다. transaction retry는 pair의 현재 DB state, expected row identity와 Workflow가 보존한 최소 snapshot으로 결과를 재구성한다.
-- 이미 존재하는 pending request의 terminal command가 새 run을 시작할 때는 mutation 전에 read-only snapshot Activity로 pending state를 bootstrap한다.
+- operation-scoped domain `operationId`와 Follow command receipt를 제거한다. transaction retry는 pair의 현재 DB state, deterministic candidate ID와 expected row identity로 결과를 재구성한다.
+- 이미 존재하는 pending request의 terminal command가 새 run을 시작할 때는 mutation 전에 read-only ID Activity로 pending state를 bootstrap한다.
 - Unfollow는 pending을 기다릴 필요가 없으므로 pair lifecycle Workflow와 별도의 짧은 command Workflow로 유지한다.
 - ActivityPub ingress의 검증, inbound Follow의 direct Accept handoff와 ActivityPub-origin no-echo 규칙은 그대로 유지한다.
 
@@ -35,11 +35,11 @@ Follow와 Follow Request는 같은 방향의 팔로우 시도가 `즉시 관계 
 - `activitypub-remote-follow`: verified ingress 이후 pair Workflow를 Update-with-Start하되 direct inbound Accept와 trust boundary를 보존한다.
 - `data-model`: operation receipt 대신 pair state와 exact row identity를 이용한 Activity retry reconstruction을 정의한다.
 - `notification`: pending과 terminal transition의 effects batch를 source identity로 순서 있게 drain하고, pending effect failure가 이후 terminal command를 막지 않도록 한다.
-- `temporal-worker-runtime-foundation`: pair Workflow, bootstrap snapshot Activity와 Unfollow short command를 등록한다. main에 포함된 적 없는 standalone Follow effects/operation Workflow는 등록하지 않는다.
+- `temporal-worker-runtime-foundation`: pair Workflow, bootstrap ID Activity와 Unfollow short command를 등록한다. main에 포함된 적 없는 standalone Follow effects/operation Workflow는 등록하지 않는다.
 
 ## Impact
 
-- `packages/core`: pair key와 lifecycle command DTO, transaction-only transition executor, read-only pending snapshot Activity 입력/결과
+- `packages/core`: pair key와 lifecycle command DTO, transaction-only transition executor, read-only pending request ID Activity 입력/결과
 - `apps/api`, `packages/fedify`: pair-derived Workflow ID와 Update 정책을 사용하는 caller 경계
 - `apps/worker`: pair lifecycle Workflow, one-in-flight Update admission, FIFO effect queue, pending bootstrap와 Unfollow command
 - `apps/web/e2e`: production Worker와 실제 Temporal server를 사용하는 lifecycle/effects 검증

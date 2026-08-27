@@ -8,29 +8,23 @@ import {
   setHandler,
   uuid4,
 } from '@temporalio/workflow';
-import {
-  runProfileFollowCreateEffect,
-  runProfileFollowDeleteEffect,
-} from './profile-follow-effects';
+import { match } from 'ts-pattern';
+import { settleEffects } from './settle-effects';
 import type {
   ProfileFollowPair,
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
   ProfileFollowPairLifecycleState,
   ProfileFollowPairTransitionExecution,
-  ProfileFollowPendingSnapshot,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
-export const PROFILE_FOLLOW_PAIR_WORKFLOW_TYPE = 'profileFollowPairWorkflow';
 export const PROFILE_FOLLOW_PAIR_UPDATE_NAME = 'profileFollowPairUpdate';
 export const PROFILE_FOLLOW_PAIR_STATUS_QUERY_NAME = 'profileFollowPairStatus';
-export const PROFILE_FOLLOW_PAIR_WORKFLOW_ID_PREFIX = 'profile-follow-pair:';
 export const PROFILE_FOLLOW_PAIR_ORPHAN_GUARD = '1 minute';
 export const PROFILE_FOLLOW_PAIR_CONFLICT_FAILURE_TYPE = 'ProfileFollowPairConflict';
 export const PROFILE_FOLLOW_PAIR_TRANSITION_FAILURE_TYPE = 'ProfileFollowPairTransitionFailure';
 
-export type ProfileFollowPairWorkflowInput = ProfileFollowPair;
 export type ProfileFollowPairUpdateInput = {
   readonly command: ProfileFollowPairCommand;
 };
@@ -41,16 +35,31 @@ export type ProfileFollowPairWorkflowStatus = {
   readonly effectFailureCount: number;
 };
 
-type PairActivities = Pick<
-  typeof activities,
-  'executeProfileFollowPairTransitionActivity' | 'loadPendingFollowRequestSnapshotActivity'
->;
-
-const { executeProfileFollowPairTransitionActivity, loadPendingFollowRequestSnapshotActivity } =
-  proxyActivities<PairActivities>({
-    retry: { maximumAttempts: 10 },
-    startToCloseTimeout: '1 minute',
-  });
+const {
+  createFollowNotificationActivity,
+  createFollowRequestNotificationActivity,
+  deleteFollowNotificationActivity,
+  deleteFollowRequestNotificationActivity,
+  executeProfileFollowPairTransitionActivity,
+  loadPendingFollowRequestIdActivity,
+  sendProfileFollowActivity,
+  sendProfileUnfollowActivity,
+} = proxyActivities<
+  Pick<
+    typeof activities,
+    | 'createFollowNotificationActivity'
+    | 'createFollowRequestNotificationActivity'
+    | 'deleteFollowNotificationActivity'
+    | 'deleteFollowRequestNotificationActivity'
+    | 'executeProfileFollowPairTransitionActivity'
+    | 'loadPendingFollowRequestIdActivity'
+    | 'sendProfileFollowActivity'
+    | 'sendProfileUnfollowActivity'
+  >
+>({
+  retry: { maximumAttempts: 10 },
+  startToCloseTimeout: '1 minute',
+});
 
 const isTerminalState = (
   state: ProfileFollowPairLifecycleState,
@@ -72,14 +81,12 @@ type EffectFailure = {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-export async function profileFollowPairWorkflow(
-  input: ProfileFollowPairWorkflowInput,
-): Promise<void> {
+export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promise<void> {
   let lifecycleState: ProfileFollowPairLifecycleState = 'INITIAL';
   let updateReceived = false;
   let inFlight = false;
   let transitionFailure: string | undefined;
-  let pendingSnapshot: ProfileFollowPendingSnapshot | undefined;
+  let pendingRequestId: string | undefined;
   const effectQueue: ProfileFollowPairEffect[] = [];
   const effectFailures: EffectFailure[] = [];
 
@@ -139,19 +146,19 @@ export async function profileFollowPairWorkflow(
           // Workflow existed. Capture that request in Workflow history before
           // the mutating Activity so a commit-then-retry can reconstruct its
           // Notification cleanup after an OPEN-policy promotion.
-          pendingSnapshot = await runTransitionActivity(() =>
-            loadPendingFollowRequestSnapshotActivity({ pair: input }),
+          pendingRequestId = await runTransitionActivity(() =>
+            loadPendingFollowRequestIdActivity({ pair: input }),
           );
         }
 
         if (lifecycleState === 'INITIAL' && command.kind !== 'FOLLOW') {
-          const loadedSnapshot = await runTransitionActivity(() =>
-            loadPendingFollowRequestSnapshotActivity({
+          const loadedRequestId = await runTransitionActivity(() =>
+            loadPendingFollowRequestIdActivity({
               pair: input,
               expectedRowId: command.expectedRowId,
             }),
           );
-          if (loadedSnapshot === undefined) {
+          if (loadedRequestId === undefined) {
             return {
               ok: false as const,
               error: {
@@ -160,7 +167,7 @@ export async function profileFollowPairWorkflow(
               },
             };
           }
-          pendingSnapshot = loadedSnapshot;
+          pendingRequestId = loadedRequestId;
           lifecycleState = 'PENDING';
         }
 
@@ -173,7 +180,7 @@ export async function profileFollowPairWorkflow(
             command,
             candidateRowId,
             followCandidateId,
-            pendingSnapshot,
+            pendingRequestId,
           }),
         );
 
@@ -183,7 +190,7 @@ export async function profileFollowPairWorkflow(
 
         lifecycleState = execution.nextState;
         if (execution.nextState === 'PENDING') {
-          pendingSnapshot = execution.pendingSnapshot;
+          pendingRequestId = execution.pendingRequestId;
         }
         effectQueue.push(...execution.effectPlan);
         return execution;
@@ -249,11 +256,33 @@ export async function profileFollowPairWorkflow(
 
     const effect = effectQueue[0];
     try {
-      if (effect.kind === 'CREATE') {
-        await runProfileFollowCreateEffect(effect.input);
-      } else {
-        await runProfileFollowDeleteEffect(effect.input);
-      }
+      await settleEffects(
+        match(effect)
+          .with({ kind: 'CREATE' }, ({ input }) => [
+            match(input.sourceKind)
+              .with('FOLLOW', () => createFollowNotificationActivity(input.sourceId))
+              .with('FOLLOW_REQUEST', () => createFollowRequestNotificationActivity(input.sourceId))
+              .exhaustive(),
+            ...match(input)
+              .with({ sendActivityPub: true }, () => [
+                sendProfileFollowActivity({
+                  sourceId: input.sourceId,
+                  sourceKind: input.sourceKind,
+                }),
+              ])
+              .otherwise(() => []),
+          ])
+          .with({ kind: 'DELETE' }, ({ input }) => [
+            match(input.sourceKind)
+              .with('FOLLOW', () => deleteFollowNotificationActivity(input.sourceId))
+              .with('FOLLOW_REQUEST', () => deleteFollowRequestNotificationActivity(input.sourceId))
+              .exhaustive(),
+            ...match(input)
+              .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(input)])
+              .otherwise(() => []),
+          ])
+          .exhaustive(),
+      );
     } catch (error) {
       effectFailures.push({
         sourceId: effect.input.sourceId,

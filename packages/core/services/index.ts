@@ -22,7 +22,6 @@ export type {
   HydratedProfileFollowPairTransition,
   ProfileFollowCreateEffectInput,
   ProfileFollowDeleteEffectInput,
-  ProfileFollowEntitySnapshot,
   ProfileFollowPair,
   ProfileFollowPairCommand,
   ProfileFollowPairEffect,
@@ -32,7 +31,6 @@ export type {
   ProfileFollowPairTransitionFailure,
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionResult,
-  ProfileFollowPendingSnapshot,
   ProfileFollowRemovalExecution,
   ProfileFollowRemovalInput,
 } from './profile-follow-command';
@@ -40,7 +38,7 @@ export {
   executeProfileFollowPairTransition,
   executeProfileFollowRemoval,
   hydrateProfileFollowPairTransition,
-  loadPendingFollowRequestSnapshot,
+  loadPendingFollowRequestId,
   rehydrateProfileFollowFailure,
 } from './profile-follow-command';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-request';

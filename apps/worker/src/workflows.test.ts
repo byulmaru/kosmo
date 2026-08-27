@@ -8,6 +8,7 @@ import type {
   ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
 } from '@kosmo/core/services';
+import type { ProfileFollowPairWorkflowStatus } from './workflows/profile-follow-pair';
 
 type ReactionCreateEffectsInput = {
   readonly reactionId: string;
@@ -23,19 +24,12 @@ type ReactionDeleteEffectsInput = {
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
 };
 
-type ProfileFollowPairStatus = {
-  readonly state: 'INITIAL' | 'PENDING' | 'ESTABLISHED' | 'REJECTED' | 'CANCELLED';
-  readonly inFlight: boolean;
-  readonly pendingEffectCount: number;
-  readonly effectFailureCount: number;
-};
-
 const waitForPairEffectsToDrain = async (handle: {
   query: <T>(queryName: string) => Promise<T>;
-}): Promise<ProfileFollowPairStatus> => {
+}): Promise<ProfileFollowPairWorkflowStatus> => {
   const deadline = Date.now() + 10_000;
   while (true) {
-    const status = await handle.query<ProfileFollowPairStatus>('profileFollowPairStatus');
+    const status = await handle.query<ProfileFollowPairWorkflowStatus>('profileFollowPairStatus');
     if (status.pendingEffectCount === 0) {
       return status;
     }
@@ -233,7 +227,7 @@ test(
 );
 
 test(
-  'Pair Follow Update는 기존 pending snapshot을 history에 보존하고 effects보다 먼저 반환한다',
+  'Pair Follow Update는 pending request ID를 history에 보존하고 effects보다 먼저 반환한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await TestWorkflowEnvironment.createLocal({
@@ -247,11 +241,6 @@ test(
       followeeProfileId: '00000000-0000-8000-8000-000000000602',
     };
     const requestId = '00000000-0000-8000-8000-000000000604';
-    const pendingSnapshot = {
-      requestId,
-      ...pair,
-      createdAt: '2026-08-25T00:00:00Z',
-    };
     const followId = '00000000-0000-8000-8000-000000000603';
     const calls: string[] = [];
     let releaseEffect!: () => void;
@@ -271,23 +260,17 @@ test(
         {
           kind: 'DELETE' as const,
           input: {
-            id: requestId,
             sourceId: requestId,
             sourceKind: 'FOLLOW_REQUEST' as const,
-            origin: 'LOCAL' as const,
-            transition: 'APPROVE' as const,
             ...pair,
-            createdAt: pendingSnapshot.createdAt,
           },
         },
         {
           kind: 'CREATE' as const,
           input: {
-            origin: 'LOCAL' as const,
             sendActivityPub: true,
             sourceId: followId,
             sourceKind: 'FOLLOW' as const,
-            transition: 'FOLLOW' as const,
           },
         },
       ],
@@ -298,10 +281,10 @@ test(
         executeProfileFollowPairTransitionActivity: async (
           input: ProfileFollowPairTransitionInput,
         ) => {
-          assert.deepEqual(input.pendingSnapshot, pendingSnapshot);
+          assert.equal(input.pendingRequestId, requestId);
           return execution;
         },
-        loadPendingFollowRequestSnapshotActivity: async () => pendingSnapshot,
+        loadPendingFollowRequestIdActivity: async () => requestId,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
           calls.push('delete:' + sourceId);
         },
@@ -434,7 +417,7 @@ test(
             ],
           };
         },
-        loadPendingFollowRequestSnapshotActivity: async () => undefined,
+        loadPendingFollowRequestIdActivity: async () => undefined,
         createFollowRequestNotificationActivity: async (sourceId: string) => {
           calls.push('create:' + sourceId);
           effectFailureResolve();
@@ -542,7 +525,7 @@ test(
           }
           throw ApplicationFailure.nonRetryable('terminal transaction failure');
         },
-        loadPendingFollowRequestSnapshotActivity: async () => undefined,
+        loadPendingFollowRequestIdActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -639,7 +622,7 @@ test(
             nextRetryDelay: '1ms',
           });
         },
-        loadPendingFollowRequestSnapshotActivity: async () => undefined,
+        loadPendingFollowRequestIdActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -715,7 +698,7 @@ test(
         executeProfileFollowPairTransitionActivity: async () => {
           throw new Error('orphan must not execute transaction');
         },
-        loadPendingFollowRequestSnapshotActivity: async () => undefined,
+        loadPendingFollowRequestIdActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
@@ -752,13 +735,6 @@ test(
       ...pair,
       expectedRowId: followId,
       origin: 'LOCAL' as const,
-      transition: 'UNFOLLOW' as const,
-      snapshot: {
-        id: followId,
-        followerProfileId: pair.followerProfileId,
-        followeeProfileId: pair.followeeProfileId,
-        createdAt: '2026-08-25T00:00:00Z',
-      },
     };
     const execution = {
       ok: true as const,
@@ -770,12 +746,10 @@ test(
         {
           kind: 'DELETE' as const,
           input: {
-            ...input.snapshot,
-            origin: 'LOCAL' as const,
+            ...pair,
             sendActivityPub: true,
             sourceId: followId,
             sourceKind: 'FOLLOW' as const,
-            transition: 'UNFOLLOW' as const,
           },
         },
       ],
@@ -798,8 +772,8 @@ test(
           effectStarted();
           await effectReleased;
         },
-        sendProfileUnfollowActivity: async (snapshot: unknown) => {
-          calls.push('undo:' + JSON.stringify(snapshot));
+        sendProfileUnfollowActivity: async (input: unknown) => {
+          calls.push('undo:' + JSON.stringify(input));
         },
       },
       connection: environment.nativeConnection,
@@ -844,12 +818,10 @@ test(
             'delete:' + followId,
             'undo:' +
               JSON.stringify({
-                ...input.snapshot,
-                origin: 'LOCAL',
+                ...pair,
                 sendActivityPub: true,
                 sourceId: followId,
                 sourceKind: 'FOLLOW',
-                transition: 'UNFOLLOW',
               }),
           ]),
         );

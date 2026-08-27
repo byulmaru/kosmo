@@ -12,7 +12,7 @@
 
 ### Requirement: Follow Effects retry와 sibling 독립성
 
-**Reason:** Retry, source snapshot, and sibling settlement behavior are consolidated into the pair lifecycle requirements.
+**Reason:** Retry, source identity, and sibling settlement behavior are consolidated into the pair lifecycle requirements.
 **Migration:** Use `Follow transition effects and retry`.
 
 ## ADDED Requirements
@@ -57,7 +57,7 @@ INITIAL → PENDING → ESTABLISHED
 #### Scenario: Remote terminal removal becomes unavailable
 
 - **WHEN** a verified remote Reject or Undo reaches the transaction after participant availability changes and the exact request is not deleted
-- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not use an earlier snapshot as evidence of deletion
+- **THEN** the Workflow returns a no-op, keeps the request lifecycle `PENDING`, and does not treat the expected ID alone as evidence of deletion
 
 #### Scenario: Remote Accept becomes unavailable
 
@@ -76,7 +76,7 @@ INITIAL → PENDING → ESTABLISHED
 
 ### Requirement: Ordered effects and lifecycle close
 
-The system MUST append each committed transition's effects to a FIFO queue owned by the pair Workflow. Effects from an earlier transition MUST be processed before effects from a later transition. Ordered phases inside one transition MUST also remain sequential, including request cleanup before relationship creation. Every phase MUST use the shared settlement helper regardless of Activity count, so all applicable Notification/protocol siblings are attempted. The pair Workflow MUST invoke the registered effect Activities directly with stable source IDs and immutable deleted-source snapshots; it MUST NOT create separate Follow create/delete effect Workflows.
+The system MUST append each committed transition's effects to a FIFO queue owned by the pair Workflow. Effects from an earlier transition MUST be processed before effects from a later transition. Ordered phases inside one transition MUST also remain sequential, including request cleanup before relationship creation. Every phase MUST use the shared settlement helper regardless of Activity count, so all applicable Notification/protocol siblings are attempted. The pair Workflow MUST invoke the registered effect Activities directly with stable source IDs and directed pair identity; it MUST NOT create separate Follow create/delete effect Workflows.
 
 #### Scenario: Pending create followed quickly by terminal transition
 
@@ -101,7 +101,7 @@ The system MUST append each committed transition's effects to a FIFO queue owned
 #### Scenario: Unfollow remains a separate short command
 
 - **WHEN** an established Follow is removed by local Unfollow or an established inbound Undo
-- **THEN** the system runs the existing short Unfollow/removal command with its immutable Follow snapshot and does not reopen or extend the completed pair lifecycle Workflow
+- **THEN** the system runs the existing short Unfollow/removal command with its exact Follow ID and directed pair and does not reopen or extend the completed pair lifecycle Workflow
 
 ### Requirement: Follow transition effects and retry
 
@@ -115,22 +115,22 @@ The system MUST preserve existing source-correlated Notification and ActivityPub
 #### Scenario: Activity retry after commit
 
 - **WHEN** a transaction or effect Activity is retried after a Worker failure
-- **THEN** the transition re-checks pair state and exact source identity, and the effect reuses the stable source ID or immutable deleted snapshot without creating a later lifecycle's Notification or protocol activity
+- **THEN** the transition re-checks pair state and exact source identity, and the effect reuses that stable identity without creating a later lifecycle's Notification or protocol activity
 
 #### Scenario: Promote an existing request after transaction completion loss
 
 - **WHEN** a new pair run captures an existing pending request, a `FOLLOW` promotes it under OPEN policy, and the transaction Activity retries after commit
-- **THEN** the Workflow reuses the request snapshot already recorded in history and still schedules request Notification cleanup before relation creation effects
+- **THEN** the Workflow reuses the request ID already recorded in history and still schedules request Notification cleanup before relation creation effects
 
-#### Scenario: Rehydrate a committed result after a concurrent terminal transition
+#### Scenario: Keep Update payload domain-minimal
 
-- **WHEN** a successful Update commits a Follow or Request and that source row is removed before the caller rehydrates its GraphQL payload
-- **THEN** the caller reconstructs the committed source from the minimal immutable snapshot in the Update result without storing a full DB row or `Temporal.Instant` in Workflow history
+- **WHEN** a successful Update commits a Follow or Request
+- **THEN** the Update result carries its domain row ID and directed pair rather than a full DB row, deleted-row payload, or `Temporal.Instant`
 
 #### Scenario: Reconstruct an old removal after refollow
 
 - **WHEN** Follow F1 removal commits, Activity completion is lost, and Follow F2 exists when the removal Activity retries
-- **THEN** the retry preserves F2 and reconstructs only F1's delete effects from the immutable F1 snapshot
+- **THEN** the retry preserves F2 and reconstructs only F1's delete effects from the expected F1 ID and directed pair
 
 #### Scenario: Bound caller admission latency
 

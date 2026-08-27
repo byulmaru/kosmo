@@ -12,6 +12,10 @@ import { InstanceKind } from '@kosmo/core/enums';
 import { sendProfileFollow, sendProfileUnfollow } from '@kosmo/fedify';
 import { eq } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import type {
+  ProfileFollowCreateEffectInput,
+  ProfileFollowDeleteEffectInput,
+} from '@kosmo/core/services';
 
 const FollowerProfiles = alias(Profiles, 'worker_follow_follower_profile');
 const FollowerInstances = alias(Instances, 'worker_follow_follower_instance');
@@ -21,24 +25,11 @@ const FolloweeActors = alias(ActivityPubActors, 'worker_follow_followee_actor');
 
 type FollowProjectionTable = typeof ProfileFollowRequests | typeof ProfileFollows;
 
-type ProfileFollowSourceInput = {
-  readonly sourceKind: 'FOLLOW' | 'FOLLOW_REQUEST';
-  readonly sourceId: string;
-};
-
-type ProfileFollowDeleteSnapshot = {
-  readonly createdAt: string;
-  readonly followerProfileId: string;
-  readonly followeeProfileId: string;
-  readonly id: string;
-  readonly sourceId: string;
-};
-
 /** Sends a Follow for the committed relation/request projection. */
 export const sendProfileFollowActivity = async ({
   sourceKind,
   sourceId,
-}: ProfileFollowSourceInput): Promise<void> => {
+}: ProfileFollowCreateEffectInput): Promise<void> => {
   const sourceTable: FollowProjectionTable =
     sourceKind === 'FOLLOW' ? ProfileFollows : ProfileFollowRequests;
   const projection = await db
@@ -88,14 +79,13 @@ export const sendProfileFollowActivity = async ({
   });
 };
 
-/** Sends an Undo using the immutable deleted relation/request snapshot. */
+/** Sends an Undo using the exact deleted source ID and directed pair. */
 export const sendProfileUnfollowActivity = async (
-  input: ProfileFollowDeleteSnapshot,
+  input: Pick<
+    ProfileFollowDeleteEffectInput,
+    'followerProfileId' | 'followeeProfileId' | 'sourceId'
+  >,
 ): Promise<void> => {
-  if (input.id !== input.sourceId) {
-    throw new TypeError('ActivityPub Follow delete snapshot source identity mismatch.');
-  }
-
   const projection = await db
     .select({
       actorInboxUri: FolloweeActors.inboxUri,
@@ -132,8 +122,7 @@ export const sendProfileUnfollowActivity = async (
       uri: projection.actorUri,
     },
     outboundFollow: {
-      createdAt: Temporal.Instant.from(input.createdAt),
-      id: input.id,
+      id: input.sourceId,
     },
     senderProfileId: projection.senderProfileId,
   });

@@ -17,17 +17,17 @@
 - state는 `INITIAL`, `PENDING`, `ESTABLISHED`, `REJECTED`, `CANCELLED`로 제한하고 Established 이후 Unfollow를 이 lifecycle에 넣지 않는다.
 - follower/followee 순서, 기존 domain policy, uniqueness, exact-row mutation과 count 원자성을 보존한다.
 - domain `operationId`, command receipt, generic ledger와 pending expiry를 추가하지 않는다.
-- Activity payload는 JSON-serializable IDs/status/snapshot만 사용한다.
+- Activity payload는 JSON-serializable IDs/status만 사용한다.
 
 **Verification**
 
 - open-policy Follow와 approval-required Follow의 state transition
 - approve/accept/reject/cancel/undo의 exact expected-row 처리
-- Activity completion loss 뒤 DB state 및 Workflow snapshot 기반 retry reconstruction
+- Activity completion loss 뒤 DB state 및 deterministic candidate/expected ID 기반 retry reconstruction
 - stale old-generation command, duplicate/no-op, refollow와 rollback/concurrency test
 
 - [x] 1.1 pair key, lifecycle command/result DTO와 transaction-only domain executor를 구현한다.
-- [x] 1.2 mutation 전 최소 snapshot, candidate domain row ID 배정, expected row validation과 DB state retry reconstruction을 구현·검증한다.
+- [x] 1.2 candidate domain row ID 배정, expected row validation과 DB state retry reconstruction을 구현·검증한다.
 - [x] 1.3 미배포 draft operation receipt schema/migration과 operation-scoped helper를 제거하고 migration/privilege 검증을 갱신한다.
 
 ## 2. PROD-720 Pair lifecycle Temporal Workflow
@@ -62,7 +62,7 @@
 
 - [x] 2.1 pair lifecycle Workflow, state machine, one-in-flight handler와 orphan INITIAL guard를 구현한다.
 - [x] 2.2 transition effect batch FIFO queue, ordered phase의 순차 drain, 기존 effect Activity/stable source identity 재사용, Activity 수와 관계없는 공용 `settleEffects` 정산과 failure recording을 구현한다. 별도 create/delete Effects Workflow는 만들지 않는다.
-- [x] 2.3 existing pending request read-only snapshot Activity와 terminal Update-with-Start bootstrap을 구현한다.
+- [x] 2.3 existing pending request read-only ID Activity와 terminal Update-with-Start bootstrap을 구현한다.
 - [x] 2.4 production Worker registry에 pair·exact-row removal Workflow와 필요한 Activities를 등록하고, main에 포함된 적 없는 standalone Follow Effects Workflow registration은 제거한다.
 
 ## 3. PROD-720 API·Fedify caller 전환

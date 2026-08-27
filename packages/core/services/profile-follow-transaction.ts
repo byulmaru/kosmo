@@ -2,9 +2,7 @@ import { and, eq, inArray, ne, notExists, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   first,
-  firstOrThrow,
   firstOrThrowWith,
-  getDatabaseConnection,
   Instances,
   ProfileFollowRequests,
   ProfileFollows,
@@ -18,9 +16,6 @@ import type { Transaction } from '../db';
 export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
-type ProfileRow = typeof Profiles.$inferSelect;
-
-export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
 export type FollowProfileResult =
   | { readonly kind: 'ESTABLISHED'; readonly profileFollow: ProfileFollowRow }
@@ -29,12 +24,9 @@ export type FollowProfileResult =
 type ProfileFollowInput = {
   followerProfileId: string;
   followeeProfileId: string;
-  origin: ProfileFollowEffectOrigin;
   candidateProfileFollowId?: string;
   candidateProfileFollowRequestId?: string;
 };
-
-export type InboundFollowDeletionTransition = 'INBOUND_UNDO' | 'INBOUND_REJECT';
 
 const loadProfileFollowParticipants = async (
   tx: Transaction,
@@ -82,7 +74,6 @@ const loadProfileFollowParticipants = async (
   }
 
   return {
-    isActivityPubInbound,
     sendActivityPub:
       follower.instanceKind === InstanceKind.LOCAL &&
       target.instanceKind === InstanceKind.ACTIVITYPUB &&
@@ -100,14 +91,9 @@ export const followProfileInTransaction = async (
   }: ProfileFollowInput,
   tx: Transaction,
 ): Promise<{
-  readonly pendingRequest: ProfileFollowRequestRow | undefined;
   readonly sendActivityPub: boolean;
-  readonly result: {
-    readonly created: boolean;
-    readonly followeeProfile: ProfileRow;
-    readonly followerProfile: ProfileRow;
-    readonly result: FollowProfileResult;
-  };
+  readonly created: boolean;
+  readonly result: FollowProfileResult;
 }> => {
   if (followerProfileId === followeeProfileId) {
     throw new ConflictError({ message: 'Profile cannot follow itself' });
@@ -117,13 +103,6 @@ export const followProfileInTransaction = async (
     followerProfileId,
     followeeProfileId,
   });
-
-  const pendingRequest = await tx
-    .select()
-    .from(ProfileFollowRequests)
-    .where(pairCondition(ProfileFollowRequests, followerProfileId, target.id))
-    .limit(1)
-    .then(first);
 
   let created: boolean;
   let followResult: FollowProfileResult;
@@ -148,68 +127,7 @@ export const followProfileInTransaction = async (
     followResult = { kind: 'ESTABLISHED', profileFollow: ensured.profileFollow };
   }
 
-  const profiles = await tx
-    .select()
-    .from(Profiles)
-    .where(inArray(Profiles.id, [followerProfileId, target.id]));
-  const followerProfile = profiles.find(({ id }) => id === followerProfileId);
-  const followeeProfile = profiles.find(({ id }) => id === target.id);
-  if (!followerProfile || !followeeProfile) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  const result = { created, followeeProfile, followerProfile, result: followResult };
-  return { pendingRequest, result, sendActivityPub };
-};
-
-export type DeletedProfileFollowProjection = {
-  readonly profileFollow: ProfileFollowRow | undefined;
-  readonly profileFollowRequest: ProfileFollowRequestRow | undefined;
-};
-
-export const unfollowProfileInTransaction = async (
-  { followerProfileId, followeeProfileId }: ProfileFollowInput,
-  tx: Transaction,
-): Promise<{
-  readonly deleted: DeletedProfileFollowProjection;
-  readonly result: {
-    readonly changed: boolean;
-    readonly followeeProfile: ProfileRow;
-    readonly followerProfile: ProfileRow;
-    readonly profileFollowId: string | null;
-  };
-}> => {
-  const { isActivityPubInbound, target } = await loadProfileFollowParticipants(tx, {
-    followerProfileId,
-    followeeProfileId,
-  });
-
-  const deleted = await removeProfileFollowProjection(
-    {
-      followeeProfileId: target.id,
-      followerProfileId,
-      removePendingRequest: isActivityPubInbound,
-    },
-    tx,
-  );
-
-  const profiles = await tx
-    .select()
-    .from(Profiles)
-    .where(inArray(Profiles.id, [followerProfileId, target.id]));
-  const followerProfile = profiles.find(({ id }) => id === followerProfileId);
-  const followeeProfile = profiles.find(({ id }) => id === target.id);
-  if (!followerProfile || !followeeProfile) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  const result = {
-    changed: deleted.profileFollow !== undefined || deleted.profileFollowRequest !== undefined,
-    followeeProfile,
-    followerProfile,
-    profileFollowId: deleted.profileFollow?.id ?? null,
-  };
-  return { deleted, result };
+  return { created, result: followResult, sendActivityPub };
 };
 
 const pairCondition = (
@@ -313,14 +231,6 @@ export const removeProfileFollowProjection = async (
   return { profileFollow: undefined, profileFollowRequest: deleted };
 };
 
-export type RemoveInboundFollowInput = {
-  readonly expectedRowId?: string;
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-  readonly origin: 'ACTIVITYPUB';
-  readonly transition: InboundFollowDeletionTransition;
-};
-
 export type AcceptProfileFollowRequestResult =
   | { readonly kind: 'ACCEPTED' }
   | { readonly kind: 'ALREADY_ESTABLISHED' }
@@ -342,7 +252,7 @@ const requestPairCondition = (
 
 export const ensureProfileFollowRequest = async (
   pair: ProfileFollowPair,
-  tx?: Transaction,
+  tx: Transaction,
   options?: { readonly id?: string },
 ): Promise<
   | {
@@ -355,59 +265,51 @@ export const ensureProfileFollowRequest = async (
       readonly kind: 'PENDING';
       readonly profileFollowRequest: ProfileFollowRequestRow;
     }
-> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
-    const profileFollow = await tx
+> => {
+  const profileFollow = await tx
+    .select()
+    .from(ProfileFollows)
+    .where(requestPairCondition(ProfileFollows, pair))
+    .limit(1)
+    .then(first);
+
+  if (profileFollow) {
+    await tx.delete(ProfileFollowRequests).where(requestPairCondition(ProfileFollowRequests, pair));
+    return { created: false, kind: 'ESTABLISHED', profileFollow };
+  }
+
+  const inserted = await tx
+    .insert(ProfileFollowRequests)
+    .values(options?.id === undefined ? pair : { ...pair, id: options.id })
+    .onConflictDoNothing({
+      target: [ProfileFollowRequests.followerProfileId, ProfileFollowRequests.followeeProfileId],
+    })
+    .returning()
+    .then(first);
+  const profileFollowRequest =
+    inserted ??
+    (await tx
       .select()
-      .from(ProfileFollows)
-      .where(requestPairCondition(ProfileFollows, pair))
+      .from(ProfileFollowRequests)
+      .where(requestPairCondition(ProfileFollowRequests, pair))
       .limit(1)
-      .then(first);
-
-    if (profileFollow) {
-      await tx
-        .delete(ProfileFollowRequests)
-        .where(requestPairCondition(ProfileFollowRequests, pair));
-      return { created: false, kind: 'ESTABLISHED', profileFollow };
-    }
-
-    const inserted = await tx
-      .insert(ProfileFollowRequests)
-      .values(options?.id === undefined ? pair : { ...pair, id: options.id })
-      .onConflictDoNothing({
-        target: [ProfileFollowRequests.followerProfileId, ProfileFollowRequests.followeeProfileId],
-      })
-      .returning()
-      .then(first);
-    const profileFollowRequest =
-      inserted ??
-      (await tx
-        .select()
-        .from(ProfileFollowRequests)
-        .where(requestPairCondition(ProfileFollowRequests, pair))
-        .limit(1)
-        .then(firstOrThrow));
-    if (!profileFollowRequest) {
-      throw new Error('Profile follow request not found after insert conflict');
-    }
-
-    return {
-      created: inserted !== undefined,
-      kind: 'PENDING',
-      profileFollowRequest,
-    };
-  });
+      .then(firstOrThrowWith(() => new Error('Profile follow request not found'))));
+  return {
+    created: inserted !== undefined,
+    kind: 'PENDING',
+    profileFollowRequest: profileFollowRequest!,
+  };
+};
 
 export type AcceptProfileFollowRequestInput = ProfileFollowPair & {
   readonly expectedRowId: string;
-  readonly origin: ProfileFollowEffectOrigin;
   readonly candidateProfileFollowId?: string;
 };
 
 export type AcceptProfileFollowRequestTransactionResult = {
   readonly result: AcceptProfileFollowRequestResult;
-  readonly deletedRequest: ProfileFollowRequestRow | undefined;
-  readonly createdFollow: ProfileFollowRow | undefined;
+  readonly deletedRequestId: string | undefined;
+  readonly createdFollowId: string | undefined;
 };
 
 export const acceptProfileFollowRequestInTransaction = async (
@@ -430,13 +332,13 @@ export const acceptProfileFollowRequestInTransaction = async (
   if (established) {
     return {
       result: established.id === expectedRowId ? { kind: 'ALREADY_ESTABLISHED' } : { kind: 'NOOP' },
-      deletedRequest: undefined,
-      createdFollow: undefined,
+      deletedRequestId: undefined,
+      createdFollowId: undefined,
     };
   }
 
   const pendingRequest = await tx
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
       and(
@@ -466,7 +368,7 @@ export const acceptProfileFollowRequestInTransaction = async (
         notExists(unavailableParticipants),
       ),
     )
-    .returning()
+    .returning({ id: ProfileFollowRequests.id })
     .then(first);
 
   if (!deleted) {
@@ -482,8 +384,8 @@ export const acceptProfileFollowRequestInTransaction = async (
         pendingRequest && establishedAfterDelete
           ? { kind: 'ALREADY_ESTABLISHED' }
           : { kind: 'NOOP' },
-      deletedRequest: undefined,
-      createdFollow: undefined,
+      deletedRequestId: undefined,
+      createdFollowId: undefined,
     };
   }
 
@@ -491,21 +393,16 @@ export const acceptProfileFollowRequestInTransaction = async (
     id: candidateProfileFollowId,
   });
   return {
-    createdFollow: ensured.created ? ensured.profileFollow : undefined,
-    deletedRequest: deleted,
+    createdFollowId: ensured.created ? ensured.profileFollow.id : undefined,
+    deletedRequestId: deleted.id,
     result: ensured.created ? { kind: 'ACCEPTED' } : { kind: 'ALREADY_ESTABLISHED' },
   };
 };
 
-export type ApproveProfileFollowRequestResult = {
-  readonly followeeProfile: typeof Profiles.$inferSelect;
-  readonly followerProfile: typeof Profiles.$inferSelect;
+export type ApproveProfileFollowRequestTransactionResult = {
+  readonly created: boolean;
   readonly profileFollow: ProfileFollowRow;
   readonly profileFollowRequestId: string;
-};
-
-export type ApproveProfileFollowRequestTransactionResult = ApproveProfileFollowRequestResult & {
-  readonly profileFollowRequest: ProfileFollowRequestRow;
 };
 
 export const approveProfileFollowRequestInTransaction = async (
@@ -519,7 +416,7 @@ export const approveProfileFollowRequestInTransaction = async (
     readonly candidateProfileFollowId?: string;
   },
   tx: Transaction,
-): Promise<ApproveProfileFollowRequestTransactionResult & { readonly created: boolean }> => {
+): Promise<ApproveProfileFollowRequestTransactionResult> => {
   const request = await tx
     .select()
     .from(ProfileFollowRequests)
@@ -534,8 +431,7 @@ export const approveProfileFollowRequestInTransaction = async (
 
   const participants = await tx
     .select({
-      instanceState: Instances.state,
-      profile: Profiles,
+      id: Profiles.id,
     })
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
@@ -547,13 +443,7 @@ export const approveProfileFollowRequestInTransaction = async (
       ),
     )
     .orderBy(Profiles.id);
-  const followerProfile = participants.find(
-    ({ profile }) => profile.id === request.followerProfileId,
-  )?.profile;
-  const followeeProfile = participants.find(
-    ({ profile }) => profile.id === request.followeeProfileId,
-  )?.profile;
-  if (!followerProfile || !followeeProfile) {
+  if (participants.length !== 2) {
     throw new NotFoundError('Profile not found');
   }
 
@@ -566,17 +456,9 @@ export const approveProfileFollowRequestInTransaction = async (
     { id: candidateProfileFollowId },
   );
 
-  const updatedProfiles = await tx
-    .select()
-    .from(Profiles)
-    .where(inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]));
-
   return {
     created,
-    followeeProfile: updatedProfiles.find(({ id }) => id === request.followeeProfileId)!,
-    followerProfile: updatedProfiles.find(({ id }) => id === request.followerProfileId)!,
     profileFollow,
-    profileFollowRequest: request,
     profileFollowRequestId: request.id,
   };
 };
@@ -607,8 +489,8 @@ export const deleteProfileFollowRequestAsActorInTransaction = async (
     .limit(1)
     .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-  const actorProfile = await tx
-    .select({ profile: Profiles })
+  await tx
+    .select({ id: Profiles.id })
     .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(
@@ -634,35 +516,5 @@ export const deleteProfileFollowRequestAsActorInTransaction = async (
     .returning({ id: ProfileFollowRequests.id })
     .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
 
-  return { actorProfile: actorProfile.profile, request };
+  return request;
 };
-
-export type DeleteProfileFollowRequestResult = {
-  readonly actorProfile: typeof Profiles.$inferSelect;
-  readonly request: ProfileFollowRequestRow;
-};
-
-export const rejectProfileFollowRequestInTransaction = async (
-  input: {
-    readonly actorProfileId: string;
-    readonly profileFollowRequestId: string;
-    readonly origin: ProfileFollowEffectOrigin;
-  },
-  tx: Transaction,
-): Promise<DeleteProfileFollowRequestResult> =>
-  deleteProfileFollowRequestAsActorInTransaction({ ...input, actorRole: 'FOLLOWEE' }, tx);
-
-export const cancelProfileFollowRequestInTransaction = async (
-  input: {
-    readonly actorProfileId: string;
-    readonly profileFollowRequestId: string;
-    readonly origin: ProfileFollowEffectOrigin;
-  },
-  tx: Transaction,
-): Promise<DeleteProfileFollowRequestResult> =>
-  deleteProfileFollowRequestAsActorInTransaction({ ...input, actorRole: 'FOLLOWER' }, tx);
-
-export const removeInboundFollowInTransaction = (
-  input: RemoveInboundFollowInput,
-  tx: Transaction,
-) => removeProfileFollowProjection(input, tx);

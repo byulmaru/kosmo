@@ -7,7 +7,7 @@ export {
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
-  loadPendingFollowRequestSnapshot as loadPendingFollowRequestSnapshotActivity,
+  loadPendingFollowRequestId as loadPendingFollowRequestIdActivity,
 } from '@kosmo/core/services';
 export {
   createFollowNotification as createFollowNotificationActivity,

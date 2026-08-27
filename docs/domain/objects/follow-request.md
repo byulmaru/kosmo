@@ -53,7 +53,7 @@ commit된 Request/Relationship을 effect failure로 되돌리지 않는다.
 
 Pair command에는 random `operationId`나 별도 operation receipt를 두지 않는다. 생성할 Follow/Request의 candidate
 domain row ID는 transaction 전에 Workflow history에 배정하고 exact ID로 저장한다. Activity retry는 mutation 전
-pair snapshot, 현재 Request/Follow candidate/expected row와 serializable transition snapshot으로 이미 commit된
+현재 Request/Follow candidate/expected row와 serializable source identity로 이미 commit된
 결과를 재구성한다. Temporal Update ID는 RPC deduplication용이며 Follow Request의 domain identity가 아니다. 동일 pair의
 실행 중 lifecycle에는 `USE_EXISTING`, terminal lifecycle 뒤 새 요청에는 `ALLOW_DUPLICATE`를 사용한다.
 

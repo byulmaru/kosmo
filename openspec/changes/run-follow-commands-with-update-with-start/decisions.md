@@ -35,9 +35,9 @@
 - Authority / Provenance: PROD-720, `docs/architecture/core-services.md`, delta `data-model` spec
 - Status: Active
 - Context / Problem: pair Workflow가 lifecycle identity를 소유하므로 command마다 random operation identity와 transient receipt를 둘 필요가 없다.
-- Decision Outcome: domain identity는 pair key와 현재 request/follow row ID가 소유한다. Temporal Update ID는 transport deduplication metadata로만 사용하고 DB에 영속화하지 않는다. Activity retry는 current DB state, expected row와 Workflow history snapshot으로 재구성한다.
+- Decision Outcome: domain identity는 pair key와 현재 request/follow row ID가 소유한다. Temporal Update ID는 transport deduplication metadata로만 사용하고 DB에 영속화하지 않는다. Activity retry는 current DB state, deterministic candidate ID와 expected row ID로 재구성한다.
 - Alternatives Considered: server-generated operation ID + receipt, generic ledger, client-supplied idempotency key. 각각 lifecycle보다 낮은 identity를 추가하거나 범위를 넓히므로 선택하지 않았다.
-- Consequences: deleted snapshot을 history에 보존해야 하고 generic exactly-once를 주장하지 않는다. 아직 배포되지 않은 receipt migration은 제거한다.
+- Consequences: 삭제된 row 전체를 history에 보존하지 않으며 generic exactly-once를 주장하지 않는다. 아직 배포되지 않은 receipt migration은 제거한다.
 - Confirmation / Follow-up: commit completion loss, duplicate/no-op, stale exact-row와 migration tests로 확인한다.
 
 ### Update handler는 한 번에 하나만 실행하고 commit 결과 뒤 즉시 반환한다
@@ -75,14 +75,14 @@
 - Consequences: caller는 같은 pair ID의 새 run에서 재시도할 수 있다. receipt가 없으므로 terminal commit 뒤 모든 Activity completion이 유실된 극단 경계에서 generic exactly-once 결과 복구는 주장하지 않는다.
 - Confirmation / Follow-up: non-retryable failure와 maximum-attempt exhaustion real Temporal test로 확인한다.
 
-### Existing pending request는 read-only snapshot으로 bootstrap한다
+### Existing pending request는 read-only identity로 bootstrap한다
 
 - Decision Date: 2026-08-25
 - Decision Class: Implementation Choice
 - Authority / Provenance: PROD-720, `docs/domain/objects/follow-request.md`
 - Status: Active
 - Context / Problem: migration 전 생성된 pending row 또는 종료된 이전 run에는 실행 중인 pair Workflow가 없을 수 있다.
-- Decision Outcome: 새 run의 첫 Update는 mutation 전에 pair/request snapshot Activity를 호출한다. terminal command는 exact request를 읽어 PENDING state를 bootstrap하고, `FOLLOW`는 기존 request가 OPEN relation으로 승격된 뒤 transaction Activity가 retry되어도 cleanup effect를 재구성하도록 snapshot을 history에 보존한다. snapshot은 id, pair IDs와 createdAt ISO만 포함한다. origin은 저장 row에서 추론하지 않고 검증된 현재 command가 제공한다.
+- Decision Outcome: 새 run의 첫 Update는 mutation 전에 pending request ID만 읽는다. terminal command는 exact request ID로 PENDING state를 bootstrap하고, `FOLLOW`는 기존 request가 OPEN relation으로 승격된 뒤 transaction Activity가 retry되어도 cleanup effect를 재구성하도록 그 ID만 history에 보존한다. pair는 Workflow input에 이미 있으며 origin은 검증된 현재 command가 제공한다.
 - Alternatives Considered: 모든 pending row를 선제 backfill, terminal command가 DB를 직접 mutate, pair Workflow가 DB를 polling. 각각 rollout mutation, trust boundary 또는 불필요한 long-running poller를 추가한다.
 - Consequences: 기존 pending row는 명령이 들어올 때 lazy bootstrap되고, terminal command에서 존재하지 않거나 expected ID가 다르면 stale/no-op으로 종료한다. 첫 `FOLLOW`도 read-only Activity 한 번을 거친다.
 - Confirmation / Follow-up: old pending fixture와 exact mismatch integration test로 확인한다.
@@ -132,7 +132,7 @@
 - Status: Superseded
 - Superseded by: `Domain operationId와 receipt는 사용하지 않는다`
 - Former outcome: command/result/effect plan을 operation receipt에 같은 transaction으로 기록하고 effects 후 정리했다.
-- Reason: pair Workflow history의 read-only snapshot과 DB state reconstruction으로 범위 내 retry를 처리하고 generic receipt를 제거한다.
+- Reason: pair Workflow history의 source identity와 DB state reconstruction으로 범위 내 retry를 처리하고 generic receipt를 제거한다.
 
 ### 2026-08-25 caller success boundary
 

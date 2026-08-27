@@ -6,7 +6,8 @@ import {
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
-import { runProfileFollowDeleteEffect } from './profile-follow-effects';
+import { match } from 'ts-pattern';
+import { settleEffects } from './settle-effects';
 import type {
   ProfileFollowPair,
   ProfileFollowRemovalExecution,
@@ -14,22 +15,28 @@ import type {
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
-export const PROFILE_FOLLOW_REMOVAL_WORKFLOW_TYPE = 'profileFollowRemovalWorkflow';
 export const PROFILE_FOLLOW_REMOVAL_UPDATE_NAME = 'profileFollowRemovalUpdate';
-export const PROFILE_FOLLOW_REMOVAL_WORKFLOW_ID_PREFIX = 'profile-follow-unfollow:';
 export const PROFILE_FOLLOW_REMOVAL_ORPHAN_GUARD = '1 minute';
 
-export type ProfileFollowRemovalWorkflowInput = ProfileFollowPair;
-
-type RemovalActivities = Pick<typeof activities, 'executeProfileFollowRemovalActivity'>;
-const { executeProfileFollowRemovalActivity } = proxyActivities<RemovalActivities>({
+const {
+  deleteFollowNotificationActivity,
+  deleteFollowRequestNotificationActivity,
+  executeProfileFollowRemovalActivity,
+  sendProfileUnfollowActivity,
+} = proxyActivities<
+  Pick<
+    typeof activities,
+    | 'deleteFollowNotificationActivity'
+    | 'deleteFollowRequestNotificationActivity'
+    | 'executeProfileFollowRemovalActivity'
+    | 'sendProfileUnfollowActivity'
+  >
+>({
   retry: { maximumAttempts: 10 },
   startToCloseTimeout: '1 minute',
 });
 
-export async function profileFollowRemovalWorkflow(
-  input: ProfileFollowRemovalWorkflowInput,
-): Promise<void> {
+export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Promise<void> {
   let inFlight = false;
   let updateReceived = false;
   let execution: ProfileFollowRemovalExecution | undefined;
@@ -91,5 +98,13 @@ export async function profileFollowRemovalWorkflow(
   if (effect.kind !== 'DELETE') {
     throw ApplicationFailure.nonRetryable('removal execution returned a non-delete effect');
   }
-  await runProfileFollowDeleteEffect(effect.input);
+  await settleEffects([
+    match(effect.input.sourceKind)
+      .with('FOLLOW', () => deleteFollowNotificationActivity(effect.input.sourceId))
+      .with('FOLLOW_REQUEST', () => deleteFollowRequestNotificationActivity(effect.input.sourceId))
+      .exhaustive(),
+    ...match(effect.input)
+      .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(effect.input)])
+      .otherwise(() => []),
+  ]);
 }

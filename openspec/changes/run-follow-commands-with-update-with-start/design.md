@@ -11,7 +11,7 @@ Follow와 Follow Request는 같은 방향의 Profile pair에 대한 하나의 �
 - Follow와 Follow Request의 initial/terminal 분기를 하나의 pair lifecycle state machine에 모은다.
 - Update-with-Start admission부터 DB commit, effects queue drain까지 하나의 durable execution으로 연결한다.
 - caller는 DB commit 결과만 기다리고, pending lifetime과 effects retry를 caller latency에 결합하지 않는다.
-- Activity retry에서 pair state, expected row identity와 최소 snapshot으로 결과와 삭제 effects를 재구성한다.
+- Activity retry에서 pair state, deterministic candidate ID와 expected row identity로 결과와 삭제 effects를 재구성한다.
 - 같은 pair Workflow의 Update를 하나씩 처리하고 transition effects를 FIFO로 drain한다.
 - ActivityPub ingress trust validation, direct inbound Accept와 no-echo 경계를 유지한다.
 
@@ -78,8 +78,8 @@ Temporal Update validator는 DB I/O를 하지 않고 command shape, pair identit
 
 handler의 순서는 다음과 같다.
 
-1. 새 `INITIAL` run은 command 종류와 무관하게 read-only bootstrap snapshot Activity로 기존 pending request를 확인한다. terminal command는 expected row까지 exact match하고, `FOLLOW`는 OPEN 정책 승격의 commit-then-retry에서도 request cleanup을 재구성할 snapshot을 먼저 history에 남긴다.
-2. 필요한 최소 source snapshot과 expected row ID를 Workflow state에 보존한다. 새 Follow 또는 Follow Request를 만들 transition이면 transaction 전에 새 domain row ID도 결정론적으로 배정해 history에 보존한다.
+1. 새 `INITIAL` run은 read-only bootstrap Activity로 기존 pending request ID만 확인한다. terminal command는 expected row까지 exact match하고, `FOLLOW`는 OPEN 정책 승격의 commit-then-retry에서도 request cleanup을 재구성할 ID를 먼저 history에 남긴다.
+2. exact source ID를 Workflow state에 보존한다. 새 Follow 또는 Follow Request를 만들 transition이면 transaction 전에 새 domain row ID도 결정론적으로 배정해 history에 보존한다.
 3. transaction Activity가 current DB state, pair key와 expected row identity를 다시 검증하고 domain transition을 commit한다.
 4. commit 결과와 다음 lifecycle state를 Workflow state에 기록하고 해당 transition의 effect batch를 FIFO queue에 넣는다.
 5. effect execution이나 pending lifetime을 기다리지 않고 Update 결과를 즉시 반환한다.
@@ -106,29 +106,20 @@ terminal state는 새 Update를 받지 않는다. main loop는 이미 queue에 �
 
 이 규칙은 committed DB transition을 rollback하지 않는다. remote delivery retry는 Fedify queue가 소유하고, ActivityPub-origin batch는 outbound Follow/Undo echo를 만들지 않는다.
 
-## Existing pending bootstrap
+## Existing pending identity bootstrap
 
-새 run은 `FOLLOW` 또는 `APPROVE`/`ACCEPT`/`REJECT`/`CANCEL`/`INBOUND_UNDO`로 시작될 수 있다. Update handler는 mutation 전에 `loadPendingFollowRequestSnapshot` read-only Activity를 호출한다. Activity는 pair와 optional expected request ID로 현재 pending row를 조회하고 다음 최소 JSON만 반환한다. `FOLLOW`에도 이 snapshot이 필요한 이유는 기존 request를 OPEN relation으로 승격한 transaction이 commit된 뒤 Activity completion만 유실될 수 있기 때문이다.
+새 run은 `FOLLOW` 또는 `APPROVE`/`ACCEPT`/`REJECT`/`CANCEL`로 시작될 수 있다. Update handler는 mutation 전에 `loadPendingFollowRequestId` read-only Activity를 호출한다. Activity는 pair와 optional expected request ID로 현재 pending row를 조회하고 ID 하나만 반환한다. `FOLLOW`에도 이 ID가 필요한 이유는 기존 request를 OPEN relation으로 승격한 transaction이 commit된 뒤 Activity completion만 유실될 수 있기 때문이다.
 
-```ts
-{
-  requestId: string;
-  followerProfileId: string;
-  followeeProfileId: string;
-  createdAt: string;
-}
-```
-
-snapshot이 없거나 exact request ID가 다르면 Workflow는 stale/no-op 또는 domain conflict로 Update를 끝내고 effects를 만들지 않는다. snapshot이 있으면 Workflow state를 PENDING으로 bootstrap한 뒤 normal terminal transition을 수행한다. Follow Request row에는 origin이 저장되지 않으므로 bootstrap Activity가 origin을 추론하지 않는다. effect routing에 필요한 `LOCAL | ACTIVITYPUB` origin은 GraphQL/Fedify 검증을 통과한 현재 terminal command가 제공한다. 이 Activity는 DB를 변경하지 않으며, 기존 pending row를 Workflow로 일괄 backfill하거나 expiry하지 않는다.
+ID가 없거나 exact request ID가 다르면 Workflow는 stale/no-op 또는 domain conflict로 Update를 끝내고 effects를 만들지 않는다. ID가 있으면 Workflow state를 PENDING으로 bootstrap한 뒤 normal terminal transition을 수행한다. Follow Request row에는 origin이 저장되지 않으므로 bootstrap Activity가 origin을 추론하지 않는다. effect routing에 필요한 `LOCAL | ACTIVITYPUB` origin은 GraphQL/Fedify 검증을 통과한 현재 terminal command가 제공한다. 이 Activity는 DB를 변경하지 않으며, 기존 pending row를 Workflow로 일괄 backfill하거나 expiry하지 않는다.
 
 ## Transaction retry without operation receipt
 
-각 transaction Activity는 domain transition을 pair의 현재 DB state에서 재구성한다. receipt를 쓰지 않으므로 Workflow는 command에 expected row ID를 포함하고, 삭제가 필요한 transition은 mutation 전에 읽은 최소 snapshot을 history에 보존한다. 생성 transition은 Activity를 호출하기 전에 Temporal의 deterministic UUID API로 candidate Follow/Follow Request row ID를 만들고 history에 보존한 뒤, Activity가 그 ID를 명시적으로 insert한다. 이 ID는 실제로 생성되는 domain entity의 identity이며 command `operationId`나 receipt key가 아니다.
+각 transaction Activity는 domain transition을 pair의 현재 DB state에서 재구성한다. receipt를 쓰지 않으므로 Workflow는 command에 expected row ID를 포함한다. 생성 transition은 Activity를 호출하기 전에 Temporal의 deterministic UUID API로 candidate Follow/Follow Request row ID를 만들고 history에 보존한 뒤, Activity가 그 ID를 명시적으로 insert한다. 이 ID는 실제로 생성되는 domain entity의 identity이며 command `operationId`나 receipt key가 아니다.
 
-- initial Follow은 mutation 전 pair snapshot으로 기존 row 여부를 확정한다. 새 row가 필요한 경우 Activity retry는 현재 Follow 또는 Pending Request ID가 history의 candidate row ID와 같으면 이번 transition의 commit으로 복구하고, 다른 ID면 기존 duplicate/stale 결과로 처리한다.
-- approve/accept retry는 request가 이미 없고 history에 배정한 candidate Follow ID가 있으면 승인 commit으로 복구한다. Workflow가 보존한 request snapshot으로 request cleanup effect를 계속 만든다.
+- initial Follow에서 새 row가 필요한 경우 Activity retry는 현재 Follow 또는 Pending Request ID가 history의 candidate row ID와 같으면 이번 transition의 commit으로 복구하고, 다른 ID면 기존 duplicate/stale 결과로 처리한다.
+- approve/accept retry는 request가 이미 없고 현재 Follow가 history에 배정한 candidate Follow ID와 같으면 승인 commit으로 복구한다. Workflow가 보존한 expected request ID로 request cleanup effect를 계속 만든다.
 - reject/cancel/undo retry는 expected request가 이미 없고 새로운 pair row가 없으면 terminal deletion이 이미 commit된 것으로 복구한다.
-- remote accept/reject/undo가 participant availability guard 때문에 expected request를 실제로 승격/삭제하지 못하면 candidate ID나 snapshot을 commit 증거로 사용하지 않고 `PENDING`/no-op과 빈 effect plan을 반환한다.
+- remote accept/reject/undo가 participant availability guard 때문에 expected request를 실제로 승격/삭제하지 못하면 candidate ID나 expected ID만으로 commit을 주장하지 않고 `PENDING`/no-op과 빈 effect plan을 반환한다.
 - current row가 expected ID와 다르면 stale command로 취급하고 새 generation에 적용하지 않는다.
 
 이 재구성은 DB 상태와 exact row token을 기반으로 하며, generic exactly-once를 주장하지 않는다. 특히 오래된 run의 command가 같은 pair의 새 run으로 라우팅되는 위험은 현재 범위에서 감당 가능한 운영 trade-off로 기록한다. remote terminal command의 expected row 검증과 기존 ActivityPub ingress validation이 그 위험을 제한한다. command에 exact row token이 없는 local duplicate Follow는 domain unique/no-op 규칙으로 수렴한다.
@@ -143,11 +134,11 @@ Unfollow는 pending request를 기다리지 않고 established Follow source를 
 workflowId = profile-follow-unfollow:{followerProfileId}:{followeeProfileId}:{expectedFollowId}
 ```
 
-Unfollow command는 `expectedFollowId`와 mutation 전에 읽은 Follow snapshot을 사용해 exact relation만 삭제한다. DB commit 결과를 Update로 반환하고, 삭제 snapshot의 Notification cleanup과 Local-origin Undo handoff를 기존 effects boundary로 실행한 뒤 종료한다. Refollow가 새 pair run을 만드는 동안 오래된 Unfollow가 도착해도 expected Follow ID가 달라져 새 관계를 삭제하지 않는다.
+Unfollow command는 `expectedFollowId`로 exact relation만 삭제한다. DB commit 결과를 Update로 반환하고, exact ID의 Notification cleanup과 Local-origin Undo handoff를 effects boundary로 실행한 뒤 종료한다. Refollow가 새 pair run을 만드는 동안 오래된 Unfollow가 도착해도 expected Follow ID가 달라져 새 관계를 삭제하지 않는다.
 
-F1 삭제 commit 뒤 Activity completion이 유실되고 F2 refollow가 먼저 생겨도 retry는 F2를 삭제하지 않는다. 현재 row가 expected F1이 아니고 history input snapshot이 F1이면 F1의 delete effect만 재구성한다.
+F1 삭제 commit 뒤 Activity completion이 유실되고 F2 refollow가 먼저 생겨도 retry는 F2를 삭제하지 않는다. 현재 row가 expected F1이 아니면 Workflow input의 F1 ID와 pair로 F1 delete effect만 재구성한다.
 
-Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격된 Follow 또는 Request의 `{id, followerProfileId, followeeProfileId, createdAt}` snapshot을 포함한다. caller-side rehydrate는 현재 row를 우선 읽되, Update 반환 전에 concurrent terminal transition이 row를 삭제한 경우 이 snapshot으로 committed GraphQL payload를 복원한다.
+Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격된 Follow 또는 Request의 ID와 pair identity만 포함한다. caller-side rehydrate는 그 identity로 현재 projection을 읽는다.
 
 ## Ingress and protocol boundaries
 
@@ -160,7 +151,7 @@ Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격�
 ## Risks / Trade-offs
 
 - [동일 pair의 완료 run에 stale command가 도착함] → remote command의 expected row ID와 exact-row check를 유지하고, local duplicate는 domain no-op으로 수렴시킨다. 별도 global ledger는 만들지 않는다.
-- [receipt 제거로 생성 결과와 삭제 snapshot을 DB에서 재구성하지 못할 수 있음] → mutation 전 read-only snapshot, expected row와 candidate domain row ID를 Workflow history에 보존해 commit 여부를 재구성한다. candidate ID는 실제 Follow/Request identity로만 사용하며 generic exactly-once는 보장하지 않는다.
+- [receipt 없이 Activity completion이 유실됨] → expected row와 candidate domain row ID를 Workflow history에 보존해 commit 여부를 재구성한다. candidate ID는 실제 Follow/Request identity로만 사용하며 generic exactly-once는 보장하지 않는다.
 - [PENDING Workflow가 장기간 살아 있음] → expiry는 두지 않고, state machine은 작은 history만 쌓는다. pair Workflow type의 replay compatibility를 유지한다.
 - [pending effect가 terminal failure여도 request는 계속 처리됨] → 실패를 Workflow state/history에 기록하고 terminal transition은 계속 허용한다. 최종 terminal queue drain 뒤 전체 failure를 관찰한다.
 - [terminal commit 직후 같은 pair의 새 attempt가 active old run과 만남] → terminal Update는 commit 결과를 먼저 반환하므로 old run의 effect drain과 새 Follow가 겹칠 수 있다. 이 짧은 창에서는 새 attempt를 queue하거나 별도 generation lease를 만들지 않고 재시도 가능한 충돌로 거부한다. caller는 old run 종료 뒤 재시도하며, 이 제한은 승인된 감당 가능한 위험이다.

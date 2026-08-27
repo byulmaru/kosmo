@@ -11,20 +11,17 @@ import {
 import {
   acceptProfileFollowRequestInTransaction,
   approveProfileFollowRequestInTransaction,
-  cancelProfileFollowRequestInTransaction,
+  deleteProfileFollowRequestAsActorInTransaction,
   followProfileInTransaction,
-  rejectProfileFollowRequestInTransaction,
-  removeInboundFollowInTransaction,
   removeProfileFollowProjection,
 } from './profile-follow-transaction';
 import type { Transaction } from '../db';
 import type { ErrorCode } from '../error';
-import type {
-  ProfileFollowEffectOrigin,
-  ProfileFollowRequestRow,
-} from './profile-follow-transaction';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
+export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
+
+export type ProfileFollowEffectOrigin = 'LOCAL' | 'ACTIVITYPUB';
 
 export type ProfileFollowPair = {
   readonly followerProfileId: string;
@@ -37,9 +34,6 @@ export type ProfileFollowPairLifecycleState =
   | 'ESTABLISHED'
   | 'REJECTED'
   | 'CANCELLED';
-
-/** Minimum immutable data needed to clean a deleted pending request. */
-export type ProfileFollowPendingSnapshot = ProfileFollowEntitySnapshot;
 
 export type ProfileFollowPairCommand =
   | (ProfileFollowPair & {
@@ -70,98 +64,37 @@ export type ProfileFollowPairCommand =
       readonly origin: ProfileFollowEffectOrigin;
     });
 
-/**
- * Immutable row data captured by the transaction Activity.  The row itself
- * may be deleted by a subsequent pair transition before the API rehydrates
- * the Update result, so the Temporal wire result must carry enough data to
- * preserve the committed mutation without serializing Temporal.Instant or a
- * full database row into Workflow history.
- */
-export type ProfileFollowEntitySnapshot = {
-  readonly id: string;
-  readonly followerProfileId: string;
-  readonly followeeProfileId: string;
-  readonly createdAt: string;
-};
-
-/** Input for the pair transaction Activity. Values are all JSON-safe. */
+/** Input for the pair transaction Activity. Values are JSON-safe. */
 export type ProfileFollowPairTransitionInput = {
   readonly pair: ProfileFollowPair;
   readonly command: ProfileFollowPairCommand;
-  /** Deterministic candidate ID allocated by the Workflow for initial Follow. */
+  /** Deterministic candidate ID allocated by the Workflow for a new Follow. */
   readonly candidateRowId?: string;
   /** Deterministic candidate Follow ID allocated for approval/accept. */
   readonly followCandidateId?: string;
-  readonly pendingSnapshot?: ProfileFollowPendingSnapshot;
+  /** Only the pending request identity is retained across Activity retries. */
+  readonly pendingRequestId?: string;
 };
 
+/** The committed projection identity needed by notification/Fedify Activities. */
 export type ProfileFollowCreateEffectInput = {
   readonly sourceId: string;
-} & (
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW';
-      readonly transition: 'FOLLOW';
-      readonly sendActivityPub: boolean;
-    }
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW';
-      readonly transition: 'APPROVE';
-    }
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'FOLLOW';
-      readonly sendActivityPub: boolean;
-    }
-  | {
-      readonly origin: 'ACTIVITYPUB';
-      readonly sourceKind: 'FOLLOW';
-      readonly transition: 'INBOUND_FOLLOW' | 'INBOUND_ACCEPT';
-    }
-  | {
-      readonly origin: 'ACTIVITYPUB';
-      readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'INBOUND_FOLLOW';
-    }
-);
+  readonly sourceKind: 'FOLLOW' | 'FOLLOW_REQUEST';
+  readonly sendActivityPub?: boolean;
+};
 
+/**
+ * A delete never carries a deleted row or timestamp. `sourceId` is the exact
+ * generation being removed and the pair is enough to rebuild an Undo after
+ * an Activity completion is lost.
+ */
 export type ProfileFollowDeleteEffectInput = {
-  readonly createdAt: string;
+  readonly sourceId: string;
   readonly followerProfileId: string;
   readonly followeeProfileId: string;
-  readonly id: string;
-  readonly sourceId: string;
-} & (
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'APPROVE' | 'REJECT';
-    }
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'CANCEL';
-      readonly sendActivityPub: boolean;
-    }
-  | {
-      readonly origin: 'ACTIVITYPUB';
-      readonly sourceKind: 'FOLLOW_REQUEST';
-      readonly transition: 'INBOUND_FOLLOW' | 'INBOUND_ACCEPT' | 'INBOUND_UNDO' | 'INBOUND_REJECT';
-    }
-  | {
-      readonly origin: 'LOCAL';
-      readonly sourceKind: 'FOLLOW';
-      readonly transition: 'UNFOLLOW';
-      readonly sendActivityPub: boolean;
-    }
-  | {
-      readonly origin: 'ACTIVITYPUB';
-      readonly sourceKind: 'FOLLOW';
-      readonly transition: 'INBOUND_UNDO' | 'INBOUND_REJECT';
-    }
-);
+  readonly sourceKind: 'FOLLOW' | 'FOLLOW_REQUEST';
+  readonly sendActivityPub?: boolean;
+};
 
 export type ProfileFollowPairEffect =
   | { readonly kind: 'CREATE'; readonly input: ProfileFollowCreateEffectInput }
@@ -177,8 +110,6 @@ export type ProfileFollowPairTransitionResult =
       readonly followeeProfileId: string;
       readonly profileFollowId?: string;
       readonly profileFollowRequestId?: string;
-      readonly profileFollowSnapshot?: ProfileFollowEntitySnapshot;
-      readonly profileFollowRequestSnapshot?: ProfileFollowEntitySnapshot;
     }
   | {
       readonly commandKind: 'APPROVE' | 'ACCEPT';
@@ -187,8 +118,6 @@ export type ProfileFollowPairTransitionResult =
       readonly followeeProfileId: string;
       readonly profileFollowId?: string;
       readonly profileFollowRequestId?: string;
-      readonly profileFollowSnapshot?: ProfileFollowEntitySnapshot;
-      readonly profileFollowRequestSnapshot?: ProfileFollowEntitySnapshot;
     }
   | {
       readonly commandKind: 'REJECT' | 'CANCEL';
@@ -196,8 +125,6 @@ export type ProfileFollowPairTransitionResult =
       readonly followerProfileId: string;
       readonly followeeProfileId: string;
       readonly profileFollowRequestId: string;
-      readonly profileFollowSnapshot?: ProfileFollowEntitySnapshot;
-      readonly profileFollowRequestSnapshot?: ProfileFollowEntitySnapshot;
     };
 
 export type HydratedProfileFollowPairTransition = {
@@ -220,7 +147,7 @@ export type ProfileFollowPairTransitionExecution =
       readonly result: ProfileFollowPairTransitionResult;
       readonly nextState: Exclude<ProfileFollowPairLifecycleState, 'INITIAL'>;
       readonly effectPlan: ProfileFollowPairEffectPlan;
-      readonly pendingSnapshot?: ProfileFollowPendingSnapshot;
+      readonly pendingRequestId?: string;
     }
   | { readonly ok: false; readonly error: ProfileFollowPairTransitionFailure };
 
@@ -229,45 +156,10 @@ type ProfileFollowPairTransitionSuccess = Extract<
   { readonly ok: true }
 >;
 
-const entitySnapshotFromRow = (
-  row: Pick<
-    ProfileFollowRow | ProfileFollowRequestRow,
-    'id' | 'followerProfileId' | 'followeeProfileId' | 'createdAt'
-  >,
-): ProfileFollowEntitySnapshot => ({
-  id: row.id,
-  followerProfileId: row.followerProfileId,
-  followeeProfileId: row.followeeProfileId,
-  createdAt: row.createdAt.toString(),
-});
-
-const entityRowFromSnapshot = (snapshot: ProfileFollowEntitySnapshot) => ({
-  id: snapshot.id,
-  followerProfileId: snapshot.followerProfileId,
-  followeeProfileId: snapshot.followeeProfileId,
-  createdAt: Temporal.Instant.from(snapshot.createdAt),
-});
-
-/** Separate short command input for established relation removal. */
-export type ProfileFollowRemovalInput =
-  | (ProfileFollowPair & {
-      readonly expectedRowId: string;
-      readonly origin: 'LOCAL';
-      readonly transition: 'UNFOLLOW';
-      readonly snapshot?: ProfileFollowRemovalSnapshot;
-    })
-  | (ProfileFollowPair & {
-      readonly expectedRowId: string;
-      readonly origin: 'ACTIVITYPUB';
-      readonly transition: 'INBOUND_UNDO' | 'INBOUND_REJECT';
-      readonly snapshot?: ProfileFollowRemovalSnapshot;
-    });
-
-export type ProfileFollowRemovalSnapshot = {
-  readonly id: string;
-  readonly followerProfileId: string;
-  readonly followeeProfileId: string;
-  readonly createdAt: string;
+/** Separate short command used after an established Follow. */
+export type ProfileFollowRemovalInput = ProfileFollowPair & {
+  readonly expectedRowId: string;
+  readonly origin: ProfileFollowEffectOrigin;
 };
 
 export type ProfileFollowRemovalExecution =
@@ -305,33 +197,34 @@ export const rehydrateProfileFollowFailure = (
   }
 };
 
-type DeleteEffectDetails = ProfileFollowDeleteEffectInput extends infer Input
-  ? Input extends ProfileFollowDeleteEffectInput
-    ? Omit<Input, 'createdAt' | 'followerProfileId' | 'followeeProfileId' | 'id' | 'sourceId'>
-    : never
-  : never;
+const pairCondition = (
+  table: typeof ProfileFollows | typeof ProfileFollowRequests,
+  pair: ProfileFollowPair,
+) =>
+  and(
+    eq(table.followerProfileId, pair.followerProfileId),
+    eq(table.followeeProfileId, pair.followeeProfileId),
+  );
 
-const deleteEffect = (
-  row: Pick<
-    ProfileFollowRow | ProfileFollowRequestRow,
-    'id' | 'createdAt' | 'followerProfileId' | 'followeeProfileId'
-  >,
-  details: DeleteEffectDetails,
-): ProfileFollowPairEffect => ({
+const deleteEffect = ({
+  sourceId,
+  pair,
+  sourceKind,
+  sendActivityPub,
+}: {
+  readonly sourceId: string;
+  readonly pair: ProfileFollowPair;
+  readonly sourceKind: ProfileFollowDeleteEffectInput['sourceKind'];
+  readonly sendActivityPub?: boolean;
+}): ProfileFollowPairEffect => ({
   kind: 'DELETE',
   input: {
-    createdAt: row.createdAt.toString(),
-    followerProfileId: row.followerProfileId,
-    followeeProfileId: row.followeeProfileId,
-    id: row.id,
-    sourceId: row.id,
-    ...details,
+    sourceId,
+    followerProfileId: pair.followerProfileId,
+    followeeProfileId: pair.followeeProfileId,
+    sourceKind,
+    ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
   },
-});
-
-const createEffect = (input: ProfileFollowCreateEffectInput): ProfileFollowPairEffect => ({
-  kind: 'CREATE',
-  input,
 });
 
 const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) => {
@@ -349,35 +242,13 @@ const shouldSendActivityPub = async (tx: Transaction, pair: ProfileFollowPair) =
   );
 };
 
-const pairCondition = (
-  table: typeof ProfileFollows | typeof ProfileFollowRequests,
-  pair: ProfileFollowPair,
-) =>
-  and(
-    eq(table.followerProfileId, pair.followerProfileId),
-    eq(table.followeeProfileId, pair.followeeProfileId),
-  );
-
-const pendingSnapshotFromRow = (row: ProfileFollowRequestRow): ProfileFollowPendingSnapshot => ({
-  id: row.id,
-  followerProfileId: row.followerProfileId,
-  followeeProfileId: row.followeeProfileId,
-  createdAt: row.createdAt.toString(),
-});
-
-const pendingSnapshotForInput = (
-  input: ProfileFollowPairTransitionInput,
-  row: ProfileFollowRequestRow | undefined,
-): ProfileFollowPendingSnapshot | undefined =>
-  row === undefined ? input.pendingSnapshot : pendingSnapshotFromRow(row);
-
-/** Read-only Activity used to bootstrap a terminal Update for an orphan run. */
-export const loadPendingFollowRequestSnapshot = async (input: {
+/** Read only the pending request identity before a mutating Update. */
+export const loadPendingFollowRequestId = async (input: {
   readonly pair: ProfileFollowPair;
   readonly expectedRowId?: string;
-}): Promise<ProfileFollowPendingSnapshot | undefined> => {
+}): Promise<string | undefined> => {
   const row = await db
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
       and(
@@ -389,7 +260,7 @@ export const loadPendingFollowRequestSnapshot = async (input: {
     )
     .limit(1)
     .then(first);
-  return row === undefined ? undefined : pendingSnapshotFromRow(row);
+  return row?.id;
 };
 
 const executeFollow = async (
@@ -397,138 +268,94 @@ const executeFollow = async (
   tx: Transaction,
 ): Promise<ProfileFollowPairTransitionSuccess> => {
   const command = input.command;
+  if (command.kind !== 'FOLLOW') {
+    throw new Error('Invalid Follow command');
+  }
+
   const beforeRequest = await tx
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(pairCondition(ProfileFollowRequests, input.pair))
     .limit(1)
     .then(first);
-  const { result, sendActivityPub } = await followProfileInTransaction(
+  const followed = await followProfileInTransaction(
     {
       ...input.pair,
-      origin: command.origin,
       candidateProfileFollowId: input.candidateRowId,
       candidateProfileFollowRequestId: input.candidateRowId,
     },
     tx,
   );
-  const followResult = result.result;
+  const followResult = followed.result;
   const profileFollowId =
     followResult.kind === 'ESTABLISHED' ? followResult.profileFollow.id : undefined;
   const profileFollowRequestId =
     followResult.kind === 'PENDING' ? followResult.profileFollowRequest.id : undefined;
   const created =
-    result.created ||
+    followed.created ||
     (input.candidateRowId !== undefined &&
       (profileFollowId === input.candidateRowId ||
         profileFollowRequestId === input.candidateRowId));
-
+  const requestToDeleteId = beforeRequest?.id ?? input.pendingRequestId;
   const effectPlan: ProfileFollowPairEffect[] = [];
-  const requestToDelete =
-    beforeRequest ??
-    (input.pendingSnapshot === undefined
-      ? undefined
-      : entityRowFromSnapshot(input.pendingSnapshot));
-  if (requestToDelete && followResult.kind === 'ESTABLISHED') {
+
+  if (followResult.kind === 'ESTABLISHED' && requestToDeleteId !== undefined) {
     effectPlan.push(
-      command.origin === 'ACTIVITYPUB'
-        ? deleteEffect(requestToDelete, {
-            sourceKind: 'FOLLOW_REQUEST',
-            origin: 'ACTIVITYPUB',
-            transition: 'INBOUND_FOLLOW',
-          })
-        : deleteEffect(requestToDelete, {
-            sourceKind: 'FOLLOW_REQUEST',
-            origin: 'LOCAL',
-            transition: 'APPROVE',
-          }),
+      deleteEffect({
+        sourceId: requestToDeleteId,
+        pair: input.pair,
+        sourceKind: 'FOLLOW_REQUEST',
+      }),
     );
   }
   if (created) {
-    if (followResult.kind === 'ESTABLISHED') {
-      effectPlan.push(
-        command.origin === 'ACTIVITYPUB'
-          ? createEffect({
-              sourceId: profileFollowId!,
-              sourceKind: 'FOLLOW',
-              origin: 'ACTIVITYPUB',
-              transition: 'INBOUND_FOLLOW',
-            })
-          : createEffect({
-              sourceId: profileFollowId!,
-              sourceKind: 'FOLLOW',
-              origin: 'LOCAL',
-              transition: 'FOLLOW',
-              sendActivityPub,
-            }),
-      );
-    } else {
-      effectPlan.push(
-        command.origin === 'ACTIVITYPUB'
-          ? createEffect({
-              sourceId: profileFollowRequestId!,
-              sourceKind: 'FOLLOW_REQUEST',
-              origin: 'ACTIVITYPUB',
-              transition: 'INBOUND_FOLLOW',
-            })
-          : createEffect({
-              sourceId: profileFollowRequestId!,
-              sourceKind: 'FOLLOW_REQUEST',
-              origin: 'LOCAL',
-              transition: 'FOLLOW',
-              sendActivityPub,
-            }),
-      );
-    }
+    effectPlan.push({
+      kind: 'CREATE',
+      input: {
+        sourceId: profileFollowId ?? profileFollowRequestId!,
+        sourceKind: followResult.kind === 'ESTABLISHED' ? 'FOLLOW' : 'FOLLOW_REQUEST',
+        ...(command.origin === 'LOCAL' ? { sendActivityPub: followed.sendActivityPub } : {}),
+      },
+    });
   }
+
   return {
-    ok: true as const,
+    ok: true,
     result: {
-      commandKind: 'FOLLOW' as const,
+      commandKind: 'FOLLOW',
       created,
       kind: followResult.kind,
       followerProfileId: input.pair.followerProfileId,
       followeeProfileId: input.pair.followeeProfileId,
       ...(profileFollowId === undefined ? {} : { profileFollowId }),
       ...(profileFollowRequestId === undefined ? {} : { profileFollowRequestId }),
-      ...(followResult.kind === 'ESTABLISHED'
-        ? { profileFollowSnapshot: entitySnapshotFromRow(followResult.profileFollow) }
-        : {
-            profileFollowRequestSnapshot: entitySnapshotFromRow(followResult.profileFollowRequest),
-          }),
     },
     nextState: followResult.kind === 'ESTABLISHED' ? 'ESTABLISHED' : 'PENDING',
     effectPlan,
-    ...(followResult.kind === 'PENDING'
-      ? {
-          pendingSnapshot: {
-            id: profileFollowRequestId!,
-            followerProfileId: input.pair.followerProfileId,
-            followeeProfileId: input.pair.followeeProfileId,
-            createdAt: followResult.profileFollowRequest.createdAt.toString(),
-          },
-        }
-      : {}),
+    ...(followResult.kind === 'PENDING' ? { pendingRequestId: profileFollowRequestId } : {}),
   };
 };
 
-const executeApprove = async (
+type ApprovalCommand = Extract<ProfileFollowPairCommand, { kind: 'APPROVE' | 'ACCEPT' }>;
+
+const executeApproveOrAccept = async (
   input: ProfileFollowPairTransitionInput,
   tx: Transaction,
 ): Promise<ProfileFollowPairTransitionSuccess> => {
-  const command = input.command;
-  if (command.kind !== 'APPROVE') {
-    throw new Error('Invalid approve command');
+  const command = input.command as ApprovalCommand;
+  if (command.kind !== 'APPROVE' && command.kind !== 'ACCEPT') {
+    throw new Error('Invalid approval command');
   }
+
   const expectedRowId = command.expectedRowId;
   const existingFollow = await tx
-    .select()
+    .select({ id: ProfileFollows.id })
     .from(ProfileFollows)
     .where(pairCondition(ProfileFollows, input.pair))
     .limit(1)
     .then(first);
   const currentRequest = await tx
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
       and(
@@ -541,264 +368,146 @@ const executeApprove = async (
   const pendingRequest =
     currentRequest ??
     (await tx
-      .select()
+      .select({ id: ProfileFollowRequests.id })
       .from(ProfileFollowRequests)
       .where(pairCondition(ProfileFollowRequests, input.pair))
       .limit(1)
       .then(first));
-  const pendingSnapshot = pendingSnapshotForInput(input, pendingRequest);
-  const followId = input.followCandidateId ?? input.candidateRowId;
-  if (!currentRequest && existingFollow) {
-    if (followId !== existingFollow.id) {
-      return {
-        ok: true as const,
-        result: {
-          commandKind: 'APPROVE' as const,
-          kind: 'NOOP' as const,
-          followerProfileId: input.pair.followerProfileId,
-          followeeProfileId: input.pair.followeeProfileId,
-          profileFollowSnapshot: entitySnapshotFromRow(existingFollow),
-        },
-        nextState: 'PENDING' as const,
-        effectPlan: [] as ProfileFollowPairEffectPlan,
-        ...(pendingSnapshot === undefined ? {} : { pendingSnapshot }),
-      };
-    }
-    const effectPlan =
-      input.pendingSnapshot?.id === expectedRowId
-        ? [
-            deleteEffect(entityRowFromSnapshot(input.pendingSnapshot), {
-              sourceKind: 'FOLLOW_REQUEST',
-              origin: 'LOCAL',
-              transition: 'APPROVE',
-            }),
-          ]
-        : [];
-    effectPlan.push(
-      createEffect({
-        sourceId: existingFollow.id,
-        sourceKind: 'FOLLOW',
-        origin: 'LOCAL',
-        transition: 'APPROVE',
-      }),
-    );
-    return {
-      ok: true as const,
-      result: {
-        commandKind: 'APPROVE' as const,
-        kind: 'ACCEPTED' as const,
-        followerProfileId: input.pair.followerProfileId,
-        followeeProfileId: input.pair.followeeProfileId,
-        profileFollowId: existingFollow.id,
-        profileFollowRequestId: expectedRowId,
-        profileFollowSnapshot: entitySnapshotFromRow(existingFollow),
-      },
-      nextState: 'ESTABLISHED' as const,
-      effectPlan,
-    };
-  }
-  if (!currentRequest) {
-    return {
-      ok: true as const,
-      result: {
-        commandKind: 'APPROVE' as const,
-        kind: 'NOOP' as const,
-        followerProfileId: input.pair.followerProfileId,
-        followeeProfileId: input.pair.followeeProfileId,
-      },
-      nextState: 'PENDING' as const,
-      effectPlan: [] as ProfileFollowPairEffectPlan,
-      ...(pendingSnapshot === undefined ? {} : { pendingSnapshot }),
-    };
-  }
-  const approved = await approveProfileFollowRequestInTransaction(
-    {
-      actorProfileId: command.actorProfileId,
-      profileFollowRequestId: expectedRowId,
-      candidateProfileFollowId: followId,
-    },
-    tx,
-  );
-  const effectPlan: ProfileFollowPairEffect[] = [
-    deleteEffect(approved.profileFollowRequest, {
-      sourceKind: 'FOLLOW_REQUEST',
-      origin: 'LOCAL',
-      transition: 'APPROVE',
-    }),
-  ];
-  const committedFollowId = approved.profileFollow.id;
-  if (approved.created || committedFollowId === followId) {
-    effectPlan.push(
-      createEffect({
-        sourceId: committedFollowId,
-        sourceKind: 'FOLLOW',
-        origin: 'LOCAL',
-        transition: 'APPROVE',
-      }),
-    );
-  }
-  return {
-    ok: true as const,
-    result: {
-      commandKind: 'APPROVE' as const,
-      kind: approved.created ? 'ACCEPTED' : 'ALREADY_ESTABLISHED',
-      followerProfileId: input.pair.followerProfileId,
-      followeeProfileId: input.pair.followeeProfileId,
-      profileFollowId: committedFollowId,
-      profileFollowRequestId: expectedRowId,
-      profileFollowSnapshot: entitySnapshotFromRow(approved.profileFollow),
-    },
-    nextState: 'ESTABLISHED' as const,
-    effectPlan,
-  };
-};
+  const pendingRequestId = pendingRequest?.id ?? input.pendingRequestId;
+  const followId = input.followCandidateId;
 
-const executeAccept = async (
-  input: ProfileFollowPairTransitionInput,
-  tx: Transaction,
-): Promise<ProfileFollowPairTransitionSuccess> => {
-  const command = input.command;
-  if (command.kind !== 'ACCEPT') {
-    throw new Error('Invalid accept command');
-  }
-  const expectedRowId = command.expectedRowId;
-  const existingFollow = await tx
-    .select()
-    .from(ProfileFollows)
-    .where(pairCondition(ProfileFollows, input.pair))
-    .limit(1)
-    .then(first);
-  const currentRequest = await tx
-    .select()
-    .from(ProfileFollowRequests)
-    .where(
-      and(
-        pairCondition(ProfileFollowRequests, input.pair),
-        eq(ProfileFollowRequests.id, expectedRowId),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  const pendingRequest =
-    currentRequest ??
-    (await tx
-      .select()
-      .from(ProfileFollowRequests)
-      .where(pairCondition(ProfileFollowRequests, input.pair))
-      .limit(1)
-      .then(first));
-  const pendingSnapshot = pendingSnapshotForInput(input, pendingRequest);
-  const followId = input.followCandidateId ?? input.candidateRowId;
   if (!currentRequest && existingFollow) {
     if (followId !== existingFollow.id) {
       return {
-        ok: true as const,
+        ok: true,
         result: {
-          commandKind: 'ACCEPT' as const,
-          kind: 'NOOP' as const,
+          commandKind: command.kind,
+          kind: 'NOOP',
           followerProfileId: input.pair.followerProfileId,
           followeeProfileId: input.pair.followeeProfileId,
         },
-        nextState: 'PENDING' as const,
-        effectPlan: [] as ProfileFollowPairEffectPlan,
-        ...(pendingSnapshot === undefined ? {} : { pendingSnapshot }),
+        nextState: 'PENDING',
+        effectPlan: [],
+        ...(pendingRequestId === undefined ? {} : { pendingRequestId }),
       };
     }
-    const effectPlan =
-      input.pendingSnapshot?.id === expectedRowId
-        ? [
-            deleteEffect(entityRowFromSnapshot(input.pendingSnapshot), {
-              sourceKind: 'FOLLOW_REQUEST',
-              origin: 'ACTIVITYPUB',
-              transition: 'INBOUND_ACCEPT',
-            }),
-          ]
-        : [];
-    effectPlan.push(
-      createEffect({
-        sourceId: existingFollow.id,
-        sourceKind: 'FOLLOW',
-        origin: 'ACTIVITYPUB',
-        transition: 'INBOUND_ACCEPT',
-      }),
-    );
+
+    const effectPlan: ProfileFollowPairEffect[] = [];
+    if (pendingRequestId === expectedRowId) {
+      effectPlan.push(
+        deleteEffect({
+          sourceId: expectedRowId,
+          pair: input.pair,
+          sourceKind: 'FOLLOW_REQUEST',
+        }),
+      );
+    }
+    effectPlan.push({
+      kind: 'CREATE',
+      input: { sourceId: existingFollow.id, sourceKind: 'FOLLOW' },
+    });
     return {
-      ok: true as const,
+      ok: true,
       result: {
-        commandKind: 'ACCEPT' as const,
-        kind: 'ACCEPTED' as const,
+        commandKind: command.kind,
+        kind: 'ACCEPTED',
         followerProfileId: input.pair.followerProfileId,
         followeeProfileId: input.pair.followeeProfileId,
         profileFollowId: existingFollow.id,
         profileFollowRequestId: expectedRowId,
-        profileFollowSnapshot: entitySnapshotFromRow(existingFollow),
       },
-      nextState: 'ESTABLISHED' as const,
+      nextState: 'ESTABLISHED',
       effectPlan,
     };
   }
+
   if (!currentRequest) {
     return {
-      ok: true as const,
+      ok: true,
       result: {
-        commandKind: 'ACCEPT' as const,
-        kind: 'NOOP' as const,
+        commandKind: command.kind,
+        kind: 'NOOP',
         followerProfileId: input.pair.followerProfileId,
         followeeProfileId: input.pair.followeeProfileId,
       },
-      nextState: 'PENDING' as const,
-      effectPlan: [] as ProfileFollowPairEffectPlan,
-      ...(pendingSnapshot === undefined ? {} : { pendingSnapshot }),
+      nextState: 'PENDING',
+      effectPlan: [],
+      ...(pendingRequestId === undefined ? {} : { pendingRequestId }),
     };
   }
-  const accepted = await acceptProfileFollowRequestInTransaction(
-    {
-      ...input.pair,
-      expectedRowId,
-      origin: 'ACTIVITYPUB',
-      candidateProfileFollowId: followId,
-    },
-    tx,
-  );
+
   const effectPlan: ProfileFollowPairEffect[] = [];
-  if (accepted.deletedRequest) {
+  let kind: 'ACCEPTED' | 'ALREADY_ESTABLISHED' | 'NOOP';
+  let committedFollowId: string | undefined;
+  let committedRequestId = currentRequest.id;
+  if (command.kind === 'APPROVE') {
+    const approved = await approveProfileFollowRequestInTransaction(
+      {
+        actorProfileId: command.actorProfileId,
+        profileFollowRequestId: expectedRowId,
+        candidateProfileFollowId: followId,
+      },
+      tx,
+    );
+    kind = approved.created ? 'ACCEPTED' : 'ALREADY_ESTABLISHED';
+    committedFollowId = approved.profileFollow.id;
+    committedRequestId = approved.profileFollowRequestId;
     effectPlan.push(
-      deleteEffect(accepted.deletedRequest, {
+      deleteEffect({
+        sourceId: approved.profileFollowRequestId,
+        pair: input.pair,
         sourceKind: 'FOLLOW_REQUEST',
-        origin: 'ACTIVITYPUB',
-        transition: 'INBOUND_ACCEPT',
       }),
     );
-  }
-  const committedFollowId = accepted.createdFollow?.id;
-  if (committedFollowId !== undefined) {
-    effectPlan.push(
-      createEffect({
-        sourceId: committedFollowId,
-        sourceKind: 'FOLLOW',
-        origin: 'ACTIVITYPUB',
-        transition: 'INBOUND_ACCEPT',
-      }),
+    if (approved.created || committedFollowId === followId) {
+      effectPlan.push({
+        kind: 'CREATE',
+        input: { sourceId: committedFollowId, sourceKind: 'FOLLOW' },
+      });
+    }
+  } else {
+    const accepted = await acceptProfileFollowRequestInTransaction(
+      {
+        ...input.pair,
+        expectedRowId,
+        candidateProfileFollowId: followId,
+      },
+      tx,
     );
+    kind = accepted.result.kind;
+    committedFollowId = accepted.createdFollowId;
+    committedRequestId = accepted.deletedRequestId ?? currentRequest.id;
+    if (accepted.deletedRequestId !== undefined) {
+      effectPlan.push(
+        deleteEffect({
+          sourceId: accepted.deletedRequestId,
+          pair: input.pair,
+          sourceKind: 'FOLLOW_REQUEST',
+        }),
+      );
+    }
+    if (accepted.createdFollowId !== undefined) {
+      effectPlan.push({
+        kind: 'CREATE',
+        input: { sourceId: accepted.createdFollowId, sourceKind: 'FOLLOW' },
+      });
+    }
   }
+
+  const pendingAfter = kind === 'NOOP' ? committedRequestId : undefined;
   return {
-    ok: true as const,
+    ok: true,
     result: {
-      commandKind: 'ACCEPT' as const,
-      kind: accepted.result.kind,
+      commandKind: command.kind,
+      kind,
       followerProfileId: input.pair.followerProfileId,
       followeeProfileId: input.pair.followeeProfileId,
       ...(committedFollowId === undefined ? {} : { profileFollowId: committedFollowId }),
-      profileFollowRequestId: expectedRowId,
-      ...(accepted.createdFollow === undefined
-        ? {}
-        : { profileFollowSnapshot: entitySnapshotFromRow(accepted.createdFollow) }),
+      ...(kind === 'NOOP' ? {} : { profileFollowRequestId: expectedRowId }),
     },
-    nextState: accepted.result.kind === 'NOOP' ? ('PENDING' as const) : ('ESTABLISHED' as const),
+    nextState: kind === 'NOOP' ? 'PENDING' : 'ESTABLISHED',
     effectPlan,
-    ...(accepted.result.kind === 'NOOP' && pendingSnapshot !== undefined
-      ? { pendingSnapshot }
-      : {}),
+    ...(pendingAfter === undefined ? {} : { pendingRequestId: pendingAfter }),
   };
 };
 
@@ -810,13 +519,10 @@ const executeRejectOrCancel = async (
   if (command.kind !== 'REJECT' && command.kind !== 'CANCEL') {
     throw new Error('Invalid terminal command');
   }
+
   const expectedRowId = command.expectedRowId;
-  const sendActivityPub =
-    command.kind === 'CANCEL' && command.origin === 'LOCAL'
-      ? await shouldSendActivityPub(tx, input.pair)
-      : false;
   const currentRequest = await tx
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(
       and(
@@ -827,14 +533,15 @@ const executeRejectOrCancel = async (
     .limit(1)
     .then(first);
   const conflictingRequest = await tx
-    .select()
+    .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(pairCondition(ProfileFollowRequests, input.pair))
     .limit(1)
     .then(first);
+
   if (!currentRequest && conflictingRequest) {
     return {
-      ok: true as const,
+      ok: true,
       result: {
         commandKind: command.kind,
         changed: false,
@@ -842,78 +549,49 @@ const executeRejectOrCancel = async (
         followeeProfileId: input.pair.followeeProfileId,
         profileFollowRequestId: expectedRowId,
       },
-      nextState: 'PENDING' as const,
-      effectPlan: [] as ProfileFollowPairEffectPlan,
-      pendingSnapshot: pendingSnapshotFromRow(conflictingRequest),
+      nextState: 'PENDING',
+      effectPlan: [],
+      pendingRequestId: conflictingRequest.id,
     };
   }
 
   if (command.origin === 'LOCAL' && command.actorProfileId === undefined) {
     throw new ValidationError('Actor profile is required for a local terminal command');
   }
-  const deleted = currentRequest
-    ? command.kind === 'REJECT'
-      ? command.origin === 'LOCAL'
-        ? await rejectProfileFollowRequestInTransaction(
-            {
-              actorProfileId: command.actorProfileId!,
-              profileFollowRequestId: expectedRowId,
-              origin: 'LOCAL',
-            },
-            tx,
-          )
-        : await removeInboundFollowInTransaction(
-            {
-              ...input.pair,
-              expectedRowId,
-              origin: 'ACTIVITYPUB',
-              transition: 'INBOUND_REJECT',
-            },
-            tx,
-          ).then(
-            (value) =>
-              ({ request: value.profileFollowRequest }) as {
-                request: ProfileFollowRequestRow | undefined;
-              },
-          )
-      : command.origin === 'LOCAL'
-        ? await cancelProfileFollowRequestInTransaction(
-            {
-              actorProfileId: command.actorProfileId!,
-              profileFollowRequestId: expectedRowId,
-              origin: 'LOCAL',
-            },
-            tx,
-          )
-        : await removeInboundFollowInTransaction(
-            {
-              ...input.pair,
-              expectedRowId,
-              origin: 'ACTIVITYPUB',
-              transition: 'INBOUND_UNDO',
-            },
-            tx,
-          ).then(
-            (value) =>
-              ({ request: value.profileFollowRequest }) as {
-                request: ProfileFollowRequestRow | undefined;
-              },
-          )
-    : undefined;
-  const source =
-    deleted?.request ??
-    // A remote removal is guarded by participant availability.  If the row
-    // was present but that guarded DELETE did not commit, keep the pair
-    // pending; the snapshot is only a retry reconstruction after the row has
-    // already been deleted, not permission to report a deletion that never
-    // happened.
-    (currentRequest === undefined && input.pendingSnapshot?.id === expectedRowId
-      ? entityRowFromSnapshot(input.pendingSnapshot)
+
+  let deletedRequestId: string | undefined;
+  if (currentRequest) {
+    if (command.origin === 'LOCAL') {
+      const deleted = await deleteProfileFollowRequestAsActorInTransaction(
+        {
+          actorProfileId: command.actorProfileId!,
+          actorRole: command.kind === 'REJECT' ? 'FOLLOWEE' : 'FOLLOWER',
+          profileFollowRequestId: expectedRowId,
+        },
+        tx,
+      );
+      deletedRequestId = deleted.id;
+    } else {
+      const deleted = await removeProfileFollowProjection(
+        {
+          ...input.pair,
+          expectedRowId,
+          removePendingRequest: true,
+        },
+        tx,
+      );
+      deletedRequestId = deleted.profileFollowRequest?.id;
+    }
+  }
+
+  const sourceId =
+    deletedRequestId ??
+    (currentRequest === undefined && input.pendingRequestId === expectedRowId
+      ? expectedRowId
       : undefined);
-  const pendingSnapshot = pendingSnapshotForInput(input, currentRequest);
-  if (!source) {
+  if (sourceId === undefined) {
     return {
-      ok: true as const,
+      ok: true,
       result: {
         commandKind: command.kind,
         changed: false,
@@ -921,27 +599,18 @@ const executeRejectOrCancel = async (
         followeeProfileId: input.pair.followeeProfileId,
         profileFollowRequestId: expectedRowId,
       },
-      nextState: 'PENDING' as const,
-      effectPlan: [] as ProfileFollowPairEffectPlan,
-      ...(pendingSnapshot === undefined ? {} : { pendingSnapshot }),
+      nextState: 'PENDING',
+      effectPlan: [],
+      ...(currentRequest === undefined ? {} : { pendingRequestId: currentRequest.id }),
     };
   }
-  const effect =
-    command.origin === 'ACTIVITYPUB'
-      ? deleteEffect(source, {
-          sourceKind: 'FOLLOW_REQUEST',
-          origin: 'ACTIVITYPUB',
-          transition: command.kind === 'REJECT' ? 'INBOUND_REJECT' : 'INBOUND_UNDO',
-        })
-      : deleteEffect(source, {
-          sourceKind: 'FOLLOW_REQUEST',
-          origin: 'LOCAL',
-          ...(command.kind === 'REJECT'
-            ? { transition: 'REJECT' as const }
-            : { transition: 'CANCEL' as const, sendActivityPub }),
-        });
+
+  const sendActivityPub =
+    command.kind === 'CANCEL' && command.origin === 'LOCAL'
+      ? await shouldSendActivityPub(tx, input.pair)
+      : undefined;
   return {
-    ok: true as const,
+    ok: true,
     result: {
       commandKind: command.kind,
       changed: true,
@@ -949,8 +618,15 @@ const executeRejectOrCancel = async (
       followeeProfileId: input.pair.followeeProfileId,
       profileFollowRequestId: expectedRowId,
     },
-    nextState: command.kind === 'REJECT' ? ('REJECTED' as const) : ('CANCELLED' as const),
-    effectPlan: effect === undefined ? [] : [effect],
+    nextState: command.kind === 'REJECT' ? 'REJECTED' : 'CANCELLED',
+    effectPlan: [
+      deleteEffect({
+        sourceId,
+        pair: input.pair,
+        sourceKind: 'FOLLOW_REQUEST',
+        ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
+      }),
+    ],
   };
 };
 
@@ -964,9 +640,8 @@ export const executeProfileFollowPairTransition = async (
         case 'FOLLOW':
           return executeFollow(input, tx);
         case 'APPROVE':
-          return executeApprove(input, tx);
         case 'ACCEPT':
-          return executeAccept(input, tx);
+          return executeApproveOrAccept(input, tx);
         case 'REJECT':
         case 'CANCEL':
           return executeRejectOrCancel(input, tx);
@@ -980,11 +655,7 @@ export const executeProfileFollowPairTransition = async (
   }
 };
 
-/**
- * Rehydrates a minimal Update result after the Temporal boundary.  This is
- * deliberately a separate query helper: full Profile rows and Temporal.Instant
- * values do not belong in Workflow history.
- */
+/** Rehydrates only the public result after the Temporal boundary. */
 export const hydrateProfileFollowPairTransition = async (
   result: ProfileFollowPairTransitionResult,
 ): Promise<HydratedProfileFollowPairTransition> => {
@@ -997,29 +668,24 @@ export const hydrateProfileFollowPairTransition = async (
   if (!followerProfile || !followeeProfile) {
     throw new NotFoundError('Profile not found');
   }
+
   const profileFollow =
     'profileFollowId' in result && result.profileFollowId !== undefined
-      ? ((await db
+      ? await db
           .select()
           .from(ProfileFollows)
           .where(eq(ProfileFollows.id, result.profileFollowId))
           .limit(1)
-          .then(first)) ??
-        (result.profileFollowSnapshot === undefined
-          ? undefined
-          : entityRowFromSnapshot(result.profileFollowSnapshot)))
+          .then(first)
       : undefined;
   const profileFollowRequest =
     'profileFollowRequestId' in result && result.profileFollowRequestId !== undefined
-      ? ((await db
+      ? await db
           .select()
           .from(ProfileFollowRequests)
           .where(eq(ProfileFollowRequests.id, result.profileFollowRequestId))
           .limit(1)
-          .then(first)) ??
-        (result.profileFollowRequestSnapshot === undefined
-          ? undefined
-          : entityRowFromSnapshot(result.profileFollowRequestSnapshot)))
+          .then(first)
       : undefined;
   return {
     result,
@@ -1036,8 +702,6 @@ export const executeProfileFollowRemoval = async (
 ): Promise<ProfileFollowRemovalExecution> => {
   try {
     return await db.transaction(async (tx) => {
-      const sendActivityPub =
-        input.origin === 'LOCAL' ? await shouldSendActivityPub(tx, input) : false;
       const currentFollow = await tx
         .select({ id: ProfileFollows.id })
         .from(ProfileFollows)
@@ -1053,35 +717,36 @@ export const executeProfileFollowRemoval = async (
         },
         tx,
       );
-      // Rebuild the committed row's effect when the pair has no row or has
-      // advanced to a newer generation, but never report deletion while the
-      // expected row is still present and its guarded DELETE did not commit.
-      const source =
-        deleted.profileFollow ??
-        (currentFollow?.id !== input.expectedRowId && input.snapshot?.id === input.expectedRowId
-          ? entityRowFromSnapshot(input.snapshot)
-          : undefined);
-      const effect = source
-        ? input.origin === 'LOCAL'
-          ? deleteEffect(source, {
-              sourceKind: 'FOLLOW',
-              origin: 'LOCAL',
-              transition: 'UNFOLLOW',
-              sendActivityPub,
-            })
-          : deleteEffect(source, {
-              sourceKind: 'FOLLOW',
-              origin: 'ACTIVITYPUB',
-              transition: input.transition,
-            })
-        : undefined;
+      const sourceId =
+        deleted.profileFollow?.id ??
+        (currentFollow?.id === input.expectedRowId ? undefined : input.expectedRowId);
+      if (sourceId === undefined) {
+        return {
+          ok: true,
+          changed: false,
+          profileFollowId: null,
+          followerProfileId: input.followerProfileId,
+          followeeProfileId: input.followeeProfileId,
+          effectPlan: [],
+        };
+      }
+
+      const sendActivityPub =
+        input.origin === 'LOCAL' ? await shouldSendActivityPub(tx, input) : undefined;
       return {
-        ok: true as const,
-        changed: effect !== undefined,
+        ok: true,
+        changed: true,
         profileFollowId: deleted.profileFollow?.id ?? null,
         followerProfileId: input.followerProfileId,
         followeeProfileId: input.followeeProfileId,
-        effectPlan: effect === undefined ? [] : [effect],
+        effectPlan: [
+          deleteEffect({
+            sourceId,
+            pair: input,
+            sourceKind: 'FOLLOW',
+            ...(sendActivityPub === undefined ? {} : { sendActivityPub }),
+          }),
+        ],
       };
     });
   } catch (error) {

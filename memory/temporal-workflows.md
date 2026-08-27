@@ -13,7 +13,7 @@
   durable admission부터 transaction을 연결해야 하는 capability는 caller 검증 뒤 directed Profile pair Workflow를
   Update-with-Start하고 transaction Activity가 core policy를 실행한다.
 - Workflow는 결정론적 orchestration만 수행한다. DB domain transition은 Activity에서 실행하고, pair Workflow의
-  retry snapshot과 effect queue는 JSON-serializable한 Workflow state로 보존한다.
+  source identity와 effect queue는 JSON-serializable한 Workflow state로 보존한다.
 - Activity는 Notification projection이나 Fedify queue handoff처럼 retry 가능한 하나의 외부 효과 경계를 소유한다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
 
@@ -66,18 +66,17 @@
   있다. 새 generation을 미리 queue하거나 별도 lease/operation identity를 두지 않으며, caller가 기존 run 종료 뒤
   재시도하는 위험을 의도적으로 수용한다.
 - Follow pair command에는 server-generated random `operationId`나 operation receipt를 추가하지 않는다. Activity
-  retry는 mutation 전 pair snapshot, exact expected row와 Workflow history에 미리 배정한 candidate domain row
-  ID로 commit 결과를 재구성한다. candidate ID는 실제 Follow/Request row에만 쓰며 command identity가 아니다.
+  retry는 exact expected row와 Workflow history에 미리 배정한 candidate domain row ID로 commit 결과를
+  재구성한다. candidate ID는 실제 Follow/Request row에만 쓰며 command identity가 아니다.
   Temporal Update ID는 RPC deduplication용 메타데이터일 뿐 domain identity나 durable receipt가 아니다.
-- 새 pair run의 첫 `FOLLOW`도 mutation 전에 기존 pending request snapshot을 read-only Activity로 history에 남긴다.
+- 새 pair run의 첫 `FOLLOW`도 mutation 전에 기존 pending request ID만 read-only Activity로 history에 남긴다.
   그래야 OPEN 정책 승격 transaction이 commit된 직후 Activity completion이 유실되어도 request cleanup effect를
   재구성할 수 있다. 장수명 PENDING run에는 execution timeout을 걸지 않되, UWS caller RPC에는 bounded deadline을 둔다.
 - pair transaction/bootstrap Activity가 retry를 모두 소진하면 Update 실패를 기록하고 기존 effects를 drain한 뒤 run을
   typed failure로 닫는다. PENDING으로 무기한 대기시키지 않으며 known domain failure DTO는 lifecycle을 계속 유지한다.
-- Update 응답에 필요한 Follow/Request는 full DB row 대신 id, pair IDs와 createdAt 문자열 snapshot으로 history에
-  보존한다. caller rehydrate 전에 row가 사라지면 이 snapshot으로 committed response를 복원한다. exact F1 removal
-  retry 시 현재 row가 F2여도 F1 snapshot으로 F1 delete effect만 재구성하고 F2는 보존한다.
-- 이 Follow 규칙이 다른 capability의 retry 계약을 제거하지는 않는다. 삭제 snapshot이나 effect plan을 DB 상태만으로
+- Update 응답에는 full DB row나 `Temporal.Instant`를 넣지 않고 domain row ID와 pair identity만 보존한다.
+  exact F1 removal retry 시 현재 row가 F2여도 expected F1 ID로 F1 delete effect만 재구성하고 F2는 보존한다.
+- 이 Follow 규칙이 다른 capability의 retry 계약을 제거하지는 않는다. 삭제 source identity나 effect plan을 DB 상태만으로
   복원할 수 없는 별도 Temporal capability는 최소 domain-specific receipt를 transition과 같은 transaction에 기록하고,
   해당 결과가 History에 기록된 뒤 정리할 수 있다. 이를 범용 command ledger나 lifecycle exactly-once 보장으로
   일반화하지 않는다.
@@ -88,7 +87,7 @@
 ## Activity Registration And Adapters
 
 - `apps/worker/src/activities.ts`는 production Activity registry다.
-- durable source ID나 삭제 snapshot을 DB projection으로 복원하고 retry/no-op을 판정하는 Activity 전용 adapter는
+- durable source ID를 DB projection과 Workflow input으로 복원하고 retry/no-op을 판정하는 Activity 전용 adapter는
   `apps/worker`가 소유한다. `packages/core`와 `packages/fedify`에는 각각 domain policy와 protocol delivery primitive만
   남기며, Temporal input shape를 맞추기 위한 공개 함수를 추가하지 않는다.
 - 기존 core/fedify 함수의 input, return과 오류 의미가 Activity 계약과 같으면 `export { source as activityName }`로 직접 alias한다.
@@ -98,7 +97,7 @@
 
 ## Inputs And Identity
 
-- Workflow input은 JSON-serializable한 immutable 최소 snapshot이어야 한다. 삭제 뒤 필요한 값은 source transaction 결과에서 확보하고, Activity가 삭제된 source row를 다시 읽는 것으로 복원하지 않는다.
+- Workflow input은 JSON-serializable한 immutable source identity여야 한다. 삭제 뒤 필요한 값은 exact source ID와 pair identity로 표현하고, Activity가 삭제된 source row를 다시 읽는 것으로 복원하지 않는다.
 - create effect는 stable source identity를 우선 사용하고 Activity가 현재 projection을 조회하게 한다.
 - input type은 한 Workflow에서만 쓰면 Workflow 파일 가까이에 둔다. Worker, core와 protocol adapter가 실제로 같은 shape를 소비할 때만 neutral contract module로 공유한다. 이름만 같은 type을 package마다 복제하지 않는다.
 - Workflow ID는 logical generation을 구분하는 immutable source ID를 포함한다. create/delete와 서로 다른 source kind가 완료된 같은 ID를 공유하지 않게 한다.

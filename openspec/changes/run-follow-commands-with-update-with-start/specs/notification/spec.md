@@ -66,7 +66,7 @@ The system MUST attach Follow and Follow Request Notification effects to the com
 #### Scenario: Separate Unfollow cleanup
 
 - **WHEN** an established Follow is removed by the separate short Unfollow/removal command
-- **THEN** its source-correlated Follow Notification cleanup uses the deleted Follow snapshot and does not reopen the completed pair lifecycle Workflow
+- **THEN** its source-correlated Follow Notification cleanup uses the exact deleted Follow ID and does not reopen the completed pair lifecycle Workflow
 
 ### Requirement: Notification failure isolation and continuation
 

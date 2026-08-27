@@ -11,12 +11,9 @@ type RemoteProfileFollowActor = {
   uri: string;
 };
 
-type ProfileFollowDeliveryOptions = {
+type ProfileFollowDeliveryOptions<OutboundFollow> = {
   actor: RemoteProfileFollowActor;
-  outboundFollow: {
-    createdAt: Temporal.Instant;
-    id: string;
-  };
+  outboundFollow: OutboundFollow;
   senderProfileId: string;
 };
 
@@ -46,7 +43,7 @@ export const sendProfileFollow = async ({
   actor,
   outboundFollow,
   senderProfileId,
-}: ProfileFollowDeliveryOptions): Promise<void> => {
+}: ProfileFollowDeliveryOptions<{ createdAt: Temporal.Instant; id: string }>): Promise<void> => {
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   const actorUri = context.getActorUri(senderProfileId);
@@ -67,7 +64,7 @@ export const sendProfileUnfollow = async ({
   actor,
   outboundFollow,
   senderProfileId,
-}: ProfileFollowDeliveryOptions): Promise<void> => {
+}: ProfileFollowDeliveryOptions<{ id: string }>): Promise<void> => {
   const recipientActor = toProfileFollowRecipient(actor);
   const context = await createFederationContext();
   const actorUri = context.getActorUri(senderProfileId);
@@ -75,7 +72,6 @@ export const sendProfileUnfollow = async ({
     actor: actorUri,
     id: getFollowActivityUri(context.canonicalOrigin, outboundFollow.id),
     object: recipientActor.id,
-    published: outboundFollow.createdAt,
   });
   const activity = new Undo({
     actor: actorUri,

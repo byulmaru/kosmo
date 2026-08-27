@@ -47,7 +47,7 @@
 #### Scenario: production bundle에서 Activity retry
 
 - **WHEN** production `workflowsPath`와 static Activities registry로 수락된 pair transition 또는 Follow effect Activity가 일시적으로 실패한다
-- **THEN** Worker는 기존 bounded Temporal Activity retry 정책으로 같은 pair identity, source identity와 immutable snapshot을 다시 실행한다
+- **THEN** Worker는 기존 bounded Temporal Activity retry 정책으로 같은 pair identity와 exact source identity를 다시 실행한다
 - **AND** queue acceptance 뒤의 remote delivery retry는 production Worker가 아니라 Fedify consumer가 소유한다
 
 #### Scenario: production bundle Worker 재시작과 drain

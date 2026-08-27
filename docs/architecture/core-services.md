@@ -114,11 +114,11 @@ Temporal Workflow/Activity와 worker의 기능·policy는 이 GraphQL authorizat
   complete/fail한다. 이미 commit된 domain 결과는 side effect failure로 rollback하지 않는다.
 - Pair command에는 random `operationId`나 operation receipt를 두지 않는다. create transition은 Activity 전에
   candidate Follow/Request domain row ID를 Workflow history에 배정하고 그 exact ID를 insert한다. transaction Activity
-  retry는 mutation 전 pair snapshot, candidate/expected row 및 Workflow가 보존한 serializable snapshot으로 이미
-  commit된 결과를 재구성한다. candidate ID는 실제 domain entity identity이며 command identity가 아니다.
+  retry는 candidate/expected row와 Workflow가 보존한 source identity로 이미 commit된 결과를 재구성한다.
+  candidate ID는 실제 domain entity identity이며 command identity가 아니다.
   Temporal Update ID는 RPC deduplication metadata이며 domain ledger가 아니다. 실행 중인 pair에는 `USE_EXISTING`을,
   완료된 lifecycle의 새 Follow에는 `ALLOW_DUPLICATE` reuse policy를 사용한다.
-- 이 예외가 다른 capability의 retry 계약을 없애지는 않는다. 삭제 snapshot이나 effect plan을 DB 상태만으로
+- 이 예외가 다른 capability의 retry 계약을 없애지는 않는다. 삭제 source identity나 effect plan을 DB 상태만으로
   재구성할 수 없는 별도 Temporal capability는 그 capability가 소유하는 최소 receipt를 같은 transaction에 기록할
   수 있지만, 이를 Follow pair Workflow의 공용 command ledger로 일반화하지 않는다.
 - Unfollow는 Follow Relationship의 별도 짧은 Workflow가 소유한다. Profile pair Workflow가 다음 command를

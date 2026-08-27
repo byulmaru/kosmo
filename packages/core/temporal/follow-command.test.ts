@@ -65,8 +65,11 @@ test('pair transition caller uses deterministic UWS identity and active-run poli
     assert.deepEqual(operation.options.args, [pair]);
     const deadlineCall = deadline.mock.calls[0];
     assert.ok(deadlineCall);
-    assert.ok(deadlineCall.arguments[0] >= before + 4_900);
-    assert.ok(deadlineCall.arguments[0] <= Date.now() + 5_000);
+    const deadlineValue = deadlineCall.arguments[0];
+    const deadlineTimestamp =
+      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
+    assert.ok(deadlineTimestamp >= before + 4_900);
+    assert.ok(deadlineTimestamp <= Date.now() + 5_000);
   } finally {
     deadline.mock.restore();
     update.mock.restore();
@@ -133,7 +136,6 @@ test('established removal uses an exact-row short Workflow and ALLOW_DUPLICATE',
     ...pair,
     expectedRowId: followId,
     origin: 'LOCAL' as const,
-    transition: 'UNFOLLOW' as const,
   };
   const execution = {
     ok: true as const,
@@ -172,8 +174,11 @@ test('established removal uses an exact-row short Workflow and ALLOW_DUPLICATE',
     assert.deepEqual(options.args, [input]);
     const deadlineCall = deadline.mock.calls[0];
     assert.ok(deadlineCall);
-    assert.ok(deadlineCall.arguments[0] >= before + 4_900);
-    assert.ok(deadlineCall.arguments[0] <= Date.now() + 5_000);
+    const deadlineValue = deadlineCall.arguments[0];
+    const deadlineTimestamp =
+      deadlineValue instanceof Date ? deadlineValue.getTime() : deadlineValue;
+    assert.ok(deadlineTimestamp >= before + 4_900);
+    assert.ok(deadlineTimestamp <= Date.now() + 5_000);
   } finally {
     deadline.mock.restore();
     update.mock.restore();

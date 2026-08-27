@@ -46,7 +46,7 @@ The system MUST route verified local-to-remote Follow and pending-request transi
 #### Scenario: Local Unfollow remains separate
 
 - **WHEN** a local follower removes an established remote Follow
-- **THEN** the separate short Unfollow command uses the immutable Follow snapshot to enqueue the outbound Undo and does not reopen the completed pair lifecycle Workflow
+- **THEN** the separate short Unfollow command uses the exact Follow ID and directed pair to enqueue the outbound Undo and does not reopen the completed pair lifecycle Workflow
 
 #### Scenario: Suspended remote instance
 
