@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
@@ -61,9 +62,91 @@ vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedEr
 let staticRoot: string;
 let app: Hono;
 let fetch = vi.fn<typeof globalThis.fetch>();
+let repositoryRobots: string;
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
+const ROBOTS_SOURCE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../apps/app/public/robots.txt',
+);
+
+type RobotsGroup = {
+  allow: string[];
+  disallow: string[];
+  userAgents: string[];
+};
+
+const parseRobots = (body: string) => {
+  const groups: RobotsGroup[] = [];
+  const sitemaps: string[] = [];
+  let group: RobotsGroup | undefined;
+  let groupHasRules = false;
+
+  const finishGroup = () => {
+    if (group?.userAgents.length) {
+      groups.push(group);
+    }
+    group = undefined;
+    groupHasRules = false;
+  };
+
+  for (const rawLine of body.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*/, '').trim();
+    if (!line) {
+      if (groupHasRules) {
+        finishGroup();
+      }
+      continue;
+    }
+
+    const separator = line.indexOf(':');
+    if (separator === -1) {
+      continue;
+    }
+
+    const directive = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+
+    if (directive === 'user-agent') {
+      if (!group || groupHasRules) {
+        finishGroup();
+        group = { allow: [], disallow: [], userAgents: [] };
+      }
+      group.userAgents.push(value);
+      continue;
+    }
+
+    if (directive === 'sitemap') {
+      sitemaps.push(value);
+      continue;
+    }
+
+    if (!group) {
+      continue;
+    }
+
+    if (directive === 'allow') {
+      group.allow.push(value);
+      groupHasRules = true;
+    } else if (directive === 'disallow') {
+      group.disallow.push(value);
+      groupHasRules = true;
+    }
+  }
+
+  finishGroup();
+  return { groups, sitemaps };
+};
+
+const robotsPathIsAllowed = (group: RobotsGroup, path: string) => {
+  const longestRule = (rules: string[]) =>
+    rules
+      .filter((rule) => rule.length > 0 && path.startsWith(rule))
+      .reduce((longest, rule) => Math.max(longest, rule.length), 0);
+
+  return longestRule(group.allow) >= longestRule(group.disallow);
+};
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
@@ -71,6 +154,8 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
+  repositoryRobots = await readFile(ROBOTS_SOURCE, 'utf8');
+  await writeFile(join(staticRoot, 'robots.txt'), repositoryRobots);
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -470,6 +555,98 @@ describe('runtime routing', () => {
     expect(await deepLink.text()).toBe('<html>expo app</html>');
     expect(federationFetch).toHaveBeenCalledTimes(4);
   });
+
+  test('keeps public, static, and ActivityPub paths crawlable while excluding protected prefixes', () => {
+    const robots = parseRobots(repositoryRobots);
+    const wildcardRules = robots.groups.find((group) => group.userAgents.includes('*'));
+
+    expect(robots.groups).toHaveLength(1);
+    expect(wildcardRules).toBeDefined();
+    if (!wildcardRules) {
+      throw new Error('Missing wildcard robots.txt group');
+    }
+
+    expect(wildcardRules.userAgents).toEqual(['*']);
+    expect(wildcardRules.allow).toEqual([]);
+    expect(wildcardRules.disallow).toEqual([
+      '/bookmarks',
+      '/compose',
+      '/feedback',
+      '/follow-requests',
+      '/hashtags/',
+      '/home',
+      '/notifications',
+      '/profile-edit',
+      '/search',
+      '/settings',
+      '/login',
+      '/logout',
+      '/graphql',
+      '/health',
+    ]);
+    expect(robots.sitemaps).toEqual(['https://kos.moe/sitemap.xml']);
+
+    for (const path of [
+      '/@alice',
+      '/@alice/post-id',
+      '/assets/entry.js',
+      '/.well-known/webfinger',
+      '/ap/actor/local-profile',
+      '/ap/actor/local-profile/followers',
+      '/ap/note/post-id',
+      '/ap/follow/follow-id',
+      '/ap/actor/local-profile/inbox',
+      '/inbox',
+      '/users/alice/inbox',
+    ]) {
+      expect(robotsPathIsAllowed(wildcardRules, path), path).toBe(true);
+    }
+
+    for (const path of [
+      '/bookmarks',
+      '/bookmarks/post-id',
+      '/compose',
+      '/feedback',
+      '/follow-requests',
+      '/hashtags/kosmo',
+      '/home',
+      '/notifications',
+      '/profile-edit',
+      '/search',
+      '/search/results',
+      '/settings',
+      '/login/callback',
+      '/logout',
+      '/graphql',
+      '/health',
+    ]) {
+      expect(robotsPathIsAllowed(wildcardRules, path), path).toBe(false);
+    }
+  });
+
+  test.each([
+    { accept: undefined, fetchMode: undefined },
+    { accept: 'text/html', fetchMode: 'navigate' },
+  ])(
+    'serves exported robots.txt as text/plain for $fetchMode request headers',
+    async ({ accept, fetchMode }) => {
+      const headers = new Headers();
+      if (accept) {
+        headers.set('accept', accept);
+      }
+      if (fetchMode) {
+        headers.set('sec-fetch-mode', fetchMode);
+      }
+
+      const response = await app.request('/robots.txt', { headers });
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/plain');
+      expect(body).toBe(repositoryRobots);
+      expect(body).not.toContain('<html>');
+    },
+  );
 
   test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
     const shell = await app.request('/');
