@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { expect, fireEvent, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
-import { spacing } from '@/theme/tokens';
+import { semanticColors, spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function ActionMenuFixture({
@@ -130,7 +130,8 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, globals }) => {
+    const expectedTheme = semanticColors[globals.theme === 'dark' ? 'dark' : 'light'];
     const canvas = within(canvasElement);
     const defaultFixture = within(canvas.getByLabelText('기본 메뉴 fixture'));
     const trigger = defaultFixture.getByRole('button', { name: '재게시' });
@@ -191,6 +192,11 @@ export const InteractionContract: Story = {
     const collisionTrigger = collisionFixture.getByRole('button', { name: '재게시' });
     const ownerDocument = canvasElement.ownerDocument;
     const ownerWindow = ownerDocument.defaultView!;
+    const serializeColor = (color: string) => {
+      const probe = ownerDocument.createElement('div');
+      probe.style.color = color;
+      return probe.style.color;
+    };
     Object.assign(collisionTrigger.style, {
       bottom: '8px',
       position: 'fixed',
@@ -215,7 +221,7 @@ export const InteractionContract: Story = {
         expect(collisionItem.contains(ownerDocument.elementFromPoint(point.x, point.y))).toBe(true);
       }
     };
-    expectCollisionGeometry();
+    await waitFor(expectCollisionGeometry);
 
     Object.assign(collisionTrigger.style, { bottom: '40px', right: '40px' });
     ownerDocument.dispatchEvent(new Event('scroll'));
@@ -258,7 +264,7 @@ export const InteractionContract: Story = {
         );
       }
     };
-    expectEndAlignedGeometry();
+    await waitFor(expectEndAlignedGeometry);
 
     Object.assign(endAlignedTrigger.style, { left: '8px', right: 'auto' });
     ownerDocument.dispatchEvent(new Event('scroll'));
@@ -275,6 +281,12 @@ export const InteractionContract: Story = {
     const copyLabel = within(copyItem).getByText('링크 복사');
     const deleteLabel = within(deleteItem).getByText('삭제');
 
+    expect(getComputedStyle(styleMenu).backgroundColor).toBe(
+      serializeColor(expectedTheme.backgroundElevated),
+    );
+    expect(getComputedStyle(styleMenu).borderTopColor).toBe(
+      serializeColor(expectedTheme.borderDefault),
+    );
     expect(copyIcon.getBoundingClientRect().left).toBeCloseTo(
       deleteIcon.getBoundingClientRect().left,
       0,
@@ -286,15 +298,21 @@ export const InteractionContract: Story = {
     expect(getComputedStyle(copyLabel).textAlign).toBe('left');
     expect(getComputedStyle(copyItem).borderTopWidth).toBe('0px');
     expect(getComputedStyle(deleteItem).borderTopWidth).toBe('1px');
-    expect(getComputedStyle(deleteItem).borderTopColor).toBe('rgb(236, 236, 240)');
+    expect(getComputedStyle(deleteItem).borderTopColor).toBe(
+      serializeColor(expectedTheme.borderSubtle),
+    );
     fireEvent.keyDown(copyItem, { key: 'Enter' });
-    expect(getComputedStyle(copyItem).backgroundColor).toBe('rgba(0, 0, 0, 0.08)');
+    expect(getComputedStyle(copyItem).backgroundColor).toBe(
+      serializeColor(expectedTheme.statePressed),
+    );
     fireEvent.keyUp(copyItem, { key: 'Enter' });
     await userEvent.keyboard('{Enter}');
     const hoveredStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
     const hoveredCopyItem = within(hoveredStyleMenu).getByRole('menuitem', { name: '링크 복사' });
     await userEvent.hover(hoveredCopyItem);
-    expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe('rgba(0, 0, 0, 0.04)');
+    expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe(
+      serializeColor(expectedTheme.stateHover),
+    );
     await userEvent.keyboard('{Escape}');
     await userEvent.keyboard('{Enter}');
     const reopenedStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
@@ -307,6 +325,11 @@ export const InteractionContract: Story = {
     disabledTrigger.click();
     expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
   },
+};
+
+export const DarkInteractionContract: Story = {
+  ...InteractionContract,
+  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
 };
 
 const styles = StyleSheet.create({

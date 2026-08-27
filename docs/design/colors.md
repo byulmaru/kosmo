@@ -50,20 +50,22 @@ Figma variable의 code syntax가 개발 target 이름이다.
 
 | Semantic token               | Light     | Dark      | 용도                        |
 | ---------------------------- | --------- | --------- | --------------------------- |
-| `color/background/canvas`    | `#FFFFFF` | `#18181B` | 앱의 최하단 배경            |
-| `color/background/surface`   | `#FAFAFB` | `#222226` | 기본 제품 surface           |
-| `color/background/elevated`  | `#FFFFFF` | `#2B2B31` | modal, card 등 상승 표면    |
+| `color/background/canvas`    | `#FFFFFF` | `#000000` | 앱의 최하단 배경            |
+| `color/background/surface`   | `#FAFAFB` | `#141414` | 기본 제품 surface           |
+| `color/background/elevated`  | `#FFFFFF` | `#262626` | modal, card 등 상승 표면    |
 | `color/background/inverse`   | `#1A1A1A` | `#FAFAFB` | tooltip, badge 등 역상 표면 |
-| `color/foreground/primary`   | `#1A1A1A` | `#F4F4F5` | 본문과 핵심 아이콘          |
-| `color/foreground/secondary` | `#64646F` | `#A5A5AF` | 설명과 메타데이터           |
-| `color/foreground/muted`     | `#71717A` | `#9898A2` | 비핵심 보조 정보            |
+| `color/foreground/primary`   | `#1A1A1A` | `#E0E0E0` | 본문과 핵심 아이콘          |
+| `color/foreground/secondary` | `#64646F` | `#A3A3A3` | 설명과 메타데이터           |
+| `color/foreground/muted`     | `#71717A` | `#969696` | 비핵심 보조 정보            |
 | `color/foreground/disabled`  | `#A5A5AF` | `#64646F` | 비활성 전경                 |
 | `color/foreground/inverse`   | `#FAFAFB` | `#1A1A1A` | inverse 표면 위 전경        |
-| `color/border/subtle`        | `#ECECF0` | `#34343A` | divider와 약한 구분         |
-| `color/border/default`       | `#DFDFE5` | `#44444C` | 카드와 입력의 기본 경계     |
+| `color/border/subtle`        | `#ECECF0` | `#303030` | divider와 약한 구분         |
+| `color/border/default`       | `#DFDFE5` | `#383838` | 카드와 입력의 기본 경계     |
 | `color/border/strong`        | `#A5A5AF` | `#71717A` | 분명한 구조 경계            |
 | `color/border/focus`         | `#4F46E5` | `#A5B4FC` | keyboard focus 경계         |
-| `color/border/disabled`      | `#F4F4F5` | `#2B2B31` | 비활성 경계                 |
+| `color/border/disabled`      | `#F4F4F5` | `#262626` | 비활성 경계                 |
+
+Dark `color/border/subtle`은 `background/elevated #262626` 위 divider가 표면과 같아지지 않도록 `ink/750 #303030`으로 분리한다.
 
 Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 preview는 `neutral/0`을 참조하는 `background/surface`로 구분하고, 독립 modal·card·menu는 같은 순백색 위에 border 또는 elevation을 함께 사용한다. `fixed/white`는 Success/Danger `on-base`, fullscreen media와 mask처럼 테마 비종속 흰색이 필요한 경우에만 사용한다.
 
@@ -79,20 +81,20 @@ Light의 route canvas는 순백색을 사용한다. 기본 입력과 내부 prev
 | `color/action/primary/pressed`     | `#DFAA17` | `#DFAA17` |
 | `color/action/primary/subtle`      | `#FFF9E6` | `#3A331A` |
 | `color/action/primary/on-subtle`   | `#1A1A1A` | `#FFE597` |
-| `color/action/primary/disabled`    | `#F4F4F5` | `#2B2B31` |
+| `color/action/primary/disabled`    | `#F4F4F5` | `#262626` |
 | `color/action/primary/on-disabled` | `#A5A5AF` | `#64646F` |
 
 ### Secondary action
 
-Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 action 역할을 사용한다. 현재 값은 기존 surface·foreground·border·interaction state와 같지만, 역할을 분리해 Button의 색상 소유권을 명확히 한다.
+Secondary Button은 중립 surface 역할을 직접 소비하지 않고 아래 action 역할을 사용한다. Light의 hover/pressed는 공용 state 값을 재사용하지만, Dark의 hover/pressed는 Button의 fill 교체 구현을 위해 opaque하게 미리 합성한 값을 사용한다. 공용 `color/state/hover`, `color/state/pressed`는 다른 중립 surface 위에 얹는 overlay layer로 유지한다.
 
-| Token                            | 같은 값을 사용하는 기존 역할 | 용도                       |
-| -------------------------------- | ---------------------------- | -------------------------- |
-| `color/action/secondary/base`    | `color/background/surface`   | 기본 Secondary action 표면 |
-| `color/action/secondary/on-base` | `color/foreground/primary`   | label과 icon               |
-| `color/action/secondary/border`  | `color/border/default`       | 기본 경계                  |
-| `color/action/secondary/hover`   | `color/state/hover`          | hover interaction layer    |
-| `color/action/secondary/pressed` | `color/state/pressed`        | pressed interaction layer  |
+| Token                            | 같은 값을 사용하는 기존 역할                           | 용도                       |
+| -------------------------------- | ------------------------------------------------------ | -------------------------- |
+| `color/action/secondary/base`    | `color/background/surface`                             | 기본 Secondary action 표면 |
+| `color/action/secondary/on-base` | `color/foreground/primary`                             | label과 icon               |
+| `color/action/secondary/border`  | `color/border/default`                                 | 기본 경계                  |
+| `color/action/secondary/hover`   | `color/state/hover` (Light); opaque `#262626` (Dark)   | Button hover fill          |
+| `color/action/secondary/pressed` | `color/state/pressed` (Light); opaque `#303030` (Dark) | Button pressed fill        |
 
 Focus와 Disabled는 Secondary 전용 색상을 추가하지 않고 공용 `color/state/focus-ring`, `color/state/disabled-*`, `color/border/disabled`를 사용한다.
 
@@ -121,18 +123,18 @@ Light Info와 Warning border는 base 색을 그대로 재사용하지 않는다.
 
 ## Interaction state와 overlay
 
-| Token                             | Light     | Dark      | 규칙                                    |
-| --------------------------------- | --------- | --------- | --------------------------------------- |
-| `color/state/hover`               | black 4%  | white 8%  | 중립 surface hover layer                |
-| `color/state/pressed`             | black 8%  | white 12% | 중립 surface pressed layer              |
-| `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                 |
-| `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                          |
-| `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                     |
-| `color/state/disabled-surface`    | `#F4F4F5` | `#2B2B31` | 공용 disabled surface                   |
-| `color/state/disabled-foreground` | `#A5A5AF` | `#64646F` | 공용 disabled foreground                |
-| `color/overlay/scrim`             | black 45% | black 45% | modal, sheet와 action menu의 표준 scrim |
+| Token                             | Light     | Dark      | 규칙                                              |
+| --------------------------------- | --------- | --------- | ------------------------------------------------- |
+| `color/state/hover`               | black 4%  | white 8%  | 중립 surface 위에 얹는 공용 hover overlay layer   |
+| `color/state/pressed`             | black 8%  | white 12% | 중립 surface 위에 얹는 공용 pressed overlay layer |
+| `color/state/selected-surface`    | `#FFF9E6` | `#3A331A` | 선택된 행과 option 표면                           |
+| `color/state/selected-border`     | `#AE8512` | `#FFE597` | 선택 상태 경계                                    |
+| `color/state/focus-ring`          | `#4F46E5` | `#A5B4FC` | keyboard focus ring                               |
+| `color/state/disabled-surface`    | `#F4F4F5` | `#262626` | 공용 disabled surface                             |
+| `color/state/disabled-foreground` | `#A5A5AF` | `#64646F` | 공용 disabled foreground                          |
+| `color/overlay/scrim`             | black 45% | black 45% | modal, sheet와 action menu의 표준 scrim           |
 
-Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존재하면 독립적으로 표현하며 `focused`, `selected`, `disabled` 같은 접근성 state를 색상과 함께 제공한다.
+Secondary action의 Dark hover/pressed처럼 Button fill을 교체하는 opaque action token과, 공용 중립 surface 위에 얹는 state overlay를 서로 대체하지 않는다. Focus와 Selected도 서로 대체하지 않는다. 두 상태가 동시에 존재하면 독립적으로 표현하며 `focused`, `selected`, `disabled` 같은 접근성 state를 색상과 함께 제공한다.
 
 ## 대비 계약
 
@@ -149,12 +151,12 @@ Focus와 Selected를 서로 대체하지 않는다. 두 상태가 동시에 존�
 | Warning Tangerine / Ink         |  `6.09:1` |
 | Danger Red / White              |  `6.57:1` |
 | Link Light / Surface            |  `6.03:1` |
-| Link Dark / Canvas              |  `8.89:1` |
+| Link Dark / Canvas              | `10.53:1` |
 | Light Muted / Canvas            |  `4.83:1` |
-| Dark Muted / Elevated           |  `4.92:1` |
-| Dark Focus / Elevated           |  `7.06:1` |
-| Dark Strong Border / Surface    |  `3.28:1` |
-| Dark Primary / Canvas           | `14.26:1` |
+| Dark Muted / Elevated           |  `5.12:1` |
+| Dark Focus / Elevated           |  `7.59:1` |
+| Dark Strong Border / Surface    |  `3.81:1` |
+| Dark Primary / Canvas           | `15.91:1` |
 | Light Selected Border / Surface |  `3.24:1` |
 | Light Info Border / Subtle      |  `3.24:1` |
 | Light Warning Border / Subtle   |  `3.25:1` |
