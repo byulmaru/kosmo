@@ -3,8 +3,13 @@ import {
   notificationSourceAvailabilityKinds,
   notificationSourceAvailabilityWhere,
 } from '@kosmo/core/visibility';
-import { activityInfo, heartbeat, log, metricMeter } from '@temporalio/activity';
-import { ApplicationFailure } from '@temporalio/client';
+import {
+  activityInfo,
+  ApplicationFailure,
+  heartbeat,
+  log,
+  metricMeter,
+} from '@temporalio/activity';
 import { and, asc, desc, gt, inArray, lte, not } from 'drizzle-orm';
 import { z } from 'zod';
 

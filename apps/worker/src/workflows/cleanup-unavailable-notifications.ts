@@ -1,4 +1,5 @@
 import {
+  ApplicationFailure,
   continueAsNew,
   log,
   metricMeter,
@@ -78,8 +79,7 @@ const RATE_LIMIT_ERROR = `rateLimitMs must be between 0 and ${MAX_RATE_LIMIT_MS}
 const MAX_PAGES_ERROR = `maxPagesPerRun must be between 1 and ${MAX_PAGES_PER_RUN}`;
 const COUNTERS_ERROR = 'cumulative counters must be non-negative integers';
 
-const defaultNumber = (schema: z.ZodNumber, value: number) =>
-  z.preprocess((input) => input ?? undefined, schema.optional().default(value));
+const defaultNumber = (schema: z.ZodNumber, value: number) => schema.optional().default(value);
 const integerInRange = (message: string, min: number, max: number) =>
   z
     .number({ error: message })
@@ -164,27 +164,16 @@ const createMetrics = () => {
 
 const validateInput = (
   input: CleanupUnavailableNotificationsWorkflowInput,
-): Required<
-  Pick<
-    CleanupUnavailableNotificationsWorkflowInput,
-    | 'sweepId'
-    | 'cursor'
-    | 'upperBound'
-    | 'pageSize'
-    | 'rateLimitMs'
-    | 'maxPagesPerRun'
-    | 'pages'
-    | 'scanned'
-    | 'deleted'
-    | 'skipped'
-  >
-> => {
+): z.output<typeof cleanupUnavailableNotificationsWorkflowInputSchema> => {
   const parsedInput = cleanupUnavailableNotificationsWorkflowInputSchema.safeParse(input);
   if (!parsedInput.success) {
     const issue = parsedInput.error.issues[0];
     const message =
       issue?.path.length === 0 ? 'sweepId is required' : (issue?.message ?? 'invalid input');
-    throw new Error(`CleanupConfigurationError: ${message}`);
+    throw ApplicationFailure.nonRetryable(
+      `CleanupConfigurationError: ${message}`,
+      'CleanupConfigurationError',
+    );
   }
 
   return parsedInput.data;

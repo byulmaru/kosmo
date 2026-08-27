@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { test } from 'node:test';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 import type { AddressInfo, Socket } from 'node:net';
+
+test('Notification Cleanup Activity는 dev-only Temporal client를 import하지 않는다', async () => {
+  const source = await readFile(
+    new URL('./activities/cleanup-unavailable-notifications.ts', import.meta.url),
+    'utf8',
+  );
+  assert.doesNotMatch(source, /from '@temporalio\/client'/);
+});
 
 test('Temporal environment를 검증한다', async () => {
   assert.throws(() => validateWorkerEnvironment({}), /TEMPORAL_ADDRESS/);

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
+import { ApplicationFailure, WithStartWorkflowOperation, WorkflowFailedError } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { cleanupUnavailableNotificationsWorkflow } from './workflows/cleanup-unavailable-notifications';
@@ -1629,6 +1629,13 @@ test('Notification Cleanup Workflow는 Zod 설정 검증과 기존 CleanupConfig
   );
   await assert.rejects(
     cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-page-size', pageSize: 0 }),
+  await assert.rejects(
+    cleanupUnavailableNotificationsWorkflow({
+      sweepId: 'null-page-size',
+      pageSize: null as never,
+    }),
+    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
+  );
     /CleanupConfigurationError: pageSize must be between 1 and 1000/,
   );
   await assert.rejects(
@@ -1754,5 +1761,42 @@ test(
     });
 
     assert.equal(pageCalls, 2);
+  },
+);
+test(
+  'Notification Cleanup Workflow는 잘못된 설정을 non-retryable Workflow 실패로 종료한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = `${KOSMO_TASK_QUEUE}-notification-cleanup-invalid-input-test-${process.pid}`;
+    const worker = await Worker.create({
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const handle = await environment.client.workflow.start(
+        'cleanupUnavailableNotificationsWorkflow',
+        {
+          args: [{ sweepId: '   ' }],
+          taskQueue,
+          workflowId: `notification-cleanup-invalid-input:${process.pid}`,
+        },
+      );
+
+      await assert.rejects(handle.result(), (error: unknown) => {
+        assert.ok(error instanceof WorkflowFailedError);
+        assert.ok(error.cause instanceof ApplicationFailure);
+        assert.equal(error.cause.type, 'CleanupConfigurationError');
+        assert.equal(error.cause.nonRetryable, true);
+        return true;
+      });
+      assert.equal((await handle.describe()).status.name, 'FAILED');
+    });
   },
 );
