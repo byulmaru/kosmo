@@ -6,7 +6,6 @@ import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
-import sitemapRoutes from './routes/sitemap';
 import staticRoutes from './routes/static';
 import { captureNotificationEffectError, captureUnexpectedError } from './sentry';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
@@ -67,7 +66,6 @@ app.all('/health', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
-app.route('/', sitemapRoutes);
 app.route('/', staticRoutes);
 
 export default app;

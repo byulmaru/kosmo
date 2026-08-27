@@ -1,97 +1,87 @@
 ## Context
 
-현재 `apps/web` Hono BFF는 모든 요청을 Fedify에 먼저 전달한 뒤 login·logout·GraphQL route와 Expo 정적 파일을 처리한다. 정적 route는 실제 파일을 찾지 못한 browser navigation 요청에 `index.html`을 반환하므로, 별도 route가 없는 `/sitemap.xml`은 검색엔진용 표현이 아니라 SPA shell이 될 수 있다. Web runtime에는 `DATABASE_URL`과 `PUBLIC_ORIGIN`이 이미 주입되고, configured Local Instance resolver는 두 값을 연결한 Local·Active Instance를 검증한다.
+현재 `apps/web` Hono BFF는 모든 요청을 Fedify에 먼저 전달한 뒤 login·logout·GraphQL route와 Expo export asset을 처리한다. 정적 route는 요청 path와 일치하는 실제 파일을 먼저 제공하고, 파일을 찾지 못한 browser navigation 요청에만 `index.html`을 반환한다. 현재 Expo export에는 `sitemap.xml`이 없으므로 `/sitemap.xml` browser navigation은 검색엔진용 XML 대신 SPA shell이 될 수 있다.
 
-`docs/domain/decisions/0024-application-policy-and-runtime-db-boundary.md`에 따라 GraphQL SNS의 visibility·owner 규칙은 application policy이고 애플리케이션 query는 프로세스의 공유 runtime DB 경계를 사용한다. sitemap도 같은 application query 경계에서 공개 projection을 만들며, 제거된 operation-scoped DB session, actor GUC 또는 GraphQL RLS 경계를 다시 만들지 않는다. 다만 현재 익명 Post visibility helper는 Public과 Unlisted를 모두 조회 가능 대상으로 취급하므로, 공개 검색 문서인 sitemap은 canonical Post 검색 계약의 Public-only 조건을 별도로 합성해야 한다.
+2026-08-27 갱신한 `PROD-731`은 현재 sitemap URL 집합을 `https://kos.moe/`, `https://kos.moe/privacy`, Kosmo 공식 안내 계정 `https://kos.moe/@kosmo`로 고정했다. 일반 Profile·Post는 포함하지 않고, DB 조회와 런타임 동적 생성도 현재 범위에서 제외했다. 동적 sitemap은 공개 eligibility, 갱신·삭제 반영, cache/invalidation, protocol 용량과 sitemap index 전환 기준을 별도 Linear 이슈와 OpenSpec change에서 결정한 뒤 구현한다.
 
-현재 저장 모델에서 Profile은 `instanceId`, state, handle과 생성 시각을 가지지만 신뢰 가능한 마지막 수정 시각은 없다. Post는 state, visibility, Author Profile, Current Content와 생성 시각을 가지며, Current Content가 가리키는 immutable Post Content revision의 생성 시각은 실제 콘텐츠 수정 시각으로 사용할 수 있다. 공개 Post route의 `postId`는 DB UUID 자체가 아니라 기존 `Post` GraphQL global ID이고, Local Profile route는 `@{handle}`을 사용한다.
+Expo는 `apps/app/public`의 정적 파일을 Web export 산출물에 포함하고, Web BFF는 기본 `apps/app/dist` 또는 `EXPO_WEB_ROOT`가 가리키는 export root를 제공한다. 따라서 현재 범위는 별도 Hono handler 없이 export asset으로 충족할 수 있다.
 
-Sitemap protocol과 Google은 단일 sitemap을 50,000 URL·압축 해제 기준 50 MB(52,428,800 bytes) 이하로 제한한다. Google Search Console과 Naver Search Advisor는 sitemap 제출·처리 상태를 제공하며, Naver의 현재 제출 도구는 sitemap file이 10 MB 이상이거나 URL이 50,000개 이상이면 제출할 수 없다고 안내한다. 외부 문서는 상위 제품 권위가 아니라 interoperability와 일회성 운영 검증 제약으로만 사용한다.
-
-- <https://www.sitemaps.org/protocol.html>
-- <https://developers.google.com/search/docs/crawling-indexing/sitemaps/build-sitemap>
-- <https://searchadvisor.naver.com/guide/request-feed>
+Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수행하는 운영 task다. 반복 제출 자동화나 검색엔진별 runtime capability는 현재 범위가 아니다.
 
 ## Goals / Non-Goals
 
-**Goals:**
+**Goals**
 
-- `/sitemap.xml`을 SPA fallback과 분리된 동적 XML route로 제공한다.
-- 공개 정적 route, configured Local Instance의 공개 Profile과 Public Content Post만 일괄 조회한다.
-- 기존 canonical origin·relative handle·Post global ID 계약을 재사용해 URL을 만들고 안전하게 XML 직렬화한다.
-- 실제로 신뢰 가능한 Post Content revision 시각만 `lastmod`로 제공한다.
-- 자동 검증과 프로덕션 무인증 HTTP 검증을 durable 계약으로 만들고, Google·Naver의 일회성 제출 결과를 이슈 완료 증거로 연결한다.
+- 프로덕션 `/sitemap.xml`에서 유효한 UTF-8 `application/xml`을 인증 없이 제공한다.
+- sitemap에 승인된 세 canonical URL만 각각 한 번 포함한다.
+- browser navigation에서도 정적 sitemap asset이 SPA fallback보다 먼저 제공되게 한다.
+- sitemap 제공을 DB와 런타임 query에서 분리한다.
+- 자동 검증과 프로덕션 확인, Google·Naver 일회성 제출 결과를 남긴다.
 
-**Non-Goals:**
+**Non-Goals**
 
-- SSR, 페이지별 HTML metadata·canonical tag와 search ranking 최적화
-- `robots.txt`의 crawler·AI bot 정책 또는 `Sitemap` 지시어 변경(`PROD-736` 소유)
-- Remote 원본의 Kosmo mirror URL, 제한 공개 콘텐츠, 보호·내부 route 노출
-- `changefreq`, `priority`, 추정 `lastmod`, IndexNow·URL Submission API 자동화
-- 반복 가능한 검색엔진 제출 capability, 배포별 재제출 자동화
-- sitemap index와 child sitemap 구현
-- GraphQL schema, 데이터베이스 schema·migration, 새 dependency 추가
+- 일반 Local·Remote Profile 또는 Post URL 포함
+- DB 기반 공개 eligibility 판정과 런타임 동적 sitemap 생성
+- `lastmod`, `changefreq`, `priority` 제공
+- cache, ETag 또는 invalidation 정책 추가
+- sitemap index와 child sitemap
+- SSR 또는 페이지 metadata 전반의 개편
+- `robots.txt` crawler 정책과 `Sitemap` 지시어
+- 반복 제출 자동화와 개별 URL 색인 완료 보장
 
-## Implementation Guidance
+## Decisions
 
 ### Current Constraints
 
-- sitemap route가 Expo 정적 route 뒤에 등록되면 browser navigation 요청이 `index.html`로 흡수된다. 반대로 전역 Fedify middleware보다 앞에 두면 현재 federation-first representation 계약을 바꾼다.
-- read-only list는 `packages/core/services`의 state-changing application action이 아니므로 Web 진입점의 application query 계층에서 공유 `@kosmo/core/db`와 configured Local Instance를 사용해야 한다. 요청별 transaction·DB session, actor GUC나 GraphQL 전용 `ctx.db`를 추가해서는 안 된다.
-- 현재 `packages/core/visibility/post.ts`의 익명 visibility 조건은 Public과 Unlisted를 모두 허용한다. 이를 단독으로 재사용하면 sitemap의 Public-only 검색 계약을 위반하므로, 기존 application policy를 재사용·합성하되 `PUBLIC` visibility와 canonical Post Eligibility를 명시적으로 보장해야 한다.
-- Profile state의 현재 DB projection은 `ACTIVE`만 공개 Active·Normal 상태로 취급하고 `DISABLED`·`SUSPENDED`를 제외한다. Local 여부는 요청 Host나 handle 모양이 아니라 configured Local Instance ID로 제한해야 한다.
-- Post canonical route는 DB UUID를 직접 노출하지 않는다. 기존 global ID encoder와 Local Author handle을 사용해야 한다.
-- `Profiles`와 `Posts`에는 일반적인 `updatedAt`이 없다. `Posts.createdAt`, 요청 시각 또는 배포 시각은 현재 페이지 수정 시각을 대신하지 못한다.
-- Current Content가 없는 Post는 독립 canonical detail을 제공하지 않는 Repost일 수 있다. Post query는 Current Content를 실제 revision과 연결해야 한다.
+- 전역 Fedify middleware의 federation-first representation 순서는 유지해야 한다.
+- `/sitemap.xml`과 일치하는 export asset이 존재하면 기존 static route가 SPA fallback보다 먼저 파일을 제공한다.
+- 현재 sitemap은 production canonical origin `https://kos.moe`의 세 URL만 포함한다. request Host나 개발 origin에 따라 본문을 바꾸지 않는다.
+- 정적 asset은 DB, configured Local Instance resolver, application visibility helper 또는 GraphQL runtime에 의존해서는 안 된다.
+- 현재 세 URL에는 신뢰할 수 있는 마지막 수정 시각이 없으므로 `lastmod`을 만들지 않는다.
+- `PROD-736`이 소유하는 `robots.txt`와 Cloudflare crawler 정책은 변경하지 않는다.
 
 ### Recommended Approach
 
-1. 전역 Fedify middleware와 기존 BFF 전용 route 흐름은 유지하고, sitemap Hono route를 GraphQL 뒤·Expo 정적 route 앞에 등록한다. GET `/sitemap.xml`은 명시적인 `application/xml; charset=utf-8` 응답을 만든다. cache 또는 validator를 적용한다면 공개 상태 변경의 반영 주기와 기존 BFF semantics를 확인해 별도로 검증한다.
-2. Web 진입점의 read-only loader가 공유 runtime DB를 사용해 configured Local Instance를 한 번 해석한 뒤 정적 allowlist, Profile, Post entry를 만든다. 현재 정적 allowlist는 공개 landing `/`와 공개 개인정보 처리방침 `/privacy`로 제한한다.
-3. Profile은 configured Local Instance ID와 `ACTIVE` state로 제한해 handle을 가져오고 `/{@handle}` URL을 만든다. Post는 application policy helper를 가능한 범위에서 재사용·합성하면서 같은 Local Author, `ACTIVE`, 명시적 `PUBLIC`, 공개 가능한 Author·Instance와 non-null Current Content를 보장하고 Current Post Content revision 생성 시각을 함께 가져온다. 일반 익명 visibility helper의 `UNLISTED` 허용만으로 sitemap 후보를 결정하지 않는다. 두 동적 집합은 ID 기반의 안정적인 순서로 조회해 출력과 테스트를 결정적으로 유지한다.
-4. Post URL은 기존 global ID encoder로 DB UUID를 `Post` ID로 바꾼 뒤 `/{@handle}/{postGlobalId}`로 구성한다. 모든 URL은 resolver가 검증한 canonical origin을 기준으로 `URL`을 통해 만들고 query·hash를 추가하지 않는다.
-5. XML 생성은 entry 목록을 받는 순수 직렬화 경계로 두어 XML declaration, sitemap namespace, `<url>`·`<loc>`·선택적 `<lastmod>`를 한 곳에서 생성한다. 먼저 route segment를 URL 문법에 맞게 percent-encode한 절대 URL을 만들고, 그 완성된 URL의 XML text 예약 문자를 별도로 escape한다. Post revision의 `Temporal.Instant`만 표준 문자열로 출력하며 정적·Profile entry의 `lastmod`는 생략한다.
-6. 이 change는 하나의 `urlset`만 제공한다. 생성 전 URL 수와 생성 후 압축하지 않은 UTF-8 byte 크기를 각각 50,000개와 52,428,800 bytes 상한과 비교한다. 한도를 넘으면 일부 URL만 담은 성공 응답이나 무효 XML을 반환하지 말고 관측 가능한 서버 오류로 실패시킨다. URL 수가 45,000개 또는 XML 크기가 45 MB(47,185,920 bytes)에 도달하면 sitemap index 지원을 위한 별도 Linear 이슈와 OpenSpec change를 생성하며, 현재 route가 자동으로 index나 child sitemap을 만들지 않는다.
-7. 순수 XML 단위 테스트는 escaping, 중복 제거, metadata 생략과 content type을 검증한다. Web runtime test는 navigation header에서도 SPA가 아닌 XML임을 확인한다. 기존 격리 PostgreSQL·Playwright E2E 경계에서는 Local/Remote, Profile state, Post visibility/state/content 조합을 seed해 실제 포함·제외 URL과 global ID·`lastmod`를 검증한다. 특히 익명 일반 조회에서는 허용되는 Unlisted Post가 sitemap에서는 제외되는 회귀 사례와, sitemap 조회가 operation-scoped DB/RLS 경계를 요구하지 않는 현재 runtime 구성을 검증한다.
+1. `apps/app/public/sitemap.xml`에 XML declaration, Sitemap protocol namespace와 세 `<url><loc>…</loc></url>` entry만 둔다.
+2. 기존 PR에서 추가한 동적 Hono sitemap route, DB loader, XML serializer와 관련 단위·격리 DB E2E 테스트를 제거한다.
+3. Web BFF의 실제 static asset 경계에서 crawler와 browser navigation 요청 모두 `application/xml`과 정확한 세 URL을 받고 Expo `index.html`을 받지 않는지 검증한다.
+4. Expo Web export에 `sitemap.xml`이 포함되는지 build 결과로 확인한다.
+5. 배포 후 무인증 production 응답의 status, content type, XML 구조와 정확한 URL 집합을 확인한다.
+6. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 처리 결과를 `PROD-731`에 기록한다.
+7. 동적 sitemap이 필요해지면 현재 change에 DB 로직을 다시 추가하지 않고 별도 Linear 이슈와 OpenSpec change에서 범위와 운영 계약부터 결정한다.
 
 ### Allowed Alternatives
 
-- sitemap index와 child sitemap은 이 change의 허용 대안이 아니다. 45,000 URL 또는 45 MB(47,185,920 bytes) 전환 기준에 도달하면 별도 이슈와 OpenSpec change에서 분할 기준, child route와 migration을 결정한다.
-- route 내부 모듈 분리와 테스트 seam의 구체적 형태는 달라도 된다. 다만 read-only query를 state-changing core service로 포장하거나 production에 없는 generic database interface·operation-scoped DB session을 테스트만을 위해 공개해서는 안 된다.
-- 짧은 bounded cache나 ETag를 사용할 수 있지만, 삭제·비공개 전환 URL이 장기간 남지 않고 새 공개 URL과 수정 시각이 다음 crawler fetch에서 갱신된다는 점을 검증해야 한다.
+- 같은 고정 XML을 Hono handler에서 문자열로 반환할 수는 있지만, 현재 Linear가 정적 자산과 런타임 동적 생성 제외를 명시하므로 이 change의 허용 대안이 아니다.
+- build-time template로 XML을 생성할 수는 있지만, 현재 canonical origin과 URL 집합이 모두 고정돼 있어 생성 script와 검증 경계를 추가할 이유가 없다.
+- 정적 asset의 기존 `Cache-Control: no-cache` 동작은 유지할 수 있다. 새 cache 또는 ETag 정책은 현재 scope에 추가하지 않는다.
 
 ### Known Traps
 
-- `apps/app/public`에 빌드 시점 XML을 두면 runtime DB의 생성·삭제·visibility 변경을 반영하지 못한다.
-- request Host, `PUBLIC_API_ORIGIN`, ActivityPub Note URI 또는 Remote 원본 URL을 `<loc>` 기준으로 사용하면 canonical Web origin 계약을 깨뜨린다.
-- Post DB UUID를 route에 직접 넣으면 클라이언트가 사용하는 GraphQL global ID route와 다른 URL이 된다.
-- `Profiles.state = ACTIVE`만 보고 Instance ID를 제한하지 않으면 Remote 또는 다른 Local Instance Profile이 섞인다.
-- `Posts.visibility = PUBLIC`만 보고 Author/Profile/Instance state와 Current Content를 확인하지 않으면 삭제·unavailable·Content 없는 항목이 노출된다.
-- 일반 익명 Post visibility helper를 추가 조건 없이 사용하면 검색 후보가 아닌 Unlisted Post가 sitemap에 노출된다.
-- 과거 GraphQL operation별 DB session·actor GUC·RLS 경계를 sitemap에 복원하면 현재 공유 runtime DB와 application policy ADR을 위반한다.
-- `Date.now()`, Post 생성 시각 또는 Profile 생성 시각을 `lastmod`로 복제하면 실제 수정 시각이라는 신호가 거짓이 된다.
-- XML escaping, UTF-8 byte 크기, 50,000 URL 제한을 테스트하지 않으면 잘 형성된 것처럼 보이는 무효 sitemap을 배포할 수 있다.
-- 이 change에서 `robots.txt`까지 수정하면 `PROD-736`의 crawler·ActivityPub 안전 경계와 책임이 섞인다.
+- `sitemap.xml`을 Expo public asset 밖에 두면 Web export에서 누락돼 browser navigation이 SPA HTML로 fallback할 수 있다.
+- 기존 동적 route import가 남으면 정적 asset보다 먼저 요청을 처리하고 DB 의존성을 유지할 수 있다.
+- Profile·Post 전체 또는 공식 계정 이외의 Profile을 자동 열거하면 승인된 세 URL 범위를 위반한다.
+- relative URL을 `<loc>`에 넣거나 request Host를 사용하면 production canonical URL 계약을 깨뜨린다.
+- 신뢰 근거 없이 `lastmod`을 추가하면 검색 crawler에 잘못된 freshness 신호를 준다.
+- 동적 구현의 spec, decision, task 또는 테스트를 남겨두면 후속 작업자가 현재 범위를 잘못 해석할 수 있다.
+- 이 change에서 `robots.txt`를 수정하면 `PROD-736`의 crawler·ActivityPub 안전 경계와 책임이 섞인다.
 
 ## Risks / Trade-offs
 
-- [동적 sitemap이 DB 가용성에 의존] → 설정·조회 실패를 부분 성공으로 숨기지 않고 기존 Web 오류 경계와 Sentry에 전달한다. 정상 응답은 매번 현재 eligibility를 반영한다.
-- [전체 entry materialization의 메모리·응답 크기] → 배포 전 count·byte 크기를 측정하고 protocol 한도를 runtime에서 방어한다. 45,000 URL 또는 45 MB(47,185,920 bytes)에 도달하면 별도 sitemap index change를 생성한다.
-- [공개 콘텐츠 증가로 현재 단일 urlset이 한도를 초과] → URL을 누락한 채 성공하지 않고 요청을 실패시킨다. 조기 전환 기준의 별도 change가 protocol 상한 전에 배포되도록 운영 gate를 둔다.
-- [두 read query 사이에 콘텐츠 상태가 바뀜] → sitemap은 discovery snapshot이며 다음 fetch에서 수렴한다. 강한 snapshot을 위해 장시간 transaction이나 lock을 추가하지 않는다.
-- [공통 application visibility helper의 계약이 바뀜] → sitemap query는 Public-only 검색 조건을 독립적인 회귀 사례로 고정하고 canonical Post 검색·Eligibility 문서 변경 시 함께 검토한다.
-- [crawler 요청이 DB 읽기 부하를 만든다] → configured Local Instance·Profile과 Post Author join 조건을 명시하고 실제 query plan·응답 시간을 E2E/프로덕션에서 확인한다. 기존 Profile instance-prefix unique index와 Post profile index는 활용 가능성을 검증할 후보일 뿐 planner 사용을 전제하지 않으며, 필요성이 확인되기 전 schema index를 선제 추가하지 않는다.
-- [검색엔진 계정 권한 또는 Naver 제출 제약으로 일회성 검증 지연] → 구현과 별개로 Google Search Console·Naver Search Advisor의 verified property와 제출 권한을 프로덕션 배포 전에 확인한다. Naver 제출 시점의 파일이 10 MB 미만이고 URL이 50,000개 미만인지 확인하며, 권한 또는 도구 제약은 코드 결함과 구분해 `PROD-731` blocker로 기록한다.
+- [새 공개 URL이 자동 반영되지 않음] → 현재 단계에서는 의도한 제한이다. 동적 확장은 별도 Linear·OpenSpec 승인 뒤 구현한다.
+- [공식 안내 계정 handle 또는 공개 경로가 바뀌면 정적 파일이 낡음] → 현재 canonical route 변경 시 `PROD-731` 계약과 정적 asset을 명시적으로 갱신한다.
+- [정적 파일도 배포 artifact에서 누락될 수 있음] → Web static route 테스트와 Expo export 결과를 함께 검증한다.
+- [검색엔진 계정 권한으로 일회성 검증이 지연될 수 있음] → 권한 문제는 코드 결함과 구분해 `PROD-731` blocker로 기록한다.
 
 ## Migration Plan
 
-1. sitemap query·직렬화·route와 자동 검증을 추가하고 `openspec validate add-public-sitemap --strict`, Web unit/E2E, typecheck를 통과시킨다.
-2. 데이터 migration 없이 기존 immutable Web image로 배포한다. `PROD-736`의 robots 지시어는 sitemap이 프로덕션에서 성공한 뒤 별도 배포·검증한다.
-3. 프로덕션 `/sitemap.xml`의 상태, `Content-Type`, XML parse, URL 수·byte 크기, 대표 정적/Profile/Post 포함과 제한·Remote·삭제 항목 제외를 확인한다. 실제 사용자 콘텐츠나 내부 식별 값을 증거에 복사하지 않는다.
-4. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 fetch/processing 상태와 확인 시각을 `PROD-731`에 기록한다. 이 단계는 반복 가능한 제품 capability나 배포 자동화를 만들지 않는다.
-5. rollback은 sitemap route가 없는 직전 Web image로 되돌린다. DB·GraphQL·정적 자산 migration이 없으므로 데이터 복구는 필요 없으며, 제출 도구에는 일시적인 fetch 실패가 나타날 수 있음을 기록한다.
+1. Linear와 OpenSpec을 정적 3-URL 계약으로 정렬한다.
+2. 기존 동적 sitemap 구현과 테스트를 제거하고 정적 asset과 Web asset-serving 회귀 테스트로 교체한다.
+3. 변경 범위의 test, typecheck, lint, Expo Web export와 OpenSpec strict validation을 실행한다.
+4. 사용자 diff 리뷰를 받은 뒤 commit·push하고 PR 본문과 상태를 갱신한다.
+5. 배포 후 production `/sitemap.xml`을 인증 없이 검증하고 Google·Naver에 한 번 제출한다.
+6. rollback은 sitemap asset이 없는 직전 Web image로 되돌린다. DB·GraphQL·migration 변경은 없으므로 데이터 복구는 필요 없다.
 
 ## Open Questions
 
-- 프로덕션의 현재 eligible URL 수와 생성 XML byte 크기는 아직 확인하지 못했다. 구현 완료 전 protocol 상한과 45,000 URL·45 MB(47,185,920 bytes) 후속 change 기준을 함께 계수해야 한다.
-- Google Search Console과 Naver Search Advisor의 production property·제출 권한 보유자는 아직 확인하지 못했다. 배포 전 운영 담당자와 권한을 확인하고 Naver 제출 시점의 10 MB 미만·50,000 URL 미만 조건도 측정해야 한다.
+- Google Search Console과 Naver Search Advisor의 production property·제출 권한 보유자는 배포 전에 확인해야 한다.
