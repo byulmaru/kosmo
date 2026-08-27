@@ -167,6 +167,13 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   Product runtime에서 검증한다. Pending은 Cancel을 Disabled, Confirm을 같은 tone의 Loading으로 바꾼다.
   제목·scrim·닫기·centered max-width 420 surface는 canonical
   [`ModalSheet`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1882-926)가 소유한다.
+  `Tone`은 visual/action intent이며 접근성 role을 자동 결정하지 않는다. `ModalSheet`는 visual/layout shell이고,
+  runtime consumer가 이름이 있는 modal semantic surface 하나를 소유한다. Web의 기본·비파괴 확인은 `dialog`,
+  삭제처럼 파괴적이거나 즉각적인 주의가 필요한 확인은 `alertdialog`를 사용하며 둘을 중첩하지 않는다. canonical
+  runtime이 단일 role 선택을 지원하기 전에는 현재 consumer-owned semantic surface를 유지할 수 있다. 이는 별도
+  visual component source를 허용하거나 현재 runtime geometry·token이 이미 canonical source와 일치한다는 뜻이
+  아니다. 정렬은 별도 Product/Frontend migration이 소유한다. role은 비시각 handoff이므로 Figma variant나
+  component property를 추가하지 않는다.
 - [`Post deletion confirmation placement`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5631-25077)는
   canonical `PostActionBar`의 More, `ActionMenu`, `ModalSheet`, `ConfirmationContent`를
   instance·slot·instance-swap으로 조합한다. 삭제·차단은 Danger, 뮤트·고정 교체는 Primary tone을 사용한다.
@@ -177,7 +184,10 @@ Active motion variable collection은 `KOSMO Motion`이다. duration과 `standard
   Checked·Unchecked와 삭제 action의 Disabled·Default 연결도 해당 consumer 계약이다.
 - 이 section은 `More → 삭제 → Idle confirmation → Pending`의 responsive placement와 theme 상속만 증명한다.
   Production Screens consumer, focus handoff, dismiss 차단, 접근성 semantics, mutation과 cache 반영은 연결된 Product
-  이슈의 runtime 검증으로 남긴다.
+  이슈의 runtime 검증으로 남긴다. canonical runtime이 단일 `alertdialog` surface를 지원하기 전에는 현재
+  consumer-owned semantic surface를 유지한다. 현재 Post 삭제 runtime의 `480px` max-width와 legacy card·border
+  token은 canonical `ModalSheet`의 `420px` 및 `backgroundElevated`·`borderDefault` 계약과 아직 다르며, 이 visual
+  정렬은 별도 Product/Frontend migration으로 남긴다. 임시 semantic surface는 별도 visual component source가 아니다.
 
 #### DSN-44 설정 control 계약
 
