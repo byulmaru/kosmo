@@ -86,7 +86,7 @@ Cloudflare 운영 담당자와 crawler 정책 갱신 담당자다.
      content negotiation
    - inbox: `POST /inbox` 또는 actor-scoped inbox path, ActivityPub media type과 Fedify가 지원하는 HTTP
      signature header 존재
-   header 존재는 인증 완료가 아니므로 signature와 activity의 진위는 기존 Fedify handler가 계속 검증한다.
+     header 존재는 인증 완료가 아니므로 signature와 activity의 진위는 기존 Fedify handler가 계속 검증한다.
 5. `docs/operations` 아래의 crawler 정책 기록에 저장소/Cloudflare 책임, 공식 운영사 자료, 검토일, 실제
    crawler action·WAF exception snapshot, 적용 권한, 갱신 책임과 rollback 절차를 남긴다. 설정 화면의 명칭이나
    기본값보다 적용된 action과 rule expression을 근거로 기록한다.
