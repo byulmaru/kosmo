@@ -2,6 +2,7 @@ import {
   ActivityPubActors,
   db,
   first,
+  firstOrThrowWith,
   Instances,
   ProfileFollowRequests,
   ProfileFollows,
@@ -111,10 +112,9 @@ export const sendProfileUnfollowActivity = async (
     .leftJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
     .where(eq(FollowerProfiles.id, input.followerProfileId))
     .limit(1)
-    .then(first);
-  if (!projection) {
-    throw new TypeError('ActivityPub Undo participant projection is missing.');
-  }
+    .then(
+      firstOrThrowWith(() => new TypeError('ActivityPub Undo participant projection is missing.')),
+    );
   if (
     projection.followerInstanceKind !== InstanceKind.LOCAL ||
     projection.followeeInstanceKind !== InstanceKind.ACTIVITYPUB
