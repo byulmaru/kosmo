@@ -1,145 +1,122 @@
 ## Context
 
-이 기록은 최신 Linear `PROD-819`, `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`가 기존 PROD-469 OpenPanel 구현을 PostHog 계약으로 교체한 결과와, `docs/design/breakpoints.md`의 Web/Native 경계를 반영한다. 각 이슈의 독립된 구현·운영·검증 책임을 유지하며, provider behavior reference와 제품 authority를 구분한다.
+이 기록은 최신 Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575`와 `docs/design/breakpoints.md`의 Web/Native 경계를 반영한다. 2026-08-28 PR #653/#685 리뷰와 사용자 결정으로 기존 app-owned 최소 수집 계약을 PostHog 표준 동작 계약으로 정정했다.
 
 ## Decision Records
 
 ### shared change의 slice·검증·archive 책임을 분리한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-575`
+- Authority / Provenance: Linear `PROD-819`, `PROD-820`, `PROD-795`, `PROD-741`, `PROD-575`
 - Status: Active
-- Context / Problem: Web runtime, Cloud/build 구성, 개인정보·운영 통합과 production acceptance는 변경·검증 방식과 완료 시점이 다르다.
-- Decision Outcome: `add-posthog-product-analytics`에서 PROD-820은 작업 그룹 1·5, PROD-819는 그룹 2·3·4, PROD-795는 그룹 6·7과 PROD-741을 block하는 cross-slice 검증을 소유한다. PROD-741은 PROD-795 이후의 그룹 8에서 replay activation·masking·초기 retention 검증을 수행하고 PROD-575에 인계한다. PROD-575는 실제 production acceptance와 최종 archive를 소유한다. 이번 artifact는 이 책임 경계를 tasks에 명시하고, 각 이슈의 독립된 검증 증거를 해당 owner에게 인계한다.
-- Alternatives Considered: 모든 작업을 PROD-795 하나에 다시 결합하거나 부모·마지막 PR이라는 이유로 통합·archive 책임을 추론하는 방법은 최신 Linear 책임 경계와 맞지 않아 제외했다.
-- Consequences: PROD-819 구현과 검증은 sibling Cloud 설정이나 production acceptance 없이 독립 완료할 수 있지만, 전체 change 완료와 archive를 의미하지 않는다.
-- Confirmation / Follow-up: tasks heading이 PROD-819(2~4)·PROD-820(1·5) → PROD-795(6·7, PROD-741 block) → PROD-741(8) → PROD-575 순서와 각 slice의 handoff를 명시하는지 확인한다.
+- Context / Problem: Web runtime, Cloud/build, 개인정보·운영, replay 품질과 production acceptance는 변경·검증 방식이 다르다.
+- Decision Outcome: PROD-819는 Web runtime, PROD-820은 Cloud·build/deployment, PROD-795는 개인정보·운영 통합, PROD-741은 replay acceptance, PROD-575는 production acceptance와 archive를 소유한다.
+- Alternatives Considered: 부모 이슈나 마지막 PR에 모든 책임을 결합하는 방식은 독립 배포·검증 경계와 맞지 않아 제외했다.
+- Consequences: 각 PR은 자체 범위를 Ready로 만들 수 있지만 개별 완료를 shared change archive로 해석하지 않는다.
+- Confirmation / Follow-up: tasks와 PR 본문이 각 owner와 남은 gate를 명시한다.
 
 ### OpenPanel dual-write 없이 PostHog로 교체한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-469`, `PROD-819`, `PROD-795`, `PROD-575`
+- Authority / Provenance: Linear `PROD-469`, `PROD-819`, `PROD-575`
 - Status: Active
-- Context / Problem: PROD-469가 전달한 OpenPanel runtime과 아직 archive되지 않은 change가 남아 있지만 최신 운영 provider는 PostHog Cloud US다. 두 provider를 함께 유지하면 payload·고지·장애 대응 계약이 중복된다.
-- Decision Outcome: PROD-819는 Web runtime과 test에서 OpenPanel dependency와 전송을 제거하고 PostHog만 사용한다. PROD-575는 최종 gate에서 `add-web-openpanel-product-analytics`를 `--skip-specs` archive한 뒤 새 PostHog change를 정상 archive한다.
-- Alternatives Considered: OpenPanel change rename, 일정 기간 dual-write, old change를 active spec에 먼저 동기화하는 방법은 명시된 migration/archive 순서와 최소 수집 경계에 어긋나 제외했다.
-- Consequences: rollout 전환 중 analytics 공백은 설정 누락 no-op으로 허용하지만 동일 사용자 행동을 두 provider에 복제하지 않는다.
-- Confirmation / Follow-up: dependency/runtime/browser request에서 OpenPanel 참조가 없음을 PROD-819에서 검증하고 archive 순서는 PROD-575가 확인한다.
+- Context / Problem: 두 provider를 함께 유지하면 payload·고지·장애 대응 계약이 중복된다.
+- Decision Outcome: Web runtime과 test에서 OpenPanel dependency와 전송을 제거하고 PostHog만 사용한다. PROD-575는 old change를 `--skip-specs` archive한 뒤 이 change를 정상 archive한다.
+- Alternatives Considered: dual-write와 OpenPanel fallback은 승인된 전환·개인정보 경계에 맞지 않아 제외했다.
+- Consequences: 공개 PostHog 설정이 없는 환경의 analytics 공백은 안전한 no-op으로 허용한다.
+- Confirmation / Follow-up: dependency와 browser request에서 OpenPanel 부재를 검증한다.
 
 ### 공개 key와 ingestion host가 모두 있을 때만 Web 분석을 활성화한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-819`, `PROD-820`
 - Status: Active
-- Context / Problem: local·development 기본 비활성화와 production 공개 설정 주입을 하나의 조건으로 맞추지 않으면 부분 설정이 unintended 전송을 만들 수 있다.
-- Decision Outcome: 공개 PostHog project token과 Cloud US ingestion host가 모두 존재할 때만 Web client를 초기화한다. exact environment variable 이름과 주입 구현은 두 slice가 shared change에서 정렬한다. 환경별 공개 값은 deployment variable에서 관리하고 최종 Web artifact에 포함될 수 있다. Personal API Key·Project Secret API Key 같은 조회·관리 권한 credential은 repository·CI log·build provenance·image artifact에 포함하지 않는다.
-- Alternatives Considered: environment 이름만 검사, key만으로 SDK default host 사용, 별도 enabled flag 추가는 부분 설정과 이중 상태를 만들어 제외했다.
-- Consequences: PROD-819은 fake 공개 설정으로 독립 검증할 수 있고, PROD-820 설정이 배포되기 전 실제 환경은 안전한 no-op이다.
-- Confirmation / Follow-up: key-only, host-only, 둘 다 없음과 둘 다 존재하는 경우를 unit·browser 검증한다.
+- Context / Problem: 부분 설정은 의도하지 않은 host 또는 project로 전송할 수 있다.
+- Decision Outcome: 공개 PostHog project key와 ingestion host가 모두 존재할 때만 Web SDK를 초기화한다.
+- Alternatives Considered: key-only default host와 별도 enabled flag는 부분 설정과 이중 상태를 만들어 제외했다.
+- Consequences: local·development와 misconfigured build는 no-op이다.
+- Confirmation / Follow-up: key/host 네 조합과 production-equivalent build를 검증한다.
 
-### SDK history-change pageview와 app-owned 최소 수집만 사용한다
+### 권장 defaults와 PostHog 표준 Web 동작을 사용한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-819`, `PROD-795`
+- Authority / Provenance: Linear `PROD-819`, `PROD-820`; PR #653/#685 review; PostHog JS config documentation
 - Status: Active
-- Context / Problem: PostHog SDK의 broad autocapture, replay와 성능 telemetry는 현재 필요한 pageview·명시 이벤트보다 넓은 사용자·환경 데이터를 만들 수 있다. 반면 history-change pageview는 SDK가 제공하는 표준 pageview 경계이며 이를 배제할 별도 승인 계약이 없다.
-- Decision Outcome: 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 `capture_pageview: 'history_change'`를 기본으로 사용하고 automatic pageleave, element autocapture, session replay, console, Web Vitals, performance와 heatmap 수집은 비활성화한다. 이 초기 replay-off 결정은 후속 PROD-741의 명시적인 production replay activation을 금지하지 않는다.
-- Alternatives Considered: app-owned route observer·template·dedupe, broad autocapture 후 blacklist, 초기 단계에서 replay를 함께 켜는 방법은 SDK 표준 pageview 경계와 단계별 책임 분리에 맞지 않아 제외했다.
-- Consequences: history-change pageview는 SDK가 관리하고 더 넓은 자동 분석 신호는 수집하지 않는다. 후속 replay는 별도 Linear 계약·shared spec·activation gate를 충족한 뒤에만 허용된다.
-- Confirmation / Follow-up: SDK config test와 intercepted browser payload에서 history-change pageview와 나머지 자동 수집의 비활성화를 확인한다.
+- Context / Problem: 자동 기능을 끄고 route pageview·metadata filter를 앱에서 다시 구현하면 SDK와 Cloud 계약이 중복되고 표준 metadata가 손실된다.
+- Decision Outcome: `defaults: '2026-05-30'`을 사용하며 pageview·pageleave·autocapture, standard URL/referrer/session metadata, persistence, performance·heatmap·console, feature flag와 Replay remote config를 명시적으로 차단하지 않는다. 앱 소유 manual pageview, route normalizer, runtime event allowlist와 sanitizer를 제거한다.
+- Alternatives Considered: 모든 기능 비활성화 후 app-owned capture, manual route bridge와 URL allowlist는 PostHog 표준 동작과 reviewer 의도에 맞지 않아 제외했다.
+- Consequences: 실제 수집 surface가 넓어지며 PROD-795 개인정보 고지와 PROD-575 production acceptance가 이를 검증해야 한다.
+- Confirmation / Follow-up: init config와 intercepted outbound payload에서 표준 이벤트·metadata·remote config가 유지되는지 확인한다.
 
-### Session Replay는 단계적으로 활성화하고 canonical 콘텐츠를 마스킹한다
+### 앱 소유 custom event는 compile-time typed contract로 제한한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
-- Authority / Provenance: 최신 Linear `PROD-820`, `PROD-741` 사용자 승인 계약; PostHog 공식 Session Replay 문서는 provider behavior reference
+- Authority / Provenance: Linear `PROD-819`, `PROD-469`
 - Status: Active
-- Context / Problem: 초기 PostHog 기반의 replay-off와 후속 production replay 요구를 하나의 전역 on/off 문구로 표현하면 rollout 순서와 개인정보 보호 완료 조건이 충돌한다.
-- Decision Outcome: 초기 PROD-819·PROD-795 단계에서는 Session Replay를 비활성화하고, 후속 PROD-741 단계에서 production canonical origin의 Web Session Replay만 10% sample로 활성화한다. 활성화 전 모든 `input`·`textarea` 값과 canonical Post Content renderer의 본문 텍스트가 replay에서 마스킹됨을 검증한다. 추가 custom selector는 현재 완료 조건에 포함하지 않는다.
-- Alternatives Considered: 초기부터 replay를 켜는 방법, 모든 DOM selector를 포괄하는 masking 범위, OpenPanel의 기존 구현을 그대로 재사용하는 방법은 승인된 단계·범위·provider 전환 책임과 맞지 않아 제외했다.
-- Consequences: PROD-819는 replay-off 기반만, PROD-741은 실제 activation·masking·초기 retention 검증을, PROD-820은 Cloud·retention 지속 계약과 설정 증거를, PROD-575는 최종 production acceptance/archive를 소유한다.
-- Confirmation / Follow-up: 초기 build의 replay 비활성, production canonical origin의 10% sample, input·textarea·canonical Post Content redaction을 단계별 증거로 확인한다.
+- Context / Problem: custom event caller가 자유 형식 event/property를 전송하면 제품 taxonomy가 흔들린다.
+- Decision Outcome: 기존 custom event는 event별 TypeScript contract로 제한하고 typed properties를 `capture`에 그대로 전달한다. `$pageview`는 SDK 소유이므로 app event map에서 제거한다.
+- Alternatives Considered: generic public capture와 runtime projection/allowlist는 compile-time contract와 SDK 표준 event를 중복 제어하므로 제외했다.
+- Consequences: 새 custom event는 담당 Linear/OpenSpec과 type contract를 함께 변경해야 한다.
+- Confirmation / Follow-up: positive capture와 `@ts-expect-error` contract test를 유지한다.
 
-### Session Replay 초기 보존 기간은 30일이며 운영 설정으로 변경할 수 있다
+### SDK persisted identity를 전환 authority로 사용한다
 
-- Decision Date: 2026-08-25
-- Decision Class: Derived Contract
-- Authority / Provenance: 최신 Linear `PROD-820`, `PROD-741` 사용자 승인 계약; PostHog 공식 Session Replay retention 문서는 provider behavior reference
-- Status: Active
-- Context / Problem: PostHog 플랜별 보존 한도와 기존·신규 replay에 대한 설정 적용 동작을 제품 retention 계약으로 고정해야 한다.
-- Decision Outcome: Session Replay 초기 보존 기간은 30일로 설정한다. 이후 기간은 현재 PostHog 플랜이 지원하는 범위 안에서 운영 설정으로 변경할 수 있다. 변경 시 실제 변경값·적용 시점·변경 근거·당시 적용 플랜 또는 지원 범위 근거를 기록하고, 더 긴 범위를 지원하는 plan upgrade만으로 자동 연장하지 않는다. 변경된 기간은 설정 이후 수집되는 replay부터 적용되며, 일반 분석 이벤트 retention과는 별도다.
-- Alternatives Considered: PostHog의 고정 default를 제품 정책으로 간주하거나 플랜 변경에 따라 자동 연장하는 방법은 안정적인 제품 authority·감사 증거와 맞지 않아 제외했다.
-- Consequences: PROD-820은 retention 설정·증거와 변경 기록을 지속 관리하고, PROD-741은 activation 시 30일 초기값과 실제 replay 결과를 검증한다. 보존 기간 숫자·플랜·시점이 바뀌면 별도 운영 기록이 필요하다.
-- Confirmation / Follow-up: activation 전 30일 설정, 지원 범위 내 변경, 실제 값·적용 시점·근거 기록, plan 변경 시 자동 연장 부재와 신규 replay 적용을 확인한다.
-
-### SDK pageview pathname과 불필요한 URL metadata를 분리한다
-
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Implementation Choice
 - Authority / Provenance: Linear `PROD-819`
 - Status: Active
-- Context / Problem: PostHog history-change pageview는 SDK 표준 `$pathname`과 URL metadata를 제공한다. 별도 승인된 route-template 개인정보 계약 없이 SDK 기능을 앱에서 다시 구현하면 pageview 생성과 중복 판단의 소유권이 이중화된다.
-- Decision Outcome: `capture_pageview: 'history_change'`로 SDK가 pageview를 생성하도록 맡기고 SDK pageview의 `$pathname`은 유지한다. `before_send`는 current URL·query·hash·referrer 등 불필요한 SDK URL metadata만 제한하며 SDK protocol/session metadata는 유지한다.
-- Alternatives Considered: Expo Router route observer에서 template을 계산하고 별도 dedupe한 뒤 수동 `$pageview`를 보내는 방법은 상위 계약 없이 SDK 기능을 다시 구현하므로 제외했다.
-- Consequences: SDK가 history-change pageview의 생성과 중복 판단을 소유한다. 대상별 행동은 pageview가 아니라 별도 명시 event가 소유한다.
-- Confirmation / Follow-up: fake endpoint payload에서 `$pathname`은 유지되고 current URL·query·hash·referrer 등 불필요한 metadata가 제거되는지 확인한다.
+- Context / Problem: PostHog 기본 persistence와 module-local Account cache가 reload 뒤 어긋날 수 있다.
+- Decision Outcome: SDK의 persisted distinct identity와 identified state를 조회해 same Account, Account 전환과 guest reset을 판정한다. 기본 persistence를 유지한다.
+- Alternatives Considered: `persistence: 'memory'`와 module cache는 표준 persistence를 무력화하고 reload identity를 잃으므로 제외했다.
+- Consequences: logout/reset은 page reload 이후에도 이전 identified Account를 끊을 수 있다.
+- Confirmation / Follow-up: persisted identified A에서 A, B, guest 전환을 unit test로 검증한다.
 
-### Account만 identify하고 전환 전에 reset한다
+### Session Replay 보호는 Cloud와 표준 masking marker가 소유한다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
-- Authority / Provenance: Linear `PROD-469`, `PROD-819`
+- Authority / Provenance: Linear `PROD-820`, `PROD-741`, `PROD-795`, `PROD-575`; PostHog Session Replay privacy documentation
 - Status: Active
-- Context / Problem: 사용자 여정을 연결하려면 stable identity가 필요하지만 Account·Profile 또는 서로 다른 로그인 사용자의 history를 잘못 결합하면 안 된다.
-- Decision Outcome: opaque Account ID만 identify에 사용하고 trait는 보내지 않는다. 같은 Account identify는 dedupe하고, Account A→B는 reset 후 identify, Account→guest·로그아웃은 reset한다. Profile 선택은 Account identity 전환이 아니다.
-- Alternatives Considered: Profile ID identity, email·이름·handle trait, 새 Account를 reset 없이 identify하는 방법은 Account 수명주기와 최소 수집에 맞지 않아 제외했다.
-- Consequences: Profile별 분석은 허용된 event property로만 표현하며 서로 다른 Account history는 reset 경계로 분리된다.
-- Confirmation / Follow-up: guest→A, A→A, A→B, A→guest와 logout ordering을 unit·browser 검증한다.
+- Context / Problem: Replay 보호를 후속 활성화 이슈로 미루면 표준 SDK 배포와 개인정보 보호 사이에 공백이 생긴다.
+- Decision Outcome: production 배포 전에 Cloud에서 10% sampling, `kos.moe` URL 조건, Normal input masking과 30일 retention을 적용한다. canonical Post Content는 PostHog 표준 `ph-mask` class를 사용한다. PROD-741은 activation이 아니라 실제 replay acceptance를 소유한다.
+- Alternatives Considered: Replay 비활성화, 앱 자체 recorder, 모든 text mask는 표준 기능 사용 또는 진단 가치와 맞지 않아 제외했다.
+- Consequences: Cloud 설정과 client marker를 함께 운영해야 하며 실제 사용자 콘텐츠 노출 여부를 PROD-741에서 확인한다.
+- Confirmation / Follow-up: Cloud 설정 증거, marker unit test와 production-equivalent replay acceptance를 남긴다.
 
-### 공용 analytics API는 event별 타입을 사용하고 SDK URL metadata만 좁게 필터한다
+### 분석 장애를 제품 흐름에서 격리한다
 
-- Decision Date: 2026-08-25
-- Decision Class: Implementation Choice
-- Authority / Provenance: Linear `PROD-819`
-- Status: Active
-- Context / Problem: `string + Record<string, unknown>` public API와 runtime allowlist·validator registry를 함께 두면 event 계약이 중복되고 typed property가 조용히 누락될 수 있다. SDK가 추가하는 URL metadata도 app-owned property와 다른 경계가 필요하다.
-- Decision Outcome: event별 property를 discriminated TypeScript 계약으로 정의하고 typed properties를 PostHog `capture`에 그대로 전달한다. 별도 runtime allowlist, projection, value validator 또는 unknown-event drop schema는 두지 않으며, `before_send`는 SDK URL metadata의 좁은 필터에만 사용한다. SDK pageview의 `$pathname`과 protocol/session metadata는 유지한다.
-- Alternatives Considered: 자유 형식 `trackAnalytics`, event별 runtime 재검사, runtime allowlist 또는 모든 SDK property를 generic `before_send` filter로 지우는 방법은 caller contract와 SDK transport/session metadata를 손상할 수 있어 제외했다.
-- Consequences: 잘못된 event/property는 discriminated TypeScript 계약의 컴파일 단계에서 드러나며 새 event는 타입 계약·caller·test를 함께 변경해야 한다. typed properties는 변형 없이 전달된다.
-- Confirmation / Follow-up: event별 type error와 typed property passthrough를 unit/type 검증하고 `before_send`가 불필요한 SDK URL metadata만 제거하는지 확인한다.
-
-### analytics 오류는 adapter에서 fail-open으로 격리한다
-
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
 - Authority / Provenance: Linear `PROD-819`, `PROD-795`
 - Status: Active
-- Context / Problem: 외부 SDK·endpoint·차단기 오류가 제품 렌더링이나 사용자 action 결과를 바꾸면 analytics가 제품 가용성 의존성이 된다.
-- Decision Outcome: 초기화·capture·identify·reset과 전송의 동기·비동기 실패를 adapter에서 흡수하고 caller는 analytics 결과를 await하거나 사용자 오류에 합치지 않는다.
-- Alternatives Considered: caller별 try/catch, analytics 실패를 mutation 실패로 변환, 사용자에게 analytics 오류를 표시하는 방법은 일관된 장애 격리와 맞지 않아 제외했다.
-- Consequences: 일부 event 누락은 허용하며 운영 수집 확인은 PROD-795·PROD-575 검증 surface에서 별도로 다룬다.
-- Confirmation / Follow-up: constructor/method/network 실패에도 원래 route·Session·mutation 흐름이 완료되는지 검증한다.
+- Context / Problem: 외부 SDK·endpoint 오류가 제품 가용성 의존성이 되어서는 안 된다.
+- Decision Outcome: 초기화·capture·identify·reset 실패를 adapter에서 흡수하고 caller는 analytics 결과를 제품 제어 흐름에 사용하지 않는다.
+- Alternatives Considered: caller별 error propagation은 일관된 장애 격리와 맞지 않아 제외했다.
+- Consequences: 일부 event 누락은 허용하고 운영 관측은 후속 acceptance가 소유한다.
+- Confirmation / Follow-up: SDK method와 endpoint 실패에도 인증·navigation·mutation이 계속되는지 검증한다.
 
 ### PostHog SDK는 Web platform 경계에만 둔다
 
-- Decision Date: 2026-08-25
+- Decision Date: 2026-08-28
 - Decision Class: Derived Contract
 - Authority / Provenance: `docs/design/breakpoints.md`, Linear `PROD-819`, `PROD-537`
 - Status: Active
-- Context / Problem: 공용 Expo app에 Web SDK dependency를 추가하면 platform import 경계가 약할 때 Native bundle로 유입될 수 있다.
-- Decision Outcome: Android·iOS 공용 analytics API는 no-op을 유지하고 PostHog value import와 runtime은 Web platform implementation에만 둔다. 이는 현재 delivery/verification 경계이며 Native의 영구 비지원 결정이 아니다.
-- Alternatives Considered: `posthog-react-native` 동시 도입, runtime `Platform.OS` 분기 뒤 공통 value import는 PROD-819 범위를 넘고 Native graph 격리를 보장하지 않아 제외했다.
-- Consequences: Native analytics는 계속 비활성이고 지원·검증은 PROD-537가 별도로 소유한다.
-- Confirmation / Follow-up: Native export/dependency graph에서 PostHog Web·Native runtime 부재를 확인한다.
+- Context / Problem: Web dependency가 공용 import를 통해 Native bundle에 유입될 수 있다.
+- Decision Outcome: PostHog value import와 runtime은 Web platform implementation에만 두고 Android·iOS 공용 API는 no-op을 유지한다.
+- Alternatives Considered: Native SDK 동시 도입과 공통 value import는 현재 범위를 넘는다.
+- Consequences: Native analytics는 계속 비활성이고 PROD-537가 별도로 소유한다.
+- Confirmation / Follow-up: Native export/dependency graph에서 PostHog runtime 부재를 확인한다.
 
 ## Remaining Decisions
 
-- 없음. retention provider behavior의 세부 삭제 지연은 PostHog 문서를 참조하되 제품 authority는 최신 Linear 계약으로 유지한다.
+- 없음.
 
 ## Superseded Decisions
 
-- PROD-469의 OpenPanel provider와 automatic screen/outgoing/attribute 수집 구현은 최신 Linear `PROD-819`, `PROD-795`, `PROD-575`의 PostHog 교체·최소 수집 계약으로 대체됐다. 기존 OpenPanel 10% replay 구현·provider 계약은 대체됐지만, 후속 PROD-741의 PostHog 10% replay 정책으로 단계적으로 재도입한다. 기존 OpenSpec 기록 자체를 새 OpenSpec 날짜로 덮지 않으며, PROD-575가 명시한 `--skip-specs` archive 순서로 old change를 보존한다.
+- 2026-08-25의 automatic telemetry 비활성화, app-owned route `$pageview`, URL/referrer filter, `persistence: 'memory'` 결정은 2026-08-28 최신 Linear와 PR #653/#685 리뷰를 반영한 표준 SDK 동작 결정으로 대체한다.
+- PROD-469의 OpenPanel provider·replay 계약은 최신 PostHog 전환 계약으로 대체하며 old artifact는 PROD-575의 archive 순서로 보존한다.

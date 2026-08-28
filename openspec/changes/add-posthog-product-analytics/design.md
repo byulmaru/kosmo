@@ -1,88 +1,82 @@
 ## Context
 
-현재 `apps/app`의 analytics 경계는 `client.web.ts`가 `@openpanel/web`을 생성하고, 공용 `client.ts`가 Native no-op을 제공하는 platform file 구조다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 clear한다. Profile 생성·선택, Post 생성, Follow와 검색 caller는 이미 공용 `trackAnalytics`를 사용한다.
+Kosmo의 공용 analytics API는 platform file로 Web 구현과 Native no-op을 나눈다. `AppProviders`가 Web client를 초기화하고 `AnalyticsSessionBridge`가 Session의 Account ID를 identify하거나 guest 상태에서 reset한다. 기존 제품 caller는 공용 `trackAnalytics`를 사용한다.
 
-PROD-819는 이 호출부를 새 기능 이벤트로 확장하지 않고 PostHog Web runtime으로 옮긴다. 공개 project host/key와 Session Replay retention 지속 계약은 PROD-820, 개인정보 처리방침·runbook과 cross-slice 검증은 PROD-795가 소유하며 PROD-795가 PROD-741을 block한다. PROD-795 이후의 production replay 활성화·마스킹·초기 30일 검증은 PROD-741, production acceptance와 두 OpenSpec change의 archive 순서는 PROD-575가 소유한다. 초기 기반은 설정이 없으면 실제로 비활성화되어야 하므로 PROD-819와 PROD-820을 먼저 개발·검증하고, PROD-741은 PROD-795 activation gate 이후에만 replay를 켠다.
+PROD-819는 이 경계를 PostHog Web SDK로 옮기고, PROD-820은 PostHog Cloud와 build/deployment 공개 설정을 제공한다. PROD-795는 실제 수집 surface와 개인정보 처리방침·runbook을 통합하고, PROD-741은 선행 적용된 Replay의 실제 품질을, PROD-575는 production acceptance와 archive를 소유한다.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 기존 공용 analytics API와 성공 event caller를 유지하면서 provider를 PostHog로 교체한다.
-- event별 discriminated TypeScript API로 app-owned data의 호출 경계를 통제하고 typed properties를 SDK에 그대로 전달한다.
-- PostHog SDK의 `capture_pageview: 'history_change'`로 pageview를 수집하고, `$pathname`은 유지하면서 불필요한 URL metadata를 제한한다.
-- Account identity 전환을 작은 상태 기계로 관리하고 모든 SDK 실패를 제품 흐름에서 격리한다.
-- Web-only SDK가 Android·iOS bundle에 유입되지 않음을 자동화로 확인한다.
-- 초기 replay-off 기반과 후속 production canonical origin 10% replay activation, masking·retention 검증의 경계를 명시한다.
+- PostHog 공식 권장 defaults와 표준 자동 이벤트·metadata·persistence·remote config를 그대로 사용한다.
+- 앱 소유 경계를 typed custom event, SDK identity state 기반 identify/reset과 fail-open adapter로 제한한다.
+- Replay 수집량과 개인정보 보호를 Cloud 설정과 PostHog 표준 masking marker로 통제한다.
+- 공개 key·host가 완전한 Web build에서만 초기화하고 Docker·workflow 주입 경계를 일치시킨다.
+- PostHog Web SDK가 Android·iOS graph에 유입되지 않음을 확인한다.
 
-**PROD-819 implementation slice Non-Goals:**
+**Non-Goals:**
 
-- PostHog Cloud project 생성, 실제 key·host 확정, Docker·GitHub Actions 주입
-- 개인정보 처리방침·운영 runbook 갱신과 production-equivalent cross-slice 검증
-- production event acceptance, OpenSpec archive와 OpenPanel 운영 데이터 migration
-- 새 제품 event, opt-out UI, Account 분석 데이터 자동 삭제와 Native SDK
-- PROD-819 implementation에서 Session Replay를 활성화하거나 masking·retention을 운영 설정하는 것. 후속 replay activation·masking·초기 30일 검증은 PROD-741, Cloud·retention 지속 계약과 설정 증거는 PROD-820이 소유한다.
+- PostHog 표준 pageview·autocapture·metadata·remote config를 앱 코드로 재구현하는 것
+- 기능별 새 제품 event·dashboard, opt-out UI와 Account 분석 데이터 삭제
+- Native PostHog SDK
+- 이번 PR만으로 개인정보 처리방침·운영 통합, replay acceptance, production acceptance 또는 OpenSpec archive를 완료하는 것
 
 ## Implementation Guidance
 
 ### Current Constraints
 
-- `client.web.ts`는 module singleton과 마지막 Account ID를 보존한다. 단순 provider import 교체만 하면 Account A→B 전환에서 이전 PostHog identity가 연결되거나 같은 Session render마다 identify될 수 있다.
-- 현재 `trackAnalytics(name, Record<string, unknown>)`는 임의 event와 property를 허용한다. 이를 event별 discriminated TypeScript 계약으로 바꾸되 같은 계약을 runtime allowlist·projection으로 다시 구현하지 않아야 한다.
-- PostHog Web SDK는 pageview·pageleave·autocapture와 session recording을 포함한 여러 자동 기능을 제공하고 기본값은 SDK release에 따라 달라질 수 있다. `capture_pageview: 'history_change'`를 기본으로 사용하고 나머지 필요한 비활성화 option을 constructor/config test로 고정해야 한다.
-- PostHog SDK pageview는 browser history change를 기준으로 `$pathname`을 제공한다. current URL·query·hash·referrer 등 불필요한 SDK URL metadata는 `before_send`에서 제한하되 `$pathname`과 SDK protocol/session metadata는 유지해야 한다.
-- `posthog-js`는 Web package지만 workspace dependency에는 공통으로 선언된다. `.web` platform 경계 밖에서 value import하면 Metro가 Native graph에 포함할 수 있다.
-- PROD-820이 공개 host/key의 build-time contract를 소유한다. 이번 slice는 실제 값이나 secret을 저장하지 않고, 두 값이 완전할 때만 초기화되는 소비자 경계만 구현한다.
+- 공개 key와 host 중 하나라도 없으면 SDK를 초기화하지 않아야 한다.
+- `posthog-js` value import는 `.web` platform 경계에만 있어야 한다.
+- installed SDK가 지원하는 최신 권장 baseline은 `defaults: '2026-05-30'`이다.
+- PostHog의 기본 identity는 localStorage와 cookie에 지속되므로 module-local Account cache는 reload 뒤 authority가 될 수 없다.
+- Cloud project는 remote config, autocapture, performance, heatmap, console과 Replay 설정을 이미 제공한다. 앱이 이를 `advanced_disable_flags`, denylist, `before_send` 또는 disable option으로 막으면 Cloud 계약이 작동하지 않는다.
+- Replay Cloud의 Normal privacy mode는 input을 mask한다. canonical Post Content는 PostHog recorder의 표준 `ph-mask` class로 선택적으로 mask한다.
 
 ### Recommended Approach
 
-1. 현재 platform adapter 구조를 유지하고 Web file만 `posthog-js`를 value-import한다. 공용 Native file은 같은 API의 no-op을 계속 제공한다. 기존 `clearAnalytics` public surface를 유지하더라도 Web 구현은 PostHog `reset()` 의미로 매핑할 수 있다.
-2. Web adapter 초기화는 공개 project key와 ingestion host가 모두 있을 때만 수행한다. 초기 PostHog 기반 단계(PROD-819·PROD-795)에서는 `capture_pageview: 'history_change'`를 기본으로 사용하고 automatic pageleave, element autocapture, session replay와 다른 자동 telemetry는 명시적으로 끈다. `person_profiles`는 identified Account에만 profile을 만드는 경계로 둔다. 후속 PROD-741 활성화 단계의 10% replay와 masking·retention은 별도 gate에서 검증한다. 실제 option 이름은 구현 시 설치된 `posthog-js` type과 공식 source에 대조한다.
-3. 공용 API는 event별 property를 discriminated TypeScript 계약으로 제한하고 typed properties를 PostHog `capture`에 그대로 전달한다. 별도의 runtime allowlist, value validator, projection 또는 unknown-event drop registry는 두지 않는다. `before_send`는 SDK URL metadata의 좁은 필터에만 사용하며 `$pathname`과 SDK protocol/session metadata는 유지한다.
-4. PostHog SDK가 browser history change를 감지해 `$pageview`를 생성하도록 맡긴다. app-owned route observer, route template 계산과 별도 pageview dedupe는 두지 않는다.
-5. identity bridge는 `anonymous | identified(accountId)` 상태만 관리한다. anonymous→A는 identify, A→A는 no-op, A→B는 reset 후 identify, A→anonymous는 reset으로 처리한다. Profile 선택은 Account identity를 바꾸지 않는다.
-6. 초기화·capture·identify·reset의 synchronous throw와 SDK가 노출하는 asynchronous failure를 adapter 안에서 best-effort로 흡수한다. caller는 analytics 결과를 await하거나 사용자 오류 UI에 합치지 않는다.
-7. 단위 검증은 fake PostHog client로 config, event type contract와 typed property passthrough, `before_send` metadata filter, identity transition과 failure isolation을 각각 증명한다. Web 브라우저 검증은 fake 공개 설정과 interception 가능한 endpoint를 사용해 history-change pageview, `$pathname` 보존, 불필요 URL metadata 부재, 설정 누락·전송 실패 시 사용자 흐름 유지와 OpenPanel request 부재를 확인한다. Native export/dependency graph 검증은 PostHog module 문자열과 runtime module이 bundle에 없는지 확인한다.
+1. Web adapter는 `posthog.init(key, { api_host, defaults: '2026-05-30' })`를 중심으로 초기화한다. test automation의 user-agent 제한을 해제하는 fixture option 외에 표준 기능 disable, persistence override, property denylist와 sanitizer를 두지 않는다.
+2. PostHog SDK가 browser history와 DOM에서 만드는 pageview·pageleave·autocapture 및 `$current_url`, `$pathname`, referrer/session-entry와 protocol metadata를 그대로 유지한다. `$pageview`는 app-owned typed event taxonomy에서 제거한다.
+3. 공용 custom event API는 event별 property 타입을 유지하고 typed properties를 `capture`에 그대로 전달한다. runtime projection, unknown-event registry나 generic property sanitizer를 추가하지 않는다.
+4. identity 전환은 SDK의 persisted state를 조회한다. 같은 identified Account는 reset하지 않고 SDK에 identify를 맡기고, 다른 identified Account는 reset 후 identify한다. guest 전환은 persisted identified state가 있을 때 reset한다.
+5. canonical Post Content root에는 Web recorder가 인식하는 `ph-mask` class를 제공한다. 이 marker는 replay 구현이 아니라 PostHog 표준 privacy control이다.
+6. PostHog Cloud는 Replay 10% sampling, production `kos.moe` origin 조건, Normal input masking과 30일 retention을 배포 전에 적용한다. 실제 project token이나 credential은 저장소·문서·로그에 복제하지 않는다.
+7. 초기화·capture·identify·reset의 synchronous failure와 endpoint failure는 제품 렌더링, 인증, navigation과 mutation에서 격리한다.
+8. unit test는 minimal config, typed passthrough, persisted identity transition과 Post Content marker를 검증한다. browser test는 표준 automatic event·metadata·remote config 요청, identity 순서, 설정 누락 no-op과 endpoint failure의 fail-open을 확인한다.
 
-공식 SDK/API 대조 표면은 PostHog JS의 [`PostHogConfig`/default config source](https://github.com/PostHog/posthog-js/blob/main/packages/browser/src/posthog-core.ts)와 Expo Router의 [`useSegments`·route hooks`](https://docs.expo.dev/versions/latest/sdk/router/)다.
+공식 대조 표면은 PostHog JS [`PostHogConfig`](https://posthog.com/docs/libraries/js/config)와 [Session Replay privacy](https://posthog.com/docs/session-replay/privacy)다.
 
 ### Allowed Alternatives
 
-- SDK URL metadata filter는 설치된 PostHog version의 typed config와 event shape 안에서 구현 위치를 선택할 수 있다. app-owned typed properties를 재투영하거나 SDK protocol/session metadata를 훼손하지 않아야 한다.
-- event type contract는 tuple union, discriminated union 또는 동등한 compile-time 표현을 사용할 수 있다. 별도 runtime schema를 중복해서 두지 않는다.
+- Post Content는 `ph-mask` class 대신 동등한 PostHog 표준 selector와 `maskTextSelector`를 사용할 수 있다. Native prop 오염이 없고 browser replay에서 같은 masking이 증명되어야 한다.
 - PostHog singleton을 직접 감싸거나 작은 injected client interface를 둘 수 있다. 공용 caller가 Web SDK type에 의존하지 않고 Native graph가 분리되면 동등하다.
 
 ### Known Traps
 
-- SDK pageview와 app-owned route observer를 함께 사용하면 pageview 생성과 중복 판단이 이중화된다.
-- TypeScript caller contract를 runtime validator·projection으로 다시 구현하면 같은 계약이 두 곳에 생기고 올바른 property도 조용히 누락될 수 있다.
-- 모든 property를 generic pattern으로 지우는 `before_send`는 PostHog 전송에 필요한 `token`이나 `distinct_id`까지 제거할 수 있다. 불필요한 URL metadata만 좁게 제한한다.
-- Account ID가 바뀔 때 `identify(newId)`만 호출하면 서로 다른 Account history가 연결될 수 있다. reset 순서를 생략하지 않는다.
-- PostHog와 OpenPanel을 dual-write하거나 rollback을 위해 OpenPanel code를 남기면 개인정보·운영 계약이 두 개가 된다.
-- Web 단위 테스트 통과를 Native bundle 비포함 또는 브라우저 request payload 검증으로 일반화하지 않는다.
-
-PostHog provider behavior note (non-normative): Session Replay recording이 retention 만료 시점에 즉시 삭제되지 않을 수 있다. 여기서 30일은 제품 retention 설정값이며, UI에서 정확히 30일에 삭제가 완료된다는 SLA로 해석하지 않는다.
+- 수동 route observer와 `capture_pageview: 'history_change'`를 함께 두면 pageview가 중복된다.
+- `before_send`, property denylist나 runtime allowlist로 표준 URL/referrer/session metadata를 제거하면 Web analytics와 reviewer 계약이 깨진다.
+- `advanced_disable_flags` 또는 external dependency loading 차단은 remote config와 Replay를 막는다.
+- `persistence: 'memory'`와 module-local identity cache는 reload 뒤 Account 연결과 reset 판정을 잃는다.
+- 모든 text를 mask하면 replay 진단 가치가 급격히 낮아진다. input과 canonical Post Content를 PostHog 표준 경계로 선택한다.
+- PostHog와 OpenPanel을 dual-write하면 개인정보 고지와 장애 대응 계약이 두 개가 된다.
 
 ## Risks / Trade-offs
 
-- [PostHog SDK pageview metadata가 필요 이상으로 넓어질 수 있음] → `$pathname`과 protocol/session metadata는 유지하고 current URL·query·hash·referrer 등 불필요 metadata 부재를 config·outbound test로 고정한다.
-- [TypeScript 계약을 우회한 JavaScript 호출은 runtime에서 재검사하지 않음] → workspace typecheck와 typed caller test를 required verification으로 두고 runtime projection을 추가하지 않는다.
-- [PostHog SDK default 변화가 다른 자동 수집을 다시 켤 수 있음] → pageview를 제외한 privacy-sensitive option을 명시하고 설치된 version의 config snapshot과 outbound browser test를 유지한다.
-- [Web dependency가 Native graph에 유입될 수 있음] → value import를 `.web` 경계에 한정하고 Native export/dependency scan을 required verification으로 둔다.
-- [PROD-819과 PROD-820의 공개 config 이름이 달라질 수 있음] → 이번 design은 key+host 의미만 고정하고 exact environment variable 이름은 두 slice가 같은 shared change에서 정렬해 검증한다.
-- [설정/전송 실패를 숨기면 analytics 누락을 즉시 알기 어려움] → 제품 흐름은 fail-open으로 유지하고 운영 관측과 production acceptance는 PROD-795·PROD-575가 별도로 소유한다.
+- [표준 metadata에 URL·referrer가 포함됨] → 실제 수집 surface를 PROD-795 개인정보 고지와 runbook에 반영하고 Cloud origin·Replay masking으로 content 노출을 통제한다.
+- [SDK defaults가 시간에 따라 바뀜] → 권장 date baseline을 명시하고 upgrade 시 PostHog migration notes와 outbound browser test를 함께 갱신한다.
+- [Replay가 production traffic 비용을 만듦] → Cloud sampling을 10%로 고정하고 PROD-741·PROD-575에서 실제 수집량과 품질을 검증한다.
+- [Web dependency가 Native graph에 유입될 수 있음] → `.web` value import와 Native export/dependency scan을 required verification으로 둔다.
+- [설정/전송 실패를 숨기면 분석 누락을 즉시 알기 어려움] → 제품 흐름은 fail-open으로 유지하고 운영 관측과 production acceptance는 PROD-795·PROD-575가 소유한다.
 
 ## Migration Plan
 
-1. PROD-819에서 PostHog adapter, event별 TypeScript 계약, SDK history-change pageview·URL metadata filter와 identity bridge, 초기 replay-off 자동화만 구현한다. 실제 production key가 없어도 unit·browser fixture로 검증한다.
-2. 같은 slice에서 `@openpanel/web` dependency, OpenPanel runtime·test 참조를 제거한다. production에 dual-write 기간을 두지 않는다.
-3. PROD-820이 Cloud US project, build/deployment 공개 config와 Session Replay 초기 30일 retention 설정·증거를 제공한다. retention 변경은 지원 범위 내 운영 설정으로만 허용하고 실제 변경값·적용 시점·변경 근거·당시 적용 플랜 또는 지원 범위 근거를 기록하며, 더 긴 범위를 지원하는 plan upgrade만으로 자동 연장하지 않는다.
-4. PROD-795가 production-equivalent build에서 초기 replay-off, Cloud/build/retention 증거와 개인정보·운영 문서를 cross-slice 검증하고 PROD-741 activation을 block한다.
-5. PROD-741이 PROD-795 gate 이후 masking 검증을 완료한 뒤 production canonical origin에 Web Session Replay를 10% sample로 활성화하고, 초기 30일 retention과 실제 replay redaction을 검증한다. 추가 custom selector는 완료 조건이 아니다.
-6. PROD-575가 actual production acceptance를 완료하고, `add-web-openpanel-product-analytics`를 `--skip-specs` archive한 뒤 이 change를 정상 archive한다.
+1. PROD-820에서 Cloud 보호 설정과 공개 build/deployment 주입을 production 배포 전에 준비한다.
+2. PROD-819에서 OpenPanel runtime, manual pageview·filter와 module identity cache를 제거하고 PostHog 표준 runtime으로 전환한다.
+3. PROD-795가 production-equivalent build에서 실제 수집 surface, 개인정보 처리방침과 runbook을 통합한다.
+4. PROD-741이 Post Media Viewer replay·masking·fail-open을 acceptance 한다.
+5. PROD-575가 production acceptance 후 old OpenPanel change를 `--skip-specs`로 archive하고 이 change를 정상 archive한다.
 
-즉시 비활성화가 필요하면 production build에서 공개 key 또는 host를 제거해 adapter를 no-op으로 만든다. 코드 rollback이 필요하면 마지막 정상 release로 되돌리되 OpenPanel과 PostHog를 동시에 활성화하지 않는다.
+긴급 비활성화는 production build의 공개 key 또는 host를 제거해 adapter를 no-op으로 만든다. OpenPanel과 PostHog를 동시에 활성화하지 않는다.
 
 ## Open Questions
 
-없음. 공개 environment variable의 exact 이름과 browser fixture의 구체 위치는 specs를 바꾸지 않는 implementation detail이며 PROD-820 integration과 repository 관례에 맞춰 정렬한다.
+없음.
