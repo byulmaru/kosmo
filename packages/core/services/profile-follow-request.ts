@@ -1,256 +1,47 @@
-import { and, eq, inArray, ne, notExists, or } from 'drizzle-orm';
-import {
-  ActivityPubActors,
-  first,
-  firstOrThrow,
-  firstOrThrowWith,
-  getDatabaseConnection,
-  Instances,
-  ProfileFollowRequests,
-  ProfileFollows,
-  Profiles,
-} from '../db';
-import { InstanceKind, InstanceState, ProfileState } from '../enums';
-import { NotFoundError, PermissionDeniedError } from '../error';
+import { eq } from 'drizzle-orm';
+import { ActivityPubActors, first, getDatabaseConnection, Instances, Profiles } from '../db';
+import { InstanceKind, InstanceState } from '../enums';
 import {
   createFollowNotification,
   deleteFollowRequestNotificationPostCommit,
 } from './notification';
-import { ensureProfileFollow } from './profile-follow-relation';
-import type { Database, Transaction } from '../db';
+import {
+  acceptProfileFollowRequestInTransaction,
+  approveProfileFollowRequestInTransaction,
+  deleteProfileFollowRequestAsActorInTransaction,
+} from './profile-follow-transaction';
+import type { Database } from '../db';
 import type { ProfileFollowPair } from './profile-follow-relation';
+import type {
+  AcceptProfileFollowRequestResult,
+  ApproveProfileFollowRequestTransactionResult,
+} from './profile-follow-transaction';
 
-export type ProfileFollowRequestRow = typeof ProfileFollowRequests.$inferSelect;
-type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
-
-export type AcceptProfileFollowRequestResult =
-  | { readonly kind: 'ACCEPTED' }
-  | { readonly kind: 'ALREADY_ESTABLISHED' }
-  | { readonly kind: 'NOOP' };
-
-const pairCondition = (
-  table: typeof ProfileFollows | typeof ProfileFollowRequests,
-  { followeeProfileId, followerProfileId }: ProfileFollowPair,
-) =>
-  and(
-    eq(table.followerProfileId, followerProfileId),
-    eq(table.followeeProfileId, followeeProfileId),
-  );
-
-export const ensureProfileFollowRequest = async (
-  pair: ProfileFollowPair,
-  tx?: Transaction,
-): Promise<
-  | {
-      readonly created: false;
-      readonly kind: 'ESTABLISHED';
-      readonly profileFollow: ProfileFollowRow;
-    }
-  | {
-      readonly created: boolean;
-      readonly kind: 'PENDING';
-      readonly profileFollowRequest: ProfileFollowRequestRow;
-    }
-> =>
-  getDatabaseConnection(tx).transaction(async (tx) => {
-    const profileFollow = await tx
-      .select()
-      .from(ProfileFollows)
-      .where(pairCondition(ProfileFollows, pair))
-      .limit(1)
-      .then(first);
-
-    if (profileFollow) {
-      await tx.delete(ProfileFollowRequests).where(pairCondition(ProfileFollowRequests, pair));
-      return { created: false, kind: 'ESTABLISHED', profileFollow };
-    }
-
-    const inserted = await tx
-      .insert(ProfileFollowRequests)
-      .values(pair)
-      .onConflictDoNothing({
-        target: [ProfileFollowRequests.followerProfileId, ProfileFollowRequests.followeeProfileId],
-      })
-      .returning()
-      .then(first);
-    const profileFollowRequest =
-      inserted ??
-      (await tx
-        .select()
-        .from(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, pair))
-        .limit(1)
-        .then(firstOrThrow));
-    if (!profileFollowRequest) {
-      throw new Error('Profile follow request not found after insert conflict');
-    }
-
-    return {
-      created: inserted !== undefined,
-      kind: 'PENDING',
-      profileFollowRequest,
-    };
-  });
+export type {
+  AcceptProfileFollowRequestResult,
+  ProfileFollowRequestRow,
+} from './profile-follow-transaction';
+export { ensureProfileFollowRequest } from './profile-follow-transaction';
 
 export const acceptProfileFollowRequest = async (
-  {
-    expectedRowId,
-    followeeProfileId,
-    followerProfileId,
-  }: ProfileFollowPair & {
-    readonly expectedRowId: string;
-  },
+  input: ProfileFollowPair & { readonly expectedRowId: string },
   handle?: Database,
 ): Promise<AcceptProfileFollowRequestResult> => {
-  const result = await getDatabaseConnection(handle).transaction(
-    async (tx): Promise<AcceptProfileFollowRequestResult> => {
-      const pair = { followeeProfileId, followerProfileId };
-      const established = await tx
-        .select({ id: ProfileFollows.id })
-        .from(ProfileFollows)
-        .where(pairCondition(ProfileFollows, pair))
-        .limit(1)
-        .then(first);
-
-      if (established) {
-        return established.id === expectedRowId
-          ? { kind: 'ALREADY_ESTABLISHED' }
-          : { kind: 'NOOP' };
-      }
-
-      const pendingRequest = await tx
-        .select({ id: ProfileFollowRequests.id })
-        .from(ProfileFollowRequests)
-        .where(
-          and(
-            eq(ProfileFollowRequests.id, expectedRowId),
-            pairCondition(ProfileFollowRequests, pair),
-          ),
-        )
-        .limit(1)
-        .then(first);
-
-      const unavailableParticipants = tx
-        .select({ id: Profiles.id })
-        .from(Profiles)
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .where(
-          and(
-            inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-            or(
-              ne(Profiles.state, ProfileState.ACTIVE),
-              eq(Instances.state, InstanceState.SUSPENDED),
-            ),
-          ),
-        );
-      const deleted = await tx
-        .delete(ProfileFollowRequests)
-        .where(
-          and(
-            eq(ProfileFollowRequests.id, expectedRowId),
-            pairCondition(ProfileFollowRequests, pair),
-            notExists(unavailableParticipants),
-          ),
-        )
-        .returning({ id: ProfileFollowRequests.id })
-        .then(first);
-
-      if (!deleted) {
-        const establishedAfterDelete = await tx
-          .select({ id: ProfileFollows.id })
-          .from(ProfileFollows)
-          .where(pairCondition(ProfileFollows, pair))
-          .limit(1)
-          .then(first);
-
-        return pendingRequest && establishedAfterDelete
-          ? { kind: 'ALREADY_ESTABLISHED' }
-          : { kind: 'NOOP' };
-      }
-
-      const ensured = await ensureProfileFollow(pair, tx);
-      return ensured.created ? { kind: 'ACCEPTED' } : { kind: 'ALREADY_ESTABLISHED' };
-    },
+  const { result } = await getDatabaseConnection(handle).transaction((tx) =>
+    acceptProfileFollowRequestInTransaction(input, tx),
   );
 
   if (result.kind !== 'NOOP') {
-    await deleteFollowRequestNotificationPostCommit(expectedRowId, handle);
+    await deleteFollowRequestNotificationPostCommit(input.expectedRowId, handle);
   }
 
   return result;
 };
 
-type ApproveProfileFollowRequestResult = {
-  readonly followeeProfile: typeof Profiles.$inferSelect;
-  readonly followerProfile: typeof Profiles.$inferSelect;
-  readonly profileFollow: ProfileFollowRow;
-  readonly profileFollowRequestId: string;
-};
-
-const approveProfileFollowRequestInTransaction = async (
-  {
-    actorProfileId,
-    profileFollowRequestId,
-  }: { readonly actorProfileId: string; readonly profileFollowRequestId: string },
-  tx: Transaction,
-): Promise<ApproveProfileFollowRequestResult & { readonly created: boolean }> => {
-  const request = await tx
-    .select()
-    .from(ProfileFollowRequests)
-    .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
-    .limit(1)
-    .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
-
-  if (request.followeeProfileId !== actorProfileId) {
-    throw new PermissionDeniedError();
-  }
-
-  const participants = await tx
-    .select({
-      instanceState: Instances.state,
-      profile: Profiles,
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]),
-        eq(Profiles.state, ProfileState.ACTIVE),
-        ne(Instances.state, InstanceState.SUSPENDED),
-      ),
-    )
-    .orderBy(Profiles.id);
-  const followerProfile = participants.find(
-    ({ profile }) => profile.id === request.followerProfileId,
-  )?.profile;
-  const followeeProfile = participants.find(
-    ({ profile }) => profile.id === request.followeeProfileId,
-  )?.profile;
-  if (!followerProfile || !followeeProfile) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  const { created, profileFollow } = await ensureProfileFollow(
-    {
-      followeeProfileId: request.followeeProfileId,
-      followerProfileId: request.followerProfileId,
-    },
-    tx,
-  );
-
-  const updatedProfiles = await tx
-    .select()
-    .from(Profiles)
-    .where(inArray(Profiles.id, [request.followerProfileId, request.followeeProfileId]));
-
-  return {
-    created,
-    followeeProfile: updatedProfiles.find(({ id }) => id === request.followeeProfileId)!,
-    followerProfile: updatedProfiles.find(({ id }) => id === request.followerProfileId)!,
-    profileFollow,
-    profileFollowRequestId: request.id,
-  };
-};
+type ApproveProfileFollowRequestResult = Omit<
+  ApproveProfileFollowRequestTransactionResult,
+  'created'
+>;
 
 export const approveProfileFollowRequest = async (
   {
@@ -263,7 +54,14 @@ export const approveProfileFollowRequest = async (
   handle?: Database,
 ): Promise<ApproveProfileFollowRequestResult> => {
   const { created, ...approved } = await getDatabaseConnection(handle).transaction((tx) =>
-    approveProfileFollowRequestInTransaction({ actorProfileId, profileFollowRequestId }, tx),
+    approveProfileFollowRequestInTransaction(
+      {
+        actorProfileId,
+        profileFollowRequestId,
+        unauthorizedError: 'PERMISSION_DENIED',
+      },
+      tx,
+    ),
   );
 
   await deleteFollowRequestNotificationPostCommit(approved.profileFollowRequestId, handle);
@@ -276,55 +74,6 @@ export const approveProfileFollowRequest = async (
   return approved;
 };
 
-const deleteProfileFollowRequestAsActor = async (
-  {
-    actorProfileId,
-    actorRole,
-    profileFollowRequestId,
-  }: {
-    readonly actorProfileId: string;
-    readonly actorRole: 'FOLLOWEE' | 'FOLLOWER';
-    readonly profileFollowRequestId: string;
-  },
-  tx?: Transaction,
-  handle?: Database,
-) =>
-  getDatabaseConnection(tx ?? handle).transaction(async (tx) => {
-    const request = await tx
-      .select()
-      .from(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, profileFollowRequestId))
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
-    const expectedActorProfileId =
-      actorRole === 'FOLLOWEE' ? request.followeeProfileId : request.followerProfileId;
-    if (expectedActorProfileId !== actorProfileId) {
-      throw new PermissionDeniedError();
-    }
-
-    const actorProfile = await tx
-      .select({ profile: Profiles })
-      .from(Profiles)
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(
-        and(
-          eq(Profiles.id, actorProfileId),
-          eq(Profiles.state, ProfileState.ACTIVE),
-          ne(Instances.state, InstanceState.SUSPENDED),
-        ),
-      )
-      .limit(1)
-      .then(firstOrThrowWith(() => new NotFoundError('Profile not found')));
-
-    await tx
-      .delete(ProfileFollowRequests)
-      .where(eq(ProfileFollowRequests.id, request.id))
-      .returning({ id: ProfileFollowRequests.id })
-      .then(firstOrThrowWith(() => new NotFoundError('Profile follow request not found')));
-
-    return { actorProfile: actorProfile.profile, request };
-  });
-
 export const rejectProfileFollowRequest = async (
   input: {
     readonly actorProfileId: string;
@@ -335,10 +84,11 @@ export const rejectProfileFollowRequest = async (
   readonly followeeProfile: typeof Profiles.$inferSelect;
   readonly profileFollowRequestId: string;
 }> => {
-  const result = await deleteProfileFollowRequestAsActor(
-    { ...input, actorRole: 'FOLLOWEE' },
-    undefined,
-    handle,
+  const result = await getDatabaseConnection(handle).transaction((tx) =>
+    deleteProfileFollowRequestAsActorInTransaction(
+      { ...input, actorRole: 'FOLLOWEE', unauthorizedError: 'PERMISSION_DENIED' },
+      tx,
+    ),
   );
   await deleteFollowRequestNotificationPostCommit(result.request.id, handle);
   return {
@@ -358,8 +108,8 @@ export const cancelProfileFollowRequest = async (
   readonly profileFollowRequestId: string;
 }> => {
   const { command, result } = await getDatabaseConnection(handle).transaction(async (tx) => {
-    const deleted = await deleteProfileFollowRequestAsActor(
-      { ...input, actorRole: 'FOLLOWER' },
+    const deleted = await deleteProfileFollowRequestAsActorInTransaction(
+      { ...input, actorRole: 'FOLLOWER', unauthorizedError: 'PERMISSION_DENIED' },
       tx,
     );
     const target = await tx

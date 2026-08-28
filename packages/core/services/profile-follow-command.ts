@@ -13,6 +13,7 @@ import {
   approveProfileFollowRequestInTransaction,
   deleteProfileFollowRequestAsActorInTransaction,
   followProfileInTransaction,
+  profileFollowPairCondition as pairCondition,
   removeProfileFollowProjection,
 } from './profile-follow-transaction';
 import type { Transaction } from '../db';
@@ -207,15 +208,6 @@ export const rehydrateProfileFollowFailure = (
   }
 };
 
-const pairCondition = (
-  table: typeof ProfileFollows | typeof ProfileFollowRequests,
-  pair: ProfileFollowPair,
-) =>
-  and(
-    eq(table.followerProfileId, pair.followerProfileId),
-    eq(table.followeeProfileId, pair.followeeProfileId),
-  );
-
 const deleteEffect = ({
   sourceId,
   pair,
@@ -307,8 +299,7 @@ const executeFollow = async (
   const followed = await followProfileInTransaction(
     {
       ...input.pair,
-      candidateProfileFollowId: input.candidateRowId,
-      candidateProfileFollowRequestId: input.candidateRowId,
+      candidateRowId: input.candidateRowId,
     },
     tx,
   );
@@ -598,7 +589,7 @@ const executeRejectOrCancel = async (
         },
         tx,
       );
-      deletedRequestId = deleted.id;
+      deletedRequestId = deleted.request.id;
     } else {
       const deleted = await removeProfileFollowProjection(
         {

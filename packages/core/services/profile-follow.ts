@@ -1,11 +1,10 @@
-import { and, eq, inArray, ne, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import {
   ActivityPubActors,
   first,
   getDatabaseConnection,
   Instances,
   ProfileFollowRequests,
-  ProfileFollows,
   Profiles,
 } from '../db';
 import {
@@ -23,8 +22,12 @@ import {
   deleteNotificationBySource,
 } from './notification';
 import { ensureProfileFollow } from './profile-follow-relation';
-import { ensureProfileFollowRequest } from './profile-follow-request';
-import type { Database, Transaction } from '../db';
+import {
+  ensureProfileFollowRequest,
+  profileFollowPairCondition,
+  removeProfileFollowProjection,
+} from './profile-follow-transaction';
+import type { Database, ProfileFollows, Transaction } from '../db';
 import type { ProfileFollowRequestRow } from './profile-follow-request';
 
 type ProfileFollowRow = typeof ProfileFollows.$inferSelect;
@@ -114,7 +117,12 @@ export const followProfile = async (
     const pendingRequest = await tx
       .select({ id: ProfileFollowRequests.id })
       .from(ProfileFollowRequests)
-      .where(pairCondition(ProfileFollowRequests, followerProfileId, target.id))
+      .where(
+        profileFollowPairCondition(ProfileFollowRequests, {
+          followerProfileId,
+          followeeProfileId: target.id,
+        }),
+      )
       .limit(1)
       .then(first);
 
@@ -328,107 +336,6 @@ export const unfollowProfile = async (
     }
   }
   return result;
-};
-
-const pairCondition = (
-  table: typeof ProfileFollows | typeof ProfileFollowRequests,
-  followerProfileId: string,
-  followeeProfileId: string,
-) =>
-  and(
-    eq(table.followerProfileId, followerProfileId),
-    eq(table.followeeProfileId, followeeProfileId),
-  );
-
-const removeProfileFollowProjection = async (
-  {
-    expectedRowId,
-    followeeProfileId,
-    followerProfileId,
-    removePendingRequest = true,
-  }: {
-    readonly expectedRowId?: string;
-    readonly followeeProfileId: string;
-    readonly followerProfileId: string;
-    readonly removePendingRequest?: boolean;
-  },
-  tx: Transaction,
-): Promise<{
-  readonly profileFollow: ProfileFollowRow | undefined;
-  readonly profileFollowRequest: ProfileFollowRequestRow | undefined;
-}> => {
-  const unavailableParticipants = tx
-    .select({ id: Profiles.id })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(Profiles.id, [followerProfileId, followeeProfileId]),
-        or(ne(Profiles.state, ProfileState.ACTIVE), eq(Instances.state, InstanceState.SUSPENDED)),
-      ),
-    );
-  const profileFollow = await tx
-    .select()
-    .from(ProfileFollows)
-    .where(pairCondition(ProfileFollows, followerProfileId, followeeProfileId))
-    .limit(1)
-    .then(first);
-
-  if (profileFollow) {
-    if (expectedRowId !== undefined && profileFollow.id !== expectedRowId) {
-      return { profileFollow: undefined, profileFollowRequest: undefined };
-    }
-
-    const deleted = await tx
-      .delete(ProfileFollows)
-      .where(and(eq(ProfileFollows.id, profileFollow.id), notExists(unavailableParticipants)))
-      .returning()
-      .then(first);
-    if (!deleted) {
-      return { profileFollow: undefined, profileFollowRequest: undefined };
-    }
-
-    await tx
-      .update(Profiles)
-      .set({ followingCount: sql`greatest(${Profiles.followingCount} - 1, 0)` })
-      .where(eq(Profiles.id, followerProfileId));
-    await tx
-      .update(Profiles)
-      .set({ followersCount: sql`greatest(${Profiles.followersCount} - 1, 0)` })
-      .where(eq(Profiles.id, followeeProfileId));
-
-    return { profileFollow: deleted, profileFollowRequest: undefined };
-  }
-
-  if (!removePendingRequest) {
-    return { profileFollow: undefined, profileFollowRequest: undefined };
-  }
-
-  const profileFollowRequest = await tx
-    .select()
-    .from(ProfileFollowRequests)
-    .where(pairCondition(ProfileFollowRequests, followerProfileId, followeeProfileId))
-    .limit(1)
-    .then(first);
-  if (
-    !profileFollowRequest ||
-    (expectedRowId !== undefined && profileFollowRequest.id !== expectedRowId)
-  ) {
-    return { profileFollow: undefined, profileFollowRequest: undefined };
-  }
-
-  const deleted = await tx
-    .delete(ProfileFollowRequests)
-    .where(
-      and(
-        eq(ProfileFollowRequests.id, profileFollowRequest.id),
-        notExists(unavailableParticipants),
-      ),
-    )
-    .returning()
-    .then(first);
-
-  return { profileFollow: undefined, profileFollowRequest: deleted };
 };
 
 export const removeInboundFollow = async (
