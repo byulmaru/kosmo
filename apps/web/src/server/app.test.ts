@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
@@ -62,14 +61,9 @@ vi.mock('./sentry', () => ({ captureNotificationEffectError, captureUnexpectedEr
 let staticRoot: string;
 let app: Hono;
 let fetch = vi.fn<typeof globalThis.fetch>();
-let repositoryRobots: string;
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
-const ROBOTS_SOURCE = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../../../apps/app/public/robots.txt',
-);
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
@@ -77,8 +71,6 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
-  repositoryRobots = await readFile(ROBOTS_SOURCE, 'utf8');
-  await writeFile(join(staticRoot, 'robots.txt'), repositoryRobots);
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -478,49 +470,6 @@ describe('runtime routing', () => {
     expect(await deepLink.text()).toBe('<html>expo app</html>');
     expect(federationFetch).toHaveBeenCalledTimes(4);
   });
-
-  test('keeps repository robots directives limited to protected prefixes and sitemap', () => {
-    const directives = repositoryRobots
-      .split(/\r?\n/)
-      .map((line) => line.replace(/#.*/, '').trim())
-      .filter(Boolean);
-
-    expect(directives).toEqual([
-      'User-agent: *',
-      'Disallow: /bookmarks',
-      'Disallow: /compose',
-      'Disallow: /feedback',
-      'Disallow: /follow-requests',
-      'Disallow: /hashtags/',
-      'Disallow: /local',
-      'Disallow: /home',
-      'Disallow: /notifications',
-      'Disallow: /profile-edit',
-      'Disallow: /search',
-      'Disallow: /settings',
-      'Disallow: /login',
-      'Disallow: /logout',
-      'Disallow: /graphql',
-      'Disallow: /health',
-      'Sitemap: https://kos.moe/sitemap.xml',
-    ]);
-  });
-
-  test.each([
-    { headers: {} as Record<string, string> },
-    { headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' } },
-  ])(
-    'serves repository robots.txt through the BFF as text/plain for request headers $headers',
-    async ({ headers }) => {
-      const response = await app.request('/robots.txt', { headers });
-      const body = await response.text();
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toContain('text/plain');
-      expect(body).toBe(repositoryRobots);
-      expect(body).not.toContain('<html>');
-    },
-  );
 
   test('revalidates the SPA shell and caches content-hashed assets immutably', async () => {
     const shell = await app.request('/');

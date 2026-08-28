@@ -57,10 +57,12 @@ Sitemap: https://kos.moe/sitemap.xml
 
 검토 기준일인 2026-08-27에 다음 저장소 범위 검증을 통과했다.
 
-- `pnpm --filter @kosmo/web test:unit`: 38 tests passed
+- `pnpm --filter @kosmo/app build`: passed
+- 앱 source와 export된 `robots.txt`의 SHA-256: 동일
+- `pnpm --filter @kosmo/web test:unit`: 35 tests passed
 - `apps/web` TypeScript check: passed
 - `apps/web/src/server/app.test.ts` ESLint: passed
-- 변경한 TypeScript 테스트·운영 문서 Prettier check: passed
+- 변경한 TypeScript·운영 문서 Prettier check: passed
 - `openspec validate define-web-crawler-policy --strict`: valid
 
 이 결과는 Cloudflare live action이나 production composite 응답의 증거가 아니다. 해당 증거는 아래 Cloudflare 적용 및 완료 게이트에서 별도로 수집한다.
@@ -132,7 +134,7 @@ Sitemap: https://kos.moe/sitemap.xml
 
 ## 완료 게이트
 
-이 문서와 저장소 테스트만으로 Cloudflare 3.x task를 완료 처리하지 않는다. 다음이 모두 실제 evidence로 남은 뒤에만 3.x와 composite 4.x를 갱신한다.
+이 문서와 저장소 검증만으로 Cloudflare 3.x task를 완료 처리하지 않는다. 다음이 모두 실제 evidence로 남은 뒤에만 3.x와 composite 4.x를 갱신한다.
 
 1. zone permission, plan/detection, Managed robots와 현재 rule baseline
 2. Training·Search+Training block 및 Search-only·사용자 요청 allow 결과

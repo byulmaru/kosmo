@@ -34,7 +34,7 @@ edge에서 실제로 차단한다. 정상 ActivityPub 연합 요청은 해당 AI
   `docs/domain/decisions/0017-profile-search-staged-visibility.md`,
   `docs/domain/decisions/0017-activitypub-local-post-note.md`
 - Linear Contract: PROD-736
-- Linear Implementations: PROD-736이 저장소 정책·자동 검증, Cloudflare 강제 차단·최소 ActivityPub 예외,
+- Linear Implementations: PROD-736이 저장소 정책·검증, Cloudflare 강제 차단·최소 ActivityPub 예외,
   운영 합성 응답과 edge 검증, 롤백, OpenSpec 정합성 및 archive를 소유한다. PROD-731은 sitemap
   생성·제공을 소유하며, PROD-736 구현은 먼저 진행할 수 있지만 운영 완료 검증은 PROD-731 배포 결과가
   필요하다.

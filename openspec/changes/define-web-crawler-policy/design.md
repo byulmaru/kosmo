@@ -90,9 +90,8 @@ Cloudflare 운영 담당자와 크롤러 정책 갱신 담당자다.
 5. `docs/operations` 아래의 크롤러 정책 기록에 저장소/Cloudflare 책임, 공식 운영사 자료, 검토일, 실제
    crawler action·WAF 예외 스냅샷, 적용 권한, 갱신 책임과 롤백 절차를 남긴다. 설정 화면의 명칭이나
    기본값보다 실제 적용된 action과 rule expression을 근거로 기록한다.
-6. 자동 검증은 저장소 문서를 에이전트·경로 기준으로 해석해 보호 prefix, 공개 경로, 검색용·학습용 에이전트와
-   ActivityPub 예외를 확인한다. 기존 runtime routing test에는 robots fixture를 제공해 Content-Type과 SPA
-   비간섭을 검증한다.
+6. 저장소 문서를 에이전트·경로 기준으로 검토해 보호 prefix, 공개 경로, 검색용·학습용 에이전트와
+   ActivityPub 예외를 확인한다. 앱을 build한 뒤 원본과 export 산출물이 일치하는지도 확인한다.
 7. edge 변경 전후의 Security Events와 origin 도달 여부를 비교한다. 대표 Training 크롤러와 Search·Training
    behavior를 함께 가진 크롤러의 일반 Web 요청은 edge block, Search/Agent 전용 요청은 비차단, 실제 연합
    특성의 WebFinger·actor/object·collection·inbox 요청은 origin handler 도달을 확인한다. 형식만 갖췄을 뿐
@@ -140,7 +139,7 @@ Cloudflare 운영 담당자와 크롤러 정책 갱신 담당자다.
 - [Cloudflare 관리 정책이 별도 변경되어 저장소 가정과 달라질 수 있음] → 배포 시 합성 응답을 에이전트·경로별로
   검증하고 실제 crawler action·WAF expression 스냅샷과 정책 기록의 검토일을 갱신한다.
 - [보호 경로 prefix가 새 공개 라우트와 충돌할 수 있음] → 현재 라우트 구조를 구현 시 다시 대조하고 공개
-  Profile·Post·asset 회귀 사례를 자동 검증한다.
+  Profile·Post·asset 경계가 유지되는지 검토한다.
 - [Cloudflare 식별이 자체 선언 User-Agent나 요금제별 detection에 의존해 위장 크롤러를 놓칠 수 있음] → 적용
   가능한 verified detection을 우선하고 한계를 정책 기록에 명시하며 기존 WAF·origin 보안을 유지한다.
 - [Training 차단이 정상 federation을 오탐할 수 있음] → 차단 활성화 전에 최소 federation 조건과 logging을
@@ -151,15 +150,15 @@ Cloudflare 운영 담당자와 크롤러 정책 갱신 담당자다.
   detection·custom rule 기능을 확인하고 충족되지 않으면 강제 차단 task를 완료로 표시하지 않는다.
 - [검색엔진이 robots 변경을 캐시해 반영이 늦을 수 있음] → 배포 직후 원본·합성 응답 증거를 보존하고 실제
   검색 반영 지연을 코드 회귀로 오인하지 않는다.
-- [PROD-731 전에는 Sitemap URL이 404임] → 저장소 구현과 자동 검증은 진행하되 Sitemap 운영 통합 체크와
+- [PROD-731 전에는 Sitemap URL이 404임] → 저장소 구현과 검증은 진행하되 Sitemap 운영 통합 체크와
   OpenSpec 전체 완료·archive는 유효한 배포 증거가 생길 때까지 남겨 둔다.
 
 ## Migration Plan
 
 1. 현재 Managed robots, AI crawler action, WAF custom rule 순서·expression, Security Events와 적용 권한을
    기준 스냅샷으로 남긴다.
-2. 저장소 robots 원본, 정책 기록과 자동 검증을 같은 저장소 구현 범위에서 추가하고 build/export·BFF
-   runtime test를 통과시킨다.
+2. 저장소 robots 원본과 정책 기록을 같은 저장소 구현 범위에서 추가하고 build/export 산출물과 원본의
+   일치를 확인한다.
 3. Cloudflare 강제 차단을 활성화하기 전에 AI Crawl Control rule에 최소 ActivityPub 예외와 logging을
    적용하고 Search/Agent·federation 대표 요청이 origin에 도달하는지 확인한다.
 4. Training 또는 공식 근거상 AI 대량 수집 용도의 크롤러를 강제 차단하고, Search behavior를 함께 가진

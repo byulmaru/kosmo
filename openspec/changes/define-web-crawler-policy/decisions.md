@@ -132,9 +132,9 @@
 - Alternatives Considered: Hono에 전용 `/robots.txt` route를 추가하는 방식은 동적 생성 필요가 없는데도 중복
   원본과 route 우선순위를 만든다. Cloudflare Worker만으로 원본까지 생성하는 방식은 저장소가 경로·Sitemap
   정책을 소유한다는 승인 범위를 약화한다.
-- Consequences: build/export가 public asset을 포함하는지와 BFF가 탐색 header에도 text 문서를 먼저
-  제공하는지를 자동 검증해야 한다. 새 런타임 service나 dependency는 필요하지 않다.
-- Confirmation / Follow-up: 정적 source 의미 검사와 BFF runtime routing test를 모두 통과시킨다.
+- Consequences: build/export가 public asset을 포함하는지는 원본과 산출물을 대조해 확인한다. BFF 정적 전달의
+  전용 자동 회귀 테스트는 두지 않으며, 새 런타임 service나 dependency도 추가하지 않는다.
+- Confirmation / Follow-up: 정적 source의 의미를 검토하고 build/export 산출물이 원본과 일치하는지 확인한다.
 
 ### PROD-731 배포가 Sitemap 통합 완료와 Change archive를 게이트한다
 

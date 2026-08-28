@@ -27,14 +27,14 @@
 **Verification**
 
 - 구현 시점의 client/server 라우트 구조와 공식 Cloudflare·크롤러 운영사 문서를 다시 대조한다.
-- 저장소 robots 문서를 에이전트 그룹·경로 prefix 의미로 검사해 공개·보호·ActivityPub·Sitemap 경계를 확인한다.
+- 저장소 robots 문서를 에이전트 그룹·경로 prefix 의미로 검토해 공개·보호·ActivityPub·Sitemap 경계를 확인한다.
 - 정책 기록에서 공식 근거, 마지막 검토일과 갱신 책임을 확인한다.
 
 - [x] 1.1 구현 시점의 보호·공개·ActivityPub 라우트와 공식 크롤러 분류를 재검증하고 근거·검토일·갱신 책임을 저장소에 기록한다.
 - [x] 1.2 저장소 크롤러 정책에 보호·내부 경로 제외와 `https://kos.moe/sitemap.xml` 지시문을 반영하고 공개 Profile·Public Post·정적 자산·ActivityPub 경로를 허용 상태로 유지한다.
-- [x] 1.3 저장소 원본과 자동 검증이 Cloudflare 동적 에이전트·detection 목록을 복제하지 않고 PROD-731 sitemap 구현을 범위에 섞지 않았는지 변경 diff를 검토한다.
+- [x] 1.3 저장소 원본과 검증 절차가 Cloudflare 동적 에이전트·detection 목록을 복제하지 않고 PROD-731 sitemap 구현을 범위에 섞지 않았는지 변경 diff를 검토한다.
 
-## 2. PROD-736 정적 응답과 정책 자동 검증
+## 2. PROD-736 정적 응답과 정책 검증
 
 **Authority / Provenance**
 
@@ -45,25 +45,25 @@
 
 **Deliverable**
 
-자동 검증이 저장소 크롤러 정책의 공개·보호·ActivityPub 경계와 `/robots.txt`의 정적 `text/plain` 응답을
-증명하고 기존 federation-first BFF·SPA routing의 회귀를 막는다.
+저장소 크롤러 정책의 공개·보호·ActivityPub 경계를 검토하고, 앱 build 결과에 `/robots.txt` 원본이 그대로
+포함되는지 확인한다.
 
 **Guardrails**
 
 - `Accept: text/html` 또는 navigation 요청도 `/robots.txt`를 SPA HTML로 바꾸지 않는다.
 - robots 문서 요청을 처리하기 위해 federation, GraphQL, login/logout 또는 일반 SPA 라우트의 우선순위를
   변경하지 않는다.
-- 테스트는 Cloudflare의 현재 동적 에이전트 목록 전체를 저장소 fixture로 복제하지 않는다.
+- 검증 자료는 Cloudflare의 현재 동적 에이전트 목록 전체를 저장소 fixture로 복제하지 않는다.
 
 **Verification**
 
 - 대표 공개 Profile·Public Post·asset, 모든 승인된 보호 prefix, WebFinger·actor/object·inbox 경로와 Sitemap
-  지시문을 정책 의미 단위로 검증한다.
-- BFF runtime test에서 `/robots.txt`의 status, Content-Type, body와 SPA 비간섭을 검증한다.
+  지시문을 정책 의미 단위로 검토한다.
+- 앱 build 뒤 source와 export된 `/robots.txt`가 일치하는지 확인한다.
 - 관련 workspace test·typecheck·lint와 strict OpenSpec validation을 통과시킨다.
 
-- [x] 2.1 저장소 robots 정책의 공개·보호·ActivityPub·Sitemap 의미를 검증하는 자동 회귀 사례를 추가한다.
-- [x] 2.2 export된 `/robots.txt`가 요청 header와 무관하게 HTTP 200 `text/plain`으로 제공되고 SPA HTML이 아님을 BFF runtime 경계에서 검증한다.
+- [x] 2.1 저장소 robots 정책의 공개·보호·ActivityPub·Sitemap 의미를 현재 라우트와 대조해 검토한다.
+- [x] 2.2 앱 build 뒤 export된 `/robots.txt`와 저장소 원본이 일치하는지 확인한다.
 - [x] 2.3 관련 workspace test·typecheck·lint와 `openspec validate define-web-crawler-policy --strict`를 통과시키고 결과를 기록한다.
 
 ## 3. PROD-736 Cloudflare 강제 차단과 ActivityPub 최소 예외
