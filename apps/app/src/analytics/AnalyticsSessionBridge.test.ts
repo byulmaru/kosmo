@@ -3,7 +3,6 @@ import { before, beforeEach, describe, it, mock } from 'node:test';
 import type { AnalyticsSessionBridge as AnalyticsSessionBridgeType } from './AnalyticsSessionBridge';
 
 const calls: string[] = [];
-let cleanup: (() => void) | undefined;
 const session = {
   accountId: null as string | null,
   status: 'guest' as 'error' | 'guest' | 'valid',
@@ -15,21 +14,14 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react', {
-  useEffect: (effect: () => void | (() => void)) => {
-    cleanup?.();
-    cleanup = effect() ?? undefined;
-  },
+  useEffect: (effect: () => void) => effect(),
 });
 mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => session,
 });
 mockModule(new URL('./client.ts', import.meta.url), {
-  clearAnalytics: () => {
-    calls.push('clear');
-  },
-  identifyAnalytics: (accountId: string) => {
-    calls.push(`identify:${accountId}`);
-  },
+  clearAnalytics: () => calls.push('clear'),
+  identifyAnalytics: (accountId: string) => calls.push(`identify:${accountId}`),
 });
 
 let AnalyticsSessionBridge: typeof AnalyticsSessionBridgeType;
@@ -39,14 +31,12 @@ before(async () => {
 });
 
 beforeEach(() => {
-  cleanup?.();
-  cleanup = undefined;
   calls.length = 0;
   session.accountId = null;
   session.status = 'guest';
 });
 
-describe('AnalyticsSessionBridge', { concurrency: false }, () => {
+describe('AnalyticsSessionBridge', () => {
   it('guest session은 anonymous client를 초기화하고 이전 identity를 지운다', () => {
     AnalyticsSessionBridge();
     assert.deepEqual(calls, ['clear']);
