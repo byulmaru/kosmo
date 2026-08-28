@@ -1,0 +1,292 @@
+name: Android Google Play Internal Distribution
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: android-play-internal-distribution
+  cancel-in-progress: false
+
+jobs:
+  distribute:
+    name: Build and upload Android Release AAB
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: android-play-internal-distribution
+    env:
+      ANDROID_RELEASE_CERTIFICATE_SHA256: ${{ vars.ANDROID_RELEASE_CERTIFICATE_SHA256 }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
+      EXPO_NO_GIT_STATUS: '1'
+      GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      KOSMO_ANDROID_AAB_PATH: ${{ github.workspace }}/apps/app/android/app/build/outputs/bundle/release/app-release.aab
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up mise
+        uses: jdx/mise-action@dba19683ed58901619b14f395a24841710cb4925 # v4.1.0
+        with:
+          cache: false
+
+      - name: Set up Java
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.0.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?Android SDK root is required}}"
+          sdkmanager --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.1.12297006" \
+            "cmake;3.22.1"
+
+          export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/build-tools/36.0.0:${PATH}"
+          apkanalyzer_path="$(command -v apkanalyzer)"
+          test -x "${apkanalyzer_path}"
+          test -x "${sdk_root}/build-tools/36.0.0/aapt2"
+          {
+            echo "ANDROID_APKANALYZER=${apkanalyzer_path}"
+            echo "ANDROID_SDK_ROOT=${sdk_root}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Ruby and Fastlane
+        uses: ruby/setup-ruby@d45b1a4e94b71acab930e56e79c6aa188764e7f9 # v1
+        with:
+          bundler-cache: true
+          ruby: '3.4'
+          working-directory: apps/app
+
+      - name: Calculate Android version code
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # ponytail: avoid a pre-build Play API query; replace this offset before 2086.
+          version_code=$(( $(date -u +%s) - 1577836800 ))
+          if (( version_code < 1 || version_code > 2147483647 )); then
+            echo "::error::KOSMO_ANDROID_VERSION_CODE is outside the signed 32-bit Android limit."
+            exit 1
+          fi
+          echo "KOSMO_ANDROID_VERSION_CODE=${version_code}" >> "${GITHUB_ENV}"
+
+      - name: Validate Android Play inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for name in \
+            ANDROID_RELEASE_CERTIFICATE_SHA256 \
+            ANDROID_RELEASE_KEY_ALIAS \
+            GCP_SERVICE_ACCOUNT \
+            GCP_WORKLOAD_IDENTITY_PROVIDER; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::${name} must be set in android-play-internal-distribution."
+              exit 1
+            fi
+          done
+
+          if [[ "${ANDROID_RELEASE_KEY_ALIAS}" == *$'\n'* || "${ANDROID_RELEASE_KEY_ALIAS}" == *$'\r'* ]]; then
+            echo "::error::ANDROID_RELEASE_KEY_ALIAS must not contain line breaks."
+            exit 1
+          fi
+
+          certificate="${ANDROID_RELEASE_CERTIFICATE_SHA256//:/}"
+          if [[ ! "${certificate}" =~ ^[0-9A-Fa-f]{64}$ ]]; then
+            echo "::error::ANDROID_RELEASE_CERTIFICATE_SHA256 must be a SHA-256 fingerprint."
+            exit 1
+          fi
+
+      - name: Restore Android upload key
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2016
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import path from "node:path";
+
+            const required = (name) => {
+              const value = process.env[name] ?? "";
+              if (value.length === 0) throw new Error(`${name} is required.`);
+              if (/\r|\n/u.test(value)) throw new Error(`${name} must not contain line breaks.`);
+              return value;
+            };
+
+            const encoded = required("ANDROID_RELEASE_KEYSTORE_BASE64");
+            const storePassword = required("ANDROID_RELEASE_STORE_PASSWORD");
+            const keyAlias = required("ANDROID_RELEASE_KEY_ALIAS");
+            const keyPassword = required("ANDROID_RELEASE_KEY_PASSWORD");
+            if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(encoded)) {
+              throw new Error("ANDROID_RELEASE_KEYSTORE_BASE64 must be a single valid base64 value.");
+            }
+            const keystore = Buffer.from(encoded, "base64");
+            if (keystore.length === 0 || keystore.toString("base64") !== encoded) {
+              throw new Error("ANDROID_RELEASE_KEYSTORE_BASE64 is invalid or empty.");
+            }
+
+            const escapeProperty = (value) => {
+              let result = "";
+              for (let index = 0; index < value.length; index += 1) {
+                const character = value[index];
+                const code = value.charCodeAt(index);
+                if (character === "\\") result += "\\\\";
+                else if (character === "=" || character === ":" || character === "#" || character === "!") result += `\\${character}`;
+                else if (character === " " && (index === 0 || index === value.length - 1)) result += "\\ ";
+                else if (code === 0x09) result += "\\t";
+                else if (code === 0x0c) result += "\\f";
+                else if (code < 0x20 || code > 0x7e) result += `\\u${code.toString(16).padStart(4, "0")}`;
+                else result += character;
+              }
+              return result;
+            };
+
+            let signingDir;
+            try {
+              signingDir = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "kosmo-android-signing-"));
+              fs.appendFileSync(
+                process.env.GITHUB_ENV,
+                `KOSMO_ANDROID_SIGNING_DIR=${signingDir}\n`,
+              );
+
+              const keystorePath = path.join(signingDir, "upload.jks");
+              const gradleHome = path.join(signingDir, "gradle");
+              fs.mkdirSync(gradleHome, { mode: 0o700 });
+              fs.writeFileSync(keystorePath, keystore, { mode: 0o600 });
+
+              const properties = [
+                `android.injected.signing.store.file=${escapeProperty(keystorePath)}`,
+                `android.injected.signing.store.password=${escapeProperty(storePassword)}`,
+                `android.injected.signing.key.alias=${escapeProperty(keyAlias)}`,
+                `android.injected.signing.key.password=${escapeProperty(keyPassword)}`,
+              ].join("\n");
+              const propertiesPath = path.join(gradleHome, "gradle.properties");
+              fs.writeFileSync(propertiesPath, `${properties}\n`, { mode: 0o600 });
+              fs.appendFileSync(process.env.GITHUB_ENV, `GRADLE_USER_HOME=${gradleHome}\n`);
+            } catch (error) {
+              if (signingDir) fs.rmSync(signingDir, { recursive: true, force: true });
+              throw error;
+            }
+          '
+
+      - name: Generate clean Expo Android project
+        working-directory: apps/app
+        run: |
+          pnpm relay
+          pnpm exec expo prebuild --clean --platform android --no-install
+
+      - name: Build signed Release AAB
+        working-directory: apps/app/android
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Verify Release AAB
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          aab_path="${KOSMO_ANDROID_AAB_PATH}"
+          test -s "${aab_path}"
+          test -x "${ANDROID_APKANALYZER}"
+          unzip -Z1 "${aab_path}" | grep -Fxq 'base/manifest/AndroidManifest.xml'
+
+          package_name="$("${ANDROID_APKANALYZER}" manifest application-id "${aab_path}" | tr -d '\r\n')"
+          version_code="$("${ANDROID_APKANALYZER}" manifest version-code "${aab_path}" | tr -d '\r\n')"
+          version_name="$("${ANDROID_APKANALYZER}" manifest version-name "${aab_path}" | tr -d '\r\n')"
+          [[ "${package_name}" == 'moe.kos' ]] || { echo "::error::AAB package is ${package_name}."; exit 1; }
+          [[ "${version_code}" == "${KOSMO_ANDROID_VERSION_CODE}" ]] || { echo "::error::AAB versionCode is ${version_code}."; exit 1; }
+          [[ -n "${version_name}" ]] || { echo "::error::AAB versionName is empty."; exit 1; }
+
+          jarsigner_output="$(LC_ALL=C jarsigner -verify "${aab_path}" 2>&1)"
+          if ! grep -Fq 'jar verified.' <<< "${jarsigner_output}"; then
+            echo "::error::AAB signature verification did not report a verified JAR."
+            printf '%s\n' "${jarsigner_output}"
+            exit 1
+          fi
+          actual_certificate="$(LC_ALL=C keytool -printcert -jarfile "${aab_path}" | sed -n 's/^[[:space:]]*SHA256:[[:space:]]*//p' | head -n 1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          expected_certificate="${ANDROID_RELEASE_CERTIFICATE_SHA256//:/}"
+          expected_certificate="${expected_certificate^^}"
+          [[ "${actual_certificate}" =~ ^[0-9A-F]{64}$ ]] || { echo "::error::AAB signing certificate was not found."; exit 1; }
+          [[ "${actual_certificate}" == "${expected_certificate}" ]] || { echo "::error::AAB signing certificate fingerprint mismatch."; exit 1; }
+
+          artifact_sha256="$(shasum -a 256 "${aab_path}" | awk '{print $1}')"
+          artifact_size_bytes="$(wc -c < "${aab_path}" | tr -d '[:space:]')"
+          {
+            echo "package_name=${package_name}"
+            echo "version_code=${version_code}"
+            echo "version_name=${version_name}"
+            echo "certificate_sha256=${actual_certificate}"
+            echo "artifact_sha256=${artifact_sha256}"
+            echo "artifact_size_bytes=${artifact_size_bytes}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Authenticate to Google Cloud for Play upload
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          create_credentials_file: true
+          cleanup_credentials: true
+          export_environment_variables: true
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+
+      - name: Upload AAB to Play internal testing
+        working-directory: apps/app
+        run: bundle exec fastlane android upload_internal
+
+      - name: Write Actions summary
+        if: success()
+        env:
+          ARTIFACT_SHA256: ${{ steps.verify.outputs.artifact_sha256 }}
+          ARTIFACT_SIZE_BYTES: ${{ steps.verify.outputs.artifact_size_bytes }}
+          CERTIFICATE_SHA256: ${{ steps.verify.outputs.certificate_sha256 }}
+          PACKAGE_NAME: ${{ steps.verify.outputs.package_name }}
+          VERSION_CODE: ${{ steps.verify.outputs.version_code }}
+          VERSION_NAME: ${{ steps.verify.outputs.version_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Android Google Play internal testing'
+            echo
+            echo "- Package: \`${PACKAGE_NAME}\`"
+            echo "- Version: \`${VERSION_NAME} (${VERSION_CODE})\`"
+            echo "- Upload certificate SHA-256: \`${CERTIFICATE_SHA256}\`"
+            echo "- AAB SHA-256: \`${ARTIFACT_SHA256}\`"
+            echo "- AAB size: \`${ARTIFACT_SIZE_BYTES} bytes\`"
+            echo "- Source: \`${GITHUB_SHA}\`"
+            echo "- Workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Remove signing and generated files
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          rm -f -- \
+            "${GOOGLE_APPLICATION_CREDENTIALS:-}" \
+            "${GOOGLE_GHA_CREDS_PATH:-}"
+          rm -rf -- \
+            "${KOSMO_ANDROID_SIGNING_DIR:-}" \
+            "${GITHUB_WORKSPACE}/apps/app/android"

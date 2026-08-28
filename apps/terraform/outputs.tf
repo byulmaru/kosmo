@@ -22,6 +22,14 @@ output "gcp_workload_identity_provider" {
   value = google_iam_workload_identity_pool_provider.kosmo.name
 }
 
+output "android_play_service_account" {
+  value = google_service_account.android_play_publisher.email
+}
+
+output "android_play_workload_identity_provider" {
+  value = google_iam_workload_identity_pool_provider.android_play.name
+}
+
 output "terraform_gcp_service_account" {
   value = google_service_account.terraform.email
 }

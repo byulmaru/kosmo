@@ -7,8 +7,10 @@ locals {
   github_repository_id = "1207798099"
   github_owner_id      = "29172280"
 
-  app_identifier     = "moe.kos"
-  distribution_group = "native-testers"
+  app_identifier           = "moe.kos"
+  distribution_group       = "native-testers"
+  android_play_environment = "android-play-internal-distribution"
+  android_play_workflow    = ".github/workflows/android-play-internal-distribution.yml"
   native_distribution_workflows = {
     "ios-device-onboarding"    = ".github/workflows/ios-device-onboarding.yml"
     "native-test-distribution" = ".github/workflows/ios-ad-hoc-distribution.yml"
@@ -60,6 +62,7 @@ resource "google_project_service" "required" {
   project  = local.firebase_project_id
   for_each = toset([
     "cloudresourcemanager.googleapis.com",
+    "androidpublisher.googleapis.com",
     "firebase.googleapis.com",
     "firebaseappdistribution.googleapis.com",
     "iam.googleapis.com",
@@ -166,6 +169,53 @@ resource "google_service_account_iam_member" "github_actions" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/native-distribution"
 
   depends_on = [google_iam_workload_identity_pool_provider.kosmo]
+}
+
+resource "google_service_account" "android_play_publisher" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  account_id      = "android-play-publisher"
+  display_name    = "Google Play internal testing from GitHub Actions"
+  deletion_policy = "PREVENT"
+
+  depends_on = [google_project_service.required]
+}
+
+resource "google_iam_workload_identity_pool_provider" "android_play" {
+  provider = google-beta
+  project  = local.firebase_project_id
+
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_actions.workload_identity_pool_id
+  workload_identity_pool_provider_id = "kosmo-android-play"
+  display_name                       = "Kosmo Android Play internal testing"
+  deletion_policy                    = "PREVENT"
+
+  attribute_mapping = {
+    "attribute.credential" = "'android-play'"
+    "google.subject"       = "assertion.sub"
+  }
+  attribute_condition = join(" && ", [
+    "assertion.repository_id == '${local.github_repository_id}'",
+    "assertion.repository_owner_id == '${local.github_owner_id}'",
+    "assertion.event_name == 'workflow_dispatch'",
+    "assertion.ref == 'refs/heads/main'",
+    "assertion.environment == '${local.android_play_environment}'",
+    "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${local.android_play_workflow}@refs/heads/main'",
+  ])
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+resource "google_service_account_iam_member" "android_play_publisher" {
+  provider           = google-beta
+  service_account_id = google_service_account.android_play_publisher.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_actions.name}/attribute.credential/android-play"
+
+  depends_on = [google_iam_workload_identity_pool_provider.android_play]
 }
 
 resource "google_service_account" "terraform" {

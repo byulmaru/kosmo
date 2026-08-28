@@ -21,6 +21,46 @@ After a successful callback, native login sends only the authorization code, PKC
 
 Native projects are generated with `expo prebuild --clean`; they are not source-of-truth files.
 
+## Android Google Play internal testing
+
+`Android Google Play Internal Distribution`은 `main`에서만 수동 실행하는 protected workflow다. 매 실행마다 clean CNG Android project를 만들고, upload key로 서명한 Release AAB 하나를 빌드·검증한 뒤 Google Play internal track에 업로드한다. versionCode는 workflow 시작 시 UTC Unix seconds에서 `2020-01-01`을 뺀 값으로 계산하며, 첫 수동 release의 versionCode `1`보다 크고 Android signed 32-bit 범위 안에 있다. Play API를 미리 조회하거나 장기 credential을 저장하지 않는다.
+
+첫 배포 전에는 Play Console에서 다음 절차를 수동으로 완료해야 한다. CI가 Play Console의 최초 app/signing bootstrap을 대신하지 않는다.
+
+1. package name `moe.kos`로 app을 만들고 Google Play App Signing을 설정한다.
+2. upload key를 관리자 장비에서 생성한다. 첫 AAB와 이후 CI AAB는 같은 upload key로 서명해야 하며, Google이 관리하는 app signing key와는 별개다.
+3. Play Console에서 첫 signed AAB 업로드와 internal testing track 생성을 완료하고 tester 목록과 opt-in 링크를 설정한다.
+4. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
+5. `android-play-internal-distribution` GitHub Environment를 만들고 `main`만 허용한 뒤 required reviewer를 설정한다.
+6. 해당 Environment에 다음 값을 넣는다.
+
+| 이름                                 | 종류     | 값                                                              |
+| ------------------------------------ | -------- | --------------------------------------------------------------- |
+| `GCP_SERVICE_ACCOUNT`                | variable | `terraform output -raw android_play_service_account`            |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER`     | variable | `terraform output -raw android_play_workload_identity_provider` |
+| `ANDROID_RELEASE_KEY_ALIAS`          | variable | upload key 생성 시 사용한 alias                                 |
+| `ANDROID_RELEASE_CERTIFICATE_SHA256` | variable | upload certificate의 SHA-256 fingerprint                        |
+| `ANDROID_RELEASE_KEYSTORE_BASE64`    | secret   | 줄바꿈 없는 upload keystore base64                              |
+| `ANDROID_RELEASE_STORE_PASSWORD`     | secret   | upload keystore password                                        |
+| `ANDROID_RELEASE_KEY_PASSWORD`       | secret   | upload key password                                             |
+
+upload key 예시는 다음과 같다. password는 명령행이나 저장소에 넣지 말고 `keytool` prompt에서 입력한다.
+
+```sh
+umask 077
+keytool -genkeypair -v \
+  -keystore kosmo-android-upload.jks \
+  -storetype JKS \
+  -alias kosmo-upload \
+  -keyalg RSA \
+  -keysize 4096 \
+  -validity 10000
+keytool -list -v -keystore kosmo-android-upload.jks
+base64 < kosmo-android-upload.jks | tr -d '\n'
+```
+
+`ANDROID_RELEASE_CERTIFICATE_SHA256`은 Play Console에 등록한 upload certificate와 일치해야 한다. upload key를 바꿀 때는 secret만 교체하지 말고 Play Console의 upload key reset 절차를 먼저 완료한다. 실제 Play Store 설치·업데이트·실기기 launch와 native login/GraphQL 검증은 PROD-287의 책임이며, 이 workflow는 API/OIDC 환경값이나 ADB/device smoke를 요구하지 않는다.
+
 ## iOS Ad Hoc Firebase distribution
 
 The two manual workflows build from a clean CNG project, not a committed `ios/` directory. `IOS_BUILD_NUMBER` is set to the GitHub Actions run ID, so each serialized run has a unique numeric build number. Before upload, Fastlane verifies the generated Xcode team and bundle ID, embedded Ad Hoc profile, distribution certificate, registered devices, IPA build number, and that the number is newer than the latest Firebase iOS release.
