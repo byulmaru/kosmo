@@ -60,7 +60,7 @@ function RadioGroupVisualStates() {
 
 const meta = {
   component: RadioGroupCatalog,
-  title: 'KOSMO/UI/Radio Group',
+  title: 'KOSMO/Components/Radio Group',
 } satisfies Meta<typeof RadioGroupCatalog>;
 
 export default meta;

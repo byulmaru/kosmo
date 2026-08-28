@@ -8,10 +8,10 @@ import {
 } from '@/components/follow-request/FollowRequestList';
 import { Button } from '@/components/ui/Button';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { profile } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { FollowRequestsStoriesQuery as FollowRequestsStoriesQueryType } from './__generated__/FollowRequestsStoriesQuery.graphql';
+import type { FollowRequestsStoriesQuery as FollowRequestsStoriesQueryType } from '../__generated__/FollowRequestsStoriesQuery.graphql';
 
 const requesterA = profile({
   avatar: {
@@ -245,7 +245,7 @@ const meta = {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/follow-requests' },
   },
-  title: 'KOSMO/Follow Requests/List',
+  title: 'KOSMO/Screens/Follow Requests',
 } satisfies Meta<typeof FollowRequestCatalog>;
 
 export default meta;

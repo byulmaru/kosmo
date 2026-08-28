@@ -11,7 +11,7 @@ import {
   space,
   textStyles,
 } from '@/theme/tokens';
-import { Catalog, Row, Section } from './StoryFrame';
+import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function FoundationsCatalog() {

@@ -11,10 +11,10 @@ import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { SessionProvider } from '@/session/SessionProvider';
-import { followersProfile, followingProfile, profile } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { followersProfile, followingProfile, profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from './__generated__/ProfilesStoriesQuery.graphql';
+import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from '../__generated__/ProfilesStoriesQuery.graphql';
 
 const followable = profile({
   avatar: { id: 'media-profile-followable-avatar', url: '/profile-followable-avatar.png' },
@@ -370,7 +370,7 @@ const meta = {
     },
     router: { pathname: '/@kosmo' },
   },
-  title: 'KOSMO/Profiles/Profile',
+  title: 'KOSMO/Patterns/Profile/Catalog',
 } satisfies Meta<typeof ProfileCatalog>;
 
 export default meta;

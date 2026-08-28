@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { radius, semanticColors, space } from '@/theme/tokens';
-import { Catalog, Row, Section } from './StoryFrame';
+import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function PrimitivesCatalog() {
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
 
 const meta = {
   component: PrimitivesCatalog,
-  title: 'KOSMO/Foundations/Primitives',
+  title: 'KOSMO/Components/Primitives',
 } satisfies Meta<typeof PrimitivesCatalog>;
 
 export default meta;

@@ -10,13 +10,13 @@ import { ReactionSelector } from '@/components/reaction/ReactionSelector';
 import { ReactionSummary } from '@/components/reaction/ReactionSummary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { colors } from '@/theme/tokens';
-import { profile } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
-import type { ReactionProfileConnectionStoriesQuery } from './__generated__/ReactionProfileConnectionStoriesQuery.graphql';
-import type { ReactionsIntegrationStoriesQuery } from './__generated__/ReactionsIntegrationStoriesQuery.graphql';
-import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
+import type { ReactionProfileConnectionStoriesQuery } from '../__generated__/ReactionProfileConnectionStoriesQuery.graphql';
+import type { ReactionsIntegrationStoriesQuery } from '../__generated__/ReactionsIntegrationStoriesQuery.graphql';
+import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from '../__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
   { count: 3, type: '🎉' },
@@ -492,7 +492,7 @@ const meta = {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/@kosmo' },
   },
-  title: 'KOSMO/Reactions/ReactionSummary',
+  title: 'KOSMO/Patterns/Reaction/Catalog',
 } satisfies Meta<typeof ReactionSummaryCatalog>;
 
 export default meta;

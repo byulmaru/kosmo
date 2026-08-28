@@ -20,11 +20,11 @@ import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing } from '@/theme/tokens';
-import { profile, shellQuery } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { profile, shellQuery } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
-import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
+import type { ShellStoriesQuery as ShellStoriesQueryType } from '../__generated__/ShellStoriesQuery.graphql';
 
 const selectedAvatarUrl = '/apple-touch-icon.png';
 const selectedHeaderUrl = '/og-default.png';
@@ -305,7 +305,7 @@ const meta = {
     relay: { data: query },
     router: { pathname: '/search' },
   },
-  title: 'KOSMO/Shell/Navigation',
+  title: 'KOSMO/Patterns/Shell/Catalog',
 } satisfies Meta<typeof NavigationCatalog>;
 
 export default meta;

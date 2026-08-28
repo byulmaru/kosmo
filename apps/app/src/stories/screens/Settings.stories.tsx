@@ -4,7 +4,7 @@ import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import { BYULMARU_ID_ACCOUNT_SETTINGS_URL } from '@/components/settings/ByulmaruIdAccountSettingsEntry';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
-import { profile } from './fixtures';
+import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const selectedProfile = profile({
@@ -41,7 +41,7 @@ const meta = {
       <SettingsRoute />
     </SettingsRouteLayout>
   ),
-  title: 'KOSMO/Settings/Page',
+  title: 'KOSMO/Screens/Settings',
 } satisfies Meta<typeof SettingsRouteLayout>;
 
 export default meta;

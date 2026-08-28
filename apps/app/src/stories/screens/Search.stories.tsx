@@ -2,8 +2,8 @@ import { expect, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
 import { StateView } from '@/components/ui/StateView';
-import { profile } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const result = profile({
@@ -42,7 +42,7 @@ const meta = {
     mocked(trackAnalytics).mockClear();
   },
   component: SearchScreen,
-  title: 'KOSMO/Search/SearchScreen',
+  title: 'KOSMO/Screens/Search',
 } satisfies Meta<typeof SearchScreen>;
 
 export default meta;

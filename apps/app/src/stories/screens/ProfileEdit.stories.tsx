@@ -213,7 +213,7 @@ const meta = {
     layout: 'fullscreen',
     viewport: { defaultViewport: 'kosmoMobile' },
   },
-  title: 'KOSMO/Profiles/Profile Edit',
+  title: 'KOSMO/Screens/Profile Edit',
 } satisfies Meta<typeof ProfileEditImageFields>;
 
 export default meta;

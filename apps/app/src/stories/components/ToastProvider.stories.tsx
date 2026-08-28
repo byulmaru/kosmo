@@ -100,7 +100,7 @@ function ToneAndActionToastFixture() {
 
 const meta = {
   component: ToastFixture,
-  title: 'KOSMO/UI/Toast Provider',
+  title: 'KOSMO/Components/Toast Provider',
 } satisfies Meta<typeof ToastFixture>;
 
 export default meta;

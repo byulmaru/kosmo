@@ -1,6 +1,6 @@
 import { expect, spyOn, waitFor, within } from 'storybook/test';
 import ComposeScreen from '@/app/(tabs)/(protected)/compose';
-import { profile } from './fixtures';
+import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const composerProfile = profile({
@@ -13,7 +13,7 @@ const composerProfile = profile({
 const meta = {
   component: ComposeScreen,
   parameters: { layout: 'fullscreen', router: { pathname: '/compose' } },
-  title: 'KOSMO/Compose/Page',
+  title: 'KOSMO/Screens/Compose',
 } satisfies Meta<typeof ComposeScreen>;
 
 export default meta;
