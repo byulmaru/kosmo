@@ -5,6 +5,7 @@ KOSMO의 UI/프로덕트 디자인 결정을 기록하고 공유하는 문서 �
 ## 문서 목록
 
 - [figma.md](./figma.md) — Figma 파일 구조와 작업 규칙
+- [storybook.md](./storybook.md) — Figma 디자인 계약을 Production 공용 UI와 Storybook으로 이관하는 기준
 - [accessibility.md](./accessibility.md) — Web·Android·iOS 접근성 목표, target과 검증 기준
 - [colors.md](./colors.md) — 컬러 토큰 정책
 - [foundations.md](./foundations.md) — typography, spacing, radius, border, elevation, icon, density와 UI 일관성 Inventory
