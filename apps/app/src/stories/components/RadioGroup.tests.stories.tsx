@@ -1,7 +1,4 @@
-import baseMeta, {
-  FallbackTabStop as fallbackTabStop,
-  InteractionContract as interactionContract,
-} from './RadioGroup.stories';
+import baseMeta, { FallbackTabStop as fallbackTabStop } from './RadioGroup.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
@@ -13,5 +10,4 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const InteractionContract: Story = interactionContract;
 export const FallbackTabStop: Story = fallbackTabStop;

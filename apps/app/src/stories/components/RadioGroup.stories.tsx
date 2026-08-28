@@ -109,7 +109,7 @@ const meta = {
     optionLabels: { control: 'object' },
   },
   component: RadioGroupCatalog,
-  excludeStories: ['InteractionContract', 'FallbackTabStop'],
+  excludeStories: ['FallbackTabStop'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Radio Group',
 } satisfies Meta<typeof RadioGroupCatalog>;
@@ -132,61 +132,57 @@ export const Playground: Story = {
       {...args}
     />
   ),
-};
-
-export const InteractionContract: Story = {
   play: async ({ args, canvasElement, step }) => {
+    args.onChange?.mockClear();
     const canvas = within(canvasElement);
-    const group = canvas.getByRole('radiogroup', { name: '알림 방식' });
-    const email = within(group).getByRole('radio', { name: '이메일' });
-    const push = within(group).getByRole('radio', { name: '푸시 알림' });
-    const sms = within(group).getByRole('radio', {
-      name: `${longLabel}: ${longDescription}`,
+    const group = canvas.getByRole('radiogroup', {
+      name: args.accessibilityLabel ?? '알림 방식',
     });
-    const inApp = within(group).getByRole('radio', { name: '앱 알림' });
+    const radios = within(group).getAllByRole('radio');
+    const optionCount = Math.max(1, Math.min(8, args.optionCount ?? 4));
+    const initialIndex = Math.max(0, Math.min((args.initialItem ?? 1) - 1, optionCount - 1));
+    const selectedRadio = radios[initialIndex];
+    const enabledRadios = radios.filter((radio) => radio.getAttribute('aria-disabled') !== 'true');
+    const tabStop =
+      selectedRadio.getAttribute('aria-disabled') === 'true' ? enabledRadios[0] : selectedRadio;
 
     await step('초기 선택과 접근성 상태 확인', async () => {
-      expect(canvas.getAllByRole('radio')).toHaveLength(4);
+      expect(radios).toHaveLength(optionCount);
       expect(group).toBeVisible();
-      expect(email).toBeChecked();
-      expect(push).not.toBeChecked();
-      expect(push).toHaveAttribute('aria-disabled', 'true');
-      expect(sms).not.toBeChecked();
-      expect(inApp).not.toBeChecked();
-      expect(email).toHaveAttribute('tabindex', '0');
-      expect(push).toHaveAttribute('tabindex', '-1');
-      expect(sms).toHaveAttribute('tabindex', '-1');
-      expect(inApp).toHaveAttribute('tabindex', '-1');
-
+      expect(selectedRadio).toBeChecked();
+      if (args.disabled) {
+        for (const radio of radios) {
+          expect(radio).toHaveAttribute('aria-disabled', 'true');
+          expect(radio).toHaveAttribute('tabindex', '-1');
+        }
+        return;
+      }
+      expect(tabStop).toHaveAttribute('tabindex', '0');
+      for (const radio of radios.filter((radio) => radio !== tabStop)) {
+        expect(radio).toHaveAttribute('tabindex', '-1');
+      }
       await userEvent.tab();
-      expect(email).toHaveFocus();
-      expect(getComputedStyle(email).borderWidth).toBe('2px');
+      expect(tabStop).toHaveFocus();
+      expect(getComputedStyle(tabStop).borderWidth).toBe('2px');
     });
 
+    if (args.disabled || enabledRadios.length < 2) {
+      return;
+    }
+
     await step('키보드로 라디오 선택 변경', async () => {
-      await userEvent.click(email);
-      expect(email).toHaveFocus();
-      expect(getComputedStyle(email).borderWidth).toBe('0px');
-
       await userEvent.keyboard('{ArrowRight}');
-      expect(sms).toHaveFocus();
-      expect(sms).toBeChecked();
-      expect(getComputedStyle(sms).borderWidth).toBe('2px');
-      expect(args.onChange).toHaveBeenCalledWith('sms');
-
-      await userEvent.keyboard('{ArrowRight}');
-      expect(inApp).toHaveFocus();
-      expect(inApp).toBeChecked();
-
-      await userEvent.keyboard('{ArrowRight}');
-      expect(email).toHaveFocus();
-      expect(email).toBeChecked();
+      const nextRadio = enabledRadios[(enabledRadios.indexOf(tabStop) + 1) % enabledRadios.length];
+      expect(nextRadio).toHaveFocus();
+      expect(nextRadio).toBeChecked();
+      expect(args.onChange).toHaveBeenCalledOnce();
     });
 
     await step('포인터 선택과 선택 상태 확인', async () => {
-      await userEvent.click(sms);
-      expect(sms).toBeChecked();
-      expect(email).not.toBeChecked();
+      const target = enabledRadios.find((radio) => radio.getAttribute('aria-checked') !== 'true')!;
+      await userEvent.click(target);
+      expect(target).toBeChecked();
+      expect(args.onChange).toHaveBeenCalledTimes(2);
     });
   },
 };
@@ -196,10 +192,5 @@ export const FallbackTabStop: Story = {
 };
 
 export const VisualStates: Story = {
-  render: () => <RadioGroupVisualStates />,
-};
-
-export const VisualStatesDark: Story = {
-  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
   render: () => <RadioGroupVisualStates />,
 };

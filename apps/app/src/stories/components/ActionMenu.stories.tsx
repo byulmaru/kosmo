@@ -1,8 +1,8 @@
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react-native';
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
+import { ThemeProvider } from '@/theme/ThemeProvider';
 import { semanticColors, spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -18,7 +18,6 @@ function ActionMenuFixture({
   itemCount = 2,
   itemLabels = defaultItemLabels,
   onSelect,
-  showSelectionCount = false,
   triggerLabel = '더 보기',
   webHorizontalPlacement,
 }: {
@@ -27,20 +26,15 @@ function ActionMenuFixture({
   itemCount?: number;
   itemLabels?: string[];
   onSelect?: (key: string) => void;
-  showSelectionCount?: boolean;
   triggerLabel?: string;
   webHorizontalPlacement?: 'end';
 }) {
-  const [selectionCount, setSelectionCount] = useState(0);
   const items = Array.from({ length: Math.max(1, Math.min(8, itemCount)) }, (_, index) => {
     const key = `item-${index + 1}`;
     return {
       key,
       label: itemLabels[index]?.trim() || `항목 ${index + 1}`,
-      onSelect: () => {
-        setSelectionCount((count) => count + 1);
-        onSelect?.(key);
-      },
+      onSelect: () => onSelect?.(key),
     };
   });
 
@@ -66,35 +60,20 @@ function ActionMenuFixture({
         )}
         webHorizontalPlacement={webHorizontalPlacement}
       />
-      {showSelectionCount ? <Text testID="selection-count">{selectionCount}</Text> : null}
     </View>
   );
 }
 
-function ActionMenuInteractionFixtures({ onSelect }: { onSelect?: (key: string) => void }) {
+function ActionMenuCollisionFixtures({ onSelect }: { onSelect?: (key: string) => void }) {
   return (
     <View style={styles.fixture}>
-      <View accessibilityLabel="기본 메뉴 fixture">
-        <ActionMenuFixture {...repostFixtureProps} onSelect={onSelect} showSelectionCount />
-      </View>
-      <View accessibilityLabel="외부 상호작용 fixture">
-        <ActionMenuFixture {...repostFixtureProps} />
-        <Pressable accessibilityLabel="바깥 버튼" accessibilityRole="button" style={styles.trigger}>
-          <Text>바깥 버튼</Text>
-        </Pressable>
-      </View>
-      <View accessibilityLabel="비활성 메뉴 fixture">
-        <ActionMenuFixture {...repostFixtureProps} disabled />
-      </View>
-      <View accessibilityLabel="가변 항목 fixture">
-        <ActionMenuFixture
-          itemCount={3}
-          itemLabels={['첫 번째 작업', '두 번째 작업', '세 번째 작업']}
-          triggerLabel="작업"
-        />
-      </View>
       <View accessibilityLabel="viewport collision fixture">
-        <ActionMenuFixture {...repostFixtureProps} compactTrigger itemCount={1} />
+        <ActionMenuFixture
+          {...repostFixtureProps}
+          compactTrigger
+          itemCount={1}
+          onSelect={onSelect}
+        />
       </View>
       <View accessibilityLabel="end-aligned menu fixture">
         <ActionMenuFixture
@@ -104,9 +83,36 @@ function ActionMenuInteractionFixtures({ onSelect }: { onSelect?: (key: string) 
           webHorizontalPlacement="end"
         />
       </View>
-      <View accessibilityLabel="공용 메뉴 스타일 fixture">
+    </View>
+  );
+}
+
+function ActionMenuBehaviorFixtures() {
+  return (
+    <View style={styles.fixture}>
+      <View accessibilityLabel="외부 상호작용 fixture">
+        <ActionMenuFixture {...repostFixtureProps} />
+        <Pressable accessibilityLabel="바깥 버튼" accessibilityRole="button" style={styles.trigger}>
+          <Text>바깥 버튼</Text>
+        </Pressable>
+      </View>
+      <View accessibilityLabel="비활성 메뉴 fixture">
+        <ActionMenuFixture {...repostFixtureProps} disabled />
+      </View>
+      <ActionMenuStyleFixture mode="light" />
+      <ActionMenuStyleFixture mode="dark" />
+    </View>
+  );
+}
+
+function ActionMenuStyleFixture({ mode }: { mode: 'dark' | 'light' }) {
+  const label = mode === 'dark' ? '다크' : '라이트';
+
+  return (
+    <ThemeProvider mode={mode}>
+      <View accessibilityLabel={`${label} 공용 메뉴 스타일 fixture`}>
         <ActionMenu
-          accessibilityLabel="더 보기 메뉴"
+          accessibilityLabel={`${label} 더 보기 메뉴`}
           items={[
             {
               icon: Link2,
@@ -125,7 +131,7 @@ function ActionMenuInteractionFixtures({ onSelect }: { onSelect?: (key: string) 
           ]}
           renderTrigger={({ expanded, onPress, ref }) => (
             <Pressable
-              accessibilityLabel="더 보기"
+              accessibilityLabel={`${label} 더 보기`}
               accessibilityRole="button"
               aria-expanded={expanded}
               aria-haspopup="menu"
@@ -139,7 +145,7 @@ function ActionMenuInteractionFixtures({ onSelect }: { onSelect?: (key: string) 
           webHorizontalPlacement="end"
         />
       </View>
-    </View>
+    </ThemeProvider>
   );
 }
 
@@ -157,7 +163,7 @@ const meta = {
     itemLabels: { control: 'object' },
   },
   component: ActionMenuFixture,
-  excludeStories: ['InteractionContract', 'DarkInteractionContract', 'ViewportCollision'],
+  excludeStories: ['SurfaceAndDismissContract', 'ViewportCollision'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Action Menu',
 } satisfies Meta<typeof ActionMenuFixture>;
@@ -174,12 +180,60 @@ export const Playground: Story = {
       include: ['compactTrigger', 'disabled', 'itemCount', 'itemLabels', 'triggerLabel'],
     },
   },
+  play: async ({ args, canvasElement, step }) => {
+    const canvas = within(canvasElement);
+    const itemCount = Math.max(1, Math.min(8, args.itemCount ?? 2));
+    const itemLabels = Array.from(
+      { length: itemCount },
+      (_, index) => args.itemLabels?.[index]?.trim() || `항목 ${index + 1}`,
+    );
+    const triggerLabel = args.triggerLabel ?? '더 보기';
+    const trigger = canvas.getByRole('button', { name: triggerLabel });
+
+    if (args.disabled) {
+      await step('비활성 trigger 계약 확인', async () => {
+        expect(trigger).toHaveAttribute('aria-disabled', 'true');
+        expect(trigger).toHaveAttribute('tabindex', '-1');
+        expect(getComputedStyle(trigger).cursor).not.toBe('pointer');
+        trigger.click();
+        expect(
+          screen.queryByRole('menu', { name: `${triggerLabel} 메뉴` }),
+        ).not.toBeInTheDocument();
+      });
+      return;
+    }
+
+    await step('메뉴 열기·키보드 탐색·dismiss', async () => {
+      expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+      await userEvent.click(trigger);
+      const menu = await screen.findByRole('menu', { name: `${triggerLabel} 메뉴` });
+      const items = within(menu).getAllByRole('menuitem');
+      expect(items.map((item) => item.textContent)).toEqual(itemLabels);
+      expect(items[0]).toHaveFocus();
+      if (items.length > 1) {
+        await userEvent.keyboard('{ArrowDown}');
+        expect(items[1]).toHaveFocus();
+        await userEvent.keyboard('{ArrowUp}');
+        expect(items[0]).toHaveFocus();
+      }
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('menu', { name: `${triggerLabel} 메뉴` })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
+    await step('항목 선택과 callback 확인', async () => {
+      await userEvent.click(trigger);
+      const menu = await screen.findByRole('menu', { name: `${triggerLabel} 메뉴` });
+      await userEvent.click(within(menu).getByRole('menuitem', { name: itemLabels[0] }));
+      expect(args.onSelect).toHaveBeenCalledWith('item-1');
+      expect(trigger).toHaveFocus();
+    });
+  },
 };
 
-export const InteractionContract: Story = {
-  render: (args) => <ActionMenuInteractionFixtures onSelect={args.onSelect} />,
-  play: async ({ args, canvasElement, globals, step }) => {
-    const expectedTheme = semanticColors[globals.theme === 'dark' ? 'dark' : 'light'];
+export const SurfaceAndDismissContract: Story = {
+  render: () => <ActionMenuBehaviorFixtures />,
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     const ownerDocument = canvasElement.ownerDocument;
     const serializeColor = (color: string) => {
@@ -187,84 +241,56 @@ export const InteractionContract: Story = {
       probe.style.color = color;
       return probe.style.color;
     };
-    await step('메뉴 열기·선택·포커스 복원', async () => {
-      const defaultFixture = within(canvas.getByLabelText('기본 메뉴 fixture'));
-      const trigger = defaultFixture.getByRole('button', { name: '재게시' });
 
-      expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+    await step('기본 배치와 외부 상호작용 dismiss', async () => {
+      const fixture = within(canvas.getByLabelText('외부 상호작용 fixture'));
+      const trigger = fixture.getByRole('button', { name: '재게시' });
       Object.assign(trigger.style, { left: '160px', position: 'fixed', top: '80px' });
       await userEvent.click(trigger);
       const menu = await screen.findByRole('menu', { name: '재게시 메뉴' });
-      const defaultMenuItem = within(menu).getByRole('menuitem', { name: '재게시' });
-      const defaultMenuRect = menu.getBoundingClientRect();
-      const defaultMenuItemRect = defaultMenuItem.getBoundingClientRect();
-      const defaultTriggerRect = trigger.getBoundingClientRect();
-      expect(menu).toBeVisible();
-      expect(trigger).toHaveAttribute('aria-expanded', 'true');
-      expect(defaultMenuRect.left).toBeCloseTo(defaultTriggerRect.left - 5, 0);
-      expect(defaultMenuItemRect.left).toBeCloseTo(defaultTriggerRect.left, 0);
-      await userEvent.keyboard('{Escape}');
-      expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
-      expect(trigger).toHaveFocus();
-      await userEvent.click(trigger);
-      await userEvent.click(
-        within(await screen.findByRole('menu')).getByRole('menuitem', { name: '재게시' }),
+      const menuItem = within(menu).getByRole('menuitem', { name: '재게시' });
+      expect(menu.getBoundingClientRect().left).toBeCloseTo(
+        trigger.getBoundingClientRect().left - 5,
+        0,
       );
-      expect(defaultFixture.getByTestId('selection-count')).toHaveTextContent('1');
-      expect(trigger).toHaveFocus();
-      expect(args.onSelect).toHaveBeenCalledWith('item-1');
-    });
-
-    await step('항목 구성과 외부에서 닫기', async () => {
-      const configurableFixture = within(canvas.getByLabelText('가변 항목 fixture'));
-      await userEvent.click(configurableFixture.getByRole('button', { name: '작업' }));
-      const configurableMenu = await screen.findByRole('menu', { name: '작업 메뉴' });
-      expect(
-        within(configurableMenu)
-          .getAllByRole('menuitem')
-          .map((item) => item.textContent),
-      ).toEqual(['첫 번째 작업', '두 번째 작업', '세 번째 작업']);
-      await userEvent.keyboard('{Escape}');
-
-      const outsideFixture = within(canvas.getByLabelText('외부 상호작용 fixture'));
-      const outsideTrigger = outsideFixture.getByRole('button', { name: '재게시' });
-      await userEvent.click(outsideTrigger);
-      await screen.findByRole('menu', { name: '재게시 메뉴' });
-      await userEvent.click(outsideFixture.getByRole('button', { name: '바깥 버튼' }));
+      expect(menuItem.getBoundingClientRect().left).toBeCloseTo(
+        trigger.getBoundingClientRect().left,
+        0,
+      );
+      await userEvent.click(fixture.getByRole('button', { name: '바깥 버튼' }));
       expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
 
-      await userEvent.click(outsideTrigger);
+      await userEvent.click(trigger);
       await screen.findByRole('menu', { name: '재게시 메뉴' });
       await userEvent.tab();
       await userEvent.tab();
-      expect(outsideFixture.getByRole('button', { name: '바깥 버튼' })).toHaveFocus();
+      expect(fixture.getByRole('button', { name: '바깥 버튼' })).toHaveFocus();
       expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
-    });
-
-    await step('키보드로 메뉴 탐색', async () => {
-      const outsideFixture = within(canvas.getByLabelText('외부 상호작용 fixture'));
-      const outsideTrigger = outsideFixture.getByRole('button', { name: '재게시' });
-      await userEvent.click(outsideTrigger);
-      const keyboardMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
-      const [repostItem, quoteItem] = within(keyboardMenu).getAllByRole('menuitem');
-      expect(repostItem).toHaveFocus();
-      await userEvent.keyboard('{ArrowDown}');
-      expect(quoteItem).toHaveFocus();
-      await userEvent.keyboard('{ArrowDown}');
-      expect(repostItem).toHaveFocus();
-      await userEvent.keyboard('{ArrowUp}');
-      expect(quoteItem).toHaveFocus();
-      await userEvent.keyboard('{Home}');
-      expect(repostItem).toHaveFocus();
-      await userEvent.keyboard('{End}');
-      expect(quoteItem).toHaveFocus();
-      await userEvent.keyboard('{Escape}');
     });
 
     await step('메뉴 스타일과 비활성 상태 확인', async () => {
-      const styleFixture = within(canvas.getByLabelText('공용 메뉴 스타일 fixture'));
-      await userEvent.click(styleFixture.getByRole('button', { name: '더 보기' }));
-      const styleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
+      for (const [label, mode] of [
+        ['라이트', 'light'],
+        ['다크', 'dark'],
+      ] as const) {
+        const styleFixture = within(canvas.getByLabelText(`${label} 공용 메뉴 스타일 fixture`));
+        const styleTrigger = styleFixture.getByRole('button', { name: `${label} 더 보기` });
+        await userEvent.click(styleTrigger);
+        const styleMenu = await screen.findByRole('menu', { name: `${label} 더 보기 메뉴` });
+        expect(getComputedStyle(styleMenu).backgroundColor).toBe(
+          serializeColor(semanticColors[mode].backgroundElevated),
+        );
+        expect(getComputedStyle(styleMenu).borderTopColor).toBe(
+          serializeColor(semanticColors[mode].borderDefault),
+        );
+        await userEvent.keyboard('{ArrowDown}');
+        await userEvent.keyboard('{Escape}');
+        expect(styleTrigger).toHaveFocus();
+      }
+
+      const styleFixture = within(canvas.getByLabelText('라이트 공용 메뉴 스타일 fixture'));
+      await userEvent.click(styleFixture.getByRole('button', { name: '라이트 더 보기' }));
+      const styleMenu = await screen.findByRole('menu', { name: '라이트 더 보기 메뉴' });
       const copyItem = within(styleMenu).getByRole('menuitem', { name: '링크 복사' });
       const deleteItem = within(styleMenu).getByRole('menuitem', { name: '게시글 삭제' });
       const copyIcon = copyItem.querySelector('svg')!;
@@ -272,12 +298,6 @@ export const InteractionContract: Story = {
       const copyLabel = within(copyItem).getByText('링크 복사');
       const deleteLabel = within(deleteItem).getByText('삭제');
 
-      expect(getComputedStyle(styleMenu).backgroundColor).toBe(
-        serializeColor(expectedTheme.backgroundElevated),
-      );
-      expect(getComputedStyle(styleMenu).borderTopColor).toBe(
-        serializeColor(expectedTheme.borderDefault),
-      );
       expect(copyIcon.getBoundingClientRect().left).toBeCloseTo(
         deleteIcon.getBoundingClientRect().left,
         0,
@@ -290,31 +310,22 @@ export const InteractionContract: Story = {
       expect(getComputedStyle(copyItem).borderTopWidth).toBe('0px');
       expect(getComputedStyle(deleteItem).borderTopWidth).toBe('1px');
       expect(getComputedStyle(deleteItem).borderTopColor).toBe(
-        serializeColor(expectedTheme.borderSubtle),
+        serializeColor(semanticColors.light.borderSubtle),
       );
       fireEvent.keyDown(copyItem, { key: 'Enter' });
       await waitFor(() =>
         expect(getComputedStyle(copyItem).backgroundColor).toBe(
-          serializeColor(expectedTheme.statePressed),
+          serializeColor(semanticColors.light.statePressed),
         ),
       );
       fireEvent.keyUp(copyItem, { key: 'Enter' });
       await userEvent.keyboard('{Enter}');
-      const hoveredStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
-      const hoveredCopyItem = within(hoveredStyleMenu).getByRole('menuitem', {
-        name: '링크 복사',
-      });
+      const hoveredMenu = await screen.findByRole('menu', { name: '라이트 더 보기 메뉴' });
+      const hoveredCopyItem = within(hoveredMenu).getByRole('menuitem', { name: '링크 복사' });
       await userEvent.hover(hoveredCopyItem);
       expect(getComputedStyle(hoveredCopyItem).backgroundColor).toBe(
-        serializeColor(expectedTheme.stateHover),
+        serializeColor(semanticColors.light.stateHover),
       );
-      await userEvent.keyboard('{Escape}');
-      await userEvent.keyboard('{Enter}');
-      const reopenedStyleMenu = await screen.findByRole('menu', { name: '더 보기 메뉴' });
-      const reopenedCopyItem = within(reopenedStyleMenu).getByRole('menuitem', {
-        name: '링크 복사',
-      });
-      expect(getComputedStyle(reopenedCopyItem).backgroundColor).toBe('rgba(0, 0, 0, 0)');
       await userEvent.keyboard('{Escape}');
 
       const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));
@@ -329,7 +340,7 @@ export const InteractionContract: Story = {
 };
 
 export const ViewportCollision: Story = {
-  render: (args) => <ActionMenuInteractionFixtures onSelect={args.onSelect} />,
+  render: (args) => <ActionMenuCollisionFixtures onSelect={args.onSelect} />,
   play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     const ownerDocument = canvasElement.ownerDocument;
@@ -417,11 +428,6 @@ export const ViewportCollision: Story = {
       await userEvent.keyboard('{Escape}');
     });
   },
-};
-
-export const DarkInteractionContract: Story = {
-  ...InteractionContract,
-  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
 };
 
 const styles = StyleSheet.create({

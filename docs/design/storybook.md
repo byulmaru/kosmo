@@ -49,14 +49,14 @@ apps/app/src/stories/
 
 기존 `apps/app/src/stories/` 직하의 story 이동·분할과 title 정렬은 `PROD-865`에서 수행한다. DSN별 이관 이슈는 `PROD-865`가 확정한 구조를 재사용하며 별도 catalog root나 UI package를 만들지 않는다.
 
-서로 다른 Production component를 하나의 `Catalog` title 아래 모으지 않는다. 각 component는 독립 title과 `Default`·`Playground`·대표 상태 story를 가지며, foundation token은 `KOSMO/Foundations/Tokens` 아래에서 종류별 story로 나눈다. Theme은 별도 Light·Dark story를 복제하지 않고 toolbar로 전환한다.
+새로 이관하는 서로 다른 Production component를 하나의 `Catalog` title 아래 모으지 않는다. 각 component는 독립 title과 `Default`·`Playground`·대표 상태 story를 가지며, foundation token은 `KOSMO/Foundations/Tokens` 아래에서 종류별 story로 나눈다. 아직 DSN별 이관 전인 기존 pattern·screen 대형 story는 현재 `Catalog` title을 임시로 유지하고 대응 `PROD-851`~`PROD-864`, `PROD-866`에서 component 경계가 확정될 때 분리한다. Theme은 별도 Light·Dark story를 복제하지 않고 toolbar로 전환한다.
 
 ## Production 컴포넌트와 fixture 경계
 
 - Story는 `apps/app/src`의 실제 Production 컴포넌트나 screen을 직접 렌더링한다.
 - args를 controlled prop에 연결하거나 사용자 시나리오를 구성하는 얇은 fixture는 허용한다. Production UI, 상태 전이 또는 시각 구조를 story 전용 컴포넌트로 복제하지 않는다.
 - Relay fragment component는 공용 `RelayStoryProvider`와 operation payload를 사용해 실제 fragment ref 계약을 유지한다. raw object를 generated `$key`로 cast하지 않는다.
-- 공용 Theme, Safe Area, Toast, Content Warning, Relay와 Router 환경은 `.storybook/preview.tsx`의 decorator와 mock을 재사용한다. component가 직접 소유하지 않는 provider를 story마다 중복하지 않는다.
+- 공용 Theme, Safe Area, Toast, Content Warning, Relay와 Router 환경은 `.storybook/preview.tsx`의 decorator와 mock을 재사용한다. component가 직접 소유하지 않는 provider를 일반 story마다 중복하지 않는다. 두 theme의 semantic style을 한 번에 비교하는 자동화 전용 `Tests` fixture만 명시적인 `ThemeProvider`를 중첩할 수 있다.
 - route·Relay·platform mock은 해당 story를 실행하는 데 필요한 최소 경계만 제공한다. mock 성공은 Production route, network, cache나 platform integration의 증거가 아니다.
 
 ## Story 종류
@@ -68,11 +68,11 @@ apps/app/src/stories/
 1. `Default` 또는 `Base`: 필수 입력만 사용한 기준 상태. 제품의 명확한 기본값이 있으면 `Default`, 필수 semantic 입력이 있어야 성립하면 `Base`를 사용한다.
 2. `Playground`: args로 component-owned props와 controlled state를 조절하는 검토 표면.
 3. 대표 상태 story: Playground 한 개로 비교하기 어려운 selected, disabled, loading, error, empty, long-content, responsive 상태.
-4. interaction story 또는 `play`: component가 직접 소유하는 핵심 사용자 동작과 callback 결과.
+4. `Playground` 또는 대표 상태의 `play`: component가 직접 소유하는 핵심 사용자 동작과 callback 결과.
 
 `Default`와 `Base`를 형식적으로 모두 만들거나 같은 상태 조합을 Playground와 개별 story에 중복하지 않는다.
 
-자동 검증을 위한 fixture·계측값·interaction lifecycle이 중심인 story는 component의 `Tests` 하위 title로 분리한다. `play`가 있더라도 사용자가 직접 비교할 대표 상태나 variant story는 일반 component title에 유지한다.
+모든 일반 story는 render 검증 표면이며, component의 기본 interaction과 callback 검증은 조절 가능한 `Playground`의 `play`에 함께 둔다. viewport collision, fallback tab stop, timer·교체·cleanup, 환경 전환 뒤 늦은 완료처럼 전용 fixture나 lifecycle이 필요한 검증만 component의 `Tests` 하위 title로 분리한다. 동일 story를 분류만 위해 `Tests`에 다시 노출하지 않는다.
 
 ### Page와 Screen
 

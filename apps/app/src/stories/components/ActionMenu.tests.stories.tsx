@@ -1,6 +1,5 @@
 import baseMeta, {
-  DarkInteractionContract as darkInteractionContract,
-  InteractionContract as interactionContract,
+  SurfaceAndDismissContract as surfaceAndDismissContract,
   ViewportCollision as viewportCollision,
 } from './ActionMenu.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -14,6 +13,5 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const InteractionContract: Story = interactionContract;
-export const DarkInteractionContract: Story = darkInteractionContract;
+export const SurfaceAndDismissContract: Story = surfaceAndDismissContract;
 export const ViewportCollision: Story = viewportCollision;

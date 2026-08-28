@@ -1,4 +1,4 @@
-import { fn } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
 import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -35,6 +35,21 @@ export const Playground: Story = {
     },
   },
   render: (args) => <Button {...args} style={{ alignSelf: 'flex-start' }} />,
+  play: async ({ args, canvasElement, step }) => {
+    args.onPress?.mockClear();
+    const button = within(canvasElement).getByRole('button', { name: String(args.children) });
+
+    await step('버튼 상태와 callback 확인', async () => {
+      if (args.disabled || args.loading) {
+        expect(button).toBeDisabled();
+        button.click();
+        expect(args.onPress).not.toHaveBeenCalled();
+        return;
+      }
+      await userEvent.click(button);
+      expect(args.onPress).toHaveBeenCalledOnce();
+    });
+  },
 };
 
 export const RepresentativeStates: Story = {
