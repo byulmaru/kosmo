@@ -92,12 +92,12 @@ jobs:
             runtime
           build-args: |
             EXPO_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}
+            EXPO_PUBLIC_OPENPANEL_CLIENT_ID=
             EXPO_PUBLIC_SENTRY_DSN=${{ steps.sentry.outputs.EXPO_PUBLIC_SENTRY_DSN }}
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
             SENTRY_RELEASE=${{ env.SENTRY_RELEASE }}
             SENTRY_UPLOAD_REQUIRED=1
-          # Mount the Sentry token as a BuildKit secret for the image build.
           secret-envs: |
             sentry_auth_token=SENTRY_AUTH_TOKEN
 
