@@ -180,7 +180,12 @@ export type ProfileFollowRemovalOutcome =
 /** Activity result with the Worker-only effect plan metadata. */
 export type ProfileFollowRemovalExecution =
   | (Extract<ProfileFollowRemovalOutcome, { readonly ok: true }> & {
-      readonly effectPlan: ProfileFollowPairEffectPlan;
+      readonly effectPlan: readonly {
+        readonly kind: 'DELETE';
+        readonly input: Omit<ProfileFollowDeleteEffectInput, 'sourceKind'> & {
+          readonly sourceKind: 'FOLLOW';
+        };
+      }[];
     })
   | Extract<ProfileFollowRemovalOutcome, { readonly ok: false }>;
 
@@ -208,7 +213,7 @@ export const rehydrateProfileFollowFailure = (
   }
 };
 
-const deleteEffect = ({
+const deleteEffect = <SourceKind extends ProfileFollowDeleteEffectInput['sourceKind']>({
   sourceId,
   pair,
   sourceKind,
@@ -216,9 +221,14 @@ const deleteEffect = ({
 }: {
   readonly sourceId: string;
   readonly pair: ProfileFollowPair;
-  readonly sourceKind: ProfileFollowDeleteEffectInput['sourceKind'];
+  readonly sourceKind: SourceKind;
   readonly sendActivityPub?: boolean;
-}): ProfileFollowPairEffect => ({
+}): {
+  readonly kind: 'DELETE';
+  readonly input: Omit<ProfileFollowDeleteEffectInput, 'sourceKind'> & {
+    readonly sourceKind: SourceKind;
+  };
+} => ({
   kind: 'DELETE',
   input: {
     sourceId,
@@ -370,28 +380,14 @@ const executeApproveOrAccept = async (
     .where(pairCondition(ProfileFollows, input.pair))
     .limit(1)
     .then(first);
-  const currentRequest = await tx
+  const pendingRequest = await tx
     .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
-    .where(
-      and(
-        pairCondition(ProfileFollowRequests, input.pair),
-        eq(ProfileFollowRequests.id, expectedRowId),
-      ),
-    )
+    .where(pairCondition(ProfileFollowRequests, input.pair))
     .limit(1)
     .then(first);
-  const pendingRequestId =
-    currentRequest?.id ??
-    (
-      await tx
-        .select({ id: ProfileFollowRequests.id })
-        .from(ProfileFollowRequests)
-        .where(pairCondition(ProfileFollowRequests, input.pair))
-        .limit(1)
-        .then(first)
-    )?.id ??
-    input.pendingRequestId;
+  const currentRequest = pendingRequest?.id === expectedRowId ? pendingRequest : undefined;
+  const pendingRequestId = pendingRequest?.id ?? input.pendingRequestId;
   const followId = input.followCandidateId;
 
   if (!currentRequest && existingFollow) {
@@ -540,24 +536,14 @@ const executeRejectOrCancel = async (
   }
 
   const expectedRowId = command.expectedRowId;
-  const currentRequest = await tx
-    .select({ id: ProfileFollowRequests.id })
-    .from(ProfileFollowRequests)
-    .where(
-      and(
-        pairCondition(ProfileFollowRequests, input.pair),
-        eq(ProfileFollowRequests.id, expectedRowId),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  const conflictingRequest = await tx
+  const request = await tx
     .select({ id: ProfileFollowRequests.id })
     .from(ProfileFollowRequests)
     .where(pairCondition(ProfileFollowRequests, input.pair))
     .limit(1)
     .then(first);
-
+  const currentRequest = request?.id === expectedRowId ? request : undefined;
+  const conflictingRequest = request?.id !== expectedRowId ? request : undefined;
   if (!currentRequest && conflictingRequest) {
     return {
       ok: true,

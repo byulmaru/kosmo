@@ -49,7 +49,6 @@ const profileFollowRemovalInputSchema = z.strictObject({
 
 const {
   deleteFollowNotificationActivity,
-  deleteFollowRequestNotificationActivity,
   executeProfileFollowRemovalActivity,
   sendProfileUnfollowActivity,
   verifyProfileFollowRemovalActivity,
@@ -157,14 +156,8 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   if (effect === undefined) {
     return;
   }
-  if (effect.kind !== 'DELETE') {
-    throw ApplicationFailure.nonRetryable('removal execution returned a non-delete effect');
-  }
   await settleEffects([
-    match(effect.input.sourceKind)
-      .with('FOLLOW', () => deleteFollowNotificationActivity(effect.input.sourceId))
-      .with('FOLLOW_REQUEST', () => deleteFollowRequestNotificationActivity(effect.input.sourceId))
-      .exhaustive(),
+    deleteFollowNotificationActivity(effect.input.sourceId),
     ...match(effect.input)
       .with({ sendActivityPub: true }, () => [sendProfileUnfollowActivity(effect.input)])
       .otherwise(() => []),

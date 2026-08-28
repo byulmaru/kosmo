@@ -2,7 +2,6 @@ import {
   allHandlersFinished,
   ApplicationFailure,
   condition,
-  defineQuery,
   defineUpdate,
   proxyActivities,
   setHandler,
@@ -22,17 +21,9 @@ import type {
 import type * as activities from '../activities';
 
 export const PROFILE_FOLLOW_PAIR_UPDATE_NAME = 'profileFollowPairUpdate';
-export const PROFILE_FOLLOW_PAIR_STATUS_QUERY_NAME = 'profileFollowPairStatus';
 export const PROFILE_FOLLOW_PAIR_ORPHAN_GUARD = '1 minute';
 export const PROFILE_FOLLOW_PAIR_CONFLICT_FAILURE_TYPE = 'ProfileFollowPairConflict';
 export const PROFILE_FOLLOW_PAIR_TRANSITION_FAILURE_TYPE = 'ProfileFollowPairTransitionFailure';
-
-export type ProfileFollowPairWorkflowStatus = {
-  readonly state: ProfileFollowPairLifecycleState;
-  readonly inFlight: boolean;
-  readonly pendingEffectCount: number;
-  readonly effectFailureCount: number;
-};
 
 const profileIdSchema = z
   .string({ error: 'Profile Follow pair requires non-empty profile IDs' })
@@ -159,29 +150,6 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   const effectQueue: ProfileFollowPairEffect[] = [];
   const effectFailures: EffectFailure[] = [];
 
-  const runTransitionActivity = async <T>(activity: () => Promise<T>): Promise<T> => {
-    try {
-      return await activity();
-    } catch (error) {
-      // The Update is already rejected, but an Activity failure must also
-      // unblock the lifecycle loop. Otherwise a PENDING pair with no queued
-      // effects would remain open forever and the same Update ID could never
-      // be admitted again in this Workflow run.
-      transitionFailure = errorMessage(error);
-      throw error;
-    }
-  };
-
-  setHandler(
-    defineQuery<ProfileFollowPairWorkflowStatus>(PROFILE_FOLLOW_PAIR_STATUS_QUERY_NAME),
-    () => ({
-      state: lifecycleState,
-      inFlight,
-      pendingEffectCount: effectQueue.length,
-      effectFailureCount: effectFailures.length,
-    }),
-  );
-
   setHandler(
     defineUpdate<ProfileFollowPairTransitionOutcome, [ProfileFollowPairCommand]>(
       PROFILE_FOLLOW_PAIR_UPDATE_NAME,
@@ -205,37 +173,33 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
           throw pairConflict('Profile Follow pair already has a pending request');
         }
 
-        if (lifecycleState === 'INITIAL' && parsedCommand.kind === 'FOLLOW') {
-          // A run can be lazily bootstrapped for a request created before this
-          // Workflow existed. Capture that request in Workflow history before
-          // the mutating Activity so a commit-then-retry can reconstruct its
-          // Notification cleanup after an OPEN-policy promotion.
-          pendingRequestId = await runTransitionActivity(() =>
-            loadPendingFollowRequestIdActivity({ pair }),
-          );
-        }
+        try {
+          if (lifecycleState === 'INITIAL' && parsedCommand.kind === 'FOLLOW') {
+            // A run can be lazily bootstrapped for a request created before this
+            // Workflow existed. Capture that request in Workflow history before
+            // the mutating Activity so a commit-then-retry can reconstruct its
+            // Notification cleanup after an OPEN-policy promotion.
+            pendingRequestId = await loadPendingFollowRequestIdActivity({ pair });
+          }
 
-        if (lifecycleState === 'INITIAL' && parsedCommand.kind !== 'FOLLOW') {
-          pendingRequestId = await runTransitionActivity(() =>
-            loadPendingFollowRequestIdActivity({
+          if (lifecycleState === 'INITIAL' && parsedCommand.kind !== 'FOLLOW') {
+            pendingRequestId = await loadPendingFollowRequestIdActivity({
               pair,
               expectedRowId: parsedCommand.expectedRowId,
-            }),
-          );
-          if (pendingRequestId === undefined) {
-            return {
-              ok: false as const,
-              error: {
-                code: 'CONFLICT' as const,
-                message: 'Pending Follow Request was not found for this pair',
-              },
-            };
+            });
+            if (pendingRequestId === undefined) {
+              return {
+                ok: false as const,
+                error: {
+                  code: 'CONFLICT' as const,
+                  message: 'Pending Follow Request was not found for this pair',
+                },
+              };
+            }
+            lifecycleState = 'PENDING';
           }
-          lifecycleState = 'PENDING';
-        }
 
-        const execution = await runTransitionActivity(() =>
-          executeProfileFollowPairTransitionActivity({
+          const execution = await executeProfileFollowPairTransitionActivity({
             pair,
             command: parsedCommand,
             candidateRowId: parsedCommand.kind === 'FOLLOW' ? uuid4() : undefined,
@@ -244,19 +208,24 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
                 ? uuid4()
                 : undefined,
             pendingRequestId,
-          }),
-        );
+          });
 
-        if (!execution.ok) {
-          return execution;
-        }
+          if (!execution.ok) {
+            return execution;
+          }
 
-        lifecycleState = execution.nextState;
-        if (execution.nextState === 'PENDING') {
-          pendingRequestId = execution.pendingRequestId;
+          lifecycleState = execution.nextState;
+          if (execution.nextState === 'PENDING') {
+            pendingRequestId = execution.pendingRequestId;
+          }
+          effectQueue.push(...execution.effectPlan);
+          return { ok: true as const, result: execution.result };
+        } catch (error) {
+          // Only the Activity phase is inside this catch. Parse, state and
+          // expected domain conflicts above remain ordinary Update failures.
+          transitionFailure = errorMessage(error);
+          throw error;
         }
-        effectQueue.push(...execution.effectPlan);
-        return { ok: true as const, result: execution.result };
       } finally {
         inFlight = false;
       }

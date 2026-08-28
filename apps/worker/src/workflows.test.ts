@@ -8,7 +8,6 @@ import type {
   ProfileFollowPairTransitionInput,
   ProfileFollowPairTransitionOutcome,
 } from '@kosmo/core/services';
-import type { ProfileFollowPairWorkflowStatus } from './workflows/profile-follow-pair';
 
 type ReactionCreateEffectsInput = {
   readonly reactionId: string;
@@ -22,22 +21,6 @@ type ReactionDeleteEffectsInput = {
   readonly type: string;
   readonly createdAt: string;
   readonly origin: 'LOCAL' | 'ACTIVITYPUB';
-};
-
-const waitForPairEffectsToDrain = async (handle: {
-  query: <T>(queryName: string) => Promise<T>;
-}): Promise<ProfileFollowPairWorkflowStatus> => {
-  const deadline = Date.now() + 10_000;
-  while (true) {
-    const status = await handle.query<ProfileFollowPairWorkflowStatus>('profileFollowPairStatus');
-    if (status.pendingEffectCount === 0) {
-      return status;
-    }
-    if (Date.now() >= deadline) {
-      throw new Error('Timed out waiting for pair effect queue to drain');
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 10));
-  }
 };
 
 const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
@@ -395,11 +378,9 @@ test(
                 {
                   kind: 'CREATE' as const,
                   input: {
-                    origin: 'LOCAL' as const,
                     sendActivityPub: true,
                     sourceId: requestId,
                     sourceKind: 'FOLLOW_REQUEST' as const,
-                    transition: 'FOLLOW' as const,
                   },
                 },
               ],
@@ -418,14 +399,10 @@ test(
               {
                 kind: 'DELETE' as const,
                 input: {
-                  createdAt: '2026-08-25T00:00:00Z',
                   followerProfileId: pair.followerProfileId,
                   followeeProfileId: pair.followeeProfileId,
-                  id: requestId,
-                  origin: 'LOCAL' as const,
                   sourceId: requestId,
                   sourceKind: 'FOLLOW_REQUEST' as const,
-                  transition: 'REJECT' as const,
                 },
               },
             ],
@@ -472,12 +449,6 @@ test(
       assert.equal(first.ok, true);
       const handle = await handlePromise;
       await effectFailed;
-      assert.deepEqual(await waitForPairEffectsToDrain(handle), {
-        state: 'PENDING',
-        inFlight: false,
-        pendingEffectCount: 0,
-        effectFailureCount: 1,
-      });
       const terminal = (await handle.executeUpdate('profileFollowPairUpdate', {
         args: [
           {
