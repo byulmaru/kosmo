@@ -18,7 +18,7 @@ import type { ViewStyle } from 'react-native';
 const toastDurationMs = 3000;
 
 type ToastContextValue = Readonly<{
-  showToast: (message: string, options?: ToastOptions) => () => void;
+  showToast: (message: string, options: ToastOptions) => () => void;
 }>;
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -28,14 +28,14 @@ type ToastOptions = Readonly<{
     label: string;
     onPress: () => void;
   }>;
-  tone?: 'danger' | 'info' | 'success' | 'warning';
+  tone: 'danger' | 'info' | 'success' | 'warning';
 }>;
 
 type Toast = Readonly<{
   action?: ToastOptions['action'];
   id: number;
   message: string;
-  tone?: ToastOptions['tone'];
+  tone: ToastOptions['tone'];
 }>;
 
 export function ToastProvider({ children }: PropsWithChildren): ReactNode {
@@ -66,13 +66,13 @@ export function ToastProvider({ children }: PropsWithChildren): ReactNode {
   }, []);
 
   const showToast = useCallback(
-    (nextMessage: string, options?: ToastOptions) => {
+    (nextMessage: string, options: ToastOptions) => {
       if (timer.current) {
         clearTimeout(timer.current);
       }
       const id = nextToastId.current++;
       activeToastId.current = id;
-      setToast({ action: options?.action, id, message: nextMessage, tone: options?.tone });
+      setToast({ action: options.action, id, message: nextMessage, tone: options.tone });
       setToastVisible(true);
       return () => dismissToast(id);
     },
@@ -184,15 +184,11 @@ function getToastColors(theme: ReturnType<typeof useTheme>, tone: ToastOptions['
       foreground: theme.feedbackWarningOnSubtle,
     };
   }
-  if (tone === 'info') {
-    return {
-      background: theme.feedbackInfoSubtle,
-      border: theme.feedbackInfoBase,
-      foreground: theme.feedbackInfoOnSubtle,
-    };
-  }
-
-  return { background: theme.backgroundInverse, foreground: theme.foregroundInverse };
+  return {
+    background: theme.feedbackInfoSubtle,
+    border: theme.feedbackInfoBase,
+    foreground: theme.feedbackInfoOnSubtle,
+  };
 }
 
 export function useToast(): ToastContextValue {

@@ -38,7 +38,6 @@ mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ botto
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {} }),
   useTheme: () => ({
-    backgroundInverse: 'inverse-background',
     feedbackDangerBase: 'danger-base',
     feedbackDangerBorder: 'danger-border',
     feedbackDangerOnSubtle: 'danger-on-subtle',
@@ -55,7 +54,6 @@ mockModule('@/theme/ThemeProvider', {
     feedbackWarningBorder: 'warning-border',
     feedbackWarningOnSubtle: 'warning-on-subtle',
     feedbackWarningSubtle: 'warning-subtle',
-    foregroundInverse: 'inverse-foreground',
   }),
 });
 mockModule('@/theme/tokens', {
@@ -96,13 +94,17 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
     return null;
   }
 
+  // @ts-expect-error Toast callers must choose an explicit semantic tone.
+  const toneRequired: Parameters<ReturnType<typeof useToast>['showToast']> = ['tone 없는 알림'];
+  void toneRequired;
+
   let renderer: ReactTestRenderer | undefined;
   try {
     await act(async () => {
       renderer = create(createElement(ToastProvider, null, createElement(Harness)));
     });
     await act(async () => {
-      api?.showToast('저장했습니다.');
+      api?.showToast('저장했습니다.', { tone: 'success' });
     });
     assert.deepEqual(delays, []);
 
@@ -119,7 +121,7 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
   }
 });
 
-test('toast maps the inverse default and subtle feedback tone rails', async () => {
+test('toast maps every semantic tone to its subtle feedback colors and rail', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
   let api: ReturnType<typeof useToast> | undefined;
@@ -129,12 +131,6 @@ test('toast maps the inverse default and subtle feedback tone rails', async () =
   }
 
   const cases = [
-    {
-      background: 'inverse-background',
-      border: undefined,
-      foreground: 'inverse-foreground',
-      tone: undefined,
-    },
     {
       background: 'info-subtle',
       border: 'info-base',
@@ -167,7 +163,7 @@ test('toast maps the inverse default and subtle feedback tone rails', async () =
   });
   for (const sample of cases) {
     await act(async () => {
-      api?.showToast('알림', sample.tone ? { tone: sample.tone } : undefined);
+      api?.showToast('알림', { tone: sample.tone });
     });
     const surface = renderer?.root.findByType(ViewHost);
     const style = flattenStyle(surface?.props.style);
@@ -175,7 +171,7 @@ test('toast maps the inverse default and subtle feedback tone rails', async () =
     assert.equal(style.paddingVertical, 12);
     const message = renderer?.root.findByType(TextHost);
     assert.equal(flattenStyle(message?.props.style).color, sample.foreground);
-    assert.equal(style.borderLeftWidth, sample.tone ? 4 : undefined);
+    assert.equal(style.borderLeftWidth, 4);
     assert.equal(style.borderLeftColor, sample.border);
   }
   await act(async () => renderer?.unmount());
@@ -253,6 +249,7 @@ test('action toast keeps a 44px target and adds only Android 2px hitSlop', async
     await act(async () => {
       api?.showToast('다시 시도해 주세요.', {
         action: { label: '다시 시도', onPress: () => undefined },
+        tone: 'danger',
       });
     });
   };

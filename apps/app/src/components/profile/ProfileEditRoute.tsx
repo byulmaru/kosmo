@@ -365,7 +365,7 @@ function EditableProfileRoute({
 
   const handleSaveFailure = useCallback(() => {
     setSubmitState({ kind: 'idle' });
-    showToast('프로필을 저장하지 못했어요.');
+    showToast('프로필을 저장하지 못했어요.', { tone: 'danger' });
   }, [showToast]);
 
   const handleChange = useCallback(

@@ -9,5 +9,8 @@ const messages: Record<RepostActionKind, string> = {
 
 export function useRepostFailureToast() {
   const { showToast } = useToast();
-  return useCallback(({ action }: RepostActionFailure) => showToast(messages[action]), [showToast]);
+  return useCallback(
+    ({ action }: RepostActionFailure) => showToast(messages[action], { tone: 'danger' }),
+    [showToast],
+  );
 }

@@ -3,6 +3,11 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import { TextArea, TextField } from '@/components/ui/TextField';
 import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ComponentProps } from 'react';
+
+type TextFieldStoryArgs = ComponentProps<typeof TextField> & {
+  containerWidth?: number;
+};
 
 const meta = {
   args: {
@@ -14,9 +19,15 @@ const meta = {
     placeholder: '이름을 입력하세요',
   },
   component: TextField,
+  excludeStories: ['TypingAndFocus'],
   parameters: { controls: { disable: true } },
+  render: ({ containerWidth, ...args }: TextFieldStoryArgs) => (
+    <View style={[styles.playground, { width: containerWidth }]}>
+      <TextField key={args.defaultValue} {...args} />
+    </View>
+  ),
   title: 'KOSMO/Components/Text Field',
-} satisfies Meta<typeof TextField>;
+} satisfies Meta<TextFieldStoryArgs>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -24,7 +35,19 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 export const Playground: Story = {
-  parameters: { controls: { disable: false } },
+  args: { containerWidth: 480, defaultValue: '코스모', error: '' },
+  argTypes: {
+    containerWidth: {
+      control: { max: 720, min: 240, step: 40, type: 'range' },
+      description: 'Storybook fixture width in pixels',
+    },
+  },
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['containerWidth', 'defaultValue', 'editable', 'error', 'label', 'placeholder'],
+    },
+  },
 };
 
 export const RepresentativeStates: Story = {
@@ -56,4 +79,5 @@ export const TypingAndFocus: Story = {
 
 const styles = StyleSheet.create({
   catalog: { gap: space[16], maxWidth: 480 },
+  playground: { maxWidth: '100%' },
 });

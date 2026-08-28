@@ -202,6 +202,7 @@ function ReplyComposerSurfaceContents({
           label: '보기',
           onPress: () => router.push(`/${profile.relativeHandle}/${post.id}` as Href),
         },
+        tone: 'success',
       });
       requestAnimationFrame(() => onPostCreated?.(post));
     },

@@ -41,7 +41,7 @@ mockModule('@/theme/tokens', {
   },
   radii: { sm: 8 },
   radius: { 8: 8 },
-  space: { 8: 8, 16: 16 },
+  space: { 4: 4, 8: 8, 12: 12, 16: 16 },
   spacing: { sm: 8, lg: 16 },
   textStyles: { uiLabelM: { fontSize: 14, lineHeight: 20 } },
   typography: { sm: { fontSize: 14, lineHeight: 20 } },
@@ -56,6 +56,7 @@ type ButtonComponent = (props: {
   children: ReactNode;
   disabled?: boolean;
   loading?: boolean;
+  size?: 'compact' | 'default';
   tone?: 'danger' | 'primary' | 'secondary';
 }) => TestElement;
 
@@ -72,9 +73,13 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   );
 }
 
-function render(tone: 'danger' | 'primary' | 'secondary' = 'primary', disabled = false) {
+function render(
+  tone: 'danger' | 'primary' | 'secondary' = 'primary',
+  disabled = false,
+  size: 'compact' | 'default' = 'default',
+) {
   assert.ok(Button);
-  const button = Button({ children: tone, disabled, tone });
+  const button = Button({ children: tone, disabled, size, tone });
   const rootStyle = button.props.style as (state: {
     focused?: boolean;
     hovered?: boolean;
@@ -127,4 +132,18 @@ test('web Button exposes the semantic focus ring', () => {
   const button = render();
   assert.equal(button.focused.outlineColor, 'focus-ring');
   assert.equal(button.focused.outlineWidth, 2);
+});
+
+test('Button exposes the Figma default and compact sizes', () => {
+  const defaultButton = render();
+  assert.equal(defaultButton.resting.minHeight, 40);
+  assert.equal(defaultButton.resting.minWidth, 120);
+  assert.equal(defaultButton.resting.paddingHorizontal, 16);
+  assert.equal(defaultButton.resting.paddingVertical, 8);
+
+  const compactButton = render('primary', false, 'compact');
+  assert.equal(compactButton.resting.minHeight, 32);
+  assert.equal(compactButton.resting.minWidth, 72);
+  assert.equal(compactButton.resting.paddingHorizontal, 12);
+  assert.equal(compactButton.resting.paddingVertical, 4);
 });

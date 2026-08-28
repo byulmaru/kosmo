@@ -13,7 +13,11 @@ function ToastFixture() {
       <Pressable
         accessibilityLabel="생성 실패 표시"
         accessibilityRole="button"
-        onPress={() => showToast('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.')}
+        onPress={() =>
+          showToast('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          })
+        }
         style={styles.button}
       >
         <Text>생성 실패 표시</Text>
@@ -21,7 +25,11 @@ function ToastFixture() {
       <Pressable
         accessibilityLabel="취소 실패 표시"
         accessibilityRole="button"
-        onPress={() => showToast('재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.')}
+        onPress={() =>
+          showToast('재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.', {
+            tone: 'danger',
+          })
+        }
         style={styles.button}
       >
         <Text>취소 실패 표시</Text>
@@ -43,12 +51,16 @@ function ScopedToastFixture() {
         onPress={() => {
           cleanup.current = showToast('이전 목록 오류', {
             action: { label: '다시 시도', onPress: scopedRetry },
+            tone: 'danger',
           });
         }}
       >
         <Text>목록 오류 표시</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" onPress={() => showToast('최신 알림')}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => showToast('최신 알림', { tone: 'info' })}
+      >
         <Text>최신 알림 표시</Text>
       </Pressable>
       <Pressable accessibilityRole="button" onPress={() => cleanup.current()}>
@@ -59,11 +71,10 @@ function ScopedToastFixture() {
 }
 
 const toneSamples = [
-  { label: '기본 · no action', message: '기본 알림', tone: undefined },
-  { label: '정보 · action', message: '정보 알림', tone: 'info' as const },
-  { label: '성공 · action', message: '성공 알림', tone: 'success' as const },
-  { label: '경고 · action', message: '경고 알림', tone: 'warning' as const },
-  { label: '위험 · action', message: '위험 알림', tone: 'danger' as const },
+  { label: '정보', message: '정보 알림', tone: 'info' as const },
+  { label: '성공', message: '성공 알림', tone: 'success' as const },
+  { label: '경고', message: '경고 알림', tone: 'warning' as const },
+  { label: '위험', message: '위험 알림', tone: 'danger' as const },
 ] as const;
 
 function ToneAndActionToastFixture() {
@@ -72,46 +83,51 @@ function ToneAndActionToastFixture() {
   return (
     <View style={styles.fixture}>
       <Text>버튼을 눌러 현재 테마의 Toast 색상과 action target을 확인하세요.</Text>
-      <View style={styles.row}>
-        {toneSamples.map((sample) => (
-          <Pressable
-            accessibilityRole="button"
-            key={sample.label}
-            onPress={() =>
-              showToast(
-                sample.message,
-                sample.tone
-                  ? {
-                      action: { label: '다시 시도', onPress: () => undefined },
-                      tone: sample.tone,
-                    }
-                  : undefined,
-              )
-            }
-            style={styles.button}
-          >
-            <Text>{sample.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      {toneSamples.map((sample) => (
+        <View key={sample.tone} style={styles.row}>
+          {([false, true] as const).map((action) => (
+            <Pressable
+              accessibilityRole="button"
+              key={`${sample.tone}-${action}`}
+              onPress={() =>
+                showToast(
+                  sample.message,
+                  action
+                    ? {
+                        action: { label: '다시 시도', onPress: () => undefined },
+                        tone: sample.tone,
+                      }
+                    : { tone: sample.tone },
+                )
+              }
+              style={styles.button}
+            >
+              <Text>{`${sample.label} · 액션 ${action ? '있음' : '없음'}`}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
 
 function ToastPlayground({
+  action,
   actionLabel,
   message,
   onAction,
   tone,
 }: {
+  action: boolean;
   actionLabel: string;
   message: string;
   onAction: () => void;
-  tone?: 'danger' | 'info' | 'success' | 'warning';
+  tone: 'danger' | 'info' | 'success' | 'warning';
 }) {
   return (
     <ToastProvider>
       <ToastPlaygroundTrigger
+        action={action}
         actionLabel={actionLabel}
         message={message}
         onAction={onAction}
@@ -122,6 +138,7 @@ function ToastPlayground({
 }
 
 function ToastPlaygroundTrigger({
+  action,
   actionLabel,
   message,
   onAction,
@@ -134,7 +151,7 @@ function ToastPlaygroundTrigger({
       accessibilityRole="button"
       onPress={() =>
         showToast(message, {
-          action: { label: actionLabel, onPress: onAction },
+          ...(action ? { action: { label: actionLabel, onPress: onAction } } : {}),
           tone,
         })
       }
@@ -147,15 +164,21 @@ function ToastPlaygroundTrigger({
 
 const meta = {
   args: {
+    action: true,
     actionLabel: '다시 시도',
     message: '요청을 완료하지 못했습니다.',
     onAction: fn(),
     tone: 'danger',
   },
   argTypes: {
-    tone: { control: 'select', options: [undefined, 'info', 'success', 'warning', 'danger'] },
+    tone: { control: 'select', options: ['info', 'success', 'warning', 'danger'] },
   },
   component: ToastPlayground,
+  excludeStories: [
+    'ReplacementAndAutoDismiss',
+    'RepeatedMessageRestartsAutoDismiss',
+    'ScopedCleanupDoesNotDismissNewerToast',
+  ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Toast Provider',
 } satisfies Meta<typeof ToastPlayground>;
@@ -169,13 +192,17 @@ const toastDurationMs = 3000;
 export const Default: Story = {};
 
 export const Playground: Story = {
-  parameters: { controls: { disable: false } },
+  parameters: {
+    controls: { disable: false, include: ['action', 'actionLabel', 'message', 'tone'] },
+  },
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Toast 표시' }));
     expect(await canvas.findByRole('alert')).toHaveTextContent(args.message);
-    await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
-    expect(args.onAction).toHaveBeenCalledOnce();
+    if (args.action) {
+      await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
+      expect(args.onAction).toHaveBeenCalledOnce();
+    }
   },
 };
 
@@ -196,7 +223,7 @@ export const ReplacementAndAutoDismiss: Story = {
     );
     const toastSurface = toastMessage.parentElement!;
     expect(alert).toHaveTextContent('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(26, 26, 26)');
+    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(254, 228, 226)');
     expect(
       toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
     ).toBeCloseTo(12, 0);

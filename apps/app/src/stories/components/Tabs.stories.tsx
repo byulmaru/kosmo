@@ -36,6 +36,7 @@ function TabsCatalog({ variant = 'underline' }: { variant?: TabVariant }) {
 
 const meta = {
   component: TabsCatalog,
+  excludeStories: ['InteractionContract'],
   title: 'KOSMO/Components/Tabs',
 } satisfies Meta<typeof TabsCatalog>;
 

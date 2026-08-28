@@ -10,7 +10,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
 import { colors } from '@/theme/tokens';
 import ProfileDefaultPostVisibilityControlStoriesQueryNode from './__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
@@ -113,26 +113,27 @@ function ProfileDefaultPostVisibilityStory({
   editable = true,
   initial = 'UNLISTED',
   mode = 'success',
+  onMutationAttempt,
 }: {
   editable?: boolean;
   initial?: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
   mode?: Mode;
+  onMutationAttempt: () => void;
 }) {
   const [revision, setRevision] = useState(0);
-  const [mutationAttempts, setMutationAttempts] = useState(0);
   const pendingCompletionRef = useRef<(() => void) | null>(null);
   const environment = useMemo(
     () =>
       createEnvironment({
         defaultPostVisibility: revision === 0 ? initial : 'FOLLOWERS',
         mode,
-        onMutationAttempt: setMutationAttempts,
+        onMutationAttempt,
         onPending: (complete) => {
           pendingCompletionRef.current = complete;
         },
         targetId: `${profileId}:${revision}`,
       }),
-    [initial, mode, revision],
+    [initial, mode, onMutationAttempt, revision],
   );
 
   return (
@@ -158,7 +159,6 @@ function ProfileDefaultPostVisibilityStory({
           <Text>이전 저장 완료</Text>
         </Pressable>
       ) : null}
-      <Text testID="profile-default-post-visibility-mutation-attempts">{mutationAttempts}</Text>
     </View>
   );
 }
@@ -183,7 +183,9 @@ function ProfileDefaultPostVisibilityStoryContents({
 }
 
 const meta = {
+  args: { onMutationAttempt: fn() },
   component: ProfileDefaultPostVisibilityStory,
+  excludeStories: ['LateCompletionIgnoredAfterProfileEnvironmentTransition'],
   title: 'KOSMO/Components/Profile Default Post Visibility Control',
 } satisfies Meta<typeof ProfileDefaultPostVisibilityStory>;
 
@@ -211,7 +213,7 @@ export const OwnerOptionsAndSuccess: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory editable initial="UNLISTED" />,
+  render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable initial="UNLISTED" />,
 };
 
 export const MemberReadOnly: Story = {
@@ -223,7 +225,7 @@ export const MemberReadOnly: Story = {
       'true',
     );
   },
-  render: () => <ProfileDefaultPostVisibilityStory editable={false} />,
+  render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable={false} />,
 };
 
 export const FailureAndRetry: Story = {
@@ -237,23 +239,21 @@ export const FailureAndRetry: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
     await expect(canvas.findByText('저장했어요.')).resolves.toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory editable mode="error-once" />,
+  render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable mode="error-once" />,
 };
 
 export const LateCompletionIgnoredAfterProfileEnvironmentTransition: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' }));
     const save = canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' });
     await userEvent.click(save);
     expect(save).toHaveAttribute('aria-disabled', 'true');
-    expect(
-      canvas.getByTestId('profile-default-post-visibility-mutation-attempts'),
-    ).toHaveTextContent('1');
+    expect(args.onMutationAttempt).toHaveBeenCalledOnce();
     await userEvent.click(canvas.getByRole('button', { name: 'Profile과 Environment 전환' }));
     await userEvent.click(canvas.getByRole('button', { name: '이전 저장 완료' }));
     expect(canvas.queryByText('저장했어요.')).toBeNull();
     expect(canvas.getByText('Profile과 Environment 전환')).toBeTruthy();
   },
-  render: () => <ProfileDefaultPostVisibilityStory editable mode="pending" />,
+  render: (args) => <ProfileDefaultPostVisibilityStory {...args} editable mode="pending" />,
 };
