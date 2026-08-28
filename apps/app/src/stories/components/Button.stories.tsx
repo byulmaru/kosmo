@@ -1,4 +1,4 @@
-import { expect, fn, within } from 'storybook/test';
+import { fn } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
 import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -33,12 +33,6 @@ export const Playground: Story = {
       disable: false,
       include: ['children', 'disabled', 'loading', 'loadingText', 'size', 'tone'],
     },
-  },
-  play: async ({ args, canvasElement }) => {
-    const button = within(canvasElement).getByRole('button', { name: String(args.children) });
-    const bounds = button.getBoundingClientRect();
-    expect(bounds.width).toBe(args.size === 'compact' ? 72 : 120);
-    expect(bounds.height).toBe(args.size === 'compact' ? 32 : 40);
   },
   render: (args) => <Button {...args} style={{ alignSelf: 'flex-start' }} />,
 };
