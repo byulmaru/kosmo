@@ -616,10 +616,10 @@ API는 같은 `Profile` 타입 안에서 소속 instance의 `kind`를 `Profile.i
 - **AND** unavailable일 수 있는 followee Profile은 payload에 포함하지 않는다
 - **AND** relation과 저장 count를 변경하지 않는다
 
-#### Scenario: Hide unauthorized request transition
+#### Scenario: Reject unauthorized request transition
 
 - **WHEN** active profile이 request participant가 아니거나 승인·거절 주체인 followee 또는 취소 주체인 follower가 아니다
-- **THEN** 시스템은 존재하지 않는 request와 구분되지 않는 request not found 오류를 반환한다
+- **THEN** 시스템은 permission denied 오류를 반환한다
 - **AND** request, relation과 저장 count를 변경하지 않는다
 
 #### Scenario: Reject approval with unavailable participant
