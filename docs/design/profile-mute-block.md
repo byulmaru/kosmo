@@ -36,6 +36,12 @@ Profile에서 Mute·Block·해제를 실행하고 관리 목록과 제한된 Pro
   action이 다른 목록의 항목을 바꾸지 않는다.
 - full Web은 기존 Settings master/detail 문법을, compact Web·mobile Web·Android·iOS는 기존 한 화면 이동
   문법을 사용한다. Mute·Block 때문에 새 Settings shell이나 navigation pattern을 만들지 않는다.
+- Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)의
+  Full·Compact loaded destination 4개, Full Settings master의 두 destination 하위 목록, Compact category
+  [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)과
+  [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)의
+  Mobile loaded destination 2개다. Mobile은 category 화면이 아직 없으므로 IA coverage 공백으로 유지한다.
+  loading·empty·error·pagination은 이 loaded representative와 별도의 runtime state coverage다.
 
 ## 차단 관계의 직접 Profile
 

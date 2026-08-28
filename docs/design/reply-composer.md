@@ -20,14 +20,11 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ## surface별 진입
 
 - Web `≥ compact` 목록 surface에서는 Reply action이 중앙 modal dialog를 연다.
-- Web `< compact`와 Android/iOS 목록 surface에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.
-- Post 상세에서는 compact `ReplyComposer` 진입점을 현재 thread 안에 유지하고, 활성화하면 그 자리에서 기존
-  Composer를 인라인으로 펼친다.
-- Post 상세의 ancestor·descendant `PostListItem`에서 inline Composer 외곽은 thread row의 왼쪽 `64px`,
-  오른쪽 `8px` content boundary를 따른다. current Post의 inline Composer는 기존 `PostLayout` content column
-  boundary를 유지한다.
-- 이 boundary는 connector의 위치·길이를 바꾸거나 숨기지 않고 Composer가 connector lane을 침범하지 않게
-  한다. connector는 caller가 공급한 direct relation을 계속 표현한다.
+- Compact Web Post 상세도 중앙 thread 안에 Composer를 인라인으로 펼치지 않고 같은 Reply modal을 연다.
+  기본 route frame은 closed thread만 표시하고 Composer-open을 별도 route frame으로 중복 만들지 않는다.
+- Full Web Post 상세는 기존 thread rail Reply surface를 유지한다. Compact modal과 Full rail은 direct Parent와
+  공용 Composer 계약을 공유하지만 서로의 배치를 억지로 재사용하지 않는다.
+- Web `< compact`와 Android/iOS에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.
 - 어느 surface에서도 Reply 전용 mutation, 별도 입력 상태 또는 Post kind를 만들지 않는다.
 
 ## Web Reply modal
@@ -125,9 +122,15 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ## lifecycle
 
 - modal을 열면 Reply action은 expanded 상태를 노출하고 본문 editor로 focus를 이동한다.
-- Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
-  Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다.
-- Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. Reply surface는 입력별 dirty를
+- Web modal의 `X`·backdrop·`Escape`, modal close와 원래 Reply action focus restore는 modal에만 적용한다.
+  fullscreen은 보이는 header close와 Web navigation back·Native platform back을 사용하고 backdrop dismiss를
+  제공하지 않는다. 폐기 확인은 두 surface가 공유한다.
+- Full Web thread rail은 backdrop modal이 아니므로 위 dismiss 계약을 상속하지 않는다. 기존 rail의
+  open·reset·success lifecycle은 이번 DSN-50 Target에서 재정의하지 않는다.
+- modal Reply surface를 여는 순간 direct Parent 맥락 자체를 dirty로 취급하므로, 본문·Content Warning·Visibility와
+  Media가 초기값이어도 `X`, backdrop 또는 `Escape`로 닫을 때 확인을 표시한다. fullscreen도 같은 dirty
+  판정을 사용하되 header close 또는 navigation/platform back에서 확인한다.
+- Reply 보호 정책은 Parent와 close lifecycle을 아는 surface가 직접 소유한다. modal·fullscreen surface는 입력별 dirty를
   다시 계산하지 않고 열린 동안 항상 폐기 확인 대상으로 취급하며, 공용 Post Composer에서는 제출 중 여부만
   전달받아 close 차단에 사용한다. 따라서 Parent에서 복사된 Content Warning을 그대로 두거나 수정·제거해도
   `답글 작성을 취소할까요?` 확인에서 사용자가 `계속 작성` 또는 `작성 취소`를 선택하게 한다.
@@ -136,10 +139,10 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - Profile 기본 Visibility는 선택한 Profile의 값을 사용하고, 값이 없거나 지원하지 않는 경우 `UNLISTED`로
   fallback한다. Composer를 연 뒤 Profile 기본값이 저장되거나 다른 화면에서 바뀌어도 현재 draft의 개별
   Visibility는 자동으로 덮어쓰지 않으며, 다음 새 Composer부터 갱신된 기본값을 사용한다.
-- 상세 inline surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
+- 열린 modal surface에서 현재 Reply action을 다시 활성화하거나 다른 Parent의 Reply action을 선택하는 동작도
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
-- 제출 실패 시 modal, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
+- 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
   Content Warning, Visibility, Media, error와 pending을 초기 상태로 시작한다. Content
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
@@ -154,7 +157,7 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 제출 성공 시 modal을 닫고 원래 Reply action으로 focus를 복원한 뒤 `답글을 게시했어요` 성공 snackbar와
   `보기` action을 표시한다. 이 snackbar는 기존 공용 toast처럼 약 3초 뒤 자동으로 사라지며, 표시 중 사용자가
   `보기`를 활성화할 때만 생성된 Reply 상세로 이동하고 자동으로 route를 바꾸지 않는다.
-- 성공 payload 반영은 modal이 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
+- 성공 payload 반영은 Reply surface가 임의의 Post나 다른 Profile Store membership을 합성하지 않고, 이를 연 surface가
   제공한 현재 actor의 connection/callback 경계만 사용한다. 상세 surface는 현재 detail query만 targeted
   refetch하며, 새 Reply가 현재 query 범위에 포함될 때만 기존 thread 정렬에 따라 자연스럽게 표시한다.
 
@@ -184,9 +187,11 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 구현 정렬 gate
 
-- 이 디자인의 목록 modal, 좁은 화면 전체 작성기와 상세 inline surface는 PROD-425의 기본 Reply 작성 계약과
+- 이 디자인의 Web modal, Full Web thread rail과 좁은 화면 전체 작성기는 PROD-425의 기본 Reply 작성 계약과
   PROD-640의 기존 Media 계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
   전체 통합 검증을 소유한 PROD-423에서 수행한다.
+- 현재 runtime의 Compact Post 상세 inline Reply는 이 Target과 다르며 modal로 이관할 Product 구현·runtime
+  검증이 남아 있다. Figma와 이 문서의 Target을 Current runtime 완료 증거로 사용하지 않는다.
 - Local API 입력·저장(PROD-460)과 일반·Reply Composer 및 공용 reveal UI(PROD-642)의 Content Warning 계약은
   `add-local-content-warning` change가 공동 소유한다. PR readiness와 별개로 Android/iOS 및 원격 federation
   runtime gate가 완료되기 전에는 이 change를 archive하지 않는다.
@@ -195,8 +200,9 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## 검증 기준
 
-- Web 목록 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을 여는지 자동화로
-  확인한다. 작은 viewport에서 높이가 `85dvh`로 제한되는 실제 layout은 Web runtime 후속 검증으로 남긴다.
+- Web 목록과 Compact Post 상세 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을
+  여는지 자동화로 확인한다. 작은 viewport에서 높이가 `85dvh`로 제한되는 실제 layout은 Web runtime 후속
+  검증으로 남긴다.
 - content가 중앙 영역을 넘을 때 header/footer는 유지되고 중앙 영역 하나만 스크롤되는지 확인한다.
 - 일반 Post, Reply, Quote Parent의 Content/Source 표시와 Action Bar/menu 제외, thread connector를 확인한다.
 - Visibility 독립성, 선택 Profile의 기본값과 `UNLISTED` fallback, `DIRECT` 제외, 500자 count와
@@ -208,13 +214,13 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media와
   Media-only Reply payload를 확인한다. 업로드 중·실패 상태는 제출을 차단하고 재시도 또는 제거 뒤 유효성을
   다시 계산해야 한다.
-- Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의 `보기` 이동과 자동 이동
-  없음, Media upload 중 dirty close, selected Profile·Parent·Relay Environment 전환의 첫 commit과 늦은
-  설정 조회·upload·mutation completion 격리를 확인한다.
-- Web `< compact` 전체 화면과 상세 inline surface의 Parent·Composer 계약을 Storybook에서 확인한다. 실제 API의
+- modal Reply-open dirty/pristine Post/pending/success close, 취소 확인, focus open/restore, 성공 snackbar의
+  `보기` 이동과 자동 이동 없음, Media upload 중 dirty close를 확인한다. fullscreen은 backdrop 없이 header
+  close와 navigation/platform back에서 같은 dirty·pending 보호를 제공하는지 확인한다. 두 surface 모두 selected
+  Profile·Parent·Relay Environment 전환의 첫 commit과 늦은 설정 조회·upload·mutation completion 격리를 확인한다.
+- Web `< compact` 전체 화면, Compact Post 상세 modal과 Full Web thread rail의 Parent·Composer 계약을
+  Storybook에서 확인한다. Compact 기본 thread에는 inline Composer wrapper가 남지 않아야 한다. 실제 API의
   targeted refetch 실패·retry와 Web 짧은-height layout은 통합 runtime 검증으로 분리한다.
-- 상세 ancestor inline Composer가 row 기준 왼쪽 `64px`, 오른쪽 `8px`에 놓이고 connector를 표시한 채
-  `connector.right < composer.left`를 만족하는지 Storybook과 `390px` Web E2E에서 확인한다.
 - Native 전체 화면 구현은 같은 Parent·Composer 계약을 공유하지만, Android·iOS의 scroll, keyboard, safe area,
   platform back과 접근성 runtime은 이번 Web 우선 PR의 Ready 근거로 사용하지 않고 Native 출시 gate에서 별도로
   확인한다.

@@ -4,9 +4,13 @@
 
 ## 디자인 권위와 적용 범위
 
-- Mobile 시각 기준은 Figma `KOSMO`의 [`Media / Fullscreen Viewer` node 354:3924](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=354-3924)다.
-- Figma의 어두운 fullscreen image surface와 상단 close affordance를 시각 기준으로 사용한다.
-- Figma에 없는 Web side surface, compact 원문 접기·펼치기와 Action Bar 배치, wide Post 상세 thread 구성은 PROD-650에서 승인된 제품 계약이다.
+- Mobile 시각 기준은 [`Mobile 390 · PostMediaViewer · Open · Target`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8103)이다.
+- Compact Web 대표 consumer는 [`Compact Web 1024 · PostMediaViewer · Open · Target`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25262)이며,
+  기존 DSN-63 Wide source의 image surface와 Post thread rail을 그대로 상속한다. Full Web은 같은 Wide source가
+  확장 규칙을 소유하므로 별도 중복 screen FRAME을 만들지 않는다.
+- Figma의 어두운 fullscreen image surface, 상단 close affordance와 Web split structure를 시각 기준으로
+  사용한다. compact 원문 접기·펼치기, Action Bar와 wide Post 상세 thread의 실제 동작은 PROD-650과 runtime
+  검증이 소유한다.
 - Figma 하단의 Media 파일 저장 action은 이 viewer에 포함하지 않는다. 현재 기존 Post Action Bar만 제공한다.
 - Viewer는 일반 목록과 Post 상세의 interactive gallery에 적용한다. `interactive=false`인 Reply Composer 부모 preview는 viewer를 열지 않는다.
 
@@ -31,6 +35,8 @@ Query cache hit·loading·error·retry, null Post·Content·Media와 현재 inde
 Compact Web과 Native의 detail panel에는 작성자, 원문 text와 기존 Post Action Bar를 이 순서로 둔다. Panel은 내용 높이를 따르되 최대 높이는 `clamp(192px, viewport height의 32%, 240px)`로 계산한다. `192px`은 낮은 viewport에서 작성자·원문 control·Action Bar를 보존하기 위한 최대 높이 계산의 안전 하한이지 panel의 최소 높이가 아니므로, 짧은 원문의 panel은 내용보다 크게 늘어나지 않는다. 짧은 원문에서 작성자·원문과 Action Bar 사이에 남는 높이를 채우지 않으며, Action Bar는 원문 바로 아래의 고정 영역을 유지한다. 원문은 처음에 3줄로 제한한다. 넘치는 경우에만 `더 보기` control을 제공하고 펼친 뒤에는 `접기`로 바꾼다. 펼친 원문은 detail panel의 text 영역 안에서만 줄어들고 scroll하며 image surface와 고정 Action Bar를 밀어내거나 가리지 않는다. Control은 펼침 상태를 접근성 state로 전달한다.
 
 Wide Web의 오른쪽은 별도의 축약 panel이 아니라 기존 Post 상세와 같은 표현·interaction을 제공하는 thread surface다. 폭은 일반 Post 상세 route의 `600px` column을 복제하지 않고 위의 Viewer 전용 bounded rail 규칙을 따른다. 기존 `PostDetailThread`와 같이 reply ancestors, 선택한 현재 Post, reply descendants를 연결 순서대로 표시한다. 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 제공하고, Reply Composer는 처음부터 열지 않으며 기존 Post 상세처럼 Reply action을 실행했을 때 현재 Post 아래에서 펼친다. 원본 Post의 Media는 왼쪽 image surface가 대표하므로 오른쪽 원본 Post에서 중복 표시하지 않되, ancestors·descendants와 Quote·Repost 등 thread 안의 Media 표현과 viewer interaction은 기존 Post surface 계약을 유지한다. 오른쪽 surface 전체가 왼쪽 image surface와 독립적으로 scroll하고, 끝에 가까워지면 기존 reply pagination을 이어서 수행한다. Route와 Viewer의 `PostDetailThread`는 각 scroll surface의 near-end, same-surface burst 재진입 guard와 loading·error·retry UI state를 독립적으로 소유한다. 두 surface 사이에는 request token을 공유하지 않으며, 같은 reply connection의 동일 cursor·count 요청이 같은 Relay environment에서 겹치면 Relay가 동일 operation을 in-flight dedupe하고 normalized connection에 병합한다. Viewer가 열렸다는 이유만으로 배경 document pagination을 중지하지 않으며, 미리 불러온 reply는 Viewer를 닫은 뒤 그대로 사용할 수 있다. Action Bar, Composer, reply interaction과 그 child overlay는 기존 Post 상세 계약을 그대로 유지한다.
+
+Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation surface가 아니므로 mode별 `color/background/canvas`를 사용한다. 왼쪽 image surface의 `color/overlay/media-viewer`는 유지한다.
 
 ## 선택과 탐색
 

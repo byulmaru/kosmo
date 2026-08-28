@@ -84,6 +84,10 @@ Full Reaction Picker는 Quick Picker를 폐기하지 않고, Unicode emoji를 �
 - 요약 row의 trailing People control은 overflow가 없으면 `Ellipsis`, overflow가 있으면 `+N`으로 표시하며 둘 다 overlay를 열지 않고 `반응한 사람` 전용 route로 이동한다. 이 surface에는 scrim, X, 바깥 영역 dismiss를 두지 않고 `PageHeader`의 Back action으로 이전 화면에 돌아간다.
 - 화면 순서는 `PageHeader(반응한 사람) → pill filter → Profile 목록`으로 고정한다. 목록 안에 `반응한 사람` 제목을 다시 표시하지 않는다.
 - Compact·Full Web에서는 기존 shell의 중앙 600px route column만 교체하며 Full Web의 `RightRail`은 유지한다. Mobile은 pushed dedicated screen을 사용하고 현재 shell 계약에 따라 `BottomTabBar`를 유지한다.
+- Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)과
+  [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)의
+  Full·Compact·Mobile `Default selected` 3개 Light FRAME이다. expanded/collapsed filter는 DSN-60 Pattern
+  source의 interaction coverage로 유지한다.
 - server가 제공한 양수 count Type과 순서를 그대로 사용한다. 처음 진입할 때 server 순서의 첫 Type을 선택하고, 사용자가 pill을 바꾸면 해당 Type의 Profile 목록을 표시한다.
 - collapsed filter는 server 순서의 앞 6개와 같은 줄의 `+N` control을 표시한다. 현재 선택 Type이 앞 6개 밖에 있으면 앞 5개와 현재 선택 Type을 표시해 선택 상태를 숨기지 않는다. `+N`을 펼치면 전체 Type을 wrap해 표시하고 다시 접을 수 있다.
 - Reaction pill 묶음은 접근성 `tablist`, 각 pill은 selected 상태를 가진 `tab`으로 노출한다. `+N`과 접기 control은 tablist 밖의 button이며 각각 `나머지 반응 N개 모두 보기`, `반응 목록 접기`로 이름을 제공한다. Type 전환 뒤 focus는 선택한 tab에 유지하고 목록 갱신을 보조 기술에 알리는 실제 동작은 runtime QA에서 검증한다.
