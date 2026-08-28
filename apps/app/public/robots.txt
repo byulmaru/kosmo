@@ -1,3 +1,21 @@
-# allow crawling everything by default
+# Repository-owned path policy: protected and internal endpoints are not crawl targets.
+# Public profiles/posts, static assets, and ActivityPub paths remain allowed by default.
+# Cloudflare Managed robots.txt owns AI content-signal directives; AI Crawl Control/WAF owns edge enforcement.
 User-agent: *
-Disallow:
+Disallow: /bookmarks
+Disallow: /compose
+Disallow: /feedback
+Disallow: /follow-requests
+Disallow: /hashtags/
+Disallow: /local
+Disallow: /home
+Disallow: /notifications
+Disallow: /profile-edit
+Disallow: /search
+Disallow: /settings
+Disallow: /login
+Disallow: /logout
+Disallow: /graphql
+Disallow: /health
+
+Sitemap: https://kos.moe/sitemap.xml
