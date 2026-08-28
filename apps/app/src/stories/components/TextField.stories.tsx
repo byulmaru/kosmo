@@ -63,17 +63,21 @@ export const RepresentativeStates: Story = {
 
 export const TypingAndFocus: Story = {
   args: { defaultValue: '', error: '입력값을 확인해 주세요.', label: '이름' },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ args, canvasElement, step }) => {
     const input = within(canvasElement).getByRole('textbox', { name: '이름' });
 
-    await userEvent.click(input);
-    await userEvent.type(input, '코스모');
-    expect(input).toHaveValue('코스모');
-    expect(args.onFocus).toHaveBeenCalled();
-    expect(args.onChangeText).toHaveBeenLastCalledWith('코스모');
+    await step('입력 포커스와 값 변경', async () => {
+      await userEvent.click(input);
+      await userEvent.type(input, '코스모');
+      expect(input).toHaveValue('코스모');
+      expect(args.onFocus).toHaveBeenCalled();
+      expect(args.onChangeText).toHaveBeenLastCalledWith('코스모');
+    });
 
-    await userEvent.tab();
-    expect(args.onBlur).toHaveBeenCalled();
+    await step('포커스 이동과 blur callback', async () => {
+      await userEvent.tab();
+      expect(args.onBlur).toHaveBeenCalled();
+    });
   },
 };
 

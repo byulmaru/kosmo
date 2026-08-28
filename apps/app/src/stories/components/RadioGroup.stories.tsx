@@ -135,7 +135,7 @@ export const Playground: Story = {
 };
 
 export const InteractionContract: Story = {
-  play: async ({ args, canvasElement }) => {
+  play: async ({ args, canvasElement, step }) => {
     const canvas = within(canvasElement);
     const group = canvas.getByRole('radiogroup', { name: '알림 방식' });
     const email = within(group).getByRole('radio', { name: '이메일' });
@@ -145,43 +145,49 @@ export const InteractionContract: Story = {
     });
     const inApp = within(group).getByRole('radio', { name: '앱 알림' });
 
-    expect(canvas.getAllByRole('radio')).toHaveLength(4);
-    expect(group).toBeVisible();
-    expect(email).toBeChecked();
-    expect(push).not.toBeChecked();
-    expect(push).toHaveAttribute('aria-disabled', 'true');
-    expect(sms).not.toBeChecked();
-    expect(inApp).not.toBeChecked();
-    expect(email).toHaveAttribute('tabindex', '0');
-    expect(push).toHaveAttribute('tabindex', '-1');
-    expect(sms).toHaveAttribute('tabindex', '-1');
-    expect(inApp).toHaveAttribute('tabindex', '-1');
+    await step('초기 선택과 접근성 상태 확인', async () => {
+      expect(canvas.getAllByRole('radio')).toHaveLength(4);
+      expect(group).toBeVisible();
+      expect(email).toBeChecked();
+      expect(push).not.toBeChecked();
+      expect(push).toHaveAttribute('aria-disabled', 'true');
+      expect(sms).not.toBeChecked();
+      expect(inApp).not.toBeChecked();
+      expect(email).toHaveAttribute('tabindex', '0');
+      expect(push).toHaveAttribute('tabindex', '-1');
+      expect(sms).toHaveAttribute('tabindex', '-1');
+      expect(inApp).toHaveAttribute('tabindex', '-1');
 
-    await userEvent.tab();
-    expect(email).toHaveFocus();
-    expect(getComputedStyle(email).borderWidth).toBe('2px');
+      await userEvent.tab();
+      expect(email).toHaveFocus();
+      expect(getComputedStyle(email).borderWidth).toBe('2px');
+    });
 
-    await userEvent.click(email);
-    expect(email).toHaveFocus();
-    expect(getComputedStyle(email).borderWidth).toBe('0px');
+    await step('키보드로 라디오 선택 변경', async () => {
+      await userEvent.click(email);
+      expect(email).toHaveFocus();
+      expect(getComputedStyle(email).borderWidth).toBe('0px');
 
-    await userEvent.keyboard('{ArrowRight}');
-    expect(sms).toHaveFocus();
-    expect(sms).toBeChecked();
-    expect(getComputedStyle(sms).borderWidth).toBe('2px');
-    expect(args.onChange).toHaveBeenCalledWith('sms');
+      await userEvent.keyboard('{ArrowRight}');
+      expect(sms).toHaveFocus();
+      expect(sms).toBeChecked();
+      expect(getComputedStyle(sms).borderWidth).toBe('2px');
+      expect(args.onChange).toHaveBeenCalledWith('sms');
 
-    await userEvent.keyboard('{ArrowRight}');
-    expect(inApp).toHaveFocus();
-    expect(inApp).toBeChecked();
+      await userEvent.keyboard('{ArrowRight}');
+      expect(inApp).toHaveFocus();
+      expect(inApp).toBeChecked();
 
-    await userEvent.keyboard('{ArrowRight}');
-    expect(email).toHaveFocus();
-    expect(email).toBeChecked();
+      await userEvent.keyboard('{ArrowRight}');
+      expect(email).toHaveFocus();
+      expect(email).toBeChecked();
+    });
 
-    await userEvent.click(sms);
-    expect(sms).toBeChecked();
-    expect(email).not.toBeChecked();
+    await step('포인터 선택과 선택 상태 확인', async () => {
+      await userEvent.click(sms);
+      expect(sms).toBeChecked();
+      expect(email).not.toBeChecked();
+    });
   },
 };
 

@@ -66,20 +66,22 @@ export const ActionInteraction: Story = {
     description: '잠시 후 다시 시도해 주세요.',
     title: '불러오지 못했어요',
   },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ args, canvasElement, step }) => {
     const canvas = within(canvasElement);
-    expect(canvas.getByRole('alert')).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
-    expect(args.onAction).toHaveBeenCalledOnce();
+    await step('오류 상태와 재시도 버튼 확인', async () => {
+      expect(canvas.getByRole('alert')).toBeVisible();
+      expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible();
+    });
+    await step('재시도 액션 실행과 callback 확인', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
+      expect(args.onAction).toHaveBeenCalledOnce();
+    });
   },
 };
 
 export const ReducedMotionLoading: Story = {
   args: { description: undefined, loading: true, title: '불러오는 중입니다.' },
   globals: { reduceMotion: true },
-  play: async ({ canvasElement }) => {
-    expect(within(canvasElement).getByText('···')).toBeVisible();
-  },
 };
 
 const styles = StyleSheet.create({

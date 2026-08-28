@@ -38,7 +38,7 @@ function ToastFixture() {
   );
 }
 
-const scopedRetry = fn();
+const scopedRetry = fn().mockName('scopedRetry');
 
 function ScopedToastFixture() {
   const { showToast } = useToast();
@@ -195,13 +195,17 @@ export const Playground: Story = {
   parameters: {
     controls: { disable: false, include: ['action', 'actionLabel', 'message', 'tone'] },
   },
-  play: async ({ args, canvasElement }) => {
+  play: async ({ args, canvasElement, step }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: 'Toast 표시' }));
-    expect(await canvas.findByRole('alert')).toHaveTextContent(args.message);
+    await step('Toast 표시와 메시지 확인', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: 'Toast 표시' }));
+      expect(await canvas.findByRole('alert')).toHaveTextContent(args.message);
+    });
     if (args.action) {
-      await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
-      expect(args.onAction).toHaveBeenCalledOnce();
+      await step('Toast action 실행과 callback 확인', async () => {
+        await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
+        expect(args.onAction).toHaveBeenCalledOnce();
+      });
     }
   },
 };
@@ -212,28 +216,36 @@ export const ReplacementAndAutoDismiss: Story = {
       <ToastFixture />
     </ToastProvider>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
 
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: '생성 실패 표시' }));
-    const alert = await canvas.findByRole('alert');
-    const toastMessage = within(alert).getByText(
-      '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-    );
-    const toastSurface = toastMessage.parentElement!;
-    expect(alert).toHaveTextContent('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-    expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(254, 228, 226)');
-    expect(
-      toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
-    ).toBeCloseTo(12, 0);
-    await userEvent.click(canvas.getByRole('button', { name: '취소 실패 표시' }));
-    expect(canvas.getByRole('alert')).toHaveTextContent(
-      '재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-    );
-    expect(canvas.getAllByRole('alert')).toHaveLength(1);
-    await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument(), {
-      timeout: 3500,
+    await step('위험 Toast 표시와 스타일 확인', async () => {
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+      await userEvent.click(canvas.getByRole('button', { name: '생성 실패 표시' }));
+      const alert = await canvas.findByRole('alert');
+      const toastMessage = within(alert).getByText(
+        '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      const toastSurface = toastMessage.parentElement!;
+      expect(alert).toHaveTextContent('재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      expect(getComputedStyle(toastSurface).backgroundColor).toBe('rgb(254, 228, 226)');
+      expect(
+        toastMessage.getBoundingClientRect().top - toastSurface.getBoundingClientRect().top,
+      ).toBeCloseTo(12, 0);
+    });
+
+    await step('새 Toast로 교체', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '취소 실패 표시' }));
+      expect(canvas.getByRole('alert')).toHaveTextContent(
+        '재게시를 취소하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+      expect(canvas.getAllByRole('alert')).toHaveLength(1);
+    });
+
+    await step('Toast 자동 닫힘 확인', async () => {
+      await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument(), {
+        timeout: 3500,
+      });
     });
   },
 };
@@ -244,36 +256,46 @@ export const RepeatedMessageRestartsAutoDismiss: Story = {
       <ToastFixture />
     </ToastProvider>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '생성 실패 표시' });
+    let firstAlert: HTMLElement;
+    let firstShownAt = 0;
+    let secondAlert: HTMLElement;
+    let secondShownAt = 0;
 
-    await userEvent.click(trigger);
-    const firstAlert = await canvas.findByRole('alert');
-    const firstShownAt = Date.now();
-    expect(firstAlert).toHaveTextContent(repeatedToastMessage);
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    expect(canvas.getByRole('alert')).toBe(firstAlert);
-    await userEvent.click(trigger);
-    const secondAlert = await canvas.findByRole('alert');
-    const secondShownAt = Date.now();
-    expect(secondAlert).toHaveTextContent(repeatedToastMessage);
-    expect(secondAlert).not.toBe(firstAlert);
-    expect(canvas.getAllByRole('alert')).toHaveLength(1);
-
-    await waitFor(
-      () => {
-        expect(Date.now()).toBeGreaterThanOrEqual(firstShownAt + toastDurationMs);
-        expect(canvas.getByRole('alert')).toBe(secondAlert);
-      },
-      { interval: 50, timeout: 2500 },
-    );
-    await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument(), {
-      interval: 50,
-      timeout: 1500,
+    await step('첫 Toast 표시', async () => {
+      await userEvent.click(trigger);
+      firstAlert = await canvas.findByRole('alert');
+      firstShownAt = Date.now();
+      expect(firstAlert).toHaveTextContent(repeatedToastMessage);
     });
-    expect(Date.now() - secondShownAt).toBeGreaterThanOrEqual(toastDurationMs - 100);
+
+    await step('반복 표시 시 Toast 교체', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      expect(canvas.getByRole('alert')).toBe(firstAlert);
+      await userEvent.click(trigger);
+      secondAlert = await canvas.findByRole('alert');
+      secondShownAt = Date.now();
+      expect(secondAlert).toHaveTextContent(repeatedToastMessage);
+      expect(secondAlert).not.toBe(firstAlert);
+      expect(canvas.getAllByRole('alert')).toHaveLength(1);
+    });
+
+    await step('교체된 Toast 자동 닫힘 확인', async () => {
+      await waitFor(
+        () => {
+          expect(Date.now()).toBeGreaterThanOrEqual(firstShownAt + toastDurationMs);
+          expect(canvas.getByRole('alert')).toBe(secondAlert);
+        },
+        { interval: 50, timeout: 2500 },
+      );
+      await waitFor(() => expect(canvas.queryByRole('alert')).not.toBeInTheDocument(), {
+        interval: 50,
+        timeout: 1500,
+      });
+      expect(Date.now() - secondShownAt).toBeGreaterThanOrEqual(toastDurationMs - 100);
+    });
   },
 };
 
@@ -283,21 +305,25 @@ export const ScopedCleanupDoesNotDismissNewerToast: Story = {
       <ScopedToastFixture />
     </ToastProvider>
   ),
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, step }) => {
     const canvas = within(canvasElement);
     scopedRetry.mockClear();
 
-    await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('이전 목록 오류');
-    await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    await step('이전 목록 오류 Toast 정리', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
+      await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('이전 목록 오류');
+      await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
+      expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
+    });
 
-    await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
-    await userEvent.click(canvas.getByRole('button', { name: '최신 알림 표시' }));
-    expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
-    await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
-    expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
-    expect(scopedRetry).not.toHaveBeenCalled();
+    await step('새 Toast 보존과 이전 action 미호출 확인', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '목록 오류 표시' }));
+      await userEvent.click(canvas.getByRole('button', { name: '최신 알림 표시' }));
+      expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
+      await userEvent.click(canvas.getByRole('button', { name: '이전 목록 정리' }));
+      expect(canvas.getByRole('alert')).toHaveTextContent('최신 알림');
+      expect(scopedRetry).not.toHaveBeenCalled();
+    });
   },
 };
 
