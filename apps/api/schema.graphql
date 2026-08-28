@@ -1,4 +1,5 @@
 type Account implements Node {
+  featureFlags: [String!]!
   id: ID!
   name: String!
   profiles: [Profile!]!

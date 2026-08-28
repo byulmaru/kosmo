@@ -1,0 +1,1 @@
+ALTER TABLE "account" ADD COLUMN "feature_flags" text[] DEFAULT '{}'::text[] NOT NULL;

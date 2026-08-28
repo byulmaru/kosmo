@@ -16,6 +16,7 @@ export const Account = createObjectRef('Account', (ids, ctx) =>
 
 Account.implement({
   fields: (t) => ({
+    featureFlags: t.exposeStringList('featureFlags'),
     name: t.string({
       resolve: (account) => account.displayName,
     }),
