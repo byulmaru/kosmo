@@ -8,8 +8,8 @@
 - sitemap은 `https://kos.moe/`, `https://kos.moe/privacy`, Kosmo 공식 안내 계정 `https://kos.moe/@kosmo`만 각각 한 번 포함한다.
 - 일반 Local·Remote Profile과 Post를 열거하지 않고, DB 조회나 런타임 동적 생성 없이 제공한다.
 - 현재 세 URL에는 `lastmod`, `changefreq`, `priority`를 제공하지 않는다.
-- Expo Web export 산출물이 source와 같은 XML을 포함하는지 확인하고, 배포 후 browser navigation을 포함한 프로덕션 무인증 응답을 검증한다.
-- 배포 뒤 Google Search Console과 Naver Search Advisor 제출은 durable capability가 아닌 일회성 운영 task로 수행하고 결과를 `PROD-731`에 기록한다.
+- Expo Web export 산출물이 source와 같은 XML을 포함하는지 확인한다.
+- browser navigation을 포함한 프로덕션 무인증 응답 검증과 Google Search Console·Naver Search Advisor 제출은 durable capability가 아닌 배포 후 운영 task로 `PROD-731`에서 추적한다. 이 운영 후속은 OpenSpec archive를 막지 않는다.
 - Profile·Post 등 공개 URL을 데이터 상태에 따라 포함하는 동적 sitemap은 별도 Linear 이슈와 OpenSpec change에서 공개 eligibility, 갱신·삭제 반영, cache/invalidation, protocol 용량과 index 전환 기준을 결정한 뒤 구현한다.
 - `robots.txt`의 crawler 분류와 `Sitemap` 지시어는 관련 이슈 `PROD-736`이 소유하므로 이 change에서는 수정하지 않는다.
 
@@ -17,7 +17,7 @@
 
 - Canonical: `docs/domain/objects/profile.md`의 Local Profile relative handle route 계약; 적용되는 sitemap 전용 `docs/design` 문서는 없음.
 - Linear Contract: `PROD-731` 본문과 관계(2026-08-27 정적 3-URL 범위로 갱신하고 사용자 승인 반영).
-- Linear Implementation: `PROD-731`이 정적 sitemap 구현·export 산출물 검증·프로덕션 무인증 응답 검증과 Google·Naver 일회성 제출 task를 소유한다. 동적 sitemap, sitemap 전용 unit/E2E 테스트와 반복 제출 capability는 소유하지 않는다.
+- Linear Implementation: `PROD-731`이 정적 sitemap 구현·export 산출물 검증을 소유하고, 프로덕션 무인증 응답 검증과 Google·Naver 일회성 제출은 OpenSpec archive와 분리된 운영 체크리스트로 추적한다. 동적 sitemap, sitemap 전용 unit/E2E 테스트와 반복 제출 capability는 소유하지 않는다.
 - Related Boundary: `PROD-736`은 `robots.txt` crawler 정책, Cloudflare edge 적용·검증과 `Sitemap` 지시어를 별도로 소유한다.
 
 ## Capabilities

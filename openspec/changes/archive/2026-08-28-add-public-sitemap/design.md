@@ -16,7 +16,8 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 - sitemap에 승인된 세 canonical URL만 각각 한 번 포함한다.
 - browser navigation에서도 정적 sitemap asset이 SPA fallback보다 먼저 제공되게 한다.
 - sitemap 제공을 DB와 런타임 query에서 분리한다.
-- Expo Web export·XML 검증과 프로덕션 확인, Google·Naver 일회성 제출 결과를 남긴다.
+- Expo Web export와 XML을 검증한다.
+- 프로덕션 확인과 Google·Naver 일회성 제출은 OpenSpec archive와 분리된 `PROD-731` 운영 체크리스트로 남긴다.
 
 **Non-Goals**
 
@@ -47,8 +48,8 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 2. 기존 PR에서 추가한 동적 Hono sitemap route, DB loader, XML serializer와 관련 단위·격리 DB E2E 테스트를 제거한다.
 3. 새 sitemap 전용 unit/E2E 테스트를 추가하지 않고 source XML의 형식과 정확한 URL 집합을 검사한다.
 4. Expo Web export에 source와 같은 `sitemap.xml`이 포함되는지 build 결과로 확인한다.
-5. 배포 후 crawler와 browser navigation 형식의 무인증 production 응답에서 status, content type, XML 구조, 정확한 URL 집합과 SPA fallback 비적용을 확인한다.
-6. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 처리 결과를 `PROD-731`에 기록한다.
+5. 배포 후 crawler와 browser navigation 형식의 무인증 production 응답에서 status, content type, XML 구조, 정확한 URL 집합과 SPA fallback 비적용을 `PROD-731` 운영 체크리스트로 확인한다.
+6. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 처리 결과를 `PROD-731`에 기록한다. 5–6은 OpenSpec archive 조건이 아니다.
 7. 동적 sitemap이 필요해지면 현재 change에 DB 로직을 다시 추가하지 않고 별도 Linear 이슈와 OpenSpec change에서 범위와 운영 계약부터 결정한다.
 
 ### Allowed Alternatives
@@ -80,8 +81,9 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 2. 기존 동적 sitemap 구현과 테스트를 제거하고 정적 asset만 남긴다. 새 sitemap 전용 테스트 코드는 추가하지 않는다.
 3. 기존 workspace test, typecheck, lint, Expo Web export, XML 검사와 OpenSpec strict validation을 실행한다.
 4. 사용자 diff 리뷰를 받은 뒤 commit·push하고 PR 본문과 상태를 갱신한다.
-5. 배포 후 production `/sitemap.xml`을 인증 없이 검증하고 Google·Naver에 한 번 제출한다.
-6. rollback은 sitemap asset이 없는 직전 Web image로 되돌린다. DB·GraphQL·migration 변경은 없으므로 데이터 복구는 필요 없다.
+5. OpenSpec을 active spec과 동기화해 archive한다.
+6. 배포 후 production `/sitemap.xml`을 인증 없이 검증하고 Google·Naver에 한 번 제출한 결과는 `PROD-731` 운영 체크리스트에 기록한다.
+7. rollback은 sitemap asset이 없는 직전 Web image로 되돌린다. DB·GraphQL·migration 변경은 없으므로 데이터 복구는 필요 없다.
 
 ## Open Questions
 

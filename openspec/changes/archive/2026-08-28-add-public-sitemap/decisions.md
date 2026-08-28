@@ -91,7 +91,7 @@
 - Context / Problem: sitemap 제공과 crawler 허용 정책을 한 변경에 섞으면 `PROD-736`의 보안·ActivityPub 검증 경계를 우회할 수 있다.
 - Decision Outcome: 이 change는 `/sitemap.xml` asset·응답·제출 증거만 소유한다. `apps/app/public/robots.txt`, crawler 분류, bot 차단과 `Sitemap` 지시어는 수정하지 않는다.
 - Alternatives Considered: 같은 PR에서 robots 지시어까지 추가하면 운영 순서는 단순해지지만 별도 이슈의 crawler 안전 검증을 섞는다.
-- Consequences: 검색엔진 제출은 sitemap URL을 직접 사용한다. `PROD-736`의 구현과 PR 준비는 독립적으로 진행할 수 있으며, `Sitemap` 지시어의 프로덕션 통합 검증과 전체 change archive는 `PROD-731`의 sitemap 배포 성공을 확인한 뒤 완료한다.
+- Consequences: 검색엔진 제출은 sitemap URL을 직접 사용한다. `PROD-736`의 구현과 PR 준비는 독립적으로 진행할 수 있으며, 해당 이슈의 `Sitemap` 지시어 프로덕션 통합 검증만 `PROD-731`의 sitemap 배포 성공 뒤 완료한다. 현재 sitemap change의 active spec 동기화와 archive는 이 운영 순서와 분리한다.
 - Confirmation / Follow-up: 구현 diff에서 `robots.txt`가 바뀌지 않았는지 확인한다.
 
 ## Remaining Decisions
