@@ -136,6 +136,8 @@ workflowId = profile-follow-unfollow:{followerProfileId}:{followeeProfileId}:{ex
 
 Unfollow command는 `expectedFollowId`로 exact relation만 삭제한다. DB commit 결과를 Update로 반환하고, exact ID의 Notification cleanup과 Local-origin Undo handoff를 effects boundary로 실행한 뒤 종료한다. Refollow가 새 pair run을 만드는 동안 오래된 Unfollow가 도착해도 expected Follow ID가 달라져 새 관계를 삭제하지 않는다.
 
+Removal transaction Activity가 configured retry를 모두 소진하면 Update와 short Workflow 실행을 함께 실패로 닫는다. DB commit에 성공한 Update만 effects와 독립적으로 성공하며, transaction 자체가 실패한 실행을 완료된 Workflow로 관찰하지 않는다.
+
 F1 삭제 commit 뒤 Activity completion이 유실되고 F2 refollow가 먼저 생겨도 retry는 F2를 삭제하지 않는다. 현재 row가 expected F1이 아니면 Workflow input의 F1 ID와 pair로 F1 delete effect만 재구성한다.
 
 Update wire result에는 full DB row나 `Temporal.Instant` 대신 생성/승격된 Follow 또는 Request의 ID와 pair identity만 포함한다. caller-side rehydrate는 그 identity로 현재 projection을 읽는다.

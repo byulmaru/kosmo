@@ -132,6 +132,12 @@ The system MUST preserve existing source-correlated Notification and ActivityPub
 - **WHEN** Follow F1 removal commits, Activity completion is lost, and Follow F2 exists when the removal Activity retries
 - **THEN** the retry preserves F2 and reconstructs only F1's delete effects from the expected F1 ID and directed pair
 
+#### Scenario: Removal transaction retries are exhausted
+
+- **WHEN** the exact-row removal transaction Activity reaches its configured terminal failure
+- **THEN** the Update fails and the short removal Workflow also closes as failed instead of reporting a completed Workflow
+- **AND** no effect is scheduled without a successful transaction result
+
 #### Scenario: Bound caller admission latency
 
 - **WHEN** the Temporal server or Worker does not complete Update-with-Start admission

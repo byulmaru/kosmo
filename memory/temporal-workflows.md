@@ -82,7 +82,9 @@
   일반화하지 않는다.
 - Unfollow는 이미 성립된 Follow Relationship의 별도 짧은 Workflow다. Follow pair Workflow는 Unfollow까지 살아
   있지 않고, inbound Follow의 actor/object/recipient 검증과 직접 Accept delivery 경계도 기존 Fedify handler에
-  남긴다. Follow effect의 origin guard는 ActivityPub outbound echo를 계속 막는다.
+  남긴다. Follow effect의 origin guard는 ActivityPub outbound echo를 계속 막는다. Removal transaction Activity가
+  retry를 소진하면 Update와 Workflow 실행을 함께 실패로 닫고, 성공한 DB commit 결과만 effects 완료와 분리해
+  Update 성공으로 반환한다.
 
 ## Activity Registration And Adapters
 

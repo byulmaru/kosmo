@@ -20,6 +20,8 @@ import type * as activities from '../activities';
 
 export const PROFILE_FOLLOW_REMOVAL_UPDATE_NAME = 'profileFollowRemovalUpdate';
 export const PROFILE_FOLLOW_REMOVAL_ORPHAN_GUARD = '1 minute';
+export const PROFILE_FOLLOW_REMOVAL_TRANSITION_FAILURE_TYPE =
+  'ProfileFollowRemovalTransitionFailure';
 
 const profileIdSchema = z
   .string({ error: 'Profile Follow pair requires non-empty profile IDs' })
@@ -73,6 +75,7 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   let inFlight = false;
   let updateReceived = false;
   let execution: ProfileFollowRemovalExecution | undefined;
+  let transitionFailure: string | undefined;
   setHandler(
     defineUpdate<ProfileFollowRemovalOutcome, [ProfileFollowRemovalInput]>(
       PROFILE_FOLLOW_REMOVAL_UPDATE_NAME,
@@ -112,6 +115,9 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
               followeeProfileId: execution.followeeProfileId,
             }
           : execution;
+      } catch (error) {
+        transitionFailure = error instanceof Error ? error.message : String(error);
+        throw error;
       } finally {
         inFlight = false;
       }
@@ -137,6 +143,12 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   }
   await condition(allHandlersFinished);
 
+  if (transitionFailure !== undefined) {
+    throw ApplicationFailure.nonRetryable(
+      'Profile Follow removal transition Activity failed: ' + transitionFailure,
+      PROFILE_FOLLOW_REMOVAL_TRANSITION_FAILURE_TYPE,
+    );
+  }
   if (execution === undefined || !execution.ok) {
     return;
   }

@@ -99,6 +99,18 @@
 - Consequences: Refollow는 새 pair run이고 expectedFollowId가 이전 relation과 새 relation을 분리한다.
 - Confirmation / Follow-up: unfollow/refollow ABA와 remote Undo test로 확인한다.
 
+### Removal transaction Activity 실패는 Update와 Workflow를 함께 실패시킨다
+
+- Decision Date: 2026-08-28
+- Decision Class: Failure Semantics
+- Authority / Provenance: PROD-720, 2026-08-28 사용자 결정
+- Status: Active
+- Context / Problem: Removal transaction Activity가 retry를 소진하면 Update는 실패하지만 Workflow가 정상 완료되어 같은 DB transition에 상반된 관찰 결과가 남을 수 있다.
+- Decision Outcome: transaction Activity 실패를 Workflow state에 기록하고 Update handler가 끝난 뒤 Workflow도 typed failure로 닫는다. DB commit 결과를 받은 성공 Update는 기존대로 effects 완료를 기다리지 않는다.
+- Alternatives Considered: Update만 실패시키고 Workflow는 완료하는 현재 동작을 유지하는 방안을 검토했지만, 운영 조회에서 transaction 실패를 성공한 Workflow로 표시하므로 선택하지 않았다.
+- Consequences: caller와 운영자는 transaction 실패를 Update와 Workflow 양쪽에서 일관되게 관찰한다. 같은 exact-row removal은 완료된 실패 run 뒤 새 run으로 재시도할 수 있다.
+- Confirmation / Follow-up: real Temporal test에서 transaction Activity retry 소진 뒤 Update와 Workflow 결과가 모두 실패하는지 확인한다.
+
 ### Ingress trust, direct Accept와 ActivityPub no-echo는 유지한다
 
 - Decision Date: 2026-08-25

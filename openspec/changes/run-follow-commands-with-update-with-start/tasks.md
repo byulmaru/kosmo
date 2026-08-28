@@ -59,6 +59,7 @@
 - delayed transaction 동안 duplicate/concurrent Update가 하나만 실행되는지 검증
 - pending effect failure 뒤 approve/reject/cancel/undo가 계속 처리되는지 검증
 - terminal queue sibling retry/failure, Worker restart/replay와 final complete/fail 검증
+- exact-row removal transaction Activity retry 소진 시 Update와 Workflow가 함께 실패하는지 검증
 
 - [x] 2.1 pair lifecycle Workflow, state machine, one-in-flight handler와 orphan INITIAL guard를 구현한다.
 - [x] 2.2 transition effect batch FIFO queue, ordered phase의 순차 drain, 기존 effect Activity/stable source identity 재사용, Activity 수와 관계없는 공용 `settleEffects` 정산과 failure recording을 구현한다. 별도 create/delete Effects Workflow는 만들지 않는다.

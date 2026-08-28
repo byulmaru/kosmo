@@ -984,3 +984,83 @@ test(
     });
   },
 );
+
+test(
+  'Separate removal Workflow는 transaction Activity retry exhaustion을 Update와 Workflow 실패로 남긴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-failure-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000634',
+      followeeProfileId: '00000000-0000-8000-8000-000000000635',
+    };
+    const followId = '00000000-0000-8000-8000-000000000636';
+    const input = {
+      ...pair,
+      expectedRowId: followId,
+      origin: 'LOCAL' as const,
+    };
+    let removalAttempts = 0;
+    let effectCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        verifyProfileFollowRemovalActivity: async () => followId,
+        executeProfileFollowRemovalActivity: async () => {
+          removalAttempts += 1;
+          throw ApplicationFailure.create({
+            message: 'removal transaction unavailable',
+            nextRetryDelay: '1ms',
+          });
+        },
+        deleteFollowNotificationActivity: async () => {
+          effectCalls += 1;
+        },
+        sendProfileUnfollowActivity: async () => {
+          effectCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation(
+        'profileFollowRemovalWorkflow',
+        {
+          args: [pair],
+          taskQueue,
+          workflowId:
+            'profile-follow-unfollow:' +
+            pair.followerProfileId +
+            ':' +
+            pair.followeeProfileId +
+            ':' +
+            followId,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        },
+      );
+      const updateResultPromise = environment.client.workflow.executeUpdateWithStart(
+        'profileFollowRemovalUpdate',
+        {
+          args: [input],
+          updateId: 'removal:' + followId,
+          startWorkflowOperation,
+        },
+      );
+      const handle = await startWorkflowOperation.workflowHandle();
+
+      await assert.rejects(updateResultPromise);
+      await assert.rejects(handle.result());
+      assert.equal(removalAttempts, 10);
+      assert.equal(effectCalls, 0);
+    });
+  },
+);
