@@ -14,8 +14,14 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.
-- Figma Action은 내부 상하 padding 4px을 포함한다. 목록 surface는 28px Action Bar 자체 geometry를 바꾸지
-  않고 전용 slot의 상단 padding은 0, 하단 padding은 4px로 두어 아래 카드 구분선과 4px 간격을 만든다.
+- Figma Action은 내부 상하 padding 4px을 포함한다. canonical
+  [`PostListItem` Text·Media variants](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)는
+  카드 상단 12px·하단 4px을 사용한다. content column의 기존 4px gap 뒤 final slot 상단 4px을 더해 마지막
+  presentation(본문·미디어 또는 Reaction Summary)과 Action Bar 사이를 8px로 만들고, slot 하단은 0으로
+  두어 카드 하단 4px이 구분선 간격을 단독 소유한다. Quote와 순수 Repost의 별도 spacing 계약은 유지한다.
+- 이 값은 현재 Figma target이다. production `PostListItem`은 이 문서 변경에서 수정하지 않으며 카드 상단
+  8px과 목록 전용 Action Bar slot 상단 0·하단 4px을 유지한다. Figma target의 production 적용은 관련
+  Product 이슈와 OpenSpec spec·task를 연결한 뒤 구현과 runtime 검증을 함께 진행한다.
 
 ## Web hover target
 
@@ -43,8 +49,11 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## Surface 배치
 
-- `PostLayout`은 `PostActionBar`를 Post content grid 안의 마지막 자식으로 렌더링한다. `PostListItem`은
-  상단 0·하단 4px을 제공하는 목록 전용 slot을 마지막 자식으로 두고 그 안에 `PostActionBar`를 렌더링한다.
+- `PostLayout`은 `PostActionBar`를 Post content grid 안의 마지막 자식으로 렌더링한다. 현재 production의
+  일반 Text·Media `PostListItem`은 카드 상단 8px과 상단 0·하단 4px인 목록 전용 Action Bar slot을 유지한다.
+  별도 Product migration의 target은 Figma와 같은 카드 상단 12px·하단 4px, slot 상단 4px·하단 0이며,
+  content column의 기존 4px gap과 합쳐 마지막 presentation(본문·미디어 또는 Reaction Summary)에서 Action
+  Bar까지 8px을 만든다. Quote와 순수 Repost는 기존 상단 0·하단 4px slot을 유지한다.
 - 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
   inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않고 Action Bar 아래부터 다음
   thread divider까지 4px을 둔다. current row 상단의 16px은 유지한다. 이 간격은 thread current row
@@ -54,8 +63,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 일반 Post는 본문 뒤, 순수 Repost는 Source presentation 뒤, Quote는 자체 본문과 Source preview 뒤에 Action
   Bar를 둔다. 상세의 metadata가 있으면 metadata 뒤에 둔다.
 - Quote 목록은 Source preview의 내부 하단 padding을 4px로 줄이고, 공용 Action Bar slot의 상단 padding 0을
-  유지하면서 Source preview border 밖에서 Action Bar까지 8px 간격을 둔다. 일반 Post와 순수 Repost의 상단
-  간격은 늘리지 않는다.
+  유지하면서 Source preview border 밖에서 Action Bar까지 8px 간격을 둔다. 순수 Repost도 기존 slot과
+  attribution·Source 간격을 유지한다.
 - 순수 Repost의 본문·생성 시각 affordance는 Repost 자체가 아니라 Source detail로 이동한다. Repost Author와
   Source Author affordance는 각각 해당 Profile로 이동한다.
 - 순수 Repost 아래 Action Bar의 Reply는 바깥 contentless Repost의 Reply 계약을 유지해 disabled로 표시한다.
@@ -210,9 +219,13 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - 일반 Post, 순수 Repost, Quote 목록에서는 Action Bar slot이, 상세에서는 Action Bar가 content grid의 마지막
   sibling이고 navigation Link/Pressable의 descendant가 아닌지 검증한다.
-- 목록의 일반 Post·순수 Repost·Quote에서 Action Bar slot의 상단 padding이 0, 하단 padding이 4이고 1px 구분선이 semantic
-  `divider` color를 사용하는지 검증한다. 순수 Repost는 attribution line box가 20이고 Source 표준행과의
-  추가 gap이 0인지, Quote는 Source preview 내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
+- Figma canonical 일반 Text·Media source와 representative consumer에서 카드 상단 12px·하단 4px,
+  Action Bar slot 상단 4px·하단 0인지 readback한다. production migration에서는 마지막
+  presentation(본문·미디어 또는 Reaction Summary)에서 Action Bar까지 8px인지 별도로 검증한다. 이 문서
+  변경의 production 완료 증거로 간주하지 않는다. 순수 Repost와 Quote는 slot 상단 0·하단 4px을 유지하고
+  1px 구분선은 semantic `divider` color를 사용해야 한다.
+  순수 Repost는 attribution line box가 20이고 Source 표준행과의 추가 gap이 0인지, Quote는 Source preview
+  내부 하단 padding이 4px이고 border 밖에서 Action Bar까지 8px인지 함께 검증한다.
 - 일반 목록의 Reply와 Reply+Quote는 조회 가능한 Parent의 display name을 사용한 Reply attribution을 한 번
   표시하고, 일반 Post와 Parent를 조회할 수 없는 Reply에는 표시하지 않는지 검증한다. Reply attribution은
   클릭 가능한 요소가 아니며 장식 icon과 문구를 중복 announce하지 않아야 한다.

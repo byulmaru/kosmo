@@ -19,6 +19,95 @@ KOSMO 디자인 작업은 Figma의 `KOSMO` 파일에서 한다.
 
 웹 화면의 1440 프레임은 레이아웃 브레이크포인트 3단계(풀 사이드바 + 피드 + 컴포저, `≥ full`/1280px)에 대응한다. 1024 프레임(접힌 아이콘 메뉴 + 피드)은 코드의 2단계(`compact`~`full`/768~1279px 아이콘 레일 + 피드)에 대응한다. 단계 정의와 대응은 [breakpoints.md](./breakpoints.md)를 참고한다.
 
+### Full Web screen baseline · DSN-49
+
+2026-08-28 KST에 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1846-880)을
+readback한 Full Web 기준은 route·state `FRAME` 31개와 Profile lifecycle `INSTANCE` 4개, 총 35개
+screen-like surface다. 피그마 인벤토리의 정본은
+[`00 Screen Inventory · DSN-49 · Complete`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13275),
+[`Route contracts · 20`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13292),
+[`State and candidate contracts · 8`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13462)이다.
+
+아래 목록은 DSN-50 Compact Web 1024와 DSN-51 Mobile 390이 누락 없이 같은 계약 세트를 만들 때
+사용하는 handoff checklist다. 상태를 `Current`로 승격하거나 새 route를 정의하는 목록이 아니다.
+위험·상태·진행도 분류는 Full의 `Current`·`Target`·`Candidate`·`Legacy`를 그대로 유지하고,
+각 플랫폼의 새 node ID와 검증 결과는 DSN-50·DSN-51이 소유하며 DSN-37이 통합한다.
+
+`01 Public Web`의 `/`(`1945:939`)와 `/privacy`(`1945:949`)는 현재 inventory의
+`Current`·`Implemented` snapshot이지만, 현재 화면 구성을 장기 보존할 canonical state로
+확정하지 않았다. 따라서 DSN-49의 31개 기준선에서 의도적으로 제외하며, DSN-50·DSN-51도
+이를 viewport별로 1:1 복제하지 않는다. 향후 Public surface의 목표 상태는 별도 범위에서 정한다.
+
+#### Full Web route·state frames
+
+| 구역                      | Full Web surface                                                                                                                                                                  | 분류                                | Inventory contract                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 04 Core routes            | [`/home · Legacy · pre-DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-2553)                                                                      | Legacy · Light · 참조만             | [`/home`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13334)                          |
+| 04 Core routes            | [`/notifications`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-2753)                                                                                   | Current · Light                     | [`/notifications`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13350)                 |
+| 04 Core routes            | [`/bookmarks · Bookmark actions selected · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-2918)                                                  | Current · Light                     | [`/bookmarks`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13358)                     |
+| 04 Core routes            | [`/search · People results · Current`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-3245)                                                               | Current · Light                     | [`/search`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13374)                        |
+| 04 Core routes            | [`/follow-requests`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-3551)                                                                                 | Current · Light                     | [`/follow-requests`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13390)               |
+| 04 Core routes            | [`/hashtags/[id]/profiles`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-3715)                                                                          | Current · Light                     | [`/hashtags/[hashtagId]/profiles`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13398) |
+| 04 Core routes            | [`/profile-edit · Candidate · Custom fields · Dark`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1951-3854)                                                 | Candidate · Dark                    | [`/profile-edit`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13406)                  |
+| 04 Core routes            | [`/search · Popular results · Candidate · Product not implemented`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5852-14340)                                 | Candidate · Product 미구현          | [`/search`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13374)                        |
+| 04 Core routes            | [`/search · Media results · Candidate · Product not implemented`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5852-14565)                                   | Candidate · Product 미구현          | [`/search`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13374)                        |
+| 05 Profile and post       | [`/[profileHandle] · Target tabs · Replies and Media product not implemented`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1953-3855)                       | Target · Product 미구현             | [`/[profileHandle]`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13430)               |
+| 05 Profile and post       | [`/[profileHandle]/followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1953-3992)                                                                       | Current · Light                     | [`/[profileHandle]/followers`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13438)     |
+| 05 Profile and post       | [`/[profileHandle]/following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1953-4133)                                                                       | Current · Light                     | [`/[profileHandle]/following`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13446)     |
+| 05 Profile and post       | [`/[profileHandle]/[postId] · Current thread`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1953-4274)                                                       | Current                             | [`/[profileHandle]/[postId]`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13454)      |
+| 06 Settings workspace     | [`/settings/profile · Follow approval shared Save · Target · Product migration`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1955-4420)                     | Target · Product migration          | [`/settings/profile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13422)              |
+| 06 Settings workspace     | [`/settings/theme · Light · Candidate · Product not implemented`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4848-10206)                                   | Candidate · Light · Product 미구현  | [`/settings/theme`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13472)                |
+| 08 Representative states  | [`/home · Profile required · Intentional override`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1957-5004)                                                  | Representative state · theme 미표기 | [`/home`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13334)                          |
+| 08 Representative states  | [`/[profileHandle]/[postId] · Deleted`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1957-5147)                                                              | Deleted · theme 미표기              | [`/[profileHandle]/[postId]`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13454)      |
+| 08 Representative states  | [`/settings · Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1957-5310)                                                                     | Representative state · theme 미표기 | [`/settings`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13414)                      |
+| 09 Timeline routes        | [`/home · Light · DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4532-8869)                                                                           | Current · Light                     | [`/home`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13334)                          |
+| 09 Timeline routes        | [`/local · Light · DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4532-9060)                                                                          | Current · Light                     | [`/local`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13342)                         |
+| 09 Timeline routes        | [`/home · Dark · DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4532-32769)                                                                           | Current · Dark                      | [`/home`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13334)                          |
+| 09 Timeline routes        | [`/local · Dark · DSN-56`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4532-32781)                                                                          | Current · Dark                      | [`/local`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13342)                         |
+| 10B Local timeline states | [`/local · Loading · Light · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5560-13237)                                                               | Current · Light                     | [`Loading`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13480)                        |
+| 10B Local timeline states | [`/local · Empty · Light · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5560-13431)                                                                 | Current · Light                     | [`Empty`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13488)                          |
+| 10B Local timeline states | [`/local · Initial error · No saved data · Blank + persistent Toast · Target · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5560-13625)             | Target · Light                      | [`Error targets`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13496)                  |
+| 10B Local timeline states | [`/local · Refresh error · Last successful timeline retained + persistent Toast · Target · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5831-14098) | Target · Light                      | [`Error targets`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13496)                  |
+| 10B Local timeline states | [`/local · Pagination error · Existing list retained + Toast · Target · DSN-49`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5831-14188)                    | Target · Light                      | [`Error targets`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13496)                  |
+| 10C Standalone states     | [`/login/callback · Current · Standalone`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5565-13663)                                                          | Current · Standalone                | [`/login/callback`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13318)                |
+| 10C Standalone states     | [`+not-found · Current · Standalone`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5565-13667)                                                               | Current · Standalone                | [`+not-found`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13326)                     |
+| 11 Profile pinned states  | [`/[profileHandle] · Pinned · Light · Target tabs`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4849-10625)                                                 | Target · Light                      | [`Pinned`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13528)                         |
+| 11 Profile pinned states  | [`/[profileHandle] · Pinned · Dark · Target tabs`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4849-10709)                                                  | Target · Dark                       | [`Pinned`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13528)                         |
+
+#### Profile lifecycle state-family
+
+[`11 Profile lifecycle · DSN-52`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4876-16628)의 네 항목은
+일반 route `FRAME`이 아닌 FullWeb consumer `INSTANCE`이고 현재 Screen Inventory에 직접 연결된 행이 없다.
+Compact·Mobile에서도 route screen으로 중복 생성하지 않고 독립된 lifecycle state-family로 대응시킨다.
+
+| Full Web lifecycle surface                                                                                                                      | State · theme         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| [`Consumer · Viewport=FullWeb, State=Active, Theme=Light`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4876-33061)        | Active · Light        |
+| [`Consumer · Viewport=FullWeb, State=Deactivated, Theme=Light`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4876-33181)   | Deactivated · Light   |
+| [`Consumer · Viewport=FullWeb, State=DeleteChecked, Theme=Light`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4876-33285) | DeleteChecked · Light |
+| [`Consumer · Viewport=FullWeb, State=Deactivated, Theme=Dark`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4876-33420)    | Deactivated · Dark    |
+
+#### Inventory-only canonical overlays
+
+Composer와 Feedback은 route screen이 아니라 어떤 route에서든 열리는 canonical overlay다. Full·Compact·Mobile
+인벤토리에서 소유 overlay 계약은 유지하되, `/compose`나 `/feedback` 전체 화면을 복제해 route 세트에
+추가하지 않는다.
+
+| Overlay  | Canonical node                                                                                                                             | Inventory contract                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Composer | [`Full Web 1440 · Any route + Composer overlay · Canonical`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5626-47243) | [`/compose · Overlay only`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13366)  |
+| Feedback | [`Full Web 1440 · Any route + Feedback overlay · Canonical`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5626-47230) | [`/feedback · Overlay only`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=5547-13382) |
+
+#### 사용·종료 경계
+
+- DSN-50·DSN-51은 Legacy `/home` 복제본 대신 DSN-56 `/home`을 현재 기준으로 사용한다.
+- 명시되지 않은 theme나 없는 Dark 상태를 임의로 추론하지 않는다. 추가 coverage는 해당 플랫폼 이슈에서 근거를 남긴다.
+- Figma readback은 node 구조·명칭·시각 상태만 증명한다. runtime route 도달성, focus·dismiss, 접근성과 Product 구현은 별도로 검증한다.
+- 이 기준선 기록과 Figma 인벤토리 readback은 DSN-49 Full Web 완료 증거다. Compact·Mobile 생성은
+  DSN-50·DSN-51의 후속 범위이며 DSN-49 종료 blocker가 아니다.
+- 이 기록을 포함한 [PR #698](https://github.com/byulmaru/kosmo/pull/698)이 merge된 뒤 merged revision에서 문서를
+  readback하면 DSN-49를 종료한다. Product code migration은 이 이슈와 PR의 범위에 포함하지 않는다.
+
 ### `01 Foundations` 프로덕션 구조
 
 - [`01 Color System · Production`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1661-254) — primitive, semantic Light/Dark, feedback, state, contrast와 migration 계약
