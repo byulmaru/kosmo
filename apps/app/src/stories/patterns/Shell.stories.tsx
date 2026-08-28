@@ -19,15 +19,18 @@ import { UniversalShell } from '@/components/shell/UniversalShell';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing } from '@/theme/tokens';
+import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
+import appIconUrl from '../../../public/icon-192.png?url';
+import ogDefaultUrl from '../../../public/og-default.png?url';
 import { profile, shellQuery } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
 import type { ShellStoriesQuery as ShellStoriesQueryType } from '../__generated__/ShellStoriesQuery.graphql';
 
-const selectedAvatarUrl = '/apple-touch-icon.png';
-const selectedHeaderUrl = '/og-default.png';
-const secondAvatarUrl = '/icon-192.png';
+const selectedAvatarUrl = appleTouchIconUrl;
+const selectedHeaderUrl = ogDefaultUrl;
+const secondAvatarUrl = appIconUrl;
 const secondProfile = profile({
   avatar: { id: 'media-shell-second-avatar', url: secondAvatarUrl },
   displayName: '먼 우주의 사용자',

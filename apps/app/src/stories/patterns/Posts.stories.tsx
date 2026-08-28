@@ -54,6 +54,9 @@ import {
   resetClipboardMock,
   setNextClipboardResult,
 } from '../../../.storybook/mocks/postClipboard';
+import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
+import appIconUrl from '../../../public/icon-192.png?url';
+import ogDefaultUrl from '../../../public/og-default.png?url';
 import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -91,7 +94,7 @@ function getColorContrastRatio(foreground: string, background: string) {
   );
 }
 
-const postMediaImageUri = '/og-default.png';
+const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
 
@@ -358,8 +361,8 @@ const loadErrorThreeMediaPost = post({
     },
   ],
 });
-const sourceAuthorAvatarUrl = '/apple-touch-icon.png';
-const repostAuthorAvatarUrl = '/icon-192.png';
+const sourceAuthorAvatarUrl = appleTouchIconUrl;
+const repostAuthorAvatarUrl = appIconUrl;
 const sourceAuthor = profile({
   avatar: { id: 'media-source-avatar', url: sourceAuthorAvatarUrl },
   displayName: '아주 긴 Source 작성자 표시 이름',

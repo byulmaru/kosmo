@@ -1,7 +1,7 @@
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, fireEvent, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { semanticColors, spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -9,11 +9,13 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 function ActionMenuFixture({
   compactTrigger = false,
   disabled = false,
+  onSelect,
   singleItem = false,
   webHorizontalPlacement,
 }: {
   compactTrigger?: boolean;
   disabled?: boolean;
+  onSelect?: (key: 'quote' | 'repost') => void;
   singleItem?: boolean;
   webHorizontalPlacement?: 'end';
 }) {
@@ -21,7 +23,10 @@ function ActionMenuFixture({
   const repostItem = {
     key: 'repost',
     label: '재게시',
-    onSelect: () => setSelectionCount((count) => count + 1),
+    onSelect: () => {
+      setSelectionCount((count) => count + 1);
+      onSelect?.('repost');
+    },
   };
 
   return (
@@ -37,7 +42,10 @@ function ActionMenuFixture({
                 {
                   key: 'quote',
                   label: '인용 재게시',
-                  onSelect: () => setSelectionCount((count) => count + 1),
+                  onSelect: () => {
+                    setSelectionCount((count) => count + 1);
+                    onSelect?.('quote');
+                  },
                 },
               ]
         }
@@ -122,14 +130,28 @@ function ActionMenuInteractionFixtures() {
 }
 
 const meta = {
-  component: ActionMenuInteractionFixtures,
+  args: {
+    compactTrigger: false,
+    disabled: false,
+    onSelect: fn(),
+    singleItem: false,
+  },
+  component: ActionMenuFixture,
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Action Menu',
-} satisfies Meta<typeof ActionMenuInteractionFixtures>;
+} satisfies Meta<typeof ActionMenuFixture>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const Default: Story = {};
+
+export const Playground: Story = {
+  parameters: { controls: { disable: false } },
+};
+
 export const InteractionContract: Story = {
+  render: () => <ActionMenuInteractionFixtures />,
   play: async ({ canvasElement, globals }) => {
     const expectedTheme = semanticColors[globals.theme === 'dark' ? 'dark' : 'light'];
     const canvas = within(canvasElement);

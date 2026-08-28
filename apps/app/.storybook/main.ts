@@ -13,6 +13,7 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx)'],
   viteFinal: (viteConfig) => ({
     ...viteConfig,
+    publicDir: false,
     define: {
       ...viteConfig.define,
       'process.env.EXPO_PUBLIC_ALLOW_INSECURE_ORIGIN': JSON.stringify('0'),

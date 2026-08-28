@@ -299,7 +299,7 @@ const meta = {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/notifications' },
   },
-  title: 'KOSMO/Screens/Notifications',
+  title: 'KOSMO/Screens/Notifications/Catalog',
 } satisfies Meta<typeof NotificationCatalog>;
 
 export default meta;
