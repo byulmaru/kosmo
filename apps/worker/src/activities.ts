@@ -1,9 +1,5 @@
 import '@kosmo/core/polyfill';
 
-export type {
-  CleanupUnavailableNotificationPageInput,
-  CleanupUnavailableNotificationPageResult,
-} from './activities/cleanup-unavailable-notifications';
 export {
   cleanupUnavailableNotificationPageActivity,
   getNotificationCleanupUpperBoundActivity,

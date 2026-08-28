@@ -253,7 +253,6 @@ export async function cleanupUnavailableNotificationsWorkflow(
     deleted += page.deleted;
     skipped += page.skipped;
     cursor = page.nextCursor;
-    upperBound = page.upperBound;
 
     pagesCounter.add(1);
     scannedCounter.add(page.scanned);

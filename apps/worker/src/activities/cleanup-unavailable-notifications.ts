@@ -28,7 +28,6 @@ export type CleanupUnavailableNotificationPageInput = Readonly<{
 }>;
 
 export type CleanupUnavailableNotificationPageResult = Readonly<{
-  upperBound: string;
   nextCursor: string | null;
   done: boolean;
   scanned: number;
@@ -109,7 +108,6 @@ export async function cleanupUnavailableNotificationPageActivity(
 
       if (rows.length === 0) {
         return {
-          upperBound,
           nextCursor: null,
           done: true,
           scanned: 0,
@@ -140,7 +138,6 @@ export async function cleanupUnavailableNotificationPageActivity(
       const done = lookaheadRows.length <= pageSize;
 
       return {
-        upperBound,
         nextCursor: done ? null : lastId,
         done,
         scanned: rows.length,
@@ -152,7 +149,7 @@ export async function cleanupUnavailableNotificationPageActivity(
     heartbeat({
       phase: 'completed',
       cursor,
-      upperBound: page.upperBound,
+      upperBound,
       nextCursor: page.nextCursor,
       attempt,
       scanned: page.scanned,
@@ -163,7 +160,7 @@ export async function cleanupUnavailableNotificationPageActivity(
       resource: 'notification_cleanup',
       schedule: 'daily',
       cursor,
-      upperBound: page.upperBound,
+      upperBound,
       nextCursor: page.nextCursor,
       done: page.done,
       scanned: page.scanned,

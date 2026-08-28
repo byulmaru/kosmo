@@ -102,7 +102,7 @@ test('Notification cleanup Activity는 bounded 결과와 시작·완료 heartbea
     ['started', 'completed'],
   );
   assert.equal((heartbeats[0] as { attempt: number }).attempt, 2);
-  assert.equal((heartbeats[1] as { upperBound: string }).upperBound, result.upperBound);
+  assert.equal((heartbeats[1] as { upperBound: string }).upperBound, upperBound);
 });
 
 test('Notification cleanup upper-bound Activity는 null bound와 heartbeat를 반환한다', async () => {
@@ -129,7 +129,6 @@ test('empty cleanup captures a null upper bound separately and an explicit bound
   const result = await runPage({ cursor: null, upperBound, pageSize: 10 });
 
   assert.equal(result.done, true);
-  assert.equal(result.upperBound, upperBound);
   assert.equal(result.nextCursor, null);
   assert.deepEqual(
     { scanned: result.scanned, deleted: result.deleted, skipped: result.skipped },
@@ -295,7 +294,7 @@ test('exclusive cursor and fixed upper bound leave later rows for the next sweep
   });
   const secondPage = await runPage({
     cursor: firstPage.nextCursor,
-    upperBound: firstPage.upperBound,
+    upperBound,
     pageSize: 2,
   });
   assert.equal(secondPage.deleted, 1);

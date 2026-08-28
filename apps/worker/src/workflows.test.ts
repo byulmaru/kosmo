@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure, WithStartWorkflowOperation, WorkflowFailedError } from '@temporalio/client';
+import {
+  ApplicationFailure,
+  WithStartWorkflowOperation,
+  WorkflowFailedError,
+} from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { cleanupUnavailableNotificationsWorkflow } from './workflows/cleanup-unavailable-notifications';
@@ -1415,7 +1419,6 @@ test(
         cleanupUnavailableNotificationPageActivity: async (input: unknown) => {
           calls.push({ type: 'page', input });
           return {
-            upperBound: '00000000-0000-8000-8000-000000000010',
             nextCursor: null,
             done: true,
             scanned: 0,
@@ -1546,7 +1549,6 @@ test(
           }
           if (input.cursor === null) {
             return {
-              upperBound: input.upperBound,
               nextCursor: '00000000-0000-8000-8000-000000000010',
               done: false,
               scanned: 2,
@@ -1555,7 +1557,6 @@ test(
             };
           }
           return {
-            upperBound: input.upperBound,
             nextCursor: null,
             done: true,
             scanned: 1,
@@ -1627,13 +1628,13 @@ test('Notification Cleanup Workflow는 Zod 설정 검증과 기존 CleanupConfig
   );
   await assert.rejects(
     cleanupUnavailableNotificationsWorkflow({ sweepId: 'invalid-page-size', pageSize: 0 }),
+    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
+  );
   await assert.rejects(
     cleanupUnavailableNotificationsWorkflow({
       sweepId: 'null-page-size',
       pageSize: null as never,
     }),
-    /CleanupConfigurationError: pageSize must be between 1 and 1000/,
-  );
     /CleanupConfigurationError: pageSize must be between 1 and 1000/,
   );
   await assert.rejects(
@@ -1683,15 +1684,10 @@ test(
     const worker = await Worker.create({
       activities: {
         getNotificationCleanupUpperBoundActivity: async () => upperBound,
-        cleanupUnavailableNotificationPageActivity: async (input: {
-          cursor: string | null;
-          upperBound: string;
-          pageSize: number;
-        }) => {
+        cleanupUnavailableNotificationPageActivity: async () => {
           pageCalls += 1;
           if (pageCalls === 1) {
             return {
-              upperBound: input.upperBound,
               nextCursor: firstPageCursor,
               done: false,
               scanned: 1,
@@ -1702,7 +1698,6 @@ test(
 
           resolveSecondPageStarted?.();
           return {
-            upperBound: input.upperBound,
             nextCursor: null,
             done: true,
             scanned: 1,
