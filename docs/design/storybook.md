@@ -2,7 +2,7 @@
 
 ## 목적과 근거
 
-Figma는 KOSMO UI의 시각·상태 디자인 계약 원천이다. `apps/app` Storybook은 Figma 계약을 실제 Production 컴포넌트와 상태·interaction으로 구현하고 검증·리뷰하는 실행 가능한 코드 측 원천이다. 실제 Production 화면은 Storybook에서 합의된 컴포넌트와 상태 계약을 재사용해 조립한다. route·data·Relay/API·mutation·cache·권한·제품 정책은 Storybook에서 필요한 최소 mock과 시나리오 경계만 제공하며, 실제 network·runtime 통합은 대응 Production runtime에서 연결한다.
+Figma는 KOSMO UI의 시각·상태 디자인 계약 원천이다. KOSMO에서는 `apps/app` Storybook을 실제 Production 컴포넌트를 애플리케이션의 business logic과 context에서 격리해 구현·검증·리뷰하고, 그 상태·예시·interaction을 합의하는 실행 가능한 UI 코드 계약의 원천으로 사용한다. 실제 Production 화면은 story 코드를 복사하지 않고 Storybook에서 검증한 동일한 Production 컴포넌트와 상태 계약을 재사용해 조립한다. route·data·Relay/API·mutation·cache·권한·제품 정책은 Storybook에서 필요한 최소 mock과 시나리오 경계만 제공하며, 실제 network·runtime 통합은 대응 Production runtime에서 연결한다.
 
 공용 UI 계약의 이관 흐름은 `Figma 디자인 계약 → Storybook에서 Production 컴포넌트 구현·승인 → Production 화면 조립·runtime 통합`이며, 조립된 Page·Screen은 다시 Storybook의 대표 시나리오로 검증한다.
 
@@ -25,6 +25,8 @@ Figma 계약을 Storybook에 먼저 이관하고 팀이 Storybook 결과를 직�
 완료된 `PROD-775`·`DSN-39` Primitive의 Production 컴포넌트는 재구현하지 않는다. TextField, StateView, ActionMenu, Toast와 RadioOption의 기존 story 구조와 부족한 Playground·Controls·Actions·play 보강은 `PROD-865`가 소유한다.
 
 ## 분류, 경로와 title
+
+아래 분류와 `apps/app/src/stories/` 중앙 배치는 Storybook 공식 표준이 아니라 기존 KOSMO catalog를 정리하기 위해 이 저장소에서 사용하는 authoring convention이다.
 
 Story는 `apps/app/src/stories/` 아래의 다음 네 폴더에 둔다.
 
@@ -96,6 +98,7 @@ Page·Screen에는 Controls를 억지로 추가하지 않는다. 활성·비활�
 | Static build           | `pnpm --filter @kosmo/app build-storybook`              | 현재 head의 story와 asset이 정적 bundle로 생성됨                | story별 interaction, runtime 배포                                  |
 | Storybook browser test | `pnpm --filter @kosmo/app test:storybook`               | Playwright Chromium에서 story render, `play`와 설정된 a11y 규칙 | iOS·Android, Production route·network                              |
 | Accessibility          | addon a11y와 semantic assertion                         | 자동 검출 가능한 role, name, state와 규칙                       | 비활성화된 `color-contrast`, 전체 WCAG AA, 실제 screen reader 흐름 |
+| Visual contract review | Figma와 대표 story 직접 비교                            | 상태·theme·viewport별 시각 계약 일치                            | 자동 pixel regression, Native runtime                              |
 | Theme                  | Light·Dark toolbar와 필요한 대표 story                  | semantic theme에서의 시각·상태 계약                             | OS theme 전환과 Production persistence                             |
 | Responsive             | 해당 surface에 등록된 mobile·compact·full 등 대표 story | React Native Web의 해당 viewport 배치                           | Native 기기, safe area, keyboard, 실제 reflow 전체                 |
 | Interaction            | `play`, Actions와 Storybook 직접 사용                   | component-owned interaction과 callback                          | route·API·mutation·cache·권한 정책                                 |
