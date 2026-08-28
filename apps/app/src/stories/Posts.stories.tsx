@@ -2422,18 +2422,6 @@ function ProductionPostListItemStory({ postId }: { postId: string }) {
   );
 }
 
-function ReplyEnabledProductionPostListItemStory({ postId }: { postId: string }) {
-  const { replyComposerProfile } = usePostsStoryData();
-
-  return (
-    <PostReplyCoordinatorProvider owner="list" profile={replyComposerProfile}>
-      <PostMediaViewerHostProvider>
-        <ProductionPostListItemStory postId={postId} />
-      </PostMediaViewerHostProvider>
-    </PostReplyCoordinatorProvider>
-  );
-}
-
 function PostMediaViewerRevisionStory() {
   const environment = useRelayEnvironment();
   const phase = useRef(0);
@@ -4230,6 +4218,8 @@ export const PostMediaViewerWide: Story = {
 
     const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
     expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
+    await userEvent.click(within(currentActionBar).getByRole('button', { name: '답글' }));
+    expect(currentRow.getByRole('textbox', { name: '답글 본문' })).toBeVisible();
 
     const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
     expect(getComputedStyle(threadScroll).overflowY).toBe('auto');
@@ -4271,20 +4261,8 @@ export const PostMediaViewerWide: Story = {
     await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(1));
     expect(screen.getByRole('dialog')).toBe(dialog);
     expect(nestedOrigin).toHaveFocus();
-
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull());
-    await userEvent.click(origin);
-    const replyViewer = within(await screen.findByTestId('post-media-viewer-dialog'));
-    const replyDetail = await replyViewer.findByTestId('post-media-viewer-wide-detail');
-    const replyCurrentRow = within(
-      within(replyDetail).getByTestId('post-thread-current-post-media-viewer-quote'),
-    );
-    await userEvent.click(replyCurrentRow.getByRole('button', { name: '답글' }));
-    await waitFor(() => expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull());
-    expect(await screen.findByRole('dialog', { name: '답글 쓰기' })).toBeVisible();
   },
-  render: () => <ReplyEnabledProductionPostListItemStory postId="post-media-viewer-quote" />,
+  render: () => <ProductionPostListItemStory postId="post-media-viewer-quote" />,
 };
 
 export const PostMediaViewerWideThreadLoading: Story = {
@@ -5080,7 +5058,6 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
 };
 
 export const PostDetailReplyTargetedRefetch: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
     relay: {
       mutationResponse: {
@@ -5469,7 +5446,6 @@ export const PostDetailThreadPageFailureIdentityReset: Story = {
 };
 
 export const PostDetailThreadReplyOwnerIntegration: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
     relay: {
       operationResponses: {
@@ -6909,7 +6885,6 @@ export const ReplyListSurfaceIntegration: Story = {
 };
 
 export const ReplyDetailInlineIntegration: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const replyButton = canvas.getByRole('button', { name: '답글' });
@@ -6965,7 +6940,6 @@ export const ReplyModalPendingLifecycle: Story = {
 };
 
 export const ReplyDetailInlinePendingLifecycle: Story = {
-  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   parameters: {
     relay: {
       mutationLoading: true,

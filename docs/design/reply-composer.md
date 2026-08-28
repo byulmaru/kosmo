@@ -19,6 +19,8 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 
 ## surface별 진입
 
+다음은 Figma Target의 surface 계약이며 현재 runtime 완료 상태를 뜻하지 않는다.
+
 - Web `≥ compact` 목록 surface에서는 Reply action이 중앙 modal dialog를 연다.
 - Compact Web Post 상세와 PostMediaViewer thread rail은 Composer를 인라인으로 펼치지 않고 같은 Reply modal을
   연다. Viewer rail의 현재 Post Reply는 Viewer를 먼저 닫은 뒤 다음 frame에 배경 Post surface의 modal을 열며
@@ -192,15 +194,21 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 - 이 디자인의 Web modal, Full Web thread rail과 좁은 화면 전체 작성기는 PROD-425의 기본 Reply 작성 계약과
   PROD-640의 기존 Media 계약 복구를 함께 적용한다. `add-local-reply-creation`의 최종 delta 동기화와 archive는
   전체 통합 검증을 소유한 PROD-423에서 수행한다.
-- 현재 runtime의 Compact Post 상세 inline Reply는 이 Target과 다르며 modal로 이관할 Product 구현·runtime
-  검증이 남아 있다. Figma와 이 문서의 Target을 Current runtime 완료 증거로 사용하지 않는다.
+- 현재 runtime의 `detail` Reply는 viewport·platform과 관계없이 inline이므로 Compact Post 상세,
+  Compact Web PostMediaViewer rail과 Web `< compact`·Android/iOS Target이 아직 구현되지 않았다. DSN-50은
+  Figma Target과 handoff만 기록하며 component·test·Storybook을 수정하지 않는다. PostMediaViewer 반영은
+  PROD-849의 범위를 먼저 동기화한 뒤 그 Product 흐름에서 소유하고, 일반 Post 상세와 Native presentation
+  이관은 별도 Product 구현 이슈에서 소유해야 한다. Figma와 이 문서의 Target을 Current runtime 완료 증거로
+  사용하지 않는다.
 - Local API 입력·저장(PROD-460)과 일반·Reply Composer 및 공용 reveal UI(PROD-642)의 Content Warning 계약은
   `add-local-content-warning` change가 공동 소유한다. PR readiness와 별개로 Android/iOS 및 원격 federation
   runtime gate가 완료되기 전에는 이 change를 archive하지 않는다.
 - Figma component와 screen state를 먼저 검토한 뒤 구현 계획을 확정한다. 디자인 문서나 Figma 완료만으로
   Reply 작성·cache 통합 또는 runtime 검증 완료를 주장하지 않는다.
 
-## 검증 기준
+## Product 후속 검증 기준
+
+아래 항목은 관련 Product 구현 이슈의 완료 기준이며 DSN-50 PR의 현재 runtime 검증 목록이 아니다.
 
 - Web 목록과 Compact Post 상세 Reply가 Parent 전체 맥락과 기존 Composer control을 가진 600×720px modal을
   여는지 자동화로 확인한다. 작은 viewport에서 높이가 `85dvh`로 제한되는 실제 layout은 Web runtime 후속

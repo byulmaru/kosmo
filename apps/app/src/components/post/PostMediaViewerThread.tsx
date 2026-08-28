@@ -4,7 +4,6 @@ import { RouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import type { PostMediaViewerThreadQuery } from './__generated__/PostMediaViewerThreadQuery.graphql';
-import type { PostActionBarProps } from './PostActionBar';
 
 const PostDetailThread = lazy(async () => {
   const module = await import('./PostDetailThread');
@@ -36,7 +35,6 @@ type Props = Readonly<{
   contentId: string;
   mediaOwnerPostId: string;
   onPostDeleted?: () => void;
-  reply?: PostActionBarProps['reply'];
   replyAvailable: boolean;
   replySurfacePostId: string;
 }>;
@@ -68,7 +66,6 @@ function PostMediaViewerThreadContent({
   mediaOwnerPostId,
   onPostDeleted,
   onReplyCreated,
-  reply,
   replyAvailable,
   replySurfacePostId,
 }: Props & {
@@ -86,7 +83,6 @@ function PostMediaViewerThreadContent({
 
   return thread ? (
     <PostDetailThread
-      currentPostReply={reply}
       header={null}
       identity={fetchKey}
       currentPostReplyAvailable={replyAvailable}

@@ -1,9 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary } from '@/components/RouteBoundary';
 import { useRelayActor } from '@/relay/RelayActorProvider';
-import { breakpoints } from '@/theme/tokens';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { PostActionSurface } from './PostActionSurface';
 import {
@@ -137,7 +136,6 @@ function PostMediaViewerHostContent({
   onDeleted: () => void;
   session: ViewerSession;
 }>) {
-  const { width } = useWindowDimensions();
   const data = useLazyLoadQuery<PostMediaViewerHostQuery>(
     PostMediaViewerHostOperation,
     { surfacePostId: session.surfacePostId },
@@ -183,8 +181,6 @@ function PostMediaViewerHostContent({
         },
       }
     : undefined;
-  const compactWideViewer =
-    Platform.OS === 'web' && width >= breakpoints.compact && width < breakpoints.full;
 
   if (!mediaOwner?.viewer) {
     return <PostMediaViewerQueryState unavailable />;
@@ -205,7 +201,6 @@ function PostMediaViewerHostContent({
       contentId={contentId}
       mediaOwnerPostId={mediaOwner.id}
       onPostDeleted={onDeleted}
-      reply={compactWideViewer ? viewerReply : undefined}
       replyAvailable={Boolean(surface?.content)}
       replySurfacePostId={session.surfacePostId}
     />

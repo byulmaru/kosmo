@@ -17,7 +17,6 @@ import type { PostDetailThreadNextPageQuery } from './__generated__/PostDetailTh
 import type { PostLayout_post$key } from './__generated__/PostLayout_post.graphql';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
-import type { PostActionBarProps } from './PostActionBar';
 import type { PostComposerCreatedPost } from './PostComposer';
 
 const PostDetailThreadFragment = graphql`
@@ -89,7 +88,6 @@ export function PostDetailFrame({ children, header, nativeScrollProps }: PostDet
 }
 
 export function PostDetailThread({
-  currentPostReply,
   currentPostReplyAvailable,
   currentPostReplySurfaceId,
   header,
@@ -100,7 +98,6 @@ export function PostDetailThread({
   presentation = 'route',
   replyProfile,
 }: {
-  currentPostReply?: PostActionBarProps['reply'];
   currentPostReplyAvailable?: boolean;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
@@ -113,7 +110,6 @@ export function PostDetailThread({
 }) {
   return (
     <PostDetailThreadContent
-      currentPostReply={currentPostReply}
       currentPostReplyAvailable={currentPostReplyAvailable}
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
@@ -128,7 +124,6 @@ export function PostDetailThread({
 }
 
 function PostDetailThreadContent({
-  currentPostReply,
   currentPostReplyAvailable,
   currentPostReplySurfaceId,
   header,
@@ -138,7 +133,6 @@ function PostDetailThreadContent({
   presentation,
   replyProfile,
 }: {
-  currentPostReply?: PostActionBarProps['reply'];
   currentPostReplyAvailable?: boolean;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
@@ -207,7 +201,6 @@ function PostDetailThreadContent({
                 mediaPresentation={presentation === 'viewer' ? 'hidden' : 'default'}
                 onDeleted={onPostDeleted}
                 post={requireThreadFragment(item.post.detail, 'current detail')}
-                reply={currentPostReply}
                 replyAvailable={currentPostReplyAvailable}
                 replySurfacePostId={currentPostReplySurfaceId}
               />

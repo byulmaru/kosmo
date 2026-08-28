@@ -45,10 +45,8 @@ Object.assign(globalThis, {
 
 mock.module('react-native', {
   exports: {
-    Platform: { OS: 'web' },
     StyleSheet: { create: <T>(styles: T) => styles },
     View: 'View',
-    useWindowDimensions: () => ({ width: 1440 }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 

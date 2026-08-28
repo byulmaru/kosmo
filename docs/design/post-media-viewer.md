@@ -1,6 +1,6 @@
 # Post Media Viewer
 
-일반 Post의 공개된 이미지 tile을 선택하면 기존 Post visibility·authorization 경계를 통과한 현재 Post query projection의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·reply thread를 사용할 수 있는 surface를 보여준다. Viewer의 현재 Post Reply Composer는 Compact Web에서 Viewer를 닫은 뒤 공용 modal로 열고 Full Web에서만 thread rail 안에 펼친다.
+일반 Post의 공개된 이미지 tile을 선택하면 기존 Post visibility·authorization 경계를 통과한 현재 Post query projection의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·reply thread를 사용할 수 있는 surface를 보여준다. Figma Target에서 Viewer의 현재 Post Reply Composer는 Compact Web에서 Viewer를 닫은 뒤 공용 modal로 열고 Full Web에서만 thread rail 안에 펼친다. 현재 runtime의 inline Reply는 이 Target의 완료 증거가 아니다.
 
 ## 디자인 권위와 적용 범위
 
@@ -9,8 +9,9 @@
   기존 DSN-63 Wide source의 image surface와 Post thread rail을 그대로 상속한다. Full Web은 같은 Wide source가
   확장 규칙을 소유하므로 별도 중복 screen FRAME을 만들지 않는다.
 - Figma의 어두운 fullscreen image surface, 상단 close affordance와 Web split structure를 시각 기준으로
-  사용한다. compact 원문 접기·펼치기, Action Bar와 wide Post 상세 thread의 실제 동작은 PROD-650과 runtime
-  검증이 소유한다.
+  사용한다. compact 원문 접기·펼치기, Action Bar와 wide Post 상세 thread의 현재 동작은 PROD-650과 runtime
+  검증이 소유한다. 이 Target의 PostMediaViewer Production 반영은 PROD-849의 범위를 먼저 동기화한 뒤 별도
+  Product PR에서 수행하며, DSN-50과 이 문서 변경은 component·Storybook·runtime을 수정하지 않는다.
 - Figma 하단의 Media 파일 저장 action은 이 viewer에 포함하지 않는다. 현재 기존 Post Action Bar만 제공한다.
 - Viewer는 일반 목록과 Post 상세의 interactive gallery에 적용한다. `interactive=false`인 Reply Composer 부모 preview는 viewer를 열지 않는다.
 
@@ -70,7 +71,10 @@ Viewer open 시 modal임을 전달하고 배경 Post surface를 focus와 interac
 
 Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Reader에서 같은 기능을 제공하고 role, accessible name, disabled·expanded 상태를 전달한다. 현재 위치 변경은 이미지의 accessible name과 별도로 인지 가능하게 알린다.
 
-## 검증 경계
+## Product 후속 검증 경계
+
+아래 자동화·Storybook·runtime 항목은 Figma Target을 Production에 이관하는 Product 이슈의 완료 기준이다.
+DSN-50의 Figma·문서 완료를 현재 runtime 검증이나 component 반영 증거로 사용하지 않는다.
 
 - Component test는 Host session의 `surfacePostId`·`mediaOwnerPostId`·선택 index·origin focus, 기존 `node(surfacePostId)` visibility 경계와 owner 검증, query cache hit·loading·error·retry와 null Post·Content·Media에서도 modal shell·close 유지, 같은 Content 복구 상태 보존, 다른 revision reset·원래 document index unavailable, URL 변경 시 이전 byte 비보존, actor/environment 전환 close·query 폐기, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료와 origin·screen fallback focus 복귀를 확인한다. Pure Repost Viewer의 Reply가 바깥 contentless Repost 기준으로 disabled이고 Repost·Reaction·Bookmark·More와 Media는 Source를 대상으로 하는지 검증한다. 목록·Quote·Repost·상세 projection 전환과 nested Viewer stack, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, Compact wide rail Reply의 Viewer close→공용 modal 순서, Full wide bounded rail·원문 전체·inline Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 함께 확인한다.
 - Storybook은 1장과 다중 이미지, 긴 원문, 첫·중간·마지막 위치, image loading·error와 Host query loading·error·retry·unavailable, compact Web·Native와 wide Web thread layout을 확인한다.
