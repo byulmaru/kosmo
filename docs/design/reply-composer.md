@@ -20,8 +20,10 @@ Reply 전용 입력·검증·제출 체계를 새로 만들지 않고, surface�
 ## surface별 진입
 
 - Web `≥ compact` 목록 surface에서는 Reply action이 중앙 modal dialog를 연다.
-- Compact Web Post 상세도 중앙 thread 안에 Composer를 인라인으로 펼치지 않고 같은 Reply modal을 연다.
-  기본 route frame은 closed thread만 표시하고 Composer-open을 별도 route frame으로 중복 만들지 않는다.
+- Compact Web Post 상세와 PostMediaViewer thread rail은 Composer를 인라인으로 펼치지 않고 같은 Reply modal을
+  연다. Viewer rail의 현재 Post Reply는 Viewer를 먼저 닫은 뒤 다음 frame에 배경 Post surface의 modal을 열며
+  현재 Viewer 위에 modal을 중첩하지 않는다. 기본 route frame과 Viewer frame은 closed thread만 표시하고
+  Composer-open을 별도 frame으로 중복 만들지 않는다.
 - Full Web Post 상세는 기존 thread rail Reply surface를 유지한다. Compact modal과 Full rail은 direct Parent와
   공용 Composer 계약을 공유하지만 서로의 배치를 억지로 재사용하지 않는다.
 - Web `< compact`와 Android/iOS에서는 같은 Reply 맥락을 전체 화면 작성기로 연다.

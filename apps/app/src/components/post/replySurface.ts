@@ -12,7 +12,9 @@ export function getReplySurfacePresentation(
   width: number,
 ): ReplySurfacePresentation {
   if (owner === 'detail') {
-    return 'inline';
+    return platform === 'web' && width >= breakpoints.compact && width < breakpoints.full
+      ? 'modal'
+      : 'inline';
   }
   return platform === 'web' && width >= breakpoints.compact ? 'modal' : 'fullscreen';
 }

@@ -71,6 +71,7 @@ export function PostLayout({
   mediaPresentation = 'default',
   onDeleted,
   post: postKey,
+  reply: replyOverride,
   replyAvailable,
   replySurfacePostId,
 }: {
@@ -78,6 +79,7 @@ export function PostLayout({
   mediaPresentation?: 'default' | 'hidden';
   onDeleted?: () => void;
   post: PostLayout_post$key;
+  reply?: PostActionBarProps['reply'];
   replyAvailable?: boolean;
   replySurfacePostId?: string;
 }) {
@@ -104,7 +106,7 @@ export function PostLayout({
     },
     [handleDeleted, openViewer, post.id],
   );
-  const reply: PostActionBarProps['reply'] = replyBinding
+  const generatedReply: PostActionBarProps['reply'] = replyBinding
     ? {
         accessibilityLabel: '답글',
         controlRef: replyTriggerRef,
@@ -122,6 +124,7 @@ export function PostLayout({
         ),
       }
     : undefined;
+  const reply = replyOverride ?? generatedReply;
   return (
     <View style={styles.root}>
       <Link asChild href={profileHref}>
@@ -162,7 +165,8 @@ export function PostLayout({
             reply={reply}
             socialActionTarget={socialActionTarget!}
           />
-          {replyBinding?.expanded &&
+          {!replyOverride &&
+          replyBinding?.expanded &&
           replyAuthentication.execution.kind === 'enabled' &&
           replyBinding?.profile &&
           post.content &&

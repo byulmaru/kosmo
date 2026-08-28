@@ -2,11 +2,14 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 describe('Reply surface selection', () => {
-  it('keeps detail rows inline regardless of platform or viewport width', async () => {
+  it('uses the shared modal for Compact Web detail while preserving other detail layouts', async () => {
     const { getReplySurfacePresentation } = await import('./replySurface');
 
     assert.equal(getReplySurfacePresentation('detail', 'web', 1440), 'inline');
-    assert.equal(getReplySurfacePresentation('detail', 'web', 390), 'inline');
+    assert.equal(getReplySurfacePresentation('detail', 'web', 1280), 'inline');
+    assert.equal(getReplySurfacePresentation('detail', 'web', 1279), 'modal');
+    assert.equal(getReplySurfacePresentation('detail', 'web', 768), 'modal');
+    assert.equal(getReplySurfacePresentation('detail', 'web', 767), 'inline');
     assert.equal(getReplySurfacePresentation('detail', 'ios', 1024), 'inline');
   });
 

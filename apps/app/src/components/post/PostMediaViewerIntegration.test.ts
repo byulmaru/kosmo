@@ -17,6 +17,7 @@ let animationFrames: FrameRequestCallback[] = [];
 let queriedSurfacePostId: string | null = null;
 let queryPosts = new Map<string, ReturnType<typeof hostPost>>();
 let replyPostIds: string[] = [];
+let replyPresses = 0;
 let renderer: ReactTestRenderer | null = null;
 let viewportWidth = 767;
 
@@ -116,7 +117,7 @@ mock.module('@/theme/ThemeProvider', {
 
 mock.module('@/theme/tokens', {
   exports: {
-    breakpoints: { compact: 768 },
+    breakpoints: { compact: 768, full: 1280 },
     iconSizes: { 24: 24 },
     radii: { full: 999, lg: 16, md: 12, sm: 8 },
     spacing: { lg: 24, md: 16, sm: 12, xl: 32, xs: 8, xxl: 40, xxs: 4 },
@@ -153,7 +154,9 @@ mock.module('./PostBody', {
 const replyBinding = {
   expanded: false,
   onPostCreated: () => undefined,
-  onPress: () => undefined,
+  onPress: () => {
+    replyPresses += 1;
+  },
   onRequestClose: () => undefined,
   owner: 'list',
   profile: null,
@@ -222,6 +225,7 @@ afterEach(async () => {
   queriedSurfacePostId = null;
   queryPosts = new Map();
   replyPostIds = [];
+  replyPresses = 0;
   viewportWidth = 767;
 });
 
@@ -279,6 +283,25 @@ describe('Post Media Viewer Host production wiring', () => {
     assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
   });
 
+  it('Compact Viewer rail Reply가 Viewer를 닫은 다음 origin Reply를 연다', async () => {
+    viewportWidth = 1024;
+    const post = storyPost('compact-reply', 'compact-reply-content');
+    queryPosts.set(post.id, hostPost(post));
+    await renderHost(createElement(PostListItem, { post: asListItemKey(post) }));
+    await openFromBody({ current: { focus: () => undefined } });
+    await flushAnimationFrames();
+
+    const viewerReply = byTestId('post-media-viewer-thread').props.reply;
+    assert.ok(viewerReply);
+    await act(async () => viewerReply.onPress());
+
+    assert.equal(findByTestId('post-media-viewer-dialog').length, 0);
+    assert.equal(replyPresses, 0);
+
+    await flushAnimationFrames();
+    assert.equal(replyPresses, 1);
+  });
+
   it('같은 Content unavailable 복구는 state를 유지하고 다른 revision은 original index로 reset한다', async () => {
     const post = storyPost('revision-post', 'content-1');
     queryPosts.set(post.id, hostPost(post));
@@ -321,6 +344,12 @@ async function openFromBody(originControl: { current: { focus: () => void } }, s
 
 async function closeViewer() {
   await act(async () => pressable('이미지 뷰어 닫기').props.onPress());
+}
+
+async function flushAnimationFrames() {
+  const pendingFrames = animationFrames;
+  animationFrames = [];
+  await act(async () => pendingFrames.forEach((callback) => callback(0)));
 }
 
 function byTestId(testID: string) {
