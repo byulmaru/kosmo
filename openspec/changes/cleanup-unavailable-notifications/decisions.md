@@ -107,10 +107,10 @@
 - Authority / Provenance: 사용자 결정, `PROD-328`
 - Status: Active
 - Context / Problem: Notification에는 unavailable 전이 시각이 없고 availability는 현재 source·Related 객체 관계에서 동적으로 계산된다. 생성 시각을 unavailable 시각으로 사용하면 오래된 Notification이 최근 unavailable이 된 경우 cleanup lag와 oldest unavailable age를 과대 보고한다.
-- Decision Outcome: replay-aware Workflow log와 Activity structured log에 schedule/run/cursor/page/attempt/result를 기록하고, Temporal SDK counter/histogram으로 scanned/deleted/skipped/error와 duration을 노출한다. 저장되지 않은 unavailable 전이 시각을 추정한 age/lag 결과와 gauge는 제공하지 않는다.
+- Decision Outcome: replay-aware Workflow log와 Activity structured log에 schedule/run/cursor/page/attempt/result를 기록하고, Temporal SDK counter/histogram으로 scanned/deleted/skipped/error와 duration을 노출한다. `scanned`·`deleted`·`skipped` 누적 counter는 Workflow가 수락한 Activity result의 논리적 합계이며, Activity commit 뒤 result가 유실돼 retry되는 경우 실제 DB 처리량과 달라질 수 있다. Activity attempt log·duration·attempt error는 개별 실행 사실이고, Workflow counter·terminal error는 Workflow가 수락하거나 최종 관찰한 결과이므로 서로 다른 의미로 해석한다. 저장되지 않은 unavailable 전이 시각을 추정한 age/lag 결과와 gauge는 제공하지 않는다.
 - Alternatives Considered: Notification `unavailableAt`과 모든 관련 객체 전이를 새로 추적하는 방식은 cleanup 정확성에 필요하지 않고 migration·복구 semantics·복수 전이 owner를 추가하므로 이번 범위에 포함하지 않는다. 생성 시각 기반 값을 이름만 바꾸는 방식도 cleanup 지연을 나타내지 않아 사용하지 않는다.
-- Consequences: 운영자는 Schedule 실행, Workflow 완료·실패, page 진행과 처리량으로 cleanup 실행·수렴을 판단한다. 실제 unavailable 체류 시간이 별도 운영 요구가 되면 저장 모델과 전이 소유권을 별도 이슈에서 설계해야 한다.
-- Confirmation / Follow-up: unit/Temporal integration에서 removed age/lag 계약이 남지 않고 counter/histogram 이름·tag cardinality와 replay 중복 억제가 유지되는지 확인하며, dev endpoint·collector target·sample 변화를 검증한다.
+- Consequences: 운영자는 Schedule 실행, Workflow 완료·실패, page 진행과 처리량으로 cleanup 실행·수렴을 판단한다. Workflow counter를 DB 삭제 회계값이나 별도 ledger로 사용하지 않는다. 실제 unavailable 체류 시간이 별도 운영 요구가 되면 저장 모델과 전이 소유권을 별도 이슈에서 설계해야 한다.
+- Confirmation / Follow-up: unit/Temporal integration에서 removed age/lag 계약이 남지 않고 Activity attempt log·duration과 Workflow accepted-result counter·terminal error의 의미, counter/histogram 이름·tag cardinality와 replay 중복 억제가 유지되는지 확인한다. dev에서는 Worker metrics endpoint와 Helm endpoint metadata를 확인한다.
 
 ### Cleanup persistence는 유일한 실행 owner인 Worker Activity가 소유한다
 

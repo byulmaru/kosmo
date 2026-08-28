@@ -137,27 +137,27 @@ const createMetrics = () => {
     pagesCounter: meter.createCounter(
       'notification_cleanup_pages',
       'pages',
-      'Number of notification cleanup pages completed',
+      'Number of cleanup pages accepted from Activity results',
     ),
     scannedCounter: meter.createCounter(
       'notification_cleanup_scanned',
       'rows',
-      'Number of notification rows scanned by cleanup',
+      'Number of notification rows reported as scanned by accepted Activity results',
     ),
     deletedCounter: meter.createCounter(
       'notification_cleanup_deleted',
       'rows',
-      'Number of notification rows deleted by cleanup',
+      'Number of notification rows reported as deleted by accepted Activity results',
     ),
     skippedCounter: meter.createCounter(
       'notification_cleanup_skipped',
       'rows',
-      'Number of notification rows retained by cleanup',
+      'Number of notification rows reported as skipped by accepted Activity results',
     ),
     errorCounter: meter.createCounter(
       'notification_cleanup_terminal_errors',
       'errors',
-      'Number of terminal notification cleanup errors',
+      'Number of terminal notification cleanup Activity failures observed by the Workflow',
     ),
   };
 };

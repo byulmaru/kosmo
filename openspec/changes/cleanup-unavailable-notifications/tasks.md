@@ -84,7 +84,7 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 - [x] 3.4 history 임계치에서 continue-as-new하고 run chain 전체가 같은 sweep 상관관계를 유지하게 한다.
 - [x] 3.5 retryable DB 오류와 non-retryable cursor/config 오류를 구분한다.
 - [x] 3.6 Temporal integration에서 첫 Activity 실패 후 stable retry, heartbeat, continue-as-new와 최종 cursor를 검증한다.
-- [ ] 3.7 Worker restart·Activity result loss·부분 page 실패 뒤 중복 삭제 없이 최종 수렴하는 database/Workflow integration을 검증한다.
+- [ ] 3.7 (PR #665 소유) Worker restart·Activity result loss·부분 page 실패 뒤 중복 삭제 없이 최종 수렴하는 database/Workflow integration을 검증한다. Activity commit 뒤 result 유실로 실제 DB 처리량과 Workflow accepted-result counter가 달라질 수 있음을 전제로 하며, DB count와 counter의 일치를 검증하지 않는다.
 - [x] 3.8 기존 Worker build·unit·workflow·database 전체 검증을 통과시킨다.
 
 ## 4. PROD-328 cleanup 관측
@@ -102,18 +102,18 @@ Notification row를 UUIDv7 exclusive cursor의 bounded page로 scan하고 실제
 
 - Workflow replay가 로그와 final-result metrics를 중복 성공으로 보이게 하지 않는다.
 - Notification ID, Profile ID나 source ID를 metric tag로 사용해 cardinality와 개인정보 범위를 늘리지 않는다.
-- endpoint가 열렸다는 사실과 platform이 실제 scrape한다는 증거를 구분한다.
+- Worker Runtime endpoint와 Helm endpoint metadata를 제공한다.
 
 **Verification**
 
 - unit/Temporal integration에서 log fields, metric names/types/tags와 success/error/retry 결과를 검증한다.
-- dev Worker metrics endpoint와 platform target에서 sample 변화를 확인한다.
+- dev Worker metrics endpoint와 Helm endpoint metadata를 확인한다.
 
 - [x] 4.1 replay-aware Workflow log와 Activity structured log에 bounded 상관관계·cursor·attempt·result를 기록한다.
 - [x] 4.2 SDK counter/histogram으로 scanned/deleted/skipped/error와 duration을 노출한다.
 - [ ] 4.3 Worker Runtime metrics endpoint와 low-cardinality resource/schedule tags를 구성한다.
-- [ ] 4.4 Helm에 metrics port와 platform scrape discovery를 렌더하고 dev endpoint 및 collector target을 검증한다.
-- [ ] 4.5 성공, retry, terminal failure와 empty backlog에서 로그·metric 의미가 구분되는지 검증한다.
+- [ ] 4.4 Helm에 metrics port와 endpoint metadata를 렌더하고 dev endpoint 및 metadata를 검증한다.
+- [ ] 4.5 (PR #665 소유) 성공, retry, terminal failure와 empty backlog에서 우리 Activity attempt log와 Workflow accepted-result counter·terminal error의 의미가 구분되는지 검증한다. 외부 Temporal SDK 동작이나 golden 문자열 자체는 검증하지 않는다.
 
 ## 5. PROD-328 24시간 Schedule reconciliation
 
@@ -165,14 +165,14 @@ dev에서 unavailable Notification cleanup이 API 즉시 숨김과 독립적으�
 
 **Verification**
 
-- dev에서 source missing, Recipient mismatch, Related Post/Profile unavailable, large backlog, retry, restart, pause rollback과 logs/metrics를 종단 검증한다.
+- dev에서 source missing, Recipient mismatch, Related Post/Profile unavailable, large backlog, retry, restart, pause rollback과 logs/metrics endpoint를 종단 검증한다.
 - focused/full checks, strict OpenSpec validation과 canonical delta sync를 확인한다.
 
 - [ ] 6.1 focused core/API/Worker/Helm checks와 workspace에서 요구하는 전체 검증을 실행하고 실패 경계를 기록한다.
 - [ ] 6.2 dev fixture로 API 즉시 비노출 뒤 cleanup 삭제, Read State 제거와 available·Recipient inactive row 보존을 검증한다.
 - [ ] 6.3 large backlog에서 bounded page/rate, DB connection/API latency budget과 continue-as-new 수렴을 확인한다.
 - [ ] 6.4 DB·Temporal 일시 장애와 Worker restart 뒤 다음 성공한 실행이 checkpoint에서 수렴함을 확인한다.
-- [ ] 6.5 24시간 Schedule desired state, Workflow 완료·실패, structured logs와 metrics endpoint·scrape를 dev live evidence로 확인한다.
+- [ ] 6.5 24시간 Schedule desired state, Workflow 완료·실패, structured logs와 metrics endpoint·Helm endpoint metadata를 dev live evidence로 확인한다.
 - [ ] 6.6 Schedule을 pause해 cleanup만 중지되고 API 즉시 숨김과 다른 Worker Workflow가 유지되는 rollback을 검증한다.
 - [x] 6.7 구현 중 확인한 canonical/Linear 계약 변경을 먼저 정렬하고 OpenSpec delta·decision·task를 동기화한다.
 - [ ] 6.8 모든 범위와 검증이 완료된 뒤 strict validation을 통과시키고 canonical spec sync를 확인한 후 change archive를 수행한다.

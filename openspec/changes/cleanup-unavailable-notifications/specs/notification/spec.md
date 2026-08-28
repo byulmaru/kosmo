@@ -89,18 +89,20 @@
 
 ### Requirement: Unavailable Notification cleanup 관측
 
-**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-328` — 시스템은 cleanup의 실행과 수렴 여부를 판단할 수 있도록 schedule/run/page 상관관계와 실행 성공·실패, scanned/deleted/skipped/error 수 및 page duration을 구조화 로그와 Temporal SDK metrics로 관측 가능하게 제공해야 한다(MUST).
+**Authority / Provenance:** `docs/domain/objects/notification.md`, `PROD-328` — 시스템은 cleanup의 실행과 수렴 여부를 판단할 수 있도록 schedule/run/page 상관관계와 실행 성공·실패, scanned/deleted/skipped/error 수 및 page duration을 구조화 로그와 Temporal SDK metrics로 관측 가능하게 제공해야 한다(MUST). `scanned`·`deleted`·`skipped` Workflow counter는 Workflow가 수락한 Activity result의 논리적 합계이며 DB 물리 처리량 회계값이 아니다. Activity attempt log·duration·attempt error와 Workflow accepted-result counter·terminal error는 서로 다른 관측 의미를 가진다.
 
 #### Scenario: 정상 page 처리 관측
 
 - **WHEN** cleanup Activity가 page를 성공적으로 처리한다
 - **THEN** 관측 결과는 schedule·Workflow run·cursor와 함께 scanned, deleted, skipped 수와 다음 checkpoint를 구분한다
+- **AND** Workflow counter는 수락한 Activity result에 보고된 page 수치만 누적하며, Activity commit 뒤 result 유실로 retry된 경우 실제 DB 처리량과 달라질 수 있다
 - **AND** 동일 retry나 Workflow replay가 집계 의미를 중복 왜곡하지 않게 시도와 최종 결과를 구분한다
 
 #### Scenario: 오류와 retry 관측
 
 - **WHEN** DB 일시 장애, Activity timeout, heartbeat timeout 또는 page 실패가 발생한다
 - **THEN** 관측 결과는 error 수, retry attempt와 마지막 안전한 checkpoint를 연관 지어 제공한다
+- **AND** Activity attempt log·duration·attempt error와 Workflow의 accepted-result counter·terminal error를 구분한다
 - **AND** 영구 실패는 성공한 cleanup이나 completed sweep으로 보고되지 않는다
 
 #### Scenario: Schedule과 cleanup 실행 상태
