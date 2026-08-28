@@ -137,18 +137,17 @@ test('established removal uses an exact-row short Workflow and ALLOW_DUPLICATE',
     expectedRowId: followId,
     origin: 'LOCAL' as const,
   };
-  const execution = {
+  const outcome = {
     ok: true as const,
     changed: true,
     profileFollowId: followId,
     followerProfileId: pair.followerProfileId,
     followeeProfileId: pair.followeeProfileId,
-    effectPlan: [],
   };
   const update = mock.method(
     temporalClient.workflow,
     'executeUpdateWithStart',
-    async () => execution,
+    async () => outcome,
   );
   const before = Date.now();
   const deadline = mock.method(
@@ -158,7 +157,7 @@ test('established removal uses an exact-row short Workflow and ALLOW_DUPLICATE',
   );
 
   try {
-    assert.deepEqual(await executeProfileFollowRemoval(input), execution);
+    assert.deepEqual(await executeProfileFollowRemoval(input), outcome);
 
     const call = update.mock.calls[0];
     assert.ok(call);

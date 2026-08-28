@@ -20,8 +20,8 @@ import type {
   ProfileFollowPairCommand,
   ProfileFollowPairTransitionExecution,
   ProfileFollowPairTransitionInput,
-  ProfileFollowRemovalExecution,
   ProfileFollowRemovalInput,
+  ProfileFollowRemovalOutcome,
 } from '../services/profile-follow-command';
 
 /**
@@ -115,7 +115,7 @@ export const executeProfileFollowPairTransition = async (
  */
 export const executeProfileFollowRemoval = async (
   input: ProfileFollowRemovalInput,
-): Promise<ProfileFollowRemovalExecution> => {
+): Promise<ProfileFollowRemovalOutcome> => {
   const result = (await temporalClient.withDeadline(
     Date.now() + PROFILE_FOLLOW_COMMAND_RPC_TIMEOUT_MS,
     () =>
@@ -138,7 +138,7 @@ export const executeProfileFollowRemoval = async (
           },
         ),
       }),
-  )) as ProfileFollowRemovalExecution;
+  )) as ProfileFollowRemovalOutcome;
   if (!result.ok) {
     throw rehydrateProfileFollowFailure(result.error);
   }
