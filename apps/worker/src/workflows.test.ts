@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure } from '@temporalio/client';
+import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
 import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
+import type {
+  ProfileFollowPairTransitionInput,
+  ProfileFollowPairTransitionOutcome,
+} from '@kosmo/core/services';
 
 type ReactionCreateEffectsInput = {
   readonly reactionId: string;
@@ -202,5 +206,832 @@ test(
       { profileId, updateId },
       { profileId, updateId },
     ]);
+  },
+);
+
+test(
+  'Pair Follow Update는 pending request ID를 history에 보존하고 effects보다 먼저 반환한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-early-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000601',
+      followeeProfileId: '00000000-0000-8000-8000-000000000602',
+    };
+    const requestId = '00000000-0000-8000-8000-000000000604';
+    const followId = '00000000-0000-8000-8000-000000000603';
+    const calls: string[] = [];
+    let releaseEffect!: () => void;
+    const effectReleased = new Promise<void>((resolve) => {
+      releaseEffect = resolve;
+    });
+    let effectStarted!: () => void;
+    const effectStartedPromise = new Promise<void>((resolve) => {
+      effectStarted = resolve;
+    });
+
+    const execution = {
+      ok: true as const,
+      nextState: 'ESTABLISHED' as const,
+      result: {
+        commandKind: 'FOLLOW' as const,
+        created: true,
+        kind: 'ESTABLISHED' as const,
+        ...pair,
+        profileFollowId: followId,
+      },
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: {
+            sourceId: requestId,
+            sourceKind: 'FOLLOW_REQUEST' as const,
+            ...pair,
+          },
+        },
+        {
+          kind: 'CREATE' as const,
+          input: {
+            sendActivityPub: true,
+            sourceId: followId,
+            sourceKind: 'FOLLOW' as const,
+          },
+        },
+      ],
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async (
+          input: ProfileFollowPairTransitionInput,
+        ) => {
+          assert.equal(input.pendingRequestId, requestId);
+          return execution;
+        },
+        loadPendingFollowRequestIdActivity: async () => requestId,
+        deleteFollowRequestNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+        },
+        createFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('notification:' + sourceId);
+          effectStarted();
+          await effectReleased;
+        },
+        sendProfileFollowActivity: async (input: unknown) => {
+          calls.push('follow:' + JSON.stringify(input));
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+          args: [pair],
+          taskQueue,
+          workflowId:
+            'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        });
+        const updateResultPromise = environment.client.workflow.executeUpdateWithStart(
+          'profileFollowPairUpdate',
+          {
+            args: [
+              {
+                kind: 'FOLLOW' as const,
+                origin: 'LOCAL' as const,
+              },
+            ],
+            startWorkflowOperation,
+          },
+        );
+
+        await effectStartedPromise;
+        assert.deepEqual(await updateResultPromise, { ok: true, result: execution.result });
+        assert.equal(calls.includes('notification:' + followId), true);
+
+        releaseEffect();
+        const handle = await startWorkflowOperation.workflowHandle();
+        await handle.result();
+        assert.deepEqual(
+          new Set(calls),
+          new Set([
+            'delete:' + requestId,
+            'notification:' + followId,
+            'follow:' + JSON.stringify({ sourceId: followId, sourceKind: 'FOLLOW' }),
+          ]),
+        );
+      } finally {
+        releaseEffect();
+      }
+    });
+  },
+);
+
+test(
+  'Pending pair는 effect failure를 기록한 뒤 terminal Update를 받고 FIFO로 종료한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-pending-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000611',
+      followeeProfileId: '00000000-0000-8000-8000-000000000612',
+    };
+    const requestId = '00000000-0000-8000-8000-000000000613';
+    const calls: string[] = [];
+    let transactionCalls = 0;
+    let effectFailureResolve!: () => void;
+    const effectFailed = new Promise<void>((resolve) => {
+      effectFailureResolve = resolve;
+    });
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          transactionCalls += 1;
+          if (transactionCalls === 1) {
+            return {
+              ok: true as const,
+              nextState: 'PENDING' as const,
+              result: {
+                commandKind: 'FOLLOW' as const,
+                created: true,
+                kind: 'PENDING' as const,
+                ...pair,
+                profileFollowRequestId: requestId,
+              },
+              effectPlan: [
+                {
+                  kind: 'CREATE' as const,
+                  input: {
+                    sendActivityPub: true,
+                    sourceId: requestId,
+                    sourceKind: 'FOLLOW_REQUEST' as const,
+                  },
+                },
+              ],
+            };
+          }
+          return {
+            ok: true as const,
+            nextState: 'REJECTED' as const,
+            result: {
+              commandKind: 'REJECT' as const,
+              changed: true,
+              ...pair,
+              profileFollowRequestId: requestId,
+            },
+            effectPlan: [
+              {
+                kind: 'DELETE' as const,
+                input: {
+                  followerProfileId: pair.followerProfileId,
+                  followeeProfileId: pair.followeeProfileId,
+                  sourceId: requestId,
+                  sourceKind: 'FOLLOW_REQUEST' as const,
+                },
+              },
+            ],
+          };
+        },
+        loadPendingFollowRequestIdActivity: async () => undefined,
+        createFollowRequestNotificationActivity: async (sourceId: string) => {
+          calls.push('create:' + sourceId);
+          effectFailureResolve();
+          throw ApplicationFailure.nonRetryable('pending notification failed');
+        },
+        sendProfileFollowActivity: async () => undefined,
+        deleteFollowRequestNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const handlePromise = startWorkflowOperation.workflowHandle();
+      const first = (await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [
+            {
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
+            },
+          ],
+          startWorkflowOperation,
+        },
+      )) as ProfileFollowPairTransitionOutcome;
+      assert.equal(first.ok, true);
+      const handle = await handlePromise;
+      await effectFailed;
+      const terminal = (await handle.executeUpdate('profileFollowPairUpdate', {
+        args: [
+          {
+            kind: 'REJECT' as const,
+            expectedRowId: requestId,
+            origin: 'LOCAL' as const,
+            actorProfileId: pair.followeeProfileId,
+          },
+        ],
+      })) as ProfileFollowPairTransitionOutcome;
+      assert.equal(terminal.ok, true);
+      assert.equal(terminal.result.commandKind, 'REJECT');
+
+      await assert.rejects(() => handle.result());
+      assert.deepEqual(calls, ['create:' + requestId, 'delete:' + requestId]);
+    });
+  },
+);
+
+test(
+  'Pair Workflow의 terminal transaction Activity non-retryable failure는 PENDING 대기를 닫는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-terminal-failure-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000641',
+      followeeProfileId: '00000000-0000-8000-8000-000000000642',
+    };
+    const requestId = '00000000-0000-8000-8000-000000000643';
+    let transactionCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          transactionCalls += 1;
+          if (transactionCalls === 1) {
+            return {
+              ok: true as const,
+              nextState: 'PENDING' as const,
+              result: {
+                commandKind: 'FOLLOW' as const,
+                created: true,
+                kind: 'PENDING' as const,
+                ...pair,
+                profileFollowRequestId: requestId,
+              },
+              effectPlan: [],
+            };
+          }
+          throw ApplicationFailure.nonRetryable('terminal transaction failure');
+        },
+        loadPendingFollowRequestIdActivity: async () => undefined,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const handlePromise = startWorkflowOperation.workflowHandle();
+      const first = (await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [
+            {
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
+            },
+          ],
+          updateId: 'follow',
+          startWorkflowOperation,
+        },
+      )) as ProfileFollowPairTransitionOutcome;
+      assert.equal(first.ok, true);
+
+      const handle = await handlePromise;
+      await assert.rejects(
+        handle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'REJECT' as const,
+              expectedRowId: requestId,
+              origin: 'LOCAL' as const,
+              actorProfileId: pair.followeeProfileId,
+            },
+          ],
+          updateId: 'REJECT:' + requestId,
+        }),
+      );
+      await assert.rejects(handle.result());
+      assert.equal(transactionCalls, 2);
+    });
+  },
+);
+
+test(
+  'Pair Workflow의 terminal transaction Activity retry exhaustion은 PENDING Workflow를 닫는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-retry-exhaustion-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000651',
+      followeeProfileId: '00000000-0000-8000-8000-000000000652',
+    };
+    const requestId = '00000000-0000-8000-8000-000000000653';
+    let transactionCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          transactionCalls += 1;
+          if (transactionCalls === 1) {
+            return {
+              ok: true as const,
+              nextState: 'PENDING' as const,
+              result: {
+                commandKind: 'FOLLOW' as const,
+                created: true,
+                kind: 'PENDING' as const,
+                ...pair,
+                profileFollowRequestId: requestId,
+              },
+              effectPlan: [],
+            };
+          }
+          throw ApplicationFailure.create({
+            message: 'retryable terminal transaction failure',
+            nextRetryDelay: '1ms',
+          });
+        },
+        loadPendingFollowRequestIdActivity: async () => undefined,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      const handlePromise = startWorkflowOperation.workflowHandle();
+      const first = (await environment.client.workflow.executeUpdateWithStart(
+        'profileFollowPairUpdate',
+        {
+          args: [
+            {
+              kind: 'FOLLOW' as const,
+              origin: 'LOCAL' as const,
+            },
+          ],
+          updateId: 'follow',
+          startWorkflowOperation,
+        },
+      )) as ProfileFollowPairTransitionOutcome;
+      assert.equal(first.ok, true);
+
+      const handle = await handlePromise;
+      await assert.rejects(
+        handle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'REJECT' as const,
+              expectedRowId: requestId,
+              origin: 'LOCAL' as const,
+              actorProfileId: pair.followeeProfileId,
+            },
+          ],
+          updateId: 'REJECT:' + requestId,
+        }),
+      );
+      await assert.rejects(handle.result());
+      assert.equal(transactionCalls, 11);
+    });
+  },
+);
+
+test(
+  'Pair Workflow의 INITIAL orphan guard는 Update 없는 직접 시작을 닫는다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-orphan-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000621',
+      followeeProfileId: '00000000-0000-8000-8000-000000000622',
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          throw new Error('orphan must not execute transaction');
+        },
+        loadPendingFollowRequestIdActivity: async () => undefined,
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      await environment.client.workflow.execute('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId:
+          'profile-follow-pair-orphan:' + pair.followerProfileId + ':' + pair.followeeProfileId,
+      });
+    });
+  },
+);
+
+test(
+  'Follow Workflow Update validator는 malformed wire input을 Activity 전에 거부한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-validation-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000661',
+      followeeProfileId: '00000000-0000-8000-8000-000000000662',
+    };
+    const calls = {
+      transition: 0,
+      removal: 0,
+      deleteNotification: 0,
+      sendUndo: 0,
+    };
+
+    const worker = await Worker.create({
+      activities: {
+        executeProfileFollowPairTransitionActivity: async () => {
+          calls.transition += 1;
+          throw new Error('malformed pair command must not execute');
+        },
+        executeProfileFollowRemovalActivity: async () => {
+          calls.removal += 1;
+          throw new Error('malformed removal input must not execute');
+        },
+        verifyProfileFollowRemovalActivity: async () => undefined,
+        deleteFollowNotificationActivity: async () => {
+          calls.deleteNotification += 1;
+        },
+        sendProfileUnfollowActivity: async () => {
+          calls.sendUndo += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const pairHandle = await environment.client.workflow.start('profileFollowPairWorkflow', {
+        args: [pair],
+        taskQueue,
+        workflowId: 'profile-follow-pair-validation:' + process.pid,
+      });
+      await assert.rejects(
+        pairHandle.executeUpdate('profileFollowPairUpdate', {
+          args: [
+            {
+              kind: 'FOLLOW',
+              origin: 'LOCAL',
+              command: {
+                kind: 'FOLLOW',
+                origin: 'LOCAL',
+              },
+            } as never,
+          ],
+        }),
+      );
+      assert.equal(calls.transition, 0);
+      await pairHandle.cancel();
+      await assert.rejects(pairHandle.result());
+
+      const removalHandle = await environment.client.workflow.start(
+        'profileFollowRemovalWorkflow',
+        {
+          args: [pair],
+          taskQueue,
+          workflowId: 'profile-follow-removal-validation:' + process.pid,
+        },
+      );
+      await assert.rejects(
+        removalHandle.executeUpdate('profileFollowRemovalUpdate', {
+          args: [
+            {
+              ...pair,
+              expectedRowId: 'follow',
+              origin: 'LOCAL',
+              extra: true,
+            } as never,
+          ],
+        }),
+      );
+      assert.deepEqual(calls, {
+        transition: 0,
+        removal: 0,
+        deleteNotification: 0,
+        sendUndo: 0,
+      });
+      assert.deepEqual(
+        await removalHandle.executeUpdate('profileFollowRemovalUpdate', {
+          args: [
+            {
+              ...pair,
+              expectedRowId: 'follow',
+              origin: 'LOCAL',
+            },
+          ],
+          updateId: 'missing-verification',
+        }),
+        {
+          ok: true,
+          changed: false,
+          profileFollowId: null,
+          followerProfileId: pair.followerProfileId,
+          followeeProfileId: pair.followeeProfileId,
+        },
+      );
+      await removalHandle.result();
+    });
+  },
+);
+
+test(
+  'Separate removal Workflow는 exact source를 검증하고 commit retry 뒤 effects를 한 번 drain한다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000631',
+      followeeProfileId: '00000000-0000-8000-8000-000000000632',
+    };
+    const followId = '00000000-0000-8000-8000-000000000633';
+    const input = {
+      ...pair,
+      expectedRowId: followId,
+      origin: 'LOCAL' as const,
+    };
+    const execution = {
+      ok: true as const,
+      changed: true,
+      profileFollowId: followId,
+      followerProfileId: pair.followerProfileId,
+      followeeProfileId: pair.followeeProfileId,
+      effectPlan: [
+        {
+          kind: 'DELETE' as const,
+          input: {
+            ...pair,
+            sendActivityPub: true,
+            sourceId: followId,
+            sourceKind: 'FOLLOW' as const,
+          },
+        },
+      ],
+    };
+    const calls: string[] = [];
+    let removalAttempts = 0;
+    let releaseEffect!: () => void;
+    const effectReleased = new Promise<void>((resolve) => {
+      releaseEffect = resolve;
+    });
+    let effectStarted!: () => void;
+    const effectStartedPromise = new Promise<void>((resolve) => {
+      effectStarted = resolve;
+    });
+
+    const worker = await Worker.create({
+      activities: {
+        verifyProfileFollowRemovalActivity: async () => {
+          calls.push('verify:' + followId);
+          return followId;
+        },
+        executeProfileFollowRemovalActivity: async () => {
+          calls.push('remove:' + followId);
+          removalAttempts += 1;
+          if (removalAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'removal completion lost after commit',
+              nextRetryDelay: '1ms',
+            });
+          }
+          return execution;
+        },
+        deleteFollowNotificationActivity: async (sourceId: string) => {
+          calls.push('delete:' + sourceId);
+          effectStarted();
+          await effectReleased;
+        },
+        sendProfileUnfollowActivity: async (input: unknown) => {
+          calls.push('undo:' + JSON.stringify(input));
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      try {
+        const startWorkflowOperation = new WithStartWorkflowOperation(
+          'profileFollowRemovalWorkflow',
+          {
+            args: [pair],
+            taskQueue,
+            workflowId:
+              'profile-follow-unfollow:' +
+              pair.followerProfileId +
+              ':' +
+              pair.followeeProfileId +
+              ':' +
+              followId,
+            workflowIdConflictPolicy: 'USE_EXISTING',
+            workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+          },
+        );
+        const updateResultPromise = environment.client.workflow.executeUpdateWithStart(
+          'profileFollowRemovalUpdate',
+          {
+            args: [input],
+            updateId: 'removal:' + followId,
+            startWorkflowOperation,
+          },
+        );
+        await effectStartedPromise;
+        const updateResult = {
+          ok: true,
+          changed: execution.changed,
+          profileFollowId: execution.profileFollowId,
+          followerProfileId: execution.followerProfileId,
+          followeeProfileId: execution.followeeProfileId,
+        };
+        assert.deepEqual(await updateResultPromise, updateResult);
+        const handle = await startWorkflowOperation.workflowHandle();
+        assert.deepEqual(
+          await handle.executeUpdate('profileFollowRemovalUpdate', {
+            args: [input],
+            updateId: 'removal:' + followId,
+          }),
+          updateResult,
+        );
+        releaseEffect();
+        await handle.result();
+        assert.equal(calls.length, 5);
+        assert.deepEqual(calls.slice(0, 3), [
+          'verify:' + followId,
+          'remove:' + followId,
+          'remove:' + followId,
+        ]);
+        assert.deepEqual(
+          new Set(calls.slice(3)),
+          new Set([
+            'delete:' + followId,
+            'undo:' +
+              JSON.stringify({
+                ...pair,
+                sendActivityPub: true,
+                sourceId: followId,
+                sourceKind: 'FOLLOW',
+              }),
+          ]),
+        );
+      } finally {
+        releaseEffect();
+      }
+    });
+  },
+);
+
+test(
+  'Separate removal Workflow는 transaction Activity retry exhaustion을 Update와 Workflow 실패로 남긴다',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
+    t.after(() => environment.teardown());
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-removal-failure-' + process.pid;
+    const pair = {
+      followerProfileId: '00000000-0000-8000-8000-000000000634',
+      followeeProfileId: '00000000-0000-8000-8000-000000000635',
+    };
+    const followId = '00000000-0000-8000-8000-000000000636';
+    const input = {
+      ...pair,
+      expectedRowId: followId,
+      origin: 'LOCAL' as const,
+    };
+    let removalAttempts = 0;
+    let effectCalls = 0;
+
+    const worker = await Worker.create({
+      activities: {
+        verifyProfileFollowRemovalActivity: async () => followId,
+        executeProfileFollowRemovalActivity: async () => {
+          removalAttempts += 1;
+          throw ApplicationFailure.create({
+            message: 'removal transaction unavailable',
+            nextRetryDelay: '1ms',
+          });
+        },
+        deleteFollowNotificationActivity: async () => {
+          effectCalls += 1;
+        },
+        sendProfileUnfollowActivity: async () => {
+          effectCalls += 1;
+        },
+      },
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      workflowsPath,
+    });
+
+    await worker.runUntil(async () => {
+      const startWorkflowOperation = new WithStartWorkflowOperation(
+        'profileFollowRemovalWorkflow',
+        {
+          args: [pair],
+          taskQueue,
+          workflowId:
+            'profile-follow-unfollow:' +
+            pair.followerProfileId +
+            ':' +
+            pair.followeeProfileId +
+            ':' +
+            followId,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+        },
+      );
+      const updateResultPromise = environment.client.workflow.executeUpdateWithStart(
+        'profileFollowRemovalUpdate',
+        {
+          args: [input],
+          updateId: 'removal:' + followId,
+          startWorkflowOperation,
+        },
+      );
+      const handle = await startWorkflowOperation.workflowHandle();
+
+      await assert.rejects(updateResultPromise);
+      await assert.rejects(handle.result());
+      assert.equal(removalAttempts, 10);
+      assert.equal(effectCalls, 0);
+    });
   },
 );

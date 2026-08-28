@@ -2202,7 +2202,6 @@ describe('GraphQL remote profile boundary', () => {
       actor: actorUri,
       id: followUri,
       object: remoteActorUri,
-      published: profileFollow.createdAt.toString(),
       type: 'Follow',
     });
   });
@@ -2304,7 +2303,6 @@ describe('GraphQL remote profile boundary', () => {
       actor: actorUri,
       id: followUri,
       object: remoteActorUri,
-      published: profileFollowRequest.createdAt.toString(),
       type: 'Follow',
     });
   });

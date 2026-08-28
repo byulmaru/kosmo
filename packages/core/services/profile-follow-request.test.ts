@@ -261,6 +261,28 @@ test('participant가 아닌 actor는 request transition을 실행할 수 없다'
   );
 });
 
+test('승인은 malformed self-pair request를 relation으로 만들지 않는다', async () => {
+  assert.equal(typeof lifecycle.approveProfileFollowRequest, 'function');
+  const profile = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);
+  const request = await db
+    .insert(ProfileFollowRequests)
+    .values({ followerProfileId: profile.id, followeeProfileId: profile.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await assert.rejects(
+    lifecycle.approveProfileFollowRequest!({
+      actorProfileId: profile.id,
+      profileFollowRequestId: request.id,
+    }),
+    NotFoundError,
+  );
+  assert.deepEqual(
+    await db.select().from(ProfileFollows).where(eq(ProfileFollows.followerProfileId, profile.id)),
+    [],
+  );
+});
+
 test('local pending request 생성은 같은 pair에서 멱등이다', async () => {
   const follower = await createLocalProfile();
   const followee = await createLocalProfile(ProfileFollowPolicy.APPROVAL_REQUIRED);

@@ -5,10 +5,12 @@ export type { NotificationEffectErrorContext } from './notification';
 export {
   createFollowNotification,
   createFollowRequestNotification,
-  createReactionNotification,
-  createRepostNotification,
   deleteFollowNotification,
   deleteFollowRequestNotification,
+} from './notification';
+export {
+  createReactionNotification,
+  createRepostNotification,
   deleteReactionNotification,
   deleteRepostNotification,
   setNotificationEffectErrorReporter,
@@ -16,6 +18,32 @@ export {
 export { createPost, deletePost, repostPost } from './post';
 export { disableProfile } from './profile';
 export { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow';
+export type {
+  HydratedProfileFollowPairTransition,
+  ProfileFollowCreateEffectInput,
+  ProfileFollowDeleteEffectInput,
+  ProfileFollowPairCommand,
+  ProfileFollowPairEffect,
+  ProfileFollowPairEffectPlan,
+  ProfileFollowPairLifecycleState,
+  ProfileFollowPairTransitionExecution,
+  ProfileFollowPairTransitionFailure,
+  ProfileFollowPairTransitionInput,
+  ProfileFollowPairTransitionOutcome,
+  ProfileFollowPairTransitionResult,
+  ProfileFollowRemovalExecution,
+  ProfileFollowRemovalInput,
+  ProfileFollowRemovalOutcome,
+} from './profile-follow-command';
+export {
+  executeProfileFollowPairTransition,
+  executeProfileFollowRemoval,
+  hydrateProfileFollowPairTransition,
+  loadPendingFollowRequestId,
+  rehydrateProfileFollowFailure,
+  verifyProfileFollowRemoval,
+} from './profile-follow-command';
+export type { ProfileFollowPair } from './profile-follow-relation';
 export type { AcceptProfileFollowRequestResult } from './profile-follow-request';
 export {
   acceptProfileFollowRequest,

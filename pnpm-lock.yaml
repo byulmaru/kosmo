@@ -402,6 +402,9 @@ importers:
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@fedify/fedify':
         specifier: ^2.3.0

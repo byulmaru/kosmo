@@ -9,7 +9,7 @@ import {
 } from '../db';
 import type { Transaction } from '../db';
 
-type ProfileFollowPair = {
+export type ProfileFollowPair = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
 };
@@ -23,7 +23,11 @@ const pairCondition = (
     eq(table.followeeProfileId, followeeProfileId),
   );
 
-export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transaction) =>
+export const ensureProfileFollow = async (
+  pair: ProfileFollowPair,
+  tx?: Transaction,
+  options?: { readonly id?: string },
+) =>
   getDatabaseConnection(tx).transaction(async (tx) => {
     const existing = await tx
       .select()
@@ -38,7 +42,7 @@ export const ensureProfileFollow = async (pair: ProfileFollowPair, tx?: Transact
 
     const inserted = await tx
       .insert(ProfileFollows)
-      .values(pair)
+      .values(options?.id === undefined ? pair : { ...pair, id: options.id })
       .onConflictDoNothing({
         target: [ProfileFollows.followerProfileId, ProfileFollows.followeeProfileId],
       })

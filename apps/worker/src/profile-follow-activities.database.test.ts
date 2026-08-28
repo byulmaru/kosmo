@@ -20,7 +20,6 @@ import type * as ProfileFollowActivities from './profile-follow-activities';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
-const profileFollowCreatedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
 
 process.env.DATABASE_URL = databaseUrl;
 process.env.PUBLIC_ORIGIN = publicOrigin;
@@ -113,19 +112,6 @@ describe('profile follow delivery activities', () => {
     }
   });
 
-  test('삭제 snapshot의 source identity 불일치를 전송 전에 거부한다', async () => {
-    await assert.rejects(
-      sendProfileUnfollowActivity({
-        createdAt: profileFollowCreatedAt.toString(),
-        followerProfileId: crypto.randomUUID(),
-        followeeProfileId: crypto.randomUUID(),
-        id: crypto.randomUUID(),
-        sourceId: crypto.randomUUID(),
-      }),
-      /source identity mismatch/,
-    );
-  });
-
   test('커밋된 전송은 이후 participant state 변경으로 취소하지 않는다', async () => {
     const source = await createFollowFixture();
     const follow = await db
@@ -154,10 +140,8 @@ describe('profile follow delivery activities', () => {
     await sendProfileFollowActivity({ sourceKind: 'FOLLOW', sourceId: follow.id });
     await db.delete(ProfileFollows).where(eq(ProfileFollows.id, follow.id));
     await sendProfileUnfollowActivity({
-      createdAt: follow.createdAt.toString(),
       followerProfileId: follow.followerProfileId,
       followeeProfileId: follow.followeeProfileId,
-      id: follow.id,
       sourceId: follow.id,
     });
 
@@ -216,17 +200,15 @@ describe('profile follow delivery activities', () => {
     );
     await assert.rejects(
       sendProfileUnfollowActivity({
-        createdAt: follow.createdAt.toString(),
         followerProfileId: follow.followerProfileId,
         followeeProfileId: follow.followeeProfileId,
-        id: follow.id,
         sourceId: follow.id,
       }),
       /recipient projection is incomplete/,
     );
   });
 
-  test('삭제 snapshot은 삭제된 source를 재조회하지 않고 동일한 Undo identity와 ordering을 쓴다', async () => {
+  test('삭제된 source를 재조회하지 않고 동일한 Undo identity와 ordering을 쓴다', async () => {
     const source = await createFollowFixture();
     const deleted = await db
       .insert(ProfileFollows)
@@ -241,10 +223,8 @@ describe('profile follow delivery activities', () => {
     mock.method(federation, 'createContext', () => fixture.context);
 
     await sendProfileUnfollowActivity({
-      createdAt: deleted.createdAt.toString(),
       followerProfileId: deleted.followerProfileId,
       followeeProfileId: deleted.followeeProfileId,
-      id: deleted.id,
       sourceId: deleted.id,
     });
 
@@ -258,7 +238,7 @@ describe('profile follow delivery activities', () => {
     const originalFollow = await call.activity.getObject();
     assert.ok(originalFollow instanceof Follow);
     assert.equal(originalFollow.id?.href, `${publicOrigin}/ap/follow/${deleted.id}`);
-    assert.equal(originalFollow.published?.toString(), deleted.createdAt.toString());
+    assert.equal(originalFollow.published, null);
     assert.deepEqual(call.options, {
       orderingKey: `profile-follow:${publicOrigin}/ap/actor/${source.follower.id}\n${source.actor.uri}`,
     });

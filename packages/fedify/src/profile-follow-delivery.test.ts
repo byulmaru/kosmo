@@ -100,7 +100,6 @@ describe('profile follow delivery', () => {
     await sendProfileUnfollow({
       actor,
       outboundFollow: {
-        createdAt: profileFollowCreatedAt,
         id: profileFollowId,
       },
       senderProfileId,
@@ -118,7 +117,7 @@ describe('profile follow delivery', () => {
     assert.equal(originalFollow.id?.href, `${publicOrigin}/ap/follow/${profileFollowId}`);
     assert.equal(originalFollow.actorId?.href, localActorUri.href);
     assert.equal(originalFollow.objectId?.href, remoteActorUri.href);
-    assert.equal(originalFollow.published?.toString(), profileFollowCreatedAt.toString());
+    assert.equal(originalFollow.published, null);
     assert.deepEqual(call.options, {
       orderingKey: `profile-follow:${localActorUri.href}\n${remoteActorUri.href}`,
     });
