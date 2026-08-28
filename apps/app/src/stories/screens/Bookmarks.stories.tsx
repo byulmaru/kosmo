@@ -13,9 +13,9 @@ import { SessionErrorProvider, SessionProvider } from '@/session/SessionProvider
 import { post, profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { BookmarksIntegrationStoriesQuery as BookmarksIntegrationStoriesQueryType } from '../__generated__/BookmarksIntegrationStoriesQuery.graphql';
-import type { BookmarksProfileSwitchStoriesQuery as BookmarksProfileSwitchStoriesQueryType } from '../__generated__/BookmarksProfileSwitchStoriesQuery.graphql';
-import type { BookmarksStoriesQuery as BookmarksStoriesQueryType } from '../__generated__/BookmarksStoriesQuery.graphql';
+import type { BookmarksIntegrationStoriesQuery as BookmarksIntegrationStoriesQueryType } from './__generated__/BookmarksIntegrationStoriesQuery.graphql';
+import type { BookmarksProfileSwitchStoriesQuery as BookmarksProfileSwitchStoriesQueryType } from './__generated__/BookmarksProfileSwitchStoriesQuery.graphql';
+import type { BookmarksStoriesQuery as BookmarksStoriesQueryType } from './__generated__/BookmarksStoriesQuery.graphql';
 
 const author = profile({
   displayName: '우주 기록자',

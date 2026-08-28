@@ -13,10 +13,10 @@ import {
 import { expect, userEvent, within } from 'storybook/test';
 import { ProfileDefaultPostVisibilityControl } from '@/components/profile/ProfileDefaultPostVisibilityControl';
 import { colors } from '@/theme/tokens';
-import ProfileDefaultPostVisibilityControlStoriesQueryNode from '../__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
+import ProfileDefaultPostVisibilityControlStoriesQueryNode from './__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
-import type { ProfileDefaultPostVisibilityControlStoriesQuery } from '../__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
+import type { ProfileDefaultPostVisibilityControlStoriesQuery } from './__generated__/ProfileDefaultPostVisibilityControlStoriesQuery.graphql';
 
 const profileId = 'profile-default-visibility-owner';
 

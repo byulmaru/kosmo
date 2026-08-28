@@ -14,9 +14,9 @@ import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactionOption, ReactionToggleIntent } from '@/components/reaction/ReactionSelector';
-import type { ReactionProfileConnectionStoriesQuery } from '../__generated__/ReactionProfileConnectionStoriesQuery.graphql';
-import type { ReactionsIntegrationStoriesQuery } from '../__generated__/ReactionsIntegrationStoriesQuery.graphql';
-import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from '../__generated__/ReactionsStoriesQuery.graphql';
+import type { ReactionProfileConnectionStoriesQuery } from './__generated__/ReactionProfileConnectionStoriesQuery.graphql';
+import type { ReactionsIntegrationStoriesQuery } from './__generated__/ReactionsIntegrationStoriesQuery.graphql';
+import type { ReactionsStoriesQuery as ReactionsStoriesQueryType } from './__generated__/ReactionsStoriesQuery.graphql';
 
 const tiedEntries = [
   { count: 3, type: '🎉' },

@@ -7,7 +7,7 @@ import {
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { HashtagRelatedProfilesStoriesQuery as HashtagRelatedProfilesStoriesQueryType } from '../__generated__/HashtagRelatedProfilesStoriesQuery.graphql';
+import type { HashtagRelatedProfilesStoriesQuery as HashtagRelatedProfilesStoriesQueryType } from './__generated__/HashtagRelatedProfilesStoriesQuery.graphql';
 
 const relatedA = profile({
   displayName: '별빛 여행자',

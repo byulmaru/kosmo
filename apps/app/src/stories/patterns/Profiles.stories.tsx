@@ -16,7 +16,7 @@ import ogDefaultUrl from '../../../public/og-default.png?url';
 import { followersProfile, followingProfile, profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from '../__generated__/ProfilesStoriesQuery.graphql';
+import type { ProfilesStoriesQuery as ProfilesStoriesQueryType } from './__generated__/ProfilesStoriesQuery.graphql';
 
 const followable = profile({
   avatar: { id: 'media-profile-followable-avatar', url: '/profile-followable-avatar.png' },
