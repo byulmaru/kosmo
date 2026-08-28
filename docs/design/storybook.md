@@ -2,7 +2,9 @@
 
 ## 목적과 근거
 
-Figma는 KOSMO UI의 시각·상태 디자인 계약 원천이다. `apps/app` Storybook은 이 계약을 실제 Production 컴포넌트, 상태와 interaction으로 실행하고 리뷰하는 코드 측 계약이다.
+Figma는 KOSMO UI의 시각·상태 디자인 계약 원천이다. `apps/app` Storybook은 Figma 계약을 실제 Production 컴포넌트와 상태·interaction으로 구현하고 검증·리뷰하는 실행 가능한 코드 측 원천이다. 실제 Production 화면은 Storybook에서 합의된 컴포넌트와 상태 계약을 재사용해 조립한다. route·data·Relay/API·mutation·cache·권한·제품 정책은 Storybook에서 필요한 최소 mock과 시나리오 경계만 제공하며, 실제 network·runtime 통합은 대응 Production runtime에서 연결한다.
+
+공용 UI 계약의 이관 흐름은 `Figma 디자인 계약 → Storybook에서 Production 컴포넌트 구현·승인 → Production 화면 조립·runtime 통합`이며, 조립된 Page·Screen은 다시 Storybook의 대표 시나리오로 검증한다.
 
 Storybook에서 렌더링하거나 검증했다는 사실만으로 Web·iOS·Android Production runtime이 완료된 것은 아니다. route, data, Relay, API, mutation, cache, 권한, 제품 정책과 실제 플랫폼 동작은 대응 Product 이슈와 runtime QA가 별도로 소유한다.
 
