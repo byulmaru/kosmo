@@ -75,11 +75,49 @@ test('Local Profile handle schema rejects every Explicitly Harmful value after p
   }
 });
 
-test('Profile handle policy rejects the specified underscore and numeric evasions', () => {
-  for (const handle of ['f_a_g_g_o_t', 'n1gg3r', 'tr4nny', 'p_0_r_n']) {
-    assert.equal(localProfileHandleSchema.safeParse(handle).success, false, handle);
-    assert.equal(profileHandlePolicyViolation(handle), 'explicitly-harmful', handle);
+test('Profile handle policy rejects underscore and numeric evasions for every harmful value', () => {
+  const numericSubstitutions = [
+    ['a', '4'],
+    ['e', '3'],
+    ['i', '1'],
+    ['o', '0'],
+  ] as const;
+  const observedNumericReplacements = new Set<string>();
+
+  for (const handle of explicitlyHarmfulProfileHandleValues) {
+    const underscoreVariant = [...handle].join('_');
+    assert.equal(
+      localProfileHandleSchema.safeParse(underscoreVariant).success,
+      false,
+      underscoreVariant,
+    );
+    assert.equal(
+      profileHandlePolicyViolation(underscoreVariant),
+      'explicitly-harmful',
+      underscoreVariant,
+    );
+
+    for (const [source, replacement] of numericSubstitutions) {
+      if (!handle.includes(source)) {
+        continue;
+      }
+
+      const numericVariant = handle.replaceAll(source, replacement);
+      observedNumericReplacements.add(replacement);
+      assert.equal(
+        localProfileHandleSchema.safeParse(numericVariant).success,
+        false,
+        numericVariant,
+      );
+      assert.equal(
+        profileHandlePolicyViolation(numericVariant),
+        'explicitly-harmful',
+        numericVariant,
+      );
+    }
   }
+
+  assert.deepEqual([...observedNumericReplacements].sort(), ['0', '1', '3', '4']);
 });
 
 test('Profile handle policy allows non-matching substrings and ordinary words', () => {

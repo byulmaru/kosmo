@@ -161,6 +161,6 @@ Android·iOS·Web의 Local Profile 생성 form은 두 정책 위반을 mutation 
       위한 일회성 code와 package script를 저장소에서 제거한다.
 - [ ] 5.2 확장된 route 예약 목록으로 배포 대상 Local Instance를 다시 감사하고 두 하위 정책의 결과를
       PROD-816에 기록한다.
-- [ ] 5.3 Core·API·앱의 집중 검증과 workspace 필수 check를 실행해 두 정책의 통합 결과를 확인한다.
+- [x] 5.3 Core·API·앱의 집중 검증과 workspace 필수 check를 실행해 두 정책의 통합 결과를 확인한다.
 - [ ] 5.4 각 task와 검증 증거를 PROD-816에 동기화하고 두 하위 정책 범위가 모두 완료된 경우에만 delta spec
       동기화와 OpenSpec archive를 수행한다.
