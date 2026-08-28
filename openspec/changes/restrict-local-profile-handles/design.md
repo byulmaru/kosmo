@@ -19,6 +19,8 @@ GraphQL shape나 데이터베이스 schema는 바꾸지 않는다.
   Expression 정책을 적용한다.
 - 공용 검증 계약을 서버와 Android·iOS·Web 클라이언트가 함께 소비해 목록과 정규화의 drift를 막는다.
 - 정확 일치와 제한된 우회 정규화만 적용해 정상 단어의 부분 문자열 오탐을 방지한다.
+- Local handle로 생성 가능한 현재 앱의 최상위 정적 route namespace가 동적 Profile route와 충돌하지 않게
+  System Reserved 목록에 포함한다.
 - 정책 위반을 안전한 handle field 오류로 전달하고 기존 접근성 계약을 유지한다.
 - 기존 Local Profile과 새 정책의 충돌을 배포 전에 읽기 전용으로 감사한다.
 
@@ -52,6 +54,12 @@ Handle Expression은 같은 기초 값에서 underscore를 제거한 compact 값
 적용한 substituted 값을 모두 만든다. 둘 중 하나를 유해표현 집합과 비교하되 모든 비교는 handle 전체의 정확
 일치여야 한다. 예약어 정책에는 underscore 제거와 숫자 치환을 적용하지 않는다.
 
+앱 route group은 URL segment에 나타나지 않으므로 `apps/app/src/app`의 최상위 정적 URL segment를 기준으로
+검토한다. 그중 Local handle 문자 형식으로 생성 가능한 `bookmarks`, `compose`, `feedback`, `hashtags`, `home`,
+`local`, `notifications`, `search`, `settings`를 System Reserved 목록에 포함한다. `login`과 `privacy`는 기존
+범주에 이미 포함한다. `follow-requests`와 `profile-edit`는 하이픈 때문에 handle 형식 검증에서 거부되므로
+underscore 별칭을 추가하지 않는다. 이후 최상위 정적 route 변경은 같은 변경에서 이 curated 목록을 검토한다.
+
 서버는 기존 GraphQL input validation 경계에서 정책 위반을 차단하고 `VALIDATION` code와 `handle` field를
 유지한다. 공개 오류에는 내부 분류, 일치한 표현 또는 전체 목록을 넣지 않는다. 이 계약을 표현하기 위해 내부
 reason이나 판정 함수를 둘 수 있지만 GraphQL input·payload shape를 추가하지 않는다.
@@ -62,9 +70,12 @@ error에 `사용할 수 없는 단어가 포함된 핸들이에요.`를 전달�
 정책으로 식별할 수 없는 validation 오류나 다른 실패는 기존의 안전한 일반 오류 계약을 유지하며 raw GraphQL
 message를 사용자에게 그대로 보여주지 않는다.
 
-배포 전 감사는 실제 적용 환경과 동일한 공용 판정 계약을 사용해 configured Local Instance의 기존 Local
-Profile handle만 읽는다. 결과에는 운영 판단에 필요한 식별자와 충돌 수만 제한적으로 남기고, 일치한 유해표현을 로그나
-analytics payload로 전송하지 않는다. 감사 자체는 어떠한 Profile write도 수행하지 않는다.
+배포 전 감사는 배포 대상에서 실제 적용 정책과 같은 조건으로 기존 Local Profile handle만 읽는다. 감사만을
+위한 일회성 code와 package script는 저장소에 남기지 않는다. 결과에는 운영 판단에 필요한 제한된 식별자와
+정책별 충돌 수만 남기고, 일치한 유해표현을 일반 log나 analytics payload로 전송하지 않는다. 충돌이 있으면
+PROD-816이 자동으로 write하지 않고 영향 Profile, 사용자·URL·연합 identity 영향, 정확한 변경 방식,
+rollback과 재점검 완료 조건을 소유하는 별도 cleanup 이슈를 만든다. 실제 변경은 그 이슈에서 승인된 forward
+data migration 또는 통제된 운영 절차로 수행한다.
 
 ### Allowed Alternatives
 
@@ -72,8 +83,9 @@ analytics payload로 전송하지 않는다. 감사 자체는 어떠한 Profile 
   형태든 목록·정규화·판정의 기준은 하나이고 독립적으로 검증 가능해야 한다.
 - 내부 판정 결과를 boolean 또는 비공개 reason enum으로 표현할 수 있다. 외부 오류 shape와 안전한 사용자
   문구가 바뀌지 않는 한 내부 표현은 구현 세부사항이다.
-- 기존 데이터 감사는 일회성 script 또는 동일 evaluator를 호출하는 제한된 운영 query로 수행할 수 있다.
-  실행 대상이 Local Profile로 제한되고 read-only임을 검증할 수 있어야 한다.
+- 기존 데이터 감사는 배포 대상에서 승인된 read-only query 또는 통제된 운영 점검으로 수행할 수 있다. 실행
+  대상이 Local Profile로 제한되고 write가 없음을 검증할 수 있어야 하며, 감사만을 위한 일회성 code나 package
+  script를 저장소에 남기지 않는다.
 
 ### Known Traps
 
@@ -93,6 +105,8 @@ analytics payload로 전송하지 않는다. 감사 자체는 어떠한 Profile 
 
 - [정적 목록이 시간이 지나며 낡거나 서버·클라이언트에서 달라질 수 있음] → 공용 기준과 parity test를
   두고 목록 변경 시 provenance와 예시를 함께 검토한다.
+- [앱 route가 추가되었지만 예약 목록이 갱신되지 않을 수 있음] → 최상위 정적 route 중 handle 문자 형식으로
+  생성 가능한 segment를 route 변경과 같은 배포 단위에서 목록·공용 단위 사례에 반영한다.
 - [제한된 숫자 치환이 정상 handle을 거부할 수 있음] → compact/substituted 전체의 정확 일치만 허용하고 정상
   단어와 부분 문자열 회귀 사례를 고정한다.
 - [서버와 클라이언트 배포 시점 차이로 클라이언트 사전 검증을 통과할 수 있음] → 서버를 최종 권위로 유지하고
@@ -109,7 +123,8 @@ analytics payload로 전송하지 않는다. 감사 자체는 어떠한 Profile 
    통합 검증한다.
 3. Profile 생성 form을 공용 TextField와 구조화된 오류 매핑으로 전환하고 Android·iOS·Web 상호작용과
    접근성을 검증한다.
-4. 동일 evaluator로 기존 Local Profile을 read-only 감사하고 두 하위 정책의 결과를 PROD-816에 남긴다.
+4. 배포 대상의 기존 Local Profile을 승인된 read-only 운영 점검으로 감사하고 두 하위 정책의 결과를
+   PROD-816에 남긴다. 충돌 시 별도 cleanup 이슈와 승인된 forward data migration 또는 운영 절차를 확정한다.
 5. PROD-816에서 두 정책의 서버 권위 검증과 클라이언트 사전 검증을 통합해 배포한다. 문제가 생기면 코드
    enforcement를 되돌릴 수 있지만 감사 결과나 기존 Profile에는 write/rollback을 수행하지 않는다.
 

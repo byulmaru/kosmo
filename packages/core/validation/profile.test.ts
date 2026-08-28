@@ -8,6 +8,18 @@ import {
   systemReservedProfileHandleValues,
 } from './profile';
 
+const currentStaticAppRouteHandleValues = [
+  'bookmarks',
+  'compose',
+  'feedback',
+  'hashtags',
+  'home',
+  'local',
+  'notifications',
+  'search',
+  'settings',
+] as const;
+
 test('Profile handle schema rejects every System Reserved value after trim and case folding', () => {
   for (const handle of systemReservedProfileHandleValues) {
     const result = profileHandleSchema.safeParse(`  ${handle.toUpperCase()}  `);
@@ -23,6 +35,25 @@ test('Profile handle schema rejects every System Reserved value after trim and c
       'system-reserved',
       handle,
     );
+  }
+});
+
+test('System Reserved values include every current static app route that is a valid handle', () => {
+  for (const handle of currentStaticAppRouteHandleValues) {
+    assert.equal(systemReservedProfileHandleValues.includes(handle), true, handle);
+    assert.equal(profileHandlePolicyViolation(handle), 'system-reserved', handle);
+  }
+
+  for (const route of ['follow-requests', 'profile-edit']) {
+    const result = profileHandleSchema.safeParse(route);
+
+    assert.equal(result.success, false, route);
+    assert.equal(
+      result.success ? undefined : result.error.issues[0]?.code,
+      'invalid_format',
+      route,
+    );
+    assert.equal(profileHandlePolicyViolation(route), undefined, route);
   }
 });
 

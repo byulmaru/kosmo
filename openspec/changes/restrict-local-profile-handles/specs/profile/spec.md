@@ -19,8 +19,16 @@ System Reserved Handle은 앞뒤 공백을 제거하고 소문자로 바꾼 hand
   `registration`, `report`, `reports`, `status`, `terms`, `tos`, `webmaster`
 - Kosmo·연합·시스템 endpoint: `activitypub`, `actor`, `actors`, `ap`, `byulmaru`, `federation`, `fediverse`,
   `graphql`, `health`, `inbox`, `kosmo`, `nodeinfo`, `outbox`, `webfinger`
+- 앱 최상위 정적 route namespace: `bookmarks`, `compose`, `feedback`, `hashtags`, `home`, `local`,
+  `notifications`, `search`, `settings`
 - 공식 계정으로 오인하기 쉬운 조합: `kosmo_admin`, `kosmo_moderator`, `kosmo_official`, `kosmo_security`,
   `kosmo_support`
+
+`login`과 `privacy`는 현재 앱 route이면서 인증·고객지원·정책 목록에 이미 포함해야 한다(MUST).
+`follow-requests`와 `profile-edit`처럼 하이픈을 포함한 route는 Local handle 문자 형식에서 거부해야 하며(MUST),
+System Reserved 목록에 같은 의미의 underscore 별칭을 임의로 추가해서는 안 된다(MUST NOT). 앱의 최상위 정적
+route를 추가하거나 이름을 바꿀 때 그 segment가 Local handle 문자 형식으로 생성 가능하면 route 변경과 같은
+배포 단위에서 System Reserved 목록과 공용 검증을 함께 갱신해야 한다(MUST).
 
 Explicitly Harmful Handle Expression은 앞뒤 공백 제거와 소문자 변환 뒤 밑줄을 제거한 compact handle과,
 그 값에 `0`→`o`, `1`→`i`, `3`→`e`, `4`→`a`를 적용한 substituted handle을 만들어야 한다(MUST).
@@ -62,6 +70,20 @@ NOT).
 - **WHEN** 로그인한 계정이 `Admin`처럼 대소문자만 다른 System Reserved Handle로 Local Profile 생성을 요청한다
 - **THEN** 시스템은 Profile을 생성하지 않고 handle field 오류를 반환한다
 - **AND** 응답은 일치한 예약 식별자나 전체 목록을 노출하지 않는다
+
+#### Scenario: Reject a handle that occupies a current app route namespace
+
+- **WHEN** 로그인한 계정이 `notifications`, `settings` 또는 `hashtags`처럼 Local handle 문자 형식으로 생성
+  가능한 현재 앱 최상위 정적 route namespace로 Local Profile 생성을 요청한다
+- **THEN** 시스템은 Profile을 생성하지 않고 handle field 오류를 반환한다
+- **AND** 정적 앱 route와 동적 Profile route가 같은 최상위 namespace를 공유하지 않는다
+
+#### Scenario: Reject a hyphenated route at the handle format boundary
+
+- **WHEN** 로그인한 계정이 `follow-requests` 또는 `profile-edit`처럼 하이픈을 포함한 현재 앱 route를 Local
+  Profile handle로 제출한다
+- **THEN** 시스템은 System Reserved 판정에 앞선 Local handle 문자 형식 검증으로 요청을 거부한다
+- **AND** `follow_requests` 또는 `profile_edit`를 route와 같은 값으로 간주하지 않는다
 
 #### Scenario: Allow a handle that only contains a reserved substring
 

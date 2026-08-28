@@ -19,11 +19,15 @@
 **Verification**
 
 - 모든 예약 식별자의 직접 일치와 대소문자 변형을 단위 검증한다.
+- Local handle 문자 형식으로 생성 가능한 현재 앱 최상위 정적 route namespace가 모두 예약되고,
+  `follow-requests`와 `profile-edit`는 형식 검증에서 거부되는지 확인한다.
 - `supporter`, `cybersecurity`, `administrator_dev`와 기존 길이·문자 형식 회귀를 검증한다.
 - 서버와 클라이언트 소비 경계가 별도 예약 목록이나 정규화를 갖지 않는지 확인한다.
 
 - [x] 1.1 공용 Profile validation에 확정된 System Reserved Handle 목록과 판정 계약을 구현한다.
 - [x] 1.2 전체 예약 식별자, 대소문자와 정확 일치 허용 경계의 단위 사례를 추가하고 통과시킨다.
+- [x] 1.3 현재 앱 최상위 정적 route와 Local handle 문자 형식의 교집합을 System Reserved 목록과 회귀 사례에
+      반영한다.
 
 ## 2. PROD-816 Explicitly Harmful Handle Expression 정책
 
@@ -138,20 +142,25 @@ Android·iOS·Web의 Local Profile 생성 form은 두 정책 위반을 mutation 
 
 **Guardrails**
 
-- 감사에는 실제 적용 정책과 같은 판정 계약을 사용한다.
-- 감사 대상은 Local Profile로 제한하며 Profile을 rename, disable, delete하거나 다른 쓰기를 수행하지 않는다.
+- 감사에는 실제 적용 정책과 같은 판정 조건을 사용한다.
+- 감사 대상은 배포 대상 Local Profile로 제한하며 Profile을 rename, disable, delete하거나 다른 쓰기를
+  수행하지 않는다.
+- 감사만을 위한 일회성 code나 package script를 저장소에 유지하지 않는다.
 - 결과와 log·analytics에 일치한 유해표현을 불필요하게 남기지 않는다.
-- 충돌이 발견되면 자동 조치하지 않고 배포와 후속 정책 범위를 별도로 판단한다.
+- 충돌이 발견되면 자동 조치하지 않고 영향·변경 방식·rollback·재점검 조건을 소유하는 별도 cleanup 이슈와
+  승인된 forward data migration 또는 운영 절차로 분리한다.
 - OpenSpec change는 두 하위 정책의 구현 범위와 감사·통합 검증이 모두 끝난 뒤에만 완료·archive한다.
 
 **Verification**
 
-- 감사 경로가 read-only이고 Remote Profile을 제외하는지 검토 또는 테스트 증거로 입증한다.
+- 배포 대상 감사 절차가 read-only이고 Remote Profile을 제외하는지 실행 계획과 결과로 입증한다.
 - 대상 환경에서 감사한 시점과 정책별 충돌 수를 민감한 일치값 없이 PROD-816에 기록한다.
 - Core 단위, API 통합, Storybook interaction·접근성 및 workspace 필수 check 결과를 한 번에 확인한다.
 
-- [x] 5.1 동일한 공용 판정 계약으로 기존 Local Profile만 점검하는 read-only 감사 경로와 검증을 마련한다.
-- [x] 5.2 대상 Local Instance에서 감사를 실행하고 두 하위 정책의 결과를 PROD-816에 기록한다.
+- [x] 5.1 기존 Local Profile 충돌의 read-only 점검, 별도 승인 cleanup과 재점검 정책을 문서화하고 감사만을
+      위한 일회성 code와 package script를 저장소에서 제거한다.
+- [ ] 5.2 확장된 route 예약 목록으로 배포 대상 Local Instance를 다시 감사하고 두 하위 정책의 결과를
+      PROD-816에 기록한다.
 - [ ] 5.3 Core·API·앱의 집중 검증과 workspace 필수 check를 실행해 두 정책의 통합 결과를 확인한다.
 - [ ] 5.4 각 task와 검증 증거를 PROD-816에 동기화하고 두 하위 정책 범위가 모두 완료된 경우에만 delta spec
       동기화와 OpenSpec archive를 수행한다.

@@ -60,8 +60,9 @@ Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예�
 #### System Reserved Handle
 
 시스템 예약 식별자는 앞뒤 공백을 제거하고 소문자로 바꾼 Local handle 전체가 아래 값 중 하나와 정확히 일치할
-때 사용을 거부한다. 부분 문자열만 일치하는 `supporter`, `cybersecurity`, `administrator_dev`는 이 정책만으로
-거부하지 않는다.
+때 사용을 거부한다. 현재 앱의 최상위 정적 route namespace 중 Local handle 문자 형식으로 생성할 수 있는 값도
+시스템 예약 식별자로 관리한다. 부분 문자열만 일치하는 `supporter`, `cybersecurity`,
+`administrator_dev`는 이 정책만으로 거부하지 않는다.
 
 - 운영 권한·공식 계정: `abuse`, `adm`, `admin`, `admins`, `administration`, `administrator`,
   `administrators`, `moderator`, `moderators`, `official`, `operator`, `owner`, `owners`, `root`, `security`,
@@ -71,8 +72,15 @@ Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예�
   `registration`, `report`, `reports`, `status`, `terms`, `tos`, `webmaster`
 - Kosmo·연합·시스템 endpoint: `activitypub`, `actor`, `actors`, `ap`, `byulmaru`, `federation`, `fediverse`,
   `graphql`, `health`, `inbox`, `kosmo`, `nodeinfo`, `outbox`, `webfinger`
+- 앱 최상위 정적 route namespace: `bookmarks`, `compose`, `feedback`, `hashtags`, `home`, `local`,
+  `notifications`, `search`, `settings`
 - 공식 계정으로 오인하기 쉬운 조합: `kosmo_admin`, `kosmo_moderator`, `kosmo_official`, `kosmo_security`,
   `kosmo_support`
+
+`login`과 `privacy`는 현재 앱 route이면서 위 인증·고객지원·정책 목록에 이미 포함된다. `follow-requests`와
+`profile-edit`처럼 하이픈을 포함한 route는 Local handle 문자 형식에서 먼저 거부되므로 예약 목록에 중복해서
+넣지 않는다. 최상위 정적 route를 추가하거나 이름을 바꿀 때 새 segment가 Local handle 문자 형식으로 생성
+가능하면 route 변경과 같은 배포 단위에서 이 목록과 공용 검증을 함께 갱신한다.
 
 예약 식별자 목록은 Bluesky atproto의
 [`reserved.ts`](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/handle/reserved.ts)를
@@ -101,6 +109,13 @@ Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예�
 검증을 함께 갱신한다. Profile Lifecycle State와 과거 handle 점유 여부는 이 정책에 우선하지 않으므로 삭제된
 Profile의 handle 재사용을 별도로 허용하더라도 예약 식별자와 명시적 유해표현은 새 Local Profile에 사용할 수
 없다.
+
+예약 목록이나 비교 규칙을 변경할 때는 배포 대상 데이터베이스의 기존 Local Profile을 실제 공용 판정 계약과
+같은 조건으로 읽기 전용 점검한다. 충돌이 없으면 별도 cleanup은 필요하지 않다. 충돌이 있더라도 PROD-816은
+Profile을 자동 rename·disable·delete하는 일회성 script를 저장소에 추가하지 않는다. 대신 영향받는 Profile,
+사용자·URL·연합 identity 영향, 정확한 변경 방식, rollback과 재점검 완료 조건을 소유하는 별도 cleanup 이슈와
+승인된 forward data migration 또는 운영 절차를 먼저 확정한다. 승인 전에는 기존 row를 변경하지 않으며, 실행
+결과는 민감한 일치 표현을 일반 log·analytics에 남기지 않고 대상 환경과 정책별 충돌 수로 기록한다.
 
 ## 관계
 

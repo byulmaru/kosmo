@@ -41,6 +41,25 @@ atproto의 공개 자료를 참고했지만, 제품 동작의 권위는 Kosmo ca
 - Confirmation / Follow-up: 직접 일치, 대소문자, underscore, 네 숫자 치환, 정상 단어와 부분 문자열 회귀를
   각각 검증한다.
 
+### Local handle로 생성 가능한 현재 앱 route namespace를 예약한다
+
+- Decision Date: 2026-08-28
+- Decision Class: Derived Contract
+- Authority / Provenance: `docs/domain/objects/profile.md`, PROD-816
+- Status: Active
+- Context / Problem: 동적 Profile route와 같은 최상위 namespace를 일반 Profile이 선점하면 정적 앱 route가
+  우선하거나 이후 route 확장을 막아 해당 Profile URL 계약이 불명확해진다.
+- Decision Outcome: 현재 앱의 최상위 정적 route segment 중 Local handle 문자 형식으로 생성 가능한
+  `bookmarks`, `compose`, `feedback`, `hashtags`, `home`, `local`, `notifications`, `search`, `settings`를 System
+  Reserved Handle로 관리한다. 기존 목록의 `login`, `privacy`도 route namespace를 함께 보호한다. 하이픈을
+  포함한 `follow-requests`, `profile-edit`는 handle 형식 검증으로 거부하며 underscore 별칭은 같은 route로
+  간주하지 않는다.
+- Alternatives Considered: 정적 route 우선순위에만 의존하면 생성은 성공하지만 Profile URL이 가려질 수 있고,
+  route 문자열을 runtime에 자동 수집하면 Core 정책이 앱 파일 구조에 결합되므로 선택하지 않았다.
+- Consequences: 최상위 정적 route를 추가하거나 이름을 바꿀 때 handle 문자 형식과의 교집합을 같은 변경에서
+  curated 목록과 단위 사례에 반영해야 한다.
+- Confirmation / Follow-up: 현재 route 교집합의 직접 일치 거부와 하이픈 route의 형식 거부를 검증한다.
+
 ### 서버를 최종 권위로 두고 공용 검증 계약을 함께 소비한다
 
 - Decision Date: 2026-08-28
@@ -92,7 +111,7 @@ atproto의 공개 자료를 참고했지만, 제품 동작의 권위는 Kosmo ca
 - Consequences: 목록 변경에는 별도 제품 검토와 canonical·서버·클라이언트 계약의 동시 갱신이 필요하다.
 - Confirmation / Follow-up: 구현이 네트워크 호출이나 외부 package 없이 canonical 목록만 사용하는지 확인한다.
 
-### 기존 충돌은 읽기 전용으로 감사하고 자동 변경하지 않는다
+### 기존 충돌은 배포 대상에서 읽기 전용으로 감사하고 별도 승인된 cleanup으로 처리한다
 
 - Decision Date: 2026-08-28
 - Decision Class: Derived Contract
@@ -100,15 +119,18 @@ atproto의 공개 자료를 참고했지만, 제품 동작의 권위는 Kosmo ca
 - Status: Active
 - Context / Problem: 새 정책과 일치하는 기존 Local Profile이 있을 수 있지만 신규 생성 차단이 기존 Profile의
   lifecycle을 소급해 바꾸는 근거는 아니다.
-- Decision Outcome: 배포 전에 같은 판정 계약으로 기존 Local Profile을 읽기 전용으로 감사한다. 충돌 Profile을
-  자동 rename, disable 또는 delete하지 않으며 후속 운영 판단이 필요하면 별도 범위로 다룬다. 앞으로 handle
-  재사용이 허용되더라도 두 정책이 우선한다.
-- Alternatives Considered: migration에서 자동 rename·비활성화하는 방식은 승인되지 않은 사용자 상태 변경이므로
-  선택하지 않았다. 기존 데이터를 무시하는 방식도 배포 위험을 알 수 없어 선택하지 않았다.
-- Consequences: 구현 완료 증거에 감사 실행과 결과 기록이 필요하며, 충돌이 발견되면 배포·운영 판단이 별도로
-  필요할 수 있다.
-- Confirmation / Follow-up: 감사가 configured Local Instance의 Local Profile만 읽고 write를 만들지 않는지,
-  결과에 일치한 유해표현을 불필요하게 남기지 않는지 확인한다.
+- Decision Outcome: 배포 대상의 기존 Local Profile을 실제 적용 정책과 같은 조건으로 읽기 전용 감사한다.
+  PROD-816에는 감사만을 위한 일회성 code나 package script를 저장소에 남기지 않고, 충돌 Profile도 자동
+  rename·disable·delete하지 않는다. 충돌이 있으면 영향 Profile, 사용자·URL·연합 identity 영향, 정확한 변경
+  방식, rollback과 재점검 조건을 소유하는 별도 cleanup 이슈를 만들고, 승인된 forward data migration 또는
+  통제된 운영 절차로만 변경한다. 앞으로 handle 재사용이 허용되더라도 두 정책이 우선한다.
+- Alternatives Considered: 저장소에 남는 일회성 script는 지속해서 유지할 제품 경계가 아니므로 선택하지 않았다.
+  정책 배포에서 기존 row를 자동 rename·비활성화하는 방식은 승인되지 않은 사용자 상태 변경이며, 기존 데이터를
+  무시하는 방식은 배포 위험을 알 수 없어 선택하지 않았다.
+- Consequences: 구현 완료 증거에는 배포 대상 감사 결과가 필요하다. 충돌이 발견되면 PROD-816 enforcement와
+  분리된 cleanup 승인·실행·rollback·재점검 증거가 필요하다.
+- Confirmation / Follow-up: 감사가 배포 대상 Local Profile만 읽고 write를 만들지 않는지, 결과에 일치한
+  유해표현을 불필요하게 남기지 않는지, 충돌 시 별도 cleanup owner가 지정되는지 확인한다.
 
 ## Remaining Decisions
 
