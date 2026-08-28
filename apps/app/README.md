@@ -31,8 +31,7 @@ Native projects are generated with `expo prebuild --clean`; they are not source-
 2. upload key를 관리자 장비에서 생성한다. 첫 AAB와 이후 CI AAB는 같은 upload key로 서명해야 하며, Google이 관리하는 app signing key와는 별개다.
 3. Play Console에서 첫 signed AAB 업로드와 internal testing track 생성을 완료하고 tester 목록과 opt-in 링크를 설정한다.
 4. [Terraform outputs](../terraform/README.md)의 `android_play_service_account` service account를 Play Console Users and permissions에 추가하고 `Release apps to testing tracks` 권한만 부여한다.
-5. `android-play-internal-distribution` GitHub Environment를 만들고 `main`만 허용한 뒤 required reviewer를 설정한다.
-6. 해당 Environment에 다음 값을 넣는다.
+5. 기존 승인형 `prod` GitHub Environment에 다음 값을 넣는다. 새 Environment는 만들지 않는다.
 
 | 이름                                 | 종류     | 값                                                              |
 | ------------------------------------ | -------- | --------------------------------------------------------------- |

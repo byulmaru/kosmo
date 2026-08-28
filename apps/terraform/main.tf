@@ -7,10 +7,9 @@ locals {
   github_repository_id = "1207798099"
   github_owner_id      = "29172280"
 
-  app_identifier           = "moe.kos"
-  distribution_group       = "native-testers"
-  android_play_environment = "android-play-internal-distribution"
-  android_play_workflow    = ".github/workflows/android-play-internal-distribution.yml"
+  app_identifier        = "moe.kos"
+  distribution_group    = "native-testers"
+  android_play_workflow = ".github/workflows/android-play-internal-distribution.yml"
   native_distribution_workflows = {
     "ios-device-onboarding"    = ".github/workflows/ios-device-onboarding.yml"
     "native-test-distribution" = ".github/workflows/ios-ad-hoc-distribution.yml"
@@ -200,7 +199,7 @@ resource "google_iam_workload_identity_pool_provider" "android_play" {
     "assertion.repository_owner_id == '${local.github_owner_id}'",
     "assertion.event_name == 'workflow_dispatch'",
     "assertion.ref == 'refs/heads/main'",
-    "assertion.environment == '${local.android_play_environment}'",
+    "assertion.environment == 'prod'",
     "assertion.workflow_ref == '${local.github_owner}/${local.github_repository}/${local.android_play_workflow}@refs/heads/main'",
   ])
 

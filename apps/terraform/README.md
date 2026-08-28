@@ -6,9 +6,9 @@
 
 - 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`), 그리고 과도기 App Distribution 리소스
 - Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
-- 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Android Play는 `main`의 정확한 workflow와 protected Environment만 허용한다.
+- 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Android Play는 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
-- GitHub에서 직접 관리하는 Actions environment와 변수 (`android-play-internal-distribution`, `native-test-distribution`, 승인형 `ios-device-onboarding`, `terraform-apply`, 승인형 `prod` release)
+- GitHub에서 직접 관리하는 Actions environment와 변수 (`native-test-distribution`, 승인형 `ios-device-onboarding`, `terraform-apply`, 승인형 `prod` release)
 - Firebase provider가 지원하지 않는 `native-testers` group의 멱등 REST bootstrap
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
 - Argo CD `kosmo` ApplicationSet이 생성하는 `kosmo-dev` Application과 별도 `kosmo-prod` Application의 선언
@@ -46,7 +46,7 @@ Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822
 
 ## Google Play 내부 테스트 bootstrap
 
-Android store 배포는 [Google Play Developer API](https://developers.google.com/android-publisher/getting_started)와 Google Play Console을 사용한다. Terraform은 API 활성화, 전용 service account, `main`의 정확한 workflow와 `android-play-internal-distribution` Environment만 신뢰하는 WIF provider, 그리고 해당 service account의 `roles/iam.workloadIdentityUser` binding만 관리한다. Play Console app·첫 AAB·app signing·upload key·tester·track·권한과 `supply` 선행 조건은 [앱의 Android Google Play 배포 절차](../app/README.md)에서 수동으로 관리한다. 정적 service account JSON key는 만들거나 저장하지 않는다.
+Android store 배포는 [Google Play Developer API](https://developers.google.com/android-publisher/getting_started)와 Google Play Console을 사용한다. Terraform은 API 활성화, 전용 service account, `main`의 정확한 workflow와 기존 `prod` Environment만 신뢰하는 WIF provider, 그리고 해당 service account의 `roles/iam.workloadIdentityUser` binding만 관리한다. Play Console app·첫 AAB·app signing·upload key·tester·track·권한과 `supply` 선행 조건은 [앱의 Android Google Play 배포 절차](../app/README.md)에서 수동으로 관리한다. 정적 service account JSON key는 만들거나 저장하지 않는다.
 
 Terraform 적용 후 다음 값을 확인한다.
 
@@ -92,6 +92,6 @@ bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이�
 
 ## Rotation과 revocation
 
-정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/android-play-internal-distribution.yml`과 `android-play-internal-distribution` Environment만 허용한다. Firebase provider는 기존 iOS 과도기 workflow만 허용하며 Android Play 경로에서 재사용하지 않는다.
+정적 Google credential은 없으므로 정기 key rotation은 필요하지 않다. repository, workflow, branch 또는 environment가 바뀌면 WIF provider의 숫자 ID 기반 trust condition을 먼저 수정하고 저장한 plan을 적용한다. Android Play provider는 `main`의 `.github/workflows/android-play-internal-distribution.yml`과 기존 `prod` Environment만 허용한다. Firebase provider는 기존 iOS 과도기 workflow만 허용하며 Android Play 경로에서 재사용하지 않는다.
 
 긴급 차단은 WIF provider에 `disabled = true`를 추가해 적용한다. 영구 폐기는 service account의 `roles/iam.workloadIdentityUser` binding을 제거한 plan을 먼저 적용한 뒤, 별도 검토로 보호된 provider와 service account의 deletion policy를 해제한다.

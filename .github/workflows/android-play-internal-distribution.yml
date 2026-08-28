@@ -17,7 +17,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    environment: android-play-internal-distribution
+    environment: prod
     env:
       ANDROID_RELEASE_CERTIFICATE_SHA256: ${{ vars.ANDROID_RELEASE_CERTIFICATE_SHA256 }}
       ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
@@ -99,7 +99,7 @@ jobs:
             GCP_SERVICE_ACCOUNT \
             GCP_WORKLOAD_IDENTITY_PROVIDER; do
             if [[ -z "${!name:-}" ]]; then
-              echo "::error::${name} must be set in android-play-internal-distribution."
+              echo "::error::${name} must be set in the prod Environment."
               exit 1
             fi
           done
