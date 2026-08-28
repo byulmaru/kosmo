@@ -7,7 +7,7 @@ import {
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 const meta = {
-  title: 'Settings/ByulmaruIdAccountSettingsEntry',
+  title: 'KOSMO/Components/Byulmaru ID Account Settings Entry',
   component: ByulmaruIdAccountSettingsEntry,
   decorators: [
     (Story) => (

@@ -123,7 +123,7 @@ function ActionMenuInteractionFixtures() {
 
 const meta = {
   component: ActionMenuInteractionFixtures,
-  title: 'KOSMO/UI/Action Menu',
+  title: 'KOSMO/Components/Action Menu',
 } satisfies Meta<typeof ActionMenuInteractionFixtures>;
 
 export default meta;

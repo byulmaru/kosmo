@@ -36,7 +36,7 @@ function TabsCatalog({ variant = 'underline' }: { variant?: TabVariant }) {
 
 const meta = {
   component: TabsCatalog,
-  title: 'KOSMO/UI/Tabs',
+  title: 'KOSMO/Components/Tabs',
 } satisfies Meta<typeof TabsCatalog>;
 
 export default meta;

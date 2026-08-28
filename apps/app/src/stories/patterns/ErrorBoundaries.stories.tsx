@@ -76,7 +76,7 @@ function SessionBoundaryHarness() {
 }
 
 const meta = {
-  title: 'Foundation/Error Boundaries',
+  title: 'KOSMO/Patterns/Error Boundaries',
 } satisfies Meta;
 
 export default meta;

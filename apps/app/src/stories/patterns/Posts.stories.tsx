@@ -48,21 +48,21 @@ import {
   getImagePickerLaunchCount,
   resetImagePickerMock,
   setNextImagePickerResult,
-} from '../../.storybook/mocks/expo-image-picker';
+} from '../../../.storybook/mocks/expo-image-picker';
 import {
   getCopiedStrings,
   resetClipboardMock,
   setNextClipboardResult,
-} from '../../.storybook/mocks/postClipboard';
-import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+} from '../../../.storybook/mocks/postClipboard';
+import { longBody, post, profile, profileWithPosts, shellQuery, timeline } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
-import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
-import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
-import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
-import type { StoryPost } from './fixtures';
+import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from '../__generated__/PostDeletionListEdgeSafetyQuery.graphql';
+import type { PostDetailThreadIdentityStoryQuery } from '../__generated__/PostDetailThreadIdentityStoryQuery.graphql';
+import type { PostsStoriesQuery as PostsStoriesQueryType } from '../__generated__/PostsStoriesQuery.graphql';
+import type { StoryPost } from '../fixtures';
 
 function getColorContrastRatio(foreground: string, background: string) {
   const relativeLuminance = (color: string) => {
@@ -2763,7 +2763,7 @@ const meta = {
       segments: ['(tabs)', '(post)', '[profileHandle]', '[postId]'],
     },
   },
-  title: 'KOSMO/Content/Posts',
+  title: 'KOSMO/Patterns/Post/Catalog',
 } satisfies Meta<typeof PostCatalog>;
 
 export default meta;

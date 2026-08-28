@@ -13,10 +13,10 @@ import {
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
 import { PostActionBar } from '@/components/post/PostActionBar';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
-import RepostActionStoryQueryNode from './__generated__/RepostActionStoryQuery.graphql';
+import RepostActionStoryQueryNode from '../__generated__/RepostActionStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
-import type { RepostActionStoryQuery } from './__generated__/RepostActionStoryQuery.graphql';
+import type { RepostActionStoryQuery } from '../__generated__/RepostActionStoryQuery.graphql';
 
 const sourcePostId = 'post-source';
 const activeRepostId = 'post-repost-active';
@@ -226,7 +226,7 @@ const selectedSource = {
 
 const meta = {
   component: RepostActionStory,
-  title: 'KOSMO/Post/Repost Action',
+  title: 'KOSMO/Patterns/Post/Repost Action',
 } satisfies Meta<typeof RepostActionStory>;
 
 export default meta;

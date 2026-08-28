@@ -5,7 +5,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   component: PrivacyScreen,
   parameters: { router: { pathname: '/privacy' } },
-  title: 'KOSMO/Legal/Privacy',
+  title: 'KOSMO/Screens/Privacy',
 } satisfies Meta<typeof PrivacyScreen>;
 
 export default meta;

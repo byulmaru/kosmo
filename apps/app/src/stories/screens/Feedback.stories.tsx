@@ -39,7 +39,7 @@ const meta = {
     layout: 'fullscreen',
     router: { pathname: '/feedback' },
   },
-  title: 'KOSMO/Feedback/Page',
+  title: 'KOSMO/Screens/Feedback',
 } satisfies Meta<typeof FeedbackPage>;
 
 export default meta;

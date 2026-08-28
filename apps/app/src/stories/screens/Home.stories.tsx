@@ -15,7 +15,7 @@ const selectedProfileData = {
 const meta = {
   component: HomeScreen,
   parameters: { layout: 'fullscreen', router: { pathname: '/home' } },
-  title: 'KOSMO/Home/Page',
+  title: 'KOSMO/Screens/Home',
 } satisfies Meta<typeof HomeScreen>;
 
 export default meta;

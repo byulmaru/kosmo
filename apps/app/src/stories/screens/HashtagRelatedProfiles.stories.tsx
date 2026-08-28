@@ -4,10 +4,10 @@ import {
   HashtagRelatedProfileList,
   HashtagRelatedProfileListState,
 } from '@/components/profile/HashtagRelatedProfileList';
-import { profile } from './fixtures';
-import { Catalog, Section } from './StoryFrame';
+import { profile } from '../fixtures';
+import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { HashtagRelatedProfilesStoriesQuery as HashtagRelatedProfilesStoriesQueryType } from './__generated__/HashtagRelatedProfilesStoriesQuery.graphql';
+import type { HashtagRelatedProfilesStoriesQuery as HashtagRelatedProfilesStoriesQueryType } from '../__generated__/HashtagRelatedProfilesStoriesQuery.graphql';
 
 const relatedA = profile({
   displayName: '별빛 여행자',
@@ -182,7 +182,7 @@ const meta = {
     relay: { data: { nodes: storyHashtags } },
     router: { pathname: '/hashtags/hashtag-related-content/profiles' },
   },
-  title: 'KOSMO/Profiles/Hashtag Related Profiles',
+  title: 'KOSMO/Screens/Hashtag Related Profiles',
 } satisfies Meta<typeof HashtagRelatedProfilesCatalog>;
 
 export default meta;
