@@ -10,19 +10,27 @@ function ActionMenuFixture({
   compactTrigger = false,
   disabled = false,
   onSelect,
+  quoteLabel = '인용 재게시',
+  repostLabel = '재게시',
+  showSelectionCount = false,
   singleItem = false,
+  triggerLabel = '재게시',
   webHorizontalPlacement,
 }: {
   compactTrigger?: boolean;
   disabled?: boolean;
   onSelect?: (key: 'quote' | 'repost') => void;
+  quoteLabel?: string;
+  repostLabel?: string;
+  showSelectionCount?: boolean;
   singleItem?: boolean;
+  triggerLabel?: string;
   webHorizontalPlacement?: 'end';
 }) {
   const [selectionCount, setSelectionCount] = useState(0);
   const repostItem = {
     key: 'repost',
-    label: '재게시',
+    label: repostLabel,
     onSelect: () => {
       setSelectionCount((count) => count + 1);
       onSelect?.('repost');
@@ -32,7 +40,7 @@ function ActionMenuFixture({
   return (
     <View style={styles.fixture}>
       <ActionMenu
-        accessibilityLabel="재게시 메뉴"
+        accessibilityLabel={`${triggerLabel} 메뉴`}
         disabled={disabled}
         items={
           singleItem
@@ -41,7 +49,7 @@ function ActionMenuFixture({
                 repostItem,
                 {
                   key: 'quote',
-                  label: '인용 재게시',
+                  label: quoteLabel,
                   onSelect: () => {
                     setSelectionCount((count) => count + 1);
                     onSelect?.('quote');
@@ -49,22 +57,23 @@ function ActionMenuFixture({
                 },
               ]
         }
-        renderTrigger={({ expanded, onPress, ref }) => (
+        renderTrigger={({ disabled: triggerDisabled, expanded, onPress, ref }) => (
           <Pressable
-            accessibilityLabel="재게시"
+            accessibilityLabel={triggerLabel}
             accessibilityRole="button"
+            disabled={triggerDisabled}
             aria-expanded={expanded}
             aria-haspopup="menu"
             onPress={onPress}
             ref={ref}
             style={[styles.trigger, compactTrigger ? styles.compactTrigger : undefined]}
           >
-            <Text>재게시</Text>
+            <Text>{triggerLabel}</Text>
           </Pressable>
         )}
         webHorizontalPlacement={webHorizontalPlacement}
       />
-      <Text testID="selection-count">{selectionCount}</Text>
+      {showSelectionCount ? <Text testID="selection-count">{selectionCount}</Text> : null}
     </View>
   );
 }
@@ -73,7 +82,7 @@ function ActionMenuInteractionFixtures() {
   return (
     <View style={styles.fixture}>
       <View accessibilityLabel="기본 메뉴 fixture">
-        <ActionMenuFixture />
+        <ActionMenuFixture showSelectionCount />
       </View>
       <View accessibilityLabel="외부 상호작용 fixture">
         <ActionMenuFixture />
@@ -134,9 +143,13 @@ const meta = {
     compactTrigger: false,
     disabled: false,
     onSelect: fn(),
+    quoteLabel: '인용 재게시',
+    repostLabel: '재게시',
     singleItem: false,
+    triggerLabel: '재게시',
   },
   component: ActionMenuFixture,
+  excludeStories: ['InteractionContract', 'DarkInteractionContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Action Menu',
 } satisfies Meta<typeof ActionMenuFixture>;
@@ -147,7 +160,19 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 export const Playground: Story = {
-  parameters: { controls: { disable: false } },
+  parameters: {
+    controls: {
+      disable: false,
+      include: [
+        'compactTrigger',
+        'disabled',
+        'quoteLabel',
+        'repostLabel',
+        'singleItem',
+        'triggerLabel',
+      ],
+    },
+  },
 };
 
 export const InteractionContract: Story = {
@@ -324,8 +349,10 @@ export const InteractionContract: Story = {
       serializeColor(expectedTheme.borderSubtle),
     );
     fireEvent.keyDown(copyItem, { key: 'Enter' });
-    expect(getComputedStyle(copyItem).backgroundColor).toBe(
-      serializeColor(expectedTheme.statePressed),
+    await waitFor(() =>
+      expect(getComputedStyle(copyItem).backgroundColor).toBe(
+        serializeColor(expectedTheme.statePressed),
+      ),
     );
     fireEvent.keyUp(copyItem, { key: 'Enter' });
     await userEvent.keyboard('{Enter}');
@@ -344,6 +371,9 @@ export const InteractionContract: Story = {
 
     const disabledFixture = within(canvas.getByLabelText('비활성 메뉴 fixture'));
     const disabledTrigger = disabledFixture.getByRole('button', { name: '재게시' });
+    expect(disabledTrigger).toHaveAttribute('aria-disabled', 'true');
+    expect(disabledTrigger).toHaveAttribute('tabindex', '-1');
+    expect(getComputedStyle(disabledTrigger).cursor).not.toBe('pointer');
     disabledTrigger.click();
     expect(screen.queryByRole('menu', { name: '재게시 메뉴' })).not.toBeInTheDocument();
   },

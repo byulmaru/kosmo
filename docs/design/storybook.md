@@ -49,6 +49,8 @@ apps/app/src/stories/
 
 기존 `apps/app/src/stories/` 직하의 story 이동·분할과 title 정렬은 `PROD-865`에서 수행한다. DSN별 이관 이슈는 `PROD-865`가 확정한 구조를 재사용하며 별도 catalog root나 UI package를 만들지 않는다.
 
+서로 다른 Production component를 하나의 `Catalog` title 아래 모으지 않는다. 각 component는 독립 title과 `Default`·`Playground`·대표 상태 story를 가지며, foundation token은 `KOSMO/Foundations/Tokens` 아래에서 종류별 story로 나눈다. Theme은 별도 Light·Dark story를 복제하지 않고 toolbar로 전환한다.
+
 ## Production 컴포넌트와 fixture 경계
 
 - Story는 `apps/app/src`의 실제 Production 컴포넌트나 screen을 직접 렌더링한다.
@@ -70,6 +72,8 @@ apps/app/src/stories/
 
 `Default`와 `Base`를 형식적으로 모두 만들거나 같은 상태 조합을 Playground와 개별 story에 중복하지 않는다.
 
+자동 검증을 위한 fixture·계측값·interaction lifecycle이 중심인 story는 component의 `Tests` 하위 title로 분리한다. `play`가 있더라도 사용자가 직접 비교할 대표 상태나 variant story는 일반 component title에 유지한다.
+
 ### Page와 Screen
 
 Page·Screen에는 Controls를 억지로 추가하지 않는다. 활성·비활성, loading·error·empty·data, 관계·권한 상태처럼 사용자가 구분할 수 있는 대표 시나리오를 story로 제공한다. route·data 정책을 바꾸지 않고 Production screen이 이미 지원하는 입력과 공용 mock으로만 구성한다.
@@ -79,6 +83,8 @@ Page·Screen에는 Controls를 억지로 추가하지 않는다. 활성·비활�
 ## Controls, toolbar와 Actions
 
 - Controls에는 Production 컴포넌트가 공개 prop 또는 controlled state로 실제 소유하는 값만 노출한다.
+- 폭처럼 사용처 layout이 소유하는 값은 Production prop으로 추가하지 않고, 필요한 Playground에서 `containerWidth` 같은 fixture arg로 분리한다.
+- 사용자가 보는 label, title, description, message, placeholder와 action 문구는 Playground에서 수정할 수 있게 한다. `style` 객체와 내부 구현 값은 Controls에서 제외한다.
 - `theme`, viewport와 reduced motion처럼 Storybook 전역에서 관리하는 값은 toolbar와 viewport parameters를 사용한다. 같은 값을 component args로 중복하지 않는다.
 - Relay fragment ref, route 객체, 내부 token과 구현 세부사항을 사람이 조절하는 Control로 노출하지 않는다.
 - callback prop은 `storybook/test`의 `fn()` 등 Storybook spy를 args에 연결해 Actions에서 호출과 입력을 관찰할 수 있게 한다.

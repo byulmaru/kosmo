@@ -145,7 +145,7 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
       }
       inFlight.current = false;
       setRequesting(false);
-      showToast(failureMessage);
+      showToast(failureMessage, { tone: 'danger' });
       void error;
     },
     [environment, showToast],

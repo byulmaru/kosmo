@@ -32,6 +32,7 @@ export type ActionMenuItem = Readonly<{
 }>;
 
 export type ActionMenuTriggerRenderProps = Readonly<{
+  disabled: boolean;
   expanded: boolean;
   focusTrigger: () => void;
   onPress: () => void;
@@ -292,6 +293,7 @@ export function ActionMenu({
     return (
       <View ref={controlRef} style={styles.control}>
         {renderTrigger({
+          disabled,
           expanded: open,
           focusTrigger,
           onPress: toggle,
@@ -380,6 +382,7 @@ export function ActionMenu({
   return (
     <>
       {renderTrigger({
+        disabled,
         expanded: open,
         focusTrigger,
         onPress: toggle,

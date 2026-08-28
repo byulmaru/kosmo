@@ -141,6 +141,7 @@ export function PostList({
     if (loadError && !loadErrorToastCleanup.current) {
       loadErrorToastCleanup.current = showToast('게시글을 더 불러오지 못했어요.', {
         action: { label: '다시 시도', onPress: loadNextPage },
+        tone: 'danger',
       });
     } else if (!loadError && loadErrorToastCleanup.current) {
       loadErrorToastCleanup.current();
