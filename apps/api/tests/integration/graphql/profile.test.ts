@@ -2484,6 +2484,16 @@ describe('GraphQL remote profile boundary', () => {
       .returning()
       .then(firstOrThrow);
     const cancelledRequestId = globalId('ProfileFollowRequest', cancelledRequest.id);
+    const unauthorizedCancellation = await requestGraphQL(
+      `mutation UnauthorizedCancelFollowRequest($id: ID!) {
+        cancelProfileFollowRequest(input: { id: $id }) { profileFollowRequestId }
+      }`,
+      { id: cancelledRequestId },
+      followeeAuth.token,
+    );
+    assertGraphQLErrorCode(unauthorizedCancellation, 'NOT_FOUND');
+    assert.equal(await countRows(ProfileFollowRequests), 1);
+
     await db
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
