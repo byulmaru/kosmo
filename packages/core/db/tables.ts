@@ -36,6 +36,7 @@ export const Accounts = pgTable('account', {
   id: id(),
   oidcSubject: text('oidc_subject').unique().notNull(),
   displayName: text('display_name').notNull(),
+  featureFlags: text('feature_flags').array().notNull().default([]),
   state: Enum.accountState('state').notNull(),
   createdAt: createdAt(),
 });
