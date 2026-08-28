@@ -5,7 +5,7 @@
 ### Gate Snapshot
 
 - Domain Gate: Pass — `docs/domain/objects/profile.md`에서 Local Profile의 relative handle canonical route를 확인했다. 현재 sitemap의 공개 URL 선정은 durable Profile eligibility 정책이 아니라 `PROD-731`의 단계별 rollout 범위이므로 별도 canonical sitemap 문서는 적용되지 않는다.
-- Issue Gate: Pass — 사용자가 현재 URL을 `/`, `/privacy`, `/@kosmo`로 확정하고 동적 조회 제외와 후속 동적 확장 기록을 승인했다. `PROD-731` 본문·관계는 2026-08-27에 이 결정으로 갱신했다.
+- Issue Gate: Pass — 사용자가 현재 URL을 `/`, `/privacy`, `/@kosmo`로 확정하고 동적 조회 제외, 후속 동적 확장 기록과 sitemap 전용 테스트 코드 제외를 승인했다. `PROD-731` 본문·관계는 이 결정으로 갱신했다.
 - OpenSpec Gate: Pass for update — 사용자가 Linear → OpenSpec → 구현 정렬을 승인했다. commit·push와 PR 갱신 전에는 별도 사용자 diff 리뷰를 받는다.
 
 ## Decision Records
@@ -32,7 +32,19 @@
 - Decision Outcome: `apps/app/public/sitemap.xml`을 Expo Web export에 포함하고 기존 Web static asset route로 제공한다. sitemap 전용 Hono handler, configured Local Instance 해석, Profile·Post query와 런타임 XML 직렬화는 사용하지 않는다.
 - Alternatives Considered: constant Hono handler와 build-time generator도 세 URL을 출력할 수 있지만 현재 고정 입력에 runtime·script 경계를 추가한다. DB 기반 동적 route는 명시적 제외 범위다.
 - Consequences: sitemap 변경에는 새 Web asset 배포가 필요하지만 응답은 DB 가용성과 콘텐츠 상태에 의존하지 않는다.
-- Confirmation / Follow-up: crawler와 browser navigation 요청이 모두 export asset의 XML을 받고 SPA HTML을 받지 않는지 자동 검증한다.
+- Confirmation / Follow-up: source와 Expo export 산출물이 같은 XML인지 확인하고, 배포 후 crawler와 browser navigation 요청이 XML을 받고 SPA HTML을 받지 않는지 검증한다.
+
+### sitemap 전용 테스트 코드는 추가하지 않는다
+
+- Decision Date: 2026-08-28
+- Decision Class: Implementation Choice
+- Authority / Provenance: `PROD-731`의 sitemap 전용 unit/E2E 테스트 제외 범위와 사용자 PR 리뷰 결정.
+- Status: Active
+- Context / Problem: 현재 변경은 기존 Expo public asset 제공 경계를 그대로 사용하며 runtime 코드를 추가하지 않는다. 별도 회귀 테스트는 정적 XML 하나만 남기려는 PR 범위를 넓힌다.
+- Decision Outcome: `apps/web/src/server/app.test.ts`와 E2E suite에 sitemap 전용 테스트를 추가하지 않는다. source XML 검사, Expo Web export 산출물 비교와 배포 후 production fetch로 검증한다.
+- Alternatives Considered: Web static route 단위 테스트나 sitemap E2E를 추가하면 배포 전 route 경계를 자동 검증할 수 있지만 이번 PR의 명시적 제외 범위를 위반한다.
+- Consequences: route-level 회귀는 저장소 테스트에서 직접 고정하지 않으며, 기존 static asset 동작과 export·production 검증을 완료 증거로 사용한다.
+- Confirmation / Follow-up: 최종 PR 파일 목록에 sitemap 관련 test file 변경이 없고 export 산출물이 source와 같은지 확인한다.
 
 ### 현재 URL에는 freshness metadata를 제공하지 않는다
 
@@ -44,7 +56,7 @@
 - Decision Outcome: 모든 entry에 `loc`만 제공하고 `lastmod`, `changefreq`, `priority`를 생략한다.
 - Alternatives Considered: 요청 시각, 배포 시각 또는 임의 값을 사용하면 실제 freshness를 나타내지 않는다.
 - Consequences: crawler에 수정 시각 힌트를 제공하지 않지만 부정확한 신호도 만들지 않는다.
-- Confirmation / Follow-up: 정적 XML과 자동 검증에서 금지 metadata가 없는지 확인한다.
+- Confirmation / Follow-up: source XML과 Expo export 산출물에서 금지 metadata가 없는지 확인한다.
 
 ### 동적 sitemap은 별도 후속 계약으로 확장한다
 

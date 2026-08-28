@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
@@ -64,19 +64,6 @@ let fetch = vi.fn<typeof globalThis.fetch>();
 
 const ASSET_BODY = 'console.log("asset")';
 const HASHED_ASSET_NAME = 'entry-0123456789abcdef0123456789abcdef.js';
-const SITEMAP_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://kos.moe/</loc>
-  </url>
-  <url>
-    <loc>https://kos.moe/privacy</loc>
-  </url>
-  <url>
-    <loc>https://kos.moe/@kosmo</loc>
-  </url>
-</urlset>
-`;
 
 beforeAll(async () => {
   staticRoot = await mkdtemp(join(tmpdir(), 'kosmo-web-server-'));
@@ -84,11 +71,6 @@ beforeAll(async () => {
   await writeFile(join(staticRoot, 'asset.js'), ASSET_BODY);
   await writeFile(join(staticRoot, 'asset.js.gz'), gzipSync(ASSET_BODY));
   await writeFile(join(staticRoot, HASHED_ASSET_NAME), ASSET_BODY);
-  const sitemapXml = await readFile(
-    new URL('../../../app/public/sitemap.xml', import.meta.url),
-    'utf8',
-  ).catch(() => '');
-  await writeFile(join(staticRoot, 'sitemap.xml'), sitemapXml);
   vi.stubEnv('EXPO_WEB_ROOT', staticRoot);
   ({ default: app } = await import('./app'));
   expect(setInboundObservabilityReporter).toHaveBeenCalledWith({
@@ -467,23 +449,6 @@ describe('GraphQL proxy', () => {
 });
 
 describe('runtime routing', () => {
-  test.each([
-    { headers: undefined, requester: 'crawler' },
-    {
-      headers: { accept: 'text/html', 'sec-fetch-mode': 'navigate' },
-      requester: 'browser navigation',
-    },
-  ])(
-    'serves the exact static sitemap to $requester before the SPA fallback',
-    async ({ headers }) => {
-      const response = await app.request('/sitemap.xml', { headers });
-
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
-      expect(await response.text()).toBe(SITEMAP_XML);
-    },
-  );
-
   test('serves health, assets, and SPA deep links', async () => {
     const health = await app.request('/health', {
       headers: { 'sec-fetch-mode': 'navigate' },

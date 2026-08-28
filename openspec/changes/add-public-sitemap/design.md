@@ -16,7 +16,7 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 - sitemap에 승인된 세 canonical URL만 각각 한 번 포함한다.
 - browser navigation에서도 정적 sitemap asset이 SPA fallback보다 먼저 제공되게 한다.
 - sitemap 제공을 DB와 런타임 query에서 분리한다.
-- 자동 검증과 프로덕션 확인, Google·Naver 일회성 제출 결과를 남긴다.
+- Expo Web export·XML 검증과 프로덕션 확인, Google·Naver 일회성 제출 결과를 남긴다.
 
 **Non-Goals**
 
@@ -25,6 +25,7 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 - `lastmod`, `changefreq`, `priority` 제공
 - cache, ETag 또는 invalidation 정책 추가
 - sitemap index와 child sitemap
+- sitemap 전용 unit/E2E 테스트 코드
 - SSR 또는 페이지 metadata 전반의 개편
 - `robots.txt` crawler 정책과 `Sitemap` 지시어
 - 반복 제출 자동화와 개별 URL 색인 완료 보장
@@ -44,9 +45,9 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 
 1. `apps/app/public/sitemap.xml`에 XML declaration, Sitemap protocol namespace와 세 `<url><loc>…</loc></url>` entry만 둔다.
 2. 기존 PR에서 추가한 동적 Hono sitemap route, DB loader, XML serializer와 관련 단위·격리 DB E2E 테스트를 제거한다.
-3. Web BFF의 실제 static asset 경계에서 crawler와 browser navigation 요청 모두 `application/xml`과 정확한 세 URL을 받고 Expo `index.html`을 받지 않는지 검증한다.
-4. Expo Web export에 `sitemap.xml`이 포함되는지 build 결과로 확인한다.
-5. 배포 후 무인증 production 응답의 status, content type, XML 구조와 정확한 URL 집합을 확인한다.
+3. 새 sitemap 전용 unit/E2E 테스트를 추가하지 않고 source XML의 형식과 정확한 URL 집합을 검사한다.
+4. Expo Web export에 source와 같은 `sitemap.xml`이 포함되는지 build 결과로 확인한다.
+5. 배포 후 crawler와 browser navigation 형식의 무인증 production 응답에서 status, content type, XML 구조, 정확한 URL 집합과 SPA fallback 비적용을 확인한다.
 6. canonical `/sitemap.xml`을 Google Search Console과 Naver Search Advisor에 한 번 제출하고 처리 결과를 `PROD-731`에 기록한다.
 7. 동적 sitemap이 필요해지면 현재 change에 DB 로직을 다시 추가하지 않고 별도 Linear 이슈와 OpenSpec change에서 범위와 운영 계약부터 결정한다.
 
@@ -70,14 +71,14 @@ Google Search Console과 Naver Search Advisor 제출은 배포 후 한 번 수�
 
 - [새 공개 URL이 자동 반영되지 않음] → 현재 단계에서는 의도한 제한이다. 동적 확장은 별도 Linear·OpenSpec 승인 뒤 구현한다.
 - [공식 안내 계정 handle 또는 공개 경로가 바뀌면 정적 파일이 낡음] → 현재 canonical route 변경 시 `PROD-731` 계약과 정적 asset을 명시적으로 갱신한다.
-- [정적 파일도 배포 artifact에서 누락될 수 있음] → Web static route 테스트와 Expo export 결과를 함께 검증한다.
+- [정적 파일도 배포 artifact에서 누락될 수 있음] → Expo export 결과와 배포 후 프로덕션 응답을 검증한다.
 - [검색엔진 계정 권한으로 일회성 검증이 지연될 수 있음] → 권한 문제는 코드 결함과 구분해 `PROD-731` blocker로 기록한다.
 
 ## Migration Plan
 
 1. Linear와 OpenSpec을 정적 3-URL 계약으로 정렬한다.
-2. 기존 동적 sitemap 구현과 테스트를 제거하고 정적 asset과 Web asset-serving 회귀 테스트로 교체한다.
-3. 변경 범위의 test, typecheck, lint, Expo Web export와 OpenSpec strict validation을 실행한다.
+2. 기존 동적 sitemap 구현과 테스트를 제거하고 정적 asset만 남긴다. 새 sitemap 전용 테스트 코드는 추가하지 않는다.
+3. 기존 workspace test, typecheck, lint, Expo Web export, XML 검사와 OpenSpec strict validation을 실행한다.
 4. 사용자 diff 리뷰를 받은 뒤 commit·push하고 PR 본문과 상태를 갱신한다.
 5. 배포 후 production `/sitemap.xml`을 인증 없이 검증하고 Google·Naver에 한 번 제출한다.
 6. rollback은 sitemap asset이 없는 직전 Web image로 되돌린다. DB·GraphQL·migration 변경은 없으므로 데이터 복구는 필요 없다.
