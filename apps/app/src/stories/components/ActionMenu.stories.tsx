@@ -6,57 +6,50 @@ import { ActionMenu } from '@/components/ui/ActionMenu';
 import { semanticColors, spacing } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+const defaultItemLabels = ['항목 1', '항목 2'];
+const repostFixtureProps = {
+  itemLabels: ['재게시', '인용 재게시'],
+  triggerLabel: '재게시',
+};
+
 function ActionMenuFixture({
   compactTrigger = false,
   disabled = false,
+  itemCount = 2,
+  itemLabels = defaultItemLabels,
   onSelect,
-  quoteLabel = '인용 재게시',
-  repostLabel = '재게시',
   showSelectionCount = false,
-  singleItem = false,
-  triggerLabel = '재게시',
+  triggerLabel = '더 보기',
   webHorizontalPlacement,
 }: {
   compactTrigger?: boolean;
   disabled?: boolean;
-  onSelect?: (key: 'quote' | 'repost') => void;
-  quoteLabel?: string;
-  repostLabel?: string;
+  itemCount?: number;
+  itemLabels?: string[];
+  onSelect?: (key: string) => void;
   showSelectionCount?: boolean;
-  singleItem?: boolean;
   triggerLabel?: string;
   webHorizontalPlacement?: 'end';
 }) {
   const [selectionCount, setSelectionCount] = useState(0);
-  const repostItem = {
-    key: 'repost',
-    label: repostLabel,
-    onSelect: () => {
-      setSelectionCount((count) => count + 1);
-      onSelect?.('repost');
-    },
-  };
+  const items = Array.from({ length: Math.max(1, Math.min(8, itemCount)) }, (_, index) => {
+    const key = `item-${index + 1}`;
+    return {
+      key,
+      label: itemLabels[index]?.trim() || `항목 ${index + 1}`,
+      onSelect: () => {
+        setSelectionCount((count) => count + 1);
+        onSelect?.(key);
+      },
+    };
+  });
 
   return (
     <View style={styles.fixture}>
       <ActionMenu
         accessibilityLabel={`${triggerLabel} 메뉴`}
         disabled={disabled}
-        items={
-          singleItem
-            ? [repostItem]
-            : [
-                repostItem,
-                {
-                  key: 'quote',
-                  label: quoteLabel,
-                  onSelect: () => {
-                    setSelectionCount((count) => count + 1);
-                    onSelect?.('quote');
-                  },
-                },
-              ]
-        }
+        items={items}
         renderTrigger={({ disabled: triggerDisabled, expanded, onPress, ref }) => (
           <Pressable
             accessibilityLabel={triggerLabel}
@@ -82,22 +75,34 @@ function ActionMenuInteractionFixtures() {
   return (
     <View style={styles.fixture}>
       <View accessibilityLabel="기본 메뉴 fixture">
-        <ActionMenuFixture showSelectionCount />
+        <ActionMenuFixture {...repostFixtureProps} showSelectionCount />
       </View>
       <View accessibilityLabel="외부 상호작용 fixture">
-        <ActionMenuFixture />
+        <ActionMenuFixture {...repostFixtureProps} />
         <Pressable accessibilityLabel="바깥 버튼" accessibilityRole="button" style={styles.trigger}>
           <Text>바깥 버튼</Text>
         </Pressable>
       </View>
       <View accessibilityLabel="비활성 메뉴 fixture">
-        <ActionMenuFixture disabled />
+        <ActionMenuFixture {...repostFixtureProps} disabled />
+      </View>
+      <View accessibilityLabel="가변 항목 fixture">
+        <ActionMenuFixture
+          itemCount={3}
+          itemLabels={['첫 번째 작업', '두 번째 작업', '세 번째 작업']}
+          triggerLabel="작업"
+        />
       </View>
       <View accessibilityLabel="viewport collision fixture">
-        <ActionMenuFixture compactTrigger singleItem />
+        <ActionMenuFixture {...repostFixtureProps} compactTrigger itemCount={1} />
       </View>
       <View accessibilityLabel="end-aligned menu fixture">
-        <ActionMenuFixture compactTrigger singleItem webHorizontalPlacement="end" />
+        <ActionMenuFixture
+          {...repostFixtureProps}
+          compactTrigger
+          itemCount={1}
+          webHorizontalPlacement="end"
+        />
       </View>
       <View accessibilityLabel="공용 메뉴 스타일 fixture">
         <ActionMenu
@@ -142,11 +147,14 @@ const meta = {
   args: {
     compactTrigger: false,
     disabled: false,
+    itemCount: 2,
+    itemLabels: defaultItemLabels,
     onSelect: fn(),
-    quoteLabel: '인용 재게시',
-    repostLabel: '재게시',
-    singleItem: false,
-    triggerLabel: '재게시',
+    triggerLabel: '더 보기',
+  },
+  argTypes: {
+    itemCount: { control: { max: 8, min: 1, step: 1, type: 'range' } },
+    itemLabels: { control: 'object' },
   },
   component: ActionMenuFixture,
   excludeStories: ['InteractionContract', 'DarkInteractionContract'],
@@ -163,14 +171,7 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: [
-        'compactTrigger',
-        'disabled',
-        'quoteLabel',
-        'repostLabel',
-        'singleItem',
-        'triggerLabel',
-      ],
+      include: ['compactTrigger', 'disabled', 'itemCount', 'itemLabels', 'triggerLabel'],
     },
   },
 };
@@ -204,6 +205,16 @@ export const InteractionContract: Story = {
     );
     expect(defaultFixture.getByTestId('selection-count')).toHaveTextContent('1');
     expect(trigger).toHaveFocus();
+
+    const configurableFixture = within(canvas.getByLabelText('가변 항목 fixture'));
+    await userEvent.click(configurableFixture.getByRole('button', { name: '작업' }));
+    const configurableMenu = await screen.findByRole('menu', { name: '작업 메뉴' });
+    expect(
+      within(configurableMenu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['첫 번째 작업', '두 번째 작업', '세 번째 작업']);
+    await userEvent.keyboard('{Escape}');
 
     const outsideFixture = within(canvas.getByLabelText('외부 상호작용 fixture'));
     const outsideTrigger = outsideFixture.getByRole('button', { name: '재게시' });
