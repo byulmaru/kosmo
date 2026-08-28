@@ -40,16 +40,23 @@ function TabsCatalog({
 
 const meta = {
   args: { onValueChange: fn() },
+  argTypes: {
+    variant: { control: 'select', options: ['underline', 'pill'] },
+  },
   component: TabsCatalog,
-  excludeStories: ['InteractionContract'],
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Tabs',
 } satisfies Meta<typeof TabsCatalog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const InteractionContract: Story = {
+export const Default: Story = {};
+
+export const Playground: Story = {
+  parameters: { controls: { disable: false, include: ['variant'] } },
   play: async ({ args, canvasElement, step }) => {
+    args.onValueChange?.mockClear();
     const canvas = within(canvasElement);
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
@@ -58,27 +65,33 @@ export const InteractionContract: Story = {
     const popularLabel = within(popular).getByText('인기');
     const indicator = popular.lastElementChild;
 
-    await step('Underline 기본 상태와 접근성 확인', async () => {
-      expect(group).toHaveStyle({
-        borderBottomColor: 'rgb(236, 236, 240)',
-        borderBottomWidth: '1px',
-      });
-      expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    await step('기본 상태와 접근성 확인', async () => {
       expect(popular).toHaveAttribute('aria-selected', 'true');
       expect(popular).toHaveAttribute('tabindex', '0');
-      expect(popularLabel).toHaveStyle({
-        fontFamily: 'SUIT',
-        fontSize: '14px',
-        fontWeight: '600',
-        lineHeight: '20px',
-      });
-      expect(indicator).not.toBeNull();
-      expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
-      expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
       expect(latest).toHaveAttribute('aria-disabled', 'true');
       expect(latest).toHaveAttribute('tabindex', '-1');
       expect(latest).toHaveStyle({ opacity: '0.45' });
       expect(media).toHaveAttribute('tabindex', '-1');
+      if (args.variant === 'pill') {
+        expect(popular).toHaveStyle({ borderRadius: '8px', height: '32px' });
+        expect(getComputedStyle(popular).backgroundColor).toBe('rgb(255, 255, 255)');
+        expect(getComputedStyle(popular).borderColor).toBe('rgb(252, 231, 154)');
+      } else {
+        expect(group).toHaveStyle({
+          borderBottomColor: 'rgb(236, 236, 240)',
+          borderBottomWidth: '1px',
+        });
+        expect(getComputedStyle(popular).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+        expect(popularLabel).toHaveStyle({
+          fontFamily: 'SUIT',
+          fontSize: '14px',
+          fontWeight: '600',
+          lineHeight: '20px',
+        });
+        expect(indicator).not.toBeNull();
+        expect(getComputedStyle(indicator as Element).backgroundColor).toBe('rgb(255, 229, 151)');
+        expect(indicator).toHaveStyle({ height: '4px', width: '64px' });
+      }
 
       await userEvent.tab();
       expect(popular).toHaveFocus();

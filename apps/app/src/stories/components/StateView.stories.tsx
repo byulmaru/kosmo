@@ -30,6 +30,26 @@ export const Playground: Story = {
       include: ['actionLabel', 'alert', 'description', 'loading', 'title'],
     },
   },
+  play: async ({ args, canvasElement, step }) => {
+    args.onAction?.mockClear();
+    const canvas = within(canvasElement);
+
+    await step('상태와 action 노출 확인', async () => {
+      if (args.alert) {
+        expect(canvas.getByRole('alert')).toBeVisible();
+      }
+      if (!args.loading && args.actionLabel) {
+        expect(canvas.getByRole('button', { name: args.actionLabel })).toBeVisible();
+      }
+    });
+
+    if (!args.loading && args.actionLabel) {
+      await step('action 실행과 callback 확인', async () => {
+        await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
+        expect(args.onAction).toHaveBeenCalledOnce();
+      });
+    }
+  },
 };
 
 export const RepresentativeStates: Story = {
@@ -57,26 +77,6 @@ export const SkeletonStates: Story = {
       <Skeleton width="45%" />
     </View>
   ),
-};
-
-export const ActionInteraction: Story = {
-  args: {
-    actionLabel: '다시 시도',
-    alert: true,
-    description: '잠시 후 다시 시도해 주세요.',
-    title: '불러오지 못했어요',
-  },
-  play: async ({ args, canvasElement, step }) => {
-    const canvas = within(canvasElement);
-    await step('오류 상태와 재시도 버튼 확인', async () => {
-      expect(canvas.getByRole('alert')).toBeVisible();
-      expect(canvas.getByRole('button', { name: '다시 시도' })).toBeVisible();
-    });
-    await step('재시도 액션 실행과 callback 확인', async () => {
-      await userEvent.click(canvas.getByRole('button', { name: '다시 시도' }));
-      expect(args.onAction).toHaveBeenCalledOnce();
-    });
-  },
 };
 
 export const ReducedMotionLoading: Story = {
