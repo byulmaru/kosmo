@@ -23,6 +23,7 @@ import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { normalizeHandle } from '@kosmo/core/utils';
+import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { profileTagNormalizationParityCases } from '@kosmo/core/validation/profile-tag-parity-fixture';
 import { and, count, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -2736,6 +2737,72 @@ describe('GraphQL remote profile boundary', () => {
       .limit(1)
       .then(firstOrThrow);
     assert.equal(ownership.accountId, auth.account.id);
+  });
+
+  test('rejects reserved and harmful handles at the API validation boundary before writing', async () => {
+    const auth = await createAuthenticatedSession();
+    const profileCountBefore = await countRows(Profiles);
+    const handles = [' Admin ', 'kosmo_admin', 'f_a_g_g_o_t', 'n1gg3r', 'tr4nny'];
+
+    for (const handle of handles) {
+      const result = await requestGraphQL(
+        `mutation CreateRejectedProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) { profile { id } }
+        }`,
+        { handle },
+        auth.token,
+      );
+
+      assert.equal(result.data, null, JSON.stringify(result));
+      assert.equal(
+        result.errors?.[0]?.extensions?.code,
+        'VALIDATION',
+        JSON.stringify(result.errors),
+      );
+      assert.equal(result.errors?.[0]?.extensions?.field, 'handle', JSON.stringify(result.errors));
+      assert.equal(result.errors?.[0]?.message, profileHandlePolicyErrorMessage, handle);
+      assert.equal(result.errors?.[0]?.message.includes(handle.trim()), false, handle);
+    }
+
+    assert.equal(await countRows(Profiles), profileCountBefore);
+  });
+
+  test('allows valid handles that only contain reserved or harmful substrings', async () => {
+    const auth = await createAuthenticatedSession();
+
+    for (const handle of ['supporter', 'administrator_dev', 'class', 'analysis']) {
+      const result = await requestGraphQL<{
+        createProfile: { profile: { id: string } };
+      }>(
+        `mutation CreateAllowedProfile($handle: String!) {
+          createProfile(input: { handle: $handle }) { profile { id } }
+        }`,
+        { handle },
+        auth.token,
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.ok(result.data?.createProfile.profile.id);
+    }
+  });
+
+  test('preserves the existing local duplicate conflict after policy validation', async () => {
+    const auth = await createAuthenticatedSession();
+    await createProfile({ handle: 'alice', instanceId: localInstanceId });
+    const profileCountBefore = await countRows(Profiles);
+
+    const result = await requestGraphQL(
+      `mutation CreateDuplicateProfile($handle: String!) {
+        createProfile(input: { handle: $handle }) { profile { id } }
+      }`,
+      { handle: 'alice' },
+      auth.token,
+    );
+
+    assert.equal(result.data, null, JSON.stringify(result));
+    assert.equal(result.errors?.[0]?.extensions?.code, 'CONFLICT', JSON.stringify(result.errors));
+    assert.equal(result.errors?.[0]?.extensions?.field, 'handle', JSON.stringify(result.errors));
+    assert.equal(await countRows(Profiles), profileCountBefore);
   });
 
   test('reads a materialized remote Post and its history without the ActivityPub mapping or network', async () => {

@@ -38,19 +38,69 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 
 ## 속성
 
-| 속성                 | 타입/nullability                  | 검증 정책                                                                                               | 존재 조건       | 조회 조건                  | 조회 권한        |
-| -------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------- | -------------------------- | ---------------- |
-| handle               | 문자열, 필수                      | Local은 3-30자 영문/숫자/밑줄, Remote는 원격 원본 값을 보존한다                                         | 항상            | Profile 조회 정책 통과     | 없음             |
-| 표시 handle          | 문자열, 필수                      | 같은 Host 안에서 유일하다                                                                               | 항상            | Profile 조회 정책 통과     | 없음             |
-| qualified handle     | 문자열, 필수                      | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다                                      | 항상            | Profile 조회 정책 통과     | 없음             |
-| 표시 이름            | 문자열, 필수                      | 1-40자                                                                                                  | 항상            | Profile 조회 정책 통과     | 없음             |
-| bio                  | 표시 가능한 평문 문자열, nullable | 앞뒤 공백 제거 후 500자 이하. Remote 원본 markup은 비표시 내용을 제외하고 의미 있는 평문으로 정규화한다 | 항상            | Profile 조회 정책 통과     | 없음             |
-| 팔로워 수            | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                             | 항상            | Profile 조회 정책 통과     | 없음             |
-| 팔로잉 수            | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                             | 항상            | Profile 조회 정책 통과     | 없음             |
-| 생성 시각            | 시각, 필수                        | 생성 결과로 기록하며 변경 불가                                                                          | 항상            | Profile 조회 정책 통과     | 없음             |
-| 기본 Post Visibility | Post Visibility, 필수             | Public, Unlisted, Followers Only 중 하나이며 값이 없으면 Unlisted로 해석한다                            | Origin이 Local  | Account가 Profile Member다 | `Profile.Member` |
-| Remote URL           | URL, 필수                         | 원격 원본 Profile URL                                                                                   | Origin이 Remote | Profile 조회 정책 통과     | 없음             |
-| Profile Link         | URL 목록, nullable                | 각 항목은 유효한 URL이다                                                                                | Origin이 Local  | Profile 조회 정책 통과     | 없음             |
+| 속성                 | 타입/nullability                  | 검증 정책                                                                                                       | 존재 조건       | 조회 조건                  | 조회 권한        |
+| -------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------- | ---------------- |
+| handle               | 문자열, 필수                      | Local은 3-30자 영문/숫자/밑줄이며 아래 Local handle 생성 정책을 통과해야 한다. Remote는 원격 원본 값을 보존한다 | 항상            | Profile 조회 정책 통과     | 없음             |
+| 표시 handle          | 문자열, 필수                      | 같은 Host 안에서 유일하다                                                                                       | 항상            | Profile 조회 정책 통과     | 없음             |
+| qualified handle     | 문자열, 필수                      | `@handle@host` 형식이며 Host는 연결된 Instance Domain에서 파생한다                                              | 항상            | Profile 조회 정책 통과     | 없음             |
+| 표시 이름            | 문자열, 필수                      | 1-40자                                                                                                          | 항상            | Profile 조회 정책 통과     | 없음             |
+| bio                  | 표시 가능한 평문 문자열, nullable | 앞뒤 공백 제거 후 500자 이하. Remote 원본 markup은 비표시 내용을 제외하고 의미 있는 평문으로 정규화한다         | 항상            | Profile 조회 정책 통과     | 없음             |
+| 팔로워 수            | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                                     | 항상            | Profile 조회 정책 통과     | 없음             |
+| 팔로잉 수            | 0 이상 정수, 필수                 | 저장된 best-effort Follow Relationship 수다                                                                     | 항상            | Profile 조회 정책 통과     | 없음             |
+| 생성 시각            | 시각, 필수                        | 생성 결과로 기록하며 변경 불가                                                                                  | 항상            | Profile 조회 정책 통과     | 없음             |
+| 기본 Post Visibility | Post Visibility, 필수             | Public, Unlisted, Followers Only 중 하나이며 값이 없으면 Unlisted로 해석한다                                    | Origin이 Local  | Account가 Profile Member다 | `Profile.Member` |
+| Remote URL           | URL, 필수                         | 원격 원본 Profile URL                                                                                           | Origin이 Remote | Profile 조회 정책 통과     | 없음             |
+| Profile Link         | URL 목록, nullable                | 각 항목은 유효한 URL이다                                                                                        | Origin이 Local  | Profile 조회 정책 통과     | 없음             |
+
+### Local handle 생성 정책
+
+Local handle은 형식과 Local Instance 안의 유일성 외에 시스템 예약 식별자와 명시적 유해표현 정책을 모두
+통과해야 한다. 두 정책은 서로 다른 비교 규칙과 목록을 가지며 Remote Profile의 원격 handle에는 적용하지 않는다.
+
+#### System Reserved Handle
+
+시스템 예약 식별자는 앞뒤 공백을 제거하고 소문자로 바꾼 Local handle 전체가 아래 값 중 하나와 정확히 일치할
+때 사용을 거부한다. 부분 문자열만 일치하는 `supporter`, `cybersecurity`, `administrator_dev`는 이 정책만으로
+거부하지 않는다.
+
+- 운영 권한·공식 계정: `abuse`, `adm`, `admin`, `admins`, `administration`, `administrator`,
+  `administrators`, `moderator`, `moderators`, `official`, `operator`, `owner`, `owners`, `root`, `security`,
+  `staff`, `support`, `system`
+- 인증·고객지원·정책: `api`, `auth`, `authentication`, `contact`, `contactus`, `copyright`, `dmca`, `help`,
+  `hostmaster`, `legal`, `login`, `logout`, `oauth`, `policies`, `policy`, `postmaster`, `privacy`, `register`,
+  `registration`, `report`, `reports`, `status`, `terms`, `tos`, `webmaster`
+- Kosmo·연합·시스템 endpoint: `activitypub`, `actor`, `actors`, `ap`, `byulmaru`, `federation`, `fediverse`,
+  `graphql`, `health`, `inbox`, `kosmo`, `nodeinfo`, `outbox`, `webfinger`
+- 공식 계정으로 오인하기 쉬운 조합: `kosmo_admin`, `kosmo_moderator`, `kosmo_official`, `kosmo_security`,
+  `kosmo_support`
+
+예약 식별자 목록은 Bluesky atproto의
+[`reserved.ts`](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/handle/reserved.ts)를
+2026-08-28에 검토해 Kosmo 경계에 맞게 선별했다.
+
+#### Explicitly Harmful Handle Expression
+
+명시적 유해표현은 앞뒤 공백 제거와 소문자 변환 뒤 밑줄을 제거한 값, 또는 그 값에 `0`→`o`, `1`→`i`,
+`3`→`e`, `4`→`a`를 적용한 값 중 하나가 아래 항목과 정확히 일치할 때 사용을 거부한다. 정상 단어 안에
+우연히 같은 짧은 문자열이 포함됐다는 이유만으로 거부하지 않는다.
+
+- 명백한 욕설·성적 표현: `fuck`, `slut`, `porn`, `p0rn`, `pr0n`, `xxx`
+- 인종·민족 비하표현: `chink`, `chinks`, `coon`, `coons`, `nigg`, `niggs`, `nigga`, `niggas`, `nigger`,
+  `niggers`, `nigglet`, `nigglets`
+- 성적 지향 비하표현: `fag`, `fags`, `fagg`, `faggs`, `faggot`, `faggots`, `faggotry`, `faggotries`
+- 유대인 비하표현: `kike`, `kikes`, `kyke`, `kykes`
+- 트랜스젠더 비하표현: `tranny`, `trannys`, `trannie`, `trannies`
+
+명시적 유해표현 목록은 Bluesky atproto의
+[`reserved.ts`](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/handle/reserved.ts)와
+[`explicit-slurs.ts`](https://github.com/bluesky-social/atproto/blob/main/packages/pds/src/handle/explicit-slurs.ts)를
+2026-08-28에 검토해 Kosmo 경계에 맞게 선별했다. 이 파일들은 curation reference이며 runtime dependency나
+자동 동기화 원본이 아니다.
+
+목록의 출처와 검토 시점을 기록하고, 목록이나 비교 규칙을 바꿀 때는 Local Profile 생성 계약과 서버·클라이언트
+검증을 함께 갱신한다. Profile Lifecycle State와 과거 handle 점유 여부는 이 정책에 우선하지 않으므로 삭제된
+Profile의 handle 재사용을 별도로 허용하더라도 예약 식별자와 명시적 유해표현은 새 Local Profile에 사용할 수
+없다.
 
 ## 관계
 
@@ -69,7 +119,7 @@ Local Profile과 Remote Profile은 Profile Origin 상태 차원으로 구분한�
 
 | 행동                      | 행동 주체      | 대상 객체           | 입력값                                                                        | 권한                                 | 조건                                                                                         | 결과                                                                                                                                                                                                                       |
 | ------------------------- | -------------- | ------------------- | ----------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local Profile 생성        | Account        | Profile             | handle, 선택적 표시 이름, Follow Approval Policy                              | `Account.Active`                     | 같은 Local handle이 없다                                                                     | Origin=Local, Lifecycle=Active, Suspension=Normal인 Profile이 현재 Local Instance와 연결되고 Owner Membership이 생성된다. 표시 이름은 입력값이 없으면 handle이 되며 표시/qualified handle은 handle과 Instance에서 파생한다 |
+| Local Profile 생성        | Account        | Profile             | handle, 선택적 표시 이름, Follow Approval Policy                              | `Account.Active`                     | 같은 Local handle이 없고 handle이 Local handle 생성 정책을 통과한다                          | Origin=Local, Lifecycle=Active, Suspension=Normal인 Profile이 현재 Local Instance와 연결되고 Owner Membership이 생성된다. 표시 이름은 입력값이 없으면 handle이 되며 표시/qualified handle은 handle과 Instance에서 파생한다 |
 | Remote Profile 등록       | 시스템         | Profile             | Instance, 원격 표현 속성, Follow Approval Policy                              | `System.RemoteProfileSource`         | Instance Type이 Remote이고 새 원격 요청 허용 상태이며 입력 qualified handle의 Profile이 없다 | Origin=Remote, Lifecycle=Active, Suspension=Normal인 Profile이 입력 Instance와 연결되고 원격 표현 속성/Policy가 생성된다                                                                                                   |
 | Remote Profile 갱신       | 시스템         | Profile             | 원격 표현 속성, Follow Approval Policy                                        | `System.RemoteProfileSource`         | 대상 Origin이 Remote이고 Lifecycle State가 Deleted가 아니다                                  | 원격 표현 속성과 Policy가 바뀌며 Lifecycle/Suspension State는 유지된다                                                                                                                                                     |
 | Profile 편집              | Account        | 현재 선택된 Profile | 표시 이름, bio, avatar/header, 링크, Follow Approval Policy, Profile Tag 목록 | `Account.Active`, `Profile.Owner`    | Origin이 Local이고 Lifecycle State가 Active이며 Suspension State가 Normal이다                | Profile 표현 속성, Policy, 선택된 Media 관계와 Profile Tag 목록이 원자적으로 바뀐다                                                                                                                                        |
@@ -155,6 +205,8 @@ route와 그 하위 경로도 저장된 Profile만 조회한다. 원격 lookup �
 - Profile Suspension State: Profile Suspension State
 - 표시 handle: Display Handle
 - qualified handle: Qualified Handle
+- 시스템 예약 식별자: System Reserved Handle
+- 명시적 유해표현: Explicitly Harmful Handle Expression
 - 원격 원본 URL: Remote URL
 - 팔로우 승인 정책: Follow Approval Policy
 - 팔로워 수: Followers Count
@@ -169,3 +221,6 @@ route와 그 하위 경로도 저장된 Profile만 조회한다. 원격 lookup �
 - active Profile 선택은 Profile 객체를 바꾸지 않는 세션 동작이므로 도메인 행동에서 제외한다.
 - theme, 계정 이동, 서버 이전은 현재 범위에서 제외한다.
 - Remote Profile의 Profile Tag 수집·동기화와 ActivityPub 표현은 현재 범위에서 제외한다.
+- 맥락에 따라 판단이 달라지는 모욕·불쾌 표현과 게시물·표시 이름·bio moderation은 Local handle 생성 정책에서
+  제외한다.
+- 로마자 한국어 욕설, Unicode 유사 문자 우회와 운영자별 allow/deny 목록은 후속 정책으로 보류한다.

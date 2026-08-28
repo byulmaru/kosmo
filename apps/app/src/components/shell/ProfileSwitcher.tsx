@@ -1,4 +1,4 @@
-import { profileHandleSchema } from '@kosmo/core/validation/profile';
+import { profileHandlePolicyErrorMessage, profileHandleSchema } from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { graphql, useFragment, useMutation } from 'react-relay';
@@ -18,6 +17,7 @@ import { trackAnalytics } from '@/analytics/client';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
+import { TextField } from '@/components/ui/TextField';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, space, spacing, textStyles, typography } from '@/theme/tokens';
@@ -144,6 +144,22 @@ const webCover = {
 const avatarShadow = {
   boxShadow: '1px 1px 2px rgba(0, 0, 0, 0.25)',
 } as ViewStyle;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isProfileHandleValidationError = (error: unknown) => {
+  if (!isRecord(error) || !isRecord(error.extensions)) {
+    return false;
+  }
+
+  return error.extensions.code === 'VALIDATION' && error.extensions.field === 'handle';
+};
+
+const profileCreationErrorMessage = (errors: ReadonlyArray<unknown> | null | undefined) =>
+  errors?.some(isProfileHandleValidationError)
+    ? profileHandlePolicyErrorMessage
+    : '프로필을 생성하지 못했습니다.';
 
 type Props = {
   onNavigate?: () => void;
@@ -296,7 +312,7 @@ export function ProfileSwitcher({
       variables: { handle: normalized },
       onCompleted: (response, errors) => {
         if (errors?.length) {
-          setOperationError(operationVersion, '프로필을 생성하지 못했습니다.');
+          setOperationError(operationVersion, profileCreationErrorMessage(errors));
           return;
         }
 
@@ -307,8 +323,7 @@ export function ProfileSwitcher({
         setCreating(false);
         commitProfileSelection(response.createProfile.profile.id, operationVersion);
       },
-      onError: (cause) =>
-        setOperationError(operationVersion, cause.message || '프로필을 생성하지 못했습니다.'),
+      onError: () => setOperationError(operationVersion, '프로필을 생성하지 못했습니다.'),
     });
   };
 
@@ -452,26 +467,21 @@ export function ProfileSwitcher({
             style={styles.createForm}
           >
             <View style={styles.createRow}>
-              <TextInput
-                aria-invalid={Boolean(error)}
-                accessibilityLabel="프로필 핸들"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!busy}
-                onChangeText={setHandle}
-                onSubmitEditing={createProfile}
-                placeholder="새 프로필 핸들"
-                placeholderTextColor={theme.textSecondary}
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.card,
-                    borderColor: error ? theme.danger : theme.border,
-                    color: theme.text,
-                  },
-                ]}
-                value={handle}
-              />
+              <View style={styles.inputField}>
+                <TextField
+                  accessibilityLabel="프로필 핸들"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!busy}
+                  error={error ?? undefined}
+                  label="프로필 핸들"
+                  onChangeText={setHandle}
+                  onSubmitEditing={createProfile}
+                  placeholder="새 프로필 핸들"
+                  style={styles.input}
+                  value={handle}
+                />
+              </View>
               <Button
                 disabled={busy}
                 loading={busy}
@@ -484,11 +494,6 @@ export function ProfileSwitcher({
             <Text style={[styles.help, { color: theme.textSecondary }]}>
               영문, 숫자, 밑줄(_)만 사용할 수 있어요.
             </Text>
-            {error ? (
-              <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-                {error}
-              </Text>
-            ) : null}
           </View>
         ) : null}
         {!creating && error ? (
@@ -808,18 +813,9 @@ const styles = StyleSheet.create({
   profileLabel: { flex: 1, minWidth: 0 },
   divider: { height: 1, marginVertical: space[4], width: '100%' },
   createForm: { gap: spacing.xs, padding: spacing.xs },
-  createRow: { flexDirection: 'row', gap: spacing.sm },
-  input: {
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    flex: 1,
-    fontFamily: 'SUIT',
-    minHeight: 40,
-    minWidth: 0,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.sm,
-  },
+  createRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.sm },
+  inputField: { flex: 1, minWidth: 0 },
+  input: { flex: 1, minWidth: 0 },
   createButton: { minHeight: 40, minWidth: 72, paddingHorizontal: spacing.md },
   help: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },
   error: { fontFamily: 'SUIT', paddingHorizontal: spacing.xs, ...typography.xsm },

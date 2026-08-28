@@ -1,8 +1,9 @@
+import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
-import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
@@ -144,6 +145,7 @@ const headerFallbackQuery = {
     selectedProfile: selectedProfileWithoutHeader,
   }),
 };
+const profileCreationRequestObserver = fn();
 const ShellStoriesQuery = graphql`
   query ShellStoriesQuery {
     ...ProfileSwitcher_query
@@ -296,6 +298,7 @@ function FollowCacheStory() {
 const meta = {
   beforeEach: () => {
     mocked(trackAnalytics).mockClear();
+    profileCreationRequestObserver.mockClear();
   },
   component: NavigationCatalog,
   parameters: {
@@ -1198,7 +1201,7 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await canvas.findByLabelText('프로필 전환');
     await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
-    await userEvent.type(canvas.getByRole('textbox', { name: '프로필 핸들' }), 'new_profile');
+    await userEvent.type(canvas.getByRole('textbox', { name: '프로필 핸들' }), 'administrator_dev');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
     await waitFor(() => expect(trackAnalytics).toHaveBeenCalledTimes(2));
     expect(trackAnalytics).toHaveBeenNthCalledWith(1, 'profile_created', {
@@ -1207,6 +1210,78 @@ export const ProfileSwitcherCreateTracksAnalytics: Story = {
     expect(trackAnalytics).toHaveBeenNthCalledWith(2, 'profile_selected', {
       selected_profile_id: secondProfile.id,
     });
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreatePolicyPrevalidation: Story = {
+  parameters: {
+    relay: {
+      mutationRequestObserver: profileCreationRequestObserver,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+
+    await userEvent.type(input, 'ADMIN');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+    const firstError = await canvas.findByText(profileHandlePolicyErrorMessage, { exact: true });
+    expect(firstError).toBeVisible();
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    const errorId = input.getAttribute('aria-describedby');
+    expect(errorId).not.toBeNull();
+    expect(input.ownerDocument.getElementById(errorId!)).toHaveTextContent(
+      profileHandlePolicyErrorMessage,
+    );
+    expect(profileCreationRequestObserver).not.toHaveBeenCalled();
+
+    await userEvent.clear(input);
+    await userEvent.type(input, 'n1gg3r');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+    await expect(
+      canvas.findByText(profileHandlePolicyErrorMessage, { exact: true }),
+    ).resolves.toBeVisible();
+    expect(input).toHaveValue('n1gg3r');
+    expect(profileCreationRequestObserver).not.toHaveBeenCalled();
+  },
+  render: () => <ProfileSwitcherStory />,
+};
+
+export const ProfileSwitcherCreateServerPolicyErrorMapsSafely: Story = {
+  parameters: {
+    relay: {
+      mutationGraphQLErrors: [
+        {
+          extensions: { code: 'VALIDATION', field: 'handle' },
+          message: 'internal policy detail: reserved expression',
+        },
+      ],
+      mutationRequestObserver: profileCreationRequestObserver,
+      mutationResponse: {
+        createProfile: { account: query.me, profile: secondProfile },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
+    await canvas.findByLabelText('프로필 전환');
+    await userEvent.click(canvas.getByRole('button', { name: '새 프로필 추가' }));
+    const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
+    await userEvent.type(input, 'new_policy_handle');
+    await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
+
+    await expect(
+      canvas.findByText(profileHandlePolicyErrorMessage, { exact: true }),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByText('internal policy detail: reserved expression')).toBeNull();
+    expect(input).toHaveValue('new_policy_handle');
+    expect(profileCreationRequestObserver).toHaveBeenCalledOnce();
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ProfileSwitcherStory />,
 };
@@ -1284,9 +1359,7 @@ export const ProfileSwitcherCreateGraphQLError: Story = {
     const input = canvas.getByRole('textbox', { name: '프로필 핸들' });
     await userEvent.type(input, 'kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '프로필을 생성하지 못했습니다.',
-    );
+    await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
     expect(input).toHaveValue('kept_handle');
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
     await userEvent.click(canvas.getByRole('button', { name: '프로필 목록' }));
@@ -1348,9 +1421,7 @@ export const ProfileSwitcherApprovedCreateGraphQLErrorPreservesDraft: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '만들기' }));
 
     await userEvent.click(body.getByRole('button', { name: '버리기' }));
-    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
-      '프로필을 생성하지 못했습니다.',
-    );
+    await expect(canvas.findByText('프로필을 생성하지 못했습니다.')).resolves.toBeVisible();
     await waitFor(() =>
       expect(
         canvasElement.ownerDocument.querySelector(
