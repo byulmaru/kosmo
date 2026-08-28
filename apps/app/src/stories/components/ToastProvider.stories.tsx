@@ -98,16 +98,86 @@ function ToneAndActionToastFixture() {
   );
 }
 
+function ToastPlayground({
+  actionLabel,
+  message,
+  onAction,
+  tone,
+}: {
+  actionLabel: string;
+  message: string;
+  onAction: () => void;
+  tone?: 'danger' | 'info' | 'success' | 'warning';
+}) {
+  return (
+    <ToastProvider>
+      <ToastPlaygroundTrigger
+        actionLabel={actionLabel}
+        message={message}
+        onAction={onAction}
+        tone={tone}
+      />
+    </ToastProvider>
+  );
+}
+
+function ToastPlaygroundTrigger({
+  actionLabel,
+  message,
+  onAction,
+  tone,
+}: Parameters<typeof ToastPlayground>[0]) {
+  const { showToast } = useToast();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() =>
+        showToast(message, {
+          action: { label: actionLabel, onPress: onAction },
+          tone,
+        })
+      }
+      style={styles.button}
+    >
+      <Text>Toast 표시</Text>
+    </Pressable>
+  );
+}
+
 const meta = {
-  component: ToastFixture,
+  args: {
+    actionLabel: '다시 시도',
+    message: '요청을 완료하지 못했습니다.',
+    onAction: fn(),
+    tone: 'danger',
+  },
+  argTypes: {
+    tone: { control: 'select', options: [undefined, 'info', 'success', 'warning', 'danger'] },
+  },
+  component: ToastPlayground,
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Toast Provider',
-} satisfies Meta<typeof ToastFixture>;
+} satisfies Meta<typeof ToastPlayground>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 const repeatedToastMessage = '재게시하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 const toastDurationMs = 3000;
+
+export const Default: Story = {};
+
+export const Playground: Story = {
+  parameters: { controls: { disable: false } },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Toast 표시' }));
+    expect(await canvas.findByRole('alert')).toHaveTextContent(args.message);
+    await userEvent.click(canvas.getByRole('button', { name: args.actionLabel }));
+    expect(args.onAction).toHaveBeenCalledOnce();
+  },
+};
 
 export const ReplacementAndAutoDismiss: Story = {
   render: () => (

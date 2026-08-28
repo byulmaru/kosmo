@@ -11,6 +11,8 @@ import { ProfileHero } from '@/components/profile/ProfileHero';
 import { ProfileListItem } from '@/components/profile/ProfileListItem';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { SessionProvider } from '@/session/SessionProvider';
+import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
+import ogDefaultUrl from '../../../public/og-default.png?url';
 import { followersProfile, followingProfile, profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -70,8 +72,8 @@ const noViewer = profile({
   viewerState: null,
 });
 const withImages = profile({
-  avatar: { id: 'media-profile-avatar', url: '/apple-touch-icon.png' },
-  header: { id: 'media-profile-header', url: '/og-default.png' },
+  avatar: { id: 'media-profile-avatar', url: appleTouchIconUrl },
+  header: { id: 'media-profile-header', url: ogDefaultUrl },
   id: 'profile-with-images',
 });
 const withTags = profile({

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { RadioOption as RadioOptionConfig } from '@/components/ui/RadioGroup';
@@ -16,12 +16,29 @@ const options = [
   { label: '앱 알림', value: 'inApp' },
 ] satisfies readonly RadioOptionConfig<RadioValue>[];
 
-function RadioGroupCatalog({ initialValue = 'email' }: { initialValue?: RadioValue }) {
+function RadioGroupCatalog({
+  disabled = false,
+  initialValue = 'email',
+  onChange,
+}: {
+  disabled?: boolean;
+  initialValue?: RadioValue;
+  onChange?: (value: RadioValue) => void;
+}) {
   const [value, setValue] = useState<RadioValue>(initialValue);
+  const handleChange = (nextValue: RadioValue) => {
+    setValue(nextValue);
+    onChange?.(nextValue);
+  };
 
   return (
     <View>
-      <RadioGroup accessibilityLabel="알림 방식" onChange={setValue} value={value}>
+      <RadioGroup
+        accessibilityLabel="알림 방식"
+        disabled={disabled}
+        onChange={handleChange}
+        value={value}
+      >
         {options.map((option) => (
           <RadioOption key={option.value} option={option} />
         ))}
@@ -59,15 +76,24 @@ function RadioGroupVisualStates() {
 }
 
 const meta = {
+  args: { disabled: false, initialValue: 'email', onChange: fn() },
   component: RadioGroupCatalog,
+  parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Radio Group',
 } satisfies Meta<typeof RadioGroupCatalog>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+export const Default: Story = {};
+
+export const Playground: Story = {
+  parameters: { controls: { disable: false } },
+  render: (args) => <RadioGroupCatalog key={args.initialValue} {...args} />,
+};
+
 export const InteractionContract: Story = {
-  play: async ({ canvasElement }) => {
+  play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const group = canvas.getByRole('radiogroup', { name: '알림 방식' });
     const email = within(group).getByRole('radio', { name: '이메일' });
@@ -101,6 +127,7 @@ export const InteractionContract: Story = {
     expect(sms).toHaveFocus();
     expect(sms).toBeChecked();
     expect(getComputedStyle(sms).borderWidth).toBe('2px');
+    expect(args.onChange).toHaveBeenCalledWith('sms');
 
     await userEvent.keyboard('{ArrowRight}');
     expect(inApp).toHaveFocus();

@@ -1,8 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
-import { Skeleton, StateView } from '@/components/ui/StateView';
-import { TextArea, TextField } from '@/components/ui/TextField';
+import { Skeleton } from '@/components/ui/StateView';
 import { radius, semanticColors, space } from '@/theme/tokens';
 import { Catalog, Row, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -37,20 +36,6 @@ function PrimitivesCatalog() {
         </Row>
       </Section>
 
-      <Section title="Text fields">
-        <TextField label="기본 입력" placeholder="Placeholder..." />
-        <TextField defaultValue="입력된 값" label="입력 완료" />
-        <TextField error="입력값을 확인해 주세요." label="오류" value="잘못된 값" />
-        <TextField
-          autoFocus
-          error="입력값을 확인해 주세요."
-          label="오류 (포커스)"
-          value="잘못된 값"
-        />
-        <TextField editable={false} label="비활성" value="수정할 수 없는 값" />
-        <TextArea label="여러 줄 입력" multiline placeholder="본문을 입력하세요." />
-      </Section>
-
       <Section title="Loading placeholders">
         <View style={{ gap: space[8] }}>
           <Skeleton circular height={48} width={48} />
@@ -58,18 +43,6 @@ function PrimitivesCatalog() {
           <Skeleton width="70%" />
           <Skeleton width="45%" />
         </View>
-      </Section>
-
-      <Section title="Loading, empty, error">
-        <StateView loading title="불러오는 중입니다." />
-        <StateView description="첫 항목이 생기면 여기에 표시돼요." title="아직 항목이 없어요" />
-        <StateView
-          actionLabel="다시 시도"
-          alert
-          description="잠시 후 다시 시도해 주세요."
-          onAction={() => undefined}
-          title="불러오지 못했어요"
-        />
       </Section>
     </Catalog>
   );
@@ -94,7 +67,7 @@ const styles = StyleSheet.create({
 
 const meta = {
   component: PrimitivesCatalog,
-  title: 'KOSMO/Components/Primitives',
+  title: 'KOSMO/Components/Primitives/Catalog',
 } satisfies Meta<typeof PrimitivesCatalog>;
 
 export default meta;
@@ -103,7 +76,4 @@ type Story = StoryObj<typeof meta>;
 export const Light: Story = {};
 export const Dark: Story = {
   globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
-};
-export const ReducedMotion: Story = {
-  globals: { reduceMotion: true },
 };

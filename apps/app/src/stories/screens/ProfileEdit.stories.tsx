@@ -6,6 +6,7 @@ import { ProfileEditImageFields } from '@/components/profile/ProfileEditImageFie
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileTagEditor } from '@/components/profile/ProfileTagEditor';
 import { colors } from '@/theme/tokens';
+import appleTouchIconUrl from '../../../public/apple-touch-icon.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type {
   ProfileEditDraft,
@@ -213,7 +214,7 @@ const meta = {
     layout: 'fullscreen',
     viewport: { defaultViewport: 'kosmoMobile' },
   },
-  title: 'KOSMO/Screens/Profile Edit',
+  title: 'KOSMO/Screens/Profile Edit/Catalog',
 } satisfies Meta<typeof ProfileEditImageFields>;
 
 export default meta;
@@ -260,7 +261,7 @@ export const ImageFieldsWithoutCallbacks: Story = {
 
 export const CurrentImageMenu: Story = {
   args: {
-    avatar: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+    avatar: { kind: 'current', previewUri: appleTouchIconUrl },
   },
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
@@ -276,8 +277,8 @@ export const CurrentImageMenu: Story = {
 
 export const HeaderMenuKeepsAvatarOverlap: Story = {
   args: {
-    avatar: { kind: 'current', previewUri: '/apple-touch-icon.png' },
-    header: { kind: 'current', previewUri: '/apple-touch-icon.png' },
+    avatar: { kind: 'current', previewUri: appleTouchIconUrl },
+    header: { kind: 'current', previewUri: appleTouchIconUrl },
   },
   play: async ({ canvasElement, userEvent }) => {
     const canvas = within(canvasElement);
