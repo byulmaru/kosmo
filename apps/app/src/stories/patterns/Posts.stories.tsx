@@ -62,10 +62,10 @@ import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
-import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from '../__generated__/PostDeletionListEdgeSafetyQuery.graphql';
-import type { PostDetailThreadIdentityStoryQuery } from '../__generated__/PostDetailThreadIdentityStoryQuery.graphql';
-import type { PostsStoriesQuery as PostsStoriesQueryType } from '../__generated__/PostsStoriesQuery.graphql';
 import type { StoryPost } from '../fixtures';
+import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
+import type { PostDetailThreadIdentityStoryQuery } from './__generated__/PostDetailThreadIdentityStoryQuery.graphql';
+import type { PostsStoriesQuery as PostsStoriesQueryType } from './__generated__/PostsStoriesQuery.graphql';
 
 function getColorContrastRatio(foreground: string, background: string) {
   const relativeLuminance = (color: string) => {

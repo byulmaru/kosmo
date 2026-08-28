@@ -11,7 +11,7 @@ import { useRelayActor } from '@/relay/RelayActorProvider';
 import { profile } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { FollowRequestsStoriesQuery as FollowRequestsStoriesQueryType } from '../__generated__/FollowRequestsStoriesQuery.graphql';
+import type { FollowRequestsStoriesQuery as FollowRequestsStoriesQueryType } from './__generated__/FollowRequestsStoriesQuery.graphql';
 
 const requesterA = profile({
   avatar: {

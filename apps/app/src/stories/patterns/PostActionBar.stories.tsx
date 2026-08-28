@@ -19,13 +19,13 @@ import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { RelayActorProvider, useRelayActor } from '@/relay/RelayActorProvider';
 import { SessionProvider } from '@/session/SessionProvider';
 import { colors, spacing, typography } from '@/theme/tokens';
-import PostActionBarStoryQueryNode from '../__generated__/PostActionBarStoryQuery.graphql';
 import { Catalog, Section } from '../StoryFrame';
+import PostActionBarStoryQueryNode from './__generated__/PostActionBarStoryQuery.graphql';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ViewStyle } from 'react-native';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
 import type { PostActionBarProps } from '@/components/post/PostActionBar';
-import type { PostActionBarStoryQuery } from '../__generated__/PostActionBarStoryQuery.graphql';
+import type { PostActionBarStoryQuery } from './__generated__/PostActionBarStoryQuery.graphql';
 
 const reply = fn();
 const bookmark = fn();

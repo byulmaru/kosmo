@@ -23,7 +23,7 @@ import {
 } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import type { NotificationsStoriesQuery as NotificationsStoriesQueryType } from '../__generated__/NotificationsStoriesQuery.graphql';
+import type { NotificationsStoriesQuery as NotificationsStoriesQueryType } from './__generated__/NotificationsStoriesQuery.graphql';
 
 const unreadFollowerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="56" height="56"%3E%3Crect width="56" height="56" fill="%237c3aed"/%3E%3C/svg%3E';

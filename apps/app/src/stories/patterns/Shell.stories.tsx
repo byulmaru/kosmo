@@ -27,7 +27,7 @@ import { profile, shellQuery } from '../fixtures';
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GuardedNavigationAction } from '@/components/shell/NavigationGuardContext';
-import type { ShellStoriesQuery as ShellStoriesQueryType } from '../__generated__/ShellStoriesQuery.graphql';
+import type { ShellStoriesQuery as ShellStoriesQueryType } from './__generated__/ShellStoriesQuery.graphql';
 
 const selectedAvatarUrl = appleTouchIconUrl;
 const selectedHeaderUrl = ogDefaultUrl;
