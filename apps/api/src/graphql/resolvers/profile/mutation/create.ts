@@ -3,7 +3,7 @@ import { AccountProfileRole, PostVisibility, ProfileFollowPolicy } from '@kosmo/
 import { ConflictError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { normalizeHandle } from '@kosmo/core/utils';
-import { profileHandleSchema } from '@kosmo/core/validation';
+import { localProfileHandleSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
 import { Account } from '@/graphql/resolvers/account';
 import { Profile } from '../ref';
@@ -17,7 +17,7 @@ builder.mutationField('createProfile', (t) =>
       }),
     }),
     input: {
-      handle: t.input.string({ validate: profileHandleSchema }),
+      handle: t.input.string({ validate: localProfileHandleSchema }),
     },
     resolve: async (_, { input }, ctx) => {
       const localInstance = await resolveConfiguredLocalInstance();

@@ -122,6 +122,8 @@ Mutation도 필드별로 나눈다.
 예시:
 
 ```ts
+import { localProfileHandleSchema } from '@kosmo/core/validation';
+
 builder.mutationField('createProfile', (t) =>
   t.withAuth({ login: true }).fieldWithInput({
     type: builder.simpleObject('CreateProfilePayload', {
@@ -130,7 +132,7 @@ builder.mutationField('createProfile', (t) =>
       }),
     }),
     input: {
-      handle: t.input.string({ validate: profileHandleSchema }),
+      handle: t.input.string({ validate: localProfileHandleSchema }),
     },
     resolve: async (_, { input }, ctx) => {
       const profile = await createProfile(input, ctx);

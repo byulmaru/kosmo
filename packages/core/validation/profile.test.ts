@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   explicitlyHarmfulProfileHandleValues,
+  localProfileHandleSchema,
   profileHandlePolicyErrorMessage,
   profileHandlePolicyViolation,
-  profileHandleSchema,
   systemReservedProfileHandleValues,
 } from './profile';
 
@@ -20,9 +20,9 @@ const currentStaticAppRouteHandleValues = [
   'settings',
 ] as const;
 
-test('Profile handle schema rejects every System Reserved value after trim and case folding', () => {
+test('Local Profile handle schema rejects every System Reserved value after trim and case folding', () => {
   for (const handle of systemReservedProfileHandleValues) {
-    const result = profileHandleSchema.safeParse(`  ${handle.toUpperCase()}  `);
+    const result = localProfileHandleSchema.safeParse(`  ${handle.toUpperCase()}  `);
 
     assert.equal(result.success, false, handle);
     assert.equal(
@@ -45,7 +45,7 @@ test('System Reserved values include every current static app route that is a va
   }
 
   for (const route of ['follow-requests', 'profile-edit']) {
-    const result = profileHandleSchema.safeParse(route);
+    const result = localProfileHandleSchema.safeParse(route);
 
     assert.equal(result.success, false, route);
     assert.equal(
@@ -57,9 +57,9 @@ test('System Reserved values include every current static app route that is a va
   }
 });
 
-test('Profile handle schema rejects every Explicitly Harmful value after policy normalization', () => {
+test('Local Profile handle schema rejects every Explicitly Harmful value after policy normalization', () => {
   for (const handle of explicitlyHarmfulProfileHandleValues) {
-    const result = profileHandleSchema.safeParse(`  ${handle.toUpperCase()}  `);
+    const result = localProfileHandleSchema.safeParse(`  ${handle.toUpperCase()}  `);
 
     assert.equal(result.success, false, handle);
     assert.equal(
@@ -77,14 +77,14 @@ test('Profile handle schema rejects every Explicitly Harmful value after policy 
 
 test('Profile handle policy rejects the specified underscore and numeric evasions', () => {
   for (const handle of ['f_a_g_g_o_t', 'n1gg3r', 'tr4nny', 'p_0_r_n']) {
-    assert.equal(profileHandleSchema.safeParse(handle).success, false, handle);
+    assert.equal(localProfileHandleSchema.safeParse(handle).success, false, handle);
     assert.equal(profileHandlePolicyViolation(handle), 'explicitly-harmful', handle);
   }
 });
 
 test('Profile handle policy allows non-matching substrings and ordinary words', () => {
   for (const handle of ['supporter', 'cybersecurity', 'administrator_dev', 'class', 'analysis']) {
-    assert.equal(profileHandleSchema.safeParse(handle).success, true, handle);
+    assert.equal(localProfileHandleSchema.safeParse(handle).success, true, handle);
     assert.equal(profileHandlePolicyViolation(handle), undefined, handle);
   }
 });

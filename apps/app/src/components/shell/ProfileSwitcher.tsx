@@ -1,4 +1,4 @@
-import { profileHandlePolicyErrorMessage, profileHandleSchema } from '@kosmo/core/validation';
+import { localProfileHandleSchema, profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
 import { usePathname } from 'expo-router';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -334,7 +334,7 @@ export function ProfileSwitcher({
       return;
     }
 
-    const result = profileHandleSchema.safeParse(normalized);
+    const result = localProfileHandleSchema.safeParse(normalized);
 
     if (!result.success) {
       setError(result.error.issues[0]?.message ?? '프로필 핸들 형식을 확인해주세요.');
@@ -474,7 +474,6 @@ export function ProfileSwitcher({
                   autoCorrect={false}
                   editable={!busy}
                   error={error ?? undefined}
-                  label="프로필 핸들"
                   onChangeText={setHandle}
                   onSubmitEditing={createProfile}
                   placeholder="새 프로필 핸들"
