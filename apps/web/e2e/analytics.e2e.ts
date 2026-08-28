@@ -66,7 +66,7 @@ test('PostHog 설정이 없는 Web build는 analytics 요청 없이 정상 렌�
   expect(analyticsRequests).toEqual([]);
 });
 
-test('Web runtime은 정규화 pathname pageview만 전송하고 automatic telemetry와 민감 URL을 보내지 않는다', async ({
+test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote config를 유지한다', async ({
   page,
 }) => {
   const viewer = await createE2ESession({
@@ -74,72 +74,52 @@ test('Web runtime은 정규화 pathname pageview만 전송하고 automatic telem
     handle: 'e2e-analytics-profile',
   });
   const payloads: PostHogPayload[] = [];
+  const posthogRequests: string[] = [];
   await page.route(`${posthogOrigin}/**`, async (route) => {
+    posthogRequests.push(route.request().url());
     if (route.request().method() === 'POST') {
       payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
     }
 
     await route.fulfill({
-      body: '{}',
+      body: JSON.stringify({ autocapture_opt_out: false }),
       contentType: 'application/json',
       status: 200,
     });
   });
 
-  await page.goto(
-    '/?secret_query=should-not-be-captured&utm_source=newsletter&gclid=campaign-click-id#secret-fragment',
-  );
+  await page.goto('/?utm_source=newsletter#overview');
+  await expect.poll(() => payloads.some((payload) => payload.event === '$pageview')).toBe(true);
+
+  await page.goto(`/${viewer.profile?.handle}?source=analytics-test#profile`);
   await expect
-    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
-    .toBe(1);
-
-  await page.waitForTimeout(200);
-  expect(payloads.filter((payload) => payload.event === '$pageview')).toHaveLength(1);
-
-  await page.goto(`/${viewer.profile?.handle}?secret_query=profile#secret-fragment`);
-  await expect
-    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
-    .toBe(2);
-
-  await page.goto(`/${viewer.profile?.handle}?another_query=private#another-fragment`);
-  await expect
-    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
-    .toBe(3);
-
+    .poll(() =>
+      payloads.some(
+        (payload) =>
+          payload.event === '$pageview' &&
+          payload.properties?.$pathname === `/${viewer.profile?.handle}`,
+      ),
+    )
+    .toBe(true);
   await page.getByRole('link', { name: '개인정보 처리방침' }).click();
   await expect(page).toHaveURL(/\/privacy$/u);
   await expect
-    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
-    .toBe(4);
+    .poll(() =>
+      payloads.some(
+        (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
+      ),
+    )
+    .toBe(true);
+  await expect.poll(() => payloads.some((payload) => payload.event === '$autocapture')).toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+  await expect.poll(() => payloads.some((payload) => payload.event === '$pageleave')).toBe(true);
 
-  await page.goto('/privacy?secret_query=second#secret-fragment');
-  await expect
-    .poll(() => payloads.filter((payload) => payload.event === '$pageview').length)
-    .toBe(5);
-
-  const pageviews = payloads.filter((payload) => payload.event === '$pageview');
-  expect(pageviews).toHaveLength(5);
-  expect(pageviews.map((payload) => payload.properties?.$pathname)).toEqual([
-    '/',
-    '/[profileHandle]',
-    '/[profileHandle]',
-    '/privacy',
-    '/privacy',
-  ]);
-  expect(payloads.every((payload) => payload.event === '$pageview')).toBe(true);
-  expect(JSON.stringify(payloads)).not.toContain('secret_query');
-  expect(JSON.stringify(payloads)).not.toContain('secret-fragment');
-
-  for (const [index, payload] of pageviews.entries()) {
-    expect(payload.properties).not.toHaveProperty('$current_url');
-    expect(payload.properties).not.toHaveProperty('$prev_pageview_pathname');
-    expect(payload.properties?.$session_entry_utm_source).toBe(
-      index === 0 ? 'newsletter' : undefined,
-    );
-    expect(payload.properties?.$session_entry_gclid).toBe(
-      index === 0 ? 'campaign-click-id' : undefined,
-    );
-  }
+  const rootPageview = payloads.find(
+    (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/',
+  );
+  expect(rootPageview?.properties?.$current_url).toContain('/?utm_source=newsletter#overview');
+  expect(rootPageview?.properties?.$session_entry_utm_source).toBe('newsletter');
+  expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 
 test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도 인증 흐름을 유지한다', async ({

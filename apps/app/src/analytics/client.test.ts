@@ -14,6 +14,8 @@ class FakePostHog {
   captureFails = false;
   identifyFails = false;
   resetFails = false;
+  distinctId = 'anonymous-id';
+  userState: 'anonymous' | 'identified' = 'anonymous';
 
   capture(event: string, properties?: Record<string, unknown>) {
     this.captureAttempts += 1;
@@ -30,6 +32,8 @@ class FakePostHog {
     }
     this.actions.push(`identify:${accountId}`);
     this.identities.push(accountId);
+    this.distinctId = accountId;
+    this.userState = 'identified';
   }
 
   reset() {
@@ -38,6 +42,21 @@ class FakePostHog {
       throw new Error('reset failure');
     }
     this.resets += 1;
+    this.distinctId = `anonymous-${this.resets}`;
+    this.userState = 'anonymous';
+  }
+
+  get_distinct_id() {
+    return this.distinctId;
+  }
+
+  get_property(name: string) {
+    return name === '$user_state' ? this.userState : undefined;
+  }
+
+  setPersistedIdentity(accountId: string) {
+    this.distinctId = accountId;
+    this.userState = 'identified';
   }
 }
 
@@ -91,7 +110,7 @@ describe('PostHog Web client', () => {
     assert.equal(instances.length, 0);
   });
 
-  it('완전한 공개 설정에서 한 번 초기화하고 자동 수집을 비활성화한다', () => {
+  it('완전한 공개 설정에서 권장 defaults로 한 번 초기화하고 표준 동작을 차단하지 않는다', () => {
     const client = analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
 
@@ -100,86 +119,10 @@ describe('PostHog Web client', () => {
     assert.deepEqual(initCalls[0], {
       token: 'project-key',
       config: {
-        advanced_disable_flags: true,
         api_host: 'https://us.i.posthog.com',
-        autocapture: false,
-        before_send: initCalls[0]?.config.before_send,
-        capture_exceptions: false,
-        capture_pageleave: false,
-        capture_pageview: false,
-        capture_performance: false,
-        disable_capture_url_hashes: true,
-        disable_external_dependency_loading: true,
-        disable_scroll_properties: true,
-        disable_session_recording: true,
-        enable_heatmaps: false,
-        enable_recording_console_log: false,
-        opt_out_useragent_filter: false,
-        persistence: 'memory',
-        person_profiles: 'identified_only',
-        property_denylist: [
-          '$current_url',
-          '$host',
-          '$initial_current_url',
-          '$initial_host',
-          '$initial_pathname',
-          '$initial_referrer',
-          '$initial_referring_domain',
-          '$prev_pageview_pathname',
-          '$raw_user_agent',
-          '$referrer',
-          '$referring_domain',
-          '$search_engine',
-          '$session_entry_host',
-          '$session_entry_pathname',
-          '$session_entry_referrer',
-          '$session_entry_referring_domain',
-          '$session_entry_url',
-          '$session_entry_search_engine',
-          '$session_entry_ph_keyword',
-          'ph_keyword',
-          'title',
-          'utm_campaign',
-          'utm_content',
-          'utm_medium',
-          'utm_source',
-          'utm_term',
-        ],
-        save_campaign_params: false,
-        save_referrer: false,
+        defaults: '2026-05-30',
       },
     });
-
-    const beforeSend = initCalls[0]?.config.before_send;
-    assert.equal(typeof beforeSend, 'function');
-    if (typeof beforeSend !== 'function') {
-      return;
-    }
-
-    assert.deepEqual(
-      beforeSend({
-        event: 'profile_created',
-        properties: { $pathname: '/private-handle', selected_profile_id: 'profile-id' },
-        uuid: '00000000-0000-7000-8000-000000000001',
-      }),
-      {
-        event: 'profile_created',
-        properties: { selected_profile_id: 'profile-id' },
-        uuid: '00000000-0000-7000-8000-000000000001',
-      },
-    );
-    assert.deepEqual(
-      beforeSend({
-        event: '$pageview',
-        properties: { $pathname: '/[profileHandle]' },
-        uuid: '00000000-0000-7000-8000-000000000002',
-      }),
-      {
-        event: '$pageview',
-        properties: { $pathname: '/[profileHandle]' },
-        uuid: '00000000-0000-7000-8000-000000000002',
-      },
-    );
   });
 
   it('E2E fake host와 명시적 flag에서만 PostHog user-agent filter를 해제한다', () => {
@@ -190,13 +133,13 @@ describe('PostHog Web client', () => {
 
     analytics.resetAnalyticsForTests();
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    assert.equal(initCalls[1]?.config.opt_out_useragent_filter, false);
+    assert.equal('opt_out_useragent_filter' in (initCalls[1]?.config ?? {}), false);
   });
 
   it('E2E fake host도 명시적 flag가 없으면 user-agent filter를 유지한다', () => {
     analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
 
-    assert.equal(initCalls[0]?.config.opt_out_useragent_filter, false);
+    assert.equal('opt_out_useragent_filter' in (initCalls[0]?.config ?? {}), false);
   });
 
   it('event별 typed payload를 전송한다', () => {
@@ -256,18 +199,6 @@ describe('PostHog Web client', () => {
     assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
   });
 
-  it('표준 pathname으로 route pageview를 전송한다', () => {
-    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
-    const instance = instances[0];
-    assert.ok(instance);
-
-    analytics.trackAnalytics('$pageview', { $pathname: '/[profileHandle]' });
-
-    assert.deepEqual(instance.calls, [
-      { event: '$pageview', properties: { $pathname: '/[profileHandle]' } },
-    ]);
-  });
-
   it('Account identity는 같은 ID를 SDK에 위임하고 전환·guest에서 reset 후 분리한다', () => {
     analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
     const instance = instances[0];
@@ -288,6 +219,32 @@ describe('PostHog Web client', () => {
       'identify:account-b',
       'reset',
     ]);
+  });
+
+  it('reload 뒤 SDK에 남은 같은 Account는 reset하지 않는다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.setPersistedIdentity('account-a');
+
+    analytics.identifyAnalytics('account-a');
+
+    assert.deepEqual(instance.actions, ['identify:account-a']);
+    assert.equal(instance.resets, 0);
+  });
+
+  it('reload 뒤 SDK에 남은 Account를 다른 Account와 guest에서 분리한다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const instance = instances[0];
+    assert.ok(instance);
+    instance.setPersistedIdentity('account-a');
+
+    analytics.identifyAnalytics('account-b');
+    analytics.clearAnalytics();
+    analytics.clearAnalytics();
+
+    assert.deepEqual(instance.actions, ['reset', 'identify:account-b', 'reset']);
+    assert.equal(instance.resets, 2);
   });
 
   it('A에서 B로 전환하는 reset 실패에도 직접 capture를 허용한다', () => {

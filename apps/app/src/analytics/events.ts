@@ -1,5 +1,4 @@
 export type AnalyticsEventProperties = {
-  $pageview: { $pathname: string };
   profile_created: { selected_profile_id: string };
   profile_selected: { selected_profile_id: string };
   post_created: {

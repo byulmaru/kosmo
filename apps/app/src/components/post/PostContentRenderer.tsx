@@ -14,11 +14,13 @@ import type {
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
-import type { StyleProp, TextStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewProps } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
+
+const postHogMaskProps = { className: 'ph-mask' } as unknown as ViewProps;
 
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
@@ -94,7 +96,7 @@ export function PostContentRenderer({
     return null;
   }
   return (
-    <View style={styles.root} testID="post-content-renderer">
+    <View {...postHogMaskProps} style={styles.root} testID="post-content-renderer">
       {showContentWarning ? (
         <View
           accessibilityLiveRegion="polite"
