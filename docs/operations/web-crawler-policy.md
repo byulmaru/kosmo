@@ -58,7 +58,6 @@ Sitemap: https://kos.moe/sitemap.xml
 검토 기준일인 2026-08-27에 다음 저장소 범위 검증을 통과했다.
 
 - `pnpm --filter @kosmo/web test:unit`: 38 tests passed
-- 실제 실행한 production-like `apps/web/e2e/robots.e2e.ts`: 1 test passed
 - `apps/web` TypeScript check: passed
 - `apps/web/src/server/app.test.ts` ESLint: passed
 - 변경한 TypeScript 테스트·운영 문서 Prettier check: passed

@@ -92,7 +92,7 @@ Cloudflare 운영 담당자와 크롤러 정책 갱신 담당자다.
    기본값보다 실제 적용된 action과 rule expression을 근거로 기록한다.
 6. 자동 검증은 저장소 문서를 에이전트·경로 기준으로 해석해 보호 prefix, 공개 경로, 검색용·학습용 에이전트와
    ActivityPub 예외를 확인한다. 기존 runtime routing test에는 robots fixture를 제공해 Content-Type과 SPA
-   비간섭을 검증하고, production-like export E2E에서는 실제 build 산출물과 BFF 응답을 확인한다.
+   비간섭을 검증한다.
 7. edge 변경 전후의 Security Events와 origin 도달 여부를 비교한다. 대표 Training 크롤러와 Search·Training
    behavior를 함께 가진 크롤러의 일반 Web 요청은 edge block, Search/Agent 전용 요청은 비차단, 실제 연합
    특성의 WebFinger·actor/object·collection·inbox 요청은 origin handler 도달을 확인한다. 형식만 갖췄을 뿐
