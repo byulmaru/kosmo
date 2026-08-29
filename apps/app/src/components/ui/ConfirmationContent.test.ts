@@ -29,6 +29,7 @@ type TestElementProps = {
   disabled?: boolean;
   hitSlop?: { bottom: number; left: number; right: number; top: number };
   loading?: boolean;
+  style?: unknown;
   tone?: 'danger' | 'primary' | 'secondary';
 };
 type TestElement = ReactElement<TestElementProps>;
@@ -81,6 +82,14 @@ function findElements(node: ReactNode, type: string): TestElement[] {
   return [...matches, ...children.flatMap((child) => findElements(child, type))];
 }
 
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return (Array.isArray(style) ? style : [style]).reduce<Record<string, unknown>>(
+    (result, entry) =>
+      entry && typeof entry === 'object' ? { ...result, ...(entry as object) } : result,
+    {},
+  );
+}
+
 test('actions keep cancel-confirm order and pending state', () => {
   const buttons = findElements(render('web', true, 'danger'), 'Button');
 
@@ -101,23 +110,28 @@ test('actions keep cancel-confirm order and pending state', () => {
   );
 });
 
-test('Native expands the 40px visual action height without overlapping adjacent actions', () => {
-  for (const [platform, verticalInset] of [
-    ['ios', 2],
-    ['android', 4],
+test('actions keep 120x40 visual bounds inside each platform target height', () => {
+  for (const [platform, targetHeight, verticalInset] of [
+    ['web', 40, undefined],
+    ['ios', 44, 2],
+    ['android', 48, 4],
   ] as const) {
-    const buttons = findElements(render(platform), 'Button');
-    for (const button of buttons) {
-      assert.deepEqual(button.props.hitSlop, {
-        bottom: verticalInset,
-        left: 0,
-        right: 0,
-        top: verticalInset,
-      });
-    }
-  }
+    const tree = render(platform);
+    const actionRow = findElements(tree, 'View').find(
+      ({ props }) => flattenStyle(props.style).flexDirection === 'row',
+    );
+    assert.ok(actionRow);
+    assert.equal(flattenStyle(actionRow.props.style).minHeight, targetHeight);
 
-  for (const button of findElements(render('web'), 'Button')) {
-    assert.equal(button.props.hitSlop, undefined);
+    const buttons = findElements(tree, 'Button');
+    for (const button of buttons) {
+      assert.deepEqual(flattenStyle(button.props.style), { height: 40, width: 120 });
+      assert.deepEqual(
+        button.props.hitSlop,
+        verticalInset
+          ? { bottom: verticalInset, left: 0, right: 0, top: verticalInset }
+          : undefined,
+      );
+    }
   }
 });

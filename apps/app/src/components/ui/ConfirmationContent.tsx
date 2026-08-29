@@ -27,6 +27,7 @@ export function ConfirmationContent({
 }: Props) {
   const theme = useTheme();
   const verticalTargetInset = Platform.OS === 'ios' ? 2 : Platform.OS === 'android' ? 4 : 0;
+  const targetHeight = Platform.OS === 'web' ? 40 : Platform.OS === 'ios' ? 44 : 48;
   const hitSlop = verticalTargetInset
     ? { bottom: verticalTargetInset, left: 0, right: 0, top: verticalTargetInset }
     : undefined;
@@ -35,8 +36,14 @@ export function ConfirmationContent({
     <View style={styles.root}>
       <Text style={[styles.message, { color: theme.foregroundSecondary }]}>{message}</Text>
       {supportingContent}
-      <View style={styles.actions}>
-        <Button disabled={pending} hitSlop={hitSlop} onPress={onCancel} tone="secondary">
+      <View style={[styles.actions, { minHeight: targetHeight }]}>
+        <Button
+          disabled={pending}
+          hitSlop={hitSlop}
+          onPress={onCancel}
+          style={styles.action}
+          tone="secondary"
+        >
           {cancelLabel}
         </Button>
         <Button
@@ -44,6 +51,7 @@ export function ConfirmationContent({
           hitSlop={hitSlop}
           loading={pending}
           onPress={onConfirm}
+          style={styles.action}
           tone={tone}
         >
           {confirmLabel}
@@ -56,5 +64,11 @@ export function ConfirmationContent({
 const styles = StyleSheet.create({
   root: { gap: space[12] },
   message: textStyles.uiCopyM,
-  actions: { flexDirection: 'row', gap: space[8], justifyContent: 'flex-end' },
+  actions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space[8],
+    justifyContent: 'flex-end',
+  },
+  action: { height: 40, width: 120 },
 });

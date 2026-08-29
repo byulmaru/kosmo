@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
@@ -12,6 +12,7 @@ type CatalogProps = {
   cancelLabel: string;
   confirmLabel: string;
   dismissible: boolean;
+  interactiveSupporting?: boolean;
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -27,6 +28,7 @@ function ConfirmationContentCatalog({
   cancelLabel,
   confirmLabel,
   dismissible,
+  interactiveSupporting = false,
   message,
   onCancel,
   onConfirm,
@@ -38,6 +40,7 @@ function ConfirmationContentCatalog({
   tone,
 }: CatalogProps) {
   const [visible, setVisible] = useState(false);
+  const [supportingChecked, setSupportingChecked] = useState(false);
   const theme = useTheme();
   const pending = state === 'pending';
   const closeFromShell = () => {
@@ -66,7 +69,19 @@ function ConfirmationContentCatalog({
           onConfirm={onConfirm}
           pending={pending}
           supportingContent={
-            supportingText ? (
+            interactiveSupporting ? (
+              <Pressable
+                aria-checked={supportingChecked}
+                accessibilityLabel="관련 링크도 삭제"
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: supportingChecked }}
+                onPress={() => setSupportingChecked((checked) => !checked)}
+              >
+                <Text style={[styles.supporting, { color: theme.foregroundSecondary }]}>
+                  관련 링크도 삭제
+                </Text>
+              </Pressable>
+            ) : supportingText ? (
               <Text style={[styles.supporting, { color: theme.foregroundSecondary }]}>
                 {supportingText}
               </Text>
@@ -100,7 +115,7 @@ const meta = {
     tone: { control: 'inline-radio', options: ['primary', 'danger'] },
   },
   component: ConfirmationContentCatalog,
-  excludeStories: ['DismissAndFocusContract', 'PendingContract'],
+  excludeStories: ['DismissAndFocusContract', 'InteractiveSupportingContract', 'PendingContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Confirmation Content',
 } satisfies Meta<typeof ConfirmationContentCatalog>;
@@ -176,11 +191,13 @@ export const Danger: Story = {
     title: '삭제할까요?',
     tone: 'danger',
   },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: openConfirmation,
 };
 
 export const Pending: Story = {
   args: { ...Danger.args, state: 'pending' },
+  globals: { viewport: { isRotated: false, value: 'kosmoProfileCompact' } },
   play: openConfirmation,
 };
 
@@ -191,7 +208,11 @@ export const WithSupportingContent: Story = {
 
 export const Dark: Story = {
   args: Danger.args,
-  globals: { backgrounds: { value: 'kosmoDark' }, theme: 'dark' },
+  globals: {
+    backgrounds: { value: 'kosmoDark' },
+    theme: 'dark',
+    viewport: { isRotated: false, value: 'kosmoProfileFull' },
+  },
   play: openConfirmation,
 };
 
@@ -202,6 +223,7 @@ export const DismissAndFocusContract: Story = {
     args.onDismiss.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '확인 열기' });
+    const initialBodyOverflow = document.body.style.overflow;
     const open = async () => {
       await userEvent.click(trigger);
       return screen.findByRole('alertdialog', { name: args.title });
@@ -211,6 +233,8 @@ export const DismissAndFocusContract: Story = {
       const surface = await open();
       const close = within(surface).getByRole('button', { name: '닫기' });
       const confirm = within(surface).getByRole('button', { name: args.confirmLabel });
+      expect(surface).toHaveAttribute('aria-modal', 'true');
+      expect(document.body.style.overflow).toBe('hidden');
       await waitFor(() => expect(close).toHaveFocus());
       await userEvent.tab({ shift: true });
       expect(confirm).toHaveFocus();
@@ -222,6 +246,7 @@ export const DismissAndFocusContract: Story = {
       await userEvent.keyboard('{Escape}');
       await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
       await waitFor(() => expect(trigger).toHaveFocus());
+      expect(document.body.style.overflow).toBe(initialBodyOverflow);
       expect(args.onDismiss).toHaveBeenCalledOnce();
     });
 
@@ -231,6 +256,27 @@ export const DismissAndFocusContract: Story = {
       await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
       await waitFor(() => expect(trigger).toHaveFocus());
       expect(args.onDismiss).toHaveBeenCalledTimes(2);
+    });
+  },
+};
+
+export const InteractiveSupportingContract: Story = {
+  args: { ...Danger.args, interactiveSupporting: true, state: 'pending' },
+  globals: { reduceMotion: true },
+  play: async ({ args, canvasElement, step }) => {
+    const canvas = within(canvasElement);
+
+    await step('Pending 중 interactive supporting content의 focus 순환', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '확인 열기' }));
+      const surface = await screen.findByRole('alertdialog', { name: args.title });
+      const supportingControl = within(surface).getByRole('checkbox', {
+        name: '관련 링크도 삭제',
+      });
+      await waitFor(() => expect(supportingControl).toHaveFocus());
+      await userEvent.tab();
+      expect(supportingControl).toHaveFocus();
+      await userEvent.tab({ shift: true });
+      expect(supportingControl).toHaveFocus();
     });
   },
 };
