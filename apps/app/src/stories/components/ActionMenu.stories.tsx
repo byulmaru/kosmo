@@ -1,6 +1,6 @@
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { expect, fireEvent, fn, screen, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { ActionMenu } from '@/components/ui/ActionMenu';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { semanticColors, spacing } from '@/theme/tokens';
@@ -17,17 +17,21 @@ function ActionMenuFixture({
   disabled = false,
   itemCount = 2,
   itemLabels = defaultItemLabels,
+  onOpenChange,
   onSelect,
   triggerLabel = '더 보기',
   webHorizontalPlacement,
+  webVerticalPlacement,
 }: {
   compactTrigger?: boolean;
   disabled?: boolean;
   itemCount?: number;
   itemLabels?: string[];
+  onOpenChange?: (open: boolean) => void;
   onSelect?: (key: string) => void;
   triggerLabel?: string;
-  webHorizontalPlacement?: 'end';
+  webHorizontalPlacement?: 'after' | 'end';
+  webVerticalPlacement?: 'end';
 }) {
   const items = Array.from({ length: Math.max(1, Math.min(8, itemCount)) }, (_, index) => {
     const key = `item-${index + 1}`;
@@ -44,6 +48,7 @@ function ActionMenuFixture({
         accessibilityLabel={`${triggerLabel} 메뉴`}
         disabled={disabled}
         items={items}
+        onOpenChange={onOpenChange}
         renderTrigger={({ disabled: triggerDisabled, expanded, onPress, ref }) => (
           <Pressable
             accessibilityLabel={triggerLabel}
@@ -59,6 +64,7 @@ function ActionMenuFixture({
           </Pressable>
         )}
         webHorizontalPlacement={webHorizontalPlacement}
+        webVerticalPlacement={webVerticalPlacement}
       />
     </View>
   );
@@ -81,6 +87,15 @@ function ActionMenuCollisionFixtures({ onSelect }: { onSelect?: (key: string) =>
           compactTrigger
           itemCount={1}
           webHorizontalPlacement="end"
+        />
+      </View>
+      <View accessibilityLabel="after-end menu fixture">
+        <ActionMenuFixture
+          {...repostFixtureProps}
+          compactTrigger
+          itemCount={1}
+          webHorizontalPlacement="after"
+          webVerticalPlacement="end"
         />
       </View>
     </View>
@@ -155,6 +170,7 @@ const meta = {
     disabled: false,
     itemCount: 2,
     itemLabels: defaultItemLabels,
+    onOpenChange: fn(),
     onSelect: fn(),
     triggerLabel: '더 보기',
   },
@@ -198,6 +214,7 @@ export const InteractionContract: Story = {
     );
     const triggerLabel = args.triggerLabel ?? '더 보기';
     const trigger = canvas.getByRole('button', { name: triggerLabel });
+    const onOpenChange = mocked(args.onOpenChange!);
 
     if (args.disabled) {
       await step('비활성 trigger 계약 확인', async () => {
@@ -214,7 +231,9 @@ export const InteractionContract: Story = {
 
     await step('메뉴 열기·키보드 탐색·dismiss', async () => {
       expect(trigger).toHaveAttribute('aria-haspopup', 'menu');
+      onOpenChange.mockClear();
       await userEvent.click(trigger);
+      expect(onOpenChange).toHaveBeenLastCalledWith(true);
       const menu = await screen.findByRole('menu', { name: `${triggerLabel} 메뉴` });
       const items = within(menu).getAllByRole('menuitem');
       expect(items.map((item) => item.textContent)).toEqual(itemLabels);
@@ -227,6 +246,7 @@ export const InteractionContract: Story = {
       }
       await userEvent.keyboard('{Escape}');
       expect(screen.queryByRole('menu', { name: `${triggerLabel} 메뉴` })).not.toBeInTheDocument();
+      expect(onOpenChange).toHaveBeenLastCalledWith(false);
       expect(trigger).toHaveFocus();
     });
 
@@ -435,6 +455,26 @@ export const ViewportCollision: Story = {
       Object.assign(endAlignedTrigger.style, { left: '8px', right: 'auto' });
       ownerDocument.dispatchEvent(new Event('scroll'));
       await waitFor(() => expectEndAlignedGeometry(0));
+      await userEvent.keyboard('{Escape}');
+    });
+
+    await step('오른쪽 바깥·아래끝 anchor 확인', async () => {
+      const afterEndFixture = within(canvas.getByLabelText('after-end menu fixture'));
+      const afterEndTrigger = afterEndFixture.getByRole('button', { name: '재게시' });
+      Object.assign(afterEndTrigger.style, {
+        left: '160px',
+        position: 'fixed',
+        top: '160px',
+      });
+      await userEvent.click(afterEndTrigger);
+      const afterEndMenu = await screen.findByRole('menu', { name: '재게시 메뉴' });
+
+      await waitFor(() => {
+        const menuRect = afterEndMenu.getBoundingClientRect();
+        const triggerRect = afterEndTrigger.getBoundingClientRect();
+        expect(menuRect.left).toBeCloseTo(triggerRect.right + spacing.sm, 0);
+        expect(menuRect.bottom).toBeCloseTo(triggerRect.bottom, 0);
+      });
       await userEvent.keyboard('{Escape}');
     });
   },
