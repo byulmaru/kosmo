@@ -6,7 +6,7 @@ import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/toke
 import { useOverlayMotion } from '@/theme/useOverlayMotion';
 import { ActionMenuPortal } from './ActionMenuPortal';
 import { IconButton } from './IconButton';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, RefObject } from 'react';
 
 const focusableSelector = [
   'button:not([disabled]):not([aria-disabled="true"])',
@@ -19,6 +19,7 @@ const focusableSelector = [
 
 type Props = PropsWithChildren<{
   dismissible?: boolean;
+  initialFocusRef?: RefObject<View | null>;
   onClose: () => void;
   role?: 'alertdialog' | 'dialog';
   title: string;
@@ -28,6 +29,7 @@ type Props = PropsWithChildren<{
 export function ModalSheet({
   children,
   dismissible = true,
+  initialFocusRef,
   onClose,
   role = 'dialog',
   title,
@@ -57,6 +59,23 @@ export function ModalSheet({
       }
     });
   }, []);
+  const focusInitialTarget = useCallback(() => {
+    const preferredTarget = initialFocusRef?.current;
+    if (Platform.OS !== 'web') {
+      (preferredTarget as unknown as { focus?: () => void } | null)?.focus?.();
+      return;
+    }
+
+    const surface = surfaceRef.current as unknown as HTMLElement | null;
+    const preferredElement = preferredTarget as unknown as HTMLElement | null;
+    const target =
+      preferredElement &&
+      surface?.contains(preferredElement) &&
+      preferredElement.matches(focusableSelector)
+        ? preferredElement
+        : (surface?.querySelector<HTMLElement>(focusableSelector) ?? surface);
+    target?.focus();
+  }, [initialFocusRef]);
 
   useEffect(() => {
     if (Platform.OS === 'web' && visible) {
@@ -92,12 +111,9 @@ export function ModalSheet({
       return;
     }
 
-    const frame = requestAnimationFrame(() => {
-      const surface = surfaceRef.current as unknown as HTMLElement | null;
-      (surface?.querySelector<HTMLElement>(focusableSelector) ?? surface)?.focus();
-    });
+    const frame = requestAnimationFrame(focusInitialTarget);
     return () => cancelAnimationFrame(frame);
-  }, [dismissible, visible]);
+  }, [dismissible, focusInitialTarget, visible]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !visible) {
@@ -204,16 +220,17 @@ export function ModalSheet({
             >
               {title}
             </Text>
-            <IconButton
-              accessibilityLabel="닫기"
-              disabled={!dismissible}
-              onPress={requestClose}
-              style={styles.close}
-              targetSize={44}
-              visualSize={44}
-            >
-              <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
-            </IconButton>
+            {dismissible ? (
+              <IconButton
+                accessibilityLabel="닫기"
+                onPress={requestClose}
+                style={styles.close}
+                targetSize={44}
+                visualSize={44}
+              >
+                <XIcon color={theme.foregroundPrimary} size={iconSizes[20]} />
+              </IconButton>
+            ) : null}
           </View>
           {children}
         </View>
@@ -234,6 +251,7 @@ export function ModalSheet({
       animationType="none"
       onDismiss={restoreFocus}
       onRequestClose={requestClose}
+      onShow={focusInitialTarget}
       transparent
       visible={overlayMotion.mounted}
     >

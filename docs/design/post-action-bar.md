@@ -205,9 +205,10 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   별도 Product/Frontend migration에서 정렬한다. 임시 semantic surface는 별도 visual component source가 아니다.
   처음 열릴 때 안전한
   `취소`에 focus를 두고 pending 전에는 Escape, platform back과 backdrop으로 취소할 수 있으며 닫은 뒤 More
-  trigger로 focus를 돌려보낸다.
+  trigger로 focus를 돌려보낸다. pending 중에는 header의 닫기 X를 렌더링하지 않으며 Escape, platform back, backdrop과
+  accessibility escape 및 두 action을 막고 destructive action에 busy 상태를 노출한다.
 - 사용자가 dialog의 `삭제`를 확인한 경우에만 target Post ID로 기존 GraphQL `deletePost` mutation을 한 번
-  실행한다. pending 중에는 두 action과 dismiss 입력을 막고 destructive action에 busy 상태를 노출한다.
+  실행한다.
 - 서버 성공 payload의 `postId`를 확인한 뒤에만 현재 Relay actor Store에서 해당 Post를 Active content로
   제거한다. Home·Profile 목록은 삭제된 Post edge를 표시하지 않고 상세는 기존 삭제됨·접근 불가 상태로
   전환하며, 다른 selected Profile의 actor Store는 변경하지 않는다. 성공하면 dialog를 닫고 성공 toast는

@@ -29,6 +29,7 @@ type TestElementProps = {
   disabled?: boolean;
   hitSlop?: { bottom: number; left: number; right: number; top: number };
   loading?: boolean;
+  onPress?: (...args: unknown[]) => void;
   style?: unknown;
   tone?: 'danger' | 'primary' | 'secondary';
 };
@@ -108,6 +109,27 @@ test('actions keep cancel-confirm order and pending state', () => {
       { disabled: undefined, loading: true, tone: 'danger' },
     ],
   );
+});
+
+test('actions do not expose the press event to consumer callbacks', () => {
+  assert.ok(ConfirmationContent, 'ConfirmationContent component must exist');
+  const cancelCalls: unknown[][] = [];
+  const confirmCalls: unknown[][] = [];
+  const tree = ConfirmationContent({
+    cancelLabel: '취소',
+    confirmLabel: '확인',
+    message: '계속할까요?',
+    onCancel: (...args: unknown[]) => cancelCalls.push(args),
+    onConfirm: (...args: unknown[]) => confirmCalls.push(args),
+  });
+  const [cancelButton, confirmButton] = findElements(tree, 'Button');
+  const pressEvent = { type: 'press' };
+
+  cancelButton?.props.onPress?.(pressEvent);
+  confirmButton?.props.onPress?.(pressEvent);
+
+  assert.deepEqual(cancelCalls, [[]]);
+  assert.deepEqual(confirmCalls, [[]]);
 });
 
 test('actions keep 120x40 visual bounds inside each platform target height', () => {

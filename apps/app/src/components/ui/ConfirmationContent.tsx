@@ -2,9 +2,10 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
 import { Button } from './Button';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 type Props = {
+  cancelControlRef?: Ref<View>;
   cancelLabel: string;
   confirmLabel: string;
   message: string;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function ConfirmationContent({
+  cancelControlRef,
   cancelLabel,
   confirmLabel,
   message,
@@ -38,9 +40,10 @@ export function ConfirmationContent({
       {supportingContent}
       <View style={[styles.actions, { minHeight: targetHeight }]}>
         <Button
+          controlRef={cancelControlRef}
           disabled={pending}
           hitSlop={hitSlop}
-          onPress={onCancel}
+          onPress={() => onCancel()}
           style={styles.action}
           tone="secondary"
         >
@@ -50,7 +53,7 @@ export function ConfirmationContent({
           aria-busy={pending || undefined}
           hitSlop={hitSlop}
           loading={pending}
-          onPress={onConfirm}
+          onPress={() => onConfirm()}
           style={styles.action}
           tone={tone}
         >

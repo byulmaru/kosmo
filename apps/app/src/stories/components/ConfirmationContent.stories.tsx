@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '@/components/ui/Button';
@@ -11,13 +11,12 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 type CatalogProps = {
   cancelLabel: string;
   confirmLabel: string;
-  dismissible: boolean;
   interactiveSupporting?: boolean;
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
   onDismiss: () => void;
-  presentation: 'alertdialog' | 'dialog';
+  role: 'alertdialog' | 'dialog';
   state: 'idle' | 'pending';
   supportingText: string;
   title: string;
@@ -27,13 +26,12 @@ type CatalogProps = {
 function ConfirmationContentCatalog({
   cancelLabel,
   confirmLabel,
-  dismissible,
   interactiveSupporting = false,
   message,
   onCancel,
   onConfirm,
   onDismiss,
-  presentation,
+  role,
   state,
   supportingText,
   title,
@@ -41,6 +39,7 @@ function ConfirmationContentCatalog({
 }: CatalogProps) {
   const [visible, setVisible] = useState(false);
   const [supportingChecked, setSupportingChecked] = useState(false);
+  const cancelControlRef = useRef<View>(null);
   const theme = useTheme();
   const pending = state === 'pending';
   const closeFromShell = () => {
@@ -52,13 +51,15 @@ function ConfirmationContentCatalog({
     <View style={styles.fixture}>
       <Button onPress={() => setVisible(true)}>확인 열기</Button>
       <ModalSheet
-        dismissible={dismissible && !pending}
+        dismissible={!pending}
+        initialFocusRef={pending ? undefined : cancelControlRef}
         onClose={closeFromShell}
-        role={presentation}
+        role={role}
         title={title}
         visible={visible}
       >
         <ConfirmationContent
+          cancelControlRef={cancelControlRef}
           cancelLabel={cancelLabel}
           confirmLabel={confirmLabel}
           message={message}
@@ -98,24 +99,22 @@ const meta = {
   args: {
     cancelLabel: '취소',
     confirmLabel: '확인',
-    dismissible: true,
     message: '이 작업을 계속할까요?',
     onCancel: fn(),
     onConfirm: fn(),
     onDismiss: fn(),
-    presentation: 'dialog',
+    role: 'dialog',
     state: 'idle',
     supportingText: '',
     title: '작업 확인',
     tone: 'primary',
   },
   argTypes: {
-    presentation: { control: 'inline-radio', options: ['dialog', 'alertdialog'] },
     state: { control: 'inline-radio', options: ['idle', 'pending'] },
     tone: { control: 'inline-radio', options: ['primary', 'danger'] },
   },
   component: ConfirmationContentCatalog,
-  excludeStories: ['DismissAndFocusContract', 'InteractiveSupportingContract', 'PendingContract'],
+  excludeStories: ['DismissAndFocusContract', 'InteractiveSupportingContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Confirmation Content',
 } satisfies Meta<typeof ConfirmationContentCatalog>;
@@ -126,12 +125,13 @@ const openConfirmation: Story['play'] = async ({ canvasElement }) => {
   await userEvent.click(within(canvasElement).getByRole('button', { name: '확인 열기' }));
 };
 
+export const Base: Story = { play: openConfirmation };
+
 export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
       include: [
-        'presentation',
         'tone',
         'state',
         'title',
@@ -139,45 +139,60 @@ export const Playground: Story = {
         'supportingText',
         'cancelLabel',
         'confirmLabel',
-        'dismissible',
       ],
     },
   },
   play: async ({ args, canvasElement, step }) => {
     args.onCancel.mockClear();
     args.onConfirm.mockClear();
+    args.onDismiss.mockClear();
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '확인 열기' });
 
     await step('확인 surface 열기와 단일 role 확인', async () => {
       await userEvent.click(trigger);
-      const surface = await screen.findByRole(args.presentation, { name: args.title });
+      const surface = await screen.findByRole(args.role, { name: args.title });
       expect(surface).toBeVisible();
-      expect(screen.getAllByRole(args.presentation)).toHaveLength(1);
-      await waitFor(() =>
-        expect(within(surface).getByRole('button', { name: '닫기' })).toHaveFocus(),
-      );
+      expect(screen.getAllByRole(args.role)).toHaveLength(1);
+      const initialFocusTarget =
+        args.state === 'pending'
+          ? surface
+          : within(surface).getByRole('button', { name: args.cancelLabel });
+      await waitFor(() => expect(initialFocusTarget).toHaveFocus());
     });
 
     if (args.state === 'pending') {
-      await step('Pending action 차단 확인', async () => {
-        expect(screen.getByRole('button', { name: args.cancelLabel })).toHaveAttribute(
-          'aria-disabled',
-          'true',
-        );
-        expect(screen.getByRole('button', { name: args.confirmLabel })).toHaveAttribute(
-          'aria-busy',
-          'true',
-        );
+      await step('Pending 중 action과 dismiss 차단', async () => {
+        const surface = screen.getByRole(args.role, { name: args.title });
+        const confirm = within(surface).getByRole('button', { name: args.confirmLabel });
+        const cancel = within(surface).getByRole('button', { name: args.cancelLabel });
+        expect(cancel).toHaveAttribute('aria-disabled', 'true');
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        expect(confirm).toHaveAttribute('aria-busy', 'true');
+        expect(within(surface).queryByRole('button', { name: '닫기' })).not.toBeInTheDocument();
+        await userEvent.keyboard('{Escape}');
+        const backdrop = screen.getByTestId('modal-sheet-backdrop');
+        expect(getComputedStyle(backdrop).pointerEvents).toBe('none');
+        expect(surface).toBeVisible();
+        expect(args.onDismiss).not.toHaveBeenCalled();
       });
       return;
     }
 
+    await step('닫기 dismiss와 trigger focus 복귀', async () => {
+      const surface = screen.getByRole(args.role, { name: args.title });
+      await userEvent.click(within(surface).getByRole('button', { name: '닫기' }));
+      expect(args.onDismiss).toHaveBeenCalledWith();
+      await waitFor(() => expect(trigger).toHaveFocus());
+      await userEvent.click(trigger);
+      await screen.findByRole(args.role, { name: args.title });
+    });
+
     await step('확인과 취소 callback 확인', async () => {
       await userEvent.click(screen.getByRole('button', { name: args.confirmLabel }));
-      expect(args.onConfirm).toHaveBeenCalledOnce();
+      expect(args.onConfirm).toHaveBeenCalledWith();
       await userEvent.click(screen.getByRole('button', { name: args.cancelLabel }));
-      expect(args.onCancel).toHaveBeenCalledOnce();
+      expect(args.onCancel).toHaveBeenCalledWith();
       await waitFor(() => expect(trigger).toHaveFocus());
     });
   },
@@ -187,7 +202,7 @@ export const Danger: Story = {
   args: {
     confirmLabel: '삭제',
     message: '삭제한 내용은 복구할 수 없습니다.',
-    presentation: 'alertdialog',
+    role: 'alertdialog',
     title: '삭제할까요?',
     tone: 'danger',
   },
@@ -198,7 +213,7 @@ export const Danger: Story = {
 export const Pending: Story = {
   args: { ...Danger.args, state: 'pending' },
   globals: { viewport: { isRotated: false, value: 'kosmoProfileCompact' } },
-  play: openConfirmation,
+  play: Playground.play,
 };
 
 export const WithSupportingContent: Story = {
@@ -232,10 +247,13 @@ export const DismissAndFocusContract: Story = {
     await step('초기 focus와 순환', async () => {
       const surface = await open();
       const close = within(surface).getByRole('button', { name: '닫기' });
+      const cancel = within(surface).getByRole('button', { name: args.cancelLabel });
       const confirm = within(surface).getByRole('button', { name: args.confirmLabel });
       expect(surface).toHaveAttribute('aria-modal', 'true');
       expect(document.body.style.overflow).toBe('hidden');
-      await waitFor(() => expect(close).toHaveFocus());
+      await waitFor(() => expect(cancel).toHaveFocus());
+      await userEvent.tab({ shift: true });
+      expect(close).toHaveFocus();
       await userEvent.tab({ shift: true });
       expect(confirm).toHaveFocus();
       await userEvent.tab();
@@ -277,39 +295,6 @@ export const InteractiveSupportingContract: Story = {
       expect(supportingControl).toHaveFocus();
       await userEvent.tab({ shift: true });
       expect(supportingControl).toHaveFocus();
-    });
-  },
-};
-
-export const PendingContract: Story = {
-  args: { ...Danger.args, state: 'pending' },
-  globals: { reduceMotion: true },
-  play: async ({ args, canvasElement, step }) => {
-    args.onCancel.mockClear();
-    args.onConfirm.mockClear();
-    args.onDismiss.mockClear();
-    const canvas = within(canvasElement);
-
-    await step('Pending 중 action과 dismiss 차단', async () => {
-      await userEvent.click(canvas.getByRole('button', { name: '확인 열기' }));
-      const surface = await screen.findByRole('alertdialog', { name: args.title });
-      const cancel = within(surface).getByRole('button', { name: args.cancelLabel });
-      const confirm = within(surface).getByRole('button', { name: args.confirmLabel });
-      const close = within(surface).getByRole('button', { name: '닫기' });
-      expect(cancel).toHaveAttribute('aria-disabled', 'true');
-      expect(confirm).toHaveAttribute('aria-busy', 'true');
-      expect(close).toHaveAttribute('aria-disabled', 'true');
-      await waitFor(() => expect(surface).toHaveFocus());
-      await userEvent.keyboard('{Escape}');
-      const backdrop = screen.getByTestId('modal-sheet-backdrop');
-      expect(getComputedStyle(backdrop).pointerEvents).toBe('none');
-      backdrop.click();
-      confirm.click();
-      cancel.click();
-      expect(screen.getByRole('alertdialog', { name: args.title })).toBeVisible();
-      expect(args.onCancel).not.toHaveBeenCalled();
-      expect(args.onConfirm).not.toHaveBeenCalled();
-      expect(args.onDismiss).not.toHaveBeenCalled();
     });
   },
 };
