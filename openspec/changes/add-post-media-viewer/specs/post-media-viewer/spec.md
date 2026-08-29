@@ -1,8 +1,37 @@
+## Delivery boundary
+
+이 delta의 최종 행동 계약은 하나로 유지하되 전달과 검증 owner는 분리한다. PROD-650의 완료된
+Host·query·runtime 구현은 historical evidence로 보존한다. PROD-853은 Production consumer와 분리된
+공용 Viewer UI·component test·Storybook을 먼저 제공하고, PROD-849가 Production Host·Relay·route
+연결·교체와 Web/iOS/Android runtime을 수행한다. PROD-853 Storybook fixture는 Gallery·permission·Production
+연결 완료의 증거가 아니며, PROD-853 PR 완료만으로 이 change를 archive하지 않는다.
+
+- DSN-63 Target transition은 최종 계약이다. PROD-849는 Host 내부 retry capability를 유지하거나 제거하는 것과
+  무관하게 top-level Host query·Media `loading`·`error`·`unavailable`을 shared surface의
+  `Loading`·`Error`·`Unavailable` close-only `viewState`로 MUST 매핑한다. 해당 surface에는 close control만
+  MUST 렌더링하고 retry·detail·navigation·secondary controls는 MUST NOT 렌더링한다. Wide `Ready` thread rail
+  내부의 loading·error·retry는 이 top-level mapping과 별도의 nested rail contract다.
+
+## Current/Target state hierarchy and transition
+
+- `PROD-650 Current historical`로 표시한 기존 Host·Gallery·query·Media retry requirement는 현재 연결된 Production 동작과 완료 이력을 보존하는 non-normative evidence다.
+- DSN-63 Target의 `viewState`는 PROD-853이 Production consumer와 분리된 shared surface에서 제어하는 최종 presentation contract다. `Ready`·`Sensitive`는 presentation별 secondary surface와 navigation을, `Loading`·`Error`·`Unavailable`은 close-only surface를 사용한다.
+- PROD-849는 Gallery를 이 shared surface consumer로 교체·연결하면서 `onRevealSensitive` callback을 기존 Gallery permission/reveal 경계에 매핑한다. Host 내부 retry capability 유지·제거와 무관하게 Target top-level 상태 매핑을 수행하며, Wide `Ready` thread rail의 loading·error·retry는 별도 nested rail contract로 유지한다.
+
+## PROD-650 Current historical retry evidence (non-normative)
+
+> 다음 항목은 PROD-650의 연결된 Host/query/Media retry 동작을 historical evidence로만 보존한다. DSN-63 Target의 active `viewState` 최종 계약이나 PROD-849의 top-level close-only 매핑을 대체하지 않으며, 이 절에는 active MUST 규범이 없다.
+
+- Host Post query의 cache hit·loading·error·retry·null Post·Content·Media에서는 modal shell과 close control이 유지되고, content 영역에는 안전한 loading·error·retry 표현이 사용됐다. raw 오류와 authorization 세부 정보, 이전 Media byte·URL은 노출하지 않았다.
+- 현재 Media가 loading이거나 표시 URL load에 실패해도 현재 index와 당시 breakpoint의 Post detail surface가 유지됐고, 같은 image surface에서 안전한 오류와 해당 Media retry를 제공했다.
+- Media retry는 같은 index에서 승인된 표시 URL load를 다시 시작하고 다른 Media의 loading·ready·error 상태를 초기화하지 않았다.
+- 현재 query projection에 Post·Content·Media 또는 선택 index에 대응하는 Media가 없으면 modal chrome과 명시적 close control을 유지한 unavailable 상태를 사용했으며, 이전 Media byte·URL과 raw 내부 정보를 노출하지 않았다.
+
 ## ADDED Requirements
 
-### Requirement: 현재 Post Content Media viewer 진입과 경계
+### Requirement: 현재 Post Content Media viewer 진입과 경계 (PROD-650 Current historical)
 
-**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 — 일반 Post surface는 공개된 정상 gallery tile의 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`을 안정적인 surface-level Host에 전달해 modal Media Viewer를 SHALL 열어야 한다. Host는 현재 Relay actor environment에서 기존 Post `node(id)` visibility·authorization 경계로 surface Post를 조회하고 Media owner가 그 surface 또는 direct Source인지 MUST 검증해야 한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media owner여야 한다. Standalone Media 조회나 별도 authorization을 MUST 추가하지 않아야 한다. Modal shell·close·focus fallback은 query의 Suspense·error boundary 밖에 MUST 유지해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action, Relay actor/environment 전환과 Host surface unmount는 Viewer session을 MUST 종료해야 한다.
+**Authority / Provenance:** `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, PROD-650 Current historical — 일반 Post surface는 공개된 정상 gallery tile의 `{surfacePostId, mediaOwnerPostId, selectedIndex, originControl}`을 안정적인 surface-level Host에 전달해 modal Media Viewer를 SHALL 열어야 한다. Host는 현재 Relay actor environment에서 기존 Post `node(id)` visibility·authorization 경계로 surface Post를 조회하고 Media owner가 그 surface 또는 direct Source인지 MUST 검증해야 한다. 일반·Quote는 두 ID가 같고, pure Repost는 바깥 contentless Repost가 surface, direct Source가 Media owner여야 한다. Standalone Media 조회나 별도 authorization을 MUST 추가하지 않아야 한다. Modal shell·close·focus fallback은 query의 Suspense·error boundary 밖에 MUST 유지해야 한다. 현재 선택 Media를 더 이상 표시할 수 없으면 이전 Media byte·URL을 유지하지 않고 modal chrome·unavailable 상태·명시적 close control을 MUST 유지해야 한다. 명시적 dismiss, Viewer 안의 삭제 action, Relay actor/environment 전환과 Host surface unmount는 Viewer session을 MUST 종료해야 한다.
 
 #### Scenario: 선택한 tile에서 viewer 열기
 
@@ -10,7 +39,7 @@
 - **THEN** modal Viewer는 surface Post ID·Media owner Post ID와 선택한 document index로 Host session을 연다
 - **AND** Host query는 기존 Post Node visibility·authorization 경계가 승인한 surface와, session의 Media owner ID가 그 surface 또는 direct Source와 일치하는 projection만 사용한다
 
-#### Scenario: Sensitive Media가 가려진 상태
+#### Scenario: Sensitive Media가 가려진 상태 (PROD-650 Current historical)
 
 - **WHEN** 현재 Post Content의 Sensitive Media가 공개되지 않았다
 - **THEN** Media byte를 mount하거나 viewer 진입 control을 제공하지 않는다
@@ -161,11 +190,20 @@
 
 ### Requirement: Wide Web Post 상세 thread surface
 
-**Authority / Provenance:** `docs/design/post-media-viewer.md`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, PROD-650 — Web `>=768px` Viewer의 오른쪽은 현재 Post 상세와 같은 reply ancestors·현재 Post·reply descendants를 연결 순서대로 SHALL 제공해야 한다. 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 제공하고 Reply Composer는 초기에는 닫혀 있다가 기존 상세처럼 Reply action으로 현재 Post 아래에서 MUST 펼쳐야 한다. 원본 Post Media와 nested Viewer trigger는 왼쪽 image surface가 표시하므로 오른쪽 현재 Post에서 MUST 중복하지 않아야 하며, ancestors·descendants와 Quote·Repost 안의 Media 표현과 viewer interaction은 기존 Post surface 계약을 MUST 유지해야 한다. 오른쪽 surface 전체는 왼쪽 image surface와 독립적으로 MUST scroll하고 기존 reply connection의 loading·error·retry·pagination 및 Post·Composer·reply interaction 계약을 MUST 재사용해야 한다.
+**Authority / Provenance:** `docs/design/post-media-viewer.md`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, PROD-650 — Web `>=768px` Viewer의 오른쪽은 현재 Post 상세와 같은 reply ancestors·현재 Post·reply descendants를 연결 순서대로 SHALL 제공해야 한다. 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 제공하고 Reply Composer는 초기에는 닫혀 있어야 한다. Web `768–1279px`에서 Reply action은 Viewer를 먼저 닫고 다음 frame에 배경 Post surface의 공용 `600×720` Reply modal을 열어야 하며, Web `>=1280px`에서만 기존 상세처럼 현재 Post 아래에 Composer를 MUST 펼쳐야 한다. 원본 Post Media와 nested Viewer trigger는 왼쪽 image surface가 표시하므로 오른쪽 현재 Post에서 MUST 중복하지 않아야 하며, ancestors·descendants와 Quote·Repost 안의 Media 표현과 viewer interaction은 기존 Post surface 계약을 MUST 유지해야 한다. 오른쪽 surface 전체는 왼쪽 image surface와 독립적으로 MUST scroll하고 기존 reply connection의 loading·error·retry·pagination 및 Post·Composer·reply interaction 계약을 MUST 재사용해야 한다.
 
-#### Scenario: Wide Web의 원본 Post와 Composer
+#### Scenario: Compact wide Web의 원본 Post와 Reply modal
 
-- **WHEN** Web viewport 폭이 768px 이상인 Viewer가 열린다
+- **WHEN** Web viewport 폭이 768px 이상 1280px 미만인 Viewer가 열린다
+- **THEN** 오른쪽 surface는 reply ancestors·현재 Post·reply descendants를 기존 연결 순서대로 표시한다
+- **AND** 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 표시하고 Reply Composer는 초기에는 닫혀 있다
+- **AND** 현재 Post의 Reply action을 실행하면 Viewer가 먼저 닫히고 다음 frame에 배경 Post surface의 공용 `600×720` Reply modal이 열린다
+- **AND** Viewer 위에 Reply modal을 중첩하거나 rail 안에 Composer를 펼치지 않는다
+- **AND** 원본 Post Media와 nested Viewer trigger는 오른쪽에서 중복하지 않는다
+
+#### Scenario: Full Web의 원본 Post와 Composer
+
+- **WHEN** Web viewport 폭이 1280px 이상인 Viewer가 열린다
 - **THEN** 오른쪽 surface는 reply ancestors·현재 Post·reply descendants를 기존 연결 순서대로 표시한다
 - **AND** 현재 Post는 작성자·원문 전체·기존 Post Action Bar를 표시하고 Reply Composer는 초기에는 닫혀 있다
 - **AND** 현재 Post의 Reply action을 실행하면 Composer가 현재 Post 아래에서 펼쳐진다
@@ -200,40 +238,6 @@
 - **AND** load 결과의 Post identity가 Viewer의 현재 Post와 다르면 그 결과를 표시하지 않는다
 - **AND** thread 결과가 unavailable이어도 Viewer session을 자동 종료하지 않는다
 
-### Requirement: Viewer 상태·오류와 재시도
-
-**Authority / Provenance:** `docs/domain/objects/media.md`, `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — Host Post query가 cache hit·loading·error·retry 또는 null Post·Content·Media 상태여도 Viewer는 modal chrome과 close control을 SHALL 유지해야 한다. 현재 Media가 loading이거나 표시 URL load에 실패해도 현재 index와 현재 breakpoint의 Post detail surface를 SHALL 유지해야 한다. 실패한 query·Media에는 raw storage URL·내부 오류·authorization 세부 정보를 노출하지 않는 접근 가능한 재시도 control을 MUST 제공하고, Media 재시도는 현재 index나 다른 Media 상태를 변경하지 MUST NOT 한다.
-
-#### Scenario: Host Post query loading 또는 실패
-
-- **WHEN** Host Post query가 loading이거나 실패한다
-- **THEN** 같은 modal shell과 close control을 유지하고 content 영역에 안전한 loading 또는 error·retry 상태를 표시한다
-- **AND** raw 오류·authorization 세부 정보나 이전 Media byte·URL을 표시하지 않는다
-
-#### Scenario: 현재 Media loading
-
-- **WHEN** 현재 Media image가 loading 중이다
-- **THEN** Viewer는 같은 image surface에 loading 상태를 전달한다
-- **AND** close, 현재 위치와 현재 breakpoint의 Post detail surface를 유지한다
-
-#### Scenario: 현재 Media load 실패
-
-- **WHEN** 현재 Media의 표시 URL load가 실패한다
-- **THEN** 같은 image surface에 안전한 오류 상태와 해당 Media 재시도 control을 표시한다
-- **AND** raw storage URL, 내부 오류와 authorization 세부 정보를 표시하지 않는다
-
-#### Scenario: 실패한 Media 재시도
-
-- **WHEN** 사용자가 현재 실패한 Media의 재시도를 실행한다
-- **THEN** 같은 index에서 해당 Media의 현재 승인된 표시 URL load를 다시 시작한다
-- **AND** 다른 Media의 loading·ready·error 상태를 초기화하지 않는다
-
-#### Scenario: 현재 Media unavailable
-
-- **WHEN** 현재 query projection의 Post·Content·Media 또는 선택 index에 대응하는 Media가 없다
-- **THEN** Viewer는 modal chrome과 명시적 close control을 유지한 안전한 unavailable 상태를 표시한다
-- **AND** 이전 Media byte·URL, raw storage URL, 내부 오류 또는 authorization 세부 정보를 표시하지 않는다
-
 ### Requirement: Modal dismiss와 focus 복귀
 
 **Authority / Provenance:** `docs/design/post-media-viewer.md`, `docs/design/accessibility.md`, PROD-650 — Viewer는 modal role과 명시적인 close control을 SHALL 제공하고 open 시 배경 Post surface를 focus와 interaction 대상에서 MUST 제외하며 초기 focus를 close control로 MUST 이동해야 한다. Web `Escape`·close control·backdrop press와 Native back으로 dismiss할 수 있어야 하며, Web image·detail surface·modal 내부 control의 press는 backdrop dismiss로 전파되지 MUST NOT 한다. Viewer open·Media navigation·close는 route와 browser history를 변경하지 MUST NOT 한다. 닫을 때 원래 선택한 tile이 존재하면 그 tile로 focus를 MUST 복귀해야 한다. 원래 tile이 사라졌다면 Host가 속한 목록 또는 상세 screen의 안전한 focus target으로 MUST 복귀해야 한다. Query loading·error·unavailable 동안에도 close target과 fallback focus surface를 MUST 유지해야 한다.
@@ -266,3 +270,40 @@
 
 - **WHEN** Viewer를 연 tile이 더 이상 존재하지 않는 상태에서 Viewer가 닫힌다
 - **THEN** focus는 제거된 node가 아니라 남아 있는 Post surface의 안전한 focus target으로 이동한다
+
+### Requirement: DSN-63 Target 공용 Viewer surface의 상태와 전달 owner
+
+**Authority / Provenance:** `docs/design/post-media-viewer.md`, DSN-63, PROD-853, PROD-849 — DSN-63 Target shared Viewer surface는 Compact·Wide presentation과 Ready·Sensitive·Loading·Error·Unavailable `viewState`를 SHALL 구분해야 한다. black 70% overlay, 48×48 interaction target, 30px icon, 2.5 stroke와 Compact 56px tray·Wide full-height rail을 사용해야 한다. Ready·Sensitive는 presentation별 secondary surface와 비순환 navigation을 제공하고, Loading·Error·Unavailable은 명시적인 close control만 제공해야 하며 모든 상태에서 close를 유지해야 한다. PROD-849는 Host 내부 retry capability의 유지·제거와 무관하게 top-level `Loading`·`Error`·`Unavailable`을 이 close-only surface로 매핑하고 retry·detail·navigation·secondary controls를 렌더링하지 않으며, Gallery→shared surface consumer replacement·permission mapping·Production 연결과 Web/iOS/Android runtime·archive evidence를 소유한다. PROD-853은 disconnected 공용 UI·component test·Storybook을 소유한다.
+
+#### Scenario: 상태별 공용 surface
+
+- **WHEN** 공용 Viewer surface가 Compact 또는 Wide presentation과 Ready·Sensitive·Loading·Error·Unavailable 중 하나를 받는다
+- **THEN** Ready·Sensitive에서는 해당 presentation의 secondary surface와 비순환 이전·다음 navigation을 표시한다
+- **AND** Loading·Error·Unavailable에서는 navigation과 secondary surface를 표시하지 않고 close control만 유지한다
+- **AND** 모든 view state에서 사용자가 close를 실행할 수 있다
+
+#### Scenario: Host query 또는 Media 오류의 Target viewState 매핑
+
+- **WHEN** PROD-849가 연결된 Host query 또는 current Media의 loading·error·unavailable projection을 DSN-63 Target shared surface에 전달한다
+- **THEN** Host 내부 retry capability를 유지하거나 제거하는 것과 무관하게 top-level shared surface `viewState`를 `Loading`·`Error`·`Unavailable` 중 하나로 MUST 매핑한다
+- **AND** 해당 top-level surface에는 close control만 MUST 렌더링하고 retry·detail·navigation·secondary controls를 MUST NOT 렌더링한다
+- **AND** Wide `Ready` thread rail 내부의 loading·error·retry는 이 top-level mapping과 별도의 nested rail contract로 유지한다
+
+#### Scenario: Sensitive reveal callback과 consumer permission 경계
+
+- **WHEN** PROD-853 disconnected shared surface가 Gallery 공개 전에 `Sensitive` state를 받고 사용자가 Sensitive reveal control을 실행한다
+- **THEN** Gallery 공개 전에 새로운 Viewer trigger를 만들지 않고 `onRevealSensitive` callback을 호출한다
+- **AND** PROD-849가 이 callback을 기존 Gallery permission/reveal mapping과 Production consumer에 연결·검증한다
+- **AND** PROD-853 Storybook fixture는 permission, Gallery 연결 또는 Production route 완료를 표현하지 않는다
+
+#### Scenario: PROD-853 Storybook-first delivery
+
+- **WHEN** PROD-853의 component test와 Storybook fixture가 검증된다
+- **THEN** disconnected 공용 UI의 상태·경계만 증명한다
+- **AND** Gallery·permission·Production Host/Relay/route 연결 완료로 해석하지 않는다
+
+#### Scenario: PROD-849 Production delivery와 archive
+
+- **WHEN** PROD-849가 Production consumer 연결·교체와 Web/iOS/Android runtime 검증을 완료한다
+- **THEN** 해당 Production·runtime evidence를 이 change의 남은 task에 기록한다
+- **AND** 전체 선언 scope와 canonical sync가 끝나기 전에는 change를 archive하지 않는다

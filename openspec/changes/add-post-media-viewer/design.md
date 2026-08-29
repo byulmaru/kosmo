@@ -23,6 +23,15 @@ React Native `Modal`, `useWindowDimensions`, focus ref와 Native `PanResponder`�
 - Gallery geometry, Post action 도메인 동작과 Relay cache update를 재구현하지 않는다.
 - Zoom·pan, route·deep link, Media 편집·metadata와 파일 공유·다운로드·기기 저장을 구현하지 않는다.
 
+### Delivery lifecycle
+
+이 기존 change는 최종 Viewer 행동 계약을 재사용한다. PROD-650의 완료된 Host·query·runtime 구현 이력은
+historical evidence로 보존하고, PROD-853은 Production consumer와 분리된 공용 UI·component test·Storybook만
+제공한다. PROD-849가 Production Host·Relay·route 연결·교체와 Web/iOS/Android runtime QA를 이어서 소유하며,
+PROD-853 PR 완료만으로 이 change를 archive하지 않는다. 새 Viewer abstraction·feature flag·dependency는 만들지 않는다.
+PROD-650의 Web `>=768px` inline Reply Composer는 Current historical evidence로 남기고, DSN-63 Target은
+`768–1279px`에서 Viewer close 후 공용 `600×720` Reply modal을, `>=1280px`에서만 inline Composer를 사용한다.
+
 ## Implementation Guidance
 
 ### Current Constraints

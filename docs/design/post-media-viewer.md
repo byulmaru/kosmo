@@ -2,6 +2,29 @@
 
 일반 Post의 공개된 이미지 tile을 선택하면 기존 Post visibility·authorization 경계를 통과한 현재 Post query projection의 이미지를 document 순서대로 살펴보는 modal viewer를 연다. Viewer는 이미지만 고립시키지 않고 Post 맥락과 기존 interaction을 함께 제공한다. Compact Web과 Native는 작성자, 원문 text와 기존 Post Action Bar를 보여주고, Wide Web은 기존 Post 상세의 원문·reply thread를 사용할 수 있는 surface를 보여준다. Figma Target에서 Viewer의 현재 Post Reply Composer는 Compact Web에서 Viewer를 닫은 뒤 공용 modal로 열고 Full Web에서만 thread rail 안에 펼친다. 현재 runtime의 inline Reply는 이 Target의 완료 증거가 아니다.
 
+## Current와 Target 및 전달 lifecycle
+
+### Current runtime (PROD-650 historical)
+
+- PROD-650의 Compact author/body/detail panel, connected Post Action Bar와 Wide thread surface는 현재 Production 동작이자 historical evidence다.
+- 이 Current 동작을 DSN-63 Target 완료 증거로 승격하지 않는다. Figma와 문서만으로 focus·dismiss·keyboard·보조 기술 runtime을 증명하지 않는다.
+
+### DSN-63 Target
+
+- Overlay: black 70% `color/overlay/media-viewer`
+- Compact: 56px canonical Post Action Bar tray
+- Wide: full-height context rail
+- Controls: 48×48 interaction target, 30px icon, 2.5 stroke, fixed white
+- Ready/Sensitive: navigation과 presentation별 secondary surface
+- Loading/Error/Unavailable: close only
+- Navigation: 첫·마지막 경계에서 비활성화하고 끝에서 반대편으로 순환하지 않는다.
+
+### Delivery
+
+- PROD-853: disconnected 공용 UI, component test와 Storybook
+- PROD-849: current Production consumer replacement와 Web/iOS/Android runtime QA
+- PROD-853 PR이 끝나도 `add-post-media-viewer`를 archive하지 않으며, PROD-849의 integration·runtime·canonical sync 완료 뒤 archive를 판단한다.
+
 ## 디자인 권위와 적용 범위
 
 - Mobile 시각 기준은 [`Mobile compact lifecycle section`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6571-7605)의
@@ -21,8 +44,9 @@
   확장 규칙을 소유하므로 별도 중복 screen FRAME을 만들지 않는다.
 - Figma의 어두운 fullscreen image surface, 상단 close affordance와 Web split structure를 시각 기준으로
   사용한다. compact 원문 접기·펼치기, Action Bar와 wide Post 상세 thread의 현재 동작은 PROD-650과 runtime
-  검증이 소유한다. 이 Target의 PostMediaViewer Production 반영은 PROD-849의 범위를 먼저 동기화한 뒤 별도
-  Product PR에서 수행하며, DSN-50과 이 문서 변경은 component·Storybook·runtime을 수정하지 않는다.
+  검증이 소유한다. 이 Target의 공용 UI·component test·Storybook은 PROD-853에서 먼저 제공하고,
+  PostMediaViewer Production 반영은 PROD-849의 범위를 먼저 동기화한 뒤 별도 Product PR에서 수행한다.
+  DSN-63과 이 문서 변경은 Production consumer·runtime을 수정하지 않는다.
 - Figma 하단의 Media 파일 저장 action은 이 viewer에 포함하지 않는다. 현재 기존 Post Action Bar만 제공한다.
 - Viewer는 일반 목록과 Post 상세의 interactive gallery에 적용한다. `interactive=false`인 Reply Composer 부모 preview는 viewer를 열지 않는다.
 
@@ -83,15 +107,11 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
   여부와 무관하게 작성자·원문·기존 Post Action Bar를 표시한다.
 - Viewer는 원래 Post surface에서 Content Warning을 공개한 뒤에만 열 수 있다. 열린 Viewer의 현재 Post는 원문을 공개 상태로 유지하고 Content Warning 안내와 다시 가리기 control을 표시하지 않는다. 이 Viewer 전용 표현은 다른 Post surface의 reveal 저장 상태를 변경하지 않는다.
 - Viewer가 열린 뒤 background Gallery의 Sensitive 표시 상태가 바뀌어도 Viewer session을 자동 종료하지 않는다. 현재 Host query projection에서 선택 Media가 사라지거나 표시할 수 없게 되면 이전 이미지 byte·URL을 유지하지 않고 modal 안에 안전한 unavailable 상태를 표시한다.
-- Host Post query가 cache hit·loading·error·retry이거나 null Post·Content·Media를 반환해도 modal shell과 close control은 유지한다. Host query 자체가 실패한 fallback은 안전한 한국어 상태와 retry만 제공하고 raw 오류·authorization 세부 정보를 노출하지 않는다.
-- Current OpenSpec은 현재 이미지의 load가 실패하면 같은 image surface에 안전한 오류와 재시도 control을
-  표시한다. Current runtime은 이를 stage 중앙의 inline fallback과 `다시 시도`로 구현하며 modal chrome, 현재
-  index와 Post detail surface를 유지한다.
-- Figma Target은 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다.
-  Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는
-  [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의
-  `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
-- 실패한 Media는 같은 index에서 다시 시도할 수 있고, retry는 다른 Media의 상태를 초기화하지 않는다.
+- PROD-650 Current Host Post query가 cache hit·loading·error·retry이거나 null Post·Content·Media를 반환해도 modal shell과 close control은 유지한다. Host query fallback은 안전한 한국어 상태와 retry만 제공하고 raw 오류·authorization 세부 정보를 노출하지 않는다.
+- DSN-63 Target top-level `Loading`·`Error`·`Unavailable`은 close-only `viewState`로 매핑하고 retry·detail·navigation·secondary controls를 렌더링하지 않는다. Wide `Ready` thread rail의 loading·error·retry는 별도 nested rail contract다.
+- DSN-51 Mobile Figma에서 `Ready` surface 안의 개별 Media load 실패는 top-level `Error`가 아니다. 중앙 blocking state 대신 기존 공용 Danger Action Toast를 stage 하단에 지속 표시한다. Mobile Error consumer [`6665:55675`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6665-55675)는 [`Toast 7380:55058`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=7380-55058)의 `미디어를 불러오지 못했어요`와 `다시 시도`를 사용하며 modal chrome, 현재 index와 Post detail surface를 유지한다.
+- PROD-650 Current runtime은 개별 Media load 실패를 stage 중앙의 inline fallback과 `다시 시도`로 표시하며 modal chrome, 현재 index와 현재 breakpoint의 Post detail surface를 유지한다.
+- 실패한 Media는 같은 위치에서 다시 시도할 수 있고, retry는 현재 index를 바꾸거나 다른 Media의 상태를 초기화하지 않는다.
 - Wide Web의 reply query가 loading 또는 실패해도 왼쪽의 선택 이미지와 modal chrome을 제거하지 않는다. 오른쪽 thread surface에서 기존 loading·error·retry 표현을 사용한다.
 - 사용자에게 raw storage URL, 내부 오류 또는 authorization 세부 정보를 노출하지 않는다.
 
@@ -101,15 +121,25 @@ Viewer open 시 modal임을 전달하고 배경 Post surface를 focus와 interac
 
 Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Reader에서 같은 기능을 제공하고 role, accessible name, disabled·expanded 상태를 전달한다. 현재 위치 변경은 이미지의 accessible name과 별도로 인지 가능하게 알린다.
 
-## Product 후속 검증 경계
+## PROD-853 공용 UI·Storybook 검증
 
-아래 자동화·Storybook·runtime 항목은 Figma Target을 Production에 이관하는 Product 이슈의 완료 기준이다.
-DSN-50·DSN-51의 Figma·문서 완료를 현재 runtime 검증이나 component 반영 증거로 사용하지 않는다.
+아래 정적 component·Storybook 검증은 DSN-63 Target의 disconnected shared surface만 증명한다.
+DSN-63의 black 70% overlay, 48×48 interaction target, 30px icon, 2.5 stroke, Compact 56px tray,
+Wide full-height rail, Ready/Sensitive visibility와 비순환 boundary를 확인하지만 Gallery·permission·
+Production Host/Relay/route 연결이나 runtime 완료를 증명하지 않는다.
+DSN-50·DSN-51의 Figma·문서 완료도 Production runtime이나 component 반영 증거로 사용하지 않는다.
 
-- Component test는 Host session의 `surfacePostId`·`mediaOwnerPostId`·선택 index·origin focus, 기존 `node(surfacePostId)` visibility 경계와 owner 검증, query cache hit·loading·error·retry와 null Post·Content·Media에서도 modal shell·close 유지, 같은 Content 복구 상태 보존, 다른 revision reset·원래 document index unavailable, URL 변경 시 이전 byte 비보존, actor/environment 전환 close·query 폐기, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료와 origin·screen fallback focus 복귀를 확인한다. Pure Repost Viewer의 Reply가 바깥 contentless Repost 기준으로 disabled이고 Repost·Reaction·Bookmark·More와 Media는 Source를 대상으로 하는지 검증한다. 목록·Quote·Repost·상세 projection 전환과 nested Viewer stack, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, Compact wide rail Reply의 Viewer close→공용 modal 순서, Full wide bounded rail·원문 전체·inline Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 함께 확인한다.
-- Storybook은 1장과 다중 이미지, 긴 원문, 첫·중간·마지막 위치, image loading·error와 Host query loading·error·retry·unavailable, compact Web·Native와 wide Web thread layout을 확인한다.
-- Web runtime은 backdrop·modal 내부 pointer 격리, keyboard arrow, Escape, 배경 surface 비활성화, focus trap·복귀, route·history 유지와 `<768px`·`>=768px` layout을 관찰한다. Compact에서는 짧은 원문의 content-height panel과 최대 높이·낮은 viewport의 stage/detail non-overlap·text-only scroll·Action Bar 인접 배치, `768–1279px` rail Reply의 Viewer close 뒤 공용 modal open과 focus 이동·복귀를 확인한다. Full에서는 `24px` inset·`clamp(320px, 25vw, 350px)` rail과 남은 image 폭, Action Bar의 가로 overflow 방지, 오른쪽 독립 scroll, inline Composer 작성, reply pagination, Action Bar·reply interaction과 child overlay layering을 함께 확인한다.
-- iOS runtime은 touch, swipe, close·back과 VoiceOver를, Android runtime은 touch, swipe, close·back과 TalkBack을 각각 확인한다. Native geometry는 safe-area·keyboard·낮은 viewport의 stage/detail non-overlap과 child overlay의 base 위치 보존을 검증한다.
+- Component test는 Compact·Wide와 Ready·Sensitive·Loading·Error·Unavailable 상태, Ready/Sensitive의 navigation·secondary surface, Loading/Error/Unavailable의 close-only surface, 1장·다중 위치와 비순환 경계를 확인한다.
+- Storybook은 Controls/Actions와 대표 responsive·theme 상태, 1장·다중 이미지, 첫·중간·마지막 위치, Sensitive reveal callback, 상태별 close와 disconnected surface를 확인한다.
+
+## PROD-849 Production 후속 검증 경계
+
+아래 connected automation·runtime 항목은 PROD-849가 DSN-63 Target을 Production consumer에 이관하는 완료 기준이다.
+Figma·Storybook 정적 완료를 현재 runtime 검증이나 component 반영 증거로 사용하지 않는다.
+
+- Component/integration test는 Host session의 `surfacePostId`·`mediaOwnerPostId`·선택 index·origin focus, 기존 `node(surfacePostId)` visibility 경계와 owner 검증, Gallery→Viewer replacement·Sensitive permission mapping, query cache hit·loading·error·retry와 null Post·Content·Media에서도 modal shell·close 유지, 같은 Content 복구 상태 보존, 다른 revision reset·원래 document index unavailable, URL 변경 시 이전 byte 비보존, actor/environment 전환 close·query 폐기, 명시적 dismiss·Viewer 삭제 action·surface unmount 종료와 origin·screen fallback focus 복귀를 확인한다. Pure Repost Viewer의 Reply가 바깥 contentless Repost 기준으로 disabled이고 Repost·Reaction·Bookmark·More와 Media는 Source를 대상으로 하는지 검증한다. 목록·Quote·Repost·상세 projection 전환과 nested Viewer stack, Viewer 현재 Post의 Content Warning 공개 표현, 비순환 이전·다음, Alt Text·fallback과 counter, compact 원문 접기·펼치기·내용 높이 panel과 fixed Action Bar, Compact wide rail Reply의 Viewer close→공용 modal 순서, Full wide bounded rail·원문 전체·inline Composer, route와 Viewer의 독립 pagination UI state·loading·error·retry와 Viewer completion 뒤 near-end 재평가를 함께 확인한다.
+- Web runtime은 backdrop·modal 내부 pointer 격리, keyboard arrow, Escape, 배경 surface 비활성화, focus trap·복귀, route·history 유지와 `<768px`·`>=768px` layout을 관찰한다. Compact에서는 짧은 원문의 content-height panel과 `clamp(192px, 32vh, 240px)` 최대 높이·낮은 viewport에서의 고정 chrome 보존·text-only scroll·Action Bar 인접 배치, `768–1279px` rail Reply의 Viewer close 뒤 공용 modal open과 focus 이동·복귀를 확인한다. Full에서는 `24px` inset·`clamp(320px, 25vw, 350px)` rail과 남은 image 폭, Action Bar의 가로 overflow 방지, 오른쪽 독립 scroll, inline Composer 작성, reply pagination, Action Bar·reply interaction과 child overlay layering을 함께 확인한다.
+- iOS runtime은 touch, swipe, close·back과 VoiceOver를, Android runtime은 touch, swipe, close·back과 TalkBack을 각각 확인한다.
 - 자동화·Storybook·Web 관찰은 iOS·Android runtime 접근성 증거를 대체하지 않으며 결과를 PR에 구분해 기록한다.
 
 ## 제외 범위
