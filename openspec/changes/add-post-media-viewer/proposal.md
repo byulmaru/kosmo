@@ -15,11 +15,23 @@ Post의 이미지가 gallery 안에서 crop되어 보이지만 원본 비율로 
 - Modal close, keyboard arrow, Native swipe, Screen Reader 위치 안내와 focus 복귀를 플랫폼별로 지원하고 Viewer open·탐색·close 중 route와 browser history를 유지한다.
 - Media 파일 공유·다운로드·기기 저장, zoom·pan, route·deep link와 Media 전용 action은 제외한다.
 
+## Delivery lifecycle
+
+이 change는 최종 Viewer 행동 계약과 archive lifecycle을 공유하므로 새 OpenSpec change를 만들지 않고
+`add-post-media-viewer`를 재사용한다. PROD-650의 이미 완료된 Host·query·runtime 구현 이력은 historical
+evidence로 보존하고, 현재 전달은 다음 책임으로 나눈다.
+
+- PROD-853은 Production consumer에 연결하지 않은 공용 Viewer UI와 component test·Storybook만 소유한다.
+- PROD-849는 Production Host·Relay·route 연결·교체와 Web/iOS/Android runtime QA를 소유한다.
+- PROD-853 PR이 끝나도 이 change를 archive하지 않으며, PROD-849의 integration·runtime·canonical sync가 끝난 뒤 archive한다.
+- 새 Viewer abstraction·feature flag·dependency는 추가하지 않는다.
+
 ## Authority / Provenance
 
 - Canonical: `docs/domain/objects/post-content.md`, `docs/domain/objects/media.md`, `docs/domain/decisions/0013-media-storage-service-boundary.md`, `docs/domain/decisions/0022-post-content-revision-media-nodes.md`, `docs/design/post-media-gallery.md`, `docs/design/post-media-viewer.md`, `docs/design/post-action-bar.md`, `docs/design/accessibility.md`, `docs/design/breakpoints.md`, `docs/design/figma.md`
-- Linear Contract: PROD-650
-- Linear Implementations: PROD-650
+- Linear Historical Contract/Implementation: PROD-650
+- Linear Shared UI/Component Test/Storybook: PROD-853
+- Linear Production Consumer Integration/Runtime/Canonical Sync/Archive: PROD-849
 
 ## Capabilities
 
