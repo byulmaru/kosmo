@@ -12,7 +12,6 @@ import {
 type PairInput = {
   readonly followeeProfileId: string;
   readonly followerProfileId: string;
-  readonly origin?: 'LOCAL' | 'ACTIVITYPUB';
 };
 
 const readProfile = (id: string) =>
@@ -29,7 +28,9 @@ export const followProfile = async (input: PairInput) => {
 export const ensureProfileFollowRequest = async (input: PairInput) =>
   db.transaction((tx) => ensureProfileFollowRequestInTransaction(input, tx));
 
-export const unfollowProfile = async (input: PairInput) =>
+export const unfollowProfile = async (
+  input: PairInput & { readonly origin?: 'LOCAL' | 'ACTIVITYPUB' },
+) =>
   db
     .transaction((tx) =>
       removeProfileFollowProjection(
@@ -44,9 +45,7 @@ export const unfollowProfile = async (input: PairInput) =>
       profileFollowId: profileFollow?.id ?? null,
     }));
 
-export const removeInboundFollow = async (
-  input: PairInput & { readonly expectedRowId?: string; readonly transition?: string },
-) =>
+export const removeInboundFollow = async (input: PairInput & { readonly expectedRowId?: string }) =>
   db
     .transaction((tx) => removeProfileFollowProjection(input, tx))
     .then(
@@ -55,19 +54,14 @@ export const removeInboundFollow = async (
     );
 
 export const acceptProfileFollowRequest = async (
-  input: Parameters<typeof acceptProfileFollowRequestInTransaction>[0] & {
-    readonly origin?: 'ACTIVITYPUB';
-    readonly transition?: string;
-  },
+  input: Parameters<typeof acceptProfileFollowRequestInTransaction>[0],
 ) =>
   db
     .transaction((tx) => acceptProfileFollowRequestInTransaction(input, tx))
     .then(({ result }) => result);
 
 export const approveProfileFollowRequest = async (
-  input: Parameters<typeof approveProfileFollowRequestInTransaction>[0] & {
-    readonly origin?: 'LOCAL' | 'ACTIVITYPUB';
-  },
+  input: Parameters<typeof approveProfileFollowRequestInTransaction>[0],
 ) =>
   db
     .transaction((tx) => approveProfileFollowRequestInTransaction(input, tx))
@@ -92,19 +86,21 @@ const deleteProfileFollowRequest = async (
 export const rejectProfileFollowRequest = async (input: {
   readonly actorProfileId: string;
   readonly profileFollowRequestId: string;
-  readonly origin?: 'LOCAL' | 'ACTIVITYPUB';
 }) =>
-  deleteProfileFollowRequest(input, 'FOLLOWEE').then(async ({ followeeProfileId, id }) => ({
-    followeeProfile: await readProfile(followeeProfileId),
-    profileFollowRequestId: id,
-  }));
+  deleteProfileFollowRequest(input, 'FOLLOWEE').then(
+    async ({ request: { followeeProfileId, id } }) => ({
+      followeeProfile: await readProfile(followeeProfileId),
+      profileFollowRequestId: id,
+    }),
+  );
 
 export const cancelProfileFollowRequest = async (input: {
   readonly actorProfileId: string;
   readonly profileFollowRequestId: string;
-  readonly origin?: 'LOCAL' | 'ACTIVITYPUB';
 }) =>
-  deleteProfileFollowRequest(input, 'FOLLOWER').then(async ({ followerProfileId, id }) => ({
-    followerProfile: await readProfile(followerProfileId),
-    profileFollowRequestId: id,
-  }));
+  deleteProfileFollowRequest(input, 'FOLLOWER').then(
+    async ({ request: { followerProfileId, id } }) => ({
+      followerProfile: await readProfile(followerProfileId),
+      profileFollowRequestId: id,
+    }),
+  );

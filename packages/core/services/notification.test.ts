@@ -285,7 +285,6 @@ test('Follow 알림은 source에서 Local Recipient와 Related Profile을 파생
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
   await createFollowNotification(profileFollow.id);
@@ -307,7 +306,6 @@ test('Follow 알림은 materialize된 Remote Follower도 같은 mapping으로 �
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'ACTIVITYPUB',
     }),
   );
   await createFollowNotification(profileFollow.id);
@@ -341,13 +339,11 @@ test('Follow 알림은 존재하지 않거나 삭제된 source를 post-commit no
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
   await unfollowProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
-    origin: 'LOCAL',
   });
 
   await assert.doesNotReject(createFollowNotification(profileFollow.id));
@@ -361,7 +357,6 @@ test('Follow 알림 생성과 삭제는 반복 및 동시 호출에 idempotent�
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
 
@@ -425,7 +420,6 @@ test('Follow Notification create/delete race does not lock the source row', asyn
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
   await deleteNotificationBySource(NotificationKind.FOLLOW, profileFollow.id);
@@ -436,7 +430,6 @@ test('Follow Notification create/delete race does not lock the source row', asyn
       unfollowProfile({
         followerProfileId: follower.id,
         followeeProfileId: followee.id,
-        origin: 'LOCAL',
       }),
   );
   assert.deepEqual(
@@ -465,8 +458,6 @@ test('Follow Notification create/delete race does not lock the source row', asyn
         expectedRowId: request.id,
         followeeProfileId: followee.id,
         followerProfileId: follower.id,
-        origin: 'ACTIVITYPUB',
-        transition: 'INBOUND_UNDO',
       }),
   );
   assert.deepEqual(
@@ -573,13 +564,11 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
   const deleted = await unfollowProfile({
     followerProfileId: follower.id,
     followeeProfileId: followee.id,
-    origin: 'LOCAL',
   });
   assert.equal(deleted.profileFollowId, firstFollow.id);
 
@@ -587,7 +576,6 @@ test('Unfollow 뒤 Re-follow는 새 source ID로 새 알림을 저장한다', as
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     }),
   );
   await createFollowNotification(secondFollow.id);

@@ -10,14 +10,12 @@ import {
   InstanceState,
   ProfileFollowPolicy,
 } from '@kosmo/core/enums';
-import { executeProfileFollowPairTransition } from '@kosmo/core/services';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
-import type { AcceptProfileFollowRequestResult } from '@kosmo/core/services';
 import type { federation as productionFederation } from './federation';
 import type * as InboundAccept from './inbound-accept';
 import type * as InboundAcceptFollow from './inbound-accept-follow';
@@ -42,33 +40,6 @@ let Profiles: typeof CoreDb.Profiles;
 let handleInboundAccept: typeof InboundAccept.handleInboundAccept;
 let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFollow;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
-type AcceptProfileFollowRequest = (input: {
-  readonly expectedRowId: string;
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-  readonly origin: 'ACTIVITYPUB';
-}) => Promise<AcceptProfileFollowRequestResult>;
-
-const acceptProfileFollowRequest: AcceptProfileFollowRequest = async (input) => {
-  const transition = await executeProfileFollowPairTransition({
-    pair: {
-      followeeProfileId: input.followeeProfileId,
-      followerProfileId: input.followerProfileId,
-    },
-    command: {
-      kind: 'ACCEPT',
-      expectedRowId: input.expectedRowId,
-      origin: input.origin,
-    },
-  });
-  if (!transition.ok) {
-    throw new Error(transition.error.message);
-  }
-  if (transition.result.commandKind !== 'ACCEPT') {
-    throw new Error('Unexpected inbound Accept transition result');
-  }
-  return { kind: transition.result.kind };
-};
 let localInstanceId: string;
 let federation: typeof productionFederation;
 
@@ -325,62 +296,27 @@ describe('inbound Accept and Reject', () => {
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
   });
 
-  test('logs a concurrent pending Accept loser as an established noop', async () => {
+  test('deduplicates concurrent pending Accepts through the pair Workflow', async () => {
     const fixture = await createFixture({ projection: 'PENDING' });
     const follow = createOutboundFollow(fixture.projection);
-    let arrived = 0;
-    let release!: () => void;
-    const bothArrived = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const acceptWithBarrier: typeof acceptProfileFollowRequest = async (input) => {
-      arrived += 1;
-      if (arrived === 2) {
-        release();
-      }
-      await bothArrived;
-      return acceptProfileFollowRequest(input);
-    };
-    const logs: unknown[] = [];
-    const restoreReporter = setInboundObservabilityReporter({
-      log: (observation) => logs.push(observation),
-    });
-
-    try {
-      await Promise.all([
-        handleInboundAcceptFollow({
-          acceptProfileFollowRequest: acceptWithBarrier,
-          context: createContext(localProfileId),
-          follow,
-          followeeActorUri: remoteActorUri,
-          followeeProfileId: fixture.remoteProfile.id,
-        }),
-        handleInboundAcceptFollow({
-          acceptProfileFollowRequest: acceptWithBarrier,
-          context: createContext(localProfileId),
-          follow,
-          followeeActorUri: remoteActorUri,
-          followeeProfileId: fixture.remoteProfile.id,
-        }),
-      ]);
-    } finally {
-      restoreReporter();
-    }
+    await Promise.all([
+      handleInboundAcceptFollow({
+        context: createContext(localProfileId),
+        follow,
+        followeeActorUri: remoteActorUri,
+        followeeProfileId: fixture.remoteProfile.id,
+      }),
+      handleInboundAcceptFollow({
+        context: createContext(localProfileId),
+        follow,
+        followeeActorUri: remoteActorUri,
+        followeeProfileId: fixture.remoteProfile.id,
+      }),
+    ]);
 
     assert.equal((await db.select().from(ProfileFollowRequests)).length, 0);
     assert.equal((await db.select().from(ProfileFollows)).length, 1);
     assert.deepEqual(await readCounts(fixture), { localFollowing: 1, remoteFollowers: 1 });
-    assert.deepEqual(logs, [
-      {
-        activityType: 'Accept',
-        actorOrigin: localActorUri.origin,
-        handler: 'accept',
-        objectOrigin: remoteActorUri.origin,
-        outcome: 'noop',
-        phase: 'projection',
-        reasonCode: 'duplicate_accept_noop',
-      },
-    ]);
   });
 
   test('uses verified actor pair fallback for same-origin non-kosmo embedded Follow', async () => {

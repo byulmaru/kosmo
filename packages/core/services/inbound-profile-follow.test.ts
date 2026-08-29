@@ -80,7 +80,6 @@ const recordInboundFollow = async (input: {
   (
     await followProfile({
       ...input,
-      origin: 'ACTIVITYPUB',
     })
   ).result.kind;
 
@@ -260,8 +259,6 @@ describe('ActivityPub inbound profile follow lifecycle', () => {
       expectedRowId: original.id,
       followeeProfileId: followee.id,
       followerProfileId: follower.id,
-      origin: 'ACTIVITYPUB',
-      transition: 'INBOUND_UNDO',
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     releaseReplacement();

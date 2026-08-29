@@ -7,27 +7,13 @@ import { resolveInboundLocalRecipient } from './inbound-local-recipient';
 import { observeInboundNoop, observeInboundRejected } from './inbound-observability';
 import type { InboxContext } from '@fedify/fedify';
 import type { Follow } from '@fedify/vocab';
-import type { AcceptProfileFollowRequestResult } from '@kosmo/core/services';
-
-type AcceptFollowRequestInput = {
-  readonly expectedRowId: string;
-  readonly followeeProfileId: string;
-  readonly followerProfileId: string;
-  readonly origin: 'ACTIVITYPUB';
-};
-
-type AcceptFollowRequest = (
-  input: AcceptFollowRequestInput,
-) => Promise<AcceptProfileFollowRequestResult>;
 
 export const handleInboundAcceptFollow = async ({
   context,
   follow,
   followeeActorUri,
   followeeProfileId,
-  acceptProfileFollowRequest,
 }: {
-  readonly acceptProfileFollowRequest?: AcceptFollowRequest;
   context: InboxContext<void>;
   follow: Follow;
   followeeActorUri: URL;
@@ -124,33 +110,21 @@ export const handleInboundAcceptFollow = async ({
     return;
   }
 
-  const input = {
-    expectedRowId: projection.id,
-    followeeProfileId,
-    followerProfileId: followerProfile.id,
-    origin: 'ACTIVITYPUB' as const,
-  };
-  let result: AcceptProfileFollowRequestResult;
-  if (acceptProfileFollowRequest) {
-    result = await acceptProfileFollowRequest(input);
-  } else {
-    const transition = await executeProfileFollowPairTransition({
-      pair: {
-        followeeProfileId: input.followeeProfileId,
-        followerProfileId: input.followerProfileId,
-      },
-      command: {
-        kind: 'ACCEPT',
-        expectedRowId: input.expectedRowId,
-        origin: input.origin,
-      },
-    });
-    if (transition.result.commandKind !== 'ACCEPT') {
-      throw new Error('Unexpected inbound Accept transition result');
-    }
-    result = { kind: transition.result.kind };
+  const transition = await executeProfileFollowPairTransition({
+    pair: {
+      followeeProfileId,
+      followerProfileId: followerProfile.id,
+    },
+    command: {
+      kind: 'ACCEPT',
+      expectedRowId: projection.id,
+      origin: 'ACTIVITYPUB',
+    },
+  });
+  if (transition.result.commandKind !== 'ACCEPT') {
+    throw new Error('Unexpected inbound Accept transition result');
   }
-  if (result.kind === 'ALREADY_ESTABLISHED') {
+  if (transition.result.kind === 'ALREADY_ESTABLISHED') {
     observeInboundNoop({
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,
@@ -159,7 +133,7 @@ export const handleInboundAcceptFollow = async ({
       phase: 'projection',
       reasonCode: 'duplicate_accept_noop',
     });
-  } else if (result.kind === 'NOOP') {
+  } else if (transition.result.kind === 'NOOP') {
     observeInboundNoop({
       activityType: 'Accept',
       actorOrigin: followerActorUri.origin,

@@ -68,12 +68,10 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     const outgoing = await followProfile({
       followerProfileId: profile.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     });
     const incoming = await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: profile.id,
-      origin: 'LOCAL',
     });
     if (outgoing.result.kind !== 'ESTABLISHED' || incoming.result.kind !== 'ESTABLISHED') {
       assert.fail('Expected established profile follows');
@@ -123,12 +121,10 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     await followProfile({
       followerProfileId: follower.id,
       followeeProfileId: followee.id,
-      origin: 'LOCAL',
     });
     await followProfile({
       followerProfileId: followee.id,
       followeeProfileId: follower.id,
-      origin: 'LOCAL',
     });
     await pg`create sequence profile_disable_attempts`;
     await pg`
