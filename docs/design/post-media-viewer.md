@@ -119,7 +119,7 @@ Viewer는 [기존 Post Action Bar](./post-action-bar.md)가 현재 제공하는 
 
 Viewer open 시 modal임을 전달하고 배경 Post surface를 focus와 interaction 대상에서 제외하며 초기 focus를 명시적인 close control로 이동한다. `Escape`, close control, Native back으로 닫을 수 있다. Web backdrop press도 Viewer를 닫되 image·detail panel과 modal 내부 control의 press는 backdrop dismiss로 전파하지 않는다. Backdrop press를 유일한 dismiss 수단으로 사용하지 않는다. 닫을 때 route·browser history를 변경하지 않고, 원래 선택한 gallery tile이 여전히 존재하면 그 tile로 focus를 돌려보낸다. 대상이 사라졌다면 Host가 속한 목록 또는 상세 screen의 안전한 focus target으로 복귀한다. Query loading·error·unavailable로 Content presentation이 교체되어도 close target과 screen fallback은 unmount하지 않는다.
 
-Close, 이전·다음, 더 보기·접기와 retry는 keyboard·touch·Screen Reader에서 같은 기능을 제공하고 role, accessible name, disabled·expanded 상태를 전달한다. 현재 위치 변경은 이미지의 accessible name과 별도로 인지 가능하게 알린다.
+Close, 이전·다음과 더 보기·접기는 keyboard·touch·Screen Reader에서 같은 기능을 제공하고 role, accessible name, disabled·expanded 상태를 전달한다. Retry 접근성은 PROD-650 Current와 Wide `Ready` thread rail의 nested retry에만 적용한다. 현재 위치 변경은 이미지의 accessible name과 별도로 인지 가능하게 알린다.
 
 ## PROD-853 공용 UI·Storybook 검증
 
