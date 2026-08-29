@@ -14,7 +14,11 @@ const meta = {
     tone: 'primary',
   },
   argTypes: {
-    size: { control: 'select', options: ['default', 'compact'] },
+    size: {
+      control: 'select',
+      description: '`compact`는 Web Post Composer footer 전용이며 Native에서는 사용하지 않습니다.',
+      options: ['default', 'compact'],
+    },
     tone: { control: 'select', options: ['primary', 'secondary', 'danger'] },
   },
   component: Button,
