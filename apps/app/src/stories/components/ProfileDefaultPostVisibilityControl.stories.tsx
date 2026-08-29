@@ -244,6 +244,7 @@ export const FailureAndRetry: Story = {
 
 export const LateCompletionIgnoredAfterProfileEnvironmentTransition: Story = {
   play: async ({ args, canvasElement }) => {
+    args.onMutationAttempt.mockClear();
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('radio', { name: '공개: 모두가 볼 수 있어요.' }));
     const save = canvas.getByRole('button', { name: '기본 게시 공개 범위 저장' });

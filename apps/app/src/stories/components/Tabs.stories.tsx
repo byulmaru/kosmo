@@ -156,6 +156,7 @@ export const Playground: Story = {
 export const PillVariant: Story = {
   args: { variant: 'pill' },
   play: async ({ args, canvasElement, step }) => {
+    args.onValueChange?.mockClear();
     const canvas = within(canvasElement);
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
     const popular = within(group).getByRole('tab', { name: '인기' });
