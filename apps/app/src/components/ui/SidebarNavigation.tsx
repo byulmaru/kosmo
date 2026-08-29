@@ -11,7 +11,7 @@ import {
   UserRound,
   UserRoundPlus,
 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
@@ -164,19 +164,28 @@ export function SidebarNavigation({
 }: SidebarNavigationProps) {
   const theme = useTheme();
   const compact = presentation === 'compact';
-  const [utilityOpen, setUtilityOpen] = useState(false);
+  const [utilityState, setUtilityState] = useState({ open: false, presentation });
+  const utilityOpen = utilityState.open && utilityState.presentation === presentation;
 
   const changeUtilityOpen = (open: boolean) => {
     if (open === utilityOpen) {
       return;
     }
-    setUtilityOpen(open);
+    setUtilityState({ open, presentation });
     onMenuOpenChange?.(open);
   };
   const selectInlineUtility = (action: () => void) => {
     changeUtilityOpen(false);
     action();
   };
+
+  useEffect(() => {
+    if (!utilityState.open || utilityState.presentation === presentation) {
+      return;
+    }
+    setUtilityState({ open: false, presentation });
+    onMenuOpenChange?.(false);
+  }, [onMenuOpenChange, presentation, utilityState]);
 
   return (
     <View
@@ -247,7 +256,7 @@ export function SidebarNavigation({
               },
               { icon: LogOut, key: 'logout', label: '로그아웃', onSelect: onLogout },
             ]}
-            onOpenChange={onMenuOpenChange}
+            onOpenChange={changeUtilityOpen}
             renderTrigger={({ disabled, expanded, onPress, ref }) => (
               <SidebarControl
                 compact

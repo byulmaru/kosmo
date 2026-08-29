@@ -74,7 +74,7 @@ const meta = {
     value: { control: 'text' },
   },
   component: SearchToolbarCatalog,
-  parameters: { controls: { disable: true } },
+  parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Components/Search Toolbar',
 } satisfies Meta<typeof SearchToolbarCatalog>;
 
