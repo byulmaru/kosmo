@@ -165,7 +165,9 @@ export const Playground: Story = {
         expect(getComputedStyle(visual).transform).toBe('matrix(0.98, 0, 0, 0.98, 0, 0)'),
       );
       expect(visual).toHaveStyle({ height: '64px', width: '64px' });
-      expect(notifications).toHaveStyle({ height: '80px' });
+      expect(notifications).toHaveStyle({
+        height: args.platform === 'web' ? '80px' : '56px',
+      });
       await userEvent.pointer({ keys: '[/MouseLeft]', target: notifications });
 
       args.onNavigate.mockClear();
@@ -178,7 +180,17 @@ export const Playground: Story = {
 
 export const ProfileUnavailable: Story = {
   args: { currentDestination: 'profile', profileAvailable: false },
-  play: Playground.play,
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const navigation = within(canvasElement).getByRole('navigation', { name: '하단 탐색' });
+    const profileControl = within(navigation).getByRole('button', { name: '프로필' });
+
+    expect(profileControl).toBeDisabled();
+    expect(profileControl).toHaveAttribute('aria-disabled', 'true');
+    expect(profileControl).not.toHaveAttribute('aria-current', 'page');
+    profileControl.click();
+    expect(args.onNavigate).not.toHaveBeenCalled();
+  },
 };
 
 const safeAreaPlay: Story['play'] = async ({ args, canvasElement }) => {

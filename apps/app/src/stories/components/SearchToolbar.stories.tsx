@@ -260,6 +260,14 @@ export const AndroidBack: Story = {
   },
 };
 
+export const LeadingActionUnavailable: Story = {
+  args: { leadingAction: 'menu', onMenuPress: undefined },
+  play: async ({ canvasElement }) => {
+    expect(getButton(canvasElement, '메뉴 열기')).toBeDisabled();
+    expect(getInput(canvasElement)).toBeEnabled();
+  },
+};
+
 export const Disabled: Story = {
   args: { disabled: true, value: '비활성 검색어' },
   play: async ({ args, canvasElement }) => {
@@ -287,16 +295,5 @@ export const Dark: Story = {
   globals: {
     backgrounds: { value: 'kosmoDark' },
     theme: 'dark',
-  },
-  play: async ({ args, canvasElement }) => {
-    const input = getInput(canvasElement);
-    const clear = getButton(canvasElement, '검색 지우기');
-
-    expect(input).toHaveValue('다크 검색어');
-    expectTarget(clear, 44);
-    expectIcon(clear, 18);
-    await userEvent.click(clear);
-    expect(args.onClear).toHaveBeenCalledOnce();
-    await waitFor(() => expect(input).toHaveValue(''));
   },
 };

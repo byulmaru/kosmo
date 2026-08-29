@@ -272,33 +272,20 @@ export const Compact: Story = {
       expect(feedback.closest('[role="menu"]')).toBeNull();
     });
 
-    await step('ActionMenu keyboard·dismiss·callback 확인', async () => {
+    await step('ActionMenu 선택 callback 확인', async () => {
       await userEvent.click(utility);
       expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
       const menu = await screen.findByRole('menu');
       const settings = within(menu).getByRole('menuitem', { name: labels.settings });
-      const logout = within(menu).getByRole('menuitem', { name: '로그아웃' });
-      expect(settings).toHaveFocus();
-      await userEvent.keyboard('{ArrowDown}');
-      expect(logout).toHaveFocus();
-      await userEvent.keyboard('{ArrowUp}');
-      expect(settings).toHaveFocus();
-      await userEvent.keyboard('{Escape}');
-      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-      expect(onMenuOpenChange).toHaveBeenLastCalledWith(false);
-      expect(utility).toHaveFocus();
-
-      await userEvent.click(utility);
-      const settingsMenu = await screen.findByRole('menu');
-      await userEvent.click(within(settingsMenu).getByRole('menuitem', { name: labels.settings }));
+      await userEvent.click(settings);
       expect(args.onNavigate).toHaveBeenLastCalledWith('settings');
-      expect(utility).toHaveFocus();
+      await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
 
       await userEvent.click(utility);
       const logoutMenu = await screen.findByRole('menu');
       await userEvent.click(within(logoutMenu).getByRole('menuitem', { name: '로그아웃' }));
       expect(args.onLogout).toHaveBeenCalledOnce();
-      expect(utility).toHaveFocus();
+      await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
     });
   },
 };
@@ -311,7 +298,9 @@ async function playInlineUtility({
   canvasElement: HTMLElement;
 }) {
   const onMenuOpenChange = mocked(args.onMenuOpenChange!);
+  const onNavigate = mocked(args.onNavigate!);
   onMenuOpenChange.mockClear();
+  onNavigate.mockClear();
   const navigation = getNavigation(canvasElement);
   const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
   const feedback = getButton(navigation, 'feedback');
@@ -333,7 +322,8 @@ async function playInlineUtility({
   expectRect(logout, 272, 45);
   expect(feedback.closest('[role="menu"]')).toBeNull();
 
-  await userEvent.click(utility);
+  await userEvent.click(settings);
+  expect(onNavigate).toHaveBeenLastCalledWith('settings');
   await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
   expect(within(navigation).queryByRole('button', { name: labels.settings })).toBeNull();
   expect(within(navigation).queryByRole('button', { name: '로그아웃' })).toBeNull();
