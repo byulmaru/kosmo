@@ -1,16 +1,17 @@
 import { Bookmark, Heart, MessageCircle, MoreHorizontal, Repeat2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { PostActionControl } from '@/components/post/PostActionControl';
 import { PostMediaViewerSurface } from '@/components/post/PostMediaViewerSurface';
-import { Avatar } from '@/components/ui/Avatar';
+import { PostMediaViewerThread } from '@/components/post/PostMediaViewerThread';
+import { SessionProvider } from '@/session/SessionProvider';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, space, textStyles } from '@/theme/tokens';
 import appleTouchImage from '../../../public/apple-touch-icon.png?url';
 import iconImage from '../../../public/icon-512.png?url';
 import maskableIconImage from '../../../public/icon-maskable-512.png?url';
 import ogImage from '../../../public/og-default.png?url';
+import { post, shellQuery } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
 
@@ -34,6 +35,55 @@ type StoryArgs = {
 type PostActionArgs = Pick<StoryArgs, 'onBookmark' | 'onMore' | 'onReact' | 'onReply' | 'onRepost'>;
 
 const mediaUrls = [ogImage, iconImage, maskableIconImage, appleTouchImage] as const;
+
+const wideRailAncestorPost = {
+  ...post({ bodyText: '오늘도 별을 보며 나누고 싶은 이야기를 남겨요.', id: 'wide-rail-ancestor' }),
+  viewerReactions: [],
+};
+const wideRailCurrentPost = {
+  ...post({
+    bodyText: '코스모에서 함께 나누고 싶은 오늘의 이야기입니다.',
+    id: 'wide-rail-current',
+    media: [
+      {
+        __typename: 'Media',
+        altText: '스토리 첨부 이미지 1',
+        id: 'wide-rail-media',
+        url: ogImage,
+      },
+    ],
+    replyParent: {
+      __typename: 'Post',
+      id: wideRailAncestorPost.id,
+      profile: wideRailAncestorPost.profile,
+    },
+  }),
+  viewerReactions: [],
+};
+const wideRailDescendantPost = {
+  ...post({
+    bodyText: '같은 하늘을 보고 있던 답글도 이어서 확인할 수 있어요.',
+    id: 'wide-rail-descendant',
+    replyParent: {
+      __typename: 'Post',
+      id: wideRailCurrentPost.id,
+      profile: wideRailCurrentPost.profile,
+    },
+  }),
+  viewerReactions: [],
+};
+const wideRailSession = shellQuery();
+const wideRailThreadResponseData = {
+  currentSession: wideRailSession.currentSession,
+  node: {
+    ...wideRailCurrentPost,
+    replyAncestors: [wideRailAncestorPost],
+    replyDescendants: {
+      edges: [{ cursor: wideRailDescendantPost.id, node: wideRailDescendantPost }],
+      pageInfo: { endCursor: null, hasNextPage: false },
+    },
+  },
+};
 
 function mediaForCount(count: number): PostMediaItem[] {
   const normalizedCount = Math.max(1, Math.min(mediaUrls.length, Math.trunc(count)));
@@ -74,7 +124,7 @@ function PostMediaViewerCatalog({
             <ViewerActionBarFixture {...postActions} />
           </ThemeProvider>
         }
-        contextRail={<ContextRailFixture {...postActions} />}
+        contextRail={<ContextRailFixture />}
         currentIndex={clampedIndex}
         media={media}
         onClose={onClose}
@@ -140,63 +190,19 @@ function ViewerActionBarFixture({
   );
 }
 
-function ContextRailFixture(props: PostActionArgs) {
+function ContextRailFixture() {
   const theme = useTheme();
 
   return (
     <View style={[styles.contextRail, { backgroundColor: theme.backgroundCanvas }]}>
-      <ThreadPostFixture
-        {...props}
-        body="오늘도 별을 보며 나누고 싶은 이야기를 남겨요."
-        connected
-        timestamp="5분 전"
-      />
-      <ThreadPostFixture
-        {...props}
-        body="코스모에서 함께 나누고 싶은 오늘의 이야기입니다."
-        connected
-        timestamp="2026년 8월 25일 · 공개"
-      />
-      <ThreadPostFixture
-        {...props}
-        body="같은 하늘을 보고 있던 답글도 이어서 확인할 수 있어요."
-        timestamp="5분 전"
-      />
-    </View>
-  );
-}
-
-function ThreadPostFixture({
-  body,
-  connected = false,
-  timestamp,
-  ...postActions
-}: PostActionArgs & { body: string; connected?: boolean; timestamp: string }) {
-  const theme = useTheme();
-
-  return (
-    <View style={[styles.threadPost, { borderBottomColor: theme.border }]}>
-      {connected ? (
-        <View style={[styles.threadConnector, { backgroundColor: theme.border }]} />
-      ) : null}
-      <View style={styles.threadHeader}>
-        <Avatar imageUri={null} label="코스모 사용자" size={48} />
-        <View style={styles.author}>
-          <Text numberOfLines={1} style={[styles.displayName, { color: theme.text }]}>
-            코스모 사용자
-          </Text>
-          <Text numberOfLines={1} style={[styles.handle, { color: theme.textSecondary }]}>
-            @kosmo
-          </Text>
-        </View>
-        <Text numberOfLines={1} style={[styles.timestamp, { color: theme.textSecondary }]}>
-          {timestamp}
-        </Text>
-      </View>
-      <Text style={[styles.postBody, { color: theme.text }]}>{body}</Text>
-      <View style={styles.threadActions}>
-        <ViewerActionBarFixture {...postActions} />
-      </View>
+      <SessionProvider>
+        <PostMediaViewerThread
+          contentId={wideRailCurrentPost.content!.id}
+          mediaOwnerPostId={wideRailCurrentPost.id}
+          replyAvailable
+          replySurfacePostId={wideRailCurrentPost.id}
+        />
+      </SessionProvider>
     </View>
   );
 }
@@ -238,8 +244,25 @@ const meta = {
     },
   },
   component: PostMediaViewerCatalog,
-  excludeStories: ['BoundaryMovementContract', 'SensitiveRevealContract', 'ErrorRetryContract'],
-  parameters: { controls: { disable: true }, layout: 'fullscreen' },
+  excludeStories: [
+    'BoundaryMovementContract',
+    'ErrorRetryContract',
+    'SensitiveRevealContract',
+    'WideRailCompositionContract',
+  ],
+  parameters: {
+    controls: { disable: true },
+    layout: 'fullscreen',
+    relay: {
+      data: {
+        currentSession: wideRailSession.currentSession,
+        me: wideRailSession.me,
+      },
+      operationResponses: {
+        PostMediaViewerThreadQuery: { data: wideRailThreadResponseData },
+      },
+    },
+  },
   title: 'KOSMO/Patterns/Post Media Viewer',
 } satisfies Meta<typeof PostMediaViewerCatalog>;
 
@@ -342,7 +365,7 @@ export const Playground: Story = {
       }
     }
 
-    if (navigable || args.presentation === 'wide') {
+    if (navigable && args.presentation === 'compact') {
       await step('실제 Post action control callback', async () => {
         const actions = [
           ['답글 달기', args.onReply],
@@ -356,6 +379,15 @@ export const Playground: Story = {
           await userEvent.click(canvas.getAllByRole('button', { name })[0]!);
           expect(callback).toHaveBeenCalledWith();
           expect(callback).toHaveBeenCalledTimes(1);
+        }
+      });
+    } else if (args.presentation === 'wide') {
+      await step('실제 Post 상세 action bar', async () => {
+        const currentPost = await canvas.findByTestId('post-thread-current-wide-rail-current');
+        const actionBar = within(currentPost).getByRole('toolbar', { name: '액션 바' });
+
+        for (const name of ['답글', '재게시', '반응', '북마크', '더보기']) {
+          expect(within(actionBar).getByRole('button', { name })).toBeVisible();
         }
       });
     }
@@ -523,6 +555,59 @@ export const ErrorRetryContract: Story = {
   },
 };
 
+export const WideRailCompositionContract: Story = {
+  args: { currentIndex: 0, mediaCount: 4, presentation: 'wide', viewState: 'ready' },
+  globals: { viewport: { isRotated: false, value: 'kosmoMediaViewerWide' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const rail = canvas.getByTestId('post-media-viewer-context-rail');
+    const thread = await within(rail).findByTestId('post-thread');
+    const rows = Array.from(thread.children) as HTMLElement[];
+    const currentRow = within(thread).getByTestId('post-thread-current-wide-rail-current');
+
+    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
+      'post-thread-item-wide-rail-ancestor',
+      'post-thread-current-wide-rail-current',
+      'post-thread-item-wide-rail-descendant',
+    ]);
+    expect(within(thread).getAllByRole('article', { current: true })).toEqual([currentRow]);
+    expect(currentRow).toHaveAttribute('aria-current', 'true');
+    expect(within(currentRow).queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
+    expect(within(rail).queryByRole('img', { name: '스토리 첨부 이미지 1' })).toBeNull();
+
+    expect(window.getComputedStyle(currentRow).borderTopWidth).toBe('0px');
+    expect(window.getComputedStyle(currentRow).borderBottomWidth).toBe('0px');
+    for (const rowId of [
+      'post-thread-item-wide-rail-ancestor',
+      'post-thread-item-wide-rail-descendant',
+    ]) {
+      expect(
+        window.getComputedStyle(
+          within(thread).getByTestId(rowId).querySelector('[role="article"]')!,
+        ).borderBottomWidth,
+      ).toBe('0px');
+    }
+
+    const dividers = within(thread).queryAllByTestId(/^post-thread-divider-/);
+    expect(dividers).toHaveLength(2);
+    for (const divider of dividers) {
+      const dividerBounds = divider.getBoundingClientRect();
+      const rowBounds = divider.parentElement!.getBoundingClientRect();
+      expect(dividerBounds.left).toBeGreaterThan(rowBounds.left);
+      expect(dividerBounds.right).toBeLessThan(rowBounds.right);
+    }
+
+    for (const testId of [
+      'post-thread-connector-wide-rail-ancestor-wide-rail-current-after',
+      'post-thread-connector-wide-rail-ancestor-wide-rail-current-before',
+      'post-thread-connector-wide-rail-current-wide-rail-descendant-after',
+      'post-thread-connector-wide-rail-current-wide-rail-descendant-before',
+    ]) {
+      expect(within(thread).getByTestId(testId)).toBeVisible();
+    }
+  },
+};
+
 export const Default: Story = {
   args: { currentIndex: 0, mediaCount: 1, presentation: 'compact', viewState: 'ready' },
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
@@ -582,24 +667,4 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   contextRail: { flex: 1, minHeight: 0, overflow: 'hidden', width: '100%' },
-  threadPost: {
-    borderBottomWidth: borderWidths[1],
-    minHeight: 0,
-    padding: space[8],
-    position: 'relative',
-  },
-  threadConnector: {
-    bottom: -8,
-    left: 31,
-    position: 'absolute',
-    top: 56,
-    width: borderWidths[1],
-  },
-  threadHeader: { alignItems: 'flex-start', flexDirection: 'row', gap: space[8] },
-  author: { flex: 1, minWidth: 0 },
-  displayName: textStyles.uiLabelM,
-  handle: textStyles.uiCopyS,
-  timestamp: { ...textStyles.uiCopyS, flexShrink: 0 },
-  postBody: { marginLeft: 56, marginTop: space[4], ...textStyles.contentM },
-  threadActions: { marginLeft: 56, marginTop: space[8] },
 });
