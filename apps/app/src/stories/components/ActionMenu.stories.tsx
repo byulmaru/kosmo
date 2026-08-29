@@ -181,6 +181,7 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
+    args.onSelect?.mockClear();
     const canvas = within(canvasElement);
     const itemCount = Math.max(1, Math.min(8, args.itemCount ?? 2));
     const itemLabels = Array.from(
@@ -225,7 +226,8 @@ export const Playground: Story = {
       await userEvent.click(trigger);
       const menu = await screen.findByRole('menu', { name: `${triggerLabel} 메뉴` });
       await userEvent.click(within(menu).getByRole('menuitem', { name: itemLabels[0] }));
-      expect(args.onSelect).toHaveBeenCalledWith('item-1');
+      expect(args.onSelect).toHaveBeenCalledOnce();
+      expect(args.onSelect).toHaveBeenLastCalledWith('item-1');
       expect(trigger).toHaveFocus();
     });
   },
