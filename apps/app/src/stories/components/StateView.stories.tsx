@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import { Skeleton, StateView } from '@/components/ui/StateView';
+import { StateView } from '@/components/ui/StateView';
 import { space } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
@@ -68,17 +68,6 @@ export const RepresentativeStates: Story = {
   ),
 };
 
-export const SkeletonStates: Story = {
-  render: () => (
-    <View style={styles.skeletons}>
-      <Skeleton circular height={48} width={48} />
-      <Skeleton height={80} />
-      <Skeleton width="70%" />
-      <Skeleton width="45%" />
-    </View>
-  ),
-};
-
 export const ReducedMotionLoading: Story = {
   args: { description: undefined, loading: true, title: '불러오는 중입니다.' },
   globals: { reduceMotion: true },
@@ -86,5 +75,4 @@ export const ReducedMotionLoading: Story = {
 
 const styles = StyleSheet.create({
   catalog: { gap: space[16] },
-  skeletons: { gap: space[8] },
 });

@@ -17,6 +17,7 @@ const defaultOptions = [
 ] satisfies readonly RadioOptionConfig<RadioValue>[];
 
 const defaultOptionLabels = defaultOptions.map((option) => option.label);
+const defaultOptionDescriptions = defaultOptions.map((option) => option.description ?? '');
 
 function RadioGroupCatalog({
   accessibilityLabel = '알림 방식',
@@ -24,6 +25,7 @@ function RadioGroupCatalog({
   initialItem = 1,
   onChange,
   optionCount = 4,
+  optionDescriptions = defaultOptionDescriptions,
   optionLabels = defaultOptionLabels,
 }: {
   accessibilityLabel?: string;
@@ -31,12 +33,14 @@ function RadioGroupCatalog({
   initialItem?: number;
   onChange?: (value: RadioValue) => void;
   optionCount?: number;
+  optionDescriptions?: string[];
   optionLabels?: string[];
 }) {
   const visibleOptions = Array.from(
     { length: Math.max(1, Math.min(8, optionCount)) },
     (_, index): RadioOptionConfig<RadioValue> => ({
       ...defaultOptions[index],
+      description: optionDescriptions[index]?.trim() || undefined,
       label: optionLabels[index]?.trim() || defaultOptions[index]?.label || `항목 ${index + 1}`,
       value: defaultOptions[index]?.value ?? `option-${index + 1}`,
     }),
@@ -100,12 +104,14 @@ const meta = {
     initialItem: 1,
     onChange: fn(),
     optionCount: 4,
+    optionDescriptions: defaultOptionDescriptions,
     optionLabels: defaultOptionLabels,
   },
   argTypes: {
     accessibilityLabel: { control: 'text' },
     initialItem: { control: { max: 8, min: 1, step: 1, type: 'number' } },
     optionCount: { control: { max: 8, min: 1, step: 1, type: 'range' } },
+    optionDescriptions: { control: 'object' },
     optionLabels: { control: 'object' },
   },
   component: RadioGroupCatalog,
@@ -123,12 +129,24 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: ['accessibilityLabel', 'disabled', 'initialItem', 'optionCount', 'optionLabels'],
+      include: [
+        'accessibilityLabel',
+        'disabled',
+        'initialItem',
+        'optionCount',
+        'optionDescriptions',
+        'optionLabels',
+      ],
     },
   },
   render: (args) => (
     <RadioGroupCatalog
-      key={JSON.stringify([args.initialItem, args.optionCount, args.optionLabels])}
+      key={JSON.stringify([
+        args.initialItem,
+        args.optionCount,
+        args.optionDescriptions,
+        args.optionLabels,
+      ])}
       {...args}
     />
   ),
@@ -140,6 +158,8 @@ export const Playground: Story = {
     });
     const radios = within(group).getAllByRole('radio');
     const optionCount = Math.max(1, Math.min(8, args.optionCount ?? 4));
+    const optionDescriptions = args.optionDescriptions ?? defaultOptionDescriptions;
+    const optionLabels = args.optionLabels ?? defaultOptionLabels;
     const initialIndex = Math.max(0, Math.min((args.initialItem ?? 1) - 1, optionCount - 1));
     const selectedRadio = radios[initialIndex];
     const enabledRadios = radios.filter((radio) => radio.getAttribute('aria-disabled') !== 'true');
@@ -150,6 +170,15 @@ export const Playground: Story = {
       expect(radios).toHaveLength(optionCount);
       expect(group).toBeVisible();
       expect(selectedRadio).toBeChecked();
+      for (const [index, radio] of radios.entries()) {
+        const label =
+          optionLabels[index]?.trim() || defaultOptions[index]?.label || `항목 ${index + 1}`;
+        const description = optionDescriptions[index]?.trim();
+        expect(radio).toHaveAccessibleName(description ? `${label}: ${description}` : label);
+        if (description) {
+          expect(within(radio).getByText(description)).toBeVisible();
+        }
+      }
       if (args.disabled) {
         for (const radio of radios) {
           expect(radio).toHaveAttribute('aria-disabled', 'true');
