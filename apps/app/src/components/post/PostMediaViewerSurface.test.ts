@@ -13,8 +13,20 @@ const require = createRequire(import.meta.url);
 
 mock.module('react-native', {
   exports: {
+    ActivityIndicator: 'ActivityIndicator',
     Image: 'Image',
-    StyleSheet: { create: <T>(styles: T) => styles },
+    Platform: { OS: 'web' },
+    Pressable: 'Pressable',
+    StyleSheet: {
+      absoluteFillObject: {
+        bottom: 0,
+        left: 0,
+        position: 'absolute',
+        right: 0,
+        top: 0,
+      },
+      create: <T>(styles: T) => styles,
+    },
     Text: 'Text',
     View: 'View',
   },
@@ -32,7 +44,6 @@ mock.module(require.resolve('lucide-react-native'), {
   exports: {
     ChevronLeftIcon: icon('ChevronLeftIcon'),
     ChevronRightIcon: icon('ChevronRightIcon'),
-    EyeIcon: icon('EyeIcon'),
     XIcon: icon('XIcon'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -45,6 +56,7 @@ type SurfaceProps = Readonly<{
   onClose: () => void;
   onNext: () => void;
   onPrevious: () => void;
+  onRetry: () => void;
   onRevealSensitive: () => void;
   presentation: 'compact' | 'wide';
   viewState: 'ready' | 'sensitive' | 'loading' | 'error' | 'unavailable';
@@ -66,7 +78,7 @@ afterEach(async () => {
 });
 
 describe('PostMediaViewerSurface', () => {
-  it('ready와 sensitive는 close, 위치 status, 다중 navigation을 제공한다', async () => {
+  it('Ready와 Sensitive는 close, 상단 위치 status, 다중 navigation을 제공한다', async () => {
     for (const viewState of ['ready', 'sensitive'] as const) {
       await render({ viewState, currentIndex: 1 });
 
@@ -74,16 +86,31 @@ describe('PostMediaViewerSurface', () => {
       assert.ok(findByLabel('이전 이미지'));
       assert.ok(findByLabel('다음 이미지'));
       assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
-      const counterStyle = flattenStyle(byTestId('post-media-viewer-counter').props.style);
-      assert.equal(counterStyle.position, 'absolute');
-      assert.equal(counterStyle.bottom, 8);
-      assert.equal(counterStyle.left, 0);
-      assert.equal(counterStyle.right, 0);
-      assert.equal(counterStyle.textAlign, 'center');
+      assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter-position').props.style), {
+        alignItems: 'center',
+        left: 0,
+        position: 'absolute',
+        right: 0,
+        top: 16,
+      });
+      assert.deepEqual(flattenStyle(byTestId('post-media-viewer-counter').props.style), {
+        backgroundColor: '#000000',
+        borderRadius: 16,
+        color: '#ffffff',
+        fontFamily: 'SUIT',
+        fontSize: 14,
+        fontWeight: '600',
+        height: 30,
+        lineHeight: 20,
+        minWidth: 54,
+        paddingHorizontal: 12,
+        paddingVertical: 5,
+        textAlign: 'center',
+      });
     }
   });
 
-  it('단일 media에서는 visual navigation과 counter를 숨긴다', async () => {
+  it('단일 Media에서는 visual navigation과 counter를 숨긴다', async () => {
     await render({ currentIndex: 0, media: [media(1, '한 장의 설명')] });
 
     assert.equal(queryByLabel('이전 이미지'), null);
@@ -92,7 +119,7 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '1 / 1');
   });
 
-  it('첫·중간·마지막 위치의 경계를 accessibility state와 disabled callback으로 지킨다', async () => {
+  it('첫·중간·마지막 위치에서 비순환 경계와 disabled callback을 지킨다', async () => {
     const calls = { next: 0, previous: 0 };
     const props = baseProps({
       currentIndex: 0,
@@ -119,9 +146,9 @@ describe('PostMediaViewerSurface', () => {
     assert.deepEqual(calls, { next: 1, previous: 1 });
   });
 
-  it('모든 callback은 event 없이 한 번 호출되고 surface는 controlled index를 보존한다', async () => {
+  it('control callback은 event 없이 한 번 호출되고 controlled index를 보존한다', async () => {
     const args: unknown[][] = [];
-    const props = baseProps({
+    await render({
       currentIndex: 1,
       onClose: (...values: unknown[]) => args.push(values),
       onNext: (...values: unknown[]) => args.push(values),
@@ -130,7 +157,6 @@ describe('PostMediaViewerSurface', () => {
       viewState: 'sensitive',
     });
 
-    await render(props);
     findByLabel('이미지 뷰어 닫기').props.onPress({ type: 'press' });
     findByLabel('이전 이미지').props.onPress({ type: 'press' });
     findByLabel('다음 이미지').props.onPress({ type: 'press' });
@@ -141,51 +167,128 @@ describe('PostMediaViewerSurface', () => {
     assert.equal(byTestId('post-media-viewer-position').children.join(''), '2 / 4');
   });
 
-  it('ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
+  it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
     await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
     assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(image().props.accessibilityRole, 'image');
     assert.equal(image().props.resizeMode, 'contain');
 
     await render({ currentIndex: 2, media: [media(1, null), media(2, null), media(3, null)] });
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');
   });
 
-  it('sensitive는 image를 숨기고 canonical reveal IconButton을 표시한다', async () => {
-    await render({ viewState: 'sensitive' });
+  it('Sensitive는 image를 숨기고 설명·보기 action과 navigation·tray를 유지한다', async () => {
+    let revealCount = 0;
+    await render({
+      actionTray: createElement('ActionTrayContent'),
+      onRevealSensitive: () => revealCount++,
+      viewState: 'sensitive',
+    });
 
     assert.equal(queryByType('Image'), null);
-    const reveal = findByLabel('민감한 이미지 표시');
-    assert.deepEqual(reveal.props.accessibilityState, { disabled: false });
-    assert.equal(reveal.props.targetSize, 48);
-    assert.equal(reveal.props.visualSize, 48);
+    assert.equal(textContents().includes('민감한 미디어'), true);
+    assert.equal(textContents().includes('표시하기 전에 내용을 확인해 주세요.'), true);
+    assert.ok(findByLabel('이전 이미지'));
+    assert.ok(findByLabel('다음 이미지'));
+    assert.ok(byTestId('post-media-viewer-action-tray'));
+    findByLabel('민감한 이미지 표시').props.onPress({ type: 'press' });
+    assert.equal(revealCount, 1);
   });
 
-  it('compact는 56px fixed-black action tray만, wide는 full-height context rail만 표시한다', async () => {
+  it('390 Compact와 1024·1440 Wide의 canonical frame·secondary geometry를 사용한다', async () => {
     await render({
       actionTray: createElement('ActionTrayContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'compact',
     });
-    const tray = byTestId('post-media-viewer-action-tray');
-    assert.deepEqual(flattenStyle(tray.props.style), { backgroundColor: '#000000', height: 56 });
-    assert.ok(queryByType('ActionTrayContent'));
+    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignItems: 'center',
+      backgroundColor: '#000000',
+      borderRadius: 8,
+      bottom: 88,
+      justifyContent: 'center',
+      left: 16,
+      overflow: 'hidden',
+      position: 'absolute',
+      right: 16,
+      top: 80,
+    });
+    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-action-tray').props.style), {
+      backgroundColor: '#000000',
+      borderRadius: 16,
+      bottom: 16,
+      height: 56,
+      justifyContent: 'center',
+      left: 16,
+      paddingHorizontal: 22,
+      position: 'absolute',
+      right: 16,
+    });
+    assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).right, 16);
     assert.equal(queryByTestId('post-media-viewer-context-rail'), null);
-    assert.equal(queryByType('ContextRailContent'), null);
 
     await render({
       actionTray: createElement('ActionTrayContent'),
       contextRail: createElement('ContextRailContent'),
       presentation: 'wide',
     });
-    const rail = byTestId('post-media-viewer-context-rail');
-    assert.equal(flattenStyle(rail.props.style).alignSelf, 'stretch');
-    assert.equal(flattenStyle(rail.props.style).flex, undefined);
-    assert.ok(queryByType('ContextRailContent'));
+    assert.deepEqual(flattenStyle(byTestId('post-media-viewer-media-viewport').props.style), {
+      alignItems: 'center',
+      aspectRatio: 4 / 3,
+      backgroundColor: '#000000',
+      borderRadius: 8,
+      justifyContent: 'center',
+      maxHeight: 420,
+      maxWidth: 560,
+      overflow: 'hidden',
+      width: '100%',
+    });
+    assert.equal(flattenStyle(byTestId('post-media-viewer-context-rail').props.style).width, 346);
+    assert.equal(flattenStyle(findByLabel('이미지 뷰어 닫기').props.style).left, 16);
     assert.equal(queryByTestId('post-media-viewer-action-tray'), null);
-    assert.equal(queryByType('ActionTrayContent'), null);
   });
 
-  it('root overlay와 media pane은 fixed viewer black surface를 소유한다', async () => {
+  it('Loading·Error·Unavailable은 canonical 상태를 보이고 Wide rail을 유지한다', async () => {
+    const states = {
+      loading: ['미디어를 불러오는 중', '잠시만 기다려 주세요.'],
+      error: ['미디어를 불러오지 못했어요', '네트워크 상태를 확인한 뒤 다시 시도해 주세요.'],
+      unavailable: ['이 미디어를 볼 수 없어요', '삭제되었거나 접근할 수 없는 미디어입니다.'],
+    } as const;
+
+    for (const [viewState, copy] of Object.entries(states) as Array<
+      [keyof typeof states, readonly [string, string]]
+    >) {
+      await render({
+        actionTray: createElement('ActionTrayContent'),
+        contextRail: createElement('ContextRailContent'),
+        presentation: 'wide',
+        viewState,
+      });
+
+      assert.equal(textContents().includes(copy[0]), true);
+      assert.equal(textContents().includes(copy[1]), true);
+      assert.ok(findByLabel('이미지 뷰어 닫기'));
+      assert.equal(queryByLabel('이전 이미지'), null);
+      assert.equal(queryByLabel('다음 이미지'), null);
+      assert.equal(queryByTestId('post-media-viewer-counter'), null);
+      assert.equal(queryByTestId('post-media-viewer-action-tray'), null);
+      assert.ok(queryByTestId('post-media-viewer-context-rail'));
+    }
+
+    await render({ viewState: 'loading' });
+    assert.ok(byTestId('post-media-viewer-loading-indicator'));
+    assert.equal(queryByLabel('다시 시도'), null);
+
+    let retryCount = 0;
+    await render({ onRetry: () => retryCount++, viewState: 'error' });
+    findByLabel('다시 시도').props.onPress({ type: 'press' });
+    assert.equal(retryCount, 1);
+
+    await render({ viewState: 'unavailable' });
+    assert.equal(queryByLabel('다시 시도'), null);
+  });
+
+  it('overlay는 stage 바깥에만 적용하고 Media frame은 fixed black이다', async () => {
     await render();
 
     assert.equal(
@@ -194,41 +297,19 @@ describe('PostMediaViewerSurface', () => {
     );
     assert.equal(
       flattenStyle(byTestId('post-media-viewer-media-pane').props.style).backgroundColor,
+      undefined,
+    );
+    assert.equal(
+      flattenStyle(byTestId('post-media-viewer-media-viewport').props.style).backgroundColor,
       '#000000',
     );
   });
 
-  it('loading, error, unavailable은 안전한 status와 close만 제공한다', async () => {
-    const statuses = {
-      loading: '이미지를 불러오는 중입니다.',
-      error: '이미지를 불러오지 못했습니다.',
-      unavailable: '이미지를 더 이상 표시할 수 없습니다.',
-    } as const;
-
-    for (const [viewState, status] of Object.entries(statuses) as Array<
-      [keyof typeof statuses, string]
-    >) {
-      await render({
-        actionTray: createElement('ActionTrayContent'),
-        contextRail: createElement('ContextRailContent'),
-        viewState,
-      });
-
-      assert.equal(textContents().includes(status), true);
-      assert.ok(findByLabel('이미지 뷰어 닫기'));
-      assert.equal(queryByLabel('이전 이미지'), null);
-      assert.equal(queryByLabel('다음 이미지'), null);
-      assert.equal(queryByLabel('민감한 이미지 표시'), null);
-      assert.equal(queryByTestId('post-media-viewer-action-tray'), null);
-      assert.equal(queryByTestId('post-media-viewer-context-rail'), null);
-    }
-  });
-
-  it('close, navigation, reveal control은 48 target·48 visual과 지정된 Lucide geometry를 사용한다', async () => {
-    await render({ viewState: 'sensitive', currentIndex: 1 });
+  it('viewer control은 48 target·30/2.5 fixed-white icon과 interaction state를 사용한다', async () => {
+    await render({ currentIndex: 0 });
 
     assert.deepEqual(
-      ['이미지 뷰어 닫기', '이전 이미지', '다음 이미지', '민감한 이미지 표시'].map((label) => {
+      ['이미지 뷰어 닫기', '이전 이미지', '다음 이미지'].map((label) => {
         const control = findByLabel(label);
         return {
           label,
@@ -240,12 +321,11 @@ describe('PostMediaViewerSurface', () => {
         { label: '이미지 뷰어 닫기', targetSize: 48, visualSize: 48 },
         { label: '이전 이미지', targetSize: 48, visualSize: 48 },
         { label: '다음 이미지', targetSize: 48, visualSize: 48 },
-        { label: '민감한 이미지 표시', targetSize: 48, visualSize: 48 },
       ],
     );
 
     assert.deepEqual(
-      ['XIcon', 'ChevronLeftIcon', 'ChevronRightIcon', 'EyeIcon'].map((type) => {
+      ['XIcon', 'ChevronLeftIcon', 'ChevronRightIcon'].map((type) => {
         const node = rendered(type)[0];
         return {
           color: node?.props.color,
@@ -257,9 +337,28 @@ describe('PostMediaViewerSurface', () => {
         { color: '#ffffff', size: 30, strokeWidth: 2.5 },
         { color: '#ffffff', size: 30, strokeWidth: 2.5 },
         { color: '#ffffff', size: 30, strokeWidth: 2.5 },
-        { color: '#ffffff', size: 30, strokeWidth: 2.5 },
       ],
     );
+
+    const closeVisual = findByLabel('이미지 뷰어 닫기').props.visualStyle;
+    assert.equal(
+      resolveStyle(closeVisual, { hovered: true }).backgroundColor,
+      'rgba(255, 255, 255, 0.16)',
+    );
+    assert.equal(
+      resolveStyle(closeVisual, { pressed: true }).backgroundColor,
+      'rgba(255, 255, 255, 0.24)',
+    );
+    assert.deepEqual(
+      pick(resolveStyle(closeVisual, { focused: true }), [
+        'outlineColor',
+        'outlineOffset',
+        'outlineStyle',
+        'outlineWidth',
+      ]),
+      { outlineColor: '#ffffff', outlineOffset: -2, outlineStyle: 'solid', outlineWidth: 2 },
+    );
+    assert.equal(resolveStyle(findByLabel('이전 이미지').props.visualStyle).opacity, 0.35);
   });
 });
 
@@ -270,6 +369,7 @@ function baseProps(overrides: Partial<SurfaceProps> = {}): SurfaceProps {
     onClose: () => undefined,
     onNext: () => undefined,
     onPrevious: () => undefined,
+    onRetry: () => undefined,
     onRevealSensitive: () => undefined,
     presentation: 'compact',
     viewState: 'ready',
@@ -333,9 +433,29 @@ function textContents(): string[] {
   );
 }
 
+function resolveStyle(
+  style: unknown,
+  state: { focused?: boolean; hovered?: boolean; pressed?: boolean } = {},
+): Record<string, unknown> {
+  return flattenStyle(
+    typeof style === 'function'
+      ? (style as (value: { focused?: boolean; hovered?: boolean; pressed: boolean }) => unknown)({
+          focused: false,
+          hovered: false,
+          pressed: false,
+          ...state,
+        })
+      : style,
+  );
+}
+
 function flattenStyle(style: unknown): Record<string, unknown> {
   if (!Array.isArray(style)) {
     return style && typeof style === 'object' ? (style as Record<string, unknown>) : {};
   }
   return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
+}
+
+function pick(value: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  return Object.fromEntries(keys.map((key) => [key, value[key]]));
 }

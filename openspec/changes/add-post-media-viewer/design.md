@@ -32,6 +32,13 @@ PROD-853 PR 완료만으로 이 change를 archive하지 않는다. 새 Viewer ab
 PROD-650의 Web `>=768px` inline Reply Composer는 Current historical evidence로 남기고, DSN-63 Target은
 `768–1279px`에서 Viewer close 후 공용 `600×720` Reply modal을, `>=1280px`에서만 inline Composer를 사용한다.
 
+PROD-853의 disconnected Storybook은 Figma `PostMediaViewer` component set과 control source의 실제 렌더링을
+직접 권위로 사용한다. 390 Compact는 좌우 16px·상단 80px·하단 88px Media frame과 56px tray를, 1024·1440
+Wide는 가운데 560×420 Media frame과 346px rail을 사용한다. Ready·Sensitive는 navigation·상단 counter와
+secondary surface를 유지하고, Sensitive는 `보기`, Error는 `다시 시도` callback을 제공한다. Loading·Error·
+Unavailable은 navigation·counter와 Compact tray를 숨기되 Wide rail은 유지한다. 이 고정 Storybook geometry를
+PROD-849의 Production responsive clamp·consumer 연결 완료 증거로 사용하지 않는다.
+
 ## Implementation Guidance
 
 ### Current Constraints

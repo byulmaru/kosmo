@@ -160,6 +160,18 @@
 - Consequences: 기존 `Web 768px` decision의 Status와 historical evidence는 유지하되 DSN-63 Target의 Reply transition은 이 record가 Target 관점에서 기존 inline 규칙을 supersede/clarify한다. tasks·spec·canonical verification은 Current PROD-650, disconnected PROD-853와 connected PROD-849 evidence를 별도로 기록한다.
 - Confirmation / Follow-up: 768–1279px의 Viewer close→공용 Reply modal→focus 복귀와 `>=1280px` inline Composer를 PROD-849 connected runtime에서 확인하고, PROD-853 Storybook은 해당 fixture를 Production 연결 완료로 표현하지 않는다.
 
+### PROD-853 Storybook은 rendered Figma source의 상태와 geometry를 우선한다
+
+- Decision Date: 2026-08-30
+- Decision Class: Derived Contract
+- Authority / Provenance: Figma `PostMediaViewer` component set `5724:2064`, control source `5687:15412`, approved patterns `5728:40994`, DSN-63, PROD-853
+- Status: Active
+- Context / Problem: 이전 PROD-853 초안은 1024를 Compact로 분류하고 Wide rail을 280px fixture로 축소했으며, Loading·Error·Unavailable을 close-only로 해석했다. 이는 rendered Figma source의 1024 Wide, 346px rail, Error retry와 상태별 visibility에 맞지 않는다.
+- Decision Outcome: PROD-853 disconnected surface와 Storybook에서는 rendered Figma source를 직접 시각·상태 권위로 사용한다. 390은 Compact, 1024·1440은 Wide이며 Wide rail은 346px다. Ready·Sensitive는 navigation·상단 counter와 secondary surface를 유지하고 Sensitive는 `보기`를 제공한다. Loading은 spinner·설명, Error는 설명·`다시 시도`, Unavailable은 설명을 제공한다. 세 non-ready 상태에서 navigation·counter와 Compact tray는 숨기고 Wide rail은 유지한다. Control은 48×48 target, fixed-white 30px/2.5 stroke icon과 hover·pressed·focus-visible·disabled state를 제공한다.
+- Alternatives Considered: 기존 close-only 문구 유지, 1024를 Compact로 유지, Production responsive clamp를 Storybook fixture에 먼저 적용. 각각 live source와 다른 상태·presentation을 고정하거나 PROD-849 runtime 결정을 PROD-853 static 범위로 앞당긴다.
+- Consequences: Storybook의 action tray와 rail은 실제 Post action control·thread 맥락 fixture를 사용하고 저장·공유 등 계약 밖 action은 제외한다. Production consumer·Gallery permission·runtime clamp는 계속 PROD-849가 소유한다.
+- Confirmation / Follow-up: component test와 Storybook play, 390/1024/1440 Browser readback으로 geometry·visibility·callback을 확인한다.
+
 ## Remaining Decisions
 
 - 없음.

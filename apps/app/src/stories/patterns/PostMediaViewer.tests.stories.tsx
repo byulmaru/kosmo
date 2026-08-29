@@ -1,5 +1,6 @@
 import baseMeta, {
   BoundaryMovementContract as boundaryMovementContract,
+  ErrorRetryContract as errorRetryContract,
   SensitiveRevealContract as sensitiveRevealContract,
 } from './PostMediaViewer.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -15,3 +16,4 @@ type Story = StoryObj<typeof meta>;
 
 export const BoundaryMovementContract: Story = boundaryMovementContract;
 export const SensitiveRevealContract: Story = sensitiveRevealContract;
+export const ErrorRetryContract: Story = errorRetryContract;
