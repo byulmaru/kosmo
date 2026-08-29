@@ -268,8 +268,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   재실행하지 않는다.
 - 선택·미선택 상태의 메뉴 label, pending 중복 차단, 생성·취소 mutation identity와 actor 격리를 검증한다.
 - 실패 문구, latest-replace, 동일 문구 반복 시 새 alert instance와 dismiss timer 재시작, 자동 dismiss,
-  alert semantics, `background/inverse` 배경·`foreground/inverse` 전경 pair와 message 중앙 정렬, 별도 glyph
-  transform 없음, 실패 뒤 상태 유지·다음 입력 재시도를 검증한다.
+  alert semantics, Danger tone의 `feedback/danger/subtle` 배경·`feedback/danger/on-subtle` 전경·
+  `feedback/danger/base` 4px left rail, message 중앙 정렬, 별도 glyph transform 없음, 실패 뒤 상태 유지·다음 입력
+  재시도를 검증한다.
 - 작성자·selected Profile 일치, Active contentful target과 guest·다른 Profile·Tombstone·Content 없는 Repost의
   `삭제` 노출 여부, Source를 target으로 하는 순수 Repost surface, 링크 복사와 destructive item 순서를
   검증한다.

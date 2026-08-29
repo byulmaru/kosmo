@@ -196,6 +196,7 @@ export const Playground: Story = {
     controls: { disable: false, include: ['action', 'actionLabel', 'message', 'tone'] },
   },
   play: async ({ args, canvasElement, step }) => {
+    args.onAction.mockClear();
     const canvas = within(canvasElement);
     await step('Toast 표시와 메시지 확인', async () => {
       await userEvent.click(canvas.getByRole('button', { name: 'Toast 표시' }));
