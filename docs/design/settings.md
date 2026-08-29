@@ -5,15 +5,18 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 다양한 설정 category와 detail이 추가될 수 있지만, 승인되지 않은 category·placeholder·범용 registry를
 미리 노출하거나 구현하지 않는다.
 
-현재 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, 클라이언트 로컬의 `테마`
-**내부 진입점**, Kosmo가 소유한 Local Profile의 `게시물 기본 공개 범위`, `뮤트 및 차단` **내부 진입점**을
-직접 배치한다. 실제 행의 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
+현재 Target 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, Kosmo가 소유한 Local
+Profile의 `프로필 설정`과 `뮤트 및 차단`, 클라이언트 로컬의 `테마` **내부 진입점**을 직접 배치한다.
+`게시물 기본 공개 범위`는 root의 독립 destination이 아니라 `프로필 설정` 안의 Profile별 field다. 실제 행의
+label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
 DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 
 ## Route와 진입점
 
 - Kosmo 설정 hub의 canonical route는 `/settings`다. 내부 설정 detail은 이 route 아래에서 열 수 있지만,
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
+- Target의 Profile detail canonical route는 `/settings/profile`이다. 현재 runtime에 남은
+  `/settings/default-post-visibility`는 이 Target으로 이관할 구현 경로이지 별도 Target destination이 아니다.
 - 테마 detail의 canonical 내부 route는 `/settings/theme`다. 홈이나 다른 주요 route에 임시 테마 toggle을
   중복 배치하지 않는다.
 - full Web sidebar와 compact Web icon rail에는 `설정` 진입점을 주요 navigation 항목으로 표시한다.
@@ -29,13 +32,19 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- root 목록에는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점, 현재 선택값을 함께 보여 주는 `테마`,
-  `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 표시한다. 항목 하나만 가진
-  `계정`·`화면 설정`·`프로필` 대분류를 만들지 않는다.
+- Target root 목록은 `계정 설정 → 프로필 설정 → 뮤트 및 차단 → 테마` 순서다. `계정 설정`은 Byulmaru ID
+  외부 진입점이고 나머지는 내부 진입점이다. `테마`는 현재 선택값을 함께 표시한다. `게시물 기본 공개 범위`를
+  root에 중복 노출하거나 항목 하나만 가진 `계정`·`화면 설정` 대분류를 만들지 않는다.
 - `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
   두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
   [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
-- full Web의 `/settings`는 `게시물 기본 공개 범위`를 기본 선택해 detail에 표시한다. compact Web, mobile Web,
+- Figma Target evidence에서 Full loaded 화면
+  [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
+  [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
+  master에 이 하위 목록을 표시하고, Compact는 category 화면
+  [`6338:1641`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6338-1641)에서 같은 순서로
+  destination을 제공한다. Mobile category 화면은 아직 Figma coverage 공백이다.
+- full Web의 Target `/settings`는 `프로필 설정`을 기본 선택해 detail에 표시한다. compact Web, mobile Web,
   Android와 iOS의 `/settings`는 root 목록부터 표시하고, 내부 진입점을 선택하면 한 화면짜리 category 또는
   detail destination으로 이동한다.
 - 향후 승인된 항목은 direct destination, 하위 목록을 여는 category 또는 기존 독립 화면으로 이동하는
@@ -49,7 +58,15 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   브라우저 또는 OS가 외부 navigation을 소유하며 URL 지원 확인, navigation 성공·실패,
   loading·error·retry·lock 상태를 Kosmo가 소유하지 않는다. 이 계약은 PROD-645가 소유한다.
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
-  Profile 설정 content를 함께 제공한다. Profile 데이터 조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
+  대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
+  조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
+- Profile target selector의 Figma lifecycle source는
+  [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
+  [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
+  [`Full`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-45172)
+  `TargetSelectorOpen`을 제공하고 Full consumer
+  [`6316:48437`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-48437)가 연결된다.
+  Figma lifecycle은 실제 선택·저장·focus·dismiss 완료 증거가 아니다.
 - selected Profile이 없으면 Profile detail은 대상이 없음을 설명하고 기존 Profile 선택·생성 흐름으로 이동할
   수 있는 action을 제공한다. 다른 Profile의 마지막 설정값을 대신 표시하지 않는다.
 
@@ -152,8 +169,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - root 화면과 master pane은 `설정` heading을, one-pane category·detail 화면과 full Web detail pane은 현재
   destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
   반복하지 않는다.
-- root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 → `테마`와 현재
-  선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이다. full Web에서는 이어서 detail heading과 현재
+- Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
+  `프로필 설정` → `뮤트 및 차단` → `테마`와 현재 선택값이다. full Web에서는 이어서 detail heading과 현재
   선택된 content를 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile

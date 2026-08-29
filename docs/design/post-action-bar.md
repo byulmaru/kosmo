@@ -14,6 +14,8 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 모든 glyph의 visual box는 16×16px, glyph와 count 사이는 4px다. count는 16px 한 줄이며 icon과 시각 중심을 맞춘다.
 - 순서는 `Reply → Repost → Reaction → Bookmark → More`로 고정한다. Reply와 Repost만 count를 표시하고 Reaction·Bookmark·More에는 count slot을 만들지 않는다.
 - pending spinner, selected·pressed·disabled 표현은 같은 28px slot 안에서 layout을 바꾸지 않는다. focus indicator와 accessible name·state는 compact geometry에서도 유지한다.
+- `/bookmarks` 목록의 Bookmark action은 저장된 상태에서 파생한 `Selected`를 사용한다. Compact와 Full 모두
+  같은 `PostListItem` source와 `itemSpacing=0` stack rhythm을 유지하며 선택 상태 때문에 목록 간격을 바꾸지 않는다.
 - Figma Action은 내부 상하 padding 4px을 포함한다. canonical
   [`PostListItem` Text·Media variants](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=1924-1992)는
   카드 상단 12px·하단 4px을 사용한다. content column의 기존 4px gap 뒤 final slot 상단 4px을 더해 마지막
@@ -55,7 +57,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   content column의 기존 4px gap과 합쳐 마지막 presentation(본문·미디어 또는 Reaction Summary)에서 Action
   Bar까지 8px을 만든다. Quote와 순수 Repost는 기존 상단 0·하단 4px slot을 유지한다.
 - 상세 thread의 현재 Post는 Reaction Summary가 있으면 Summary와 Action Bar 사이에 4px을 둔다.
-  inline Reply Composer가 닫힌 상태에서는 빈 Composer wrapper를 렌더링하지 않고 Action Bar 아래부터 다음
+  Reply surface가 닫힌 기본 상태에서는 빈 Composer wrapper를 렌더링하지 않고 Action Bar 아래부터 다음
   thread divider까지 4px을 둔다. current row 상단의 16px은 유지한다. 이 간격은 thread current row
   wrapper와 `PostLayout`이 소유하며 Action Bar의 28px geometry는 바꾸지 않는다.
 - Action Bar는 `PostBody` 또는 Source presentation과 같은 content-level sibling이며 본문, 작성자, 생성 시각,
@@ -112,6 +114,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 화면 순서는 `PageHeader(게시 활동) → underline TabList(재게시 | 인용) → 선택한 목록`으로 고정한다. Reaction People의 pill filter와 합치지 않는다.
 - `재게시` tab은 기존 `ProfileListItem`의 `Bio=False, Action=Follow` 계약을 사용한 Profile 목록을 표시하고 관계에 따라 `팔로우`, `팔로잉`, `요청됨` 상태를 노출한다. `인용` tab은 기존 `PostListItem`의 `Kind=Quote`를 사용한 Quote Post 목록을 표시한다. 두 목록 renderer를 하나의 새 범용 component로 합치지 않는다.
 - Compact·Full Web에서는 기존 shell의 중앙 600px route column만 교체하며 Full Web의 `RightRail`은 유지한다. Mobile은 pushed dedicated screen을 사용하고 현재 shell 계약에 따라 `BottomTabBar`를 유지한다.
+- Target screen evidence는 [`05 Screens - Web`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-16233)과
+  [`04 Screens - Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6312-21917)의
+  Full·Compact·Mobile Reposts·Quotes 6개 Light FRAME이다.
 - Figma는 두 tab의 기본·선택 상태와 responsive surface를 확정한다. entry control, URL·Back fallback, 재게시·인용 connection/API, empty·error·pagination과 scroll restoration은 연결된 Production 이슈가 소유하며 이번 디자인 완료 증거에 포함하지 않는다.
 
 ## More 링크 복사 menu
@@ -128,6 +133,9 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 - Profile 목록 최상단의 고정 Post는 `Pin`과 `고정됨`을 표시한다. `Pin`은 인접한 문장이 의미를 제공하는
   장식 아이콘이며 보조 기술에 중복 announce하지 않는다.
+- `고정됨` 위쪽 여백은 `Pinned attribution / Size=Center, Kind=Pinned` source가 `paddingTop=4px`로 소유한다.
+  이 source의 전체 높이는 24px이고 내부 text line box는 기존 20px을 유지한다. 순수 Repost의 attribution
+  source에는 이 여백을 적용하지 않으며 기존 `paddingTop=0`, 높이 20px을 유지한다.
 - owner의 More `ActionMenu`는 기존 첫 행 `링크 복사`를 유지하고, 다음 행을 상태에 따라
   `프로필에 고정` 또는 `프로필 고정 해제`로 전환한다. `삭제`는 마지막에 두며 기존 eligibility가 있을 때만 표시한다.
 - 고정·해제에는 같은 `Pin` glyph를 사용하고 `PinOff`는 사용하지 않는다. attribution은 `16`/`secondary`,
@@ -229,8 +237,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 일반 목록의 Reply와 Reply+Quote는 조회 가능한 Parent의 display name을 사용한 Reply attribution을 한 번
   표시하고, 일반 Post와 Parent를 조회할 수 없는 Reply에는 표시하지 않는지 검증한다. Reply attribution은
   클릭 가능한 요소가 아니며 장식 icon과 문구를 중복 announce하지 않아야 한다.
+- `/bookmarks`의 Bookmark action이 Compact·Full에서 모두 data-derived `Selected`인지, 두 목록의
+  `PostListItem` stack 간격이 모두 0인지 확인한다.
+- Compact·Full과 Light·Dark의 Pinned attribution은 위쪽 4px을 포함한 24px 높이인지, Repost attribution은
+  위쪽 여백 없이 20px인지 확인한다.
 - 상세 thread의 현재 Post에서 current row 상단부터 content까지 16px, Reaction Summary 아래부터 Action Bar까지
-  4px인지 검증한다. selected Profile이 있고 inline Reply Composer가 닫힌 상태에서도 빈 wrapper가 남지 않으며
+  4px인지 검증한다. selected Profile이 있고 Reply surface가 닫힌 기본 상태에서도 빈 wrapper가 남지 않으며
   Action Bar 아래부터 1px thread divider까지 4px인지 exact geometry로 검증한다.
 - 모든 플랫폼 구현에서 Bar와 control 높이 28, Reply·More target의 content column 양끝 정렬, social action 너비 50, More target 너비 최소
   28, glyph 16, icon-count gap 4와 고정 순서를 검증한다. Web runtime에서는 각 target이 24×24 CSS px 자체를
