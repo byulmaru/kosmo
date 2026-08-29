@@ -61,7 +61,6 @@ const createPendingRequest = async () => {
   const followed = await followProfile({
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
-    origin: 'LOCAL',
   });
   assert.equal(followed.result.kind, 'PENDING');
   if (followed.result.kind !== 'PENDING') {
@@ -81,7 +80,6 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
   const followed = await followProfile({
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
-    origin: 'LOCAL',
   });
   assert.equal(followed.result.kind, 'PENDING');
   if (followed.result.kind !== 'PENDING') {
@@ -103,7 +101,6 @@ test('pair 조회와 승인은 request를 relation으로 원자적으로 전환�
   const approved = await lifecycle.approveProfileFollowRequest!({
     actorProfileId: followee.id,
     profileFollowRequestId: found.id,
-    origin: 'LOCAL',
   });
 
   assert.equal(approved.profileFollowRequestId, found.id);
@@ -141,13 +138,11 @@ test('Local approve는 request와 relation을 transaction으로 전환하고 반
   const approved = await lifecycle.approveProfileFollowRequest!({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
-    origin: 'LOCAL',
   });
   await assert.rejects(
     lifecycle.approveProfileFollowRequest!({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
     NotFoundError,
   );
@@ -163,7 +158,6 @@ test('ActivityPub Accept는 request를 relation으로 전환하고 duplicate는 
     expectedRowId: fixture.request.id,
     followeeProfileId: fixture.followee.id,
     followerProfileId: fixture.follower.id,
-    origin: 'ACTIVITYPUB' as const,
   };
   const result = await lifecycle.acceptProfileFollowRequest(input);
   const duplicate = await lifecycle.acceptProfileFollowRequest(input);
@@ -187,7 +181,6 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
   const rejected = await lifecycle.rejectProfileFollowRequest!({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
-    origin: 'LOCAL',
   });
 
   assert.equal(rejected.profileFollowRequestId, request.id);
@@ -211,7 +204,6 @@ test('followee는 request를 거절하고 actor Profile과 삭제 ID를 받는�
     lifecycle.rejectProfileFollowRequest!({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
     NotFoundError,
   );
@@ -224,7 +216,6 @@ test('follower는 request를 취소하고 actor Profile과 삭제 ID를 받는�
   const canceled = await lifecycle.cancelProfileFollowRequest!({
     actorProfileId: follower.id,
     profileFollowRequestId: request.id,
-    origin: 'LOCAL',
   });
 
   assert.equal(canceled.profileFollowRequestId, request.id);
@@ -255,7 +246,6 @@ test('participant가 아닌 actor는 request transition을 실행할 수 없다'
     lifecycle.rejectProfileFollowRequest!({
       actorProfileId: stranger.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
     NotFoundError,
   );
@@ -297,7 +287,6 @@ test('local pending request 생성은 같은 pair에서 멱등이다', async () 
   const input = {
     followeeProfileId: followee.id,
     followerProfileId: follower.id,
-    origin: 'LOCAL' as const,
   };
 
   const [firstResult, secondResult] = await Promise.all([
@@ -336,7 +325,6 @@ test('승인은 unavailable participant를 거부하고 request를 보존한다'
     lifecycle.approveProfileFollowRequest!({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
     NotFoundError,
   );
@@ -359,7 +347,6 @@ test('거절과 취소는 unavailable counterpart가 있어도 pending row를 �
   const rejected = await lifecycle.rejectProfileFollowRequest!({
     actorProfileId: rejectedPair.followee.id,
     profileFollowRequestId: rejectedPair.request.id,
-    origin: 'LOCAL',
   });
   assert.equal(rejected.profileFollowRequestId, rejectedPair.request.id);
 
@@ -371,7 +358,6 @@ test('거절과 취소는 unavailable counterpart가 있어도 pending row를 �
   const canceled = await lifecycle.cancelProfileFollowRequest!({
     actorProfileId: canceledPair.follower.id,
     profileFollowRequestId: canceledPair.request.id,
-    origin: 'LOCAL',
   });
   assert.equal(canceled.profileFollowRequestId, canceledPair.request.id);
 });
@@ -394,7 +380,6 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
   const rejected = await lifecycle.rejectProfileFollowRequest!({
     actorProfileId: localFollowee.id,
     profileFollowRequestId: rejectedRequest.profileFollowRequest.id,
-    origin: 'ACTIVITYPUB',
   });
   assert.equal(rejected.profileFollowRequestId, rejectedRequest.profileFollowRequest.id);
 
@@ -418,7 +403,6 @@ test('SUSPENDED remote counterpart가 있어도 거절과 취소로 pending row�
   const canceled = await lifecycle.cancelProfileFollowRequest!({
     actorProfileId: localFollower.id,
     profileFollowRequestId: canceledRequest.profileFollowRequest.id,
-    origin: 'LOCAL',
   });
   assert.equal(canceled.profileFollowRequestId, canceledRequest.profileFollowRequest.id);
 });
@@ -443,7 +427,6 @@ test('승인은 SUSPENDED remote participant를 거부하고 request를 보존�
     lifecycle.approveProfileFollowRequest!({
       actorProfileId: localFollowee.id,
       profileFollowRequestId: request.profileFollowRequest.id,
-      origin: 'ACTIVITYPUB',
     }),
     NotFoundError,
   );
@@ -470,7 +453,6 @@ test('승인은 기존 relation을 재사용하고 count를 중복 증가시키�
   const approved = await lifecycle.approveProfileFollowRequest!({
     actorProfileId: followee.id,
     profileFollowRequestId: request.id,
-    origin: 'LOCAL',
   });
   assert.equal(approved.profileFollow.id, existing.id);
   assert.equal(approved.followerProfile.followingCount, 1);
@@ -484,12 +466,10 @@ test('동시 승인은 성공 개수와 무관하게 relation과 count를 중복
     lifecycle.approveProfileFollowRequest!({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
     lifecycle.approveProfileFollowRequest!({
       actorProfileId: followee.id,
       profileFollowRequestId: request.id,
-      origin: 'LOCAL',
     }),
   ]);
 
@@ -529,7 +509,6 @@ test('Follow 알림 저장 실패는 승인 relation과 count 전이를 되돌�
       return await lifecycle.approveProfileFollowRequest!({
         actorProfileId: followee.id,
         profileFollowRequestId: request.id,
-        origin: 'LOCAL',
       });
     } finally {
       await db.execute(sql`ALTER TABLE ${Notifications} DROP CONSTRAINT notification_test_failure`);
@@ -631,7 +610,6 @@ test('원격 Accept는 비활성 local participant의 pending을 보존한다', 
       expectedRowId: fixture.request.id,
       followeeProfileId: fixture.followee.id,
       followerProfileId: fixture.follower.id,
-      origin: 'ACTIVITYPUB',
     }),
     { kind: 'NOOP' },
   );
@@ -655,8 +633,6 @@ test('원격 Reject는 비활성 local participant의 pending을 보존한다', 
       expectedRowId: fixture.request.id,
       followeeProfileId: fixture.followee.id,
       followerProfileId: fixture.follower.id,
-      origin: 'ACTIVITYPUB',
-      transition: 'INBOUND_REJECT',
     }),
     false,
   );
@@ -674,7 +650,6 @@ test('원격 Accept 동시 처리는 pending을 한 번만 relation으로 승격
     expectedRowId: fixture.request.id,
     followeeProfileId: fixture.followee.id,
     followerProfileId: fixture.follower.id,
-    origin: 'ACTIVITYPUB' as const,
   };
   const results = await Promise.all([
     lifecycle.acceptProfileFollowRequest(input),
@@ -696,8 +671,6 @@ test('원격 Accept와 Reject 경쟁에서는 exact row 전이 하나만 성공�
     expectedRowId: fixture.request.id,
     followeeProfileId: fixture.followee.id,
     followerProfileId: fixture.follower.id,
-    origin: 'ACTIVITYPUB' as const,
-    transition: 'INBOUND_REJECT' as const,
   };
   const results = await Promise.all([
     lifecycle.acceptProfileFollowRequest(input),
@@ -733,8 +706,6 @@ test('원격 Accept와 Reject는 교체된 pending에 이전 request id를 적�
     expectedRowId: fixture.request.id,
     followeeProfileId: fixture.followee.id,
     followerProfileId: fixture.follower.id,
-    origin: 'ACTIVITYPUB' as const,
-    transition: 'INBOUND_REJECT' as const,
   };
 
   assert.deepEqual(await lifecycle.acceptProfileFollowRequest(staleInput), { kind: 'NOOP' });

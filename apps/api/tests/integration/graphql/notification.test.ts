@@ -14,7 +14,11 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { temporalClient } from '@kosmo/core/temporal/client';
+import {
+  executeProfileFollowPairTransition,
+  profileFollowPairWorkflowId,
+} from '@kosmo/core/temporal/follow-command';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -356,6 +360,15 @@ describe('Notification GraphQL Node boundary', () => {
       assert.fail('Expected canceled follow request');
     }
     assert.equal(cancelResult.result.profileFollowRequestId, request.id);
+
+    await temporalClient.workflow
+      .getHandle(
+        profileFollowPairWorkflowId({
+          followerProfileId: requester.id,
+          followeeProfileId: recipient.id,
+        }),
+      )
+      .result();
 
     const notificationId = encodeGlobalId('FollowRequestNotification', request.id);
     const recipientId = encodeGlobalId('Profile', recipient.id);
