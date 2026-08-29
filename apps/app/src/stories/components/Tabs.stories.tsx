@@ -6,20 +6,25 @@ import type { TabOption, TabVariant } from '@/components/ui/Tabs';
 
 type TabValue = 'latest' | 'media' | 'popular';
 
-const options = [
-  { label: '인기', value: 'popular' },
-  { disabled: true, label: '최신', value: 'latest' },
-  { label: '미디어', value: 'media' },
-] satisfies readonly TabOption<TabValue>[];
-
 function TabsCatalog({
+  latestLabel = '최신',
+  mediaLabel = '미디어',
   onValueChange,
+  popularLabel = '인기',
   variant = 'underline',
 }: {
+  latestLabel?: string;
+  mediaLabel?: string;
   onValueChange?: (value: TabValue) => void;
+  popularLabel?: string;
   variant?: TabVariant;
 }) {
   const [value, setValue] = useState<TabValue>('popular');
+  const options = [
+    { label: popularLabel, value: 'popular' },
+    { disabled: true, label: latestLabel, value: 'latest' },
+    { label: mediaLabel, value: 'media' },
+  ] satisfies readonly TabOption<TabValue>[];
 
   return (
     <TabList
@@ -39,7 +44,12 @@ function TabsCatalog({
 }
 
 const meta = {
-  args: { onValueChange: fn() },
+  args: {
+    latestLabel: '최신',
+    mediaLabel: '미디어',
+    onValueChange: fn(),
+    popularLabel: '인기',
+  },
   argTypes: {
     variant: { control: 'select', options: ['underline', 'pill'] },
   },
@@ -54,15 +64,23 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 
 export const Playground: Story = {
-  parameters: { controls: { disable: false, include: ['variant'] } },
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['popularLabel', 'latestLabel', 'mediaLabel', 'variant'],
+    },
+  },
   play: async ({ args, canvasElement, step }) => {
     args.onValueChange?.mockClear();
     const canvas = within(canvasElement);
     const group = canvas.getByRole('tablist', { name: '검색 결과 유형' });
-    const popular = within(group).getByRole('tab', { name: '인기' });
-    const latest = within(group).getByRole('tab', { name: '최신' });
-    const media = within(group).getByRole('tab', { name: '미디어' });
-    const popularLabel = within(popular).getByText('인기');
+    const popularText = args.popularLabel ?? '인기';
+    const latestText = args.latestLabel ?? '최신';
+    const mediaText = args.mediaLabel ?? '미디어';
+    const popular = within(group).getByRole('tab', { name: popularText });
+    const latest = within(group).getByRole('tab', { name: latestText });
+    const media = within(group).getByRole('tab', { name: mediaText });
+    const popularLabel = within(popular).getByText(popularText);
     const indicator = popular.lastElementChild;
 
     await step('기본 상태와 접근성 확인', async () => {
