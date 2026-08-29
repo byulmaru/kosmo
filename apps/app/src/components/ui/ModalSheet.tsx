@@ -8,6 +8,15 @@ import { ActionMenuPortal } from './ActionMenuPortal';
 import { IconButton } from './IconButton';
 import type { PropsWithChildren } from 'react';
 
+const focusableSelector = [
+  'button:not([disabled]):not([aria-disabled="true"])',
+  '[href]:not([aria-disabled="true"])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"]):not([aria-disabled="true"])',
+].join(',');
+
 type Props = PropsWithChildren<{
   dismissible?: boolean;
   onClose: () => void;
@@ -56,6 +65,18 @@ export function ModalSheet({
   }, [visible]);
 
   useEffect(() => {
+    if (Platform.OS !== 'web' || !overlayMotion.mounted) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [overlayMotion.mounted]);
+
+  useEffect(() => {
     if (Platform.OS !== 'web') {
       return;
     }
@@ -73,7 +94,7 @@ export function ModalSheet({
 
     const frame = requestAnimationFrame(() => {
       const surface = surfaceRef.current as unknown as HTMLElement | null;
-      (surface?.querySelector<HTMLElement>('button:not([disabled])') ?? surface)?.focus();
+      (surface?.querySelector<HTMLElement>(focusableSelector) ?? surface)?.focus();
     });
     return () => cancelAnimationFrame(frame);
   }, [dismissible, visible]);
@@ -96,7 +117,7 @@ export function ModalSheet({
       }
 
       const surface = surfaceRef.current as unknown as HTMLElement | null;
-      const controls = surface?.querySelectorAll<HTMLElement>('button:not([disabled])');
+      const controls = surface?.querySelectorAll<HTMLElement>(focusableSelector);
       const first = controls?.item(0);
       const last = controls?.item((controls?.length ?? 1) - 1);
       const active = document.activeElement;
@@ -164,7 +185,7 @@ export function ModalSheet({
         ]}
       >
         <View
-          {...(Platform.OS === 'web' ? { tabIndex: -1 as const } : {})}
+          {...(Platform.OS === 'web' ? { 'aria-modal': true as const, tabIndex: -1 as const } : {})}
           accessibilityLabel={title}
           accessibilityViewIsModal
           onAccessibilityEscape={requestClose}
