@@ -1,0 +1,345 @@
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
+import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
+import { SidebarNavigation } from '@/components/ui/SidebarNavigation';
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { NavigationDestination, NavigationProfile } from '@/components/ui/navigationChrome';
+import type { SidebarNavigationProps } from '@/components/ui/SidebarNavigation';
+
+type CatalogProps = Omit<SidebarNavigationProps, 'profile'> & {
+  profileAvailable: boolean;
+};
+
+const profile = {
+  imageUri: null,
+  label: '사샤',
+} satisfies NavigationProfile;
+
+const destinations = [
+  'home',
+  'search',
+  'notifications',
+  'profile',
+  'followRequests',
+  'bookmarks',
+  'compose',
+  'feedback',
+  'settings',
+] as const satisfies readonly NavigationDestination[];
+
+const labels = {
+  bookmarks: '북마크',
+  compose: '글쓰기',
+  feedback: '피드백 보내기',
+  followRequests: '팔로워 요청',
+  home: '홈',
+  notifications: '알림',
+  profile: '프로필',
+  search: '검색',
+  settings: '설정',
+} satisfies Record<NavigationDestination, string>;
+
+function SidebarNavigationCatalog({
+  currentDestination = 'home',
+  onLogout,
+  onMenuOpenChange,
+  onNavigate,
+  presentation = 'full',
+  profileAvailable,
+}: CatalogProps) {
+  const [destination, setDestination] = useState<NavigationDestination | null>(currentDestination);
+
+  useEffect(() => setDestination(currentDestination), [currentDestination]);
+
+  return (
+    <View
+      style={{
+        height: 720,
+        width: presentation === 'compact' ? 80 : 320,
+      }}
+    >
+      <SidebarNavigation
+        currentDestination={destination}
+        onLogout={onLogout}
+        onMenuOpenChange={onMenuOpenChange}
+        onNavigate={(nextDestination) => {
+          onNavigate(nextDestination);
+          setDestination(nextDestination);
+        }}
+        presentation={presentation}
+        profile={profileAvailable ? profile : null}
+      />
+    </View>
+  );
+}
+
+const meta = {
+  args: {
+    currentDestination: 'home',
+    onLogout: fn(),
+    onMenuOpenChange: fn(),
+    onNavigate: fn(),
+    presentation: 'full',
+    profileAvailable: true,
+  },
+  argTypes: {
+    currentDestination: {
+      control: 'select',
+      options: [null, ...destinations],
+    },
+    presentation: {
+      control: 'inline-radio',
+      options: ['full', 'compact', 'drawer'],
+    },
+    profileAvailable: { control: 'boolean' },
+  },
+  component: SidebarNavigationCatalog,
+  parameters: { controls: { disable: true } },
+  title: 'KOSMO/Components/Sidebar Navigation',
+} satisfies Meta<typeof SidebarNavigationCatalog>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+function getNavigation(canvasElement: HTMLElement) {
+  return within(canvasElement).getByRole('navigation', { name: '주요 메뉴' });
+}
+
+function getButton(navigation: HTMLElement, destination: NavigationDestination) {
+  return within(navigation).getByRole('button', { name: labels[destination] });
+}
+
+function expectRect(element: HTMLElement, width: number, height: number) {
+  const rect = element.getBoundingClientRect();
+  expect(rect.width).toBe(width);
+  expect(rect.height).toBe(height);
+}
+
+async function expectNavigationBasics(
+  canvasElement: HTMLElement,
+  presentation: 'compact' | 'drawer' | 'full',
+  currentDestination: NavigationDestination | null = 'home',
+  profileAvailable = true,
+) {
+  const navigation = getNavigation(canvasElement);
+  const home = getButton(navigation, 'home');
+  const currentControls = navigation.querySelectorAll('[aria-current="page"]');
+  const currentIsRendered =
+    currentDestination !== null &&
+    !(currentDestination === 'compose' && presentation !== 'compact') &&
+    !(currentDestination === 'profile' && !profileAvailable);
+
+  expect(navigation).toHaveAccessibleName('주요 메뉴');
+  if (currentIsRendered) {
+    const selected =
+      currentDestination === 'settings'
+        ? within(navigation).getByRole('button', { name: '설정 및 기타' })
+        : getButton(navigation, currentDestination);
+    expect(selected).toHaveAttribute('aria-current', 'page');
+    expect(currentControls).toHaveLength(1);
+  } else {
+    expect(currentControls).toHaveLength(0);
+  }
+  expectRect(home, presentation === 'compact' ? 44 : 272, presentation === 'compact' ? 44 : 45);
+
+  if (presentation === 'compact') {
+    expectRect(navigation, 80, 720);
+  } else {
+    expectRect(home, 272, 45);
+  }
+}
+
+export const Default: Story = {
+  play: async ({ canvasElement }) => {
+    await expectNavigationBasics(canvasElement, 'full');
+  },
+};
+
+export const Playground: Story = {
+  parameters: {
+    controls: {
+      disable: false,
+      include: ['currentDestination', 'presentation', 'profileAvailable'],
+    },
+  },
+  play: async ({ args, canvasElement, step }) => {
+    args.onLogout.mockClear();
+    mocked(args.onMenuOpenChange!).mockClear();
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    const presentation = args.presentation ?? 'full';
+    const home = getButton(navigation, 'home');
+    const search = getButton(navigation, 'search');
+    const profileButton = getButton(navigation, 'profile');
+    const feedback = getButton(navigation, 'feedback');
+
+    await step('내비게이션 이름·현재 목적지·geometry 확인', async () => {
+      await expectNavigationBasics(
+        canvasElement,
+        presentation,
+        args.currentDestination ?? null,
+        args.profileAvailable,
+      );
+      expectRect(
+        search,
+        presentation === 'compact' ? 44 : 272,
+        presentation === 'compact' ? 44 : 45,
+      );
+      expect(feedback.closest('[role="menu"]')).toBeNull();
+      if (presentation === 'compact') {
+        expectRect(profileButton, 44, 44);
+      }
+    });
+
+    await step('Tab과 Enter로 destination callback 확인', async () => {
+      home.focus();
+      await userEvent.tab();
+      expect(search).toHaveFocus();
+      await userEvent.keyboard('{Enter}');
+      expect(args.onNavigate).toHaveBeenLastCalledWith('search');
+      await waitFor(() => expect(search).toHaveAttribute('aria-current', 'page'));
+    });
+
+    await step('프로필이 있으면 프로필 destination을 활성화', async () => {
+      if (args.profileAvailable) {
+        expect(profileButton).toBeEnabled();
+        profileButton.focus();
+        await userEvent.keyboard('{Enter}');
+        expect(args.onNavigate).toHaveBeenLastCalledWith('profile');
+        await waitFor(() => expect(profileButton).toHaveAttribute('aria-current', 'page'));
+      }
+    });
+  },
+};
+
+export const Compact: Story = {
+  args: { presentation: 'compact' },
+  play: async ({ args, canvasElement, step }) => {
+    args.onLogout.mockClear();
+    const onMenuOpenChange = mocked(args.onMenuOpenChange!);
+    onMenuOpenChange.mockClear();
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    const feedback = getButton(navigation, 'feedback');
+    const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
+
+    await step('80px rail과 compact control geometry 확인', async () => {
+      await expectNavigationBasics(canvasElement, 'compact');
+      expectRect(feedback, 44, 44);
+      expectRect(utility, 44, 44);
+      for (const destination of [
+        'home',
+        'search',
+        'notifications',
+        'profile',
+        'followRequests',
+        'bookmarks',
+        'compose',
+      ] as const) {
+        expectRect(getButton(navigation, destination), 44, 44);
+      }
+      expect(feedback.closest('[role="menu"]')).toBeNull();
+    });
+
+    await step('ActionMenu keyboard·dismiss·callback 확인', async () => {
+      await userEvent.click(utility);
+      expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
+      const menu = await screen.findByRole('menu');
+      const settings = within(menu).getByRole('menuitem', { name: labels.settings });
+      const logout = within(menu).getByRole('menuitem', { name: '로그아웃' });
+      expect(settings).toHaveFocus();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(logout).toHaveFocus();
+      await userEvent.keyboard('{ArrowUp}');
+      expect(settings).toHaveFocus();
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+      expect(onMenuOpenChange).toHaveBeenLastCalledWith(false);
+      expect(utility).toHaveFocus();
+
+      await userEvent.click(utility);
+      const settingsMenu = await screen.findByRole('menu');
+      await userEvent.click(within(settingsMenu).getByRole('menuitem', { name: labels.settings }));
+      expect(args.onNavigate).toHaveBeenLastCalledWith('settings');
+      expect(utility).toHaveFocus();
+
+      await userEvent.click(utility);
+      const logoutMenu = await screen.findByRole('menu');
+      await userEvent.click(within(logoutMenu).getByRole('menuitem', { name: '로그아웃' }));
+      expect(args.onLogout).toHaveBeenCalledOnce();
+      expect(utility).toHaveFocus();
+    });
+  },
+};
+
+async function playInlineUtility({
+  args,
+  canvasElement,
+}: {
+  args: NonNullable<Story['args']>;
+  canvasElement: HTMLElement;
+}) {
+  const onMenuOpenChange = mocked(args.onMenuOpenChange!);
+  onMenuOpenChange.mockClear();
+  const navigation = getNavigation(canvasElement);
+  const utility = within(navigation).getByRole('button', { name: '설정 및 기타' });
+  const feedback = getButton(navigation, 'feedback');
+  const home = getButton(navigation, 'home');
+
+  expectRect(navigation, 320, 720);
+  expectRect(home, 272, 45);
+  expectRect(utility, 272, 45);
+  expectRect(feedback, 272, 45);
+  expect(feedback.closest('[role="menu"]')).toBeNull();
+
+  await userEvent.click(utility);
+  expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
+  const settings = within(navigation).getByRole('button', { name: labels.settings });
+  const logout = within(navigation).getByRole('button', { name: '로그아웃' });
+  expect(settings).toBeVisible();
+  expect(logout).toBeVisible();
+  expectRect(settings, 272, 45);
+  expectRect(logout, 272, 45);
+  expect(feedback.closest('[role="menu"]')).toBeNull();
+
+  await userEvent.click(utility);
+  await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
+  expect(within(navigation).queryByRole('button', { name: labels.settings })).toBeNull();
+  expect(within(navigation).queryByRole('button', { name: '로그아웃' })).toBeNull();
+}
+
+export const Drawer: Story = {
+  args: { presentation: 'drawer' },
+  play: async ({ args, canvasElement }) => {
+    await playInlineUtility({ args, canvasElement });
+  },
+};
+
+export const ProfileUnavailable: Story = {
+  args: { currentDestination: 'profile', profileAvailable: false },
+  play: async ({ args, canvasElement }) => {
+    args.onNavigate.mockClear();
+    const navigation = getNavigation(canvasElement);
+    const profileButton = getButton(navigation, 'profile');
+
+    expect(profileButton).toBeDisabled();
+    expect(profileButton).toHaveAttribute('aria-disabled', 'true');
+    expect(profileButton).not.toHaveAttribute('aria-current', 'page');
+    profileButton.click();
+    expect(args.onNavigate).not.toHaveBeenCalled();
+  },
+};
+
+export const Dark: Story = {
+  args: { currentDestination: 'notifications' },
+  globals: {
+    backgrounds: { value: 'kosmoDark' },
+    theme: 'dark',
+  },
+  play: async ({ canvasElement }) => {
+    const navigation = getNavigation(canvasElement);
+    const notifications = getButton(navigation, 'notifications');
+    expect(notifications).toHaveAttribute('aria-current', 'page');
+    expect(notifications).toBeVisible();
+  },
+};
