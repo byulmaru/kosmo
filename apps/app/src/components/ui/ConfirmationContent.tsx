@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 
 type Props = {
   cancelLabel: string;
+  confirmDisabled?: boolean;
   confirmLabel: string;
   message: string;
   onCancel: () => void;
@@ -17,6 +18,7 @@ type Props = {
 
 export function ConfirmationContent({
   cancelLabel,
+  confirmDisabled,
   confirmLabel,
   message,
   onCancel,
@@ -48,6 +50,7 @@ export function ConfirmationContent({
         </Button>
         <Button
           aria-busy={pending || undefined}
+          disabled={pending ? undefined : confirmDisabled}
           hitSlop={hitSlop}
           loading={pending}
           onPress={() => onConfirm()}

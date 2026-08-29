@@ -36,6 +36,7 @@ type TestElementProps = {
 type TestElement = ReactElement<TestElementProps>;
 type ConfirmationContentComponent = (props: {
   cancelLabel: string;
+  confirmDisabled?: boolean;
   confirmLabel: string;
   message: string;
   onCancel: () => void;
@@ -107,6 +108,50 @@ test('actions keep cancel-confirm order and pending state', () => {
     [
       { disabled: true, loading: undefined, tone: 'secondary' },
       { disabled: undefined, loading: true, tone: 'danger' },
+    ],
+  );
+});
+
+test('confirm can be disabled without changing cancel or loading state', () => {
+  assert.ok(ConfirmationContent, 'ConfirmationContent component must exist');
+  const buttons = findElements(
+    ConfirmationContent({
+      cancelLabel: '취소',
+      confirmDisabled: true,
+      confirmLabel: '확인',
+      message: '계속할까요?',
+      onCancel: () => undefined,
+      onConfirm: () => undefined,
+    }),
+    'Button',
+  );
+
+  assert.deepEqual(
+    buttons.map(({ props }) => ({ disabled: props.disabled, loading: props.loading })),
+    [
+      { disabled: false, loading: undefined },
+      { disabled: true, loading: false },
+    ],
+  );
+
+  const pendingButtons = findElements(
+    ConfirmationContent({
+      cancelLabel: '취소',
+      confirmDisabled: true,
+      confirmLabel: '확인',
+      message: '계속할까요?',
+      onCancel: () => undefined,
+      onConfirm: () => undefined,
+      pending: true,
+    }),
+    'Button',
+  );
+
+  assert.deepEqual(
+    pendingButtons.map(({ props }) => ({ disabled: props.disabled, loading: props.loading })),
+    [
+      { disabled: true, loading: undefined },
+      { disabled: undefined, loading: true },
     ],
   );
 });

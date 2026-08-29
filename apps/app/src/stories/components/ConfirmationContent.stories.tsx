@@ -7,6 +7,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 
 type CatalogProps = {
   cancelLabel: string;
+  confirmDisabled: boolean;
   confirmLabel: string;
   message: string;
   onCancel: () => void;
@@ -18,6 +19,7 @@ type CatalogProps = {
 
 function ConfirmationContentCatalog({
   cancelLabel,
+  confirmDisabled,
   confirmLabel,
   message,
   onCancel,
@@ -32,6 +34,7 @@ function ConfirmationContentCatalog({
     <View style={styles.fixture}>
       <ConfirmationContent
         cancelLabel={cancelLabel}
+        confirmDisabled={confirmDisabled}
         confirmLabel={confirmLabel}
         message={message}
         onCancel={onCancel}
@@ -53,6 +56,7 @@ function ConfirmationContentCatalog({
 const meta = {
   args: {
     cancelLabel: '취소',
+    confirmDisabled: false,
     confirmLabel: '확인',
     message: '이 작업을 계속할까요?',
     onCancel: fn(),
@@ -79,7 +83,15 @@ export const Playground: Story = {
   parameters: {
     controls: {
       disable: false,
-      include: ['tone', 'state', 'message', 'supportingText', 'cancelLabel', 'confirmLabel'],
+      include: [
+        'tone',
+        'state',
+        'message',
+        'supportingText',
+        'cancelLabel',
+        'confirmLabel',
+        'confirmDisabled',
+      ],
     },
   },
   play: async ({ args, canvasElement, step }) => {
@@ -97,14 +109,20 @@ export const Playground: Story = {
         expect(confirm).toHaveAttribute('aria-busy', 'true');
       } else {
         expect(cancel).not.toHaveAttribute('aria-disabled', 'true');
-        expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
+        if (args.confirmDisabled) {
+          expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        } else {
+          expect(confirm).not.toHaveAttribute('aria-disabled', 'true');
+        }
       }
     });
 
     if (args.state === 'idle') {
-      await step('확인과 취소 callback 확인', async () => {
-        await userEvent.click(confirm);
-        expect(args.onConfirm).toHaveBeenCalledWith();
+      await step('사용 가능한 action callback 확인', async () => {
+        if (!args.confirmDisabled) {
+          await userEvent.click(confirm);
+          expect(args.onConfirm).toHaveBeenCalledWith();
+        }
         await userEvent.click(cancel);
         expect(args.onCancel).toHaveBeenCalledWith();
       });
