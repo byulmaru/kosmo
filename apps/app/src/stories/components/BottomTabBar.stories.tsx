@@ -75,7 +75,7 @@ const meta = {
     safeAreaBottom: { control: { min: 0, step: 4, type: 'number' } },
   },
   component: BottomTabBarCatalog,
-  parameters: { controls: { disable: true } },
+  parameters: { controls: { disable: true }, layout: 'fullscreen' },
   title: 'KOSMO/Components/Bottom Tab Bar',
 } satisfies Meta<typeof BottomTabBarCatalog>;
 

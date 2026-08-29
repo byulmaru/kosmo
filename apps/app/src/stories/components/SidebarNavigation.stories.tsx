@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Button, View } from 'react-native';
 import { expect, fn, mocked, screen, userEvent, waitFor, within } from 'storybook/test';
 import { SidebarNavigation } from '@/components/ui/SidebarNavigation';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { NavigationDestination, NavigationProfile } from '@/components/ui/navigationChrome';
-import type { SidebarNavigationProps } from '@/components/ui/SidebarNavigation';
+import type {
+  SidebarNavigationProps,
+  SidebarPresentation,
+} from '@/components/ui/SidebarNavigation';
 
 type CatalogProps = Omit<SidebarNavigationProps, 'profile'> & {
   profileAvailable: boolean;
@@ -73,6 +76,33 @@ function SidebarNavigationCatalog({
   );
 }
 
+function SidebarNavigationTransitionFixture({
+  onLogout,
+  onMenuOpenChange,
+  onNavigate,
+}: Pick<SidebarNavigationProps, 'onLogout' | 'onMenuOpenChange' | 'onNavigate'>) {
+  const [presentation, setPresentation] = useState<SidebarPresentation>('full');
+
+  return (
+    <View>
+      <Button
+        onPress={() => setPresentation((current) => (current === 'compact' ? 'full' : 'compact'))}
+        title={`${presentation === 'compact' ? 'full' : 'compact'}로 전환`}
+      />
+      <View style={{ height: 720, width: presentation === 'compact' ? 80 : 320 }}>
+        <SidebarNavigation
+          currentDestination="home"
+          onLogout={onLogout}
+          onMenuOpenChange={onMenuOpenChange}
+          onNavigate={onNavigate}
+          presentation={presentation}
+          profile={profile}
+        />
+      </View>
+    </View>
+  );
+}
+
 const meta = {
   args: {
     currentDestination: 'home',
@@ -94,6 +124,7 @@ const meta = {
     profileAvailable: { control: 'boolean' },
   },
   component: SidebarNavigationCatalog,
+  excludeStories: ['PresentationTransitionContract'],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Sidebar Navigation',
 } satisfies Meta<typeof SidebarNavigationCatalog>;
@@ -341,5 +372,45 @@ export const Dark: Story = {
     const notifications = getButton(navigation, 'notifications');
     expect(notifications).toHaveAttribute('aria-current', 'page');
     expect(notifications).toBeVisible();
+  },
+};
+
+export const PresentationTransitionContract: Story = {
+  render: (args) => (
+    <SidebarNavigationTransitionFixture
+      onLogout={args.onLogout}
+      onMenuOpenChange={args.onMenuOpenChange}
+      onNavigate={args.onNavigate}
+    />
+  ),
+  play: async ({ args, canvasElement, step }) => {
+    const onMenuOpenChange = mocked(args.onMenuOpenChange!);
+    onMenuOpenChange.mockClear();
+    const canvas = within(canvasElement);
+
+    await step('열린 full utility는 compact 전환에서 닫힘', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+      expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
+      expect(canvas.getByRole('button', { name: labels.settings })).toBeVisible();
+
+      await userEvent.click(canvas.getByRole('button', { name: 'compact로 전환' }));
+      await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
+      expect(canvas.queryByRole('button', { name: labels.settings })).not.toBeInTheDocument();
+
+      await userEvent.click(canvas.getByRole('button', { name: 'full로 전환' }));
+      expect(canvas.queryByRole('button', { name: labels.settings })).not.toBeInTheDocument();
+    });
+
+    await step('열린 compact ActionMenu는 full 전환에서 닫힘', async () => {
+      await userEvent.click(canvas.getByRole('button', { name: 'compact로 전환' }));
+      await userEvent.click(canvas.getByRole('button', { name: '설정 및 기타' }));
+      await screen.findByRole('menu', { name: '설정 및 기타 메뉴' });
+      expect(onMenuOpenChange).toHaveBeenLastCalledWith(true);
+
+      await userEvent.click(canvas.getByRole('button', { name: 'full로 전환' }));
+      await waitFor(() => expect(onMenuOpenChange).toHaveBeenLastCalledWith(false));
+      expect(screen.queryByRole('menu', { name: '설정 및 기타 메뉴' })).not.toBeInTheDocument();
+      expect(canvas.queryByRole('button', { name: labels.settings })).not.toBeInTheDocument();
+    });
   },
 };
