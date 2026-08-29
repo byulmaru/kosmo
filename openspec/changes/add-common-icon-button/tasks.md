@@ -80,8 +80,8 @@ UniversalShell menu/back, Post detail back, ModalSheet close, ReplyComposer clos
 
 **Verification**
 
-- 테스트 코드 범위: 공용 component forwarding test를 우선 사용하고, 기존 `Shell.stories.tsx`,
-  `Search.stories.tsx`와 `Posts.stories.tsx`에서 직접 관찰할 수 없는 회귀만 가장 가까운 기존 interaction에 보완한다.
+- 테스트 코드 범위: 공용 component forwarding test를 우선 사용하고, 기존 `apps/app/src/stories/patterns/Shell.stories.tsx`,
+  `Search.stories.tsx`와 `apps/app/src/stories/patterns/Posts.stories.tsx`에서 직접 관찰할 수 없는 회귀만 가장 가까운 기존 interaction에 보완한다.
 - 테스트 필요성: menu expanded, search focus, reply disabled와 각 action 실행 결과가 전환 전과 같음을 검증한다.
 - 테스트 제외 범위: navigation·modal·search 제품 기능 coverage 확대, 새 Storybook harness와 unrelated snapshot.
 - Web의 compact/full shell, Post detail, modal/reply와 search Storybook Chromium interaction에서
@@ -115,8 +115,8 @@ visual geometry, effective input region, 상태와 제품 동작을 유지한다
 
 **Verification**
 
-- 테스트 코드 범위: `IconButton.test.ts`의 effective target/state 전달과 기존 `Posts.stories.tsx`,
-  `Reactions.stories.tsx`, `Shell.stories.tsx`에서 필요한 최소 interaction assertion.
+- 테스트 코드 범위: `IconButton.test.ts`의 effective target/state 전달과 기존 `apps/app/src/stories/patterns/Posts.stories.tsx`,
+  `Reactions.stories.tsx`, `apps/app/src/stories/patterns/Shell.stories.tsx`에서 필요한 최소 interaction assertion.
 - 테스트 필요성: media disabled·position, Reaction more geometry, Logout pending content와 busy/disabled를 직접 검증한다.
 - 테스트 제외 범위: upload·reaction·session 제품 coverage 확대, reaction entry·Post Action Bar 변경과 Native runtime test.
 - Web Storybook Chromium interaction에서 media overlay, reaction row와 compact shell visual·pointer·focus 결과를

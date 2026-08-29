@@ -35,6 +35,6 @@ Unread 알림이 생겼는지 전환 전에는 알 수 없다. 기존 selected P
 
 - Profile picker 표시: `apps/app/src/components/shell/ProfileSwitcher.tsx`
 - Relay 생성 산출물: 기존 ProfileSwitcher fragment와 이를 포함하는 query artifact
-- 가장 가까운 자동 검증: `apps/app/src/stories/Shell.stories.tsx`,
+- 가장 가까운 자동 검증: `apps/app/src/stories/patterns/Shell.stories.tsx`,
   `apps/web/e2e/profile-switcher.e2e.ts`
 - GraphQL schema, resolver, DB·migration, 패키지 dependency와 기존 셸 badge 구현은 변경하지 않는다.
