@@ -52,6 +52,9 @@ export const Playground: Story = {
     },
   },
   play: async ({ args, canvasElement, step }) => {
+    args.onBlur?.mockClear();
+    args.onChangeText?.mockClear();
+    args.onFocus?.mockClear();
     const input = within(canvasElement).getByRole('textbox', { name: args.label ?? '이름' });
 
     if (args.editable === false) {
@@ -66,13 +69,13 @@ export const Playground: Story = {
       await userEvent.clear(input);
       await userEvent.type(input, '코스모');
       expect(input).toHaveValue('코스모');
-      expect(args.onFocus).toHaveBeenCalled();
+      expect(args.onFocus).toHaveBeenCalledOnce();
       expect(args.onChangeText).toHaveBeenLastCalledWith('코스모');
     });
 
     await step('포커스 이동과 blur callback', async () => {
       await userEvent.tab();
-      expect(args.onBlur).toHaveBeenCalled();
+      expect(args.onBlur).toHaveBeenCalledOnce();
     });
   },
 };
