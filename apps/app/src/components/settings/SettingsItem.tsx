@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 export type SettingsItemProps = {
@@ -53,7 +53,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   leading: { flexShrink: 0 },
-  copy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  copy: { ...layoutRecipes.labelSupportStack, flex: 1, minWidth: 0 },
   label: {
     flexShrink: 1,
     fontFamily: 'SUIT',

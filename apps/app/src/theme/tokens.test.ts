@@ -10,7 +10,7 @@ test('density는 기존 spacing scale을 시맨틱 preset으로 제공한다', (
   });
 });
 
-test('layout recipe는 승인된 form, list, Web ActionMenu geometry를 제공한다', () => {
+test('layout recipe는 승인된 form, list, menu, dialog action과 label support geometry를 제공한다', () => {
   assert.deepEqual((tokens as Record<string, unknown>).layoutRecipes, {
     formStack: { flexDirection: 'column', gap: 16 },
     formPageInset: { paddingHorizontal: 16 },
@@ -29,6 +29,15 @@ test('layout recipe는 승인된 form, list, Web ActionMenu geometry를 제공�
       gap: 0,
       padding: 4,
       borderRadius: 12,
+    },
+    dialogActions: {
+      flexDirection: 'row',
+      gap: 8,
+      justifyContent: 'flex-end',
+    },
+    labelSupportStack: {
+      flexDirection: 'column',
+      gap: 4,
     },
   });
 });

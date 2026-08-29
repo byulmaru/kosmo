@@ -22,7 +22,7 @@ import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useRelayEnvironmentGeneration } from '@/relay/RelayEnvironmentBoundary';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostBody } from './PostBody';
 import { PostComposer } from './PostComposer';
 import { PostSourcePreview } from './PostSourcePresentationView';
@@ -568,5 +568,5 @@ const styles = StyleSheet.create({
   },
   confirmTitle: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   confirmDescription: { fontFamily: 'SUIT', ...typography.sm },
-  confirmActions: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
+  confirmActions: { ...layoutRecipes.dialogActions },
 });

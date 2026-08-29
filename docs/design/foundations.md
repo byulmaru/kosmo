@@ -53,19 +53,23 @@ Density는 별도 runtime mode나 새 token collection이 아니라 `space/*`를
 
 프로덕션 코드는 위 density 조합과 반복되는 부모 geometry를 `tokens.ts`의 plain style object로 소비한다. 별도 React wrapper나 Figma `Box`·`Stack`·`Inline` component를 만들지 않는다.
 
-| Recipe              | 소유 geometry                                                                   | 최초 적용 경계                          |
-| ------------------- | ------------------------------------------------------------------------------- | --------------------------------------- |
-| `formStack`         | vertical flow, gap `16`                                                         | `FeedbackForm`, `ProfileEditForm`       |
-| `formPageInset`     | horizontal padding `16`                                                         | `FeedbackPage`, Profile Edit field 영역 |
-| `listStack`         | vertical flow, gap `0`, padding `0`                                             | `SettingsNavigationList` 부모           |
-| `listRow`           | horizontal flow, center, gap `12`, padding `12 16`, min-height `64`, radius `0` | `SettingsItem`, `ProfileListItem`       |
-| `actionMenuSurface` | vertical flow, gap `0`, padding `4`, radius `12`                                | Web `ActionMenu` 외곽 surface           |
+| Recipe              | 소유 geometry                                                                   | 최초 적용 경계                            |
+| ------------------- | ------------------------------------------------------------------------------- | ----------------------------------------- |
+| `formStack`         | vertical flow, gap `16`                                                         | `FeedbackForm`, `ProfileEditForm`         |
+| `formPageInset`     | horizontal padding `16`                                                         | `FeedbackPage`, Profile Edit field 영역   |
+| `listStack`         | vertical flow, gap `0`, padding `0`                                             | `SettingsNavigationList` 부모             |
+| `listRow`           | horizontal flow, center, gap `12`, padding `12 16`, min-height `64`, radius `0` | `SettingsItem`, `ProfileListItem`         |
+| `actionMenuSurface` | vertical flow, gap `0`, padding `4`, radius `12`                                | Web `ActionMenu` 외곽 surface             |
+| `dialogActions`     | horizontal flow, gap `8`, end-aligned                                           | 확인·취소 동작이 있는 dialog consumer     |
+| `labelSupportStack` | vertical flow, gap `4`                                                          | `TextField`, `RadioGroup`, `SettingsItem` |
 
 - `listStack`은 행 내부 padding, 높이, divider, 상태, content growth를 소유하지 않는다.
 - `listRow`는 divider, 색상, selected·interaction 상태와 Bio의 줄 수를 소유하지 않는다. `min-height`만 보장하고 긴 content에 따라 늘어난다.
 - `formStack`은 field 사이의 흐름과 gap만 소유한다. `formPageInset`은 page form의 좌우 inset만 소유하며 section별 top·bottom spacing은 consumer가 유지한다.
 - page, card와 overlay의 padding·radius는 presentation 역할이 다르므로 각 surface가 계속 소유한다.
 - `actionMenuSurface`는 범용 menu나 Native bottom sheet 계약이 아니다. border, elevation, positioning, portal, focus와 lifecycle은 `ActionMenu`가 계속 소유한다.
+- `dialogActions`는 actions row의 방향·간격·정렬만 소유한다. Button 크기와 child별 flex, 외부 margin, dialog surface의 padding·radius·border·typography는 consumer 또는 Button이 계속 소유한다.
+- `labelSupportStack`은 label과 control·description·error 사이의 내부 vertical rhythm만 소유한다. typography, padding, radius, input geometry와 flex·min-width는 consumer가 계속 소유한다.
 
 ## Elevation과 shadow
 

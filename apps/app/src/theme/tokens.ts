@@ -252,6 +252,15 @@ export const layoutRecipes = {
     padding: space[4],
     borderRadius: radius[12],
   },
+  dialogActions: {
+    flexDirection: 'row',
+    gap: space[8],
+    justifyContent: 'flex-end',
+  },
+  labelSupportStack: {
+    flexDirection: 'column',
+    gap: space[4],
+  },
 } satisfies Record<string, ViewStyle>;
 
 /** @deprecated Use numeric `radius` tokens for new work. */

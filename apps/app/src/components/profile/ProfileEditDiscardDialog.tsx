@@ -1,6 +1,6 @@
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { Button } from '../ui/Button';
 
 type ProfileEditDiscardDialogProps = {
@@ -67,6 +67,6 @@ const styles = StyleSheet.create({
   copy: { gap: spacing.sm },
   title: { fontFamily: 'SUIT', fontWeight: '800', ...typography.lg },
   description: { fontFamily: 'SUIT', ...typography.sm },
-  actions: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
+  actions: { ...layoutRecipes.dialogActions },
   action: { flex: 1, minWidth: 0 },
 });

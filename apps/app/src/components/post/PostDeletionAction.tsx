@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, typography } from '@/theme/tokens';
+import { layoutRecipes, radii, spacing, typography } from '@/theme/tokens';
 import { PostActionControl } from './PostActionControl';
 import type { ViewStyle } from 'react-native';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -307,9 +307,7 @@ export function PostDeletionAction({ items = [], onDeleted, post: postKey }: Pro
 
 const styles = StyleSheet.create({
   actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    justifyContent: 'flex-end',
+    ...layoutRecipes.dialogActions,
     marginTop: spacing.lg,
   },
   backdrop: {
