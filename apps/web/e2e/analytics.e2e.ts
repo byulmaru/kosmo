@@ -1,5 +1,10 @@
 import { gunzipSync } from 'node:zlib';
-import { createE2ESession, resetE2EDatabase, setE2ESessionCookie } from './db-fixtures';
+import {
+  createE2EPost,
+  createE2ESession,
+  resetE2EDatabase,
+  setE2ESessionCookie,
+} from './db-fixtures';
 import { expect, test } from './fixtures';
 import { toGlobalId } from './graphql';
 
@@ -73,12 +78,18 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
     displayName: 'E2E Analytics Profile',
     handle: 'e2e-analytics-profile',
   });
-  const payloads: PostHogPayload[] = [];
+  if (!viewer.profile) {
+    throw new Error('Analytics E2E requires a Profile');
+  }
+  const postContentMarker = 'E2E private Post Content marker';
+  await createE2EPost({ body: postContentMarker, profileId: viewer.profile.id });
+  const eventPayloads: PostHogPayload[] = [];
   const posthogRequests: string[] = [];
   await page.route(`${posthogOrigin}/**`, async (route) => {
-    posthogRequests.push(route.request().url());
-    if (route.request().method() === 'POST') {
-      payloads.push(...readPostHogPayloads(route.request().postDataBuffer()));
+    const request = route.request();
+    posthogRequests.push(request.url());
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/e/') {
+      eventPayloads.push(...readPostHogPayloads(request.postDataBuffer()));
     }
 
     await route.fulfill({
@@ -88,7 +99,19 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
     });
   });
 
-  await page.goto('/?utm_source=newsletter#overview');
+  const searchMarker = 'e2e-private-search-marker';
+  const referrerSearchMarker = 'e2e-private-referrer-search-marker';
+  const referrerClickMarkers = {
+    fbclid: 'e2e-referrer-fbclid',
+    gclid: 'e2e-referrer-gclid',
+    msclkid: 'e2e-referrer-msclkid',
+  };
+  await page.goto(
+    `/?q=${searchMarker}&gclid=e2e-current-gclid&fbclid=e2e-current-fbclid&msclkid=e2e-current-msclkid&utm_source=newsletter#overview`,
+    {
+      referer: `https://www.google.com/search?q=${referrerSearchMarker}&gclid=${referrerClickMarkers.gclid}&fbclid=${referrerClickMarkers.fbclid}&msclkid=${referrerClickMarkers.msclkid}&utm_source=search-engine`,
+    },
+  );
   expect(
     await page.evaluate(() => ({
       automation: navigator.webdriver,
@@ -98,36 +121,75 @@ test('Web runtime은 PostHog 표준 pageview·autocapture·metadata와 remote co
       headlessUserAgent: /Headless|Playwright/u.test(navigator.userAgent),
     })),
   ).toEqual({ automation: false, headlessBrand: false, headlessUserAgent: false });
-  await expect.poll(() => payloads.some((payload) => payload.event === '$pageview')).toBe(true);
+  await expect
+    .poll(() => eventPayloads.some((payload) => payload.event === '$pageview'))
+    .toBe(true);
 
-  await page.goto(`/${viewer.profile?.handle}?source=analytics-test#profile`);
+  await page.goto(`/${viewer.profile.handle}?source=analytics-test#profile`);
   await expect
     .poll(() =>
-      payloads.some(
+      eventPayloads.some(
         (payload) =>
           payload.event === '$pageview' &&
-          payload.properties?.$pathname === `/${viewer.profile?.handle}`,
+          payload.properties?.$pathname === `/${viewer.profile.handle}`,
       ),
     )
     .toBe(true);
+  await expect(page.getByTestId('post-content-renderer').first()).toHaveClass(
+    /(?:^|\s)ph-mask(?:\s|$)/u,
+  );
+  await expect(page.getByTestId('post-content-renderer').first()).toHaveClass(
+    /(?:^|\s)ph-no-capture(?:\s|$)/u,
+  );
+  await page.getByTestId('post-list-row-body').filter({ hasText: postContentMarker }).click();
+  await expect(page).toHaveURL(new RegExp(`/@${viewer.profile.handle}/[^/?#]+$`));
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/@?${viewer.profile.handle}(?:[?#]|$)`));
   await page.getByRole('link', { name: '개인정보 처리방침' }).click();
   await expect(page).toHaveURL(/\/privacy$/u);
   await expect
     .poll(() =>
-      payloads.some(
+      eventPayloads.some(
         (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/privacy',
       ),
     )
     .toBe(true);
-  await expect.poll(() => payloads.some((payload) => payload.event === '$autocapture')).toBe(true);
+  await expect
+    .poll(() => eventPayloads.some((payload) => payload.event === '$autocapture'))
+    .toBe(true);
   await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
-  await expect.poll(() => payloads.some((payload) => payload.event === '$pageleave')).toBe(true);
+  await expect
+    .poll(() => eventPayloads.some((payload) => payload.event === '$pageleave'))
+    .toBe(true);
 
-  const rootPageview = payloads.find(
+  const rootPageview = eventPayloads.find(
     (payload) => payload.event === '$pageview' && payload.properties?.$pathname === '/',
   );
-  expect(rootPageview?.properties?.$current_url).toContain('/?utm_source=newsletter#overview');
+  const currentUrl = new URL(String(rootPageview?.properties?.$current_url));
+  const referrerUrl = new URL(String(rootPageview?.properties?.$referrer));
+  const sessionEntryUrl = new URL(String(rootPageview?.properties?.$session_entry_url));
+  expect(currentUrl.hash).toBe('#overview');
+  expect(currentUrl.searchParams.get('q')).toBe('<masked>');
+  expect(currentUrl.searchParams.get('gclid')).toBe('<masked>');
+  expect(currentUrl.searchParams.get('fbclid')).toBe('<masked>');
+  expect(currentUrl.searchParams.get('msclkid')).toBe('<masked>');
+  expect(currentUrl.searchParams.get('utm_source')).toBe('newsletter');
+  expect(referrerUrl.searchParams.get('q')).toBe('<masked>');
+  expect(referrerUrl.searchParams.get('gclid')).toBe('<masked>');
+  expect(referrerUrl.searchParams.get('fbclid')).toBe('<masked>');
+  expect(referrerUrl.searchParams.get('msclkid')).toBe('<masked>');
+  expect(referrerUrl.searchParams.get('utm_source')).toBe('search-engine');
+  expect(sessionEntryUrl.searchParams.get('q')).toBe('<masked>');
+  expect(rootPageview?.properties?.ph_keyword).toBe('<masked>');
   expect(rootPageview?.properties?.$session_entry_utm_source).toBe('newsletter');
+  expect(JSON.stringify(eventPayloads)).not.toContain(searchMarker);
+  expect(JSON.stringify(eventPayloads)).not.toContain(referrerSearchMarker);
+  for (const marker of Object.values(referrerClickMarkers)) {
+    expect(JSON.stringify(eventPayloads)).not.toContain(marker);
+  }
+  expect(
+    JSON.stringify(eventPayloads.filter((payload) => payload.event === '$autocapture')),
+  ).not.toContain(postContentMarker);
   expect(posthogRequests.some((url) => new URL(url).pathname.startsWith('/flags'))).toBe(true);
 });
 
@@ -169,6 +231,20 @@ test('Account identity는 A→guest→B에서 분리되고 endpoint 실패에도
   expect(JSON.stringify(identifyPayload)).not.toMatch(
     /email|displayName|handle|selected_profile_id/u,
   );
+
+  payloads.length = 0;
+  await page.reload();
+  await expect(page.getByRole('button', { name: '로그아웃' })).toBeVisible();
+  await expect
+    .poll(() =>
+      payloads.find(
+        (payload) =>
+          payload.event === '$pageview' &&
+          payload.properties?.$pathname === '/home' &&
+          payload.properties?.distinct_id === toGlobalId('Account', viewer.account.id),
+      ),
+    )
+    .not.toBeUndefined();
 
   await page.unroute(`${posthogOrigin}/**`);
   await page.route(`${posthogOrigin}/**`, async (route) => {

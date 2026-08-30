@@ -5,6 +5,7 @@ import { match } from 'ts-pattern';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, typography } from '@/theme/tokens';
+import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
 import { PostMediaGallery } from './PostMediaGallery';
 import type {
@@ -14,13 +15,11 @@ import type {
   PostContentTextNode,
 } from '@kosmo/core/post-content';
 import type { Key, ReactNode } from 'react';
-import type { StyleProp, TextStyle, ViewProps } from 'react-native';
+import type { StyleProp, TextStyle } from 'react-native';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
 type PostContentMark = NonNullable<PostContentTextNode['marks']>[number];
-
-const postHogMaskProps = { className: 'ph-mask' } as unknown as ViewProps;
 
 interface RenderContext {
   readonly bodyStyle: StyleProp<TextStyle>;
@@ -96,7 +95,7 @@ export function PostContentRenderer({
     return null;
   }
   return (
-    <View {...postHogMaskProps} style={styles.root} testID="post-content-renderer">
+    <PostContentPrivacyBoundary style={styles.root}>
       {showContentWarning ? (
         <View
           accessibilityLiveRegion="polite"
@@ -129,7 +128,7 @@ export function PostContentRenderer({
           sensitive={document?.attrs?.sensitiveMedia ?? false}
         />
       ) : null}
-    </View>
+    </PostContentPrivacyBoundary>
   );
 }
 

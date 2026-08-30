@@ -15,7 +15,7 @@ class FakePostHog {
   identifyFails = false;
   resetFails = false;
   distinctId = 'anonymous-id';
-  userState: 'anonymous' | 'identified' = 'anonymous';
+  userId: string | undefined;
 
   capture(event: string, properties?: Record<string, unknown>) {
     this.captureAttempts += 1;
@@ -33,7 +33,7 @@ class FakePostHog {
     this.actions.push(`identify:${accountId}`);
     this.identities.push(accountId);
     this.distinctId = accountId;
-    this.userState = 'identified';
+    this.userId = accountId;
   }
 
   reset() {
@@ -43,7 +43,7 @@ class FakePostHog {
     }
     this.resets += 1;
     this.distinctId = `anonymous-${this.resets}`;
-    this.userState = 'anonymous';
+    this.userId = undefined;
   }
 
   get_distinct_id() {
@@ -51,12 +51,12 @@ class FakePostHog {
   }
 
   get_property(name: string) {
-    return name === '$user_state' ? this.userState : undefined;
+    return name === '$user_id' ? this.userId : undefined;
   }
 
   setPersistedIdentity(accountId: string) {
     this.distinctId = accountId;
-    this.userState = 'identified';
+    this.userId = accountId;
   }
 }
 
@@ -115,24 +115,81 @@ describe('PostHog Web client', () => {
 
     assert.ok(client);
     assert.equal(initCalls.length, 1);
-    assert.deepEqual(initCalls[0], {
-      token: 'project-key',
-      config: {
-        api_host: 'https://us.i.posthog.com',
-        defaults: '2026-05-30',
-      },
+    assert.equal(initCalls[0]?.token, 'project-key');
+    assert.deepEqual(initCalls[0]?.config, {
+      api_host: 'https://us.i.posthog.com',
+      before_send: initCalls[0]?.config.before_send,
+      custom_personal_data_properties: ['q'],
+      defaults: '2026-05-30',
+      mask_personal_data_properties: true,
     });
+    assert.equal(typeof initCalls[0]?.config.before_send, 'function');
   });
 
   it('E2E fake endpoint도 production adapter 설정을 넓히지 않는다', () => {
     analytics.initializeAnalytics('project-key', 'https://posthog.e2e.invalid');
-    assert.deepEqual(initCalls[0], {
-      token: 'project-key',
-      config: {
-        api_host: 'https://posthog.e2e.invalid',
-        defaults: '2026-05-30',
+    assert.equal(initCalls[0]?.token, 'project-key');
+    assert.deepEqual(Object.keys(initCalls[0]?.config ?? {}).sort(), [
+      'api_host',
+      'before_send',
+      'custom_personal_data_properties',
+      'defaults',
+      'mask_personal_data_properties',
+    ]);
+  });
+
+  it('native masking이 놓치는 referrer URL과 파생 검색어의 개인정보만 전송 직전에 가린다', () => {
+    analytics.initializeAnalytics('project-key', 'https://us.i.posthog.com');
+    const beforeSend = initCalls[0]?.config.before_send;
+    assert.equal(typeof beforeSend, 'function');
+    assert.equal(Array.isArray(beforeSend), false);
+    if (typeof beforeSend !== 'function') {
+      assert.fail('before_send must be configured');
+    }
+
+    const urlProperties = ['$referrer', '$initial_referrer', '$session_entry_referrer'] as const;
+    const referrerUrl =
+      'https://www.google.com/search?q=private-marker&gclid=private-gclid&fbclid=private-fbclid&msclkid=private-msclkid&utm_source=newsletter';
+    const event = {
+      event: '$pageview',
+      uuid: '00000000-0000-4000-8000-000000000000',
+      properties: {
+        ...Object.fromEntries(urlProperties.map((property) => [property, referrerUrl])),
+        $session_entry_ph_keyword: 'private-marker',
+        ph_keyword: 'private-marker',
       },
-    });
+      $set: { $referrer: referrerUrl },
+      $set_once: {
+        $initial_ph_keyword: 'private-marker',
+        $initial_referrer: referrerUrl,
+        $referrer: referrerUrl,
+      },
+    } as Parameters<typeof beforeSend>[0];
+
+    const result = beforeSend(event);
+    assert.ok(result);
+    const assertMaskedReferrerUrl = (value: unknown) => {
+      assert.equal(typeof value, 'string');
+      const url = new URL(value as string);
+      assert.equal(url.searchParams.get('q'), '<masked>');
+      assert.equal(url.searchParams.get('gclid'), '<masked>');
+      assert.equal(url.searchParams.get('fbclid'), '<masked>');
+      assert.equal(url.searchParams.get('msclkid'), '<masked>');
+      assert.equal(url.searchParams.get('utm_source'), 'newsletter');
+    };
+    for (const property of urlProperties) {
+      assertMaskedReferrerUrl(result.properties?.[property]);
+    }
+    assertMaskedReferrerUrl(result.$set?.$referrer);
+    assertMaskedReferrerUrl(result.$set_once?.$initial_referrer);
+    assertMaskedReferrerUrl(result.$set_once?.$referrer);
+    assert.equal(result.properties?.$session_entry_ph_keyword, '<masked>');
+    assert.equal(result.properties?.ph_keyword, '<masked>');
+    assert.equal(result.$set_once?.$initial_ph_keyword, '<masked>');
+    assert.equal(JSON.stringify(result).includes('private-marker'), false);
+    assert.equal(JSON.stringify(result).includes('private-gclid'), false);
+    assert.equal(JSON.stringify(result).includes('private-fbclid'), false);
+    assert.equal(JSON.stringify(result).includes('private-msclkid'), false);
   });
 
   it('event별 typed payload를 전송한다', () => {
