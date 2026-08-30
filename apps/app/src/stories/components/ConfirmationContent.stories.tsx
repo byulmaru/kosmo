@@ -40,15 +40,14 @@ function ConfirmationContentCatalog({
         onCancel={onCancel}
         onConfirm={onConfirm}
         pending={state === 'pending'}
-        supportingContent={
-          supportingText ? (
-            <Text style={[styles.supporting, { color: theme.foregroundSecondary }]}>
-              {supportingText}
-            </Text>
-          ) : undefined
-        }
         tone={tone}
-      />
+      >
+        {supportingText ? (
+          <Text style={[styles.supporting, { color: theme.foregroundSecondary }]}>
+            {supportingText}
+          </Text>
+        ) : undefined}
+      </ConfirmationContent>
     </View>
   );
 }
@@ -145,6 +144,9 @@ export const Pending: Story = {
 
 export const WithSupportingContent: Story = {
   args: { supportingText: '관련된 공유 링크도 더 이상 사용할 수 없습니다.' },
+  play: async ({ args, canvasElement }) => {
+    expect(within(canvasElement).getByText(args.supportingText)).toBeVisible();
+  },
 };
 
 const styles = StyleSheet.create({

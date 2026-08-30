@@ -6,25 +6,25 @@ import type { ReactNode } from 'react';
 
 type Props = {
   cancelLabel: string;
+  children?: ReactNode;
   confirmDisabled?: boolean;
   confirmLabel: string;
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
   pending?: boolean;
-  supportingContent?: ReactNode;
   tone?: 'danger' | 'primary';
 };
 
 export function ConfirmationContent({
   cancelLabel,
+  children,
   confirmDisabled,
   confirmLabel,
   message,
   onCancel,
   onConfirm,
   pending = false,
-  supportingContent,
   tone = 'primary',
 }: Props) {
   const theme = useTheme();
@@ -37,7 +37,7 @@ export function ConfirmationContent({
   return (
     <View style={styles.root}>
       <Text style={[styles.message, { color: theme.foregroundSecondary }]}>{message}</Text>
-      {supportingContent}
+      {children}
       <View style={[styles.actions, { minHeight: targetHeight }]}>
         <Button
           disabled={pending}

@@ -36,13 +36,13 @@ type TestElementProps = {
 type TestElement = ReactElement<TestElementProps>;
 type ConfirmationContentComponent = (props: {
   cancelLabel: string;
+  children?: ReactNode;
   confirmDisabled?: boolean;
   confirmLabel: string;
   message: string;
   onCancel: () => void;
   onConfirm: () => void;
   pending?: boolean;
-  supportingContent?: ReactNode;
   tone?: 'danger' | 'primary';
 }) => TestElement;
 
